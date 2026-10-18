@@ -165,7 +165,7 @@ class SaveWordsTest(unittest.TestCase):
                         reading=reading)
         analysis = Analysis(text='')
         for w, count in ((word('猫', '猫', 'noun', 'ねこ'), 3), (word('太郎', '太郎', 'name'), 9),
-                         (word('走る', '走る', 'verb'), 5), (word('稀', '稀', 'noun'), 1)):
+                         (word('走る', '走る', 'verb'), 5), (word('稀', '稀', 'noun'), 1), (word('今', '今', 'fix', 'こん'), 7)):
             analysis.words[w.key, w.form] = [w, count]
         service.save_words(7, analysis, FrequencyTable({'猫': 1200}))
         with gzip.open(os.path.join(service.WORDS_DIR, '7.json.gz'), 'rt', encoding='utf-8') as f:

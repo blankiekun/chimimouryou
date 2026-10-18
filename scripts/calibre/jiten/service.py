@@ -101,9 +101,10 @@ def save_kanji(book_id: int, text: str):
 
 
 def save_words(book_id: int, analysis, frequency):
-    """The book's WORDS_PER_BOOK most frequent words (names and unclassified tokens left out), most frequent
-    first, as [form, reading or None, count in the book, frequency rank or None]."""
-    words = sorted(((word, count) for word, count in analysis.words.values() if word.pos not in ('name', 'other')),
+    """The book's WORDS_PER_BOOK most frequent words, most frequent first, as [form, reading or None,
+    count in the book, frequency rank or None]. Names, affixes (今 read こん, from 今回) and
+    unclassified tokens are left out."""
+    words = sorted(((word, count) for word, count in analysis.words.values() if word.pos not in ('name', 'fix', 'other')),
                    key=lambda item: -item[1])[:WORDS_PER_BOOK]
     rows = []
     for word, count in words:
