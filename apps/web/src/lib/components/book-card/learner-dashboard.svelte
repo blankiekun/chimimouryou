@@ -10,6 +10,7 @@
   import { pullAccountStatistics } from '$lib/data/statistics-sync';
   import { database, startDayHoursForTracker$, statisticsEnabled$ } from '$lib/data/store';
   import { getDateKey } from '$lib/functions/statistic-util';
+  import { t$, type MessageKey, type MessageParams } from '$lib/i18n';
   import { onMount } from 'svelte';
 
   /**
@@ -23,11 +24,13 @@
 
   const number = (value: number) => value.toLocaleString('en-US');
 
-  function hours(seconds: number) {
+  function hours(seconds: number, t: (key: MessageKey, params?: MessageParams) => string) {
     const h = Math.floor(seconds / 3600);
     const m = Math.round((seconds % 3600) / 60);
 
-    return h ? `${h}h ${m}m` : `${m}m`;
+    return h
+      ? t('dashboard.hours', { hours: h, minutes: m })
+      : t('dashboard.minutes', { minutes: m });
   }
 
   async function loadStats() {
@@ -54,48 +57,59 @@
 
   $: secondary = stats
     ? [
-        { label: 'Past 7 days', value: number(stats.weekCharacters) },
-        { label: 'Characters read', value: number(stats.totalCharacters) },
-        { label: 'Reading time', value: hours(stats.totalTime) },
-        { label: 'Speed', value: stats.speed ? `${number(stats.speed)}/h` : '–' },
+        { label: $t$('dashboard.pastWeek'), value: number(stats.weekCharacters) },
+        { label: $t$('dashboard.characters'), value: number(stats.totalCharacters) },
+        { label: $t$('dashboard.time'), value: hours(stats.totalTime, $t$) },
         {
-          label: 'Books finished',
-          value: number(stats.booksCompleted),
-          hint: `${number(stats.booksStarted)} started`
+          label: $t$('dashboard.speed'),
+          value: stats.speed ? $t$('dashboard.speedValue', { speed: number(stats.speed) }) : '–'
         },
-        { label: 'Kanji met', value: kanji ? number(kanji.unique) : '–' }
+        {
+          label: $t$('dashboard.finished'),
+          value: number(stats.booksCompleted),
+          hint: $t$('dashboard.started', { count: number(stats.booksStarted) })
+        },
+        { label: $t$('dashboard.kanji'), value: kanji ? number(kanji.unique) : '–' }
       ]
     : [];
 </script>
 
-<section class="dashboard" aria-label="Reading stats">
+<section class="dashboard" aria-label={$t$('dashboard.label')}>
   {#if stats}
     <div class="dashboard-main">
       <div class="dashboard-feature">
-        <span class="dashboard-feature-label">Today</span>
+        <span class="dashboard-feature-label">{$t$('dashboard.today')}</span>
         <span class="dashboard-feature-value">{number(stats.todayCharacters)}<small>字</small></span>
         <span
           class="dashboard-streak"
-          title="Longest {stats.longestStreak} · {stats.daysRead} days read"
+          title={$t$('dashboard.streakTitle', {
+            longest: stats.longestStreak,
+            days: stats.daysRead
+          })}
         >
           {#if stats.streak}
             <span class="dashboard-seal" aria-hidden="true">連</span>
-            {stats.streak} day{stats.streak === 1 ? '' : 's'} in a row
+            {$t$(stats.streak === 1 ? 'dashboard.streakOne' : 'dashboard.streak', {
+              count: stats.streak
+            })}
           {:else}
-            No streak yet
+            {$t$('dashboard.noStreak')}
           {/if}
         </span>
       </div>
 
       {#if stats.daysRead}
-        <div class="dashboard-heatmap" role="img" aria-label="Characters read per day, last 18 weeks">
+        <div class="dashboard-heatmap" role="img" aria-label={$t$('dashboard.heatmap')}>
           {#each weeks as week, w (w)}
             <span class="dashboard-week">
               {#each week as day (day.dateKey)}
                 <span
                   class="dashboard-day"
                   data-level={day.level}
-                  title="{day.dateKey}: {number(day.characters)} characters"
+                  title={$t$('dashboard.dayTitle', {
+                    date: day.dateKey,
+                    count: number(day.characters)
+                  })}
                 />
               {/each}
             </span>
@@ -115,12 +129,12 @@
 
     {#if !$statisticsEnabled$ && !stats.daysRead}
       <p class="dashboard-note">
-        Turn on the reading tracker (Settings → Statistics) to count characters, time and streaks.
+        {$t$('dashboard.trackerOff')}
       </p>
     {/if}
   {/if}
   <a class="dashboard-guide" href={learningGuideUrl} target="_blank" rel="noreferrer">
-    Learning guide: Yomitan, Anki and choosing books
+    {$t$('dashboard.guide')}
   </a>
 </section>
 

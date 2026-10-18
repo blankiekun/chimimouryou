@@ -14,6 +14,7 @@
   import Fa from 'svelte-fa';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import SettingsAccount from '$lib/components/settings/settings-account.svelte';
+  import SettingsLanguage from '$lib/components/settings/settings-language.svelte';
   import SettingsPlugins from '$lib/components/settings/settings-plugins.svelte';
   import { activePlugins$, plugins } from '$lib/plugins';
   import SettingsAnki from '$lib/components/settings/settings-anki.svelte';
@@ -454,6 +455,9 @@
       <div class="settings-sections" bind:this={sectionsElement}>
         <SettingsSection id="general-account">
           <SettingsAccount />
+        </SettingsSection>
+        <SettingsSection id="general-language" keywords="language japanese english 日本語 言語">
+          <SettingsLanguage />
         </SettingsSection>
         <SettingsSection id="general-theme">
           <SettingsThemeMode />

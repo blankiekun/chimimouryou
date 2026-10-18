@@ -29,6 +29,8 @@ How to change this fork. See `ARCHITECTURE.md` for how the pieces fit together,
 - Commit messages: `fix: …`, `feat: …`, `refactor: …`, `test: …`, `docs: …`,
   `style: …`. One logical change per commit; bug fixes don't include refactors.
 - Add a line to `CHANGELOG.md` for anything a user or the server would notice.
+- New UI strings go in both `lib/i18n/en.ts` and `lib/i18n/ja.ts` (whole sentences
+  with `{param}`s), used as `$t$('key')` in components and `tr('key')` elsewhere.
 - Never put API keys, passwords or other secrets in the repository, in shared
   sync files (`/calibre/sync/`), in URLs or in log/error messages
   (`redactSecret` in `data/ai-settings.ts`).

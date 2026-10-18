@@ -74,6 +74,12 @@ export const settingsAreas: SettingsArea[] = [
         icon: faUser
       },
       {
+        id: 'general-language',
+        label: 'Language · 言語',
+        description: 'The language of the menus and buttons.',
+        icon: faLanguage
+      },
+      {
         id: 'general-theme',
         label: 'Theme',
         description: 'Colors for the whole app, and how system light and dark mode are handled.',

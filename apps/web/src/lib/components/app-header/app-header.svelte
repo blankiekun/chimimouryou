@@ -18,6 +18,7 @@
   import { account$ } from '$lib/data/account';
   import { pagePath } from '$lib/data/env';
   import { libraryTab$, type LibraryTab } from '$lib/data/library-home';
+  import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
   export let active: AppSection | undefined;
@@ -35,19 +36,37 @@
     }
   }
 
-  const sections: {
+  let sections: {
     key: AppSection;
     /** The library's Home or Store tab */
     tab?: LibraryTab;
     label: string;
     icon: typeof faBook;
     href: string;
-  }[] = [
-    { key: 'library', tab: 'home', label: 'Home', icon: faHouse, href: `${pagePath}/manage` },
-    { key: 'library', tab: 'store', label: 'Store', icon: faStore, href: `${pagePath}/manage` },
-    { key: 'statistics', label: 'Statistics', icon: faChartLine, href: `${pagePath}/statistics` },
-    { key: 'settings', label: 'Settings', icon: faGear, href: `${pagePath}/settings` },
-    { key: 'notes', label: 'Notes', icon: faNoteSticky, href: '' }
+  }[];
+  $: sections = [
+    {
+      key: 'library',
+      tab: 'home',
+      label: $t$('nav.home'),
+      icon: faHouse,
+      href: `${pagePath}/manage`
+    },
+    {
+      key: 'library',
+      tab: 'store',
+      label: $t$('nav.store'),
+      icon: faStore,
+      href: `${pagePath}/manage`
+    },
+    {
+      key: 'statistics',
+      label: $t$('nav.statistics'),
+      icon: faChartLine,
+      href: `${pagePath}/statistics`
+    },
+    { key: 'settings', label: $t$('nav.settings'), icon: faGear, href: `${pagePath}/settings` },
+    { key: 'notes', label: $t$('nav.notes'), icon: faNoteSticky, href: '' }
   ];
 
   $: isActive = (section: (typeof sections)[number]) =>
@@ -63,8 +82,8 @@
         <button
           type="button"
           class="app-header-icon sm:hidden"
-          title="Back"
-          aria-label="Back"
+          title={$t$('nav.back')}
+          aria-label={$t$('nav.back')}
           on:click={onBack}
         >
           <Fa icon={faArrowLeft} />
@@ -80,7 +99,7 @@
         <AppHeaderLogo label="Chimimouryou" />
       </a>
 
-      <nav class="section-nav hidden sm:flex" aria-label="Sections">
+      <nav class="section-nav hidden sm:flex" aria-label={$t$('nav.sections')}>
         {#each sections as section (section.label)}
           {#if section.href}
             <a
@@ -98,7 +117,7 @@
             <span
               class="section-nav-item section-nav-item-disabled"
               aria-disabled="true"
-              title="{section.label} are not available in this reader yet"
+              title={$t$('nav.notesUnavailable')}
             >
               <Fa icon={section.icon} class="md:hidden" />
               <span class="hidden md:inline">{section.label}</span>
@@ -112,10 +131,10 @@
           <a
             href="{pagePath}/b?id={currentBookId}"
             class="app-header-icon app-header-continue"
-            title="Continue reading"
+            title={$t$('nav.continueReading')}
           >
             <Fa icon={faBookOpenReader} />
-            <span class="hidden lg:inline">Continue</span>
+            <span class="hidden lg:inline">{$t$('nav.continue')}</span>
           </a>
         {/if}
         {#if $$slots.default}
@@ -126,8 +145,12 @@
         <a
           href="{pagePath}/settings?section=general#general-account"
           class="app-header-icon"
-          title={$account$ ? `Signed in as ${$account$.username}` : 'Sign in'}
-          aria-label={$account$ ? `Account: ${$account$.username}` : 'Sign in'}
+          title={$account$
+            ? $t$('nav.signedInAs', { name: $account$.username })
+            : $t$('nav.signIn')}
+          aria-label={$account$
+            ? $t$('nav.account', { name: $account$.username })
+            : $t$('nav.signIn')}
         >
           {#if $account$}
             <span class="account-initial">{$account$.username.charAt(0)}</span>
@@ -141,7 +164,7 @@
 </header>
 
 {#if !onBack}
-  <nav class="app-bottom-nav" aria-label="Sections">
+  <nav class="app-bottom-nav" aria-label={$t$('nav.sections')}>
     {#each sections as section (section.label)}
       {#if section.href}
         <a

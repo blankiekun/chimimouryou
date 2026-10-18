@@ -14,6 +14,7 @@
 
 import { BehaviorSubject, map, merge, skip, type Subscription } from 'rxjs';
 import { mangaSeriesModes$ } from '$lib/data/manga';
+import { uiLanguage$ } from '$lib/i18n';
 import { accountSyncUrl, type AccountUser } from '$lib/data/account';
 import {
   aiLanguage$,
@@ -97,6 +98,7 @@ const sharedSettings: Record<string, Store> = {
   openRouterRecapModel: openRouterRecapModel$,
   lorebookAutoInterval: lorebookAutoInterval$,
   aiLanguage: aiLanguage$,
+  uiLanguage: uiLanguage$,
   enabledPlugins: enabledPlugins$,
   audiobookshelfToken: audiobookshelfToken$,
   homeBookTitles: homeBookTitles$,

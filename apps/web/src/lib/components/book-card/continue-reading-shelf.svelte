@@ -11,6 +11,7 @@
   import { homeRemovedTitles$, isContinueReading, lastRead } from '$lib/data/library-home';
   import { formatSeries } from '$lib/components/book-card/library-sort';
   import { longPress } from '$lib/functions/use-long-press';
+  import { t$ } from '$lib/i18n';
   import { createEventDispatcher } from 'svelte';
   import Fa from 'svelte-fa';
 
@@ -18,7 +19,7 @@
   export let currentBookId: number | undefined;
   /** Other shelves (Home → My books) pass their books and heading */
   export let shelfBooks: BookCardProps[] | undefined = undefined;
-  export let heading = 'Continue reading';
+  export let heading: string | undefined = undefined;
   export let icon: IconDefinition = faBookOpenReader;
   export let removeTitle = '';
   /** Set while the library is in select mode: clicks then toggle these */
@@ -44,10 +45,10 @@
 </script>
 
 {#if books.length}
-  <section class="shelf" aria-label={heading}>
+  <section class="shelf" aria-label={heading ?? $t$('home.continueReading')}>
     <h2 class="shelf-heading">
       <Fa {icon} />
-      {heading}
+      {heading ?? $t$('home.continueReading')}
       <span class="shelf-count">{books.length}</span>
     </h2>
     <div class="shelf-row">
@@ -80,10 +81,11 @@
             <button
               type="button"
               class="shelf-resume"
-              aria-label="Resume {book.title}"
+              aria-label={$t$('home.resumeBook', { title: book.title })}
               on:click={() => dispatch('bookRead', { id: book.id })}
             >
-              <Fa icon={faBookOpenReader} /> Resume
+              <Fa icon={faBookOpenReader} />
+              {$t$('home.resume')}
             </button>
           {/if}
           {#if selectedBookIds?.has(book.id)}
