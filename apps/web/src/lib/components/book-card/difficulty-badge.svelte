@@ -15,7 +15,7 @@
     : '';
   $: summary = `Difficulty ${difficulty.toFixed(2)} of 5 (${difficultyName(difficulty)})${range}`;
   $: meaning = `\n${difficultyName(difficulty)}: ${difficultyDescription(difficulty)}`;
-  $: rangeNote = range ? '\nThe likely range covers 10-90% of the estimate' : '';
+  $: rangeNote = range ? '\nThe likely range holds the true score for about 8 books in 10' : '';
   /** How full each of the five segments is, 0-1 */
   $: fills = [0, 1, 2, 3, 4].map((i) => Math.min(Math.max(difficulty - i, 0), 1));
 </script>
