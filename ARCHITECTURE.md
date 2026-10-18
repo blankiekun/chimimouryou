@@ -82,7 +82,8 @@ needs Calibre, difficulty needs Sudachi and ONNX Runtime.
    (and `/account/sync/` while signed in): `CalibreStorageHandler.getBookList`.
 2. On first open, `prepareBookForReading` downloads the EPUB/HTMLZ/TXT from
    `/calibre/library/`, processes it in the browser with upstream's loaders,
-   uploads the processed `bookdata_*.zip` and cover to `/calibre/sync/<root>/<title>/`
+   uploads the processed `bookdata_*.zip` (not for manga: their pages are the CBZ, so
+   every device loads that) and cover to `/calibre/sync/<root>/<title>/`
    and caches the book in IndexedDB.
 3. Later opens use the IndexedDB copy unless the server's `bookdata_*` is newer
    (`getBook`).
