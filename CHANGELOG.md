@@ -6,6 +6,12 @@ anything a reader or a server operator would notice.
 
 ## Unreleased
 
+### Documentation
+
+- The README is ordered for whoever sets the server up: what it is, setup, then "How you
+  read with it" (Yomitan → Anki → next book by difficulty), the features (learner ones
+  first) and the credits last.
+
 ### Server
 
 - Recommended server sizes per profile (docs/INSTALL.md → Server size). The `difficulty`
