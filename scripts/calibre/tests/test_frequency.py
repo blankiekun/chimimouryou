@@ -170,3 +170,23 @@ class SaveWordsTest(unittest.TestCase):
         service.save_words(7, analysis, FrequencyTable({'猫': 1200}))
         with gzip.open(os.path.join(service.WORDS_DIR, '7.json.gz'), 'rt', encoding='utf-8') as f:
             self.assertEqual(json.load(f), [['走る', None, 5, None], ['猫', 'ねこ', 3, 1200]])
+
+    def test_one_row_per_reading(self):
+        import gzip
+        import importlib.util
+        from collections import Counter
+        from features import Analysis, Word
+        spec = importlib.util.spec_from_file_location(
+            'jiten_service', os.path.join(os.path.dirname(__file__), '..', 'jiten', 'service.py'))
+        service = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(service)
+        service.WORDS_DIR = tempfile.mkdtemp()
+        other = Word('他\tnoun', '他', 'noun', 'kango', (), '他', 'ほか')
+        run = Word('走る\tverb', '走る', 'verb', 'wago', (), '走る', 'はしる')
+        analysis = Analysis(text='', words={(other.key, '他'): [other, 7], (run.key, '走る'): [run, 4]})
+        # 走った has no reading: it counts for the word's most common one.
+        analysis.readings = {(other.key, '他'): Counter({'ほか': 5, 'た': 2}),
+                             (run.key, '走る'): Counter({None: 3, 'はしる': 1})}
+        service.save_words(8, analysis, FrequencyTable({'他': 145038}, {('他', 'ほか'): 382, ('他', 'た'): 145038}))
+        with gzip.open(os.path.join(service.WORDS_DIR, '8.json.gz'), 'rt', encoding='utf-8') as f:
+            self.assertEqual(json.load(f), [['他', 'ほか', 5, 382], ['走る', 'はしる', 4, None], ['他', 'た', 2, 145038]])

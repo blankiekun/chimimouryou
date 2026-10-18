@@ -25,6 +25,7 @@ import sys
 import zipfile
 import threading
 import time
+from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -57,6 +58,9 @@ KANJI_DIR = os.path.join(STATE_DIR, 'kanji')
 # Per-book word lists, gzipped JSON, for "words to study"; capped to bound disk use (~19k books).
 WORDS_DIR = os.path.join(STATE_DIR, 'words')
 WORDS_PER_BOOK = 2000
+# Stored with each estimate ('words'); whole-library runs redo word lists made by an older version.
+# 2: one row per (form, reading).
+WORDS_VERSION = 2
 WORKERS = int(os.environ.get('JITEN_WORKERS', os.cpu_count() or 1))
 PORT = int(os.environ.get('JITEN_PORT', '8765'))
 HOST = os.environ.get('JITEN_HOST', '127.0.0.1')
@@ -91,7 +95,6 @@ def _init_worker():
 
 
 def save_kanji(book_id: int, text: str):
-    from collections import Counter
     from features import is_kanji
     os.makedirs(KANJI_DIR, exist_ok=True)
     path = os.path.join(KANJI_DIR, f'{book_id}.json.gz')
@@ -102,14 +105,23 @@ def save_kanji(book_id: int, text: str):
 
 def save_words(book_id: int, analysis, frequency):
     """The book's WORDS_PER_BOOK most frequent words, most frequent first, as [form, reading or None,
-    count in the book, frequency rank or None]. Names, affixes (今 read こん, from 今回) and
-    unclassified tokens are left out."""
-    words = sorted(((word, count) for word, count in analysis.words.values() if word.pos not in ('name', 'fix', 'other')),
-                   key=lambda item: -item[1])[:WORDS_PER_BOOK]
+    count in the book, frequency rank or None], one row per reading (他: ほか and た). Names,
+    affixes (今 read こん, from 今回) and unclassified tokens are left out."""
     rows = []
-    for word, count in words:
-        data = frequency.word(word.key, word.reading)
-        rows.append([word.form, word.reading, count, data[0] if data else None])
+    for word_key, (word, count) in analysis.words.items():
+        if word.pos in ('name', 'fix', 'other'):
+            continue
+        readings = Counter(analysis.readings.get(word_key) or {word.reading: count})
+        # Conjugated occurrences have no reading: they go to the word's most common one.
+        unknown = readings.pop(None, 0)
+        if readings:
+            readings[readings.most_common(1)[0][0]] += unknown
+        elif unknown:
+            readings[None] = unknown
+        for reading, n in readings.items():
+            data = frequency.word(word.key, reading)
+            rows.append([word.form, reading, n, data[0] if data else None])
+    rows = sorted(rows, key=lambda row: -row[2])[:WORDS_PER_BOOK]
     os.makedirs(WORDS_DIR, exist_ok=True)
     path = os.path.join(WORDS_DIR, f'{book_id}.json.gz')
     with gzip.open(path + '.tmp', 'wt', encoding='utf-8') as f:
@@ -147,6 +159,7 @@ def _estimate(book: dict):
         'high': round(min(max(scores['high'], scores['difficulty']) + RANGE_WIDEN, 5.0), 2),
         'words95': words_for_coverage(extra) if extra['CoverageRank95'] == extra['CoverageRank95'] else None,
         'model': MODEL_VERSION,
+        'words': WORDS_VERSION,
         'characters': characters,
         'uniqueKanji': len({c for c in text if is_kanji(c)}),
         'computedAt': int(time.time() * 1000),
@@ -267,9 +280,10 @@ class JobRunner:
         # failed ones are broken files (not a zip, no container.xml), retried once the file changes.
         no_text = set(results.get('noText', []))
         failed = results.setdefault('failed', {})
-        # All books: only those not tried yet, estimated by another model or before word lists, or whose
-        # file changed since it failed. Selected books are always recomputed.
+        # All books: only those not tried yet, estimated by another model or with an older word list, or
+        # whose file changed since it failed. Selected books are always recomputed.
         books = [b for b in catalog if (results['books'].get(str(b['id']), {}).get('model') != MODEL_VERSION
+                                        or results['books'][str(b['id'])].get('words') != WORDS_VERSION
                                         or not os.path.exists(os.path.join(WORDS_DIR, f"{b['id']}.json.gz")))
                  and b['id'] not in no_text
                  and failed.get(str(b['id']), {}).get('size') != b['size']] \
