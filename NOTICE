@@ -19,7 +19,9 @@ with this project.
 scripts/calibre/jiten/kanji-grades.json is derived from KANJIDIC2 by the
 Electronic Dictionary Research and Development Group
 (https://www.edrdg.org/kanjidic/), licensed under CC BY-SA 4.0; it is
-distributed under the same licence.
+distributed under the same licence. So is
+apps/web/src/lib/data/kanji-readings.json (on and kun readings of 常用 and
+人名用 kanji, from the same source).
 scripts/calibre/jiten/goshu.json.gz holds word origins (語種) from UniDic
 (https://clrd.ninjal.ac.jp/unidic/, via unidic-lite), Copyright (c) 2011-2013,
 The UniDic Consortium, used under its BSD licence.

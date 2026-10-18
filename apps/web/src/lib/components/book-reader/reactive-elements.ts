@@ -7,6 +7,7 @@
 import {
   NEVER,
   filter,
+  from,
   fromEvent,
   merge,
   race,
@@ -19,6 +20,7 @@ import {
 } from 'rxjs';
 
 import { FuriganaStyle } from '../../data/furigana-style';
+import { loadKnownRubyCheck, markKnownRuby } from '$lib/data/known-furigana';
 import { nextChapter$ } from '$lib/components/book-reader/book-toc/book-toc';
 import { pulseElement } from '$lib/functions/range-util';
 import { toggleImageGalleryPictureSpoiler$ } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';
@@ -31,11 +33,20 @@ export function reactiveElements(
 ) {
   const anchorTagDocumentListener = anchorTagListener(document);
   const spoilerImageDocumentListener = spoilerImageListener(document);
+  // Kanji met are read once per opened book; new ones show up on the next open.
+  const knownRuby =
+    furiganaStyle === FuriganaStyle.Known
+      ? loadKnownRubyCheck().catch(() => () => false)
+      : undefined;
 
   return (contentEl: HTMLElement) =>
     merge(
       anchorTagDocumentListener(contentEl),
-      rubyTagListener(contentEl, furiganaStyle),
+      knownRuby
+        ? from(knownRuby).pipe(
+            switchMap((hide) => merge(...markKnownRuby(contentEl, hide).map(toggleRuby)))
+          )
+        : rubyTagListener(contentEl, furiganaStyle),
       spoilerImageDocumentListener(contentEl),
       openImageInNewTab(contentEl, hideSpoilerImage, isExtendedMode)
     );
@@ -64,11 +75,7 @@ function rubyTagListener(contentEl: HTMLElement, furiganaStyle: FuriganaStyle) {
   const rubyTags = Array.from(contentEl.getElementsByTagName('ruby'));
   const obs$ = rubyTags.map((el) =>
     isToggle
-      ? fromClickEvent(el).pipe(
-          tap(() => {
-            el.classList.toggle('reveal-rt');
-          })
-        )
+      ? toggleRuby(el)
       : fromClickEvent(el).pipe(
           take(1),
           tap(() => {
@@ -77,6 +84,14 @@ function rubyTagListener(contentEl: HTMLElement, furiganaStyle: FuriganaStyle) {
         )
   );
   return merge(...obs$);
+}
+
+function toggleRuby(el: Element) {
+  return fromClickEvent(el).pipe(
+    tap(() => {
+      el.classList.toggle('reveal-rt');
+    })
+  );
 }
 
 function spoilerImageListener(document: Document) {
