@@ -50,10 +50,24 @@ describe('manga', () => {
   });
 
   it('turns pages by tap side and direction', () => {
-    expect(tapDirection(10, 300, 'rtl')).toBe(1);
-    expect(tapDirection(290, 300, 'rtl')).toBe(-1);
-    expect(tapDirection(10, 300, 'ltr')).toBe(-1);
-    expect(tapDirection(150, 300, 'ltr')).toBe(0);
+    const view = { width: 300, height: 600 };
+
+    expect(tapDirection(10, 300, view, 'rtl')).toBe(1);
+    expect(tapDirection(290, 300, view, 'rtl')).toBe(-1);
+    expect(tapDirection(10, 300, view, 'ltr')).toBe(-1);
+    expect(tapDirection(150, 300, view, 'ltr')).toBe(0);
+    // The strip's default L shape: the top and left back, the bottom and right forward.
+    expect(tapDirection(290, 10, view, 'vertical')).toBe(-1);
+    expect(tapDirection(10, 590, view, 'vertical')).toBe(1);
+    expect(tapDirection(150, 300, view, 'vertical')).toBe(0);
+    expect(tapDirection(150, 10, view, 'rtl', 'kindle')).toBe(0);
+    expect(tapDirection(10, 590, view, 'rtl', 'kindle')).toBe(-1);
+    expect(tapDirection(150, 590, view, 'ltr', 'edge')).toBe(-1);
+    expect(tapDirection(10, 10, view, 'ltr', 'edge')).toBe(1);
+    expect(tapDirection(10, 300, view, 'ltr', 'off')).toBe(0);
+    expect(tapDirection(10, 300, view, 'ltr', 'sides', 'horizontal')).toBe(1);
+    expect(tapDirection(150, 10, view, 'ltr', 'l', 'vertical')).toBe(1);
+    expect(tapDirection(300, 600, view, 'ltr', 'l', 'both')).toBe(-1);
   });
 
   it('pairs pages, leaving the cover, spreads and the last page alone', () => {

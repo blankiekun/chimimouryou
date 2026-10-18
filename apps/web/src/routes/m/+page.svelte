@@ -54,12 +54,16 @@
     mangaPageNumber$,
     mangaPages,
     mangaScale$,
+    mangaTapInvert$,
+    mangaTapLayout$,
     pageSpreads,
     tapDirection,
     type MangaBackground,
     type MangaDualPage,
     type MangaReadingMode,
     type MangaScale,
+    type MangaTapInvert,
+    type MangaTapLayout,
     type PageSize
   } from '$lib/data/manga';
   import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
@@ -79,6 +83,20 @@
     { id: 'rtl', text: 'Right to left' },
     { id: 'ltr', text: 'Left to right' },
     { id: 'vertical', text: 'Vertical' }
+  ];
+  const tapLayouts: ToggleOption<MangaTapLayout>[] = [
+    { id: 'default', text: 'Default' },
+    { id: 'l', text: 'L shape' },
+    { id: 'kindle', text: 'Kindle' },
+    { id: 'edge', text: 'Edge' },
+    { id: 'sides', text: 'Sides' },
+    { id: 'off', text: 'Off' }
+  ];
+  const tapInverts: ToggleOption<MangaTapInvert>[] = [
+    { id: 'none', text: 'None' },
+    { id: 'horizontal', text: 'Horizontal' },
+    { id: 'vertical', text: 'Vertical' },
+    { id: 'both', text: 'Both' }
   ];
   const scales: ToggleOption<MangaScale>[] = [
     { id: 'screen', text: 'Screen' },
@@ -718,7 +736,7 @@
 
   function tap(x: number, y: number) {
     if (!$mangaDoubleTapZoom$) {
-      singleTap(x);
+      singleTap(x, y);
       return;
     }
 
@@ -737,12 +755,12 @@
     lastTap = { x, y, time: now };
     clearTimeout(tapTimer);
     // Waits to see whether a second tap makes it a double tap.
-    tapTimer = setTimeout(() => singleTap(x), 300);
+    tapTimer = setTimeout(() => singleTap(x, y), 300);
   }
 
-  /** The sides turn the page, unless zoomed in; the middle toggles the menu. */
-  function singleTap(x: number) {
-    const dir = zoom > 1 ? 0 : tapDirection(x, viewWidth, mode);
+  /** The tap zones turn the page, unless zoomed in; the rest toggles the menu. */
+  function singleTap(x: number, y: number) {
+    const dir = zoom > 1 ? 0 : tapDirection(x, y, view, mode, $mangaTapLayout$, $mangaTapInvert$);
 
     if (dir) {
       turn(dir);
@@ -760,7 +778,27 @@
 
     pointerStart = undefined;
 
-    if (Math.abs(dx) < 10 && Math.abs(dy) < 10 && !(event.target as Element).closest('button')) {
+    if (Math.abs(dx) >= 10 || Math.abs(dy) >= 10 || (event.target as Element).closest('button')) {
+      return;
+    }
+
+    const dir = tapDirection(
+      event.clientX,
+      event.clientY,
+      view,
+      mode,
+      $mangaTapLayout$,
+      $mangaTapInvert$
+    );
+
+    if (dir) {
+      // Most of a screen, so the last lines stay in view.
+      strip?.scrollBy({
+        top: dir * 0.75 * viewHeight,
+        behavior: prefersReducedMotion() ? 'auto' : 'smooth'
+      });
+      showMenu = false;
+    } else {
       showMenu = !showMenu;
     }
   }
@@ -1014,6 +1052,18 @@
               options={optionsForToggle}
               bind:selectedOptionId={$mangaDoubleTapZoom$}
             />
+          </SettingsItemGroup>
+        {/if}
+        <SettingsItemGroup
+          title="Tap zones"
+          wide
+          tooltip="Where a tap turns the page. Default is the sides for pages and an L shape for the vertical strip (top and left back, bottom and right forward)."
+        >
+          <ButtonToggleGroup options={tapLayouts} bind:selectedOptionId={$mangaTapLayout$} />
+        </SettingsItemGroup>
+        {#if $mangaTapLayout$ !== 'off'}
+          <SettingsItemGroup title="Invert tap zones">
+            <ButtonToggleGroup options={tapInverts} bind:selectedOptionId={$mangaTapInvert$} />
           </SettingsItemGroup>
         {/if}
         <SettingsItemGroup title="Background">
