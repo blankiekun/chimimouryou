@@ -5,19 +5,35 @@
  */
 
 /**
- * Keeps one reader's progress, statistics and reading goals for Calibre books from
+ * Keeps one reader's progress, statistics and reading goals for Calibre books (and kanji met) from
  * showing up for, and syncing into, the next account on a shared browser. They are
  * on the server, so they come back when their reader signs in again. Not part of upstream.
  */
 
 import type { AccountUser } from '$lib/data/account';
 import { loadCalibreCatalog } from '$lib/data/calibre';
+import { readerDb } from '$lib/data/reader-db';
 import { database } from '$lib/data/store';
 
 const ownerKey = 'readerDataOwner';
 
+let release: Promise<void> | undefined;
+
 /** Called once per page load with the session state ('' = signed out). */
-export async function releaseReaderData(user: AccountUser | null) {
+export function releaseReaderData(user: AccountUser | null) {
+  release = releaseFor(user);
+
+  return release;
+}
+
+/** The reader ('' signed out) whose data this browser holds, once this page load's release is done. */
+export async function readerDataOwner() {
+  await release?.catch(() => {});
+
+  return window.localStorage.getItem(ownerKey);
+}
+
+async function releaseFor(user: AccountUser | null) {
   const owner = window.localStorage.getItem(ownerKey);
   const id = user?.id ?? '';
 
@@ -27,6 +43,8 @@ export async function releaseReaderData(user: AccountUser | null) {
     const titles = new Set((await loadCalibreCatalog()).map((book) => book.title));
 
     await database.clearReaderData(titles);
+    // Kanji met sync for every title, so none stay behind.
+    await (await readerDb()).clear('kanji');
   }
 
   window.localStorage.setItem(ownerKey, id);

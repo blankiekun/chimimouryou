@@ -146,9 +146,10 @@ exists (made by the server's `difficulty` service; readers with the
 - **Different kanji** in the book, and how many of them you have **already met**:
   the share of the book's kanji (counted every time they appear) that you have
   read before in other books, and the number of kanji that would be new. Kanji
-  met are recorded by this browser as you read books and visual novels; the
-  first time a book is counted, everything before your position counts as read.
-  Home shows the total as "Kanji met".
+  met are recorded as you read books and visual novels and, while you are signed
+  in, synced to your account so every device sees them; the first time a book is
+  counted, everything before your position counts as read. Home shows the total
+  as "Kanji met".
 
 Manga have no estimate. In the Store, filter by difficulty band and sort by
 difficulty (easiest first) or length to find the next book: one a little harder

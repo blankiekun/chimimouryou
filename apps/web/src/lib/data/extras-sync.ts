@@ -9,14 +9,19 @@
  * Calibre books through the book's sync folder, the account's own folder while
  * signed in, like annotations.json. Local changes upload a second after they
  * are saved; panels pull before showing. Browser copies record their account
- * and are ignored under another sign-in state. Not part of upstream.
+ * and are ignored under another sign-in state.
+ *
+ * Kanji met (kanji-seen.ts) sync for every book as one kanji.json in the account's
+ * folder, only while signed in and after releaseReaderData has run. Not part of upstream.
  */
 
 import { BehaviorSubject, type Subject } from 'rxjs';
-import { accountReady, currentAccount } from '$lib/data/account';
+import { accountReady, accountSyncUrl, currentAccount } from '$lib/data/account';
+import type { KanjiSeen } from '$lib/data/kanji-seen';
 import { logger } from '$lib/data/logger';
 import { lorebookChanged$, mergeLorebooks, sameLorebooks, type Lorebook } from '$lib/data/lorebook';
 import { mergeRecaps, recapsChanged$, sameRecaps, type BookRecaps } from '$lib/data/recap';
+import { readerDataOwner } from '$lib/data/reader-data-owner';
 import { readerDb } from '$lib/data/reader-db';
 import { CalibreStorageHandler } from '$lib/data/storage/handler/calibre-handler';
 
@@ -170,5 +175,110 @@ async function syncOnce<T extends { title: string; account?: string }>(
 
     logger.warn(message);
     setError(kind, message);
+  }
+}
+
+const kanjiUrl = `${accountSyncUrl}kanji.json`;
+/** The file holds every book, so uploads wait for a pause in reading. */
+const kanjiUploadDelay = 30_000;
+/** Reads within this time of a sync don't download again. */
+const kanjiFreshFor = 60_000;
+
+let kanjiTimer: ReturnType<typeof setTimeout> | undefined;
+let kanjiQueue = Promise.resolve();
+let kanjiSyncedAt = 0;
+
+const newerKanji = (a: KanjiSeen, b: KanjiSeen) =>
+  (a.modified ?? 0) - (b.modified ?? 0) || a.upTo - b.upTo;
+
+const sameKanji = (a: KanjiSeen, b?: KanjiSeen) =>
+  !!b && a.modified === b.modified && a.upTo === b.upTo;
+
+/**
+ * Keeps the newest record per title (records from before syncing: the one read
+ * further). Counts are never added: both devices may have counted the same reading.
+ */
+export function mergeKanji(local: KanjiSeen[], remote: KanjiSeen[]) {
+  const merged = new Map(local.map((book) => [book.title, book]));
+
+  for (const book of remote) {
+    const mine = merged.get(book.title);
+
+    if (!mine || newerKanji(book, mine) > 0) {
+      merged.set(book.title, book);
+    }
+  }
+
+  return [...merged.values()];
+}
+
+/** Uploads a while after the reader records kanji. */
+export function kanjiChanged() {
+  clearTimeout(kanjiTimer);
+  kanjiTimer = setTimeout(syncKanji, kanjiUploadDelay);
+}
+
+/** Downloads before kanji are read or recorded, unless synced a moment ago. */
+export function pullKanji() {
+  return Date.now() - kanjiSyncedAt < kanjiFreshFor ? Promise.resolve() : syncKanji();
+}
+
+export function syncKanji(): Promise<void> {
+  kanjiQueue = kanjiQueue.then(syncKanjiOnce);
+
+  return kanjiQueue;
+}
+
+async function syncKanjiOnce() {
+  try {
+    const user = await accountReady();
+
+    // Signed out, or this browser still holds another reader's kanji.
+    if (!user || (await readerDataOwner()) !== user.id) {
+      return;
+    }
+
+    const response = await fetch(kanjiUrl, { cache: 'no-store' });
+
+    if (!response.ok && response.status !== 404) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const books: unknown = response.ok ? (await response.json())?.books : [];
+    const remote = (Array.isArray(books) ? books : []).filter(
+      (book) =>
+        typeof book?.title === 'string' &&
+        typeof book.upTo === 'number' &&
+        typeof book.counts === 'object' &&
+        book.counts !== null
+    ) as KanjiSeen[];
+    const tx = (await readerDb()).transaction('kanji', 'readwrite');
+    const local = await tx.store.getAll();
+    const merged = mergeKanji(local, remote);
+    const localByTitle = new Map(local.map((book) => [book.title, book]));
+    const remoteByTitle = new Map(remote.map((book) => [book.title, book]));
+
+    await Promise.all(
+      merged
+        .filter((book) => !sameKanji(book, localByTitle.get(book.title)))
+        .map((book) => tx.store.put(book))
+    );
+    await tx.done;
+
+    if (merged.some((book) => !sameKanji(book, remoteByTitle.get(book.title)))) {
+      const put = await fetch(kanjiUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ books: merged })
+      });
+
+      if (!put.ok) {
+        throw new Error(`upload failed (HTTP ${put.status})`);
+      }
+    }
+
+    kanjiSyncedAt = Date.now();
+  } catch (error: any) {
+    logger.warn(`Kanji sync failed: ${error.message}`);
   }
 }
