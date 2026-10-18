@@ -126,6 +126,8 @@
   let animating = false;
   let autoBackground = '#000';
   let wakeLock: WakeLockSentinel | undefined;
+  let wantWakeLock = false;
+  let requestingWakeLock = false;
 
   $: mode = $mangaReadingMode$;
   $: pageCount = urls.length;
@@ -136,8 +138,14 @@
     0,
     groups.findIndex((group) => group.includes(pageIndex))
   );
-  /** The page a bookmark keeps: the last one shown, so a final spread counts as finished. */
-  $: shownPage = mode === 'vertical' ? pageIndex : (groups[groupIndex]?.at(-1) ?? pageIndex);
+  /**
+   * The page a bookmark keeps: a spread's first, so another device or layout opens on it, but the
+   * last spread's last page, so it counts as finished.
+   */
+  $: shownPage =
+    mode === 'vertical'
+      ? pageIndex
+      : (groups[groupIndex]?.at(groupIndex === groups.length - 1 ? -1 : 0) ?? pageIndex);
   $: if (ready && shownPage !== savedIndex) scheduleSave();
   // Next is to the left in right-to-left manga.
   $: sign = mode === 'rtl' ? -1 : 1;
@@ -364,11 +372,21 @@
 
   let viewKey = '';
 
-  /** Back to the start of a spread when it or its size changes, not as the other pages are measured. */
+  /**
+   * Back to the start of a spread when it changes or its pages are first measured; a resize (a phone
+   * turning, its address bar hiding) keeps the zoom and position.
+   */
   function resetView(index: number, size: PageSize, force = false) {
-    const key = `${index} ${size.width} ${size.height} ${mode}`;
+    const measured = groups[index]?.every((page) => sizes[page]);
+    const key = `${index} ${measured} ${mode}`;
 
-    if (key === viewKey && !force) return;
+    if (key === viewKey && !force) {
+      pan = {
+        x: clampPan(pan.x, size.width * zoom, viewWidth),
+        y: clampPan(pan.y, size.height * zoom, viewHeight)
+      };
+      return;
+    }
 
     viewKey = key;
     zoom = 1;
@@ -707,14 +725,24 @@
     if (!wakeLockSupported) return;
 
     if (keepOn && document.visibilityState === 'visible') {
-      if (wakeLock && !wakeLock.released) return;
+      wantWakeLock = true;
 
-      wakeLock = await navigator.wakeLock.request('screen').catch(({ message }) => {
+      if (requestingWakeLock || (wakeLock && !wakeLock.released)) return;
+
+      requestingWakeLock = true;
+
+      const lock = await navigator.wakeLock.request('screen').catch(({ message }) => {
         logger.warn(`Could not keep the screen on: ${message}`);
 
         return undefined;
       });
+
+      requestingWakeLock = false;
+      // The reader may have closed, or the setting turned off, while the browser was asked.
+      if (wantWakeLock) wakeLock = lock;
+      else await lock?.release().catch(() => {});
     } else {
+      wantWakeLock = false;
       await wakeLock?.release().catch(() => {});
       wakeLock = undefined;
     }
