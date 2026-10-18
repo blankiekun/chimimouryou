@@ -47,6 +47,7 @@ export const ja: Record<MessageKey, string> = {
   'home.continueReading': '続きを読む',
   'home.resume': '再開',
   'home.resumeBook': '{title}を再開',
+  'home.readNext': '次に読む',
   'home.myBooks': 'マイブック',
   'home.remove': 'ホームから削除',
   'home.add': 'ホームに追加',

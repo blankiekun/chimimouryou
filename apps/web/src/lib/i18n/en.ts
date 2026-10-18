@@ -49,6 +49,7 @@ export const en = {
   'home.continueReading': 'Continue reading',
   'home.resume': 'Resume',
   'home.resumeBook': 'Resume {title}',
+  'home.readNext': 'Read next',
   'home.myBooks': 'My books',
   'home.remove': 'Remove from Home',
   'home.add': 'Add to Home',

@@ -1386,7 +1386,7 @@
         <ContinueReadingShelf
           bookCards={$bookCards$}
           shelfBooks={readNextCards}
-          heading="Read next"
+          heading={$t$('home.readNext')}
           icon={faForward}
           currentBookId={$currentBookId$}
           selectedBookIds={selectMode ? selectedBookIds : undefined}
