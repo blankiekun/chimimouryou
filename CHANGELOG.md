@@ -22,6 +22,8 @@ anything a reader or a server operator would notice.
 
 - A book's page lists the new kanji: the 30 most frequent kanji in the book you haven't
   met yet, with a button that copies them.
+- The difficulty badge's tooltip says what the band means for a learner, and that the
+  likely range holds the true score for about 8 books in 10.
 - Deleting books in the Calibre library (select mode → Delete) now removes them from the
   library for admins, after a confirmation: books go to Calibre's recycle bin
   (`calibredb remove`), visual novel folders are deleted, and the catalog is rebuilt
