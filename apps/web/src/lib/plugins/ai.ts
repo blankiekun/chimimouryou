@@ -25,9 +25,8 @@ import type { Plugin } from '$lib/plugins';
 
 export const aiPlugin: Plugin = {
   id: 'ai',
-  name: 'AI tools',
-  description:
-    'Ask AI, Story so far, Lorebook and the AI voice (OpenRouter and ElevenLabs, with your own keys).',
+  name: 'prefs.plugins.ai',
+  description: 'prefs.plugins.aiHint',
   settingsArea: 'ai',
   settings: SettingsAi,
   companionTabs: [

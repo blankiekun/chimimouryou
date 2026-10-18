@@ -41,12 +41,12 @@
   } from '$lib/data/store';
   import { AutoReplicationType } from '$lib/functions/replication/replication-options';
   import { dummyFn } from '$lib/functions/utils';
+  import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
   export let storageSources: BooksDbStorageSource[];
 
   let listLoading = true;
-  let listTooltip = 'Allows you to add a custom set of credentials';
 
   $: if (storageSources) {
     listLoading = false;
@@ -54,9 +54,7 @@
 
   $: fileSystemAvailable = browser && 'showDirectoryPicker' in window;
 
-  $: if (fileSystemAvailable) {
-    listTooltip += ' or filesystem access';
-  }
+  $: listTooltip = $t$(fileSystemAvailable ? 'prefs.sourcesHintFs' : 'prefs.sourcesHint');
 
   function isSyncTarget(name: string, referenceName: string) {
     return name === referenceName;
@@ -218,14 +216,14 @@
   <div class="flex">
     <div class="flex grow">
       <h1 class="mb-2 text-xl font-medium">
-        <span class="capitalize">Storage Sources</span>
+        <span class="capitalize">{$t$('prefs.sources')}</span>
       </h1>
       <Popover contentText={listTooltip} contentStyles="padding: 0.5rem;">
         <Fa icon={faCircleQuestion} slot="icon" class="mx-2" />
       </Popover>
       {#if $autoReplication$ !== AutoReplicationType.Off && !$syncTarget$}
         <Popover
-          contentText={'Auto import/export enabled but no source as sync target from list selected'}
+          contentText={$t$('prefs.sourcesNoTarget')}
           contentStyles="padding: 0.25rem;"
         >
           <Fa icon={faTriangleExclamation} slot="icon" class="mx-2" />
@@ -242,7 +240,7 @@
     >
       <div class="flex items-center justify-center">
         <Fa icon={faPlus} />
-        <span class="ml-1 hidden sm:block">Add</span>
+        <span class="ml-1 hidden sm:block">{$t$('prefs.add')}</span>
       </div>
       <Ripple />
     </button>
@@ -275,7 +273,7 @@
               <div
                 tabindex="0"
                 role="button"
-                title="Edit source"
+                title={$t$('prefs.sourceEdit')}
                 class="mr-4"
                 class:hidden={isDefault}
                 on:click={() => modifyStorageSource(storageSource)}
@@ -286,7 +284,7 @@
               <div
                 tabindex="0"
                 role="button"
-                title="Toggle source as sync target"
+                title={$t$('prefs.sourceSyncTarget')}
                 class="mr-4"
                 class:opacity-50={!storageSourceIsSyncTarget}
                 on:click={() =>
@@ -298,7 +296,7 @@
               <div
                 tabindex="0"
                 role="button"
-                title="Toggle source as data source for this type"
+                title={$t$('prefs.sourceDefault')}
                 class="mr-4"
                 class:opacity-50={!storageSourceIsSourceDefault}
                 on:click={() =>
@@ -313,7 +311,7 @@
               <div
                 tabindex="0"
                 role="button"
-                title="Delete source"
+                title={$t$('prefs.sourceDelete')}
                 class:hidden={isDefault}
                 on:click={() =>
                   deleteStorageSource(

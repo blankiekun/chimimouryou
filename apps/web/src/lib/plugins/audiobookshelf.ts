@@ -13,9 +13,8 @@ import type { Plugin } from '$lib/plugins';
 
 export const audiobookshelfPlugin: Plugin = {
   id: 'audiobookshelf',
-  name: 'Audiobookshelf',
-  description:
-    "Listen to the book's audiobook from an Audiobookshelf server (the server needs AUDIOBOOKSHELF_URL).",
+  name: 'prefs.plugins.abs',
+  description: 'prefs.plugins.absHint',
   settingsArea: 'audiobookshelf',
   settings: SettingsAudiobookshelf,
   listenModes: [

@@ -125,7 +125,8 @@
   let scrollToMatchTimer: ReturnType<typeof setTimeout> | undefined;
 
   $: view.set({ area: activeArea, query });
-  $: applySearch(query);
+  // Again after a language change: the texts searched are translated.
+  $: applySearch(query, $uiLanguage$);
   $: searching = !!query.trim();
   // Areas of plugins that are switched off are hidden.
   $: visibleAreas = settingsAreas.filter(
@@ -199,7 +200,7 @@
   }
 
   /** Hides settings that don't match the search; sections match by title too. */
-  async function applySearch(text: string) {
+  async function applySearch(text: string, ..._rerunOn: unknown[]) {
     await tick();
 
     if (!sectionsElement) {
@@ -286,7 +287,7 @@
     share()
   );
 
-  let storageQuota = '';
+  let storageUsed: number | undefined;
 
   const setPersistentStorage$ = persistentStorage$.pipe(
     tap((value) => {
@@ -317,7 +318,7 @@
           return;
         }
 
-        storageQuota = `${Math.round(((usage / quota) * 100 + Number.EPSILON) * 100) / 100} % used`;
+        storageUsed = Math.round(((usage / quota) * 100 + Number.EPSILON) * 100) / 100;
       })
       .catch(() => {
         // no-op
@@ -456,97 +457,99 @@
         </div>
       {/if}
       <div class="settings-sections" bind:this={sectionsElement}>
-        <SettingsSection id="general-account">
-          <SettingsAccount />
-        </SettingsSection>
-        <SettingsSection id="general-language" keywords="language japanese english 日本語 言語">
-          <!-- Rows name their switches once (settings-item-group.svelte): remount on a language change. -->
-          {#key $uiLanguage$}<SettingsLanguage />{/key}
-        </SettingsSection>
-        <SettingsSection id="general-theme">
-          <SettingsThemeMode />
-        </SettingsSection>
-        <SettingsSection
-          id="general-custom-themes"
-          keywords="editor colors colours import export json css font roundness blur"
-          wide
-        >
-          <SettingsThemes />
-        </SettingsSection>
-        <SettingsPlugins />
-        {#each $activePlugins$ as plugin (plugin.id)}
-          {#if plugin.settings}
-            <svelte:component this={plugin.settings} />
-          {/if}
-        {/each}
-        {#key $uiLanguage$}<SettingsAnki />{/key}
-        <SettingsContent
-          {storageQuota}
-          bind:fontFamilyGroupOne={$fontFamilyGroupOne$}
-          bind:fontFamilyGroupTwo={$fontFamilyGroupTwo$}
-          bind:fontWeight={$fontWeight$}
-          bind:fontSize={$fontSize$}
-          bind:lineHeight={$lineHeight$}
-          bind:textIndentation={$textIndentation$}
-          bind:textMarginValue={$textMarginValue$}
-          bind:blurImage={$hideSpoilerImage$}
-          bind:blurImageMode={$hideSpoilerImageMode$}
-          bind:hideFurigana={$hideFurigana$}
-          bind:furiganaStyle={$furiganaStyle$}
-          bind:writingMode={$writingMode$}
-          bind:enableFontKerning={$enableVerticalFontKerning$}
-          bind:enableFontVPAL={$enableFontVPAL$}
-          bind:verticalTextOrientation={$verticalTextOrientation$}
-          bind:prioritizeReaderStyles={$prioritizeReaderStyles$}
-          bind:enableTextJustification={$enableTextJustification$}
-          bind:enableTextWrapPretty={$enableTextWrapPretty$}
-          bind:textMarginMode={$textMarginMode$}
-          bind:enableReaderWakeLock={$enableReaderWakeLock$}
-          bind:showCharacterCounter={$showCharacterCounter$}
-          bind:showPercentage={$showPercentage$}
-          bind:showFooterChapterCharacterCounter={$showFooterChapterCharacterCounter$}
-          bind:showFooterChapterPercentage={$showFooterChapterPercentage$}
-          bind:viewMode={$viewMode$}
-          bind:secondDimensionMaxValue={$secondDimensionMaxValue$}
-          bind:firstDimensionMargin={$firstDimensionMargin$}
-          bind:swipeThreshold={$swipeThreshold$}
-          bind:disableWheelNavigation={$disableWheelNavigation$}
-          bind:autoPositionOnResize={$autoPositionOnResize$}
-          bind:avoidPageBreak={$avoidPageBreak$}
-          bind:pauseTrackerOnCustomPointChange={$pauseTrackerOnCustomPointChange$}
-          bind:customReadingPointEnabled={$customReadingPointEnabled$}
-          bind:selectionToBookmarkEnabled={$selectionToBookmarkEnabled$}
-          bind:enableTapEdgeToFlip={$enableTapEdgeToFlip$}
-          bind:pageColumns={$pageColumns$}
-          bind:persistentStorage={$persistentStorage$}
-          bind:hideExternalReadHint={$hideExternalReadHint$}
-          bind:confirmClose={$confirmClose$}
-          bind:manualBookmark={$manualBookmark$}
-          bind:autoBookmark={$autoBookmark$}
-          bind:autoBookmarkTime={$autoBookmarkTime$}
-          bind:importHTMLFixMode={$importHTMLFixMode$}
-          bind:restrictImportFixToAnchor={$restrictImportFixToAnchor$}
-          bind:cacheStorageData={$cacheStorageData$}
-          bind:replicationSaveBehavior={$replicationSaveBehavior$}
-          bind:autoReplication={$autoReplication$}
-          bind:showExternalPlaceholder={$showExternalPlaceholder$}
-          bind:keepLocalStatisticsOnDeletion={$keepLocalStatisticsOnDeletion$}
-          bind:overwriteBookCompletion={$overwriteBookCompletion$}
-          bind:startDayHoursForTracker={$startDayHoursForTracker$}
-          bind:statisticsMergeMode={$statisticsMergeMode$}
-          bind:readingGoalsMergeMode={$readingGoalsMergeMode$}
-          bind:statisticsEnabled={$statisticsEnabled$}
-          bind:trackerAutoPause={$trackerAutoPause$}
-          bind:openTrackerOnCompletion={$openTrackerOnCompletion$}
-          bind:addCharactersOnCompletion={$addCharactersOnCompletion$}
-          bind:trackerAutoStartTime={$trackerAutostartTime$}
-          bind:trackerIdleTime={$trackerIdleTime$}
-          bind:trackerForwardSkipThreshold={$trackerForwardSkipThreshold$}
-          bind:trackerBackwardSkipThreshold={$trackerBackwardSkipThreshold$}
-          bind:trackerSkipThresholdAction={$trackerSkipThresholdAction$}
-          bind:trackerPopupDetection={$trackerPopupDetection$}
-          bind:adjustStatisticsAfterIdleTime={$adjustStatisticsAfterIdleTime$}
-        />
+        <!-- Rows name their switches once (settings-item-group.svelte): remount on a language change. -->
+        {#key $uiLanguage$}
+          <SettingsSection id="general-account">
+            <SettingsAccount />
+          </SettingsSection>
+          <SettingsSection id="general-language" keywords="language japanese english 日本語 言語">
+            <SettingsLanguage />
+          </SettingsSection>
+          <SettingsSection id="general-theme">
+            <SettingsThemeMode />
+          </SettingsSection>
+          <SettingsSection
+            id="general-custom-themes"
+            keywords="editor colors colours import export json css font roundness blur"
+            wide
+          >
+            <SettingsThemes />
+          </SettingsSection>
+          <SettingsPlugins />
+          {#each $activePlugins$ as plugin (plugin.id)}
+            {#if plugin.settings}
+              <svelte:component this={plugin.settings} />
+            {/if}
+          {/each}
+          <SettingsAnki />
+          <SettingsContent
+            storageQuota={storageUsed === undefined ? '' : $t$('prefs.used', { percent: storageUsed })}
+            bind:fontFamilyGroupOne={$fontFamilyGroupOne$}
+            bind:fontFamilyGroupTwo={$fontFamilyGroupTwo$}
+            bind:fontWeight={$fontWeight$}
+            bind:fontSize={$fontSize$}
+            bind:lineHeight={$lineHeight$}
+            bind:textIndentation={$textIndentation$}
+            bind:textMarginValue={$textMarginValue$}
+            bind:blurImage={$hideSpoilerImage$}
+            bind:blurImageMode={$hideSpoilerImageMode$}
+            bind:hideFurigana={$hideFurigana$}
+            bind:furiganaStyle={$furiganaStyle$}
+            bind:writingMode={$writingMode$}
+            bind:enableFontKerning={$enableVerticalFontKerning$}
+            bind:enableFontVPAL={$enableFontVPAL$}
+            bind:verticalTextOrientation={$verticalTextOrientation$}
+            bind:prioritizeReaderStyles={$prioritizeReaderStyles$}
+            bind:enableTextJustification={$enableTextJustification$}
+            bind:enableTextWrapPretty={$enableTextWrapPretty$}
+            bind:textMarginMode={$textMarginMode$}
+            bind:enableReaderWakeLock={$enableReaderWakeLock$}
+            bind:showCharacterCounter={$showCharacterCounter$}
+            bind:showPercentage={$showPercentage$}
+            bind:showFooterChapterCharacterCounter={$showFooterChapterCharacterCounter$}
+            bind:showFooterChapterPercentage={$showFooterChapterPercentage$}
+            bind:viewMode={$viewMode$}
+            bind:secondDimensionMaxValue={$secondDimensionMaxValue$}
+            bind:firstDimensionMargin={$firstDimensionMargin$}
+            bind:swipeThreshold={$swipeThreshold$}
+            bind:disableWheelNavigation={$disableWheelNavigation$}
+            bind:autoPositionOnResize={$autoPositionOnResize$}
+            bind:avoidPageBreak={$avoidPageBreak$}
+            bind:pauseTrackerOnCustomPointChange={$pauseTrackerOnCustomPointChange$}
+            bind:customReadingPointEnabled={$customReadingPointEnabled$}
+            bind:selectionToBookmarkEnabled={$selectionToBookmarkEnabled$}
+            bind:enableTapEdgeToFlip={$enableTapEdgeToFlip$}
+            bind:pageColumns={$pageColumns$}
+            bind:persistentStorage={$persistentStorage$}
+            bind:hideExternalReadHint={$hideExternalReadHint$}
+            bind:confirmClose={$confirmClose$}
+            bind:manualBookmark={$manualBookmark$}
+            bind:autoBookmark={$autoBookmark$}
+            bind:autoBookmarkTime={$autoBookmarkTime$}
+            bind:importHTMLFixMode={$importHTMLFixMode$}
+            bind:restrictImportFixToAnchor={$restrictImportFixToAnchor$}
+            bind:cacheStorageData={$cacheStorageData$}
+            bind:replicationSaveBehavior={$replicationSaveBehavior$}
+            bind:autoReplication={$autoReplication$}
+            bind:showExternalPlaceholder={$showExternalPlaceholder$}
+            bind:keepLocalStatisticsOnDeletion={$keepLocalStatisticsOnDeletion$}
+            bind:overwriteBookCompletion={$overwriteBookCompletion$}
+            bind:startDayHoursForTracker={$startDayHoursForTracker$}
+            bind:statisticsMergeMode={$statisticsMergeMode$}
+            bind:readingGoalsMergeMode={$readingGoalsMergeMode$}
+            bind:statisticsEnabled={$statisticsEnabled$}
+            bind:trackerAutoPause={$trackerAutoPause$}
+            bind:openTrackerOnCompletion={$openTrackerOnCompletion$}
+            bind:addCharactersOnCompletion={$addCharactersOnCompletion$}
+            bind:trackerAutoStartTime={$trackerAutostartTime$}
+            bind:trackerIdleTime={$trackerIdleTime$}
+            bind:trackerForwardSkipThreshold={$trackerForwardSkipThreshold$}
+            bind:trackerBackwardSkipThreshold={$trackerBackwardSkipThreshold$}
+            bind:trackerSkipThresholdAction={$trackerSkipThresholdAction$}
+            bind:trackerPopupDetection={$trackerPopupDetection$}
+            bind:adjustStatisticsAfterIdleTime={$adjustStatisticsAfterIdleTime$}
+          />
+        {/key}
       </div>
     </main>
   </div>

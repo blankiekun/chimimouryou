@@ -2,18 +2,19 @@
   import { faCheck } from '@fortawesome/free-solid-svg-icons';
   import { customAppThemes$, themeDefinitions$ } from '$lib/data/theme/theme-store';
   import { resolveTheme, type ResolvedTheme } from '$lib/data/theme/themes';
+  import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
   export let value: string;
   /** Lists dark themes first (for the dark slot when following the system) */
   export let preferDark = false;
-  export let label = 'Theme';
+  export let label = '';
 
   $: themes = ($themeDefinitions$ ?? []).map((definition) =>
     resolveTheme(definition.id, $customAppThemes$)
   );
-  $: light = { name: 'Light', themes: themes.filter((theme) => !theme.dark) };
-  $: dark = { name: 'Dark', themes: themes.filter((theme) => theme.dark) };
+  $: light = { name: $t$('prefs.themes.lightGroup'), themes: themes.filter((theme) => !theme.dark) };
+  $: dark = { name: $t$('prefs.themes.darkGroup'), themes: themes.filter((theme) => theme.dark) };
   $: groups = preferDark ? [dark, light] : [light, dark];
 
   function choose(theme: ResolvedTheme) {
@@ -40,7 +41,7 @@
   }
 </script>
 
-<div class="theme-swatches" role="radiogroup" aria-label={label}>
+<div class="theme-swatches" role="radiogroup" aria-label={label || $t$('prefs.themes.theme')}>
   {#each groups as group (group.name)}
     {#if group.themes.length}
       <p class="theme-swatch-group">{group.name}</p>
@@ -55,7 +56,7 @@
             class="theme-swatch"
             class:theme-swatch-selected={selected}
             data-theme-id={theme.id}
-            title="{theme.name}{theme.builtIn ? '' : ' (custom)'}"
+            title={theme.builtIn ? theme.name : $t$('prefs.themes.customName', { name: theme.name })}
             on:click={() => choose(theme)}
             on:keydown={onKeydown}
           >

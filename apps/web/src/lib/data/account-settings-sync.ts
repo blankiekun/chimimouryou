@@ -165,11 +165,6 @@ const readerSettings: Record<string, Store> = {
 
 export type ReaderProfile = 'phone' | 'desktop';
 
-export const readerProfileLabels: Record<ReaderProfile, string> = {
-  phone: 'Phone',
-  desktop: 'Desktop and tablet'
-};
-
 /** Phones (touch screen, short side under 600 px) keep their own reader settings. */
 export function readerProfile(): ReaderProfile {
   const touch = window.matchMedia('(pointer: coarse)').matches;

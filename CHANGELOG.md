@@ -45,10 +45,12 @@ anything a reader or a server operator would notice.
 - Japanese interface (Settings → General → Language · 言語, English by default, synced with
   the account), separate from the AI's language. This release translates the header, Home,
   the book page (difficulty bands and badge included), the settings page's sidebar,
-  Settings → Anki and → AI (with the key setup guide), the library (the Store's toolbar,
-  filters and sorting, select mode, the difficulty dialog, Make series and the manga text
-  row) and the reader (header and menus, dialogs, table of contents, tracker, highlights,
-  search, Listen, Ask AI, Story so far and Lorebook); the rest of the app follows.
+  Settings → Anki and → AI (with the key setup guide), the rest of the settings (reader,
+  tracking, data, account, themes, plugins, Audiobookshelf; the theme editor's colour names
+  and the storage source dialogs stay English), the library (the Store's toolbar, filters and
+  sorting, select mode, the difficulty dialog, Make series and the manga text row) and the
+  reader (header and menus, dialogs, table of contents, tracker, highlights, search, Listen,
+  Ask AI, Story so far and Lorebook); the rest of the app follows.
 - A book's page lists the new kanji: the 30 most frequent kanji in the book you haven't
   met yet, with a button that copies them.
 - The difficulty badge's tooltip says what the band means for a learner, and that the
@@ -138,6 +140,11 @@ anything a reader or a server operator would notice.
   fallback when the browser blocks it, the video at the game's size, and Enter, Space or
   Escape to skip a skippable one. The script's `language` command sets the text layer's
   language.
+
+### Fixes
+
+- Switching the interface language while searching the settings (Ctrl+F) runs the search
+  again on the translated texts, instead of leaving the earlier matches shown.
 
 ## v3.6.0 (2026-10-15)
 
