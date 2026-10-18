@@ -34,6 +34,9 @@ anything a reader or a server operator would notice.
   removes only the synced data. The import service empties Calibre's recycle bin of books
   deleted more than 14 days ago once a day (Calibre itself only does so when the library
   is opened).
+- Kanji met now sync between devices for signed-in readers (`kanji.json` in the account's
+  folder; each book keeps its newest record, counts are not added). Signing in as another
+  reader or signing out clears them from the browser; they come back on sign-in.
 
 ### Reader
 

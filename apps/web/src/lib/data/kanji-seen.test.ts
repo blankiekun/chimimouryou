@@ -5,7 +5,11 @@
  */
 
 import 'fake-indexeddb/auto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// Recording pulls through extras-sync; its handler pulls in every storage source.
+vi.mock('$lib/data/storage/handler/calibre-handler', () => ({ CalibreStorageHandler: {} }));
+
 import {
   kanjiCoverage,
   newKanjiShown,
@@ -56,7 +60,8 @@ describe('recordKanjiText', () => {
     expect(await (await readerDb()).get('kanji', 'ノベル')).toEqual({
       title: 'ノベル',
       upTo: 8,
-      counts: { 吾: 1, 輩: 1, 猫: 2 }
+      counts: { 吾: 1, 輩: 1, 猫: 2 },
+      modified: expect.any(Number)
     });
   });
 });

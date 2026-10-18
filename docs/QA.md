@@ -349,8 +349,8 @@ On a spare machine or VM, following [INSTALL.md](INSTALL.md):
   private model.
 - Calibre's own `has_cover` flag stays unset for covers extracted by the catalog
   builder; Calibre desktop may not show them until its cover is refreshed.
-- Recaps and lorebooks are cached per browser and synced per account;
-  audiobooks, lorebook auto-update state and kanji seen are per browser.
+- Recaps, lorebooks and kanji seen are cached per browser and synced per account;
+  audiobooks and lorebook auto-update state are per browser.
 - Reader settings outside Settings → Reader (e.g. custom reading point
   positions) are not synced.
 - AI API keys are stored in plain text in the account's folder on the server.

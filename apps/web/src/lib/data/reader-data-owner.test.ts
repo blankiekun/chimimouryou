@@ -12,6 +12,7 @@ vi.mock('$lib/data/calibre', () => ({
 }));
 
 const { database } = await import('$lib/data/store');
+const { readerDb } = await import('$lib/data/reader-db');
 const { releaseReaderData } = await import('$lib/data/reader-data-owner');
 
 async function seed() {
@@ -26,7 +27,10 @@ async function seed() {
     await db.put('lastModified', { title, dataType: 'statistic', lastModifiedValue: 1 } as any);
   }
   await db.put('readingGoal', { goalStartDate: '2026-10-01', goalEndDate: '' } as any);
+  await (await readerDb()).put('kanji', { title: 'Local', upTo: 1, counts: { 人: 1 } });
 }
+
+const kanjiCount = async () => (await readerDb()).count('kanji');
 
 async function counts() {
   const db = await database.db;
@@ -49,12 +53,14 @@ describe('releaseReaderData', () => {
     await releaseReaderData(user('a'));
     await releaseReaderData(user('a'));
     expect(await counts()).toEqual([2, 2, 2, 2, 1]);
+    expect(await kanjiCount()).toBe(1);
   });
 
   it("clears Calibre books' progress, statistics and goals for another reader", async () => {
     await releaseReaderData(user('a'));
     await releaseReaderData(user('b'));
     expect(await counts()).toEqual([2, 1, 1, 1, 0]);
+    expect(await kanjiCount()).toBe(0);
     const db = await database.db;
     expect(await db.get('bookmark', 2)).toBeTruthy();
     expect(await db.get('statistic', ['Local', '2026-10-12'])).toBeTruthy();

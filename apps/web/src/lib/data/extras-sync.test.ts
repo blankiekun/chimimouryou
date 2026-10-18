@@ -16,13 +16,14 @@ const account = vi.hoisted(() => ({ user: null as { id: string; username: string
 
 vi.mock('$lib/data/account', () => ({
   accountReady: async () => account.user,
+  accountSyncUrl: '/account/sync/',
   currentAccount: () => account.user
 }));
 
 import { readerDb } from '$lib/data/reader-db';
 import { getLorebook, saveLoreEntries, type LoreEntry } from '$lib/data/lorebook';
 import { deleteSavedRecap, getSavedRecaps } from '$lib/data/recap';
-import { enableExtrasSync, syncExtras } from './extras-sync';
+import { enableExtrasSync, mergeKanji, syncExtras, syncKanji } from './extras-sync';
 
 const entry = (name: string): LoreEntry => ({
   id: name,
@@ -174,5 +175,59 @@ describe('extras sync', () => {
 
     expect(JSON.stringify(files)).not.toContain('秘密');
     expect((await getLorebook('Private')).entries).toEqual([]);
+  });
+});
+
+describe('kanji sync', () => {
+  const book = (title: string, upTo: number, modified?: number, kanji = '人') => ({
+    title,
+    upTo,
+    counts: { [kanji]: upTo },
+    ...(modified === undefined ? {} : { modified })
+  });
+
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    account.user = null;
+    window.localStorage.clear();
+    await (await readerDb()).clear('kanji');
+  });
+
+  it('keeps the newest record per title without adding counts', () => {
+    expect(
+      mergeKanji(
+        [book('A', 10, 2), book('B', 50), book('C', 5, 1)],
+        [book('A', 99, 1), book('B', 60), book('D', 7, 3)]
+      )
+    ).toEqual([book('A', 10, 2), book('B', 60), book('C', 5, 1), book('D', 7, 3)]);
+  });
+
+  it('downloads newer records and uploads the merged file for the signed-in reader', async () => {
+    const { files } = server({
+      '/account/sync/kanji.json': { books: [book('A', 99, 1, '山'), book('B', 20, 5)] }
+    });
+    const db = await readerDb();
+
+    await db.put('kanji', book('A', 10, 2));
+    account.user = { id: 'bob', username: 'bob' };
+    window.localStorage.setItem('readerDataOwner', 'bob');
+    await syncKanji();
+
+    expect(await db.getAll('kanji')).toEqual([book('A', 10, 2), book('B', 20, 5)]);
+    expect(files['/account/sync/kanji.json']).toEqual({
+      books: [book('A', 10, 2), book('B', 20, 5)]
+    });
+  });
+
+  it("doesn't sync signed out or before another reader's kanji are released", async () => {
+    const { calls } = server();
+
+    await (await readerDb()).put('kanji', book('A', 10, 2));
+    await syncKanji();
+    account.user = { id: 'bob', username: 'bob' };
+    window.localStorage.setItem('readerDataOwner', 'alice');
+    await syncKanji();
+
+    expect(calls).toEqual([]);
   });
 });

@@ -6,9 +6,11 @@
 
 /**
  * Kanji met while reading, per book, counted from the text up to the reading
- * position, for the library's Home tab. Kept in this browser only. Not part of upstream.
+ * position, for the library's Home tab. Synced as kanji.json in the account's folder
+ * while signed in (extras-sync.ts). Not part of upstream.
  */
 
+import { kanjiChanged, pullKanji } from '$lib/data/extras-sync';
 import { readerDb } from '$lib/data/reader-db';
 import { textBetween } from '$lib/data/recap';
 import type { SearchIndex } from '$lib/functions/book-text/book-search';
@@ -18,6 +20,8 @@ export interface KanjiSeen {
   /** Character count counted up to */
   upTo: number;
   counts: Record<string, number>;
+  /** When this browser last recorded it (ms); missing on records from before syncing */
+  modified?: number;
 }
 
 const kanjiPattern = /\p{Unified_Ideograph}/gu;
@@ -37,6 +41,8 @@ export function countKanji(text: string, counts: Record<string, number> = {}) {
  * time a book is recorded, everything before the position counts as read.
  */
 export async function recordKanjiSeen(title: string, index: SearchIndex, position: number) {
+  // Start from another device's newer record rather than overwrite it.
+  await pullKanji();
   const db = await readerDb();
   const seen = (await db.get('kanji', title)) ?? { title, upTo: 0, counts: {} };
 
@@ -48,15 +54,23 @@ export async function recordKanjiSeen(title: string, index: SearchIndex, positio
     countKanji(textBetween(index, seen.upTo, position), seen.counts);
   }
 
-  await db.put('kanji', { ...seen, upTo: position });
+  await db.put('kanji', { ...seen, upTo: position, modified: Date.now() });
+  kanjiChanged();
 }
 
 /** Adds the kanji of text read in a visual novel, which has no search index. */
 export async function recordKanjiText(title: string, text: string, upTo: number) {
+  await pullKanji();
   const db = await readerDb();
   const seen = (await db.get('kanji', title)) ?? { title, upTo: 0, counts: {} };
 
-  await db.put('kanji', { ...seen, upTo, counts: countKanji(text, { ...seen.counts }) });
+  await db.put('kanji', {
+    ...seen,
+    upTo,
+    counts: countKanji(text, { ...seen.counts }),
+    modified: Date.now()
+  });
+  kanjiChanged();
 }
 
 export interface KanjiSummary {
@@ -69,6 +83,7 @@ export function summarizeKanji(books: KanjiSeen[]): KanjiSummary {
 }
 
 export async function getKanjiSummary() {
+  await pullKanji();
   return summarizeKanji(await (await readerDb()).getAll('kanji'));
 }
 
@@ -111,5 +126,6 @@ export function kanjiCoverage(
 }
 
 export async function getKanjiSeen() {
+  await pullKanji();
   return (await readerDb()).getAll('kanji');
 }

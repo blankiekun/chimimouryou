@@ -185,6 +185,6 @@ section in paginated mode. `annotations.json` is merged per highlight (newest
 - The AI voice highlight is per phrase (split at 。、 and quotes), from
   ElevenLabs' character timestamps; if they don't line up with the text, the
   whole chunk is highlighted.
-- Audiobooks and kanji seen are per browser (not synced). Highlighting
+- Audiobooks are per browser (not synced); kanji seen sync per account, signed-in only. Highlighting
   the line being read walks the rendered text on every line change, which costs
   more in continuous mode on very long books.
