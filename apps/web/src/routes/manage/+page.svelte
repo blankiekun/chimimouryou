@@ -41,6 +41,7 @@
     storeView$
   } from '$lib/data/library-home';
   import { homeOfflineTitles, keepBooksOffline } from '$lib/data/offline-books';
+  import { t$ } from '$lib/i18n';
   import { ankiKnownWords$ } from '$lib/data/anki';
   import {
     cacheCoverage,
@@ -1183,7 +1184,11 @@
     >
       <!-- Visual novels aren't grouped in series -->
       {#if !isHome && activeFilter !== 'vn'}
-        <div class="library-tabs library-tabs-small" role="radiogroup" aria-label="Store view">
+        <div
+          class="library-tabs library-tabs-small"
+          role="radiogroup"
+          aria-label={$t$('store.view')}
+        >
           <button
             type="button"
             role="radio"
@@ -1192,7 +1197,8 @@
             aria-checked={!showSeriesGrid}
             on:click={() => setStoreView('books')}
           >
-            <Fa icon={faBook} /> Books
+            <Fa icon={faBook} />
+            {$t$('store.books')}
           </button>
           <button
             type="button"
@@ -1202,7 +1208,8 @@
             aria-checked={showSeriesGrid}
             on:click={() => setStoreView('series')}
           >
-            <Fa icon={faLayerGroup} /> Series
+            <Fa icon={faLayerGroup} />
+            {$t$('store.series')}
           </button>
         </div>
       {/if}
@@ -1261,12 +1268,12 @@
           <button
             type="button"
             class="library-toolbar-button"
-            title="Add selected books to Home"
+            title={$t$('home.addSelected')}
             disabled={!selectedBookIds.size}
             on:click={addSelectedToHome}
           >
             <Fa icon={faPlus} />
-            <span class="hidden sm:inline">Add to Home</span>
+            <span class="hidden sm:inline">{$t$('home.add')}</span>
           </button>
           <button
             type="button"
@@ -1356,9 +1363,10 @@
 
       {#if $libraryOffline$ && $storageSource$ === StorageKey.CALIBRE && !isLoading}
         <p class="pb-4 text-center text-xs font-semibold text-[color:var(--app-muted-fg)]">
-          The server can't be reached: showing the books downloaded to this browser. Progress syncs
-          once it's back ·
-          <button type="button" class="underline" on:click={retryLibrary}>retry</button>
+          {$t$('home.offline')} ·
+          <button type="button" class="underline" on:click={retryLibrary}
+            >{$t$('home.retry')}</button
+          >
         </p>
       {/if}
       {#if isLoading}
@@ -1372,7 +1380,7 @@
           on:bookClick={(ev) => onCoverClick(ev.detail.id)}
           on:bookRead={(ev) => onBookClick(ev.detail.id)}
           on:bookSelect={(ev) => selectBook(ev.detail.id)}
-          removeTitle="Remove from Home"
+          removeTitle={$t$('home.remove')}
           on:remove={(ev) => removeFromHome(ev.detail.title)}
         />
         <ContinueReadingShelf
@@ -1388,9 +1396,9 @@
         <ContinueReadingShelf
           bookCards={$bookCards$}
           shelfBooks={homeCards}
-          heading="My books"
+          heading={$t$('home.myBooks')}
           icon={faHouse}
-          removeTitle="Remove from Home"
+          removeTitle={$t$('home.remove')}
           currentBookId={$currentBookId$}
           selectedBookIds={selectMode ? selectedBookIds : undefined}
           on:bookClick={(ev) => onCoverClick(ev.detail.id)}
@@ -1399,17 +1407,17 @@
         />
         {#if !homeCards.length}
           <div class="library-empty">
-            <p class="library-empty-title">Pick your next reads in the Store</p>
+            <p class="library-empty-title">{$t$('home.emptyTitle')}</p>
             <p class="text-sm font-semibold text-[color:var(--app-muted-fg)]">
-              Search for a book or a series there and add it to Home, or select several books and
-              press "Add to Home".
+              {$t$('home.emptyText')}
             </p>
             <button
               type="button"
               class="library-toolbar-button"
               on:click={() => ($libraryTab$ = 'store')}
             >
-              <Fa icon={faStore} /> Open the Store
+              <Fa icon={faStore} />
+              {$t$('home.openStore')}
             </button>
           </div>
         {/if}

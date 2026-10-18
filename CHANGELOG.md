@@ -34,6 +34,9 @@ anything a reader or a server operator would notice.
 
 ### Library
 
+- Japanese interface (Settings → General → Language · 言語, English by default, synced with
+  the account), separate from the AI's language. This release translates the header and
+  Home; the rest of the app follows.
 - A book's page lists the new kanji: the 30 most frequent kanji in the book you haven't
   met yet, with a button that copies them.
 - The difficulty badge's tooltip says what the band means for a learner, and that the
