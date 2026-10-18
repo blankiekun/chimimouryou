@@ -5,18 +5,20 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { difficultyDescription, difficultyDescriptions, difficultyNames } from './difficulty';
+import { translate } from '$lib/i18n';
+import { difficultyDescriptionKey, difficultyNameKey, difficultyNames } from './difficulty';
 
-describe('difficultyDescription', () => {
-  it('has one description per band', () => {
-    expect(difficultyDescriptions).toHaveLength(difficultyNames.length);
+describe('difficulty bands', () => {
+  it('follows the band of the score, clamped to the scale', () => {
+    expect(difficultyDescriptionKey(-1)).toBe('difficulty.beginnerHint');
+    expect(difficultyDescriptionKey(0.99)).toBe('difficulty.beginnerHint');
+    expect(difficultyNameKey(2.4)).toBe('difficulty.average');
+    expect(difficultyNameKey(5)).toBe('difficulty.insane');
+    expect(difficultyDescriptionKey(7)).toBe('difficulty.insaneHint');
   });
 
-  it('follows the band of the score, clamped to the scale', () => {
-    expect(difficultyDescription(-1)).toBe(difficultyDescriptions[0]);
-    expect(difficultyDescription(0.99)).toBe(difficultyDescriptions[0]);
-    expect(difficultyDescription(2.4)).toBe(difficultyDescriptions[2]);
-    expect(difficultyDescription(5)).toBe(difficultyDescriptions[5]);
-    expect(difficultyDescription(7)).toBe(difficultyDescriptions[5]);
+  it('names the bands in English for the filters, in Japanese on request', () => {
+    expect(difficultyNames).toEqual(['Beginner', 'Easy', 'Average', 'Hard', 'Expert', 'Insane']);
+    expect(translate('ja', difficultyNameKey(1.5))).toBe('初級');
   });
 });

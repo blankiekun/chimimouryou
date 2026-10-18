@@ -16,7 +16,7 @@
   import DifficultyDialog from '$lib/components/book-card/difficulty-dialog.svelte';
   import MokuroText from '$lib/components/book-card/mokuro-text.svelte';
   import { isFinished, isReading } from '$lib/components/book-card/library-filters';
-  import { formatSeries, orderSeries } from '$lib/components/book-card/library-sort';
+  import { orderSeries } from '$lib/components/book-card/library-sort';
   import { account$, hasPermission } from '$lib/data/account';
   import {
     loadBookMetadata,
@@ -36,7 +36,7 @@
     type CalibreBook,
     type CalibreDifficulty
   } from '$lib/data/calibre';
-  import { difficultyName } from '$lib/data/difficulty';
+  import { difficultyNameKey } from '$lib/data/difficulty';
   import {
     downloadWordsCsv,
     kanjiPattern,
@@ -58,6 +58,7 @@
   import { guessSeriesName } from '$lib/data/series-overrides';
   import { database, startDayHoursForTracker$ } from '$lib/data/store';
   import { getDateKey } from '$lib/functions/statistic-util';
+  import { t$, tr, uiLanguage$ } from '$lib/i18n';
   import { createEventDispatcher, onMount } from 'svelte';
   import Fa from 'svelte-fa';
 
@@ -119,6 +120,40 @@
     ? new Date(calibreBook.published).getFullYear().toString()
     : metadata?.released.slice(0, 4);
   $: (book.title, load());
+  /** The difficulty note: a few whole sentences, each only when its numbers exist */
+  $: difficultyNote =
+    book.difficulty === undefined
+      ? ''
+      : [
+          book.difficultyLow !== undefined && book.difficultyHigh !== undefined
+            ? $t$('book.scoreRange', {
+                score: book.difficulty.toFixed(1),
+                low: book.difficultyLow.toFixed(1),
+                high: book.difficultyHigh.toFixed(1)
+              })
+            : $t$('book.score', { score: book.difficulty.toFixed(1) }),
+          book.words95 ? $t$('book.words95', { count: number(book.words95) }) : '',
+          kanjiSentence(estimate?.uniqueKanji, kanji)
+        ]
+          .filter(Boolean)
+          .join($uiLanguage$ === 'ja' ? '' : ' ');
+
+  function kanjiSentence(unique: number | undefined, met: KanjiCoverage | undefined) {
+    const params = {
+      count: number(unique ?? 0),
+      percent: ((met?.coverage ?? 0) * 100).toFixed(1),
+      new: number(met?.newKanji ?? 0)
+    };
+
+    if (!met) {
+      return unique ? $t$('book.kanji', params) : '';
+    }
+    if (unique) {
+      return $t$(met.newKanji ? 'book.kanjiMetNew' : 'book.kanjiMet', params);
+    }
+
+    return $t$(met.newKanji ? 'book.kanjiMetOnlyNew' : 'book.kanjiMetOnly', params);
+  }
 
   onMount(() => {
     backButton.focus();
@@ -138,7 +173,9 @@
   function hours(count: number) {
     const value = count / speed;
 
-    return value < 1 ? `${Math.max(1, Math.round(value * 60))} min` : `${value.toFixed(1)} h`;
+    return value < 1
+      ? $t$('book.minutes', { minutes: Math.max(1, Math.round(value * 60)) })
+      : $t$('book.hours', { hours: value.toFixed(1) });
   }
 
   async function loadSpeed() {
@@ -240,7 +277,10 @@
       }
     } catch (error: any) {
       if (request === searchRequest) {
-        searchError = `${sourceNames[source ?? defaultSource(kind)]} search failed: ${error.message}`;
+        searchError = tr('book.searchFailed', {
+          source: sourceNames[source ?? defaultSource(kind)],
+          error: error.message
+        });
       }
     } finally {
       if (request === searchRequest) {
@@ -286,7 +326,8 @@
       bind:this={backButton}
       on:click={() => dispatch('close')}
     >
-      <Fa icon={faArrowLeft} /> Library
+      <Fa icon={faArrowLeft} />
+      {$t$('book.library')}
     </button>
   </div>
 
@@ -300,7 +341,7 @@
           <span class="details-obi-sub">
             {obiLength ? kindLabel : ''}{#if book.difficulty !== undefined}{obiLength
                 ? '・'
-                : ''}{difficultyName(book.difficulty)}{/if}
+                : ''}{$t$(difficultyNameKey(book.difficulty))}{/if}
           </span>
         </span>
       </div>
@@ -312,13 +353,13 @@
           on:click={() => dispatch('read', { id: book.id })}
         >
           <Fa icon={isReading(book) ? faBookOpenReader : faBookOpen} />
-          {#if isReading(book)}Resume at {Math.round(
-              book.progress * 100
-            )}%{:else if isFinished(book)}Read again{:else}Read{/if}
+          {#if isReading(book)}{$t$('book.resumeAt', {
+              percent: Math.round(book.progress * 100)
+            })}{:else if isFinished(book)}{$t$('book.readAgain')}{:else}{$t$('book.read')}{/if}
         </button>
         <button type="button" class="app-button" aria-pressed={onHome} on:click={toggleHome}>
           <Fa icon={onHome ? faXmark : faHouse} />
-          {onHome ? 'Remove from Home' : 'Add to Home'}
+          {onHome ? $t$('home.remove') : $t$('home.add')}
         </button>
       </div>
     </div>
@@ -337,7 +378,9 @@
           lang="ja"
           on:click={() => dispatch('showSeries', book.series ?? '')}
         >
-          {formatSeries(book)}
+          {book.seriesIndex === null || book.seriesIndex === undefined
+            ? book.series
+            : $t$('book.seriesVolume', { series: book.series, index: book.seriesIndex })}
         </button>
       {/if}
 
@@ -345,42 +388,43 @@
         <div class="details-description">
           <p lang="ja">{metadata.description}</p>
           <a href={metadata.url} target="_blank" rel="noreferrer">
-            From {sourceNames[metadata.source]}
+            {$t$('book.from', { source: sourceNames[metadata.source] })}
           </a>
         </div>
       {/if}
 
       <dl class="details-facts">
         <div>
-          <dt>Length</dt>
+          <dt>{$t$('book.length')}</dt>
           <dd>
             {#if !characters}
-              Unknown until opened or estimated
+              {$t$('book.lengthUnknown')}
             {:else if kind === 'manga'}
-              {number(characters)} pages
+              {$t$('book.pages', { count: number(characters) })}
             {:else}
-              {number(characters)} characters
+              {$t$('book.characters', { count: number(characters) })}
               {#if speed}
                 <span class="details-note">
-                  About {hours(remaining)}{isReading(book) ? ' left' : ''} at your speed ({number(
-                    speed
-                  )}/h)
+                  {$t$(isReading(book) ? 'book.timeLeftAtSpeed' : 'book.timeAtSpeed', {
+                    time: hours(remaining),
+                    speed: number(speed)
+                  })}
                 </span>
               {/if}
             {/if}
           </dd>
         </div>
         <div>
-          <dt>Progress</dt>
+          <dt>{$t$('book.progress')}</dt>
           <dd>
-            {#if isFinished(book)}Finished{:else if isReading(book)}{Math.round(
+            {#if isFinished(book)}{$t$('book.finished')}{:else if isReading(book)}{Math.round(
                 book.progress * 100
-              )}%{:else}Not started{/if}
+              )}%{:else}{$t$('book.notStarted')}{/if}
           </dd>
         </div>
         {#if isCalibre && kind !== 'manga' && book.calibreId !== undefined}
           <div>
-            <dt>Difficulty</dt>
+            <dt>{$t$('book.difficulty')}</dt>
             <dd>
               {#if book.difficulty !== undefined}
                 <DifficultyBadge
@@ -389,75 +433,68 @@
                   high={book.difficultyHigh}
                   words95={book.words95}
                 />
-                <span class="details-note">
-                  {book.difficulty.toFixed(1)} of 5{#if book.difficultyLow !== undefined && book.difficultyHigh !== undefined},
-                    likely {book.difficultyLow.toFixed(1)}–{book.difficultyHigh.toFixed(
-                      1
-                    )}{/if}{#if book.words95}. The {number(book.words95)} most common words cover 95%
-                    of it{/if}{#if estimate?.uniqueKanji}. {number(estimate.uniqueKanji)} different kanji{/if}{#if kanji},
-                    {(kanji.coverage * 100).toFixed(1)}% already met{#if kanji.newKanji}
-                      ({number(kanji.newKanji)} new){/if}{/if}.
-                </span>
+                <span class="details-note">{difficultyNote}</span>
                 {#if kanji?.topNew.length}
                   <span class="details-note">
-                    {kanji.topNew.length < kanji.newKanji ? 'Most frequent new' : 'New'} kanji:
+                    {kanji.topNew.length < kanji.newKanji
+                      ? $t$('book.topNewKanji')
+                      : $t$('book.newKanji')}
                     <span class="details-new-kanji" lang="ja">{kanji.topNew.join('')}</span>
                     <button type="button" class="details-link" on:click={copyNewKanji}>
-                      {copied ? 'Copied' : 'Copy'}
+                      {copied ? $t$('book.copied') : $t$('book.copy')}
                     </button>
                   </span>
                 {/if}
               {:else}
-                No estimate yet
+                {$t$('book.noEstimate')}
               {/if}
               <button type="button" class="details-link" on:click={showDifficulty}>
-                Difficulty details
+                {$t$('book.difficultyDetails')}
               </button>
             </dd>
           </div>
         {/if}
         {#if isCalibre && kind === 'manga' && book.calibreId !== undefined}
           <div>
-            <dt>Text</dt>
+            <dt>{$t$('book.text')}</dt>
             <dd><MokuroText calibreId={book.calibreId} /></dd>
           </div>
         {/if}
         {#if calibreBook?.publisher}
           <div>
-            <dt>Publisher</dt>
+            <dt>{$t$('book.publisher')}</dt>
             <dd lang="ja">{calibreBook.publisher}</dd>
           </div>
         {/if}
         {#if published}
           <div>
-            <dt>Published</dt>
+            <dt>{$t$('book.published')}</dt>
             <dd>{published}</dd>
           </div>
         {/if}
         {#if book.rating}
           <div>
-            <dt>Rating</dt>
-            <dd aria-label="{book.rating} of 5 stars">
+            <dt>{$t$('book.rating')}</dt>
+            <dd aria-label={$t$('book.ratingLabel', { rating: book.rating })}>
               {'★'.repeat(Math.round(book.rating))}{'☆'.repeat(5 - Math.round(book.rating))}
             </dd>
           </div>
         {/if}
         {#if metadata?.score}
           <div>
-            <dt>{sourceNames[metadata.source]} score</dt>
+            <dt>{$t$('book.sourceScore', { source: sourceNames[metadata.source] })}</dt>
             <dd>{metadata.score} / 100</dd>
           </div>
         {/if}
         {#if calibreBook}
           <div>
-            <dt>File</dt>
+            <dt>{$t$('book.file')}</dt>
             <dd>
-              {calibreBook.format === 'VN'
-                ? 'Game folder'
-                : calibreBook.format}{#if calibreBook.size},
-                {(calibreBook.size / 1e6).toFixed(1)} MB{/if}, added {new Date(
-                calibreBook.added
-              ).toLocaleDateString()}
+              {$t$(calibreBook.size ? 'book.fileSizeAdded' : 'book.fileAdded', {
+                format: calibreBook.format === 'VN' ? $t$('book.gameFolder') : calibreBook.format,
+                size: (calibreBook.size / 1e6).toFixed(1),
+                date: new Date(calibreBook.added).toLocaleDateString()
+              })}
             </dd>
           </div>
         {/if}
@@ -465,20 +502,19 @@
 
       {#if studyWords.length}
         <section class="details-words" aria-labelledby="book-details-words">
-          <h2 id="book-details-words" class="details-fetch-heading">Words to study first</h2>
+          <h2 id="book-details-words" class="details-fetch-heading">{$t$('book.studyWords')}</h2>
           <p class="details-note">
-            Used often in this book but outside the {number(estimate?.words95 ?? 0)} most common
-            words, by count in the book{#if studyWords.length > 50}: the first 50 of {number(
-                studyWords.length
-              )} (the CSV has all){/if}.
+            {$t$(studyWords.length > 50 ? 'book.studyWordsNoteFirst' : 'book.studyWordsNote', {
+              count: number(estimate?.words95 ?? 0),
+              total: number(studyWords.length)
+            })}
           </p>
           {#if knownStudy}
-            <p
-              class="details-note"
-              title="Your deck's mature cards compared with these words by written form (readings aren't matched). Only the book's 2,000 most frequent words are listed, so this is an estimate."
-            >
-              You know {number(knownStudy.size)} of the {number(studyWords.length)} words to study
-              (from your Anki deck).
+            <p class="details-note" title={$t$('book.knownWordsHint')}>
+              {$t$(studyWords.length === 1 ? 'book.knownWordsOne' : 'book.knownWords', {
+                known: number(knownStudy.size),
+                total: number(studyWords.length)
+              })}
             </p>
           {/if}
           <ol lang="ja">
@@ -490,7 +526,7 @@
                   >{/if}
                 <span class="details-note-inline">×{count}</span>{#if known}<span
                     class="details-note-inline"
-                    aria-label="known"> ✓</span
+                    aria-label={$t$('book.known')}> ✓</span
                   >{/if}
               </li>
             {/each}
@@ -500,13 +536,14 @@
             class="app-button"
             on:click={() => downloadWordsCsv(book.title, studyWords)}
           >
-            <Fa icon={faDownload} /> Download CSV
+            <Fa icon={faDownload} />
+            {$t$('book.downloadCsv')}
           </button>
         </section>
       {/if}
 
       {#if genres.length}
-        <ul class="details-tags" aria-label="Tags">
+        <ul class="details-tags" aria-label={$t$('book.tags')}>
           {#each genres as genre (genre)}
             <li lang="ja">{genre}</li>
           {/each}
@@ -519,8 +556,8 @@
             <button type="button" class="app-button" on:click={openSearch}>
               <Fa icon={faMagnifyingGlass} />
               {metadata
-                ? 'Change details'
-                : `Find details on ${sourceNames[defaultSource(kind)]} or Jiten`}
+                ? $t$('book.changeDetails')
+                : $t$('book.findDetailsOn', { source: sourceNames[defaultSource(kind)] })}
             </button>
             {#if metadata}
               <button
@@ -529,15 +566,17 @@
                 disabled={saving}
                 on:click={() => save(undefined)}
               >
-                Remove details{metadata.cover ? ' and cover' : ''}
+                {metadata.cover ? $t$('book.removeDetailsCover') : $t$('book.removeDetails')}
               </button>
             {/if}
           {:else}
-            <h2 id="book-details-fetch" class="details-fetch-heading">Find details</h2>
+            <h2 id="book-details-fetch" class="details-fetch-heading">
+              {$t$('book.findDetails')}
+            </h2>
             <form class="details-search" on:submit|preventDefault={search}>
               <select
                 class="app-input"
-                aria-label="Source"
+                aria-label={$t$('book.source')}
                 bind:value={source}
                 on:change={() => ((candidates = undefined), search())}
               >
@@ -548,23 +587,26 @@
                 class="app-input"
                 type="search"
                 lang="ja"
-                aria-label="Search {sourceNames[source ?? defaultSource(kind)]}"
+                aria-label={$t$('book.searchSource', {
+                  source: sourceNames[source ?? defaultSource(kind)]
+                })}
                 bind:value={searchTerm}
                 on:keydown={(ev) => ev.key === 'Escape' && (searchOpen = false)}
               />
               <button type="submit" class="app-button">
-                <Fa icon={searching ? faSpinner : faMagnifyingGlass} spin={searching} /> Search
+                <Fa icon={searching ? faSpinner : faMagnifyingGlass} spin={searching} />
+                {$t$('book.search')}
               </button>
               <button
                 type="button"
                 class="app-button app-button-quiet"
                 on:click={() => (searchOpen = false)}
               >
-                Cancel
+                {$t$('book.cancel')}
               </button>
             </form>
             {#if candidates && !candidates.length && !searching}
-              <p class="details-note">Nothing found. Try the series name without volume numbers.</p>
+              <p class="details-note">{$t$('book.nothingFound')}</p>
             {/if}
             {#if candidates?.length}
               <ul class="details-candidates">
@@ -585,7 +627,8 @@
                         {candidate.title}
                       </a>
                       <span class="details-note">
-                        {candidate.released.slice(0, 4) || 'Undated'}{#if candidate.genres.length},
+                        {candidate.released.slice(0, 4) ||
+                          $t$('book.undated')}{#if candidate.genres.length},
                           {candidate.genres.slice(0, 3).join(', ')}{/if}
                       </span>
                       <span class="details-candidate-buttons">
@@ -595,7 +638,7 @@
                           disabled={saving}
                           on:click={() => save({ ...candidate, cover: '' })}
                         >
-                          Use details
+                          {$t$('book.useDetails')}
                         </button>
                         {#if candidate.cover}
                           <button
@@ -604,7 +647,7 @@
                             disabled={saving}
                             on:click={() => save(candidate)}
                           >
-                            Use details and cover
+                            {$t$('book.useDetailsCover')}
                           </button>
                         {/if}
                       </span>
