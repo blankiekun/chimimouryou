@@ -9,13 +9,17 @@ import { userFontsCacheName } from '$lib/data/fonts';
 // eslint-disable-next-line no-restricted-globals
 const worker = self as unknown as ServiceWorkerGlobalScope;
 const BUILD_CACHE_NAME = `build:${version}`;
+// The visual novel engine can be replaced on the server without a new build (admin panel),
+// so it is fetched network-first and kept across builds for offline play.
+const ENGINE_CACHE_NAME = 'vn-engine';
+const engineFile = /\/vn\/conscripter(\.js|\.wasm|-version\.txt)$/;
 
 const prerenderedSet = new Set(prerendered);
 
 // Whisper's worker and runtime (tens of MB) load only when someone transcribes.
 const assetsToCache = build
   .filter((file) => !/ort-wasm|whisper\.worker/.test(file))
-  .concat(files)
+  .concat(files.filter((file) => !engineFile.test(file)))
   .concat(prerendered);
 const cachedAssets = new Set(assetsToCache);
 
@@ -28,7 +32,7 @@ worker.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       const keysWithOldCache = keys.filter(
-        (key) => key !== BUILD_CACHE_NAME && key !== userFontsCacheName
+        (key) => key !== BUILD_CACHE_NAME && key !== userFontsCacheName && key !== ENGINE_CACHE_NAME
       );
       return Promise.all(keysWithOldCache.map((key) => caches.delete(key)));
     })
@@ -55,6 +59,11 @@ worker.addEventListener('fetch', (event) => {
     event.respondWith(
       networkFirstRaceCache(event.request, false, BUILD_CACHE_NAME, requestWithoutParams)
     );
+    return;
+  }
+
+  if (isSelfHost && engineFile.test(url.pathname)) {
+    event.respondWith(networkFirst(event.request, url.pathname));
     return;
   }
 
@@ -86,6 +95,20 @@ worker.addEventListener('fetch', (event) => {
     event.respondWith(networkFirstRaceCache(event.request));
   }
 });
+
+async function networkFirst(request: Request, key: string) {
+  const cache = await caches.open(ENGINE_CACHE_NAME);
+
+  try {
+    const response = await fetch(request);
+
+    if (response.ok) await cache.put(key, response.clone());
+
+    return response;
+  } catch (error) {
+    return (await cache.match(key)) ?? Promise.reject(error);
+  }
+}
 
 async function networkFirstRaceCache(
   request: Request,

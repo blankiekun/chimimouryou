@@ -9,8 +9,9 @@
 # starts this, which downloads the commit (main's head or the latest release), swaps it into /opt/ebook-reader,
 # builds the images and restarts the stack like deploy.sh. If the build fails
 # the running version stays. Progress goes to status.json for the admin panel.
-# A request naming an "engine" (Tools → Visual novel engine) instead fetches that
-# CONscripter release into a copy of the installed tree and rebuilds only web.
+# A request naming an "engine" (Tools → Visual novel engine) instead downloads that
+# CONscripter release's web build into DATA_PATH/state/engine, which nginx serves ahead of
+# the built-in engine: nothing is built or restarted.
 # DATA_PATH (absolute) and UPDATE_REPO come from /etc/ebook-reader/env.
 set -euo pipefail
 
@@ -88,8 +89,6 @@ trap 'rm -rf "$work"' EXIT
 trap 'status failed "Update failed; see journalctl -u ebook-update on the server"' ERR
 
 compose=/usr/local/bin/ebook-compose
-vn=apps/web/static/vn
-services=
 status running "Downloading"
 if [ -n "$engine" ]; then
   # Only the latest release, as for the app below.
@@ -98,10 +97,14 @@ if [ -n "$engine" ]; then
     status failed "That is not the latest CONscripter release any more; check again"
     exit 0
   fi
-  cp -a "$APP" "$work/src"
-  CONSCRIPTER_TAG=$engine "$work/src/scripts/conscripter/build.sh"
-  version=$($compose exec -T web cat /srv/www/version.txt || true)
-  services=web
+  CONSCRIPTER_TAG=$engine CONSCRIPTER_OUT=$work/engine "$APP/scripts/conscripter/build.sh"
+  as_owner mkdir -p "$data/state/engine"
+  # The version file last, so a half-installed engine is never announced.
+  for file in conscripter.js conscripter.wasm conscripter-version.txt; do
+    write "$data/state/engine/$file" < "$work/engine/$file"
+  done
+  status done "Installed"
+  exit 0
 else
   # Only the head of main (bleeding edge) or the latest release (stable): GitHub
   # also serves commits pushed to forks under this repository's name, and the
@@ -121,12 +124,6 @@ else
   fi
   mkdir "$work/src"
   curl -fsSL "https://codeload.github.com/$repo/tar.gz/$head" | tar -xz -C "$work/src" --strip-components=1
-  # Keep an engine installed from the admin panel that is newer than the commit's.
-  old=$(cat "$APP/$vn/conscripter-version.txt" 2>/dev/null || true)
-  new=$(cat "$work/src/$vn/conscripter-version.txt" 2>/dev/null || true)
-  if [ -n "$old" ] && [ "$old" != "$new" ] && [ "$(printf '%s\n%s\n' "$new" "$old" | sort -V | tail -n 1)" = "$old" ]; then
-    cp "$APP/$vn"/conscripter.js "$APP/$vn"/conscripter.wasm "$APP/$vn"/conscripter-version.txt "$work/src/$vn/"
-  fi
 fi
 
 status running "Building"
@@ -137,9 +134,7 @@ rm -rf "$APP.previous"
 mv "$APP" "$APP.previous"
 mv "$work/src" "$APP"
 export VERSION=${version:-docker}
-# $services is empty (all) or web.
-# shellcheck disable=SC2086
-if ! $compose build --quiet $services; then
+if ! $compose build --quiet; then
   rm -rf "$APP"
   mv "$APP.previous" "$APP"
   status failed "The new version did not build; the running one stays"
@@ -147,8 +142,7 @@ if ! $compose build --quiet $services; then
 fi
 
 status running "Restarting"
-# shellcheck disable=SC2086
-$compose up -d --remove-orphans $services
+$compose up -d --remove-orphans
 docker image prune -f >/dev/null
 rm -rf "$APP.previous"
 for command in $COMMANDS; do

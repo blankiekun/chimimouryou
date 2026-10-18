@@ -92,6 +92,8 @@ services:
       target: difficulty
     image: ${IMAGE_PREFIX:-ebook-reader}-difficulty:${IMAGE_TAG:-local}
     command: ["/opt/venv/bin/python", "-W", "ignore", "/app/jiten/service.py", "serve"]
+    # Long background jobs: the reader and accounts come first.
+    cpu_shares: 512
     environment:
       JITEN_WORKERS: ${DIFFICULTY_WORKERS:-2}
       ALLOW_HTTP_ACCOUNTS: ${ALLOW_HTTP_ACCOUNTS:-0}
@@ -109,6 +111,7 @@ services:
       target: mokuro
     image: ${IMAGE_PREFIX:-ebook-reader}-mokuro:${IMAGE_TAG:-local}
     command: ["python3", "/app/mokuro/service.py", "serve"]
+    cpu_shares: 512
     environment:
       ALLOW_HTTP_ACCOUNTS: ${ALLOW_HTTP_ACCOUNTS:-0}
     volumes:

@@ -6,6 +6,12 @@ anything a reader or a server operator would notice.
 
 ## Unreleased
 
+### Server
+
+- Recommended server sizes per profile (docs/INSTALL.md → Server size). The `difficulty`
+  and `mokuro` services get a lower CPU share (`cpu_shares: 512`) in `docker-compose.yml`
+  itself, not only in the Tailscale example.
+
 ### Library
 
 - Deleting books in the Calibre library (select mode → Delete) now removes them from the
@@ -52,6 +58,11 @@ anything a reader or a server operator would notice.
 
 ### Visual novels
 
+- Installing a new CONscripter release from the admin panel (Tools → Visual novel engine)
+  now only downloads its web build from GitHub into `DATA_PATH/state/engine/`, which nginx
+  serves ahead of the built-in engine: no copy of the app, no build, no restart. The
+  web container drops it again once an app update ships the same or a newer engine.
+  Browsers fetch the engine network-first (kept for offline play) instead of precaching it.
 - Game sound no longer hiccups in Firefox (CONscripter v0.25.1 queues its audio ahead instead
   of filling it at the last moment on a busy page).
 - CONscripter v0.30.0. Movies play in the player as in CONscripter's own web page: movies

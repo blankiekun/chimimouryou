@@ -27,7 +27,7 @@ HTTP API (bound to localhost, proxied by nginx at /account/api/):
   GET  admin/update   the updater's state (admins only)
   POST admin/update   {"ref": "<commit>"}: asks the server's updater (ebook-update,
        a systemd timer on the host) to deploy that commit of the GitHub repository;
-       {"engine": "<tag>"} instead installs that CONscripter release (rebuilds web only)
+       {"engine": "<tag>"} instead installs that CONscripter release (downloaded into state/engine, no build)
 
 There is no self-service sign-up. On an empty database the service creates the
 admin account `admin` with a random temporary password, printed in its log and by

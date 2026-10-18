@@ -15,6 +15,8 @@ set -eu
 : "${DIFFICULTY_UPSTREAM:=difficulty:8765}"
 : "${MOKURO_UPSTREAM:=mokuro:8768}"
 : "${MOKURO_DIR:=/data/state/mokuro}"
+# A visual novel engine installed from the admin panel (ebook-update).
+: "${ENGINE_DIR:=/data/state/engine}"
 # Signed-out readers from these networks may read the library and write the
 # shared sync folder; empty (the default) = always require an account. Never
 # 172.16.0.0/12: that is Docker's own range, where a reverse proxy on the same
@@ -68,9 +70,9 @@ if [ -n "$AUDIOBOOKSHELF_URL" ]; then
 fi
 
 export WEB_ROOT LIBRARY_DIR VN_DIR SYNC_DIR ACCOUNT_DATA_DIR CATALOG_FILE DIFFICULTY_FILE \
-  ACCOUNT_UPSTREAM IMPORT_UPSTREAM DIFFICULTY_UPSTREAM MOKURO_UPSTREAM MOKURO_DIR TRUSTED_NETWORKS_GEO REAL_IP_FROM_GEO PUBLIC_READS INTERNAL_TOKEN \
+  ACCOUNT_UPSTREAM IMPORT_UPSTREAM DIFFICULTY_UPSTREAM MOKURO_UPSTREAM MOKURO_DIR ENGINE_DIR TRUSTED_NETWORKS_GEO REAL_IP_FROM_GEO PUBLIC_READS INTERNAL_TOKEN \
   AUDIOBOOKSHELF_LOCATION
 
 # Only these names: the template's own nginx variables ($host, ...) stay as they are.
-envsubst '${WEB_ROOT} ${LIBRARY_DIR} ${VN_DIR} ${SYNC_DIR} ${ACCOUNT_DATA_DIR} ${CATALOG_FILE} ${DIFFICULTY_FILE} ${ACCOUNT_UPSTREAM} ${IMPORT_UPSTREAM} ${DIFFICULTY_UPSTREAM} ${MOKURO_UPSTREAM} ${MOKURO_DIR} ${TRUSTED_NETWORKS_GEO} ${REAL_IP_FROM_GEO} ${PUBLIC_READS} ${INTERNAL_TOKEN} ${AUDIOBOOKSHELF_LOCATION}' \
+envsubst '${WEB_ROOT} ${LIBRARY_DIR} ${VN_DIR} ${SYNC_DIR} ${ACCOUNT_DATA_DIR} ${CATALOG_FILE} ${DIFFICULTY_FILE} ${ACCOUNT_UPSTREAM} ${IMPORT_UPSTREAM} ${DIFFICULTY_UPSTREAM} ${MOKURO_UPSTREAM} ${MOKURO_DIR} ${ENGINE_DIR} ${TRUSTED_NETWORKS_GEO} ${REAL_IP_FROM_GEO} ${PUBLIC_READS} ${INTERNAL_TOKEN} ${AUDIOBOOKSHELF_LOCATION}' \
   < "$(dirname "$0")/nginx-ebook-reader.conf.template"

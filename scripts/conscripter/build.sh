@@ -8,7 +8,8 @@ set -euo pipefail
 REPO=https://github.com/blankiekun/CONscripter
 
 here=$(cd "$(dirname "$0")" && pwd)
-out=$here/../../apps/web/static/vn
+# CONSCRIPTER_OUT: elsewhere (ebook-update installs into DATA_PATH/state/engine).
+out=${CONSCRIPTER_OUT:-$here/../../apps/web/static/vn}
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
