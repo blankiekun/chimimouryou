@@ -109,9 +109,9 @@ export const ja: Record<MessageKey, string> = {
   'book.fileSizeAdded': '{format}・{size} MB・{date}追加',
   'book.studyWords': '先に覚えたい単語',
   'book.studyWordsNote':
-    'この本でよく使われ、よく使われる上位{count}語に入らない単語です。本の中での出現回数順に並んでいます。',
+    'この本によく出てくるものの、一般的な上位{count}語には入らない単語です。本の中での出現回数順に並んでいます。',
   'book.studyWordsNoteFirst':
-    'この本でよく使われ、よく使われる上位{count}語に入らない単語です。本の中での出現回数順に、全{total}語のうち上位50語を表示しています（CSVにはすべて含まれます）。',
+    'この本によく出てくるものの、一般的な上位{count}語には入らない単語です。本の中での出現回数順に、全{total}語のうち上位50語を表示しています（CSVにはすべて含まれます）。',
   'book.knownWords': '覚えたい単語{total}語のうち、{known}語を知っています（Ankiのデッキより）。',
   'book.knownWordsOne':
     '覚えたい単語{total}語のうち、{known}語を知っています（Ankiのデッキより）。',
