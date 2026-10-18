@@ -128,4 +128,19 @@ describe('readNext', () => {
 
     expect(titles).toEqual(['S 2', 'known', 'near']);
   });
+
+  it('takes an unstarted series only by its first unread volume', () => {
+    const titles = readNext(
+      [
+        done('f', 2, 10),
+        book('T 1', { series: 'T', seriesIndex: 1, difficulty: 1.9 }),
+        book('T 2', { series: 'T', seriesIndex: 2, difficulty: 2 }),
+        book('U 1', { series: 'U', seriesIndex: 1, difficulty: 3 }),
+        book('U 2', { series: 'U', seriesIndex: 2, difficulty: 2 })
+      ],
+      {}
+    ).map((card) => card.title);
+
+    expect(titles).toEqual(['T 1']);
+  });
 });

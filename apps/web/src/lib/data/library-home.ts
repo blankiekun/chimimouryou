@@ -155,7 +155,8 @@ export function readNextPool(cards: BookCardProps[]) {
   }
 
   const median = recent.length % 2 ? recent[(recent.length - 1) / 2] : (recent[0] + recent[1]) / 2;
-  const next = seriesGroups(cards)
+  const groups = seriesGroups(cards);
+  const next = groups
     .filter((group) => group.started)
     .map((group) => {
       const lastStarted = group.books.findLastIndex((book) => book.progress > 0);
@@ -165,12 +166,15 @@ export function readNextPool(cards: BookCardProps[]) {
     .filter((card): card is BookCardProps => !!card)
     .sort((a, b) => lastRead(b) - lastRead(a));
   const nextIds = new Set(next.map((card) => card.id));
+  // A series only enters the pool by its first unread volume.
+  const firstUnread = new Set(groups.map((group) => group.books.find((book) => !book.progress)));
   const distance = (card: BookCardProps) => Math.abs(card.difficulty! - median);
   const pool = cards
     .filter(
       (card) =>
         !card.progress &&
         !nextIds.has(card.id) &&
+        (!card.series || firstUnread.has(card)) &&
         card.difficulty !== undefined &&
         distance(card) <= readNextRange
     )
