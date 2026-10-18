@@ -4,7 +4,12 @@
  * All rights reserved.
  */
 
-import { describe, expect, it } from 'vitest';
+import 'fake-indexeddb/auto';
+import { describe, expect, it, vi } from 'vitest';
+
+// known-furigana loads kanji met, which sync through extras-sync and its storage handler.
+vi.mock('$lib/data/storage/handler/calibre-handler', () => ({ CalibreStorageHandler: {} }));
+
 import readings from '$lib/data/kanji-readings.json';
 import {
   hideKnownRuby,
