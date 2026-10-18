@@ -40,6 +40,12 @@ anything a reader or a server operator would notice.
 
 ### Reader
 
+- New "Known" furigana style (Settings → Reader → Hide furigana style): furigana is hidden
+  over words whose kanji you have all met at least 10 times while reading (synced with your
+  account), and shown everywhere else; click a word to show it. Only plain hiragana
+  readings are hidden: katakana or kanji furigana and unusual readings the author chose
+  (マジ over 本気, そら over 宇宙) always show, as do special readings such as きょう over
+  今日 and kanji outside 常用/人名用. Kanji met count from the next time a book is opened.
 - A "Grammar" Ask AI preset (AI plugin): it goes through the grammar points and
   conjugations of the selection with their dictionary forms. Preset lists you have already
   saved are kept as they are; Settings → AI → "Reset to defaults" adds it to them.

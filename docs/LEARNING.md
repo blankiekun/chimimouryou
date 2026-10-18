@@ -113,6 +113,10 @@ Books: Settings → Reader → Writing → **Hide furigana**, then pick a style:
 - **Partial**: shown greyed out; hovering a word shows it fully, clicking keeps it shown.
 - **Toggle**: hidden; hovering shows it, clicking shows or hides it again.
 - **Full**: hidden; hovering shows it, clicking shows it for good.
+- **Known**: hidden only over words whose kanji you have all met at least 10 times,
+  and only when the furigana is an ordinary hiragana reading; clicking shows it.
+  Furigana the author chose for effect (マジ over 本気, スキル over 異能, そら over 宇宙)
+  always shows, as do special readings (きょう over 今日) and rarer kanji.
 
 Search and the AI voice ignore furigana either way. In visual novels, the header's
 furigana button turns the game's readings on or off (from the next text; the

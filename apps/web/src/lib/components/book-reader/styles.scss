@@ -191,6 +191,26 @@
   }
 }
 
+.book-content--hide-furigana.book-content--furigana-style-known {
+  // Marked by markKnownRuby; other ruby stays visible. Clicks toggle like the Toggle style.
+  :global(ruby.ttu-known-ruby) {
+    cursor: pointer;
+    text-shadow: var(--book-content-hint-furigana-shadow-color) 1px 0 10px;
+
+    :global(rt) {
+      visibility: hidden;
+    }
+  }
+
+  :global(ruby.ttu-known-ruby.reveal-rt) {
+    text-shadow: none;
+
+    :global(rt) {
+      visibility: visible;
+    }
+  }
+}
+
 .book-content--hide-spoiler-image {
   :global([data-ttu-spoiler-img]) {
     display: inline-block;

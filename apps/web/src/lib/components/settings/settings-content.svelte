@@ -23,6 +23,7 @@
   import { dialogManager } from '$lib/data/dialog-manager';
   import { LocalFont } from '$lib/data/fonts';
   import { FuriganaStyle } from '$lib/data/furigana-style';
+  import { knownKanjiMinCount } from '$lib/data/known-furigana';
   import { ImportHTMLFixMode } from '$lib/data/import-html-fix-mode';
   import { logger } from '$lib/data/logger';
   import { MergeMode } from '$lib/data/merge-mode';
@@ -202,6 +203,10 @@
     {
       id: FuriganaStyle.Full,
       text: 'Full'
+    },
+    {
+      id: FuriganaStyle.Known,
+      text: 'Known'
     }
   ];
 
@@ -387,6 +392,9 @@
       break;
     case FuriganaStyle.Full:
       furiganaStyleTooltip = 'Hidden by default, show on hover or click';
+      break;
+    case FuriganaStyle.Known:
+      furiganaStyleTooltip = `Hidden when every kanji was met ${knownKanjiMinCount}+ times in your reading and the furigana is their usual hiragana reading; click to toggle. Katakana, kanji and unusual readings (マジ over 本気, そら over 宇宙) always show, and so do special readings like きょう over 今日 or kanji outside 常用/人名用. Kanji met update when the book is reopened`;
       break;
     default:
       furiganaStyleTooltip = 'Display furigana as grayed out text';
