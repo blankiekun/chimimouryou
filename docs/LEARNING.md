@@ -139,8 +139,8 @@ exists (made by the server's `difficulty` service; readers with the
 `difficulty` permission start it with **Difficulty details**):
 
 - **A score from 0 to 5** with its band: Beginner (0-1), Easy, Average, Hard,
-  Expert (4-5), the same bands as jiten.moe, and the **likely range** (the model's
-  10-90% band). A narrow range is a surer estimate.
+  Expert (4-5), the same bands as jiten.moe, and the **likely range**, which holds
+  jiten.moe's score for about 8 books in 10. A narrow range is a surer estimate.
 - **The most common words that cover 95%** of the book: how many words you would
   need to know to understand 95% of it. Lower is easier.
 - **Different kanji** in the book, and how many of them you have **already met**:
