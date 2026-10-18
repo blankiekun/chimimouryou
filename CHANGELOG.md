@@ -18,6 +18,15 @@ anything a reader or a server operator would notice.
 
 ### Manga
 
+- Manga text with [mokuro](https://github.com/kha-white/mokuro): the manga reader lays the
+  text of each speech bubble over the page, under the pointer or always (reader settings →
+  Page text), so Yomitan can look it up. A book's page shows whether a volume has text;
+  accounts with the `import` permission make it on the server ("Make text on the server",
+  one volume at a time, about 5 s a page on a CPU) or upload a `.mokuro` file made on
+  another computer. Server operators: the optional `mokuro` compose profile (a 2 GB image;
+  the models, about 450 MB, go to `DATA_PATH/state/mokuro/models/`), text in
+  `state/mokuro/<id>.json`, served as `/calibre/mokuro/<id>.json`.
+
 - Opening a Calibre manga for the first time is much faster: its pages are no longer
   re-zipped and uploaded to the sync folder (a 100 MB volume uploaded 100 MB before it
   opened); each device loads the CBZ from the library instead.

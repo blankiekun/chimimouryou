@@ -1,0 +1,4 @@
+# CPU-only PyTorch: the CUDA build is several GB larger.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+mokuro==0.2.5

@@ -13,9 +13,10 @@ features) use `docker compose -f docker-compose.static.yml up -d` instead.
 | `catalog`    | base         | rebuilds `catalog.json` from `metadata.db`, extracts covers   |
 | `import`     | import       | optional (`--profile import`): adds uploaded books to Calibre |
 | `difficulty` | difficulty   | optional (`--profile difficulty`): difficulty estimates       |
+| `mokuro`     | mokuro       | optional (`--profile mokuro`): manga text (OCR) for Yomitan   |
 
-`import` installs Calibre and `difficulty` installs Sudachi and ONNX Runtime,
-so both images are large; leave them out unless you want those features.
+`import` installs Calibre, `difficulty` Sudachi and ONNX Runtime and `mokuro`
+PyTorch (about 2 GB), so these images are large; leave them out unless you want those features.
 
 ## Setup
 
@@ -184,6 +185,24 @@ adds a few GB, so a small disk fills up after a while. Cap it in
 
 Apply with `systemctl reload docker` for `live-restore` first, then
 `systemctl restart docker`. `docker builder prune` frees the cache right away.
+
+## Manga text (mokuro)
+
+The `mokuro` profile gives manga their text: [mokuro](https://github.com/kha-white/mokuro)
+finds the speech bubbles and reads them, and the manga reader lays the text over the
+pages, where Yomitan can look it up. On a book's page in the library, accounts with the
+`import` permission choose "Make text on the server" (one volume at a time, about 5 s a
+page on a CPU and 1.5 GB of RAM; the models, about 450 MB, are downloaded into
+`DATA_PATH/state/mokuro/models/` the first time) or "Upload .mokuro".
+
+A computer with a GPU is much faster. Make the file there and upload it:
+
+```sh
+pip install mokuro
+mokuro --disable_confirmation=true --legacy_html=false "Volume 1.cbz"   # writes "Volume 1.mokuro"
+```
+
+The service only runs mokuro when asked, so it costs nothing while idle.
 
 ## Difficulty estimates
 

@@ -84,13 +84,16 @@ jobs:
           - image: difficulty
             file: docker/services.Dockerfile
             target: difficulty
+          - image: mokuro
+            file: docker/services.Dockerfile
+            target: mokuro
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
 
       - name: Check the compose files
         run: |
-          LIBRARY_PATH=/tmp docker compose --profile import --profile difficulty config --quiet
+          LIBRARY_PATH=/tmp docker compose --profile import --profile difficulty --profile mokuro config --quiet
           docker compose -f docker-compose.static.yml config --quiet
 
       - name: Set up Docker Buildx
