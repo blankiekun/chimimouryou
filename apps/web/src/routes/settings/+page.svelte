@@ -100,6 +100,7 @@
   } from '$lib/data/store';
   import { storage } from '$lib/data/window/navigator/storage';
   import { formatPageTitle } from '$lib/functions/format-page-title';
+  import { t$, uiLanguage$ } from '$lib/i18n';
   import { writableSubject } from '$lib/functions/svelte/store';
   import { reduceToEmptyString } from '$lib/functions/rxjs/reduce-to-empty-string';
 
@@ -325,7 +326,7 @@
 </script>
 
 <svelte:head>
-  <title>{formatPageTitle('Settings')}</title>
+  <title>{formatPageTitle($t$('nav.settings'))}</title>
 </svelte:head>
 
 <svelte:window on:keydown={onKeydown} on:scroll={onScroll} />
@@ -337,16 +338,16 @@
     class="settings-layout mx-auto max-w-6xl px-4 pb-28 pt-[5.25rem] md:px-8 xl:px-10 xl:pt-[4.75rem]"
     data-mobile={searching ? 'search' : mobileView}
   >
-    <aside class="settings-sidebar" aria-label="Settings categories">
-      <h1 class="settings-title">Settings</h1>
+    <aside class="settings-sidebar" aria-label={$t$('settings.categories')}>
+      <h1 class="settings-title">{$t$('nav.settings')}</h1>
       <div class="settings-search" role="search">
         <Fa icon={faMagnifyingGlass} />
         <input
           bind:this={searchInput}
           bind:value={query}
           type="search"
-          placeholder="Find a setting"
-          aria-label="Search settings"
+          placeholder={$t$('settings.search')}
+          aria-label={$t$('settings.searchLabel')}
           aria-keyshortcuts="Control+F Meta+F"
           on:keydown={onSearchKeydown}
         />
@@ -354,7 +355,7 @@
           <span class="keycap">Ctrl</span><span class="keycap">F</span>
         </span>
       </div>
-      <nav class="settings-nav" aria-label="Settings sections">
+      <nav class="settings-nav" aria-label={$t$('settings.sectionsLabel')}>
         {#each visibleAreas as area (area.id)}
           {@const collapsed = collapsedAreas.has(area.id)}
           <div class="settings-nav-area">
@@ -365,13 +366,15 @@
                 class:settings-nav-area-active={!searching && area.id === activeArea}
                 on:click={() => showSection(area.sections[0].id)}
               >
-                {area.label}
+                {$t$(area.label)}
               </button>
               <button
                 type="button"
                 class="settings-nav-collapse"
                 aria-expanded={!collapsed}
-                aria-label="{collapsed ? 'Show' : 'Hide'} {area.label} sections"
+                aria-label={$t$(collapsed ? 'settings.showSections' : 'settings.hideSections', {
+                  area: $t$(area.label)
+                })}
                 on:click={() => toggleArea(area.id)}
               >
                 <span class="settings-nav-chevron-down" class:settings-nav-collapsed={collapsed}
@@ -390,7 +393,7 @@
                     on:click={() => showSection(section.id)}
                   >
                     <span class="settings-nav-icon"><Fa icon={section.icon} /></span>
-                    <span>{section.label}</span>
+                    <span>{$t$(section.label)}</span>
                     <span class="settings-nav-chevron"><Fa icon={faChevronRight} /></span>
                   </button>
                 {/each}
@@ -404,7 +407,7 @@
           <span class="sync-dot" data-state={$settingsSyncState$.state} />
           <span
             class="min-w-0 truncate"
-            title="Progress, statistics, reader and AI settings and themes sync to your account"
+            title={$t$('settings.syncNote')}
           >
             {$account$.username}
           </span>
@@ -413,7 +416,7 @@
             class="app-button app-button-quiet ml-auto"
             on:click={() => showSection('general-account')}
           >
-            Account
+            {$t$('settings.account')}
           </button>
         {:else}
           <Fa icon={faUser} />
@@ -422,33 +425,33 @@
             class="app-button app-button-quiet"
             on:click={() => showSection('general-account')}
           >
-            Sign in to sync
+            {$t$('settings.signInToSync')}
           </button>
         {/if}
       </div>
     </aside>
 
-    <main class="settings-main" aria-label="Settings">
+    <main class="settings-main" aria-label={$t$('nav.settings')}>
       <button type="button" class="settings-back" on:click={backToList}>
-        <Fa icon={faChevronLeft} /> Settings
+        <Fa icon={faChevronLeft} /> {$t$('nav.settings')}
       </button>
       <div class="settings-breadcrumb" aria-live="polite">
         {#if searching}
-          <span>Results for “{query.trim()}”</span>
+          <span>{$t$('settings.results', { query: query.trim() })}</span>
         {:else}
-          <span>{activeAreaInfo.label}</span>
+          <span>{$t$(activeAreaInfo.label)}</span>
           {#if activeSectionInfo}
             <span class="opacity-50">›</span>
-            <span>{activeSectionInfo.label}</span>
+            <span>{$t$(activeSectionInfo.label)}</span>
           {/if}
         {/if}
       </div>
       {#if noResults}
         <div class="settings-no-results" role="status">
           <Fa icon={faMagnifyingGlass} />
-          <p>No settings match “{query.trim()}”.</p>
+          <p>{$t$('settings.noResults', { query: query.trim() })}</p>
           <button type="button" class="app-button" on:click={() => (query = '')}>
-            Clear search
+            {$t$('settings.clearSearch')}
           </button>
         </div>
       {/if}
@@ -457,7 +460,8 @@
           <SettingsAccount />
         </SettingsSection>
         <SettingsSection id="general-language" keywords="language japanese english 日本語 言語">
-          <SettingsLanguage />
+          <!-- Rows name their switches once (settings-item-group.svelte): remount on a language change. -->
+          {#key $uiLanguage$}<SettingsLanguage />{/key}
         </SettingsSection>
         <SettingsSection id="general-theme">
           <SettingsThemeMode />
@@ -475,7 +479,7 @@
             <svelte:component this={plugin.settings} />
           {/if}
         {/each}
-        <SettingsAnki />
+        {#key $uiLanguage$}<SettingsAnki />{/key}
         <SettingsContent
           {storageQuota}
           bind:fontFamilyGroupOne={$fontFamilyGroupOne$}

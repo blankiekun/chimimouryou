@@ -1,5 +1,6 @@
 <script lang="ts">
   import { findSettingsSection, getSettingsView } from './settings-sections';
+  import { t$ } from '$lib/i18n';
 
   /** Id from settings-sections.ts; title, description and order come from there. */
   export let id: string;
@@ -20,12 +21,12 @@
     class="settings-section"
     style:order={info.order}
     data-settings-section
-    data-settings-search="{info.label} {info.description} {keywords}"
+    data-settings-search="{$t$(info.label)} {$t$(info.description)} {keywords}"
     aria-labelledby="{id}-heading"
   >
     <header class="settings-section-header">
-      <h2 id="{id}-heading">{info.label}</h2>
-      <p>{info.description}</p>
+      <h2 id="{id}-heading">{$t$(info.label)}</h2>
+      <p>{$t$(info.description)}</p>
     </header>
     <div class="settings-section-grid" class:settings-section-grid-wide={wide}>
       <slot />

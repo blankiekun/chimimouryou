@@ -156,5 +156,208 @@ export const ja: Record<MessageKey, string> = {
 
   'settings.uiLanguage': '表示言語',
   'settings.uiLanguageHint':
-    'メニューやボタンの言語です。一部はまだ英語のみです。AIの言語は「設定 → AI」で設定します。'
+    'メニューやボタンの言語です。一部はまだ英語のみです。AIの言語は「設定 → AI」で設定します。',
+  'settings.categories': '設定のカテゴリ',
+  'settings.search': '設定を検索',
+  'settings.searchLabel': '設定を検索',
+  'settings.sectionsLabel': '設定のセクション',
+  'settings.showSections': '{area}のセクションを表示',
+  'settings.hideSections': '{area}のセクションを隠す',
+  'settings.syncNote': '進捗、統計、リーダーとAIの設定、テーマはアカウントに同期されます',
+  'settings.account': 'アカウント',
+  'settings.signInToSync': 'ログインして同期',
+  'settings.results': '「{query}」の検索結果',
+  'settings.noResults': '「{query}」に一致する設定はありません。',
+  'settings.clearSearch': '検索をクリア',
+  'settings.on': 'オン',
+  'settings.off': 'オフ',
+
+  'settings.area.general': '一般',
+  'settings.area.reader': 'リーダー',
+  'settings.area.ai': 'AI',
+  'settings.area.audiobookshelf': 'Audiobookshelf',
+  'settings.area.anki': 'Anki',
+  'settings.area.tracking': '記録',
+  'settings.area.data': 'データ',
+  'settings.section.general-account': 'アカウント',
+  'settings.section.general-account.text':
+    'ログインすると、進捗・統計・設定を複数の端末で使えます。',
+  'settings.section.general-language': '言語 · Language',
+  'settings.section.general-language.text': 'メニューやボタンの言語です。',
+  'settings.section.general-theme': 'テーマ',
+  'settings.section.general-theme.text':
+    'アプリ全体の色と、システムのライト・ダークモードへの対応です。',
+  'settings.section.general-custom-themes': 'カスタムテーマ',
+  'settings.section.general-custom-themes.text':
+    'テーマの作成・編集・インポート・エクスポートです。',
+  'settings.section.general-plugins': 'プラグイン',
+  'settings.section.general-plugins.text':
+    '追加機能です。アカウントごとにオン・オフを切り替えられます。',
+  'settings.section.reader-text': '文字のスタイル',
+  'settings.section.reader-text.text': 'フォント、文字サイズ、段落の間隔です。',
+  'settings.section.reader-writing': '表記',
+  'settings.section.reader-writing.text': '書字方向、縦書き、ふりがなです。',
+  'settings.section.reader-layout': 'ページレイアウト',
+  'settings.section.reader-layout.text': '表示モード、余白、段組み、画像です。',
+  'settings.section.reader-progress': '進捗',
+  'settings.section.reader-progress.text': 'フッターのカウンターと、ブックマークの付け方です。',
+  'settings.section.reader-navigation': 'ページ送り',
+  'settings.section.reader-navigation.text': 'スワイプ、スクロール、タップでのページ送りです。',
+  'settings.section.reader-session': 'セッション',
+  'settings.section.reader-session.text': 'スリープ防止と、リーダーを閉じるときの動作です。',
+  'settings.section.ai-guide': 'セットアップガイド',
+  'settings.section.ai-guide.text': 'OpenRouter と ElevenLabs のキーを取得する手順です。',
+  'settings.section.ai-ask': 'AIに質問',
+  'settings.section.ai-ask.text':
+    'テキストを選択して「AIに質問」を押したときに使う OpenRouter のキーとモデルです。',
+  'settings.section.ai-presets': 'プリセット',
+  'settings.section.ai-presets.text': '「AIに質問」パネルのボタンと、そのプロンプトです。',
+  'settings.section.ai-read-aloud': '読み上げ',
+  'settings.section.ai-read-aloud.text': 'ElevenLabs による音声読み上げです。',
+  'settings.section.ai-recap': 'あらすじとロアブック',
+  'settings.section.ai-recap.text': 'ネタバレなしのあらすじと、読んだ内容のロアブックです。',
+  'settings.section.audiobookshelf-connect': 'サーバー',
+  'settings.section.audiobookshelf-connect.text':
+    '「聴く → Audiobookshelf」で使う Audiobookshelf のアカウントです。',
+  'settings.section.anki-connect': 'AnkiConnect',
+  'settings.section.anki-connect.text': 'Anki への接続と、入力するノートのフィールドです。',
+  'settings.section.anki-media': 'カードのメディア',
+  'settings.section.anki-media.text':
+    '読書中やプレイ中にマイニングしたカードに追加する音声とスクリーンショットです。',
+  'settings.section.anki-known': '既知語',
+  'settings.section.anki-known.text':
+    'デッキの成熟カードを知っている単語として、各本の単語カバー率に使います。',
+  'settings.section.tracking-statistics': '統計',
+  'settings.section.tracking-statistics.text': '読書トラッカーと、一時停止するタイミングです。',
+  'settings.section.tracking-day': '読書日',
+  'settings.section.tracking-day.text': '1日の始まりと、読了の数え方です。',
+  'settings.section.tracking-merge': '同期と統合',
+  'settings.section.tracking-merge.text': '他の端末の統計や目標をまとめる方法です。',
+  'settings.section.tracking-goals': '読書目標',
+  'settings.section.tracking-goals.text': '日・週・月ごとの目標です。',
+  'settings.section.data-storage': 'ローカルストレージ',
+  'settings.section.data-storage.text': 'このブラウザでの本とデータの保存方法です。',
+  'settings.section.data-import': 'インポート',
+  'settings.section.data-import.text': 'EPUB ファイルのインポート時に適用する修正です。',
+  'settings.section.data-sync': '同期',
+  'settings.section.data-sync.text': 'ストレージソース間のインポートとエクスポートです。',
+  'settings.section.data-sources': 'ソース',
+  'settings.section.data-sources.text': 'Calibre、ブラウザ、クラウド、フォルダのストレージです。',
+
+  'anki.enabled': 'マイニングしたカードにメディアを追加',
+  'anki.enabledHint':
+    '本やビジュアルノベルを開いている間に Anki に追加されたノート（Yomitan など）に、下で選んだ音声とスクリーンショットを追加します。',
+  'anki.guide': 'セットアップガイド',
+  'anki.guideLink': 'Yomitan・AnkiConnect・フィールドの設定',
+  'anki.url': 'AnkiConnect のアドレス',
+  'anki.urlHint':
+    'Anki に AnkiConnect アドオンが必要です。アドオンの設定の webCorsOriginList に、このサイトのアドレス（{origin}）を追加してください。',
+  'anki.test': '接続をテスト',
+  'anki.connecting': '接続中…',
+  'anki.connected': '接続しました（AnkiConnect バージョン {version}）',
+  'anki.sentenceField': '例文フィールド',
+  'anki.sentenceFieldHint':
+    'マイニングした例文が入るフィールドです。AI音声で読み上げたり、オーディオブックで探したりします。ビジュアルノベルでは、どのセリフのスクリーンショットと音声をカードに付けるかをこれで決めます。',
+  'anki.audioField': '音声フィールド',
+  'anki.audioFieldHint': '例文やセリフの音声が入ります。すでに入力されている場合は変更しません。',
+  'anki.pictureField': '画像フィールド',
+  'anki.pictureFieldHint':
+    'ビジュアルノベルのスクリーンショットが入ります。すでに入力されている場合は変更しません。',
+  'anki.bookAudio': '本の音声',
+  'anki.bookAudioHint':
+    '本に読み込んだオーディオブック（聴く → オーディオブック）から、例文の部分をリアルタイムで録音します。',
+  'anki.aiFallback': 'オーディオブックがない場合は ElevenLabs の音声を使う',
+  'anki.aiFallbackHint':
+    'AI音声で読み上げた例文を使います（キーと音声は「設定 → AI」で設定）。カードごとに ElevenLabs のクレジットを消費します。',
+  'anki.vnScreenshot': 'ビジュアルノベルのスクリーンショット',
+  'anki.vnScreenshotHint': 'カードを追加した時点のゲーム画面です。',
+  'anki.vnAudio': 'ビジュアルノベルの音声',
+  'anki.vnAudioHint':
+    '最後のクリックまたはキー入力以降のゲームの音（ボイスと音楽）です。変更後に起動したゲームから適用されます。',
+  'anki.known': 'Anki の既知語',
+  'anki.knownHint':
+    'デッキの成熟カード（間隔21日以上）の単語を1日1回まで読み込み、各本の学習する単語のうち、知っている単語に印を付けます。このブラウザにのみ保存されます。',
+  'anki.deck': 'デッキ',
+  'anki.deckHint': 'サブデッキも含まれます。',
+  'anki.wordField': '単語フィールド',
+  'anki.wordFieldHint':
+    '単語が入っているフィールドです（Expression、Word など）。HTML や 漢字[かんじ] のようなふりがなは取り除かれます。',
+  'anki.reading': '読み込み中…',
+  'anki.refresh': '更新',
+  'anki.knownCount': '既知語 {count}語（{date} に読み込み）',
+  'anki.notRead': 'まだ読み込んでいません',
+
+  'ai.guideOpenRouter': 'OpenRouter（AIに質問・あらすじ・ロアブック）',
+  'ai.guideOpenRouterHint':
+    'OpenRouter では、1つのキーでさまざまな会社のモデルを使えます。料金はリクエストごとで、初期設定の Flash モデルなら1回の質問は1セント未満です。',
+  'ai.guideAccount': '{link} でアカウントを作成します。',
+  'ai.guideCredits': '{link} でクレジットを追加します。',
+  'ai.guideOpenRouterKey':
+    '{link} でキーを作成します。キーが漏れても被害が小さくなるよう、クレジットの上限を設定してください。',
+  'ai.guideOpenRouterPaste':
+    'キー（{prefix} で始まり、一度しか表示されません）をコピーして、{field} に貼り付けます。',
+  'ai.guideModels': '初期設定のモデルで十分使えます。そこで他の OpenRouter モデルも選べます。',
+  'ai.guideElevenLabs': 'ElevenLabs（AI音声）',
+  'ai.guideElevenLabsHint':
+    'ElevenLabs が本を読み上げます。プランごとに毎月使える文字数があり、1文字読むごとに1つ消費します。',
+  'ai.guideElevenLabsKey':
+    'アカウントメニューの「API Keys」を開いてキーを作成します。Text to Speech だけを許可し、クレジットの上限を設定しておけば、キーが漏れても安心です。',
+  'ai.guideElevenLabsPaste': 'キー（{prefix} で始まります）をコピーして、{field} に貼り付けます。',
+  'ai.guideVoice':
+    '「Voices」で日本語を話す音声を選び、メニューの「Copy voice ID」でコピーして、{field}に貼り付けます。',
+  'ai.guideListen': '本を開いてヘッドホンのアイコンを押し、「AI音声」を選びます。',
+  'ai.keysWhere': 'キーの保存先',
+  'ai.keysWhereHint':
+    'キーはこのブラウザに保存され、ログイン中はこのサーバーのアカウントにも保存されるので、他の端末でも使えます。ログアウトするとブラウザから削除され、ログアウト中に入力したキーは誰かがログインすると削除されます。ブラウザがキーを送るのは OpenRouter と ElevenLabs だけです。',
+  'ai.openRouterKey': 'OpenRouter API キー',
+  'ai.openRouterKeyHint':
+    'リクエストはこのブラウザから OpenRouter に直接送られます。ログイン中はアカウントに同期されます。',
+  'ai.howToGetKey': 'キーの取得方法',
+  'ai.language': 'AIの言語',
+  'ai.languageHint':
+    '「AIに質問」「あらすじ」「ロアブック」で使うプロンプトと回答の言語です。リーダーのパネルでも切り替えられます。',
+  'ai.model': 'モデル',
+  'ai.modelHint':
+    '「AIに質問」で使います。あらすじのモデルを設定していない場合は、あらすじにも使います。',
+  'ai.unknownModel': 'OpenRouter のモデル一覧にありません。ID を確認してください。',
+  'ai.modelSearch':
+    '入力すると{count}件のモデルから検索できます（例：「claude」「gemini」「deepseek」）。',
+  'ai.modelSearchAny': '入力するとモデルを検索できます（例：「claude」「gemini」「deepseek」）。',
+  'ai.aboutYou': 'あなたについて',
+  'ai.aboutYouHint':
+    '「AIに質問」のたびに追加されます。レベルや回答の好みなどを書いてください。例：「JLPT N3くらいです。回答は短めにして、N3より上の漢字には読みを付けてください。」',
+  'ai.optional': '任意',
+  'ai.presets': '「AIに質問」のプリセット',
+  'ai.presetsHint':
+    '各ボタンは、選択した文章について（または追加の質問として）そのプロンプトを送ります。',
+  'ai.presetLabel': 'ボタン名',
+  'ai.prompt': 'プロンプト',
+  'ai.moveUp': '上へ移動',
+  'ai.moveDown': '下へ移動',
+  'ai.delete': '削除',
+  'ai.addPreset': 'プリセットを追加',
+  'ai.resetPresets': '初期設定に戻す',
+  'ai.panelOpens': 'パネルを開いたとき',
+  'ai.waitForChoice': '選択を待つ',
+  'ai.runPreset': '「{label}」を実行',
+  'ai.elevenLabsKey': 'ElevenLabs API キー',
+  'ai.elevenLabsKeyHint':
+    'リクエストはこのブラウザから api.elevenlabs.io に直接送られます。ログイン中はアカウントに同期されます。',
+  'ai.elevenLabsModel': 'ElevenLabs のモデル',
+  'ai.elevenLabsModelHint':
+    'タイムスタンプ付き音声合成のモデル ID です（eleven_v4、eleven_v4_turbo など）。',
+  'ai.voiceSpeed': 'AI音声の速度',
+  'ai.voiceSpeedHint': '声の高さを変えずに再生速度を変えます。ハイライトも合わせて動きます。',
+  'ai.voiceId': 'ElevenLabs の音声 ID',
+  'ai.voiceIdHint': '本の読み上げに使う音声です。',
+  'ai.voiceIdPlaceholder': '例：{id}',
+  'ai.recapModel': 'あらすじのモデル',
+  'ai.recapModelHint':
+    '読み終えた章を1回ずつ要約し（ブラウザごとに保存）、それをもとにあらすじを書きます。安くて速いモデルで十分です。',
+  'ai.recapModelPlaceholder': '「AIに質問」と同じ（{model}）',
+  'ai.lorebookAuto': 'ロアブックを自動で更新',
+  'ai.lorebookAutoHint':
+    '読書中、新しくこの文字数を読むたびに、ロアブック（登場人物・場所・用語）をバックグラウンドで更新します。あらすじのモデルに送るのは新しい部分だけです。0 でオフになります。',
+  'ai.lorebookInterval': 'ロアブックを更新する間隔（文字数）',
+  'ai.lorebookOff': '0（オフ）'
 };

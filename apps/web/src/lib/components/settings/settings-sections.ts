@@ -7,7 +7,8 @@
 /**
  * Settings navigation (sidebar areas and their sections), modeled on
  * app.yatsu.moe/settings. Section ids are the anchors in the URL:
- * /settings?section=<area>#<section id>. Not part of upstream.
+ * /settings?section=<area>#<section id>. Labels and descriptions are i18n keys
+ * (`$t$(label)` where shown). Not part of upstream.
  */
 
 import {
@@ -44,19 +45,20 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { getContext, setContext } from 'svelte';
 import type { Writable } from 'svelte/store';
+import type { MessageKey } from '$lib/i18n';
 
 type Icon = typeof faUser;
 
 export interface SettingsSectionInfo {
   id: string;
-  label: string;
-  description: string;
+  label: MessageKey;
+  description: MessageKey;
   icon: Icon;
 }
 
 export interface SettingsArea {
   id: string;
-  label: string;
+  label: MessageKey;
   icon: Icon;
   sections: SettingsSectionInfo[];
 }
@@ -64,217 +66,217 @@ export interface SettingsArea {
 export const settingsAreas: SettingsArea[] = [
   {
     id: 'general',
-    label: 'General',
+    label: 'settings.area.general',
     icon: faSliders,
     sections: [
       {
         id: 'general-account',
-        label: 'Account',
-        description: 'Sign in to keep progress, statistics and settings across devices.',
+        label: 'settings.section.general-account',
+        description: 'settings.section.general-account.text',
         icon: faUser
       },
       {
         id: 'general-language',
-        label: 'Language · 言語',
-        description: 'The language of the menus and buttons.',
+        label: 'settings.section.general-language',
+        description: 'settings.section.general-language.text',
         icon: faLanguage
       },
       {
         id: 'general-theme',
-        label: 'Theme',
-        description: 'Colors for the whole app, and how system light and dark mode are handled.',
+        label: 'settings.section.general-theme',
+        description: 'settings.section.general-theme.text',
         icon: faPalette
       },
       {
         id: 'general-custom-themes',
-        label: 'Custom Themes',
-        description: 'Create, edit, import and export themes.',
+        label: 'settings.section.general-custom-themes',
+        description: 'settings.section.general-custom-themes.text',
         icon: faSwatchbook
       },
       {
         id: 'general-plugins',
-        label: 'Plugins',
-        description: 'Optional features: switch them on or off for your account.',
+        label: 'settings.section.general-plugins',
+        description: 'settings.section.general-plugins.text',
         icon: faPlug
       }
     ]
   },
   {
     id: 'reader',
-    label: 'Reader',
+    label: 'settings.area.reader',
     icon: faBookOpen,
     sections: [
       {
         id: 'reader-text',
-        label: 'Text Style',
-        description: 'Fonts, sizes and paragraph spacing.',
+        label: 'settings.section.reader-text',
+        description: 'settings.section.reader-text.text',
         icon: faFont
       },
       {
         id: 'reader-writing',
-        label: 'Writing',
-        description: 'Writing direction, vertical text and furigana.',
+        label: 'settings.section.reader-writing',
+        description: 'settings.section.reader-writing.text',
         icon: faLanguage
       },
       {
         id: 'reader-layout',
-        label: 'Page Layout',
-        description: 'View mode, margins, columns and images.',
+        label: 'settings.section.reader-layout',
+        description: 'settings.section.reader-layout.text',
         icon: faTableColumns
       },
       {
         id: 'reader-progress',
-        label: 'Progress',
-        description: 'Counters in the footer and how bookmarks are placed.',
+        label: 'settings.section.reader-progress',
+        description: 'settings.section.reader-progress.text',
         icon: faBookmark
       },
       {
         id: 'reader-navigation',
-        label: 'Navigation',
-        description: 'Swiping, scrolling and tapping to turn pages.',
+        label: 'settings.section.reader-navigation',
+        description: 'settings.section.reader-navigation.text',
         icon: faHandPointer
       },
       {
         id: 'reader-session',
-        label: 'Session',
-        description: 'Screen lock and closing the reader.',
+        label: 'settings.section.reader-session',
+        description: 'settings.section.reader-session.text',
         icon: faDisplay
       }
     ]
   },
   {
     id: 'ai',
-    label: 'AI',
+    label: 'settings.area.ai',
     icon: faWandMagicSparkles,
     sections: [
       {
         id: 'ai-guide',
-        label: 'Setup Guide',
-        description: 'Getting OpenRouter and ElevenLabs keys, step by step.',
+        label: 'settings.section.ai-guide',
+        description: 'settings.section.ai-guide.text',
         icon: faCircleInfo
       },
       {
         id: 'ai-ask',
-        label: 'Ask AI',
-        description: 'OpenRouter key and model used when you select text and press Ask AI.',
+        label: 'settings.section.ai-ask',
+        description: 'settings.section.ai-ask.text',
         icon: faCommentDots
       },
       {
         id: 'ai-presets',
-        label: 'Presets',
-        description: 'Buttons in the Ask AI panel and their prompts.',
+        label: 'settings.section.ai-presets',
+        description: 'settings.section.ai-presets.text',
         icon: faListUl
       },
       {
         id: 'ai-read-aloud',
-        label: 'Read Aloud',
-        description: 'Text-to-speech with ElevenLabs.',
+        label: 'settings.section.ai-read-aloud',
+        description: 'settings.section.ai-read-aloud.text',
         icon: faHeadphones
       },
       {
         id: 'ai-recap',
-        label: 'Story So Far & Lorebook',
-        description: 'Spoiler-free recaps and the lorebook of what you have read.',
+        label: 'settings.section.ai-recap',
+        description: 'settings.section.ai-recap.text',
         icon: faClockRotateLeft
       }
     ]
   },
   {
     id: 'audiobookshelf',
-    label: 'Audiobookshelf',
+    label: 'settings.area.audiobookshelf',
     icon: faHeadphones,
     sections: [
       {
         id: 'audiobookshelf-connect',
-        label: 'Server',
-        description: 'Your Audiobookshelf account, for Listen → Audiobookshelf.',
+        label: 'settings.section.audiobookshelf-connect',
+        description: 'settings.section.audiobookshelf-connect.text',
         icon: faServer
       }
     ]
   },
   {
     id: 'anki',
-    label: 'Anki',
+    label: 'settings.area.anki',
     icon: faNoteSticky,
     sections: [
       {
         id: 'anki-connect',
-        label: 'AnkiConnect',
-        description: 'Connecting to Anki and the note fields to fill.',
+        label: 'settings.section.anki-connect',
+        description: 'settings.section.anki-connect.text',
         icon: faPlug
       },
       {
         id: 'anki-media',
-        label: 'Card Media',
-        description: 'Audio and screenshots added to cards you mine while reading or playing.',
+        label: 'settings.section.anki-media',
+        description: 'settings.section.anki-media.text',
         icon: faPhotoFilm
       },
       {
         id: 'anki-known',
-        label: 'Known Words',
-        description: "Mature cards of a deck as the words you know, for each book's word coverage.",
+        label: 'settings.section.anki-known',
+        description: 'settings.section.anki-known.text',
         icon: faBookOpen
       }
     ]
   },
   {
     id: 'tracking',
-    label: 'Tracking',
+    label: 'settings.area.tracking',
     icon: faChartLine,
     sections: [
       {
         id: 'tracking-statistics',
-        label: 'Statistics',
-        description: 'The reading tracker and when it pauses.',
+        label: 'settings.section.tracking-statistics',
+        description: 'settings.section.tracking-statistics.text',
         icon: faStopwatch
       },
       {
         id: 'tracking-day',
-        label: 'Reading Day',
-        description: 'When a day starts and how completions are counted.',
+        label: 'settings.section.tracking-day',
+        description: 'settings.section.tracking-day.text',
         icon: faSun
       },
       {
         id: 'tracking-merge',
-        label: 'Sync & Merge',
-        description: 'How statistics and goals from other devices are combined.',
+        label: 'settings.section.tracking-merge',
+        description: 'settings.section.tracking-merge.text',
         icon: faCodeMerge
       },
       {
         id: 'tracking-goals',
-        label: 'Reading Goals',
-        description: 'Daily, weekly and monthly targets.',
+        label: 'settings.section.tracking-goals',
+        description: 'settings.section.tracking-goals.text',
         icon: faBullseye
       }
     ]
   },
   {
     id: 'data',
-    label: 'Data',
+    label: 'settings.area.data',
     icon: faDatabase,
     sections: [
       {
         id: 'data-storage',
-        label: 'Local Storage',
-        description: 'How this browser keeps books and data.',
+        label: 'settings.section.data-storage',
+        description: 'settings.section.data-storage.text',
         icon: faHardDrive
       },
       {
         id: 'data-import',
-        label: 'Import',
-        description: 'Fixes applied when importing EPUB files.',
+        label: 'settings.section.data-import',
+        description: 'settings.section.data-import.text',
         icon: faFileImport
       },
       {
         id: 'data-sync',
-        label: 'Sync',
-        description: 'Importing and exporting between storage sources.',
+        label: 'settings.section.data-sync',
+        description: 'settings.section.data-sync.text',
         icon: faRotate
       },
       {
         id: 'data-sources',
-        label: 'Sources',
-        description: 'Calibre, browser, cloud and folder storage.',
+        label: 'settings.section.data-sources',
+        description: 'settings.section.data-sources.text',
         icon: faServer
       }
     ]
