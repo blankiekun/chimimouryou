@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { learningGuideUrl } from '$lib/data/app-update';
   import { getKanjiSummary, type KanjiSummary } from '$lib/data/kanji-seen';
   import {
     activityWeeks,
@@ -118,6 +119,9 @@
       </p>
     {/if}
   {/if}
+  <a class="dashboard-guide" href={learningGuideUrl} target="_blank" rel="noreferrer">
+    Learning guide: Yomitan, Anki and choosing books
+  </a>
 </section>
 
 <style>
@@ -233,5 +237,13 @@
 
   .dashboard-note {
     margin-top: 1rem;
+  }
+
+  .dashboard-guide {
+    display: inline-block;
+    margin-top: 1rem;
+    color: var(--app-muted-fg);
+    font-size: 0.78rem;
+    text-decoration: underline;
   }
 </style>

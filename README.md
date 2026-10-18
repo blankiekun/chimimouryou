@@ -121,6 +121,7 @@ yourself.
 
 - [docs/INSTALL.md](docs/INSTALL.md): installing, HTTPS, accounts, who may do what
 - [docs/CONFIGURATION.md](docs/CONFIGURATION.md): every setting
+- [docs/LEARNING.md](docs/LEARNING.md): for readers: Yomitan, Anki cards, furigana, manga text, difficulty
 - [ARCHITECTURE.md](ARCHITECTURE.md): how it works; [CONTRIBUTING.md](CONTRIBUTING.md): changing it
 - [docs/QA.md](docs/QA.md): test plan; [CHANGELOG.md](CHANGELOG.md); [themes.md](themes.md): writing themes
 - Prebuilt images: `ghcr.io/blankiekun/chimimouryou-{web,services,import,difficulty,mokuro}` (see INSTALL.md, "Updating")

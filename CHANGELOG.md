@@ -11,6 +11,9 @@ anything a reader or a server operator would notice.
 - The README is ordered for whoever sets the server up: what it is, setup, then "How you
   read with it" (Yomitan → Anki → next book by difficulty), the features (learner ones
   first) and the credits last.
+- docs/LEARNING.md, a guide for learners: Yomitan and dictionaries, its secure container
+  and the tracker's dictionary detection, AnkiConnect and the card fields, furigana, manga
+  text and reading a book's difficulty and kanji met. Linked from Home and Settings → Anki.
 
 ### Server
 
