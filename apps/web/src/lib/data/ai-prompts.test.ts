@@ -43,12 +43,26 @@ describe('AI language', () => {
   });
 
   it('shows Japanese default presets unless they were customised', () => {
-    expect(presetsForLanguage(defaultAskAiPresets, 'ja')).toBe(defaultAskAiPresetsJa);
+    expect(presetsForLanguage(defaultAskAiPresets, 'ja')).toEqual(defaultAskAiPresetsJa);
     expect(presetsForLanguage(defaultAskAiPresets, 'en')).toBe(defaultAskAiPresets);
 
     const custom = [{ id: 'mine', label: 'Mine', prompt: 'p' }];
 
     expect(presetsForLanguage(custom, 'ja')).toBe(custom);
     expect(defaultAskAiPresetsJa.map((p) => p.id)).toEqual(defaultAskAiPresets.map((p) => p.id));
+  });
+
+  it('keeps a list saved before Grammar was added, still shown in Japanese', () => {
+    expect(defaultAskAiPresets.map((p) => p.id)).toContain('grammar');
+
+    const saved = defaultAskAiPresets.filter((p) => p.id !== 'grammar');
+    const ja = presetsForLanguage(saved, 'ja');
+
+    expect(ja.map((p) => p.id)).toEqual(['explain', 'translate', 'nuance']);
+    expect(ja[0].label).toBe('説明');
+
+    const edited = [{ ...saved[0], prompt: 'mine' }, ...saved.slice(1)];
+
+    expect(presetsForLanguage(edited, 'ja')).toBe(edited);
   });
 });

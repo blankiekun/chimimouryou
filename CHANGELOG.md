@@ -22,6 +22,12 @@ anything a reader or a server operator would notice.
   deleted more than 14 days ago once a day (Calibre itself only does so when the library
   is opened).
 
+### Reader
+
+- A "Grammar" Ask AI preset (AI plugin): it goes through the grammar points and
+  conjugations of the selection with their dictionary forms. Preset lists you have already
+  saved are kept as they are; Settings → AI → "Reset to defaults" adds it to them.
+
 ### Manga
 
 - Manga text with [mokuro](https://github.com/kha-white/mokuro): the manga reader lays the

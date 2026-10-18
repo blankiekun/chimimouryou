@@ -101,15 +101,27 @@ export const defaultAskAiPresetsJa: AskAiPreset[] = [
     label: 'ニュアンス',
     prompt:
       '選んだ部分の口調・文体・ニュアンスを説明してください：誰がどのように話しているか（丁寧、乱暴、女性的、方言など）、そしてそれが人物や状況について何を表しているか。'
+  },
+  {
+    id: 'grammar',
+    label: '文法',
+    prompt:
+      '選んだ部分の文法を学習者向けに分解してください：使われている文法項目と活用を一つずつ取り上げ、辞書形を示し、ここでの働きを簡潔に説明してください。'
   }
 ];
 
 /**
- * The presets to show: the Japanese defaults when the language is Japanese and
- * the presets were never customised, otherwise the stored ones.
+ * The presets to show: in Japanese when the language is Japanese and every preset
+ * is an unchanged default (a list saved before a preset was added still counts),
+ * otherwise the stored ones.
  */
 export function presetsForLanguage(presets: AskAiPreset[], language: string) {
-  const untouched = JSON.stringify(presets) === JSON.stringify(defaultAskAiPresets);
+  const defaults = new Set(defaultAskAiPresets.map((preset) => JSON.stringify(preset)));
+  const untouched = presets.every((preset) => defaults.has(JSON.stringify(preset)));
 
-  return language === 'ja' && untouched ? defaultAskAiPresetsJa : presets;
+  if (language !== 'ja' || !untouched) {
+    return presets;
+  }
+
+  return presets.map((preset) => defaultAskAiPresetsJa.find(({ id }) => id === preset.id)!);
 }

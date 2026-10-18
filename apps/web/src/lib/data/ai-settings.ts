@@ -76,6 +76,12 @@ export const defaultAskAiPresets: AskAiPreset[] = [
     label: 'Nuance',
     prompt:
       'Explain the tone, register and nuance of the selected passage: who is speaking and how (polite, rough, feminine, dialect...), and what it says about the character or situation.'
+  },
+  {
+    id: 'grammar',
+    label: 'Grammar',
+    prompt:
+      'Break down the grammar of the selected passage for a learner: go through each grammar point and conjugation used, give its dictionary form, and briefly explain what it does here.'
   }
 ];
 
