@@ -23,6 +23,10 @@ anything a reader or a server operator would notice.
 - Deprecated: the `adjusted` field of `/calibre/difficulty.json`. It has been a copy of
   `difficulty` since chimi-difficulty and the app no longer reads it; the release after
   this one stops writing it. Scripts reading it should use `difficulty`.
+- Difficulty estimates also save each book's 2,000 most frequent words with their frequency
+  rank (`state/difficulty/words/`, about 20 KB per book; `GET /calibre/difficulty/api/words/<id>`),
+  for word lists on the book page. "Books without an estimate" redoes existing estimates once
+  to add them.
 
 ### Library
 
