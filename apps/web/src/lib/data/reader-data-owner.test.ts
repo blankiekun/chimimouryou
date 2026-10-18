@@ -14,7 +14,6 @@ vi.mock('$lib/data/calibre', () => ({
 const { database } = await import('$lib/data/store');
 const { readerDb } = await import('$lib/data/reader-db');
 const { releaseReaderData } = await import('$lib/data/reader-data-owner');
-const { readerDb } = await import('$lib/data/reader-db');
 
 async function seed() {
   const db = await database.db;
