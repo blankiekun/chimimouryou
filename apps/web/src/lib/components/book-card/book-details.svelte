@@ -3,6 +3,7 @@
     faArrowLeft,
     faBookOpen,
     faBookOpenReader,
+    faDownload,
     faHouse,
     faMagnifyingGlass,
     faSpinner,
@@ -36,6 +37,12 @@
     type CalibreDifficulty
   } from '$lib/data/calibre';
   import { difficultyName } from '$lib/data/difficulty';
+  import {
+    downloadWordsCsv,
+    loadBookWords,
+    wordsToStudy,
+    type BookWord
+  } from '$lib/data/book-words';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { getKanjiSeen, kanjiCoverage, type KanjiCoverage } from '$lib/data/kanji-seen';
   import { learnerStats } from '$lib/data/learner-stats';
@@ -77,6 +84,7 @@
   let estimate: CalibreDifficulty | undefined;
   let kanji: KanjiCoverage | undefined;
   let copied = false;
+  let studyWords: BookWord[] = [];
   let speed = 0;
   let metadata: BookMetadata | undefined;
   let searching = false;
@@ -144,6 +152,7 @@
     estimate = undefined;
     kanji = undefined;
     copied = false;
+    studyWords = [];
     metadata = undefined;
     candidates = undefined;
     source = undefined;
@@ -169,13 +178,24 @@
     metadata = details[title];
 
     if (estimate && book.calibreId !== undefined) {
-      const [counts, seen] = await Promise.all([
+      const { words95 } = estimate;
+      const [counts, seen, words] = await Promise.all([
         loadBookKanji(book.calibreId).catch(() => undefined),
-        getKanjiSeen().catch(() => [])
+        getKanjiSeen().catch(() => []),
+        words95 && kind !== 'manga'
+          ? loadBookWords(book.calibreId).catch(() => undefined)
+          : undefined
       ]);
 
-      if (title === book.title && counts && seen.length) {
+      if (title !== book.title) {
+        return;
+      }
+
+      if (counts && seen.length) {
         kanji = kanjiCoverage(counts, seen);
+      }
+      if (words && words95) {
+        studyWords = wordsToStudy(words, words95);
       }
     }
   }
@@ -431,6 +451,35 @@
           </div>
         {/if}
       </dl>
+
+      {#if studyWords.length}
+        <section class="details-words" aria-labelledby="book-details-words">
+          <h2 id="book-details-words" class="details-fetch-heading">Words to study first</h2>
+          <p class="details-note">
+            Used often in this book but outside the {number(estimate?.words95 ?? 0)} most common
+            words, by count in the book{#if studyWords.length > 50}: the first 50 of {number(
+                studyWords.length
+              )} (the CSV has all){/if}.
+          </p>
+          <ol lang="ja">
+            {#each studyWords.slice(0, 50) as [form, reading, count]}
+              <li>
+                {form}{#if reading && reading !== form}<span class="details-note-inline"
+                    >（{reading}）</span
+                  >{/if}
+                <span class="details-note-inline">×{count}</span>
+              </li>
+            {/each}
+          </ol>
+          <button
+            type="button"
+            class="app-button"
+            on:click={() => downloadWordsCsv(book.title, studyWords)}
+          >
+            <Fa icon={faDownload} /> Download CSV
+          </button>
+        </section>
+      {/if}
 
       {#if genres.length}
         <ul class="details-tags" aria-label="Tags">
@@ -748,6 +797,26 @@
     letter-spacing: 0.1em;
     color: var(--font-color);
     word-break: break-all;
+  }
+
+  .details-words {
+    display: flex;
+    max-width: 40em;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin-top: 2rem;
+  }
+
+  .details-words ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 1.1rem;
+  }
+
+  .details-note-inline {
+    color: var(--app-muted-fg);
+    font-size: 0.85rem;
   }
 
   .details-tags {

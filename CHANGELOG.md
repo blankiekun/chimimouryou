@@ -34,6 +34,10 @@ anything a reader or a server operator would notice.
   met yet, with a button that copies them.
 - The difficulty badge's tooltip says what the band means for a learner, and that the
   likely range holds the true score for about 8 books in 10.
+- The book page lists "Words to study first": words the book uses often that are outside the
+  most common words needed for 95% of it (`words95`), by count in the book, with a CSV
+  download (word, reading, count, frequency rank) for Anki. Shown once the book has an
+  estimate with a word list.
 - Deleting books in the Calibre library (select mode → Delete) now removes them from the
   library for admins, after a confirmation: books go to Calibre's recycle bin
   (`calibredb remove`), visual novel folders are deleted, and the catalog is rebuilt
