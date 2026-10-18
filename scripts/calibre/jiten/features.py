@@ -293,6 +293,8 @@ class Analysis:
     # (key, form) -> [Word (first occurrence), occurrences]; Jiten's DeckWords are unique per
     # (WordId, ReadingIndex), so each written form counts as its own word.
     words: dict = field(default_factory=dict)
+    # (key, form) -> Counter of each occurrence's reading (for word lists; the features use the Word's)
+    readings: dict = field(default_factory=dict)
     word_count: int = 0
     sentence_count: int = 0
     markers: dict = field(default_factory=dict)
@@ -506,6 +508,7 @@ class Analyzer:
                 entry[1] += 1
             else:
                 result.words[word_key] = [word, 1]
+            result.readings.setdefault(word_key, Counter())[word.reading] += 1
             result.word_count += 1
             index = end
 

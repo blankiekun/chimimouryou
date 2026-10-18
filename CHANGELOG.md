@@ -27,6 +27,10 @@ anything a reader or a server operator would notice.
   rank (`state/difficulty/words/`, about 20 KB per book; `GET /calibre/difficulty/api/words/<id>`),
   for word lists on the book page. "Books without an estimate" redoes existing estimates once
   to add them.
+- Word lists keep a word's readings apart: 他 read ほか and 他 read た are two rows, each with
+  its own count and frequency rank (before, the first occurrence's reading counted for all).
+  "Books without an estimate" redoes word lists made before this once (`words` in
+  `difficulty.json`). The difficulty scores don't change.
 
 ### Library
 
