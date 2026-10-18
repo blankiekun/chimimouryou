@@ -206,6 +206,73 @@ def ruby_reading(hints: dict, begin: int, surface: str, form: str, known) -> str
     return None
 
 
+# Context rules for word-list readings (form: [(reading, text before, text after)]): a rule fires
+# when its `before` pattern ends where the word starts or its `after` pattern starts where the
+# word's head token ends, both within the line. Checked against distil/readings-test.tsv.
+_CONTEXT_RULES = {
+    '人気': [('ひとけ', None, r'[がのはも]?(?:な[いくかけ]|無[いくかけ]|少な|絶え|途絶え)')],
+    '他': [('た', r'その$', None)],
+    '今日': [('こんにち', None, r'の(?:社会|日本|世界|経済|時代|状況|情勢|問題|課題|文明|科学|技術|教育|政治)'
+              r'|に(?:至|いた)る|では|において')],
+    # Sudachi says あす; books mostly say あした, except in formal phrases.
+    '明日': [('あした', None, r'(?!の(?:日本|社会|世界|未来|地球|国)|を担|にも)')],
+    '上手': [('かみて', r'舞台の?$', None), ('うわて', r'枚$', r'に出(?:る|た|て|ら|ま)')],
+    '下手': [('しもて', r'舞台の?$', None), ('したて', None, r'に出(?:る|た|て|ら|ま)')],
+    '市場': [('いちば', r'(?:魚|青物|朝|築地|近所の|朝早く)$', r'.{0,8}?(?:魚|野菜|果物|八百屋|買い物|買[っうい]|売り子)')],
+    '生物': [('なまもの', None, r'を(?:食べ|食[うっ]|召し上が)|.{0,8}?(?:冷蔵|早めに|腐[らりるっ]|扱いに注意)')],
+    '最中': [('もなか', r'(?:アイス|栗|餡)の$|(?:餡|あんこ).{0,8}入[っり].{0,2}$',
+              r'を(?:食べ|頬張|かじ|買)|と(?:お茶|緑茶)')],
+    '方々': [('ほうぼう', None, r'を?(?:探|捜|歩|回|駆け|走り|尋ね|旅)|から(?:集ま|聞こえ|寄せ)|に(?:散|手を)')],
+    '目下': [('もっか', None, r'のところ|の(?:急務|課題|問題|状況|情勢|最大|懸案)|、|調査|検討|準備|交渉|捜査|審議|開発'
+              r'|建設|進行|継続|捜索|修理|工事'),
+             ('めした', None, r'の(?:者|人)')],
+    '何': [('なに', None, r'[をがも]|より')],
+    '色紙': [('しきし', r'(?:サイン|寄せ書きの?)$', r'に(?:サイン|寄せ書き|書)|を(?:飾|贈)'),
+             ('いろがみ', r'折り?$', r'.{0,6}?(?:折[っらりる]|鶴|切り抜)')],
+    '寒気': [('かんき', r'(?:強い|上空の|大陸からの|冬型の|北からの)$', r'団|が(?:南下|流れ込|入)|の(?:影響|流れ込|南下)'),
+             ('さむけ', None, r'が(?:し|す|走|襲)|を(?:覚え|感じ)')],
+    '心中': [('しんじゅう', r'(?:無理|一家|親子)$', r'を(?:図|遂げ|はか)|する|した|して|しよう|未遂|事件|物'),
+             ('しんちゅう', None, r'を(?:察|お察|推し量|思|吐露|明か|語)|穏やか|は(?:穏やか|複雑)|お察し')],
+    '大家': [('たいか', r'(?:画|学|界|道|楽|壇|芸)の$', r'として'), ('おおや', None, r'さん')],
+    '分別': [('ふんべつ', r'(?:大人|年相応|思慮)(?:としての|の)$', r'が(?:な|つ|あ)|の(?:な|あ)|盛り|くさ|臭|を(?:わきまえ|失)')],
+    '人事': [('ひとごと', None, r'(?:では|じゃ)な|とは思え|のよう|みたい|ながら')],
+    '気質': [('かたぎ', r'(?:職人|昔|江戸っ子|学生|商人|芸人|役者|書生)$', None)],
+    '末期': [('まつご', None, r'の(?:水|言葉|際|願い|一言|息)')],
+    '床': [('とこ', r'病の$', r'に(?:就|つ|伏|臥)|の間|を(?:上げ|敷|延べ)')],
+    '辛い': [('からい', r'(?:カレー|料理|スープ|ラーメン|味|唐辛子|わさび|キムチ|口)(?:は|が|も|の)?'
+              r'(?:少し|とても|すごく|かなり|ちょっと)?$', r'(?:料理|カレー|ラーメン|味付け|ソース)')],
+    '縁': [('ふち', r'(?:眼鏡|メガネ|めがね|カップ|グラス|コップ|池|崖|井戸|ベッド|茶碗|帽子|皿|鍋|器|机|窓)の$',
+            r'に(?:腰|座|手を|立)|を(?:なぞ|指で)')],
+    '一寸': [('いっすん', None, r'先|法師|の虫|刻み')],
+    '金': [('きん', r'(?:純|銀と|十八)$', r'の(?:ネックレス|指輪|延べ棒|メダル|装飾|粉|糸|髪|仮面|冠|像|鎖|腕輪|首飾り|ボタン|刺繍)'
+            r'|色|メダル|貨|銀|と銀|箔|髪|属'),
+           ('かね', None, r'を(?:貸|借|払|稼|返|出|使|積|ため|貯|盗|渡|持)|が(?:な[いく]|無|足り|か[かけ]|要|い[るり]|あ[るれっ])'
+            r'|に(?:困|な[るら])|で(?:買|解決|雇)|持ち|目当て|づる|遣い|儲け')],
+    '見物': [('みもの', None, r'だ(?:な|ね|ぞ|わ)?(?:[。！」]|$)|である|です')],
+    '一行': [('いちぎょう', r'(?:最初の|最後の|文章の|冒頭の|手紙の|ほんの|たった)$', r'目|ずつ|ごと|だけ|空け|の(?:文|文章|詩)')],
+}
+_CONTEXT_RULES = {form: [(reading, before and re.compile(before), after and re.compile(after))
+                         for reading, before, after in rules] for form, rules in _CONTEXT_RULES.items()}
+_CONTEXT = 12  # characters looked at on each side
+
+
+def context_reading(text: str, begin: int, surface: str, form: str, known) -> str | None:
+    """The reading _CONTEXT_RULES give a word whose head token `surface` starts at `begin` in
+    `text`, if Jiten lists it for the form (`known`, as in ruby_reading)."""
+    rules = _CONTEXT_RULES.get(form)
+    if not rules:
+        return None
+    end = begin + len(surface)
+    line_end = text.find('\n', end)
+    before = text[max(text.rfind('\n', 0, begin) + 1, begin - _CONTEXT):begin]
+    after = text[end:min(end + _CONTEXT, line_end if line_end >= 0 else len(text))]
+    for reading, before_rule, after_rule in rules:
+        if ((before_rule and before_rule.search(before)) or (after_rule and after_rule.match(after))) \
+                and (form, reading) in known:
+            return reading
+    return None
+
+
 def _lines(text: str) -> str:
     return '\n'.join(line.strip() for line in text.splitlines() if line.strip())
 
@@ -489,7 +556,8 @@ class Analyzer:
     def analyse(self, text: str, hints=(), known_readings=()) -> Analysis:
         """`hints`: (start, end, ruby) from book_text; ruby that ruby_reading accepts (with
         `known_readings`, FrequencyTable.reading_ranks) is that occurrence's reading in
-        `readings`. Word.reading, which the model features use, stays Sudachi's."""
+        `readings`, else one context_reading gives. Word.reading, which the model features use,
+        stays Sudachi's."""
         result = Analysis(text=text)
         hints = {start: (end, reading) for start, end, reading in hints}
         tokens = list(self._tokens(text))
@@ -585,7 +653,8 @@ class Analyzer:
                 entry[1] += 1
             else:
                 result.words[word_key] = [word, 1]
-            reading = hints and ruby_reading(hints, head.begin, head.surface(), word.form, known_readings)
+            reading = (hints and ruby_reading(hints, head.begin, head.surface(), word.form, known_readings)
+                       or context_reading(text, head.begin, head.surface(), word.form, known_readings))
             result.readings.setdefault(word_key, Counter())[reading or word.reading] += 1
             result.word_count += 1
             index = end

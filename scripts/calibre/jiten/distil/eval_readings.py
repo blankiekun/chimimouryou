@@ -7,8 +7,8 @@ or ｜人気《ひとけ》; offsets count without the markup). Prints accuracy 
 macro average (each form weighs the same).
 
 With --dictionary (Jiten's frequency list, the service's frequency-dictionary.zip), ruby
-gives the reading as in the service (features.ruby_reading), and the result without ruby is
-printed too.
+and then the context rules give the reading as in the service (features.ruby_reading,
+context_reading), and the result without ruby is printed too; without it neither applies.
 
 Run where `jiten/requirements.txt` is installed (the `difficulty` image's /opt/venv):
   python eval_readings.py [readings-test.tsv] [--dictionary frequency-dictionary.zip]
@@ -25,13 +25,15 @@ sys.path.insert(0, os.path.dirname(HERE))
 
 def score(results, label):
     accuracy = [sum(ok for ok, *_ in rows) / len(rows) for rows in results.values()]
+    if not accuracy:
+        return
     total = [ok for rows in results.values() for ok, *_ in rows]
     print(f'{label}macro {sum(accuracy) / len(accuracy):.1%} over {len(accuracy)} forms, '
           f'micro {sum(total) / len(total):.1%} over {len(total)} sentences')
 
 
 def main(path, dictionary=None):
-    from features import Analyzer, aozora_text, ruby_reading, to_hiragana
+    from features import Analyzer, aozora_text, context_reading, ruby_reading, to_hiragana
     tokenizer = Analyzer().tokenizer
     known = ()
     if dictionary:
@@ -49,7 +51,8 @@ def main(path, dictionary=None):
             sudachi = to_hiragana(token.reading_form()) if token.surface() == token.dictionary_form() else None
             ruby = ruby_reading({s: (e, r) for s, e, r in hints}, token.begin(), token.surface(),
                                 token.dictionary_form(), known)
-            for reading, out in ((ruby or sudachi, results), (sudachi, without_ruby)):
+            rule = context_reading(sentence, token.begin(), token.surface(), token.dictionary_form(), known)
+            for reading, out in ((ruby or rule or sudachi, results), (rule or sudachi, without_ruby)):
                 ok = token.surface() == form and reading in row['reading'].split('|')
                 got = reading if token.surface() == form else f'{token.surface()}:{reading}'
                 out[form].append((ok, got, row))

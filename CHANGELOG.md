@@ -35,6 +35,10 @@ anything a reader or a server operator would notice.
   reading: 人気 with ひとけ above it counts as ひとけ, not にんき. Flavour readings (マジ over
   本気, そら over 宇宙) are ignored. "Books without an estimate" redoes word lists once;
   the difficulty scores don't change.
+- Without furigana, word lists read about 30 ambiguous words from the words around them:
+  人気がない is ひとけ, 今日の社会 こんにち, 舞台の上手 かみて, 金を貸す かね, and 明日 is あした
+  except in formal phrases (明日の日本). "Books without an estimate" redoes word lists once;
+  the difficulty scores don't change.
 
 ### Library
 
