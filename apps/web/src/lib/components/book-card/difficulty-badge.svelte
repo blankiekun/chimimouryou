@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { difficultyColor, difficultyName } from '$lib/data/difficulty';
+  import { difficultyColor, difficultyDescription, difficultyName } from '$lib/data/difficulty';
 
   export let difficulty: number;
   export let low: number | undefined = undefined;
@@ -14,6 +14,8 @@
     ? `\nKnowing the ${words95.toLocaleString()} most common words covers 95% of its words`
     : '';
   $: summary = `Difficulty ${difficulty.toFixed(2)} of 5 (${difficultyName(difficulty)})${range}`;
+  $: meaning = `\n${difficultyName(difficulty)}: ${difficultyDescription(difficulty)}`;
+  $: rangeNote = range ? '\nThe likely range covers 10-90% of the estimate' : '';
   /** How full each of the five segments is, 0-1 */
   $: fills = [0, 1, 2, 3, 4].map((i) => Math.min(Math.max(difficulty - i, 0), 1));
 </script>
@@ -23,7 +25,7 @@
   style:--difficulty-color={difficultyColor(difficulty)}
   role="img"
   aria-label={summary}
-  title="{summary}, estimated by chimi-difficulty{words}"
+  title="{summary}, estimated by chimi-difficulty on jiten.moe's 0-5 scale{meaning}{rangeNote}{words}"
 >
   <span class="difficulty-meter" aria-hidden="true">
     {#each fills as fill, i (i)}

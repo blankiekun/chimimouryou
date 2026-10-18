@@ -10,6 +10,20 @@
 
 export const difficultyNames = ['Beginner', 'Easy', 'Average', 'Hard', 'Expert', 'Insane'] as const;
 
+/** What each band means for a learner, one line each (same order as difficultyNames). */
+export const difficultyDescriptions = [
+  'Very simple text, almost only the most common words',
+  'Simple prose with few rare words or kanji',
+  'Everyday fiction with a broader vocabulary',
+  'Rich vocabulary and denser sentences',
+  'Literary or specialised text with many rare words',
+  'The top of the scale: rare words and heavy prose throughout'
+] as const;
+
+export function difficultyDescription(difficulty: number) {
+  return difficultyDescriptions[difficultyBand(difficulty)];
+}
+
 export function difficultyBand(difficulty: number) {
   return Math.min(Math.max(Math.floor(difficulty), 0), difficultyNames.length - 1);
 }
