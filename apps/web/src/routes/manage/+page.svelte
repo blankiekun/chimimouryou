@@ -11,6 +11,7 @@
     faBook,
     faBookOpen,
     faGaugeHigh,
+    faForward,
     faHouse,
     faLayerGroup,
     faPlus,
@@ -33,6 +34,8 @@
     homeRemovedTitles$,
     libraryTab$,
     matchingSeries,
+    readNext,
+    readNextPool,
     removeFromHome,
     seriesGroups,
     storeView$
@@ -240,7 +243,9 @@
   }
   $: if (knownWordsOn && $bookCards$ && !isLoading) {
     const onHome = new Set(homeOfflineTitles($bookCards$, $homeBookTitles$, $homeRemovedTitles$));
+    const { next, pool } = readNextPool($bookCards$);
 
+    [...next, ...pool].forEach((card) => onHome.add(card.title));
     cacheCoverage(
       $bookCards$
         .filter(
@@ -250,6 +255,7 @@
         .map((card) => ({ id: card.calibreId!, words95: card.words95! }))
     );
   }
+  $: readNextCards = isHome && $bookCards$ ? readNext($bookCards$, $knownCoverage$) : [];
   $: homeCards = (() => {
     const byTitle = new Map(($bookCards$ ?? []).map((card) => [card.title, card]));
 
@@ -1368,6 +1374,16 @@
           on:bookSelect={(ev) => selectBook(ev.detail.id)}
           removeTitle="Remove from Home"
           on:remove={(ev) => removeFromHome(ev.detail.title)}
+        />
+        <ContinueReadingShelf
+          bookCards={$bookCards$}
+          shelfBooks={readNextCards}
+          heading="Read next"
+          icon={faForward}
+          currentBookId={$currentBookId$}
+          selectedBookIds={selectMode ? selectedBookIds : undefined}
+          on:bookClick={(ev) => onCoverClick(ev.detail.id)}
+          on:bookSelect={(ev) => selectBook(ev.detail.id)}
         />
         <ContinueReadingShelf
           bookCards={$bookCards$}

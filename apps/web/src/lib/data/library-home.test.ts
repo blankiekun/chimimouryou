@@ -12,6 +12,7 @@ import {
   homeRemovedTitles$,
   isContinueReading,
   matchingSeries,
+  readNext,
   removeFromHome,
   seriesGroups
 } from './library-home';
@@ -93,5 +94,38 @@ describe('seriesGroups', () => {
       '涼宮ハルヒの憂鬱',
       '涼宮ハルヒの溜息'
     ]);
+  });
+});
+
+describe('readNext', () => {
+  let id = 0;
+  const book = (title: string, props: Partial<BookCardProps> = {}) =>
+    ({ id: ++id, title, progress: 0, ...props }) as BookCardProps;
+  const done = (title: string, difficulty: number, lastBookOpen: number) =>
+    book(title, { progress: 1, difficulty, lastBookOpen });
+
+  it('is empty without a finished book with a difficulty', () => {
+    expect(readNext([book('a', { difficulty: 2 }), book('b', { progress: 1 })], {})).toEqual([]);
+  });
+
+  it('puts next volumes first, then books near the median of the last 3 finished, by coverage', () => {
+    const titles = readNext(
+      [
+        done('old', 5, 1),
+        done('f1', 2, 10),
+        done('f2', 3, 11),
+        done('f3', 2.6, 12),
+        book('S 1', { series: 'S', seriesIndex: 1, progress: 1, lastBookOpen: 5 }),
+        book('S 2', { series: 'S', seriesIndex: 2, difficulty: 4.5 }),
+        book('S 3', { series: 'S', seriesIndex: 3 }),
+        book('near', { difficulty: 2.5, calibreId: 1 }),
+        book('known', { difficulty: 2.8, calibreId: 2 }),
+        book('far', { difficulty: 3.2 }),
+        book('started', { difficulty: 2.6, progress: 0.2 })
+      ],
+      { 1: 0.5, 2: 0.9 }
+    ).map((card) => card.title);
+
+    expect(titles).toEqual(['S 2', 'known', 'near']);
   });
 });
