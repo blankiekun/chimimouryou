@@ -18,6 +18,10 @@ anything a reader or a server operator would notice.
 
 ### Manga
 
+- Opening a Calibre manga for the first time is much faster: its pages are no longer
+  re-zipped and uploaded to the sync folder (a 100 MB volume uploaded 100 MB before it
+  opened); each device loads the CBZ from the library instead.
+
 - The manga reader works more like Mihon: pinch, double tap or Ctrl+wheel to zoom, and drag
   a zoomed page around; swipes drag the page along with the finger; scale types (fit screen,
   width, height, original size, smart fit); two-page spreads on screens wider than tall (the

@@ -452,7 +452,11 @@ export class CalibreStorageHandler extends ApiStorageHandler {
     // Keep the Calibre title rather than the one in the file, since titles identify books.
     bookContent.title = title;
 
-    await this.saveBook(bookContent, false);
+    // A manga's book data is just its pages, which the server already has as the CBZ:
+    // re-zipping and uploading them doubled a first open, so other devices load the CBZ too.
+    if (!isManga(bookContent)) {
+      await this.saveBook(bookContent, false);
+    }
     await this.saveCover(bookContent.coverImage);
     await this.saveLocally(bookContent, bookContent.coverImage);
   }
