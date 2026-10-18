@@ -62,16 +62,18 @@ describe('wordsFileName', () => {
 });
 
 describe('knownCoverage', () => {
-  it('weighs known written forms by their count, leaving out numbers and lone kana', () => {
-    const words: BookWord[] = [
-      ['猫', 'ねこ', 6, 100],
-      ['は', 'は', 50, 1],
-      ['8', null, 9, null],
-      ['犬', 'いぬ', 3, 200],
+  it('counts the known study words and weighs their share by count', () => {
+    const study: BookWord[] = [
+      ['猫', 'ねこ', 6, 40000],
+      ['犬', 'いぬ', 3, 50000],
       ['宦官', 'かんがん', 1, 68872]
     ];
 
-    expect(knownCoverage(words, new Set(['猫', 'は']))).toBeCloseTo(0.6);
+    expect(knownCoverage(study, new Set(['猫', 'は']))).toEqual({
+      known: ['猫'],
+      total: 3,
+      share: 0.6
+    });
     expect(knownCoverage([], new Set(['猫']))).toBeUndefined();
   });
 });

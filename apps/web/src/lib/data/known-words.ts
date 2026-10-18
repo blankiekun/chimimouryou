@@ -5,15 +5,15 @@
  */
 
 /**
- * Known words read from an Anki deck (mature cards) and each book's share of known
- * words, an estimate shown on the book page and used by the Store's Coverage sort.
- * Personal: kept in this browser only (reader-db `known`), cleared when the reader
+ * Known words read from an Anki deck (mature cards) and which of each book's words to
+ * study (`wordsToStudy`) they cover: an estimate on the book page, also used by the
+ * Store's Known words sort. Personal: kept in this browser only (reader-db `known`), cleared when the reader
  * changes (`releaseReaderData`). Off unless Settings → Anki turns it on. Not part of upstream.
  */
 
 import { BehaviorSubject } from 'rxjs';
 import { ankiInvoke, ankiKnownDeck$, ankiKnownField$, ankiKnownWords$ } from '$lib/data/anki';
-import { knownCoverage, loadBookWords, type BookWord } from '$lib/data/book-words';
+import { knownCoverage, loadBookWords, wordsToStudy, type BookWord } from '$lib/data/book-words';
 import { readerDb } from '$lib/data/reader-db';
 
 export interface KnownWords {
@@ -25,7 +25,7 @@ export interface KnownWords {
 export interface CoverageCache {
   /** `KnownWords.read` the coverages were computed from */
   read: number;
-  /** Calibre book id → share of known word occurrences */
+  /** Calibre book id → share of the study words' occurrences that are known */
   books: Record<number, number>;
 }
 
@@ -123,48 +123,53 @@ export async function loadCoverageCache() {
 }
 
 /**
- * The book's known-word coverage, from the cache or computed from its word list (loaded
- * when not given) and cached; undefined when the feature is off or data is missing.
+ * The book's words to study (`wordsToStudy`) known from Anki. Computed from `words` when
+ * given (the book page), else the cached share or one computed from the loaded word list;
+ * the share is cached. Undefined when the feature is off or data is missing.
  */
-export async function bookCoverage(id: number, words?: BookWord[]) {
+export async function bookCoverage(id: number, words95: number, words?: BookWord[]) {
   const known = ankiKnownWords$.getValue() ? await getKnownWords() : undefined;
 
   if (!known) return undefined;
 
-  const cache = await coverageCache(known.read);
+  if (!words) {
+    const cached = (await coverageCache(known.read)).books[id];
 
-  if (cache.books[id] !== undefined) return cache.books[id];
+    if (cached !== undefined) return { share: cached };
+    words = await loadBookWords(id).catch(() => undefined);
+  }
 
-  words ??= await loadBookWords(id).catch(() => undefined);
+  const coverage = words && knownCoverage(wordsToStudy(words, words95), new Set(known.words));
 
-  const coverage = words && knownCoverage(words, new Set(known.words));
-
-  if (coverage === undefined) return undefined;
+  if (!coverage) return undefined;
 
   // Re-read: another book may have been cached meanwhile.
   const latest = await coverageCache(known.read);
-  const books = { ...latest.books, [id]: coverage };
 
-  await (await readerDb()).put('known', { read: known.read, books }, 'coverage');
-  knownCoverage$.next(books);
+  if (latest.books[id] !== coverage.share) {
+    const books = { ...latest.books, [id]: coverage.share };
+
+    await (await readerDb()).put('known', { read: known.read, books }, 'coverage');
+    knownCoverage$.next(books);
+  }
 
   return coverage;
 }
 
-let pending: number[] | undefined;
+let pending: { id: number; words95: number }[] | undefined;
 let running: Promise<void> | undefined;
 
 /** Computes the coverage of these books one at a time in the background (Home's books). */
-export function cacheCoverage(ids: number[]) {
-  pending = ids;
+export function cacheCoverage(books: { id: number; words95: number }[]) {
+  pending = books;
   running ??= (async () => {
     while (pending) {
       const batch = pending;
 
       pending = undefined;
-      for (const id of batch) {
+      for (const { id, words95 } of batch) {
         if (pending) break;
-        await bookCoverage(id).catch(() => undefined);
+        await bookCoverage(id, words95).catch(() => undefined);
       }
     }
   })().finally(() => {

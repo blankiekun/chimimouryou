@@ -121,7 +121,7 @@
             property: 'coverage' as SortOption['property'],
             label: 'Known words',
             title:
-              "By the share of a book's words known from Anki. Only books whose page you opened, and Home's books, have one; the rest come last."
+              "By the share of a book's words to study that you know from Anki. Only books whose page you opened, and Home's books, have one; the rest come last."
           }
         ]
       : []),

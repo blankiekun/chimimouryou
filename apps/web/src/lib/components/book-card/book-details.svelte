@@ -87,8 +87,8 @@
   let kanji: KanjiCoverage | undefined;
   let copied = false;
   let studyWords: BookWord[] = [];
-  /** Share of the listed words known from Anki */
-  let wordCoverage: number | undefined;
+  /** Words to study known from Anki (Settings → Anki → Known Words) */
+  let knownStudy: Set<string> | undefined;
   let speed = 0;
   let metadata: BookMetadata | undefined;
   let searching = false;
@@ -157,7 +157,7 @@
     kanji = undefined;
     copied = false;
     studyWords = [];
-    wordCoverage = undefined;
+    knownStudy = undefined;
     metadata = undefined;
     candidates = undefined;
     source = undefined;
@@ -192,7 +192,10 @@
           : undefined,
         refreshKnownWordsIfStale()
       ]);
-      const coverage = words && (await bookCoverage(book.calibreId, words).catch(() => undefined));
+      const coverage =
+        words &&
+        words95 &&
+        (await bookCoverage(book.calibreId, words95, words).catch(() => undefined));
 
       if (title !== book.title) {
         return;
@@ -204,7 +207,7 @@
       if (words && words95) {
         studyWords = wordsToStudy(words, words95);
       }
-      wordCoverage = coverage;
+      knownStudy = coverage && 'known' in coverage ? new Set(coverage.known) : undefined;
     }
   }
 
@@ -404,15 +407,6 @@
                     </button>
                   </span>
                 {/if}
-                {#if wordCoverage !== undefined}
-                  <span
-                    class="details-note"
-                    title="Only the book's 2,000 most frequent words are compared with your deck's mature cards, by written form (readings aren't matched)."
-                  >
-                    ≈{Math.round(wordCoverage * 100)}% of its words known (estimate from your Anki
-                    deck).
-                  </span>
-                {/if}
               {:else}
                 No estimate yet
               {/if}
@@ -478,13 +472,26 @@
                 studyWords.length
               )} (the CSV has all){/if}.
           </p>
+          {#if knownStudy}
+            <p
+              class="details-note"
+              title="Your deck's mature cards compared with these words by written form (readings aren't matched). Only the book's 2,000 most frequent words are listed, so this is an estimate."
+            >
+              You know {number(knownStudy.size)} of the {number(studyWords.length)} words to study
+              (from your Anki deck).
+            </p>
+          {/if}
           <ol lang="ja">
             {#each studyWords.slice(0, 50) as [form, reading, count]}
-              <li>
+              {@const known = knownStudy?.has(form)}
+              <li class:details-word-known={known}>
                 {form}{#if reading && kanjiPattern.test(form)}<span class="details-note-inline"
                     >（{reading}）</span
                   >{/if}
-                <span class="details-note-inline">×{count}</span>
+                <span class="details-note-inline">×{count}</span>{#if known}<span
+                    class="details-note-inline"
+                    aria-label="known"> ✓</span
+                  >{/if}
               </li>
             {/each}
           </ol>
@@ -829,6 +836,10 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.3rem 1.1rem;
+  }
+
+  .details-word-known {
+    color: var(--app-muted-fg);
   }
 
   .details-note-inline {

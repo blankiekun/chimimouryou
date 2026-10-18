@@ -243,8 +243,11 @@
 
     cacheCoverage(
       $bookCards$
-        .filter((card) => onHome.has(card.title) && !card.manga && card.calibreId !== undefined)
-        .map((card) => card.calibreId!)
+        .filter(
+          (card) =>
+            onHome.has(card.title) && !card.manga && card.calibreId !== undefined && card.words95
+        )
+        .map((card) => ({ id: card.calibreId!, words95: card.words95! }))
     );
   }
   $: homeCards = (() => {

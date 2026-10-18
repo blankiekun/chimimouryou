@@ -34,31 +34,31 @@ const singleKanaPattern = /^[\p{Script=Hiragana}\p{Script=Katakana}ー]$/u;
 export function wordsToStudy(words: BookWord[], words95: number) {
   return words.filter(
     ([form, , , rank]) =>
-      (rank === null ? kanjiPattern.test(form) : rank > words95) && !isNoise(form)
+      (rank === null ? kanjiPattern.test(form) : rank > words95) &&
+      !numberPattern.test(form) &&
+      !singleKanaPattern.test(form)
   );
 }
 
-function isNoise(form: string) {
-  return numberPattern.test(form) || singleKanaPattern.test(form);
-}
-
 /**
- * Share of the listed word occurrences (numbers and lone kana left out) whose written
- * form is in `known`; undefined for an empty list. An estimate: the list holds only the
- * book's most frequent words, and readings aren't compared.
+ * Which words to study (`wordsToStudy`) are known by written form, and their share of
+ * the study words' occurrences (for sorting); undefined when there are none. An estimate:
+ * only the book's most frequent words are listed, and readings aren't compared.
  */
-export function knownCoverage(words: BookWord[], known: ReadonlySet<string>) {
+export function knownCoverage(study: BookWord[], known: ReadonlySet<string>) {
   let total = 0;
   let covered = 0;
+  const forms: string[] = [];
 
-  for (const [form, , count] of words) {
-    if (!isNoise(form)) {
-      total += count;
-      if (known.has(form)) covered += count;
+  for (const [form, , count] of study) {
+    total += count;
+    if (known.has(form)) {
+      covered += count;
+      forms.push(form);
     }
   }
 
-  return total ? covered / total : undefined;
+  return total ? { known: forms, total: study.length, share: covered / total } : undefined;
 }
 
 function csvField(value: string | number | null) {

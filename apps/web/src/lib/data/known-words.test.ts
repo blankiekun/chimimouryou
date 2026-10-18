@@ -85,24 +85,25 @@ describe('known words', () => {
   it('computes, caches and invalidates coverage when the words are read again', async () => {
     stubAnki(['猫']);
     await refreshKnownWords();
-    expect(await bookCoverage(7, words)).toBeCloseTo(0.6);
+    expect(await bookCoverage(7, 50, words)).toEqual({ known: ['猫'], total: 3, share: 0.6 });
     expect(knownCoverage$.getValue()).toEqual({ 7: 0.6 });
-    // Cached: the word list isn't needed again.
-    expect(await bookCoverage(7, [])).toBeCloseTo(0.6);
+    // Cached: the word list isn't loaded again.
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    expect(await bookCoverage(7, 50)).toEqual({ share: 0.6 });
 
     await new Promise((resolve) => setTimeout(resolve, 2));
     stubAnki(['猫', '犬']);
     await refreshKnownWords();
     expect(knownCoverage$.getValue()).toEqual({});
     // Not cached any more: loaded from the server again.
-    expect(await bookCoverage(7)).toBeCloseTo(0.9);
+    expect((await bookCoverage(7, 50))?.share).toBeCloseTo(0.9);
   });
 
   it('gives nothing while the feature is off', async () => {
     stubAnki(['猫']);
     await refreshKnownWords();
     ankiKnownWords$.next(false);
-    expect(await bookCoverage(7, words)).toBeUndefined();
+    expect(await bookCoverage(7, 50, words)).toBeUndefined();
   });
 
   it('keeps the old words quietly when Anki is closed', async () => {
@@ -117,7 +118,7 @@ describe('known words', () => {
   it('clears everything', async () => {
     stubAnki(['猫']);
     await refreshKnownWords();
-    await bookCoverage(7, words);
+    await bookCoverage(7, 50, words);
     await clearKnownWords();
     expect(await (await readerDb()).count('known')).toBe(0);
     expect(knownCoverage$.getValue()).toEqual({});

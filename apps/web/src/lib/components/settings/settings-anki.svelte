@@ -142,7 +142,7 @@
 <SettingsSection id="anki-known">
   <SettingsItemGroup
     title="Known words from Anki"
-    tooltip="Reads the words of the deck's mature cards (interval of 21 days or more) at most once a day, kept in this browser only, to estimate how many of each book's words you know."
+    tooltip="Reads the words of the deck's mature cards (interval of 21 days or more) at most once a day, kept in this browser only, to mark the ones you know in each book's words to study."
   >
     <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={$ankiKnownWords$} />
   </SettingsItemGroup>
