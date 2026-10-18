@@ -18,6 +18,34 @@ features) use `docker compose -f docker-compose.static.yml up -d` instead.
 `import` installs Calibre, `difficulty` Sudachi and ONNX Runtime and `mokuro`
 PyTorch (about 2 GB), so these images are large; leave them out unless you want those features.
 
+## Server size
+
+What the machine (or VM/container) running the stack needs, by the profiles in use.
+The library and sync folder are extra and can live on other storage. Disk is for the
+system, the images twice over (each update keeps the previous ones as `:previous`),
+Docker's build cache (capped at 6 GB, see [Disk space for builds](#disk-space-for-builds))
+and `DATA_PATH`.
+
+| Profiles                 | CPU cores | RAM    | Swap | Disk  |
+| ------------------------ | --------- | ------ | ---- | ----- |
+| none (reader, accounts)  | 1         | 1 GB   | 512 MB | 16 GB |
+| `import`                 | 2         | 2 GB   | 512 MB | 24 GB |
+| `import,difficulty`      | 2-4       | 4 GB   | 1 GB | 24 GB |
+| `import,difficulty,mokuro` (recommended) | 4+ | 6 GB | 1 GB | 32 GB |
+
+Where it goes: the services idle at about 15 MB each. Calibre's `calibredb add`
+takes a few hundred MB while it runs; each difficulty worker (`DIFFICULTY_WORKERS`,
+default 2) 0.5-1 GB during estimates; mokuro 1.5 GB while it reads a volume. The images
+are about 0.3 GB (web), 0.1 GB (services), 1.4 GB (import), 0.6 GB (difficulty) and
+2.1 GB (mokuro), plus 450 MB of mokuro models in `DATA_PATH`. More cores make estimates
+and mokuro faster; the compose file gives both a lower CPU share (`cpu_shares: 512`)
+so the reader stays responsive while they run. Add 16 GB of disk and 2 GB of RAM for a
+second copy of the stack (a test server) or for building the visual novel engine there.
+
+On Proxmox, an unprivileged LXC container works with `nesting=1,keyctl=1` (Docker
+inside), Debian with Docker from its own packages (`docker.io docker-compose
+docker-buildx`), and the library bind-mounted into it.
+
 ## Setup
 
 ```sh
@@ -153,7 +181,9 @@ restart the stack. A failed build keeps the running version; the previous images
 stay tagged `:previous`. Its log: `journalctl -u ebook-update`. It builds and
 runs whatever is released or on main as root, so only point `UPDATE_REPO` at a
 repository you trust. Tools → Visual novel engine uses the same updater to
-install a new CONscripter release (it rebuilds only the web container).
+install a new CONscripter release: it only downloads the release's web build into
+`DATA_PATH/state/engine/`, which nginx serves ahead of the built-in engine (no build,
+no restart).
 
 Otherwise:
 

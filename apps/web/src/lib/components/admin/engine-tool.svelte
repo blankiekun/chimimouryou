@@ -56,12 +56,12 @@
     }
   }
 
-  /** The web container restarts during the update, so failed requests just mean "wait". */
+  /** Failed requests just mean "try again". */
   async function poll() {
     try {
       state = await getUpdateState();
     } catch {
-      // Restarting
+      // Try again
     }
 
     const latest = state?.status;
@@ -77,9 +77,10 @@
     Visual novels play on
     <a class="underline" href="https://github.com/{engineRepo}" target="_blank" rel="noreferrer"
       >CONscripter</a
-    >. A new release isn't installed on its own: "Install" downloads the release's web build on the
-    server (nothing is compiled) and rebuilds the web container so browsers fetch the new engine (a
-    few seconds of downtime; other services keep running). Without the server's updater, run
+    >. A new release isn't installed on its own: "Install" downloads the release's web build from
+    GitHub into the server's data folder, where it replaces the built-in engine right away (nothing
+    is built or restarted; games started afterwards use it). An app update that ships the same or a
+    newer engine takes over again. Without the server's updater, run
     <code>scripts/conscripter/build.sh</code>, commit the files it changes and deploy.
   </p>
 

@@ -65,6 +65,7 @@ real-IP settings) go in `/etc/nginx/ebook-reader.d/*.conf`.
 | `IMPORT_UPSTREAM`       | `import:8767`                              |
 | `DIFFICULTY_UPSTREAM`   | `difficulty:8765`                          |
 | `MOKURO_UPSTREAM`       | `mokuro:8768`                              |
+| `ENGINE_DIR`            | `/data/state/engine` (a visual novel engine installed from the admin panel) |
 | `MOKURO_DIR`            | `/data/state/mokuro` (served as `/calibre/mokuro/<id>.json`) |
 | `TRUSTED_NETWORKS`, `PUBLIC_READS`, `AUDIOBOOKSHELF_URL` | as in `.env` |
 | `INTERNAL_TOKEN_FILE`   | `/data/state/internal-token`               |

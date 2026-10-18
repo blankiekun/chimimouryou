@@ -23,7 +23,7 @@ chown -R "$PUID:$PGID" /var/cache/nginx
 # The services run as PUID and can't create these in a root-owned /data.
 for dir in /data /data/sync /data/sync/.tmp /data/accounts /data/accounts/.tmp /data/state \
   /data/state/account /data/state/catalog /data/state/import /data/state/difficulty \
-  /data/state/update; do
+  /data/state/update /data/state/engine; do
   mkdir -p "$dir"
   chown "$PUID:$PGID" "$dir"
 done
@@ -53,6 +53,16 @@ case " ${TRUSTED_NETWORKS:-} " in
     [ -n "${REAL_IP_FROM:-}" ] ||
       echo "WARNING: TRUSTED_NETWORKS includes 172.x (Docker's network) without REAL_IP_FROM: visitors through a reverse proxy on this host count as trusted." >&2 ;;
 esac
+
+# An engine installed from the admin panel is served ahead of the built-in one; drop it
+# once the app ships the same or a newer release, so it never holds a newer one back.
+engine=/data/state/engine
+installed=$(cat "$engine/conscripter-version.txt" 2>/dev/null || true)
+built_in=$(cat /srv/www/vn/conscripter-version.txt 2>/dev/null || true)
+if [ -n "$installed" ] && [ -n "$built_in" ] &&
+  [ "$(printf '%s\n%s\n' "$installed" "$built_in" | sort -V | tail -n 1)" = "$built_in" ]; then
+  rm -f "$engine/conscripter-version.txt" "$engine/conscripter.js" "$engine/conscripter.wasm"
+fi
 
 rm -f /etc/nginx/conf.d/default.conf
 /opt/ebook-reader/render-nginx.sh > /etc/nginx/conf.d/ebook-reader.conf

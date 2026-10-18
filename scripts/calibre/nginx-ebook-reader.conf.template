@@ -74,6 +74,18 @@ server {
     try_files $uri $uri.html $uri/ =404;
   }
 
+  # The visual novel engine: one installed from the admin panel wins over the built-in one.
+  # Revalidated every time, so browsers pick up a new one.
+  location ~ ^/vn/(conscripter\.js|conscripter\.wasm|conscripter-version\.txt)$ {
+    root ${ENGINE_DIR};
+    try_files /$1 @built_in_engine;
+    expires -1;
+  }
+
+  location @built_in_engine {
+    expires -1;
+  }
+
   # Module scripts (Whisper's ONNX runtime); nginx's mime.types has no .mjs.
   location ~ \.mjs$ {
     types { }
