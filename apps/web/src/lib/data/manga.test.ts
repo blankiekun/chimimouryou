@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  adjacentVolumes,
   borderColor,
   clampPan,
   fitSize,
@@ -100,5 +101,33 @@ describe('manga', () => {
     data.splice(4 * 4, 4, 0, 0, 0, 255); // the centre doesn't count
 
     expect(borderColor(data, 3)).toBe('rgb(255, 255, 255)');
+  });
+
+  it('finds the manga volumes either side, with series overrides', () => {
+    const book = (title: string, series: string, seriesIndex: number | null, format = 'CBZ') => ({
+      title,
+      series,
+      seriesIndex,
+      format
+    });
+    const books = [
+      book('M 2', 'M', 2),
+      book('M 1', 'M', 1),
+      book('M 3', 'M', 3),
+      book('M novel', 'M', 1.5, 'EPUB'),
+      book('Other 4', 'Other', 1)
+    ];
+
+    expect(adjacentVolumes(books, {}, 'M 2')).toEqual({ previous: books[1], next: books[2] });
+    expect(adjacentVolumes(books, {}, 'M 1').previous).toBeUndefined();
+    expect(adjacentVolumes(books, {}, 'M novel')).toEqual({});
+    // A reader moved M 3 out of the series and Other 4 into it.
+    const overrides = {
+      'M 3': { series: '', modified: 1 },
+      'Other 4': { series: 'M', modified: 1 }
+    };
+
+    expect(adjacentVolumes(books, overrides, 'M 3')).toEqual({});
+    expect(adjacentVolumes(books, overrides, 'M 2').next?.title).toBe('Other 4');
   });
 });
