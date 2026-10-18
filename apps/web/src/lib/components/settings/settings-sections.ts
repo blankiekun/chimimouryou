@@ -202,6 +202,12 @@ export const settingsAreas: SettingsArea[] = [
         label: 'Card Media',
         description: 'Audio and screenshots added to cards you mine while reading or playing.',
         icon: faPhotoFilm
+      },
+      {
+        id: 'anki-known',
+        label: 'Known Words',
+        description: "Mature cards of a deck as the words you know, for each book's word coverage.",
+        icon: faBookOpen
       }
     ]
   },

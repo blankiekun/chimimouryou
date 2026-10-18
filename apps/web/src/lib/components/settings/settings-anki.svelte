@@ -9,6 +9,9 @@
     ankiConnectUrl$,
     ankiEnabled$,
     ankiInvoke,
+    ankiKnownDeck$,
+    ankiKnownField$,
+    ankiKnownWords$,
     ankiBookAiFallback$,
     ankiBookAudio$,
     ankiPictureField$,
@@ -17,11 +20,39 @@
     ankiVnScreenshot$
   } from '$lib/data/anki';
   import { learningGuideUrl } from '$lib/data/app-update';
+  import { getKnownWords, knownWords$, refreshKnownWords } from '$lib/data/known-words';
   import { activePlugins$ } from '$lib/plugins';
+  import { onMount } from 'svelte';
 
   const origin = typeof location === 'undefined' ? '' : location.origin;
 
   let testResult = '';
+  let decks: string[] = [];
+  let refreshing = false;
+  let refreshError = '';
+
+  onMount(() => {
+    getKnownWords().catch(() => undefined);
+  });
+
+  $: if ($ankiKnownWords$ && !decks.length) {
+    ankiInvoke<string[]>('deckNames').then(
+      (names) => (decks = names),
+      () => {}
+    );
+  }
+
+  async function refreshKnown() {
+    refreshing = true;
+    refreshError = '';
+    try {
+      await refreshKnownWords();
+    } catch (error: any) {
+      refreshError = error.message;
+    } finally {
+      refreshing = false;
+    }
+  }
 
   async function test() {
     testResult = 'Connecting…';
@@ -106,4 +137,41 @@
   >
     <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={$ankiVnAudio$} />
   </SettingsItemGroup>
+</SettingsSection>
+
+<SettingsSection id="anki-known">
+  <SettingsItemGroup
+    title="Known words from Anki"
+    tooltip="Reads the words of the deck's mature cards (interval of 21 days or more) at most once a day, kept in this browser only, to mark the ones you know in each book's words to study."
+  >
+    <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={$ankiKnownWords$} />
+  </SettingsItemGroup>
+  {#if $ankiKnownWords$}
+    <SettingsItemGroup title="Deck" tooltip="Its subdecks are included.">
+      <input
+        aria-label="Deck"
+        autocomplete="off"
+        class={inputClasses}
+        list="anki-known-decks"
+        bind:value={$ankiKnownDeck$}
+      />
+      <datalist id="anki-known-decks">
+        {#each decks as deck}<option value={deck} />{/each}
+      </datalist>
+    </SettingsItemGroup>
+    <SettingsItemGroup
+      title="Word field"
+      tooltip="The field holding the word (e.g. Expression or Word). HTML and furigana like 漢字[かんじ] are removed."
+    >
+      <input aria-label="Word field" class={inputClasses} bind:value={$ankiKnownField$} />
+      <button class="{buttonClasses} mt-2" disabled={refreshing} on:click={refreshKnown}>
+        {refreshing ? 'Reading…' : 'Refresh'}
+      </button>
+      <p class="mt-2 text-xs text-[color:var(--app-muted-fg)]">
+        {#if refreshError}{refreshError}{:else if $knownWords$}{$knownWords$.words.length.toLocaleString(
+            'en-US'
+          )} known words, read {new Date($knownWords$.read).toLocaleString()}{:else}Not read yet{/if}
+      </p>
+    </SettingsItemGroup>
+  {/if}
 </SettingsSection>

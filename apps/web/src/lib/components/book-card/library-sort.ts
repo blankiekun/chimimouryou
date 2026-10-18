@@ -50,15 +50,15 @@ export function compareBookCards(card1: BookCardProps, card2: BookCardProps, sor
     diff =
       direction * titleCollator.compare(card1.series || card1.title, card2.series || card2.title) ||
       (card1.seriesIndex ?? 0) - (card2.seriesIndex ?? 0);
-  } else if (sort.property === 'difficulty') {
-    const missing1 = card1.difficulty === undefined;
-    const missing2 = card2.difficulty === undefined;
+  } else if (sort.property === 'difficulty' || sort.property === 'coverage') {
+    const missing1 = card1[sort.property] === undefined;
+    const missing2 = card2[sort.property] === undefined;
 
-    // Books without an estimate always go last.
+    // Books without an estimate (or a cached coverage) always go last.
     diff =
       missing1 || missing2
         ? Number(missing1) - Number(missing2)
-        : direction * ((card1.difficulty ?? 0) - (card2.difficulty ?? 0));
+        : direction * ((card1[sort.property] ?? 0) - (card2[sort.property] ?? 0));
   } else {
     const value1 = card1[sort.property];
     const value2 = card2[sort.property];

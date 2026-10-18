@@ -6,7 +6,8 @@
 
 /**
  * The browser database for reader extras (highlights, "Story so far" summaries,
- * lorebooks, audiobooks, kanji seen, visual novel pages read and Audiobookshelf subtitles), separate from upstream's books
+ * lorebooks, audiobooks, kanji seen, visual novel pages read, Audiobookshelf subtitles and
+ * known words from Anki), separate from upstream's books
  * database. Not part of upstream.
  */
 
@@ -15,6 +16,7 @@ import type { BookAnnotations } from '$lib/data/annotations';
 import type { BookAudiobook } from '$lib/data/audiobook';
 import type { AbsSubtitles } from '$lib/data/audiobookshelf';
 import type { KanjiSeen } from '$lib/data/kanji-seen';
+import type { CoverageCache, KnownWords } from '$lib/data/known-words';
 import type { Lorebook } from '$lib/data/lorebook';
 import type { BookRecaps } from '$lib/data/recap';
 import type { VnRead } from '$lib/data/vn';
@@ -27,6 +29,8 @@ interface ReaderDb extends DBSchema {
   kanji: { key: string; value: KanjiSeen };
   vnRead: { key: string; value: VnRead };
   absSubtitles: { key: string; value: AbsSubtitles };
+  /** 'words' and 'coverage' */
+  known: { key: string; value: KnownWords | CoverageCache };
 }
 
 let dbPromise: ReturnType<typeof openDB<ReaderDb>> | undefined;
@@ -34,7 +38,7 @@ let dbPromise: ReturnType<typeof openDB<ReaderDb>> | undefined;
 /** Named ttu-annotations for historical reasons; it holds every reader extra. */
 export function readerDb() {
   dbPromise ??= new Promise((resolve, reject) => {
-    openDB<ReaderDb>('ttu-annotations', 4, {
+    openDB<ReaderDb>('ttu-annotations', 5, {
       upgrade(database, oldVersion) {
         if (oldVersion < 1) {
           database.createObjectStore('annotations', { keyPath: 'title' });
@@ -50,6 +54,9 @@ export function readerDb() {
         }
         if (oldVersion < 4) {
           database.createObjectStore('absSubtitles', { keyPath: 'title' });
+        }
+        if (oldVersion < 5) {
+          database.createObjectStore('known');
         }
       },
       // Another tab still has the previous version open; the upgrade waits for it.

@@ -40,6 +40,27 @@ export function wordsToStudy(words: BookWord[], words95: number) {
   );
 }
 
+/**
+ * Which words to study (`wordsToStudy`) are known by written form, and their share of
+ * the study words' occurrences (for sorting); undefined when there are none. An estimate:
+ * only the book's most frequent words are listed, and readings aren't compared.
+ */
+export function knownCoverage(study: BookWord[], known: ReadonlySet<string>) {
+  let total = 0;
+  let covered = 0;
+  const forms: string[] = [];
+
+  for (const [form, , count] of study) {
+    total += count;
+    if (known.has(form)) {
+      covered += count;
+      forms.push(form);
+    }
+  }
+
+  return total ? { known: forms, total: study.length, share: covered / total } : undefined;
+}
+
 function csvField(value: string | number | null) {
   const text = value === null ? '' : String(value);
 

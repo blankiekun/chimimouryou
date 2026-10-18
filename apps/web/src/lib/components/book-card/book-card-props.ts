@@ -29,6 +29,8 @@ export interface BookCardProps {
   difficultyHigh?: number;
   /** Top-N words a reader needs to know for 95% of the book's words */
   words95?: number;
+  /** Cached share of the book's words known from Anki (`known-words.ts`), for sorting */
+  coverage?: number;
   /** CBZ/ZIP read in the manga reader */
   manga?: boolean;
   /** ONScripter game played in the visual novel player */

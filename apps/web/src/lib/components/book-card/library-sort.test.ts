@@ -57,6 +57,16 @@ describe('library sort', () => {
       easy,
       none
     ]);
+
+    const known = card({ title: 'k', coverage: 0.9 });
+    const unknown = card({ title: 'u', coverage: 0.4 });
+    const asc = { property: 'coverage', direction: SortDirection.ASC } as const;
+
+    expect([none, known, unknown].sort((a, b) => compareBookCards(a, b, asc))).toEqual([
+      unknown,
+      known,
+      none
+    ]);
   });
 
   it('sorts titles with numbers naturally', () => {

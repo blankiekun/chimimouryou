@@ -66,6 +66,15 @@ describe('releaseReaderData', () => {
     expect(await db.get('statistic', ['Local', '2026-10-12'])).toBeTruthy();
   });
 
+  it('forgets the known words read from Anki for another reader', async () => {
+    await releaseReaderData(user('a'));
+    await (await readerDb()).put('known', { words: ['猫'], read: 1 }, 'words');
+    await releaseReaderData(user('a'));
+    expect(await (await readerDb()).count('known')).toBe(1);
+    await releaseReaderData(user('b'));
+    expect(await (await readerDb()).count('known')).toBe(0);
+  });
+
   it('treats signing out as another reader', async () => {
     await releaseReaderData(user('a'));
     await releaseReaderData(null);

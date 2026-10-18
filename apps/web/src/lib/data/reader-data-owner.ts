@@ -5,13 +5,15 @@
  */
 
 /**
- * Keeps one reader's progress, statistics and reading goals for Calibre books (and kanji met) from
+ * Keeps one reader's progress, statistics and reading goals for Calibre books (and kanji met
+ * and known words read from Anki) from
  * showing up for, and syncing into, the next account on a shared browser. They are
  * on the server, so they come back when their reader signs in again. Not part of upstream.
  */
 
 import type { AccountUser } from '$lib/data/account';
 import { loadCalibreCatalog } from '$lib/data/calibre';
+import { clearKnownWords } from '$lib/data/known-words';
 import { readerDb } from '$lib/data/reader-db';
 import { database } from '$lib/data/store';
 
@@ -39,6 +41,7 @@ async function releaseFor(user: AccountUser | null) {
 
   // Data from before owners were recorded is adopted, like settings.
   if (owner !== null && owner !== id) {
+    await clearKnownWords();
     // Throws when the catalog can't be read (signed out): the next page load retries.
     const titles = new Set((await loadCalibreCatalog()).map((book) => book.title));
 
