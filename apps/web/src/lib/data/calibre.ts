@@ -36,10 +36,8 @@ export interface CalibreBook {
 
 /** Difficulty estimate (chimi-difficulty, run on demand on the server), 0-5. */
 export interface CalibreDifficulty {
-  /** Output of Jiten's local model */
+  /** chimi-difficulty's estimate, on jiten.moe's scale */
   difficulty: number;
-  /** With the adjustment jiten.moe applies (fitted to its newer hosted model) */
-  adjusted: number;
   /** 10th and 90th percentile of the estimate (older estimates have none) */
   low?: number;
   high?: number;

@@ -11,6 +11,9 @@ anything a reader or a server operator would notice.
 - Recommended server sizes per profile (docs/INSTALL.md → Server size). The `difficulty`
   and `mokuro` services get a lower CPU share (`cpu_shares: 512`) in `docker-compose.yml`
   itself, not only in the Tailscale example.
+- Deprecated: the `adjusted` field of `/calibre/difficulty.json`. It has been a copy of
+  `difficulty` since chimi-difficulty and the app no longer reads it; the release after
+  this one stops writing it. Scripts reading it should use `difficulty`.
 
 ### Library
 
