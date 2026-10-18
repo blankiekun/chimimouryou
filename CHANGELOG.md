@@ -31,6 +31,10 @@ anything a reader or a server operator would notice.
   its own count and frequency rank (before, the first occurrence's reading counted for all).
   "Books without an estimate" redoes word lists made before this once (`words` in
   `difficulty.json`). The difficulty scores don't change.
+- Word lists take a word's reading from the book's own furigana when it gives an ordinary
+  reading: 人気 with ひとけ above it counts as ひとけ, not にんき. Flavour readings (マジ over
+  本気, そら over 宇宙) are ignored. "Books without an estimate" redoes word lists once;
+  the difficulty scores don't change.
 
 ### Library
 

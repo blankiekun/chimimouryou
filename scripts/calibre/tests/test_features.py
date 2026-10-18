@@ -9,8 +9,13 @@ import unittest
 import zipfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'jiten'))
-from features import (EXTRA_FEATURES, Analysis, Word, _coverage_rank, _origin, book_text,  # noqa: E402
-                      compute_extra_features, to_hiragana, vn_text)
+from features import (EXTRA_FEATURES, Analysis, Word, _coverage_rank, _origin, aozora_text, book_text,  # noqa: E402
+                      compute_extra_features, compute_features, ruby_reading, to_hiragana, vn_text)
+
+try:
+    import sudachipy  # noqa: F401  (only in the difficulty image)
+except ImportError:
+    sudachipy = None
 
 OPF = '''<?xml version="1.0"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0">
@@ -74,6 +79,67 @@ class BookTextTest(unittest.TestCase):
             archive.writestr('Game/0.txt', script.encode())
             archive.writestr('Game/sub/0.txt', '無視\n'.encode())
         self.assertEqual(vn_text(path), '「本気だ」\n吾輩は猫である。\n二行目')
+
+
+class RubyHintTest(unittest.TestCase):
+    def hinted(self, text, hints):
+        return [(text[start:end], reading) for start, end, reading in hints]
+
+    def test_epub_hints_are_offsets_in_the_plain_text(self):
+        hints = []
+        text = book_text(epub('<p>夜の<ruby class="r">公園<rt class="x">こうえん</rt></ruby>は'
+                              '<ruby><rb>人気</rb><rp>(</rp><rt>ひと<span>け</span></rt><rp>)</rp></ruby>がない。</p>'
+                              '<p><ruby>本気<rt>マジ</rt></ruby>だ</p>'), 'EPUB', {}, hints)
+        self.assertEqual(text, '夜の公園は人気がない。\n本気だ')
+        self.assertEqual(self.hinted(text, hints), [('公園', 'こうえん'), ('人気', 'ひとけ'), ('本気', 'マジ')])
+
+    def test_odd_markup_gives_no_hints_and_the_same_text(self):
+        hints = []
+        text = book_text(epub('<p><ruby> 人気<rt>ひとけ</rt></ruby>がない</p>'), 'EPUB', None, hints)
+        self.assertEqual((text, hints), ('人気がない', []))
+
+    def test_aozora_and_vn_hints(self):
+        hints = []
+        text = aozora_text('　吾輩《わがはい》は\n｜猫《ねこ》である。\n', None, hints)
+        self.assertEqual(text, '吾輩は\n猫である。')
+        self.assertEqual(self.hinted(text, hints), [('吾輩', 'わがはい'), ('猫', 'ねこ')])
+        folder = tempfile.mkdtemp()
+        with open(os.path.join(folder, '0.txt'), 'w', encoding='utf-8') as f:
+            f.write('[太郎|v.ogg]「(本気/マジ)だ」@\n*label\n舞台の(上手/かみて)から#ffffff(人気/ひとけ)\\\n')
+        hints = []
+        text = vn_text(folder, None, hints)
+        self.assertEqual(text, '「本気だ」\n舞台の上手から人気')
+        self.assertEqual(self.hinted(text, hints), [('本気', 'マジ'), ('上手', 'かみて'), ('人気', 'ひとけ')])
+
+    def test_only_plain_readings_listed_by_jiten(self):
+        known = {('人気', 'ひとけ'), ('人気', 'にんき'), ('本気', 'まじ'), ('本気', 'ほんき'), ('宇宙', 'うちゅう')}
+        hints = {0: (2, 'ひとけ'), 3: (5, 'そら'), 6: (8, 'マジ'), 9: (11, 'まじ'), 12: (13, 'ひと')}
+        self.assertEqual(ruby_reading(hints, 0, '人気', '人気', known), 'ひとけ')
+        self.assertIsNone(ruby_reading(hints, 3, '宇宙', '宇宙', known))  # not a reading of 宇宙
+        self.assertIsNone(ruby_reading(hints, 6, '本気', '本気', known))  # katakana: flavour
+        self.assertEqual(ruby_reading(hints, 9, '本気', '本気', known), 'まじ')  # Jiten lists it (accepted hole)
+        self.assertIsNone(ruby_reading(hints, 12, '人気', '人気', known))  # ruby over part of the token
+        self.assertIsNone(ruby_reading(hints, 1, '気', '気', known))
+
+
+@unittest.skipUnless(sudachipy, 'needs Sudachi (difficulty image)')
+class RubyReadingAnalysisTest(unittest.TestCase):
+    def test_ruby_sets_the_occurrence_reading_but_not_the_features(self):
+        from features import Analyzer
+        from frequency import FrequencyTable
+        hints = []
+        text = aozora_text('夜の公園は｜人気《ひとけ》がない。\nこの店は人気だ。宇宙《そら》を見る。本気《マジ》だ。\n', None, hints)
+        known = {('人気', 'ひとけ'), ('人気', 'にんき'), ('宇宙', 'うちゅう')}
+        analyzer = Analyzer()
+        plain, hinted = analyzer.analyse(text), analyzer.analyse(text, hints, known)
+        readings = {form: dict(counter) for (_, form), counter in hinted.readings.items()}
+        self.assertEqual(readings['人気'], {'ひとけ': 1, 'にんき': 1})
+        self.assertEqual(readings['宇宙'], {'うちゅう': 1})
+        self.assertEqual(readings['本気'], {'ほんき': 1})
+        self.assertEqual(hinted.words, plain.words)
+        frequency = FrequencyTable({'人気': 1500, '公園': 2000, '宇宙': 3000, '本気': 4000}, {('人気', 'ひとけ'): 40000})
+        self.assertEqual(compute_features(hinted, frequency), compute_features(plain, frequency))
+        self.assertEqual(compute_extra_features(hinted, frequency), compute_extra_features(plain, frequency))
 
 
 class FeatureTest(unittest.TestCase):

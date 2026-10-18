@@ -59,8 +59,8 @@ KANJI_DIR = os.path.join(STATE_DIR, 'kanji')
 WORDS_DIR = os.path.join(STATE_DIR, 'words')
 WORDS_PER_BOOK = 2000
 # Stored with each estimate ('words'); whole-library runs redo word lists made by an older version.
-# 2: one row per (form, reading).
-WORDS_VERSION = 2
+# 2: one row per (form, reading). 3: the book's own ruby gives readings (features.ruby_reading).
+WORDS_VERSION = 3
 WORKERS = int(os.environ.get('JITEN_WORKERS', os.cpu_count() or 1))
 PORT = int(os.environ.get('JITEN_PORT', '8765'))
 HOST = os.environ.get('JITEN_HOST', '127.0.0.1')
@@ -133,15 +133,15 @@ def _estimate(book: dict):
     import numpy
     from features import (EXTRA_FEATURES, FEATURE_ORDER, TOKEN_CLEAN, book_text, compute_extra_features,
                           compute_features, is_kanji, vn_text, words_for_coverage)
-    ruby = {}
+    ruby, hints = {}, []
     if book.get('vn'):
-        text = vn_text(os.path.join(VN_DIR if book['format'] == 'VN' else LIBRARY, book['file']), ruby)
+        text = vn_text(os.path.join(VN_DIR if book['format'] == 'VN' else LIBRARY, book['file']), ruby, hints)
     else:
-        text = book_text(os.path.join(LIBRARY, book['file']), book['format'], ruby)
+        text = book_text(os.path.join(LIBRARY, book['file']), book['format'], ruby, hints)
     characters = len(TOKEN_CLEAN.sub('', text))
     if characters < 1000:
         return book['id'], None
-    analysis = _analyzer.analyse(text)
+    analysis = _analyzer.analyse(text, hints, _frequency.reading_ranks)
     features = compute_features(analysis, _frequency)
     extra = compute_extra_features(analysis, _frequency, ruby)
     row = numpy.array([[features[name] for name in FEATURE_ORDER] + [extra[name] for name in EXTRA_FEATURES]],

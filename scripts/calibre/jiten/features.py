@@ -165,17 +165,64 @@ def _count_ruby(ruby: dict, base: str, reading: str):
         ruby['katakana'] = ruby.get('katakana', 0) + 1
 
 
-def _markup_to_text(markup: str, ruby: dict | None = None) -> str:
+# Ruby kept as reading hints: the base between U+FFF9 and U+FFFA, the reading up to U+FFFB
+# (Unicode's interlinear annotation characters), taken out again by _take_hints.
+_HINT = re.compile('\ufff9([^\ufff9-\ufffb]*)\ufffa([^\ufff9-\ufffb]*)\ufffb')
+_HINT_MARKS = dict.fromkeys(range(0xFFF9, 0xFFFC))
+_RUBY_ELEMENT = re.compile(r'<ruby\b[^>]*>(.*?)</ruby>', re.S | re.I)
+_RT_ELEMENT = re.compile(r'<rt\b[^>]*>(.*?)</rt>', re.S | re.I)
+_HIRAGANA_WORD = re.compile(r'^[ぁ-ゖ]+$')
+
+
+def _mark_ruby(base: str, reading: str) -> str:
+    return '\ufff9' + base + '\ufffa' + re.sub(r'[\s《》｜]', '', reading) + '\ufffb'
+
+
+def _take_hints(marked: str, plain: str, hints: list, offset: int = 0):
+    """Adds (start, end, reading) of each ruby marked in `marked` to `hints`, offsets in `plain`
+    plus `offset`; nothing when `marked` without its marks isn't `plain` (odd markup), so
+    hints never change the text."""
+    pieces, found, at, length = [], [], 0, 0
+    for match in _HINT.finditer(marked):
+        before = marked[at:match.start()].translate(_HINT_MARKS)
+        base = match.group(1)
+        length += len(before)
+        found.append((offset + length, offset + length + len(base), match.group(2)))
+        length += len(base)
+        pieces += [before, base]
+        at = match.end()
+    pieces.append(marked[at:].translate(_HINT_MARKS))
+    if ''.join(pieces) == plain:
+        hints.extend(found)
+
+
+def ruby_reading(hints: dict, begin: int, surface: str, form: str, known) -> str | None:
+    """The book's ruby as the reading of a word whose head token starts at `begin`: only ruby
+    over exactly that token, in hiragana, and a reading Jiten lists for the form (`known`,
+    FrequencyTable.reading_ranks). Flavour ruby (マジ over 本気, そら over 宇宙) is never a reading."""
+    hint = hints.get(begin)
+    if hint and hint[0] == begin + len(surface) and _HIRAGANA_WORD.match(hint[1]) and (form, hint[1]) in known:
+        return hint[1]
+    return None
+
+
+def _lines(text: str) -> str:
+    return '\n'.join(line.strip() for line in text.splitlines() if line.strip())
+
+
+def _markup_to_text(markup: str, ruby: dict | None = None, hints: list | None = None) -> str:
     markup = _SKIP.sub('', markup)
     if ruby is not None:
         for match in _RUBY.finditer(markup):
             inner = match.group(1)
             reading = ''.join(_TAG.sub('', r) for r in _RT_TEXT.findall(inner))
             _count_ruby(ruby, html.unescape(_TAG.sub('', _RT.sub('', inner))), html.unescape(reading))
-    markup = _RT.sub('', markup)
-    markup = _BLOCK_END.sub('\n', markup)
-    text = html.unescape(_TAG.sub('', markup))
-    return '\n'.join(line.strip() for line in text.splitlines() if line.strip())
+    text = _lines(html.unescape(_TAG.sub('', _BLOCK_END.sub('\n', _RT.sub('', markup)))))
+    if hints is not None:
+        marked = _RUBY_ELEMENT.sub(lambda m: _mark_ruby(
+            _RT.sub('', m.group(1)), ''.join(_TAG.sub('', r) for r in _RT_ELEMENT.findall(m.group(1)))), markup)
+        _take_hints(_markup_to_text(marked), text, hints)
+    return text
 
 
 def _epub_documents(archive: zipfile.ZipFile):
@@ -196,9 +243,22 @@ def _epub_documents(archive: zipfile.ZipFile):
         yield posixpath.normpath(posixpath.join(base, manifest[el.get('idref')]))
 
 
-def book_text(path: str, fmt: str, ruby: dict | None = None) -> str:
+def aozora_text(text: str, ruby: dict | None = None, hints: list | None = None) -> str:
+    """Text with Aozora-style ruby (漢字《かんじ》 and ｜ markers) taken out."""
+    if ruby is not None:
+        for match in _AOZORA_RUBY.finditer(text):
+            _count_ruby(ruby, match.group(1) or match.group(2), match.group(3))
+    plain = _lines(re.sub(r'《[^》]*》|｜', '', text))
+    if hints is not None:
+        marked = _AOZORA_RUBY.sub(lambda m: _mark_ruby(m.group(1) or m.group(2), m.group(3)), text)
+        _take_hints(_lines(re.sub(r'《[^》]*》|｜', '', marked)), plain, hints)
+    return plain
+
+
+def book_text(path: str, fmt: str, ruby: dict | None = None, hints: list | None = None) -> str:
     """Plain text of a book, one paragraph per line, without furigana (counted into `ruby`
-    if given), tables of contents, colophons or ads."""
+    if given; with `hints`, ruby positions are added to it, see _take_hints), tables of
+    contents, colophons or ads."""
     if fmt == 'TXT':
         raw = open(path, 'rb').read()
         for encoding in ('utf-8-sig', 'shift_jis', 'cp932', 'euc_jp', 'utf-16'):
@@ -209,25 +269,26 @@ def book_text(path: str, fmt: str, ruby: dict | None = None) -> str:
                 continue
         else:
             text = raw.decode('utf-8', 'replace')
-        # Aozora-style ruby: 漢字《かんじ》 and ｜ markers.
-        if ruby is not None:
-            for match in _AOZORA_RUBY.finditer(text):
-                _count_ruby(ruby, match.group(1) or match.group(2), match.group(3))
-        text = re.sub(r'《[^》]*》|｜', '', text)
-        return '\n'.join(line.strip() for line in text.splitlines() if line.strip())
+        return aozora_text(text, ruby, hints)
 
     with zipfile.ZipFile(path) as archive:
         if fmt == 'HTMLZ':
             names = sorted(n for n in archive.namelist() if n.lower().endswith(('.html', '.xhtml', '.htm')))
         else:
             names = list(_epub_documents(archive))
-        parts = []
+        parts, offset = [], 0
         for name in names:
             try:
-                parts.append(_markup_to_text(archive.read(name).decode('utf-8', 'replace'), ruby))
+                part_hints = [] if hints is not None else None
+                part = _markup_to_text(archive.read(name).decode('utf-8', 'replace'), ruby, part_hints)
             except KeyError:
                 continue
-    return '\n'.join(p for p in parts if p)
+            if part:
+                if part_hints:
+                    hints.extend((start + offset, end + offset, reading) for start, end, reading in part_hints)
+                parts.append(part)
+                offset += len(part) + 1
+    return '\n'.join(parts)
 
 
 _VN_SCRIPT = re.compile(r'^(?:\d+\.txt|nscript\.dat)$', re.I)
@@ -236,7 +297,7 @@ _VN_RUBY = re.compile(r'\(([^/)]*)/([^)]*)\)')
 _VN_CONTROL = re.compile(r'^\s*\[[^\]]*\]|!(?:sd|[sdwz]\d+)|#[0-9a-fA-F]{6}|[@\\/]')
 
 
-def vn_text(path: str, ruby: dict | None = None) -> str:
+def vn_text(path: str, ruby: dict | None = None, hints: list | None = None) -> str:
     """Text lines of an ONScripter game (its folder, or a ZIP holding one): numbered .txt
     scripts or nscript.dat (XORed with 0x84). Like the reader's scriptCharacters, a text
     line starts with a non-ASCII character or a name tag (left out, `[name|voice]`);
@@ -263,14 +324,20 @@ def vn_text(path: str, ruby: dict | None = None) -> str:
         script = raw.decode('utf-8')
     except UnicodeDecodeError:
         script = raw.decode('cp932', 'replace')
-    lines = []
+    lines, offset = [], 0
     for line in script.splitlines():
         if re.match(r'\s*(?:[^\x00-\x7f]|\[)', line):
             if ruby is not None:
                 for match in _VN_RUBY.finditer(line):
                     _count_ruby(ruby, match.group(1), match.group(2))
-            lines.append(_VN_CONTROL.sub('', _VN_RUBY.sub(r'\1', line)).strip())
-    return '\n'.join(line for line in lines if line)
+            text = _VN_CONTROL.sub('', _VN_RUBY.sub(r'\1', line)).strip()
+            if text:
+                if hints is not None:
+                    marked = _VN_RUBY.sub(lambda m: _mark_ruby(m.group(1), m.group(2)), line)
+                    _take_hints(_VN_CONTROL.sub('', marked).strip(), text, hints, offset)
+                lines.append(text)
+                offset += len(text) + 1
+    return '\n'.join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -336,9 +403,11 @@ def _coarse_pos(pos: tuple) -> str:
 class Token:
     """The parts of a Sudachi morpheme the analysis uses. Morphemes keep their whole
     tokenizer result alive, which on very long books ran workers out of memory."""
-    __slots__ = ('_surface', '_dictionary_form', '_normalized_form', '_pos', '_reading')
+    __slots__ = ('_surface', '_dictionary_form', '_normalized_form', '_pos', '_reading', 'begin')
 
-    def __init__(self, surface: str, dictionary_form: str, normalized_form: str, pos: tuple, reading: str = ''):
+    def __init__(self, surface: str, dictionary_form: str, normalized_form: str, pos: tuple, reading: str = '',
+                 begin: int = 0):
+        self.begin = begin  # offset in the analysed text
         self._surface = surface
         self._dictionary_form = dictionary_form
         self._normalized_form = normalized_form
@@ -387,20 +456,24 @@ class Analyzer:
 
     def _tokens(self, text: str):
         # Sudachi limits input size; paragraphs are short, long ones are cut at sentence ends.
+        offset = 0
         for paragraph in text.split('\n'):
+            start = offset
+            offset += len(paragraph) + 1
             while paragraph:
                 chunk = paragraph[:5000]
                 if len(paragraph) > 5000:
                     cut = max(chunk.rfind(c) for c in '。！？')
                     chunk = paragraph[: cut + 1] if cut > 0 else chunk
                 paragraph = paragraph[len(chunk):]
+                chunk_start, start = start, start + len(chunk)
                 for morpheme in self.tokenizer.tokenize(chunk):
                     pos_id = morpheme.part_of_speech_id()
                     pos = self._pos_by_id.get(pos_id) or self._pos_by_id.setdefault(pos_id, morpheme.part_of_speech())
                     surface = morpheme.surface()
                     if pos[0] not in ('補助記号', '空白') and HAS_CONTENT.search(surface):
                         yield Token(surface, morpheme.dictionary_form(), morpheme.normalized_form(), pos,
-                                    morpheme.reading_form())
+                                    morpheme.reading_form(), chunk_start + morpheme.begin())
 
     @lru_cache(maxsize=100_000)
     def _conjugations(self, surface: str, target: str, conj_type: str) -> tuple[str, ...]:
@@ -413,8 +486,12 @@ class Analyzer:
         compatible = [f for f in matches if prefix and f.tags and f.tags[-1].startswith(prefix)] or matches
         return min(compatible, key=lambda f: len(f.process)).process
 
-    def analyse(self, text: str) -> Analysis:
+    def analyse(self, text: str, hints=(), known_readings=()) -> Analysis:
+        """`hints`: (start, end, ruby) from book_text; ruby that ruby_reading accepts (with
+        `known_readings`, FrequencyTable.reading_ranks) is that occurrence's reading in
+        `readings`. Word.reading, which the model features use, stays Sudachi's."""
         result = Analysis(text=text)
+        hints = {start: (end, reading) for start, end, reading in hints}
         tokens = list(self._tokens(text))
         surfaces = [t.surface() for t in tokens]
         dictionary_forms = [t.dictionary_form() for t in tokens]
@@ -508,7 +585,8 @@ class Analyzer:
                 entry[1] += 1
             else:
                 result.words[word_key] = [word, 1]
-            result.readings.setdefault(word_key, Counter())[word.reading] += 1
+            reading = hints and ruby_reading(hints, head.begin, head.surface(), word.form, known_readings)
+            result.readings.setdefault(word_key, Counter())[reading or word.reading] += 1
             result.word_count += 1
             index = end
 
