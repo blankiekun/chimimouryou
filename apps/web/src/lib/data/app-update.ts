@@ -14,6 +14,7 @@ import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-s
 
 export const defaultUpdateRepo = 'blankiekun/chimimouryou';
 export const engineRepo = 'blankiekun/CONscripter';
+export const learningGuideUrl = `https://github.com/${defaultUpdateRepo}/blob/main/docs/LEARNING.md`;
 
 export type UpdateChannel = 'stable' | 'edge';
 

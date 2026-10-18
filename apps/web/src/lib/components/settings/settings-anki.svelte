@@ -16,6 +16,7 @@
     ankiVnAudio$,
     ankiVnScreenshot$
   } from '$lib/data/anki';
+  import { learningGuideUrl } from '$lib/data/app-update';
   import { activePlugins$ } from '$lib/plugins';
 
   const origin = typeof location === 'undefined' ? '' : location.origin;
@@ -38,6 +39,11 @@
     tooltip="While a book or visual novel is open, notes added to Anki (e.g. with Yomitan) get the audio and screenshot chosen below."
   >
     <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={$ankiEnabled$} />
+  </SettingsItemGroup>
+  <SettingsItemGroup title="Setup guide">
+    <a class="underline" href={learningGuideUrl} target="_blank" rel="noreferrer">
+      Yomitan, AnkiConnect and the fields
+    </a>
   </SettingsItemGroup>
   <SettingsItemGroup
     title="AnkiConnect address"
