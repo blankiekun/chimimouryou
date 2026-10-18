@@ -13,6 +13,7 @@
   import { dummyFn, getWeightedAverage } from '$lib/functions/utils';
   import { debounceTime, fromEvent, merge, take } from 'rxjs';
   import { onMount } from 'svelte';
+  import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
   export let sectionData: SectionWithProgress[] = [];
@@ -128,11 +129,16 @@
 </script>
 
 <div class="flex justify-between p-4">
-  <div>Chapter Progress: {currentChapterCharacterProgress} ({currentChapterProgress}%)</div>
+  <div>
+    {$t$('reader.chapterProgress', {
+      count: currentChapterCharacterProgress,
+      percent: currentChapterProgress
+    })}
+  </div>
   <div
     tabindex="0"
     role="button"
-    title="Close Table of Contents"
+    title={$t$('reader.closeToc')}
     class="flex items-end md:items-center"
     on:click={closeTocMenu}
     on:keyup={dummyFn}
@@ -146,7 +152,7 @@
       <div
         tabindex="0"
         role="button"
-        title={`Go to ${chapter.label}`}
+        title={$t$('reader.goTo', { chapter: chapter.label ?? '' })}
         id={`for${chapter.reference}`}
         class="mr-4"
         class:opacity-30={chapter.progress === 100 && chapter !== currentChapter}
@@ -167,7 +173,9 @@
   <div
     tabindex="0"
     role="button"
-    title={prevChapterAvailable ? `${verticalMode ? 'Next' : 'Previous'} Chapter` : ''}
+    title={prevChapterAvailable
+      ? $t$(verticalMode ? 'reader.nextChapter' : 'reader.prevChapter')
+      : ''}
     class:opacity-30={!prevChapterAvailable}
     on:click={() => changeChapter(prevChapterAvailable, verticalMode ? 1 : -1)}
     on:keyup={dummyFn}
@@ -177,7 +185,9 @@
   <div
     tabindex="0"
     role="button"
-    title={nextChapterAvailable ? `${verticalMode ? 'Previous' : 'Next'} Chapter` : ''}
+    title={nextChapterAvailable
+      ? $t$(verticalMode ? 'reader.prevChapter' : 'reader.nextChapter')
+      : ''}
     class:opacity-30={!nextChapterAvailable}
     on:click={() => changeChapter(nextChapterAvailable, verticalMode ? -1 : 1)}
     on:keyup={dummyFn}

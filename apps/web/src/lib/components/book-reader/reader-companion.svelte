@@ -12,6 +12,7 @@
   import type { SearchIndex } from '$lib/functions/book-text/book-search';
   import { activePlugins$ } from '$lib/plugins';
   import { createEventDispatcher } from 'svelte';
+  import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
   /**
@@ -41,12 +42,12 @@
   }
 
   $: pluginTabs = $activePlugins$.flatMap((plugin) => plugin.companionTabs ?? []);
-  $: tabs = [{ key: 'highlights', label: 'Highlights', icon: faHighlighter }, ...pluginTabs];
+  $: tabs = [{ key: 'highlights', label: 'reader.highlights' as const, icon: faHighlighter }, ...pluginTabs];
 </script>
 
 <aside
   class="reader-panel writing-horizontal-tb fixed inset-x-0 bottom-0 z-[60] flex max-h-[80vh] flex-col rounded-t-xl text-sm shadow-2xl md:inset-y-0 md:left-auto md:right-0 md:max-h-none md:w-[28rem] md:rounded-none"
-  aria-label="Reading companion"
+  aria-label={$t$('reader.companion')}
 >
   <header class="reader-panel-divider flex items-center gap-1 border-b px-2 py-2" role="tablist">
     {#each tabs as item (item.key)}
@@ -55,16 +56,16 @@
         class:tab-active={tab === item.key}
         role="tab"
         aria-selected={tab === item.key}
-        title={item.label}
+        title={$t$(item.label)}
         on:click={() => (tab = item.key)}
       >
         <Fa icon={item.icon} />
         <!-- Phones: only the active tab is labelled, so the tabs fit beside Close. -->
-        <span class={tab === item.key ? '' : 'hidden sm:inline'}>{item.label}</span>
+        <span class={tab === item.key ? '' : 'hidden sm:inline'}>{$t$(item.label)}</span>
       </button>
     {/each}
     <span class="flex-1" />
-    <button class="p-2" title="Close" on:click={() => dispatch('close')}
+    <button class="p-2" title={$t$('reader.close')} on:click={() => dispatch('close')}
       ><Fa icon={faXmark} /></button
     >
   </header>

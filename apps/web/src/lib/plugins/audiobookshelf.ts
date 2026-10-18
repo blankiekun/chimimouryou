@@ -21,7 +21,7 @@ export const audiobookshelfPlugin: Plugin = {
   listenModes: [
     {
       key: 'audiobookshelf',
-      title: 'Audiobookshelf',
+      title: 'reader.audiobookshelf',
       icon: faServer,
       component: AudiobookshelfPlayer,
       props: ({ title, getIndex, position }) => ({ title, getIndex, position })

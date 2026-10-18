@@ -18,6 +18,7 @@
   } from '$lib/data/ask-ai';
   import { pagePath } from '$lib/data/env';
   import { createEventDispatcher, onDestroy, onMount } from 'svelte';
+  import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';
   import { renderBasicMarkdown } from '$lib/functions/basic-markdown';
 
@@ -102,13 +103,13 @@
 
 <aside
   class="reader-panel writing-horizontal-tb fixed inset-x-0 bottom-0 z-30 flex max-h-[75vh] flex-col rounded-t-xl text-sm shadow-2xl md:inset-y-0 md:left-auto md:right-0 md:max-h-none md:w-[28rem] md:rounded-none"
-  aria-label="Ask AI"
+  aria-label={$t$('reader.askAi')}
 >
   <header class="reader-panel-divider flex items-center gap-2 border-b px-4 py-3">
-    <span class="flex-1 font-semibold">Ask AI</span>
+    <span class="flex-1 font-semibold">{$t$('reader.askAi')}</span>
     <span class="truncate text-xs opacity-60">{$openRouterModel$}</span>
     <AiLanguageToggle />
-    <button class="p-1" title="Close" on:click={close}><Fa icon={faXmark} /></button>
+    <button class="p-1" title={$t$('reader.close')} on:click={close}><Fa icon={faXmark} /></button>
   </header>
 
   <div class="flex-1 overflow-y-auto px-4 py-3" bind:this={answersElm}>
@@ -117,12 +118,12 @@
     </blockquote>
     {#if !$openRouterApiKey$}
       <p class="mb-3">
-        Ask AI needs an OpenRouter API key.
+        {$t$('reader.askAiNeedsKey')}
         <a
           class="underline"
           href="{pagePath}/settings?section=ai#ai-guide"
           target="_blank"
-          rel="noreferrer">Setup guide</a
+          rel="noreferrer">{$t$('reader.setupGuide')}</a
         >
       </p>
     {/if}
@@ -143,7 +144,7 @@
   </div>
 
   {#if presets.length}
-    <div class="flex flex-wrap gap-1.5 px-4 pb-2" role="group" aria-label="Quick questions">
+    <div class="flex flex-wrap gap-1.5 px-4 pb-2" role="group" aria-label={$t$('reader.quickQuestions')}>
       {#each presets as preset (preset.id)}
         <button
           type="button"
@@ -164,11 +165,11 @@
   >
     <input
       class="reader-panel-input min-w-0 flex-1 rounded px-3 py-2"
-      placeholder={exchanges.length ? 'Ask a follow-up...' : 'Ask about this passage...'}
+      placeholder={$t$(exchanges.length ? 'reader.askFollowUp' : 'reader.askPassage')}
       bind:value={question}
       disabled={busy}
     />
-    <button class="px-2" title="Send" disabled={busy || !question.trim()}>
+    <button class="px-2" title={$t$('reader.send')} disabled={busy || !question.trim()}>
       <Fa icon={faPaperPlane} />
     </button>
   </form>

@@ -31,6 +31,7 @@
   import { toTimeString } from '$lib/functions/statistic-util';
   import WhisperSubtitles from '$lib/components/book-reader/whisper-subtitles.svelte';
   import { createEventDispatcher, onDestroy, tick } from 'svelte';
+  import { t$, tr } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
   export let title: string;
@@ -194,7 +195,7 @@
     const index = cues.findIndex((cue) => cue.end !== undefined && cue.end > position);
 
     if (index < 0) {
-      error = 'No matched line at or after this position';
+      error = tr('reader.abNoMatch');
       return;
     }
 
@@ -226,7 +227,7 @@
       const parsed = parseSubtitles(await subtitleFile.text());
 
       if (!parsed.length) {
-        throw new Error('No subtitle lines found (SRT or VTT expected)');
+        throw new Error(tr('reader.abNoCues'));
       }
 
       const index = await getIndex();
@@ -245,13 +246,13 @@
       };
 
       if (!matched.some((cue) => cue.start !== undefined)) {
-        throw new Error('None of the subtitle lines were found in this book');
+        throw new Error(tr('reader.abNotFound'));
       }
 
       try {
         await putAudiobook(stored);
       } catch (_) {
-        error = 'Not enough browser storage to keep the audio; it plays until you close the book';
+        error = tr('reader.abNoStorage');
       }
 
       saveAudiobookPosition(title, 0, rate);
@@ -265,7 +266,7 @@
   }
 
   async function remove() {
-    if (!confirm('Remove the audiobook from this browser?')) {
+    if (!confirm(tr('reader.abRemoveConfirm'))) {
       return;
     }
 
@@ -281,15 +282,15 @@
   {#if !audiobook}
     <span class="player-icon"><Fa icon={faFileAudio} /></span>
     <span class="player-text">
-      <span class="player-line">No audiobook for this book</span>
-      <span class="player-meta">Audio + SRT/VTT subtitles, matched to the text</span>
+      <span class="player-line">{$t$('reader.abNone')}</span>
+      <span class="player-meta">{$t$('reader.abNoneHint')}</span>
     </span>
     <button
       class="player-pill"
       class:player-pill-active={sheet === 'setup'}
       on:click={() => (sheet = sheet === 'setup' ? '' : 'setup')}
     >
-      Set up
+      {$t$('reader.abSetUp')}
     </button>
   {:else}
     <audio
@@ -312,16 +313,16 @@
       max={duration || 0}
       step="1"
       value={currentTime}
-      aria-label="Position"
+      aria-label={$t$('reader.abPosition')}
       on:change={(e) => seek(Number(e.currentTarget.value))}
     />
-    <button class="player-icon" title="Previous line" on:click={() => skipLine(-1)}>
+    <button class="player-icon" title={$t$('reader.prevLine')} on:click={() => skipLine(-1)}>
       <Fa icon={faBackwardStep} />
     </button>
-    <button class="player-play" title={playing ? 'Pause' : 'Play'} on:click={togglePlay}>
+    <button class="player-play" title={$t$(playing ? 'reader.pause' : 'reader.play')} on:click={togglePlay}>
       <Fa icon={playing ? faPause : faPlay} fw />
     </button>
-    <button class="player-icon" title="Next line" on:click={() => skipLine(1)}>
+    <button class="player-icon" title={$t$('reader.nextLine')} on:click={() => skipLine(1)}>
       <Fa icon={faForwardStep} />
     </button>
     <span class="player-text">
@@ -332,10 +333,10 @@
       {/if}
       <span class="player-meta">{toTimeString(currentTime)} / {toTimeString(duration)}</span>
     </span>
-    <button class="player-pill" title="Playback speed" on:click={cycleRate}>{rate}×</button>
+    <button class="player-pill" title={$t$('reader.speed')} on:click={cycleRate}>{rate}×</button>
     <button
       class="player-icon hidden sm:inline-flex"
-      title="Play from my reading position"
+      title={$t$('reader.playFromPosition')}
       on:click={playFromHere}
     >
       <Fa icon={faCrosshairs} />
@@ -343,7 +344,7 @@
     <button
       class="player-icon"
       class:player-icon-active={sheet === 'lines'}
-      title="Lines"
+      title={$t$('reader.lines')}
       on:click={() => (sheet = sheet === 'lines' ? '' : 'lines')}
     >
       <Fa icon={faList} />
@@ -352,19 +353,18 @@
 </div>
 
 {#if sheet === 'setup' && !audiobook}
-  <div class="sheet reader-panel" role="dialog" aria-label="Set up audiobook">
+  <div class="sheet reader-panel" role="dialog" aria-label={$t$('reader.abSetupTitle')}>
     <div class="sheet-header">
-      <span class="flex-1 font-semibold">Set up the audiobook</span>
-      <button class="player-icon" title="Close" on:click={() => (sheet = '')}
+      <span class="flex-1 font-semibold">{$t$('reader.abSetupTitle')}</span>
+      <button class="player-icon" title={$t$('reader.close')} on:click={() => (sheet = '')}
         ><Fa icon={faXmark} /></button
       >
     </div>
     <p class="mb-3 text-xs opacity-75">
-      The subtitle lines (from a file, or made by Whisper here) are matched to the book, so the line
-      being read is highlighted and the pages follow it. Files stay in this browser.
+      {$t$('reader.abSetupHint')}
     </p>
     <label class="sheet-field">
-      <span>Audio (.mp3, .m4a, .m4b)</span>
+      <span>{$t$('reader.abAudio')}</span>
       <input
         type="file"
         accept="audio/*,.m4b"
@@ -372,7 +372,7 @@
       />
     </label>
     <label class="sheet-field">
-      <span>Subtitles (.srt, .vtt)</span>
+      <span>{$t$('reader.abSubtitles')}</span>
       <input
         type="file"
         accept=".srt,.vtt,text/vtt"
@@ -393,40 +393,42 @@
     {/if}
     <label class="mb-3 flex items-center gap-2 text-xs">
       <input type="checkbox" bind:checked={fromCurrentPosition} />
-      The audio starts at my current position
+      {$t$('reader.abFromPosition')}
     </label>
     <button class="player-pill" disabled={!audioFile || !subtitleFile || matching} on:click={match}>
-      {#if matching}<Fa icon={faSpinner} spin /> Matching...{:else}Match with the book{/if}
+      {#if matching}<Fa icon={faSpinner} spin /> {$t$('reader.abMatching')}{:else}{$t$(
+        'reader.abMatch'
+      )}{/if}
     </button>
     {#if error}<p class="pt-2 text-xs text-panel-danger">{error}</p>{/if}
   </div>
 {/if}
 
 {#if sheet === 'lines' && audiobook}
-  <div class="sheet reader-panel" role="dialog" aria-label="Lines">
+  <div class="sheet reader-panel" role="dialog" aria-label={$t$('reader.lines')}>
     <div class="sheet-header">
-      <span class="flex-1 text-xs opacity-70">{foundCount} of {cues.length} lines found</span>
-      <button class="player-icon" title="Back 10 seconds" on:click={() => seek(currentTime - 10)}>
+      <span class="flex-1 text-xs opacity-70">{$t$('reader.abLinesFound', { found: foundCount, total: cues.length })}</span>
+      <button class="player-icon" title={$t$('reader.back10')} on:click={() => seek(currentTime - 10)}>
         <Fa icon={faRotateLeft} />
       </button>
       <button
         class="player-icon"
-        title="Forward 10 seconds"
+        title={$t$('reader.forward10')}
         on:click={() => seek(currentTime + 10)}
       >
         <Fa icon={faRotateRight} />
       </button>
       <button
         class="player-icon sm:hidden"
-        title="Play from my reading position"
+        title={$t$('reader.playFromPosition')}
         on:click={playFromHere}
       >
         <Fa icon={faCrosshairs} />
       </button>
-      <button class="player-icon" title="Remove audiobook" on:click={remove}
+      <button class="player-icon" title={$t$('reader.abRemove')} on:click={remove}
         ><Fa icon={faTrash} /></button
       >
-      <button class="player-icon" title="Close" on:click={() => (sheet = '')}
+      <button class="player-icon" title={$t$('reader.close')} on:click={() => (sheet = '')}
         ><Fa icon={faXmark} /></button
       >
     </div>
@@ -437,7 +439,7 @@
           class:line-active={index === activeIndex}
           class:opacity-50={cue.start === undefined}
           data-active={index === activeIndex ? '' : undefined}
-          title={cue.start === undefined ? 'Not found in the book' : 'Play from this line'}
+          title={$t$(cue.start === undefined ? 'reader.abLineMissing' : 'reader.abPlayLine')}
           on:click={() => playCue(index)}
         >
           <span class="line-time">{toTimeString(cue.startSeconds)}</span>

@@ -8,6 +8,7 @@
     type SearchResult
   } from '$lib/functions/book-text/book-search';
   import { createEventDispatcher, onMount, tick } from 'svelte';
+  import { t$, tr } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
   export let getIndex: () => Promise<SearchIndex>;
@@ -54,7 +55,8 @@
       error = '';
     } catch (e: any) {
       results = [];
-      error = e instanceof SyntaxError ? `Invalid regular expression: ${e.message}` : e.message;
+      error =
+        e instanceof SyntaxError ? tr('reader.invalidRegex', { error: e.message }) : e.message;
     }
 
     activeIndex = -1;
@@ -86,7 +88,7 @@
 
 <aside
   class="reader-panel writing-horizontal-tb fixed inset-x-0 bottom-0 z-[60] flex max-h-[70vh] flex-col rounded-t-xl text-sm shadow-2xl md:inset-y-0 md:left-auto md:right-0 md:max-h-none md:w-[26rem] md:rounded-none"
-  aria-label="Search in book"
+  aria-label={$t$('reader.search')}
 >
   <header class="reader-panel-divider flex items-center gap-2 border-b px-3 py-2.5">
     <label class="reader-panel-input flex min-w-0 flex-1 items-center gap-2 rounded px-3 py-2">
@@ -94,14 +96,14 @@
       <input
         class="min-w-0 flex-1 border-0 bg-transparent p-0 focus:ring-0"
         type="search"
-        placeholder="Search this book"
+        placeholder={$t$('reader.searchPlaceholder')}
         lang="ja"
         bind:this={inputElm}
         bind:value={query}
         on:keydown={onKeydown}
       />
     </label>
-    <button class="p-2" title="Close search" on:click={() => dispatch('close')}>
+    <button class="p-2" title={$t$('reader.closeSearch')} on:click={() => dispatch('close')}>
       <Fa icon={faXmark} />
     </button>
   </header>
@@ -109,20 +111,20 @@
   <div class="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 text-xs">
     <label class="flex items-center gap-1.5">
       <input type="checkbox" bind:checked={ignoreKana} />
-      Match hiragana and katakana
+      {$t$('reader.matchKana')}
     </label>
     <label class="flex items-center gap-1.5">
       <input type="checkbox" bind:checked={regex} />
-      Regular expression
+      {$t$('reader.regex')}
     </label>
     <span class="ml-auto flex items-center gap-1 opacity-80">
       {#if !index}
-        <Fa icon={faSpinner} spin /> Indexing...
+        <Fa icon={faSpinner} spin /> {$t$('reader.indexing')}
       {:else if query.trim() && !error}
-        {#if activeIndex >= 0}{activeIndex + 1} / {/if}{results.length}{results.length >=
-        maxSearchResults
-          ? '+'
-          : ''} results
+        {$t$(activeIndex >= 0 ? 'reader.resultsAt' : 'reader.results', {
+          index: activeIndex + 1,
+          count: `${results.length}${results.length >= maxSearchResults ? '+' : ''}`
+        })}
       {/if}
     </span>
   </div>
@@ -156,7 +158,7 @@
     {#if results.length > renderLimit}
       <li class="px-2 pt-2">
         <button class="reader-panel-chip rounded-full px-3 py-1 text-xs" on:click={() => (renderLimit += renderStep)}>
-          Show more ({results.length - renderLimit} remaining)
+          {$t$('reader.showMore', { count: results.length - renderLimit })}
         </button>
       </li>
     {/if}
@@ -165,10 +167,10 @@
   {#if results.length}
     <footer class="reader-panel-divider flex justify-end gap-2 border-t px-3 py-2">
       <button class="reader-panel-chip rounded-full px-3 py-1 text-xs" on:click={() => go(-1)}>
-        Previous
+        {$t$('reader.previous')}
       </button>
       <button class="reader-panel-chip rounded-full px-3 py-1 text-xs" on:click={() => go(1)}>
-        Next
+        {$t$('reader.next')}
       </button>
     </footer>
   {/if}

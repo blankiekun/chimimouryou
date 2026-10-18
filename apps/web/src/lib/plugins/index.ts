@@ -18,6 +18,7 @@ import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v
 import { aiPlugin } from '$lib/plugins/ai';
 import { audiobookshelfPlugin } from '$lib/plugins/audiobookshelf';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
+import type { MessageKey } from '$lib/i18n';
 
 export { enabledPlugins$ };
 
@@ -35,7 +36,7 @@ export interface ReaderContext {
 
 export interface CompanionTabContribution {
   key: string;
-  label: string;
+  label: MessageKey;
   icon: IconDefinition;
   component: ComponentType;
   /** The component's props, picked from the reader context */
@@ -47,8 +48,8 @@ export interface CompanionTabContribution {
 }
 
 export interface SelectionActionContribution {
-  label: string;
-  title: string;
+  label: MessageKey;
+  title: MessageKey;
   icon: IconDefinition;
   /** Shown with `passage` (PassageContext from data/ask-ai: the selection and text around it, without furigana); dispatches `close` */
   panel: ComponentType;
@@ -69,7 +70,7 @@ export interface ListenContext {
  */
 export interface ListenModeContribution {
   key: string;
-  title: string;
+  title: MessageKey;
   icon: IconDefinition;
   component: ComponentType;
   props: (context: ListenContext) => Record<string, unknown>;

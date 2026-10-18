@@ -33,7 +33,7 @@ export const aiPlugin: Plugin = {
   companionTabs: [
     {
       key: 'recap',
-      label: 'Story so far',
+      label: 'reader.recap',
       icon: faBookOpen,
       component: RecapPanel,
       props: ({ title, getIndex, sections, position, bookCharacters, active }) => ({
@@ -49,7 +49,7 @@ export const aiPlugin: Plugin = {
     },
     {
       key: 'lorebook',
-      label: 'Lorebook',
+      label: 'reader.lorebook',
       icon: faBookAtlas,
       component: LorebookPanel,
       props: ({ title, getIndex, position }) => ({ title, getIndex, position })
@@ -57,8 +57,8 @@ export const aiPlugin: Plugin = {
   ],
   selectionActions: [
     {
-      label: 'Ask AI',
-      title: 'Ask AI about the selection',
+      label: 'reader.askAi',
+      title: 'reader.askAiTitle',
       icon: faWandMagicSparkles,
       panel: AskAiPanel
     }
@@ -66,7 +66,7 @@ export const aiPlugin: Plugin = {
   listenModes: [
     {
       key: 'voice',
-      title: 'AI voice (ElevenLabs)',
+      title: 'reader.aiVoice',
       icon: faRobot,
       component: TtsPlayer,
       props: ({ elementHtml, startCharCount }) => ({ elementHtml, startCharCount })

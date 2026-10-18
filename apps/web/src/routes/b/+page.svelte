@@ -212,6 +212,7 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import { isManga } from '$lib/data/manga';
   import { isVn } from '$lib/data/vn';
+  import { t$, tr } from '$lib/i18n';
   import Fa from 'svelte-fa';
   import {
     clearRange,
@@ -386,7 +387,7 @@
           welcomeBackDays = Math.floor(daysAway);
         }
       } catch (error: any) {
-        const message = `Error loading book: ${error.message}`;
+        const message = tr('reader.loadErrorMessage', { error: error.message });
 
         logger.warn(message);
 
@@ -394,7 +395,7 @@
           {
             component: MessageDialog,
             props: {
-              title: 'Load Error',
+              title: tr('reader.loadError'),
               message
             }
           }
@@ -1157,7 +1158,7 @@
         {
           component: NumberDialog,
           props: {
-            dialogHeader: 'Jump to Position',
+            dialogHeader: tr('reader.jumpToPosition'),
             minValue: 1,
             maxValue: bookCharCount || 1,
             resolver
@@ -1211,10 +1212,10 @@
         {
           component: ConfirmDialog,
           props: {
-            dialogHeader: 'Complete Book',
-            dialogMessage: `Would you like to complete this Book${
-              diffToComplete ? ` and capture ${diffToComplete} characters read` : ''
-            }?`,
+            dialogHeader: tr('reader.completeBook'),
+            dialogMessage: diffToComplete
+              ? tr('reader.completeMessageCharacters', { count: diffToComplete })
+              : tr('reader.completeMessage'),
             resolver
           }
         }
@@ -1344,8 +1345,8 @@
         {
           component: MessageDialog,
           props: {
-            title: 'Error',
-            message: `Error completing Book: ${message}`
+            title: tr('reader.error'),
+            message: tr('reader.completeError', { error: message })
           }
         }
       ]);
@@ -1440,9 +1441,8 @@
           {
             component: MessageDialog,
             props: {
-              title: 'Load Error',
-              message:
-                'Sync disabled due to missing Online Connection - refresh Page after going Online to try again'
+              title: tr('reader.loadError'),
+              message: tr('reader.offline')
             }
           }
         ]);
@@ -1467,9 +1467,8 @@
           {
             component: MessageDialog,
             props: {
-              title: 'Load Error',
-              message:
-                'Sync disabled due to missing Online Connection - refresh Page after going Online to try again'
+              title: tr('reader.loadError'),
+              message: tr('reader.offline')
             }
           }
         ]);
@@ -1498,9 +1497,8 @@
             {
               component: MessageDialog,
               props: {
-                title: 'Load Error',
-                message:
-                  'Sync disabled due to missing Online Connection - refresh Page after going Online to try again'
+                title: tr('reader.loadError'),
+                message: tr('reader.offline')
               }
             }
           ]);
@@ -1524,7 +1522,7 @@
       }
     }
 
-    const message = `No storage source with name ${storageSourceName} found - skipping auto import/export`;
+    const message = tr('reader.noStorageSource', { name: storageSourceName });
 
     logger.warn(message);
 
@@ -1532,7 +1530,7 @@
       {
         component: MessageDialog,
         props: {
-          title: 'Configuration Error',
+          title: tr('reader.configError'),
           message
         }
       }
@@ -1572,7 +1570,7 @@
     const dataToReturn = { id, ...bookData };
 
     await storageHandler.updateLastRead(dataToReturn).catch((error: any) => {
-      const message = `Failed to update last read on external storage: ${error.message}`;
+      const message = tr('reader.lastReadError', { error: error.message });
 
       logger.warn(message);
 
@@ -1580,7 +1578,7 @@
         {
           component: MessageDialog,
           props: {
-            title: 'Update Error',
+            title: tr('reader.updateError'),
             message
           }
         }
@@ -1736,9 +1734,8 @@
       {
         component: MessageDialog,
         props: {
-          title: 'Old Domain',
-          message:
-            'You are currently using the old domain of ッツ Reader - consider switching to https://reader.ttsu.app to prevent issues and to ensure full features'
+          title: tr('reader.oldDomain'),
+          message: tr('reader.oldDomainMessage')
         },
         disableCloseOnClick: true
       }
@@ -1835,9 +1832,9 @@
           {
             component: showReport ? LogReportDialog : MessageDialog,
             props: {
-              title: 'Error Processing Data',
+              title: tr('reader.processError'),
               message: showReport
-                ? `Some or all data could not be stored on an external storage`
+                ? tr('reader.processErrorReport')
                 : error
             }
           }
@@ -1902,8 +1899,8 @@
             {
               component: ConfirmDialog,
               props: {
-                dialogHeader: 'Confirm Exit',
-                dialogMessage: 'Your current location was not bookmarked. Continue leaving?',
+                dialogHeader: tr('reader.confirmExit'),
+                dialogMessage: tr('reader.confirmExitMessage'),
                 resolver
               },
 
@@ -1967,7 +1964,7 @@
         {
           component: MessageDialog,
           props: {
-            title: 'Error',
+            title: tr('reader.error'),
             message
           },
           disableCloseOnClick: true
@@ -2381,7 +2378,7 @@
     {#if showTrackerIcon}
       <div
         role="button"
-        title="Click to open Tracker Menu or Double Click to toggle Tracker"
+        title={$t$('reader.trackerTitle')}
         class="flex h-full w-8 items-center justify-center text-sm sm:text-lg"
         class:text-danger={$isTrackerPaused$}
         class:animate-pulse={frozenPosition > -1}
@@ -2432,7 +2429,7 @@
     <div
       tabindex="0"
       role="button"
-      title="Click to copy Progress"
+      title={$t$('reader.copyProgress')}
       class="writing-horizontal-tb fixed bottom-2 right-2 z-10 text-xs leading-none tabular-nums select-none whitespace-pre"
       class:invisible={!$showCharacterCounter$ &&
         !$showPercentage$ &&
@@ -2562,14 +2559,14 @@
     class="reader-panel writing-horizontal-tb fixed left-1/2 top-10 z-20 flex -translate-x-1/2 items-center gap-3 rounded-full py-1.5 pl-4 pr-1.5 text-sm shadow-lg"
     role="status"
   >
-    <span>Welcome back - it's been {welcomeBackDays} days.</span>
+    <span>{$t$('reader.welcomeBack', { days: welcomeBackDays })}</span>
     <button
       class="reader-panel-chip rounded-full px-3 py-1 font-semibold"
       on:click={() => absenceTab && openPanel(absenceTab.key)}
     >
-      {absenceTab.label}
+      {$t$(absenceTab.label)}
     </button>
-    <button class="px-2 opacity-70" title="Dismiss" on:click={() => (welcomeBackDays = 0)}>
+    <button class="px-2 opacity-70" title={$t$('reader.dismiss')} on:click={() => (welcomeBackDays = 0)}>
       ✕
     </button>
   </div>

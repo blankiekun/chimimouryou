@@ -18,6 +18,7 @@
   import { extrasSyncError$, syncExtras } from '$lib/data/extras-sync';
   import { chapterLabelAt, type SearchIndex } from '$lib/functions/book-text/book-search';
   import { onDestroy, onMount } from 'svelte';
+  import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';
   import { renderBasicMarkdown } from '$lib/functions/basic-markdown';
 
@@ -133,24 +134,22 @@
   {/if}
 
   {#if !plan && !error}
-    <p class="flex items-center gap-2 opacity-80"><Fa icon={faSpinner} spin /> Preparing...</p>
+    <p class="flex items-center gap-2 opacity-80"><Fa icon={faSpinner} spin /> {$t$('reader.preparing')}</p>
   {:else if plan && !running}
     <p class="mb-3 leading-relaxed">
-      A spoiler-free recap up to your position ({position.toLocaleString()} characters, {percent(
-        position
-      )}). Finished parts are summarised once and cached in this browser; each recap is saved here
-      by position.
+      {$t$('reader.recapIntro', { count: position.toLocaleString(), percent: percent(position) })}
     </p>
     {#if plan.missing.length}
       <p class="mb-3 text-xs opacity-80">
-        {plan.missing.length} part{plan.missing.length === 1 ? '' : 's'} still
-        {plan.missing.length === 1 ? 'needs' : 'need'} summarising: about {Math.round(
-          plan.missingCharacters / 1000
-        )}k characters will be sent to {plan.model}.
+        {$t$(plan.missing.length === 1 ? 'reader.recapMissingOne' : 'reader.recapMissing', {
+          count: plan.missing.length,
+          k: Math.round(plan.missingCharacters / 1000),
+          model: plan.model
+        })}
       </p>
     {/if}
     <button class="reader-panel-chip mb-4 rounded-full px-4 py-2 font-semibold" on:click={start}>
-      Write recap at this position
+      {$t$('reader.writeRecap')}
     </button>
   {/if}
 
@@ -166,7 +165,7 @@
   {/if}
 
   {#if saved.length}
-    <h3 class="pb-1 pt-2 text-xs font-bold uppercase tracking-wide opacity-60">Saved recaps</h3>
+    <h3 class="pb-1 pt-2 text-xs font-bold uppercase tracking-wide opacity-60">{$t$('reader.savedRecaps')}</h3>
     {#each [...saved].reverse() as item (item.created)}
       {@const ahead = item.position > position}
       <div class="saved rounded-lg">
@@ -178,18 +177,19 @@
             <Fa icon={openRecap === item.created ? faChevronDown : faChevronRight} fw />
             <span class="min-w-0 flex-1">
               <span class="block truncate font-semibold">
-                {chapterLabelAt(sections, item.position) || 'Recap'} · {percent(item.position)}
+                {chapterLabelAt(sections, item.position) || $t$('reader.recapFallback')} · {percent(item.position)}
               </span>
               <span class="block text-xs opacity-60">
-                {item.position.toLocaleString()} characters · {new Date(
-                  item.created
-                ).toLocaleDateString()}{ahead ? ' · ahead of your position' : ''}
+                {$t$('reader.recapMeta', {
+                  count: item.position.toLocaleString(),
+                  date: new Date(item.created).toLocaleDateString()
+                })}{ahead ? ` · ${$t$('reader.recapAhead')}` : ''}
               </span>
             </span>
           </button>
           <button
             class="p-1.5 opacity-60 hover:opacity-100"
-            title="Delete"
+            title={$t$('reader.delete')}
             on:click={() => remove(item.created)}
           >
             <Fa icon={faTrash} />
