@@ -34,6 +34,11 @@ anything a reader or a server operator would notice.
 
 - Game sound no longer hiccups in Firefox (CONscripter v0.25.1 queues its audio ahead instead
   of filling it at the last moment on a busy page).
+- CONscripter v0.30.0. Movies play in the player as in CONscripter's own web page: movies
+  shown as pictures (which stopped the game before), `mpeghold` prompts, sound with a muted
+  fallback when the browser blocks it, the video at the game's size, and Enter, Space or
+  Escape to skip a skippable one. The script's `language` command sets the text layer's
+  language.
 
 ## v3.6.0 (2026-10-15)
 

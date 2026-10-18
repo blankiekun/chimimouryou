@@ -1,8 +1,9 @@
 /**
  * Shell for the CONscripter web engine (conscripter.js, GPL-2.0, fetched by scripts/conscripter/),
  * loaded by the reader's /v page in a same-origin iframe. The engine calls the globals below
- * (g_cons_*, fetch_file, flush_save, playVideo, scale_full, consText, consChoice,
- * consOverlay, consBacklog, consSprites, consVoice, consPosition, consMode) from its C code; the loader is
+ * (g_cons_*, fetch_file, flush_save, playVideo, playVideoHold, consMovie*, scale_full, consText,
+ * consChoice, consOverlay, consBacklog, consSprites, consVoice, consPosition, consMode,
+ * consLanguage) from its C code; the loader is
  * cons() (CONscripter v0.23.0 renamed them from ONScripter-yuri's onsyuri names).
  * The page calls startGame() once the frame has loaded.
  */
@@ -464,28 +465,270 @@ function flush_save() {
   });
 }
 
-function playVideo(path, clickFlag, loopFlag) {
-  var video = document.getElementById('video');
+var video = document.getElementById('video');
+var videoSkippable = false;
+
+function videoUrl(path) {
+  return URL.createObjectURL(new Blob([g_cons_module.FS.readFile(path)], { type: 'video/mp4' }));
+}
+
+/** The video over the game, at the canvas's size, in its place. */
+function showVideo() {
   var canvas = document.getElementById('canvas');
-  var data = g_cons_module.FS.readFile(path);
 
-  function ended() {
-    canvas.style.display = 'block';
-    video.style.display = 'none';
-    URL.revokeObjectURL(video.src);
-    video.removeAttribute('src');
-    g_cons_module.wait_video = false;
-  }
-
-  g_cons_module.wait_video = true;
-  video.src = URL.createObjectURL(new Blob([data], { type: 'video/mp4' }));
-  video.loop = loopFlag;
-  video.onended = ended;
-  video.onerror = ended;
-  video.onclick = clickFlag ? ended : null;
+  video.style.width = canvas.style.width;
+  video.style.height = canvas.style.height;
   canvas.style.display = 'none';
   video.style.display = 'block';
-  video.play();
+}
+
+// Browsers block autoplay with sound until the page was clicked: play muted rather than wait.
+function playOrMute(onFail) {
+  video.muted = false;
+  video.play().catch(function () {
+    video.muted = true;
+    video.play().catch(onFail);
+  });
+}
+
+function videoEnded() {
+  holdEnded();
+  videoSkippable = false;
+  video.onclick = null;
+  // Hidden with its src cleared, a video keeps its sound in some browsers: pause it first.
+  video.pause();
+  document.getElementById('canvas').style.display = 'block';
+  video.style.display = 'none';
+  if (video.src.startsWith('blob:')) URL.revokeObjectURL(video.src);
+  video.removeAttribute('src');
+  video.load();
+  g_cons_module.wait_video = false;
+}
+
+function videoSkipped() {
+  g_cons_module.video_skipped = true;
+  videoEnded();
+}
+
+video.addEventListener('ended', videoEnded);
+video.addEventListener('error', function () {
+  if (video.getAttribute('src')) videoEnded();
+});
+// Enter, Space and Escape skip it, as in the native player.
+window.addEventListener('keyup', function (event) {
+  if (videoSkippable && /^(Enter| |Escape)$/.test(event.key)) videoSkipped();
+});
+
+/** mpegplay and movie (CONscripter's web shell, conscripter.html). */
+function playVideo(path, clickFlag, loopFlag) {
+  g_cons_module.wait_video = true;
+  g_cons_module.video_skipped = false;
+  video.src = videoUrl(path);
+  video.loop = !!loopFlag;
+  video.onclick = clickFlag ? videoSkipped : null;
+  videoSkippable = !!clickFlag;
+  showVideo();
+  playOrMute(videoEnded);
+}
+
+// mpeghold: the video plays only while the pointer, Enter or Space is held on it, under the
+// engine's sprite (a "hold the button" prompt); g_cons_module.video_held tells the engine.
+var holdOverlay = document.createElement('canvas');
+var hold = null;
+
+holdOverlay.style.cssText = 'position:absolute; display:none; touch-action:none;';
+document.body.appendChild(holdOverlay);
+
+function holdSet() {
+  if (!hold) return;
+
+  var down = hold.pointers.size > 0 || hold.keys.size > 0;
+
+  if (down === !!g_cons_module.video_held) return;
+  g_cons_module.video_held = down;
+  if (down) playOrMute(function () {});
+  else video.pause();
+}
+
+function holdKey(event) {
+  if (!hold || !(event.key === 'Enter' || event.key === ' ')) return;
+  event.preventDefault();
+  if (event.type === 'keydown') hold.keys.add(event.key);
+  else hold.keys.delete(event.key);
+  holdSet();
+}
+
+window.addEventListener('keydown', holdKey);
+window.addEventListener('keyup', holdKey);
+holdOverlay.addEventListener('pointerdown', function (event) {
+  if (!hold || event.button > 0) return;
+  holdOverlay.setPointerCapture(event.pointerId);
+  hold.pointers.add(event.pointerId);
+  holdSet();
+});
+['pointerup', 'pointercancel', 'lostpointercapture'].forEach(function (type) {
+  holdOverlay.addEventListener(type, function (event) {
+    if (!hold) return;
+    hold.pointers.delete(event.pointerId);
+    holdSet();
+  });
+});
+holdOverlay.addEventListener('contextmenu', function (event) {
+  event.preventDefault();
+});
+window.addEventListener('blur', function () {
+  if (!hold) return;
+  hold.pointers.clear();
+  hold.keys.clear();
+  holdSet();
+});
+
+/** rgba: the sprite's picture (w x h, stride px a row), cells side by side, each shown ms; drawn at x,y of the sw x sh screen. */
+function playVideoHold(path, rgba, w, h, stride, cells, ms, x, y, sw, sh) {
+  g_cons_module.wait_video = true;
+  g_cons_module.video_held = false;
+  g_cons_module.video_hold_end = 0;
+  video.src = videoUrl(path);
+  video.loop = false;
+  video.muted = false;
+  video.onclick = null;
+  videoSkippable = false;
+  video.preload = 'auto';
+  video.pause();
+  showVideo();
+
+  var rect = video.getBoundingClientRect();
+  var ctx = holdOverlay.getContext('2d');
+
+  Object.assign(holdOverlay.style, {
+    left: rect.left + 'px',
+    top: rect.top + 'px',
+    width: rect.width + 'px',
+    height: rect.height + 'px',
+    display: 'block'
+  });
+  holdOverlay.width = sw;
+  holdOverlay.height = sh;
+  ctx.clearRect(0, 0, sw, sh);
+  hold = { pointers: new Set(), keys: new Set(), timer: null };
+  if (!rgba || w <= 0 || h <= 0) return;
+
+  var image = new ImageData(w, h);
+  var count = Math.max(cells, 1);
+  var cw = Math.floor(w / count);
+  var cell = 0;
+
+  for (var row = 0; row < h; row++) {
+    image.data.set(rgba.subarray(row * stride * 4, row * stride * 4 + w * 4), row * w * 4);
+  }
+  function draw() {
+    ctx.clearRect(0, 0, sw, sh);
+    ctx.putImageData(image, x - cell * cw, y, cell * cw, 0, cw, h);
+    cell = (cell + 1) % count;
+  }
+  draw();
+  if (cells > 1 && ms > 0) hold.timer = setInterval(draw, ms);
+}
+
+function holdEnded() {
+  if (!hold) return;
+  g_cons_module.video_hold_end =
+    (hold.pointers.size > 0 ? 1 : 0) |
+    (hold.keys.has('Enter') ? 2 : 0) |
+    (hold.keys.has(' ') ? 8 : 0);
+  if (hold.timer) clearInterval(hold.timer);
+  hold = null;
+  g_cons_module.video_held = false;
+  holdOverlay.style.display = 'none';
+}
+
+// Movies whose frames the engine draws (a movie as a picture, mpegplay under the text window):
+// a hidden <video> each, its current frame read through a canvas as RGBA bytes.
+// g_cons_movies: the engine reads a movie's size from it.
+var g_cons_movies = {};
+var movieId = 0;
+
+function consMovieOpen(path, loop, sound, w, h) {
+  var url;
+
+  try {
+    url = videoUrl(path);
+  } catch (error) {
+    console.error('No movie ' + path, error);
+    return -1;
+  }
+
+  var v = document.createElement('video');
+  var id = ++movieId;
+  var m = { video: v, state: 0, last: -1, ctx: null };
+
+  v.muted = !sound;
+  v.loop = !!loop;
+  v.playsInline = true;
+  v.preload = 'auto';
+  // In the page (a detached or hidden video may not decode), unseen.
+  v.style.cssText =
+    'position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none';
+  v.onloadeddata = function () {
+    if (m.state === 0) m.state = 1;
+  };
+  v.onerror = function () {
+    m.state = -1;
+  };
+  v.src = url;
+  document.body.appendChild(v);
+  v.play().catch(function () {
+    v.muted = true;
+    v.play().catch(function () {
+      m.state = -1;
+    });
+  });
+  g_cons_movies[id] = m;
+  return id;
+}
+
+function consMovieState(id) {
+  return g_cons_movies[id] ? g_cons_movies[id].state : -1;
+}
+
+/** The frame as RGBA bytes when it changed since the last call, else null. */
+function consMovieFrame(id, w, h) {
+  var m = g_cons_movies[id];
+
+  if (!m || m.video.readyState < 2 || m.video.currentTime === m.last) return null;
+  m.last = m.video.currentTime;
+  if (!m.ctx) {
+    var c = document.createElement('canvas');
+
+    c.width = w;
+    c.height = h;
+    m.ctx = c.getContext('2d', { willReadFrequently: true });
+  }
+  m.ctx.drawImage(m.video, 0, 0, w, h);
+  return m.ctx.getImageData(0, 0, w, h).data;
+}
+
+function consMovieEnded(id) {
+  var m = g_cons_movies[id];
+
+  return !m || m.state < 0 || m.video.ended ? 1 : 0;
+}
+
+function consMovieClose(id) {
+  var m = g_cons_movies[id];
+
+  if (!m) return;
+  m.video.pause();
+  URL.revokeObjectURL(m.video.src);
+  m.video.removeAttribute('src');
+  m.video.load();
+  m.video.remove();
+  delete g_cons_movies[id];
+}
+
+/** The script's `language` command: the overlay's language, for Yomitan and fonts. */
+function consLanguage(lang) {
+  document.getElementById('overlay').lang = lang;
 }
 
 /** The save folder's files: name → { modified, bytes }. */
