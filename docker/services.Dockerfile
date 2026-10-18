@@ -2,6 +2,7 @@
 #   base        accounts and the catalog builder (Python standard library + Pillow)
 #   import      + Calibre, for adding books to the library (large)
 #   difficulty  + Sudachi and ONNX Runtime, for Jiten's difficulty model (large)
+#   mokuro      + mokuro and CPU PyTorch, for manga OCR (about 2 GB)
 # Built by docker-compose.yml from the repository root. Runs as PUID (compose `user:`).
 
 FROM debian:trixie-slim AS base
@@ -26,7 +27,9 @@ ENV PYTHONUNBUFFERED=1 \
   IMPORT_HOST=0.0.0.0 \
   CALIBRE_WRITE_LOCK=/data/state/import/calibre-write.lock \
   JITEN_STATE_DIR=/data/state/difficulty \
-  JITEN_HOST=0.0.0.0
+  JITEN_HOST=0.0.0.0 \
+  MOKURO_STATE_DIR=/data/state/mokuro \
+  MOKURO_HOST=0.0.0.0
 CMD ["python3", "/app/account/service.py", "serve"]
 
 FROM base AS import
@@ -44,3 +47,14 @@ COPY scripts/calibre/jiten/requirements.txt /app/jiten/requirements.txt
 RUN python3 -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir -r /app/jiten/requirements.txt
 COPY scripts/calibre/jiten /app/jiten
 CMD ["/opt/venv/bin/python", "-W", "ignore", "/app/jiten/service.py", "serve"]
+
+FROM base AS mokuro
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3-venv libgl1 libglib2.0-0 \
+  && rm -rf /var/lib/apt/lists/*
+COPY scripts/calibre/mokuro/requirements.txt /app/mokuro/requirements.txt
+RUN python3 -m venv /opt/mokuro && /opt/mokuro/bin/pip install --no-cache-dir -r /app/mokuro/requirements.txt
+COPY scripts/calibre/mokuro /app/mokuro
+# The models (about 450 MB) are downloaded on the first volume and kept in /data.
+ENV HOME=/data/state/mokuro HF_HOME=/data/state/mokuro/models
+CMD ["python3", "/app/mokuro/service.py", "serve"]

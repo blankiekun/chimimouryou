@@ -2,6 +2,7 @@
 #   docker compose up -d                          reader, accounts, catalog
 #   docker compose --profile import up -d         + adding books to Calibre
 #   docker compose --profile difficulty up -d     + difficulty estimates
+#   docker compose --profile mokuro up -d         + manga OCR (text for Yomitan)
 # First admin: the account service creates `admin` with a temporary password, shown by
 #   docker compose exec account ebook-account initial-admin   (until it signs in)
 # See docs/INSTALL.md (HTTPS, reverse proxies, backups). Builds the images here
@@ -98,3 +99,18 @@ services:
       - ${DATA_PATH:-./data}:/data
       - ${LIBRARY_PATH:?set LIBRARY_PATH in .env}:/library:ro
       - ${VN_PATH:-${DATA_PATH:-./data}/vn}:/vn:ro
+
+  # Text of manga pages, made by mokuro here or uploaded as .mokuro files.
+  mokuro:
+    <<: *services
+    profiles: [mokuro]
+    build:
+      <<: *services-build
+      target: mokuro
+    image: ${IMAGE_PREFIX:-ebook-reader}-mokuro:${IMAGE_TAG:-local}
+    command: ["python3", "/app/mokuro/service.py", "serve"]
+    environment:
+      ALLOW_HTTP_ACCOUNTS: ${ALLOW_HTTP_ACCOUNTS:-0}
+    volumes:
+      - ${DATA_PATH:-./data}:/data
+      - ${LIBRARY_PATH:?set LIBRARY_PATH in .env}:/library:ro

@@ -13,6 +13,7 @@
   import ContinueReadingShelf from '$lib/components/book-card/continue-reading-shelf.svelte';
   import DifficultyBadge from '$lib/components/book-card/difficulty-badge.svelte';
   import DifficultyDialog from '$lib/components/book-card/difficulty-dialog.svelte';
+  import MokuroText from '$lib/components/book-card/mokuro-text.svelte';
   import { isFinished, isReading } from '$lib/components/book-card/library-filters';
   import { formatSeries, orderSeries } from '$lib/components/book-card/library-sort';
   import { account$, hasPermission } from '$lib/data/account';
@@ -96,8 +97,7 @@
     kind === 'manga' ? (characters ? `${characters}頁` : '') : japaneseLength(characters);
   $: remaining = isReading(book) ? characters * (1 - book.progress) : characters;
   $: canEdit = isCalibre && hasPermission($account$, 'series');
-  $: onHome =
-    $homeBookTitles$.includes(book.title) || isContinueReading(book, $homeRemovedTitles$);
+  $: onHome = $homeBookTitles$.includes(book.title) || isContinueReading(book, $homeRemovedTitles$);
   $: seriesBooks = book.series
     ? orderSeries(bookCards.filter((card) => card.series === book.series))
     : [];
@@ -286,7 +286,9 @@
     </div>
 
     <div class="details-main">
-      <h1 id="book-details-title" class="details-title" lang="ja">{(metadata?.source === 'vndb' && metadata.title) || book.title}</h1>
+      <h1 id="book-details-title" class="details-title" lang="ja">
+        {(metadata?.source === 'vndb' && metadata.title) || book.title}
+      </h1>
       {#if book.authors && book.authors !== 'Unknown'}
         <p class="details-author" lang="ja">{book.authors}</p>
       {/if}
@@ -367,6 +369,12 @@
             </dd>
           </div>
         {/if}
+        {#if isCalibre && kind === 'manga' && book.calibreId !== undefined}
+          <div>
+            <dt>Text</dt>
+            <dd><MokuroText calibreId={book.calibreId} /></dd>
+          </div>
+        {/if}
         {#if calibreBook?.publisher}
           <div>
             <dt>Publisher</dt>
@@ -421,7 +429,9 @@
           {#if !searchOpen}
             <button type="button" class="app-button" on:click={openSearch}>
               <Fa icon={faMagnifyingGlass} />
-              {metadata ? 'Change details' : `Find details on ${sourceNames[defaultSource(kind)]} or Jiten`}
+              {metadata
+                ? 'Change details'
+                : `Find details on ${sourceNames[defaultSource(kind)]} or Jiten`}
             </button>
             {#if metadata}
               <button
@@ -434,9 +444,7 @@
               </button>
             {/if}
           {:else}
-            <h2 id="book-details-fetch" class="details-fetch-heading">
-              Find details
-            </h2>
+            <h2 id="book-details-fetch" class="details-fetch-heading">Find details</h2>
             <form class="details-search" on:submit|preventDefault={search}>
               <select
                 class="app-input"

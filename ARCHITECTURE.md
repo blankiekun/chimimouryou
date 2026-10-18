@@ -24,6 +24,7 @@ nginx: the `web` container (scripts/calibre/nginx-ebook-reader.conf.template)
  ├─ /account/sync/…         per-account WebDAV (auth_request), DATA_PATH/accounts/<id>
  ├─ /calibre/import/api/…   → `import` container (import:8767, optional), writes the library
  ├─ /calibre/difficulty/…   → `difficulty` container (difficulty:8765, optional)
+ ├─ /calibre/mokuro/…       → manga text files; `api/` → `mokuro` container (mokuro:8768, optional)
  ├─ /audiobookshelf/…       → AUDIOBOOKSHELF_URL (API and sign-in only, optional)
  └─ /jiten/search           → jiten.moe search (Find details, `series` permission)
 

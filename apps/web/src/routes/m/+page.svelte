@@ -26,8 +26,16 @@
   } from '$lib/components/button-toggle-group/toggle-option';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import VolumeTransition from '$lib/components/manga/volume-transition.svelte';
+  import MokuroOverlay from '$lib/components/manga/mokuro-overlay.svelte';
   import { calibreCoverUrl, loadCalibreCatalog, type CalibreBook } from '$lib/data/calibre';
   import { loadSeriesOverrides } from '$lib/data/series-overrides';
+  import {
+    loadMokuro,
+    mangaText$,
+    pagesText,
+    type MangaText,
+    type MokuroPage
+  } from '$lib/data/mokuro';
   import {
     autoReplication$,
     cacheStorageData$,
@@ -110,6 +118,11 @@
     { id: 'on', text: 'On' },
     { id: 'off', text: 'Off' }
   ];
+  const textModes: ToggleOption<MangaText>[] = [
+    { id: 'hover', text: 'Under the pointer' },
+    { id: 'always', text: 'Always' },
+    { id: 'off', text: 'Off' }
+  ];
   const backgrounds: ToggleOption<MangaBackground>[] = [
     { id: 'black', text: 'Black' },
     { id: 'gray', text: 'Gray' },
@@ -161,6 +174,8 @@
   let openError = '';
   let wantWakeLock = false;
   let requestingWakeLock = false;
+  /** Each page's mokuro text, if the server has some for this volume. */
+  let pageText: (MokuroPage | undefined)[] = [];
 
   $: readingMode = seriesReadingMode(volumes.series);
   $: mode = $readingMode;
@@ -323,6 +338,9 @@
       loadVolumes(data.title).catch(({ message }) =>
         logger.warn(`Could not find the series' other volumes: ${message}`)
       );
+      loadText(data).catch(({ message }) =>
+        logger.warn(`Could not load the page text: ${message}`)
+      );
     }
   }
 
@@ -334,6 +352,14 @@
     ]);
 
     volumes = adjacentVolumes(books, overrides, title);
+  }
+
+  // shortcut: needs the catalog for the id, so there is no text offline; cache it in IndexedDB if missed.
+  async function loadText(data: BooksDbBookData) {
+    const calibreBook = (await loadCalibreCatalog()).find((entry) => entry.title === data.title);
+    const text = calibreBook && (await loadMokuro(calibreBook.id));
+
+    if (text) pageText = pagesText(text, mangaPages(data));
   }
 
   /** Opens another volume like the library does: downloaded and processed when first read. */
@@ -925,15 +951,20 @@
   {#if mode === 'vertical'}
     <div class="h-full overflow-y-auto" bind:this={strip} on:scroll={onStripScroll}>
       {#each urls as url, index}
-        <img
-          src={url}
-          alt="Page {index + 1}"
-          loading="lazy"
-          draggable="false"
-          class="mx-auto block w-full max-w-3xl"
-          class:min-h-[60vh]={!loaded.has(index)}
-          on:load={() => (loaded = new Set(loaded).add(index))}
-        />
+        <div class="relative mx-auto w-full max-w-3xl">
+          <img
+            src={url}
+            alt="Page {index + 1}"
+            loading="lazy"
+            draggable="false"
+            class="block w-full"
+            class:min-h-[60vh]={!loaded.has(index)}
+            on:load={() => (loaded = new Set(loaded).add(index))}
+          />
+          {#if pageText[index] && $mangaText$ !== 'off' && loaded.has(index)}
+            <MokuroOverlay page={pageText[index]} mode={$mangaText$} />
+          {/if}
+        </div>
       {/each}
       {#if ready && volumes.next}
         <div class="flex justify-center px-4 py-10">
@@ -957,12 +988,17 @@
         style={slotStyle(index)}
       >
         {#each groups[index] as pageNumber (pageNumber)}
-          <img
-            src={urls[pageNumber]}
-            alt="Page {pageNumber + 1}"
-            draggable="false"
-            class="h-full w-auto max-w-none flex-none"
-          />
+          <div class="relative h-full flex-none">
+            <img
+              src={urls[pageNumber]}
+              alt="Page {pageNumber + 1}"
+              draggable="false"
+              class="block h-full w-auto max-w-none"
+            />
+            {#if pageText[pageNumber] && $mangaText$ !== 'off'}
+              <MokuroOverlay page={pageText[pageNumber]} mode={$mangaText$} />
+            {/if}
+          </div>
         {/each}
       </div>
     {/each}
@@ -1064,6 +1100,15 @@
         {#if $mangaTapLayout$ !== 'off'}
           <SettingsItemGroup title="Invert tap zones">
             <ButtonToggleGroup options={tapInverts} bind:selectedOptionId={$mangaTapInvert$} />
+          </SettingsItemGroup>
+        {/if}
+        {#if pageText.some(Boolean)}
+          <SettingsItemGroup
+            title="Page text"
+            wide
+            tooltip="Text recognised by mokuro, laid over the speech bubbles for Yomitan."
+          >
+            <ButtonToggleGroup options={textModes} bind:selectedOptionId={$mangaText$} />
           </SettingsItemGroup>
         {/if}
         <SettingsItemGroup title="Background">

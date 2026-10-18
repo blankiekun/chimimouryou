@@ -26,7 +26,7 @@ each reader enters them in Settings → AI, and they sync with their account.
 | `DIFFICULTY_WORKERS`  | `2`                                                    | Processes for difficulty estimates (`difficulty` profile), about 0.5-1 GB of RAM each. |
 | `IMAGE_PREFIX`, `IMAGE_TAG` | `ebook-reader`, `local` | Image names: `<prefix>-{web,services,import,difficulty}:<tag>`. The defaults are built locally (`--build`); for published images use `ghcr.io/<owner>/<repository>` and a version or `latest`, then `docker compose pull`. |
 | `UPDATE_REPO`         | `blankiekun/chimimouryou`                              | GitHub repository the admin panel's updater (`ebook-update`, deploy.sh installs) checks and installs from: its latest release, or the newest commit on `main`. |
-| `COMPOSE_PROFILES`    | empty                                                  | Optional services to run: `import` (adding books to Calibre), `difficulty` (difficulty estimates), e.g. `import,difficulty`. Same as passing `--profile`. |
+| `COMPOSE_PROFILES`    | empty                                                  | Optional services to run: `import` (adding books to Calibre), `difficulty` (difficulty estimates), `mokuro` (manga text), e.g. `import,difficulty`. Same as passing `--profile`. |
 
 ## Build-time settings of the app (`VITE_*`)
 
@@ -64,6 +64,8 @@ real-IP settings) go in `/etc/nginx/ebook-reader.d/*.conf`.
 | `ACCOUNT_UPSTREAM`      | `account:8766`                             |
 | `IMPORT_UPSTREAM`       | `import:8767`                              |
 | `DIFFICULTY_UPSTREAM`   | `difficulty:8765`                          |
+| `MOKURO_UPSTREAM`       | `mokuro:8768`                              |
+| `MOKURO_DIR`            | `/data/state/mokuro` (served as `/calibre/mokuro/<id>.json`) |
 | `TRUSTED_NETWORKS`, `PUBLIC_READS`, `AUDIOBOOKSHELF_URL` | as in `.env` |
 | `INTERNAL_TOKEN_FILE`   | `/data/state/internal-token`               |
 
@@ -82,7 +84,7 @@ code are the same container paths.
 | `ACCOUNT_STATE_DIR`   | `/data/state/account` (`accounts.db`)      | account |
 | `ACCOUNT_DATA_DIR`    | `/data/accounts` (must match nginx's `ACCOUNT_DATA_DIR`) | account |
 | `ACCOUNT_HOST`, `ACCOUNT_PORT` | `0.0.0.0`, `8766`                 | account |
-| `ALLOW_HTTP_ACCOUNTS` | `0`                                        | account, import, difficulty |
+| `ALLOW_HTTP_ACCOUNTS` | `0`                                        | account, import, difficulty, mokuro |
 | `MIN_FREE_MB`         | `1024`                                     | account |
 | `CATALOG_OUTPUT`      | `/data/state/catalog/catalog.json`         | import (rebuilds the catalog after adding books) |
 | `CATALOG_BUILDER`     | `/usr/local/bin/build-calibre-catalog`     | import |
@@ -99,6 +101,9 @@ code are the same container paths.
 | `JITEN_FREQUENCY_DICTIONARY` | `JITEN_STATE_DIR/frequency-dictionary.zip` | difficulty |
 | `JITEN_WORKERS`       | `DIFFICULTY_WORKERS`                       | difficulty |
 | `JITEN_HOST`, `JITEN_PORT` | `0.0.0.0`, `8765`                     | difficulty |
+| `MOKURO_STATE_DIR`    | `/data/state/mokuro` (`<id>.json` per manga, `models/`, `work/`) | mokuro |
+| `MOKURO_HOST`, `MOKURO_PORT` | `0.0.0.0`, `8768`                 | mokuro |
+| `MOKURO_BIN`          | `/opt/mokuro/bin/mokuro` (without it, only uploads) | mokuro |
 
 The catalog builder takes the library and the output file as arguments:
 `build-calibre-catalog <library> <catalog.json> [<vn folder>] [--force]`.
