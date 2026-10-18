@@ -8,6 +8,7 @@ Nothing runs until asked: the reader (or the CLI) requests difficulty for chosen
 HTTP API (bound to localhost, proxied by nginx at /calibre/difficulty/api/):
   GET  status                       progress of the current job
   GET  kanji/ID                     kanji counts of an estimated book (for each reader's own kanji coverage)
+  GET  words/ID                     the book's most frequent words: [form, reading, count, rank] (WORDS_PER_BOOK)
   POST compute    {"ids": [...]}    estimate difficulty for these books ({"all": true} for all without a current estimate)
   POST cancel                       stop the running job
   POST dictionary   body: the zip    install Jiten's frequency list (jiten_freq_global.zip)
@@ -53,6 +54,9 @@ with open(os.path.join(MODEL_DIR, 'chimi-difficulty-range.json'), encoding='utf-
 MODEL_VERSION = 'chimi-difficulty-1'
 # Per-book kanji counts, gzipped JSON, for the reader's own coverage.
 KANJI_DIR = os.path.join(STATE_DIR, 'kanji')
+# Per-book word lists, gzipped JSON, for "words to study"; capped to bound disk use (~19k books).
+WORDS_DIR = os.path.join(STATE_DIR, 'words')
+WORDS_PER_BOOK = 2000
 WORKERS = int(os.environ.get('JITEN_WORKERS', os.cpu_count() or 1))
 PORT = int(os.environ.get('JITEN_PORT', '8765'))
 HOST = os.environ.get('JITEN_HOST', '127.0.0.1')
@@ -96,6 +100,23 @@ def save_kanji(book_id: int, text: str):
     os.replace(path + '.tmp', path)
 
 
+def save_words(book_id: int, analysis, frequency):
+    """The book's WORDS_PER_BOOK most frequent words, most frequent first, as [form, reading or None,
+    count in the book, frequency rank or None]. Names, affixes (今 read こん, from 今回) and
+    unclassified tokens are left out."""
+    words = sorted(((word, count) for word, count in analysis.words.values() if word.pos not in ('name', 'fix', 'other')),
+                   key=lambda item: -item[1])[:WORDS_PER_BOOK]
+    rows = []
+    for word, count in words:
+        data = frequency.word(word.key, word.reading)
+        rows.append([word.form, word.reading, count, data[0] if data else None])
+    os.makedirs(WORDS_DIR, exist_ok=True)
+    path = os.path.join(WORDS_DIR, f'{book_id}.json.gz')
+    with gzip.open(path + '.tmp', 'wt', encoding='utf-8') as f:
+        json.dump(rows, f, ensure_ascii=False, separators=(',', ':'))
+    os.replace(path + '.tmp', path)
+
+
 def _estimate(book: dict):
     import numpy
     from features import (EXTRA_FEATURES, FEATURE_ORDER, TOKEN_CLEAN, book_text, compute_extra_features,
@@ -116,6 +137,7 @@ def _estimate(book: dict):
     scores = {name: round(min(max(float(session.run(None, {'float_input': row})[0][0][0]), 0.0), 5.0), 2)
               for name, session in _sessions.items()}
     save_kanji(book['id'], text)
+    save_words(book['id'], analysis, _frequency)
     # 'adjusted' is kept for older readers (deprecated, see CHANGELOG; drop it one release later);
     # the model includes jiten.moe's adjustment.
     return book['id'], {
@@ -245,9 +267,10 @@ class JobRunner:
         # failed ones are broken files (not a zip, no container.xml), retried once the file changes.
         no_text = set(results.get('noText', []))
         failed = results.setdefault('failed', {})
-        # All books: only those not tried yet or estimated by another model, or whose file changed since it failed.
-        # Selected books are always recomputed.
-        books = [b for b in catalog if results['books'].get(str(b['id']), {}).get('model') != MODEL_VERSION
+        # All books: only those not tried yet, estimated by another model or before word lists, or whose
+        # file changed since it failed. Selected books are always recomputed.
+        books = [b for b in catalog if (results['books'].get(str(b['id']), {}).get('model') != MODEL_VERSION
+                                        or not os.path.exists(os.path.join(WORDS_DIR, f"{b['id']}.json.gz")))
                  and b['id'] not in no_text
                  and failed.get(str(b['id']), {}).get('size') != b['size']] \
             if ids is None else [b for b in catalog if b['id'] in wanted]
@@ -338,9 +361,10 @@ class Handler(BaseHTTPRequestHandler):
         parts = self.path.split('?')[0].strip('/').split('/')
         if parts == ['status']:
             self._send(200, runner.status())
-        elif len(parts) == 2 and parts[0] == 'kanji' and re.fullmatch(r'-?[0-9]+', parts[1]):
+        elif len(parts) == 2 and parts[0] in ('kanji', 'words') and re.fullmatch(r'-?[0-9]+', parts[1]):
+            folder = KANJI_DIR if parts[0] == 'kanji' else WORDS_DIR
             try:
-                with open(os.path.join(KANJI_DIR, f'{int(parts[1])}.json.gz'), 'rb') as f:
+                with open(os.path.join(folder, f'{int(parts[1])}.json.gz'), 'rb') as f:
                     data = f.read()
             except OSError:
                 return self._send(404, {'error': 'no estimate for this book'})

@@ -146,3 +146,27 @@ class KanjiEndpointTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class SaveWordsTest(unittest.TestCase):
+    def test_most_frequent_words_with_ranks_names_left_out(self):
+        import gzip
+        import importlib.util
+        from features import Analysis, Word
+        spec = importlib.util.spec_from_file_location(
+            'jiten_service', os.path.join(os.path.dirname(__file__), '..', 'jiten', 'service.py'))
+        service = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(service)
+        service.WORDS_DIR = tempfile.mkdtemp()
+        service.WORDS_PER_BOOK = 2
+
+        def word(key, form, pos, reading=None):
+            return Word(key=f'{key}\t{pos}', form=form, pos=pos, origin='wago', conjugations=(), surface=form,
+                        reading=reading)
+        analysis = Analysis(text='')
+        for w, count in ((word('猫', '猫', 'noun', 'ねこ'), 3), (word('太郎', '太郎', 'name'), 9),
+                         (word('走る', '走る', 'verb'), 5), (word('稀', '稀', 'noun'), 1), (word('今', '今', 'fix', 'こん'), 7)):
+            analysis.words[w.key, w.form] = [w, count]
+        service.save_words(7, analysis, FrequencyTable({'猫': 1200}))
+        with gzip.open(os.path.join(service.WORDS_DIR, '7.json.gz'), 'rt', encoding='utf-8') as f:
+            self.assertEqual(json.load(f), [['走る', None, 5, None], ['猫', 'ねこ', 3, 1200]])
