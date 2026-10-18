@@ -116,7 +116,8 @@ def _estimate(book: dict):
     scores = {name: round(min(max(float(session.run(None, {'float_input': row})[0][0][0]), 0.0), 5.0), 2)
               for name, session in _sessions.items()}
     save_kanji(book['id'], text)
-    # 'adjusted' is kept for older readers; the model includes jiten.moe's adjustment.
+    # 'adjusted' is kept for older readers (deprecated, see CHANGELOG; drop it one release later);
+    # the model includes jiten.moe's adjustment.
     return book['id'], {
         'difficulty': scores['difficulty'],
         'adjusted': scores['difficulty'],
