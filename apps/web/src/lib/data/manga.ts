@@ -196,12 +196,57 @@ export function mangaBookmark(
   };
 }
 
+export type MangaTapLayout = 'default' | 'l' | 'kindle' | 'edge' | 'sides' | 'off';
+
+export type MangaTapInvert = 'none' | 'horizontal' | 'vertical' | 'both';
+
+export const mangaTapLayout$ = writableStringLocalStorageSubject<MangaTapLayout>()(
+  'mangaTapLayout',
+  'default'
+);
+
+export const mangaTapInvert$ = writableStringLocalStorageSubject<MangaTapInvert>()(
+  'mangaTapInvert',
+  'none'
+);
+
 /**
- * Page turn for a tap at x (Mihon's default layout): the outer thirds turn the page,
- * the middle toggles the menu (0). In right-to-left manga the left side goes forward.
+ * Mihon's tap zone layouts on a 3×3 grid, rows from the top: N forward, P back, L/R the page on
+ * that side (forward on the left in right-to-left manga), M the menu.
  */
-export function tapDirection(x: number, width: number, mode: MangaReadingMode) {
-  const side = x < width / 3 ? -1 : x > (width * 2) / 3 ? 1 : 0;
+const tapGrids: Record<Exclude<MangaTapLayout, 'default'>, string[]> = {
+  l: ['PPP', 'PMN', 'NNN'],
+  kindle: ['MMM', 'PNN', 'PNN'],
+  edge: ['NMN', 'NMN', 'NPN'],
+  sides: ['LMR', 'LMR', 'LMR'],
+  off: ['MMM', 'MMM', 'MMM']
+};
+
+/**
+ * Page turn for a tap at x, y: 1 forward, -1 back, 0 the menu. The default layout is the sides
+ * for pages and the L shape for the vertical strip, as in Mihon.
+ */
+export function tapDirection(
+  x: number,
+  y: number,
+  view: PageSize,
+  mode: MangaReadingMode,
+  layout: MangaTapLayout = 'default',
+  invert: MangaTapInvert = 'none'
+) {
+  const grid = tapGrids[layout === 'default' ? (mode === 'vertical' ? 'l' : 'sides') : layout];
+  const third = (at: number, size: number) => Math.max(0, Math.min(2, Math.floor((3 * at) / size)));
+  const column = third(x, view.width);
+  const row = third(y, view.height);
+  const flipX = invert === 'horizontal' || invert === 'both';
+  const flipY = invert === 'vertical' || invert === 'both';
+  const zone = grid[flipY ? 2 - row : row][flipX ? 2 - column : column];
+
+  if (zone === 'N') return 1;
+  if (zone === 'P') return -1;
+  if (zone === 'M') return 0;
+
+  const side = zone === 'L' ? -1 : 1;
 
   return mode === 'rtl' ? -side : side;
 }

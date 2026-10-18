@@ -32,6 +32,10 @@ anything a reader or a server operator would notice.
 - Each series keeps its own reading mode (right to left, left to right or vertical), synced with
   your account, so a webtoon series stays vertical on every device; books outside a series
   open in the last mode chosen.
+- Tap zones as in Mihon (settings sheet → Tap zones): L shape, Kindle, Edge, Sides or off, and
+  inverted horizontally, vertically or both. By default the sides turn pages and, in the
+  vertical strip, taps on the bottom or right scroll down most of a screen and the top or left
+  scroll back up (the strip only showed the menu before).
 
 ### Visual novels
 
