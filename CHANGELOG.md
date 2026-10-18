@@ -29,6 +29,9 @@ anything a reader or a server operator would notice.
   shows what you finished and the next volume, and turning again (or its button) opens it,
   downloading it first if needed; the same at the first page for the volume before. The menu
   has buttons for both, and the vertical strip ends with the next volume.
+- Each series keeps its own reading mode (right to left, left to right or vertical), synced with
+  your account, so a webtoon series stays vertical on every device; books outside a series
+  open in the last mode chosen.
 
 ### Visual novels
 

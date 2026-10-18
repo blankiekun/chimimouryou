@@ -4,6 +4,7 @@
  * All rights reserved.
  */
 
+import { get } from 'svelte/store';
 import { describe, expect, it } from 'vitest';
 import {
   adjacentVolumes,
@@ -15,7 +16,10 @@ import {
   mangaBookmark,
   mangaElementHtml,
   mangaPages,
+  mangaReadingMode$,
+  mangaSeriesModes$,
   pageSpreads,
+  seriesReadingMode,
   sortPages,
   tapDirection
 } from './manga';
@@ -118,7 +122,11 @@ describe('manga', () => {
       book('Other 4', 'Other', 1)
     ];
 
-    expect(adjacentVolumes(books, {}, 'M 2')).toEqual({ previous: books[1], next: books[2] });
+    expect(adjacentVolumes(books, {}, 'M 2')).toEqual({
+      series: 'M',
+      previous: books[1],
+      next: books[2]
+    });
     expect(adjacentVolumes(books, {}, 'M 1').previous).toBeUndefined();
     expect(adjacentVolumes(books, {}, 'M novel')).toEqual({});
     // A reader moved M 3 out of the series and Other 4 into it.
@@ -129,5 +137,19 @@ describe('manga', () => {
 
     expect(adjacentVolumes(books, overrides, 'M 3')).toEqual({});
     expect(adjacentVolumes(books, overrides, 'M 2').next?.title).toBe('Other 4');
+  });
+
+  it('keeps a reading mode per series, and the last one chosen for the rest', () => {
+    mangaReadingMode$.next('rtl');
+    mangaSeriesModes$.next({});
+    seriesReadingMode('A').set('vertical');
+
+    expect(get(seriesReadingMode('A'))).toBe('vertical');
+    expect(get(seriesReadingMode('B'))).toBe('vertical');
+    seriesReadingMode(undefined).set('ltr');
+    expect(get(seriesReadingMode('A'))).toBe('vertical');
+    expect(get(seriesReadingMode('B'))).toBe('ltr');
+    seriesReadingMode('C').set('ltr');
+    expect(mangaSeriesModes$.getValue()).toEqual({ A: 'vertical' });
   });
 });

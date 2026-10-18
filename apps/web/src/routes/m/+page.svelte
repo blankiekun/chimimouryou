@@ -42,6 +42,7 @@
   import { logger } from '$lib/data/logger';
   import {
     adjacentVolumes,
+    seriesReadingMode,
     borderColor,
     clampPan,
     fitSize,
@@ -52,7 +53,6 @@
     mangaKeepScreenOn$,
     mangaPageNumber$,
     mangaPages,
-    mangaReadingMode$,
     mangaScale$,
     pageSpreads,
     tapDirection,
@@ -136,7 +136,7 @@
   let animating = false;
   let autoBackground = '#000';
   let wakeLock: WakeLockSentinel | undefined;
-  let volumes: { previous?: CalibreBook; next?: CalibreBook } = {};
+  let volumes: { series?: string; previous?: CalibreBook; next?: CalibreBook } = {};
   /** The card shown past the last (1) or before the first (-1) spread, else 0. */
   let transition = 0;
   let opening = false;
@@ -144,7 +144,8 @@
   let wantWakeLock = false;
   let requestingWakeLock = false;
 
-  $: mode = $mangaReadingMode$;
+  $: readingMode = seriesReadingMode(volumes.series);
+  $: mode = $readingMode;
   $: pageCount = urls.length;
   $: view = { width: viewWidth, height: viewHeight };
   $: dual = $mangaDualPage$ === 'on' || ($mangaDualPage$ === 'auto' && viewWidth > viewHeight);
@@ -987,7 +988,7 @@
     {#if showSettings}
       <div class="max-h-[55vh] overflow-y-auto">
         <SettingsItemGroup title="Reading mode">
-          <ButtonToggleGroup options={modes} bind:selectedOptionId={$mangaReadingMode$} />
+          <ButtonToggleGroup options={modes} bind:selectedOptionId={$readingMode} />
         </SettingsItemGroup>
         {#if mode !== 'vertical'}
           <SettingsItemGroup title="Scale">
