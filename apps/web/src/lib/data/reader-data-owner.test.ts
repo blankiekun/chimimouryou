@@ -14,6 +14,7 @@ vi.mock('$lib/data/calibre', () => ({
 const { database } = await import('$lib/data/store');
 const { readerDb } = await import('$lib/data/reader-db');
 const { releaseReaderData } = await import('$lib/data/reader-data-owner');
+const { readerDb } = await import('$lib/data/reader-db');
 
 async function seed() {
   const db = await database.db;
@@ -64,6 +65,15 @@ describe('releaseReaderData', () => {
     const db = await database.db;
     expect(await db.get('bookmark', 2)).toBeTruthy();
     expect(await db.get('statistic', ['Local', '2026-10-12'])).toBeTruthy();
+  });
+
+  it('forgets the known words read from Anki for another reader', async () => {
+    await releaseReaderData(user('a'));
+    await (await readerDb()).put('known', { words: ['猫'], read: 1 }, 'words');
+    await releaseReaderData(user('a'));
+    expect(await (await readerDb()).count('known')).toBe(1);
+    await releaseReaderData(user('b'));
+    expect(await (await readerDb()).count('known')).toBe(0);
   });
 
   it('treats signing out as another reader', async () => {

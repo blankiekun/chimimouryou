@@ -46,6 +46,7 @@
   } from '$lib/data/book-words';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { getKanjiSeen, kanjiCoverage, type KanjiCoverage } from '$lib/data/kanji-seen';
+  import { bookCoverage, refreshKnownWordsIfStale } from '$lib/data/known-words';
   import { learnerStats } from '$lib/data/learner-stats';
   import {
     addToHome,
@@ -86,6 +87,8 @@
   let kanji: KanjiCoverage | undefined;
   let copied = false;
   let studyWords: BookWord[] = [];
+  /** Share of the listed words known from Anki */
+  let wordCoverage: number | undefined;
   let speed = 0;
   let metadata: BookMetadata | undefined;
   let searching = false;
@@ -154,6 +157,7 @@
     kanji = undefined;
     copied = false;
     studyWords = [];
+    wordCoverage = undefined;
     metadata = undefined;
     candidates = undefined;
     source = undefined;
@@ -185,8 +189,10 @@
         getKanjiSeen().catch(() => []),
         words95 && kind !== 'manga'
           ? loadBookWords(book.calibreId).catch(() => undefined)
-          : undefined
+          : undefined,
+        refreshKnownWordsIfStale()
       ]);
+      const coverage = words && (await bookCoverage(book.calibreId, words).catch(() => undefined));
 
       if (title !== book.title) {
         return;
@@ -198,6 +204,7 @@
       if (words && words95) {
         studyWords = wordsToStudy(words, words95);
       }
+      wordCoverage = coverage;
     }
   }
 
@@ -395,6 +402,15 @@
                     <button type="button" class="details-link" on:click={copyNewKanji}>
                       {copied ? 'Copied' : 'Copy'}
                     </button>
+                  </span>
+                {/if}
+                {#if wordCoverage !== undefined}
+                  <span
+                    class="details-note"
+                    title="Only the book's 2,000 most frequent words are compared with your deck's mature cards, by written form (readings aren't matched)."
+                  >
+                    ≈{Math.round(wordCoverage * 100)}% of its words known (estimate from your Anki
+                    deck).
                   </span>
                 {/if}
               {:else}

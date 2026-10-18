@@ -38,6 +38,12 @@ anything a reader or a server operator would notice.
   most common words needed for 95% of it (`words95`), by count in the book, with a CSV
   download (word, reading, count, frequency rank) for Anki. Shown once the book has an
   estimate with a word list.
+- Known words from Anki (Settings → Anki → Known Words, off by default): the words of a deck's
+  mature cards (interval of 21 days or more, read through AnkiConnect at most once a day) give
+  each book's page an estimate of how many of its words you know ("≈NN% of its words known",
+  from its 2,000 most frequent words, by written form). The Store gets a "Known words" sort
+  for the books whose coverage was worked out (pages opened, Home's books); the rest come
+  last. Kept in this browser only and forgotten when another account signs in.
 - Deleting books in the Calibre library (select mode → Delete) now removes them from the
   library for admins, after a confirmation: books go to Calibre's recycle bin
   (`calibredb remove`), visual novel folders are deleted, and the catalog is rebuilt

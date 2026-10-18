@@ -40,6 +40,10 @@ export const ankiBookAiFallback$ = writableBooleanLocalStorageSubject()(
 );
 export const ankiVnScreenshot$ = writableBooleanLocalStorageSubject()('ankiVnScreenshot', true);
 export const ankiVnAudio$ = writableBooleanLocalStorageSubject()('ankiVnAudio', true);
+/** Read mature cards from a deck as known words, for word coverage (`known-words.ts`). */
+export const ankiKnownWords$ = writableBooleanLocalStorageSubject()('ankiKnownWords', false);
+export const ankiKnownDeck$ = writableStringLocalStorageSubject()('ankiKnownDeck', '');
+export const ankiKnownField$ = writableStringLocalStorageSubject()('ankiKnownField', 'Expression');
 
 export interface AnkiNote {
   noteId: number;

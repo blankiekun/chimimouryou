@@ -43,6 +43,7 @@
     faSquareCheck,
     faTriangleExclamation
   } from '@fortawesome/free-solid-svg-icons';
+  import { ankiKnownWords$ } from '$lib/data/anki';
   import { createEventDispatcher } from 'svelte';
   import Fa from 'svelte-fa';
 
@@ -106,6 +107,7 @@
       ]
     : [];
 
+  let sortMenuItems: { property: SortOption['property']; label: string; title?: string }[];
   $: sortMenuItems = [
     ...($storageSource$ === StorageKey.BROWSER
       ? [{ property: 'id' as SortOption['property'], label: 'Date added' }]
@@ -113,6 +115,16 @@
     { property: 'title' as SortOption['property'], label: 'Title' },
     { property: 'series' as SortOption['property'], label: 'Series' },
     { property: 'difficulty' as SortOption['property'], label: 'Difficulty' },
+    ...($ankiKnownWords$ && $storageSource$ === StorageKey.CALIBRE
+      ? [
+          {
+            property: 'coverage' as SortOption['property'],
+            label: 'Known words',
+            title:
+              "By the share of a book's words known from Anki. Only books whose page you opened, and Home's books, have one; the rest come last."
+          }
+        ]
+      : []),
     { property: 'progress' as SortOption['property'], label: 'Progress' },
     { property: 'characters' as SortOption['property'], label: 'Characters' },
     { property: 'lastBookOpen' as SortOption['property'], label: 'Last read' },
@@ -342,6 +354,7 @@
           type="button"
           class="app-popover-item"
           class:app-popover-item-active={isCurrent}
+          title={sortMenuItem.title}
           on:click={() => changeSort(sortMenuItem.property)}
         >
           <span class="flex-1">{sortMenuItem.label}</span>

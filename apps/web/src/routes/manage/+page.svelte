@@ -38,6 +38,13 @@
     storeView$
   } from '$lib/data/library-home';
   import { homeOfflineTitles, keepBooksOffline } from '$lib/data/offline-books';
+  import { ankiKnownWords$ } from '$lib/data/anki';
+  import {
+    cacheCoverage,
+    knownCoverage$,
+    loadCoverageCache,
+    refreshKnownWordsIfStale
+  } from '$lib/data/known-words';
   import { deleteVnCache } from '$lib/data/vn';
   import DifficultyDialog from '$lib/components/book-card/difficulty-dialog.svelte';
   import {
@@ -126,10 +133,19 @@
   const bookCards$: Observable<BookCardProps[]> = combineLatest([
     database.dataList$,
     database.bookmarks$,
-    booklistSortOptions$
+    booklistSortOptions$,
+    knownCoverage$
   ]).pipe(
-    map(([dataList, bookmarks]) => {
+    map(([dataList, bookmarks, , coverage]) => {
       const sortProp = $booklistSortOptions$[$storageSource$];
+
+      if (sortProp.property === 'coverage') {
+        dataList = dataList.map((d: BookCardProps) =>
+          d.calibreId === undefined || coverage[d.calibreId] === undefined
+            ? d
+            : { ...d, coverage: coverage[d.calibreId] }
+        );
+      }
 
       if ($storageSource$ === StorageKey.BROWSER) {
         const bookmarkMap = keyBy(bookmarks, 'dataId');
@@ -216,6 +232,20 @@
         homeOfflineTitles($bookCards$, $homeBookTitles$, $homeRemovedTitles$)
       );
     }
+  }
+  // Known-word coverage (Settings → Anki) for Home's books, so the Store can sort by it.
+  $: knownWordsOn = $ankiKnownWords$ && $storageSource$ === StorageKey.CALIBRE;
+  $: if (knownWordsOn) {
+    refreshKnownWordsIfStale().then(loadCoverageCache, () => {});
+  }
+  $: if (knownWordsOn && $bookCards$ && !isLoading) {
+    const onHome = new Set(homeOfflineTitles($bookCards$, $homeBookTitles$, $homeRemovedTitles$));
+
+    cacheCoverage(
+      $bookCards$
+        .filter((card) => onHome.has(card.title) && !card.manga && card.calibreId !== undefined)
+        .map((card) => card.calibreId!)
+    );
   }
   $: homeCards = (() => {
     const byTitle = new Map(($bookCards$ ?? []).map((card) => [card.title, card]));

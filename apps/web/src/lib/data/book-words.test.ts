@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { wordsCsv, wordsFileName, wordsToStudy, type BookWord } from './book-words';
+import { knownCoverage, wordsCsv, wordsFileName, wordsToStudy, type BookWord } from './book-words';
 
 describe('wordsToStudy', () => {
   it('keeps words rarer than the 95% coverage rank, in book order', () => {
@@ -58,5 +58,20 @@ describe('wordsFileName', () => {
 
   it('falls back when nothing is left', () => {
     expect(wordsFileName(' .. ')).toBe('book words.csv');
+  });
+});
+
+describe('knownCoverage', () => {
+  it('weighs known written forms by their count, leaving out numbers and lone kana', () => {
+    const words: BookWord[] = [
+      ['猫', 'ねこ', 6, 100],
+      ['は', 'は', 50, 1],
+      ['8', null, 9, null],
+      ['犬', 'いぬ', 3, 200],
+      ['宦官', 'かんがん', 1, 68872]
+    ];
+
+    expect(knownCoverage(words, new Set(['猫', 'は']))).toBeCloseTo(0.6);
+    expect(knownCoverage([], new Set(['猫']))).toBeUndefined();
   });
 });
