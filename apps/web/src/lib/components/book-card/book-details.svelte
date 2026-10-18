@@ -39,6 +39,7 @@
   import { difficultyName } from '$lib/data/difficulty';
   import {
     downloadWordsCsv,
+    kanjiPattern,
     loadBookWords,
     wordsToStudy,
     type BookWord
@@ -464,7 +465,7 @@
           <ol lang="ja">
             {#each studyWords.slice(0, 50) as [form, reading, count]}
               <li>
-                {form}{#if reading && reading !== form}<span class="details-note-inline"
+                {form}{#if reading && kanjiPattern.test(form)}<span class="details-note-inline"
                     >（{reading}）</span
                   >{/if}
                 <span class="details-note-inline">×{count}</span>

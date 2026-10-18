@@ -23,7 +23,7 @@ export async function loadBookWords(id: number): Promise<BookWord[] | undefined>
 }
 
 const numberPattern = /^[\d０-９〇一二三四五六七八九十百千万]+$/u;
-const kanjiPattern = /\p{Unified_Ideograph}/u;
+export const kanjiPattern = /\p{Unified_Ideograph}/u;
 const singleKanaPattern = /^[\p{Script=Hiragana}\p{Script=Katakana}ー]$/u;
 
 /**
