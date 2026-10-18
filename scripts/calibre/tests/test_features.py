@@ -10,7 +10,8 @@ import zipfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'jiten'))
 from features import (EXTRA_FEATURES, Analysis, Word, _coverage_rank, _origin, aozora_text, book_text,  # noqa: E402
-                      compute_extra_features, compute_features, ruby_reading, to_hiragana, vn_text)
+                      compute_extra_features, compute_features, context_reading, ruby_reading, to_hiragana,
+                      vn_text)
 
 try:
     import sudachipy  # noqa: F401  (only in the difficulty image)
@@ -122,6 +123,30 @@ class RubyHintTest(unittest.TestCase):
         self.assertIsNone(ruby_reading(hints, 1, '気', '気', known))
 
 
+class ContextReadingTest(unittest.TestCase):
+    known = {('人気', 'ひとけ'), ('人気', 'にんき'), ('明日', 'あした'), ('明日', 'あす'), ('上手', 'かみて'),
+             ('今日', 'こんにち'), ('他', 'た')}
+
+    def reading(self, text, form, surface=None, known=None):
+        return context_reading(text, text.index(form), surface or form, form, self.known if known is None else known)
+
+    def test_rules(self):
+        self.assertEqual(self.reading('夜の公園は人気がなく、', '人気'), 'ひとけ')
+        self.assertIsNone(self.reading('彼は人気者だ。', '人気'))  # Sudachi's reading stays
+        self.assertEqual(self.reading('役者が舞台の上手から', '上手'), 'かみて')  # text before
+        self.assertEqual(self.reading('今日に至るまで', '今日'), 'こんにち')
+        self.assertEqual(self.reading('その他の項目', '他'), 'た')
+        self.assertEqual(self.reading('明日は雨だ。', '明日'), 'あした')
+        self.assertIsNone(self.reading('明日の日本を担う', '明日'))
+        self.assertIsNone(self.reading('料理が上手だ', '上手'))
+
+    def test_only_the_line_and_listed_readings(self):
+        self.assertIsNone(self.reading('舞台の\n上手から', '上手'))
+        self.assertIsNone(self.reading('人気\nがない', '人気'))
+        self.assertIsNone(self.reading('人気がない', '人気', known={('人気', 'にんき')}))
+        self.assertIsNone(self.reading('人気がない', '人気', known=()))  # no frequency list: no rules
+
+
 @unittest.skipUnless(sudachipy, 'needs Sudachi (difficulty image)')
 class RubyReadingAnalysisTest(unittest.TestCase):
     def test_ruby_sets_the_occurrence_reading_but_not_the_features(self):
@@ -140,6 +165,18 @@ class RubyReadingAnalysisTest(unittest.TestCase):
         frequency = FrequencyTable({'人気': 1500, '公園': 2000, '宇宙': 3000, '本気': 4000}, {('人気', 'ひとけ'): 40000})
         self.assertEqual(compute_features(hinted, frequency), compute_features(plain, frequency))
         self.assertEqual(compute_extra_features(hinted, frequency), compute_extra_features(plain, frequency))
+
+    def test_context_rules_after_ruby(self):
+        from features import Analyzer
+        hints = []
+        text = aozora_text('人気のない道。\n｜人気《にんき》がない店。\nこの店は人気だ。\n', None, hints)
+        known = {('人気', 'ひとけ'), ('人気', 'にんき')}
+        analyzer = Analyzer()
+        plain, ruled = analyzer.analyse(text), analyzer.analyse(text, hints, known)
+        readings = {form: dict(counter) for (_, form), counter in ruled.readings.items()}
+        self.assertEqual(readings['人気'], {'ひとけ': 1, 'にんき': 2})  # the book's ruby wins over the rule
+        self.assertEqual(ruled.words, plain.words)
+        self.assertEqual(dict(plain.readings[next(k for k in plain.readings if k[1] == '人気')]), {'にんき': 3})
 
 
 class FeatureTest(unittest.TestCase):
