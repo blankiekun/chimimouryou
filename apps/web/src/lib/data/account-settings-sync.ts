@@ -13,6 +13,7 @@
  */
 
 import { BehaviorSubject, map, merge, skip, type Subscription } from 'rxjs';
+import { mangaSeriesModes$ } from '$lib/data/manga';
 import { accountSyncUrl, type AccountUser } from '$lib/data/account';
 import {
   aiLanguage$,
@@ -100,6 +101,7 @@ const sharedSettings: Record<string, Store> = {
   audiobookshelfToken: audiobookshelfToken$,
   homeBookTitles: homeBookTitles$,
   homeRemovedTitles: homeRemovedTitles$,
+  mangaSeriesModes: mangaSeriesModes$,
   askAiPresets: askAiPresets$,
   askAiDefaultPreset: askAiDefaultPreset$,
   askAiReaderNote: askAiReaderNote$,

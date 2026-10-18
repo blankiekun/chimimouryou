@@ -11,6 +11,8 @@
  */
 
 import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
+import { combineLatest, map } from 'rxjs';
+import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 import type { SeriesOverrides } from '$lib/data/series-overrides';
@@ -25,6 +27,37 @@ export const mangaReadingMode$ = writableStringLocalStorageSubject<MangaReadingM
   'mangaReadingMode',
   'rtl'
 );
+
+/** Reading modes chosen per series (by name), synced with the account like Mihon's per-series setting. */
+export const mangaSeriesModes$ = writableObjectLocalStorageSubject<
+  Record<string, MangaReadingMode>
+>()('mangaSeriesModes', {});
+
+/**
+ * A store of the series' reading mode, else the last one chosen. Setting it keeps it for the
+ * series and makes it the mode of books without one.
+ */
+export function seriesReadingMode(series: string | undefined) {
+  const resolve = (fallback: MangaReadingMode, modes: Record<string, MangaReadingMode>) =>
+    (series && modes[series]) || fallback;
+  const mode$ = combineLatest([mangaReadingMode$, mangaSeriesModes$]).pipe(
+    map(([fallback, modes]) => resolve(fallback, modes))
+  );
+
+  return {
+    subscribe(run: (mode: MangaReadingMode) => void) {
+      const subscription = mode$.subscribe(run);
+
+      return () => subscription.unsubscribe();
+    },
+    set(mode: MangaReadingMode) {
+      // A bind: sets the value it was given when it mounts, which is no choice.
+      if (mode === resolve(mangaReadingMode$.getValue(), mangaSeriesModes$.getValue())) return;
+      mangaReadingMode$.next(mode);
+      if (series) mangaSeriesModes$.next({ ...mangaSeriesModes$.getValue(), [series]: mode });
+    }
+  };
+}
 
 /** How a page fits the screen in the paged modes (Mihon's scale types). */
 export type MangaScale = 'screen' | 'width' | 'height' | 'original' | 'smart';
@@ -189,7 +222,7 @@ export function adjacentVolumes<T extends VolumeBook>(
   books: T[],
   overrides: SeriesOverrides,
   title: string
-): { previous?: T; next?: T } {
+): { series?: string; previous?: T; next?: T } {
   const isMangaBook = (book: T) => /^(?:CBZ|ZIP)$/i.test(book.format) && !book.vn;
   const withOverrides = books.map((book) => {
     const override = overrides[book.title];
@@ -207,5 +240,5 @@ export function adjacentVolumes<T extends VolumeBook>(
   );
   const index = ordered.indexOf(current);
 
-  return { previous: ordered[index - 1], next: ordered[index + 1] };
+  return { series: current.series, previous: ordered[index - 1], next: ordered[index + 1] };
 }
