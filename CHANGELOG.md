@@ -25,6 +25,10 @@ anything a reader or a server operator would notice.
   sheet (gear in the menu) for these, the background (black, gray, white or matched to the
   page), double tap to zoom, keeping the screen on and the page number. Full screen is in the
   menu. The next few pages are decoded ahead, so turning is instant.
+- Volumes of a series follow each other, as chapters do in Mihon: turning past the last page
+  shows what you finished and the next volume, and turning again (or its button) opens it,
+  downloading it first if needed; the same at the first page for the volume before. The menu
+  has buttons for both, and the vertical strip ends with the next volume.
 
 ### Visual novels
 

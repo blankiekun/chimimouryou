@@ -13,6 +13,8 @@
 import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
 import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
+import type { SeriesOverrides } from '$lib/data/series-overrides';
+import { orderSeries } from '$lib/components/book-card/library-sort';
 
 const marker = '<!--ttu-manga-->';
 
@@ -169,4 +171,41 @@ export function tapDirection(x: number, width: number, mode: MangaReadingMode) {
   const side = x < width / 3 ? -1 : x > (width * 2) / 3 ? 1 : 0;
 
   return mode === 'rtl' ? -side : side;
+}
+
+interface VolumeBook {
+  title: string;
+  series?: string;
+  seriesIndex?: number | null;
+  format: string;
+  vn?: boolean;
+}
+
+/**
+ * The manga volumes before and after a title in its series (reading order as in the Store), with
+ * readers' series overrides applied. Novels and games of the same series are left out.
+ */
+export function adjacentVolumes<T extends VolumeBook>(
+  books: T[],
+  overrides: SeriesOverrides,
+  title: string
+): { previous?: T; next?: T } {
+  const isMangaBook = (book: T) => /^(?:CBZ|ZIP)$/i.test(book.format) && !book.vn;
+  const withOverrides = books.map((book) => {
+    const override = overrides[book.title];
+
+    return !override || override.series === book.series
+      ? book
+      : { ...book, series: override.series, seriesIndex: null };
+  });
+  const current = withOverrides.find((book) => book.title === title);
+
+  if (!current?.series || !isMangaBook(current)) return {};
+
+  const ordered = orderSeries(
+    withOverrides.filter((book) => book.series === current.series && isMangaBook(book))
+  );
+  const index = ordered.indexOf(current);
+
+  return { previous: ordered[index - 1], next: ordered[index + 1] };
 }

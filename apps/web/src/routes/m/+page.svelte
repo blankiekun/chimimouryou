@@ -12,13 +12,22 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import Fa from 'svelte-fa';
-  import { faArrowLeft, faExpand, faGear } from '@fortawesome/free-solid-svg-icons';
+  import {
+    faArrowLeft,
+    faBackwardStep,
+    faExpand,
+    faForwardStep,
+    faGear
+  } from '@fortawesome/free-solid-svg-icons';
   import ButtonToggleGroup from '$lib/components/button-toggle-group/button-toggle-group.svelte';
   import {
     optionsForToggle,
     type ToggleOption
   } from '$lib/components/button-toggle-group/toggle-option';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
+  import VolumeTransition from '$lib/components/manga/volume-transition.svelte';
+  import { calibreCoverUrl, loadCalibreCatalog, type CalibreBook } from '$lib/data/calibre';
+  import { loadSeriesOverrides } from '$lib/data/series-overrides';
   import {
     autoReplication$,
     cacheStorageData$,
@@ -32,6 +41,7 @@
   import { fullscreenManager } from '$lib/data/fullscreen-manager';
   import { logger } from '$lib/data/logger';
   import {
+    adjacentVolumes,
     borderColor,
     clampPan,
     fitSize,
@@ -126,6 +136,11 @@
   let animating = false;
   let autoBackground = '#000';
   let wakeLock: WakeLockSentinel | undefined;
+  let volumes: { previous?: CalibreBook; next?: CalibreBook } = {};
+  /** The card shown past the last (1) or before the first (-1) spread, else 0. */
+  let transition = 0;
+  let opening = false;
+  let openError = '';
   let wantWakeLock = false;
   let requestingWakeLock = false;
 
@@ -177,12 +192,12 @@
   $: if (browser) updateWakeLock($mangaKeepScreenOn$);
   $: shownPages = mode === 'vertical' ? [pageIndex] : (groups[groupIndex] ?? [pageIndex]);
 
-  function handler(type: StorageKey, name?: string) {
+  function handler(type: StorageKey, name?: string, isForBrowser = true) {
     return getStorageHandler(
       window,
       type,
       name,
-      true,
+      isForBrowser,
       $cacheStorageData$,
       $replicationSaveBehavior$,
       $statisticsMergeMode$,
@@ -284,6 +299,50 @@
     savedIndex = Math.min(bookmark?.exploredCharCount || 0, Math.max(pageCount - 1, 0));
     goToPage(savedIndex);
     ready = true;
+
+    if (external?.storageType === StorageKey.CALIBRE) {
+      loadVolumes(data.title).catch(({ message }) =>
+        logger.warn(`Could not find the series' other volumes: ${message}`)
+      );
+    }
+  }
+
+  // shortcut: needs the catalog, so offline there are no volume links even for cached volumes.
+  async function loadVolumes(title: string) {
+    const [books, overrides] = await Promise.all([
+      loadCalibreCatalog(),
+      loadSeriesOverrides().catch(() => ({}))
+    ]);
+
+    volumes = adjacentVolumes(books, overrides, title);
+  }
+
+  /** Opens another volume like the library does: downloaded and processed when first read. */
+  async function openVolume(target: CalibreBook) {
+    if (opening) return;
+
+    opening = true;
+    openError = '';
+
+    try {
+      await save();
+
+      const calibre = handler(StorageKey.CALIBRE, '', false);
+
+      calibre.startContext({ id: 0, title: target.title, imagePath: calibreCoverUrl(target) });
+
+      const id = await calibre.prepareBookForReading();
+
+      await database.putLastItem(id);
+      await goto(`${pagePath}/b?id=${id}`);
+    } catch (error: any) {
+      // The handler is shared: progress saved from here must still go to this book.
+      external?.startContext(context());
+      openError = `Could not open ${target.title}: ${error.message}`;
+      logger.warn(openError);
+    } finally {
+      opening = false;
+    }
   }
 
   function scheduleSave() {
@@ -319,10 +378,11 @@
   }
 
   function goToPage(index: number) {
+    transition = 0;
     pageIndex = Math.max(0, Math.min(pageCount - 1, index));
 
     if (mode === 'vertical') {
-      strip?.children[pageIndex]?.scrollIntoView();
+      strip?.querySelectorAll('img')[pageIndex]?.scrollIntoView();
     }
   }
 
@@ -336,7 +396,7 @@
     if (!strip) return;
 
     const middle = strip.getBoundingClientRect().top + strip.clientHeight / 2;
-    const pages = [...strip.children];
+    const pages = [...strip.querySelectorAll('img')];
     const index = pages.findIndex((img) => img.getBoundingClientRect().bottom > middle);
 
     pageIndex = index === -1 ? pages.length - 1 : index;
@@ -460,7 +520,10 @@
     return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
-  /** Turns by whole spreads (dir 1 forward), sliding the track along unless motion is reduced. */
+  /**
+   * Turns by whole spreads (dir 1 forward), sliding the track along unless motion is reduced. Past
+   * either end it shows the volume card, and turning on from there opens that volume.
+   */
   function turn(dir: number) {
     const target = groups[groupIndex + dir];
 
@@ -469,7 +532,26 @@
       return;
     }
 
-    if (!target || turnTimer) return;
+    if (transition) {
+      const volume = transition > 0 ? volumes.next : volumes.previous;
+
+      dragX = 0;
+
+      if (dir !== transition) transition = 0;
+      else if (volume) openVolume(volume);
+
+      return;
+    }
+
+    if (turnTimer) return;
+
+    if (!target) {
+      // The start only has a card when there is a volume before.
+      if (dir > 0 || volumes.previous) transition = dir;
+      if (dragX) snapBack();
+
+      return;
+    }
 
     if (prefersReducedMotion()) {
       pageIndex = target[0];
@@ -624,7 +706,7 @@
     } else if (ended.kind === 'swipe') {
       const dir = (dragX < 0 ? 1 : -1) * sign;
 
-      if (Math.abs(dragX) > Math.min(80, viewWidth / 5) && groups[groupIndex + dir]) {
+      if (Math.abs(dragX) > Math.min(80, viewWidth / 5)) {
         showMenu = false;
         turn(dir);
       } else {
@@ -677,7 +759,7 @@
 
     pointerStart = undefined;
 
-    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+    if (Math.abs(dx) < 10 && Math.abs(dy) < 10 && !(event.target as Element).closest('button')) {
       showMenu = !showMenu;
     }
   }
@@ -694,7 +776,8 @@
       setPan(pan.x - event.deltaX, pan.y - event.deltaY);
     } else if (Math.abs(event.deltaY) > 4 && Date.now() - lastWheelTurn > 400) {
       lastWheelTurn = Date.now();
-      turn(Math.sign(event.deltaY));
+      // A scroll's momentum shouldn't open the next volume: that takes a key, tap or swipe.
+      if (Math.sign(event.deltaY) !== transition) turn(Math.sign(event.deltaY));
     }
   }
 
@@ -813,8 +896,20 @@
           on:load={() => (loaded = new Set(loaded).add(index))}
         />
       {/each}
+      {#if ready && volumes.next}
+        <div class="flex justify-center px-4 py-10">
+          <VolumeTransition
+            direction={1}
+            title={book?.title ?? ''}
+            volume={volumes.next}
+            {opening}
+            error={openError}
+            on:open={(event) => openVolume(event.detail)}
+          />
+        </div>
+      {/if}
     </div>
-  {:else}
+  {:else if !transition}
     <!-- The spreads either side are laid out beside this one, so a swipe drags them in. -->
     {#each slots as index (index)}
       <div
@@ -835,7 +930,24 @@
   {/if}
 </div>
 
-{#if $mangaPageNumber$ && !showMenu && pageCount}
+{#if transition && mode !== 'vertical'}
+  <!-- Outside the gesture layer, so its button gets clicks; the sides still turn. -->
+  <div class="pointer-events-none fixed inset-0 flex items-center justify-center p-6">
+    <div class="pointer-events-auto">
+      <VolumeTransition
+        direction={transition}
+        title={book?.title ?? ''}
+        volume={transition > 0 ? volumes.next : volumes.previous}
+        {opening}
+        error={openError}
+        hint="Or turn the page again"
+        on:open={(event) => openVolume(event.detail)}
+      />
+    </div>
+  </div>
+{/if}
+
+{#if $mangaPageNumber$ && !showMenu && pageCount && !transition}
   <div
     class="reader-panel pointer-events-none fixed bottom-2 left-1/2 -translate-x-1/2 rounded-full px-3 py-0.5 text-xs tabular-nums opacity-80"
   >
@@ -920,6 +1032,19 @@
       </div>
     {/if}
     <div class="flex items-center gap-3" dir={mode === 'rtl' ? 'rtl' : 'ltr'}>
+      {#if volumes.previous || volumes.next}
+        <button
+          class="p-2 disabled:opacity-40"
+          title={volumes.previous
+            ? `Previous volume: ${volumes.previous.title}`
+            : 'No previous volume'}
+          aria-label="Previous volume"
+          disabled={!volumes.previous || opening}
+          on:click={() => volumes.previous && openVolume(volumes.previous)}
+        >
+          <Fa icon={mode === 'rtl' ? faForwardStep : faBackwardStep} />
+        </button>
+      {/if}
       <span class="w-10 text-center tabular-nums">{pageIndex + 1}</span>
       <input
         class="flex-1"
@@ -931,6 +1056,20 @@
         on:input={(event) => goToPage(Number(event.currentTarget.value))}
       />
       <span class="w-10 text-center tabular-nums">{pageCount}</span>
+      {#if volumes.previous || volumes.next}
+        <button
+          class="p-2 disabled:opacity-40"
+          title={volumes.next ? `Next volume: ${volumes.next.title}` : 'No next volume'}
+          aria-label="Next volume"
+          disabled={!volumes.next || opening}
+          on:click={() => volumes.next && openVolume(volumes.next)}
+        >
+          <Fa icon={mode === 'rtl' ? faBackwardStep : faForwardStep} />
+        </button>
+      {/if}
     </div>
+    {#if openError && !transition}
+      <div class="text-center text-sm text-danger">{openError}</div>
+    {/if}
   </div>
 {/if}
