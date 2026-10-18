@@ -61,7 +61,8 @@ WORDS_PER_BOOK = 2000
 # Stored with each estimate ('words'); whole-library runs redo word lists made by an older version.
 # 2: one row per (form, reading). 3: the book's own ruby gives readings (features.ruby_reading).
 # 4: context rules for ambiguous forms (features.context_reading).
-# 5: more of the ruby: per-kanji spans, kanji stems of inflected words, large kana.
+# 5: more of the ruby: per-kanji spans, kanji stems of inflected words, large kana; 人気がない
+#    reads ひとけ only with a cue.
 WORDS_VERSION = 5
 WORKERS = int(os.environ.get('JITEN_WORKERS', os.cpu_count() or 1))
 PORT = int(os.environ.get('JITEN_PORT', '8765'))

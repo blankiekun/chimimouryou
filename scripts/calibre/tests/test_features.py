@@ -168,11 +168,21 @@ class ContextReadingTest(unittest.TestCase):
         self.assertIsNone(self.reading('明日の日本を担う', '明日'))
         self.assertIsNone(self.reading('料理が上手だ', '上手'))
 
+    def test_hitoke_needs_a_cue(self):
+        for text in ('人気のない路地', '人気も無い', '人気が少ない', '人気が絶えた', '周囲に人気がない', '人気がない場所に',
+                     '廊下は人気がなく静か', '夜の公園は人気がまったくなかった', '辺りに人気はなかった', '駐車場は人気がない', '事務所に人気がない'):
+            self.assertEqual(self.reading(text, '人気'), 'ひとけ', text)
+        self.assertEqual(self.reading('人気のない奴だ', '人気'), 'にんき')  # before the のない rule
+        for text in ('この店は人気がない', '茨城県は人気がない', '海外では人気がない', '国内では人気がない', '人気がない',
+                     'この作家はまだ人気がない', '作家は人気がない', '市場では人気がない', 'パン屋は人気がない',
+                     '驚くほど人気がない', 'この店は全く人気がない', '北海道では人気がない', '長所は人気がないことだ'):
+            self.assertIsNone(self.reading(text, '人気'), text)  # no cue: Sudachi's にんき
+
     def test_only_the_line_and_listed_readings(self):
         self.assertIsNone(self.reading('舞台の\n上手から', '上手'))
-        self.assertIsNone(self.reading('人気\nがない', '人気'))
-        self.assertIsNone(self.reading('人気がない', '人気', known={('人気', 'にんき')}))
-        self.assertIsNone(self.reading('人気がない', '人気', known=()))  # no frequency list: no rules
+        self.assertIsNone(self.reading('人気\nのない', '人気'))
+        self.assertIsNone(self.reading('人気のない', '人気', known={('人気', 'にんき')}))
+        self.assertIsNone(self.reading('人気のない', '人気', known=()))  # no frequency list: no rules
 
 
 @unittest.skipUnless(sudachipy, 'needs Sudachi (difficulty image)')

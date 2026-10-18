@@ -237,11 +237,18 @@ def _small_kana(reading: str):
             yield ''.join(c.translate(_SMALL) if i in chosen else c for i, c in enumerate(reading))
 
 
-# Context rules for word-list readings (form: [(reading, text before, text after)]): a rule fires
-# when its `before` pattern ends where the word starts or its `after` pattern starts where the
-# word's head token ends, both within the line. Checked against distil/readings-test.tsv.
+# Context rules for word-list readings (form: [(reading, text before, text after[, 'and'])]): a rule
+# fires when its `before` pattern ends where the word starts or its `after` pattern starts where the
+# word's head token ends (with 'and': both), within the line. Checked against distil/readings-test.tsv.
+# 人気がない is にんき as often as ひとけ in plain text (この店は人気がない), so が/は + ない needs a cue.
+_HITOKE_PLACE = (r'(?:辺り|あたり|周囲|周り|付近|他|ほか|(?<![国海])[内外]|奥|(?<!海)道|通り|街|町|庭|園|室|館|駅|森|林|浜|港|廊下|広場|駐車場|墓場|(?<![長短])所'
+                 r'|夜|深夜|しんと)(?:に|には|は|も|では|、)?$')
 _CONTEXT_RULES = {
-    '人気': [('ひとけ', None, r'[がのはも]?(?:な[いくかけ]|無[いくかけ]|少な|絶え|途絶え)')],
+    '人気': [('にんき', None, r'の(?:な|無)(?:い|かった)(?:奴|やつ|者|人|キャラ|作品|商品|子(?!供|ども)|アイドル|作家|店)'),
+             ('ひとけ', None, r'の(?:な[いくかけ]|無[いくかけ])|[がのはも]?(?:少な|絶え|途絶え)|も(?:な[いくかけ]|無)'),
+             ('ひとけ', None, r'[がは](?:な|無)(?:い|く|かった)?(?:場所|所|ところ|道|通り|廊下|路地|部屋|時|とき'
+              r'|のを確|ことを確|、?(?:静|しん|ひっそり))'),
+             ('ひとけ', _HITOKE_PLACE, r'[がは](?:まったく|全く|ほとんど|全然|一切)?(?:な[いくかけ]|無[いくかけ])', 'and')],
     '他': [('た', r'その$', None)],
     '今日': [('こんにち', None, r'の(?:社会|日本|世界|経済|時代|状況|情勢|問題|課題|文明|科学|技術|教育|政治)'
               r'|に(?:至|いた)る|では|において')],
@@ -282,8 +289,8 @@ _CONTEXT_RULES = {
     '見物': [('みもの', None, r'だ(?:な|ね|ぞ|わ)?(?:[。！」]|$)|である|です')],
     '一行': [('いちぎょう', r'(?:最初の|最後の|文章の|冒頭の|手紙の|ほんの|たった)$', r'目|ずつ|ごと|だけ|空け|の(?:文|文章|詩)')],
 }
-_CONTEXT_RULES = {form: [(reading, before and re.compile(before), after and re.compile(after))
-                         for reading, before, after in rules] for form, rules in _CONTEXT_RULES.items()}
+_CONTEXT_RULES = {form: [(reading, before and re.compile(before), after and re.compile(after), bool(both))
+                         for reading, before, after, *both in rules] for form, rules in _CONTEXT_RULES.items()}
 _CONTEXT = 12  # characters looked at on each side
 
 
@@ -297,9 +304,9 @@ def context_reading(text: str, begin: int, surface: str, form: str, known) -> st
     line_end = text.find('\n', end)
     before = text[max(text.rfind('\n', 0, begin) + 1, begin - _CONTEXT):begin]
     after = text[end:min(end + _CONTEXT, line_end if line_end >= 0 else len(text))]
-    for reading, before_rule, after_rule in rules:
-        if ((before_rule and before_rule.search(before)) or (after_rule and after_rule.match(after))) \
-                and (form, reading) in known:
+    for reading, before_rule, after_rule, both in rules:
+        hits = (bool(before_rule and before_rule.search(before)), bool(after_rule and after_rule.match(after)))
+        if (all(hits) if both else any(hits)) and (form, reading) in known:
             return reading
     return None
 
