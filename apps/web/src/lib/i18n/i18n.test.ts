@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { en } from './en';
 import { ja } from './ja';
 import { translate, tr, uiLanguage$ } from './index';
+import { settingsAreas } from '$lib/components/settings/settings-sections';
 
 const params = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
 
@@ -37,6 +38,15 @@ describe('i18n', () => {
 
     expect(used.length).toBeGreaterThan(0);
     expect(used.filter((key) => !(key in en))).toEqual([]);
+  });
+
+  it('has the settings areas and sections', () => {
+    const keys = settingsAreas.flatMap((area) => [
+      area.label,
+      ...area.sections.flatMap((section) => [section.label, section.description])
+    ]);
+
+    expect(keys.filter((key) => !(key in en))).toEqual([]);
   });
 
   it('fills in params and falls back to English', () => {

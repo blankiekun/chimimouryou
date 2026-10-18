@@ -156,7 +156,208 @@ export const en = {
 
   'settings.uiLanguage': 'Interface language',
   'settings.uiLanguageHint':
-    "Menus and buttons. Parts of the app are still in English only. The AI's language is set in Settings → AI."
+    "Menus and buttons. Parts of the app are still in English only. The AI's language is set in Settings → AI.",
+  'settings.categories': 'Settings categories',
+  'settings.search': 'Find a setting',
+  'settings.searchLabel': 'Search settings',
+  'settings.sectionsLabel': 'Settings sections',
+  'settings.showSections': 'Show {area} sections',
+  'settings.hideSections': 'Hide {area} sections',
+  'settings.syncNote':
+    'Progress, statistics, reader and AI settings and themes sync to your account',
+  'settings.account': 'Account',
+  'settings.signInToSync': 'Sign in to sync',
+  'settings.results': 'Results for “{query}”',
+  'settings.noResults': 'No settings match “{query}”.',
+  'settings.clearSearch': 'Clear search',
+  'settings.on': 'On',
+  'settings.off': 'Off',
+
+  'settings.area.general': 'General',
+  'settings.area.reader': 'Reader',
+  'settings.area.ai': 'AI',
+  'settings.area.audiobookshelf': 'Audiobookshelf',
+  'settings.area.anki': 'Anki',
+  'settings.area.tracking': 'Tracking',
+  'settings.area.data': 'Data',
+  'settings.section.general-account': 'Account',
+  'settings.section.general-account.text':
+    'Sign in to keep progress, statistics and settings across devices.',
+  'settings.section.general-language': 'Language · 言語',
+  'settings.section.general-language.text': 'The language of the menus and buttons.',
+  'settings.section.general-theme': 'Theme',
+  'settings.section.general-theme.text':
+    'Colors for the whole app, and how system light and dark mode are handled.',
+  'settings.section.general-custom-themes': 'Custom Themes',
+  'settings.section.general-custom-themes.text': 'Create, edit, import and export themes.',
+  'settings.section.general-plugins': 'Plugins',
+  'settings.section.general-plugins.text':
+    'Optional features: switch them on or off for your account.',
+  'settings.section.reader-text': 'Text Style',
+  'settings.section.reader-text.text': 'Fonts, sizes and paragraph spacing.',
+  'settings.section.reader-writing': 'Writing',
+  'settings.section.reader-writing.text': 'Writing direction, vertical text and furigana.',
+  'settings.section.reader-layout': 'Page Layout',
+  'settings.section.reader-layout.text': 'View mode, margins, columns and images.',
+  'settings.section.reader-progress': 'Progress',
+  'settings.section.reader-progress.text': 'Counters in the footer and how bookmarks are placed.',
+  'settings.section.reader-navigation': 'Navigation',
+  'settings.section.reader-navigation.text': 'Swiping, scrolling and tapping to turn pages.',
+  'settings.section.reader-session': 'Session',
+  'settings.section.reader-session.text': 'Screen lock and closing the reader.',
+  'settings.section.ai-guide': 'Setup Guide',
+  'settings.section.ai-guide.text': 'Getting OpenRouter and ElevenLabs keys, step by step.',
+  'settings.section.ai-ask': 'Ask AI',
+  'settings.section.ai-ask.text':
+    'OpenRouter key and model used when you select text and press Ask AI.',
+  'settings.section.ai-presets': 'Presets',
+  'settings.section.ai-presets.text': 'Buttons in the Ask AI panel and their prompts.',
+  'settings.section.ai-read-aloud': 'Read Aloud',
+  'settings.section.ai-read-aloud.text': 'Text-to-speech with ElevenLabs.',
+  'settings.section.ai-recap': 'Story So Far & Lorebook',
+  'settings.section.ai-recap.text': 'Spoiler-free recaps and the lorebook of what you have read.',
+  'settings.section.audiobookshelf-connect': 'Server',
+  'settings.section.audiobookshelf-connect.text':
+    'Your Audiobookshelf account, for Listen → Audiobookshelf.',
+  'settings.section.anki-connect': 'AnkiConnect',
+  'settings.section.anki-connect.text': 'Connecting to Anki and the note fields to fill.',
+  'settings.section.anki-media': 'Card Media',
+  'settings.section.anki-media.text':
+    'Audio and screenshots added to cards you mine while reading or playing.',
+  'settings.section.anki-known': 'Known Words',
+  'settings.section.anki-known.text':
+    "Mature cards of a deck as the words you know, for each book's word coverage.",
+  'settings.section.tracking-statistics': 'Statistics',
+  'settings.section.tracking-statistics.text': 'The reading tracker and when it pauses.',
+  'settings.section.tracking-day': 'Reading Day',
+  'settings.section.tracking-day.text': 'When a day starts and how completions are counted.',
+  'settings.section.tracking-merge': 'Sync & Merge',
+  'settings.section.tracking-merge.text':
+    'How statistics and goals from other devices are combined.',
+  'settings.section.tracking-goals': 'Reading Goals',
+  'settings.section.tracking-goals.text': 'Daily, weekly and monthly targets.',
+  'settings.section.data-storage': 'Local Storage',
+  'settings.section.data-storage.text': 'How this browser keeps books and data.',
+  'settings.section.data-import': 'Import',
+  'settings.section.data-import.text': 'Fixes applied when importing EPUB files.',
+  'settings.section.data-sync': 'Sync',
+  'settings.section.data-sync.text': 'Importing and exporting between storage sources.',
+  'settings.section.data-sources': 'Sources',
+  'settings.section.data-sources.text': 'Calibre, browser, cloud and folder storage.',
+
+  'anki.enabled': 'Add media to mined cards',
+  'anki.enabledHint':
+    'While a book or visual novel is open, notes added to Anki (e.g. with Yomitan) get the audio and screenshot chosen below.',
+  'anki.guide': 'Setup guide',
+  'anki.guideLink': 'Yomitan, AnkiConnect and the fields',
+  'anki.url': 'AnkiConnect address',
+  'anki.urlHint':
+    "Anki needs the AnkiConnect add-on, with this site's address ({origin}) in webCorsOriginList in the add-on's config.",
+  'anki.test': 'Test connection',
+  'anki.connecting': 'Connecting…',
+  'anki.connected': 'Connected (AnkiConnect version {version})',
+  'anki.sentenceField': 'Sentence field',
+  'anki.sentenceFieldHint':
+    'Where the mined sentence is; read aloud by the AI voice or looked up in the audiobook. In visual novels, it picks the line whose screenshot and sound the card gets.',
+  'anki.audioField': 'Audio field',
+  'anki.audioFieldHint': 'Gets the sentence or line audio. Left alone if already filled.',
+  'anki.pictureField': 'Picture field',
+  'anki.pictureFieldHint': 'Gets the visual novel screenshot. Left alone if already filled.',
+  'anki.bookAudio': 'Book audio',
+  'anki.bookAudioHint':
+    "The sentence's lines from the book's imported audiobook (Listen → Audiobook), recorded in real time.",
+  'anki.aiFallback': 'Use ElevenLabs audio if no audiobook file present',
+  'anki.aiFallbackHint':
+    'The sentence read by the AI voice (key and voice in Settings → AI). Each card uses ElevenLabs credits.',
+  'anki.vnScreenshot': 'Visual novel screenshot',
+  'anki.vnScreenshotHint': 'The game screen when the card was added.',
+  'anki.vnAudio': 'Visual novel audio',
+  'anki.vnAudioHint':
+    "The game's sound (voice and music) since your last click or key press. Applies to games started after the change.",
+  'anki.known': 'Known words from Anki',
+  'anki.knownHint':
+    "Reads the words of the deck's mature cards (interval of 21 days or more) at most once a day, kept in this browser only, to mark the ones you know in each book's words to study.",
+  'anki.deck': 'Deck',
+  'anki.deckHint': 'Its subdecks are included.',
+  'anki.wordField': 'Word field',
+  'anki.wordFieldHint':
+    'The field holding the word (e.g. Expression or Word). HTML and furigana like 漢字[かんじ] are removed.',
+  'anki.reading': 'Reading…',
+  'anki.refresh': 'Refresh',
+  'anki.knownCount': '{count} known words, read {date}',
+  'anki.notRead': 'Not read yet',
+
+  'ai.guideOpenRouter': 'OpenRouter (Ask AI, Story so far, Lorebook)',
+  'ai.guideOpenRouterHint':
+    'OpenRouter gives one key for models from many providers. You pay per request; a question with the default Flash models costs a fraction of a cent.',
+  'ai.guideAccount': 'Create an account at {link}.',
+  'ai.guideCredits': 'Add credits in {link}.',
+  'ai.guideOpenRouterKey':
+    "Create a key in {link}. Give it a credit limit so a leaked key can't cost much.",
+  'ai.guideOpenRouterPaste':
+    'Copy the key (it starts with {prefix} and is only shown once) and paste it into {field}.',
+  'ai.guideModels': 'The default models work well; you can pick any other OpenRouter model there.',
+  'ai.guideElevenLabs': 'ElevenLabs (AI voice)',
+  'ai.guideElevenLabsHint':
+    'ElevenLabs reads the book aloud. Plans include a number of characters a month; reading uses one per character.',
+  'ai.guideElevenLabsKey':
+    'Open API Keys (in the account menu) and create a key. Allowing only Text to Speech and setting a credit limit keeps a leaked key harmless.',
+  'ai.guideElevenLabsPaste': 'Copy the key (it starts with {prefix}) and paste it into {field}.',
+  'ai.guideVoice':
+    'In Voices, choose a voice that speaks Japanese, open its menu, choose "Copy voice ID" and paste it into {field}.',
+  'ai.guideListen': 'Open a book and press the headphones icon, then "AI voice".',
+  'ai.keysWhere': 'Where the keys go',
+  'ai.keysWhereHint':
+    'Keys are kept in this browser and, when signed in, in your account on this server, so your other devices get them. They are removed from the browser when you sign out, and keys typed while signed out are removed when someone signs in. The browser sends them only to OpenRouter and ElevenLabs.',
+  'ai.openRouterKey': 'OpenRouter API key',
+  'ai.openRouterKeyHint':
+    'Requests go from this browser straight to OpenRouter. Synced to your account when signed in.',
+  'ai.howToGetKey': 'How to get a key',
+  'ai.language': 'AI language',
+  'ai.languageHint':
+    "Language of the prompts and answers for Ask AI, Story so far and the lorebook. Also switchable in the reader's panels.",
+  'ai.model': 'Model',
+  'ai.modelHint': 'Used for Ask AI, and for recaps unless a recap model is set.',
+  'ai.unknownModel': "Not in OpenRouter's model list - check the ID.",
+  'ai.modelSearch': 'Type to search {count} models, e.g. "claude", "gemini" or "deepseek".',
+  'ai.modelSearchAny': 'Type to search models, e.g. "claude", "gemini" or "deepseek".',
+  'ai.aboutYou': 'About you',
+  'ai.aboutYouHint':
+    'Added to every Ask AI question, e.g. your level or how you like answers: "I\'m around JLPT N3; keep answers short and give readings for kanji above N3."',
+  'ai.optional': 'Optional',
+  'ai.presets': 'Ask AI presets',
+  'ai.presetsHint': 'Each button sends its prompt about the selected passage (or as a follow-up).',
+  'ai.presetLabel': 'Button label',
+  'ai.prompt': 'Prompt',
+  'ai.moveUp': 'Move up',
+  'ai.moveDown': 'Move down',
+  'ai.delete': 'Delete',
+  'ai.addPreset': 'Add preset',
+  'ai.resetPresets': 'Reset to defaults',
+  'ai.panelOpens': 'When the panel opens',
+  'ai.waitForChoice': 'wait for a choice',
+  'ai.runPreset': 'run "{label}"',
+  'ai.elevenLabsKey': 'ElevenLabs API key',
+  'ai.elevenLabsKeyHint':
+    'Requests go from this browser straight to api.elevenlabs.io. Synced to your account when signed in.',
+  'ai.elevenLabsModel': 'ElevenLabs model',
+  'ai.elevenLabsModelHint':
+    'Model ID for text to speech with timestamps, e.g. eleven_v4 or eleven_v4_turbo.',
+  'ai.voiceSpeed': 'AI voice speed',
+  'ai.voiceSpeedHint':
+    'Plays the voice faster or slower without changing its pitch; the highlight follows.',
+  'ai.voiceId': 'ElevenLabs voice ID',
+  'ai.voiceIdHint': 'The voice used to read the book.',
+  'ai.voiceIdPlaceholder': 'e.g. {id}',
+  'ai.recapModel': 'Recap model',
+  'ai.recapModelHint':
+    'Recaps summarise each finished chapter once (cached per browser), then write a recap. A cheaper, fast model works well here.',
+  'ai.recapModelPlaceholder': 'Same as Ask AI ({model})',
+  'ai.lorebookAuto': 'Update the lorebook automatically',
+  'ai.lorebookAutoHint':
+    'While reading, the lorebook (characters, places, terms) is updated in the background each time you read this many new characters. Only the new text is sent, to the recap model. 0 turns it off.',
+  'ai.lorebookInterval': 'Characters between lorebook updates',
+  'ai.lorebookOff': '0 (off)'
 };
 
 export type MessageKey = keyof typeof en;

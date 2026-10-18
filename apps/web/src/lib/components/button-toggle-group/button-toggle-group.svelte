@@ -53,7 +53,7 @@
     on:click={() => (selectedOptionId = !selectedOptionId)}
   >
     <span class="app-switch-thumb" />
-    <span class="app-switch-text">{selectedOptionId ? 'On' : 'Off'}</span>
+    <span class="app-switch-text">{options[selectedOptionId ? 1 : 0].text}</span>
   </button>
 {:else}
   <div class="segmented" role="radiogroup" aria-label={label}>
