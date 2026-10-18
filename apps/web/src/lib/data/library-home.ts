@@ -11,7 +11,7 @@
  */
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-import { isReading } from '$lib/components/book-card/library-filters';
+import { isFinished, isReading } from '$lib/components/book-card/library-filters';
 import { orderSeries } from '$lib/components/book-card/library-sort';
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
@@ -128,4 +128,70 @@ export function seriesGroups(bookCards: BookCardProps[]): SeriesGroup[] {
       started: books.filter((book) => book.progress > 0).length
     }))
     .sort((a, b) => a.series.localeCompare(b.series, 'ja'));
+}
+
+/** Read next: books this close to the recent finished books' median difficulty */
+const readNextRange = 0.3;
+// shortcut: only the books closest in difficulty get a coverage worked out (one word list
+// fetch each); rank the whole range once coverages are computed server-side.
+const readNextPoolSize = 40;
+
+/**
+ * Home's Read next candidates: the next unread volume of each series the reader has
+ * started, and the unread books within ±0.3 of the median difficulty of the last 3
+ * finished books (closest first, at most `readNextPoolSize`). Nothing when no finished
+ * book has a difficulty estimate.
+ */
+export function readNextPool(cards: BookCardProps[]) {
+  const recent = cards
+    .filter((card) => isFinished(card) && card.difficulty !== undefined)
+    .sort((a, b) => lastRead(b) - lastRead(a))
+    .slice(0, 3)
+    .map((card) => card.difficulty!)
+    .sort((a, b) => a - b);
+
+  if (!recent.length) {
+    return { next: [], pool: [] };
+  }
+
+  const median = recent.length % 2 ? recent[(recent.length - 1) / 2] : (recent[0] + recent[1]) / 2;
+  const groups = seriesGroups(cards);
+  const next = groups
+    .filter((group) => group.started)
+    .map((group) => {
+      const lastStarted = group.books.findLastIndex((book) => book.progress > 0);
+
+      return group.books.slice(lastStarted + 1).find((book) => !book.progress);
+    })
+    .filter((card): card is BookCardProps => !!card)
+    .sort((a, b) => lastRead(b) - lastRead(a));
+  const nextIds = new Set(next.map((card) => card.id));
+  // A series only enters the pool by its first unread volume.
+  const firstUnread = new Set(groups.map((group) => group.books.find((book) => !book.progress)));
+  const distance = (card: BookCardProps) => Math.abs(card.difficulty! - median);
+  const pool = cards
+    .filter(
+      (card) =>
+        !card.progress &&
+        !nextIds.has(card.id) &&
+        (!card.series || firstUnread.has(card)) &&
+        card.difficulty !== undefined &&
+        distance(card) <= readNextRange
+    )
+    .sort((a, b) => distance(a) - distance(b))
+    .slice(0, readNextPoolSize);
+
+  return { next, pool };
+}
+
+/**
+ * Home's Read next shelf: next volumes first, then the pool by known-word coverage
+ * (`known-words.ts`, Calibre id → share; books without one after, closest difficulty first).
+ */
+export function readNext(cards: BookCardProps[], coverage: Record<number, number>, limit = 12) {
+  const { next, pool } = readNextPool(cards);
+  const share = (card: BookCardProps) =>
+    card.calibreId === undefined ? -1 : (coverage[card.calibreId] ?? -1);
+
+  return [...next, ...pool.sort((a, b) => share(b) - share(a))].slice(0, limit);
 }

@@ -34,6 +34,10 @@ anything a reader or a server operator would notice.
   met yet, with a button that copies them.
 - The difficulty badge's tooltip says what the band means for a learner, and that the
   likely range holds the true score for about 8 books in 10.
+- Home has a "Read next" shelf: the next unread volume of each series you have started, then
+  unread books within ±0.3 of the median difficulty of your last 3 finished books, those with
+  the most known words from Anki first (otherwise the closest in difficulty). Hidden until a
+  finished book has a difficulty estimate.
 - The book page lists "Words to study first": words the book uses often that are outside the
   most common words needed for 95% of it (`words95`), by count in the book, with a CSV
   download (word, reading, count, frequency rank) for Anki. Shown once the book has an
