@@ -23,11 +23,11 @@
   } from '$lib/data/account';
   import {
     readerProfile,
-    readerProfileLabels,
     settingsSyncState$,
     syncAccountSettings
   } from '$lib/data/account-settings-sync';
   import { pagePath } from '$lib/data/env';
+  import { t$ } from '$lib/i18n';
   import { onMount } from 'svelte';
   import Fa from 'svelte-fa';
 
@@ -42,7 +42,10 @@
   /** The first admin hasn't signed in yet: its password is on the server. */
   let initialAdmin = false;
 
-  $: profileLabel = available || $account$ ? readerProfileLabels[readerProfile()] : '';
+  $: profileLabel =
+    available || $account$
+      ? $t$(readerProfile() === 'phone' ? 'prefs.account.phone' : 'prefs.account.desktop')
+      : '';
 
   let busy = false;
   let error = '';
@@ -98,7 +101,7 @@
   async function onChangePassword() {
     const failure = await run(() => changePassword(currentPassword, newPassword));
 
-    passwordMessage = failure || 'Password changed. Other devices have been signed out.';
+    passwordMessage = failure || $t$('prefs.account.passwordChanged');
 
     if (!failure) {
       currentPassword = '';
@@ -112,16 +115,16 @@
 </script>
 
 {#if user}
-  <SettingsItemGroup title="Signed in" wide>
+  <SettingsItemGroup title={$t$('prefs.account.signedIn')} wide>
     {#if warnInsecure}
       <p class="account-warning" role="alert">
-        <strong>Not encrypted.</strong> This page uses plain HTTP, so your password, your session
-        and the settings that sync with your account (including AI API keys) can be read by
-        anyone who can watch this network. Passwords set in Manage accounts travel the same way.
-        If this server has an HTTPS address, use
+        <strong>{$t$('prefs.account.notEncrypted')}</strong>
+        {$t$('prefs.account.insecureSignedIn')}
+        {$t$('prefs.account.useHttpsBefore')}
         <a class="font-semibold underline" href="{secureUrl}/settings?section=general#general-account"
           >{secureUrl.replace('https://', '')}</a
-        > instead.
+        >
+        {$t$('prefs.account.useHttpsAfter')}
       </p>
     {/if}
     <div class="account-identity">
@@ -129,24 +132,26 @@
       <span class="min-w-0">
         <span class="block truncate font-semibold">{user.username}</span>
         <span class="block text-xs text-[color:var(--app-muted-fg)]">
-          Signed in{#if user.admin} · admin{/if} · {profileLabel} reader settings
+          {$t$(user.admin ? 'prefs.account.identityAdmin' : 'prefs.account.identity', {
+            profile: profileLabel
+          })}
         </span>
       </span>
     </div>
   </SettingsItemGroup>
 
-  <SettingsItemGroup title="Settings sync">
+  <SettingsItemGroup title={$t$('prefs.account.settingsSync')}>
     <div class="flex flex-wrap items-center gap-3">
       <span class="sync-status" data-state={syncState.state} aria-live="polite">
         <span class="sync-dot" />
         {#if syncState.state === 'syncing'}
-          Syncing...
+          {$t$('prefs.account.syncing')}
         {:else if syncState.state === 'synced'}
-          Synced at {formatTime(syncState.at)}
+          {$t$('prefs.account.syncedAt', { time: formatTime(syncState.at) })}
         {:else if syncState.state === 'error'}
           {syncState.message}
         {:else}
-          Not started
+          {$t$('prefs.account.notStarted')}
         {/if}
       </span>
       <button
@@ -155,39 +160,33 @@
         on:click={syncAccountSettings}
       >
         <Fa icon={faRotate} spin={syncState.state === 'syncing'} />
-        Sync now
+        {$t$('prefs.account.syncNow')}
       </button>
     </div>
     <details class="account-details" slot="after">
-      <summary>What syncs</summary>
+      <summary>{$t$('prefs.account.whatSyncs')}</summary>
       <ul class="account-list">
-        <li>Reading progress, statistics, reading goals and highlights of Calibre books</li>
-        <li>
-          AI settings and themes. API keys are removed from this browser when you sign out
-        </li>
-        <li>
-          Reader settings, kept separately for phones and for desktops and tablets (this device:
-          {profileLabel})
-        </li>
+        <li>{$t$('prefs.account.syncsProgress')}</li>
+        <li>{$t$('prefs.account.syncsAi')}</li>
+        <li>{$t$('prefs.account.syncsReader', { profile: profileLabel })}</li>
       </ul>
       <p class="mt-2 text-xs text-[color:var(--app-muted-fg)]">
-        Stored in your account on this server, so every device you sign in on shares them. Books
-        themselves are shared by everyone using this server.
+        {$t$('prefs.account.syncsWhere')}
       </p>
     </details>
   </SettingsItemGroup>
 
   {#if user.temporaryPassword}
-    <SettingsItemGroup title="Temporary password" wide>
+    <SettingsItemGroup title={$t$('prefs.account.tempPassword')} wide>
       <p class="account-warning" role="alert">
-        You signed in with the password generated when this server was set up. Change it below.
+        {$t$('prefs.account.tempPasswordText')}
       </p>
     </SettingsItemGroup>
   {/if}
 
   <SettingsItemGroup
-    title="Change password"
-    tooltip="At least {minPasswordLength} characters. Signs out your other devices."
+    title={$t$('prefs.account.changePassword')}
+    tooltip={$t$('prefs.account.changePasswordHint', { count: minPasswordLength })}
     wide
   >
     <form class="account-password" on:submit|preventDefault={onChangePassword}>
@@ -195,8 +194,8 @@
       <input
         type="password"
         autocomplete="current-password"
-        placeholder="Current password"
-        aria-label="Current password"
+        placeholder={$t$('prefs.account.currentPassword')}
+        aria-label={$t$('prefs.account.currentPassword')}
         required
         class={inputClasses}
         bind:value={currentPassword}
@@ -204,66 +203,78 @@
       <input
         type="password"
         autocomplete="new-password"
-        placeholder="New password"
-        aria-label="New password"
+        placeholder={$t$('prefs.account.newPassword')}
+        aria-label={$t$('prefs.account.newPassword')}
         minlength={minPasswordLength}
         required
         class={inputClasses}
         bind:value={newPassword}
       />
-      <button class={buttonClasses} disabled={busy}>Change</button>
+      <button class={buttonClasses} disabled={busy}>{$t$('prefs.account.change')}</button>
     </form>
     {#if passwordMessage}<p class="mt-2 text-sm" role="status">{passwordMessage}</p>{/if}
   </SettingsItemGroup>
 
   {#if canOpenAdminPanel(user)}
     <SettingsItemGroup
-      title="Admin panel"
-      tooltip="Manage accounts and permissions, and run server tools such as difficulty estimates."
+      title={$t$('prefs.account.adminPanel')}
+      tooltip={$t$('prefs.account.adminPanelHint')}
     >
       <a class={buttonClasses} href="{pagePath}/admin">
         <Fa icon={faUserShield} />
-        Open
+        {$t$('prefs.account.open')}
         <Fa icon={faChevronRight} />
       </a>
     </SettingsItemGroup>
   {/if}
 
-  <SettingsItemGroup title="Sign out" tooltip="Removes this browser's API keys and synced settings.">
+  <SettingsItemGroup
+    title={$t$('prefs.account.signOut')}
+    tooltip={$t$('prefs.account.signOutHint')}
+  >
     <button class="app-button app-button-danger" disabled={busy} on:click={onSignOut}>
       <Fa icon={faArrowRightFromBracket} />
-      Sign out
+      {$t$('prefs.account.signOut')}
     </button>
     {#if error}<p class="account-error">{error}</p>{/if}
   </SettingsItemGroup>
 {:else if user === undefined}
-  <SettingsItemGroup title="Account" wide>
-    <span class="flex items-center gap-2"><Fa icon={faSpinner} spin /> Checking sign-in...</span>
+  <SettingsItemGroup title={$t$('settings.account')} wide>
+    <span class="flex items-center gap-2"
+      ><Fa icon={faSpinner} spin /> {$t$('prefs.account.checking')}</span
+    >
   </SettingsItemGroup>
 {:else}
   <SettingsItemGroup
-    title="Sign in"
-    tooltip="Keeps reading progress, statistics, highlights, AI settings and themes in your account on this server, shared by every device you sign in on. Accounts are created by an admin (admin panel) or on the server with ebook-account add NAME."
+    title={$t$('nav.signIn')}
+    tooltip={$t$('prefs.account.signInHint')}
     wide
   >
     {#if checkingHttp}
-      <span class="flex items-center gap-2"><Fa icon={faSpinner} spin /> Checking sign-in...</span>
+      <span class="flex items-center gap-2"
+        ><Fa icon={faSpinner} spin /> {$t$('prefs.account.checking')}</span
+      >
     {:else if available}
       {#if warnInsecure}
         <p class="account-warning" role="alert">
-          <strong>Not encrypted.</strong> This server allows signing in over plain HTTP. Your
-          password and session will be sent unencrypted and can be read by anyone who can watch
-          this network. If this server has an HTTPS address, sign in at
+          <strong>{$t$('prefs.account.notEncrypted')}</strong>
+          {$t$('prefs.account.insecureSignIn')}
+          {$t$('prefs.account.signInAtBefore')}
           <a class="font-semibold underline" href="{secureUrl}/settings?section=general#general-account"
             >{secureUrl.replace('https://', '')}</a
-          > instead.
+          >
+          {$t$('prefs.account.signInAtAfter')}
         </p>
       {/if}
       {#if initialAdmin}
         <p class="mb-3 text-sm">
-          <strong>First start:</strong> sign in as <code>admin</code> with the temporary password
-          shown at the end of the deploy, or on the server with
-          <code>ebook-account initial-admin</code> (or <code>docker compose logs account</code>).
+          <strong>{$t$('prefs.account.firstStart')}</strong>
+          {$t$('prefs.account.firstStartBefore')} <code>admin</code>
+          {$t$('prefs.account.firstStartMiddle')}
+          <code>ebook-account initial-admin</code>
+          {$t$('prefs.account.firstStartOr')} <code>docker compose logs account</code>{$t$(
+            'prefs.account.firstStartAfter'
+          )}
         </p>
       {/if}
       <form class="account-form" on:submit|preventDefault={onSignIn}>
@@ -272,8 +283,8 @@
           autocomplete="username"
           autocapitalize="none"
           spellcheck="false"
-          placeholder="Username"
-          aria-label="Username"
+          placeholder={$t$('prefs.username')}
+          aria-label={$t$('prefs.username')}
           required
           class={inputClasses}
           bind:value={username}
@@ -281,26 +292,27 @@
         <input
           type="password"
           autocomplete="current-password"
-          placeholder="Password"
-          aria-label="Password"
+          placeholder={$t$('prefs.password')}
+          aria-label={$t$('prefs.password')}
           required
           class={inputClasses}
           bind:value={password}
         />
         <button class={primaryButtonClasses} disabled={busy}>
           <Fa icon={busy ? faSpinner : faRightToBracket} spin={busy} />
-          Sign in
+          {$t$('nav.signIn')}
         </button>
       </form>
       {#if error}<p class="account-error">{error}</p>{/if}
     {:else}
       <p class="text-sm">
-        Signing in only works on the secure address. Open
+        {$t$('prefs.account.secureOnlyBefore')}
         <a
           class="font-semibold underline"
           href="{secureUrl}/settings?section=general#general-account"
           >{secureUrl.replace('https://', '')}</a
-        > to sign in.
+        >
+        {$t$('prefs.account.secureOnlyAfter')}
       </p>
     {/if}
   </SettingsItemGroup>

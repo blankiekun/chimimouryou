@@ -14,7 +14,6 @@ import { account$ } from '$lib/data/account';
 // Settings sync pulls in the whole store (IndexedDB, media queries); not under test here.
 vi.mock('$lib/data/account-settings-sync', () => ({
   readerProfile: () => 'desktop',
-  readerProfileLabels: { desktop: 'desktop' },
   settingsSyncState$: new BehaviorSubject({ state: 'idle' }),
   syncAccountSettings: vi.fn()
 }));

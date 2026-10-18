@@ -6,10 +6,7 @@
     TrackerSkipThresholdAction
   } from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker';
   import ButtonToggleGroup from '$lib/components/button-toggle-group/button-toggle-group.svelte';
-  import {
-    optionsForToggle,
-    type ToggleOption
-  } from '$lib/components/button-toggle-group/toggle-option';
+  import type { ToggleOption } from '$lib/components/button-toggle-group/toggle-option';
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import SettingsDimensionPopover from '$lib/components/settings/settings-dimension-popover.svelte';
   import SettingsFontSelector from '$lib/components/settings/settings-font-selector.svelte';
@@ -51,6 +48,7 @@
     ReplicationSaveBehavior,
     AutoReplicationType
   } from '$lib/functions/replication/replication-options';
+  import { t$ } from '$lib/i18n';
   import { map } from 'rxjs';
   import Fa from 'svelte-fa';
   import { onDestroy } from 'svelte';
@@ -187,165 +185,77 @@
 
   onDestroy(() => dialogManager.dialogs$.next([]));
 
-  const optionsForFuriganaStyle: ToggleOption<FuriganaStyle>[] = [
-    {
-      id: FuriganaStyle.Hide,
-      text: 'Hide'
-    },
-    {
-      id: FuriganaStyle.Partial,
-      text: 'Partial'
-    },
-    {
-      id: FuriganaStyle.Toggle,
-      text: 'Toggle'
-    },
-    {
-      id: FuriganaStyle.Full,
-      text: 'Full'
-    },
-    {
-      id: FuriganaStyle.Known,
-      text: 'Known'
-    }
-  ];
+  $: toggle = [
+    { id: false, text: $t$('settings.off') },
+    { id: true, text: $t$('settings.on') }
+  ] as ToggleOption<boolean>[];
 
-  const optionsForWritingMode: ToggleOption<WritingMode>[] = [
-    {
-      id: 'horizontal-tb',
-      text: 'Horizontal'
-    },
-    {
-      id: 'vertical-rl',
-      text: 'Vertical'
-    }
-  ];
+  $: optionsForFuriganaStyle = [
+    { id: FuriganaStyle.Hide, text: $t$('prefs.opt.hide') },
+    { id: FuriganaStyle.Partial, text: $t$('prefs.opt.partial') },
+    { id: FuriganaStyle.Toggle, text: $t$('prefs.opt.toggle') },
+    { id: FuriganaStyle.Full, text: $t$('prefs.opt.full') },
+    { id: FuriganaStyle.Known, text: $t$('prefs.opt.known') }
+  ] as ToggleOption<FuriganaStyle>[];
 
-  const optionsForVerticalTextOrientation: ToggleOption<VerticalTextOrientation>[] = [
-    {
-      id: 'mixed',
-      text: 'Mixed'
-    },
-    {
-      id: 'upright',
-      text: 'Upright'
-    }
-  ];
+  $: optionsForWritingMode = [
+    { id: 'horizontal-tb', text: $t$('prefs.opt.horizontal') },
+    { id: 'vertical-rl', text: $t$('prefs.opt.vertical') }
+  ] as ToggleOption<WritingMode>[];
 
-  const optionsForTextMarginMode: ToggleOption<TextMarginMode>[] = [
-    {
-      id: 'auto',
-      text: 'Auto'
-    },
-    {
-      id: 'manual',
-      text: 'Manual'
-    }
-  ];
+  $: optionsForVerticalTextOrientation = [
+    { id: 'mixed', text: $t$('prefs.opt.mixed') },
+    { id: 'upright', text: $t$('prefs.opt.upright') }
+  ] as ToggleOption<VerticalTextOrientation>[];
 
-  const optionsForViewMode: ToggleOption<ViewMode>[] = [
-    {
-      id: ViewMode.Continuous,
-      text: 'Continuous'
-    },
-    {
-      id: ViewMode.Paginated,
-      text: 'Paginated'
-    }
-  ];
+  $: optionsForTextMarginMode = [
+    { id: 'auto', text: $t$('prefs.opt.auto') },
+    { id: 'manual', text: $t$('prefs.opt.manual') }
+  ] as ToggleOption<TextMarginMode>[];
 
-  const optionsForBlurMode: ToggleOption<BlurMode>[] = [
-    {
-      id: BlurMode.ALL,
-      text: 'All'
-    },
-    {
-      id: BlurMode.AFTER_TOC,
-      text: 'After ToC'
-    }
-  ];
+  $: optionsForViewMode = [
+    { id: ViewMode.Continuous, text: $t$('prefs.opt.continuous') },
+    { id: ViewMode.Paginated, text: $t$('prefs.opt.paginated') }
+  ] as ToggleOption<ViewMode>[];
 
-  const optionsForImportHTMLFixes: ToggleOption<ImportHTMLFixMode>[] = [
-    {
-      id: ImportHTMLFixMode.OFF,
-      text: 'Off'
-    },
-    {
-      id: ImportHTMLFixMode.STANDARD,
-      text: 'Standard'
-    },
-    {
-      id: ImportHTMLFixMode.EXTENDED,
-      text: 'Extended'
-    }
-  ];
+  $: optionsForBlurMode = [
+    { id: BlurMode.ALL, text: $t$('prefs.opt.all') },
+    { id: BlurMode.AFTER_TOC, text: $t$('prefs.opt.afterToc') }
+  ] as ToggleOption<BlurMode>[];
 
-  const optionsForAutoReplicationType: ToggleOption<AutoReplicationType>[] = [
-    {
-      id: AutoReplicationType.Off,
-      text: 'Off'
-    },
-    {
-      id: AutoReplicationType.Up,
-      text: 'Up'
-    },
-    {
-      id: AutoReplicationType.Down,
-      text: 'Down'
-    },
-    {
-      id: AutoReplicationType.All,
-      text: 'All'
-    }
-  ];
+  $: optionsForImportHTMLFixes = [
+    { id: ImportHTMLFixMode.OFF, text: $t$('settings.off') },
+    { id: ImportHTMLFixMode.STANDARD, text: $t$('prefs.opt.standard') },
+    { id: ImportHTMLFixMode.EXTENDED, text: $t$('prefs.opt.extended') }
+  ] as ToggleOption<ImportHTMLFixMode>[];
 
-  const optionsForReplicationSaveBehavior: ToggleOption<ReplicationSaveBehavior>[] = [
-    {
-      id: ReplicationSaveBehavior.NewOnly,
-      text: 'New Only'
-    },
-    {
-      id: ReplicationSaveBehavior.Overwrite,
-      text: 'Overwrite'
-    }
-  ];
+  $: optionsForAutoReplicationType = [
+    { id: AutoReplicationType.Off, text: $t$('settings.off') },
+    { id: AutoReplicationType.Up, text: $t$('prefs.opt.up') },
+    { id: AutoReplicationType.Down, text: $t$('prefs.opt.down') },
+    { id: AutoReplicationType.All, text: $t$('prefs.opt.both') }
+  ] as ToggleOption<AutoReplicationType>[];
 
-  const optionsForTrackerAutoPause: ToggleOption<TrackerAutoPause>[] = [
-    {
-      id: TrackerAutoPause.OFF,
-      text: 'Off'
-    },
-    {
-      id: TrackerAutoPause.MODERATE,
-      text: 'Moderate'
-    },
-    {
-      id: TrackerAutoPause.STRICT,
-      text: 'Strict'
-    }
-  ];
+  $: optionsForReplicationSaveBehavior = [
+    { id: ReplicationSaveBehavior.NewOnly, text: $t$('prefs.opt.newOnly') },
+    { id: ReplicationSaveBehavior.Overwrite, text: $t$('prefs.opt.overwrite') }
+  ] as ToggleOption<ReplicationSaveBehavior>[];
 
-  const optionsForTrackerSkipThresholdAction: ToggleOption<TrackerSkipThresholdAction>[] = [
-    {
-      id: TrackerSkipThresholdAction.IGNORE,
-      text: 'Ignore'
-    },
-    {
-      id: TrackerSkipThresholdAction.PAUSE,
-      text: 'Pause Tracker'
-    }
-  ];
+  $: optionsForTrackerAutoPause = [
+    { id: TrackerAutoPause.OFF, text: $t$('settings.off') },
+    { id: TrackerAutoPause.MODERATE, text: $t$('prefs.opt.moderate') },
+    { id: TrackerAutoPause.STRICT, text: $t$('prefs.opt.strict') }
+  ] as ToggleOption<TrackerAutoPause>[];
 
-  const optionsForMergeMode: ToggleOption<MergeMode>[] = [
-    {
-      id: MergeMode.MERGE,
-      text: 'Merge'
-    },
-    {
-      id: MergeMode.REPLACE,
-      text: 'Replace'
-    }
-  ];
+  $: optionsForTrackerSkipThresholdAction = [
+    { id: TrackerSkipThresholdAction.IGNORE, text: $t$('prefs.opt.ignore') },
+    { id: TrackerSkipThresholdAction.PAUSE, text: $t$('prefs.opt.pauseTracker') }
+  ] as ToggleOption<TrackerSkipThresholdAction>[];
+
+  $: optionsForMergeMode = [
+    { id: MergeMode.MERGE, text: $t$('prefs.opt.merge') },
+    { id: MergeMode.REPLACE, text: $t$('prefs.opt.replace') }
+  ] as ToggleOption<MergeMode>[];
 
   const storageSources$ = database.storageSourcesChanged$.pipe(
     map((storageSources) => [
@@ -375,75 +285,72 @@
     $textMarginValue$ = 0;
   }
 
-  $: verticalTextOrientationTooltip =
+  $: verticalTextOrientationTooltip = $t$(
     verticalTextOrientation === 'mixed'
-      ? 'Rotates the characters of horizontal scripts 90° clockwise'
-      : 'Lays out the characters of horizontal scripts naturally (upright), as well as the glyphs for vertical scripts.';
-  $: autoBookmarkTooltip = `If enabled sets a bookmark after ${autoBookmarkTime} seconds without scrolling/page change. A bookmark that is still on screen is kept`;
+      ? 'prefs.orientationMixedHint'
+      : 'prefs.orientationUprightHint'
+  );
+  $: autoBookmarkTooltip = $t$('prefs.autoBookmarkHint', { seconds: autoBookmarkTime });
   $: wakeLockSupported = browser && 'wakeLock' in navigator;
   $: verticalMode = writingMode === 'vertical-rl';
   $: fontCacheSupported = browser && 'caches' in window;
   $: switch (furiganaStyle) {
     case FuriganaStyle.Hide:
-      furiganaStyleTooltip = 'Always hidden';
+      furiganaStyleTooltip = $t$('prefs.furiganaHideHint');
       break;
     case FuriganaStyle.Toggle:
-      furiganaStyleTooltip = 'Hidden by default, can be toggled on click';
+      furiganaStyleTooltip = $t$('prefs.furiganaToggleHint');
       break;
     case FuriganaStyle.Full:
-      furiganaStyleTooltip = 'Hidden by default, show on hover or click';
+      furiganaStyleTooltip = $t$('prefs.furiganaFullHint');
       break;
     case FuriganaStyle.Known:
-      furiganaStyleTooltip = `Hidden when every kanji was met ${knownKanjiMinCount}+ times in your reading and the furigana is their usual hiragana reading; click to toggle. Katakana, kanji and unusual readings (マジ over 本気, そら over 宇宙) always show, and so do special readings like きょう over 今日 or kanji outside 常用/人名用. Kanji met update when the book is reopened`;
+      furiganaStyleTooltip = $t$('prefs.furiganaKnownHint', { count: knownKanjiMinCount });
       break;
     default:
-      furiganaStyleTooltip = 'Display furigana as grayed out text';
+      furiganaStyleTooltip = $t$('prefs.furiganaPartialHint');
       break;
   }
-  $: avoidPageBreakTooltip = avoidPageBreak
-    ? 'Avoids breaking words/sentences into different pages'
-    : 'Allow words/sentences to break into different pages';
-  $: persistentStorageTooltip = persistentStorage
-    ? 'Reader uses higher storage limit for local data'
-    : 'Uses lower temporary storage for local data.\nMay require bookmark or notification permissions for enablement';
+  $: avoidPageBreakTooltip = $t$(
+    avoidPageBreak ? 'prefs.avoidBreakOnHint' : 'prefs.avoidBreakOffHint'
+  );
+  $: persistentStorageTooltip = $t$(
+    persistentStorage ? 'prefs.persistentOnHint' : 'prefs.persistentOffHint'
+  );
   $: switch (importHTMLFixMode) {
     case ImportHTMLFixMode.OFF:
-      importHTMLFixModeTooltip = 'Imports epub files as is';
+      importHTMLFixModeTooltip = $t$('prefs.importFixesOffHint');
       break;
     case ImportHTMLFixMode.EXTENDED:
-      importHTMLFixModeTooltip =
-        'Applies additional fixes for epub imports like removing control characters, replacing html entities etc.';
+      importHTMLFixModeTooltip = $t$('prefs.importFixesExtendedHint');
       break;
     default:
-      importHTMLFixModeTooltip =
-        'Applies fixes for epub imports like wrong self closing elements etc.';
+      importHTMLFixModeTooltip = $t$('prefs.importFixesStandardHint');
       break;
   }
-  $: cacheStorageDataTooltip = cacheStorageData
-    ? 'Storage data is cached. Saves network traffic/latency but requires to reload current/open a new tab to retrieve data changes'
-    : 'Storage data is refetched on every action. May consume more network traffic/latency but ensures current data';
-  $: replicationSaveBehaviorTooltip =
+  $: cacheStorageDataTooltip = $t$(cacheStorageData ? 'prefs.cacheOnHint' : 'prefs.cacheOffHint');
+  $: replicationSaveBehaviorTooltip = $t$(
     replicationSaveBehavior === ReplicationSaveBehavior.Overwrite
-      ? 'Data will always be overwritten'
-      : 'Data will only be written if none exist on target, no time data is present or if target data is older';
+      ? 'prefs.saveBehaviorOverwriteHint'
+      : 'prefs.saveBehaviorNewHint'
+  );
   $: switch (autoReplication) {
     case AutoReplicationType.Up:
-      autoReplicationTypeTooltip =
-        'Updated data will be exported to sync target when reading once per minute';
+      autoReplicationTypeTooltip = $t$('prefs.autoSyncUpHint');
       break;
     case AutoReplicationType.Down:
-      autoReplicationTypeTooltip = 'Data will be imported from sync target when opening a book';
+      autoReplicationTypeTooltip = $t$('prefs.autoSyncDownHint');
       break;
     case AutoReplicationType.All:
-      autoReplicationTypeTooltip = 'Data will be synced in both directions';
+      autoReplicationTypeTooltip = $t$('prefs.autoSyncAllHint');
       break;
     default:
-      autoReplicationTypeTooltip = 'No automatic import/export of data';
+      autoReplicationTypeTooltip = $t$('prefs.autoSyncOffHint');
       break;
   }
-  $: showExternalPlaceholderToolTip = showExternalPlaceholder
-    ? 'Placeholder data for external books is shown in the browser source manager'
-    : 'Placeholder data for external books is hidden';
+  $: showExternalPlaceholderToolTip = $t$(
+    showExternalPlaceholder ? 'prefs.placeholderOnHint' : 'prefs.placeholderOffHint'
+  );
 
   $: startOfDayHours = `${`${startDayHoursForTracker}`.padStart(2, '0')}:00`;
 
@@ -451,15 +358,13 @@
 
   $: switch (trackerAutoPause) {
     case TrackerAutoPause.OFF:
-      trackerAutoPauseTooltip = 'Tracker does not auto pause except for certain reader events';
+      trackerAutoPauseTooltip = $t$('prefs.autoPauseOffHint');
       break;
     case TrackerAutoPause.STRICT:
-      trackerAutoPauseTooltip =
-        'Tracker will auto pause on certain reader events and any kind of site focus loss (e. g. dictionary popup)';
+      trackerAutoPauseTooltip = $t$('prefs.autoPauseStrictHint');
       break;
     default:
-      trackerAutoPauseTooltip =
-        'Tracker will auto pause on certain reader events and when the reader tab loses focus';
+      trackerAutoPauseTooltip = $t$('prefs.autoPauseModerateHint');
       break;
   }
 
@@ -477,7 +382,7 @@
 </script>
 
 <SettingsSection id="reader-text">
-  <SettingsItemGroup title="Font family (Group 1)">
+  <SettingsItemGroup title={$t$('prefs.font1')}>
     <div slot="header" class="flex items-center">
       <SettingsFontSelector
         availableFonts={[
@@ -495,7 +400,7 @@
         <div
           tabindex="0"
           role="button"
-          title="Open Custom Font Dialog"
+          title={$t$('prefs.customFont')}
           on:click={() =>
             dialogManager.dialogs$.next([
               {
@@ -516,7 +421,7 @@
       bind:value={fontFamilyGroupOne}
     />
   </SettingsItemGroup>
-  <SettingsItemGroup title="Font family (Group 2)">
+  <SettingsItemGroup title={$t$('prefs.font2')}>
     <div slot="header" class="flex items-center">
       <SettingsFontSelector
         availableFonts={[LocalFont.NOTOSANSJP, LocalFont.KZUDGOTHIC, LocalFont.SANSSERIF]}
@@ -547,12 +452,12 @@
     />
   </SettingsItemGroup>
   <SettingsItemGroup
-    title="Font Weight"
-    tooltip={'Sets a font weight - leave empty to fallback to default'}
+    title={$t$('prefs.fontWeight')}
+    tooltip={$t$('prefs.fontWeightHint')}
   >
     <input
       type="number"
-      placeholder="default"
+      placeholder={$t$('prefs.default')}
       class={inputClasses}
       step="100"
       min="100"
@@ -571,10 +476,10 @@
       }}
     />
   </SettingsItemGroup>
-  <SettingsItemGroup title="Font size">
+  <SettingsItemGroup title={$t$('prefs.fontSize')}>
     <input type="number" class={inputClasses} step="1" min="1" bind:value={fontSize} />
   </SettingsItemGroup>
-  <SettingsItemGroup title="Line Height">
+  <SettingsItemGroup title={$t$('prefs.lineHeight')}>
     <input
       type="number"
       class={inputClasses}
@@ -589,8 +494,8 @@
     />
   </SettingsItemGroup>
   <SettingsItemGroup
-    title="Paragraph Indentation"
-    tooltip="# of rem added as text indentation of new paragraphs"
+    title={$t$('prefs.indent')}
+    tooltip={$t$('prefs.indentHint')}
   >
     <input
       type="number"
@@ -608,8 +513,8 @@
     />
   </SettingsItemGroup>
   <SettingsItemGroup
-    title="Paragraph Margin Mode"
-    tooltip={'When set to manual it allows to specify a margin value which should be applied to paragraphs'}
+    title={$t$('prefs.marginMode')}
+    tooltip={$t$('prefs.marginModeHint')}
   >
     <ButtonToggleGroup
       options={optionsForTextMarginMode}
@@ -617,7 +522,7 @@
     />
   </SettingsItemGroup>
   {#if textMarginMode === 'manual'}
-    <SettingsItemGroup title="Paragraph Margins" tooltip="# of rem added as margin to paragraphs">
+    <SettingsItemGroup title={$t$('prefs.margins')} tooltip={$t$('prefs.marginsHint')}>
       <input
         type="number"
         class={inputClasses}
@@ -635,59 +540,59 @@
     </SettingsItemGroup>
   {/if}
   <SettingsItemGroup
-    title="Enable Text Justification"
-    tooltip={'When enabled the reader adds styles to justify text content of paragraphs'}
+    title={$t$('prefs.justify')}
+    tooltip={$t$('prefs.justifyHint')}
   >
     <ButtonToggleGroup
-      options={optionsForToggle}
+      options={toggle}
       bind:selectedOptionId={enableTextJustification}
     />
   </SettingsItemGroup>
   <SettingsItemGroup
-    title="Enable Pretty Text Wrap"
-    tooltip={'When enabled the reader adds the pretty text wrap style to supported browsers'}
+    title={$t$('prefs.wrapPretty')}
+    tooltip={$t$('prefs.wrapPrettyHint')}
   >
-    <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableTextWrapPretty} />
+    <ButtonToggleGroup options={toggle} bind:selectedOptionId={enableTextWrapPretty} />
   </SettingsItemGroup>
   <SettingsItemGroup
-    title="Prioritize Reader Styles"
-    tooltip={'When enabled the "important" declaration is added to certain rules like margins or justification which makes it more likely to be applied in case of conflicting book styles'}
+    title={$t$('prefs.prioritize')}
+    tooltip={$t$('prefs.prioritizeHint')}
   >
     <ButtonToggleGroup
-      options={optionsForToggle}
+      options={toggle}
       bind:selectedOptionId={prioritizeReaderStyles}
     />
   </SettingsItemGroup>
 </SettingsSection>
 <SettingsSection id="reader-writing">
-  <SettingsItemGroup title="Writing mode">
+  <SettingsItemGroup title={$t$('prefs.writingMode')}>
     <ButtonToggleGroup options={optionsForWritingMode} bind:selectedOptionId={writingMode} />
   </SettingsItemGroup>
   {#if verticalMode}
     <SettingsItemGroup
-      title="Enable Font Kerning"
-      tooltip={'Can lead to better visual balance for vertical spacing of text if font and browser supports it'}
+      title={$t$('prefs.kerning')}
+      tooltip={$t$('prefs.kerningHint')}
     >
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableFontKerning} />
+      <ButtonToggleGroup options={toggle} bind:selectedOptionId={enableFontKerning} />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="Enable VPAL"
-      tooltip={'Can lead to more natural spacing for vertically laid-out text if font and browser supports it'}
+      title={$t$('prefs.vpal')}
+      tooltip={$t$('prefs.vpalHint')}
     >
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableFontVPAL} />
+      <ButtonToggleGroup options={toggle} bind:selectedOptionId={enableFontVPAL} />
     </SettingsItemGroup>
-    <SettingsItemGroup title="Text Orientation" tooltip={verticalTextOrientationTooltip}>
+    <SettingsItemGroup title={$t$('prefs.orientation')} tooltip={verticalTextOrientationTooltip}>
       <ButtonToggleGroup
         options={optionsForVerticalTextOrientation}
         bind:selectedOptionId={verticalTextOrientation}
       />
     </SettingsItemGroup>
   {/if}
-  <SettingsItemGroup title="Hide furigana">
-    <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={hideFurigana} />
+  <SettingsItemGroup title={$t$('prefs.hideFurigana')}>
+    <ButtonToggleGroup options={toggle} bind:selectedOptionId={hideFurigana} />
   </SettingsItemGroup>
   {#if hideFurigana}
-    <SettingsItemGroup title="Hide furigana style" tooltip={furiganaStyleTooltip}>
+    <SettingsItemGroup title={$t$('prefs.furiganaStyle')} tooltip={furiganaStyleTooltip}>
       <ButtonToggleGroup
         options={optionsForFuriganaStyle}
         bind:selectedOptionId={furiganaStyle}
@@ -696,11 +601,11 @@
   {/if}
 </SettingsSection>
 <SettingsSection id="reader-layout">
-  <SettingsItemGroup title="View mode">
+  <SettingsItemGroup title={$t$('prefs.viewMode')}>
     <ButtonToggleGroup options={optionsForViewMode} bind:selectedOptionId={viewMode} />
   </SettingsItemGroup>
   <SettingsItemGroup
-    title={verticalMode ? 'Reader Left/right margin' : 'Reader Top/bottom margin'}
+    title={$t$(verticalMode ? 'prefs.marginLeftRight' : 'prefs.marginTopBottom')}
   >
     <SettingsDimensionPopover
       slot="header"
@@ -716,7 +621,7 @@
       bind:value={firstDimensionMargin}
     />
   </SettingsItemGroup>
-  <SettingsItemGroup title={verticalMode ? 'Reader Max height' : 'Reader Max width'}>
+  <SettingsItemGroup title={$t$(verticalMode ? 'prefs.maxHeight' : 'prefs.maxWidth')}>
     <SettingsDimensionPopover
       slot="header"
       isVertical={verticalMode}
@@ -731,57 +636,57 @@
     />
   </SettingsItemGroup>
   {#if viewMode !== ViewMode.Continuous}
-    <SettingsItemGroup title="Avoid Page Break" tooltip={avoidPageBreakTooltip}>
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={avoidPageBreak} />
+    <SettingsItemGroup title={$t$('prefs.avoidBreak')} tooltip={avoidPageBreakTooltip}>
+      <ButtonToggleGroup options={toggle} bind:selectedOptionId={avoidPageBreak} />
     </SettingsItemGroup>
     {#if !verticalMode}
-      <SettingsItemGroup title="Page Columns" tooltip="# of text columns rendered">
+      <SettingsItemGroup title={$t$('prefs.columns')} tooltip={$t$('prefs.columnsHint')}>
         <input type="number" class={inputClasses} step="1" min="0" bind:value={pageColumns} />
       </SettingsItemGroup>
     {/if}
   {/if}
-  <SettingsItemGroup title="Blur image">
-    <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={blurImage} />
+  <SettingsItemGroup title={$t$('prefs.blur')}>
+    <ButtonToggleGroup options={toggle} bind:selectedOptionId={blurImage} />
   </SettingsItemGroup>
   {#if blurImage}
     <SettingsItemGroup
-      title="Blur Mode"
-      tooltip="Determines if all or only images after the table of contents will be blurred"
+      title={$t$('prefs.blurMode')}
+      tooltip={$t$('prefs.blurModeHint')}
     >
       <ButtonToggleGroup options={optionsForBlurMode} bind:selectedOptionId={blurImageMode} />
     </SettingsItemGroup>
   {/if}
 </SettingsSection>
 <SettingsSection id="reader-progress">
-  <SettingsItemGroup title="Show Character Counter">
-    <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={showCharacterCounter} />
+  <SettingsItemGroup title={$t$('prefs.charCounter')}>
+    <ButtonToggleGroup options={toggle} bind:selectedOptionId={showCharacterCounter} />
   </SettingsItemGroup>
-  <SettingsItemGroup title="Show Percentage">
-    <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={showPercentage} />
+  <SettingsItemGroup title={$t$('prefs.percentage')}>
+    <ButtonToggleGroup options={toggle} bind:selectedOptionId={showPercentage} />
   </SettingsItemGroup>
-  <SettingsItemGroup title="Show Footer Chapter Characters">
+  <SettingsItemGroup title={$t$('prefs.chapterChars')}>
     <ButtonToggleGroup
-      options={optionsForToggle}
+      options={toggle}
       bind:selectedOptionId={showFooterChapterCharacterCounter}
     />
   </SettingsItemGroup>
-  <SettingsItemGroup title="Show Footer Chapter Percentage">
+  <SettingsItemGroup title={$t$('prefs.chapterPercentage')}>
     <ButtonToggleGroup
-      options={optionsForToggle}
+      options={toggle}
       bind:selectedOptionId={showFooterChapterPercentage}
     />
   </SettingsItemGroup>
   <SettingsItemGroup
-    title="Manual Bookmark"
-    tooltip={'If enabled current position will not be bookmarked when leaving the reader via menu elements'}
+    title={$t$('prefs.manualBookmark')}
+    tooltip={$t$('prefs.manualBookmarkHint')}
   >
-    <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={manualBookmark} />
+    <ButtonToggleGroup options={toggle} bind:selectedOptionId={manualBookmark} />
   </SettingsItemGroup>
-  <SettingsItemGroup title="Auto Bookmark" tooltip={autoBookmarkTooltip}>
-    <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={autoBookmark} />
+  <SettingsItemGroup title={$t$('prefs.autoBookmark')} tooltip={autoBookmarkTooltip}>
+    <ButtonToggleGroup options={toggle} bind:selectedOptionId={autoBookmark} />
   </SettingsItemGroup>
   {#if autoBookmark}
-    <SettingsItemGroup title="Auto Bookmark Time" tooltip={'Time in s for Auto Bookmark'}>
+    <SettingsItemGroup title={$t$('prefs.autoBookmarkTime')} tooltip={$t$('prefs.autoBookmarkTimeHint')}>
       <input
         type="number"
         step="1"
@@ -798,12 +703,12 @@
   {/if}
   {#if viewMode === ViewMode.Continuous}
     <SettingsItemGroup
-      title="Custom Reading Point"
-      tooltip={'Allows to set a persistent custom point in the reader from which the current progress and bookmark is calculated when enabled'}
+      title={$t$('prefs.readingPoint')}
+      tooltip={$t$('prefs.readingPointHint')}
     >
       <div class="flex items-center">
         <ButtonToggleGroup
-          options={optionsForToggle}
+          options={toggle}
           bind:selectedOptionId={customReadingPointEnabled}
         />
         {#if customReadingPointEnabled}
@@ -815,24 +720,24 @@
               horizontalCustomReadingPosition$.next(0);
             }}
           >
-            Reset Points
+            {$t$('prefs.resetPoints')}
           </button>
         {/if}
       </div>
     </SettingsItemGroup>
-    <SettingsItemGroup title="Auto position on resize">
+    <SettingsItemGroup title={$t$('prefs.autoPosition')}>
       <ButtonToggleGroup
-        options={optionsForToggle}
+        options={toggle}
         bind:selectedOptionId={autoPositionOnResize}
       />
     </SettingsItemGroup>
   {:else}
     <SettingsItemGroup
-      title="Selection to Bookmark"
-      tooltip={'When enabled bookmarks will be placed to a near paragraph of current/previous selected text instead of page start'}
+      title={$t$('prefs.selectionBookmark')}
+      tooltip={$t$('prefs.selectionBookmarkHint')}
     >
       <ButtonToggleGroup
-        options={optionsForToggle}
+        options={toggle}
         bind:selectedOptionId={selectionToBookmarkEnabled}
       />
     </SettingsItemGroup>
@@ -840,8 +745,8 @@
 </SettingsSection>
 <SettingsSection id="reader-navigation">
   <SettingsItemGroup
-    title="Swipe Threshold"
-    tooltip={'Distance which you need to swipe in order trigger a navigation'}
+    title={$t$('prefs.swipe')}
+    tooltip={$t$('prefs.swipeHint')}
   >
     <input
       type="number"
@@ -856,87 +761,87 @@
       }}
     />
   </SettingsItemGroup>
-  <SettingsItemGroup title="Disable Wheel Navigation">
+  <SettingsItemGroup title={$t$('prefs.noWheel')}>
     <ButtonToggleGroup
-      options={optionsForToggle}
+      options={toggle}
       bind:selectedOptionId={disableWheelNavigation}
     />
   </SettingsItemGroup>
   {#if viewMode !== ViewMode.Continuous}
     <SettingsItemGroup
-      title="Tap to Flip"
-      tooltip="Reserves small margins on the left and right on which you can tap to turn pages"
+      title={$t$('prefs.tapFlip')}
+      tooltip={$t$('prefs.tapFlipHint')}
     >
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={enableTapEdgeToFlip} />
+      <ButtonToggleGroup options={toggle} bind:selectedOptionId={enableTapEdgeToFlip} />
     </SettingsItemGroup>
   {/if}
 </SettingsSection>
 <SettingsSection id="reader-session">
   {#if wakeLockSupported}
     <SettingsItemGroup
-      title="Enable Screen Lock"
-      tooltip={'When enabled the reader site attempts to request a WakeLock that prevents device screens from dimming or locking'}
+      title={$t$('prefs.wakeLock')}
+      tooltip={$t$('prefs.wakeLockHint')}
     >
       <ButtonToggleGroup
-        options={optionsForToggle}
+        options={toggle}
         bind:selectedOptionId={enableReaderWakeLock}
       />
     </SettingsItemGroup>
   {/if}
   <SettingsItemGroup
-    title="Close Confirmation"
-    tooltip={`When enabled asks for confirmation on closing/reloading a reader tab and unsaved changes were detected`}
+    title={$t$('prefs.confirmClose')}
+    tooltip={$t$('prefs.confirmCloseHint')}
   >
-    <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={confirmClose} />
+    <ButtonToggleGroup options={toggle} bind:selectedOptionId={confirmClose} />
   </SettingsItemGroup>
 </SettingsSection>
 <SettingsSection id="tracking-statistics">
   <SettingsItemGroup
-    title="Enable Statistics"
-    tooltip="Enables the tracker icon in the bottom left corner of the reader which you need to use to start tracking your reading session"
+    title={$t$('prefs.statistics')}
+    tooltip={$t$('prefs.statisticsHint')}
   >
-    <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={statisticsEnabled} />
+    <ButtonToggleGroup options={toggle} bind:selectedOptionId={statisticsEnabled} />
   </SettingsItemGroup>
   {#if statisticsEnabled}
     <SettingsItemGroup
-      title="Custom Point pauses Tracker"
-      tooltip={'When enabled the tracker will auto pause and unpause while setting a custom reading point'}
+      title={$t$('prefs.pointPauses')}
+      tooltip={$t$('prefs.pointPausesHint')}
     >
       <ButtonToggleGroup
-        options={optionsForToggle}
+        options={toggle}
         bind:selectedOptionId={pauseTrackerOnCustomPointChange}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title="Tracker Auto Pause" tooltip={trackerAutoPauseTooltip}>
+    <SettingsItemGroup title={$t$('prefs.autoPause')} tooltip={trackerAutoPauseTooltip}>
       <ButtonToggleGroup
         options={optionsForTrackerAutoPause}
         bind:selectedOptionId={trackerAutoPause}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title="Open Tracker on Completion">
+    <SettingsItemGroup title={$t$('prefs.openOnCompletion')}>
       <ButtonToggleGroup
-        options={optionsForToggle}
+        options={toggle}
         bind:selectedOptionId={openTrackerOnCompletion}
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="Update on Completion"
-      tooltip={`Determines if the missing amount of characters between the current position and the book total will be added to the statistics or not`}
+      title={$t$('prefs.updateOnCompletion')}
+      tooltip={$t$('prefs.updateOnCompletionHint')}
     >
       <ButtonToggleGroup
-        options={optionsForToggle}
+        options={toggle}
         bind:selectedOptionId={addCharactersOnCompletion}
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="Start tracker when a book opens"
-      tooltip="Starts the tracker once the book has loaded and settled on your position, so it runs without pressing play."
+      title={$t$('prefs.startOnOpen')}
+      tooltip={$t$('prefs.startOnOpenHint')}
     >
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={$trackerStartOnOpen$} />
+      <ButtonToggleGroup options={toggle} bind:selectedOptionId={$trackerStartOnOpen$} />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="Autostart tracker (sec)"
-      tooltip={'Time in seconds without a change to the character count after which the tracker will initially auto start (0 = disabled, higher value recommended to avoid racing conditions)'}
+      title={$t$('prefs.autostart')}
+      tooltip={$t$('prefs.autostartHint')}
     >
       <input
         type="number"
@@ -954,8 +859,8 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="Idle Time (min)"
-      tooltip={'Time in minutes after which the tracker will auto pause without page interaction (0 = disabled, max 12h)'}
+      title={$t$('prefs.idle')}
+      tooltip={$t$('prefs.idleHint')}
     >
       <input
         type="number"
@@ -975,8 +880,8 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="Forward Skip Threshold"
-      tooltip={'Amount of positive characters passed between a tick after which a threshold action is triggered (0 = disabled)'}
+      title={$t$('prefs.forwardSkip')}
+      tooltip={$t$('prefs.forwardSkipHint')}
     >
       <input
         type="number"
@@ -994,8 +899,8 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup
-      title="Backward Skip Threshold"
-      tooltip={'Amount of negative characters passed between a tick after which a threshold action is triggered (0 = disabled)'}
+      title={$t$('prefs.backwardSkip')}
+      tooltip={$t$('prefs.backwardSkipHint')}
     >
       <input
         type="number"
@@ -1015,8 +920,8 @@
     </SettingsItemGroup>
     {#if trackerForwardSkipThreshold || trackerBackwardSkipThreshold}
       <SettingsItemGroup
-        title="Threshold Action"
-        tooltip={`Determines what action will be executed in case a skip threshold was triggered`}
+        title={$t$('prefs.thresholdAction')}
+        tooltip={$t$('prefs.thresholdActionHint')}
       >
         <ButtonToggleGroup
           options={optionsForTrackerSkipThresholdAction}
@@ -1026,22 +931,22 @@
     {/if}
     {#if trackerAutoPause !== TrackerAutoPause.OFF}
       <SettingsItemGroup
-        title="Dictionary Detection"
-        tooltip={`If enabled auto pause is skipped if open yomitan/jpdb-browser-reader was detected - yomitan requires disabled 'Secure Container' settings`}
+        title={$t$('prefs.dictionary')}
+        tooltip={$t$('prefs.dictionaryHint')}
       >
         <ButtonToggleGroup
-          options={optionsForToggle}
+          options={toggle}
           bind:selectedOptionId={trackerPopupDetection}
         />
       </SettingsItemGroup>
     {/if}
     {#if trackerIdleTime > 0}
       <SettingsItemGroup
-        title="Rollback Statistics on Idle"
-        tooltip={`If enabled attempts to rollback statistics by subtracting the idled time value back from the session`}
+        title={$t$('prefs.rollback')}
+        tooltip={$t$('prefs.rollbackHint')}
       >
         <ButtonToggleGroup
-          options={optionsForToggle}
+          options={toggle}
           bind:selectedOptionId={adjustStatisticsAfterIdleTime}
         />
       </SettingsItemGroup>
@@ -1050,8 +955,8 @@
 </SettingsSection>
 <SettingsSection id="tracking-day">
   <SettingsItemGroup
-    title={`Start Day Hours: ${startOfDayHours}`}
-    tooltip={'Determines at which time a new day starts.\nData before this point will be counted towards the previous day'}
+    title={$t$('prefs.dayStart', { time: startOfDayHours })}
+    tooltip={$t$('prefs.dayStartHint')}
   >
     <input
       type="range"
@@ -1063,34 +968,34 @@
     />
   </SettingsItemGroup>
   <SettingsItemGroup
-    title="Overwrite Book Completion"
-    tooltip={`Determines if only the first Book Completion will be tracked or if it always updates to the latest one`}
+    title={$t$('prefs.overwriteCompletion')}
+    tooltip={$t$('prefs.overwriteCompletionHint')}
   >
     <ButtonToggleGroup
-      options={optionsForToggle}
+      options={toggle}
       bind:selectedOptionId={overwriteBookCompletion}
     />
   </SettingsItemGroup>
   <SettingsItemGroup
-    title="Keep Local Data on Deletion"
-    tooltip={'Determines if local statistics will be deleted or not when removing a local book copy'}
+    title={$t$('prefs.keepLocal')}
+    tooltip={$t$('prefs.keepLocalHint')}
   >
     <ButtonToggleGroup
-      options={optionsForToggle}
+      options={toggle}
       bind:selectedOptionId={keepLocalStatisticsOnDeletion}
     />
   </SettingsItemGroup>
-  <div class="settings-danger-zone" role="group" aria-label="Danger zone">
-    <p class="settings-danger-zone-label">Danger zone</p>
+  <div class="settings-danger-zone" role="group" aria-label={$t$('prefs.dangerZone')}>
+    <p class="settings-danger-zone-label">{$t$('prefs.dangerZone')}</p>
     <SettingsItemGroup
-      title="Clear zombie statistics"
-      tooltip="Deletes the statistics of books that are no longer in this browser. This can't be undone."
+      title={$t$('prefs.zombie')}
+      tooltip={$t$('prefs.zombieHint')}
     >
       <button
         type="button"
         class="app-button app-button-danger"
         on:click={() => {
-          if (!window.confirm('Delete the statistics of books that are no longer in this browser?')) {
+          if (!window.confirm($t$('prefs.zombieConfirm'))) {
             return;
           }
 
@@ -1102,8 +1007,8 @@
                 {
                   component: MessageDialog,
                   props: {
-                    title: 'Error',
-                    message: `Error clearing Zombie Statistics: ${message}`
+                    title: $t$('prefs.error'),
+                    message: $t$('prefs.zombieError', { message })
                   }
                 }
               ])
@@ -1111,15 +1016,15 @@
             .finally(() => (showSpinner = false));
         }}
       >
-        Clear
+        {$t$('prefs.clear')}
       </button>
     </SettingsItemGroup>
   </div>
 </SettingsSection>
 <SettingsSection id="tracking-merge">
   <SettingsItemGroup
-    title="Statistics Merge"
-    tooltip={`Determines if statistics will be merged entry by entry or replaced completely on a sync`}
+    title={$t$('prefs.statisticsMerge')}
+    tooltip={$t$('prefs.statisticsMergeHint')}
   >
     <ButtonToggleGroup
       options={optionsForMergeMode}
@@ -1127,8 +1032,8 @@
     />
   </SettingsItemGroup>
   <SettingsItemGroup
-    title="Reading Goals Merge"
-    tooltip={`Determines if reading goals will be merged entry by entry or replaced completely on a sync`}
+    title={$t$('prefs.goalsMerge')}
+    tooltip={$t$('prefs.goalsMergeHint')}
   >
     <ButtonToggleGroup
       options={optionsForMergeMode}
@@ -1138,33 +1043,33 @@
 </SettingsSection>
 <SettingsSection id="tracking-goals" wide>
   {#if statisticsEnabled}
-    <div class="settings-panel" data-settings-item data-settings-search="Reading goals daily weekly monthly target">
+    <div class="settings-panel" data-settings-item data-settings-search={$t$('prefs.goalsSearch')}>
       <SettingsReadingGoals
         storageSources={$storageSources$}
         on:spinner={({ detail }) => (showSpinner = detail)}
       />
     </div>
   {:else}
-    <SettingsItemGroup title="Reading goals" wide>
-      Turn on statistics (Tracking → Statistics) to set reading goals.
+    <SettingsItemGroup title={$t$('prefs.goals')} wide>
+      {$t$('prefs.goalsOff')}
     </SettingsItemGroup>
   {/if}
 </SettingsSection>
 <SettingsSection id="data-storage">
-  <SettingsItemGroup title="Persistent storage" tooltip={persistentStorageTooltip}>
+  <SettingsItemGroup title={$t$('prefs.persistent')} tooltip={persistentStorageTooltip}>
     <div class="flex items-center">
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={persistentStorage} />
+      <ButtonToggleGroup options={toggle} bind:selectedOptionId={persistentStorage} />
       {#if storageQuota}
         <span class="ml-4 text-sm text-[color:var(--app-muted-fg)]">{storageQuota}</span>
       {/if}
     </div>
   </SettingsItemGroup>
-  <SettingsItemGroup title="Cache Data" tooltip={cacheStorageDataTooltip}>
-    <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={cacheStorageData} />
+  <SettingsItemGroup title={$t$('prefs.cache')} tooltip={cacheStorageDataTooltip}>
+    <ButtonToggleGroup options={toggle} bind:selectedOptionId={cacheStorageData} />
   </SettingsItemGroup>
 </SettingsSection>
 <SettingsSection id="data-import">
-  <SettingsItemGroup title="Epub Import Fixes" tooltip={importHTMLFixModeTooltip}>
+  <SettingsItemGroup title={$t$('prefs.importFixes')} tooltip={importHTMLFixModeTooltip}>
     <ButtonToggleGroup
       options={optionsForImportHTMLFixes}
       bind:selectedOptionId={importHTMLFixMode}
@@ -1172,44 +1077,44 @@
   </SettingsItemGroup>
   {#if importHTMLFixMode !== ImportHTMLFixMode.OFF}
     <SettingsItemGroup
-      title="Restrict to Links"
-      tooltip="Restricts epub fixes for self closing tags to links only"
+      title={$t$('prefs.restrictLinks')}
+      tooltip={$t$('prefs.restrictLinksHint')}
     >
       <ButtonToggleGroup
-        options={optionsForToggle}
+        options={toggle}
         bind:selectedOptionId={restrictImportFixToAnchor}
       />
     </SettingsItemGroup>
   {/if}
 </SettingsSection>
 <SettingsSection id="data-sync">
-  <SettingsItemGroup title="Auto Import/Export" tooltip={autoReplicationTypeTooltip}>
+  <SettingsItemGroup title={$t$('prefs.autoSync')} tooltip={autoReplicationTypeTooltip}>
     <ButtonToggleGroup
       options={optionsForAutoReplicationType}
       bind:selectedOptionId={autoReplication}
     />
   </SettingsItemGroup>
-  <SettingsItemGroup title="Import/Export Behavior" tooltip={replicationSaveBehaviorTooltip}>
+  <SettingsItemGroup title={$t$('prefs.saveBehavior')} tooltip={replicationSaveBehaviorTooltip}>
     <ButtonToggleGroup
       options={optionsForReplicationSaveBehavior}
       bind:selectedOptionId={replicationSaveBehavior}
     />
   </SettingsItemGroup>
-  <SettingsItemGroup title="Show Placeholder" tooltip={showExternalPlaceholderToolTip}>
+  <SettingsItemGroup title={$t$('prefs.placeholder')} tooltip={showExternalPlaceholderToolTip}>
     <ButtonToggleGroup
-      options={optionsForToggle}
+      options={toggle}
       bind:selectedOptionId={showExternalPlaceholder}
     />
   </SettingsItemGroup>
   <SettingsItemGroup
-    title="Hide Source Hint"
-    tooltip="Hides the user warning when opening a book from an external storage source"
+    title={$t$('prefs.hideSourceHint')}
+    tooltip={$t$('prefs.hideSourceHintHint')}
   >
-    <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={hideExternalReadHint} />
+    <ButtonToggleGroup options={toggle} bind:selectedOptionId={hideExternalReadHint} />
   </SettingsItemGroup>
 </SettingsSection>
 <SettingsSection id="data-sources" wide>
-  <div class="settings-panel" data-settings-item data-settings-search="Storage sources Calibre browser Google Drive OneDrive folder">
+  <div class="settings-panel" data-settings-item data-settings-search={$t$('prefs.sourcesSearch')}>
     <SettingsStorageSourceList storageSources={$storageSources$} />
   </div>
 </SettingsSection>

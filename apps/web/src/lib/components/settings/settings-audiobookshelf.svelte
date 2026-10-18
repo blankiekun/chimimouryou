@@ -3,6 +3,7 @@
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
   import { buttonClasses, inputClasses } from '$lib/css-classes';
   import { absLogin, audiobookshelfToken$ } from '$lib/data/audiobookshelf';
+  import { t$ } from '$lib/i18n';
 
   let username = '';
   let password = '';
@@ -25,21 +26,23 @@
 
 <SettingsSection id="audiobookshelf-connect" keywords="abs audiobook server token api key">
   {#if $audiobookshelfToken$}
-    <SettingsItemGroup
-      title="Connected"
-      tooltip="Listen → Audiobookshelf streams the book's audiobook."
-    >
+    <SettingsItemGroup title={$t$('prefs.abs.connected')} tooltip={$t$('prefs.abs.connectedHint')}>
       <button class={buttonClasses} on:click={() => audiobookshelfToken$.next('')}>
-        Disconnect
+        {$t$('prefs.abs.disconnect')}
       </button>
     </SettingsItemGroup>
   {:else}
-    <SettingsItemGroup title="Username">
-      <input aria-label="Username" class={inputClasses} autocomplete="off" bind:value={username} />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="Password" tooltip="Used once to get a token; not stored.">
+    <SettingsItemGroup title={$t$('prefs.username')}>
       <input
-        aria-label="Password"
+        aria-label={$t$('prefs.username')}
+        class={inputClasses}
+        autocomplete="off"
+        bind:value={username}
+      />
+    </SettingsItemGroup>
+    <SettingsItemGroup title={$t$('prefs.password')} tooltip={$t$('prefs.abs.passwordHint')}>
+      <input
+        aria-label={$t$('prefs.password')}
         type="password"
         class={inputClasses}
         autocomplete="off"
@@ -48,12 +51,12 @@
     </SettingsItemGroup>
     <SettingsItemGroup title="">
       <button class={buttonClasses} disabled={busy || !username || !password} on:click={signIn}>
-        Sign in
+        {$t$('nav.signIn')}
       </button>
     </SettingsItemGroup>
-    <SettingsItemGroup title="Or an API key" tooltip="Audiobookshelf → Settings → API Keys.">
+    <SettingsItemGroup title={$t$('prefs.abs.apiKey')} tooltip={$t$('prefs.abs.apiKeyHint')}>
       <input
-        aria-label="API key"
+        aria-label={$t$('prefs.abs.apiKeyLabel')}
         type="password"
         class={inputClasses}
         autocomplete="off"

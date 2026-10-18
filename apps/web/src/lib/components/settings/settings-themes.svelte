@@ -37,6 +37,7 @@
   import { downloadBlob } from '$lib/functions/file-dom/download-blob';
   import { inputFile } from '$lib/functions/file-dom/input-file';
   import { onDestroy } from 'svelte';
+  import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
   let editing: ThemeDefinition | undefined;
@@ -52,8 +53,8 @@
     resolved: resolveTheme(definition.id, $customAppThemes$)
   }));
   $: baseOptions = [
-    { id: 'light', name: 'Light base' },
-    { id: 'dark', name: 'Dark base' },
+    { id: 'light', name: $t$('prefs.themes.lightBase') },
+    { id: 'dark', name: $t$('prefs.themes.darkBase') },
     ...themes
       .filter(({ definition }) => definition.id !== editing?.id)
       .map(({ resolved }) => ({ id: resolved.id, name: resolved.name }))
@@ -153,11 +154,11 @@
       selectTheme(id);
     }
     editing = undefined;
-    flash(`Saved "${name}"`);
+    flash($t$('prefs.themes.saved', { name }));
   }
 
   function remove(definition: ThemeDefinition) {
-    if (!window.confirm(`Delete the theme "${definition.name}"?`)) {
+    if (!window.confirm($t$('prefs.themes.deleteConfirm', { name: definition.name }))) {
       return;
     }
 
@@ -189,7 +190,7 @@
 
   async function copy(definition: ThemeDefinition) {
     await navigator.clipboard.writeText(exportableTheme(definition));
-    flash('Copied theme JSON');
+    flash($t$('prefs.themes.copied'));
   }
 
   function importTheme(json: string) {
@@ -202,9 +203,9 @@
       importError = '';
       importText = '';
       showImport = false;
-      flash(`Imported "${parsed.name}"`);
+      flash($t$('prefs.themes.imported', { name: parsed.name }));
     } catch (e: any) {
-      importError = e instanceof SyntaxError ? `Not valid JSON: ${e.message}` : e.message;
+      importError = e instanceof SyntaxError ? $t$('prefs.themes.invalidJson', { message: e.message }) : e.message;
     }
   }
 
@@ -221,10 +222,10 @@
   {#if !editing}
     <div class="flex flex-wrap items-center gap-2">
       <button type="button" class="theme-action" on:click={() => startNew()}>
-        <Fa icon={faPlus} /> New theme
+        <Fa icon={faPlus} /> {$t$('prefs.themes.new')}
       </button>
       <button type="button" class="theme-action" on:click={() => (showImport = !showImport)}>
-        <Fa icon={faFileImport} /> Import
+        <Fa icon={faFileImport} /> {$t$('prefs.themes.import')}
       </button>
       <span class="text-sm font-semibold text-[color:var(--app-muted-fg)]">{message}</span>
       <a
@@ -232,16 +233,16 @@
         href="/themes.md"
         rel="external"
         target="_blank"
-        title="Explains every theme setting and the JSON format"
+        title={$t$('prefs.themes.guideTitle')}
       >
-        Theme guide (themes.md)
+        {$t$('prefs.themes.guide')}
       </a>
     </div>
 
     {#if showImport}
-      <SettingsItemGroup title="Import a theme" wide>
+      <SettingsItemGroup title={$t$('prefs.themes.importTitle')} wide>
         <p class="mb-2 text-sm text-[color:var(--app-muted-fg)]">
-          Paste theme JSON or choose a .json file.
+          {$t$('prefs.themes.importHint')}
         </p>
         <textarea
           class="theme-code w-full"
@@ -260,11 +261,11 @@
             disabled={!importText.trim()}
             on:click={() => importTheme(importText)}
           >
-            Import JSON
+            {$t$('prefs.themes.importJson')}
           </button>
           <label class="theme-action cursor-pointer">
             <input type="file" accept="application/json,.json" hidden use:inputFile={importFiles} />
-            Choose file
+            {$t$('prefs.themes.chooseFile')}
           </label>
         </div>
       </SettingsItemGroup>
@@ -279,7 +280,7 @@
             type="button"
             class="theme-preview"
             style:background={colors.background}
-            title="Use {resolved.name}"
+            title={$t$('prefs.themes.use', { name: resolved.name })}
             on:click={() => selectTheme(definition.id)}
           >
             <span class="theme-preview-header" style:background={colors.headerBackground}>
@@ -311,21 +312,21 @@
               {resolved.name}
             </span>
             {#if custom}
-              <button class="theme-icon" title="Edit" on:click={() => startEdit(definition)}>
+              <button class="theme-icon" title={$t$('prefs.edit')} on:click={() => startEdit(definition)}>
                 <Fa icon={faPen} />
               </button>
             {/if}
-            <button class="theme-icon" title="Duplicate and edit" on:click={() => startNew(resolved)}>
+            <button class="theme-icon" title={$t$('prefs.themes.duplicate')} on:click={() => startNew(resolved)}>
               <Fa icon={faPlus} />
             </button>
-            <button class="theme-icon" title="Copy JSON" on:click={() => copy(definition)}>
+            <button class="theme-icon" title={$t$('prefs.themes.copyJson')} on:click={() => copy(definition)}>
               <Fa icon={faCopy} />
             </button>
-            <button class="theme-icon" title="Download JSON" on:click={() => download(definition)}>
+            <button class="theme-icon" title={$t$('prefs.themes.downloadJson')} on:click={() => download(definition)}>
               <Fa icon={faDownload} />
             </button>
             {#if custom}
-              <button class="theme-icon" title="Delete" on:click={() => remove(definition)}>
+              <button class="theme-icon" title={$t$('prefs.delete')} on:click={() => remove(definition)}>
                 <Fa icon={faTrash} />
               </button>
             {/if}
@@ -336,21 +337,21 @@
   {:else if parent}
     <div class="theme-editor-bar app-surface-card">
       <span class="text-sm font-semibold text-[color:var(--app-muted-fg)]">
-        Editing - changes show live across the app
+        {$t$('prefs.themes.editing')}
       </span>
       <span class="flex-1" />
       <button type="button" class="theme-action" on:click={() => copy(editing ?? { id: '', name: '' })}>
         <Fa icon={faCopy} /> JSON
       </button>
       <button type="button" class="theme-action" on:click={() => (editing = undefined)}>
-        Cancel
+        {$t$('prefs.cancel')}
       </button>
       <button type="button" class="theme-action theme-action-primary" on:click={save}>
-        <Fa icon={faCheck} /> Save
+        <Fa icon={faCheck} /> {$t$('prefs.save')}
       </button>
     </div>
 
-    <div class="theme-live-preview" aria-label="Preview">
+    <div class="theme-live-preview" aria-label={$t$('prefs.themes.preview')}>
       <div class="theme-live-card">
         <span class="theme-live-cover" />
         <span class="theme-live-title" lang="ja">吾輩は猫である</span>
@@ -361,24 +362,24 @@
       <div class="theme-live-settings">
         <div class="theme-live-row">
           <span>
-            <span class="block text-sm font-semibold">A settings row</span>
-            <span class="block text-xs text-[color:var(--app-muted-fg)]">Muted description</span>
+            <span class="block text-sm font-semibold">{$t$('prefs.themes.previewRow')}</span>
+            <span class="block text-xs text-[color:var(--app-muted-fg)]">{$t$('prefs.themes.previewDescription')}</span>
           </span>
           <button
             type="button"
             role="switch"
             class="app-switch"
             aria-checked={previewOn}
-            aria-label="Preview switch"
+            aria-label={$t$('prefs.themes.previewSwitch')}
             on:click={() => (previewOn = !previewOn)}
           >
             <span class="app-switch-thumb" />
           </button>
         </div>
         <div class="flex flex-wrap gap-2 pt-3">
-          <button type="button" class="app-button app-button-primary">Primary</button>
-          <button type="button" class="app-button">Secondary</button>
-          <button type="button" class="app-button app-button-danger">Delete</button>
+          <button type="button" class="app-button app-button-primary">{$t$('prefs.themes.primary')}</button>
+          <button type="button" class="app-button">{$t$('prefs.themes.secondary')}</button>
+          <button type="button" class="app-button app-button-danger">{$t$('prefs.delete')}</button>
         </div>
       </div>
       <p class="theme-live-page" lang="ja">
@@ -391,11 +392,16 @@
 
     {#if lowContrast.length}
       <div class="theme-contrast-warning" role="status">
-        <strong>Low contrast</strong> (below {minimumContrast}:1, WCAG AA). Text may be hard to read:
+        <strong>{$t$('prefs.themes.lowContrast')}</strong>
+        {$t$('prefs.themes.lowContrastText', { ratio: minimumContrast })}
         <ul>
           {#each lowContrast as issue (issue.foreground + issue.background)}
             <li>
-              {tokenLabel(issue.foreground)} on {tokenLabel(issue.background)}: {issue.ratio.toFixed(1)}:1
+              {$t$('prefs.themes.contrastIssue', {
+                foreground: tokenLabel(issue.foreground),
+                background: tokenLabel(issue.background),
+                ratio: issue.ratio.toFixed(1)
+              })}
             </li>
           {/each}
         </ul>
@@ -403,14 +409,14 @@
     {/if}
 
     <div class="flex flex-col">
-      <SettingsItemGroup title="General" wide>
+      <SettingsItemGroup title={$t$('prefs.themes.general')} wide>
         <div class="flex flex-col gap-3 text-sm">
           <label class="theme-field">
-            <span>Name</span>
+            <span>{$t$('prefs.themes.name')}</span>
             <input type="text" bind:value={editing.name} />
           </label>
           <label class="theme-field">
-            <span>Based on</span>
+            <span>{$t$('prefs.themes.basedOn')}</span>
             <select bind:value={editing.extends}>
               {#each baseOptions as option (option.id)}
                 <option value={option.id}>{option.name}</option>
@@ -418,7 +424,7 @@
             </select>
           </label>
           <label class="theme-field">
-            <span>Dark theme</span>
+            <span>{$t$('prefs.themes.dark')}</span>
             <select
               value={editing.dark === undefined ? 'inherit' : String(editing.dark)}
               on:change={(event) => {
@@ -428,13 +434,19 @@
                 }
               }}
             >
-              <option value="inherit">Same as base ({parent.dark ? 'dark' : 'light'})</option>
-              <option value="true">Dark</option>
-              <option value="false">Light</option>
+              <option value="inherit"
+                >{$t$(parent.dark ? 'prefs.themes.sameAsBaseDark' : 'prefs.themes.sameAsBaseLight')}</option
+              >
+              <option value="true">{$t$('prefs.themes.darkGroup')}</option>
+              <option value="false">{$t$('prefs.themes.lightGroup')}</option>
             </select>
           </label>
           <label class="theme-field">
-            <span>Roundness ({(editing.radius ?? parent.radius).toFixed(2)})</span>
+            <span
+              >{$t$('prefs.themes.roundness', {
+                value: (editing.radius ?? parent.radius).toFixed(2)
+              })}</span
+            >
             <input
               type="range"
               min="0"
@@ -446,7 +458,7 @@
             />
           </label>
           <label class="theme-field">
-            <span>Glass blur ({editing.blur ?? parent.blur}px)</span>
+            <span>{$t$('prefs.themes.blur', { value: editing.blur ?? parent.blur })}</span>
             <input
               type="range"
               min="0"
@@ -458,7 +470,7 @@
             />
           </label>
           <label class="theme-field">
-            <span>Interface font</span>
+            <span>{$t$('prefs.themes.uiFont')}</span>
             <input
               type="text"
               placeholder="Noto Sans JP"
@@ -473,8 +485,8 @@
 
       <SettingsItemGroup
         wide
-        title="Custom CSS"
-        tooltip="Added after the theme variables. Use the CSS variables listed in themes.md, e.g. .app-surface-card {'{'} border-width: 2px; {'}'}"
+        title={$t$('prefs.themes.customCss')}
+        tooltip={$t$('prefs.themes.customCssHint')}
       >
         <textarea
           class="theme-code h-full min-h-[14rem] w-full"

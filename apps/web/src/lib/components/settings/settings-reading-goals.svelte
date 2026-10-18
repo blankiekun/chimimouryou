@@ -38,9 +38,10 @@
     statisticsMergeMode$
   } from '$lib/data/store';
   import { replicateData } from '$lib/functions/replication/replicator';
-  import { isOnlineSourceAvailable, pluralize } from '$lib/functions/utils';
+  import { isOnlineSourceAvailable } from '$lib/functions/utils';
   import { getDateKey, secondsToMinutes } from '$lib/functions/statistic-util';
   import { createEventDispatcher, onMount, tick } from 'svelte';
+  import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
   export let storageSources: BooksDbStorageSource[] = [];
@@ -49,16 +50,10 @@
     spinner: boolean;
   }>();
 
-  const readingGoalFrequencies = [
-    {
-      id: ReadingGoalFrequency.DAILY,
-      label: 'Daily (1 Day)'
-    },
-    {
-      id: ReadingGoalFrequency.WEEKLY,
-      label: 'Weekly (7 Days)'
-    },
-    { id: ReadingGoalFrequency.MONTHLY, label: 'Monthly (30 Days)' }
+  $: readingGoalFrequencies = [
+    { id: ReadingGoalFrequency.DAILY, label: $t$('prefs.goals.daily') },
+    { id: ReadingGoalFrequency.WEEKLY, label: $t$('prefs.goals.weekly') },
+    { id: ReadingGoalFrequency.MONTHLY, label: $t$('prefs.goals.monthly') }
   ];
 
   let currentTimeGoal = 0;
@@ -371,7 +366,7 @@
 <div class="mb-8 sm:col-span-2 lg:col-span-3">
   <div class="flex flex-grow">
     <h1 class="mb-2 text-xl font-medium w-full">
-      <span class="capitalize">Reading Goals</span>
+      <span class="capitalize">{$t$('prefs.goals')}</span>
     </h1>
     {#if isInEditMode}
       <button class={`${buttonClasses} mr-4`} disabled={saveDisabled} on:click={saveReadingGoal}>
@@ -379,7 +374,7 @@
           class="flex items-center justify-center hover:opacity-50"
           class:cursor-not-allowed={saveDisabled}
         >
-          <span class="mr-2">Save</span>
+          <span class="mr-2">{$t$('prefs.save')}</span>
           <Fa icon={faSave} />
         </div>
       </button>
@@ -397,20 +392,20 @@
         }}
       >
         <div class="flex items-center justify-center hover:opacity-50">
-          <span class="mr-2">Cancel</span>
+          <span class="mr-2">{$t$('prefs.cancel')}</span>
           <Fa icon={faCancel} />
         </div>
       </button>
     {:else}
       <button class={buttonClasses} on:click={syncReadingGoals}>
         <div class="flex items-center justify-center hover:opacity-50">
-          <span class="mr-2">Sync</span>
+          <span class="mr-2">{$t$('prefs.sync')}</span>
           <Fa icon={faRotate} />
         </div>
       </button>
       <button class={buttonClasses} on:click={() => (isInEditMode = true)}>
         <div class="flex items-center justify-center hover:opacity-50">
-          <span class="mr-2">Edit</span>
+          <span class="mr-2">{$t$('prefs.edit')}</span>
           <Fa icon={faEdit} />
         </div>
       </button>
@@ -420,11 +415,11 @@
         on:click={() => deleteReadingGoals()}
       >
         <div
-          title="Delete all Reading Goals"
+          title={$t$('prefs.goals.deleteAll')}
           class="flex items-center justify-center hover:opacity-50"
           class:cursor-not-allowed={!readingGoals.length}
         >
-          <span class="mr-2">Reset</span>
+          <span class="mr-2">{$t$('prefs.reset')}</span>
           <Fa icon={faTrash} />
         </div>
       </button>
@@ -433,7 +428,7 @@
   <hr class="border border-[color:var(--border-color)]" />
   <div class="grid grid-cols-1 gap-4 justify-between items-end mt-4 md:grid-cols-4">
     <div class="flex flex-col">
-      Time Goal (Min)
+      {$t$('prefs.goals.time')}
       <input
         type="number"
         min="0"
@@ -444,7 +439,7 @@
       />
     </div>
     <div class="flex flex-col">
-      Character Goal
+      {$t$('prefs.goals.characters')}
       <input
         type="number"
         min="0"
@@ -455,7 +450,7 @@
       />
     </div>
     <div class="flex flex-col">
-      Frequency
+      {$t$('prefs.goals.frequency')}
       <select
         class:cursor-not-allowed={!isInEditMode}
         disabled={!isInEditMode}
@@ -469,7 +464,7 @@
       </select>
     </div>
     <div class="flex flex-col">
-      Start Date
+      {$t$('prefs.goals.startDate')}
       <input
         type="date"
         class:cursor-not-allowed={!isInEditMode}
@@ -479,7 +474,11 @@
     </div>
   </div>
   <details class="mt-6 cursor-pointer">
-    <summary>Reading Goal History ({pluralize(readingGoals.length, 'Item')})</summary>
+    <summary>
+      {$t$(readingGoals.length === 1 ? 'prefs.goals.historyOne' : 'prefs.goals.history', {
+        count: readingGoals.length
+      })}
+    </summary>
     {#if readingGoals.length}
       <div class="grid-cols-[repeat(4,1fr)_0.1fr] hidden sm:grid">
         {#each historyReadingGoals as historyGoal (historyGoal.goalStartDate)}
@@ -488,12 +487,12 @@
             historyGoal.goalEndDate
           )}
           <div>{dateRangeLabel}</div>
-          <div>{secondsToMinutes(historyGoal.timeGoal)} min</div>
-          <div>{historyGoal.characterGoal} characters</div>
+          <div>{$t$('prefs.goals.minutes', { minutes: secondsToMinutes(historyGoal.timeGoal) })}</div>
+          <div>{$t$('prefs.goals.chars', { count: historyGoal.characterGoal })}</div>
           <div>{historyGoal.goalFrequency}</div>
           <button
             on:click={() => deleteReadingGoals(historyGoal, dateRangeLabel)}
-            title="Delete Reading Goal"
+            title={$t$('prefs.goals.deleteOne')}
           >
             <Fa icon={faTrash} />
           </button>
@@ -506,11 +505,12 @@
             historyGoal.goalEndDate
           )}
           <div class="my-2">
-            {dateRangeLabel} / {secondsToMinutes(historyGoal.timeGoal)} min / {historyGoal.characterGoal}
-            characters / {historyGoal.goalFrequency}
+            {dateRangeLabel} / {$t$('prefs.goals.minutes', {
+              minutes: secondsToMinutes(historyGoal.timeGoal)
+            })} / {$t$('prefs.goals.chars', { count: historyGoal.characterGoal })} / {historyGoal.goalFrequency}
             <button
               on:click={() => deleteReadingGoals(historyGoal, dateRangeLabel)}
-              title="Delete Reading Goal"
+              title={$t$('prefs.goals.deleteOne')}
             >
               <Fa icon={faTrash} />
             </button>
@@ -519,7 +519,7 @@
       </div>
       <div class="mt-3 flex justify-between">
         <button
-          title={currentHistoryIndex === 0 ? '' : 'Previous Page'}
+          title={currentHistoryIndex === 0 ? '' : $t$('prefs.previousPage')}
           disabled={currentHistoryIndex === 0}
           class:opacity-50={currentHistoryIndex === 0}
           class:cursor-not-allowed={currentHistoryIndex === 0}
@@ -528,7 +528,7 @@
           <Fa icon={faChevronLeft} />
         </button>
         <button
-          title={hasNextHistoryPage ? 'Next Page' : ''}
+          title={hasNextHistoryPage ? $t$('prefs.nextPage') : ''}
           disabled={!hasNextHistoryPage}
           class:opacity-50={!hasNextHistoryPage}
           class:cursor-not-allowed={!hasNextHistoryPage}
@@ -538,7 +538,7 @@
         </button>
       </div>
     {:else}
-      <div>You have no archived Reading Goals yet</div>
+      <div>{$t$('prefs.goals.noHistory')}</div>
     {/if}
   </details>
 </div>

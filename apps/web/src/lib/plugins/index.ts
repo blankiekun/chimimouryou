@@ -15,10 +15,10 @@ import type { ComponentType } from 'svelte';
 import { map } from 'rxjs';
 import type { SearchIndex } from '$lib/functions/book-text/book-search';
 import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v3';
+import type { MessageKey } from '$lib/i18n';
 import { aiPlugin } from '$lib/plugins/ai';
 import { audiobookshelfPlugin } from '$lib/plugins/audiobookshelf';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
-import type { MessageKey } from '$lib/i18n';
 
 export { enabledPlugins$ };
 
@@ -78,8 +78,9 @@ export interface ListenModeContribution {
 
 export interface Plugin {
   id: string;
-  name: string;
-  description: string;
+  /** i18n keys */
+  name: MessageKey;
+  description: MessageKey;
   /** Settings area (settings-sections.ts) shown only while the plugin is on */
   settingsArea?: string;
   /** Rendered on the settings page; holds its SettingsSections */
