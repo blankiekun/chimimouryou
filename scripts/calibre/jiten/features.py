@@ -14,6 +14,7 @@ import gzip
 import json
 import os
 import html
+import itertools
 import math
 import posixpath
 import re
@@ -197,13 +198,43 @@ def _take_hints(marked: str, plain: str, hints: list, offset: int = 0):
 
 
 def ruby_reading(hints: dict, begin: int, surface: str, form: str, known) -> str | None:
-    """The book's ruby as the reading of a word whose head token starts at `begin`: only ruby
-    over exactly that token, in hiragana, and a reading Jiten lists for the form (`known`,
-    FrequencyTable.reading_ranks). Flavour ruby (マジ over 本気, そら over 宇宙) is never a reading."""
-    hint = hints.get(begin)
-    if hint and hint[0] == begin + len(surface) and _HIRAGANA_WORD.match(hint[1]) and (form, hint[1]) in known:
-        return hint[1]
+    """The book's ruby as the reading of a word whose head token starts at `begin`: ruby over that
+    token (one span or adjacent per-kanji spans, 人《ひと》気《け》), or over its kanji stem when the
+    rest is kana (行《い》った: the ruby plus the lemma's okurigana, いく), in hiragana, and a
+    reading Jiten lists for the form (`known`, FrequencyTable.reading_ranks), as written or with
+    large kana made small (いつしよ, see _small_kana). Flavour ruby (マジ over 本気, そら over
+    宇宙) is never a reading."""
+    token_end, end, reading = begin + len(surface), begin, ''
+    while end < token_end and end in hints and hints[end][0] > end:
+        end, part = hints[end]
+        reading += part
+    if end == begin or end > token_end or not _HIRAGANA_WORD.match(reading):
+        return None
+    tail = ''
+    if end < token_end:
+        base = surface[:end - begin]
+        if not form.startswith(base) or any(is_kanji(c) for c in surface[end - begin:] + form[len(base):]):
+            return None  # ruby over part of a compound (魚《うお》市場), or a lemma spelled differently
+        tail = form[len(base):]
+    for candidate in (reading, *_small_kana(reading)):
+        if (form, candidate + tail) in known:
+            return candidate + tail
     return None
+
+
+_SMALL = str.maketrans('つやゆよ', 'っゃゅょ')
+_YOUON_AFTER = set('きぎしじちぢにひびぴみり')
+
+
+def _small_kana(reading: str):
+    """Older books set ruby in large kana (いつしよ for いっしょ): `reading` with some of its つ
+    (not first) and its や/ゆ/よ after an i-row kana made small. Small ぁぃぅぇぉ aren't tried:
+    no hiragana reading of a kanji word uses them."""
+    spots = [i for i, c in enumerate(reading)
+             if i and (c == 'つ' or (c in 'やゆよ' and reading[i - 1] in _YOUON_AFTER))][:6]
+    for k in range(1, len(spots) + 1):
+        for chosen in itertools.combinations(spots, k):
+            yield ''.join(c.translate(_SMALL) if i in chosen else c for i, c in enumerate(reading))
 
 
 # Context rules for word-list readings (form: [(reading, text before, text after)]): a rule fires
