@@ -45,6 +45,31 @@ average. The gain is small because jiten.moe's score itself barely uses these si
 copy jiten.moe more closely. `validate_speed.py` checks estimates against how fast
 readers actually read, once statistics cover enough books.
 
+## Readings in context (word lists)
+
+Word lists read ambiguous words (人気: にんき or ひとけ) from the book's ruby, else from
+context rules, else Sudachi (`../features.py`, `Analysis.readings`). `eval_readings.py`
+checks them on hand-written sentences; `reading_context.py` on a whole library, using each
+book's ruby as the answer and hiding it:
+
+    reading_context.py mine <library> <scratch> --dictionary frequency-dictionary.zip
+    reading_context.py report <scratch> --dictionary frequency-dictionary.zip
+
+Gold is the ruby `../features.py`'s `ruby_reading` accepts: over the word, kanji by kanji,
+or over an inflected word's kanji stem (so verbs get labels too). Mining 19,372 EPUBs took 25
+minutes on 3 processes in a 3 GB container (4.22 M ruby'd occurrences of forms Jiten lists with
+two or more readings, 7.3 M unlabelled ones sampled from lines without ruby); the report takes
+a minute and a half. The scratch folder holds book text: keep it out of git. Ruby over the
+word left out of the answers: unlisted readings 355,804, katakana 110,907 (マジ over 本気),
+kanji 3,913, other 4,019, and (form, reading) pairs from fewer than three authors 6,401
+(本気 まじ: 38 occurrences, all one author).
+
+Current pipeline on the held-out authors (2026-10-18, this library, rules then Sudachi):
+macro 74.2% over 4,184 forms, 51.3% over the 1,210 forms with two or more readings held out,
+micro 80.9% over 824,249 occurrences. Ruby is biased to the rare reading, which is why the
+score is per reading: 身体 からだ 4,108/6,686, 微笑む ほほえむ 2,363/7,580, 吐く つく 0/3,403,
+頃 ごろ 0/184, 何故 なにゆえ 0/77.
+
 ## Rebuilding
 
 Run from one working folder (the scripts use relative paths). Jiten allows its public
