@@ -15,6 +15,7 @@
     type MokuroStatus,
     type MokuroText
   } from '$lib/data/mokuro';
+  import { t$ } from '$lib/i18n';
 
   export let calibreId: number;
 
@@ -28,6 +29,8 @@
   $: canEdit = hasPermission($account$, 'import');
   $: running = status?.job?.id === calibreId ? status.job : undefined;
   $: queuedAt = status?.queue.indexOf(calibreId) ?? -1;
+  /** Volumes ahead of this one: those queued before it and the running one */
+  $: waiting = queuedAt + (status?.job ? 1 : 0);
   $: load(calibreId, canEdit);
 
   async function load(id: number, edit: boolean) {
@@ -113,21 +116,22 @@
 </script>
 
 {#if text}
-  Page text by mokuro ({text.source === 'server' ? 'made on the server' : 'uploaded'}
-  {new Date(text.created).toLocaleDateString()})
+  {$t$(text.source === 'server' ? 'library.mokuroServer' : 'library.mokuroUploaded', {
+    date: new Date(text.created).toLocaleDateString()
+  })}
 {:else}
-  No page text
+  {$t$('library.noPageText')}
 {/if}
 {#if running}
   <span class="mokuro-note">
-    Reading page {Math.min(running.done + 1, running.total)} of {running.total}…
+    {$t$('library.readingPage', {
+      page: Math.min(running.done + 1, running.total),
+      total: running.total
+    })}
   </span>
 {:else if queuedAt >= 0}
   <span class="mokuro-note">
-    Waiting for {queuedAt + (status?.job ? 1 : 0)} other volume{queuedAt + (status?.job ? 1 : 0) ===
-    1
-      ? ''
-      : 's'}
+    {$t$(waiting === 1 ? 'library.waitingOne' : 'library.waitingMany', { count: waiting })}
   </span>
 {/if}
 {#if error}
@@ -137,17 +141,17 @@
   <span class="mokuro-actions">
     {#if running || queuedAt >= 0}
       <button type="button" class="app-button app-button-quiet" disabled={busy} on:click={cancel}>
-        Stop
+        {$t$('library.stop')}
       </button>
     {:else if status.generator}
       <button
         type="button"
         class="app-button app-button-quiet"
         disabled={busy}
-        title="About 5 seconds a page on a CPU"
+        title={$t$('library.mokuroHint')}
         on:click={generate}
       >
-        {text ? 'Make again on the server' : 'Make text on the server'}
+        {text ? $t$('library.mokuroMakeAgain') : $t$('library.mokuroMake')}
       </button>
     {/if}
     <button
@@ -156,11 +160,11 @@
       disabled={busy}
       on:click={() => fileInput.click()}
     >
-      Upload .mokuro
+      {$t$('library.mokuroUpload')}
     </button>
     {#if text}
       <button type="button" class="app-button app-button-quiet" disabled={busy} on:click={remove}>
-        Remove
+        {$t$('library.remove')}
       </button>
     {/if}
     <input

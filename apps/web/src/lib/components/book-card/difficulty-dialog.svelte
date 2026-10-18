@@ -7,6 +7,7 @@
   import { account$, hasPermission } from '$lib/data/account';
   import { loadBookKanji } from '$lib/data/calibre';
   import { getKanjiSeen, kanjiCoverage, type KanjiCoverage } from '$lib/data/kanji-seen';
+  import { t$ } from '$lib/i18n';
   import { createEventDispatcher, onMount } from 'svelte';
 
   /** Selected books of the Calibre source */
@@ -39,7 +40,7 @@
 </script>
 
 <DialogTemplate>
-  <svelte:fragment slot="header">Difficulty</svelte:fragment>
+  <svelte:fragment slot="header">{$t$('book.difficulty')}</svelte:fragment>
   <div slot="content" class="flex max-w-xl flex-col gap-4 text-sm">
     <ul class="flex flex-col gap-2">
       {#each books.slice(0, maxCoverageBooks) as book (book.id)}
@@ -57,32 +58,35 @@
             {/if}
           </span>
           {#if book.difficulty === undefined}
-            <span class="opacity-70">No estimate yet</span>
+            <span class="opacity-70">{$t$('book.noEstimate')}</span>
           {:else}
             {#if book.difficultyLow !== undefined && book.difficultyHigh !== undefined}
-              <span class="opacity-70"
-                >Likely between {book.difficultyLow.toFixed(1)} and {book.difficultyHigh.toFixed(
-                  1
-                )}</span
-              >
+              <span class="opacity-70">
+                {$t$('library.likelyRange', {
+                  low: book.difficultyLow.toFixed(1),
+                  high: book.difficultyHigh.toFixed(1)
+                })}
+              </span>
             {/if}
             {#if book.words95}
-              <span class="opacity-70"
-                >The {book.words95.toLocaleString()} most common words cover 95% of its words</span
-              >
+              <span class="opacity-70">
+                {$t$('difficulty.words95', { count: book.words95.toLocaleString() })}
+              </span>
             {/if}
             {#if kanji}
-              <span
-                >You have met {(kanji.coverage * 100).toFixed(1)}% of its kanji{#if kanji.newKanji}
-                  ({kanji.newKanji.toLocaleString()} new){/if}</span
-              >
+              <span>
+                {$t$(kanji.newKanji ? 'book.kanjiMetOnlyNew' : 'book.kanjiMetOnly', {
+                  percent: (kanji.coverage * 100).toFixed(1),
+                  new: kanji.newKanji.toLocaleString()
+                })}
+              </span>
             {/if}
           {/if}
         </li>
       {/each}
     </ul>
     {#if Object.values(coverage).some(Boolean)}
-      <p class="opacity-70">Kanji met: counted from what you have read in this browser.</p>
+      <p class="opacity-70">{$t$('library.kanjiNote')}</p>
     {/if}
 
     {#if hasPermission($account$, 'difficulty')}
@@ -91,9 +95,10 @@
   </div>
   <div slot="footer" class="flex gap-2">
     {#if finishedCompute}
-      <button class={buttonClasses} on:click={() => window.location.reload()}>Reload library</button
-      >
+      <button class={buttonClasses} on:click={() => window.location.reload()}>
+        {$t$('library.reload')}
+      </button>
     {/if}
-    <button class={buttonClasses} on:click={() => dispatch('close')}>Close</button>
+    <button class={buttonClasses} on:click={() => dispatch('close')}>{$t$('library.close')}</button>
   </div>
 </DialogTemplate>

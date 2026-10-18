@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { translate } from '$lib/i18n';
-import { difficultyDescriptionKey, difficultyNameKey, difficultyNames } from './difficulty';
+import { difficultyDescriptionKey, difficultyNameKey } from './difficulty';
 
 describe('difficulty bands', () => {
   it('follows the band of the score, clamped to the scale', () => {
@@ -17,8 +17,8 @@ describe('difficulty bands', () => {
     expect(difficultyDescriptionKey(7)).toBe('difficulty.insaneHint');
   });
 
-  it('names the bands in English for the filters, in Japanese on request', () => {
-    expect(difficultyNames).toEqual(['Beginner', 'Easy', 'Average', 'Hard', 'Expert', 'Insane']);
+  it('names the bands in English or Japanese', () => {
+    expect(translate('en', difficultyNameKey(0))).toBe('Beginner');
     expect(translate('ja', difficultyNameKey(1.5))).toBe('初級');
   });
 });

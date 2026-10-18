@@ -5,6 +5,7 @@
   import { formatSeries } from '$lib/components/book-card/library-sort';
   import { SortDirection, type SortOption } from '$lib/data/sort-types';
   import { longPress } from '$lib/functions/use-long-press';
+  import { t$, type MessageKey } from '$lib/i18n';
   import { createEventDispatcher } from 'svelte';
   import Fa from 'svelte-fa';
 
@@ -22,14 +23,14 @@
     sort: SortOption['property'];
   }>();
 
-  const columns: { property: SortOption['property']; label: string }[] = [
-    { property: 'title', label: 'Title' },
-    { property: 'series', label: 'Series' },
-    { property: 'difficulty', label: 'Difficulty' },
-    { property: 'progress', label: 'Progress' },
-    { property: 'characters', label: 'Characters' },
-    { property: 'lastBookOpen', label: 'Last read' },
-    { property: 'lastBookmarkModified', label: 'Bookmarked' }
+  const columns: { property: SortOption['property']; label: MessageKey }[] = [
+    { property: 'title', label: 'library.sortTitle' },
+    { property: 'series', label: 'library.sortSeries' },
+    { property: 'difficulty', label: 'library.sortDifficulty' },
+    { property: 'progress', label: 'library.sortProgress' },
+    { property: 'characters', label: 'library.sortCharacters' },
+    { property: 'lastBookOpen', label: 'library.sortLastRead' },
+    { property: 'lastBookmarkModified', label: 'library.sortBookmarked' }
   ];
 
   const relativeTimeFormat = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
@@ -56,15 +57,17 @@
   }
 
   function formatDate(timestamp: number) {
-    return timestamp ? new Date(timestamp).toLocaleString() : 'No data';
+    return timestamp ? new Date(timestamp).toLocaleString() : $t$('library.noData');
   }
 
   function sortLabel(property: SortOption['property']) {
     if (sortOption.property !== property) {
-      return 'not sorted';
+      return $t$('library.notSorted');
     }
 
-    return sortOption.direction === SortDirection.ASC ? 'ascending' : 'descending';
+    return $t$(
+      sortOption.direction === SortDirection.ASC ? 'library.ascending' : 'library.descending'
+    );
   }
 </script>
 
@@ -79,10 +82,13 @@
           <button
             type="button"
             class="library-list-header-button"
-            aria-label="Sort by {column.label} ({sortLabel(column.property)})"
+            aria-label={$t$('library.sortByColumn', {
+              label: $t$(column.label),
+              state: sortLabel(column.property)
+            })}
             on:click={() => dispatch('sort', column.property)}
           >
-            {column.label}
+            {$t$(column.label)}
             {#if sortOption.property === column.property}
               <span
                 class="library-list-sort-icon"
@@ -114,7 +120,7 @@
             type="button"
             class="library-list-select-button"
             aria-pressed={selected}
-            aria-label="Select {bookCard.title}"
+            aria-label={$t$('library.selectTitle', { title: bookCard.title })}
             on:click={() => dispatch('bookClick', { id: bookCard.id })}
           >
             {#if selected}<Fa icon={faCheck} />{/if}
@@ -164,8 +170,8 @@
           <button
             type="button"
             class="library-list-action-button"
-            title="Delete book"
-            aria-label="Delete {bookCard.title}"
+            title={$t$('library.deleteBook')}
+            aria-label={$t$('library.deleteTitle', { title: bookCard.title })}
             on:click={() => dispatch('removeBookClick', { id: bookCard.id })}
           >
             <Fa icon={faTrash} />

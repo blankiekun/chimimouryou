@@ -41,7 +41,9 @@ anything a reader or a server operator would notice.
 - Japanese interface (Settings → General → Language · 言語, English by default, synced with
   the account), separate from the AI's language. This release translates the header, Home,
   the book page (difficulty bands and badge included), the settings page's sidebar and
-  Settings → Anki and → AI (with the key setup guide); the rest of the app follows.
+  Settings → Anki and → AI (with the key setup guide), and the library: the Store's toolbar,
+  filters and sorting, select mode, the difficulty dialog, Make series and the manga text
+  row; the rest of the app follows.
 - A book's page lists the new kanji: the 30 most frequent kanji in the book you haven't
   met yet, with a button that copies them.
 - The difficulty badge's tooltip says what the band means for a learner, and that the

@@ -8,13 +8,10 @@
  * Difficulty bands as shown on jiten.moe (score 0-5). Not part of upstream.
  */
 
-import { en, type MessageKey } from '$lib/i18n/en';
+import type { MessageKey } from '$lib/i18n/en';
 
 /** The bands, lowest first, as message keys `difficulty.<band>` (name) and `…Hint` (meaning). */
 const bands = ['beginner', 'easy', 'average', 'hard', 'expert', 'insane'] as const;
-
-/** English band names (the Store's difficulty filters). */
-export const difficultyNames = bands.map((band) => en[`difficulty.${band}`]);
 
 export function difficultyBand(difficulty: number) {
   return Math.min(Math.max(Math.floor(difficulty), 0), bands.length - 1);

@@ -29,6 +29,7 @@
   import { inputAllowDirectory } from '$lib/functions/file-dom/input-allow-directory';
   import { inputFile } from '$lib/functions/file-dom/input-file';
   import { isMobile$, isOnOldUrl } from '$lib/functions/utils';
+  import { t$, type MessageKey } from '$lib/i18n';
   import {
     faArrowDown,
     faBorderAll,
@@ -61,10 +62,10 @@
 
   const panelClasses = 'app-popover-panel';
 
-  const displayModes: { mode: LibraryDisplayMode; label: string; icon: typeof faGrip }[] = [
-    { mode: 'covers-comfortable', label: 'Covers', icon: faBorderAll },
-    { mode: 'covers-compact', label: 'Compact covers', icon: faGrip },
-    { mode: 'list', label: 'List', icon: faList }
+  const displayModes: { mode: LibraryDisplayMode; label: MessageKey; icon: typeof faGrip }[] = [
+    { mode: 'covers-comfortable', label: 'library.viewCovers', icon: faBorderAll },
+    { mode: 'covers-compact', label: 'library.viewCompact', icon: faGrip },
+    { mode: 'list', label: 'library.viewList', icon: faList }
   ];
 
   let fileImportElm: HTMLElement;
@@ -83,6 +84,13 @@
     showLoadCount = new URLSearchParams(window.location.search).has('count');
   }
 
+  // triggerImport tells the entries apart by their English label
+  const importLabels: Record<string, MessageKey> = {
+    [mergeEntries.FILE_IMPORT.label]: 'library.importFiles',
+    [mergeEntries.FOLDER_IMPORT.label]: 'library.importFolders',
+    [mergeEntries.BACKUP_IMPORT.label]: 'library.importBackup'
+  };
+
   $: importMenuItems = [
     mergeEntries.FILE_IMPORT,
     ...($isMobile$ ? [] : [mergeEntries.FOLDER_IMPORT]),
@@ -93,7 +101,13 @@
     ? [
         { label: 'Calibre', key: StorageKey.CALIBRE, requiresConnectivity: false },
         ...(browserSourceAvailable
-          ? [{ label: 'Browser', key: StorageKey.BROWSER, requiresConnectivity: false }]
+          ? [
+              {
+                label: $t$('library.sourceBrowser'),
+                key: StorageKey.BROWSER,
+                requiresConnectivity: false
+              }
+            ]
           : []),
         ...(isStorageSourceAvailable(StorageKey.GDRIVE, $gDriveStorageSource$, window)
           ? [{ label: 'GDrive', key: StorageKey.GDRIVE, requiresConnectivity: true }]
@@ -102,7 +116,13 @@
           ? [{ label: 'OneDrive', key: StorageKey.ONEDRIVE, requiresConnectivity: true }]
           : []),
         ...(isStorageSourceAvailable(StorageKey.FS, $fsStorageSource$, window)
-          ? [{ label: 'Filesystem', key: StorageKey.FS, requiresConnectivity: false }]
+          ? [
+              {
+                label: $t$('library.sourceFilesystem'),
+                key: StorageKey.FS,
+                requiresConnectivity: false
+              }
+            ]
           : [])
       ]
     : [];
@@ -110,26 +130,28 @@
   let sortMenuItems: { property: SortOption['property']; label: string; title?: string }[];
   $: sortMenuItems = [
     ...($storageSource$ === StorageKey.BROWSER
-      ? [{ property: 'id' as SortOption['property'], label: 'Date added' }]
+      ? [{ property: 'id' as SortOption['property'], label: $t$('library.sortId') }]
       : []),
-    { property: 'title' as SortOption['property'], label: 'Title' },
-    { property: 'series' as SortOption['property'], label: 'Series' },
-    { property: 'difficulty' as SortOption['property'], label: 'Difficulty' },
+    { property: 'title' as SortOption['property'], label: $t$('library.sortTitle') },
+    { property: 'series' as SortOption['property'], label: $t$('library.sortSeries') },
+    { property: 'difficulty' as SortOption['property'], label: $t$('library.sortDifficulty') },
     ...($ankiKnownWords$ && $storageSource$ === StorageKey.CALIBRE
       ? [
           {
             property: 'coverage' as SortOption['property'],
-            label: 'Known words',
-            title:
-              "By the share of a book's words to study that you know from Anki. Only books whose page you opened, and Home's books, have one; the rest come last."
+            label: $t$('library.sortCoverage'),
+            title: $t$('library.sortCoverageHint')
           }
         ]
       : []),
-    { property: 'progress' as SortOption['property'], label: 'Progress' },
-    { property: 'characters' as SortOption['property'], label: 'Characters' },
-    { property: 'lastBookOpen' as SortOption['property'], label: 'Last read' },
-    { property: 'lastBookmarkModified' as SortOption['property'], label: 'Bookmarked' },
-    { property: 'lastBookModified' as SortOption['property'], label: 'Last update' }
+    { property: 'progress' as SortOption['property'], label: $t$('library.sortProgress') },
+    { property: 'characters' as SortOption['property'], label: $t$('library.sortCharacters') },
+    { property: 'lastBookOpen' as SortOption['property'], label: $t$('library.sortLastRead') },
+    {
+      property: 'lastBookmarkModified' as SortOption['property'],
+      label: $t$('library.sortBookmarked')
+    },
+    { property: 'lastBookModified' as SortOption['property'], label: $t$('library.sortUpdated') }
   ];
 
   $: currentSort = $booklistSortOptions$[$storageSource$];
@@ -248,18 +270,18 @@
       slot="icon"
       type="button"
       class="app-header-icon app-header-icon-label"
-      title="Import books"
+      title={$t$('library.importBooks')}
       {disabled}
     >
       <Fa icon={faFileImport} />
-      <span class="hidden md:inline">Import</span>
+      <span class="hidden md:inline">{$t$('library.import')}</span>
       <Fa icon={faChevronDown} size="xs" class="hidden opacity-70 md:block" />
     </button>
     <div slot="content" class="flex flex-col">
       {#each importMenuItems as item (item.label)}
         <button type="button" class="app-popover-item" on:click={() => triggerImport(item.label)}>
           <Fa icon={item.icon} fw />
-          {item.label}
+          {$t$(importLabels[item.label])}
         </button>
       {/each}
     </div>
@@ -276,8 +298,8 @@
       slot="icon"
       type="button"
       class="app-header-icon"
-      title="Select storage source"
-      aria-label="Select storage source"
+      title={$t$('library.selectStorageSource')}
+      aria-label={$t$('library.selectStorageSource')}
       {disabled}
     >
       {#key $storageIcon$}
@@ -287,7 +309,7 @@
       {/key}
     </button>
     <div slot="content" class="flex flex-col">
-      <div class="app-popover-heading">Storage source</div>
+      <div class="app-popover-heading">{$t$('library.storageSource')}</div>
       {#each storageSourceMenuItems as sourceMenuItem (sourceMenuItem.key)}
         <button
           type="button"
@@ -324,15 +346,15 @@
       slot="icon"
       type="button"
       class="app-header-icon"
-      title="Display settings (Q)"
-      aria-label="Open library display settings"
+      title={$t$('library.displaySettings')}
+      aria-label={$t$('library.openDisplaySettings')}
       aria-keyshortcuts="Q"
       {disabled}
     >
       <Fa icon={displayModes.find((d) => d.mode === $libraryDisplayMode$)?.icon ?? faBorderAll} />
     </button>
     <div slot="content" class="flex w-60 flex-col">
-      <div class="app-popover-heading">View</div>
+      <div class="app-popover-heading">{$t$('library.view')}</div>
       <div class="grid grid-cols-3 gap-1 px-1 pb-1">
         {#each displayModes as displayMode (displayMode.mode)}
           <button
@@ -343,11 +365,11 @@
             on:click={() => ($libraryDisplayMode$ = displayMode.mode)}
           >
             <Fa icon={displayMode.icon} />
-            <span class="text-center leading-tight">{displayMode.label}</span>
+            <span class="text-center leading-tight">{$t$(displayMode.label)}</span>
           </button>
         {/each}
       </div>
-      <div class="app-popover-heading">Sort by</div>
+      <div class="app-popover-heading">{$t$('library.sortBy')}</div>
       {#each sortMenuItems as sortMenuItem (sortMenuItem.property)}
         {@const isCurrent = currentSort.property === sortMenuItem.property}
         <button
@@ -362,7 +384,11 @@
             <span
               class="inline-flex text-xs transition-transform"
               class:rotate-180={currentSort.direction === SortDirection.ASC}
-              title={currentSort.direction === SortDirection.ASC ? 'Ascending' : 'Descending'}
+              title={$t$(
+                currentSort.direction === SortDirection.ASC
+                  ? 'library.ascending'
+                  : 'library.descending'
+              )}
             >
               <Fa icon={faArrowDown} />
             </span>
@@ -383,8 +409,8 @@
       slot="icon"
       type="button"
       class="app-header-icon"
-      title="More options"
-      aria-label="More options"
+      title={$t$('library.moreOptions')}
+      aria-label={$t$('library.moreOptions')}
       {disabled}
     >
       <Fa icon={faEllipsis} />
@@ -398,7 +424,7 @@
         on:click={() => runMoreAction(() => (selectMode = !selectMode))}
       >
         <Fa icon={faSquareCheck} fw />
-        {selectMode ? 'Stop selecting' : 'Select books'}
+        {selectMode ? $t$('library.stopSelecting') : $t$('library.selectBooks')}
       </button>
       <button
         type="button"
@@ -406,7 +432,7 @@
         on:click={() => runMoreAction(() => dispatch('bugReportClick'))}
       >
         <Fa icon={faBug} fw />
-        Report an issue
+        {$t$('library.reportIssue')}
       </button>
       {#if isOldUrl}
         <button
@@ -415,7 +441,7 @@
           on:click={() => runMoreAction(() => dispatch('domainHintClick'))}
         >
           <Fa icon={faTriangleExclamation} fw />
-          Old domain hint
+          {$t$('library.oldDomainHint')}
         </button>
       {/if}
       {#if showLoadCount}
@@ -426,7 +452,7 @@
           on:click={() => runMoreAction(() => countImportElm.click())}
         >
           <Fa icon={faHashtag} fw />
-          Load character counts
+          {$t$('library.loadCounts')}
         </button>
       {/if}
     </div>

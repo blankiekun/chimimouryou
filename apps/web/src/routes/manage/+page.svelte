@@ -1241,29 +1241,29 @@
       {:else if selectMode}
         <div class="library-toolbar app-surface-card">
           <span class="mr-auto text-sm font-extrabold">
-            {selectedBookIds.size} selected
+            {$t$('library.selected', { count: selectedBookIds.size })}
           </span>
           <!-- Home's shelves aren't the list Select all works on -->
           {#if !isHome}
             <button
               type="button"
               class="library-toolbar-button"
-              title="Select all shown books"
+              title={$t$('library.selectAllHint')}
               on:click={onSelectAllBooks}
             >
               <Fa icon={faCheckDouble} />
-              <span class="hidden sm:inline">Select all</span>
+              <span class="hidden sm:inline">{$t$('library.selectAll')}</span>
             </button>
           {/if}
           <button
             type="button"
             class="library-toolbar-button"
-            title="Read the selected book"
+            title={$t$('library.readSelected')}
             disabled={selectedBookIds.size !== 1}
             on:click={readSelected}
           >
             <Fa icon={faBookOpen} />
-            <span class="hidden sm:inline">Read</span>
+            <span class="hidden sm:inline">{$t$('book.read')}</span>
           </button>
           <button
             type="button"
@@ -1278,18 +1278,18 @@
           <button
             type="button"
             class="library-toolbar-button"
-            title="Open export menu"
+            title={$t$('library.exportHint')}
             disabled={!selectedBookIds.size}
             on:click={onReplicateData}
           >
             <Fa icon={faCloudArrowUp} />
-            <span class="hidden sm:inline">Export</span>
+            <span class="hidden sm:inline">{$t$('library.export')}</span>
           </button>
           {#if $storageSource$ === StorageKey.BROWSER}
             <button
               type="button"
               class="library-toolbar-button"
-              title="Show statistics for selected books"
+              title={$t$('library.statisticsHint')}
               disabled={!selectedBookIds.size}
               on:click={onSelectionToStatistics}
             >
@@ -1298,7 +1298,7 @@
             <button
               type="button"
               class="library-toolbar-button"
-              title="Delete statistics for selected books"
+              title={$t$('library.deleteStatisticsHint')}
               disabled={!selectedBookIds.size}
               on:click={onDeleteStatistics}
             >
@@ -1309,19 +1309,19 @@
             <button
               type="button"
               class="library-toolbar-button"
-              title="Make a series from the selected book and the books like it"
+              title={$t$('library.makeSeriesHint')}
               disabled={selectedBookIds.size !== 1}
               on:click={onMakeSeries}
             >
               <Fa icon={faLayerGroup} />
-              <span class="hidden sm:inline">Make series</span>
+              <span class="hidden sm:inline">{$t$('library.makeSeries')}</span>
             </button>
           {/if}
           {#if $storageSource$ === StorageKey.CALIBRE}
             <button
               type="button"
               class="library-toolbar-button"
-              title="Difficulty of selected books"
+              title={$t$('library.difficultyHint')}
               disabled={!selectedBookIds.size}
               on:click={onDifficultyClick}
             >
@@ -1332,18 +1332,18 @@
             <button
               type="button"
               class="library-toolbar-button"
-              title="Clear reading progress of selected books"
+              title={$t$('library.clearProgressHint')}
               disabled={!selectedBookIds.size}
               on:click={onClearProgress}
             >
               <Fa icon={faRotateLeft} />
-              <span class="hidden sm:inline">Clear progress</span>
+              <span class="hidden sm:inline">{$t$('library.clearProgress')}</span>
             </button>
           {/if}
           <button
             type="button"
             class="library-toolbar-button library-toolbar-button-danger"
-            title="Delete selected books"
+            title={$t$('library.deleteSelected')}
             disabled={!selectedBookIds.size}
             on:click={() => removeBooks(Array.from(selectedBookIds))}
           >
@@ -1352,8 +1352,8 @@
           <button
             type="button"
             class="library-toolbar-button"
-            title="Stop selecting"
-            aria-label="Stop selecting"
+            title={$t$('library.stopSelecting')}
+            aria-label={$t$('library.stopSelecting')}
             on:click={() => (selectMode = false)}
           >
             <Fa icon={faXmark} />
