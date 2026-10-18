@@ -24,6 +24,7 @@
   import { secondsToMinutes, toTimeString } from '$lib/functions/statistic-util';
   import { caluclatePercentage, dummyFn } from '$lib/functions/utils';
   import { createEventDispatcher, onMount } from 'svelte';
+  import { t$, type MessageKey } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
   export let fontColor: string;
@@ -62,12 +63,21 @@
     revertStatistic: TrackingHistory;
   }>();
 
-  const actions = [
-    { icon: faPlay, event: 'toggleTracker', title: 'Toggle Tracker' },
-    { icon: faRepeat, event: 'updateCurrentLocation', title: 'Update Position' },
-    { icon: faClockRotateLeft, event: 'freezeCurrentLocation', title: 'Toggle Freeze Position' },
-    { icon: faFloppyDisk, event: 'saveStatistics', title: 'Save' }
+  const actions: { icon: IconDefinition; event: string; title: MessageKey }[] = [
+    { icon: faPlay, event: 'toggleTracker', title: 'reader.tracker.toggle' },
+    { icon: faRepeat, event: 'updateCurrentLocation', title: 'reader.tracker.updatePosition' },
+    { icon: faClockRotateLeft, event: 'freezeCurrentLocation', title: 'reader.tracker.freeze' },
+    { icon: faFloppyDisk, event: 'saveStatistics', title: 'reader.tracker.save' }
   ];
+
+  /** The statistics' ids, which the template compares, stay English. */
+  const statisticLabels: Record<string, MessageKey> = {
+    'Current Session': 'reader.tracker.session',
+    Today: 'reader.tracker.today',
+    'All Time': 'reader.tracker.allTime',
+    'Book Completion': 'reader.tracker.completion',
+    Autoscroller: 'reader.tracker.autoscroller'
+  };
 
   const trackingItemsPerPage = 15;
 
@@ -180,13 +190,13 @@
 <div class="flex items-center justify-between min-h-[60px] px-4">
   <div class="mr-4">
     {#if hadError}
-      Last Update failed
+      {$t$('reader.tracker.lastUpdateFailed')}
     {/if}
   </div>
   <div
     tabindex="0"
     role="button"
-    title="Close Tracker Menu"
+    title={$t$('reader.tracker.close')}
     class="flex items-center hover:text-accent-strong md:items-center"
     on:click={() => dispatch('trackerMenuClosed')}
     on:keyup={dummyFn}
@@ -203,7 +213,11 @@
           currentReadingGoal.timeGoal
         )}
         <div>
-          {secondsToMinutes(currentTimeGoal)} / {secondsToMinutes(currentReadingGoal.timeGoal)} Min ({timeGoalPercentage}%)
+          {$t$('reader.tracker.goalMinutes', {
+            current: secondsToMinutes(currentTimeGoal),
+            goal: secondsToMinutes(currentReadingGoal.timeGoal),
+            percent: timeGoalPercentage
+          })}
         </div>
         <!-- eslint-disable-next-line svelte/no-unknown-style-directive-property -->
         <div class="w-full rounded-full h-2.5" style:background-Color={fontColor}>
@@ -220,7 +234,11 @@
           currentReadingGoal.characterGoal
         )}
         <div class="mt-4">
-          {currentCharacterGoal} / {currentReadingGoal.characterGoal} Characters ({characterGoalPercentage}%)
+          {$t$('reader.tracker.goalCharacters', {
+            current: currentCharacterGoal,
+            goal: currentReadingGoal.characterGoal,
+            percent: characterGoalPercentage
+          })}
         </div>
         <!-- eslint-disable-next-line svelte/no-unknown-style-directive-property -->
         <div class="w-full rounded-full h-2.5" style:background-Color={fontColor}>
@@ -234,7 +252,7 @@
         </div>
       {/if}
       <div class="grid grid-cols-[max-content,auto] gap-x-4 gap-y-2 mt-4">
-        <div>Current Reading Goal:</div>
+        <div>{$t$('reader.tracker.currentGoal')}</div>
         <div class="flex flex-col sm:block">
           <span>{currentReadingGoalStart}</span>
           {#if currentReadingGoalEnd && currentReadingGoalStart !== currentReadingGoalEnd}
@@ -242,7 +260,7 @@
             <span>{currentReadingGoalEnd}</span>
           {/if}
         </div>
-        <div>Remaining Time left:</div>
+        <div>{$t$('reader.tracker.remaining')}</div>
         <div>
           {remainingTimeInReadingGoalWindow}
         </div>
@@ -253,7 +271,7 @@
     <div class="mb-7 last:mb-4">
       <div class="flex items-center">
         <div>
-          {statistic.id}
+          {$t$(statisticLabels[statistic.id])}
         </div>
         {#if statistic.id === 'Current Session'}
           {#each actions as action (action.event)}
@@ -262,7 +280,7 @@
                 tabindex="0"
                 role="button"
                 class="ml-4 hover:text-accent-strong"
-                title={action.title}
+                title={$t$(action.title)}
                 on:click={() => executeAction(action.event)}
                 on:keyup={dummyFn}
               >
@@ -275,11 +293,11 @@
       <hr />
       <div class="grid grid-cols-[max-content,auto] gap-x-4 gap-y-2">
         {#if statistic.id === 'All Time'}
-          <div class="mt-3">Book started on:</div>
+          <div class="mt-3">{$t$('reader.tracker.started')}</div>
           <div class="mt-3">{bookStartDate}</div>
         {/if}
         {#if statistic.id === 'Book Completion' && bookCompletionStatistics}
-          <div class="mt-3">Completed on:</div>
+          <div class="mt-3">{$t$('reader.tracker.completed')}</div>
           <div class="mt-3">{bookCompletionStatistics.dateKey}</div>
         {/if}
         <button
@@ -287,7 +305,7 @@
           class:mt-3={statistic.id !== 'All Time' && statistic.id !== 'Book Completion'}
           on:click={() => handleBlurredKey('charactersRead')}
         >
-          Characters Read:
+          {$t$('reader.tracker.charactersRead')}
         </button>
         <div
           role="button"
@@ -300,7 +318,7 @@
           {statistic.charactersRead}
         </div>
         <button class="text-left" on:click={() => handleBlurredKey('lastReadingSpeed')}>
-          Reading Speed:
+          {$t$('reader.tracker.speed')}
         </button>
         <div
           role="button"
@@ -309,10 +327,10 @@
           on:click={() => handleBlurredKey('lastReadingSpeed')}
           on:keyup={dummyFn}
         >
-          {statistic.lastReadingSpeed} / h
+          {$t$('reader.tracker.speedValue', { speed: statistic.lastReadingSpeed })}
         </div>
         <button class="text-left" on:click={() => handleBlurredKey('readingTime')}>
-          Reading Time:
+          {$t$('reader.tracker.time')}
         </button>
         <div
           role="button"
@@ -325,7 +343,7 @@
         </div>
         {#if statistic.id === 'Current Session'}
           <button class="text-left" on:click={() => handleBlurredKey('finishETA')}>
-            Time to Finish Book:
+            {$t$('reader.tracker.finishBook')}
           </button>
           <div
             role="button"
@@ -338,7 +356,7 @@
           </div>
           {#if timeToFinishChapter}
             <button class="text-left" on:click={() => handleBlurredKey('finishChapterETA')}>
-              Time to Finish Chapter:
+              {$t$('reader.tracker.finishChapter')}
             </button>
             <div
               role="button"
@@ -351,19 +369,19 @@
             </div>
           {/if}
 
-          <div class="mt-3">Current Position:</div>
+          <div class="mt-3">{$t$('reader.tracker.currentPosition')}</div>
           <div class="mt-3">{lastExploredCharCount}</div>
-          <div>Previous Position</div>
+          <div>{$t$('reader.tracker.previousPosition')}</div>
           <div>{previousLastExploredCharCount}</div>
           {#if frozenPosition > -1}
-            <div>Frozen Position</div>
+            <div>{$t$('reader.tracker.frozenPosition')}</div>
             <div>{frozenPosition}</div>
           {/if}
         {/if}
       </div>
       {#if statistic.id === 'Current Session' && trackingHistoryItems.length}
         <details class="mt-3 mr-4">
-          <summary class="cursor-pointer">Recent History</summary>
+          <summary class="cursor-pointer">{$t$('reader.tracker.history')}</summary>
           <div class="grid grid-cols-[repeat(4,max-content)] gap-x-8 items-center">
             {#each trackingHistoryItems as trackingHistoryItem (trackingHistoryItem.id)}
               <div>{trackingHistoryItem.dateTimeKey}</div>
@@ -381,14 +399,14 @@
               </div>
               <div class="flex">
                 <button
-                  title="Revert Item"
+                  title={$t$('reader.tracker.revert')}
                   class="hover:text-accent-strong"
                   on:click={() => dispatch('revertStatistic', trackingHistoryItem)}
                 >
                   <Fa icon={faTrash} />
                 </button>
                 <div
-                  title="Item saved to Database"
+                  title={$t$('reader.tracker.saved')}
                   class="ml-4 cursor-not-allowed"
                   class:text-success={trackingHistoryItem.saved}
                 >
@@ -399,7 +417,7 @@
           </div>
           <div class="flex justify-between mt-3">
             <button
-              title={currentTrackingHistoryIndex === 0 ? '' : 'Previous Page'}
+              title={currentTrackingHistoryIndex === 0 ? '' : $t$('reader.tracker.prevPage')}
               disabled={currentTrackingHistoryIndex === 0}
               class:opacity-50={currentTrackingHistoryIndex === 0}
               class:cursor-not-allowed={currentTrackingHistoryIndex === 0}
@@ -408,7 +426,7 @@
               <Fa icon={faChevronLeft} />
             </button>
             <button
-              title={hasNextPage ? 'Next Page' : ''}
+              title={hasNextPage ? $t$('reader.tracker.nextPage') : ''}
               disabled={!hasNextPage}
               class:opacity-50={!hasNextPage}
               class:cursor-not-allowed={!hasNextPage}

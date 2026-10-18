@@ -32,6 +32,7 @@
   import { ViewMode } from '$lib/data/view-mode';
   import { isMobile$, isOnOldUrl } from '$lib/functions/utils';
   import { createEventDispatcher } from 'svelte';
+  import { t$, type MessageKey } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
   export let hasChapterData: boolean;
@@ -63,12 +64,16 @@
   }>();
 
   const customReadingPointMenuItems: {
-    label: string;
+    label: MessageKey;
     action: any;
   }[] = [
-    ...(hasCustomReadingPoint ? [{ label: 'Show Point', action: 'showCustomReadingPoint' }] : []),
-    { label: 'Set Point', action: 'setCustomReadingPoint' },
-    ...(hasCustomReadingPoint ? [{ label: 'Reset Point', action: 'resetCustomReadingPoint' }] : [])
+    ...(hasCustomReadingPoint
+      ? [{ label: 'reader.showPoint' as const, action: 'showCustomReadingPoint' }]
+      : []),
+    { label: 'reader.setPoint', action: 'setCustomReadingPoint' },
+    ...(hasCustomReadingPoint
+      ? [{ label: 'reader.resetPoint' as const, action: 'resetCustomReadingPoint' }]
+      : [])
   ];
 
   const panelClasses = 'app-popover-panel';
@@ -93,11 +98,11 @@
 
   $: {
     const item = (
-      entry: { label: string; icon: IconDefinition },
+      entry: { label: MessageKey; icon: IconDefinition },
       action: HeaderAction,
       classes = ''
     ) => ({
-      label: entry.label,
+      label: $t$(entry.label),
       icon: entry.icon,
       action,
       classes: `app-popover-item ${classes}`
@@ -108,40 +113,49 @@
     if (hasBookmarkData) {
       items.push(
         item(
-          { label: 'Return to Bookmark', icon: faRotateLeft },
+          { label: 'reader.returnToBookmark', icon: faRotateLeft },
           'scrollToBookmarkClick',
           'md:hidden'
         )
       );
     }
     if (showFullscreenButton) {
-      items.push(item({ label: 'Fullscreen', icon: faExpand }, 'fullscreenClick', 'md:hidden'));
+      items.push(item({ label: 'reader.fullscreen', icon: faExpand }, 'fullscreenClick', 'md:hidden'));
     }
     // Phones: the bar would push its icons over the back button.
     if (hasText) {
       items.push(
-        item({ label: 'Search in Book', icon: faMagnifyingGlass }, 'searchClick', 'sm:hidden')
+        item({ label: 'reader.search', icon: faMagnifyingGlass }, 'searchClick', 'sm:hidden')
       );
     }
-    items.push(item({ label: 'Listen', icon: faHeadphones }, 'ttsClick', 'sm:hidden'));
+    items.push(item({ label: 'reader.listen', icon: faHeadphones }, 'ttsClick', 'sm:hidden'));
 
-    items.push(item({ label: 'Complete Book', icon: faFlag }, 'completeBook'));
+    items.push(item({ label: 'reader.completeBook', icon: faFlag }, 'completeBook'));
 
     if (hasText) {
-      items.push(item(mergeEntries.JUMP_TO_POSITION, 'jumpClick'));
+      items.push(item({ label: 'reader.jump', icon: mergeEntries.JUMP_TO_POSITION.icon }, 'jumpClick'));
     }
 
     if ($readerImageGalleryPictures$.length) {
-      items.push(item(mergeEntries.READER_IMAGE_GALLERY, 'readerImageGalleryClick'));
+      items.push(
+        item(
+          { label: 'reader.images', icon: mergeEntries.READER_IMAGE_GALLERY.icon },
+          'readerImageGalleryClick'
+        )
+      );
     }
 
     // Larger screens have these in the section navigation.
     items.push(
       isOldUrl
-        ? item(mergeEntries.DOMAIN_HINT, 'domainHintClick')
-        : item(mergeEntries.STATISTICS, 'statisticsClick', 'sm:hidden'),
-      item(mergeEntries.SETTINGS, 'settingsClick', 'sm:hidden'),
-      item({ label: 'Library', icon: mergeEntries.MANAGE.icon }, 'bookManagerClick', 'sm:hidden')
+        ? item({ label: 'reader.domainHint', icon: mergeEntries.DOMAIN_HINT.icon }, 'domainHintClick')
+        : item(
+            { label: 'nav.statistics', icon: mergeEntries.STATISTICS.icon },
+            'statisticsClick',
+            'sm:hidden'
+          ),
+      item({ label: 'nav.settings', icon: mergeEntries.SETTINGS.icon }, 'settingsClick', 'sm:hidden'),
+      item({ label: 'book.library', icon: mergeEntries.MANAGE.icon }, 'bookManagerClick', 'sm:hidden')
     );
 
     moreMenuItems = items;
@@ -175,7 +189,7 @@
     <button
       type="button"
       class="app-header-icon"
-      title="Open Table of Contents"
+      title={$t$('reader.toc')}
       on:click={() => dispatch('tocClick')}
     >
       <Fa icon={faList} />
@@ -184,7 +198,7 @@
   <button
     type="button"
     class="app-header-icon"
-    title="Create Bookmark"
+    title={$t$('reader.bookmark')}
     on:click={() => dispatch('bookmarkClick')}
   >
     <Fa icon={isBookmarkScreen ? fasBookmark : farBookmark} />
@@ -193,7 +207,7 @@
     <button
       type="button"
       class="app-header-icon hidden md:inline-flex"
-      title="Return to Bookmark"
+      title={$t$('reader.returnToBookmark')}
       on:click={() => dispatch('scrollToBookmarkClick')}
     >
       <Fa icon={faRotateLeft} />
@@ -203,7 +217,7 @@
     <button
       type="button"
       class="app-header-icon hidden sm:inline-flex"
-      title="Search in Book"
+      title={$t$('reader.search')}
       on:click={() => dispatch('searchClick')}
     >
       <Fa icon={faMagnifyingGlass} />
@@ -212,7 +226,7 @@
   <button
     type="button"
     class="app-header-icon hidden sm:inline-flex"
-    title="Listen: audiobook or AI voice"
+    title={$t$('reader.listenTitle')}
     on:click={() => dispatch('ttsClick')}
   >
     <Fa icon={faHeadphones} />
@@ -220,7 +234,7 @@
   <button
     type="button"
     class="app-header-icon"
-    title="Highlights, story so far and lorebook"
+    title={$t$('reader.companionTitle')}
     on:click={() => dispatch('companionClick')}
   >
     <Fa icon={faBookAtlas} />
@@ -233,7 +247,7 @@
       {panelClasses}
       bind:this={customReadingPointMenuElm}
     >
-      <div slot="icon" class="app-header-icon hidden md:inline-flex" title="Custom Reading Point">
+      <div slot="icon" class="app-header-icon hidden md:inline-flex" title={$t$('reader.readingPoint')}>
         <Fa icon={faLocationDot} />
       </div>
       <div slot="content" class="flex flex-col">
@@ -243,7 +257,7 @@
             class="app-popover-item"
             on:click={() => dispatchCustomReadingPointAction(actionItem.action)}
           >
-            {actionItem.label}
+            {$t$(actionItem.label)}
           </button>
         {/each}
       </div>
@@ -253,7 +267,7 @@
     <button
       type="button"
       class="app-header-icon hidden md:inline-flex"
-      title="Toggle Fullscreen"
+      title={$t$('reader.toggleFullscreen')}
       on:click={() => dispatch('fullscreenClick')}
     >
       <Fa icon={faExpand} />
@@ -265,11 +279,11 @@
     yOffset={10}
     {panelClasses}
   >
-    <div slot="icon" class="app-header-icon" title="Quick Settings">
+    <div slot="icon" class="app-header-icon" title={$t$('reader.quickSettings')}>
       <Fa icon={faPalette} />
     </div>
     <div slot="content" class="flex w-64 flex-col gap-3 p-2">
-      <div class="app-popover-heading">Theme</div>
+      <div class="app-popover-heading">{$t$('reader.theme')}</div>
       <div class="flex flex-wrap gap-2 px-2">
         {#each themes as option (option.id)}
           <button
@@ -287,12 +301,12 @@
           </button>
         {/each}
       </div>
-      <div class="app-popover-heading">Font size</div>
+      <div class="app-popover-heading">{$t$('reader.fontSize')}</div>
       <div class="flex items-center justify-between px-2 pb-1">
         <button
           type="button"
           class="font-size-button"
-          title="Smaller"
+          title={$t$('reader.smaller')}
           on:click={() => fontSize$.next(Math.max(8, $fontSize$ - 1))}
         >
           <Fa icon={faMinus} />
@@ -301,7 +315,7 @@
         <button
           type="button"
           class="font-size-button"
-          title="Larger"
+          title={$t$('reader.larger')}
           on:click={() => fontSize$.next($fontSize$ + 1)}
         >
           <Fa icon={faPlus} />
@@ -316,7 +330,7 @@
     {panelClasses}
     bind:this={moreMenuElm}
   >
-    <div slot="icon" class="app-header-icon" title="More reader actions">
+    <div slot="icon" class="app-header-icon" title={$t$('reader.more')}>
       <Fa icon={faEllipsisVertical} />
     </div>
     <div slot="content" class="flex flex-col">
@@ -329,7 +343,7 @@
     </div>
   </Popover>
   {#if $viewMode$ === ViewMode.Continuous && !$isMobile$}
-    <span class="px-2 text-sm font-semibold" title="Current Autoscroll Speed">
+    <span class="px-2 text-sm font-semibold" title={$t$('reader.autoscrollSpeed')}>
       {autoScrollMultiplier}x
     </span>
   {/if}

@@ -3,6 +3,7 @@
   import { highlightsToMarkdown, type Highlight } from '$lib/data/annotations';
   import { downloadBlob } from '$lib/functions/file-dom/download-blob';
   import { createEventDispatcher } from 'svelte';
+  import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
   export let title: string;
@@ -48,17 +49,21 @@
   <div class="flex items-center gap-3 px-4 py-2 text-xs">
     <label class="flex items-center gap-1.5">
       <input type="checkbox" bind:checked={notesOnly} />
-      Only with notes
+      {$t$('reader.notesOnly')}
     </label>
     <span class="ml-auto opacity-70">
-      {copied ? 'Copied' : `${highlights.length} highlight${highlights.length === 1 ? '' : 's'}`}
+      {copied
+        ? $t$('reader.copied')
+        : $t$(highlights.length === 1 ? 'reader.highlightCountOne' : 'reader.highlightCount', {
+            count: highlights.length
+          })}
     </span>
-    <button class="p-1.5" title="Copy as Markdown" disabled={!highlights.length} on:click={copy}>
+    <button class="p-1.5" title={$t$('reader.copyMarkdown')} disabled={!highlights.length} on:click={copy}>
       <Fa icon={faCopy} />
     </button>
     <button
       class="p-1.5"
-      title="Download as Markdown"
+      title={$t$('reader.downloadMarkdown')}
       disabled={!highlights.length}
       on:click={download}
     >
@@ -73,7 +78,7 @@
   <div class="flex-1 overflow-y-auto px-2 pb-4">
     {#if !shown.length}
       <p class="px-2 py-6 text-center opacity-70">
-        {notesOnly ? 'No notes yet.' : 'Select text in the book and pick a colour to highlight it.'}
+        {notesOnly ? $t$('reader.noNotes') : $t$('reader.noHighlights')}
       </p>
     {/if}
     {#each groups as group, groupIndex (groupIndex)}
@@ -85,7 +90,7 @@
           <button
             type="button"
             class="min-w-0 flex-1 text-left"
-            title="Go to this highlight"
+            title={$t$('reader.goToHighlight')}
             on:click={() => dispatch('jump', highlight)}
           >
             <span
@@ -103,7 +108,7 @@
           <button
             type="button"
             class="self-start p-1.5 opacity-60 hover:opacity-100"
-            title="Edit"
+            title={$t$('reader.edit')}
             on:click={() => dispatch('edit', highlight)}
           >
             <Fa icon={faPen} />

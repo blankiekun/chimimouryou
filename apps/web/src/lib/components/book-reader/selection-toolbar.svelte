@@ -3,6 +3,7 @@
   import { highlightColors, type HighlightColor } from '$lib/data/annotations';
   import { activePlugins$, type SelectionActionContribution } from '$lib/plugins';
   import { createEventDispatcher } from 'svelte';
+  import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
   /** The Listen panel is open at the bottom, so show at the top instead */
@@ -20,13 +21,13 @@
     ? 'top-12'
     : 'bottom-10'}"
   role="toolbar"
-  aria-label="Selection actions"
+  aria-label={$t$('reader.selectionActions')}
 >
   {#each highlightColors as color (color)}
     <button
       type="button"
       class="flex h-8 w-8 items-center justify-center rounded-full"
-      title="Highlight ({color})"
+      title={$t$('reader.highlightColor', { color: $t$(`reader.color.${color}`) })}
       on:mousedown|preventDefault
       on:click={() => dispatch('highlight', color)}
     >
@@ -37,23 +38,23 @@
   <button
     type="button"
     class="flex h-8 items-center gap-1.5 rounded-full px-2.5"
-    title="Highlight and add a note"
+    title={$t$('reader.noteTitle')}
     on:mousedown|preventDefault
     on:click={() => dispatch('note')}
   >
     <Fa icon={faNoteSticky} />
-    <span class="hidden sm:inline">Note</span>
+    <span class="hidden sm:inline">{$t$('reader.note')}</span>
   </button>
   {#each $activePlugins$.flatMap((plugin) => plugin.selectionActions ?? []) as action (action.label)}
     <button
       type="button"
       class="flex h-8 items-center gap-1.5 rounded-full px-2.5"
-      title={action.title}
+      title={$t$(action.title)}
       on:mousedown|preventDefault
       on:click={() => dispatch('action', action)}
     >
       <Fa icon={action.icon} />
-      {action.label}
+      {$t$(action.label)}
     </button>
   {/each}
 </div>

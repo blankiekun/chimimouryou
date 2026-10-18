@@ -36,20 +36,14 @@
   import type { SearchIndex } from '$lib/functions/book-text/book-search';
   import { downloadBlob } from '$lib/functions/file-dom/download-blob';
   import { onDestroy, onMount } from 'svelte';
+  import { t$, tr } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
   export let title: string;
   export let getIndex: () => Promise<SearchIndex>;
   export let position: number;
 
-  const categoryLabels: Record<LoreCategory, string> = {
-    character: 'Characters',
-    place: 'Places',
-    organization: 'Groups',
-    item: 'Items',
-    term: 'Terms',
-    event: 'Events'
-  };
+  $: categoryLabels = (category: LoreCategory) => $t$(`reader.lore.${category}`);
 
   let lorebook: Lorebook | undefined;
   let progress = '';
@@ -139,7 +133,7 @@
       sendTargets = laterInSeries(await loadCalibreCatalog(), title, $homeBookTitles$);
       sendTarget = sendTargets[0]?.title ?? '';
       if (!sendTargets.length) {
-        sendMessage = 'No later book of this series in the Calibre library.';
+        sendMessage = tr('reader.loreNoLater');
       }
     } catch (e: any) {
       sendTargets = [];
@@ -160,7 +154,10 @@
       syncExtras('lorebook', sendTarget);
     }
 
-    sendMessage = `Copied ${added} entr${added === 1 ? 'y' : 'ies'} to ${sendTarget}. Its lorebook continues from them.`;
+    sendMessage = tr(added === 1 ? 'reader.loreCopiedOne' : 'reader.loreCopied', {
+      count: added,
+      title: sendTarget
+    });
     sendTargets = undefined;
   }
 
@@ -185,7 +182,7 @@
   }
 
   async function clearAll() {
-    if (confirm('Delete every lorebook entry for this book? It will be rebuilt from the start.')) {
+    if (confirm(tr('reader.loreClearConfirm'))) {
       await clearLorebook(title);
     }
   }
@@ -204,34 +201,39 @@
   <div class="px-4 pt-3 text-xs">
     {#if lorebook}
       <p class="mb-2 opacity-80">
-        Read up to {lorebook.processedUpTo.toLocaleString()} characters. {$lorebookAutoInterval$
-          ? `Updates itself every ${$lorebookAutoInterval$.toLocaleString()} characters.`
-          : 'Automatic updates are off (Settings → AI).'}
+        {$t$('reader.loreReadUpTo', { count: lorebook.processedUpTo.toLocaleString() })}
+        {$lorebookAutoInterval$
+          ? $t$('reader.loreAuto', { count: $lorebookAutoInterval$.toLocaleString() })
+          : $t$('reader.loreAutoOff')}
       </p>
       <div class="flex flex-wrap items-center gap-2">
         <button
           class="reader-panel-chip rounded-full px-3 py-1.5 font-semibold disabled:opacity-50"
           disabled={running || pending < minUpdateCharacters}
-          title="Sends the {pending.toLocaleString()} characters since the last update to {recapModel()}"
+          title={$t$('reader.loreUpdateTitle', {
+            count: pending.toLocaleString(),
+            model: recapModel()
+          })}
           on:click={update}
         >
-          {#if running}<Fa icon={faSpinner} spin /> Updating...{:else}Update to here ({Math.round(
-              pending / 1000
-            )}k new){/if}
+          {#if running}<Fa icon={faSpinner} spin /> {$t$('reader.loreUpdating')}{:else}{$t$(
+              'reader.loreUpdate',
+              { k: Math.round(pending / 1000) }
+            )}{/if}
         </button>
         {#if running}
           <button
             class="flex items-center gap-1 p-1.5"
-            title="Stop the update (what was read so far is kept)"
+            title={$t$('reader.loreStopTitle')}
             on:click={() => stopLorebookUpdate(title)}
           >
-            <Fa icon={faStop} /> Stop
+            <Fa icon={faStop} /> {$t$('reader.stop')}
           </button>
         {/if}
         <span class="flex-1" />
         <button
           class="p-1.5"
-          title="Send to the next book of the series"
+          title={$t$('reader.loreSend')}
           disabled={!lorebook.entries.length}
           on:click={showSendTargets}
         >
@@ -239,13 +241,13 @@
         </button>
         <button
           class="p-1.5"
-          title="Export for SillyTavern"
+          title={$t$('reader.loreExport')}
           disabled={!lorebook.entries.length}
           on:click={exportJson}
         >
           <Fa icon={faDownload} />
         </button>
-        <button class="p-1.5" title="Clear lorebook" disabled={running} on:click={clearAll}>
+        <button class="p-1.5" title={$t$('reader.loreClear')} disabled={running} on:click={clearAll}>
           <Fa icon={faTrash} />
         </button>
       </div>
@@ -255,13 +257,13 @@
             {#each sendTargets as book (book.title)}
               <option value={book.title}>
                 {book.seriesIndex ?? '?'} · {book.title}{$homeBookTitles$.includes(book.title)
-                  ? ' (Home)'
+                  ? ` (${$t$('nav.home')})`
                   : ''}
               </option>
             {/each}
           </select>
           <button class="reader-panel-chip rounded-full px-3 py-1.5 font-semibold" on:click={send}>
-            Copy entries
+            {$t$('reader.loreCopy')}
           </button>
         </div>
       {/if}
@@ -275,7 +277,7 @@
 
     <div class="mt-3 flex flex-wrap gap-1">
       <button class="chip" class:chip-active={!category} on:click={() => (category = '')}
-        >All</button
+        >{$t$('reader.all')}</button
       >
       {#each loreCategories as option}
         {#if counts[option]}
@@ -284,7 +286,7 @@
             class:chip-active={category === option}
             on:click={() => (category = option)}
           >
-            {categoryLabels[option]}
+            {categoryLabels(option)}
             {counts[option]}
           </button>
         {/if}
@@ -292,7 +294,7 @@
     </div>
     <input
       class="filter mt-2 w-full rounded-lg px-2 py-1.5"
-      placeholder="Filter entries"
+      placeholder={$t$('reader.loreFilter')}
       bind:value={filter}
     />
   </div>
@@ -300,8 +302,7 @@
   <div class="flex-1 overflow-y-auto px-2 py-2">
     {#if lorebook && !lorebook.entries.length}
       <p class="px-2 py-6 text-center text-sm opacity-70">
-        No entries yet. Update the lorebook to collect the characters, places and terms you've met
-        so far.
+        {$t$('reader.loreEmpty')}
       </p>
     {/if}
     {#each visible as entry (entry.id)}
@@ -314,7 +315,7 @@
           {#if entry.reading && entry.reading !== entry.name}
             <span class="text-xs opacity-60" lang="ja">{entry.reading}</span>
           {/if}
-          <span class="ml-1 text-xs opacity-50">{categoryLabels[entry.category]}</span>
+          <span class="ml-1 text-xs opacity-50">{categoryLabels(entry.category)}</span>
           {#if openEntry !== entry.id}
             <span class="entry-preview mt-0.5 block text-xs opacity-75">{entry.content}</span>
           {/if}
@@ -327,13 +328,18 @@
             on:change={(e) => editContent(entry.id, e.currentTarget.value)}
           />
           <div class="flex items-center gap-2 text-xs opacity-60">
-            <span class="min-w-0 flex-1 truncate" lang="ja">Keys: {entry.keys.join('、')}</span>
+            <span class="min-w-0 flex-1 truncate" lang="ja"
+              >{$t$('reader.loreKeys', { keys: entry.keys.join('、') })}</span
+            >
             <span
               >{entry.fromBook
-                ? `From ${entry.fromBook}`
-                : `${entry.updated > position ? 'Has details from later · ' : ''}since ${entry.firstSeen.toLocaleString()}`}</span
+                ? $t$('reader.loreFrom', { title: entry.fromBook })
+                : `${entry.updated > position ? `${$t$('reader.loreLater')} · ` : ''}${$t$(
+                    'reader.loreSince',
+                    { count: entry.firstSeen.toLocaleString() }
+                  )}`}</span
             >
-            <button class="p-1" title="Delete entry" on:click={() => removeEntry(entry.id)}>
+            <button class="p-1" title={$t$('reader.loreDeleteEntry')} on:click={() => removeEntry(entry.id)}>
               <Fa icon={faTrash} />
             </button>
           </div>

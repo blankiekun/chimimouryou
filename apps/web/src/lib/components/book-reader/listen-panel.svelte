@@ -10,6 +10,7 @@
   import { activePlugins$ } from '$lib/plugins';
   import type { SearchIndex } from '$lib/functions/book-text/book-search';
   import { createEventDispatcher, onMount } from 'svelte';
+  import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
   export let title: string;
@@ -36,6 +37,10 @@
 
   $: pluginModes = $activePlugins$.flatMap((plugin) => plugin.listenModes ?? []);
   $: pluginMode = pluginModes.find((item) => item.key === mode);
+  $: modes = [
+    { key: 'audiobook', title: 'reader.audiobook' as const, icon: faCompactDisc },
+    ...pluginModes
+  ];
 
   onMount(async () => {
     try {
@@ -54,7 +59,7 @@
 </script>
 
 <!-- A single fixed-height row above the footer; the reader is shortened by listenBarRem so no text sits under it. -->
-<div class="listen-bar reader-panel writing-horizontal-tb" role="region" aria-label="Listen">
+<div class="listen-bar reader-panel writing-horizontal-tb" role="region" aria-label={$t$('reader.listen')}>
   {#if loaded}
     {#if pluginMode}
       <svelte:component
@@ -80,13 +85,13 @@
   {/if}
 
   {#if pluginModes.length}
-    <div class="listen-modes" role="radiogroup" aria-label="Source">
-      {#each [{ key: 'audiobook', title: 'Audiobook', icon: faCompactDisc }, ...pluginModes] as item (item.key)}
+    <div class="listen-modes" role="radiogroup" aria-label={$t$('reader.source')}>
+      {#each modes as item (item.key)}
         <button
           role="radio"
           aria-checked={mode === item.key}
           class:listen-mode-active={mode === item.key}
-          title={item.title}
+          title={$t$(item.title)}
           on:click={() => setMode(item.key)}
         >
           <Fa icon={item.icon} />
@@ -94,7 +99,7 @@
       {/each}
     </div>
   {/if}
-  <button class="listen-icon" title="Close" on:click={() => dispatch('close')}>
+  <button class="listen-icon" title={$t$('reader.close')} on:click={() => dispatch('close')}>
     <Fa icon={faXmark} />
   </button>
 </div>

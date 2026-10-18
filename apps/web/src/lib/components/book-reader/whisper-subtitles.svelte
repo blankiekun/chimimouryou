@@ -7,6 +7,7 @@
     type WhisperSource
   } from '$lib/data/whisper';
   import { createEventDispatcher, onDestroy } from 'svelte';
+  import { t$, tr } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
   /** The audio to transcribe, asked for when the button is pressed. */
@@ -29,7 +30,7 @@
   async function start() {
     controller = new AbortController();
     error = '';
-    progress = 'Starting Whisper';
+    progress = tr('reader.whisperStarting');
 
     try {
       const srt = await transcribeAudio(sources(), (text) => (progress = text), controller.signal);
@@ -49,24 +50,24 @@
   {#if controller}
     <Fa icon={faSpinner} spin />
     <span class="truncate" role="status">{progress}</span>
-    <button class="whisper-pill" title="Stop Whisper" on:click={() => controller?.abort()}>
+    <button class="whisper-pill" title={$t$('reader.whisperStop')} on:click={() => controller?.abort()}>
       <Fa icon={faStop} />
     </button>
   {:else}
-    <select class="whisper-select" aria-label="Whisper model" bind:value={$whisperModel$}>
+    <select class="whisper-select" aria-label={$t$('reader.whisperModel')} bind:value={$whisperModel$}>
       {#each whisperModels as model (model.id)}
         <option value={model.id}>{model.name}</option>
       {/each}
     </select>
     <button
       class="whisper-pill"
-      title="Transcribe the audio in this browser (a GPU with WebGPU makes it much faster); keep the tab open"
+      title={$t$('reader.whisperHint')}
       on:click={start}
     >
-      Make subtitles with Whisper
+      {$t$('reader.whisperMake')}
     </button>
     {#if srtUrl}
-      <a class="whisper-pill" href={srtUrl} download="{name}.srt" title="Download the subtitles">
+      <a class="whisper-pill" href={srtUrl} download="{name}.srt" title={$t$('reader.whisperDownload')}>
         <Fa icon={faDownload} /> SRT
       </a>
     {/if}

@@ -28,6 +28,7 @@
     type ReadingParagraph
   } from '$lib/functions/tts/extract-reading-text';
   import { createEventDispatcher, onDestroy, onMount } from 'svelte';
+  import { t$, tr } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
   /** Book HTML (furigana is stripped before synthesis) */
@@ -48,10 +49,10 @@
   let playing = false;
   let loading = false;
   let error = !$elevenLabsApiKey$
-    ? 'Add an ElevenLabs API key in Settings → AI to read aloud'
+    ? tr('reader.ttsNoKey')
     : $ttsVoiceId$
       ? ''
-      : 'Set a voice ID in Settings → AI to read aloud';
+      : tr('reader.ttsNoVoice');
   let audio: HTMLAudioElement;
   let abortController = new AbortController();
   let audioCache = createAudioCache();
@@ -162,7 +163,7 @@
     chunks = buildReadingChunks(extractParagraphsFrom(elementHtml, startCharCount));
 
     if (!chunks.length) {
-      error = 'No text found from the current position';
+      error = tr('reader.ttsNoText');
       return;
     }
 
@@ -201,25 +202,25 @@
 
 <!-- One row inside the Listen bar (listen-panel.svelte). -->
 <div class="voice">
-  <button class="voice-icon" title="Previous" on:click={() => skip(-1)}>
+  <button class="voice-icon" title={$t$('reader.previous')} on:click={() => skip(-1)}>
     <Fa icon={faBackwardStep} />
   </button>
   <button
     class="voice-play"
-    title={playing ? 'Pause' : 'Read aloud from here'}
+    title={$t$(playing ? 'reader.pause' : 'reader.readAloudHere')}
     disabled={!$ttsVoiceId$ || !$elevenLabsApiKey$}
     on:click={togglePlay}
   >
     <Fa icon={loading ? faSpinner : playing ? faPause : faPlay} spin={loading} fw />
   </button>
-  <button class="voice-icon" title="Next" on:click={() => skip(1)}>
+  <button class="voice-icon" title={$t$('reader.next')} on:click={() => skip(1)}>
     <Fa icon={faForwardStep} />
   </button>
   <span class="voice-text">
     {#if error}
       <span class="voice-line voice-error">{error}</span>
     {:else}
-      <span class="voice-line" lang="ja">{currentText || 'Read aloud from your position'}</span>
+      <span class="voice-line" lang="ja">{currentText || $t$('reader.readAloudPosition')}</span>
     {/if}
     <span class="voice-meta">ElevenLabs · {$elevenLabsModel$ || defaultElevenLabsModel}</span>
   </span>

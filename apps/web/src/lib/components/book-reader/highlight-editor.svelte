@@ -2,6 +2,7 @@
   import { faTrash, faXmark } from '@fortawesome/free-solid-svg-icons';
   import { highlightColors, type Highlight, type HighlightColor } from '$lib/data/annotations';
   import { createEventDispatcher, onMount } from 'svelte';
+  import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
   export let highlight: Highlight;
@@ -32,18 +33,18 @@
 
 <aside
   class="reader-panel writing-horizontal-tb fixed inset-x-2 bottom-2 z-30 mx-auto flex max-w-xl flex-col gap-3 rounded-xl p-4 text-sm shadow-2xl"
-  aria-label="Highlight"
+  aria-label={$t$('reader.highlight')}
 >
   <div class="flex items-start gap-3">
     <blockquote class="reader-panel-quote max-h-28 flex-1 overflow-y-auto border-l-2 pl-3" lang="ja">
       {highlight.text}
     </blockquote>
-    <button class="p-1" title="Close" on:click={close}><Fa icon={faXmark} /></button>
+    <button class="p-1" title={$t$('reader.close')} on:click={close}><Fa icon={faXmark} /></button>
   </div>
 
   <textarea
     class="reader-panel-input min-h-[5rem] w-full resize-y rounded px-3 py-2"
-    placeholder="Add a note..."
+    placeholder={$t$('reader.notePlaceholder')}
     bind:this={noteElm}
     bind:value={note}
     on:keydown={(event) => {
@@ -61,7 +62,7 @@
         class="color-option"
         class:color-option-active={highlight.color === color}
         style:background-color="var(--highlight-{color})"
-        title={color}
+        title={$t$(`reader.color.${color}`)}
         on:click={() => {
           highlight = { ...highlight, color };
           dispatch('change', { color });
@@ -74,14 +75,14 @@
       class="reader-panel-chip flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs"
       on:click={() => dispatch('delete')}
     >
-      <Fa icon={faTrash} /> Delete
+      <Fa icon={faTrash} /> {$t$('reader.delete')}
     </button>
     <button
       type="button"
       class="reader-panel-chip rounded-full px-3 py-1.5 text-xs font-semibold"
       on:click={close}
     >
-      Done
+      {$t$('reader.done')}
     </button>
   </div>
 </aside>
