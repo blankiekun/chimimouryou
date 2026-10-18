@@ -44,6 +44,9 @@ anything a reader or a server operator would notice.
   人気がない is ひとけ, 今日の社会 こんにち, 舞台の上手 かみて, 金を貸す かね, and 明日 is あした
   except in formal phrases (明日の日本). "Books without an estimate" redoes word lists once;
   the difficulty scores don't change.
+- 人気がない in word lists is only ひとけ with a place or absence word around it (周囲に人気がない,
+  人気がない場所); この店は人気がない and 人気のない奴 stay にんき. "Books without an estimate"
+  redoes word lists once; the difficulty scores don't change.
 
 ### Library
 
