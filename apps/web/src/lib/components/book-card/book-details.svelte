@@ -76,6 +76,7 @@
   let calibreBook: CalibreBook | undefined;
   let estimate: CalibreDifficulty | undefined;
   let kanji: KanjiCoverage | undefined;
+  let copied = false;
   let speed = 0;
   let metadata: BookMetadata | undefined;
   let searching = false;
@@ -142,6 +143,7 @@
     calibreBook = undefined;
     estimate = undefined;
     kanji = undefined;
+    copied = false;
     metadata = undefined;
     candidates = undefined;
     source = undefined;
@@ -176,6 +178,11 @@
         kanji = kanjiCoverage(counts, seen);
       }
     }
+  }
+
+  async function copyNewKanji() {
+    await navigator.clipboard.writeText(kanji?.topNew.join('') ?? '');
+    copied = true;
   }
 
   function openSearch() {
@@ -360,6 +367,15 @@
                     {(kanji.coverage * 100).toFixed(1)}% already met{#if kanji.newKanji}
                       ({number(kanji.newKanji)} new){/if}{/if}.
                 </span>
+                {#if kanji?.topNew.length}
+                  <span class="details-note">
+                    {kanji.topNew.length < kanji.newKanji ? 'Most frequent new' : 'New'} kanji:
+                    <span class="details-new-kanji" lang="ja">{kanji.topNew.join('')}</span>
+                    <button type="button" class="details-link" on:click={copyNewKanji}>
+                      {copied ? 'Copied' : 'Copy'}
+                    </button>
+                  </span>
+                {/if}
               {:else}
                 No estimate yet
               {/if}
@@ -725,6 +741,13 @@
     width: 100%;
     color: var(--app-muted-fg);
     font-size: 0.85rem;
+  }
+
+  .details-new-kanji {
+    font-size: 1.1rem;
+    letter-spacing: 0.1em;
+    color: var(--font-color);
+    word-break: break-all;
   }
 
   .details-tags {
