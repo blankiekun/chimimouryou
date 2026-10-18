@@ -2,6 +2,7 @@
   import { faSpinner } from '@fortawesome/free-solid-svg-icons';
   import { buttonClasses } from '$lib/css-classes';
   import { difficultyApiUrl } from '$lib/data/calibre';
+  import { t$, tr } from '$lib/i18n';
   import { onDestroy, onMount } from 'svelte';
   import Fa from 'svelte-fa';
 
@@ -35,6 +36,8 @@
   export let finishedCompute = false;
 
   $: running = !!status?.job && !status.job.finished;
+  /** The sentence around the file name and link, which go where the language puts them */
+  $: dictionaryParts = $t$('library.dictionaryNeeded').split(/(\{file\}|\{link\})/);
 
   onMount(poll);
 
@@ -47,7 +50,7 @@
       const response = await fetch(`${difficultyApiUrl}status`, { cache: 'no-store' });
 
       if (!response.ok) {
-        throw new Error(`Difficulty service unavailable (HTTP ${response.status})`);
+        throw new Error(tr('library.difficultyUnavailable', { status: response.status }));
       }
 
       const wasRunning = running;
@@ -127,30 +130,34 @@
 </script>
 
 <div class="flex max-w-xl flex-col gap-4 text-sm">
-  <p>Estimates difficulty of books in the library on a scale from 0 Beginner to 5 Insane.</p>
+  <p>
+    {$t$('library.difficultyIntro', {
+      beginner: $t$('difficulty.beginner'),
+      insane: $t$('difficulty.insane')
+    })}
+  </p>
 
   {#if error}
     <p class="text-[color:var(--app-danger-color)]">{error}</p>
   {/if}
 
   {#if !status && !error}
-    <p class="flex items-center gap-2"><Fa icon={faSpinner} spin /> Loading status...</p>
+    <p class="flex items-center gap-2"><Fa icon={faSpinner} spin /> {$t$('library.loadingStatus')}</p>
   {:else if status}
     {#if !status.dictionary}
       <div class="flex flex-col gap-2">
         <p>
-          Estimates need Jiten's word frequency list. Download
-          <strong>jiten_freq_global.zip</strong> from
-          <a
-            class="underline"
-            href="https://jiten.moe/frequency-dictionaries"
-            target="_blank"
-            rel="noreferrer">jiten.moe/frequency-dictionaries</a
-          >, then import it.
+          {#each dictionaryParts as part}{#if part === '{file}'}<strong>jiten_freq_global.zip</strong
+              >{:else if part === '{link}'}<a
+                class="underline"
+                href="https://jiten.moe/frequency-dictionaries"
+                target="_blank"
+                rel="noreferrer">jiten.moe/frequency-dictionaries</a
+              >{:else}{part}{/if}{/each}
         </p>
         <label class="{buttonClasses} flex cursor-pointer items-center gap-2 self-start">
           {#if importing}<Fa icon={faSpinner} spin />{/if}
-          Import frequency list
+          {$t$('library.importDictionary')}
           <input
             type="file"
             accept=".zip,application/zip"
@@ -164,11 +171,11 @@
     <div class="flex flex-wrap gap-2">
       <button
         class={buttonClasses}
-        title="Books without an estimate"
+        title={$t$('library.runHint')}
         disabled={running || !status.dictionary}
         on:click={() => post('compute', { all: true })}
       >
-        Run
+        {$t$('library.run')}
       </button>
       {#if selectedIds.length}
         <button
@@ -176,7 +183,7 @@
           disabled={running || !status.dictionary}
           on:click={() => post('compute', { ids: selectedIds })}
         >
-          Selected books ({selectedIds.length})
+          {$t$('library.selectedBooks', { count: selectedIds.length })}
         </button>
       {/if}
     </div>
@@ -187,9 +194,13 @@
         <div class="flex items-center gap-2">
           {#if running}<Fa icon={faSpinner} spin />{/if}
           <span class="font-semibold">
-            Estimating difficulty:
-            {job.done.toLocaleString()} / {job.total.toLocaleString()}
-            {#if job.cancelled}(cancelled){:else if job.error}(failed){:else if job.finished}(done){/if}
+            {$t$('library.estimating', {
+              done: job.done.toLocaleString(),
+              total: job.total.toLocaleString()
+            })}
+            {#if job.cancelled}{$t$('library.jobCancelled')}{:else if job.error}{$t$(
+                'library.jobFailed'
+              )}{:else if job.finished}{$t$('library.jobDone')}{/if}
           </span>
         </div>
         <progress class="w-full" value={job.done} max={job.total || 1} />
@@ -197,9 +208,9 @@
           <p class="text-[color:var(--app-danger-color)]">{job.error}</p>
         {/if}
         {#if running}
-          <button class="{buttonClasses} self-start" on:click={() => post('cancel')}
-            >Cancel</button
-          >
+          <button class="{buttonClasses} self-start" on:click={() => post('cancel')}>
+            {$t$('book.cancel')}
+          </button>
         {/if}
       </section>
     {/if}

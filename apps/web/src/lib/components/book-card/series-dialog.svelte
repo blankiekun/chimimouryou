@@ -9,6 +9,7 @@
     guessSeriesName,
     saveSeriesOverrides
   } from '$lib/data/series-overrides';
+  import { t$ } from '$lib/i18n';
   import { createEventDispatcher } from 'svelte';
 
   /**
@@ -91,15 +92,14 @@
 </script>
 
 <DialogTemplate>
-  <svelte:fragment slot="header">Make series</svelte:fragment>
+  <svelte:fragment slot="header">{$t$('library.makeSeries')}</svelte:fragment>
   <div slot="content" class="flex w-[min(80vw,48rem)] flex-col">
     <label class="flex flex-col gap-1 text-sm">
-      Series name
+      {$t$('library.seriesName')}
       <input type="text" class={inputClasses} bind:value={name} maxlength="200" />
     </label>
     <p class="py-2 text-xs opacity-70">
-      {checked.size} of {candidates.length} books found with this name in their title will be in the
-      series. Unchecked books already in it are taken out.
+      {$t$('library.seriesNote', { checked: checked.size, total: candidates.length })}
     </p>
     <label
       class="flex cursor-pointer items-center gap-3 border-b border-line py-2 font-medium"
@@ -110,7 +110,7 @@
         indeterminate={!!checked.size && !allChecked}
         on:change={toggleAll}
       />
-      Check all
+      {$t$('library.checkAll')}
     </label>
     <ul class="h-[50vh] overflow-y-auto">
       {#each candidates as card (card.title)}
@@ -127,7 +127,7 @@
               <span class="block truncate font-medium">{card.title}</span>
               <span class="block truncate text-xs opacity-70">
                 {card.authors || ''}{card.series && card.series !== name.trim()
-                  ? ` · now in ${card.series}`
+                  ? ` · ${$t$('library.nowIn', { series: card.series })}`
                   : ''}
               </span>
             </span>
@@ -141,7 +141,7 @@
   </div>
   <div class="flex grow items-center justify-between" slot="footer">
     <button class={buttonClasses} on:click={() => close(false)}>
-      Cancel
+      {$t$('book.cancel')}
       <Ripple />
     </button>
     <button
@@ -150,7 +150,7 @@
       disabled={saving || !name.trim() || !checked.size}
       on:click={save}
     >
-      Save series
+      {$t$('library.saveSeries')}
       <Ripple />
     </button>
   </div>

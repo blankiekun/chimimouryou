@@ -5,17 +5,18 @@
  */
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-import { difficultyBand, difficultyNames } from '$lib/data/difficulty';
+import { difficultyBand, difficultyNameKey } from '$lib/data/difficulty';
+import type { MessageKey } from '$lib/i18n';
 
 export interface LibraryFilter {
   key: string;
-  label: string;
+  label: MessageKey;
   test: (card: BookCardProps, now: number) => boolean;
 }
 
 export interface LibraryFilterSection {
   key: string;
-  label: string;
+  label: MessageKey;
   filters: LibraryFilter[];
 }
 
@@ -33,103 +34,103 @@ export function isReading(card: BookCardProps) {
 
 export const allBooksFilter: LibraryFilter = {
   key: 'all',
-  label: 'All books',
+  label: 'library.allBooks',
   test: () => true
 };
 
 export const libraryFilterSections: LibraryFilterSection[] = [
   {
     key: 'type',
-    label: 'Type',
+    label: 'library.type',
     filters: [
-      { key: 'books', label: 'Books', test: (card) => !card.manga && !card.vn },
-      { key: 'manga', label: 'Manga', test: (card) => !!card.manga },
-      { key: 'vn', label: 'Visual novels', test: (card) => !!card.vn }
+      { key: 'books', label: 'library.books', test: (card) => !card.manga && !card.vn },
+      { key: 'manga', label: 'library.manga', test: (card) => !!card.manga },
+      { key: 'vn', label: 'library.vn', test: (card) => !!card.vn }
     ]
   },
   {
     key: 'status',
-    label: 'Reading status',
+    label: 'library.status',
     filters: [
-      { key: 'unread', label: 'Unread', test: (card) => !card.progress },
+      { key: 'unread', label: 'library.unread', test: (card) => !card.progress },
       {
         key: 'reading',
-        label: 'Reading',
+        label: 'library.reading',
         test: isReading
       },
       {
         key: 'completed',
-        label: 'Completed',
+        label: 'library.completed',
         test: isFinished
       }
     ]
   },
   {
     key: 'activity',
-    label: 'Last read',
+    label: 'library.lastRead',
     filters: [
       {
         key: 'week',
-        label: 'Past 7 days',
+        label: 'library.pastWeek',
         test: (card, now) => !!card.lastBookOpen && now - card.lastBookOpen <= 7 * dayMs
       },
       {
         key: 'month',
-        label: 'Past 30 days',
+        label: 'library.pastMonth',
         test: (card, now) => !!card.lastBookOpen && now - card.lastBookOpen <= 30 * dayMs
       },
       {
         key: 'older',
-        label: 'Older',
+        label: 'library.older',
         test: (card, now) => !!card.lastBookOpen && now - card.lastBookOpen > 30 * dayMs
       },
-      { key: 'never', label: 'Never opened', test: (card) => !card.lastBookOpen }
+      { key: 'never', label: 'library.neverOpened', test: (card) => !card.lastBookOpen }
     ]
   },
   {
     key: 'difficulty',
-    label: 'Difficulty',
+    label: 'book.difficulty',
     filters: [
-      ...difficultyNames.slice(0, 5).map((name, band) => ({
+      ...[0, 1, 2, 3, 4].map((band) => ({
         key: `difficulty-${band}`,
-        label: name,
+        label: difficultyNameKey(band),
         test: (card: BookCardProps) =>
           card.difficulty !== undefined && Math.min(difficultyBand(card.difficulty), 4) === band
       })),
       {
         key: 'difficulty-none',
-        label: 'Not estimated',
+        label: 'library.notEstimated',
         test: (card) => card.difficulty === undefined
       }
     ]
   },
   {
     key: 'length',
-    label: 'Length',
+    label: 'library.length',
     filters: [
       {
         key: 'short',
-        label: 'Under 100k characters',
+        label: 'library.lengthShort',
         test: (card) => card.characters > 0 && card.characters < 100_000
       },
       {
         key: 'medium',
-        label: '100k – 150k characters',
+        label: 'library.lengthMedium',
         test: (card) => card.characters >= 100_000 && card.characters < 150_000
       },
       {
         key: 'medium-long',
-        label: '150k – 200k characters',
+        label: 'library.lengthMediumLong',
         test: (card) => card.characters >= 150_000 && card.characters < 200_000
       },
       {
         key: 'longer',
-        label: '200k – 300k characters',
+        label: 'library.lengthLonger',
         test: (card) => card.characters >= 200_000 && card.characters <= 300_000
       },
       {
         key: 'long',
-        label: 'Over 300k characters',
+        label: 'library.lengthLong',
         test: (card) => card.characters > 300_000
       }
     ]
@@ -150,14 +151,21 @@ export function seriesFilterKey(series: string) {
   return `${seriesPrefix}${series}`;
 }
 
-export function getLibraryFilter(key: string) {
+export function getLibraryFilter(key: string): LibraryFilter {
   if (key.startsWith(seriesPrefix)) {
     const series = key.slice(seriesPrefix.length);
 
-    return { key, label: series, test: (card: BookCardProps) => card.series === series };
+    return { key, label: 'library.sortSeries', test: (card) => card.series === series };
   }
 
   return filtersByKey.get(key) ?? allBooksFilter;
+}
+
+/** What the filter is called: its label, or the series' name. */
+export function libraryFilterLabel(key: string, t: (key: MessageKey) => string) {
+  return key.startsWith(seriesPrefix)
+    ? key.slice(seriesPrefix.length)
+    : t(getLibraryFilter(key).label);
 }
 
 export function filterBookCards(

@@ -9,10 +9,11 @@
   import {
     allBooksFilter,
     countBookCards,
-    getLibraryFilter,
+    libraryFilterLabel,
     libraryFilterSections
   } from '$lib/components/book-card/library-filters';
   import { libraryCollapsedFilterSections$ } from '$lib/data/store';
+  import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
   export let bookCards: BookCardProps[] = [];
@@ -23,7 +24,7 @@
   let mobileOpen = false;
 
   $: counts = countBookCards(bookCards);
-  $: activeFilterLabel = getLibraryFilter(activeFilter).label;
+  $: activeFilterLabel = libraryFilterLabel(activeFilter, $t$);
 
   function toggleSection(sectionKey: string) {
     const collapsed = new Set($libraryCollapsedFilterSections$);
@@ -43,7 +44,7 @@
   }
 </script>
 
-<aside class="library-sidebar" aria-label="Library filters">
+<aside class="library-sidebar" aria-label={$t$('library.filters')}>
   <button
     type="button"
     class="library-sidebar-toggle"
@@ -85,7 +86,7 @@
         <input
           type="search"
           class="library-filter-search-input"
-          placeholder="Search titles, series, tags"
+          placeholder={$t$('library.searchPlaceholder')}
           autocomplete="off"
           bind:value={searchTerm}
         />
@@ -93,7 +94,7 @@
           <button
             type="button"
             class="library-filter-search-clear"
-            title="Clear search"
+            title={$t$('library.clearSearch')}
             on:click={() => (searchTerm = '')}
           >
             <Fa icon={faXmark} />
@@ -107,7 +108,7 @@
         class:library-filter-row-active={activeFilter === allBooksFilter.key}
         on:click={() => selectFilter(allBooksFilter.key)}
       >
-        <span>{allBooksFilter.label}</span>
+        <span>{$t$(allBooksFilter.label)}</span>
         <span class="library-filter-count">{counts.get(allBooksFilter.key) ?? 0}</span>
       </button>
 
@@ -125,7 +126,7 @@
             aria-expanded={expanded}
             on:click={() => toggleSection(section.key)}
           >
-            <span>{section.label}</span>
+            <span>{$t$(section.label)}</span>
             <span class="flex items-center gap-1.5">
               <span class="library-filter-count">
                 {section.filters.reduce((sum, filter) => sum + (counts.get(filter.key) ?? 0), 0)}
@@ -144,7 +145,7 @@
                   class:library-filter-row-active={activeFilter === filter.key}
                   on:click={() => selectFilter(filter.key)}
                 >
-                  <span>{filter.label}</span>
+                  <span>{$t$(filter.label)}</span>
                   <span class="library-filter-count">{counts.get(filter.key) ?? 0}</span>
                 </button>
               {/each}
