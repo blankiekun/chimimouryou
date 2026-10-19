@@ -14,6 +14,8 @@
 limit_req_zone $binary_remote_addr zone=account_login:1m rate=10r/m;
 # Keeps book page searches on Jiten small (its API terms: personal, small scale).
 limit_req_zone $binary_remote_addr zone=jiten:1m rate=20r/m;
+# Readings files are asked for on each book open; this bounds what one address can queue.
+limit_req_zone $binary_remote_addr zone=readings:1m rate=6r/m;
 
 # Behind a reverse proxy every client looks like the proxy, so set
 # real_ip_header/set_real_ip_from for it (REAL_IP_FROM in Docker) first.
@@ -123,6 +125,20 @@ server {
     proxy_set_header X-Forwarded-Proto $forwarded_proto;
     # The frequency list upload (jiten_freq_global.zip, about 8 MB).
     client_max_body_size 64m;
+  }
+
+  # Readings files (furigana in context): requested and fetched by every reader who may use the
+  # shared sync folder, not only those with the difficulty permission.
+  location ~ ^/calibre/difficulty/api/readings/-?[0-9]+$ {
+    auth_request /_account_shared;
+    limit_req zone=readings burst=10 nodelay;
+    limit_req_status 429;
+    rewrite ^/calibre/difficulty/api/(.*)$ /$1 break;
+    proxy_pass http://$difficulty_upstream;
+    proxy_set_header X-Internal-Token "${INTERNAL_TOKEN}";
+    proxy_http_version 1.1;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-Proto $forwarded_proto;
   }
 
   # Text of manga pages (mokuro service), by catalog id.

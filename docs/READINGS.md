@@ -8,6 +8,8 @@ build a table and the accuracy numbers.
 
 - The difficulty service reads every word of a book for its **word lists**: a word with
   two readings becomes two rows, 他 read ほか and 他 read た.
+- The difficulty service also writes a **readings file** per book: every kanji word's reading
+  in the reader's own character positions, and the furigana the reader may add.
 - The reader's **"Known" furigana style** decides which of a book's own ruby to hide.
 
 Neither one changes the book or the difficulty scores.
@@ -46,6 +48,43 @@ table.
   image with the old and the new tag.
 - **`MODEL_VERSION`** is for the difficulty scores. They use `Word.reading` (always
   Sudachi's), never `Analysis.readings`, so reading changes leave it alone.
+
+## Readings files
+
+`scripts/calibre/jiten/readings_file.py`, made on request by the difficulty service
+(`POST /calibre/difficulty/api/readings/<id>`, docs/CONFIGURATION.md) into
+`state/difficulty/readings/<id>.json.gz`. The reader does not use them yet.
+
+**Input**: the reader's own processed book, `staticdata.json`'s `elementHtml` in the newest
+`bookdata_*.zip` of the title's shared sync folder (`sync/ttu-reader-data/<title>/`, the title
+as `sanitizeForFilename` writes it). It is counted exactly like the reader counts bookmarks
+(`get-paragraph-nodes.ts`, `get-character-count.ts`): `<rt>` and `[hidden]`/`[aria-hidden]`
+subtrees left out, a gaiji image is one character, the same set of counted characters, code
+points. `scripts/calibre/tests/fixtures/character-count.json` is checked by both sides
+(`test_readings_file.py`, `character-count-fixture.test.ts`). The book's ruby goes to yurigana
+as hints, like `book_text`.
+
+**Readings**: yurigana's `Reader` with the word lists' reading list (Jiten's frequency list)
+and tables, so a word reads the same in both.
+
+**Format** (gzipped JSON):
+
+- `v` (`READINGS_VERSION`), `yurigana` (its version), `bookdata` (the file it was made from) and
+  `characters` (the book's count): a file whose `v`, `yurigana` or `bookdata` differ is stale
+  and made again on the next request.
+- `words`: `[form, reading or null]`, dictionary forms (行った: 行く).
+- `glosses`: `[[offset, length, base, ruby], ...]`, the dictionary form's reading split over the
+  word's kanji runs (行っ: 行/い; 取り扱い: 取/と, 扱/あつか), offsets in characters from the
+  word's start; `base` is the text the ruby goes over, for the reader to check.
+- `occ`: `Δstart, word, gloss` per kanji word in reading order; `gloss` is `-1` when no
+  furigana is to be added.
+
+**What gets furigana** (a gloss): a hiragana reading on the list that comes from the list's
+only reading, a context rule or the reading model (never Sudachi's guess); not under the book's
+own ruby; and not a form the book flavour-rubied earlier: once ruby that isn't the word's
+reading covers it (katakana like マジ over 本気, ruby with kanji, or rejected hiragana over the
+whole word like そら over 宇宙), later bare occurrences of that form get none. Partial hiragana
+ruby (と over 取 of 取り扱い) doesn't count as flavour.
 
 ## The reader's "Known" furigana style
 

@@ -17,6 +17,12 @@ anything a reader or a server operator would notice.
 
 ### Server
 
+- Readings files: with the `difficulty` profile, the service makes a file per book with every
+  kanji word's reading in context and the furigana the reader may add, in the reader's own
+  character positions (`POST`/`GET /calibre/difficulty/api/readings/<id>`, for every reader who
+  may use the shared sync folder, rate-limited). It reads the processed book in the shared sync
+  folder, which the `difficulty` service now mounts read-only (`SYNC_PATH`). Nothing in the
+  reader uses them yet (docs/READINGS.md → Readings files).
 - The readings in context (the book's ruby, context rules, the reading model and its tools)
   and the "Known" furigana check moved to their own package,
   [yurigana](https://github.com/blankiekun/yurigana) (v0.1.1, pinned), which the difficulty

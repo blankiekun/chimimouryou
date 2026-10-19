@@ -12,7 +12,7 @@ each reader enters them in Settings → AI, and they sync with their account.
 | `LIBRARY_PATH`        | required                                               | The Calibre library (the folder with `metadata.db`). Mounted read-only into the web server; the catalog and import services write to it (`cover.jpg` for books without a cover, new books). |
 | `DATA_PATH`           | `./data`                                               | Everything the server stores: `sync/` (shared processed books and signed-out progress), `accounts/` (per-account data, including synced AI keys), `state/` (account database, catalog, import queue, difficulty results). Back it up; keep it off shares others can read. |
 | `VN_PATH`             | `DATA_PATH/vn`                                         | Visual novels: one unpacked ONScripter game per folder (the folder holding `0.txt`, `00.txt` or `nscript.dat`, or one level above it). The folder name is the title; a `cover.jpg`/`.png`/`.webp` or `icon.png` in it is the cover. Read-only for the web server and catalog; the import service unpacks uploaded game ZIPs into it. Served to signed-in readers at `/calibre/vn/` and listed in the catalog. The player fetches each file when the game opens it, so games aren't downloaded whole. |
-| `SYNC_PATH`           | `DATA_PATH/sync`                                       | The shared sync folder, if it should live elsewhere (e.g. next to the library on a NAS); account data stays in `DATA_PATH`. |
+| `SYNC_PATH`           | `DATA_PATH/sync`                                       | The shared sync folder, if it should live elsewhere (e.g. next to the library on a NAS); account data stays in `DATA_PATH`. Mounted read-only in `account` and `difficulty` (readings files are made from the processed books in it). |
 | `PUID`, `PGID`        | `1000`                                                 | User and group the containers run as. Must be able to read the library (and write to it for covers and imports) and own `DATA_PATH`. |
 | `HTTP_PORT`           | `8080`                                                 | Host port of the web server (plain HTTP). Put an HTTPS reverse proxy in front of it. |
 | `PUBLIC_HTTPS_URL`    | empty                                                  | The HTTPS address, if people also use a plain-HTTP address with a different name: the HTTP page links there to sign in. Build-time (`docker compose build web` after changing). |
@@ -102,9 +102,20 @@ code are the same container paths.
 | `JITEN_FREQUENCY_DICTIONARY` | `JITEN_STATE_DIR/frequency-dictionary.zip` | difficulty |
 | `JITEN_WORKERS`       | `DIFFICULTY_WORKERS`                       | difficulty |
 | `JITEN_HOST`, `JITEN_PORT` | `0.0.0.0`, `8765`                     | difficulty |
+| `SYNC_DIR`            | `/data/sync` (read-only; `ttu-reader-data/<title>/bookdata_*.zip`) | difficulty (readings files) |
 | `MOKURO_STATE_DIR`    | `/data/state/mokuro` (`<id>.json` per manga, `models/`, `work/`) | mokuro |
 | `MOKURO_HOST`, `MOKURO_PORT` | `0.0.0.0`, `8768`                 | mokuro |
 | `MOKURO_BIN`          | `/opt/mokuro/bin/mokuro` (without it, only uploads) | mokuro |
+
+Readings files: with the `difficulty` profile and the frequency list installed, the service
+also makes a readings file per book (`state/difficulty/readings/<id>.json.gz`, about 1 KB per
+1,000 characters; [docs/READINGS.md](READINGS.md#readings-files)) from the processed book a
+reader uploaded to the shared sync folder. Anyone who may use that folder can ask for one
+(`POST /calibre/difficulty/api/readings/<id>`, answered `ready`, `queued` or `unavailable`)
+and fetch it (`GET` on the same address); nginx allows 6 requests a minute per address (burst
+10). They are made one at a time in a process of their own (about 750 MB while there is work,
+a few seconds to start, under a second per novel), never waiting behind an estimate job; at
+most 100 wait, and a book whose `staticdata.json` is over 30 MB is skipped.
 
 The catalog builder takes the library and the output file as arguments:
 `build-calibre-catalog <library> <catalog.json> [<vn folder>] [--force]`.

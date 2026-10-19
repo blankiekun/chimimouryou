@@ -1,0 +1,23 @@
+{
+ "html": "<div class=\"main\"><h1>第一章　始まり</h1><p>彼は<ruby>漢字<rp>（</rp><rt>かんじ</rt><rp>）</rp></ruby>を<ruby>読<rt>よ</rt></ruby>んだ。<ruby>本気<rt>マジ</rt></ruby>で&amp;&#x6F22;&lt;</p><p><span hidden=\"\">隠れた</span><span aria-hidden=\"true\">見えない<b>字</b></span>見える<img class=\"gaiji\" src=\"a.png\"/><img class=\"x-gaiji-wide\" src=\"b.png\"><img class=\"gaiji\" hidden src=\"c.png\"><img src=\"d.png\" alt=\"絵\"></p><p>ABC xyz ＡＢｃ　123 ０９ ｱｲｳ ﾞ ・ー〜 ○◯ 々〆ヶ 〻 ⺟⼀ 𠮟る ſK ı ⅰ ①</p><p>改<br/>行<ruby>強<rp>か</rp><rt>つよ</rt></ruby></p></div>",
+ "characters": 57,
+ "counted": "第一章始まり彼は漢字を読んだ本気で漢見える〓〓ABCxyzＡＢｃ123０９ｱｲｳー○◯々〆ヶ〻⺟⼀𠮟るſK改行強か",
+ "text": "第一章　始まり\n彼は漢字を読んだ。本気で&漢<\n見える〓〓\nABC xyz ＡＢｃ　123 ０９ ｱｲｳ ﾞ ・ー〜 ○◯ 々〆ヶ 〻 ⺟⼀ 𠮟る ſK ı ⅰ ①\n改\n行強か\n\n",
+ "hints": [
+  [
+   10,
+   12,
+   "かんじ"
+  ],
+  [
+   13,
+   14,
+   "よ"
+  ],
+  [
+   17,
+   19,
+   "マジ"
+  ]
+ ]
+}

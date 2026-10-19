@@ -9,10 +9,13 @@ HTTP API (bound to localhost, proxied by nginx at /calibre/difficulty/api/):
   GET  status                       progress of the current job
   GET  kanji/ID                     kanji counts of an estimated book (for each reader's own kanji coverage)
   GET  words/ID                     the book's most frequent words: [form, reading, count, rank] (WORDS_PER_BOOK)
+  GET  readings/ID                  the book's readings file (readings_file.py)
+  POST readings/ID                  make it if missing or stale: {"status": "ready" | "queued" | "unavailable"}
   POST compute    {"ids": [...]}    estimate difficulty for these books ({"all": true} for all without a current estimate)
   POST cancel                       stop the running job
   POST dictionary   body: the zip    install Jiten's frequency list (jiten_freq_global.zip)
 Results are written to RESULTS_PATH, which nginx serves as /calibre/difficulty.json.
+Readings files are made one at a time in their own process, never waiting behind an estimate job.
 
 CLI: service.py serve | compute ID...
 """
@@ -30,9 +33,10 @@ from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from yurigana import PUBLIC_TABLE, load_tables
+from yurigana import PUBLIC_TABLE, __version__ as YURIGANA_VERSION, load_tables
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+import readings_file  # noqa: E402
 
 LIBRARY = os.environ.get('CALIBRE_LIBRARY', '/library')
 # Unpacked visual novels (catalog format 'VN'; their 'file' is relative to it).
@@ -80,6 +84,12 @@ PARTICLES = set('は が を に で と も の へ や か な ね よ わ ぞ
 NUMBER = re.compile(r'[0-9０-９〇一二三四五六七八九十百千万]+')
 SINGLE_KANA = re.compile(r'[\u3041-\u309f\u30a0-\u30ffー]')
 KANJI = re.compile(r'[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\U00020000-\U0003134f]')
+# Readings files (#17), made from the reader's processed book in the shared sync folder
+# (mounted read-only): <SYNC_DIR>/ttu-reader-data/<title>/bookdata_*.zip.
+SYNC_DIR = os.environ.get('SYNC_DIR', '/data/sync')
+READINGS_DIR = os.path.join(STATE_DIR, 'readings')
+READINGS_QUEUE_MAX = 100
+MAX_STATICDATA_BYTES = 30 * 1024 * 1024
 WORKERS = int(os.environ.get('JITEN_WORKERS', os.cpu_count() or 1))
 PORT = int(os.environ.get('JITEN_PORT', '8765'))
 HOST = os.environ.get('JITEN_HOST', '127.0.0.1')
@@ -204,6 +214,108 @@ def _estimate(book: dict):
         'tokens': tokens,
         'computedAt': int(time.time() * 1000),
     }
+
+
+# ---------------------------------------------------------------------------
+# Readings files
+
+_reader = None
+
+
+def _init_readings_worker():
+    global _reader
+    from yurigana import Reader
+    # The known list and the server's reading model the estimates use (yurigana adds its public table).
+    _reader = Reader(known=FREQUENCY_DICTIONARY, tables=READING_MODEL_PATHS[:1])
+
+
+def readings_path(book_id: int) -> str:
+    return os.path.join(READINGS_DIR, f'{book_id}.json.gz')
+
+
+def _make_readings(book_id: int, bookdata: str):
+    with zipfile.ZipFile(bookdata) as archive:
+        if archive.getinfo('staticdata.json').file_size > MAX_STATICDATA_BYTES:
+            raise ValueError('staticdata.json is too large')
+        html = json.loads(archive.read('staticdata.json'))['elementHtml']
+    readings_file.write(readings_path(book_id),
+                        readings_file.build(html, _reader, os.path.basename(bookdata), YURIGANA_VERSION))
+
+
+def find_bookdata(title: str):
+    """The newest bookdata_*.zip in a title's shared sync folder, or None."""
+    folder = os.path.join(SYNC_DIR, 'ttu-reader-data', readings_file.sanitize_for_filename(title))
+    try:
+        paths = [os.path.join(folder, name) for name in os.listdir(folder)
+                 if name.startswith('bookdata_') and name.endswith('.zip')]
+    except OSError:
+        return None
+    return max(paths, key=os.path.getmtime, default=None)
+
+
+class ReadingsQueue:
+    """Readings files to make, in request order, by one worker process that lives while there
+    is work (a Reader takes a few seconds and ~750 MB to load)."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.queue = {}  # book id -> bookdata path
+        self.running = None
+        self.failed = {}  # book id -> bookdata name it failed on: not retried until that changes
+        self.thread = None
+
+    def request(self, book_id: int) -> str:
+        if not os.path.exists(FREQUENCY_DICTIONARY):
+            return 'unavailable'
+        book = next((b for b in load_catalog() if b['id'] == book_id and not b.get('vn')), None)
+        bookdata = book and find_bookdata(book['title'])
+        if not bookdata:
+            return 'unavailable'
+        name = os.path.basename(bookdata)
+        if readings_file.header(readings_path(book_id)) == (readings_file.READINGS_VERSION, YURIGANA_VERSION, name):
+            return 'ready'
+        with self.lock:
+            if book_id in self.queue or self.running == book_id:
+                return 'queued'
+            if self.failed.get(book_id) == name or len(self.queue) >= READINGS_QUEUE_MAX:
+                return 'unavailable'
+            self.queue[book_id] = bookdata
+            if not self.thread:
+                self.thread = self._start()
+        return 'queued'
+
+    def _start(self):
+        thread = threading.Thread(target=self._run, daemon=True)
+        thread.start()
+        return thread
+
+    def _run(self):
+        pool = None
+        try:
+            while True:
+                with self.lock:
+                    if not self.queue:
+                        self.thread = None
+                        return
+                    book_id, bookdata = next(iter(self.queue.items()))
+                    del self.queue[book_id]
+                    self.running = book_id
+                pool = pool or ProcessPoolExecutor(1, initializer=_init_readings_worker)
+                try:
+                    pool.submit(_make_readings, book_id, bookdata).result()
+                except Exception as error:
+                    print(f'readings {book_id}: {error}', file=sys.stderr, flush=True)
+                    self.failed[book_id] = os.path.basename(bookdata)
+                    if isinstance(error, BrokenProcessPool):
+                        pool = None
+                finally:
+                    self.running = None
+        finally:
+            if pool:
+                pool.shutdown(cancel_futures=True)
+
+
+readings = ReadingsQueue()
 
 
 # ---------------------------------------------------------------------------
@@ -415,13 +527,13 @@ class Handler(BaseHTTPRequestHandler):
         parts = self.path.split('?')[0].strip('/').split('/')
         if parts == ['status']:
             self._send(200, runner.status())
-        elif len(parts) == 2 and parts[0] in ('kanji', 'words') and re.fullmatch(r'-?[0-9]+', parts[1]):
-            folder = KANJI_DIR if parts[0] == 'kanji' else WORDS_DIR
+        elif len(parts) == 2 and parts[0] in ('kanji', 'words', 'readings') and re.fullmatch(r'-?[0-9]+', parts[1]):
+            folder = {'kanji': KANJI_DIR, 'words': WORDS_DIR, 'readings': READINGS_DIR}[parts[0]]
             try:
                 with open(os.path.join(folder, f'{int(parts[1])}.json.gz'), 'rb') as f:
                     data = f.read()
             except OSError:
-                return self._send(404, {'error': 'no estimate for this book'})
+                return self._send(404, {'error': f'no {parts[0]} for this book'})
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Content-Encoding', 'gzip')
@@ -439,6 +551,9 @@ class Handler(BaseHTTPRequestHandler):
         scheme = 'http' if ALLOW_HTTP and self.headers.get('X-Forwarded-Proto') == 'http' else 'https'
         if self.headers.get('Origin') != f"{scheme}://{self.headers.get('Host', '')}":
             return self._send(403, {'error': 'Request from another site'})
+        parts = self.path.split('?')[0].strip('/').split('/')
+        if len(parts) == 2 and parts[0] == 'readings' and re.fullmatch(r'-?[0-9]+', parts[1]):
+            return self._send(200, {'status': readings.request(int(parts[1]))})
         if self._action() == 'dictionary':
             try:
                 terms = install_dictionary(self.rfile, int(self.headers.get('Content-Length') or 0))
