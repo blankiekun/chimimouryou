@@ -130,6 +130,7 @@
   import { bookSentenceAudio, noteSentence } from '$lib/data/anki';
   import { enableExtrasSync } from '$lib/data/extras-sync';
   import { recordKanjiSeen } from '$lib/data/kanji-seen';
+  import { bookWordForms, getWordMarks } from '$lib/data/word-marks';
   import type { PassageContext } from '$lib/data/ask-ai';
   import { activePlugins, activePlugins$, type SelectionActionContribution } from '$lib/plugins';
   import {
@@ -814,6 +815,23 @@
         ? range.cloneRange()
         : undefined;
   }
+
+  /** The book's word list forms, loaded on the first selection ("Mark known") */
+  let wordForms: { title: string; forms: Set<string> } | undefined;
+
+  $: if (selectedRange && $rawBookData$ && wordForms?.title !== $rawBookData$.title) {
+    const title = $rawBookData$.title;
+
+    wordForms = { title, forms: new Set() };
+    getWordMarks().catch(() => undefined);
+    bookWordForms(title).then(
+      (forms) => wordForms?.title === title && (wordForms = { title, forms }),
+      () => {}
+    );
+  }
+
+  $: selectedWord =
+    selectedRange && wordForms?.forms.size ? getTextWithoutFurigana(selectedRange) : '';
 
   function openSelectionAction(action: SelectionActionContribution) {
     const content = document.querySelector('.book-content');
@@ -2497,6 +2515,7 @@
 {#if selectedRange && !selectionPanel && !editingHighlight}
   <SelectionToolbar
     raised={showTts}
+    word={wordForms?.forms.has(selectedWord) ? selectedWord : ''}
     on:highlight={({ detail }) => createHighlight(detail)}
     on:note={() => createHighlight('yellow', true)}
     on:action={({ detail }) => openSelectionAction(detail)}

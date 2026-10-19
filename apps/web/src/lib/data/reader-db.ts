@@ -20,6 +20,7 @@ import type { CoverageCache, KnownWords } from '$lib/data/known-words';
 import type { Lorebook } from '$lib/data/lorebook';
 import type { BookRecaps } from '$lib/data/recap';
 import type { VnRead } from '$lib/data/vn';
+import type { WordMarks } from '$lib/data/word-marks';
 import type { WordList, WordsMetCache } from '$lib/data/words-met';
 
 interface ReaderDb extends DBSchema {
@@ -30,8 +31,11 @@ interface ReaderDb extends DBSchema {
   kanji: { key: string; value: KanjiSeen };
   vnRead: { key: string; value: VnRead };
   absSubtitles: { key: string; value: AbsSubtitles };
-  /** 'words' and 'coverage' (known-words.ts), 'met' and 'list:<id>' (words-met.ts) */
-  known: { key: string; value: KnownWords | CoverageCache | WordsMetCache | WordList };
+  /** 'words' and 'coverage' (known-words.ts), 'met' and 'list:<id>' (words-met.ts), 'marks' (word-marks.ts) */
+  known: {
+    key: string;
+    value: KnownWords | CoverageCache | WordsMetCache | WordList | WordMarks;
+  };
 }
 
 let dbPromise: ReturnType<typeof openDB<ReaderDb>> | undefined;

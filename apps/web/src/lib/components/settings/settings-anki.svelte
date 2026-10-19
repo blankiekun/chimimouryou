@@ -2,6 +2,7 @@
   import ButtonToggleGroup from '$lib/components/button-toggle-group/button-toggle-group.svelte';
   import type { ToggleOption } from '$lib/components/button-toggle-group/toggle-option';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
+  import SettingsMarkedWords from '$lib/components/settings/settings-marked-words.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
   import { buttonClasses, inputClasses } from '$lib/css-classes';
   import {
@@ -155,4 +156,5 @@
       </p>
     </SettingsItemGroup>
   {/if}
+  <SettingsMarkedWords />
 </SettingsSection>

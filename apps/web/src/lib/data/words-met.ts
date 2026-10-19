@@ -8,7 +8,8 @@
  * Words met while reading, for the Home dashboard. Not recorded: derived from how far
  * each Calibre book was read (the kanji records' `upTo`, minus text skipped by jumps)
  * and the difficulty service's word list of the book, assuming its words are spread
- * evenly. A word is known when met `knownMinCount` times or mature in Anki (known-words.ts).
+ * evenly. A word is known when met `knownMinCount` times, mature in Anki (known-words.ts)
+ * or marked known or ignored (word-marks.ts).
  * Cached in reader-db `known` (keys `met` and `list:<id>`), cleared with the known words
  * when the reader changes. Not part of upstream.
  */
@@ -23,6 +24,7 @@ import {
 import { getKanjiSeen, type KanjiSeen } from '$lib/data/kanji-seen';
 import { getKnownWords } from '$lib/data/known-words';
 import { readerDb } from '$lib/data/reader-db';
+import { getWordMarks, wordMark, type WordMarks } from '$lib/data/word-marks';
 
 /** Times a word must be met to count as known. */
 export const knownMinCount = 8;
@@ -44,7 +46,7 @@ export interface WordList {
 export interface WordsSummary {
   /** Different words met at least once */
   met: number;
-  /** Words met `knownMinCount` times, plus Anki's mature words */
+  /** Words met `knownMinCount` times, plus Anki's mature words and the words marked */
   known: number;
 }
 
@@ -72,22 +74,45 @@ export function addWordsMet(totals: Record<string, number>, words: BookWord[], f
 
 export function summarizeWords(
   totals: Record<string, number>,
-  anki: ReadonlySet<string> = new Set()
+  anki: ReadonlySet<string> = new Set(),
+  marks: WordMarks = {}
 ): WordsSummary {
   let met = 0;
   let known = 0;
   const forms = new Set<string>();
 
   for (const [key, count] of Object.entries(totals)) {
-    const form = key.slice(0, key.indexOf('\t'));
+    const tab = key.indexOf('\t');
+    const form = key.slice(0, tab);
 
     forms.add(form);
     if (count >= 1) met += 1;
-    if (count >= knownMinCount || anki.has(form)) known += 1;
+    if (
+      count >= knownMinCount ||
+      anki.has(form) ||
+      wordMark(marks, [form, key.slice(tab + 1) || null, count, null])
+    ) {
+      known += 1;
+    }
   }
 
   for (const form of anki) {
     if (!forms.has(form) && !particles.has(form)) known += 1;
+  }
+
+  // Marked words not met yet (a mark without a reading covers the form's words met).
+  for (const [key, mark] of Object.entries(marks)) {
+    const form = key.slice(0, key.indexOf('\t'));
+
+    if (
+      mark.status &&
+      !(key in totals) &&
+      !(key.endsWith('\t') && forms.has(form)) &&
+      !anki.has(form) &&
+      !particles.has(form)
+    ) {
+      known += 1;
+    }
   }
 
   return { met, known };
@@ -176,10 +201,11 @@ async function computeWordsMet(): Promise<WordsMetCache> {
 
 /** Words met and known, for the dashboard. */
 export async function getWordsSummary() {
-  const [{ words: totals }, anki] = await Promise.all([
+  const [{ words: totals }, anki, marks] = await Promise.all([
     getWordsMet(),
-    ankiKnownWords$.getValue() ? getKnownWords().catch(() => undefined) : undefined
+    ankiKnownWords$.getValue() ? getKnownWords().catch(() => undefined) : undefined,
+    getWordMarks().catch(() => ({}) as WordMarks)
   ]);
 
-  return summarizeWords(totals, new Set(anki?.words));
+  return summarizeWords(totals, new Set(anki?.words), marks);
 }

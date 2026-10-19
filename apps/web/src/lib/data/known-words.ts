@@ -6,10 +6,11 @@
 
 /**
  * Known words: read from an Anki deck (mature cards, off unless Settings → Anki turns it
- * on) together with the words met often enough (words-met.ts), and how much of each book's
- * text they cover (`wordCoverage`): the book page, the difficulty dialog, the Store's Known
- * words sort and Read next. Personal: kept in this browser only (reader-db `known`), cleared
- * when the reader changes (`releaseReaderData`). Not part of upstream.
+ * on) together with the words met often enough (words-met.ts) and those marked by hand
+ * (word-marks.ts, synced), and how much of each book's text they cover (`wordCoverage`):
+ * the book page, the difficulty dialog, the Store's Known words sort and Read next.
+ * Personal: kept in this browser (reader-db `known`), cleared when the reader changes
+ * (`releaseReaderData`). Not part of upstream.
  */
 
 import { BehaviorSubject } from 'rxjs';
@@ -17,6 +18,13 @@ import { ankiInvoke, ankiKnownDeck$, ankiKnownField$, ankiKnownWords$ } from '$l
 import { wordCoverage, type BookWord, type WordTotals } from '$lib/data/book-words';
 import { loadCalibreDifficulty } from '$lib/data/calibre';
 import { readerDb } from '$lib/data/reader-db';
+import {
+  getWordMarks,
+  marksSignature,
+  wordMark,
+  wordMarks$,
+  type WordMarks
+} from '$lib/data/word-marks';
 import { getWordsMet, knownMinCount, wordKey, wordList } from '$lib/data/words-met';
 
 export interface KnownWords {
@@ -120,18 +128,22 @@ export async function refreshKnownWordsIfStale() {
 
 /**
  * The words the reader knows: met `knownMinCount` times (words-met.ts) or, when Settings →
- * Anki → Known Words is on, mature in Anki (by written form).
+ * Anki → Known Words is on, mature in Anki (by written form), or marked known or ignored.
  */
 export async function getKnownSet(): Promise<KnownSet> {
-  const [met, anki] = await Promise.all([
+  const [met, anki, marks] = await Promise.all([
     getWordsMet(),
-    ankiKnownWords$.getValue() ? getKnownWords().catch(() => undefined) : undefined
+    ankiKnownWords$.getValue() ? getKnownWords().catch(() => undefined) : undefined,
+    getWordMarks().catch(() => ({}) as WordMarks)
   ]);
   const forms = new Set(anki?.words);
 
   return {
-    key: met.signature && `${met.signature}|${anki?.read ?? ''}`,
-    isKnown: (word) => (met.words[wordKey(word)] ?? 0) >= knownMinCount || forms.has(word[0])
+    key: met.signature && `${met.signature}|${anki?.read ?? ''}|${marksSignature(marks)}`,
+    isKnown: (word) =>
+      (met.words[wordKey(word)] ?? 0) >= knownMinCount ||
+      forms.has(word[0]) ||
+      !!wordMark(marks, word)
   };
 }
 
@@ -223,5 +235,6 @@ export function cacheCoverage(ids: number[]) {
 export async function clearKnownWords() {
   await (await readerDb()).clear('known');
   knownWords$.next(undefined);
+  wordMarks$.next({});
   knownCoverage$.next({});
 }

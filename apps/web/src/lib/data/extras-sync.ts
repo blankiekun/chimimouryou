@@ -12,7 +12,8 @@
  * and are ignored under another sign-in state.
  *
  * Kanji met (kanji-seen.ts) sync for every book as one kanji.json in the account's
- * folder, only while signed in and after releaseReaderData has run. Not part of upstream.
+ * folder, only while signed in and after releaseReaderData has run. Words marked known or
+ * ignored (word-marks.ts) sync the same way as words.json. Not part of upstream.
  */
 
 import { BehaviorSubject, type Subject } from 'rxjs';
@@ -23,6 +24,7 @@ import { lorebookChanged$, mergeLorebooks, sameLorebooks, type Lorebook } from '
 import { mergeRecaps, recapsChanged$, sameRecaps, type BookRecaps } from '$lib/data/recap';
 import { readerDataOwner } from '$lib/data/reader-data-owner';
 import { readerDb } from '$lib/data/reader-db';
+import type { WordMarks } from '$lib/data/word-marks';
 import { CalibreStorageHandler } from '$lib/data/storage/handler/calibre-handler';
 
 export type ExtrasKind = 'recaps' | 'lorebook';
@@ -280,5 +282,95 @@ async function syncKanjiOnce() {
     kanjiSyncedAt = Date.now();
   } catch (error: any) {
     logger.warn(`Kanji sync failed: ${error.message}`);
+  }
+}
+
+const wordsUrl = `${accountSyncUrl}words.json`;
+
+let wordsTimer: ReturnType<typeof setTimeout> | undefined;
+let wordsQueue = Promise.resolve();
+let wordsSyncedAt = 0;
+
+/** Keeps the newest mark per word, removals (status null) included. */
+export function mergeWordMarks(local: WordMarks, remote: WordMarks) {
+  const merged = { ...local };
+
+  for (const [key, mark] of Object.entries(remote)) {
+    if (!merged[key] || mark.modified > merged[key].modified) {
+      merged[key] = mark;
+    }
+  }
+
+  return merged;
+}
+
+const sameMarks = (a: WordMarks, b: WordMarks) =>
+  Object.keys(a).length === Object.keys(b).length &&
+  Object.entries(a).every(([key, mark]) => b[key]?.modified === mark.modified);
+
+/** Uploads a moment after the reader marks words. */
+export function wordMarksChanged() {
+  clearTimeout(wordsTimer);
+  wordsTimer = setTimeout(syncWordMarks, 2000);
+}
+
+/** Downloads before the marks are read, unless synced a moment ago. */
+export function pullWordMarks() {
+  return Date.now() - wordsSyncedAt < kanjiFreshFor ? Promise.resolve() : syncWordMarks();
+}
+
+export function syncWordMarks(): Promise<void> {
+  wordsQueue = wordsQueue.then(syncWordMarksOnce);
+
+  return wordsQueue;
+}
+
+async function syncWordMarksOnce() {
+  try {
+    const user = await accountReady();
+
+    // Signed out (browser only), or this browser still holds another reader's marks.
+    if (!user || (await readerDataOwner()) !== user.id) {
+      return;
+    }
+
+    const response = await fetch(wordsUrl, { cache: 'no-store' });
+
+    if (!response.ok && response.status !== 404) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const words: unknown = response.ok ? (await response.json())?.words : {};
+    const remote = Object.fromEntries(
+      Object.entries(typeof words === 'object' && words ? words : {}).filter(
+        ([, mark]) =>
+          typeof mark?.modified === 'number' &&
+          (mark.status === null || mark.status === 'known' || mark.status === 'ignored')
+      )
+    ) as WordMarks;
+    const tx = (await readerDb()).transaction('known', 'readwrite');
+    const local = ((await tx.store.get('marks')) ?? {}) as WordMarks;
+    const merged = mergeWordMarks(local, remote);
+
+    if (!sameMarks(merged, local)) {
+      await tx.store.put(merged, 'marks');
+    }
+    await tx.done;
+
+    if (!sameMarks(merged, remote)) {
+      const put = await fetch(wordsUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ words: merged })
+      });
+
+      if (!put.ok) {
+        throw new Error(`upload failed (HTTP ${put.status})`);
+      }
+    }
+
+    wordsSyncedAt = Date.now();
+  } catch (error: any) {
+    logger.warn(`Word marks sync failed: ${error.message}`);
   }
 }

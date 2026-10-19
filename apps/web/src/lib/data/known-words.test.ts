@@ -20,10 +20,16 @@ import {
   refreshKnownWordsIfStale
 } from '$lib/data/known-words';
 import { readerDb } from '$lib/data/reader-db';
+import { setWordMarks } from '$lib/data/word-marks';
 
 const met = vi.hoisted(() => ({ signature: 'read 1', words: {} as Record<string, number> }));
 
-vi.mock('$lib/data/extras-sync', () => ({ pullKanji: async () => {}, kanjiChanged: () => {} }));
+vi.mock('$lib/data/extras-sync', () => ({
+  pullKanji: async () => {},
+  kanjiChanged: () => {},
+  pullWordMarks: async () => {},
+  wordMarksChanged: () => {}
+}));
 vi.mock('$lib/data/words-met', async (importOriginal) => ({
   ...(await importOriginal<typeof import('$lib/data/words-met')>()),
   getWordsMet: async () => ({ ...met })
@@ -117,6 +123,24 @@ describe('known words', () => {
     ankiKnownWords$.next(false);
     met.words = { '犬\tいぬ': 8 };
     expect((await bookCoverage(7, words, {}, await getKnownSet()))?.share).toBeCloseTo(0.3);
+  });
+
+  it('counts marked words as known and changes the key when the marks change', async () => {
+    ankiKnownWords$.next(false);
+    const before = await getKnownSet();
+
+    await setWordMarks([['猫', 'ねこ']], 'known');
+    await setWordMarks([['宦官', null]], 'ignored');
+    const marked = await getKnownSet();
+
+    expect(marked.key).not.toBe(before.key);
+    expect(words.map(marked.isKnown)).toEqual([true, false, true]);
+
+    await setWordMarks([['猫', 'ねこ']], null);
+    const unmarked = await getKnownSet();
+
+    expect(unmarked.key).not.toBe(marked.key);
+    expect(words.map(unmarked.isKnown)).toEqual([false, false, true]);
   });
 
   it("doesn't cache coverage from partial known words", async () => {

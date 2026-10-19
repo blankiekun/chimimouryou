@@ -122,7 +122,13 @@ export const en = {
   'book.newWordsNoteFirst':
     'Used in this book, outside the {count} most common words and not known yet: frequent here and rare in general first. The first 50 of {total} (Copy and the CSV have all).',
   'book.newWordsHint':
-    'Known: met {count} times in what you have read, or a mature card in Anki (Settings → Anki → Known Words).',
+    'Known: met {count} times in what you have read, a mature card in Anki, or marked known or ignored (Settings → Anki → Known Words).',
+  'book.markKnown': 'Mark {word} known',
+  'book.markIgnored': 'Ignore {word} (counts as known)',
+  'book.unmarkWord': 'Unmark {word}',
+  'book.undoMark': 'Undo',
+  'book.markAllKnown': 'Mark all shown known',
+  'book.markAllKnownConfirm': 'Mark the {count} words shown as known?',
   'book.downloadCsv': 'Download CSV',
   'book.tags': 'Tags',
   'book.findDetailsOn': 'Find details on {source} or Jiten',
@@ -231,7 +237,7 @@ export const en = {
     'Audio and screenshots added to cards you mine while reading or playing.',
   'settings.section.anki-known': 'Known Words',
   'settings.section.anki-known.text':
-    "Mature cards of a deck as the words you know, for each book's word coverage.",
+    "Mature cards of a deck and the words you marked as the words you know, for each book's word coverage.",
   'settings.section.tracking-statistics': 'Statistics',
   'settings.section.tracking-statistics.text': 'The reading tracker and when it pauses.',
   'settings.section.tracking-day': 'Reading Day',
@@ -291,6 +297,14 @@ export const en = {
   'anki.refresh': 'Refresh',
   'anki.knownCount': '{count} known words, read {date}',
   'anki.notRead': 'Not read yet',
+  'anki.markedWords': 'Marked words',
+  'anki.markedWordsHint':
+    '{count} words you marked known or ignored on a book page or in the reader. Both count as known; synced with your account.',
+  'anki.markedWordsSearch': 'Search marked words',
+  'anki.markedKnown': 'Known',
+  'anki.markedIgnored': 'Ignored',
+  'anki.unmark': 'Unmark',
+  'anki.noMarkedWords': 'No marked words.',
 
   'ai.guideOpenRouter': 'OpenRouter (Ask AI, Story so far, Lorebook)',
   'ai.guideOpenRouterHint':
@@ -564,6 +578,8 @@ export const en = {
   'reader.highlightColor': 'Highlight ({color})',
   'reader.noteTitle': 'Highlight and add a note',
   'reader.note': 'Note',
+  'reader.markKnown': 'Mark known',
+  'reader.wordKnown': 'Known',
   'reader.askAiNeedsKey': 'Ask AI needs an OpenRouter API key.',
   'reader.setupGuide': 'Setup guide',
   'reader.quickQuestions': 'Quick questions',

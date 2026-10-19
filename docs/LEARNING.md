@@ -154,6 +154,11 @@ exists (made by the server's `difficulty` service; readers with the
   sentence then says it counts those; "Books without an estimate" doesn't redo them.
 - **New words**: the book's words outside the most common ones that you don't know
   yet, frequent in this book and rare in general first, with **Copy** and a CSV for Anki.
+  ✓ marks a word known and ✕ ignores it (names, words you don't care about); both count
+  as known everywhere. **Mark all shown known** marks the whole list shown. In the reader,
+  selecting a word of the book's list offers **Mark known**. Settings → Anki → Known words
+  lists the marked words to search and unmark; while you are signed in they are synced to
+  your account.
 - **Different kanji** in the book, and how many of them you have **already met**:
   the share of the book's kanji (counted every time they appear) that you have
   read before in other books, and the number of kanji that would be new. Kanji
@@ -165,7 +170,7 @@ Home shows **Words met** and **Words known**. They are estimated, not counted wo
 word: each Calibre book with a difficulty estimate has a list of its 2,000 most
 frequent words, and reading a share of the book counts that share of each word's
 occurrences (spread evenly). A word is met once it reaches one occurrence, and known
-once met 8 times or mature in Anki (Settings → Anki → Known words). Particles (は, が,
+once met 8 times, mature in Anki (Settings → Anki → Known words) or marked. Particles (は, が,
 から…) don't count, nor does text you jumped over; a visual novel counts the share of
 its script read. Books read before this existed count as far as you got. Books without
 an estimate, manga and books outside Calibre add nothing.

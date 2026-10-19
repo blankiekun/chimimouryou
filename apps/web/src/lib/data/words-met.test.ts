@@ -16,7 +16,12 @@ import {
   summarizeWords
 } from '$lib/data/words-met';
 
-vi.mock('$lib/data/extras-sync', () => ({ pullKanji: async () => {}, kanjiChanged: () => {} }));
+vi.mock('$lib/data/extras-sync', () => ({
+  pullKanji: async () => {},
+  kanjiChanged: () => {},
+  pullWordMarks: async () => {},
+  wordMarksChanged: () => {}
+}));
 
 const words: BookWord[] = [
   ['猫', 'ねこ', 20, 100],
@@ -47,6 +52,19 @@ describe('words met', () => {
       met: 2,
       known: 4
     });
+  });
+
+  it('counts marked words as known, met or not, removals not', () => {
+    const totals = { '猫\tねこ': 1, '犬\tいぬ': 2 };
+    const mark = (status: 'known' | 'ignored' | null) => ({ status, modified: 1 });
+
+    expect(
+      summarizeWords(totals, new Set(), {
+        '猫\t': mark('known'),
+        '犬\tいぬ': mark(null),
+        '鳥\tとり': mark('ignored')
+      })
+    ).toEqual({ met: 2, known: 2 });
   });
 });
 
