@@ -41,7 +41,11 @@ export const en = {
   'dashboard.speedValue': '{speed}/h',
   'dashboard.finished': 'Books finished',
   'dashboard.started': '{count} started',
-  'dashboard.kanji': 'Kanji met',
+  'dashboard.words': 'Words met',
+  'dashboard.wordsHint':
+    "Different words in the Calibre books you have read, estimated from each book's word list and how far you got; particles and skipped text don't count",
+  'dashboard.wordsKnown': 'Words known',
+  'dashboard.wordsKnownHint': 'Words met at least {count} times, plus mature words from Anki',
   'dashboard.trackerOff':
     'Turn on the reading tracker (Settings → Statistics) to count characters, time and streaks.',
   'dashboard.guide': 'Learning guide: Yomitan, Anki and choosing books',

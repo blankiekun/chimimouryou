@@ -1,6 +1,5 @@
 <script lang="ts">
   import { learningGuideUrl } from '$lib/data/app-update';
-  import { getKanjiSummary, type KanjiSummary } from '$lib/data/kanji-seen';
   import {
     activityWeeks,
     learnerStats,
@@ -9,18 +8,19 @@
   } from '$lib/data/learner-stats';
   import { pullAccountStatistics } from '$lib/data/statistics-sync';
   import { database, startDayHoursForTracker$, statisticsEnabled$ } from '$lib/data/store';
+  import { getWordsSummary, knownMinCount, type WordsSummary } from '$lib/data/words-met';
   import { getDateKey } from '$lib/functions/statistic-util';
   import { t$, type MessageKey, type MessageParams } from '$lib/i18n';
   import { onMount } from 'svelte';
 
   /**
    * Home tab totals for Japanese learners: characters, time, speed, streaks
-   * and how many different kanji were met. Not part of upstream.
+   * and how many different words were met and known. Not part of upstream.
    */
 
   let stats: LearnerStats | undefined;
   let weeks: ActivityDay[][] = [];
-  let kanji: KanjiSummary | undefined;
+  let words: WordsSummary | undefined;
 
   const number = (value: number) => value.toLocaleString('en-US');
 
@@ -45,8 +45,8 @@
   }
 
   onMount(async () => {
-    getKanjiSummary()
-      .then((summary) => (kanji = summary))
+    getWordsSummary()
+      .then((summary) => (words = summary))
       .catch(() => {});
     await loadStats();
     // Statistics of books not opened in this browser only exist on the server.
@@ -69,7 +69,16 @@
           value: number(stats.booksCompleted),
           hint: $t$('dashboard.started', { count: number(stats.booksStarted) })
         },
-        { label: $t$('dashboard.kanji'), value: kanji ? number(kanji.unique) : '–' }
+        {
+          label: $t$('dashboard.words'),
+          value: words ? number(words.met) : '–',
+          hint: $t$('dashboard.wordsHint')
+        },
+        {
+          label: $t$('dashboard.wordsKnown'),
+          value: words ? number(words.known) : '–',
+          hint: $t$('dashboard.wordsKnownHint', { count: knownMinCount })
+        }
       ]
     : [];
 </script>

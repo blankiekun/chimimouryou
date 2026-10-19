@@ -152,8 +152,16 @@ exists (made by the server's `difficulty` service; readers with the
   read before in other books, and the number of kanji that would be new. Kanji
   met are recorded as you read books and visual novels and, while you are signed
   in, synced to your account so every device sees them; the first time a book is
-  counted, everything before your position counts as read. Home shows the total
-  as "Kanji met".
+  counted, everything before your position counts as read.
+
+Home shows **Words met** and **Words known**. They are estimated, not counted word by
+word: each Calibre book with a difficulty estimate has a list of its 2,000 most
+frequent words, and reading a share of the book counts that share of each word's
+occurrences (spread evenly). A word is met once it reaches one occurrence, and known
+once met 8 times or mature in Anki (Settings → Anki → Known words). Particles (は, が,
+から…) don't count, nor does text you jumped over; a visual novel counts the share of
+its script read. Books read before this existed count as far as you got. Books without
+an estimate, manga and books outside Calibre add nothing.
 
 Manga have no estimate. In the Store, filter by difficulty band and sort by
 difficulty (easiest first) or length to find the next book: one a little harder

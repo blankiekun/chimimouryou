@@ -39,7 +39,11 @@ export const ja: Record<MessageKey, string> = {
   'dashboard.speedValue': '{speed}字/時',
   'dashboard.finished': '読み終えた本',
   'dashboard.started': '読み始めた本 {count}冊',
-  'dashboard.kanji': '出会った漢字',
+  'dashboard.words': '出会った語',
+  'dashboard.wordsHint':
+    '読んだ Calibre の本に出てきた語の数。本ごとの単語リストと読んだ位置からの推定で、助詞と飛ばした部分は数えません',
+  'dashboard.wordsKnown': '既知語',
+  'dashboard.wordsKnownHint': '{count}回以上出会った語と、Anki で成熟したカード',
   'dashboard.trackerOff':
     '文字数・読書時間・連続記録を数えるには、読書トラッカーをオンにしてください（設定 → 統計）。',
   'dashboard.guide': '学習ガイド：Yomitan・Anki・本の選び方',

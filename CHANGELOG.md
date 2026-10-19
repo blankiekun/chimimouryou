@@ -59,6 +59,10 @@ anything a reader or a server operator would notice.
 
 ### Library
 
+- Home's "Kanji met" is replaced by **Words met** and **Words known**: the words of the
+  Calibre books you have read (from the server's word lists and how far you got, so past
+  reading counts; text skipped by a jump and particles don't), known once met 8 times or
+  mature in Anki. Kanji are still recorded.
 - Japanese interface (Settings → General → Language · 言語, English by default, synced with
   the account), separate from the AI's language. This release translates the header, Home,
   the book page (difficulty bands and badge included), the settings page's sidebar,
