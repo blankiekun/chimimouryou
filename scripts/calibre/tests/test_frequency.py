@@ -167,9 +167,25 @@ class SaveWordsTest(unittest.TestCase):
         for w, count in ((word('猫', '猫', 'noun', 'ねこ'), 3), (word('太郎', '太郎', 'name'), 9),
                          (word('走る', '走る', 'verb'), 5), (word('稀', '稀', 'noun'), 1), (word('今', '今', 'fix', 'こん'), 7)):
             analysis.words[w.key, w.form] = [w, count]
-        service.save_words(7, analysis, FrequencyTable({'猫': 1200}))
+        # The totals count the rows past the cap (稀) too.
+        self.assertEqual(service.save_words(7, analysis, FrequencyTable({'猫': 1200})), (3, 9))
         with gzip.open(os.path.join(service.WORDS_DIR, '7.json.gz'), 'rt', encoding='utf-8') as f:
             self.assertEqual(json.load(f), [['走る', None, 5, None], ['猫', 'ねこ', 3, 1200]])
+
+    def test_totals_leave_noise_out(self):
+        import importlib.util
+        from features import Analysis, Word
+        spec = importlib.util.spec_from_file_location(
+            'jiten_service', os.path.join(os.path.dirname(__file__), '..', 'jiten', 'service.py'))
+        service = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(service)
+        service.WORDS_DIR = tempfile.mkdtemp()
+        analysis = Analysis(text='')
+        # Particles, numbers, lone kana and unranked kana-only words aren't vocabulary.
+        for form, count in (('猫', 3), ('から', 9), ('三', 4), ('ッ', 5), ('ふむ', 2), ('すごい', 6)):
+            w = Word(f'{form}\tnoun', form, 'noun', 'wago', (), form)
+            analysis.words[w.key, form] = [w, count]
+        self.assertEqual(service.save_words(9, analysis, FrequencyTable({'から': 30, 'すごい': 900})), (2, 9))
 
     def test_one_row_per_reading(self):
         import gzip

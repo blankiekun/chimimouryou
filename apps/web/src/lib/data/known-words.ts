@@ -5,16 +5,19 @@
  */
 
 /**
- * Known words read from an Anki deck (mature cards) and which of each book's words to
- * study (`wordsToStudy`) they cover: an estimate on the book page, also used by the
- * Store's Known words sort. Personal: kept in this browser only (reader-db `known`), cleared when the reader
- * changes (`releaseReaderData`). Off unless Settings → Anki turns it on. Not part of upstream.
+ * Known words: read from an Anki deck (mature cards, off unless Settings → Anki turns it
+ * on) together with the words met often enough (words-met.ts), and how much of each book's
+ * text they cover (`wordCoverage`): the book page, the difficulty dialog, the Store's Known
+ * words sort and Read next. Personal: kept in this browser only (reader-db `known`), cleared
+ * when the reader changes (`releaseReaderData`). Not part of upstream.
  */
 
 import { BehaviorSubject } from 'rxjs';
 import { ankiInvoke, ankiKnownDeck$, ankiKnownField$, ankiKnownWords$ } from '$lib/data/anki';
-import { knownCoverage, loadBookWords, wordsToStudy, type BookWord } from '$lib/data/book-words';
+import { wordCoverage, type BookWord, type WordTotals } from '$lib/data/book-words';
+import { loadCalibreDifficulty } from '$lib/data/calibre';
 import { readerDb } from '$lib/data/reader-db';
+import { getWordsMet, knownMinCount, wordKey, wordList } from '$lib/data/words-met';
 
 export interface KnownWords {
   words: string[];
@@ -22,10 +25,16 @@ export interface KnownWords {
   read: number;
 }
 
+export interface KnownSet {
+  /** Changes whenever the known words change; empty when they are partial (offline) */
+  key: string;
+  isKnown: (word: BookWord) => boolean;
+}
+
 export interface CoverageCache {
-  /** `KnownWords.read` the coverages were computed from */
-  read: number;
-  /** Calibre book id → share of the study words' occurrences that are known */
+  /** `KnownSet.key` the coverages were computed from */
+  key: string;
+  /** Calibre book id → share of the book's word occurrences that are known */
   books: Record<number, number>;
 }
 
@@ -109,72 +118,103 @@ export async function refreshKnownWordsIfStale() {
   return refreshKnownWords().catch(() => known);
 }
 
-async function coverageCache(read: number): Promise<CoverageCache> {
-  const cache = (await (await readerDb()).get('known', 'coverage')) as CoverageCache | undefined;
+/**
+ * The words the reader knows: met `knownMinCount` times (words-met.ts) or, when Settings →
+ * Anki → Known Words is on, mature in Anki (by written form).
+ */
+export async function getKnownSet(): Promise<KnownSet> {
+  const [met, anki] = await Promise.all([
+    getWordsMet(),
+    ankiKnownWords$.getValue() ? getKnownWords().catch(() => undefined) : undefined
+  ]);
+  const forms = new Set(anki?.words);
 
-  return cache?.read === read ? cache : { read, books: {} };
+  return {
+    key: met.signature && `${met.signature}|${anki?.read ?? ''}`,
+    isKnown: (word) => (met.words[wordKey(word)] ?? 0) >= knownMinCount || forms.has(word[0])
+  };
+}
+
+async function coverageCache(key: string): Promise<CoverageCache> {
+  const cache = key
+    ? ((await (await readerDb()).get('known', 'coverage')) as CoverageCache | undefined)
+    : undefined;
+
+  return cache?.key === key ? cache : { key, books: {} };
 }
 
 /** Loads the cached coverages for the current known words into `knownCoverage$`. */
 export async function loadCoverageCache() {
-  const known = await getKnownWords();
-
-  knownCoverage$.next(known ? (await coverageCache(known.read)).books : {});
+  knownCoverage$.next((await coverageCache((await getKnownSet()).key)).books);
 }
 
 /**
- * The book's words to study (`wordsToStudy`) known from Anki. Computed from `words` when
- * given (the book page), else the cached share or one computed from the loaded word list;
- * the share is cached. Undefined when the feature is off or data is missing.
+ * The book's word coverage (`wordCoverage`) from its word list; its share is cached for
+ * the Store's Known words sort unless the known words are partial.
  */
-export async function bookCoverage(id: number, words95: number, words?: BookWord[]) {
-  const known = ankiKnownWords$.getValue() ? await getKnownWords() : undefined;
+export async function bookCoverage(
+  id: number,
+  words: BookWord[],
+  totals: WordTotals,
+  known: KnownSet
+) {
+  const coverage = wordCoverage(words, known.isKnown, totals);
 
-  if (!known) return undefined;
-
-  if (!words) {
-    const cached = (await coverageCache(known.read)).books[id];
-
-    if (cached !== undefined) return { share: cached };
-    words = await loadBookWords(id).catch(() => undefined);
-  }
-
-  const coverage = words && knownCoverage(wordsToStudy(words, words95), new Set(known.words));
-
-  if (!coverage) return undefined;
+  if (!coverage || !known.key) return coverage;
 
   // Re-read: another book may have been cached meanwhile.
-  const latest = await coverageCache(known.read);
+  const latest = await coverageCache(known.key);
 
   if (latest.books[id] !== coverage.share) {
     const books = { ...latest.books, [id]: coverage.share };
 
-    await (await readerDb()).put('known', { read: known.read, books }, 'coverage');
+    await (await readerDb()).put('known', { key: known.key, books }, 'coverage');
     knownCoverage$.next(books);
   }
 
   return coverage;
 }
 
-let pending: { id: number; words95: number }[] | undefined;
+let pending: number[] | undefined;
+let runningIds = '';
 let running: Promise<void> | undefined;
 
-/** Computes the coverage of these books one at a time in the background (Home's books). */
-export function cacheCoverage(books: { id: number; words95: number }[]) {
-  pending = books;
+/**
+ * Computes the coverage of these Calibre books one at a time in the background (Home's
+ * books and Read next's), skipping those cached for the current known words.
+ */
+export function cacheCoverage(ids: number[]) {
+  // The library re-renders as each coverage arrives: don't restart the same batch.
+  if (running && ids.join() === runningIds) return running;
+
+  pending = ids;
   running ??= (async () => {
     while (pending) {
       const batch = pending;
 
       pending = undefined;
-      for (const { id, words95 } of batch) {
+      runningIds = batch.join();
+
+      const [known, difficulty] = await Promise.all([getKnownSet(), loadCalibreDifficulty()]);
+      const cached = (await coverageCache(known.key)).books;
+
+      for (const id of batch) {
         if (pending) break;
-        await bookCoverage(id, words95).catch(() => undefined);
+
+        const estimate = difficulty[id];
+
+        if (!estimate || cached[id] !== undefined) continue;
+
+        const words = await wordList(id, estimate.computedAt).catch(() => null);
+
+        if (words) await bookCoverage(id, words, estimate, known);
       }
     }
-  })().finally(() => {
-    running = undefined;
-  });
+  })()
+    .catch(() => undefined)
+    .finally(() => {
+      running = undefined;
+    });
 
   return running;
 }

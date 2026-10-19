@@ -111,17 +111,17 @@ export const ja: Record<MessageKey, string> = {
   'book.gameFolder': 'ゲームフォルダ',
   'book.fileAdded': '{format}・{date}追加',
   'book.fileSizeAdded': '{format}・{size} MB・{date}追加',
-  'book.studyWords': '先に覚えたい単語',
-  'book.studyWordsNote':
-    'この本によく出てくるものの、一般的な上位{count}語には入らない単語です。本の中での出現回数順に並んでいます。',
-  'book.studyWordsNoteFirst':
-    'この本によく出てくるものの、一般的な上位{count}語には入らない単語です。本の中での出現回数順に、全{total}語のうち上位50語を表示しています（CSVにはすべて含まれます）。',
-  'book.knownWords': '覚えたい単語{total}語のうち、{known}語を知っています（Ankiのデッキより）。',
-  'book.knownWordsOne':
-    '覚えたい単語{total}語のうち、{known}語を知っています（Ankiのデッキより）。',
-  'book.knownWordsHint':
-    'デッキの成熟したカードをこれらの単語と表記で照合しています（読みは照合しません）。この本でよく使われる2,000語のみが対象のため、推定値です。',
-  'book.known': '既知',
+  'book.wordCoverage':
+    '{count}種類の単語が使われ、本文の{percent}%は既に知っている単語です（未知の単語{new}語）。',
+  'book.wordCoverageTop':
+    'よく出る{count}語で数えると、本文の{percent}%は既に知っている単語です（未知の単語{new}語）。',
+  'book.newWords': '新しい単語',
+  'book.newWordsNote':
+    'この本で使われ、一般的な上位{count}語に入らず、まだ知らない単語です。この本によく出て一般には珍しい順に並んでいます。',
+  'book.newWordsNoteFirst':
+    'この本で使われ、一般的な上位{count}語に入らず、まだ知らない単語です。この本によく出て一般には珍しい順に、全{total}語のうち上位50語を表示しています（コピーとCSVにはすべて含まれます）。',
+  'book.newWordsHint':
+    '既知の単語：読んだ範囲で{count}回以上出会った単語と、Anki の成熟したカード（設定 → Anki → 既知語）です。',
   'book.downloadCsv': 'CSVをダウンロード',
   'book.tags': 'タグ',
   'book.findDetailsOn': '{source}またはJitenで詳細を検索',
@@ -280,7 +280,7 @@ export const ja: Record<MessageKey, string> = {
     '最後のクリックまたはキー入力以降のゲームの音（ボイスと音楽）です。変更後に起動したゲームから適用されます。',
   'anki.known': 'Anki の既知語',
   'anki.knownHint':
-    'デッキの成熟カード（間隔21日以上）の単語を1日1回まで読み込み、各本の学習する単語のうち、知っている単語に印を付けます。このブラウザにのみ保存されます。',
+    'デッキの成熟カード（間隔21日以上）の単語を1日1回まで読み込みます。各本の既知の単語の割合と新しい単語で、既知として数えます。このブラウザにのみ保存されます。',
   'anki.deck': 'デッキ',
   'anki.deckHint': 'サブデッキも含まれます。',
   'anki.wordField': '単語フィールド',
@@ -392,7 +392,7 @@ export const ja: Record<MessageKey, string> = {
   'library.sortDifficulty': '難易度',
   'library.sortCoverage': '既知の単語',
   'library.sortCoverageHint':
-    '学習する単語のうち、Anki で覚えた単語の割合順です。ページを開いた本とホームの本にだけあり、ほかの本は最後になります。',
+    '本の単語のうち、既に知っている単語（よく出会った単語や Anki の成熟したカード）の割合順です。ページを開いた本とホームの本にだけあり、ほかの本は最後になります。',
   'library.sortProgress': '進捗',
   'library.sortCharacters': '文字数',
   'library.sortLastRead': '最後に読んだ日',
@@ -447,7 +447,8 @@ export const ja: Record<MessageKey, string> = {
   'library.deleteTitle': '{title}を削除',
   'library.selectTitle': '{title}を選択',
   'library.likelyRange': 'おそらく{low}〜{high}',
-  'library.kanjiNote': '既に出会った漢字は、このブラウザで読んだ分から数えています。',
+  'library.wordsNote':
+    '既知の単語：読んだ範囲で{count}回以上出会った単語と、Anki の成熟したカードです。',
   'library.reload': 'ライブラリを再読み込み',
   'library.close': '閉じる',
   'library.difficultyIntro':

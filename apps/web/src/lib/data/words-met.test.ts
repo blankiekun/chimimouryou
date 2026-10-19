@@ -71,13 +71,13 @@ describe('getWordsMet', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
-    expect(await getWordsMet()).toEqual({ '猫\tねこ': 10, '宦官\tかんがん': 0.5 });
-    expect(await getWordsMet()).toEqual({ '猫\tねこ': 10, '宦官\tかんがん': 0.5 });
+    expect((await getWordsMet()).words).toEqual({ '猫\tねこ': 10, '宦官\tかんがん': 0.5 });
+    expect((await getWordsMet()).words).toEqual({ '猫\tねこ': 10, '宦官\tかんがん': 0.5 });
     expect(fetchMock.mock.calls.filter(([url]) => url.includes('/words/'))).toHaveLength(1);
 
     // Reading on changes the totals; the list comes from the cache.
     await db.put('kanji', { title: '猫の本', upTo: 1000, counts: {} });
-    expect((await getWordsMet())['猫\tねこ']).toBe(20);
+    expect((await getWordsMet()).words['猫\tねこ']).toBe(20);
     expect(fetchMock.mock.calls.filter(([url]) => url.includes('/words/'))).toHaveLength(1);
   });
 });

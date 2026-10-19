@@ -70,6 +70,14 @@ WORDS_PER_BOOK = 2000
 #    reads ひとけ only with a cue.
 # 6: a reading model learned from ruby reads ambiguous forms no rule covers (reading_model.py).
 WORDS_VERSION = 6
+# Not vocabulary, left out of the book's word totals (uniqueWords, tokens) like the reader's
+# word coverage does (isNoiseWord in book-words.ts): particles, numbers, lone kana, and kana-only
+# words without a frequency rank (tokenizer noise).
+PARTICLES = set('は が を に で と も の へ や か な ね よ わ ぞ ぜ さ て ば し から まで より だけ ほど '
+                'くらい ぐらい など なら って けど けれど のに ので しか こそ でも ても さえ'.split())
+NUMBER = re.compile(r'[0-9０-９〇一二三四五六七八九十百千万]+')
+SINGLE_KANA = re.compile(r'[\u3041-\u309f\u30a0-\u30ffー]')
+KANJI = re.compile(r'[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\U00020000-\U0003134f]')
 WORKERS = int(os.environ.get('JITEN_WORKERS', os.cpu_count() or 1))
 PORT = int(os.environ.get('JITEN_PORT', '8765'))
 HOST = os.environ.get('JITEN_HOST', '127.0.0.1')
@@ -128,10 +136,17 @@ def save_kanji(book_id: int, text: str):
     os.replace(path + '.tmp', path)
 
 
+def is_noise_word(form: str, rank) -> bool:
+    return (form in PARTICLES or bool(NUMBER.fullmatch(form)) or bool(SINGLE_KANA.fullmatch(form))
+            or (rank is None and not KANJI.search(form)))
+
+
 def save_words(book_id: int, analysis, frequency):
     """The book's WORDS_PER_BOOK most frequent words, most frequent first, as [form, reading or None,
     count in the book, frequency rank or None], one row per reading (他: ほか and た). Names,
-    affixes (今 read こん, from 今回) and unclassified tokens are left out."""
+    affixes (今 read こん, from 今回) and unclassified tokens are left out. Returns the number of
+    rows and their occurrences before the cap, without noise (is_noise_word), so the reader can
+    count the words past the cap as unknown."""
     rows = []
     for word_key, (word, count) in analysis.words.items():
         if word.pos in ('name', 'fix', 'other'):
@@ -146,12 +161,14 @@ def save_words(book_id: int, analysis, frequency):
         for reading, n in readings.items():
             data = frequency.word(word.key, reading)
             rows.append([word.form, reading, n, data[0] if data else None])
+    vocabulary = [row for row in rows if not is_noise_word(row[0], row[3])]
     rows = sorted(rows, key=lambda row: -row[2])[:WORDS_PER_BOOK]
     os.makedirs(WORDS_DIR, exist_ok=True)
     path = os.path.join(WORDS_DIR, f'{book_id}.json.gz')
     with gzip.open(path + '.tmp', 'wt', encoding='utf-8') as f:
         json.dump(rows, f, ensure_ascii=False, separators=(',', ':'))
     os.replace(path + '.tmp', path)
+    return len(vocabulary), sum(row[2] for row in vocabulary)
 
 
 def _estimate(book: dict):
@@ -174,7 +191,7 @@ def _estimate(book: dict):
     scores = {name: round(min(max(float(session.run(None, {'float_input': row})[0][0][0]), 0.0), 5.0), 2)
               for name, session in _sessions.items()}
     save_kanji(book['id'], text)
-    save_words(book['id'], analysis, _frequency)
+    unique_words, tokens = save_words(book['id'], analysis, _frequency)
     # 'adjusted' is kept for older readers (deprecated, see CHANGELOG; drop it one release later);
     # the model includes jiten.moe's adjustment.
     return book['id'], {
@@ -187,6 +204,10 @@ def _estimate(book: dict):
         'words': WORDS_VERSION,
         'characters': characters,
         'uniqueKanji': len({c for c in text if is_kanji(c)}),
+        # All the book's words (rows of its word list before the cap) and their occurrences,
+        # without noise; older estimates have neither.
+        'uniqueWords': unique_words,
+        'tokens': tokens,
         'computedAt': int(time.time() * 1000),
     }
 

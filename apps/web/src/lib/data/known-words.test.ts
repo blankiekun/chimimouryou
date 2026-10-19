@@ -10,13 +10,24 @@ import { ankiKnownDeck$, ankiKnownField$, ankiKnownWords$ } from '$lib/data/anki
 import type { BookWord } from '$lib/data/book-words';
 import {
   bookCoverage,
+  cacheCoverage,
   cleanAnkiField,
   clearKnownWords,
+  getKnownSet,
   knownCoverage$,
+  loadCoverageCache,
   refreshKnownWords,
   refreshKnownWordsIfStale
 } from '$lib/data/known-words';
 import { readerDb } from '$lib/data/reader-db';
+
+const met = vi.hoisted(() => ({ signature: 'read 1', words: {} as Record<string, number> }));
+
+vi.mock('$lib/data/extras-sync', () => ({ pullKanji: async () => {}, kanjiChanged: () => {} }));
+vi.mock('$lib/data/words-met', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('$lib/data/words-met')>()),
+  getWordsMet: async () => ({ ...met })
+}));
 
 const words: BookWord[] = [
   ['猫', 'ねこ', 6, 100],
@@ -64,6 +75,8 @@ describe('known words', () => {
     ankiKnownWords$.next(true);
     ankiKnownDeck$.next('Mining "JP"');
     ankiKnownField$.next('Expression');
+    met.signature = 'read 1';
+    met.words = {};
     await clearKnownWords();
   });
 
@@ -82,28 +95,51 @@ describe('known words', () => {
     expect(calls[1]).toMatchObject({ action: 'notesInfo', params: { notes: [1, 2] } });
   });
 
-  it('computes, caches and invalidates coverage when the words are read again', async () => {
+  it('counts words met 8 times and Anki words as known, cached per known set', async () => {
     stubAnki(['猫']);
     await refreshKnownWords();
-    expect(await bookCoverage(7, 50, words)).toEqual({ known: ['猫'], total: 3, share: 0.6 });
-    expect(knownCoverage$.getValue()).toEqual({ 7: 0.6 });
-    // Cached: the word list isn't loaded again.
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
-    expect(await bookCoverage(7, 50)).toEqual({ share: 0.6 });
+    met.words = { '犬\tいぬ': 8, '宦官\tかんがん': 7 };
+    expect(await bookCoverage(7, words, {}, await getKnownSet())).toMatchObject({
+      share: 0.9,
+      newWords: 1
+    });
+    expect(knownCoverage$.getValue()).toEqual({ 7: 0.9 });
 
-    await new Promise((resolve) => setTimeout(resolve, 2));
-    stubAnki(['猫', '犬']);
-    await refreshKnownWords();
+    // Reading on changes the known words: the cached shares are dropped.
+    met.signature = 'read 2';
+    await loadCoverageCache();
     expect(knownCoverage$.getValue()).toEqual({});
-    // Not cached any more: loaded from the server again.
-    expect((await bookCoverage(7, 50))?.share).toBeCloseTo(0.9);
   });
 
-  it('gives nothing while the feature is off', async () => {
+  it('works without Anki', async () => {
     stubAnki(['猫']);
     await refreshKnownWords();
     ankiKnownWords$.next(false);
-    expect(await bookCoverage(7, 50, words)).toBeUndefined();
+    met.words = { '犬\tいぬ': 8 };
+    expect((await bookCoverage(7, words, {}, await getKnownSet()))?.share).toBeCloseTo(0.3);
+  });
+
+  it("doesn't cache coverage from partial known words", async () => {
+    met.signature = '';
+    expect(await bookCoverage(7, words, {}, await getKnownSet())).toMatchObject({ share: 0 });
+    expect(knownCoverage$.getValue()).toEqual({});
+  });
+
+  it('computes the missing coverages in the background', async () => {
+    met.words = { '猫\tねこ': 8 };
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('difficulty.json')) {
+        return new Response(JSON.stringify({ books: { 7: { characters: 10, computedAt: 1 } } }));
+      }
+      if (url.endsWith('/words/7')) return new Response(JSON.stringify(words));
+      return new Response('', { status: 404 });
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+    await cacheCoverage([7, 8]);
+    expect(knownCoverage$.getValue()).toEqual({ 7: 0.6 });
+    await cacheCoverage([7, 8]);
+    expect(fetchMock.mock.calls.filter(([url]) => url.includes('/words/'))).toHaveLength(1);
   });
 
   it('keeps the old words quietly when Anki is closed', async () => {
@@ -118,7 +154,7 @@ describe('known words', () => {
   it('clears everything', async () => {
     stubAnki(['猫']);
     await refreshKnownWords();
-    await bookCoverage(7, 50, words);
+    await bookCoverage(7, words, {}, await getKnownSet());
     await clearKnownWords();
     expect(await (await readerDb()).count('known')).toBe(0);
     expect(knownCoverage$.getValue()).toEqual({});

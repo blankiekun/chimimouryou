@@ -147,6 +147,13 @@ exists (made by the server's `difficulty` service; readers with the
   jiten.moe's score for about 8 books in 10. A narrow range is a surer estimate.
 - **The most common words that cover 95%** of the book: how many words you would
   need to know to understand 95% of it. Lower is easier.
+- **Different words** in the book and how much of its text you **already know**: the
+  share of its word occurrences that are known words (see Words known below), and how
+  many of its words would be new. Particles, numbers and lone kana don't count.
+  Estimates made before this only list the book's 2,000 most frequent words, so the
+  sentence then says it counts those; "Books without an estimate" doesn't redo them.
+- **New words**: the book's words outside the most common ones that you don't know
+  yet, frequent in this book and rare in general first, with **Copy** and a CSV for Anki.
 - **Different kanji** in the book, and how many of them you have **already met**:
   the share of the book's kanji (counted every time they appear) that you have
   read before in other books, and the number of kanji that would be new. Kanji
@@ -165,4 +172,6 @@ an estimate, manga and books outside Calibre add nothing.
 
 Manga have no estimate. In the Store, filter by difficulty band and sort by
 difficulty (easiest first) or length to find the next book: one a little harder
-than the last, with most of its kanji already met, is usually a good pick.
+than the last, with most of its words already known, is usually a good pick. The Store's
+**Known words** sort and Home's **Read next** order books by that share; Difficulty
+details on selected books shows it for each.
