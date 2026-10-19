@@ -40,13 +40,14 @@
   import {
     downloadWordsCsv,
     kanjiPattern,
-    loadBookWords,
+    newWords,
     wordsToStudy,
-    type BookWord
+    type BookWord,
+    type WordCoverage
   } from '$lib/data/book-words';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { getKanjiSeen, kanjiCoverage, type KanjiCoverage } from '$lib/data/kanji-seen';
-  import { bookCoverage, refreshKnownWordsIfStale } from '$lib/data/known-words';
+  import { bookCoverage, getKnownSet, refreshKnownWordsIfStale } from '$lib/data/known-words';
   import { learnerStats } from '$lib/data/learner-stats';
   import {
     addToHome,
@@ -57,6 +58,7 @@
   } from '$lib/data/library-home';
   import { guessSeriesName } from '$lib/data/series-overrides';
   import { database, startDayHoursForTracker$ } from '$lib/data/store';
+  import { knownMinCount, wordList } from '$lib/data/words-met';
   import { getDateKey } from '$lib/functions/statistic-util';
   import { t$, tr, uiLanguage$ } from '$lib/i18n';
   import { createEventDispatcher, onMount } from 'svelte';
@@ -87,9 +89,10 @@
   let estimate: CalibreDifficulty | undefined;
   let kanji: KanjiCoverage | undefined;
   let copied = false;
-  let studyWords: BookWord[] = [];
-  /** Words to study known from Anki (Settings → Anki → Known Words) */
-  let knownStudy: Set<string> | undefined;
+  /** Words to study not known yet (met often enough or mature in Anki), by `newWords` */
+  let unknownWords: BookWord[] = [];
+  let wordsCopied = false;
+  let wordStats: WordCoverage | undefined;
   let speed = 0;
   let metadata: BookMetadata | undefined;
   let searching = false;
@@ -133,6 +136,13 @@
               })
             : $t$('book.score', { score: book.difficulty.toFixed(1) }),
           book.words95 ? $t$('book.words95', { count: number(book.words95) }) : '',
+          wordStats
+            ? $t$(wordStats.complete ? 'book.wordCoverage' : 'book.wordCoverageTop', {
+                count: number(wordStats.words),
+                percent: (wordStats.share * 100).toFixed(1),
+                new: number(wordStats.newWords)
+              })
+            : '',
           kanjiSentence(estimate?.uniqueKanji, kanji)
         ]
           .filter(Boolean)
@@ -193,8 +203,9 @@
     estimate = undefined;
     kanji = undefined;
     copied = false;
-    studyWords = [];
-    knownStudy = undefined;
+    unknownWords = [];
+    wordsCopied = false;
+    wordStats = undefined;
     metadata = undefined;
     candidates = undefined;
     source = undefined;
@@ -220,19 +231,20 @@
     metadata = details[title];
 
     if (estimate && book.calibreId !== undefined) {
-      const { words95 } = estimate;
-      const [counts, seen, words] = await Promise.all([
-        loadBookKanji(book.calibreId).catch(() => undefined),
+      const id = book.calibreId;
+      const bookEstimate = estimate;
+      const [counts, seen, list, known] = await Promise.all([
+        loadBookKanji(id).catch(() => undefined),
         getKanjiSeen().catch(() => []),
-        words95 && kind !== 'manga'
-          ? loadBookWords(book.calibreId).catch(() => undefined)
-          : undefined,
+        kind === 'manga' ? null : wordList(id, bookEstimate.computedAt).catch(() => null),
         refreshKnownWordsIfStale()
+          .then(getKnownSet)
+          .catch(() => undefined)
       ]);
       const coverage =
-        words &&
-        words95 &&
-        (await bookCoverage(book.calibreId, words95, words).catch(() => undefined));
+        list && known
+          ? await bookCoverage(id, list, bookEstimate, known).catch(() => undefined)
+          : undefined;
 
       if (title !== book.title) {
         return;
@@ -241,16 +253,24 @@
       if (counts && seen.length) {
         kanji = kanjiCoverage(counts, seen);
       }
-      if (words && words95) {
-        studyWords = wordsToStudy(words, words95);
+      wordStats = coverage;
+      if (list && bookEstimate.words95) {
+        unknownWords = newWords(
+          wordsToStudy(list, bookEstimate.words95),
+          known?.isKnown ?? (() => false)
+        );
       }
-      knownStudy = coverage && 'known' in coverage ? new Set(coverage.known) : undefined;
     }
   }
 
   async function copyNewKanji() {
     await navigator.clipboard.writeText(kanji?.topNew.join('') ?? '');
     copied = true;
+  }
+
+  async function copyNewWords() {
+    await navigator.clipboard.writeText(unknownWords.map(([form]) => form).join('\n'));
+    wordsCopied = true;
   }
 
   function openSearch() {
@@ -500,45 +520,38 @@
         {/if}
       </dl>
 
-      {#if studyWords.length}
+      {#if unknownWords.length}
         <section class="details-words" aria-labelledby="book-details-words">
-          <h2 id="book-details-words" class="details-fetch-heading">{$t$('book.studyWords')}</h2>
-          <p class="details-note">
-            {$t$(studyWords.length > 50 ? 'book.studyWordsNoteFirst' : 'book.studyWordsNote', {
+          <h2 id="book-details-words" class="details-fetch-heading">{$t$('book.newWords')}</h2>
+          <p class="details-note" title={$t$('book.newWordsHint', { count: knownMinCount })}>
+            {$t$(unknownWords.length > 50 ? 'book.newWordsNoteFirst' : 'book.newWordsNote', {
               count: number(estimate?.words95 ?? 0),
-              total: number(studyWords.length)
+              total: number(unknownWords.length)
             })}
           </p>
-          {#if knownStudy}
-            <p class="details-note" title={$t$('book.knownWordsHint')}>
-              {$t$(studyWords.length === 1 ? 'book.knownWordsOne' : 'book.knownWords', {
-                known: number(knownStudy.size),
-                total: number(studyWords.length)
-              })}
-            </p>
-          {/if}
           <ol lang="ja">
-            {#each studyWords.slice(0, 50) as [form, reading, count]}
-              {@const known = knownStudy?.has(form)}
-              <li class:details-word-known={known}>
+            {#each unknownWords.slice(0, 50) as [form, reading, count]}
+              <li>
                 {form}{#if reading && kanjiPattern.test(form)}<span class="details-note-inline"
                     >（{reading}）</span
                   >{/if}
-                <span class="details-note-inline">×{count}</span>{#if known}<span
-                    class="details-note-inline"
-                    aria-label={$t$('book.known')}> ✓</span
-                  >{/if}
+                <span class="details-note-inline">×{count}</span>
               </li>
             {/each}
           </ol>
-          <button
-            type="button"
-            class="app-button"
-            on:click={() => downloadWordsCsv(book.title, studyWords)}
-          >
-            <Fa icon={faDownload} />
-            {$t$('book.downloadCsv')}
-          </button>
+          <span class="details-word-actions">
+            <button type="button" class="app-button" on:click={copyNewWords}>
+              {wordsCopied ? $t$('book.copied') : $t$('book.copy')}
+            </button>
+            <button
+              type="button"
+              class="app-button"
+              on:click={() => downloadWordsCsv(book.title, unknownWords)}
+            >
+              <Fa icon={faDownload} />
+              {$t$('book.downloadCsv')}
+            </button>
+          </span>
         </section>
       {/if}
 
@@ -881,8 +894,10 @@
     gap: 0.3rem 1.1rem;
   }
 
-  .details-word-known {
-    color: var(--app-muted-fg);
+  .details-word-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
 
   .details-note-inline {

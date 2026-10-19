@@ -5,7 +5,15 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { knownCoverage, wordsCsv, wordsFileName, wordsToStudy, type BookWord } from './book-words';
+import {
+  newWords,
+  wordCoverage,
+  wordsCsv,
+  wordsFileName,
+  wordsPerBook,
+  wordsToStudy,
+  type BookWord
+} from './book-words';
 
 describe('wordsToStudy', () => {
   it('keeps words rarer than the 95% coverage rank, in book order', () => {
@@ -61,19 +69,64 @@ describe('wordsFileName', () => {
   });
 });
 
-describe('knownCoverage', () => {
-  it('counts the known study words and weighs their share by count', () => {
+describe('newWords', () => {
+  it('leaves known words out, frequent in the book × rare in general first', () => {
     const study: BookWord[] = [
-      ['猫', 'ねこ', 6, 40000],
-      ['犬', 'いぬ', 3, 50000],
-      ['宦官', 'かんがん', 1, 68872]
+      ['後宮', 'こうきゅう', 100, 1000],
+      ['宦官', 'かんがん', 70, 100000],
+      ['猫', 'ねこ', 500, 40000],
+      ['小姐', 'しゃおじぇ', 50, null]
     ];
 
-    expect(knownCoverage(study, new Set(['猫', 'は']))).toEqual({
-      known: ['猫'],
-      total: 3,
-      share: 0.6
+    // 70 × 5 = 350, 100 × 3 = 300, 50 × log10(100000) = 250
+    expect(newWords(study, ([form]) => form === '猫').map(([form]) => form)).toEqual([
+      '宦官',
+      '後宮',
+      '小姐'
+    ]);
+  });
+});
+
+describe('wordCoverage', () => {
+  const words: BookWord[] = [
+    ['猫', 'ねこ', 6, 400],
+    ['は', null, 50, 1],
+    ['8', null, 9, null],
+    ['犬', 'いぬ', 3, 500],
+    ['宦官', 'かんがん', 1, 68872]
+  ];
+  const isKnown = ([form]: BookWord) => form === '猫' || form === 'は';
+
+  it('weighs known words by occurrences, without particles and noise', () => {
+    expect(wordCoverage(words, isKnown)).toEqual({
+      words: 3,
+      newWords: 2,
+      share: 0.6,
+      complete: true
     });
-    expect(knownCoverage([], new Set(['猫']))).toBeUndefined();
+  });
+
+  it("counts the words past the list's cap as unknown when the estimate has totals", () => {
+    expect(wordCoverage(words, isKnown, { uniqueWords: 5, tokens: 20 })).toEqual({
+      words: 5,
+      newWords: 4,
+      share: 0.3,
+      complete: true
+    });
+  });
+
+  it('counts only the listed words of a cut list without totals', () => {
+    const full: BookWord[] = Array.from({ length: wordsPerBook }, (_, i) => [
+      `語${i}`,
+      null,
+      1,
+      100
+    ]);
+
+    expect(wordCoverage(full, () => true)).toMatchObject({ share: 1, complete: false });
+  });
+
+  it('has nothing to say without words', () => {
+    expect(wordCoverage([['は', null, 5, 1]], isKnown)).toBeUndefined();
   });
 });

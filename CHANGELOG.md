@@ -56,6 +56,9 @@ anything a reader or a server operator would notice.
   /opt/venv/bin/python /app/jiten/distil/reading_context.py build`, about half an hour for
   19,000 books; see docs/CONFIGURATION.md). "Books without an estimate" redoes word lists
   once; the difficulty scores don't change.
+- Estimates store `uniqueWords` and `tokens` in `/calibre/difficulty.json`: the book's
+  different words and their occurrences, without particles, numbers and lone kana, for the
+  reader's word coverage. Only new estimates have them; nothing is redone.
 
 ### Library
 
@@ -63,6 +66,14 @@ anything a reader or a server operator would notice.
   Calibre books you have read (from the server's word lists and how far you got, so past
   reading counts; text skipped by a jump and particles don't), known once met 8 times or
   mature in Anki. Kanji are still recorded.
+- Word coverage replaces Anki-only known words: a book's page says how many different words
+  it uses and how much of its text you already know ("N different words, X% of its words
+  already known (M new)"), with known meaning met 8 times or mature in Anki, so it works
+  without Anki. "Words to study first" becomes **New words**: those you don't know yet,
+  frequent in the book and rare in general first, with Copy and the CSV of the same list.
+  Difficulty details on selected books, the Store's "Known words" sort and Read next use
+  the same coverage. New estimates count the words past the book's 2,000 most frequent
+  as unknown; older ones count only those 2,000, and the page says so.
 - Japanese interface (Settings → General → Language · 言語, English by default, synced with
   the account), separate from the AI's language. This release translates the header, Home,
   the book page (difficulty bands and badge included), the settings page's sidebar,

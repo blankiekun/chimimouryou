@@ -45,6 +45,9 @@ export interface CalibreDifficulty {
   words95?: number | null;
   characters: number;
   uniqueKanji: number;
+  /** Different words and their occurrences, without noise (`isNoiseWord`); newer estimates only */
+  uniqueWords?: number;
+  tokens?: number;
   computedAt: number;
 }
 

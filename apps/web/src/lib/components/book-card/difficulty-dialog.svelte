@@ -5,37 +5,45 @@
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
   import { buttonClasses } from '$lib/css-classes';
   import { account$, hasPermission } from '$lib/data/account';
-  import { loadBookKanji } from '$lib/data/calibre';
-  import { getKanjiSeen, kanjiCoverage, type KanjiCoverage } from '$lib/data/kanji-seen';
+  import type { WordCoverage } from '$lib/data/book-words';
+  import { loadCalibreDifficulty } from '$lib/data/calibre';
+  import { bookCoverage, getKnownSet } from '$lib/data/known-words';
+  import { knownMinCount, wordList } from '$lib/data/words-met';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher, onMount } from 'svelte';
 
   /** Selected books of the Calibre source */
   export let books: BookCardProps[] = [];
 
-  /** Kanji coverage is fetched per book, so only for the first few. */
+  /** Word coverage needs each book's word list, so only for the first few. */
   const maxCoverageBooks = 20;
   const dispatch = createEventDispatcher<{ close: void }>();
 
   let finishedCompute = false;
-  let coverage: Record<number, KanjiCoverage | null> = {};
+  let coverage: Record<number, WordCoverage | null> = {};
 
   $: selectedIds = books.map((book) => book.calibreId as number);
 
   onMount(async () => {
-    const seen = await getKanjiSeen().catch(() => []);
+    const [known, difficulty] = await Promise.all([
+      getKnownSet().catch(() => undefined),
+      loadCalibreDifficulty().catch(() => undefined)
+    ]);
 
-    if (!seen.length) {
+    if (!known || !difficulty) {
       return;
     }
 
-    await Promise.all(
-      selectedIds.slice(0, maxCoverageBooks).map(async (id) => {
-        const counts = await loadBookKanji(id).catch(() => undefined);
+    // One at a time: each book's share is also cached for the Known words sort.
+    for (const id of selectedIds.slice(0, maxCoverageBooks)) {
+      const estimate = difficulty[id];
+      const words = estimate ? await wordList(id, estimate.computedAt).catch(() => null) : null;
 
-        coverage = { ...coverage, [id]: (counts && kanjiCoverage(counts, seen)) || null };
-      })
-    );
+      coverage = {
+        ...coverage,
+        [id]: (estimate && words && (await bookCoverage(id, words, estimate, known))) || null
+      };
+    }
   });
 </script>
 
@@ -44,7 +52,7 @@
   <div slot="content" class="flex max-w-xl flex-col gap-4 text-sm">
     <ul class="flex flex-col gap-2">
       {#each books.slice(0, maxCoverageBooks) as book (book.id)}
-        {@const kanji = coverage[book.calibreId ?? -1]}
+        {@const words = coverage[book.calibreId ?? -1]}
         <li class="flex flex-col gap-0.5">
           <span class="flex items-center gap-2">
             <span class="truncate font-semibold" title={book.title}>{book.title}</span>
@@ -73,11 +81,12 @@
                 {$t$('difficulty.words95', { count: book.words95.toLocaleString() })}
               </span>
             {/if}
-            {#if kanji}
+            {#if words}
               <span>
-                {$t$(kanji.newKanji ? 'book.kanjiMetOnlyNew' : 'book.kanjiMetOnly', {
-                  percent: (kanji.coverage * 100).toFixed(1),
-                  new: kanji.newKanji.toLocaleString()
+                {$t$(words.complete ? 'book.wordCoverage' : 'book.wordCoverageTop', {
+                  count: words.words.toLocaleString(),
+                  percent: (words.share * 100).toFixed(1),
+                  new: words.newWords.toLocaleString()
                 })}
               </span>
             {/if}
@@ -86,7 +95,7 @@
       {/each}
     </ul>
     {#if Object.values(coverage).some(Boolean)}
-      <p class="opacity-70">{$t$('library.kanjiNote')}</p>
+      <p class="opacity-70">{$t$('library.wordsNote', { count: knownMinCount })}</p>
     {/if}
 
     {#if hasPermission($account$, 'difficulty')}

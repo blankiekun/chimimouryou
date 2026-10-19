@@ -112,16 +112,17 @@ export const en = {
   'book.gameFolder': 'Game folder',
   'book.fileAdded': '{format}, added {date}',
   'book.fileSizeAdded': '{format}, {size} MB, added {date}',
-  'book.studyWords': 'Words to study first',
-  'book.studyWordsNote':
-    'Used often in this book but outside the {count} most common words, by count in the book.',
-  'book.studyWordsNoteFirst':
-    'Used often in this book but outside the {count} most common words, by count in the book: the first 50 of {total} (the CSV has all).',
-  'book.knownWords': 'You know {known} of the {total} words to study (from your Anki deck).',
-  'book.knownWordsOne': 'You know {known} of the {total} word to study (from your Anki deck).',
-  'book.knownWordsHint':
-    "Your deck's mature cards compared with these words by written form (readings aren't matched). Only the book's 2,000 most frequent words are listed, so this is an estimate.",
-  'book.known': 'known',
+  'book.wordCoverage':
+    '{count} different words, {percent}% of its words already known ({new} new).',
+  'book.wordCoverageTop':
+    'Counting its {count} most frequent words, {percent}% of its words already known ({new} new).',
+  'book.newWords': 'New words',
+  'book.newWordsNote':
+    'Used in this book, outside the {count} most common words and not known yet: frequent here and rare in general first.',
+  'book.newWordsNoteFirst':
+    'Used in this book, outside the {count} most common words and not known yet: frequent here and rare in general first. The first 50 of {total} (Copy and the CSV have all).',
+  'book.newWordsHint':
+    'Known: met {count} times in what you have read, or a mature card in Anki (Settings → Anki → Known Words).',
   'book.downloadCsv': 'Download CSV',
   'book.tags': 'Tags',
   'book.findDetailsOn': 'Find details on {source} or Jiten',
@@ -280,7 +281,7 @@ export const en = {
     "The game's sound (voice and music) since your last click or key press. Applies to games started after the change.",
   'anki.known': 'Known words from Anki',
   'anki.knownHint':
-    "Reads the words of the deck's mature cards (interval of 21 days or more) at most once a day, kept in this browser only, to mark the ones you know in each book's words to study.",
+    "Reads the words of the deck's mature cards (interval of 21 days or more) at most once a day, kept in this browser only. They count as known in each book's word coverage and new words.",
   'anki.deck': 'Deck',
   'anki.deckHint': 'Its subdecks are included.',
   'anki.wordField': 'Word field',
@@ -390,7 +391,7 @@ export const en = {
   'library.sortDifficulty': 'Difficulty',
   'library.sortCoverage': 'Known words',
   'library.sortCoverageHint':
-    "By the share of a book's words to study that you know from Anki. Only books whose page you opened, and Home's books, have one; the rest come last.",
+    "By the share of a book's words you already know (met often or mature in Anki). Only books whose page you opened, and Home's books, have one; the rest come last.",
   'library.sortProgress': 'Progress',
   'library.sortCharacters': 'Characters',
   'library.sortLastRead': 'Last read',
@@ -445,7 +446,7 @@ export const en = {
   'library.deleteTitle': 'Delete {title}',
   'library.selectTitle': 'Select {title}',
   'library.likelyRange': 'Likely between {low} and {high}',
-  'library.kanjiNote': 'Kanji met: counted from what you have read in this browser.',
+  'library.wordsNote': 'Known words: met {count} times in what you have read, or mature in Anki.',
   'library.reload': 'Reload library',
   'library.close': 'Close',
   'library.difficultyIntro':

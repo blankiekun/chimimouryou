@@ -42,7 +42,6 @@
   } from '$lib/data/library-home';
   import { homeOfflineTitles, keepBooksOffline } from '$lib/data/offline-books';
   import { t$ } from '$lib/i18n';
-  import { ankiKnownWords$ } from '$lib/data/anki';
   import {
     cacheCoverage,
     knownCoverage$,
@@ -237,8 +236,8 @@
       );
     }
   }
-  // Known-word coverage (Settings → Anki) for Home's books, so the Store can sort by it.
-  $: knownWordsOn = $ankiKnownWords$ && $storageSource$ === StorageKey.CALIBRE;
+  // Known-word coverage for Home's books and Read next's, so the Store can sort by it.
+  $: knownWordsOn = $storageSource$ === StorageKey.CALIBRE;
   $: if (knownWordsOn) {
     refreshKnownWordsIfStale().then(loadCoverageCache, () => {});
   }
@@ -251,9 +250,12 @@
       $bookCards$
         .filter(
           (card) =>
-            onHome.has(card.title) && !card.manga && card.calibreId !== undefined && card.words95
+            onHome.has(card.title) &&
+            !card.manga &&
+            card.calibreId !== undefined &&
+            card.difficulty !== undefined
         )
-        .map((card) => ({ id: card.calibreId!, words95: card.words95! }))
+        .map((card) => card.calibreId!)
     );
   }
   $: readNextCards = isHome && $bookCards$ ? readNext($bookCards$, $knownCoverage$) : [];

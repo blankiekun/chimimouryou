@@ -14,7 +14,7 @@
  */
 
 import { ankiKnownWords$ } from '$lib/data/anki';
-import { loadBookWords, type BookWord } from '$lib/data/book-words';
+import { loadBookWords, particles, type BookWord } from '$lib/data/book-words';
 import {
   loadCalibreCatalog,
   loadCalibreDifficulty,
@@ -26,17 +26,6 @@ import { readerDb } from '$lib/data/reader-db';
 
 /** Times a word must be met to count as known. */
 export const knownMinCount = 8;
-
-/**
- * Particles: frequent but not vocabulary to learn. The word lists carry no part of
- * speech, so they are dropped by form.
- */
-const particles = new Set(
-  (
-    'は が を に で と も の へ や か な ね よ わ ぞ ぜ さ て ば し から まで より だけ ほど ' +
-    'くらい ぐらい など なら って けど けれど のに ので しか こそ でも ても さえ'
-  ).split(' ')
-);
 
 export interface WordsMetCache {
   /** The inputs the totals came from: catalog id, read fraction and list date per title */
@@ -104,7 +93,8 @@ export function summarizeWords(
   return { met, known };
 }
 
-async function wordList(id: number, computedAt: number) {
+/** The book's word list, cached per estimate. */
+export async function wordList(id: number, computedAt: number) {
   const db = await readerDb();
   const key = `list:${id}`;
   const cached = (await db.get('known', key)) as WordList | undefined;
@@ -119,11 +109,12 @@ async function wordList(id: number, computedAt: number) {
   return words;
 }
 
-let running: Promise<Record<string, number>> | undefined;
+let running: Promise<WordsMetCache> | undefined;
 
 /**
  * Occurrences met per word over every Calibre book read, from the cache when the
  * kanji records and estimates haven't changed. Word lists are fetched one at a time.
+ * The signature is empty when a list couldn't be loaded (the totals are partial).
  */
 export function getWordsMet() {
   running ??= computeWordsMet().finally(() => {
@@ -133,7 +124,7 @@ export function getWordsMet() {
   return running;
 }
 
-async function computeWordsMet() {
+async function computeWordsMet(): Promise<WordsMetCache> {
   const [records, catalog, difficulty] = await Promise.all([
     getKanjiSeen(),
     loadCalibreCatalog().catch(() => []),
@@ -160,7 +151,7 @@ async function computeWordsMet() {
   const db = await readerDb();
   const cached = (await db.get('known', 'met')) as WordsMetCache | undefined;
 
-  if (cached?.signature === signature) return cached.words;
+  if (cached?.signature === signature) return cached;
 
   const totals: Record<string, number> = {};
   let complete = true;
@@ -174,14 +165,18 @@ async function computeWordsMet() {
     if (words) addWordsMet(totals, words, fraction);
   }
 
-  if (complete) await db.put('known', { signature, words: totals }, 'met');
+  if (!complete) return { signature: '', words: totals };
 
-  return totals;
+  const met = { signature, words: totals };
+
+  await db.put('known', met, 'met');
+
+  return met;
 }
 
 /** Words met and known, for the dashboard. */
 export async function getWordsSummary() {
-  const [totals, anki] = await Promise.all([
+  const [{ words: totals }, anki] = await Promise.all([
     getWordsMet(),
     ankiKnownWords$.getValue() ? getKnownWords().catch(() => undefined) : undefined
   ]);
