@@ -110,11 +110,11 @@ The catalog builder takes the library and the output file as arguments:
 `build-calibre-catalog <library> <catalog.json> [<vn folder>] [--force]`.
 
 Word lists read ambiguous words (柄: がら, つか or え) with a small model learned from books'
-furigana. The image ships a small one (42 words) trained on Aozora Bunko and Tatoeba; a model
+furigana ([yurigana](https://github.com/blankiekun/yurigana)). The image ships a small one (42 words) trained on Aozora Bunko and Tatoeba; a model
 built from your own library (`state/difficulty/reading-model.json.gz`, about 400 words for
 19,000 books) is used first:
 
-    docker compose exec difficulty /opt/venv/bin/python /app/jiten/distil/reading_context.py build
+    docker compose exec difficulty /opt/venv/bin/python -m yurigana.reading_context build
 
 It reads the whole library with `DIFFICULTY_WORKERS` processes: for 19,000 books about
 25 minutes of mining on 3 and 3 minutes of training, up to about 3 GB of RAM, with its working

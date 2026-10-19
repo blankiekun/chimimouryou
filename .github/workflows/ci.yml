@@ -60,6 +60,10 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Install yurigana
+        # The difficulty scripts import it; its Sudachi dependencies are only needed in the image.
+        run: pip install --no-deps "$(grep '^yurigana' scripts/calibre/jiten/requirements.txt)"
+
       - name: Unit tests
         run: python -m unittest discover -s scripts/calibre/tests
 

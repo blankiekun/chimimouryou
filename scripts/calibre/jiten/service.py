@@ -30,6 +30,8 @@ from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from yurigana import PUBLIC_TABLE, load_tables
+
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 
 LIBRARY = os.environ.get('CALIBRE_LIBRARY', '/library')
@@ -51,11 +53,10 @@ MODEL_PATHS = {name: os.path.join(MODEL_DIR, f'chimi-difficulty{suffix}.onnx')
 # Added to both sides of the range so it holds 80% of books (written by distil/train.py).
 with open(os.path.join(MODEL_DIR, 'chimi-difficulty-range.json'), encoding='utf-8') as _f:
     RANGE_WIDEN = json.load(_f)['widen']
-# Readings in context for word lists (reading_model.py): the server's own table, built from its
-# library by `distil/reading_context.py build`, and for other forms the committed one built
-# from Aozora Bunko and Tatoeba (distil/README.md).
-READING_MODEL_PATHS = [os.path.join(STATE_DIR, 'reading-model.json.gz'),
-                       os.path.join(MODEL_DIR, 'reading-model-public.json.gz')]
+# Readings in context for word lists (yurigana's reading model): the server's own table, built
+# from its library by `python -m yurigana.reading_context build`, and for other forms
+# yurigana's public one, built from Aozora Bunko and Tatoeba.
+READING_MODEL_PATHS = [os.path.join(STATE_DIR, 'reading-model.json.gz'), PUBLIC_TABLE]
 # Stored with each estimate; whole-library runs redo estimates made by another model.
 MODEL_VERSION = 'chimi-difficulty-1'
 # Per-book kanji counts, gzipped JSON, for the reader's own coverage.
@@ -64,11 +65,12 @@ KANJI_DIR = os.path.join(STATE_DIR, 'kanji')
 WORDS_DIR = os.path.join(STATE_DIR, 'words')
 WORDS_PER_BOOK = 2000
 # Stored with each estimate ('words'); whole-library runs redo word lists made by an older version.
-# 2: one row per (form, reading). 3: the book's own ruby gives readings (features.ruby_reading).
-# 4: context rules for ambiguous forms (features.context_reading).
+# 2: one row per (form, reading). 3: the book's own ruby gives readings (yurigana's ruby_reading).
+# 4: context rules for ambiguous forms (yurigana's context_reading).
 # 5: more of the ruby: per-kanji spans, kanji stems of inflected words, large kana; 人気がない
 #    reads ひとけ only with a cue.
-# 6: a reading model learned from ruby reads ambiguous forms no rule covers (reading_model.py).
+# 6: a reading model learned from ruby reads ambiguous forms no rule covers (yurigana's ReadingModel).
+# Moving the readings to yurigana 0.1.1 changed no reading.
 WORDS_VERSION = 6
 # Not vocabulary, left out of the book's word totals (uniqueWords, tokens) like the reader's
 # word coverage does (isNoiseWord in book-words.ts): particles, numbers, lone kana, and kana-only
@@ -100,15 +102,7 @@ _reading_model = None
 def load_reading_model(paths=None):
     """The tables of READING_MODEL_PATHS that load, merged (a form's model from the first that
     has one), or None."""
-    from reading_model import ReadingModel
-    forms = {}
-    for path in reversed(paths or READING_MODEL_PATHS):
-        if os.path.exists(path):
-            try:
-                forms.update(ReadingModel.load(path).forms)
-            except (OSError, ValueError, KeyError) as error:
-                print(f'{path}: {error}', flush=True)
-    return ReadingModel(forms) if forms else None
+    return load_tables(paths or READING_MODEL_PATHS)
 
 
 def _init_worker():

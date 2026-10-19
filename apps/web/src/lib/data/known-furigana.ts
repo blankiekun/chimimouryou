@@ -6,107 +6,16 @@
 
 /**
  * The "Known" furigana style: hides ruby over kanji the reader has met often,
- * but only ruby that is a plain hiragana reading of its base. Not part of upstream.
+ * but only ruby that is a plain hiragana reading of its base (yurigana's hideKnownRuby).
+ * Not part of upstream.
  */
 
+import { hideKnownRuby } from 'yurigana';
 import { getKanjiSeen } from '$lib/data/kanji-seen';
 
-/** Times every kanji of a base must have been met (all books) for its ruby to hide. */
-export const knownKanjiMinCount = 10;
+export { hideKnownRuby, isPlainReading, knownKanjiMinCount } from 'yurigana';
 
 export const knownRubyClass = 'ttu-known-ruby';
-
-const kanjiPattern = /\p{Unified_Ideograph}/u;
-const hiraganaOnly = /^[ぁ-ゖ]+$/;
-const voiced: Record<string, string> = {
-  か: 'が',
-  き: 'ぎ',
-  く: 'ぐ',
-  け: 'げ',
-  こ: 'ご',
-  さ: 'ざ',
-  し: 'じ',
-  す: 'ず',
-  せ: 'ぜ',
-  そ: 'ぞ',
-  た: 'だ',
-  ち: 'ぢ',
-  つ: 'づ',
-  て: 'で',
-  と: 'ど',
-  は: 'ばぱ',
-  ひ: 'びぴ',
-  ふ: 'ぶぷ',
-  へ: 'べぺ',
-  ほ: 'ぼぽ'
-};
-
-function toHiragana(text: string) {
-  return text.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
-}
-
-/** A kanji's reading as it can sound in a word: rendaku (ひと → びと) and っ (がく → がっ). */
-function variants(reading: string) {
-  const starts = [reading[0], ...(voiced[reading[0]] ?? '')];
-  const result: string[] = [];
-
-  for (const start of starts) {
-    const word = start + reading.slice(1);
-    result.push(word);
-    if (word.length > 1 && 'つちくき'.includes(word[word.length - 1])) {
-      result.push(`${word.slice(0, -1)}っ`);
-    }
-  }
-
-  return result;
-}
-
-/**
- * Whether `reading` is spelled by the readings of the base's kanji (on and kun of
- * 常用/人名用 kanji, from KANJIDIC2) and its kana. Gikun like そら over 宇宙 and
- * jukujikun like きょう over 今日 aren't, and neither are kanji outside the table.
- */
-export function isPlainReading(base: string, reading: string, readings: Record<string, string>) {
-  const match = (i: number, j: number): boolean => {
-    if (i === base.length) {
-      return j === reading.length;
-    }
-
-    const char = base[i];
-    if (!kanjiPattern.test(char) && char !== '々') {
-      return reading[j] === toHiragana(char) && match(i + 1, j + 1);
-    }
-
-    const own = readings[char === '々' && i > 0 ? base[i - 1] : char];
-    return (own?.split(' ') ?? [])
-      .flatMap(variants)
-      .some((form) => reading.startsWith(form, j) && match(i + 1, j + form.length));
-  };
-
-  return match(0, 0);
-}
-
-/**
- * Hide ruby only when its reading is plain hiragana that spells the base's usual
- * reading and every kanji of the base was met at least `minCount` times. Ruby that is
- * katakana, contains kanji or is any other reading is the author's choice and stays.
- */
-export function hideKnownRuby(
-  base: string,
-  reading: string,
-  kanjiTotals: Record<string, number>,
-  readings: Record<string, string>,
-  minCount = knownKanjiMinCount
-) {
-  const kanji = [...base].filter((char) => kanjiPattern.test(char));
-
-  return (
-    kanji.length > 0 &&
-    hiraganaOnly.test(reading) &&
-    kanji.every((char) => (kanjiTotals[char] ?? 0) >= minCount) &&
-    isPlainReading(base, reading, readings)
-  );
-}
 
 /** Kanji met across all books in this browser. */
 export function totalKanjiCounts(books: { counts: Record<string, number> }[]) {
@@ -121,7 +30,10 @@ export function totalKanjiCounts(books: { counts: Record<string, number> }[]) {
 
 /** Loads the kanji met and the readings table once, e.g. when a book opens. */
 export async function loadKnownRubyCheck() {
-  const [books, table] = await Promise.all([getKanjiSeen(), import('./kanji-readings.json')]);
+  const [books, table] = await Promise.all([
+    getKanjiSeen(),
+    import('yurigana/kanji-readings.json')
+  ]);
   const totals = totalKanjiCounts(books);
   const readings: Record<string, string> = table.default;
 
