@@ -70,9 +70,17 @@ function stubAnki(fields: string[]) {
 
 describe('cleanAnkiField', () => {
   it('keeps the written form', () => {
-    expect(cleanAnkiField(' 漢字[かんじ]')).toBe('漢字');
-    expect(cleanAnkiField('<b>食べ[た]る</b>&nbsp;')).toBe('食べる');
-    expect(cleanAnkiField('<div>猫</div>')).toBe('猫');
+    expect(cleanAnkiField(' 漢字[かんじ]')).toEqual(['漢字']);
+    expect(cleanAnkiField('<b>食べ[た]る</b>&nbsp;')).toEqual(['食べる']);
+    expect(cleanAnkiField('<div>猫</div>')).toEqual(['猫']);
+  });
+
+  it("drops Yomitan's ruby and 〜, and splits several words", () => {
+    expect(cleanAnkiField('<ruby>漢字<rp>(</rp><rt>かんじ</rt><rp>)</rp></ruby>')).toEqual([
+      '漢字'
+    ]);
+    expect(cleanAnkiField('食べる<br>食う')).toEqual(['食べる', '食う']);
+    expect(cleanAnkiField('〜さん、～様・殿/君;氏')).toEqual(['さん', '様', '殿', '君', '氏']);
   });
 });
 
@@ -101,11 +109,41 @@ describe('known words', () => {
     expect(calls[1]).toMatchObject({ action: 'notesInfo', params: { notes: [1, 2] } });
   });
 
+  it('reads 勉強する as also covering 勉強', async () => {
+    stubAnki(['勉強する']);
+    expect((await refreshKnownWords()).words).toEqual(['勉強する', '勉強']);
+  });
+
+  it('counts a word met without a reading by its form', async () => {
+    ankiKnownWords$.next(false);
+    met.words = { '呟く\tつぶやく': 8 };
+    expect((await getKnownSet()).isKnown(['呟く', null, 3, 900])).toBe(true);
+  });
+
+  it('drops cached coverages of re-estimated books', async () => {
+    ankiKnownWords$.next(false);
+    met.words = { '猫\tねこ': 8 };
+    let computedAt = 1;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () => new Response(JSON.stringify({ books: { 7: { characters: 10, computedAt } } }))
+      )
+    );
+    await bookCoverage(7, words, { computedAt: 1 }, await getKnownSet());
+    await loadCoverageCache();
+    expect(knownCoverage$.getValue()).toEqual({ 7: 0.6 });
+    computedAt = 2;
+    await loadCoverageCache();
+    expect(knownCoverage$.getValue()).toEqual({});
+  });
+
   it('counts words met 8 times and Anki words as known, cached per known set', async () => {
     stubAnki(['猫']);
     await refreshKnownWords();
     met.words = { '犬\tいぬ': 8, '宦官\tかんがん': 7 };
-    expect(await bookCoverage(7, words, {}, await getKnownSet())).toMatchObject({
+    expect(await bookCoverage(7, words, { computedAt: 1 }, await getKnownSet())).toMatchObject({
       share: 0.9,
       newWords: 1
     });
@@ -122,7 +160,9 @@ describe('known words', () => {
     await refreshKnownWords();
     ankiKnownWords$.next(false);
     met.words = { '犬\tいぬ': 8 };
-    expect((await bookCoverage(7, words, {}, await getKnownSet()))?.share).toBeCloseTo(0.3);
+    expect(
+      (await bookCoverage(7, words, { computedAt: 1 }, await getKnownSet()))?.share
+    ).toBeCloseTo(0.3);
   });
 
   it('counts marked words as known and changes the key when the marks change', async () => {
@@ -145,7 +185,9 @@ describe('known words', () => {
 
   it("doesn't cache coverage from partial known words", async () => {
     met.signature = '';
-    expect(await bookCoverage(7, words, {}, await getKnownSet())).toMatchObject({ share: 0 });
+    expect(await bookCoverage(7, words, { computedAt: 1 }, await getKnownSet())).toMatchObject({
+      share: 0
+    });
     expect(knownCoverage$.getValue()).toEqual({});
   });
 
@@ -178,7 +220,7 @@ describe('known words', () => {
   it('clears everything', async () => {
     stubAnki(['猫']);
     await refreshKnownWords();
-    await bookCoverage(7, words, {}, await getKnownSet());
+    await bookCoverage(7, words, { computedAt: 1 }, await getKnownSet());
     await clearKnownWords();
     expect(await (await readerDb()).count('known')).toBe(0);
     expect(knownCoverage$.getValue()).toEqual({});

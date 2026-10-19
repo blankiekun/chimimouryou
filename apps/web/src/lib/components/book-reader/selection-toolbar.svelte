@@ -1,7 +1,7 @@
 <script lang="ts">
   import { faCheck, faNoteSticky } from '@fortawesome/free-solid-svg-icons';
   import { highlightColors, type HighlightColor } from '$lib/data/annotations';
-  import { markKey, setWordMarks, wordMarks$ } from '$lib/data/word-marks';
+  import { formMarked, setWordMarks, wordMarks$ } from '$lib/data/word-marks';
   import { activePlugins$, type SelectionActionContribution } from '$lib/plugins';
   import { createEventDispatcher } from 'svelte';
   import { t$ } from '$lib/i18n';
@@ -9,7 +9,7 @@
 
   /** The Listen panel is open at the bottom, so show at the top instead */
   export let raised = false;
-  /** The selection when it is a word of the book's word list (offers "Mark known") */
+  /** The word-list form the selection is, conjugated or not (offers "Mark known") */
   export let word = '';
 
   const dispatch = createEventDispatcher<{
@@ -18,7 +18,7 @@
     action: SelectionActionContribution;
   }>();
 
-  $: marked = !!word && !!$wordMarks$[markKey(word)]?.status;
+  $: marked = !!word && formMarked($wordMarks$, word);
 </script>
 
 <div

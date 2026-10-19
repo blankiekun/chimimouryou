@@ -58,7 +58,7 @@
   } from '$lib/data/library-home';
   import { guessSeriesName } from '$lib/data/series-overrides';
   import { database, startDayHoursForTracker$ } from '$lib/data/store';
-  import { setWordMarks, wordMark, wordMarks$ } from '$lib/data/word-marks';
+  import { markEntry, marksOf, setWordMarks, wordMark, wordMarks$ } from '$lib/data/word-marks';
   import { knownMinCount, wordList } from '$lib/data/words-met';
   import { getDateKey } from '$lib/functions/statistic-util';
   import { t$, tr, uiLanguage$ } from '$lib/i18n';
@@ -92,6 +92,8 @@
   let copied = false;
   /** Words to study not known yet (met often enough or mature in Anki), by `newWords` */
   let unknownWords: BookWord[] = [];
+  /** The book's word list (marks depend on how many readings a form has in it) */
+  let listWords: BookWord[] = [];
   let wordsCopied = false;
   let wordStats: WordCoverage | undefined;
   let speed = 0;
@@ -137,17 +139,27 @@
               })
             : $t$('book.score', { score: book.difficulty.toFixed(1) }),
           book.words95 ? $t$('book.words95', { count: number(book.words95) }) : '',
-          wordStats
-            ? $t$(wordStats.complete ? 'book.wordCoverage' : 'book.wordCoverageTop', {
-                count: number(wordStats.words),
-                percent: (wordStats.share * 100).toFixed(1),
-                new: number(wordStats.newWords)
-              })
-            : '',
+          wordStats ? coverageSentence(wordStats, $t$) : '',
           kanjiSentence(estimate?.uniqueKanji, kanji)
         ]
           .filter(Boolean)
           .join($uiLanguage$ === 'ja' ? '' : ' ');
+
+  function coverageSentence(stats: WordCoverage, t: typeof $t$) {
+    return t(
+      stats.unlisted
+        ? 'book.wordCoverageTail'
+        : stats.complete
+          ? 'book.wordCoverage'
+          : 'book.wordCoverageTop',
+      {
+        count: number(stats.words),
+        percent: Math.floor(stats.share * 100),
+        new: number(stats.newWords),
+        rare: number(stats.unlisted)
+      }
+    );
+  }
 
   function kanjiSentence(unique: number | undefined, met: KanjiCoverage | undefined) {
     const params = {
@@ -255,6 +267,7 @@
         kanji = kanjiCoverage(counts, seen);
       }
       wordStats = coverage;
+      listWords = list ?? [];
       if (list && bookEstimate.words95) {
         unknownWords = newWords(
           wordsToStudy(list, bookEstimate.words95),
@@ -274,7 +287,7 @@
 
     if (shown.length && confirm(tr('book.markAllKnownConfirm', { count: shown.length }))) {
       setWordMarks(
-        shown.map(([form, reading]) => [form, reading]),
+        shown.map((word) => markEntry(listWords, word)),
         'known'
       );
     }
@@ -558,7 +571,7 @@
                       type="button"
                       class="details-mark"
                       title={$t$('book.unmarkWord', { word: form })}
-                      on:click={() => setWordMarks([[form, reading]], null)}
+                      on:click={() => setWordMarks(marksOf($wordMarks$, word), null)}
                     >
                       {$t$('book.undoMark')}
                     </button>
@@ -568,14 +581,14 @@
                       class="details-mark"
                       title={$t$('book.markKnown', { word: form })}
                       aria-label={$t$('book.markKnown', { word: form })}
-                      on:click={() => setWordMarks([[form, reading]], 'known')}>✓</button
+                      on:click={() => setWordMarks([markEntry(listWords, word)], 'known')}>✓</button
                     >
                     <button
                       type="button"
                       class="details-mark"
                       title={$t$('book.markIgnored', { word: form })}
                       aria-label={$t$('book.markIgnored', { word: form })}
-                      on:click={() => setWordMarks([[form, reading]], 'ignored')}>✕</button
+                      on:click={() => setWordMarks([markEntry(listWords, word)], 'ignored')}>✕</button
                     >
                   {/if}
                 </span>

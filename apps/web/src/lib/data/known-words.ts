@@ -25,7 +25,7 @@ import {
   wordMarks$,
   type WordMarks
 } from '$lib/data/word-marks';
-import { getWordsMet, knownMinCount, wordKey, wordList } from '$lib/data/words-met';
+import { getWordsMet, knownMinCount, metCounter, wordList } from '$lib/data/words-met';
 
 export interface KnownWords {
   words: string[];
@@ -42,8 +42,8 @@ export interface KnownSet {
 export interface CoverageCache {
   /** `KnownSet.key` the coverages were computed from */
   key: string;
-  /** Calibre book id → share of the book's word occurrences that are known */
-  books: Record<number, number>;
+  /** Calibre book id → share of the book's word occurrences that are known, per estimate */
+  books: Record<number, { share: number; computedAt: number }>;
 }
 
 const day = 24 * 60 * 60 * 1000;
@@ -54,11 +54,23 @@ export const knownCoverage$ = new BehaviorSubject<Record<number, number>>({});
 /** The known words read last, for Settings; undefined until loaded or when there are none. */
 export const knownWords$ = new BehaviorSubject<KnownWords | undefined>(undefined);
 
-/** The written form in an Anki field: no HTML, no furigana (` 漢字[かんじ]`), no spaces. */
+/**
+ * The written forms in an Anki field: no HTML, no furigana (` 漢字[かんじ]` or Yomitan's
+ * ruby), no spaces or leading 〜; several words (`食べる<br>食う`, `A、B`) come apart.
+ */
 export function cleanAnkiField(html: string) {
-  const text = new DOMParser().parseFromString(html, 'text/html').body.textContent ?? '';
+  const body = new DOMParser().parseFromString(
+    html.replace(/<br\s*\/?>/gi, '\n'),
+    'text/html'
+  ).body;
 
-  return text.replace(/\[[^\]]*\]/g, '').replace(/\s+/g, '');
+  body.querySelectorAll('rt, rp').forEach((element) => element.remove());
+
+  return (body.textContent ?? '')
+    .replace(/\[[^\]]*\]/g, '')
+    .split(/[\n、,，・/／;；]/)
+    .map((word) => word.replace(/\s+/g, '').replace(/^[〜～]+/, ''))
+    .filter(Boolean);
 }
 
 /** Reads the deck's mature cards (interval of 21 days or more) from Anki and caches them. */
@@ -81,9 +93,11 @@ export async function refreshKnownWords() {
     });
 
     for (const note of notes) {
-      const word = cleanAnkiField(note.fields[field]?.value ?? '');
-
-      if (word) words.add(word);
+      for (const word of cleanAnkiField(note.fields[field]?.value ?? '')) {
+        words.add(word);
+        // 勉強する in Anki covers the book's 勉強.
+        if (word.length > 2 && word.endsWith('する')) words.add(word.slice(0, -2));
+      }
     }
   }
 
@@ -137,13 +151,12 @@ export async function getKnownSet(): Promise<KnownSet> {
     getWordMarks().catch(() => ({}) as WordMarks)
   ]);
   const forms = new Set(anki?.words);
+  const metCount = metCounter(met.words);
 
   return {
     key: met.signature && `${met.signature}|${anki?.read ?? ''}|${marksSignature(marks)}`,
     isKnown: (word) =>
-      (met.words[wordKey(word)] ?? 0) >= knownMinCount ||
-      forms.has(word[0]) ||
-      !!wordMark(marks, word)
+      metCount(word) >= knownMinCount || forms.has(word[0]) || !!wordMark(marks, word)
   };
 }
 
@@ -155,9 +168,28 @@ async function coverageCache(key: string): Promise<CoverageCache> {
   return cache?.key === key ? cache : { key, books: {} };
 }
 
+/** The shares still current: books re-estimated since (or cached in the older format) are left out. */
+function currentShares(
+  books: CoverageCache['books'],
+  difficulty: Record<number, { computedAt: number } | undefined>
+) {
+  const shares: Record<number, number> = {};
+
+  for (const [id, cached] of Object.entries(books)) {
+    if (cached?.computedAt === difficulty[+id]?.computedAt) shares[+id] = cached.share;
+  }
+
+  return shares;
+}
+
 /** Loads the cached coverages for the current known words into `knownCoverage$`. */
 export async function loadCoverageCache() {
-  knownCoverage$.next((await coverageCache((await getKnownSet()).key)).books);
+  const [known, difficulty] = await Promise.all([
+    getKnownSet(),
+    loadCalibreDifficulty().catch(() => ({}))
+  ]);
+
+  knownCoverage$.next(currentShares((await coverageCache(known.key)).books, difficulty));
 }
 
 /**
@@ -167,21 +199,25 @@ export async function loadCoverageCache() {
 export async function bookCoverage(
   id: number,
   words: BookWord[],
-  totals: WordTotals,
+  estimate: WordTotals & { computedAt: number },
   known: KnownSet
 ) {
-  const coverage = wordCoverage(words, known.isKnown, totals);
+  const coverage = wordCoverage(words, known.isKnown, estimate);
 
   if (!coverage || !known.key) return coverage;
 
   // Re-read: another book may have been cached meanwhile.
   const latest = await coverageCache(known.key);
+  const cached = latest.books[id];
 
-  if (latest.books[id] !== coverage.share) {
-    const books = { ...latest.books, [id]: coverage.share };
+  if (cached?.share !== coverage.share || cached.computedAt !== estimate.computedAt) {
+    const books = {
+      ...latest.books,
+      [id]: { share: coverage.share, computedAt: estimate.computedAt }
+    };
 
     await (await readerDb()).put('known', { key: known.key, books }, 'coverage');
-    knownCoverage$.next(books);
+    knownCoverage$.next({ ...knownCoverage$.getValue(), [id]: coverage.share });
   }
 
   return coverage;
@@ -208,7 +244,7 @@ export function cacheCoverage(ids: number[]) {
       runningIds = batch.join();
 
       const [known, difficulty] = await Promise.all([getKnownSet(), loadCalibreDifficulty()]);
-      const cached = (await coverageCache(known.key)).books;
+      const cached = currentShares((await coverageCache(known.key)).books, difficulty);
 
       for (const id of batch) {
         if (pending) break;

@@ -1374,7 +1374,9 @@
       {#if isLoading}
         <LibrarySkeleton mode={$libraryDisplayMode$} />
       {:else if $bookCards$.length && isHome}
-        <LearnerDashboard />
+        <LearnerDashboard
+          books={$storageSource$ === StorageKey.CALIBRE ? $bookCards$ : undefined}
+        />
         <ContinueReadingShelf
           bookCards={$bookCards$}
           currentBookId={$currentBookId$}

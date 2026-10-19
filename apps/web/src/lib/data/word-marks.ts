@@ -39,6 +39,61 @@ export function wordMark(marks: WordMarks, [form, reading]: BookWord) {
   return marks[markKey(form, reading)]?.status || marks[markKey(form)]?.status || null;
 }
 
+/** Whether any reading of the form is marked (the reader's toolbar). */
+export function formMarked(marks: WordMarks, form: string) {
+  return Object.entries(marks).some(([key, mark]) => mark.status && key.startsWith(`${form}\t`));
+}
+
+/** The marks that mark this word (to unmark it): by its reading and by its form alone. */
+export function marksOf(marks: WordMarks, [form, reading]: BookWord): [string, string | null][] {
+  return (
+    [
+      [form, reading],
+      [form, null]
+    ] as [string, string | null][]
+  ).filter(([f, r]) => marks[markKey(f, r)]?.status);
+}
+
+/**
+ * How to mark a word of a book's list: by form alone, so a reading that changes in a
+ * later word list doesn't orphan the mark, unless the list reads the form two ways.
+ */
+export function markEntry(list: BookWord[], [form, reading]: BookWord): [string, string | null] {
+  const readings = new Set(list.filter((word) => word[0] === form).map((word) => word[1]));
+
+  return [form, readings.size > 1 ? reading : null];
+}
+
+/**
+ * The word-list form a selection is (conjugated or not): the form itself, else the
+ * longest form whose stem (without its last kana, or する) starts the selection, followed
+ * by a few kana only (呟いた → 呟く, 勉強した → 勉強する). '' when none.
+ */
+export function selectionForm(selection: string, forms: ReadonlySet<string> | undefined) {
+  if (!selection || !forms) return '';
+  if (forms.has(selection)) return selection;
+
+  let best = '';
+
+  for (const form of forms) {
+    const stem = form.endsWith('する')
+      ? form.slice(0, -2)
+      : form.replace(/\p{Script=Hiragana}$/u, '');
+
+    if (
+      stem !== form &&
+      /\p{Unified_Ideograph}/u.test(stem) &&
+      selection.startsWith(stem) &&
+      /^\p{Script=Hiragana}{1,6}$/u.test(selection.slice(stem.length)) &&
+      form.length > best.length
+    ) {
+      best = form;
+    }
+  }
+
+  return best;
+}
+
 /** Changes whenever any mark does (part of the known set's cache key). */
 export function marksSignature(marks: WordMarks) {
   const values = Object.values(marks);

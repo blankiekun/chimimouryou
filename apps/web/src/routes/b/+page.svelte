@@ -130,7 +130,7 @@
   import { bookSentenceAudio, noteSentence } from '$lib/data/anki';
   import { enableExtrasSync } from '$lib/data/extras-sync';
   import { recordKanjiSeen } from '$lib/data/kanji-seen';
-  import { bookWordForms, getWordMarks } from '$lib/data/word-marks';
+  import { bookWordForms, getWordMarks, selectionForm } from '$lib/data/word-marks';
   import type { PassageContext } from '$lib/data/ask-ai';
   import { activePlugins, activePlugins$, type SelectionActionContribution } from '$lib/plugins';
   import {
@@ -2515,7 +2515,7 @@
 {#if selectedRange && !selectionPanel && !editingHighlight}
   <SelectionToolbar
     raised={showTts}
-    word={wordForms?.forms.has(selectedWord) ? selectedWord : ''}
+    word={selectionForm(selectedWord, wordForms?.forms)}
     on:highlight={({ detail }) => createHighlight(detail)}
     on:note={() => createHighlight('yellow', true)}
     on:action={({ detail }) => openSelectionAction(detail)}

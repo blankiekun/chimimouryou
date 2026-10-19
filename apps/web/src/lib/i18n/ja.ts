@@ -95,7 +95,8 @@ export const ja: Record<MessageKey, string> = {
   'book.difficulty': '難易度',
   'book.score': '5段階中{score}です。',
   'book.scoreRange': '5段階中{score}（おそらく{low}〜{high}）です。',
-  'book.words95': 'よく使われる{count}語で、この本の95%をカバーできます。',
+  'book.words95':
+    '頻度順位で上位{count}語までの単語が、この本の単語の95%を占めます（頻度リストにない単語を除く）。',
   'book.kanji': '漢字は{count}種類です。',
   'book.kanjiMet': '漢字は{count}種類で、そのうち{percent}%は既に出会っています。',
   'book.kanjiMetNew':
@@ -122,6 +123,8 @@ export const ja: Record<MessageKey, string> = {
     '{count}種類の単語が使われ、本文の{percent}%は既に知っている単語です（未知の単語{new}語）。',
   'book.wordCoverageTop':
     'よく出る{count}語で数えると、本文の{percent}%は既に知っている単語です（未知の単語{new}語）。',
+  'book.wordCoverageTail':
+    '{count}種類の単語が使われ、本文の少なくとも{percent}%は既に知っている単語です（単語リストの未知の単語{new}語と、リスト外のあまり使われない{rare}語は未知として数えています）。',
   'book.newWords': '新しい単語',
   'book.newWordsNote':
     'この本で使われ、一般的な上位{count}語に入らず、まだ知らない単語です。この本によく出て一般には珍しい順に並んでいます。',
@@ -169,7 +172,8 @@ export const ja: Record<MessageKey, string> = {
   'difficulty.estimated': '{summary}（jiten.moeの0〜5段階でchimi-difficultyが推定）',
   'difficulty.meaning': '{band}：{meaning}',
   'difficulty.rangeNote': 'この範囲には、10冊中約8冊で本当のスコアが入ります',
-  'difficulty.words95': 'よく使われる{count}語を知っていれば、この本の単語の95%をカバーできます',
+  'difficulty.words95':
+    '頻度順位で上位{count}語までの単語が、この本の単語の95%を占めます（頻度リストにない単語を除く）',
 
   'settings.uiLanguage': '表示言語',
   'settings.uiLanguageHint':

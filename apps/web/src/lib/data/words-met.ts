@@ -6,16 +6,23 @@
 
 /**
  * Words met while reading, for the Home dashboard. Not recorded: derived from how far
- * each Calibre book was read (the kanji records' `upTo`, minus text skipped by jumps)
+ * each Calibre book was read (the kanji records' `upTo`, minus text skipped by jumps; for
+ * books read before kanji were recorded, the synced progress the library listed)
  * and the difficulty service's word list of the book, assuming its words are spread
  * evenly. A word is known when met `knownMinCount` times, mature in Anki (known-words.ts)
  * or marked known or ignored (word-marks.ts).
- * Cached in reader-db `known` (keys `met` and `list:<id>`), cleared with the known words
+ * Cached in reader-db `known` (keys `met`, `progress` and `list:<id>`), cleared with the known words
  * when the reader changes. Not part of upstream.
  */
 
 import { ankiKnownWords$ } from '$lib/data/anki';
-import { loadBookWords, particles, type BookWord } from '$lib/data/book-words';
+import {
+  foldReadings,
+  isNoiseWord,
+  loadBookWords,
+  particles,
+  type BookWord
+} from '$lib/data/book-words';
 import {
   loadCalibreCatalog,
   loadCalibreDifficulty,
@@ -52,17 +59,42 @@ export interface WordsSummary {
 
 export const wordKey = ([form, reading]: BookWord) => `${form}\t${reading ?? ''}`;
 
+/** Bumped when the totals are computed differently, so cached ones are redone. */
+const metVersion = 2;
+
+/** A finished book's position is the start of its last page: count it as read through. */
+const fullyRead = (fraction: number) => (fraction >= 0.97 ? 1 : fraction);
+
 /** Share of the book read: text skipped by jumps doesn't count. */
 export function readFraction(record: KanjiSeen, characters: number) {
   return characters > 0
-    ? Math.max(0, Math.min(1, (record.upTo - (record.skipped ?? 0)) / characters))
+    ? fullyRead(Math.max(0, Math.min(1, (record.upTo - (record.skipped ?? 0)) / characters)))
     : 0;
+}
+
+/**
+ * Remembers the synced progress of the Calibre books the library listed, for the books
+ * read before kanji were recorded (they have no kanji record). Resolves true if it changed.
+ */
+export async function saveReadProgress(books: { title: string; progress: number }[]) {
+  const progress = Object.fromEntries(
+    books
+      .filter((book) => book.progress > 0)
+      .map((book) => [book.title, book.progress])
+      .sort(([a], [b]) => (a < b ? -1 : 1))
+  );
+  const db = await readerDb();
+
+  if (JSON.stringify(await db.get('known', 'progress')) === JSON.stringify(progress)) return false;
+  await db.put('known', progress, 'progress');
+
+  return true;
 }
 
 /** Adds each word's count × the share read to `totals`. */
 export function addWordsMet(totals: Record<string, number>, words: BookWord[], fraction: number) {
   for (const word of words) {
-    if (!particles.has(word[0])) {
+    if (!isNoiseWord(word)) {
       const key = wordKey(word);
 
       totals[key] = (totals[key] ?? 0) + word[2] * fraction;
@@ -70,6 +102,47 @@ export function addWordsMet(totals: Record<string, number>, words: BookWord[], f
   }
 
   return totals;
+}
+
+/**
+ * Totals of a form without a reading (a book where it only appeared conjugated) join its
+ * most met reading, like `foldReadings` within a book.
+ */
+export function foldTotals(totals: Record<string, number>) {
+  const top: Record<string, string> = {};
+
+  for (const [key, count] of Object.entries(totals)) {
+    const form = key.slice(0, key.indexOf('\t'));
+
+    if (!key.endsWith('\t') && !(totals[top[form]] >= count)) top[form] = key;
+  }
+
+  const folded = { ...totals };
+
+  for (const [form, key] of Object.entries(top)) {
+    const bare = `${form}\t`;
+
+    if (bare in folded) {
+      folded[key] += folded[bare];
+      delete folded[bare];
+    }
+  }
+
+  return folded;
+}
+
+/** Occurrences met of a word in folded totals; a word without a reading takes its form's. */
+export function metCounter(totals: Record<string, number>) {
+  const byForm = new Map<string, number>();
+
+  for (const [key, count] of Object.entries(totals)) {
+    const form = key.slice(0, key.indexOf('\t'));
+
+    byForm.set(form, Math.max(byForm.get(form) ?? 0, count));
+  }
+
+  return (word: BookWord) =>
+    totals[wordKey(word)] ?? (word[1] === null ? byForm.get(word[0]) : totals[`${word[0]}\t`]) ?? 0;
 }
 
 export function summarizeWords(
@@ -124,9 +197,10 @@ export async function wordList(id: number, computedAt: number) {
   const key = `list:${id}`;
   const cached = (await db.get('known', key)) as WordList | undefined;
 
-  if (cached?.computedAt === computedAt) return cached.words;
+  // Lists cached before readings were folded are folded here.
+  if (cached?.computedAt === computedAt) return cached.words && foldReadings(cached.words);
 
-  // Throws when offline: the totals then aren't cached and are retried next time.
+  // Throws when offline or the server fails: nothing is cached and it is retried next time.
   const words = (await loadBookWords(id)) ?? null;
 
   await db.put('known', { computedAt, words }, key);
@@ -150,30 +224,29 @@ export function getWordsMet() {
 }
 
 async function computeWordsMet(): Promise<WordsMetCache> {
-  const [records, catalog, difficulty] = await Promise.all([
+  const db = await readerDb();
+  const [records, catalog, difficulty, progress] = await Promise.all([
     getKanjiSeen(),
     loadCalibreCatalog().catch(() => []),
-    loadCalibreDifficulty().catch(() => ({}) as Record<string, CalibreDifficulty>)
+    loadCalibreDifficulty().catch(() => ({}) as Record<string, CalibreDifficulty>),
+    db.get('known', 'progress') as Promise<Record<string, number> | undefined>
   ]);
-  const ids = new Map(catalog.map((book) => [book.title, book.id]));
-  const books = records
-    .map((record) => {
-      const id = ids.get(record.title);
-      const estimate = id === undefined ? undefined : difficulty[id];
+  const read = new Map(records.map((record) => [record.title, record]));
+  const books = catalog
+    .map(({ id, title }) => {
+      const estimate = difficulty[id];
+      const record = read.get(title);
+      const fraction = !estimate
+        ? 0
+        : record
+          ? readFraction(record, estimate.characters)
+          : fullyRead(Math.min(1, progress?.[title] ?? 0));
 
-      return id !== undefined && estimate
-        ? {
-            id,
-            computedAt: estimate.computedAt,
-            fraction: readFraction(record, estimate.characters)
-          }
-        : undefined;
+      return { id, computedAt: estimate?.computedAt, fraction };
     })
-    .filter((book) => !!book?.fraction)
-    .map((book) => book!)
+    .filter((book) => !!book.fraction)
     .sort((a, b) => a.id - b.id);
-  const signature = JSON.stringify(books);
-  const db = await readerDb();
+  const signature = JSON.stringify([metVersion, books]);
   const cached = (await db.get('known', 'met')) as WordsMetCache | undefined;
 
   if (cached?.signature === signature) return cached;
@@ -182,7 +255,7 @@ async function computeWordsMet(): Promise<WordsMetCache> {
   let complete = true;
 
   for (const { id, computedAt, fraction } of books) {
-    const words = await wordList(id, computedAt).catch(() => {
+    const words = await wordList(id, computedAt!).catch(() => {
       complete = false;
       return null;
     });
@@ -190,9 +263,9 @@ async function computeWordsMet(): Promise<WordsMetCache> {
     if (words) addWordsMet(totals, words, fraction);
   }
 
-  if (!complete) return { signature: '', words: totals };
+  if (!complete) return { signature: '', words: foldTotals(totals) };
 
-  const met = { signature, words: totals };
+  const met = { signature, words: foldTotals(totals) };
 
   await db.put('known', met, 'met');
 

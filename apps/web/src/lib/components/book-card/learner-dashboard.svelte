@@ -8,7 +8,12 @@
   } from '$lib/data/learner-stats';
   import { pullAccountStatistics } from '$lib/data/statistics-sync';
   import { database, startDayHoursForTracker$, statisticsEnabled$ } from '$lib/data/store';
-  import { getWordsSummary, knownMinCount, type WordsSummary } from '$lib/data/words-met';
+  import {
+    getWordsSummary,
+    knownMinCount,
+    saveReadProgress,
+    type WordsSummary
+  } from '$lib/data/words-met';
   import { gainedThisMonth, getKnownHistory } from '$lib/data/words-history';
   import { getDateKey } from '$lib/functions/statistic-util';
   import { t$, type MessageKey, type MessageParams } from '$lib/i18n';
@@ -18,6 +23,9 @@
    * Home tab totals for Japanese learners: characters, time, speed, streaks
    * and how many different words were met and known. Not part of upstream.
    */
+
+  /** The Calibre library's books, for the progress of books read before kanji were recorded */
+  export let books: { title: string; progress: number }[] | undefined = undefined;
 
   let stats: LearnerStats | undefined;
   let weeks: ActivityDay[][] = [];
@@ -48,10 +56,23 @@
     return { statistics, today };
   }
 
-  onMount(async () => {
-    const summary = getWordsSummary()
+  function loadWords() {
+    return getWordsSummary()
       .then((summary) => (words = summary))
       .catch(() => {});
+  }
+
+  $: if (books) {
+    saveReadProgress(books).then(
+      (changed) => {
+        if (changed) loadWords();
+      },
+      () => {}
+    );
+  }
+
+  onMount(async () => {
+    const summary = loadWords();
 
     await loadStats();
     // Statistics of books not opened in this browser only exist on the server.

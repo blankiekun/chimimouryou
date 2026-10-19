@@ -6,6 +6,19 @@ anything a reader or a server operator would notice.
 
 ## Unreleased
 
+### Fixed
+
+- Words met, known words and coverage: a word list the server failed to send (restart,
+  sign-in) is retried instead of treated as missing; books read before kanji were recorded
+  count from their synced progress; a finished book counts as read through; a word met only
+  conjugated (no reading) is one word with its reading; noise words no longer count on Home;
+  Anki fields with Yomitan furigana, several words (`<br>`, 、, ・ …), a leading 〜 or a
+  trailing する (勉強する also covers 勉強) are read right; cached coverages are redone
+  when a book is re-estimated. Marks are by word, not reading (unless the book reads it two
+  ways), so new word lists keep them; "Mark known" in the reader also offers conjugated
+  selections. The book page says "at least N%" and tells the words new in its list from the
+  rarely used ones past it, and the 95% sentence says it counts by frequency rank.
+
 ### Documentation
 
 - The README is ordered for whoever sets the server up: what it is, setup, then "How you

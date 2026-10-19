@@ -98,7 +98,8 @@ export const en = {
   'book.difficulty': 'Difficulty',
   'book.score': '{score} of 5.',
   'book.scoreRange': '{score} of 5, likely {low}–{high}.',
-  'book.words95': 'The {count} most common words cover 95% of it.',
+  'book.words95':
+    'The {count} most common words (by frequency rank) cover 95% of its words, words outside the frequency list aside.',
   'book.kanji': '{count} different kanji.',
   'book.kanjiMet': '{count} different kanji, {percent}% already met.',
   'book.kanjiMetNew': '{count} different kanji, {percent}% already met ({new} new).',
@@ -124,6 +125,8 @@ export const en = {
     '{count} different words, {percent}% of its words already known ({new} new).',
   'book.wordCoverageTop':
     'Counting its {count} most frequent words, {percent}% of its words already known ({new} new).',
+  'book.wordCoverageTail':
+    '{count} different words, at least {percent}% of its words already known ({new} new in its word list, plus {rare} rarely used ones past it, counted as unknown).',
   'book.newWords': 'New words',
   'book.newWordsNote':
     'Used in this book, outside the {count} most common words and not known yet: frequent here and rare in general first.',
@@ -171,7 +174,8 @@ export const en = {
   'difficulty.estimated': "{summary}, estimated by chimi-difficulty on jiten.moe's 0-5 scale",
   'difficulty.meaning': '{band}: {meaning}',
   'difficulty.rangeNote': 'The likely range holds the true score for about 8 books in 10',
-  'difficulty.words95': 'Knowing the {count} most common words covers 95% of its words',
+  'difficulty.words95':
+    'The {count} most common words (by frequency rank) cover 95% of its words, words outside the frequency list aside',
 
   'settings.uiLanguage': 'Interface language',
   'settings.uiLanguageHint':
