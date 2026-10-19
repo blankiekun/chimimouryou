@@ -79,7 +79,7 @@ describe('wordsCsv', () => {
   it('has a BOM, a header and quotes fields with quotes or commas', () => {
     expect(
       wordsCsv([
-        ['後宮', 'こうきゅう', 104, 44745],
+        ['後宮', 'こうきゅう', 104, 44745, '後宮'],
         ['a,b', null, 2, null],
         ['say "hi"', 'x', 1, 5]
       ])

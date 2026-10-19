@@ -37,6 +37,13 @@ anything a reader or a server operator would notice.
 
 ### Server
 
+- Word lists version 7: words met only conjugated get a reading (the form's reading in the
+  book, else Sudachi's), one form and reading from different dictionary words is one row
+  (ある, もの, よう), particles and auxiliaries (です, ます, らしい, ながら…) are left out by
+  part of speech, and each row carries a 5th column, the lemma, so spelling variants
+  (分かる/わかる/判る) match Anki words and marks. Run "Books without an estimate" once
+  (admin panel → Tools) to redo the lists; it also adds the word totals to estimates that
+  lack them.
 - Readings files: with the `difficulty` profile, the service makes a file per book with every
   kanji word's reading in context and the furigana the reader may add, in the reader's own
   character positions (`POST`/`GET /calibre/difficulty/api/readings/<id>`, for every reader who

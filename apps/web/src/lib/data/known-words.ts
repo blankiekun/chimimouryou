@@ -156,7 +156,10 @@ export async function getKnownSet(): Promise<KnownSet> {
   return {
     key: met.signature && `${met.signature}|${anki?.read ?? ''}|${marksSignature(marks)}`,
     isKnown: (word) =>
-      metCount(word) >= knownMinCount || forms.has(word[0]) || !!wordMark(marks, word)
+      metCount(word) >= knownMinCount ||
+      forms.has(word[0]) ||
+      (!!word[4] && forms.has(word[4])) ||
+      !!wordMark(marks, word)
   };
 }
 

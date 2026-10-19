@@ -206,6 +206,8 @@ class Analysis:
     words: dict = field(default_factory=dict)
     # (key, form) -> Counter of each occurrence's reading (for word lists; the features use the Word's)
     readings: dict = field(default_factory=dict)
+    # (key, form) -> Sudachi's reading of the form alone, for words met only conjugated
+    form_readings: dict = field(default_factory=dict)
     word_count: int = 0
     sentence_count: int = 0
     markers: dict = field(default_factory=dict)
@@ -263,6 +265,10 @@ class Analyzer:
         last = tokens[-1]
         inflects = last.part_of_speech()[4] != '*' and last.surface() == last.dictionary_form()
         return tuple(t.surface() for t in tokens), last.dictionary_form() if inflects else None
+
+    @lru_cache(maxsize=100_000)
+    def _form_reading(self, form: str) -> str | None:
+        return to_hiragana(''.join(t.reading_form() for t in self.tokenizer.tokenize(form))) or None
 
     @lru_cache(maxsize=100_000)
     def _conjugations(self, surface: str, target: str, conj_type: str) -> tuple[str, ...]:
@@ -380,6 +386,8 @@ class Analyzer:
                        or context_reading(text, head.begin, head.surface(), word.form, known_readings)
                        or reading_model and reading_model.reading(text, tokens, index, word.form, known_readings))
             result.readings.setdefault(word_key, Counter())[reading or word.reading] += 1
+            if not (reading or word.reading) and word_key not in result.form_readings:
+                result.form_readings[word_key] = self._form_reading(word.form)
             result.word_count += 1
             index = end
 
