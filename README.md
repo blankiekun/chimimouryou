@@ -162,7 +162,7 @@ yourself.
 
 The Calibre library is the bookshelf. **Home** has your reading at a glance:
 characters read today and this week, reading streaks, speed and the number of
-different kanji met, then "Continue reading" and "My books". **Store** is the
+words met and known, then "Continue reading" and "My books". **Store** is the
 whole library, as books or as series, with filters (type, reading status, last
 read, difficulty, length, tags) and sorting.
 

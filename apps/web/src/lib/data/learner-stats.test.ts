@@ -8,7 +8,8 @@ import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import type { BooksDbStatistic } from '$lib/data/database/books-db/versions/books-db';
 import { buildSearchIndex } from '$lib/functions/book-text/book-search';
-import { countKanji, getKanjiSummary, recordKanjiSeen, summarizeKanji } from './kanji-seen';
+import { readerDb } from '$lib/data/reader-db';
+import { countKanji, recordKanjiSeen } from './kanji-seen';
 import { activityWeeks, learnerStats } from './learner-stats';
 
 const stat = (title: string, dateKey: string, charactersRead: number, extra = {}) =>
@@ -54,7 +55,7 @@ describe('kanji seen', () => {
     expect(countKanji('漢字の漢、カナ々')).toEqual({ 漢: 2, 字: 1 });
   });
 
-  it('counts each stretch once and skips long jumps', async () => {
+  it('counts each stretch once and records long jumps as skipped', async () => {
     const index = buildSearchIndex(`<p>猫と犬</p><p>${'あ'.repeat(30_000)}</p><p>鳥</p>`);
 
     await recordKanjiSeen('K', index, 2);
@@ -62,16 +63,11 @@ describe('kanji seen', () => {
     await recordKanjiSeen('K', index, 1);
     await recordKanjiSeen('K', index, 30_004);
 
-    expect(await getKanjiSummary()).toEqual({ unique: 2 });
-  });
-
-  it('summarises across books', () => {
-    const summary = summarizeKanji([
-      { title: 'a', upTo: 1, counts: { 猫: 3, 犬: 1 } },
-      { title: 'b', upTo: 1, counts: { 猫: 1 } }
-    ]);
-
-    expect(summary).toEqual({ unique: 2 });
+    expect(await (await readerDb()).get('kanji', 'K')).toMatchObject({
+      upTo: 30_004,
+      counts: { 猫: 1, 犬: 1 },
+      skipped: 30_001
+    });
   });
 });
 

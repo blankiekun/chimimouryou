@@ -20,6 +20,8 @@ export interface KanjiSeen {
   /** Character count counted up to */
   upTo: number;
   counts: Record<string, number>;
+  /** Characters jumped over rather than read (words-met.ts); missing on older records */
+  skipped?: number;
   /** When this browser last recorded it (ms); missing on records from before syncing */
   modified?: number;
 }
@@ -50,11 +52,15 @@ export async function recordKanjiSeen(title: string, index: SearchIndex, positio
     return;
   }
 
+  let skipped = seen.skipped;
+
   if (!seen.upTo || position - seen.upTo <= maxStep) {
     countKanji(textBetween(index, seen.upTo, position), seen.counts);
+  } else {
+    skipped = (skipped ?? 0) + position - seen.upTo;
   }
 
-  await db.put('kanji', { ...seen, upTo: position, modified: Date.now() });
+  await db.put('kanji', { ...seen, upTo: position, skipped, modified: Date.now() });
   kanjiChanged();
 }
 
@@ -71,20 +77,6 @@ export async function recordKanjiText(title: string, text: string, upTo: number)
     modified: Date.now()
   });
   kanjiChanged();
-}
-
-export interface KanjiSummary {
-  /** Different kanji met across all books */
-  unique: number;
-}
-
-export function summarizeKanji(books: KanjiSeen[]): KanjiSummary {
-  return { unique: new Set(books.flatMap((book) => Object.keys(book.counts))).size };
-}
-
-export async function getKanjiSummary() {
-  await pullKanji();
-  return summarizeKanji(await (await readerDb()).getAll('kanji'));
 }
 
 export interface KanjiCoverage {
