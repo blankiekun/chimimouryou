@@ -34,9 +34,9 @@ Sudachi gives a reading only for an unconjugated word. A conjugated occurrence w
 goes to the word's most common reading in the book, in `save_words`.
 
 **Tables** (`load_reading_model` in `service.py`): `state/difficulty/reading-model.json.gz`
-is the server's own table, built from its library
-([docs/CONFIGURATION.md](CONFIGURATION.md#python-services) has the command); yurigana's
-public table fills in the forms it lacks. Forms with a context rule are never answered by a
+is the server's own table, when one has been built from its library (optional: none exists
+until you build it; [docs/CONFIGURATION.md](CONFIGURATION.md#python-services) has the
+command); yurigana's public table fills in the forms it lacks, or answers alone without it. Forms with a context rule are never answered by a
 table.
 
 ### Versions

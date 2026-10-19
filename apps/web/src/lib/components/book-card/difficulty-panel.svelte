@@ -1,6 +1,7 @@
 <script lang="ts">
   import { faSpinner } from '@fortawesome/free-solid-svg-icons';
   import { buttonClasses } from '$lib/css-classes';
+  import { account$ } from '$lib/data/account';
   import { difficultyApiUrl } from '$lib/data/calibre';
   import { t$, tr } from '$lib/i18n';
   import { onDestroy, onMount } from 'svelte';
@@ -72,7 +73,7 @@
 
   let importing = false;
 
-  /** Installs jiten_freq_global.zip on the server (it checks the file). */
+  /** Installs jiten_freq_global.zip on the server (it checks the file; admins only). */
   async function importDictionary(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
@@ -84,11 +85,27 @@
 
     importing = true;
     try {
-      const response = await fetch(`${difficultyApiUrl}dictionary`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/zip' },
-        body: file
-      });
+      const upload = (force: boolean) =>
+        fetch(`${difficultyApiUrl}dictionary${force ? '?force=1' : ''}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/zip' },
+          body: file
+        });
+      let response = await upload(false);
+
+      // Replacing a list whose readings disagree with the installed one needs a confirmation.
+      const agreement = response.status === 409 ? (await response.clone().json().catch(() => ({}))).agreement : undefined;
+
+      if (
+        typeof agreement === 'number' &&
+        confirm(
+          tr('library.dictionaryMismatch', {
+            agreement: agreement.toLocaleString(undefined, { style: 'percent', maximumFractionDigits: 1 })
+          })
+        )
+      ) {
+        response = await upload(true);
+      }
 
       if (!response.ok) {
         throw new Error(
@@ -146,26 +163,30 @@
   {:else if status}
     {#if !status.dictionary}
       <div class="flex flex-col gap-2">
-        <p>
-          {#each dictionaryParts as part}{#if part === '{file}'}<strong>jiten_freq_global.zip</strong
-              >{:else if part === '{link}'}<a
-                class="underline"
-                href="https://jiten.moe/frequency-dictionaries"
-                target="_blank"
-                rel="noreferrer">jiten.moe/frequency-dictionaries</a
-              >{:else}{part}{/if}{/each}
-        </p>
-        <label class="{buttonClasses} flex cursor-pointer items-center gap-2 self-start">
-          {#if importing}<Fa icon={faSpinner} spin />{/if}
-          {$t$('library.importDictionary')}
-          <input
-            type="file"
-            accept=".zip,application/zip"
-            class="hidden"
-            disabled={importing}
-            on:change={importDictionary}
-          />
-        </label>
+        {#if $account$?.admin}
+          <p>
+            {#each dictionaryParts as part}{#if part === '{file}'}<strong>jiten_freq_global.zip</strong
+                >{:else if part === '{link}'}<a
+                  class="underline"
+                  href="https://jiten.moe/frequency-dictionaries"
+                  target="_blank"
+                  rel="noreferrer">jiten.moe/frequency-dictionaries</a
+                >{:else}{part}{/if}{/each}
+          </p>
+          <label class="{buttonClasses} flex cursor-pointer items-center gap-2 self-start">
+            {#if importing}<Fa icon={faSpinner} spin />{/if}
+            {$t$('library.importDictionary')}
+            <input
+              type="file"
+              accept=".zip,application/zip"
+              class="hidden"
+              disabled={importing}
+              on:change={importDictionary}
+            />
+          </label>
+        {:else}
+          <p>{$t$('library.dictionaryNeededAdmin')}</p>
+        {/if}
       </div>
     {/if}
     <div class="flex flex-wrap gap-2">

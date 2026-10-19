@@ -9,23 +9,31 @@ import unittest
 import zipfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'jiten'))
-from frequency import TOP_SHARE, FrequencyTable, load_yomitan_ranks  # noqa: E402
+from frequency import TOP_SHARE, FrequencyTable, load_yomitan_ranks, reading_agreement  # noqa: E402
+
+ENTRIES = [
+    ['ある', 'freq', {'value': 18, 'displayValue': '18㋕'}],
+    ['有る', 'freq', {'reading': 'ある', 'frequency': {'value': 12756, 'displayValue': '12756'}}],
+    ['有る', 'freq', {'reading': 'ある', 'frequency': {'value': 18}}],
+    ['在る', 'freq', {'reading': 'ある', 'frequency': 10382}],
+    ['魔法', 'freq', {'reading': 'まほう', 'frequency': 1986}],
+    ['事', 'freq', {'reading': 'こと', 'frequency': 30}],
+    ['事', 'freq', {'reading': 'じ', 'frequency': 9000}],
+]
 
 
-def dictionary(mode='rank-based'):
+def dictionary(mode='rank-based', entries=ENTRIES):
     path = os.path.join(tempfile.mkdtemp(), 'freq.zip')
     with zipfile.ZipFile(path, 'w') as archive:
         archive.writestr('index.json', json.dumps({'title': 'T', 'format': 3, 'frequencyMode': mode}))
-        archive.writestr('term_meta_bank_1.json', json.dumps([
-            ['ある', 'freq', {'value': 18, 'displayValue': '18㋕'}],
-            ['有る', 'freq', {'reading': 'ある', 'frequency': {'value': 12756, 'displayValue': '12756'}}],
-            ['有る', 'freq', {'reading': 'ある', 'frequency': {'value': 18}}],
-            ['在る', 'freq', {'reading': 'ある', 'frequency': 10382}],
-            ['魔法', 'freq', {'reading': 'まほう', 'frequency': 1986}],
-            ['事', 'freq', {'reading': 'こと', 'frequency': 30}],
-            ['事', 'freq', {'reading': 'じ', 'frequency': 9000}],
-        ]))
+        archive.writestr('term_meta_bank_1.json', json.dumps(entries))
     return path
+
+
+def with_reading(form, reading):
+    """ENTRIES with every entry of form read as reading instead."""
+    return [[t, k, {'reading': reading, 'frequency': d.get('frequency', d)} if t == form else d]
+            for t, k, d in ENTRIES]
 
 
 class YomitanRanksTest(unittest.TestCase):
@@ -53,6 +61,15 @@ class YomitanRanksTest(unittest.TestCase):
         self.assertEqual(table.word('事\tnoun')[0], 30)  # unknown reading: the most common one
         self.assertEqual(table.word('魔法\tnoun', 'まじっく')[0], 1986)  # reading not listed: the spelling's rank
 
+    def test_reading_agreement(self):
+        old = dictionary()
+        self.assertEqual(reading_agreement(old, dictionary()), 1.0)
+        # Top forms by rank: ある, 有る, 事, 魔法, 在る. One read otherwise, one dropped.
+        self.assertEqual(reading_agreement(old, dictionary(entries=with_reading('魔法', 'まじっく'))), 0.8)
+        self.assertEqual(reading_agreement(old, dictionary(entries=ENTRIES[1:])), 0.8)  # ある gone
+        self.assertEqual(reading_agreement(old, dictionary(entries=ENTRIES[:-1])), 1.0)  # 事 keeps こと
+        self.assertEqual(reading_agreement(old, dictionary(entries=with_reading('事', 'ごと')), top=2), 1.0)
+
 
 
 class InstallDictionaryTest(unittest.TestCase):
@@ -63,11 +80,36 @@ class InstallDictionaryTest(unittest.TestCase):
         self.service = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.service)
         self.service.FREQUENCY_DICTIONARY = os.path.join(tempfile.mkdtemp(), 'frequency-dictionary.zip')
+        self.service.MIN_DICTIONARY_TERMS = 5
 
-    def install(self, data: bytes):
+    def install(self, data: bytes, force=False):
         import io
         # Bytes past Content-Length stand in for a socket that stays open: they must not be read.
-        return self.service.install_dictionary(io.BytesIO(data + b'next request'), len(data))
+        return self.service.install_dictionary(io.BytesIO(data + b'next request'), len(data), force)
+
+    def test_refuses_small_lists(self):
+        self.service.MIN_DICTIONARY_TERMS = 6
+        with open(dictionary(), 'rb') as f, self.assertRaises(ValueError):
+            self.install(f.read())
+        self.assertFalse(os.path.exists(self.service.FREQUENCY_DICTIONARY))
+
+    def test_replacement_must_agree_unless_forced(self):
+        with open(dictionary(), 'rb') as f:
+            self.install(f.read())
+        # A list that agrees (a new version of the same one) needs no force.
+        with open(dictionary(entries=ENTRIES[:-1]), 'rb') as f:
+            installed = f.read()
+        self.assertEqual(self.install(installed), 5)
+        with open(dictionary(entries=with_reading('魔法', 'まじっく')), 'rb') as f:
+            other = f.read()
+        with self.assertRaises(self.service.DictionaryMismatch) as error:
+            self.install(other)
+        self.assertEqual(error.exception.agreement, 0.8)
+        with open(self.service.FREQUENCY_DICTIONARY, 'rb') as f:
+            self.assertEqual(f.read(), installed)
+        self.assertEqual(self.install(other, force=True), 5)
+        with open(self.service.FREQUENCY_DICTIONARY, 'rb') as f:
+            self.assertEqual(f.read(), other)
 
     def test_installs_a_rank_based_list(self):
         with open(dictionary(), 'rb') as f:
@@ -139,13 +181,36 @@ class KanjiEndpointTest(unittest.TestCase):
             self.assertEqual(post('https://evil.example'), 403)
             self.assertEqual(post('http://reader.example'), 403)
             self.assertEqual(post('https://reader.example'), 404)
+
+            def upload(admin, path='/dictionary'):
+                headers = {'X-Internal-Token': 'c0ffee', 'Host': 'reader.example',
+                           'Origin': 'https://reader.example', 'X-Account-Admin': admin}
+                request = urllib.request.Request(base + path, data=b'not a zip', headers=headers)
+                try:
+                    return urllib.request.urlopen(request).status
+                except urllib.error.HTTPError as error:
+                    return error.code
+            service.FREQUENCY_DICTIONARY = os.path.join(service.KANJI_DIR, 'freq.zip')
+            # Only admins (nginx's account check) get past to the file checks.
+            self.assertEqual(upload('0'), 403)
+            self.assertEqual(upload(''), 403)
+            self.assertEqual(upload('1'), 400)
         finally:
             server.shutdown()
             server.server_close()
 
 
-if __name__ == '__main__':
-    unittest.main()
+class NginxTest(unittest.TestCase):
+    def test_frequency_list_upload_is_admin_only(self):
+        import re
+        path = os.path.join(os.path.dirname(__file__), '..', 'nginx-ebook-reader.conf.template')
+        with open(path, encoding='utf-8') as f:
+            template = f.read()
+        block = re.search(r'location = /calibre/difficulty/api/dictionary \{(.*?)\n  \}', template, re.S).group(1)
+        self.assertIn('auth_request /_account_admin;', block)
+        # The service's own check reads X-Account-Admin: every location reaching it sets it from the account.
+        api = re.search(r'location /calibre/difficulty/api/ \{(.*?)\n  \}', template, re.S).group(1)
+        self.assertIn('proxy_set_header X-Account-Admin $account_admin;', api)
 
 
 class SaveWordsTest(unittest.TestCase):

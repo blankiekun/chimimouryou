@@ -42,6 +42,26 @@ def load_yomitan_ranks(path: str) -> dict:
     return ranks
 
 
+def _readings(path: str, forms) -> dict:
+    """form -> set of its readings, for those of forms the dictionary lists."""
+    wanted, readings = set(forms), {}
+    for term, reading, _ in _yomitan_entries(path):
+        if term in wanted:
+            readings.setdefault(term, set()).update([reading] if reading else [])
+    return readings
+
+
+def reading_agreement(old_path: str, new_path: str, top: int = 5000) -> float:
+    """Share of the old list's top forms that the new one lists with an overlapping reading
+    (or, for forms without readings, none either): how much a replacement list agrees with it."""
+    ranks = load_yomitan_ranks(old_path)
+    forms = sorted(ranks, key=ranks.get)[:top]
+    if not forms:
+        return 1.0
+    old, new = _readings(old_path, forms), _readings(new_path, forms)
+    return sum(1 for f in forms if f in new and (old[f] & new[f] or old[f] == new[f])) / len(forms)
+
+
 class FrequencyTable:
     """word(key) -> (rank, share of occurrences); form(key, spelling) -> (rank, share, percentage).
     Keys are Sudachi's normalised form plus a part of speech ('有る\\tverb'), looked up by

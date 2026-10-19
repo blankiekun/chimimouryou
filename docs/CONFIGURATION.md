@@ -123,7 +123,7 @@ The catalog builder takes the library and the output file as arguments:
 Word lists read ambiguous words (柄: がら, つか or え) with a small model learned from books'
 furigana ([yurigana](https://github.com/blankiekun/yurigana)). The image ships a small one (42 words) trained on Aozora Bunko and Tatoeba; a model
 built from your own library (`state/difficulty/reading-model.json.gz`, about 400 words for
-19,000 books) is used first:
+19,000 books) is used first when you build one (optional; until then the shipped one is used):
 
     docker compose exec difficulty /opt/venv/bin/python -m yurigana.reading_context build
 

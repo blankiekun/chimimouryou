@@ -6,6 +6,13 @@ anything a reader or a server operator would notice.
 
 ## Unreleased
 
+### Security
+
+- Only admins can import the frequency list for difficulty estimates (the `difficulty`
+  permission no longer can). The server refuses lists with fewer than 50,000 words, and
+  a list replacing an installed one whose readings for the 5,000 most frequent words agree
+  with it on less than 95% needs a confirmation that shows the share.
+
 ### Fixed
 
 - Words met, known words and coverage: a word list the server failed to send (restart,

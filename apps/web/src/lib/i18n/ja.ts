@@ -482,6 +482,10 @@ export const ja: Record<MessageKey, string> = {
   'library.loadingStatus': '状態を読み込み中…',
   'library.dictionaryNeeded':
     '推定には Jiten の単語頻度リストが必要です。{link} から {file} をダウンロードして、取り込んでください。',
+  'library.dictionaryNeededAdmin':
+    '推定には Jiten の単語頻度リストが必要です。取り込めるのは管理者だけです。',
+  'library.dictionaryMismatch':
+    'このリストの読みは、よく使われる語でインストール済みのリストと {agreement} しか一致しません。それでもインストールしますか？',
   'library.importDictionary': '頻度リストを取り込む',
   'library.run': '実行',
   'library.runHint': '推定のない本',
