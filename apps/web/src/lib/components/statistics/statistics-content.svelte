@@ -11,6 +11,7 @@
     StatisticsDeleteRequest,
     StatisticsEditRequest
   } from '$lib/components/statistics/statistics-summary/statistics-summary';
+  import WordsKnownChart from '$lib/components/statistics/words-known-chart.svelte';
   import StatisticsTitleFilter from '$lib/components/statistics/statistics-title-filter.svelte';
   import {
     type BookStatistic,
@@ -842,6 +843,7 @@
         />
       </div>
     {/if}
+    <WordsKnownChart {statisticsData} {todayKey} />
   {/if}
   {#if $lastStatisticsTab$ === StatisticsTab.SUMMARY}
     <StatisticsSummary

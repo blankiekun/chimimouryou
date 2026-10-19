@@ -9,6 +9,7 @@
   import { pullAccountStatistics } from '$lib/data/statistics-sync';
   import { database, startDayHoursForTracker$, statisticsEnabled$ } from '$lib/data/store';
   import { getWordsSummary, knownMinCount, type WordsSummary } from '$lib/data/words-met';
+  import { gainedThisMonth, getKnownHistory } from '$lib/data/words-history';
   import { getDateKey } from '$lib/functions/statistic-util';
   import { t$, type MessageKey, type MessageParams } from '$lib/i18n';
   import { onMount } from 'svelte';
@@ -21,6 +22,7 @@
   let stats: LearnerStats | undefined;
   let weeks: ActivityDay[][] = [];
   let words: WordsSummary | undefined;
+  let gained: number | undefined;
 
   const number = (value: number) => value.toLocaleString('en-US');
 
@@ -42,16 +44,27 @@
 
     stats = learnerStats(statistics, today);
     weeks = activityWeeks(statistics, today);
+
+    return { statistics, today };
   }
 
   onMount(async () => {
-    getWordsSummary()
+    const summary = getWordsSummary()
       .then((summary) => (words = summary))
       .catch(() => {});
+
     await loadStats();
     // Statistics of books not opened in this browser only exist on the server.
-    pullAccountStatistics(window)
-      .then(loadStats)
+    const pulled = pullAccountStatistics(window)
+      .catch(() => {})
+      .then(loadStats);
+
+    // After the summary, which fetches the same word lists.
+    Promise.all([pulled, summary])
+      .then(async ([{ statistics, today }]) =>
+        gainedThisMonth(await getKnownHistory(statistics), today)
+      )
+      .then((count) => (gained = count))
       .catch(() => {});
   });
 
@@ -77,7 +90,8 @@
         {
           label: $t$('dashboard.wordsKnown'),
           value: words ? number(words.known) : '–',
-          hint: $t$('dashboard.wordsKnownHint', { count: knownMinCount })
+          hint: $t$('dashboard.wordsKnownHint', { count: knownMinCount }),
+          extra: gained ? $t$('dashboard.wordsGained', { count: number(gained) }) : ''
         }
       ]
     : [];
@@ -131,7 +145,10 @@
       {#each secondary as item (item.label)}
         <div title={item.hint || undefined}>
           <dt>{item.label}</dt>
-          <dd>{item.value}</dd>
+          <dd>
+            {item.value}
+            {#if item.extra}<small title={$t$('dashboard.wordsGainedHint')}>{item.extra}</small>{/if}
+          </dd>
         </div>
       {/each}
     </dl>
@@ -256,6 +273,13 @@
     font-size: 1rem;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
+  }
+
+  .dashboard-stats dd small {
+    margin-left: 0.4em;
+    color: var(--app-muted-fg);
+    font-size: 0.75rem;
+    font-weight: 400;
   }
 
   .dashboard-note {

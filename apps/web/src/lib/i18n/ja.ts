@@ -44,6 +44,13 @@ export const ja: Record<MessageKey, string> = {
     '読んだ Calibre の本に出てきた語の数。本ごとの単語リストと読んだ位置からの推定で、助詞と飛ばした部分は数えません',
   'dashboard.wordsKnown': '既知語',
   'dashboard.wordsKnownHint': '{count}回以上出会った語と、Anki で成熟したカード',
+  'dashboard.wordsGained': '今月 +{count}',
+  'dashboard.wordsGainedHint': '毎日読んだ文字数からの推定（Anki の語は含まない）',
+  'statistics.wordsKnown': '知っている語',
+  'statistics.wordsKnownNow': '現在 {count}',
+  'statistics.wordsKnownLabel': '{from} から {to} までの知っている語、現在 {count}',
+  'statistics.wordsKnownNote':
+    '推定値：毎日読んだ文字数と各本の語彙リストから、{count}回以上出会った語として再計算しています。Anki で成熟した語は履歴に含まれず、ホームの合計にだけ数えられます。',
   'dashboard.trackerOff':
     '文字数・読書時間・連続記録を数えるには、読書トラッカーをオンにしてください（設定 → 統計）。',
   'dashboard.guide': '学習ガイド：Yomitan・Anki・本の選び方',

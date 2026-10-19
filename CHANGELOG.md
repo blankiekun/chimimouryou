@@ -72,6 +72,10 @@ anything a reader or a server operator would notice.
   selection is a word of the book's list. Both count as known in coverage, New words, Read
   next and Home's Words known, with or without Anki. Settings → Anki → Known Words lists them
   to search and unmark. Synced as `words.json` in the account folder while signed in.
+- Words known over time: the Statistics page has a "Words known" chart and Home's Words
+  known tile shows "+N this month". Both are estimates rebuilt from the characters read
+  each day and the books' word lists (words met 8 times); Anki's words count only in
+  today's total. Computed in the browser and cached; nothing new is synced.
 - Home's "Kanji met" is replaced by **Words met** and **Words known**: the words of the
   Calibre books you have read (from the server's word lists and how far you got, so past
   reading counts; text skipped by a jump and particles don't), known once met 8 times or
