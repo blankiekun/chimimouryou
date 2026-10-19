@@ -55,7 +55,9 @@ export function foldReadings(words: BookWord[]): BookWord[] {
     ? kept
         .map(
           (word): BookWord =>
-            extra.has(word) ? [word[0], word[1], word[2] + extra.get(word)!, word[3]] : word
+            extra.has(word)
+              ? [word[0], word[1], word[2] + extra.get(word)!, word[3], ...word.slice(4)]
+              : word
         )
         .sort((a, b) => b[2] - a[2])
     : words;

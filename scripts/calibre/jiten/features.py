@@ -383,7 +383,8 @@ class Analyzer:
             else:
                 result.words[word_key] = [word, 1]
             reading = (hints and ruby_reading(hints, head.begin, head.surface(), word.form, known_readings)
-                       or context_reading(text, head.begin, head.surface(), word.form, known_readings)
+                       or context_reading(text, head.begin, head.surface(), word.form, known_readings,
+                                          tokens[index - 1].part_of_speech() if index else None)
                        or reading_model and reading_model.reading(text, tokens, index, word.form, known_readings))
             result.readings.setdefault(word_key, Counter())[reading or word.reading] += 1
             if not (reading or word.reading) and word_key not in result.form_readings:

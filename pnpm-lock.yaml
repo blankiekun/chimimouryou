@@ -142,8 +142,8 @@ importers:
         specifier: 2.0.10
         version: 2.0.10
       yurigana:
-        specifier: github:blankiekun/yurigana#v0.1.1
-        version: https://codeload.github.com/blankiekun/yurigana/tar.gz/ef7b864ee9fb27e5b86f4232b61a7ecd60f1c518
+        specifier: github:blankiekun/yurigana#v0.2.0
+        version: https://codeload.github.com/blankiekun/yurigana/tar.gz/79ac3b7697cef8af707d25ce90aa85d88f3ee6be
     devDependencies:
       '@sveltejs/adapter-static':
         specifier: 3.0.10
@@ -3398,9 +3398,9 @@ packages:
     resolution: {integrity: sha512-AyeEbWOu/TAXdxlV9wmGcR0+yh2j3vYPGOECcIj2S7MkrLyC7ne+oye2BKTItt0ii2PHk4cDy+95+LshzbXnGg==}
     engines: {node: '>=12.20'}
 
-  yurigana@https://codeload.github.com/blankiekun/yurigana/tar.gz/ef7b864ee9fb27e5b86f4232b61a7ecd60f1c518:
-    resolution: {gitHosted: true, integrity: sha512-JFDAk6txukCQZ7LNow1ZahslW8xzOh4y6AcXMwQ3oUQhlO1mr61O2lNB09TBw9TmQCWeMlX684yji8yxQ9p/Yw==, tarball: https://codeload.github.com/blankiekun/yurigana/tar.gz/ef7b864ee9fb27e5b86f4232b61a7ecd60f1c518}
-    version: 0.1.1
+  yurigana@https://codeload.github.com/blankiekun/yurigana/tar.gz/79ac3b7697cef8af707d25ce90aa85d88f3ee6be:
+    resolution: {gitHosted: true, integrity: sha512-SPclxTGr/KAPzoTsq35uBAEqgJi2cZvLmtTHTy0PNF4vfXU93etbdGNhJluoM+kPTybFfgbF8vNF+SsAHNLVSQ==, tarball: https://codeload.github.com/blankiekun/yurigana/tar.gz/79ac3b7697cef8af707d25ce90aa85d88f3ee6be}
+    version: 0.2.0
 
   zimmerframe@1.1.2:
     resolution: {integrity: sha512-rAbqEGa8ovJy4pyBxZM70hg4pE6gDgaQ0Sl9M3enG3I0d6H4XSAM3GeNGLKnsBpuijUow064sf7ww1nutC5/3w==}
@@ -6371,6 +6371,6 @@ snapshots:
 
   yocto-queue@1.2.1: {}
 
-  yurigana@https://codeload.github.com/blankiekun/yurigana/tar.gz/ef7b864ee9fb27e5b86f4232b61a7ecd60f1c518: {}
+  yurigana@https://codeload.github.com/blankiekun/yurigana/tar.gz/79ac3b7697cef8af707d25ce90aa85d88f3ee6be: {}
 
   zimmerframe@1.1.2: {}
