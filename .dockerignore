@@ -9,3 +9,5 @@
 **/.env.*
 **/__pycache__
 data
+# Agent worktrees and local tool state
+.claude
