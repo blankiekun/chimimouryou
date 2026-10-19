@@ -150,8 +150,9 @@ yourself.
   features and a model trained on jiten.moe's scores, computed on your server:
   a score with its likely range, the vocabulary needed for 95% coverage, and how
   many of the book's kanji you have already met.
-- **Statistics**: characters, time and speed per day and per book, streaks and
-  reading goals (upstream's, synced per account).
+- **Statistics**: characters, time and speed per day and per book, streaks,
+  reading goals (upstream's, synced per account) and an estimate of the words known
+  over time.
 - **Anki mining**: cards made with Yomitan get the sentence's audio from the
   audiobook (or the AI voice) and, in visual novels, a screenshot and the
   line's voice.

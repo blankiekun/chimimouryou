@@ -46,6 +46,14 @@ export const en = {
     "Different words in the Calibre books you have read, estimated from each book's word list and how far you got; particles and skipped text don't count",
   'dashboard.wordsKnown': 'Words known',
   'dashboard.wordsKnownHint': 'Words met at least {count} times, plus mature words from Anki',
+  'dashboard.wordsGained': '+{count} this month',
+  'dashboard.wordsGainedHint':
+    'Estimated from the characters read each day; Anki words are not included',
+  'statistics.wordsKnown': 'Words known',
+  'statistics.wordsKnownNow': '{count} now',
+  'statistics.wordsKnownLabel': 'Words known from {from} to {to}, {count} now',
+  'statistics.wordsKnownNote':
+    "Estimate: rebuilt from the characters read each day and each book's word list, as words met at least {count} times. Anki's mature words are not in the history; they only count in Home's total.",
   'dashboard.trackerOff':
     'Turn on the reading tracker (Settings → Statistics) to count characters, time and streaks.',
   'dashboard.guide': 'Learning guide: Yomitan, Anki and choosing books',

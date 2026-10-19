@@ -175,6 +175,11 @@ once met 8 times, mature in Anki (Settings → Anki → Known words) or marked. 
 its script read. Books read before this existed count as far as you got. Books without
 an estimate, manga and books outside Calibre add nothing.
 
+The Statistics page charts **Words known** over time, and Home's tile shows the words
+gained this month. The history is rebuilt from the characters read each day (as far as
+the book's recorded position at most) with the same rule, so it is an estimate too;
+Anki's mature words count only in today's total, not in the history.
+
 Manga have no estimate. In the Store, filter by difficulty band and sort by
 difficulty (easiest first) or length to find the next book: one a little harder
 than the last, with most of its words already known, is usually a good pick. The Store's
