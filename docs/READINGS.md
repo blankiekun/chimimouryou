@@ -31,7 +31,11 @@ reading is always hiragana and one that list gives for the written form. Katakan
 counts for `RubyKatakanaShare`, which is measured separately.
 
 Sudachi gives a reading only for an unconjugated word. A conjugated occurrence without one
-goes to the word's most common reading in the book, in `save_words`.
+goes to the word's most common reading in the book, in `save_words`. A word met only
+conjugated takes the form's most common reading in the book (from another dictionary word
+with the same form), else Sudachi's reading of the form alone (`Analysis.form_readings`).
+Rows of one form and reading are merged, and each row also carries the lemma (Sudachi's
+normalized form).
 
 **Tables** (`load_reading_model` in `service.py`): `state/difficulty/reading-model.json.gz`
 is the server's own table, when one has been built from its library (optional: none exists
