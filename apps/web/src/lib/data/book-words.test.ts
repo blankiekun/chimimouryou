@@ -4,8 +4,10 @@
  * All rights reserved.
  */
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  foldReadings,
+  loadBookWords,
   newWords,
   wordCoverage,
   wordsCsv,
@@ -39,6 +41,37 @@ describe('wordsToStudy', () => {
     ];
 
     expect(wordsToStudy(words, 12618).map(([form]) => form)).toEqual(['トゥアン']);
+  });
+});
+
+describe('loadBookWords', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('has no list only on 404 and throws on other failures', async () => {
+    vi.stubGlobal('fetch', async () => new Response('', { status: 404 }));
+    expect(await loadBookWords(7)).toBeUndefined();
+    vi.stubGlobal('fetch', async () => new Response('', { status: 502 }));
+    await expect(loadBookWords(7)).rejects.toThrow();
+  });
+});
+
+describe('foldReadings', () => {
+  it("adds rows without a reading to the form's most frequent reading", () => {
+    expect(
+      foldReadings([
+        ['呟く', null, 9, 900],
+        ['私', 'わたし', 8, 10],
+        ['呟く', 'つぶやく', 5, 900],
+        ['私', 'わたくし', 2, 10],
+        ['私', null, 1, 10],
+        ['えっと', null, 3, null]
+      ])
+    ).toEqual([
+      ['呟く', 'つぶやく', 14, 900],
+      ['私', 'わたし', 9, 10],
+      ['えっと', null, 3, null],
+      ['私', 'わたくし', 2, 10]
+    ]);
   });
 });
 
@@ -101,6 +134,7 @@ describe('wordCoverage', () => {
     expect(wordCoverage(words, isKnown)).toEqual({
       words: 3,
       newWords: 2,
+      unlisted: 0,
       share: 0.6,
       complete: true
     });
@@ -109,7 +143,8 @@ describe('wordCoverage', () => {
   it("counts the words past the list's cap as unknown when the estimate has totals", () => {
     expect(wordCoverage(words, isKnown, { uniqueWords: 5, tokens: 20 })).toEqual({
       words: 5,
-      newWords: 4,
+      newWords: 2,
+      unlisted: 2,
       share: 0.3,
       complete: true
     });

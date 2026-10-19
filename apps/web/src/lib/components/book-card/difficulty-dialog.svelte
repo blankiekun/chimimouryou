@@ -83,11 +83,19 @@
             {/if}
             {#if words}
               <span>
-                {$t$(words.complete ? 'book.wordCoverage' : 'book.wordCoverageTop', {
-                  count: words.words.toLocaleString(),
-                  percent: (words.share * 100).toFixed(1),
-                  new: words.newWords.toLocaleString()
-                })}
+                {$t$(
+                  words.unlisted
+                    ? 'book.wordCoverageTail'
+                    : words.complete
+                      ? 'book.wordCoverage'
+                      : 'book.wordCoverageTop',
+                  {
+                    count: words.words.toLocaleString(),
+                    percent: Math.floor(words.share * 100),
+                    new: words.newWords.toLocaleString(),
+                    rare: words.unlisted.toLocaleString()
+                  }
+                )}
               </span>
             {/if}
           {/if}

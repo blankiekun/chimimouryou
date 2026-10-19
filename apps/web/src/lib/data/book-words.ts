@@ -15,11 +15,47 @@ import { difficultyApiUrl } from '$lib/data/calibre';
 /** Form, reading (null when the analyser has none), count in the book, Jiten frequency rank (null: not listed) */
 export type BookWord = [string, string | null, number, number | null];
 
-/** The book's most frequent words, most frequent first; undefined if it has no word list yet. */
+/**
+ * The book's most frequent words, most frequent first; undefined if it has no word list
+ * yet (404). Other failures (server restarting, signed out) throw, so they aren't cached.
+ */
 export async function loadBookWords(id: number): Promise<BookWord[] | undefined> {
   const response = await fetch(`${difficultyApiUrl}words/${id}`, { cache: 'no-cache' });
 
-  return response.ok ? response.json() : undefined;
+  if (response.status === 404) return undefined;
+  if (!response.ok) throw new Error(`Word list: ${response.status}`);
+
+  return foldReadings(await response.json());
+}
+
+/**
+ * Rows without a reading (conjugated-only occurrences) join the form's most frequent
+ * row with a reading, so 呟く with and without つぶやく are one word.
+ */
+export function foldReadings(words: BookWord[]): BookWord[] {
+  const top = new Map<string, BookWord>();
+
+  for (const word of words) {
+    if (word[1] !== null && (top.get(word[0])?.[2] ?? -1) < word[2]) top.set(word[0], word);
+  }
+
+  const extra = new Map<BookWord, number>();
+  const kept = words.filter((word) => {
+    const into = word[1] === null && top.get(word[0]);
+
+    if (into) extra.set(into, (extra.get(into) ?? 0) + word[2]);
+
+    return !into;
+  });
+
+  return extra.size
+    ? kept
+        .map(
+          (word): BookWord =>
+            extra.has(word) ? [word[0], word[1], word[2] + extra.get(word)!, word[3]] : word
+        )
+        .sort((a, b) => b[2] - a[2])
+    : words;
 }
 
 const numberPattern = /^[\d０-９〇一二三四五六七八九十百千万]+$/u;
@@ -82,8 +118,10 @@ export interface WordTotals {
 export interface WordCoverage {
   /** Different words (form and reading), without noise */
   words: number;
-  /** Of these, not known */
+  /** Of the listed words, not known */
   newWords: number;
+  /** Words past the list's cap (each used rarely), counted as unknown */
+  unlisted: number;
   /** Share of the words' occurrences that are known */
   share: number;
   /** false: only the list's `wordsPerBook` most frequent words were counted */
@@ -115,9 +153,9 @@ export function wordCoverage(
   }
 
   const hasTotals = totals.uniqueWords !== undefined && totals.tokens !== undefined;
+  const unlisted = hasTotals ? Math.max(0, totals.uniqueWords! - unique) : 0;
 
   if (hasTotals) {
-    unknown += Math.max(0, totals.uniqueWords! - unique);
     unique = Math.max(unique, totals.uniqueWords!);
     tokens = Math.max(tokens, totals.tokens!);
   }
@@ -126,6 +164,7 @@ export function wordCoverage(
     ? {
         words: unique,
         newWords: unknown,
+        unlisted,
         share: known / tokens,
         complete: hasTotals || words.length < wordsPerBook
       }
