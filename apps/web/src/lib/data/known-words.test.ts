@@ -117,6 +117,23 @@ describe('known words', () => {
     expect(knownCoverage$.getValue()).toEqual({});
   });
 
+  it('matches Anki words and marks on the form or the lemma', async () => {
+    stubAnki(['分かる']);
+    await refreshKnownWords();
+    await setWordMarks([['出来る', null]], 'known');
+    const known = await getKnownSet();
+
+    expect(
+      (
+        [
+          ['わかる', 'わかる', 3, 50, '分かる'],
+          ['できる', 'できる', 3, 40, '出来る'],
+          ['わかる', 'わかる', 3, 50]
+        ] as BookWord[]
+      ).map(known.isKnown)
+    ).toEqual([true, true, false]);
+  });
+
   it('works without Anki', async () => {
     stubAnki(['猫']);
     await refreshKnownWords();

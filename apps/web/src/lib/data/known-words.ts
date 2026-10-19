@@ -143,6 +143,7 @@ export async function getKnownSet(): Promise<KnownSet> {
     isKnown: (word) =>
       (met.words[wordKey(word)] ?? 0) >= knownMinCount ||
       forms.has(word[0]) ||
+      (!!word[4] && forms.has(word[4])) ||
       !!wordMark(marks, word)
   };
 }

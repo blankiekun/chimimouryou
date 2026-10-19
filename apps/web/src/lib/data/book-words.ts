@@ -12,8 +12,11 @@
 
 import { difficultyApiUrl } from '$lib/data/calibre';
 
-/** Form, reading (null when the analyser has none), count in the book, Jiten frequency rank (null: not listed) */
-export type BookWord = [string, string | null, number, number | null];
+/**
+ * Form, reading (null when the analyser has none), count in the book, Jiten frequency rank
+ * (null: not listed), lemma (word lists 7+: Sudachi's normalized form, 分かる for わかる)
+ */
+export type BookWord = [string, string | null, number, number | null, string?];
 
 /** The book's most frequent words, most frequent first; undefined if it has no word list yet. */
 export async function loadBookWords(id: number): Promise<BookWord[] | undefined> {
@@ -132,15 +135,17 @@ export function wordCoverage(
     : undefined;
 }
 
-function csvField(value: string | number | null) {
-  const text = value === null ? '' : String(value);
+function csvField(value?: string | number | null) {
+  const text = value == null ? '' : String(value);
 
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 /** CSV for Anki or a spreadsheet, with a BOM so Excel reads it as UTF-8. */
 export function wordsCsv(words: BookWord[]) {
-  return `\uFEFF${[['word', 'reading', 'count in book', 'frequency rank'], ...words]
+  const header = ['word', 'reading', 'count in book', 'frequency rank'];
+
+  return `\uFEFF${[header, ...words.map((word) => word.slice(0, 4))]
     .map((row) => row.map(csvField).join(','))
     .join('\r\n')}\r\n`;
 }

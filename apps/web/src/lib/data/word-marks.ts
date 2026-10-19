@@ -34,9 +34,14 @@ export const wordMarks$ = new BehaviorSubject<WordMarks>({});
 
 export const markKey = (form: string, reading?: string | null) => `${form}\t${reading ?? ''}`;
 
-/** The word's mark: by form and reading, else by form alone. */
-export function wordMark(marks: WordMarks, [form, reading]: BookWord) {
-  return marks[markKey(form, reading)]?.status || marks[markKey(form)]?.status || null;
+/** The word's mark: by form and reading, else by form alone, else by its lemma (判る: 分かる). */
+export function wordMark(marks: WordMarks, [form, reading, , , lemma]: BookWord) {
+  return (
+    marks[markKey(form, reading)]?.status ||
+    marks[markKey(form)]?.status ||
+    (lemma && marks[markKey(lemma)]?.status) ||
+    null
+  );
 }
 
 /** Changes whenever any mark does (part of the known set's cache key). */
