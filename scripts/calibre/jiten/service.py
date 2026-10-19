@@ -13,7 +13,8 @@ HTTP API (bound to localhost, proxied by nginx at /calibre/difficulty/api/):
   POST readings/ID                  make it if missing or stale: {"status": "ready" | "queued" | "unavailable"}
   POST compute    {"ids": [...]}    estimate difficulty for these books ({"all": true} for all without a current estimate)
   POST cancel                       stop the running job
-  POST dictionary   body: the zip    install Jiten's frequency list (jiten_freq_global.zip)
+  POST dictionary   body: the zip    install Jiten's frequency list (jiten_freq_global.zip); admins only.
+                                    Replacing one needs ?force=1 when its readings disagree (409 with "agreement")
 Results are written to RESULTS_PATH, which nginx serves as /calibre/difficulty.json.
 Readings files are made one at a time in their own process, never waiting behind an estimate job.
 
@@ -48,6 +49,11 @@ FREQUENCY_DICTIONARY = os.environ.get('JITEN_FREQUENCY_DICTIONARY',
                                       os.path.join(STATE_DIR, 'frequency-dictionary.zip'))
 RESULTS_PATH = os.path.join(STATE_DIR, 'difficulty.json')
 MAX_DICTIONARY_BYTES = 64 * 1024 * 1024
+# Sanity gate for uploads: Jiten's list has about 500,000 terms, and a new version keeps the readings
+# of its most frequent forms; a list that doesn't is refused unless forced.
+MIN_DICTIONARY_TERMS = 50_000
+AGREEMENT_FORMS = 5000
+MIN_AGREEMENT = 0.95
 # chimi-difficulty, trained on jiten.moe's own scores (distil/, README there): their scale directly,
 # adjustment included, from Jiten's 55 features plus EXTRA_FEATURES. The -low/-high models
 # are its 10th and 90th percentiles, shown as a range.
@@ -466,10 +472,18 @@ class JobRunner:
 runner = JobRunner()
 
 
-def install_dictionary(source, length: int) -> int:
+class DictionaryMismatch(ValueError):
+    """A replacement list whose readings disagree with the installed one."""
+    def __init__(self, agreement: float):
+        super().__init__(f'The readings of its {AGREEMENT_FORMS:,} most frequent words agree with the installed '
+                         f'list on only {agreement:.1%}')
+        self.agreement = agreement
+
+
+def install_dictionary(source, length: int, force: bool = False) -> int:
     """Checks an uploaded rank-based Yomitan frequency list and makes it the one in use
     (from the next job on); returns its number of terms."""
-    from frequency import load_yomitan_ranks
+    from frequency import load_yomitan_ranks, reading_agreement
 
     if not 0 < length <= MAX_DICTIONARY_BYTES:
         raise ValueError('The file is empty or too large')
@@ -489,8 +503,15 @@ def install_dictionary(source, length: int) -> int:
             terms = len(load_yomitan_ranks(upload))
         except (zipfile.BadZipFile, KeyError, ValueError, TypeError, AttributeError) as error:
             raise ValueError("Not Jiten's frequency list (a rank-based Yomitan dictionary zip)") from error
-        if not terms:
-            raise ValueError('The frequency list has no words')
+        if terms < MIN_DICTIONARY_TERMS:
+            raise ValueError(f'The frequency list has only {terms:,} words; Jiten\'s has about 500,000')
+        if not force and os.path.exists(FREQUENCY_DICTIONARY):
+            try:
+                agreement = reading_agreement(FREQUENCY_DICTIONARY, upload, AGREEMENT_FORMS)
+            except (zipfile.BadZipFile, KeyError, ValueError, TypeError, AttributeError):
+                agreement = 1.0  # the installed list is unreadable: nothing to compare with
+            if agreement < MIN_AGREEMENT:
+                raise DictionaryMismatch(agreement)
         os.replace(upload, FREQUENCY_DICTIONARY)
         return terms
     finally:
@@ -554,9 +575,16 @@ class Handler(BaseHTTPRequestHandler):
         parts = self.path.split('?')[0].strip('/').split('/')
         if len(parts) == 2 and parts[0] == 'readings' and re.fullmatch(r'-?[0-9]+', parts[1]):
             return self._send(200, {'status': readings.request(int(parts[1]))})
-        if self._action() == 'dictionary':
+        if parts == ['dictionary']:
+            # nginx sends it from the account check of every location that reaches this path.
+            if self.headers.get('X-Account-Admin') != '1':
+                return self._send(403, {'error': 'Only admins can install the frequency list'})
+            query = self.path.split('?', 1)[1] if '?' in self.path else ''
             try:
-                terms = install_dictionary(self.rfile, int(self.headers.get('Content-Length') or 0))
+                terms = install_dictionary(self.rfile, int(self.headers.get('Content-Length') or 0),
+                                           force='force=1' in query.split('&'))
+            except DictionaryMismatch as error:
+                return self._send(409, {'error': str(error), 'agreement': error.agreement})
             except RuntimeError as error:
                 return self._send(409, {'error': str(error)})
             except ValueError as error:

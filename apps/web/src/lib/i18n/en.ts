@@ -481,6 +481,10 @@ export const en = {
   'library.loadingStatus': 'Loading status...',
   'library.dictionaryNeeded':
     "Estimates need Jiten's word frequency list. Download {file} from {link}, then import it.",
+  'library.dictionaryNeededAdmin':
+    "Estimates need Jiten's word frequency list, which only an admin can import.",
+  'library.dictionaryMismatch':
+    'The readings of this list agree with the installed one on only {agreement} of its most frequent words. Install it anyway?',
   'library.importDictionary': 'Import frequency list',
   'library.run': 'Run',
   'library.runHint': 'Books without an estimate',
