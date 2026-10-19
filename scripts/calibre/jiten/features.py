@@ -23,8 +23,8 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 
 from deconjugator import Deconjugator
-# The readings in context, book text with its ruby, and Sudachi tokens come from yurigana.
-from yurigana.readings import context_reading, is_kanji, ruby_reading, to_hiragana  # noqa: F401
+# Book text with its ruby and Sudachi tokens come from yurigana (the readings in context too: a Reader).
+from yurigana.readings import is_kanji, to_hiragana  # noqa: F401
 from yurigana.text import _count_ruby, _mark_ruby, _take_hints, aozora_text, book_text  # noqa: F401
 from yurigana.tokens import SudachiTokenizer, Token  # noqa: F401
 
@@ -253,6 +253,7 @@ class Analyzer:
         self.tokenizer = sudachi.tokenizer
         self._tokens = sudachi.tokens
         self.deconjugator = Deconjugator()
+        self._text = self._text_tokens = None
         self.marker_sequences = {
             name: [self._marker_sequence(w) for w in words]
             for name, words in (('logical', LOGICAL_CONNECTORS), ('modal', MODAL_MARKERS),
@@ -281,15 +282,26 @@ class Analyzer:
         compatible = [f for f in matches if prefix and f.tags and f.tags[-1].startswith(prefix)] or matches
         return min(compatible, key=lambda f: len(f.process)).process
 
-    def analyse(self, text: str, hints=(), known_readings=(), reading_model=None) -> Analysis:
-        """`hints`: (start, end, ruby) from book_text; ruby that ruby_reading accepts (with
-        `known_readings`, FrequencyTable.reading_ranks) is that occurrence's reading in
-        `readings`, else one context_reading gives, else the one `reading_model`
-        (yurigana's ReadingModel) gives. Word.reading, which the model features use, stays
-        Sudachi's."""
+    def tokens(self, text: str) -> list:
+        """Sudachi tokens of `text`; a Reader made with this Analyzer as its tokenizer gets the
+        tokens analyse() already has instead of tokenizing the book again."""
+        if text is not self._text:
+            self._text, self._text_tokens = text, list(self._tokens(text))
+        return self._text_tokens
+
+    def analyse(self, text: str, hints=(), reader=None) -> Analysis:
+        """`hints`: (start, end, ruby) from book_text. `reader` (a yurigana Reader, made with
+        this Analyzer as its tokenizer) gives each occurrence's reading in `readings`: the
+        book's ruby, a context rule, the reading model, a default or the list's only reading,
+        else Sudachi's, as in readings files (no carried name ruby). Tokens it reads as part
+        of a longer word (a compound: 三日月 みかづき) keep Sudachi's. Word.reading, which the
+        model features use, stays Sudachi's."""
         result = Analysis(text=text)
-        hints = {start: (end, reading) for start, end, reading in hints}
-        tokens = list(self._tokens(text))
+        tokens = self.tokens(text)
+        # A number + counter span (三本 さんぼん) and compounds are Words over several tokens:
+        # only a Word over exactly the head token is its reading (the counter's own: 本 ほん).
+        read = {(w.start, w.end): w for w in reader.read(text, hints)} if reader else {}
+        self._text = self._text_tokens = None  # don't keep a book's tokens past its analysis
         surfaces = [t.surface() for t in tokens]
         dictionary_forms = [t.dictionary_form() for t in tokens]
 
@@ -382,10 +394,8 @@ class Analyzer:
                 entry[1] += 1
             else:
                 result.words[word_key] = [word, 1]
-            reading = (hints and ruby_reading(hints, head.begin, head.surface(), word.form, known_readings)
-                       or context_reading(text, head.begin, head.surface(), word.form, known_readings,
-                                          tokens[index - 1].part_of_speech() if index else None)
-                       or reading_model and reading_model.reading(text, tokens, index, word.form, known_readings))
+            own = read.get((head.begin, head.begin + len(head.surface())))
+            reading = own.reading if own and own.form == word.form else None
             result.readings.setdefault(word_key, Counter())[reading or word.reading] += 1
             if not (reading or word.reading) and word_key not in result.form_readings:
                 result.form_readings[word_key] = self._form_reading(word.form)

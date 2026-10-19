@@ -148,7 +148,7 @@ section in paginated mode. `annotations.json` is merged per highlight (newest
   each book's kanji counts in `state/difficulty/kanji/` (`GET kanji/ID`, for each
   reader's own kanji coverage, compared in the browser with the kanji they met) and its
   2,000 most frequent words with frequency ranks in `state/difficulty/words/` (`GET words/ID`).
-  How those words get their readings (book ruby, context rules, a reading model, Sudachi):
+  How those words get their readings (yurigana's `Reader`: book ruby, context rules, a reading model, defaults, Sudachi):
   [docs/READINGS.md](docs/READINGS.md); the engine is the
   [yurigana](https://github.com/blankiekun/yurigana) package (pinned tag, in the difficulty
   image's requirements and `apps/web/package.json`).

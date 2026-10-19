@@ -34,7 +34,7 @@ from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from yurigana import PUBLIC_TABLE, __version__ as YURIGANA_VERSION, load_tables
+from yurigana import __version__ as YURIGANA_VERSION
 from yurigana.reader import _UNVOICED
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
@@ -64,10 +64,10 @@ MODEL_PATHS = {name: os.path.join(MODEL_DIR, f'chimi-difficulty{suffix}.onnx')
 # Added to both sides of the range so it holds 80% of books (written by distil/train.py).
 with open(os.path.join(MODEL_DIR, 'chimi-difficulty-range.json'), encoding='utf-8') as _f:
     RANGE_WIDEN = json.load(_f)['widen']
-# Readings in context for word lists (yurigana's reading model): the server's own table, built
-# from its library by `python -m yurigana.reading_context build`, and for other forms
-# yurigana's public one, built from Aozora Bunko and Tatoeba.
-READING_MODEL_PATHS = [os.path.join(STATE_DIR, 'reading-model.json.gz'), PUBLIC_TABLE]
+# Readings in context for word lists and readings files (a yurigana Reader): the server's own
+# reading-model table, built from its library by `python -m yurigana.reading_context build`; the
+# Reader adds yurigana's public one (Aozora Bunko and Tatoeba) for other forms.
+READING_MODEL_TABLES = [os.path.join(STATE_DIR, 'reading-model.json.gz')]
 # Stored with each estimate; whole-library runs redo estimates made by another model.
 MODEL_VERSION = 'chimi-difficulty-1'
 # Per-book kanji counts, gzipped JSON, for the reader's own coverage.
@@ -85,7 +85,9 @@ WORDS_PER_BOOK = 2000
 # 7: readings for words met only conjugated, rows of one form and reading merged, particles and
 #    auxiliaries dropped by part of speech, a 5th column: the lemma; yurigana 0.2.0's context rules
 #    and models; a voiced reading the list lacks counts for the unvoiced one (箱 ばこ: はこ).
-WORDS_VERSION = 7
+# 8: readings from yurigana's whole Reader, as readings files have them: defaults, the list's only
+#    reading, counters (本 in 三本: ほん), rendaku, readings of conjugated occurrences.
+WORDS_VERSION = 8
 # Not vocabulary, left out of the book's word totals (uniqueWords, tokens) like the reader's
 # word coverage does (isNoiseWord in book-words.ts): particles, numbers, lone kana, and kana-only
 # words without a frequency rank (tokenizer noise).
@@ -116,17 +118,13 @@ BOOKS_PER_POOL = 300
 _analyzer = None
 _frequency = None
 _sessions = None
-_reading_model = None
-
-
-def load_reading_model(paths=None):
-    """The tables of READING_MODEL_PATHS that load, merged (a form's model from the first that
-    has one), or None."""
-    return load_tables(paths or READING_MODEL_PATHS)
+# A yurigana Reader: word-list readings in estimate workers, readings files in the readings worker.
+_reader = None
 
 
 def _init_worker():
-    global _analyzer, _frequency, _sessions, _reading_model
+    global _analyzer, _frequency, _sessions, _reader
+    from yurigana import Reader
     import warnings
     warnings.filterwarnings('ignore')
     import onnxruntime
@@ -134,7 +132,8 @@ def _init_worker():
     from frequency import FrequencyTable
     _analyzer = Analyzer()
     _frequency = FrequencyTable.load(FREQUENCY_DICTIONARY)
-    _reading_model = load_reading_model()
+    # Sharing the Analyzer's tokens and the list's readings: no second Sudachi or copy of the list.
+    _reader = Reader(known=_frequency.reading_ranks, tables=READING_MODEL_TABLES, tokenizer=_analyzer)
     options = onnxruntime.SessionOptions()
     options.intra_op_num_threads = 1
     options.inter_op_num_threads = 1
@@ -225,7 +224,7 @@ def _estimate(book: dict):
     characters = len(TOKEN_CLEAN.sub('', text))
     if characters < 1000:
         return book['id'], None
-    analysis = _analyzer.analyse(text, hints, _frequency.reading_ranks, _reading_model)
+    analysis = _analyzer.analyse(text, hints, _reader)
     features = compute_features(analysis, _frequency)
     extra = compute_extra_features(analysis, _frequency, ruby)
     row = numpy.array([[features[name] for name in FEATURE_ORDER] + [extra[name] for name in EXTRA_FEATURES]],
@@ -257,14 +256,11 @@ def _estimate(book: dict):
 # ---------------------------------------------------------------------------
 # Readings files
 
-_reader = None
-
-
 def _init_readings_worker():
     global _reader
     from yurigana import Reader
     # The known list and the server's reading model the estimates use (yurigana adds its public table).
-    _reader = Reader(known=FREQUENCY_DICTIONARY, tables=READING_MODEL_PATHS[:1])
+    _reader = Reader(known=FREQUENCY_DICTIONARY, tables=READING_MODEL_TABLES)
 
 
 def readings_path(book_id: int) -> str:

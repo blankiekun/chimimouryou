@@ -56,6 +56,11 @@ class VnHintTest(unittest.TestCase):
         self.assertEqual(text, '「本気だ」\n舞台の上手から人気')
         self.assertEqual(self.hinted(text, hints), [('本気', 'マジ'), ('上手', 'かみて'), ('人気', 'ひとけ')])
 
+def reader(analyzer, known):
+    from yurigana import Reader
+    return Reader(known=known, tokenizer=analyzer)
+
+
 @unittest.skipUnless(sudachipy, 'needs Sudachi (difficulty image)')
 class RubyReadingAnalysisTest(unittest.TestCase):
     def test_ruby_sets_the_occurrence_reading_but_not_the_features(self):
@@ -65,7 +70,7 @@ class RubyReadingAnalysisTest(unittest.TestCase):
         text = aozora_text('夜の公園は｜人気《ひとけ》がない。\nこの店は人気だ。宇宙《そら》を見る。本気《マジ》だ。\n', None, hints)
         known = {('人気', 'ひとけ'), ('人気', 'にんき'), ('宇宙', 'うちゅう')}
         analyzer = Analyzer()
-        plain, hinted = analyzer.analyse(text), analyzer.analyse(text, hints, known)
+        plain, hinted = analyzer.analyse(text), analyzer.analyse(text, hints, reader(analyzer, known))
         readings = {form: dict(counter) for (_, form), counter in hinted.readings.items()}
         self.assertEqual(readings['人気'], {'ひとけ': 1, 'にんき': 1})
         self.assertEqual(readings['宇宙'], {'うちゅう': 1})
@@ -89,7 +94,7 @@ class RubyReadingAnalysisTest(unittest.TestCase):
         known = {('行く', 'いく'), ('行く', 'ゆく'), ('人気', 'ひとけ'), ('人気', 'にんき'), ('一緒', 'いっしょ'),
                  ('歩く', 'あるく')}
         analyzer = Analyzer()
-        plain, hinted = analyzer.analyse(text), analyzer.analyse(text, hints, known)
+        plain, hinted = analyzer.analyse(text), analyzer.analyse(text, hints, reader(analyzer, known))
         readings = {form: dict(counter) for (_, form), counter in hinted.readings.items()}
         self.assertEqual(readings['行く'], {'いく': 1})
         self.assertEqual(readings['人気'], {'ひとけ': 1})
@@ -103,11 +108,34 @@ class RubyReadingAnalysisTest(unittest.TestCase):
         text = aozora_text('人気のない道。\n｜人気《にんき》がない店。\nこの店は人気だ。\n', None, hints)
         known = {('人気', 'ひとけ'), ('人気', 'にんき')}
         analyzer = Analyzer()
-        plain, ruled = analyzer.analyse(text), analyzer.analyse(text, hints, known)
+        plain, ruled = analyzer.analyse(text), analyzer.analyse(text, hints, reader(analyzer, known))
         readings = {form: dict(counter) for (_, form), counter in ruled.readings.items()}
         self.assertEqual(readings['人気'], {'ひとけ': 1, 'にんき': 2})  # the book's ruby wins over the rule
         self.assertEqual(ruled.words, plain.words)
         self.assertEqual(dict(plain.readings[next(k for k in plain.readings if k[1] == '人気')]), {'にんき': 3})
+
+    def test_counters_and_the_readers_rules_but_not_the_features(self):
+        from features import Analyzer
+        from frequency import FrequencyTable
+        text = '鉛筆を三本買った。\nもう一回本を読む。\n私は行く。\n'
+        known = {('鉛筆', 'えんぴつ'), ('本', 'ほん'), ('本', 'もと'), ('買う', 'かう'), ('読む', 'よむ'),
+                 ('一回', 'いっかい'), ('一回', 'いちかい'), ('私', 'わたし'), ('私', 'わたくし'), ('行く', 'いく'),
+                 ('行く', 'ゆく')}
+        analyzer = Analyzer()
+        plain, read = analyzer.analyse(text), analyzer.analyse(text, (), reader(analyzer, known))
+        readings = {key: dict(counter) for key, counter in read.readings.items()}
+        # 三本 さんぼん is no word of its own: 三 (a number) and the counter 本, a suffix, keep theirs.
+        self.assertEqual(readings['3\tnoun', '三'], {'さん': 1})
+        self.assertEqual(readings['本\tfix', '本'], {'ほん': 1})
+        self.assertEqual(readings['一回\tnoun', '一回'], {'いっかい': 1})  # one token: the counter's reading
+        self.assertEqual(readings['買う\tverb', '買う'], {'かう': 1})  # conjugated, read by the Reader
+        self.assertEqual(readings['私\tpn', '私'], {'わたし': 1})  # yurigana's default
+        self.assertEqual(dict(plain.readings['一回\tnoun', '一回']), {'いちかい': 1})
+        self.assertEqual(read.words, plain.words)
+        self.assertIsNone(analyzer._text)  # the book's tokens aren't kept
+        frequency = FrequencyTable({'本': 100, '鉛筆': 3000, '一回': 500}, {('一回', 'いっかい'): 500})
+        self.assertEqual(compute_features(read, frequency), compute_features(plain, frequency))
+        self.assertEqual(compute_extra_features(read, frequency), compute_extra_features(plain, frequency))
 
 
 class FeatureTest(unittest.TestCase):
