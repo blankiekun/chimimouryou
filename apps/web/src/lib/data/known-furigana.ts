@@ -30,7 +30,10 @@ export function totalKanjiCounts(books: { counts: Record<string, number> }[]) {
 
 /** Loads the kanji met and the readings table once, e.g. when a book opens. */
 export async function loadKnownRubyCheck() {
-  const [books, table] = await Promise.all([getKanjiSeen(), import('yurigana/kanji-readings.json')]);
+  const [books, table] = await Promise.all([
+    getKanjiSeen(),
+    import('yurigana/kanji-readings.json')
+  ]);
   const totals = totalKanjiCounts(books);
   const readings: Record<string, string> = table.default;
 

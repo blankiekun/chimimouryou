@@ -19,7 +19,7 @@ anything a reader or a server operator would notice.
 
 - The readings in context (the book's ruby, context rules, the reading model and its tools)
   and the "Known" furigana check moved to their own package,
-  [yurigana](https://github.com/blankiekun/yurigana) (v0.1.0, pinned), which the difficulty
+  [yurigana](https://github.com/blankiekun/yurigana) (v0.1.1, pinned), which the difficulty
   image and the web app install. Word lists read exactly as before; the command that builds
   a server's own reading model is now `python -m yurigana.reading_context build`.
 - Recommended server sizes per profile (docs/INSTALL.md → Server size). The `difficulty`

@@ -70,7 +70,7 @@ WORDS_PER_BOOK = 2000
 # 5: more of the ruby: per-kanji spans, kanji stems of inflected words, large kana; 人気がない
 #    reads ひとけ only with a cue.
 # 6: a reading model learned from ruby reads ambiguous forms no rule covers (yurigana's ReadingModel).
-# Moving the readings to yurigana 0.1.0 changed no reading.
+# Moving the readings to yurigana 0.1.1 changed no reading.
 WORDS_VERSION = 6
 # Not vocabulary, left out of the book's word totals (uniqueWords, tokens) like the reader's
 # word coverage does (isNoiseWord in book-words.ts): particles, numbers, lone kana, and kana-only
