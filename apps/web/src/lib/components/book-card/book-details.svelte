@@ -58,6 +58,7 @@
   } from '$lib/data/library-home';
   import { guessSeriesName } from '$lib/data/series-overrides';
   import { database, startDayHoursForTracker$ } from '$lib/data/store';
+  import { setWordMarks, wordMark, wordMarks$ } from '$lib/data/word-marks';
   import { knownMinCount, wordList } from '$lib/data/words-met';
   import { getDateKey } from '$lib/functions/statistic-util';
   import { t$, tr, uiLanguage$ } from '$lib/i18n';
@@ -266,6 +267,17 @@
   async function copyNewKanji() {
     await navigator.clipboard.writeText(kanji?.topNew.join('') ?? '');
     copied = true;
+  }
+
+  function markAllShown() {
+    const shown = unknownWords.slice(0, 50).filter((word) => !wordMark($wordMarks$, word));
+
+    if (shown.length && confirm(tr('book.markAllKnownConfirm', { count: shown.length }))) {
+      setWordMarks(
+        shown.map(([form, reading]) => [form, reading]),
+        'known'
+      );
+    }
   }
 
   async function copyNewWords() {
@@ -530,16 +542,50 @@
             })}
           </p>
           <ol lang="ja">
-            {#each unknownWords.slice(0, 50) as [form, reading, count]}
-              <li>
-                {form}{#if reading && kanjiPattern.test(form)}<span class="details-note-inline"
-                    >（{reading}）</span
-                  >{/if}
+            {#each unknownWords.slice(0, 50) as word}
+              {@const [form, reading, count] = word}
+              {@const mark = wordMark($wordMarks$, word)}
+              <li class:details-word-marked={mark}>
+                <span
+                  >{form}{#if reading && kanjiPattern.test(form)}<span class="details-note-inline"
+                      >（{reading}）</span
+                    >{/if}</span
+                >
                 <span class="details-note-inline">×{count}</span>
+                <span lang={$uiLanguage$}>
+                  {#if mark}
+                    <button
+                      type="button"
+                      class="details-mark"
+                      title={$t$('book.unmarkWord', { word: form })}
+                      on:click={() => setWordMarks([[form, reading]], null)}
+                    >
+                      {$t$('book.undoMark')}
+                    </button>
+                  {:else}
+                    <button
+                      type="button"
+                      class="details-mark"
+                      title={$t$('book.markKnown', { word: form })}
+                      aria-label={$t$('book.markKnown', { word: form })}
+                      on:click={() => setWordMarks([[form, reading]], 'known')}>✓</button
+                    >
+                    <button
+                      type="button"
+                      class="details-mark"
+                      title={$t$('book.markIgnored', { word: form })}
+                      aria-label={$t$('book.markIgnored', { word: form })}
+                      on:click={() => setWordMarks([[form, reading]], 'ignored')}>✕</button
+                    >
+                  {/if}
+                </span>
               </li>
             {/each}
           </ol>
           <span class="details-word-actions">
+            <button type="button" class="app-button" on:click={markAllShown}>
+              {$t$('book.markAllKnown')}
+            </button>
             <button type="button" class="app-button" on:click={copyNewWords}>
               {wordsCopied ? $t$('book.copied') : $t$('book.copy')}
             </button>
@@ -903,6 +949,28 @@
   .details-note-inline {
     color: var(--app-muted-fg);
     font-size: 0.85rem;
+  }
+
+  .details-word-marked {
+    color: var(--app-muted-fg);
+  }
+
+  .details-word-marked > span:first-child {
+    text-decoration: line-through;
+  }
+
+  .details-mark {
+    min-width: 1.6rem;
+    padding: 0 0.3rem;
+    border-radius: 0.25rem;
+    color: var(--app-muted-fg);
+    font-size: 0.85rem;
+  }
+
+  .details-mark:hover,
+  .details-mark:focus-visible {
+    background: color-mix(in srgb, currentColor 12%, transparent);
+    color: inherit;
   }
 
   .details-tags {

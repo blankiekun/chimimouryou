@@ -23,7 +23,14 @@ vi.mock('$lib/data/account', () => ({
 import { readerDb } from '$lib/data/reader-db';
 import { getLorebook, saveLoreEntries, type LoreEntry } from '$lib/data/lorebook';
 import { deleteSavedRecap, getSavedRecaps } from '$lib/data/recap';
-import { enableExtrasSync, mergeKanji, syncExtras, syncKanji } from './extras-sync';
+import {
+  enableExtrasSync,
+  mergeKanji,
+  mergeWordMarks,
+  syncExtras,
+  syncKanji,
+  syncWordMarks
+} from './extras-sync';
 
 const entry = (name: string): LoreEntry => ({
   id: name,
@@ -175,6 +182,55 @@ describe('extras sync', () => {
 
     expect(JSON.stringify(files)).not.toContain('秘密');
     expect((await getLorebook('Private')).entries).toEqual([]);
+  });
+});
+
+describe('word marks sync', () => {
+  const mark = (status: 'known' | 'ignored' | null, modified: number) => ({ status, modified });
+
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    account.user = null;
+    window.localStorage.clear();
+    await (await readerDb()).clear('known');
+  });
+
+  it('keeps the newest mark per word, removals included', () => {
+    expect(
+      mergeWordMarks(
+        { '猫\t': mark('known', 5), '犬\tいぬ': mark('ignored', 1), '鳥\t': mark(null, 3) },
+        { '猫\t': mark(null, 4), '犬\tいぬ': mark(null, 2), '魚\t': mark('known', 1) }
+      )
+    ).toEqual({
+      '猫\t': mark('known', 5),
+      '犬\tいぬ': mark(null, 2),
+      '鳥\t': mark(null, 3),
+      '魚\t': mark('known', 1)
+    });
+  });
+
+  it('merges words.json in the account folder for the signed-in reader', async () => {
+    const { files } = server({
+      '/account/sync/words.json': { words: { '猫\t': mark(null, 9), bad: { status: 'x' } } }
+    });
+    const db = await readerDb();
+
+    await db.put('known', { '猫\t': mark('known', 5), '犬\t': mark('ignored', 6) }, 'marks');
+    account.user = { id: 'bob', username: 'bob' };
+    window.localStorage.setItem('readerDataOwner', 'bob');
+    await syncWordMarks();
+
+    const merged = { '猫\t': mark(null, 9), '犬\t': mark('ignored', 6) };
+
+    expect(await db.get('known', 'marks')).toEqual(merged);
+    expect(files['/account/sync/words.json']).toEqual({ words: merged });
+  });
+
+  it("doesn't sync signed out", async () => {
+    const { calls } = server();
+
+    await syncWordMarks();
+    expect(calls).toEqual([]);
   });
 });
 

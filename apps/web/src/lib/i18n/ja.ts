@@ -121,7 +121,13 @@ export const ja: Record<MessageKey, string> = {
   'book.newWordsNoteFirst':
     'この本で使われ、一般的な上位{count}語に入らず、まだ知らない単語です。この本によく出て一般には珍しい順に、全{total}語のうち上位50語を表示しています（コピーとCSVにはすべて含まれます）。',
   'book.newWordsHint':
-    '既知の単語：読んだ範囲で{count}回以上出会った単語と、Anki の成熟したカード（設定 → Anki → 既知語）です。',
+    '既知の単語：読んだ範囲で{count}回以上出会った単語、Anki の成熟したカード、既知・無視とマークした単語（設定 → Anki → 既知語）です。',
+  'book.markKnown': '「{word}」を既知にする',
+  'book.markIgnored': '「{word}」を無視する（既知として数えます）',
+  'book.unmarkWord': '「{word}」のマークを外す',
+  'book.undoMark': '元に戻す',
+  'book.markAllKnown': '表示中をすべて既知にする',
+  'book.markAllKnownConfirm': '表示中の{count}語を既知にしますか？',
   'book.downloadCsv': 'CSVをダウンロード',
   'book.tags': 'タグ',
   'book.findDetailsOn': '{source}またはJitenで詳細を検索',
@@ -230,7 +236,7 @@ export const ja: Record<MessageKey, string> = {
     '読書中やプレイ中にマイニングしたカードに追加する音声とスクリーンショットです。',
   'settings.section.anki-known': '既知語',
   'settings.section.anki-known.text':
-    'デッキの成熟カードを知っている単語として、各本の単語カバー率に使います。',
+    'デッキの成熟カードとマークした単語を知っている単語として、各本の単語カバー率に使います。',
   'settings.section.tracking-statistics': '統計',
   'settings.section.tracking-statistics.text': '読書トラッカーと、一時停止するタイミングです。',
   'settings.section.tracking-day': '読書日',
@@ -290,6 +296,14 @@ export const ja: Record<MessageKey, string> = {
   'anki.refresh': '更新',
   'anki.knownCount': '既知語 {count}語（{date} に読み込み）',
   'anki.notRead': 'まだ読み込んでいません',
+  'anki.markedWords': 'マークした単語',
+  'anki.markedWordsHint':
+    '本のページやリーダーで既知・無視とマークした{count}語。どちらも既知として数え、アカウントで同期されます。',
+  'anki.markedWordsSearch': 'マークした単語を検索',
+  'anki.markedKnown': '既知',
+  'anki.markedIgnored': '無視',
+  'anki.unmark': 'マークを外す',
+  'anki.noMarkedWords': 'マークした単語はありません。',
 
   'ai.guideOpenRouter': 'OpenRouter（AIに質問・あらすじ・ロアブック）',
   'ai.guideOpenRouterHint':
@@ -566,6 +580,8 @@ export const ja: Record<MessageKey, string> = {
   'reader.highlightColor': 'ハイライト（{color}）',
   'reader.noteTitle': 'ハイライトしてメモを追加',
   'reader.note': 'メモ',
+  'reader.markKnown': '既知にする',
+  'reader.wordKnown': '既知',
   'reader.askAiNeedsKey': '「AIに質問」には OpenRouter の API キーが必要です。',
   'reader.setupGuide': '設定ガイド',
   'reader.quickQuestions': 'クイック質問',

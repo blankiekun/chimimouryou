@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { faNoteSticky } from '@fortawesome/free-solid-svg-icons';
+  import { faCheck, faNoteSticky } from '@fortawesome/free-solid-svg-icons';
   import { highlightColors, type HighlightColor } from '$lib/data/annotations';
+  import { markKey, setWordMarks, wordMarks$ } from '$lib/data/word-marks';
   import { activePlugins$, type SelectionActionContribution } from '$lib/plugins';
   import { createEventDispatcher } from 'svelte';
   import { t$ } from '$lib/i18n';
@@ -8,12 +9,16 @@
 
   /** The Listen panel is open at the bottom, so show at the top instead */
   export let raised = false;
+  /** The selection when it is a word of the book's word list (offers "Mark known") */
+  export let word = '';
 
   const dispatch = createEventDispatcher<{
     highlight: HighlightColor;
     note: void;
     action: SelectionActionContribution;
   }>();
+
+  $: marked = !!word && !!$wordMarks$[markKey(word)]?.status;
 </script>
 
 <div
@@ -45,6 +50,19 @@
     <Fa icon={faNoteSticky} />
     <span class="hidden sm:inline">{$t$('reader.note')}</span>
   </button>
+  {#if word}
+    <button
+      type="button"
+      class="flex h-8 items-center gap-1.5 rounded-full px-2.5"
+      title={$t$('book.markKnown', { word })}
+      disabled={marked}
+      on:mousedown|preventDefault
+      on:click={() => setWordMarks([[word, null]], 'known')}
+    >
+      <Fa icon={faCheck} />
+      <span class="hidden sm:inline">{$t$(marked ? 'reader.wordKnown' : 'reader.markKnown')}</span>
+    </button>
+  {/if}
   {#each $activePlugins$.flatMap((plugin) => plugin.selectionActions ?? []) as action (action.label)}
     <button
       type="button"
