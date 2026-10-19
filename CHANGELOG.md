@@ -17,6 +17,11 @@ anything a reader or a server operator would notice.
 
 ### Server
 
+- The readings in context (the book's ruby, context rules, the reading model and its tools)
+  and the "Known" furigana check moved to their own package,
+  [yurigana](https://github.com/blankiekun/yurigana) (v0.1.0, pinned), which the difficulty
+  image and the web app install. Word lists read exactly as before; the command that builds
+  a server's own reading model is now `python -m yurigana.reading_context build`.
 - Recommended server sizes per profile (docs/INSTALL.md → Server size). The `difficulty`
   and `mokuro` services get a lower CPU share (`cpu_shares: 512`) in `docker-compose.yml`
   itself, not only in the Tailscale example.
@@ -53,7 +58,7 @@ anything a reader or a server operator would notice.
   sentences (CC BY 2.0 FR), and keeps only the 42 words it reads no worse than before on the
   other half. A server can build its
   own from its library, which suits modern books better (`docker compose exec difficulty
-  /opt/venv/bin/python /app/jiten/distil/reading_context.py build`, about half an hour for
+  /opt/venv/bin/python -m yurigana.reading_context build`, about half an hour for
   19,000 books; see docs/CONFIGURATION.md). "Books without an estimate" redoes word lists
   once; the difficulty scores don't change.
 - Estimates store `uniqueWords` and `tokens` in `/calibre/difficulty.json`: the book's

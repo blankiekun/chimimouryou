@@ -53,9 +53,12 @@ docker run --rm -e HUSKY=0 -v "$PWD":/src -w /src node:24-slim sh -c \
   'corepack enable && pnpm install --frozen-lockfile && cd apps/web && pnpm svelte-kit sync && pnpm test && pnpm check'
 ```
 
-Python tests (catalog builder, account and import services, frequency list):
+Python tests (catalog builder, account and import services, frequency list). The difficulty
+scripts import [yurigana](https://github.com/blankiekun/yurigana); install the pinned release
+first (its Sudachi dependencies are only needed for the tests that skip without them):
 
 ```sh
+pip install --no-deps "$(grep '^yurigana' scripts/calibre/jiten/requirements.txt)"
 python3 -m unittest discover -s scripts/calibre/tests
 ```
 

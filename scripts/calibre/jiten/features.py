@@ -13,8 +13,6 @@ measures from the Japanese readability literature (distil/README.md).
 import gzip
 import json
 import os
-import html
-import itertools
 import math
 import posixpath
 import re
@@ -23,9 +21,12 @@ import zipfile
 from collections import Counter, deque
 from dataclasses import dataclass, field
 from functools import lru_cache
-from xml.etree import ElementTree
 
 from deconjugator import Deconjugator
+# The readings in context, book text with its ruby, and Sudachi tokens come from yurigana.
+from yurigana.readings import context_reading, is_kanji, ruby_reading, to_hiragana  # noqa: F401
+from yurigana.text import _count_ruby, _mark_ruby, _take_hints, aozora_text, book_text  # noqa: F401
+from yurigana.tokens import SudachiTokenizer, Token  # noqa: F401
 
 # Feature order of Jiten's model (DifficultyPredictor.cs); chimi-difficulty appends EXTRA_FEATURES.
 FEATURE_ORDER = [
@@ -131,270 +132,8 @@ CONJUGATION_TAG_PREFIX = {'五段': 'v5', '上一段': 'v1', '下一段': 'v1', 
                           '形容詞': 'adj-i', '助動詞': ''}
 
 
-def is_kanji(char: str) -> bool:
-    code = ord(char)
-    return (0x4E00 <= code <= 0x9FFF or 0x3400 <= code <= 0x4DBF or 0xF900 <= code <= 0xFAFF
-            or 0x20000 <= code <= 0x3134F)
-
-
 # ---------------------------------------------------------------------------
-# Book text
-
-_BLOCK_END = re.compile(r'</(?:p|div|h[1-6]|li|blockquote|tr|dd|dt)\s*>|<br\s*/?>', re.I)
-_RT = re.compile(r'<rt[\s>].*?</rt>|<rp[\s>].*?</rp>', re.S | re.I)
-_SKIP = re.compile(r'<(head|script|style)[\s>].*?</\1>', re.S | re.I)
-_TAG = re.compile(r'<[^>]+>')
-
-
-_RUBY = re.compile(r'<ruby[\s>](.*?)</ruby>', re.S | re.I)
-_RT_TEXT = re.compile(r'<rt[\s>](.*?)</rt>', re.S | re.I)
-# Aozora-style ruby in TXT: ｜base《reading》, or a run of kanji followed by 《reading》.
-_AOZORA_RUBY = re.compile(r'(?:｜([^《｜\n]+)|([㐀-䶿一-鿿豈-﫿々〆ヶ]+))《([^》]*)》')
-# Spine documents that aren't the story: tables of contents, colophons (奥付), store notices, ads.
-_FRONT_MATTER = re.compile(r'^(?:toc|nav|navdoc|contents|colophon|okuduke|okuzuke|caution|copyright'
-                           r'|ad|ads|advert|advertisement)[-_]?\d*$', re.I)
-
-
-def _count_ruby(ruby: dict, base: str, reading: str):
-    """Furigana statistics: kanji under ruby, and readings in katakana (マジ over 本気)."""
-    kanji = sum(1 for c in base if is_kanji(c))
-    if not kanji:
-        return
-    ruby['ruby'] = ruby.get('ruby', 0) + 1
-    ruby['kanji'] = ruby.get('kanji', 0) + kanji
-    if KATAKANA_READING.match(reading.strip()):
-        ruby['katakana'] = ruby.get('katakana', 0) + 1
-
-
-# Ruby kept as reading hints: the base between U+FFF9 and U+FFFA, the reading up to U+FFFB
-# (Unicode's interlinear annotation characters), taken out again by _take_hints.
-_HINT = re.compile('\ufff9([^\ufff9-\ufffb]*)\ufffa([^\ufff9-\ufffb]*)\ufffb')
-_HINT_MARKS = dict.fromkeys(range(0xFFF9, 0xFFFC))
-_RUBY_ELEMENT = re.compile(r'<ruby\b[^>]*>(.*?)</ruby>', re.S | re.I)
-_RT_ELEMENT = re.compile(r'<rt\b[^>]*>(.*?)</rt>', re.S | re.I)
-_HIRAGANA_WORD = re.compile(r'^[ぁ-ゖ]+$')
-
-
-def _mark_ruby(base: str, reading: str) -> str:
-    return '\ufff9' + base + '\ufffa' + re.sub(r'[\s《》｜]', '', reading) + '\ufffb'
-
-
-def _take_hints(marked: str, plain: str, hints: list, offset: int = 0):
-    """Adds (start, end, reading) of each ruby marked in `marked` to `hints`, offsets in `plain`
-    plus `offset`; nothing when `marked` without its marks isn't `plain` (odd markup), so
-    hints never change the text."""
-    pieces, found, at, length = [], [], 0, 0
-    for match in _HINT.finditer(marked):
-        before = marked[at:match.start()].translate(_HINT_MARKS)
-        base = match.group(1)
-        length += len(before)
-        found.append((offset + length, offset + length + len(base), match.group(2)))
-        length += len(base)
-        pieces += [before, base]
-        at = match.end()
-    pieces.append(marked[at:].translate(_HINT_MARKS))
-    if ''.join(pieces) == plain:
-        hints.extend(found)
-
-
-def ruby_reading(hints: dict, begin: int, surface: str, form: str, known) -> str | None:
-    """The book's ruby as the reading of a word whose head token starts at `begin`: ruby over that
-    token (one span or adjacent per-kanji spans, 人《ひと》気《け》), or over its kanji stem when the
-    rest is kana (行《い》った: the ruby plus the lemma's okurigana, いく), in hiragana, and a
-    reading Jiten lists for the form (`known`, FrequencyTable.reading_ranks), as written or with
-    large kana made small (いつしよ, see _small_kana). Flavour ruby (マジ over 本気, そら over
-    宇宙) is never a reading."""
-    token_end, end, reading = begin + len(surface), begin, ''
-    while end < token_end and end in hints and hints[end][0] > end:
-        end, part = hints[end]
-        reading += part
-    if end == begin or end > token_end or not _HIRAGANA_WORD.match(reading):
-        return None
-    tail = ''
-    if end < token_end:
-        base = surface[:end - begin]
-        if not form.startswith(base) or any(is_kanji(c) for c in surface[end - begin:] + form[len(base):]):
-            return None  # ruby over part of a compound (魚《うお》市場), or a lemma spelled differently
-        tail = form[len(base):]
-    for candidate in (reading, *_small_kana(reading)):
-        if (form, candidate + tail) in known:
-            return candidate + tail
-    return None
-
-
-_SMALL = str.maketrans('つやゆよ', 'っゃゅょ')
-_YOUON_AFTER = set('きぎしじちぢにひびぴみり')
-
-
-def _small_kana(reading: str):
-    """Older books set ruby in large kana (いつしよ for いっしょ): `reading` with some of its つ
-    (not first) and its や/ゆ/よ after an i-row kana made small. Small ぁぃぅぇぉ aren't tried:
-    no hiragana reading of a kanji word uses them."""
-    spots = [i for i, c in enumerate(reading)
-             if i and (c == 'つ' or (c in 'やゆよ' and reading[i - 1] in _YOUON_AFTER))][:6]
-    for k in range(1, len(spots) + 1):
-        for chosen in itertools.combinations(spots, k):
-            yield ''.join(c.translate(_SMALL) if i in chosen else c for i, c in enumerate(reading))
-
-
-# Context rules for word-list readings (form: [(reading, text before, text after[, 'and'])]): a rule
-# fires when its `before` pattern ends where the word starts or its `after` pattern starts where the
-# word's head token ends (with 'and': both), within the line. Checked against distil/readings-test.tsv.
-# 人気がない is にんき as often as ひとけ in plain text (この店は人気がない), so が/は + ない needs a cue.
-_HITOKE_PLACE = (r'(?:辺り|あたり|周囲|周り|付近|他|ほか|(?<![国海])[内外]|奥|(?<!海)道|通り|街|町|庭|園|室|館|駅|森|林|浜|港|廊下|広場|駐車場|墓場|(?<![長短])所'
-                 r'|夜|深夜|しんと)(?:に|には|は|も|では|、)?$')
-_CONTEXT_RULES = {
-    '人気': [('にんき', None, r'の(?:な|無)(?:い|かった)(?:奴|やつ|者|人|キャラ|作品|商品|子(?!供|ども)|アイドル|作家|店)'),
-             ('ひとけ', None, r'の(?:な[いくかけ]|無[いくかけ])|[がのはも]?(?:少な|絶え|途絶え)|も(?:な[いくかけ]|無)'),
-             ('ひとけ', None, r'[がは](?:な|無)(?:い|く|かった)?(?:場所|所|ところ|道|通り|廊下|路地|部屋|時|とき'
-              r'|のを確|ことを確|、?(?:静|しん|ひっそり))'),
-             ('ひとけ', _HITOKE_PLACE, r'[がは](?:まったく|全く|ほとんど|全然|一切)?(?:な[いくかけ]|無[いくかけ])', 'and')],
-    '他': [('た', r'その$', None)],
-    '今日': [('こんにち', None, r'の(?:社会|日本|世界|経済|時代|状況|情勢|問題|課題|文明|科学|技術|教育|政治)'
-              r'|に(?:至|いた)る|では|において')],
-    # Sudachi says あす; books mostly say あした, except in formal phrases.
-    '明日': [('あした', None, r'(?!の(?:日本|社会|世界|未来|地球|国)|を担|にも)')],
-    '上手': [('かみて', r'舞台の?$', None), ('うわて', r'枚$', r'に出(?:る|た|て|ら|ま)')],
-    '下手': [('しもて', r'舞台の?$', None), ('したて', None, r'に出(?:る|た|て|ら|ま)')],
-    '市場': [('いちば', r'(?:魚|青物|朝|築地|近所の|朝早く)$', r'.{0,8}?(?:魚|野菜|果物|八百屋|買い物|買[っうい]|売り子)')],
-    '生物': [('なまもの', None, r'を(?:食べ|食[うっ]|召し上が)|.{0,8}?(?:冷蔵|早めに|腐[らりるっ]|扱いに注意)')],
-    '最中': [('もなか', r'(?:アイス|栗|餡)の$|(?:餡|あんこ).{0,8}入[っり].{0,2}$',
-              r'を(?:食べ|頬張|かじ|買)|と(?:お茶|緑茶)')],
-    '方々': [('ほうぼう', None, r'を?(?:探|捜|歩|回|駆け|走り|尋ね|旅)|から(?:集ま|聞こえ|寄せ)|に(?:散|手を)')],
-    '目下': [('もっか', None, r'のところ|の(?:急務|課題|問題|状況|情勢|最大|懸案)|、|調査|検討|準備|交渉|捜査|審議|開発'
-              r'|建設|進行|継続|捜索|修理|工事'),
-             ('めした', None, r'の(?:者|人)')],
-    '何': [('なに', None, r'[をがも]|より')],
-    '色紙': [('しきし', r'(?:サイン|寄せ書きの?)$', r'に(?:サイン|寄せ書き|書)|を(?:飾|贈)'),
-             ('いろがみ', r'折り?$', r'.{0,6}?(?:折[っらりる]|鶴|切り抜)')],
-    '寒気': [('かんき', r'(?:強い|上空の|大陸からの|冬型の|北からの)$', r'団|が(?:南下|流れ込|入)|の(?:影響|流れ込|南下)'),
-             ('さむけ', None, r'が(?:し|す|走|襲)|を(?:覚え|感じ)')],
-    '心中': [('しんじゅう', r'(?:無理|一家|親子)$', r'を(?:図|遂げ|はか)|する|した|して|しよう|未遂|事件|物'),
-             ('しんちゅう', None, r'を(?:察|お察|推し量|思|吐露|明か|語)|穏やか|は(?:穏やか|複雑)|お察し')],
-    '大家': [('たいか', r'(?:画|学|界|道|楽|壇|芸)の$', r'として'), ('おおや', None, r'さん')],
-    '分別': [('ふんべつ', r'(?:大人|年相応|思慮)(?:としての|の)$', r'が(?:な|つ|あ)|の(?:な|あ)|盛り|くさ|臭|を(?:わきまえ|失)')],
-    '人事': [('ひとごと', None, r'(?:では|じゃ)な|とは思え|のよう|みたい|ながら')],
-    '気質': [('かたぎ', r'(?:職人|昔|江戸っ子|学生|商人|芸人|役者|書生)$', None)],
-    '末期': [('まつご', None, r'の(?:水|言葉|際|願い|一言|息)')],
-    '床': [('とこ', r'病の$', r'に(?:就|つ|伏|臥)|の間|を(?:上げ|敷|延べ)')],
-    '辛い': [('からい', r'(?:カレー|料理|スープ|ラーメン|味|唐辛子|わさび|キムチ|口)(?:は|が|も|の)?'
-              r'(?:少し|とても|すごく|かなり|ちょっと)?$', r'(?:料理|カレー|ラーメン|味付け|ソース)')],
-    '縁': [('ふち', r'(?:眼鏡|メガネ|めがね|カップ|グラス|コップ|池|崖|井戸|ベッド|茶碗|帽子|皿|鍋|器|机|窓)の$',
-            r'に(?:腰|座|手を|立)|を(?:なぞ|指で)')],
-    '一寸': [('いっすん', None, r'先|法師|の虫|刻み')],
-    '金': [('きん', r'(?:純|銀と|十八)$', r'の(?:ネックレス|指輪|延べ棒|メダル|装飾|粉|糸|髪|仮面|冠|像|鎖|腕輪|首飾り|ボタン|刺繍)'
-            r'|色|メダル|貨|銀|と銀|箔|髪|属'),
-           ('かね', None, r'を(?:貸|借|払|稼|返|出|使|積|ため|貯|盗|渡|持)|が(?:な[いく]|無|足り|か[かけ]|要|い[るり]|あ[るれっ])'
-            r'|に(?:困|な[るら])|で(?:買|解決|雇)|持ち|目当て|づる|遣い|儲け')],
-    '見物': [('みもの', None, r'だ(?:な|ね|ぞ|わ)?(?:[。！」]|$)|である|です')],
-    '一行': [('いちぎょう', r'(?:最初の|最後の|文章の|冒頭の|手紙の|ほんの|たった)$', r'目|ずつ|ごと|だけ|空け|の(?:文|文章|詩)')],
-}
-_CONTEXT_RULES = {form: [(reading, before and re.compile(before), after and re.compile(after), bool(both))
-                         for reading, before, after, *both in rules] for form, rules in _CONTEXT_RULES.items()}
-_CONTEXT = 12  # characters looked at on each side
-
-
-def context_reading(text: str, begin: int, surface: str, form: str, known) -> str | None:
-    """The reading _CONTEXT_RULES give a word whose head token `surface` starts at `begin` in
-    `text`, if Jiten lists it for the form (`known`, as in ruby_reading)."""
-    rules = _CONTEXT_RULES.get(form)
-    if not rules:
-        return None
-    end = begin + len(surface)
-    line_end = text.find('\n', end)
-    before = text[max(text.rfind('\n', 0, begin) + 1, begin - _CONTEXT):begin]
-    after = text[end:min(end + _CONTEXT, line_end if line_end >= 0 else len(text))]
-    for reading, before_rule, after_rule, both in rules:
-        hits = (bool(before_rule and before_rule.search(before)), bool(after_rule and after_rule.match(after)))
-        if (all(hits) if both else any(hits)) and (form, reading) in known:
-            return reading
-    return None
-
-
-def _lines(text: str) -> str:
-    return '\n'.join(line.strip() for line in text.splitlines() if line.strip())
-
-
-def _markup_to_text(markup: str, ruby: dict | None = None, hints: list | None = None) -> str:
-    markup = _SKIP.sub('', markup)
-    if ruby is not None:
-        for match in _RUBY.finditer(markup):
-            inner = match.group(1)
-            reading = ''.join(_TAG.sub('', r) for r in _RT_TEXT.findall(inner))
-            _count_ruby(ruby, html.unescape(_TAG.sub('', _RT.sub('', inner))), html.unescape(reading))
-    text = _lines(html.unescape(_TAG.sub('', _BLOCK_END.sub('\n', _RT.sub('', markup)))))
-    if hints is not None:
-        marked = _RUBY_ELEMENT.sub(lambda m: _mark_ruby(
-            _RT.sub('', m.group(1)), ''.join(_TAG.sub('', r) for r in _RT_ELEMENT.findall(m.group(1)))), markup)
-        _take_hints(_markup_to_text(marked), text, hints)
-    return text
-
-
-def _epub_documents(archive: zipfile.ZipFile):
-    container = ElementTree.fromstring(archive.read('META-INF/container.xml'))
-    rootfile = next(el for el in container.iter() if el.tag.endswith('rootfile')).get('full-path')
-    opf = ElementTree.fromstring(archive.read(rootfile))
-    base = posixpath.dirname(rootfile)
-    manifest = {el.get('id'): el.get('href') for el in opf.iter()
-                if el.tag.endswith('}item') and 'html' in (el.get('media-type') or '')}
-    skip = {el.get('id') for el in opf.iter() if el.tag.endswith('}item') and 'nav' in (el.get('properties') or '')}
-    skip_hrefs = {(el.get('href') or '').split('#')[0] for el in opf.iter()
-                  if el.tag.endswith('}reference') and el.get('type') in ('toc', 'copyright-page', 'colophon')}
-    spine = [el for el in opf.iter() if el.tag.endswith('}itemref') and el.get('idref') in manifest]
-    story = [el for el in spine if el.get('linear') != 'no' and el.get('idref') not in skip
-             and manifest[el.get('idref')] not in skip_hrefs
-             and not _FRONT_MATTER.match(posixpath.splitext(posixpath.basename(manifest[el.get('idref')]))[0])]
-    for el in story or spine:
-        yield posixpath.normpath(posixpath.join(base, manifest[el.get('idref')]))
-
-
-def aozora_text(text: str, ruby: dict | None = None, hints: list | None = None) -> str:
-    """Text with Aozora-style ruby (漢字《かんじ》 and ｜ markers) taken out."""
-    if ruby is not None:
-        for match in _AOZORA_RUBY.finditer(text):
-            _count_ruby(ruby, match.group(1) or match.group(2), match.group(3))
-    plain = _lines(re.sub(r'《[^》]*》|｜', '', text))
-    if hints is not None:
-        marked = _AOZORA_RUBY.sub(lambda m: _mark_ruby(m.group(1) or m.group(2), m.group(3)), text)
-        _take_hints(_lines(re.sub(r'《[^》]*》|｜', '', marked)), plain, hints)
-    return plain
-
-
-def book_text(path: str, fmt: str, ruby: dict | None = None, hints: list | None = None) -> str:
-    """Plain text of a book, one paragraph per line, without furigana (counted into `ruby`
-    if given; with `hints`, ruby positions are added to it, see _take_hints), tables of
-    contents, colophons or ads."""
-    if fmt == 'TXT':
-        raw = open(path, 'rb').read()
-        for encoding in ('utf-8-sig', 'shift_jis', 'cp932', 'euc_jp', 'utf-16'):
-            try:
-                text = raw.decode(encoding)
-                break
-            except UnicodeDecodeError:
-                continue
-        else:
-            text = raw.decode('utf-8', 'replace')
-        return aozora_text(text, ruby, hints)
-
-    with zipfile.ZipFile(path) as archive:
-        if fmt == 'HTMLZ':
-            names = sorted(n for n in archive.namelist() if n.lower().endswith(('.html', '.xhtml', '.htm')))
-        else:
-            names = list(_epub_documents(archive))
-        parts, offset = [], 0
-        for name in names:
-            try:
-                part_hints = [] if hints is not None else None
-                part = _markup_to_text(archive.read(name).decode('utf-8', 'replace'), ruby, part_hints)
-            except KeyError:
-                continue
-            if part:
-                if part_hints:
-                    hints.extend((start + offset, end + offset, reading) for start, end, reading in part_hints)
-                parts.append(part)
-                offset += len(part) + 1
-    return '\n'.join(parts)
-
+# Visual novel text (book text and its ruby hints: yurigana.text)
 
 _VN_SCRIPT = re.compile(r'^(?:\d+\.txt|nscript\.dat)$', re.I)
 _VN_RUBY = re.compile(r'\(([^/)]*)/([^)]*)\)')
@@ -505,46 +244,12 @@ def _coarse_pos(pos: tuple) -> str:
     }.get(p0, 'other')
 
 
-class Token:
-    """The parts of a Sudachi morpheme the analysis uses. Morphemes keep their whole
-    tokenizer result alive, which on very long books ran workers out of memory."""
-    __slots__ = ('_surface', '_dictionary_form', '_normalized_form', '_pos', '_reading', 'begin')
-
-    def __init__(self, surface: str, dictionary_form: str, normalized_form: str, pos: tuple, reading: str = '',
-                 begin: int = 0):
-        self.begin = begin  # offset in the analysed text
-        self._surface = surface
-        self._dictionary_form = dictionary_form
-        self._normalized_form = normalized_form
-        self._pos = pos
-        self._reading = reading
-
-    def surface(self) -> str:
-        return self._surface
-
-    def dictionary_form(self) -> str:
-        return self._dictionary_form
-
-    def normalized_form(self) -> str:
-        return self._normalized_form
-
-    def part_of_speech(self) -> tuple:
-        return self._pos
-
-    def reading_form(self) -> str:
-        return self._reading
-
-
-def to_hiragana(text: str) -> str:
-    return ''.join(chr(ord(c) - 0x60) if 'ァ' <= c <= 'ヶ' else c for c in text)
-
-
 class Analyzer:
     def __init__(self):
         # Imported here so the rest of the module works without Sudachi (tests).
-        from sudachipy import Dictionary, SplitMode
-        self.tokenizer = Dictionary(dict='full').create(SplitMode.C)
-        self._pos_by_id: dict[int, tuple] = {}
+        sudachi = SudachiTokenizer()
+        self.tokenizer = sudachi.tokenizer
+        self._tokens = sudachi.tokens
         self.deconjugator = Deconjugator()
         self.marker_sequences = {
             name: [self._marker_sequence(w) for w in words]
@@ -558,27 +263,6 @@ class Analyzer:
         last = tokens[-1]
         inflects = last.part_of_speech()[4] != '*' and last.surface() == last.dictionary_form()
         return tuple(t.surface() for t in tokens), last.dictionary_form() if inflects else None
-
-    def _tokens(self, text: str):
-        # Sudachi limits input size; paragraphs are short, long ones are cut at sentence ends.
-        offset = 0
-        for paragraph in text.split('\n'):
-            start = offset
-            offset += len(paragraph) + 1
-            while paragraph:
-                chunk = paragraph[:5000]
-                if len(paragraph) > 5000:
-                    cut = max(chunk.rfind(c) for c in '。！？')
-                    chunk = paragraph[: cut + 1] if cut > 0 else chunk
-                paragraph = paragraph[len(chunk):]
-                chunk_start, start = start, start + len(chunk)
-                for morpheme in self.tokenizer.tokenize(chunk):
-                    pos_id = morpheme.part_of_speech_id()
-                    pos = self._pos_by_id.get(pos_id) or self._pos_by_id.setdefault(pos_id, morpheme.part_of_speech())
-                    surface = morpheme.surface()
-                    if pos[0] not in ('補助記号', '空白') and HAS_CONTENT.search(surface):
-                        yield Token(surface, morpheme.dictionary_form(), morpheme.normalized_form(), pos,
-                                    morpheme.reading_form(), chunk_start + morpheme.begin())
 
     @lru_cache(maxsize=100_000)
     def _conjugations(self, surface: str, target: str, conj_type: str) -> tuple[str, ...]:
@@ -595,7 +279,7 @@ class Analyzer:
         """`hints`: (start, end, ruby) from book_text; ruby that ruby_reading accepts (with
         `known_readings`, FrequencyTable.reading_ranks) is that occurrence's reading in
         `readings`, else one context_reading gives, else the one `reading_model`
-        (reading_model.ReadingModel) gives. Word.reading, which the model features use, stays
+        (yurigana's ReadingModel) gives. Word.reading, which the model features use, stays
         Sudachi's."""
         result = Analysis(text=text)
         hints = {start: (end, reading) for start, end, reading in hints}
