@@ -47,6 +47,15 @@ anything a reader or a server operator would notice.
 - 人気がない in word lists is only ひとけ with a place or absence word around it (周囲に人気がない,
   人気がない場所); この店は人気がない and 人気のない奴 stay にんき. "Books without an estimate"
   redoes word lists once; the difficulty scores don't change.
+- Where no rule applies, a small model learned from books' furigana reads ambiguous words
+  from the words around them (柄 がら/つか/え, 踵 かかと/きびす, 何 なに/なん). The one that
+  ships is trained on Aozora Bunko's public-domain works and half of Tatoeba's reviewed
+  sentences (CC BY 2.0 FR), and keeps only the 42 words it reads no worse than before on the
+  other half. A server can build its
+  own from its library, which suits modern books better (`docker compose exec difficulty
+  /opt/venv/bin/python /app/jiten/distil/reading_context.py build`, about half an hour for
+  19,000 books; see docs/CONFIGURATION.md). "Books without an estimate" redoes word lists
+  once; the difficulty scores don't change.
 
 ### Library
 

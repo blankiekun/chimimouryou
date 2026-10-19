@@ -148,6 +148,8 @@ section in paginated mode. `annotations.json` is merged per highlight (newest
   each book's kanji counts in `state/difficulty/kanji/` (`GET kanji/ID`, for each
   reader's own kanji coverage, compared in the browser with the kanji they met) and its
   2,000 most frequent words with frequency ranks in `state/difficulty/words/` (`GET words/ID`).
+  How those words get their readings (book ruby, context rules, a reading model, Sudachi):
+  [docs/READINGS.md](docs/READINGS.md).
 
 ## Key design decisions
 

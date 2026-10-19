@@ -25,6 +25,10 @@ apps/web/src/lib/data/kanji-readings.json (on and kun readings of 常用 and
 scripts/calibre/jiten/goshu.json.gz holds word origins (語種) from UniDic
 (https://clrd.ninjal.ac.jp/unidic/, via unidic-lite), Copyright (c) 2011-2013,
 The UniDic Consortium, used under its BSD licence.
+scripts/calibre/jiten/reading-model-public.json.gz is a model trained on
+public-domain works from Aozora Bunko (https://www.aozora.gr.jp/) and on
+sentences with reviewed readings from Tatoeba (https://tatoeba.org/), by
+Tatoeba's contributors, licensed under CC BY 2.0 FR; neither text is included.
 
 The visual novel player (apps/web/static/vn/conscripter.js and conscripter.wasm) is
 CONscripter (https://github.com/blankiekun/CONscripter), a fork of

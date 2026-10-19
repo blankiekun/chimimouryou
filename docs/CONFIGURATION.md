@@ -109,6 +109,21 @@ code are the same container paths.
 The catalog builder takes the library and the output file as arguments:
 `build-calibre-catalog <library> <catalog.json> [<vn folder>] [--force]`.
 
+Word lists read ambiguous words (柄: がら, つか or え) with a small model learned from books'
+furigana. The image ships a small one (42 words) trained on Aozora Bunko and Tatoeba; a model
+built from your own library (`state/difficulty/reading-model.json.gz`, about 400 words for
+19,000 books) is used first:
+
+    docker compose exec difficulty /opt/venv/bin/python /app/jiten/distil/reading_context.py build
+
+It reads the whole library with `DIFFICULTY_WORKERS` processes: for 19,000 books about
+25 minutes of mining on 3 and 3 minutes of training, up to about 3 GB of RAM, with its working
+files (about 0.85 GB) in `state/difficulty/reading-model-scratch/` until it is done. Run it
+when the server is idle (no estimates running). It prints how it scored on held-out authors.
+The next estimates use it; no restart is needed. Run it again after adding many books. The
+model holds word statistics from your books: keep it on the server (it is in `DATA_PATH`,
+not in git).
+
 ## Accounts
 
 Not configuration files but commands, in the `account` container
