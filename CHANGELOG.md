@@ -15,6 +15,10 @@ anything a reader or a server operator would notice.
 
 ### Fixed
 
+- Word lists of difficulty estimates read words like readings files do (yurigana's whole
+  reader): 私 わたし, 言う いう, 一回 いっかい, 三百 さんびゃく, 鶏肉 とりにく, and conjugated
+  words (買って かう). "Books without an estimate" redoes the word lists (`WORDS_VERSION` 8);
+  the difficulty scores are unchanged. Estimates take about 0.9 s longer per book.
 - Words met, known words and coverage: a word list the server failed to send (restart,
   sign-in) is retried instead of treated as missing; books read before kanji were recorded
   count from their synced progress; a finished book counts as read through; a word met only

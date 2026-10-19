@@ -18,27 +18,39 @@ Neither one changes the book or the difficulty scores.
 
 `Analyzer.analyse` in [`scripts/calibre/jiten/features.py`](../scripts/calibre/jiten/features.py)
 counts a reading for each occurrence of a word in `Analysis.readings`, and `save_words` in
-`service.py` writes the rows. The first step that gives a reading wins:
+`service.py` writes the rows. The readings are yurigana's `Reader`, the same one readings files
+use (below), so both agree: the book's ruby (`book_text`, `aozora_text` and `vn_text` give it
+as hints), a context rule, the reading model, the list's only reading, a default (私 わたし,
+言う いう rather than ゆう), number readings (三百 さんびゃく), rendaku, else Sudachi's
+reading; conjugated occurrences get the dictionary form's reading too. One `Reader` per
+worker, with the Analyzer as its tokenizer (no second tokenizing of the book) and the
+worker's reading list. Name ruby is not carried to later bare occurrences (`read()` without
+`carry`): a name's word list row is left out anyway, and showing carried readings is
+undecided.
 
-1. the book's ruby (yurigana's `ruby_reading`; `book_text`, `aozora_text` and `vn_text` give
-   the ruby as hints)
-2. a context rule (`context_reading`)
-3. the reading model (`ReadingModel`)
-4. Sudachi's reading (`Word.reading`)
+A row is a Sudachi word (its form, part of speech and lemma), and only a `Reader` word over
+exactly that word's token gives its reading:
+
+- A number + counter span (三本 さんぼん) is not a row: Jiten's list has 三 and 本 apart.
+  The number is noise (left out of the totals) and the counter, a suffix to Sudachi, is an
+  affix, left out like the others. A counter Sudachi keeps in one token with its number
+  (一回) is a row with the span's reading (いっかい, not Sudachi's いちかい).
+- Tokens the `Reader` joins into a compound the list gives one reading (三日月 みかづき, 3-4%
+  of a book's kanji tokens) keep Sudachi's reading each.
 
 The reading list (`known`) is Jiten's frequency list (`FrequencyTable.reading_ranks`): a
 reading is always hiragana and one that list gives for the written form. Katakana ruby still
 counts for `RubyKatakanaShare`, which is measured separately.
 
-Sudachi gives a reading only for an unconjugated word. A conjugated occurrence without one
-goes to the word's most common reading in the book, in `save_words`. A word met only
-conjugated takes the form's most common reading in the book (from another dictionary word
-with the same form), else Sudachi's reading of the form alone (`Analysis.form_readings`).
-Rows of one form and reading are merged, and each row also carries the lemma (Sudachi's
-normalized form). A voiced reading the list lacks counts for the unvoiced one it gives (この箱
-read ばこ, 小屋 read ごや as a compound's tail: はこ, こや), so it gets the word's rank.
+An occurrence without a reading goes to the word's most common reading in the book, in
+`save_words`. A word met only without one takes the form's most common reading in the book
+(from another dictionary word with the same form), else Sudachi's reading of the form alone
+(`Analysis.form_readings`). Rows of one form and reading are merged, and each row also carries
+the lemma (Sudachi's normalized form). A voiced reading the list lacks counts for the
+unvoiced one it gives (この箱 read ばこ: はこ), so it gets the word's rank; a voiced reading the
+list has stays (造り in 石造り: づくり).
 
-**Tables** (`load_reading_model` in `service.py`): `state/difficulty/reading-model.json.gz`
+**Tables** (`READING_MODEL_TABLES` in `service.py`): `state/difficulty/reading-model.json.gz`
 is the server's own table, when one has been built from its library (optional: none exists
 until you build it; [docs/CONFIGURATION.md](CONFIGURATION.md#python-services) has the
 command); yurigana's public table fills in the forms it lacks, or answers alone without it. A form
@@ -55,7 +67,8 @@ entries for those forms are dropped.
   `python -m yurigana.evaluate tatoeba OUT`, yurigana's docs/evaluation.md) in the difficulty
   image with the old and the new tag.
 - **`MODEL_VERSION`** is for the difficulty scores. They use `Word.reading` (always
-  Sudachi's), never `Analysis.readings`, so reading changes leave it alone.
+  Sudachi's), never `Analysis.readings`, so reading changes leave it alone
+  (`test_features.py` checks the features with and without a `Reader`).
 
 ## Readings files
 
@@ -73,7 +86,7 @@ points. `scripts/calibre/tests/fixtures/character-count.json` is checked by both
 as hints, like `book_text`.
 
 **Readings**: yurigana's `Reader` with the word lists' reading list (Jiten's frequency list)
-and tables. The whole book is one text read with `carry={}`, so a name's ruby is carried to its
+and tables, as for word lists. The whole book is one text read with `carry={}`, so a name's ruby is carried to its
 later bare occurrences (`source` 'book'); those get no gloss (see below).
 
 **Format** (gzipped JSON):
