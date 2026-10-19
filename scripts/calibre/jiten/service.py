@@ -51,6 +51,11 @@ MODEL_PATHS = {name: os.path.join(MODEL_DIR, f'chimi-difficulty{suffix}.onnx')
 # Added to both sides of the range so it holds 80% of books (written by distil/train.py).
 with open(os.path.join(MODEL_DIR, 'chimi-difficulty-range.json'), encoding='utf-8') as _f:
     RANGE_WIDEN = json.load(_f)['widen']
+# Readings in context for word lists (reading_model.py): the server's own table, built from its
+# library by `distil/reading_context.py build`, and for other forms the committed one built
+# from Aozora Bunko and Tatoeba (distil/README.md).
+READING_MODEL_PATHS = [os.path.join(STATE_DIR, 'reading-model.json.gz'),
+                       os.path.join(MODEL_DIR, 'reading-model-public.json.gz')]
 # Stored with each estimate; whole-library runs redo estimates made by another model.
 MODEL_VERSION = 'chimi-difficulty-1'
 # Per-book kanji counts, gzipped JSON, for the reader's own coverage.
@@ -63,7 +68,8 @@ WORDS_PER_BOOK = 2000
 # 4: context rules for ambiguous forms (features.context_reading).
 # 5: more of the ruby: per-kanji spans, kanji stems of inflected words, large kana; 人気がない
 #    reads ひとけ only with a cue.
-WORDS_VERSION = 5
+# 6: a reading model learned from ruby reads ambiguous forms no rule covers (reading_model.py).
+WORDS_VERSION = 6
 WORKERS = int(os.environ.get('JITEN_WORKERS', os.cpu_count() or 1))
 PORT = int(os.environ.get('JITEN_PORT', '8765'))
 HOST = os.environ.get('JITEN_HOST', '127.0.0.1')
@@ -80,10 +86,25 @@ BOOKS_PER_POOL = 300
 _analyzer = None
 _frequency = None
 _sessions = None
+_reading_model = None
+
+
+def load_reading_model(paths=None):
+    """The tables of READING_MODEL_PATHS that load, merged (a form's model from the first that
+    has one), or None."""
+    from reading_model import ReadingModel
+    forms = {}
+    for path in reversed(paths or READING_MODEL_PATHS):
+        if os.path.exists(path):
+            try:
+                forms.update(ReadingModel.load(path).forms)
+            except (OSError, ValueError, KeyError) as error:
+                print(f'{path}: {error}', flush=True)
+    return ReadingModel(forms) if forms else None
 
 
 def _init_worker():
-    global _analyzer, _frequency, _sessions
+    global _analyzer, _frequency, _sessions, _reading_model
     import warnings
     warnings.filterwarnings('ignore')
     import onnxruntime
@@ -91,6 +112,7 @@ def _init_worker():
     from frequency import FrequencyTable
     _analyzer = Analyzer()
     _frequency = FrequencyTable.load(FREQUENCY_DICTIONARY)
+    _reading_model = load_reading_model()
     options = onnxruntime.SessionOptions()
     options.intra_op_num_threads = 1
     options.inter_op_num_threads = 1
@@ -144,7 +166,7 @@ def _estimate(book: dict):
     characters = len(TOKEN_CLEAN.sub('', text))
     if characters < 1000:
         return book['id'], None
-    analysis = _analyzer.analyse(text, hints, _frequency.reading_ranks)
+    analysis = _analyzer.analyse(text, hints, _frequency.reading_ranks, _reading_model)
     features = compute_features(analysis, _frequency)
     extra = compute_extra_features(analysis, _frequency, ruby)
     row = numpy.array([[features[name] for name in FEATURE_ORDER] + [extra[name] for name in EXTRA_FEATURES]],

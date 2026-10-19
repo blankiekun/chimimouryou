@@ -591,11 +591,12 @@ class Analyzer:
         compatible = [f for f in matches if prefix and f.tags and f.tags[-1].startswith(prefix)] or matches
         return min(compatible, key=lambda f: len(f.process)).process
 
-    def analyse(self, text: str, hints=(), known_readings=()) -> Analysis:
+    def analyse(self, text: str, hints=(), known_readings=(), reading_model=None) -> Analysis:
         """`hints`: (start, end, ruby) from book_text; ruby that ruby_reading accepts (with
         `known_readings`, FrequencyTable.reading_ranks) is that occurrence's reading in
-        `readings`, else one context_reading gives. Word.reading, which the model features use,
-        stays Sudachi's."""
+        `readings`, else one context_reading gives, else the one `reading_model`
+        (reading_model.ReadingModel) gives. Word.reading, which the model features use, stays
+        Sudachi's."""
         result = Analysis(text=text)
         hints = {start: (end, reading) for start, end, reading in hints}
         tokens = list(self._tokens(text))
@@ -692,7 +693,8 @@ class Analyzer:
             else:
                 result.words[word_key] = [word, 1]
             reading = (hints and ruby_reading(hints, head.begin, head.surface(), word.form, known_readings)
-                       or context_reading(text, head.begin, head.surface(), word.form, known_readings))
+                       or context_reading(text, head.begin, head.surface(), word.form, known_readings)
+                       or reading_model and reading_model.reading(text, tokens, index, word.form, known_readings))
             result.readings.setdefault(word_key, Counter())[reading or word.reading] += 1
             result.word_count += 1
             index = end

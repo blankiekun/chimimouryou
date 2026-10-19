@@ -123,6 +123,7 @@ yourself.
 - [docs/CONFIGURATION.md](docs/CONFIGURATION.md): every setting
 - [docs/LEARNING.md](docs/LEARNING.md): for readers: Yomitan, Anki cards, furigana, manga text, difficulty
 - [ARCHITECTURE.md](ARCHITECTURE.md): how it works; [CONTRIBUTING.md](CONTRIBUTING.md): changing it
+- [docs/READINGS.md](docs/READINGS.md): how word lists read ambiguous words, and the "Known" furigana style
 - [docs/QA.md](docs/QA.md): test plan; [CHANGELOG.md](CHANGELOG.md); [themes.md](themes.md): writing themes
 - Prebuilt images: `ghcr.io/blankiekun/chimimouryou-{web,services,import,difficulty,mokuro}` (see INSTALL.md, "Updating")
 
@@ -274,5 +275,7 @@ browser:
 [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook-reader) by ッツ Reader
 Authors (BSD 3-Clause, see [LICENSE](LICENSE)), from which this fork derives;
 [Jiten](https://github.com/Sirush/Jiten) for the difficulty features and
-deconjugation rules (Apache-2.0, see [NOTICE](NOTICE)). chimimouryou is not
-affiliated with or endorsed by either project.
+deconjugation rules (Apache-2.0, see [NOTICE](NOTICE)). The committed reading model is
+trained on public-domain works from [Aozora Bunko](https://www.aozora.gr.jp/) and on
+sentences with reviewed readings from [Tatoeba](https://tatoeba.org/) (CC BY 2.0 FR, by
+Tatoeba's contributors); neither is redistributed here. chimimouryou is not affiliated with or endorsed by any of these projects.
