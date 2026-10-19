@@ -1,0 +1,214 @@
+"""Tests for readings files (scripts/calibre/jiten/readings_file.py) and the difficulty service's
+readings queue. The reader is faked: yurigana's Reader needs Sudachi."""
+import gzip
+import importlib.util
+import json
+import os
+import re
+import sys
+import tempfile
+import unittest
+import zipfile
+from typing import NamedTuple
+
+HERE = os.path.dirname(__file__)
+sys.path.insert(0, os.path.join(HERE, '..', 'jiten'))
+import readings_file  # noqa: E402
+
+
+class Word(NamedTuple):
+    start: int
+    end: int
+    form: str
+    reading: str
+    source: str
+    certainty: float
+
+
+class FakeReader:
+    """Words given as (surface, form, reading, source), found in the text in order."""
+
+    def __init__(self, *words):
+        self.words = words
+
+    def read(self, text, hints=()):
+        out, at = [], 0
+        for surface, form, reading, source in self.words:
+            at = text.index(surface, at)
+            out.append(Word(at, at + len(surface), form, reading, source, 1.0))
+            at += len(surface)
+        return out
+
+
+def build(html, *words):
+    return readings_file.build(html, FakeReader(*words), 'bookdata_1_2_3_4_5.zip', '0.1.1')
+
+
+class CountingTest(unittest.TestCase):
+    def test_the_shared_fixture(self):
+        # The same fixture is counted by the reader in character-count-fixture.test.ts.
+        with open(os.path.join(HERE, 'fixtures', 'character-count.json'), encoding='utf-8') as f:
+            fixture = json.load(f)
+        text, hints, counts = readings_file.extract(fixture['html'])
+        self.assertEqual(text, fixture['text'])
+        self.assertEqual(counts[-1], fixture['characters'])
+        self.assertEqual(''.join(c for i, c in enumerate(text) if counts[i + 1] > counts[i]), fixture['counted'])
+        self.assertEqual([list(h) for h in hints], fixture['hints'])
+
+    def test_sanitize_for_filename_matches_the_reader(self):
+        for title, folder in (('普通', '普通'), ('a?b*c. ', 'a%3Fb~ttu-star~c.~ttu-spc~'), ('終わり.', '終わり~ttu-dend~'),
+                              ('50%: "x" <y>|z\\/', '50%25%3A %22x%22 %3Cy%3E%7Cz%5C%2F'), ('改行\n.', '改行\n~ttu-dend~')):
+            self.assertEqual(readings_file.sanitize_for_filename(title), folder)
+
+
+class GlossTest(unittest.TestCase):
+    def test_dictionary_form_readings_go_over_the_surfaces_kanji(self):
+        self.assertEqual(readings_file.gloss('行っ', '行く', 'いく'), [(0, '行', 'い')])
+        self.assertEqual(readings_file.gloss('取り扱い', '取り扱い', 'とりあつかい'), [(0, '取', 'と'), (2, '扱', 'あつか')])
+        self.assertEqual(readings_file.gloss('大人', '大人', 'おとな'), [(0, '大人', 'おとな')])
+        self.assertIsNone(readings_file.gloss('取扱い', '取り扱い', 'とりあつかい'))  # other runs
+        self.assertIsNone(readings_file.gloss('行っ', '行く', 'おこなう'))  # doesn't end in く
+
+    def test_the_file(self):
+        data = build('<p>彼は<ruby>行<rt>い</rt></ruby>った。<br>行った<img class="gaiji">取り扱い</p>',
+                     ('行っ', '行く', 'いく', 'ruby'), ('行っ', '行く', 'いく', 'only'),
+                     ('取り扱い', '取り扱い', 'とりあつかい', 'rule'))
+        self.assertEqual((data['v'], data['yurigana'], data['bookdata']), (1, '0.1.1', 'bookdata_1_2_3_4_5.zip'))
+        self.assertEqual(data['characters'], 13)  # 彼は行った 行った 〓 取り扱い
+        self.assertEqual(data['words'], [['行く', 'いく'], ['取り扱い', 'とりあつかい']])
+        self.assertEqual(data['glosses'], [[[0, 1, '行', 'い']], [[0, 1, '取', 'と'], [2, 1, '扱', 'あつか']]])
+        # Starts 2, 5 and 9 (the gaiji counts); the one under the book's ruby gets none of ours.
+        self.assertEqual(data['occ'], [2, 0, -1, 3, 0, 0, 4, 1, 1])
+
+
+class ShowTest(unittest.TestCase):
+    def shown(self, html, *words):
+        return [g for g in build(html, *words)['occ'][2::3]]
+
+    def test_only_listed_hiragana_readings_from_the_list_rules_or_model(self):
+        self.assertEqual(self.shown('<p>顔と顔と顔と顔と顔</p>', ('顔', '顔', 'かお', 'only'), ('顔', '顔', 'かお', 'model'),
+                                    ('顔', '顔', 'かお', 'dictionary'), ('顔', '顔', None, 'dictionary'),
+                                    ('顔', '顔', 'カオ', 'rule')), [0, 0, -1, -1, -1])
+
+    def test_katakana_ruby_flavours_the_form_from_there_on(self):
+        self.assertEqual(self.shown('<p>本気だ。<ruby>本気<rt>マジ</rt></ruby>だ。本気だ。</p>',
+                                    *[('本気', '本気', 'ほんき', s) for s in ('only', 'dictionary', 'only')]), [0, -1, -1])
+
+    def test_rejected_hiragana_ruby_over_the_whole_word_flavours_it(self):
+        self.assertEqual(self.shown('<p><ruby>宇宙<rt>そら</rt></ruby>の宇宙</p>',
+                                    *[('宇宙', '宇宙', 'うちゅう', s) for s in ('dictionary', 'only')]), [-1, -1])
+
+    def test_partial_or_accepted_hiragana_ruby_does_not(self):
+        self.assertEqual(self.shown('<p><ruby>取<rt>と</rt></ruby>り扱い。取り扱い</p>',
+                                    *[('取り扱い', '取り扱い', 'とりあつかい', s) for s in ('dictionary', 'only')]), [-1, 0])
+        self.assertEqual(self.shown('<p><ruby>宇宙<rt>うちゅう</rt></ruby>の宇宙</p>',
+                                    *[('宇宙', '宇宙', 'うちゅう', s) for s in ('ruby', 'only')]), [-1, 0])
+
+    def test_partial_katakana_ruby_does(self):
+        self.assertEqual(self.shown('<p><ruby>本<rt>マ</rt></ruby>気だ。本気</p>',
+                                    *[('本気', '本気', 'ほんき', s) for s in ('dictionary', 'only')]), [-1, -1])
+
+
+def load_service():
+    spec = importlib.util.spec_from_file_location('jiten_service', os.path.join(HERE, '..', 'jiten', 'service.py'))
+    service = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(service)
+    return service
+
+
+class ReadingsQueueTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        tmp = self.tmp.name
+        self.service = service = load_service()
+        service.FREQUENCY_DICTIONARY = os.path.join(tmp, 'frequency-dictionary.zip')
+        open(service.FREQUENCY_DICTIONARY, 'w').close()
+        service.CATALOG_PATH = os.path.join(tmp, 'catalog.json')
+        with open(service.CATALOG_PATH, 'w') as f:
+            json.dump({'books': [{'id': 1, 'title': '本?', 'format': 'EPUB'}, {'id': 2, 'title': '無し', 'format': 'EPUB'},
+                                 {'id': 3, 'title': 'ゲーム', 'format': 'VN', 'vn': True}]}, f)
+        service.SYNC_DIR = os.path.join(tmp, 'sync')
+        service.READINGS_DIR = os.path.join(tmp, 'readings')
+        self.folder = os.path.join(service.SYNC_DIR, 'ttu-reader-data', '本%3F')
+        self.bookdata = self.add_bookdata('bookdata_1_6_10_1_1.zip')
+        self.queue = service.ReadingsQueue()
+        self.queue._start = lambda: 'thread'
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def add_bookdata(self, name, html='<p>行った</p>'):
+        os.makedirs(self.folder, exist_ok=True)
+        path = os.path.join(self.folder, name)
+        with zipfile.ZipFile(path, 'w') as archive:
+            archive.writestr('staticdata.json', json.dumps({'elementHtml': html}))
+        return path
+
+    def test_queued_once_then_ready_until_stale(self):
+        service, queue = self.service, self.queue
+        self.assertEqual([queue.request(i) for i in (1, 1, 2, 3, 99)], ['queued', 'queued', 'unavailable', 'unavailable', 'unavailable'])
+        self.assertEqual(queue.queue, {1: self.bookdata})
+        # The worker makes it.
+        queue.queue.clear()
+        service._reader = FakeReader(('行っ', '行く', 'いく', 'only'))
+        service._make_readings(1, self.bookdata)
+        self.assertEqual(queue.request(1), 'ready')
+        with gzip.open(service.readings_path(1), 'rt', encoding='utf-8') as f:
+            self.assertEqual(json.load(f)['occ'], [0, 0, 0])
+        # A new bookdata (the book was processed again) or another yurigana make it stale.
+        newer = self.add_bookdata('bookdata_1_6_10_2_2.zip')
+        os.utime(newer, (2e9, 2e9))
+        self.assertEqual(queue.request(1), 'queued')
+        self.assertEqual(queue.queue, {1: newer})
+        queue.queue.clear()
+        service._make_readings(1, newer)
+        self.assertEqual(queue.request(1), 'ready')
+        service.YURIGANA_VERSION = '9.9.9'
+        self.assertEqual(queue.request(1), 'queued')
+
+    def test_full_queue_failures_and_no_dictionary(self):
+        queue = self.queue
+        queue.queue = {-i: 'x' for i in range(self.service.READINGS_QUEUE_MAX)}
+        self.assertEqual(queue.request(1), 'unavailable')
+        queue.queue = {}
+        queue.failed[1] = os.path.basename(self.bookdata)
+        self.assertEqual(queue.request(1), 'unavailable')
+        queue.failed[1] = 'bookdata_older.zip'
+        self.assertEqual(queue.request(1), 'queued')
+        queue.queue = {}
+        os.remove(self.service.FREQUENCY_DICTIONARY)
+        self.assertEqual(queue.request(1), 'unavailable')
+
+    def test_the_worker_makes_queued_files_and_remembers_failures(self):
+        from concurrent.futures import ThreadPoolExecutor
+        service, queue = self.service, self.service.ReadingsQueue()
+        service.ProcessPoolExecutor = lambda workers, initializer: ThreadPoolExecutor(workers)
+        service._reader = FakeReader(('行っ', '行く', 'いく', 'only'))
+        self.assertEqual(queue.request(1), 'queued')
+        queue.thread.join(10)
+        self.assertEqual((queue.request(1), queue.thread), ('ready', None))
+        broken = self.add_bookdata('bookdata_1_6_10_3_3.zip', html=None)
+        os.utime(broken, (3e9, 3e9))
+        self.assertEqual(queue.request(1), 'queued')
+        queue.thread.join(10)
+        self.assertEqual((queue.failed, queue.request(1)), ({1: 'bookdata_1_6_10_3_3.zip'}, 'unavailable'))
+
+    def test_oversized_staticdata_is_refused(self):
+        self.service.MAX_STATICDATA_BYTES = 10
+        with self.assertRaises(ValueError):
+            self.service._make_readings(1, self.bookdata)
+
+
+class NginxTest(unittest.TestCase):
+    def test_readers_reach_readings_files_without_the_difficulty_permission(self):
+        with open(os.path.join(HERE, '..', 'nginx-ebook-reader.conf.template'), encoding='utf-8') as f:
+            template = f.read()
+        block = re.search(r'location ~ \^/calibre/difficulty/api/readings/[^{]*\{(.*?)\n  \}', template, re.S).group(1)
+        self.assertIn('auth_request /_account_shared;', block)
+        self.assertIn('limit_req zone=readings', block)
+        api = re.search(r'location /calibre/difficulty/api/ \{(.*?)\n  \}', template, re.S).group(1)
+        self.assertIn('auth_request /_account_difficulty_writes;', api)
+
+
+if __name__ == '__main__':
+    unittest.main()
