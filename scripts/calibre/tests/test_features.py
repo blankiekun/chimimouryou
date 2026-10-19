@@ -75,6 +75,13 @@ class RubyReadingAnalysisTest(unittest.TestCase):
         self.assertEqual(compute_features(hinted, frequency), compute_features(plain, frequency))
         self.assertEqual(compute_extra_features(hinted, frequency), compute_extra_features(plain, frequency))
 
+    def test_words_met_only_conjugated_get_the_forms_reading(self):
+        from features import Analyzer
+        analysis = Analyzer().analyse('彼は小さく呟いた。')
+        readings = {form: reading for (_, form), reading in analysis.form_readings.items()}
+        self.assertEqual(readings.get('呟く'), 'つぶやく')
+        self.assertEqual(readings.get('小さい'), 'ちいさい')
+
     def test_more_ruby_readings(self):
         from features import Analyzer
         hints = []

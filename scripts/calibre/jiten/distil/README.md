@@ -8,16 +8,16 @@ older model and is not used there.
 Inputs: the 55 features of `../features.py`, with word frequencies from Jiten's
 Yomitan frequency list (`../frequency.py`), plus `EXTRA_FEATURES`, which are not Jiten's:
 
-| Input | What it measures | Source |
-|---|---|---|
-| `LogCharacters`, `LogUniqueKanji` | length, kanji range | |
-| `CoverageRank90/95/98` | how many of the most common words cover 90/95/98% of the book's words (log) | known-word thresholds: 95-96% for Japanese learners (小森・三國・近藤 2004), 95/98% (Laufer & Ravenhorst-Kalovski 2010) |
-| `Mattr` | moving-average type/token ratio, 500 words | Covington & McFall 2010 (plain TTR mostly measures length) |
-| `LineSentenceLength` | characters per sentence, line breaks ending sentences | light novels' lines often lack 。 |
-| `PredicatesPerSentence`, `HiraganaRatio` | clause load, hiragana share | 柴崎・原 2010 (12-grade readability formula) |
-| `RelativeClausesPerSentence` | a verb or auxiliary in 連体形 right before a noun (昨日買った本) | Japanese relative clauses have no marker word |
-| `NonJoyoKanjiShare`, `UpperJoyoKanjiShare` | kanji outside 常用, and 常用 above 教育漢字 | `../kanji-grades.json` (KANJIDIC2) |
-| `RubyKanjiShare`, `RubyKatakanaShare` | kanji under furigana (総ルビ = children's books), katakana readings (本気→マジ) | measured before the furigana is removed |
+| Input                                      | What it measures                                                                | Source                                                                                                                  |
+| ------------------------------------------ | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `LogCharacters`, `LogUniqueKanji`          | length, kanji range                                                             |                                                                                                                         |
+| `CoverageRank90/95/98`                     | how many of the most common words cover 90/95/98% of the book's words (log)     | known-word thresholds: 95-96% for Japanese learners (小森・三國・近藤 2004), 95/98% (Laufer & Ravenhorst-Kalovski 2010) |
+| `Mattr`                                    | moving-average type/token ratio, 500 words                                      | Covington & McFall 2010 (plain TTR mostly measures length)                                                              |
+| `LineSentenceLength`                       | characters per sentence, line breaks ending sentences                           | light novels' lines often lack 。                                                                                       |
+| `PredicatesPerSentence`, `HiraganaRatio`   | clause load, hiragana share                                                     | 柴崎・原 2010 (12-grade readability formula)                                                                            |
+| `RelativeClausesPerSentence`               | a verb or auxiliary in 連体形 right before a noun (昨日買った本)                | Japanese relative clauses have no marker word                                                                           |
+| `NonJoyoKanjiShare`, `UpperJoyoKanjiShare` | kanji outside 常用, and 常用 above 教育漢字                                     | `../kanji-grades.json` (KANJIDIC2)                                                                                      |
+| `RubyKanjiShare`, `RubyKatakanaShare`      | kanji under furigana (総ルビ = children's books), katakana readings (本気→マジ) | measured before the furigana is removed                                                                                 |
 
 Jiten's own features got two fixes as well: word origins (和語/漢語/外来語, for the
 jReadability score) come from UniDic (`../goshu.json.gz`) instead of guessing from the
@@ -33,11 +33,11 @@ books (62% inside), so the service widens both sides by `chimi-difficulty-range.
 Result (2026-10-11, 3,253 books of the library that are on jiten.moe, 5-fold
 cross-validation grouped by series):
 
-| | r | mean abs. error | RMSE | bias |
-|---|---|---|---|---|
-| Jiten's original model (library frequencies) | 0.63 | 0.77 | | -0.73 |
-| Jiten's features + length, unique kanji (previous) | 0.88 | 0.23 | 0.30 | -0.03 |
-| plus `EXTRA_FEATURES` (in use) | 0.90 | 0.22 | 0.28 | -0.02 |
+|                                                    | r    | mean abs. error | RMSE | bias  |
+| -------------------------------------------------- | ---- | --------------- | ---- | ----- |
+| Jiten's original model (library frequencies)       | 0.63 | 0.77            |      | -0.73 |
+| Jiten's features + length, unique kanji (previous) | 0.88 | 0.23            | 0.30 | -0.03 |
+| plus `EXTRA_FEATURES` (in use)                     | 0.90 | 0.22            | 0.28 | -0.02 |
 
 Half the books are within 0.17 of jiten.moe, 90% within 0.46. The range is 0.74 wide on
 average. The gain is small because jiten.moe's score itself barely uses these signals
@@ -50,7 +50,7 @@ readers actually read, once statistics cover enough books.
 Word lists read ambiguous words (人気: にんき or ひとけ) with
 [yurigana](https://github.com/blankiekun/yurigana): the book's ruby, else context rules, else
 a small reading model, else Sudachi (`../features.py`, `Analysis.readings`; docs/READINGS.md).
-Its tools (`python -m yurigana.eval_readings`, `python -m yurigana.reading_context
+Its tools (`python -m yurigana.evaluate`, `python -m yurigana.reading_context
 mine|report|train|evaluate|build`, `fetch_aozora`, `fetch_tatoeba`), the hand-written test
 sentences, how the public table was built and the accuracy numbers (hand eval 95.0% macro
 with ruby / 80.3% without; Tatoeba half b 86.4% micro with the public table, 86.8% with this

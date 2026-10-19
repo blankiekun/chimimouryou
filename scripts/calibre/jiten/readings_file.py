@@ -12,7 +12,8 @@ get-character-count.ts), so offsets are bookmark positions. The output, gzipped 
   glosses         [[[offset, length, base, ruby], ...]]: furigana per kanji run, offsets in
                   characters from the word's start; base is the text it goes over
   occ             [Δstart, word index, gloss index or -1, ...]: each kanji word in reading
-                  order, start in characters from the previous one's
+                  order, start in characters from the previous one's; a number + counter
+                  span (三本 さんぼん) comes right before its tokens' own words, at the same start
 """
 import gzip
 import json
@@ -20,8 +21,10 @@ import os
 import re
 from html.parser import HTMLParser
 
-# 1: first version.
-READINGS_VERSION = 1
+from yurigana.readings import surface_reading
+
+# 1: first version. 2: yurigana 0.2.0 (counter spans, names' ruby carried, 来た glossed き).
+READINGS_VERSION = 2
 
 # Radical and Unified_Ideograph as in Unicode 16.
 # shortcut: newer CJK extensions are missing, add them when browsers count them.
@@ -138,9 +141,14 @@ def to_hiragana(text: str) -> str:
     return ''.join(chr(ord(c) - 0x60) if 'ァ' <= c <= 'ヶ' else c for c in text)
 
 
-def gloss(surface: str, form: str, reading: str):
+def gloss(surface: str, form: str, reading: str, after: str = ''):
     """The dictionary form's reading split over the surface's kanji runs, [(offset, run,
-    ruby)] (行っ, 行く, いく: [(0, 行, い)]), or None when the runs differ or don't align."""
+    ruby)] (行っ, 行く, いく: [(0, 行, い)]), or None when the runs differ or don't align.
+    The surface's own reading when yurigana gives one (来た, 来る, くる: き; `after` is the text
+    after the surface)."""
+    spoken = surface_reading(surface, form, reading, after)
+    if spoken:
+        form, reading = surface, spoken
     runs = [(m.start(), m.group()) for m in KANJI_RUN.finditer(surface)]
     if not runs or [run for _, run in runs] != KANJI_RUN.findall(form):
         return None
@@ -160,7 +168,8 @@ def build(html: str, reader, bookdata: str, version: str) -> dict:
     words, glosses, occ = {}, {}, []
     flavoured = set()  # forms the book gave a ruby that isn't their reading (マジ over 本気)
     last = 0
-    for word in reader.read(text, hints):
+    # carry: a name's ruby read for its later bare occurrences (source 'book'), never glossed below.
+    for word in reader.read(text, hints, carry={}):
         under = {covering[i] for i in range(word.start, word.end) if i in covering}
         shown = -1
         if under:
@@ -173,7 +182,7 @@ def build(html: str, reader, bookdata: str, version: str) -> dict:
                 flavoured.add(word.form)
         elif (word.form not in flavoured and word.source in ('only', 'rule', 'model')
               and word.reading and HIRAGANA.match(word.reading)):
-            parts = gloss(text[word.start:word.end], word.form, word.reading)
+            parts = gloss(text[word.start:word.end], word.form, word.reading, text[word.end:word.end + 8])
             if parts:
                 begin = counts[word.start]
                 key = tuple((counts[word.start + offset] - begin, len(run), run, ruby) for offset, run, ruby in parts)

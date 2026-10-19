@@ -31,20 +31,28 @@ reading is always hiragana and one that list gives for the written form. Katakan
 counts for `RubyKatakanaShare`, which is measured separately.
 
 Sudachi gives a reading only for an unconjugated word. A conjugated occurrence without one
-goes to the word's most common reading in the book, in `save_words`.
+goes to the word's most common reading in the book, in `save_words`. A word met only
+conjugated takes the form's most common reading in the book (from another dictionary word
+with the same form), else Sudachi's reading of the form alone (`Analysis.form_readings`).
+Rows of one form and reading are merged, and each row also carries the lemma (Sudachi's
+normalized form). A voiced reading the list lacks counts for the unvoiced one it gives (この箱
+read ばこ, 小屋 read ごや as a compound's tail: はこ, こや), so it gets the word's rank.
 
 **Tables** (`load_reading_model` in `service.py`): `state/difficulty/reading-model.json.gz`
 is the server's own table, when one has been built from its library (optional: none exists
 until you build it; [docs/CONFIGURATION.md](CONFIGURATION.md#python-services) has the
-command); yurigana's public table fills in the forms it lacks, or answers alone without it. Forms with a context rule are never answered by a
-table.
+command); yurigana's public table fills in the forms it lacks, or answers alone without it. A form
+with a context rule is answered by a table only when no rule fires, and only if the table lists
+it in `ruleForms` (trained on the occurrences no rule reads, yurigana 0.2.0); other tables'
+entries for those forms are dropped.
 
 ### Versions
 
 - **`WORDS_VERSION`** (`service.py`) is stored with each estimate. Bump it, with a comment,
   whenever a new yurigana release (or anything above) changes which reading a word gets;
   "Books without an estimate" then redoes those word lists. Before moving the pin, compare
-  `python -m yurigana.eval_readings --dictionary frequency-dictionary.zip` in the difficulty
+  `python -m yurigana.evaluate SET.jsonl --known frequency-dictionary.zip` (gold sets from
+  `python -m yurigana.evaluate tatoeba OUT`, yurigana's docs/evaluation.md) in the difficulty
   image with the old and the new tag.
 - **`MODEL_VERSION`** is for the difficulty scores. They use `Word.reading` (always
   Sudachi's), never `Analysis.readings`, so reading changes leave it alone.
@@ -65,7 +73,8 @@ points. `scripts/calibre/tests/fixtures/character-count.json` is checked by both
 as hints, like `book_text`.
 
 **Readings**: yurigana's `Reader` with the word lists' reading list (Jiten's frequency list)
-and tables, so a word reads the same in both.
+and tables. The whole book is one text read with `carry={}`, so a name's ruby is carried to its
+later bare occurrences (`source` 'book'); those get no gloss (see below).
 
 **Format** (gzipped JSON):
 
@@ -73,14 +82,17 @@ and tables, so a word reads the same in both.
   `characters` (the book's count): a file whose `v`, `yurigana` or `bookdata` differ is stale
   and made again on the next request.
 - `words`: `[form, reading or null]`, dictionary forms (行った: 行く).
-- `glosses`: `[[offset, length, base, ruby], ...]`, the dictionary form's reading split over the
-  word's kanji runs (行っ: 行/い; 取り扱い: 取/と, 扱/あつか), offsets in characters from the
-  word's start; `base` is the text the ruby goes over, for the reader to check.
+- `glosses`: `[[offset, length, base, ruby], ...]`, the surface's reading (yurigana's
+  `surface_reading`: 来た: 来/き) split over the word's kanji runs (行っ: 行/い; 取り扱い: 取/と,
+  扱/あつか), offsets in characters from the word's start; `base` is the text the ruby goes
+  over, for the reader to check.
 - `occ`: `Δstart, word, gloss` per kanji word in reading order; `gloss` is `-1` when no
-  furigana is to be added.
+  furigana is to be added. A number + counter span (三本 さんぼん) comes right before its
+  tokens' own words, at the same start (Δstart 0 for the first of them).
 
 **What gets furigana** (a gloss): a hiragana reading on the list that comes from the list's
-only reading, a context rule or the reading model (never Sudachi's guess); not under the book's
+only reading, a context rule or the reading model (never Sudachi's guess, a default, a
+counter span or a name's carried ruby); not under the book's
 own ruby; and not a form the book flavour-rubied earlier: once ruby that isn't the word's
 reading covers it (katakana like マジ over 本気, ruby with kanji, or rejected hiragana over the
 whole word like そら over 宇宙), later bare occurrences of that form get none. Partial hiragana

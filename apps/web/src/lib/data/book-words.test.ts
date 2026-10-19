@@ -61,13 +61,13 @@ describe('foldReadings', () => {
       foldReadings([
         ['呟く', null, 9, 900],
         ['私', 'わたし', 8, 10],
-        ['呟く', 'つぶやく', 5, 900],
+        ['呟く', 'つぶやく', 5, 900, '呟く'],
         ['私', 'わたくし', 2, 10],
         ['私', null, 1, 10],
         ['えっと', null, 3, null]
       ])
     ).toEqual([
-      ['呟く', 'つぶやく', 14, 900],
+      ['呟く', 'つぶやく', 14, 900, '呟く'],
       ['私', 'わたし', 9, 10],
       ['えっと', null, 3, null],
       ['私', 'わたくし', 2, 10]
@@ -79,7 +79,7 @@ describe('wordsCsv', () => {
   it('has a BOM, a header and quotes fields with quotes or commas', () => {
     expect(
       wordsCsv([
-        ['後宮', 'こうきゅう', 104, 44745],
+        ['後宮', 'こうきゅう', 104, 44745, '後宮'],
         ['a,b', null, 2, null],
         ['say "hi"', 'x', 1, 5]
       ])

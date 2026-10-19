@@ -14,13 +14,14 @@ class ServiceTest(unittest.TestCase):
         service = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(service)
         with tempfile.TemporaryDirectory() as tmp:
+            # Forms without context rules: tables' entries for those are dropped unless listed in ruleForms.
             paths = [os.path.join(tmp, name) for name in ('server.json.gz', 'aozora.json.gz', 'broken.json.gz')]
-            for path, forms in zip(paths, ({'人気': 'server'}, {'人気': 'aozora', '床': 'aozora'})):
+            for path, forms in zip(paths, ({'日向': 'server'}, {'日向': 'aozora', '大事': 'aozora'})):
                 with gzip.open(path, 'wt', encoding='utf-8') as f:
                     json.dump({'version': 1, 'forms': forms}, f)
             with open(paths[2], 'w') as f:
                 f.write('not gzip')
-            self.assertEqual(service.load_reading_model(paths).forms, {'人気': 'server', '床': 'aozora'})
+            self.assertEqual(service.load_reading_model(paths).forms, {'日向': 'server', '大事': 'aozora'})
             self.assertIsNone(service.load_reading_model([os.path.join(tmp, 'missing')]))
         self.assertGreater(len(service.load_reading_model().forms), 30)  # yurigana's public table
 

@@ -235,7 +235,7 @@ class SaveWordsTest(unittest.TestCase):
         # The totals count the rows past the cap (稀) too.
         self.assertEqual(service.save_words(7, analysis, FrequencyTable({'猫': 1200})), (3, 9))
         with gzip.open(os.path.join(service.WORDS_DIR, '7.json.gz'), 'rt', encoding='utf-8') as f:
-            self.assertEqual(json.load(f), [['走る', None, 5, None], ['猫', 'ねこ', 3, 1200]])
+            self.assertEqual(json.load(f), [['走る', None, 5, None, '走る'], ['猫', 'ねこ', 3, 1200, '猫']])
 
     def test_totals_leave_noise_out(self):
         import importlib.util
@@ -264,10 +264,45 @@ class SaveWordsTest(unittest.TestCase):
         service.WORDS_DIR = tempfile.mkdtemp()
         other = Word('他\tnoun', '他', 'noun', 'kango', (), '他', 'ほか')
         run = Word('走る\tverb', '走る', 'verb', 'wago', (), '走る', 'はしる')
-        analysis = Analysis(text='', words={(other.key, '他'): [other, 7], (run.key, '走る'): [run, 4]})
+        box = Word('箱\tnoun', '箱', 'noun', 'wago', (), '箱', 'はこ')
+        analysis = Analysis(text='', words={(other.key, '他'): [other, 7], (run.key, '走る'): [run, 4],
+                                            (box.key, '箱'): [box, 3]})
         # 走った has no reading: it counts for the word's most common one.
         analysis.readings = {(other.key, '他'): Counter({'ほか': 5, 'た': 2}),
-                             (run.key, '走る'): Counter({None: 3, 'はしる': 1})}
-        service.save_words(8, analysis, FrequencyTable({'他': 145038}, {('他', 'ほか'): 382, ('他', 'た'): 145038}))
+                             (run.key, '走る'): Counter({None: 3, 'はしる': 1}),
+                             (box.key, '箱'): Counter({'ばこ': 2, 'はこ': 1})}  # この箱 ばこ: the list has only はこ
+        service.save_words(8, analysis, FrequencyTable({'他': 145038, '箱': 2000},
+                                                       {('他', 'ほか'): 382, ('他', 'た'): 145038, ('箱', 'はこ'): 2000}))
         with gzip.open(os.path.join(service.WORDS_DIR, '8.json.gz'), 'rt', encoding='utf-8') as f:
-            self.assertEqual(json.load(f), [['他', 'ほか', 5, 382], ['走る', 'はしる', 4, None], ['他', 'た', 2, 145038]])
+            self.assertEqual(json.load(f), [['他', 'ほか', 5, 382, '他'], ['走る', 'はしる', 4, None, '走る'],
+                                            ['箱', 'はこ', 3, 2000, '箱'], ['他', 'た', 2, 145038, '他']])
+
+    def test_merges_fills_and_drops(self):
+        import gzip
+        import importlib.util
+        from collections import Counter
+        from features import Analysis, Word
+        spec = importlib.util.spec_from_file_location(
+            'jiten_service', os.path.join(os.path.dirname(__file__), '..', 'jiten', 'service.py'))
+        service = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(service)
+        service.WORDS_DIR = tempfile.mkdtemp()
+        have = Word('有る\tverb', 'ある', 'verb', 'wago', (), 'ある', 'ある')
+        some = Word('或る\tadj', 'ある', 'adj', 'wago', (), 'ある', 'ある')
+        mutter = Word('呟く\tverb', '呟く', 'verb', 'wago', (), '呟いた')
+        know = Word('分かる\tverb', 'わかる', 'verb', 'wago', (), 'わかっ')
+        know2 = Word('分かる\tadj', 'わかる', 'adj', 'wago', (), 'わかる', 'わかる')
+        desu = Word('です\taux', 'です', 'aux', 'wago', (), 'です', 'です')
+        nante = Word('なんて\tparticle', 'なんて', 'particle', 'wago', (), 'なんて', 'なんて')
+        words = (have, 6), (some, 2), (mutter, 3), (know, 4), (know2, 1), (desu, 9), (nante, 5)
+        analysis = Analysis(text='', words={(w.key, w.form): [w, n] for w, n in words})
+        analysis.readings = {(have.key, 'ある'): Counter({'ある': 6}), (some.key, 'ある'): Counter({'ある': 2}),
+                             (mutter.key, '呟く'): Counter({None: 3}), (know.key, 'わかる'): Counter({None: 4}),
+                             (know2.key, 'わかる'): Counter({'わかる': 1})}
+        # Sudachi's reading of the form, for words met only conjugated.
+        analysis.form_readings = {(mutter.key, '呟く'): 'つぶやく', (know.key, 'わかる'): 'わからない'}
+        service.save_words(5, analysis, FrequencyTable({'有る': 900, '或る': 300}))
+        with gzip.open(os.path.join(service.WORDS_DIR, '5.json.gz'), 'rt', encoding='utf-8') as f:
+            # わかる takes the form's reading in the book, not Sudachi's.
+            self.assertEqual(json.load(f), [['ある', 'ある', 8, 300, '有る'], ['わかる', 'わかる', 5, None, '分かる'],
+                                            ['呟く', 'つぶやく', 3, None, '呟く']])

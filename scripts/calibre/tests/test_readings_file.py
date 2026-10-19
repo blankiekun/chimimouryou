@@ -31,7 +31,8 @@ class FakeReader:
     def __init__(self, *words):
         self.words = words
 
-    def read(self, text, hints=()):
+    def read(self, text, hints=(), carry=None):
+        assert carry == {}  # one book, one text
         out, at = [], 0
         for surface, form, reading, source in self.words:
             at = text.index(surface, at)
@@ -68,12 +69,16 @@ class GlossTest(unittest.TestCase):
         self.assertEqual(readings_file.gloss('大人', '大人', 'おとな'), [(0, '大人', 'おとな')])
         self.assertIsNone(readings_file.gloss('取扱い', '取り扱い', 'とりあつかい'))  # other runs
         self.assertIsNone(readings_file.gloss('行っ', '行く', 'おこなう'))  # doesn't end in く
+        # 来る's stem is read by what follows (yurigana's surface_reading).
+        self.assertEqual(readings_file.gloss('来', '来る', 'くる', 'た。'), [(0, '来', 'き')])
+        self.assertEqual(readings_file.gloss('来', '来る', 'くる', 'ない'), [(0, '来', 'こ')])
+        self.assertEqual(readings_file.gloss('来る', '来る', 'くる'), [(0, '来', 'く')])
 
     def test_the_file(self):
         data = build('<p>彼は<ruby>行<rt>い</rt></ruby>った。<br>行った<img class="gaiji">取り扱い</p>',
                      ('行っ', '行く', 'いく', 'ruby'), ('行っ', '行く', 'いく', 'only'),
                      ('取り扱い', '取り扱い', 'とりあつかい', 'rule'))
-        self.assertEqual((data['v'], data['yurigana'], data['bookdata']), (1, '0.1.1', 'bookdata_1_2_3_4_5.zip'))
+        self.assertEqual((data['v'], data['yurigana'], data['bookdata']), (2, '0.1.1', 'bookdata_1_2_3_4_5.zip'))
         self.assertEqual(data['characters'], 13)  # 彼は行った 行った 〓 取り扱い
         self.assertEqual(data['words'], [['行く', 'いく'], ['取り扱い', 'とりあつかい']])
         self.assertEqual(data['glosses'], [[[0, 1, '行', 'い']], [[0, 1, '取', 'と'], [2, 1, '扱', 'あつか']]])
@@ -89,6 +94,9 @@ class ShowTest(unittest.TestCase):
         self.assertEqual(self.shown('<p>顔と顔と顔と顔と顔</p>', ('顔', '顔', 'かお', 'only'), ('顔', '顔', 'かお', 'model'),
                                     ('顔', '顔', 'かお', 'dictionary'), ('顔', '顔', None, 'dictionary'),
                                     ('顔', '顔', 'カオ', 'rule')), [0, 0, -1, -1, -1])
+
+    def test_not_a_names_ruby_carried_from_earlier(self):
+        self.assertEqual(self.shown('<p>芽衣と芽衣</p>', ('芽衣', '芽衣', 'めい', 'book'), ('芽衣', '芽衣', 'めい', 'only')), [-1, 0])
 
     def test_katakana_ruby_flavours_the_form_from_there_on(self):
         self.assertEqual(self.shown('<p>本気だ。<ruby>本気<rt>マジ</rt></ruby>だ。本気だ。</p>',

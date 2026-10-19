@@ -37,6 +37,19 @@ anything a reader or a server operator would notice.
 
 ### Server
 
+- Word lists version 7: words met only conjugated get a reading (the form's reading in the
+  book, else Sudachi's), one form and reading from different dictionary words is one row
+  (ある, もの, よう), particles and auxiliaries (です, ます, らしい, ながら…) are left out by
+  part of speech, and each row carries a 5th column, the lemma, so spelling variants
+  (分かる/わかる/判る) match Anki words and marks. Run "Books without an estimate" once
+  (admin panel → Tools) to redo the lists; it also adds the word totals to estimates that
+  lack them.
+- yurigana v0.2.0 (pinned in the difficulty image and the web app). Word lists (version 7)
+  get its context rules for more words with two readings (表 主 抱く 家 側 傍 間 後 方 留まる …)
+  and count a voiced reading the list lacks for its unvoiced one (この箱 ばこ: はこ). Readings
+  files (version 2) also get its numbers with counters (三本 さんぼん), rendaku and default
+  readings, carry a name's ruby to its later bare occurrences without adding furigana for it,
+  and gloss 来た as き.
 - Readings files: with the `difficulty` profile, the service makes a file per book with every
   kanji word's reading in context and the furigana the reader may add, in the reader's own
   character positions (`POST`/`GET /calibre/difficulty/api/readings/<id>`, for every reader who
@@ -84,7 +97,7 @@ anything a reader or a server operator would notice.
   sentences (CC BY 2.0 FR), and keeps only the 42 words it reads no worse than before on the
   other half. A server can build its
   own from its library, which suits modern books better (`docker compose exec difficulty
-  /opt/venv/bin/python -m yurigana.reading_context build`, about half an hour for
+/opt/venv/bin/python -m yurigana.reading_context build`, about half an hour for
   19,000 books; see docs/CONFIGURATION.md). "Books without an estimate" redoes word lists
   once; the difficulty scores don't change.
 - Estimates store `uniqueWords` and `tokens` in `/calibre/difficulty.json`: the book's
