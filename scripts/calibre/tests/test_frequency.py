@@ -134,6 +134,59 @@ class InstallDictionaryTest(unittest.TestCase):
         self.assertEqual(os.listdir(os.path.dirname(self.service.FREQUENCY_DICTIONARY)), [])
 
 
+def _has_term_dictionaries():
+    try:
+        from yurigana.yomitan import term_readings  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+@unittest.skipUnless(_has_term_dictionaries(), 'needs a yurigana with term dictionaries')
+class InstallTermDictionaryTest(unittest.TestCase):
+    def setUp(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            'jiten_service', os.path.join(os.path.dirname(__file__), '..', 'jiten', 'service.py'))
+        self.service = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.service)
+        self.service.TERM_DICTIONARY_DIR = os.path.join(tempfile.mkdtemp(), 'term-dictionaries')
+        self.service.MIN_TERM_DICTIONARY_TERMS = 2
+
+    def zip(self, rows):
+        path = os.path.join(tempfile.mkdtemp(), 'terms.zip')
+        with zipfile.ZipFile(path, 'w') as archive:
+            archive.writestr('index.json', json.dumps({'title': 'test', 'format': 3}))
+            archive.writestr('term_bank_1.json', json.dumps([[t, r, '', '', 0, [], 0, ''] for t, r in rows], ensure_ascii=False))
+        with open(path, 'rb') as f:
+            return f.read()
+
+    def install(self, data: bytes, name='My terms.zip'):
+        import io
+        return self.service.install_term_dictionary(io.BytesIO(data + b'next request'), len(data), name)
+
+    def test_installs_lists_and_removes(self):
+        self.assertEqual(self.service.term_options(), {})
+        version = self.service.reader_version()
+        self.assertEqual(self.install(self.zip([('星喰竜', 'ほしくいりゅう'), ('女剣豪', 'おんなけんごう')])), 2)
+        self.assertEqual(self.service.runner.status()['termDictionaries'], ['My terms.zip'])
+        self.assertEqual(len(self.service.term_options()['terms']), 1)
+        self.assertNotEqual(self.service.reader_version(), version)  # readings files made before are stale
+        self.service.remove_term_dictionary('My terms')
+        self.assertEqual(self.service.term_dictionaries(), [])
+        self.assertEqual(self.service.reader_version(), version)
+
+    def test_refuses_bad_files_and_names(self):
+        for data in (b'not a zip', self.zip([('星喰竜', 'ほしくいりゅう'), ('ルキア(QMA)', 'るきあ')])):
+            with self.assertRaises(ValueError):
+                self.install(data)
+        for name in ('../x.zip', 'a/b.zip', '.zip', ''):
+            with self.assertRaises(ValueError):
+                self.install(self.zip([('星喰竜', 'ほしくいりゅう'), ('女剣豪', 'おんなけんごう')]), name)
+        self.assertEqual(self.service.term_dictionaries(), [])
+        self.assertEqual([n for n in os.listdir(self.service.TERM_DICTIONARY_DIR)], [])
+
+
 class KanjiEndpointTest(unittest.TestCase):
     def test_saved_counts_are_served(self):
         import importlib.util

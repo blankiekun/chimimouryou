@@ -142,6 +142,22 @@ server {
     client_max_body_size 64m;
   }
 
+  # Term dictionaries (Yomitan zips, up to 256 MB) change word lists and readings files: admins only.
+  location ~ ^/calibre/difficulty/api/terms(/remove)?$ {
+    auth_request /_account_admin;
+    auth_request_set $account_admin $upstream_http_x_account_admin;
+    rewrite ^/calibre/difficulty/api/(.*)$ /$1 break;
+    proxy_pass http://$difficulty_upstream;
+    proxy_set_header X-Internal-Token "${INTERNAL_TOKEN}";
+    proxy_http_version 1.1;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Account-Admin $account_admin;
+    proxy_set_header X-Forwarded-Proto $forwarded_proto;
+    proxy_request_buffering off;
+    proxy_read_timeout 300s;
+    client_max_body_size 256m;
+  }
+
   # Readings files (furigana in context): requested and fetched by every reader who may use the
   # shared sync folder, not only those with the difficulty permission.
   location ~ ^/calibre/difficulty/api/readings/-?[0-9]+$ {

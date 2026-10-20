@@ -15,12 +15,15 @@ HTTP API (bound to localhost, proxied by nginx at /calibre/difficulty/api/):
   POST cancel                       stop the running job
   POST dictionary   body: the zip    install Jiten's frequency list (jiten_freq_global.zip); admins only.
                                     Replacing one needs ?force=1 when its readings disagree (409 with "agreement")
+  POST terms?name=NAME  body: zip   install a Yomitan term dictionary (TERM_DICTIONARY_DIR); admins only
+  POST terms/remove {"name": NAME}  remove one; admins only
 Results are written to RESULTS_PATH, which nginx serves as /calibre/difficulty.json.
 Readings files are made one at a time in their own process, never waiting behind an estimate job.
 
 CLI: service.py serve | compute ID...
 """
 import gzip
+import hashlib
 import hmac
 import json
 import os
@@ -29,6 +32,7 @@ import sys
 import zipfile
 import threading
 import time
+import urllib.parse
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
@@ -55,6 +59,12 @@ MAX_DICTIONARY_BYTES = 64 * 1024 * 1024
 MIN_DICTIONARY_TERMS = 50_000
 AGREEMENT_FORMS = 5000
 MIN_AGREEMENT = 0.95
+# Yomitan term dictionaries admins upload (bring your own: none is bundled): yurigana's Reader(terms=...) reads
+# them for words the frequency list and JMdict lack, in word lists and readings files. Large dictionaries are
+# 50-200 MB zips; a sanity gate refuses files with few usable terms (not a term dictionary).
+TERM_DICTIONARY_DIR = os.path.join(STATE_DIR, 'term-dictionaries')
+MAX_TERM_DICTIONARY_BYTES = 256 * 1024 * 1024
+MIN_TERM_DICTIONARY_TERMS = 1_000
 # chimi-difficulty, trained on jiten.moe's own scores (distil/, README there): their scale directly,
 # adjustment included, from Jiten's 55 features plus EXTRA_FEATURES. The -low/-high models
 # are its 10th and 90th percentiles, shown as a range.
@@ -139,7 +149,8 @@ def _init_worker():
     _frequency = FrequencyTable.load(FREQUENCY_DICTIONARY)
     # Sharing the Analyzer's tokens and the list's readings: no second Sudachi or copy of the list.
     # The extra readings (描く かく…) as Reader(known=path) adds them; the features keep the plain list.
-    _reader = Reader(known=with_extra_readings(_frequency.reading_ranks), tables=READING_MODEL_TABLES, tokenizer=_analyzer)
+    _reader = Reader(known=with_extra_readings(_frequency.reading_ranks), tables=READING_MODEL_TABLES, tokenizer=_analyzer,
+                     **term_options())
     options = onnxruntime.SessionOptions()
     options.intra_op_num_threads = 1
     options.inter_op_num_threads = 1
@@ -266,7 +277,31 @@ def _init_readings_worker():
     global _reader
     from yurigana import Reader
     # The known list and the server's reading model the estimates use (yurigana adds its public table).
-    _reader = Reader(known=FREQUENCY_DICTIONARY, tables=READING_MODEL_TABLES)
+    _reader = Reader(known=FREQUENCY_DICTIONARY, tables=READING_MODEL_TABLES, **term_options())
+
+
+def term_dictionaries() -> list:
+    """The installed term dictionaries' paths, by name."""
+    try:
+        return sorted(os.path.join(TERM_DICTIONARY_DIR, n) for n in os.listdir(TERM_DICTIONARY_DIR) if n.endswith('.zip'))
+    except OSError:
+        return []
+
+
+def term_options() -> dict:
+    """Reader's terms argument, none without term dictionaries (and with a yurigana that has none)."""
+    paths = term_dictionaries()
+    return {'terms': paths} if paths else {}
+
+
+def reader_version() -> str:
+    """yurigana's version, plus the term dictionaries (name, size) when there are any: readings files made
+    with others are stale."""
+    paths = term_dictionaries()
+    if not paths:
+        return YURIGANA_VERSION
+    names = ','.join(f'{os.path.basename(p)}:{os.path.getsize(p)}' for p in paths)
+    return f'{YURIGANA_VERSION}+terms.{hashlib.sha256(names.encode()).hexdigest()[:12]}'
 
 
 def readings_path(book_id: int) -> str:
@@ -279,7 +314,7 @@ def _make_readings(book_id: int, bookdata: str):
             raise ValueError('staticdata.json is too large')
         html = json.loads(archive.read('staticdata.json'))['elementHtml']
     readings_file.write(readings_path(book_id),
-                        readings_file.build(html, _reader, os.path.basename(bookdata), YURIGANA_VERSION))
+                        readings_file.build(html, _reader, os.path.basename(bookdata), reader_version()))
 
 
 def find_bookdata(title: str):
@@ -312,7 +347,7 @@ class ReadingsQueue:
         if not bookdata:
             return 'unavailable'
         name = os.path.basename(bookdata)
-        if readings_file.header(readings_path(book_id)) == (readings_file.READINGS_VERSION, YURIGANA_VERSION, name):
+        if readings_file.header(readings_path(book_id)) == (readings_file.READINGS_VERSION, reader_version(), name):
             return 'ready'
         with self.lock:
             if book_id in self.queue or self.running == book_id:
@@ -431,6 +466,7 @@ class JobRunner:
         return {
             'job': job,
             'dictionary': os.path.exists(FREQUENCY_DICTIONARY),
+            'termDictionaries': [os.path.basename(p) for p in term_dictionaries()],
             'results': len(results.get('books', {})),
             'noText': len(results.get('noText', [])),
             'failed': len(results.get('failed', {})),
@@ -553,6 +589,62 @@ def install_dictionary(source, length: int, force: bool = False) -> int:
             os.remove(upload)
 
 
+# A file name: no folders, control characters or leading dot
+_TERM_NAME = re.compile(r'[^./\\\x00-\x1f\x7f][^/\\\x00-\x1f\x7f]{0,99}')
+
+
+def term_dictionary_path(name: str) -> str:
+    """TERM_DICTIONARY_DIR/<name>.zip for a plain file name (the uploaded file's), else ValueError."""
+    name = name[:-4] if name.lower().endswith('.zip') else name
+    if not _TERM_NAME.fullmatch(name):
+        raise ValueError('Not a plain file name')
+    return os.path.join(TERM_DICTIONARY_DIR, name + '.zip')
+
+
+def install_term_dictionary(source, length: int, name: str) -> int:
+    """Checks an uploaded Yomitan term dictionary and installs it as `name` (replacing one of that name),
+    from the next job on; returns its number of usable terms (yurigana.yomitan.term_readings)."""
+    try:
+        from yurigana.yomitan import term_readings
+    except ImportError as error:
+        raise RuntimeError('This yurigana has no term dictionary support') from error
+    path = term_dictionary_path(name)
+    if not 0 < length <= MAX_TERM_DICTIONARY_BYTES:
+        raise ValueError('The file is empty or too large')
+    if runner.job and not runner.job.get('finished'):
+        raise RuntimeError('Wait until the running job has finished')
+    os.makedirs(TERM_DICTIONARY_DIR, exist_ok=True)
+    upload = path + '.upload'
+    try:
+        with open(upload, 'wb') as f:
+            remaining = length  # exactly length: nginx keeps the connection open (install_dictionary)
+            while remaining and (chunk := source.read(min(remaining, 1 << 20))):
+                f.write(chunk)
+                remaining -= len(chunk)
+        if os.path.getsize(upload) != length:
+            raise ValueError('Upload incomplete')
+        try:
+            terms = len(term_readings(upload))
+        except (zipfile.BadZipFile, KeyError, ValueError, TypeError, AttributeError, IndexError) as error:
+            raise ValueError('Not a Yomitan term dictionary (a zip with index.json and term_bank_*.json)') from error
+        if terms < MIN_TERM_DICTIONARY_TERMS:
+            raise ValueError(f'The dictionary has only {terms:,} usable terms with kanji')
+        os.replace(upload, path)
+        return terms
+    finally:
+        if os.path.exists(upload):
+            os.remove(upload)
+
+
+def remove_term_dictionary(name: str):
+    if runner.job and not runner.job.get('finished'):
+        raise RuntimeError('Wait until the running job has finished')
+    try:
+        os.remove(term_dictionary_path(name))
+    except FileNotFoundError:
+        pass
+
+
 def from_nginx(headers) -> bool:
     """Whether the request carries nginx's internal token (none configured: refuse everything)."""
     try:
@@ -624,6 +716,24 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError as error:
                 return self._send(400, {'error': str(error)})
             return self._send(200, {**runner.status(), 'terms': terms})
+        if parts in (['terms'], ['terms', 'remove']):
+            # nginx sends it from the account check of every location that reaches this path.
+            if self.headers.get('X-Account-Admin') != '1':
+                return self._send(403, {'error': 'Only admins can install term dictionaries'})
+            try:
+                if parts == ['terms']:
+                    query = urllib.parse.parse_qs(self.path.split('?', 1)[1] if '?' in self.path else '')
+                    terms = install_term_dictionary(self.rfile, int(self.headers.get('Content-Length') or 0),
+                                                    (query.get('name') or [''])[0])
+                    return self._send(200, {**runner.status(), 'terms': terms})
+                length = max(int(self.headers.get('Content-Length') or 0), 0)
+                body = json.loads(self.rfile.read(length) or b'{}')
+                remove_term_dictionary(str(body.get('name', '')) if isinstance(body, dict) else '')
+                return self._send(200, runner.status())
+            except RuntimeError as error:
+                return self._send(409, {'error': str(error)})
+            except ValueError as error:
+                return self._send(400, {'error': str(error)})
         try:
             length = max(int(self.headers.get('Content-Length') or 0), 0)
             body = json.loads(self.rfile.read(length) or b'{}')

@@ -13,6 +13,13 @@ anything a reader or a server operator would notice.
   a list replacing an installed one whose readings for the 5,000 most frequent words agree
   with it on less than 95% needs a confirmation that shows the share.
 
+### Added
+
+- Difficulty estimates: admins can add Yomitan term dictionaries of their own (admin panel → Tools,
+  difficulty estimates). Word lists and readings files then read words the frequency list lacks
+  (coined compounds, names, words the tokenizer doesn't know) from them. None is
+  bundled; without one nothing changes.
+
 ### Fixed
 
 - Word lists of difficulty estimates read words like readings files do (yurigana's whole
