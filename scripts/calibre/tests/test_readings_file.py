@@ -78,7 +78,7 @@ class GlossTest(unittest.TestCase):
         data = build('<p>彼は<ruby>行<rt>い</rt></ruby>った。<br>行った<img class="gaiji">取り扱い</p>',
                      ('行っ', '行く', 'いく', 'ruby'), ('行っ', '行く', 'いく', 'only'),
                      ('取り扱い', '取り扱い', 'とりあつかい', 'rule'))
-        self.assertEqual((data['v'], data['yurigana'], data['bookdata']), (2, '0.1.1', 'bookdata_1_2_3_4_5.zip'))
+        self.assertEqual((data['v'], data['yurigana'], data['bookdata']), (readings_file.READINGS_VERSION, '0.1.1', 'bookdata_1_2_3_4_5.zip'))
         self.assertEqual(data['characters'], 13)  # 彼は行った 行った 〓 取り扱い
         self.assertEqual(data['words'], [['行く', 'いく'], ['取り扱い', 'とりあつかい']])
         self.assertEqual(data['glosses'], [[[0, 1, '行', 'い']], [[0, 1, '取', 'と'], [2, 1, '扱', 'あつか']]])

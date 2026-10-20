@@ -24,7 +24,9 @@ from html.parser import HTMLParser
 from yurigana.readings import surface_reading
 
 # 1: first version. 2: yurigana 0.2.0 (counter spans, names' ruby carried, 来た glossed き).
-READINGS_VERSION = 2
+# 3: SudachiDict-core instead of -full (compounds split differently, about 1% of occurrences),
+#    yurigana 0.3.0.
+READINGS_VERSION = 3
 
 # Radical and Unified_Ideograph as in Unicode 16.
 # shortcut: newer CJK extensions are missing, add them when browsers count them.

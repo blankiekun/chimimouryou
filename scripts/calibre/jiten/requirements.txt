@@ -1,5 +1,5 @@
 numpy==2.5.4
 onnxruntime==1.31.0
-SudachiDict-full==20260723.1
+SudachiDict-core==20260723.1
 SudachiPy==0.7.0
-yurigana @ https://github.com/blankiekun/yurigana/archive/refs/tags/v0.2.0.tar.gz
+yurigana @ https://github.com/blankiekun/yurigana/archive/refs/tags/v0.3.0.tar.gz

@@ -41,6 +41,12 @@ anything a reader or a server operator would notice.
 
 ### Server
 
+- The difficulty service uses SudachiDict-core instead of SudachiDict-full (yurigana's new default): the image is
+  about 130 MB smaller and each worker uses about 100 MB less RAM. With it comes yurigana 0.3.0,
+  which reads more hard words right (開く あく after 穴, 描く かく after a picture, 四つ よっつ,
+  三日月 みかづき…) and splits some compounds differently (word lists version 9, readings
+  files version 3: run "Books without an estimate" once to redo the lists).
+  Difficulty scores move by at most 0.05 (0.01 on average), so existing estimates are kept.
 - Word lists version 7: words met only conjugated get a reading (the form's reading in the
   book, else Sudachi's), one form and reading from different dictionary words is one row
   (ある, もの, よう), particles and auxiliaries (です, ます, らしい, ながら…) are left out by
