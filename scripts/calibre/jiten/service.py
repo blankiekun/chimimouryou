@@ -88,7 +88,8 @@ WORDS_PER_BOOK = 2000
 # 8: readings from yurigana's whole Reader, as readings files have them: defaults, the list's only
 #    reading, counters (本 in 三本: ほん), rendaku, readings of conjugated occurrences.
 # 9: SudachiDict-core instead of -full (compounds split differently, 3-10% of rows), and
-#    yurigana main's hard-noun context rules (yurigana #61, #62).
+#    yurigana 0.3.0 (context rules for hard nouns and verbs, compound joins, native つ counts,
+#    hand-checked extra readings).
 WORDS_VERSION = 9
 # Not vocabulary, left out of the book's word totals (uniqueWords, tokens) like the reader's
 # word coverage does (isNoiseWord in book-words.ts): particles, numbers, lone kana, and kana-only
@@ -127,6 +128,7 @@ _reader = None
 def _init_worker():
     global _analyzer, _frequency, _sessions, _reader
     from yurigana import Reader
+    from yurigana.yomitan import with_extra_readings
     import warnings
     warnings.filterwarnings('ignore')
     import onnxruntime
@@ -135,7 +137,8 @@ def _init_worker():
     _analyzer = Analyzer()
     _frequency = FrequencyTable.load(FREQUENCY_DICTIONARY)
     # Sharing the Analyzer's tokens and the list's readings: no second Sudachi or copy of the list.
-    _reader = Reader(known=_frequency.reading_ranks, tables=READING_MODEL_TABLES, tokenizer=_analyzer)
+    # The extra readings (描く かく…) as Reader(known=path) adds them; the features keep the plain list.
+    _reader = Reader(known=with_extra_readings(_frequency.reading_ranks), tables=READING_MODEL_TABLES, tokenizer=_analyzer)
     options = onnxruntime.SessionOptions()
     options.intra_op_num_threads = 1
     options.inter_op_num_threads = 1

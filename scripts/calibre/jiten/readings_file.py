@@ -25,7 +25,7 @@ from yurigana.readings import surface_reading
 
 # 1: first version. 2: yurigana 0.2.0 (counter spans, names' ruby carried, 来た glossed き).
 # 3: SudachiDict-core instead of -full (compounds split differently, about 1% of occurrences),
-#    yurigana main's hard-noun context rules.
+#    yurigana 0.3.0.
 READINGS_VERSION = 3
 
 # Radical and Unified_Ideograph as in Unicode 16.
