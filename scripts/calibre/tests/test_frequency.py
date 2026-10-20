@@ -176,6 +176,20 @@ class InstallTermDictionaryTest(unittest.TestCase):
         self.assertEqual(self.service.term_dictionaries(), [])
         self.assertEqual(self.service.reader_version(), version)
 
+    def test_jmnedict_is_a_name_dictionary(self):
+        from yurigana.yomitan import name_readings  # noqa: F401 (yurigana 0.5.1+)
+        path = os.path.join(tempfile.mkdtemp(), 'names.zip')
+        with zipfile.ZipFile(path, 'w') as archive:  # yomitan-import's JMnedict: readings in the glosses
+            archive.writestr('index.json', json.dumps({'title': 'JMnedict [2026-10-20]', 'format': 3}))
+            archive.writestr('term_bank_1.json', json.dumps([[t, '', '', '', 0, [r], 0, ''] for t, r in
+                                                             (('姫路', 'ひめじ'), ('柚木', 'ゆずき'), ('柚木', 'ゆのき'))], ensure_ascii=False))
+        with open(path, 'rb') as f:
+            self.assertEqual(self.install(f.read(), 'JMnedict.zip'), 2)  # as terms, no row would count
+        self.install(self.zip([('星喰竜', 'ほしくいりゅう'), ('女剣豪', 'おんなけんごう')]))
+        options = self.service.term_options()
+        self.assertEqual([os.path.basename(p) for p in options['names']], ['JMnedict.zip'])
+        self.assertEqual([os.path.basename(p) for p in options['terms']], ['My terms.zip'])
+
     def test_refuses_bad_files_and_names(self):
         for data in (b'not a zip', self.zip([('星喰竜', 'ほしくいりゅう'), ('ルキア(QMA)', 'るきあ')])):
             with self.assertRaises(ValueError):
