@@ -90,7 +90,8 @@ WORDS_PER_BOOK = 2000
 # 9: SudachiDict-core instead of -full (compounds split differently, 3-10% of rows), and
 #    yurigana 0.3.0 (context rules for hard nouns and verbs, compound joins, native つ counts,
 #    hand-checked extra readings).
-WORDS_VERSION = 9
+# 10: yurigana 0.5.0 (ateji, shown idioms, bare-evidence dominant readings such as 私 わたし).
+WORDS_VERSION = 10
 # Not vocabulary, left out of the book's word totals (uniqueWords, tokens) like the reader's
 # word coverage does (isNoiseWord in book-words.ts): particles, numbers, lone kana, and kana-only
 # words without a frequency rank (tokenizer noise).
