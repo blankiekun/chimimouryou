@@ -487,6 +487,10 @@ export const ja: Record<MessageKey, string> = {
   'library.dictionaryMismatch':
     'このリストの読みは、よく使われる語でインストール済みのリストと {agreement} しか一致しません。それでもインストールしますか？',
   'library.importDictionary': '頻度リストを取り込む',
+  'library.termDictionaries':
+    '用語辞書（任意）：手持ちの Yomitan 用語辞書から、頻度リストにない語の読みを単語リストと読みファイルに使います。既存の推定の単語はやり直すまで変わりません。',
+  'library.addTermDictionary': '用語辞書を追加',
+  'library.removeTermDictionary': '削除',
   'library.run': '実行',
   'library.runHint': '推定のない本',
   'library.selectedBooks': '選択した本（{count}冊）',

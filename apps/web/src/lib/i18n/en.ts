@@ -486,6 +486,10 @@ export const en = {
   'library.dictionaryMismatch':
     'The readings of this list agree with the installed one on only {agreement} of its most frequent words. Install it anyway?',
   'library.importDictionary': 'Import frequency list',
+  'library.termDictionaries':
+    'Term dictionaries (optional): Yomitan term dictionaries you have give readings of words the frequency list lacks, in word lists and readings files. Estimates made before keep their words until redone.',
+  'library.addTermDictionary': 'Add term dictionary',
+  'library.removeTermDictionary': 'Remove',
   'library.run': 'Run',
   'library.runHint': 'Books without an estimate',
   'library.selectedBooks': 'Selected books ({count})',

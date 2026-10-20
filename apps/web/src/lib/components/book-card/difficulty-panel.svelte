@@ -22,6 +22,8 @@
     } | null;
     /** Whether the frequency list is installed on the server */
     dictionary: boolean;
+    /** File names of the installed term dictionaries (older services: missing) */
+    termDictionaries?: string[];
     results: number;
     /** Books without enough text to estimate (image-only manga and scans) */
     noText?: number;
@@ -122,12 +124,25 @@
     }
   }
 
-  async function post(action: string, body: object = {}) {
+  /** Installs a Yomitan term dictionary on the server under its file name (it checks the file; admins only). */
+  async function importTermDictionary(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+
+    input.value = '';
+    if (file) {
+      importing = true;
+      await post(`terms?name=${encodeURIComponent(file.name)}`, file);
+      importing = false;
+    }
+  }
+
+  async function post(action: string, body: object | File = {}) {
     try {
       const response = await fetch(`${difficultyApiUrl}${action}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        headers: { 'Content-Type': body instanceof File ? 'application/zip' : 'application/json' },
+        body: body instanceof File ? body : JSON.stringify(body)
       });
 
       if (!response.ok) {
@@ -188,6 +203,34 @@
           <p>{$t$('library.dictionaryNeededAdmin')}</p>
         {/if}
       </div>
+    {/if}
+    {#if $account$?.admin && status.termDictionaries}
+      <section class="flex flex-col gap-2">
+        <p>{$t$('library.termDictionaries')}</p>
+        {#each status.termDictionaries as name (name)}
+          <div class="flex items-center gap-2">
+            <span class="break-all">{name}</span>
+            <button
+              class={buttonClasses}
+              disabled={running || importing}
+              on:click={() => post('terms/remove', { name })}
+            >
+              {$t$('library.removeTermDictionary')}
+            </button>
+          </div>
+        {/each}
+        <label class="{buttonClasses} flex cursor-pointer items-center gap-2 self-start">
+          {#if importing}<Fa icon={faSpinner} spin />{/if}
+          {$t$('library.addTermDictionary')}
+          <input
+            type="file"
+            accept=".zip,application/zip"
+            class="hidden"
+            disabled={importing || running}
+            on:change={importTermDictionary}
+          />
+        </label>
+      </section>
     {/if}
     <div class="flex flex-wrap gap-2">
       <button

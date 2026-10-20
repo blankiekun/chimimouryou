@@ -117,6 +117,14 @@ and fetch it (`GET` on the same address); nginx allows 6 requests a minute per a
 a few seconds to start, under a second per novel), never waiting behind an estimate job; at
 most 100 wait, and a book whose `staticdata.json` is over 30 MB is skipped.
 
+Term dictionaries (optional, bring your own): admins can add Yomitan term dictionaries in the
+admin panel (Tools → difficulty estimates → Add term dictionary; `POST /calibre/difficulty/api/terms?name=<file name>`,
+admins only, up to 256 MB, refused with fewer than 1,000 usable terms with kanji). They are kept in
+`state/difficulty/term-dictionaries/` and read by yurigana (`Reader(terms=...)`) for words the frequency
+list and JMdict both lack (coined compounds, names, words Sudachi doesn't know), in word lists and readings
+files from the next job on; readings files made before become stale. Estimates made before keep their word
+lists until redone. Each large dictionary costs every worker about 20 s at start and under 100 MB. Removing one (`POST …/terms/remove`) works the same way.
+
 The catalog builder takes the library and the output file as arguments:
 `build-calibre-catalog <library> <catalog.json> [<vn folder>] [--force]`.
 
