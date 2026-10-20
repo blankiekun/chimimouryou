@@ -39,7 +39,7 @@ from concurrent.futures.process import BrokenProcessPool
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from yurigana import __version__ as YURIGANA_VERSION
-from yurigana.reader import _UNVOICED
+from yurigana.kana import UNVOICED
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 import readings_file  # noqa: E402
@@ -60,7 +60,8 @@ MIN_DICTIONARY_TERMS = 50_000
 AGREEMENT_FORMS = 5000
 MIN_AGREEMENT = 0.95
 # Yomitan term dictionaries admins upload (bring your own: none is bundled): yurigana's Reader(terms=...) reads
-# them for words the frequency list and JMdict lack, in word lists and readings files. Large dictionaries are
+# them for words the frequency list and JMdict lack, in word lists and readings files; JMnedict is read as a
+# name dictionary (Reader(names=...), is_name_dictionary). Large dictionaries are
 # 50-200 MB zips; a sanity gate refuses files with few usable terms (not a term dictionary).
 TERM_DICTIONARY_DIR = os.path.join(STATE_DIR, 'term-dictionaries')
 MAX_TERM_DICTIONARY_BYTES = 256 * 1024 * 1024
@@ -101,7 +102,8 @@ WORDS_PER_BOOK = 2000
 #    yurigana 0.3.0 (context rules for hard nouns and verbs, compound joins, native つ counts,
 #    hand-checked extra readings).
 # 10: yurigana 0.5.0 (ateji, shown idioms, bare-evidence dominant readings such as 私 わたし).
-WORDS_VERSION = 10
+# 11: yurigana 0.5.1 (行っ on a going cue reads いっ; an uploaded JMnedict is a name dictionary).
+WORDS_VERSION = 11
 # Not vocabulary, left out of the book's word totals (uniqueWords, tokens) like the reader's
 # word coverage does (isNoiseWord in book-words.ts): particles, numbers, lone kana, and kana-only
 # words without a frequency rank (tokenizer noise).
@@ -188,7 +190,7 @@ A voiced reading the list lacks counts for the unvoiced one it gives (箱 ばこ
     def add(word, reading, n):
         lemma = word.key.split('\t')[0]
         # A voiced reading the list lacks (この箱 ばこ, 小屋 ごや as a compound's tail) is the word's plain one.
-        plain = reading and reading[0].translate(_UNVOICED) + reading[1:]
+        plain = reading and reading[0].translate(UNVOICED) + reading[1:]
         if plain != reading and (lemma, reading) not in frequency.reading_ranks and (lemma, plain) in frequency.reading_ranks:
             reading = plain
         data = frequency.word(word.key, reading)
@@ -288,10 +290,22 @@ def term_dictionaries() -> list:
         return []
 
 
+def is_name_dictionary(path: str) -> bool:
+    """JMnedict (by its index title): a name dictionary, Reader(names=...): it shows names it reads one way
+    (姫路 ひめじ) and changes no reading. Its rows aren't terms (the readings are glosses)."""
+    try:
+        with zipfile.ZipFile(path) as archive:
+            return str(json.loads(archive.read('index.json')).get('title', '')).lower().startswith('jmnedict')
+    except (OSError, zipfile.BadZipFile, KeyError, ValueError, AttributeError):
+        return False
+
+
 def term_options() -> dict:
-    """Reader's terms argument, none without term dictionaries (and with a yurigana that has none)."""
+    """Reader's terms and names arguments, none without dictionaries (and with a yurigana that has none)."""
     paths = term_dictionaries()
-    return {'terms': paths} if paths else {}
+    names = [p for p in paths if is_name_dictionary(p)]
+    terms = [p for p in paths if p not in names]
+    return ({'terms': terms} if terms else {}) | ({'names': names} if names else {})
 
 
 def reader_version() -> str:
@@ -605,7 +619,7 @@ def install_term_dictionary(source, length: int, name: str) -> int:
     """Checks an uploaded Yomitan term dictionary and installs it as `name` (replacing one of that name),
     from the next job on; returns its number of usable terms (yurigana.yomitan.term_readings)."""
     try:
-        from yurigana.yomitan import term_readings
+        from yurigana.yomitan import name_readings, term_readings
     except ImportError as error:
         raise RuntimeError('This yurigana has no term dictionary support') from error
     path = term_dictionary_path(name)
@@ -624,7 +638,7 @@ def install_term_dictionary(source, length: int, name: str) -> int:
         if os.path.getsize(upload) != length:
             raise ValueError('Upload incomplete')
         try:
-            terms = len(term_readings(upload))
+            terms = len((name_readings if is_name_dictionary(upload) else term_readings)(upload))
         except (zipfile.BadZipFile, KeyError, ValueError, TypeError, AttributeError, IndexError) as error:
             raise ValueError('Not a Yomitan term dictionary (a zip with index.json and term_bank_*.json)') from error
         if terms < MIN_TERM_DICTIONARY_TERMS:

@@ -19,8 +19,13 @@ anything a reader or a server operator would notice.
   difficulty estimates). Word lists and readings files then read words the frequency list lacks
   (coined compounds, names, words the tokenizer doesn't know) from them. None is
   bundled; without one nothing changes.
+- Difficulty estimates: an uploaded JMnedict is read as a name dictionary (yurigana 0.5.1): names
+  it reads only one way (姫路 ひめじ) are sure readings in readings files. Before, it gave nothing.
 
 ### Fixed
+
+- Word lists and readings files: 行っ on a going cue (学校へ行った) reads いっ, not おこなっ (yurigana
+  0.5.1). "Books without an estimate" redoes the word lists (`WORDS_VERSION` 11).
 
 - Word lists of difficulty estimates read words like readings files do (yurigana's whole
   reader): 私 わたし, 言う いう, 一回 いっかい, 三百 さんびゃく, 鶏肉 とりにく, and conjugated
