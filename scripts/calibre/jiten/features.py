@@ -28,9 +28,6 @@ from yurigana.readings import is_kanji, to_hiragana  # noqa: F401
 from yurigana.text import _count_ruby, _mark_ruby, _take_hints, aozora_text, book_text  # noqa: F401
 from yurigana.tokens import SudachiTokenizer, Token  # noqa: F401
 
-# SudachiDict-core: the same features, word lists and readings as -full on our books, 120 MB smaller.
-SUDACHI_DICTIONARY = 'core'
-
 # Feature order of Jiten's model (DifficultyPredictor.cs); chimi-difficulty appends EXTRA_FEATURES.
 FEATURE_ORDER = [
     'Ttr', 'AverageSentenceLength', 'DialoguePercentage', 'KanjiRatio',
@@ -252,7 +249,7 @@ def _coarse_pos(pos: tuple) -> str:
 class Analyzer:
     def __init__(self):
         # Imported here so the rest of the module works without Sudachi (tests).
-        sudachi = SudachiTokenizer(SUDACHI_DICTIONARY)
+        sudachi = SudachiTokenizer()
         self.tokenizer = sudachi.tokenizer
         self._tokens = sudachi.tokens
         self.deconjugator = Deconjugator()

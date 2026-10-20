@@ -87,7 +87,8 @@ WORDS_PER_BOOK = 2000
 #    and models; a voiced reading the list lacks counts for the unvoiced one (箱 ばこ: はこ).
 # 8: readings from yurigana's whole Reader, as readings files have them: defaults, the list's only
 #    reading, counters (本 in 三本: ほん), rendaku, readings of conjugated occurrences.
-# 9: SudachiDict-core instead of -full (compounds split differently, 3-10% of rows).
+# 9: SudachiDict-core instead of -full (compounds split differently, 3-10% of rows), and
+#    yurigana main's hard-noun context rules (yurigana #61, #62).
 WORDS_VERSION = 9
 # Not vocabulary, left out of the book's word totals (uniqueWords, tokens) like the reader's
 # word coverage does (isNoiseWord in book-words.ts): particles, numbers, lone kana, and kana-only
@@ -260,10 +261,8 @@ def _estimate(book: dict):
 def _init_readings_worker():
     global _reader
     from yurigana import Reader
-    from features import SUDACHI_DICTIONARY, SudachiTokenizer
     # The known list and the server's reading model the estimates use (yurigana adds its public table).
-    _reader = Reader(known=FREQUENCY_DICTIONARY, tables=READING_MODEL_TABLES,
-                     tokenizer=SudachiTokenizer(SUDACHI_DICTIONARY))
+    _reader = Reader(known=FREQUENCY_DICTIONARY, tables=READING_MODEL_TABLES)
 
 
 def readings_path(book_id: int) -> str:

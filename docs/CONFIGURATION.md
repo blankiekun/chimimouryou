@@ -125,11 +125,7 @@ furigana ([yurigana](https://github.com/blankiekun/yurigana)). The image ships a
 built from your own library (`state/difficulty/reading-model.json.gz`, about 400 words for
 19,000 books) is used first when you build one (optional; until then the shipped one is used):
 
-    docker compose exec -u 0 difficulty /opt/venv/bin/pip install SudachiDict-full==20260723.1
     docker compose exec difficulty /opt/venv/bin/python -m yurigana.reading_context build
-
-The builder loads SudachiDict-full, which the image doesn't ship (the service uses -core);
-the first line installs it until the container is recreated.
 
 It reads the whole library with `DIFFICULTY_WORKERS` processes: for 19,000 books about
 25 minutes of mining on 3 and 3 minutes of training, up to about 3 GB of RAM, with its working

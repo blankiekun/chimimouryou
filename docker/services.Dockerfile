@@ -44,12 +44,7 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends python3-venv \
   && rm -rf /var/lib/apt/lists/*
 COPY scripts/calibre/jiten/requirements.txt /app/jiten/requirements.txt
-# yurigana without its dependencies: it asks for SudachiDict-full, the service uses -core.
-RUN python3 -m venv /opt/venv \
-  && grep -v '^yurigana' /app/jiten/requirements.txt > /tmp/requirements.txt \
-  && /opt/venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt \
-  && /opt/venv/bin/pip install --no-cache-dir --no-deps "$(grep '^yurigana' /app/jiten/requirements.txt)" \
-  && rm /tmp/requirements.txt
+RUN python3 -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir -r /app/jiten/requirements.txt
 COPY scripts/calibre/jiten /app/jiten
 CMD ["/opt/venv/bin/python", "-W", "ignore", "/app/jiten/service.py", "serve"]
 
