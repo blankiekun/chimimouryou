@@ -7,6 +7,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 import unittest
 import zipfile
 from typing import NamedTuple
@@ -164,13 +165,18 @@ class ReadingsQueueTest(unittest.TestCase):
         with gzip.open(service.readings_path(1), 'rt', encoding='utf-8') as f:
             self.assertEqual(json.load(f)['occ'], [0, 0, 0])
         # A new bookdata (the book was processed again) or another yurigana make it stale.
-        newer = self.add_bookdata('bookdata_1_6_10_2_2.zip')
+        newer = self.add_bookdata('bookdata_1_6_10_2_2.zip', html='<p>行ったよ</p>')
         os.utime(newer, (2e9, 2e9))
         self.assertEqual(queue.request(1), 'queued')
         self.assertEqual(queue.queue, {1: newer})
         queue.queue.clear()
         service._make_readings(1, newer)
         self.assertEqual(queue.request(1), 'ready')
+        # Processed again with the same text: the file is kept and points at the newest bookdata.
+        again = self.add_bookdata('bookdata_1_6_10_4_4.zip', html='<p>行ったよ</p>')
+        os.utime(again, (4e9, 4e9))
+        self.assertEqual(queue.request(1), 'ready')
+        self.assertEqual(readings_file.header(service.readings_path(1))[2], 'bookdata_1_6_10_4_4.zip')
         service.YURIGANA_VERSION = '9.9.9'
         self.assertEqual(queue.request(1), 'queued')
 
@@ -191,6 +197,7 @@ class ReadingsQueueTest(unittest.TestCase):
         from concurrent.futures import ThreadPoolExecutor
         service, queue = self.service, self.service.ReadingsQueue()
         service.ProcessPoolExecutor = lambda workers, initializer: ThreadPoolExecutor(workers)
+        service.READINGS_KEEP_ALIVE = 0
         service._reader = FakeReader(('行っ', '行く', 'いく', 'only'))
         self.assertEqual(queue.request(1), 'queued')
         queue.thread.join(10)
@@ -200,6 +207,31 @@ class ReadingsQueueTest(unittest.TestCase):
         self.assertEqual(queue.request(1), 'queued')
         queue.thread.join(10)
         self.assertEqual((queue.failed, queue.request(1)), ({1: 'bookdata_1_6_10_3_3.zip'}, 'unavailable'))
+
+    def test_the_worker_stays_loaded_for_the_next_book(self):
+        from concurrent.futures import ThreadPoolExecutor
+        service, queue = self.service, self.service.ReadingsQueue()
+        pools = []
+        service.ProcessPoolExecutor = lambda workers, initializer: pools.append(1) or ThreadPoolExecutor(workers)
+        service._reader = FakeReader(('行っ', '行く', 'いく', 'only'))
+        service.READINGS_KEEP_ALIVE = 30
+        self.assertEqual(queue.request(1), 'queued')
+        for _ in range(100):
+            if queue.request(1) == 'ready':
+                break
+            time.sleep(0.05)
+        thread = queue.thread
+        self.assertTrue(thread.is_alive())
+        os.remove(service.readings_path(1))
+        self.assertEqual(queue.request(1), 'queued')
+        for _ in range(100):
+            if queue.request(1) == 'ready':
+                break
+            time.sleep(0.05)
+        self.assertEqual((queue.request(1), queue.thread, len(pools)), ('ready', thread, 1))
+        service.READINGS_KEEP_ALIVE = 0
+        thread.join(10)
+        self.assertIsNone(queue.thread)
 
     def test_oversized_staticdata_is_refused(self):
         self.service.MAX_STATICDATA_BYTES = 10

@@ -118,6 +118,9 @@ SYNC_DIR = os.environ.get('SYNC_DIR', '/data/sync')
 READINGS_DIR = os.path.join(STATE_DIR, 'readings')
 READINGS_QUEUE_MAX = 100
 MAX_STATICDATA_BYTES = 30 * 1024 * 1024
+# The readings worker's Reader takes ~20 s to load and building a file ~3 s: keep it this long
+# after its last file (~750 MB) so the next book opened doesn't wait for the load again.
+READINGS_KEEP_ALIVE = 600
 WORKERS = int(os.environ.get('JITEN_WORKERS', os.cpu_count() or 1))
 PORT = int(os.environ.get('JITEN_PORT', '8765'))
 HOST = os.environ.get('JITEN_HOST', '127.0.0.1')
@@ -322,13 +325,24 @@ def readings_path(book_id: int) -> str:
     return os.path.join(READINGS_DIR, f'{book_id}.json.gz')
 
 
-def _make_readings(book_id: int, bookdata: str):
+def staticdata_html(bookdata: str) -> str:
     with zipfile.ZipFile(bookdata) as archive:
         if archive.getinfo('staticdata.json').file_size > MAX_STATICDATA_BYTES:
             raise ValueError('staticdata.json is too large')
         html = json.loads(archive.read('staticdata.json'))['elementHtml']
-    readings_file.write(readings_path(book_id),
-                        readings_file.build(html, _reader, os.path.basename(bookdata), reader_version()))
+    if not isinstance(html, str):
+        raise ValueError('staticdata.json has no elementHtml')
+    return html
+
+
+def html_digest(html: str) -> str:
+    return hashlib.sha256(html.encode()).hexdigest()
+
+
+def _make_readings(book_id: int, bookdata: str):
+    html = staticdata_html(bookdata)
+    data = readings_file.build(html, _reader, os.path.basename(bookdata), reader_version())
+    readings_file.write(readings_path(book_id), {**data, 'html': html_digest(html)})
 
 
 def find_bookdata(title: str):
@@ -361,7 +375,20 @@ class ReadingsQueue:
         if not bookdata:
             return 'unavailable'
         name = os.path.basename(bookdata)
-        if readings_file.header(readings_path(book_id)) == (readings_file.READINGS_VERSION, reader_version(), name):
+        path = readings_path(book_id)
+        head = readings_file.header(path)
+        current = (readings_file.READINGS_VERSION, reader_version())
+        if head and head[:2] == current and head[2] != name and head[3]:
+            # Processed again (another device, or deleted and reopened): same text, same file.
+            try:
+                same = html_digest(staticdata_html(bookdata)) == head[3]
+            except (OSError, ValueError, KeyError, zipfile.BadZipFile):
+                same = False
+            if same:
+                with self.lock:
+                    readings_file.retarget(path, name)
+                head = (*current, name, head[3])
+        if head and head[:3] == (*current, name):
             return 'ready'
         with self.lock:
             if book_id in self.queue or self.running == book_id:
@@ -380,15 +407,21 @@ class ReadingsQueue:
 
     def _run(self):
         pool = None
+        idle_since = time.monotonic()
         try:
             while True:
                 with self.lock:
-                    if not self.queue:
+                    job = next(iter(self.queue.items()), None)
+                    if job:
+                        del self.queue[job[0]]
+                        self.running = job[0]
+                    elif not pool or time.monotonic() - idle_since >= READINGS_KEEP_ALIVE:
                         self.thread = None
                         return
-                    book_id, bookdata = next(iter(self.queue.items()))
-                    del self.queue[book_id]
-                    self.running = book_id
+                if not job:
+                    time.sleep(1)
+                    continue
+                book_id, bookdata = job
                 pool = pool or ProcessPoolExecutor(1, initializer=_init_readings_worker)
                 try:
                     pool.submit(_make_readings, book_id, bookdata).result()
@@ -399,6 +432,7 @@ class ReadingsQueue:
                         pool = None
                 finally:
                     self.running = None
+                    idle_since = time.monotonic()
         finally:
             if pool:
                 pool.shutdown(cancel_futures=True)
