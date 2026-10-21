@@ -96,8 +96,9 @@ class ShowTest(unittest.TestCase):
                                     ('顔', '顔', 'かお', 'dictionary'), ('顔', '顔', None, 'dictionary'),
                                     ('顔', '顔', 'カオ', 'rule')), [0, 0, -1, -1, -1])
 
-    def test_not_a_names_ruby_carried_from_earlier(self):
-        self.assertEqual(self.shown('<p>芽衣と芽衣</p>', ('芽衣', '芽衣', 'めい', 'book'), ('芽衣', '芽衣', 'めい', 'only')), [-1, 0])
+    def test_a_names_ruby_carried_to_its_bare_occurrences(self):
+        self.assertEqual(self.shown('<p><ruby>芽衣<rt>めい</rt></ruby>と芽衣</p>',
+                                    ('芽衣', '芽衣', 'めい', 'ruby'), ('芽衣', '芽衣', 'めい', 'book')), [-1, 0])
 
     def test_katakana_ruby_flavours_the_form_from_there_on(self):
         self.assertEqual(self.shown('<p>本気だ。<ruby>本気<rt>マジ</rt></ruby>だ。本気だ。</p>',

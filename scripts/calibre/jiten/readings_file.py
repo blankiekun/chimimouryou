@@ -27,7 +27,8 @@ from yurigana.readings import surface_reading
 # 3: SudachiDict-core instead of -full (compounds split differently, about 1% of occurrences),
 #    yurigana 0.3.0.
 # 4: yurigana 0.5.0 (ateji, shown idioms, bare-evidence dominant readings, name ruby carried back).
-READINGS_VERSION = 4
+# 5: names' ruby carried to their bare occurrences (source 'book') glossed.
+READINGS_VERSION = 5
 
 # Radical and Unified_Ideograph as in Unicode 16.
 # shortcut: newer CJK extensions are missing, add them when browsers count them.
@@ -171,7 +172,7 @@ def build(html: str, reader, bookdata: str, version: str) -> dict:
     words, glosses, occ = {}, {}, []
     flavoured = set()  # forms the book gave a ruby that isn't their reading (マジ over 本気)
     last = 0
-    # carry: a name's ruby read for its later bare occurrences (source 'book'), never glossed below.
+    # carry: a name's ruby read for its bare occurrences (source 'book'), glossed like the others.
     for word in reader.read(text, hints, carry={}):
         under = {covering[i] for i in range(word.start, word.end) if i in covering}
         shown = -1
@@ -183,7 +184,7 @@ def build(html: str, reader, bookdata: str, version: str) -> dict:
                     or (len(under) == 1 and HIRAGANA.match(ruby) and start <= word.start and end >= word.end)
                     for start, end, ruby in under):
                 flavoured.add(word.form)
-        elif (word.form not in flavoured and word.source in ('only', 'rule', 'model')
+        elif (word.form not in flavoured and word.source in ('only', 'rule', 'model', 'book')
               and word.reading and HIRAGANA.match(word.reading)):
             parts = gloss(text[word.start:word.end], word.form, word.reading, text[word.end:word.end + 8])
             if parts:
