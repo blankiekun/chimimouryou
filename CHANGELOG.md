@@ -34,6 +34,10 @@ anything a reader or a server operator would notice.
 - Difficulty estimates: an uploaded JMnedict is read as a name dictionary (yurigana 0.5.1): names
   it reads only one way (姫路 ひめじ) are sure readings in readings files. Before, it gave nothing.
 
+### Changed
+
+- Japanese UI: reworded strings throughout (595 of 973) to read more naturally.
+
 ### Fixed
 
 - Word lists and readings files: 行っ on a going cue (学校へ行った) reads いっ, not おこなっ (yurigana
