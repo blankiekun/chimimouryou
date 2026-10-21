@@ -41,7 +41,10 @@ anything a reader or a server operator would notice.
   `state/difficulty/reader.ygp` and `frequency.ygp` and shared by every worker, so workers
   start at once and use about 750 MB less each (an estimate worker ~500 MB instead of ~1.25 GB).
   Estimates count marker expressions from an index of the book's words rather than scanning
-  it once per expression (~2 s less per novel). The readings worker
+  it once per expression (~2 s less per novel).
+- yurigana 0.5.3: readings for word lists and generated furigana (the top reading of 118 more
+  words shown, voiced tails after a noun, 血肉 ちにく) and about 40% faster reading. Word lists
+  are redone (`WORDS_VERSION` 12) and readings files made again on request. The readings worker
   now stops 2 minutes after its last book rather than 10.
 
 - Japanese UI: reworded strings throughout (595 of 973) to read more naturally.
