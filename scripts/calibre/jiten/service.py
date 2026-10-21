@@ -467,9 +467,14 @@ def _run_pool(books, task, cancel: threading.Event, workers: int, lost: list):
     with ProcessPoolExecutor(workers, initializer=_init_worker) as pool:
         futures = [pool.submit(task, book) for book in books]
         for book, future in zip(books, futures):
+            while not future.done() and not cancel.wait(0.5):
+                pass
             if cancel.is_set():
-                for f in futures:
-                    f.cancel()
+                # A book can take minutes: stop the workers rather than wait for theirs (results are
+                # written to .tmp files and renamed, so nothing is left half-written).
+                for process in list(pool._processes.values()):
+                    process.terminate()
+                pool.shutdown(wait=False, cancel_futures=True)
                 return
             try:
                 yield book, future.result()
@@ -510,6 +515,8 @@ class JobRunner:
     def status(self):
         with self.lock:
             job = dict(self.job) if self.job else None
+            if job and not job.get('finished') and self.cancel.is_set():
+                job['cancelling'] = True
         results = load_results()
         return {
             'job': job,
