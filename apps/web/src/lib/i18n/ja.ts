@@ -534,7 +534,6 @@ export const ja: Record<MessageKey, string> = {
   'reader.theme': 'テーマ',
   'reader.fontSize': '文字サイズ',
   'reader.hoverFurigana': 'ホバーでふりがな',
-  'reader.generatedFurigana': '自動ふりがな',
   'reader.smaller': '小さく',
   'reader.larger': '大きく',
   'reader.more': 'その他の操作',
@@ -832,7 +831,7 @@ export const ja: Record<MessageKey, string> = {
     '最初は表示せず、ポインターを重ねている間だけ表示します。タッチ画面ではタップで切り替えます。',
   'prefs.generatedFurigana': '自動ふりがな',
   'prefs.generatedFuriganaHint':
-    '本にふりがながない語に、サーバー（yurigana）が付けたふりがなを淡い色で表示します。難易度サービスのあるCalibreの本のみ。初めての本は少し時間がかかります。',
+    '本にふりがながない語に、サーバー（yurigana）が付けたふりがなを淡い色で表示します。難易度サービスのあるCalibreの本のみ。本を初めて開くときは、生成に10秒以上かかることがあり、できしだい表示されます。',
   'prefs.furiganaPartialHint': 'ふりがなを薄い色で表示します。',
   'prefs.viewMode': '表示モード',
   'prefs.marginLeftRight': '左右の余白',

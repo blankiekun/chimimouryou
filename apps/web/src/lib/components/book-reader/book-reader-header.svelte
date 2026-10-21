@@ -26,7 +26,6 @@
     customReadingPointEnabled$,
     fontSize$,
     furiganaStyle$,
-    generatedFurigana$,
     hideFurigana$,
     viewMode$
   } from '$lib/data/store';
@@ -363,17 +362,6 @@
         on:click={toggleHoverFurigana}
       >
         <span class="app-switch-text">{$t$('reader.hoverFurigana')}</span>
-        <span class="app-switch-thumb" />
-      </button>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={$generatedFurigana$}
-        title={$t$('prefs.generatedFuriganaHint')}
-        class="app-switch justify-between px-2 pb-1"
-        on:click={() => generatedFurigana$.next(!$generatedFurigana$)}
-      >
-        <span class="app-switch-text">{$t$('reader.generatedFurigana')}</span>
         <span class="app-switch-thumb" />
       </button>
     </div>

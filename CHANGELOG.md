@@ -15,10 +15,16 @@ anything a reader or a server operator would notice.
 
 ### Added
 
-- Reader: generated furigana (Settings → Reader, and a switch in the reader's quick settings): words
+- Reader: generated furigana (Settings → Reader, next to Hide furigana): words
   the book gives no furigana get yurigana's reading from the difficulty service, in a colour
   leaning towards the theme's accent. Calibre books only; the server prepares a book the first time
   (they appear when ready). Hide/hover furigana styles apply to them too.
+  Each book's furigana are kept in the browser, so the book opens with them at once (offline too)
+  and they are only downloaded again when the server's copy changes; a book being prepared is asked for
+  again after 3 s rather than 15 s. The server keeps its reading engine loaded for 10 minutes after
+  preparing a book (~20 s to load, ~3 s per book), and reuses a book's furigana when it is processed
+  again with the same text (another device, or deleted and reopened). Home's books get their furigana
+  in the background, and a book's page asks for them, so books usually open with them already there.
 - Reader: a "Hover" furigana style (hidden, shown while the pointer is over a word; tap toggles on
   touch screens) and a "Furigana on hover" switch in the reader's quick settings (palette icon).
 - Difficulty estimates: admins can add Yomitan term dictionaries of their own (admin panel → Tools,

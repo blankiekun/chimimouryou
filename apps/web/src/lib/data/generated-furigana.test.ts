@@ -4,8 +4,27 @@
  * All rights reserved.
  */
 
-import { describe, expect, it } from 'vitest';
-import { addGeneratedRuby, type ReadingsFile } from './generated-furigana';
+import 'fake-indexeddb/auto';
+import { firstValueFrom, toArray } from 'rxjs';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  addGeneratedRuby,
+  deleteCachedReadings,
+  generatedReadings$,
+  prefetchReadings,
+  type ReadingsFile
+} from './generated-furigana';
+import { generatedFurigana$ } from './store';
+import { readerDb } from './reader-db';
+
+vi.mock('$lib/data/calibre', () => ({
+  difficultyApiUrl: '/api/',
+  loadCalibreCatalog: () =>
+    Promise.resolve([
+      { id: 7, title: 'Book' },
+      { id: 8, title: 'Other' }
+    ])
+}));
 
 const html = '<div><p>三本の木を<ruby>見<rt>み</rt></ruby>た。行った。</p></div>';
 
@@ -42,5 +61,91 @@ describe('addGeneratedRuby', () => {
     };
 
     expect(addGeneratedRuby(html, readings)).toBe(html);
+  });
+});
+
+describe('generatedReadings$', () => {
+  const file = (characters: number): ReadingsFile => ({ characters, glosses: [], occ: [] });
+  const serve = (get: () => Response) =>
+    vi.fn((_url: string, init?: RequestInit) =>
+      Promise.resolve(
+        init?.method === 'POST' ? new Response(JSON.stringify({ status: 'ready' })) : get()
+      )
+    );
+
+  it('keeps the file in the browser and asks for it again only when it changed', async () => {
+    const fetchMock = serve(
+      () => new Response(JSON.stringify(file(1)), { headers: { ETag: '"a"' } })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await firstValueFrom(generatedReadings$('Book').pipe(toArray()))).toEqual([file(1)]);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(await (await readerDb()).get('readings', 'Book')).toEqual({
+      title: 'Book',
+      etag: '"a"',
+      file: file(1)
+    });
+
+    const unchanged = serve(() => new Response(null, { status: 304 }));
+    vi.stubGlobal('fetch', unchanged);
+
+    expect(await firstValueFrom(generatedReadings$('Book').pipe(toArray()))).toEqual([file(1)]);
+    expect(unchanged.mock.calls[1][1]?.headers).toEqual({ 'If-None-Match': '"a"' });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new TypeError('offline')))
+    );
+    expect(await firstValueFrom(generatedReadings$('Book').pipe(toArray()))).toEqual([file(1)]);
+
+    vi.stubGlobal(
+      'fetch',
+      serve(() => new Response(JSON.stringify(file(2)), { headers: { ETag: '"b"' } }))
+    );
+    expect(await firstValueFrom(generatedReadings$('Book').pipe(toArray()))).toEqual([
+      file(1),
+      file(2)
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await deleteCachedReadings('Book');
+    expect(await (await readerDb()).get('readings', 'Book')).toBeUndefined();
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('prefetchReadings', () => {
+  it('keeps the books not kept yet, only while generated furigana are on', async () => {
+    const fetchMock = vi.fn((_url: string, init?: RequestInit) =>
+      Promise.resolve(
+        init?.method === 'POST'
+          ? new Response(JSON.stringify({ status: 'ready' }))
+          : new Response(JSON.stringify({ characters: 3, glosses: [], occ: [] }), {
+              headers: { ETag: '"o"' }
+            })
+      )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const db = await readerDb();
+
+    await db.put('readings', {
+      title: 'Book',
+      etag: '"a"',
+      file: { characters: 1, glosses: [], occ: [] }
+    });
+    generatedFurigana$.next(false);
+    await prefetchReadings(['Book', 'Other'], 0);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    generatedFurigana$.next(true);
+    await prefetchReadings(['Book', 'Other'], 0);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      '/api/readings/8',
+      '/api/readings/8'
+    ]);
+    expect((await db.get('readings', 'Other'))?.etag).toBe('"o"');
+    generatedFurigana$.next(false);
+    vi.unstubAllGlobals();
   });
 });

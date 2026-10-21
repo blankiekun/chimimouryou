@@ -206,13 +206,20 @@ def write(path: str, data: dict):
 
 
 def header(path: str):
-    """(v, yurigana, bookdata) of a readings file, or None."""
+    """(v, yurigana, bookdata, html digest or None) of a readings file, or None."""
     try:
         with gzip.open(path, 'rt', encoding='utf-8') as f:
             data = json.load(f)
-        return data['v'], data['yurigana'], data['bookdata']
+        return data['v'], data['yurigana'], data['bookdata'], data.get('html')
     except (OSError, ValueError, KeyError, TypeError):
         return None
+
+
+def retarget(path: str, bookdata: str):
+    """Records a newer bookdata of the same text as the file's source."""
+    with gzip.open(path, 'rt', encoding='utf-8') as f:
+        data = json.load(f)
+    write(path, {**data, 'bookdata': bookdata})
 
 
 def sanitize_for_filename(title: str) -> str:

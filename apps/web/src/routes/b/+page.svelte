@@ -2282,56 +2282,59 @@
     />
   {/if}
   <StyleSheetRenderer styleSheet={$bookData$.styleSheet} />
-  <BookReader
-    htmlContent={$bookData$.htmlContent}
-    width={$containerViewportWidth$ ?? 0}
-    height={Math.max(0, ($containerViewportHeight$ ?? 0) - listenReserve)}
-    {fontFeatureSettings}
-    {verticalTextOrientation}
-    prioritizeReaderStyles={$prioritizeReaderStyles$}
-    enableTextJustification={$enableTextJustification$}
-    enableTextWrapPretty={$enableTextWrapPretty$}
-    verticalMode={$verticalMode$}
-    fontColor={$themeOption$?.fontColor}
-    backgroundColor={$backgroundColor$}
-    hintFuriganaFontColor={$themeOption$?.hintFuriganaFontColor}
-    hintFuriganaShadowColor={$themeOption$?.hintFuriganaShadowColor}
-    fontFamilyGroupOne={$fontFamilyGroupOne$}
-    fontFamilyGroupTwo={$fontFamilyGroupTwo$}
-    fontWeight={$fontWeight$}
-    fontSize={$fontSize$}
-    lineHeight={$lineHeight$}
-    textIndentation={$textIndentation$}
-    textMarginMode={$textMarginMode$}
-    textMarginValue={$textMarginValue$}
-    hideSpoilerImage={$hideSpoilerImage$}
-    hideFurigana={$hideFurigana$}
-    furiganaStyle={$furiganaStyle$}
-    viewMode={$viewMode$}
-    secondDimensionMaxValue={$secondDimensionMaxValue$}
-    {firstDimensionMargin}
-    autoPositionOnResize={$autoPositionOnResize$}
-    avoidPageBreak={$avoidPageBreak$}
-    pageColumns={$pageColumns$}
-    autoBookmark={$autoBookmark$}
-    autoBookmarkTime={$autoBookmarkTime$}
-    multiplier={$multiplier$}
-    bind:exploredCharCount
-    bind:bookCharCount
-    bind:isBookmarkScreen
-    bind:bookmarkData
-    bind:autoScroller
-    bind:bookmarkManager
-    bind:pageManager
-    bind:customReadingPoint
-    bind:customReadingPointTop
-    bind:customReadingPointLeft
-    bind:customReadingPointScrollOffset
-    bind:customReadingPointRange
-    bind:showCustomReadingPoint
-    on:bookmark={bookmarkPage}
-    on:trackerPause={() => pauseTracker(true)}
-  />
+  <!-- New HTML (generated furigana): remount, as on opening the book; the readers can't swap it in place. -->
+  {#key $bookData$.htmlContent}
+    <BookReader
+      htmlContent={$bookData$.htmlContent}
+      width={$containerViewportWidth$ ?? 0}
+      height={Math.max(0, ($containerViewportHeight$ ?? 0) - listenReserve)}
+      {fontFeatureSettings}
+      {verticalTextOrientation}
+      prioritizeReaderStyles={$prioritizeReaderStyles$}
+      enableTextJustification={$enableTextJustification$}
+      enableTextWrapPretty={$enableTextWrapPretty$}
+      verticalMode={$verticalMode$}
+      fontColor={$themeOption$?.fontColor}
+      backgroundColor={$backgroundColor$}
+      hintFuriganaFontColor={$themeOption$?.hintFuriganaFontColor}
+      hintFuriganaShadowColor={$themeOption$?.hintFuriganaShadowColor}
+      fontFamilyGroupOne={$fontFamilyGroupOne$}
+      fontFamilyGroupTwo={$fontFamilyGroupTwo$}
+      fontWeight={$fontWeight$}
+      fontSize={$fontSize$}
+      lineHeight={$lineHeight$}
+      textIndentation={$textIndentation$}
+      textMarginMode={$textMarginMode$}
+      textMarginValue={$textMarginValue$}
+      hideSpoilerImage={$hideSpoilerImage$}
+      hideFurigana={$hideFurigana$}
+      furiganaStyle={$furiganaStyle$}
+      viewMode={$viewMode$}
+      secondDimensionMaxValue={$secondDimensionMaxValue$}
+      {firstDimensionMargin}
+      autoPositionOnResize={$autoPositionOnResize$}
+      avoidPageBreak={$avoidPageBreak$}
+      pageColumns={$pageColumns$}
+      autoBookmark={$autoBookmark$}
+      autoBookmarkTime={$autoBookmarkTime$}
+      multiplier={$multiplier$}
+      bind:exploredCharCount
+      bind:bookCharCount
+      bind:isBookmarkScreen
+      bind:bookmarkData
+      bind:autoScroller
+      bind:bookmarkManager
+      bind:pageManager
+      bind:customReadingPoint
+      bind:customReadingPointTop
+      bind:customReadingPointLeft
+      bind:customReadingPointScrollOffset
+      bind:customReadingPointRange
+      bind:showCustomReadingPoint
+      on:bookmark={bookmarkPage}
+      on:trackerPause={() => pauseTracker(true)}
+    />
+  {/key}
   {$initBookmarkData$ ?? ''}
   {$setBackgroundColor$ ?? ''}
   {$setWritingMode$ ?? ''}

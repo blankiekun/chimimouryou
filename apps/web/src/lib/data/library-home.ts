@@ -15,6 +15,7 @@ import { isFinished, isReading } from '$lib/components/book-card/library-filters
 import { orderSeries } from '$lib/components/book-card/library-sort';
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
+import { deleteCachedReadings } from '$lib/data/generated-furigana';
 import { deleteVnCache } from '$lib/data/vn';
 
 export type LibraryTab = 'home' | 'store';
@@ -53,6 +54,7 @@ export function removeFromHome(title: string) {
   homeBookTitles$.next(homeBookTitles$.getValue().filter((t) => t !== title));
   homeRemovedTitles$.next({ ...homeRemovedTitles$.getValue(), [title]: Date.now() });
   deleteVnCache(title).catch(() => {});
+  deleteCachedReadings(title).catch(() => {});
 }
 
 export interface SeriesMatch {

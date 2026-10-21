@@ -11,8 +11,10 @@
  * counted, so character counts (bookmarks, highlights) don't change.
  */
 
-import { Observable } from 'rxjs';
+import { lastValueFrom, Observable } from 'rxjs';
 import { difficultyApiUrl, loadCalibreCatalog } from '$lib/data/calibre';
+import { readerDb } from '$lib/data/reader-db';
+import { generatedFurigana$ } from '$lib/data/store';
 import {
   getTextSegments,
   offsetForCount,
@@ -27,10 +29,23 @@ export interface ReadingsFile {
   occ: number[];
 }
 
+/** A readings file kept in the browser (reader-db `readings`), so books open with it at once. */
+export interface CachedReadings {
+  title: string;
+  etag: string;
+  file: ReadingsFile;
+}
+
+// The server makes a new file in seconds to a minute: ask soon, then every 15 s (nginx allows
+// 6 requests a minute per address, burst 10).
+const pollDelays = [3_000, 5_000, 10_000];
 const pollInterval = 15_000;
 const pollLimit = 40;
 
-async function requestReadings(id: number): Promise<ReadingsFile | 'queued' | undefined> {
+async function requestReadings(
+  id: number,
+  etag?: string
+): Promise<Omit<CachedReadings, 'title'> | 'unchanged' | 'queued' | undefined> {
   const url = `${difficultyApiUrl}readings/${id}`;
   const response = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(5000) });
   const status = response.ok ? (await response.json()).status : undefined;
@@ -38,46 +53,74 @@ async function requestReadings(id: number): Promise<ReadingsFile | 'queued' | un
   if (status === 'queued') return 'queued';
   if (status !== 'ready') return undefined;
 
-  const file = await fetch(url, { cache: 'no-cache', signal: AbortSignal.timeout(15000) });
+  const file = await fetch(url, {
+    cache: 'no-store',
+    headers: etag ? { 'If-None-Match': etag } : {},
+    signal: AbortSignal.timeout(15000)
+  });
 
-  return file.ok ? file.json() : undefined;
+  if (file.status === 304) return 'unchanged';
+
+  return file.ok ? { etag: file.headers.get('ETag') || '', file: await file.json() } : undefined;
 }
 
 /**
  * The book's readings file, or undefined first while the server makes it (then the file
  * once it is ready), or undefined when there is none (no catalog entry, no difficulty
- * service, offline). Always emits at least once.
+ * service, offline). A copy kept in the browser is emitted first and stays when the server
+ * can't be reached; the server's is emitted only when it differs. Always emits at least once.
  */
 export function generatedReadings$(title: string) {
   return new Observable<ReadingsFile | undefined>((subscriber) => {
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let cached: CachedReadings | undefined;
+
+    const done = (file?: ReadingsFile) => {
+      if (file || !cached) subscriber.next(file);
+      subscriber.complete();
+    };
 
     const attempt = async (id: number, tries: number) => {
-      const result = await requestReadings(id).catch(() => undefined);
+      const result = await requestReadings(id, cached?.etag).catch(() => undefined);
 
       if (stopped) return;
-      if (result !== 'queued') {
-        subscriber.next(result);
+      if (result === 'unchanged') {
         subscriber.complete();
+      } else if (result !== 'queued') {
+        if (result) {
+          readerDb()
+            .then((db) => db.put('readings', { title, ...result }))
+            .catch(() => undefined);
+        }
+        done(result?.file);
       } else if (tries < pollLimit) {
-        if (!tries) subscriber.next(undefined);
-        timer = setTimeout(() => attempt(id, tries + 1), pollInterval);
+        if (!tries && !cached) subscriber.next(undefined);
+        timer = setTimeout(() => attempt(id, tries + 1), pollDelays[tries] ?? pollInterval);
       } else {
         subscriber.complete();
       }
     };
 
-    loadCalibreCatalog()
+    const id = loadCalibreCatalog()
       .then((books) => books.find((book) => book.title === title)?.id)
+      .catch(() => undefined);
+
+    readerDb()
+      .then((db) => db.get('readings', title))
       .catch(() => undefined)
-      .then((id) => {
+      .then(async (file) => {
         if (stopped) return;
-        if (id === undefined) {
-          subscriber.next(undefined);
-          subscriber.complete();
+        cached = file;
+        if (cached) subscriber.next(cached.file);
+
+        const bookId = await id;
+
+        if (stopped) return;
+        if (bookId === undefined) {
+          done();
         } else {
-          attempt(id, 0);
+          attempt(bookId, 0);
         }
       });
 
@@ -86,6 +129,38 @@ export function generatedReadings$(title: string) {
       clearTimeout(timer);
     };
   });
+}
+
+let prefetching: Promise<void> | undefined;
+
+/**
+ * Keeps the readings files of these books (Home's) in the browser before they are opened,
+ * one every 30 s: each check costs the server's rate limit (nginx: 6 a minute) that opening
+ * a book needs too. Books already kept are skipped; the reader checks those when it opens them.
+ */
+export function prefetchReadings(titles: string[], pause = 30_000) {
+  if (prefetching || !generatedFurigana$.getValue()) return prefetching;
+
+  prefetching = (async () => {
+    for (const title of titles) {
+      if (!generatedFurigana$.getValue()) break;
+      if (await (await readerDb()).getKey('readings', title)) continue;
+
+      await lastValueFrom(generatedReadings$(title), { defaultValue: undefined });
+      await new Promise((resolve) => setTimeout(resolve, pause));
+    }
+  })()
+    .catch(() => {})
+    .finally(() => {
+      prefetching = undefined;
+    });
+
+  return prefetching;
+}
+
+/** Frees a book's kept readings file, e.g. when it leaves the library or Home. */
+export async function deleteCachedReadings(title: string) {
+  await (await readerDb()).delete('readings', title);
 }
 
 /** The book's HTML with the readings file's furigana added; unchanged if the counts differ. */
