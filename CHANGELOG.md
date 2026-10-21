@@ -15,7 +15,7 @@ anything a reader or a server operator would notice.
 
 ### Added
 
-- Reader: generated furigana (Settings → Reader, and a switch in the reader's quick settings): words
+- Reader: generated furigana (Settings → Reader, next to Hide furigana): words
   the book gives no furigana get yurigana's reading from the difficulty service, in a colour
   leaning towards the theme's accent. Calibre books only; the server prepares a book the first time
   (they appear when ready). Hide/hover furigana styles apply to them too.

@@ -533,7 +533,6 @@ export const en = {
   'reader.theme': 'Theme',
   'reader.fontSize': 'Font size',
   'reader.hoverFurigana': 'Furigana on hover',
-  'reader.generatedFurigana': 'Generated furigana',
   'reader.smaller': 'Smaller',
   'reader.larger': 'Larger',
   'reader.more': 'More reader actions',
@@ -833,7 +832,7 @@ export const en = {
     'Hidden, shown while the pointer is over it; tap to toggle on touch screens',
   'prefs.generatedFurigana': 'Generated furigana',
   'prefs.generatedFuriganaHint':
-    "Furigana from the server (yurigana) on words the book gives none, in a softer colour. Calibre books with the difficulty service; a book's first time can take a minute",
+    'Furigana from the server (yurigana) on words the book gives none, in a softer colour. Calibre books with the difficulty service. The first time a book is opened, they can take 10 seconds or more to generate and appear once ready.',
   'prefs.furiganaPartialHint': 'Display furigana as grayed out text',
   'prefs.viewMode': 'View mode',
   'prefs.marginLeftRight': 'Reader Left/right margin',
