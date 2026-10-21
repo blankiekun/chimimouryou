@@ -4,8 +4,16 @@
  * All rights reserved.
  */
 
-import { describe, expect, it } from 'vitest';
-import { addGeneratedRuby, type ReadingsFile } from './generated-furigana';
+import 'fake-indexeddb/auto';
+import { firstValueFrom, toArray } from 'rxjs';
+import { describe, expect, it, vi } from 'vitest';
+import { addGeneratedRuby, generatedReadings$, type ReadingsFile } from './generated-furigana';
+import { readerDb } from './reader-db';
+
+vi.mock('$lib/data/calibre', () => ({
+  difficultyApiUrl: '/api/',
+  loadCalibreCatalog: () => Promise.resolve([{ id: 7, title: 'Book' }])
+}));
 
 const html = '<div><p>三本の木を<ruby>見<rt>み</rt></ruby>た。行った。</p></div>';
 
@@ -42,5 +50,52 @@ describe('addGeneratedRuby', () => {
     };
 
     expect(addGeneratedRuby(html, readings)).toBe(html);
+  });
+});
+
+describe('generatedReadings$', () => {
+  const file = (characters: number): ReadingsFile => ({ characters, glosses: [], occ: [] });
+  const serve = (get: () => Response) =>
+    vi.fn((_url: string, init?: RequestInit) =>
+      Promise.resolve(
+        init?.method === 'POST' ? new Response(JSON.stringify({ status: 'ready' })) : get()
+      )
+    );
+
+  it('keeps the file in the browser and asks for it again only when it changed', async () => {
+    const fetchMock = serve(
+      () => new Response(JSON.stringify(file(1)), { headers: { ETag: '"a"' } })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await firstValueFrom(generatedReadings$('Book').pipe(toArray()))).toEqual([file(1)]);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(await (await readerDb()).get('readings', 'Book')).toEqual({
+      title: 'Book',
+      etag: '"a"',
+      file: file(1)
+    });
+
+    const unchanged = serve(() => new Response(null, { status: 304 }));
+    vi.stubGlobal('fetch', unchanged);
+
+    expect(await firstValueFrom(generatedReadings$('Book').pipe(toArray()))).toEqual([file(1)]);
+    expect(unchanged.mock.calls[1][1]?.headers).toEqual({ 'If-None-Match': '"a"' });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new TypeError('offline')))
+    );
+    expect(await firstValueFrom(generatedReadings$('Book').pipe(toArray()))).toEqual([file(1)]);
+
+    vi.stubGlobal(
+      'fetch',
+      serve(() => new Response(JSON.stringify(file(2)), { headers: { ETag: '"b"' } }))
+    );
+    expect(await firstValueFrom(generatedReadings$('Book').pipe(toArray()))).toEqual([
+      file(1),
+      file(2)
+    ]);
+    vi.unstubAllGlobals();
   });
 });

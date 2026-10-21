@@ -19,6 +19,9 @@ anything a reader or a server operator would notice.
   the book gives no furigana get yurigana's reading from the difficulty service, in a colour
   leaning towards the theme's accent. Calibre books only; the server prepares a book the first time
   (they appear when ready). Hide/hover furigana styles apply to them too.
+  Each book's furigana are kept in the browser, so the book opens with them at once (offline too)
+  and they are only downloaded again when the server's change; a book being prepared is asked for
+  again after 3 s rather than 15 s.
 - Reader: a "Hover" furigana style (hidden, shown while the pointer is over a word; tap toggles on
   touch screens) and a "Furigana on hover" switch in the reader's quick settings (palette icon).
 - Difficulty estimates: admins can add Yomitan term dictionaries of their own (admin panel → Tools,

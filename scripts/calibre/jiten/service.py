@@ -692,10 +692,17 @@ class Handler(BaseHTTPRequestHandler):
             folder = {'kanji': KANJI_DIR, 'words': WORDS_DIR, 'readings': READINGS_DIR}[parts[0]]
             try:
                 with open(os.path.join(folder, f'{int(parts[1])}.json.gz'), 'rb') as f:
+                    stat = os.fstat(f.fileno())
+                    etag = f'"{stat.st_mtime_ns:x}-{stat.st_size:x}"'
+                    if self.headers.get('If-None-Match') == etag:
+                        self.send_response(304)
+                        self.send_header('ETag', etag)
+                        return self.end_headers()
                     data = f.read()
             except OSError:
                 return self._send(404, {'error': f'no {parts[0]} for this book'})
             self.send_response(200)
+            self.send_header('ETag', etag)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Content-Encoding', 'gzip')
             self.send_header('Content-Length', str(len(data)))

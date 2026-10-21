@@ -6,7 +6,8 @@
 
 /**
  * The browser database for reader extras (highlights, "Story so far" summaries,
- * lorebooks, audiobooks, kanji seen, visual novel pages read, Audiobookshelf subtitles and
+ * lorebooks, audiobooks, kanji seen, visual novel pages read, Audiobookshelf subtitles,
+ * generated furigana readings files and
  * known words from Anki), separate from upstream's books
  * database. Not part of upstream.
  */
@@ -14,6 +15,7 @@
 import { openDB, type DBSchema } from 'idb';
 import type { BookAnnotations } from '$lib/data/annotations';
 import type { BookAudiobook } from '$lib/data/audiobook';
+import type { CachedReadings } from '$lib/data/generated-furigana';
 import type { AbsSubtitles } from '$lib/data/audiobookshelf';
 import type { KanjiSeen } from '$lib/data/kanji-seen';
 import type { CoverageCache, KnownWords } from '$lib/data/known-words';
@@ -32,6 +34,7 @@ interface ReaderDb extends DBSchema {
   kanji: { key: string; value: KanjiSeen };
   vnRead: { key: string; value: VnRead };
   absSubtitles: { key: string; value: AbsSubtitles };
+  readings: { key: string; value: CachedReadings };
   /**
    * 'words' and 'coverage' (known-words.ts), 'met' and 'list:<id>' (words-met.ts), 'marks'
    * (word-marks.ts), 'history' (words-history.ts)
@@ -47,7 +50,7 @@ let dbPromise: ReturnType<typeof openDB<ReaderDb>> | undefined;
 /** Named ttu-annotations for historical reasons; it holds every reader extra. */
 export function readerDb() {
   dbPromise ??= new Promise((resolve, reject) => {
-    openDB<ReaderDb>('ttu-annotations', 5, {
+    openDB<ReaderDb>('ttu-annotations', 6, {
       upgrade(database, oldVersion) {
         if (oldVersion < 1) {
           database.createObjectStore('annotations', { keyPath: 'title' });
@@ -66,6 +69,9 @@ export function readerDb() {
         }
         if (oldVersion < 5) {
           database.createObjectStore('known');
+        }
+        if (oldVersion < 6) {
+          database.createObjectStore('readings', { keyPath: 'title' });
         }
       },
       // Another tab still has the previous version open; the upgrade waits for it.
