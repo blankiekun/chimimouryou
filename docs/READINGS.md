@@ -25,8 +25,8 @@ as hints), a context rule, the reading model, the list's only reading, a default
 reading; conjugated occurrences get the dictionary form's reading too. One `Reader` per
 worker, with the Analyzer as its tokenizer (no second tokenizing of the book) and the
 worker's reading list. Name ruby is not carried to later bare occurrences (`read()` without
-`carry`): a name's word list row is left out anyway, and showing carried readings is
-undecided.
+`carry`): a name's word list row is left out anyway. Readings files carry it and gloss the
+carried readings (below).
 
 A row is a Sudachi word (its form, part of speech and lemma), and only a `Reader` word over
 exactly that word's token gives its reading:
@@ -87,7 +87,7 @@ as hints, like `book_text`.
 
 **Readings**: yurigana's `Reader` with the word lists' reading list (Jiten's frequency list)
 and tables, as for word lists. The whole book is one text read with `carry={}`, so a name's ruby is carried to its
-later bare occurrences (`source` 'book'); those get no gloss (see below).
+later bare occurrences (`source` 'book', also earlier ones for names of 2+ characters); those are glossed (see below).
 
 **Format** (gzipped JSON):
 
@@ -104,8 +104,8 @@ later bare occurrences (`source` 'book'); those get no gloss (see below).
   tokens' own words, at the same start (Δstart 0 for the first of them).
 
 **What gets furigana** (a gloss): a hiragana reading on the list that comes from the list's
-only reading, a context rule or the reading model (never Sudachi's guess, a default, a
-counter span or a name's carried ruby); not under the book's
+only reading, a context rule, the reading model or a name's ruby carried from elsewhere in the book
+(never Sudachi's guess, a default or a counter span); not under the book's
 own ruby; and not a form the book flavour-rubied earlier: once ruby that isn't the word's
 reading covers it (katakana like マジ over 本気, ruby with kanji, or rejected hiragana over the
 whole word like そら over 宇宙), later bare occurrences of that form get none. Partial hiragana

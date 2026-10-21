@@ -25,6 +25,8 @@ anything a reader or a server operator would notice.
   preparing a book (~20 s to load, ~3 s per book), and reuses a book's furigana when it is processed
   again with the same text (another device, or deleted and reopened). Home's books get their furigana
   in the background, and a book's page asks for them, so books usually open with them already there.
+- Reader: generated furigana also go over names (and other words) the book gives ruby once and
+  leaves bare elsewhere, with the book's own reading. Readings files are made again on the next request.
 - Reader: a "Hover" furigana style (hidden, shown while the pointer is over a word; tap toggles on
   touch screens) and a "Furigana on hover" switch in the reader's quick settings (palette icon).
 - Difficulty estimates: admins can add Yomitan term dictionaries of their own (admin panel → Tools,
