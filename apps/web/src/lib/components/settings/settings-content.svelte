@@ -31,6 +31,7 @@
     database,
     fontFamilyGroupOne$,
     fontFamilyGroupTwo$,
+    generatedFurigana$,
     horizontalCustomReadingPosition$,
     textMarginMode$,
     textMarginValue$,
@@ -561,6 +562,12 @@
   {/if}
   <SettingsItemGroup title={$t$('prefs.hideFurigana')}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={hideFurigana} />
+  </SettingsItemGroup>
+  <SettingsItemGroup
+    title={$t$('prefs.generatedFurigana')}
+    tooltip={$t$('prefs.generatedFuriganaHint')}
+  >
+    <ButtonToggleGroup options={toggle} bind:selectedOptionId={$generatedFurigana$} />
   </SettingsItemGroup>
   {#if hideFurigana}
     <SettingsItemGroup title={$t$('prefs.furiganaStyle')} tooltip={furiganaStyleTooltip}>

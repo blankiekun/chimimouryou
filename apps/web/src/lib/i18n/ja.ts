@@ -534,6 +534,7 @@ export const ja: Record<MessageKey, string> = {
   'reader.theme': 'テーマ',
   'reader.fontSize': '文字サイズ',
   'reader.hoverFurigana': 'ホバーでふりがな',
+  'reader.generatedFurigana': '自動ふりがな',
   'reader.smaller': '小さく',
   'reader.larger': '大きく',
   'reader.more': 'その他の操作',
@@ -829,6 +830,9 @@ export const ja: Record<MessageKey, string> = {
     'どの漢字にも読書で{count}回以上出会っていて、ふりがながその漢字の普通のひらがなの読みなら表示しません（クリックで切替）。カタカナ、漢字、珍しい読み（本気→マジ、宇宙→そら）は常に表示します。今日→きょうのような特別な読みや、常用・人名用以外の漢字も表示します。出会った漢字は本を開き直すと更新されます。',
   'prefs.furiganaHoverHint':
     '最初は表示せず、ポインターを重ねている間だけ表示します。タッチ画面ではタップで切り替えます。',
+  'prefs.generatedFurigana': '自動ふりがな',
+  'prefs.generatedFuriganaHint':
+    '本にふりがながない語に、サーバー（yurigana）が付けたふりがなを淡い色で表示します。難易度サービスのあるCalibreの本のみ。初めての本は少し時間がかかります。',
   'prefs.furiganaPartialHint': 'ふりがなを薄い色で表示します。',
   'prefs.viewMode': '表示モード',
   'prefs.marginLeftRight': '左右の余白',
