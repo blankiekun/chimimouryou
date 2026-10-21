@@ -11,6 +11,7 @@
     of,
     share,
     shareReplay,
+    distinctUntilChanged,
     skip,
     startWith,
     Subject,
@@ -93,8 +94,10 @@
     showPercentage$,
     enableVerticalFontKerning$,
     enableFontVPAL$,
-    verticalTextOrientation$
+    verticalTextOrientation$,
+    generatedFurigana$
   } from '$lib/data/store';
+  import { addGeneratedRuby, generatedReadings$ } from '$lib/data/generated-furigana';
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
   import ReaderCompanion, {
     type CompanionTab
@@ -467,12 +470,33 @@
 
       sectionList$.next(rawBookData.sections || []);
 
-      return loadBookData(
-        rawBookData,
-        '.book-content',
-        document,
-        $viewMode$ === ViewMode.Paginated,
-        $hideSpoilerImageMode$
+      const isCalibreBook = rawBookData.storageSource === StorageSourceDefault.CALIBRE_DEFAULT;
+      let rendered = false;
+
+      return generatedFurigana$.pipe(
+        switchMap((on) =>
+          on && isCalibreBook ? generatedReadings$(rawBookData.title) : of(undefined)
+        ),
+        distinctUntilChanged(),
+        switchMap((readings) => {
+          // Re-rendered while reading (switch, or the readings file got ready): keep the place.
+          if (rendered && bookmarkManager) {
+            bookmarkData = Promise.resolve(
+              bookmarkManager.formatBookmarkData(rawBookData.id, customReadingPointScrollOffset)
+            );
+          }
+          rendered = true;
+
+          return loadBookData(
+            readings
+              ? { ...rawBookData, elementHtml: addGeneratedRuby(rawBookData.elementHtml, readings) }
+              : rawBookData,
+            '.book-content',
+            document,
+            $viewMode$ === ViewMode.Paginated,
+            $hideSpoilerImageMode$
+          );
+        })
       );
     }),
     shareReplay({ refCount: true, bufferSize: 1 })
@@ -1851,9 +1875,7 @@
             component: showReport ? LogReportDialog : MessageDialog,
             props: {
               title: tr('reader.processError'),
-              message: showReport
-                ? tr('reader.processErrorReport')
-                : error
+              message: showReport ? tr('reader.processErrorReport') : error
             }
           }
         ]);
@@ -2585,7 +2607,11 @@
     >
       {$t$(absenceTab.label)}
     </button>
-    <button class="px-2 opacity-70" title={$t$('reader.dismiss')} on:click={() => (welcomeBackDays = 0)}>
+    <button
+      class="px-2 opacity-70"
+      title={$t$('reader.dismiss')}
+      on:click={() => (welcomeBackDays = 0)}
+    >
       ✕
     </button>
   </div>

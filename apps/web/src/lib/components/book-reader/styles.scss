@@ -124,6 +124,11 @@
   }
 }
 
+// Generated furigana (generated-furigana.ts): the book's own colour leaning towards the accent.
+:global(ruby.ttu-gen-ruby > rt) {
+  color: color-mix(in srgb, var(--accent-color) 55%, currentColor);
+}
+
 .book-content--hide-furigana.book-content--furigana-style-hide {
   :global(rt) {
     display: none;

@@ -88,6 +88,8 @@ export const hideSpoilerImageMode$ = writableStringLocalStorageSubject<BlurMode>
   BlurMode.AFTER_TOC
 );
 export const hideFurigana$ = writableBooleanLocalStorageSubject()('hideFurigana', false);
+// Furigana from the server's readings files (generated-furigana.ts) on words the book gives none.
+export const generatedFurigana$ = writableBooleanLocalStorageSubject()('generatedFurigana', false);
 export const furiganaStyle$ = writableStringLocalStorageSubject<FuriganaStyle>()(
   'furiganaStyle',
   FuriganaStyle.Partial
