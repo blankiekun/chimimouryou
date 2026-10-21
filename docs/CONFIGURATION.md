@@ -118,7 +118,7 @@ under a second per novel), never waiting behind an estimate job; at most 100 wai
 whose `staticdata.json` is over 30 MB is skipped.
 
 The reading engine's tables and the frequency list are built once into
-`state/difficulty/reader.ygp` and `frequency.ygp` (about 80 MB and 60 MB, ~25 s, again when
+`state/difficulty/reader.ygp` and `frequency.ygp` (about 80 MB and 25 MB, ~25 s, again when
 yurigana, the frequency list or the term dictionaries change); every worker maps those files
 instead of building its own copy, so workers share them and start at once (an estimate worker
 uses about 500 MB while scoring a novel).
