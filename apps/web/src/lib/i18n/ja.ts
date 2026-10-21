@@ -506,6 +506,7 @@ export const ja: Record<MessageKey, string> = {
   'library.selectedBooks': '選択した本（{count}冊）',
   'library.estimating': '難易度を算出中：{done} / {total}',
   'library.jobCancelled': '（キャンセル）',
+  'library.jobCancelling': '（キャンセル中…）',
   'library.jobFailed': '（失敗）',
   'library.jobDone': '（完了）',
   'library.mokuroServer': 'mokuro ページテキスト（{date} サーバーで生成）',

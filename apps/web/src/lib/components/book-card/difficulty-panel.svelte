@@ -18,6 +18,8 @@
       started: number;
       finished?: number;
       cancelled?: boolean;
+      /** Cancel was asked for and the workers are being stopped */
+      cancelling?: boolean;
       error?: string;
     } | null;
     /** Whether the frequency list is installed on the server */
@@ -96,13 +98,24 @@
       let response = await upload(false);
 
       // Replacing a list whose readings disagree with the installed one needs a confirmation.
-      const agreement = response.status === 409 ? (await response.clone().json().catch(() => ({}))).agreement : undefined;
+      const agreement =
+        response.status === 409
+          ? (
+              await response
+                .clone()
+                .json()
+                .catch(() => ({}))
+            ).agreement
+          : undefined;
 
       if (
         typeof agreement === 'number' &&
         confirm(
           tr('library.dictionaryMismatch', {
-            agreement: agreement.toLocaleString(undefined, { style: 'percent', maximumFractionDigits: 1 })
+            agreement: agreement.toLocaleString(undefined, {
+              style: 'percent',
+              maximumFractionDigits: 1
+            })
           })
         )
       ) {
@@ -174,13 +187,17 @@
   {/if}
 
   {#if !status && !error}
-    <p class="flex items-center gap-2"><Fa icon={faSpinner} spin /> {$t$('library.loadingStatus')}</p>
+    <p class="flex items-center gap-2">
+      <Fa icon={faSpinner} spin />
+      {$t$('library.loadingStatus')}
+    </p>
   {:else if status}
     {#if !status.dictionary}
       <div class="flex flex-col gap-2">
         {#if $account$?.admin}
           <p>
-            {#each dictionaryParts as part}{#if part === '{file}'}<strong>jiten_freq_global.zip</strong
+            {#each dictionaryParts as part}{#if part === '{file}'}<strong
+                  >jiten_freq_global.zip</strong
                 >{:else if part === '{link}'}<a
                   class="underline"
                   href="https://jiten.moe/frequency-dictionaries"
@@ -262,9 +279,11 @@
               done: job.done.toLocaleString(),
               total: job.total.toLocaleString()
             })}
-            {#if job.cancelled}{$t$('library.jobCancelled')}{:else if job.error}{$t$(
-                'library.jobFailed'
-              )}{:else if job.finished}{$t$('library.jobDone')}{/if}
+            {#if job.cancelled}{$t$('library.jobCancelled')}{:else if job.cancelling}{$t$(
+                'library.jobCancelling'
+              )}{:else if job.error}{$t$('library.jobFailed')}{:else if job.finished}{$t$(
+                'library.jobDone'
+              )}{/if}
           </span>
         </div>
         <progress class="w-full" value={job.done} max={job.total || 1} />
@@ -272,7 +291,11 @@
           <p class="text-[color:var(--app-danger-color)]">{job.error}</p>
         {/if}
         {#if running}
-          <button class="{buttonClasses} self-start" on:click={() => post('cancel')}>
+          <button
+            class="{buttonClasses} self-start"
+            disabled={job.cancelling}
+            on:click={() => post('cancel')}
+          >
             {$t$('book.cancel')}
           </button>
         {/if}

@@ -40,6 +40,8 @@ anything a reader or a server operator would notice.
 
 ### Fixed
 
+- Cancelling a difficulty job stops it within a second instead of after the books in progress
+  finish, and the panel shows "cancelling…" until it has stopped.
 - Word lists and readings files: 行っ on a going cue (学校へ行った) reads いっ, not おこなっ (yurigana
   0.5.1). "Books without an estimate" redoes the word lists (`WORDS_VERSION` 11).
 

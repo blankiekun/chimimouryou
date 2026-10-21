@@ -495,6 +495,7 @@ export const en = {
   'library.selectedBooks': 'Selected books ({count})',
   'library.estimating': 'Estimating difficulty: {done} / {total}',
   'library.jobCancelled': '(cancelled)',
+  'library.jobCancelling': '(cancelling…)',
   'library.jobFailed': '(failed)',
   'library.jobDone': '(done)',
   'library.mokuroServer': 'Page text by mokuro (made on the server {date})',
