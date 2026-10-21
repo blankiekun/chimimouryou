@@ -118,9 +118,13 @@ SYNC_DIR = os.environ.get('SYNC_DIR', '/data/sync')
 READINGS_DIR = os.path.join(STATE_DIR, 'readings')
 READINGS_QUEUE_MAX = 100
 MAX_STATICDATA_BYTES = 30 * 1024 * 1024
-# The readings worker's Reader takes ~20 s to load and building a file ~3 s: keep it this long
-# after its last file (~750 MB) so the next book opened doesn't wait for the load again.
-READINGS_KEEP_ALIVE = 600
+# Building a file takes ~3 s: keep the readings worker this long after its last file so the next
+# book opened doesn't start a process again (its Reader loads from READER_PACK at once).
+READINGS_KEEP_ALIVE = 120
+# The Reader's tables (known list, JMdict, term dictionaries): built once (~20 s, ~620 MB) by
+# Reader.save, then every worker maps the file (Reader.load: no parse, ~100 MB, pages shared).
+# The .key file names the inputs it was built from.
+READER_PACK = os.path.join(STATE_DIR, 'reader.ygp')
 WORKERS = int(os.environ.get('JITEN_WORKERS', os.cpu_count() or 1))
 PORT = int(os.environ.get('JITEN_PORT', '8765'))
 HOST = os.environ.get('JITEN_HOST', '127.0.0.1')
@@ -143,7 +147,6 @@ _reader = None
 
 def _init_worker():
     global _analyzer, _frequency, _sessions, _reader
-    from yurigana import Reader
     from yurigana.yomitan import with_extra_readings
     import warnings
     warnings.filterwarnings('ignore')
@@ -154,8 +157,7 @@ def _init_worker():
     _frequency = FrequencyTable.load(FREQUENCY_DICTIONARY)
     # Sharing the Analyzer's tokens and the list's readings: no second Sudachi or copy of the list.
     # The extra readings (描く かく…) as Reader(known=path) adds them; the features keep the plain list.
-    _reader = Reader(known=with_extra_readings(_frequency.reading_ranks), tables=READING_MODEL_TABLES, tokenizer=_analyzer,
-                     **term_options())
+    _reader = _load_reader(_analyzer, lambda: with_extra_readings(_frequency.reading_ranks))
     options = onnxruntime.SessionOptions()
     options.intra_op_num_threads = 1
     options.inter_op_num_threads = 1
@@ -280,9 +282,60 @@ def _estimate(book: dict):
 
 def _init_readings_worker():
     global _reader
-    from yurigana import Reader
     # The known list and the server's reading model the estimates use (yurigana adds its public table).
-    _reader = Reader(known=FREQUENCY_DICTIONARY, tables=READING_MODEL_TABLES, **term_options())
+    _reader = _load_reader()
+
+
+def _load_reader(tokenizer=None, known=lambda: FREQUENCY_DICTIONARY):
+    """READER_PACK's Reader, or one built here when the file is missing or another yurigana saved it.
+    `known` gives the list to build from: the same pairs as the file's (Reader(known=path) reads them
+    as FrequencyTable does and adds with_extra_readings')."""
+    from yurigana import Reader
+    try:
+        if reader_pack_current():
+            return Reader.load(READER_PACK, tables=READING_MODEL_TABLES, tokenizer=tokenizer)
+    except (OSError, ValueError) as error:
+        print(f'reader pack: {error}', file=sys.stderr, flush=True)
+    return Reader(known=known(), tables=READING_MODEL_TABLES, tokenizer=tokenizer, **term_options())
+
+
+def reader_pack_key() -> str:
+    paths = [FREQUENCY_DICTIONARY, *term_dictionaries()]
+    return reader_version() + ' ' + ','.join(f'{os.path.basename(p)}:{os.path.getsize(p)}:{os.path.getmtime(p)}'
+                                             for p in paths if os.path.exists(p))
+
+
+def reader_pack_current() -> bool:
+    try:
+        with open(READER_PACK + '.key', encoding='utf-8') as f:
+            return f.read() == reader_pack_key() and os.path.exists(READER_PACK)
+    except OSError:
+        return False
+
+
+def _save_reader_pack(key: str):
+    from yurigana import Reader
+    Reader(known=FREQUENCY_DICTIONARY, **term_options()).save(READER_PACK + '.tmp')
+    os.replace(READER_PACK + '.tmp', READER_PACK)
+    with open(READER_PACK + '.key.tmp', 'w', encoding='utf-8') as f:
+        f.write(key)
+    os.replace(READER_PACK + '.key.tmp', READER_PACK + '.key')
+
+
+_reader_pack_lock = threading.Lock()
+
+
+def ensure_reader_pack():
+    """Builds READER_PACK, in a process of its own (its memory goes back when it exits), when it is
+    missing or its inputs changed. Workers that start meanwhile build their own Reader."""
+    with _reader_pack_lock:
+        if reader_pack_current() or not os.path.exists(FREQUENCY_DICTIONARY):
+            return
+        try:
+            with ProcessPoolExecutor(1) as pool:
+                pool.submit(_save_reader_pack, reader_pack_key()).result()
+        except Exception as error:
+            print(f'reader pack: {error}', file=sys.stderr, flush=True)
 
 
 def term_dictionaries() -> list:
@@ -358,7 +411,7 @@ def find_bookdata(title: str):
 
 class ReadingsQueue:
     """Readings files to make, in request order, by one worker process that lives while there
-    is work (a Reader takes a few seconds and ~750 MB to load)."""
+    is work."""
 
     def __init__(self):
         self.lock = threading.Lock()
@@ -422,7 +475,9 @@ class ReadingsQueue:
                     time.sleep(1)
                     continue
                 book_id, bookdata = job
-                pool = pool or ProcessPoolExecutor(1, initializer=_init_readings_worker)
+                if not pool:
+                    ensure_reader_pack()
+                    pool = ProcessPoolExecutor(1, initializer=_init_readings_worker)
                 try:
                     pool.submit(_make_readings, book_id, bookdata).result()
                 except Exception as error:
@@ -448,6 +503,7 @@ def run_in_pools(books, task, cancel: threading.Event):
     """Yields (book, result or exception), using fresh worker pools per chunk.
     Books lost when a worker process dies (e.g. out of memory) are retried one at a
     time, so only a book that kills a worker on its own is reported as failed."""
+    ensure_reader_pack()
     for start in range(0, len(books), BOOKS_PER_POOL):
         lost = []
         yield from _run_pool(books[start:start + BOOKS_PER_POOL], task, cancel, WORKERS, lost)

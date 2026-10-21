@@ -113,9 +113,14 @@ also makes a readings file per book (`state/difficulty/readings/<id>.json.gz`, a
 reader uploaded to the shared sync folder. Anyone who may use that folder can ask for one
 (`POST /calibre/difficulty/api/readings/<id>`, answered `ready`, `queued` or `unavailable`)
 and fetch it (`GET` on the same address); nginx allows 6 requests a minute per address (burst
-10). They are made one at a time in a process of their own (about 750 MB while there is work,
-a few seconds to start, under a second per novel), never waiting behind an estimate job; at
-most 100 wait, and a book whose `staticdata.json` is over 30 MB is skipped.
+10). They are made one at a time in a process of their own (about 300 MB while there is work,
+under a second per novel), never waiting behind an estimate job; at most 100 wait, and a book
+whose `staticdata.json` is over 30 MB is skipped.
+
+The reading engine's tables are built once into `state/difficulty/reader.ygp` (about 80 MB,
+~20 s, again when yurigana, the frequency list or the term dictionaries change); every worker
+maps that file instead of building its own copy, so estimate workers share it (about 100 MB
+each before reading instead of about 620 MB) and start at once.
 
 Term dictionaries (optional, bring your own): admins can add Yomitan term dictionaries in the
 admin panel (Tools → difficulty estimates → Add term dictionary; `POST /calibre/difficulty/api/terms?name=<file name>`,

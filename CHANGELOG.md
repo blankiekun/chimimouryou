@@ -21,8 +21,7 @@ anything a reader or a server operator would notice.
   (they appear when ready). Hide/hover furigana styles apply to them too.
   Each book's furigana are kept in the browser, so the book opens with them at once (offline too)
   and they are only downloaded again when the server's copy changes; a book being prepared is asked for
-  again after 3 s rather than 15 s. The server keeps its reading engine loaded for 10 minutes after
-  preparing a book (~20 s to load, ~3 s per book), and reuses a book's furigana when it is processed
+  again after 3 s rather than 15 s. The server prepares a book in ~3 s, and reuses a book's furigana when it is processed
   again with the same text (another device, or deleted and reopened). Home's books get their furigana
   in the background, and a book's page asks for them, so books usually open with them already there.
 - Reader: generated furigana also go over names (and other words) the book gives ruby once and
@@ -37,6 +36,11 @@ anything a reader or a server operator would notice.
   it reads only one way (姫路 ひめじ) are sure readings in readings files. Before, it gave nothing.
 
 ### Changed
+
+- Difficulty service: the reading engine's tables are built once into
+  `state/difficulty/reader.ygp` (~80 MB) and shared by every worker, so workers start at once
+  and use about 500 MB less each (estimates with 4 workers: ~2 GB less). The readings worker
+  now stops 2 minutes after its last book rather than 10.
 
 - Japanese UI: reworded strings throughout (595 of 973) to read more naturally.
 
