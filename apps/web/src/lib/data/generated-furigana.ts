@@ -13,7 +13,11 @@
 
 import { Observable } from 'rxjs';
 import { difficultyApiUrl, loadCalibreCatalog } from '$lib/data/calibre';
-import { getTextSegments, rangeForCounts } from '$lib/functions/book-text/text-positions';
+import {
+  getTextSegments,
+  offsetForCount,
+  type TextSegment
+} from '$lib/functions/book-text/text-positions';
 
 export interface ReadingsFile {
   characters: number;
@@ -110,26 +114,50 @@ export function addGeneratedRuby(html: string, readings: ReadingsFile) {
     });
   }
 
-  // Backwards, so splitting a text node keeps the earlier marks' offsets in it valid.
-  marks.reverse().forEach(([at, length, base, ruby]) => {
-    const range = rangeForCounts(doc, segments, at, at + length);
+  // Marks and text nodes are both in reading order: group the marks by node, then rebuild
+  // each node once (DOM ranges per mark took ~20 s on a novel).
+  const groups = new Map<TextSegment, typeof marks>();
+  let index = 0;
 
-    if (
-      !range ||
-      range.startContainer !== range.endContainer ||
-      range.toString() !== base ||
-      range.startContainer.parentElement?.closest('ruby')
+  for (const mark of marks) {
+    while (
+      index < segments.length &&
+      segments[index].startCount + segments[index].count <= mark[0]
     ) {
-      return;
+      index += 1;
     }
+    const segment = segments[index];
 
-    const rubyEl = doc.createElement('ruby');
-    const rt = doc.createElement('rt');
+    if (!segment) break;
+    if (mark[0] + mark[1] <= segment.startCount + segment.count) {
+      groups.set(segment, [...(groups.get(segment) || []), mark]);
+    }
+  }
 
-    rubyEl.className = 'ttu-gen-ruby';
-    rt.textContent = ruby;
-    range.surroundContents(rubyEl);
-    rubyEl.append(rt);
+  groups.forEach((group, { node, startCount, text }) => {
+    if (node.nodeType !== Node.TEXT_NODE || node.parentElement?.closest('ruby')) return;
+
+    const fragment = doc.createDocumentFragment();
+    let position = 0;
+
+    group.forEach(([at, length, base, ruby]) => {
+      const from = offsetForCount(text, at - startCount);
+      const to = offsetForCount(text, at - startCount + length, true);
+
+      if (from < position || text.slice(from, to) !== base) return;
+
+      const rubyEl = doc.createElement('ruby');
+      const rt = doc.createElement('rt');
+
+      rubyEl.className = 'ttu-gen-ruby';
+      rt.textContent = ruby;
+      rubyEl.append(base, rt);
+      fragment.append(text.slice(position, from), rubyEl);
+      position = to;
+    });
+
+    fragment.append(text.slice(position));
+    (node as ChildNode).replaceWith(fragment);
   });
 
   return doc.body.innerHTML;
