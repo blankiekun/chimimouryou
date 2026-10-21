@@ -48,6 +48,7 @@
     loadCoverageCache,
     refreshKnownWordsIfStale
   } from '$lib/data/known-words';
+  import { deleteCachedReadings } from '$lib/data/generated-furigana';
   import { deleteVnCache } from '$lib/data/vn';
   import DifficultyDialog from '$lib/components/book-card/difficulty-dialog.svelte';
   import {
@@ -804,7 +805,10 @@
 
     cards
       .filter((card) => deleted.includes(card.id))
-      .forEach((card) => deleteVnCache(card.title).catch(() => {}));
+      .forEach((card) => {
+        deleteVnCache(card.title).catch(() => {});
+        deleteCachedReadings(card.title).catch(() => {});
+      });
 
     if (fromLibrary && !cancelSignal.aborted) {
       const calibreIds = cards

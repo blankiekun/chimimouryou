@@ -130,6 +130,11 @@ export function generatedReadings$(title: string) {
   });
 }
 
+/** Frees a book's kept readings file, e.g. when it leaves the library or Home. */
+export async function deleteCachedReadings(title: string) {
+  await (await readerDb()).delete('readings', title);
+}
+
 /** The book's HTML with the readings file's furigana added; unchanged if the counts differ. */
 export function addGeneratedRuby(html: string, readings: ReadingsFile) {
   const doc = new DOMParser().parseFromString(html, 'text/html');

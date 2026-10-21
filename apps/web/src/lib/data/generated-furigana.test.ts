@@ -7,7 +7,12 @@
 import 'fake-indexeddb/auto';
 import { firstValueFrom, toArray } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
-import { addGeneratedRuby, generatedReadings$, type ReadingsFile } from './generated-furigana';
+import {
+  addGeneratedRuby,
+  deleteCachedReadings,
+  generatedReadings$,
+  type ReadingsFile
+} from './generated-furigana';
 import { readerDb } from './reader-db';
 
 vi.mock('$lib/data/calibre', () => ({
@@ -96,6 +101,9 @@ describe('generatedReadings$', () => {
       file(1),
       file(2)
     ]);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await deleteCachedReadings('Book');
+    expect(await (await readerDb()).get('readings', 'Book')).toBeUndefined();
     vi.unstubAllGlobals();
   });
 });
