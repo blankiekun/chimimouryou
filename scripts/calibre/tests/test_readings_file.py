@@ -141,6 +141,7 @@ class ReadingsQueueTest(unittest.TestCase):
         service.READINGS_DIR = os.path.join(tmp, 'readings')
         self.folder = os.path.join(service.SYNC_DIR, 'ttu-reader-data', '本%3F')
         self.bookdata = self.add_bookdata('bookdata_1_6_10_1_1.zip')
+        service.ensure_reader_pack = lambda: None
         self.queue = service.ReadingsQueue()
         self.queue._start = lambda: 'thread'
 
@@ -249,6 +250,57 @@ class NginxTest(unittest.TestCase):
         self.assertIn('limit_req zone=readings', block)
         api = re.search(r'location /calibre/difficulty/api/ \{(.*?)\n  \}', template, re.S).group(1)
         self.assertIn('auth_request /_account_difficulty_writes;', api)
+
+
+class ReaderPackTest(unittest.TestCase):
+    """READER_PACK is built once, again when its inputs change; workers load it or build their own."""
+
+    def test_built_once_then_again_when_its_inputs_change(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from unittest import mock
+        made = []
+
+        class Reader:
+            def __init__(self, **options):
+                made.append(options)
+
+            def save(self, path):
+                with open(path, 'w') as f:
+                    f.write('pack')
+
+            @classmethod
+            def load(cls, path, tables, tokenizer):
+                return ('loaded', path, tokenizer)
+
+        class FrequencyTable:
+            @classmethod
+            def load(cls, path):
+                return cls()
+
+            def save(self, path):
+                open(path, 'w').close()
+
+        service = load_service()
+        fakes = {'yurigana': mock.Mock(Reader=Reader), 'frequency': mock.Mock(FrequencyTable=FrequencyTable)}
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(sys.modules, fakes):
+            service.ProcessPoolExecutor = ThreadPoolExecutor
+            service.FREQUENCY_DICTIONARY = os.path.join(tmp, 'frequency-dictionary.zip')
+            service.TERM_DICTIONARY_DIR = os.path.join(tmp, 'term-dictionaries')
+            service.READER_PACK = os.path.join(tmp, 'reader.ygp')
+            service.FREQUENCY_PACK = os.path.join(tmp, 'frequency.ygp')
+            with open(service.FREQUENCY_DICTIONARY, 'w') as f:
+                f.write('a')
+            self.assertIsInstance(service._load_reader(), Reader)  # no pack yet: built in the worker
+            service.ensure_reader_pack()
+            service.ensure_reader_pack()
+            self.assertEqual(len(made), 2)
+            self.assertEqual(made[1], {'known': service.FREQUENCY_DICTIONARY})
+            self.assertEqual(service._load_reader('tokenizer'), ('loaded', service.READER_PACK, 'tokenizer'))
+            with open(service.FREQUENCY_DICTIONARY, 'w') as f:
+                f.write('a newer list')
+            self.assertFalse(service.reader_pack_current())
+            service.ensure_reader_pack()
+            self.assertEqual((len(made), service.reader_pack_current()), (3, True))
 
 
 if __name__ == '__main__':

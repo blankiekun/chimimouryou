@@ -18,7 +18,7 @@ import posixpath
 import re
 import statistics
 import zipfile
-from collections import Counter, deque
+from collections import Counter, defaultdict, deque
 from dataclasses import dataclass, field
 from functools import lru_cache
 
@@ -402,13 +402,21 @@ class Analyzer:
             result.word_count += 1
             index = end
 
-        # Marker expressions (single JMdict words in Jiten, often several Sudachi tokens).
+        # Marker expressions (single JMdict words in Jiten, often several Sudachi tokens), tried
+        # where their first token's surface (or a lone token's dictionary form) is.
+        at_surface, at_form = defaultdict(list), defaultdict(list)
+        for i, (surface, form) in enumerate(zip(surfaces, dictionary_forms)):
+            at_surface[surface].append(i)
+            at_form[form].append(i)
         for name, sequences in self.marker_sequences.items():
             count = 0
             for sequence, last_form in sequences:
                 n = len(sequence)
-                for i in range(len(tokens) - n + 1):
-                    if (tuple(surfaces[i:i + n - 1]) == sequence[:-1]
+                starts = at_surface.get(sequence[0], [])
+                if n == 1:
+                    starts = set(starts) | set(at_form.get(last_form, []))
+                for i in starts:
+                    if (i + n <= len(tokens) and tuple(surfaces[i:i + n - 1]) == sequence[:-1]
                             and (surfaces[i + n - 1] == sequence[-1] or dictionary_forms[i + n - 1] == last_form)):
                         count += 1
             result.markers[name] = count
