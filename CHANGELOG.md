@@ -15,6 +15,8 @@ anything a reader or a server operator would notice.
 
 ### Added
 
+- Reader: a "Hover" furigana style (hidden, shown while the pointer is over a word; tap toggles on
+  touch screens) and a "Furigana on hover" switch in the reader's quick settings (palette icon).
 - Difficulty estimates: admins can add Yomitan term dictionaries of their own (admin panel → Tools,
   difficulty estimates). Word lists and readings files then read words the frequency list lacks
   (coined compounds, names, words the tokenizer doesn't know) from them. None is

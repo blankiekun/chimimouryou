@@ -9,5 +9,6 @@ export enum FuriganaStyle {
   Partial = 'partial',
   Toggle = 'toggle',
   Full = 'full',
+  Hover = 'hover',
   Known = 'known'
 }

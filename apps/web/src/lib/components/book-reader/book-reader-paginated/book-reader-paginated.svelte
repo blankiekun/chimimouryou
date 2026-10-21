@@ -720,6 +720,7 @@
   class:book-content--furigana-style-partial={furiganaStyle === FuriganaStyle.Partial}
   class:book-content--furigana-style-toggle={furiganaStyle === FuriganaStyle.Toggle}
   class:book-content--furigana-style-full={furiganaStyle === FuriganaStyle.Full}
+  class:book-content--furigana-style-hover={furiganaStyle === FuriganaStyle.Hover}
   class:book-content--furigana-style-known={furiganaStyle === FuriganaStyle.Known}
   class:ttu-apply-font-weight={!!fontWeight}
   class:ttu-apply-important={prioritizeReaderStyles}
