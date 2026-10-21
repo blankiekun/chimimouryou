@@ -125,6 +125,8 @@ READINGS_KEEP_ALIVE = 120
 # Reader.save, then every worker maps the file (Reader.load: no parse, ~100 MB, pages shared).
 # The .key file names the inputs it was built from.
 READER_PACK = os.path.join(STATE_DIR, 'reader.ygp')
+# The frequency list the same way (FrequencyTable.save/load_packed, ~450 MB as dicts), built with it.
+FREQUENCY_PACK = os.path.join(STATE_DIR, 'frequency.ygp')
 WORKERS = int(os.environ.get('JITEN_WORKERS', os.cpu_count() or 1))
 PORT = int(os.environ.get('JITEN_PORT', '8765'))
 HOST = os.environ.get('JITEN_HOST', '127.0.0.1')
@@ -154,7 +156,8 @@ def _init_worker():
     from features import Analyzer
     from frequency import FrequencyTable
     _analyzer = Analyzer()
-    _frequency = FrequencyTable.load(FREQUENCY_DICTIONARY)
+    _frequency = (FrequencyTable.load_packed(FREQUENCY_PACK) if reader_pack_current()
+                  else FrequencyTable.load(FREQUENCY_DICTIONARY))
     # Sharing the Analyzer's tokens and the list's readings: no second Sudachi or copy of the list.
     # The extra readings (描く かく…) as Reader(known=path) adds them; the features keep the plain list.
     _reader = _load_reader(_analyzer, lambda: with_extra_readings(_frequency.reading_ranks))
@@ -308,13 +311,15 @@ def reader_pack_key() -> str:
 def reader_pack_current() -> bool:
     try:
         with open(READER_PACK + '.key', encoding='utf-8') as f:
-            return f.read() == reader_pack_key() and os.path.exists(READER_PACK)
+            return f.read() == reader_pack_key() and os.path.exists(READER_PACK) and os.path.exists(FREQUENCY_PACK)
     except OSError:
         return False
 
 
 def _save_reader_pack(key: str):
     from yurigana import Reader
+    from frequency import FrequencyTable
+    FrequencyTable.load(FREQUENCY_DICTIONARY).save(FREQUENCY_PACK)
     Reader(known=FREQUENCY_DICTIONARY, **term_options()).save(READER_PACK + '.tmp')
     os.replace(READER_PACK + '.tmp', READER_PACK)
     with open(READER_PACK + '.key.tmp', 'w', encoding='utf-8') as f:

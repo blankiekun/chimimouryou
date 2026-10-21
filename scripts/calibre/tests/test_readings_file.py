@@ -272,12 +272,22 @@ class ReaderPackTest(unittest.TestCase):
             def load(cls, path, tables, tokenizer):
                 return ('loaded', path, tokenizer)
 
+        class FrequencyTable:
+            @classmethod
+            def load(cls, path):
+                return cls()
+
+            def save(self, path):
+                open(path, 'w').close()
+
         service = load_service()
-        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(sys.modules, {'yurigana': mock.Mock(Reader=Reader)}):
+        fakes = {'yurigana': mock.Mock(Reader=Reader), 'frequency': mock.Mock(FrequencyTable=FrequencyTable)}
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(sys.modules, fakes):
             service.ProcessPoolExecutor = ThreadPoolExecutor
             service.FREQUENCY_DICTIONARY = os.path.join(tmp, 'frequency-dictionary.zip')
             service.TERM_DICTIONARY_DIR = os.path.join(tmp, 'term-dictionaries')
             service.READER_PACK = os.path.join(tmp, 'reader.ygp')
+            service.FREQUENCY_PACK = os.path.join(tmp, 'frequency.ygp')
             with open(service.FREQUENCY_DICTIONARY, 'w') as f:
                 f.write('a')
             self.assertIsInstance(service._load_reader(), Reader)  # no pack yet: built in the worker

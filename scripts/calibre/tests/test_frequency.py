@@ -61,6 +61,17 @@ class YomitanRanksTest(unittest.TestCase):
         self.assertEqual(table.word('事\tnoun')[0], 30)  # unknown reading: the most common one
         self.assertEqual(table.word('魔法\tnoun', 'まじっく')[0], 1986)  # reading not listed: the spelling's rank
 
+    def test_saved_table_reads_the_same(self):
+        table = FrequencyTable.load(dictionary())
+        with tempfile.TemporaryDirectory() as tmp:
+            table.save(os.path.join(tmp, 'frequency.ygp'))
+            packed = FrequencyTable.load_packed(os.path.join(tmp, 'frequency.ygp'))
+            for key, reading in (('事\tnoun', 'じ'), ('事\tnoun', 'こと'), ('事\tnoun', None), ('魔法\tnoun', 'まじっく'),
+                                 ('珍語\tnoun', None)):
+                self.assertEqual(packed.word(key, reading), table.word(key, reading))
+            self.assertEqual(packed.form('有る\tverb', '在る'), table.form('有る\tverb', '在る'))
+            self.assertEqual((('事', 'じ') in packed.reading_ranks, ('事', 'ず') in packed.reading_ranks), (True, False))
+
     def test_reading_agreement(self):
         old = dictionary()
         self.assertEqual(reading_agreement(old, dictionary()), 1.0)

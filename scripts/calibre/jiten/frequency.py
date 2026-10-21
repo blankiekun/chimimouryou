@@ -62,6 +62,10 @@ def reading_agreement(old_path: str, new_path: str, top: int = 5000) -> float:
     return sum(1 for f in forms if f in new and (old[f] & new[f] or old[f] == new[f])) / len(forms)
 
 
+def _rank(value: str):
+    return int(value) if value.isdigit() else float(value)
+
+
 class FrequencyTable:
     """word(key) -> (rank, share of occurrences); form(key, spelling) -> (rank, share, percentage).
     Keys are Sudachi's normalised form plus a part of speech ('有る\\tverb'), looked up by
@@ -80,6 +84,19 @@ class FrequencyTable:
             if reading:
                 reading_ranks[term, reading] = min(value, reading_ranks.get((term, reading), value))
         return cls(ranks, reading_ranks)
+
+    def save(self, path: str):
+        """The table in yurigana's mmap format, for load_packed: workers share its pages, nothing is parsed."""
+        from yurigana import packed
+        packed.write(path, {'ranks': {term: repr(rank) for term, rank in self.ranks.items()},
+                            'reading_ranks': {f'{term}\t{reading}': repr(rank)
+                                              for (term, reading), rank in self.reading_ranks.items()}})
+
+    @classmethod
+    def load_packed(cls, path: str) -> 'FrequencyTable':
+        from yurigana.packed import Decoded, Packed, PairMap
+        pack = Packed(path)
+        return cls(Decoded(pack.table('ranks'), _rank), PairMap(pack.table('reading_ranks'), _rank))
 
     def word(self, key, reading=None):
         term = key.split('\t')[0]

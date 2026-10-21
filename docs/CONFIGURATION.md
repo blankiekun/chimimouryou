@@ -117,10 +117,11 @@ and fetch it (`GET` on the same address); nginx allows 6 requests a minute per a
 under a second per novel), never waiting behind an estimate job; at most 100 wait, and a book
 whose `staticdata.json` is over 30 MB is skipped.
 
-The reading engine's tables are built once into `state/difficulty/reader.ygp` (about 80 MB,
-~20 s, again when yurigana, the frequency list or the term dictionaries change); every worker
-maps that file instead of building its own copy, so estimate workers share it (about 100 MB
-each before reading instead of about 620 MB) and start at once.
+The reading engine's tables and the frequency list are built once into
+`state/difficulty/reader.ygp` and `frequency.ygp` (about 80 MB and 60 MB, ~25 s, again when
+yurigana, the frequency list or the term dictionaries change); every worker maps those files
+instead of building its own copy, so workers share them and start at once (an estimate worker
+uses about 500 MB while scoring a novel).
 
 Term dictionaries (optional, bring your own): admins can add Yomitan term dictionaries in the
 admin panel (Tools → difficulty estimates → Add term dictionary; `POST /calibre/difficulty/api/terms?name=<file name>`,
