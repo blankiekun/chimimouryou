@@ -532,6 +532,7 @@ export const en = {
   'reader.quickSettings': 'Quick Settings',
   'reader.theme': 'Theme',
   'reader.fontSize': 'Font size',
+  'reader.hoverFurigana': 'Furigana on hover',
   'reader.smaller': 'Smaller',
   'reader.larger': 'Larger',
   'reader.more': 'More reader actions',
@@ -762,6 +763,7 @@ export const en = {
   'prefs.opt.toggle': 'Toggle',
   'prefs.opt.full': 'Full',
   'prefs.opt.known': 'Known',
+  'prefs.opt.hover': 'Hover',
   'prefs.opt.horizontal': 'Horizontal',
   'prefs.opt.vertical': 'Vertical',
   'prefs.opt.mixed': 'Mixed',
@@ -826,6 +828,8 @@ export const en = {
   'prefs.furiganaFullHint': 'Hidden by default, show on hover or click',
   'prefs.furiganaKnownHint':
     'Hidden when every kanji was met {count}+ times in your reading and the furigana is their usual hiragana reading; click to toggle. Katakana, kanji and unusual readings (マジ over 本気, そら over 宇宙) always show, and so do special readings like きょう over 今日 or kanji outside 常用/人名用. Kanji met update when the book is reopened',
+  'prefs.furiganaHoverHint':
+    'Hidden, shown while the pointer is over it; tap to toggle on touch screens',
   'prefs.furiganaPartialHint': 'Display furigana as grayed out text',
   'prefs.viewMode': 'View mode',
   'prefs.marginLeftRight': 'Reader Left/right margin',

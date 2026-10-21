@@ -21,7 +21,14 @@
   import { readerImageGalleryPictures$ } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
   import Popover from '$lib/components/popover/popover.svelte';
-  import { customReadingPointEnabled$, fontSize$, viewMode$ } from '$lib/data/store';
+  import { FuriganaStyle } from '$lib/data/furigana-style';
+  import {
+    customReadingPointEnabled$,
+    fontSize$,
+    furiganaStyle$,
+    hideFurigana$,
+    viewMode$
+  } from '$lib/data/store';
   import {
     customAppThemes$,
     selectedThemeId$,
@@ -92,6 +99,13 @@
 
   $: isOldUrl = browser && isOnOldUrl(window);
 
+  $: hoverFurigana = $hideFurigana$ && $furiganaStyle$ === FuriganaStyle.Hover;
+
+  function toggleHoverFurigana() {
+    if (!hoverFurigana) furiganaStyle$.next(FuriganaStyle.Hover);
+    hideFurigana$.next(!hoverFurigana);
+  }
+
   $: themes = ($themeDefinitions$ ?? []).map((definition) =>
     resolveTheme(definition.id, $customAppThemes$)
   );
@@ -120,7 +134,9 @@
       );
     }
     if (showFullscreenButton) {
-      items.push(item({ label: 'reader.fullscreen', icon: faExpand }, 'fullscreenClick', 'md:hidden'));
+      items.push(
+        item({ label: 'reader.fullscreen', icon: faExpand }, 'fullscreenClick', 'md:hidden')
+      );
     }
     // Phones: the bar would push its icons over the back button.
     if (hasText) {
@@ -133,7 +149,9 @@
     items.push(item({ label: 'reader.completeBook', icon: faFlag }, 'completeBook'));
 
     if (hasText) {
-      items.push(item({ label: 'reader.jump', icon: mergeEntries.JUMP_TO_POSITION.icon }, 'jumpClick'));
+      items.push(
+        item({ label: 'reader.jump', icon: mergeEntries.JUMP_TO_POSITION.icon }, 'jumpClick')
+      );
     }
 
     if ($readerImageGalleryPictures$.length) {
@@ -148,14 +166,25 @@
     // Larger screens have these in the section navigation.
     items.push(
       isOldUrl
-        ? item({ label: 'reader.domainHint', icon: mergeEntries.DOMAIN_HINT.icon }, 'domainHintClick')
+        ? item(
+            { label: 'reader.domainHint', icon: mergeEntries.DOMAIN_HINT.icon },
+            'domainHintClick'
+          )
         : item(
             { label: 'nav.statistics', icon: mergeEntries.STATISTICS.icon },
             'statisticsClick',
             'sm:hidden'
           ),
-      item({ label: 'nav.settings', icon: mergeEntries.SETTINGS.icon }, 'settingsClick', 'sm:hidden'),
-      item({ label: 'book.library', icon: mergeEntries.MANAGE.icon }, 'bookManagerClick', 'sm:hidden')
+      item(
+        { label: 'nav.settings', icon: mergeEntries.SETTINGS.icon },
+        'settingsClick',
+        'sm:hidden'
+      ),
+      item(
+        { label: 'book.library', icon: mergeEntries.MANAGE.icon },
+        'bookManagerClick',
+        'sm:hidden'
+      )
     );
 
     moreMenuItems = items;
@@ -247,7 +276,11 @@
       {panelClasses}
       bind:this={customReadingPointMenuElm}
     >
-      <div slot="icon" class="app-header-icon hidden md:inline-flex" title={$t$('reader.readingPoint')}>
+      <div
+        slot="icon"
+        class="app-header-icon hidden md:inline-flex"
+        title={$t$('reader.readingPoint')}
+      >
         <Fa icon={faLocationDot} />
       </div>
       <div slot="content" class="flex flex-col">
@@ -321,6 +354,16 @@
           <Fa icon={faPlus} />
         </button>
       </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={hoverFurigana}
+        class="app-switch justify-between px-2 pb-1"
+        on:click={toggleHoverFurigana}
+      >
+        <span class="app-switch-text">{$t$('reader.hoverFurigana')}</span>
+        <span class="app-switch-thumb" />
+      </button>
     </div>
   </Popover>
   <Popover

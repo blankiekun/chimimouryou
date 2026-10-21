@@ -71,7 +71,7 @@ function rubyTagListener(contentEl: HTMLElement, furiganaStyle: FuriganaStyle) {
     return NEVER;
   }
 
-  const isToggle = furiganaStyle === FuriganaStyle.Toggle;
+  const isToggle = furiganaStyle === FuriganaStyle.Toggle || furiganaStyle === FuriganaStyle.Hover;
   const rubyTags = Array.from(contentEl.getElementsByTagName('ruby'));
   const obs$ = rubyTags.map((el) =>
     isToggle

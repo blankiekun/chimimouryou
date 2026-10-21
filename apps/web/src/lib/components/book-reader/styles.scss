@@ -152,6 +152,7 @@
 }
 
 .book-content--hide-furigana.book-content--furigana-style-full,
+.book-content--hide-furigana.book-content--furigana-style-hover,
 .book-content--hide-furigana.book-content--furigana-style-toggle {
   :global(ruby) {
     cursor: pointer;
