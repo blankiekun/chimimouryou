@@ -39,7 +39,9 @@ anything a reader or a server operator would notice.
 
 - Difficulty service: the reading engine's tables and the frequency list are built once into
   `state/difficulty/reader.ygp` and `frequency.ygp` and shared by every worker, so workers
-  start at once and use about 750 MB less each (an estimate worker ~500 MB instead of ~1.25 GB). The readings worker
+  start at once and use about 750 MB less each (an estimate worker ~500 MB instead of ~1.25 GB).
+  Estimates count marker expressions from an index of the book's words rather than scanning
+  it once per expression (~2 s less per novel). The readings worker
   now stops 2 minutes after its last book rather than 10.
 
 - Japanese UI: reworded strings throughout (595 of 973) to read more naturally.
