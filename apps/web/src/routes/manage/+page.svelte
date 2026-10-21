@@ -48,7 +48,7 @@
     loadCoverageCache,
     refreshKnownWordsIfStale
   } from '$lib/data/known-words';
-  import { deleteCachedReadings } from '$lib/data/generated-furigana';
+  import { deleteCachedReadings, prefetchReadings } from '$lib/data/generated-furigana';
   import { deleteVnCache } from '$lib/data/vn';
   import DifficultyDialog from '$lib/components/book-card/difficulty-dialog.svelte';
   import {
@@ -231,10 +231,10 @@
   }
   $: if ($bookCards$ && !isLoading && $storageSource$ === StorageKey.CALIBRE) {
     if ($isOnline$ && !$libraryOffline$) {
-      keepBooksOffline(
-        window,
-        homeOfflineTitles($bookCards$, $homeBookTitles$, $homeRemovedTitles$)
-      );
+      const titles = homeOfflineTitles($bookCards$, $homeBookTitles$, $homeRemovedTitles$);
+
+      // Furigana after the books: a book's first processing is what they are made from.
+      keepBooksOffline(window, titles).then(() => prefetchReadings(titles));
     }
   }
   // Known-word coverage for Home's books and Read next's, so the Store can sort by it.

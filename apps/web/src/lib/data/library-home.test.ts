@@ -4,6 +4,7 @@
  * All rights reserved.
  */
 
+import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 import {

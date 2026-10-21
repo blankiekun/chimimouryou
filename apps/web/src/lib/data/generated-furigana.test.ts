@@ -11,13 +11,19 @@ import {
   addGeneratedRuby,
   deleteCachedReadings,
   generatedReadings$,
+  prefetchReadings,
   type ReadingsFile
 } from './generated-furigana';
+import { generatedFurigana$ } from './store';
 import { readerDb } from './reader-db';
 
 vi.mock('$lib/data/calibre', () => ({
   difficultyApiUrl: '/api/',
-  loadCalibreCatalog: () => Promise.resolve([{ id: 7, title: 'Book' }])
+  loadCalibreCatalog: () =>
+    Promise.resolve([
+      { id: 7, title: 'Book' },
+      { id: 8, title: 'Other' }
+    ])
 }));
 
 const html = '<div><p>三本の木を<ruby>見<rt>み</rt></ruby>た。行った。</p></div>';
@@ -104,6 +110,42 @@ describe('generatedReadings$', () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
     await deleteCachedReadings('Book');
     expect(await (await readerDb()).get('readings', 'Book')).toBeUndefined();
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('prefetchReadings', () => {
+  it('keeps the books not kept yet, only while generated furigana are on', async () => {
+    const fetchMock = vi.fn((_url: string, init?: RequestInit) =>
+      Promise.resolve(
+        init?.method === 'POST'
+          ? new Response(JSON.stringify({ status: 'ready' }))
+          : new Response(JSON.stringify({ characters: 3, glosses: [], occ: [] }), {
+              headers: { ETag: '"o"' }
+            })
+      )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const db = await readerDb();
+
+    await db.put('readings', {
+      title: 'Book',
+      etag: '"a"',
+      file: { characters: 1, glosses: [], occ: [] }
+    });
+    generatedFurigana$.next(false);
+    await prefetchReadings(['Book', 'Other'], 0);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    generatedFurigana$.next(true);
+    await prefetchReadings(['Book', 'Other'], 0);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      '/api/readings/8',
+      '/api/readings/8'
+    ]);
+    expect((await db.get('readings', 'Other'))?.etag).toBe('"o"');
+    generatedFurigana$.next(false);
     vi.unstubAllGlobals();
   });
 });

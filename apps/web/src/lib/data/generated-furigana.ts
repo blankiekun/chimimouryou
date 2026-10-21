@@ -11,9 +11,10 @@
  * counted, so character counts (bookmarks, highlights) don't change.
  */
 
-import { Observable } from 'rxjs';
+import { lastValueFrom, Observable } from 'rxjs';
 import { difficultyApiUrl, loadCalibreCatalog } from '$lib/data/calibre';
 import { readerDb } from '$lib/data/reader-db';
+import { generatedFurigana$ } from '$lib/data/store';
 import {
   getTextSegments,
   offsetForCount,
@@ -128,6 +129,33 @@ export function generatedReadings$(title: string) {
       clearTimeout(timer);
     };
   });
+}
+
+let prefetching: Promise<void> | undefined;
+
+/**
+ * Keeps the readings files of these books (Home's) in the browser before they are opened,
+ * one every 30 s: each check costs the server's rate limit (nginx: 6 a minute) that opening
+ * a book needs too. Books already kept are skipped; the reader checks those when it opens them.
+ */
+export function prefetchReadings(titles: string[], pause = 30_000) {
+  if (prefetching || !generatedFurigana$.getValue()) return prefetching;
+
+  prefetching = (async () => {
+    for (const title of titles) {
+      if (!generatedFurigana$.getValue()) break;
+      if (await (await readerDb()).getKey('readings', title)) continue;
+
+      await lastValueFrom(generatedReadings$(title), { defaultValue: undefined });
+      await new Promise((resolve) => setTimeout(resolve, pause));
+    }
+  })()
+    .catch(() => {})
+    .finally(() => {
+      prefetching = undefined;
+    });
+
+  return prefetching;
 }
 
 /** Frees a book's kept readings file, e.g. when it leaves the library or Home. */

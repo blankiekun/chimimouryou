@@ -23,7 +23,8 @@ anything a reader or a server operator would notice.
   and they are only downloaded again when the server's change; a book being prepared is asked for
   again after 3 s rather than 15 s. The server keeps its reading engine loaded for 10 minutes after
   preparing a book (~20 s to load, ~3 s per book), and reuses a book's furigana when it is processed
-  again with the same text (another device, or deleted and reopened).
+  again with the same text (another device, or deleted and reopened). Home's books get their furigana
+  in the background, and a book's page asks for them, so books usually open with them already there.
 - Reader: a "Hover" furigana style (hidden, shown while the pointer is over a word; tap toggles on
   touch screens) and a "Furigana on hover" switch in the reader's quick settings (palette icon).
 - Difficulty estimates: admins can add Yomitan term dictionaries of their own (admin panel → Tools,

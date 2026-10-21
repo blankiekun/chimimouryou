@@ -57,7 +57,8 @@
     removeFromHome
   } from '$lib/data/library-home';
   import { guessSeriesName } from '$lib/data/series-overrides';
-  import { database, startDayHoursForTracker$ } from '$lib/data/store';
+  import { generatedReadings$ } from '$lib/data/generated-furigana';
+  import { database, generatedFurigana$, startDayHoursForTracker$ } from '$lib/data/store';
   import { markEntry, marksOf, setWordMarks, wordMark, wordMarks$ } from '$lib/data/word-marks';
   import { knownMinCount, wordList } from '$lib/data/words-met';
   import { getDateKey } from '$lib/functions/statistic-util';
@@ -181,6 +182,14 @@
   onMount(() => {
     backButton.focus();
     loadSpeed();
+
+    // Ask for the generated furigana now, so they are usually ready when the book opens.
+    const readings =
+      isCalibre && kind === 'book' && generatedFurigana$.getValue()
+        ? generatedReadings$(book.title).subscribe()
+        : undefined;
+
+    return () => readings?.unsubscribe();
   });
 
   function japaneseLength(count: number) {
@@ -588,7 +597,8 @@
                       class="details-mark"
                       title={$t$('book.markIgnored', { word: form })}
                       aria-label={$t$('book.markIgnored', { word: form })}
-                      on:click={() => setWordMarks([markEntry(listWords, word)], 'ignored')}>✕</button
+                      on:click={() => setWordMarks([markEntry(listWords, word)], 'ignored')}
+                      >✕</button
                     >
                   {/if}
                 </span>
