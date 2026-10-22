@@ -103,9 +103,9 @@ later bare occurrences (`source` 'book', also earlier ones for names of 2+ chara
   furigana is to be added. A number + counter span (三本 さんぼん) comes right before its
   tokens' own words, at the same start (Δstart 0 for the first of them).
 
-**What gets furigana** (a gloss): a hiragana reading on the list that comes from the list's
-only reading, a context rule, the reading model or a name's ruby carried from elsewhere in the book
-(never Sudachi's guess, a default or a counter span); not under the book's
+**What gets furigana** (a gloss): every hiragana reading on the list, whatever its source (the
+list's only reading, a context rule, the reading model, a name's ruby carried from elsewhere in the
+book, a default, Sudachi's guess or a counter span); not under the book's
 own ruby; and not a form the book flavour-rubied earlier: once ruby that isn't the word's
 reading covers it (katakana like マジ over 本気, ruby with kanji, or rejected hiragana over the
 whole word like そら over 宇宙), later bare occurrences of that form get none. Partial hiragana

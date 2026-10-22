@@ -37,6 +37,8 @@ anything a reader or a server operator would notice.
 
 ### Changed
 
+- Generated furigana: every word with a reading gets it, not only the ones yurigana is
+  sure of (defaults, dictionary readings and counter spans too). Readings files are redone.
 - Difficulty service: the reading engine's tables and the frequency list are built once into
   `state/difficulty/reader.ygp` and `frequency.ygp` and shared by every worker, so workers
   start at once and use about 750 MB less each (an estimate worker ~500 MB instead of ~1.25 GB).
