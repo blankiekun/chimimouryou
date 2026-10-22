@@ -36,7 +36,8 @@
     recentLevels,
     removeFromHome,
     seriesGroups,
-    storeView$
+    storeView$,
+    takePendingImport
   } from '$lib/data/library-home';
   import { homeOfflineTitles, keepBooksOffline } from '$lib/data/offline-books';
   import { t$ } from '$lib/i18n';
@@ -127,7 +128,7 @@
   import { reduceToEmptyString } from '$lib/functions/rxjs/reduce-to-empty-string';
   import pLimit from 'p-limit';
   import { combineLatest, map, Observable, share, Subject, switchMap, takeUntil } from 'rxjs';
-  import { onDestroy, tick } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import Fa from 'svelte-fa';
 
   const booksAreLoading$ = database.listLoading$.pipe(map((isLoading) => isLoading));
@@ -296,6 +297,12 @@
   }
 
   onDestroy(() => dialogManager.dialogs$.next([]));
+
+  onMount(() => {
+    const pending = takePendingImport();
+    if (pending && 'files' in pending) onFilesChange(pending.files);
+    else if (pending) onImportBackup(pending.backup);
+  });
 
   function retryLibrary() {
     if ($libraryOffline$) {

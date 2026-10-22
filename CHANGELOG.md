@@ -8,6 +8,9 @@ anything a reader or a server operator would notice.
 
 ### Changed
 
+- Difficulty meters use each theme's own colours (from its accent for Beginner to its text
+  colour for Expert) instead of a fixed rainbow; the Words page has the Import menu too, and
+  the last rounded pills are square.
 - New default look, "Study Book" (first step of the interface rework): white paper, ink and
   one green, as the default themes Chimi Light and Chimi Dark. Washi and Sumi stay
   selectable in Settings → Themes. Browsers and accounts still on Washi or Sumi from before

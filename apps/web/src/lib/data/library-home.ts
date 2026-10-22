@@ -22,6 +22,21 @@ export type LibraryTab = 'home' | 'store';
 
 export const libraryTab$ = writableStringLocalStorageSubject()('libraryTab', 'home');
 
+export type PendingImport = { files: File[] } | { backup: File };
+
+/** Files picked in the Import menu outside /manage (e.g. /words); /manage imports them on open. */
+let pendingImport: PendingImport | undefined;
+
+export function setPendingImport(value: PendingImport) {
+  pendingImport = value;
+}
+
+export function takePendingImport() {
+  const value = pendingImport;
+  pendingImport = undefined;
+  return value;
+}
+
 /** Store → Books or Series */
 export const storeView$ = writableStringLocalStorageSubject()('libraryStoreView', 'books');
 

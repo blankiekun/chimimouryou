@@ -87,8 +87,8 @@
     z-index: 60;
     max-width: calc(100vw - 2rem);
     padding: 0.4rem 0.9rem;
-    border-radius: 999px;
-    box-shadow: 0 10px 30px -12px var(--shadow-color);
+    border-radius: 2px;
+    border: 1px solid var(--border-color);
     font-size: 0.8rem;
     transform: translateX(-50%);
   }

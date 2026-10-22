@@ -28,7 +28,7 @@
     display: inline-flex;
     flex-shrink: 0;
     padding: 0.12rem;
-    border-radius: 999px;
+    border-radius: 2px;
     background: color-mix(in srgb, currentColor 10%, transparent);
     font-size: 0.7rem;
     font-weight: 700;
@@ -36,7 +36,7 @@
 
   button {
     padding: 0.15rem 0.5rem;
-    border-radius: 999px;
+    border-radius: 2px;
     opacity: 0.6;
   }
 

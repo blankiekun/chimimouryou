@@ -2,8 +2,8 @@
   import { browser } from '$app/environment';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
+  import ImportMenu from '$lib/components/book-card/import-menu.svelte';
   import LibrarySortMenu from '$lib/components/book-card/library-sort-menu.svelte';
-  import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
   import Popover from '$lib/components/popover/popover.svelte';
   import { FilesystemStorageHandler } from '$lib/data/storage/handler/filesystem-handler';
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
@@ -24,17 +24,14 @@
     oneDriveStorageSource$,
     type LibraryDisplayMode
   } from '$lib/data/store';
-  import { inputAllowDirectory } from '$lib/functions/file-dom/input-allow-directory';
   import { inputFile } from '$lib/functions/file-dom/input-file';
-  import { isMobile$, isOnOldUrl } from '$lib/functions/utils';
+  import { isOnOldUrl } from '$lib/functions/utils';
   import { t$, type MessageKey } from '$lib/i18n';
   import {
     faBorderAll,
     faBug,
     faCheck,
-    faChevronDown,
     faEllipsis,
-    faFileImport,
     faGrip,
     faHashtag,
     faList,
@@ -64,11 +61,7 @@
     { mode: 'list', label: 'library.viewList', icon: faList }
   ];
 
-  let fileImportElm: HTMLElement;
-  let folderImportElm: HTMLElement;
-  let backupImportElm: HTMLElement;
   let countImportElm: HTMLInputElement;
-  let importMenuElm: Popover;
   let storageSourceElm: Popover;
   let displayMenuElm: Popover;
   let moreMenuElm: Popover;
@@ -79,19 +72,6 @@
     isOldUrl = isOnOldUrl(window);
     showLoadCount = new URLSearchParams(window.location.search).has('count');
   }
-
-  // triggerImport tells the entries apart by their English label
-  const importLabels: Record<string, MessageKey> = {
-    [mergeEntries.FILE_IMPORT.label]: 'library.importFiles',
-    [mergeEntries.FOLDER_IMPORT.label]: 'library.importFolders',
-    [mergeEntries.BACKUP_IMPORT.label]: 'library.importBackup'
-  };
-
-  $: importMenuItems = [
-    mergeEntries.FILE_IMPORT,
-    ...($isMobile$ ? [] : [mergeEntries.FOLDER_IMPORT]),
-    mergeEntries.BACKUP_IMPORT
-  ];
 
   $: storageSourceMenuItems = browser
     ? [
@@ -122,32 +102,6 @@
           : [])
       ]
     : [];
-
-  function triggerImport(label: string) {
-    switch (label) {
-      case mergeEntries.FOLDER_IMPORT.label:
-        folderImportElm.click();
-        break;
-
-      case mergeEntries.BACKUP_IMPORT.label:
-        backupImportElm.click();
-        break;
-
-      default:
-        fileImportElm.click();
-        break;
-    }
-
-    importMenuElm.toggleOpen();
-  }
-
-  function dispatchFilesChange(fileList: FileList) {
-    dispatch('filesChange', fileList);
-  }
-
-  function dispatchImportBackup(fileList: FileList) {
-    dispatch('importBackup', fileList[0]);
-  }
 
   async function setCountData(fileList: FileList) {
     try {
@@ -189,29 +143,6 @@
 
 <input
   hidden
-  multiple
-  type="file"
-  accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,.cbz,.zip"
-  use:inputFile={dispatchFilesChange}
-  bind:this={fileImportElm}
-/>
-<input
-  hidden
-  multiple
-  type="file"
-  use:inputAllowDirectory
-  use:inputFile={dispatchFilesChange}
-  bind:this={folderImportElm}
-/>
-<input
-  hidden
-  type="file"
-  accept=".zip,application/zip"
-  use:inputFile={dispatchImportBackup}
-  bind:this={backupImportElm}
-/>
-<input
-  hidden
   type="file"
   accept=".json,application/json"
   use:inputFile={setCountData}
@@ -219,33 +150,11 @@
 />
 
 <AppHeader active="library" {currentBookId}>
-  <Popover
-    placement="bottom-end"
-    fallbackPlacements={['bottom', 'bottom-start']}
-    yOffset={10}
-    {panelClasses}
-    bind:this={importMenuElm}
-  >
-    <button
-      slot="icon"
-      type="button"
-      class="app-header-icon app-header-icon-label"
-      title={$t$('library.importBooks')}
-      {disabled}
-    >
-      <Fa icon={faFileImport} />
-      <span class="hidden md:inline">{$t$('library.import')}</span>
-      <Fa icon={faChevronDown} size="xs" class="hidden opacity-70 md:block" />
-    </button>
-    <div slot="content" class="flex flex-col">
-      {#each importMenuItems as item (item.label)}
-        <button type="button" class="app-popover-item" on:click={() => triggerImport(item.label)}>
-          <Fa icon={item.icon} fw />
-          {$t$(importLabels[item.label])}
-        </button>
-      {/each}
-    </div>
-  </Popover>
+  <ImportMenu
+    {disabled}
+    on:filesChange={(ev) => dispatch('filesChange', ev.detail)}
+    on:importBackup={(ev) => dispatch('importBackup', ev.detail)}
+  />
 
   <Popover
     placement="bottom-end"

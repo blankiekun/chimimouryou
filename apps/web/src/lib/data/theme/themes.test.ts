@@ -71,4 +71,18 @@ describe('contrast', () => {
 
     expect(report, 'Below WCAG AA (4.5:1)').toEqual([]);
   });
+
+  // The difficulty scale runs from accent to text: both ends need 3:1 (non-text) on the page.
+  it('keeps the difficulty scale visible', () => {
+    const report = builtInThemes.flatMap(({ id }) => {
+      const { colors } = resolveTheme(id, {});
+      const page = parseSimpleColor(colors.background)!;
+      return (['accent', 'text'] as const)
+        .map((token) => [token, contrastRatio(parseSimpleColor(colors[token])!, page)] as const)
+        .filter(([, ratio]) => ratio < 3)
+        .map(([token, ratio]) => `${id}: ${token} is ${ratio.toFixed(2)}:1`);
+    });
+
+    expect(report).toEqual([]);
+  });
 });

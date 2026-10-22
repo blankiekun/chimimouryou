@@ -137,7 +137,7 @@
         Reading time, characters read and goals for the selected period
       </p>
     </div>
-    <section class="app-surface-card rounded-[1.4rem] p-4 sm:p-6">
+    <section class="app-surface-card p-4 sm:p-6">
       <StatisticsContent />
     </section>
   </main>

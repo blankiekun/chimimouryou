@@ -15,7 +15,7 @@
   const dispatch = createEventDispatcher<{ open: CalibreBook }>();
 </script>
 
-<div class="reader-panel flex max-w-sm flex-col gap-3 rounded-lg p-5 text-center">
+<div class="reader-panel flex max-w-sm flex-col gap-3 rounded p-5 text-center">
   <div>
     <div class="text-xs opacity-70">{direction > 0 ? 'Finished' : 'Current'}</div>
     <div class="font-bold">{title}</div>
