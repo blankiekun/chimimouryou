@@ -217,6 +217,11 @@ window.addEventListener(
   });
 });
 
+// Right-click is the game's (menu, skip): never the browser's menu, on the canvas or the black bars.
+document.addEventListener('contextmenu', function (event) {
+  event.preventDefault();
+});
+
 window.addEventListener('resize', function () {
   scale_full(document.getElementById('canvas'), g_screen_width / g_screen_height);
 });
