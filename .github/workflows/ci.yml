@@ -94,6 +94,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 2
+
+      # Pull requests build images only when image inputs change (Front end already test-builds the app);
+      # main and release tags always build. The job itself always runs: its checks are required.
+      - name: Image inputs changed?
+        id: inputs
+        run: |
+          if [ "${{ github.event_name }}" != pull_request ] ||
+            git diff --name-only HEAD^1 HEAD | grep -qE '^(docker/|docker-compose|\.dockerignore|scripts/calibre/|package\.json|pnpm-|apps/web/package\.json|\.github/workflows/)'; then
+            echo build=true >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Check the compose files
         run: |
@@ -101,9 +113,11 @@ jobs:
           docker compose -f docker-compose.static.yml config --quiet
 
       - name: Set up Docker Buildx
+        if: steps.inputs.outputs.build
         uses: docker/setup-buildx-action@v4.4.1
 
       - name: Build
+        if: steps.inputs.outputs.build
         uses: docker/build-push-action@v7.4.0
         with:
           context: .
