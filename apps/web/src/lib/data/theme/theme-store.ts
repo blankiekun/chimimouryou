@@ -19,6 +19,7 @@ import { customThemes$, theme$ } from '$lib/data/store';
 import {
   allThemeDefinitions,
   defaultDarkThemeId,
+  defaultLightThemeId,
   migrateLegacyTheme,
   resolveTheme,
   type ThemeDefinition
@@ -51,6 +52,37 @@ if (Object.keys(legacyThemes).length && !Object.keys(customAppThemes$.getValue()
 /** Switch between `theme$` (light) and `darkTheme$` with the system setting. */
 export const followSystemTheme$ = writableBooleanLocalStorageSubject()('followSystemTheme', false);
 export const darkTheme$ = writableStringLocalStorageSubject()('darkTheme', defaultDarkThemeId);
+
+/**
+ * Washi and Sumi were the defaults until Study Book. A setting that still holds one of them and
+ * was last changed before Study Book existed is the old default, not a choice, so it moves to
+ * the new default once: here for this browser, and in account-settings-sync for the account.
+ */
+const oldDefaultThemes: Record<string, string> = {
+  theme: 'washi-theme',
+  darkTheme: 'washi-dark-theme'
+};
+const studyBookSince = Date.UTC(2026, 9, 23);
+const oldDefaultsMovedKey = 'studyBookThemeMoved';
+
+export function replacedOldDefaultTheme(key: string, value: unknown, changedAt: number) {
+  if (oldDefaultThemes[key] === undefined || value !== oldDefaultThemes[key]) return undefined;
+  if (changedAt >= studyBookSince) return undefined;
+  return key === 'theme' ? defaultLightThemeId : defaultDarkThemeId;
+}
+
+if (browser && !window.localStorage.getItem(oldDefaultsMovedKey)) {
+  (
+    [
+      ['theme', theme$],
+      ['darkTheme', darkTheme$]
+    ] as const
+  ).forEach(([key, store]) => {
+    const replacement = replacedOldDefaultTheme(key, store.getValue(), 0);
+    if (replacement) store.next(replacement);
+  });
+  window.localStorage.setItem(oldDefaultsMovedKey, '1');
+}
 
 const darkQuery = browser ? window.matchMedia('(prefers-color-scheme: dark)') : undefined;
 

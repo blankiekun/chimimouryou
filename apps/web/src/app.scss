@@ -5,42 +5,42 @@
 @tailwind utilities;
 
 :root {
-  /* Colours are set by the active theme (lib/data/theme); these are Washi's, for the first paint. */
-  --font-color: #1f1b16;
-  --background-color: #f5f0e6;
-  --surface-color: #fbf8f1;
-  --surface-strong-color: #fffdf8;
-  --border-color: #e2d9c8;
-  --shadow-color: rgba(60, 40, 20, 0.12);
-  --accent-color: #b23a24;
-  --accent-strong-color: #9a2f1c;
-  --app-accent-fg: #fffaf2;
-  --app-muted-fg: #5f574b;
-  --app-text-subtle: #857c6f;
-  --app-accent-hover: #9a2f1c;
-  --app-focus-ring: #b23a24;
-  --app-header-bg: #f5f0e6;
-  --app-header-fg: #1f1b16;
-  --app-header-border: #e2d9c8;
+  /* Colours are set by the active theme (lib/data/theme); these are Study Book's, for the first paint. */
+  --font-color: #1b1b1b;
+  --background-color: #ffffff;
+  --surface-color: #f3f5f4;
+  --surface-strong-color: #ffffff;
+  --border-color: #d5d9d7;
+  --shadow-color: transparent;
+  --accent-color: #0f7a5c;
+  --accent-strong-color: #0f7a5c;
+  --app-accent-fg: #ffffff;
+  --app-muted-fg: #5a5f5d;
+  --app-text-subtle: #6a6f6d;
+  --app-accent-hover: #0b6249;
+  --app-focus-ring: #0f7a5c;
+  --app-header-bg: #ffffff;
+  --app-header-fg: #1b1b1b;
+  --app-header-border: #d5d9d7;
   --app-header-icon-bg: transparent;
   --app-header-icon-border: transparent;
-  --app-header-icon-fg: #5f574b;
-  --app-header-icon-hover-bg: rgba(31, 27, 22, 0.06);
-  --app-control-bg: #fffdf8;
-  --app-control-border: #cfc3ad;
+  --app-header-icon-fg: #5a5f5d;
+  --app-header-icon-hover-bg: #f3f5f4;
+  --app-control-bg: #ffffff;
+  --app-control-border: #5a5f5d;
   --app-inset-highlight: transparent;
-  --app-danger-color: #a3192b;
-  --app-success-color: #2f7a3e;
-  --app-warning-color: #9a5b06;
-  --app-overlay-color: rgba(31, 27, 22, 0.4);
-  --app-scrollbar-color: rgba(95, 87, 75, 0.45);
-  --app-toggle-on: var(--accent-color);
-  --app-toggle-off: #cfc3ad;
-  --app-progress-track: #e8dfcf;
-  --app-progress-fill: var(--accent-color);
-  --app-cover-shadow: rgba(60, 40, 20, 0.24);
-  --reader-panel-bg: #fffdf8;
-  --reader-panel-fg: #1f1b16;
+  --app-danger-color: #b42318;
+  --app-success-color: #0f7a5c;
+  --app-warning-color: #8a5300;
+  --app-overlay-color: rgba(27, 27, 27, 0.4);
+  --app-scrollbar-color: rgba(90, 95, 93, 0.5);
+  --app-toggle-on: #0f7a5c;
+  --app-toggle-off: #5a5f5d;
+  --app-progress-track: #d5d9d7;
+  --app-progress-fill: #0f7a5c;
+  --app-cover-shadow: transparent;
+  --reader-panel-bg: #ffffff;
+  --reader-panel-fg: #1b1b1b;
   --highlight-yellow: rgba(250, 204, 21, 0.4);
   --highlight-green: rgba(74, 222, 128, 0.38);
   --highlight-blue: rgba(96, 165, 250, 0.38);
@@ -48,9 +48,23 @@
   --search-match-color: rgba(249, 115, 22, 0.5);
 
   /* Structure: the same under every theme. */
-  --app-radius-scale: 0.6;
+  --app-radius-scale: 0.3;
   --app-blur: 0px;
-  --app-font-display: 'KZ UDMincho', 'Noto Serif JP', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+  /* BIZ UDPGothic is self-hosted in unicode-range chunks (lib/assets/fonts/biz-udpgothic). */
+  --app-font-ui: 'BIZ UDPGothic', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', Meiryo, sans-serif;
+  --app-font-display: var(--app-font-ui);
+  /* Type scale (Study Book); nothing below 12px. */
+  --type-display: 2.5rem;
+  --type-h1: 1.75rem;
+  --type-h2: 1.25rem;
+  --type-body: 0.9375rem;
+  --type-button: 0.875rem;
+  --type-small: 0.8125rem;
+  --type-label: 0.75rem;
+  --type-number: 1.375rem;
+  --type-figure: 2.75rem;
+  /* Buttons and other controls: 40px, 44px on touch screens. */
+  --app-control-height: 2.5rem;
   --app-header-control-height: 2.6rem;
   --app-header-pill-height: 3.1rem;
   --app-header-label-size: 0.92rem;
@@ -63,6 +77,12 @@
 @media (max-width: 639px) {
   body:has(.app-bottom-nav) {
     padding-bottom: calc(3.5rem + env(safe-area-inset-bottom));
+  }
+}
+
+@media (pointer: coarse) {
+  :root {
+    --app-control-height: 2.75rem;
   }
 }
 
@@ -81,7 +101,8 @@
   body {
     color: var(--font-color);
     background-color: var(--background-color);
-    font-family: var(--app-ui-font, 'Noto Sans JP'), sans-serif;
+    font-family: var(--app-ui-font, var(--app-font-ui));
+    font-size: var(--type-body);
   }
 
   /* Beats the white defaults of @tailwindcss/forms so inputs follow the theme. */
@@ -202,39 +223,44 @@
     box-shadow: inset 0 1px var(--app-inset-highlight);
   }
 
-  /* Settings primitives (also used in dialogs and the admin panel) */
+  /* Settings primitives (also used in dialogs and the admin panel). Study Book: square corners,
+     1px lines, no shadows; the focus ring is the global :focus-visible outline. */
   .app-input {
-    min-height: 2.4rem;
+    min-height: var(--app-control-height);
     padding: 0.4rem 0.65rem;
     border: 1px solid var(--app-control-border);
     border-radius: calc(0.45rem * var(--app-radius-scale));
     background-color: var(--app-control-bg);
     color: var(--font-color);
-    font-size: 0.9rem;
-    transition:
-      border-color 0.15s ease,
-      box-shadow 0.15s ease;
+    font-size: var(--type-body);
+    transition: border-color 0.15s ease;
+  }
+
+  .app-input::placeholder {
+    color: var(--app-text-subtle);
   }
 
   .app-input:focus {
     border-color: var(--app-focus-ring);
-    box-shadow: 0 0 0 1px var(--app-focus-ring);
-    outline: none;
+    box-shadow: none;
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 2px;
   }
 
+  /* Secondary by default: 1px ink outline. */
   .app-button {
     display: inline-flex;
-    min-height: 2.25rem;
+    min-height: var(--app-control-height);
     align-items: center;
     justify-content: center;
     gap: 0.45rem;
-    padding: 0 0.9rem;
-    border: 1px solid var(--app-control-border);
-    border-radius: calc(0.5rem * var(--app-radius-scale));
-    background: var(--app-control-bg);
+    padding: 0 1rem;
+    border: 1px solid var(--font-color);
+    border-radius: calc(0.45rem * var(--app-radius-scale));
+    background: transparent;
     color: var(--font-color);
-    font-size: 0.85rem;
-    font-weight: 600;
+    font-size: var(--type-button);
+    font-weight: 700;
     line-height: 1.2;
     cursor: pointer;
     transition:
@@ -244,7 +270,7 @@
   }
 
   .app-button:hover:not(:disabled) {
-    border-color: color-mix(in srgb, var(--font-color) 35%, var(--app-control-border));
+    background: color-mix(in srgb, var(--font-color) 6%, transparent);
   }
 
   .app-button:disabled {
@@ -263,6 +289,7 @@
     background: var(--app-accent-hover);
   }
 
+  /* Inline, like a link */
   .app-button-quiet {
     min-height: 0;
     padding: 0.15rem 0;
@@ -272,18 +299,17 @@
   }
 
   .app-button-quiet:hover:not(:disabled) {
-    border-color: transparent;
+    background: transparent;
     text-decoration: underline;
     text-underline-offset: 0.2em;
   }
 
   .app-button-danger {
-    border-color: color-mix(in srgb, var(--app-danger-color) 45%, var(--app-control-border));
+    border-color: var(--app-danger-color);
     color: var(--app-danger-color);
   }
 
   .app-button-danger:hover:not(:disabled) {
-    border-color: var(--app-danger-color);
     background: color-mix(in srgb, var(--app-danger-color) 8%, transparent);
   }
 
@@ -307,25 +333,29 @@
     border-bottom: 0;
   }
 
+  /* Switch (button-toggle-group.svelte): square track and knob. Off: outlined track, knob in the
+     outline colour; on: filled track, knob in the text-on-accent colour. */
   .app-switch {
     display: inline-flex;
     min-height: 2rem;
     align-items: center;
     gap: 0.6rem;
-    border-radius: 999px;
     color: var(--app-muted-fg);
-    font-size: 0.82rem;
-    font-weight: 500;
+    font-size: var(--type-small);
+    font-weight: 400;
   }
 
   .app-switch-thumb {
     position: relative;
-    width: 2.4rem;
-    height: 1.4rem;
+    width: 2.5rem;
+    height: 1.5rem;
     flex: none;
-    border-radius: 999px;
-    background: var(--app-toggle-off);
-    transition: background-color 0.18s var(--app-ease);
+    border: 1px solid var(--app-toggle-off);
+    border-radius: 2px;
+    background: transparent;
+    transition:
+      background-color 0.18s var(--app-ease),
+      border-color 0.18s var(--app-ease);
   }
 
   .app-switch-thumb::after {
@@ -333,16 +363,13 @@
     position: absolute;
     top: 3px;
     left: 3px;
-    width: calc(1.4rem - 6px);
-    height: calc(1.4rem - 6px);
-    border-radius: 999px;
-    background: var(--surface-strong-color);
-    box-shadow: 0 1px 2px var(--shadow-color);
-    transition: transform 0.18s var(--app-ease);
-  }
-
-  .theme-dark .app-switch-thumb::after {
-    background: color-mix(in srgb, var(--font-color) 85%, var(--background-color));
+    width: calc(1.5rem - 8px);
+    height: calc(1.5rem - 8px);
+    border-radius: 1px;
+    background: var(--app-toggle-off);
+    transition:
+      transform 0.18s var(--app-ease),
+      background-color 0.18s var(--app-ease);
   }
 
   .app-switch[aria-checked='true'] {
@@ -350,12 +377,49 @@
   }
 
   .app-switch[aria-checked='true'] .app-switch-thumb {
+    border-color: var(--app-toggle-on);
     background: var(--app-toggle-on);
   }
 
   .app-switch[aria-checked='true'] .app-switch-thumb::after {
     background: var(--app-accent-fg);
     transform: translateX(1rem);
+  }
+
+  /* Segmented control (button-toggle-group.svelte): the selected segment is filled with ink. */
+  .app-segmented {
+    display: inline-flex;
+    max-width: 100%;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--app-control-border);
+    border-radius: calc(0.45rem * var(--app-radius-scale));
+    background: var(--app-control-bg);
+  }
+
+  .app-segment {
+    min-height: calc(var(--app-control-height) - 6px);
+    padding: 0.25rem 0.8rem;
+    border-radius: calc(0.3rem * var(--app-radius-scale));
+    color: var(--app-muted-fg);
+    font-size: var(--type-button);
+    font-weight: 400;
+    white-space: nowrap;
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease;
+  }
+
+  .app-segment:hover {
+    color: var(--font-color);
+  }
+
+  .app-segment-selected,
+  .app-segment-selected:hover {
+    background: var(--font-color);
+    color: var(--background-color);
+    font-weight: 700;
   }
 
   .app-header-pill {

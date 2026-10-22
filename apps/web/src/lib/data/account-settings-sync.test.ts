@@ -7,6 +7,8 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { openRouterApiKey$, openRouterModel$, elevenLabsApiKey$ } from '$lib/data/ai-settings';
+import { theme$ } from '$lib/data/store';
+import { darkTheme$ } from '$lib/data/theme/theme-store';
 import { startSettingsSync, syncAccountSettings } from './account-settings-sync';
 
 // jsdom has no matchMedia; the theme store reads the system colour scheme on import.
@@ -134,5 +136,20 @@ describe('account settings sync', () => {
     await signInAs(bob);
 
     expect(openRouterApiKey$.getValue()).toBe('sk-or-bob');
+  });
+
+  it('moves the account from the old default themes to Study Book, but keeps a later choice', async () => {
+    const later = Date.UTC(2026, 10, 1);
+    mockServer({
+      values: { theme: 'washi-theme', darkTheme: 'washi-dark-theme' },
+      modified: { theme: Date.UTC(2026, 9, 12), darkTheme: later }
+    });
+
+    await signInAs(alice);
+
+    expect(theme$.getValue()).toBe('study-book');
+    expect(darkTheme$.getValue()).toBe('washi-dark-theme');
+    expect(remote?.values.theme).toBe('study-book');
+    expect(remote?.modified.darkTheme).toBe(later);
   });
 });

@@ -13,8 +13,6 @@ export const ja: Record<MessageKey, string> = {
   'nav.store': 'ストア',
   'nav.statistics': '統計',
   'nav.settings': '設定',
-  'nav.notes': 'メモ',
-  'nav.notesUnavailable': 'メモ機能は現在準備中です',
   'nav.back': '戻る',
   'nav.continueReading': '続きを読む',
   'nav.continue': '続き',

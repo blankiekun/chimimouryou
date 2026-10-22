@@ -13,12 +13,17 @@ const BUILD_CACHE_NAME = `build:${version}`;
 // so it is fetched network-first and kept across builds for offline play.
 const ENGINE_CACHE_NAME = 'vn-engine';
 const engineFile = /\/vn\/conscripter(\.js|\.wasm|-version\.txt)$/;
+// The UI font is split into unicode-range chunks (4 MB in all); a page loads only the ones it
+// shows, so they are cached on first use, across builds, rather than precached.
+const UI_FONT_CACHE_NAME = 'ui-font';
+const uiFontFile = /\/BIZUDPGothic-[^/]+\.woff2$/;
+const uiFontFiles = new Set(build.filter((file) => uiFontFile.test(file)));
 
 const prerenderedSet = new Set(prerendered);
 
 // Whisper's worker and runtime (tens of MB) load only when someone transcribes.
 const assetsToCache = build
-  .filter((file) => !/ort-wasm|whisper\.worker/.test(file))
+  .filter((file) => !/ort-wasm|whisper\.worker/.test(file) && !uiFontFile.test(file))
   .concat(files.filter((file) => !engineFile.test(file)))
   .concat(prerendered);
 const cachedAssets = new Set(assetsToCache);
@@ -32,9 +37,16 @@ worker.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       const keysWithOldCache = keys.filter(
-        (key) => key !== BUILD_CACHE_NAME && key !== userFontsCacheName && key !== ENGINE_CACHE_NAME
+        (key) =>
+          key !== BUILD_CACHE_NAME &&
+          key !== userFontsCacheName &&
+          key !== ENGINE_CACHE_NAME &&
+          key !== UI_FONT_CACHE_NAME
       );
-      return Promise.all(keysWithOldCache.map((key) => caches.delete(key)));
+      return Promise.all([
+        ...keysWithOldCache.map((key) => caches.delete(key)),
+        dropOldUiFontChunks()
+      ]);
     })
   );
 });
@@ -59,6 +71,11 @@ worker.addEventListener('fetch', (event) => {
     event.respondWith(
       networkFirstRaceCache(event.request, false, BUILD_CACHE_NAME, requestWithoutParams)
     );
+    return;
+  }
+
+  if (isSelfHost && uiFontFile.test(url.pathname)) {
+    event.respondWith(cacheFirst(event.request, url.pathname));
     return;
   }
 
@@ -95,6 +112,31 @@ worker.addEventListener('fetch', (event) => {
     event.respondWith(networkFirstRaceCache(event.request));
   }
 });
+
+async function cacheFirst(request: Request, key: string) {
+  const cache = await caches.open(UI_FONT_CACHE_NAME);
+  const cached = await cache.match(key);
+
+  if (cached) return cached;
+
+  const response = await fetch(request);
+
+  if (response.ok) await cache.put(key, response.clone());
+
+  return response;
+}
+
+/** Chunks of an older build's font (hashed names) are never asked for again. */
+async function dropOldUiFontChunks() {
+  const cache = await caches.open(UI_FONT_CACHE_NAME);
+  const keys = await cache.keys();
+
+  await Promise.all(
+    keys
+      .filter((request) => !uiFontFiles.has(new URL(request.url).pathname))
+      .map((request) => cache.delete(request))
+  );
+}
 
 async function networkFirst(request: Request, key: string) {
   const cache = await caches.open(ENGINE_CACHE_NAME);

@@ -168,11 +168,123 @@ const darkBase: ThemeColors = {
 const defaults = { radius: 1, blur: 24, uiFont: '', customCss: '' };
 
 /** The default themes (Settings → Themes, and the reset target). */
-export const defaultLightThemeId = 'washi-theme';
-export const defaultDarkThemeId = 'washi-dark-theme';
+export const defaultLightThemeId = 'study-book';
+export const defaultDarkThemeId = 'study-book-dark';
 
-/** Built-in themes. Ids from light-theme to black-theme are upstream's reader themes. */
+/**
+ * Built-in themes. The first is the fallback for unknown ids. Ids from light-theme to
+ * black-theme are upstream's reader themes.
+ */
 export const builtInThemes: ThemeDefinition[] = [
+  // Study Book: white paper, ink and one green spot colour; no shadows (shadow tokens transparent).
+  {
+    id: 'study-book',
+    name: 'Study Book',
+    extends: 'light',
+    radius: 0.3,
+    blur: 0,
+    colors: {
+      background: '#ffffff',
+      surface: '#f3f5f4',
+      surfaceStrong: '#ffffff',
+      text: '#1b1b1b',
+      mutedText: '#5a5f5d',
+      subtleText: '#6a6f6d',
+      border: '#d5d9d7',
+      shadow: 'transparent',
+      insetHighlight: 'transparent',
+      accent: '#0f7a5c',
+      accentStrong: '#0f7a5c',
+      accentHover: '#0b6249',
+      accentText: '#ffffff',
+      focusRing: '#0f7a5c',
+      control: '#ffffff',
+      controlBorder: '#5a5f5d',
+      danger: '#b42318',
+      success: '#0f7a5c',
+      warning: '#8a5300',
+      overlay: 'rgba(27, 27, 27, 0.4)',
+      scrollbar: 'rgba(90, 95, 93, 0.5)',
+      toggleOn: '#0f7a5c',
+      toggleOff: '#5a5f5d',
+      progressTrack: '#d5d9d7',
+      progressFill: '#0f7a5c',
+      coverShadow: 'transparent',
+      heatmapEmpty: '#f3f5f4',
+      heatmapLow: '#b5dccd',
+      heatmapHigh: '#0f7a5c',
+      headerBackground: '#ffffff',
+      headerText: '#1b1b1b',
+      headerBorder: '#d5d9d7',
+      headerIcon: '#5a5f5d',
+      headerIconBackground: 'transparent',
+      headerIconBorder: 'transparent',
+      headerIconHover: '#f3f5f4',
+      readerText: '#1b1b1b',
+      readerBackground: '#ffffff',
+      selectionText: '#1b1b1b',
+      selectionBackground: 'rgba(15, 122, 92, 0.24)',
+      furiganaHintText: 'rgba(27, 27, 27, 0.35)',
+      furiganaHintShadow: 'rgba(27, 27, 27, 0.3)',
+      footerText: '#5a5f5d',
+      panelBackground: '#ffffff',
+      panelText: '#1b1b1b'
+    }
+  },
+  {
+    id: 'study-book-dark',
+    name: 'Study Book Dark',
+    extends: 'dark',
+    radius: 0.3,
+    blur: 0,
+    colors: {
+      background: '#121413',
+      surface: '#1b1e1d',
+      surfaceStrong: '#121413',
+      text: '#e9ebea',
+      mutedText: '#a3a9a6',
+      subtleText: '#8e9491',
+      border: '#2e3331',
+      shadow: 'transparent',
+      insetHighlight: 'transparent',
+      accent: '#4fbf95',
+      accentStrong: '#4fbf95',
+      accentHover: '#6fd0ab',
+      accentText: '#0b1a15',
+      focusRing: '#4fbf95',
+      control: '#121413',
+      controlBorder: '#a3a9a6',
+      danger: '#f28b82',
+      success: '#4fbf95',
+      warning: '#e5a93c',
+      overlay: 'rgba(0, 0, 0, 0.6)',
+      scrollbar: 'rgba(163, 169, 166, 0.4)',
+      toggleOn: '#4fbf95',
+      toggleOff: '#a3a9a6',
+      progressTrack: '#2e3331',
+      progressFill: '#4fbf95',
+      coverShadow: 'transparent',
+      heatmapEmpty: '#1b1e1d',
+      heatmapLow: '#2a5a49',
+      heatmapHigh: '#4fbf95',
+      headerBackground: '#121413',
+      headerText: '#e9ebea',
+      headerBorder: '#2e3331',
+      headerIcon: '#a3a9a6',
+      headerIconBackground: 'transparent',
+      headerIconBorder: 'transparent',
+      headerIconHover: '#1b1e1d',
+      readerText: 'rgba(233, 235, 234, 0.9)',
+      readerBackground: '#121413',
+      selectionText: '#e9ebea',
+      selectionBackground: 'rgba(79, 191, 149, 0.32)',
+      furiganaHintText: 'rgba(233, 235, 234, 0.3)',
+      furiganaHintShadow: 'rgba(233, 235, 234, 0.25)',
+      footerText: '#a3a9a6',
+      panelBackground: '#1b1e1d',
+      panelText: '#e9ebea'
+    }
+  },
   {
     id: 'washi-theme',
     name: 'Washi',

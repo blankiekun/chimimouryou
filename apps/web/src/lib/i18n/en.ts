@@ -15,8 +15,6 @@ export const en = {
   'nav.store': 'Store',
   'nav.statistics': 'Statistics',
   'nav.settings': 'Settings',
-  'nav.notes': 'Notes',
-  'nav.notesUnavailable': 'Notes are not available in this reader yet',
   'nav.back': 'Back',
   'nav.continueReading': 'Continue reading',
   'nav.continue': 'Continue',
