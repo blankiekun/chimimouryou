@@ -16,9 +16,15 @@ import {
 import { themeTokens } from '$lib/data/theme/theme-tokens';
 
 describe('themes', () => {
-  it('defaults to Washi (light) and Sumi (dark)', () => {
-    expect(resolveTheme(defaultLightThemeId, {})).toMatchObject({ name: 'Washi', dark: false });
-    expect(resolveTheme(defaultDarkThemeId, {})).toMatchObject({ name: 'Sumi', dark: true });
+  it('defaults to Study Book (light and dark)', () => {
+    expect(resolveTheme(defaultLightThemeId, {})).toMatchObject({
+      name: 'Study Book',
+      dark: false
+    });
+    expect(resolveTheme(defaultDarkThemeId, {})).toMatchObject({
+      name: 'Study Book Dark',
+      dark: true
+    });
     expect(resolveTheme('no-such-theme', {}).id).toBe(defaultLightThemeId);
   });
 

@@ -8,27 +8,29 @@ themes, the theme editor, the JSON format for sharing themes, and custom CSS.
 
 - **Settings → General → Theme** shows every theme as a swatch, grouped light and
   dark. Click one to use it. With "Follow system theme" on there is one grid for the
-  light slot and one for the dark slot (Washi and Sumi by default).
+  light slot and one for the dark slot (Study Book and Study Book Dark by default).
 - **Settings → General → Custom Themes** lists every theme with its actions.
 - **Settings → Reader → Theme** and the palette icon in the reader header switch
   themes quickly.
 
 Built-in themes:
 
-| Id | Name | Kind |
-| --- | --- | --- |
-| `washi-theme` | Washi | light, warm paper and vermilion (default) |
-| `washi-dark-theme` | Sumi | dark, ink and vermilion (default dark) |
-| `light-theme` | Light | light |
-| `ecru-theme` | Ecru | light, warm paper |
-| `water-theme` | Water | light, pale blue page |
-| `gray-theme` | Gray | dark |
-| `dark-theme` | Dark | dark, dimmed text |
-| `black-theme` | Black | dark, pure black (OLED) |
-| `sepia-theme` | Sepia | light, brown text on cream |
-| `sakura-theme` | Sakura | light, pink accents |
-| `nord-theme` | Nord | dark, blue-grey |
-| `solarized-dark-theme` | Solarized Dark | dark |
+| Id                     | Name            | Kind                                                   |
+| ---------------------- | --------------- | ------------------------------------------------------ |
+| `study-book`           | Study Book      | light, white paper, ink and one green (default)        |
+| `study-book-dark`      | Study Book Dark | dark, ink-black page and a lifted green (default dark) |
+| `washi-theme`          | Washi           | light, warm paper and vermilion                        |
+| `washi-dark-theme`     | Sumi            | dark, ink and vermilion                                |
+| `light-theme`          | Light           | light                                                  |
+| `ecru-theme`           | Ecru            | light, warm paper                                      |
+| `water-theme`          | Water           | light, pale blue page                                  |
+| `gray-theme`           | Gray            | dark                                                   |
+| `dark-theme`           | Dark            | dark, dimmed text                                      |
+| `black-theme`          | Black           | dark, pure black (OLED)                                |
+| `sepia-theme`          | Sepia           | light, brown text on cream                             |
+| `sakura-theme`         | Sakura          | light, pink accents                                    |
+| `nord-theme`           | Nord            | dark, blue-grey                                        |
+| `solarized-dark-theme` | Solarized Dark  | dark                                                   |
 
 `light-theme` to `black-theme` keep the ids of upstream ッツ Reader's reader themes, so a theme
 chosen before this update stays selected. Custom reader themes made with the old
@@ -57,7 +59,7 @@ In the editor:
 - **Roundness**: scales the corner radius of cards, popovers, the header and
   buttons (0 is square, 1 is the default, 2 is very round).
 - **Glass blur**: the blur behind translucent header backgrounds and popovers,
-  in pixels. 0 turns the glass effect off (Washi and Sumi use 0 and opaque bars).
+  in pixels. 0 turns the glass effect off (the Study Book, Washi and Sumi themes use 0 and opaque bars).
 - The editor shows a live preview (a book card, a settings row and reader text) and
   warns, without blocking, when text falls below WCAG AA contrast.
 - **Interface font**: a CSS font family for the app's interface, e.g.
@@ -90,89 +92,89 @@ contrast (4.5:1); built-in themes are checked by `themes.test.ts`.
 
 ### App
 
-| Key | CSS variable | Used for |
-| --- | --- | --- |
-| `background` | `--background-color` | Page background of the library, settings and statistics |
-| `surface` | `--surface-color` | Cards and panels (bottom of their gradient) |
-| `surfaceStrong` | `--surface-strong-color` | Cards and panels (top of their gradient), popovers, dialogs |
-| `text` | `--font-color` | Main text colour |
-| `mutedText` | `--app-muted-fg` | Secondary text such as hints and counts |
-| `subtleText` | `--app-text-subtle` | Least important text: placeholders, counts on inactive filters |
-| `border` | `--border-color` | Card and divider borders |
-| `shadow` | `--shadow-color` | Drop shadows |
-| `insetHighlight` | `--app-inset-highlight` | The thin light line along the top edge of cards |
-| `accent` | `--accent-color` | Active items, progress bars, focus rings |
-| `accentStrong` | `--accent-strong-color` | Accent used for text and icons |
-| `accentHover` | `--app-accent-hover` | Accent buttons and links under the pointer |
-| `accentText` | `--app-accent-fg` | Text placed on an accent background |
-| `control` | `--app-control-bg` | Inputs, tabs and buttons |
-| `focusRing` | `--app-focus-ring` | Outline around the focused control when using the keyboard |
-| `controlBorder` | `--app-control-border` | Borders of inputs, tabs and buttons |
-| `danger` | `--app-danger-color` | Delete actions and errors |
-| `overlay` | `--app-overlay-color` | Dims the page behind dialogs |
-| `scrollbar` | `--app-scrollbar-color` | Scrollbar thumb |
+| Key              | CSS variable             | Used for                                                       |
+| ---------------- | ------------------------ | -------------------------------------------------------------- |
+| `background`     | `--background-color`     | Page background of the library, settings and statistics        |
+| `surface`        | `--surface-color`        | Cards and panels (bottom of their gradient)                    |
+| `surfaceStrong`  | `--surface-strong-color` | Cards and panels (top of their gradient), popovers, dialogs    |
+| `text`           | `--font-color`           | Main text colour                                               |
+| `mutedText`      | `--app-muted-fg`         | Secondary text such as hints and counts                        |
+| `subtleText`     | `--app-text-subtle`      | Least important text: placeholders, counts on inactive filters |
+| `border`         | `--border-color`         | Card and divider borders                                       |
+| `shadow`         | `--shadow-color`         | Drop shadows                                                   |
+| `insetHighlight` | `--app-inset-highlight`  | The thin light line along the top edge of cards                |
+| `accent`         | `--accent-color`         | Active items, progress bars, focus rings                       |
+| `accentStrong`   | `--accent-strong-color`  | Accent used for text and icons                                 |
+| `accentHover`    | `--app-accent-hover`     | Accent buttons and links under the pointer                     |
+| `accentText`     | `--app-accent-fg`        | Text placed on an accent background                            |
+| `control`        | `--app-control-bg`       | Inputs, tabs and buttons                                       |
+| `focusRing`      | `--app-focus-ring`       | Outline around the focused control when using the keyboard     |
+| `controlBorder`  | `--app-control-border`   | Borders of inputs, tabs and buttons                            |
+| `danger`         | `--app-danger-color`     | Delete actions and errors                                      |
+| `overlay`        | `--app-overlay-color`    | Dims the page behind dialogs                                   |
+| `scrollbar`      | `--app-scrollbar-color`  | Scrollbar thumb                                                |
 
 ### States
 
-| Key | CSS variable | Used for |
-| --- | --- | --- |
-| `success` | `--app-success-color` | Synced, saved and other good states |
-| `warning` | `--app-warning-color` | Pending sync and other states that need attention |
-| `toggleOn` | `--app-toggle-on` | Track of a switch that is on |
-| `toggleOff` | `--app-toggle-off` | Track of a switch that is off |
-| `progressTrack` | `--app-progress-track` | Empty part of progress bars |
-| `progressFill` | `--app-progress-fill` | Filled part of progress bars |
-| `coverShadow` | `--app-cover-shadow` | Shadow under book covers |
+| Key             | CSS variable           | Used for                                          |
+| --------------- | ---------------------- | ------------------------------------------------- |
+| `success`       | `--app-success-color`  | Synced, saved and other good states               |
+| `warning`       | `--app-warning-color`  | Pending sync and other states that need attention |
+| `toggleOn`      | `--app-toggle-on`      | Track of a switch that is on                      |
+| `toggleOff`     | `--app-toggle-off`     | Track of a switch that is off                     |
+| `progressTrack` | `--app-progress-track` | Empty part of progress bars                       |
+| `progressFill`  | `--app-progress-fill`  | Filled part of progress bars                      |
+| `coverShadow`   | `--app-cover-shadow`   | Shadow under book covers                          |
 
 ### Data
 
-| Key | CSS variable | Used for |
-| --- | --- | --- |
-| `difficulty1` | `--difficulty-1` | Beginner |
-| `difficulty2` | `--difficulty-2` | Easy |
-| `difficulty3` | `--difficulty-3` | Average |
-| `difficulty4` | `--difficulty-4` | Hard |
-| `difficulty5` | `--difficulty-5` | Expert and above |
-| `heatmapEmpty` | `--heatmap-empty` | Days without reading |
-| `heatmapLow` | `--heatmap-low` | Days with the least reading; other days blend towards the next colour |
-| `heatmapHigh` | `--heatmap-high` | Days with the most reading |
+| Key            | CSS variable      | Used for                                                              |
+| -------------- | ----------------- | --------------------------------------------------------------------- |
+| `difficulty1`  | `--difficulty-1`  | Beginner                                                              |
+| `difficulty2`  | `--difficulty-2`  | Easy                                                                  |
+| `difficulty3`  | `--difficulty-3`  | Average                                                               |
+| `difficulty4`  | `--difficulty-4`  | Hard                                                                  |
+| `difficulty5`  | `--difficulty-5`  | Expert and above                                                      |
+| `heatmapEmpty` | `--heatmap-empty` | Days without reading                                                  |
+| `heatmapLow`   | `--heatmap-low`   | Days with the least reading; other days blend towards the next colour |
+| `heatmapHigh`  | `--heatmap-high`  | Days with the most reading                                            |
 
 ### Header
 
-| Key | CSS variable | Used for |
-| --- | --- | --- |
-| `headerBackground` | `--app-header-bg` | Top bar, mobile tab bar and library sidebar |
-| `headerText` | `--app-header-fg` | Titles in the top bar |
-| `headerBorder` | `--app-header-border` | Line below the top bar |
-| `headerIcon` | `--app-header-icon-fg` | Icon buttons |
-| `headerIconBackground` | `--app-header-icon-bg` | Icon buttons at rest (transparent in Washi) |
-| `headerIconBorder` | `--app-header-icon-border` | Outline of icon buttons at rest |
-| `headerIconHover` | `--app-header-icon-hover-bg` | Icon button hover and active state |
+| Key                    | CSS variable                 | Used for                                         |
+| ---------------------- | ---------------------------- | ------------------------------------------------ |
+| `headerBackground`     | `--app-header-bg`            | Top bar, mobile tab bar and library sidebar      |
+| `headerText`           | `--app-header-fg`            | Titles in the top bar                            |
+| `headerBorder`         | `--app-header-border`        | Line below the top bar                           |
+| `headerIcon`           | `--app-header-icon-fg`       | Icon buttons                                     |
+| `headerIconBackground` | `--app-header-icon-bg`       | Icon buttons at rest (transparent in Study Book) |
+| `headerIconBorder`     | `--app-header-icon-border`   | Outline of icon buttons at rest                  |
+| `headerIconHover`      | `--app-header-icon-hover-bg` | Icon button hover and active state               |
 
 ### Reader
 
-| Key | CSS variable | Used for |
-| --- | --- | --- |
-| `readerText` | `--reader-text-color` | Text of the book |
-| `readerBackground` | `--reader-background-color` | Page colour while reading |
-| `selectionText` | `--reader-selection-color` | Selected text in the book |
-| `selectionBackground` | `--reader-selection-bg` | Background of selected text |
-| `furiganaHintText` | `--reader-furigana-hint-color` | Furigana when the "partial" furigana style is on |
-| `furiganaHintShadow` | `--reader-furigana-shadow-color` | Shadow that hides furigana until hovered |
-| `footerText` | `--reader-footer-color` | Progress and character counter at the bottom |
-| `panelBackground` | `--reader-panel-bg` | Read aloud player, Ask AI, search, notes and the selection toolbar |
-| `panelText` | `--reader-panel-fg` | Text in those panels |
+| Key                   | CSS variable                     | Used for                                                           |
+| --------------------- | -------------------------------- | ------------------------------------------------------------------ |
+| `readerText`          | `--reader-text-color`            | Text of the book                                                   |
+| `readerBackground`    | `--reader-background-color`      | Page colour while reading                                          |
+| `selectionText`       | `--reader-selection-color`       | Selected text in the book                                          |
+| `selectionBackground` | `--reader-selection-bg`          | Background of selected text                                        |
+| `furiganaHintText`    | `--reader-furigana-hint-color`   | Furigana when the "partial" furigana style is on                   |
+| `furiganaHintShadow`  | `--reader-furigana-shadow-color` | Shadow that hides furigana until hovered                           |
+| `footerText`          | `--reader-footer-color`          | Progress and character counter at the bottom                       |
+| `panelBackground`     | `--reader-panel-bg`              | Read aloud player, Ask AI, search, notes and the selection toolbar |
+| `panelText`           | `--reader-panel-fg`              | Text in those panels                                               |
 
 ### Annotations
 
-| Key | CSS variable | Used for |
-| --- | --- | --- |
-| `highlightYellow` | `--highlight-yellow` | First highlight colour |
-| `highlightGreen` | `--highlight-green` | Second highlight colour |
-| `highlightBlue` | `--highlight-blue` | Third highlight colour |
-| `highlightPink` | `--highlight-pink` | Fourth highlight colour |
-| `searchMatch` | `--search-match-color` | The search result you jumped to |
-| `readingLine` | `--reading-line-color` | What the audiobook or AI voice is reading |
+| Key               | CSS variable           | Used for                                  |
+| ----------------- | ---------------------- | ----------------------------------------- |
+| `highlightYellow` | `--highlight-yellow`   | First highlight colour                    |
+| `highlightGreen`  | `--highlight-green`    | Second highlight colour                   |
+| `highlightBlue`   | `--highlight-blue`     | Third highlight colour                    |
+| `highlightPink`   | `--highlight-pink`     | Fourth highlight colour                   |
+| `searchMatch`     | `--search-match-color` | The search result you jumped to           |
+| `readingLine`     | `--reading-line-color` | What the audiobook or AI voice is reading |
 
 - Highlight colours sit on top of the book text, so give them roughly 30–45%
   opacity. Fully opaque highlights hide the text.
@@ -214,18 +216,18 @@ export one, and **Import** to add one, either by pasting JSON or choosing a
 }
 ```
 
-| Field | Required | Meaning |
-| --- | --- | --- |
-| `name` | yes | Name shown in the app. |
-| `id` | no | Lowercase letters, digits and dashes. Generated from the name if missing; made unique on import (e.g. `midnight-2-theme`). |
-| `extends` | no | Id of the theme to start from: `light`, `dark` (the plain bases), a built-in id, or another custom theme's id. Defaults to `light`, or `dark` when `"dark": true`. |
-| `dark` | no | `true` for a dark theme (native controls, scrollbars). Inherited when missing. |
-| `colors` | no | Any of the colour keys above. Unknown keys and invalid colours are rejected on import, with a message saying which one. |
-| `radius` | no | Corner roundness, 0–3 (1 = default). |
-| `blur` | no | Glass blur in px, 0–64 (default 24). |
-| `uiFont` | no | CSS font family for the interface. |
-| `customCss` | no | Extra CSS, see below. The custom CSS of the base theme is applied first. |
-| `$format` | no | Format version written on export, currently 1. |
+| Field       | Required | Meaning                                                                                                                                                            |
+| ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`      | yes      | Name shown in the app.                                                                                                                                             |
+| `id`        | no       | Lowercase letters, digits and dashes. Generated from the name if missing; made unique on import (e.g. `midnight-2-theme`).                                         |
+| `extends`   | no       | Id of the theme to start from: `light`, `dark` (the plain bases), a built-in id, or another custom theme's id. Defaults to `light`, or `dark` when `"dark": true`. |
+| `dark`      | no       | `true` for a dark theme (native controls, scrollbars). Inherited when missing.                                                                                     |
+| `colors`    | no       | Any of the colour keys above. Unknown keys and invalid colours are rejected on import, with a message saying which one.                                            |
+| `radius`    | no       | Corner roundness, 0–3 (1 = default).                                                                                                                               |
+| `blur`      | no       | Glass blur in px, 0–64 (default 24).                                                                                                                               |
+| `uiFont`    | no       | CSS font family for the interface.                                                                                                                                 |
+| `customCss` | no       | Extra CSS, see below. The custom CSS of the base theme is applied first.                                                                                           |
+| `$format`   | no       | Format version written on export, currently 1.                                                                                                                     |
 
 A theme that extends a custom theme only works where that theme exists too, so
 either share both or use a built-in theme as the base. If a base can't be found,
@@ -243,27 +245,27 @@ The smallest useful theme changes a single colour:
 element after the theme's variables, so it can override anything. The theme's
 colours are available as CSS variables (see the tables above), along with:
 
-| Variable | Meaning |
-| --- | --- |
-| `--app-radius-scale` | The roundness setting, as a number |
-| `--app-blur` | The glass blur setting, e.g. `24px` |
-| `--app-ui-font` | The interface font, if set |
+| Variable             | Meaning                             |
+| -------------------- | ----------------------------------- |
+| `--app-radius-scale` | The roundness setting, as a number  |
+| `--app-blur`         | The glass blur setting, e.g. `24px` |
+| `--app-ui-font`      | The interface font, if set          |
 
 Useful selectors:
 
-| Selector | What it is |
-| --- | --- |
-| `html.theme-dark` | Present while a dark theme is active |
-| `html[data-theme="my-theme"]` | The active theme's id |
-| `.app-header-surface` | The top bar |
-| `.app-surface-card` | Cards (settings groups, toolbars, the continue-reading shelf) |
-| `.app-popover-panel`, `.app-popover-item` | Menus |
-| `.library-card`, `.library-list-row` | Books in the library (cover and list views) |
-| `.book-content` | The book text in the reader |
-| `.reader-panel` | Overlay panels in the reader |
-| `::highlight(ttu-hl-yellow)` (`-green`, `-blue`, `-pink`) | Highlighted text |
-| `::highlight(ttu-hl-note)` | Highlights that have a note (dotted underline by default) |
-| `::highlight(ttu-search)` | The search result you jumped to |
+| Selector                                                  | What it is                                                    |
+| --------------------------------------------------------- | ------------------------------------------------------------- |
+| `html.theme-dark`                                         | Present while a dark theme is active                          |
+| `html[data-theme="my-theme"]`                             | The active theme's id                                         |
+| `.app-header-surface`                                     | The top bar                                                   |
+| `.app-surface-card`                                       | Cards (settings groups, toolbars, the continue-reading shelf) |
+| `.app-popover-panel`, `.app-popover-item`                 | Menus                                                         |
+| `.library-card`, `.library-list-row`                      | Books in the library (cover and list views)                   |
+| `.book-content`                                           | The book text in the reader                                   |
+| `.reader-panel`                                           | Overlay panels in the reader                                  |
+| `::highlight(ttu-hl-yellow)` (`-green`, `-blue`, `-pink`) | Highlighted text                                              |
+| `::highlight(ttu-hl-note)`                                | Highlights that have a note (dotted underline by default)     |
+| `::highlight(ttu-search)`                                 | The search result you jumped to                               |
 
 Examples:
 

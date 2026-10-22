@@ -188,7 +188,7 @@ export const themeTokenGroups = {
     headerIconBackground: {
       label: 'Header icon background',
       cssVar: '--app-header-icon-bg',
-      description: 'Icon buttons at rest (transparent in Washi)'
+      description: 'Icon buttons at rest (transparent in Study Book)'
     },
     headerIconBorder: {
       label: 'Header icon border',

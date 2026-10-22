@@ -13,6 +13,7 @@
   import { reloadOnStaleBuild } from '$lib/functions/reload-on-stale-build';
   import { dummyFn, isMobile, isMobile$ } from '$lib/functions/utils';
   import { MetaTags } from 'svelte-meta-tags';
+  import '$lib/assets/fonts/biz-udpgothic/biz-udpgothic.css';
   import '../app.scss';
 
   let path = '';

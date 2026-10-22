@@ -77,7 +77,12 @@ import {
   viewMode$,
   writingMode$
 } from '$lib/data/store';
-import { customAppThemes$, darkTheme$, followSystemTheme$ } from '$lib/data/theme/theme-store';
+import {
+  customAppThemes$,
+  darkTheme$,
+  followSystemTheme$,
+  replacedOldDefaultTheme
+} from '$lib/data/theme/theme-store';
 
 interface SettingsDocument {
   version: 1;
@@ -288,10 +293,17 @@ async function syncOnce() {
   entries.forEach(({ key, storageKey, store }) => {
     const remoteTime = remote.modified[key] || 0;
     const localTime = localTimes[key] || 0;
+    const newDefault = replacedOldDefaultTheme(key, remote.values[key], remoteTime);
 
-    if (key in remote.values && remoteTime >= localTime) {
+    if (newDefault) {
+      remote.values[key] = newDefault;
+      remote.modified[key] = Date.now();
+      changedRemote = true;
+    }
+
+    if (key in remote.values && (newDefault || remoteTime >= localTime)) {
       applyRemoteValue(store, remote.values[key]);
-      localTimes[key] = remoteTime;
+      localTimes[key] = remote.modified[key];
     } else if (localTime > remoteTime || window.localStorage.getItem(storageKey) !== null) {
       remote.values[key] = store.getValue();
       remote.modified[key] = localTime || Date.now();

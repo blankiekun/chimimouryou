@@ -6,6 +6,20 @@ anything a reader or a server operator would notice.
 
 ## Unreleased
 
+### Changed
+
+- New default look, "Study Book" (first step of the interface rework): white paper, ink and
+  one green, with a dark version (Study Book Dark) as the default dark theme. Washi and Sumi stay
+  selectable in Settings → Themes. Browsers and accounts still on Washi or Sumi from before
+  move to Study Book once; picking Washi again afterwards sticks.
+- The app's interface uses BIZ UDPGothic, served by the server itself and split by
+  character set, so a page downloads only the parts it shows (about 0.55 MB the first time
+  for a typical page, kept for later visits; 4.4 MB if every character were shown). Book text
+  keeps the reader's own font.
+- Buttons, inputs, switches and segmented controls are square-cornered and flat; buttons
+  are 44 px tall on touch screens. The top bar shows the ち mark alone and text tabs with a
+  green underline, and the disabled Notes tab is gone; the phone tab bar matches it.
+
 ## v3.7.0 (2026-10-22)
 
 ### Security

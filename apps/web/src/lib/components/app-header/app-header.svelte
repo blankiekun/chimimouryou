@@ -1,5 +1,5 @@
 <script lang="ts" context="module">
-  export type AppSection = 'library' | 'statistics' | 'settings' | 'notes';
+  export type AppSection = 'library' | 'statistics' | 'settings';
 </script>
 
 <script lang="ts">
@@ -10,7 +10,6 @@
     faChartLine,
     faGear,
     faHouse,
-    faNoteSticky,
     faStore,
     faUser
   } from '@fortawesome/free-solid-svg-icons';
@@ -65,8 +64,7 @@
       icon: faChartLine,
       href: `${pagePath}/statistics`
     },
-    { key: 'settings', label: $t$('nav.settings'), icon: faGear, href: `${pagePath}/settings` },
-    { key: 'notes', label: $t$('nav.notes'), icon: faNoteSticky, href: '' }
+    { key: 'settings', label: $t$('nav.settings'), icon: faGear, href: `${pagePath}/settings` }
   ];
 
   $: isActive = (section: (typeof sections)[number]) =>
@@ -101,28 +99,17 @@
 
       <nav class="section-nav hidden sm:flex" aria-label={$t$('nav.sections')}>
         {#each sections as section (section.label)}
-          {#if section.href}
-            <a
-              href={section.href}
-              class="section-nav-item"
-              class:section-nav-item-active={isActive(section)}
-              aria-current={isActive(section) ? 'page' : undefined}
-              title={section.label}
-              on:click={(event) => navigate(event, section.key, section.href, section.tab)}
-            >
-              <Fa icon={section.icon} class="md:hidden" />
-              <span class="hidden md:inline">{section.label}</span>
-            </a>
-          {:else}
-            <span
-              class="section-nav-item section-nav-item-disabled"
-              aria-disabled="true"
-              title={$t$('nav.notesUnavailable')}
-            >
-              <Fa icon={section.icon} class="md:hidden" />
-              <span class="hidden md:inline">{section.label}</span>
-            </span>
-          {/if}
+          <a
+            href={section.href}
+            class="section-nav-item"
+            class:section-nav-item-active={isActive(section)}
+            aria-current={isActive(section) ? 'page' : undefined}
+            title={section.label}
+            on:click={(event) => navigate(event, section.key, section.href, section.tab)}
+          >
+            <Fa icon={section.icon} class="md:hidden" />
+            <span class="hidden md:inline">{section.label}</span>
+          </a>
         {/each}
       </nav>
 
@@ -166,23 +153,22 @@
 {#if !onBack}
   <nav class="app-bottom-nav" aria-label={$t$('nav.sections')}>
     {#each sections as section (section.label)}
-      {#if section.href}
-        <a
-          href={section.href}
-          class="bottom-nav-item"
-          class:bottom-nav-item-active={isActive(section)}
-          aria-current={isActive(section) ? 'page' : undefined}
-          on:click={(event) => navigate(event, section.key, section.href, section.tab)}
-        >
-          <Fa icon={section.icon} />
-          <span>{section.label}</span>
-        </a>
-      {/if}
+      <a
+        href={section.href}
+        class="bottom-nav-item"
+        class:bottom-nav-item-active={isActive(section)}
+        aria-current={isActive(section) ? 'page' : undefined}
+        on:click={(event) => navigate(event, section.key, section.href, section.tab)}
+      >
+        <Fa icon={section.icon} />
+        <span>{section.label}</span>
+      </a>
     {/each}
   </nav>
 {/if}
 
 <style>
+  /* Study Book top bar: the ち mark in the spot colour, text tabs with a 3px spot underline. */
   .app-brand {
     flex-shrink: 0;
     align-items: center;
@@ -195,11 +181,11 @@
     height: 1.75rem;
     align-items: center;
     justify-content: center;
-    border: 1px solid var(--app-header-border);
     border-radius: 9999px;
-    color: var(--app-header-fg);
-    font-family: var(--app-font-display);
-    font-size: 0.85rem;
+    background: var(--app-header-fg);
+    color: var(--app-header-bg);
+    font-size: var(--type-small);
+    font-weight: 700;
     text-transform: uppercase;
   }
 
@@ -215,10 +201,9 @@
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0 0.7rem;
+    padding: 0 0.75rem;
     color: var(--app-header-icon-fg);
-    font-size: var(--app-header-label-size);
-    font-weight: 500;
+    font-size: var(--type-body);
     white-space: nowrap;
     transition: color 0.15s var(--app-ease);
   }
@@ -226,32 +211,22 @@
   .section-nav-item::after {
     content: '';
     position: absolute;
-    inset: auto 0.7rem -1px;
-    height: 2px;
+    inset: auto 0.75rem -1px;
+    height: 3px;
     background: transparent;
   }
 
-  .section-nav-item:hover:not(.section-nav-item-disabled),
+  .section-nav-item:hover,
   .section-nav-item-active {
     color: var(--app-header-fg);
   }
 
   .section-nav-item-active {
-    font-weight: 650;
+    font-weight: 700;
   }
 
   .section-nav-item-active::after {
     background: var(--accent-color);
-  }
-
-  .section-nav-item:focus-visible {
-    outline: 2px solid var(--app-focus-ring);
-    outline-offset: -4px;
-  }
-
-  .section-nav-item-disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
   }
 
   .app-bottom-nav {
@@ -264,8 +239,6 @@
     padding-bottom: env(safe-area-inset-bottom);
     border-top: 1px solid var(--app-header-border);
     background: var(--app-header-bg);
-    -webkit-backdrop-filter: blur(var(--app-blur));
-    backdrop-filter: blur(var(--app-blur));
   }
 
   @media (max-width: 639px) {
@@ -281,23 +254,26 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 0.2rem;
+    gap: 0.25rem;
     color: var(--app-header-icon-fg);
-    font-size: 0.7rem;
-    font-weight: 500;
+    font-size: var(--type-label);
   }
 
   .bottom-nav-item-active {
-    color: var(--accent-strong-color);
-    font-weight: 650;
+    color: var(--app-header-fg);
+    font-weight: 700;
+  }
+
+  .bottom-nav-item-active :global(svg) {
+    color: var(--accent-color);
   }
 
   .bottom-nav-item-active::before {
     content: '';
     position: absolute;
     top: -1px;
-    width: 1.5rem;
-    height: 2px;
+    inset-inline: 25%;
+    height: 3px;
     background: var(--accent-color);
   }
 </style>

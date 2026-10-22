@@ -56,7 +56,7 @@
     <span class="app-switch-text">{options[selectedOptionId ? 1 : 0].text}</span>
   </button>
 {:else}
-  <div class="segmented" role="radiogroup" aria-label={label}>
+  <div class="app-segmented" role="radiogroup" aria-label={label}>
     {#each options as option, index}
       <div class="flex">
         <button
@@ -65,8 +65,8 @@
           aria-checked={option.id === selectedOptionId}
           tabindex={option.id === selectedOptionId ? 0 : -1}
           title={typeof option.id === 'string' ? option.id : undefined}
-          class="segment"
-          class:segment-selected={option.id === selectedOptionId}
+          class="app-segment"
+          class:app-segment-selected={option.id === selectedOptionId}
           class:segment-thick={option.thickBorders}
           class:segment-inverted={invertColors}
           style={mapToStyleString(option.style)}
@@ -93,44 +93,13 @@
 {/if}
 
 <style>
-  .segmented {
-    display: inline-flex;
-    max-width: 100%;
-    flex-wrap: wrap;
-    gap: 2px;
-    padding: 2px;
-    border: 1px solid var(--app-control-border);
-    border-radius: calc(0.55rem * var(--app-radius-scale));
-    background: var(--app-control-bg);
-  }
-
-  .segment {
-    min-height: 2rem;
-    padding: 0.25rem 0.8rem;
-    border-radius: calc(0.4rem * var(--app-radius-scale));
-    color: var(--app-muted-fg);
-    font-size: 0.85rem;
-    font-weight: 500;
-    white-space: nowrap;
-    transition:
-      background-color 0.15s ease,
-      color 0.15s ease;
-  }
-
-  .segment:hover {
-    color: var(--font-color);
-  }
-
-  .segment-selected {
-    background: color-mix(in srgb, var(--accent-color) 14%, var(--surface-strong-color));
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-color) 45%, transparent);
-    color: var(--font-color);
-    font-weight: 650;
-  }
+  /* .app-segmented and .app-segment are in app.scss. */
 
   /* Option previews (e.g. colours) keep their own look; selection shows as a ring. */
-  .segment-thick.segment-selected {
-    box-shadow: inset 0 0 0 2px var(--accent-color);
+  .segment-thick.app-segment-selected {
+    background: inherit;
+    color: inherit;
+    box-shadow: inset 0 0 0 2px var(--font-color);
   }
 
   .segment-inverted {

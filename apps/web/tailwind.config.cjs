@@ -6,7 +6,8 @@ const config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Noto Sans JP', 'sans-serif'],
+        // Chrome font (app.scss --app-font-ui); a theme's uiFont replaces it. Book text has its own.
+        sans: ['var(--app-ui-font, var(--app-font-ui))'],
         serif: ['Noto Serif JP', 'serif']
       },
       // Theme colours (lib/data/theme/theme-tokens.ts); components use these, never a palette.
@@ -19,6 +20,7 @@ const config = {
         surface: 'var(--surface-color)',
         'surface-strong': 'var(--surface-strong-color)',
         accent: 'var(--accent-color)',
+        'on-accent': 'var(--app-accent-fg)',
         'accent-strong': 'var(--accent-strong-color)',
         danger: 'var(--app-danger-color)',
         success: 'var(--app-success-color)',
@@ -27,6 +29,18 @@ const config = {
         hover: 'color-mix(in srgb, var(--font-color) 7%, transparent)',
         // Errors inside the dark reader panels
         'panel-danger': 'color-mix(in srgb, var(--app-danger-color) 55%, var(--reader-panel-fg))'
+      },
+      // Study Book type scale (app.scss)
+      fontSize: {
+        display: 'var(--type-display)',
+        h1: 'var(--type-h1)',
+        h2: 'var(--type-h2)',
+        body: 'var(--type-body)',
+        button: 'var(--type-button)',
+        small: 'var(--type-small)',
+        label: 'var(--type-label)',
+        number: 'var(--type-number)',
+        figure: 'var(--type-figure)'
       },
       spacing: {
         21: '5.25rem'
