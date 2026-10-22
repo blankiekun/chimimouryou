@@ -359,7 +359,7 @@
     <div class="details-aside">
       <div class="details-cover">
         <span class="details-cover-image"
-          ><BookCard imagePath={book.imagePath} title={book.title} /></span
+          ><BookCard imagePath={book.imagePath} title={book.title} full /></span
         >
         <span class="details-track" aria-hidden="true"
           ><span style:width="{Math.round((book.progress || 0) * 100)}%" /></span

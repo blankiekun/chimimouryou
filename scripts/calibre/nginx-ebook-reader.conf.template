@@ -45,6 +45,11 @@ map $host $import_upstream { default ${IMPORT_UPSTREAM}; }
 map $host $difficulty_upstream { default ${DIFFICULTY_UPSTREAM}; }
 map $host $mokuro_upstream { default ${MOKURO_UPSTREAM}; }
 map $host $public_reads { default ${PUBLIC_READS}; }
+# A full cover sent for a thumbnail not made yet is revalidated, so the thumbnail replaces it.
+map $request_uri $cover_expires {
+  default 1d;
+  ~^/calibre/thumbs/ epoch;
+}
 
 # HSTS only when the page itself is HTTPS (an empty value sends no header).
 map $forwarded_proto $hsts {
@@ -402,6 +407,17 @@ server {
     alias ${LIBRARY_DIR}/$1;
     types { application/epub+zip epub; application/zip htmlz; text/plain txt; application/zip cbz zip; image/jpeg jpg; }
     charset off;
+    expires $cover_expires;
+  }
+
+  # Library cards' covers: the catalog builder's thumbnails (JPEG, whatever the name),
+  # else the full cover from the library or the visual novel folder.
+  location ~ ^/calibre/thumbs/(library/.+/cover\.jpg|vn/.+)$ {
+    auth_request /_account_shared;
+    root ${THUMB_DIR};
+    try_files /$1 /calibre/$1;
+    types { }
+    default_type image/jpeg;
     expires 1d;
   }
 
@@ -416,7 +432,7 @@ server {
     types { image/jpeg jpg jpeg; image/png png; image/webp webp; }
     default_type application/octet-stream;
     charset off;
-    expires 1d;
+    expires $cover_expires;
     add_header Content-Security-Policy "sandbox; default-src 'none'" always;
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy same-origin always;

@@ -8,6 +8,9 @@ anything a reader or a server operator would notice.
 
 ### Changed
 
+- Library cards load small cover thumbnails (about 30 KB instead of the full cover, often
+  700 KB or more), made by the catalog service in `state/catalog/thumbs/` (up to five minutes per
+  run, so a large library takes a few runs); the book page still shows the full cover.
 - Difficulty meters use each theme's own colours (from its accent for Beginner to its text
   colour for Expert) instead of a fixed rainbow; the Words page has the Import menu too, and
   the last rounded pills are square.

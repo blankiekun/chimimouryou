@@ -15,7 +15,7 @@ x-services: &services
     dockerfile: docker/services.Dockerfile
     target: base
   image: ${IMAGE_PREFIX:-ebook-reader}-services:${IMAGE_TAG:-local}
-  user: "${PUID:-1000}:${PGID:-1000}"
+  user: '${PUID:-1000}:${PGID:-1000}'
   restart: unless-stopped
   volumes:
     - ${DATA_PATH:-./data}:/data
@@ -34,7 +34,7 @@ services:
     image: ${IMAGE_PREFIX:-ebook-reader}-web:${IMAGE_TAG:-local}
     restart: unless-stopped
     ports:
-      - "${HTTP_PORT:-8080}:80"
+      - '${HTTP_PORT:-8080}:80'
     environment:
       PUID: ${PUID:-1000}
       PGID: ${PGID:-1000}
@@ -50,7 +50,7 @@ services:
 
   account:
     <<: *services
-    command: ["python3", "/app/account/service.py", "serve"]
+    command: ['python3', '/app/account/service.py', 'serve']
     volumes:
       - ${DATA_PATH:-./data}:/data
       - ${SYNC_PATH:-${DATA_PATH:-./data}/sync}:/data/sync:ro
@@ -59,10 +59,15 @@ services:
       ALLOW_HTTP_ACCOUNTS: ${ALLOW_HTTP_ACCOUNTS:-0}
 
   # Rebuilds the catalog (and extracts missing covers into the library) when metadata.db
-  # or the visual novel folder changes.
+  # or the visual novel folder changes, and makes the library cards' cover thumbnails.
   catalog:
     <<: *services
-    command: ["sh", "-c", "while :; do build-calibre-catalog /library /data/state/catalog/catalog.json; sleep ${CATALOG_INTERVAL:-600}; done"]
+    command:
+      [
+        'sh',
+        '-c',
+        'while :; do build-calibre-catalog /library /data/state/catalog/catalog.json --thumbs; sleep ${CATALOG_INTERVAL:-600}; done'
+      ]
     volumes:
       - ${DATA_PATH:-./data}:/data
       - ${LIBRARY_PATH:?set LIBRARY_PATH in .env}:/library
@@ -75,7 +80,7 @@ services:
       <<: *services-build
       target: import
     image: ${IMAGE_PREFIX:-ebook-reader}-import:${IMAGE_TAG:-local}
-    command: ["python3", "/app/import/service.py"]
+    command: ['python3', '/app/import/service.py']
     environment:
       ALLOW_HTTP_ACCOUNTS: ${ALLOW_HTTP_ACCOUNTS:-0}
     volumes:
@@ -91,7 +96,7 @@ services:
       <<: *services-build
       target: difficulty
     image: ${IMAGE_PREFIX:-ebook-reader}-difficulty:${IMAGE_TAG:-local}
-    command: ["/opt/venv/bin/python", "-W", "ignore", "/app/jiten/service.py", "serve"]
+    command: ['/opt/venv/bin/python', '-W', 'ignore', '/app/jiten/service.py', 'serve']
     # Long background jobs: the reader and accounts come first.
     cpu_shares: 512
     environment:
@@ -112,7 +117,7 @@ services:
       <<: *services-build
       target: mokuro
     image: ${IMAGE_PREFIX:-ebook-reader}-mokuro:${IMAGE_TAG:-local}
-    command: ["python3", "/app/mokuro/service.py", "serve"]
+    command: ['python3', '/app/mokuro/service.py', 'serve']
     cpu_shares: 512
     environment:
       ALLOW_HTTP_ACCOUNTS: ${ALLOW_HTTP_ACCOUNTS:-0}
