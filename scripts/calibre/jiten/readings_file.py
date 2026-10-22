@@ -28,7 +28,7 @@ from yurigana.readings import surface_reading
 #    yurigana 0.3.0.
 # 4: yurigana 0.5.0 (ateji, shown idioms, bare-evidence dominant readings, name ruby carried back).
 # 5: names' ruby carried to their bare occurrences (source 'book') glossed.
-READINGS_VERSION = 6
+READINGS_VERSION = 7
 
 # Radical and Unified_Ideograph as in Unicode 16.
 # shortcut: newer CJK extensions are missing, add them when browsers count them.
