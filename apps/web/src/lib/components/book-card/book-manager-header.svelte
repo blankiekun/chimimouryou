@@ -2,10 +2,9 @@
   import { browser } from '$app/environment';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-  import { nextSortOption } from '$lib/components/book-card/library-sort';
+  import LibrarySortMenu from '$lib/components/book-card/library-sort-menu.svelte';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
   import Popover from '$lib/components/popover/popover.svelte';
-  import { SortDirection, type SortOption } from '$lib/data/sort-types';
   import { FilesystemStorageHandler } from '$lib/data/storage/handler/filesystem-handler';
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
   import { StorageKey } from '$lib/data/storage/storage-types';
@@ -16,7 +15,6 @@
     storageSource$
   } from '$lib/data/storage/storage-view';
   import {
-    booklistSortOptions$,
     cacheStorageData$,
     fileCountData$,
     fsStorageSource$,
@@ -31,7 +29,6 @@
   import { isMobile$, isOnOldUrl } from '$lib/functions/utils';
   import { t$, type MessageKey } from '$lib/i18n';
   import {
-    faArrowDown,
     faBorderAll,
     faBug,
     faCheck,
@@ -44,7 +41,6 @@
     faSquareCheck,
     faTriangleExclamation
   } from '@fortawesome/free-solid-svg-icons';
-  import { ankiKnownWords$ } from '$lib/data/anki';
   import { createEventDispatcher } from 'svelte';
   import Fa from 'svelte-fa';
 
@@ -127,35 +123,6 @@
       ]
     : [];
 
-  let sortMenuItems: { property: SortOption['property']; label: string; title?: string }[];
-  $: sortMenuItems = [
-    ...($storageSource$ === StorageKey.BROWSER
-      ? [{ property: 'id' as SortOption['property'], label: $t$('library.sortId') }]
-      : []),
-    { property: 'title' as SortOption['property'], label: $t$('library.sortTitle') },
-    { property: 'series' as SortOption['property'], label: $t$('library.sortSeries') },
-    { property: 'difficulty' as SortOption['property'], label: $t$('library.sortDifficulty') },
-    ...($ankiKnownWords$ && $storageSource$ === StorageKey.CALIBRE
-      ? [
-          {
-            property: 'coverage' as SortOption['property'],
-            label: $t$('library.sortCoverage'),
-            title: $t$('library.sortCoverageHint')
-          }
-        ]
-      : []),
-    { property: 'progress' as SortOption['property'], label: $t$('library.sortProgress') },
-    { property: 'characters' as SortOption['property'], label: $t$('library.sortCharacters') },
-    { property: 'lastBookOpen' as SortOption['property'], label: $t$('library.sortLastRead') },
-    {
-      property: 'lastBookmarkModified' as SortOption['property'],
-      label: $t$('library.sortBookmarked')
-    },
-    { property: 'lastBookModified' as SortOption['property'], label: $t$('library.sortUpdated') }
-  ];
-
-  $: currentSort = $booklistSortOptions$[$storageSource$];
-
   function triggerImport(label: string) {
     switch (label) {
       case mergeEntries.FOLDER_IMPORT.label:
@@ -188,13 +155,6 @@
     } catch ({ message }: any) {
       console.error(`failed to read file: ${message}`);
     }
-  }
-
-  function changeSort(property: SortOption['property']) {
-    booklistSortOptions$.next({
-      ...$booklistSortOptions$,
-      [$storageSource$]: nextSortOption(currentSort, property)
-    });
   }
 
   function onKeydown(event: KeyboardEvent) {
@@ -369,32 +329,7 @@
           </button>
         {/each}
       </div>
-      <div class="app-popover-heading">{$t$('library.sortBy')}</div>
-      {#each sortMenuItems as sortMenuItem (sortMenuItem.property)}
-        {@const isCurrent = currentSort.property === sortMenuItem.property}
-        <button
-          type="button"
-          class="app-popover-item"
-          class:app-popover-item-active={isCurrent}
-          title={sortMenuItem.title}
-          on:click={() => changeSort(sortMenuItem.property)}
-        >
-          <span class="flex-1">{sortMenuItem.label}</span>
-          {#if isCurrent}
-            <span
-              class="inline-flex text-xs transition-transform"
-              class:rotate-180={currentSort.direction === SortDirection.ASC}
-              title={$t$(
-                currentSort.direction === SortDirection.ASC
-                  ? 'library.ascending'
-                  : 'library.descending'
-              )}
-            >
-              <Fa icon={faArrowDown} />
-            </span>
-          {/if}
-        </button>
-      {/each}
+      <LibrarySortMenu inline />
     </div>
   </Popover>
 

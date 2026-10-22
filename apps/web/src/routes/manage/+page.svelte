@@ -4,38 +4,35 @@
   import {
     faCalendarXmark,
     faChartLine,
-    faCheckDouble,
     faCircleXmark,
     faCloudArrowUp,
-    faFileImport,
-    faBook,
     faBookOpen,
     faGaugeHigh,
-    faForward,
-    faHouse,
     faLayerGroup,
     faPlus,
     faRotateLeft,
-    faStore,
-    faTrash,
-    faUser,
-    faXmark
+    faTrash
   } from '@fortawesome/free-solid-svg-icons';
   import BookCardList from '$lib/components/book-card/book-card-list.svelte';
   import BookCardTable from '$lib/components/book-card/book-card-table.svelte';
   import BookDetails from '$lib/components/book-card/book-details.svelte';
   import ContinueReadingShelf from '$lib/components/book-card/continue-reading-shelf.svelte';
   import LearnerDashboard from '$lib/components/book-card/learner-dashboard.svelte';
+  import SectionHead from '$lib/components/section-head.svelte';
+  import ReadNextShelf from '$lib/components/book-card/read-next-shelf.svelte';
+  import LibrarySortMenu from '$lib/components/book-card/library-sort-menu.svelte';
   import SeriesGrid from '$lib/components/book-card/series-grid.svelte';
   import SeriesResults from '$lib/components/book-card/series-results.svelte';
   import {
     addToHome,
+    continueReading,
     homeBookTitles$,
     homeRemovedTitles$,
     libraryTab$,
     matchingSeries,
     readNext,
     readNextPool,
+    recentLevels,
     removeFromHome,
     seriesGroups,
     storeView$
@@ -212,6 +209,10 @@
   $: (activeFilter, searchTerm, $storageSource$, (renderLimit = renderStep));
   $: renderedBookCards = visibleBookCards.slice(0, renderLimit);
   $: isLoading = !$bookCards$ || $booksAreLoading$;
+  $: activeSeries = activeFilter.startsWith('series:') ? activeFilter.slice('series:'.length) : '';
+  $: seriesMissing = activeSeries
+    ? visibleBookCards.filter((card) => !$homeBookTitles$.includes(card.title))
+    : [];
   $: hasActiveFilter = activeFilter !== allBooksFilter.key || !!searchTerm.trim();
   $: isHome = $libraryTab$ !== 'store';
   $: showSeriesGrid = !isHome && $storeView$ === 'series' && activeFilter !== 'vn';
@@ -259,7 +260,25 @@
         .map((card) => card.calibreId!)
     );
   }
-  $: readNextCards = isHome && $bookCards$ ? readNext($bookCards$, $knownCoverage$) : [];
+  $: readNextCards = isHome && $bookCards$ ? readNext($bookCards$, $knownCoverage$, 3) : [];
+  $: readNextReason = (() => {
+    if (!readNextCards.length) return '';
+    const levels = recentLevels($bookCards$);
+    const low = levels[0].toFixed(1);
+    const high = levels[levels.length - 1].toFixed(1);
+    const next = new Set(readNextPool($bookCards$).next.map((card) => card.id));
+
+    return $t$(
+      readNextCards.some((card) => next.has(card.id))
+        ? 'home.readNextReasonSeries'
+        : 'home.readNextReason',
+      { range: low === high ? low : `${low}–${high}` }
+    );
+  })();
+  $: firstRun = !continueCards.length && !readNextCards.length && !homeCards.length;
+  $: myBooksNumber =
+    1 + Number(firstRun) + Number(!!continueCards.length) + Number(!!readNextCards.length);
+  $: continueCards = isHome && $bookCards$ ? continueReading($bookCards$, $homeRemovedTitles$) : [];
   $: homeCards = (() => {
     const byTitle = new Map(($bookCards$ ?? []).map((card) => [card.title, card]));
 
@@ -779,9 +798,11 @@
           {
             component: ConfirmDialog,
             props: {
-              dialogHeader: 'Delete from the library',
-              dialogMessage: `This removes ${pluralize(cards.length, 'title', false)} from the Calibre library for every reader, with their shared reader data.\n\nBooks go to Calibre's recycle bin; visual novel folders are deleted for good.`,
+              dialogHeader: `Delete ${pluralize(cards.length, 'title')} from the library?`,
+              dialogMessage: `This removes them from the Calibre library for every reader, with their shared reader data.\n\nBooks go to Calibre's recycle bin; visual novel folders are deleted for good.`,
               contentStyles: 'white-space: pre-line;',
+              confirmLabel: `Delete ${pluralize(cards.length, 'title')}`,
+              danger: true,
               resolver
             }
           }
@@ -1189,38 +1210,75 @@
       on:drop={(ev) => getDropEventFiles(ev).then(onFilesChange)}
     >
       <!-- Visual novels aren't grouped in series -->
-      {#if !isHome && activeFilter !== 'vn'}
-        <div
-          class="library-tabs library-tabs-small"
-          role="radiogroup"
-          aria-label={$t$('store.view')}
-        >
+      {#if !isHome && activeSeries && !showSeriesGrid && visibleBookCards.length}
+        <div class="series-header">
+          <div class="min-w-0">
+            <h1 class="series-header-title" lang="ja">{activeSeries}</h1>
+            <p class="series-header-meta" lang="ja">
+              {[
+                visibleBookCards[0].authors !== 'Unknown' ? visibleBookCards[0].authors : '',
+                $t$('store.seriesMeta', {
+                  count: visibleBookCards.length,
+                  started: visibleBookCards.filter((card) => card.progress > 0).length,
+                  missing: seriesMissing.length
+                })
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+          </div>
           <button
             type="button"
-            role="radio"
-            class="library-tab"
-            class:library-tab-active={!showSeriesGrid}
-            aria-checked={!showSeriesGrid}
-            on:click={() => setStoreView('books')}
+            class="app-button app-button-primary"
+            disabled={!seriesMissing.length}
+            on:click={() => addToHome(seriesMissing.map((card) => card.title))}
           >
-            <Fa icon={faBook} />
-            {$t$('store.books')}
-          </button>
-          <button
-            type="button"
-            role="radio"
-            class="library-tab"
-            class:library-tab-active={showSeriesGrid}
-            aria-checked={showSeriesGrid}
-            on:click={() => setStoreView('series')}
-          >
-            <Fa icon={faLayerGroup} />
-            {$t$('store.series')}
+            {seriesMissing.length
+              ? $t$('store.addAll', { count: seriesMissing.length })
+              : $t$('store.allOnHome')}
           </button>
         </div>
       {/if}
+      {#if !isHome}
+        <div class="store-bar">
+          {#if activeFilter !== 'vn'}
+            <div class="app-segmented" role="radiogroup" aria-label={$t$('store.view')}>
+              <button
+                type="button"
+                role="radio"
+                class="app-segment"
+                class:app-segment-selected={!showSeriesGrid}
+                aria-checked={!showSeriesGrid}
+                on:click={() => setStoreView('books')}
+              >
+                {$t$('store.books')}
+              </button>
+              <button
+                type="button"
+                role="radio"
+                class="app-segment"
+                class:app-segment-selected={showSeriesGrid}
+                aria-checked={showSeriesGrid}
+                on:click={() => setStoreView('series')}
+              >
+                {$t$('store.series')}
+              </button>
+            </div>
+          {/if}
+          {#if !isLoading && $bookCards$?.length}
+            <span class="store-count">
+              {$t$(visibleBookCards.length === 1 ? 'store.titlesOne' : 'store.titles', {
+                count: visibleBookCards.length.toLocaleString('en-US')
+              })}
+            </span>
+          {/if}
+          {#if !showSeriesGrid}
+            <span class="store-sort"><LibrarySortMenu /></span>
+          {/if}
+        </div>
+      {/if}
       {#if replicationToProgress}
-        <div class="library-toolbar app-surface-card" role="status">
+        <div class="library-toolbar" role="status">
           <button
             type="button"
             class="library-toolbar-button"
@@ -1245,190 +1303,216 @@
           </span>
         </div>
       {:else if selectMode}
-        <div class="library-toolbar app-surface-card">
-          <span class="mr-auto text-sm font-extrabold">
+        <div class="library-select-bar" role="toolbar" aria-label={$t$('library.selectBooks')}>
+          <span class="library-select-count">
             {$t$('library.selected', { count: selectedBookIds.size })}
           </span>
           <!-- Home's shelves aren't the list Select all works on -->
           {#if !isHome}
             <button
               type="button"
-              class="library-toolbar-button"
+              class="app-button app-button-quiet"
               title={$t$('library.selectAllHint')}
               on:click={onSelectAllBooks}
             >
-              <Fa icon={faCheckDouble} />
-              <span class="hidden sm:inline">{$t$('library.selectAll')}</span>
+              {$t$('library.selectAll')}
             </button>
           {/if}
           <button
             type="button"
-            class="library-toolbar-button"
-            title={$t$('library.readSelected')}
-            disabled={selectedBookIds.size !== 1}
-            on:click={readSelected}
-          >
-            <Fa icon={faBookOpen} />
-            <span class="hidden sm:inline">{$t$('book.read')}</span>
-          </button>
-          <button
-            type="button"
-            class="library-toolbar-button"
-            title={$t$('home.addSelected')}
-            disabled={!selectedBookIds.size}
-            on:click={addSelectedToHome}
-          >
-            <Fa icon={faPlus} />
-            <span class="hidden sm:inline">{$t$('home.add')}</span>
-          </button>
-          <button
-            type="button"
-            class="library-toolbar-button"
-            title={$t$('library.exportHint')}
-            disabled={!selectedBookIds.size}
-            on:click={onReplicateData}
-          >
-            <Fa icon={faCloudArrowUp} />
-            <span class="hidden sm:inline">{$t$('library.export')}</span>
-          </button>
-          {#if $storageSource$ === StorageKey.BROWSER}
-            <button
-              type="button"
-              class="library-toolbar-button"
-              title={$t$('library.statisticsHint')}
-              disabled={!selectedBookIds.size}
-              on:click={onSelectionToStatistics}
-            >
-              <Fa icon={faChartLine} />
-            </button>
-            <button
-              type="button"
-              class="library-toolbar-button"
-              title={$t$('library.deleteStatisticsHint')}
-              disabled={!selectedBookIds.size}
-              on:click={onDeleteStatistics}
-            >
-              <Fa icon={faCalendarXmark} />
-            </button>
-          {/if}
-          {#if $storageSource$ === StorageKey.CALIBRE && hasPermission($account$, 'series')}
-            <button
-              type="button"
-              class="library-toolbar-button"
-              title={$t$('library.makeSeriesHint')}
-              disabled={selectedBookIds.size !== 1}
-              on:click={onMakeSeries}
-            >
-              <Fa icon={faLayerGroup} />
-              <span class="hidden sm:inline">{$t$('library.makeSeries')}</span>
-            </button>
-          {/if}
-          {#if $storageSource$ === StorageKey.CALIBRE}
-            <button
-              type="button"
-              class="library-toolbar-button"
-              title={$t$('library.difficultyHint')}
-              disabled={!selectedBookIds.size}
-              on:click={onDifficultyClick}
-            >
-              <Fa icon={faGaugeHigh} />
-            </button>
-          {/if}
-          {#if $storageSource$ !== StorageKey.FS}
-            <button
-              type="button"
-              class="library-toolbar-button"
-              title={$t$('library.clearProgressHint')}
-              disabled={!selectedBookIds.size}
-              on:click={onClearProgress}
-            >
-              <Fa icon={faRotateLeft} />
-              <span class="hidden sm:inline">{$t$('library.clearProgress')}</span>
-            </button>
-          {/if}
-          <button
-            type="button"
-            class="library-toolbar-button library-toolbar-button-danger"
-            title={$t$('library.deleteSelected')}
-            disabled={!selectedBookIds.size}
-            on:click={() => removeBooks(Array.from(selectedBookIds))}
-          >
-            <Fa icon={faTrash} />
-          </button>
-          <button
-            type="button"
-            class="library-toolbar-button"
+            class="app-button app-button-quiet"
             title={$t$('library.stopSelecting')}
-            aria-label={$t$('library.stopSelecting')}
             on:click={() => (selectMode = false)}
           >
-            <Fa icon={faXmark} />
+            {$t$('library.cancel')}
           </button>
+          <span class="library-select-actions">
+            <button
+              type="button"
+              class="library-toolbar-button library-toolbar-button-primary"
+              title={$t$('home.addSelected')}
+              disabled={!selectedBookIds.size}
+              on:click={addSelectedToHome}
+            >
+              <Fa icon={faPlus} />
+              <span class="library-toolbar-label">{$t$('home.add')}</span>
+            </button>
+            <button
+              type="button"
+              class="library-toolbar-button"
+              title={$t$('library.readSelected')}
+              disabled={selectedBookIds.size !== 1}
+              on:click={readSelected}
+            >
+              <Fa icon={faBookOpen} />
+              <span class="library-toolbar-label">{$t$('book.read')}</span>
+            </button>
+            {#if $storageSource$ === StorageKey.CALIBRE && hasPermission($account$, 'series')}
+              <button
+                type="button"
+                class="library-toolbar-button"
+                title={$t$('library.makeSeriesHint')}
+                disabled={selectedBookIds.size !== 1}
+                on:click={onMakeSeries}
+              >
+                <Fa icon={faLayerGroup} />
+                <span class="library-toolbar-label">{$t$('library.makeSeries')}</span>
+              </button>
+            {/if}
+            {#if $storageSource$ !== StorageKey.FS}
+              <button
+                type="button"
+                class="library-toolbar-button"
+                title={$t$('library.clearProgressHint')}
+                disabled={!selectedBookIds.size}
+                on:click={onClearProgress}
+              >
+                <Fa icon={faRotateLeft} />
+                <span class="library-toolbar-label">{$t$('library.clearProgress')}</span>
+              </button>
+            {/if}
+            <button
+              type="button"
+              class="library-toolbar-button"
+              title={$t$('library.exportHint')}
+              disabled={!selectedBookIds.size}
+              on:click={onReplicateData}
+            >
+              <Fa icon={faCloudArrowUp} />
+              <span class="library-toolbar-label">{$t$('library.export')}</span>
+            </button>
+            {#if $storageSource$ === StorageKey.BROWSER}
+              <button
+                type="button"
+                class="library-toolbar-button"
+                title={$t$('library.statisticsHint')}
+                aria-label={$t$('library.statisticsHint')}
+                disabled={!selectedBookIds.size}
+                on:click={onSelectionToStatistics}
+              >
+                <Fa icon={faChartLine} />
+              </button>
+              <button
+                type="button"
+                class="library-toolbar-button"
+                title={$t$('library.deleteStatisticsHint')}
+                aria-label={$t$('library.deleteStatisticsHint')}
+                disabled={!selectedBookIds.size}
+                on:click={onDeleteStatistics}
+              >
+                <Fa icon={faCalendarXmark} />
+              </button>
+            {/if}
+            {#if $storageSource$ === StorageKey.CALIBRE}
+              <button
+                type="button"
+                class="library-toolbar-button"
+                title={$t$('library.difficultyHint')}
+                aria-label={$t$('library.difficultyHint')}
+                disabled={!selectedBookIds.size}
+                on:click={onDifficultyClick}
+              >
+                <Fa icon={faGaugeHigh} />
+              </button>
+            {/if}
+            <button
+              type="button"
+              class="library-toolbar-button library-toolbar-button-danger"
+              title={$t$('library.deleteSelected')}
+              disabled={!selectedBookIds.size}
+              on:click={() => removeBooks(Array.from(selectedBookIds))}
+            >
+              <Fa icon={faTrash} />
+              <span class="library-toolbar-label">{$t$('library.delete')}</span>
+            </button>
+          </span>
         </div>
       {/if}
 
       {#if $libraryOffline$ && $storageSource$ === StorageKey.CALIBRE && !isLoading}
-        <p class="pb-4 text-center text-xs font-semibold text-[color:var(--app-muted-fg)]">
-          {$t$('home.offline')} ·
-          <button type="button" class="underline" on:click={retryLibrary}
+        <div class="library-banner" role="status">
+          <p>{$t$('home.offline')}</p>
+          <button type="button" class="app-button" on:click={retryLibrary}
             >{$t$('home.retry')}</button
           >
-        </p>
+        </div>
       {/if}
       {#if isLoading}
         <LibrarySkeleton mode={$libraryDisplayMode$} />
       {:else if $bookCards$.length && isHome}
-        <LearnerDashboard
-          books={$storageSource$ === StorageKey.CALIBRE ? $bookCards$ : undefined}
-        />
-        <ContinueReadingShelf
-          bookCards={$bookCards$}
-          currentBookId={$currentBookId$}
-          selectedBookIds={selectMode ? selectedBookIds : undefined}
-          on:bookClick={(ev) => onCoverClick(ev.detail.id)}
-          on:bookRead={(ev) => onBookClick(ev.detail.id)}
-          on:bookSelect={(ev) => selectBook(ev.detail.id)}
-          removeTitle={$t$('home.remove')}
-          on:remove={(ev) => removeFromHome(ev.detail.title)}
-        />
-        <ContinueReadingShelf
-          bookCards={$bookCards$}
-          shelfBooks={readNextCards}
-          heading={$t$('home.readNext')}
-          icon={faForward}
-          currentBookId={$currentBookId$}
-          selectedBookIds={selectMode ? selectedBookIds : undefined}
-          on:bookClick={(ev) => onCoverClick(ev.detail.id)}
-          on:bookSelect={(ev) => selectBook(ev.detail.id)}
-        />
-        <ContinueReadingShelf
-          bookCards={$bookCards$}
-          shelfBooks={homeCards}
-          heading={$t$('home.myBooks')}
-          icon={faHouse}
-          removeTitle={$t$('home.remove')}
-          currentBookId={$currentBookId$}
-          selectedBookIds={selectMode ? selectedBookIds : undefined}
-          on:bookClick={(ev) => onCoverClick(ev.detail.id)}
-          on:bookSelect={(ev) => selectBook(ev.detail.id)}
-          on:remove={(ev) => removeFromHome(ev.detail.title)}
-        />
-        {#if !homeCards.length}
-          <div class="library-empty">
-            <p class="library-empty-title">{$t$('home.emptyTitle')}</p>
-            <p class="text-sm font-semibold text-[color:var(--app-muted-fg)]">
-              {$t$('home.emptyText')}
-            </p>
-            <button
-              type="button"
-              class="library-toolbar-button"
-              on:click={() => ($libraryTab$ = 'store')}
-            >
-              <Fa icon={faStore} />
-              {$t$('home.openStore')}
-            </button>
+        <div class="home">
+          <LearnerDashboard
+            books={$storageSource$ === StorageKey.CALIBRE ? $bookCards$ : undefined}
+          />
+          {#if firstRun}
+            <section class="home-start" aria-label={$t$('home.startReading')}>
+              <SectionHead number={1} title={$t$('home.startReading')} />
+              <p class="library-empty-text">{$t$('home.startText')}</p>
+              <span class="home-start-actions">
+                <button
+                  type="button"
+                  class="app-button app-button-primary"
+                  on:click={() => ($libraryTab$ = 'store')}
+                >
+                  {$t$('home.openStore')}
+                </button>
+                <label class="app-button">
+                  <input
+                    type="file"
+                    accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,.cbz,.zip"
+                    multiple
+                    hidden
+                    use:inputFile={onFilesChange}
+                  />
+                  {$t$('home.importBook')}
+                </label>
+              </span>
+            </section>
+          {/if}
+          <div class="home-pair">
+            <ContinueReadingShelf
+              books={continueCards}
+              number={1}
+              heading={$t$('home.continueReading')}
+              currentBookId={$currentBookId$}
+              selectedBookIds={selectMode ? selectedBookIds : undefined}
+              on:bookClick={(ev) => onCoverClick(ev.detail.id)}
+              on:bookRead={(ev) => onBookClick(ev.detail.id)}
+              on:bookSelect={(ev) => selectBook(ev.detail.id)}
+              removeTitle={$t$('home.remove')}
+              on:remove={(ev) => removeFromHome(ev.detail.title)}
+            />
+            <ReadNextShelf
+              books={readNextCards}
+              number={continueCards.length ? 2 : 1}
+              coverage={$knownCoverage$}
+              reason={readNextReason}
+              currentBookId={$currentBookId$}
+              selectedBookIds={selectMode ? selectedBookIds : undefined}
+              on:bookClick={(ev) => onCoverClick(ev.detail.id)}
+              on:bookRead={(ev) => onBookClick(ev.detail.id)}
+              on:bookSelect={(ev) => selectBook(ev.detail.id)}
+            />
           </div>
-        {/if}
+          {#if homeCards.length}
+            <ContinueReadingShelf
+              books={homeCards}
+              number={myBooksNumber}
+              heading={$t$('home.myBooks')}
+              removeTitle={$t$('home.remove')}
+              currentBookId={$currentBookId$}
+              selectedBookIds={selectMode ? selectedBookIds : undefined}
+              on:bookClick={(ev) => onCoverClick(ev.detail.id)}
+              on:bookSelect={(ev) => selectBook(ev.detail.id)}
+              on:remove={(ev) => removeFromHome(ev.detail.title)}
+            />
+          {:else}
+            <section class="home-start" aria-label={$t$('home.myBooks')}>
+              <SectionHead number={myBooksNumber} title={$t$('home.myBooks')} count={0} />
+              <p class="library-empty-text">{$t$('home.myBooksEmpty')}</p>
+            </section>
+          {/if}
+        </div>
       {:else if $bookCards$.length && showSeriesGrid}
         <SeriesGrid
           groups={seriesGroups(visibleBookCards)}
@@ -1438,7 +1522,7 @@
         <SeriesResults matches={seriesMatches} on:showSeries={(ev) => showSeries(ev.detail)} />
         {#if !visibleBookCards.length}
           <div class="library-empty">
-            <p class="font-bold">No books match this filter.</p>
+            <p class="library-empty-title">No books match this filter.</p>
             <button type="button" class="library-toolbar-button" on:click={clearFilters}>
               Show all books
             </button>
@@ -1487,18 +1571,18 @@
           </p>
         {/if}
       {:else if $storageSource$ === StorageKey.CALIBRE && $account$ === null}
-        <a
-          class="library-empty library-empty-import app-surface-card"
-          href="/settings?section=general#general-account"
-        >
-          <span class="library-empty-icon"><Fa icon={faUser} /></span>
-          <span class="text-xl font-extrabold">Sign in to see the library</span>
-          <span class="text-sm font-semibold text-[color:var(--app-muted-fg)]">
-            This server's library needs an account
-          </span>
-        </a>
+        <div class="library-signed-out">
+          <h1 class="library-signed-out-title">Sign in to see the library</h1>
+          <p class="library-empty-text">
+            This server keeps its books, progress and highlights per account. Ask whoever runs it
+            for one: there is no sign-up.
+          </p>
+          <a class="app-button app-button-primary" href="/settings?section=general#general-account"
+            >Sign in</a
+          >
+        </div>
       {:else}
-        <label class="library-empty library-empty-import app-surface-card">
+        <label class="library-empty library-empty-import">
           <input
             type="file"
             accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,.cbz,.zip"
@@ -1506,9 +1590,8 @@
             hidden
             use:inputFile={onFilesChange}
           />
-          <span class="library-empty-icon"><Fa icon={faFileImport} /></span>
-          <span class="text-xl font-extrabold">Your library is empty</span>
-          <span class="text-sm font-semibold text-[color:var(--app-muted-fg)]">
+          <span class="library-empty-title">Your library is empty</span>
+          <span class="library-empty-text">
             Drop EPUB, HTMLZ or TXT files here, or click to import
           </span>
         </label>
@@ -1561,79 +1644,11 @@
     grid-column: auto;
   }
 
-  .library-tabs {
-    display: inline-flex;
-    gap: 1.5rem;
-    margin-bottom: 1.75rem;
-  }
-
-  .library-tab {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.35rem 0;
-    color: var(--app-muted-fg);
-    font-family: var(--app-font-display);
-    font-size: 1.35rem;
-    transition: color 0.15s ease;
-  }
-
-  .library-tab :global(svg) {
-    display: none;
-  }
-
-  .library-tab:hover,
-  .library-tab-active {
-    color: var(--font-color);
-  }
-
-  .library-tab-active::after {
-    content: '';
-    position: absolute;
-    inset: auto 0 -2px;
-    height: 2px;
-    background: var(--accent-color);
-  }
-
-  .library-tab:focus-visible {
-    outline: 2px solid var(--app-focus-ring);
-    outline-offset: 2px;
-  }
-
-  /* Books / Series: a small segmented control */
-  .library-tabs-small {
-    gap: 0;
-    padding: 2px;
-    border: 1px solid var(--app-control-border);
-    border-radius: calc(0.5rem * var(--app-radius-scale));
-    vertical-align: bottom;
-  }
-
-  .library-tabs-small .library-tab {
-    padding: 0.25rem 0.75rem;
-    border-radius: calc(0.4rem * var(--app-radius-scale));
-    font-family: inherit;
-    font-size: 0.8rem;
-  }
-
-  .library-tabs-small .library-tab :global(svg) {
-    display: inline;
-  }
-
-  .library-tabs-small .library-tab-active {
-    background: color-mix(in srgb, var(--font-color) 8%, transparent);
-  }
-
-  .library-tabs-small .library-tab-active::after {
-    content: none;
-  }
-
   .library-main {
     grid-column: 2;
     min-width: 0;
     min-height: calc(100dvh - 8rem);
-    padding-top: 0.25rem;
+    padding-top: 1.75rem;
   }
 
   @media (max-width: 900px) {
@@ -1645,115 +1660,310 @@
 
     .library-main {
       grid-column: auto;
+      padding-top: 0.5rem;
     }
   }
 
+  .home {
+    display: flex;
+    max-width: 75rem;
+    flex-direction: column;
+    gap: 3.5rem;
+    margin: 0 auto;
+    padding-top: 1.25rem;
+  }
+
+  /* Continue reading and Read next side by side while both fit */
+  .home-pair {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3.5rem 4rem;
+  }
+
+  /* Grown, so every section head's rule runs to the column's right edge */
+  .home-pair > :global(*) {
+    flex: 1 1 auto;
+    max-width: 100%;
+  }
+
+  .home-pair:not(:has(> *)) {
+    display: none;
+  }
+
+  @media (max-width: 639px) {
+    .home {
+      gap: 2.5rem;
+      padding-top: 0.5rem;
+    }
+
+    .home-pair {
+      gap: 2.5rem;
+    }
+
+    .home-pair > :global(*) {
+      flex-basis: 100%;
+    }
+  }
+
+  .home-start {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .home-start :global(.section-head) {
+    align-self: stretch;
+  }
+
+  .home-start > p {
+    max-width: 40rem;
+  }
+
+  .home-start-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .series-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem 2rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .series-header-title {
+    font-size: var(--type-h1);
+    font-weight: 700;
+    line-height: 1.3;
+  }
+
+  .series-header-meta {
+    margin-top: 0.25rem;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  .store-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .store-sort {
+    margin-left: auto;
+  }
+
+  .store-count {
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Select mode and progress: a ruled bar that sticks under the top bar */
   .library-toolbar {
     position: sticky;
-    top: calc(var(--library-header-height) + 0.5rem);
+    top: var(--library-header-height);
     z-index: 15;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
-    margin-bottom: 1rem;
-    padding: 0.5rem 0.5rem 0.5rem 1rem;
-    border-radius: 1.15rem;
+    margin-bottom: 1.5rem;
+    padding: 0.5rem 0;
+    border-top: 2px solid var(--font-color);
+    border-bottom: 1px solid var(--border-color);
+    background: var(--background-color);
+    color: var(--font-color);
+  }
+
+  /* Select mode: a ruled action bar fixed to the bottom (above the phone tab bar) */
+  .library-select-bar {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 30;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1.25rem;
+    padding: 0.75rem clamp(1rem, 3.125vw, 2.5rem) calc(0.75rem + env(safe-area-inset-bottom));
+    border-top: 2px solid var(--font-color);
+    background: var(--background-color);
+  }
+
+  @media (max-width: 639px) {
+    .library-select-bar {
+      bottom: calc(3.5rem + env(safe-area-inset-bottom));
+      gap: 0.5rem 1rem;
+      padding-bottom: 0.75rem;
+    }
+
+    .library-toolbar-label {
+      display: none;
+    }
+  }
+
+  @media (min-width: 640px) {
+    .library-toolbar-button:has(.library-toolbar-label) :global(svg) {
+      display: none;
+    }
+  }
+
+  .library-select-count {
+    font-size: var(--type-body);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .library-select-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-left: auto;
+  }
+
+  /* Room under the last row for the bar */
+  .library-main:has(.library-select-bar) {
+    padding-bottom: 6rem;
   }
 
   .library-toolbar-button {
     display: inline-flex;
-    min-height: 2.4rem;
-    min-width: 2.4rem;
+    min-height: var(--app-control-height);
+    min-width: var(--app-control-height);
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    padding: 0 0.8rem;
-    border: 1px solid color-mix(in srgb, var(--font-color) 10%, var(--border-color));
-    border-radius: 0.85rem;
-    background: color-mix(in srgb, var(--surface-color) 92%, transparent);
-    font-size: 0.85rem;
+    padding: 0 0.75rem;
+    border: 1px solid var(--font-color);
+    border-radius: 2px;
+    background: transparent;
+    font-size: var(--type-button);
     font-weight: 700;
-    transition:
-      background-color 0.16s ease,
-      border-color 0.16s ease;
+    transition: background-color 0.15s ease;
   }
 
-  .library-toolbar-button:hover:not(:disabled),
-  .library-toolbar-button:focus-visible {
-    border-color: color-mix(in srgb, var(--accent-color) 38%, var(--border-color));
-    background: color-mix(in srgb, var(--accent-color) 10%, var(--surface-strong-color));
-    outline: none;
+  .library-toolbar-button:hover:not(:disabled) {
+    background: var(--surface-color);
+  }
+
+  .library-toolbar-button-primary {
+    border-color: var(--accent-color);
+    background: var(--accent-color);
+    color: var(--app-accent-fg);
+  }
+
+  .library-toolbar-button-primary:hover:not(:disabled) {
+    border-color: var(--app-accent-hover);
+    background: var(--app-accent-hover);
   }
 
   .library-toolbar-button:disabled {
     cursor: not-allowed;
-    opacity: 0.45;
+    border-color: var(--border-color);
+    background: transparent;
+    color: var(--app-muted-fg);
   }
 
-  .library-toolbar-button-danger:hover:not(:disabled) {
-    border-color: color-mix(in srgb, var(--app-danger-color) 42%, var(--border-color));
-    background: color-mix(in srgb, var(--app-danger-color) 12%, var(--surface-strong-color));
+  .library-toolbar-button-danger:not(:disabled) {
+    border-color: var(--app-danger-color);
     color: var(--app-danger-color);
   }
 
   .library-progress {
     flex: 1 1 auto;
-    height: 0.6rem;
-    overflow: hidden;
-    border-radius: 999px;
+    height: 3px;
+    border: 0;
     appearance: none;
-    background: color-mix(in srgb, var(--font-color) 12%, var(--surface-color));
+    background: var(--app-progress-track);
   }
 
   .library-progress::-webkit-progress-bar {
-    background: transparent;
+    background: var(--app-progress-track);
   }
 
   .library-progress::-webkit-progress-value {
-    border-radius: 999px;
-    background: linear-gradient(90deg, var(--accent-color), var(--accent-strong-color));
+    background: var(--app-progress-fill);
   }
 
   .library-progress::-moz-progress-bar {
-    border-radius: 999px;
-    background: linear-gradient(90deg, var(--accent-color), var(--accent-strong-color));
+    background: var(--app-progress-fill);
+  }
+
+  /* Banner (States & specs): a paper-2 band between a 2px ink rule and a 1px rule */
+  .library-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem 1.5rem;
+    margin-bottom: 1.5rem;
+    padding: 0.6rem 1rem;
+    border-top: 2px solid var(--font-color);
+    border-bottom: 1px solid var(--border-color);
+    background: var(--surface-color);
+    font-size: var(--type-small);
+  }
+
+  @media (max-width: 639px) {
+    .library-banner {
+      flex-direction: column;
+      align-items: flex-start;
+    }
   }
 
   .library-empty {
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.9rem;
-    margin: 3rem auto;
     max-width: 32rem;
-    padding: 2.5rem 1.5rem;
-    border: 1px dashed var(--border-color);
-    border-radius: calc(0.75rem * var(--app-radius-scale));
-    text-align: center;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin: 1rem 0 3rem;
+    padding: 1.5rem 0;
+    border-top: 2px solid var(--font-color);
+    border-bottom: 1px solid var(--border-color);
   }
 
   .library-empty-title {
-    font-family: var(--app-font-display);
-    font-size: 1.15rem;
+    font-size: var(--type-h2);
+    font-weight: 700;
+  }
+
+  .library-empty-text {
+    color: var(--app-muted-fg);
+    font-size: var(--type-body);
+    line-height: 1.6;
   }
 
   .library-empty-import {
     cursor: pointer;
-    border-style: dashed;
-    border-color: color-mix(in srgb, var(--accent-color) 30%, var(--border-color));
   }
 
-  .library-empty-icon {
-    display: inline-flex;
-    width: 3.5rem;
-    height: 3.5rem;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid color-mix(in srgb, var(--accent-color) 22%, var(--border-color));
-    border-radius: 1rem;
-    background: color-mix(in srgb, var(--accent-color) 14%, var(--surface-strong-color));
-    color: var(--accent-strong-color);
-    font-size: 1.4rem;
+  .library-signed-out {
+    display: flex;
+    max-width: 75rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+    margin: 0 auto;
+    padding-top: 1.5rem;
+  }
+
+  .library-signed-out p {
+    max-width: 34rem;
+  }
+
+  .library-signed-out-title {
+    font-size: var(--type-h1);
+    font-weight: 700;
+  }
+
+  .library-empty-import:focus-visible {
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 2px;
   }
 </style>

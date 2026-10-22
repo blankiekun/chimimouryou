@@ -43,6 +43,18 @@ export function isContinueReading(card: BookCardProps, removed: Record<string, n
   return isReading(card) && lastRead(card) > (removed[card.title] ?? 0);
 }
 
+/** Home's Continue reading shelf: the books being read, last read first. */
+export function continueReading(
+  cards: BookCardProps[],
+  removed: Record<string, number>,
+  limit = 12
+) {
+  return cards
+    .filter((card) => isContinueReading(card, removed))
+    .sort((a, b) => lastRead(b) - lastRead(a))
+    .slice(0, limit);
+}
+
 export function addToHome(titles: string[]) {
   homeBookTitles$.next([...new Set([...homeBookTitles$.getValue(), ...titles])]);
   const removed = { ...homeRemovedTitles$.getValue() };
@@ -138,6 +150,16 @@ const readNextRange = 0.3;
 // fetch each); rank the whole range once coverages are computed server-side.
 const readNextPoolSize = 40;
 
+/** Difficulties of the last 3 finished books with an estimate, lowest first: Read next's level. */
+export function recentLevels(cards: BookCardProps[]) {
+  return cards
+    .filter((card) => isFinished(card) && card.difficulty !== undefined)
+    .sort((a, b) => lastRead(b) - lastRead(a))
+    .slice(0, 3)
+    .map((card) => card.difficulty!)
+    .sort((a, b) => a - b);
+}
+
 /**
  * Home's Read next candidates: the next unread volume of each series the reader has
  * started, and the unread books within ±0.3 of the median difficulty of the last 3
@@ -145,12 +167,7 @@ const readNextPoolSize = 40;
  * book has a difficulty estimate.
  */
 export function readNextPool(cards: BookCardProps[]) {
-  const recent = cards
-    .filter((card) => isFinished(card) && card.difficulty !== undefined)
-    .sort((a, b) => lastRead(b) - lastRead(a))
-    .slice(0, 3)
-    .map((card) => card.difficulty!)
-    .sort((a, b) => a - b);
+  const recent = recentLevels(cards);
 
   if (!recent.length) {
     return { next: [], pool: [] };

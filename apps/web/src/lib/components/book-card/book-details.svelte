@@ -1,18 +1,10 @@
 <script lang="ts">
-  import {
-    faArrowLeft,
-    faBookOpen,
-    faBookOpenReader,
-    faDownload,
-    faHouse,
-    faMagnifyingGlass,
-    faSpinner,
-    faXmark
-  } from '@fortawesome/free-solid-svg-icons';
+  import { faDownload, faMagnifyingGlass, faSpinner } from '@fortawesome/free-solid-svg-icons';
+  import PointBox from '$lib/components/point-box.svelte';
+  import SectionHead from '$lib/components/section-head.svelte';
   import BookCard from '$lib/components/book-card/book-card.svelte';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
   import ContinueReadingShelf from '$lib/components/book-card/continue-reading-shelf.svelte';
-  import DifficultyBadge from '$lib/components/book-card/difficulty-badge.svelte';
   import DifficultyDialog from '$lib/components/book-card/difficulty-dialog.svelte';
   import MokuroText from '$lib/components/book-card/mokuro-text.svelte';
   import { isFinished, isReading } from '$lib/components/book-card/library-filters';
@@ -54,6 +46,7 @@
     homeBookTitles$,
     homeRemovedTitles$,
     isContinueReading,
+    libraryTab$,
     removeFromHome
   } from '$lib/data/library-home';
   import { guessSeriesName } from '$lib/data/series-overrides';
@@ -86,7 +79,7 @@
     changed: void;
   }>();
 
-  let backButton: HTMLButtonElement;
+  let layer: HTMLDivElement;
   let calibreBook: CalibreBook | undefined;
   let estimate: CalibreDifficulty | undefined;
   let kanji: KanjiCoverage | undefined;
@@ -112,11 +105,9 @@
 
   $: kind = (book.vn ? 'vn' : book.manga ? 'manga' : 'book') as MetadataKind;
   $: source ??= defaultSource(kind);
-  $: kindLabel = { book: '小説', manga: '漫画', vn: 'ノベルゲーム' }[kind];
   $: characters = book.characters || estimate?.characters || 0;
-  $: obiLength =
-    kind === 'manga' ? (characters ? `${characters}頁` : '') : japaneseLength(characters);
   $: remaining = isReading(book) ? characters * (1 - book.progress) : characters;
+  $: hasDifficulty = isCalibre && kind !== 'manga' && book.calibreId !== undefined;
   $: canEdit = isCalibre && hasPermission($account$, 'series');
   $: onHome = $homeBookTitles$.includes(book.title) || isContinueReading(book, $homeRemovedTitles$);
   $: seriesBooks = book.series
@@ -180,7 +171,8 @@
   }
 
   onMount(() => {
-    backButton.focus();
+    // The layer rather than the back link, whose focus ring would show on every open.
+    layer.focus();
     loadSpeed();
 
     // Ask for the generated furigana now, so they are usually ready when the book opens.
@@ -191,16 +183,6 @@
 
     return () => readings?.unsubscribe();
   });
-
-  function japaneseLength(count: number) {
-    if (!count) {
-      return '';
-    }
-
-    return count >= 10000
-      ? `${(count / 10000).toFixed(count >= 1e6 ? 0 : 1).replace(/\.0$/, '')}万字`
-      : `${number(count)}字`;
-  }
 
   function hours(count: number) {
     const value = count / speed;
@@ -372,32 +354,33 @@
 
 <svelte:window on:keydown={(ev) => ev.key === 'Escape' && !searchOpen && dispatch('close')} />
 
-<div class="details" role="dialog" aria-modal="true" aria-labelledby="book-details-title">
-  <div class="details-bar">
-    <button
-      type="button"
-      class="app-button app-button-quiet"
-      bind:this={backButton}
-      on:click={() => dispatch('close')}
-    >
-      <Fa icon={faArrowLeft} />
-      {$t$('book.library')}
+<div
+  class="details"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="book-details-title"
+  tabindex="-1"
+  bind:this={layer}
+>
+  <nav class="details-bar" aria-label={$t$('nav.back')}>
+    <button type="button" class="app-button app-button-quiet" on:click={() => dispatch('close')}>
+      ← {$t$($libraryTab$ === 'home' ? 'nav.home' : 'nav.store')}
     </button>
-  </div>
+    <span class="details-crumb" lang="ja">/ {book.displayTitle || book.title}</span>
+  </nav>
 
   <div class="details-body">
     <div class="details-aside">
       <div class="details-cover">
-        <BookCard imagePath={book.imagePath} title={book.title} />
-        <!-- The obi (帯): the band publishers wrap around Japanese books -->
-        <span class="details-obi" aria-hidden="true">
-          <span class="details-obi-main">{obiLength || kindLabel}</span>
-          <span class="details-obi-sub">
-            {obiLength ? kindLabel : ''}{#if book.difficulty !== undefined}{obiLength
-                ? '・'
-                : ''}{$t$(difficultyNameKey(book.difficulty))}{/if}
-          </span>
-        </span>
+        <span class="details-cover-image"
+          ><BookCard imagePath={book.imagePath} title={book.title} /></span
+        >
+        <span class="details-track" aria-hidden="true"
+          ><span style:width="{Math.round((book.progress || 0) * 100)}%" /></span
+        >
+        {#if isReading(book)}
+          <span class="details-percent">{Math.round(book.progress * 100)}%</span>
+        {/if}
       </div>
 
       <div class="details-actions">
@@ -406,356 +389,411 @@
           class="app-button app-button-primary"
           on:click={() => dispatch('read', { id: book.id })}
         >
-          <Fa icon={isReading(book) ? faBookOpenReader : faBookOpen} />
           {#if isReading(book)}{$t$('book.resumeAt', {
               percent: Math.round(book.progress * 100)
             })}{:else if isFinished(book)}{$t$('book.readAgain')}{:else}{$t$('book.read')}{/if}
         </button>
         <button type="button" class="app-button" aria-pressed={onHome} on:click={toggleHome}>
-          <Fa icon={onHome ? faXmark : faHouse} />
           {onHome ? $t$('home.remove') : $t$('home.add')}
         </button>
       </div>
     </div>
 
     <div class="details-main">
-      <h1 id="book-details-title" class="details-title" lang="ja">
-        {(metadata?.source === 'vndb' && metadata.title) || book.title}
-      </h1>
-      {#if book.authors && book.authors !== 'Unknown'}
-        <p class="details-author" lang="ja">{book.authors}</p>
-      {/if}
-      {#if book.series}
-        <button
-          type="button"
-          class="details-series"
-          lang="ja"
-          on:click={() => dispatch('showSeries', book.series ?? '')}
-        >
-          {book.seriesIndex === null || book.seriesIndex === undefined
-            ? book.series
-            : $t$('book.seriesVolume', { series: book.series, index: book.seriesIndex })}
-        </button>
-      {/if}
-
-      {#if metadata?.description}
-        <div class="details-description">
-          <p lang="ja">{metadata.description}</p>
-          <a href={metadata.url} target="_blank" rel="noreferrer">
-            {$t$('book.from', { source: sourceNames[metadata.source] })}
-          </a>
-        </div>
-      {/if}
-
-      <dl class="details-facts">
-        <div>
-          <dt>{$t$('book.length')}</dt>
-          <dd>
-            {#if !characters}
-              {$t$('book.lengthUnknown')}
-            {:else if kind === 'manga'}
-              {$t$('book.pages', { count: number(characters) })}
-            {:else}
-              {$t$('book.characters', { count: number(characters) })}
-              {#if speed}
-                <span class="details-note">
-                  {$t$(isReading(book) ? 'book.timeLeftAtSpeed' : 'book.timeAtSpeed', {
-                    time: hours(remaining),
-                    speed: number(speed)
-                  })}
-                </span>
-              {/if}
+      <div class="details-head">
+        <h1 id="book-details-title" class="details-title" lang="ja">
+          {(metadata?.source === 'vndb' && metadata.title) || book.title}
+        </h1>
+        {#if book.authors && book.authors !== 'Unknown'}
+          <p class="details-author" lang="ja">{book.authors}</p>
+        {/if}
+        {#if book.series}
+          <p class="details-series">
+            {#if book.seriesIndex !== null && book.seriesIndex !== undefined}
+              <span class="details-vol">{$t$('book.vol', { index: book.seriesIndex })}</span>
             {/if}
-          </dd>
-        </div>
-        <div>
-          <dt>{$t$('book.progress')}</dt>
-          <dd>
-            {#if isFinished(book)}{$t$('book.finished')}{:else if isReading(book)}{Math.round(
-                book.progress * 100
-              )}%{:else}{$t$('book.notStarted')}{/if}
-          </dd>
-        </div>
-        {#if isCalibre && kind !== 'manga' && book.calibreId !== undefined}
-          <div>
-            <dt>{$t$('book.difficulty')}</dt>
-            <dd>
-              {#if book.difficulty !== undefined}
-                <DifficultyBadge
-                  difficulty={book.difficulty}
-                  low={book.difficultyLow}
-                  high={book.difficultyHigh}
-                  words95={book.words95}
-                />
-                <span class="details-note">{difficultyNote}</span>
-                {#if kanji?.topNew.length}
-                  <span class="details-note">
-                    {kanji.topNew.length < kanji.newKanji
-                      ? $t$('book.topNewKanji')
-                      : $t$('book.newKanji')}
-                    <span class="details-new-kanji" lang="ja">{kanji.topNew.join('')}</span>
-                    <button type="button" class="details-link" on:click={copyNewKanji}>
-                      {copied ? $t$('book.copied') : $t$('book.copy')}
-                    </button>
-                  </span>
-                {/if}
-              {:else}
-                {$t$('book.noEstimate')}
-              {/if}
-              <button type="button" class="details-link" on:click={showDifficulty}>
-                {$t$('book.difficultyDetails')}
-              </button>
-            </dd>
-          </div>
-        {/if}
-        {#if isCalibre && kind === 'manga' && book.calibreId !== undefined}
-          <div>
-            <dt>{$t$('book.text')}</dt>
-            <dd><MokuroText calibreId={book.calibreId} /></dd>
-          </div>
-        {/if}
-        {#if calibreBook?.publisher}
-          <div>
-            <dt>{$t$('book.publisher')}</dt>
-            <dd lang="ja">{calibreBook.publisher}</dd>
-          </div>
-        {/if}
-        {#if published}
-          <div>
-            <dt>{$t$('book.published')}</dt>
-            <dd>{published}</dd>
-          </div>
-        {/if}
-        {#if book.rating}
-          <div>
-            <dt>{$t$('book.rating')}</dt>
-            <dd aria-label={$t$('book.ratingLabel', { rating: book.rating })}>
-              {'★'.repeat(Math.round(book.rating))}{'☆'.repeat(5 - Math.round(book.rating))}
-            </dd>
-          </div>
-        {/if}
-        {#if metadata?.score}
-          <div>
-            <dt>{$t$('book.sourceScore', { source: sourceNames[metadata.source] })}</dt>
-            <dd>{metadata.score} / 100</dd>
-          </div>
-        {/if}
-        {#if calibreBook}
-          <div>
-            <dt>{$t$('book.file')}</dt>
-            <dd>
-              {$t$(calibreBook.size ? 'book.fileSizeAdded' : 'book.fileAdded', {
-                format: calibreBook.format === 'VN' ? $t$('book.gameFolder') : calibreBook.format,
-                size: (calibreBook.size / 1e6).toFixed(1),
-                date: new Date(calibreBook.added).toLocaleDateString()
-              })}
-            </dd>
-          </div>
-        {/if}
-      </dl>
-
-      {#if unknownWords.length}
-        <section class="details-words" aria-labelledby="book-details-words">
-          <h2 id="book-details-words" class="details-fetch-heading">{$t$('book.newWords')}</h2>
-          <p class="details-note" title={$t$('book.newWordsHint', { count: knownMinCount })}>
-            {$t$(unknownWords.length > 50 ? 'book.newWordsNoteFirst' : 'book.newWordsNote', {
-              count: number(estimate?.words95 ?? 0),
-              total: number(unknownWords.length)
-            })}
-          </p>
-          <ol lang="ja">
-            {#each unknownWords.slice(0, 50) as word}
-              {@const [form, reading, count] = word}
-              {@const mark = wordMark($wordMarks$, word)}
-              <li class:details-word-marked={mark}>
-                <span
-                  >{form}{#if reading && kanjiPattern.test(form)}<span class="details-note-inline"
-                      >（{reading}）</span
-                    >{/if}</span
-                >
-                <span class="details-note-inline">×{count}</span>
-                <span lang={$uiLanguage$}>
-                  {#if mark}
-                    <button
-                      type="button"
-                      class="details-mark"
-                      title={$t$('book.unmarkWord', { word: form })}
-                      on:click={() => setWordMarks(marksOf($wordMarks$, word), null)}
-                    >
-                      {$t$('book.undoMark')}
-                    </button>
-                  {:else}
-                    <button
-                      type="button"
-                      class="details-mark"
-                      title={$t$('book.markKnown', { word: form })}
-                      aria-label={$t$('book.markKnown', { word: form })}
-                      on:click={() => setWordMarks([markEntry(listWords, word)], 'known')}>✓</button
-                    >
-                    <button
-                      type="button"
-                      class="details-mark"
-                      title={$t$('book.markIgnored', { word: form })}
-                      aria-label={$t$('book.markIgnored', { word: form })}
-                      on:click={() => setWordMarks([markEntry(listWords, word)], 'ignored')}
-                      >✕</button
-                    >
-                  {/if}
-                </span>
-              </li>
-            {/each}
-          </ol>
-          <span class="details-word-actions">
-            <button type="button" class="app-button" on:click={markAllShown}>
-              {$t$('book.markAllKnown')}
-            </button>
-            <button type="button" class="app-button" on:click={copyNewWords}>
-              {wordsCopied ? $t$('book.copied') : $t$('book.copy')}
-            </button>
             <button
               type="button"
-              class="app-button"
-              on:click={() => downloadWordsCsv(book.title, unknownWords)}
+              class="app-button app-button-quiet"
+              lang="ja"
+              on:click={() => dispatch('showSeries', book.series ?? '')}
             >
-              <Fa icon={faDownload} />
-              {$t$('book.downloadCsv')}
+              {book.series}{#if seriesBooks.length > 1}&nbsp;·
+                {$t$('book.volumes', { count: seriesBooks.length })}{/if}
             </button>
-          </span>
-        </section>
-      {/if}
+          </p>
+        {/if}
+      </div>
 
-      {#if genres.length}
-        <ul class="details-tags" aria-label={$t$('book.tags')}>
-          {#each genres as genre (genre)}
-            <li lang="ja">{genre}</li>
-          {/each}
-        </ul>
-      {/if}
+      <div class="details-rest">
+        {#if metadata?.description}
+          <div class="details-description">
+            <p lang="ja">{metadata.description}</p>
+            <a href={metadata.url} target="_blank" rel="noreferrer">
+              {$t$('book.from', { source: sourceNames[metadata.source] })}
+            </a>
+          </div>
+        {/if}
 
-      {#if canEdit}
-        <section class="details-fetch" aria-labelledby="book-details-fetch">
-          {#if !searchOpen}
-            <button type="button" class="app-button" on:click={openSearch}>
-              <Fa icon={faMagnifyingGlass} />
-              {metadata
-                ? $t$('book.changeDetails')
-                : $t$('book.findDetailsOn', { source: sourceNames[defaultSource(kind)] })}
-            </button>
-            {#if metadata}
-              <button
-                type="button"
-                class="app-button app-button-quiet"
-                disabled={saving}
-                on:click={() => save(undefined)}
-              >
-                {metadata.cover ? $t$('book.removeDetailsCover') : $t$('book.removeDetails')}
-              </button>
+        {#if hasDifficulty && book.difficulty !== undefined}
+          <PointBox
+            label={$t$('book.difficulty')}
+            figure={book.difficulty.toFixed(1)}
+            unit={$t$('book.outOf', { band: $t$(difficultyNameKey(book.difficulty)) })}
+          >
+            <div class="details-difficulty" title={difficultyNote}>
+              <div class="details-difficulty-score">
+                <span class="details-meter" aria-hidden="true">
+                  {#each [0, 1, 2, 3, 4] as i (i)}
+                    <span
+                      ><span
+                        style:width="{Math.min(Math.max(book.difficulty - i, 0), 1) * 100}%"
+                      /></span
+                    >
+                  {/each}
+                </span>
+                {#if book.difficultyLow !== undefined && book.difficultyHigh !== undefined}
+                  <span class="details-small">
+                    {$t$('book.likely', {
+                      low: book.difficultyLow.toFixed(1),
+                      high: book.difficultyHigh.toFixed(1)
+                    })}
+                  </span>
+                {/if}
+              </div>
+              <dl class="details-figures">
+                {#if wordStats}
+                  <div>
+                    <dt>{Math.floor(wordStats.share * 100)}%</dt>
+                    <dd>{$t$('book.knownFigure')}</dd>
+                  </div>
+                {/if}
+                {#if estimate?.uniqueKanji}
+                  <div>
+                    <dt>{number(estimate.uniqueKanji)}</dt>
+                    <dd>
+                      {kanji
+                        ? $t$('book.kanjiFigure', { new: number(kanji.newKanji) })
+                        : $t$('book.kanjiFigureOnly')}
+                    </dd>
+                  </div>
+                {/if}
+                {#if book.words95}
+                  <div>
+                    <dt>{number(book.words95)}</dt>
+                    <dd>{$t$('book.words95Figure')}</dd>
+                  </div>
+                {/if}
+              </dl>
+            </div>
+            {#if kanji?.topNew.length}
+              <p class="details-small details-kanji-line">
+                {kanji.topNew.length < kanji.newKanji
+                  ? $t$('book.topNewKanji')
+                  : $t$('book.newKanji')}
+                <span class="details-new-kanji" lang="ja">{kanji.topNew.join('')}</span>
+                <button type="button" class="app-button app-button-quiet" on:click={copyNewKanji}>
+                  {copied ? $t$('book.copied') : $t$('book.copy')}
+                </button>
+              </p>
             {/if}
-          {:else}
-            <h2 id="book-details-fetch" class="details-fetch-heading">
-              {$t$('book.findDetails')}
-            </h2>
-            <form class="details-search" on:submit|preventDefault={search}>
-              <select
-                class="app-input"
-                aria-label={$t$('book.source')}
-                bind:value={source}
-                on:change={() => ((candidates = undefined), search())}
-              >
-                <option value={defaultSource(kind)}>{sourceNames[defaultSource(kind)]}</option>
-                <option value="jiten">Jiten</option>
-              </select>
-              <input
-                class="app-input"
-                type="search"
-                lang="ja"
-                aria-label={$t$('book.searchSource', {
-                  source: sourceNames[source ?? defaultSource(kind)]
+            <button type="button" class="app-button app-button-quiet" on:click={showDifficulty}>
+              {$t$('book.difficultyDetails')}
+            </button>
+          </PointBox>
+        {/if}
+
+        <dl class="details-facts">
+          {#if hasDifficulty && book.difficulty === undefined}
+            <div>
+              <dt>{$t$('book.difficulty')}</dt>
+              <dd>
+                {$t$('book.noEstimate')}
+                <button
+                  type="button"
+                  class="app-button details-row-button"
+                  on:click={showDifficulty}
+                >
+                  {$t$('book.difficultyDetails')}
+                </button>
+              </dd>
+            </div>
+          {/if}
+          <div>
+            <dt>{$t$('book.length')}</dt>
+            <dd>
+              {#if !characters}
+                {$t$('book.lengthUnknown')}
+              {:else if kind === 'manga'}
+                {$t$('book.pages', { count: number(characters) })}
+              {:else}
+                {$t$('book.characters', { count: number(characters) })}
+                {#if speed}
+                  <span class="details-note">
+                    {$t$(isReading(book) ? 'book.timeLeftAtSpeed' : 'book.timeAtSpeed', {
+                      time: hours(remaining),
+                      speed: number(speed)
+                    })}
+                  </span>
+                {/if}
+              {/if}
+            </dd>
+          </div>
+          <div>
+            <dt>{$t$('book.progress')}</dt>
+            <dd>
+              {#if isFinished(book)}{$t$('book.finished')}{:else if isReading(book)}{Math.round(
+                  book.progress * 100
+                )}%{:else}{$t$('book.notStarted')}{/if}
+            </dd>
+          </div>
+          {#if isCalibre && kind === 'manga' && book.calibreId !== undefined}
+            <div>
+              <dt>{$t$('book.text')}</dt>
+              <dd><MokuroText calibreId={book.calibreId} /></dd>
+            </div>
+          {/if}
+          {#if calibreBook?.publisher}
+            <div>
+              <dt>{$t$('book.publisher')}</dt>
+              <dd lang="ja">{calibreBook.publisher}</dd>
+            </div>
+          {/if}
+          {#if published}
+            <div>
+              <dt>{$t$('book.published')}</dt>
+              <dd>{published}</dd>
+            </div>
+          {/if}
+          {#if genres.length}
+            <div>
+              <dt>{$t$('book.tags')}</dt>
+              <dd lang="ja">{genres.join('・')}</dd>
+            </div>
+          {/if}
+          {#if book.rating}
+            <div>
+              <dt>{$t$('book.rating')}</dt>
+              <dd aria-label={$t$('book.ratingLabel', { rating: book.rating })}>
+                {'★'.repeat(Math.round(book.rating))}{'☆'.repeat(5 - Math.round(book.rating))}
+              </dd>
+            </div>
+          {/if}
+          {#if metadata?.score}
+            <div>
+              <dt>{$t$('book.sourceScore', { source: sourceNames[metadata.source] })}</dt>
+              <dd>{metadata.score} / 100</dd>
+            </div>
+          {/if}
+          {#if calibreBook}
+            <div>
+              <dt>{$t$('book.file')}</dt>
+              <dd>
+                {$t$(calibreBook.size ? 'book.fileSizeAdded' : 'book.fileAdded', {
+                  format: calibreBook.format === 'VN' ? $t$('book.gameFolder') : calibreBook.format,
+                  size: (calibreBook.size / 1e6).toFixed(1),
+                  date: new Date(calibreBook.added).toLocaleDateString()
                 })}
-                bind:value={searchTerm}
-                on:keydown={(ev) => ev.key === 'Escape' && (searchOpen = false)}
-              />
-              <button type="submit" class="app-button">
-                <Fa icon={searching ? faSpinner : faMagnifyingGlass} spin={searching} />
-                {$t$('book.search')}
+              </dd>
+            </div>
+          {/if}
+        </dl>
+
+        {#if unknownWords.length}
+          <section class="details-words" aria-label={$t$('book.newWords')}>
+            <SectionHead number={1} title={$t$('book.newWords')} count={unknownWords.length} />
+            <p class="details-note" title={$t$('book.newWordsHint', { count: knownMinCount })}>
+              {$t$(unknownWords.length > 50 ? 'book.newWordsNoteFirst' : 'book.newWordsNote', {
+                count: number(estimate?.words95 ?? 0),
+                total: number(unknownWords.length)
+              })}
+            </p>
+            <ol lang="ja">
+              {#each unknownWords.slice(0, 50) as word}
+                {@const [form, reading, count] = word}
+                {@const mark = wordMark($wordMarks$, word)}
+                <li class:details-word-marked={mark}>
+                  <span
+                    >{form}{#if reading && kanjiPattern.test(form)}<span class="details-note-inline"
+                        >（{reading}）</span
+                      >{/if}</span
+                  >
+                  <span class="details-note-inline">×{count}</span>
+                  <span lang={$uiLanguage$}>
+                    {#if mark}
+                      <button
+                        type="button"
+                        class="details-mark"
+                        title={$t$('book.unmarkWord', { word: form })}
+                        on:click={() => setWordMarks(marksOf($wordMarks$, word), null)}
+                      >
+                        {$t$('book.undoMark')}
+                      </button>
+                    {:else}
+                      <button
+                        type="button"
+                        class="details-mark"
+                        title={$t$('book.markKnown', { word: form })}
+                        aria-label={$t$('book.markKnown', { word: form })}
+                        on:click={() => setWordMarks([markEntry(listWords, word)], 'known')}
+                        >✓</button
+                      >
+                      <button
+                        type="button"
+                        class="details-mark"
+                        title={$t$('book.markIgnored', { word: form })}
+                        aria-label={$t$('book.markIgnored', { word: form })}
+                        on:click={() => setWordMarks([markEntry(listWords, word)], 'ignored')}
+                        >✕</button
+                      >
+                    {/if}
+                  </span>
+                </li>
+              {/each}
+            </ol>
+            <span class="details-word-actions">
+              <button type="button" class="app-button" on:click={markAllShown}>
+                {$t$('book.markAllKnown')}
+              </button>
+              <button type="button" class="app-button" on:click={copyNewWords}>
+                {wordsCopied ? $t$('book.copied') : $t$('book.copy')}
               </button>
               <button
                 type="button"
-                class="app-button app-button-quiet"
-                on:click={() => (searchOpen = false)}
+                class="app-button"
+                on:click={() => downloadWordsCsv(book.title, unknownWords)}
               >
-                {$t$('book.cancel')}
+                <Fa icon={faDownload} />
+                {$t$('book.downloadCsv')}
               </button>
-            </form>
-            {#if candidates && !candidates.length && !searching}
-              <p class="details-note">{$t$('book.nothingFound')}</p>
-            {/if}
-            {#if candidates?.length}
-              <ul class="details-candidates">
-                {#each candidates as candidate (candidate.url)}
-                  <li>
-                    {#if candidate.cover}
-                      <img
-                        src={candidate.cover}
-                        alt=""
-                        loading="lazy"
-                        referrerpolicy="no-referrer"
-                      />
-                    {:else}
-                      <span class="details-candidate-blank" />
-                    {/if}
-                    <span class="details-candidate-text">
-                      <a href={candidate.url} target="_blank" rel="noreferrer" lang="ja">
-                        {candidate.title}
-                      </a>
-                      <span class="details-note">
-                        {candidate.released.slice(0, 4) ||
-                          $t$('book.undated')}{#if candidate.genres.length},
-                          {candidate.genres.slice(0, 3).join(', ')}{/if}
-                      </span>
-                      <span class="details-candidate-buttons">
-                        <button
-                          type="button"
-                          class="app-button"
-                          disabled={saving}
-                          on:click={() => save({ ...candidate, cover: '' })}
-                        >
-                          {$t$('book.useDetails')}
-                        </button>
-                        {#if candidate.cover}
+            </span>
+          </section>
+        {/if}
+
+        {#if seriesBooks.length > 1}
+          <ContinueReadingShelf
+            books={seriesBooks}
+            number={unknownWords.length ? 2 : 1}
+            heading={book.series ?? ''}
+            currentBookId={book.id}
+            on:bookClick={(ev) => dispatch('showBook', ev.detail)}
+            on:bookRead={(ev) => dispatch('read', ev.detail)}
+          />
+        {/if}
+
+        {#if canEdit}
+          <section class="details-fetch" aria-labelledby="book-details-fetch">
+            {#if !searchOpen}
+              <button type="button" class="app-button" on:click={openSearch}>
+                <Fa icon={faMagnifyingGlass} />
+                {metadata
+                  ? $t$('book.changeDetails')
+                  : $t$('book.findDetailsOn', { source: sourceNames[defaultSource(kind)] })}
+              </button>
+              {#if metadata}
+                <button
+                  type="button"
+                  class="app-button app-button-quiet"
+                  disabled={saving}
+                  on:click={() => save(undefined)}
+                >
+                  {metadata.cover ? $t$('book.removeDetailsCover') : $t$('book.removeDetails')}
+                </button>
+              {/if}
+            {:else}
+              <h2 id="book-details-fetch" class="details-fetch-heading">
+                {$t$('book.findDetails')}
+              </h2>
+              <form class="details-search" on:submit|preventDefault={search}>
+                <select
+                  class="app-input"
+                  aria-label={$t$('book.source')}
+                  bind:value={source}
+                  on:change={() => ((candidates = undefined), search())}
+                >
+                  <option value={defaultSource(kind)}>{sourceNames[defaultSource(kind)]}</option>
+                  <option value="jiten">Jiten</option>
+                </select>
+                <input
+                  class="app-input"
+                  type="search"
+                  lang="ja"
+                  aria-label={$t$('book.searchSource', {
+                    source: sourceNames[source ?? defaultSource(kind)]
+                  })}
+                  bind:value={searchTerm}
+                  on:keydown={(ev) => ev.key === 'Escape' && (searchOpen = false)}
+                />
+                <button type="submit" class="app-button">
+                  <Fa icon={searching ? faSpinner : faMagnifyingGlass} spin={searching} />
+                  {$t$('book.search')}
+                </button>
+                <button
+                  type="button"
+                  class="app-button app-button-quiet"
+                  on:click={() => (searchOpen = false)}
+                >
+                  {$t$('book.cancel')}
+                </button>
+              </form>
+              {#if candidates && !candidates.length && !searching}
+                <p class="details-note">{$t$('book.nothingFound')}</p>
+              {/if}
+              {#if candidates?.length}
+                <ul class="details-candidates">
+                  {#each candidates as candidate (candidate.url)}
+                    <li>
+                      {#if candidate.cover}
+                        <img
+                          src={candidate.cover}
+                          alt=""
+                          loading="lazy"
+                          referrerpolicy="no-referrer"
+                        />
+                      {:else}
+                        <span class="details-candidate-blank" />
+                      {/if}
+                      <span class="details-candidate-text">
+                        <a href={candidate.url} target="_blank" rel="noreferrer" lang="ja">
+                          {candidate.title}
+                        </a>
+                        <span class="details-note">
+                          {candidate.released.slice(0, 4) ||
+                            $t$('book.undated')}{#if candidate.genres.length},
+                            {candidate.genres.slice(0, 3).join(', ')}{/if}
+                        </span>
+                        <span class="details-candidate-buttons">
                           <button
                             type="button"
                             class="app-button"
                             disabled={saving}
-                            on:click={() => save(candidate)}
+                            on:click={() => save({ ...candidate, cover: '' })}
                           >
-                            {$t$('book.useDetailsCover')}
+                            {$t$('book.useDetails')}
                           </button>
-                        {/if}
+                          {#if candidate.cover}
+                            <button
+                              type="button"
+                              class="app-button"
+                              disabled={saving}
+                              on:click={() => save(candidate)}
+                            >
+                              {$t$('book.useDetailsCover')}
+                            </button>
+                          {/if}
+                        </span>
                       </span>
-                    </span>
-                  </li>
-                {/each}
-              </ul>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
             {/if}
-          {/if}
-          {#if searchError}
-            <p class="text-danger" role="alert">{searchError}</p>
-          {/if}
-        </section>
-      {/if}
-
-      {#if seriesBooks.length > 1}
-        <ContinueReadingShelf
-          {bookCards}
-          shelfBooks={seriesBooks}
-          heading={book.series}
-          icon={faBookOpen}
-          currentBookId={book.id}
-          on:bookClick={(ev) => dispatch('showBook', ev.detail)}
-          on:bookRead={(ev) => dispatch('read', ev.detail)}
-        />
-      {/if}
+            {#if searchError}
+              <p class="text-danger" role="alert">{searchError}</p>
+            {/if}
+          </section>
+        {/if}
+      </div>
     </div>
   </div>
 </div>
@@ -763,182 +801,305 @@
 <style>
   .details {
     position: fixed;
-    inset: 0;
-    /* Above the app header (40), below dialogs (50) */
-    z-index: 45;
+    /* Under the app header (4rem, 3.25rem from xl) and the phones' bottom tab bar */
+    inset: 4rem 0 0;
+    z-index: 39;
+    outline: none;
     overflow-y: auto;
     overscroll-behavior: contain;
     background: var(--background-color);
     color: var(--font-color);
   }
 
+  @media (min-width: 1280px) {
+    .details {
+      top: 3.25rem;
+    }
+  }
+
+  @media (max-width: 639px) {
+    .details {
+      bottom: calc(3.5rem + env(safe-area-inset-bottom));
+    }
+  }
+
   .details-bar {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    padding: 0.6rem max(1rem, env(safe-area-inset-left));
-    border-bottom: 1px solid var(--app-header-border);
-    background: var(--app-header-bg);
+    display: flex;
+    min-width: 0;
+    max-width: 75rem;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin: 0 auto;
+    padding: 1.25rem 1rem 0;
+  }
+
+  .details-crumb {
+    overflow: hidden;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .details-body {
     display: grid;
-    gap: 2rem;
-    max-width: 68rem;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    gap: 1.5rem 1rem;
+    max-width: 75rem;
     margin: 0 auto;
-    padding: 2rem 1.25rem calc(3rem + env(safe-area-inset-bottom));
+    padding: 1.5rem 1rem calc(3rem + env(safe-area-inset-bottom));
+  }
+
+  /* Phones: cover beside the title, then everything full width */
+  .details-aside,
+  .details-main {
+    display: contents;
+  }
+
+  .details-cover {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .details-head {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .details-actions,
+  .details-rest {
+    grid-column: 1 / -1;
   }
 
   @media (min-width: 768px) {
     .details-body {
-      grid-template-columns: 16rem minmax(0, 1fr);
-      gap: 3rem;
-      padding-top: 3rem;
+      grid-template-columns: 16.5rem minmax(0, 1fr);
+      gap: 0 4rem;
+      padding: 2rem 2.5rem 4rem;
+    }
+
+    .details-bar {
+      padding: 2rem 2.5rem 0;
+    }
+
+    .details-aside,
+    .details-main {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
     }
 
     .details-aside {
       position: sticky;
-      top: 5rem;
+      top: 2rem;
       align-self: start;
+      gap: 1.25rem;
+    }
+
+    .details-main {
+      gap: 2rem;
     }
   }
 
-  .details-aside {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1.25rem;
+  .details-cover-image {
+    display: block;
+    border: 1px solid var(--border-color);
   }
 
-  .details-cover {
-    position: relative;
-    width: min(13rem, 60vw);
-    box-shadow: 0 0.8rem 2rem -0.8rem var(--app-cover-shadow);
+  .details-track {
+    display: block;
+    height: 3px;
+    margin-top: 0.5rem;
+    background: var(--app-progress-track);
   }
 
-  @media (min-width: 768px) {
-    .details-cover {
-      width: 100%;
-    }
+  .details-track > span {
+    display: block;
+    height: 100%;
+    background: var(--app-progress-fill);
   }
 
-  .details-obi {
-    position: absolute;
-    right: -0.35rem;
-    bottom: 9%;
-    left: -0.35rem;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 0.55rem 0.5rem 0.5rem;
-    background: var(--accent-color);
-    box-shadow: 0 0.25rem 0.6rem -0.2rem var(--app-cover-shadow);
-    color: var(--app-accent-fg);
-    font-family: var(--app-font-display);
-    line-height: 1.15;
-    text-align: center;
-  }
-
-  .details-obi-main {
-    font-size: 1.6rem;
-    letter-spacing: 0.04em;
-  }
-
-  .details-obi-sub {
-    min-height: 1em;
-    font-size: 0.8rem;
+  .details-percent {
+    display: block;
+    margin-top: 0.4rem;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+    font-variant-numeric: tabular-nums;
   }
 
   .details-actions {
     display: flex;
-    width: min(13rem, 60vw);
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.75rem;
   }
 
-  @media (min-width: 768px) {
-    .details-actions {
-      width: 100%;
-    }
-  }
-
-  .details-actions :global(.app-button) {
-    justify-content: center;
-  }
-
-  .details-main {
-    min-width: 0;
+  .details-actions .app-button {
+    width: 100%;
   }
 
   .details-title {
-    font-family: var(--app-font-display);
-    font-size: clamp(1.6rem, 3.5vw, 2.4rem);
-    font-weight: 400;
+    font-size: var(--type-h1);
+    font-weight: 700;
     line-height: 1.3;
     overflow-wrap: anywhere;
   }
 
+  @media (max-width: 767px) {
+    .details-title {
+      font-size: var(--type-h2);
+    }
+  }
+
   .details-author {
-    margin-top: 0.5rem;
+    margin-top: 0.4rem;
     color: var(--app-muted-fg);
-    font-size: 1.05rem;
+    font-size: var(--type-body);
   }
 
   .details-series {
-    margin-top: 0.35rem;
-    color: var(--accent-color);
-    font-weight: 600;
-    text-decoration: underline;
-    text-underline-offset: 0.2em;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.6rem;
+    margin-top: 0.6rem;
+  }
+
+  .details-vol {
+    padding: 0.1rem 0.4rem;
+    border-radius: 2px;
+    background: var(--accent-color);
+    color: var(--app-accent-fg);
+    font-size: var(--type-label);
+    font-weight: 700;
+  }
+
+  .details-rest {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2rem;
   }
 
   .details-description {
     max-width: 40em;
-    margin-top: 1.75rem;
     line-height: 1.8;
     white-space: pre-line;
   }
 
-  .details-description a,
-  .details-link {
+  .details-description a {
     display: inline-block;
     margin-top: 0.35rem;
     color: var(--app-muted-fg);
-    font-size: 0.85rem;
+    font-size: var(--type-small);
     text-decoration: underline;
     text-underline-offset: 0.2em;
   }
 
+  .details-difficulty {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 3rem;
+    margin-top: 0.5rem;
+  }
+
+  .details-difficulty-score {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .details-meter {
+    display: flex;
+    gap: 3px;
+  }
+
+  .details-meter > span {
+    display: block;
+    width: 1.75rem;
+    height: 4px;
+    background: var(--app-progress-track);
+  }
+
+  .details-meter > span > span {
+    display: block;
+    height: 100%;
+    background: var(--accent-color);
+  }
+
+  .details-figures {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: baseline;
+    gap: 0.3rem 0.6rem;
+  }
+
+  .details-figures > div {
+    display: contents;
+  }
+
+  .details-figures dt {
+    font-size: var(--type-number);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .details-figures dd,
+  .details-small {
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  .details-kanji-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.6rem;
+    margin-top: 1rem;
+  }
+
   .details-facts {
-    max-width: 40em;
-    margin-top: 2rem;
+    border-top: 2px solid var(--font-color);
   }
 
   .details-facts > div {
     display: grid;
-    grid-template-columns: 7.5rem minmax(0, 1fr);
+    grid-template-columns: 8.5rem minmax(0, 1fr);
     gap: 1rem;
     padding: 0.7rem 0;
-    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  @media (max-width: 639px) {
+    .details-facts > div {
+      grid-template-columns: 6rem minmax(0, 1fr);
+    }
   }
 
   .details-facts dt {
+    padding-top: 0.1rem;
     color: var(--app-muted-fg);
-    font-size: 0.9rem;
+    font-size: var(--type-small);
   }
 
   .details-facts dd {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.25rem 0.6rem;
+    gap: 0.25rem 0.75rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .details-row-button {
+    --app-control-height: 2rem;
+    padding: 0 0.6rem;
   }
 
   .details-note {
     display: block;
     width: 100%;
     color: var(--app-muted-fg);
-    font-size: 0.85rem;
+    font-size: var(--type-small);
   }
 
   .details-new-kanji {
@@ -950,11 +1111,9 @@
 
   .details-words {
     display: flex;
-    max-width: 40em;
     flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-    margin-top: 2rem;
+    align-items: stretch;
+    gap: 0.75rem;
   }
 
   .details-words ol {
@@ -971,7 +1130,7 @@
 
   .details-note-inline {
     color: var(--app-muted-fg);
-    font-size: 0.85rem;
+    font-size: var(--type-small);
   }
 
   .details-word-marked {
@@ -985,46 +1144,27 @@
   .details-mark {
     min-width: 1.6rem;
     padding: 0 0.3rem;
-    border-radius: 0.25rem;
+    border-radius: 2px;
     color: var(--app-muted-fg);
-    font-size: 0.85rem;
+    font-size: var(--type-small);
   }
 
   .details-mark:hover,
   .details-mark:focus-visible {
-    background: color-mix(in srgb, currentColor 12%, transparent);
+    background: var(--surface-color);
     color: inherit;
-  }
-
-  .details-tags {
-    display: flex;
-    max-width: 40em;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    margin-top: 1.25rem;
-  }
-
-  .details-tags li {
-    padding: 0.15rem 0.6rem;
-    border: 1px solid var(--border-color);
-    border-radius: 999px;
-    color: var(--app-muted-fg);
-    font-size: 0.8rem;
   }
 
   .details-fetch {
     display: flex;
-    max-width: 40em;
     flex-wrap: wrap;
     gap: 0.5rem;
-    margin: 2rem 0 2.5rem;
   }
 
   .details-fetch-heading {
     width: 100%;
-    font-family: var(--app-font-display);
-    font-size: 1.15rem;
-    font-weight: 400;
+    font-size: var(--type-h2);
+    font-weight: 700;
   }
 
   .details-search {
@@ -1043,13 +1183,14 @@
     display: flex;
     width: 100%;
     flex-direction: column;
+    border-top: 2px solid var(--font-color);
   }
 
   .details-candidates li {
     display: flex;
     gap: 0.9rem;
     padding: 0.8rem 0;
-    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
   }
 
   .details-candidates img,
@@ -1058,7 +1199,7 @@
     flex: 0 0 auto;
     aspect-ratio: 375 / 529;
     object-fit: cover;
-    background: var(--app-progress-track);
+    background: var(--surface-color);
   }
 
   .details-candidate-text {
@@ -1069,7 +1210,7 @@
   }
 
   .details-candidate-text a {
-    font-weight: 600;
+    font-weight: 700;
     text-decoration: underline;
     text-underline-offset: 0.2em;
   }

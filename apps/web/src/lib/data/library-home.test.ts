@@ -14,6 +14,7 @@ import {
   isContinueReading,
   matchingSeries,
   readNext,
+  recentLevels,
   removeFromHome,
   seriesGroups
 } from './library-home';
@@ -143,5 +144,11 @@ describe('readNext', () => {
     ).map((card) => card.title);
 
     expect(titles).toEqual(['T 1']);
+  });
+
+  it("gives Read next's level: the last 3 finished books, lowest first", () => {
+    expect(
+      recentLevels([done('a', 3, 1), done('b', 2, 4), done('c', 2.5, 3), done('d', 1, 2)])
+    ).toEqual([1, 2, 2.5]);
   });
 });

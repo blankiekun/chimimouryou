@@ -34,7 +34,10 @@
           <BookCard imagePath={group.books[0].imagePath} title={group.books[0].title} />
           <span class="series-count">{group.books.length}</span>
         </span>
-        <span class="series-name">{group.series}</span>
+        <span class="series-track" aria-hidden="true"
+          ><span style:width="{(group.started / group.books.length) * 100}%" /></span
+        >
+        <span class="series-name" lang="ja">{group.series}</span>
         <span class="series-meta">
           {group.started ? `${group.started} of ${group.books.length} started` : 'Not started'}
         </span>
@@ -54,18 +57,28 @@
 </div>
 {#if groups.length > limit}
   <div class="flex justify-center py-4">
-    <button type="button" class="series-more" on:click={() => (limit += step)}>
+    <button type="button" class="app-button" on:click={() => (limit += step)}>
       Show more ({groups.length - limit} remaining)
     </button>
   </div>
 {/if}
 
 <style>
+  /* Same columns as book-card-list.svelte */
   .series-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
-    gap: 2rem 1.5rem;
-    padding-bottom: 1rem;
+    grid-template-columns: repeat(auto-fill, 8.75rem);
+    justify-content: space-between;
+    align-items: start;
+    gap: 2.5rem 1.5rem;
+    padding: 6px 6px 1rem 0;
+  }
+
+  @media (max-width: 639px) {
+    .series-grid {
+      grid-template-columns: repeat(auto-fill, 6.5rem);
+      gap: 1.75rem 0.75rem;
+    }
   }
 
   .series-card {
@@ -77,40 +90,55 @@
     display: flex;
     width: 100%;
     flex-direction: column;
-    gap: 0.25rem;
-    border-radius: calc(4px * var(--app-radius-scale));
+    border-radius: 2px;
     text-align: left;
+  }
+
+  .series-open:focus-visible {
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 2px;
   }
 
   .series-cover {
     position: relative;
-    overflow: hidden;
-    margin-bottom: 0.4rem;
-    border-radius: calc(4px * var(--app-radius-scale));
-    /* A second cover peeking out behind: it's a series */
-    box-shadow:
-      5px -5px 0 -1px var(--surface-strong-color),
-      5px -5px 0 0 var(--border-color),
-      0 10px 22px -12px var(--app-cover-shadow);
-    transition: transform 0.2s var(--app-ease);
+    display: block;
+    isolation: isolate;
+    border: 1px solid var(--border-color);
   }
 
-  .series-open:hover .series-cover,
-  .series-open:focus-visible .series-cover {
-    transform: translateY(-3px);
+  /* A second sheet behind the cover, drawn as a rule: it's a series */
+  .series-cover::before {
+    content: '';
+    position: absolute;
+    inset: -5px -5px 5px 5px;
+    z-index: -1;
+    border: 1px solid var(--border-color);
+    background: var(--surface-color);
   }
 
   .series-count {
     position: absolute;
-    right: 0.35rem;
-    bottom: 0.35rem;
-    padding: 0.1rem 0.5rem;
-    border-radius: 2px;
-    background: var(--surface-strong-color);
-    color: var(--font-color);
-    font-size: 0.7rem;
-    font-weight: 600;
+    right: 0;
+    bottom: 0;
+    padding: 0.1rem 0.45rem;
+    background: var(--font-color);
+    color: var(--background-color);
+    font-size: var(--type-label);
+    font-weight: 700;
     font-variant-numeric: tabular-nums;
+  }
+
+  .series-track {
+    display: block;
+    height: 3px;
+    margin: 0.4rem 0 0.6rem;
+    background: var(--app-progress-track);
+  }
+
+  .series-track > span {
+    display: block;
+    height: 100%;
+    background: var(--app-progress-fill);
   }
 
   .series-name {
@@ -120,46 +148,40 @@
     -webkit-line-clamp: 2;
     line-clamp: 2;
     padding-block: 0.05em;
-    font-family: var(--app-font-display);
-    font-size: 0.88rem;
-    line-height: 1.5;
+    font-size: var(--type-body);
+    font-weight: 700;
+    line-height: 1.45;
   }
 
   .series-meta,
   .series-empty {
+    margin-top: 0.2rem;
     color: var(--app-muted-fg);
-    font-size: 0.74rem;
+    font-size: var(--type-small);
   }
 
   .series-empty {
     padding: 2rem 0;
-    text-align: center;
   }
 
   .series-add {
     position: absolute;
-    top: 0.4rem;
-    left: 0.4rem;
+    top: 0.35rem;
+    left: 0.35rem;
     display: inline-flex;
-    width: 1.8rem;
-    height: 1.8rem;
+    width: 1.75rem;
+    height: 1.75rem;
     align-items: center;
     justify-content: center;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--surface-strong-color) 92%, transparent);
+    border: 1px solid var(--font-color);
+    border-radius: 2px;
+    background: var(--background-color);
     color: var(--accent-strong-color);
-    font-size: 0.75rem;
+    font-size: var(--type-label);
   }
 
   .series-add:disabled {
-    opacity: 0.7;
-  }
-
-  .series-more {
-    padding: 0.5rem 0.9rem;
-    border: 1px solid var(--app-control-border);
-    border-radius: calc(0.5rem * var(--app-radius-scale));
-    font-size: 0.85rem;
-    font-weight: 600;
+    border-color: var(--border-color);
+    color: var(--app-muted-fg);
   }
 </style>

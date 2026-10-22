@@ -2,12 +2,13 @@
   // Typed so importers get a declaration (svelte-check), no props.
 </script>
 
+<!-- Study Book dialog: paper panel, 2px ink top rule, square corners, no shadow. -->
 <section
-  class="mdc-elevation--z24 rounded-[calc(1rem*var(--app-radius-scale))] bg-[color:var(--surface-strong-color)] p-6 text-[color:var(--font-color)]"
+  class="rounded-[2px] border-t-2 border-fg bg-[color:var(--surface-strong-color)] p-6 text-[color:var(--font-color)]"
 >
-  <h2 class="weight-medium mb-5 text-xl"><slot name="header" /></h2>
+  <h2 class="mb-4 text-h2 font-bold leading-snug"><slot name="header" /></h2>
   <slot name="content" />
-  <footer class="flex flex-wrap items-center justify-end pt-5">
+  <footer class="flex flex-wrap items-center justify-end gap-2 pt-5">
     <slot name="footer" />
   </footer>
 </section>

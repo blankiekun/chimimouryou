@@ -1,10 +1,5 @@
 <script lang="ts">
-  import {
-    faChevronDown,
-    faMagnifyingGlass,
-    faSliders,
-    faXmark
-  } from '@fortawesome/free-solid-svg-icons';
+  import { faChevronDown, faXmark } from '@fortawesome/free-solid-svg-icons';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
   import {
     allBooksFilter,
@@ -45,44 +40,9 @@
 </script>
 
 <aside class="library-sidebar" aria-label={$t$('library.filters')}>
-  <button
-    type="button"
-    class="library-sidebar-toggle"
-    aria-expanded={mobileOpen}
-    on:click={() => (mobileOpen = !mobileOpen)}
-  >
-    <span class="flex min-w-0 items-center gap-3">
-      <Fa icon={faSliders} />
-      <span class="truncate">{activeFilterLabel}</span>
-      {#if !loading}
-        <span class="library-filter-count">{counts.get(activeFilter) ?? 0}</span>
-      {/if}
-    </span>
-    <span class="library-filter-chevron" class:library-filter-chevron-expanded={mobileOpen}>
-      <Fa icon={faChevronDown} />
-    </span>
-  </button>
-
-  <div class="library-sidebar-content" class:library-sidebar-content-open={mobileOpen}>
-    {#if loading}
-      <div class="library-filter-search">
-        <span class="app-skeleton h-[1.1rem] w-[1.1rem] rounded-full" />
-        <span class="app-skeleton h-3 w-2/3 rounded-full" />
-      </div>
-      {#each [3, 4, 3] as rows}
-        <div class="mt-4 flex flex-col gap-3 px-3">
-          <div class="flex items-center justify-between">
-            <span class="app-skeleton h-3 w-1/3 rounded-full" />
-            <span class="app-skeleton h-5 w-5 rounded-full" />
-          </div>
-          {#each { length: rows } as _}
-            <span class="app-skeleton ml-5 h-3 w-1/2 rounded-full" />
-          {/each}
-        </div>
-      {/each}
-    {:else}
+  {#if !loading}
+    <div class="library-sidebar-search">
       <label class="library-filter-search">
-        <Fa icon={faMagnifyingGlass} />
         <input
           type="search"
           class="library-filter-search-input"
@@ -101,14 +61,67 @@
           </button>
         {/if}
       </label>
+    </div>
+  {:else}
+    <div class="library-sidebar-search">
+      <div class="library-filter-search"><span class="app-skeleton h-3 w-2/3" /></div>
+    </div>
+  {/if}
+  <button
+    type="button"
+    class="library-sidebar-toggle"
+    title={activeFilterLabel}
+    aria-expanded={mobileOpen}
+    on:click={() => (mobileOpen = !mobileOpen)}
+  >
+    {$t$('library.filtersButton')}
+    {#if activeFilter !== allBooksFilter.key}<span class="library-sidebar-toggle-count">1</span
+      >{/if}
+  </button>
+  {#if mobileOpen}
+    <button
+      type="button"
+      class="library-sheet-scrim"
+      aria-label={$t$('library.close')}
+      on:click={() => (mobileOpen = false)}
+    />
+  {/if}
 
+  <div class="library-sidebar-content" class:library-sidebar-content-open={mobileOpen}>
+    <div class="library-sheet-head">
+      <h2>{$t$('library.filtersButton')}</h2>
       <button
         type="button"
-        class="library-filter-row mt-2"
+        class="library-filter-search-clear"
+        aria-label={$t$('library.close')}
+        on:click={() => (mobileOpen = false)}
+      >
+        <Fa icon={faXmark} />
+      </button>
+    </div>
+    {#if loading}
+      {#each [3, 4, 3] as rows}
+        <div class="mt-4 flex flex-col gap-3 px-3">
+          <div class="flex items-center justify-between">
+            <span class="app-skeleton h-3 w-1/3" />
+            <span class="app-skeleton h-5 w-5" />
+          </div>
+          {#each { length: rows } as _}
+            <span class="app-skeleton ml-5 h-3 w-1/2" />
+          {/each}
+        </div>
+      {/each}
+    {:else}
+      <button
+        type="button"
+        class="library-filter-row library-filter-all"
         class:library-filter-row-active={activeFilter === allBooksFilter.key}
+        aria-pressed={activeFilter === allBooksFilter.key}
         on:click={() => selectFilter(allBooksFilter.key)}
       >
-        <span>{$t$(allBooksFilter.label)}</span>
+        <span
+          ><span class="library-filter-mark" aria-hidden="true" />{$t$(allBooksFilter.label)}</span
+        >
         <span class="library-filter-count">{counts.get(allBooksFilter.key) ?? 0}</span>
       </button>
 
@@ -127,13 +140,9 @@
             on:click={() => toggleSection(section.key)}
           >
             <span>{$t$(section.label)}</span>
-            <span class="flex items-center gap-1.5">
-              <span class="library-filter-count">
-                {section.filters.reduce((sum, filter) => sum + (counts.get(filter.key) ?? 0), 0)}
-              </span>
-              <span class="library-filter-chevron" class:library-filter-chevron-expanded={expanded}>
-                <Fa icon={faChevronDown} />
-              </span>
+            <!-- No group count: Last read's buckets overlap, so a sum would mislead -->
+            <span class="library-filter-chevron" class:library-filter-chevron-expanded={expanded}>
+              <Fa icon={faChevronDown} />
             </span>
           </button>
           {#if expanded}
@@ -143,9 +152,14 @@
                   type="button"
                   class="library-filter-row"
                   class:library-filter-row-active={activeFilter === filter.key}
+                  aria-pressed={activeFilter === filter.key}
                   on:click={() => selectFilter(filter.key)}
                 >
-                  <span>{$t$(filter.label)}</span>
+                  <span
+                    ><span class="library-filter-mark" aria-hidden="true" />{$t$(
+                      filter.label
+                    )}</span
+                  >
                   <span class="library-filter-count">{counts.get(filter.key) ?? 0}</span>
                 </button>
               {/each}
@@ -158,13 +172,8 @@
 </aside>
 
 <style>
+  /* Study Book filters: ruled groups (2px ink rule, 1px rows), a square mark on the chosen one */
   .library-sidebar {
-    --library-sidebar-fg: var(--font-color);
-    --library-sidebar-muted: var(--app-muted-fg);
-    --library-sidebar-hover-bg: color-mix(in srgb, var(--font-color) 5%, transparent);
-    --library-sidebar-control-bg: var(--app-control-bg);
-    --library-sidebar-control-border: var(--app-control-border);
-
     position: fixed;
     top: calc(var(--library-header-height) - 1px);
     left: 0;
@@ -174,13 +183,18 @@
     box-sizing: border-box;
     width: var(--library-sidebar-width);
     height: calc(100dvh - var(--library-header-height) + 1px);
-    border-right: 1px solid var(--border-color);
     background: var(--background-color);
-    color: var(--library-sidebar-fg);
+    color: var(--font-color);
   }
 
-  .library-sidebar-toggle {
+  .library-sidebar-toggle,
+  .library-sheet-head,
+  .library-sheet-scrim {
     display: none;
+  }
+
+  .library-sidebar-search {
+    padding: 1.75rem 1.25rem 0 2.5rem;
   }
 
   .library-sidebar-content {
@@ -188,30 +202,28 @@
     flex: 1 1 auto;
     flex-direction: column;
     min-height: 0;
-    padding: 1rem 0.9rem 2rem;
+    padding: 0 1.25rem 2rem 2.5rem;
     overflow-y: auto;
   }
 
   .library-filter-search {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    gap: 0.55rem;
-    min-height: 2.5rem;
-    padding: 0.2rem 0.7rem;
-    border: 1px solid var(--library-sidebar-control-border);
-    border-radius: calc(0.6rem * var(--app-radius-scale));
-    background: var(--library-sidebar-control-bg);
-    color: var(--library-sidebar-muted);
-    transition:
-      background-color 0.16s ease,
-      color 0.16s ease;
+    gap: 0.5rem;
+    min-height: var(--app-control-height);
+    padding: 0 0.4rem 0 0.75rem;
+    border: 1px solid var(--app-control-border);
+    border-radius: 2px;
+    background: var(--app-control-bg);
+    color: var(--app-muted-fg);
   }
 
   .library-filter-search:focus-within {
     border-color: var(--app-focus-ring);
-    box-shadow: 0 0 0 1px var(--app-focus-ring);
-    color: var(--library-sidebar-fg);
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 2px;
+    color: var(--font-color);
   }
 
   .library-filter-search-input {
@@ -220,8 +232,8 @@
     padding: 0;
     border: 0;
     background: transparent;
-    color: var(--library-sidebar-fg);
-    font-size: 0.9rem;
+    color: var(--font-color);
+    font-size: var(--type-body);
     outline: none;
     appearance: none;
   }
@@ -231,7 +243,7 @@
   }
 
   .library-filter-search-input::placeholder {
-    color: var(--library-sidebar-muted);
+    color: var(--app-text-subtle);
     opacity: 1;
   }
 
@@ -245,15 +257,23 @@
     justify-content: center;
     width: 1.75rem;
     height: 1.75rem;
-    border-radius: 9999px;
-    background: color-mix(in srgb, var(--library-sidebar-fg) 8%, transparent);
+    border-radius: 2px;
+  }
+
+  .library-filter-search-clear:hover {
+    background: var(--surface-color);
+  }
+
+  .library-filter-all {
+    margin-top: 1.25rem;
+    border-top: 2px solid var(--font-color);
   }
 
   .library-filter-section {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
-    margin-top: 1.1rem;
+    margin-top: 1.5rem;
+    border-top: 2px solid var(--font-color);
   }
 
   .library-filter-section-toggle,
@@ -264,65 +284,70 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.55rem;
-    border-radius: calc(0.4rem * var(--app-radius-scale));
-    color: var(--library-sidebar-muted);
     text-align: left;
-    transition:
-      background-color 0.16s ease,
-      color 0.16s ease;
   }
 
   .library-filter-section-toggle > span:first-child,
   .library-filter-row > span:first-child {
+    display: flex;
     min-width: 0;
+    align-items: center;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .library-filter-section-toggle {
-    min-height: 1.9rem;
-    padding: 0.3rem 0.55rem;
-    color: var(--app-text-subtle);
-    font-size: 0.7rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    min-height: 2.25rem;
+    color: var(--font-color);
+    font-size: var(--type-small);
+    font-weight: 700;
   }
 
   .library-filter-row {
-    min-height: 2.1rem;
-    padding: 0.35rem 0.65rem;
-    font-size: 0.88rem;
+    min-height: 2.25rem;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--font-color);
+    font-size: var(--type-body);
   }
 
-  .library-filter-section-toggle:hover,
-  .library-filter-row:hover {
-    background: var(--library-sidebar-hover-bg);
-    color: var(--library-sidebar-fg);
+  .library-filter-mark {
+    flex: none;
+    width: 0.875rem;
+    height: 0.875rem;
+    margin-right: 0.65rem;
+    border: 1px solid var(--app-control-border);
+    border-radius: 2px;
   }
 
-  .library-filter-row-active,
-  .library-filter-row-active:hover {
-    background: transparent;
-    box-shadow: inset 2px 0 var(--accent-color);
-    color: var(--library-sidebar-fg);
-    font-weight: 650;
+  .library-filter-row:hover .library-filter-mark {
+    border-color: var(--font-color);
+  }
+
+  .library-filter-row-active {
+    font-weight: 700;
+  }
+
+  .library-filter-row-active .library-filter-mark,
+  .library-filter-row-active:hover .library-filter-mark {
+    border-color: var(--accent-color);
+    padding: 2px;
+    background: var(--accent-color) content-box;
   }
 
   .library-filter-section-toggle:focus-visible,
   .library-filter-row:focus-visible {
     outline: 2px solid var(--app-focus-ring);
-    outline-offset: -2px;
+    outline-offset: 2px;
   }
 
   .library-filter-list {
     display: flex;
     flex-direction: column;
-    gap: 0.12rem;
-    margin-left: 0.62rem;
-    padding-left: 0.45rem;
-    border-left: 1px solid var(--border-color);
+  }
+
+  .library-filter-list .library-filter-row:first-child {
+    border-top: 1px solid var(--border-color);
   }
 
   .library-filter-count {
@@ -330,20 +355,10 @@
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
-    color: var(--app-text-subtle);
-    font-size: 0.72rem;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
     font-variant-numeric: tabular-nums;
-    letter-spacing: 0;
-    opacity: 0;
-    transition: opacity 0.15s ease;
-  }
-
-  /* Counts only where they help: the active filter's group, and under the pointer */
-  .library-filter-row:hover .library-filter-count,
-  .library-filter-row-active .library-filter-count,
-  .library-filter-section-active .library-filter-count,
-  .library-sidebar-toggle .library-filter-count {
-    opacity: 1;
+    font-weight: 400;
   }
 
   .library-filter-chevron {
@@ -360,43 +375,90 @@
     .library-sidebar {
       position: relative;
       top: auto;
-      z-index: 20;
+      /* No stacking context: the filter sheet goes above the tab bar */
+      z-index: auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 0.75rem;
       width: auto;
       height: auto;
-      border-right: 0;
       background: transparent;
     }
 
-    .library-sidebar::before {
-      content: none;
+    .library-sidebar-search {
+      padding: 0;
     }
 
     .library-sidebar-toggle {
-      display: flex;
-      width: 100%;
+      display: inline-flex;
       min-height: 2.75rem;
       align-items: center;
-      justify-content: space-between;
-      gap: 0.75rem;
-      padding: 0.6rem 0.9rem;
-      border: 1px solid var(--library-sidebar-control-border);
-      border-radius: calc(0.6rem * var(--app-radius-scale));
-      background: var(--app-control-bg);
-      font-weight: 600;
+      gap: 0.6rem;
+      padding: 0 1rem;
+      border: 1px solid var(--font-color);
+      border-radius: 2px;
+      background: transparent;
+      font-size: var(--type-button);
+      font-weight: 700;
+    }
+
+    .library-sidebar-toggle-count {
+      padding: 0 0.4rem;
+      border-radius: 2px;
+      background: var(--accent-color);
+      color: var(--app-accent-fg);
+      font-size: var(--type-label);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .library-filter-search {
+      min-height: 2.75rem;
     }
 
     .library-sidebar-content {
       display: none;
     }
 
+    /* Filters as a bottom sheet over a scrim */
+    .library-sheet-scrim {
+      position: fixed;
+      inset: 0;
+      z-index: 48;
+      display: block;
+      background: var(--app-overlay-color);
+    }
+
     .library-sidebar-content-open {
+      position: fixed;
+      inset: auto 0 0;
+      z-index: 49;
       display: flex;
-      margin-top: 0.55rem;
-      padding: 0.85rem;
-      border: 1px solid var(--border-color);
-      border-radius: calc(0.6rem * var(--app-radius-scale));
-      background: var(--surface-strong-color);
-      box-shadow: 0 18px 40px -28px var(--shadow-color);
+      max-height: 85dvh;
+      padding: 0.5rem 1rem calc(1.5rem + env(safe-area-inset-bottom));
+      border-top: 2px solid var(--font-color);
+      background: var(--background-color);
+    }
+
+    .library-sheet-head {
+      display: flex;
+      min-height: 3rem;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .library-sheet-head h2 {
+      font-size: var(--type-h2);
+      font-weight: 700;
+    }
+
+    .library-sheet-head .library-filter-search-clear {
+      width: 2.75rem;
+      height: 2.75rem;
+    }
+
+    .library-filter-row,
+    .library-filter-section-toggle {
+      min-height: 2.75rem;
     }
   }
 </style>
