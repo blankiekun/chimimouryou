@@ -471,26 +471,21 @@
   .app-popover-panel {
     min-width: 12rem;
     padding: 0.4rem;
-    border: 1px solid var(--border-color);
-    border-radius: calc(1rem * var(--app-radius-scale));
+    /* Study Book: a paper panel framed in ink, square, no shadow */
+    border: 1px solid var(--font-color);
+    border-top-width: 2px;
+    border-radius: 2px;
     background: var(--surface-strong-color);
     color: var(--font-color);
-    font-size: 0.875rem;
-    font-weight: 600;
-    box-shadow:
-      0 24px 48px -28px var(--shadow-color),
-      inset 0 1px var(--app-inset-highlight);
-    -webkit-backdrop-filter: blur(calc(var(--app-blur) * 0.75));
-    backdrop-filter: blur(calc(var(--app-blur) * 0.75));
+    font-size: var(--type-button);
+    font-weight: 400;
   }
 
   .app-popover-heading {
     padding: 0.45rem 0.7rem 0.25rem;
     color: var(--app-muted-fg);
-    font-size: 0.68rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font-size: var(--type-label);
+    font-weight: 700;
   }
 
   .app-popover-item {
@@ -500,7 +495,7 @@
     align-items: center;
     gap: 0.65rem;
     padding: 0.45rem 0.7rem;
-    border-radius: calc(0.75rem * var(--app-radius-scale));
+    border-radius: 2px;
     text-align: left;
     cursor: pointer;
     transition: background-color 0.16s ease;
@@ -513,8 +508,9 @@
   }
 
   .app-popover-item-active {
-    background: color-mix(in srgb, var(--accent-color) 13%, transparent);
+    background: color-mix(in srgb, var(--accent-color) 10%, transparent);
     color: var(--accent-strong-color);
+    font-weight: 700;
   }
 
   .app-popover-item:disabled {
@@ -588,23 +584,9 @@
     color: color-mix(in srgb, var(--reader-panel-fg) 50%, transparent);
   }
 
+  /* Loading (States & specs): static paper-2 blocks, no shimmer */
   .app-skeleton {
-    background:
-      linear-gradient(
-        100deg,
-        color-mix(in srgb, var(--font-color) 7%, transparent),
-        color-mix(in srgb, var(--font-color) 13%, transparent),
-        color-mix(in srgb, var(--font-color) 7%, transparent)
-      ),
-      color-mix(in srgb, var(--font-color) 6%, transparent);
-    background-size: 220% 100%;
-    animation: app-skeleton-shimmer 1.35s ease-in-out infinite;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .app-skeleton {
-      animation: none;
-    }
+    background: var(--surface-color);
   }
 }
 
@@ -649,16 +631,6 @@
 
 ::highlight(ttu-reading) {
   background-color: var(--reading-line-color);
-}
-
-@keyframes app-skeleton-shimmer {
-  0% {
-    background-position: 120% 0;
-  }
-
-  100% {
-    background-position: -120% 0;
-  }
 }
 
 @font-face {

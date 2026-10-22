@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { faCheck, faLayerGroup, faPlus } from '@fortawesome/free-solid-svg-icons';
+  import { faCheck, faPlus } from '@fortawesome/free-solid-svg-icons';
   import BookCard from '$lib/components/book-card/book-card.svelte';
   import { addToHome, homeBookTitles$, type SeriesMatch } from '$lib/data/library-home';
   import { createEventDispatcher } from 'svelte';
@@ -14,8 +14,8 @@
 </script>
 
 {#if matches.length}
-  <section class="series app-surface-card" aria-label="Matching series">
-    <h2 class="series-heading"><Fa icon={faLayerGroup} /> Series</h2>
+  <section class="series" aria-label="Matching series">
+    <h2 class="series-heading">Series</h2>
     {#each matches as match (match.series)}
       {@const missing = match.books.filter((book) => !home.has(book.title))}
       <div class="series-row">
@@ -38,7 +38,7 @@
           </span>
         </button>
         <button
-          class="series-add"
+          class="app-button series-add"
           disabled={!missing.length}
           title={missing.length ? 'Add every book of the series to Home' : 'All on Home'}
           on:click={() => addToHome(missing.map((book) => book.title))}
@@ -55,32 +55,23 @@
 
 <style>
   .series {
-    margin-bottom: 1rem;
-    padding: 0.8rem 0.9rem;
-    border-radius: calc(1.15rem * var(--app-radius-scale));
+    margin-bottom: 1.5rem;
+    border-top: 2px solid var(--font-color);
   }
 
   .series-heading {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.4rem;
+    padding: 0.6rem 0 0.3rem;
     color: var(--app-muted-fg);
-    font-size: 0.78rem;
-    font-weight: 800;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    font-size: var(--type-label);
+    font-weight: 700;
   }
 
   .series-row {
     display: flex;
     align-items: center;
     gap: 0.8rem;
-    padding: 0.4rem 0;
-  }
-
-  .series-row + .series-row {
-    border-top: 1px solid var(--border-color);
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color);
   }
 
   .series-covers {
@@ -92,7 +83,6 @@
     width: 2.2rem;
     overflow: hidden;
     border: 1px solid var(--border-color);
-    border-radius: calc(0.35rem * var(--app-radius-scale));
   }
 
   .series-cover + .series-cover {
@@ -109,27 +99,12 @@
     display: block;
     overflow: hidden;
     color: var(--app-muted-fg);
-    font-size: 0.75rem;
-    font-weight: 700;
+    font-size: var(--type-small);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .series-add {
-    display: inline-flex;
-    min-height: 2.2rem;
     flex-shrink: 0;
-    align-items: center;
-    gap: 0.45rem;
-    padding: 0 0.8rem;
-    border: 1px solid color-mix(in srgb, var(--accent-color) 35%, var(--border-color));
-    border-radius: 0.85rem;
-    background: color-mix(in srgb, var(--accent-color) 12%, var(--surface-strong-color));
-    font-size: 0.82rem;
-    font-weight: 700;
-  }
-
-  .series-add:disabled {
-    opacity: 0.55;
   }
 </style>

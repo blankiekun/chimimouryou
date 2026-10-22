@@ -1,26 +1,16 @@
 <script lang="ts">
-  import {
-    faBookOpenReader,
-    faCheck,
-    faXmark,
-    type IconDefinition
-  } from '@fortawesome/free-solid-svg-icons';
-  import BookCard from '$lib/components/book-card/book-card.svelte';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
+  import CoverCard from '$lib/components/book-card/cover-card.svelte';
   import { isReading } from '$lib/components/book-card/library-filters';
-  import { homeRemovedTitles$, isContinueReading, lastRead } from '$lib/data/library-home';
-  import { formatSeries } from '$lib/components/book-card/library-sort';
-  import { longPress } from '$lib/functions/use-long-press';
+  import SectionHead from '$lib/components/section-head.svelte';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher } from 'svelte';
-  import Fa from 'svelte-fa';
 
-  export let bookCards: BookCardProps[];
+  /** A numbered shelf of covers: Home's Continue reading and My books, a book page's series. */
+  export let books: BookCardProps[];
+  export let number: number;
+  export let heading: string;
   export let currentBookId: number | undefined;
-  /** Other shelves (Home → My books) pass their books and heading */
-  export let shelfBooks: BookCardProps[] | undefined = undefined;
-  export let heading: string | undefined = undefined;
-  export let icon: IconDefinition = faBookOpenReader;
   export let removeTitle = '';
   /** Set while the library is in select mode: clicks then toggle these */
   export let selectedBookIds: ReadonlySet<number> | undefined = undefined;
@@ -34,75 +24,46 @@
     bookSelect: { id: number };
     remove: BookCardProps;
   }>();
-  const maxBooks = 12;
 
-  $: books =
-    shelfBooks ??
-    bookCards
-      .filter((card) => isContinueReading(card, $homeRemovedTitles$))
-      .sort((a, b) => lastRead(b) - lastRead(a))
-      .slice(0, maxBooks);
+  /** "Vol. 2 · 24%": the volume (or the author outside a series) and the progress */
+  function meta(book: BookCardProps, t: typeof $t$) {
+    const parts = [
+      book.series && book.seriesIndex !== null && book.seriesIndex !== undefined
+        ? t('book.vol', { index: book.seriesIndex })
+        : book.series || (book.authors !== 'Unknown' ? book.authors : ''),
+      isReading(book) ? `${Math.round(book.progress * 100)}%` : ''
+    ];
+
+    return parts.filter(Boolean).join(' · ');
+  }
 </script>
 
 {#if books.length}
-  <section class="shelf" aria-label={heading ?? $t$('home.continueReading')}>
-    <h2 class="shelf-heading">
-      <Fa {icon} />
-      {heading ?? $t$('home.continueReading')}
-      <span class="shelf-count">{books.length}</span>
-    </h2>
+  <section class="shelf" aria-label={heading}>
+    <SectionHead {number} title={heading} count={books.length} />
     <div class="shelf-row">
       {#each books as book (book.id)}
-        {@const percent = Math.round(book.progress * 100)}
-        <div class="shelf-item">
-          <button
-            type="button"
-            class="shelf-book"
-            class:shelf-book-current={book.id === currentBookId}
-            class:shelf-book-selected={selectedBookIds?.has(book.id)}
-            aria-pressed={selectedBookIds ? selectedBookIds.has(book.id) : undefined}
-            title={book.title}
-            on:click={() => dispatch('bookClick', { id: book.id })}
-            use:longPress={() => dispatch('bookSelect', { id: book.id })}
-          >
-            <span class="shelf-cover">
-              <BookCard imagePath={book.imagePath} title={book.title} />
-              {#if isReading(book)}
-                <span class="shelf-progress"><span style:width="{percent}%" /></span>
-              {/if}
-            </span>
-            <span class="shelf-title" lang="ja">{book.displayTitle || book.title}</span>
-            <span class="shelf-meta">
-              {#if isReading(book)}{percent}%{/if}{#if isReading(book) && book.series}&nbsp;·
-              {/if}{#if book.series}{formatSeries(book)}{/if}
-            </span>
-          </button>
+        <CoverCard
+          {book}
+          meta={meta(book, $t$)}
+          current={book.id === currentBookId}
+          selected={selectedBookIds ? selectedBookIds.has(book.id) : undefined}
+          {removeTitle}
+          on:open={() => dispatch('bookClick', { id: book.id })}
+          on:select={() => dispatch('bookSelect', { id: book.id })}
+          on:remove={() => dispatch('remove', book)}
+        >
           {#if isReading(book)}
             <button
               type="button"
-              class="shelf-resume"
+              class="app-button app-button-primary shelf-resume"
               aria-label={$t$('home.resumeBook', { title: book.title })}
               on:click={() => dispatch('bookRead', { id: book.id })}
             >
-              <Fa icon={faBookOpenReader} />
               {$t$('home.resume')}
             </button>
           {/if}
-          {#if selectedBookIds?.has(book.id)}
-            <span class="shelf-check" aria-hidden="true"><Fa icon={faCheck} /></span>
-          {/if}
-          {#if removeTitle && !selectedBookIds}
-            <button
-              type="button"
-              class="shelf-remove"
-              title={removeTitle}
-              aria-label="{removeTitle}: {book.title}"
-              on:click={() => dispatch('remove', book)}
-            >
-              <Fa icon={faXmark} />
-            </button>
-          {/if}
-        </div>
+        </CoverCard>
       {/each}
     </div>
   </section>
@@ -110,184 +71,36 @@
 
 <style>
   .shelf {
-    margin-bottom: 2.5rem;
-  }
-
-  .shelf-heading {
     display: flex;
-    align-items: center;
-    gap: 0.55rem;
-    margin-bottom: 1rem;
-    font-family: var(--app-font-display);
-    font-size: 1.15rem;
-    font-weight: 400;
-  }
-
-  .shelf-heading :global(svg) {
-    color: var(--accent-color);
-    font-size: 0.85em;
+    min-width: 0;
+    flex-direction: column;
+    gap: 1.5rem;
   }
 
   .shelf-row {
     display: grid;
-    grid-auto-columns: 9.5rem;
+    grid-auto-columns: var(--shelf-cover-width, 8.75rem);
     grid-auto-flow: column;
-    gap: 1.5rem;
+    align-items: start;
+    gap: 2rem;
     overflow-x: auto;
-    padding: 0.25rem 0.25rem 0.5rem;
+    /* Room for focus rings */
+    padding: 4px 4px 0.5rem;
+    margin: -4px;
     scroll-snap-type: x proximity;
   }
 
-  .shelf-count {
-    color: var(--app-text-subtle);
-    font-family: var(--app-ui-font, 'Noto Sans JP'), sans-serif;
-    font-size: 0.8rem;
-  }
-
-  .shelf-item {
-    position: relative;
-    min-width: 0;
+  .shelf-row > :global(*) {
     scroll-snap-align: start;
   }
 
-  .shelf-remove {
-    position: absolute;
-    top: 0.3rem;
-    right: 0.3rem;
-    display: inline-flex;
-    width: 1.6rem;
-    height: 1.6rem;
-    align-items: center;
-    justify-content: center;
-    border-radius: 999px;
-    background: var(--reader-panel-bg);
-    color: var(--reader-panel-fg);
-    font-size: 0.75rem;
-    opacity: 0;
-    transition: opacity 0.16s ease;
-  }
-
-  .shelf-item:hover .shelf-remove,
-  .shelf-remove:focus-visible {
-    opacity: 1;
-  }
-
-  @media (hover: none) {
-    .shelf-remove {
-      opacity: 0.85;
-    }
-  }
-
-  .shelf-book {
-    /* No iOS image callout or text selection on a long press (it selects the book). */
-    -webkit-touch-callout: none;
-    user-select: none;
-    display: flex;
-    width: 100%;
-    min-width: 0;
-    flex-direction: column;
-    gap: 0.3rem;
-    text-align: left;
-  }
-
-  .shelf-cover {
-    position: relative;
-    overflow: hidden;
-    margin-bottom: 0.35rem;
-    border-radius: calc(4px * var(--app-radius-scale));
-    box-shadow:
-      0 1px 2px var(--app-cover-shadow),
-      0 12px 26px -14px var(--app-cover-shadow);
-    transition: transform 0.2s var(--app-ease);
-  }
-
-  .shelf-book:hover .shelf-cover,
-  .shelf-book:focus-visible .shelf-cover {
-    transform: translateY(-3px);
-  }
-
-  .shelf-book:focus-visible {
-    outline: none;
-  }
-
-  .shelf-book:focus-visible .shelf-cover {
-    outline: 2px solid var(--app-focus-ring);
-    outline-offset: 3px;
-  }
-
-  .shelf-check {
-    position: absolute;
-    top: 0.3rem;
-    left: 0.3rem;
-    display: inline-flex;
-    width: 1.6rem;
-    height: 1.6rem;
-    align-items: center;
-    justify-content: center;
-    border-radius: 999px;
-    background: var(--accent-color);
-    color: var(--app-accent-fg);
-    font-size: 0.8rem;
-    pointer-events: none;
-  }
-
-  .shelf-book-current .shelf-cover,
-  .shelf-book-selected .shelf-cover {
-    outline: 2px solid var(--accent-color);
-    outline-offset: 3px;
-  }
-
-  .shelf-progress {
-    position: absolute;
-    inset: auto 0 0;
-    height: 3px;
-    background: var(--app-progress-track);
-  }
-
-  .shelf-progress > span {
-    display: block;
-    height: 100%;
-    background: var(--app-progress-fill);
-  }
-
-  .shelf-title {
-    display: -webkit-box;
-    overflow: hidden;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    padding-block: 0.05em;
-    font-family: var(--app-font-display);
-    font-size: 0.85rem;
-    line-height: 1.5;
-  }
-
-  .shelf-meta {
-    overflow: hidden;
-    color: var(--app-muted-fg);
-    font-size: 0.72rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
   .shelf-resume {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    margin-top: 0.45rem;
-    padding: 0.3rem 0.7rem;
-    border: 1px solid var(--app-control-border);
-    border-radius: calc(0.5rem * var(--app-radius-scale));
-    color: var(--accent-strong-color);
-    font-size: 0.75rem;
-    font-weight: 600;
-    transition:
-      background-color 0.15s ease,
-      border-color 0.15s ease;
+    width: 100%;
   }
 
-  .shelf-resume:hover {
-    border-color: var(--accent-color);
-    background: color-mix(in srgb, var(--accent-color) 8%, transparent);
+  @media (max-width: 639px) {
+    .shelf-row {
+      gap: 1.5rem;
+    }
   }
 </style>

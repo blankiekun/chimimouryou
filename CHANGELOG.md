@@ -19,6 +19,20 @@ anything a reader or a server operator would notice.
 - Buttons, inputs, switches and segmented controls are square-cornered and flat; buttons
   are 44 px tall on touch screens. The top bar shows the ち mark alone and text tabs with a
   green underline, and the disabled Notes tab is gone; the phone tab bar matches it.
+- The library in the Study Book look. Home: today's characters in a Today box with the past
+  week as bars (the 18-week heatmap is gone; Statistics has the history) and the totals as a
+  ruled table, then numbered sections: Continue reading with Resume, Read next as three books
+  with their difficulty, share of words known, why they were picked and a Read button, and My
+  books. A first visit shows Start reading (Open the Store, Import a book) instead of empty
+  totals. Covers are one size on every shelf with a progress line under each.
+- Store: ruled filter groups with counts, Books/Series as a segmented control with the
+  number of titles, a series header with "Add all to Home", and on phones a Filters button
+  that opens the filters as a bottom sheet. Select mode is a bar along the bottom with
+  labelled actions; deleting from the library asks in the new confirm dialog, which names the
+  action ("Delete 3 titles").
+- Book page: a Difficulty box (score, likely range, share of words known, kanji, common words
+  for 95%), the details as a ruled table with the tags in it, and Vol. N with the series; the
+  obi on the cover is gone. Dialogs, menus and loading placeholders are flat and square.
 
 ## v3.7.0 (2026-10-22)
 

@@ -18,21 +18,18 @@
       </div>
       {#each progressWidths.slice(0, 8) as width, index}
         <div class="skeleton-list-row">
-          <span
-            class="app-skeleton h-[0.9rem] rounded-full"
-            style:width="{76 + (index % 3) * 8}%"
-          />
+          <span class="app-skeleton h-[0.9rem]" style:width="{76 + (index % 3) * 8}%" />
           <span class="flex items-center gap-2">
-            <span class="relative h-[0.55rem] flex-1 overflow-hidden rounded-full app-skeleton">
+            <span class="relative h-[0.55rem] flex-1 overflow-hidden app-skeleton">
               <span
-                class="absolute inset-y-0 left-0 rounded-full app-skeleton opacity-60"
+                class="absolute inset-y-0 left-0 app-skeleton opacity-60"
                 style:width="{width}%"
               />
             </span>
-            <span class="app-skeleton h-3 w-8 rounded-full" />
+            <span class="app-skeleton h-3 w-8" />
           </span>
           {#each { length: 3 } as _}
-            <span class="app-skeleton h-3 rounded-full" style:width="{index % 2 ? 52 : 68}%" />
+            <span class="app-skeleton h-3" style:width="{index % 2 ? 52 : 68}%" />
           {/each}
         </div>
       {/each}
@@ -41,13 +38,12 @@
     <div class="skeleton-grid" class:skeleton-grid-compact={mode === 'covers-compact'}>
       {#each progressWidths as width}
         <div class="skeleton-card">
-          <div class="skeleton-cover app-skeleton">
-            <span class="skeleton-cover-mark" />
-          </div>
+          <div class="skeleton-cover app-skeleton" />
+          <span class="skeleton-track" />
           {#if mode === 'covers-comfortable'}
             <div class="flex flex-col gap-2 pt-3">
-              <span class="app-skeleton h-3 rounded-full" style:width="{60 + (width % 35)}%" />
-              <span class="app-skeleton h-2.5 w-1/2 rounded-full" />
+              <span class="app-skeleton h-3" style:width="{60 + (width % 35)}%" />
+              <span class="app-skeleton h-2.5 w-1/2" />
             </div>
           {/if}
         </div>
@@ -57,26 +53,27 @@
 </div>
 
 <style>
+  /* Same columns as book-card-list.svelte */
   .skeleton-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
-    gap: 2rem 1.5rem;
+    grid-template-columns: repeat(auto-fill, 8.75rem);
+    justify-content: space-between;
+    gap: 2.5rem 1.5rem;
   }
 
   .skeleton-grid-compact {
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 7rem), 1fr));
-    gap: 1.25rem 1rem;
+    grid-template-columns: repeat(auto-fill, 6.25rem);
+    gap: 1.5rem 1rem;
   }
 
-  /* Same columns as book-card-list.svelte */
   @media (max-width: 639px) {
     .skeleton-grid {
-      grid-template-columns: repeat(auto-fill, minmax(min(100%, 7.25rem), 1fr));
-      gap: 1.5rem 0.9rem;
+      grid-template-columns: repeat(auto-fill, 6.5rem);
+      gap: 1.75rem 0.75rem;
     }
 
     .skeleton-grid-compact {
-      grid-template-columns: repeat(auto-fill, minmax(min(100%, 5.5rem), 1fr));
+      grid-template-columns: repeat(auto-fill, 4.75rem);
     }
   }
 
@@ -85,17 +82,14 @@
   }
 
   .skeleton-cover {
-    display: grid;
-    border-radius: calc(4px * var(--app-radius-scale));
     aspect-ratio: 375 / 529;
-    place-items: center;
   }
 
-  .skeleton-cover-mark {
-    width: 34%;
-    aspect-ratio: 375 / 529;
-    border: 2px solid color-mix(in srgb, var(--font-color) 8%, transparent);
-    border-radius: 0.45rem;
+  .skeleton-track {
+    display: block;
+    height: 3px;
+    margin-top: 0.4rem;
+    background: var(--app-progress-track);
   }
 
   .skeleton-list-header,
@@ -112,9 +106,7 @@
     padding: 0 1.1rem 0.25rem;
     color: color-mix(in srgb, var(--font-color) 58%, var(--surface-color));
     font-size: 0.72rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font-weight: 700;
   }
 
   .skeleton-list-header span {
@@ -126,8 +118,6 @@
   .skeleton-list-row {
     min-height: 3.35rem;
     padding: 0.35rem 1.1rem;
-    border: 1px solid color-mix(in srgb, var(--font-color) 8%, var(--border-color));
-    border-radius: 0.95rem;
-    background: color-mix(in srgb, var(--surface-strong-color) 92%, var(--background-color));
+    border-bottom: 1px solid var(--border-color);
   }
 </style>

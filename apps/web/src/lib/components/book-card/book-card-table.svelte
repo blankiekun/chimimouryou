@@ -209,12 +209,12 @@
 
   .library-list-header {
     align-items: center;
-    padding: 0 0.35rem 0.25rem;
-    color: color-mix(in srgb, var(--font-color) 58%, var(--surface-color));
-    font-size: 0.72rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    padding: 0.5rem 0.35rem;
+    border-top: 2px solid var(--font-color);
+    border-bottom: 1px solid var(--border-color);
+    color: var(--app-muted-fg);
+    font-size: var(--type-label);
+    font-weight: 700;
   }
 
   .library-list-cells {
@@ -262,36 +262,21 @@
     box-sizing: border-box;
     min-height: 3.35rem;
     padding: 0.35rem;
-    border: 1px solid color-mix(in srgb, var(--font-color) 8%, var(--border-color));
-    border-radius: 0.95rem;
-    background: color-mix(in srgb, var(--surface-strong-color) 92%, var(--background-color));
-    box-shadow:
-      0 14px 34px -34px var(--shadow-color),
-      inset 0 1px var(--app-inset-highlight);
-    transition:
-      border-color 0.18s ease,
-      box-shadow 0.18s ease,
-      background-color 0.18s ease;
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.15s ease;
   }
 
   .library-list-row:hover,
   .library-list-row:focus-within {
-    border-color: color-mix(in srgb, var(--accent-color) 38%, var(--border-color));
-    box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--accent-color) 18%, transparent),
-      0 18px 38px -34px var(--shadow-color);
+    background: var(--surface-color);
   }
 
-  .library-list-row-current,
-  .library-list-row-selected {
-    border-color: color-mix(in srgb, var(--accent-color) 62%, var(--border-color));
-    box-shadow:
-      0 0 0 2px color-mix(in srgb, var(--accent-color) 30%, transparent),
-      0 18px 38px -34px var(--shadow-color);
+  .library-list-row-current .library-list-title {
+    color: var(--accent-strong-color);
   }
 
   .library-list-row-selected {
-    background: color-mix(in srgb, var(--accent-color) 6%, var(--surface-strong-color));
+    background: color-mix(in srgb, var(--accent-color) 10%, transparent);
   }
 
   .library-list-row-main {
@@ -301,7 +286,8 @@
   }
 
   .library-list-row-main:focus-visible {
-    outline: none;
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 2px;
   }
 
   .library-list-title {
@@ -332,17 +318,15 @@
 
   .library-list-progress {
     position: relative;
-    height: 0.55rem;
+    height: 3px;
     overflow: hidden;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--font-color) 12%, var(--surface-color));
+    background: var(--app-progress-track);
   }
 
   .library-list-progress-value {
     display: block;
     height: 100%;
-    border-radius: inherit;
-    background: linear-gradient(90deg, var(--accent-color), var(--accent-strong-color));
+    background: var(--app-progress-fill);
   }
 
   .library-list-select-button,
@@ -352,10 +336,10 @@
     height: 2.2rem;
     align-items: center;
     justify-content: center;
-    border: 1px solid color-mix(in srgb, var(--font-color) 9%, var(--border-color));
-    border-radius: 0.78rem;
-    background: color-mix(in srgb, var(--surface-color) 94%, var(--background-color));
-    color: color-mix(in srgb, var(--font-color) 72%, var(--surface-color));
+    border: 1px solid var(--app-control-border);
+    border-radius: 2px;
+    background: transparent;
+    color: var(--font-color);
     font-size: 0.85rem;
     transition:
       background-color 0.18s ease,
@@ -374,7 +358,6 @@
     align-items: center;
     justify-content: center;
     padding-left: 0.35rem;
-    border-left: 1px solid color-mix(in srgb, var(--font-color) 7%, transparent);
   }
 
   .library-list-action-button {
@@ -384,9 +367,7 @@
 
   .library-list-row:hover .library-list-action-button,
   .library-list-action-button:focus-visible {
-    border-color: color-mix(in srgb, var(--app-danger-color) 34%, var(--border-color));
-    background: color-mix(in srgb, var(--app-danger-color) 10%, var(--surface-strong-color));
+    border-color: var(--app-danger-color);
     color: var(--app-danger-color);
-    outline: none;
   }
 </style>

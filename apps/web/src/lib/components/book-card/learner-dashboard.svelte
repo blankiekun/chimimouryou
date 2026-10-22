@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PointBox from '$lib/components/point-box.svelte';
   import { learningGuideUrl } from '$lib/data/app-update';
   import {
     activityWeeks,
@@ -16,19 +17,20 @@
   } from '$lib/data/words-met';
   import { gainedThisMonth, getKnownHistory } from '$lib/data/words-history';
   import { getDateKey } from '$lib/functions/statistic-util';
-  import { t$, type MessageKey, type MessageParams } from '$lib/i18n';
+  import { t$, uiLanguage$, type MessageKey, type MessageParams } from '$lib/i18n';
   import { onMount } from 'svelte';
 
   /**
-   * Home tab totals for Japanese learners: characters, time, speed, streaks
-   * and how many different words were met and known. Not part of upstream.
+   * Home tab totals for Japanese learners: today's characters in the Today box with the
+   * past week, then time, speed, books and words met and known as a ruled table. Not part
+   * of upstream.
    */
 
   /** The Calibre library's books, for the progress of books read before kanji were recorded */
   export let books: { title: string; progress: number }[] | undefined = undefined;
 
   let stats: LearnerStats | undefined;
-  let weeks: ActivityDay[][] = [];
+  let week: ActivityDay[] = [];
   let words: WordsSummary | undefined;
   let gained: number | undefined;
 
@@ -51,7 +53,7 @@
     const today = getDateKey($startDayHoursForTracker$);
 
     stats = learnerStats(statistics, today);
-    weeks = activityWeeks(statistics, today);
+    week = activityWeeks(statistics, today, 2).flat().slice(-7);
 
     return { statistics, today };
   }
@@ -89,7 +91,14 @@
       .catch(() => {});
   });
 
-  $: secondary = stats
+  $: weekMax = Math.max(1, ...week.map((day) => day.characters));
+  $: weekday = (dateKey: string) =>
+    new Date(`${dateKey}T00:00:00Z`).toLocaleDateString($uiLanguage$, {
+      weekday: 'narrow',
+      timeZone: 'UTC'
+    });
+
+  $: rows = stats
     ? [
         { label: $t$('dashboard.pastWeek'), value: number(stats.weekCharacters) },
         { label: $t$('dashboard.characters'), value: number(stats.totalCharacters) },
@@ -119,12 +128,15 @@
 </script>
 
 <section class="dashboard" aria-label={$t$('dashboard.label')}>
-  {#if stats}
-    <div class="dashboard-main">
-      <div class="dashboard-feature">
-        <span class="dashboard-feature-label">{$t$('dashboard.today')}</span>
-        <span class="dashboard-feature-value">{number(stats.todayCharacters)}<small>字</small></span>
-        <span
+  <!-- Nothing read yet: Home's Start reading says what to do instead of a row of zeros -->
+  {#if stats?.daysRead}
+    <div class="dashboard-today">
+      <PointBox
+        label={$t$('dashboard.today')}
+        figure={stats.todayCharacters}
+        unit={$t$('dashboard.unit')}
+      >
+        <p
           class="dashboard-streak"
           title={$t$('dashboard.streakTitle', {
             longest: stats.longestStreak,
@@ -132,53 +144,47 @@
           })}
         >
           {#if stats.streak}
-            <span class="dashboard-seal" aria-hidden="true">連</span>
             {$t$(stats.streak === 1 ? 'dashboard.streakOne' : 'dashboard.streak', {
               count: stats.streak
             })}
           {:else}
             {$t$('dashboard.noStreak')}
           {/if}
-        </span>
-      </div>
-
-      {#if stats.daysRead}
-        <div class="dashboard-heatmap" role="img" aria-label={$t$('dashboard.heatmap')}>
-          {#each weeks as week, w (w)}
-            <span class="dashboard-week">
-              {#each week as day (day.dateKey)}
-                <span
-                  class="dashboard-day"
-                  data-level={day.level}
-                  title={$t$('dashboard.dayTitle', {
-                    date: day.dateKey,
-                    count: number(day.characters)
-                  })}
-                />
-              {/each}
-            </span>
+        </p>
+        <ol class="dashboard-week" aria-label={$t$('dashboard.week')}>
+          {#each week as day, i (day.dateKey)}
+            <li
+              class:dashboard-week-today={i === week.length - 1}
+              title={$t$('dashboard.dayTitle', {
+                date: day.dateKey,
+                count: number(day.characters)
+              })}
+            >
+              <span class="dashboard-week-bar" aria-hidden="true">
+                <span style:height="{(day.characters / weekMax) * 100}%" />
+              </span>
+              <span class="dashboard-week-day">{weekday(day.dateKey)}</span>
+            </li>
           {/each}
-        </div>
-      {/if}
+        </ol>
+      </PointBox>
     </div>
 
-    <dl class="dashboard-stats">
-      {#each secondary as item (item.label)}
-        <div title={item.hint || undefined}>
-          <dt>{item.label}</dt>
+    <dl class="dashboard-table">
+      {#each rows as row (row.label)}
+        <div title={row.hint || undefined}>
+          <dt>{row.label}</dt>
           <dd>
-            {item.value}
-            {#if item.extra}<small title={$t$('dashboard.wordsGainedHint')}>{item.extra}</small>{/if}
+            {#if row.extra}<small title={$t$('dashboard.wordsGainedHint')}>{row.extra}</small>{/if}
+            {row.value}
           </dd>
         </div>
       {/each}
     </dl>
-
-    {#if !$statisticsEnabled$ && !stats.daysRead}
-      <p class="dashboard-note">
-        {$t$('dashboard.trackerOff')}
-      </p>
-    {/if}
+  {:else if stats && !$statisticsEnabled$}
+    <p class="dashboard-note">
+      {$t$('dashboard.trackerOff')}
+    </p>
   {/if}
   <a class="dashboard-guide" href={learningGuideUrl} target="_blank" rel="noreferrer">
     {$t$('dashboard.guide')}
@@ -187,131 +193,145 @@
 
 <style>
   .dashboard {
-    margin-bottom: 2.5rem;
-    padding-bottom: 1.75rem;
-    border-bottom: 1px solid var(--border-color);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem 3rem;
   }
 
-  .dashboard-main {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 1.5rem 2.5rem;
+  @media (min-width: 900px) {
+    .dashboard {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+      align-items: start;
+    }
+
+    .dashboard-note,
+    .dashboard-guide {
+      grid-column: 1 / -1;
+    }
   }
 
-  .dashboard-feature {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
+  .dashboard-today {
+    min-width: 0;
   }
 
-  .dashboard-feature-label,
-  .dashboard-note,
-  .dashboard-stats dt {
-    color: var(--app-muted-fg);
-    font-size: 0.78rem;
-  }
-
-  .dashboard-feature-value {
-    font-family: var(--app-font-display);
-    font-size: clamp(2.5rem, 7vw, 3.5rem);
-    font-variant-numeric: tabular-nums;
-    line-height: 1.1;
-  }
-
-  .dashboard-feature-value small {
-    margin-left: 0.2em;
-    color: var(--app-muted-fg);
-    font-size: 0.4em;
+  .dashboard-today :global(.point-box) {
+    min-height: 100%;
+    padding-right: 12rem;
   }
 
   .dashboard-streak {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    margin-top: 0.35rem;
+    margin-top: 0.5rem;
     color: var(--app-muted-fg);
-    font-size: 0.82rem;
-  }
-
-  .dashboard-seal {
-    display: inline-flex;
-    width: 1.3rem;
-    height: 1.3rem;
-    align-items: center;
-    justify-content: center;
-    border-radius: 2px;
-    background: var(--accent-color);
-    color: var(--app-accent-fg);
-    font-family: var(--app-font-display);
-    font-size: 0.75rem;
-  }
-
-  .dashboard-heatmap {
-    display: flex;
-    gap: 3px;
-    max-width: 100%;
-    overflow-x: auto;
+    font-size: var(--type-small);
   }
 
   .dashboard-week {
+    position: absolute;
+    right: 1.25rem;
+    bottom: 1.25rem;
     display: grid;
-    grid-template-rows: repeat(7, 0.7rem);
-    gap: 3px;
+    grid-template-columns: repeat(7, 1rem);
+    gap: 0.4rem;
   }
 
-  .dashboard-day {
-    width: 0.7rem;
-    border-radius: 2px;
-    background: var(--heatmap-empty);
-  }
-
-  .dashboard-day[data-level='1'] {
-    background: var(--heatmap-low);
-  }
-
-  .dashboard-day[data-level='2'] {
-    background: color-mix(in srgb, var(--heatmap-high) 40%, var(--heatmap-low));
-  }
-
-  .dashboard-day[data-level='3'] {
-    background: color-mix(in srgb, var(--heatmap-high) 70%, var(--heatmap-low));
-  }
-
-  .dashboard-day[data-level='4'] {
-    background: var(--heatmap-high);
-  }
-
-  .dashboard-stats {
+  .dashboard-week li {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem 2rem;
-    margin-top: 1.5rem;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
   }
 
-  .dashboard-stats dd {
-    font-size: 1rem;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
+  .dashboard-week-bar {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 3.5rem;
   }
 
-  .dashboard-stats dd small {
-    margin-left: 0.4em;
+  .dashboard-week-bar::before {
+    content: '';
+    position: absolute;
+    inset: auto 0 0;
+    height: 2px;
+    background: var(--border-color);
+  }
+
+  .dashboard-week-bar > span {
+    position: absolute;
+    inset: auto 0 0;
+    background: var(--accent-color);
+  }
+
+  .dashboard-week-day {
     color: var(--app-muted-fg);
-    font-size: 0.75rem;
+    font-size: var(--type-label);
+    line-height: 1;
+  }
+
+  .dashboard-week-today .dashboard-week-day {
+    color: var(--font-color);
+    font-weight: 700;
+  }
+
+  @media (max-width: 479px) {
+    .dashboard-today :global(.point-box) {
+      padding-right: 1.25rem;
+    }
+
+    .dashboard-week {
+      position: static;
+      margin-top: 1rem;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+    }
+
+    .dashboard-week-bar {
+      width: 1rem;
+      height: 2.5rem;
+    }
+  }
+
+  .dashboard-table {
+    border-top: 2px solid var(--font-color);
+  }
+
+  .dashboard-table > div {
+    display: flex;
+    min-height: 2.5rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .dashboard-table dt {
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  .dashboard-table dd {
+    color: var(--font-color);
+    font-size: var(--type-body);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .dashboard-table dd small {
+    margin-right: 0.6em;
+    color: var(--accent-strong-color);
+    font-size: var(--type-label);
     font-weight: 400;
   }
 
-  .dashboard-note {
-    margin-top: 1rem;
+  .dashboard-note,
+  .dashboard-guide {
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
   }
 
   .dashboard-guide {
-    display: inline-block;
-    margin-top: 1rem;
-    color: var(--app-muted-fg);
-    font-size: 0.78rem;
+    justify-self: start;
     text-decoration: underline;
+    text-underline-offset: 0.2em;
   }
 </style>
