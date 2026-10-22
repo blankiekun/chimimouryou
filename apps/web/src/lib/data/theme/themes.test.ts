@@ -18,11 +18,11 @@ import { themeTokens } from '$lib/data/theme/theme-tokens';
 describe('themes', () => {
   it('defaults to chimi-light and chimi-dark', () => {
     expect(resolveTheme(defaultLightThemeId, {})).toMatchObject({
-      name: 'chimi-light',
+      name: 'Chimi Light',
       dark: false
     });
     expect(resolveTheme(defaultDarkThemeId, {})).toMatchObject({
-      name: 'chimi-dark',
+      name: 'Chimi Dark',
       dark: true
     });
     expect(resolveTheme('no-such-theme', {}).id).toBe(defaultLightThemeId);
