@@ -1,5 +1,5 @@
 <script lang="ts" context="module">
-  export type AppSection = 'library' | 'statistics' | 'settings';
+  export type AppSection = 'library' | 'words' | 'statistics' | 'settings';
 </script>
 
 <script lang="ts">
@@ -10,6 +10,7 @@
     faChartLine,
     faGear,
     faHouse,
+    faLanguage,
     faStore,
     faUser
   } from '@fortawesome/free-solid-svg-icons';
@@ -58,6 +59,7 @@
       icon: faStore,
       href: `${pagePath}/manage`
     },
+    { key: 'words', label: $t$('nav.words'), icon: faLanguage, href: `${pagePath}/words` },
     {
       key: 'statistics',
       label: $t$('nav.statistics'),

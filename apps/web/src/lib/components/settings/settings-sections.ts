@@ -210,12 +210,6 @@ export const settingsAreas: SettingsArea[] = [
         label: 'settings.section.anki-media',
         description: 'settings.section.anki-media.text',
         icon: faPhotoFilm
-      },
-      {
-        id: 'anki-known',
-        label: 'settings.section.anki-known',
-        description: 'settings.section.anki-known.text',
-        icon: faBookOpen
       }
     ]
   },
@@ -307,6 +301,11 @@ const legacySettingsTabs: Record<string, string> = {
 
 export function isFirstSectionOfArea(id: string) {
   return settingsAreas.some((area) => area.sections[0].id === id);
+}
+
+/** Old links to Settings → Anki → Known Words, which is the Words page now. */
+export function isKnownWordsLink(url: URL) {
+  return url.hash === '#anki-known' || url.searchParams.get('section') === 'anki-known';
 }
 
 /** Section from #section-id, ?section=<area or section id> or a legacy ?tab=. */

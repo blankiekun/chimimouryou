@@ -422,6 +422,47 @@
     font-weight: 700;
   }
 
+  /* Ruled table (Words pages): 2px ink rule on top, 1px rule under each row. */
+  .app-table {
+    width: 100%;
+    border-top: 2px solid var(--font-color);
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .app-table th {
+    padding: 0.75rem 0.75rem 0.6rem 0;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+    font-weight: 400;
+    text-align: left;
+  }
+
+  .app-table td {
+    padding: 0.6rem 0.75rem 0.6rem 0;
+    vertical-align: middle;
+  }
+
+  .app-table tr {
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  /* Square status tag: Known in the spot colour, Ignored muted */
+  .app-tag {
+    display: inline-block;
+    padding: 0.05rem 0.45rem;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--accent-color) 16%, transparent);
+    color: var(--accent-strong-color);
+    font-size: var(--type-label);
+    white-space: nowrap;
+  }
+
+  .app-tag-muted {
+    background: var(--surface-color);
+    color: var(--app-muted-fg);
+  }
+
   .app-header-pill {
     display: inline-flex;
     flex-shrink: 0;

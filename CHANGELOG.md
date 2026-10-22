@@ -36,6 +36,13 @@ anything a reader or a server operator would notice.
 - Book page: a Difficulty box (score, likely range, share of words known, kanji, common words
   for 95%), the details as a ruled table with the tags in it, and Vol. N with the series; the
   obi on the cover is gone. Dialogs, menus and loading placeholders are flat and square.
+- A Words tab (Home, Store, Words, Statistics, Settings): words known with this month's gain,
+  why they are known (met 8+ times, mature in Anki, marked, ignored), the words you marked
+  with filters, search, Unmark and a CSV export, and the Anki deck and field that count as
+  known. It replaces Settings → Anki → Known Words; old links to it open the Words tab.
+- Book page: the New words section became a Words row (new · known · ignored) with a
+  Word list link to the book's word list: coverage, why its words are known, and every
+  listed word as New, Known, Ignored or All with search, ✓/✕, Copy and CSV.
 
 ## v3.7.0 (2026-10-22)
 

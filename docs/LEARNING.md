@@ -64,6 +64,7 @@ Yomitan makes the cards; chimimouryou adds media to them afterwards.
 
    Restart Anki after saving. Settings → Anki → AnkiConnect shows the exact
    address to add in its tooltip.
+
 3. Set up Yomitan's Anki settings (enable Anki, pick a deck and note type, map
    the fields), as described in [Yomitan's Anki guide](https://yomitan.wiki/anki/).
    Put the sentence (`{sentence}`) in a field of its own.
@@ -80,11 +81,11 @@ Turn on **Add media to mined cards** in Settings → Anki. While a book or a
 visual novel is open, the reader checks Anki every couple of seconds for notes
 added since then, and fills two fields of each new note:
 
-| Setting        | Default         | What goes in                                                         |
-| -------------- | --------------- | -------------------------------------------------------------------- |
-| Sentence field | `Sentence`      | Read, not written: tells the reader which sentence you mined.       |
-| Audio field    | `SentenceAudio` | The sentence's audio (books) or the line's sound (visual novels).    |
-| Picture field  | `Picture`       | The game's screen (visual novels only).                             |
+| Setting        | Default         | What goes in                                                      |
+| -------------- | --------------- | ----------------------------------------------------------------- |
+| Sentence field | `Sentence`      | Read, not written: tells the reader which sentence you mined.     |
+| Audio field    | `SentenceAudio` | The sentence's audio (books) or the line's sound (visual novels). |
+| Picture field  | `Picture`       | The game's screen (visual novels only).                           |
 
 Use your note type's field names. A field that is missing or already filled is
 left alone, so map Yomitan's word audio (`{audio}`) and any screenshot to other
@@ -152,13 +153,14 @@ exists (made by the server's `difficulty` service; readers with the
   many of its words would be new. Particles, numbers and lone kana don't count.
   Estimates made before this only list the book's 2,000 most frequent words, so the
   sentence then says it counts those; "Books without an estimate" doesn't redo them.
-- **New words**: the book's words outside the most common ones that you don't know
-  yet, frequent in this book and rare in general first, with **Copy** and a CSV for Anki.
-  ✓ marks a word known and ✕ ignores it (names, words you don't care about); both count
-  as known everywhere. **Mark all shown known** marks the whole list shown. In the reader,
-  selecting a word of the book's list offers **Mark known**. Settings → Anki → Known words
-  lists the marked words to search and unmark; while you are signed in they are synced to
-  your account.
+- **Words**: how many of the book's words are new to you, known and ignored. **Word list →**
+  opens the book's word list: its coverage, why its words are known, and the words as New
+  (outside the most common ones and not known yet, frequent in this book and rare in general
+  first), Known, Ignored or All, with search, **Copy** and a CSV for Anki. ✓ marks a word
+  known and ✕ ignores it (names, words you don't care about); both count as known
+  everywhere. **Mark all shown known** marks the words shown. In the reader, selecting a
+  word of the book's list offers **Mark known**. The **Words** tab lists the marked words to
+  search, unmark and export; while you are signed in they are synced to your account.
 - **Different kanji** in the book, and how many of them you have **already met**:
   the share of the book's kanji (counted every time they appear) that you have
   read before in other books, and the number of kanji that would be new. Kanji
@@ -170,7 +172,7 @@ Home shows **Words met** and **Words known**. They are estimated, not counted wo
 word: each Calibre book with a difficulty estimate has a list of its 2,000 most
 frequent words, and reading a share of the book counts that share of each word's
 occurrences (spread evenly). A word is met once it reaches one occurrence, and known
-once met 8 times, mature in Anki (Settings → Anki → Known words) or marked. Particles (は, が,
+once met 8 times, mature in Anki (the Words tab's Anki section) or marked. Particles (は, が,
 から…) don't count, nor does text you jumped over; a visual novel counts the share of
 its script read. Books read before this existed count as far as you got. Books without
 an estimate, manga and books outside Calibre add nothing.

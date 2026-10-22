@@ -2,7 +2,6 @@
   import ButtonToggleGroup from '$lib/components/button-toggle-group/button-toggle-group.svelte';
   import type { ToggleOption } from '$lib/components/button-toggle-group/toggle-option';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
-  import SettingsMarkedWords from '$lib/components/settings/settings-marked-words.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
   import { buttonClasses, inputClasses } from '$lib/css-classes';
   import {
@@ -10,9 +9,6 @@
     ankiConnectUrl$,
     ankiEnabled$,
     ankiInvoke,
-    ankiKnownDeck$,
-    ankiKnownField$,
-    ankiKnownWords$,
     ankiBookAiFallback$,
     ankiBookAudio$,
     ankiPictureField$,
@@ -21,10 +17,8 @@
     ankiVnScreenshot$
   } from '$lib/data/anki';
   import { learningGuideUrl } from '$lib/data/app-update';
-  import { getKnownWords, knownWords$, refreshKnownWords } from '$lib/data/known-words';
   import { t$ } from '$lib/i18n';
   import { activePlugins$ } from '$lib/plugins';
-  import { onMount } from 'svelte';
 
   const origin = typeof location === 'undefined' ? '' : location.origin;
 
@@ -34,32 +28,6 @@
   ] as ToggleOption<boolean>[];
 
   let testResult = '';
-  let decks: string[] = [];
-  let refreshing = false;
-  let refreshError = '';
-
-  onMount(() => {
-    getKnownWords().catch(() => undefined);
-  });
-
-  $: if ($ankiKnownWords$ && !decks.length) {
-    ankiInvoke<string[]>('deckNames').then(
-      (names) => (decks = names),
-      () => {}
-    );
-  }
-
-  async function refreshKnown() {
-    refreshing = true;
-    refreshError = '';
-    try {
-      await refreshKnownWords();
-    } catch (error: any) {
-      refreshError = error.message;
-    } finally {
-      refreshing = false;
-    }
-  }
 
   async function test() {
     testResult = $t$('anki.connecting');
@@ -70,6 +38,7 @@
     }
   }
 </script>
+
 <SettingsSection id="anki-connect">
   <SettingsItemGroup title={$t$('anki.enabled')} tooltip={$t$('anki.enabledHint')}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={$ankiEnabled$} />
@@ -124,37 +93,4 @@
   <SettingsItemGroup title={$t$('anki.vnAudio')} tooltip={$t$('anki.vnAudioHint')}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={$ankiVnAudio$} />
   </SettingsItemGroup>
-</SettingsSection>
-
-<SettingsSection id="anki-known">
-  <SettingsItemGroup title={$t$('anki.known')} tooltip={$t$('anki.knownHint')}>
-    <ButtonToggleGroup options={toggle} bind:selectedOptionId={$ankiKnownWords$} />
-  </SettingsItemGroup>
-  {#if $ankiKnownWords$}
-    <SettingsItemGroup title={$t$('anki.deck')} tooltip={$t$('anki.deckHint')}>
-      <input
-        aria-label={$t$('anki.deck')}
-        autocomplete="off"
-        class={inputClasses}
-        list="anki-known-decks"
-        bind:value={$ankiKnownDeck$}
-      />
-      <datalist id="anki-known-decks">
-        {#each decks as deck}<option value={deck} />{/each}
-      </datalist>
-    </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('anki.wordField')} tooltip={$t$('anki.wordFieldHint')}>
-      <input aria-label={$t$('anki.wordField')} class={inputClasses} bind:value={$ankiKnownField$} />
-      <button class="{buttonClasses} mt-2" disabled={refreshing} on:click={refreshKnown}>
-        {refreshing ? $t$('anki.reading') : $t$('anki.refresh')}
-      </button>
-      <p class="mt-2 text-xs text-[color:var(--app-muted-fg)]">
-        {#if refreshError}{refreshError}{:else if $knownWords$}{$t$('anki.knownCount', {
-            count: $knownWords$.words.length.toLocaleString('en-US'),
-            date: new Date($knownWords$.read).toLocaleString()
-          })}{:else}{$t$('anki.notRead')}{/if}
-      </p>
-    </SettingsItemGroup>
-  {/if}
-  <SettingsMarkedWords />
 </SettingsSection>

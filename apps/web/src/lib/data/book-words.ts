@@ -5,7 +5,7 @@
  */
 
 /**
- * The book page's word coverage and "New words" (words a book uses often that are
+ * The Book words page's word coverage and "New words" (words a book uses often that are
  * rarer in general and not known yet), from the difficulty service's per-book word
  * list, and their CSV export for Anki. Not part of upstream.
  */
@@ -177,7 +177,7 @@ export function wordCoverage(
     : undefined;
 }
 
-function csvField(value?: string | number | null) {
+export function csvField(value?: string | number | null) {
   const text = value == null ? '' : String(value);
 
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
@@ -203,10 +203,14 @@ export function wordsFileName(title: string) {
 }
 
 export function downloadWordsCsv(title: string, words: BookWord[]) {
+  downloadCsv(wordsFileName(title), wordsCsv(words));
+}
+
+export function downloadCsv(fileName: string, csv: string) {
   const a = document.createElement('a');
 
-  a.href = URL.createObjectURL(new Blob([wordsCsv(words)], { type: 'text/csv;charset=utf-8' }));
-  a.download = wordsFileName(title);
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = fileName;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }

@@ -23,6 +23,7 @@
   import {
     findSettingsSection,
     isFirstSectionOfArea,
+    isKnownWordsLink,
     sectionFromUrl,
     setSettingsView,
     settingsAreas,
@@ -32,6 +33,7 @@
   import SettingsThemes from '$lib/components/settings/settings-themes.svelte';
   import { account$ } from '$lib/data/account';
   import { settingsSyncState$ } from '$lib/data/account-settings-sync';
+  import { pagePath } from '$lib/data/env';
   import {
     addCharactersOnCompletion$,
     adjustStatisticsAfterIdleTime$,
@@ -139,7 +141,15 @@
   $: activeSectionInfo = findSettingsSection(activeSection);
 
   onMount(() => {
-    const requested = sectionFromUrl(new URL(window.location.href));
+    const url = new URL(window.location.href);
+
+    if (isKnownWordsLink(url)) {
+      // Known words moved to the Words page; old links still lead there.
+      window.location.replace(`${pagePath}/words`);
+      return;
+    }
+
+    const requested = sectionFromUrl(url);
 
     if (requested) {
       // The URL already names the section, and SvelteKit's router isn't ready
@@ -406,10 +416,7 @@
       <div class="settings-sync-note">
         {#if $account$}
           <span class="sync-dot" data-state={$settingsSyncState$.state} />
-          <span
-            class="min-w-0 truncate"
-            title={$t$('settings.syncNote')}
-          >
+          <span class="min-w-0 truncate" title={$t$('settings.syncNote')}>
             {$account$.username}
           </span>
           <button
@@ -434,7 +441,8 @@
 
     <main class="settings-main" aria-label={$t$('nav.settings')}>
       <button type="button" class="settings-back" on:click={backToList}>
-        <Fa icon={faChevronLeft} /> {$t$('nav.settings')}
+        <Fa icon={faChevronLeft} />
+        {$t$('nav.settings')}
       </button>
       <div class="settings-breadcrumb" aria-live="polite">
         {#if searching}
@@ -483,7 +491,9 @@
           {/each}
           <SettingsAnki />
           <SettingsContent
-            storageQuota={storageUsed === undefined ? '' : $t$('prefs.used', { percent: storageUsed })}
+            storageQuota={storageUsed === undefined
+              ? ''
+              : $t$('prefs.used', { percent: storageUsed })}
             bind:fontFamilyGroupOne={$fontFamilyGroupOne$}
             bind:fontFamilyGroupTwo={$fontFamilyGroupTwo$}
             bind:fontWeight={$fontWeight$}

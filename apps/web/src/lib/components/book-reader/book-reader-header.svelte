@@ -61,6 +61,7 @@
     setCustomReadingPoint: void;
     resetCustomReadingPoint: void;
     statisticsClick: void;
+    wordsClick: void;
     readerImageGalleryClick: void;
     settingsClick: void;
     domainHintClick: void;
@@ -206,6 +207,8 @@
   onNavigate={(section) => {
     if (section === 'statistics') {
       dispatch('statisticsClick');
+    } else if (section === 'words') {
+      dispatch('wordsClick');
     } else if (section === 'settings') {
       dispatch('settingsClick');
     } else {
