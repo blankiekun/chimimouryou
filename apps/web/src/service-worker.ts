@@ -14,9 +14,10 @@ const BUILD_CACHE_NAME = `build:${version}`;
 const ENGINE_CACHE_NAME = 'vn-engine';
 const engineFile = /\/vn\/conscripter(\.js|\.wasm|-version\.txt)$/;
 // The UI font is split into unicode-range chunks (4 MB in all); a page loads only the ones it
-// shows, so they are cached on first use, across builds, rather than precached.
+// shows, so they are cached on first use, across builds, rather than precached. So is KZ UDMincho
+// (17 MB), the old Washi & Sumi display font, now only a reader font choice.
 const UI_FONT_CACHE_NAME = 'ui-font';
-const uiFontFile = /\/BIZUDPGothic-[^/]+\.woff2$/;
+const uiFontFile = /\/(BIZUDPGothic-[^/]+\.woff2|KZUDMincho-[^/]+\.woff2?)$/;
 const uiFontFiles = new Set(build.filter((file) => uiFontFile.test(file)));
 
 const prerenderedSet = new Set(prerendered);
