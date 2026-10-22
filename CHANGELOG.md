@@ -46,6 +46,10 @@ anything a reader or a server operator would notice.
   words shown, voiced tails after a noun, 血肉 ちにく) and about 40% faster reading. Word lists
   are redone (`WORDS_VERSION` 12) and readings files made again on request. The readings worker
   now stops 2 minutes after its last book rather than 10.
+- yurigana 0.5.5: readings for word lists and generated furigana: glued compounds from a
+  shipped table, the top reading of 226 more words shown, casual spellings (ながーい, ふいんき) no
+  longer hide a word, and context rules for 何, 方, 様, 上, 子, 一, 間, 前, 頭 and 今日. Word lists
+  are redone (`WORDS_VERSION` 13) and readings files made again on request (`READINGS_VERSION` 6).
 
 - Japanese UI: reworded strings throughout (595 of 973) to read more naturally.
 
