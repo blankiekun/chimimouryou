@@ -209,7 +209,7 @@
             {#if view !== 'known' && view !== 'ignored'}
               <button
                 type="button"
-                class="app-button"
+                class="app-button words-mark-all"
                 disabled={!shown.length}
                 on:click={markAllShown}
               >
@@ -498,9 +498,11 @@
     }
 
     .words-actions {
-      flex-direction: row-reverse;
-      justify-content: flex-end;
       margin-left: 0;
+    }
+
+    .words-mark-all {
+      order: -1;
     }
 
     .words-wide {
