@@ -220,9 +220,9 @@
           })}
         </div>
         <!-- eslint-disable-next-line svelte/no-unknown-style-directive-property -->
-        <div class="w-full rounded-full h-2.5" style:background-Color={fontColor}>
+        <div class="w-full rounded-sm h-2.5" style:background-Color={fontColor}>
           <div
-            class="h-2.5 rounded-full opacity-70"
+            class="h-2.5 rounded-sm opacity-70"
             style:width={`${Math.min(100, timeGoalPercentage)}%`}
             style:background-color={backgroundColor}
           ></div>
@@ -241,10 +241,10 @@
           })}
         </div>
         <!-- eslint-disable-next-line svelte/no-unknown-style-directive-property -->
-        <div class="w-full rounded-full h-2.5" style:background-Color={fontColor}>
+        <div class="w-full rounded-sm h-2.5" style:background-Color={fontColor}>
           <!-- eslint-disable svelte/no-unknown-style-directive-property -->
           <div
-            class="h-2.5 rounded-full opacity-70"
+            class="h-2.5 rounded-sm opacity-70"
             style:width={`${Math.min(100, characterGoalPercentage)}%`}
             style:background-Color={backgroundColor}
           ></div>

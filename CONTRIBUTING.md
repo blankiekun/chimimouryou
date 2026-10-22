@@ -75,7 +75,7 @@ once merged.
    write it like one (`fix(vn): …`). Fill in the template's checklist.
 3. When CI is green, **Squash and merge** (`gh pr merge --squash`).
 4. Upstream syncs are the exception: `git switch -c sync/upstream origin/main &&
-   git merge upstream/main`, open a PR and merge it with **Create a merge
+git merge upstream/main`, open a PR and merge it with **Create a merge
    commit** (`gh pr merge --merge`). Squashing it would lose upstream's history,
    and every later sync would conflict again.
 
@@ -96,6 +96,7 @@ once merged.
   `latest`). Add a `CHANGELOG.md` heading for the version first. The first
   publish creates private packages: make them public in the repository's
   Packages settings.
+
 - Check workflow changes with `actionlint` (e.g. `docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint .github/workflows/*.yml`).
 
 ## Testing expectations
@@ -108,7 +109,7 @@ once merged.
   it gets a new object, so `set = new Set([...set, x])`, not `set.add(x)`.
 - Patterns to copy:
   - Components: mount with `new Component({ target, props })`, click, then
-    `vi.waitFor` (see `reader-companion.test.ts`). Modules reading
+    `vi.waitFor` (see `reader-panel.test.ts`). Modules reading
     `window.matchMedia` need a stub (see `account-settings-sync.test.ts`).
   - IndexedDB: `import 'fake-indexeddb/auto'` (see `annotations.test.ts`).
   - Network: `vi.stubGlobal('fetch', vi.fn(...))` and assert on what was sent

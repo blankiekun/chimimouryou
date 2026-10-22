@@ -36,6 +36,9 @@
 
   export let width: number;
 
+  /** Room kept free on the right for the reader panel (px), so vertical text, which starts at the right, isn't under it */
+  export let reserveRight = 0;
+
   export let height: number;
 
   export let verticalMode: boolean;
@@ -280,7 +283,11 @@
     The reader is currently blurred due to an external application (e. g. exstatic)
   </div>
 {/if}
-<div bind:this={$containerEl$} class="{pxReader} py-8">
+<div
+  bind:this={$containerEl$}
+  class="{pxReader} py-8"
+  style:margin-right={reserveRight ? `${reserveRight}px` : undefined}
+>
   {#if viewMode === ViewMode.Continuous}
     <BookReaderContinuous
       {htmlContent}

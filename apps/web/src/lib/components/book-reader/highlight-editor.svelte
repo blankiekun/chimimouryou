@@ -32,11 +32,14 @@
 </script>
 
 <aside
-  class="reader-panel writing-horizontal-tb fixed inset-x-2 bottom-2 z-30 mx-auto flex max-w-xl flex-col gap-3 rounded-xl p-4 text-sm shadow-2xl"
+  class="reader-panel writing-horizontal-tb fixed inset-x-2 bottom-2 z-[70] mx-auto flex max-w-xl flex-col gap-3 rounded-sm p-4 text-sm"
   aria-label={$t$('reader.highlight')}
 >
   <div class="flex items-start gap-3">
-    <blockquote class="reader-panel-quote max-h-28 flex-1 overflow-y-auto border-l-2 pl-3" lang="ja">
+    <blockquote
+      class="reader-panel-quote max-h-28 flex-1 overflow-y-auto border-l-2 pl-3"
+      lang="ja"
+    >
       {highlight.text}
     </blockquote>
     <button class="p-1" title={$t$('reader.close')} on:click={close}><Fa icon={faXmark} /></button>
@@ -72,14 +75,15 @@
     <span class="flex-1" />
     <button
       type="button"
-      class="reader-panel-chip flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs"
+      class="reader-panel-chip flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-xs"
       on:click={() => dispatch('delete')}
     >
-      <Fa icon={faTrash} /> {$t$('reader.delete')}
+      <Fa icon={faTrash} />
+      {$t$('reader.delete')}
     </button>
     <button
       type="button"
-      class="reader-panel-chip rounded-full px-3 py-1.5 text-xs font-semibold"
+      class="reader-panel-chip rounded-sm px-3 py-1.5 text-xs font-semibold"
       on:click={close}
     >
       {$t$('reader.done')}

@@ -1,24 +1,17 @@
-<script lang="ts" context="module">
-  /** Height of the bar plus its gap; the reader leaves this much room above the footer. */
-  export const listenBarRem = 4;
-</script>
-
 <script lang="ts">
-  import { faCompactDisc, faXmark } from '@fortawesome/free-solid-svg-icons';
   import AudiobookPlayer from '$lib/components/book-reader/audiobook-player.svelte';
   import { getAudiobook, type BookAudiobook } from '$lib/data/audiobook';
   import { activePlugins$ } from '$lib/plugins';
   import type { SearchIndex } from '$lib/functions/book-text/book-search';
   import { createEventDispatcher, onMount } from 'svelte';
   import { t$ } from '$lib/i18n';
-  import Fa from 'svelte-fa';
 
   export let title: string;
   export let elementHtml: string;
   export let getIndex: () => Promise<SearchIndex>;
   /** Current reading position */
   export let position: number;
-  /** Position when the panel opened, where the voice starts */
+  /** Position when the Listen tab opened, where the voice starts */
   export let startCharCount: number;
 
   const dispatch = createEventDispatcher<{
@@ -27,7 +20,6 @@
     position: number;
     /** Go to a line the user picked */
     jump: number;
-    close: void;
   }>();
 
   let loaded = false;
@@ -37,10 +29,7 @@
 
   $: pluginModes = $activePlugins$.flatMap((plugin) => plugin.listenModes ?? []);
   $: pluginMode = pluginModes.find((item) => item.key === mode);
-  $: modes = [
-    { key: 'audiobook', title: 'reader.audiobook' as const, icon: faCompactDisc },
-    ...pluginModes
-  ];
+  $: modes = [{ key: 'audiobook', title: 'reader.audiobook' as const }, ...pluginModes];
 
   onMount(async () => {
     try {
@@ -58,109 +47,96 @@
   }
 </script>
 
-<!-- A single fixed-height row above the footer; the reader is shortened by listenBarRem so no text sits under it. -->
-<div class="listen-bar reader-panel writing-horizontal-tb" role="region" aria-label={$t$('reader.listen')}>
-  {#if loaded}
-    {#if pluginMode}
-      <svelte:component
-        this={pluginMode.component}
-        {...pluginMode.props({ title, elementHtml, getIndex, position, startCharCount })}
-        on:position
-        on:reading
-        on:jump
-      />
-    {:else}
-      <AudiobookPlayer
-        {title}
-        {audiobook}
-        {getIndex}
-        {position}
-        on:reading
-        on:jump
-        on:changed={({ detail }) => (audiobook = detail)}
-      />
-    {/if}
-  {:else}
-    <span class="flex-1" />
-  {/if}
-
+<!-- The Listen tab of the reader panel; it stays mounted when the panel closes, so playback goes on. -->
+<div class="listen" role="region" aria-label={$t$('reader.listen')}>
   {#if pluginModes.length}
-    <div class="listen-modes" role="radiogroup" aria-label={$t$('reader.source')}>
+    <div class="app-segmented self-start" role="radiogroup" aria-label={$t$('reader.source')}>
       {#each modes as item (item.key)}
         <button
           role="radio"
           aria-checked={mode === item.key}
-          class:listen-mode-active={mode === item.key}
-          title={$t$(item.title)}
+          class="app-segment"
+          class:app-segment-selected={mode === item.key}
           on:click={() => setMode(item.key)}
         >
-          <Fa icon={item.icon} />
+          {$t$(item.title)}
         </button>
       {/each}
     </div>
   {/if}
-  <button class="listen-icon" title={$t$('reader.close')} on:click={() => dispatch('close')}>
-    <Fa icon={faXmark} />
-  </button>
+
+  {#if loaded}
+    <div class="listen-player">
+      {#if pluginMode}
+        <svelte:component
+          this={pluginMode.component}
+          {...pluginMode.props({ title, elementHtml, getIndex, position, startCharCount })}
+          on:position
+          on:reading
+          on:jump
+        />
+      {:else}
+        <AudiobookPlayer
+          {title}
+          {audiobook}
+          {getIndex}
+          {position}
+          on:reading
+          on:jump
+          on:changed={({ detail }) => (audiobook = detail)}
+        />
+      {/if}
+    </div>
+  {/if}
 </div>
 
 <style>
-  .listen-bar {
-    position: fixed;
-    right: 0.5rem;
-    bottom: 2rem;
-    left: 0.5rem;
-    z-index: 20;
+  .listen {
     display: flex;
-    height: 3.5rem;
-    max-width: 44rem;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1rem;
+    font-size: var(--type-small);
+  }
+
+  /* The players were made for a one-line bar: let their controls wrap in the panel's width. */
+  .listen-player {
+    position: relative;
+    display: flex;
+    min-height: 3rem;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.25rem;
-    margin: 0 auto;
-    padding: 0 0.4rem 0 0.5rem;
-    border: 1px solid color-mix(in srgb, var(--reader-panel-fg) 10%, transparent);
-    border-radius: 1.1rem;
-    box-shadow: 0 10px 30px -12px var(--shadow-color);
-    font-size: 0.875rem;
-    backdrop-filter: blur(12px);
+    padding-top: 0.9rem;
   }
 
-  .listen-modes {
-    display: flex;
-    flex-shrink: 0;
-    padding: 0.15rem;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--reader-panel-fg) 8%, transparent);
+  /* Their seek bar ran along the bar's top edge and their sheets opened above it. */
+  .listen-player :global(.player-seek) {
+    right: 0;
+    left: 0;
   }
 
-  .listen-modes button {
-    display: inline-flex;
-    width: 1.9rem;
-    height: 1.7rem;
-    align-items: center;
-    justify-content: center;
-    border-radius: 999px;
-    font-size: 0.8rem;
-    opacity: 0.55;
+  .listen-player :global(.sheet) {
+    position: static;
+    width: 100%;
+    max-height: none;
+    margin-top: 0.75rem;
+    border-radius: 2px;
+    box-shadow: none;
   }
 
-  .listen-modes .listen-mode-active {
-    background: color-mix(in srgb, var(--reader-panel-fg) 18%, transparent);
-    opacity: 1;
+  .listen-player
+    :global(:is(.player-icon, .player-play, .player-pill, .player-seek, .voice-icon, .voice-play)) {
+    border-radius: 2px;
   }
 
-  .listen-icon {
-    display: inline-flex;
-    width: 2rem;
-    height: 2rem;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-    border-radius: 999px;
-    opacity: 0.7;
+  .listen-player :global(:is(.player-line, .voice-line, .voice-meta)) {
+    white-space: normal;
   }
 
-  .listen-icon:hover {
-    opacity: 1;
+  @media (min-width: 768px) {
+    .listen {
+      padding: 1.25rem 1.5rem;
+    }
   }
 </style>

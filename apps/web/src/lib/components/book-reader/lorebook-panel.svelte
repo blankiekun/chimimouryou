@@ -208,7 +208,7 @@
       </p>
       <div class="flex flex-wrap items-center gap-2">
         <button
-          class="reader-panel-chip rounded-full px-3 py-1.5 font-semibold disabled:opacity-50"
+          class="reader-panel-chip rounded-sm px-3 py-1.5 font-semibold disabled:opacity-50"
           disabled={running || pending < minUpdateCharacters}
           title={$t$('reader.loreUpdateTitle', {
             count: pending.toLocaleString(),
@@ -227,7 +227,8 @@
             title={$t$('reader.loreStopTitle')}
             on:click={() => stopLorebookUpdate(title)}
           >
-            <Fa icon={faStop} /> {$t$('reader.stop')}
+            <Fa icon={faStop} />
+            {$t$('reader.stop')}
           </button>
         {/if}
         <span class="flex-1" />
@@ -247,13 +248,18 @@
         >
           <Fa icon={faDownload} />
         </button>
-        <button class="p-1.5" title={$t$('reader.loreClear')} disabled={running} on:click={clearAll}>
+        <button
+          class="p-1.5"
+          title={$t$('reader.loreClear')}
+          disabled={running}
+          on:click={clearAll}
+        >
           <Fa icon={faTrash} />
         </button>
       </div>
       {#if sendTargets?.length}
         <div class="mt-2 flex items-center gap-2">
-          <select class="filter min-w-0 flex-1 rounded-lg px-2 py-1.5" bind:value={sendTarget}>
+          <select class="filter min-w-0 flex-1 rounded-sm px-2 py-1.5" bind:value={sendTarget}>
             {#each sendTargets as book (book.title)}
               <option value={book.title}>
                 {book.seriesIndex ?? '?'} · {book.title}{$homeBookTitles$.includes(book.title)
@@ -262,7 +268,7 @@
               </option>
             {/each}
           </select>
-          <button class="reader-panel-chip rounded-full px-3 py-1.5 font-semibold" on:click={send}>
+          <button class="reader-panel-chip rounded-sm px-3 py-1.5 font-semibold" on:click={send}>
             {$t$('reader.loreCopy')}
           </button>
         </div>
@@ -293,7 +299,7 @@
       {/each}
     </div>
     <input
-      class="filter mt-2 w-full rounded-lg px-2 py-1.5"
+      class="filter mt-2 w-full rounded-sm px-2 py-1.5"
       placeholder={$t$('reader.loreFilter')}
       bind:value={filter}
     />
@@ -306,7 +312,7 @@
       </p>
     {/if}
     {#each visible as entry (entry.id)}
-      <div class="entry rounded-lg px-2 py-2">
+      <div class="entry rounded-sm px-2 py-2">
         <button
           class="w-full text-left"
           on:click={() => (openEntry = openEntry === entry.id ? '' : entry.id)}
@@ -322,7 +328,7 @@
         </button>
         {#if openEntry === entry.id}
           <textarea
-            class="filter mt-1 w-full rounded-lg p-2 text-xs leading-relaxed"
+            class="filter mt-1 w-full rounded-sm p-2 text-xs leading-relaxed"
             rows="5"
             value={entry.content}
             on:change={(e) => editContent(entry.id, e.currentTarget.value)}
@@ -339,7 +345,11 @@
                     { count: entry.firstSeen.toLocaleString() }
                   )}`}</span
             >
-            <button class="p-1" title={$t$('reader.loreDeleteEntry')} on:click={() => removeEntry(entry.id)}>
+            <button
+              class="p-1"
+              title={$t$('reader.loreDeleteEntry')}
+              on:click={() => removeEntry(entry.id)}
+            >
               <Fa icon={faTrash} />
             </button>
           </div>
@@ -363,7 +373,7 @@
   }
 
   .chip {
-    border-radius: 999px;
+    border-radius: 2px;
     padding: 0.2rem 0.6rem;
     font-weight: 600;
     background: color-mix(in srgb, var(--reader-panel-fg) 8%, transparent);
