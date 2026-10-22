@@ -34,7 +34,7 @@
             : ''
     ]
       .filter(Boolean)
-      .join('・');
+      .join(' · ');
   }
 </script>
 

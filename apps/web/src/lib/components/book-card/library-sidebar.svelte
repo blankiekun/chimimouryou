@@ -140,13 +140,9 @@
             on:click={() => toggleSection(section.key)}
           >
             <span>{$t$(section.label)}</span>
-            <span class="flex items-center gap-1.5">
-              <span class="library-filter-count">
-                {section.filters.reduce((sum, filter) => sum + (counts.get(filter.key) ?? 0), 0)}
-              </span>
-              <span class="library-filter-chevron" class:library-filter-chevron-expanded={expanded}>
-                <Fa icon={faChevronDown} />
-              </span>
+            <!-- No group count: Last read's buckets overlap, so a sum would mislead -->
+            <span class="library-filter-chevron" class:library-filter-chevron-expanded={expanded}>
+              <Fa icon={faChevronDown} />
             </span>
           </button>
           {#if expanded}

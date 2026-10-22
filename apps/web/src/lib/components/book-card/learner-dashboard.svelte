@@ -100,8 +100,10 @@
 
   $: rows = stats
     ? [
-        { label: $t$('dashboard.pastWeek'), value: number(stats.weekCharacters) },
-        { label: $t$('dashboard.characters'), value: number(stats.totalCharacters) },
+        {
+          label: $t$('dashboard.pastWeek'),
+          value: $t$('dashboard.charsValue', { count: number(stats.weekCharacters) })
+        },
         { label: $t$('dashboard.time'), value: hours(stats.totalTime, $t$) },
         {
           label: $t$('dashboard.speed'),

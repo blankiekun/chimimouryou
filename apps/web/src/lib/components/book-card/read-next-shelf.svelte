@@ -99,10 +99,13 @@
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
-    margin-top: 0.4rem;
+    /* At the bottom, so the bars line up when a title wraps */
+    margin-top: auto;
+    padding-top: 0.4rem;
     color: var(--app-muted-fg);
-    font-size: var(--type-small);
+    font-size: var(--type-label);
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
 
   .read-next-meter {

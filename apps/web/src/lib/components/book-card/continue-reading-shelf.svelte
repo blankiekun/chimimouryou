@@ -81,7 +81,6 @@
     display: grid;
     grid-auto-columns: var(--shelf-cover-width, 8.75rem);
     grid-auto-flow: column;
-    align-items: start;
     gap: 2rem;
     overflow-x: auto;
     /* Room for focus rings */

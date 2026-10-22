@@ -20,6 +20,7 @@
   import LearnerDashboard from '$lib/components/book-card/learner-dashboard.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import ReadNextShelf from '$lib/components/book-card/read-next-shelf.svelte';
+  import LibrarySortMenu from '$lib/components/book-card/library-sort-menu.svelte';
   import SeriesGrid from '$lib/components/book-card/series-grid.svelte';
   import SeriesResults from '$lib/components/book-card/series-results.svelte';
   import {
@@ -1271,6 +1272,9 @@
               })}
             </span>
           {/if}
+          {#if !showSeriesGrid}
+            <span class="store-sort"><LibrarySortMenu /></span>
+          {/if}
         </div>
       {/if}
       {#if replicationToProgress}
@@ -1676,8 +1680,9 @@
     gap: 3.5rem 4rem;
   }
 
+  /* Grown, so every section head's rule runs to the column's right edge */
   .home-pair > :global(*) {
-    flex: 0 1 auto;
+    flex: 1 1 auto;
     max-width: 100%;
   }
 
@@ -1702,7 +1707,6 @@
 
   .home-start {
     display: flex;
-    max-width: 40rem;
     flex-direction: column;
     align-items: flex-start;
     gap: 1rem;
@@ -1710,6 +1714,10 @@
 
   .home-start :global(.section-head) {
     align-self: stretch;
+  }
+
+  .home-start > p {
+    max-width: 40rem;
   }
 
   .home-start-actions {
@@ -1745,6 +1753,10 @@
     align-items: center;
     gap: 0.75rem 1.25rem;
     margin-bottom: 1.5rem;
+  }
+
+  .store-sort {
+    margin-left: auto;
   }
 
   .store-count {

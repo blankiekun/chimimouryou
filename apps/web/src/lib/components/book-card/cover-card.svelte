@@ -111,6 +111,8 @@
     display: flex;
     width: 100%;
     min-width: 0;
+    /* Fills the card so shelf buttons and Read next's bars line up when a title wraps */
+    flex: 1 1 auto;
     flex-direction: column;
     border-radius: 2px;
     text-align: left;
@@ -162,6 +164,7 @@
   .cover-card-text {
     display: flex;
     min-width: 0;
+    flex: 1 1 auto;
     flex-direction: column;
     gap: 0.2rem;
     margin-top: 0.6rem;

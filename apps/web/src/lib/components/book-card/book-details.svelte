@@ -1,10 +1,5 @@
 <script lang="ts">
-  import {
-    faArrowLeft,
-    faDownload,
-    faMagnifyingGlass,
-    faSpinner
-  } from '@fortawesome/free-solid-svg-icons';
+  import { faDownload, faMagnifyingGlass, faSpinner } from '@fortawesome/free-solid-svg-icons';
   import PointBox from '$lib/components/point-box.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import BookCard from '$lib/components/book-card/book-card.svelte';
@@ -51,6 +46,7 @@
     homeBookTitles$,
     homeRemovedTitles$,
     isContinueReading,
+    libraryTab$,
     removeFromHome
   } from '$lib/data/library-home';
   import { guessSeriesName } from '$lib/data/series-overrides';
@@ -83,7 +79,7 @@
     changed: void;
   }>();
 
-  let backButton: HTMLButtonElement;
+  let layer: HTMLDivElement;
   let calibreBook: CalibreBook | undefined;
   let estimate: CalibreDifficulty | undefined;
   let kanji: KanjiCoverage | undefined;
@@ -175,7 +171,8 @@
   }
 
   onMount(() => {
-    backButton.focus();
+    // The layer rather than the back link, whose focus ring would show on every open.
+    layer.focus();
     loadSpeed();
 
     // Ask for the generated furigana now, so they are usually ready when the book opens.
@@ -357,18 +354,20 @@
 
 <svelte:window on:keydown={(ev) => ev.key === 'Escape' && !searchOpen && dispatch('close')} />
 
-<div class="details" role="dialog" aria-modal="true" aria-labelledby="book-details-title">
-  <div class="details-bar">
-    <button
-      type="button"
-      class="app-button app-button-quiet"
-      bind:this={backButton}
-      on:click={() => dispatch('close')}
-    >
-      <Fa icon={faArrowLeft} />
-      {$t$('book.library')}
+<div
+  class="details"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="book-details-title"
+  tabindex="-1"
+  bind:this={layer}
+>
+  <nav class="details-bar" aria-label={$t$('nav.back')}>
+    <button type="button" class="app-button app-button-quiet" on:click={() => dispatch('close')}>
+      ← {$t$($libraryTab$ === 'home' ? 'nav.home' : 'nav.store')}
     </button>
-  </div>
+    <span class="details-crumb" lang="ja">/ {book.displayTitle || book.title}</span>
+  </nav>
 
   <div class="details-body">
     <div class="details-aside">
@@ -802,25 +801,44 @@
 <style>
   .details {
     position: fixed;
-    inset: 0;
-    /* Above the app header (40), below dialogs (50) */
-    z-index: 45;
+    /* Under the app header (4rem, 3.25rem from xl) and the phones' bottom tab bar */
+    inset: 4rem 0 0;
+    z-index: 39;
+    outline: none;
     overflow-y: auto;
     overscroll-behavior: contain;
     background: var(--background-color);
     color: var(--font-color);
   }
 
+  @media (min-width: 1280px) {
+    .details {
+      top: 3.25rem;
+    }
+  }
+
+  @media (max-width: 639px) {
+    .details {
+      bottom: calc(3.5rem + env(safe-area-inset-bottom));
+    }
+  }
+
   .details-bar {
-    position: sticky;
-    top: 0;
-    z-index: 1;
     display: flex;
-    min-height: 3.5rem;
-    align-items: center;
-    padding: 0 max(1rem, env(safe-area-inset-left));
-    border-bottom: 1px solid var(--app-header-border);
-    background: var(--app-header-bg);
+    min-width: 0;
+    max-width: 75rem;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin: 0 auto;
+    padding: 1.25rem 1rem 0;
+  }
+
+  .details-crumb {
+    overflow: hidden;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .details-body {
@@ -857,7 +875,11 @@
     .details-body {
       grid-template-columns: 16.5rem minmax(0, 1fr);
       gap: 0 4rem;
-      padding: 2.5rem 2.5rem 4rem;
+      padding: 2rem 2.5rem 4rem;
+    }
+
+    .details-bar {
+      padding: 2rem 2.5rem 0;
     }
 
     .details-aside,
@@ -869,7 +891,7 @@
 
     .details-aside {
       position: sticky;
-      top: 5.5rem;
+      top: 2rem;
       align-self: start;
       gap: 1.25rem;
     }
