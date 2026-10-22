@@ -9,9 +9,9 @@ anything a reader or a server operator would notice.
 ### Changed
 
 - New default look, "Study Book" (first step of the interface rework): white paper, ink and
-  one green, with a dark version (Study Book Dark) as the default dark theme. Washi and Sumi stay
+  one green, as the default themes chimi-light and chimi-dark. Washi and Sumi stay
   selectable in Settings → Themes. Browsers and accounts still on Washi or Sumi from before
-  move to Study Book once; picking Washi again afterwards sticks.
+  move to chimi-light and chimi-dark once; picking Washi again afterwards sticks.
 - The app's interface uses BIZ UDPGothic, served by the server itself and split by
   character set, so a page downloads only the parts it shows (about 0.55 MB the first time
   for a typical page, kept for later visits; 4.4 MB if every character were shown). Book text

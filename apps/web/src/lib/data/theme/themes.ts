@@ -168,8 +168,8 @@ const darkBase: ThemeColors = {
 const defaults = { radius: 1, blur: 24, uiFont: '', customCss: '' };
 
 /** The default themes (Settings → Themes, and the reset target). */
-export const defaultLightThemeId = 'study-book';
-export const defaultDarkThemeId = 'study-book-dark';
+export const defaultLightThemeId = 'chimi-light';
+export const defaultDarkThemeId = 'chimi-dark';
 
 /**
  * Built-in themes. The first is the fallback for unknown ids. Ids from light-theme to
@@ -178,8 +178,8 @@ export const defaultDarkThemeId = 'study-book-dark';
 export const builtInThemes: ThemeDefinition[] = [
   // Study Book: white paper, ink and one green spot colour; no shadows (shadow tokens transparent).
   {
-    id: 'study-book',
-    name: 'Study Book',
+    id: 'chimi-light',
+    name: 'chimi-light',
     extends: 'light',
     radius: 0.3,
     blur: 0,
@@ -232,8 +232,8 @@ export const builtInThemes: ThemeDefinition[] = [
     }
   },
   {
-    id: 'study-book-dark',
-    name: 'Study Book Dark',
+    id: 'chimi-dark',
+    name: 'chimi-dark',
     extends: 'dark',
     radius: 0.3,
     blur: 0,
