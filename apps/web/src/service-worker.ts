@@ -22,9 +22,10 @@ const uiFontFiles = new Set(build.filter((file) => uiFontFile.test(file)));
 
 const prerenderedSet = new Set(prerendered);
 
-// Whisper's worker and runtime (tens of MB) load only when someone transcribes.
+// Whisper's worker and runtime (tens of MB) load only when someone transcribes. The .woff font
+// fallbacks (86 MB) are never fetched by browsers that run service workers: they take the woff2.
 const assetsToCache = build
-  .filter((file) => !/ort-wasm|whisper\.worker/.test(file) && !uiFontFile.test(file))
+  .filter((file) => !/ort-wasm|whisper\.worker|\.woff$/.test(file) && !uiFontFile.test(file))
   .concat(files.filter((file) => !engineFile.test(file)))
   .concat(prerendered);
 const cachedAssets = new Set(assetsToCache);

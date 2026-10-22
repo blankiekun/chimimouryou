@@ -16,8 +16,9 @@ anything a reader or a server operator would notice.
   character set, so a page downloads only the parts it shows (about 0.55 MB the first time
   for a typical page, kept for later visits; 4.4 MB if every character were shown). Book text
   keeps the reader's own font.
-- Installing the app downloads 17 MB less: KZ UDMincho, the old Washi look's heading font and
-  still a reader font choice, is now downloaded the first time it is used instead of up front.
+- Installing the app downloads about 100 MB less: KZ UDMincho, the old Washi look's heading font and
+  still a reader font choice, is now downloaded the first time it is used instead of up front, and
+  the reader fonts' old .woff copies, which browsers skip for the .woff2 ones, are no longer downloaded.
 - Buttons, inputs, switches and segmented controls are square-cornered and flat; buttons
   are 44 px tall on touch screens. The top bar shows the ち mark alone and text tabs with a
   green underline, and the disabled Notes tab is gone; the phone tab bar matches it.
