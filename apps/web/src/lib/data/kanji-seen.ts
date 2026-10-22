@@ -79,44 +79,6 @@ export async function recordKanjiText(title: string, text: string, upTo: number)
   kanjiChanged();
 }
 
-export interface KanjiCoverage {
-  /** Share of the book's kanji occurrences already met, 0-1 */
-  coverage: number;
-  /** Different kanji in the book not met yet */
-  newKanji: number;
-  /** The most frequent of those, most frequent first (up to `newKanjiShown`) */
-  topNew: string[];
-}
-
-export const newKanjiShown = 30;
-
-/** How much of a book's kanji (its counts from the difficulty service) a reader has met. */
-export function kanjiCoverage(
-  bookCounts: Record<string, number>,
-  books: KanjiSeen[]
-): KanjiCoverage | undefined {
-  const met = new Set(books.flatMap((book) => Object.keys(book.counts)));
-  let total = 0;
-  let known = 0;
-  const unmet: [string, number][] = [];
-
-  for (const [kanji, count] of Object.entries(bookCounts)) {
-    total += count;
-    if (met.has(kanji)) {
-      known += count;
-    } else {
-      unmet.push([kanji, count]);
-    }
-  }
-
-  const topNew = unmet
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, newKanjiShown)
-    .map(([kanji]) => kanji);
-
-  return total ? { coverage: known / total, newKanji: unmet.length, topNew } : undefined;
-}
-
 export async function getKanjiSeen() {
   await pullKanji();
   return (await readerDb()).getAll('kanji');
