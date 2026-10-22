@@ -55,6 +55,10 @@ anything a reader or a server operator would notice.
   Known, Hide) and theme; changing direction or view saves your place first. More holds the
   bookmark, reading point, auto-scroll, fullscreen, jump, tracker and finish actions.
 
+### Fixed
+
+- Visual novels: right-clicking the game no longer opens the browser's menu.
+
 ## v3.7.0 (2026-10-22)
 
 ### Security
