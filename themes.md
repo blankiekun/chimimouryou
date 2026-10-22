@@ -8,7 +8,7 @@ themes, the theme editor, the JSON format for sharing themes, and custom CSS.
 
 - **Settings → General → Theme** shows every theme as a swatch, grouped light and
   dark. Click one to use it. With "Follow system theme" on there is one grid for the
-  light slot and one for the dark slot (chimi-light and chimi-dark by default).
+  light slot and one for the dark slot (Chimi Light and Chimi Dark by default).
 - **Settings → General → Custom Themes** lists every theme with its actions.
 - **Settings → Reader → Theme** and the palette icon in the reader header switch
   themes quickly.
@@ -17,8 +17,8 @@ Built-in themes:
 
 | Id                     | Name           | Kind                                                   |
 | ---------------------- | -------------- | ------------------------------------------------------ |
-| `chimi-light`          | chimi-light    | light, white paper, ink and one green (default)        |
-| `chimi-dark`           | chimi-dark     | dark, ink-black page and a lifted green (default dark) |
+| `chimi-light`          | Chimi Light    | light, white paper, ink and one green (default)        |
+| `chimi-dark`           | Chimi Dark     | dark, ink-black page and a lifted green (default dark) |
 | `washi-theme`          | Washi          | light, warm paper and vermilion                        |
 | `washi-dark-theme`     | Sumi           | dark, ink and vermilion                                |
 | `light-theme`          | Light          | light                                                  |

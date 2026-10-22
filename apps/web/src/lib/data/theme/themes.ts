@@ -179,7 +179,7 @@ export const builtInThemes: ThemeDefinition[] = [
   // Study Book: white paper, ink and one green spot colour; no shadows (shadow tokens transparent).
   {
     id: 'chimi-light',
-    name: 'chimi-light',
+    name: 'Chimi Light',
     extends: 'light',
     radius: 0.3,
     blur: 0,
@@ -233,7 +233,7 @@ export const builtInThemes: ThemeDefinition[] = [
   },
   {
     id: 'chimi-dark',
-    name: 'chimi-dark',
+    name: 'Chimi Dark',
     extends: 'dark',
     radius: 0.3,
     blur: 0,
