@@ -50,6 +50,11 @@ anything a reader or a server operator would notice.
   shipped table, the top reading of 226 more words shown, casual spellings (ながーい, ふいんき) no
   longer hide a word, and context rules for 何, 方, 様, 上, 子, 一, 間, 前, 頭 and 今日. Word lists
   are redone (`WORDS_VERSION` 13) and readings files made again on request (`READINGS_VERSION` 6).
+- yurigana 0.5.6: names a book rubies and uses as names (honorifics, speaker tags) are read the
+  book's way through the whole book, more two-reading words read from context (抱く, 間, 札, 描く,
+  止める, 側, 空く, 家, 方, 何, 主 …), 辛い no longer shown as つらい where it means spicy, and better
+  verb forms in word lists (入れる, 通っ, 行っ). Word lists are redone (`WORDS_VERSION` 14) and readings
+  files made again on request (`READINGS_VERSION` 7).
 
 - Japanese UI: reworded strings throughout (595 of 973) to read more naturally.
 

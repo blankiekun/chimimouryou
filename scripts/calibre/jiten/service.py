@@ -104,7 +104,7 @@ WORDS_PER_BOOK = 2000
 # 10: yurigana 0.5.0 (ateji, shown idioms, bare-evidence dominant readings such as 私 わたし).
 # 11: yurigana 0.5.1 (行っ on a going cue reads いっ; an uploaded JMnedict is a name dictionary).
 # 12: yurigana 0.5.3 (top readings of 118 forms, voiced tails after a noun, 血肉 ちにく).
-WORDS_VERSION = 13
+WORDS_VERSION = 14
 # Not vocabulary, left out of the book's word totals (uniqueWords, tokens) like the reader's
 # word coverage does (isNoiseWord in book-words.ts): particles, numbers, lone kana, and kana-only
 # words without a frequency rank (tokenizer noise).
