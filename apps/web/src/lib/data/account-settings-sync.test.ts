@@ -138,7 +138,7 @@ describe('account settings sync', () => {
     expect(openRouterApiKey$.getValue()).toBe('sk-or-bob');
   });
 
-  it('moves the account from the old default themes to Study Book, but keeps a later choice', async () => {
+  it('moves the account from the old default themes to chimi-light, but keeps a later choice', async () => {
     const later = Date.UTC(2026, 10, 1);
     mockServer({
       values: { theme: 'washi-theme', darkTheme: 'washi-dark-theme' },
@@ -147,9 +147,9 @@ describe('account settings sync', () => {
 
     await signInAs(alice);
 
-    expect(theme$.getValue()).toBe('study-book');
+    expect(theme$.getValue()).toBe('chimi-light');
     expect(darkTheme$.getValue()).toBe('washi-dark-theme');
-    expect(remote?.values.theme).toBe('study-book');
+    expect(remote?.values.theme).toBe('chimi-light');
     expect(remote?.modified.darkTheme).toBe(later);
   });
 });

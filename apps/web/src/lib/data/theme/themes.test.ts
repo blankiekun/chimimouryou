@@ -16,13 +16,13 @@ import {
 import { themeTokens } from '$lib/data/theme/theme-tokens';
 
 describe('themes', () => {
-  it('defaults to Study Book (light and dark)', () => {
+  it('defaults to chimi-light and chimi-dark', () => {
     expect(resolveTheme(defaultLightThemeId, {})).toMatchObject({
-      name: 'Study Book',
+      name: 'chimi-light',
       dark: false
     });
     expect(resolveTheme(defaultDarkThemeId, {})).toMatchObject({
-      name: 'Study Book Dark',
+      name: 'chimi-dark',
       dark: true
     });
     expect(resolveTheme('no-such-theme', {}).id).toBe(defaultLightThemeId);
