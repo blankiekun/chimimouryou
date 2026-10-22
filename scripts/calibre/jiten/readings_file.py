@@ -28,7 +28,8 @@ from yurigana.readings import surface_reading
 #    yurigana 0.3.0.
 # 4: yurigana 0.5.0 (ateji, shown idioms, bare-evidence dominant readings, name ruby carried back).
 # 5: names' ruby carried to their bare occurrences (source 'book') glossed.
-READINGS_VERSION = 7
+# 8: every reading glossed, not only the sure ones (defaults, Sudachi's, counter spans too).
+READINGS_VERSION = 8
 
 # Radical and Unified_Ideograph as in Unicode 16.
 # shortcut: newer CJK extensions are missing, add them when browsers count them.
@@ -184,7 +185,7 @@ def build(html: str, reader, bookdata: str, version: str) -> dict:
                     or (len(under) == 1 and HIRAGANA.match(ruby) and start <= word.start and end >= word.end)
                     for start, end, ruby in under):
                 flavoured.add(word.form)
-        elif (word.form not in flavoured and word.source in ('only', 'rule', 'model', 'book')
+        elif (word.form not in flavoured and word.source != 'ruby'
               and word.reading and HIRAGANA.match(word.reading)):
             parts = gloss(text[word.start:word.end], word.form, word.reading, text[word.end:word.end + 8])
             if parts:

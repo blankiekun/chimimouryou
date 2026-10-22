@@ -91,10 +91,10 @@ class ShowTest(unittest.TestCase):
     def shown(self, html, *words):
         return [g for g in build(html, *words)['occ'][2::3]]
 
-    def test_only_listed_hiragana_readings_from_the_list_rules_or_model(self):
+    def test_every_hiragana_reading_whatever_its_source(self):
         self.assertEqual(self.shown('<p>顔と顔と顔と顔と顔</p>', ('顔', '顔', 'かお', 'only'), ('顔', '顔', 'かお', 'model'),
                                     ('顔', '顔', 'かお', 'dictionary'), ('顔', '顔', None, 'dictionary'),
-                                    ('顔', '顔', 'カオ', 'rule')), [0, 0, -1, -1, -1])
+                                    ('顔', '顔', 'カオ', 'rule')), [0, 0, 0, -1, -1])
 
     def test_a_names_ruby_carried_to_its_bare_occurrences(self):
         self.assertEqual(self.shown('<p><ruby>芽衣<rt>めい</rt></ruby>と芽衣</p>',
