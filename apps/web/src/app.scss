@@ -560,13 +560,11 @@
   }
 
   /* Overlay panels in the reader: read aloud, Ask AI, search, notes, selection toolbar */
+  /* Study Book: a ruled box, no shadow or blur */
   .reader-panel {
-    border: 1px solid color-mix(in srgb, var(--reader-panel-fg) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
     background: var(--reader-panel-bg);
-    box-shadow: 0 18px 48px -20px var(--shadow-color);
     color: var(--reader-panel-fg);
-    -webkit-backdrop-filter: blur(calc(var(--app-blur) * 0.5));
-    backdrop-filter: blur(calc(var(--app-blur) * 0.5));
   }
 
   .reader-panel :is(h2, h3) {

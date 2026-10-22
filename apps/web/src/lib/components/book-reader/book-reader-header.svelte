@@ -1,33 +1,15 @@
 <script lang="ts">
   import { browser } from '$app/environment';
-  import { faBookmark as farBookmark } from '@fortawesome/free-regular-svg-icons';
-  import {
-    faBookmark as fasBookmark,
-    faBookAtlas,
-    faEllipsisVertical,
-    faExpand,
-    faFlag,
-    faHeadphones,
-    faList,
-    faLocationDot,
-    faMagnifyingGlass,
-    faMinus,
-    faPalette,
-    faPlus,
-    faRotateLeft,
-    type IconDefinition
-  } from '@fortawesome/free-solid-svg-icons';
-  import AppHeader from '$lib/components/app-header/app-header.svelte';
+  import { faChevronLeft, faEllipsis, faMinus, faPlus } from '@fortawesome/free-solid-svg-icons';
   import { readerImageGalleryPictures$ } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';
-  import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
-  import Popover from '$lib/components/popover/popover.svelte';
-  import { FuriganaStyle } from '$lib/data/furigana-style';
+  import ReaderSheet from '$lib/components/book-reader/reader-sheet.svelte';
+  import { furiganaChoice, furiganaSettings, type FuriganaChoice } from '$lib/data/reader-panel';
   import {
-    customReadingPointEnabled$,
     fontSize$,
     furiganaStyle$,
     hideFurigana$,
-    viewMode$
+    viewMode$,
+    writingMode$
   } from '$lib/data/store';
   import {
     customAppThemes$,
@@ -37,377 +19,451 @@
   } from '$lib/data/theme/theme-store';
   import { resolveTheme } from '$lib/data/theme/themes';
   import { ViewMode } from '$lib/data/view-mode';
-  import { isMobile$, isOnOldUrl } from '$lib/functions/utils';
+  import { isOnOldUrl } from '$lib/functions/utils';
   import { createEventDispatcher } from 'svelte';
   import { t$, type MessageKey } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
-  export let hasChapterData: boolean;
+  /**
+   * The reader's slim bar (Study Book): back, title with chapter and progress, Aa (quick
+   * settings), More, and the panel toggle. Not part of upstream's layout.
+   */
+  export let title: string;
+  export let chapter: string;
+  export let progress: string;
+  export let panelOpen: boolean;
   export let hasText: boolean;
-  export let autoScrollMultiplier: number;
   export let hasCustomReadingPoint: boolean;
+  export let canSetReadingPoint: boolean;
   export let showFullscreenButton: boolean;
-  export let isBookmarkScreen: boolean;
   export let hasBookmarkData: boolean;
+  /** Continuous mode: the auto-scroll speed, else undefined */
+  export let autoScrollMultiplier: number | undefined;
+  /** The reading tracker is available; whether it is paused */
+  export let tracker: { paused: boolean } | undefined;
 
   const dispatch = createEventDispatcher<{
-    tocClick: void;
+    back: void;
+    panelClick: void;
     bookmarkClick: void;
     scrollToBookmarkClick: void;
-    jumpClick: void;
-    completeBook: void;
-    fullscreenClick: void;
     showCustomReadingPoint: void;
     setCustomReadingPoint: void;
     resetCustomReadingPoint: void;
+    autoScrollClick: void;
+    fullscreenClick: void;
+    trackerClick: void;
+    completeBook: void;
+    jumpClick: void;
+    readerImageGalleryClick: void;
     statisticsClick: void;
     wordsClick: void;
-    readerImageGalleryClick: void;
     settingsClick: void;
     domainHintClick: void;
-    bookManagerClick: void;
-    ttsClick: void;
-    searchClick: void;
-    companionClick: void;
+    /** Direction or view changed: the reader saves the place, then applies it */
+    layoutChange: () => void;
   }>();
 
-  const customReadingPointMenuItems: {
-    label: MessageKey;
-    action: any;
-  }[] = [
-    ...(hasCustomReadingPoint
-      ? [{ label: 'reader.showPoint' as const, action: 'showCustomReadingPoint' }]
-      : []),
-    { label: 'reader.setPoint', action: 'setCustomReadingPoint' },
-    ...(hasCustomReadingPoint
-      ? [{ label: 'reader.resetPoint' as const, action: 'resetCustomReadingPoint' }]
-      : [])
-  ];
+  type Action = Parameters<typeof dispatch>[0];
 
-  const panelClasses = 'app-popover-panel';
+  const directions = [
+    ['vertical-rl', 'reader.vertical'],
+    ['horizontal-tb', 'reader.horizontal']
+  ] as const;
+  const views = [
+    [ViewMode.Paginated, 'reader.pages'],
+    [ViewMode.Continuous, 'reader.scroll']
+  ] as const;
+  const furiganaChoices = [
+    ['show', 'reader.furiganaShow'],
+    ['known', 'reader.furiganaKnown'],
+    ['hide', 'reader.furiganaHide']
+  ] as const;
 
-  let customReadingPointMenuElm: Popover;
-  let moreMenuElm: Popover;
-
-  type HeaderAction = Parameters<typeof dispatch>[0];
-
-  let moreMenuItems: {
-    label: string;
-    icon: IconDefinition;
-    action: HeaderAction;
-    classes: string;
-  }[] = [];
-
-  $: isOldUrl = browser && isOnOldUrl(window);
-
-  $: hoverFurigana = $hideFurigana$ && $furiganaStyle$ === FuriganaStyle.Hover;
-
-  function toggleHoverFurigana() {
-    if (!hoverFurigana) furiganaStyle$.next(FuriganaStyle.Hover);
-    hideFurigana$.next(!hoverFurigana);
-  }
+  let sheet: '' | 'aa' | 'more' = '';
 
   $: themes = ($themeDefinitions$ ?? []).map((definition) =>
     resolveTheme(definition.id, $customAppThemes$)
   );
+  $: furigana = furiganaChoice($hideFurigana$, $furiganaStyle$);
+  $: vertical = $writingMode$ === 'vertical-rl';
+  $: paginated = $viewMode$ === ViewMode.Paginated;
 
-  $: {
-    const item = (
-      entry: { label: MessageKey; icon: IconDefinition },
-      action: HeaderAction,
-      classes = ''
-    ) => ({
-      label: $t$(entry.label),
-      icon: entry.icon,
-      action,
-      classes: `app-popover-item ${classes}`
-    });
-    const items = [];
+  // Grouped as in the More sheet; empty groups drop out.
+  $: moreGroups = [
+    [
+      ['reader.bookmarkPage', 'bookmarkClick'],
+      hasBookmarkData && ['reader.returnToBookmark', 'scrollToBookmarkClick'],
+      hasCustomReadingPoint && ['reader.showReadingPoint', 'showCustomReadingPoint'],
+      canSetReadingPoint && ['reader.setReadingPoint', 'setCustomReadingPoint'],
+      hasCustomReadingPoint && ['reader.resetReadingPoint', 'resetCustomReadingPoint']
+    ],
+    [
+      autoScrollMultiplier !== undefined && ['reader.autoScroll', 'autoScrollClick'],
+      showFullscreenButton && ['reader.fullscreen', 'fullscreenClick'],
+      hasText && ['reader.jumpToPosition', 'jumpClick'],
+      $readerImageGalleryPictures$.length && ['reader.images', 'readerImageGalleryClick']
+    ],
+    [
+      tracker && [tracker.paused ? 'reader.startTracker' : 'reader.pauseTracker', 'trackerClick'],
+      ['reader.completeBook', 'completeBook'],
+      browser && isOnOldUrl(window)
+        ? ['reader.domainHint', 'domainHintClick']
+        : ['nav.statistics', 'statisticsClick'],
+      ['nav.words', 'wordsClick']
+    ]
+  ]
+    .map((group) => group.filter(Boolean) as [MessageKey, Action][])
+    .filter((group) => group.length);
 
-    // Shown in the bar on larger screens.
-    if (hasBookmarkData) {
-      items.push(
-        item(
-          { label: 'reader.returnToBookmark', icon: faRotateLeft },
-          'scrollToBookmarkClick',
-          'md:hidden'
-        )
-      );
-    }
-    if (showFullscreenButton) {
-      items.push(
-        item({ label: 'reader.fullscreen', icon: faExpand }, 'fullscreenClick', 'md:hidden')
-      );
-    }
-    // Phones: the bar would push its icons over the back button.
-    if (hasText) {
-      items.push(
-        item({ label: 'reader.search', icon: faMagnifyingGlass }, 'searchClick', 'sm:hidden')
-      );
-    }
-    items.push(item({ label: 'reader.listen', icon: faHeadphones }, 'ttsClick', 'sm:hidden'));
-
-    items.push(item({ label: 'reader.completeBook', icon: faFlag }, 'completeBook'));
-
-    if (hasText) {
-      items.push(
-        item({ label: 'reader.jump', icon: mergeEntries.JUMP_TO_POSITION.icon }, 'jumpClick')
-      );
-    }
-
-    if ($readerImageGalleryPictures$.length) {
-      items.push(
-        item(
-          { label: 'reader.images', icon: mergeEntries.READER_IMAGE_GALLERY.icon },
-          'readerImageGalleryClick'
-        )
-      );
-    }
-
-    // Larger screens have these in the section navigation.
-    items.push(
-      isOldUrl
-        ? item(
-            { label: 'reader.domainHint', icon: mergeEntries.DOMAIN_HINT.icon },
-            'domainHintClick'
-          )
-        : item(
-            { label: 'nav.statistics', icon: mergeEntries.STATISTICS.icon },
-            'statisticsClick',
-            'sm:hidden'
-          ),
-      item(
-        { label: 'nav.settings', icon: mergeEntries.SETTINGS.icon },
-        'settingsClick',
-        'sm:hidden'
-      ),
-      item(
-        { label: 'book.library', icon: mergeEntries.MANAGE.icon },
-        'bookManagerClick',
-        'sm:hidden'
-      )
-    );
-
-    moreMenuItems = items;
+  function run(action: Action) {
+    sheet = '';
+    dispatch(action as 'back');
   }
 
-  function runMoreAction(action: HeaderAction) {
-    moreMenuElm.toggleOpen();
-    dispatch(action);
+  function setFurigana(choice: FuriganaChoice) {
+    const { hideFurigana, style } = furiganaSettings(choice);
+
+    if (style) {
+      furiganaStyle$.next(style);
+    }
+    hideFurigana$.next(hideFurigana);
   }
 
-  function dispatchCustomReadingPointAction(action: any) {
-    dispatch(action);
-    customReadingPointMenuElm.toggleOpen();
+  function changeLayout(apply: () => void) {
+    sheet = '';
+    dispatch('layoutChange', apply);
   }
 </script>
 
-<AppHeader
-  active={undefined}
-  onNavigate={(section) => {
-    if (section === 'statistics') {
-      dispatch('statisticsClick');
-    } else if (section === 'words') {
-      dispatch('wordsClick');
-    } else if (section === 'settings') {
-      dispatch('settingsClick');
-    } else {
-      dispatch('bookManagerClick');
-    }
-  }}
-  onBack={() => dispatch('bookManagerClick')}
->
-  {#if hasChapterData}
-    <button
-      type="button"
-      class="app-header-icon"
-      title={$t$('reader.toc')}
-      on:click={() => dispatch('tocClick')}
-    >
-      <Fa icon={faList} />
-    </button>
-  {/if}
-  <button
-    type="button"
-    class="app-header-icon"
-    title={$t$('reader.bookmark')}
-    on:click={() => dispatch('bookmarkClick')}
-  >
-    <Fa icon={isBookmarkScreen ? fasBookmark : farBookmark} />
+<header class="reader-bar">
+  <button class="bar-icon" title={$t$('nav.back')} on:click={() => dispatch('back')}>
+    <Fa icon={faChevronLeft} />
   </button>
-  {#if hasBookmarkData}
-    <button
-      type="button"
-      class="app-header-icon hidden md:inline-flex"
-      title={$t$('reader.returnToBookmark')}
-      on:click={() => dispatch('scrollToBookmarkClick')}
+  <div class="bar-title">
+    <span class="bar-book" lang="ja">{title}</span>
+    <span class="bar-place"
+      ><span lang="ja">{chapter}</span>{chapter && progress ? ' · ' : ''}{progress}</span
     >
-      <Fa icon={faRotateLeft} />
-    </button>
-  {/if}
-  {#if hasText}
-    <button
-      type="button"
-      class="app-header-icon hidden sm:inline-flex"
-      title={$t$('reader.search')}
-      on:click={() => dispatch('searchClick')}
-    >
-      <Fa icon={faMagnifyingGlass} />
-    </button>
-  {/if}
+  </div>
   <button
-    type="button"
-    class="app-header-icon hidden sm:inline-flex"
-    title={$t$('reader.listenTitle')}
-    on:click={() => dispatch('ttsClick')}
+    class="bar-icon bar-aa"
+    class:bar-icon-active={sheet === 'aa'}
+    title={$t$('reader.quickSettings')}
+    aria-expanded={sheet === 'aa'}
+    on:click={() => (sheet = sheet === 'aa' ? '' : 'aa')}
   >
-    <Fa icon={faHeadphones} />
+    Aa
   </button>
   <button
-    type="button"
-    class="app-header-icon"
-    title={$t$('reader.companionTitle')}
-    on:click={() => dispatch('companionClick')}
+    class="bar-icon"
+    class:bar-icon-active={sheet === 'more'}
+    title={$t$('reader.more')}
+    aria-expanded={sheet === 'more'}
+    on:click={() => (sheet = sheet === 'more' ? '' : 'more')}
   >
-    <Fa icon={faBookAtlas} />
+    <Fa icon={faEllipsis} />
   </button>
-  {#if $customReadingPointEnabled$ || $viewMode$ === ViewMode.Paginated}
-    <Popover
-      placement="bottom"
-      fallbackPlacements={['bottom-end', 'bottom-start']}
-      yOffset={10}
-      {panelClasses}
-      bind:this={customReadingPointMenuElm}
-    >
-      <div
-        slot="icon"
-        class="app-header-icon hidden md:inline-flex"
-        title={$t$('reader.readingPoint')}
-      >
-        <Fa icon={faLocationDot} />
+  <button
+    class="bar-icon"
+    class:bar-icon-active={panelOpen}
+    title={$t$('reader.panelToggle')}
+    aria-pressed={panelOpen}
+    on:click={() => dispatch('panelClick')}
+  >
+    <!-- A page with the panel on its right; on phones the panel is a sheet at the bottom. -->
+    <svg class="hidden md:block" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
+      <rect
+        x="2.75"
+        y="3.75"
+        width="14.5"
+        height="12.5"
+        rx="1"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+      />
+      <rect
+        x="11.5"
+        y="3.75"
+        width="5.75"
+        height="12.5"
+        fill="currentColor"
+        opacity={panelOpen ? 1 : 0}
+      />
+      <path d="M11.5 4v12" stroke="currentColor" stroke-width="1.5" />
+    </svg>
+    <svg class="md:hidden" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
+      <rect
+        x="2.75"
+        y="3.75"
+        width="14.5"
+        height="12.5"
+        rx="1"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+      />
+      <path d="M3 12h14" stroke="currentColor" stroke-width="1.5" />
+    </svg>
+  </button>
+</header>
+
+{#if sheet === 'aa'}
+  <ReaderSheet title={$t$('reader.quickSettings')} on:close={() => (sheet = '')}>
+    <div class="qs-row">
+      <span>{$t$('reader.size')}</span>
+      <div class="qs-stepper">
+        <button
+          title={$t$('reader.smaller')}
+          on:click={() => fontSize$.next(Math.max(8, $fontSize$ - 1))}
+        >
+          <Fa icon={faMinus} />
+        </button>
+        <output aria-label={$t$('reader.fontSize')}>{$fontSize$}</output>
+        <button title={$t$('reader.larger')} on:click={() => fontSize$.next($fontSize$ + 1)}>
+          <Fa icon={faPlus} />
+        </button>
       </div>
-      <div slot="content" class="flex flex-col">
-        {#each customReadingPointMenuItems as actionItem (actionItem.label)}
+    </div>
+    <div class="qs-row">
+      <span>{$t$('reader.direction')}</span>
+      <div class="app-segmented" role="radiogroup" aria-label={$t$('reader.direction')}>
+        {#each directions as [mode, label] (mode)}
           <button
-            type="button"
-            class="app-popover-item"
-            on:click={() => dispatchCustomReadingPointAction(actionItem.action)}
+            role="radio"
+            aria-checked={$writingMode$ === mode}
+            class="app-segment"
+            class:app-segment-selected={$writingMode$ === mode}
+            on:click={() => $writingMode$ !== mode && changeLayout(() => writingMode$.next(mode))}
           >
-            {$t$(actionItem.label)}
+            {$t$(label)}
           </button>
         {/each}
       </div>
-    </Popover>
-  {/if}
-  {#if showFullscreenButton}
-    <button
-      type="button"
-      class="app-header-icon hidden md:inline-flex"
-      title={$t$('reader.toggleFullscreen')}
-      on:click={() => dispatch('fullscreenClick')}
-    >
-      <Fa icon={faExpand} />
-    </button>
-  {/if}
-  <Popover
-    placement="bottom-end"
-    fallbackPlacements={['bottom', 'bottom-start']}
-    yOffset={10}
-    {panelClasses}
-  >
-    <div slot="icon" class="app-header-icon" title={$t$('reader.quickSettings')}>
-      <Fa icon={faPalette} />
     </div>
-    <div slot="content" class="flex w-64 flex-col gap-3 p-2">
-      <div class="app-popover-heading">{$t$('reader.theme')}</div>
-      <div class="flex flex-wrap gap-2 px-2">
+    <div class="qs-row">
+      <span>{$t$('reader.view')}</span>
+      <div class="app-segmented" role="radiogroup" aria-label={$t$('reader.view')}>
+        {#each views as [mode, label] (mode)}
+          <button
+            role="radio"
+            aria-checked={$viewMode$ === mode}
+            class="app-segment"
+            class:app-segment-selected={$viewMode$ === mode}
+            on:click={() => $viewMode$ !== mode && changeLayout(() => viewMode$.next(mode))}
+          >
+            {$t$(label)}
+          </button>
+        {/each}
+      </div>
+    </div>
+    <div class="qs-row">
+      <span>{$t$('reader.furigana')}</span>
+      <div class="app-segmented" role="radiogroup" aria-label={$t$('reader.furigana')}>
+        {#each furiganaChoices as [choice, label] (choice)}
+          <button
+            role="radio"
+            aria-checked={furigana === choice}
+            class="app-segment"
+            class:app-segment-selected={furigana === choice}
+            on:click={() => setFurigana(choice)}
+          >
+            {$t$(label)}
+          </button>
+        {/each}
+      </div>
+    </div>
+    <div class="qs-row qs-themes">
+      <span>{$t$('reader.theme')}</span>
+      <div class="qs-swatches">
         {#each themes as option (option.id)}
           <button
-            type="button"
-            class="h-9 w-9 rounded-lg border-2 text-sm"
-            style:border-color={option.id === $selectedThemeId$
-              ? 'var(--accent-color)'
-              : 'var(--app-control-border)'}
+            class="qs-swatch"
+            class:qs-swatch-active={option.id === $selectedThemeId$}
             style:color={option.colors.readerText}
             style:background-color={option.colors.readerBackground}
             title={option.name}
+            aria-pressed={option.id === $selectedThemeId$}
             on:click={() => selectTheme(option.id)}
           >
             あ
           </button>
         {/each}
       </div>
-      <div class="app-popover-heading">{$t$('reader.fontSize')}</div>
-      <div class="flex items-center justify-between px-2 pb-1">
-        <button
-          type="button"
-          class="font-size-button"
-          title={$t$('reader.smaller')}
-          on:click={() => fontSize$.next(Math.max(8, $fontSize$ - 1))}
-        >
-          <Fa icon={faMinus} />
-        </button>
-        <span class="font-semibold">{$fontSize$}px</span>
-        <button
-          type="button"
-          class="font-size-button"
-          title={$t$('reader.larger')}
-          on:click={() => fontSize$.next($fontSize$ + 1)}
-        >
-          <Fa icon={faPlus} />
-        </button>
-      </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={hoverFurigana}
-        class="app-switch justify-between px-2 pb-1"
-        on:click={toggleHoverFurigana}
-      >
-        <span class="app-switch-text">{$t$('reader.hoverFurigana')}</span>
-        <span class="app-switch-thumb" />
-      </button>
     </div>
-  </Popover>
-  <Popover
-    placement="bottom-end"
-    fallbackPlacements={['bottom', 'bottom-start']}
-    yOffset={10}
-    {panelClasses}
-    bind:this={moreMenuElm}
-  >
-    <div slot="icon" class="app-header-icon" title={$t$('reader.more')}>
-      <Fa icon={faEllipsisVertical} />
-    </div>
-    <div slot="content" class="flex flex-col">
-      {#each moreMenuItems as item (item.label)}
-        <button type="button" class={item.classes} on:click={() => runMoreAction(item.action)}>
-          <Fa icon={item.icon} fw />
-          {item.label}
-        </button>
-      {/each}
-    </div>
-  </Popover>
-  {#if $viewMode$ === ViewMode.Continuous && !$isMobile$}
-    <span class="px-2 text-sm font-semibold" title={$t$('reader.autoscrollSpeed')}>
-      {autoScrollMultiplier}x
-    </span>
-  {/if}
-</AppHeader>
+    <button class="app-button-quiet mt-4" on:click={() => run('settingsClick')}>
+      {$t$('reader.allSettings')} →
+    </button>
+  </ReaderSheet>
+{/if}
+
+{#if sheet === 'more'}
+  <ReaderSheet title={$t$('reader.moreTitle')} on:close={() => (sheet = '')}>
+    {#each moreGroups as group, i (i)}
+      <ul class="more-group">
+        {#each group as [label, action] (label)}
+          <li>
+            <button class="more-item" on:click={() => run(action)}>
+              {$t$(label, { speed: autoScrollMultiplier ?? 1 })}
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {/each}
+  </ReaderSheet>
+{/if}
 
 <style>
-  .font-size-button {
-    display: inline-flex;
-    width: 2.25rem;
-    height: 2.25rem;
+  .reader-bar {
+    display: flex;
+    height: 3.5rem;
     align-items: center;
-    justify-content: center;
-    border: 1px solid currentColor;
-    border-radius: 0.75rem;
-    opacity: 0.8;
+    gap: 0.25rem;
+    padding: 0 0.5rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
+    /* A flat layer on the opaque page colour: some themes' panel colour is translucent (it was blurred). */
+    background:
+      linear-gradient(var(--reader-panel-bg), var(--reader-panel-bg)), var(--background-color);
+    color: var(--reader-panel-fg);
+    font-family: var(--app-font-ui);
   }
 
-  .font-size-button:hover {
-    opacity: 1;
+  .bar-icon {
+    display: inline-flex;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    border-radius: 2px;
+    font-size: 1.05rem;
+  }
+
+  .bar-icon:hover {
+    background: color-mix(in srgb, var(--reader-panel-fg) 6%, transparent);
+  }
+
+  .bar-icon-active,
+  .bar-icon-active:hover {
+    background: color-mix(in srgb, var(--accent-color) 12%, var(--reader-panel-bg));
+    color: var(--accent-strong-color);
+  }
+
+  .bar-aa {
+    font-size: 1.15rem;
+    font-weight: 700;
+  }
+
+  .bar-title {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    padding: 0 0.25rem;
+    line-height: 1.3;
+  }
+
+  .bar-book {
+    overflow: hidden;
+    font-size: var(--type-body);
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .bar-place {
+    overflow: hidden;
+    color: color-mix(in srgb, var(--reader-panel-fg) 68%, transparent);
+    font-size: var(--type-label);
+    font-variant-numeric: tabular-nums;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .qs-row {
+    display: flex;
+    min-height: 3.75rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
+  }
+
+  .qs-stepper {
+    display: flex;
+    border: 1px solid var(--reader-panel-fg);
+    border-radius: 2px;
+  }
+
+  .qs-stepper button {
+    display: inline-flex;
+    width: 2.75rem;
+    height: 2.5rem;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .qs-stepper button:hover {
+    background: color-mix(in srgb, var(--reader-panel-fg) 6%, transparent);
+  }
+
+  .qs-stepper output {
+    display: inline-flex;
+    min-width: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    background: var(--reader-panel-fg);
+    color: var(--reader-panel-bg);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .qs-themes {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+    padding: 0.75rem 0;
+  }
+
+  .qs-swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .qs-swatch {
+    width: 2.75rem;
+    height: 2.75rem;
+    border: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
+    border-radius: 2px;
+  }
+
+  .qs-swatch-active {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+  }
+
+  .more-group {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .more-group + .more-group {
+    margin-top: 0.75rem;
+  }
+
+  .more-item {
+    display: flex;
+    width: 100%;
+    min-height: 3.25rem;
+    align-items: center;
+    border-bottom: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
+    text-align: left;
+  }
+
+  .more-item:hover {
+    color: var(--accent-strong-color);
   }
 </style>

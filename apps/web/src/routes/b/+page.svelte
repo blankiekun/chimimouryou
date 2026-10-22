@@ -26,7 +26,13 @@
   import { browser } from '$app/environment';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { faCloudBolt, faPause, faPlay, faSpinner } from '@fortawesome/free-solid-svg-icons';
+  import {
+    faCloudBolt,
+    faPause,
+    faPlay,
+    faSpinner,
+    faXmark
+  } from '@fortawesome/free-solid-svg-icons';
   import BookReader from '$lib/components/book-reader/book-reader.svelte';
   import type {
     AutoScroller,
@@ -99,10 +105,13 @@
   } from '$lib/data/store';
   import { addGeneratedRuby, generatedReadings$ } from '$lib/data/generated-furigana';
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
-  import ReaderCompanion, {
-    type CompanionTab
-  } from '$lib/components/book-reader/reader-companion.svelte';
-  import BookSearchPanel from '$lib/components/book-reader/book-search-panel.svelte';
+  import ReaderPanel from '$lib/components/book-reader/reader-panel.svelte';
+  import {
+    currentChapterLabel,
+    jumpOffset,
+    readerWidth,
+    type PanelTab
+  } from '$lib/data/reader-panel';
   import HighlightEditor from '$lib/components/book-reader/highlight-editor.svelte';
   import SelectionToolbar from '$lib/components/book-reader/selection-toolbar.svelte';
   import {
@@ -128,7 +137,6 @@
     rangeForCounts
   } from '$lib/functions/book-text/text-positions';
   import BookReaderHeader from '$lib/components/book-reader/book-reader-header.svelte';
-  import ListenPanel, { listenBarRem } from '$lib/components/book-reader/listen-panel.svelte';
   import AnkiWatcher from '$lib/components/anki-watcher.svelte';
   import { bookSentenceAudio, noteSentence } from '$lib/data/anki';
   import { enableExtrasSync } from '$lib/data/extras-sync';
@@ -153,10 +161,8 @@
     nextChapter$,
     sectionList$,
     sectionProgress$,
-    tocIsOpen$,
     type SectionWithProgress
   } from '$lib/components/book-reader/book-toc/book-toc';
-  import BookToc from '$lib/components/book-reader/book-toc/book-toc.svelte';
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
   import NumberDialog from '$lib/components/number-dialog.svelte';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
@@ -242,27 +248,22 @@
     ? $verticalCustomReadingPosition$
     : $horizontalCustomReadingPosition$;
   let customReadingPointScrollOffset = 0;
-  let showTts = false;
-  let showSearch = false;
-  let searchQuery = '';
-  let searchIgnoreKana = true;
-  let searchRegex = false;
-  let searchResults: SearchResult[] = [];
-  let searchActiveIndex = -1;
+  /** The side panel (Contents, Search, Highlights, Listen, plugin tabs); mounted once opened */
+  let panelOpen = false;
+  let panelMounted = false;
+  let panelTab: PanelTab = 'contents';
   let searchMatch: { start: number; end: number } | undefined;
   let searchIndexPromise: Promise<SearchIndex> | undefined;
   let searchIndexHtml = '';
   let annotations: AnnotationsController | undefined;
   let editingHighlight: Highlight | undefined;
   let editingFocusNote = false;
-  let companionTab: CompanionTab | undefined;
   /** Line being read aloud (audiobook or AI voice) */
   let readingMatch: { start: number; end: number } | undefined;
   /** Days since the book was last opened, if long enough to offer a recap */
   let welcomeBackDays = 0;
   let highlightRanges: { highlight: Highlight; range: Range }[] = [];
   let highlightsDirty = true;
-  let ttsStartCharCount = 0;
   let selectedRange: Range | undefined;
   /** A plugin's selection action, open with the passage it was given */
   let selectionPanel: { action: SelectionActionContribution; passage: PassageContext } | undefined;
@@ -643,7 +644,7 @@
     reduceToEmptyString()
   );
 
-  $: if ($tocIsOpen$) {
+  $: if (panelOpen) {
     autoScroller?.off();
   }
 
@@ -679,8 +680,9 @@
 
   $: isPaginated = $viewMode$ === ViewMode.Paginated;
 
-  // Room kept free above the footer for the Listen bar, so it covers no text.
-  $: listenReserve = browser && showTts ? convertRemToPixels(window, listenBarRem) : 0;
+  $: bookWidth = browser
+    ? readerWidth($containerViewportWidth$ ?? 0, panelOpen, convertRemToPixels(window, 1))
+    : 0;
 
   $: firstDimensionMargin =
     browser && $enableTapEdgeToFlip$ && isPaginated && $verticalMode$
@@ -790,12 +792,6 @@
     isTrackerPaused$.next(wasTrackerPaused);
   }
 
-  function openTts() {
-    ttsStartCharCount = exploredCharCount;
-    showTts = true;
-    showHeader = false;
-  }
-
   /** Keep the page in step with what is being read aloud. */
   function followTts(charCount: number) {
     if (charCount > exploredCharCount) {
@@ -817,7 +813,12 @@
         lastBookmarkModified: new Date().getTime(),
         progress: 0
       },
-      customReadingPointScrollOffset
+      customReadingPointScrollOffset +
+        jumpOffset(
+          { vertical: $verticalMode$, paginated: isPaginated, panelOpen },
+          $containerViewportWidth$ ?? 0,
+          convertRemToPixels(window, 1)
+        )
     );
   }
 
@@ -881,6 +882,8 @@
         after: getTextWithoutFurigana(after).slice(0, 600)
       }
     };
+    panelOpen = true;
+    panelMounted = true;
     selectedRange = undefined;
     document.getSelection()?.removeAllRanges();
   }
@@ -1019,8 +1022,8 @@
       rect.width + rect.height > 0 &&
       rect.right > 0 &&
       rect.bottom > 0 &&
-      rect.left < window.innerWidth &&
-      rect.bottom <= window.innerHeight - listenReserve;
+      rect.left < bookWidth &&
+      rect.bottom <= window.innerHeight;
 
     if (!visible) {
       scrollToCount(match.start);
@@ -1149,10 +1152,26 @@
     jumpToCount(result.start);
   }
 
-  function closeSearch() {
-    showSearch = false;
-    searchMatch = undefined;
-    scheduleHighlights(true);
+  function closePanel() {
+    panelOpen = false;
+    selectionPanel = undefined;
+    if (searchMatch) {
+      searchMatch = undefined;
+      scheduleHighlights(true);
+    }
+  }
+
+  /** Direction or view from the Aa sheet: save the place, then remount the reader there. */
+  async function changeLayout(apply: () => void) {
+    await bookmarkPage();
+    apply();
+  }
+
+  /** Phones: a jump from the sheet closes it, so the place it went to is visible. */
+  function closeSheetAfterJump() {
+    if (window.innerWidth < 768) {
+      panelOpen = false;
+    }
   }
 
   function getSearchIndex() {
@@ -1170,10 +1189,10 @@
     return searchIndexPromise;
   }
 
-  function openPanel(panel: 'search' | CompanionTab) {
-    showHeader = false;
-    showSearch = panel === 'search';
-    companionTab = panel === 'search' ? undefined : panel;
+  function openPanel(panel: PanelTab) {
+    panelTab = panel;
+    panelOpen = true;
+    panelMounted = true;
     welcomeBackDays = 0;
 
     if (
@@ -1225,7 +1244,12 @@
         lastBookmarkModified: new Date().getTime(),
         progress: 0
       },
-      customReadingPointScrollOffset
+      customReadingPointScrollOffset +
+        jumpOffset(
+          { vertical: $verticalMode$, paginated: isPaginated, panelOpen },
+          $containerViewportWidth$ ?? 0,
+          convertRemToPixels(window, 1)
+        )
     );
   }
 
@@ -2170,30 +2194,32 @@
 {$initAnnotations$ ?? ''}
 {$handleUpdateImageGalleryPictureSpoilers$ ?? ''}
 <button class="fixed inset-x-0 top-0 z-10 h-8 w-full" on:click={() => (showHeader = true)} />
-{#if showHeader}
+{#if showHeader || panelOpen}
   <div
-    class="elevation-4 writing-horizontal-tb fixed inset-x-0 top-0 z-10 w-full"
+    class="writing-horizontal-tb fixed left-0 right-0 top-0 z-[61] {panelOpen
+      ? 'md:right-[26.75rem]'
+      : ''}"
     transition:fly|local={{ y: -300, easing: quintInOut }}
     use:clickOutside={() => (showHeader = false)}
   >
     <BookReaderHeader
-      hasChapterData={!!$sectionData$?.length}
+      title={$rawBookData$?.title ?? ''}
+      chapter={$sectionData$ ? currentChapterLabel($sectionData$) : ''}
+      progress={bookCharCount ? `${Math.floor((exploredCharCount / bookCharCount) * 100)}%` : ''}
+      {panelOpen}
       hasText={!!bookCharCount}
       hasCustomReadingPoint={!!(
         ($customReadingPointEnabled$ || isPaginated) &&
         ((isPaginated && customReadingPointRange) ||
           (!isPaginated && customReadingPointLeft > -1 && customReadingPointTop > -1))
       )}
+      canSetReadingPoint={$customReadingPointEnabled$ || isPaginated}
       showFullscreenButton={fullscreenManager.fullscreenEnabled}
-      autoScrollMultiplier={$multiplier$}
+      autoScrollMultiplier={isPaginated ? undefined : $multiplier$}
+      tracker={$statisticsEnabled$ && showTrackerIcon ? { paused: $isTrackerPaused$ } : undefined}
       {hasBookmarkData}
-      bind:isBookmarkScreen
-      on:tocClick={() => {
-        pauseTracker();
-
-        showHeader = false;
-        tocIsOpen$.next(true);
-      }}
+      on:back={() => leaveReader(mergeEntries.MANAGE.routeId)}
+      on:panelClick={() => (panelOpen ? closePanel() : openPanel(panelTab))}
       on:jumpClick={handleJump}
       on:completeBook={completeBook}
       on:setCustomReadingPoint={handleSetCustomReadingPoint}
@@ -2222,7 +2248,12 @@
           restartTrackerAfterCharacterChangeOrTime(1000);
         }
       }}
+      on:autoScrollClick={() => {
+        showHeader = false;
+        autoScroller?.toggle();
+      }}
       on:fullscreenClick={onFullscreenClick}
+      on:trackerClick={trackerDblClickHandler}
       on:bookmarkClick={bookmarkPage}
       on:scrollToBookmarkClick={() => {
         showHeader = false;
@@ -2242,10 +2273,7 @@
       on:settingsClick={() => leaveReader(mergeEntries.SETTINGS.routeId, false)}
       on:wordsClick={() => leaveReader('/words', false)}
       on:domainHintClick={onDomainHintClick}
-      on:bookManagerClick={() => leaveReader(mergeEntries.MANAGE.routeId)}
-      on:ttsClick={openTts}
-      on:searchClick={() => openPanel('search')}
-      on:companionClick={() => openPanel(companionTab ?? 'highlights')}
+      on:layoutChange={({ detail }) => changeLayout(detail)}
     />
   </div>
 {/if}
@@ -2284,58 +2312,60 @@
   {/if}
   <StyleSheetRenderer styleSheet={$bookData$.styleSheet} />
   <!-- New HTML (generated furigana): remount, as on opening the book; the readers can't swap it in place. -->
-  {#key $bookData$.htmlContent}
-    <BookReader
-      htmlContent={$bookData$.htmlContent}
-      width={$containerViewportWidth$ ?? 0}
-      height={Math.max(0, ($containerViewportHeight$ ?? 0) - listenReserve)}
-      {fontFeatureSettings}
-      {verticalTextOrientation}
-      prioritizeReaderStyles={$prioritizeReaderStyles$}
-      enableTextJustification={$enableTextJustification$}
-      enableTextWrapPretty={$enableTextWrapPretty$}
-      verticalMode={$verticalMode$}
-      fontColor={$themeOption$?.fontColor}
-      backgroundColor={$backgroundColor$}
-      hintFuriganaFontColor={$themeOption$?.hintFuriganaFontColor}
-      hintFuriganaShadowColor={$themeOption$?.hintFuriganaShadowColor}
-      fontFamilyGroupOne={$fontFamilyGroupOne$}
-      fontFamilyGroupTwo={$fontFamilyGroupTwo$}
-      fontWeight={$fontWeight$}
-      fontSize={$fontSize$}
-      lineHeight={$lineHeight$}
-      textIndentation={$textIndentation$}
-      textMarginMode={$textMarginMode$}
-      textMarginValue={$textMarginValue$}
-      hideSpoilerImage={$hideSpoilerImage$}
-      hideFurigana={$hideFurigana$}
-      furiganaStyle={$furiganaStyle$}
-      viewMode={$viewMode$}
-      secondDimensionMaxValue={$secondDimensionMaxValue$}
-      {firstDimensionMargin}
-      autoPositionOnResize={$autoPositionOnResize$}
-      avoidPageBreak={$avoidPageBreak$}
-      pageColumns={$pageColumns$}
-      autoBookmark={$autoBookmark$}
-      autoBookmarkTime={$autoBookmarkTime$}
-      multiplier={$multiplier$}
-      bind:exploredCharCount
-      bind:bookCharCount
-      bind:isBookmarkScreen
-      bind:bookmarkData
-      bind:autoScroller
-      bind:bookmarkManager
-      bind:pageManager
-      bind:customReadingPoint
-      bind:customReadingPointTop
-      bind:customReadingPointLeft
-      bind:customReadingPointScrollOffset
-      bind:customReadingPointRange
-      bind:showCustomReadingPoint
-      on:bookmark={bookmarkPage}
-      on:trackerPause={() => pauseTracker(true)}
-    />
-  {/key}
+  <!-- Also on a direction or view change from the Aa sheet, after it saved the place. -->
+  {#key $bookData$.htmlContent}{#key `${$viewMode$}:${$verticalMode$}`}
+      <BookReader
+        htmlContent={$bookData$.htmlContent}
+        width={bookWidth}
+        reserveRight={($containerViewportWidth$ ?? 0) - bookWidth}
+        height={$containerViewportHeight$ ?? 0}
+        {fontFeatureSettings}
+        {verticalTextOrientation}
+        prioritizeReaderStyles={$prioritizeReaderStyles$}
+        enableTextJustification={$enableTextJustification$}
+        enableTextWrapPretty={$enableTextWrapPretty$}
+        verticalMode={$verticalMode$}
+        fontColor={$themeOption$?.fontColor}
+        backgroundColor={$backgroundColor$}
+        hintFuriganaFontColor={$themeOption$?.hintFuriganaFontColor}
+        hintFuriganaShadowColor={$themeOption$?.hintFuriganaShadowColor}
+        fontFamilyGroupOne={$fontFamilyGroupOne$}
+        fontFamilyGroupTwo={$fontFamilyGroupTwo$}
+        fontWeight={$fontWeight$}
+        fontSize={$fontSize$}
+        lineHeight={$lineHeight$}
+        textIndentation={$textIndentation$}
+        textMarginMode={$textMarginMode$}
+        textMarginValue={$textMarginValue$}
+        hideSpoilerImage={$hideSpoilerImage$}
+        hideFurigana={$hideFurigana$}
+        furiganaStyle={$furiganaStyle$}
+        viewMode={$viewMode$}
+        secondDimensionMaxValue={$secondDimensionMaxValue$}
+        {firstDimensionMargin}
+        autoPositionOnResize={$autoPositionOnResize$}
+        avoidPageBreak={$avoidPageBreak$}
+        pageColumns={$pageColumns$}
+        autoBookmark={$autoBookmark$}
+        autoBookmarkTime={$autoBookmarkTime$}
+        multiplier={$multiplier$}
+        bind:exploredCharCount
+        bind:bookCharCount
+        bind:isBookmarkScreen
+        bind:bookmarkData
+        bind:autoScroller
+        bind:bookmarkManager
+        bind:pageManager
+        bind:customReadingPoint
+        bind:customReadingPointTop
+        bind:customReadingPointLeft
+        bind:customReadingPointScrollOffset
+        bind:customReadingPointRange
+        bind:showCustomReadingPoint
+        on:bookmark={bookmarkPage}
+        on:trackerPause={() => pauseTracker(true)}
+      />
+    {/key}{/key}
   {$initBookmarkData$ ?? ''}
   {$setBackgroundColor$ ?? ''}
   {$setWritingMode$ ?? ''}
@@ -2345,28 +2375,6 @@
   {$startTrackerOnOpen$ ?? ''}
 {:else}
   {$leaveIfBookMissing$ ?? ''}
-{/if}
-
-{#if $tocIsOpen$ && $sectionData$}
-  <div
-    class="writing-horizontal-tb fixed top-0 left-0 z-[60] flex h-full w-full max-w-xl flex-col justify-between"
-    style:color={$themeOption$?.fontColor}
-    style:background-color={$backgroundColor$}
-    in:fly|local={{ x: -100, duration: 100, easing: quintInOut }}
-    use:clickOutside={() => {
-      if ($statisticsEnabled$ && !wasTrackerPaused) {
-        isTrackerPaused$.next(false);
-      }
-      tocIsOpen$.next(false);
-    }}
-  >
-    <BookToc
-      sectionData={$sectionData$}
-      verticalMode={$verticalMode$}
-      {exploredCharCount}
-      {wasTrackerPaused}
-    />
-  </div>
 {/if}
 
 {#if showReaderImageGallery}
@@ -2474,7 +2482,9 @@
       tabindex="0"
       role="button"
       title={$t$('reader.copyProgress')}
-      class="writing-horizontal-tb fixed bottom-2 right-2 z-10 text-xs leading-none tabular-nums select-none whitespace-pre"
+      class="writing-horizontal-tb fixed bottom-2 right-2 z-10 text-xs leading-none tabular-nums select-none whitespace-pre {panelOpen
+        ? 'md:right-[27.25rem]'
+        : ''}"
       class:invisible={!$showCharacterCounter$ &&
         !$showPercentage$ &&
         !$showFooterChapterCharacterCounter$ &&
@@ -2517,30 +2527,8 @@
   />
 {/if}
 
-{#if showTts && $rawBookData$ && $bookData$}
-  <ListenPanel
-    title={$rawBookData$.title}
-    elementHtml={$rawBookData$.elementHtml}
-    getIndex={getSearchIndex}
-    position={exploredCharCount}
-    startCharCount={ttsStartCharCount}
-    on:position={(ev) => {
-      if (!cssHighlightsSupported) {
-        followTts(ev.detail);
-      }
-    }}
-    on:reading={(ev) => showReading(ev.detail)}
-    on:jump={(ev) => jumpToCount(ev.detail)}
-    on:close={() => {
-      showTts = false;
-      showReading(undefined);
-    }}
-  />
-{/if}
-
 {#if selectedRange && !selectionPanel && !editingHighlight}
   <SelectionToolbar
-    raised={showTts}
     word={selectionForm(selectedWord, wordForms?.forms)}
     on:highlight={({ detail }) => createHighlight(detail)}
     on:note={() => createHighlight('yellow', true)}
@@ -2566,67 +2554,64 @@
   {/key}
 {/if}
 
-{#if showSearch && $bookData$}
-  <BookSearchPanel
-    getIndex={getSearchIndex}
-    sections={$sectionList$}
-    bind:query={searchQuery}
-    bind:ignoreKana={searchIgnoreKana}
-    bind:regex={searchRegex}
-    bind:results={searchResults}
-    bind:activeIndex={searchActiveIndex}
-    on:jump={({ detail }) => jumpToSearchResult(detail)}
-    on:close={closeSearch}
-  />
-{/if}
-
-{#if companionTab && $rawBookData$ && $bookData$}
-  <ReaderCompanion
-    bind:tab={companionTab}
+{#if panelMounted && $rawBookData$ && $bookData$}
+  <ReaderPanel
+    open={panelOpen}
+    bind:tab={panelTab}
     title={$rawBookData$.title}
+    elementHtml={$rawBookData$.elementHtml}
     highlights={$highlights$ ?? []}
     syncError={$highlightSyncError$ ?? ''}
     getIndex={getSearchIndex}
     sections={$sectionList$}
+    sectionData={$sectionData$ ?? []}
     position={exploredCharCount}
     bookCharacters={bookCharCount}
-    on:jump={({ detail }) => jumpToCount(detail.start)}
+    selection={selectionPanel}
+    on:close={closePanel}
+    on:closeSelection={() => (selectionPanel = undefined)}
+    on:navigated={closeSheetAfterJump}
+    on:jump={({ detail }) => {
+      jumpToCount(detail);
+      closeSheetAfterJump();
+    }}
+    on:searchJump={({ detail }) => {
+      jumpToSearchResult(detail);
+      closeSheetAfterJump();
+    }}
     on:edit={({ detail }) => {
       editingHighlight = detail;
       editingFocusNote = true;
     }}
-    on:close={() => (companionTab = undefined)}
+    on:position={(ev) => {
+      if (!cssHighlightsSupported) {
+        followTts(ev.detail);
+      }
+    }}
+    on:reading={(ev) => showReading(ev.detail)}
   />
 {/if}
 
-{#if welcomeBackDays && storedExploredCharacter > 0 && absenceTab && companionTab !== absenceTab.key}
+{#if welcomeBackDays && storedExploredCharacter > 0 && absenceTab && !(panelOpen && panelTab === absenceTab.key)}
   <div
-    class="reader-panel writing-horizontal-tb fixed left-1/2 top-10 z-20 flex -translate-x-1/2 items-center gap-3 rounded-full py-1.5 pl-4 pr-1.5 text-sm shadow-lg"
+    class="writing-horizontal-tb fixed left-1/2 top-10 z-20 flex -translate-x-1/2 items-center gap-4 rounded-sm bg-[var(--reader-panel-fg)] py-2 pl-4 pr-1 text-sm text-[var(--reader-panel-bg)]"
     role="status"
   >
     <span>{$t$('reader.welcomeBack', { days: welcomeBackDays })}</span>
     <button
-      class="reader-panel-chip rounded-full px-3 py-1 font-semibold"
+      class="font-bold underline underline-offset-2"
       on:click={() => absenceTab && openPanel(absenceTab.key)}
     >
       {$t$(absenceTab.label)}
     </button>
     <button
-      class="px-2 opacity-70"
+      class="inline-flex h-9 w-9 items-center justify-center opacity-80"
       title={$t$('reader.dismiss')}
       on:click={() => (welcomeBackDays = 0)}
     >
-      ✕
+      <Fa icon={faXmark} />
     </button>
   </div>
-{/if}
-
-{#if selectionPanel}
-  <svelte:component
-    this={selectionPanel.action.panel}
-    passage={selectionPanel.passage}
-    on:close={() => (selectionPanel = undefined)}
-  />
 {/if}
 
 {#if bookCompleted}

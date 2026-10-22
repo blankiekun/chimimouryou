@@ -46,6 +46,14 @@ anything a reader or a server operator would notice.
 - Book page: the New words section became a Words row (new · known · ignored) with a
   Word list link to the book's word list: coverage, why its words are known, and every
   listed word as New, Known, Ignored or All with search, ✓/✕, Copy and CSV.
+- The reader has a slim bar (back, title with chapter and progress, Aa, More, panel toggle)
+  and one side panel with index tabs on its edge: Contents, Search, Highlights, Listen, and
+  Story so far and Lorebook with the AI plugin. It replaces the table of contents, the search
+  panel, the Listen bar and the reading companion; Ask AI opens in it too. On larger screens
+  the book makes room for the panel; on phones the panel, Aa and More are bottom sheets.
+  Listening goes on with the panel closed. Aa holds size, direction, view, furigana (Show,
+  Known, Hide) and theme; changing direction or view saves your place first. More holds the
+  bookmark, reading point, auto-scroll, fullscreen, jump, tracker and finish actions.
 
 ## v3.7.0 (2026-10-22)
 

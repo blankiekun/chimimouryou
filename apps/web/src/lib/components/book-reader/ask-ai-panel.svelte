@@ -101,12 +101,9 @@
   }
 </script>
 
-<aside
-  class="reader-panel writing-horizontal-tb fixed inset-x-0 bottom-0 z-30 flex max-h-[75vh] flex-col rounded-t-xl text-sm shadow-2xl md:inset-y-0 md:left-auto md:right-0 md:max-h-none md:w-[28rem] md:rounded-none"
-  aria-label={$t$('reader.askAi')}
->
-  <header class="reader-panel-divider flex items-center gap-2 border-b px-4 py-3">
-    <span class="flex-1 font-semibold">{$t$('reader.askAi')}</span>
+<section class="flex min-h-0 flex-1 flex-col text-sm" aria-label={$t$('reader.askAi')}>
+  <header class="ask-head flex items-center gap-2">
+    <h2 class="flex-1">{$t$('reader.askAi')}</h2>
     <span class="truncate text-xs opacity-60">{$openRouterModel$}</span>
     <AiLanguageToggle />
     <button class="p-1" title={$t$('reader.close')} on:click={close}><Fa icon={faXmark} /></button>
@@ -144,11 +141,15 @@
   </div>
 
   {#if presets.length}
-    <div class="flex flex-wrap gap-1.5 px-4 pb-2" role="group" aria-label={$t$('reader.quickQuestions')}>
+    <div
+      class="flex flex-wrap gap-1.5 px-4 pb-2"
+      role="group"
+      aria-label={$t$('reader.quickQuestions')}
+    >
       {#each presets as preset (preset.id)}
         <button
           type="button"
-          class="reader-panel-chip rounded-full px-3 py-1 text-xs font-semibold"
+          class="reader-panel-chip rounded-sm px-3 py-1 text-xs font-semibold"
           title={preset.prompt}
           disabled={busy}
           on:click={() => runPreset(preset)}
@@ -173,9 +174,28 @@
       <Fa icon={faPaperPlane} />
     </button>
   </form>
-</aside>
+</section>
 
 <style>
+  .ask-head {
+    margin: 0 1rem;
+    padding: 0.9rem 0 0.6rem;
+    border-bottom: 2px solid var(--reader-panel-fg);
+  }
+
+  .ask-head h2 {
+    margin: 0;
+    font-size: var(--type-h2);
+    font-weight: 700;
+  }
+
+  @media (min-width: 768px) {
+    .ask-head {
+      margin: 0 1.5rem;
+      padding-top: 1.4rem;
+    }
+  }
+
   .answer :global(code) {
     padding: 0 0.2rem;
     border-radius: 0.2rem;

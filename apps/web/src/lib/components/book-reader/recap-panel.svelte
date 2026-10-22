@@ -134,7 +134,10 @@
   {/if}
 
   {#if !plan && !error}
-    <p class="flex items-center gap-2 opacity-80"><Fa icon={faSpinner} spin /> {$t$('reader.preparing')}</p>
+    <p class="flex items-center gap-2 opacity-80">
+      <Fa icon={faSpinner} spin />
+      {$t$('reader.preparing')}
+    </p>
   {:else if plan && !running}
     <p class="mb-3 leading-relaxed">
       {$t$('reader.recapIntro', { count: position.toLocaleString(), percent: percent(position) })}
@@ -148,7 +151,7 @@
         })}
       </p>
     {/if}
-    <button class="reader-panel-chip mb-4 rounded-full px-4 py-2 font-semibold" on:click={start}>
+    <button class="reader-panel-chip mb-4 rounded-sm px-4 py-2 font-semibold" on:click={start}>
       {$t$('reader.writeRecap')}
     </button>
   {/if}
@@ -165,10 +168,12 @@
   {/if}
 
   {#if saved.length}
-    <h3 class="pb-1 pt-2 text-xs font-bold uppercase tracking-wide opacity-60">{$t$('reader.savedRecaps')}</h3>
+    <h3 class="pb-1 pt-2 text-xs font-bold uppercase tracking-wide opacity-60">
+      {$t$('reader.savedRecaps')}
+    </h3>
     {#each [...saved].reverse() as item (item.created)}
       {@const ahead = item.position > position}
-      <div class="saved rounded-lg">
+      <div class="saved rounded-sm">
         <div class="flex items-center gap-2 px-2 py-2">
           <button
             class="flex min-w-0 flex-1 items-center gap-2 text-left"
@@ -177,7 +182,9 @@
             <Fa icon={openRecap === item.created ? faChevronDown : faChevronRight} fw />
             <span class="min-w-0 flex-1">
               <span class="block truncate font-semibold">
-                {chapterLabelAt(sections, item.position) || $t$('reader.recapFallback')} · {percent(item.position)}
+                {chapterLabelAt(sections, item.position) || $t$('reader.recapFallback')} · {percent(
+                  item.position
+                )}
               </span>
               <span class="block text-xs opacity-60">
                 {$t$('reader.recapMeta', {

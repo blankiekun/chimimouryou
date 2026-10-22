@@ -1,10 +1,8 @@
 <script lang="ts">
-  import { faCopy, faDownload, faNoteSticky, faPen } from '@fortawesome/free-solid-svg-icons';
   import { highlightsToMarkdown, type Highlight } from '$lib/data/annotations';
   import { downloadBlob } from '$lib/functions/file-dom/download-blob';
   import { createEventDispatcher } from 'svelte';
   import { t$ } from '$lib/i18n';
-  import Fa from 'svelte-fa';
 
   export let title: string;
   export let highlights: Highlight[];
@@ -46,47 +44,52 @@
 </script>
 
 <div class="flex min-h-0 flex-1 flex-col">
-  <div class="flex items-center gap-3 px-4 py-2 text-xs">
+  <div class="ann-tools">
     <label class="flex items-center gap-1.5">
       <input type="checkbox" bind:checked={notesOnly} />
       {$t$('reader.notesOnly')}
     </label>
-    <span class="ml-auto opacity-70">
+    <span class="ann-count ml-auto">
       {copied
         ? $t$('reader.copied')
         : $t$(highlights.length === 1 ? 'reader.highlightCountOne' : 'reader.highlightCount', {
             count: highlights.length
           })}
     </span>
-    <button class="p-1.5" title={$t$('reader.copyMarkdown')} disabled={!highlights.length} on:click={copy}>
-      <Fa icon={faCopy} />
+    <button
+      class="app-button-quiet"
+      title={$t$('reader.copyMarkdown')}
+      disabled={!highlights.length}
+      on:click={copy}
+    >
+      {$t$('reader.copy')}
     </button>
     <button
-      class="p-1.5"
+      class="app-button-quiet"
       title={$t$('reader.downloadMarkdown')}
       disabled={!highlights.length}
       on:click={download}
     >
-      <Fa icon={faDownload} />
+      {$t$('reader.download')}
     </button>
   </div>
 
   {#if syncError}
-    <p class="px-4 pb-2 text-xs text-panel-danger">{syncError}</p>
+    <p class="px-4 pb-2 text-xs text-panel-danger md:px-6">{syncError}</p>
   {/if}
 
-  <div class="flex-1 overflow-y-auto px-2 pb-4">
+  <div class="ann-list">
     {#if !shown.length}
-      <p class="px-2 py-6 text-center opacity-70">
+      <p class="ann-empty">
         {notesOnly ? $t$('reader.noNotes') : $t$('reader.noHighlights')}
       </p>
     {/if}
     {#each groups as group, groupIndex (groupIndex)}
       {#if group.chapter}
-        <h3 class="px-2 pb-1 pt-3 text-xs font-bold opacity-60">{group.chapter}</h3>
+        <h3 class="ann-chapter" lang="ja">{group.chapter}</h3>
       {/if}
       {#each group.items as highlight (highlight.id)}
-        <div class="annotation flex gap-2 rounded-lg px-2 py-2">
+        <div class="annotation">
           <button
             type="button"
             class="min-w-0 flex-1 text-left"
@@ -94,24 +97,20 @@
             on:click={() => dispatch('jump', highlight)}
           >
             <span
-              class="annotation-text block border-l-4 pl-2"
+              class="annotation-text"
               style:border-color="var(--highlight-{highlight.color})"
               lang="ja">{highlight.text}</span
             >
             {#if highlight.note}
-              <span class="mt-1 flex gap-1.5 pl-3 text-xs opacity-80">
-                <Fa icon={faNoteSticky} class="mt-0.5 shrink-0" />
-                <span class="whitespace-pre-wrap">{highlight.note}</span>
-              </span>
+              <span class="annotation-note">{highlight.note}</span>
             {/if}
           </button>
           <button
             type="button"
-            class="self-start p-1.5 opacity-60 hover:opacity-100"
-            title={$t$('reader.edit')}
+            class="app-button-quiet self-start"
             on:click={() => dispatch('edit', highlight)}
           >
-            <Fa icon={faPen} />
+            {$t$('reader.edit')}
           </button>
         </div>
       {/each}
@@ -120,15 +119,82 @@
 </div>
 
 <style>
-  .annotation:hover {
-    background: color-mix(in srgb, var(--reader-panel-fg) 7%, transparent);
+  .ann-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    margin: 0 1rem;
+    padding: 0.75rem 0;
+    border-bottom: 2px solid var(--reader-panel-fg);
   }
 
+  .ann-count,
+  .ann-empty,
+  .ann-chapter {
+    color: color-mix(in srgb, var(--reader-panel-fg) 68%, transparent);
+    font-size: var(--type-small);
+  }
+
+  .ann-count {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ann-list {
+    min-height: 0;
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 1rem 1rem;
+  }
+
+  .ann-empty {
+    padding: 1.5rem 0;
+  }
+
+  .ann-chapter {
+    margin: 0;
+    padding: 1rem 0 0.4rem;
+    font-weight: 700;
+  }
+
+  .annotation {
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
+  }
+
+  .annotation:hover {
+    background: color-mix(in srgb, var(--reader-panel-fg) 4%, transparent);
+  }
+
+  /* The bar carries the highlight's colour, so it says which one this is. */
   .annotation-text {
     display: -webkit-box;
     overflow: hidden;
+    padding-left: 0.75rem;
+    border-left: 3px solid;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 4;
     line-clamp: 4;
+  }
+
+  .annotation-note {
+    display: block;
+    margin-top: 0.3rem;
+    padding-left: calc(0.75rem + 3px);
+    color: var(--accent-strong-color);
+    font-size: var(--type-small);
+    white-space: pre-wrap;
+  }
+
+  @media (min-width: 768px) {
+    .ann-tools {
+      margin: 0 1.5rem;
+    }
+
+    .ann-list {
+      padding: 0 1.5rem 1.5rem;
+    }
   }
 </style>

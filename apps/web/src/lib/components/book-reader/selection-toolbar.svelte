@@ -22,7 +22,7 @@
 </script>
 
 <div
-  class="reader-panel writing-horizontal-tb fixed left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full px-2 py-1.5 text-sm shadow-lg {raised
+  class="reader-panel writing-horizontal-tb fixed left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-sm px-2 py-1.5 text-sm {raised
     ? 'top-12'
     : 'bottom-10'}"
   role="toolbar"
@@ -31,7 +31,7 @@
   {#each highlightColors as color (color)}
     <button
       type="button"
-      class="flex h-8 w-8 items-center justify-center rounded-full"
+      class="flex h-8 w-8 items-center justify-center rounded-sm"
       title={$t$('reader.highlightColor', { color: $t$(`reader.color.${color}`) })}
       on:mousedown|preventDefault
       on:click={() => dispatch('highlight', color)}
@@ -42,7 +42,7 @@
   <span class="reader-panel-divider mx-1 h-5 border-l" />
   <button
     type="button"
-    class="flex h-8 items-center gap-1.5 rounded-full px-2.5"
+    class="flex h-8 items-center gap-1.5 rounded-sm px-2.5"
     title={$t$('reader.noteTitle')}
     on:mousedown|preventDefault
     on:click={() => dispatch('note')}
@@ -53,7 +53,7 @@
   {#if word}
     <button
       type="button"
-      class="flex h-8 items-center gap-1.5 rounded-full px-2.5"
+      class="flex h-8 items-center gap-1.5 rounded-sm px-2.5"
       title={$t$('book.markKnown', { word })}
       disabled={marked}
       on:mousedown|preventDefault
@@ -66,7 +66,7 @@
   {#each $activePlugins$.flatMap((plugin) => plugin.selectionActions ?? []) as action (action.label)}
     <button
       type="button"
-      class="flex h-8 items-center gap-1.5 rounded-full px-2.5"
+      class="flex h-8 items-center gap-1.5 rounded-sm px-2.5"
       title={$t$(action.title)}
       on:mousedown|preventDefault
       on:click={() => dispatch('action', action)}
