@@ -114,6 +114,14 @@ export function calibreCoverUrl(book: CalibreBook) {
   return book.cover ? toLibraryUrl(book.cover, book.format === 'VN' ? vnUrl : libraryUrl) : '';
 }
 
+/**
+ * The library card's copy of a Calibre or game cover (the catalog builder's thumbnail; nginx
+ * sends the full cover until it exists). Other images are returned as they are.
+ */
+export function coverThumbUrl(imagePath: string) {
+  return imagePath.replace(/^\/calibre\/(library|vn)\//, '/calibre/thumbs/$1/');
+}
+
 export function calibreBookFileName(book: CalibreBook) {
   return `${book.title.replace(/[\\/]/g, '_')}.${book.format.toLowerCase()}`;
 }

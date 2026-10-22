@@ -2,9 +2,12 @@
   import { faImage } from '@fortawesome/free-regular-svg-icons';
   import { onDestroy } from 'svelte';
   import Fa from 'svelte-fa';
+  import { coverThumbUrl } from '$lib/data/calibre';
 
   export let imagePath: string | Blob;
   export let title: string;
+  /** The full-size cover (the book's page) rather than the card's thumbnail */
+  export let full = false;
 
   let objectUrl = '';
 
@@ -27,7 +30,7 @@
       return objectUrl;
     }
 
-    return value;
+    return full ? value : coverThumbUrl(value);
   }
 
   function mapImagePathFactory() {

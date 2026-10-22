@@ -5,7 +5,8 @@ The reader fetches this catalog to browse the library, then downloads the
 book files themselves through nginx (see nginx-ebook-reader.conf.template).
 EPUBs without a cover get one extracted from the book (manga: the first page)
 into its library folder as cover.jpg, the file Calibre uses (metadata.db is not modified).
-Usage: build-catalog.py LIBRARY_DIR OUTPUT_JSON
+With --thumbs, card-sized copies of the covers go to thumbs/ next to OUTPUT_JSON.
+Usage: build-catalog.py LIBRARY_DIR OUTPUT_JSON [VN_DIR] [--force] [--thumbs]
 """
 import fcntl
 import json
@@ -15,6 +16,7 @@ import re
 import sqlite3
 import sys
 import tempfile
+import time
 import unicodedata
 import urllib.request
 import zipfile
@@ -350,11 +352,68 @@ def add_missing_covers(library: str, books: dict, state_path: str) -> None:
     os.replace(tmp_state, state_path)
 
 
-def main(library: str, output: str, vn_dir: str | None = None, force: bool = False) -> None:
+# Library cards are at most 8.75rem wide: twice that, for high-density screens.
+THUMB_SIZE = (280, 396)
+# A run stops making thumbnails after this long and goes on at the next one, so the first
+# pass over a large library (about 20 ms a cover) doesn't hold up the catalog timer.
+THUMB_SECONDS = 300
+
+
+def make_thumb(source: str, target: str) -> None:
+    with Image.open(source) as image:
+        image.draft('RGB', THUMB_SIZE)  # JPEG: decode at 1/2-1/8 scale, much faster
+        image.thumbnail(THUMB_SIZE)
+        if image.mode in ('RGBA', 'LA', 'P'):
+            image = image.convert('RGBA')
+            background = Image.new('RGB', image.size, 'white')
+            background.paste(image, mask=image.getchannel('A'))
+            image = background
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        tmp_path = target + '.tmp'
+        image.convert('RGB').save(tmp_path, 'JPEG', quality=80, optimize=True)
+    os.replace(tmp_path, target)
+
+
+def add_thumbnails(library: str, output: str, vn_dir: str | None, seconds: float = THUMB_SECONDS) -> int:
+    """Writes thumbs/library/<cover path> and thumbs/vn/<cover path> (JPEG, whatever the
+    name) for the catalog's covers that have none or an older one, newest books first.
+    nginx serves the full cover until one exists. Returns how many were written."""
+    if not Image:
+        return 0
+    with open(output, encoding='utf-8') as f:
+        books = json.load(f)['books']
+    thumbs = os.path.join(os.path.dirname(output), 'thumbs')
+    deadline = time.monotonic() + seconds
+    written = 0
+    for book in books:
+        if not book['cover']:
+            continue
+        kind, base = ('vn', vn_dir) if book['format'] == 'VN' else ('library', library)
+        if not base:
+            continue
+        source = os.path.join(base, book['cover'])
+        target = os.path.join(thumbs, kind, book['cover'])
+        try:
+            if os.path.exists(target) and os.path.getmtime(target) >= os.path.getmtime(source):
+                continue
+            if time.monotonic() > deadline:
+                break
+            make_thumb(source, target)
+            written += 1
+        except Exception as error:  # noqa: BLE001 - a broken cover keeps its full-size fallback
+            print(f'No thumbnail for {source}: {error}', file=sys.stderr)
+    return written
+
+
+def main(library: str, output: str, vn_dir: str | None = None, force: bool = False,
+         thumbs: bool = False) -> None:
     # The timer and the import queue (calibre-import) both build; one at a time.
     with open(output + '.lock', 'a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         build(library, output, vn_dir, force)
+    # Outside the lock: only the catalog timer passes --thumbs, and imports shouldn't wait.
+    if thumbs and os.path.exists(output):
+        add_thumbnails(library, output, vn_dir if vn_dir and os.path.isdir(vn_dir) else None)
 
 
 def build(library: str, output: str, vn_dir: str | None = None, force: bool = False) -> None:
@@ -474,7 +533,7 @@ def build(library: str, output: str, vn_dir: str | None = None, force: bool = Fa
 
 
 if __name__ == '__main__':
-    # build-calibre-catalog LIBRARY OUTPUT [VN_DIR] [--force]
-    args = [arg for arg in sys.argv[1:] if arg != '--force']
+    # build-calibre-catalog LIBRARY OUTPUT [VN_DIR] [--force] [--thumbs]
+    args = [arg for arg in sys.argv[1:] if arg not in ('--force', '--thumbs')]
     main(args[0], args[1], args[2] if len(args) > 2 else os.environ.get('VN_DIR', '/vn'),
-         '--force' in sys.argv)
+         '--force' in sys.argv, '--thumbs' in sys.argv)

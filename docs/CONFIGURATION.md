@@ -60,6 +60,7 @@ real-IP settings) go in `/etc/nginx/ebook-reader.d/*.conf`.
 | `SYNC_DIR`                                               | `/data/sync`                                                                |
 | `ACCOUNT_DATA_DIR`                                       | `/data/accounts`                                                            |
 | `CATALOG_FILE`                                           | `/data/state/catalog/catalog.json`                                          |
+| `THUMB_DIR`                                              | `/data/state/catalog/thumbs` (library card thumbnails)                      |
 | `DIFFICULTY_FILE`                                        | `/data/state/difficulty/difficulty.json`                                    |
 | `ACCOUNT_UPSTREAM`                                       | `account:8766`                                                              |
 | `IMPORT_UPSTREAM`                                        | `import:8767`                                                               |

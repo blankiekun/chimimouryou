@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 import os
+import tempfile
 import unittest
 import zipfile
 
@@ -199,6 +200,48 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(result[2], (series, 2.0))
         # A single volume without a matching series stays on its own.
         self.assertEqual(result[3], ('', None))
+
+
+@unittest.skipUnless(catalog.Image, 'needs Pillow (python3-pil)')
+class ThumbnailTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = tmp.name
+        self.library, self.vn = os.path.join(self.root, 'library'), os.path.join(self.root, 'vn')
+        catalog.Image.new('RGB', (1500, 2100), 'red').save(self.mkdirs(self.library, 'A/B (1)/cover.jpg'))
+        catalog.Image.new('RGBA', (800, 600), (0, 0, 0, 0)).save(self.mkdirs(self.vn, 'Game/cover.png'))
+        self.output = os.path.join(self.root, 'state', 'catalog.json')
+        with open(self.mkdirs(self.output), 'w', encoding='utf-8') as f:
+            json.dump({'books': [{'format': 'EPUB', 'cover': 'A/B (1)/cover.jpg'},
+                                 {'format': 'VN', 'cover': 'Game/cover.png'},
+                                 {'format': 'EPUB', 'cover': ''}]}, f)
+
+    @staticmethod
+    def mkdirs(*parts):
+        path = os.path.join(*parts)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        return path
+
+    def test_makes_small_jpegs_once(self):
+        self.assertEqual(catalog.add_thumbnails(self.library, self.output, self.vn), 2)
+        thumbs = os.path.join(self.root, 'state', 'thumbs')
+        with catalog.Image.open(os.path.join(thumbs, 'library', 'A/B (1)/cover.jpg')) as image:
+            self.assertEqual((image.format, image.size), ('JPEG', (280, 392)))
+        with catalog.Image.open(os.path.join(thumbs, 'vn', 'Game/cover.png')) as image:
+            self.assertEqual((image.format, image.mode), ('JPEG', 'RGB'))
+            self.assertEqual(image.getpixel((0, 0)), (255, 255, 255))
+        self.assertEqual(catalog.add_thumbnails(self.library, self.output, self.vn), 0)
+        # A changed cover gets a new thumbnail.
+        cover = os.path.join(self.library, 'A/B (1)/cover.jpg')
+        os.utime(cover, (os.path.getmtime(cover) + 10,) * 2)
+        self.assertEqual(catalog.add_thumbnails(self.library, self.output, self.vn), 1)
+
+    def test_stops_at_the_deadline_and_skips_broken_covers(self):
+        self.assertEqual(catalog.add_thumbnails(self.library, self.output, self.vn, seconds=-1), 0)
+        with open(os.path.join(self.vn, 'Game/cover.png'), 'wb') as f:
+            f.write(b'not an image')
+        self.assertEqual(catalog.add_thumbnails(self.library, self.output, self.vn), 1)
 
 
 if __name__ == '__main__':
