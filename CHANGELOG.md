@@ -6,6 +6,8 @@ anything a reader or a server operator would notice.
 
 ## Unreleased
 
+## v3.7.0 (2026-10-22)
+
 ### Security
 
 - Only admins can import the frequency list for difficulty estimates (the `difficulty`
