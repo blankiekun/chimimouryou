@@ -14,16 +14,18 @@ const BUILD_CACHE_NAME = `build:${version}`;
 const ENGINE_CACHE_NAME = 'vn-engine';
 const engineFile = /\/vn\/conscripter(\.js|\.wasm|-version\.txt)$/;
 // The UI font is split into unicode-range chunks (4 MB in all); a page loads only the ones it
-// shows, so they are cached on first use, across builds, rather than precached.
+// shows, so they are cached on first use, across builds, rather than precached. So is KZ UDMincho
+// (17 MB), the old Washi & Sumi display font, now only a reader font choice.
 const UI_FONT_CACHE_NAME = 'ui-font';
-const uiFontFile = /\/BIZUDPGothic-[^/]+\.woff2$/;
+const uiFontFile = /\/(BIZUDPGothic-[^/]+\.woff2|KZUDMincho-[^/]+\.woff2?)$/;
 const uiFontFiles = new Set(build.filter((file) => uiFontFile.test(file)));
 
 const prerenderedSet = new Set(prerendered);
 
-// Whisper's worker and runtime (tens of MB) load only when someone transcribes.
+// Whisper's worker and runtime (tens of MB) load only when someone transcribes. The .woff font
+// fallbacks (86 MB) are never fetched by browsers that run service workers: they take the woff2.
 const assetsToCache = build
-  .filter((file) => !/ort-wasm|whisper\.worker/.test(file) && !uiFontFile.test(file))
+  .filter((file) => !/ort-wasm|whisper\.worker|\.woff$/.test(file) && !uiFontFile.test(file))
   .concat(files.filter((file) => !engineFile.test(file)))
   .concat(prerendered);
 const cachedAssets = new Set(assetsToCache);
