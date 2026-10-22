@@ -97,13 +97,6 @@ export async function loadCalibreDifficulty(): Promise<Record<string, CalibreDif
   return (await response.json()).books || {};
 }
 
-/** How often each kanji occurs in a book with an estimate; undefined if it has none. */
-export async function loadBookKanji(id: number): Promise<Record<string, number> | undefined> {
-  const response = await fetch(`${difficultyApiUrl}kanji/${id}`, { cache: 'no-cache' });
-
-  return response.ok ? response.json() : undefined;
-}
-
 function toLibraryUrl(path: string, base = libraryUrl) {
   return `${base}${path.split('/').map(encodeURIComponent).join('/')}`;
 }

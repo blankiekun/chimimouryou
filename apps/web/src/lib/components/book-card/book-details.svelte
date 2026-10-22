@@ -22,7 +22,6 @@
     type MetadataSource
   } from '$lib/data/book-metadata';
   import {
-    loadBookKanji,
     loadCalibreCatalog,
     loadCalibreDifficulty,
     type CalibreBook,
@@ -31,7 +30,6 @@
   import { difficultyNameKey } from '$lib/data/difficulty';
   import type { BookWord, WordCoverage } from '$lib/data/book-words';
   import { dialogManager } from '$lib/data/dialog-manager';
-  import { getKanjiSeen, kanjiCoverage, type KanjiCoverage } from '$lib/data/kanji-seen';
   import {
     bookCoverage,
     bookWordGroups,
@@ -85,8 +83,6 @@
   let layer: HTMLDivElement;
   let calibreBook: CalibreBook | undefined;
   let estimate: CalibreDifficulty | undefined;
-  let kanji: KanjiCoverage | undefined;
-  let copied = false;
   /** The book's word list and the words known, for the Words row */
   let listWords: BookWord[] = [];
   let knownSet: KnownSet | undefined;
@@ -137,7 +133,9 @@
             : $t$('book.score', { score: book.difficulty.toFixed(1) }),
           book.words95 ? $t$('book.words95', { count: number(book.words95) }) : '',
           wordStats ? coverageSentence(wordStats, $t$) : '',
-          kanjiSentence(estimate?.uniqueKanji, kanji)
+          estimate?.uniqueKanji
+            ? $t$('book.kanji', { count: number(estimate.uniqueKanji) })
+            : ''
         ]
           .filter(Boolean)
           .join($uiLanguage$ === 'ja' ? '' : ' ');
@@ -156,23 +154,6 @@
         rare: number(stats.unlisted)
       }
     );
-  }
-
-  function kanjiSentence(unique: number | undefined, met: KanjiCoverage | undefined) {
-    const params = {
-      count: number(unique ?? 0),
-      percent: ((met?.coverage ?? 0) * 100).toFixed(1),
-      new: number(met?.newKanji ?? 0)
-    };
-
-    if (!met) {
-      return unique ? $t$('book.kanji', params) : '';
-    }
-    if (unique) {
-      return $t$(met.newKanji ? 'book.kanjiMetNew' : 'book.kanjiMet', params);
-    }
-
-    return $t$(met.newKanji ? 'book.kanjiMetOnlyNew' : 'book.kanjiMetOnly', params);
   }
 
   onMount(() => {
@@ -210,8 +191,6 @@
 
     calibreBook = undefined;
     estimate = undefined;
-    kanji = undefined;
-    copied = false;
     listWords = [];
     knownSet = undefined;
     wordStats = undefined;
@@ -242,9 +221,7 @@
     if (estimate && book.calibreId !== undefined) {
       const id = book.calibreId;
       const bookEstimate = estimate;
-      const [counts, seen, list, known] = await Promise.all([
-        loadBookKanji(id).catch(() => undefined),
-        getKanjiSeen().catch(() => []),
+      const [list, known] = await Promise.all([
         kind === 'manga' ? null : wordList(id, bookEstimate.computedAt).catch(() => null),
         refreshKnownWordsIfStale()
           .then(getKnownSet)
@@ -259,18 +236,10 @@
         return;
       }
 
-      if (counts && seen.length) {
-        kanji = kanjiCoverage(counts, seen);
-      }
       wordStats = coverage;
       listWords = list ?? [];
       knownSet = known;
     }
-  }
-
-  async function copyNewKanji() {
-    await navigator.clipboard.writeText(kanji?.topNew.join('') ?? '');
-    copied = true;
   }
 
   function openSearch() {
@@ -457,11 +426,7 @@
                 {#if estimate?.uniqueKanji}
                   <div>
                     <dt>{number(estimate.uniqueKanji)}</dt>
-                    <dd>
-                      {kanji
-                        ? $t$('book.kanjiFigure', { new: number(kanji.newKanji) })
-                        : $t$('book.kanjiFigureOnly')}
-                    </dd>
+                    <dd>{$t$('book.kanjiFigureOnly')}</dd>
                   </div>
                 {/if}
                 {#if book.words95}
@@ -472,17 +437,6 @@
                 {/if}
               </dl>
             </div>
-            {#if kanji?.topNew.length}
-              <p class="details-small details-kanji-line">
-                {kanji.topNew.length < kanji.newKanji
-                  ? $t$('book.topNewKanji')
-                  : $t$('book.newKanji')}
-                <span class="details-new-kanji" lang="ja">{kanji.topNew.join('')}</span>
-                <button type="button" class="app-button app-button-quiet" on:click={copyNewKanji}>
-                  {copied ? $t$('book.copied') : $t$('book.copy')}
-                </button>
-              </p>
-            {/if}
             <button type="button" class="app-button app-button-quiet" on:click={showDifficulty}>
               {$t$('book.difficultyDetails')}
             </button>
@@ -984,13 +938,6 @@
     font-size: var(--type-small);
   }
 
-  .details-kanji-line {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.25rem 0.6rem;
-    margin-top: 1rem;
-  }
 
   .details-facts {
     border-top: 2px solid var(--font-color);
@@ -1036,12 +983,6 @@
     font-size: var(--type-small);
   }
 
-  .details-new-kanji {
-    font-size: 1.1rem;
-    letter-spacing: 0.1em;
-    color: var(--font-color);
-    word-break: break-all;
-  }
 
   .details-fetch {
     display: flex;

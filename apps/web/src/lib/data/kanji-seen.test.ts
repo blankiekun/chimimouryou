@@ -10,47 +10,8 @@ import { describe, expect, it, vi } from 'vitest';
 // Recording pulls through extras-sync; its handler pulls in every storage source.
 vi.mock('$lib/data/storage/handler/calibre-handler', () => ({ CalibreStorageHandler: {} }));
 
-import {
-  kanjiCoverage,
-  newKanjiShown,
-  recordKanjiText,
-  type KanjiSeen
-} from '$lib/data/kanji-seen';
+import { recordKanjiText } from '$lib/data/kanji-seen';
 import { readerDb } from '$lib/data/reader-db';
-
-describe('kanjiCoverage', () => {
-  it('weights kanji by how often the book uses them', () => {
-    const seen: KanjiSeen[] = [
-      { title: 'A', upTo: 10, counts: { 人: 3 } },
-      { title: 'B', upTo: 10, counts: { 本: 1 } }
-    ];
-
-    expect(kanjiCoverage({ 人: 6, 本: 2, 鬱: 2 }, seen)).toEqual({
-      coverage: 0.8,
-      newKanji: 1,
-      topNew: ['鬱']
-    });
-  });
-
-  it('lists the most frequent new kanji first, up to newKanjiShown', () => {
-    const seen: KanjiSeen[] = [{ title: 'A', upTo: 10, counts: { 人: 1 } }];
-    const book: Record<string, number> = { 人: 100, 猫: 2, 犬: 5 };
-    for (let i = 0; i < newKanjiShown; i += 1) {
-      book[String.fromCodePoint(0x4e00 + i)] = 1;
-    }
-
-    const { newKanji, topNew } = kanjiCoverage(book, seen)!;
-
-    expect(newKanji).toBe(newKanjiShown + 2);
-    expect(topNew).toHaveLength(newKanjiShown);
-    expect(topNew.slice(0, 2)).toEqual(['犬', '猫']);
-    expect(topNew).not.toContain('人');
-  });
-
-  it('has no coverage for a book without kanji', () => {
-    expect(kanjiCoverage({}, [])).toBeUndefined();
-  });
-});
 
 describe('recordKanjiText', () => {
   it('adds the kanji of each piece of text read', async () => {
