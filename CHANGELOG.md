@@ -37,6 +37,9 @@ anything a reader or a server operator would notice.
 
 ### Changed
 
+- yurigana 0.5.7: 川 after a name is voiced (メコン川 がわ) and names a book rubies in large kana
+  (佳樹《かじゆ》) are read with small kana (かじゅ). Word lists are redone (`WORDS_VERSION` 15) and
+  readings files made again on request.
 - Generated furigana: every word with a reading gets it, not only the ones yurigana is
   sure of (defaults, dictionary readings and counter spans too). Readings files are redone.
 - Difficulty service: the reading engine's tables and the frequency list are built once into
