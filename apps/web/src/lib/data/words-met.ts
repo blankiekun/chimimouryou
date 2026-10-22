@@ -55,6 +55,8 @@ export interface WordsSummary {
   met: number;
   /** Words met `knownMinCount` times, plus Anki's mature words and the words marked */
   known: number;
+  /** Words met `knownMinCount` times (the Words page's "Known because") */
+  metEnough: number;
 }
 
 export const wordKey = ([form, reading]: BookWord) => `${form}\t${reading ?? ''}`;
@@ -152,6 +154,7 @@ export function summarizeWords(
 ): WordsSummary {
   let met = 0;
   let known = 0;
+  let metEnough = 0;
   const forms = new Set<string>();
 
   for (const [key, count] of Object.entries(totals)) {
@@ -160,6 +163,7 @@ export function summarizeWords(
 
     forms.add(form);
     if (count >= 1) met += 1;
+    if (count >= knownMinCount) metEnough += 1;
     if (
       count >= knownMinCount ||
       anki.has(form) ||
@@ -188,7 +192,7 @@ export function summarizeWords(
     }
   }
 
-  return { met, known };
+  return { met, known, metEnough };
 }
 
 /** The book's word list, cached per estimate. */

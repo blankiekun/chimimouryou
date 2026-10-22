@@ -5,15 +5,15 @@
  */
 
 /**
- * Words the reader marked known or ignored by hand (book page New words, the reader's
- * selection toolbar; unmarked in Settings → Anki → Known Words). Both count as known
+ * Words the reader marked known or ignored by hand (Book words, the reader's selection
+ * toolbar; listed and unmarked on the Words page). Both count as known
  * (known-words.ts, words-met.ts). Kept in reader-db `known` under 'marks', synced as
  * words.json in the account folder while signed in (extras-sync.ts), cleared with the
  * known words when the reader changes. Not part of upstream.
  */
 
 import { BehaviorSubject } from 'rxjs';
-import type { BookWord } from '$lib/data/book-words';
+import { csvField, type BookWord } from '$lib/data/book-words';
 import { loadCalibreCatalog, loadCalibreDifficulty } from '$lib/data/calibre';
 import { pullWordMarks, wordMarksChanged } from '$lib/data/extras-sync';
 import { readerDb } from '$lib/data/reader-db';
@@ -97,6 +97,41 @@ export function selectionForm(selection: string, forms: ReadonlySet<string> | un
   }
 
   return best;
+}
+
+export interface MarkedWord {
+  form: string;
+  /** '' when marked by form alone */
+  reading: string;
+  status: WordStatus;
+  modified: number;
+}
+
+/** The words marked known or ignored, newest first (the Words page). */
+export function markedWords(marks: WordMarks): MarkedWord[] {
+  return Object.entries(marks)
+    .filter(([, mark]) => mark.status)
+    .sort(([, a], [, b]) => b.modified - a.modified)
+    .map(([key, mark]) => {
+      const [form, reading] = key.split('\t');
+
+      return { form, reading, status: mark.status!, modified: mark.modified };
+    });
+}
+
+/** CSV of marked words, with a BOM so Excel reads it as UTF-8. */
+export function markedWordsCsv(words: MarkedWord[]) {
+  const rows = [
+    ['word', 'reading', 'status', 'marked'],
+    ...words.map(({ form, reading, status, modified }) => [
+      form,
+      reading,
+      status,
+      new Date(modified).toISOString().slice(0, 10)
+    ])
+  ];
+
+  return `\uFEFF${rows.map((row) => row.map(csvField).join(',')).join('\r\n')}\r\n`;
 }
 
 /** Changes whenever any mark does (part of the known set's cache key). */

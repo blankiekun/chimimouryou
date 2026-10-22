@@ -15,7 +15,14 @@
 
 import { BehaviorSubject } from 'rxjs';
 import { ankiInvoke, ankiKnownDeck$, ankiKnownField$, ankiKnownWords$ } from '$lib/data/anki';
-import { wordCoverage, type BookWord, type WordTotals } from '$lib/data/book-words';
+import {
+  isNoiseWord,
+  newWords,
+  wordCoverage,
+  wordsToStudy,
+  type BookWord,
+  type WordTotals
+} from '$lib/data/book-words';
 import { loadCalibreDifficulty } from '$lib/data/calibre';
 import { readerDb } from '$lib/data/reader-db';
 import {
@@ -37,6 +44,22 @@ export interface KnownSet {
   /** Changes whenever the known words change; empty when they are partial (offline) */
   key: string;
   isKnown: (word: BookWord) => boolean;
+  /** Met `knownMinCount` times */
+  met: (word: BookWord) => boolean;
+  /** Mature in Anki (by form or lemma) */
+  anki: (word: BookWord) => boolean;
+}
+
+export interface BookWordGroups {
+  /** Words to study not known yet (`newWords`) */
+  new: BookWord[];
+  /** Known, ignored words left out */
+  known: BookWord[];
+  ignored: BookWord[];
+  /** Every word of the list, noise left out */
+  all: BookWord[];
+  /** Why the list's words are known (a word can have several reasons) */
+  reasons: { met: number; anki: number; marked: number; ignored: number };
 }
 
 export interface CoverageCache {
@@ -152,15 +175,50 @@ export async function getKnownSet(): Promise<KnownSet> {
   ]);
   const forms = new Set(anki?.words);
   const metCount = metCounter(met.words);
+  const isMet = (word: BookWord) => metCount(word) >= knownMinCount;
+  const inAnki = (word: BookWord) => forms.has(word[0]) || (!!word[4] && forms.has(word[4]));
 
   return {
     key: met.signature && `${met.signature}|${anki?.read ?? ''}|${marksSignature(marks)}`,
-    isKnown: (word) =>
-      metCount(word) >= knownMinCount ||
-      forms.has(word[0]) ||
-      (!!word[4] && forms.has(word[4])) ||
-      !!wordMark(marks, word)
+    isKnown: (word) => isMet(word) || inAnki(word) || !!wordMark(marks, word),
+    met: isMet,
+    anki: inAnki
   };
+}
+
+/**
+ * A book's word list as the Book words page shows it: new, known and ignored words, with the
+ * marks as they are now (`marks`, so marking a word moves it at once).
+ */
+export function bookWordGroups(
+  list: BookWord[],
+  words95: number | null | undefined,
+  known: Pick<KnownSet, 'met' | 'anki'>,
+  marks: WordMarks
+): BookWordGroups {
+  const all = list.filter((word) => !isNoiseWord(word));
+  const isKnown = (word: BookWord) =>
+    known.met(word) || known.anki(word) || !!wordMark(marks, word);
+  const groups: BookWordGroups = {
+    new: newWords(wordsToStudy(list, words95 ?? 0), isKnown),
+    known: [],
+    ignored: [],
+    all,
+    reasons: { met: 0, anki: 0, marked: 0, ignored: 0 }
+  };
+
+  for (const word of all) {
+    const mark = wordMark(marks, word);
+
+    if (mark === 'ignored') groups.ignored.push(word);
+    else if (isKnown(word)) groups.known.push(word);
+    if (known.met(word)) groups.reasons.met += 1;
+    if (known.anki(word)) groups.reasons.anki += 1;
+    if (mark === 'known') groups.reasons.marked += 1;
+    if (mark === 'ignored') groups.reasons.ignored += 1;
+  }
+
+  return groups;
 }
 
 async function coverageCache(key: string): Promise<CoverageCache> {

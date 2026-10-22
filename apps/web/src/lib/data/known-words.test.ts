@@ -10,6 +10,7 @@ import { ankiKnownDeck$, ankiKnownField$, ankiKnownWords$ } from '$lib/data/anki
 import type { BookWord } from '$lib/data/book-words';
 import {
   bookCoverage,
+  bookWordGroups,
   cacheCoverage,
   cleanAnkiField,
   clearKnownWords,
@@ -241,5 +242,28 @@ describe('known words', () => {
     await clearKnownWords();
     expect(await (await readerDb()).count('known')).toBe(0);
     expect(knownCoverage$.getValue()).toEqual({});
+  });
+});
+
+describe('bookWordGroups', () => {
+  it('splits the list into new, known and ignored words with their reasons', () => {
+    const list: BookWord[] = [
+      ['猫', 'ねこ', 9, 900],
+      ['犬', 'いぬ', 5, 950],
+      ['宦官', 'かんがん', 4, 68872],
+      ['毒見', 'どくみ', 3, 21330],
+      ['は', null, 90, 1]
+    ];
+    const known = { met: (w: BookWord) => w[0] === '猫', anki: (w: BookWord) => w[0] === '犬' };
+    const groups = bookWordGroups(list, 100, known, {
+      '猫\t': { status: 'known', modified: 1 },
+      '毒見\t': { status: 'ignored', modified: 1 }
+    });
+
+    expect(groups.new.map(([form]) => form)).toEqual(['宦官']);
+    expect(groups.known.map(([form]) => form)).toEqual(['猫', '犬']);
+    expect(groups.ignored.map(([form]) => form)).toEqual(['毒見']);
+    expect(groups.all).toHaveLength(4);
+    expect(groups.reasons).toEqual({ met: 1, anki: 1, marked: 1, ignored: 1 });
   });
 });

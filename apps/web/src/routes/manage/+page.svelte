@@ -16,6 +16,7 @@
   import BookCardList from '$lib/components/book-card/book-card-list.svelte';
   import BookCardTable from '$lib/components/book-card/book-card-table.svelte';
   import BookDetails from '$lib/components/book-card/book-details.svelte';
+  import BookWords from '$lib/components/book-card/book-words.svelte';
   import ContinueReadingShelf from '$lib/components/book-card/continue-reading-shelf.svelte';
   import LearnerDashboard from '$lib/components/book-card/learner-dashboard.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
@@ -1605,13 +1606,18 @@
     book={detailsBook}
     bookCards={$bookCards$}
     isCalibre={$storageSource$ === StorageKey.CALIBRE}
+    covered={$page.state.bookWords !== undefined}
     on:close={() => history.back()}
+    on:words={() => pushState('', { bookDetails: detailsBook?.id, bookWords: detailsBook?.id })}
     on:read={(ev) => onBookClick(ev.detail.id)}
     on:showBook={(ev) => pushState('', { bookDetails: ev.detail.id })}
     on:showSeries={(ev) => showSeriesFromDetails(ev.detail)}
     on:changed={() =>
       database.dataListChanged$.next(getStorageHandler(window, $storageSource$, ''))}
   />
+  {#if $page.state.bookWords === detailsBook.id}
+    <BookWords book={detailsBook} on:close={() => history.back()} />
+  {/if}
 {/if}
 
 <style>

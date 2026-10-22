@@ -7,7 +7,14 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it, vi } from 'vitest';
 import type { BookWord } from '$lib/data/book-words';
-import { formMarked, markEntry, marksOf, selectionForm } from '$lib/data/word-marks';
+import {
+  formMarked,
+  markEntry,
+  markedWords,
+  markedWordsCsv,
+  marksOf,
+  selectionForm
+} from '$lib/data/word-marks';
 
 vi.mock('$lib/data/extras-sync', () => ({
   pullKanji: async () => {},
@@ -48,5 +55,23 @@ describe('word marks', () => {
     expect(selectionForm('見せた', forms)).toBe('見せる');
     expect(selectionForm('した', forms)).toBe('');
     expect(selectionForm('呟きの声', forms)).toBe('');
+  });
+});
+
+describe('markedWords', () => {
+  it('lists active marks newest first and exports them', () => {
+    const words = markedWords({
+      '猫\t': { status: 'known', modified: Date.UTC(2026, 9, 20) },
+      '犬\tいぬ': { status: 'ignored', modified: Date.UTC(2026, 9, 22) },
+      '鳥\t': { status: null, modified: Date.UTC(2026, 9, 23) }
+    });
+
+    expect(words.map(({ form, reading, status }) => [form, reading, status])).toEqual([
+      ['犬', 'いぬ', 'ignored'],
+      ['猫', '', 'known']
+    ]);
+    expect(markedWordsCsv(words)).toBe(
+      '\uFEFFword,reading,status,marked\r\n犬,いぬ,ignored,2026-10-22\r\n猫,,known,2026-10-20\r\n'
+    );
   });
 });

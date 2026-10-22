@@ -14,6 +14,8 @@ declare global {
     interface PageState {
       /** Library: id of the book whose page is shown */
       bookDetails?: number;
+      /** Library: id of the book whose word list is shown over its page */
+      bookWords?: number;
     }
   }
   interface HTMLElement {

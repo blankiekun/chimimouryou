@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { faDownload, faMagnifyingGlass, faSpinner } from '@fortawesome/free-solid-svg-icons';
+  import { faMagnifyingGlass, faSpinner } from '@fortawesome/free-solid-svg-icons';
   import PointBox from '$lib/components/point-box.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import BookCard from '$lib/components/book-card/book-card.svelte';
@@ -29,17 +29,16 @@
     type CalibreDifficulty
   } from '$lib/data/calibre';
   import { difficultyNameKey } from '$lib/data/difficulty';
-  import {
-    downloadWordsCsv,
-    kanjiPattern,
-    newWords,
-    wordsToStudy,
-    type BookWord,
-    type WordCoverage
-  } from '$lib/data/book-words';
+  import type { BookWord, WordCoverage } from '$lib/data/book-words';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { getKanjiSeen, kanjiCoverage, type KanjiCoverage } from '$lib/data/kanji-seen';
-  import { bookCoverage, getKnownSet, refreshKnownWordsIfStale } from '$lib/data/known-words';
+  import {
+    bookCoverage,
+    bookWordGroups,
+    getKnownSet,
+    refreshKnownWordsIfStale,
+    type KnownSet
+  } from '$lib/data/known-words';
   import { learnerStats } from '$lib/data/learner-stats';
   import {
     addToHome,
@@ -52,8 +51,8 @@
   import { guessSeriesName } from '$lib/data/series-overrides';
   import { generatedReadings$ } from '$lib/data/generated-furigana';
   import { database, generatedFurigana$, startDayHoursForTracker$ } from '$lib/data/store';
-  import { markEntry, marksOf, setWordMarks, wordMark, wordMarks$ } from '$lib/data/word-marks';
-  import { knownMinCount, wordList } from '$lib/data/words-met';
+  import { wordMarks$ } from '$lib/data/word-marks';
+  import { wordList } from '$lib/data/words-met';
   import { getDateKey } from '$lib/functions/statistic-util';
   import { t$, tr, uiLanguage$ } from '$lib/i18n';
   import { createEventDispatcher, onMount } from 'svelte';
@@ -69,12 +68,16 @@
   export let bookCards: BookCardProps[];
   /** Calibre source: catalog metadata, difficulty and shared details exist */
   export let isCalibre: boolean;
+  /** The book's word list is shown over the page (Escape is its own) */
+  export let covered = false;
 
   const dispatch = createEventDispatcher<{
     close: void;
     read: { id: number };
     showBook: { id: number };
     showSeries: string;
+    /** Show the book's word list */
+    words: void;
     /** Saved details changed the library (a cover) */
     changed: void;
   }>();
@@ -84,11 +87,9 @@
   let estimate: CalibreDifficulty | undefined;
   let kanji: KanjiCoverage | undefined;
   let copied = false;
-  /** Words to study not known yet (met often enough or mature in Anki), by `newWords` */
-  let unknownWords: BookWord[] = [];
-  /** The book's word list (marks depend on how many readings a form has in it) */
+  /** The book's word list and the words known, for the Words row */
   let listWords: BookWord[] = [];
-  let wordsCopied = false;
+  let knownSet: KnownSet | undefined;
   let wordStats: WordCoverage | undefined;
   let speed = 0;
   let metadata: BookMetadata | undefined;
@@ -118,6 +119,10 @@
     ? new Date(calibreBook.published).getFullYear().toString()
     : metadata?.released.slice(0, 4);
   $: (book.title, load());
+  $: wordGroups =
+    listWords.length && knownSet
+      ? bookWordGroups(listWords, estimate?.words95, knownSet, $wordMarks$)
+      : undefined;
   /** The difficulty note: a few whole sentences, each only when its numbers exist */
   $: difficultyNote =
     book.difficulty === undefined
@@ -207,8 +212,8 @@
     estimate = undefined;
     kanji = undefined;
     copied = false;
-    unknownWords = [];
-    wordsCopied = false;
+    listWords = [];
+    knownSet = undefined;
     wordStats = undefined;
     metadata = undefined;
     candidates = undefined;
@@ -259,34 +264,13 @@
       }
       wordStats = coverage;
       listWords = list ?? [];
-      if (list && bookEstimate.words95) {
-        unknownWords = newWords(
-          wordsToStudy(list, bookEstimate.words95),
-          known?.isKnown ?? (() => false)
-        );
-      }
+      knownSet = known;
     }
   }
 
   async function copyNewKanji() {
     await navigator.clipboard.writeText(kanji?.topNew.join('') ?? '');
     copied = true;
-  }
-
-  function markAllShown() {
-    const shown = unknownWords.slice(0, 50).filter((word) => !wordMark($wordMarks$, word));
-
-    if (shown.length && confirm(tr('book.markAllKnownConfirm', { count: shown.length }))) {
-      setWordMarks(
-        shown.map((word) => markEntry(listWords, word)),
-        'known'
-      );
-    }
-  }
-
-  async function copyNewWords() {
-    await navigator.clipboard.writeText(unknownWords.map(([form]) => form).join('\n'));
-    wordsCopied = true;
   }
 
   function openSearch() {
@@ -352,7 +336,9 @@
   }
 </script>
 
-<svelte:window on:keydown={(ev) => ev.key === 'Escape' && !searchOpen && dispatch('close')} />
+<svelte:window
+  on:keydown={(ev) => ev.key === 'Escape' && !searchOpen && !covered && dispatch('close')}
+/>
 
 <div
   class="details"
@@ -539,6 +525,25 @@
               {/if}
             </dd>
           </div>
+          {#if wordGroups}
+            <div>
+              <dt>{$t$('book.words')}</dt>
+              <dd>
+                {$t$('book.wordsValue', {
+                  new: number(wordGroups.new.length),
+                  known: number(wordGroups.known.length),
+                  ignored: number(wordGroups.ignored.length)
+                })}
+                <button
+                  type="button"
+                  class="app-button app-button-quiet"
+                  on:click={() => dispatch('words')}
+                >
+                  {$t$('book.wordList')}
+                </button>
+              </dd>
+            </div>
+          {/if}
           <div>
             <dt>{$t$('book.progress')}</dt>
             <dd>
@@ -599,81 +604,10 @@
           {/if}
         </dl>
 
-        {#if unknownWords.length}
-          <section class="details-words" aria-label={$t$('book.newWords')}>
-            <SectionHead number={1} title={$t$('book.newWords')} count={unknownWords.length} />
-            <p class="details-note" title={$t$('book.newWordsHint', { count: knownMinCount })}>
-              {$t$(unknownWords.length > 50 ? 'book.newWordsNoteFirst' : 'book.newWordsNote', {
-                count: number(estimate?.words95 ?? 0),
-                total: number(unknownWords.length)
-              })}
-            </p>
-            <ol lang="ja">
-              {#each unknownWords.slice(0, 50) as word}
-                {@const [form, reading, count] = word}
-                {@const mark = wordMark($wordMarks$, word)}
-                <li class:details-word-marked={mark}>
-                  <span
-                    >{form}{#if reading && kanjiPattern.test(form)}<span class="details-note-inline"
-                        >（{reading}）</span
-                      >{/if}</span
-                  >
-                  <span class="details-note-inline">×{count}</span>
-                  <span lang={$uiLanguage$}>
-                    {#if mark}
-                      <button
-                        type="button"
-                        class="details-mark"
-                        title={$t$('book.unmarkWord', { word: form })}
-                        on:click={() => setWordMarks(marksOf($wordMarks$, word), null)}
-                      >
-                        {$t$('book.undoMark')}
-                      </button>
-                    {:else}
-                      <button
-                        type="button"
-                        class="details-mark"
-                        title={$t$('book.markKnown', { word: form })}
-                        aria-label={$t$('book.markKnown', { word: form })}
-                        on:click={() => setWordMarks([markEntry(listWords, word)], 'known')}
-                        >✓</button
-                      >
-                      <button
-                        type="button"
-                        class="details-mark"
-                        title={$t$('book.markIgnored', { word: form })}
-                        aria-label={$t$('book.markIgnored', { word: form })}
-                        on:click={() => setWordMarks([markEntry(listWords, word)], 'ignored')}
-                        >✕</button
-                      >
-                    {/if}
-                  </span>
-                </li>
-              {/each}
-            </ol>
-            <span class="details-word-actions">
-              <button type="button" class="app-button" on:click={markAllShown}>
-                {$t$('book.markAllKnown')}
-              </button>
-              <button type="button" class="app-button" on:click={copyNewWords}>
-                {wordsCopied ? $t$('book.copied') : $t$('book.copy')}
-              </button>
-              <button
-                type="button"
-                class="app-button"
-                on:click={() => downloadWordsCsv(book.title, unknownWords)}
-              >
-                <Fa icon={faDownload} />
-                {$t$('book.downloadCsv')}
-              </button>
-            </span>
-          </section>
-        {/if}
-
         {#if seriesBooks.length > 1}
           <ContinueReadingShelf
             books={seriesBooks}
-            number={unknownWords.length ? 2 : 1}
+            number={1}
             heading={book.series ?? ''}
             currentBookId={book.id}
             on:bookClick={(ev) => dispatch('showBook', ev.detail)}
@@ -1107,52 +1041,6 @@
     letter-spacing: 0.1em;
     color: var(--font-color);
     word-break: break-all;
-  }
-
-  .details-words {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.75rem;
-  }
-
-  .details-words ol {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem 1.1rem;
-  }
-
-  .details-word-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-
-  .details-note-inline {
-    color: var(--app-muted-fg);
-    font-size: var(--type-small);
-  }
-
-  .details-word-marked {
-    color: var(--app-muted-fg);
-  }
-
-  .details-word-marked > span:first-child {
-    text-decoration: line-through;
-  }
-
-  .details-mark {
-    min-width: 1.6rem;
-    padding: 0 0.3rem;
-    border-radius: 2px;
-    color: var(--app-muted-fg);
-    font-size: var(--type-small);
-  }
-
-  .details-mark:hover,
-  .details-mark:focus-visible {
-    background: var(--surface-color);
-    color: inherit;
   }
 
   .details-fetch {

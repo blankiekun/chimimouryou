@@ -78,10 +78,11 @@ describe('words met', () => {
   it('counts words met once and known from N meetings or Anki', () => {
     const totals = { '猫\tねこ': knownMinCount, '犬\tいぬ': 2, '宦官\tかんがん': 0.5 };
 
-    expect(summarizeWords(totals)).toEqual({ met: 2, known: 1 });
+    expect(summarizeWords(totals)).toEqual({ met: 2, known: 1, metEnough: 1 });
     expect(summarizeWords(totals, new Set(['犬', '宦官', '鳥', '猫']))).toEqual({
       met: 2,
-      known: 4
+      known: 4,
+      metEnough: 1
     });
   });
 
@@ -95,7 +96,7 @@ describe('words met', () => {
         '犬\tいぬ': mark(null),
         '鳥\tとり': mark('ignored')
       })
-    ).toEqual({ met: 2, known: 2 });
+    ).toEqual({ met: 2, known: 2, metEnough: 0 });
   });
 });
 
