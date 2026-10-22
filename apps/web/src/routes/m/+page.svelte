@@ -1024,7 +1024,7 @@
 
 {#if $mangaPageNumber$ && !showMenu && pageCount && !transition}
   <div
-    class="reader-panel pointer-events-none fixed bottom-2 left-1/2 -translate-x-1/2 rounded-full px-3 py-0.5 text-xs tabular-nums opacity-80"
+    class="reader-panel pointer-events-none fixed bottom-2 left-1/2 -translate-x-1/2 rounded-sm px-3 py-0.5 text-xs tabular-nums opacity-80"
   >
     {shownPages.map((index) => index + 1).join('–')} / {pageCount}
   </div>

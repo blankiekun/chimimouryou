@@ -66,18 +66,21 @@ const derivedTokens = {
   heatmapHigh: 'var(--accent-color)'
 } as const;
 
-/** Jiten's difficulty palette, readable on light and dark backgrounds. */
-const jitenDifficulty = {
-  difficulty1: '#15803d',
-  difficulty2: '#22c55e',
-  difficulty3: '#06b6d4',
-  difficulty4: '#d97706',
-  difficulty5: '#dc2626'
+/**
+ * Difficulty bands as one scale from the theme's spot colour (Beginner) to its ink (Expert),
+ * so every theme gets a scale in its own colours; both ends are readable on the page.
+ */
+const inkScale = {
+  difficulty1: 'var(--accent-color)',
+  difficulty2: 'color-mix(in srgb, var(--accent-color) 75%, var(--font-color))',
+  difficulty3: 'color-mix(in srgb, var(--accent-color) 50%, var(--font-color))',
+  difficulty4: 'color-mix(in srgb, var(--accent-color) 25%, var(--font-color))',
+  difficulty5: 'var(--font-color)'
 } as const;
 
 const lightBase: ThemeColors = {
   ...derivedTokens,
-  ...jitenDifficulty,
+  ...inkScale,
   success: '#15803d',
   warning: '#b45309',
   background: '#eef3f6',
@@ -122,7 +125,7 @@ const lightBase: ThemeColors = {
 
 const darkBase: ThemeColors = {
   ...derivedTokens,
-  ...jitenDifficulty,
+  ...inkScale,
   success: '#4ade80',
   warning: '#fbbf24',
   background: '#16191c',
@@ -316,11 +319,6 @@ export const builtInThemes: ThemeDefinition[] = [
       toggleOff: '#cfc3ad',
       progressTrack: '#e8dfcf',
       coverShadow: 'rgba(60, 40, 20, 0.24)',
-      difficulty1: '#4f7a3a',
-      difficulty2: '#7d9a3e',
-      difficulty3: '#c08a1e',
-      difficulty4: '#c4561f',
-      difficulty5: '#a3201b',
       heatmapEmpty: '#ebe3d4',
       heatmapLow: '#ecc3b4',
       headerBackground: '#f5f0e6',
@@ -372,11 +370,6 @@ export const builtInThemes: ThemeDefinition[] = [
       toggleOff: '#4a433a',
       progressTrack: '#332e28',
       coverShadow: 'rgba(0, 0, 0, 0.6)',
-      difficulty1: '#7fae5f',
-      difficulty2: '#a9c25a',
-      difficulty3: '#e0b04a',
-      difficulty4: '#ef8a4c',
-      difficulty5: '#f0675a',
       heatmapEmpty: '#2a2621',
       heatmapLow: '#5a3329',
       headerBackground: '#1a1714',

@@ -1,12 +1,16 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
+  import ImportMenu from '$lib/components/book-card/import-menu.svelte';
   import PointBox from '$lib/components/point-box.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import AnkiKnown from '$lib/components/words/anki-known.svelte';
   import KnownBecause from '$lib/components/words/known-because.svelte';
   import MarkedWords from '$lib/components/words/marked-words.svelte';
   import { ankiKnownWords$ } from '$lib/data/anki';
+  import { pagePath } from '$lib/data/env';
   import { knownWords$ } from '$lib/data/known-words';
+  import { setPendingImport, type PendingImport } from '$lib/data/library-home';
   import { pullAccountStatistics } from '$lib/data/statistics-sync';
   import { database, startDayHoursForTracker$ } from '$lib/data/store';
   import { markedWords, marksSignature, wordMarks$ } from '$lib/data/word-marks';
@@ -59,6 +63,12 @@
     .filter(Boolean)
     .join(' · ');
 
+  // The import runs (with its progress and errors) in the library.
+  function importOnManage(value: PendingImport) {
+    setPendingImport(value);
+    goto(`${pagePath}/manage`);
+  }
+
   function loadSummary() {
     getWordsSummary().then(
       (value) => (summary = value),
@@ -79,7 +89,12 @@
   });
 </script>
 
-<AppHeader active="words" currentBookId={$currentBookId$} />
+<AppHeader active="words" currentBookId={$currentBookId$}>
+  <ImportMenu
+    on:filesChange={(ev) => importOnManage({ files: Array.from(ev.detail) })}
+    on:importBackup={(ev) => importOnManage({ backup: ev.detail })}
+  />
+</AppHeader>
 
 <div class="app-page-shell">
   <main class="words">
