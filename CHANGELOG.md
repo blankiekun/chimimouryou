@@ -14,6 +14,9 @@ anything a reader or a server operator would notice.
   Pages. CI builds it too.
 - The installed app accepts books shared to it (Android) and opens .epub, .htmlz, .cbz and .zip
   files from the system (desktop Chromium); its window and colours follow Study Book.
+- Standalone edition: a book's page shows its number of different kanji, counted in the browser
+  from the stored book (furigana left out), and Home's Read next lists the next volumes of
+  series you are reading, grouped by the volume numbers in titles.
 
 ### Changed
 

@@ -17,6 +17,7 @@ import type { BookAnnotations } from '$lib/data/annotations';
 import type { BookAudiobook } from '$lib/data/audiobook';
 import type { CachedReadings } from '$lib/data/generated-furigana';
 import type { AbsSubtitles } from '$lib/data/audiobookshelf';
+import type { BookKanji } from '$lib/data/book-kanji';
 import type { KanjiSeen } from '$lib/data/kanji-seen';
 import type { CoverageCache, KnownWords } from '$lib/data/known-words';
 import type { Lorebook } from '$lib/data/lorebook';
@@ -37,11 +38,18 @@ interface ReaderDb extends DBSchema {
   readings: { key: string; value: CachedReadings };
   /**
    * 'words' and 'coverage' (known-words.ts), 'met' and 'list:<id>' (words-met.ts), 'marks'
-   * (word-marks.ts), 'history' (words-history.ts)
+   * (word-marks.ts), 'history' (words-history.ts), 'kanji:<title>' (book-kanji.ts)
    */
   known: {
     key: string;
-    value: KnownWords | CoverageCache | WordsMetCache | WordList | WordMarks | HistoryCache;
+    value:
+      | KnownWords
+      | CoverageCache
+      | WordsMetCache
+      | WordList
+      | WordMarks
+      | HistoryCache
+      | BookKanji;
   };
 }
 
