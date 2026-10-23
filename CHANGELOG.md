@@ -16,6 +16,11 @@ anything a reader or a server operator would notice.
   position is measured in the visible part of the book. A book that re-renders with its
   generated furigana (on opening, or while listening) stays on the bookmarked text instead of
   jumping to the top of the page or back to the start.
+- Opening or closing the reader panel keeps your place exactly: in paginated mode the first
+  line of the page stays the first line (the chapter's first page may start with a blank gap
+  until the next chapter), and closing it without turning a page returns to the same page; in
+  continuous mode the line being read stays where it was on screen unless the panel or bar
+  would cover it.
 - Difficulty meters use each theme's own colours (from its accent for Beginner to its text
   colour for Expert) instead of a fixed rainbow; the Words page has the Import menu too, and
   the last rounded pills are square.

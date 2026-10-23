@@ -30,7 +30,7 @@
   import type { AutoScroller, BookmarkManager, PageManager } from './types';
   import BookReaderPaginated from './book-reader-paginated/book-reader-paginated.svelte';
   import { enableReaderWakeLock$, enableTapEdgeToFlip$ } from '$lib/data/store';
-  import { onDestroy } from 'svelte';
+  import { beforeUpdate, onDestroy } from 'svelte';
 
   export let htmlContent: string;
 
@@ -140,6 +140,17 @@
   let visibilityState: DocumentVisibilityState;
 
   const mutationObserver: MutationObserver = new MutationObserver(handleMutation);
+
+  let reader: BookReaderContinuous | BookReaderPaginated | undefined;
+
+  let panelRoom = '';
+
+  // The panel's room changes before the reader gets its new size: let it measure its place first.
+  beforeUpdate(() => {
+    const room = `${reserveRight} ${reserveTop} ${edgeOffset}`;
+    if (panelRoom && room !== panelRoom) reader?.captureAnchor();
+    panelRoom = room;
+  });
 
   const width$ = new Subject<number>();
 
@@ -297,6 +308,7 @@
 >
   {#if viewMode === ViewMode.Continuous}
     <BookReaderContinuous
+      bind:this={reader}
       {htmlContent}
       width={$contentViewportWidth$ ?? 0}
       height={$contentViewportHeight$ ?? 0}
@@ -345,6 +357,7 @@
     />
   {:else}
     <BookReaderPaginated
+      bind:this={reader}
       {htmlContent}
       width={$contentViewportWidth$ ?? 0}
       height={$contentViewportHeight$ ?? 0}
