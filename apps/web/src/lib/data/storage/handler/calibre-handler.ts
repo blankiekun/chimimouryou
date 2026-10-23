@@ -28,7 +28,11 @@ import {
   type CalibreBook
 } from '$lib/data/calibre';
 import { ApiStorageHandler, type RequestOptions } from '$lib/data/storage/handler/api-handler';
-import { BaseStorageHandler, type ExternalFile } from '$lib/data/storage/handler/base-handler';
+import {
+  BaseStorageHandler,
+  type ExternalFile,
+  type SyncFileOptions
+} from '$lib/data/storage/handler/base-handler';
 import { BrowserStorageHandler } from '$lib/data/storage/handler/browser-handler';
 import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
 import { StorageKey, StorageSourceDefault } from '$lib/data/storage/storage-types';
@@ -92,6 +96,54 @@ export class CalibreStorageHandler extends ApiStorageHandler {
     return `${currentAccount() ? accountSyncUrl : syncBaseUrl}${folderName(
       BaseStorageHandler.rootName
     )}/${folderName(title)}/${encodeURIComponent(fileName)}`;
+  }
+
+  /**
+   * Extra sync files (`sync-files.ts`): a book's in its sync folder (`syncFileUrl`), root files
+   * (kanji.json, words.json, settings.json) at the root of the account's folder, so only while
+   * signed in. Static: no handler context. The ETag is the version, but nginx's WebDAV can't
+   * refuse a changed file, so writes don't check it; the merges make up for it on the next sync.
+   */
+  static async readSyncFile(name: string, title?: string) {
+    const url = await CalibreStorageHandler.syncUrl(name, title);
+    const response = await fetch(url, { cache: 'no-store' });
+
+    if (response.status === 404) return undefined;
+
+    if (!response.ok) {
+      throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status });
+    }
+
+    return { text: await response.text(), version: response.headers.get('ETag') ?? '' };
+  }
+
+  static async writeSyncFile(
+    name: string,
+    text: string,
+    { title, keepalive }: SyncFileOptions = {}
+  ) {
+    const response = await fetch(await CalibreStorageHandler.syncUrl(name, title), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: text,
+      // Browsers keep requests alive after the tab closes only up to 64 KiB in total.
+      ...(keepalive && new Blob([text]).size <= 60_000 ? { keepalive } : {})
+    });
+
+    if (!response.ok) {
+      throw Object.assign(new Error(`upload failed (HTTP ${response.status})`), {
+        status: response.status
+      });
+    }
+  }
+
+  /** Root files are personal: callers only sync them while signed in (`readerSyncStore`). */
+  private static async syncUrl(name: string, title?: string) {
+    if (title === undefined) return `${accountSyncUrl}${encodeURIComponent(name)}`;
+
+    await accountReady();
+
+    return CalibreStorageHandler.syncFileUrl(title, name);
   }
 
   /** URL path segment of a title's (or the root's) sync folder. */

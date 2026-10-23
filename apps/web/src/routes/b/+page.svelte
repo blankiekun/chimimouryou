@@ -145,6 +145,7 @@
   import AnkiWatcher from '$lib/components/anki-watcher.svelte';
   import { bookSentenceAudio, noteSentence } from '$lib/data/anki';
   import { enableExtrasSync } from '$lib/data/extras-sync';
+  import { bookSyncSource } from '$lib/data/sync-files';
   import { recordKanjiSeen } from '$lib/data/kanji-seen';
   import { bookWordForms, getWordMarks, selectionForm } from '$lib/data/word-marks';
   import type { PassageContext } from '$lib/data/ask-ai';
@@ -459,13 +460,11 @@
     switchMap(async (rawBookData) => {
       if (!rawBookData) return;
 
-      const isCalibreBook = rawBookData.storageSource === StorageSourceDefault.CALIBRE_DEFAULT;
-      const controller = new AnnotationsController(rawBookData.title, isCalibreBook);
+      const syncSource = bookSyncSource(rawBookData.storageSource);
+      const controller = new AnnotationsController(rawBookData.title, syncSource);
 
-      if (isCalibreBook) {
-        // Recaps and lorebook sync like highlights.
-        enableExtrasSync(rawBookData.title);
-      }
+      // Recaps and lorebook sync like highlights.
+      enableExtrasSync(rawBookData.title, syncSource);
 
       annotations = controller;
       await controller.load();

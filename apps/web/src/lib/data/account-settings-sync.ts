@@ -6,7 +6,9 @@
 
 /**
  * Syncs AI settings, themes and reader settings to the signed-in account
- * (settings.json in the account's WebDAV folder). Reader settings are kept
+ * (settings.json in the account's WebDAV folder), or while signed out to the
+ * root of the library's Google Drive, OneDrive or folder source, without the
+ * API keys (sync-files.ts). Reader settings are kept
  * separately for phones and larger screens, e.g. one column on the phone and
  * two on the desktop. Each setting keeps the time it was last changed in this
  * browser, and the newer value wins per setting. Not part of upstream.
@@ -15,7 +17,8 @@
 import { BehaviorSubject, map, merge, skip, type Subscription } from 'rxjs';
 import { mangaSeriesModes$ } from '$lib/data/manga';
 import { uiLanguage$ } from '$lib/i18n';
-import { accountSyncUrl, type AccountUser } from '$lib/data/account';
+import type { AccountUser } from '$lib/data/account';
+import { readerSyncStore, syncJsonFile } from '$lib/data/sync-files';
 import {
   aiLanguage$,
   askAiDefaultPreset$,
@@ -207,7 +210,6 @@ export type SettingsSyncState =
 
 export const settingsSyncState$ = new BehaviorSubject<SettingsSyncState>({ state: 'off' });
 
-const settingsUrl = `${accountSyncUrl}settings.json`;
 const changeTimesKey = 'accountSettingsModified';
 /** Account whose settings this browser holds (its change times and API keys). */
 const ownerKey = 'accountSettingsOwner';
@@ -215,6 +217,7 @@ const uploadDelayMs = 1500;
 const refreshOnFocusAfterMs = 60_000;
 
 let entries: SyncEntry[] = [];
+let signedIn = false;
 let changeSubscription: Subscription | undefined;
 let applyingRemote = false;
 let uploadTimer: ReturnType<typeof setTimeout> | undefined;
@@ -233,42 +236,6 @@ function writeChangeTimes(times: Record<string, number>) {
   window.localStorage.setItem(changeTimesKey, JSON.stringify(times));
 }
 
-async function downloadSettings(): Promise<SettingsDocument> {
-  const response = await fetch(settingsUrl, { cache: 'no-store' });
-
-  if (response.status === 404) {
-    return { version: 1, values: {}, modified: {} };
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      response.status === 401 ? 'Sign-in expired' : `Download failed (HTTP ${response.status})`
-    );
-  }
-
-  const { values = {}, modified = {} } = await response.json();
-
-  return { version: 1, values, modified };
-}
-
-/** Browsers only keep requests alive after the tab closes up to 64 KiB in total. */
-const keepaliveMaxBytes = 60_000;
-
-async function uploadSettings(settings: SettingsDocument) {
-  const body = JSON.stringify(settings);
-  const response = await fetch(settingsUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body,
-    // Finishes even if the tab is closed right after a change.
-    keepalive: new Blob([body]).size <= keepaliveMaxBytes
-  });
-
-  if (!response.ok) {
-    throw new Error(`Upload failed (HTTP ${response.status})`);
-  }
-}
-
 function applyRemoteValue(store: Store, value: unknown) {
   if (JSON.stringify(store.getValue()) === JSON.stringify(value)) {
     return;
@@ -284,9 +251,35 @@ function applyRemoteValue(store: Store, value: unknown) {
  * newer here (or were set before signing in and are missing from the account).
  */
 async function syncOnce() {
+  const store = await readerSyncStore(signedIn);
+
+  if (!store) {
+    settingsSyncState$.next({ state: 'off' });
+    return;
+  }
+
   settingsSyncState$.next({ state: 'syncing' });
 
-  const remote = await downloadSettings();
+  // keepalive: finishes even if the tab is closed right after a change.
+  await syncJsonFile<Partial<SettingsDocument>>(
+    store,
+    'settings.json',
+    undefined,
+    mergeSettings,
+    true
+  );
+
+  lastSynced = Date.now();
+  settingsSyncState$.next({ state: 'synced', at: lastSynced });
+}
+
+/** Applies the newer remote settings; resolves the file to upload when this browser has newer ones. */
+async function mergeSettings(file: Partial<SettingsDocument> | undefined) {
+  const remote: SettingsDocument = {
+    version: 1,
+    values: file?.values ?? {},
+    modified: file?.modified ?? {}
+  };
   const localTimes = readChangeTimes();
   let changedRemote = false;
 
@@ -314,20 +307,17 @@ async function syncOnce() {
 
   writeChangeTimes(localTimes);
 
-  if (changedRemote) {
-    await uploadSettings(remote);
-  }
-
-  lastSynced = Date.now();
-  settingsSyncState$.next({ state: 'synced', at: lastSynced });
+  return changedRemote ? remote : undefined;
 }
 
 /** Queues a sync; runs never overlap. */
 export function syncAccountSettings(): Promise<void> {
   queue = queue.then(() =>
-    syncOnce().catch((error: Error) => {
-      logger.warn(`Settings sync failed: ${error.message}`);
-      settingsSyncState$.next({ state: 'error', message: error.message });
+    syncOnce().catch((error: Error & { status?: number }) => {
+      const message = error.status === 401 ? 'Sign-in expired' : error.message;
+
+      logger.warn(`Settings sync failed: ${message}`);
+      settingsSyncState$.next({ state: 'error', message });
     })
   );
 
@@ -381,17 +371,18 @@ function releasePreviousOwner(user: AccountUser | null) {
 
 /**
  * Called once per page load with the session state. With null (signed out or
- * expired) it only releases the previous account's API keys.
+ * expired) it releases the previous account's API keys and syncs with the
+ * library's cloud or folder, if it has one.
  */
 export function startSettingsSync(user: AccountUser | null) {
   stopSettingsSync();
   releasePreviousOwner(user);
 
-  if (!user) {
-    return;
-  }
-
-  entries = syncEntries(readerProfile());
+  signedIn = !!user;
+  // API keys only go to the account: a cloud or folder may be shared or read by other apps.
+  entries = syncEntries(readerProfile()).filter(
+    ({ key }) => signedIn || !secretSettings.includes(key)
+  );
   changeSubscription = merge(
     ...entries.map(({ key, store }) =>
       store.pipe(

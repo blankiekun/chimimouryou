@@ -8,7 +8,13 @@ import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 import { gDriveRefreshEndpoint } from '$lib/data/env';
 import { ApiStorageHandler, type FullResponse } from '$lib/data/storage/handler/api-handler';
 import { AbortError } from '$lib/functions/replication/replication-error';
-import { BaseStorageHandler, type ExternalFile } from '$lib/data/storage/handler/base-handler';
+import {
+  BaseStorageHandler,
+  SyncConflictError,
+  type ExternalFile,
+  type SyncFileOptions,
+  type SyncFileStore
+} from '$lib/data/storage/handler/base-handler';
 import { StorageKey } from '$lib/data/storage/storage-types';
 import { database, gDriveStorageSource$ } from '$lib/data/store';
 import pLimit from 'p-limit';
@@ -18,7 +24,7 @@ interface GDriveFile extends ExternalFile {
   parents: string[];
 }
 
-export class GDriveStorageHandler extends ApiStorageHandler {
+export class GDriveStorageHandler extends ApiStorageHandler implements SyncFileStore {
   private baseFileApiUrl = 'https://www.googleapis.com/drive/v3/files';
 
   private baseUploadApiUrl = 'https://www.googleapis.com/upload/drive/v3/files';
@@ -354,6 +360,53 @@ export class GDriveStorageHandler extends ApiStorageHandler {
         start = received;
       }
     }
+  }
+
+  /** An extra file in the root folder or a book's folder (`sync-files.ts`); its version is Drive's. */
+  async readSyncFile(name: string, title?: string) {
+    const file = await this.findSyncFile(name, await this.syncFolder(title));
+
+    if (!file) return undefined;
+
+    const text: string = await this.request(
+      `${this.baseFileApiUrl}/${file.id}?alt=media`,
+      {},
+      'text'
+    );
+
+    return { text, version: file.version };
+  }
+
+  /** Writes into books already on Drive only; looks the file up again, as Drive allows two of one name. */
+  async writeSyncFile(name: string, text: string, { title, version }: SyncFileOptions = {}) {
+    const folderId = await this.syncFolder(title);
+
+    if (!folderId) return;
+
+    const file = await this.findSyncFile(name, folderId);
+
+    if (version !== undefined && (file?.version ?? '') !== version) {
+      throw new SyncConflictError();
+    }
+
+    await this.upload(folderId, name, [], file, new Blob([text], { type: 'application/json' }));
+  }
+
+  private async syncFolder(title?: string) {
+    const rootId = await this.ensureTitle();
+
+    return title === undefined ? rootId : this.ensureTitle(title, rootId, true);
+  }
+
+  private async findSyncFile(name: string, folderId: string) {
+    if (!folderId) return undefined;
+
+    const [file] = await this.list(
+      `trashed=false and '${folderId}' in parents and name='${name}'`,
+      'files(id,name,version)'
+    );
+
+    return file as (GDriveFile & { version: string }) | undefined;
   }
 
   protected executeDelete(id: string) {

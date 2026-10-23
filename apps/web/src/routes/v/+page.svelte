@@ -4,7 +4,7 @@
    * same-origin frame (static/vn/player.html); its text hook sends every page's text here
    * with where each character was drawn: laid invisibly over the game for Yomitan (and
    * optionally shown in a panel below it), and counted for progress and statistics. Saves of
-   * Calibre games sync through vnsaves.json in the reader's sync folder.
+   * games on a synced source sync through vnsaves.json in the game's folder (sync-files.ts).
    */
   import { onDestroy, onMount } from 'svelte';
   import { goto } from '$app/navigation';
@@ -49,10 +49,9 @@
     type VnRead,
     type VnSaves
   } from '$lib/data/vn';
-  import { accountReady } from '$lib/data/account';
+  import { bookSyncSource, syncFileStore, syncJsonFile } from '$lib/data/sync-files';
   import { recordKanjiText } from '$lib/data/kanji-seen';
   import { countTextCharacters } from '$lib/functions/get-character-count';
-  import { CalibreStorageHandler } from '$lib/data/storage/handler/calibre-handler';
   import type {
     BooksDbBookData,
     BooksDbStatistic
@@ -242,31 +241,22 @@
       statistics.get(getDateKey($startDayHoursForTracker$, new Date()))?.charactersRead ?? 0;
   }
 
-  function savesUrl() {
-    return book?.storageSource === StorageSourceDefault.CALIBRE_DEFAULT
-      ? CalibreStorageHandler.syncFileUrl(book.title, 'vnsaves.json')
-      : undefined;
+  function savesStore() {
+    return syncFileStore(bookSyncSource(book?.storageSource));
   }
 
   async function fetchSaves(): Promise<VnSaves> {
-    const url = savesUrl();
+    const store = book && (await savesStore());
+    const file = store ? await store.readSyncFile('vnsaves.json', book!.title) : undefined;
 
-    if (!url) return {};
-
-    await accountReady();
-
-    const response = await fetch(url, { cache: 'no-store' });
-
-    if (!response.ok && response.status !== 404) throw new Error(`HTTP ${response.status}`);
-
-    return response.ok ? response.json() : {};
+    return file ? JSON.parse(file.text) : {};
   }
 
   /** After the engine saved: merges this browser's saves into the synced ones. */
   function uploadSaves(files: Record<string, { modified: number; bytes: Uint8Array }>) {
-    const url = savesUrl();
+    const title = book?.title;
 
-    if (!url) return;
+    if (!title) return;
 
     const local: VnSaves = Object.fromEntries(
       Object.entries(files).map(([name, file]) => [
@@ -277,18 +267,15 @@
 
     savesQueue = savesQueue
       .then(async () => {
-        const remote = await fetchSaves();
-        const merged = mergeVnSaves(local, remote);
+        const store = await savesStore();
 
-        if (!sameVnSaves(merged, remote)) {
-          const put = await fetch(url, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(merged)
-          });
+        if (!store) return;
 
-          if (!put.ok) throw new Error(`upload failed (HTTP ${put.status})`);
-        }
+        await syncJsonFile<VnSaves>(store, 'vnsaves.json', title, async (remote = {}) => {
+          const merged = mergeVnSaves(local, remote);
+
+          return sameVnSaves(merged, remote) ? undefined : merged;
+        });
       })
       .catch((error) => logger.warn(`Visual novel save sync failed: ${error.message}`));
   }
@@ -494,7 +481,13 @@
       on: $instantText$,
       click: () => instantText$.next(!$instantText$)
     },
-    { label: 'Menu', title: "The game's menu (right-click)", on: undefined, click: openMenu, phone: true },
+    {
+      label: 'Menu',
+      title: "The game's menu (right-click)",
+      on: undefined,
+      click: openMenu,
+      phone: true
+    },
     { label: 'Skip', title: 'Skip text', on: skipping, click: toggleSkip, phone: true }
   ];
 

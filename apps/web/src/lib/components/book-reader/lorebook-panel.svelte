@@ -28,7 +28,7 @@
   import {
     enableExtrasSync,
     extrasSyncError$,
-    isExtrasSynced,
+    extrasSyncSource,
     syncExtras
   } from '$lib/data/extras-sync';
   import { homeBookTitles$ } from '$lib/data/library-home';
@@ -149,8 +149,8 @@
     const added = await copyLorebookTo(title, sendTarget);
 
     // The next book is from Calibre too, so its lorebook syncs.
-    if (isExtrasSynced(title)) {
-      enableExtrasSync(sendTarget);
+    if (extrasSyncSource(title)) {
+      enableExtrasSync(sendTarget, extrasSyncSource(title));
       syncExtras('lorebook', sendTarget);
     }
 

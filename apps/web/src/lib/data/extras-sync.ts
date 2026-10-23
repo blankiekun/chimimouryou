@@ -6,18 +6,20 @@
 
 /**
  * Syncs "Story so far" recaps (recaps.json) and the lorebook (lorebook.json) of
- * Calibre books through the book's sync folder, the account's own folder while
- * signed in, like annotations.json. Local changes upload a second after they
- * are saved; panels pull before showing. Browser copies record their account
- * and are ignored under another sign-in state.
+ * books on a synced source through the book's folder (sync-files.ts; on the
+ * server, the account's own folder while signed in), like annotations.json.
+ * Local changes upload a second after they are saved; panels pull before
+ * showing. Browser copies record their account and are ignored under another
+ * sign-in state.
  *
  * Kanji met (kanji-seen.ts) sync for every book as one kanji.json in the account's
- * folder, only while signed in and after releaseReaderData has run. Words marked known or
- * ignored (word-marks.ts) sync the same way as words.json. Not part of upstream.
+ * folder while signed in (else at the root of the library's Drive, OneDrive or folder),
+ * after releaseReaderData has run. Words marked known or ignored (word-marks.ts) sync
+ * the same way as words.json. Not part of upstream.
  */
 
 import { BehaviorSubject, type Subject } from 'rxjs';
-import { accountReady, accountSyncUrl, currentAccount } from '$lib/data/account';
+import { accountReady, currentAccount } from '$lib/data/account';
 import type { KanjiSeen } from '$lib/data/kanji-seen';
 import { logger } from '$lib/data/logger';
 import { lorebookChanged$, mergeLorebooks, sameLorebooks, type Lorebook } from '$lib/data/lorebook';
@@ -25,7 +27,7 @@ import { mergeRecaps, recapsChanged$, sameRecaps, type BookRecaps } from '$lib/d
 import { readerDataOwner } from '$lib/data/reader-data-owner';
 import { readerDb } from '$lib/data/reader-db';
 import type { WordMarks } from '$lib/data/word-marks';
-import { CalibreStorageHandler } from '$lib/data/storage/handler/calibre-handler';
+import { readerSyncStore, syncFileStore, syncJsonFile } from '$lib/data/sync-files';
 
 export type ExtrasKind = 'recaps' | 'lorebook';
 
@@ -60,19 +62,21 @@ export const extrasSyncError$ = new BehaviorSubject<Record<ExtrasKind, string>>(
   lorebook: ''
 });
 
-const syncedTitles = new Set<string>();
+/** Synced books and the storage source their files go to. */
+const syncedTitles = new Map<string, string>();
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
 const queues = new Map<string, Promise<void>>();
 /** Copies being written by a sync, so their change events don't start another one. */
 const applying = new Set<string>();
 
-/** Turns syncing on for a book (Calibre books, when the reader opens them). */
-export function enableExtrasSync(title: string) {
-  syncedTitles.add(title);
+/** Turns syncing on for a book on a synced source (when the reader opens it). */
+export function enableExtrasSync(title: string, source: string) {
+  if (source) syncedTitles.set(title, source);
 }
 
-export function isExtrasSynced(title: string) {
-  return syncedTitles.has(title);
+/** The source a book's extras sync to ('' when they don't). */
+export function extrasSyncSource(title: string) {
+  return syncedTitles.get(title) ?? '';
 }
 
 function schedule(kind: ExtrasKind, title: string) {
@@ -127,49 +131,40 @@ async function syncOnce<T extends { title: string; account?: string }>(
     await accountReady();
 
     const owner = currentAccount()?.id ?? '';
-    const url = CalibreStorageHandler.syncFileUrl(title, spec.file);
-    const response = await fetch(url, { cache: 'no-store' });
+    const store = await syncFileStore(syncedTitles.get(title) ?? '');
 
-    if (!response.ok && response.status !== 404) {
-      throw new Error(`HTTP ${response.status}`);
-    }
+    if (!store) return;
 
-    const remote = response.ok ? ((await response.json()) as T) : undefined;
-    // Read, merge and write in one transaction, so a save made during the fetch isn't lost.
-    const tx = (await readerDb()).transaction(spec.store, 'readwrite');
-    const stored = (await tx.store.get(title)) as T | undefined;
-    // Another sign-in state's copy stays out of this account (it is on that account's server).
-    const local = stored && (stored.account ?? owner) === owner ? stored : undefined;
-    const merged = spec.merge(title, local, remote);
-    const changed = !spec.same(merged, stored) || stored?.account !== owner;
+    await syncJsonFile<T>(store, spec.file, title, async (remote) => {
+      // Read, merge and write in one transaction, so a save made during the fetch isn't lost.
+      const tx = (await readerDb()).transaction(spec.store, 'readwrite');
+      const stored = (await tx.store.get(title)) as T | undefined;
+      // Another sign-in state's copy stays out of this account (it is on that account's server).
+      const local = stored && (stored.account ?? owner) === owner ? stored : undefined;
+      const merged = spec.merge(title, local, remote);
+      const changed = !spec.same(merged, stored) || stored?.account !== owner;
 
-    if (changed) {
-      await tx.store.put({ ...merged, account: owner } as never);
-    }
-
-    await tx.done;
-
-    if (changed) {
-      applying.add(key);
-      try {
-        spec.changed$.next(merged);
-      } finally {
-        applying.delete(key);
+      if (changed) {
+        await tx.store.put({ ...merged, account: owner } as never);
       }
-    }
 
-    if (!spec.same(merged, remote)) {
+      await tx.done;
+
+      if (changed) {
+        applying.add(key);
+        try {
+          spec.changed$.next(merged);
+        } finally {
+          applying.delete(key);
+        }
+      }
+
+      if (spec.same(merged, remote)) return undefined;
+
       const { account: _account, ...upload } = merged;
-      const put = await fetch(url, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(upload)
-      });
 
-      if (!put.ok) {
-        throw new Error(`upload failed (HTTP ${put.status})`);
-      }
-    }
+      return upload as T;
+    });
 
     setError(kind, '');
   } catch (error: any) {
@@ -180,7 +175,15 @@ async function syncOnce<T extends { title: string; account?: string }>(
   }
 }
 
-const kanjiUrl = `${accountSyncUrl}kanji.json`;
+/** The store for kanji.json and words.json, once this browser's data belongs to the reader syncing. */
+async function readerStore() {
+  const user = await accountReady();
+
+  // This browser still holds another reader's data (signed out: '' once released).
+  if ((await readerDataOwner()) !== (user?.id ?? '')) return undefined;
+
+  return readerSyncStore(!!user);
+}
 /** The file holds every book, so uploads wait for a pause in reading. */
 const kanjiUploadDelay = 30_000;
 /** Reads within this time of a sync don't download again. */
@@ -233,59 +236,42 @@ export function syncKanji(): Promise<void> {
 
 async function syncKanjiOnce() {
   try {
-    const user = await accountReady();
+    const store = await readerStore();
 
-    // Signed out, or this browser still holds another reader's kanji.
-    if (!user || (await readerDataOwner()) !== user.id) {
-      return;
-    }
+    if (!store) return;
 
-    const response = await fetch(kanjiUrl, { cache: 'no-store' });
+    await syncJsonFile<{ books?: unknown }>(store, 'kanji.json', undefined, async (file) => {
+      const books = file?.books;
+      const remote = (Array.isArray(books) ? books : []).filter(
+        (book) =>
+          typeof book?.title === 'string' &&
+          typeof book.upTo === 'number' &&
+          typeof book.counts === 'object' &&
+          book.counts !== null
+      ) as KanjiSeen[];
+      const tx = (await readerDb()).transaction('kanji', 'readwrite');
+      const local = await tx.store.getAll();
+      const merged = mergeKanji(local, remote);
+      const localByTitle = new Map(local.map((book) => [book.title, book]));
+      const remoteByTitle = new Map(remote.map((book) => [book.title, book]));
 
-    if (!response.ok && response.status !== 404) {
-      throw new Error(`HTTP ${response.status}`);
-    }
+      await Promise.all(
+        merged
+          .filter((book) => !sameKanji(book, localByTitle.get(book.title)))
+          .map((book) => tx.store.put(book))
+      );
+      await tx.done;
 
-    const books: unknown = response.ok ? (await response.json())?.books : [];
-    const remote = (Array.isArray(books) ? books : []).filter(
-      (book) =>
-        typeof book?.title === 'string' &&
-        typeof book.upTo === 'number' &&
-        typeof book.counts === 'object' &&
-        book.counts !== null
-    ) as KanjiSeen[];
-    const tx = (await readerDb()).transaction('kanji', 'readwrite');
-    const local = await tx.store.getAll();
-    const merged = mergeKanji(local, remote);
-    const localByTitle = new Map(local.map((book) => [book.title, book]));
-    const remoteByTitle = new Map(remote.map((book) => [book.title, book]));
-
-    await Promise.all(
-      merged
-        .filter((book) => !sameKanji(book, localByTitle.get(book.title)))
-        .map((book) => tx.store.put(book))
-    );
-    await tx.done;
-
-    if (merged.some((book) => !sameKanji(book, remoteByTitle.get(book.title)))) {
-      const put = await fetch(kanjiUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ books: merged })
-      });
-
-      if (!put.ok) {
-        throw new Error(`upload failed (HTTP ${put.status})`);
-      }
-    }
+      return merged.some((book) => !sameKanji(book, remoteByTitle.get(book.title)))
+        ? { books: merged }
+        : undefined;
+    });
 
     kanjiSyncedAt = Date.now();
   } catch (error: any) {
     logger.warn(`Kanji sync failed: ${error.message}`);
   }
 }
-
-const wordsUrl = `${accountSyncUrl}words.json`;
 
 let wordsTimer: ReturnType<typeof setTimeout> | undefined;
 let wordsQueue = Promise.resolve();
@@ -327,47 +313,30 @@ export function syncWordMarks(): Promise<void> {
 
 async function syncWordMarksOnce() {
   try {
-    const user = await accountReady();
+    const store = await readerStore();
 
-    // Signed out (browser only), or this browser still holds another reader's marks.
-    if (!user || (await readerDataOwner()) !== user.id) {
-      return;
-    }
+    if (!store) return;
 
-    const response = await fetch(wordsUrl, { cache: 'no-store' });
+    await syncJsonFile<{ words?: unknown }>(store, 'words.json', undefined, async (file) => {
+      const words = file?.words;
+      const remote = Object.fromEntries(
+        Object.entries(typeof words === 'object' && words ? words : {}).filter(
+          ([, mark]: [string, any]) =>
+            typeof mark?.modified === 'number' &&
+            (mark.status === null || mark.status === 'known' || mark.status === 'ignored')
+        )
+      ) as WordMarks;
+      const tx = (await readerDb()).transaction('known', 'readwrite');
+      const local = ((await tx.store.get('marks')) ?? {}) as WordMarks;
+      const merged = mergeWordMarks(local, remote);
 
-    if (!response.ok && response.status !== 404) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const words: unknown = response.ok ? (await response.json())?.words : {};
-    const remote = Object.fromEntries(
-      Object.entries(typeof words === 'object' && words ? words : {}).filter(
-        ([, mark]) =>
-          typeof mark?.modified === 'number' &&
-          (mark.status === null || mark.status === 'known' || mark.status === 'ignored')
-      )
-    ) as WordMarks;
-    const tx = (await readerDb()).transaction('known', 'readwrite');
-    const local = ((await tx.store.get('marks')) ?? {}) as WordMarks;
-    const merged = mergeWordMarks(local, remote);
-
-    if (!sameMarks(merged, local)) {
-      await tx.store.put(merged, 'marks');
-    }
-    await tx.done;
-
-    if (!sameMarks(merged, remote)) {
-      const put = await fetch(wordsUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ words: merged })
-      });
-
-      if (!put.ok) {
-        throw new Error(`upload failed (HTTP ${put.status})`);
+      if (!sameMarks(merged, local)) {
+        await tx.store.put(merged, 'marks');
       }
-    }
+      await tx.done;
+
+      return sameMarks(merged, remote) ? undefined : { words: merged };
+    });
 
     wordsSyncedAt = Date.now();
   } catch (error: any) {
