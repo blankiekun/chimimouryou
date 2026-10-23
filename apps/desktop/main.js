@@ -11,6 +11,12 @@ import { app, BrowserWindow, dialog, Menu, session, shell } from 'electron';
 import { cpSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import {
+  cancelBrowserSignIn,
+  finishBrowserSignIn,
+  isSignInUrl,
+  startBrowserSignIn
+} from './oauth.js';
 import { serve } from './serve.js';
 
 // Fixed: browser storage, the service worker, AnkiConnect's CORS check (its default
@@ -29,10 +35,19 @@ const electronDir = app.isPackaged
 
 let mainWindow;
 
-/** Links that leave the app open in the system browser; same-origin windows (OAuth's /auth popup) stay in. */
+/** The app's own windows (not extension pages or About) learn they run in the desktop app. */
+const appPreferences = { preload: join(import.meta.dirname, 'preload.cjs') };
+
+/**
+ * Links that leave the app open in the system browser; same-origin windows (OAuth's /auth popup) stay
+ * in, and the popup's sign-in page opens in the browser too, waiting for its redirect (oauth.js).
+ */
 function keepExternalLinksOut(contents) {
+  contents.on('did-create-window', (window) => keepExternalLinksOut(window.webContents));
+  contents.on('destroyed', () => cancelBrowserSignIn(contents));
   contents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith(`${origin}/`)) return { action: 'allow' };
+    if (url.startsWith(`${origin}/`))
+      return { action: 'allow', overrideBrowserWindowOptions: { webPreferences: appPreferences } };
     if (/^https?:/.test(url)) shell.openExternal(url);
     else if (url.startsWith('file:')) shell.openPath(fileURLToPath(url));
     return { action: 'deny' };
@@ -40,8 +55,42 @@ function keepExternalLinksOut(contents) {
   contents.on('will-navigate', (event, url) => {
     if (url.startsWith(`${origin}/`)) return;
     event.preventDefault();
-    if (/^https?:/.test(url)) shell.openExternal(url);
+    if (contents.getURL().startsWith(`${origin}/auth?`) && isSignInUrl(url, origin))
+      shell.openExternal(startBrowserSignIn(url, contents));
+    else if (/^https?:/.test(url)) shell.openExternal(url);
   });
+}
+
+/** The browser's redirect back from a sign-in: hands the code to the waiting /auth popup. */
+function handleSignInRedirect(url, res) {
+  if (url.pathname !== '/auth' || !url.searchParams.has('state')) return false;
+  const page = (status, text) =>
+    res
+      .writeHead(status, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'Referrer-Policy': 'no-referrer'
+      })
+      .end(
+        `<!doctype html><meta charset="utf-8"><title>chimimouryou</title>
+<style>body{font:16px/1.5 system-ui,sans-serif;margin:48px;color:#222;background:#fff}
+@media (prefers-color-scheme:dark){body{color:#eee;background:#222}}</style><p>${text}</p>`
+      );
+  const result = finishBrowserSignIn(url.searchParams);
+  const popup = result && !result.popup.isDestroyed() ? result.popup : undefined;
+  if (!popup) {
+    page(400, 'chimimouryou isn’t waiting for this sign-in. Start it again from the app.');
+  } else if (result.code) {
+    // A same-origin navigation from inside the popup keeps window.opener, which holds the PKCE verifier.
+    const next = `/auth?code=${encodeURIComponent(result.code)}`;
+    popup.executeJavaScript(`location.replace(${JSON.stringify(next)})`);
+    mainWindow?.focus();
+    page(200, 'Signed in. You can close this tab and go back to chimimouryou.');
+  } else {
+    BrowserWindow.fromWebContents(popup)?.close();
+    page(200, 'Sign-in was cancelled. You can close this tab.');
+  }
+  return true;
 }
 
 const readVersion = (dir) => {
@@ -87,8 +136,8 @@ async function loadYomitan() {
   }
 }
 
-function openWindow(url, options = {}) {
-  const window = new BrowserWindow({ width: 1000, height: 800, ...options });
+function openWindow(url, options = {}, webPreferences = {}) {
+  const window = new BrowserWindow({ width: 1000, height: 800, ...options, webPreferences });
   keepExternalLinksOut(window.webContents);
   window.loadURL(url);
   return window;
@@ -174,7 +223,7 @@ if (!app.requestSingleInstanceLock()) {
       return;
     }
     try {
-      await serve(webDir, port);
+      await serve(webDir, port, handleSignInRedirect);
     } catch (error) {
       dialog.showErrorBox('chimimouryou', `Port ${port} on 127.0.0.1 is taken: ${error.message}`);
       app.quit();
@@ -182,6 +231,10 @@ if (!app.requestSingleInstanceLock()) {
     }
     const yomitan = await loadYomitan();
     setMenu(yomitan);
-    mainWindow = openWindow(`${origin}/`, { width: 1200, height: 900, title: 'chimimouryou' });
+    mainWindow = openWindow(
+      `${origin}/`,
+      { width: 1200, height: 900, title: 'chimimouryou' },
+      appPreferences
+    );
   });
 }

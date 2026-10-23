@@ -4,6 +4,12 @@
   import { convertAuthErrorResponse } from '$lib/functions/replication/error-handler';
   import Fa from 'svelte-fa';
 
+  // The desktop app opens the consent page in the system browser (apps/desktop/oauth.js).
+  const inBrowser =
+    browser &&
+    'chimiDesktop' in window &&
+    new URL(window.location.href).searchParams.has('ttu-init-auth');
+
   $: if (browser) {
     handleAuthRequest();
   }
@@ -198,6 +204,9 @@
   }
 </script>
 
-<div class="fixed inset-0 flex h-full w-full items-center justify-center text-7xl">
-  <Fa icon={faSpinner} spin />
+<div class="fixed inset-0 flex h-full w-full flex-col items-center justify-center gap-6">
+  <div class="text-7xl"><Fa icon={faSpinner} spin /></div>
+  {#if inBrowser}
+    <p class="px-4 text-center">Continue signing in in your browser.</p>
+  {/if}
 </div>
