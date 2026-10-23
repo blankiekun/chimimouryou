@@ -176,7 +176,7 @@ export const customReadingPointEnabled$ = writableBooleanLocalStorageSubject()(
 
 export const selectionToBookmarkEnabled$ = writableBooleanLocalStorageSubject()(
   'selectionToBookmarkEnabled',
-  false
+  true
 );
 
 export const enableTapEdgeToFlip$ = writableBooleanLocalStorageSubject()(
@@ -261,7 +261,7 @@ export const startDayHoursForTracker$ = writableNumberLocalStorageSubject()(
   0
 );
 
-export const statisticsEnabled$ = writableBooleanLocalStorageSubject()('statisticsEnabled', false);
+export const statisticsEnabled$ = writableBooleanLocalStorageSubject()('statisticsEnabled', true);
 
 export const statisticsMergeMode$ = writableStringLocalStorageSubject<MergeMode>()(
   'statisticsMergeMode',

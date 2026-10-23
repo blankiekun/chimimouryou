@@ -20,6 +20,7 @@ anything a reader or a server operator would notice.
 
 ### Changed
 
+- Statistics, selecting text to bookmark, and the AI and Audiobookshelf plugins are on by default (browsers that already chose keep their choice).
 - The library's top bar shows only Import and the account: view and sort are in the Store's Sort
   menu, Select is a Store button (long press still selects on Home), and the storage source and
   "Report an issue" are in Settings → Data → Storage. The old-domain hint and the `?count` loader
