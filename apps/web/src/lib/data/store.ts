@@ -4,6 +4,7 @@
  * All rights reserved.
  */
 
+import { standalone } from '$lib/data/env';
 import { browser } from '$app/environment';
 import {
   ReaderImageGalleryAvailableKeybind,
@@ -89,7 +90,12 @@ export const hideSpoilerImageMode$ = writableStringLocalStorageSubject<BlurMode>
 );
 export const hideFurigana$ = writableBooleanLocalStorageSubject()('hideFurigana', false);
 // Furigana from the server's readings files (generated-furigana.ts) on words the book gives none.
-export const generatedFurigana$ = writableBooleanLocalStorageSubject()('generatedFurigana', false);
+// On by default only in the standalone edition: on a server every open would ask the optional
+// difficulty service for a readings file.
+export const generatedFurigana$ = writableBooleanLocalStorageSubject()(
+  'generatedFurigana',
+  standalone
+);
 export const furiganaStyle$ = writableStringLocalStorageSubject<FuriganaStyle>()(
   'furiganaStyle',
   FuriganaStyle.Partial

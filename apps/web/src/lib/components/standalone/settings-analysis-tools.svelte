@@ -7,10 +7,12 @@
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
   import {
+    analysisDownload$,
     analysisFeatures,
     analysisToolsSize,
     analysisToolsState$,
     analysisToolsSupported,
+    cancelAnalysisDownload,
     checkAnalysisTools,
     downloadAnalysisTools,
     removeAnalysisTools,
@@ -24,21 +26,18 @@
     difficulty: {
       title: 'Difficulty estimates',
       tooltip:
-        'Difficulty, word lists and word coverage for your books, made in this browser. A book is estimated when you open it, or from its page; a long novel takes about two minutes.',
-      ready: 'Downloaded. Open a book, or its page, to estimate it.'
+        'Difficulty, word lists and word coverage for your books, made in this browser in the background when a book is added; a long novel takes about two minutes.',
+      ready: 'Downloaded. Books are estimated in the background when you add them.'
     },
     furigana: {
       title: 'Generated furigana',
       tooltip:
-        'Furigana for your books, made in this browser when you open a book with Reader → Generated furigana on; a long novel takes about two minutes.',
-      ready: 'Downloaded. Turn on Generated furigana in the reader settings.'
+        'Furigana for your books, made in this browser in the background while Reader → Generated furigana is on; a long novel takes about two minutes.',
+      ready: 'Downloaded. Used while Generated furigana is on in the reader settings.'
     }
   };
 
   let size: Partial<Record<AnalysisFeature, number>> = {};
-  let done = 0;
-  let error: Partial<Record<AnalysisFeature, string>> = {};
-  let controller: AbortController | undefined;
 
   $: downloading = analysisFeatures.some(
     (feature) => $analysisToolsState$[feature] === 'downloading'
@@ -52,28 +51,8 @@
 
   async function sizes(_state: unknown) {
     for (const feature of analysisFeatures) {
-      size = { ...size, [feature]: await analysisToolsSize(feature).catch(() => undefined) };
+      size = { ...size, [feature]: await analysisToolsSize([feature]).catch(() => undefined) };
     }
-  }
-
-  async function download(feature: AnalysisFeature) {
-    error = { ...error, [feature]: '' };
-    done = 0;
-    controller = new AbortController();
-    await downloadAnalysisTools(
-      feature,
-      (bytes, total) => {
-        done = bytes;
-        size = { ...size, [feature]: total };
-      },
-      controller.signal
-    ).catch((err: Error) => {
-      error = {
-        ...error,
-        [feature]: err.name === 'AbortError' ? '' : `The download failed: ${err.message}`
-      };
-    });
-    controller = undefined;
   }
 
   function remove(feature: AnalysisFeature) {
@@ -108,24 +87,23 @@
           Remove
         </button>
       {:else if state === 'downloading'}
+        {@const total = $analysisDownload$?.total ?? 0}
+        {@const done = $analysisDownload$?.done ?? 0}
         <div class="analysis-progress">
           <div
             class="analysis-track"
             role="progressbar"
             aria-label="Downloading {text[feature].title.toLowerCase()}"
             aria-valuemin={0}
-            aria-valuemax={size[feature] ?? 0}
+            aria-valuemax={total}
             aria-valuenow={done}
           >
-            <div
-              class="analysis-fill"
-              style:width="{size[feature] ? (done / (size[feature] ?? 1)) * 100 : 0}%"
-            />
+            <div class="analysis-fill" style:width="{total ? (done / total) * 100 : 0}%" />
           </div>
           <span class="analysis-note">
-            {mb(done)} of {size[feature] ? mb(size[feature] ?? 0) : '…'} MB
+            {mb(done)} of {total ? mb(total) : '…'} MB
           </span>
-          <button type="button" class="app-button" on:click={() => controller?.abort()}>
+          <button type="button" class="app-button" on:click={cancelAnalysisDownload}>
             Cancel
           </button>
         </div>
@@ -134,14 +112,16 @@
           type="button"
           class="app-button app-button-primary"
           disabled={downloading}
-          on:click={() => download(feature)}
+          on:click={() => downloadAnalysisTools([feature])}
         >
           Download{size[feature] ? ` (${mb(size[feature] ?? 0)} MB)` : ''}
         </button>
       {/if}
       <svelte:fragment slot="after">
-        {#if error[feature]}
-          <p class="analysis-note" role="alert">{error[feature]}</p>
+        {#if $analysisDownload$?.error && $analysisDownload$.features.includes(feature)}
+          <p class="analysis-note" role="alert">
+            The download failed: {$analysisDownload$.error}
+          </p>
         {:else if supported && state === 'ready'}
           <p class="analysis-note">{text[feature].ready}</p>
         {/if}
