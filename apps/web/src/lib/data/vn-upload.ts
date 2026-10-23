@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-import { BlobReader, ZipReader } from '@zip.js/zip.js';
+import { BlobReader, BlobWriter, ZipReader, ZipWriter } from '@zip.js/zip.js';
 import { asksBeforeVnUpload, StorageKey } from '$lib/data/storage/storage-types';
 import { findVnRoot } from '$lib/data/vn';
 
@@ -52,6 +52,70 @@ export async function vnZipFiles(files: File[]) {
   }
 
   return games;
+}
+
+/** An unpacked game among picked or dropped files: its folder's name, bytes and files by path */
+export interface VnFolder {
+  name: string;
+  size: number;
+  files: Record<string, File>;
+}
+
+/** Where a picked or dropped file sits: its folder path (webkitRelativePath, or set by getEntryFiles) */
+const relativePath = (file: File) => file.webkitRelativePath || file.name;
+
+/**
+ * The game folders among picked or dropped files (a folder holding a script, findVnRoot), each
+ * one game with its files keyed by their path inside it, and the files outside any game.
+ */
+export function vnFolders(files: File[]) {
+  const roots = files
+    .map((file) => relativePath(file))
+    .filter((path) => findVnRoot([path]) !== undefined)
+    .map((path) => path.slice(0, path.lastIndexOf('/') + 1))
+    // A game needs a folder to be named after; a loose script stays a file.
+    .filter((root) => root)
+    .sort((a, b) => a.length - b.length)
+    .filter((root, index, sorted) => !sorted.slice(0, index).some((r) => root.startsWith(r)));
+  const games: VnFolder[] = roots.map((root) => ({
+    name: root.slice(0, -1).split('/').pop()!,
+    size: 0,
+    files: {}
+  }));
+  const rest: File[] = [];
+
+  for (const file of files) {
+    const path = relativePath(file);
+    const at = roots.findIndex((root) => path.startsWith(root));
+
+    if (at < 0) {
+      rest.push(file);
+      continue;
+    }
+
+    const inner = path.slice(roots[at].length);
+
+    if (!inner.split('/').some((part) => part.startsWith('.') || part === '__MACOSX')) {
+      games[at].files[inner] = file;
+      games[at].size += file.size;
+    }
+  }
+
+  return { games, rest };
+}
+
+/**
+ * A game folder as a stored ZIP (no compression), for the Calibre import, which takes ZIPs.
+ * shortcut: builds the whole ZIP in memory; stream it to the upload if big games fail.
+ */
+export async function zipVnFolder(game: VnFolder) {
+  const writer = new ZipWriter(new BlobWriter('application/zip'));
+
+  for (const [path, file] of Object.entries(game.files)) {
+    await writer.add(`${game.name}/${path}`, new BlobReader(file), { level: 0 });
+  }
+
+  return new File([await writer.close()], `${game.name}.zip`, { type: 'application/zip' });
 }
 
 export function formatBytes(size: number) {

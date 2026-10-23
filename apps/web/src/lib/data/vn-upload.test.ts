@@ -7,8 +7,8 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it, vi } from 'vitest';
 import { StorageKey } from '$lib/data/storage/storage-types';
-import { vnElementHtml } from '$lib/data/vn';
-import { vnsKeptOnDevice, vnUploadQuestion } from '$lib/data/vn-upload';
+import { isVn, vnElementHtml, vnInfo } from '$lib/data/vn';
+import { vnFolders, vnsKeptOnDevice, vnUploadQuestion } from '$lib/data/vn-upload';
 
 vi.mock('$lib/functions/file-loaders/cbz/load-cbz', () => ({
   default: async (file: File) => ({
@@ -112,5 +112,85 @@ describe('importData with games kept on the device', () => {
 
     expect(handler.keepOnDevice).not.toHaveBeenCalled();
     expect(handler.saveBook).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('game folders among picked files', () => {
+  /** A file as a folder pick gives it: its path from the picked folder */
+  const picked = (path: string, text = 'x') => {
+    const file = new File([text], path.split('/').pop()!);
+
+    Object.defineProperty(file, 'webkitRelativePath', { value: path });
+    // jsdom's Blob has no arrayBuffer().
+    Object.defineProperty(file, 'arrayBuffer', {
+      value: async () => new TextEncoder().encode(text).buffer
+    });
+    return file;
+  };
+  const pick = () => [
+    picked('Books/novel.epub'),
+    picked('Books/Game/0.txt', '*define\ngame\n*start\n「こんにちは」\\\nend'),
+    picked('Books/Game/arc.nsa', 'archive'),
+    picked('Books/Game/bgm/title.ogg'),
+    picked('Books/Game/save/1.txt'),
+    picked('Books/Game/.DS_Store'),
+    picked('Books/notes.txt')
+  ];
+
+  it('makes one game of each folder holding a script, the rest stay files', () => {
+    const { games, rest } = vnFolders(pick());
+
+    expect(rest.map((file) => file.webkitRelativePath)).toEqual([
+      'Books/novel.epub',
+      'Books/notes.txt'
+    ]);
+    expect(games).toHaveLength(1);
+    expect(games[0].name).toBe('Game');
+    expect(Object.keys(games[0].files)).toEqual([
+      '0.txt',
+      'arc.nsa',
+      'bgm/title.ogg',
+      'save/1.txt'
+    ]);
+    expect(games[0].size).toBe(Object.values(games[0].files).reduce((n, f) => n + f.size, 0));
+  });
+
+  it('leaves loose scripts and plain files alone', () => {
+    expect(vnFolders([new File(['x'], '0.txt'), new File(['x'], 'a.epub')]).games).toEqual([]);
+  });
+
+  it('imports a game folder as one visual novel, kept on the device when asked', async () => {
+    const handler = {
+      storageType: StorageKey.GDRIVE,
+      isCacheDisabled: () => false,
+      startContext: vi.fn(),
+      saveCover: vi.fn(),
+      saveBook: vi.fn(async (_book: unknown) => 0),
+      keepOnDevice: vi.fn(async (_book: unknown) => 7)
+    };
+    const { games } = vnFolders(pick());
+    const titles: string[] = [];
+
+    await importData(
+      document,
+      handler as any,
+      games,
+      new AbortController().signal,
+      undefined,
+      titles,
+      new Set(['Game'])
+    );
+
+    expect(handler.saveBook).not.toHaveBeenCalled();
+    expect(handler.keepOnDevice).toHaveBeenCalledTimes(1);
+
+    const book = handler.keepOnDevice.mock.calls[0][0] as any;
+
+    expect(titles).toEqual(['Game']);
+    expect(book.title).toBe('Game');
+    expect(isVn(book)).toBe(true);
+    expect(vnInfo(book).files).toEqual(['0.txt', 'arc.nsa', 'bgm/title.ogg', 'save/1.txt']);
+    expect(book.blobs['arc.nsa']).toBe(games[0].files['arc.nsa']);
+    expect(book.characters).toBeGreaterThan(0);
   });
 });

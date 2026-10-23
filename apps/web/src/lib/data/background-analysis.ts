@@ -92,10 +92,13 @@ async function analyse(title: string) {
 async function run() {
   while (waiting.length) {
     report();
-    await analyse(waiting[0]);
+    // A book that fails is passed over: the queue and its progress go on.
+    await analyse(waiting[0]).catch(() => undefined);
     waiting.shift();
     done += 1;
   }
+  // In the same tick as the last shift: a title queued after it starts a new run, not this one.
+  running = undefined;
   done = 0;
   report();
   if (estimated) {
@@ -134,7 +137,7 @@ export function analyseInBackground(titles: string[]) {
       ) {
         waiting.push(title);
         report();
-        running ??= run().finally(() => (running = undefined));
+        running ??= run();
       }
     }
   });

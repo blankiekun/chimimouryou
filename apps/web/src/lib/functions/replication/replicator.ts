@@ -13,6 +13,8 @@ import loadEpub from '$lib/functions/file-loaders/epub/load-epub';
 import loadHtmlz from '$lib/functions/file-loaders/htmlz/load-htmlz';
 import loadTxt from '$lib/functions/file-loaders/txt/load-txt';
 import loadCbz from '$lib/functions/file-loaders/cbz/load-cbz';
+import { loadVnFiles } from '$lib/functions/file-loaders/vn/load-vn';
+import type { VnFolder } from '$lib/data/vn-upload';
 import { isMangaFileName } from '$lib/data/manga';
 import { isVn } from '$lib/data/vn';
 import type { ApiStorageHandler } from '$lib/data/storage/handler/api-handler';
@@ -74,7 +76,7 @@ async function saveLocalCopy(targetHandler: BaseStorageHandler, book: LoadData) 
 export async function importData(
   document: Document,
   targetHandler: BaseStorageHandler,
-  files: File[],
+  files: (File | VnFolder)[],
   cancelSignal: AbortSignal,
   fileCountData?: Record<string, number>,
   importedTitles: string[] = [],
@@ -124,7 +126,9 @@ export async function importData(
 
           let bookContent: LoadData;
 
-          if (file.name.endsWith('.epub')) {
+          if (!(file instanceof File)) {
+            bookContent = await loadVnFiles(file.name, file.files, lastBookModified);
+          } else if (file.name.endsWith('.epub')) {
             bookContent = await loadEpub(file, document, lastBookModified);
           } else if (file.name.endsWith('.txt')) {
             bookContent = await loadTxt(file, lastBookModified);

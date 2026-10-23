@@ -110,7 +110,9 @@
   import {
     vnsKeptOnDevice,
     vnUploadQuestion,
+    vnFolders,
     vnZipFiles,
+    zipVnFolder,
     type VnUpload
   } from '$lib/data/vn-upload';
   import { storageSource$ } from '$lib/data/storage/storage-view';
@@ -549,10 +551,12 @@
     initializeReplicationProgressData();
 
     const supportedExtRegex = /\.(?:htmlz|epub|txt|cbz|zip)$/;
-    const files = Array.from(fileList).filter((f) => supportedExtRegex.test(f.name));
+    // Unpacked game folders become one visual novel each, like a ZIP of them.
+    const { games, rest } = vnFolders(Array.from(fileList));
+    const files = rest.filter((f) => supportedExtRegex.test(f.name));
     const errorTitle = 'Bookimport failed';
 
-    if (!files.length) {
+    if (!files.length && !games.length) {
       resetProgress();
 
       showError(errorTitle, 'File(s) must be HTMLZ, TXT, EPUB, CBZ or ZIP', '');
@@ -560,7 +564,7 @@
     }
 
     if ($storageSource$ === StorageKey.CALIBRE) {
-      await addFilesToCalibre(files);
+      await addFilesToCalibre([...files, ...(await Promise.all(games.map(zipVnFolder)))]);
       return;
     }
 
@@ -568,7 +572,7 @@
     const keepOnDevice = asksBeforeVnUpload($storageSource$)
       ? await vnsKeptOnDevice(
           $storageSource$,
-          (await vnZipFiles(files)).map((file) => ({ name: file.name, size: file.size })),
+          [...(await vnZipFiles(files)), ...games].map(({ name, size }) => ({ name, size })),
           askVnUpload
         )
       : undefined;
@@ -585,7 +589,7 @@
         $statisticsMergeMode$,
         $readingGoalsMergeMode$
       ),
-      files,
+      [...files, ...games],
       cancelSignal,
       $fileCountData$,
       importedTitles,
