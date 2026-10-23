@@ -8,6 +8,7 @@ The details of a particular deployment (hosts, addresses, how it is deployed and
 
 - pnpm workspace: the only app is `apps/web`, a SvelteKit app built with `@sveltejs/adapter-static`.
   The output is purely static; there is no server-side code at runtime.
+- `apps/desktop` (P5): an Electron shell serving the standalone build from `http://127.0.0.1:41917` with Yomitan loaded unmodified (`scripts/fetch-yomitan.sh`, pinned, not committed; `yomitan-shim.cjs` adds `chrome.permissions`); see its README. The Docker images never install it (`.dockerignore`, and web.Dockerfile copies only `apps/web/package.json` before `pnpm install`); Electron's binary is fetched by its `fetch` script, not on install.
 - `apps/web/src/routes/`: pages. `b/` is the reader (`b/+page.svelte` is large), `m/` the manga reader, plus `manage/` (library), `settings/`, `statistics/` and `auth/`.
 - `apps/web/src/lib/components/`: UI components. `book-reader/` is the reading view and `settings/` is the settings UI.
 - `apps/web/src/lib/data/`: stores, settings enums and storage/database code. Books live in the browser (IndexedDB), synced with the server (Calibre source) or GDrive/OneDrive.

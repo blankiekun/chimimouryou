@@ -49,6 +49,7 @@ tar -C "$REPO_ROOT" \
   --exclude=.git --exclude=node_modules --exclude=build --exclude=.svelte-kit \
   --exclude=./local --exclude=./CLAUDE.local.md --exclude=apps/web/.env.local \
   --exclude=./.env --exclude=./data --exclude=./.claude \
+  --exclude=./apps/desktop/yomitan --exclude=./apps/desktop/dist \
   -czf - . \
   | run bash -c 'set -euo pipefail; rm -rf /opt/ebook-reader && mkdir -p /opt/ebook-reader && tar -C /opt/ebook-reader -xzf -'
 

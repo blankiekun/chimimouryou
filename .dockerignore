@@ -11,3 +11,5 @@
 data
 # Agent worktrees and local tool state
 .claude
+# The desktop app is built on its own (apps/desktop), never in the images
+apps/desktop

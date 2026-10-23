@@ -1,0 +1,59 @@
+{
+  "name": "desktop",
+  "productName": "chimimouryou",
+  "version": "0.0.1",
+  "description": "chimimouryou's standalone reader as a desktop app, with Yomitan",
+  "license": "BSD-3-Clause",
+  "private": true,
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "fetch": "node node_modules/electron/install.js && bash scripts/fetch-yomitan.sh",
+    "build:web": "cd ../web && VITE_EDITION=standalone VITE_STORAGE_ROOT_NAME=chimi-reader-data pnpm build",
+    "start": "electron .",
+    "test": "node --test serve.test.js",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "26.17.0"
+  },
+  "build": {
+    "appId": "io.github.blankiekun.chimimouryou",
+    "files": [
+      "main.js",
+      "serve.js",
+      "yomitan-shim.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/build",
+        "to": "web"
+      },
+      {
+        "from": "yomitan",
+        "to": "yomitan"
+      },
+      {
+        "from": "../../LICENSE",
+        "to": "LICENSE"
+      },
+      {
+        "from": "../../NOTICE",
+        "to": "NOTICE"
+      }
+    ],
+    "linux": {
+      "target": "AppImage",
+      "category": "Education",
+      "executableName": "chimimouryou"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    }
+  }
+}
