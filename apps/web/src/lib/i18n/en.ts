@@ -1244,7 +1244,13 @@ export const en = {
   'prefs.abs.passwordHint': 'Used once to get a token; not stored.',
   'prefs.abs.apiKey': 'Or an API key',
   'prefs.abs.apiKeyHint': 'Audiobookshelf → Settings → API Keys.',
-  'prefs.abs.apiKeyLabel': 'API key'
+  'prefs.abs.apiKeyLabel': 'API key',
+  'prefs.abs.server': 'Server address',
+  'prefs.abs.serverHint':
+    "Your Audiobookshelf's HTTPS address, e.g. https://abs.example.com. In Audiobookshelf (2.28 or later), open Settings → Allowed CORS origins and add {origin}. An http:// address doesn't work from this site.",
+  'prefs.abs.unreachable':
+    "Couldn't reach Audiobookshelf at {server}. Check the address uses https:// and that {origin} is in its Settings → Allowed CORS origins.",
+  'prefs.abs.notFound': 'No Audiobookshelf at {server}'
 };
 
 export type MessageKey = keyof typeof en;

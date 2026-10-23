@@ -14,7 +14,12 @@ import { gDriveRefreshEndpoint, gDriveRevokeEndpoint, pagePath } from '$lib/data
 import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
 import { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
 import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
-import { StorageOAuthManager, storageOAuthTokens } from '$lib/data/storage/storage-oauth-manager';
+import {
+  StorageOAuthManager,
+  storageOAuthTokens,
+  storedRefreshToken,
+  storeRefreshToken
+} from '$lib/data/storage/storage-oauth-manager';
 import { StorageKey, StorageSourceDefault } from '$lib/data/storage/storage-types';
 import { isStorageSourceAvailable, storageSource$ } from '$lib/data/storage/storage-view';
 import {
@@ -52,10 +57,11 @@ function driveSourceName() {
   return gDriveStorageSource$.getValue() || StorageSourceDefault.GDRIVE_DEFAULT;
 }
 
-/** A Drive token that hasn't expired: the next sync needs no sign-in. */
+/** A Drive token that hasn't expired, or a kept refresh token: the next sync needs no sign-in. */
 export function driveSignedIn(now = Date.now()) {
-  const token = storageOAuthTokens.get(driveSourceName());
-  return !!token && token.expiration > now;
+  const name = driveSourceName();
+  const token = storageOAuthTokens.get(name);
+  return (!!token && token.expiration > now) || !!storedRefreshToken(name);
 }
 
 /** The signed-in Google account, for the Storage row; empty when unknown. */
@@ -77,7 +83,11 @@ async function loadDriveEmail() {
  * Resolves 'blocked' when the browser refused the pop-up, an error message, or ''.
  */
 export async function signInToDrive(window: Window): Promise<string> {
-  if (driveSignedIn()) return '';
+  const token = storageOAuthTokens.get(driveSourceName());
+  if (token && token.expiration > Date.now()) {
+    await loadDriveEmail();
+    return '';
+  }
 
   const popup = StorageOAuthManager.createWindow(
     `${pagePath}/auth?ttu-init-wait=1`,
@@ -97,6 +107,9 @@ export async function signInToDrive(window: Window): Promise<string> {
     );
   } catch (error: any) {
     return error.message || 'Sign-in failed';
+  } finally {
+    // A kept refresh token renews the session without the window.
+    if (!popup.closed) popup.close();
   }
 
   await loadDriveEmail();
@@ -107,8 +120,9 @@ export function signOutOfDrive(window: Window) {
   const name = driveSourceName();
   const token = storageOAuthTokens.get(name);
   // Revoking the refresh token also ends its access tokens.
-  if (token)
-    StorageOAuthManager.revokeToken(gDriveRevokeEndpoint, token.refreshToken || token.accessToken);
+  const revoke = storedRefreshToken(name) || token?.refreshToken || token?.accessToken;
+  if (revoke) StorageOAuthManager.revokeToken(gDriveRevokeEndpoint, revoke);
+  storeRefreshToken(name, undefined);
   storageOAuthTokens.delete(name);
   driveEmail$.next('');
   getStorageHandler(window, StorageKey.GDRIVE).clearData();

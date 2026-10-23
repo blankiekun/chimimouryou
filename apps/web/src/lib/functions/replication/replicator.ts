@@ -14,6 +14,8 @@ import loadHtmlz from '$lib/functions/file-loaders/htmlz/load-htmlz';
 import loadTxt from '$lib/functions/file-loaders/txt/load-txt';
 import loadCbz from '$lib/functions/file-loaders/cbz/load-cbz';
 import { isMangaFileName } from '$lib/data/manga';
+import { isVn } from '$lib/data/vn';
+import type { ApiStorageHandler } from '$lib/data/storage/handler/api-handler';
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
 import { throwIfAborted } from '$lib/functions/replication/replication-error';
@@ -31,7 +33,9 @@ export async function importData(
   targetHandler: BaseStorageHandler,
   files: File[],
   cancelSignal: AbortSignal,
-  fileCountData?: Record<string, number>
+  fileCountData?: Record<string, number>,
+  importedTitles: string[] = [],
+  keepOnDevice?: Set<string>
 ) {
   const dataIds: number[] = [];
   const tasks: Promise<void>[] = [];
@@ -100,7 +104,13 @@ export async function importData(
             cancelSignal
           );
 
-          dataIds.push(await targetHandler.saveBook(bookContent, false));
+          dataIds.push(
+            // File names of visual novels the reader kept off a cloud provider (vn-upload.ts)
+            keepOnDevice?.has(file.name) && isVn(bookContent)
+              ? await (targetHandler as ApiStorageHandler).keepOnDevice(bookContent)
+              : await targetHandler.saveBook(bookContent, false)
+          );
+          importedTitles.push(bookContent.title);
 
           checkCancelAndProgress(cancelSignal, false);
 
@@ -220,7 +230,10 @@ export async function replicateData(
           targetHandler.startContext(context, cancelSignal);
 
           if (processBookData) {
-            if (
+            if (context.keepOnDevice) {
+              checkCancelAndProgress(cancelSignal, true, true);
+              checkCancelAndProgress(cancelSignal, true, true);
+            } else if (
               await targetHandler.isBookPresentAndUpToDate(
                 await sourceHandler.getFilenameForRecentCheck('bookdata_')
               )

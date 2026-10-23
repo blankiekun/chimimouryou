@@ -10,6 +10,7 @@ import { dialogManager } from '$lib/data/dialog-manager';
 import {
   gDriveAuthEndpoint,
   gDriveClientId,
+  gDriveClientSecret,
   gDriveScope,
   gDriveTokenEndpoint,
   oneDriveAuthEndpoint,
@@ -39,6 +40,32 @@ interface OAuthTokenData {
 }
 
 export const storageOAuthTokens = new Map<string, OAuthTokenData>();
+
+/**
+ * Not part of upstream: the built-in Google Drive client keeps its refresh token in this
+ * browser (like the AI keys), so a new page renews the session instead of opening sign-in.
+ */
+const refreshTokenKey = (storageSourceName: string) => `oauthRefreshToken:${storageSourceName}`;
+
+export function storedRefreshToken(storageSourceName: string) {
+  try {
+    return localStorage.getItem(refreshTokenKey(storageSourceName)) || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function storeRefreshToken(storageSourceName: string, refreshToken: string | undefined) {
+  try {
+    if (refreshToken) {
+      localStorage.setItem(refreshTokenKey(storageSourceName), refreshToken);
+    } else {
+      localStorage.removeItem(refreshTokenKey(storageSourceName));
+    }
+  } catch {
+    // Storage blocked: sign in again next time.
+  }
+}
 
 export class StorageOAuthManager {
   private storageType: StorageKey;
@@ -105,8 +132,17 @@ export class StorageOAuthManager {
     if (storageSourceName === StorageSourceDefault.GDRIVE_DEFAULT) {
       this.remoteData = {
         clientId: gDriveClientId,
-        clientSecret: ''
+        clientSecret: gDriveClientSecret,
+        refreshToken: storedRefreshToken(storageSourceName)
       };
+
+      token = await this.refreshToken();
+
+      if (token) {
+        return token.accessToken;
+      }
+
+      storeRefreshToken(storageSourceName, undefined);
     } else if (storageSourceName === StorageSourceDefault.ONEDRIVE_DEFAULT) {
       this.remoteData = {
         clientId: oneDriveClientId,
@@ -219,6 +255,10 @@ export class StorageOAuthManager {
       token = await this.waitForAuth(window);
 
       storageOAuthTokens.set(storageSourceName, token);
+
+      if (storageSourceName === StorageSourceDefault.GDRIVE_DEFAULT) {
+        storeRefreshToken(storageSourceName, token.refreshToken);
+      }
 
       if (
         this.parentWindow &&
@@ -400,8 +440,11 @@ export class StorageOAuthManager {
           result: {
             ...this.remoteData,
             ...StorageOAuthManager.getAuthVariables(this.storageType),
+            // The built-in client sends its secret too when the build has one (Google's token
+            // endpoint needs it for web clients).
             sendSecret:
-              this.storageType === StorageKey.GDRIVE && !isAppDefault(this.storageSourceName)
+              this.storageType === StorageKey.GDRIVE &&
+              (!isAppDefault(this.storageSourceName) || !!gDriveClientSecret)
           }
         });
         break;
