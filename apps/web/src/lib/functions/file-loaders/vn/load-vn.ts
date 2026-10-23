@@ -45,13 +45,40 @@ export default async function loadVn(
     }
   }
 
+  return vnBook(name.replace(/\.(?:cbz|zip)$/i, ''), blobs, scripts, lastBookModified);
+}
+
+/**
+ * A game folder picked or dropped as files (`vnFolders` in vn-upload.ts): the files are the
+ * blobs as they are, keyed by their path inside the game folder.
+ */
+export async function loadVnFiles(
+  title: string,
+  files: Record<string, Blob>,
+  lastBookModified: number
+): Promise<LoadData> {
+  const scripts = await Promise.all(
+    Object.keys(files)
+      .filter(isScriptPath)
+      .map(async (path) => ({ path, bytes: new Uint8Array(await files[path].arrayBuffer()) }))
+  );
+
+  return vnBook(title, files, scripts, lastBookModified);
+}
+
+function vnBook(
+  title: string,
+  blobs: Record<string, Blob>,
+  scripts: { path: string; bytes: Uint8Array }[],
+  lastBookModified: number
+): LoadData {
   const cover = Object.keys(blobs).find(
     (path) => !path.includes('/') && /(?:cover|icon).*\.(?:jpe?g|png|webp)$/i.test(path)
   );
   const { encoding, characters } = analyzeScripts(scripts);
 
   return {
-    title: name.replace(/\.(?:cbz|zip)$/i, ''),
+    title,
     styleSheet: '',
     elementHtml: vnElementHtml({ encoding, files: Object.keys(blobs) }),
     blobs,

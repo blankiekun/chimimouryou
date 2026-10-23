@@ -16,6 +16,11 @@ export async function getEntryFiles(entry: FileSystemEntry): Promise<File[]> {
     (entry as FileSystemFileEntry).file(resolve, reject);
   });
 
+  // Dropped files have no webkitRelativePath; game folders are found by it (vnFolders).
+  if (!file.webkitRelativePath) {
+    Object.defineProperty(file, 'webkitRelativePath', { value: entry.fullPath.replace(/^\//, '') });
+  }
+
   return [file];
 }
 

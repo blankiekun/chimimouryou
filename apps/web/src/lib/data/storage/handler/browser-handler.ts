@@ -374,7 +374,12 @@ export class BrowserStorageHandler extends BaseStorageHandler {
       });
 
       // Standalone: its estimate and furigana in the background (background-analysis.ts).
-      if (standalone && storedBookData.elementHtml) {
+      if (
+        standalone &&
+        storedBookData.elementHtml &&
+        !isVn(storedBookData) &&
+        !isManga(storedBookData)
+      ) {
         import('$lib/data/background-analysis')
           .then(({ analyseInBackground }) => analyseInBackground([data.title]))
           .catch(() => undefined);
