@@ -23,6 +23,8 @@ export interface SyncState {
   /** Books done and to do in the running sync */
   running: { done: number; total: number } | undefined;
   lastSync: number;
+  /** What the last successful sync covered: a title, "N books" or "Library" */
+  lastWhat: string;
   /** The last sync failed */
   failed: boolean;
   /** `title\ttype` of changes whose upload failed and that the reader retries */
@@ -31,6 +33,7 @@ export interface SyncState {
 }
 
 const lastSyncKey = 'syncLastSync';
+const lastWhatKey = 'syncLastWhat';
 const errorsKey = 'syncErrors';
 const maxErrors = 5;
 
@@ -54,6 +57,7 @@ function write(key: string, value: unknown) {
 export const syncState$ = writableSubject<SyncState>({
   running: undefined,
   lastSync: typeof localStorage === 'undefined' ? 0 : read(lastSyncKey, 0),
+  lastWhat: typeof localStorage === 'undefined' ? '' : read(lastWhatKey, ''),
   failed: false,
   waiting: [],
   errors: typeof localStorage === 'undefined' ? [] : read<SyncError[]>(errorsKey, [])
@@ -90,7 +94,8 @@ export function syncEnded(keys: string[], error: string, what: string, now = Dat
 
   if (!error) {
     write(lastSyncKey, now);
-    update({ running: undefined, lastSync: now, failed: false, waiting: others });
+    write(lastWhatKey, what);
+    update({ running: undefined, lastSync: now, lastWhat: what, failed: false, waiting: others });
     return;
   }
 

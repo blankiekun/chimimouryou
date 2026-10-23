@@ -12,6 +12,7 @@
 
 import { gDriveRefreshEndpoint, gDriveRevokeEndpoint, pagePath } from '$lib/data/env';
 import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
+import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 import { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
 import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
 import {
@@ -31,7 +32,6 @@ import {
 } from '$lib/data/store';
 import { storage } from '$lib/data/window/navigator/storage';
 import { AutoReplicationType } from '$lib/functions/replication/replication-options';
-import { writableSubject } from '$lib/functions/svelte/store';
 
 /** The first run's choice was made (the storage itself is `storageSource$`). */
 export const storageChosen$ = writableBooleanLocalStorageSubject()('storageChosen', false);
@@ -64,8 +64,8 @@ export function driveSignedIn(now = Date.now()) {
   return (!!token && token.expiration > now) || !!storedRefreshToken(name);
 }
 
-/** The signed-in Google account, for the Storage row; empty when unknown. */
-export const driveEmail$ = writableSubject('');
+/** The signed-in Google account, for the Storage row; empty when unknown. Kept across reloads, cleared on sign-out. */
+export const driveEmail$ = writableStringLocalStorageSubject()('driveEmail', '');
 
 async function loadDriveEmail() {
   const token = storageOAuthTokens.get(driveSourceName());
@@ -75,7 +75,8 @@ async function loadDriveEmail() {
     { headers: { Authorization: `Bearer ${token.accessToken}` } }
   ).catch(() => undefined);
   const about = response?.ok ? await response.json().catch(() => undefined) : undefined;
-  driveEmail$.next(about?.user?.emailAddress || '');
+  // A failed lookup keeps the address already known.
+  if (about?.user?.emailAddress) driveEmail$.next(about.user.emailAddress);
 }
 
 /**
