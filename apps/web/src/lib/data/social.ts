@@ -129,6 +129,19 @@ const finishedPending$ = writableArrayLocalStorageSubject<Omit<FinishedBook, 'mo
   []
 );
 
+// Books are only noted while signed in: another hub account here (a server sign-in change
+// brings the account's own) must not send the last one's.
+socialSession$.subscribe((session) => {
+  const id = session?.me.id;
+
+  if (!id || typeof window === 'undefined') return;
+  if (window.localStorage.getItem('socialBooksUser') !== id) {
+    currentBooks$.next([]);
+    finishedPending$.next([]);
+    window.localStorage.setItem('socialBooksUser', id);
+  }
+});
+
 /** Book keys hidden from friends (the book page's switch), kept in this browser only */
 export const hiddenBooks$ = writableArrayLocalStorageSubject<string>()('socialHiddenBooks', []);
 

@@ -15,7 +15,34 @@ import {
 } from '$lib/data/ai-settings';
 import { theme$ } from '$lib/data/store';
 import { darkTheme$ } from '$lib/data/theme/theme-store';
+import { socialSession$ } from '$lib/data/social-account';
 import { startSettingsSync, syncAccountSettings } from './account-settings-sync';
+
+/** The library's Drive/OneDrive/folder while signed out (undefined: none) */
+const folder = vi.hoisted(() => ({ files: undefined as Record<string, string> | undefined }));
+
+vi.mock('$lib/data/sync-files', async (importOriginal) => {
+  const original = await importOriginal<typeof import('$lib/data/sync-files')>();
+
+  return {
+    ...original,
+    readerSyncStore: (signedIn: boolean) =>
+      signedIn || !folder.files
+        ? original.readerSyncStore(signedIn)
+        : Promise.resolve({
+            readSyncFile: async (name: string) =>
+              folder.files?.[name] ? { text: folder.files[name], version: '' } : undefined,
+            writeSyncFile: async (name: string, text: string) => {
+              folder.files![name] = text;
+            }
+          })
+  };
+});
+
+const hubSession = (id: string) => ({
+  token: `hub-token-${id}`,
+  me: { id, username: id, name: id, avatar: 0, code: 'K7QM2XPA', share: {}, created: 1 }
+});
 
 // jsdom has no matchMedia; the theme store reads the system colour scheme on import.
 vi.hoisted(() => {
@@ -72,6 +99,7 @@ async function signInAs(user: typeof alice | null) {
 describe('account settings sync', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    folder.files = undefined;
     // jsdom has no matchMedia (used to pick the reader profile).
     window.matchMedia = vi.fn(() => ({ matches: false }) as MediaQueryList);
   });
@@ -199,5 +227,51 @@ describe('account settings sync', () => {
     expect(darkTheme$.getValue()).toBe('washi-dark-theme');
     expect(remote?.values.theme).toBe('chimi-light');
     expect(remote?.modified.darkTheme).toBe(later);
+  });
+
+  it('syncs the hub sign-in to the account, so its other browsers are signed in', async () => {
+    window.localStorage.setItem('accountSettingsOwner', 'alice');
+    socialSession$.next(hubSession('aki'));
+    mockServer({ values: {}, modified: {} });
+
+    await signInAs(alice);
+    expect(uploads.join()).toContain('hub-token-aki');
+
+    // Another browser of the same account
+    window.localStorage.clear();
+    socialSession$.next(null);
+    await signInAs(alice);
+    expect(socialSession$.getValue()?.token).toBe('hub-token-aki');
+  });
+
+  it("forgets the account's hub sign-in on sign-out and on another account", async () => {
+    window.localStorage.setItem('accountSettingsOwner', 'alice');
+    socialSession$.next(hubSession('aki'));
+    mockServer();
+
+    await signInAs(null);
+    expect(socialSession$.getValue()).toBeNull();
+    expect(window.localStorage.getItem('socialSession')).toBeNull();
+
+    window.localStorage.setItem('accountSettingsOwner', 'alice');
+    socialSession$.next(hubSession('aki'));
+    mockServer({ values: {}, modified: {} });
+
+    await signInAs(bob);
+    expect(socialSession$.getValue()).toBeNull();
+    expect(uploads.join()).not.toContain('hub-token');
+  });
+
+  it('keeps a hub sign-in made while signed out in this browser, never in the folder', async () => {
+    folder.files = {};
+    openRouterModel$.next('model/ren');
+    socialSession$.next(hubSession('ren'));
+    mockServer();
+
+    await signInAs(null);
+    expect(socialSession$.getValue()?.token).toBe('hub-token-ren');
+    expect(folder.files['settings.json']).toBeDefined();
+    expect(folder.files['settings.json']).not.toContain('hub-token');
+    expect(folder.files['settings.json']).not.toContain('socialSession');
   });
 });

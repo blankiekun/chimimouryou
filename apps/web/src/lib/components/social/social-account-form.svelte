@@ -1,13 +1,6 @@
 <script lang="ts">
-  import PointBox from '$lib/components/point-box.svelte';
-  import {
-    formatCode,
-    hubErrorKey,
-    hubOrigin,
-    logIn,
-    recoverAccount,
-    signUp
-  } from '$lib/data/social-account';
+  import RecoveryCode from '$lib/components/social/recovery-code.svelte';
+  import { hubErrorKey, hubOrigin, logIn, recoverAccount, signUp } from '$lib/data/social-account';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher } from 'svelte';
 
@@ -62,20 +55,6 @@
     }
     busy = false;
   }
-
-  function copyRecovery() {
-    navigator.clipboard?.writeText(formatCode(recovery, 5)).catch(() => {});
-  }
-
-  function downloadRecovery() {
-    const text = `${$t$('social.recoveryFile', { username })}\n\n${formatCode(recovery, 5)}\n`;
-    const link = document.createElement('a');
-
-    link.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
-    link.download = `chimimouryou-recovery-${username}.txt`;
-    link.click();
-    URL.revokeObjectURL(link.href);
-  }
 </script>
 
 {#if recovery}
@@ -83,20 +62,7 @@
     <p class="social-step">{$t$('social.step2')}</p>
     <h1 class="social-title">{$t$('social.recoveryTitle')}</h1>
     <p class="social-lead">{$t$('social.recoveryLead')}</p>
-    <PointBox label={$t$('social.recoveryCode')}>
-      <p class="social-recovery" aria-label={$t$('social.recoveryCode')}>
-        <span>{recovery.slice(0, 5)}-{recovery.slice(5, 10)}</span>
-        <span>{recovery.slice(10, 15)}-{recovery.slice(15)}</span>
-      </p>
-      <span class="social-actions">
-        <button type="button" class="app-button" on:click={copyRecovery}>
-          {$t$('social.copy')}
-        </button>
-        <button type="button" class="app-button" on:click={downloadRecovery}>
-          {$t$('social.downloadTxt')}
-        </button>
-      </span>
-    </PointBox>
+    <RecoveryCode code={recovery} {username} />
     <p class="social-note">{$t$('social.recoveryWarning')}</p>
     <label class="social-check">
       <input type="checkbox" bind:checked={saved} />
@@ -301,22 +267,6 @@
     background: var(--surface-color);
     color: var(--app-muted-fg);
     font-size: var(--type-small);
-  }
-
-  .social-recovery {
-    display: flex;
-    flex-direction: column;
-    margin-bottom: 1rem;
-    font-size: var(--type-h1);
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0.04em;
-    line-height: 1.25;
-  }
-
-  .social-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
   }
 
   .social-check {

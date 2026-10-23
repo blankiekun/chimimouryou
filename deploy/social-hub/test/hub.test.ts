@@ -120,6 +120,44 @@ describe('social hub', () => {
     ).toBe(401);
   });
 
+  it('changes the password and the recovery code with the current password', async () => {
+    const sora = await signUp('sora', 1);
+    const other = (await call('POST', '/v1/login', { username: 'sora', key: key(1) })).body.token;
+
+    expect(
+      (await call('POST', '/v1/password', { key: key(9), next: key(2) }, sora.token)).status
+    ).toBe(401);
+    // A wrong password is a failed sign-in, not an ended session.
+    expect((await call('GET', '/v1/me', undefined, sora.token)).status).toBe(200);
+    expect(
+      (await call('POST', '/v1/password', { key: key(1), next: key(2) }, sora.token)).status
+    ).toBe(200);
+    expect((await call('GET', '/v1/me', undefined, sora.token)).status).toBe(200);
+    expect((await call('GET', '/v1/me', undefined, other)).status).toBe(401);
+    expect((await call('POST', '/v1/login', { username: 'sora', key: key(1) })).status).toBe(401);
+    expect((await call('POST', '/v1/login', { username: 'sora', key: key(2) })).status).toBe(200);
+
+    expect((await call('POST', '/v1/recovery', { key: key(1) }, sora.token)).status).toBe(401);
+    const fresh = await call('POST', '/v1/recovery', { key: key(2) }, sora.token);
+    expect(fresh.body.recovery).toMatch(/^[0-9A-Z]{20}$/);
+    expect(JSON.stringify(rows('users'))).not.toContain(fresh.body.recovery);
+    const old = { username: 'sora', recovery: sora.recovery, key: key(3) };
+    expect((await call('POST', '/v1/recover', old)).status).toBe(401);
+    const reset = { username: 'sora', recovery: fresh.body.recovery, key: key(3) };
+    expect((await call('POST', '/v1/recover', reset)).status).toBe(200);
+  });
+
+  it('signs out everywhere', async () => {
+    const kai = await signUp('kai', 1);
+    const other = (await call('POST', '/v1/login', { username: 'kai', key: key(1) })).body.token;
+    await signUp('someone_else', 1);
+
+    expect((await call('POST', '/v1/logout-all', undefined, kai.token)).status).toBe(200);
+    expect((await call('GET', '/v1/me', undefined, kai.token)).status).toBe(401);
+    expect((await call('GET', '/v1/me', undefined, other)).status).toBe(401);
+    expect(rows('sessions')).toHaveLength(1);
+  });
+
   it('allows 3 sign-ups per address a day', async () => {
     const address = '198.51.100.7';
     for (const name of ['a_1', 'a_2', 'a_3']) {
