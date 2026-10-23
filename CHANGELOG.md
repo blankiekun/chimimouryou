@@ -109,6 +109,7 @@ anything a reader or a server operator would notice.
 
 ### Fixed
 
+- Google Drive: book covers show again after a reload (the page's content security policy blocked Drive's thumbnails).
 - Visual novels: right-clicking the game no longer opens the browser's menu.
 - An app update no longer deletes every cache of the site: only the service worker's own (now
   named `chimi:…`), so games kept for offline play and other sites on the same origin keep theirs.
