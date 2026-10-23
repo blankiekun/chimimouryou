@@ -10,6 +10,7 @@
  * Not part of upstream.
  */
 
+import { learningGuideUrl } from '$lib/data/app-update';
 import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
 import { storage } from '$lib/data/window/navigator/storage';
 import { writableSubject } from '$lib/functions/svelte/store';
@@ -50,18 +51,30 @@ export function installWay(
   return 'none';
 }
 
-export const installTexts: Record<Exclude<InstallWay, 'none'>, { title: string; text: string }> = {
+/** docs/LEARNING.md's section on phones: Yomitan on Android, Safari and Hoshi Reader on iOS. */
+export const phonesGuideUrl = `${learningGuideUrl}#6-phones-and-tablets`;
+const phonesGuide = { label: 'Reading on phones →', href: phonesGuideUrl };
+
+export const installTexts: Record<
+  Exclude<InstallWay, 'none'>,
+  { title: string; text: string; links?: { label: string; href: string }[] }
+> = {
   prompt: {
     title: 'Install chimimouryou',
     text: 'Opens in its own window and keeps working offline.'
   },
   'firefox-android': {
     title: 'Install from the Firefox menu',
-    text: 'Open the menu (⋮), then Install. Yomitan works here: Firefox is the only Android browser that runs it.'
+    text: "Open the menu (⋮), then Install. For Yomitan lookups, read in a Firefox tab instead: it's the only Android browser that runs Yomitan.",
+    links: [
+      { label: 'Get Yomitan →', href: 'https://addons.mozilla.org/android/addon/yomitan/' },
+      phonesGuide
+    ]
   },
   ios: {
     title: 'Add to your Home Screen',
-    text: "Tap Share, then Add to Home Screen. Safari deletes a site's data after 7 days without a visit; on the Home Screen your books stay."
+    text: "Tap Share, then Add to Home Screen. Safari deletes a site's data after 7 days without a visit; on the Home Screen your books stay.",
+    links: [phonesGuide]
   },
   installed: {
     title: 'Installed',

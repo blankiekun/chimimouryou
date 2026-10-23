@@ -122,6 +122,7 @@ yourself.
 - [docs/INSTALL.md](docs/INSTALL.md): installing, HTTPS, accounts, who may do what
 - [docs/CONFIGURATION.md](docs/CONFIGURATION.md): every setting
 - [docs/LEARNING.md](docs/LEARNING.md): for readers: Yomitan, Anki cards, furigana, manga text, difficulty
+- Phones: Firefox for Android runs Yomitan; on iPhone, add the site to the Home Screen ([docs/LEARNING.md → Phones and tablets](docs/LEARNING.md#6-phones-and-tablets))
 - [ARCHITECTURE.md](ARCHITECTURE.md): how it works; [CONTRIBUTING.md](CONTRIBUTING.md): changing it
 - [docs/READINGS.md](docs/READINGS.md): how word lists read ambiguous words, and the "Known" furigana style
 - [docs/QA.md](docs/QA.md): test plan; [CHANGELOG.md](CHANGELOG.md); [themes.md](themes.md): writing themes

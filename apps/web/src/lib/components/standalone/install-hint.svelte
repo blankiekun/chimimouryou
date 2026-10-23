@@ -33,12 +33,18 @@
     {#if way === 'prompt'}
       <button type="button" class="app-button" on:click={promptInstall}>Install app</button>
     {/if}
+    {#each texts.links ?? [] as link}
+      <a class="install-link" href={link.href} target="_blank" rel="noreferrer">{link.label}</a>
+    {/each}
   </SettingsItemGroup>
 {:else if way !== 'none' && way !== 'installed' && !$installHintDismissed$}
   <aside class="install-hint" aria-label={texts.title}>
     <div class="install-hint-text">
       <h2>{texts.title}</h2>
       <p>{texts.text}</p>
+      {#each texts.links ?? [] as link}
+        <a class="install-link" href={link.href} target="_blank" rel="noreferrer">{link.label}</a>
+      {/each}
     </div>
     <div class="install-hint-actions">
       {#if way === 'prompt'}
@@ -83,6 +89,24 @@
     color: var(--app-muted-fg);
     font-size: var(--type-small);
     line-height: 1.55;
+  }
+
+  .install-link {
+    color: var(--accent-strong-color);
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .install-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+
+  .install-hint-text .install-link {
+    display: inline-block;
+    margin-top: 0.5rem;
+    margin-inline-end: 1.5rem;
+    font-size: var(--type-small);
   }
 
   .install-hint-actions {
