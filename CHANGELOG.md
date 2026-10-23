@@ -8,6 +8,9 @@ anything a reader or a server operator would notice.
 
 ### Changed
 
+- The manga reader and visual novel player use the Study Book reader bar: the manga reader has a
+  page slider, a settings panel and a new card between volumes; the player shows reading progress
+  and asks to keep a large game's files in a bar instead of a browser dialog.
 - Library cards load small cover thumbnails (about 30 KB instead of the full cover, often
   700 KB or more), made by the catalog service in `state/catalog/thumbs/` (up to five minutes per
   run, so a large library takes a few runs); the book page still shows the full cover.

@@ -59,4 +59,25 @@
     background: #fff;
     color: #000;
   }
+
+  /* The bubble under the pointer: framed and tagged in the spot colour */
+  .mokuro-block:hover {
+    outline: 2px solid var(--accent-color);
+  }
+
+  .mokuro-block:hover::before {
+    content: 'Text';
+    position: absolute;
+    right: -2px;
+    bottom: calc(100% + 2px);
+    padding: 0 0.4rem;
+    border-radius: 2px 2px 0 0;
+    background: var(--accent-color);
+    color: var(--app-accent-fg);
+    font-family: var(--app-font-ui);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    writing-mode: horizontal-tb;
+    user-select: none;
+  }
 </style>
