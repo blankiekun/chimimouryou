@@ -11,6 +11,7 @@
   import SettingsDimensionPopover from '$lib/components/settings/settings-dimension-popover.svelte';
   import SettingsReadingGoals from '$lib/components/settings/settings-reading-goals.svelte';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
+  import SettingsLibrarySource from '$lib/components/settings/settings-library-source.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
   import SettingsStorageSourceList from '$lib/components/settings/settings-storage-source-list.svelte';
   import SettingsUserFontDialog from '$lib/components/settings/settings-user-font-dialog.svelte';
@@ -911,6 +912,7 @@
   <SettingsItemGroup title={$t$('prefs.cache')} tooltip={cacheStorageDataTooltip}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={cacheStorageData} />
   </SettingsItemGroup>
+  <SettingsLibrarySource />
 </SettingsSection>
 <SettingsSection id="data-import">
   <SettingsItemGroup title={$t$('prefs.importFixes')} tooltip={importHTMLFixModeTooltip}>
