@@ -65,10 +65,12 @@ describe('spacerSize', () => {
 });
 
 describe('lineScroll', () => {
-  it('keeps the line where it was unless that is under the panel or bar', () => {
-    expect(lineScroll(800, 1000, 1012, true)).toBe(-200);
-    expect(lineScroll(800, 1300, 1012, true)).toBe(-212);
-    expect(lineScroll(300, 200, 56, false)).toBe(100);
-    expect(lineScroll(300, 20, 56, false)).toBe(244);
+  it('keeps the line as far from the visible start edge as it was', () => {
+    // vertical: the panel opens (edge 1440 -> 1012), then closes
+    expect(lineScroll(1500, 1430, 1440, 1012)).toBe(498);
+    expect(lineScroll(1000, 1002, 1012, 1440)).toBe(-430);
+    // horizontal: the bar's room comes (edge 0 -> 56) and goes
+    expect(lineScroll(300, 20, 0, 56)).toBe(224);
+    expect(lineScroll(60, 76, 56, 0)).toBe(40);
   });
 });

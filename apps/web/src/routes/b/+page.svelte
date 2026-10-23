@@ -692,14 +692,12 @@
 
   $: isPaginated = $viewMode$ === ViewMode.Paginated;
 
-  // The book shrinks to the room beside the open panel and below the bar shown with it; the
-  // readers keep their place when they re-lay out.
+  // The book shrinks to the room beside the open panel and always leaves the bar's room above it;
+  // the readers keep their place when they re-lay out.
   $: bookWidth = browser
     ? readerWidth($containerViewportWidth$ ?? 0, panelOpen, convertRemToPixels(window, 1))
     : 0;
-  $: bookTop = browser
-    ? readerTopInset($containerViewportWidth$ ?? 0, panelOpen, convertRemToPixels(window, 1))
-    : 0;
+  $: bookTop = browser ? readerTopInset(convertRemToPixels(window, 1)) : 0;
   // Continuous: scrolled text passes under the panel's chrome, so the visible book (where jumps
   // land and the position is measured) begins this far from the screen's start edge.
   $: edgeOffset = browser
