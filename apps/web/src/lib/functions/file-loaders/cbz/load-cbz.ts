@@ -31,7 +31,7 @@ export default async function loadCbz(
 
   if (vnRoot !== undefined) {
     try {
-      return await loadVn(file.name, allEntries, vnRoot, lastBookModified, cancelSignal);
+      return await loadVn(file, allEntries, vnRoot, lastBookModified, cancelSignal);
     } finally {
       await reader.close();
     }

@@ -13,13 +13,34 @@ import { throwIfAborted } from '$lib/functions/replication/replication-error';
 import { reportBytes } from '$lib/functions/replication/replication-progress';
 
 /**
+ * A stored (uncompressed) entry's bytes as a slice of the zip, without reading them: games keep
+ * their big archives (.nsa, .sar) stored. undefined when it must be unpacked.
+ * shortcut: skips the CRC check zip.js makes; a corrupt stored file shows only when played.
+ */
+async function storedSlice(zip: Blob, entry: Entry) {
+  const { compressionMethod } = entry as Entry & { compressionMethod: number };
+
+  if (compressionMethod !== 0 || entry.encrypted || entry.offset === undefined) return undefined;
+
+  // The local header's name and extra field lengths can differ from the central directory's.
+  const header = new DataView(await zip.slice(entry.offset, entry.offset + 30).arrayBuffer());
+
+  if (header.byteLength < 30 || header.getUint32(0, true) !== 0x04034b50) return undefined;
+
+  const start = entry.offset + 30 + header.getUint16(26, true) + header.getUint16(28, true);
+
+  return start + entry.uncompressedSize <= zip.size
+    ? zip.slice(start, start + entry.uncompressedSize)
+    : undefined;
+}
+
+/**
  * An ONScripter game from a zip as a book: every file under `root` is a blob, keyed by
  * its path inside the game folder. characters is the script's text, for progress.
- * shortcut: holds the whole game in memory while importing (like manga); stream entries
- * into IndexedDB one by one if large games fail to import on phones.
+ * Stored files are slices of the zip, so only compressed ones are unpacked here.
  */
 export default async function loadVn(
-  name: string,
+  zip: File,
   entries: Entry[],
   root: string,
   lastBookModified: number,
@@ -46,7 +67,7 @@ export default async function loadVn(
 
     const path = entry.filename.slice(root.length);
 
-    blobs[path] = await entry.getData!(new BlobWriter());
+    blobs[path] = (await storedSlice(zip, entry)) ?? (await entry.getData!(new BlobWriter()));
     reportBytes('reading', (done += entry.uncompressedSize), total);
 
     if (isScriptPath(path)) {
@@ -54,7 +75,7 @@ export default async function loadVn(
     }
   }
 
-  return vnBook(name.replace(/\.(?:cbz|zip)$/i, ''), blobs, scripts, lastBookModified);
+  return vnBook(zip.name.replace(/\.(?:cbz|zip)$/i, ''), blobs, scripts, lastBookModified);
 }
 
 /**
