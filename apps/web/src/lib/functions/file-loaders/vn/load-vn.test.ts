@@ -4,8 +4,9 @@
  * All rights reserved.
  */
 
+import { File as NodeFile } from 'node:buffer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { BlobReader, BlobWriter, ZipWriter, configure } from '@zip.js/zip.js';
+import { BlobReader, Uint8ArrayWriter, ZipWriter, configure } from '@zip.js/zip.js';
 import loadCbz from '../cbz/load-cbz';
 import { loadVnFolder, vnFolderSize } from './load-vn';
 import { isVn, vnInfo } from '$lib/data/vn';
@@ -13,14 +14,15 @@ import { isVn, vnInfo } from '$lib/data/vn';
 // jsdom has no Worker.
 configure({ useWebWorkers: false });
 
-async function zip(files: Record<string, Blob>) {
-  const writer = new ZipWriter(new BlobWriter('application/zip'));
+async function zip(files: Record<string, Blob>, level?: number) {
+  const writer = new ZipWriter(new Uint8ArrayWriter());
 
   for (const [name, data] of Object.entries(files)) {
-    await writer.add(name, new BlobReader(data));
+    await writer.add(name, new BlobReader(data), { level });
   }
 
-  return new File([await writer.close()], 'ゲーム.zip');
+  // Node's File: slices of jsdom's can't be read back
+  return new NodeFile([await writer.close()], 'ゲーム.zip') as unknown as File;
 }
 
 describe('loadVn', () => {
@@ -45,6 +47,21 @@ describe('loadVn', () => {
     });
     expect(book.characters).toBe(7);
     expect(book.coverImage?.type).toBe('image/png');
+  });
+
+  it('reads stored files as slices of the zip, compressed ones unpacked', async () => {
+    const files = {
+      'ゲーム/0.txt': new Blob(['*start\n吾輩は猫である。\nend']),
+      'ゲーム/arc.nsa': new Blob(['nsa'.repeat(1000)])
+    };
+
+    for (const level of [0, 9]) {
+      const book = await loadCbz(await zip(files, level), 5);
+
+      expect(book.blobs['arc.nsa'].size).toBe(3000);
+      expect(book.characters).toBe(7);
+      if (level === 0) expect(await book.blobs['arc.nsa'].text()).toBe('nsa'.repeat(1000));
+    }
   });
 
   it('reads a server game folder through its listings, fetching only the script', async () => {
