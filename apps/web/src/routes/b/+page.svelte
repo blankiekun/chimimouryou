@@ -103,10 +103,15 @@
     verticalTextOrientation$,
     generatedFurigana$
   } from '$lib/data/store';
-  import { addGeneratedRuby, generatedReadings$ } from '$lib/data/generated-furigana';
+  import {
+    addGeneratedRuby,
+    generatedReadings$,
+    placeAfterRerender
+  } from '$lib/data/generated-furigana';
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
   import ReaderPanel from '$lib/components/book-reader/reader-panel.svelte';
   import {
+    bookLayoutWidth,
     currentChapterLabel,
     jumpOffset,
     readerWidth,
@@ -242,6 +247,9 @@
   let bookmarkManager: BookmarkManager | undefined;
   let pageManager: PageManager | undefined;
   let bookmarkData: Promise<BooksDbBookmarkData | undefined> = Promise.resolve(undefined);
+  /** bookmarkData once resolved, for a re-render that must decide at once where to reopen */
+  let savedBookmark: BooksDbBookmarkData | undefined;
+  $: bookmarkData.then((data) => (savedBookmark = data));
   let customReadingPointTop = -2;
   let customReadingPointLeft = -2;
   let customReadingPoint = $verticalMode$
@@ -482,8 +490,13 @@
         switchMap((readings) => {
           // Re-rendered while reading (switch, or the readings file got ready): keep the place.
           if (rendered && bookmarkManager) {
+            const saved = savedBookmark?.exploredCharCount;
             bookmarkData = Promise.resolve(
-              bookmarkManager.formatBookmarkData(rawBookData.id, customReadingPointScrollOffset)
+              placeAfterRerender(
+                savedBookmark,
+                bookmarkManager.formatBookmarkData(rawBookData.id, customReadingPointScrollOffset),
+                !!saved && bookmarkManager.isCharCountOnScreen(saved)
+              )
             );
           }
           rendered = true;
@@ -680,7 +693,11 @@
 
   $: isPaginated = $viewMode$ === ViewMode.Paginated;
 
+  // Laid out the same with the panel open or closed, so it never moves the text.
   $: bookWidth = browser
+    ? bookLayoutWidth($containerViewportWidth$ ?? 0, convertRemToPixels(window, 1))
+    : 0;
+  $: uncoveredWidth = browser
     ? readerWidth($containerViewportWidth$ ?? 0, panelOpen, convertRemToPixels(window, 1))
     : 0;
 
@@ -1022,7 +1039,7 @@
       rect.width + rect.height > 0 &&
       rect.right > 0 &&
       rect.bottom > 0 &&
-      rect.left < bookWidth &&
+      rect.left < uncoveredWidth &&
       rect.bottom <= window.innerHeight;
 
     if (!visible) {

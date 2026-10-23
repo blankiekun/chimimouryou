@@ -64,6 +64,13 @@ async function requestReadings(
   return file.ok ? { etag: file.headers.get('ETag') || '', file: await file.json() } : undefined;
 }
 
+/** Whether two files add the same furigana (their metadata, such as the bookdata name, may differ). */
+function sameReadings(a: ReadingsFile, b: ReadingsFile) {
+  const rendered = ({ characters, glosses, occ }: ReadingsFile) =>
+    JSON.stringify([characters, glosses, occ]);
+  return rendered(a) === rendered(b);
+}
+
 /**
  * The book's readings file, or undefined first while the server makes it (then the file
  * once it is ready), or undefined when there is none (no catalog entry, no difficulty
@@ -77,7 +84,9 @@ export function generatedReadings$(title: string) {
     let cached: CachedReadings | undefined;
 
     const done = (file?: ReadingsFile) => {
-      if (file || !cached) subscriber.next(file);
+      // A file rewritten with the same readings (new ETag, e.g. a newer bookdata name) would re-render the book for nothing.
+      const same = file && cached && sameReadings(file, cached.file);
+      if ((file || !cached) && !same) subscriber.next(file);
       subscriber.complete();
     };
 
@@ -236,4 +245,19 @@ export function addGeneratedRuby(html: string, readings: ReadingsFile) {
   });
 
   return doc.body.innerHTML;
+}
+
+/**
+ * Where the book reopens after a re-render (the readings file got ready or changed): the saved
+ * bookmark while it is still on screen, or while the reader hasn't reached it yet (at 0), so the
+ * text doesn't move; otherwise the place the reader has turned to since.
+ */
+export function placeAfterRerender<T extends { exploredCharCount?: number }>(
+  saved: T | undefined,
+  current: T,
+  savedOnScreen: boolean
+): T {
+  return saved?.exploredCharCount && (savedOnScreen || !current.exploredCharCount)
+    ? saved
+    : current;
 }

@@ -11,6 +11,7 @@ import {
   addGeneratedRuby,
   deleteCachedReadings,
   generatedReadings$,
+  placeAfterRerender,
   prefetchReadings,
   type ReadingsFile
 } from './generated-furigana';
@@ -99,12 +100,24 @@ describe('generatedReadings$', () => {
     );
     expect(await firstValueFrom(generatedReadings$('Book').pipe(toArray()))).toEqual([file(1)]);
 
+    // Rewritten on the server with the same readings (a newer bookdata name): nothing to re-render.
+    vi.stubGlobal(
+      'fetch',
+      serve(
+        () =>
+          new Response(JSON.stringify({ ...file(1), bookdata: 'bookdata_2.zip' }), {
+            headers: { ETag: '"a2"' }
+          })
+      )
+    );
+    expect(await firstValueFrom(generatedReadings$('Book').pipe(toArray()))).toEqual([file(1)]);
+
     vi.stubGlobal(
       'fetch',
       serve(() => new Response(JSON.stringify(file(2)), { headers: { ETag: '"b"' } }))
     );
     expect(await firstValueFrom(generatedReadings$('Book').pipe(toArray()))).toEqual([
-      file(1),
+      { ...file(1), bookdata: 'bookdata_2.zip' },
       file(2)
     ]);
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -147,5 +160,23 @@ describe('prefetchReadings', () => {
     expect((await db.get('readings', 'Other'))?.etag).toBe('"o"');
     generatedFurigana$.next(false);
     vi.unstubAllGlobals();
+  });
+});
+
+describe('placeAfterRerender', () => {
+  const saved = { exploredCharCount: 120 };
+  const current = { exploredCharCount: 100 };
+
+  it('keeps the bookmark while it is on screen, so a mid-page bookmark stays mid-page', () => {
+    expect(placeAfterRerender(saved, current, true)).toBe(saved);
+  });
+
+  it('keeps the bookmark when the reader has not reached it yet', () => {
+    expect(placeAfterRerender(saved, { exploredCharCount: 0 }, false)).toBe(saved);
+  });
+
+  it('follows the reader once it turned away from the bookmark', () => {
+    expect(placeAfterRerender(saved, current, false)).toBe(current);
+    expect(placeAfterRerender(undefined, current, false)).toBe(current);
   });
 });

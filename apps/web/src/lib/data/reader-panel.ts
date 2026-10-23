@@ -39,9 +39,21 @@ export function readerPanelTabs(
 /** Width of the open panel with its tabs on larger screens (reader-panel.svelte) */
 export const panelWidthRem = 26.75;
 
-/** The book's width beside the panel: on larger screens it makes room, on phones the sheet covers it. */
+/** The width left uncovered by the panel: on phones the sheet lies over the book instead. */
 export function readerWidth(width: number, panelOpen: boolean, remPx: number) {
   return panelOpen && width >= 768 ? width - panelWidthRem * remPx : width;
+}
+
+/** From this width the book always leaves the panel's room, open or not. */
+export const panelRoomFromPx = 1280;
+
+/**
+ * The width the book is laid out in. It never depends on the panel being open, so opening or
+ * closing it never moves the text: wide screens always keep the panel's room free (no text is
+ * ever under it), narrower ones lay the panel over the book's right side.
+ */
+export function bookLayoutWidth(width: number, remPx: number) {
+  return width >= panelRoomFromPx ? width - panelWidthRem * remPx : width;
 }
 
 /** Height of the reader bar (book-reader-header.svelte) */
