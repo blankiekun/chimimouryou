@@ -84,6 +84,46 @@ jobs:
       - name: Render the nginx config
         run: scripts/calibre/render-nginx.sh > /dev/null
 
+  # Packages the desktop app (Linux, unpacked) when apps/desktop changes; Front end already lints and
+  # tests it. A stub page stands in for the web build, which Front end builds anyway.
+  desktop:
+    name: Desktop package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 2
+
+      - name: Desktop inputs changed?
+        id: inputs
+        run: |
+          if git diff --name-only HEAD^1 HEAD | grep -qE '^(apps/desktop/|pnpm-lock\.yaml|\.github/workflows/)'; then
+            echo build=true >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install pnpm
+        if: steps.inputs.outputs.build
+        uses: pnpm/action-setup@v6.1.0
+        with:
+          run_install: false
+
+      - name: Install Node.js
+        if: steps.inputs.outputs.build
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+
+      - name: Package
+        if: steps.inputs.outputs.build
+        working-directory: apps/desktop
+        run: |
+          pnpm install --frozen-lockfile --filter desktop
+          bash scripts/fetch-yomitan.sh
+          mkdir -p ../web/build && echo '<!doctype html>' > ../web/build/index.html
+          pnpm exec electron-builder --linux dir --publish never
+
   docker:
     name: Image ${{ matrix.image }}
     runs-on: ubuntu-latest

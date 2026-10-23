@@ -25,6 +25,7 @@
       "oauth.js",
       "preload.cjs",
       "serve.js",
+      "updater.js",
       "yomitan-shim.cjs",
       "package.json"
     ],
@@ -54,8 +55,22 @@
     "win": {
       "target": "nsis"
     },
+    "nsis": {
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
     "mac": {
-      "target": "dmg"
+      "target": "dmg",
+      "category": "public.app-category.education",
+      "identity": "-",
+      "hardenedRuntime": false
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "blankiekun",
+      "repo": "chimimouryou"
     }
+  },
+  "dependencies": {
+    "electron-updater": "6.8.10"
   }
 }

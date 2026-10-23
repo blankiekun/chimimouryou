@@ -18,6 +18,7 @@ import {
   startBrowserSignIn
 } from './oauth.js';
 import { serve } from './serve.js';
+import { checkForUpdates } from './updater.js';
 
 // Fixed: browser storage, the service worker, AnkiConnect's CORS check (its default
 // webCorsOriginList admits http://127.0.0.1:<any port>) and OAuth redirects all key on the origin.
@@ -236,5 +237,6 @@ if (!app.requestSingleInstanceLock()) {
       { width: 1200, height: 900, title: 'chimimouryou' },
       appPreferences
     );
+    checkForUpdates(mainWindow);
   });
 }
