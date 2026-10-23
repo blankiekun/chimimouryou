@@ -13,10 +13,15 @@ With a Cloudflare account, from this folder:
 2. `npx wrangler@4.147.0 d1 create chimi-hub`, and put the printed `database_id` in `wrangler.toml`.
 3. `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file schema.sql`
 4. `npx wrangler@4.147.0 deploy`. It prints the address, e.g. `https://chimi-hub.<you>.workers.dev`
-   (or add a custom domain in the dashboard). The daily cron (retention) is set by `wrangler.toml`.
+   (or add a custom domain in the dashboard). The daily cron (retention) and the edge rate limit
+   are set by `wrangler.toml`.
 5. Set `socialHubDefault` in `apps/web/src/lib/data/social-account.ts` to that address and release.
-6. In the dashboard: Security → WAF → Rate limiting rules, one rule for the hub's hostname:
-   5 requests per 10 seconds per IP, block for 10 seconds.
+
+Edge limit: a workers.dev address can't have dashboard WAF rules, so the Worker checks the
+Workers Rate Limiting binding `EDGE_LIMIT` (`[[ratelimits]]` in `wrangler.toml`: 5 requests per
+10 seconds per address) first, before any D1 access, and answers `429 {"error":"busy"}`
+(preflights skip it). The counters are per Cloudflare location and approximate; the daily
+limits in D1 stay the real bounds.
 
 `schema.sql` uses `CREATE TABLE IF NOT EXISTS`, so step 3 can be rerun after a schema change
 that only adds tables. A hub that is already running gets each change from `migrations/` (all

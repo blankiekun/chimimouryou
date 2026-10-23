@@ -23,8 +23,15 @@ export interface D1Database {
   batch(statements: D1PreparedStatement[]): Promise<unknown[]>;
 }
 
+/** Workers Rate Limiting (wrangler.toml `[[ratelimits]]`) */
+export interface RateLimit {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
+}
+
 export interface Env {
   DB: D1Database;
+  /** Per address, before any D1 access; absent (tests, older configs) means allowed */
+  EDGE_LIMIT?: RateLimit;
 }
 
 /** The parts of Cloudflare's edge cache (caches.default) the hub uses */
@@ -1079,6 +1086,11 @@ export default {
   async fetch(request: Request, env: Env, ctx?: Context) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     try {
+      const edge = await env.EDGE_LIMIT?.limit({
+        key: request.headers.get('CF-Connecting-IP') ?? 'unknown'
+      });
+
+      if (edge && !edge.success) return json({ error: 'busy' }, 429);
       return await route(request, env, ctx);
     } catch (error) {
       if (error instanceof HttpError) return json({ error: error.code }, error.status);

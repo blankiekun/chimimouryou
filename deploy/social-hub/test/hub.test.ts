@@ -437,6 +437,35 @@ describe('social hub', () => {
     ).toBe(400);
   });
 
+  it('answers 429 with CORS headers when the edge limit refuses, before any D1 access', async () => {
+    const keys: string[] = [];
+    const prepare = vi.spyOn(env.DB, 'prepare');
+
+    env.EDGE_LIMIT = {
+      limit: async ({ key }) => {
+        keys.push(key);
+        return { success: false };
+      }
+    };
+    const response = await hub.fetch(
+      new Request('https://hub.example/v1/me', { headers: { 'CF-Connecting-IP': '203.0.113.9' } }),
+      env
+    );
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(await response.json()).toEqual({ error: 'busy' });
+    expect(keys).toEqual(['203.0.113.9']);
+    expect(prepare).not.toHaveBeenCalled();
+    // Preflights skip it.
+    const preflight = await hub.fetch(
+      new Request('https://hub.example/v1/me', { method: 'OPTIONS' }),
+      env
+    );
+    expect(preflight.status).toBe(204);
+    expect(keys).toHaveLength(1);
+  });
+
   it('has migrations that apply twice over the schema without changing it', () => {
     const tables = () => db.prepare(`SELECT sql FROM sqlite_master ORDER BY name`).all();
     const before = tables();
