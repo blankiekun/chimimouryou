@@ -7,7 +7,6 @@
 import type { BookmarkManager } from '../types';
 import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
 import type { CharacterStatsCalculator } from './character-stats-calculator';
-import { formatPos } from '$lib/functions/format-pos';
 
 export class BookmarkManagerContinuous implements BookmarkManager {
   constructor(
@@ -19,15 +18,7 @@ export class BookmarkManagerContinuous implements BookmarkManager {
   scrollToBookmark(bookmarkData: BooksDbBookmarkData, customReadingPointScrollOffset = 0) {
     if (!bookmarkData.exploredCharCount) return;
 
-    // The saved scroll, when it still reads as the saved count from the same reading point.
-    const savedScroll = this.getBookmarkTargetPosByScrollValue(
-      bookmarkData,
-      customReadingPointScrollOffset
-    );
-    if (savedScroll) {
-      this.window.scrollTo(
-        resolveTargetScroll(savedScroll, this.firstDimensionMargin).scrollToData
-      );
+    if (this.scrollToCharCount(bookmarkData.exploredCharCount, customReadingPointScrollOffset)) {
       return;
     }
 
@@ -47,7 +38,7 @@ export class BookmarkManagerContinuous implements BookmarkManager {
   }
 
   formatBookmarkData(bookId: number, customReadingPointScrollOffset = 0): BooksDbBookmarkData {
-    const exploredCharCount = this.calculator.calcExploredCharCount(customReadingPointScrollOffset);
+    const exploredCharCount = this.charCountAt(customReadingPointScrollOffset);
     const bookCharCount = this.calculator.charCount;
 
     const { verticalMode } = this.calculator;
@@ -60,6 +51,21 @@ export class BookmarkManagerContinuous implements BookmarkManager {
       [scrollAxis]: this.window[scrollAxis],
       lastBookmarkModified: new Date().getTime()
     };
+  }
+
+  /** Characters before the first one at the reading point (not whole paragraphs). */
+  charCountAt(customReadingPointScrollOffset = 0) {
+    return (
+      this.calculator.charCountAtLine(this.readingLine(customReadingPointScrollOffset)) ??
+      this.calculator.calcExploredCharCount(customReadingPointScrollOffset)
+    );
+  }
+
+  /** Puts the line of the character after `charCount` at the reading point, whatever the layout. */
+  scrollToCharCount(charCount: number, customReadingPointScrollOffset = 0) {
+    const target = this.getCharScroll(charCount, customReadingPointScrollOffset);
+    if (target) this.window.scrollTo(resolveTargetScroll(target, 0).scrollToData);
+    return !!target;
   }
 
   getRenderedStartCount() {
@@ -85,7 +91,7 @@ export class BookmarkManagerContinuous implements BookmarkManager {
     if (!bookmark.exploredCharCount) return undefined;
 
     return (
-      this.getBookmarkTargetPosByScrollValue(bookmark) ||
+      this.getCharScroll(bookmark.exploredCharCount) ||
       this.getParagraphPosition(bookmark.exploredCharCount)
     );
   }
@@ -102,25 +108,20 @@ export class BookmarkManagerContinuous implements BookmarkManager {
     };
   }
 
-  private getBookmarkTargetPosByScrollValue(bookmarkData: BooksDbBookmarkData, offset = 0) {
-    const { exploredCharCount } = bookmarkData;
+  /** Screen x (vertical text) or y of the reading point, where jumps land and chapters are read. */
+  private readingLine(offset = 0) {
+    const fromEdge = this.firstDimensionMargin + offset;
+    return this.calculator.verticalMode ? this.window.innerWidth - fromEdge : fromEdge;
+  }
 
-    const getTargetPos = (scrollAxis: 'scrollX' | 'scrollY') => {
-      const scrollPos = bookmarkData[scrollAxis];
-      if (!scrollPos) return undefined;
-
-      const formattedScrollPos = formatPos(scrollPos, this.calculator.direction);
-      if (
-        this.calculator.getCharCountByScrollPos(formattedScrollPos + offset) === exploredCharCount
-      ) {
-        return {
-          [scrollAxis]: scrollPos
-        } as TargetScroll;
-      }
-      return undefined;
-    };
-
-    return this.calculator.verticalMode ? getTargetPos('scrollX') : getTargetPos('scrollY');
+  /** The scroll that puts the line of the character after `charCount` at the reading point. */
+  private getCharScroll(charCount: number, offset = 0): TargetScroll | undefined {
+    const rect = this.calculator.charRectForCount(charCount);
+    if (!rect) return undefined;
+    const line = this.readingLine(offset);
+    return this.calculator.verticalMode
+      ? { scrollX: this.window.scrollX + rect.right - line }
+      : { scrollY: this.window.scrollY + rect.top - line };
   }
 }
 
