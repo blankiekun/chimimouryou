@@ -121,9 +121,20 @@ export const textMarginMode$ = writableStringLocalStorageSubject<TextMarginMode>
   'textMarginMode',
   'auto'
 );
+export type ReaderProfile = 'phone' | 'desktop';
+
+/** Phones (touch screen, short side under 600 px) keep their own reader settings. */
+export function readerProfile(): ReaderProfile {
+  const touch = !!window.matchMedia?.('(pointer: coarse)').matches; // jsdom has none
+  const shortSide = Math.min(window.screen.width, window.screen.height);
+
+  return touch && shortSide < 600 ? 'phone' : 'desktop';
+}
+
+// On for phones only: they dim within a page's reading time; desktops would never sleep.
 export const enableReaderWakeLock$ = writableBooleanLocalStorageSubject()(
   'enableReaderWakeLock',
-  true
+  browser && readerProfile() === 'phone'
 );
 export const verticalMode$ = writingMode$.pipe(map((writingMode) => writingMode === 'vertical-rl'));
 export const showCharacterCounter$ = writableBooleanLocalStorageSubject()(
@@ -293,7 +304,7 @@ export const trackerAutostartTime$ = writableNumberLocalStorageSubject()('tracke
 /** Not part of upstream: start the tracker as soon as a book has opened (statistics enabled). */
 export const trackerStartOnOpen$ = writableBooleanLocalStorageSubject()('trackerStartOnOpen', true);
 
-export const trackerIdleTime$ = writableNumberLocalStorageSubject()('trackerIdleTime', 0);
+export const trackerIdleTime$ = writableNumberLocalStorageSubject()('trackerIdleTime', 300);
 
 export const trackerForwardSkipThreshold$ = writableNumberLocalStorageSubject()(
   'trackerForwardSkipThreshold',

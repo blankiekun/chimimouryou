@@ -50,7 +50,7 @@ if (Object.keys(legacyThemes).length && !Object.keys(customAppThemes$.getValue()
 }
 
 /** Switch between `theme$` (light) and `darkTheme$` with the system setting. */
-export const followSystemTheme$ = writableBooleanLocalStorageSubject()('followSystemTheme', false);
+export const followSystemTheme$ = writableBooleanLocalStorageSubject()('followSystemTheme', true);
 export const darkTheme$ = writableStringLocalStorageSubject()('darkTheme', defaultDarkThemeId);
 
 /**
