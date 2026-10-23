@@ -28,12 +28,15 @@
   import { inputFile } from '$lib/functions/file-dom/input-file';
   import { AutoReplicationType } from '$lib/functions/replication/replication-options';
   import { map } from 'rxjs';
+  import { isMobile } from '$lib/functions/utils';
   import Fa from 'svelte-fa';
 
   const sources: ToggleOption<StorageKey>[] = [
     { id: StorageKey.BROWSER, text: 'This device' },
     ...(browser && driveAvailable(window) ? [{ id: StorageKey.GDRIVE, text: 'Google Drive' }] : []),
-    ...(browser && folderAvailable(window) ? [{ id: StorageKey.FS, text: 'Folder' }] : [])
+    ...(browser && folderAvailable(window) && !isMobile(window)
+      ? [{ id: StorageKey.FS, text: 'Folder' }]
+      : [])
   ];
 
   let selected = $storageSource$;

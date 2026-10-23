@@ -30,7 +30,6 @@
   } from '$lib/data/calibre';
   import { difficultyNameKey } from '$lib/data/difficulty';
   import { bookKanjiCount } from '$lib/data/book-kanji';
-  import { standalone } from '$lib/data/env';
   import type { BookWord, WordCoverage } from '$lib/data/book-words';
   import { dialogManager } from '$lib/data/dialog-manager';
   import {
@@ -1006,6 +1005,7 @@
 
   .details-server-note a {
     margin-left: 0.5rem;
+    white-space: nowrap;
     color: var(--accent-strong-color);
     font-weight: 700;
   }

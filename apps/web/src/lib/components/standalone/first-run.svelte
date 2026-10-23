@@ -269,10 +269,25 @@
     color: var(--app-muted-fg);
   }
 
+  /* Drawn from theme colours: the native radio stays white on dark themes. */
   .place input {
     width: 1.25rem;
     height: 1.25rem;
-    accent-color: var(--accent-color);
+    flex: none;
+    appearance: none;
+    border: 1.5px solid var(--app-muted-fg);
+    border-radius: 50%;
+    background: var(--background-color);
+  }
+
+  .place input:checked {
+    border-color: var(--accent-color);
+    background: var(--accent-color);
+    box-shadow: inset 0 0 0 3px var(--background-color);
+  }
+
+  .place input:disabled {
+    opacity: 0.5;
   }
 
   .place input:focus-visible {

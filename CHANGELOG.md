@@ -14,17 +14,14 @@ anything a reader or a server operator would notice.
   Pages. CI builds it too.
 - The installed app accepts books shared to it (Android) and opens .epub, .htmlz, .cbz and .zip
   files from the system (desktop Chromium); its window and colours follow Study Book.
-- Standalone screens: a first run that asks where books live (this device, Google Drive or, on
-  desktop, a folder), an empty library with Import files/folder, the Store named Library, a sync
-  status in the top bar (synced, syncing, offline with changes waiting, sign in again, failed),
-  Settings → Sync (storage, status with recent errors, backup, self-hosting) in place of Data, an
-  install hint on Home and in Settings → General, and a self-hosting line on book pages.
 - Standalone edition: a book's page shows its number of different kanji, counted in the browser
   from the stored book (furigana left out), and Home's Read next lists the next volumes of
   series you are reading, grouped by the volume numbers in titles.
 
 ### Changed
 
+- Standalone: Settings → Audiobookshelf asks for the server's address and explains the CORS origin to add in Audiobookshelf.
+- Imported books are added to Home's My books.
 - Statistics, selecting text to bookmark, and the AI and Audiobookshelf plugins are on by default (browsers that already chose keep their choice).
 - The library's top bar shows only Import and the account: view and sort are in the Store's Sort
   menu, Select is a Store button (long press still selects on Home), and the storage source and
@@ -114,6 +111,7 @@ anything a reader or a server operator would notice.
 
 ### Fixed
 
+- Google Drive (built-in client): the sign-in lasts. Builds with `VITE_GDRIVE_CLIENT_SECRET` now use it, so Google returns a refresh token, which is kept in this browser and renews the session on every page instead of opening sign-in again.
 - Google Drive: book covers show again after a reload (the page's content security policy blocked Drive's thumbnails).
 - Visual novels: right-clicking the game no longer opens the browser's menu.
 - An app update no longer deletes every cache of the site: only the service worker's own (now
