@@ -566,5 +566,8 @@ ${CORS}
   # Only the site's own 404 page: sync or game files named 404.html stay reachable.
   location ~ ^/404(\.html)?$ {
     internal;
+    # A missing sync file is an ordinary answer to the standalone app (server connect): without
+    # these, its 404 would arrive as a CORS failure.
+${CORS_WITH_SECURITY_HEADERS}
   }
 }

@@ -441,7 +441,8 @@ export class CalibreStorageHandler extends ApiStorageHandler {
       await this.davRequest(externalFile.id, {
         method: 'MOVE',
         headers: {
-          Destination: new URL(serverUrl(id), this.window.location.href).href,
+          // A path: nginx refuses an https:// Destination when TLS ends before it (a proxy).
+          Destination: id,
           Overwrite: 'T'
         }
       });

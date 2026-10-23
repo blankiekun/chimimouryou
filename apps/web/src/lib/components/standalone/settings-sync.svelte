@@ -51,7 +51,12 @@
   let backupBusy = false;
   let restoreInput: HTMLInputElement;
 
-  $: if (browser && selected !== $storageSource$) changeSource(selected);
+  // Only the reader's own pick: a change made elsewhere (connecting a server) must not be undone.
+  $: if (browser) onPick(selected);
+
+  function onPick(key: StorageKey) {
+    if (key !== storageSource$.getValue()) changeSource(key);
+  }
 
   async function changeSource(key: StorageKey) {
     if (key === StorageKey.FS && !folderChosen()) {
