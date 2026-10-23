@@ -247,9 +247,10 @@ def _coarse_pos(pos: tuple) -> str:
 
 
 class Analyzer:
-    def __init__(self):
-        # Imported here so the rest of the module works without Sudachi (tests).
-        sudachi = SudachiTokenizer()
+    def __init__(self, sudachi=None):
+        """`sudachi`: a SudachiTokenizer (made here when None), or anything with its `tokens` and a
+        `tokenizer` whose tokenize() gives morphemes (the browser's, browser.py)."""
+        sudachi = sudachi or SudachiTokenizer()
         self.tokenizer = sudachi.tokenizer
         self._tokens = sudachi.tokens
         self.deconjugator = Deconjugator()

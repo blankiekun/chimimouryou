@@ -288,6 +288,8 @@ export const ja: Record<MessageKey, string> = {
     'アプリ全体の配色です。「複製」でどのテーマからでも独自テーマを作れます。',
   'settings.section.general-install': 'アプリとしてインストール',
   'settings.section.general-install.text': 'この端末にアプリとして置いておけます。',
+  'settings.section.general-analysis': '解析ツール',
+  'settings.section.general-analysis.text': 'サーバーなしで単語リストとふりがなを作ります。',
   'settings.section.general-plugins': '拡張機能',
   'settings.section.general-plugins.text':
     '追加機能です。オンにすると、それぞれの設定項目が表示されます。',
@@ -726,6 +728,8 @@ export const ja: Record<MessageKey, string> = {
   'reader.furiganaShow': '表示',
   'reader.furiganaKnown': '既知',
   'reader.furiganaHide': '非表示',
+  'reader.furiganaPreparing': 'ふりがなを準備中… {percent}%',
+  'reader.furiganaQueued': 'ふりがなの順番待ち',
   'reader.allSettings': 'リーダー設定をすべて表示',
   'reader.error': 'エラー',
   'reader.loadError': '読み込みエラー',

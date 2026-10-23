@@ -3,7 +3,13 @@
   import SectionHead from '$lib/components/section-head.svelte';
   import KnownBecause from '$lib/components/words/known-because.svelte';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-  import { downloadWordsCsv, wordCoverage, type BookWord } from '$lib/data/book-words';
+  import { localWordList } from '$lib/data/analysis-tools';
+  import {
+    downloadWordsCsv,
+    wordCoverage,
+    type BookWord,
+    type WordTotals
+  } from '$lib/data/book-words';
   import { loadCalibreDifficulty, type CalibreDifficulty } from '$lib/data/calibre';
   import {
     bookWordGroups,
@@ -30,6 +36,8 @@
 
   let layer: HTMLDivElement;
   let estimate: CalibreDifficulty | undefined;
+  /** A local book's totals (analysis tools) */
+  let totals: WordTotals | undefined;
   let list: BookWord[] | null | undefined;
   let known: KnownSet | undefined;
   let view: View = 'new';
@@ -46,7 +54,7 @@
       ? wordCoverage(
           list,
           (word) => known!.met(word) || known!.anki(word) || !!wordMark($wordMarks$, word),
-          estimate
+          estimate ?? totals
         )
       : undefined;
   $: shown = (groups?.[view] ?? []).filter(
@@ -65,7 +73,16 @@
   onMount(async () => {
     layer.focus();
     if (book.calibreId === undefined) {
-      list = null;
+      const local = await localWordList(book.title).catch(() => undefined);
+
+      totals = local?.totals;
+      [list, known] = [
+        local?.words ?? null,
+        local &&
+          (await refreshKnownWordsIfStale()
+            .then(getKnownSet)
+            .catch(() => undefined))
+      ];
       return;
     }
 

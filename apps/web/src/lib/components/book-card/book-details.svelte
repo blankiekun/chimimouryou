@@ -30,7 +30,8 @@
   } from '$lib/data/calibre';
   import { difficultyNameKey } from '$lib/data/difficulty';
   import { bookKanjiCount } from '$lib/data/book-kanji';
-  import type { BookWord, WordCoverage } from '$lib/data/book-words';
+  import { localWordList } from '$lib/data/analysis-tools';
+  import { wordCoverage, type BookWord, type WordCoverage } from '$lib/data/book-words';
   import { dialogManager } from '$lib/data/dialog-manager';
   import {
     bookCoverage,
@@ -209,6 +210,22 @@
           if (title === book.title) browserKanji = count;
         })
         .catch(() => {});
+    }
+
+    if (standalone && kind === 'book') {
+      // A word list the analysis tools made when the book was opened (analysis-tools.ts).
+      const [local, known] = await Promise.all([
+        localWordList(title).catch(() => undefined),
+        refreshKnownWordsIfStale()
+          .then(getKnownSet)
+          .catch(() => undefined)
+      ]);
+
+      if (title === book.title && local && known) {
+        listWords = local.words;
+        knownSet = known;
+        wordStats = wordCoverage(local.words, known.isKnown, local.totals);
+      }
     }
 
     if (!isCalibre) {
