@@ -10,7 +10,13 @@
  * Settings → AI). Not part of upstream.
  */
 
-import { aiLanguage$, defaultAskAiPresets, type AskAiPreset } from '$lib/data/ai-settings';
+import {
+  aiLanguage$,
+  aiPromptOverrides$,
+  defaultAskAiPresets,
+  type AiPromptKey,
+  type AskAiPreset
+} from '$lib/data/ai-settings';
 
 export type AiLanguage = 'en' | 'ja';
 
@@ -79,8 +85,19 @@ ${loreFormat}
   }
 };
 
+/** The built-in system prompt, which Settings → AI shows next to the reader's copy. */
+export function builtInPrompt(language: string, key: AiPromptKey) {
+  return prompts[language === 'ja' ? 'ja' : 'en'][key];
+}
+
+/** The prompts for the current AI language, with the reader's own copies where set. */
 export function aiPrompts(): Prompts {
-  return prompts[aiLanguage$.getValue() === 'ja' ? 'ja' : 'en'];
+  const language = aiLanguage$.getValue() === 'ja' ? 'ja' : 'en';
+  const own = Object.entries(aiPromptOverrides$.getValue()[language] ?? {}).filter(([, text]) =>
+    text?.trim()
+  );
+
+  return { ...prompts[language], ...Object.fromEntries(own) };
 }
 
 /** Japanese versions of the default Ask AI presets (same ids). */

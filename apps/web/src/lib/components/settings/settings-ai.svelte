@@ -2,6 +2,7 @@
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
   import AiLanguageToggle from '$lib/components/ai-language-toggle.svelte';
+  import SettingsAiPrompts from '$lib/components/settings/settings-ai-prompts.svelte';
   import {
     askAiDefaultPreset$,
     askAiPresets$,
@@ -364,6 +365,8 @@
     />
   </SettingsItemGroup>
 </SettingsSection>
+
+<SettingsAiPrompts />
 
 <style>
   .guide-columns {
