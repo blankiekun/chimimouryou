@@ -44,6 +44,8 @@ export interface RequestOptions {
   skipAuth?: boolean;
   /** Resolve with the status and response headers too (`FullResponse`) */
   fullResponse?: boolean;
+  /** Resolve with undefined on 404 instead of failing (extra sync files that may not exist yet) */
+  missingOk?: boolean;
 }
 
 export interface FullResponse {
@@ -769,6 +771,8 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
                     }
                   : this.response
               );
+            } else if (this.status === 404 && options.missingOk) {
+              resolve(undefined);
             } else {
               const errorMessage = await convertAuthErrorResponse(this);
 
@@ -776,7 +780,7 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
                 logger.error(errorMessage);
                 reject(new Error('Resource not found. Refresh your current tab and try again'));
               } else {
-                reject(new Error(errorMessage));
+                reject(Object.assign(new Error(errorMessage), { status: this.status }));
               }
             }
           }

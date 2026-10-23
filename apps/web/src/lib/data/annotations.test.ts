@@ -7,15 +7,11 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// The real handler pulls in every storage source (and their circular imports).
-vi.mock('$lib/data/storage/handler/calibre-handler', () => ({
-  CalibreStorageHandler: { syncFileUrl: (title: string, name: string) => `/sync/${title}/${name}` }
-}));
-
 const account = vi.hoisted(() => ({ user: null as { id: string; username: string } | null }));
 
 vi.mock('$lib/data/account', () => ({
   accountReady: async () => account.user,
+  accountSyncUrl: '/account/sync/',
   currentAccount: () => account.user
 }));
 
@@ -103,7 +99,7 @@ describe('AnnotationsController account scoping', () => {
     account.user = { id: 'bob', username: 'bob' };
     mockServer([]);
 
-    const controller = new AnnotationsController('Book A', true);
+    const controller = new AnnotationsController('Book A', 'ttu-calibre-default');
 
     await controller.load();
 
@@ -115,7 +111,7 @@ describe('AnnotationsController account scoping', () => {
     await storeLocally('Book B', [highlight('private', 1, { note: 'secret' })], 'alice');
     mockServer([]);
 
-    const controller = new AnnotationsController('Book B', true);
+    const controller = new AnnotationsController('Book B', 'ttu-calibre-default');
 
     await controller.load();
 
@@ -127,7 +123,7 @@ describe('AnnotationsController account scoping', () => {
     account.user = { id: 'alice', username: 'alice' };
     mockServer([]);
 
-    const controller = new AnnotationsController('Book C', true);
+    const controller = new AnnotationsController('Book C', 'ttu-calibre-default');
 
     await controller.load();
 
@@ -139,7 +135,7 @@ describe('AnnotationsController account scoping', () => {
     await storeLocally('Local book', [highlight('local', 1)], 'alice');
     mockServer([]);
 
-    const controller = new AnnotationsController('Local book', false);
+    const controller = new AnnotationsController('Local book', '');
 
     await controller.load();
 

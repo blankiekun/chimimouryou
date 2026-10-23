@@ -16,7 +16,13 @@ import { database, fsStorageSource$ } from '$lib/data/store';
 import { mergeReadingGoals, readingGoalSortFunction } from '$lib/data/reading-goal';
 import { mergeStatistics, updateStatisticToStore } from '$lib/functions/statistic-util';
 
-import { BaseStorageHandler, FilePrefix } from '$lib/data/storage/handler/base-handler';
+import {
+  BaseStorageHandler,
+  FilePrefix,
+  SyncConflictError,
+  type SyncFileOptions,
+  type SyncFileStore
+} from '$lib/data/storage/handler/base-handler';
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 import { MergeMode } from '$lib/data/merge-mode';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
@@ -33,7 +39,7 @@ import pLimit from 'p-limit';
 import { replicationProgress$ } from '$lib/functions/replication/replication-progress';
 import { throwIfAborted } from '$lib/functions/replication/replication-error';
 
-export class FilesystemStorageHandler extends BaseStorageHandler {
+export class FilesystemStorageHandler extends BaseStorageHandler implements SyncFileStore {
   private rootDirectory: FileSystemDirectoryHandle | undefined;
 
   private titleToDirectory = new Map<string, FileSystemDirectoryHandle>();
@@ -653,6 +659,60 @@ export class FilesystemStorageHandler extends BaseStorageHandler {
     await Promise.all(deleteTasks).catch(() => {});
 
     return { error, deleted };
+  }
+
+  /** An extra file in the root folder or a book's folder (`sync-files.ts`); its version is the modified time. */
+  async readSyncFile(name: string, title?: string) {
+    const file = await (
+      await this.syncFolder(title)
+    )
+      ?.getFileHandle(name)
+      .then((handle) => handle.getFile())
+      .catch(() => undefined);
+
+    return file ? { text: await file.text(), version: `${file.lastModified}` } : undefined;
+  }
+
+  /** Writes into books already in the folder only. */
+  async writeSyncFile(name: string, text: string, { title, version }: SyncFileOptions = {}) {
+    const folder = await this.syncFolder(title);
+
+    if (!folder) return;
+
+    if (version !== undefined) {
+      const current = await folder
+        .getFileHandle(name)
+        .then((handle) => handle.getFile())
+        .catch(() => undefined);
+
+      if ((current ? `${current.lastModified}` : '') !== version) throw new SyncConflictError();
+    }
+
+    const writer = await (await folder.getFileHandle(name, { create: true })).createWritable();
+
+    await writer.write(text);
+    await writer.close();
+  }
+
+  /** Never asks for access: syncing extras in the background can't show the permission prompt. */
+  private async syncFolder(title?: string) {
+    if (!this.rootDirectory) {
+      const source = await (await database.db).get('storageSource', this.storageSourceName);
+      const handle = (source?.data as { directoryHandle?: FileSystemDirectoryHandle } | undefined)
+        ?.directoryHandle;
+
+      if (!handle || (await (handle as any).queryPermission({ mode: 'readwrite' })) !== 'granted') {
+        throw new Error('No access to the folder yet');
+      }
+
+      this.rootDirectory = handle;
+    }
+
+    return title === undefined
+      ? this.rootDirectory
+      : this.rootDirectory
+          .getDirectoryHandle(BaseStorageHandler.sanitizeForFilename(title))
+          .catch(() => undefined);
   }
 
   private async ensureRoot(

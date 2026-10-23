@@ -6,16 +6,16 @@
 
 /**
  * Highlights and notes, stored per book title in the browser (IndexedDB).
- * Books from the Calibre source also sync them to the server as
- * annotations.json in the book's sync folder (the account's own folder while
- * signed in). Not part of upstream.
+ * Books on a synced source also sync them as annotations.json in the book's
+ * folder (sync-files.ts; on the server, the account's own folder while signed
+ * in). Not part of upstream.
  */
 
 import { BehaviorSubject } from 'rxjs';
 import { accountReady, currentAccount } from '$lib/data/account';
-import { CalibreStorageHandler } from '$lib/data/storage/handler/calibre-handler';
 import { logger } from '$lib/data/logger';
 import { readerDb as db } from '$lib/data/reader-db';
+import { syncFileStore, syncJsonFile } from '$lib/data/sync-files';
 
 export const highlightColors = ['yellow', 'green', 'blue', 'pink'] as const;
 
@@ -93,9 +93,10 @@ export class AnnotationsController {
 
   readonly syncError$ = new BehaviorSubject('');
 
+  /** `syncSource`: the storage source the book's files sync to ('' = this browser only). */
   constructor(
     readonly title: string,
-    private readonly syncWithCalibre: boolean
+    private readonly syncSource: string
   ) {}
 
   async load() {
@@ -104,13 +105,13 @@ export class AnnotationsController {
     // The browser cache is shared by everyone who signs in here. Highlights cached
     // under another sign-in state must not be merged (and uploaded) into this one;
     // they are safe on that account's server. Old records without an owner are kept.
-    const owner = this.syncWithCalibre ? await this.owner() : undefined;
+    const owner = this.syncSource ? await this.owner() : undefined;
     const ownedByOther =
       owner !== undefined && stored?.account !== undefined && stored.account !== owner;
 
     this.setAll(ownedByOther ? [] : stored?.highlights || []);
 
-    if (this.syncWithCalibre) {
+    if (this.syncSource) {
       await this.sync();
     }
   }
@@ -161,7 +162,7 @@ export class AnnotationsController {
   }
 
   private async save(highlights: Highlight[]) {
-    const owner = this.syncWithCalibre ? await this.owner() : undefined;
+    const owner = this.syncSource ? await this.owner() : undefined;
 
     await (await db()).put('annotations', { title: this.title, highlights, account: owner });
   }
@@ -171,7 +172,7 @@ export class AnnotationsController {
       logger.error(`Saving highlights failed: ${error.message}`)
     );
 
-    if (this.syncWithCalibre) {
+    if (this.syncSource) {
       clearTimeout(this.syncTimer);
       this.syncTimer = setTimeout(() => {
         this.syncTimer = undefined;
@@ -186,38 +187,33 @@ export class AnnotationsController {
     return this.syncQueue;
   }
 
-  /** Merges with the server copy and uploads the result if it differs. */
+  /** Merges with the synced copy and uploads the result if it differs. */
   private async syncOnce() {
     await accountReady();
 
-    const url = CalibreStorageHandler.syncFileUrl(this.title, annotationsFileName);
-
     try {
-      const response = await fetch(url, { cache: 'no-store' });
+      const store = await syncFileStore(this.syncSource);
 
-      if (!response.ok && response.status !== 404) {
-        throw new Error(`HTTP ${response.status}`);
-      }
+      if (!store) return;
 
-      const remote: Highlight[] = response.ok ? (await response.json()).highlights || [] : [];
-      const merged = mergeHighlights(this.all, remote);
+      await syncJsonFile<{ highlights?: Highlight[] }>(
+        store,
+        annotationsFileName,
+        this.title,
+        async (file) => {
+          const remote = file?.highlights || [];
+          const merged = mergeHighlights(this.all, remote);
 
-      if (!sameHighlights(merged, this.all)) {
-        this.setAll(merged);
-        await this.save(merged);
-      }
+          if (!sameHighlights(merged, this.all)) {
+            this.setAll(merged);
+            await this.save(merged);
+          }
 
-      if (!sameHighlights(merged, remote)) {
-        const upload = await fetch(url, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: this.title, highlights: merged })
-        });
-
-        if (!upload.ok) {
-          throw new Error(`upload failed (HTTP ${upload.status})`);
+          return sameHighlights(merged, remote)
+            ? undefined
+            : { title: this.title, highlights: merged };
         }
-      }
+      );
 
       this.syncError$.next('');
     } catch (error: any) {

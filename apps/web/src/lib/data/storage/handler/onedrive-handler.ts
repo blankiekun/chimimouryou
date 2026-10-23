@@ -8,7 +8,13 @@ import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 import { oneDriveTokenEndpoint } from '$lib/data/env';
 import { ApiStorageHandler, type FullResponse } from '$lib/data/storage/handler/api-handler';
 import { AbortError } from '$lib/functions/replication/replication-error';
-import { BaseStorageHandler, type ExternalFile } from '$lib/data/storage/handler/base-handler';
+import {
+  BaseStorageHandler,
+  SyncConflictError,
+  type ExternalFile,
+  type SyncFileOptions,
+  type SyncFileStore
+} from '$lib/data/storage/handler/base-handler';
 import { StorageKey } from '$lib/data/storage/storage-types';
 import { database, oneDriveStorageSource$ } from '$lib/data/store';
 import pLimit from 'p-limit';
@@ -51,7 +57,7 @@ interface ExternalThumbnailData {
   url: string;
 }
 
-export class OneDriveStorageHandler extends ApiStorageHandler {
+export class OneDriveStorageHandler extends ApiStorageHandler implements SyncFileStore {
   private baseEndpoint = 'https://graph.microsoft.com/v1.0/me/drive/items';
 
   static singleRequestLimit = 60 * 1024 * 1024;
@@ -285,6 +291,51 @@ export class OneDriveStorageHandler extends ApiStorageHandler {
 
       this.rootFileListFetched = true;
     }
+  }
+
+  /** An extra file in the root folder or a book's folder (`sync-files.ts`); its version is the eTag. */
+  async readSyncFile(name: string, title?: string) {
+    const folderId = await this.syncFolder(title);
+    const item = folderId
+      ? await this.request(`${this.baseEndpoint}/${folderId}:/${encodeURIComponent(name)}`, {
+          missingOk: true
+        })
+      : undefined;
+
+    if (!item) return undefined;
+
+    const text: string = await this.request(`${this.baseEndpoint}/${item.id}/content`, {}, 'text');
+
+    return { text, version: item.eTag as string };
+  }
+
+  /** Writes into books already on OneDrive only; If-Match makes OneDrive refuse a changed file. */
+  async writeSyncFile(name: string, text: string, { title, version }: SyncFileOptions = {}) {
+    const folderId = await this.syncFolder(title);
+
+    if (!folderId) return;
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+    if (version) headers['If-Match'] = version;
+
+    try {
+      // shortcut: a simple upload (OneDrive takes up to 250 MB this way), enough for JSON.
+      await this.request(
+        `${this.baseEndpoint}/${folderId}:/${encodeURIComponent(name)}:/content${
+          version === '' ? '?@microsoft.graph.conflictBehavior=fail' : ''
+        }`,
+        { method: 'PUT', headers, body: text }
+      );
+    } catch (error: any) {
+      throw error.status === 412 || error.status === 409 ? new SyncConflictError() : error;
+    }
+  }
+
+  private async syncFolder(title?: string) {
+    const rootId = await this.ensureTitle();
+
+    return title === undefined ? rootId : this.ensureTitle(title, rootId, true);
   }
 
   protected retrieve(

@@ -7,11 +7,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// The real handler pulls in every storage source (and their circular imports).
-vi.mock('$lib/data/storage/handler/calibre-handler', () => ({
-  CalibreStorageHandler: { syncFileUrl: (title: string, name: string) => `/sync/${title}/${name}` }
-}));
-
 const account = vi.hoisted(() => ({ user: null as { id: string; username: string } | null }));
 
 vi.mock('$lib/data/account', () => ({
@@ -83,14 +78,17 @@ describe('extras sync', () => {
   it('uploads a newer local lorebook and adopts a newer remote one', async () => {
     const { files } = server();
 
-    enableExtrasSync('Lore');
+    enableExtrasSync('Lore', 'ttu-calibre-default');
     await saveLoreEntries('Lore', [entry('葵')]);
     await syncExtras('lorebook', 'Lore');
 
-    expect((files['/sync/Lore/lorebook.json'] as { entries: LoreEntry[] }).entries).toHaveLength(1);
-    expect(files['/sync/Lore/lorebook.json']).not.toHaveProperty('account');
+    expect(
+      (files['/calibre/sync/ttu-reader-data/Lore/lorebook.json'] as { entries: LoreEntry[] })
+        .entries
+    ).toHaveLength(1);
+    expect(files['/calibre/sync/ttu-reader-data/Lore/lorebook.json']).not.toHaveProperty('account');
 
-    files['/sync/Lore/lorebook.json'] = {
+    files['/calibre/sync/ttu-reader-data/Lore/lorebook.json'] = {
       title: 'Lore',
       entries: [entry('葵'), entry('東京')],
       processedUpTo: 900,
@@ -107,7 +105,7 @@ describe('extras sync', () => {
   it('keeps a local save made while the remote copy was being fetched', async () => {
     const { files } = server();
 
-    enableExtrasSync('Race');
+    enableExtrasSync('Race', 'ttu-calibre-default');
     await saveLoreEntries('Race', [entry('葵')]);
     await syncExtras('lorebook', 'Race');
 
@@ -120,7 +118,10 @@ describe('extras sync', () => {
     await syncExtras('lorebook', 'Race');
 
     expect((await getLorebook('Race')).entries.map((e) => e.name)).toEqual(['葵', '東京']);
-    expect((files['/sync/Race/lorebook.json'] as { entries: LoreEntry[] }).entries).toHaveLength(2);
+    expect(
+      (files['/calibre/sync/ttu-reader-data/Race/lorebook.json'] as { entries: LoreEntry[] })
+        .entries
+    ).toHaveLength(2);
   });
 
   it('combines saved recaps from both sides and keeps deletions', async () => {
@@ -131,14 +132,14 @@ describe('extras sync', () => {
       model: 'm'
     });
     const { files } = server({
-      '/sync/Recaps/recaps.json': {
+      '/calibre/sync/ttu-reader-data/Recaps/recaps.json': {
         title: 'Recaps',
         chapters: { c2: { summary: 'two', characters: 1, model: 'm' } },
         saved: [recap(2), recap(3)]
       }
     });
 
-    enableExtrasSync('Recaps');
+    enableExtrasSync('Recaps', 'ttu-calibre-default');
     await (
       await readerDb()
     ).put('recaps', {
@@ -153,7 +154,7 @@ describe('extras sync', () => {
     await deleteSavedRecap('Recaps', 3);
     await syncExtras('recaps', 'Recaps');
 
-    const uploaded = files['/sync/Recaps/recaps.json'] as {
+    const uploaded = files['/calibre/sync/ttu-reader-data/Recaps/recaps.json'] as {
       chapters: object;
       saved: { created: number }[];
       deletedSaved: number[];
@@ -167,7 +168,7 @@ describe('extras sync', () => {
   it("doesn't upload another account's cached lorebook", async () => {
     const { files } = server();
 
-    enableExtrasSync('Private');
+    enableExtrasSync('Private', 'ttu-calibre-default');
     await (
       await readerDb()
     ).put('lorebooks', {
