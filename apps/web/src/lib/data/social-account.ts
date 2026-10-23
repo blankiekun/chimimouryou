@@ -190,6 +190,34 @@ export async function logOut() {
   forget();
 }
 
+/** Ends every session of the account, this one too. */
+export async function logOutEverywhere() {
+  await hubFetch('/v1/logout-all', 'POST');
+  forget();
+}
+
+function sessionSalt() {
+  const session = socialSession$.getValue();
+
+  if (!session) throw new HubError(401, 'session');
+  return saltFor(session.me.username);
+}
+
+/** A new password (checked against the current one); other devices are signed out. */
+export async function changeSocialPassword(current: string, next: string) {
+  const salt = await sessionSalt();
+  const key = await stretchPassword(current, salt);
+
+  await hubFetch('/v1/password', 'POST', { key, next: await stretchPassword(next, salt) });
+}
+
+/** A new recovery code for the current password; returns it, shown once. */
+export async function newRecoveryCode(password: string) {
+  const key = await stretchPassword(password, await sessionSalt());
+
+  return (await hubFetch<{ recovery: string }>('/v1/recovery', 'POST', { key })).recovery;
+}
+
 export async function deleteSocialAccount() {
   await hubFetch('/v1/me', 'DELETE');
   forget();

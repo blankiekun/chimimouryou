@@ -3,13 +3,18 @@
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
+  import RecoveryCode from '$lib/components/social/recovery-code.svelte';
+  import { account$ } from '$lib/data/account';
   import { pagePath, standalone } from '$lib/data/env';
   import {
     avatarKanji,
+    changeSocialPassword,
     deleteSocialAccount,
     hubErrorKey,
     hubOrigin,
     logOut,
+    logOutEverywhere,
+    newRecoveryCode,
     shareDefaults,
     socialHub$,
     socialHubDefault,
@@ -76,6 +81,65 @@
     }
   }
 
+  /** Server builds signed in to the server: the hub sign-in syncs with the server account. */
+  $: remembered = !standalone && !!$account$;
+
+  let open: '' | 'password' | 'recovery' = '';
+  let current = '';
+  let next = '';
+  let busy = false;
+  let formError = '';
+  let passwordNotice = '';
+  /** A new recovery code, shown once */
+  let newCode = '';
+
+  function toggle(form: typeof open) {
+    open = open === form ? '' : form;
+    current = next = newCode = formError = '';
+  }
+
+  async function run(task: () => Promise<void>) {
+    formError = '';
+    busy = true;
+    try {
+      await task();
+    } catch (e) {
+      formError = $t$(hubErrorKey(e));
+    }
+    busy = false;
+  }
+
+  function submitPassword() {
+    if (next.length < 10) {
+      formError = $t$('social.passwordShort');
+      return;
+    }
+    run(async () => {
+      await changeSocialPassword(current, next);
+      toggle('');
+      passwordNotice = $t$('social.passwordChanged');
+    });
+  }
+
+  function submitRecovery() {
+    run(async () => {
+      const code = await newRecoveryCode(current);
+
+      current = '';
+      newCode = code;
+    });
+  }
+
+  async function signOutEverywhere() {
+    if (!window.confirm($t$('social.signOutEverywhereConfirm'))) return;
+    error = '';
+    try {
+      await logOutEverywhere();
+    } catch (e) {
+      error = $t$(hubErrorKey(e));
+    }
+  }
+
   const switchLabel = (on: boolean) => $t$(on ? 'settings.on' : 'settings.off');
 </script>
 
@@ -99,9 +163,112 @@
   {#if me}
     <SettingsItemGroup
       title={$t$('social.signedInAs', { username: me.username })}
-      tooltip={$t$('social.memberSince', { since })}
+      tooltip="{remembered ? `${$t$('social.remembered')} ` : ''}{$t$('social.memberSince', {
+        since
+      })}"
     >
       <button type="button" class="app-button" on:click={logOut}>{$t$('social.signOut')}</button>
+    </SettingsItemGroup>
+    <SettingsItemGroup title={$t$('social.password')} tooltip={passwordNotice}>
+      <button
+        type="button"
+        class="app-button"
+        aria-expanded={open === 'password'}
+        on:click={() => toggle('password')}>{$t$('social.changePassword')}</button
+      >
+      <svelte:fragment slot="after">
+        {#if open === 'password'}
+          <form class="social-settings-form" on:submit|preventDefault={submitPassword}>
+            <label class="social-settings-field">
+              <span>{$t$('social.currentPassword')}</span>
+              <input
+                class="app-input"
+                type="password"
+                bind:value={current}
+                required
+                autocomplete="current-password"
+              />
+            </label>
+            <label class="social-settings-field">
+              <span>{$t$('social.newPassword')}</span>
+              <input
+                class="app-input"
+                type="password"
+                bind:value={next}
+                required
+                minlength="10"
+                autocomplete="new-password"
+              />
+              <small>{$t$('social.passwordHint')} {$t$('social.passwordOthers')}</small>
+            </label>
+            {#if formError}<p class="social-settings-error" role="alert">{formError}</p>{/if}
+            <span class="social-settings-actions">
+              <button type="submit" class="app-button app-button-primary" disabled={busy}>
+                {$t$('social.changePassword')}
+              </button>
+              <button type="button" class="app-button app-button-quiet" on:click={() => toggle('')}>
+                {$t$('social.cancel')}
+              </button>
+            </span>
+          </form>
+        {/if}
+      </svelte:fragment>
+    </SettingsItemGroup>
+    <SettingsItemGroup title={$t$('social.recoveryCode')} tooltip={$t$('social.recoveryRowHint')}>
+      <button
+        type="button"
+        class="app-button"
+        aria-expanded={open === 'recovery'}
+        on:click={() => toggle('recovery')}>{$t$('social.newRecoveryCode')}</button
+      >
+      <svelte:fragment slot="after">
+        {#if open === 'recovery' && newCode}
+          <div class="social-settings-form">
+            <p>{$t$('social.newRecoveryLead')}</p>
+            <RecoveryCode code={newCode} username={me.username} />
+            <span class="social-settings-actions">
+              <button
+                type="button"
+                class="app-button app-button-primary"
+                on:click={() => toggle('')}
+              >
+                {$t$('social.recoverySaved')}
+              </button>
+            </span>
+          </div>
+        {:else if open === 'recovery'}
+          <form class="social-settings-form" on:submit|preventDefault={submitRecovery}>
+            <label class="social-settings-field">
+              <span>{$t$('social.currentPassword')}</span>
+              <input
+                class="app-input"
+                type="password"
+                bind:value={current}
+                required
+                autocomplete="current-password"
+              />
+              <small>{$t$('social.newRecoveryHint')}</small>
+            </label>
+            {#if formError}<p class="social-settings-error" role="alert">{formError}</p>{/if}
+            <span class="social-settings-actions">
+              <button type="submit" class="app-button app-button-primary" disabled={busy}>
+                {$t$('social.newRecoveryCode')}
+              </button>
+              <button type="button" class="app-button app-button-quiet" on:click={() => toggle('')}>
+                {$t$('social.cancel')}
+              </button>
+            </span>
+          </form>
+        {/if}
+      </svelte:fragment>
+    </SettingsItemGroup>
+    <SettingsItemGroup
+      title={$t$('social.otherDevices')}
+      tooltip={$t$(remembered ? 'social.signOutEverywhereServer' : 'social.signOutEverywhereHint')}
+    >
+      <button type="button" class="app-button" on:click={signOutEverywhere}>
+        {$t$('social.signOutEverywhere')}
+      </button>
     </SettingsItemGroup>
   {:else}
     <SettingsItemGroup title={$t$('social.notSignedIn')} tooltip={$t$('social.notSignedInHint')}>
@@ -239,6 +406,33 @@
   .social-avatar-choice:focus-visible {
     outline: 2px solid var(--app-focus-ring);
     outline-offset: 2px;
+  }
+
+  .social-settings-form {
+    display: flex;
+    max-width: 28rem;
+    flex-direction: column;
+    gap: 1rem;
+    padding-top: 0.75rem;
+  }
+
+  .social-settings-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-weight: 700;
+  }
+
+  .social-settings-field small {
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+    font-weight: 400;
+  }
+
+  .social-settings-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
 
   .social-settings-error {

@@ -42,6 +42,7 @@ import { homeBookTitles$, homeRemovedTitles$ } from '$lib/data/library-home';
 import { logger } from '$lib/data/logger';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 import { audiobookshelfToken$ } from '$lib/data/audiobookshelf';
+import { socialSession$ } from '$lib/data/social-account';
 import {
   autoBookmark$,
   autoBookmarkTime$,
@@ -121,6 +122,7 @@ const sharedSettings: Record<string, Store> = {
   uiLanguage: uiLanguage$,
   enabledPlugins: enabledPlugins$,
   audiobookshelfToken: audiobookshelfToken$,
+  socialSession: socialSession$,
   homeBookTitles: homeBookTitles$,
   homeRemovedTitles: homeRemovedTitles$,
   mangaSeriesModes: mangaSeriesModes$,
@@ -142,7 +144,9 @@ const secretSettings = [
   'aiConnectionKeys',
   'openRouterApiKey',
   'elevenLabsApiKey',
-  'audiobookshelfToken'
+  'audiobookshelfToken',
+  // The hub sign-in: other browsers of the server account are signed in to the hub too.
+  'socialSession'
 ];
 
 /** Settings merged with the account's copy instead of replaced by the newer one. */
@@ -387,8 +391,9 @@ function releasePreviousOwner(user: AccountUser | null) {
   if (user ? owner !== user.id : owner) {
     secretSettings.forEach((key) => {
       const store = sharedSettings[key];
+      const value = store.getValue();
 
-      store.next(typeof store.getValue() === 'string' ? '' : {});
+      store.next(key === 'socialSession' ? null : typeof value === 'string' ? '' : {});
       window.localStorage.removeItem(key);
     });
     window.localStorage.removeItem(changeTimesKey);

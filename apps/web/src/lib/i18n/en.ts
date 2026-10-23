@@ -1604,6 +1604,24 @@ export const en = {
   'social.signedInAs': 'Signed in to the hub as @{username}',
   'social.memberSince': 'Member since {since}.',
   'social.signOut': 'Sign out',
+  'social.remembered':
+    'Remembered for this server account: your other browsers are signed in when you sign in to this server.',
+  'social.changePassword': 'Change password',
+  'social.currentPassword': 'Current password',
+  'social.passwordOthers': 'Other sessions are signed out.',
+  'social.passwordChanged': 'Password changed. Other sessions were signed out.',
+  'social.recoveryRowHint':
+    'The only way back in without your password. A new one retires the old one.',
+  'social.newRecoveryCode': 'New recovery code',
+  'social.newRecoveryHint': 'Your password confirms it is you.',
+  'social.newRecoveryLead': 'Your old code no longer works. Save this one: it is shown once.',
+  'social.otherDevices': 'Other devices',
+  'social.signOutEverywhere': 'Sign out everywhere',
+  'social.signOutEverywhereHint': 'Signs out every browser and device, this one too.',
+  'social.signOutEverywhereServer':
+    'Signs out every browser and device, this one too, and forgets the sign-in for this server account.',
+  'social.signOutEverywhereConfirm':
+    'Sign out of the hub on every browser and device, this one too?',
   'social.notSignedIn': 'Not signed in',
   'social.notSignedInHint': 'Nothing is sent to the hub until you sign up or log in.',
   'social.avatar': 'Avatar',

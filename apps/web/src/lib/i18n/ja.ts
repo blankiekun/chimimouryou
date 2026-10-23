@@ -1621,6 +1621,26 @@ export const ja: Record<MessageKey, string> = {
   'social.signedInAs': '@{username} としてハブにサインイン中',
   'social.memberSince': '{since}から利用。',
   'social.signOut': 'サインアウト',
+  'social.remembered':
+    'このサーバーのアカウントに記憶されます。他のブラウザーでもこのサーバーにサインインすると、ハブにもサインインします。',
+  'social.changePassword': 'パスワードを変更',
+  'social.currentPassword': '現在のパスワード',
+  'social.passwordOthers': '他のセッションはサインアウトされます。',
+  'social.passwordChanged': 'パスワードを変更しました。他のセッションはサインアウトされました。',
+  'social.recoveryRowHint':
+    'パスワードなしで戻る唯一の方法です。新しいコードを作ると古いコードは使えなくなります。',
+  'social.newRecoveryCode': '新しい復旧コード',
+  'social.newRecoveryHint': '本人確認のためパスワードを入力してください。',
+  'social.newRecoveryLead':
+    '古いコードはもう使えません。このコードは一度だけ表示されるので保存してください。',
+  'social.otherDevices': '他の端末',
+  'social.signOutEverywhere': 'すべての端末でサインアウト',
+  'social.signOutEverywhereHint':
+    'この端末を含む、すべてのブラウザーと端末からサインアウトします。',
+  'social.signOutEverywhereServer':
+    'この端末を含む、すべてのブラウザーと端末からサインアウトし、このサーバーのアカウントに記憶されたサインインも消します。',
+  'social.signOutEverywhereConfirm':
+    'この端末を含む、すべてのブラウザーと端末でハブからサインアウトしますか？',
   'social.notSignedIn': 'サインインしていません',
   'social.notSignedInHint': '登録かログインするまでハブには何も送信しません。',
   'social.avatar': 'アバター',

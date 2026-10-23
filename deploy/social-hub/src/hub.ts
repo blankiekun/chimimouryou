@@ -929,6 +929,44 @@ async function recover(request: Request, env: Env) {
   return json({ token: await newSession(env, user.id), recovery, me: me(user) });
 }
 
+/** Checks the current password (stretched with the account's salt) of a signed-in reader. */
+async function checkPassword(request: Request, env: Env, user: UserRow, key: unknown) {
+  const subjects = [`name:${user.username.toLowerCase()}`, await ipSubject(request)];
+
+  await checkFailures(env, subjects);
+  if ((await passHash(user.salt, matching(key, KEY, 'key'))) !== user.pass_hash) {
+    await recordFailure(env, subjects);
+  }
+}
+
+/** POST /v1/password {key, next}: a new password (same salt); other sessions end. */
+async function changePassword(request: Request, env: Env, user: UserRow, hash: string) {
+  const body = await readBody(request);
+  const next = matching(body.next, KEY, 'key');
+
+  await checkPassword(request, env, user, body.key);
+  await env.DB.batch([
+    env.DB.prepare('UPDATE users SET pass_hash = ?1 WHERE id = ?2').bind(
+      await passHash(user.salt, next),
+      user.id
+    ),
+    env.DB.prepare('DELETE FROM sessions WHERE user = ?1 AND hash != ?2').bind(user.id, hash)
+  ]);
+  return json({ ok: true });
+}
+
+/** POST /v1/recovery {key}: a new recovery code, shown once; the old one stops working. */
+async function newRecovery(request: Request, env: Env, user: UserRow) {
+  await checkPassword(request, env, user, (await readBody(request)).key);
+
+  const recovery = randomCode(20);
+
+  await env.DB.prepare('UPDATE users SET recovery_hash = ?1 WHERE id = ?2')
+    .bind(await sha256(recovery), user.id)
+    .run();
+  return json({ recovery });
+}
+
 /** The scrypt salt for a username; unknown names get a made-up one that stays the same. */
 async function salt(request: Request, env: Env) {
   const body = await readBody(request);
@@ -1021,6 +1059,13 @@ async function route(request: Request, env: Env, ctx?: Context): Promise<Respons
     case 'POST /v1/logout':
       await env.DB.prepare('DELETE FROM sessions WHERE hash = ?1').bind(hash).run();
       return json({ ok: true });
+    case 'POST /v1/logout-all':
+      await env.DB.prepare('DELETE FROM sessions WHERE user = ?1').bind(user.id).run();
+      return json({ ok: true });
+    case 'POST /v1/password':
+      return changePassword(request, env, user, hash);
+    case 'POST /v1/recovery':
+      return newRecovery(request, env, user);
     case 'GET /v1/me':
       return json(me(user));
     case 'PUT /v1/me':

@@ -41,7 +41,9 @@ idempotent), in order, then `npx wrangler@4.147.0 deploy`:
 
 JSON under `/v1`, `Authorization: Bearer <token>` except `salt`, `signup`, `login`, `recover`,
 and (token optional) `profile/:username` and `report`.
-`POST salt`, `signup`, `login`, `logout`, `recover`; `GET|PUT|DELETE me` (turning a share off
+`POST salt`, `signup`, `login`, `logout`, `recover`; `POST logout-all` (every session of the account);
+`POST password` (`{key, next}`: the current and new stretched password, same salt; other sessions end);
+`POST recovery` (`{key}`: a new recovery code, the old one stops working); `GET|PUT|DELETE me` (turning a share off
 in `PUT me` deletes that data at once); `POST code`;
 `PUT status` (current books, `finished`, `stats`; one per 5 minutes, plus one when leaving a
 book; writes started, finished and streak events); `GET friends` (with their finished books and
