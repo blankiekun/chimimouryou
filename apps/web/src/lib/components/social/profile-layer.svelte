@@ -2,6 +2,7 @@
   import ProfileView from '$lib/components/social/profile-view.svelte';
   import { loadProfile, type Profile } from '$lib/data/social';
   import { hubErrorKey } from '$lib/data/social-account';
+  import { pagePath, standalone } from '$lib/data/env';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher, onMount } from 'svelte';
 
@@ -51,6 +52,13 @@
     <span class="profile-layer-crumb">
       / {profile?.relation === 'self' ? $t$('social.yourProfile') : (profile?.profile.name ?? '')}
     </span>
+    {#if !standalone && profile?.relation === 'self'}
+      <!-- The header's account control opens this with social on: the server account stays a click away. -->
+      <a
+        class="app-button app-button-quiet profile-layer-account"
+        href="{pagePath}/settings?section=general#general-account">{$t$('social.serverAccount')}</a
+      >
+    {/if}
   </nav>
   <div class="profile-layer-body">
     {#if profile}
@@ -96,6 +104,11 @@
     gap: 0.5rem;
     margin: 0 auto;
     padding: 1.25rem 1rem 0;
+  }
+
+  .profile-layer-account {
+    margin-left: auto;
+    flex: none;
   }
 
   .profile-layer-crumb,

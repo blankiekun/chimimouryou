@@ -131,7 +131,7 @@
   </main>
 </div>
 
-{#if $page.state.profile && $socialSession$}
+{#if $page.state.profile && $socialSession$ && !$page.state.profileFromHeader}
   <ProfileLayer
     username={$page.state.profile}
     {covers}

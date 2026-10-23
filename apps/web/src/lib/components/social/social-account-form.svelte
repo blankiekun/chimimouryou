@@ -9,6 +9,8 @@
    * shown once, and Forgot password with the recovery code.
    */
   export let mode: 'signup' | 'login' | 'forgot' = 'signup';
+  /** Under a heading of its own (the first run): no title or lead of the form's */
+  export let compact = false;
 
   const dispatch = createEventDispatcher<{ done: void }>();
   const tabs = [
@@ -86,8 +88,10 @@
       <h1 class="social-title">{$t$('social.resetTitle')}</h1>
       <p class="social-lead">{$t$('social.resetLead')}</p>
     {:else}
-      <h1 class="social-title">{$t$('social.friends')}</h1>
-      <p class="social-lead">{$t$('social.signUpLead')}</p>
+      {#if !compact}
+        <h1 class="social-title">{$t$('social.friends')}</h1>
+        <p class="social-lead">{$t$('social.signUpLead')}</p>
+      {/if}
       <div class="app-segmented social-tabs" role="radiogroup" aria-label={$t$('social.account')}>
         {#each tabs as [key, label]}
           <button

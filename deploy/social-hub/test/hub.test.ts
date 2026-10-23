@@ -226,7 +226,7 @@ describe('social hub', () => {
     expect(mutual.body.friends).toHaveLength(1);
   });
 
-  it('takes one status push per 5 minutes, plus one on leaving a book', async () => {
+  it('takes one status push per minute, plus one on leaving a book', async () => {
     const aki = await signUp('aki');
     const push = (leaving = false) =>
       call('PUT', '/v1/status', { books: [], leaving }, aki.token).then((r) => r.status);
@@ -314,7 +314,7 @@ describe('social hub', () => {
     await call('POST', `/v1/friends/${x.me.id}/accept`, undefined, y.token);
   }
 
-  /** A status push 5 minutes after the last one */
+  /** A status push a minute after the last one */
   async function push(who: { token: string }, body: object) {
     vi.advanceTimersByTime(STATUS_GAP * 1000);
     const response = await call('PUT', '/v1/status', { books: [], ...body }, who.token);
@@ -473,6 +473,21 @@ describe('social hub', () => {
         )
       ).status
     ).toBe(400);
+  });
+
+  it('drops a finished book and its events for its reader only', async () => {
+    const aki = await signUp('aki');
+    const ren = await signUp('ren');
+    const done = { key: 'k1', title: '魔女の旅々 3', kind: 'book' };
+
+    await push(aki, { finished: done });
+    await push(ren, { finished: done });
+    expect(rows('events')).toHaveLength(2);
+
+    expect((await call('DELETE', '/v1/finished/k1', undefined, aki.token)).status).toBe(200);
+    expect(rows('finished').map((r) => r.user)).toEqual([ren.me.id]);
+    expect(rows('events').map((r) => r.user)).toEqual([ren.me.id]);
+    expect((await call('DELETE', '/v1/finished/k1')).status).toBe(401);
   });
 
   it('answers 429 with CORS headers when the edge limit refuses, before any D1 access', async () => {

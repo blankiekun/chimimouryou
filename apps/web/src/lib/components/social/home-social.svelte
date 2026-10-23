@@ -180,7 +180,7 @@
   {/if}
 {/if}
 
-{#if $page.state.profile}
+{#if $page.state.profile && !$page.state.profileFromHeader}
   <ProfileLayer
     username={$page.state.profile}
     {covers}

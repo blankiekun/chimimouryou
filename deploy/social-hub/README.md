@@ -45,8 +45,9 @@ and (token optional) `profile/:username` and `report`.
 `POST password` (`{key, next}`: the current and new stretched password, same salt; other sessions end);
 `POST recovery` (`{key}`: a new recovery code, the old one stops working); `GET|PUT|DELETE me` (turning a share off
 in `PUT me` deletes that data at once); `POST code`;
-`PUT status` (current books, `finished`, `stats`; one per 5 minutes, plus one when leaving a
-book; writes started, finished and streak events); `GET friends` (with their finished books and
+`PUT status` (current books, `finished`, `stats`; one a minute, plus one when leaving a
+book; writes started, finished and streak events); `DELETE finished/:key` (the reader's finished
+book and its events, when its statistics are deleted); `GET friends` (with their finished books and
 stats; once a minute); `GET feed?since=` (friends' events, 90 days; once a minute);
 `GET profile/:username` (public profiles to anyone, edge-cached 15 minutes; private ones to
 friends; 404 when blocked; 30 a day); `POST report` (`{username, what: name|picture}`, 5 a day);

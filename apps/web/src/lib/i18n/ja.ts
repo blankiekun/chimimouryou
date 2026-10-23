@@ -1539,6 +1539,14 @@ export const ja: Record<MessageKey, string> = {
     'アクティビティとリクエストは常にフレンドのみ。プロフィール、読了した本、アクティビティ、統計は今後のバージョンで使われ、ここでの選択は保存されます。',
   'settings.section.social-hub': 'ハブとデータ',
   'settings.section.social-hub.text': 'ソーシャルアカウントの置き場所と削除。',
+  'social.serverAccount': 'サーバーアカウント',
+  'social.firstRunLead':
+    'フレンドには読んでいる本と進み具合だけが見えます。共有しない限りそれ以上は見えません。登録かログインをするまで何も送信されません。',
+  'social.notNow': '後で',
+  'social.firstRunLater': 'ホームのフレンドから後で登録できます。',
+  'social.firstRunSignedIn': '@{name} としてフレンドにログイン中です。',
+  'firstRun.difficulty': '難易度の推定',
+  'firstRun.difficultyHint': '本ごとの難易度と単語リスト、既知語のカバー率と「次に読む本」。',
   'social.friends': 'フレンド',
   'social.lead': 'フレンドが読んでいる本。フレンドに見えるのは共有すると決めたものだけです。',
   'social.emptyLead':
