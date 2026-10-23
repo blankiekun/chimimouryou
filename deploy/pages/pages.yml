@@ -51,6 +51,7 @@ jobs:
         run: pnpm build
         env:
           VITE_EDITION: standalone
+          VITE_STORAGE_ROOT_NAME: chimi-reader-data
           VITE_BASE_PATH: https://chimimouryou.github.io
           VITE_GDRIVE_CLIENT_ID: ${{ secrets.VITE_GDRIVE_CLIENT_ID }}
           VITE_GDRIVE_CLIENT_SECRET: ${{ secrets.VITE_GDRIVE_CLIENT_SECRET }}

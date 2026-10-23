@@ -52,6 +52,7 @@ jobs:
         run: pnpm build
         env:
           VITE_EDITION: standalone
+          VITE_STORAGE_ROOT_NAME: chimi-reader-data
 
   python:
     name: Server scripts

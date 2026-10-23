@@ -250,6 +250,10 @@ writes a static site to `apps/web/build`. Books live on the device (in the brows
 local folder or on Google Drive; there are no accounts, Calibre library, difficulty estimates or
 Words page, and the build sends no requests to `/calibre/` or `/account/`.
 
+The Pages workflow builds with `VITE_STORAGE_ROOT_NAME=chimi-reader-data`, so its Google Drive
+folder is `chimi-reader-data`, not ッツ Reader's or Hoshi's `ttu-reader-data` (the `drive.file`
+scope would not let it see their files anyway). Server builds keep `ttu-reader-data`.
+
 To publish it on GitHub Pages, copy [deploy/pages/pages.yml](../deploy/pages/pages.yml) to
 `.github/workflows/` in the site repository (e.g. `<org>/<org>.github.io`), choose
 "GitHub Actions" as the Pages source, add the secrets `VITE_GDRIVE_CLIENT_ID` and
