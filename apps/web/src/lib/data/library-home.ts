@@ -79,6 +79,13 @@ export function addToHome(titles: string[]) {
   homeRemovedTitles$.next(removed);
 }
 
+/** Imports of more books than this (a library dump, not today's reading) stay in the Store only. */
+export const maxImportsToHome = 3;
+
+export function addImportsToHome(titles: string[]) {
+  if (titles.length <= maxImportsToHome) addToHome(titles);
+}
+
 export function removeFromHome(title: string) {
   homeBookTitles$.next(homeBookTitles$.getValue().filter((t) => t !== title));
   homeRemovedTitles$.next({ ...homeRemovedTitles$.getValue(), [title]: Date.now() });

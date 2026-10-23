@@ -26,6 +26,7 @@
   import SeriesGrid from '$lib/components/book-card/series-grid.svelte';
   import SeriesResults from '$lib/components/book-card/series-results.svelte';
   import {
+    addImportsToHome,
     addToHome,
     continueReading,
     homeBookTitles$,
@@ -576,7 +577,7 @@
       keepOnDevice
     ).catch((catchedError) => catchedError.message);
 
-    addToHome(importedTitles);
+    addImportsToHome(importedTitles);
     resetProgress();
 
     if (error) {
@@ -706,7 +707,7 @@
     });
     const newTitles = addedCards.filter((card) => !card.series).map((card) => card.title);
 
-    addToHome(addedCards.map((card) => card.title));
+    addImportsToHome(addedCards.map((card) => card.title));
 
     await offerSeriesForImports(books, newTitles);
 
