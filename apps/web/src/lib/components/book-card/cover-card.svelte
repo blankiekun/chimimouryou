@@ -17,10 +17,8 @@
   /** Set in select mode: clicks then toggle the book */
   export let selected: boolean | undefined = undefined;
   export let current = false;
-  /** Shows a remove button on the cover when not selecting */
+  /** Shows a remove button on the cover on hover/focus when not selecting (fine pointers only) */
   export let removeTitle = '';
-  /** Touch screens (no hover) show the remove button too */
-  export let removeOnTouch = true;
   /** Cover only, no text */
   export let compact = false;
   /** Phones: cover on the left, text on the right */
@@ -56,7 +54,7 @@
     <span class="cover-card-cover">
       <BookCard imagePath={book.imagePath} title={book.title} />
       {#if isFinished(book)}
-        <span class="cover-card-finished" title="Finished">読了</span>
+        <span class="cover-card-finished">Finished</span>
       {/if}
     </span>
     <span class="cover-card-track" aria-hidden="true"><span style:width="{percent}%" /></span>
@@ -81,7 +79,6 @@
     <button
       type="button"
       class="cover-card-remove"
-      class:cover-card-remove-touch={removeOnTouch}
       title={removeTitle}
       aria-label="{removeTitle}: {book.title}"
       on:click={() => dispatch('remove')}
@@ -222,28 +219,19 @@
     color: var(--app-accent-fg);
   }
 
+  /* Hidden until hover or focus; touch screens remove from the book page or select mode */
   .cover-card-remove {
     right: 0.35rem;
+    display: none;
     border: 1px solid var(--font-color);
     background: var(--background-color);
     color: var(--font-color);
-    opacity: 0;
-    transition: opacity 0.15s ease;
   }
 
-  .cover-card:hover .cover-card-remove,
-  .cover-card-remove:focus-visible {
-    opacity: 1;
-  }
-
-  @media (hover: none) {
-    .cover-card-remove {
-      display: none;
-    }
-
-    .cover-card-remove-touch {
+  @media (hover: hover) and (pointer: fine) {
+    .cover-card:hover .cover-card-remove,
+    .cover-card:focus-within .cover-card-remove {
       display: inline-flex;
-      opacity: 1;
     }
   }
 

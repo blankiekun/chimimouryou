@@ -50,19 +50,18 @@
 <!-- The Listen tab of the reader panel; it stays mounted when the panel closes, so playback goes on. -->
 <div class="listen" role="region" aria-label={$t$('reader.listen')}>
   {#if pluginModes.length}
-    <div class="app-segmented self-start" role="radiogroup" aria-label={$t$('reader.source')}>
-      {#each modes as item (item.key)}
-        <button
-          role="radio"
-          aria-checked={mode === item.key}
-          class="app-segment"
-          class:app-segment-selected={mode === item.key}
-          on:click={() => setMode(item.key)}
-        >
-          {$t$(item.title)}
-        </button>
-      {/each}
-    </div>
+    <label class="listen-source">
+      <span>{$t$('reader.source')}</span>
+      <select
+        class="app-input"
+        value={mode}
+        on:change={(event) => setMode(event.currentTarget.value)}
+      >
+        {#each modes as item (item.key)}
+          <option value={item.key}>{$t$(item.title)}</option>
+        {/each}
+      </select>
+    </label>
   {/if}
 
   {#if loaded}
@@ -97,6 +96,18 @@
     gap: 1rem;
     padding: 1rem;
     font-size: var(--type-small);
+  }
+
+  .listen-source {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--muted);
+  }
+
+  .listen-source select {
+    min-width: 0;
+    flex: 1;
   }
 
   /* The players were made for a one-line bar: let their controls wrap in the panel's width. */

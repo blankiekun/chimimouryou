@@ -2488,12 +2488,12 @@
     {@const currentProgress = [
       [
         $showCharacterCounter$
-          ? `${exploredCharCount.toLocaleString('en-US')} / ${bookCharCount.toLocaleString('en-US')} Ch`
+          ? `${exploredCharCount.toLocaleString('en-US')} / ${bookCharCount.toLocaleString('en-US')} chars`
           : '',
-        $showPercentage$ ? `${((exploredCharCount / bookCharCount) * 100).toFixed(2)}%` : ''
+        $showPercentage$ ? `${Math.floor((exploredCharCount / bookCharCount) * 100)}%` : ''
       ]
         .filter(Boolean)
-        .join(' | '),
+        .join(' · '),
       $showFooterChapterCharacterCounter$ || $showFooterChapterPercentage$ ? 'T' : ''
     ]
       .filter(Boolean)
@@ -2502,7 +2502,7 @@
       tabindex="0"
       role="button"
       title={$t$('reader.copyProgress')}
-      class="writing-horizontal-tb fixed bottom-2 right-2 z-10 text-xs leading-none tabular-nums select-none whitespace-pre {panelOpen
+      class="writing-horizontal-tb fixed bottom-2 right-2 z-10 font-sans text-label leading-none tabular-nums select-none whitespace-pre {panelOpen
         ? 'md:right-[27.25rem]'
         : ''}"
       class:invisible={!$showCharacterCounter$ &&

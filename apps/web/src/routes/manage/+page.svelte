@@ -1473,11 +1473,11 @@
                 type="button"
                 class="library-toolbar-button"
                 title={$t$('library.difficultyHint')}
-                aria-label={$t$('library.difficultyHint')}
                 disabled={!selectedBookIds.size}
                 on:click={onDifficultyClick}
               >
                 <Fa icon={faGaugeHigh} />
+                <span class="library-toolbar-label">{$t$('library.sortDifficulty')}</span>
               </button>
             {/if}
             <button

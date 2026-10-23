@@ -731,10 +731,9 @@ export const ja: Record<MessageKey, string> = {
   'reader.showMore': 'さらに表示（残り{count}件）',
   'reader.previous': '前へ',
   'reader.next': '次へ',
-  'reader.ttsNoKey':
-    '音声読み上げを利用するには、「設定 → AI」で ElevenLabs の APIキーを設定してください',
-  'reader.ttsNoVoice':
-    '音声読み上げを利用するには、「設定 → AI」で音声ID（Voice ID）を設定してください',
+  'reader.ttsNoKey': '音声読み上げには ElevenLabs の APIキーが必要です。',
+  'reader.openAiSettings': 'AI設定を開く',
+  'reader.ttsNoVoice': '音声読み上げには ElevenLabs の音声ID（Voice ID）が必要です。',
   'reader.ttsNoText': '現在の位置より後にテキストがありません',
   'reader.pause': '一時停止',
   'reader.play': '再生',
@@ -805,6 +804,10 @@ export const ja: Record<MessageKey, string> = {
   'reader.loreSend': 'シリーズの次巻へ引き継ぐ',
   'reader.loreExport': 'SillyTavern 形式でエクスポート',
   'reader.loreClear': '用語集を消去',
+  'reader.loreSendShort': '次の巻へ',
+  'reader.loreExportShort': 'エクスポート',
+  'reader.loreClearShort': 'すべて削除',
+  'reader.loreCategory': '表示',
   'reader.loreCopy': '項目をコピー',
   'reader.loreNoLater': 'Calibre ライブラリ内にこのシリーズの続刊が見つかりません。',
   'reader.loreCopied':
@@ -1118,6 +1121,11 @@ export const ja: Record<MessageKey, string> = {
   'prefs.sourceSyncTarget': '同期先として指定／解除',
   'prefs.sourceDefault': 'この種類の標準ソースとして指定／解除',
   'prefs.sourceDelete': 'ソースを削除',
+  'prefs.sourceEditShort': '編集',
+  'prefs.sourceDeleteShort': '削除',
+  'prefs.sourceTargetShort': '同期先',
+  'prefs.sourceDefaultShort': '標準',
+  'prefs.sourcesNone': '追加されたソースはありません。',
 
   'prefs.account.signedIn': 'ログイン中',
   'prefs.account.notEncrypted': '通信が暗号化されていません。',

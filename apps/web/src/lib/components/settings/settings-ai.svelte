@@ -158,14 +158,14 @@
   <SettingsItemGroup title={$t$('ai.language')} tooltip={$t$('ai.languageHint')}>
     <AiLanguageToggle />
   </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('ai.model')} tooltip={$t$('ai.modelHint')}>
+  <SettingsItemGroup title={$t$('ai.model')} tooltip={$t$('ai.modelHint')} wide>
     <input
       id="openrouter-model"
       aria-label={$t$('ai.model')}
       list="openrouter-models"
       autocomplete="off"
       placeholder={defaultOpenRouterModel}
-      class="app-input"
+      class="app-input w-full"
       bind:value={$openRouterModel$}
       on:change={() => {
         if (!$openRouterModel$.trim()) {
@@ -340,14 +340,14 @@
 </SettingsSection>
 
 <SettingsSection id="ai-recap">
-  <SettingsItemGroup title={$t$('ai.recapModel')} tooltip={$t$('ai.recapModelHint')}>
+  <SettingsItemGroup title={$t$('ai.recapModel')} tooltip={$t$('ai.recapModelHint')} wide>
     <input
       id="recap-model"
       list="openrouter-models"
       autocomplete="off"
       aria-label={$t$('ai.recapModel')}
       placeholder={$t$('ai.recapModelPlaceholder', { model: $openRouterModel$ })}
-      class="app-input"
+      class="app-input w-full"
       bind:value={$openRouterRecapModel$}
     />
   </SettingsItemGroup>
@@ -480,8 +480,6 @@
   }
 
   .model-note {
-    width: 16rem;
-    max-width: 100%;
     margin-top: 0.35rem;
     color: var(--app-muted-fg);
     font-size: var(--type-label);

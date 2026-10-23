@@ -95,3 +95,8 @@ export const askAiDefaultPreset$ = writableStringLocalStorageSubject()(
   'askAiDefaultPreset',
   'explain'
 );
+
+/** An OpenRouter model id as the panels show it: `~vendor/model` → `model`. */
+export function modelShortName(id: string) {
+  return id.replace(/^~/, '').split('/').pop() || id;
+}

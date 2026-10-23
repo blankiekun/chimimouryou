@@ -72,6 +72,34 @@ describe('contrast', () => {
     expect(report, 'Below WCAG AA (4.5:1)').toEqual([]);
   });
 
+  // The reader panel's current Contents row (accentStrong) and the header's ち mark (accent).
+  it('keeps the spot colour readable on the panel and header', () => {
+    const report = builtInThemes.flatMap(({ id }) => {
+      const { colors } = resolveTheme(id, {});
+      const page = parseSimpleColor(colors.background)!;
+      // Translucent panels and headers sit on the page.
+      const on = (fg: string, bg: string) => {
+        const back = parseSimpleColor(bg)!;
+        const mix = (a: number, b: number) => a * back.a + b * (1 - back.a);
+        const solid = {
+          r: mix(back.r, page.r),
+          g: mix(back.g, page.g),
+          b: mix(back.b, page.b),
+          a: 1
+        };
+        return contrastRatio(parseSimpleColor(fg)!, solid);
+      };
+      return [
+        ['accentStrong on panelBackground', on(colors.accentStrong, colors.panelBackground), 4.5],
+        ['accent on headerBackground', on(colors.accent, colors.headerBackground), 3]
+      ]
+        .filter(([, ratio, min]) => (ratio as number) < (min as number))
+        .map(([pair, ratio]) => `${id}: ${pair} is ${(ratio as number).toFixed(2)}:1`);
+    });
+
+    expect(report).toEqual([]);
+  });
+
   // The difficulty scale runs from accent to text: both ends need 3:1 (non-text) on the page.
   it('keeps the difficulty scale visible', () => {
     const report = builtInThemes.flatMap(({ id }) => {

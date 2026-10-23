@@ -1,6 +1,5 @@
 <script lang="ts">
   import { faXmark } from '@fortawesome/free-solid-svg-icons';
-  import AiLanguageToggle from '$lib/components/ai-language-toggle.svelte';
   import AnnotationsPanel from '$lib/components/book-reader/annotations-panel.svelte';
   import BookSearchPanel from '$lib/components/book-reader/book-search-panel.svelte';
   import ListenPanel from '$lib/components/book-reader/listen-panel.svelte';
@@ -133,9 +132,6 @@
           <span class="meta"
             >{$t$('reader.chars', { count: bookCharacters.toLocaleString('en-US') })}</span
           >
-        {:else if pluginTabs.some((item) => item.key === active.key)}
-          <!-- shortcut: assumes every plugin tab is an AI tab; give tabs their own toolbar when another plugin adds one. -->
-          <AiLanguageToggle compact />
         {/if}
         <button class="close" title={$t$('reader.close')} on:click={() => dispatch('close')}>
           <Fa icon={faXmark} />
@@ -339,7 +335,7 @@
     display: inline-flex;
     width: 2.75rem;
     height: 2.75rem;
-    margin: -0.6rem -0.75rem -0.6rem 0;
+    margin: -0.6rem -0.75rem -0.6rem auto;
     align-items: center;
     justify-content: center;
     color: var(--muted);
@@ -409,6 +405,55 @@
     background: var(--accent-color);
   }
 
+  /* Shared by the tabs' bodies (Ask AI, Story so far, Lorebook): a meta row under the header's
+     rule (model, AI language) and the header's side margins. */
+  .reader-index :global(.panel-meta) {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin: 0 1rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--rule);
+    color: var(--muted);
+    font-size: var(--type-small);
+  }
+
+  .reader-index :global(.panel-meta-text) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .reader-index :global(.panel-body) {
+    padding-right: 1rem;
+    padding-left: 1rem;
+  }
+
+  .reader-index :global(.panel-note) {
+    color: var(--muted);
+    font-size: var(--type-small);
+    line-height: 1.6;
+  }
+
+  /* Phones: the tab row already names the tab, so the header keeps only the count and close. */
+  @media (max-width: 767px) {
+    .head {
+      padding: 0.35rem 0;
+    }
+
+    .head h2 {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+  }
+
   /* The panels inside predate Study Book: square their corners and drop their shadows here. */
   .reader-index :global(:is(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-full)) {
     border-radius: 2px;
@@ -470,6 +515,15 @@
     .head {
       margin: 0 1.5rem;
       padding-top: 1.4rem;
+    }
+
+    .reader-index :global(.panel-meta) {
+      margin: 0 1.5rem;
+    }
+
+    .reader-index :global(.panel-body) {
+      padding-right: 1.5rem;
+      padding-left: 1.5rem;
     }
 
     .toc {

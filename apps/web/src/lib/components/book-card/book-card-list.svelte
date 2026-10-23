@@ -48,7 +48,6 @@
       current={bookCard.id === currentBookId}
       selected={selectMode ? selectedBookIds.has(bookCard.id) : undefined}
       removeTitle="Delete book"
-      removeOnTouch={false}
       on:open={() => dispatch('bookClick', { id: bookCard.id })}
       on:select={() => dispatch('bookSelect', { id: bookCard.id })}
       on:remove={() => dispatch('removeBookClick', { id: bookCard.id })}

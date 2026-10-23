@@ -1,20 +1,8 @@
 <script lang="ts">
   import { browser } from '$app/environment';
-  import {
-    faCircleQuestion,
-    faCloudArrowUp,
-    faPenToSquare,
-    faPlus,
-    faSpinner,
-    faTableList,
-    faTrash,
-    faTriangleExclamation
-  } from '@fortawesome/free-solid-svg-icons';
+  import { faSpinner } from '@fortawesome/free-solid-svg-icons';
   import MessageDialog from '$lib/components/message-dialog.svelte';
-  import Popover from '$lib/components/popover/popover.svelte';
-  import Ripple from '$lib/components/ripple.svelte';
   import SettingsStorageSource from '$lib/components/settings/settings-storage-source.svelte';
-  import { buttonClasses } from '$lib/css-classes';
   import type { BooksDbStorageSource } from '$lib/data/database/books-db/versions/books-db';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { gDriveRevokeEndpoint } from '$lib/data/env';
@@ -29,7 +17,6 @@
     unlockStorageData
   } from '$lib/data/storage/storage-source-manager';
   import { StorageKey } from '$lib/data/storage/storage-types';
-  import { getStorageIconData } from '$lib/data/storage/storage-view';
   import {
     autoReplication$,
     database,
@@ -40,7 +27,6 @@
     syncTarget$
   } from '$lib/data/store';
   import { AutoReplicationType } from '$lib/functions/replication/replication-options';
-  import { dummyFn } from '$lib/functions/utils';
   import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
@@ -212,126 +198,138 @@
   }
 </script>
 
-<div class="mb-8 sm:col-span-2 lg:col-span-3">
-  <div class="flex">
-    <div class="flex grow">
-      <h1 class="mb-2 text-xl font-medium">
-        <span class="capitalize">{$t$('prefs.sources')}</span>
-      </h1>
-      <Popover contentText={listTooltip} contentStyles="padding: 0.5rem;">
-        <Fa icon={faCircleQuestion} slot="icon" class="mx-2" />
-      </Popover>
+<div class="sources">
+  <div class="sources-head">
+    <p class="sources-hint">
+      {listTooltip}
       {#if $autoReplication$ !== AutoReplicationType.Off && !$syncTarget$}
-        <Popover
-          contentText={$t$('prefs.sourcesNoTarget')}
-          contentStyles="padding: 0.25rem;"
-        >
-          <Fa icon={faTriangleExclamation} slot="icon" class="mx-2" />
-        </Popover>
+        <span class="sources-warn">{$t$('prefs.sourcesNoTarget')}</span>
       {/if}
-    </div>
+    </p>
     <button
-      class={buttonClasses}
-      class:cursor-not-allowed={!storageSources}
+      class="app-button"
       disabled={!storageSources}
       on:click={() => {
         modifyStorageSource();
       }}
     >
-      <div class="flex items-center justify-center">
-        <Fa icon={faPlus} />
-        <span class="ml-1 hidden sm:block">{$t$('prefs.add')}</span>
-      </div>
-      <Ripple />
+      {$t$('prefs.add')}
     </button>
   </div>
-  <hr class="border border-[color:var(--border-color)]" />
-  <div class="mt-6">
-    {#if !listLoading && storageSources}
-      <div class="grid grid-cols-1 gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
-        {#each storageSources as storageSource (storageSource.name)}
-          {@const icon = getStorageIconData(storageSource.type)}
-          {@const isDefault = isAppDefault(storageSource.name)}
-          {@const storageSourceIsSyncTarget = isSyncTarget(storageSource.name, $syncTarget$)}
-          {@const storageSourceIsSourceDefault = isStorageSourceDefault(
-            storageSource.name,
-            storageSource.type,
-            [$gDriveStorageSource$, $oneDriveStorageSource$, $fsStorageSource$]
-          )}
-          <div class="flex flex-col">
-            <div class="flex">
-              <svg
-                class="inline-block h-6 w-6 self-center"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox={icon.viewBox}
-              >
-                <path class="fill-current" d={icon.d} />
-              </svg>
-              <div class="ml-3 self-center">{storageSource.name}</div>
-            </div>
-            <div class="mt-4 flex">
-              <div
-                tabindex="0"
-                role="button"
-                title={$t$('prefs.sourceEdit')}
-                class="mr-4"
-                class:hidden={isDefault}
-                on:click={() => modifyStorageSource(storageSource)}
-                on:keyup={dummyFn}
-              >
-                <Fa icon={faPenToSquare} />
-              </div>
-              <div
-                tabindex="0"
-                role="button"
-                title={$t$('prefs.sourceSyncTarget')}
-                class="mr-4"
-                class:opacity-50={!storageSourceIsSyncTarget}
-                on:click={() =>
-                  syncTarget$.next($syncTarget$ === storageSource.name ? '' : storageSource.name)}
-                on:keyup={dummyFn}
-              >
-                <Fa icon={faCloudArrowUp} />
-              </div>
-              <div
-                tabindex="0"
-                role="button"
-                title={$t$('prefs.sourceDefault')}
-                class="mr-4"
-                class:opacity-50={!storageSourceIsSourceDefault}
-                on:click={() =>
-                  setStorageSourceDefault(
-                    storageSourceIsSourceDefault ? '' : storageSource.name,
-                    storageSource.type
-                  )}
-                on:keyup={dummyFn}
-              >
-                <Fa icon={faTableList} />
-              </div>
-              <div
-                tabindex="0"
-                role="button"
-                title={$t$('prefs.sourceDelete')}
-                class:hidden={isDefault}
-                on:click={() =>
-                  deleteStorageSource(
-                    storageSource,
-                    storageSourceIsSyncTarget,
-                    storageSourceIsSourceDefault
-                  )}
-                on:keyup={dummyFn}
-              >
-                <Fa icon={faTrash} />
-              </div>
-            </div>
-          </div>
-        {/each}
-      </div>
+  {#if !listLoading && storageSources}
+    {#if storageSources.length}
+      <table class="app-table">
+        <tbody>
+          {#each storageSources as storageSource (storageSource.name)}
+            {@const isDefault = isAppDefault(storageSource.name)}
+            {@const storageSourceIsSyncTarget = isSyncTarget(storageSource.name, $syncTarget$)}
+            {@const storageSourceIsSourceDefault = isStorageSourceDefault(
+              storageSource.name,
+              storageSource.type,
+              [$gDriveStorageSource$, $oneDriveStorageSource$, $fsStorageSource$]
+            )}
+            <tr>
+              <th scope="row">{storageSource.name}</th>
+              <td>
+                <div class="sources-actions">
+                  <button
+                    class="app-button app-button-quiet"
+                    title={$t$('prefs.sourceSyncTarget')}
+                    aria-pressed={storageSourceIsSyncTarget}
+                    on:click={() =>
+                      syncTarget$.next(
+                        $syncTarget$ === storageSource.name ? '' : storageSource.name
+                      )}
+                  >
+                    {$t$('prefs.sourceTargetShort')}
+                  </button>
+                  <button
+                    class="app-button app-button-quiet"
+                    title={$t$('prefs.sourceDefault')}
+                    aria-pressed={storageSourceIsSourceDefault}
+                    on:click={() =>
+                      setStorageSourceDefault(
+                        storageSourceIsSourceDefault ? '' : storageSource.name,
+                        storageSource.type
+                      )}
+                  >
+                    {$t$('prefs.sourceDefaultShort')}
+                  </button>
+                  {#if !isDefault}
+                    <button
+                      class="app-button app-button-quiet"
+                      title={$t$('prefs.sourceEdit')}
+                      on:click={() => modifyStorageSource(storageSource)}
+                    >
+                      {$t$('prefs.sourceEditShort')}
+                    </button>
+                    <button
+                      class="app-button app-button-quiet"
+                      title={$t$('prefs.sourceDelete')}
+                      on:click={() =>
+                        deleteStorageSource(
+                          storageSource,
+                          storageSourceIsSyncTarget,
+                          storageSourceIsSourceDefault
+                        )}
+                    >
+                      {$t$('prefs.sourceDeleteShort')}
+                    </button>
+                  {/if}
+                </div>
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
     {:else}
-      <div class="text-xl">
-        <Fa icon={faSpinner} spin />
-      </div>
+      <p class="sources-hint">{$t$('prefs.sourcesNone')}</p>
     {/if}
-  </div>
-  <div />
+  {:else}
+    <Fa icon={faSpinner} spin />
+  {/if}
 </div>
+
+<style>
+  .sources {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .sources-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem 1.5rem;
+  }
+
+  .sources-hint {
+    max-width: 40rem;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  .sources-warn {
+    display: block;
+    margin-top: 0.25rem;
+    color: var(--font-color);
+  }
+
+  .sources th {
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+
+  .sources-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0 0.5rem;
+  }
+
+  /* Sync target and Default are toggles: off reads muted, on in the spot colour */
+  .sources-actions [aria-pressed='false'] {
+    color: var(--app-muted-fg);
+  }
+</style>

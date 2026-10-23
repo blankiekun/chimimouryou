@@ -28,6 +28,7 @@
     type ReadingParagraph
   } from '$lib/functions/tts/extract-reading-text';
   import { createEventDispatcher, onDestroy, onMount } from 'svelte';
+  import { pagePath } from '$lib/data/env';
   import { t$, tr } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
@@ -48,15 +49,16 @@
   let index = 0;
   let playing = false;
   let loading = false;
-  let error = !$elevenLabsApiKey$
-    ? tr('reader.ttsNoKey')
-    : $ttsVoiceId$
-      ? ''
-      : tr('reader.ttsNoVoice');
+  let error = '';
   let audio: HTMLAudioElement;
   let abortController = new AbortController();
   let audioCache = createAudioCache();
 
+  $: setup = !$elevenLabsApiKey$
+    ? $t$('reader.ttsNoKey')
+    : !$ttsVoiceId$
+      ? $t$('reader.ttsNoVoice')
+      : '';
   $: currentText = displayReadingText(chunks[index]?.text ?? '');
 
   onMount(() => {
@@ -201,30 +203,38 @@
 </script>
 
 <!-- One row inside the Listen bar (listen-panel.svelte). -->
-<div class="voice">
-  <button class="voice-icon" title={$t$('reader.previous')} on:click={() => skip(-1)}>
-    <Fa icon={faBackwardStep} />
-  </button>
-  <button
-    class="voice-play"
-    title={$t$(playing ? 'reader.pause' : 'reader.readAloudHere')}
-    disabled={!$ttsVoiceId$ || !$elevenLabsApiKey$}
-    on:click={togglePlay}
-  >
-    <Fa icon={loading ? faSpinner : playing ? faPause : faPlay} spin={loading} fw />
-  </button>
-  <button class="voice-icon" title={$t$('reader.next')} on:click={() => skip(1)}>
-    <Fa icon={faForwardStep} />
-  </button>
-  <span class="voice-text">
-    {#if error}
-      <span class="voice-line voice-error">{error}</span>
-    {:else}
-      <span class="voice-line" lang="ja">{currentText || $t$('reader.readAloudPosition')}</span>
-    {/if}
-    <span class="voice-meta">ElevenLabs · {$elevenLabsModel$ || defaultElevenLabsModel}</span>
-  </span>
-</div>
+{#if setup}
+  <p class="voice-setup">
+    {setup}
+    <a class="app-button app-button-quiet" href="{pagePath}/settings?section=ai#ai-guide"
+      >{$t$('reader.openAiSettings')}</a
+    >
+  </p>
+{:else}
+  <div class="voice">
+    <button class="voice-icon" title={$t$('reader.previous')} on:click={() => skip(-1)}>
+      <Fa icon={faBackwardStep} />
+    </button>
+    <button
+      class="voice-play"
+      title={$t$(playing ? 'reader.pause' : 'reader.readAloudHere')}
+      on:click={togglePlay}
+    >
+      <Fa icon={loading ? faSpinner : playing ? faPause : faPlay} spin={loading} fw />
+    </button>
+    <button class="voice-icon" title={$t$('reader.next')} on:click={() => skip(1)}>
+      <Fa icon={faForwardStep} />
+    </button>
+    <span class="voice-text">
+      {#if error}
+        <span class="voice-line voice-error">{error}</span>
+      {:else}
+        <span class="voice-line" lang="ja">{currentText || $t$('reader.readAloudPosition')}</span>
+      {/if}
+      <span class="voice-meta">ElevenLabs · {$elevenLabsModel$ || defaultElevenLabsModel}</span>
+    </span>
+  </div>
+{/if}
 
 <style>
   .voice {
@@ -281,6 +291,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .voice-setup {
+    color: var(--muted);
+    line-height: 1.6;
   }
 
   .voice-error {

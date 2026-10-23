@@ -494,7 +494,13 @@
       on: $instantText$,
       click: () => instantText$.next(!$instantText$)
     },
-    { label: 'Menu', title: "The game's menu (right-click)", on: undefined, click: openMenu, phone: true },
+    {
+      label: 'Menu',
+      title: "The game's menu (right-click)",
+      on: undefined,
+      click: openMenu,
+      phone: true
+    },
     { label: 'Skip', title: 'Skip text', on: skipping, click: toggleSkip, phone: true }
   ];
 
@@ -653,7 +659,7 @@
       {#if ended}
         <p class="vn-text">The game has ended.</p>
       {:else if $showText$}
-        <div class="vn-text" lang="ja">
+        <div class="vn-text" class:vn-text-ruled={lines.length} lang="ja">
           {#each lines as line}
             <p>
               {#each line as part}{#if part.ruby}<ruby>{part.text}<rt>{part.ruby}</rt></ruby
@@ -768,9 +774,16 @@
       flex-direction: column;
     }
 
+    /* The text at body size, as tall as it is; the progress stays at the bottom */
     .vn-main-text .vn-text {
       max-height: none;
-      flex: 1;
+      font-size: var(--type-body);
+      font-weight: 400;
+      line-height: 1.8;
+    }
+
+    .vn-main-text .vn-progress {
+      margin-top: auto;
     }
   }
 
@@ -830,10 +843,13 @@
     margin: 1.75rem auto 0;
     overflow-y: auto;
     padding-top: 0.75rem;
-    border-top: 2px solid var(--reader-panel-fg);
     font-size: 1.25rem;
     font-weight: 700;
     line-height: 2;
+  }
+
+  .vn-text-ruled {
+    border-top: 2px solid var(--reader-panel-fg);
   }
 
   .vn-text p {
