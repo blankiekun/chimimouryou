@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { FuriganaStyle } from '$lib/data/furigana-style';
 import {
+  bookLayoutWidth,
   contentsRows,
   currentChapterLabel,
   furiganaChoice,
@@ -61,6 +62,14 @@ describe('readerWidth', () => {
     expect(readerWidth(1440, true, 16)).toBe(1440 - 26.75 * 16);
     expect(readerWidth(1440, false, 16)).toBe(1440);
     expect(readerWidth(390, true, 16)).toBe(390);
+  });
+});
+
+describe('bookLayoutWidth', () => {
+  it('keeps the panel room free on wide screens, open or not, and nowhere else', () => {
+    expect(bookLayoutWidth(1440, 16)).toBe(1440 - 26.75 * 16);
+    expect(bookLayoutWidth(1279, 16)).toBe(1279);
+    expect(bookLayoutWidth(390, 16)).toBe(390);
   });
 });
 
