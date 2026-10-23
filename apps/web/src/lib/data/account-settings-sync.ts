@@ -78,7 +78,9 @@ import {
   theme$,
   verticalTextOrientation$,
   viewMode$,
-  writingMode$
+  writingMode$,
+  readerProfile,
+  type ReaderProfile
 } from '$lib/data/store';
 import {
   customAppThemes$,
@@ -173,15 +175,7 @@ const readerSettings: Record<string, Store> = {
   confirmClose: confirmClose$
 };
 
-export type ReaderProfile = 'phone' | 'desktop';
-
-/** Phones (touch screen, short side under 600 px) keep their own reader settings. */
-export function readerProfile(): ReaderProfile {
-  const touch = window.matchMedia('(pointer: coarse)').matches;
-  const shortSide = Math.min(window.screen.width, window.screen.height);
-
-  return touch && shortSide < 600 ? 'phone' : 'desktop';
-}
+export { readerProfile, type ReaderProfile } from '$lib/data/store';
 
 interface SyncEntry {
   /** Key in settings.json (and in the change times) */
