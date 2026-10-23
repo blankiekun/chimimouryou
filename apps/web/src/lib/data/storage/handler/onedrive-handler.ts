@@ -161,6 +161,7 @@ export class OneDriveStorageHandler extends ApiStorageHandler {
           });
         }
 
+        await this.addDeviceVns();
         this.dataListFetched = true;
       } catch (error) {
         this.clearData();

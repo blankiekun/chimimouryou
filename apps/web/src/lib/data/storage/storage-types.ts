@@ -13,6 +13,14 @@ export enum StorageKey {
   ONEDRIVE = 'onedrive'
 }
 
+/**
+ * Cloud providers, where a visual novel's game files (often gigabytes) take long and use the
+ * reader's space: ask before uploading one (`vn-upload.ts`). Calibre and folders just store it.
+ */
+export function asksBeforeVnUpload(type: StorageKey) {
+  return type === StorageKey.GDRIVE || type === StorageKey.ONEDRIVE;
+}
+
 export enum StorageDataType {
   DATA = 'data',
   PROGRESS = 'bookmark',

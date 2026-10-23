@@ -11,6 +11,8 @@ export interface ReplicationContext {
   title: string;
   id?: number;
   imagePath?: string | Blob | Entry;
+  /** A visual novel kept on this device: its book data is not replicated. */
+  keepOnDevice?: boolean;
 }
 
 export interface ReplicationProgress {

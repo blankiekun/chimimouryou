@@ -23,6 +23,7 @@ import {
 import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
 import { StorageOAuthManager } from '$lib/data/storage/storage-oauth-manager';
 import { StorageKey } from '$lib/data/storage/storage-types';
+import { isVn } from '$lib/data/vn';
 import { database } from '$lib/data/store';
 import {
   convertAuthErrorResponse,
@@ -41,6 +42,14 @@ export interface RequestOptions {
   trackDownload?: boolean;
   trackUpload?: boolean;
   skipAuth?: boolean;
+  /** Resolve with the status and response headers too (`FullResponse`) */
+  fullResponse?: boolean;
+}
+
+export interface FullResponse {
+  status: number;
+  response: any;
+  header: (name: string) => string | null;
 }
 
 export abstract class ApiStorageHandler extends BaseStorageHandler {
@@ -444,6 +453,44 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
     return 0;
   }
 
+  /**
+   * Saves a visual novel in this browser only, for this source: listed with its books, opened
+   * from here, never uploaded (the reader chose "Keep on this device").
+   */
+  async keepOnDevice(data: Omit<BooksDbBookData, 'id'>) {
+    const id = await getStorageHandler(
+      this.window,
+      StorageKey.BROWSER,
+      undefined,
+      true,
+      this.cacheStorageData,
+      this.saveBehavior
+    ).saveBook({ ...data, storageSource: this.storageSourceName }, false, false);
+
+    this.addDeviceVnCard(data);
+
+    return id;
+  }
+
+  /** Lists the visual novels this browser keeps for this source (`keepOnDevice`). */
+  protected async addDeviceVns() {
+    const books = await (await database.db).getAll('data');
+
+    books
+      .filter((book) => book.storageSource === this.storageSourceName && isVn(book))
+      .forEach((book) => this.addDeviceVnCard(book));
+  }
+
+  private addDeviceVnCard(book: Omit<BooksDbBookData, 'id'>) {
+    this.addBookCard(book.title, {
+      imagePath: book.coverImage || '',
+      characters: BaseStorageHandler.getBookCharacters(book.characters || 0, book.sections || []),
+      lastBookModified: book.lastBookModified || 0,
+      lastBookOpen: book.lastBookOpen || 0,
+      vn: true
+    });
+  }
+
   async saveProgress(data: File | BooksDbBookmarkData) {
     const filename = BaseStorageHandler.getProgressFileName(data);
     const progressData = data instanceof File ? data : JSON.stringify(data);
@@ -678,7 +725,15 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
         async function stateHandler() {
           if (this.readyState === 4) {
             if (this.status >= 200 && this.status < 400) {
-              resolve(this.response);
+              resolve(
+                options.fullResponse
+                  ? {
+                      status: this.status,
+                      response: this.response,
+                      header: (name: string) => this.getResponseHeader(name)
+                    }
+                  : this.response
+              );
             } else {
               const errorMessage = await convertAuthErrorResponse(this);
 

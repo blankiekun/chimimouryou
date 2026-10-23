@@ -9,6 +9,7 @@
   export let showCancel = true;
   /** The action, named with its verb (and count), e.g. "Delete 3 titles" */
   export let confirmLabel = 'Confirm';
+  export let cancelLabel = 'Cancel';
   /** Destructive: the action button is filled with the danger colour */
   export let danger = false;
   export let resolver: (arg0: boolean) => void;
@@ -37,7 +38,7 @@
   <svelte:fragment slot="footer">
     {#if showCancel}
       <button class="app-button" bind:this={cancelButton} on:click={() => closeDialog(true)}>
-        Cancel
+        {cancelLabel}
       </button>
     {/if}
     <button

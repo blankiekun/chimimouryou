@@ -105,6 +105,13 @@ anything a reader or a server operator would notice.
 
 ### Fixed
 
+- Google Drive: files over 5 MB (large manga, games) go up as resumable uploads in 8 MiB
+  chunks, retried on failure, instead of one request that Google refuses.
+- Importing or exporting a visual novel to Google Drive or OneDrive first asks whether to upload
+  it (with its size) or keep it on this device: a kept game is listed with the source's books,
+  opens from this browser and is never uploaded; its progress and statistics still sync.
+- The import and export progress shows "Estimating…" instead of "??:??:??" until it can tell
+  the time left.
 - Visual novels: right-clicking the game no longer opens the browser's menu.
 - An app update no longer deletes every cache of the site: only the service worker's own (now
   named `chimi:…`), so games kept for offline play and other sites on the same origin keep theirs.
