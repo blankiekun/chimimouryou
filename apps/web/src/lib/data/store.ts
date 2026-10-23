@@ -123,7 +123,7 @@ export const textMarginMode$ = writableStringLocalStorageSubject<TextMarginMode>
 );
 export const enableReaderWakeLock$ = writableBooleanLocalStorageSubject()(
   'enableReaderWakeLock',
-  false
+  true
 );
 export const verticalMode$ = writingMode$.pipe(map((writingMode) => writingMode === 'vertical-rl'));
 export const showCharacterCounter$ = writableBooleanLocalStorageSubject()(

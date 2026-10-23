@@ -32,7 +32,7 @@ export const ankiAudioField$ = writableStringLocalStorageSubject()(
 );
 export const ankiPictureField$ = writableStringLocalStorageSubject()('ankiPictureField', 'Picture');
 /** Sentence audio for books, from the imported audiobook. */
-export const ankiBookAudio$ = writableBooleanLocalStorageSubject()('ankiBookAudio', false);
+export const ankiBookAudio$ = writableBooleanLocalStorageSubject()('ankiBookAudio', true);
 /** Books without an audiobook get the sentence read by ElevenLabs instead. */
 export const ankiBookAiFallback$ = writableBooleanLocalStorageSubject()(
   'ankiBookAiFallback',
