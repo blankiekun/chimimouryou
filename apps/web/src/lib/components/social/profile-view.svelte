@@ -62,7 +62,10 @@
   $: year = new Date().getFullYear();
   $: statCells = stats
     ? [
-        { value: $t$('social.days', { count: stats.streak }), label: $t$('social.streak') },
+        {
+          value: $t$(stats.streak === 1 ? 'social.dayOne' : 'social.days', { count: stats.streak }),
+          label: $t$('social.streak')
+        },
         { value: stats.weekChars.toLocaleString('en-US'), label: $t$('social.charsWeek') },
         { value: duration(stats.weekMinutes), label: $t$('social.timeWeek') },
         { value: String(stats.finishedYear), label: $t$('social.finishedIn', { year }) },

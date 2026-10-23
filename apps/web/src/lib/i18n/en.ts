@@ -1691,6 +1691,7 @@ export const en = {
   'social.hideFromFriends': 'Hide from friends',
   'social.hideFromFriendsHint': 'Friends won’t see this book.',
   'social.error.user': 'No one has that username, or the profile is friends only.',
+  'social.dayOne': '1 day',
   'social.error.other': 'The hub couldn’t do that. Try again later.'
 };
 

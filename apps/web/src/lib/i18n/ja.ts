@@ -1708,5 +1708,6 @@ export const ja: Record<MessageKey, string> = {
   'social.hideFromFriendsHint': 'この本はフレンドに表示されません。',
   'social.error.user':
     'そのユーザー名の人はいないか、プロフィールがフレンドのみに公開されています。',
+  'social.dayOne': '1日',
   'social.error.other': 'ハブで処理できませんでした。あとでもう一度お試しください。'
 };
