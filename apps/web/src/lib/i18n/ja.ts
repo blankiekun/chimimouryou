@@ -184,6 +184,13 @@ export const ja: Record<MessageKey, string> = {
   'book.difficultyDetails': '難易度の詳細',
   'book.estimate': '算出する',
   'book.estimating': '算出中… {percent}%',
+  'book.estimateNoText':
+    'この本の本文はこのブラウザに保存されていません。一度開いてから、もう一度お試しください。',
+  'book.estimateFailed': '推定に失敗しました: {message}',
+  'book.needsAnalysisTools': '難易度と単語リストには分析ツールが必要です。',
+  'book.downloadAnalysisTools': 'ダウンロード →',
+  'book.needsDesktopOrServer': '難易度と単語リストにはデスクトップのブラウザかサーバーが必要です。',
+  'book.selfHosting': 'セルフホスト →',
   'book.text': 'テキスト',
   'book.publisher': '出版社',
   'book.published': '出版日',

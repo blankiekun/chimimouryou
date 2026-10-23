@@ -11,7 +11,7 @@
   import { isFinished, isReading } from '$lib/components/book-card/library-filters';
   import { orderSeries } from '$lib/components/book-card/library-sort';
   import { account$, hasPermission } from '$lib/data/account';
-  import { selfHostingGuideUrl, standalone } from '$lib/data/env';
+  import { pagePath, selfHostingGuideUrl, standalone } from '$lib/data/env';
   import {
     loadBookMetadata,
     defaultSource,
@@ -33,6 +33,7 @@
   import { bookKanjiCount } from '$lib/data/book-kanji';
   import {
     analysisToolsState$,
+    analysisToolsSupported,
     checkAnalysisTools,
     keptEstimate,
     localEstimate,
@@ -98,6 +99,7 @@
   /** Standalone: the analysis tools' estimate of a stored book, and its progress while made */
   let localScored: LocalEstimate | undefined;
   let estimating: number | undefined;
+  let estimateError = '';
   /** The book's word list and the words known, for the Words row */
   let listWords: BookWord[] = [];
   let knownSet: KnownSet | undefined;
@@ -238,6 +240,7 @@
     browserKanji = undefined;
     localScored = undefined;
     estimating = undefined;
+    estimateError = '';
 
     if (standalone && kind === 'book') {
       bookKanjiCount(book.id, title, book.characters)
@@ -362,12 +365,24 @@
     const title = book.title;
     const data = await database.getData(book.id).catch(() => undefined);
 
-    if (!data?.elementHtml) return;
+    estimateError = '';
+    if (!data?.elementHtml) {
+      estimateError = $t$('book.estimateNoText');
+      return;
+    }
     estimating = 0;
-    await localEstimate(title, data.elementHtml, (share) => {
-      if (title === book.title) estimating = share;
-    }).catch(() => undefined);
-    if (title === book.title) load();
+    try {
+      await localEstimate(title, data.elementHtml, (share) => {
+        if (title === book.title) estimating = share;
+      });
+      if (title === book.title) load();
+    } catch (error) {
+      if (title !== book.title) return;
+      estimating = undefined;
+      estimateError = $t$('book.estimateFailed', {
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
   }
 
   function showDifficulty() {
@@ -553,6 +568,9 @@
                   >
                     {$t$('book.estimate')}
                   </button>
+                  {#if estimateError}
+                    <span class="details-note" role="alert">{estimateError}</span>
+                  {/if}
                 {:else}
                   <span role="status">
                     {$t$('book.estimating', { percent: Math.round(estimating * 100) })}
@@ -665,10 +683,19 @@
             </div>
           {/if}
         </dl>
-        {#if standalone}
+        {#if standalone && kind === 'book' && $analysisToolsState$.difficulty !== 'ready'}
           <p class="details-server-note">
-            Difficulty and word lists need a server.
-            <a href={selfHostingGuideUrl} target="_blank" rel="noreferrer">Self-hosting →</a>
+            {#if analysisToolsSupported()}
+              {$t$('book.needsAnalysisTools')}
+              <a href="{pagePath}/settings?section=general#general-analysis"
+                >{$t$('book.downloadAnalysisTools')}</a
+              >
+            {:else}
+              {$t$('book.needsDesktopOrServer')}
+              <a href={selfHostingGuideUrl} target="_blank" rel="noreferrer"
+                >{$t$('book.selfHosting')}</a
+              >
+            {/if}
           </p>
         {/if}
 

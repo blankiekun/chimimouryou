@@ -188,6 +188,13 @@ export const en = {
   'book.difficultyDetails': 'Difficulty details',
   'book.estimate': 'Estimate',
   'book.estimating': 'Estimating… {percent}%',
+  'book.estimateNoText':
+    'This book’s text isn’t stored in this browser. Open it once, then try again.',
+  'book.estimateFailed': 'The estimate failed: {message}',
+  'book.needsAnalysisTools': 'Difficulty and word lists need the analysis tools.',
+  'book.downloadAnalysisTools': 'Download →',
+  'book.needsDesktopOrServer': 'Difficulty and word lists need a desktop browser or a server.',
+  'book.selfHosting': 'Self-hosting →',
   'book.text': 'Text',
   'book.publisher': 'Publisher',
   'book.published': 'Published',
