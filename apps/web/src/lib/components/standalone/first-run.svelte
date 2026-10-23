@@ -9,6 +9,10 @@
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import PointBox from '$lib/components/point-box.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
+  import SocialAccountForm from '$lib/components/social/social-account-form.svelte';
+  import { socialSession$ } from '$lib/data/social-account';
+  import { t$ } from '$lib/i18n';
+  import { activePlugins$ } from '$lib/plugins';
   import { pagePath, storageRootName } from '$lib/data/env';
   import {
     chooseStorage,
@@ -24,6 +28,7 @@
   import { generatedFurigana$, isOnline$ } from '$lib/data/store';
   import {
     analysisDownload$,
+    analysisFeatures,
     analysisToolsSize,
     analysisToolsState$,
     analysisToolsSupported,
@@ -59,20 +64,33 @@
   let toolsSize: number | undefined;
   let toolsDeclined = false;
 
-  // Without furigana only the difficulty tools are fetched.
-  $: wantedTools = (
-    $generatedFurigana$ ? ['difficulty', 'furigana'] : ['difficulty']
-  ) as AnalysisFeature[];
-  $: toolsReady = wantedTools.every((feature) => $analysisToolsState$[feature] === 'ready');
+  let wantDifficulty = true;
+
+  // Only the features switched on are fetched (the furigana switch is the reader setting itself).
+  $: wantedTools = analysisFeatures.filter((feature) =>
+    feature === 'furigana' ? $generatedFurigana$ : wantDifficulty
+  );
+  $: toolsReady =
+    !!wantedTools.length &&
+    wantedTools.every((feature) => $analysisToolsState$[feature] === 'ready');
   $: toolsDownloading = !!$analysisDownload$ && !$analysisDownload$.error;
   $: if (toolsSupported && !toolsDownloading) measureTools(wantedTools);
+  $: toolsShown = toolsSupported && (toolsSize !== undefined || toolsReady || toolsDownloading);
+
+  // Friends (the social plugin): nothing goes to the hub until Sign up or Log in is sent.
+  $: socialOn = $activePlugins$.some((plugin) => plugin.id === 'social');
+  let socialForm: 'signup' | 'login' | undefined;
+  let socialDeclined = false;
 
   onMount(() => {
     if (toolsSupported) checkAnalysisTools();
   });
 
   async function measureTools(features: AnalysisFeature[]) {
-    const size = await analysisToolsSize(features).catch(() => undefined);
+    // Nothing chosen: no size, and Download is off.
+    const size = features.length
+      ? await analysisToolsSize(features).catch(() => undefined)
+      : (toolsSize ?? 0);
 
     if (features === wantedTools) toolsSize = size;
   }
@@ -221,7 +239,7 @@
         </button>
       {/if}
 
-      {#if toolsSupported && (toolsSize !== undefined || toolsReady || toolsDownloading)}
+      {#if toolsShown}
         <section class="tools" aria-labelledby="first-run-tools-title">
           <SectionHead id="first-run-tools-title" number={2} title="Analysis tools" />
           <p class="first-run-intro">
@@ -231,6 +249,25 @@
           </p>
 
           <div class="tools-rows">
+            <div class="tool-row">
+              <span class="place-text">
+                <span class="place-title" id="first-run-difficulty">
+                  {$t$('firstRun.difficulty')}
+                </span>
+                <span class="place-description">{$t$('firstRun.difficultyHint')}</span>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                class="app-switch"
+                aria-checked={wantDifficulty}
+                aria-labelledby="first-run-difficulty"
+                disabled={toolsDownloading}
+                on:click={() => (wantDifficulty = !wantDifficulty)}
+              >
+                <span class="app-switch-thumb" />
+              </button>
+            </div>
             <div class="tool-row">
               <span class="place-text">
                 <span class="place-title" id="first-run-furigana">Generated furigana</span>
@@ -285,9 +322,10 @@
               <button
                 type="button"
                 class="app-button app-button-primary"
+                disabled={!wantedTools.length}
                 on:click={() => downloadAnalysisTools(wantedTools)}
               >
-                Download{toolsSize ? ` (${mb(toolsSize)} MB)` : ''}
+                Download{toolsSize && wantedTools.length ? ` (${mb(toolsSize)} MB)` : ''}
               </button>
               <button
                 type="button"
@@ -295,6 +333,50 @@
                 on:click={() => (toolsDeclined = true)}
               >
                 Not now
+              </button>
+            </span>
+          {/if}
+        </section>
+      {/if}
+
+      {#if socialOn}
+        <section class="social" aria-labelledby="first-run-social-title">
+          <SectionHead
+            id="first-run-social-title"
+            number={toolsShown ? 3 : 2}
+            title={$t$('social.friends')}
+          />
+          <p class="first-run-intro">{$t$('social.firstRunLead')}</p>
+          {#if $socialSession$ && !socialForm}
+            <p class="tools-note" role="status">
+              {$t$('social.firstRunSignedIn', { name: $socialSession$.me.username })}
+            </p>
+          {:else if socialForm}
+            <SocialAccountForm mode={socialForm} compact on:done={() => (socialForm = undefined)} />
+          {:else if socialDeclined}
+            <p class="tools-note">{$t$('social.firstRunLater')}</p>
+          {:else}
+            <span class="tools-actions">
+              <button
+                type="button"
+                class="app-button app-button-primary"
+                on:click={() => (socialForm = 'signup')}
+              >
+                {$t$('social.signUp')}
+              </button>
+              <button
+                type="button"
+                class="app-button app-button-quiet"
+                on:click={() => (socialForm = 'login')}
+              >
+                {$t$('social.logIn')}
+              </button>
+              <button
+                type="button"
+                class="app-button app-button-quiet"
+                on:click={() => (socialDeclined = true)}
+              >
+                {$t$('social.notNow')}
               </button>
             </span>
           {/if}
@@ -481,7 +563,8 @@
     margin-top: 1.75rem;
   }
 
-  .tools {
+  .tools,
+  .social {
     margin-top: 3rem;
   }
 

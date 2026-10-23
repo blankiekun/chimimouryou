@@ -1523,6 +1523,15 @@ export const en = {
     'Activity and requests are always friends-only. Profiles, finished books, activity and stats come in a later version; these choices are kept for them.',
   'settings.section.social-hub': 'Hub and data',
   'settings.section.social-hub.text': 'Where your social account lives, and deleting it.',
+  'social.serverAccount': 'Server account',
+  'social.firstRunLead':
+    'Friends see the books you are reading and how far along you are, nothing more unless you share it. Nothing is sent until you sign up or log in.',
+  'social.notNow': 'Not now',
+  'social.firstRunLater': 'You can sign up later from Friends on Home.',
+  'social.firstRunSignedIn': 'Signed in to Friends as @{name}.',
+  'firstRun.difficulty': 'Difficulty estimates',
+  'firstRun.difficultyHint':
+    'A difficulty and a word list for each book, with your known-word coverage and Read next.',
   'social.friends': 'Friends',
   'social.lead': 'What your friends are reading. They see only what you choose to share.',
   'social.emptyLead':
