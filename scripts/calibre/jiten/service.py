@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """On-demand difficulty estimates for the Calibre library, with Jiten's features and a
 model of our own, chimi-difficulty, trained on jiten.moe's scores (distil/). Word frequencies come from Jiten's
-Yomitan frequency list (FREQUENCY_DICTIONARY).
+Yomitan frequency list (FREQUENCY_DICTIONARY; the bundled copy in data/ unless an admin replaced it).
 
 Nothing runs until asked: the reader (or the CLI) requests difficulty for chosen books.
 
@@ -28,6 +28,7 @@ import hmac
 import json
 import os
 import re
+import shutil
 import sys
 import zipfile
 import threading
@@ -52,6 +53,9 @@ STATE_DIR = os.environ.get('JITEN_STATE_DIR', '/data/state/difficulty')
 # Rank-based Yomitan frequency dictionary: Jiten's list (jiten.moe/frequency-dictionaries).
 FREQUENCY_DICTIONARY = os.environ.get('JITEN_FREQUENCY_DICTIONARY',
                                       os.path.join(STATE_DIR, 'frequency-dictionary.zip'))
+# The same list shipped with the code (data/README.md): installed on start when none is.
+BUNDLED_FREQUENCY_DICTIONARY = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                            'data', 'jiten_freq_global.zip')
 RESULTS_PATH = os.path.join(STATE_DIR, 'difficulty.json')
 MAX_DICTIONARY_BYTES = 64 * 1024 * 1024
 # Sanity gate for uploads: Jiten's list has about 500,000 terms, and a new version keeps the readings
@@ -669,6 +673,15 @@ class DictionaryMismatch(ValueError):
         self.agreement = agreement
 
 
+def install_bundled_dictionary():
+    """Copies the bundled list to FREQUENCY_DICTIONARY when none is installed; an installed (uploaded)
+    one is kept. copy2 keeps the mtime, so reader_pack_key is the same on every install of one file."""
+    if os.path.exists(FREQUENCY_DICTIONARY) or not os.path.exists(BUNDLED_FREQUENCY_DICTIONARY):
+        return
+    shutil.copy2(BUNDLED_FREQUENCY_DICTIONARY, FREQUENCY_DICTIONARY + '.tmp')
+    os.replace(FREQUENCY_DICTIONARY + '.tmp', FREQUENCY_DICTIONARY)
+
+
 def install_dictionary(source, length: int, force: bool = False) -> int:
     """Checks an uploaded rank-based Yomitan frequency list and makes it the one in use
     (from the next job on); returns its number of terms."""
@@ -891,6 +904,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main(argv):
     os.makedirs(STATE_DIR, exist_ok=True)
+    install_bundled_dictionary()
     command = argv[1] if len(argv) > 1 else 'serve'
     if command == 'serve':
         ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()

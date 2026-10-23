@@ -570,6 +570,7 @@ export const ja: Record<MessageKey, string> = {
   'library.dictionaryMismatch':
     'このリストの読みは、導入済みリストの頻出語と {agreement} しか一致しません。このまま導入しますか？',
   'library.importDictionary': '頻度リストをインポート',
+  'library.replaceDictionary': '頻度リストを置き換え',
   'library.termDictionaries':
     '用語辞書（任意）：お手持ちの Yomitan 用語辞書を追加すると、頻度リストにない単語の読みを補完できます（算出済みのデータは再実行するまで変更されません）。',
   'library.addTermDictionary': '用語辞書を追加',

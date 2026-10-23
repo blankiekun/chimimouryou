@@ -137,6 +137,18 @@ class InstallDictionaryTest(unittest.TestCase):
         finally:
             frequency.MAX_MEMBER_BYTES = limit
 
+    def test_bundled_list_is_installed_only_when_none_is(self):
+        bundled_path = self.service.BUNDLED_FREQUENCY_DICTIONARY = dictionary()
+        self.service.install_bundled_dictionary()
+        with open(self.service.FREQUENCY_DICTIONARY, 'rb') as f, open(bundled_path, 'rb') as bundled:
+            self.assertEqual(f.read(), bundled.read())
+        with open(dictionary(entries=ENTRIES[:-1]), 'rb') as f:
+            uploaded = f.read()
+        self.install(uploaded)
+        self.service.install_bundled_dictionary()
+        with open(self.service.FREQUENCY_DICTIONARY, 'rb') as f:
+            self.assertEqual(f.read(), uploaded)
+
     def test_rejects_other_files_and_keeps_the_current_one(self):
         for data in (b'not a zip', open(dictionary('occurrence-based'), 'rb').read()):
             with self.assertRaises(ValueError):

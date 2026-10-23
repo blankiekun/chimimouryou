@@ -20,6 +20,10 @@ anything a reader or a server operator would notice.
 
 ### Changed
 
+- Jiten's word frequency list is bundled with the difficulty service (CC BY-SA 4.0), so estimates
+  work without downloading it: on start the service installs it when no list is installed, and
+  an installed or uploaded list is kept. Admins can still upload a newer one (Tools → Estimate
+  difficulty → "Replace frequency list").
 - Standalone: Settings → Audiobookshelf asks for the server's address and explains the CORS origin to add in Audiobookshelf.
 - Imported books are added to Home's My books.
 - Statistics, selecting text to bookmark, and the AI and Audiobookshelf plugins are on by default (browsers that already chose keep their choice).
@@ -755,8 +759,8 @@ First public release. Compared with upstream ッツ Ebook Reader:
   left, left to right, vertical strip).
 - **Difficulty estimates** with Jiten's features and a model distilled from
   jiten.moe's scores, computed on the server on demand, started from the admin panel's Tools tab or for books
-  selected in the library. The word frequency list (`jiten_freq_global.zip`)
-  can be imported there.
+  selected in the library. Jiten's word frequency list (`jiten_freq_global.zip`) is bundled
+  and can be replaced there.
 
 ### Accounts and sync
 

@@ -143,7 +143,7 @@ ${CORS_WITH_SECURITY_HEADERS}
     proxy_set_header X-Forwarded-Proto $forwarded_proto;
   }
 
-  # The frequency list upload (jiten_freq_global.zip, about 8 MB) changes every estimate: admins only.
+  # Replacing the frequency list (jiten_freq_global.zip, about 8 MB) changes every estimate: admins only.
   location = /calibre/difficulty/api/dictionary {
     auth_request /_account_admin;
     auth_request_set $account_admin $upstream_http_x_account_admin;
