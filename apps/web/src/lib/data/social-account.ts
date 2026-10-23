@@ -326,7 +326,8 @@ export function hubErrorKey(error: unknown): MessageKey {
     'username',
     'user',
     'name',
-    'network'
+    'network',
+    'paused'
   ];
 
   return `social.error.${known.includes(code) ? code : 'other'}` as MessageKey;
