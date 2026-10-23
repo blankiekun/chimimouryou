@@ -11,6 +11,7 @@
  * counted, so character counts (bookmarks, highlights) don't change.
  */
 
+import { serverFetch } from '$lib/data/server';
 import { lastValueFrom, Observable } from 'rxjs';
 import { difficultyApiUrl, loadCalibreCatalog } from '$lib/data/calibre';
 import { readerDb } from '$lib/data/reader-db';
@@ -47,13 +48,13 @@ async function requestReadings(
   etag?: string
 ): Promise<Omit<CachedReadings, 'title'> | 'unchanged' | 'queued' | undefined> {
   const url = `${difficultyApiUrl}readings/${id}`;
-  const response = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(5000) });
+  const response = await serverFetch(url, { method: 'POST', signal: AbortSignal.timeout(5000) });
   const status = response.ok ? (await response.json()).status : undefined;
 
   if (status === 'queued') return 'queued';
   if (status !== 'ready') return undefined;
 
-  const file = await fetch(url, {
+  const file = await serverFetch(url, {
     cache: 'no-store',
     headers: etag ? { 'If-None-Match': etag } : {},
     signal: AbortSignal.timeout(15000)

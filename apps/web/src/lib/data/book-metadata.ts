@@ -14,7 +14,7 @@
  */
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-import { standalone } from '$lib/data/env';
+import { serverFetch, serverless } from '$lib/data/server';
 
 export type MetadataKind = 'book' | 'manga' | 'vn';
 
@@ -91,9 +91,9 @@ export function parseBookMetadata(data: unknown): BookMetadataMap {
 }
 
 async function fetchBookMetadata() {
-  if (standalone) return {};
+  if (serverless) return {};
 
-  const response = await fetch(metadataUrl, { cache: 'no-store' });
+  const response = await serverFetch(metadataUrl, { cache: 'no-store' });
 
   if (response.status === 404) {
     return {};
@@ -130,7 +130,7 @@ export async function saveBookMetadata(title: string, entry: MetadataCandidate |
     delete map[title];
   }
 
-  const response = await fetch(metadataUrl, {
+  const response = await serverFetch(metadataUrl, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(map)
@@ -179,7 +179,7 @@ export function cleanDescription(value: string) {
 }
 
 async function postJson(url: string, body: object) {
-  const response = await fetch(url, {
+  const response = await serverFetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify(body)

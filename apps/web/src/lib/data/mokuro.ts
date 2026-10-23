@@ -11,6 +11,7 @@
  * Not part of upstream.
  */
 
+import { serverFetch } from '$lib/data/server';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 
 export interface MokuroBlock {
@@ -54,7 +55,7 @@ export const mangaText$ = writableStringLocalStorageSubject<MangaText>()('mangaT
 export const mokuroApiUrl = '/calibre/mokuro/api/';
 
 export async function loadMokuro(calibreId: number): Promise<MokuroText | undefined> {
-  const response = await fetch(`/calibre/mokuro/${calibreId}.json`, { cache: 'no-cache' });
+  const response = await serverFetch(`/calibre/mokuro/${calibreId}.json`, { cache: 'no-cache' });
 
   return response.ok ? response.json() : undefined;
 }
@@ -90,7 +91,7 @@ export function blockStyle(block: MokuroBlock, page: MokuroPage, scale: number) 
 }
 
 async function api(action: string, init: RequestInit) {
-  const response = await fetch(`${mokuroApiUrl}${action}`, { cache: 'no-store', ...init });
+  const response = await serverFetch(`${mokuroApiUrl}${action}`, { cache: 'no-store', ...init });
   const body = await response.json().catch(() => ({}));
 
   if (!response.ok) {

@@ -3,6 +3,7 @@
   import { onDestroy } from 'svelte';
   import Fa from 'svelte-fa';
   import { coverThumbUrl } from '$lib/data/calibre';
+  import { needsServerImage, serverImage } from '$lib/data/server';
 
   export let imagePath: string | Blob;
   export let title: string;
@@ -65,6 +66,8 @@
 
   $: imageLoadComplete = imgEl?.complete && !imageLoading;
   $: alt = `${title}_cover`;
+  // A connected server's covers load as blobs (serverImage): <img> can't send its token.
+  $: src = imagePath ? mapImagePath(imagePath) : '';
 </script>
 
 <div
@@ -85,7 +88,8 @@
       referrerpolicy="no-referrer"
       class="book-cover relative h-full w-full object-cover transition delay-150 duration-700 ease-out"
       class:blur={!imageLoadComplete}
-      src={mapImagePath(imagePath)}
+      src={needsServerImage(src) ? undefined : src}
+      use:serverImage={src}
       {alt}
       bind:this={imgEl}
       on:load={() => (imageLoading = false)}

@@ -345,6 +345,8 @@ export const ja: Record<MessageKey, string> = {
   'settings.section.sync-status.text': '最後の同期とエラー。',
   'settings.section.sync-backup': 'バックアップ',
   'settings.section.sync-backup.text': '進捗、統計、読書目標を保存します。書籍は含まれません。',
+  'settings.section.sync-server': 'サーバー',
+  'settings.section.sync-server.text': 'chimimouryouサーバーに接続し、そのライブラリを読みます。',
   'settings.section.sync-selfhost': 'セルフホスト',
   'settings.section.sync-selfhost.text': 'chimimouryouサーバーでできること。',
   'settings.section.data-storage': 'ローカルストレージ',

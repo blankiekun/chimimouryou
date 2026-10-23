@@ -17,7 +17,7 @@ import { logger } from '$lib/data/logger';
 import { database } from '$lib/data/store';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
 import { MergeMode } from '$lib/data/merge-mode';
-import { standalone } from '$lib/data/env';
+import { serverless } from '$lib/data/server';
 
 let pending: string[] | undefined;
 let running: Promise<void> | undefined;
@@ -40,7 +40,7 @@ export function homeOfflineTitles(
  * time in the background. A new call while it runs replaces the titles still to check.
  */
 export function keepBooksOffline(window: Window, titles: string[]) {
-  if (standalone) return Promise.resolve();
+  if (serverless) return Promise.resolve();
 
   pending = titles;
   running ??= (async () => {

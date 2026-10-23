@@ -12,7 +12,7 @@
  */
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-import { standalone } from '$lib/data/env';
+import { serverFetch, serverless } from '$lib/data/server';
 
 export interface SeriesOverride {
   series: string;
@@ -49,9 +49,9 @@ export function parseSeriesOverrides(data: unknown): SeriesOverrides {
 }
 
 async function fetchSeriesOverrides() {
-  if (standalone) return {};
+  if (serverless) return {};
 
-  const response = await fetch(overridesUrl, { cache: 'no-store' });
+  const response = await serverFetch(overridesUrl, { cache: 'no-store' });
 
   if (response.status === 404) {
     return {};
@@ -87,7 +87,7 @@ export async function saveSeriesOverrides(changes: Record<string, string>) {
     overrides[title] = { series: series.trim().slice(0, maxSeriesLength), modified };
   });
 
-  const response = await fetch(overridesUrl, {
+  const response = await serverFetch(overridesUrl, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(overrides)

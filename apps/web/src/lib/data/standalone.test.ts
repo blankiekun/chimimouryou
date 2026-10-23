@@ -55,4 +55,50 @@ describe('standalone edition', () => {
       getStorageHandler(window, StorageKey.BROWSER)
     );
   });
+
+  describe('connected to a server', () => {
+    beforeEach(() => {
+      window.localStorage.setItem('serverBase', 'https://books.example');
+      window.localStorage.setItem('serverToken', 'secret-token');
+      fetchMock.mockResolvedValue(new Response(JSON.stringify({ books: [] })));
+    });
+
+    it('offers the Calibre source and reads the catalog with the token, without cookies', async () => {
+      const view = await import('$lib/data/storage/storage-view');
+      const calibre = await import('$lib/data/calibre');
+
+      expect(view.calibreSourceAvailable).toBe(true);
+      await calibre.loadCalibreCatalog();
+
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe('https://books.example/calibre/catalog.json');
+      expect(new Headers(init.headers).get('Authorization')).toBe('Bearer secret-token');
+      expect(init.credentials).toBe('omit');
+      expect(url).not.toContain('secret-token');
+    });
+
+    it('leaves other URLs alone', async () => {
+      const { serverUrl } = await import('$lib/data/server');
+
+      expect(serverUrl('/calibre/sync/a')).toBe('https://books.example/calibre/sync/a');
+      expect(serverUrl('/jiten/search')).toBe('/jiten/search');
+      expect(serverUrl('https://api.example/calibre/x')).toBe('https://api.example/calibre/x');
+    });
+
+    it('is ignored by the self-hosted build', async () => {
+      vi.stubEnv('VITE_EDITION', '');
+      const { serverConnected, serverUrl } = await import('$lib/data/server');
+
+      expect(serverConnected).toBe(false);
+      expect(serverUrl('/calibre/catalog.json')).toBe('/calibre/catalog.json');
+    });
+  });
+
+  it('accepts only https server addresses', async () => {
+    const { serverOrigin } = await import('$lib/data/server');
+
+    expect(serverOrigin('books.example/')).toBe('https://books.example');
+    expect(serverOrigin(' https://books.example:8443/x ')).toBe('https://books.example:8443');
+    expect(() => serverOrigin('http://192.0.2.1')).toThrow(/HTTPS/);
+  });
 });

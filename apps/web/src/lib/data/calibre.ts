@@ -9,7 +9,7 @@
  * (see scripts/calibre/). Not part of upstream.
  */
 
-import { standalone } from '$lib/data/env';
+import { serverConnected, serverFetch, serverless } from '$lib/data/server';
 
 export interface CalibreBook {
   id: number;
@@ -70,10 +70,10 @@ export function loadCalibreCatalog(refresh = false) {
     catalogCache = undefined;
   }
 
-  // The standalone edition has no server: an empty catalog, never a request.
-  if (standalone) return Promise.resolve([] as CalibreBook[]);
+  // The standalone without a server: an empty catalog, never a request.
+  if (serverless) return Promise.resolve([] as CalibreBook[]);
 
-  catalogCache ??= fetch(catalogUrl, { cache: 'no-cache' })
+  catalogCache ??= serverFetch(catalogUrl, { cache: 'no-cache' })
     .then((response) => {
       if (!response.ok) {
         throw Object.assign(new Error(`Calibre catalog unavailable (HTTP ${response.status})`), {
@@ -83,7 +83,11 @@ export function loadCalibreCatalog(refresh = false) {
 
       return response.json();
     })
-    .then((catalog: { books: CalibreBook[] }) => catalog.books)
+    // shortcut: the VN player loads game folders by URL, which can't carry the token; list them
+    // once player.js gets blob URLs or a fetch through its message channel.
+    .then(({ books }: { books: CalibreBook[] }) =>
+      serverConnected ? books.filter((book) => book.format !== 'VN') : books
+    )
     .catch((error) => {
       catalogCache = undefined;
       throw error;
@@ -93,9 +97,9 @@ export function loadCalibreCatalog(refresh = false) {
 }
 
 export async function loadCalibreDifficulty(): Promise<Record<string, CalibreDifficulty>> {
-  if (standalone) return {};
+  if (serverless) return {};
 
-  const response = await fetch(difficultyUrl, { cache: 'no-cache' });
+  const response = await serverFetch(difficultyUrl, { cache: 'no-cache' });
 
   if (!response.ok) {
     return {};
@@ -134,7 +138,7 @@ export function calibreBookFileName(book: CalibreBook) {
 }
 
 export async function downloadCalibreBook(book: CalibreBook) {
-  const response = await fetch(calibreBookUrl(book));
+  const response = await serverFetch(calibreBookUrl(book));
 
   if (!response.ok) {
     throw new Error(`${book.title}: download failed (HTTP ${response.status})`);

@@ -8,7 +8,7 @@
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import PointBox from '$lib/components/point-box.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
-  import { storageRootName } from '$lib/data/env';
+  import { pagePath, storageRootName } from '$lib/data/env';
   import {
     chooseStorage,
     driveAvailable,
@@ -194,6 +194,11 @@
       >
         Continue
       </button>
+      {#if $isOnline$}
+        <a class="first-run-server" href="{pagePath}/settings?section=sync#sync-server">
+          I have a chimimouryou server
+        </a>
+      {/if}
     </main>
 
     {#if !$yomitanSeen$}
@@ -360,6 +365,19 @@
   .first-run-continue {
     display: flex;
     margin-top: 1.75rem;
+  }
+
+  .first-run-server {
+    display: inline-block;
+    margin-top: 1.25rem;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  .first-run-server:hover {
+    color: var(--font-color);
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
   }
 
   .lookups {

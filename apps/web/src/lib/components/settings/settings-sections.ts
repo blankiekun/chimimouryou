@@ -217,6 +217,11 @@ export const settingsAreas: SettingsArea[] = [
             description: 'settings.section.sync-backup.text'
           },
           {
+            id: 'sync-server',
+            label: 'settings.section.sync-server',
+            description: 'settings.section.sync-server.text'
+          },
+          {
             id: 'sync-selfhost',
             label: 'settings.section.sync-selfhost',
             description: 'settings.section.sync-selfhost.text'

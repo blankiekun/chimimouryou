@@ -28,6 +28,7 @@ import {
   type CalibreBook
 } from '$lib/data/calibre';
 import { ApiStorageHandler, type RequestOptions } from '$lib/data/storage/handler/api-handler';
+import { serverConnected, serverFetch, serverHeaders, serverUrl } from '$lib/data/server';
 import {
   BaseStorageHandler,
   type ExternalFile,
@@ -61,14 +62,21 @@ interface DirectoryEntry {
 }
 
 const syncBaseUrl = '/calibre/sync/';
+/**
+ * The server's sync root, whatever this build's VITE_STORAGE_ROOT_NAME: the standalone names its
+ * Drive and folder root differently, and the server's paths (difficulty readings) expect this one.
+ */
+const serverRootName = 'ttu-reader-data';
+/** Where readers sign in: Settings → Sync in the standalone, Settings → General otherwise. */
+const signInPlace = serverConnected ? 'Settings → Sync → Server' : 'Settings → General → Account';
 
 /** 401 from the sync folder: an expired session, or a signed-out reader outside the trusted networks. */
 function unauthorizedError() {
   return Object.assign(
     new Error(
       currentAccount()
-        ? 'Your sign-in has expired. Sign in again in Settings → General → Account.'
-        : 'Using the library from this network needs an account. Sign in in Settings → General → Account.'
+        ? `Your sign-in has expired. Sign in again in ${signInPlace}.`
+        : `Using the library from this network needs an account. Sign in in ${signInPlace}.`
     ),
     { status: 401 }
   );
@@ -94,7 +102,7 @@ export class CalibreStorageHandler extends ApiStorageHandler {
     const { folderName } = CalibreStorageHandler;
 
     return `${currentAccount() ? accountSyncUrl : syncBaseUrl}${folderName(
-      BaseStorageHandler.rootName
+      serverRootName
     )}/${folderName(title)}/${encodeURIComponent(fileName)}`;
   }
 
@@ -106,7 +114,7 @@ export class CalibreStorageHandler extends ApiStorageHandler {
    */
   static async readSyncFile(name: string, title?: string) {
     const url = await CalibreStorageHandler.syncUrl(name, title);
-    const response = await fetch(url, { cache: 'no-store' });
+    const response = await serverFetch(url, { cache: 'no-store' });
 
     if (response.status === 404) return undefined;
 
@@ -122,7 +130,7 @@ export class CalibreStorageHandler extends ApiStorageHandler {
     text: string,
     { title, keepalive }: SyncFileOptions = {}
   ) {
-    const response = await fetch(await CalibreStorageHandler.syncUrl(name, title), {
+    const response = await serverFetch(await CalibreStorageHandler.syncUrl(name, title), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: text,
@@ -346,7 +354,7 @@ export class CalibreStorageHandler extends ApiStorageHandler {
 
     if (name === BaseStorageHandler.rootName) {
       if (!this.rootId) {
-        const rootId = `${syncBaseUrl}${CalibreStorageHandler.folderName(name)}/`;
+        const rootId = `${syncBaseUrl}${CalibreStorageHandler.folderName(serverRootName)}/`;
 
         if (!(await this.listDirectory(rootId))) {
           await this.davRequest(rootId, { method: 'MKCOL' }, [405]);
@@ -433,7 +441,8 @@ export class CalibreStorageHandler extends ApiStorageHandler {
       await this.davRequest(externalFile.id, {
         method: 'MOVE',
         headers: {
-          Destination: new URL(id, this.window.location.href).href,
+          // A path: nginx refuses an https:// Destination when TLS ends before it (a proxy).
+          Destination: id,
           Overwrite: 'T'
         }
       });
@@ -458,7 +467,12 @@ export class CalibreStorageHandler extends ApiStorageHandler {
     type: XMLHttpRequestResponseType = 'json',
     progressBase = 1
   ) {
-    return super.request(url, { ...options, skipAuth: true }, type, progressBase);
+    return super.request(
+      serverUrl(url),
+      { ...options, headers: { ...options.headers, ...serverHeaders(url) }, skipAuth: true },
+      type,
+      progressBase
+    );
   }
 
   private async processCalibreBook() {
@@ -686,7 +700,7 @@ export class CalibreStorageHandler extends ApiStorageHandler {
 
   /** JSON directory listing from nginx autoindex, or undefined if the directory is missing. */
   private async listDirectory(url: string): Promise<DirectoryEntry[] | undefined> {
-    const response = await fetch(url, { cache: 'no-store' });
+    const response = await serverFetch(url, { cache: 'no-store' });
 
     if (response.status === 404) {
       return undefined;
@@ -704,7 +718,7 @@ export class CalibreStorageHandler extends ApiStorageHandler {
   }
 
   private async davRequest(url: string, init: RequestInit, allowedStatuses: number[] = []) {
-    const response = await fetch(url, init);
+    const response = await serverFetch(url, init);
 
     if (response.status === 401) {
       throw unauthorizedError();
