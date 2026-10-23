@@ -89,7 +89,7 @@
           : 'Google sign-in';
 </script>
 
-<div class="app-page-shell">
+<div class="app-page-shell first-run-page">
   <AppHeader active={undefined} bare />
 
   <div class="first-run">
@@ -219,6 +219,15 @@
 </div>
 
 <style>
+  /* Covers the library page under it (routes/manage) until a place is chosen. */
+  .first-run-page {
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    overflow-y: auto;
+    background: var(--background-color);
+  }
+
   .first-run {
     display: grid;
     max-width: 80rem;

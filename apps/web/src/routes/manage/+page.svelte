@@ -1242,447 +1242,448 @@
 
 {$replicator$ ?? ''}
 
+<!-- The standalone's first run covers the library until a place for books is chosen. -->
 {#if browser && needsFirstRun(standalone, $storageChosen$)}
   <FirstRun />
-{:else}
-  <div class="app-page-shell">
-    <BookManagerHeader
-      currentBookId={$currentBookId$}
-      disabled={!!replicationToProgress}
-      on:filesChange={(ev) => onFilesChange(ev.detail)}
-      on:importBackup={(ev) => onImportBackup(ev.detail)}
-    />
+{/if}
 
-    <div class="library-layout" class:library-layout-home={isHome}>
-      {#if !isHome}
-        <LibrarySidebar
-          bookCards={$bookCards$ ?? []}
-          loading={isLoading}
-          bind:activeFilter
-          bind:searchTerm
-        />
+<div class="app-page-shell">
+  <BookManagerHeader
+    currentBookId={$currentBookId$}
+    disabled={!!replicationToProgress}
+    on:filesChange={(ev) => onFilesChange(ev.detail)}
+    on:importBackup={(ev) => onImportBackup(ev.detail)}
+  />
+
+  <div class="library-layout" class:library-layout-home={isHome}>
+    {#if !isHome}
+      <LibrarySidebar
+        bookCards={$bookCards$ ?? []}
+        loading={isLoading}
+        bind:activeFilter
+        bind:searchTerm
+      />
+    {/if}
+
+    <main
+      class="library-main"
+      aria-label="Book library"
+      on:dragenter={(ev) => ev.preventDefault()}
+      on:dragover={(ev) => ev.preventDefault()}
+      on:dragend={(ev) => ev.preventDefault()}
+      on:drop={(ev) => ev.preventDefault()}
+      on:drop={(ev) => getDropEventFiles(ev).then(onFilesChange)}
+    >
+      <!-- Visual novels aren't grouped in series -->
+      {#if !isHome && activeSeries && !showSeriesGrid && visibleBookCards.length}
+        <div class="series-header">
+          <div class="min-w-0">
+            <h1 class="series-header-title" lang="ja">{activeSeries}</h1>
+            <p class="series-header-meta" lang="ja">
+              {[
+                visibleBookCards[0].authors !== 'Unknown' ? visibleBookCards[0].authors : '',
+                $t$('store.seriesMeta', {
+                  count: visibleBookCards.length,
+                  started: visibleBookCards.filter((card) => card.progress > 0).length,
+                  missing: seriesMissing.length
+                })
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+          </div>
+          <button
+            type="button"
+            class="app-button app-button-primary"
+            disabled={!seriesMissing.length}
+            on:click={() => addToHome(seriesMissing.map((card) => card.title))}
+          >
+            {seriesMissing.length
+              ? $t$('store.addAll', { count: seriesMissing.length })
+              : $t$('store.allOnHome')}
+          </button>
+        </div>
       {/if}
-
-      <main
-        class="library-main"
-        aria-label="Book library"
-        on:dragenter={(ev) => ev.preventDefault()}
-        on:dragover={(ev) => ev.preventDefault()}
-        on:dragend={(ev) => ev.preventDefault()}
-        on:drop={(ev) => ev.preventDefault()}
-        on:drop={(ev) => getDropEventFiles(ev).then(onFilesChange)}
-      >
-        <!-- Visual novels aren't grouped in series -->
-        {#if !isHome && activeSeries && !showSeriesGrid && visibleBookCards.length}
-          <div class="series-header">
-            <div class="min-w-0">
-              <h1 class="series-header-title" lang="ja">{activeSeries}</h1>
-              <p class="series-header-meta" lang="ja">
-                {[
-                  visibleBookCards[0].authors !== 'Unknown' ? visibleBookCards[0].authors : '',
-                  $t$('store.seriesMeta', {
-                    count: visibleBookCards.length,
-                    started: visibleBookCards.filter((card) => card.progress > 0).length,
-                    missing: seriesMissing.length
-                  })
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </p>
+      {#if !isHome}
+        <div class="store-bar">
+          {#if activeFilter !== 'vn'}
+            <div class="app-segmented" role="radiogroup" aria-label={$t$('store.view')}>
+              <button
+                type="button"
+                role="radio"
+                class="app-segment"
+                class:app-segment-selected={!showSeriesGrid}
+                aria-checked={!showSeriesGrid}
+                on:click={() => setStoreView('books')}
+              >
+                {$t$('store.books')}
+              </button>
+              <button
+                type="button"
+                role="radio"
+                class="app-segment"
+                class:app-segment-selected={showSeriesGrid}
+                aria-checked={showSeriesGrid}
+                on:click={() => setStoreView('series')}
+              >
+                {$t$('store.series')}
+              </button>
             </div>
-            <button
-              type="button"
-              class="app-button app-button-primary"
-              disabled={!seriesMissing.length}
-              on:click={() => addToHome(seriesMissing.map((card) => card.title))}
-            >
-              {seriesMissing.length
-                ? $t$('store.addAll', { count: seriesMissing.length })
-                : $t$('store.allOnHome')}
-            </button>
-          </div>
-        {/if}
-        {#if !isHome}
-          <div class="store-bar">
-            {#if activeFilter !== 'vn'}
-              <div class="app-segmented" role="radiogroup" aria-label={$t$('store.view')}>
-                <button
-                  type="button"
-                  role="radio"
-                  class="app-segment"
-                  class:app-segment-selected={!showSeriesGrid}
-                  aria-checked={!showSeriesGrid}
-                  on:click={() => setStoreView('books')}
-                >
-                  {$t$('store.books')}
-                </button>
-                <button
-                  type="button"
-                  role="radio"
-                  class="app-segment"
-                  class:app-segment-selected={showSeriesGrid}
-                  aria-checked={showSeriesGrid}
-                  on:click={() => setStoreView('series')}
-                >
-                  {$t$('store.series')}
-                </button>
-              </div>
-            {/if}
-            {#if !isLoading && $bookCards$?.length}
-              <span class="store-count">
-                {$t$(visibleBookCards.length === 1 ? 'store.titlesOne' : 'store.titles', {
-                  count: visibleBookCards.length.toLocaleString('en-US')
-                })}
-              </span>
-            {/if}
-            {#if !showSeriesGrid}
-              <span class="store-sort">
-                <button
-                  type="button"
-                  class="app-button app-button-quiet"
-                  disabled={!$bookCards$?.length}
-                  on:click={() => (selectMode = true)}
-                >
-                  {$t$('library.select')}
-                </button>
-                <LibrarySortMenu />
-              </span>
-            {/if}
-          </div>
-        {/if}
-        {#if replicationToProgress}
-          <div class="library-toolbar" role="status">
-            <button
-              type="button"
-              class="library-toolbar-button"
-              title={cancelTooltip}
-              aria-label="Cancel operation"
-              on:click={() => {
-                if (!cancelSignal.aborted) {
-                  cancelToken.abort();
-                  replicationProgressRemaining = 'Canceling ...';
-                }
-              }}
-            >
-              <Fa icon={faCircleXmark} />
-            </button>
-            <progress
-              class="library-progress"
-              value={replicationProgress}
-              max={replicationToProgress}
-            />
-            <span class="shrink-0 text-sm font-bold tabular-nums">
-              {replicationProgressRemaining}
+          {/if}
+          {#if !isLoading && $bookCards$?.length}
+            <span class="store-count">
+              {$t$(visibleBookCards.length === 1 ? 'store.titlesOne' : 'store.titles', {
+                count: visibleBookCards.length.toLocaleString('en-US')
+              })}
             </span>
-          </div>
-        {:else if selectMode}
-          <div class="library-select-bar" role="toolbar" aria-label={$t$('library.selectBooks')}>
-            <span class="library-select-count">
-              {$t$('library.selected', { count: selectedBookIds.size })}
-            </span>
-            <!-- Home's shelves aren't the list Select all works on -->
-            {#if !isHome}
+          {/if}
+          {#if !showSeriesGrid}
+            <span class="store-sort">
               <button
                 type="button"
                 class="app-button app-button-quiet"
-                title={$t$('library.selectAllHint')}
-                on:click={onSelectAllBooks}
+                disabled={!$bookCards$?.length}
+                on:click={() => (selectMode = true)}
               >
-                {$t$('library.selectAll')}
+                {$t$('library.select')}
+              </button>
+              <LibrarySortMenu />
+            </span>
+          {/if}
+        </div>
+      {/if}
+      {#if replicationToProgress}
+        <div class="library-toolbar" role="status">
+          <button
+            type="button"
+            class="library-toolbar-button"
+            title={cancelTooltip}
+            aria-label="Cancel operation"
+            on:click={() => {
+              if (!cancelSignal.aborted) {
+                cancelToken.abort();
+                replicationProgressRemaining = 'Canceling ...';
+              }
+            }}
+          >
+            <Fa icon={faCircleXmark} />
+          </button>
+          <progress
+            class="library-progress"
+            value={replicationProgress}
+            max={replicationToProgress}
+          />
+          <span class="shrink-0 text-sm font-bold tabular-nums">
+            {replicationProgressRemaining}
+          </span>
+        </div>
+      {:else if selectMode}
+        <div class="library-select-bar" role="toolbar" aria-label={$t$('library.selectBooks')}>
+          <span class="library-select-count">
+            {$t$('library.selected', { count: selectedBookIds.size })}
+          </span>
+          <!-- Home's shelves aren't the list Select all works on -->
+          {#if !isHome}
+            <button
+              type="button"
+              class="app-button app-button-quiet"
+              title={$t$('library.selectAllHint')}
+              on:click={onSelectAllBooks}
+            >
+              {$t$('library.selectAll')}
+            </button>
+          {/if}
+          <button
+            type="button"
+            class="app-button app-button-quiet"
+            title={$t$('library.stopSelecting')}
+            on:click={() => (selectMode = false)}
+          >
+            {$t$('library.cancel')}
+          </button>
+          <span class="library-select-actions">
+            <button
+              type="button"
+              class="library-toolbar-button library-toolbar-button-primary"
+              title={$t$('home.addSelected')}
+              disabled={!selectedBookIds.size}
+              on:click={addSelectedToHome}
+            >
+              <Fa icon={faPlus} />
+              <span class="library-toolbar-label">{$t$('home.add')}</span>
+            </button>
+            <button
+              type="button"
+              class="library-toolbar-button"
+              title={$t$('library.readSelected')}
+              disabled={selectedBookIds.size !== 1}
+              on:click={readSelected}
+            >
+              <Fa icon={faBookOpen} />
+              <span class="library-toolbar-label">{$t$('book.read')}</span>
+            </button>
+            {#if $storageSource$ === StorageKey.CALIBRE && hasPermission($account$, 'series')}
+              <button
+                type="button"
+                class="library-toolbar-button"
+                title={$t$('library.makeSeriesHint')}
+                disabled={selectedBookIds.size !== 1}
+                on:click={onMakeSeries}
+              >
+                <Fa icon={faLayerGroup} />
+                <span class="library-toolbar-label">{$t$('library.makeSeries')}</span>
+              </button>
+            {/if}
+            {#if $storageSource$ !== StorageKey.FS}
+              <button
+                type="button"
+                class="library-toolbar-button"
+                title={$t$('library.clearProgressHint')}
+                disabled={!selectedBookIds.size}
+                on:click={onClearProgress}
+              >
+                <Fa icon={faRotateLeft} />
+                <span class="library-toolbar-label">{$t$('library.clearProgress')}</span>
               </button>
             {/if}
             <button
               type="button"
-              class="app-button app-button-quiet"
-              title={$t$('library.stopSelecting')}
-              on:click={() => (selectMode = false)}
+              class="library-toolbar-button"
+              title={$t$('library.exportHint')}
+              disabled={!selectedBookIds.size}
+              on:click={onReplicateData}
             >
-              {$t$('library.cancel')}
+              <Fa icon={faCloudArrowUp} />
+              <span class="library-toolbar-label">{$t$('library.export')}</span>
             </button>
-            <span class="library-select-actions">
+            {#if $storageSource$ === StorageKey.BROWSER}
               <button
                 type="button"
-                class="library-toolbar-button library-toolbar-button-primary"
-                title={$t$('home.addSelected')}
+                class="library-toolbar-button"
+                title={$t$('library.statisticsHint')}
+                aria-label={$t$('library.statisticsHint')}
                 disabled={!selectedBookIds.size}
-                on:click={addSelectedToHome}
+                on:click={onSelectionToStatistics}
               >
-                <Fa icon={faPlus} />
-                <span class="library-toolbar-label">{$t$('home.add')}</span>
+                <Fa icon={faChartLine} />
               </button>
               <button
                 type="button"
                 class="library-toolbar-button"
-                title={$t$('library.readSelected')}
-                disabled={selectedBookIds.size !== 1}
-                on:click={readSelected}
+                title={$t$('library.deleteStatisticsHint')}
+                aria-label={$t$('library.deleteStatisticsHint')}
+                disabled={!selectedBookIds.size}
+                on:click={onDeleteStatistics}
               >
-                <Fa icon={faBookOpen} />
-                <span class="library-toolbar-label">{$t$('book.read')}</span>
+                <Fa icon={faCalendarXmark} />
               </button>
-              {#if $storageSource$ === StorageKey.CALIBRE && hasPermission($account$, 'series')}
-                <button
-                  type="button"
-                  class="library-toolbar-button"
-                  title={$t$('library.makeSeriesHint')}
-                  disabled={selectedBookIds.size !== 1}
-                  on:click={onMakeSeries}
-                >
-                  <Fa icon={faLayerGroup} />
-                  <span class="library-toolbar-label">{$t$('library.makeSeries')}</span>
-                </button>
-              {/if}
-              {#if $storageSource$ !== StorageKey.FS}
-                <button
-                  type="button"
-                  class="library-toolbar-button"
-                  title={$t$('library.clearProgressHint')}
-                  disabled={!selectedBookIds.size}
-                  on:click={onClearProgress}
-                >
-                  <Fa icon={faRotateLeft} />
-                  <span class="library-toolbar-label">{$t$('library.clearProgress')}</span>
-                </button>
-              {/if}
+            {/if}
+            {#if $storageSource$ === StorageKey.CALIBRE}
               <button
                 type="button"
                 class="library-toolbar-button"
-                title={$t$('library.exportHint')}
+                title={$t$('library.difficultyHint')}
+                aria-label={$t$('library.difficultyHint')}
                 disabled={!selectedBookIds.size}
-                on:click={onReplicateData}
+                on:click={onDifficultyClick}
               >
-                <Fa icon={faCloudArrowUp} />
-                <span class="library-toolbar-label">{$t$('library.export')}</span>
+                <Fa icon={faGaugeHigh} />
               </button>
-              {#if $storageSource$ === StorageKey.BROWSER}
-                <button
-                  type="button"
-                  class="library-toolbar-button"
-                  title={$t$('library.statisticsHint')}
-                  aria-label={$t$('library.statisticsHint')}
-                  disabled={!selectedBookIds.size}
-                  on:click={onSelectionToStatistics}
-                >
-                  <Fa icon={faChartLine} />
-                </button>
-                <button
-                  type="button"
-                  class="library-toolbar-button"
-                  title={$t$('library.deleteStatisticsHint')}
-                  aria-label={$t$('library.deleteStatisticsHint')}
-                  disabled={!selectedBookIds.size}
-                  on:click={onDeleteStatistics}
-                >
-                  <Fa icon={faCalendarXmark} />
-                </button>
-              {/if}
-              {#if $storageSource$ === StorageKey.CALIBRE}
-                <button
-                  type="button"
-                  class="library-toolbar-button"
-                  title={$t$('library.difficultyHint')}
-                  aria-label={$t$('library.difficultyHint')}
-                  disabled={!selectedBookIds.size}
-                  on:click={onDifficultyClick}
-                >
-                  <Fa icon={faGaugeHigh} />
-                </button>
-              {/if}
-              <button
-                type="button"
-                class="library-toolbar-button library-toolbar-button-danger"
-                title={$t$('library.deleteSelected')}
-                disabled={!selectedBookIds.size}
-                on:click={() => removeBooks(Array.from(selectedBookIds))}
-              >
-                <Fa icon={faTrash} />
-                <span class="library-toolbar-label">{$t$('library.delete')}</span>
-              </button>
-            </span>
-          </div>
-        {/if}
-
-        {#if $libraryOffline$ && $storageSource$ === StorageKey.CALIBRE && !isLoading}
-          <div class="library-banner" role="status">
-            <p>{$t$('home.offline')}</p>
-            <button type="button" class="app-button" on:click={retryLibrary}
-              >{$t$('home.retry')}</button
+            {/if}
+            <button
+              type="button"
+              class="library-toolbar-button library-toolbar-button-danger"
+              title={$t$('library.deleteSelected')}
+              disabled={!selectedBookIds.size}
+              on:click={() => removeBooks(Array.from(selectedBookIds))}
             >
-          </div>
-        {/if}
-        {#if isLoading}
-          <LibrarySkeleton mode={$libraryDisplayMode$} />
-        {:else if $bookCards$.length && isHome}
-          <div class="home">
-            <LearnerDashboard
-              books={$storageSource$ === StorageKey.CALIBRE ? $bookCards$ : undefined}
-            />
-            {#if firstRun}
-              <section class="home-start" aria-label={$t$('home.startReading')}>
-                <SectionHead number={1} title={$t$('home.startReading')} />
-                <p class="library-empty-text">
-                  {$t$(standalone ? 'home.startTextLibrary' : 'home.startText')}
-                </p>
-                <span class="home-start-actions">
-                  <button
-                    type="button"
-                    class="app-button app-button-primary"
-                    on:click={() => ($libraryTab$ = 'store')}
-                  >
-                    {$t$(standalone ? 'home.openLibrary' : 'home.openStore')}
-                  </button>
-                  <label class="app-button">
-                    <input
-                      type="file"
-                      accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,.cbz,.zip"
-                      multiple
-                      hidden
-                      use:inputFile={onFilesChange}
-                    />
-                    {$t$('home.importBook')}
-                  </label>
-                </span>
-              </section>
-            {/if}
-            <div class="home-pair">
-              <ContinueReadingShelf
-                books={continueCards}
-                number={1}
-                heading={$t$('home.continueReading')}
-                currentBookId={$currentBookId$}
-                selectedBookIds={selectMode ? selectedBookIds : undefined}
-                on:bookClick={(ev) => onCoverClick(ev.detail.id)}
-                on:bookRead={(ev) => onBookClick(ev.detail.id)}
-                on:bookSelect={(ev) => selectBook(ev.detail.id)}
-                removeTitle={$t$('home.remove')}
-                on:remove={(ev) => removeFromHome(ev.detail.title)}
-              />
-              <ReadNextShelf
-                books={readNextCards}
-                number={continueCards.length ? 2 : 1}
-                coverage={$knownCoverage$}
-                reason={readNextReason}
-                currentBookId={$currentBookId$}
-                selectedBookIds={selectMode ? selectedBookIds : undefined}
-                on:bookClick={(ev) => onCoverClick(ev.detail.id)}
-                on:bookRead={(ev) => onBookClick(ev.detail.id)}
-                on:bookSelect={(ev) => selectBook(ev.detail.id)}
-              />
-            </div>
-            {#if homeCards.length}
-              <ContinueReadingShelf
-                books={homeCards}
-                number={myBooksNumber}
-                heading={$t$('home.myBooks')}
-                removeTitle={$t$('home.remove')}
-                currentBookId={$currentBookId$}
-                selectedBookIds={selectMode ? selectedBookIds : undefined}
-                on:bookClick={(ev) => onCoverClick(ev.detail.id)}
-                on:bookSelect={(ev) => selectBook(ev.detail.id)}
-                on:remove={(ev) => removeFromHome(ev.detail.title)}
-              />
-            {:else}
-              <section class="home-start" aria-label={$t$('home.myBooks')}>
-                <SectionHead number={myBooksNumber} title={$t$('home.myBooks')} count={0} />
-                <p class="library-empty-text">
-                  {$t$(standalone ? 'home.myBooksEmptyLibrary' : 'home.myBooksEmpty')}
-                </p>
-              </section>
-            {/if}
-            {#if standalone}
-              <InstallHint />
-            {/if}
-          </div>
-        {:else if $bookCards$.length && showSeriesGrid}
-          <SeriesGrid
-            groups={seriesGroups(visibleBookCards)}
-            on:showSeries={(ev) => showSeries(ev.detail)}
+              <Fa icon={faTrash} />
+              <span class="library-toolbar-label">{$t$('library.delete')}</span>
+            </button>
+          </span>
+        </div>
+      {/if}
+
+      {#if $libraryOffline$ && $storageSource$ === StorageKey.CALIBRE && !isLoading}
+        <div class="library-banner" role="status">
+          <p>{$t$('home.offline')}</p>
+          <button type="button" class="app-button" on:click={retryLibrary}
+            >{$t$('home.retry')}</button
+          >
+        </div>
+      {/if}
+      {#if isLoading}
+        <LibrarySkeleton mode={$libraryDisplayMode$} />
+      {:else if $bookCards$.length && isHome}
+        <div class="home">
+          <LearnerDashboard
+            books={$storageSource$ === StorageKey.CALIBRE ? $bookCards$ : undefined}
           />
-        {:else if $bookCards$.length}
-          <SeriesResults matches={seriesMatches} on:showSeries={(ev) => showSeries(ev.detail)} />
-          {#if !visibleBookCards.length}
-            <div class="library-empty">
-              <p class="library-empty-title">No books match this filter.</p>
-              <button type="button" class="library-toolbar-button" on:click={clearFilters}>
-                Show all books
-              </button>
-            </div>
-          {:else if $libraryDisplayMode$ === 'list'}
-            <BookCardTable
+          {#if firstRun}
+            <section class="home-start" aria-label={$t$('home.startReading')}>
+              <SectionHead number={1} title={$t$('home.startReading')} />
+              <p class="library-empty-text">
+                {$t$(standalone ? 'home.startTextLibrary' : 'home.startText')}
+              </p>
+              <span class="home-start-actions">
+                <button
+                  type="button"
+                  class="app-button app-button-primary"
+                  on:click={() => ($libraryTab$ = 'store')}
+                >
+                  {$t$(standalone ? 'home.openLibrary' : 'home.openStore')}
+                </button>
+                <label class="app-button">
+                  <input
+                    type="file"
+                    accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,.cbz,.zip"
+                    multiple
+                    hidden
+                    use:inputFile={onFilesChange}
+                  />
+                  {$t$('home.importBook')}
+                </label>
+              </span>
+            </section>
+          {/if}
+          <div class="home-pair">
+            <ContinueReadingShelf
+              books={continueCards}
+              number={1}
+              heading={$t$('home.continueReading')}
               currentBookId={$currentBookId$}
-              {selectedBookIds}
-              {selectMode}
-              sortOption={$booklistSortOptions$[$storageSource$]}
-              bookCards={renderedBookCards}
+              selectedBookIds={selectMode ? selectedBookIds : undefined}
+              on:bookClick={(ev) => onCoverClick(ev.detail.id)}
+              on:bookRead={(ev) => onBookClick(ev.detail.id)}
+              on:bookSelect={(ev) => selectBook(ev.detail.id)}
+              removeTitle={$t$('home.remove')}
+              on:remove={(ev) => removeFromHome(ev.detail.title)}
+            />
+            <ReadNextShelf
+              books={readNextCards}
+              number={continueCards.length ? 2 : 1}
+              coverage={$knownCoverage$}
+              reason={readNextReason}
+              currentBookId={$currentBookId$}
+              selectedBookIds={selectMode ? selectedBookIds : undefined}
+              on:bookClick={(ev) => onCoverClick(ev.detail.id)}
+              on:bookRead={(ev) => onBookClick(ev.detail.id)}
+              on:bookSelect={(ev) => selectBook(ev.detail.id)}
+            />
+          </div>
+          {#if homeCards.length}
+            <ContinueReadingShelf
+              books={homeCards}
+              number={myBooksNumber}
+              heading={$t$('home.myBooks')}
+              removeTitle={$t$('home.remove')}
+              currentBookId={$currentBookId$}
+              selectedBookIds={selectMode ? selectedBookIds : undefined}
               on:bookClick={(ev) => onCoverClick(ev.detail.id)}
               on:bookSelect={(ev) => selectBook(ev.detail.id)}
-              on:removeBookClick={(ev) => removeBooks([ev.detail.id])}
-              on:sort={(ev) => onSortChange(ev.detail)}
+              on:remove={(ev) => removeFromHome(ev.detail.title)}
             />
           {:else}
-            <BookCardList
-              currentBookId={$currentBookId$}
-              {selectedBookIds}
-              {selectMode}
-              compact={$libraryDisplayMode$ === 'covers-compact'}
-              bookCards={renderedBookCards}
-              on:bookClick={(ev) => onCoverClick(ev.detail.id)}
-              on:bookSelect={(ev) => selectBook(ev.detail.id)}
-              on:removeBookClick={(ev) => removeBooks([ev.detail.id])}
-            />
+            <section class="home-start" aria-label={$t$('home.myBooks')}>
+              <SectionHead number={myBooksNumber} title={$t$('home.myBooks')} count={0} />
+              <p class="library-empty-text">
+                {$t$(standalone ? 'home.myBooksEmptyLibrary' : 'home.myBooksEmpty')}
+              </p>
+            </section>
           {/if}
-          {#if renderedBookCards.length < visibleBookCards.length}
-            {#key renderLimit}
-              <div class="flex justify-center pb-4" use:renderMoreOnVisible>
-                <button
-                  type="button"
-                  class="library-toolbar-button"
-                  on:click={() => (renderLimit += renderStep)}
-                >
-                  Show more ({visibleBookCards.length - renderedBookCards.length} remaining)
-                </button>
-              </div>
-            {/key}
+          {#if standalone}
+            <InstallHint />
           {/if}
-          {#if hasActiveFilter && visibleBookCards.length}
-            <p class="pb-4 text-center text-xs font-semibold text-[color:var(--app-muted-fg)]">
-              Showing {visibleBookCards.length} of {$bookCards$.length} books ·
-              <button type="button" class="underline" on:click={clearFilters}>show all</button>
-            </p>
-          {/if}
-        {:else if $storageSource$ === StorageKey.CALIBRE && $account$ === null}
-          <div class="library-signed-out">
-            <h1 class="library-signed-out-title">Sign in to see the library</h1>
-            <p class="library-empty-text">
-              This server keeps its books, progress and highlights per account. Ask whoever runs it
-              for one: there is no sign-up.
-            </p>
-            <a
-              class="app-button app-button-primary"
-              href="{pagePath}/settings?section=general#general-account">Sign in</a
-            >
+        </div>
+      {:else if $bookCards$.length && showSeriesGrid}
+        <SeriesGrid
+          groups={seriesGroups(visibleBookCards)}
+          on:showSeries={(ev) => showSeries(ev.detail)}
+        />
+      {:else if $bookCards$.length}
+        <SeriesResults matches={seriesMatches} on:showSeries={(ev) => showSeries(ev.detail)} />
+        {#if !visibleBookCards.length}
+          <div class="library-empty">
+            <p class="library-empty-title">No books match this filter.</p>
+            <button type="button" class="library-toolbar-button" on:click={clearFilters}>
+              Show all books
+            </button>
           </div>
-        {:else if standalone}
-          <LibraryEmpty onFiles={onFilesChange} />
+        {:else if $libraryDisplayMode$ === 'list'}
+          <BookCardTable
+            currentBookId={$currentBookId$}
+            {selectedBookIds}
+            {selectMode}
+            sortOption={$booklistSortOptions$[$storageSource$]}
+            bookCards={renderedBookCards}
+            on:bookClick={(ev) => onCoverClick(ev.detail.id)}
+            on:bookSelect={(ev) => selectBook(ev.detail.id)}
+            on:removeBookClick={(ev) => removeBooks([ev.detail.id])}
+            on:sort={(ev) => onSortChange(ev.detail)}
+          />
         {:else}
-          <label class="library-empty library-empty-import">
-            <input
-              type="file"
-              accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,.cbz,.zip"
-              multiple
-              hidden
-              use:inputFile={onFilesChange}
-            />
-            <span class="library-empty-title">Your library is empty</span>
-            <span class="library-empty-text">
-              Drop EPUB, HTMLZ or TXT files here, or click to import
-            </span>
-          </label>
+          <BookCardList
+            currentBookId={$currentBookId$}
+            {selectedBookIds}
+            {selectMode}
+            compact={$libraryDisplayMode$ === 'covers-compact'}
+            bookCards={renderedBookCards}
+            on:bookClick={(ev) => onCoverClick(ev.detail.id)}
+            on:bookSelect={(ev) => selectBook(ev.detail.id)}
+            on:removeBookClick={(ev) => removeBooks([ev.detail.id])}
+          />
         {/if}
-      </main>
-    </div>
+        {#if renderedBookCards.length < visibleBookCards.length}
+          {#key renderLimit}
+            <div class="flex justify-center pb-4" use:renderMoreOnVisible>
+              <button
+                type="button"
+                class="library-toolbar-button"
+                on:click={() => (renderLimit += renderStep)}
+              >
+                Show more ({visibleBookCards.length - renderedBookCards.length} remaining)
+              </button>
+            </div>
+          {/key}
+        {/if}
+        {#if hasActiveFilter && visibleBookCards.length}
+          <p class="pb-4 text-center text-xs font-semibold text-[color:var(--app-muted-fg)]">
+            Showing {visibleBookCards.length} of {$bookCards$.length} books ·
+            <button type="button" class="underline" on:click={clearFilters}>show all</button>
+          </p>
+        {/if}
+      {:else if $storageSource$ === StorageKey.CALIBRE && $account$ === null}
+        <div class="library-signed-out">
+          <h1 class="library-signed-out-title">Sign in to see the library</h1>
+          <p class="library-empty-text">
+            This server keeps its books, progress and highlights per account. Ask whoever runs it
+            for one: there is no sign-up.
+          </p>
+          <a
+            class="app-button app-button-primary"
+            href="{pagePath}/settings?section=general#general-account">Sign in</a
+          >
+        </div>
+      {:else if standalone}
+        <LibraryEmpty onFiles={onFilesChange} />
+      {:else}
+        <label class="library-empty library-empty-import">
+          <input
+            type="file"
+            accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,.cbz,.zip"
+            multiple
+            hidden
+            use:inputFile={onFilesChange}
+          />
+          <span class="library-empty-title">Your library is empty</span>
+          <span class="library-empty-text">
+            Drop EPUB, HTMLZ or TXT files here, or click to import
+          </span>
+        </label>
+      {/if}
+    </main>
   </div>
-{/if}
+</div>
 
 {#if detailsBook}
   <BookDetails
