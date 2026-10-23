@@ -17,6 +17,7 @@ anything a reader or a server operator would notice.
 
 ### Changed
 
+- Standalone: Settings → Audiobookshelf asks for the server's address and explains the CORS origin to add in Audiobookshelf.
 - The library's top bar shows only Import and the account: view and sort are in the Store's Sort
   menu, Select is a Store button (long press still selects on Home), and the storage source and
   "Report an issue" are in Settings → Data → Storage. The old-domain hint and the `?count` loader
