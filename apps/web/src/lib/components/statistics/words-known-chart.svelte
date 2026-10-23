@@ -57,13 +57,12 @@
 </script>
 
 {#if points.some((point) => point.known)}
-  <section class="words-chart mt-8 sm:mt-16">
-    <div class="flex flex-wrap items-baseline justify-between gap-2">
-      <h2 class="text-lg">{$t$('statistics.wordsKnown')}</h2>
-      <span class="words-chart-muted text-sm">
+  <figure class="words-chart">
+    <figcaption class="words-chart-title">
+      <span>
         {$t$('statistics.wordsKnownNow', { count: number(last.known) })}
       </span>
-    </div>
+    </figcaption>
     <div class="words-chart-plot">
       <span class="words-chart-muted words-chart-max">{number(max)}</span>
       <div class="words-chart-area">
@@ -79,10 +78,10 @@
           on:pointermove={onPointerMove}
           on:pointerleave={() => (hovered = undefined)}
         >
-          <line x1="0" y1={height} x2={width} y2={height} class="words-chart-axis" />
+          <line x1="0" y1={height} x2={width} y2={height} class="words-chart-rule" />
           <polyline points={line} class="words-chart-line" />
           {#if active}
-            <line x1={active.x} y1="0" x2={active.x} y2={height} class="words-chart-axis" />
+            <line x1={active.x} y1="0" x2={active.x} y2={height} class="words-chart-rule" />
           {/if}
         </svg>
         {#if active}
@@ -102,17 +101,46 @@
         </span>
       {/if}
     </div>
-    <div class="words-chart-muted flex justify-between text-xs">
+    <div class="words-chart-muted words-chart-axis">
       <span>{shown[0].dateKey}</span>
       <span>{last.dateKey}</span>
     </div>
-    <p class="words-chart-muted mt-2 text-xs">
+    <p class="words-chart-muted words-chart-note">
       {$t$('statistics.wordsKnownNote', { count: knownMinCount })}
     </p>
-  </section>
+  </figure>
+{:else}
+  <p class="words-chart-muted words-chart-note">{$t$('statistics.wordsKnownEmpty')}</p>
 {/if}
 
 <style>
+  .words-chart {
+    min-width: 0;
+  }
+
+  .words-chart-title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .words-chart-axis {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--type-label);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .words-chart-note {
+    margin-top: 0.75rem;
+    font-size: var(--type-label);
+    line-height: 1.6;
+  }
+
   .words-chart-muted {
     color: var(--app-muted-fg);
   }
@@ -139,10 +167,11 @@
     position: absolute;
     top: 0;
     left: 0;
-    font-size: 0.75rem;
+    font-size: var(--type-label);
+    font-variant-numeric: tabular-nums;
   }
 
-  .words-chart-axis {
+  .words-chart-rule {
     stroke: var(--border-color);
     stroke-width: 1;
     vector-effect: non-scaling-stroke;
@@ -161,7 +190,7 @@
     width: 0.6rem;
     height: 0.6rem;
     margin: -0.3rem 0 0 -0.3rem;
-    border: 2px solid var(--surface-strong-color);
+    border: 2px solid var(--background-color);
     border-radius: 50%;
     background: var(--accent-color);
     pointer-events: none;
@@ -171,10 +200,11 @@
     position: absolute;
     top: 0;
     transform: translateX(-50%);
-    padding: 0 0.4rem;
-    border-radius: 4px;
-    background: var(--surface-strong-color);
-    font-size: 0.75rem;
+    padding: 0.1rem 0.4rem;
+    border: 1px solid var(--border-color);
+    border-radius: 2px;
+    background: var(--background-color);
+    font-size: var(--type-label);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
     pointer-events: none;

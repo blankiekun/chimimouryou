@@ -1,13 +1,4 @@
 <script lang="ts">
-  import {
-    faChevronLeft,
-    faChevronRight,
-    faClose,
-    faFloppyDisk,
-    faPen,
-    faTrash,
-    faXmark
-  } from '@fortawesome/free-solid-svg-icons';
   import Popover from '$lib/components/popover/popover.svelte';
   import {
     StatisticsSummaryKey,
@@ -39,11 +30,9 @@
     lastStatisticsSummarySortProperty$
   } from '$lib/data/store';
   import { getNumberFromObject, secondsToMinutes } from '$lib/functions/statistic-util';
-  import { reduceToEmptyString } from '$lib/functions/rxjs/reduce-to-empty-string';
-  import { convertRemToPixels, dummyFn, getFullHeight, limitToRange } from '$lib/functions/utils';
-  import { debounceTime, fromEvent, tap } from 'rxjs';
+  import { limitToRange } from '$lib/functions/utils';
+  import { t$ } from '$lib/i18n';
   import { createEventDispatcher, tick } from 'svelte';
-  import Fa from 'svelte-fa';
 
   export let aggregratedStatistics: BookStatistic[];
   export let statisticsDateRangeLabel: string;
@@ -53,19 +42,14 @@
     edit: StatisticsEditRequest;
   }>();
 
-  const statisticsSummaryBaseRowRem = 3;
-  const statisticsSummaryBaseRowGap = 1.5;
+  const rowsPerStatisticsSummaryPage = 20;
+  const number = (value: number) => value.toLocaleString('en-US');
 
-  let renderFullStatisticsSummaryTable = window && window.matchMedia('(min-width: 768px)').matches;
-  let statisticsSummaryTableContainerElm: HTMLElement;
   let statisticsSummaryPopover: Popover;
-  let statisticsSummaryButtonContainer: HTMLElement;
   let statisticsData: BookStatistic[] = [];
   let currentStatisticsSummaryRows: BookStatistic[] = [];
-  let statisticsSummaryGridRowMod = 0;
   let statisticsSummaryMaxPages = 0;
   let currentStatisticsSummaryPage = 1;
-  let rowsPerStatisticsSummaryPage = 0;
   const statisticsSummaryPageRefs: HTMLButtonElement[] = [];
   let statisticsSummaryPagesContainer: HTMLElement;
   let statisticsSummaryPopoverDetails: string[] = [];
@@ -74,16 +58,10 @@
   let rowInEditCharacters = 0;
   let rowInEditResetMinMaxValues = false;
 
-  const resizeHandler$ = fromEvent(window, 'resize').pipe(
-    debounceTime(250),
-    tap(() => {
-      renderFullStatisticsSummaryTable = window && window.matchMedia('(min-width: 768px)').matches;
-      updateRowsPerPage(false);
-    }),
-    reduceToEmptyString()
-  );
-
-  $: statisticsSummaryPageLabel = `PAGE ${currentStatisticsSummaryPage} / ${statisticsSummaryMaxPages}`;
+  $: statisticsSummaryPageLabel = $t$('statistics.page', {
+    page: currentStatisticsSummaryPage,
+    pages: statisticsSummaryMaxPages
+  });
 
   // eslint-disable-next-line prefer-spread
   $: statisticsSummaryPages = Array.apply(null, Array(statisticsSummaryMaxPages)).map(
@@ -97,7 +75,7 @@
   $: if (aggregratedStatistics) {
     setRowInEditMode();
     statisticsData = [...aggregratedStatistics];
-    updateRowsPerPage();
+    updatePageData(true);
   }
 
   $: if (
@@ -202,26 +180,6 @@
     }
   }
 
-  function updateRowsPerPage(executeSort = true) {
-    tick().then(() => {
-      rowsPerStatisticsSummaryPage = renderFullStatisticsSummaryTable
-        ? Math.max(
-            1,
-            Math.ceil(
-              (getFullHeight(window, statisticsSummaryTableContainerElm) -
-                getFullHeight(window, statisticsSummaryButtonContainer, true)) /
-                convertRemToPixels(
-                  window,
-                  statisticsSummaryBaseRowRem + statisticsSummaryBaseRowGap + 0.4
-                )
-            )
-          )
-        : 1;
-
-      updatePageData(executeSort);
-    });
-  }
-
   function updatePageData(executeSort: boolean, newPage?: number) {
     statisticsSummaryMaxPages = Math.ceil(statisticsData.length / rowsPerStatisticsSummaryPage);
     currentStatisticsSummaryPage = newPage
@@ -312,9 +270,6 @@
         $lastReadingTimeDataSource$ = 'readingTime';
         break;
     }
-
-    statisticsSummaryGridRowMod =
-      aggregrationMode === StatisticsReadingDataAggregationMode.NONE ? 0 : 1;
   }
 
   function setRowInEditMode(row?: BookStatistic) {
@@ -332,339 +287,512 @@
   }
 </script>
 
-{$resizeHandler$ ?? ''}
-<div class="my-4" class:hidden={!aggregratedStatistics.length}>
-  Data for {statisticsDateRangeLabel}
-</div>
-<div
-  class="grow p-2 overflow-auto"
-  class:flex={!statisticsData.length}
-  class:justify-center={!statisticsData.length}
-  class:items-center={!statisticsData.length}
-  class:text-4xl={!statisticsData.length}
-  bind:this={statisticsSummaryTableContainerElm}
->
-  {#if statisticsData.length}
-    {@const isNoneAggregation =
-      $lastPrimaryReadingDataAggregationMode$ === StatisticsReadingDataAggregationMode.NONE}
-    {@const isDateAggregation =
-      $lastPrimaryReadingDataAggregationMode$ === StatisticsReadingDataAggregationMode.DATE}
-    {@const isTitleAggregation =
-      $lastPrimaryReadingDataAggregationMode$ === StatisticsReadingDataAggregationMode.TITLE}
-    <div
-      class="grid grid-cols-[0.75fr_1fr] gap-x-8 items-center"
-      class:md:grid-cols-[0.31fr_0.6fr_0.77fr_0.74fr_0.6fr_0.57fr]={isNoneAggregation}
-      class:lg:grid-cols-[0.14fr_0.26fr_0.85fr_repeat(2,_0.59fr)_0.45fr]={isNoneAggregation}
-      class:md:grid-cols-[0.1fr_0.6fr_1fr_1.1fr_0.85fr]={isDateAggregation}
-      class:lg:grid-cols-[0.1fr_repeat(4,1fr)]={isDateAggregation}
-      class:md:grid-cols-[0.1fr_1fr_repeat(3,_0.45fr)]={isTitleAggregation}
-      class:lg:grid-cols-[0.1fr_0.93fr_0.35fr_0.42fr_0.3fr]={isTitleAggregation}
-      style:grid-auto-rows={`${statisticsSummaryBaseRowRem}rem`}
-      style:row-gap={`${statisticsSummaryBaseRowGap}rem`}
+{#if statisticsData.length}
+  {@const isNoneAggregation =
+    $lastPrimaryReadingDataAggregationMode$ === StatisticsReadingDataAggregationMode.NONE}
+  {@const isDateAggregation =
+    $lastPrimaryReadingDataAggregationMode$ === StatisticsReadingDataAggregationMode.DATE}
+  {@const isTitleAggregation =
+    $lastPrimaryReadingDataAggregationMode$ === StatisticsReadingDataAggregationMode.TITLE}
+  <div class="summary-scroll">
+    <table class="app-table summary-table">
+      <thead>
+        <tr>
+          {#if !isTitleAggregation}
+            <StatisticsSummaryHeader
+              statisticsSummaryKey={StatisticsSummaryKey.DATE}
+              options={dateDataSources}
+              selectionKey={StatisticsSummaryKey.DATE}
+              hasRowInEdit={rowInEdit !== undefined}
+              title="Sort by date"
+              on:propertyChange={(detail) => handlePropertyChange(detail)}
+            />
+          {/if}
+          {#if !isDateAggregation}
+            <StatisticsSummaryHeader
+              statisticsSummaryKey={StatisticsSummaryKey.TITLE}
+              options={titleDataSources}
+              selectionKey={StatisticsSummaryKey.TITLE}
+              hasRowInEdit={rowInEdit !== undefined}
+              title="Sort by title"
+              on:propertyChange={(detail) => handlePropertyChange(detail)}
+            />
+          {/if}
+          <StatisticsSummaryHeader
+            statisticsSummaryKey={StatisticsSummaryKey.CHARACTERS}
+            options={charactersDataSources}
+            selectionKey={$lastCharactersDataSource$}
+            hasRowInEdit={rowInEdit !== undefined}
+            numeric
+            title="Choose which characters figure to show"
+            on:propertyChange={(detail) => handlePropertyChange(detail)}
+          />
+          <StatisticsSummaryHeader
+            statisticsSummaryKey={StatisticsSummaryKey.READING_TIME}
+            options={readingTimeDataSources}
+            selectionKey={$lastReadingTimeDataSource$}
+            hasRowInEdit={rowInEdit !== undefined}
+            numeric
+            title="Choose which time figure to show"
+            on:propertyChange={(detail) => handlePropertyChange(detail)}
+          />
+          <StatisticsSummaryHeader
+            statisticsSummaryKey={StatisticsSummaryKey.READING_SPEED}
+            options={readingSpeedDataSources}
+            selectionKey={$lastReadingSpeedDataSource$}
+            hasRowInEdit={rowInEdit !== undefined}
+            numeric
+            title="Choose which speed figure to show"
+            on:propertyChange={(detail) => handlePropertyChange(detail)}
+          />
+          <th class="summary-actions-head"><span class="sr-only">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each currentStatisticsSummaryRows as currentStatisticsSummaryRow (currentStatisticsSummaryRow.id)}
+          {@const currentRowInEdit = rowInEdit && rowInEdit.id === currentStatisticsSummaryRow.id}
+          {@const otherRowInEdit = rowInEdit && !currentRowInEdit}
+          <tr class:summary-row-edit={currentRowInEdit}>
+            {#if !isTitleAggregation}
+              <td class="summary-date">{currentStatisticsSummaryRow.dateKey}</td>
+            {/if}
+            {#if !isDateAggregation}
+              <td class="summary-title">
+                <button
+                  type="button"
+                  title={currentStatisticsSummaryRow.title}
+                  on:click={(event) => {
+                    statisticsSummaryPopoverDetails = [currentStatisticsSummaryRow.title];
+
+                    tick().then(() => {
+                      if (event.target instanceof HTMLElement) {
+                        statisticsSummaryPopover.toggleOpen(event.target);
+                      }
+                    });
+                  }}
+                >
+                  {currentStatisticsSummaryRow.title}
+                </button>
+              </td>
+            {/if}
+            <td class="summary-number" data-label="Characters">
+              {#if currentRowInEdit}
+                <input
+                  class="app-input summary-input"
+                  type="number"
+                  aria-label="Characters"
+                  bind:value={rowInEditCharacters}
+                  on:change={() => {
+                    if (
+                      rowInEdit &&
+                      (!Number.isFinite(rowInEditCharacters) || rowInEditCharacters < 0)
+                    ) {
+                      rowInEditCharacters = rowInEdit.charactersRead;
+                    }
+                  }}
+                />
+              {:else}
+                <button
+                  type="button"
+                  class:blur={$lastBlurredTrackerItems$.has('charactersRead')}
+                  on:click={(event) => {
+                    statisticsSummaryPopoverDetails = [
+                      `Characters: ${number(currentStatisticsSummaryRow.charactersRead)}`,
+                      `Average: ${number(currentStatisticsSummaryRow.averageCharactersRead)}`,
+                      `Weighted: ${number(
+                        currentStatisticsSummaryRow.averageWeightedCharactersRead
+                      )}`
+                    ];
+
+                    tick().then(() => {
+                      if (event.target instanceof HTMLElement) {
+                        statisticsSummaryPopover.toggleOpen(event.target);
+                      }
+                    });
+                  }}
+                >
+                  {number(
+                    getNumberFromObject(currentStatisticsSummaryRow, $lastCharactersDataSource$)
+                  )}
+                </button>
+              {/if}
+            </td>
+            <td class="summary-number" data-label="Time">
+              {#if currentRowInEdit}
+                <input
+                  class="app-input summary-input"
+                  type="number"
+                  aria-label="Time in seconds"
+                  title="Seconds"
+                  bind:value={rowInEditTime}
+                  on:change={() => {
+                    if (rowInEdit && (!Number.isFinite(rowInEditTime) || rowInEditTime < 0)) {
+                      rowInEditTime = rowInEdit.readingTime;
+                    }
+                  }}
+                />
+              {:else}
+                <button
+                  type="button"
+                  class:blur={$lastBlurredTrackerItems$.has('readingTime')}
+                  on:click={(event) => {
+                    statisticsSummaryPopoverDetails = [
+                      `Time: ${secondsToMinutes(currentStatisticsSummaryRow.readingTime)} min`,
+                      `Average: ${secondsToMinutes(
+                        currentStatisticsSummaryRow.averageReadingTime
+                      )} min`,
+                      `Weighted: ${secondsToMinutes(
+                        currentStatisticsSummaryRow.averageWeightedReadingTime
+                      )} min`
+                    ];
+
+                    tick().then(() => {
+                      if (event.target instanceof HTMLElement) {
+                        statisticsSummaryPopover.toggleOpen(event.target);
+                      }
+                    });
+                  }}
+                >
+                  {secondsToMinutes(
+                    getNumberFromObject(currentStatisticsSummaryRow, $lastReadingTimeDataSource$)
+                  )} min
+                </button>
+              {/if}
+            </td>
+            <td class="summary-number" data-label="Speed">
+              {#if currentRowInEdit}
+                <label class="summary-reset">
+                  <input type="checkbox" bind:checked={rowInEditResetMinMaxValues} />
+                  Reset min/max
+                </label>
+              {:else}
+                <button
+                  type="button"
+                  class:blur={$lastBlurredTrackerItems$.has('lastReadingSpeed')}
+                  on:click={(event) => {
+                    statisticsSummaryPopoverDetails = [
+                      `Speed: ${number(currentStatisticsSummaryRow.lastReadingSpeed)}/h`,
+                      `Min: ${number(currentStatisticsSummaryRow.minReadingSpeed)}/h`,
+                      `Alt min: ${number(currentStatisticsSummaryRow.altMinReadingSpeed)}/h`,
+                      `Max: ${number(currentStatisticsSummaryRow.maxReadingSpeed)}/h`
+                    ];
+
+                    tick().then(() => {
+                      if (event.target instanceof HTMLElement) {
+                        statisticsSummaryPopover.toggleOpen(event.target);
+                      }
+                    });
+                  }}
+                >
+                  {number(
+                    getNumberFromObject(currentStatisticsSummaryRow, $lastReadingSpeedDataSource$)
+                  )}/h
+                </button>
+              {/if}
+            </td>
+            <td class="summary-actions">
+              {#if currentRowInEdit && rowInEdit}
+                <button
+                  type="button"
+                  class="app-button app-button-quiet"
+                  on:click={() => {
+                    if (!rowInEdit) return;
+                    dispatch('edit', {
+                      dateKey: rowInEdit.dateKey,
+                      title: rowInEdit.title,
+                      newReadingTime: rowInEditTime,
+                      newCharactersRead: rowInEditCharacters,
+                      resetMinMaxValues: rowInEditResetMinMaxValues
+                    });
+                    setRowInEditMode();
+                  }}
+                >
+                  {$t$('statistics.save')}
+                </button>
+                <button
+                  type="button"
+                  class="app-button app-button-quiet"
+                  on:click={() => setRowInEditMode()}
+                >
+                  {$t$('statistics.cancel')}
+                </button>
+              {:else}
+                {#if isNoneAggregation}
+                  <button
+                    type="button"
+                    class="app-button app-button-quiet"
+                    disabled={otherRowInEdit}
+                    on:click={() => setRowInEditMode(currentStatisticsSummaryRow)}
+                  >
+                    {$t$('statistics.edit')}
+                  </button>
+                {/if}
+                <button
+                  type="button"
+                  class="app-button app-button-quiet"
+                  disabled={otherRowInEdit}
+                  on:click={() => dispatchDeleteRequest(currentStatisticsSummaryRow)}
+                >
+                  {$t$('statistics.delete')}
+                </button>
+              {/if}
+            </td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
+  {#if statisticsSummaryPopoverDetails.length}
+    <Popover
+      placement="top-start"
+      yOffset={5}
+      containerStyles={`align-self:flex-start;display:${isDateAggregation ? 'none' : 'flex'}`}
+      bind:this={statisticsSummaryPopover}
     >
-      {#if renderFullStatisticsSummaryTable}
-        <div></div>
-      {/if}
-      <StatisticsSummaryHeader
-        statisticsSummaryKey={StatisticsSummaryKey.DATE}
-        options={dateDataSources}
-        selectionKey={StatisticsSummaryKey.DATE}
-        hasRowInEdit={rowInEdit !== undefined}
-        isHidden={isTitleAggregation}
-        gridRow={renderFullStatisticsSummaryTable ? undefined : 2}
-        title="Click to select/sort by this Attribute"
-        on:propertyChange={(detail) => handlePropertyChange(detail)}
-      />
-      <StatisticsSummaryHeader
-        statisticsSummaryKey={StatisticsSummaryKey.TITLE}
-        options={titleDataSources}
-        selectionKey={StatisticsSummaryKey.TITLE}
-        hasRowInEdit={rowInEdit !== undefined}
-        isHidden={isDateAggregation}
-        gridRow={renderFullStatisticsSummaryTable ? undefined : 3 - statisticsSummaryGridRowMod}
-        title="Click to select/sort by this Attribute"
-        on:propertyChange={(detail) => handlePropertyChange(detail)}
-      />
-      <StatisticsSummaryHeader
-        statisticsSummaryKey={StatisticsSummaryKey.READING_TIME}
-        options={readingTimeDataSources}
-        selectionKey={$lastReadingTimeDataSource$}
-        hasRowInEdit={rowInEdit !== undefined}
-        gridRow={renderFullStatisticsSummaryTable ? undefined : 4 - statisticsSummaryGridRowMod}
-        title={'Switch between Reading Time Attributes'}
-        on:propertyChange={(detail) => handlePropertyChange(detail)}
-      />
-      <StatisticsSummaryHeader
-        statisticsSummaryKey={StatisticsSummaryKey.CHARACTERS}
-        options={charactersDataSources}
-        selectionKey={$lastCharactersDataSource$}
-        hasRowInEdit={rowInEdit !== undefined}
-        gridRow={renderFullStatisticsSummaryTable ? undefined : 5 - statisticsSummaryGridRowMod}
-        title={'Switch between Character Attributes'}
-        on:propertyChange={(detail) => handlePropertyChange(detail)}
-      />
-      <StatisticsSummaryHeader
-        statisticsSummaryKey={StatisticsSummaryKey.READING_SPEED}
-        options={readingSpeedDataSources}
-        selectionKey={$lastReadingSpeedDataSource$}
-        hasRowInEdit={rowInEdit !== undefined}
-        gridRow={renderFullStatisticsSummaryTable ? undefined : 6 - statisticsSummaryGridRowMod}
-        title={'Switch between Reading Speed Attributes'}
-        on:propertyChange={(detail) => handlePropertyChange(detail)}
-      />
-      {#each currentStatisticsSummaryRows as currentStatisticsSummaryRow (currentStatisticsSummaryRow.id)}
-        {@const currentRowInEdit = rowInEdit && rowInEdit.id === currentStatisticsSummaryRow.id}
-        {@const otherRowInEdit = rowInEdit && !currentRowInEdit}
-        <div class="col-span-2 md:col-span-1">
-          <button
-            class="hover:text-accent-strong"
-            class:cursor-not-allowed={otherRowInEdit}
-            title={otherRowInEdit ? '' : `${rowInEdit ? 'Cancel Edit' : 'Delete Row'}`}
-            disabled={otherRowInEdit}
-            on:click={() => {
-              if (rowInEdit) {
-                setRowInEditMode();
-              } else {
-                dispatchDeleteRequest(currentStatisticsSummaryRow);
-              }
-            }}
-          >
-            <Fa icon={currentRowInEdit ? faXmark : faTrash} />
-          </button>
-          {#if isNoneAggregation}
+      <div slot="content" class="summary-popover">
+        {#each statisticsSummaryPopoverDetails as popoverDetail (popoverDetail)}
+          <div>{popoverDetail}</div>
+        {/each}
+        <button
+          type="button"
+          class="app-button app-button-quiet"
+          on:click={() => (statisticsSummaryPopoverDetails = [])}
+        >
+          {$t$('statistics.close')}
+        </button>
+      </div>
+    </Popover>
+  {/if}
+  {#if statisticsSummaryMaxPages > 1}
+    <div class="summary-pages">
+      <button
+        type="button"
+        class="app-button app-button-quiet"
+        disabled={currentStatisticsSummaryPage === 1}
+        on:click={() => {
+          setRowInEditMode();
+          currentStatisticsSummaryPage -= 1;
+        }}
+      >
+        {$t$('statistics.previous')}
+      </button>
+      <Popover
+        yOffset={5}
+        on:open={() => {
+          const currentPageElement = statisticsSummaryPageRefs[currentStatisticsSummaryPage];
+
+          if (!currentPageElement || !statisticsSummaryPagesContainer) {
+            return;
+          }
+
+          const absoluteElementTop =
+            currentPageElement.offsetTop + currentPageElement.clientHeight / 2;
+          const middle = absoluteElementTop - statisticsSummaryPagesContainer.clientHeight / 2;
+
+          statisticsSummaryPagesContainer.scrollTo(0, middle);
+        }}
+      >
+        <button type="button" class="summary-page-label">{statisticsSummaryPageLabel}</button>
+        <div
+          slot="content"
+          class="flex max-h-48 w-32 flex-col overflow-auto"
+          bind:this={statisticsSummaryPagesContainer}
+        >
+          {#each statisticsSummaryPages as statisticsSummaryPage, pageIndex (statisticsSummaryPage)}
             <button
-              class="ml-2 hover:text-accent-strong"
-              class:cursor-not-allowed={otherRowInEdit}
-              title={otherRowInEdit ? '' : `${rowInEdit ? 'Save Changes' : 'Edit Row'}`}
-              disabled={otherRowInEdit}
-              on:click={() => {
-                if (rowInEdit) {
-                  dispatch('edit', {
-                    dateKey: rowInEdit.dateKey,
-                    title: rowInEdit.title,
-                    newReadingTime: rowInEditTime,
-                    newCharactersRead: rowInEditCharacters,
-                    resetMinMaxValues: rowInEditResetMinMaxValues
-                  });
-                  setRowInEditMode();
-                } else {
-                  setRowInEditMode(currentStatisticsSummaryRow);
-                }
+              type="button"
+              class="app-popover-item"
+              class:app-popover-item-active={statisticsSummaryPage === currentStatisticsSummaryPage}
+              bind:this={statisticsSummaryPageRefs[pageIndex + 1]}
+              on:click={({ target }) => {
+                setRowInEditMode();
+
+                currentStatisticsSummaryPage = statisticsSummaryPage;
+                target?.dispatchEvent(new CustomEvent(CLOSE_POPOVER, { bubbles: true }));
               }}
             >
-              <Fa icon={currentRowInEdit ? faFloppyDisk : faPen} />
+              {statisticsSummaryPage}
             </button>
-          {/if}
-        </div>
-        <div class:hidden={isTitleAggregation}>
-          {currentStatisticsSummaryRow.dateKey}
-        </div>
-        <div
-          tabindex="0"
-          role="button"
-          class="line-clamp-2"
-          class:hidden={isDateAggregation}
-          title={currentStatisticsSummaryRow.title}
-          on:click={(event) => {
-            statisticsSummaryPopoverDetails = [currentStatisticsSummaryRow.title];
-
-            tick().then(() => {
-              if (event.target instanceof HTMLElement) {
-                statisticsSummaryPopover.toggleOpen(event.target);
-              }
-            });
-          }}
-          on:keyup={dummyFn}
-        >
-          {currentStatisticsSummaryRow.title}
-        </div>
-        {#if currentRowInEdit}
-          <input
-            class="w-full"
-            type="number"
-            bind:value={rowInEditTime}
-            on:change={() => {
-              if (rowInEdit && (!Number.isFinite(rowInEditTime) || rowInEditTime < 0)) {
-                rowInEditTime = rowInEdit.readingTime;
-              }
-            }}
-          />
-        {:else}
-          <button
-            class="text-left"
-            class:blur={$lastBlurredTrackerItems$.has('readingTime')}
-            on:click={(event) => {
-              statisticsSummaryPopoverDetails = [
-                `Time: ${secondsToMinutes(currentStatisticsSummaryRow.readingTime)} min`,
-                `Average Time: ${secondsToMinutes(
-                  currentStatisticsSummaryRow.averageReadingTime
-                )} min`,
-                `Weighted Time: ${secondsToMinutes(
-                  currentStatisticsSummaryRow.averageWeightedReadingTime
-                )} min`
-              ];
-
-              tick().then(() => {
-                if (event.target instanceof HTMLElement) {
-                  statisticsSummaryPopover.toggleOpen(event.target);
-                }
-              });
-            }}
-          >
-            {secondsToMinutes(
-              getNumberFromObject(currentStatisticsSummaryRow, $lastReadingTimeDataSource$)
-            )} min
-          </button>
-        {/if}
-        {#if currentRowInEdit}
-          <input
-            class="w-full"
-            type="number"
-            bind:value={rowInEditCharacters}
-            on:change={() => {
-              if (rowInEdit && (!Number.isFinite(rowInEditCharacters) || rowInEditCharacters < 0)) {
-                rowInEditCharacters = rowInEdit.charactersRead;
-              }
-            }}
-          />
-        {:else}
-          <button
-            class="text-left"
-            class:blur={$lastBlurredTrackerItems$.has('charactersRead')}
-            on:click={(event) => {
-              statisticsSummaryPopoverDetails = [
-                `Characters: ${currentStatisticsSummaryRow.charactersRead}`,
-                `Average Characters: ${currentStatisticsSummaryRow.averageCharactersRead}`,
-                `Weighted Characters: ${currentStatisticsSummaryRow.averageWeightedCharactersRead}`
-              ];
-
-              tick().then(() => {
-                if (event.target instanceof HTMLElement) {
-                  statisticsSummaryPopover.toggleOpen(event.target);
-                }
-              });
-            }}
-          >
-            {getNumberFromObject(currentStatisticsSummaryRow, $lastCharactersDataSource$)}
-          </button>
-        {/if}
-        {#if currentRowInEdit}
-          <div class="flex items-center">
-            <input id="reset-min-max" type="checkbox" bind:checked={rowInEditResetMinMaxValues} />
-            <label for="reset-min-max" class="ml-1">Reset Min/Max</label>
-          </div>
-        {:else}
-          <button
-            class="text-left"
-            class:blur={$lastBlurredTrackerItems$.has('lastReadingSpeed')}
-            on:click={(event) => {
-              statisticsSummaryPopoverDetails = [
-                `Speed: ${currentStatisticsSummaryRow.lastReadingSpeed}`,
-                `Min Speed: ${currentStatisticsSummaryRow.minReadingSpeed}`,
-                `Alt Min Speed: ${currentStatisticsSummaryRow.altMinReadingSpeed}`,
-                `Max Speed: ${currentStatisticsSummaryRow.maxReadingSpeed}`
-              ];
-
-              tick().then(() => {
-                if (event.target instanceof HTMLElement) {
-                  statisticsSummaryPopover.toggleOpen(event.target);
-                }
-              });
-            }}
-          >
-            {getNumberFromObject(currentStatisticsSummaryRow, $lastReadingSpeedDataSource$)} / h
-          </button>
-        {/if}
-      {/each}
-    </div>
-    {#if statisticsSummaryPopoverDetails.length}
-      <Popover
-        placement={renderFullStatisticsSummaryTable ? 'top-start' : 'top'}
-        yOffset={5}
-        containerStyles={`align-self:flex-start;display:${isDateAggregation ? 'none' : 'flex'}`}
-        bind:this={statisticsSummaryPopover}
-      >
-        <div slot="content" class="p-4">
-          <button
-            class="flex w-full justify-end absolute top-1 right-2"
-            on:click={() => (statisticsSummaryPopoverDetails = [])}
-          >
-            <Fa icon={faClose} />
-          </button>
-          {#each statisticsSummaryPopoverDetails as popoverDetail (popoverDetail)}
-            <div class="mb-2 last:mb-0">{popoverDetail}</div>
           {/each}
         </div>
       </Popover>
-    {/if}
-  {:else}
-    No Data found for {statisticsDateRangeLabel}
-  {/if}
-</div>
-<div
-  class="my-6 flex justify-between"
-  class:invisible={statisticsSummaryMaxPages < 2}
-  bind:this={statisticsSummaryButtonContainer}
->
-  <button
-    disabled={currentStatisticsSummaryPage === 1}
-    class:opacity-25={currentStatisticsSummaryPage === 1}
-    class:cursor-not-allowed={currentStatisticsSummaryPage === 1}
-    on:click={() => {
-      setRowInEditMode();
-      currentStatisticsSummaryPage -= 1;
-    }}
-  >
-    <Fa icon={faChevronLeft} />
-  </button>
-  <Popover
-    yOffset={5}
-    on:open={() => {
-      const currentPageElement = statisticsSummaryPageRefs[currentStatisticsSummaryPage];
-
-      if (!currentPageElement || !statisticsSummaryPagesContainer) {
-        return;
-      }
-
-      const absoluteElementTop = currentPageElement.offsetTop + currentPageElement.clientHeight / 2;
-      const middle = absoluteElementTop - statisticsSummaryPagesContainer.clientHeight / 2;
-
-      statisticsSummaryPagesContainer.scrollTo(0, middle);
-    }}
-  >
-    <div class="mx-6">{statisticsSummaryPageLabel}</div>
-    <div
-      slot="content"
-      class="max-h-32 w-32 p-2 flex flex-col overflow-auto"
-      bind:this={statisticsSummaryPagesContainer}
-    >
-      {#each statisticsSummaryPages as statisticsSummaryPage, pageIndex (statisticsSummaryPage)}
-        <button
-          class="hover:opacity-50 hover:bg-[color:color-mix(in_srgb,var(--accent-color)_18%,transparent)]"
-          class:bg-[color:color-mix(in_srgb,var(--accent-color)_18%,transparent)]={statisticsSummaryPage ===
-            currentStatisticsSummaryPage}
-          bind:this={statisticsSummaryPageRefs[pageIndex + 1]}
-          on:click={({ target }) => {
-            setRowInEditMode();
-
-            currentStatisticsSummaryPage = statisticsSummaryPage;
-            target?.dispatchEvent(new CustomEvent(CLOSE_POPOVER, { bubbles: true }));
-          }}
-        >
-          {statisticsSummaryPage}
-        </button>
-      {/each}
+      <button
+        type="button"
+        class="app-button app-button-quiet"
+        disabled={currentStatisticsSummaryPage === statisticsSummaryMaxPages}
+        on:click={() => {
+          setRowInEditMode();
+          currentStatisticsSummaryPage += 1;
+        }}
+      >
+        {$t$('statistics.next')}
+      </button>
     </div>
-  </Popover>
-  <button
-    disabled={currentStatisticsSummaryPage === statisticsSummaryMaxPages}
-    class:opacity-25={currentStatisticsSummaryPage === statisticsSummaryMaxPages}
-    class:cursor-not-allowed={currentStatisticsSummaryPage === statisticsSummaryMaxPages}
-    on:click={() => {
-      setRowInEditMode();
-      currentStatisticsSummaryPage += 1;
-    }}
-  >
-    <Fa icon={faChevronRight} />
-  </button>
-</div>
+  {/if}
+{:else}
+  <p class="summary-empty">{$t$('statistics.noData', { range: statisticsDateRangeLabel })}</p>
+{/if}
+
+<style>
+  .summary-scroll {
+    min-width: 0;
+  }
+
+  .summary-table :global(th) {
+    white-space: nowrap;
+  }
+
+  .summary-table td {
+    font-size: var(--type-body);
+  }
+
+  .summary-table :global(.summary-th-numeric),
+  .summary-number {
+    text-align: right;
+  }
+
+  .summary-date {
+    color: var(--app-muted-fg);
+    white-space: nowrap;
+  }
+
+  .summary-title {
+    width: 100%;
+  }
+
+  .summary-title button {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    text-align: left;
+  }
+
+  .summary-number {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .summary-number button:hover,
+  .summary-title button:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+
+  .summary-input {
+    width: 7rem;
+    text-align: right;
+  }
+
+  .summary-reset {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: var(--type-small);
+  }
+
+  .summary-actions {
+    padding-right: 0 !important;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .summary-actions button + button {
+    margin-left: 1rem;
+  }
+
+  .summary-actions-head {
+    padding-right: 0 !important;
+  }
+
+  .summary-row-edit {
+    background: var(--app-control-bg);
+  }
+
+  .summary-popover {
+    display: flex;
+    min-width: 10rem;
+    max-width: 20rem;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.75rem;
+    font-size: var(--type-small);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .summary-popover button {
+    align-self: flex-start;
+    margin-top: 0.25rem;
+  }
+
+  .summary-pages {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 1rem;
+  }
+
+  .summary-page-label {
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .summary-empty {
+    padding: 1.5rem 0;
+    border-top: 2px solid var(--font-color);
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  /* Phones: each row is a block, title on top and the figures below it. */
+  @media (max-width: 767px) {
+    .summary-table thead tr {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0 1rem;
+    }
+
+    .summary-table thead :global(th) {
+      padding-right: 0;
+    }
+
+    .summary-actions-head {
+      display: none;
+    }
+
+    .summary-table tbody tr {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.25rem 0.75rem;
+      padding: 0.6rem 0;
+    }
+
+    .summary-table td {
+      padding: 0 !important;
+    }
+
+    .summary-date,
+    .summary-title,
+    .summary-actions {
+      grid-column: 1 / -1;
+    }
+
+    .summary-actions {
+      text-align: left;
+    }
+
+    .summary-number {
+      text-align: left;
+      font-size: var(--type-small) !important;
+    }
+
+    .summary-number::before {
+      content: attr(data-label);
+      display: block;
+      color: var(--app-muted-fg);
+      font-size: var(--type-label);
+    }
+  }
+</style>

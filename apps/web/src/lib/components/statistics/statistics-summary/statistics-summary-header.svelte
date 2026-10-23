@@ -20,17 +20,13 @@
   export let statisticsSummaryKey: StatisticsSummaryKey;
   export let options: StatisticsDataSource[];
   export let selectionKey: keyof BookStatistic;
-  export let gridRow: number | undefined;
   export let hasRowInEdit: boolean;
-  export let isHidden = false;
+  export let numeric = false;
   export let title = '';
 
   const dispatch = createEventDispatcher<{
     propertyChange: StatisticsDataSourceChange;
   }>();
-
-  const tableHeaderClasses =
-    'flex items-center py-2.5 px-0 text-sm w-full bg-transparent border-0 md:border-b-2 border-[color:var(--border-color)] appearance-none focus:outline-none focus:ring-0 focus:border-[color:var(--accent-color)] peer lg:text-base';
 
   let summaryHeaderPopover: Popover;
 
@@ -39,63 +35,104 @@
   $: selectedOption = options.find((option) => option.key === selectionKey)!;
 </script>
 
-<div
-  tabindex="0"
-  role="button"
-  class={tableHeaderClasses}
-  class:hidden={isHidden}
-  style:grid-row={gridRow ? `${gridRow}/${gridRow}` : null}
+<th
+  class="summary-th"
+  class:summary-th-numeric={numeric}
+  aria-sort={optionKeys.has($lastStatisticsSummarySortProperty$)
+    ? $lastStatisticsSummarySortDirection$ === SortDirection.ASC
+      ? 'ascending'
+      : 'descending'
+    : undefined}
 >
-  {#if options.length > 1 && !hasRowInEdit}
-    <Popover
-      placement={'bottom-start'}
-      fallbackPlacements={['top']}
-      innerContainerStyles={'width: 100%'}
-      containerStyles={'flex: 1;'}
-      bind:this={summaryHeaderPopover}
-    >
-      <div {title}>{selectedOption.label}</div>
-      <div slot="content" class="flex flex-col overflow-auto w-46 p-2">
-        {#each options as option (option.key)}
-          <button
-            class="flex flex-1 my-2 hover:opacity-50 hover:bg-hover"
-            on:click|stopPropagation={() => {
-              selectedOption = option;
-              dispatch('propertyChange', { property: option.key, statisticsSummaryKey });
-              summaryHeaderPopover.toggleOpen();
-            }}
-          >
-            {option.label}
-          </button>
-        {/each}
-      </div>
-    </Popover>
-  {:else}
-    <button
-      class="flex flex-1 text-left"
-      class:cursor-not-allowed={hasRowInEdit}
-      disabled={hasRowInEdit}
-      {title}
-      on:click={() => {
-        dispatch('propertyChange', { property: selectedOption.key, statisticsSummaryKey });
-      }}
-    >
-      {selectedOption.label}
-    </button>
-  {/if}
-  <button
-    title="Click to select/sort by this Attribute"
-    class="ml-4"
-    class:opacity-20={!optionKeys.has($lastStatisticsSummarySortProperty$)}
-    class:cursor-not-allowed={hasRowInEdit}
-    disabled={hasRowInEdit}
-    on:click={() =>
-      dispatch('propertyChange', { property: selectedOption.key, statisticsSummaryKey })}
-  >
-    {#if $lastStatisticsSummarySortDirection$ === SortDirection.ASC}
-      <Fa icon={faArrowUpShortWide} />
+  <div class="summary-th-inner">
+    {#if options.length > 1 && !hasRowInEdit}
+      <Popover
+        placement={'bottom-start'}
+        fallbackPlacements={['top']}
+        panelClasses="app-popover-panel"
+        bind:this={summaryHeaderPopover}
+      >
+        <button type="button" class="summary-th-choice" {title}>{selectedOption.label}</button>
+        <div slot="content" class="flex flex-col">
+          {#each options as option (option.key)}
+            <button
+              type="button"
+              class="app-popover-item"
+              class:app-popover-item-active={option.key === selectedOption.key}
+              on:click|stopPropagation={() => {
+                selectedOption = option;
+                dispatch('propertyChange', { property: option.key, statisticsSummaryKey });
+                summaryHeaderPopover.toggleOpen();
+              }}
+            >
+              {option.label}
+            </button>
+          {/each}
+        </div>
+      </Popover>
     {:else}
-      <Fa icon={faArrowDownWideShort} />
+      <button
+        type="button"
+        class="summary-th-choice"
+        disabled={hasRowInEdit}
+        {title}
+        on:click={() => {
+          dispatch('propertyChange', { property: selectedOption.key, statisticsSummaryKey });
+        }}
+      >
+        {selectedOption.label}
+      </button>
     {/if}
-  </button>
-</div>
+    <button
+      type="button"
+      title="Sort by this column"
+      aria-label="Sort by {selectedOption.label}"
+      class="summary-th-sort"
+      class:summary-th-sort-active={optionKeys.has($lastStatisticsSummarySortProperty$)}
+      disabled={hasRowInEdit}
+      on:click={() =>
+        dispatch('propertyChange', { property: selectedOption.key, statisticsSummaryKey })}
+    >
+      {#if $lastStatisticsSummarySortDirection$ === SortDirection.ASC}
+        <Fa icon={faArrowUpShortWide} />
+      {:else}
+        <Fa icon={faArrowDownWideShort} />
+      {/if}
+    </button>
+  </div>
+</th>
+
+<style>
+  .summary-th-inner {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .summary-th-numeric .summary-th-inner {
+    justify-content: flex-end;
+  }
+
+  .summary-th-choice {
+    color: inherit;
+    text-align: inherit;
+  }
+
+  .summary-th-choice:hover:not(:disabled) {
+    color: var(--font-color);
+  }
+
+  .summary-th-sort {
+    font-size: 0.7rem;
+    opacity: 0.35;
+  }
+
+  .summary-th-sort-active {
+    color: var(--font-color);
+    opacity: 1;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+</style>

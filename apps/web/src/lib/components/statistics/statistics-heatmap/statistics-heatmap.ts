@@ -8,7 +8,7 @@ export const heatmapDayElementSize = 15;
 
 export const heatmapDayMargins = 20;
 
-export const heatmapGridGapValue = 1;
+export const heatmapGridGapValue = 3;
 
 export const heatmapMaxValueColor = 'var(--heatmap-high)';
 

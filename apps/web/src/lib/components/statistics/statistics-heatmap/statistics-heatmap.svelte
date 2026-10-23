@@ -1,13 +1,7 @@
 <script lang="ts">
-  import {
-    faChevronLeft,
-    faChevronRight,
-    faClose,
-    faLayerGroup,
-    faRepeat
-  } from '@fortawesome/free-solid-svg-icons';
   import { ReadingGoalFrequency } from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker';
   import Popover from '$lib/components/popover/popover.svelte';
+  import SectionHead from '$lib/components/section-head.svelte';
   import {
     type HeatmapMonthLabel,
     type HeatmapStreak,
@@ -48,9 +42,11 @@
   } from '$lib/functions/statistic-util';
   import { caluclatePercentage, dummyFn, limitToRange, pluralize } from '$lib/functions/utils';
   import { debounceTime, fromEvent, tap } from 'rxjs';
+  import { t$ } from '$lib/i18n';
   import { onMount, tick } from 'svelte';
-  import Fa from 'svelte-fa';
 
+  /** Section number of the Study Book section head; without one the title is a subheading */
+  export let number: number | undefined = undefined;
   export let heatmapType: HeatmapType = HeatmapType.STATISTICS;
   export let heatmapAggregration: HeatmapDataAggregration;
   export let statisticsData: BooksDbStatistic[];
@@ -84,9 +80,17 @@
   let selectedStreak = HeatmapStreakType.NONE;
   let selectedStreakDates = new Set<string>();
 
-  $: heatmapLabel = `Reading ${
-    heatmapType === HeatmapType.STATISTICS ? '' : 'Goals '
-  }Data for ${heatmapYear}`;
+  $: heatmapTitle = $t$(
+    heatmapType === HeatmapType.STATISTICS ? 'statistics.calendar' : 'statistics.readingGoals'
+  );
+
+  $: streakModes = [
+    { mode: HeatmapDataAggregration.YEAR, label: String(heatmapYear) },
+    { mode: HeatmapDataAggregration.ALL_TIME, label: $t$('statistics.allTime') }
+  ];
+
+  // The scale colorByRating draws from, empty day first
+  const legendColors = ['', ...[0, 33, 67, 100].map((percent) => colorMix(percent))];
 
   $: dayLabels = [
     ...daysOfWeekShort.slice($lastStartDayOfWeek$),
@@ -232,7 +236,7 @@
     }
 
     const containerWidth = heatmapElement.parentElement.clientWidth;
-    const arrowElementsWidth = 30;
+    const arrowElementsWidth = 0;
     const gridGap = heatmapGridGapValue * 2;
     const gridColumnsPerYear = 54;
     const gridColumnsWidth = gridColumnsPerYear * gridGap;
@@ -795,6 +799,10 @@
   function colorByRating(minValue: number, maxValue: number, value: number) {
     const percent = Math.round(limitToRange(0, 1, value / (maxValue - minValue)) * 100);
 
+    return colorMix(percent);
+  }
+
+  function colorMix(percent: number) {
     return `color-mix(in srgb, var(--heatmap-high) ${percent}%, var(--heatmap-low))`;
   }
 
@@ -1043,77 +1051,102 @@
 </script>
 
 {$resizeHandler$ ?? ''}
-<div class="mb-4 flex justify-center">
-  {heatmapLabel}
-  <button
-    title="Return to current Year"
-    class="mx-4 hover:text-accent-strong"
-    on:click={() => changeHeatmapYear(today.getFullYear() - heatmapYear)}
-  >
-    <Fa icon={faRepeat} />
-  </button>
-  <button
-    title="Switch (Streak) Data between 'All Time' and 'Current Year'"
-    class="text-lg hover:text-accent-strong"
-    on:click={() =>
-      (heatmapAggregration =
-        heatmapAggregration === HeatmapDataAggregration.ALL_TIME
-          ? HeatmapDataAggregration.YEAR
-          : HeatmapDataAggregration.ALL_TIME)}
-  >
-    <Fa icon={faLayerGroup} />
-  </button>
-</div>
-<div class="flex justify-between">
-  <button
-    title="Move Backwards"
-    class="hover:text-accent-strong"
-    on:click={() => {
-      if (heatmapElement.scrollLeft === 0) {
-        changeHeatmapYear(-1);
-      } else {
-        heatmapElement.scrollBy({
-          top: 0,
-          left: -(heatmapElement.clientWidth / 2),
-          behavior: 'smooth'
-        });
-      }
-    }}
-  >
-    <Fa icon={faChevronLeft} />
-  </button>
+<section class="heatmap" aria-label={heatmapTitle}>
+  {#if number}
+    <SectionHead {number} title={heatmapTitle} count={heatmapYear} />
+  {:else}
+    <h3 class="heatmap-subtitle">{heatmapTitle} <span>{heatmapYear}</span></h3>
+  {/if}
+  <div class="heatmap-toolbar">
+    <div class="heatmap-nav">
+      <button
+        type="button"
+        class="app-button app-button-quiet"
+        on:click={() => {
+          if (heatmapElement.scrollLeft === 0) {
+            changeHeatmapYear(-1);
+          } else {
+            heatmapElement.scrollBy({
+              top: 0,
+              left: -(heatmapElement.clientWidth / 2),
+              behavior: 'smooth'
+            });
+          }
+        }}
+      >
+        {$t$('statistics.earlier')}
+      </button>
+      {#if heatmapYear !== today.getFullYear()}
+        <button
+          type="button"
+          class="app-button app-button-quiet"
+          on:click={() => changeHeatmapYear(today.getFullYear() - heatmapYear)}
+        >
+          {$t$('statistics.thisYear')}
+        </button>
+      {/if}
+      <button
+        type="button"
+        class="app-button app-button-quiet"
+        on:click={() => {
+          const scrollWidth =
+            heatmapElement.scrollWidth - heatmapElement.scrollLeft - heatmapDayMargins;
+          if (scrollWidth <= heatmapElement.clientWidth) {
+            changeHeatmapYear(1);
+          } else {
+            heatmapElement.scrollBy({
+              top: 0,
+              left: heatmapElement.clientWidth / 2,
+              behavior: 'smooth'
+            });
+          }
+        }}
+      >
+        {$t$('statistics.later')}
+      </button>
+    </div>
+    <div class="heatmap-streaks">
+      <span id="heatmap-streaks-{heatmapType}">{$t$('statistics.streaks')}</span>
+      <div class="app-segmented" role="radiogroup" aria-labelledby="heatmap-streaks-{heatmapType}">
+        {#each streakModes as { mode, label } (mode)}
+          <button
+            type="button"
+            role="radio"
+            aria-checked={heatmapAggregration === mode}
+            class="app-segment"
+            class:app-segment-selected={heatmapAggregration === mode}
+            on:click={() => (heatmapAggregration = mode)}
+          >
+            {label}
+          </button>
+        {/each}
+      </div>
+    </div>
+  </div>
   <div
-    class="grid items-center overflow-x-auto py-1"
+    class="heatmap-grid"
+    class:heatmap-grid-streak={selectedStreakDates.size > 0}
     style:grid-auto-columns={`${dayElementSize}px`}
     style:grid-auto-rows={`${dayElementSize}px`}
     style:gap={`${heatmapGridGapValue}px`}
-    style:margin={`0 ${heatmapDayMargins}px`}
     bind:this={heatmapElement}
   >
     {#each monthLabels as label (label.monthLabel)}
       <div
-        class="text-xs md:text-sm"
+        class="heatmap-label"
         style:grid-row={'1/1'}
         style:grid-column={`${label.heatmapColumn}`}
         style:height={`${dayElementSize}px`}
-        style:margin-bottom={`${dayElementSize}px`}
       >
         {label.monthLabel}
       </div>
     {/each}
-    <div
-      class="sticky left-0"
-      style:grid-row={'1/1'}
-      style:grid-column={`1/3`}
-      style:height={`${dayElementSize * 2}px`}
-      style:background-color={'var(--background-color)'}
-    />
+    <div class="heatmap-label heatmap-label-day" style:grid-row={'1/1'} style:grid-column={`1/3`} />
     {#each dayLabels as dayLabel, index (dayLabel)}
       <div
-        class="sticky left-0 text-xs sm:text-sm"
+        class="heatmap-label heatmap-label-day"
         style:grid-row={`${index + 2}/${index + 2}`}
         style:grid-column={`1/3`}
-        style:background-color={'var(--background-color)'}
       >
         {dayLabel}
       </div>
@@ -1125,22 +1158,19 @@
         (heatmapDay.dateString === $lastStatisticsStartDate$ ||
           heatmapDay.dateString === $lastStatisticsEndDate$)}
       <div
-        tabindex="0"
+        tabindex={heatmapDay.isCurrentYear ? 0 : -1}
         role="cell"
-        class="justify-self-center fadeIn"
+        class="heatmap-day"
         class:cursor-pointer={heatmapDay.isCurrentYear}
         class:heatmap-day-current={heatmapDay.isCurrentYear}
         class:heatmap-day-other={!heatmapDay.isCurrentYear}
-        class:border-warning={isSelected}
-        class:border-accent={isToday}
-        class:highlight={selectedStreakDates.has(heatmapDay.dateString)}
-        style:animation-delay={`${3 * heatmapDay.heatmapColumn}ms`}
-        style:height={`${dayElementSize}px`}
-        style:width={`${dayElementSize}px`}
+        class:heatmap-day-selected={isSelected}
+        class:heatmap-day-today={isToday}
+        class:heatmap-day-future={heatmapDay.isCurrentYear && heatmapDay.dateString > todayKey}
+        class:heatmap-day-streak={selectedStreakDates.has(heatmapDay.dateString)}
         style:grid-row={`${heatmapDay.heatmapRow}/${heatmapDay.heatmapRow}`}
         style:grid-column={`${heatmapDay.heatmapColumn}/${heatmapDay.heatmapColumn}`}
         style:background-color={heatmapDay.color || null}
-        style:border-width={`${isSelected || isToday ? '3' : '1'}px`}
         title={`${heatmapDay.isCurrentYear ? `${heatmapDay.dayDetails.join('\n')}` : ''}`}
         data-date={heatmapDay.dateString}
         on:click={(event) => {
@@ -1161,226 +1191,294 @@
     {/each}
     {#if popoverDetails.length}
       <Popover yOffset={5} bind:this={heatmapDetailDataPopover}>
-        <div
-          slot="content"
-          class="p-2"
-          class:w-36={heatmapType === HeatmapType.STATISTICS}
-          class:w-42={heatmapType === HeatmapType.READING_GOALS}
-        >
+        <div slot="content" class="heatmap-popover">
+          {#each popoverDetails as popoverDetail (popoverDetail)}
+            <div>{popoverDetail}</div>
+          {/each}
           <button
-            title="Close Details"
-            class="flex w-full justify-end absolute right-2"
+            type="button"
+            class="app-button app-button-quiet"
             on:click={() => (popoverDetails = [])}
           >
-            <Fa icon={faClose} />
+            {$t$('statistics.close')}
           </button>
-          {#each popoverDetails as popoverDetail (popoverDetail)}
-            <div class="mb-2 last:mb-0">{popoverDetail}</div>
-          {/each}
         </div>
       </Popover>
     {/if}
   </div>
-  <button
-    title="Move Forwards"
-    class="hover:text-accent-strong"
-    on:click={() => {
-      const scrollWidth =
-        heatmapElement.scrollWidth - heatmapElement.scrollLeft - heatmapDayMargins;
-      if (scrollWidth <= heatmapElement.clientWidth) {
-        changeHeatmapYear(1);
-      } else {
-        heatmapElement.scrollBy({
-          top: 0,
-          left: heatmapElement.clientWidth / 2,
-          behavior: 'smooth'
-        });
-      }
-    }}
-  >
-    <Fa icon={faChevronRight} />
-  </button>
-</div>
-{#if currentHeatmapData}
-  {@const isAllTime = heatmapAggregration === HeatmapDataAggregration.ALL_TIME}
-  {@const mapAggregationlabel = `(${isAllTime ? 'All Time' : heatmapYear})`}
-  {@const typeLabel = `${heatmapType === HeatmapType.STATISTICS ? 'day' : 'goal'}`}
-  {@const daysReadLabel = `Days read ${mapAggregationlabel}:`}
-  {@const readingGoalsCompletedLabel = `100% completed ${mapAggregationlabel}:`}
-  {@const longestStreaksLabel = `Longest ${pluralize(
-    currentHeatmapData.longestStreaks.length,
-    'Streak',
-    false
-  )} ${mapAggregationlabel}:`}
-  {@const longestStreaksDuration = currentHeatmapData.longestStreaks[0]?.duration || 0}
-  {@const longestStreaksCount = `${
-    longestStreaksDuration
-      ? ` (${pluralize(currentHeatmapData.longestStreaks.length, 'Time')})`
-      : ''
-  }`}
-  {@const longestStreaksDays = `${longestStreaksDuration} ${pluralize(
-    longestStreaksDuration,
-    typeLabel,
-    false
-  )}`}
-  {@const currentStreakLabel = `Current Streak ${mapAggregationlabel}:`}
-  {@const currentStreakDays = pluralize(currentHeatmapData.currentStreak.duration, typeLabel)}
-  <div class="hidden grid-cols-3 justify-center mt-4 text-center text-sm sm:grid">
-    {#if checkIsStatisticsHeatmapData(currentHeatmapData)}
-      <div>{daysReadLabel}</div>
-    {:else}
-      <button
-        title="Highlight completed Reading Goals"
-        on:click={() =>
-          highlightStreaks(currentHeatmapData.streaks, HeatmapStreakType.READING_GOALS_COMPLETED)}
-      >
-        {readingGoalsCompletedLabel}
-      </button>
-    {/if}
-    <div>
-      <button
-        title="Highlight Streak"
-        on:click={() =>
-          highlightStreaks(currentHeatmapData.longestStreaks, HeatmapStreakType.LONGEST)}
-      >
-        {longestStreaksLabel}
-      </button>
-    </div>
-    <div>
-      <button
-        title="Highlight Streak"
-        on:click={() =>
-          highlightStreaks(
-            currentHeatmapData.currentStreak.duration ? [currentHeatmapData.currentStreak] : [],
-            HeatmapStreakType.CURRENT
-          )}
-      >
-        {currentStreakLabel}
-      </button>
-    </div>
-    {#if checkIsStatisticsHeatmapData(currentHeatmapData)}
-      <div>{currentHeatmapData.daysRead}</div>
-    {:else}
-      <button
-        title="Highlight completed Reading Goals"
-        on:click={() =>
-          highlightStreaks(currentHeatmapData.streaks, HeatmapStreakType.READING_GOALS_COMPLETED)}
-      >
-        {currentHeatmapData.completedReadingGoals}
-      </button>
-    {/if}
-    <div>
-      <button
-        title="Highlight Streak"
-        on:click={() =>
-          highlightStreaks(currentHeatmapData.longestStreaks, HeatmapStreakType.LONGEST)}
-      >
-        {longestStreaksDays}{longestStreaksCount}
-      </button>
-    </div>
-    <div>
-      <button
-        title="Highlight Streak"
-        on:click={() =>
-          highlightStreaks(
-            currentHeatmapData.currentStreak.duration ? [currentHeatmapData.currentStreak] : [],
-            HeatmapStreakType.CURRENT
-          )}
-      >
-        {currentStreakDays}
-      </button>
-    </div>
+  <div class="heatmap-legend" aria-hidden="true">
+    {$t$('statistics.less')}
+    {#each legendColors as color, index (index)}
+      <span class="heatmap-legend-cell" style:background-color={color || null} />
+    {/each}
+    {$t$(heatmapType === HeatmapType.STATISTICS ? 'statistics.moreTime' : 'statistics.moreGoal')}
   </div>
-  <div class="grid grid-cols-[auto_auto] gap-y-2 mt-4 text-xs sm:hidden">
-    {#if checkIsStatisticsHeatmapData(currentHeatmapData)}
-      <div>{daysReadLabel}</div>
-      <div>{currentHeatmapData.daysRead}</div>
-    {:else}
-      <button
-        title="Highlight completed Reading Goals"
-        class="text-left"
-        on:click={() =>
-          highlightStreaks(currentHeatmapData.streaks, HeatmapStreakType.READING_GOALS_COMPLETED)}
-      >
-        {readingGoalsCompletedLabel}
-      </button>
-      <button
-        title="Highlight completed Reading Goals"
-        class="text-left"
-        on:click={() =>
-          highlightStreaks(currentHeatmapData.streaks, HeatmapStreakType.READING_GOALS_COMPLETED)}
-      >
-        {currentHeatmapData.completedReadingGoals}
-      </button>
-    {/if}
-    <button
-      title="Highlight Streak"
-      class="text-left"
-      on:click={() =>
-        highlightStreaks(currentHeatmapData.longestStreaks, HeatmapStreakType.LONGEST)}
-    >
-      {longestStreaksLabel}
-    </button>
-    <button
-      title="Highlight Streak"
-      class="text-left"
-      on:click={() =>
-        highlightStreaks(currentHeatmapData.longestStreaks, HeatmapStreakType.LONGEST)}
-    >
-      {longestStreaksDays}{longestStreaksCount}
-    </button>
-    <div>
-      <button
-        title="Highlight Streak"
-        on:click={() =>
-          highlightStreaks(
-            currentHeatmapData.currentStreak.duration ? [currentHeatmapData.currentStreak] : [],
-            HeatmapStreakType.CURRENT
-          )}
-      >
-        {currentStreakLabel}
-      </button>
-    </div>
-    <div>
-      <button
-        title="Highlight Streak"
-        on:click={() =>
-          highlightStreaks(
-            currentHeatmapData.currentStreak.duration ? [currentHeatmapData.currentStreak] : [],
-            HeatmapStreakType.CURRENT
-          )}
-      >
-        {currentStreakDays}
-      </button>
-    </div>
-  </div>
-{/if}
+  {#if currentHeatmapData}
+    {@const isAllTime = heatmapAggregration === HeatmapDataAggregration.ALL_TIME}
+    {@const scope = isAllTime ? $t$('statistics.allTime') : String(heatmapYear)}
+    {@const typeLabel = `${heatmapType === HeatmapType.STATISTICS ? 'day' : 'goal'}`}
+    {@const longestStreaksDuration = currentHeatmapData.longestStreaks[0]?.duration || 0}
+    {@const longestStreaksCount = `${
+      currentHeatmapData.longestStreaks.length > 1
+        ? ` (${pluralize(currentHeatmapData.longestStreaks.length, 'time')})`
+        : ''
+    }`}
+    <dl class="heatmap-totals">
+      <div>
+        {#if checkIsStatisticsHeatmapData(currentHeatmapData)}
+          <dt>{$t$('statistics.daysReadIn', { scope })}</dt>
+          <dd>{currentHeatmapData.daysRead}</dd>
+        {:else}
+          <dt>{$t$('statistics.goalsCompletedIn', { scope })}</dt>
+          <dd>
+            <button
+              type="button"
+              title={$t$('statistics.highlight')}
+              on:click={() =>
+                highlightStreaks(
+                  currentHeatmapData.streaks,
+                  HeatmapStreakType.READING_GOALS_COMPLETED
+                )}
+            >
+              {currentHeatmapData.completedReadingGoals}
+            </button>
+          </dd>
+        {/if}
+      </div>
+      <div>
+        <dt>{$t$('statistics.longestStreakIn', { scope })}</dt>
+        <dd>
+          <button
+            type="button"
+            title={$t$('statistics.highlight')}
+            aria-pressed={selectedStreak === HeatmapStreakType.LONGEST}
+            on:click={() =>
+              highlightStreaks(currentHeatmapData.longestStreaks, HeatmapStreakType.LONGEST)}
+          >
+            {pluralize(longestStreaksDuration, typeLabel)}{longestStreaksCount}
+          </button>
+        </dd>
+      </div>
+      <div>
+        <dt>{$t$('statistics.currentStreakIn', { scope })}</dt>
+        <dd>
+          <button
+            type="button"
+            title={$t$('statistics.highlight')}
+            aria-pressed={selectedStreak === HeatmapStreakType.CURRENT}
+            on:click={() =>
+              highlightStreaks(
+                currentHeatmapData.currentStreak.duration ? [currentHeatmapData.currentStreak] : [],
+                HeatmapStreakType.CURRENT
+              )}
+          >
+            {pluralize(currentHeatmapData.currentStreak.duration, typeLabel)}
+          </button>
+        </dd>
+      </div>
+    </dl>
+  {/if}
+</section>
 
 <style>
+  .heatmap {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .heatmap-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1.5rem;
+  }
+
+  .heatmap-nav {
+    display: flex;
+    gap: 1.25rem;
+  }
+
+  .heatmap-streaks {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  .heatmap-grid {
+    display: grid;
+    align-items: center;
+    overflow-x: auto;
+    padding: 2px 2px 0.5rem;
+  }
+
+  .heatmap-label {
+    color: var(--app-muted-fg);
+    font-size: var(--type-label);
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .heatmap-label-day {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    background: var(--background-color);
+  }
+
+  .heatmap-day {
+    width: 100%;
+    height: 100%;
+    border-radius: 2px;
+  }
+
+  .heatmap-day:focus-visible {
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 1px;
+  }
+
   .heatmap-day-current {
     background-color: var(--heatmap-empty);
   }
 
+  .heatmap-subtitle {
+    font-size: var(--type-body);
+    font-weight: 700;
+  }
+
+  .heatmap-subtitle span {
+    margin-left: 0.5rem;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+    font-weight: 400;
+  }
+
+  /* Days still to come: an empty ruled square on the paper */
+  .heatmap-day-future {
+    background-color: transparent;
+    box-shadow: inset 0 0 0 1px var(--border-color);
+  }
+
   .heatmap-day-other {
-    background-color: color-mix(in srgb, var(--heatmap-empty) 45%, transparent);
+    background-color: transparent;
   }
 
-  .highlight {
-    box-shadow: 0px 1px 5px 1px black;
+  .heatmap-day-selected {
+    outline: 1px solid var(--app-muted-fg);
+    outline-offset: 1px;
   }
 
-  @media (min-width: 1024px) {
-    .fadeIn {
-      animation: fadeIn 0.1s ease-in backwards;
+  .heatmap-day-today {
+    outline: 2px solid var(--font-color);
+    outline-offset: 1px;
+  }
+
+  .heatmap-grid-streak .heatmap-day-current:not(.heatmap-day-streak) {
+    opacity: 0.25;
+  }
+
+  .heatmap-popover {
+    display: flex;
+    min-width: 10rem;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.75rem;
+    font-size: var(--type-small);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .heatmap-popover button {
+    align-self: flex-start;
+    margin-top: 0.25rem;
+  }
+
+  .heatmap-legend {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: var(--app-muted-fg);
+    font-size: var(--type-label);
+  }
+
+  .heatmap-legend-cell {
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 2px;
+    background: var(--heatmap-empty);
+  }
+
+  .heatmap-legend-cell:first-of-type {
+    margin-left: 0.2rem;
+  }
+
+  .heatmap-legend-cell:last-of-type {
+    margin-right: 0.2rem;
+  }
+
+  .heatmap-totals {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    border-top: 2px solid var(--font-color);
+  }
+
+  .heatmap-totals > div {
+    display: flex;
+    min-height: 2.5rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .heatmap-totals dt {
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  .heatmap-totals dd {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .heatmap-totals button {
+    font-weight: inherit;
+    text-decoration: underline dotted var(--app-muted-fg);
+    text-underline-offset: 0.25em;
+  }
+
+  .heatmap-totals button[aria-pressed='true'] {
+    color: var(--accent-strong-color);
+  }
+
+  @media (min-width: 768px) {
+    .heatmap-totals {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
-    @keyframes fadeIn {
-      0% {
-        transform: scale3d(0, 0, 0);
-      }
-      100% {
-        transform: scale3d(1, 1, 1);
-      }
+    .heatmap-totals > div {
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 0.15rem;
+      padding: 0.75rem 1rem 0.75rem 0;
+    }
+
+    .heatmap-totals > div + div {
+      padding-left: 1rem;
+      border-left: 1px solid var(--border-color);
+    }
+
+    .heatmap-totals dd {
+      font-size: var(--type-h2);
+      text-align: left;
     }
   }
 </style>
