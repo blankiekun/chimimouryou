@@ -7,7 +7,7 @@
 /**
  * The browser database for reader extras (highlights, "Story so far" summaries,
  * lorebooks, audiobooks, kanji seen, visual novel pages read, Audiobookshelf subtitles,
- * generated furigana readings files and
+ * generated furigana readings files, the analysis tools' difficulty estimates and word lists and
  * known words from Anki), separate from upstream's books
  * database. Not part of upstream.
  */
@@ -15,6 +15,7 @@
 import { openDB, type DBSchema } from 'idb';
 import type { BookAnnotations } from '$lib/data/annotations';
 import type { BookAudiobook } from '$lib/data/audiobook';
+import type { LocalEstimate, LocalWordList } from '$lib/data/analysis-tools';
 import type { CachedReadings } from '$lib/data/generated-furigana';
 import type { AbsSubtitles } from '$lib/data/audiobookshelf';
 import type { BookKanji } from '$lib/data/book-kanji';
@@ -36,6 +37,9 @@ interface ReaderDb extends DBSchema {
   vnRead: { key: string; value: VnRead };
   absSubtitles: { key: string; value: AbsSubtitles };
   readings: { key: string; value: CachedReadings };
+  /** Local books' difficulty estimates and word lists, made by the analysis tools */
+  estimates: { key: string; value: LocalEstimate };
+  wordLists: { key: string; value: LocalWordList };
   /**
    * 'words' and 'coverage' (known-words.ts), 'met' and 'list:<id>' (words-met.ts), 'marks'
    * (word-marks.ts), 'history' (words-history.ts), 'kanji:<title>' (book-kanji.ts)
@@ -58,7 +62,7 @@ let dbPromise: ReturnType<typeof openDB<ReaderDb>> | undefined;
 /** Named ttu-annotations for historical reasons; it holds every reader extra. */
 export function readerDb() {
   dbPromise ??= new Promise((resolve, reject) => {
-    openDB<ReaderDb>('ttu-annotations', 6, {
+    openDB<ReaderDb>('ttu-annotations', 7, {
       upgrade(database, oldVersion) {
         if (oldVersion < 1) {
           database.createObjectStore('annotations', { keyPath: 'title' });
@@ -80,6 +84,10 @@ export function readerDb() {
         }
         if (oldVersion < 6) {
           database.createObjectStore('readings', { keyPath: 'title' });
+        }
+        if (oldVersion < 7) {
+          database.createObjectStore('estimates', { keyPath: 'title' });
+          database.createObjectStore('wordLists', { keyPath: 'title' });
         }
       },
       // Another tab still has the previous version open; the upgrade waits for it.

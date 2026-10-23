@@ -12,7 +12,7 @@
  */
 
 import { serverFetch } from '$lib/data/server';
-import { lastValueFrom, Observable } from 'rxjs';
+import { BehaviorSubject, lastValueFrom, Observable } from 'rxjs';
 import { difficultyApiUrl, loadCalibreCatalog } from '$lib/data/calibre';
 import { readerDb } from '$lib/data/reader-db';
 import { generatedFurigana$ } from '$lib/data/store';
@@ -28,6 +28,19 @@ export interface ReadingsFile {
   glosses: [number, number, string, string][][];
   /** [Δstart, word index, gloss index or -1, ...] */
   occ: number[];
+}
+
+/**
+ * The open book's furigana being prepared, for the reader's Aa sheet: 'queued' while the server
+ * makes them, or the share done (0 to 1) while the analysis tools make them in the browser.
+ */
+export const furiganaProgress$ = new BehaviorSubject<
+  { title: string; progress: number | 'queued' } | undefined
+>(undefined);
+
+/** Ends `title`'s entry in furiganaProgress$ (another book's stays). */
+export function endFuriganaProgress(title: string) {
+  if (furiganaProgress$.getValue()?.title === title) furiganaProgress$.next(undefined);
 }
 
 /** A readings file kept in the browser (reader-db `readings`), so books open with it at once. */
@@ -78,7 +91,7 @@ function sameReadings(a: ReadingsFile, b: ReadingsFile) {
  * service, offline). A copy kept in the browser is emitted first and stays when the server
  * can't be reached; the server's is emitted only when it differs. Always emits at least once.
  */
-export function generatedReadings$(title: string) {
+export function generatedReadings$(title: string, showProgress = false) {
   return new Observable<ReadingsFile | undefined>((subscriber) => {
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -88,6 +101,7 @@ export function generatedReadings$(title: string) {
       // A file rewritten with the same readings (new ETag, e.g. a newer bookdata name) would re-render the book for nothing.
       const same = file && cached && sameReadings(file, cached.file);
       if ((file || !cached) && !same) subscriber.next(file);
+      endFuriganaProgress(title);
       subscriber.complete();
     };
 
@@ -106,8 +120,10 @@ export function generatedReadings$(title: string) {
         done(result?.file);
       } else if (tries < pollLimit) {
         if (!tries && !cached) subscriber.next(undefined);
+        if (showProgress && !cached) furiganaProgress$.next({ title, progress: 'queued' });
         timer = setTimeout(() => attempt(id, tries + 1), pollDelays[tries] ?? pollInterval);
       } else {
+        endFuriganaProgress(title);
         subscriber.complete();
       }
     };
@@ -135,6 +151,7 @@ export function generatedReadings$(title: string) {
       });
 
     return () => {
+      if (showProgress) endFuriganaProgress(title);
       stopped = true;
       clearTimeout(timer);
     };

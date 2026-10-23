@@ -30,7 +30,15 @@
   } from '$lib/data/calibre';
   import { difficultyNameKey } from '$lib/data/difficulty';
   import { bookKanjiCount } from '$lib/data/book-kanji';
-  import type { BookWord, WordCoverage } from '$lib/data/book-words';
+  import {
+    analysisToolsState$,
+    checkAnalysisTools,
+    keptEstimate,
+    localEstimate,
+    localWordList,
+    type LocalEstimate
+  } from '$lib/data/analysis-tools';
+  import { wordCoverage, type BookWord, type WordCoverage } from '$lib/data/book-words';
   import { dialogManager } from '$lib/data/dialog-manager';
   import {
     bookCoverage,
@@ -85,6 +93,9 @@
   let layer: HTMLDivElement;
   let calibreBook: CalibreBook | undefined;
   let estimate: CalibreDifficulty | undefined;
+  /** Standalone: the analysis tools' estimate of a stored book, and its progress while made */
+  let localScored: LocalEstimate | undefined;
+  let estimating: number | undefined;
   /** The book's word list and the words known, for the Words row */
   let listWords: BookWord[] = [];
   let knownSet: KnownSet | undefined;
@@ -108,7 +119,19 @@
   $: source ??= defaultSource(kind);
   $: characters = book.characters || estimate?.characters || 0;
   $: remaining = isReading(book) ? characters * (1 - book.progress) : characters;
-  $: hasDifficulty = isCalibre && kind !== 'manga' && book.calibreId !== undefined;
+  $: hasDifficulty =
+    (isCalibre && kind !== 'manga' && book.calibreId !== undefined) || !!localScored;
+  $: canEstimate =
+    standalone && kind === 'book' && !localScored && $analysisToolsState$.difficulty === 'ready';
+  $: scored = localScored
+    ? {
+        ...book,
+        difficulty: localScored.difficulty,
+        difficultyLow: localScored.low,
+        difficultyHigh: localScored.high,
+        words95: localScored.words95 ?? undefined
+      }
+    : book;
   $: canEdit = isCalibre && hasPermission($account$, 'series');
   $: onHome = $homeBookTitles$.includes(book.title) || isContinueReading(book, $homeRemovedTitles$);
   $: seriesBooks = book.series
@@ -125,17 +148,17 @@
       : undefined;
   /** The difficulty note: a few whole sentences, each only when its numbers exist */
   $: difficultyNote =
-    book.difficulty === undefined
+    scored.difficulty === undefined
       ? ''
       : [
-          book.difficultyLow !== undefined && book.difficultyHigh !== undefined
+          scored.difficultyLow !== undefined && scored.difficultyHigh !== undefined
             ? $t$('book.scoreRange', {
-                score: book.difficulty.toFixed(1),
-                low: book.difficultyLow.toFixed(1),
-                high: book.difficultyHigh.toFixed(1)
+                score: scored.difficulty.toFixed(1),
+                low: scored.difficultyLow.toFixed(1),
+                high: scored.difficultyHigh.toFixed(1)
               })
-            : $t$('book.score', { score: book.difficulty.toFixed(1) }),
-          book.words95 ? $t$('book.words95', { count: number(book.words95) }) : '',
+            : $t$('book.score', { score: scored.difficulty.toFixed(1) }),
+          scored.words95 ? $t$('book.words95', { count: number(scored.words95) }) : '',
           wordStats ? coverageSentence(wordStats, $t$) : '',
           estimate?.uniqueKanji ? $t$('book.kanji', { count: number(estimate.uniqueKanji) }) : ''
         ]
@@ -162,6 +185,7 @@
     // The layer rather than the back link, whose focus ring would show on every open.
     layer.focus();
     loadSpeed();
+    if (standalone) checkAnalysisTools();
 
     // Ask for the generated furigana now, so they are usually ready when the book opens.
     const readings =
@@ -202,6 +226,8 @@
     searchOpen = false;
     searchError = '';
     browserKanji = undefined;
+    localScored = undefined;
+    estimating = undefined;
 
     if (standalone && kind === 'book') {
       bookKanjiCount(book.id, title, book.characters)
@@ -209,6 +235,24 @@
           if (title === book.title) browserKanji = count;
         })
         .catch(() => {});
+    }
+
+    if (standalone && kind === 'book') {
+      // The estimate and word list the analysis tools made (analysis-tools.ts).
+      const [scores, local, known] = await Promise.all([
+        keptEstimate(title),
+        localWordList(title).catch(() => undefined),
+        refreshKnownWordsIfStale()
+          .then(getKnownSet)
+          .catch(() => undefined)
+      ]);
+
+      if (title === book.title) estimate = localScored = scores;
+      if (title === book.title && local && known) {
+        listWords = local.words;
+        knownSet = known;
+        wordStats = wordCoverage(local.words, known.isKnown, local.totals);
+      }
     }
 
     if (!isCalibre) {
@@ -301,6 +345,19 @@
     } finally {
       saving = false;
     }
+  }
+
+  /** Standalone: estimates the stored book with the analysis tools (analysis-tools.ts). */
+  async function estimateLocally() {
+    const title = book.title;
+    const data = await database.getData(book.id).catch(() => undefined);
+
+    if (!data?.elementHtml) return;
+    estimating = 0;
+    await localEstimate(title, data.elementHtml, (share) => {
+      if (title === book.title) estimating = share;
+    }).catch(() => undefined);
+    if (title === book.title) load();
   }
 
   function showDifficulty() {
@@ -401,11 +458,11 @@
           </div>
         {/if}
 
-        {#if hasDifficulty && book.difficulty !== undefined}
+        {#if hasDifficulty && scored.difficulty !== undefined}
           <PointBox
             label={$t$('book.difficulty')}
-            figure={book.difficulty.toFixed(1)}
-            unit={$t$('book.outOf', { band: $t$(difficultyNameKey(book.difficulty)) })}
+            figure={scored.difficulty.toFixed(1)}
+            unit={$t$('book.outOf', { band: $t$(difficultyNameKey(scored.difficulty)) })}
           >
             <div class="details-difficulty" title={difficultyNote}>
               <div class="details-difficulty-score">
@@ -413,16 +470,16 @@
                   {#each [0, 1, 2, 3, 4] as i (i)}
                     <span
                       ><span
-                        style:width="{Math.min(Math.max(book.difficulty - i, 0), 1) * 100}%"
+                        style:width="{Math.min(Math.max(scored.difficulty - i, 0), 1) * 100}%"
                       /></span
                     >
                   {/each}
                 </span>
-                {#if book.difficultyLow !== undefined && book.difficultyHigh !== undefined}
+                {#if scored.difficultyLow !== undefined && scored.difficultyHigh !== undefined}
                   <span class="details-small">
                     {$t$('book.likely', {
-                      low: book.difficultyLow.toFixed(1),
-                      high: book.difficultyHigh.toFixed(1)
+                      low: scored.difficultyLow.toFixed(1),
+                      high: scored.difficultyHigh.toFixed(1)
                     })}
                   </span>
                 {/if}
@@ -440,22 +497,24 @@
                     <dd>{$t$('book.kanjiFigureOnly')}</dd>
                   </div>
                 {/if}
-                {#if book.words95}
+                {#if scored.words95}
                   <div>
-                    <dt>{number(book.words95)}</dt>
+                    <dt>{number(scored.words95)}</dt>
                     <dd>{$t$('book.words95Figure')}</dd>
                   </div>
                 {/if}
               </dl>
             </div>
-            <button type="button" class="app-button app-button-quiet" on:click={showDifficulty}>
-              {$t$('book.difficultyDetails')}
-            </button>
+            {#if book.calibreId !== undefined}
+              <button type="button" class="app-button app-button-quiet" on:click={showDifficulty}>
+                {$t$('book.difficultyDetails')}
+              </button>
+            {/if}
           </PointBox>
         {/if}
 
         <dl class="details-facts">
-          {#if hasDifficulty && book.difficulty === undefined}
+          {#if hasDifficulty && scored.difficulty === undefined}
             <div>
               <dt>{$t$('book.difficulty')}</dt>
               <dd>
@@ -467,6 +526,26 @@
                 >
                   {$t$('book.difficultyDetails')}
                 </button>
+              </dd>
+            </div>
+          {:else if canEstimate}
+            <div>
+              <dt>{$t$('book.difficulty')}</dt>
+              <dd>
+                {#if estimating === undefined}
+                  {$t$('book.noEstimate')}
+                  <button
+                    type="button"
+                    class="app-button details-row-button"
+                    on:click={estimateLocally}
+                  >
+                    {$t$('book.estimate')}
+                  </button>
+                {:else}
+                  <span role="status">
+                    {$t$('book.estimating', { percent: Math.round(estimating * 100) })}
+                  </span>
+                {/if}
               </dd>
             </div>
           {/if}

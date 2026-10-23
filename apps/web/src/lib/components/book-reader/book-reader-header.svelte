@@ -3,6 +3,7 @@
   import { faChevronLeft, faEllipsis, faMinus, faPlus } from '@fortawesome/free-solid-svg-icons';
   import { readerImageGalleryPictures$ } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';
   import ReaderSheet from '$lib/components/book-reader/reader-sheet.svelte';
+  import { furiganaProgress$ } from '$lib/data/generated-furigana';
   import { furiganaChoice, furiganaSettings, type FuriganaChoice } from '$lib/data/reader-panel';
   import {
     fontSize$,
@@ -274,6 +275,15 @@
         {/each}
       </div>
     </div>
+    {#if $furiganaProgress$}
+      <p class="qs-note" role="status">
+        {$furiganaProgress$.progress === 'queued'
+          ? $t$('reader.furiganaQueued')
+          : $t$('reader.furiganaPreparing', {
+              percent: Math.round($furiganaProgress$.progress * 100)
+            })}
+      </p>
+    {/if}
     <div class="qs-row qs-themes">
       <span>{$t$('reader.theme')}</span>
       <div class="qs-swatches">
@@ -388,6 +398,14 @@
     justify-content: space-between;
     gap: 1rem;
     border-bottom: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
+  }
+
+  .qs-note {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
+    font-size: var(--type-small);
+    font-variant-numeric: tabular-nums;
+    opacity: 0.7;
   }
 
   .qs-stepper {

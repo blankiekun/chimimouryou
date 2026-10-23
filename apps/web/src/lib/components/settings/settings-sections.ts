@@ -62,6 +62,11 @@ export const settingsAreas: SettingsArea[] = [
               id: 'general-install',
               label: 'settings.section.general-install' as const,
               description: 'settings.section.general-install.text' as const
+            },
+            {
+              id: 'general-analysis',
+              label: 'settings.section.general-analysis' as const,
+              description: 'settings.section.general-analysis.text' as const
             }
           ]
         : []),

@@ -108,6 +108,7 @@
     generatedReadings$,
     placeAfterRerender
   } from '$lib/data/generated-furigana';
+  import { analysisToolsSupported, localEstimate, localReadings$ } from '$lib/data/analysis-tools';
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
   import ReaderPanel from '$lib/components/book-reader/reader-panel.svelte';
   import {
@@ -480,11 +481,22 @@
 
       const isCalibreBook = rawBookData.storageSource === StorageSourceDefault.CALIBRE_DEFAULT;
       let rendered = false;
+      const analysed = !isCalibreBook && analysisToolsSupported();
+
+      // Local books with the analysis tools: the difficulty estimate and word list are made on open
+      // (after the furigana, analysis-tools.ts's queue); generated furigana only while they are on.
+      if (analysed) localEstimate(rawBookData.title, rawBookData.elementHtml).catch(() => {});
 
       return generatedFurigana$.pipe(
-        switchMap((on) =>
-          on && isCalibreBook ? generatedReadings$(rawBookData.title) : of(undefined)
-        ),
+        switchMap((on) => {
+          if (!on) return of(undefined);
+
+          if (isCalibreBook) return generatedReadings$(rawBookData.title, true);
+
+          return analysed
+            ? localReadings$(rawBookData.title, rawBookData.elementHtml)
+            : of(undefined);
+        }),
         distinctUntilChanged(),
         switchMap((readings) => {
           // Re-rendered while reading (switch, or the readings file got ready): keep the place.

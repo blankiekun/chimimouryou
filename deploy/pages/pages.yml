@@ -56,6 +56,12 @@ jobs:
           VITE_GDRIVE_CLIENT_ID: ${{ secrets.VITE_GDRIVE_CLIENT_ID }}
           VITE_GDRIVE_CLIENT_SECRET: ${{ secrets.VITE_GDRIVE_CLIENT_SECRET }}
 
+      # Settings → Analysis tools: Sudachi (wasm), Pyodide and yurigana, built from source (~10 min).
+      - name: Build the analysis tools
+        run: |
+          rustup target add wasm32-unknown-unknown
+          scripts/analysis-tools/build.sh
+
       # Settings → Themes links to the theme guide (the web image copies it the same way).
       - name: Add the theme guide
         run: cp themes.md apps/web/build/themes.md

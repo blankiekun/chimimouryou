@@ -1,0 +1,300 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 7dab527..bed809f 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -200,6 +200,26 @@ version = "1.0.5"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
+ 
++[[package]]
++name = "console_error_panic_hook"
++version = "0.1.7"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "a06aeb73f470f66dcdbf7223caeebb85984942f22f1adb2a088cf9668146bbbc"
++dependencies = [
++ "cfg-if",
++ "wasm-bindgen",
++]
++
++[[package]]
++name = "console_log"
++version = "1.1.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "86919cef3e37b9356ccf54d4421208c17ecfda01beae61393e7ffd72916c0ef1"
++dependencies = [
++ "log",
++ "web-sys",
++]
++
+ [[package]]
+ name = "criterion"
+ version = "0.5.1"
+@@ -364,30 +384,6 @@ dependencies = [
+  "slab",
+ ]
+ 
+-[[package]]
+-name = "futures-core"
+-version = "0.3.32"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "7e3450815272ef58cec6d564423f6e755e25379b217b0bc688e295ba24df6b1d"
+-
+-[[package]]
+-name = "futures-task"
+-version = "0.3.32"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "037711b3d59c33004d3856fbdc83b99d4ff37a24768fa1be9ce3538a1cde4393"
+-
+-[[package]]
+-name = "futures-util"
+-version = "0.3.32"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "389ca41296e6190b48053de0321d02a77f32f8a5d2461dd38762c0593805c6d6"
+-dependencies = [
+- "futures-core",
+- "futures-task",
+- "pin-project-lite",
+- "slab",
+-]
+-
+ [[package]]
+ name = "getrandom"
+ version = "0.4.3"
+@@ -558,6 +554,12 @@ version = "0.12.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
+ 
++[[package]]
++name = "log"
++version = "0.4.34"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
++
+ [[package]]
+ name = "memchr"
+ version = "2.8.3"
+@@ -902,7 +904,7 @@ checksum = "18d26a20a969b9e3fdf2fc2d9f21eda6c40e2de84c9408bb5d3b05d499aae711"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.119",
+ ]
+ 
+ [[package]]
+@@ -939,11 +941,13 @@ checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
+ 
+ [[package]]
+ name = "sudachi"
+-version = "0.7.0"
++version = "1.0.4"
+ dependencies = [
+  "aho-corasick",
+  "bitflags",
+  "claim",
++ "console_error_panic_hook",
++ "console_log",
+  "criterion",
+  "csv",
+  "default_input_text",
+@@ -1145,7 +1149,7 @@ dependencies = [
+  "proc-macro2",
+  "quote",
+  "serde_derive_internals",
+- "syn",
++ "syn 2.0.119",
+ ]
+ 
+ [[package]]
+@@ -1192,6 +1196,16 @@ dependencies = [
+  "wasm-bindgen-shared",
+ ]
+ 
++[[package]]
++name = "wasm-bindgen-futures"
++version = "0.4.78"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6ef4c5d3d2cdf5c54f4231181768f5510842e350db025faf1f7163b1030ed928"
++dependencies = [
++ "js-sys",
++ "wasm-bindgen",
++]
++
+ [[package]]
+ name = "wasm-bindgen-macro"
+ version = "0.2.128"
+diff --git a/sudachi/src/config.rs b/sudachi/src/config.rs
+index 1665d89..67b7f30 100644
+--- a/sudachi/src/config.rs
++++ b/sudachi/src/config.rs
+@@ -32,9 +32,9 @@ const DEFAULT_SETTING_BYTES: &[u8] = include_bytes!("../../resources/sudachi.jso
+ pub(crate) const DEFAULT_CHAR_DEF_FILE: &str = "char.def";
+ pub(crate) const DEFAULT_CHAR_DEF_BYTES: &[u8] = include_bytes!("../../resources/char.def");
+ pub(crate) const DEFAULT_UNK_DEF_FILE: &str = "unk.def";
+-const DEFAULT_UNK_DEF_BYTES: &[u8] = include_bytes!("../../resources/unk.def");
++pub(crate) const DEFAULT_UNK_DEF_BYTES: &[u8] = include_bytes!("../../resources/unk.def");
+ pub(crate) const DEFAULT_REWRITE_DEF_FILE: &str = "rewrite.def";
+-const DEFAULT_REWRITE_DEF_BYTES: &[u8] = include_bytes!("../../resources/rewrite.def");
++pub(crate) const DEFAULT_REWRITE_DEF_BYTES: &[u8] = include_bytes!("../../resources/rewrite.def");
+ 
+ /// Sudachi Error
+ #[derive(Error, Debug)]
+diff --git a/sudachi/src/dic/build/util.rs b/sudachi/src/dic/build/util.rs
+index d8ae1fa..46f8d28 100644
+--- a/sudachi/src/dic/build/util.rs
++++ b/sudachi/src/dic/build/util.rs
+@@ -16,6 +16,12 @@
+ 
+ use std::time::{SystemTime, UNIX_EPOCH};
+ 
++#[cfg(target_arch = "wasm32")]
++pub fn default_signature(_time: SystemTime, comment: &str) -> String {
++    format!("wasm-{:08x}", java_string_hash(comment))
++}
++
++#[cfg(not(target_arch = "wasm32"))]
+ pub fn default_signature(time: SystemTime, comment: &str) -> String {
+     let secs = match time.duration_since(UNIX_EPOCH) {
+         Ok(d) => d.as_secs() as libc::time_t,
+@@ -88,6 +94,7 @@ pub fn utc_tm(secs: libc::time_t) -> libc::tm {
+     }
+ }
+ 
++#[cfg(not(target_arch = "wasm32"))]
+ fn zero_tm() -> libc::tm {
+     unsafe { std::mem::zeroed() }
+ }
+diff --git a/sudachi/src/lib.rs b/sudachi/src/lib.rs
+index aa6ae77..c88b75e 100644
+--- a/sudachi/src/lib.rs
++++ b/sudachi/src/lib.rs
+@@ -69,6 +69,15 @@ use crate::dic::dictionary::JapaneseDictionary;
+ use crate::dic::storage::{Storage, SudachiDicData};
+ use crate::prelude::{Morpheme, MorphemeList};
+ 
++/// A buffer of `len` bytes in wasm memory for the dictionary, owned by `initialize_from_ptr` afterwards.
++#[wasm_bindgen]
++pub fn dict_alloc(len: usize) -> usize {
++    let mut v = Vec::<u8>::with_capacity(len);
++    let ptr = v.as_mut_ptr();
++    std::mem::forget(v);
++    ptr as usize
++}
++
+ #[wasm_bindgen(start)]
+ pub fn main() {
+     #[cfg(feature = "console_error_panic_hook")]
+@@ -152,7 +161,7 @@ pub struct TokenMorpheme {
+     pub end: usize,
+ }
+ 
+-impl<'a, D: analysis::stateless_tokenizer::DictionaryAccess> From<Morpheme<'a, D>> for TokenMorpheme {
++impl<'a, D: crate::dic::DictionaryAccess> From<Morpheme<'a, D>> for TokenMorpheme {
+     fn from(morpheme: Morpheme<'a, D>) -> Self {
+         Self {
+             surface: morpheme.surface().to_string(),
+@@ -336,7 +345,7 @@ async fn load_dict_from_url(
+     Ok(dict_bytes)
+ }
+ 
+-fn create_config_and_dictionary(dict_bytes: &[u8]) -> Result<(Config, Arc<JapaneseDictionary>), JsValue> {
++fn create_config_and_dictionary(dict_bytes: Vec<u8>) -> Result<(Config, Arc<JapaneseDictionary>), JsValue> {
+     if dict_bytes.is_empty() {
+         return Err(JsValue::from(WasmError {
+             error: "InvalidDictionary".to_string(),
+@@ -350,7 +359,7 @@ fn create_config_and_dictionary(dict_bytes: &[u8]) -> Result<(Config, Arc<Japane
+             details: format!("Failed to initialize config: {}", e)
+         }))?;
+     
+-    let storage = SudachiDicData::new(Storage::Owned(dict_bytes.to_vec()));
++    let storage = SudachiDicData::new(Storage::Owned(dict_bytes));
+ 
+     let dictionary = JapaneseDictionary::from_cfg_storage_with_embedded_chardef(&config, storage)
+         .map_err(|e| JsValue::from(WasmError {
+@@ -386,7 +395,7 @@ impl SudachiStateless {
+     #[wasm_bindgen]
+     pub async fn initialize_browser(&mut self, dict_url: Option<String>) -> Result<(), JsValue> {
+         let dict_bytes = load_dict_from_url(dict_url).await?;
+-        self.initialize_from_bytes(dict_bytes.as_slice())
++        self.initialize_from_bytes(dict_bytes)
+     }
+ 
+     /// Initializes the tokenizer with the given dictionary file path. If not given, the default one is used.
+@@ -397,13 +406,20 @@ impl SudachiStateless {
+     #[wasm_bindgen]
+     pub async fn initialize_node(&mut self, read_file_func: Function, dict_path: Option<String>) -> Result<(), JsValue> {
+         let dict_bytes = load_dict_from_path(dict_path, read_file_func).await?;
+-        self.initialize_from_bytes(dict_bytes.as_slice())
++        self.initialize_from_bytes(dict_bytes)
+     }
+ 
+     /// Initializes the tokenizer with the given bytes.
+     /// Returns an error object `{ error: string, details: string }` if initialization fails.
+     #[wasm_bindgen]
+-    pub fn initialize_from_bytes(&mut self, dict_bytes: &[u8]) -> Result<(), JsValue> {
++    /// Takes the buffer `dict_alloc` returned, filled by JS, without copying it.
++    #[wasm_bindgen]
++    pub fn initialize_from_ptr(&mut self, ptr: usize, len: usize) -> Result<(), JsValue> {
++        let bytes = unsafe { Vec::from_raw_parts(ptr as *mut u8, len, len) };
++        self.initialize_from_bytes(bytes)
++    }
++
++    pub fn initialize_from_bytes(&mut self, dict_bytes: Vec<u8>) -> Result<(), JsValue> {
+         let (config, dictionary) = create_config_and_dictionary(dict_bytes)?;
+         let tokenizer = StatelessTokenizer::new(dictionary);
+ 
+@@ -513,7 +529,7 @@ impl SudachiStateful {
+     #[wasm_bindgen]
+     pub async fn initialize_browser(&mut self, mode: TokenizeMode, debug: Option<bool>, dict_url: Option<String>) -> Result<(), JsValue> {
+         let dict_bytes = load_dict_from_url(dict_url).await?;
+-        self.initialize_from_bytes(dict_bytes.as_slice(), mode, debug)
++        self.initialize_from_bytes(dict_bytes, mode, debug)
+     }
+ 
+     /// Initializes the tokenizer with the given dictionary file path. If not given, the default one is used.
+@@ -524,13 +540,13 @@ impl SudachiStateful {
+     #[wasm_bindgen]
+     pub async fn initialize_node(&mut self, read_file_func: Function, mode: TokenizeMode, debug: Option<bool>, dict_path: Option<String>) -> Result<(), JsValue> {
+         let dict_bytes = load_dict_from_path(dict_path, read_file_func).await?;
+-        self.initialize_from_bytes(dict_bytes.as_slice(), mode, debug)
++        self.initialize_from_bytes(dict_bytes, mode, debug)
+     }
+ 
+     /// Initializes the tokenizer with the given bytes.
+     /// Returns an error object `{ error: string, details: string }` if initialization fails.
+     #[wasm_bindgen]
+-    pub fn initialize_from_bytes(&mut self, dict_bytes: &[u8], mode: TokenizeMode, debug: Option<bool>) -> Result<(), JsValue> {
++    pub fn initialize_from_bytes(&mut self, dict_bytes: Vec<u8>, mode: TokenizeMode, debug: Option<bool>) -> Result<(), JsValue> {
+         let (config, dictionary) = create_config_and_dictionary(dict_bytes)?;
+         let debug = debug.unwrap_or(false);
+         
+diff --git a/sudachi/src/plugin/input_text/default_input_text.rs b/sudachi/src/plugin/input_text/default_input_text.rs
+index 041fbe8..4e7fce0 100644
+--- a/sudachi/src/plugin/input_text/default_input_text.rs
++++ b/sudachi/src/plugin/input_text/default_input_text.rs
+@@ -277,7 +277,7 @@ impl InputTextPlugin for DefaultInputTextPlugin {
+         _config: &Config,
+         _grammar: &Grammar,
+     ) -> SudachiResult<()> {
+-        let reader = BufReader::new(DEFAULT_REWRITE_DEF_BYTES);
++        let reader = std::io::BufReader::new(crate::config::DEFAULT_REWRITE_DEF_BYTES);
+         self.read_rewrite_lists(reader)?;
+ 
+         Ok(())
+diff --git a/sudachi/src/plugin/oov/mecab_oov.rs b/sudachi/src/plugin/oov/mecab_oov.rs
+index 2d1b630..683afb1 100644
+--- a/sudachi/src/plugin/oov/mecab_oov.rs
++++ b/sudachi/src/plugin/oov/mecab_oov.rs
+@@ -293,10 +293,10 @@ impl OovProviderPlugin for MeCabOovPlugin {
+     ) -> SudachiResult<()> {
+         let settings: PluginSettings = serde_json::from_value(settings.clone())?;
+ 
+-        let reader = BufReader::new(DEFAULT_CHAR_DEF_BYTES);
++        let reader = std::io::BufReader::new(crate::config::DEFAULT_CHAR_DEF_BYTES);
+         let categories = MeCabOovPlugin::read_character_property(reader)?;
+ 
+-        let reader = BufReader::new(DEFAULT_UNK_DEF_BYTES);
++        let reader = std::io::BufReader::new(crate::config::DEFAULT_UNK_DEF_BYTES);
+         let oov_list = MeCabOovPlugin::read_oov(reader, &categories, grammar, settings.userPOS)?;
+ 
+         self.categories = categories;

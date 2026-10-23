@@ -11,6 +11,7 @@
   import { setPendingImport, type PendingImport } from '$lib/data/library-home';
   import SettingsAccount from '$lib/components/settings/settings-account.svelte';
   import InstallHint from '$lib/components/standalone/install-hint.svelte';
+  import SettingsAnalysisTools from '$lib/components/standalone/settings-analysis-tools.svelte';
   import SettingsSync from '$lib/components/standalone/settings-sync.svelte';
   import SettingsLanguage from '$lib/components/settings/settings-language.svelte';
   import SettingsPlugins from '$lib/components/settings/settings-plugins.svelte';
@@ -452,6 +453,7 @@
             <SettingsSection id="general-install" keywords="install home screen app offline">
               <InstallHint settings />
             </SettingsSection>
+            <SettingsAnalysisTools />
             <SettingsSync />
           {:else}
             <SettingsSection id="general-account">
