@@ -68,7 +68,8 @@
       draft.name = next.label;
     }
 
-    draft = { ...draft, provider: id, kind: next.kind, endpoint: '' };
+    // Filled in so it's clear where requests go; empty falls back to the same address.
+    draft = { ...draft, provider: id, kind: next.kind, endpoint: next.baseUrl };
     test = undefined;
     reload();
   }

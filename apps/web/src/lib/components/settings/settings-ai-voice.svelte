@@ -39,7 +39,11 @@
   $: connection = resolved.connection;
   $: voiceConnections = $aiConnections$.filter((c) => !c.deleted && c.kind === 'voice');
   $: eleven = $aiFeatureState$ && elevenLabsVoice();
-  $: models = resolved.provider?.models ?? [];
+  $: models = cache?.models?.length
+    ? cache.models.map((model) => model.id)
+    : (resolved.provider?.models ?? []);
+  /** A pasted voice ID (e.g. from the Voice Library) instead of one from the list */
+  let typingVoiceId = false;
   $: cache = connection ? $aiConnectionCache$[connection.id] : undefined;
   // Japanese voices first; the list is the account's library.
   $: voiceList = [...(cache?.voiceList ?? [])].sort(
@@ -155,12 +159,19 @@
     </SettingsItemGroup>
     <SettingsItemGroup title={$t$('ai.deviceVoice')} tooltip={$t$('ai.elevenLabsVoiceHint')}>
       <span class="voice-field">
-        {#if voiceList.length}
+        {#if voiceList.length && !typingVoiceId}
           <select
             id="tts-voice"
             class="app-input"
             aria-label={$t$('ai.deviceVoice')}
-            bind:value={$ttsVoiceId$}
+            value={$ttsVoiceId$}
+            on:change={(event) => {
+              if (event.currentTarget.value === '\u0000other') {
+                typingVoiceId = true;
+              } else {
+                $ttsVoiceId$ = event.currentTarget.value;
+              }
+            }}
           >
             {#if !voiceList.some((v) => v.id === $ttsVoiceId$)}
               <option value={$ttsVoiceId$}>{$ttsVoiceId$ || $t$('ai.chooseVoice')}</option>
@@ -168,6 +179,7 @@
             {#each voiceList as v (v.id)}
               <option value={v.id}>{voiceLabel(v)}</option>
             {/each}
+            <option value={'\u0000other'}>{$t$('ai.otherVoiceId')}</option>
           </select>
         {:else}
           <input

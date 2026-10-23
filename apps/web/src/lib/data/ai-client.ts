@@ -160,7 +160,12 @@ async function errorDetail(response: Response) {
     const body = await response.json();
     const error = Array.isArray(body) ? body[0]?.error : body?.error;
 
-    return String((typeof error === 'string' ? error : error?.message) || body?.message || '');
+    // ElevenLabs answers {detail: {message}} or {detail: "…"}
+    const detail = typeof body?.detail === 'string' ? body.detail : body?.detail?.message;
+
+    return String(
+      (typeof error === 'string' ? error : error?.message) || body?.message || detail || ''
+    );
   } catch {
     return '';
   }
@@ -199,10 +204,18 @@ async function responseError(
       : new AiError('Too many requests (429)', detail || 'Wait a moment and try again.');
   }
 
-  if (status === 404 || (status === 400 && /model/i.test(detail))) {
+  if (model && (status === 404 || (status === 400 && /model/i.test(detail)))) {
     return new AiError(
       'Model no longer offered',
       `${model} is not offered by ${provider.label}. Choose another model in Settings → AI.`
+    );
+  }
+
+  if (status === 404) {
+    return new AiError(
+      'Not found (404)',
+      detail ||
+        `Nothing at ${response.url || baseUrl}. Check the endpoint (${provider.baseUrl || 'https://…/v1'}).`
     );
   }
 
@@ -426,8 +439,14 @@ export async function loadModels(connection: AiConnection, key = connectionKey(c
 
   try {
     if (provider.kind === 'voice') {
-      models = (provider.models ?? []).map((id) => ({ id }));
       const list: any[] = (await fetchJson(provider, baseUrl, '/voices', key)).voices ?? [];
+      // The account's text-to-speech models; the built-in list if that fails.
+      const offered: any[] = await fetchJson(provider, baseUrl, '/models', key).catch(() => []);
+      const ids = (Array.isArray(offered) ? offered : [])
+        .filter((model) => model?.model_id && model.can_do_text_to_speech !== false)
+        .map((model) => String(model.model_id));
+
+      models = (ids.length ? ids : (provider.models ?? [])).map((id) => ({ id }));
 
       voices = list.length;
       voiceList = list

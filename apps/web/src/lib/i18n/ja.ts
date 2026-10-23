@@ -670,6 +670,7 @@ export const ja: Record<MessageKey, string> = {
     'この接続のキーはこの端末にありません。「接続」で追加してください。それまではこの端末の音声で読みます。',
   'ai.voiceModelHint': 'ElevenLabsのモデルです。ハイライトには文字ごとのタイムスタンプが必要です。',
   'ai.elevenLabsVoiceHint': 'ElevenLabsのライブラリにある音声（日本語が先）。',
+  'ai.otherVoiceId': 'ボイスIDを貼り付け…',
   'ai.chooseVoice': '音声を選択',
   'ai.loadingVoices': '音声を読み込み中…',
   'ai.withoutVoiceKey': '音声キーがないとき',
