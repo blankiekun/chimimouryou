@@ -246,13 +246,13 @@ installed list), or save it as
 ## Standalone web app
 
 The same code builds as a web app without a server: `VITE_EDITION=standalone pnpm build`
-writes a static site to `apps/web/build`. Books live in the browser, a local folder,
-Google Drive or OneDrive; there are no accounts, Calibre library, difficulty estimates or
+writes a static site to `apps/web/build`. Books live on the device (in the browser), in a
+local folder or on Google Drive; there are no accounts, Calibre library, difficulty estimates or
 Words page, and the build sends no requests to `/calibre/` or `/account/`.
 
 To publish it on GitHub Pages, copy [deploy/pages/pages.yml](../deploy/pages/pages.yml) to
 `.github/workflows/` in the site repository (e.g. `<org>/<org>.github.io`), choose
-"GitHub Actions" as the Pages source, add the secrets `VITE_GDRIVE_CLIENT_ID`,
-`VITE_GDRIVE_CLIENT_SECRET` and `VITE_ONEDRIVE_CLIENT_ID` (OAuth redirect URI
+"GitHub Actions" as the Pages source, add the secrets `VITE_GDRIVE_CLIENT_ID` and
+`VITE_GDRIVE_CLIENT_SECRET` (OAuth redirect URI
 `https://<site>/auth`), set `VITE_BASE_PATH` in the workflow to the site's address and run it
 from the Actions tab with a tag or `main`.

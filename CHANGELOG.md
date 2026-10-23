@@ -9,7 +9,7 @@ anything a reader or a server operator would notice.
 ### Added
 
 - A standalone edition: `VITE_EDITION=standalone` builds the reader as a static web app without
-  a server (books in the browser, a folder, Google Drive or OneDrive; no accounts, Calibre,
+  a server (books on the device, in a folder or on Google Drive; no accounts, Calibre,
   difficulty, Words page or Read next), and `deploy/pages/pages.yml` publishes it on GitHub
   Pages. CI builds it too.
 - The installed app accepts books shared to it (Android) and opens .epub, .htmlz, .cbz and .zip

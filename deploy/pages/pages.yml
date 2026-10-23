@@ -2,7 +2,7 @@
 # Copy this file to .github/workflows/pages.yml in the site repository
 # (chimimouryou/chimimouryou.github.io, served at https://chimimouryou.github.io),
 # set Settings → Pages → Source to "GitHub Actions", and add the repository secrets
-# VITE_GDRIVE_CLIENT_ID, VITE_GDRIVE_CLIENT_SECRET and VITE_ONEDRIVE_CLIENT_ID
+# VITE_GDRIVE_CLIENT_ID and VITE_GDRIVE_CLIENT_SECRET (no OneDrive in the standalone)
 # (OAuth redirect URI: https://chimimouryou.github.io/auth). Run it from the Actions tab,
 # with a tag such as v1.2.3 or main.
 name: Pages
@@ -54,7 +54,6 @@ jobs:
           VITE_BASE_PATH: https://chimimouryou.github.io
           VITE_GDRIVE_CLIENT_ID: ${{ secrets.VITE_GDRIVE_CLIENT_ID }}
           VITE_GDRIVE_CLIENT_SECRET: ${{ secrets.VITE_GDRIVE_CLIENT_SECRET }}
-          VITE_ONEDRIVE_CLIENT_ID: ${{ secrets.VITE_ONEDRIVE_CLIENT_ID }}
 
       # Settings → Themes links to the theme guide (the web image copies it the same way).
       - name: Add the theme guide
