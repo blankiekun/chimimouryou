@@ -150,6 +150,7 @@
   import { recordKanjiSeen } from '$lib/data/kanji-seen';
   import { bookWordForms, getWordMarks, selectionForm } from '$lib/data/word-marks';
   import type { PassageContext } from '$lib/data/ask-ai';
+  import { featureParams } from '$lib/data/ai-connections';
   import { activePlugins, activePlugins$, type SelectionActionContribution } from '$lib/plugins';
   import {
     readerImageGalleryPictures$,
@@ -909,7 +910,7 @@
       action,
       passage: {
         bookTitle: $rawBookData$?.title ?? '',
-        before: getTextWithoutFurigana(before).slice(-2000),
+        before: getTextWithoutFurigana(before).slice(-(featureParams('ask').context ?? 2000)),
         selection: getTextWithoutFurigana(selectedRange),
         after: getTextWithoutFurigana(after).slice(0, 600)
       }

@@ -7,10 +7,9 @@
     askAiDefaultPreset$,
     askAiPresets$,
     modelShortName,
-    openRouterApiKey$,
-    openRouterModel$,
     type AskAiPreset
   } from '$lib/data/ai-settings';
+  import { aiFeatureState$, isReady } from '$lib/data/ai-connections';
   import {
     askAi,
     buildPassagePrompt,
@@ -41,11 +40,13 @@
   let answersElm: HTMLElement;
 
   $: presets = presetsForLanguage($askAiPresets$, $aiLanguage$);
+  $: ready = isReady($aiFeatureState$.ask);
+  $: model = $aiFeatureState$.ask.model;
 
   onMount(() => {
     const preset = presets.find((p) => p.id === $askAiDefaultPreset$);
 
-    if (preset && $openRouterApiKey$) {
+    if (preset && ready) {
       runPreset(preset);
     }
   });
@@ -110,9 +111,7 @@
     >
   </header>
   <div class="panel-meta">
-    <span class="panel-meta-text" title={$openRouterModel$}
-      >{modelShortName($openRouterModel$)}</span
-    >
+    <span class="panel-meta-text" title={model}>{modelShortName(model)}</span>
     <AiLanguageToggle compact />
   </div>
 
@@ -120,12 +119,12 @@
     <blockquote class="reader-panel-quote mb-3 border-l pl-3 opacity-80" lang="ja">
       {passage.selection}
     </blockquote>
-    {#if !$openRouterApiKey$}
+    {#if !ready}
       <p class="panel-note mb-3">
         {$t$('reader.askAiNeedsKey')}
         <a
           class="app-button app-button-quiet"
-          href="{pagePath}/settings?section=ai#ai-guide"
+          href="{pagePath}/settings?section=ai#ai-connections"
           target="_blank"
           rel="noreferrer">{$t$('reader.setupGuide')} →</a
         >

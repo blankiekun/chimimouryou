@@ -6,7 +6,13 @@
 
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { openRouterApiKey$, openRouterModel$, elevenLabsApiKey$ } from '$lib/data/ai-settings';
+import {
+  aiConnectionKeys$,
+  aiConnections$,
+  openRouterApiKey$,
+  openRouterModel$,
+  elevenLabsApiKey$
+} from '$lib/data/ai-settings';
 import { theme$ } from '$lib/data/store';
 import { darkTheme$ } from '$lib/data/theme/theme-store';
 import { startSettingsSync, syncAccountSettings } from './account-settings-sync';
@@ -136,6 +142,48 @@ describe('account settings sync', () => {
     await signInAs(bob);
 
     expect(openRouterApiKey$.getValue()).toBe('sk-or-bob');
+  });
+
+  it('removes connection keys on sign-out but keeps the connections', async () => {
+    aiConnections$.next([
+      { id: 'g', name: 'Gemini', provider: 'gemini', kind: 'text', modified: 1 }
+    ]);
+    aiConnectionKeys$.next({ g: 'AIza-alice' });
+    window.localStorage.setItem('accountSettingsOwner', 'alice');
+    mockServer();
+
+    await signInAs(null);
+
+    expect(aiConnectionKeys$.getValue()).toEqual({});
+    expect(window.localStorage.getItem('aiConnectionKeys')).toBeNull();
+    expect(aiConnections$.getValue()).toHaveLength(1);
+  });
+
+  it('merges connections per id with the account', async () => {
+    aiConnections$.next([
+      { id: 'a', name: 'mine, newer', provider: 'groq', kind: 'text', modified: 5 },
+      { id: 'b', name: 'b', provider: 'groq', kind: 'text', modified: 1 }
+    ]);
+    window.localStorage.setItem('accountSettingsModified', JSON.stringify({ aiConnections: 1 }));
+    mockServer({
+      values: {
+        aiConnections: [
+          { id: 'a', name: 'theirs, older', provider: 'groq', kind: 'text', modified: 2 },
+          { id: 'b', name: 'b', provider: 'groq', kind: 'text', modified: 3, deleted: true },
+          { id: 'c', name: 'c', provider: 'groq', kind: 'text', modified: 1 }
+        ]
+      },
+      modified: { aiConnections: 9 }
+    });
+
+    await signInAs(alice);
+
+    const names = (list: { id: string; name: string; deleted?: boolean }[]) =>
+      list.map((c) => `${c.id}:${c.name}${c.deleted ? ':deleted' : ''}`);
+    const expected = ['a:mine, newer', 'b:b:deleted', 'c:c'];
+
+    expect(names(aiConnections$.getValue())).toEqual(expected);
+    expect(names(remote?.values.aiConnections as never)).toEqual(expected);
   });
 
   it('moves the account from the old default themes to chimi-light, but keeps a later choice', async () => {

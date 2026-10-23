@@ -23,9 +23,10 @@ import {
 } from './lorebook';
 
 function answer(json: unknown) {
-  const content = JSON.stringify('```json\n' + JSON.stringify(json) + '\n```');
+  const content = '```json\n' + JSON.stringify(json) + '\n```';
 
-  return new Response(`data: {"choices":[{"delta":{"content":${content}}}]}\n\ndata: [DONE]\n`);
+  // The lorebook asks without streaming (Settings → AI → Lorebook → Stream).
+  return new Response(JSON.stringify({ choices: [{ message: { content } }] }));
 }
 
 const aoi: LoreEntry = {

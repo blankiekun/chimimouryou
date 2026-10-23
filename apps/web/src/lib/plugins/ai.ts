@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-/** The AI tools (OpenRouter and ElevenLabs) as a plugin. Not part of upstream. */
+/** The AI tools (Ask AI, Story so far, Lorebook, AI voice) as a plugin. Not part of upstream. */
 
 import {
   faBookAtlas,
@@ -17,7 +17,7 @@ import LorebookPanel from '$lib/components/book-reader/lorebook-panel.svelte';
 import RecapPanel from '$lib/components/book-reader/recap-panel.svelte';
 import TtsPlayer from '$lib/components/book-reader/tts-player.svelte';
 import SettingsAi from '$lib/components/settings/settings-ai.svelte';
-import { openRouterApiKey$ } from '$lib/data/ai-settings';
+import { featureReady } from '$lib/data/ai-connections';
 import { syncExtras } from '$lib/data/extras-sync';
 import { autoUpdateLorebook } from '$lib/data/lorebook';
 import { synthesizeSpeech } from '$lib/data/tts';
@@ -44,7 +44,7 @@ export const aiPlugin: Plugin = {
         active
       }),
       pausesTracker: true,
-      offerAfterAbsence: () => !!openRouterApiKey$.getValue()
+      offerAfterAbsence: () => featureReady('recap')
     },
     {
       key: 'lorebook',

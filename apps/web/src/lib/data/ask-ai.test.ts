@@ -65,13 +65,13 @@ describe('askAi', () => {
       vi.fn(
         async () =>
           new Response(JSON.stringify({ error: { message: 'Bad key sk-or-secret' } }), {
-            status: 401
+            status: 500
           })
       )
     );
 
     await expect(askAi([{ role: 'user', content: 'q' }], () => {})).rejects.toThrow(
-      /^(?!.*sk-or-secret).*API key/s
+      /^(?!.*sk-or-secret).*Bad key \[API key\]/s
     );
   });
 

@@ -13,7 +13,7 @@ describe('settings sections', () => {
   it('reads the section from the hash, ?section= and old ?tab= links', () => {
     expect(section('/settings?section=reader#reader-writing')).toBe('reader-writing');
     expect(section('/settings?section=anki')).toBe('anki-connect');
-    expect(section('/settings?tab=AI')).toBe('ai-ask');
+    expect(section('/settings?tab=AI')).toBe('ai-connections');
   });
 
   it('sends links to the old Custom Themes section to Themes', () => {
