@@ -317,7 +317,10 @@ export const ja: Record<MessageKey, string> = {
     '「AIに質問」パネルに表示するボタンとプロンプトを管理します。',
   'settings.section.ai-read-aloud': '音声読み上げ',
   'settings.section.ai-read-aloud.text':
-    'ElevenLabs を利用したテキストの音声読み上げを設定します。',
+    'ElevenLabs を利用したテキストの音声読み上げを設定します。キーを設定すると AI音声は ElevenLabs を使い、ハイライトは1文字ずつ同期します。',
+  'settings.section.ai-voice': '端末の音声',
+  'settings.section.ai-voice.text':
+    'ElevenLabs のキーを追加するまで、AI音声はこの端末の音声で読み上げます（無料・キー不要・オフラインで動作）。ハイライトは1文字ずつではなく文節ごとに進みます。',
   'settings.section.ai-recap': 'あらすじ・用語集',
   'settings.section.ai-recap.text':
     '読んだ範囲までのネタバレなしあらすじと、用語集（ロアブック）を設定します。',
@@ -526,6 +529,12 @@ export const ja: Record<MessageKey, string> = {
   'ai.elevenLabsModel': 'ElevenLabs モデル',
   'ai.elevenLabsModelHint':
     'タイムスタンプ付き音声合成のモデルID（例：eleven_v4、eleven_v4_turbo）',
+  'ai.deviceVoice': '音声',
+  'ai.deviceVoiceHint':
+    'この端末にインストールされている音声です（日本語の音声を先頭に表示）。このブラウザにのみ保存されます。',
+  'ai.deviceVoiceAuto': '自動（最初の日本語音声）',
+  'ai.deviceVoiceNone': 'このブラウザには読み上げ用の音声がありません。',
+  'ai.playSample': 'サンプルを再生',
   'ai.voiceSpeed': 'AI音声の再生速度',
   'ai.voiceSpeedHint':
     '声の高さを変えずに再生速度を調整します（ハイライトも速度に合わせて追従します）。',
@@ -755,7 +764,7 @@ export const ja: Record<MessageKey, string> = {
   'reader.lorebook': '用語集',
   'reader.askAi': 'AIに質問',
   'reader.askAiTitle': '選択箇所についてAIに質問',
-  'reader.aiVoice': 'AI音声（ElevenLabs）',
+  'reader.aiVoice': 'AI音声',
   'reader.audiobookshelf': 'Audiobookshelf',
   'reader.audiobook': 'オーディオブック',
   'reader.notesOnly': 'メモありのみ',
@@ -800,7 +809,10 @@ export const ja: Record<MessageKey, string> = {
   'reader.showMore': 'さらに表示（残り{count}件）',
   'reader.previous': '前へ',
   'reader.next': '次へ',
-  'reader.ttsNoKey': '音声読み上げには ElevenLabs の APIキーが必要です。',
+  'reader.ttsNoDevice':
+    'このブラウザには読み上げ用の音声がありません。読み上げるには AI設定で ElevenLabs のAPIキーを追加してください。',
+  'reader.ttsDeviceError': '端末の音声が停止しました：{error}',
+  'reader.deviceVoice': '端末の音声',
   'reader.openAiSettings': 'AI設定を開く',
   'reader.ttsNoVoice': '音声読み上げには ElevenLabs の音声ID（Voice ID）が必要です。',
   'reader.ttsNoText': '現在の位置より後にテキストがありません',

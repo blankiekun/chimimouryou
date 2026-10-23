@@ -313,7 +313,11 @@ export const en = {
   'settings.section.ai-presets': 'Presets',
   'settings.section.ai-presets.text': 'Buttons in the Ask AI panel and their prompts.',
   'settings.section.ai-read-aloud': 'Read aloud',
-  'settings.section.ai-read-aloud.text': 'Text-to-speech with ElevenLabs.',
+  'settings.section.ai-read-aloud.text':
+    'Text-to-speech with ElevenLabs. Once a key is set, AI voice uses it, with the highlight timed per character.',
+  'settings.section.ai-voice': 'Device voice',
+  'settings.section.ai-voice.text':
+    "AI voice reads with this device's voices until an ElevenLabs key is added: free, no key, works offline. The highlight follows each phrase rather than each character.",
   'settings.section.ai-recap': 'Story so far & Lorebook',
   'settings.section.ai-recap.text': 'Spoiler-free recaps and the lorebook of what you have read.',
   'settings.section.audiobookshelf-connect': 'Server',
@@ -514,6 +518,12 @@ export const en = {
   'ai.elevenLabsModel': 'ElevenLabs model',
   'ai.elevenLabsModelHint':
     'Model ID for text to speech with timestamps, e.g. eleven_v4 or eleven_v4_turbo.',
+  'ai.deviceVoice': 'Voice',
+  'ai.deviceVoiceHint':
+    'Voices installed on this device, Japanese first. Kept in this browser only.',
+  'ai.deviceVoiceAuto': 'Automatic (first Japanese voice)',
+  'ai.deviceVoiceNone': 'This browser has no speech voices.',
+  'ai.playSample': 'Play sample',
   'ai.voiceSpeed': 'AI voice speed',
   'ai.voiceSpeedHint':
     'Plays the voice faster or slower without changing its pitch; the highlight follows.',
@@ -743,7 +753,7 @@ export const en = {
   'reader.lorebook': 'Lorebook',
   'reader.askAi': 'Ask AI',
   'reader.askAiTitle': 'Ask AI about the selection',
-  'reader.aiVoice': 'AI voice (ElevenLabs)',
+  'reader.aiVoice': 'AI voice',
   'reader.audiobookshelf': 'Audiobookshelf',
   'reader.audiobook': 'Audiobook',
   'reader.notesOnly': 'Only with notes',
@@ -788,7 +798,10 @@ export const en = {
   'reader.showMore': 'Show more ({count} remaining)',
   'reader.previous': 'Previous',
   'reader.next': 'Next',
-  'reader.ttsNoKey': 'Reading aloud needs an ElevenLabs API key.',
+  'reader.ttsNoDevice':
+    'This browser has no speech voices. Add an ElevenLabs key in Settings → AI to read aloud.',
+  'reader.ttsDeviceError': 'The device voice stopped: {error}',
+  'reader.deviceVoice': 'Device voice',
   'reader.openAiSettings': 'Open Settings → AI',
   'reader.ttsNoVoice': 'Reading aloud needs an ElevenLabs voice ID.',
   'reader.ttsNoText': 'No text found from the current position',

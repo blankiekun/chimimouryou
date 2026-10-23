@@ -129,6 +129,11 @@ export const settingsAreas: SettingsArea[] = [
         description: 'settings.section.ai-presets.text'
       },
       {
+        id: 'ai-voice',
+        label: 'settings.section.ai-voice',
+        description: 'settings.section.ai-voice.text'
+      },
+      {
         id: 'ai-read-aloud',
         label: 'settings.section.ai-read-aloud',
         description: 'settings.section.ai-read-aloud.text'
