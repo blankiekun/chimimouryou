@@ -12,7 +12,14 @@ import { needsFirstRun } from '$lib/data/standalone-storage';
 import { StorageKey } from '$lib/data/storage/storage-types';
 import { syncEnded, syncState$, syncView, type SyncState } from '$lib/data/sync-status';
 
-const idle: SyncState = { running: undefined, lastSync: 0, failed: false, waiting: [], errors: [] };
+const idle: SyncState = {
+  running: undefined,
+  lastSync: 0,
+  lastWhat: '',
+  failed: false,
+  waiting: [],
+  errors: []
+};
 const now = 1_000_000_000;
 
 describe('syncView', () => {
@@ -72,7 +79,12 @@ describe('syncEnded', () => {
     });
 
     syncEnded(['Book\tbookmark'], '', 'Book', now + 1);
-    expect(syncState$.getValue()).toMatchObject({ failed: false, waiting: [], lastSync: now + 1 });
+    expect(syncState$.getValue()).toMatchObject({
+      failed: false,
+      waiting: [],
+      lastSync: now + 1,
+      lastWhat: 'Book'
+    });
   });
 });
 

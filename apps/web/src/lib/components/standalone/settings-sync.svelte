@@ -137,6 +137,7 @@
   $: waiting = $syncState$.waiting.length;
   $: lastSync = [
     $syncState$.lastSync ? formatAgo(Date.now() - $syncState$.lastSync) : 'Not yet',
+    ...($syncState$.lastSync && $syncState$.lastWhat ? [$syncState$.lastWhat] : []),
     waiting ? `${waiting} ${waiting === 1 ? 'change' : 'changes'} waiting` : 'nothing waiting'
   ].join(' · ');
 

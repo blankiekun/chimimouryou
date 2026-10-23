@@ -21,6 +21,7 @@
   } from '$lib/data/standalone-storage';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import { isOnline$ } from '$lib/data/store';
+  import { yomitanSeen$ } from '$lib/data/yomitan';
   import { isMobile } from '$lib/functions/utils';
   import Fa from 'svelte-fa';
 
@@ -195,26 +196,28 @@
       </button>
     </main>
 
-    <aside class="first-run-aside">
-      <PointBox label="Lookups">
-        <div class="lookups lookups-desktop">
-          <p>Install Yomitan in this browser to look up words as you read.</p>
-          <p class="lookups-links">
-            <a href={yomitan.chrome} target="_blank" rel="noreferrer">Chrome</a>
-            <a href={yomitan.edge} target="_blank" rel="noreferrer">Edge</a>
-            <a href={yomitan.firefox} target="_blank" rel="noreferrer">Firefox</a>
-          </p>
-          <p class="lookups-note">On Android, Yomitan runs in Firefox.</p>
-        </div>
-        <div class="lookups lookups-phone">
-          <p>Install Yomitan to look up words as you read. On Android it runs in Firefox.</p>
-          <p class="lookups-links">
-            <a href={yomitan.firefox} target="_blank" rel="noreferrer">Yomitan for Firefox</a>
-          </p>
-          <p class="lookups-note">Safari on iPhone and iPad has no Yomitan.</p>
-        </div>
-      </PointBox>
-    </aside>
+    {#if !$yomitanSeen$}
+      <aside class="first-run-aside">
+        <PointBox label="Lookups">
+          <div class="lookups lookups-desktop">
+            <p>Install Yomitan in this browser to look up words as you read.</p>
+            <p class="lookups-links">
+              <a href={yomitan.chrome} target="_blank" rel="noreferrer">Chrome</a>
+              <a href={yomitan.edge} target="_blank" rel="noreferrer">Edge</a>
+              <a href={yomitan.firefox} target="_blank" rel="noreferrer">Firefox</a>
+            </p>
+            <p class="lookups-note">On Android, Yomitan runs in Firefox.</p>
+          </div>
+          <div class="lookups lookups-phone">
+            <p>Install Yomitan to look up words as you read. On Android it runs in Firefox.</p>
+            <p class="lookups-links">
+              <a href={yomitan.firefox} target="_blank" rel="noreferrer">Yomitan for Firefox</a>
+            </p>
+            <p class="lookups-note">Safari on iPhone and iPad has no Yomitan.</p>
+          </div>
+        </PointBox>
+      </aside>
+    {/if}
   </div>
 </div>
 

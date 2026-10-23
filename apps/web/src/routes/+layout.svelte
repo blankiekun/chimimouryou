@@ -8,6 +8,7 @@
   import { releaseReaderData } from '$lib/data/reader-data-owner';
   import { basePath, clearConsoleOnReload, pagePath, standalone } from '$lib/data/env';
   import { watchInstall } from '$lib/data/install-app';
+  import { watchYomitan } from '$lib/data/yomitan';
   import { dialogManager, type Dialog } from '$lib/data/dialog-manager';
   import { userFontsCacheName, type UserFont } from '$lib/data/fonts';
   import { fontFamilyGroupOne$, isOnline$, userFonts$ } from '$lib/data/store';
@@ -26,7 +27,10 @@
 
   if (browser) {
     reloadOnStaleBuild(window);
-    if (standalone) watchInstall(window);
+    if (standalone) {
+      watchInstall(window);
+      watchYomitan(window);
+    }
     accountReady().then(async (user) => {
       await releaseReaderData(user).catch(() => {});
       startSettingsSync(user);
