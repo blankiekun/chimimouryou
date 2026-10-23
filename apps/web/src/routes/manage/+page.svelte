@@ -116,6 +116,7 @@
     isOnline$,
     keepLocalStatisticsOnDeletion$,
     libraryOffline$,
+    librarySignInNeeded,
     libraryDisplayMode$,
     lastExportedTarget$,
     lastExportedTypes$,
@@ -1652,7 +1653,7 @@
             <button type="button" class="underline" on:click={clearFilters}>show all</button>
           </p>
         {/if}
-      {:else if $storageSource$ === StorageKey.CALIBRE && $account$ === null}
+      {:else if $storageSource$ === StorageKey.CALIBRE && librarySignInNeeded($account$, $libraryOffline$)}
         <div class="library-signed-out">
           <h1 class="library-signed-out-title">Sign in to see the library</h1>
           <p class="library-empty-text">
@@ -1663,6 +1664,14 @@
             class="app-button app-button-primary"
             href="{pagePath}/settings?section=general#general-account">Sign in</a
           >
+        </div>
+      {:else if $storageSource$ === StorageKey.CALIBRE && $libraryOffline$}
+        <div class="library-signed-out">
+          <h1 class="library-signed-out-title">The server can't be reached</h1>
+          <p class="library-empty-text">
+            No books are downloaded to this browser yet. Books you open while the server is
+            reachable stay readable here.
+          </p>
         </div>
       {:else if standalone}
         <LibraryEmpty onFiles={onFilesChange} />

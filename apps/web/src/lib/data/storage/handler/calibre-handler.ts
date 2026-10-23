@@ -198,6 +198,7 @@ export class CalibreStorageHandler extends ApiStorageHandler {
         // Signed out where the library needs an account: an empty library that asks to
         // sign in (manage page), not a failure that switches the source to the browser.
         if (!currentAccount() && (error as { status?: number }).status === 401) {
+          libraryOffline$.next(false);
           return [];
         }
 
