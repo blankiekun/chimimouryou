@@ -1519,8 +1519,7 @@ export const en = {
   'settings.section.social-profile': 'Profile',
   'settings.section.social-profile.text': 'What friends see of you.',
   'settings.section.social-shows': 'What your profile shows',
-  'settings.section.social-shows.text':
-    'Activity and requests are always friends-only. Profiles, finished books, activity and stats come in a later version; these choices are kept for them.',
+  'settings.section.social-shows.text': 'Activity and requests are always friends-only.',
   'settings.section.social-hub': 'Hub and data',
   'settings.section.social-hub.text': 'Where your social account lives, and deleting it.',
   'social.serverAccount': 'Server account',

@@ -1535,8 +1535,7 @@ export const ja: Record<MessageKey, string> = {
   'settings.section.social-profile': 'プロフィール',
   'settings.section.social-profile.text': 'フレンドに見えるあなたの情報。',
   'settings.section.social-shows': 'プロフィールに表示するもの',
-  'settings.section.social-shows.text':
-    'アクティビティとリクエストは常にフレンドのみ。プロフィール、読了した本、アクティビティ、統計は今後のバージョンで使われ、ここでの選択は保存されます。',
+  'settings.section.social-shows.text': 'アクティビティとリクエストは常にフレンドのみです。',
   'settings.section.social-hub': 'ハブとデータ',
   'settings.section.social-hub.text': 'ソーシャルアカウントの置き場所と削除。',
   'social.serverAccount': 'サーバーアカウント',
