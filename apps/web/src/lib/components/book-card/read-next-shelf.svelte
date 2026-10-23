@@ -3,6 +3,7 @@
   import CoverCard from '$lib/components/book-card/cover-card.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import { difficultyNameKey } from '$lib/data/difficulty';
+  import { standalone } from '$lib/data/env';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher } from 'svelte';
 
@@ -27,7 +28,11 @@
 
 {#if books.length}
   <section class="read-next" aria-label={$t$('home.readNext')}>
-    <SectionHead {number} title={$t$('home.readNext')} count={$t$('home.atYourLevel')} />
+    <SectionHead
+      {number}
+      title={$t$('home.readNext')}
+      count={$t$(standalone ? 'home.nextInSeries' : 'home.atYourLevel')}
+    />
     <div class="read-next-body">
       <div class="read-next-books">
         {#each books as book (book.id)}

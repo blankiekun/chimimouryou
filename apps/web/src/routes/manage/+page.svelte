@@ -49,6 +49,7 @@
     refreshKnownWordsIfStale
   } from '$lib/data/known-words';
   import { deleteCachedReadings, prefetchReadings } from '$lib/data/generated-furigana';
+  import { deleteBookKanji } from '$lib/data/book-kanji';
   import { deleteVnCache } from '$lib/data/vn';
   import DifficultyDialog from '$lib/components/book-card/difficulty-dialog.svelte';
   import {
@@ -87,7 +88,7 @@
   } from '$lib/data/calibre-import';
   import { clearReadingProgress } from '$lib/functions/clear-reading-progress';
   import { dialogManager } from '$lib/data/dialog-manager';
-  import { pagePath } from '$lib/data/env';
+  import { pagePath, standalone } from '$lib/data/env';
   import { logger } from '$lib/data/logger';
   import type { SortOption } from '$lib/data/sort-types';
   import { ApiStorageHandler } from '$lib/data/storage/handler/api-handler';
@@ -266,6 +267,7 @@
   $: readNextCards = isHome && $bookCards$ ? readNext($bookCards$, $knownCoverage$, 3) : [];
   $: readNextReason = (() => {
     if (!readNextCards.length) return '';
+    if (standalone) return $t$('home.readNextReasonNext');
     const levels = recentLevels($bookCards$);
     const low = levels[0].toFixed(1);
     const high = levels[levels.length - 1].toFixed(1);
@@ -852,6 +854,7 @@
       .forEach((card) => {
         deleteVnCache(card.title).catch(() => {});
         deleteCachedReadings(card.title).catch(() => {});
+        deleteBookKanji(card.title).catch(() => {});
       });
 
     if (fromLibrary && !cancelSignal.aborted) {

@@ -16,7 +16,8 @@ import {
   readNext,
   recentLevels,
   removeFromHome,
-  seriesGroups
+  seriesGroups,
+  standaloneReadNext
 } from './library-home';
 import { filterBookCards, seriesFilterKey } from '$lib/components/book-card/library-filters';
 
@@ -144,6 +145,21 @@ describe('readNext', () => {
     ).map((card) => card.title);
 
     expect(titles).toEqual(['T 1']);
+  });
+
+  it('without a server, gives the next volumes of started series from their titles', () => {
+    const titles = standaloneReadNext([
+      book('魔女の旅々 1', { progress: 1, lastBookOpen: 5 }),
+      book('魔女の旅々 3'),
+      book('魔女の旅々 2'),
+      book('86―エイティシックス― 1', { progress: 0.4, lastBookOpen: 9 }),
+      book('86―エイティシックス― 2'),
+      book('Unread 1'),
+      book('Unread 2'),
+      book('No volume', { progress: 1 })
+    ]).map((card) => card.title);
+
+    expect(titles).toEqual(['86―エイティシックス― 2', '魔女の旅々 2']);
   });
 
   it("gives Read next's level: the last 3 finished books, lowest first", () => {
