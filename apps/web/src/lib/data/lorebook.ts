@@ -12,11 +12,12 @@
  * Not part of upstream.
  */
 
-import { lorebookAutoInterval$, openRouterApiKey$ } from '$lib/data/ai-settings';
+import { featureParams, featureReady } from '$lib/data/ai-connections';
+import { lorebookAutoInterval$ } from '$lib/data/ai-settings';
 import { aiPrompts } from '$lib/data/ai-prompts';
 import { askAi } from '$lib/data/ask-ai';
 import { readerDb } from '$lib/data/reader-db';
-import { recapModel, textBetween } from '$lib/data/recap';
+import { textBetween } from '$lib/data/recap';
 import { orderSeries, seriesVolumes } from '$lib/components/book-card/library-sort';
 import type { SearchIndex } from '$lib/functions/book-text/book-search';
 import { BehaviorSubject, Subject } from 'rxjs';
@@ -75,7 +76,8 @@ export function sameLorebooks(a?: Lorebook, b?: Lorebook) {
 }
 
 /** Text sent per request; longer stretches are split. */
-const chunkCharacters = 20_000;
+/** Characters per request unless Settings → AI → Lorebook → Context sent says otherwise */
+const defaultChunkCharacters = 20_000;
 /** Below this, an update isn't worth a request. */
 export const minUpdateCharacters = 500;
 
@@ -268,7 +270,7 @@ async function readUntil(
   signal: AbortSignal
 ) {
   let lorebook = await getLorebook(title);
-  const model = recapModel();
+  const chunkCharacters = Math.max(1000, featureParams('lore').context ?? defaultChunkCharacters);
   const total = Math.ceil((position - lorebook.processedUpTo) / chunkCharacters);
 
   for (let part = 1; lorebook.processedUpTo < position; part += 1) {
@@ -295,7 +297,7 @@ async function readUntil(
           ],
           () => {},
           signal,
-          { model, system: aiPrompts().lore }
+          { feature: 'lore', system: aiPrompts().lore }
         )
       : [];
     const updates = answer.length ? parseLoreAnswer(answer[answer.length - 1].content) : [];
@@ -325,7 +327,7 @@ export async function autoUpdateLorebook(
 ) {
   const interval = lorebookAutoInterval$.getValue();
 
-  if (!interval || !openRouterApiKey$.getValue() || running.has(title)) {
+  if (!interval || !featureReady('lore') || running.has(title)) {
     return;
   }
 

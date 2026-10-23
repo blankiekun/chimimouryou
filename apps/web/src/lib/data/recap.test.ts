@@ -6,7 +6,12 @@
 
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { openRouterApiKey$, openRouterModel$, openRouterRecapModel$ } from '$lib/data/ai-settings';
+import {
+  aiConnections$,
+  aiFeatures$,
+  defaultAiFeatures,
+  openRouterApiKey$
+} from '$lib/data/ai-settings';
 import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v3';
 import { buildSearchIndex } from '$lib/functions/book-text/book-search';
 import { readerDb } from '$lib/data/reader-db';
@@ -27,8 +32,14 @@ async function cacheSummary(title: string, key: string, model: string) {
 
 describe('planRecap', () => {
   it('summarises only finished chapters, skipping cached ones for the same model', async () => {
-    openRouterModel$.next('model/a');
-    openRouterRecapModel$.next('');
+    aiConnections$.next([
+      { id: 'or', name: 'OpenRouter', provider: 'openrouter', kind: 'text', modified: 1 }
+    ]);
+    aiFeatures$.next({
+      ...defaultAiFeatures,
+      ask: { connection: 'or', model: 'model/a', params: {} },
+      recap: { connection: 'inherit', model: '', params: {} }
+    });
     await cacheSummary('Book', 'c1', 'model/a');
 
     const plan = await planRecap('Book', index, sections, 7, 9);
@@ -40,7 +51,10 @@ describe('planRecap', () => {
   });
 
   it('redoes summaries made with another model', async () => {
-    openRouterRecapModel$.next('model/cheap');
+    aiFeatures$.next({
+      ...defaultAiFeatures,
+      recap: { connection: 'or', model: 'model/cheap', params: {} }
+    });
     await cacheSummary('Book 2', 'c1', 'model/a');
 
     const plan = await planRecap('Book 2', index, sections, 7, 9);

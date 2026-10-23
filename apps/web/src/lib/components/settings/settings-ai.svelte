@@ -2,38 +2,25 @@
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
   import SettingsAiVoice from '$lib/components/settings/settings-ai-voice.svelte';
-  import AiLanguageToggle from '$lib/components/ai-language-toggle.svelte';
   import SettingsAiPrompts from '$lib/components/settings/settings-ai-prompts.svelte';
+  import AiConnections from '$lib/components/settings/ai/ai-connections.svelte';
+  import AiFeatures from '$lib/components/settings/ai/ai-features.svelte';
   import {
+    aiConnections$,
     askAiDefaultPreset$,
     askAiPresets$,
     askAiReaderNote$,
     defaultAskAiPresets,
-    defaultOpenRouterModel,
     lorebookAutoInterval$,
-    openRouterApiKey$,
-    openRouterModel$,
-    openRouterRecapModel$,
-    defaultElevenLabsModel,
-    elevenLabsApiKey$,
-    elevenLabsModel$,
     ttsPlaybackRate$,
     ttsVoiceId$
   } from '$lib/data/ai-settings';
-  import { listOpenRouterModels, type OpenRouterModel } from '$lib/data/ask-ai';
   import { t$ } from '$lib/i18n';
-  import { onMount } from 'svelte';
 
   const link = (href: string, text: string) =>
     `<a href="${href}" target="_blank" rel="noreferrer">${text}</a>`;
 
-  let models: OpenRouterModel[] = [];
-  let modelsError = '';
-  /** Shows a key as text while the reader checks it; never stored. */
-  let showOpenRouterKey = false;
-  let showElevenLabsKey = false;
-
-  $: knownModel = !models.length || models.some((model) => model.id === $openRouterModel$);
+  $: connectionCount = $aiConnections$.filter((c) => !c.deleted).length;
 
   function updatePreset(index: number, changes: Partial<{ label: string; prompt: string }>) {
     $askAiPresets$ = $askAiPresets$.map((preset, i) =>
@@ -55,143 +42,33 @@
       { id: `custom-${Date.now().toString(36)}`, label: 'New', prompt: '' }
     ];
   }
-
-  onMount(() => {
-    listOpenRouterModels()
-      .then((result) => {
-        models = result;
-      })
-      .catch((error) => {
-        modelsError = error.message;
-      });
-  });
 </script>
 
-<SettingsSection id="ai-guide" keywords="api key openrouter elevenlabs voice">
-  <div class="guide-columns">
-    <section
-      class="guide"
-      data-settings-item
-      data-settings-search="{$t$('ai.guideOpenRouter')} {$t$('ai.guideOpenRouterHint')}"
-    >
-      <h3>{$t$('ai.guideOpenRouter')}</h3>
-      <p>{$t$('ai.guideOpenRouterHint')}</p>
-      <!-- Our own strings with links as params, so translations can put them anywhere. -->
-      <ol class="guide-steps">
-        <li>
-          {@html $t$('ai.guideAccount', { link: link('https://openrouter.ai', 'openrouter.ai') })}
-        </li>
-        <li>
-          {@html $t$('ai.guideCredits', {
-            link: link('https://openrouter.ai/settings/credits', 'Settings → Credits')
-          })}
-        </li>
-        <li>
-          {@html $t$('ai.guideOpenRouterKey', {
-            link: link('https://openrouter.ai/settings/keys', 'Settings → API Keys')
-          })}
-        </li>
-        <li>
-          {@html $t$('ai.guideOpenRouterPaste', {
-            prefix: '<code>sk-or-</code>',
-            field: `<a href="#ai-ask">${$t$('ai.openRouterKey')}</a>`
-          })}
-        </li>
-        <li>{$t$('ai.guideModels')}</li>
-      </ol>
-    </section>
-    <section
-      class="guide"
-      data-settings-item
-      data-settings-search="{$t$('ai.guideElevenLabs')} {$t$('ai.guideElevenLabsHint')}"
-    >
-      <h3>{$t$('ai.guideElevenLabs')}</h3>
-      <p>{$t$('ai.guideElevenLabsHint')}</p>
-      <ol class="guide-steps">
-        <li>
-          {@html $t$('ai.guideAccount', { link: link('https://elevenlabs.io', 'elevenlabs.io') })}
-        </li>
-        <li>{$t$('ai.guideElevenLabsKey')}</li>
-        <li>
-          {@html $t$('ai.guideElevenLabsPaste', {
-            prefix: '<code>sk_</code>',
-            field: `<a href="#ai-read-aloud">${$t$('ai.elevenLabsKey')}</a>`
-          })}
-        </li>
-        <li>{$t$('ai.guideVoice', { field: $t$('ai.voiceId') })}</li>
-        <li>{$t$('ai.guideListen')}</li>
-      </ol>
-    </section>
+<SettingsSection id="ai-connections" wide count={connectionCount || undefined}>
+  <div data-settings-item data-settings-search="{$t$('ai.connection')} api key openrouter gemini">
+    <AiConnections />
   </div>
-  <aside
-    class="keys-note"
-    data-settings-item
-    data-settings-search="{$t$('ai.keysWhere')} {$t$('ai.keysWhereHint')}"
-  >
-    <h3>{$t$('ai.keysWhere')}</h3>
-    <p>{$t$('ai.keysWhereHint')}</p>
-  </aside>
 </SettingsSection>
 
-<SettingsSection id="ai-ask">
-  <SettingsItemGroup title={$t$('ai.openRouterKey')} tooltip={$t$('ai.openRouterKeyHint')}>
-    <span class="secret-field">
-      <input
-        id="openrouter-key"
-        type={showOpenRouterKey ? 'text' : 'password'}
-        autocomplete="off"
-        spellcheck="false"
-        placeholder="sk-or-..."
-        aria-label={$t$('ai.openRouterKey')}
-        class="app-input"
-        value={$openRouterApiKey$}
-        on:input={(event) => ($openRouterApiKey$ = event.currentTarget.value)}
-      />
-      <button
-        type="button"
-        class="app-button app-button-quiet"
-        aria-pressed={showOpenRouterKey}
-        on:click={() => (showOpenRouterKey = !showOpenRouterKey)}
-        >{$t$(showOpenRouterKey ? 'ai.hideKey' : 'ai.showKey')}</button
-      >
-    </span>
-    <a class="app-button app-button-quiet secret-help" href="#ai-guide">{$t$('ai.howToGetKey')}</a>
-  </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('ai.language')} tooltip={$t$('ai.languageHint')}>
-    <AiLanguageToggle />
-  </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('ai.model')} tooltip={$t$('ai.modelHint')} wide>
+<SettingsSection id="ai-features" wide>
+  <div data-settings-item data-settings-search="{$t$('ai.feature')} {$t$('ai.model')}">
+    <AiFeatures />
+  </div>
+  <SettingsItemGroup title={$t$('ai.lorebookAuto')} tooltip={$t$('ai.lorebookAutoHint')}>
     <input
-      id="openrouter-model"
-      aria-label={$t$('ai.model')}
-      list="openrouter-models"
-      autocomplete="off"
-      placeholder={defaultOpenRouterModel}
-      class="app-input w-full"
-      bind:value={$openRouterModel$}
-      on:change={() => {
-        if (!$openRouterModel$.trim()) {
-          openRouterModel$.next(defaultOpenRouterModel);
-        }
-      }}
+      id="lorebook-interval"
+      type="number"
+      min="0"
+      step="5000"
+      aria-label={$t$('ai.lorebookInterval')}
+      placeholder={$t$('ai.lorebookOff')}
+      class="app-input"
+      bind:value={$lorebookAutoInterval$}
     />
-    <datalist id="openrouter-models">
-      {#each models as model (model.id)}
-        <option value={model.id}>{model.name}</option>
-      {/each}
-    </datalist>
-    <p class="model-note">
-      {#if modelsError}
-        {modelsError}
-      {:else if !knownModel}
-        {$t$('ai.unknownModel')}
-      {:else if models.length}
-        {$t$('ai.modelSearch', { count: models.length })}
-      {:else}
-        {$t$('ai.modelSearchAny')}
-      {/if}
-    </p>
   </SettingsItemGroup>
+</SettingsSection>
+
+<SettingsSection id="ai-presets" wide>
   <SettingsItemGroup title={$t$('ai.aboutYou')} tooltip={$t$('ai.aboutYouHint')} wide>
     <textarea
       id="ask-ai-reader-note"
@@ -202,9 +79,6 @@
       bind:value={$askAiReaderNote$}
     />
   </SettingsItemGroup>
-</SettingsSection>
-
-<SettingsSection id="ai-presets" wide>
   <div data-settings-item data-settings-search="{$t$('ai.presets')} {$t$('ai.presetsHint')}">
     <table class="app-table presets">
       <thead>
@@ -281,44 +155,6 @@
 <SettingsAiVoice />
 
 <SettingsSection id="ai-read-aloud">
-  <SettingsItemGroup title={$t$('ai.elevenLabsKey')} tooltip={$t$('ai.elevenLabsKeyHint')}>
-    <span class="secret-field">
-      <input
-        id="tts-key"
-        type={showElevenLabsKey ? 'text' : 'password'}
-        autocomplete="off"
-        spellcheck="false"
-        placeholder="sk_..."
-        aria-label={$t$('ai.elevenLabsKey')}
-        class="app-input"
-        value={$elevenLabsApiKey$}
-        on:input={(event) => ($elevenLabsApiKey$ = event.currentTarget.value)}
-      />
-      <button
-        type="button"
-        class="app-button app-button-quiet"
-        aria-pressed={showElevenLabsKey}
-        on:click={() => (showElevenLabsKey = !showElevenLabsKey)}
-        >{$t$(showElevenLabsKey ? 'ai.hideKey' : 'ai.showKey')}</button
-      >
-    </span>
-  </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('ai.elevenLabsModel')} tooltip={$t$('ai.elevenLabsModelHint')}>
-    <input
-      id="tts-model"
-      list="elevenlabs-models"
-      autocomplete="off"
-      aria-label={$t$('ai.elevenLabsModel')}
-      placeholder={defaultElevenLabsModel}
-      class="app-input"
-      bind:value={$elevenLabsModel$}
-    />
-    <datalist id="elevenlabs-models">
-      <option value="eleven_v4" />
-      <option value="eleven_v4_turbo" />
-      <option value="eleven_multilingual_v2" />
-    </datalist>
-  </SettingsItemGroup>
   <SettingsItemGroup title={$t$('ai.voiceId')} tooltip={$t$('ai.voiceIdHint')}>
     <input
       id="tts-voice"
@@ -343,30 +179,70 @@
   </SettingsItemGroup>
 </SettingsSection>
 
-<SettingsSection id="ai-recap">
-  <SettingsItemGroup title={$t$('ai.recapModel')} tooltip={$t$('ai.recapModelHint')} wide>
-    <input
-      id="recap-model"
-      list="openrouter-models"
-      autocomplete="off"
-      aria-label={$t$('ai.recapModel')}
-      placeholder={$t$('ai.recapModelPlaceholder', { model: $openRouterModel$ })}
-      class="app-input w-full"
-      bind:value={$openRouterRecapModel$}
-    />
-  </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('ai.lorebookAuto')} tooltip={$t$('ai.lorebookAutoHint')}>
-    <input
-      id="lorebook-interval"
-      type="number"
-      min="0"
-      step="5000"
-      aria-label={$t$('ai.lorebookInterval')}
-      placeholder={$t$('ai.lorebookOff')}
-      class="app-input"
-      bind:value={$lorebookAutoInterval$}
-    />
-  </SettingsItemGroup>
+<SettingsSection id="ai-guide" keywords="api key openrouter elevenlabs voice">
+  <div class="guide-columns">
+    <section
+      class="guide"
+      data-settings-item
+      data-settings-search="{$t$('ai.guideOpenRouter')} {$t$('ai.guideOpenRouterHint')}"
+    >
+      <h3>{$t$('ai.guideOpenRouter')}</h3>
+      <p>{$t$('ai.guideOpenRouterHint')}</p>
+      <!-- Our own strings with links as params, so translations can put them anywhere. -->
+      <ol class="guide-steps">
+        <li>
+          {@html $t$('ai.guideAccount', { link: link('https://openrouter.ai', 'openrouter.ai') })}
+        </li>
+        <li>
+          {@html $t$('ai.guideCredits', {
+            link: link('https://openrouter.ai/settings/credits', 'Settings → Credits')
+          })}
+        </li>
+        <li>
+          {@html $t$('ai.guideOpenRouterKey', {
+            link: link('https://openrouter.ai/settings/keys', 'Settings → API Keys')
+          })}
+        </li>
+        <li>
+          {@html $t$('ai.guideOpenRouterPaste', {
+            prefix: '<code>sk-or-</code>',
+            field: `<a href="#ai-connections">${$t$('settings.section.ai-connections')}</a>`
+          })}
+        </li>
+        <li>{$t$('ai.guideModels')}</li>
+      </ol>
+    </section>
+    <section
+      class="guide"
+      data-settings-item
+      data-settings-search="{$t$('ai.guideElevenLabs')} {$t$('ai.guideElevenLabsHint')}"
+    >
+      <h3>{$t$('ai.guideElevenLabs')}</h3>
+      <p>{$t$('ai.guideElevenLabsHint')}</p>
+      <ol class="guide-steps">
+        <li>
+          {@html $t$('ai.guideAccount', { link: link('https://elevenlabs.io', 'elevenlabs.io') })}
+        </li>
+        <li>{$t$('ai.guideElevenLabsKey')}</li>
+        <li>
+          {@html $t$('ai.guideElevenLabsPaste', {
+            prefix: '<code>sk_</code>',
+            field: `<a href="#ai-connections">${$t$('settings.section.ai-connections')}</a>`
+          })}
+        </li>
+        <li>{$t$('ai.guideVoice', { field: $t$('ai.voiceId') })}</li>
+        <li>{$t$('ai.guideListen')}</li>
+      </ol>
+    </section>
+  </div>
+  <aside
+    class="keys-note"
+    data-settings-item
+    data-settings-search="{$t$('ai.keysWhere')} {$t$('ai.keysWhereHint')}"
+  >
+    <h3>{$t$('ai.keysWhere')}</h3>
+    <p>{$t$('ai.keysWhereHint')}</p>
+  </aside>
 </SettingsSection>
 
 <SettingsAiPrompts />
@@ -456,39 +332,6 @@
     color: var(--app-muted-fg);
     font-size: var(--type-small);
     line-height: 1.55;
-  }
-
-  .secret-field {
-    position: relative;
-    display: block;
-    width: 16rem;
-    max-width: 100%;
-  }
-
-  .secret-field input {
-    width: 100%;
-    padding-right: 3.75rem;
-    font-family: ui-monospace, monospace;
-    font-size: var(--type-small);
-  }
-
-  .secret-field button {
-    position: absolute;
-    top: 50%;
-    right: 0.6rem;
-    font-size: var(--type-label);
-    transform: translateY(-50%);
-  }
-
-  .secret-help {
-    margin-top: 0.35rem;
-    font-size: var(--type-label);
-  }
-
-  .model-note {
-    margin-top: 0.35rem;
-    color: var(--app-muted-fg);
-    font-size: var(--type-label);
   }
 
   .presets {

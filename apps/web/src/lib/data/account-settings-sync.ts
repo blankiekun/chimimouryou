@@ -20,6 +20,9 @@ import { uiLanguage$ } from '$lib/i18n';
 import type { AccountUser } from '$lib/data/account';
 import { readerSyncStore, syncJsonFile } from '$lib/data/sync-files';
 import {
+  aiConnectionKeys$,
+  aiConnections$,
+  aiFeatures$,
   aiLanguage$,
   aiPromptOverrides$,
   askAiDefaultPreset$,
@@ -34,6 +37,7 @@ import {
   ttsPlaybackRate$,
   ttsVoiceId$
 } from '$lib/data/ai-settings';
+import { mergeConnections, migrateAiSettings } from '$lib/data/ai-connections';
 import { homeBookTitles$, homeRemovedTitles$ } from '$lib/data/library-home';
 import { logger } from '$lib/data/logger';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
@@ -105,6 +109,9 @@ const sharedSettings: Record<string, Store> = {
   darkTheme: darkTheme$,
   followSystemTheme: followSystemTheme$,
   customAppThemes: customAppThemes$,
+  aiConnections: aiConnections$,
+  aiConnectionKeys: aiConnectionKeys$,
+  aiFeatures: aiFeatures$,
   openRouterApiKey: openRouterApiKey$,
   openRouterModel: openRouterModel$,
   openRouterRecapModel: openRouterRecapModel$,
@@ -131,7 +138,17 @@ const sharedSettings: Record<string, Store> = {
  * from the browser when it signs out (or the session expires) or another account
  * signs in, so they are never used by, shown to or uploaded for someone else.
  */
-const secretSettings = ['openRouterApiKey', 'elevenLabsApiKey', 'audiobookshelfToken'];
+const secretSettings = [
+  'aiConnectionKeys',
+  'openRouterApiKey',
+  'elevenLabsApiKey',
+  'audiobookshelfToken'
+];
+
+/** Settings merged with the account's copy instead of replaced by the newer one. */
+const mergedSettings: Record<string, (local: any, remote: any) => unknown> = {
+  aiConnections: mergeConnections
+};
 
 /** Settings → Reader: localStorage key → store, synced per reader profile. */
 const readerSettings: Record<string, Store> = {
@@ -265,6 +282,8 @@ async function syncOnce() {
     true
   );
 
+  // A device signing in may only now get the settings the move to connections needs.
+  migrateAiSettings();
   lastSynced = Date.now();
   settingsSyncState$.next({ state: 'synced', at: lastSynced });
 }
@@ -290,7 +309,21 @@ async function mergeSettings(file: Partial<SettingsDocument> | undefined) {
       changedRemote = true;
     }
 
-    if (key in remote.values && (newDefault || remoteTime >= localTime)) {
+    const merge = mergedSettings[key];
+
+    if (merge && key in remote.values) {
+      const merged = merge(store.getValue(), remote.values[key]);
+
+      applyRemoteValue(store, merged);
+
+      if (JSON.stringify(merged) !== JSON.stringify(remote.values[key])) {
+        remote.values[key] = merged;
+        remote.modified[key] = Date.now();
+        changedRemote = true;
+      }
+
+      localTimes[key] = remote.modified[key];
+    } else if (key in remote.values && (newDefault || remoteTime >= localTime)) {
       applyRemoteValue(store, remote.values[key]);
       localTimes[key] = remote.modified[key];
     } else if (localTime > remoteTime || window.localStorage.getItem(storageKey) !== null) {
@@ -353,7 +386,9 @@ function releasePreviousOwner(user: AccountUser | null) {
 
   if (user ? owner !== user.id : owner) {
     secretSettings.forEach((key) => {
-      sharedSettings[key].next('');
+      const store = sharedSettings[key];
+
+      store.next(typeof store.getValue() === 'string' ? '' : {});
       window.localStorage.removeItem(key);
     });
     window.localStorage.removeItem(changeTimesKey);

@@ -119,14 +119,14 @@ export const settingsAreas: SettingsArea[] = [
     description: 'settings.area.ai.text',
     sections: [
       {
-        id: 'ai-guide',
-        label: 'settings.section.ai-guide',
-        description: 'settings.section.ai-guide.text'
+        id: 'ai-connections',
+        label: 'settings.section.ai-connections',
+        description: 'settings.section.ai-connections.text'
       },
       {
-        id: 'ai-ask',
-        label: 'settings.section.ai-ask',
-        description: 'settings.section.ai-ask.text'
+        id: 'ai-features',
+        label: 'settings.section.ai-features',
+        description: 'settings.section.ai-features.text'
       },
       {
         id: 'ai-presets',
@@ -149,14 +149,14 @@ export const settingsAreas: SettingsArea[] = [
         description: 'settings.section.ai-read-aloud.text'
       },
       {
-        id: 'ai-recap',
-        label: 'settings.section.ai-recap',
-        description: 'settings.section.ai-recap.text'
-      },
-      {
         id: 'ai-syncs',
         label: 'settings.section.ai-syncs',
         description: 'settings.section.ai-syncs.text'
+      },
+      {
+        id: 'ai-guide',
+        label: 'settings.section.ai-guide',
+        description: 'settings.section.ai-guide.text'
       }
     ]
   },
@@ -297,7 +297,7 @@ const legacySettingsTabs: Record<string, string> = {
   Themes: 'general-theme',
   Data: 'data-storage',
   Statistics: 'tracking-statistics',
-  AI: 'ai-ask'
+  AI: 'ai-connections'
 };
 
 export function isFirstSectionOfArea(id: string) {

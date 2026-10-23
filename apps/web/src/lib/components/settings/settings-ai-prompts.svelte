@@ -30,10 +30,7 @@
   </SettingsItemGroup>
   {#each keys as key (key)}
     <SettingsItemGroup title={$t$(`ai.prompt.${key}`)} tooltip={$t$(`ai.prompt.${key}Hint`)}>
-      <span
-        slot="header"
-        class="app-tag"
-        class:app-tag-muted={own[key] === undefined}
+      <span slot="header" class="app-tag" class:app-tag-muted={own[key] === undefined}
         >{own[key] === undefined ? $t$('ai.builtIn') : $t$('ai.yourCopy')}</span
       >
       {#if own[key] === undefined}
@@ -85,6 +82,16 @@
         <td>
           {$t$('ai.syncs.keysWhere')}
           <small>{$t$('ai.syncs.keysNote')}</small>
+        </td>
+      </tr>
+      <tr>
+        <th scope="row">
+          {$t$('ai.syncs.connections')}
+          <span class="app-tag">{$t$('ai.synced')}</span>
+        </th>
+        <td>
+          {$t$('ai.syncs.connectionsWhere')}
+          <small>{$t$('ai.syncs.connectionsNote')}</small>
         </td>
       </tr>
       <tr>

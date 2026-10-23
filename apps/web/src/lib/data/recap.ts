@@ -10,7 +10,7 @@
  * before the reading position. Nothing past the position is sent. Not part of upstream.
  */
 
-import { openRouterModel$, openRouterRecapModel$ } from '$lib/data/ai-settings';
+import { resolveFeature } from '$lib/data/ai-connections';
 import { aiPrompts } from '$lib/data/ai-prompts';
 import { askAi } from '$lib/data/ask-ai';
 import { readerDb } from '$lib/data/reader-db';
@@ -121,7 +121,7 @@ export interface RecapPlan {
 }
 
 export function recapModel() {
-  return openRouterRecapModel$.getValue().trim() || openRouterModel$.getValue();
+  return resolveFeature('recap').model;
 }
 
 /**
@@ -233,7 +233,7 @@ export async function writeRecap(
       [{ role: 'user', content: `Book: ${title}\nChapter: ${part.label}\n\n${text}` }],
       () => {},
       signal,
-      { model: plan.model, system: aiPrompts().chapter }
+      { feature: 'recap', system: aiPrompts().chapter }
     );
 
     recaps.chapters[part.key] = {
@@ -263,7 +263,7 @@ export async function writeRecap(
     ],
     onText,
     signal,
-    { model: plan.model, system: aiPrompts().recap }
+    { feature: 'recap', system: aiPrompts().recap }
   );
   const saved: SavedRecap = {
     position,

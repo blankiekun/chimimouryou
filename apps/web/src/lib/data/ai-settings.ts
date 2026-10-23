@@ -46,6 +46,107 @@ export const openRouterRecapModel$ = writableStringLocalStorageSubject()(
   '~deepseek/deepseek-flash-latest'
 );
 
+/**
+ * A provider, where requests go and a name (Settings → AI → Connections). Synced and
+ * merged per id (newest `modified` wins, deletions kept); never holds the key.
+ */
+export interface AiConnection {
+  id: string;
+  name: string;
+  /** Id in ai-providers.ts */
+  provider: string;
+  /** Base URL instead of the provider's */
+  endpoint?: string;
+  kind: 'text' | 'voice';
+  modified: number;
+  deleted?: boolean;
+}
+
+export type AiFeature = 'ask' | 'recap' | 'lore' | 'voice';
+export type AiTextFeature = Exclude<AiFeature, 'voice'>;
+
+export type ReasoningEffort = 'off' | 'low' | 'medium' | 'high';
+
+/** Advanced settings of a feature; a missing value is not sent. */
+export interface AiSamplers {
+  temperature?: number;
+  top_p?: number;
+  top_k?: number;
+  min_p?: number;
+  frequency_penalty?: number;
+  presence_penalty?: number;
+  max_tokens?: number;
+  /** Characters of book text sent (Ask AI: before the selection; Lorebook: per request) */
+  context?: number;
+  reasoning?: ReasoningEffort;
+  stream?: boolean;
+  seed?: number;
+}
+
+export interface AiFeatureSetting {
+  /** Connection id; 'inherit': the feature above (Lorebook → Story so far → Ask AI); '': the first one */
+  connection: string;
+  /** Empty: the provider's default model for the feature */
+  model: string;
+  /** Changes from the feature's defaults */
+  params: AiSamplers;
+}
+
+/** Sent with every request unless the model doesn't take them. */
+export const aiFeatureDefaults: Record<AiTextFeature, AiSamplers> = {
+  ask: {
+    temperature: 0.7,
+    top_p: 1,
+    frequency_penalty: 0,
+    presence_penalty: 0,
+    max_tokens: 1024,
+    context: 2000,
+    reasoning: 'off',
+    stream: true
+  },
+  recap: {
+    temperature: 0.3,
+    top_p: 1,
+    frequency_penalty: 0,
+    presence_penalty: 0,
+    max_tokens: 2048,
+    reasoning: 'off',
+    stream: true
+  },
+  lore: {
+    temperature: 0.2,
+    top_p: 1,
+    frequency_penalty: 0,
+    presence_penalty: 0,
+    max_tokens: 4096,
+    context: 20_000,
+    reasoning: 'off',
+    // The answer is JSON.
+    stream: false
+  }
+};
+
+export const defaultAiFeatures: Record<AiFeature, AiFeatureSetting> = {
+  ask: { connection: '', model: '', params: {} },
+  recap: { connection: '', model: '', params: {} },
+  lore: { connection: 'inherit', model: '', params: {} },
+  voice: { connection: '', model: '', params: {} }
+};
+
+export const aiConnections$ = writableObjectLocalStorageSubject<AiConnection[]>()(
+  'aiConnections',
+  []
+);
+/** Connection id → API key. A secret setting: only in the account's settings.json. */
+export const aiConnectionKeys$ = writableObjectLocalStorageSubject<Record<string, string>>()(
+  'aiConnectionKeys',
+  {}
+);
+export const aiFeatures$ = writableObjectLocalStorageSubject<Record<AiFeature, AiFeatureSetting>>()(
+  'aiFeatures',
+  defaultAiFeatures
+);
+
 /** Added to Ask AI's instructions, e.g. the reader's level; empty adds nothing. */
 export const askAiReaderNote$ = writableStringLocalStorageSubject()('askAiReaderNote', '');
 

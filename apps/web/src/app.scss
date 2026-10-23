@@ -461,6 +461,12 @@
     color: var(--app-muted-fg);
   }
 
+  /* "Free · may train on text": a caution, not an error */
+  .app-tag-warning {
+    background: color-mix(in srgb, var(--app-warning-color) 12%, transparent);
+    color: var(--app-warning-color);
+  }
+
   .app-header-pill {
     display: inline-flex;
     flex-shrink: 0;
