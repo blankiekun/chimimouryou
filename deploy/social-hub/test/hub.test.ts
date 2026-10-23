@@ -5,7 +5,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import hub, { STATUS_GAP, cleanUp, type Env } from '../src/index';
+import hub, { STATUS_GAP, cleanUp, type Env } from '../src/hub';
 import { memoryD1 } from './d1';
 
 const key = (n: number) => n.toString(16).padStart(64, '0');

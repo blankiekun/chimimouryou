@@ -202,6 +202,11 @@ export async function newFriendCode() {
   return setMe(await hubFetch<SocialMe>('/v1/code', 'POST'));
 }
 
+/** Codes as people type them: any case, dashes and spaces (the hub also reads O as 0, I and L as 1) */
+export function normalizeCode(text: string) {
+  return text.toUpperCase().replace(/[^0-9A-Z]/g, '');
+}
+
 /** K7QM2XPA → K7QM-2XPA; recovery codes in groups of five */
 export function formatCode(code: string, group = 4) {
   return code.replace(new RegExp(`(.{${group}})(?=.)`, 'g'), '$1-');

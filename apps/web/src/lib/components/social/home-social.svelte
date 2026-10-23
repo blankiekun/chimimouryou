@@ -2,6 +2,7 @@
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
+  import BookCard from '$lib/components/book-card/book-card.svelte';
   import CoverCard from '$lib/components/book-card/cover-card.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import AddFriend from '$lib/components/social/add-friend.svelte';
@@ -96,7 +97,11 @@
                 mine ? dispatch('bookClick', { id: mine.id }) : goto(`${pagePath}/friends`)}
             >
               <svelte:fragment slot="cover">
-                {#if !mine}<TitleCard title={card.title} colour={(friend.avatar % 8) + 1} />{/if}
+                {#if mine}
+                  <BookCard imagePath={mine.imagePath} title={mine.title} />
+                {:else}
+                  <TitleCard title={card.title} colour={(friend.avatar % 8) + 1} />
+                {/if}
               </svelte:fragment>
               <span slot="badge" class="home-social-badge">
                 <SocialAvatar avatar={friend.avatar} size={1.75} label={friend.name} />

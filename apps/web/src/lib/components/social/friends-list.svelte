@@ -46,7 +46,7 @@
     <ul class="friends-rows">
       {#each byLastRead(friends) as friend (friend.id)}
         {@const book = friend.books[0]}
-        <li class="friends-row">
+        <li class="friends-row" class:friends-row-manage={manage}>
           <SocialAvatar avatar={friend.avatar} />
           <span class="friends-who">
             <strong>{friend.name}</strong>
@@ -198,12 +198,16 @@
     background: var(--app-progress-fill);
   }
 
+  .friends-row-manage {
+    grid-template-columns: auto minmax(0, 10rem) minmax(0, 1fr) auto;
+  }
+
   .friends-manage {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     justify-content: flex-end;
     gap: 0.5rem;
-    grid-column: 1 / -1;
   }
 
   .friends-error {
@@ -212,12 +216,14 @@
   }
 
   @media (max-width: 639px) {
-    .friends-row {
-      grid-template-columns: auto minmax(0, 1fr);
+    .friends-row,
+    .friends-row-manage {
+      grid-template-columns: auto minmax(0, 1fr) auto;
     }
 
     .friends-book {
-      grid-column: 2;
+      grid-column: 2 / -1;
+      grid-row: 2;
     }
   }
 </style>

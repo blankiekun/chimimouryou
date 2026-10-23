@@ -6,7 +6,7 @@
 
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import type { D1Database, D1PreparedStatement } from '../src/index';
+import type { D1Database, D1PreparedStatement } from '../src/hub';
 
 /** D1's binding over Node's built-in SQLite (D1 is SQLite too), with schema.sql applied */
 export function memoryD1() {

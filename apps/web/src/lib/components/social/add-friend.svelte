@@ -3,7 +3,13 @@
   import SectionHead from '$lib/components/section-head.svelte';
   import { pagePath } from '$lib/data/env';
   import { sendFriendRequest } from '$lib/data/social';
-  import { formatCode, hubErrorKey, newFriendCode, socialSession$ } from '$lib/data/social-account';
+  import {
+    formatCode,
+    hubErrorKey,
+    newFriendCode,
+    normalizeCode,
+    socialSession$
+  } from '$lib/data/social-account';
   import { t$ } from '$lib/i18n';
   import qrcode from 'qrcode-generator';
   import { onMount } from 'svelte';
@@ -13,7 +19,7 @@
   /** From a /friends?add=CODE link */
   export let initialCode = '';
 
-  let entered = initialCode ? formatCode(initialCode.toUpperCase()) : '';
+  let entered = initialCode ? formatCode(normalizeCode(initialCode)) : '';
   let error = '';
   let sent = '';
   let busy = false;
@@ -60,7 +66,7 @@
   function add() {
     run(async () => {
       await sendFriendRequest(entered);
-      sent = $t$('social.requestSent', { code: formatCode(entered.toUpperCase()) });
+      sent = $t$('social.requestSent', { code: formatCode(normalizeCode(entered)) });
       entered = '';
     });
   }

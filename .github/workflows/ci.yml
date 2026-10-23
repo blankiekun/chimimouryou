@@ -44,6 +44,9 @@ jobs:
         run: pnpm test
         working-directory: apps/web
 
+      - name: Social hub tests
+        run: pnpm --filter chimi-social-hub test
+
       - name: Desktop shell tests
         run: node --test apps/desktop/serve.test.js apps/desktop/oauth.test.js
 
