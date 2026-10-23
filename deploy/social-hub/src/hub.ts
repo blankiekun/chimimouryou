@@ -27,6 +27,19 @@ export interface Env {
   DB: D1Database;
 }
 
+/** The parts of Cloudflare's edge cache (caches.default) the hub uses */
+interface EdgeCache {
+  match(key: string): Promise<Response | undefined>;
+  put(key: string, response: Response): Promise<void>;
+  delete(key: string): Promise<boolean>;
+}
+
+interface Context {
+  waitUntil(promise: Promise<unknown>): void;
+}
+
+const edgeCache = () => (globalThis as { caches?: { default?: EdgeCache } }).caches?.default;
+
 type Row = Record<string, unknown>;
 
 interface UserRow {
@@ -64,6 +77,14 @@ const SHARE_KEYS = [
   'hideVn'
 ];
 const KINDS = ['book', 'manga', 'vn'];
+/** Events are kept this long */
+export const EVENT_TTL = 90 * DAY;
+const MAX_FINISHED = 50;
+/** Streaks that make an event, in days */
+const STREAKS = [7, 30, 100, 365, 1000];
+/** A book that shows up at or past this share isn't announced as started */
+const STARTED_BELOW = 0.25;
+const PROFILE_TTL = 15 * MINUTE;
 
 const USERNAME = /^[A-Za-z0-9_]{3,20}$/;
 const KEY = /^[0-9a-f]{64}$/;
@@ -203,7 +224,7 @@ async function checkFailures(env: Env, subjects: string[]) {
   if ((row?.n ?? 0) >= MAX_FAILURES) throw new HttpError(429, 'locked');
 }
 
-async function recordFailure(env: Env, subjects: string[]) {
+async function recordFailure(env: Env, subjects: string[]): Promise<never> {
   const win = Math.floor(now() / HOUR) * HOUR;
 
   await env.DB.batch(
@@ -312,7 +333,217 @@ export async function friendsOf(env: Env, user: string) {
       incoming.push({ ...person, at: row.created });
     }
   }
+
+  // Their finished books (for the book page's Friends row) and stats, newest first.
+  const ofFriends = (sql: string) =>
+    env.DB.prepare(
+      `${sql} JOIN links l ON l.state = 'accepted'
+         AND ((l.a = ?1 AND l.b = t.user) OR (l.b = ?1 AND l.a = t.user))`
+    )
+      .bind(user)
+      .all();
+  const [finished, stats] = await Promise.all([
+    ofFriends('SELECT t.user, t.book_key, t.title, t.kind, t.month, t.at FROM finished t'),
+    ofFriends('SELECT t.user, t.data FROM stats t')
+  ]);
+
+  friends.forEach((friend) => Object.assign(friend, { finished: [], stats: null }));
+  finished.results
+    .sort((x, y) => (y.at as number) - (x.at as number))
+    .forEach((row) =>
+      (friends.get(row.user as string)?.finished as Row[] | undefined)?.push({
+        key: row.book_key,
+        title: row.title,
+        kind: row.kind,
+        month: row.month
+      })
+    );
+  stats.results.forEach((row) => {
+    const friend = friends.get(row.user as string);
+
+    if (friend) friend.stats = JSON.parse(row.data as string);
+  });
   return { friends: [...friends.values()], incoming, outgoing };
+}
+
+/** Share settings with their defaults: on, except words known and the hide switches */
+function sharing(user: UserRow) {
+  const share = JSON.parse(user.share) as Record<string, boolean>;
+  const on = (key: string, fallback = true) => share[key] ?? fallback;
+
+  return {
+    public: on('public'),
+    current: on('current'),
+    finished: on('finished'),
+    activity: on('activity'),
+    stats: on('stats'),
+    wordsKnown: on('wordsKnown', false),
+    hidden: (kind: string) =>
+      (kind === 'manga' && on('hideManga', false)) || (kind === 'vn' && on('hideVn', false))
+  };
+}
+
+/** Deletes at once what the reader no longer shares */
+function dropUnshared(env: Env, user: UserRow) {
+  const share = sharing(user);
+  const sql: string[] = [];
+
+  if (!share.current) sql.push('DELETE FROM status WHERE user = ?1');
+  if (!share.finished) sql.push('DELETE FROM finished WHERE user = ?1');
+  if (!share.activity) sql.push('DELETE FROM events WHERE user = ?1');
+  if (!share.stats) sql.push('DELETE FROM stats WHERE user = ?1');
+  if (!share.wordsKnown) {
+    sql.push(`UPDATE stats SET data = json_remove(data, '$.wordsKnown') WHERE user = ?1`);
+  }
+  ['manga', 'vn']
+    .filter(share.hidden)
+    .forEach((kind) =>
+      ['status', 'finished', 'events'].forEach((table) =>
+        sql.push(`DELETE FROM ${table} WHERE user = ?1 AND kind = '${kind}'`)
+      )
+    );
+  return sql.length
+    ? env.DB.batch(sql.map((one) => env.DB.prepare(one).bind(user.id)))
+    : Promise.resolve();
+}
+
+const profileKey = (request: Request, username: string) =>
+  `${new URL(request.url).origin}/v1/profile/${username.toLowerCase()}`;
+
+/** A changed profile shouldn't wait 15 minutes in this data centre's cache (others may). */
+async function purgeProfile(request: Request, username: string) {
+  await edgeCache()
+    ?.delete(profileKey(request, username))
+    .catch(() => false);
+}
+
+/**
+ * A profile: public ones to anyone, private ones to friends (404 otherwise, and both ways
+ * when blocked). Activity only for friends and oneself.
+ */
+async function profile(env: Env, username: string, viewer: UserRow | null) {
+  const user = await userByName(env, username);
+
+  if (!user) throw new HttpError(404, 'user');
+
+  const share = sharing(user);
+  let relation = 'visitor';
+  let since: number | undefined;
+
+  if (viewer?.id === user.id) {
+    relation = 'self';
+  } else if (viewer) {
+    const [a, b] = pair(viewer.id, user.id);
+    const link = await env.DB.prepare('SELECT state, created FROM links WHERE a = ?1 AND b = ?2')
+      .bind(a, b)
+      .first<{ state: string; created: number }>();
+
+    if (link?.state === 'blocked') throw new HttpError(404, 'user');
+    if (link?.state === 'accepted') {
+      relation = 'friend';
+      since = link.created;
+    }
+  }
+  if (relation === 'visitor' && !share.public) throw new HttpError(404, 'user');
+
+  const rows = (sql: string) => env.DB.prepare(sql).bind(user.id).all();
+  const [books, finished, stats, events] = await Promise.all([
+    rows(
+      'SELECT book_key, title, author, kind, pct, read_at FROM status WHERE user = ?1 ORDER BY slot'
+    ),
+    rows('SELECT book_key, title, kind, month FROM finished WHERE user = ?1 ORDER BY at DESC'),
+    env.DB.prepare('SELECT data FROM stats WHERE user = ?1')
+      .bind(user.id)
+      .first<{ data: string }>(),
+    relation === 'visitor'
+      ? Promise.resolve({ results: [] })
+      : rows(
+          'SELECT id, type, book_key, title, kind, value, at FROM events WHERE user = ?1 ORDER BY at DESC, id DESC LIMIT 30'
+        )
+  ]);
+
+  return {
+    profile: {
+      id: user.id,
+      username: user.username,
+      name: user.name,
+      avatar: user.avatar,
+      created: user.created,
+      public: share.public
+    },
+    relation,
+    since,
+    books: books.results.map((row) => ({
+      key: row.book_key,
+      title: row.title,
+      author: row.author,
+      kind: row.kind,
+      pct: row.pct,
+      readAt: row.read_at
+    })),
+    finished: finished.results.map((row) => ({
+      key: row.book_key,
+      title: row.title,
+      kind: row.kind,
+      month: row.month
+    })),
+    stats: stats ? JSON.parse(stats.data) : null,
+    events: events.results.map(eventJson)
+  };
+}
+
+function eventJson(row: Row) {
+  return {
+    id: row.id,
+    type: row.type,
+    key: row.book_key,
+    title: row.title,
+    kind: row.kind,
+    value: row.value,
+    at: row.at
+  };
+}
+
+/** Friends' events after `since` (at most 90 days back), newest first */
+async function feed(env: Env, user: string, since: number) {
+  const { results } = await env.DB.prepare(
+    `SELECT e.id, e.type, e.book_key, e.title, e.kind, e.value, e.at,
+       u.id AS uid, u.username, u.name, u.avatar
+     FROM events e
+     JOIN links l ON l.state = 'accepted' AND ((l.a = ?1 AND l.b = e.user) OR (l.b = ?1 AND l.a = e.user))
+     JOIN users u ON u.id = e.user
+     WHERE e.at > ?2 ORDER BY e.at DESC, e.id DESC LIMIT 100`
+  )
+    .bind(user, Math.max(since, now() - EVENT_TTL))
+    .all();
+
+  return {
+    events: results.map((row) => ({
+      ...eventJson(row),
+      user: { id: row.uid, username: row.username, name: row.name, avatar: row.avatar }
+    }))
+  };
+}
+
+/** A report of someone's name or picture, once per reporter; read and acted on by hand (README). */
+async function report(request: Request, env: Env, viewer: UserRow | null) {
+  const body = await readBody(request);
+  const username = matching(body.username, USERNAME, 'username');
+  const what = body.what === 'picture' ? 'picture' : 'name';
+  const reporter = viewer?.id ?? (await ipSubject(request));
+
+  await limit(env, reporter, 'report', DAY, 5);
+
+  const target = await userByName(env, username);
+
+  if (!target) throw new HttpError(404, 'user');
+  if (target.id === viewer?.id) throw new HttpError(400, 'self');
+  await env.DB.prepare(
+    'INSERT OR IGNORE INTO reports (target, reporter, what, at) VALUES (?1, ?2, ?3, ?4)'
+  )
+    .bind(target.id, reporter, what, now())
+    .run();
+  return json({ ok: true });
 }
 
 function linkCounts(env: Env, user: string, other: string) {
@@ -346,12 +577,21 @@ async function sendRequest(env: Env, user: UserRow, body: Row) {
   // Counted before the lookup: the daily limit also bounds guessing codes.
   await limit(env, user.id, 'request', DAY, 20);
 
-  const code = normalizeCode(text(body.code, 20, 'code'));
-  const target = await env.DB.prepare('SELECT id FROM users WHERE code = ?1')
-    .bind(code)
-    .first<{ id: string }>();
+  // By code, or by username from a public profile's Add friend.
+  const byName = body.username !== undefined;
+  const code = byName ? null : normalizeCode(text(body.code, 20, 'code'));
+  const named = byName
+    ? await userByName(env, matching(body.username, USERNAME, 'username'))
+    : null;
+  const target = byName
+    ? named && sharing(named).public
+      ? named
+      : null
+    : await env.DB.prepare('SELECT id FROM users WHERE code = ?1')
+        .bind(code)
+        .first<{ id: string }>();
 
-  if (!target) throw new HttpError(404, 'code');
+  if (!target) throw new HttpError(404, byName ? 'user' : 'code');
   if (target.id === user.id) throw new HttpError(400, 'self');
 
   const [a, b] = pair(user.id, target.id);
@@ -373,7 +613,7 @@ async function sendRequest(env: Env, user: UserRow, body: Row) {
       `INSERT INTO links (a, b, state, by_user, code, created) VALUES (?1, ?2, 'pending', ?3, ?4, ?5)
        ON CONFLICT (a, b) DO UPDATE SET state = 'pending', by_user = ?3, code = ?4, created = ?5`
     )
-      .bind(a, b, user.id, code, now())
+      .bind(a, b, user.id, code ?? `@${named!.username}`, now())
       .run();
   }
   // Already friends or pending, or blocked by them: nothing changes and nothing tells them.
@@ -389,13 +629,15 @@ function validBooks(value: unknown) {
 
     const pct = Number(book.pct);
     const readAt = Math.min(time, Math.max(0, Math.floor(Number(book.readAt) || time)));
+    // "Reading something": a hidden book, only its share.
+    const hidden = book.kind === 'hidden';
 
     if (!(pct >= 0 && pct <= 1)) throw new HttpError(400, 'pct');
-    if (!KINDS.includes(book.kind as string)) throw new HttpError(400, 'kind');
+    if (!hidden && !KINDS.includes(book.kind as string)) throw new HttpError(400, 'kind');
     return {
-      key: text(book.key, 200, 'key'),
-      title: text(book.title, 200, 'title'),
-      author: text(book.author, 200, 'author', true),
+      key: hidden ? '' : text(book.key, 200, 'key'),
+      title: hidden ? '' : text(book.title, 200, 'title'),
+      author: hidden ? '' : text(book.author, 200, 'author', true),
       kind: book.kind as string,
       pct,
       readAt
@@ -403,8 +645,58 @@ function validBooks(value: unknown) {
   });
 }
 
+function validFinished(value: unknown) {
+  if (value === undefined || value === null) return null;
+
+  const book = value as Row;
+
+  if (typeof book !== 'object' || !KINDS.includes(book.kind as string)) {
+    throw new HttpError(400, 'finished');
+  }
+  return {
+    key: text(book.key, 200, 'key'),
+    title: text(book.title, 200, 'title'),
+    kind: book.kind as string
+  };
+}
+
+function validStats(value: unknown, wordsKnown: boolean) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'object') throw new HttpError(400, 'stats');
+
+  const stats = value as Row;
+  const count = (field: unknown) => {
+    const n = Number(field);
+
+    if (!Number.isInteger(n) || n < 0 || n > 1e9) throw new HttpError(400, 'stats');
+    return n;
+  };
+
+  if (typeof stats.heat !== 'string' || !/^[0-4]{84}$/.test(stats.heat)) {
+    throw new HttpError(400, 'stats');
+  }
+  return {
+    streak: count(stats.streak),
+    weekChars: count(stats.weekChars),
+    weekMinutes: count(stats.weekMinutes),
+    finishedYear: count(stats.finishedYear),
+    heat: stats.heat,
+    ...(wordsKnown && stats.wordsKnown !== undefined && stats.wordsKnown !== null
+      ? { wordsKnown: count(stats.wordsKnown) }
+      : {})
+  };
+}
+
+/**
+ * Current books, a book just finished and the stats, kept only as far as the reader shares
+ * them; writes started, finished and streak events (each once per 90 days).
+ */
 async function pushStatus(env: Env, user: UserRow, body: Row) {
-  const books = validBooks(body.books);
+  const share = sharing(user);
+  const books = validBooks(body.books).filter((book) => share.current && !share.hidden(book.kind));
+  const stats = share.stats ? validStats(body.stats, share.wordsKnown) : null;
+  const finishedNow = validFinished(body.finished);
+  const done = finishedNow && !share.hidden(finishedNow.kind) ? finishedNow : null;
   const time = now();
   const { meta } = await env.DB.prepare(
     'UPDATE users SET status_at = ?1 WHERE id = ?2 AND status_at <= ?1 - ?3'
@@ -415,6 +707,27 @@ async function pushStatus(env: Env, user: UserRow, body: Row) {
   if (!meta.changes && !(body.leaving === true && (await take(env, user.id, 'leave', DAY, 30)))) {
     throw new HttpError(429, 'soon');
   }
+
+  const [before, oldStats] = await Promise.all([
+    env.DB.prepare('SELECT book_key FROM status WHERE user = ?1').bind(user.id).all(),
+    env.DB.prepare('SELECT data FROM stats WHERE user = ?1').bind(user.id).first<{ data: string }>()
+  ]);
+  const known = new Set(before.results.map((row) => row.book_key));
+  const events: [string, string, string, string, number][] = [];
+
+  if (share.activity) {
+    books
+      .filter((book) => book.kind !== 'hidden' && !known.has(book.key) && book.pct < STARTED_BELOW)
+      .forEach((book) => events.push(['started', book.key, book.title, book.kind, 0]));
+    if (done && share.finished) events.push(['finished', done.key, done.title, done.kind, 0]);
+    if (stats) {
+      const last = oldStats ? Number(JSON.parse(oldStats.data).streak) || 0 : 0;
+      const reached = STREAKS.filter((days) => last < days && stats.streak >= days).pop();
+
+      if (reached) events.push(['streak', '', '', 'book', reached]);
+    }
+  }
+
   await env.DB.batch([
     env.DB.prepare('DELETE FROM status WHERE user = ?1').bind(user.id),
     ...books.map((book, slot) =>
@@ -422,11 +735,46 @@ async function pushStatus(env: Env, user: UserRow, body: Row) {
         `INSERT INTO status (user, slot, book_key, title, author, kind, pct, read_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`
       ).bind(user.id, slot, book.key, book.title, book.author, book.kind, book.pct, book.readAt)
+    ),
+    ...(stats
+      ? [
+          env.DB.prepare('INSERT OR REPLACE INTO stats (user, data, at) VALUES (?1, ?2, ?3)').bind(
+            user.id,
+            JSON.stringify(stats),
+            time
+          )
+        ]
+      : []),
+    ...(done && share.finished
+      ? [
+          env.DB.prepare(
+            `INSERT OR REPLACE INTO finished (user, book_key, title, kind, month, at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)`
+          ).bind(
+            user.id,
+            done.key,
+            done.title,
+            done.kind,
+            new Date(time * 1000).toISOString().slice(0, 7),
+            time
+          ),
+          env.DB.prepare(
+            `DELETE FROM finished WHERE user = ?1 AND book_key NOT IN
+               (SELECT book_key FROM finished WHERE user = ?1 ORDER BY at DESC LIMIT ${MAX_FINISHED})`
+          ).bind(user.id)
+        ]
+      : []),
+    ...events.map(([type, key, title, kind, value]) =>
+      env.DB.prepare(
+        `INSERT INTO events (user, type, book_key, title, kind, value, at)
+         SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 WHERE NOT EXISTS (SELECT 1 FROM events
+           WHERE user = ?1 AND type = ?2 AND book_key = ?3 AND value = ?6 AND at > ?8)`
+      ).bind(user.id, type, key, title, kind, value, time, time - EVENT_TTL)
     )
   ]);
 }
 
-async function updateMe(env: Env, user: UserRow, body: Row) {
+async function updateMe(request: Request, env: Env, user: UserRow, body: Row) {
   await limit(env, user.id, 'me', DAY, 10);
 
   const name = body.name === undefined ? user.name : displayName(body.name);
@@ -448,7 +796,12 @@ async function updateMe(env: Env, user: UserRow, body: Row) {
   await env.DB.prepare('UPDATE users SET name = ?1, avatar = ?2, share = ?3 WHERE id = ?4')
     .bind(name, avatar, JSON.stringify(share), user.id)
     .run();
-  return me((await userById(env, user.id))!);
+
+  const updated = (await userById(env, user.id))!;
+
+  await dropUnshared(env, updated);
+  await purgeProfile(request, user.username);
+  return me(updated);
 }
 
 /** Every row of these users: accounts, sessions, friend links, status and counters */
@@ -460,6 +813,10 @@ function deleteUsers(env: Env, where: string, ...values: unknown[]) {
       `DELETE FROM sessions WHERE user IN (${users})`,
       `DELETE FROM links WHERE a IN (${users}) OR b IN (${users})`,
       `DELETE FROM status WHERE user IN (${users})`,
+      `DELETE FROM stats WHERE user IN (${users})`,
+      `DELETE FROM finished WHERE user IN (${users})`,
+      `DELETE FROM events WHERE user IN (${users})`,
+      `DELETE FROM reports WHERE target IN (${users}) OR reporter IN (${users})`,
       `DELETE FROM limits WHERE subject IN (${users})`,
       `DELETE FROM users WHERE ${where}`
     ].map((sql) => env.DB.prepare(sql).bind(...values))
@@ -472,6 +829,8 @@ export async function cleanUp(env: Env) {
 
   await deleteUsers(env, 'last_seen < ?1', time - ACCOUNT_TTL);
   await env.DB.batch([
+    env.DB.prepare('DELETE FROM events WHERE at < ?1').bind(time - EVENT_TTL),
+    env.DB.prepare('DELETE FROM reports WHERE at < ?1').bind(time - EVENT_TTL),
     env.DB.prepare('DELETE FROM sessions WHERE last_used < ?1').bind(time - SESSION_TTL),
     env.DB.prepare('DELETE FROM limits WHERE win < ?1').bind(time - 2 * DAY)
   ]);
@@ -580,13 +939,48 @@ const privacy = `<!doctype html><meta charset="utf-8"><meta name="viewport" cont
 <h1>What the hub stores</h1>
 <p>The hub keeps your username, display name, avatar choice, friend code, your friends and
 requests, and up to three books you are reading (title, author, kind and how far along you are),
-plus the share settings you choose. Passwords are stretched in your browser and stored only as a
+plus the share settings you choose. As far as you share them: your last 50 finished books with
+the month, reading stats (streak, this week, books finished this year, an 84-day activity strip,
+words known only if you turn it on) and activity for friends (started, finished, streaks), kept
+90 days. Turning a share off deletes that data at once. Reports of a name are kept 90 days. Passwords are stretched in your browser and stored only as a
 salted hash; the recovery code and session tokens are stored only as hashes.</p>
 <p>No email, IP address log, book files or covers. Rate limits keep hashed addresses for two days.</p>
 <p>Deleting your account (Settings, Social) removes every row at once. Sessions unused for 90 days
 and accounts unused for 12 months are deleted automatically.</p>`;
 
-async function route(request: Request, env: Env): Promise<Response> {
+/**
+ * GET /v1/profile/:username. Without a token: public profiles only, from the edge cache for
+ * 15 minutes (30 misses a day per address); with one: friends see private profiles too.
+ */
+async function profileResponse(
+  request: Request,
+  env: Env,
+  ctx: Context | undefined,
+  username: string,
+  viewer: UserRow | null
+) {
+  const cache = viewer ? undefined : edgeCache();
+  const key = profileKey(request, username);
+  const hit = await cache?.match(key).catch(() => undefined);
+
+  if (hit) return hit;
+  await limit(env, viewer?.id ?? (await ipSubject(request)), 'profile', DAY, 30);
+
+  const response = json(await profile(env, username, viewer));
+
+  if (cache) {
+    const copy = new Response(response.clone().body, response);
+
+    copy.headers.set('Cache-Control', `public, max-age=${PROFILE_TTL}`);
+    const put = cache.put(key, copy).catch(() => {});
+
+    if (ctx) ctx.waitUntil(put);
+    else await put;
+  }
+  return response;
+}
+
+async function route(request: Request, env: Env, ctx?: Context): Promise<Response> {
   const { pathname } = new URL(request.url);
   const route = `${request.method} ${pathname}`;
 
@@ -598,18 +992,35 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (route === 'POST /v1/login') return login(request, env);
   if (route === 'POST /v1/recover') return recover(request, env);
 
-  const { user, hash } = await authenticate(request, env);
+  // Profiles and reports also answer visitors without an account.
+  const auth = request.headers.has('Authorization') ? await authenticate(request, env) : null;
+  const profilePath = /^\/v1\/profile\/([A-Za-z0-9_]{3,20})$/.exec(pathname);
+
+  if (request.method === 'GET' && profilePath) {
+    return profileResponse(request, env, ctx, profilePath[1], auth?.user ?? null);
+  }
+  if (route === 'POST /v1/report') return report(request, env, auth?.user ?? null);
+  if (!auth) throw new HttpError(401, 'session');
+
+  const { user, hash } = auth;
 
   switch (route) {
+    case 'GET /v1/feed': {
+      await limit(env, user.id, 'feed', MINUTE, 1);
+      const since = Number(new URL(request.url).searchParams.get('since')) || 0;
+
+      return json(await feed(env, user.id, since));
+    }
     case 'POST /v1/logout':
       await env.DB.prepare('DELETE FROM sessions WHERE hash = ?1').bind(hash).run();
       return json({ ok: true });
     case 'GET /v1/me':
       return json(me(user));
     case 'PUT /v1/me':
-      return json(await updateMe(env, user, await readBody(request)));
+      return json(await updateMe(request, env, user, await readBody(request)));
     case 'DELETE /v1/me':
       await deleteUsers(env, 'id = ?1', user.id);
+      await purgeProfile(request, user.username);
       return json({ ok: true });
     case 'POST /v1/code':
       await limit(env, user.id, 'code', DAY, 3);
@@ -665,10 +1076,10 @@ async function route(request: Request, env: Env): Promise<Response> {
 }
 
 export default {
-  async fetch(request: Request, env: Env) {
+  async fetch(request: Request, env: Env, ctx?: Context) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     try {
-      return await route(request, env);
+      return await route(request, env, ctx);
     } catch (error) {
       if (error instanceof HttpError) return json({ error: error.code }, error.status);
       console.error(error);

@@ -30,8 +30,30 @@ that only adds tables.
 
 ## API
 
-JSON under `/v1`, `Authorization: Bearer <token>` except `salt`, `signup`, `login` and `recover`.
-`POST salt`, `signup`, `login`, `logout`, `recover`; `GET|PUT|DELETE me`; `POST code`;
-`PUT status` (one per 5 minutes, plus one when leaving a book); `GET friends` (once a minute);
-`POST friends/request`; `POST friends/:id/accept`; `DELETE friends/:id` (decline, cancel, remove);
-`POST block/:id`. `GET /privacy` is the privacy page. Limits are daily counters in D1 (`limits`).
+JSON under `/v1`, `Authorization: Bearer <token>` except `salt`, `signup`, `login`, `recover`,
+and (token optional) `profile/:username` and `report`.
+`POST salt`, `signup`, `login`, `logout`, `recover`; `GET|PUT|DELETE me` (turning a share off
+in `PUT me` deletes that data at once); `POST code`;
+`PUT status` (current books, `finished`, `stats`; one per 5 minutes, plus one when leaving a
+book; writes started, finished and streak events); `GET friends` (with their finished books and
+stats; once a minute); `GET feed?since=` (friends' events, 90 days; once a minute);
+`GET profile/:username` (public profiles to anyone, edge-cached 15 minutes; private ones to
+friends; 404 when blocked; 30 a day); `POST report` (`{username, what: name|picture}`, 5 a day);
+`POST friends/request` (`{code}`, or `{username}` of a public profile); `POST friends/:id/accept`;
+`DELETE friends/:id` (decline, cancel, remove); `POST block/:id`. `GET /privacy` is the privacy
+page. Limits are counters in D1 (`limits`).
+
+## Reports
+
+Reports of a name or picture are kept 90 days. To review them and reset a name:
+
+```sh
+npx wrangler@4.147.0 d1 execute chimi-hub --remote --command \
+  "SELECT u.username, u.name, r.what, COUNT(*) AS n FROM reports r JOIN users u ON u.id = r.target
+   GROUP BY r.target, r.what ORDER BY n DESC"
+npx wrangler@4.147.0 d1 execute chimi-hub --remote --command \
+  "UPDATE users SET name = username WHERE username = 'NAME';
+   DELETE FROM reports WHERE target = (SELECT id FROM users WHERE username = 'NAME')"
+```
+
+The edge cache keeps a public profile up to 15 minutes, so a reset name can show that long.

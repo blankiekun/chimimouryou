@@ -3,6 +3,7 @@
   import PointBox from '$lib/components/point-box.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import BookCard from '$lib/components/book-card/book-card.svelte';
+  import BookFriends from '$lib/components/social/book-friends.svelte';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
   import ContinueReadingShelf from '$lib/components/book-card/continue-reading-shelf.svelte';
   import DifficultyDialog from '$lib/components/book-card/difficulty-dialog.svelte';
@@ -414,6 +415,7 @@
           <span class="details-percent">{Math.round(book.progress * 100)}%</span>
         {/if}
       </div>
+      <BookFriends title={book.title} part="friends" />
 
       <div class="details-actions">
         <button
@@ -429,6 +431,7 @@
           {onHome ? $t$('home.remove') : $t$('home.add')}
         </button>
       </div>
+      <BookFriends title={book.title} part="hide" />
     </div>
 
     <div class="details-main">

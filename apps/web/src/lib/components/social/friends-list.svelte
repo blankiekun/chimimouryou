@@ -1,7 +1,8 @@
 <script lang="ts">
   import SectionHead from '$lib/components/section-head.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
-  import TitleCard from '$lib/components/social/title-card.svelte';
+  import { pushState } from '$app/navigation';
+  import FriendCover from '$lib/components/social/friend-cover.svelte';
   import {
     blockFriend,
     byLastRead,
@@ -17,6 +18,9 @@
   export let number: number;
   /** Remove and Block on each row (the Friends page) */
   export let manage = false;
+  /** Your own covers by book key */
+  export let covers: Map<string, { title: string; imagePath: string | Blob }> | undefined =
+    undefined;
 
   let error = '';
   let open = '';
@@ -49,7 +53,11 @@
         <li class="friends-row" class:friends-row-manage={manage}>
           <SocialAvatar avatar={friend.avatar} />
           <span class="friends-who">
-            <strong>{friend.name}</strong>
+            <button
+              type="button"
+              class="friends-name"
+              on:click={() => pushState('', { profile: friend.username })}>{friend.name}</button
+            >
             <small>
               {book
                 ? $t$('social.readAgo', { when: relativeTime(book.readAt, $uiLanguage$) })
@@ -59,10 +67,12 @@
           {#if book}
             <span class="friends-book">
               <span class="friends-thumb"
-                ><TitleCard title={book.title} colour={(friend.avatar % 8) + 1} small /></span
+                ><FriendCover {book} {covers} avatar={friend.avatar} small /></span
               >
               <span class="friends-book-text">
-                <span class="friends-book-title" lang="ja">{book.title}</span>
+                <span class="friends-book-title" lang={book.kind === 'hidden' ? undefined : 'ja'}
+                  >{book.kind === 'hidden' ? $t$('social.readingSomething') : book.title}</span
+                >
                 <span class="friends-progress">
                   <span class="friends-track" aria-hidden="true"
                     ><span style:width="{Math.round(book.pct * 100)}%" /></span
@@ -140,6 +150,21 @@
     display: flex;
     min-width: 0;
     flex-direction: column;
+  }
+
+  .friends-name {
+    align-self: flex-start;
+    max-width: 100%;
+    overflow: hidden;
+    font-weight: 700;
+    text-align: start;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .friends-name:hover {
+    color: var(--accent-strong-color);
+    text-decoration: underline;
   }
 
   .friends-who small,
