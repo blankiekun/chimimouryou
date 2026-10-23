@@ -29,7 +29,7 @@ export function isYomitanPopup(node: Node) {
 }
 
 /** Watches the page body for Yomitan's popup until it is seen once. */
-export function watchYomitan(window: Window) {
+export function watchYomitan(window: Window & typeof globalThis) {
   if (yomitanSeen$.getValue() || !window.document.body) return;
   const observer = new window.MutationObserver((records) => {
     if (records.some((record) => Array.from(record.addedNodes).some(isYomitanPopup))) {
