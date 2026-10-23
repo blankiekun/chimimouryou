@@ -260,3 +260,7 @@ To publish it on GitHub Pages, copy [deploy/pages/pages.yml](../deploy/pages/pag
 `VITE_GDRIVE_CLIENT_SECRET` (OAuth redirect URI
 `https://<site>/auth`), set `VITE_BASE_PATH` in the workflow to the site's address and run it
 from the Actions tab with a tag or `main`.
+To publish every release automatically, give this repository the secret `PAGES_DISPATCH_TOKEN`
+(a fine-grained token for the site repository only, with Actions: read and write) and, if the
+site isn't `chimireader/chimireader.github.io`, the variable `PAGES_REPO`: `release.yml` then runs
+the site's workflow with each `v*` tag once CI passes.
