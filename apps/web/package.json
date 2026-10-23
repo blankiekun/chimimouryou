@@ -40,6 +40,7 @@
     "@fortawesome/free-regular-svg-icons": "7.3.1",
     "@fortawesome/free-solid-svg-icons": "7.3.1",
     "@huggingface/transformers": "4.3.1",
+    "@jsquash/webp": "1.5.0",
     "@noble/hashes": "1.8.0",
     "@popperjs/core": "2.11.8",
     "@zip.js/zip.js": "2.4.26",

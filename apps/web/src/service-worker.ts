@@ -29,7 +29,9 @@ const prerenderedSet = new Set(prerendered);
 const assetsToCache = build
   .filter(
     (file) =>
-      !/ort-wasm|whisper\.worker|analysis-\w+\.worker|\.woff$/.test(file) && !uiFontFile.test(file)
+      !/ort-wasm|webp_enc|webp-encode\.worker|whisper\.worker|analysis-\w+\.worker|\.woff$/.test(
+        file
+      ) && !uiFontFile.test(file)
   )
   .concat(files.filter((file) => !engineFile.test(file)))
   .concat(prerendered);
