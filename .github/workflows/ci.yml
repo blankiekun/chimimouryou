@@ -45,7 +45,7 @@ jobs:
         working-directory: apps/web
 
       - name: Desktop shell tests
-        run: node --test apps/desktop/serve.test.js
+        run: node --test apps/desktop/serve.test.js apps/desktop/oauth.test.js
 
       - name: Test build
         run: pnpm build

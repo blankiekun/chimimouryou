@@ -54,14 +54,19 @@ export function resolveFile(root, urlPath) {
   return undefined;
 }
 
-/** Starts the server on 127.0.0.1:`port`; rejects if the port is taken. */
-export function serve(root, port) {
+/**
+ * Starts the server on 127.0.0.1:`port`; rejects if the port is taken. `handle(url, res)` may answer
+ * a GET first (returns true when it did).
+ */
+export function serve(root, port, handle = () => false) {
   const server = createServer((req, res) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.writeHead(405).end();
       return;
     }
-    const path = new URL(req.url ?? '/', 'http://127.0.0.1').pathname;
+    const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+    if (req.method === 'GET' && handle(url, res)) return;
+    const path = url.pathname;
     const found = resolveFile(root, path);
     const file = found ?? join(resolve(root), '404.html');
     res.writeHead(found ? 200 : 404, {

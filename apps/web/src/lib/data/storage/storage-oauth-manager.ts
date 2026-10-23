@@ -92,7 +92,8 @@ export class StorageOAuthManager {
 
   private authCloseInterval: number | undefined;
 
-  private authTimeout = 45000;
+  // The desktop app signs in in the system browser (apps/desktop/oauth.js): switching there takes longer.
+  private authTimeout = 'chimiDesktop' in globalThis ? 600000 : 45000;
 
   private authTimeoutTimer: number | undefined;
 

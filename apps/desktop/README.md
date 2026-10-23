@@ -37,8 +37,25 @@ root install stays light for the web app and its Docker image; `fetch` downloads
   first start; menu → Yomitan → Settings opens its settings (import dictionaries there).
 - Links to other sites open in the system browser; windows on the app's origin (the cloud sign-in
   popup) open in the app.
+- Google Drive sign-in continues in the system browser, since Google refuses sign-in inside
+  embedded browsers (RFC 8252 loopback redirect, `oauth.js`). The `/auth` popup builds the consent
+  URL as on the web; `main.js` stops its navigation, adds a random `state` and opens it with
+  `shell.openExternal`. Google redirects the browser to `http://127.0.0.1:41917/auth?code=…&state=…`;
+  `serve.js` hands that request to `main.js`, which accepts only the waiting state, once, and sends
+  the code to the popup (`location.replace('/auth?code=…')`, same origin, so `window.opener` and its
+  PKCE verifier stay), which exchanges it like the web build. The browser tab only gets a "signed in"
+  page. `preload.cjs` exposes `window.chimiDesktop` to the app's windows: `/auth` then says to
+  continue in the browser and the sign-in waits 10 minutes instead of 45 seconds.
 - Help → About lists the licences (Yomitan is GPL-3.0, a separate program; its source is the
   release tag named there).
+
+## Google Drive client
+
+`build:web` takes `VITE_GDRIVE_CLIENT_ID` and `VITE_GDRIVE_CLIENT_SECRET` from the environment, like
+the Pages build. Use the same Google Cloud OAuth client as the web build (Web application type) and add
+`http://127.0.0.1:41917/auth` to its Authorized redirect URIs: Google exempts loopback addresses from
+its https and no-IP rules, and keeping one client lets the app see the Drive files the web build made
+(the `drive.file` scope only shows files made by the app itself).
 
 ## Updating Yomitan
 
