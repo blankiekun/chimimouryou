@@ -17,10 +17,24 @@ export class BookmarkManagerContinuous implements BookmarkManager {
   ) {}
 
   scrollToBookmark(bookmarkData: BooksDbBookmarkData, customReadingPointScrollOffset = 0) {
-    const targetScroll = this.getBookmarkPosition(bookmarkData);
-    if (!targetScroll) return;
+    if (!bookmarkData.exploredCharCount) return;
 
-    const { scrollToData } = resolveTargetScroll(targetScroll, this.firstDimensionMargin);
+    // The saved scroll, when it still reads as the saved count from the same reading point.
+    const savedScroll = this.getBookmarkTargetPosByScrollValue(
+      bookmarkData,
+      customReadingPointScrollOffset
+    );
+    if (savedScroll) {
+      this.window.scrollTo(
+        resolveTargetScroll(savedScroll, this.firstDimensionMargin).scrollToData
+      );
+      return;
+    }
+
+    const { scrollToData } = resolveTargetScroll(
+      this.getParagraphPosition(bookmarkData.exploredCharCount),
+      this.firstDimensionMargin
+    );
     const scrollProperty = this.calculator.verticalMode ? 'left' : 'top';
 
     if (scrollToData.left !== undefined && scrollProperty === 'left') {
@@ -70,13 +84,15 @@ export class BookmarkManagerContinuous implements BookmarkManager {
   private getBookmarkPosition(bookmark: BooksDbBookmarkData): TargetScroll | undefined {
     if (!bookmark.exploredCharCount) return undefined;
 
-    const { verticalMode } = this.calculator;
+    return (
+      this.getBookmarkTargetPosByScrollValue(bookmark) ||
+      this.getParagraphPosition(bookmark.exploredCharCount)
+    );
+  }
 
-    const targetScrollByScrollPos = this.getBookmarkTargetPosByScrollValue(bookmark);
-    if (targetScrollByScrollPos) return targetScrollByScrollPos;
-
-    const scrollPos = this.calculator.getScrollPosByCharCount(bookmark.exploredCharCount);
-    if (verticalMode) {
+  private getParagraphPosition(charCount: number): TargetScroll {
+    const scrollPos = this.calculator.getScrollPosByCharCount(charCount);
+    if (this.calculator.verticalMode) {
       return {
         scrollX: scrollPos
       };
@@ -86,7 +102,7 @@ export class BookmarkManagerContinuous implements BookmarkManager {
     };
   }
 
-  private getBookmarkTargetPosByScrollValue(bookmarkData: BooksDbBookmarkData) {
+  private getBookmarkTargetPosByScrollValue(bookmarkData: BooksDbBookmarkData, offset = 0) {
     const { exploredCharCount } = bookmarkData;
 
     const getTargetPos = (scrollAxis: 'scrollX' | 'scrollY') => {
@@ -94,7 +110,9 @@ export class BookmarkManagerContinuous implements BookmarkManager {
       if (!scrollPos) return undefined;
 
       const formattedScrollPos = formatPos(scrollPos, this.calculator.direction);
-      if (this.calculator.getCharCountByScrollPos(formattedScrollPos) === exploredCharCount) {
+      if (
+        this.calculator.getCharCountByScrollPos(formattedScrollPos + offset) === exploredCharCount
+      ) {
         return {
           [scrollAxis]: scrollPos
         } as TargetScroll;

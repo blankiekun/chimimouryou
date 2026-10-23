@@ -31,7 +31,6 @@
     EMPTY,
     filter,
     fromEvent,
-    map,
     observeOn,
     skip,
     Subject,
@@ -163,6 +162,8 @@
 
   let isResizeScroll = false;
 
+  let restoreScrolled = false;
+
   let bookmarkAdjustment = window.matchMedia('(min-width: 640px)').matches ? '0.5rem' : '0.25rem';
 
   let fontLoadingAdded = false;
@@ -183,9 +184,13 @@
 
   let scrollAdjustment = 0;
 
-  // The first whole line past the reading point before the panel re-lays out the book and where
-  // it was on screen, kept there after.
-  let lineAnchor: { anchor: TextAnchor; pos: number; at: number } | undefined;
+  // The first whole line past the reading point before the panel re-lays out the book, where it
+  // was on screen and the reading point then, kept as far from the reading point after.
+  let lineAnchor: { anchor: TextAnchor; pos: number; edge: number; at: number } | undefined;
+
+  // The scroll before the panel changed the layout, restored when it changes back without the
+  // reader scrolling in between, so toggling it twice ends where it began.
+  let panelUndo: { width: number; height: number; x: number; y: number } | undefined;
 
   /** Screen coordinate of the reading point: x for vertical text, y otherwise */
   function readingEdge(edge: number) {
@@ -203,7 +208,18 @@
     );
     const rect = anchor && charRect(anchor);
     lineAnchor =
-      anchor && rect ? { anchor, pos: linePos(rect, vertical), at: performance.now() } : undefined;
+      anchor && rect
+        ? { anchor, pos: linePos(rect, vertical), edge, at: performance.now() }
+        : undefined;
+    panelUndo ??= { width, height, x: window.scrollX, y: window.scrollY };
+  }
+
+  /** A scroll of the reader's own: not the reader's choice, so it doesn't move the intended place. */
+  function resizeScroll(scroll: () => void) {
+    const was = `${window.scrollX} ${window.scrollY}`;
+    scroll();
+    // No scroll event follows when nothing moved (e.g. at the book's start).
+    isResizeScroll = `${window.scrollX} ${window.scrollY}` !== was;
   }
 
   let willNavigate = false;
@@ -398,8 +414,12 @@
     .pipe(
       filter(() => autoPositionOnResize),
       skip(1),
-      map(([w, h]) => (verticalMode ? h : w)),
-      distinctUntilChanged(),
+      // The reading dimension re-lays out the text; the panel's room (vertical: only the width)
+      // moves it too, after captureAnchor.
+      distinctUntilChanged(
+        ([w1, h1], [w2, h2]) =>
+          (verticalMode ? h1 === h2 : w1 === w2) && ((w1 === w2 && h1 === h2) || !lineAnchor)
+      ),
       debounceTime(10),
       observeOn(animationFrameScheduler),
       takeUntil(destroy$)
@@ -409,16 +429,22 @@
 
       const kept = lineAnchor && performance.now() - lineAnchor.at < 3000 ? lineAnchor : undefined;
       const rect = kept && charRect(kept.anchor);
+      lineAnchor = undefined;
+      if (kept && panelUndo?.width === width && panelUndo.height === height) {
+        const { x, y } = panelUndo;
+        panelUndo = undefined;
+        resizeScroll(() => window.scrollTo(x, y));
+        return;
+      }
       if (kept && rect) {
         const delta = lineScroll(
           linePos(rect, verticalMode),
           kept.pos,
-          readingEdge(edgeOffset),
-          verticalMode
+          kept.edge,
+          readingEdge(edgeOffset)
         );
         if (Math.abs(delta) >= 1) {
-          isResizeScroll = true;
-          window.scrollBy(verticalMode ? { left: delta } : { top: delta });
+          resizeScroll(() => window.scrollBy(verticalMode ? { left: delta } : { top: delta }));
         }
         return;
       }
@@ -428,8 +454,8 @@
         (verticalMode
           ? customReadingPointScrollOffset + edgeOffset
           : -customReadingPointScrollOffset - edgeOffset);
-      isResizeScroll = true;
-      pageManagerConcrete.scrollTo(scrollPos);
+      const pages = pageManagerConcrete;
+      resizeScroll(() => pages.scrollTo(scrollPos));
     });
 
   function updateCustomReadingPointPosition() {
@@ -492,12 +518,20 @@
           }
 
           prevIntendedCharCount = data.exploredCharCount || 0;
-          bookmarkManager.scrollToBookmark(data, customReadingPointScrollOffset);
+          const was = `${window.scrollX} ${window.scrollY}`;
+          bookmarkManager.scrollToBookmark(data, customReadingPointScrollOffset + edgeOffset);
+          restoreScrolled = `${window.scrollX} ${window.scrollY}` !== was;
         })
         .finally(() => {
           if (autoBookmark) {
+            // Skip the scroll to the bookmark only: at the book's start there is none, and the
+            // first scroll (a jump from Contents) is the reader's.
             fromEvent(window, 'scroll')
-              .pipe(skip(1), debounceTime(autoBookmarkTime * 1000), takeUntil(destroy$))
+              .pipe(
+                skip(restoreScrolled ? 1 : 0),
+                debounceTime(autoBookmarkTime * 1000),
+                takeUntil(destroy$)
+              )
               .subscribe(async () => {
                 const savedCount = (await bookmarkData)?.exploredCharCount;
 
@@ -570,7 +604,8 @@
               rect.right +
                 (firstDimensionMargin || 0) -
                 window.innerWidth +
-                customReadingPointScrollOffset,
+                customReadingPointScrollOffset +
+                edgeOffset,
               0
             ),
             rect.width
@@ -580,7 +615,10 @@
         : (Math.abs(
             Math.min(
               Math.max(
-                rect.top - (firstDimensionMargin || 0) - customReadingPointScrollOffset,
+                rect.top -
+                  (firstDimensionMargin || 0) -
+                  customReadingPointScrollOffset -
+                  edgeOffset,
                 -rect.height
               ),
               0
@@ -610,8 +648,9 @@
         customReadingPointScrollOffset + edgeOffset
       );
 
-      if (!isResizeScroll && exploredCharCount) {
-        prevIntendedCharCount = exploredCharCount;
+      if (!isResizeScroll) {
+        panelUndo = undefined;
+        if (exploredCharCount) prevIntendedCharCount = exploredCharCount;
       }
       isResizeScroll = false;
     });
@@ -689,6 +728,7 @@
           rect.right -
           (firstDimensionMargin || 0) -
           customReadingPointScrollOffset -
+          edgeOffset -
           (!customReadingPointScrollOffset ||
           (customReadingPointScrollOffset && scrollAdjustment > customReadingPointScrollOffset)
             ? scrollAdjustment
@@ -702,6 +742,7 @@
         rect.top -
           (firstDimensionMargin || 0) -
           customReadingPointScrollOffset -
+          edgeOffset -
           (!customReadingPointScrollOffset ||
           (customReadingPointScrollOffset && scrollAdjustment > customReadingPointScrollOffset)
             ? scrollAdjustment

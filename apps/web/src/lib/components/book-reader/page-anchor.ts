@@ -173,10 +173,9 @@ export function linePos(rect: DOMRect, vertical: boolean) {
 }
 
 /**
- * Continuous: the scroll that brings a line from `now` back to `was`, or to the visible start
- * edge `edge` when `was` lies before it (under the panel or bar).
+ * Continuous: the scroll that keeps a line as far from the visible start edge as it was when that
+ * edge moved from `edgeWas` to `edge` (the panel or bar came or went), so the place read stays.
  */
-export function lineScroll(now: number, was: number, edge: number, vertical: boolean) {
-  const target = vertical ? Math.min(was, edge) : Math.max(was, edge);
-  return now - target;
+export function lineScroll(now: number, was: number, edgeWas: number, edge: number) {
+  return now - (was - edgeWas + edge);
 }

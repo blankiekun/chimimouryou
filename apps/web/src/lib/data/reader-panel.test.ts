@@ -45,15 +45,17 @@ describe('readerPanelTabs', () => {
 describe('jumpOffset', () => {
   const open = { paginated: false, panelOpen: true };
 
-  it('keeps continuous jumps clear of the open panel and bar', () => {
+  it('keeps continuous jumps clear of the open panel and the bar', () => {
     expect(jumpOffset({ ...open, vertical: true }, 1440, 16)).toBe(26.75 * 16);
     expect(jumpOffset({ ...open, vertical: true }, 390, 16)).toBe(0);
+    expect(jumpOffset({ ...open, vertical: true, panelOpen: false }, 1440, 16)).toBe(0);
     expect(jumpOffset({ ...open, vertical: false }, 1440, 16)).toBe(3.5 * 16);
+    expect(jumpOffset({ ...open, vertical: false, panelOpen: false }, 390, 16)).toBe(3.5 * 16);
   });
 
-  it('is zero when paginated or closed', () => {
+  it('is zero when paginated', () => {
     expect(jumpOffset({ ...open, vertical: true, paginated: true }, 1440, 16)).toBe(0);
-    expect(jumpOffset({ ...open, vertical: false, panelOpen: false }, 1440, 16)).toBe(0);
+    expect(jumpOffset({ ...open, vertical: false, paginated: true }, 1440, 16)).toBe(0);
   });
 });
 
@@ -66,10 +68,8 @@ describe('readerWidth', () => {
 });
 
 describe('readerTopInset', () => {
-  it('keeps the bar clear while the panel is open on larger screens', () => {
-    expect(readerTopInset(1024, true, 16)).toBe(2.5 * 16);
-    expect(readerTopInset(1024, false, 16)).toBe(0);
-    expect(readerTopInset(390, true, 16)).toBe(0);
+  it('keeps the bar clear at every size, panel open or not', () => {
+    expect(readerTopInset(16)).toBe(2 * 16);
   });
 });
 

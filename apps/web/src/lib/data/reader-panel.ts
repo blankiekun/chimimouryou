@@ -48,29 +48,33 @@ export function readerWidth(width: number, panelOpen: boolean, remPx: number) {
 export const readerBarRem = 3.5;
 
 /**
- * Room kept free above the book for the bar while it stays shown beside the open panel on larger
- * screens (the book's own top padding, 2rem, makes up the rest), so no line starts under it.
+ * Room kept free above the book for the bar, with the book's own top padding (2rem) a little more
+ * than the bar's height, so no line starts under it and showing it moves nothing.
  */
-export function readerTopInset(width: number, panelOpen: boolean, remPx: number) {
-  return panelOpen && width >= 768 ? (readerBarRem - 1) * remPx : 0;
+export function readerTopInset(remPx: number) {
+  return (readerBarRem - 1.5) * remPx;
 }
 
 /**
  * Continuous mode: how far from the screen's start edge the visible book begins, where jumps land
- * and the reading position is measured. Scrolled text passes under the panel's chrome: under the
- * panel at the right for vertical text, under the bar (shown while the panel is open) at the top
- * for horizontal text. Paginated pages fit beside them.
+ * and the reading position is measured. Scrolled text passes under the reader's chrome: under the
+ * open panel at the right for vertical text, under the bar at the top for horizontal text (always,
+ * so showing the bar or the panel moves nothing). Paginated pages fit beside them.
  */
 export function jumpOffset(
   { vertical, paginated, panelOpen }: { vertical: boolean; paginated: boolean; panelOpen: boolean },
   width: number,
   remPx: number
 ) {
-  if (paginated || !panelOpen) {
+  if (paginated) {
     return 0;
   }
 
-  return vertical ? width - readerWidth(width, true, remPx) : readerBarRem * remPx;
+  if (!vertical) {
+    return readerBarRem * remPx;
+  }
+
+  return panelOpen ? width - readerWidth(width, true, remPx) : 0;
 }
 
 export interface ContentsRow {
