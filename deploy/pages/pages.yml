@@ -1,9 +1,9 @@
 # Publishes chimimouryou's standalone web app (no server) to GitHub Pages.
 # Copy this file to .github/workflows/pages.yml in the site repository
-# (chimimouryou/chimimouryou.github.io, served at https://chimimouryou.github.io),
+# (chimireader/chimireader.github.io, served at https://chimireader.github.io),
 # set Settings → Pages → Source to "GitHub Actions", and add the repository secrets
 # VITE_GDRIVE_CLIENT_ID and VITE_GDRIVE_CLIENT_SECRET (no OneDrive in the standalone)
-# (OAuth redirect URI: https://chimimouryou.github.io/auth). Run it from the Actions tab,
+# (OAuth redirect URI: https://chimireader.github.io/auth). Run it from the Actions tab,
 # with a tag such as v1.2.3 or main.
 name: Pages
 on:
@@ -52,7 +52,7 @@ jobs:
         env:
           VITE_EDITION: standalone
           VITE_STORAGE_ROOT_NAME: chimi-reader-data
-          VITE_BASE_PATH: https://chimimouryou.github.io
+          VITE_BASE_PATH: https://chimireader.github.io
           VITE_GDRIVE_CLIENT_ID: ${{ secrets.VITE_GDRIVE_CLIENT_ID }}
           VITE_GDRIVE_CLIENT_SECRET: ${{ secrets.VITE_GDRIVE_CLIENT_SECRET }}
 
