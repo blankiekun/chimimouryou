@@ -3,7 +3,7 @@
   export let number: number;
   export let title: string;
   export let count: number | string | undefined = undefined;
-  export let level: 'h2' | 'h3' = 'h2';
+  export let level: 'h1' | 'h2' | 'h3' = 'h2';
   /** Id of the title, for aria-labelledby */
   export let id: string | undefined = undefined;
 

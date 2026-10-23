@@ -21,6 +21,7 @@ import {
   replicationProgress$,
   type ReplicationContext
 } from '$lib/functions/replication/replication-progress';
+import { isSyncBetween, syncEnded, syncStarted, syncStep } from '$lib/data/sync-status';
 import pLimit from 'p-limit';
 
 export const exporterVersion = 1;
@@ -195,6 +196,10 @@ export async function replicateData(
 
   replicationProgress$.next({ maxProgress });
 
+  const isSync = isSyncBetween(sourceHandler.storageType, targetHandler.storageType);
+
+  if (isSync) syncStarted(Math.max(1, contexts.length + (processReadingGoals ? 1 : 0)));
+
   await persistStorage(targetHandler.storageType).catch(() => {});
 
   [sourceHandler, targetHandler].forEach((handler) => {
@@ -350,6 +355,7 @@ export async function replicateData(
           }
 
           processed += 1;
+          if (isSync) syncStep();
         } catch (error: any) {
           errorMessage = handleErrorDuringReplication(
             error,
@@ -401,6 +407,14 @@ export async function replicateData(
   }
 
   await Promise.all(replicationTasks).catch(() => {});
+
+  if (isSync) {
+    syncEnded(
+      contexts.flatMap((context) => dataToReplicate.map((type) => `${context.title}\t${type}`)),
+      cancelSignal?.aborted ? '' : errorMessage,
+      contexts.length === 1 ? contexts[0].title : `${contexts.length} books`
+    );
+  }
 
   if (targetHandler instanceof BackupStorageHandler) {
     await targetHandler

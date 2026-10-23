@@ -13,6 +13,7 @@ export const en = {
   'nav.sections': 'Sections',
   'nav.home': 'Home',
   'nav.store': 'Store',
+  'nav.library': 'Library',
   'nav.words': 'Words',
   'nav.statistics': 'Statistics',
   'nav.settings': 'Settings',
@@ -73,6 +74,10 @@ export const en = {
   'home.myBooksEmpty':
     'Books you add with Add to Home in the Store stay here, on every device you sign in on.',
   'home.openStore': 'Open the Store',
+  'home.startTextLibrary':
+    "Nothing read yet. Open a book from the Library and today's reading shows here.",
+  'home.myBooksEmptyLibrary': 'Books you add with Add to Home in the Library stay here.',
+  'home.openLibrary': 'Open the Library',
   'home.offline':
     "The server can't be reached: showing the books downloaded to this browser. Progress syncs once it's back",
   'home.retry': 'Retry',
@@ -214,6 +219,8 @@ export const en = {
   'settings.area.anki': 'Anki',
   'settings.area.tracking': 'Tracking',
   'settings.area.data': 'Data',
+  'settings.area.sync': 'Sync',
+  'settings.area.sync.text': 'Storage, sync status and backups for this browser.',
   'settings.area.anki.text':
     'Fills audio and pictures on the cards you mine with Yomitan. Known words are on the Words tab.',
   'settings.area.ai.text':
@@ -229,6 +236,8 @@ export const en = {
   'settings.section.general-theme': 'Themes',
   'settings.section.general-theme.text':
     'Colours for the whole app. Make your own from any theme with Duplicate.',
+  'settings.section.general-install': 'Install app',
+  'settings.section.general-install.text': 'Keep chimimouryou on this device like an app.',
   'settings.section.general-plugins': 'Plugins',
   'settings.section.general-plugins.text': 'Extra tools. Each adds its own settings area when on.',
   'settings.section.reader-text': 'Text style',
@@ -271,6 +280,15 @@ export const en = {
     'How statistics and goals from other devices are combined.',
   'settings.section.tracking-goals': 'Reading goals',
   'settings.section.tracking-goals.text': 'Daily, weekly and monthly targets.',
+  'settings.section.sync-storage': 'Storage',
+  'settings.section.sync-storage.text': 'Where your books and reading data are kept.',
+  'settings.section.sync-status': 'Status',
+  'settings.section.sync-status.text': 'The last sync and anything that went wrong.',
+  'settings.section.sync-backup': 'Backup',
+  'settings.section.sync-backup.text':
+    'A backup holds progress, statistics and reading goals; books are not included.',
+  'settings.section.sync-selfhost': 'Self-hosting',
+  'settings.section.sync-selfhost.text': 'What a chimimouryou server adds.',
   'settings.section.data-storage': 'Local storage',
   'settings.section.data-storage.text': 'How this browser keeps books and data.',
   'settings.section.data-import': 'Import',

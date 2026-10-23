@@ -55,6 +55,16 @@ export const settingsAreas: SettingsArea[] = [
         label: 'settings.section.general-theme',
         description: 'settings.section.general-theme.text'
       },
+      // The standalone edition is a web app people install; the server edition is reached by URL.
+      ...(standalone
+        ? [
+            {
+              id: 'general-install',
+              label: 'settings.section.general-install' as const,
+              description: 'settings.section.general-install.text' as const
+            }
+          ]
+        : []),
       {
         id: 'general-plugins',
         label: 'settings.section.general-plugins',
@@ -184,32 +194,61 @@ export const settingsAreas: SettingsArea[] = [
       }
     ]
   },
-  {
-    id: 'data',
-    label: 'settings.area.data',
-    sections: [
-      {
-        id: 'data-storage',
-        label: 'settings.section.data-storage',
-        description: 'settings.section.data-storage.text'
-      },
-      {
-        id: 'data-import',
-        label: 'settings.section.data-import',
-        description: 'settings.section.data-import.text'
-      },
-      {
-        id: 'data-sync',
-        label: 'settings.section.data-sync',
-        description: 'settings.section.data-sync.text'
-      },
-      {
-        id: 'data-sources',
-        label: 'settings.section.data-sources',
-        description: 'settings.section.data-sources.text'
+  // The standalone edition has no server: Sync (storage, status, backup) replaces Data.
+  standalone
+    ? {
+        id: 'sync',
+        label: 'settings.area.sync',
+        description: 'settings.area.sync.text',
+        sections: [
+          {
+            id: 'sync-storage',
+            label: 'settings.section.sync-storage',
+            description: 'settings.section.sync-storage.text'
+          },
+          {
+            id: 'sync-status',
+            label: 'settings.section.sync-status',
+            description: 'settings.section.sync-status.text'
+          },
+          {
+            id: 'sync-backup',
+            label: 'settings.section.sync-backup',
+            description: 'settings.section.sync-backup.text'
+          },
+          {
+            id: 'sync-selfhost',
+            label: 'settings.section.sync-selfhost',
+            description: 'settings.section.sync-selfhost.text'
+          }
+        ]
       }
-    ]
-  }
+    : {
+        id: 'data',
+        label: 'settings.area.data',
+        sections: [
+          {
+            id: 'data-storage',
+            label: 'settings.section.data-storage',
+            description: 'settings.section.data-storage.text'
+          },
+          {
+            id: 'data-import',
+            label: 'settings.section.data-import',
+            description: 'settings.section.data-import.text'
+          },
+          {
+            id: 'data-sync',
+            label: 'settings.section.data-sync',
+            description: 'settings.section.data-sync.text'
+          },
+          {
+            id: 'data-sources',
+            label: 'settings.section.data-sources',
+            description: 'settings.section.data-sources.text'
+          }
+        ]
+      }
 ];
 
 export const settingsSections = settingsAreas.flatMap((area, areaIndex) =>

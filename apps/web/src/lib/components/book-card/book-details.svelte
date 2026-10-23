@@ -10,6 +10,7 @@
   import { isFinished, isReading } from '$lib/components/book-card/library-filters';
   import { orderSeries } from '$lib/components/book-card/library-sort';
   import { account$, hasPermission } from '$lib/data/account';
+  import { selfHostingGuideUrl, standalone } from '$lib/data/env';
   import {
     loadBookMetadata,
     defaultSource,
@@ -133,9 +134,7 @@
             : $t$('book.score', { score: book.difficulty.toFixed(1) }),
           book.words95 ? $t$('book.words95', { count: number(book.words95) }) : '',
           wordStats ? coverageSentence(wordStats, $t$) : '',
-          estimate?.uniqueKanji
-            ? $t$('book.kanji', { count: number(estimate.uniqueKanji) })
-            : ''
+          estimate?.uniqueKanji ? $t$('book.kanji', { count: number(estimate.uniqueKanji) }) : ''
         ]
           .filter(Boolean)
           .join($uiLanguage$ === 'ja' ? '' : ' ');
@@ -319,7 +318,7 @@
 >
   <nav class="details-bar" aria-label={$t$('nav.back')}>
     <button type="button" class="app-button app-button-quiet" on:click={() => dispatch('close')}>
-      ← {$t$($libraryTab$ === 'home' ? 'nav.home' : 'nav.store')}
+      ← {$t$($libraryTab$ === 'home' ? 'nav.home' : standalone ? 'nav.library' : 'nav.store')}
     </button>
     <span class="details-crumb" lang="ja">/ {book.displayTitle || book.title}</span>
   </nav>
@@ -557,6 +556,12 @@
             </div>
           {/if}
         </dl>
+        {#if standalone}
+          <p class="details-server-note">
+            Difficulty and word lists need a server.
+            <a href={selfHostingGuideUrl} target="_blank" rel="noreferrer">Self-hosting →</a>
+          </p>
+        {/if}
 
         {#if seriesBooks.length > 1}
           <ContinueReadingShelf
@@ -938,7 +943,6 @@
     font-size: var(--type-small);
   }
 
-
   .details-facts {
     border-top: 2px solid var(--font-color);
   }
@@ -976,13 +980,28 @@
     padding: 0 0.6rem;
   }
 
+  .details-server-note {
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  .details-server-note a {
+    margin-left: 0.5rem;
+    color: var(--accent-strong-color);
+    font-weight: 700;
+  }
+
+  .details-server-note a:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+
   .details-note {
     display: block;
     width: 100%;
     color: var(--app-muted-fg);
     font-size: var(--type-small);
   }
-
 
   .details-fetch {
     display: flex;

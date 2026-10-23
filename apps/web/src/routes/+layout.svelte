@@ -6,7 +6,8 @@
   import { accountReady } from '$lib/data/account';
   import { startSettingsSync } from '$lib/data/account-settings-sync';
   import { releaseReaderData } from '$lib/data/reader-data-owner';
-  import { basePath, clearConsoleOnReload, pagePath } from '$lib/data/env';
+  import { basePath, clearConsoleOnReload, pagePath, standalone } from '$lib/data/env';
+  import { watchInstall } from '$lib/data/install-app';
   import { dialogManager, type Dialog } from '$lib/data/dialog-manager';
   import { userFontsCacheName, type UserFont } from '$lib/data/fonts';
   import { fontFamilyGroupOne$, isOnline$, userFonts$ } from '$lib/data/store';
@@ -25,6 +26,7 @@
 
   if (browser) {
     reloadOnStaleBuild(window);
+    if (standalone) watchInstall(window);
     accountReady().then(async (user) => {
       await releaseReaderData(user).catch(() => {});
       startSettingsSync(user);

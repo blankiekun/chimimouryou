@@ -14,6 +14,11 @@ anything a reader or a server operator would notice.
   Pages. CI builds it too.
 - The installed app accepts books shared to it (Android) and opens .epub, .htmlz, .cbz and .zip
   files from the system (desktop Chromium); its window and colours follow Study Book.
+- Standalone screens: a first run that asks where books live (this device, Google Drive or, on
+  desktop, a folder), an empty library with Import files/folder, the Store named Library, a sync
+  status in the top bar (synced, syncing, offline with changes waiting, sign in again, failed),
+  Settings → Sync (storage, status with recent errors, backup, self-hosting) in place of Data, an
+  install hint on Home and in Settings → General, and a self-hosting line on book pages.
 
 ### Changed
 

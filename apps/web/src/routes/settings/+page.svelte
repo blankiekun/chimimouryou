@@ -10,6 +10,8 @@
   import ImportMenu from '$lib/components/book-card/import-menu.svelte';
   import { setPendingImport, type PendingImport } from '$lib/data/library-home';
   import SettingsAccount from '$lib/components/settings/settings-account.svelte';
+  import InstallHint from '$lib/components/standalone/install-hint.svelte';
+  import SettingsSync from '$lib/components/standalone/settings-sync.svelte';
   import SettingsLanguage from '$lib/components/settings/settings-language.svelte';
   import SettingsPlugins from '$lib/components/settings/settings-plugins.svelte';
   import { activePlugins$, plugins } from '$lib/plugins';
@@ -446,7 +448,12 @@
       <div class="settings-sections" bind:this={sectionsElement}>
         <!-- Rows name their switches once (settings-item-group.svelte): remount on a language change. -->
         {#key $uiLanguage$}
-          {#if !standalone}
+          {#if standalone}
+            <SettingsSection id="general-install" keywords="install home screen app offline">
+              <InstallHint settings />
+            </SettingsSection>
+            <SettingsSync />
+          {:else}
             <SettingsSection id="general-account">
               <SettingsAccount />
             </SettingsSection>

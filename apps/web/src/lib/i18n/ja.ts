@@ -11,6 +11,7 @@ export const ja: Record<MessageKey, string> = {
   'nav.sections': 'セクション',
   'nav.home': 'ホーム',
   'nav.store': 'ストア',
+  'nav.library': 'ライブラリ',
   'nav.words': '語彙',
   'nav.statistics': '統計',
   'nav.settings': '設定',
@@ -70,6 +71,10 @@ export const ja: Record<MessageKey, string> = {
   'home.myBooksEmpty':
     'ストアで「ホームに追加」した本は、サインインしたすべての端末でここに表示されます。',
   'home.openStore': 'ストアを開く',
+  'home.startTextLibrary':
+    'まだ読んだ本がありません。ライブラリで本を開くと今日の読書がここに表示されます。',
+  'home.myBooksEmptyLibrary': 'ライブラリで「ホームに追加」した本はここに表示されます。',
+  'home.openLibrary': 'ライブラリを開く',
   'home.offline':
     'サーバーに接続できません。ブラウザに保存済みの本を表示しています。進捗はオンライン復帰後に同期されます。',
   'home.retry': '再試行',
@@ -210,6 +215,8 @@ export const ja: Record<MessageKey, string> = {
   'settings.area.anki': 'Anki',
   'settings.area.tracking': '記録・統計',
   'settings.area.data': 'データ管理',
+  'settings.area.sync': '同期',
+  'settings.area.sync.text': 'このブラウザの保存先、同期の状態とバックアップ。',
   'settings.area.anki.text':
     'Yomitan で作成したカードに音声と画像を追加します。既知語は「単語」タブにあります。',
   'settings.area.ai.text':
@@ -226,6 +233,8 @@ export const ja: Record<MessageKey, string> = {
   'settings.section.general-theme': 'テーマ',
   'settings.section.general-theme.text':
     'アプリ全体の配色です。「複製」でどのテーマからでも独自テーマを作れます。',
+  'settings.section.general-install': 'アプリとしてインストール',
+  'settings.section.general-install.text': 'この端末にアプリとして置いておけます。',
   'settings.section.general-plugins': '拡張機能',
   'settings.section.general-plugins.text':
     '追加機能です。オンにすると、それぞれの設定項目が表示されます。',
@@ -277,6 +286,14 @@ export const ja: Record<MessageKey, string> = {
   'settings.section.tracking-merge.text': '他端末の統計データや読書目標との統合方法を設定します。',
   'settings.section.tracking-goals': '読書目標',
   'settings.section.tracking-goals.text': '日次・週次・月次の読書目標を設定します。',
+  'settings.section.sync-storage': '保存先',
+  'settings.section.sync-storage.text': '書籍と読書データの保存場所です。',
+  'settings.section.sync-status': '状態',
+  'settings.section.sync-status.text': '最後の同期とエラー。',
+  'settings.section.sync-backup': 'バックアップ',
+  'settings.section.sync-backup.text': '進捗、統計、読書目標を保存します。書籍は含まれません。',
+  'settings.section.sync-selfhost': 'セルフホスト',
+  'settings.section.sync-selfhost.text': 'chimimouryouサーバーでできること。',
   'settings.section.data-storage': 'ローカルストレージ',
   'settings.section.data-storage.text': 'このブラウザでの書籍やデータの保存方法を設定します。',
   'settings.section.data-import': 'インポート',
