@@ -14,6 +14,9 @@ anything a reader or a server operator would notice.
   Pages. CI builds it too.
 - The installed app accepts books shared to it (Android) and opens .epub, .htmlz, .cbz and .zip
   files from the system (desktop Chromium); its window and colours follow Study Book.
+- Standalone edition: a book's page shows its number of different kanji, counted in the browser
+  from the stored book (furigana left out), and Home's Read next lists the next volumes of
+  series you are reading, grouped by the volume numbers in titles.
 
 ### Changed
 
@@ -21,6 +24,7 @@ anything a reader or a server operator would notice.
   work without downloading it: on start the service installs it when no list is installed, and
   an installed or uploaded list is kept. Admins can still upload a newer one (Tools → Estimate
   difficulty → "Replace frequency list").
+- Statistics, selecting text to bookmark, and the AI and Audiobookshelf plugins are on by default (browsers that already chose keep their choice).
 - The library's top bar shows only Import and the account: view and sort are in the Store's Sort
   menu, Select is a Store button (long press still selects on Home), and the storage source and
   "Report an issue" are in Settings → Data → Storage. The old-domain hint and the `?count` loader
@@ -109,6 +113,7 @@ anything a reader or a server operator would notice.
 
 ### Fixed
 
+- Google Drive: book covers show again after a reload (the page's content security policy blocked Drive's thumbnails).
 - Visual novels: right-clicking the game no longer opens the browser's menu.
 - An app update no longer deletes every cache of the site: only the service worker's own (now
   named `chimi:…`), so games kept for offline play and other sites on the same origin keep theirs.

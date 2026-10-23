@@ -82,6 +82,8 @@ export const en = {
   'home.readNextReason': 'Near the level of the last books you finished ({range}).',
   'home.readNextReasonSeries':
     'The next volumes of series you are reading, then books near the level of the last ones you finished ({range}).',
+  'home.nextInSeries': 'next in series',
+  'home.readNextReasonNext': 'The next volumes of series you are reading.',
   'home.readBook': 'Read {title}',
 
   'store.view': 'Store view',
@@ -123,6 +125,8 @@ export const en = {
   'book.words95':
     'The {count} most common words (by frequency rank) cover 95% of its words, words outside the frequency list aside.',
   'book.kanji': '{count} different kanji.',
+  'book.kanjiRow': 'Kanji',
+  'book.kanjiCount': '{count} different kanji',
   'book.copy': 'Copy',
   'book.copied': 'Copied',
   'book.noEstimate': 'No estimate yet',
