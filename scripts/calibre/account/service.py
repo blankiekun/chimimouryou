@@ -108,9 +108,16 @@ COOKIE = '__Host-ttu_session'
 # browsers drop on HTTP pages.
 HTTP_COOKIE = 'ttu_session'
 ALLOW_HTTP = os.environ.get('ALLOW_HTTP_ACCOUNTS') == '1'
-# Origins of the standalone app allowed to sign in with tokens (exact https origins); empty = off.
-CORS_ORIGINS = {origin for origin in os.environ.get('CORS_ORIGINS', '').split()
-                if re.fullmatch(r'https://[A-Za-z0-9.-]+(:[0-9]{1,5})?', origin)}
+# Origins of the standalone app allowed to sign in with tokens: exact https origins, or http on
+# loopback with a port (the desktop app, http://127.0.0.1:41917); others are ignored. Empty = off.
+CORS_ORIGIN_RE = r'https://[A-Za-z0-9.-]+(:[0-9]{1,5})?|http://(127\.0\.0\.1|localhost):[0-9]{1,5}'
+
+
+def parse_cors_origins(value: str) -> set[str]:
+    return {origin for origin in value.split() if re.fullmatch(CORS_ORIGIN_RE, origin)}
+
+
+CORS_ORIGINS = parse_cors_origins(os.environ.get('CORS_ORIGINS', ''))
 CLIENT_MAX_LENGTH = 64
 SESSION_IDLE_SECONDS = 30 * 86400
 SESSION_MAX_SECONDS = 180 * 86400

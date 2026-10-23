@@ -71,15 +71,16 @@ if [ -n "$AUDIOBOOKSHELF_URL" ]; then
 fi
 
 # Server connect: exact https origins of the standalone app that may call the reader's
-# locations with a token (CORS). Empty (the default) = no CORS headers at all.
+# locations with a token (CORS), or http on loopback with a port (the desktop app).
+# Empty (the default) = no CORS headers at all. Same rule as CORS_ORIGIN_RE in account/service.py.
 : "${CORS_ORIGINS:=}"
 CORS_ORIGIN_MAP=''
 CORS=''
 CORS_WITH_SECURITY_HEADERS=''
 if [ -n "$CORS_ORIGINS" ]; then
   for origin in $CORS_ORIGINS; do
-    if ! printf '%s' "$origin" | grep -Eqx 'https://[A-Za-z0-9.-]+(:[0-9]{1,5})?'; then
-      echo "CORS_ORIGINS: $origin is not an https origin like https://read.example (no path or slash)" >&2; exit 1
+    if ! printf '%s' "$origin" | grep -Eqx 'https://[A-Za-z0-9.-]+(:[0-9]{1,5})?|http://(127\.0\.0\.1|localhost):[0-9]{1,5}'; then
+      echo "CORS_ORIGINS: $origin is not an https origin like https://read.example (no path or slash) or http://127.0.0.1:<port>" >&2; exit 1
     fi
   done
   CORS_ORIGIN_MAP=$(for origin in $CORS_ORIGINS; do printf '  "%s" $http_origin;\n' "$origin"; done)

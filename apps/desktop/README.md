@@ -24,6 +24,11 @@ to update"; it never restarts or installs by itself, and "Later" offers it again
 updates need a signed app, so there the app only says a new version is out and opens its release
 page. Runs from source (`pnpm start`) never check.
 
+## Connecting to a server
+
+Server connect needs the server to list the app's origin: add `http://127.0.0.1:41917` to its
+`CORS_ORIGINS` (docs/CONFIGURATION.md → Server connect). The server must use HTTPS.
+
 ## Run it
 
 From this folder, after `pnpm install` at the repository root:
