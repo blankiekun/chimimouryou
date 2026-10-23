@@ -26,6 +26,7 @@ import {
   socialSession$,
   type ShareKey
 } from '$lib/data/social-account';
+import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 
 export type BookKind = 'book' | 'manga' | 'vn';
 
@@ -105,6 +106,8 @@ export interface Profile {
 
 const cacheTime = 15 * 60_000;
 const pushInterval = 15 * 60_000;
+/** The hub's guard between two status pushes (STATUS_GAP in deploy/social-hub) */
+const hubGap = 60_000;
 /** Like words met: 97% counts as finished */
 const finishedShare = 0.97;
 
@@ -475,7 +478,35 @@ export function noteReading(
   }
   lastPush = { at: Date.now(), title };
   pushStatus(leaving, leaving).catch(() => {
-    // Too soon for the hub or unreachable: a settled position 5 minutes on tries again.
-    lastPush = { at: Date.now() - pushInterval + 5 * 60_000, title };
+    // Too soon for the hub or unreachable: a settled position a minute on tries again.
+    lastPush = { at: Date.now() - pushInterval + hubGap, title };
+  });
+}
+
+/**
+ * Statistics deleted on the Statistics page: the recomputed stats go to the hub at once, outside
+ * the 15-minute cadence (once more a minute on when the hub's guard refuses), and books left
+ * without any statistics leave the hub's finished books and events.
+ */
+export async function statisticsDeleted(titles: string[]) {
+  if (!socialSession$.getValue() || !enabledPlugins$.getValue().includes('social')) return;
+
+  const { database } = await import('$lib/data/store');
+  const gone = new Set<string>();
+
+  for (const title of titles) {
+    if (!(await database.getStatisticsForBook(title)).length) gone.add(bookKey(title));
+  }
+  finishedPending$.next(finishedPending$.getValue().filter((book) => !gone.has(book.key)));
+  await Promise.all(
+    [...gone].map((key) =>
+      hubFetch(`/v1/finished/${encodeURIComponent(key)}`, 'DELETE').catch(() => {})
+    )
+  );
+  lastPush = { ...lastPush, at: Date.now() };
+  await pushStatus(false).catch((error) => {
+    if (error instanceof HubError && error.status === 429) {
+      setTimeout(() => pushStatus(false).catch(() => {}), hubGap + 1000);
+    }
   });
 }

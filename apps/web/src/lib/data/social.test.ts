@@ -14,13 +14,18 @@ import {
   setBookHidden,
   sharedBooks,
   socialStats,
+  statisticsDeleted,
   type Friend,
   type FriendBook
 } from '$lib/data/social';
 import { socialSession$, type SocialMe } from '$lib/data/social-account';
+import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 
 vi.mock('$lib/data/store', () => ({
-  database: { getStatisticsForTimeWindow: async () => [] },
+  database: {
+    getStatisticsForTimeWindow: async () => [],
+    getStatisticsForBook: async (title: string) => (title === 'Kept' ? [{ title }] : [])
+  },
   startDayHoursForTracker$: { getValue: () => 0 }
 }));
 
@@ -142,5 +147,33 @@ describe('social', () => {
     expect(bodies.slice(2).flatMap((body) => body.books as unknown[])).toEqual([
       expect.objectContaining({ kind: 'hidden', key: '', title: '' })
     ]);
+  });
+
+  it('pushes the stats and drops books left without statistics when statistics are deleted', async () => {
+    const calls: string[] = [];
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit) => {
+        calls.push(`${init.method} ${new URL(url).pathname}`);
+        return new Response('{"ok":true}');
+      })
+    );
+
+    enabledPlugins$.next([]);
+    await statisticsDeleted(['Gone']);
+    expect(calls).toEqual([]);
+
+    enabledPlugins$.next(['social']);
+    await statisticsDeleted(['Gone', 'Kept']);
+    expect(calls).toEqual([
+      `DELETE /v1/finished/${encodeURIComponent(bookKey('Gone'))}`,
+      'PUT /v1/status'
+    ]);
+
+    calls.length = 0;
+    socialSession$.next(null);
+    await statisticsDeleted(['Gone']);
+    expect(calls).toEqual([]);
   });
 });

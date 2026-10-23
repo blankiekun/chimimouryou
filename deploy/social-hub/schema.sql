@@ -4,7 +4,7 @@
 
 -- One row per reader. salt is per user: the browser stretches the password with scrypt
 -- over it, the hub keeps sha256(salt:key). recovery_hash is sha256 of the recovery code.
--- status_at is the 5-minute guard of PUT /v1/status.
+-- status_at is the 1-minute guard of PUT /v1/status.
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   username TEXT NOT NULL UNIQUE COLLATE NOCASE,

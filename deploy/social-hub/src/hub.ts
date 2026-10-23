@@ -71,7 +71,7 @@ const MAX_FAILURES = 10;
 const SESSION_TTL = 90 * DAY;
 const ACCOUNT_TTL = 365 * DAY;
 /** Seconds between two status pushes (one more is allowed when leaving a book) */
-export const STATUS_GAP = 5 * MINUTE;
+export const STATUS_GAP = MINUTE;
 const AVATARS = 24;
 const SHARE_KEYS = [
   'public',
@@ -1089,6 +1089,21 @@ async function route(request: Request, env: Env, ctx?: Context): Promise<Respons
     case 'POST /v1/friends/request':
       await sendRequest(env, user, await readBody(request));
       return json(await friendsOf(env, user.id));
+  }
+
+  const finished = /^\/v1\/finished\/([^/]+)$/.exec(pathname);
+
+  if (request.method === 'DELETE' && finished) {
+    // The reader deleted the book's statistics: its finished entry and its events go too.
+    await limit(env, user.id, 'unfinish', DAY, 100);
+    const key = text(decodeURIComponent(finished[1]), 200, 'key');
+
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM finished WHERE user = ?1 AND book_key = ?2').bind(user.id, key),
+      env.DB.prepare('DELETE FROM events WHERE user = ?1 AND book_key = ?2').bind(user.id, key)
+    ]);
+    await purgeProfile(request, user.username);
+    return json({ ok: true });
   }
 
   const friend = /^\/v1\/(friends|block)\/([^/]+)(\/accept)?$/.exec(pathname);
