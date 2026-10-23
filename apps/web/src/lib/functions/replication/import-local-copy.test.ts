@@ -156,3 +156,45 @@ describe('replicating browser books to Drive', () => {
     expect(await localTitles()).toEqual([['one', undefined]]);
   });
 });
+
+describe('opening a Drive book cached in the browser', () => {
+  async function driveHandler(remoteModified: number) {
+    const { getStorageHandler } = await import('$lib/data/storage/storage-handler-factory');
+    const handler = getStorageHandler(window, StorageKey.GDRIVE, undefined, true) as any;
+    const book = { title: 'one', elementHtml: '<p>remote</p>' };
+
+    vi.spyOn(handler, 'getExternalFile').mockImplementation(async () => ({
+      file: { name: `bookdata_1_6_4_${remoteModified}_0.zip` }
+    }));
+    vi.spyOn(handler, 'downloadBook').mockImplementation(async () => book);
+    handler.startContext({ title: 'one' });
+
+    await database.upsertData(
+      {
+        title: 'one',
+        elementHtml: '<p>local</p>',
+        lastBookModified: 100,
+        storageSource: handler.getCurrentStorageSource()
+      } as any,
+      ReplicationSaveBehavior.Overwrite,
+      false,
+      false
+    );
+
+    return { handler, book };
+  }
+
+  it('reads the local copy when the Drive copy is not newer', async () => {
+    const { handler } = await driveHandler(100);
+
+    expect(await handler.getBook()).toBeUndefined();
+    expect(handler.downloadBook).not.toHaveBeenCalled();
+  });
+
+  it('downloads a newer Drive copy', async () => {
+    const { handler, book } = await driveHandler(200);
+
+    expect(await handler.getBook()).toBe(book);
+    expect(handler.downloadBook).toHaveBeenCalledTimes(1);
+  });
+});

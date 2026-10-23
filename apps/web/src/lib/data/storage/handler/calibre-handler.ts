@@ -327,7 +327,7 @@ export class CalibreStorageHandler extends ApiStorageHandler {
    */
   async getBook() {
     if (!this.isForBrowser) {
-      return super.getBook();
+      return this.downloadBook();
     }
 
     const localData = await database.getDataByTitle(this.currentContext.title);
@@ -340,7 +340,7 @@ export class CalibreStorageHandler extends ApiStorageHandler {
       return undefined;
     }
 
-    const book = await super.getBook();
+    const book = await this.downloadBook();
 
     if (book && !(book instanceof File)) {
       await this.saveLocally(book);
