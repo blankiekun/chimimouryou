@@ -32,7 +32,8 @@ const config = {
         'base-uri': ['self'],
         // Book CSS is applied as is: no outside images, fonts or stylesheets to beacon to.
         // The image hosts are the covers "Find details" may save (lib/data/book-metadata.ts)
-        // and Google Drive's cover thumbnails (thumbnailLink, gdrive-handler.ts).
+        // and Google Drive's and OneDrive's cover thumbnails (thumbnailLink, gdrive-handler.ts;
+        // Graph thumbnails, onedrive-handler.ts: hosts from Microsoft's thumbnail docs).
         'img-src': [
           'self',
           'blob:',
@@ -40,7 +41,9 @@ const config = {
           'https://s4.anilist.co',
           'https://t.vndb.org',
           'https://cdn.jiten.moe',
-          'https://*.googleusercontent.com'
+          'https://*.googleusercontent.com',
+          'https://*.files.1drv.com',
+          'https://*.onedrive.com'
         ],
         'font-src': ['self', 'blob:', 'data:'],
         'style-src': ['self', 'unsafe-inline']
