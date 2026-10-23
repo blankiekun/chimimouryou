@@ -7,3 +7,4 @@ __pycache__/
 CLAUDE.local.md
 # One deployment's private config and notes (deploy.sh reads local/deploy.env)
 local/
+.wrangler

@@ -1,0 +1,14 @@
+# chimimouryou social hub: deploy steps in README.md.
+name = "chimi-hub"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "chimi-hub"
+# Printed by `npx wrangler d1 create chimi-hub`.
+database_id = "00000000-0000-0000-0000-000000000000"
+
+# Retention: sessions unused 90 days, accounts unused 12 months, old rate-limit counters.
+[triggers]
+crons = ["17 3 * * *"]

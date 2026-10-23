@@ -100,6 +100,19 @@ describe('contrast', () => {
     expect(report).toEqual([]);
   });
 
+  it('keeps avatar text readable on every avatar colour', () => {
+    const report = builtInThemes.flatMap(({ id }) => {
+      const { colors } = resolveTheme(id, {});
+      const white = parseSimpleColor(colors.avatarText)!;
+      return ([1, 2, 3, 4, 5, 6, 7, 8] as const)
+        .map((n) => [n, contrastRatio(white, parseSimpleColor(colors[`avatar${n}`])!)] as const)
+        .filter(([, ratio]) => ratio < 4.5)
+        .map(([n, ratio]) => `${id}: avatar${n} is ${ratio.toFixed(2)}:1`);
+    });
+
+    expect(report).toEqual([]);
+  });
+
   // The difficulty scale runs from accent to text: both ends need 3:1 (non-text) on the page.
   it('keeps the difficulty scale visible', () => {
     const report = builtInThemes.flatMap(({ id }) => {

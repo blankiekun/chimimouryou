@@ -167,6 +167,38 @@ export const settingsAreas: SettingsArea[] = [
     ]
   },
   {
+    id: 'social',
+    label: 'settings.area.social',
+    description: 'settings.area.social.text',
+    sections: [
+      {
+        id: 'social-features',
+        label: 'settings.section.social-features',
+        description: 'settings.section.social-features.text'
+      },
+      {
+        id: 'social-account',
+        label: 'settings.section.social-account',
+        description: 'settings.section.social-account.text'
+      },
+      {
+        id: 'social-profile',
+        label: 'settings.section.social-profile',
+        description: 'settings.section.social-profile.text'
+      },
+      {
+        id: 'social-shows',
+        label: 'settings.section.social-shows',
+        description: 'settings.section.social-shows.text'
+      },
+      {
+        id: 'social-hub',
+        label: 'settings.section.social-hub',
+        description: 'settings.section.social-hub.text'
+      }
+    ]
+  },
+  {
     id: 'anki',
     label: 'settings.area.anki',
     description: 'settings.area.anki.text',

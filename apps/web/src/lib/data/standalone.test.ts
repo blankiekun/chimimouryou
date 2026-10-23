@@ -47,6 +47,30 @@ describe('standalone edition', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('sends nothing to the social hub before signing up, or while social is off', async () => {
+    const social = await import('$lib/data/social');
+    const { activePlugins } = await import('$lib/plugins');
+
+    await social.loadFriends();
+    activePlugins().forEach((plugin) => plugin.onBookLeft?.('本', 10, 100));
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    window.localStorage.setItem(
+      'socialSession',
+      JSON.stringify({ token: 't', me: { id: 'a', share: {} } })
+    );
+    vi.resetModules();
+    const plugins = await import('$lib/plugins');
+
+    plugins.setPluginEnabled('social', false);
+    plugins.activePlugins().forEach((plugin) => plugin.onBookLeft?.('本', 10, 100));
+    expect(fetchMock).not.toHaveBeenCalled();
+    // Signed in with social on, leaving a book reports it.
+    plugins.setPluginEnabled('social', true);
+    plugins.activePlugins().forEach((plugin) => plugin.onBookLeft?.('本', 10, 100));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('hands out the browser handler for Calibre', async () => {
     const { getStorageHandler } = await import('$lib/data/storage/storage-handler-factory');
     const { StorageKey } = await import('$lib/data/storage/storage-types');

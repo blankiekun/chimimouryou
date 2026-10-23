@@ -1,5 +1,6 @@
 packages:
   - apps/*
+  - deploy/social-hub
 allowBuilds:
   esbuild: true
   svelte-preprocess: true

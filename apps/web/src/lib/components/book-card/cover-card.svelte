@@ -11,6 +11,7 @@
    * Study Book cover card, the same on every shelf and in the Store: a cover of one fixed size
    * (set by the parent's column), a 3px progress track under it, title and one line of meta.
    * `info` goes under the meta inside the card's button; the default slot after it (buttons).
+   * `cover` replaces the cover (a friend's book you don't have), `badge` sits on it.
    */
   export let book: BookCardProps;
   export let meta = '';
@@ -52,10 +53,11 @@
     use:longPress={() => dispatch('select')}
   >
     <span class="cover-card-cover">
-      <BookCard imagePath={book.imagePath} title={book.title} />
+      <slot name="cover"><BookCard imagePath={book.imagePath} title={book.title} /></slot>
       {#if isFinished(book)}
         <span class="cover-card-finished">Finished</span>
       {/if}
+      <slot name="badge" />
     </span>
     <span class="cover-card-track" aria-hidden="true"><span style:width="{percent}%" /></span>
     {#if !compact}

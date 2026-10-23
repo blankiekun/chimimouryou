@@ -1,0 +1,14 @@
+{
+  "name": "chimi-social-hub",
+  "private": true,
+  "license": "BSD-3-Clause",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "dev": "npx wrangler@4.147.0 dev",
+    "deploy": "npx wrangler@4.147.0 deploy"
+  },
+  "devDependencies": {
+    "vitest": "3.2.7"
+  }
+}
