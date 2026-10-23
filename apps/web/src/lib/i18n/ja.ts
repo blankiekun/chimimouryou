@@ -84,6 +84,8 @@ export const ja: Record<MessageKey, string> = {
   'home.readNextReason': '最近読み終えた本に近いレベルです（{range}）。',
   'home.readNextReasonSeries':
     '読んでいるシリーズの次の巻と、最近読み終えた本に近いレベルの本です（{range}）。',
+  'home.nextInSeries': 'シリーズの次の巻',
+  'home.readNextReasonNext': '読んでいるシリーズの次の巻です。',
   'home.readBook': '「{title}」を読む',
 
   'store.view': '表示切替',
@@ -124,6 +126,8 @@ export const ja: Record<MessageKey, string> = {
   'book.scoreRange': '5段階中 {score}（目安：{low}〜{high}）',
   'book.words95': '頻出上位{count}語で本文の95%をカバーできます（頻度リスト外の語彙を除く）。',
   'book.kanji': '漢字数：{count}字',
+  'book.kanjiRow': '漢字',
+  'book.kanjiCount': '{count}種類',
   'book.copy': 'コピー',
   'book.copied': 'コピーしました',
   'book.noEstimate': '未算出',

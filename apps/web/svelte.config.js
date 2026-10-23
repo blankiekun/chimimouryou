@@ -31,14 +31,16 @@ const config = {
         'object-src': ['none'],
         'base-uri': ['self'],
         // Book CSS is applied as is: no outside images, fonts or stylesheets to beacon to.
-        // The image hosts are the covers "Find details" may save (lib/data/book-metadata.ts).
+        // The image hosts are the covers "Find details" may save (lib/data/book-metadata.ts)
+        // and Google Drive's cover thumbnails (thumbnailLink, gdrive-handler.ts).
         'img-src': [
           'self',
           'blob:',
           'data:',
           'https://s4.anilist.co',
           'https://t.vndb.org',
-          'https://cdn.jiten.moe'
+          'https://cdn.jiten.moe',
+          'https://*.googleusercontent.com'
         ],
         'font-src': ['self', 'blob:', 'data:'],
         'style-src': ['self', 'unsafe-inline']

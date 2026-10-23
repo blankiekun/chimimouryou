@@ -82,3 +82,17 @@ jobs:
           build-args: VERSION=${{ github.ref_name }}
           cache-from: type=gha,scope=release-${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=release-${{ matrix.image }}
+
+  # Publishes the tag on the standalone site (deploy/pages/pages.yml in PAGES_REPO). Needs the
+  # secret PAGES_DISPATCH_TOKEN: a fine-grained token for that repository only, Actions: write.
+  pages:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run the site's Pages workflow
+        env:
+          GH_TOKEN: ${{ secrets.PAGES_DISPATCH_TOKEN }}
+          PAGES_REPO: ${{ vars.PAGES_REPO || 'chimireader/chimireader.github.io' }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then echo "No PAGES_DISPATCH_TOKEN: skipping"; exit 0; fi
+          gh workflow run pages.yml -R "$PAGES_REPO" -f ref="$GITHUB_REF_NAME"

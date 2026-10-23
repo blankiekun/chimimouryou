@@ -12,12 +12,13 @@
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 import { isFinished, isReading } from '$lib/components/book-card/library-filters';
-import { orderSeries } from '$lib/components/book-card/library-sort';
+import { orderSeries, titleVolume } from '$lib/components/book-card/library-sort';
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 import { deleteCachedReadings } from '$lib/data/generated-furigana';
 import { deleteVnCache } from '$lib/data/vn';
 import { standalone } from '$lib/data/env';
+import { guessSeriesName } from '$lib/data/series-overrides';
 
 export type LibraryTab = 'home' | 'store';
 
@@ -176,6 +177,36 @@ export function recentLevels(cards: BookCardProps[]) {
     .sort((a, b) => a - b);
 }
 
+/** The first unread volume after the last started one of each started series, last read first. */
+function nextVolumes(groups: SeriesGroup[]) {
+  return groups
+    .filter((group) => group.started)
+    .map((group) => {
+      const lastStarted = group.books.findLastIndex((book) => book.progress > 0);
+
+      return group.books.slice(lastStarted + 1).find((book) => !book.progress);
+    })
+    .filter((card): card is BookCardProps => !!card)
+    .sort((a, b) => lastRead(b) - lastRead(a));
+}
+
+/**
+ * Read next without a server (no catalog series, no estimates): the next volumes only,
+ * books without a series grouped by the name before their title's volume number.
+ */
+export function standaloneReadNext(cards: BookCardProps[], limit = 12) {
+  const byId = new Map(cards.map((card) => [card.id, card]));
+  const withSeries = cards.map((card) =>
+    card.series || titleVolume(card.title) === undefined
+      ? card
+      : { ...card, series: guessSeriesName(card.title) }
+  );
+
+  return nextVolumes(seriesGroups(withSeries))
+    .slice(0, limit)
+    .map((card) => byId.get(card.id)!);
+}
+
 /**
  * Home's Read next candidates: the next unread volume of each series the reader has
  * started, and the unread books within ±0.3 of the median difficulty of the last 3
@@ -191,15 +222,7 @@ export function readNextPool(cards: BookCardProps[]) {
 
   const median = recent.length % 2 ? recent[(recent.length - 1) / 2] : (recent[0] + recent[1]) / 2;
   const groups = seriesGroups(cards);
-  const next = groups
-    .filter((group) => group.started)
-    .map((group) => {
-      const lastStarted = group.books.findLastIndex((book) => book.progress > 0);
-
-      return group.books.slice(lastStarted + 1).find((book) => !book.progress);
-    })
-    .filter((card): card is BookCardProps => !!card)
-    .sort((a, b) => lastRead(b) - lastRead(a));
+  const next = nextVolumes(groups);
   const nextIds = new Set(next.map((card) => card.id));
   // A series only enters the pool by its first unread volume.
   const firstUnread = new Set(groups.map((group) => group.books.find((book) => !book.progress)));
@@ -224,8 +247,7 @@ export function readNextPool(cards: BookCardProps[]) {
  * (`known-words.ts`, Calibre id → share; books without one after, closest difficulty first).
  */
 export function readNext(cards: BookCardProps[], coverage: Record<number, number>, limit = 12) {
-  // It picks by the server's catalog series and difficulty estimates.
-  if (standalone) return [];
+  if (standalone) return standaloneReadNext(cards, limit);
 
   const { next, pool } = readNextPool(cards);
   const share = (card: BookCardProps) =>

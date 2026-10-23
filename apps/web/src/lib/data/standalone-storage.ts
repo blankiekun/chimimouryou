@@ -106,7 +106,9 @@ export async function signInToDrive(window: Window): Promise<string> {
 export function signOutOfDrive(window: Window) {
   const name = driveSourceName();
   const token = storageOAuthTokens.get(name);
-  if (token) StorageOAuthManager.revokeToken(gDriveRevokeEndpoint, token.accessToken);
+  // Revoking the refresh token also ends its access tokens.
+  if (token)
+    StorageOAuthManager.revokeToken(gDriveRevokeEndpoint, token.refreshToken || token.accessToken);
   storageOAuthTokens.delete(name);
   driveEmail$.next('');
   getStorageHandler(window, StorageKey.GDRIVE).clearData();

@@ -50,6 +50,7 @@
     refreshKnownWordsIfStale
   } from '$lib/data/known-words';
   import { deleteCachedReadings, prefetchReadings } from '$lib/data/generated-furigana';
+  import { deleteBookKanji } from '$lib/data/book-kanji';
   import { deleteVnCache } from '$lib/data/vn';
   import DifficultyDialog from '$lib/components/book-card/difficulty-dialog.svelte';
   import {
@@ -271,6 +272,7 @@
   $: readNextCards = isHome && $bookCards$ ? readNext($bookCards$, $knownCoverage$, 3) : [];
   $: readNextReason = (() => {
     if (!readNextCards.length) return '';
+    if (standalone) return $t$('home.readNextReasonNext');
     const levels = recentLevels($bookCards$);
     const low = levels[0].toFixed(1);
     const high = levels[levels.length - 1].toFixed(1);
@@ -851,6 +853,7 @@
       .forEach((card) => {
         deleteVnCache(card.title).catch(() => {});
         deleteCachedReadings(card.title).catch(() => {});
+        deleteBookKanji(card.title).catch(() => {});
       });
 
     if (fromLibrary && !cancelSignal.aborted) {
