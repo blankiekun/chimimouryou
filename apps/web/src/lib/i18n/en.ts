@@ -66,12 +66,9 @@ export const en = {
   'statistics.settings': 'Settings',
   'statistics.thisPeriod': 'This period',
   'statistics.daysRead': 'Days read',
-  'statistics.longestStreak': 'Longest streak',
-  'statistics.currentStreak': 'Current streak',
   'statistics.time': 'Time',
   'statistics.speed': 'Speed',
   'statistics.speedValue': '{count} chars/h',
-  'statistics.days': '{count} days',
   'statistics.calendar': 'Calendar',
   'statistics.readingGoals': 'Reading goals',
   'statistics.wordsKnownEmpty':

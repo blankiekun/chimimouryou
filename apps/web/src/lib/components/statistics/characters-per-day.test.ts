@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { charactersPerDay, periodTotals, readingStreaks } from './characters-per-day';
+import { charactersPerDay, periodTotals } from './characters-per-day';
 
 const entry = (dateKey: string, charactersRead: number, title = 'A', readingTime = 60) => ({
   dateKey,
@@ -58,21 +58,5 @@ describe('periodTotals', () => {
       ])
     ).toEqual({ characters: 1200, time: 240, speed: 18000, days: 2, titles: 2 });
     expect(periodTotals([])).toEqual({ characters: 0, time: 0, speed: 0, days: 0, titles: 0 });
-  });
-});
-
-describe('readingStreaks', () => {
-  const days = new Set(['2026-09-29', '2026-09-30', '2026-10-01', '2026-10-05', '2026-10-06']);
-
-  it('finds the longest run inside the period and the run up to today', () => {
-    expect(readingStreaks(days, '2026-09-01', '2026-10-31', '2026-10-06')).toEqual({
-      longest: 3,
-      current: 2
-    });
-    expect(readingStreaks(days, '2026-10-01', '2026-10-31', '2026-10-07')).toEqual({
-      longest: 2,
-      current: 2
-    });
-    expect(readingStreaks(days, '2026-10-01', '2026-10-31', '2026-10-08').current).toBe(0);
   });
 });
