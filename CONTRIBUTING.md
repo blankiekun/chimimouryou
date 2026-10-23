@@ -28,7 +28,9 @@ How to change this fork. See `ARCHITECTURE.md` for how the pieces fit together,
   `var(--reader-panel-bg)`, …), never fixed values.
 - Commit messages: `fix: …`, `feat: …`, `refactor: …`, `test: …`, `docs: …`,
   `style: …`. One logical change per commit; bug fixes don't include refactors.
-- Add a line to `CHANGELOG.md` for anything a user or the server would notice.
+- Don't edit `CHANGELOG.md` in pull requests: it is written when a version is released, from the
+  squashed commit titles since the last tag, so make the PR title say what a reader or server
+  operator would notice.
 - New UI strings go in both `lib/i18n/en.ts` and `lib/i18n/ja.ts` (whole sentences
   with `{param}`s), used as `$t$('key')` in components and `tr('key')` elsewhere.
 - Never put API keys, passwords or other secrets in the repository, in shared
@@ -93,7 +95,9 @@ git merge upstream/main`, open a PR and merge it with **Create a merge
 
   gives `ghcr.io/<owner>/<repository>-{web,services,import,difficulty}` tagged
   `1.2.0`, `1.2` and `latest` (pre-releases like `v1.2.0-rc1` don't move
-  `latest`). Add a `CHANGELOG.md` heading for the version first. The first
+  `latest`). First write the version's `CHANGELOG.md` section from the commits since the last tag
+  (`git log --oneline <last tag>..main`): what readers and server operators notice, grouped
+  under Added / Changed / Fixed / Security, and commit it. The first
   publish creates private packages: make them public in the repository's
   Packages settings.
 
@@ -168,5 +172,5 @@ Adding a "Copy" button to the Ask AI answer:
 4. Run `pnpm test`, `pnpm check` (still 13 errors) and `npx eslint .` (clean).
 5. Rebuild and restart the stack, then open a book on the HTTPS address, select
    text, ask, and try the button. Check `/version.txt`.
-6. Add a `CHANGELOG.md` line, commit (`feat: copy button for Ask AI answers`)
+6. Commit (`feat: copy button for Ask AI answers`)
    and open a pull request (see Pull requests).
