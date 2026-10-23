@@ -79,7 +79,7 @@
 
   let importing = false;
 
-  /** Installs jiten_freq_global.zip on the server (it checks the file; admins only). */
+  /** Installs or replaces the frequency list on the server (it checks the file; admins only). */
   async function importDictionary(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
@@ -250,6 +250,19 @@
         </section>
       {/if}
       <div class="tool-actions !mt-0">
+        {#if $account$?.admin && status.dictionary}
+          <label class="{buttonClasses} flex cursor-pointer items-center gap-2">
+            {#if importing}<Fa icon={faSpinner} spin />{/if}
+            {$t$('library.replaceDictionary')}
+            <input
+              type="file"
+              accept=".zip,application/zip"
+              class="hidden"
+              disabled={importing || running}
+              on:change={importDictionary}
+            />
+          </label>
+        {/if}
         {#if $account$?.admin && status.termDictionaries}
           <label class="{buttonClasses} flex cursor-pointer items-center gap-2">
             {#if importing}<Fa icon={faSpinner} spin />{/if}

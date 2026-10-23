@@ -236,12 +236,14 @@ The service only runs mokuro when asked, so it costs nothing while idle.
 
 ## Difficulty estimates
 
-The `difficulty` profile needs Jiten's word frequency list: download
-`jiten_freq_global.zip` from https://jiten.moe/frequency-dictionaries and import
-it in the admin panel as an admin (Tools → Estimate difficulty → "Import frequency list";
-the service checks it, and asks to confirm a replacement whose readings disagree with the
-installed list), or save it as
-`DATA_PATH/state/difficulty/frequency-dictionary.zip`.
+The `difficulty` profile uses Jiten's word frequency list, which is bundled
+(`scripts/calibre/jiten/data/jiten_freq_global.zip`, CC BY-SA 4.0) and copied to
+`DATA_PATH/state/difficulty/frequency-dictionary.zip` when the service starts and none is
+there. To use a newer list, download `jiten_freq_global.zip` from
+https://jiten.moe/frequency-dictionaries and upload it in the admin panel as an admin
+(Tools → Estimate difficulty → "Replace frequency list"; the service checks it, and asks to
+confirm a replacement whose readings disagree with the installed list), or save it as that
+file. An installed list is never overwritten by the bundled one.
 
 ## Standalone web app
 

@@ -17,6 +17,10 @@ anything a reader or a server operator would notice.
 
 ### Changed
 
+- Jiten's word frequency list is bundled with the difficulty service (CC BY-SA 4.0), so estimates
+  work without downloading it: on start the service installs it when no list is installed, and
+  an installed or uploaded list is kept. Admins can still upload a newer one (Tools → Estimate
+  difficulty → "Replace frequency list").
 - The library's top bar shows only Import and the account: view and sort are in the Store's Sort
   menu, Select is a Store button (long press still selects on Home), and the storage source and
   "Report an issue" are in Settings → Data → Storage. The old-domain hint and the `?count` loader
@@ -738,8 +742,8 @@ First public release. Compared with upstream ッツ Ebook Reader:
   left, left to right, vertical strip).
 - **Difficulty estimates** with Jiten's features and a model distilled from
   jiten.moe's scores, computed on the server on demand, started from the admin panel's Tools tab or for books
-  selected in the library. The word frequency list (`jiten_freq_global.zip`)
-  can be imported there.
+  selected in the library. Jiten's word frequency list (`jiten_freq_global.zip`) is bundled
+  and can be replaced there.
 
 ### Accounts and sync
 

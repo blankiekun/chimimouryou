@@ -131,7 +131,7 @@ code are the same container paths.
 | `UPDATE_STATE_DIR`               | `/data/state/update` (`request.json`, `status.json`, `updater`)    | account, `ebook-update` on the host                                                  |
 | `CALIBRE_CATALOG`                | `/data/state/catalog/catalog.json`                                 | difficulty                                                                           |
 | `JITEN_STATE_DIR`                | `/data/state/difficulty` (results, `frequency-dictionary.zip`)     | difficulty                                                                           |
-| `JITEN_FREQUENCY_DICTIONARY`     | `JITEN_STATE_DIR/frequency-dictionary.zip`                         | difficulty                                                                           |
+| `JITEN_FREQUENCY_DICTIONARY`     | `JITEN_STATE_DIR/frequency-dictionary.zip`, bundled if missing     | difficulty                                                                           |
 | `JITEN_WORKERS`                  | `DIFFICULTY_WORKERS`                                               | difficulty                                                                           |
 | `JITEN_HOST`, `JITEN_PORT`       | `0.0.0.0`, `8765`                                                  | difficulty                                                                           |
 | `SYNC_DIR`                       | `/data/sync` (read-only; `ttu-reader-data/<title>/bookdata_*.zip`) | difficulty (readings files)                                                          |

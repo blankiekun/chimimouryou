@@ -16,6 +16,12 @@ scripts/calibre/jiten/LICENSE):
 These files were modified or derived for this project. Jiten is not affiliated
 with this project.
 
+scripts/calibre/jiten/data/jiten_freq_global.zip is Jiten's word frequency
+list from jiten.moe (https://jiten.moe/frequency-dictionaries), by Jiten,
+licensed under CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/),
+redistributed unmodified; files packed from it (frequency.ygp) are under the
+same licence. See scripts/calibre/jiten/data/README.md.
+
 scripts/calibre/jiten/kanji-grades.json is derived from KANJIDIC2 by the
 Electronic Dictionary Research and Development Group
 (https://www.edrdg.org/kanjidic/), licensed under CC BY-SA 4.0; it is
