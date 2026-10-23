@@ -10,6 +10,7 @@
   import { isFinished, isReading } from '$lib/components/book-card/library-filters';
   import { orderSeries } from '$lib/components/book-card/library-sort';
   import { account$, hasPermission } from '$lib/data/account';
+  import { selfHostingGuideUrl, standalone } from '$lib/data/env';
   import {
     loadBookMetadata,
     defaultSource,
@@ -29,7 +30,6 @@
   } from '$lib/data/calibre';
   import { difficultyNameKey } from '$lib/data/difficulty';
   import { bookKanjiCount } from '$lib/data/book-kanji';
-  import { standalone } from '$lib/data/env';
   import type { BookWord, WordCoverage } from '$lib/data/book-words';
   import { dialogManager } from '$lib/data/dialog-manager';
   import {
@@ -330,7 +330,7 @@
 >
   <nav class="details-bar" aria-label={$t$('nav.back')}>
     <button type="button" class="app-button app-button-quiet" on:click={() => dispatch('close')}>
-      ← {$t$($libraryTab$ === 'home' ? 'nav.home' : 'nav.store')}
+      ← {$t$($libraryTab$ === 'home' ? 'nav.home' : standalone ? 'nav.library' : 'nav.store')}
     </button>
     <span class="details-crumb" lang="ja">/ {book.displayTitle || book.title}</span>
   </nav>
@@ -574,6 +574,12 @@
             </div>
           {/if}
         </dl>
+        {#if standalone}
+          <p class="details-server-note">
+            Difficulty and word lists need a server.
+            <a href={selfHostingGuideUrl} target="_blank" rel="noreferrer">Self-hosting →</a>
+          </p>
+        {/if}
 
         {#if seriesBooks.length > 1}
           <ContinueReadingShelf
@@ -990,6 +996,23 @@
   .details-row-button {
     --app-control-height: 2rem;
     padding: 0 0.6rem;
+  }
+
+  .details-server-note {
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  .details-server-note a {
+    margin-left: 0.5rem;
+    white-space: nowrap;
+    color: var(--accent-strong-color);
+    font-weight: 700;
+  }
+
+  .details-server-note a:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
   }
 
   .details-note {

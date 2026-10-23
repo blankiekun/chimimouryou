@@ -4,7 +4,8 @@
    * figure of the screen. Anything in the default slot goes below the figure.
    */
   export let label: string;
-  export let figure: number | string;
+  /** Optional: a box of guidance (the standalone first run's Lookups) has no figure */
+  export let figure: number | string | undefined = undefined;
   export let unit = '';
 
   $: shown = typeof figure === 'number' ? figure.toLocaleString('en-US') : figure;
@@ -12,9 +13,11 @@
 
 <section class="point-box" aria-label={label}>
   <span class="point-box-tag" aria-hidden="true">{label}</span>
-  <p class="point-box-figure">
-    {shown}{#if unit}<span class="point-box-unit">{unit}</span>{/if}
-  </p>
+  {#if shown !== undefined}
+    <p class="point-box-figure">
+      {shown}{#if unit}<span class="point-box-unit">{unit}</span>{/if}
+    </p>
+  {/if}
   <slot />
 </section>
 

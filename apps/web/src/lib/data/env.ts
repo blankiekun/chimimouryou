@@ -9,6 +9,9 @@
  * It also implies the Browser default storage source (storage-view.ts).
  */
 export const standalone = import.meta.env.VITE_EDITION === 'standalone';
+/** Where the standalone points readers who want a server (Settings → Sync, book pages). */
+export const selfHostingGuideUrl =
+  'https://github.com/blankiekun/chimimouryou/blob/main/docs/INSTALL.md';
 /** Absolute address of the site for canonical links; '' uses the current origin. */
 export const basePath = import.meta.env.VITE_BASE_PATH || '';
 export const pagePath = import.meta.env.VITE_PAGE_PATH || '';

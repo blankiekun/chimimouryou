@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { browser } from '$app/environment';
   import { goto, pushState } from '$app/navigation';
   import { page } from '$app/stores';
   import {
@@ -89,6 +90,10 @@
   import { clearReadingProgress } from '$lib/functions/clear-reading-progress';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { pagePath, standalone } from '$lib/data/env';
+  import FirstRun from '$lib/components/standalone/first-run.svelte';
+  import InstallHint from '$lib/components/standalone/install-hint.svelte';
+  import LibraryEmpty from '$lib/components/standalone/library-empty.svelte';
+  import { needsFirstRun, storageChosen$ } from '$lib/data/standalone-storage';
   import { logger } from '$lib/data/logger';
   import type { SortOption } from '$lib/data/sort-types';
   import { ApiStorageHandler } from '$lib/data/storage/handler/api-handler';
@@ -1237,6 +1242,11 @@
 
 {$replicator$ ?? ''}
 
+<!-- The standalone's first run covers the library until a place for books is chosen. -->
+{#if browser && needsFirstRun(standalone, $storageChosen$)}
+  <FirstRun />
+{/if}
+
 <div class="app-page-shell">
   <BookManagerHeader
     currentBookId={$currentBookId$}
@@ -1512,14 +1522,16 @@
           {#if firstRun}
             <section class="home-start" aria-label={$t$('home.startReading')}>
               <SectionHead number={1} title={$t$('home.startReading')} />
-              <p class="library-empty-text">{$t$('home.startText')}</p>
+              <p class="library-empty-text">
+                {$t$(standalone ? 'home.startTextLibrary' : 'home.startText')}
+              </p>
               <span class="home-start-actions">
                 <button
                   type="button"
                   class="app-button app-button-primary"
                   on:click={() => ($libraryTab$ = 'store')}
                 >
-                  {$t$('home.openStore')}
+                  {$t$(standalone ? 'home.openLibrary' : 'home.openStore')}
                 </button>
                 <label class="app-button">
                   <input
@@ -1574,8 +1586,13 @@
           {:else}
             <section class="home-start" aria-label={$t$('home.myBooks')}>
               <SectionHead number={myBooksNumber} title={$t$('home.myBooks')} count={0} />
-              <p class="library-empty-text">{$t$('home.myBooksEmpty')}</p>
+              <p class="library-empty-text">
+                {$t$(standalone ? 'home.myBooksEmptyLibrary' : 'home.myBooksEmpty')}
+              </p>
             </section>
+          {/if}
+          {#if standalone}
+            <InstallHint />
           {/if}
         </div>
       {:else if $bookCards$.length && showSeriesGrid}
@@ -1647,6 +1664,8 @@
             href="{pagePath}/settings?section=general#general-account">Sign in</a
           >
         </div>
+      {:else if standalone}
+        <LibraryEmpty onFiles={onFilesChange} />
       {:else}
         <label class="library-empty library-empty-import">
           <input

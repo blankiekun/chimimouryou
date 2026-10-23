@@ -15,6 +15,7 @@
     faUser
   } from '@fortawesome/free-solid-svg-icons';
   import AppHeaderLogo from '$lib/components/app-header/app-header-logo.svelte';
+  import SyncIndicator from '$lib/components/standalone/sync-indicator.svelte';
   import { account$ } from '$lib/data/account';
   import { pagePath, standalone } from '$lib/data/env';
   import { libraryTab$, type LibraryTab } from '$lib/data/library-home';
@@ -27,6 +28,8 @@
   export let onNavigate: ((section: AppSection, href: string) => void) | undefined = undefined;
   /** When set, small screens show a back button instead of the section navigation. */
   export let onBack: (() => void) | undefined = undefined;
+  /** Only the logo, for the standalone's first run */
+  export let bare = false;
 
   function navigate(event: MouseEvent, section: AppSection, href: string, tab?: LibraryTab) {
     if (tab) $libraryTab$ = tab;
@@ -55,7 +58,8 @@
     {
       key: 'library',
       tab: 'store',
-      label: $t$('nav.store'),
+      // The standalone has no store to browse: it lists the books imported here.
+      label: $t$(standalone ? 'nav.library' : 'nav.store'),
       icon: faStore,
       href: `${pagePath}/manage`
     },
@@ -109,7 +113,7 @@
         <AppHeaderLogo label="Chimimouryou" />
       </a>
 
-      <nav class="section-nav hidden sm:flex" aria-label={$t$('nav.sections')}>
+      <nav class="section-nav hidden {bare ? '' : 'sm:flex'}" aria-label={$t$('nav.sections')}>
         {#each sections as section (section.label)}
           <a
             href={section.href}
@@ -125,7 +129,7 @@
         {/each}
       </nav>
 
-      <div class="ml-auto flex min-w-0 items-center gap-1">
+      <div class="ml-auto flex min-w-0 items-center gap-1" class:hidden={bare}>
         {#if currentBookId}
           <a
             href="{pagePath}/b?id={currentBookId}"
@@ -141,7 +145,9 @@
             <slot />
           </div>
         {/if}
-        {#if !standalone}
+        {#if standalone}
+          <SyncIndicator />
+        {:else}
           <a
             href="{pagePath}/settings?section=general#general-account"
             class="app-header-icon"
@@ -164,7 +170,7 @@
   </div>
 </header>
 
-{#if !onBack}
+{#if !onBack && !bare}
   <nav class="app-bottom-nav" aria-label={$t$('nav.sections')}>
     {#each sections as section (section.label)}
       <a

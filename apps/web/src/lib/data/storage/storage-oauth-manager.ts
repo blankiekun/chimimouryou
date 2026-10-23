@@ -47,7 +47,7 @@ export const storageOAuthTokens = new Map<string, OAuthTokenData>();
  */
 const refreshTokenKey = (storageSourceName: string) => `oauthRefreshToken:${storageSourceName}`;
 
-function storedRefreshToken(storageSourceName: string) {
+export function storedRefreshToken(storageSourceName: string) {
   try {
     return localStorage.getItem(refreshTokenKey(storageSourceName)) || undefined;
   } catch {
