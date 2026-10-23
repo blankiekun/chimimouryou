@@ -20,6 +20,7 @@ anything a reader or a server operator would notice.
 
 ### Changed
 
+- Standalone: Settings → Audiobookshelf asks for the server's address and explains the CORS origin to add in Audiobookshelf.
 - Imported books are added to Home's My books.
 - Statistics, selecting text to bookmark, and the AI and Audiobookshelf plugins are on by default (browsers that already chose keep their choice).
 - The library's top bar shows only Import and the account: view and sort are in the Store's Sort

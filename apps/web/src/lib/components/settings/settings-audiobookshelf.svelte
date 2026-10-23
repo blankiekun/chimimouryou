@@ -1,7 +1,9 @@
 <script lang="ts">
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
-  import { absLogin, audiobookshelfToken$ } from '$lib/data/audiobookshelf';
+  import { absLogin, audiobookshelfServer$, audiobookshelfToken$ } from '$lib/data/audiobookshelf';
+  import { standalone } from '$lib/data/env';
+  import { onMount } from 'svelte';
   import { t$ } from '$lib/i18n';
 
   let username = '';
@@ -9,6 +11,14 @@
   let apiKey = '';
   let error = '';
   let busy = false;
+
+  // This site's origin, for the CORS setting (not known while prerendering).
+  let origin = '';
+
+  onMount(() => (origin = location.origin));
+
+  // The standalone has no server proxy: it needs Audiobookshelf's own address.
+  $: needsServer = standalone && !$audiobookshelfServer$.trim();
 
   async function signIn() {
     busy = true;
@@ -31,6 +41,22 @@
       </button>
     </SettingsItemGroup>
   {:else}
+    {#if standalone}
+      <SettingsItemGroup
+        title={$t$('prefs.abs.server')}
+        tooltip={$t$('prefs.abs.serverHint', { origin: origin || 'this site' })}
+        wide
+      >
+        <input
+          aria-label={$t$('prefs.abs.server')}
+          type="url"
+          class="app-input"
+          placeholder="https://abs.example.com"
+          autocomplete="url"
+          bind:value={$audiobookshelfServer$}
+        />
+      </SettingsItemGroup>
+    {/if}
     <SettingsItemGroup title={$t$('prefs.username')}>
       <input
         aria-label={$t$('prefs.username')}
@@ -51,7 +77,7 @@
     <div class="abs-sign-in" data-settings-item>
       <button
         class="app-button app-button-primary"
-        disabled={busy || !username || !password}
+        disabled={busy || needsServer || !username || !password}
         on:click={signIn}
       >
         {$t$('nav.signIn')}
@@ -64,6 +90,7 @@
         class="app-input"
         autocomplete="off"
         bind:value={apiKey}
+        disabled={needsServer}
         on:change={() => apiKey.trim() && audiobookshelfToken$.next(apiKey.trim())}
       />
     </SettingsItemGroup>
