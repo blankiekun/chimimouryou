@@ -73,7 +73,8 @@
       Read a chimimouryou server's Calibre library here, with your progress and highlights synced to
       your account on it. Its admin must allow this app ({browser
         ? window.location.origin
-        : 'this address'}) first.
+        : 'this address'}) first. AI keys entered on this device are removed when you connect; enter
+      them again afterwards and they sync with your account.
     </p>
     <form class="server-form" on:submit|preventDefault={connect}>
       <label class="server-field">

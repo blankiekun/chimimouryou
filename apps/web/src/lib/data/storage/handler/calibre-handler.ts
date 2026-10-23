@@ -469,7 +469,7 @@ export class CalibreStorageHandler extends ApiStorageHandler {
   ) {
     return super.request(
       serverUrl(url),
-      { ...options, headers: { ...options.headers, ...serverHeaders() }, skipAuth: true },
+      { ...options, headers: { ...options.headers, ...serverHeaders(url) }, skipAuth: true },
       type,
       progressBase
     );

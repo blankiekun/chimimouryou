@@ -50,9 +50,9 @@ export function serverUrl(path: string) {
   return serverBase && serverPath.test(path) ? `${serverBase}${path}` : path;
 }
 
-/** The headers a request to the server needs besides its own (none in the self-hosted build). */
-export function serverHeaders(): Record<string, string> {
-  return serverBase ? { Authorization: `Bearer ${token}` } : {};
+/** The headers a request to a server path needs besides its own (none in the self-hosted build). */
+export function serverHeaders(path: string): Record<string, string> {
+  return serverBase && serverPath.test(path) ? { Authorization: `Bearer ${token}` } : {};
 }
 
 /** fetch() for server paths: the connected server with its token, else this site as before. */
