@@ -16,6 +16,7 @@ import type {
 import { database, lastReadingGoalsModified$ } from '$lib/data/store';
 import { isManga } from '$lib/data/manga';
 import { isVn } from '$lib/data/vn';
+import { standalone } from '$lib/data/env';
 
 import type { MergeMode } from '$lib/data/merge-mode';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
@@ -43,9 +44,16 @@ export class BrowserStorageHandler extends BaseStorageHandler {
       try {
         const db = await database.db;
         const data = await db.getAll('data');
+        // Standalone: the analysis tools' estimates of stored books (analysis-tools.ts).
+        const estimates = standalone
+          ? await import('$lib/data/analysis-tools')
+              .then(({ localEstimates }) => localEstimates())
+              .catch(() => undefined)
+          : undefined;
 
         for (let index = 0, { length } = data; index < length; index += 1) {
           const book = data[index];
+          const estimate = estimates?.get(book.title);
 
           this.addBookCard(book.title, {
             id: book.id,
@@ -58,7 +66,11 @@ export class BrowserStorageHandler extends BaseStorageHandler {
             lastBookOpen: book.lastBookOpen || 0,
             isPlaceholder: !book.elementHtml,
             manga: isManga(book),
-            vn: isVn(book)
+            vn: isVn(book),
+            difficulty: estimate?.difficulty,
+            difficultyLow: estimate?.low,
+            difficultyHigh: estimate?.high,
+            words95: estimate?.words95 ?? undefined
           });
         }
 

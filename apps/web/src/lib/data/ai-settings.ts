@@ -102,3 +102,11 @@ export const askAiDefaultPreset$ = writableStringLocalStorageSubject()(
 export function modelShortName(id: string) {
   return id.replace(/^~/, '').split('/').pop() || id;
 }
+
+/** The system prompts readers can replace (`ai-prompts.ts`). */
+export type AiPromptKey = 'ask' | 'chapter' | 'recap' | 'lore';
+
+/** The reader's own system prompts per AI language (`en`/`ja`); a missing one uses the built-in. */
+export const aiPromptOverrides$ = writableObjectLocalStorageSubject<
+  Partial<Record<string, Partial<Record<AiPromptKey, string>>>>
+>()('aiPromptOverrides', {});

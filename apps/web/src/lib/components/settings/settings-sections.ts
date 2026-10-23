@@ -62,6 +62,11 @@ export const settingsAreas: SettingsArea[] = [
               id: 'general-install',
               label: 'settings.section.general-install' as const,
               description: 'settings.section.general-install.text' as const
+            },
+            {
+              id: 'general-analysis',
+              label: 'settings.section.general-analysis' as const,
+              description: 'settings.section.general-analysis.text' as const
             }
           ]
         : []),
@@ -129,6 +134,11 @@ export const settingsAreas: SettingsArea[] = [
         description: 'settings.section.ai-presets.text'
       },
       {
+        id: 'ai-prompts',
+        label: 'settings.section.ai-prompts',
+        description: 'settings.section.ai-prompts.text'
+      },
+      {
         id: 'ai-voice',
         label: 'settings.section.ai-voice',
         description: 'settings.section.ai-voice.text'
@@ -142,6 +152,11 @@ export const settingsAreas: SettingsArea[] = [
         id: 'ai-recap',
         label: 'settings.section.ai-recap',
         description: 'settings.section.ai-recap.text'
+      },
+      {
+        id: 'ai-syncs',
+        label: 'settings.section.ai-syncs',
+        description: 'settings.section.ai-syncs.text'
       }
     ]
   },

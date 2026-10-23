@@ -40,10 +40,10 @@ from concurrent.futures.process import BrokenProcessPool
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from yurigana import __version__ as YURIGANA_VERSION
-from yurigana.kana import UNVOICED
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 import readings_file  # noqa: E402
+from word_list import KANJI, NUMBER, PARTICLES, SINGLE_KANA, is_noise_word, word_rows  # noqa: E402,F401
 
 LIBRARY = os.environ.get('CALIBRE_LIBRARY', '/library')
 # Unpacked visual novels (catalog format 'VN'; their 'file' is relative to it).
@@ -109,14 +109,6 @@ WORDS_PER_BOOK = 2000
 # 11: yurigana 0.5.1 (行っ on a going cue reads いっ; an uploaded JMnedict is a name dictionary).
 # 12: yurigana 0.5.3 (top readings of 118 forms, voiced tails after a noun, 血肉 ちにく).
 WORDS_VERSION = 15
-# Not vocabulary, left out of the book's word totals (uniqueWords, tokens) like the reader's
-# word coverage does (isNoiseWord in book-words.ts): particles, numbers, lone kana, and kana-only
-# words without a frequency rank (tokenizer noise).
-PARTICLES = set('は が を に で と も の へ や か な ね よ わ ぞ ぜ さ て ば し から まで より だけ ほど '
-                'くらい ぐらい など なら って けど けれど のに ので しか こそ でも ても さえ'.split())
-NUMBER = re.compile(r'[0-9０-９〇一二三四五六七八九十百千万]+')
-SINGLE_KANA = re.compile(r'[\u3041-\u309f\u30a0-\u30ffー]')
-KANJI = re.compile(r'[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\U00020000-\U0003134f]')
 # Readings files (#17), made from the reader's processed book in the shared sync folder
 # (mounted read-only): <SYNC_DIR>/ttu-reader-data/<title>/bookdata_*.zip.
 SYNC_DIR = os.environ.get('SYNC_DIR', '/data/sync')
@@ -183,67 +175,17 @@ def save_kanji(book_id: int, text: str):
     os.replace(path + '.tmp', path)
 
 
-def is_noise_word(form: str, rank) -> bool:
-    return (form in PARTICLES or bool(NUMBER.fullmatch(form)) or bool(SINGLE_KANA.fullmatch(form))
-            or (rank is None and not KANJI.search(form)))
-
-
 def save_words(book_id: int, analysis, frequency):
-    """The book's WORDS_PER_BOOK most frequent words, most frequent first, as [form, reading or None,
-    count in the book, frequency rank or None, lemma (Sudachi's normalized form: 分かる for わかる
-    and 判る)], one row per reading (他: ほか and た). Rows of one form and reading from different
-    Sudachi words (ある: 有る and 或る) are merged. A word met only conjugated takes the form's most
-    common reading in the book, else Sudachi's reading of the form (None only when neither exists).
-A voiced reading the list lacks counts for the unvoiced one it gives (箱 ばこ: はこ).
-    Names, affixes (今 read こん, from 今回), particles, auxiliaries and unclassified tokens are left
-    out. Returns the number of rows and their occurrences before the cap, without noise
-    (is_noise_word), so the reader can count the words past the cap as unknown."""
-    merged = {}  # (form, reading) -> [form, reading, count, rank, lemma, the lemma's count]
-    by_form = {}  # form -> Counter of readings
-    conjugated = []
-
-    def add(word, reading, n):
-        lemma = word.key.split('\t')[0]
-        # A voiced reading the list lacks (この箱 ばこ, 小屋 ごや as a compound's tail) is the word's plain one.
-        plain = reading and reading[0].translate(UNVOICED) + reading[1:]
-        if plain != reading and (lemma, reading) not in frequency.reading_ranks and (lemma, plain) in frequency.reading_ranks:
-            reading = plain
-        data = frequency.word(word.key, reading)
-        rank = data[0] if data else None
-        row = merged.get((word.form, reading))
-        if row is None:
-            merged[word.form, reading] = [word.form, reading, n, rank, lemma, n]
-        else:
-            row[2] += n
-            row[3] = min(filter(None, (row[3], rank)), default=None)
-            if n > row[5]:
-                row[4], row[5] = lemma, n
-        by_form.setdefault(word.form, Counter())[reading] += n
-
-    for word_key, (word, count) in analysis.words.items():
-        if word.pos in ('name', 'fix', 'other', 'particle', 'aux'):
-            continue
-        readings = Counter(analysis.readings.get(word_key) or {word.reading: count})
-        # Conjugated occurrences have no reading: they go to the word's most common one.
-        unknown = readings.pop(None, 0)
-        if readings:
-            readings[readings.most_common(1)[0][0]] += unknown
-        elif unknown:
-            conjugated.append((word, word_key, unknown))
-        for reading, n in readings.items():
-            add(word, reading, n)
-    for word, word_key, n in conjugated:
-        known = by_form.get(word.form)
-        add(word, known.most_common(1)[0][0] if known else analysis.form_readings.get(word_key), n)
-    rows = [row[:5] for row in merged.values()]
-    vocabulary = [row for row in rows if not is_noise_word(row[0], row[3])]
-    rows = sorted(rows, key=lambda row: -row[2])[:WORDS_PER_BOOK]
+    """The book's WORDS_PER_BOOK most frequent words (word_list.word_rows) in WORDS_DIR. Returns the
+    number of rows and their occurrences before the cap, without noise (is_noise_word), so the
+    reader can count the words past the cap as unknown."""
+    rows, unique_words, tokens = word_rows(analysis, frequency)
     os.makedirs(WORDS_DIR, exist_ok=True)
     path = os.path.join(WORDS_DIR, f'{book_id}.json.gz')
     with gzip.open(path + '.tmp', 'wt', encoding='utf-8') as f:
-        json.dump(rows, f, ensure_ascii=False, separators=(',', ':'))
+        json.dump(rows[:WORDS_PER_BOOK], f, ensure_ascii=False, separators=(',', ':'))
     os.replace(path + '.tmp', path)
-    return len(vocabulary), sum(row[2] for row in vocabulary)
+    return unique_words, tokens
 
 
 def _estimate(book: dict):

@@ -181,6 +181,8 @@ export const ja: Record<MessageKey, string> = {
   'book.copied': 'コピーしました',
   'book.noEstimate': '未算出',
   'book.difficultyDetails': '難易度の詳細',
+  'book.estimate': '算出する',
+  'book.estimating': '算出中… {percent}%',
   'book.text': 'テキスト',
   'book.publisher': '出版社',
   'book.published': '出版日',
@@ -288,6 +290,9 @@ export const ja: Record<MessageKey, string> = {
     'アプリ全体の配色です。「複製」でどのテーマからでも独自テーマを作れます。',
   'settings.section.general-install': 'アプリとしてインストール',
   'settings.section.general-install.text': 'この端末にアプリとして置いておけます。',
+  'settings.section.general-analysis': '解析ツール',
+  'settings.section.general-analysis.text':
+    'サーバーなしで難易度、単語リスト、ふりがなを作ります。',
   'settings.section.general-plugins': '拡張機能',
   'settings.section.general-plugins.text':
     '追加機能です。オンにすると、それぞれの設定項目が表示されます。',
@@ -324,6 +329,12 @@ export const ja: Record<MessageKey, string> = {
   'settings.section.ai-recap': 'あらすじ・用語集',
   'settings.section.ai-recap.text':
     '読んだ範囲までのネタバレなしあらすじと、用語集（ロアブック）を設定します。',
+  'settings.section.ai-prompts': 'システムプロンプト',
+  'settings.section.ai-prompts.text':
+    '毎回のリクエストの前にAIへ伝える指示です。標準のプロンプトはAIの言語に従い、編集すると自分用のコピーになります。',
+  'settings.section.ai-syncs': '同期される内容',
+  'settings.section.ai-syncs.text':
+    'リクエストはこのブラウザからプロバイダーへ直接送られ、このサーバーを経由しません。',
   'settings.section.audiobookshelf-connect': 'サーバー接続',
   'settings.section.audiobookshelf-connect.text':
     '「聴く → Audiobookshelf」で使用するアカウントを設定します。',
@@ -549,6 +560,33 @@ export const ja: Record<MessageKey, string> = {
   'ai.lorebookAutoHint':
     '読書中、指定した文字数を読み進めるたびに、用語集（登場人物・地名・用語）をバックグラウンドで自動更新します。新しく読んだ部分のみがあらすじ用モデルへ送信されます（0で無効）。',
   'ai.lorebookInterval': '用語集の自動更新間隔（文字数）',
+  'ai.promptsLanguageHint': 'プロンプトは言語ごとに別々です。',
+  'ai.prompt.ask': 'AIに質問',
+  'ai.prompt.askHint': '選んだ一節を説明します。',
+  'ai.prompt.chapter': '章の要約',
+  'ai.prompt.chapterHint': '読み終えた章を1回ずつ要約し、あらすじに使います。',
+  'ai.prompt.recap': 'これまでのあらすじ',
+  'ai.prompt.recapHint': '章の要約からあらすじを書きます。',
+  'ai.prompt.lore': '用語集',
+  'ai.prompt.loreHint': '用語集の項目を更新します。答えはこの形式のJSONのままにしてください。',
+  'ai.builtIn': '標準',
+  'ai.yourCopy': '自分用',
+  'ai.showPrompt': 'プロンプトを表示',
+  'ai.editCopy': 'コピーを編集',
+  'ai.resetPrompt': '標準に戻す',
+  'ai.syncs.setting': '設定',
+  'ai.syncs.where': '保存先',
+  'ai.syncs.keys': 'APIキー',
+  'ai.syncs.keysWhere':
+    'このブラウザと、ログイン中はこのサーバーのアカウント（他の端末でも使えるように）。',
+  'ai.syncs.keysNote':
+    'Drive、OneDrive、同期フォルダや共有ファイルには保存しません。ログアウトすると削除されます。',
+  'ai.syncs.rest': 'モデル、音声、プリセット、プロンプト',
+  'ai.syncs.restWhere':
+    'ログイン中はアカウント、それ以外はライブラリのDrive、OneDrive、フォルダ（ある場合）。',
+  'ai.syncs.restNote': 'ユーザー情報とAIの言語も同様です。設定ごとに最新の変更が残ります。',
+  'ai.private': '非公開',
+  'ai.synced': '同期',
   'ai.lorebookOff': '0（オフ）',
 
   // Library
@@ -735,6 +773,8 @@ export const ja: Record<MessageKey, string> = {
   'reader.furiganaShow': '表示',
   'reader.furiganaKnown': '既知',
   'reader.furiganaHide': '非表示',
+  'reader.furiganaPreparing': 'ふりがなを準備中… {percent}%',
+  'reader.furiganaQueued': 'ふりがなの順番待ち',
   'reader.allSettings': 'リーダー設定をすべて表示',
   'reader.error': 'エラー',
   'reader.loadError': '読み込みエラー',
