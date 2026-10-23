@@ -36,6 +36,8 @@ idempotent), in order, then `npx wrangler@4.147.0 deploy`:
   (pictures and cover thumbnails)
 - `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file migrations/0004_roles.sql`
   (`users.role`: moderators; a second run only fails with "duplicate column name")
+- `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file migrations/0005_transfers.sql`
+  (sending a book to a friend; the deploy also adds the 10-minute cron and `SIGNAL_LIMIT`)
 
 ## Develop
 
@@ -72,6 +74,19 @@ skip the edge limit (a shelf shows a dozen at once; each device fetches each URL
 `DELETE friends/:id` (decline, cancel, remove); `POST block/:id`. `GET /privacy` is the privacy
 page. Limits are counters in D1 (`limits`).
 People carry `role` (`'dev'` or `''`).
+
+Sending a book to a friend (WebRTC; the book goes browser to browser, never through the hub or
+R2, and there is no TURN relay): the hub only passes the SDP, between two accounts with an
+accepted link, checked on every call. `POST transfers` (`{to, title, kind: book|manga, size}`,
+at most 300 MB; 20 a day; one live transfer per pair, either way round); `GET transfers` (books
+offered to this reader); `POST transfers/:id/accept` (`{offer}`, the receiver, with all its ICE
+candidates); `POST transfers/:id/answer` (`{answer}`, the sender); `GET transfers/:id` (the state
+and what the other side sent); `DELETE transfers/:id` (the receiver declining while pending, kept
+until the sender has seen it; otherwise removed: the sender does it once connected). A transfer
+lives 10 minutes; a 10-minute cron deletes expired ones. `/v1/transfers*` take the
+`SIGNAL_LIMIT` binding (30 per 10 s per address) instead of `EDGE_LIMIT`: the app polls about
+once a second only while one is being set up. A typical transfer costs 10-20 Worker requests,
+plus one per 3 s while the friend hasn't answered yet (at most ~200 for one left waiting).
 
 Moderation, role `dev` only (403 for everyone else): `GET admin/reports` (open reports grouped
 by kind and target, with the name, picture or cover reported); `DELETE admin/reports?what=&target=`

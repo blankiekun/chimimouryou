@@ -4,6 +4,7 @@
   import SectionHead from '$lib/components/section-head.svelte';
   import BookCard from '$lib/components/book-card/book-card.svelte';
   import BookFriends from '$lib/components/social/book-friends.svelte';
+  import SendBook from '$lib/components/social/send-book.svelte';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
   import ContinueReadingShelf from '$lib/components/book-card/continue-reading-shelf.svelte';
   import DifficultyDialog from '$lib/components/book-card/difficulty-dialog.svelte';
@@ -447,6 +448,7 @@
         </button>
       </div>
       <BookFriends title={book.title} part="hide" />
+      <SendBook title={book.title} vn={!!book.vn} />
     </div>
 
     <div class="details-main">

@@ -45,6 +45,8 @@ export interface Env {
   MEDIA?: R2Bucket;
   /** Per address, before any D1 access; absent (tests, older configs) means allowed */
   EDGE_LIMIT?: RateLimit;
+  /** Per address for /v1/transfers (polled while a transfer is set up), instead of EDGE_LIMIT */
+  SIGNAL_LIMIT?: RateLimit;
 }
 
 /** The parts of Cloudflare's edge cache (caches.default) the hub uses */
@@ -124,6 +126,14 @@ export const UPLOADS_PER_DAY = 2_000;
 export const MEDIA_BYTES = 8 * 1024 ** 3;
 /** Image URLs carry a content hash or a version, so they never change */
 const IMMUTABLE = 'public, max-age=31536000, immutable';
+
+/** Sending a book: signaling only (the book goes browser to browser over WebRTC) */
+export const TRANSFER_TTL = 10 * MINUTE;
+export const TRANSFERS_PER_DAY = 20;
+/** wrangler.toml's second cron: expired transfers only */
+export const TRANSFER_CRON = '*/10 * * * *';
+export const TRANSFER_BYTES = 300 * 1024 ** 2;
+const SDP_LENGTH = 12_000;
 
 const USERNAME = /^[A-Za-z0-9_]{3,20}$/;
 const KEY = /^[0-9a-f]{64}$/;
@@ -1128,6 +1138,7 @@ async function deleteUsers(env: Env, where: string, ...values: unknown[]) {
       `DELETE FROM events WHERE user IN (${users})`,
       `DELETE FROM reports WHERE target IN (${users}) OR reporter IN (${users})`,
       `DELETE FROM limits WHERE subject IN (${users})`,
+      `DELETE FROM transfers WHERE sender IN (${users}) OR receiver IN (${users})`,
       `DELETE FROM users WHERE ${where}`
     ].map((sql) => env.DB.prepare(sql).bind(...values))
   );
@@ -1142,8 +1153,157 @@ export async function cleanUp(env: Env) {
     env.DB.prepare('DELETE FROM events WHERE at < ?1').bind(time - EVENT_TTL),
     env.DB.prepare('DELETE FROM reports WHERE at < ?1').bind(time - EVENT_TTL),
     env.DB.prepare('DELETE FROM sessions WHERE last_used < ?1').bind(time - SESSION_TTL),
-    env.DB.prepare('DELETE FROM limits WHERE win < ?1').bind(time - 2 * DAY)
+    env.DB.prepare('DELETE FROM limits WHERE win < ?1').bind(time - 2 * DAY),
+    expireTransfers(env)
   ]);
+}
+
+/** Transfers (and the network addresses in their SDP) last minutes: also run every 10 minutes. */
+const expireTransfers = (env: Env) =>
+  env.DB.prepare('DELETE FROM transfers WHERE created <= ?1').bind(now() - TRANSFER_TTL);
+
+/**
+ * A transfer this user is part of, while it lives and the two are still friends (checked on
+ * every signaling call: removing or blocking a friend ends it). Else 404.
+ */
+async function transferFor(env: Env, user: string, id: string) {
+  const row = await env.DB.prepare(
+    `SELECT t.* FROM transfers t JOIN links l ON l.state = 'accepted'
+       AND l.a = MIN(t.sender, t.receiver) AND l.b = MAX(t.sender, t.receiver)
+     WHERE t.id = ?1 AND ?2 IN (t.sender, t.receiver) AND t.created > ?3`
+  )
+    .bind(matching(id, ID, 'transfer'), user, now() - TRANSFER_TTL)
+    .first<{ id: string; sender: string; receiver: string; state: string } & Row>();
+
+  if (!row) throw new HttpError(404, 'transfer');
+  return row;
+}
+
+function sdp(value: unknown) {
+  if (typeof value !== 'string' || !value.startsWith('v=0') || value.length > SDP_LENGTH) {
+    throw new HttpError(400, 'sdp');
+  }
+  return value;
+}
+
+/** POST /v1/transfers: {to, title, kind, size}; one live transfer per pair, 20 a day. */
+async function createTransfer(env: Env, user: UserRow, body: Row) {
+  const to = matching(body.to, ID, 'to');
+  const title = text(body.title, 200, 'title');
+  const kind = body.kind === 'book' || body.kind === 'manga' ? body.kind : null;
+  const size = Number(body.size);
+
+  if (!kind) throw new HttpError(400, 'kind');
+  if (!Number.isInteger(size) || size <= 0) throw new HttpError(400, 'size');
+  if (size > TRANSFER_BYTES) throw new HttpError(413, 'too-big');
+
+  const [a, b] = pair(user.id, to);
+  const link = await env.DB.prepare('SELECT state FROM links WHERE a = ?1 AND b = ?2')
+    .bind(a, b)
+    .first<{ state: string }>();
+
+  if (link?.state !== 'accepted') throw new HttpError(403, 'friend');
+  await limit(env, user.id, 'transfer', DAY, TRANSFERS_PER_DAY);
+
+  const id = randomHex(8);
+  const time = now();
+  const { meta } = await env.DB.prepare(
+    `INSERT INTO transfers (id, sender, receiver, title, kind, size, state, created)
+     SELECT ?1, ?2, ?3, ?4, ?5, ?6, 'pending', ?7 WHERE NOT EXISTS (
+       SELECT 1 FROM transfers WHERE created > ?8
+         AND ((sender = ?2 AND receiver = ?3) OR (sender = ?3 AND receiver = ?2)))`
+  )
+    .bind(id, user.id, to, title, kind, size, time, time - TRANSFER_TTL)
+    .run();
+
+  if (!meta.changes) throw new HttpError(409, 'busy-pair');
+  await expireTransfers(env).run();
+  return { id, expires: time + TRANSFER_TTL };
+}
+
+/** GET /v1/transfers: books friends are offering this reader right now */
+async function incomingTransfers(env: Env, user: string) {
+  const { results } = await env.DB.prepare(
+    `SELECT t.id, t.title, t.kind, t.size, t.created, u.id AS uid, u.username, u.name, u.avatar,
+       u.role, COALESCE(p.version, 0) AS picture
+     FROM transfers t JOIN users u ON u.id = t.sender LEFT JOIN pictures p ON p.user = u.id
+     JOIN links l ON l.state = 'accepted'
+       AND l.a = MIN(t.sender, t.receiver) AND l.b = MAX(t.sender, t.receiver)
+     WHERE t.receiver = ?1 AND t.state = 'pending' AND t.created > ?2
+     ORDER BY t.created`
+  )
+    .bind(user, now() - TRANSFER_TTL)
+    .all();
+
+  return {
+    incoming: results.map((row) => ({
+      id: row.id,
+      title: row.title,
+      kind: row.kind,
+      size: row.size,
+      expires: (row.created as number) + TRANSFER_TTL,
+      from: {
+        id: row.uid,
+        username: row.username,
+        name: row.name,
+        avatar: row.avatar,
+        picture: row.picture,
+        role: row.role
+      }
+    }))
+  };
+}
+
+/**
+ * /v1/transfers/:id[/accept|/answer]. The receiver accepts with its offer, the sender answers;
+ * GET shows each side what the other sent. The sender deletes it once connected; a receiver's
+ * DELETE while pending declines (kept so the sender can tell), any other DELETE removes it.
+ */
+async function transferRoute(request: Request, env: Env, user: UserRow, id: string, step = '') {
+  const row = await transferFor(env, user.id, id);
+  const sending = row.sender === user.id;
+  const update = async (sql: string, ...values: unknown[]) => {
+    const { meta } = await env.DB.prepare(sql)
+      .bind(row.id, ...values)
+      .run();
+
+    if (!meta.changes) throw new HttpError(409, 'state');
+    return json({ ok: true });
+  };
+
+  if (request.method === 'GET' && !step) {
+    if (sending && row.state === 'declined') {
+      await env.DB.prepare('DELETE FROM transfers WHERE id = ?1').bind(row.id).run();
+    }
+    return json({
+      state: row.state,
+      ...(sending ? { offer: row.offer ?? null } : { answer: row.answer ?? null })
+    });
+  }
+  if (request.method === 'POST' && step === 'accept' && !sending) {
+    const offer = sdp((await readBody(request)).offer);
+
+    return update(
+      `UPDATE transfers SET state = 'accepted', offer = ?2 WHERE id = ?1 AND state = 'pending'`,
+      offer
+    );
+  }
+  if (request.method === 'POST' && step === 'answer' && sending) {
+    const answer = sdp((await readBody(request)).answer);
+
+    return update(
+      `UPDATE transfers SET state = 'answered', answer = ?2 WHERE id = ?1 AND state = 'accepted'`,
+      answer
+    );
+  }
+  if (request.method === 'DELETE' && !step) {
+    if (!sending && row.state === 'pending') {
+      return update(`UPDATE transfers SET state = 'declined' WHERE id = ?1`);
+    }
+    await env.DB.prepare('DELETE FROM transfers WHERE id = ?1').bind(row.id).run();
+    return json({ ok: true });
+  }
+  throw new HttpError(404, 'route');
 }
 
 async function signup(request: Request, env: Env) {
@@ -1489,6 +1649,9 @@ recovery code and session tokens are stored only as hashes.</p>
 drops EXIF and location data), and small cover thumbnails (about 160 px) of books readers share,
 one per book, uploaded by the first reader who has its cover. Covers are shared by everyone who
 reads the book and stay when an account is deleted; your picture does not.</p>
+<p>Sending a book to a friend: the book goes directly from one browser to the other. The hub
+only passes the connection details between the two of you (including network addresses), with the
+title, kind and size, and deletes them once connected or after 10 minutes.</p>
 <p>No email, IP address log or book files. Rate limits keep hashed addresses for two days.</p>
 <p>Deleting your account (Settings, Social) removes every row and your picture at once. Sessions unused for 90 days
 and accounts unused for 12 months are deleted automatically.</p>`;
@@ -1551,6 +1714,14 @@ async function route(request: Request, env: Env, ctx?: Context): Promise<Respons
   const adminPath = /^\/v1\/admin\/(.+)$/.exec(pathname);
 
   if (adminPath) return admin(request, env, user, adminPath[1]);
+
+  const transfer = /^\/v1\/transfers(?:\/([^/]+)(?:\/(accept|answer))?)?$/.exec(pathname);
+
+  if (transfer?.[1]) return transferRoute(request, env, user, transfer[1], transfer[2]);
+  if (route === 'POST /v1/transfers') {
+    return json(await createTransfer(env, user, await readBody(request)));
+  }
+  if (route === 'GET /v1/transfers') return json(await incomingTransfers(env, user.id));
 
   switch (route) {
     case 'GET /v1/feed': {
@@ -1662,7 +1833,9 @@ export default {
       // once per device and edge location.
       if (request.method === 'GET' && image) return await serveImage(request, env, ctx, image[1]);
 
-      const edge = await env.EDGE_LIMIT?.limit({
+      // Transfers poll about once a second while one is being set up: their own, looser limit.
+      const signaling = new URL(request.url).pathname.startsWith('/v1/transfers');
+      const edge = await (signaling ? env.SIGNAL_LIMIT : env.EDGE_LIMIT)?.limit({
         key: request.headers.get('CF-Connecting-IP') ?? 'unknown'
       });
 
@@ -1674,7 +1847,11 @@ export default {
       return json({ error: 'server' }, 500);
     }
   },
-  async scheduled(_event: unknown, env: Env) {
+  async scheduled(event: { cron?: string }, env: Env) {
+    if (event?.cron === TRANSFER_CRON) {
+      await expireTransfers(env).run();
+      return;
+    }
     await cleanUp(env);
   }
 };

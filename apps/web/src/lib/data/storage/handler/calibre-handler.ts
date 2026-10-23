@@ -54,7 +54,17 @@ import { loadVnFolder } from '$lib/functions/file-loaders/vn/load-vn';
 import { deleteOrphanVnCaches, isVn } from '$lib/data/vn';
 import { isManga } from '$lib/data/manga';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
+import { writableArrayLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import pLimit from 'p-limit';
+
+/**
+ * Titles of books friends sent (book-transfer.ts) that this browser keeps for the Calibre source:
+ * listed with the library but never uploaded, since the shared sync folder is everyone's.
+ */
+export const calibreReceivedBooks$ = writableArrayLocalStorageSubject<string>()(
+  'calibreReceivedBooks',
+  []
+);
 
 interface DirectoryEntry {
   name: string;
@@ -279,9 +289,19 @@ export class CalibreStorageHandler extends ApiStorageHandler {
       loadBookMetadata().catch(() => ({}))
     ]);
 
-    return [...this.titleToBookCard.values()].map((card) =>
-      applySeriesOverride(applyMetadata(card, metadata), overrides)
-    );
+    const received = new Set(calibreReceivedBooks$.getValue());
+    const kept = received.size
+      ? (await this.cachedBookList()).filter(
+          (card) => received.has(card.title) && !this.titleToBookCard.has(card.title)
+        )
+      : [];
+
+    return [
+      ...[...this.titleToBookCard.values()].map((card) =>
+        applySeriesOverride(applyMetadata(card, metadata), overrides)
+      ),
+      ...kept
+    ];
   }
 
   /** Books from this source processed and stored in the browser, with their local progress. */

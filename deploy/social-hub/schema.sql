@@ -124,3 +124,21 @@ CREATE TABLE IF NOT EXISTS covers (
   at INTEGER NOT NULL,
   removed INTEGER NOT NULL DEFAULT 0
 );
+-- Signaling only, the book goes browser to browser over WebRTC.
+-- pending (sender asked) -> accepted (the receiver's SDP offer) -> answered (the sender's answer),
+-- or declined. Deleted by the sender once connected, else after 10 minutes (TRANSFER_TTL, cron).
+CREATE TABLE IF NOT EXISTS transfers (
+  id TEXT PRIMARY KEY,
+  sender TEXT NOT NULL,
+  receiver TEXT NOT NULL,
+  title TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  state TEXT NOT NULL,
+  offer TEXT,
+  answer TEXT,
+  created INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS transfers_receiver ON transfers (receiver, created);
+CREATE INDEX IF NOT EXISTS transfers_sender ON transfers (sender, created);
+CREATE INDEX IF NOT EXISTS transfers_created ON transfers (created);
