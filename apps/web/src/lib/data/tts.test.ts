@@ -6,7 +6,13 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { elevenLabsApiKey$, elevenLabsModel$, ttsVoiceId$ } from '$lib/data/ai-settings';
-import { readingTimeline, synthesizeSpeech, timelineEntryAt } from './tts';
+import {
+  readingTimeline,
+  spokenPhrases,
+  synthesizeSpeech,
+  timelineEntryAt,
+  ttsBackend
+} from './tts';
 
 function timed(text: string, seconds: number[]) {
   const characters = Array.from(text);
@@ -108,5 +114,27 @@ describe('readingTimeline', () => {
 
     expect(readingTimeline(chunk)).toEqual([{ time: 0, start: 5, end: 9 }]);
     expect(readingTimeline(chunk, timed('違う', [0, 1]))).toEqual([{ time: 0, start: 5, end: 9 }]);
+  });
+});
+
+describe('device voice', () => {
+  it('maps boundary charIndex in the spoken readings to the phrase', async () => {
+    const { extractParagraphsFrom } = await import('$lib/functions/tts/extract-reading-text');
+    const [chunk] = extractParagraphsFrom('<p><ruby>魔法<rt>マジック</rt></ruby>、次。</p>', 0);
+    const phrases = spokenPhrases(chunk);
+
+    // マジック、 is five spoken characters, so 次 starts at charIndex 5.
+    expect(phrases).toEqual([
+      { time: 0, start: 0, end: 2 },
+      { time: 5, start: 2, end: 3 }
+    ]);
+    expect(timelineEntryAt(phrases, 3)).toBe(phrases[0]);
+    expect(timelineEntryAt(phrases, 5)).toBe(phrases[1]);
+  });
+
+  it('uses the device voice until an ElevenLabs key is set', () => {
+    expect(ttsBackend('')).toBe('device');
+    expect(ttsBackend('  ')).toBe('device');
+    expect(ttsBackend('sk_1')).toBe('elevenlabs');
   });
 });

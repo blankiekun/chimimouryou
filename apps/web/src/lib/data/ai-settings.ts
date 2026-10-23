@@ -27,6 +27,8 @@ export const elevenLabsModel$ = writableStringLocalStorageSubject()(
   defaultElevenLabsModel
 );
 export const ttsVoiceId$ = writableStringLocalStorageSubject()('ttsVoiceId', '');
+/** This device's Web Speech voice (by name) used without an ElevenLabs key; empty picks a Japanese one. Not synced: voices differ per device. */
+export const deviceVoiceName$ = writableStringLocalStorageSubject()('deviceVoiceName', '');
 /** Playback speed of the AI voice (the highlight follows the audio clock). */
 export const ttsPlaybackRate$ = writableNumberLocalStorageSubject()('ttsPlaybackRate', 1);
 
