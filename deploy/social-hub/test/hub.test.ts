@@ -4,6 +4,7 @@
  * All rights reserved.
  */
 
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import hub, { STATUS_GAP, cleanUp, type Env } from '../src/hub';
 import { memoryD1 } from './d1';
@@ -434,6 +435,19 @@ describe('social hub', () => {
         )
       ).status
     ).toBe(400);
+  });
+
+  it('has migrations that apply twice over the schema without changing it', () => {
+    const tables = () => db.prepare(`SELECT sql FROM sqlite_master ORDER BY name`).all();
+    const before = tables();
+    const migration = readFileSync(
+      new URL('../migrations/0002_profiles.sql', import.meta.url),
+      'utf8'
+    );
+
+    db.exec(migration);
+    db.exec(migration);
+    expect(tables()).toEqual(before);
   });
 
   it('records reports once per reporter, 5 a day', async () => {

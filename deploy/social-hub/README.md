@@ -19,7 +19,11 @@ With a Cloudflare account, from this folder:
    5 requests per 10 seconds per IP, block for 10 seconds.
 
 `schema.sql` uses `CREATE TABLE IF NOT EXISTS`, so step 3 can be rerun after a schema change
-that only adds tables.
+that only adds tables. A hub that is already running gets each change from `migrations/` (all
+idempotent), in order, then `npx wrangler@4.147.0 deploy`:
+
+- `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file migrations/0002_profiles.sql`
+  (profiles and activity: stats, finished books, events, reports)
 
 ## Develop
 
