@@ -182,7 +182,7 @@
             aria-label={$t$('social.yourProfile')}
             on:click={openProfile}
           >
-            <SocialAvatar avatar={hubMe.avatar} size={1.75} />
+            <SocialAvatar avatar={hubMe.avatar} person={hubMe} size={1.75} />
           </a>
         {:else if standalone && socialOn}
           <a

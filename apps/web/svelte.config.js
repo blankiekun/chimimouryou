@@ -43,7 +43,11 @@ const config = {
           'https://cdn.jiten.moe',
           'https://*.googleusercontent.com',
           'https://*.files.1drv.com',
-          'https://*.onedrive.com'
+          'https://*.onedrive.com',
+          // The social hub's pictures and cover thumbnails (socialHubDefault in social-account.ts).
+          // shortcut: another hub address (Settings → Social) shows presets and title cards
+          // instead; fetch them as blobs if forks run their own hubs.
+          'https://chimi-hub.blankiekun.workers.dev'
         ],
         'font-src': ['self', 'blob:', 'data:'],
         'style-src': ['self', 'unsafe-inline']

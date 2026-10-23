@@ -96,11 +96,29 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS events_user ON events (user, at);
 
--- Reports of a display name or picture; reporter is a user id or "ip:<sha256>". Kept 90 days.
+-- Reports of a display name, picture (target: a user id) or cover (target: a book key);
+-- reporter is a user id or "ip:<sha256>". Kept 90 days.
 CREATE TABLE IF NOT EXISTS reports (
   target TEXT NOT NULL,
   reporter TEXT NOT NULL,
   what TEXT NOT NULL,
   at INTEGER NOT NULL,
   PRIMARY KEY (target, reporter, what)
+);
+
+-- A reader's uploaded picture: R2 object avatar/<user>/<version>, a new version per upload.
+CREATE TABLE IF NOT EXISTS pictures (
+  user TEXT PRIMARY KEY,
+  version INTEGER NOT NULL
+);
+
+-- One cover thumbnail per book key: R2 object cover/<file> (16 hex of the WebP's sha256),
+-- uploaded by the first reader who shared the book with a cover. removed = 1 after a report:
+-- the title card shows instead and no new one is taken.
+CREATE TABLE IF NOT EXISTS covers (
+  book_key TEXT PRIMARY KEY,
+  file TEXT NOT NULL,
+  user TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  removed INTEGER NOT NULL DEFAULT 0
 );

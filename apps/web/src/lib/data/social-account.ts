@@ -33,6 +33,8 @@ export interface SocialMe {
   username: string;
   name: string;
   avatar: number;
+  /** The uploaded picture's version, 0 (or absent, older hubs) for the preset */
+  picture?: number;
   code: string;
   share: Partial<Record<ShareKey, boolean>>;
   created: number;
@@ -93,7 +95,21 @@ export function hubOrigin(address = socialHub$.getValue()) {
   return url.origin;
 }
 
-/** keepalive: the request outlives the page (a push when the tab closes) */
+/** An image on the hub: a picture (`avatar/<id>/<version>`) or a cover thumbnail (`cover/<hash>`) */
+export function hubImageUrl(path: string) {
+  try {
+    return `${hubOrigin()}/v1/${path}`;
+  } catch (_) {
+    return '';
+  }
+}
+
+/** A person's uploaded picture, '' for the preset */
+export function pictureUrl(person: { id: string; picture?: number } | undefined) {
+  return person?.picture ? hubImageUrl(`avatar/${person.id}/${person.picture}`) : '';
+}
+
+/** keepalive: the request outlives the page (a push when the tab closes). A Blob body is sent as is. */
 export async function hubFetch<T>(
   path: string,
   method = 'GET',
@@ -101,6 +117,7 @@ export async function hubFetch<T>(
   keepalive = false
 ): Promise<T> {
   const session = socialSession$.getValue();
+  const raw = body instanceof Blob;
   let response: Response;
 
   try {
@@ -109,10 +126,10 @@ export async function hubFetch<T>(
       credentials: 'omit',
       keepalive,
       headers: {
-        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+        ...(body === undefined ? {} : { 'Content-Type': raw ? body.type : 'application/json' }),
         ...(session ? { Authorization: `Bearer ${session.token}` } : {})
       },
-      body: body === undefined ? undefined : JSON.stringify(body)
+      body: body === undefined ? undefined : raw ? body : JSON.stringify(body)
     });
   } catch (_) {
     hubDown$.next(true);
@@ -267,6 +284,16 @@ export async function flushProfileChanges() {
   pendingPatch = {};
   if (!Object.keys(patch.share ?? {}).length) delete patch.share;
   if (Object.keys(patch).length) await updateProfile(patch);
+}
+
+/** A 256 px WebP from the crop (social-images.ts); 5 a day on the hub */
+export async function uploadPicture(picture: Blob) {
+  return setMe(await hubFetch<SocialMe>('/v1/avatar', 'PUT', picture));
+}
+
+/** Back to the preset */
+export async function removePicture() {
+  return setMe(await hubFetch<SocialMe>('/v1/avatar', 'DELETE'));
 }
 
 /** Retires the friend code for a new one; friends stay. */

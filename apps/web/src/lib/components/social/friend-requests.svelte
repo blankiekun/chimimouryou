@@ -35,7 +35,7 @@
     <ul class="requests-rows">
       {#each list.incoming as request (request.id)}
         <li class="requests-row">
-          <SocialAvatar avatar={request.avatar} />
+          <SocialAvatar avatar={request.avatar} person={request} />
           <span class="requests-text">
             <strong>{request.name}</strong>
             <small
