@@ -21,6 +21,7 @@ export const en = {
   'nav.continueReading': 'Continue reading',
   'nav.continue': 'Continue',
   'nav.signIn': 'Sign in',
+  'nav.serverUnreachable': "Can't reach the server",
   'nav.signedInAs': 'Signed in as {name}',
   'nav.account': 'Account: {name}',
 
@@ -1220,6 +1221,8 @@ export const en = {
   'prefs.account.signOut': 'Sign out',
   'prefs.account.signOutHint': "Removes this browser's API keys and synced settings.",
   'prefs.account.checking': 'Checking sign-in...',
+  'prefs.account.unreachable':
+    "The server can't be reached, so this browser can't sign in or show the account right now. Reload the page when the server is back.",
   'prefs.account.signInHint':
     'Keeps reading progress, statistics, highlights, AI settings and themes in your account on this server, shared by every device you sign in on. Accounts are created by an admin (admin panel) or on the server with ebook-account add NAME.',
   'prefs.account.remember': 'Your browser can remember this sign-in.',

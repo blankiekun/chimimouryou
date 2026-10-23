@@ -16,7 +16,8 @@
   let updatingTo = '';
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
 
-  $: status = state?.status;
+  // Older servers report engine installs in `status`.
+  $: status = state?.engineStatus ?? state?.status;
   $: finished = !!updatingTo && status?.ref === updatingTo && status.state !== 'running';
   $: canUpdate = !!state?.updater && !!check?.newer && check.webBuild;
 
@@ -64,7 +65,7 @@
       // Try again
     }
 
-    const latest = state?.status;
+    const latest = state?.engineStatus ?? state?.status;
 
     if (!(latest?.ref === updatingTo && latest.state !== 'running')) {
       pollTimer = setTimeout(poll, pollMs);

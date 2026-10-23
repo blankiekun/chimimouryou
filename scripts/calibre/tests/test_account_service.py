@@ -93,13 +93,25 @@ class AccountServiceTest(unittest.TestCase):
 
     def test_update_state(self):
         service.UPDATE_DIR = self.tmp.name
-        self.assertEqual(service.update_state(), {'status': None, 'updater': '', 'requested': False})
+        self.assertEqual(service.update_state(),
+                         {'status': None, 'engineStatus': None, 'updater': '', 'requested': False})
         with open(os.path.join(self.tmp.name, 'updater'), 'w') as f:
             f.write('owner/repo\n')
         with open(os.path.join(self.tmp.name, 'status.json'), 'w') as f:
             f.write('{"state": "done", "ref": "abcdef1"}')
         self.assertEqual(service.update_state()['updater'], 'owner/repo')
         self.assertEqual(service.update_state()['status']['state'], 'done')
+        with open(os.path.join(self.tmp.name, 'engine-status.json'), 'w') as f:
+            f.write('{"state": "failed", "ref": "v0.23.0"}')
+        state = service.update_state()
+        self.assertEqual((state['status']['ref'], state['engineStatus']['ref']), ('abcdef1', 'v0.23.0'))
+        # An older updater's engine install in status.json is the engine's status.
+        os.remove(os.path.join(self.tmp.name, 'engine-status.json'))
+        with open(os.path.join(self.tmp.name, 'status.json'), 'w') as f:
+            f.write('{"state": "running", "ref": "v0.22.0"}')
+        state = service.update_state()
+        self.assertIsNone(state['status'])
+        self.assertEqual(state['engineStatus']['ref'], 'v0.22.0')
 
     def test_update_requests(self):
         service.UPDATE_DIR = self.tmp.name

@@ -14,7 +14,12 @@
   import UpdateTool from '$lib/components/admin/update-tool.svelte';
   import DifficultyPanel from '$lib/components/book-card/difficulty-panel.svelte';
   import SettingsAdmin from '$lib/components/settings/settings-admin.svelte';
-  import { account$, canOpenAdminPanel, hasPermission } from '$lib/data/account';
+  import {
+    account$,
+    accountUnreachable$,
+    canOpenAdminPanel,
+    hasPermission
+  } from '$lib/data/account';
   import { pagePath } from '$lib/data/env';
   import { database } from '$lib/data/store';
   import { formatPageTitle } from '$lib/functions/format-page-title';
@@ -88,7 +93,13 @@
       <p class="flex items-center gap-2"><Fa icon={faSpinner} spin /> Checking sign-in...</p>
     {:else if !canOpenAdminPanel(user)}
       <p class="admin-no-access">
-        {user ? 'This account' : 'You need to sign in with an account that'} can't use the admin panel.
+        {#if user}
+          This account can't use the admin panel.
+        {:else if $accountUnreachable$}
+          The server can't be reached, so the admin panel can't open right now.
+        {:else}
+          You need to sign in with an account that can use the admin panel.
+        {/if}
         <a
           class="app-button app-button-quiet"
           href="{pagePath}/settings?section=general#general-account">Account settings</a

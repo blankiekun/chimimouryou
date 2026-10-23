@@ -16,7 +16,7 @@
   } from '@fortawesome/free-solid-svg-icons';
   import AppHeaderLogo from '$lib/components/app-header/app-header-logo.svelte';
   import SyncIndicator from '$lib/components/standalone/sync-indicator.svelte';
-  import { account$ } from '$lib/data/account';
+  import { account$, accountUnreachable$ } from '$lib/data/account';
   import { pagePath, standalone } from '$lib/data/env';
   import { libraryTab$, type LibraryTab } from '$lib/data/library-home';
   import { t$ } from '$lib/i18n';
@@ -153,10 +153,10 @@
             class="app-header-icon"
             title={$account$
               ? $t$('nav.signedInAs', { name: $account$.username })
-              : $t$('nav.signIn')}
+              : $t$($accountUnreachable$ ? 'nav.serverUnreachable' : 'nav.signIn')}
             aria-label={$account$
               ? $t$('nav.account', { name: $account$.username })
-              : $t$('nav.signIn')}
+              : $t$($accountUnreachable$ ? 'nav.serverUnreachable' : 'nav.signIn')}
           >
             {#if $account$}
               <span class="account-initial">{$account$.username.charAt(0)}</span>

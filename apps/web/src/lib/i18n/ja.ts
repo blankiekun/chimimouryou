@@ -19,6 +19,7 @@ export const ja: Record<MessageKey, string> = {
   'nav.continueReading': '続きを読む',
   'nav.continue': '続き',
   'nav.signIn': 'ログイン',
+  'nav.serverUnreachable': 'サーバーに接続できません',
   'nav.signedInAs': '{name} としてログイン中',
   'nav.account': 'アカウント: {name}',
 
@@ -1238,6 +1239,8 @@ export const ja: Record<MessageKey, string> = {
   'prefs.account.signOut': 'ログアウト',
   'prefs.account.signOutHint': 'このブラウザからAPIキーと同期設定を削除してログアウトします。',
   'prefs.account.checking': 'ログイン状態を確認中…',
+  'prefs.account.unreachable':
+    'サーバーに接続できないため、今はログインもアカウントの表示もできません。サーバーが復旧したらページを再読み込みしてください。',
   'prefs.account.signInHint':
     '読書進捗・統計・ハイライト・AI設定・テーマをサーバー上のアカウントに保存し、ログインしたすべての端末で共有します。アカウントは管理パネルまたはサーバーコマンド（ebook-account add NAME）から作成できます。',
   'prefs.account.remember': 'ブラウザにログイン情報を保存できます。',
