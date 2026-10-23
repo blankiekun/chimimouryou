@@ -1246,5 +1246,11 @@ export const ja: Record<MessageKey, string> = {
   'prefs.abs.passwordHint': '認証トークンの取得時に1度だけ使用され、保存されません。',
   'prefs.abs.apiKey': 'または APIキーを使用',
   'prefs.abs.apiKeyHint': 'Audiobookshelf の「設定 → API Keys」から発行できます。',
-  'prefs.abs.apiKeyLabel': 'APIキー'
+  'prefs.abs.apiKeyLabel': 'APIキー',
+  'prefs.abs.server': 'サーバーのアドレス',
+  'prefs.abs.serverHint':
+    'AudiobookshelfのHTTPSアドレス（例: https://abs.example.com）。Audiobookshelf（2.28以降）の設定 → Allowed CORS origins に {origin} を追加してください。http:// のアドレスはこのサイトから使えません。',
+  'prefs.abs.unreachable':
+    '{server} のAudiobookshelfに接続できません。アドレスが https:// で始まり、その設定の Allowed CORS origins に {origin} があるか確認してください。',
+  'prefs.abs.notFound': '{server} にAudiobookshelfがありません'
 };

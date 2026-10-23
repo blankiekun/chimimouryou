@@ -6,7 +6,8 @@
 
 /**
  * Audiobookshelf (https://www.audiobookshelf.org) through the server's
- * `/audiobookshelf/` proxy (AUDIOBOOKSHELF_URL): finds a book's audiobook,
+ * `/audiobookshelf/` proxy (AUDIOBOOKSHELF_URL), or in the standalone edition straight
+ * at the address the reader gives (its CORS origins must allow this site): finds a book's audiobook,
  * streams it and keeps its progress there. Not part of upstream.
  */
 
@@ -15,9 +16,22 @@ import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-o
 import { redactSecret } from '$lib/data/ai-settings';
 import { readerDb } from '$lib/data/reader-db';
 import { titleVolume } from '$lib/components/book-card/library-sort';
+import { standalone } from '$lib/data/env';
+import { tr } from '$lib/i18n';
 import type { MatchedCue } from '$lib/functions/audiobook/subtitles';
 
-export const absBaseUrl = '/audiobookshelf';
+/** Standalone only: the Audiobookshelf address (no server proxy there). */
+export const audiobookshelfServer$ = writableStringLocalStorageSubject()(
+  'audiobookshelfServer',
+  ''
+);
+
+/** Where requests go: the server's proxy, or the standalone's own address. */
+export function absBaseUrl() {
+  return standalone
+    ? audiobookshelfServer$.getValue().trim().replace(/\/+$/, '')
+    : '/audiobookshelf';
+}
 
 /** The Audiobookshelf user's token or API key; belongs to the account like the AI keys. */
 export const audiobookshelfToken$ = writableStringLocalStorageSubject()('audiobookshelfToken', '');
@@ -51,7 +65,7 @@ async function absFetch(path: string, init: RequestInit = {}) {
     throw new Error('Not connected to Audiobookshelf (Settings → Audiobookshelf)');
   }
 
-  const response = await fetch(`${absBaseUrl}${path}`, {
+  const response = await fetch(`${absBaseUrl()}${path}`, {
     ...init,
     headers: { ...init.headers, Authorization: `Bearer ${token}` }
   });
@@ -67,14 +81,23 @@ async function absFetch(path: string, init: RequestInit = {}) {
 
 /** Signs in and returns the user's token; the password isn't kept. */
 export async function absLogin(username: string, password: string) {
-  const response = await fetch(`${absBaseUrl}/login`, {
+  const server = absBaseUrl();
+  const response = await fetch(`${server}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password })
+  }).catch((error) => {
+    // A CORS refusal or mixed content looks like a network error.
+    if (!standalone) throw error;
+    throw new Error(tr('prefs.abs.unreachable', { server, origin: location.origin }));
   });
 
   if (response.status === 404) {
-    throw new Error('This server has no Audiobookshelf address (AUDIOBOOKSHELF_URL)');
+    throw new Error(
+      standalone
+        ? tr('prefs.abs.notFound', { server })
+        : 'This server has no Audiobookshelf address (AUDIOBOOKSHELF_URL)'
+    );
   }
   if (!response.ok) {
     throw new Error(
@@ -256,7 +279,7 @@ export async function findAbsCandidates(title: string) {
 
 /** A track's address for <audio>, which can't send headers: the token goes in the URL. */
 export function absTrackUrl(itemId: string, track: AbsTrack) {
-  return `${absBaseUrl}/api/items/${itemId}/file/${track.ino}?token=${encodeURIComponent(audiobookshelfToken$.getValue())}`;
+  return `${absBaseUrl()}/api/items/${itemId}/file/${track.ino}?token=${encodeURIComponent(audiobookshelfToken$.getValue())}`;
 }
 
 export async function getAbsProgress(itemId: string): Promise<number> {
