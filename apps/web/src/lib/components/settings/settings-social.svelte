@@ -14,7 +14,8 @@
     socialHub$,
     socialHubDefault,
     socialSession$,
-    updateProfile,
+    queueProfileChange,
+    flushProfileChanges,
     type ShareKey,
     type SocialMe
   } from '$lib/data/social-account';
@@ -36,8 +37,6 @@
 
   let error = '';
   let name = '';
-  let pending: Partial<Pick<SocialMe, 'name' | 'avatar' | 'share'>> = {};
-  let timer: ReturnType<typeof setTimeout> | undefined;
 
   $: me = $socialSession$?.me;
   $: if (me && !name) name = me.name;
@@ -57,34 +56,14 @@
   const showsLabel = (key: ShareKey) => `social.shows.${key}` as MessageKey;
   $: shared = (key: ShareKey) => me?.share[key] ?? shareDefaults[key];
 
-  /** Shown at once, sent together after a pause (the hub takes 10 profile changes a day) */
-  function save(patch: typeof pending) {
-    const session = socialSession$.getValue();
+  const showError = (e: unknown) => (error = $t$(hubErrorKey(e)));
 
-    if (!session) return;
-    pending = { ...pending, ...patch, share: { ...pending.share, ...patch.share } };
-    socialSession$.next({
-      ...session,
-      me: { ...session.me, ...patch, share: { ...session.me.share, ...patch.share } }
-    });
-    clearTimeout(timer);
-    timer = setTimeout(flush, 1500);
-  }
-
-  function flush() {
-    const patch = pending;
-
-    pending = {};
-    if (!Object.keys(patch.share ?? {}).length) delete patch.share;
-    if (!Object.keys(patch).length) return;
+  function save(patch: Partial<Pick<SocialMe, 'name' | 'avatar' | 'share'>>) {
     error = '';
-    updateProfile(patch).catch((e) => (error = $t$(hubErrorKey(e))));
+    queueProfileChange(patch, showError);
   }
 
-  onDestroy(() => {
-    clearTimeout(timer);
-    flush();
-  });
+  onDestroy(() => flushProfileChanges().catch(showError));
 
   async function remove() {
     if (!window.confirm($t$('social.deleteConfirm'))) return;
@@ -139,6 +118,12 @@
 
 {#if me}
   <SettingsSection id="social-profile" keywords="display name avatar public">
+    <SettingsItemGroup title={$t$('social.viewProfile')} tooltip={$t$('social.viewProfileHint')}>
+      <a
+        class="app-button app-button-quiet"
+        href="{pagePath}/u?name={encodeURIComponent(me.username)}">{$t$('social.yourProfile')} →</a
+      >
+    </SettingsItemGroup>
     <SettingsItemGroup title={$t$('social.displayName')}>
       <input
         class="app-input"

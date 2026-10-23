@@ -4,6 +4,7 @@
  * All rights reserved.
  */
 
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import hub, { STATUS_GAP, cleanUp, type Env } from '../src/hub';
 import { memoryD1 } from './d1';
@@ -256,5 +257,242 @@ describe('social hub', () => {
     vi.advanceTimersByTime(275 * 86400_000);
     await cleanUp(env);
     expect(rows('users')).toHaveLength(0);
+  });
+
+  const heat = '0123401234'.repeat(8) + '0000';
+  const stats = (streak: number, wordsKnown?: number) => ({
+    streak,
+    weekChars: 12400,
+    weekMinutes: 100,
+    finishedYear: 9,
+    heat,
+    wordsKnown
+  });
+
+  async function befriend(x: { token: string; me: { id: string } }, y: { token: string }) {
+    const code = (await call('GET', '/v1/me', undefined, y.token)).body.code;
+
+    await call('POST', '/v1/friends/request', { code }, x.token);
+    await call('POST', `/v1/friends/${x.me.id}/accept`, undefined, y.token);
+  }
+
+  /** A status push 5 minutes after the last one */
+  async function push(who: { token: string }, body: object) {
+    vi.advanceTimersByTime(STATUS_GAP * 1000);
+    const response = await call('PUT', '/v1/status', { books: [], ...body }, who.token);
+
+    expect(response.status).toBe(200);
+  }
+
+  it('shows public profiles to anyone, private ones to friends, and neither when blocked', async () => {
+    const aki = await signUp('aki_reads');
+    const ren = await signUp('ren');
+    const mio = await signUp('mio');
+
+    await befriend(aki, ren);
+    await push(aki, {
+      books: [{ key: 'kusuriya1', title: '薬屋のひとりごと 1', kind: 'book', pct: 0.1 }],
+      finished: { key: 'honzuki1', title: '本好きの下剋上 1', kind: 'book' },
+      stats: stats(14)
+    });
+
+    const visitor = await call('GET', '/v1/profile/AKI_READS');
+    expect(visitor.status).toBe(200);
+    expect(visitor.body).toMatchObject({
+      relation: 'visitor',
+      profile: { username: 'aki_reads' },
+      books: [{ key: 'kusuriya1' }],
+      finished: [{ key: 'honzuki1', month: '2026-10' }],
+      stats: { streak: 14, heat },
+      events: []
+    });
+    const friend = await call('GET', '/v1/profile/aki_reads', undefined, ren.token);
+    expect(friend.body.relation).toBe('friend');
+    expect(friend.body.events.map((e: { type: string }) => e.type).sort()).toEqual([
+      'finished',
+      'started',
+      'streak'
+    ]);
+
+    await call('PUT', '/v1/me', { share: { public: false } }, aki.token);
+    expect((await call('GET', '/v1/profile/aki_reads')).status).toBe(404);
+    expect((await call('GET', '/v1/profile/aki_reads', undefined, mio.token)).status).toBe(404);
+    expect((await call('GET', '/v1/profile/aki_reads', undefined, ren.token)).status).toBe(200);
+    // Add friend by username works for public profiles only.
+    expect(
+      (await call('POST', '/v1/friends/request', { username: 'aki_reads' }, mio.token)).status
+    ).toBe(404);
+    await call('PUT', '/v1/me', { share: { public: true } }, aki.token);
+    const added = await call('POST', '/v1/friends/request', { username: 'aki_reads' }, mio.token);
+    expect(added.body.outgoing).toEqual([
+      { id: aki.me.id, code: '@aki_reads', at: expect.any(Number) }
+    ]);
+
+    await call('POST', `/v1/block/${ren.me.id}`, undefined, aki.token);
+    expect((await call('GET', '/v1/profile/aki_reads', undefined, ren.token)).status).toBe(404);
+    expect((await call('GET', '/v1/profile/ren', undefined, aki.token)).status).toBe(404);
+    expect((await call('GET', '/v1/profile/nobody')).status).toBe(404);
+  });
+
+  it('deletes what a share toggle turns off at once', async () => {
+    const aki = await signUp('aki');
+
+    await call('PUT', '/v1/me', { share: { wordsKnown: true } }, aki.token);
+    await push(aki, {
+      books: [
+        { key: 'k1', title: 'Book', kind: 'book', pct: 0.1 },
+        { key: 'm1', title: 'Manga', kind: 'manga', pct: 0.1 }
+      ],
+      finished: { key: 'm0', title: 'Manga 0', kind: 'manga' },
+      stats: stats(3, 3210)
+    });
+    expect(rows('status')).toHaveLength(2);
+    expect(JSON.parse(rows('stats')[0].data as string).wordsKnown).toBe(3210);
+
+    const share = (patch: object) => call('PUT', '/v1/me', { share: patch }, aki.token);
+
+    await share({ hideManga: true });
+    expect(rows('status').map((r) => r.kind)).toEqual(['book']);
+    expect(rows('finished')).toHaveLength(0);
+    expect(rows('events').map((r) => r.kind)).toEqual(['book']);
+    await share({ wordsKnown: false });
+    expect(JSON.parse(rows('stats')[0].data as string)).not.toHaveProperty('wordsKnown');
+    await share({ activity: false });
+    expect(rows('events')).toHaveLength(0);
+    await share({ stats: false });
+    expect(rows('stats')).toHaveLength(0);
+    await share({ current: false });
+    expect(rows('status')).toHaveLength(0);
+
+    // Pushes keep only what is shared.
+    await push(aki, {
+      books: [{ key: 'k2', title: 'Book 2', kind: 'book', pct: 0.1 }],
+      stats: stats(7)
+    });
+    expect([rows('status'), rows('stats'), rows('events')]).toEqual([[], [], []]);
+  });
+
+  it('feeds only friends’ events, once each, for 90 days', async () => {
+    const aki = await signUp('aki');
+    const ren = await signUp('ren');
+    const mio = await signUp('mio');
+
+    await befriend(aki, ren);
+    const book = { key: 'k1', title: '魔女の旅々 3', kind: 'book', pct: 0.05 };
+
+    await push(aki, { books: [book], stats: stats(6) });
+    await push(aki, { books: [], stats: stats(7) });
+    // Back among the current books: no second "started".
+    await push(aki, { books: [book], stats: stats(7) });
+    // Hidden: only the share, no event.
+    await push(aki, { books: [{ kind: 'hidden', pct: 0.4 }] });
+    await push(mio, { books: [{ key: 'k9', title: 'x', kind: 'book', pct: 0 }] });
+
+    const feed = await call('GET', '/v1/feed?since=0', undefined, ren.token);
+    expect(feed.body.events.map((e: { type: string; value: number }) => [e.type, e.value])).toEqual(
+      [
+        ['streak', 7],
+        ['started', 0]
+      ]
+    );
+    expect(feed.body.events[0].user).toMatchObject({ id: aki.me.id, name: 'aki' });
+    expect((await call('GET', '/v1/feed?since=0', undefined, ren.token)).status).toBe(429);
+
+    const friends = (await call('GET', '/v1/friends', undefined, ren.token)).body.friends;
+    expect(friends[0].books).toEqual([
+      expect.objectContaining({ key: '', title: '', kind: 'hidden', pct: 0.4 })
+    ]);
+    expect(friends[0].stats).toMatchObject({ weekChars: 12400 });
+
+    vi.advanceTimersByTime(60_000);
+    const since = (
+      await call('GET', `/v1/feed?since=${Math.floor(Date.now() / 1000)}`, undefined, ren.token)
+    ).body;
+    expect(since.events).toEqual([]);
+
+    vi.advanceTimersByTime(91 * 86400_000);
+    await call('GET', '/v1/me', undefined, ren.token);
+    await cleanUp(env);
+    expect(rows('events')).toHaveLength(0);
+  });
+
+  it('keeps the last 50 finished books', async () => {
+    const aki = await signUp('aki');
+
+    for (let i = 0; i < 52; i += 1) {
+      await push(aki, { finished: { key: `k${i}`, title: `Book ${i}`, kind: 'book' } });
+    }
+    const keys = rows('finished').map((r) => r.book_key);
+    expect(keys).toHaveLength(50);
+    expect(keys).not.toContain('k0');
+    expect(
+      (
+        await call(
+          'PUT',
+          '/v1/status',
+          { books: [], stats: { ...stats(1), heat: 'x' }, leaving: true },
+          aki.token
+        )
+      ).status
+    ).toBe(400);
+  });
+
+  it('answers 429 with CORS headers when the edge limit refuses, before any D1 access', async () => {
+    const keys: string[] = [];
+    const prepare = vi.spyOn(env.DB, 'prepare');
+
+    env.EDGE_LIMIT = {
+      limit: async ({ key }) => {
+        keys.push(key);
+        return { success: false };
+      }
+    };
+    const response = await hub.fetch(
+      new Request('https://hub.example/v1/me', { headers: { 'CF-Connecting-IP': '203.0.113.9' } }),
+      env
+    );
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(await response.json()).toEqual({ error: 'busy' });
+    expect(keys).toEqual(['203.0.113.9']);
+    expect(prepare).not.toHaveBeenCalled();
+    // Preflights skip it.
+    const preflight = await hub.fetch(
+      new Request('https://hub.example/v1/me', { method: 'OPTIONS' }),
+      env
+    );
+    expect(preflight.status).toBe(204);
+    expect(keys).toHaveLength(1);
+  });
+
+  it('has migrations that apply twice over the schema without changing it', () => {
+    const tables = () => db.prepare(`SELECT sql FROM sqlite_master ORDER BY name`).all();
+    const before = tables();
+    const migration = readFileSync(
+      new URL('../migrations/0002_profiles.sql', import.meta.url),
+      'utf8'
+    );
+
+    db.exec(migration);
+    db.exec(migration);
+    expect(tables()).toEqual(before);
+  });
+
+  it('records reports once per reporter, 5 a day', async () => {
+    const aki = await signUp('aki');
+
+    for (const name of ['aki', 'aki', 'nobody']) {
+      await call('POST', '/v1/report', { username: name }, '', '198.51.100.1');
+    }
+    expect(rows('reports')).toHaveLength(1);
+    expect((await call('POST', '/v1/report', { username: 'aki' }, aki.token)).status).toBe(400);
+    for (let i = 0; i < 2; i += 1) {
+      await call('POST', '/v1/report', { username: 'aki', what: 'picture' }, '', '198.51.100.1');
+    }
+    expect((await call('POST', '/v1/report', { username: 'aki' }, '', '198.51.100.1')).status).toBe(
+      429
+    );
+    expect(rows('reports')).toHaveLength(2);
   });
 });

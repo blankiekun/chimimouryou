@@ -1,17 +1,19 @@
 <script lang="ts">
   import { browser } from '$app/environment';
-  import { goto } from '$app/navigation';
+  import { pushState } from '$app/navigation';
+  import { page } from '$app/stores';
+  import ActivityFeed from '$lib/components/social/activity-feed.svelte';
+  import FriendCover from '$lib/components/social/friend-cover.svelte';
+  import ProfileLayer from '$lib/components/social/profile-layer.svelte';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-  import BookCard from '$lib/components/book-card/book-card.svelte';
   import CoverCard from '$lib/components/book-card/cover-card.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import AddFriend from '$lib/components/social/add-friend.svelte';
   import FriendRequests from '$lib/components/social/friend-requests.svelte';
   import FriendsList from '$lib/components/social/friends-list.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
-  import TitleCard from '$lib/components/social/title-card.svelte';
   import { pagePath } from '$lib/data/env';
-  import { bookKey, byLastRead, friends$, loadFriends } from '$lib/data/social';
+  import { bookKey, byLastRead, feed$, friends$, loadFeed, loadFriends } from '$lib/data/social';
   import { hubDown$, socialSession$ } from '$lib/data/social-account';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher, onDestroy, onMount } from 'svelte';
@@ -33,25 +35,32 @@
 
   phoneQuery?.addEventListener('change', onQuery);
   onDestroy(() => phoneQuery?.removeEventListener('change', onQuery));
-  onMount(() => loadFriends());
+  onMount(() => {
+    loadFriends();
+    loadFeed();
+  });
 
   $: list =
     $socialSession$ && $friends$?.user === $socialSession$.me.id ? $friends$.list : undefined;
   $: owned = new Map(books.map((book) => [bookKey(book.title), book]));
+  $: covers = new Map(
+    books.map((book) => [bookKey(book.title), { title: book.title, imagePath: book.imagePath }])
+  );
   $: reading = byLastRead(list?.friends ?? [])
     .flatMap((friend) => friend.books.map((book) => ({ friend, book })))
     .slice(0, 12)
     .map(({ friend, book }, index) => {
-      const mine = owned.get(book.key);
+      const mine = book.kind === 'hidden' ? undefined : owned.get(book.key);
 
       return {
         friend,
         mine,
+        book,
         card: {
           ...(mine ?? {
             id: -1 - index,
             imagePath: '',
-            title: book.title,
+            title: book.kind === 'hidden' ? $t$('social.readingSomething') : book.title,
             characters: 0,
             lastBookModified: 0,
             lastBookOpen: 0,
@@ -71,7 +80,12 @@
     ? 0
     : !$socialSession$
       ? 1
-      : Number(!!reading.length) + (phone ? 1 : 2 + Number(requestsShown));
+      : Number(!!reading.length) +
+        Number(!!events.length) +
+        (phone ? 1 : 2 + Number(requestsShown));
+  $: events = $socialSession$ && $feed$?.user === $socialSession$.me.id ? $feed$.events : [];
+  $: activityNumber = friendsNumber + 1;
+  $: sideNumber = activityNumber + Number(!!events.length);
   $: friendsNumber = number + Number(!!reading.length);
 </script>
 
@@ -89,19 +103,17 @@
       <section class="home-social-reading" aria-labelledby="home-social-reading">
         <SectionHead id="home-social-reading" {number} title={$t$('social.nowReading')} />
         <div class="home-social-shelf">
-          {#each reading as { friend, mine, card, meta } (card.id + friend.id)}
+          {#each reading as { friend, mine, book, card, meta } (card.id + friend.id)}
             <CoverCard
               book={card}
               {meta}
               on:open={() =>
-                mine ? dispatch('bookClick', { id: mine.id }) : goto(`${pagePath}/friends`)}
+                mine
+                  ? dispatch('bookClick', { id: mine.id })
+                  : pushState('', { profile: friend.username })}
             >
               <svelte:fragment slot="cover">
-                {#if mine}
-                  <BookCard imagePath={mine.imagePath} title={mine.title} />
-                {:else}
-                  <TitleCard title={card.title} colour={(friend.avatar % 8) + 1} />
-                {/if}
+                <FriendCover {book} {covers} avatar={friend.avatar} />
               </svelte:fragment>
               <span slot="badge" class="home-social-badge">
                 <SocialAvatar avatar={friend.avatar} size={1.75} label={friend.name} />
@@ -146,18 +158,35 @@
           <a class="app-button-quiet" href="{pagePath}/friends">{$t$('social.allFriends')} →</a>
         </span>
       </section>
+      {#if events.length}
+        <ActivityFeed {events} number={activityNumber} limit={5} />
+      {/if}
     {:else}
       <div class="home-social-pair">
-        <FriendsList friends={list?.friends ?? []} number={friendsNumber} />
+        <div class="home-social-side">
+          <FriendsList friends={list?.friends ?? []} number={friendsNumber} {covers} />
+          {#if events.length}
+            <ActivityFeed {events} number={activityNumber} limit={8} />
+          {/if}
+        </div>
         <div class="home-social-side">
           {#if list && requestsShown}
-            <FriendRequests {list} number={friendsNumber + 1} />
+            <FriendRequests {list} number={sideNumber} />
           {/if}
-          <AddFriend number={friendsNumber + 1 + Number(requestsShown)} />
+          <AddFriend number={sideNumber + Number(requestsShown)} />
         </div>
       </div>
     {/if}
   {/if}
+{/if}
+
+{#if $page.state.profile}
+  <ProfileLayer
+    username={$page.state.profile}
+    {covers}
+    back={$t$('nav.home')}
+    on:close={() => history.back()}
+  />
 {/if}
 
 <style>

@@ -16,6 +16,8 @@ declare global {
       bookDetails?: number;
       /** Library: id of the book whose word list is shown over its page */
       bookWords?: number;
+      /** Home and /friends: username of the social profile shown */
+      profile?: string;
     }
   }
   interface HTMLElement {

@@ -67,7 +67,9 @@
       {#each list.outgoing as request (request.id)}
         <li class="requests-row requests-sent">
           <span class="requests-text">
-            <strong class="requests-code">{formatCode(request.code)}</strong>
+            <strong class="requests-code"
+              >{request.code.startsWith('@') ? request.code : formatCode(request.code)}</strong
+            >
             <small
               >{$t$('social.sentWaiting', { when: relativeTime(request.at, $uiLanguage$) })}</small
             >

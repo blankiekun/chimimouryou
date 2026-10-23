@@ -6,6 +6,8 @@
    * pinch, double tap and Ctrl+wheel zoom, and a zoomed page pans.
    * Book-only extras (highlights, recap, listen, search, statistics) are left out.
    */
+  import { noteReading } from '$lib/data/social';
+  import { isPluginEnabled } from '$lib/plugins';
   import { onDestroy, onMount, tick } from 'svelte';
   import { fly } from 'svelte/transition';
   import { browser } from '$app/environment';
@@ -422,6 +424,8 @@
 
     savedIndex = shownPage;
     await database.putBookmark(mangaBookmark(book!.id, shownPage, pageCount));
+    if (isPluginEnabled('social'))
+      noteReading(book!.title, shownPage + 1, pageCount, false, 'manga');
 
     const upSync =
       external &&
@@ -949,6 +953,9 @@
 
   onDestroy(() => {
     save();
+    if (book && pageCount && isPluginEnabled('social')) {
+      noteReading(book.title, shownPage + 1, pageCount, true, 'manga');
+    }
     clearTimeout(tapTimer);
     clearTimeout(turnTimer);
     decoded.clear();

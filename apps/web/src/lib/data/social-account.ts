@@ -93,7 +93,13 @@ export function hubOrigin(address = socialHub$.getValue()) {
   return url.origin;
 }
 
-export async function hubFetch<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
+/** keepalive: the request outlives the page (a push when the tab closes) */
+export async function hubFetch<T>(
+  path: string,
+  method = 'GET',
+  body?: unknown,
+  keepalive = false
+): Promise<T> {
   const session = socialSession$.getValue();
   let response: Response;
 
@@ -101,6 +107,7 @@ export async function hubFetch<T>(path: string, method = 'GET', body?: unknown):
     response = await fetch(`${hubOrigin()}${path}`, {
       method,
       credentials: 'omit',
+      keepalive,
       headers: {
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
         ...(session ? { Authorization: `Bearer ${session.token}` } : {})
@@ -174,6 +181,8 @@ function forget() {
   socialSession$.next(null);
   window.localStorage.removeItem('socialFriends');
   window.localStorage.removeItem('socialBooks');
+  window.localStorage.removeItem('socialFeed');
+  window.localStorage.removeItem('socialFinishedPending');
 }
 
 export async function logOut() {
@@ -195,6 +204,41 @@ function setMe(me: SocialMe) {
 
 export async function updateProfile(patch: Partial<Pick<SocialMe, 'name' | 'avatar' | 'share'>>) {
   return setMe(await hubFetch<SocialMe>('/v1/me', 'PUT', patch));
+}
+
+type ProfilePatch = Partial<Pick<SocialMe, 'name' | 'avatar' | 'share'>>;
+
+let pendingPatch: ProfilePatch = {};
+let patchTimer: ReturnType<typeof setTimeout> | undefined;
+
+/**
+ * Profile changes from Settings and the profile: shown at once, sent together after a pause
+ * (the hub takes 10 a day). A share turned off is deleted on the hub with it.
+ */
+export function queueProfileChange(patch: ProfilePatch, onError: (error: unknown) => void) {
+  const session = socialSession$.getValue();
+
+  if (!session) return;
+  pendingPatch = {
+    ...pendingPatch,
+    ...patch,
+    share: { ...pendingPatch.share, ...patch.share }
+  };
+  socialSession$.next({
+    ...session,
+    me: { ...session.me, ...patch, share: { ...session.me.share, ...patch.share } }
+  });
+  clearTimeout(patchTimer);
+  patchTimer = setTimeout(() => flushProfileChanges().catch(onError), 1500);
+}
+
+export async function flushProfileChanges() {
+  const patch = pendingPatch;
+
+  clearTimeout(patchTimer);
+  pendingPatch = {};
+  if (!Object.keys(patch.share ?? {}).length) delete patch.share;
+  if (Object.keys(patch).length) await updateProfile(patch);
 }
 
 /** Retires the friend code for a new one; friends stay. */
@@ -225,6 +269,7 @@ export function hubErrorKey(error: unknown): MessageKey {
     'friends',
     'pending',
     'username',
+    'user',
     'name',
     'network'
   ];

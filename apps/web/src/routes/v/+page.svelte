@@ -6,6 +6,8 @@
    * optionally shown in a panel below it), and counted for progress and statistics. Saves of
    * games on a synced source sync through vnsaves.json in the game's folder (sync-files.ts).
    */
+  import { noteReading } from '$lib/data/social';
+  import { isPluginEnabled } from '$lib/plugins';
   import { onDestroy, onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
@@ -433,6 +435,8 @@
     await saveVnRead({ ...read, pages: [...seen] });
     await recordKanjiText(book.title, text, read.characters);
     await database.putBookmark(vnBookmark(book.id, read.characters, book.characters));
+    if (isPluginEnabled('social'))
+      noteReading(book.title, read.characters, book.characters, false, 'vn');
 
     const types = [StorageDataType.PROGRESS];
 
@@ -516,6 +520,9 @@
 
   onDestroy(() => {
     save();
+    if (book && isPluginEnabled('social')) {
+      noteReading(book.title, read.characters, book.characters, true, 'vn');
+    }
   });
 </script>
 
