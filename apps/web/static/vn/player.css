@@ -56,15 +56,18 @@ body {
   background: rgba(255, 220, 120, 0.35);
 }
 
+/* Loading readout (Study Book): a dark label at the top left, a thin bar along the bottom.
+   The game area keeps its own dark ground, so these colours don't follow the theme. */
 #progress {
   position: absolute;
-  left: 50%;
-  bottom: 10%;
-  transform: translateX(-50%);
-  width: min(80%, 24rem);
+  top: 12px;
+  left: 12px;
+  padding: 0.3rem 0.6rem;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.8);
   color: #ddd;
-  font: 0.9rem sans-serif;
-  text-align: center;
+  font: 0.8rem sans-serif;
+  font-variant-numeric: tabular-nums;
 }
 
 #progress[hidden] {
@@ -72,7 +75,24 @@ body {
 }
 
 #progress progress {
-  display: block;
+  position: fixed;
+  left: 0;
+  bottom: 0;
   width: 100%;
-  margin-bottom: 0.4rem;
+  height: 3px;
+  appearance: none;
+  border: 0;
+  background: #2e3331;
+}
+
+#progress progress::-webkit-progress-bar {
+  background: #2e3331;
+}
+
+#progress progress::-webkit-progress-value {
+  background: #4fbf95;
+}
+
+#progress progress::-moz-progress-bar {
+  background: #4fbf95;
 }

@@ -12,19 +12,16 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import Fa from 'svelte-fa';
-  import {
-    faArrowLeft,
-    faBackwardStep,
-    faExpand,
-    faForwardStep,
-    faGear
-  } from '@fortawesome/free-solid-svg-icons';
+  import { faBookOpen, faEllipsis, faExpand, faSliders } from '@fortawesome/free-solid-svg-icons';
   import ButtonToggleGroup from '$lib/components/button-toggle-group/button-toggle-group.svelte';
   import {
     optionsForToggle,
     type ToggleOption
   } from '$lib/components/button-toggle-group/toggle-option';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
+  import SectionHead from '$lib/components/section-head.svelte';
+  import PlayerBar from '$lib/components/player-bar.svelte';
+  import ReaderSheet from '$lib/components/book-reader/reader-sheet.svelte';
   import VolumeTransition from '$lib/components/manga/volume-transition.svelte';
   import MokuroOverlay from '$lib/components/manga/mokuro-overlay.svelte';
   import { calibreCoverUrl, loadCalibreCatalog, type CalibreBook } from '$lib/data/calibre';
@@ -119,7 +116,7 @@
     { id: 'off', text: 'Off' }
   ];
   const textModes: ToggleOption<MangaText>[] = [
-    { id: 'hover', text: 'Under the pointer' },
+    { id: 'hover', text: 'Hover' },
     { id: 'always', text: 'Always' },
     { id: 'off', text: 'Off' }
   ];
@@ -151,6 +148,7 @@
   let ready = false;
   let showMenu = false;
   let showSettings = false;
+  let showMore = false;
   let shift = false;
   let loaded = new Set<number>();
   let strip: HTMLElement | undefined;
@@ -168,6 +166,8 @@
   let autoBackground = '#000';
   let wakeLock: WakeLockSentinel | undefined;
   let volumes: { series?: string; previous?: CalibreBook; next?: CalibreBook } = {};
+  /** This volume's catalog entry (Calibre manga), for its number */
+  let currentVolume: CalibreBook | undefined;
   /** The card shown past the last (1) or before the first (-1) spread, else 0. */
   let transition = 0;
   let opening = false;
@@ -225,6 +225,25 @@
   $: scrollStripOnModeChange(mode);
   $: if (browser) updateWakeLock($mangaKeepScreenOn$);
   $: shownPages = mode === 'vertical' ? [pageIndex] : (groups[groupIndex] ?? [pageIndex]);
+  $: pagesLabel = shownPages.map((index) => index + 1).join('–');
+  $: volumeLabel = currentVolume?.seriesIndex != null ? `Vol. ${currentVolume.seriesIndex}` : '';
+  $: barTitle = (volumeLabel && volumes.series) || book?.title || '';
+  $: barPlace = [volumeLabel, pageCount ? `${pagesLabel} / ${pageCount}` : '']
+    .filter(Boolean)
+    .join(' · ');
+  $: percent = pageCount ? Math.round(((shownPage + 1) / pageCount) * 100) : 0;
+  /** Where the slider's thumb is, 0-100 from its start */
+  $: sliderAt = pageCount > 1 ? (pageIndex / (pageCount - 1)) * 100 : 0;
+  $: modeLabel = modes.find((option) => option.id === mode)?.text ?? '';
+  $: hasText = pageText.some(Boolean);
+  $: textLabel = textModes.find((option) => option.id === $mangaText$)?.text ?? '';
+  $: moreItems = [
+    volumes.previous && {
+      label: `Previous volume: ${volumes.previous.title}`,
+      volume: volumes.previous
+    },
+    volumes.next && { label: `Next volume: ${volumes.next.title}`, volume: volumes.next }
+  ].filter(Boolean) as { label: string; volume: CalibreBook }[];
 
   function handler(type: StorageKey, name?: string, isForBrowser = true) {
     return getStorageHandler(
@@ -352,6 +371,7 @@
     ]);
 
     volumes = adjacentVolumes(books, overrides, title);
+    currentVolume = books.find((entry) => entry.title === title);
   }
 
   // shortcut: needs the catalog for the id, so there is no text offline; cache it in IndexedDB if missed.
@@ -853,7 +873,10 @@
     const back = mode === 'rtl' ? 'ArrowRight' : 'ArrowLeft';
 
     if (event.key === 'Escape') {
-      showMenu = !showMenu;
+      if (showMore) return;
+      if (showSettings) showSettings = false;
+      else if (transition && mode !== 'vertical') leave();
+      else showMenu = !showMenu;
     } else if (mode === 'vertical') {
       return;
     } else if (event.key === forward || event.key === ' ' || event.key === 'PageDown') {
@@ -894,6 +917,11 @@
       await wakeLock?.release().catch(() => {});
       wakeLock = undefined;
     }
+  }
+
+  /** The bar's mode and text buttons step through their options. */
+  function next<T>(options: ToggleOption<T>[], current: T) {
+    return options[(options.findIndex((option) => option.id === current) + 1) % options.length].id;
   }
 
   function toggleFullscreen() {
@@ -971,10 +999,13 @@
           <VolumeTransition
             direction={1}
             title={book?.title ?? ''}
+            current={currentVolume}
+            {pageCount}
             volume={volumes.next}
             {opening}
             error={openError}
             on:open={(event) => openVolume(event.detail)}
+            on:library={leave}
           />
         </div>
       {/if}
@@ -1006,17 +1037,20 @@
 </div>
 
 {#if transition && mode !== 'vertical'}
-  <!-- Outside the gesture layer, so its button gets clicks; the sides still turn. -->
-  <div class="pointer-events-none fixed inset-0 flex items-center justify-center p-6">
+  <!-- Outside the gesture layer, so its buttons get clicks; the sides still turn. -->
+  <div class="pointer-events-none fixed inset-0 flex items-center justify-center p-4">
     <div class="pointer-events-auto">
       <VolumeTransition
         direction={transition}
         title={book?.title ?? ''}
+        current={currentVolume}
+        {pageCount}
         volume={transition > 0 ? volumes.next : volumes.previous}
         {opening}
         error={openError}
-        hint="Or turn the page again"
+        keys={mode === 'rtl' ? ['←', '→'] : ['→', '←']}
         on:open={(event) => openVolume(event.detail)}
+        on:library={leave}
       />
     </div>
   </div>
@@ -1024,148 +1058,379 @@
 
 {#if $mangaPageNumber$ && !showMenu && pageCount && !transition}
   <div
-    class="reader-panel pointer-events-none fixed bottom-2 left-1/2 -translate-x-1/2 rounded-sm px-3 py-0.5 text-xs tabular-nums opacity-80"
+    class="reader-panel pointer-events-none fixed bottom-2 left-1/2 -translate-x-1/2 px-3 py-0.5 text-xs tabular-nums opacity-80"
   >
-    {shownPages.map((index) => index + 1).join('–')} / {pageCount}
+    {pagesLabel} / {pageCount}
   </div>
 {/if}
 
-{#if showMenu}
-  <div
-    class="reader-panel fixed inset-x-0 top-0 flex items-center gap-3 px-3 py-2"
-    transition:fly={{ y: -40, duration: 150 }}
-  >
-    <button class="p-2" title="Back to the library" aria-label="Back" on:click={leave}>
-      <Fa icon={faArrowLeft} />
-    </button>
-    <div class="min-w-0 flex-1 truncate">{book?.title ?? ''}</div>
-    {#if fullscreenManager.fullscreenEnabled}
-      <button class="p-2" title="Full screen" aria-label="Full screen" on:click={toggleFullscreen}>
-        <Fa icon={faExpand} />
+{#if showMenu || transition}
+  <div class="fixed inset-x-0 top-0 z-10" transition:fly={{ y: -40, duration: 150 }}>
+    <PlayerBar title={barTitle} place={barPlace} on:back={leave}>
+      <button
+        class="bar-text bar-wide"
+        title="Reading mode"
+        on:click={() => ($readingMode = next(modes, mode))}
+      >
+        <Fa icon={faBookOpen} />{modeLabel}
       </button>
-    {/if}
-    <button
-      class="p-2"
-      title="Reader settings"
-      aria-label="Reader settings"
-      aria-expanded={showSettings}
-      on:click={() => (showSettings = !showSettings)}
-    >
-      <Fa icon={faGear} />
-    </button>
-  </div>
-
-  <div
-    class="reader-panel fixed inset-x-0 bottom-0 flex flex-col gap-3 px-4 py-3"
-    transition:fly={{ y: 40, duration: 150 }}
-  >
-    {#if showSettings}
-      <div class="max-h-[55vh] overflow-y-auto">
-        <SettingsItemGroup title="Reading mode">
-          <ButtonToggleGroup options={modes} bind:selectedOptionId={$readingMode} />
-        </SettingsItemGroup>
-        {#if mode !== 'vertical'}
-          <SettingsItemGroup title="Scale">
-            <ButtonToggleGroup options={scales} bind:selectedOptionId={$mangaScale$} />
-          </SettingsItemGroup>
-          <SettingsItemGroup
-            title="Two pages"
-            tooltip="Auto shows spreads on screens wider than tall. Shift pairs the cover too, for spreads that are off by one."
-          >
-            <ButtonToggleGroup options={dualPages} bind:selectedOptionId={$mangaDualPage$} />
-            {#if dual}
-              <button
-                class="app-button ml-2"
-                aria-pressed={shift}
-                on:click={() => (shift = !shift)}
-              >
-                Shift
-              </button>
-            {/if}
-          </SettingsItemGroup>
-          <SettingsItemGroup title="Double tap to zoom" tooltip="Single taps then wait a moment.">
-            <ButtonToggleGroup
-              options={optionsForToggle}
-              bind:selectedOptionId={$mangaDoubleTapZoom$}
-            />
-          </SettingsItemGroup>
-        {/if}
-        <SettingsItemGroup
-          title="Tap zones"
-          wide
-          tooltip="Where a tap turns the page. Default is the sides for pages and an L shape for the vertical strip (top and left back, bottom and right forward)."
-        >
-          <ButtonToggleGroup options={tapLayouts} bind:selectedOptionId={$mangaTapLayout$} />
-        </SettingsItemGroup>
-        {#if $mangaTapLayout$ !== 'off'}
-          <SettingsItemGroup title="Invert tap zones">
-            <ButtonToggleGroup options={tapInverts} bind:selectedOptionId={$mangaTapInvert$} />
-          </SettingsItemGroup>
-        {/if}
-        {#if pageText.some(Boolean)}
-          <SettingsItemGroup
-            title="Page text"
-            wide
-            tooltip="Text recognised by mokuro, laid over the speech bubbles for Yomitan."
-          >
-            <ButtonToggleGroup options={textModes} bind:selectedOptionId={$mangaText$} />
-          </SettingsItemGroup>
-        {/if}
-        <SettingsItemGroup title="Background">
-          <ButtonToggleGroup options={backgrounds} bind:selectedOptionId={$mangaBackground$} />
-        </SettingsItemGroup>
-        {#if wakeLockSupported}
-          <SettingsItemGroup title="Keep the screen on">
-            <ButtonToggleGroup
-              options={optionsForToggle}
-              bind:selectedOptionId={$mangaKeepScreenOn$}
-            />
-          </SettingsItemGroup>
-        {/if}
-        <SettingsItemGroup title="Page number">
-          <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={$mangaPageNumber$} />
-        </SettingsItemGroup>
-      </div>
-    {/if}
-    <div class="flex items-center gap-3" dir={mode === 'rtl' ? 'rtl' : 'ltr'}>
-      {#if volumes.previous || volumes.next}
+      <button
+        class="bar-icon bar-narrow"
+        title="Reading mode: {modeLabel}"
+        on:click={() => ($readingMode = next(modes, mode))}
+      >
+        <Fa icon={faBookOpen} />
+      </button>
+      {#if hasText}
         <button
-          class="p-2 disabled:opacity-40"
-          title={volumes.previous
-            ? `Previous volume: ${volumes.previous.title}`
-            : 'No previous volume'}
-          aria-label="Previous volume"
-          disabled={!volumes.previous || opening}
-          on:click={() => volumes.previous && openVolume(volumes.previous)}
+          class="bar-text bar-wide"
+          title="Page text"
+          on:click={() => ($mangaText$ = next(textModes, $mangaText$))}
         >
-          <Fa icon={mode === 'rtl' ? faForwardStep : faBackwardStep} />
+          Text: {textLabel}
         </button>
       {/if}
-      <span class="w-10 text-center tabular-nums">{pageIndex + 1}</span>
-      <input
-        class="flex-1"
-        type="range"
-        min="0"
-        max={Math.max(pageCount - 1, 0)}
-        value={pageIndex}
-        aria-label="Page"
-        on:input={(event) => goToPage(Number(event.currentTarget.value))}
-      />
-      <span class="w-10 text-center tabular-nums">{pageCount}</span>
-      {#if volumes.previous || volumes.next}
+      <button
+        class="bar-icon"
+        class:bar-icon-active={showSettings}
+        title="Reader settings"
+        aria-expanded={showSettings}
+        on:click={() => (showSettings = !showSettings)}
+      >
+        <Fa icon={faSliders} />
+      </button>
+      {#if fullscreenManager.fullscreenEnabled}
+        <button class="bar-icon bar-wide" title="Full screen" on:click={toggleFullscreen}>
+          <Fa icon={faExpand} />
+        </button>
+      {/if}
+      {#if moreItems.length || fullscreenManager.fullscreenEnabled}
         <button
-          class="p-2 disabled:opacity-40"
-          title={volumes.next ? `Next volume: ${volumes.next.title}` : 'No next volume'}
-          aria-label="Next volume"
-          disabled={!volumes.next || opening}
-          on:click={() => volumes.next && openVolume(volumes.next)}
+          class="bar-icon"
+          class:bar-icon-active={showMore}
+          title="More"
+          aria-expanded={showMore}
+          on:click={() => (showMore = !showMore)}
         >
-          <Fa icon={mode === 'rtl' ? faBackwardStep : faForwardStep} />
+          <Fa icon={faEllipsis} />
+        </button>
+      {/if}
+    </PlayerBar>
+  </div>
+{/if}
+
+{#if showMenu && !transition && !showSettings}
+  <div class="manga-bottom" transition:fly={{ y: 40, duration: 150 }}>
+    <div class="manga-slider-row">
+      <div class="manga-slider-track" dir={mode === 'rtl' ? 'rtl' : 'ltr'}>
+        <span class="manga-end">1</span>
+        <div class="manga-slider">
+          <!-- Over the thumb's centre: the thumb (1rem) travels the track less its width. -->
+          <span
+            class="manga-bubble"
+            dir="ltr"
+            style="{mode === 'rtl' ? 'right' : 'left'}: calc({sliderAt}% + {(50 - sliderAt) *
+              0.01}rem)"
+          >
+            {pagesLabel}
+          </span>
+          <input
+            type="range"
+            min="0"
+            max={Math.max(pageCount - 1, 0)}
+            value={pageIndex}
+            aria-label="Page"
+            style:background="linear-gradient(to {mode === 'rtl' ? 'left' : 'right'},
+            var(--accent-color) {sliderAt}%, var(--app-progress-track) {sliderAt}%)"
+            on:input={(event) => goToPage(Number(event.currentTarget.value))}
+          />
+        </div>
+        <span class="manga-end">{pageCount}</span>
+      </div>
+      <span class="manga-percent">{[volumeLabel, `${percent}%`].filter(Boolean).join(' · ')}</span>
+    </div>
+    <div class="manga-phone-row">
+      <button on:click={() => ($readingMode = next(modes, mode))}>{modeLabel}</button>
+      {#if hasText}
+        <button on:click={() => ($mangaText$ = next(textModes, $mangaText$))}>
+          Text: {textLabel}
         </button>
       {/if}
     </div>
-    {#if openError && !transition}
-      <div class="text-center text-sm text-danger">{openError}</div>
+    {#if openError}
+      <div class="pt-2 text-center text-danger">{openError}</div>
     {/if}
   </div>
 {/if}
+
+{#if showSettings}
+  <div class="manga-scrim" aria-hidden="true" on:click={() => (showSettings = false)} />
+  <aside class="manga-settings" aria-label="Manga settings">
+    <h2 class="manga-settings-title">Manga</h2>
+    <SectionHead number={1} title="Reading" level="h3" />
+    <SettingsItemGroup
+      title="Reading mode"
+      wide
+      tooltip={volumes.series
+        ? `Kept for this series: ${volumes.series}`
+        : 'Kept for manga outside a series.'}
+    >
+      <ButtonToggleGroup options={modes} bind:selectedOptionId={$readingMode} />
+    </SettingsItemGroup>
+    {#if mode !== 'vertical'}
+      <SettingsItemGroup
+        title="Two-page spreads"
+        tooltip="Auto shows spreads on screens wider than tall. Cover, wide and last pages stay single; Shift pairs the cover too."
+      >
+        <div class="flex items-center gap-2">
+          <ButtonToggleGroup options={dualPages} bind:selectedOptionId={$mangaDualPage$} />
+          {#if dual}
+            <button class="app-button" aria-pressed={shift} on:click={() => (shift = !shift)}>
+              Shift
+            </button>
+          {/if}
+        </div>
+      </SettingsItemGroup>
+      <SettingsItemGroup title="Scale">
+        <ButtonToggleGroup options={scales} bind:selectedOptionId={$mangaScale$} />
+      </SettingsItemGroup>
+    {/if}
+    <div class="manga-section"><SectionHead number={2} title="Taps" level="h3" /></div>
+    <SettingsItemGroup
+      title="Tap zones"
+      wide
+      tooltip="Where a tap turns the page. Default is the sides for pages and an L shape for the vertical strip (top and left back, bottom and right forward)."
+    >
+      <ButtonToggleGroup options={tapLayouts} bind:selectedOptionId={$mangaTapLayout$} />
+    </SettingsItemGroup>
+    {#if $mangaTapLayout$ !== 'off'}
+      <SettingsItemGroup title="Invert">
+        <ButtonToggleGroup options={tapInverts} bind:selectedOptionId={$mangaTapInvert$} />
+      </SettingsItemGroup>
+    {/if}
+    {#if mode !== 'vertical'}
+      <SettingsItemGroup title="Double tap to zoom" tooltip="Single taps then wait a moment.">
+        <ButtonToggleGroup
+          options={optionsForToggle}
+          bind:selectedOptionId={$mangaDoubleTapZoom$}
+        />
+      </SettingsItemGroup>
+    {/if}
+    <div class="manga-section"><SectionHead number={3} title="Display" level="h3" /></div>
+    <SettingsItemGroup title="Background">
+      <ButtonToggleGroup options={backgrounds} bind:selectedOptionId={$mangaBackground$} />
+    </SettingsItemGroup>
+    <SettingsItemGroup title="Page number">
+      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={$mangaPageNumber$} />
+    </SettingsItemGroup>
+    {#if wakeLockSupported}
+      <SettingsItemGroup title="Keep screen on" tooltip="Wake lock while the reader is open.">
+        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={$mangaKeepScreenOn$} />
+      </SettingsItemGroup>
+    {/if}
+    {#if hasText}
+      <SettingsItemGroup title="Text overlay" tooltip="Text recognised by mokuro, for Yomitan.">
+        <ButtonToggleGroup options={textModes} bind:selectedOptionId={$mangaText$} />
+      </SettingsItemGroup>
+    {/if}
+  </aside>
+{/if}
+
+{#if showMore}
+  <ReaderSheet title="More" on:close={() => (showMore = false)}>
+    <ul class="manga-more">
+      {#each moreItems as item (item.label)}
+        <li>
+          <button
+            disabled={opening}
+            lang="ja"
+            on:click={() => {
+              showMore = false;
+              openVolume(item.volume);
+            }}
+          >
+            {item.label}
+          </button>
+        </li>
+      {/each}
+      {#if fullscreenManager.fullscreenEnabled}
+        <li>
+          <button
+            on:click={() => {
+              showMore = false;
+              toggleFullscreen();
+            }}
+          >
+            Full screen
+          </button>
+        </li>
+      {/if}
+    </ul>
+  </ReaderSheet>
+{/if}
+
+<style>
+  .manga-bottom {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 10;
+    padding: 1.75rem 1.25rem 0.75rem;
+    border-top: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
+    background:
+      linear-gradient(var(--reader-panel-bg), var(--reader-panel-bg)), var(--background-color);
+    color: var(--reader-panel-fg);
+    font-family: var(--app-font-ui);
+    font-size: var(--type-small);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .manga-slider-row,
+  .manga-slider-track {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .manga-slider-track {
+    flex: 1;
+  }
+
+  .manga-end,
+  .manga-percent {
+    color: color-mix(in srgb, var(--reader-panel-fg) 68%, transparent);
+    white-space: nowrap;
+  }
+
+  .manga-percent {
+    margin-left: 0.5rem;
+  }
+
+  .manga-slider {
+    position: relative;
+    display: flex;
+    flex: 1;
+    align-items: center;
+  }
+
+  .manga-bubble {
+    position: absolute;
+    bottom: 1rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: 2px;
+    background: var(--accent-color);
+    color: var(--app-accent-fg);
+    font-size: var(--type-label);
+    font-weight: 700;
+    white-space: nowrap;
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+
+  [dir='rtl'] .manga-bubble {
+    transform: translateX(50%);
+  }
+
+  /* Square thumb on a 3px track; the read part is filled (inline background) */
+  .manga-slider input {
+    width: 100%;
+    height: 3px;
+    appearance: none;
+    border-radius: 0;
+    cursor: pointer;
+  }
+
+  .manga-slider input::-webkit-slider-thumb {
+    width: 1rem;
+    height: 1rem;
+    appearance: none;
+    border-radius: 2px;
+    background: var(--accent-color);
+  }
+
+  .manga-slider input::-moz-range-thumb {
+    width: 1rem;
+    height: 1rem;
+    border: 0;
+    border-radius: 2px;
+    background: var(--accent-color);
+  }
+
+  .manga-phone-row {
+    display: none;
+  }
+
+  @media (max-width: 767px) {
+    .manga-percent {
+      display: none;
+    }
+
+    .manga-phone-row {
+      display: flex;
+      justify-content: space-between;
+      padding-top: 0.5rem;
+      color: color-mix(in srgb, var(--reader-panel-fg) 68%, transparent);
+      font-size: var(--type-body);
+    }
+
+    .manga-phone-row button {
+      min-height: 2.75rem;
+    }
+  }
+
+  .manga-scrim {
+    position: fixed;
+    inset: 3.5rem 0 0;
+    z-index: 9;
+    background: var(--app-overlay-color);
+  }
+
+  .manga-settings {
+    position: fixed;
+    top: 3.5rem;
+    right: 0;
+    bottom: 0;
+    z-index: 11;
+    width: min(32.5rem, 100vw);
+    overflow-y: auto;
+    padding: 1.25rem 1.75rem 2rem;
+    border-left: 1px solid var(--border-color);
+    background: var(--background-color);
+    color: var(--font-color);
+    font-family: var(--app-font-ui);
+  }
+
+  .manga-settings-title {
+    margin: 0 0 1.25rem;
+    font-size: var(--type-h2);
+    font-weight: 400;
+  }
+
+  .manga-section {
+    margin-top: 1.75rem;
+  }
+
+  .manga-more {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .manga-more button {
+    display: flex;
+    width: 100%;
+    min-height: 3.25rem;
+    align-items: center;
+    border-bottom: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
+    text-align: left;
+  }
+
+  .manga-more button:hover:not(:disabled) {
+    color: var(--accent-strong-color);
+  }
+
+  .manga-more button:disabled {
+    opacity: 0.5;
+  }
+</style>

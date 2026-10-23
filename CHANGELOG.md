@@ -8,6 +8,10 @@ anything a reader or a server operator would notice.
 
 ### Changed
 
+- The manga reader and visual novel player use the Study Book reader bar: the manga reader has a
+  page slider, a settings panel and a new card between volumes; the player shows reading progress
+  and asks to keep a large game's files in a bar instead of a browser dialog. On phones it has
+  Menu (the game's right-click menu), Skip and Full screen buttons.
 - Settings and the admin panel in the Study Book look: numbered sections, ruled tables, one theme
   gallery (built-in and custom themes, with the editor under it) instead of Theme and Custom
   Themes, an AnkiConnect status line, Show for API keys, and settings labels in plain sentence

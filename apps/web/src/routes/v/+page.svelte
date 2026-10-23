@@ -10,7 +10,10 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import Fa from 'svelte-fa';
-  import { faArrowLeft, faBolt, faFont } from '@fortawesome/free-solid-svg-icons';
+  import { faEllipsis, faExpand } from '@fortawesome/free-solid-svg-icons';
+  import PlayerBar from '$lib/components/player-bar.svelte';
+  import ReaderSheet from '$lib/components/book-reader/reader-sheet.svelte';
+  import { fullscreenManager } from '$lib/data/fullscreen-manager';
   import {
     autoReplication$,
     cacheStorageData$,
@@ -122,6 +125,16 @@
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let savesQueue = Promise.resolve();
   let started = false;
+  /** A server game over 10 MB asks before its files are kept in the browser. */
+  let keepAsk: { size: string; answer: (keep: boolean) => void } | undefined;
+  let showMore = false;
+  /** The engine's skip mode, as it reports it (consMode) */
+  let skipping = false;
+  /** For the progress line: characters read, and today */
+  let readCharacters = 0;
+  let todayCharacters = 0;
+
+  $: percent = book?.characters ? Math.min(100, (readCharacters / book.characters) * 100) : 0;
 
   $: if (started) engineSet('Ruby', $furigana$ ? 1 : 0);
   $: if (started) engineSet('TextSpeed', $instantText$ ? 0 : -1);
@@ -220,6 +233,13 @@
     statistics = new Map(
       (await database.getStatisticsForBook(data.title)).map((stat) => [stat.dateKey, stat])
     );
+    updateProgress();
+  }
+
+  function updateProgress() {
+    readCharacters = read.characters;
+    todayCharacters =
+      statistics.get(getDateKey($startDayHoursForTracker$, new Date()))?.charactersRead ?? 0;
   }
 
   function savesUrl() {
@@ -283,13 +303,21 @@
 
     const size = await vnFolderSize(base).catch(() => 0);
 
-    if (
-      size <= 10 * 1024 * 1024 ||
-      !confirm(
-        `This game is ${size >= 1024 ** 3 ? `${(size / 1024 ** 3).toFixed(1)} GB` : `${Math.round(size / 1024 ** 2)} MB`}. Keep its files in this browser so it starts quickly next time?`
-      )
-    )
-      return undefined;
+    if (size <= 10 * 1024 * 1024) return undefined;
+
+    const keep = await new Promise<boolean>((answer) => {
+      keepAsk = {
+        size:
+          size >= 1024 ** 3
+            ? `${(size / 1024 ** 3).toFixed(1)} GB`
+            : `${Math.round(size / 1024 ** 2)} MB`,
+        answer
+      };
+    });
+
+    keepAsk = undefined;
+
+    if (!keep) return undefined;
 
     navigator.storage?.persist?.();
     return name;
@@ -337,6 +365,7 @@
       textLines: (bytes: Uint8Array, boxes: Int32Array) =>
         overlayLines(bytes, boxes, info.encoding),
       onSave: uploadSaves,
+      onMode: (auto: boolean, skip: boolean) => (skipping = skip),
       onExit: () => (ended = true)
     });
     started = true;
@@ -390,6 +419,7 @@
 
     previousText = text;
     lastTextTime = now;
+    updateProgress();
 
     if (dirty) {
       clearTimeout(saveTimer);
@@ -441,6 +471,43 @@
     goto(`${pagePath}/manage`);
   }
 
+  function toggleSkip() {
+    skipping = !skipping;
+    engineSet('Skip', skipping ? 1 : 0);
+  }
+
+  function openMenu() {
+    (frame?.contentWindow as any)?.openMenu();
+  }
+
+  /** Toggles in the bar, and on portrait phones in a row under it; Menu and Skip only on phones. */
+  $: chips = [
+    {
+      label: 'Furigana',
+      title: 'Furigana in the game (from the next text; readings stay in the text panel)',
+      on: $furigana$,
+      click: () => furigana$.next(!$furigana$)
+    },
+    {
+      label: 'Instant text',
+      title: 'Show the whole text at once',
+      on: $instantText$,
+      click: () => instantText$.next(!$instantText$)
+    },
+    { label: 'Menu', title: "The game's menu (right-click)", on: undefined, click: openMenu, phone: true },
+    { label: 'Skip', title: 'Skip text', on: skipping, click: toggleSkip, phone: true }
+  ];
+
+  function toggleFullscreen() {
+    if (fullscreenManager.fullscreenElement) fullscreenManager.exitFullscreen();
+    else fullscreenManager.requestFullscreen(document.documentElement);
+  }
+
+  async function openStatistics() {
+    await save().catch((error) => logger.warn(error.message));
+    goto(`${pagePath}/statistics`);
+  }
+
   function onVisibilityChange() {
     if (document.visibilityState === 'hidden') save();
   }
@@ -462,89 +529,404 @@
 
 <svelte:document on:visibilitychange={onVisibilityChange} />
 
-<div class="fixed inset-0 flex flex-col bg-black">
-  <div class="reader-panel flex items-center gap-3 px-3 py-1">
-    <button class="p-2" title="Back to the library" aria-label="Back" on:click={leave}>
-      <Fa icon={faArrowLeft} />
-    </button>
-    <div class="min-w-0 flex-1 truncate">{book?.title ?? ''}</div>
+<div class="vn-page fixed inset-0 flex flex-col">
+  <PlayerBar
+    title={book?.title ?? ''}
+    place="Visual novel{book?.characters ? ` · ${Math.floor(percent)}%` : ''}"
+    on:back={leave}
+  >
+    {#each chips as chip}
+      <button
+        class="bar-text bar-chip vn-bar-chip"
+        class:vn-phone-chip={chip.phone}
+        class:bar-icon-active={chip.on}
+        title={chip.title}
+        aria-pressed={chip.on}
+        on:click={chip.click}
+      >
+        {chip.label}
+      </button>
+    {/each}
+    <span class="bar-divider vn-bar-chip" aria-hidden="true" />
     <button
-      class="p-2"
-      title="Furigana in the game (from the next text; readings stay in the text panel)"
-      aria-label="Furigana"
-      aria-pressed={$furigana$}
-      class:opacity-50={!$furigana$}
-      on:click={() => furigana$.next(!$furigana$)}
-    >
-      <ruby class="text-lg">字<rt class="text-[0.55em]">じ</rt></ruby>
-    </button>
-    <button
-      class="p-2"
-      title="Show the whole text at once"
-      aria-label="Instant text"
-      aria-pressed={$instantText$}
-      class:opacity-50={!$instantText$}
-      on:click={() => instantText$.next(!$instantText$)}
-    >
-      <Fa icon={faBolt} />
-    </button>
-    <button
-      class="p-2"
-      title="Show the text below the game"
-      aria-label="Text panel"
+      class="bar-icon"
+      class:bar-icon-active={$showText$}
+      title="Show the text beside the game"
       aria-pressed={$showText$}
       on:click={() => showText$.next(!$showText$)}
     >
-      <Fa icon={faFont} />
+      <!-- A screen with a text panel under it -->
+      <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
+        <rect
+          x="2.75"
+          y="3.75"
+          width="14.5"
+          height="12.5"
+          rx="1"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+        />
+        <path d="M3 12h14" stroke="currentColor" stroke-width="1.5" />
+      </svg>
     </button>
+    {#if fullscreenManager.fullscreenEnabled}
+      <button class="bar-icon vn-bar-chip" title="Full screen" on:click={toggleFullscreen}>
+        <Fa icon={faExpand} />
+      </button>
+    {/if}
+    <button
+      class="bar-icon"
+      class:bar-icon-active={showMore}
+      title="More"
+      aria-expanded={showMore}
+      on:click={() => (showMore = !showMore)}
+    >
+      <Fa icon={faEllipsis} />
+    </button>
+  </PlayerBar>
+
+  <div class="vn-chip-row">
+    {#each chips as chip}
+      <button
+        class="vn-chip"
+        class:vn-chip-on={chip.on}
+        title={chip.title}
+        aria-pressed={chip.on}
+        on:click={chip.click}
+      >
+        {chip.label}
+      </button>
+    {/each}
+    {#if fullscreenManager.fullscreenEnabled}
+      <button class="vn-chip vn-chip-icon" title="Full screen" on:click={toggleFullscreen}>
+        <Fa icon={faExpand} />
+      </button>
+    {/if}
   </div>
 
-  {#if book}
-    <AnkiWatcher media={ankiMedia} />
-    <iframe
-      bind:this={frame}
-      class="min-h-0 w-full flex-1 border-0"
-      src="{pagePath}/vn/player.html"
-      title={book.title}
-      allow="autoplay; fullscreen"
-      on:load={() =>
-        start().catch((error) => logger.error(`Error starting game: ${error.message}`))}
-    />
-  {/if}
-
-  {#if newerEngine}
-    <p class="reader-panel px-4 py-2 text-center text-sm">
-      Some saves were made with a newer engine (CONscripter {newerEngine}) than this server's ({engineVersion}).
-      Saves should be backward compatible, so they will most likely still load; if one doesn't, ask
-      an admin to update the engine.
-      <button class="app-button app-button-quiet ml-2" on:click={() => (newerEngine = undefined)}
-        >Dismiss</button
-      >
-    </p>
-  {/if}
-
-  {#if ended}
-    <p class="reader-panel px-4 py-2 text-center">The game has ended.</p>
-  {:else if $showText$}
-    <div class="vn-text reader-panel max-h-[30vh] overflow-y-auto px-4 py-3" lang="ja">
-      {#each lines as line}
-        <p>
-          {#each line as part}{#if part.ruby}<ruby>{part.text}<rt>{part.ruby}</rt></ruby
-              >{:else}{part.text}{/if}{/each}
-        </p>
-      {/each}
+  {#if keepAsk}
+    <div class="vn-keep">
+      <p>
+        This game is {keepAsk.size}. Keep its files in this browser so it starts quickly next time?
+      </p>
+      <button class="app-button app-button-quiet" on:click={() => keepAsk?.answer(false)}>
+        Not now
+      </button>
+      <button class="app-button app-button-primary" on:click={() => keepAsk?.answer(true)}>
+        Keep files
+      </button>
     </div>
   {/if}
+
+  <div class="vn-main" class:vn-main-text={$showText$ && !ended}>
+    <!-- The game's own dark ground: part of the content, not the theme -->
+    <div class="vn-game">
+      {#if book}
+        <AnkiWatcher media={ankiMedia} />
+        <iframe
+          bind:this={frame}
+          class="h-full w-full border-0"
+          src="{pagePath}/vn/player.html"
+          title={book.title}
+          allow="autoplay; fullscreen"
+          on:load={() =>
+            start().catch((error) => logger.error(`Error starting game: ${error.message}`))}
+        />
+      {/if}
+    </div>
+
+    <div class="vn-side">
+      {#if newerEngine}
+        <div class="vn-notice">
+          <p>
+            Some saves were made with a newer engine (CONscripter {newerEngine}) than this server's
+            ({engineVersion}). They will most likely still load; if one doesn't, ask an admin to
+            update the engine.
+          </p>
+          <button class="app-button app-button-quiet" on:click={() => (newerEngine = undefined)}>
+            Dismiss
+          </button>
+        </div>
+      {/if}
+
+      {#if ended}
+        <p class="vn-text">The game has ended.</p>
+      {:else if $showText$}
+        <div class="vn-text" lang="ja">
+          {#each lines as line}
+            <p>
+              {#each line as part}{#if part.ruby}<ruby>{part.text}<rt>{part.ruby}</rt></ruby
+                  >{:else}{part.text}{/if}{/each}
+            </p>
+          {/each}
+        </div>
+      {/if}
+
+      {#if book?.characters}
+        <div class="vn-progress">
+          <span class="vn-progress-track">
+            <span class="vn-progress-fill" style:width="{percent}%" />
+          </span>
+          <span class="vn-progress-label">
+            {readCharacters.toLocaleString('en')} / {book.characters.toLocaleString('en')} chars ·
+            {Math.floor(percent)}%
+            {#if todayCharacters}
+              <span class="vn-today">+{todayCharacters.toLocaleString('en')} today</span>
+            {/if}
+          </span>
+        </div>
+      {/if}
+    </div>
+  </div>
 </div>
 
+{#if showMore}
+  <ReaderSheet title="More" on:close={() => (showMore = false)}>
+    <ul class="vn-more">
+      {#if fullscreenManager.fullscreenEnabled}
+        <li>
+          <button
+            on:click={() => {
+              showMore = false;
+              toggleFullscreen();
+            }}
+          >
+            Full screen
+          </button>
+        </li>
+      {/if}
+      <li><button on:click={openStatistics}>Statistics</button></li>
+    </ul>
+  </ReaderSheet>
+{/if}
+
 <style>
+  .vn-page {
+    background: var(--reader-panel-bg);
+    color: var(--reader-panel-fg);
+    font-family: var(--app-font-ui);
+  }
+
+  /* Menu and Skip are for phones, where right-click and the game's own buttons are hard to reach. */
+  .vn-page .vn-phone-chip,
+  .vn-chip-row {
+    display: none;
+  }
+
+  .vn-chip-row {
+    gap: 0.25rem;
+    overflow-x: auto;
+    padding: 0 0.5rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
+  }
+
+  .vn-chip {
+    display: inline-flex;
+    height: 2.75rem;
+    flex: 1 0 auto;
+    align-items: center;
+    justify-content: center;
+    padding: 0 0.5rem;
+    border-radius: 2px;
+    color: color-mix(in srgb, var(--reader-panel-fg) 68%, transparent);
+    font-size: var(--type-small);
+    font-weight: 700;
+  }
+
+  .vn-chip-icon {
+    width: 2.75rem;
+    flex: none;
+    padding: 0;
+  }
+
+  .vn-chip-on {
+    background: color-mix(in srgb, var(--accent-color) 12%, var(--reader-panel-bg));
+    color: var(--accent-strong-color);
+  }
+
+  @media (orientation: portrait) and (max-width: 767px) {
+    .vn-page .vn-bar-chip {
+      display: none;
+    }
+
+    .vn-chip-row {
+      display: flex;
+    }
+
+    /* The game at its width (most are 4:3), the text panel in the rest of the height */
+    .vn-main-text .vn-game {
+      height: 75vw;
+      flex: none;
+      padding: 0;
+    }
+
+    .vn-main-text .vn-side {
+      display: flex;
+      min-height: 0;
+      flex: 1;
+      flex-direction: column;
+    }
+
+    .vn-main-text .vn-text {
+      max-height: none;
+      flex: 1;
+    }
+  }
+
+  @media (orientation: landscape) and (max-height: 500px) {
+    .vn-page .vn-phone-chip {
+      display: inline-flex;
+    }
+
+    .vn-page .bar-chip {
+      height: 2.75rem;
+    }
+  }
+
+  .vn-keep {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 1.25rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
+    font-size: var(--type-body);
+  }
+
+  .vn-keep p {
+    flex: 1;
+  }
+
+  .vn-main {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  .vn-game {
+    min-height: 0;
+    flex: 1;
+    padding: 1.5rem 0;
+    background: #000;
+  }
+
+  .vn-notice {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 0.6rem 1.25rem;
+    background: var(--surface-color);
+    font-size: var(--type-small);
+  }
+
+  .vn-notice p {
+    flex: 1;
+  }
+
   .vn-text {
+    width: min(50rem, calc(100% - 2.5rem));
+    max-height: 30vh;
+    margin: 1.75rem auto 0;
+    overflow-y: auto;
+    padding-top: 0.75rem;
+    border-top: 2px solid var(--reader-panel-fg);
     font-size: 1.25rem;
+    font-weight: 700;
     line-height: 2;
   }
 
   .vn-text p {
     margin: 0;
     min-height: 1em;
+  }
+
+  .vn-progress {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+  }
+
+  .vn-progress-track {
+    position: relative;
+    height: 3px;
+    flex: 1;
+    background: var(--app-progress-track);
+  }
+
+  .vn-progress-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    background: var(--accent-color);
+  }
+
+  .vn-progress-label {
+    color: color-mix(in srgb, var(--reader-panel-fg) 68%, transparent);
+    font-size: var(--type-small);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .vn-today {
+    margin-left: 0.5rem;
+    color: var(--accent-strong-color);
+    font-weight: 700;
+  }
+
+  /* Phones held sideways: the text beside the game, the progress under it */
+  @media (orientation: landscape) and (max-height: 500px) {
+    .vn-game {
+      padding: 0;
+    }
+
+    .vn-main-text {
+      flex-direction: row;
+    }
+
+    .vn-main-text .vn-side {
+      display: flex;
+      width: 40%;
+      flex-direction: column;
+      border-left: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
+    }
+
+    .vn-main-text .vn-text {
+      max-height: none;
+      flex: 1;
+      margin-top: 1rem;
+    }
+
+    .vn-main-text .vn-progress {
+      flex-wrap: wrap;
+      padding: 0.75rem 1rem;
+    }
+
+    .vn-main-text .vn-progress-track {
+      flex-basis: 100%;
+    }
+
+    .vn-progress {
+      padding: 0.4rem 1rem;
+    }
+  }
+
+  .vn-more {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .vn-more button {
+    display: flex;
+    width: 100%;
+    min-height: 3.25rem;
+    align-items: center;
+    border-bottom: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
+    text-align: left;
+  }
+
+  .vn-more button:hover {
+    color: var(--accent-strong-color);
   }
 </style>
