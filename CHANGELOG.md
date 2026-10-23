@@ -8,6 +8,10 @@ anything a reader or a server operator would notice.
 
 ### Changed
 
+- The library's top bar shows only Import and the account: view and sort are in the Store's Sort
+  menu, Select is a Store button (long press still selects on Home), and the storage source and
+  "Report an issue" are in Settings → Data → Storage. The old-domain hint and the `?count` loader
+  are gone, and so is the Q shortcut.
 - The manga reader and visual novel player use the Study Book reader bar: the manga reader has a
   page slider, a settings panel and a new card between volumes; the player shows reading progress
   and asks to keep a large game's files in a bar instead of a browser dialog. On phones it has

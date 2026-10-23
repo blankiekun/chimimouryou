@@ -925,32 +925,6 @@
     }
   }
 
-  function onDomainHintClick() {
-    dialogManager.dialogs$.next([
-      {
-        component: MessageDialog,
-        props: {
-          title: 'Old Domain',
-          message:
-            'You are currently using the old domain of ッツ Reader - consider switching to https://reader.ttsu.app to prevent issues and to ensure full features'
-        },
-        disableCloseOnClick: true
-      }
-    ]);
-  }
-
-  function onBugReportClick() {
-    dialogManager.dialogs$.next([
-      {
-        component: LogReportDialog,
-        props: {
-          title: 'Bug Report',
-          message: 'Please include the attached file for your report'
-        }
-      }
-    ]);
-  }
-
   function onDifficultyClick() {
     const books = ($bookCards$ ?? []).filter(
       (card) => selectedBookIds.has(card.id) && card.calibreId
@@ -1189,12 +1163,8 @@
 <div class="app-page-shell">
   <BookManagerHeader
     currentBookId={$currentBookId$}
-    hasBooks={!!$bookCards$?.length}
     disabled={!!replicationToProgress}
-    bind:selectMode
     on:filesChange={(ev) => onFilesChange(ev.detail)}
-    on:domainHintClick={onDomainHintClick}
-    on:bugReportClick={onBugReportClick}
     on:importBackup={(ev) => onImportBackup(ev.detail)}
   />
 
@@ -1281,7 +1251,17 @@
             </span>
           {/if}
           {#if !showSeriesGrid}
-            <span class="store-sort"><LibrarySortMenu /></span>
+            <span class="store-sort">
+              <button
+                type="button"
+                class="app-button app-button-quiet"
+                disabled={!$bookCards$?.length}
+                on:click={() => (selectMode = true)}
+              >
+                {$t$('library.select')}
+              </button>
+              <LibrarySortMenu />
+            </span>
           {/if}
         </div>
       {/if}
@@ -1769,6 +1749,8 @@
   }
 
   .store-sort {
+    display: flex;
+    gap: 0.5rem;
     margin-left: auto;
   }
 
