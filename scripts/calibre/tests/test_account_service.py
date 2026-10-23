@@ -434,6 +434,24 @@ class AccountServiceTest(unittest.TestCase):
         self.assertEqual(call('POST', 'token', self.ALICE, Origin='https://books.example')[0], 403)
         self.assertEqual(call('POST', 'login', self.ALICE, Origin=self.APP)[0], 403)
 
+    def test_desktop_loopback_origin(self):
+        # https origins, and http only on loopback with a port (the desktop app).
+        self.assertEqual(service.parse_cors_origins(
+            'https://app.example http://127.0.0.1:41917 http://localhost:41917 http://app.example '
+            'http://127.0.0.1 http://127.0.0.2:41917 http://127.0.0.1.evil.example:41917 '
+            'http://127.0.0.1:41917/ https://app.example/path'),
+            {'https://app.example', 'http://127.0.0.1:41917', 'http://localhost:41917'})
+        desktop = 'http://127.0.0.1:41917'
+        call = self.serve((self.APP, desktop))
+        service.create_user('alice', 'long enough')
+        status, body, _ = call('POST', 'token', self.ALICE, Origin=desktop)
+        self.assertEqual(status, 200)
+        bearer = f"Bearer {body['token']}"
+        self.assertEqual(call('GET', 'me', Origin=desktop, Authorization=bearer)[1]['user']['username'], 'alice')
+        # The server itself stays HTTPS-only, and tokens never administer.
+        self.assertEqual(call('POST', 'token', self.ALICE, Origin=desktop, X_Forwarded_Proto='http')[0], 403)
+        self.assertEqual(call('POST', 'token', self.ALICE, Origin='http://127.0.0.1:41918')[0], 403)
+
     def test_token_off_without_cors_origins(self):
         call = self.serve(cors_origins=())
         service.create_user('alice', 'long enough')
