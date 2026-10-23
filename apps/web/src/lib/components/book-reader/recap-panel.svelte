@@ -1,15 +1,11 @@
 <script lang="ts">
-  import {
-    faChevronDown,
-    faChevronRight,
-    faSpinner,
-    faTrash
-  } from '@fortawesome/free-solid-svg-icons';
+  import { faChevronDown, faChevronRight, faSpinner } from '@fortawesome/free-solid-svg-icons';
   import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v3';
   import {
     deleteSavedRecap,
     getSavedRecaps,
     planRecap,
+    recapModel,
     recapsChanged$,
     writeRecap,
     type RecapPlan,
@@ -18,6 +14,9 @@
   import { extrasSyncError$, syncExtras } from '$lib/data/extras-sync';
   import { chapterLabelAt, type SearchIndex } from '$lib/functions/book-text/book-search';
   import { onDestroy, onMount } from 'svelte';
+  import AiLanguageToggle from '$lib/components/ai-language-toggle.svelte';
+  import SectionHead from '$lib/components/section-head.svelte';
+  import { modelShortName } from '$lib/data/ai-settings';
   import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';
   import { renderBasicMarkdown } from '$lib/functions/basic-markdown';
@@ -42,6 +41,9 @@
   let error = '';
   let running = false;
   let abortController = new AbortController();
+
+  // Read when the tab opens; changing the model in Settings means leaving the reader.
+  const model = recapModel();
 
   const percent = (count: number) =>
     bookCharacters ? `${((count / bookCharacters) * 100).toFixed(1)}%` : '';
@@ -125,95 +127,136 @@
   }
 </script>
 
-<div class="flex-1 overflow-y-auto px-4 py-3">
+<div class="panel-meta">
+  <span class="panel-meta-text" title={model}>{modelShortName(model)}</span>
+  <AiLanguageToggle compact />
+</div>
+<div class="recap panel-body flex-1 overflow-y-auto">
   {#if error}
-    <p class="mb-3 text-panel-danger">{error}</p>
+    <p class="text-panel-danger">{error}</p>
   {/if}
   {#if $extrasSyncError$.recaps}
-    <p class="mb-3 text-xs text-panel-danger">{$extrasSyncError$.recaps}</p>
+    <p class="text-panel-danger">{$extrasSyncError$.recaps}</p>
   {/if}
 
   {#if !plan && !error}
-    <p class="flex items-center gap-2 opacity-80">
+    <p class="panel-note flex items-center gap-2">
       <Fa icon={faSpinner} spin />
       {$t$('reader.preparing')}
     </p>
   {:else if plan && !running}
-    <p class="mb-3 leading-relaxed">
+    <p>
       {$t$('reader.recapIntro', { count: position.toLocaleString(), percent: percent(position) })}
     </p>
     {#if plan.missing.length}
-      <p class="mb-3 text-xs opacity-80">
+      <p class="panel-note">
         {$t$(plan.missing.length === 1 ? 'reader.recapMissingOne' : 'reader.recapMissing', {
           count: plan.missing.length,
           k: Math.round(plan.missingCharacters / 1000),
-          model: plan.model
+          model: modelShortName(plan.model)
         })}
       </p>
     {/if}
-    <button class="reader-panel-chip mb-4 rounded-sm px-4 py-2 font-semibold" on:click={start}>
+    <button class="app-button app-button-primary self-start" on:click={start}>
       {$t$('reader.writeRecap')}
     </button>
   {/if}
 
   {#if progress}
-    <p class="mb-3 flex items-center gap-2 text-xs opacity-80">
+    <p class="panel-note flex items-center gap-2">
       <Fa icon={faSpinner} spin />
       {progress}
     </p>
   {/if}
 
   {#if recap}
-    <div class="mb-4 whitespace-pre-wrap leading-relaxed">{@html renderBasicMarkdown(recap)}</div>
+    <div class="recap-text">{@html renderBasicMarkdown(recap)}</div>
   {/if}
 
   {#if saved.length}
-    <h3 class="pb-1 pt-2 text-xs font-bold uppercase tracking-wide opacity-60">
-      {$t$('reader.savedRecaps')}
-    </h3>
-    {#each [...saved].reverse() as item (item.created)}
-      {@const ahead = item.position > position}
-      <div class="saved rounded-sm">
-        <div class="flex items-center gap-2 px-2 py-2">
-          <button
-            class="flex min-w-0 flex-1 items-center gap-2 text-left"
-            on:click={() => (openRecap = openRecap === item.created ? undefined : item.created)}
-          >
-            <Fa icon={openRecap === item.created ? faChevronDown : faChevronRight} fw />
-            <span class="min-w-0 flex-1">
-              <span class="block truncate font-semibold">
-                {chapterLabelAt(sections, item.position) || $t$('reader.recapFallback')} · {percent(
-                  item.position
-                )}
-              </span>
-              <span class="block text-xs opacity-60">
-                {$t$('reader.recapMeta', {
-                  count: item.position.toLocaleString(),
-                  date: new Date(item.created).toLocaleDateString()
-                })}{ahead ? ` · ${$t$('reader.recapAhead')}` : ''}
-              </span>
-            </span>
-          </button>
-          <button
-            class="p-1.5 opacity-60 hover:opacity-100"
-            title={$t$('reader.delete')}
-            on:click={() => remove(item.created)}
-          >
-            <Fa icon={faTrash} />
-          </button>
-        </div>
-        {#if openRecap === item.created}
-          <div class="whitespace-pre-wrap px-3 pb-3 leading-relaxed">
-            {@html renderBasicMarkdown(item.text)}
-          </div>
-        {/if}
-      </div>
-    {/each}
+    <div class="recap-saved">
+      <SectionHead number={1} title={$t$('reader.savedRecaps')} count={saved.length} level="h3" />
+      <ul class="recap-list">
+        {#each [...saved].reverse() as item (item.created)}
+          {@const ahead = item.position > position}
+          <li>
+            <div class="recap-row">
+              <button
+                class="recap-toggle"
+                aria-expanded={openRecap === item.created}
+                on:click={() => (openRecap = openRecap === item.created ? undefined : item.created)}
+              >
+                <Fa icon={openRecap === item.created ? faChevronDown : faChevronRight} fw />
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate font-bold" lang="ja">
+                    {chapterLabelAt(sections, item.position) || $t$('reader.recapFallback')} · {percent(
+                      item.position
+                    )}
+                  </span>
+                  <span class="panel-note block">
+                    {$t$('reader.recapMeta', {
+                      count: item.position.toLocaleString(),
+                      date: new Date(item.created).toLocaleDateString()
+                    })}{ahead ? ` · ${$t$('reader.recapAhead')}` : ''}
+                  </span>
+                </span>
+              </button>
+              <button class="app-button app-button-quiet" on:click={() => remove(item.created)}>
+                {$t$('reader.delete')}
+              </button>
+            </div>
+            {#if openRecap === item.created}
+              <div class="recap-text pb-4">{@html renderBasicMarkdown(item.text)}</div>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+    </div>
   {/if}
 </div>
 
 <style>
-  .saved:hover {
-    background: color-mix(in srgb, var(--reader-panel-fg) 5%, transparent);
+  .recap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    padding-top: 1rem;
+    padding-bottom: 1.5rem;
+    line-height: 1.7;
+  }
+
+  .recap-text {
+    white-space: pre-wrap;
+    line-height: 1.8;
+  }
+
+  .recap-saved {
+    margin-top: 0.75rem;
+  }
+
+  .recap-list {
+    margin-top: 0.75rem;
+    border-top: 2px solid var(--reader-panel-fg);
+  }
+
+  .recap-list > li {
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .recap-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0;
+  }
+
+  .recap-toggle {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    align-items: center;
+    gap: 0.5rem;
+    text-align: left;
+    line-height: 1.5;
   }
 </style>

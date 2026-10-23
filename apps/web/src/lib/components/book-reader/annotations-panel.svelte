@@ -45,33 +45,35 @@
 
 <div class="flex min-h-0 flex-1 flex-col">
   <div class="ann-tools">
-    <label class="flex items-center gap-1.5">
+    <label class="flex items-center gap-1.5 whitespace-nowrap">
       <input type="checkbox" bind:checked={notesOnly} />
       {$t$('reader.notesOnly')}
     </label>
-    <span class="ann-count ml-auto">
-      {copied
-        ? $t$('reader.copied')
-        : $t$(highlights.length === 1 ? 'reader.highlightCountOne' : 'reader.highlightCount', {
-            count: highlights.length
-          })}
+    <span class="ann-actions">
+      <span class="ann-count">
+        {copied
+          ? $t$('reader.copied')
+          : $t$(highlights.length === 1 ? 'reader.highlightCountOne' : 'reader.highlightCount', {
+              count: highlights.length
+            })}
+      </span>
+      <button
+        class="app-button-quiet"
+        title={$t$('reader.copyMarkdown')}
+        disabled={!highlights.length}
+        on:click={copy}
+      >
+        {$t$('reader.copy')}
+      </button>
+      <button
+        class="app-button-quiet"
+        title={$t$('reader.downloadMarkdown')}
+        disabled={!highlights.length}
+        on:click={download}
+      >
+        {$t$('reader.download')}
+      </button>
     </span>
-    <button
-      class="app-button-quiet"
-      title={$t$('reader.copyMarkdown')}
-      disabled={!highlights.length}
-      on:click={copy}
-    >
-      {$t$('reader.copy')}
-    </button>
-    <button
-      class="app-button-quiet"
-      title={$t$('reader.downloadMarkdown')}
-      disabled={!highlights.length}
-      on:click={download}
-    >
-      {$t$('reader.download')}
-    </button>
   </div>
 
   {#if syncError}
@@ -92,18 +94,21 @@
         <div class="annotation">
           <button
             type="button"
-            class="min-w-0 flex-1 text-left"
+            class="annotation-main"
             title={$t$('reader.goToHighlight')}
             on:click={() => dispatch('jump', highlight)}
           >
             <span
-              class="annotation-text"
-              style:border-color="var(--highlight-{highlight.color})"
-              lang="ja">{highlight.text}</span
-            >
-            {#if highlight.note}
-              <span class="annotation-note">{highlight.note}</span>
-            {/if}
+              class="annotation-swatch"
+              style:background="var(--highlight-{highlight.color})"
+              aria-hidden="true"
+            />
+            <span class="min-w-0">
+              <span class="annotation-text" lang="ja">{highlight.text}</span>
+              {#if highlight.note}
+                <span class="annotation-note">{highlight.note}</span>
+              {/if}
+            </span>
           </button>
           <button
             type="button"
@@ -119,11 +124,13 @@
 </div>
 
 <style>
+  /* One row when it fits; otherwise count, Copy and Download wrap together */
   .ann-tools {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem 1rem;
+    gap: 0.5rem 0.75rem;
+    font-size: var(--type-small);
     margin: 0 1rem;
     padding: 0.75rem 0;
     border-bottom: 2px solid var(--reader-panel-fg);
@@ -136,8 +143,17 @@
     font-size: var(--type-small);
   }
 
+  .ann-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-left: auto;
+    white-space: nowrap;
+  }
+
   .ann-count {
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
 
   .ann-list {
@@ -168,12 +184,27 @@
     background: color-mix(in srgb, var(--reader-panel-fg) 4%, transparent);
   }
 
-  /* The bar carries the highlight's colour, so it says which one this is. */
+  .annotation-main {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    gap: 0.6rem;
+    text-align: left;
+  }
+
+  /* The swatch carries the highlight's colour, so it says which one this is. */
+  .annotation-swatch {
+    width: 10px;
+    height: 10px;
+    flex: none;
+    margin-top: 0.45em;
+    border: 1px solid color-mix(in srgb, var(--reader-panel-fg) 30%, transparent);
+    border-radius: 2px;
+  }
+
   .annotation-text {
     display: -webkit-box;
     overflow: hidden;
-    padding-left: 0.75rem;
-    border-left: 3px solid;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 4;
     line-clamp: 4;
@@ -182,7 +213,6 @@
   .annotation-note {
     display: block;
     margin-top: 0.3rem;
-    padding-left: calc(0.75rem + 3px);
     color: var(--accent-strong-color);
     font-size: var(--type-small);
     white-space: pre-wrap;

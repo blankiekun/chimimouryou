@@ -6,6 +6,7 @@
     aiLanguage$,
     askAiDefaultPreset$,
     askAiPresets$,
+    modelShortName,
     openRouterApiKey$,
     openRouterModel$,
     type AskAiPreset
@@ -44,7 +45,7 @@
   onMount(() => {
     const preset = presets.find((p) => p.id === $askAiDefaultPreset$);
 
-    if (preset) {
+    if (preset && $openRouterApiKey$) {
       runPreset(preset);
     }
   });
@@ -101,26 +102,32 @@
   }
 </script>
 
-<section class="flex min-h-0 flex-1 flex-col text-sm" aria-label={$t$('reader.askAi')}>
-  <header class="ask-head flex items-center gap-2">
-    <h2 class="flex-1">{$t$('reader.askAi')}</h2>
-    <span class="truncate text-xs opacity-60">{$openRouterModel$}</span>
-    <AiLanguageToggle compact />
-    <button class="p-1" title={$t$('reader.close')} on:click={close}><Fa icon={faXmark} /></button>
+<section class="flex min-h-0 flex-1 flex-col" aria-label={$t$('reader.askAi')}>
+  <header class="ask-head">
+    <h2>{$t$('reader.askAi')}</h2>
+    <button class="ask-close" title={$t$('reader.close')} on:click={close}
+      ><Fa icon={faXmark} /></button
+    >
   </header>
+  <div class="panel-meta">
+    <span class="panel-meta-text" title={$openRouterModel$}
+      >{modelShortName($openRouterModel$)}</span
+    >
+    <AiLanguageToggle compact />
+  </div>
 
-  <div class="flex-1 overflow-y-auto px-4 py-3" bind:this={answersElm}>
-    <blockquote class="reader-panel-quote mb-3 border-l-2 pl-3 opacity-80" lang="ja">
+  <div class="panel-body flex-1 overflow-y-auto py-3" bind:this={answersElm}>
+    <blockquote class="reader-panel-quote mb-3 border-l pl-3 opacity-80" lang="ja">
       {passage.selection}
     </blockquote>
     {#if !$openRouterApiKey$}
-      <p class="mb-3">
+      <p class="panel-note mb-3">
         {$t$('reader.askAiNeedsKey')}
         <a
-          class="underline"
+          class="app-button app-button-quiet"
           href="{pagePath}/settings?section=ai#ai-guide"
           target="_blank"
-          rel="noreferrer">{$t$('reader.setupGuide')}</a
+          rel="noreferrer">{$t$('reader.setupGuide')} →</a
         >
       </p>
     {/if}
@@ -142,7 +149,7 @@
 
   {#if presets.length}
     <div
-      class="flex flex-wrap gap-1.5 px-4 pb-2"
+      class="panel-body flex flex-wrap gap-1.5 pb-2"
       role="group"
       aria-label={$t$('reader.quickQuestions')}
     >
@@ -161,7 +168,7 @@
   {/if}
 
   <form
-    class="reader-panel-divider flex gap-2 border-t px-4 py-3"
+    class="panel-body reader-panel-divider flex gap-2 border-t py-3"
     on:submit|preventDefault={() => question.trim() && ask(question.trim())}
   >
     <input
@@ -177,16 +184,35 @@
 </section>
 
 <style>
+  /* Same as the reader panel's tab header: title and close */
   .ask-head {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
     margin: 0 1rem;
     padding: 0.9rem 0 0.6rem;
     border-bottom: 2px solid var(--reader-panel-fg);
   }
 
   .ask-head h2 {
+    flex: 1;
     margin: 0;
     font-size: var(--type-h2);
     font-weight: 700;
+  }
+
+  .ask-close {
+    display: inline-flex;
+    width: 2.75rem;
+    height: 2.75rem;
+    margin: -0.6rem -0.75rem -0.6rem 0;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+  }
+
+  .ask-close:hover {
+    color: var(--reader-panel-fg);
   }
 
   @media (min-width: 768px) {

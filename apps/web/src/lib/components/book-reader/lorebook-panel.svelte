@@ -1,12 +1,7 @@
 <script lang="ts">
-  import {
-    faDownload,
-    faForward,
-    faSpinner,
-    faStop,
-    faTrash
-  } from '@fortawesome/free-solid-svg-icons';
-  import { lorebookAutoInterval$ } from '$lib/data/ai-settings';
+  import { faSpinner } from '@fortawesome/free-solid-svg-icons';
+  import AiLanguageToggle from '$lib/components/ai-language-toggle.svelte';
+  import { lorebookAutoInterval$, modelShortName } from '$lib/data/ai-settings';
   import {
     clearLorebook,
     copyLorebookTo,
@@ -42,6 +37,9 @@
   export let title: string;
   export let getIndex: () => Promise<SearchIndex>;
   export let position: number;
+
+  // Read when the tab opens; the model is set in Settings → AI.
+  const model = recapModel();
 
   $: categoryLabels = (category: LoreCategory) => $t$(`reader.lore.${category}`);
 
@@ -197,22 +195,26 @@
   }
 </script>
 
+<div class="panel-meta">
+  <span class="panel-meta-text" title={model}>{modelShortName(model)}</span>
+  <AiLanguageToggle compact />
+</div>
 <div class="flex min-h-0 flex-1 flex-col">
-  <div class="px-4 pt-3 text-xs">
+  <div class="lore-top panel-body">
     {#if lorebook}
-      <p class="mb-2 opacity-80">
+      <p class="panel-note">
         {$t$('reader.loreReadUpTo', { count: lorebook.processedUpTo.toLocaleString() })}
         {$lorebookAutoInterval$
           ? $t$('reader.loreAuto', { count: $lorebookAutoInterval$.toLocaleString() })
           : $t$('reader.loreAutoOff')}
       </p>
-      <div class="flex flex-wrap items-center gap-2">
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
         <button
-          class="reader-panel-chip rounded-sm px-3 py-1.5 font-semibold disabled:opacity-50"
+          class="app-button app-button-primary"
           disabled={running || pending < minUpdateCharacters}
           title={$t$('reader.loreUpdateTitle', {
             count: pending.toLocaleString(),
-            model: recapModel()
+            model: modelShortName(model)
           })}
           on:click={update}
         >
@@ -223,43 +225,43 @@
         </button>
         {#if running}
           <button
-            class="flex items-center gap-1 p-1.5"
+            class="app-button"
             title={$t$('reader.loreStopTitle')}
             on:click={() => stopLorebookUpdate(title)}
           >
-            <Fa icon={faStop} />
             {$t$('reader.stop')}
           </button>
         {/if}
-        <span class="flex-1" />
+      </div>
+      <div class="flex flex-wrap items-center gap-x-4">
         <button
-          class="p-1.5"
+          class="app-button app-button-quiet"
           title={$t$('reader.loreSend')}
           disabled={!lorebook.entries.length}
           on:click={showSendTargets}
         >
-          <Fa icon={faForward} />
+          {$t$('reader.loreSendShort')}
         </button>
         <button
-          class="p-1.5"
+          class="app-button app-button-quiet"
           title={$t$('reader.loreExport')}
           disabled={!lorebook.entries.length}
           on:click={exportJson}
         >
-          <Fa icon={faDownload} />
+          {$t$('reader.loreExportShort')}
         </button>
         <button
-          class="p-1.5"
+          class="app-button app-button-quiet"
           title={$t$('reader.loreClear')}
-          disabled={running}
+          disabled={running || !lorebook.entries.length}
           on:click={clearAll}
         >
-          <Fa icon={faTrash} />
+          {$t$('reader.loreClearShort')}
         </button>
       </div>
       {#if sendTargets?.length}
-        <div class="mt-2 flex items-center gap-2">
-          <select class="filter min-w-0 flex-1 rounded-sm px-2 py-1.5" bind:value={sendTarget}>
+        <div class="flex items-center gap-2">
+          <select class="app-input min-w-0 flex-1" bind:value={sendTarget}>
             {#each sendTargets as book (book.title)}
               <option value={book.title}>
                 {book.seriesIndex ?? '?'} · {book.title}{$homeBookTitles$.includes(book.title)
@@ -268,123 +270,135 @@
               </option>
             {/each}
           </select>
-          <button class="reader-panel-chip rounded-sm px-3 py-1.5 font-semibold" on:click={send}>
+          <button class="app-button" on:click={send}>
             {$t$('reader.loreCopy')}
           </button>
         </div>
       {/if}
-      {#if sendMessage}<p class="mt-2 opacity-70">{sendMessage}</p>{/if}
-      {#if progress}<p class="mt-2 opacity-70">{progress}</p>{/if}
+      {#if sendMessage}<p class="panel-note">{sendMessage}</p>{/if}
+      {#if progress}<p class="panel-note">{progress}</p>{/if}
     {/if}
-    {#if error}<p class="mt-2 text-panel-danger">{error}</p>{/if}
-    {#if $extrasSyncError$.lorebook}<p class="mt-2 text-panel-danger">
+    {#if error}<p class="text-panel-danger">{error}</p>{/if}
+    {#if $extrasSyncError$.lorebook}<p class="text-panel-danger">
         {$extrasSyncError$.lorebook}
       </p>{/if}
 
-    <div class="mt-3 flex flex-wrap gap-1">
-      <button class="chip" class:chip-active={!category} on:click={() => (category = '')}
-        >{$t$('reader.all')}</button
-      >
-      {#each loreCategories as option}
-        {#if counts[option]}
-          <button
-            class="chip"
-            class:chip-active={category === option}
-            on:click={() => (category = option)}
-          >
-            {categoryLabels(option)}
-            {counts[option]}
-          </button>
-        {/if}
-      {/each}
-    </div>
-    <input
-      class="filter mt-2 w-full rounded-sm px-2 py-1.5"
-      placeholder={$t$('reader.loreFilter')}
-      bind:value={filter}
-    />
+    {#if lorebook?.entries.length}
+      <div class="flex gap-2">
+        <select
+          class="app-input lore-category"
+          aria-label={$t$('reader.loreCategory')}
+          bind:value={category}
+        >
+          <option value="">{$t$('reader.all')} {lorebook.entries.length}</option>
+          {#each loreCategories as option}
+            {#if counts[option]}
+              <option value={option}>{categoryLabels(option)} {counts[option]}</option>
+            {/if}
+          {/each}
+        </select>
+        <input
+          class="app-input min-w-0 flex-1"
+          type="search"
+          placeholder={$t$('reader.loreFilter')}
+          bind:value={filter}
+        />
+      </div>
+    {/if}
   </div>
 
-  <div class="flex-1 overflow-y-auto px-2 py-2">
+  <div class="panel-body flex-1 overflow-y-auto pb-6">
     {#if lorebook && !lorebook.entries.length}
-      <p class="px-2 py-6 text-center text-sm opacity-70">
+      <p class="panel-note py-6">
         {$t$('reader.loreEmpty')}
       </p>
-    {/if}
-    {#each visible as entry (entry.id)}
-      <div class="entry rounded-sm px-2 py-2">
-        <button
-          class="w-full text-left"
-          on:click={() => (openEntry = openEntry === entry.id ? '' : entry.id)}
-        >
-          <span class="font-semibold" lang="ja">{entry.name}</span>
-          {#if entry.reading && entry.reading !== entry.name}
-            <span class="text-xs opacity-60" lang="ja">{entry.reading}</span>
-          {/if}
-          <span class="ml-1 text-xs opacity-50">{categoryLabels(entry.category)}</span>
-          {#if openEntry !== entry.id}
-            <span class="entry-preview mt-0.5 block text-xs opacity-75">{entry.content}</span>
-          {/if}
-        </button>
-        {#if openEntry === entry.id}
-          <textarea
-            class="filter mt-1 w-full rounded-sm p-2 text-xs leading-relaxed"
-            rows="5"
-            value={entry.content}
-            on:change={(e) => editContent(entry.id, e.currentTarget.value)}
-          />
-          <div class="flex items-center gap-2 text-xs opacity-60">
-            <span class="min-w-0 flex-1 truncate" lang="ja"
-              >{$t$('reader.loreKeys', { keys: entry.keys.join('、') })}</span
-            >
-            <span
-              >{entry.fromBook
-                ? $t$('reader.loreFrom', { title: entry.fromBook })
-                : `${entry.updated > position ? `${$t$('reader.loreLater')} · ` : ''}${$t$(
-                    'reader.loreSince',
-                    { count: entry.firstSeen.toLocaleString() }
-                  )}`}</span
-            >
+    {:else if visible.length}
+      <ul class="lore-list">
+        {#each visible as entry (entry.id)}
+          <li>
             <button
-              class="p-1"
-              title={$t$('reader.loreDeleteEntry')}
-              on:click={() => removeEntry(entry.id)}
+              class="lore-entry"
+              aria-expanded={openEntry === entry.id}
+              on:click={() => (openEntry = openEntry === entry.id ? '' : entry.id)}
             >
-              <Fa icon={faTrash} />
+              <span class="font-bold" lang="ja">{entry.name}</span>
+              {#if entry.reading && entry.reading !== entry.name}
+                <span class="panel-note" lang="ja">{entry.reading}</span>
+              {/if}
+              <span class="panel-note ml-1">{categoryLabels(entry.category)}</span>
+              {#if openEntry !== entry.id}
+                <span class="lore-preview" lang="ja">{entry.content}</span>
+              {/if}
             </button>
-          </div>
-        {/if}
-      </div>
-    {/each}
+            {#if openEntry === entry.id}
+              <textarea
+                class="app-input w-full"
+                rows="5"
+                lang="ja"
+                value={entry.content}
+                on:change={(e) => editContent(entry.id, e.currentTarget.value)}
+              />
+              <div class="panel-note flex items-center gap-3 pb-2">
+                <span class="min-w-0 flex-1 truncate" lang="ja"
+                  >{$t$('reader.loreKeys', { keys: entry.keys.join('、') })}</span
+                >
+                <span
+                  >{entry.fromBook
+                    ? $t$('reader.loreFrom', { title: entry.fromBook })
+                    : `${entry.updated > position ? `${$t$('reader.loreLater')} · ` : ''}${$t$(
+                        'reader.loreSince',
+                        { count: entry.firstSeen.toLocaleString() }
+                      )}`}</span
+                >
+                <button class="app-button app-button-quiet" on:click={() => removeEntry(entry.id)}>
+                  {$t$('reader.delete')}
+                </button>
+              </div>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+    {/if}
   </div>
 </div>
 
 <style>
-  .entry:hover {
-    background: color-mix(in srgb, var(--reader-panel-fg) 6%, transparent);
+  .lore-top {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
   }
 
-  .entry-preview {
+  .lore-category {
+    max-width: 45%;
+  }
+
+  .lore-list {
+    border-top: 2px solid var(--reader-panel-fg);
+  }
+
+  .lore-list > li {
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .lore-entry {
+    display: block;
+    width: 100%;
+    padding: 0.6rem 0;
+    text-align: left;
+    line-height: 1.6;
+  }
+
+  .lore-preview {
     display: -webkit-box;
     overflow: hidden;
+    margin-top: 0.15rem;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     line-clamp: 2;
-  }
-
-  .chip {
-    border-radius: 2px;
-    padding: 0.2rem 0.6rem;
-    font-weight: 600;
-    background: color-mix(in srgb, var(--reader-panel-fg) 8%, transparent);
-  }
-
-  .chip-active {
-    background: color-mix(in srgb, var(--reader-panel-fg) 22%, transparent);
-  }
-
-  .filter {
-    color: inherit;
-    background: color-mix(in srgb, var(--reader-panel-fg) 8%, transparent);
+    color: var(--muted);
+    font-size: var(--type-small);
   }
 </style>

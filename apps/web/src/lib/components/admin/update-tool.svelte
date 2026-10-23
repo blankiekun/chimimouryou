@@ -27,7 +27,8 @@
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
 
   $: repo = state?.updater || defaultUpdateRepo;
-  $: status = state?.status;
+  // status.json also reports VN engine installs (ref = a release tag); app updates name a commit.
+  $: status = /^[0-9a-f]{7,40}$/.test(state?.status?.ref ?? '') ? state?.status : undefined;
   $: canUpdate =
     !!state?.updater && !!check && check.latest !== check.current && check.state !== 'ahead';
   $: finished = !!updatingTo && status?.ref === updatingTo && status.state !== 'running';
