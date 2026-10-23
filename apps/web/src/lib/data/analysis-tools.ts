@@ -265,7 +265,7 @@ export async function downloadAnalysisTools(wanted: AnalysisFeature[]) {
     analysisDownload$.next(
       signal.aborted
         ? undefined
-        : { features: wanted, done: 0, total: 0, error: (error as Error).message }
+        : { features: wanted, done: 0, total: 0, error: downloadError(error) }
     );
   } finally {
     downloadController = undefined;
@@ -281,6 +281,14 @@ async function removeAll() {
     .getDirectory()
     .then((root) => root.removeEntry(analysisToolsCacheName, { recursive: true }))
     .catch(() => undefined);
+}
+
+/** Firefox refuses OPFS in private windows or when the site may not keep data (SecurityError). */
+function downloadError(error: unknown) {
+  if (error instanceof DOMException && error.name === 'SecurityError') {
+    return 'this browser won’t let the site store files (a private window, or site data blocked or cleared on close). Use a normal window or allow site data for this site, then try again.';
+  }
+  return (error as Error).message;
 }
 
 /** Removes `feature` and the files no other installed feature needs. */
