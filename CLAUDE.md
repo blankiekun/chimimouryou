@@ -15,6 +15,7 @@ The details of a particular deployment (hosts, addresses, how it is deployed and
 - `scripts/calibre/`: the server side: nginx template, catalog builder and Python services (accounts, import, difficulty) with their tests.
 - `docker/`, `docker-compose.yml`: the Docker install. `docker-compose.static.yml` is upstream's reader-only image.
 - `scripts/deploy.sh`: deploys the working tree to a server (Proxmox container, SSH or local) and restarts the stack; reads the gitignored `local/` (`deploy.env`, `env`, optional override). `deploy/server/` holds the commands it installs (`ebook-compose`, `ebook-account`, `ebook-update`), `deploy/examples/` optional setups (`tailscale-https/`).
+- Standalone edition (`VITE_EDITION=standalone`, `standalone` in `lib/data/env.ts`, D9): the same app without a server. Gate server features in `lib/` (data loaders return empty, `checkSession` null, `calibreSourceAvailable` false, the factory refuses the Calibre handler) and hide their UI; it must send no request to `/calibre/` or `/account/` (`standalone.test.ts`). Published to GitHub Pages by `deploy/pages/pages.yml`. The service worker deletes only caches named `chimi:…` (`service-worker-caches.ts`).
 - Styling: Tailwind 3 + SCSS. Svelte 4 syntax in app code (not runes).
 
 ## Git workflow

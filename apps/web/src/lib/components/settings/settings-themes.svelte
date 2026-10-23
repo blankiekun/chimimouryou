@@ -28,6 +28,7 @@
   import { inputFile } from '$lib/functions/file-dom/input-file';
   import { onDestroy, tick } from 'svelte';
   import { t$, type MessageKey } from '$lib/i18n';
+  import { pagePath } from '$lib/data/env';
 
   /** Number of themes in the gallery, for the section head */
   export let count = 0;
@@ -245,7 +246,7 @@
   </button>
   <a
     class="app-button app-button-quiet"
-    href="/themes.md"
+    href="{pagePath}/themes.md"
     rel="external"
     target="_blank"
     title={$t$('prefs.themes.guideTitle')}

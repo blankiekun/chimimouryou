@@ -1,11 +1,35 @@
 {
   "name": "Chimimouryou",
   "short_name": "Chimimouryou",
-  "theme_color": "#37474f",
-  "background_color": "#f5f5f6",
-  "display": "fullscreen",
+  "theme_color": "#0F7A5C",
+  "background_color": "#FFFFFF",
+  "display": "standalone",
   "scope": "./",
   "start_url": "./",
+  "launch_handler": { "client_mode": "navigate-existing" },
+  "share_target": {
+    "action": "./share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "books",
+          "accept": [".epub", ".htmlz", ".cbz", ".zip", "application/epub+zip", "application/zip"]
+        }
+      ]
+    }
+  },
+  "file_handlers": [
+    {
+      "action": "./manage",
+      "accept": {
+        "application/epub+zip": [".epub"],
+        "application/zip": [".htmlz", ".zip"],
+        "application/vnd.comicbook+zip": [".cbz"]
+      }
+    }
+  ],
   "icons": [
     {
       "src": "icons/regular-icon@16x16.png",

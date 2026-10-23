@@ -14,6 +14,7 @@
 import { getContext, setContext } from 'svelte';
 import type { Writable } from 'svelte/store';
 import type { MessageKey } from '$lib/i18n';
+import { standalone } from '$lib/data/env';
 
 export interface SettingsSectionInfo {
   id: string;
@@ -34,11 +35,16 @@ export const settingsAreas: SettingsArea[] = [
     id: 'general',
     label: 'settings.area.general',
     sections: [
-      {
-        id: 'general-account',
-        label: 'settings.section.general-account',
-        description: 'settings.section.general-account.text'
-      },
+      // Accounts live on a chimimouryou server; the standalone edition has none.
+      ...(standalone
+        ? []
+        : [
+            {
+              id: 'general-account',
+              label: 'settings.section.general-account' as const,
+              description: 'settings.section.general-account.text' as const
+            }
+          ]),
       {
         id: 'general-language',
         label: 'settings.section.general-language',

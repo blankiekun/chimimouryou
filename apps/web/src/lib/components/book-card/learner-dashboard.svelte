@@ -1,6 +1,7 @@
 <script lang="ts">
   import PointBox from '$lib/components/point-box.svelte';
   import { learningGuideUrl } from '$lib/data/app-update';
+  import { standalone } from '$lib/data/env';
   import {
     activityWeeks,
     learnerStats,
@@ -74,9 +75,11 @@
   }
 
   onMount(async () => {
-    const summary = loadWords();
-
     await loadStats();
+
+    if (standalone) return;
+
+    const summary = loadWords();
     // Statistics of books not opened in this browser only exist on the server.
     const pulled = pullAccountStatistics(window)
       .catch(() => {})
@@ -114,17 +117,22 @@
           value: number(stats.booksCompleted),
           hint: $t$('dashboard.started', { count: number(stats.booksStarted) })
         },
-        {
-          label: $t$('dashboard.words'),
-          value: words ? number(words.met) : '–',
-          hint: $t$('dashboard.wordsHint')
-        },
-        {
-          label: $t$('dashboard.wordsKnown'),
-          value: words ? number(words.known) : '–',
-          hint: $t$('dashboard.wordsKnownHint', { count: knownMinCount }),
-          extra: gained ? $t$('dashboard.wordsGained', { count: number(gained) }) : ''
-        }
+        // Words met and known come from the server's word lists, which the standalone lacks.
+        ...(standalone
+          ? []
+          : [
+              {
+                label: $t$('dashboard.words'),
+                value: words ? number(words.met) : '–',
+                hint: $t$('dashboard.wordsHint')
+              },
+              {
+                label: $t$('dashboard.wordsKnown'),
+                value: words ? number(words.known) : '–',
+                hint: $t$('dashboard.wordsKnownHint', { count: knownMinCount }),
+                extra: gained ? $t$('dashboard.wordsGained', { count: number(gained) }) : ''
+              }
+            ])
       ]
     : [];
 </script>

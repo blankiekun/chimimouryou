@@ -47,6 +47,12 @@ jobs:
       - name: Test build
         run: pnpm build
 
+      # The web app without a server (deploy/pages/pages.yml publishes it).
+      - name: Test standalone build
+        run: pnpm build
+        env:
+          VITE_EDITION: standalone
+
   python:
     name: Server scripts
     runs-on: ubuntu-latest

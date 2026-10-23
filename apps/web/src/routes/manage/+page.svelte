@@ -40,6 +40,7 @@
     takePendingImport
   } from '$lib/data/library-home';
   import { homeOfflineTitles, keepBooksOffline } from '$lib/data/offline-books';
+  import { onLaunchFiles, takeSharedFiles } from '$lib/data/launch-files';
   import { t$ } from '$lib/i18n';
   import {
     cacheCoverage,
@@ -302,6 +303,14 @@
     const pending = takePendingImport();
     if (pending && 'files' in pending) onFilesChange(pending.files);
     else if (pending) onImportBackup(pending.backup);
+    // Books shared with or opened by the installed app (manifest.webmanifest).
+    takeSharedFiles().then(
+      (files) => {
+        if (files.length) onFilesChange(files);
+      },
+      () => {}
+    );
+    onLaunchFiles(onFilesChange);
   });
 
   function retryLibrary() {
@@ -1585,8 +1594,9 @@
             This server keeps its books, progress and highlights per account. Ask whoever runs it
             for one: there is no sign-up.
           </p>
-          <a class="app-button app-button-primary" href="/settings?section=general#general-account"
-            >Sign in</a
+          <a
+            class="app-button app-button-primary"
+            href="{pagePath}/settings?section=general#general-account">Sign in</a
           >
         </div>
       {:else}

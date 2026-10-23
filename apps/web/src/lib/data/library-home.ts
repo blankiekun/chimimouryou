@@ -17,6 +17,7 @@ import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-o
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 import { deleteCachedReadings } from '$lib/data/generated-furigana';
 import { deleteVnCache } from '$lib/data/vn';
+import { standalone } from '$lib/data/env';
 
 export type LibraryTab = 'home' | 'store';
 
@@ -223,6 +224,9 @@ export function readNextPool(cards: BookCardProps[]) {
  * (`known-words.ts`, Calibre id → share; books without one after, closest difficulty first).
  */
 export function readNext(cards: BookCardProps[], coverage: Record<number, number>, limit = 12) {
+  // It picks by the server's catalog series and difficulty estimates.
+  if (standalone) return [];
+
   const { next, pool } = readNextPool(cards);
   const share = (card: BookCardProps) =>
     card.calibreId === undefined ? -1 : (coverage[card.calibreId] ?? -1);

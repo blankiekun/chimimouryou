@@ -28,7 +28,7 @@
   import SettingsThemeMode from '$lib/components/settings/settings-theme-mode.svelte';
   import SettingsThemes from '$lib/components/settings/settings-themes.svelte';
   import { readerProfile } from '$lib/data/account-settings-sync';
-  import { pagePath } from '$lib/data/env';
+  import { pagePath, standalone } from '$lib/data/env';
   import {
     addCharactersOnCompletion$,
     adjustStatisticsAfterIdleTime$,
@@ -446,9 +446,11 @@
       <div class="settings-sections" bind:this={sectionsElement}>
         <!-- Rows name their switches once (settings-item-group.svelte): remount on a language change. -->
         {#key $uiLanguage$}
-          <SettingsSection id="general-account">
-            <SettingsAccount />
-          </SettingsSection>
+          {#if !standalone}
+            <SettingsSection id="general-account">
+              <SettingsAccount />
+            </SettingsSection>
+          {/if}
           <SettingsSection id="general-language" keywords="language japanese english 日本語 言語">
             <SettingsLanguage />
           </SettingsSection>

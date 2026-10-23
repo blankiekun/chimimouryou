@@ -8,6 +8,7 @@
   import ButtonToggleGroup from '$lib/components/button-toggle-group/button-toggle-group.svelte';
   import type { ToggleOption } from '$lib/components/button-toggle-group/toggle-option';
   import MessageDialog from '$lib/components/message-dialog.svelte';
+  import { standalone } from '$lib/data/env';
   import SettingsDimensionPopover from '$lib/components/settings/settings-dimension-popover.svelte';
   import SettingsReadingGoals from '$lib/components/settings/settings-reading-goals.svelte';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
@@ -545,12 +546,15 @@
   <SettingsItemGroup title={$t$('prefs.hideFurigana')}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={hideFurigana} />
   </SettingsItemGroup>
-  <SettingsItemGroup
-    title={$t$('prefs.generatedFurigana')}
-    tooltip={$t$('prefs.generatedFuriganaHint')}
-  >
-    <ButtonToggleGroup options={toggle} bind:selectedOptionId={$generatedFurigana$} />
-  </SettingsItemGroup>
+  <!-- Generated furigana come from the server's difficulty service. -->
+  {#if !standalone}
+    <SettingsItemGroup
+      title={$t$('prefs.generatedFurigana')}
+      tooltip={$t$('prefs.generatedFuriganaHint')}
+    >
+      <ButtonToggleGroup options={toggle} bind:selectedOptionId={$generatedFurigana$} />
+    </SettingsItemGroup>
+  {/if}
   {#if hideFurigana}
     <SettingsItemGroup title={$t$('prefs.furiganaStyle')} tooltip={furiganaStyleTooltip}>
       <ButtonToggleGroup options={optionsForFuriganaStyle} bind:selectedOptionId={furiganaStyle} />

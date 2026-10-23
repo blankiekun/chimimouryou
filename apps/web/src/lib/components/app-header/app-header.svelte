@@ -16,7 +16,7 @@
   } from '@fortawesome/free-solid-svg-icons';
   import AppHeaderLogo from '$lib/components/app-header/app-header-logo.svelte';
   import { account$ } from '$lib/data/account';
-  import { pagePath } from '$lib/data/env';
+  import { pagePath, standalone } from '$lib/data/env';
   import { libraryTab$, type LibraryTab } from '$lib/data/library-home';
   import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';
@@ -59,7 +59,17 @@
       icon: faStore,
       href: `${pagePath}/manage`
     },
-    { key: 'words', label: $t$('nav.words'), icon: faLanguage, href: `${pagePath}/words` },
+    // The Words page reads the server's word lists.
+    ...(standalone
+      ? []
+      : [
+          {
+            key: 'words' as const,
+            label: $t$('nav.words'),
+            icon: faLanguage,
+            href: `${pagePath}/words`
+          }
+        ]),
     {
       key: 'statistics',
       label: $t$('nav.statistics'),
@@ -131,22 +141,24 @@
             <slot />
           </div>
         {/if}
-        <a
-          href="{pagePath}/settings?section=general#general-account"
-          class="app-header-icon"
-          title={$account$
-            ? $t$('nav.signedInAs', { name: $account$.username })
-            : $t$('nav.signIn')}
-          aria-label={$account$
-            ? $t$('nav.account', { name: $account$.username })
-            : $t$('nav.signIn')}
-        >
-          {#if $account$}
-            <span class="account-initial">{$account$.username.charAt(0)}</span>
-          {:else}
-            <Fa icon={faUser} />
-          {/if}
-        </a>
+        {#if !standalone}
+          <a
+            href="{pagePath}/settings?section=general#general-account"
+            class="app-header-icon"
+            title={$account$
+              ? $t$('nav.signedInAs', { name: $account$.username })
+              : $t$('nav.signIn')}
+            aria-label={$account$
+              ? $t$('nav.account', { name: $account$.username })
+              : $t$('nav.signIn')}
+          >
+            {#if $account$}
+              <span class="account-initial">{$account$.username.charAt(0)}</span>
+            {:else}
+              <Fa icon={faUser} />
+            {/if}
+          </a>
+        {/if}
       </div>
     </div>
   </div>

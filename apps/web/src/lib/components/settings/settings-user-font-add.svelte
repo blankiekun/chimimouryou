@@ -1,5 +1,6 @@
 <script lang="ts">
   import { inputClasses } from '$lib/css-classes';
+  import { pagePath } from '$lib/data/env';
   import { reservedFontNames } from '$lib/data/fonts';
   import { userFonts$ } from '$lib/data/store';
   import { dummyFn } from '$lib/functions/utils';
@@ -67,7 +68,7 @@
     isLoading = true;
 
     try {
-      const path = `/userfonts/${encodeURIComponent(fontFile.name)}`;
+      const path = `${pagePath}/userfonts/${encodeURIComponent(fontFile.name)}`;
       await fontCache.put(
         path,
         new Response(fontFile, {

@@ -26,12 +26,12 @@ system, the images twice over (each update keeps the previous ones as `:previous
 Docker's build cache (capped at 6 GB, see [Disk space for builds](#disk-space-for-builds))
 and `DATA_PATH`.
 
-| Profiles                 | CPU cores | RAM    | Swap | Disk  |
-| ------------------------ | --------- | ------ | ---- | ----- |
-| none (reader, accounts)  | 1         | 1 GB   | 512 MB | 16 GB |
-| `import`                 | 2         | 2 GB   | 512 MB | 24 GB |
-| `import,difficulty`      | 2-4       | 4 GB   | 1 GB | 24 GB |
-| `import,difficulty,mokuro` (recommended) | 4+ | 6 GB | 1 GB | 32 GB |
+| Profiles                                 | CPU cores | RAM  | Swap   | Disk  |
+| ---------------------------------------- | --------- | ---- | ------ | ----- |
+| none (reader, accounts)                  | 1         | 1 GB | 512 MB | 16 GB |
+| `import`                                 | 2         | 2 GB | 512 MB | 24 GB |
+| `import,difficulty`                      | 2-4       | 4 GB | 1 GB   | 24 GB |
+| `import,difficulty,mokuro` (recommended) | 4+        | 6 GB | 1 GB   | 32 GB |
 
 Where it goes: the services idle at about 15 MB each. Calibre's `calibredb add`
 takes a few hundred MB while it runs; each difficulty worker (`DIFFICULTY_WORKERS`,
@@ -122,13 +122,13 @@ panel), or with `docker compose exec account ebook-account ...`
 (`add NAME [--admin]`, `passwd NAME`, `remove NAME`, `admin NAME on|off`,
 `permissions NAME import,series,difficulty`, `list`).
 
-| Who                                    | May                                                                  |
-| -------------------------------------- | -------------------------------------------------------------------- |
-| anyone who can reach the server        | load the app; with `PUBLIC_READS=1` also browse and download books   |
-| signed out, from `TRUSTED_NETWORKS`    | read the library, open books, save progress in the shared folder    |
-| any account                            | the above from anywhere, plus its own synced progress and settings  |
+| Who                                           | May                                                                 |
+| --------------------------------------------- | ------------------------------------------------------------------- |
+| anyone who can reach the server               | load the app; with `PUBLIC_READS=1` also browse and download books  |
+| signed out, from `TRUSTED_NETWORKS`           | read the library, open books, save progress in the shared folder    |
+| any account                                   | the above from anywhere, plus its own synced progress and settings  |
 | permission `import` / `series` / `difficulty` | add books to Calibre / change series for everyone / start estimates |
-| admin                                  | everything, and manage accounts and permissions                      |
+| admin                                         | everything, and manage accounts and permissions                     |
 
 `TRUSTED_NETWORKS` is empty by default, so everything needs an account. On a
 home server you can list your networks (e.g. `10.0.0.0/8 192.168.0.0/16`,
@@ -242,3 +242,17 @@ it in the admin panel as an admin (Tools → Estimate difficulty → "Import fre
 the service checks it, and asks to confirm a replacement whose readings disagree with the
 installed list), or save it as
 `DATA_PATH/state/difficulty/frequency-dictionary.zip`.
+
+## Standalone web app
+
+The same code builds as a web app without a server: `VITE_EDITION=standalone pnpm build`
+writes a static site to `apps/web/build`. Books live in the browser, a local folder,
+Google Drive or OneDrive; there are no accounts, Calibre library, difficulty estimates or
+Words page, and the build sends no requests to `/calibre/` or `/account/`.
+
+To publish it on GitHub Pages, copy [deploy/pages/pages.yml](../deploy/pages/pages.yml) to
+`.github/workflows/` in the site repository (e.g. `<org>/<org>.github.io`), choose
+"GitHub Actions" as the Pages source, add the secrets `VITE_GDRIVE_CLIENT_ID`,
+`VITE_GDRIVE_CLIENT_SECRET` and `VITE_ONEDRIVE_CLIENT_ID` (OAuth redirect URI
+`https://<site>/auth`), set `VITE_BASE_PATH` in the workflow to the site's address and run it
+from the Actions tab with a tag or `main`.

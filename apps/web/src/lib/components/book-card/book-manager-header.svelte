@@ -10,6 +10,7 @@
   import { StorageKey } from '$lib/data/storage/storage-types';
   import {
     browserSourceAvailable,
+    calibreSourceAvailable,
     isStorageSourceAvailable,
     storageIcon$,
     storageSource$
@@ -75,7 +76,9 @@
 
   $: storageSourceMenuItems = browser
     ? [
-        { label: 'Calibre', key: StorageKey.CALIBRE, requiresConnectivity: false },
+        ...(calibreSourceAvailable
+          ? [{ label: 'Calibre', key: StorageKey.CALIBRE, requiresConnectivity: false }]
+          : []),
         ...(browserSourceAvailable
           ? [
               {

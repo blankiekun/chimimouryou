@@ -6,7 +6,7 @@
   import { accountReady } from '$lib/data/account';
   import { startSettingsSync } from '$lib/data/account-settings-sync';
   import { releaseReaderData } from '$lib/data/reader-data-owner';
-  import { basePath, clearConsoleOnReload } from '$lib/data/env';
+  import { basePath, clearConsoleOnReload, pagePath } from '$lib/data/env';
   import { dialogManager, type Dialog } from '$lib/data/dialog-manager';
   import { userFontsCacheName, type UserFont } from '$lib/data/fonts';
   import { fontFamilyGroupOne$, isOnline$, userFonts$ } from '$lib/data/store';
@@ -17,6 +17,8 @@
   import '../app.scss';
 
   let path = '';
+  // Prerendered pages don't know their origin: without VITE_BASE_PATH the tags are set in the browser.
+  const siteOrigin = basePath || (browser ? window.location.origin : '');
   let dialogs: Dialog[] = [];
   let clickOnCloseDisabled = false;
   let zIndex = '';
@@ -103,16 +105,18 @@
 <MetaTags
   title="Chimimouryou"
   description="Online e-book reader that supports dictionary extensions like Yomitan"
-  canonical="{basePath}{path !== '/' ? path : ''}"
+  canonical={siteOrigin ? `${siteOrigin}${path !== '/' ? path : ''}` : undefined}
   openGraph={{
     type: 'website',
-    images: [
-      {
-        url: `${basePath}/icons/regular-icon@512x512.png`,
-        width: 512,
-        height: 512
-      }
-    ]
+    images: siteOrigin
+      ? [
+          {
+            url: `${siteOrigin}${pagePath}/icons/regular-icon@512x512.png`,
+            width: 512,
+            height: 512
+          }
+        ]
+      : []
   }}
 />
 

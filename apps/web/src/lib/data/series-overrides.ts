@@ -12,6 +12,7 @@
  */
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
+import { standalone } from '$lib/data/env';
 
 export interface SeriesOverride {
   series: string;
@@ -48,6 +49,8 @@ export function parseSeriesOverrides(data: unknown): SeriesOverrides {
 }
 
 async function fetchSeriesOverrides() {
+  if (standalone) return {};
+
   const response = await fetch(overridesUrl, { cache: 'no-store' });
 
   if (response.status === 404) {
