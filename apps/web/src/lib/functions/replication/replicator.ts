@@ -33,6 +33,7 @@ export async function importData(
   files: File[],
   cancelSignal: AbortSignal,
   fileCountData?: Record<string, number>,
+  importedTitles: string[] = [],
   keepOnDevice?: Set<string>
 ) {
   const dataIds: number[] = [];
@@ -108,6 +109,7 @@ export async function importData(
               ? await (targetHandler as ApiStorageHandler).keepOnDevice(bookContent)
               : await targetHandler.saveBook(bookContent, false)
           );
+          importedTitles.push(bookContent.title);
 
           checkCancelAndProgress(cancelSignal, false);
 

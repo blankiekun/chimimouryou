@@ -86,6 +86,7 @@ describe('importData with games kept on the device', () => {
       files(),
       new AbortController().signal,
       undefined,
+      [],
       new Set(['game.zip', 'manga.zip'])
     );
 
@@ -105,6 +106,7 @@ describe('importData with games kept on the device', () => {
       files(),
       new AbortController().signal,
       undefined,
+      [],
       new Set()
     );
 
