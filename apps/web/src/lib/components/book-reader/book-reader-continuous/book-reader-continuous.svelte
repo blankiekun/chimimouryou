@@ -131,6 +131,9 @@
 
   export let customReadingPointScrollOffset: number;
 
+  /** Distance from the screen's start edge to the visible book (px): text under the reader panel or bar is not read yet */
+  export let edgeOffset = 0;
+
   const dispatch = createEventDispatcher<{
     bookmark: void;
     contentChange: HTMLElement;
@@ -382,7 +385,9 @@
 
       const scrollPos =
         calculator.getScrollPosByCharCount(prevIntendedCharCount) +
-        (verticalMode ? customReadingPointScrollOffset : -customReadingPointScrollOffset);
+        (verticalMode
+          ? customReadingPointScrollOffset + edgeOffset
+          : -customReadingPointScrollOffset - edgeOffset);
       isResizeScroll = true;
       pageManagerConcrete.scrollTo(scrollPos);
     });
@@ -433,7 +438,9 @@
   function onContentDisplayChange(_calculator: CharacterStatsCalculator) {
     _calculator.updateParagraphPos();
     updateCustomReadingPointPosition();
-    exploredCharCount = _calculator.calcExploredCharCount(customReadingPointScrollOffset);
+    exploredCharCount = _calculator.calcExploredCharCount(
+      customReadingPointScrollOffset + edgeOffset
+    );
 
     if (scrollWhenReady) {
       scrollWhenReady = false;
@@ -559,7 +566,9 @@
     requestAnimationFrame(() => {
       if (!calculator) return;
 
-      exploredCharCount = calculator.calcExploredCharCount(customReadingPointScrollOffset);
+      exploredCharCount = calculator.calcExploredCharCount(
+        customReadingPointScrollOffset + edgeOffset
+      );
 
       if (!isResizeScroll && exploredCharCount) {
         prevIntendedCharCount = exploredCharCount;

@@ -36,8 +36,14 @@
 
   export let width: number;
 
-  /** Room kept free on the right for the reader panel (px), so vertical text, which starts at the right, isn't under it */
+  /** Room kept free on the right for the open reader panel (px) */
   export let reserveRight = 0;
+
+  /** Room kept free at the top for the reader bar shown with the panel (px); height excludes it */
+  export let reserveTop = 0;
+
+  /** Continuous: distance from the screen's start edge to the visible book (px), see jumpOffset */
+  export let edgeOffset = 0;
 
   export let height: number;
 
@@ -287,6 +293,7 @@
   bind:this={$containerEl$}
   class="{pxReader} py-8"
   style:margin-right={reserveRight ? `${reserveRight}px` : undefined}
+  style:margin-top={reserveTop ? `${reserveTop}px` : undefined}
 >
   {#if viewMode === ViewMode.Continuous}
     <BookReaderContinuous
@@ -320,6 +327,7 @@
       {autoBookmark}
       {autoBookmarkTime}
       {multiplier}
+      {edgeOffset}
       loadingState={$imageLoadingState$ ?? true}
       bind:exploredCharCount
       bind:bookCharCount
