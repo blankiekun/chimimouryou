@@ -9,6 +9,8 @@
 
   /** Calibre ids of the selected books, if any */
   export let selectedIds: number[] = [];
+  /** Admin panel layout: the tool section's text style, term dictionaries as a ruled table, one button row */
+  export let admin = false;
 
   interface Status {
     job: {
@@ -174,8 +176,8 @@
   }
 </script>
 
-<div class="flex max-w-xl flex-col gap-4 text-sm">
-  <p>
+<div class="flex flex-col gap-4" class:admin class:max-w-xl={!admin} class:text-sm={!admin}>
+  <p class:tool-text={admin}>
     {$t$('library.difficultyIntro', {
       beginner: $t$('difficulty.beginner'),
       insane: $t$('difficulty.insane')
@@ -195,7 +197,7 @@
     {#if !status.dictionary}
       <div class="flex flex-col gap-2">
         {#if $account$?.admin}
-          <p>
+          <p class:tool-text={admin}>
             {#each dictionaryParts as part}{#if part === '{file}'}<strong
                   >jiten_freq_global.zip</strong
                 >{:else if part === '{link}'}<a
@@ -217,57 +219,108 @@
             />
           </label>
         {:else}
-          <p>{$t$('library.dictionaryNeededAdmin')}</p>
+          <p class:tool-text={admin}>{$t$('library.dictionaryNeededAdmin')}</p>
         {/if}
       </div>
     {/if}
-    {#if $account$?.admin && status.termDictionaries}
-      <section class="flex flex-col gap-2">
-        <p>{$t$('library.termDictionaries')}</p>
-        {#each status.termDictionaries as name (name)}
-          <div class="flex items-center gap-2">
-            <span class="break-all">{name}</span>
-            <button
-              class={buttonClasses}
-              disabled={running || importing}
-              on:click={() => post('terms/remove', { name })}
-            >
-              {$t$('library.removeTermDictionary')}
-            </button>
-          </div>
-        {/each}
-        <label class="{buttonClasses} flex cursor-pointer items-center gap-2 self-start">
-          {#if importing}<Fa icon={faSpinner} spin />{/if}
-          {$t$('library.addTermDictionary')}
-          <input
-            type="file"
-            accept=".zip,application/zip"
-            class="hidden"
-            disabled={importing || running}
-            on:change={importTermDictionary}
-          />
-        </label>
-      </section>
-    {/if}
-    <div class="flex flex-wrap gap-2">
-      <button
-        class={buttonClasses}
-        title={$t$('library.runHint')}
-        disabled={running || !status.dictionary}
-        on:click={() => post('compute', { all: true })}
-      >
-        {$t$('library.run')}
-      </button>
-      {#if selectedIds.length}
+    {#if admin}
+      {#if $account$?.admin && status.termDictionaries}
+        <section>
+          <p class="tool-text">{$t$('library.termDictionaries')}</p>
+          {#if status.termDictionaries.length}
+            <table class="app-table">
+              <tbody>
+                {#each status.termDictionaries as name (name)}
+                  <tr>
+                    <td class="break-all">{name}</td>
+                    <td class="w-0 text-right">
+                      <button
+                        class="app-button app-button-quiet"
+                        disabled={running || importing}
+                        on:click={() => post('terms/remove', { name })}
+                      >
+                        {$t$('library.removeTermDictionary')}
+                      </button>
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          {/if}
+        </section>
+      {/if}
+      <div class="tool-actions !mt-0">
+        {#if $account$?.admin && status.termDictionaries}
+          <label class="{buttonClasses} flex cursor-pointer items-center gap-2">
+            {#if importing}<Fa icon={faSpinner} spin />{/if}
+            {$t$('library.addTermDictionary')}
+            <input
+              type="file"
+              accept=".zip,application/zip"
+              class="hidden"
+              disabled={importing || running}
+              on:change={importTermDictionary}
+            />
+          </label>
+        {/if}
+        <button
+          class="app-button app-button-primary"
+          title={$t$('library.runHint')}
+          disabled={running || !status.dictionary}
+          on:click={() => post('compute', { all: true })}
+        >
+          {$t$('library.run')}
+        </button>
+      </div>
+    {:else}
+      {#if $account$?.admin && status.termDictionaries}
+        <section class="flex flex-col gap-2">
+          <p>{$t$('library.termDictionaries')}</p>
+          {#each status.termDictionaries as name (name)}
+            <div class="flex items-center gap-2">
+              <span class="break-all">{name}</span>
+              <button
+                class={buttonClasses}
+                disabled={running || importing}
+                on:click={() => post('terms/remove', { name })}
+              >
+                {$t$('library.removeTermDictionary')}
+              </button>
+            </div>
+          {/each}
+          <label class="{buttonClasses} flex cursor-pointer items-center gap-2 self-start">
+            {#if importing}<Fa icon={faSpinner} spin />{/if}
+            {$t$('library.addTermDictionary')}
+            <input
+              type="file"
+              accept=".zip,application/zip"
+              class="hidden"
+              disabled={importing || running}
+              on:change={importTermDictionary}
+            />
+          </label>
+        </section>
+      {/if}
+      <div class="flex flex-wrap gap-2">
         <button
           class={buttonClasses}
+          title={$t$('library.runHint')}
           disabled={running || !status.dictionary}
-          on:click={() => post('compute', { ids: selectedIds })}
+          on:click={() => post('compute', { all: true })}
         >
-          {$t$('library.selectedBooks', { count: selectedIds.length })}
+          {$t$('library.run')}
         </button>
-      {/if}
-    </div>
+        {#if selectedIds.length}
+          <button
+            class={buttonClasses}
+            disabled={running || !status.dictionary}
+            on:click={() => post('compute', { ids: selectedIds })}
+          >
+            {$t$('library.selectedBooks', { count: selectedIds.length })}
+          </button>
+        {/if}
+      </div>
+    {/if}
 
     {#if status.job}
       {@const job = status.job}
@@ -303,3 +356,14 @@
     {/if}
   {/if}
 </div>
+
+<style>
+  /* The flex gap spaces the admin layout; .tool-text brings its own margin. */
+  div.admin :global(.tool-text) {
+    margin-bottom: 0;
+  }
+
+  div.admin section :global(.tool-text) {
+    margin-bottom: 0.75rem;
+  }
+</style>

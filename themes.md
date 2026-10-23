@@ -6,10 +6,10 @@ themes, the theme editor, the JSON format for sharing themes, and custom CSS.
 
 ## Picking a theme
 
-- **Settings → General → Theme** shows every theme as a swatch, grouped light and
-  dark. Click one to use it. With "Follow system theme" on there is one grid for the
-  light slot and one for the dark slot (Chimi Light and Chimi Dark by default).
-- **Settings → General → Custom Themes** lists every theme with its actions.
+- **Settings → General → Themes** shows every theme, built-in and custom, in one gallery
+  with its actions (Edit, Duplicate, JSON, Delete). Click one to use it. With "Follow the
+  system" on, a click replaces the theme of the current mode; the tags show which theme is
+  used in light and which in dark mode (Chimi Light and Chimi Dark by default).
 - **Settings → Reader → Theme** and the palette icon in the reader header switch
   themes quickly.
 
@@ -41,7 +41,7 @@ each browser has its own list. Export a theme to move it to another browser.
 
 ## Making a theme in the editor
 
-1. Go to **Settings → General → Custom Themes**.
+1. Go to **Settings → General → Themes**.
 2. Click **New theme**, which starts from the theme you are using, or the **+**
    on any theme card to duplicate that theme.
 3. Change what you like. Every change shows live across the whole app, so you can

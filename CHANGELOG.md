@@ -8,6 +8,11 @@ anything a reader or a server operator would notice.
 
 ### Changed
 
+- Settings and the admin panel in the Study Book look: numbered sections, ruled tables, one theme
+  gallery (built-in and custom themes, with the editor under it) instead of Theme and Custom
+  Themes, an AnkiConnect status line, Show for API keys, and settings labels in plain sentence
+  case; on phones Settings is a numbered list of areas with section tabs. Underscores (`sk_`,
+  `eleven_v4`) are visible again.
 - Library cards load small cover thumbnails (about 30 KB instead of the full cover, often
   700 KB or more), made by the catalog service in `state/catalog/thumbs/` (up to five minutes per
   run, so a large library takes a few runs); the book page still shows the full cover.

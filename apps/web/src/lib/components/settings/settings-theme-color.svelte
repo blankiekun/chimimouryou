@@ -30,10 +30,6 @@
 </script>
 
 <div class="theme-color-row" title="{description} ({cssVar})">
-  <span class="min-w-0">
-    <span class="block truncate text-sm font-semibold">{label}</span>
-    <span class="block truncate text-xs text-[color:var(--app-muted-fg)]">{description}</span>
-  </span>
   <span class="theme-color-preview" style:--preview={effective}>
     <input
       type="color"
@@ -42,21 +38,13 @@
       on:input={(event) => setFromPicker(event.currentTarget.value, alpha)}
     />
   </span>
+  <span class="theme-color-label">{label}</span>
   <input
-    type="range"
-    min="0"
-    max="1"
-    step="0.01"
-    value={alpha}
-    aria-label="{label} opacity"
-    title="Opacity {Math.round(alpha * 100)}%"
-    on:input={(event) => setFromPicker(hex, Number(event.currentTarget.value))}
-  />
-  <input
-    class="theme-color-text"
+    class="app-input theme-color-text"
     class:theme-color-invalid={invalid}
     type="text"
     spellcheck="false"
+    aria-label="{label} value"
     placeholder={inherited}
     value={text}
     on:change={(event) => {
@@ -69,10 +57,21 @@
       }
     }}
   />
+  <input
+    type="range"
+    min="0"
+    max="1"
+    step="0.01"
+    value={alpha}
+    aria-label="{label} opacity"
+    title="Opacity {Math.round(alpha * 100)}%"
+    on:input={(event) => setFromPicker(hex, Number(event.currentTarget.value))}
+  />
   <button
     type="button"
-    class="p-1.5 disabled:opacity-25"
+    class="theme-color-reset"
     title="Use the inherited colour"
+    aria-label="Use the inherited colour for {label}"
     disabled={value === undefined}
     on:click={() => dispatch('change', undefined)}
   >
@@ -83,31 +82,37 @@
 <style>
   .theme-color-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 2.25rem 5.5rem minmax(0, 11rem) 2rem;
+    grid-template-columns: 1.75rem minmax(0, 1fr) 7.5rem minmax(0, 7rem) 2rem;
     align-items: center;
-    gap: 0.6rem;
-    padding: 0.4rem 0;
-    border-bottom: 1px solid color-mix(in srgb, var(--font-color) 7%, transparent);
+    gap: 0.75rem;
+    padding: 0.3rem 0 0.3rem 1rem;
   }
 
   @media (max-width: 640px) {
     .theme-color-row {
-      grid-template-columns: minmax(0, 1fr) 2.25rem 2rem;
+      grid-template-columns: 1.75rem minmax(0, 1fr) 6.5rem 2rem;
+      padding-left: 0;
     }
 
-    .theme-color-row input[type='range'],
-    .theme-color-text {
-      grid-column: 1 / -1;
+    .theme-color-row input[type='range'] {
+      display: none;
     }
+  }
+
+  .theme-color-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .theme-color-preview {
     position: relative;
-    width: 2.25rem;
-    height: 2.25rem;
+    width: 1.75rem;
+    height: 1.75rem;
     overflow: hidden;
-    border: 1px solid var(--app-control-border);
-    border-radius: 0.6rem;
+    border: 1px solid var(--border-color);
+    border-radius: 2px;
     background:
       linear-gradient(var(--preview), var(--preview)),
       repeating-conic-gradient(#bbb 0% 25%, #fff 0% 50%) 50% / 10px 10px;
@@ -124,11 +129,27 @@
 
   .theme-color-text {
     width: 100%;
-    padding: 0.3rem 0.5rem;
-    border: 1px solid var(--app-control-border);
-    border-radius: 0.5rem;
+    min-height: 2rem;
+    padding: 0.2rem 0.5rem;
     font-family: ui-monospace, monospace;
-    font-size: 0.75rem;
+    font-size: var(--type-label);
+  }
+
+  .theme-color-row input[type='range'] {
+    accent-color: var(--accent-color);
+  }
+
+  .theme-color-reset {
+    display: inline-flex;
+    width: 2rem;
+    height: 2rem;
+    align-items: center;
+    justify-content: center;
+    color: var(--app-muted-fg);
+  }
+
+  .theme-color-reset:disabled {
+    opacity: 0.3;
   }
 
   .theme-color-invalid {
