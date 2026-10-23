@@ -42,6 +42,13 @@
   import { PageManagerPaginated } from './page-manager-paginated';
   import { SectionCharacterStatsCalculator } from './section-character-stats-calculator';
   import { createEventDispatcher, onDestroy, onMount } from 'svelte';
+  import {
+    alignPageAnchor,
+    capturePageAnchor,
+    setSpacer,
+    spacerOf,
+    type PageAnchor
+  } from '../page-anchor';
 
   export let htmlContent: string;
 
@@ -160,6 +167,22 @@
   let fontLoadingAdded = false;
 
   let currentSectionId = '';
+
+  let spacerEl: HTMLElement | undefined;
+
+  type Layout = { width: number; height: number; spacer: number; pos: number };
+
+  // The first character of the page shown before the panel re-lays out the book, put at a page
+  // start after it. Kept for a while: one toggle can re-lay out in several steps.
+  let pageAnchor: PageAnchor | undefined;
+
+  let pageAnchorAt = 0;
+
+  // The layout shown when the panel last toggled, and the one before it: toggling back without
+  // turning a page returns to exactly that page.
+  let undoLayout: Layout | undefined;
+
+  let restoreLayout: Layout | undefined;
 
   const width$ = new Subject<number>();
 
@@ -379,6 +402,48 @@
     destroy$.complete();
   });
 
+  function pageGeometry(w: number, h: number, columns: number) {
+    if (!contentEl) return undefined;
+    return verticalMode
+      ? {
+          vertical: true,
+          columnSize: contentEl.clientWidth,
+          columnPitch: h + gap,
+          columnsPerPage: 1
+        }
+      : {
+          vertical: false,
+          columnSize: contentEl.clientHeight,
+          columnPitch: (w + gap) / columns,
+          columnsPerPage: columns
+        };
+  }
+
+  /** Called before the panel re-lays out the book, while the page shown can still be measured. */
+  export function captureAnchor() {
+    const g = pageGeometry(width, height, columnCount);
+    if (!g || !spacerEl || !contentEl || !calculator || !allowDisplay) return;
+    const pos = virtualScrollPos$.getValue();
+    const page = Math.round(pos / ((verticalMode ? height : width) + gap));
+    pageAnchor = capturePageAnchor(contentEl, g, page);
+    pageAnchorAt = performance.now();
+    restoreLayout = undoLayout;
+    undoLayout = { width, height, spacer: spacerOf(spacerEl), pos };
+  }
+
+  /** After a re-layout: the scroll position that keeps the page's first line first, if known. */
+  function keepPage() {
+    if (!spacerEl || !contentEl || performance.now() - pageAnchorAt > 3000) return undefined;
+    contentEl.style.removeProperty('transform');
+    if (restoreLayout?.width === width && restoreLayout.height === height) {
+      setSpacer(spacerEl, restoreLayout.spacer);
+      return restoreLayout.pos;
+    }
+    const g = pageGeometry(width, height, columnCount);
+    const page = pageAnchor && g && alignPageAnchor(spacerEl, contentEl, pageAnchor, g);
+    return page === undefined ? undefined : page * ((verticalMode ? height : width) + gap);
+  }
+
   combineLatest([width$, height$])
     .pipe(
       skip(1),
@@ -389,7 +454,14 @@
       if (!calculator || !concretePageManager) return;
 
       concretePageManager.scrollTo(0, false);
+      const keptPos = keepPage();
       calculator.updateParagraphPos();
+
+      if (keptPos !== undefined) {
+        concretePageManager.scrollTo(keptPos, false);
+        isResizing = false;
+        return;
+      }
 
       const scrollPos = calculator.getScrollPosByCharCount(previousIntendedCount);
 
@@ -414,6 +486,8 @@
 
     if (isUser) {
       previousIntendedCount = exploredCharCount;
+      undoLayout = undefined;
+      restoreLayout = undefined;
 
       if ($selectionToBookmarkEnabled$) {
         clearRange(window);
@@ -498,6 +572,11 @@
       return;
     }
     if (!scrollEl) return;
+
+    pageAnchor = undefined;
+    undoLayout = undefined;
+    restoreLayout = undefined;
+    if (spacerEl) setSpacer(spacerEl, 0);
 
     calculator = new SectionCharacterStatsCalculator(
       scrollEl,
@@ -732,6 +811,7 @@
   on:swipe={onSwipe}
 >
   <div class="book-content-container" id={currentSectionId || null} bind:this={contentEl}>
+    <div bind:this={spacerEl} class="ttu-page-spacer" style="display: none" />
     <HtmlRenderer html={displayedHtml} on:load={onHtmlLoad} />
   </div>
 </div>
