@@ -17,8 +17,8 @@
 
   const settingsHref = `${pagePath}/settings?section=sync`;
 
-  // Tokens aren't observable: checked again on the 15 s tick and after signing in here.
-  $: signedIn = $storageSource$ !== StorageKey.GDRIVE || driveSignedIn(now);
+  // Tokens aren't observable: checked again on the 15 s tick, after each sync and after signing in here.
+  $: signedIn = !!$syncState$ && ($storageSource$ !== StorageKey.GDRIVE || driveSignedIn(now));
   $: view = syncView($syncState$, $storageSource$, $isOnline$, signedIn, now);
 
   async function signIn() {
