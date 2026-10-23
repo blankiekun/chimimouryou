@@ -49,8 +49,30 @@ import { replicationProgress$ } from '$lib/functions/replication/replication-pro
 import { setStorageSourceDefault } from '$lib/data/storage/storage-source-manager';
 import { fallbackStorageSource, storageSource$ } from '$lib/data/storage/storage-view';
 import { throwIfAborted } from '$lib/functions/replication/replication-error';
+import { isVn } from '$lib/data/vn';
+import {
+  deleteVnFiles,
+  dropOrphanVnFiles,
+  getVnFiles,
+  putVnFiles
+} from '$lib/data/database/vn-files';
 
 const LAST_ITEM_KEY = 0;
+
+/** A stored book is kept over `data` (ReplicationSaveBehavior.NewOnly and not older) */
+function keepsStored(
+  stored: BooksDbBookData,
+  data: Omit<BooksDbBookData, 'id'>,
+  saveBehavior: ReplicationSaveBehavior
+) {
+  return (
+    saveBehavior === ReplicationSaveBehavior.NewOnly &&
+    !!stored.lastBookModified &&
+    !!data.lastBookModified &&
+    stored.lastBookModified >= data.lastBookModified &&
+    (stored.lastBookOpen || 0) >= (data.lastBookOpen || 0)
+  );
+}
 
 export class DatabaseService {
   private db$: Observable<Awaited<typeof this.db>>;
@@ -58,6 +80,8 @@ export class DatabaseService {
   isReady$: Observable<boolean>;
 
   listLoading$ = new Subject<boolean>();
+
+  private vnFilesTidied = false;
 
   dataListChanged$ = new Subject<BaseStorageHandler | undefined>();
 
@@ -214,12 +238,25 @@ export class DatabaseService {
     data: Omit<BooksDbBookData, 'id'>,
     saveBehavior: ReplicationSaveBehavior,
     skipTimestampFallback = true,
-    removeStorageContext = true
+    removeStorageContext = true,
+    cancelSignal?: AbortSignal
   ) {
     const db = await this.db;
 
     let dataId: number;
     let bookData: BooksDbBookData;
+    let staleVnFiles: string | undefined;
+
+    // A visual novel's files go to their own database first, the record last: whole or nothing.
+    if (isVn(data) && Object.keys(data.blobs).length) {
+      const stored = await db.getFromIndex('data', 'title', data.title);
+
+      if (stored && keepsStored(stored, data, saveBehavior)) {
+        return stored;
+      }
+
+      data = { ...data, blobs: {}, vnFiles: await putVnFiles(data.blobs, cancelSignal) };
+    }
 
     const tx = db.transaction('data', 'readwrite');
     const { store } = tx;
@@ -230,16 +267,15 @@ export class DatabaseService {
         oldData.storageSource = undefined;
       }
 
-      if (
-        saveBehavior === ReplicationSaveBehavior.NewOnly &&
-        oldData.lastBookModified &&
-        data.lastBookModified &&
-        oldData.lastBookModified >= data.lastBookModified &&
-        (oldData.lastBookOpen || 0) >= (data.lastBookOpen || 0)
-      ) {
+      if (keepsStored(oldData, data, saveBehavior)) {
         bookData = oldData;
         dataId = oldData.id;
+        staleVnFiles = data.vnFiles !== oldData.vnFiles ? data.vnFiles : undefined;
       } else {
+        if (oldData.vnFiles && data.vnFiles && oldData.vnFiles !== data.vnFiles) {
+          staleVnFiles = oldData.vnFiles;
+        }
+
         bookData = {
           ...data,
           id: oldData.id,
@@ -259,9 +295,43 @@ export class DatabaseService {
       dataId = await store.add(bookDataWithoutKey as BooksDbBookData);
       bookData = { ...data, id: dataId };
     }
-    await tx.done;
+
+    try {
+      await tx.done;
+    } catch (error) {
+      if (data.vnFiles !== oldData?.vnFiles) staleVnFiles = data.vnFiles;
+      throw error;
+    } finally {
+      if (staleVnFiles) await deleteVnFiles(staleVnFiles).catch(() => undefined);
+    }
 
     return bookData;
+  }
+
+  /** A book's blobs: a visual novel's from the vn-files database, others' from the record */
+  async getBlobs(book: Pick<BooksDbBookData, 'blobs' | 'vnFiles'>) {
+    return book.vnFiles ? getVnFiles(book.vnFiles) : book.blobs;
+  }
+
+  /**
+   * Once per start: visual novels stored with their files in the record (before vn-files.ts)
+   * move them out, so listing the library stops reading them, and files of imports that never
+   * finished are dropped.
+   */
+  async tidyVnFiles() {
+    if (this.vnFilesTidied) return;
+    this.vnFilesTidied = true;
+
+    const db = await this.db;
+    const books = await db.getAll('data');
+
+    await dropOrphanVnFiles(new Set(books.flatMap((book) => book.vnFiles || [])));
+
+    for (const book of books) {
+      if (isVn(book) && !book.vnFiles && Object.keys(book.blobs || {}).length) {
+        await this.upsertData(book, ReplicationSaveBehavior.Overwrite, false, false);
+      }
+    }
   }
 
   async deleteData(
@@ -419,10 +489,13 @@ export class DatabaseService {
 
     const tx = db.transaction(storeNames, 'readwrite');
 
+    let vnFiles: string | undefined;
+
     try {
-      if (!bookTitle) {
-        bookTitle = (await tx.objectStore('data').get(dataId))?.title;
-      }
+      const record = await tx.objectStore('data').get(dataId);
+
+      bookTitle ||= record?.title;
+      vnFiles = record?.vnFiles;
 
       if (shouldDeleteLastItem) {
         await tx.objectStore('lastItem').delete(LAST_ITEM_KEY);
@@ -445,6 +518,8 @@ export class DatabaseService {
 
       await tx.objectStore('data').delete(dataId);
       await tx.done;
+
+      if (vnFiles) await deleteVnFiles(vnFiles).catch(() => undefined);
 
       if (shouldDeleteLastItem) {
         this.lastItemChanged$.next();

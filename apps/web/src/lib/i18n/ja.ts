@@ -741,6 +741,12 @@ export const ja: Record<MessageKey, string> = {
   // Library
   'library.import': 'インポート',
   'library.importBooks': '本をインポート',
+  'library.progress.reading': '読み込み中',
+  'library.progress.saving': 'このブラウザに保存中',
+  'library.progress.packing': 'アップロードの準備中',
+  'library.progress.uploading': 'アップロード中',
+  'library.progress.bytes': '{phase} {done} / {total}',
+  'library.progress.left': '{progress} · 残り {time}',
   'library.importFiles': 'ファイルをインポート',
   'library.importFolders': 'フォルダをインポート',
   'library.importBackup': 'バックアップをインポート',

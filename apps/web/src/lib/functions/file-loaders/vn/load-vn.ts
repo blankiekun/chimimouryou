@@ -9,6 +9,8 @@ import type { LoadData } from '../types';
 import { getMimeTypeFromName } from '../htmlz/extract-htmlz';
 import { analyzeScripts, encodePath, isScriptPath, vnElementHtml } from '$lib/data/vn';
 import { serverFetch } from '$lib/data/server';
+import { throwIfAborted } from '$lib/functions/replication/replication-error';
+import { reportBytes } from '$lib/functions/replication/replication-progress';
 
 /**
  * An ONScripter game from a zip as a book: every file under `root` is a blob, keyed by
@@ -20,28 +22,35 @@ export default async function loadVn(
   name: string,
   entries: Entry[],
   root: string,
-  lastBookModified: number
+  lastBookModified: number,
+  cancelSignal?: AbortSignal
 ): Promise<LoadData> {
   const blobs: Record<string, Blob> = {};
   const scripts: { path: string; bytes: Uint8Array }[] = [];
+  const files = entries.filter(
+    (entry) =>
+      !entry.directory &&
+      entry.getData &&
+      entry.filename.startsWith(root) &&
+      !entry.filename.includes('__MACOSX/') &&
+      !entry.filename.split('/').pop()!.startsWith('.')
+  );
+  const total = files.reduce((sum, entry) => sum + entry.uncompressedSize, 0);
+  let done = 0;
 
-  for (const entry of entries) {
+  // Bytes extracted, for the import's label; cancelling stops between files.
+  reportBytes('reading', 0, total);
+
+  for (const entry of files) {
+    throwIfAborted(cancelSignal);
+
     const path = entry.filename.slice(root.length);
 
-    if (
-      entry.directory ||
-      !entry.getData ||
-      !entry.filename.startsWith(root) ||
-      entry.filename.includes('__MACOSX/') ||
-      path.split('/').pop()!.startsWith('.')
-    ) {
-      continue;
-    }
-
-    blobs[path] = await entry.getData(new BlobWriter());
+    blobs[path] = await entry.getData!(new BlobWriter());
+    reportBytes('reading', (done += entry.uncompressedSize), total);
 
     if (isScriptPath(path)) {
-      scripts.push({ path, bytes: await entry.getData(new Uint8ArrayWriter()) });
+      scripts.push({ path, bytes: await entry.getData!(new Uint8ArrayWriter()) });
     }
   }
 

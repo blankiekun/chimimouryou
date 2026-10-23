@@ -21,6 +21,16 @@ export interface ReplicationProgress {
   maxProgress?: number;
   skipStep?: boolean;
   completeStep?: boolean;
+  /** Bytes done in a long phase of the current step (large visual novels), for the label */
+  bytes?: BytesProgress;
+}
+
+export type BytesPhase = 'reading' | 'saving' | 'packing' | 'uploading';
+
+export interface BytesProgress {
+  phase: BytesPhase;
+  done: number;
+  total: number;
 }
 
 export interface ReplicationDeleteResult {
@@ -29,4 +39,8 @@ export interface ReplicationDeleteResult {
 }
 
 export const replicationProgress$ = new Subject<ReplicationProgress>();
+export function reportBytes(phase: BytesPhase, done: number, total: number) {
+  replicationProgress$.next({ bytes: { phase, done, total } });
+}
+
 export const executeReplicate$ = new Subject<void>();

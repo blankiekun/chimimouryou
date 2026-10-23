@@ -133,7 +133,7 @@ export async function importData(
           } else if (file.name.endsWith('.txt')) {
             bookContent = await loadTxt(file, lastBookModified);
           } else if (isMangaFileName(file.name)) {
-            bookContent = await loadCbz(file, lastBookModified);
+            bookContent = await loadCbz(file, lastBookModified, cancelSignal);
           } else {
             bookContent = await loadHtmlz(file, document, lastBookModified);
           }
@@ -162,9 +162,10 @@ export async function importData(
           if (keepOnDevice?.has(file.name) && isVn(bookContent)) {
             dataIds.push(await (targetHandler as ApiStorageHandler).keepOnDevice(bookContent));
           } else {
-            dataIds.push(await targetHandler.saveBook(bookContent, false));
+            dataIds.push(await targetHandler.saveBook(bookContent, false, undefined, cancelSignal));
 
-            if (localCopies > 0) {
+            // Not visual novels: they get no estimate or furigana, and can be GBs.
+            if (localCopies > 0 && !isVn(bookContent)) {
               localCopies -= 1;
               // Without it the book is downloaded on first open, as before.
               await saveLocalCopy(targetHandler, bookContent).catch(() => undefined);

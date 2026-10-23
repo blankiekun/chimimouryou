@@ -45,7 +45,7 @@
   } from '$lib/data/library-home';
   import { homeOfflineTitles, keepBooksOffline } from '$lib/data/offline-books';
   import { onLaunchFiles, takeSharedFiles } from '$lib/data/launch-files';
-  import { t$ } from '$lib/i18n';
+  import { t$, tr, type MessageKey } from '$lib/i18n';
   import {
     cacheCoverage,
     knownCoverage$,
@@ -113,6 +113,7 @@
     vnFolders,
     vnZipFiles,
     zipVnFolder,
+    formatBytes,
     type VnUpload
   } from '$lib/data/vn-upload';
   import { storageSource$ } from '$lib/data/storage/storage-view';
@@ -146,6 +147,7 @@
   import {
     replicationProgress$,
     executeReplicate$,
+    type BytesPhase,
     type ReplicationProgress
   } from '$lib/functions/replication/replication-progress';
   import { pluralize } from '$lib/functions/utils';
@@ -220,6 +222,9 @@
   let replicationDone = new Subject<void>();
   let progressBase = 0;
   let executionStart: number;
+  /** Part of the current step done in a long phase measured in bytes (large visual novels) */
+  let bytesBonus = 0;
+  let bytesPhase: { key: string; start: number; startDone: number } | undefined;
 
   $: {
     if (!selectMode) {
@@ -340,7 +345,16 @@
       () => {}
     );
     onLaunchFiles(onFilesChange);
+    tidyVnFilesOnce();
   });
+
+  /** Visual novels' files out of their book records, once per start (vn-files.ts) */
+  function tidyVnFilesOnce() {
+    setTimeout(
+      () => database.tidyVnFiles().catch((error) => logger.warn(`Visual novel files: ${error}`)),
+      5000
+    );
+  }
 
   function retryLibrary() {
     if ($libraryOffline$) {
@@ -630,7 +644,10 @@
 
         return {
           name,
-          size: Object.values(data?.blobs || {}).reduce((sum, blob) => sum + blob.size, 0)
+          size: Object.values(data ? await database.getBlobs(data) : {}).reduce(
+            (sum, blob) => sum + blob.size,
+            0
+          )
         };
       })
     );
@@ -836,6 +853,8 @@
     replicationProgressRemaining = 'Estimating…';
     replicationProgress = 0;
     replicationToProgress = 1;
+    bytesBonus = 0;
+    bytesPhase = undefined;
     executionStart = Date.now();
 
     logger.clearHistory();
@@ -1163,6 +1182,19 @@
     progressBase = replicationProgressData.progressBase || progressBase || 0;
     replicationToProgress = replicationProgressData.maxProgress || replicationToProgress || 0;
 
+    if (replicationProgressData.bytes) {
+      updateBytesProgress(replicationProgressData.bytes.phase, replicationProgressData.bytes);
+      return;
+    }
+
+    if (replicationProgressData.progressToAdd || replicationProgressData.completeStep) {
+      bytesBonus = 0;
+    }
+
+    if (replicationProgressData.completeStep || replicationProgressData.skipStep) {
+      bytesPhase = undefined;
+    }
+
     if (replicationProgressData.skipStep) {
       const progressDiffToAdd =
         Math.ceil(replicationProgress / progressBase) * progressBase - replicationProgress;
@@ -1183,7 +1215,7 @@
         ) / 1000;
     }
 
-    if (replicationProgressData.progressToAdd) {
+    if (replicationProgressData.progressToAdd && !bytesPhase) {
       const duration = (Date.now() - executionStart) / 1000;
       const processPerSecond = replicationProgress / duration;
       const remainingTime = (replicationToProgress - replicationProgress) / processPerSecond;
@@ -1247,6 +1279,47 @@
     }),
     reduceToEmptyString()
   );
+
+  const bytesPhaseLabels: Record<BytesPhase, MessageKey> = {
+    reading: 'library.progress.reading',
+    saving: 'library.progress.saving',
+    packing: 'library.progress.packing',
+    uploading: 'library.progress.uploading'
+  };
+
+  /** "Saving to this browser 1.2 GB / 3.0 GB", with the time left once there is a rate */
+  function updateBytesProgress(
+    phase: BytesPhase,
+    { done, total }: { done: number; total: number }
+  ) {
+    const now = Date.now();
+    const key = `${phase}:${total}`;
+
+    if (bytesPhase?.key !== key) bytesPhase = { key, start: now, startDone: done };
+
+    // Reading and saving have no other progress inside their step: the bytes move the bar.
+    if (phase === 'reading' || phase === 'saving') {
+      const stepLeft = Math.ceil(replicationProgress) - replicationProgress || 1;
+
+      bytesBonus = Math.max(bytesBonus, (total ? Math.min(done / total, 0.99) : 0) * stepLeft);
+    }
+
+    const elapsed = (now - bytesPhase.start) / 1000;
+    const moved = done - bytesPhase.startDone;
+    const progress = tr('library.progress.bytes', {
+      phase: tr(bytesPhaseLabels[phase]),
+      done: formatBytes(done),
+      total: formatBytes(total)
+    });
+
+    replicationProgressRemaining =
+      elapsed >= 3 && moved > 0 && done < total
+        ? tr('library.progress.left', {
+            progress,
+            time: getTimestamp(Math.ceil(((total - done) * elapsed) / moved))
+          })
+        : progress;
+  }
 
   function getTimestamp(seconds: number) {
     return seconds && Number.isFinite(seconds)
@@ -1391,10 +1464,10 @@
           </button>
           <progress
             class="library-progress"
-            value={replicationProgress}
+            value={Math.min(replicationToProgress, replicationProgress + bytesBonus)}
             max={replicationToProgress}
           />
-          <span class="shrink-0 text-sm font-bold tabular-nums">
+          <span class="library-progress-label text-sm font-bold tabular-nums">
             {replicationProgressRemaining}
           </span>
         </div>
@@ -2013,10 +2086,17 @@
 
   .library-progress {
     flex: 1 1 auto;
+    min-width: 4rem;
     height: 3px;
     border: 0;
     appearance: none;
     background: var(--app-progress-track);
+  }
+
+  /* Long byte labels wrap on phones rather than pushing the bar out */
+  .library-progress-label {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .library-progress::-webkit-progress-bar {

@@ -8,6 +8,7 @@ import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 import { oneDriveTokenEndpoint } from '$lib/data/env';
 import { ApiStorageHandler, type FullResponse } from '$lib/data/storage/handler/api-handler';
 import { AbortError } from '$lib/functions/replication/replication-error';
+import { reportBytes } from '$lib/functions/replication/replication-progress';
 import {
   BaseStorageHandler,
   SyncConflictError,
@@ -502,6 +503,7 @@ export class OneDriveStorageHandler extends ApiStorageHandler implements SyncFil
       }
 
       start = received;
+      reportBytes('uploading', start, size);
     }
   }
 

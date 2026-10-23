@@ -290,7 +290,8 @@ export class BrowserStorageHandler extends BaseStorageHandler {
 
     BaseStorageHandler.reportProgress();
 
-    return book;
+    // Exports and uploads take the files; a visual novel's are stored apart (vn-files.ts).
+    return book?.vnFiles ? { ...book, blobs: await database.getBlobs(book) } : book;
   }
 
   async getProgress() {
@@ -349,7 +350,8 @@ export class BrowserStorageHandler extends BaseStorageHandler {
   async saveBook(
     data: Omit<BooksDbBookData, 'id'> | File,
     skipTimestampFallback = true,
-    removeStorageContext = true
+    removeStorageContext = true,
+    cancelSignal?: AbortSignal
   ) {
     let idToReturn = 0;
 
@@ -358,7 +360,8 @@ export class BrowserStorageHandler extends BaseStorageHandler {
         data,
         this.saveBehavior,
         skipTimestampFallback,
-        removeStorageContext
+        removeStorageContext,
+        cancelSignal
       );
 
       idToReturn = storedBookData.id;
