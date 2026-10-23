@@ -191,12 +191,20 @@ export class StorageOAuthManager {
       secret = unlockResult.secret;
     }
 
+    // Not part of upstream: sign-in only opens from a click. Start-up and background syncs of the
+    // built-in clients stop here and leave the "Sign in" action to the sync status instead.
+    if (!authWindow && !StorageOAuthManager.fromClick(window) && isAppDefault(storageSourceName)) {
+      throw new Error(
+        `Sign in to ${this.storageType === StorageKey.ONEDRIVE ? 'OneDrive' : 'Drive'} again`
+      );
+    }
+
     this.parentWindow = window;
 
     if (authWindow) {
       this.authWindow = authWindow;
       this.authWindow.location.assign(`${pagePath}/auth?ttu-init-auth=1`);
-    } else if (shallUnlock) {
+    } else if (shallUnlock && StorageOAuthManager.fromClick(window)) {
       this.authWindow = StorageOAuthManager.createWindow(
         `${pagePath}/auth?ttu-init-auth=1`,
         'auth',
@@ -506,6 +514,11 @@ export class StorageOAuthManager {
     this.parentWindow = undefined;
     this.authWindow = null;
     this.codeVerifier = '';
+  }
+
+  /** A click or key press just happened (browsers without `userActivation` count as yes). */
+  static fromClick(window: Window) {
+    return window.navigator.userActivation?.isActive ?? true;
   }
 
   static createWindow(url: string, title: string, w: number, h: number, window: Window) {
