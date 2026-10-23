@@ -28,6 +28,8 @@
     type CalibreDifficulty
   } from '$lib/data/calibre';
   import { difficultyNameKey } from '$lib/data/difficulty';
+  import { bookKanjiCount } from '$lib/data/book-kanji';
+  import { standalone } from '$lib/data/env';
   import type { BookWord, WordCoverage } from '$lib/data/book-words';
   import { dialogManager } from '$lib/data/dialog-manager';
   import {
@@ -87,6 +89,8 @@
   let listWords: BookWord[] = [];
   let knownSet: KnownSet | undefined;
   let wordStats: WordCoverage | undefined;
+  /** Standalone: different kanji counted from the stored book */
+  let browserKanji: number | undefined;
   let speed = 0;
   let metadata: BookMetadata | undefined;
   let searching = false;
@@ -133,9 +137,7 @@
             : $t$('book.score', { score: book.difficulty.toFixed(1) }),
           book.words95 ? $t$('book.words95', { count: number(book.words95) }) : '',
           wordStats ? coverageSentence(wordStats, $t$) : '',
-          estimate?.uniqueKanji
-            ? $t$('book.kanji', { count: number(estimate.uniqueKanji) })
-            : ''
+          estimate?.uniqueKanji ? $t$('book.kanji', { count: number(estimate.uniqueKanji) }) : ''
         ]
           .filter(Boolean)
           .join($uiLanguage$ === 'ja' ? '' : ' ');
@@ -199,6 +201,15 @@
     source = undefined;
     searchOpen = false;
     searchError = '';
+    browserKanji = undefined;
+
+    if (standalone && kind === 'book') {
+      bookKanjiCount(book.id, title, book.characters)
+        .then((count) => {
+          if (title === book.title) browserKanji = count;
+        })
+        .catch(() => {});
+    }
 
     if (!isCalibre) {
       return;
@@ -479,6 +490,12 @@
               {/if}
             </dd>
           </div>
+          {#if browserKanji}
+            <div>
+              <dt>{$t$('book.kanjiRow')}</dt>
+              <dd>{$t$('book.kanjiCount', { count: number(browserKanji) })}</dd>
+            </div>
+          {/if}
           {#if wordGroups}
             <div>
               <dt>{$t$('book.words')}</dt>
@@ -938,7 +955,6 @@
     font-size: var(--type-small);
   }
 
-
   .details-facts {
     border-top: 2px solid var(--font-color);
   }
@@ -982,7 +998,6 @@
     color: var(--app-muted-fg);
     font-size: var(--type-small);
   }
-
 
   .details-fetch {
     display: flex;
