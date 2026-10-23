@@ -64,8 +64,14 @@
           <span class="sub">{$t$(row.hint)}</span>
         </th>
         {#if !r.connection}
-          <td colspan="3" class="sub needs">
-            {$t$(row.id === 'voice' ? 'ai.needsVoiceConnection' : 'ai.needsConnection')}
+          <td colspan="3" class="needs">
+            {#if row.id === 'voice'}
+              <!-- The device's Web Speech voices are the default, not a missing setting. -->
+              <span class="device">{$t$('ai.deviceVoices')}</span>
+              <span class="sub">{$t$('ai.deviceVoicesHint')}</span>
+            {:else}
+              <span class="needs-text">{$t$('ai.needsConnection')}</span>
+            {/if}
           </td>
         {:else}
           <td class="col-connection">
@@ -163,6 +169,20 @@
 
   .needs {
     vertical-align: middle;
+  }
+
+  .needs .device {
+    margin-right: 1rem;
+  }
+
+  /* Muted ink, not danger: nothing is broken, it just isn't set up yet. */
+  .needs-text {
+    color: var(--app-muted-fg);
+  }
+
+  .needs .sub,
+  .needs .device {
+    display: inline;
   }
 
   .col-connection {

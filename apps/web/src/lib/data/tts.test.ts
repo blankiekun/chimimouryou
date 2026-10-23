@@ -5,14 +5,39 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { elevenLabsApiKey$, elevenLabsModel$, ttsVoiceId$ } from '$lib/data/ai-settings';
 import {
+  aiConnectionKeys$,
+  aiConnections$,
+  aiFeatures$,
+  defaultAiFeatures,
+  elevenLabsApiKey$,
+  ttsVoiceId$
+} from '$lib/data/ai-settings';
+import { setFeature } from '$lib/data/ai-connections';
+import {
+  elevenLabsVoice,
   readingTimeline,
   spokenPhrases,
   synthesizeSpeech,
-  timelineEntryAt,
-  ttsBackend
+  timelineEntryAt
 } from './tts';
+
+const elevenLabs = {
+  id: 'elevenlabs',
+  name: 'ElevenLabs',
+  provider: 'elevenlabs',
+  kind: 'voice' as const,
+  modified: 1
+};
+
+function connectElevenLabs(key: string, model = 'eleven_v4') {
+  aiConnections$.next([elevenLabs]);
+  aiConnectionKeys$.next({ elevenlabs: key });
+  aiFeatures$.next({
+    ...defaultAiFeatures,
+    voice: { connection: 'elevenlabs', model, params: {} }
+  });
+}
 
 function timed(text: string, seconds: number[]) {
   const characters = Array.from(text);
@@ -34,16 +59,18 @@ describe('synthesizeSpeech', () => {
     vi.stubGlobal('fetch', fetchMock);
     fetchMock.mockClear();
     ttsVoiceId$.next('voice');
-    elevenLabsModel$.next('eleven_v4');
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
     elevenLabsApiKey$.next('');
+    aiConnections$.next([]);
+    aiConnectionKeys$.next({});
+    aiFeatures$.next(defaultAiFeatures);
   });
 
   it('calls ElevenLabs with timestamps, the key header and the model', async () => {
-    elevenLabsApiKey$.next('sk_secret');
+    connectElevenLabs('sk_secret');
 
     const speech = await synthesizeSpeech('テスト', undefined, { previousText: '前' });
     const [url, init] = fetchMock.mock.calls[0];
@@ -61,13 +88,13 @@ describe('synthesizeSpeech', () => {
     expect(speech.alignment?.characters).toEqual(['テ']);
   });
 
-  it('needs a key', async () => {
-    await expect(synthesizeSpeech('テスト')).rejects.toThrow(/API key/);
+  it('needs an ElevenLabs connection', async () => {
+    await expect(synthesizeSpeech('テスト')).rejects.toThrow(/ElevenLabs connection/);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('keeps the key out of error messages', async () => {
-    elevenLabsApiKey$.next('sk_secret');
+    connectElevenLabs('sk_secret');
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ detail: { message: 'Invalid key sk_secret' } }), {
         status: 401
@@ -131,10 +158,41 @@ describe('device voice', () => {
     expect(timelineEntryAt(phrases, 3)).toBe(phrases[0]);
     expect(timelineEntryAt(phrases, 5)).toBe(phrases[1]);
   });
+});
 
-  it('uses the device voice until an ElevenLabs key is set', () => {
-    expect(ttsBackend('')).toBe('device');
-    expect(ttsBackend('  ')).toBe('device');
-    expect(ttsBackend('sk_1')).toBe('elevenlabs');
+describe('elevenLabsVoice', () => {
+  afterEach(() => {
+    elevenLabsApiKey$.next('');
+    aiConnections$.next([]);
+    aiConnectionKeys$.next({});
+    aiFeatures$.next(defaultAiFeatures);
+  });
+
+  it('uses the device voice until an ElevenLabs connection has a key', () => {
+    expect(elevenLabsVoice()).toBeUndefined();
+
+    connectElevenLabs('  ');
+    expect(elevenLabsVoice()).toBeUndefined();
+
+    connectElevenLabs('sk_1', 'eleven_multilingual_v2');
+    expect(elevenLabsVoice()).toMatchObject({
+      key: 'sk_1',
+      model: 'eleven_multilingual_v2',
+      baseUrl: 'https://api.elevenlabs.io/v1'
+    });
+  });
+
+  it("reads the key from the connection store, not the previous release's setting", () => {
+    aiConnections$.next([elevenLabs]);
+    elevenLabsApiKey$.next('sk_old');
+
+    expect(elevenLabsVoice()).toBeUndefined();
+  });
+
+  it("keeps this device's voices when chosen over a keyed connection", () => {
+    connectElevenLabs('sk_1');
+    setFeature('voice', { connection: 'device', model: '' });
+
+    expect(elevenLabsVoice()).toBeUndefined();
   });
 });

@@ -323,9 +323,6 @@ export const en = {
   'settings.section.ai-features': 'Features',
   'settings.section.ai-features.text':
     'Which connection and model each feature uses. A new connection picks a sensible model for every feature; change it here.',
-  'settings.section.ai-voice': 'Device voice',
-  'settings.section.ai-voice.text':
-    "AI voice reads with this device's voices until an ElevenLabs key is added: free, no key, works offline. The highlight follows each phrase rather than each character.",
   'settings.section.ai-prompts': 'System prompts',
   'settings.section.ai-prompts.text':
     'What the AI is told before every request. Built-in prompts follow the AI language; editing one makes your own copy.',
@@ -528,7 +525,6 @@ export const en = {
   'ai.voiceSpeedHint':
     'Plays the voice faster or slower without changing its pitch; the highlight follows.',
   'ai.voiceId': 'ElevenLabs voice ID',
-  'ai.voiceIdHint': 'The voice used to read the book.',
   'ai.voiceIdPlaceholder': 'e.g. {id}',
   'ai.lorebookAuto': 'Update the lorebook automatically',
   'ai.lorebookAutoHint':
@@ -579,8 +575,6 @@ export const en = {
   'ai.modelsCount': '{count} models',
   'ai.needsKey': 'Needs a key on this device',
   'ai.notTested': 'Not tested yet',
-  'ai.noConnections':
-    'No connections yet. Add one with a key from OpenRouter (every vendor, free models included) or Google AI Studio (free Gemini).',
   'ai.addConnection': 'Add connection',
   'ai.testAll': 'Test all',
   'ai.testing': 'Testing…',
@@ -627,7 +621,44 @@ export const en = {
   'ai.sameAsAsk': 'Same as Ask AI',
   'ai.sameAsRecap': 'Same as Story so far',
   'ai.needsConnection': 'Needs a connection',
-  'ai.needsVoiceConnection': 'Needs a voice connection (ElevenLabs)',
+  'ai.getStarted': 'Get started',
+  'ai.getStartedText': 'One connection is enough: every feature uses it until you pick another.',
+  'ai.startHere': 'Start here',
+  'ai.startHereLead':
+    'Connect one provider and Ask AI, Story so far and the lorebook all work. You can add more later.',
+  'ai.connectOpenRouter': 'Connect with OpenRouter',
+  'ai.connecting': 'Connecting…',
+  'ai.connectOpenRouterHint': 'Sign in at openrouter.ai and approve; you come back with a key.',
+  'ai.connectOpenRouterHttps':
+    'Connecting with OpenRouter needs an https address. Paste a key below instead.',
+  'ai.orPasteKey': 'Or paste a key',
+  'ai.pasteKey': 'Paste a key',
+  'ai.paste': 'Paste',
+  'ai.connect': 'Connect',
+  'ai.gettingKey': 'Getting a {provider} key',
+  'ai.stepOpenRouterCredits':
+    'Optional: add credits. Models marked Free work without them (50 requests a day).',
+  'ai.stepOpenRouterKey':
+    "In {link}, create a key with a credit limit, so a leaked key can't cost much.",
+  'ai.stepOpenRouterPaste':
+    'Copy it (it starts with {prefix} and is shown once) and paste it above.',
+  'ai.stepCreateKey': 'Create an account and an API key at {link}.',
+  'ai.stepPaste': 'Copy the key, paste it above and press Connect.',
+  'ai.otherProviders': 'Other providers',
+  'ai.otherProvidersHint': 'For Ollama, LM Studio or any other server, use Add connection below.',
+  'ai.deviceVoices': "This device's voices",
+  'ai.deviceVoicesHint': 'Free, no key. Add an ElevenLabs key for natural voices.',
+  'ai.voiceConnectionHint':
+    "This device's voices until a voice connection is added: free, no key, works offline. Adding an ElevenLabs key under Connections switches to it.",
+  'ai.voiceNoKeyHint':
+    "This connection's key isn't on this device. Add it under Connections; until then this device's voices read.",
+  'ai.voiceModelHint': "From ElevenLabs' list; it needs character timestamps for the highlight.",
+  'ai.elevenLabsVoiceHint': 'Voices in your ElevenLabs library, Japanese first.',
+  'ai.chooseVoice': 'Choose a voice',
+  'ai.loadingVoices': 'Loading voices…',
+  'ai.withoutVoiceKey': 'Without a voice key',
+  'ai.withoutVoiceKeyText':
+    "AI voice uses this device's voices: free, no key, works offline. The highlight follows each phrase rather than each character. Add an ElevenLabs key under Connections for natural voices and exact timing.",
   'ai.connectionFor': '{feature} connection',
   'ai.modelFor': '{feature} model',
   'ai.voiceLink': 'Voice ↓',

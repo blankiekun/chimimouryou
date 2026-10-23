@@ -6,14 +6,8 @@
     faPlay,
     faSpinner
   } from '@fortawesome/free-solid-svg-icons';
-  import {
-    defaultElevenLabsModel,
-    deviceVoiceName$,
-    elevenLabsApiKey$,
-    elevenLabsModel$,
-    ttsPlaybackRate$,
-    ttsVoiceId$
-  } from '$lib/data/ai-settings';
+  import { deviceVoiceName$, ttsPlaybackRate$, ttsVoiceId$ } from '$lib/data/ai-settings';
+  import { aiFeatureState$ } from '$lib/data/ai-connections';
   import {
     deviceSpeechAvailable,
     deviceUtterance,
@@ -21,8 +15,8 @@
     pickDeviceVoice,
     readingTimeline,
     spokenPhrases,
+    elevenLabsVoice,
     synthesizeSpeech,
-    ttsBackend,
     timelineEntryAt,
     type TimelineEntry
   } from '$lib/data/tts';
@@ -65,7 +59,9 @@
   /** The device utterance being spoken; events from older ones are ignored. */
   let utterance: SpeechSynthesisUtterance | undefined;
 
-  $: device = ttsBackend($elevenLabsApiKey$) === 'device';
+  // Recomputed whenever a connection, key or the voice feature changes.
+  $: eleven = $aiFeatureState$ && elevenLabsVoice();
+  $: device = !eleven;
   $: voice = pickDeviceVoice(voices, $deviceVoiceName$);
   $: setup = device
     ? deviceSpeechAvailable()
@@ -306,7 +302,7 @@
       <span class="voice-meta"
         >{device
           ? `${$t$('reader.deviceVoice')} · ${voice?.name ?? 'ja-JP'}`
-          : `ElevenLabs · ${$elevenLabsModel$ || defaultElevenLabsModel}`}</span
+          : `ElevenLabs · ${eleven?.model ?? ''}`}</span
       >
     </span>
   </div>

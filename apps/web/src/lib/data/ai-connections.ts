@@ -57,6 +57,8 @@ export interface AiConnectionCache {
   loadedAt?: number;
   /** ElevenLabs: voices in the account's library */
   voices?: number;
+  /** ElevenLabs: the voices themselves, for the Voice picker */
+  voiceList?: { id: string; name: string; lang?: string }[];
   test?: AiConnectionTest;
 }
 
@@ -135,6 +137,9 @@ export interface ResolvedFeature {
   inherited: boolean;
 }
 
+/** Connection value of the AI voice that picks this device's Web Speech voices. */
+export const deviceVoice = 'device';
+
 const parentFeature: Partial<Record<AiFeature, AiFeature>> = { lore: 'recap', recap: 'ask' };
 
 /** The model a feature uses on a provider when none is chosen. */
@@ -162,7 +167,11 @@ export function resolveFeature(feature: AiFeature): ResolvedFeature {
   }
 
   const live = liveConnections(feature === 'voice' ? 'voice' : 'text');
-  let connection = live.find((c) => c.id === setting.connection) ?? live[0];
+  // 'device': the AI voice reads with this device's voices even when a voice connection exists.
+  let connection =
+    setting.connection === deviceVoice
+      ? undefined
+      : (live.find((c) => c.id === setting.connection) ?? live[0]);
 
   // shortcut: the previous release's OpenRouter key works without a connection; drop with the mirror.
   if (!connection && feature !== 'voice' && openRouterApiKey$.getValue()) {
@@ -304,6 +313,26 @@ export function setFeature(feature: AiFeature, changes: Partial<AiFeatureSetting
     [feature]: { ...featureSetting(feature), ...changes }
   });
   mirrorOldSettings();
+}
+
+/** Get started: a new connection for a provider with the key the reader pasted or OpenRouter sent. */
+export function connectProvider(providerId: string, key: string, endpoint = '') {
+  const provider = findProvider(providerId);
+
+  if (!provider) {
+    throw new Error(`Unknown provider ${providerId}`);
+  }
+
+  return saveConnection(
+    {
+      id: newConnectionId(providerId),
+      name: provider.label,
+      provider: providerId,
+      kind: provider.kind,
+      ...(endpoint.trim() && { endpoint: endpoint.trim() })
+    },
+    key
+  );
 }
 
 /** A new connection id from its provider: `openrouter`, then `openrouter-2`… */

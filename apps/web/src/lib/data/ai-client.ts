@@ -17,6 +17,7 @@ import {
   defaultModel,
   resolveFeature,
   updateConnectionCache,
+  type AiConnectionCache,
   type AiConnectionTest,
   type AiModel,
   type ResolvedFeature
@@ -421,11 +422,21 @@ export async function loadModels(connection: AiConnection, key = connectionKey(c
   const baseUrl = connectionBaseUrl(provider, connection.endpoint);
   let models: AiModel[];
   let voices: number | undefined;
+  let voiceList: AiConnectionCache['voiceList'];
 
   try {
     if (provider.kind === 'voice') {
       models = (provider.models ?? []).map((id) => ({ id }));
-      voices = (await fetchJson(provider, baseUrl, '/voices', key)).voices?.length ?? 0;
+      const list: any[] = (await fetchJson(provider, baseUrl, '/voices', key)).voices ?? [];
+
+      voices = list.length;
+      voiceList = list
+        .filter((voice) => voice?.voice_id)
+        .map((voice) => ({
+          id: String(voice.voice_id),
+          name: String(voice.name ?? voice.voice_id),
+          lang: voice.labels?.language ?? voice.verified_languages?.[0]?.language
+        }));
     } else if (provider.models) {
       models = provider.models.map((id) => ({ id }));
     } else {
@@ -440,7 +451,7 @@ export async function loadModels(connection: AiConnection, key = connectionKey(c
     throw redacted(error, key);
   }
 
-  updateConnectionCache(connection.id, { models, voices, loadedAt: Date.now() });
+  updateConnectionCache(connection.id, { models, voices, voiceList, loadedAt: Date.now() });
 
   return models;
 }

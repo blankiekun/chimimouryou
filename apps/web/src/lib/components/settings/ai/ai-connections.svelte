@@ -169,8 +169,6 @@
       {/if}
     </tbody>
   </table>
-{:else}
-  <p class="empty">{$t$('ai.noConnections')}</p>
 {/if}
 
 <p class="buttons">
@@ -239,12 +237,6 @@
 
   .phone-only {
     display: none;
-  }
-
-  .empty {
-    padding: 1rem 0;
-    color: var(--app-muted-fg);
-    font-size: var(--type-small);
   }
 
   .buttons {
