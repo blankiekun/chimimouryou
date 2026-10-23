@@ -14,6 +14,7 @@
  */
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
+import { standalone } from '$lib/data/env';
 
 export type MetadataKind = 'book' | 'manga' | 'vn';
 
@@ -90,6 +91,8 @@ export function parseBookMetadata(data: unknown): BookMetadataMap {
 }
 
 async function fetchBookMetadata() {
+  if (standalone) return {};
+
   const response = await fetch(metadataUrl, { cache: 'no-store' });
 
   if (response.status === 404) {

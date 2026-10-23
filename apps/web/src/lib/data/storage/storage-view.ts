@@ -11,7 +11,8 @@ import {
   gDriveScope,
   oneDriveAuthEndpoint,
   oneDriveClientId,
-  oneDriveScope
+  oneDriveScope,
+  standalone
 } from '$lib/data/env';
 
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
@@ -103,9 +104,13 @@ export function getStorageIconData(storageSource: StorageKey): StorageIcon {
   }
 }
 
-// Builds without the Calibre server (static hosting) default to 'browser'.
-const defaultStorageSource =
-  (import.meta.env.VITE_DEFAULT_STORAGE_SOURCE as StorageKey) || StorageKey.CALIBRE;
+/** The Calibre source needs this app's own server; the standalone edition has none. */
+export const calibreSourceAvailable = !standalone;
+
+// Builds without the Calibre server (static hosting, standalone) default to 'browser'.
+const defaultStorageSource = standalone
+  ? StorageKey.BROWSER
+  : (import.meta.env.VITE_DEFAULT_STORAGE_SOURCE as StorageKey) || StorageKey.CALIBRE;
 
 /** The Browser library source exists only in the reader-only build; server builds list Calibre. */
 export const browserSourceAvailable = defaultStorageSource === StorageKey.BROWSER;
@@ -123,6 +128,11 @@ export const storageSource$ = writableStringLocalStorageSubject<StorageKey>()(
 // A Browser source saved before it was removed from server builds.
 if (!browserSourceAvailable && storageSource$.getValue() === StorageKey.BROWSER) {
   storageSource$.next(StorageKey.CALIBRE);
+}
+
+// The standalone edition never constructs the Calibre handler, whatever was saved.
+if (!calibreSourceAvailable && storageSource$.getValue() === StorageKey.CALIBRE) {
+  storageSource$.next(fallbackStorageSource);
 }
 
 export const storageIcon$ = writableSubject<StorageIcon>(getStorageIconData(StorageKey.BROWSER));

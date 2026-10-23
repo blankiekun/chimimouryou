@@ -1,0 +1,77 @@
+# Publishes chimimouryou's standalone web app (no server) to GitHub Pages.
+# Copy this file to .github/workflows/pages.yml in the site repository
+# (chimimouryou/chimimouryou.github.io, served at https://chimimouryou.github.io),
+# set Settings → Pages → Source to "GitHub Actions", and add the repository secrets
+# VITE_GDRIVE_CLIENT_ID and VITE_GDRIVE_CLIENT_SECRET (no OneDrive in the standalone)
+# (OAuth redirect URI: https://chimimouryou.github.io/auth). Run it from the Actions tab,
+# with a tag such as v1.2.3 or main.
+name: Pages
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Tag or branch of blankiekun/chimimouryou to publish
+        default: main
+        required: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout chimimouryou
+        uses: actions/checkout@v7.0.1
+        with:
+          repository: blankiekun/chimimouryou
+          ref: ${{ inputs.ref }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6.1.0
+        with:
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the standalone edition
+        run: pnpm build
+        env:
+          VITE_EDITION: standalone
+          VITE_STORAGE_ROOT_NAME: chimi-reader-data
+          VITE_BASE_PATH: https://chimimouryou.github.io
+          VITE_GDRIVE_CLIENT_ID: ${{ secrets.VITE_GDRIVE_CLIENT_ID }}
+          VITE_GDRIVE_CLIENT_SECRET: ${{ secrets.VITE_GDRIVE_CLIENT_SECRET }}
+
+      # Settings → Themes links to the theme guide (the web image copies it the same way).
+      - name: Add the theme guide
+        run: cp themes.md apps/web/build/themes.md
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: apps/web/build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

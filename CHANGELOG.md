@@ -6,6 +6,15 @@ anything a reader or a server operator would notice.
 
 ## Unreleased
 
+### Added
+
+- A standalone edition: `VITE_EDITION=standalone` builds the reader as a static web app without
+  a server (books on the device, in a folder or on Google Drive; no accounts, Calibre,
+  difficulty, Words page or Read next), and `deploy/pages/pages.yml` publishes it on GitHub
+  Pages. CI builds it too.
+- The installed app accepts books shared to it (Android) and opens .epub, .htmlz, .cbz and .zip
+  files from the system (desktop Chromium); its window and colours follow Study Book.
+
 ### Changed
 
 - The library's top bar shows only Import and the account: view and sort are in the Store's Sort
@@ -97,6 +106,10 @@ anything a reader or a server operator would notice.
 ### Fixed
 
 - Visual novels: right-clicking the game no longer opens the browser's menu.
+- An app update no longer deletes every cache of the site: only the service worker's own (now
+  named `chimi:…`), so games kept for offline play and other sites on the same origin keep theirs.
+- Pages no longer name reader.ttsu.app as their canonical address; without `VITE_BASE_PATH` they
+  use their own. Links to the theme guide and settings work under `VITE_PAGE_PATH`.
 
 ## v3.7.0 (2026-10-22)
 

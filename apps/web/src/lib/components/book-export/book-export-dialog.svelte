@@ -6,6 +6,7 @@
   import { buttonClasses } from '$lib/css-classes';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import {
+    calibreSourceAvailable,
     getStorageIconData,
     isStorageSourceAvailable,
     storageSource$
@@ -23,7 +24,15 @@
   let icons = [
     { ...getStorageIconData(StorageKey.BACKUP), source: StorageKey.BACKUP, label: 'Zip File' },
     { ...getStorageIconData(StorageKey.BROWSER), source: StorageKey.BROWSER, label: 'Browser DB' },
-    { ...getStorageIconData(StorageKey.CALIBRE), source: StorageKey.CALIBRE, label: 'Calibre' }
+    ...(calibreSourceAvailable
+      ? [
+          {
+            ...getStorageIconData(StorageKey.CALIBRE),
+            source: StorageKey.CALIBRE,
+            label: 'Calibre'
+          }
+        ]
+      : [])
   ];
 
   const dispatch = createEventDispatcher<{

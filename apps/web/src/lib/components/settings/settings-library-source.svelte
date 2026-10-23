@@ -9,6 +9,7 @@
   import { StorageKey } from '$lib/data/storage/storage-types';
   import {
     browserSourceAvailable,
+    calibreSourceAvailable,
     isStorageSourceAvailable,
     storageSource$
   } from '$lib/data/storage/storage-view';
@@ -25,7 +26,9 @@
   let sources: (ToggleOption<StorageKey> & { online: boolean })[];
   $: sources = browser
     ? [
-        { id: StorageKey.CALIBRE, text: 'Calibre', online: false },
+        ...(calibreSourceAvailable
+          ? [{ id: StorageKey.CALIBRE, text: 'Calibre', online: false }]
+          : []),
         ...(browserSourceAvailable
           ? [{ id: StorageKey.BROWSER, text: $t$('library.sourceBrowser'), online: false }]
           : []),

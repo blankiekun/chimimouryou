@@ -13,6 +13,7 @@
 
 import { browser } from '$app/environment';
 import { BehaviorSubject } from 'rxjs';
+import { standalone } from '$lib/data/env';
 
 export interface AccountUser {
   id: string;
@@ -71,6 +72,9 @@ function cachedUser(): AccountUser | null {
 }
 
 async function checkSession(): Promise<AccountUser | null> {
+  // No server, so never signed in: every account-only sync bails out on null.
+  if (standalone) return null;
+
   try {
     const response = await fetch(`${accountApiUrl}me`, { cache: 'no-store' });
 

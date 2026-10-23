@@ -9,6 +9,8 @@
  * (see scripts/calibre/). Not part of upstream.
  */
 
+import { standalone } from '$lib/data/env';
+
 export interface CalibreBook {
   id: number;
   title: string;
@@ -68,6 +70,9 @@ export function loadCalibreCatalog(refresh = false) {
     catalogCache = undefined;
   }
 
+  // The standalone edition has no server: an empty catalog, never a request.
+  if (standalone) return Promise.resolve([] as CalibreBook[]);
+
   catalogCache ??= fetch(catalogUrl, { cache: 'no-cache' })
     .then((response) => {
       if (!response.ok) {
@@ -88,6 +93,8 @@ export function loadCalibreCatalog(refresh = false) {
 }
 
 export async function loadCalibreDifficulty(): Promise<Record<string, CalibreDifficulty>> {
+  if (standalone) return {};
+
   const response = await fetch(difficultyUrl, { cache: 'no-cache' });
 
   if (!response.ok) {

@@ -4,6 +4,7 @@
   import Fa from 'svelte-fa';
   import { getUpdateState, requestEngineUpdate, type UpdateState } from '$lib/data/account';
   import { checkEngineRelease, engineRepo } from '$lib/data/app-update';
+  import { pagePath } from '$lib/data/env';
 
   const pollMs = 3000;
 
@@ -29,7 +30,7 @@
     try {
       state = await getUpdateState().catch(() => undefined);
 
-      const response = await fetch('/vn/conscripter-version.txt', { cache: 'no-store' });
+      const response = await fetch(`${pagePath}/vn/conscripter-version.txt`, { cache: 'no-store' });
 
       check = await checkEngineRelease(response.ok ? await response.text() : 'unknown');
     } catch (e: any) {

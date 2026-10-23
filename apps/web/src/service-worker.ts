@@ -3,20 +3,22 @@
 import { build, files, prerendered, version } from '$service-worker';
 
 import { pagePath } from '$lib/data/env';
+import { shareCacheName, sharePath, stashSharedFiles } from '$lib/data/launch-files';
 import { toSearchParams } from '$lib/functions/to-search-params';
-import { userFontsCacheName } from '$lib/data/fonts';
+import { staleServiceWorkerCaches, swCachePrefix } from '$lib/functions/service-worker-caches';
 
 // eslint-disable-next-line no-restricted-globals
 const worker = self as unknown as ServiceWorkerGlobalScope;
-const BUILD_CACHE_NAME = `build:${version}`;
+const BUILD_CACHE_NAME = `${swCachePrefix}build:${version}`;
+const OTHER_CACHE_NAME = `${swCachePrefix}other:${version}`;
 // The visual novel engine can be replaced on the server without a new build (admin panel),
 // so it is fetched network-first and kept across builds for offline play.
-const ENGINE_CACHE_NAME = 'vn-engine';
+const ENGINE_CACHE_NAME = `${swCachePrefix}vn-engine`;
 const engineFile = /\/vn\/conscripter(\.js|\.wasm|-version\.txt)$/;
 // The UI font is split into unicode-range chunks (4 MB in all); a page loads only the ones it
 // shows, so they are cached on first use, across builds, rather than precached. So is KZ UDMincho
 // (17 MB), the old Washi & Sumi display font, now only a reader font choice.
-const UI_FONT_CACHE_NAME = 'ui-font';
+const UI_FONT_CACHE_NAME = `${swCachePrefix}ui-font`;
 const uiFontFile = /\/(BIZUDPGothic-[^/]+\.woff2|KZUDMincho-[^/]+\.woff2?)$/;
 const uiFontFiles = new Set(build.filter((file) => uiFontFile.test(file)));
 
@@ -38,13 +40,14 @@ worker.addEventListener('install', (event) => {
 worker.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
-      const keysWithOldCache = keys.filter(
-        (key) =>
-          key !== BUILD_CACHE_NAME &&
-          key !== userFontsCacheName &&
-          key !== ENGINE_CACHE_NAME &&
-          key !== UI_FONT_CACHE_NAME
-      );
+      // Never other caches on the origin: the page's (user fonts, kept games) or other sites'.
+      const keysWithOldCache = staleServiceWorkerCaches(keys, [
+        BUILD_CACHE_NAME,
+        OTHER_CACHE_NAME,
+        ENGINE_CACHE_NAME,
+        UI_FONT_CACHE_NAME,
+        shareCacheName
+      ]);
       return Promise.all([
         ...keysWithOldCache.map((key) => caches.delete(key)),
         dropOldUiFontChunks()
@@ -54,9 +57,19 @@ worker.addEventListener('activate', (event) => {
 });
 
 worker.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET' || event.request.headers.has('range')) return;
-
   const url = new URL(event.request.url);
+
+  // Books shared with the installed app (manifest share_target): the site is static.
+  if (
+    event.request.method === 'POST' &&
+    url.host === worker.location.host &&
+    url.pathname === sharePath
+  ) {
+    event.respondWith(stashSharedFiles(event.request));
+    return;
+  }
+
+  if (event.request.method !== 'GET' || event.request.headers.has('range')) return;
 
   // don't try to handle e.g. data: URIs
   const isHttp = url.protocol.startsWith('http');
@@ -86,11 +99,11 @@ worker.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (isSelfHost && url.pathname.startsWith('/userfonts/')) {
+  if (isSelfHost && url.pathname.startsWith(`${pagePath}/userfonts/`)) {
     event.respondWith(
       caches
         .match(url.pathname)
-        .then((r) => r ?? createRedirectResponse('/fonts/noto-serif-v21-regular.woff2'))
+        .then((r) => r ?? createRedirectResponse(`${pagePath}/fonts/noto-serif-v21-regular.woff2`))
     );
     return;
   }
@@ -160,7 +173,7 @@ async function networkFirstRaceCache(
   fallbackCacheName?: string,
   fallbackCacheRequest?: Request
 ) {
-  const cache = await caches.open(`other:${version}`);
+  const cache = await caches.open(OTHER_CACHE_NAME);
   const controller = new AbortController();
 
   let cachedResponse: Response | undefined;
