@@ -5,11 +5,12 @@
  */
 
 /**
- * Analysis tools (standalone edition, desktop browsers): an optional download (Settings) of
- * Sudachi, Pyodide and yurigana (scripts/analysis-tools/build.sh) that makes a stored book's word
- * list and readings file in the browser, in the formats the server's difficulty service gives
- * (scripts/calibre/jiten/browser.py), so Book words, word coverage and generated furigana work
- * without a server.
+ * Analysis tools (standalone edition, desktop browsers): optional downloads (Settings) of Sudachi,
+ * Pyodide and yurigana (scripts/analysis-tools/build.sh) that make a stored book's data in the
+ * browser, in the formats the server's difficulty service gives (scripts/calibre/jiten/browser.py).
+ * Two features, each its own pipeline and download: difficulty estimates (the estimate, and the
+ * word list for Book words and word coverage; also the frequency pack and the models) and
+ * generated furigana (the readings file). Files both use are kept while either is installed.
  *
  * Sudachi (~250 MB in memory) and Pyodide (~200 MB) run one after the other in their own workers
  * (functions/analysis/): the tokenizer worker tokenizes what the reader worker asks for and is ended
@@ -19,15 +20,16 @@
 
 import { BehaviorSubject, Observable } from 'rxjs';
 import { foldReadings, type BookWord, type WordTotals } from '$lib/data/book-words';
+import type { CalibreDifficulty } from '$lib/data/calibre';
 import { pagePath, standalone } from '$lib/data/env';
 import {
   endFuriganaProgress,
   furiganaProgress$,
-  type CachedReadings,
   type ReadingsFile
 } from '$lib/data/generated-furigana';
 import { readerDb } from '$lib/data/reader-db';
 import type { ReadMessage, ReadRequest } from '$lib/functions/analysis/analysis-read.worker';
+import type { ScoreMessage, ScoreRequest } from '$lib/functions/analysis/analysis-score.worker';
 import type {
   TokenizeMessage,
   TokenizeRequest
@@ -67,25 +69,58 @@ export function analysisToolsSupported() {
   );
 }
 
+export type AnalysisFeature = 'difficulty' | 'furigana';
+export const analysisFeatures: AnalysisFeature[] = ['difficulty', 'furigana'];
+type Part = ReadRequest['part'];
+
+/** The tools' manifest as kept in the cache: the site's, plus the features installed from it. */
+interface KeptManifest extends AnalysisToolsManifest {
+  installed?: AnalysisFeature[];
+}
+
+type ToolsFile = AnalysisToolsManifest['files'][number];
+
+const needs = (file: ToolsFile, features: AnalysisFeature[]) =>
+  !file.features || features.some((feature) => file.features!.includes(feature));
+
 export type AnalysisToolsState = 'unknown' | 'absent' | 'downloading' | 'ready';
 
-export const analysisToolsState$ = new BehaviorSubject<AnalysisToolsState>('unknown');
+export const analysisToolsState$ = new BehaviorSubject<Record<AnalysisFeature, AnalysisToolsState>>(
+  { difficulty: 'unknown', furigana: 'unknown' }
+);
 
-/** The manifest of the tools kept in the cache, when every file is there. */
-export async function installedTools(): Promise<AnalysisToolsManifest | undefined> {
+function setState(feature: AnalysisFeature, state: AnalysisToolsState) {
+  analysisToolsState$.next({ ...analysisToolsState$.getValue(), [feature]: state });
+}
+
+async function keptManifest(): Promise<KeptManifest | undefined> {
+  const cache = await caches.open(analysisToolsCacheName);
+
+  return (await cache.match(new URL(manifestName, base()).href))?.json();
+}
+
+async function hasFile(cache: Cache, file: ToolsFile) {
+  if (!file.raw) return !!(await cache.match(new URL(file.name, base()).href));
+
+  const folder = await rawFolder();
+
+  return (await (await folder.getFileHandle(rawName(file.name))).getFile()).size === file.raw;
+}
+
+/** The kept manifest when `feature` is installed and every file it needs is there. */
+export async function installedTools(
+  feature: AnalysisFeature
+): Promise<AnalysisToolsManifest | undefined> {
   try {
+    const manifest = await keptManifest();
+
+    if (!manifest?.installed?.includes(feature)) return undefined;
+
     const cache = await caches.open(analysisToolsCacheName);
-    const manifest = await (await cache.match(new URL(manifestName, base()).href))?.json();
-
-    if (!manifest) return undefined;
-
-    const folder = await rawFolder();
     const found = await Promise.all(
-      (manifest as AnalysisToolsManifest).files.map(async (file) =>
-        file.raw
-          ? (await (await folder.getFileHandle(rawName(file.name))).getFile()).size === file.raw
-          : cache.match(new URL(file.name, base()).href)
-      )
+      manifest.files
+        .filter((file) => needs(file, [feature]))
+        .map((file) => hasFile(cache, file).catch(() => false))
     );
 
     return found.every(Boolean) ? manifest : undefined;
@@ -96,46 +131,74 @@ export async function installedTools(): Promise<AnalysisToolsManifest | undefine
 
 /** Sets `analysisToolsState$` from the cache. */
 export async function checkAnalysisTools() {
-  if (analysisToolsState$.getValue() === 'downloading') return;
-  analysisToolsState$.next((await installedTools()) ? 'ready' : 'absent');
+  for (const feature of analysisFeatures) {
+    if (analysisToolsState$.getValue()[feature] !== 'downloading') {
+      setState(feature, (await installedTools(feature)) ? 'ready' : 'absent');
+    }
+  }
 }
 
-/** The download's size in bytes, from the site's manifest. */
-export async function analysisToolsSize() {
-  const manifest: AnalysisToolsManifest = await (
-    await fetch(new URL(manifestName, base()).href, { cache: 'no-cache' })
-  ).json();
+async function siteManifest(signal?: AbortSignal) {
+  const response = await fetch(new URL(manifestName, base()).href, { cache: 'no-cache', signal });
 
-  return manifest.files.reduce((sum, file) => sum + file.bytes, 0);
+  if (!response.ok) throw new Error(`The analysis tools aren't on this site`);
+
+  return (await response.json()) as AnalysisToolsManifest;
 }
 
 /**
- * Downloads every file into the cache, the manifest last (so a cut download is never taken for
- * a whole one). Asks the browser to keep the site's storage first.
+ * What downloading `feature` fetches: its files the installed features don't have already (all it
+ * needs, and the installed features' files again, when the site has another version).
+ */
+async function toDownload(feature: AnalysisFeature, site: AnalysisToolsManifest) {
+  const kept = await keptManifest().catch(() => undefined);
+  const same = kept?.version === site.version;
+  const features = [...new Set([...(kept?.installed ?? []), feature])];
+  const cache = await caches.open(analysisToolsCacheName);
+  const files: ToolsFile[] = [];
+
+  for (const file of site.files) {
+    if (needs(file, features) && !(same && (await hasFile(cache, file).catch(() => false)))) {
+      files.push(file);
+    }
+  }
+
+  return { files, features, same };
+}
+
+/** The download's size in bytes for `feature`, from the site's manifest. */
+export async function analysisToolsSize(feature: AnalysisFeature) {
+  const { files } = await toDownload(feature, await siteManifest());
+
+  return files.reduce((sum, file) => sum + file.bytes, 0);
+}
+
+/**
+ * Downloads the files `feature` needs into the cache, the manifest last (so a cut download is never
+ * taken for a whole one). Asks the browser to keep the site's storage first.
  */
 export async function downloadAnalysisTools(
+  feature: AnalysisFeature,
   onProgress: (done: number, total: number) => void,
   signal?: AbortSignal
 ) {
-  analysisToolsState$.next('downloading');
+  setState(feature, 'downloading');
 
   try {
     await navigator.storage?.persist?.().catch(() => false);
 
-    const manifestResponse = await fetch(new URL(manifestName, base()).href, {
-      cache: 'no-cache',
-      signal
-    });
+    const site = await siteManifest(signal);
+    const { files, features, same } = await toDownload(feature, site);
 
-    if (!manifestResponse.ok) throw new Error(`The analysis tools aren't on this site`);
+    // Another version: the installed features are fetched again with this one.
+    if (!same) await removeAll();
 
-    const manifest: AnalysisToolsManifest = await manifestResponse.clone().json();
-    const total = manifest.files.reduce((sum, file) => sum + file.bytes, 0);
+    const total = files.reduce((sum, file) => sum + file.bytes, 0);
     const cache = await caches.open(analysisToolsCacheName);
     const folder = await rawFolder(true);
     let done = 0;
 
-    for (const file of manifest.files) {
+    for (const file of files) {
       const url = new URL(file.name, base()).href;
       const response = await fetch(url, { cache: 'no-cache', signal });
 
@@ -167,37 +230,75 @@ export async function downloadAnalysisTools(
       }
     }
 
-    await cache.put(new URL(manifestName, base()).href, manifestResponse);
-    analysisToolsState$.next('ready');
-  } catch (error) {
-    analysisToolsState$.next((await installedTools()) ? 'ready' : 'absent');
-    throw error;
+    await cache.put(
+      new URL(manifestName, base()).href,
+      new Response(JSON.stringify({ ...site, installed: features } satisfies KeptManifest))
+    );
+  } finally {
+    await checkAnalysisTools();
   }
 }
 
-export async function removeAnalysisTools() {
+async function removeAll() {
   await caches.delete(analysisToolsCacheName);
   await navigator.storage
     .getDirectory()
     .then((root) => root.removeEntry(analysisToolsCacheName, { recursive: true }))
     .catch(() => undefined);
-  analysisToolsState$.next('absent');
 }
 
-export interface BookAnalysis {
+/** Removes `feature` and the files no other installed feature needs. */
+export async function removeAnalysisTools(feature: AnalysisFeature) {
+  const kept = await keptManifest().catch(() => undefined);
+  const others = (kept?.installed ?? []).filter((installed) => installed !== feature);
+
+  if (!kept || !others.length) {
+    await removeAll();
+  } else {
+    const cache = await caches.open(analysisToolsCacheName);
+    const folder = await rawFolder(true);
+
+    await cache.put(
+      new URL(manifestName, base()).href,
+      new Response(JSON.stringify({ ...kept, installed: others } satisfies KeptManifest))
+    );
+    for (const file of kept.files.filter(
+      (file) => needs(file, [feature]) && !needs(file, others)
+    )) {
+      await (
+        file.raw
+          ? folder.removeEntry(rawName(file.name))
+          : cache.delete(new URL(file.name, base()).href)
+      ).catch(() => undefined);
+    }
+  }
+  await checkAnalysisTools();
+}
+
+/** browser.py's word list, the difficulty model's input row and the estimate's counts */
+interface WordsResult {
   words: BookWord[];
-  /** The word list's rows and occurrences before the cap, without noise (as an estimate's) */
   uniqueWords: number;
   tokens: number;
-  readings: ReadingsFile;
+  features: number[];
+  words95: number | null;
+  characters: number;
+  uniqueKanji: number;
 }
+
+const abortError = () => new DOMException('The analysis was stopped', 'AbortError');
 
 function run<Message extends { type: string }>(
   worker: Worker,
   request: unknown,
-  onMessage: (message: Message) => unknown
+  onMessage: (message: Message) => unknown,
+  signal?: AbortSignal
 ) {
   return new Promise<unknown>((resolve, reject) => {
+    const stop = () => reject(abortError());
+
+    if (signal?.aborted) return stop();
+    signal?.addEventListener('abort', stop, { once: true });
     worker.onerror = (event) => reject(new Error(event.message || 'The analysis stopped'));
     worker.onmessage = ({ data }: MessageEvent<Message>) => {
       try {
@@ -218,17 +319,22 @@ const fail = (message: { type: string; message?: string }) => {
   return undefined;
 };
 
-function readWorker(request: ReadRequest) {
+function readWorker(request: ReadRequest, signal?: AbortSignal) {
   return run<ReadMessage>(
     new Worker(new URL('../functions/analysis/analysis-read.worker.ts', import.meta.url), {
       type: 'module'
     }),
     request,
-    (message) => (message.type === 'texts' || message.type === 'result' ? message : fail(message))
+    (message) => (message.type === 'texts' || message.type === 'result' ? message : fail(message)),
+    signal
   ) as Promise<Extract<ReadMessage, { type: 'texts' | 'result' }>>;
 }
 
-function tokenizeWorker(request: TokenizeRequest, onProgress: (share: number) => void) {
+function tokenizeWorker(
+  request: TokenizeRequest,
+  onProgress: (share: number) => void,
+  signal?: AbortSignal
+) {
   return run<TokenizeMessage>(
     new Worker(new URL('../functions/analysis/analysis-tokenize.worker.ts', import.meta.url), {
       type: 'module'
@@ -238,50 +344,103 @@ function tokenizeWorker(request: TokenizeRequest, onProgress: (share: number) =>
       if (message.type === 'progress') onProgress(message.done / message.total);
 
       return message.type === 'done' || fail(message);
-    }
+    },
+    signal
   );
 }
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, settlePause));
+function scoreWorker(request: ScoreRequest) {
+  return run<ScoreMessage>(
+    new Worker(new URL('../functions/analysis/analysis-score.worker.ts', import.meta.url), {
+      type: 'module'
+    }),
+    request,
+    (message) => (message.type === 'scores' ? message : fail(message))
+  ) as Promise<Extract<ScoreMessage, { type: 'scores' }>>;
+}
 
-let queue: Promise<unknown> = Promise.resolve();
+const settle = (signal?: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(resolve, settlePause);
+
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        reject(abortError());
+      },
+      { once: true }
+    );
+  });
+
+/** Analyses waiting, one at a time; readings files go ahead of word lists (a reader waits for them). */
+const pending: { part: Part; start: () => Promise<void> }[] = [];
+let running = false;
+
+async function pump() {
+  if (running) return;
+  running = true;
+  while (pending.length) await pending.shift()!.start();
+  running = false;
+}
+
+function enqueue<T>(part: Part, task: () => Promise<T>) {
+  return new Promise<T>((resolve, reject) => {
+    const job = { part, start: () => task().then(resolve, reject) };
+    const at = part === 'readings' ? pending.findIndex((queued) => queued.part === 'words') : -1;
+
+    if (at < 0) {
+      pending.push(job);
+    } else {
+      pending.splice(at, 0, job);
+    }
+    pump();
+  });
+}
 
 /**
- * The book's word list and readings file, made from its HTML (the processed book's elementHtml).
- * `onProgress` gets a share from 0 to 1. Books are analysed one at a time.
+ * One part of the book's analysis from its HTML (the processed book's elementHtml): browser.py's
+ * JSON. `onProgress` gets a share from 0 to 1; `signal` stops it (between and inside stages).
  */
-export function analyseBook(html: string, onProgress: (share: number) => void = () => {}) {
-  const next = queue.then(async (): Promise<BookAnalysis> => {
-    const manifest = await installedTools();
-    const dictionaryBytes = manifest?.files.find((file) => file.name === 'core.dic.gz')?.raw;
+function analyseBook(
+  html: string,
+  part: Part,
+  manifest: AnalysisToolsManifest,
+  onProgress: (share: number) => void,
+  signal?: AbortSignal
+) {
+  return enqueue(part, async () => {
+    const dictionaryBytes = manifest.files.find((file) => file.name === 'core.dic.gz')?.raw;
 
-    if (!manifest || !dictionaryBytes) throw new Error('The analysis tools are not downloaded');
+    if (!dictionaryBytes) throw new Error('The analysis tools are not downloaded');
+    if (signal?.aborted) throw abortError();
 
     onProgress(0);
 
-    const request = { base: base(), manifest, html, wordsPerBook };
+    const request = { base: base(), manifest, html, part, wordsPerBook };
     const tokenFile = `analysis-${Date.now()}-${Math.random().toString(36).slice(2)}.tokens`;
-    let texts = ((await readWorker(request)) as { texts: string[] }).texts;
+    let texts = ((await readWorker(request, signal)) as { texts: string[] }).texts;
 
     try {
       for (let round = 0; round < maxRounds; round += 1) {
         // The first round tokenizes the book: most of the time; later ones only a few words.
         const [from, to] = round ? [0.75, 0.8] : [0.05, 0.3];
 
-        await settle();
+        await settle(signal);
         await tokenizeWorker(
           { base: base(), dictionaryBytes, tokenFile, texts, expand: !round },
-          (share) => onProgress(from + (to - from) * share)
+          (share) => onProgress(from + (to - from) * share),
+          signal
         );
         onProgress(to);
-        await settle();
+        await settle(signal);
 
-        const { json } = (await readWorker({ ...request, tokenFile })) as { json: string };
-        const analysis = JSON.parse(json) as BookAnalysis & { misses?: string[] };
+        const { json } = (await readWorker({ ...request, tokenFile }, signal)) as { json: string };
+        const analysis = JSON.parse(json) as { misses?: string[] };
 
         if (!analysis.misses) {
           onProgress(1);
-          return analysis;
+          return analysis as unknown;
         }
         texts = analysis.misses;
         onProgress(0.75);
@@ -292,18 +451,6 @@ export function analyseBook(html: string, onProgress: (share: number) => void = 
 
     throw new Error('The analysis did not finish');
   });
-
-  queue = next.catch(() => undefined);
-
-  return next;
-}
-
-/** A book's analysis kept with its readings file (reader-db `readings`). */
-export interface LocalAnalysis extends CachedReadings {
-  words: BookWord[];
-  uniqueWords: number;
-  tokens: number;
-  computedAt: number;
 }
 
 /** Names the analysis of this HTML by these tools: another import or tools version redoes it. */
@@ -313,23 +460,41 @@ async function analysisTag(html: string, version: string) {
   return `local ${version} ${[...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
 }
 
-/** The book's kept analysis, if it has one (it may be from older tools or another import). */
-export async function keptAnalysis(title: string) {
-  const kept = await (await readerDb()).get('readings', title).catch(() => undefined);
+/** A local book's difficulty estimate (reader-db `estimates`), shaped like the server's. */
+export interface LocalEstimate extends CalibreDifficulty {
+  title: string;
+  etag: string;
+}
 
-  return kept && 'words' in kept ? (kept as LocalAnalysis) : undefined;
+/** A local book's word list (reader-db `wordLists`), made with its estimate. */
+export interface LocalWordList {
+  title: string;
+  etag: string;
+  words: BookWord[];
+}
+
+export async function keptEstimate(title: string) {
+  return (await readerDb()).get('estimates', title).catch(() => undefined);
+}
+
+/** Every local book's estimate, by title (for the library's cards). */
+export async function localEstimates() {
+  const estimates = await (await readerDb()).getAll('estimates').catch(() => []);
+
+  return new Map(estimates.map((estimate) => [estimate.title, estimate]));
 }
 
 /**
- * The book's analysis: the kept one when it was made from this HTML by these tools, else a new
- * one (undefined when the tools aren't downloaded: then the kept one, if any).
+ * The book's difficulty estimate and word list: the kept one when made from this HTML by these
+ * tools, else a new one (undefined when the difficulty tools aren't downloaded: then the kept one).
  */
-export async function localAnalysis(
+export async function localEstimate(
   title: string,
   html: string,
-  onProgress?: (share: number) => void
-): Promise<LocalAnalysis | undefined> {
-  const [kept, manifest] = await Promise.all([keptAnalysis(title), installedTools()]);
+  onProgress: (share: number) => void = () => {},
+  signal?: AbortSignal
+): Promise<LocalEstimate | undefined> {
+  const [kept, manifest] = await Promise.all([keptEstimate(title), installedTools('difficulty')]);
 
   if (!manifest) return kept;
 
@@ -337,57 +502,94 @@ export async function localAnalysis(
 
   if (kept?.etag === etag) return kept;
 
-  const result = await analyseBook(html, onProgress);
-  const analysis: LocalAnalysis = {
+  const result = (await analyseBook(
+    html,
+    'words',
+    manifest,
+    (share) => onProgress(share * 0.95),
+    signal
+  )) as WordsResult;
+  const scores = await scoreWorker({ base: base(), features: result.features });
+  const estimate: LocalEstimate = {
     title,
     etag,
-    file: result.readings,
-    words: result.words,
+    difficulty: scores.difficulty,
+    low: scores.low,
+    high: scores.high,
+    words95: result.words95,
+    characters: result.characters,
+    uniqueKanji: result.uniqueKanji,
     uniqueWords: result.uniqueWords,
     tokens: result.tokens,
     computedAt: Date.now()
   };
+  const db = await readerDb();
 
-  await (await readerDb()).put('readings', analysis);
+  await db.put('wordLists', { title, etag, words: result.words });
+  await db.put('estimates', estimate);
+  onProgress(1);
 
-  return analysis;
+  return estimate;
 }
 
-/** A local book's word list and its totals, from its kept analysis (as an estimate's). */
+/** A local book's word list and its totals, from its kept estimate. */
 export async function localWordList(
   title: string
 ): Promise<{ words: BookWord[]; totals: WordTotals } | undefined> {
-  const kept = await keptAnalysis(title);
+  const db = await readerDb();
+  const [estimate, list] = await Promise.all([
+    db.get('estimates', title),
+    db.get('wordLists', title)
+  ]);
 
-  return (
-    kept && {
-      words: foldReadings(kept.words),
-      totals: { uniqueWords: kept.uniqueWords, tokens: kept.tokens }
-    }
-  );
+  if (!estimate || list?.etag !== estimate.etag) return undefined;
+
+  return {
+    words: foldReadings(list.words),
+    totals: { uniqueWords: estimate.uniqueWords, tokens: estimate.tokens }
+  };
 }
 
 /**
  * A local book's readings file, for the reader: the kept one at once (undefined if none), then
- * a new one when the book or the tools changed. Analysing shows in furiganaProgress$ and goes on
- * when unsubscribed, so its word list is kept for the book's page.
+ * a new one when the book or the tools changed. Analysing shows in furiganaProgress$;
+ * unsubscribing stops it.
  */
 export function localReadings$(title: string, html: string) {
   return new Observable<ReadingsFile | undefined>((subscriber) => {
-    keptAnalysis(title)
-      .then(async (kept) => {
-        subscriber.next(kept?.file);
+    const controller = new AbortController();
 
-        const analysis = await localAnalysis(title, html, (share) =>
-          furiganaProgress$.next({ title, progress: share })
-        );
+    (async () => {
+      const db = await readerDb();
+      const kept = await db.get('readings', title).catch(() => undefined);
 
-        if (analysis && analysis !== kept) subscriber.next(analysis.file);
-      })
+      subscriber.next(kept?.file);
+
+      const manifest = await installedTools('furigana');
+
+      if (!manifest) return;
+
+      const etag = await analysisTag(html, manifest.version);
+
+      if (kept?.etag === etag) return;
+
+      const { readings } = (await analyseBook(
+        html,
+        'readings',
+        manifest,
+        (share) => furiganaProgress$.next({ title, progress: share }),
+        controller.signal
+      )) as { readings: ReadingsFile };
+
+      await db.put('readings', { title, etag, file: readings });
+      subscriber.next(readings);
+    })()
       .catch(() => undefined)
       .finally(() => {
         endFuriganaProgress(title);
         subscriber.complete();
       });
+
+    return () => controller.abort();
   });
 }

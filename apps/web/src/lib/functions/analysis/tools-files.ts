@@ -15,8 +15,11 @@ export const analysisToolsCacheName = 'analysis-tools';
 
 export interface AnalysisToolsManifest {
   version: string;
-  /** `raw`: the size once gunzipped, for the files streamed into wasm memory */
-  files: { name: string; bytes: number; raw?: number }[];
+  /**
+   * `raw`: the size once gunzipped, for the files streamed into wasm memory; `features`: the only
+   * features that need the file (none: every feature)
+   */
+  files: { name: string; bytes: number; raw?: number; features?: ('difficulty' | 'furigana')[] }[];
 }
 
 /** A tools file from the cache, else from the network (the download was evicted or is partial). */

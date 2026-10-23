@@ -198,8 +198,9 @@ function nextVolumes(groups: SeriesGroup[]) {
 }
 
 /**
- * Read next without a server (no catalog series, no estimates): the next volumes only,
- * books without a series grouped by the name before their title's volume number.
+ * Read next without a server (no catalog series): the next volumes, books without a series
+ * grouped by the name before their title's volume number, then the books near the reader's level
+ * by the analysis tools' estimates (readNextPool; no coverage), closest first.
  */
 export function standaloneReadNext(cards: BookCardProps[], limit = 12) {
   const byId = new Map(cards.map((card) => [card.id, card]));
@@ -209,7 +210,7 @@ export function standaloneReadNext(cards: BookCardProps[], limit = 12) {
       : { ...card, series: guessSeriesName(card.title) }
   );
 
-  return nextVolumes(seriesGroups(withSeries))
+  return [...nextVolumes(seriesGroups(withSeries)), ...readNextPool(withSeries).pool]
     .slice(0, limit)
     .map((card) => byId.get(card.id)!);
 }

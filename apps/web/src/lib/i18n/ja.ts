@@ -181,6 +181,8 @@ export const ja: Record<MessageKey, string> = {
   'book.copied': 'コピーしました',
   'book.noEstimate': '未算出',
   'book.difficultyDetails': '難易度の詳細',
+  'book.estimate': '算出する',
+  'book.estimating': '算出中… {percent}%',
   'book.text': 'テキスト',
   'book.publisher': '出版社',
   'book.published': '出版日',
@@ -289,7 +291,8 @@ export const ja: Record<MessageKey, string> = {
   'settings.section.general-install': 'アプリとしてインストール',
   'settings.section.general-install.text': 'この端末にアプリとして置いておけます。',
   'settings.section.general-analysis': '解析ツール',
-  'settings.section.general-analysis.text': 'サーバーなしで単語リストとふりがなを作ります。',
+  'settings.section.general-analysis.text':
+    'サーバーなしで難易度、単語リスト、ふりがなを作ります。',
   'settings.section.general-plugins': '拡張機能',
   'settings.section.general-plugins.text':
     '追加機能です。オンにすると、それぞれの設定項目が表示されます。',

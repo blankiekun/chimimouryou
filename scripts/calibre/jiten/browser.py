@@ -3,10 +3,10 @@
 
 Sudachi and Pyodide don't fit in memory together, so they run one after the other in two workers
 (apps/web/src/lib/functions/analysis/): the tokenizer worker tokenizes the texts asked for and stops,
-then this module reads the book with those tokens (`lookup`). Texts nobody tokenized yet (yurigana
+then this module reads the book with those tokens (`lookup`), for one part: the word list with the
+difficulty model's input (Settings: difficulty estimates) or the readings file (generated furigana). Texts nobody tokenized yet (yurigana
 reads parts of words, the Analyzer conjugated forms) are `misses`: the tokenizer worker takes them and
 the book is read again, until there are none. Not upstream."""
-import gc
 import json
 import mmap
 import os
@@ -17,7 +17,8 @@ from yurigana import Reader, __version__ as YURIGANA_VERSION, packed
 from yurigana.tokens import HAS_CONTENT, Token
 
 import readings_file
-from features import Analyzer
+from features import (EXTRA_FEATURES, FEATURE_ORDER, TOKEN_CLEAN, Analyzer, _count_ruby, compute_extra_features,
+                      compute_features, is_kanji, words_for_coverage)
 from frequency import FrequencyTable
 from word_list import word_rows
 
@@ -91,36 +92,48 @@ def pack_buffer(path: str, size: int) -> int:
     return ctypes.addressof((ctypes.c_char * size).from_buffer(buffer))
 
 
-def first_texts(html: str) -> list:
-    """What the first round tokenizes: the book's text in the tokenizer's chunks and the Analyzer's
-    marker words."""
+def first_texts(html: str, part: str) -> list:
+    """What the first round tokenizes: the book's text in the tokenizer's chunks, and for the word
+    list (`part` 'words') the Analyzer's marker words."""
     tokens = BrowserTokens(lambda text: None)
-    Analyzer(tokens)
+    if part == 'words':
+        Analyzer(tokens)
     text = readings_file.extract(html)[0]
     for _ in tokens.tokens(text):
         pass
     return sorted(tokens.misses)
 
 
-def analyse(html: str, lookup, words_per_book: int) -> str:
-    """JSON: {misses} while texts are missing, else the book's word list as the service saves it
-    ({words, uniqueWords, tokens}) and its readings file ({readings}, bookdata '')."""
-    tokens = BrowserTokens(lookup)
+def _words(html: str, tokens, words_per_book: int) -> dict:
+    """The book's word list as the service saves it ({words, uniqueWords, tokens}) and the
+    difficulty model's input row (`features`, the service's _estimate) with the estimate's counts."""
     analyzer = Analyzer(tokens)
     # The deconjugator's cache holds every intermediate form: a small one (only slower).
     analyzer.deconjugator.deconjugate = lru_cache(maxsize=200)(analyzer.deconjugator._deconjugate)
     text, hints, _ = readings_file.extract(html)
-    rows, unique_words, total = word_rows(analyzer.analyse(text, hints, Reader.load(READER_PACK, tokenizer=analyzer)),
-                                          FrequencyTable.load_packed(FREQUENCY_PACK))
-    # Pyodide's memory never shrinks: what the word list needed (the frequency pack too) is freed before
-    # the readings file is made.
-    del text, hints, analyzer
-    _buffers.pop(os.stat(FREQUENCY_PACK).st_ino, None)
-    Analyzer._conjugations.cache_clear()
-    Analyzer._form_reading.cache_clear()
-    gc.collect()
-    result = readings_file.build(html, Reader.load(READER_PACK, tokenizer=tokens), '', YURIGANA_VERSION)
+    # book_text's furigana count, from the same ruby
+    ruby = {}
+    for start, end, reading in hints:
+        _count_ruby(ruby, text[start:end], reading)
+    frequency = FrequencyTable.load_packed(FREQUENCY_PACK)
+    analysis = analyzer.analyse(text, hints, Reader.load(READER_PACK, tokenizer=analyzer))
+    rows, unique_words, total = word_rows(analysis, frequency)
+    features = compute_features(analysis, frequency)
+    extra = compute_extra_features(analysis, frequency, ruby)
+    return {'words': rows[:words_per_book], 'uniqueWords': unique_words, 'tokens': total,
+            'features': [features[name] for name in FEATURE_ORDER] + [extra[name] for name in EXTRA_FEATURES],
+            'words95': words_for_coverage(extra) if extra['CoverageRank95'] == extra['CoverageRank95'] else None,
+            'characters': len(TOKEN_CLEAN.sub('', text)), 'uniqueKanji': len({c for c in text if is_kanji(c)})}
+
+
+def analyse(html: str, lookup, part: str, words_per_book: int = 2000) -> str:
+    """JSON: {misses} while texts are missing, else `part`: 'words' (_words) or 'readings' (the
+    book's readings file, bookdata '': {readings})."""
+    tokens = BrowserTokens(lookup)
+    if part == 'words':
+        result = _words(html, tokens, words_per_book)
+    else:
+        result = {'readings': readings_file.build(html, Reader.load(READER_PACK, tokenizer=tokens), '', YURIGANA_VERSION)}
     if tokens.misses:
         return json.dumps({'misses': sorted(tokens.misses)}, ensure_ascii=False)
-    return json.dumps({'words': rows[:words_per_book], 'uniqueWords': unique_words, 'tokens': total,
-                       'readings': result}, ensure_ascii=False, separators=(',', ':'))
+    return json.dumps(result, ensure_ascii=False, separators=(',', ':'))

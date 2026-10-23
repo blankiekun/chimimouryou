@@ -9,7 +9,11 @@
 #   pyodide/                     Pyodide (MPL-2.0), the core files only (a lock file without packages)
 #   analysis.zip                 yurigana (pinned like the server) and the difficulty service's Python
 #   reader.ygp.gz, frequency.ygp.gz  yurigana's Reader and the frequency table, packed as the server packs them
-#   manifest.json                the files, their sizes and the tools' version
+#   chimi-difficulty*.onnx, chimi-difficulty-range.json  the difficulty models
+#   ort/                         onnxruntime-web's plain wasm runtime (the app's own copy, which Whisper's
+#                                build lacks the models' ML operators), from apps/web/node_modules
+#   manifest.json                the files, their sizes, the tools' version and which files only one
+#                                feature needs (`features`; the rest serve both difficulty and furigana)
 # Needs curl, python3 (3.12+), gzip, and Rust (rustup) with the wasm32-unknown-unknown target; installs
 # wasm-bindgen-cli at the version Cargo.lock pins when it is missing.
 set -euo pipefail
@@ -73,9 +77,13 @@ FrequencyTable.load(freq).save(f'{work}/frequency.ygp')
 Reader(known=freq, tokenizer=False).save(f'{work}/reader.ygp')
 EOF
 for pack in reader frequency; do gzip -9 -c "$work/$pack.ygp" > "$out/$pack.ygp.gz"; done
+cp "$jiten/"chimi-difficulty{,-low,-high}.onnx "$jiten/chimi-difficulty-range.json" "$out/"
+mkdir -p "$out/ort"
+cp "$root/apps/web/node_modules/onnxruntime-web/dist/"ort-wasm-simd-threaded.{mjs,wasm} "$out/ort/"
 
 # Raw sizes let the worker preallocate the dictionary and the packs.
-# The version names the Python too (a hash of its files), so a change there redoes the books' analyses.
+# The version names the Python and the models too (a hash of their files), so a change there redoes the
+# books' analyses. Files only difficulty estimates need: the frequency pack and the models.
 python3 - "$out" "$work" "$SUDACHI_DICT" "$PYODIDE" "$(basename "$yurigana" .tar.gz)" <<'EOF'
 import hashlib, json, os, sys
 out, work, dic, pyodide, yurigana = sys.argv[1:]
@@ -83,11 +91,16 @@ code = hashlib.sha256()
 for d, _, fs in sorted(os.walk(f'{work}/py')):
     for f in sorted(fs):
         code.update(f.encode() + open(os.path.join(d, f), 'rb').read())
+difficulty = {'frequency.ygp.gz', 'chimi-difficulty.onnx', 'chimi-difficulty-low.onnx', 'chimi-difficulty-high.onnx',
+              'chimi-difficulty-range.json', 'ort/ort-wasm-simd-threaded.mjs', 'ort/ort-wasm-simd-threaded.wasm'}
+for f in sorted(difficulty - {'frequency.ygp.gz', 'ort/ort-wasm-simd-threaded.mjs', 'ort/ort-wasm-simd-threaded.wasm'}):
+    code.update(f.encode() + open(f'{out}/{f}', 'rb').read())
 raw = {'core.dic.gz': os.path.getsize(f'{work}/core.dic'), 'reader.ygp.gz': os.path.getsize(f'{work}/reader.ygp'),
        'frequency.ygp.gz': os.path.getsize(f'{work}/frequency.ygp')}
 files = sorted(os.path.relpath(os.path.join(d, f), out) for d, _, fs in os.walk(out) for f in fs if f != 'manifest.json')
 json.dump({'version': f'sudachidict-{dic} pyodide-{pyodide} yurigana-{yurigana.lstrip("v")} py-{code.hexdigest()[:12]}',
-           'files': [{'name': f, 'bytes': os.path.getsize(f'{out}/{f}'), **({'raw': raw[f]} if f in raw else {})}
+           'files': [{'name': f, 'bytes': os.path.getsize(f'{out}/{f}'), **({'raw': raw[f]} if f in raw else {}),
+                      **({'features': ['difficulty']} if f in difficulty else {})}
                      for f in files]}, open(f'{out}/manifest.json', 'w'), indent=1)
 EOF
 du -sh "$out"

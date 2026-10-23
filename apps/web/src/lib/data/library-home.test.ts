@@ -162,6 +162,18 @@ describe('readNext', () => {
     expect(titles).toEqual(['86―エイティシックス― 2', '魔女の旅々 2']);
   });
 
+  it('without a server, adds the books near the level of the local estimates after them', () => {
+    const titles = standaloneReadNext([
+      book('魔女の旅々 1', { progress: 1, lastBookOpen: 5, difficulty: 3 }),
+      book('魔女の旅々 2', { difficulty: 3 }),
+      book('Far', { difficulty: 4 }),
+      book('Near', { difficulty: 3.2 }),
+      book('Nearer', { difficulty: 2.9 })
+    ]).map((card) => card.title);
+
+    expect(titles).toEqual(['魔女の旅々 2', 'Nearer', 'Near']);
+  });
+
   it("gives Read next's level: the last 3 finished books, lowest first", () => {
     expect(
       recentLevels([done('a', 3, 1), done('b', 2, 4), done('c', 2.5, 3), done('d', 1, 2)])

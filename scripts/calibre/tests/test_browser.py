@@ -32,5 +32,14 @@ class BrowserTokensTest(unittest.TestCase):
         self.assertEqual(tokens.misses, {'犬'})
 
 
+class FirstTextsTest(unittest.TestCase):
+    def test_only_the_word_list_asks_for_marker_words(self):
+        html = '<p>猫が鳴く。</p>'
+        readings = browser.first_texts(html, 'readings')
+        words = browser.first_texts(html, 'words')
+        self.assertEqual(readings, ['猫が鳴く。'])
+        self.assertTrue(set(readings) < set(words))
+
+
 if __name__ == '__main__':
     unittest.main()

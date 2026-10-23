@@ -7,7 +7,7 @@
 /**
  * Stage 2 of a book's analysis (lib/data/analysis-tools.ts): Pyodide runs yurigana and the
  * difficulty service's own Python (scripts/calibre/jiten/browser.py) over the tokens stage 1 made,
- * giving the book's word list and readings file, or the texts it still needs tokenized. Every file
+ * giving the book's word list (with the difficulty model's input) or its readings file, or the texts it still needs tokenized. Every file
  * comes from the tools' cache (`fetch` is routed through it). Not part of upstream.
  */
 
@@ -23,6 +23,8 @@ export interface ReadRequest {
   base: string;
   manifest: AnalysisToolsManifest;
   html: string;
+  /** browser.py's part: the word list and the difficulty model's input, or the readings file */
+  part: 'words' | 'readings';
   /** Stage 1's token file; none for the first call, which only lists the texts to tokenize */
   tokenFile?: string;
   wordsPerBook: number;
@@ -66,11 +68,16 @@ async function loadPython(manifest: AnalysisToolsManifest) {
 }
 
 /** Reads the packs into the bytearrays browser.py hands Packed instead of files. */
-async function loadPacks({ py, browser, manifest }: Awaited<ReturnType<typeof loadPython>>) {
-  for (const [name, path] of [
-    ['reader.ygp.gz', browser.READER_PACK],
-    ['frequency.ygp.gz', browser.FREQUENCY_PACK]
-  ]) {
+async function loadPacks(
+  { py, browser, manifest }: Awaited<ReturnType<typeof loadPython>>,
+  part: ReadRequest['part']
+) {
+  const packs = [['reader.ygp.gz', browser.READER_PACK]];
+
+  // Only the word list ranks words.
+  if (part === 'words') packs.push(['frequency.ygp.gz', browser.FREQUENCY_PACK]);
+
+  for (const [name, path] of packs) {
     const size = manifest.files.find((file) => file.name === name)?.raw;
 
     if (!size) throw new Error(`${name}: not in the tools`);
@@ -88,11 +95,11 @@ self.onmessage = async ({ data }: MessageEvent<ReadRequest>) => {
     const python = await loadPython(data.manifest);
 
     if (!data.tokenFile) {
-      post({ type: 'texts', texts: python.browser.first_texts(data.html).toJs() });
+      post({ type: 'texts', texts: python.browser.first_texts(data.html, data.part).toJs() });
       return;
     }
 
-    await loadPacks(python);
+    await loadPacks(python, data.part);
     post({ type: 'loaded' });
 
     const tokens = await openTokenIndex(data.tokenFile);
@@ -100,6 +107,7 @@ self.onmessage = async ({ data }: MessageEvent<ReadRequest>) => {
     const json = python.browser.analyse(
       data.html,
       (text: string) => tokens.get(text),
+      data.part,
       data.wordsPerBook
     );
 
