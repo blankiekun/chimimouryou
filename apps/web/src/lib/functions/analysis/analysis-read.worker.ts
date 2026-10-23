@@ -32,6 +32,8 @@ export interface ReadRequest {
 
 export type ReadMessage =
   | { type: 'loaded' }
+  /** Sent every few seconds while analysing: the page's watchdog stops silent workers */
+  | { type: 'alive' }
   | { type: 'texts'; texts: string[] }
   /** browser.analyse's JSON */
   | { type: 'result'; json: string }
@@ -103,10 +105,18 @@ self.onmessage = async ({ data }: MessageEvent<ReadRequest>) => {
     post({ type: 'loaded' });
 
     const tokens = await openTokenIndex(data.tokenFile);
+    let alive = Date.now();
     // undefined is None in Python: a text not tokenized yet
     const json = python.browser.analyse(
       data.html,
-      (text: string) => tokens.get(text),
+      (text: string) => {
+        if (Date.now() - alive > 5000) {
+          alive = Date.now();
+          post({ type: 'alive' });
+        }
+
+        return tokens.get(text);
+      },
       data.part,
       data.wordsPerBook
     );

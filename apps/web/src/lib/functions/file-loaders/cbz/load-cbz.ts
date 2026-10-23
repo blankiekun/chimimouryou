@@ -18,7 +18,11 @@ initZipSettings();
  * Manga as a book: the pages are its blobs, in reading order in elementHtml. A zip holding
  * an ONScripter script is a visual novel instead.
  */
-export default async function loadCbz(file: File, lastBookModified: number): Promise<LoadData> {
+export default async function loadCbz(
+  file: File,
+  lastBookModified: number,
+  cancelSignal?: AbortSignal
+): Promise<LoadData> {
   const reader = new ZipReader(new BlobReader(file));
   const allEntries = await reader.getEntries();
   const vnRoot = findVnRoot(
@@ -27,7 +31,7 @@ export default async function loadCbz(file: File, lastBookModified: number): Pro
 
   if (vnRoot !== undefined) {
     try {
-      return await loadVn(file.name, allEntries, vnRoot, lastBookModified);
+      return await loadVn(file.name, allEntries, vnRoot, lastBookModified, cancelSignal);
     } finally {
       await reader.close();
     }

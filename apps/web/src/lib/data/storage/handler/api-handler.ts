@@ -490,7 +490,7 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
       true,
       this.cacheStorageData,
       this.saveBehavior
-    ).saveBook({ ...data, storageSource: this.storageSourceName }, false, false);
+    ).saveBook({ ...data, storageSource: this.storageSourceName }, false, false, this.cancelSignal);
 
     this.addDeviceVnCard(data);
 

@@ -332,19 +332,35 @@ interface WordsResult {
 
 const abortError = () => new DOMException('The analysis was stopped', 'AbortError');
 
-function run<Message extends { type: string }>(
+/** A worker silent this long (killed by memory pressure, stuck) is stopped and the book skipped. */
+export const WORKER_SILENCE_MS = 2 * 60 * 1000;
+
+export function runWorker<Message extends { type: string }>(
   worker: Worker,
   request: unknown,
   onMessage: (message: Message) => unknown,
   signal?: AbortSignal
 ) {
+  let watchdog: ReturnType<typeof setTimeout> | undefined;
+
   return new Promise<unknown>((resolve, reject) => {
     const stop = () => reject(abortError());
+    // Every message, progress included, shows it is alive (the read worker sends 'alive').
+    const feed = () => {
+      clearTimeout(watchdog);
+      watchdog = setTimeout(
+        () => reject(new Error('The analysis stopped answering')),
+        WORKER_SILENCE_MS
+      );
+    };
 
     if (signal?.aborted) return stop();
     signal?.addEventListener('abort', stop, { once: true });
+    feed();
     worker.onerror = (event) => reject(new Error(event.message || 'The analysis stopped'));
     worker.onmessage = ({ data }: MessageEvent<Message>) => {
+      feed();
+
       try {
         const result = onMessage(data);
 
@@ -354,7 +370,10 @@ function run<Message extends { type: string }>(
       }
     };
     worker.postMessage(request);
-  }).finally(() => worker.terminate());
+  }).finally(() => {
+    clearTimeout(watchdog);
+    worker.terminate();
+  });
 }
 
 const fail = (message: { type: string; message?: string }) => {
@@ -364,7 +383,7 @@ const fail = (message: { type: string; message?: string }) => {
 };
 
 function readWorker(request: ReadRequest, signal?: AbortSignal) {
-  return run<ReadMessage>(
+  return runWorker<ReadMessage>(
     new Worker(new URL('../functions/analysis/analysis-read.worker.ts', import.meta.url), {
       type: 'module'
     }),
@@ -379,7 +398,7 @@ function tokenizeWorker(
   onProgress: (share: number) => void,
   signal?: AbortSignal
 ) {
-  return run<TokenizeMessage>(
+  return runWorker<TokenizeMessage>(
     new Worker(new URL('../functions/analysis/analysis-tokenize.worker.ts', import.meta.url), {
       type: 'module'
     }),
@@ -394,7 +413,7 @@ function tokenizeWorker(
 }
 
 function scoreWorker(request: ScoreRequest) {
-  return run<ScoreMessage>(
+  return runWorker<ScoreMessage>(
     new Worker(new URL('../functions/analysis/analysis-score.worker.ts', import.meta.url), {
       type: 'module'
     }),

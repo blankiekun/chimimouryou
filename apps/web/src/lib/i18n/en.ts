@@ -733,6 +733,12 @@ export const en = {
   // Library
   'library.import': 'Import',
   'library.importBooks': 'Import books',
+  'library.progress.reading': 'Reading',
+  'library.progress.saving': 'Saving to this browser',
+  'library.progress.packing': 'Preparing upload',
+  'library.progress.uploading': 'Uploading',
+  'library.progress.bytes': '{phase} {done} / {total}',
+  'library.progress.left': '{progress} · {time} left',
   'library.importFiles': 'Import File(s)',
   'library.importFolders': 'Import Folder(s)',
   'library.importBackup': 'Import Backup',

@@ -336,7 +336,7 @@
       // Server folder games are fetched by URL; imported ones are blobs.
       files: info.base
         ? Object.fromEntries(info.files.map((path) => [path, `${info.base}${encodePath(path)}`]))
-        : book.blobs,
+        : await database.getBlobs(book),
       cacheName,
       // A connected server's game files need its token, which a URL can't carry.
       fetchFile: serverConnected ? serverFetch : undefined,

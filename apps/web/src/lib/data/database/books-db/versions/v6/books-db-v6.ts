@@ -45,6 +45,8 @@ interface BooksDbV6BookData {
   lastBookOpen: number;
   storageSource?: string;
   htmlBackup?: string;
+  /** A visual novel's files are in the vn-files database under this key, not in blobs */
+  vnFiles?: string;
 }
 
 interface BooksDbV6BookmarkData {

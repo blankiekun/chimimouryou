@@ -23,10 +23,12 @@ import { throwIfAborted } from '$lib/functions/replication/replication-error';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
 import {
   replicationProgress$,
+  reportBytes,
   type ReplicationContext,
   type ReplicationDeleteResult
 } from '$lib/functions/replication/replication-progress';
 import pLimit from 'p-limit';
+import { isVn } from '$lib/data/vn';
 import {
   BlobReader,
   BlobWriter,
@@ -135,7 +137,8 @@ export abstract class BaseStorageHandler {
   abstract saveBook(
     data: Omit<BooksDbBookData, 'id'> | File,
     skipTimestampFallback?: boolean,
-    removeStorageContext?: boolean
+    removeStorageContext?: boolean,
+    cancelSignal?: AbortSignal
   ): Promise<number>;
 
   abstract saveProgress(data: BooksDbBookmarkData | File): Promise<void>;
@@ -410,18 +413,24 @@ export abstract class BaseStorageHandler {
     const isBlobCover = cover instanceof Blob;
     const filesInScope = blobEntries.length + staticDataToZip.length + (isBlobCover ? 1 : 0);
     const progressPerStep = progressBase / filesInScope;
+    // Visual novels can be GBs of already compressed media: stored, with bytes for the label.
+    const vn = isVn(bookdata);
+    const total = blobEntries.reduce((sum, [, blob]) => sum + blob.size, 0);
+    let done = 0;
 
     for (let index = 0, { length } = blobEntries; index < length; index += 1) {
       blobsToZip.push(
         limiter(async () => {
           const [name, blob] = blobEntries[index];
 
-          await this.addDataToZip(`blobs/${name}`, blob, zipWriter, progressPerStep).catch(
+          await this.addDataToZip(`blobs/${name}`, blob, zipWriter, progressPerStep, vn).catch(
             (error) => {
               limiter.clearQueue();
               throw error;
             }
           );
+
+          if (vn) reportBytes('packing', (done += blob.size), total);
         })
       );
     }
@@ -463,7 +472,8 @@ export abstract class BaseStorageHandler {
     name: string,
     data: string | Blob,
     writer: ZipWriter<Blob> | undefined,
-    progressBase = 1
+    progressBase = 1,
+    stored = false
   ) {
     throwIfAborted(this.cancelSignal);
 
@@ -474,7 +484,8 @@ export abstract class BaseStorageHandler {
 
     if (data instanceof Blob) {
       await zipWriter.add(name, new BlobReader(data), {
-        onprogress: (...args) => this.reportFunction(...args)
+        onprogress: (...args) => this.reportFunction(...args),
+        ...(stored ? { level: 0 } : {})
       });
     } else if (data) {
       await zipWriter.add(name, new TextReader(data), {
