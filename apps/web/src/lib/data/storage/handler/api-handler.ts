@@ -481,6 +481,29 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
       .forEach((book) => this.addDeviceVnCard(book));
   }
 
+  /** Deletes the browser copies of visual novels kept on this device, or they would be listed again. */
+  private async deleteDeviceVns(
+    titles: string[],
+    cancelSignal: AbortSignal,
+    keepStatistics: boolean
+  ) {
+    const idToTitle = new Map<number, string>();
+
+    for (const title of titles) {
+      const book = await database.getDataByTitle(title);
+
+      if (book?.storageSource === this.storageSourceName && isVn(book)) {
+        idToTitle.set(book.id, title);
+      }
+    }
+
+    if (!idToTitle.size) return '';
+
+    return (
+      await database.deleteData([...idToTitle.keys()], idToTitle, cancelSignal, keepStatistics)
+    ).error;
+  }
+
   private addDeviceVnCard(book: Omit<BooksDbBookData, 'id'>) {
     this.addBookCard(book.title, {
       imagePath: book.coverImage || '',
@@ -616,12 +639,17 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
     await this.upload(titleId, filename, files, file, subtitleData);
   }
 
-  async deleteBookData(booksToDelete: string[], cancelSignal: AbortSignal) {
+  async deleteBookData(
+    booksToDelete: string[],
+    cancelSignal: AbortSignal,
+    keepLocalStatistics = false
+  ) {
     await this.ensureTitle();
 
     let error = '';
 
     const deleted: number[] = [];
+    const removedTitles: string[] = [];
     const deletionLimiter = pLimit(1);
     const deleteTasks: Promise<void>[] = [];
 
@@ -638,6 +666,8 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
             if (externalId) {
               await this.executeDelete(externalId);
             }
+
+            removedTitles.push(bookToDelete);
 
             this.titleToFiles.delete(bookToDelete);
 
@@ -663,6 +693,11 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
     );
 
     await Promise.all(deleteTasks).catch(() => {});
+
+    error =
+      (await this.deleteDeviceVns(removedTitles, cancelSignal, keepLocalStatistics).catch(
+        (err) => err.message
+      )) || error;
 
     return { error, deleted };
   }

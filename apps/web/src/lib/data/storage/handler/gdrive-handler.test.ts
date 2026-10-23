@@ -77,3 +77,47 @@ describe('GDriveStorageHandler.upload', () => {
     expect((request.mock.calls[0] as any[])[0]).toContain('uploadType=multipart');
   });
 });
+
+describe('GDriveStorageHandler.deleteBookData', () => {
+  it('also deletes the browser copy of a game kept on this device', async () => {
+    const { database } = await import('$lib/data/store');
+    const { vnElementHtml } = await import('$lib/data/vn');
+    const db = await database.db;
+    const book = { styleSheet: '', blobs: {}, coverImage: '', hasThumb: false, sections: [] };
+    const game = { ...book, elementHtml: vnElementHtml({ encoding: 'sjis', files: [] } as any) };
+
+    await db.add('data', { ...game, title: 'ゲーム', storageSource: 'drive' } as any);
+    await db.add('data', { ...game, title: '他所', storageSource: 'other' } as any);
+    await db.add('data', {
+      ...book,
+      title: '本',
+      elementHtml: '<p>x</p>',
+      storageSource: 'drive'
+    } as any);
+
+    const handler = new GDriveStorageHandler(window);
+    const executeDelete = vi.fn(async () => {});
+
+    Object.assign(handler as any, {
+      storageSourceName: 'drive',
+      rootId: 'root',
+      executeDelete,
+      dataListFetched: true
+    });
+    await (handler as any).addDeviceVns();
+
+    const { error, deleted } = await handler.deleteBookData(
+      ['ゲーム', '他所', '本'],
+      new AbortController().signal,
+      false
+    );
+
+    expect(error).toBe('');
+    expect(deleted).toHaveLength(1);
+    expect(executeDelete).not.toHaveBeenCalled();
+    expect(await database.getDataByTitle('ゲーム')).toBeUndefined();
+    // Another source's game and a cached book stay.
+    expect(await database.getDataByTitle('他所')).toBeDefined();
+    expect(await database.getDataByTitle('本')).toBeDefined();
+  });
+});

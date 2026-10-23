@@ -6,7 +6,8 @@
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 import { oneDriveTokenEndpoint } from '$lib/data/env';
-import { ApiStorageHandler } from '$lib/data/storage/handler/api-handler';
+import { ApiStorageHandler, type FullResponse } from '$lib/data/storage/handler/api-handler';
+import { AbortError } from '$lib/functions/replication/replication-error';
 import { BaseStorageHandler, type ExternalFile } from '$lib/data/storage/handler/base-handler';
 import { StorageKey } from '$lib/data/storage/storage-types';
 import { database, oneDriveStorageSource$ } from '$lib/data/store';
@@ -52,6 +53,13 @@ interface ExternalThumbnailData {
 
 export class OneDriveStorageHandler extends ApiStorageHandler {
   private baseEndpoint = 'https://graph.microsoft.com/v1.0/me/drive/items';
+
+  static singleRequestLimit = 60 * 1024 * 1024;
+
+  /** A multiple of 320 KiB, as Microsoft requires for every slice but the last */
+  static chunkSize = 10 * 1024 * 1024;
+
+  static chunkRetries = 3;
 
   constructor(window: Window) {
     super(StorageKey.ONEDRIVE, window, oneDriveTokenEndpoint);
@@ -339,17 +347,9 @@ export class OneDriveStorageHandler extends ApiStorageHandler {
       }
 
       try {
-        const byteSize = body instanceof Blob ? body.size : new Blob([body]).size;
-        const response = await this.request(
+        const response = await this.uploadToSession(
           `${uploadUrl}?${params.toString()}`,
-          {
-            method: 'PUT',
-            headers: { 'Content-Range': `bytes 0-${byteSize - 1}/${byteSize}` },
-            body,
-            trackUpload: true,
-            skipAuth: true
-          },
-          'json',
+          body instanceof Blob ? body : new Blob([body]),
           progressBase
         );
 
@@ -386,6 +386,72 @@ export class OneDriveStorageHandler extends ApiStorageHandler {
     const renameResponse = await this.rename(name, files, remoteFile, params, rootFilePrefix);
 
     return renameResponse;
+  }
+
+  /**
+   * PUTs the file to an upload session: in one request up to `singleRequestLimit` (Microsoft
+   * takes at most 60 MiB per request), else in `chunkSize` slices, resuming from the
+   * session's nextExpectedRanges after a failed slice.
+   */
+  private async uploadToSession(sessionUrl: string, blob: Blob, progressBase: number) {
+    const { size } = blob;
+    const chunkSize =
+      size > OneDriveStorageHandler.singleRequestLimit ? OneDriveStorageHandler.chunkSize : size;
+
+    let start = 0;
+    let failures = 0;
+
+    for (;;) {
+      const end = Math.min(start + chunkSize, size);
+      let result: FullResponse | undefined;
+
+      try {
+        result = await this.request(
+          sessionUrl,
+          {
+            method: 'PUT',
+            headers: { 'Content-Range': `bytes ${start}-${end - 1}/${size}` },
+            body: end - start === size ? blob : blob.slice(start, end),
+            trackUpload: true,
+            skipAuth: true,
+            fullResponse: true
+          },
+          'json',
+          (progressBase * (end - start)) / size
+        );
+      } catch (error) {
+        failures += 1;
+
+        if (error instanceof AbortError || failures > OneDriveStorageHandler.chunkRetries) {
+          throw error;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** failures));
+
+        // Ask where to go on; on failure the same slice is sent again.
+        result = await this.request(sessionUrl, { skipAuth: true, fullResponse: true }).catch(
+          () => undefined
+        );
+      }
+
+      if (!result) continue;
+
+      // The finished item; a 202 (or the session's status) names the bytes still expected.
+      if (result.status !== 202 && !result.response?.nextExpectedRanges) {
+        return result.response;
+      }
+
+      const next: string | undefined = result.response?.nextExpectedRanges?.[0];
+      const received = next ? Number(next.split('-')[0]) : start;
+
+      if (received > start) {
+        failures = 0;
+      } else if (++failures > OneDriveStorageHandler.chunkRetries) {
+        throw new Error('OneDrive did not accept the upload');
+      }
+
+      start = received;
+    }
   }
 
   protected executeDelete(id: string) {
