@@ -9,7 +9,7 @@
  * (see scripts/calibre/). Not part of upstream.
  */
 
-import { serverConnected, serverFetch, serverless } from '$lib/data/server';
+import { serverFetch, serverless } from '$lib/data/server';
 
 export interface CalibreBook {
   id: number;
@@ -83,11 +83,7 @@ export function loadCalibreCatalog(refresh = false) {
 
       return response.json();
     })
-    // shortcut: the VN player loads game folders by URL, which can't carry the token; list them
-    // once player.js gets blob URLs or a fetch through its message channel.
-    .then(({ books }: { books: CalibreBook[] }) =>
-      serverConnected ? books.filter((book) => book.format !== 'VN') : books
-    )
+    .then((catalog: { books: CalibreBook[] }) => catalog.books)
     .catch((error) => {
       catalogCache = undefined;
       throw error;

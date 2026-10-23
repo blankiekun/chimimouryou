@@ -400,6 +400,10 @@ function screenshot() {
 
 // Cache API cache of a server game the reader chose to keep in the browser (startGame's cacheName).
 var fileCache;
+// startGame's fetchFile: how game file URLs are requested (a connected server needs its token).
+var fetchFile = function (url) {
+  return fetch(url);
+};
 var progress = { loaded: 0, total: 0 };
 
 function showProgress() {
@@ -452,7 +456,7 @@ async function loadFile(url) {
 
   if (cached) return readResponse(cached);
 
-  var response = await fetch(url);
+  var response = await fetchFile(url);
 
   if (!response.ok) throw new Error('HTTP ' + response.status);
   if (fileCache) {
@@ -787,7 +791,8 @@ function loadScript(src) {
 /**
  * options: files (path → Blob or URL, paths relative to the game folder), encoding ('sjis' |
  * 'utf8'), saveDir (unique per game), cacheName (Cache API cache keeping the fetched files, for
- * games served by URL), saves (synced save files, written when newer than
+ * games served by URL), fetchFile (url → Promise<Response>, for game files; default fetch),
+ * saves (synced save files, written when newer than
  * this browser's), keepLines (keep the recent lines with their screenshots for ankiMedia()),
  * recordLines (and record their sound),
  * onText(bytes, skipped, boxes, read), textLines(bytes, boxes) (overlay lines for backlog pages and sprites),
@@ -808,6 +813,7 @@ async function startGame(options) {
     if (!skipped) keepLine(textLines(bytes, boxes));
   };
   recordLines = !!options.recordLines && typeof MediaRecorder !== 'undefined';
+  if (options.fetchFile) fetchFile = options.fetchFile;
   if (options.cacheName) fileCache = await caches.open(options.cacheName);
   onSave = options.onSave || onSave;
   onMode = options.onMode || onMode;
@@ -826,7 +832,8 @@ async function startGame(options) {
   if (!hasFont) {
     g_cons_filemap[gameDir + '/default.ttf'] = {
       path: gameDir + '/default.ttf',
-      url: 'default.ttf',
+      // Absolute, so a fetchFile from the page resolves it against this frame, not the page.
+      url: new URL('default.ttf', location.href).href,
       loaded: false
     };
   }

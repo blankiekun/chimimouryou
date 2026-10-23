@@ -8,6 +8,7 @@ import { BlobWriter, Uint8ArrayWriter, type Entry } from '@zip.js/zip.js';
 import type { LoadData } from '../types';
 import { getMimeTypeFromName } from '../htmlz/extract-htmlz';
 import { analyzeScripts, encodePath, isScriptPath, vnElementHtml } from '$lib/data/vn';
+import { serverFetch } from '$lib/data/server';
 
 /**
  * An ONScripter game from a zip as a book: every file under `root` is a blob, keyed by
@@ -65,7 +66,7 @@ export default async function loadVn(
 }
 
 async function fetchOk(url: string) {
-  const response = await fetch(url, { cache: 'no-cache' });
+  const response = await serverFetch(url, { cache: 'no-cache' });
 
   if (!response.ok) throw new Error(`${decodeURI(url)}: HTTP ${response.status}`);
 

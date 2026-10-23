@@ -86,6 +86,7 @@
     vnLineFor,
     type AnkiNote
   } from '$lib/data/anki';
+  import { serverConnected, serverFetch } from '$lib/data/server';
   import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
 
   /** Time between two clicks counted as reading at most, so breaks don't count. */
@@ -335,6 +336,8 @@
         ? Object.fromEntries(info.files.map((path) => [path, `${info.base}${encodePath(path)}`]))
         : book.blobs,
       cacheName,
+      // A connected server's game files need its token, which a URL can't carry.
+      fetchFile: serverConnected ? serverFetch : undefined,
       keepLines: $ankiEnabled$,
       recordLines: $ankiEnabled$ && $ankiVnAudio$,
       encoding: info.encoding,

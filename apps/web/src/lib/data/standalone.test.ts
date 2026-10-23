@@ -77,6 +77,18 @@ describe('standalone edition', () => {
       expect(url).not.toContain('secret-token');
     });
 
+    it('lists game folders with the token, without cookies', async () => {
+      fetchMock.mockResolvedValue(new Response('[]'));
+      const { vnFolderSize } = await import('$lib/functions/file-loaders/vn/load-vn');
+
+      expect(await vnFolderSize('/calibre/vn/G/')).toBe(0);
+
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe('https://books.example/calibre/vn/G/');
+      expect(new Headers(init.headers).get('Authorization')).toBe('Bearer secret-token');
+      expect(init.credentials).toBe('omit');
+    });
+
     it('leaves other URLs alone', async () => {
       const { serverUrl } = await import('$lib/data/server');
 
