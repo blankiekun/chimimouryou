@@ -1,8 +1,8 @@
 # Changelog
 
 chimimouryou is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook-reader);
-upstream's own changes are not listed here. Add an entry under "Unreleased" for
-anything a reader or a server operator would notice.
+upstream's own changes are not listed here. Each version's section is written when it is released,
+from the pull requests merged since the previous tag (pull requests don't edit this file).
 
 ## Unreleased
 
