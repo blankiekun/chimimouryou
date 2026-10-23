@@ -11,6 +11,8 @@
  * of upstream.
  */
 
+import type { WebpRequest } from '$lib/functions/webp/webp-encode.worker';
+
 export const coverWidth = 160;
 export const coverBytes = 20_480;
 export const pictureSize = 256;
@@ -23,13 +25,15 @@ export interface Crop {
   size: number;
 }
 
+const qualities = [0.85, 0.75, 0.6, 0.45, 0.3];
+
 const toBlob = (canvas: HTMLCanvasElement, quality: number) =>
   new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
 
 /**
  * Draws a part of `source` at width × height and encodes it as WebP, lowering the quality until
- * it fits `maxBytes`. Null when it doesn't fit or the browser can't encode WebP (it then hands
- * back a PNG).
+ * it fits `maxBytes`. Null when it doesn't fit. Browsers whose canvas can't encode WebP (it then
+ * hands back a PNG: Safari) get the wasm encoder, downloaded on first use.
  */
 export async function encodeWebp(
   source: CanvasImageSource,
@@ -46,13 +50,28 @@ export async function encodeWebp(
   canvas.height = height;
   context.imageSmoothingQuality = 'high';
   context.drawImage(source, sx, sy, sw, sh, 0, 0, width, height);
-  for (const quality of [0.85, 0.75, 0.6, 0.45, 0.3]) {
+  for (const quality of qualities) {
     const blob = await toBlob(canvas, quality);
 
-    if (!blob || blob.type !== 'image/webp') return null;
+    if (!blob || blob.type !== 'image/webp') {
+      return wasmWebp(context.getImageData(0, 0, width, height), maxBytes);
+    }
     if (blob.size <= maxBytes) return blob;
   }
   return null;
+}
+
+function wasmWebp(image: ImageData, maxBytes: number) {
+  const worker = new Worker(new URL('../functions/webp/webp-encode.worker.ts', import.meta.url), {
+    type: 'module'
+  });
+
+  return new Promise<Blob | null>((resolve) => {
+    worker.onmessage = ({ data }: MessageEvent<ArrayBuffer | null>) =>
+      resolve(data && new Blob([data], { type: 'image/webp' }));
+    worker.onerror = () => resolve(null);
+    worker.postMessage({ image, qualities, maxBytes } satisfies WebpRequest, [image.data.buffer]);
+  }).finally(() => worker.terminate());
 }
 
 /** A cover's thumbnail for the hub: 160 px wide, at most 400 px high (taller ones are cut). */

@@ -14,6 +14,10 @@ const config = {
     // https://github.com/FortAwesome/Font-Awesome/issues/18677
     noExternal: ['@fortawesome/*', '@popperjs/*']
   },
+  // Every worker is created with type: 'module'; ES output lets them code-split (the WebP encoder)
+  worker: {
+    format: 'es'
+  },
   experimental: {
     prebundleSvelteLibraries: true
   }
