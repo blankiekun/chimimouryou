@@ -30,7 +30,8 @@ export async function importData(
   targetHandler: BaseStorageHandler,
   files: File[],
   cancelSignal: AbortSignal,
-  fileCountData?: Record<string, number>
+  fileCountData?: Record<string, number>,
+  importedTitles: string[] = []
 ) {
   const dataIds: number[] = [];
   const tasks: Promise<void>[] = [];
@@ -100,6 +101,7 @@ export async function importData(
           );
 
           dataIds.push(await targetHandler.saveBook(bookContent, false));
+          importedTitles.push(bookContent.title);
 
           checkCancelAndProgress(cancelSignal, false);
 
