@@ -44,6 +44,9 @@ jobs:
         run: pnpm test
         working-directory: apps/web
 
+      - name: Desktop shell tests
+        run: node --test apps/desktop/serve.test.js
+
       - name: Test build
         run: pnpm build
 

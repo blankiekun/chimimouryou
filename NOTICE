@@ -47,6 +47,12 @@ source. Its fallback font
 (apps/web/static/vn/default.ttf) is Noto Sans JP, licensed under the SIL Open
 Font License 1.1.
 
+The desktop app (apps/desktop) bundles Yomitan
+(https://github.com/yomidevs/yomitan), a separate program licensed under the
+GNU General Public License version 3, unmodified: the Chrome build of the
+release named in apps/desktop/scripts/fetch-yomitan.sh, fetched at build time
+with its licence text. That release's tag is its complete corresponding source.
+
 The ち icon (apps/web/static/ icons, favicons and the header logo) is drawn
 from the glyph in Noto Sans CJK JP Bold, Copyright 2014-2021 Adobe
 (http://www.adobe.com/), licensed under the SIL Open Font License 1.1.

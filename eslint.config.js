@@ -26,7 +26,9 @@ module.exports = (async () => {
         '**/vitest.config.js',
         '**/eslint.config.js',
         '**/tailwind.config.cjs',
-        'apps/web/static/**'
+        'apps/web/static/**',
+        'apps/desktop/yomitan/**',
+        'apps/desktop/dist/**'
       ]
     },
     {
@@ -89,6 +91,14 @@ module.exports = (async () => {
       rules: {
         'except-parens': 'off',
         quotes: ['error', 'single', { avoidEscape: true, allowTemplateLiterals: true }]
+      }
+    },
+    {
+      // The desktop shell: plain Node/Electron modules outside the web app's tsconfig.
+      files: ['apps/desktop/**/*.{js,cjs}'],
+      languageOptions: {
+        parserOptions: { project: null },
+        globals: { process: 'readonly', console: 'readonly', URL: 'readonly' }
       }
     },
     {
