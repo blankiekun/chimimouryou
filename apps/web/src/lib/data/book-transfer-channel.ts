@@ -20,7 +20,7 @@ import { bytesToHex } from '@noble/hashes/utils';
 
 export const CHUNK_BYTES = 64 * 1024;
 /** Stop queueing past this, go on when the channel drains to a quarter of it */
-const HIGH_WATER = 4 * 1024 * 1024;
+export const HIGH_WATER = 4 * 1024 * 1024;
 
 export class TransferError extends Error {
   constructor(public reason: string) {

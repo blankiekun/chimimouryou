@@ -19,7 +19,7 @@ import { addImportsToHome } from '$lib/data/library-home';
 import { HubError, hubFetch, socialSession$ } from '$lib/data/social-account';
 import type { Person } from '$lib/data/social';
 import { storageSource$ } from '$lib/data/storage/storage-view';
-import { StorageKey } from '$lib/data/storage/storage-types';
+import { StorageKey, StorageSourceDefault } from '$lib/data/storage/storage-types';
 import {
   cacheStorageData$,
   database,
@@ -76,6 +76,8 @@ export interface Transfer {
   phase: TransferPhase;
   /** The reason it failed (book-transfer.error.* in the i18n files) */
   error?: string;
+  /** Received under the Calibre source: kept in this browser only */
+  local?: boolean;
 }
 
 /** Books friends are offering this reader (from the hub, refreshed on Home and /friends) */
@@ -305,12 +307,42 @@ export async function freeTitle(title: string, from: string) {
 }
 
 /** Imports the book into the current library source, like importing a file. */
-async function importReceived(book: Awaited<ReturnType<typeof unpackBook>>) {
+export async function importReceived(book: Awaited<ReturnType<typeof unpackBook>>) {
   const [{ getStorageHandler }, { importData }] = await Promise.all([
     import('$lib/data/storage/storage-handler-factory'),
     import('$lib/functions/replication/replicator')
   ]);
   const source = storageSource$.getValue();
+
+  if (source === StorageKey.CALIBRE) {
+    // Never into the server's shared sync folder (every reader there would get a friend's copy):
+    // this browser keeps it, listed under the Calibre source (calibreReceivedBooks$).
+    const [{ calibreReceivedBooks$ }, { ReplicationSaveBehavior }] = await Promise.all([
+      import('$lib/data/storage/handler/calibre-handler'),
+      import('$lib/functions/replication/replication-options')
+    ]);
+    const browser = getStorageHandler(
+      window,
+      StorageKey.BROWSER,
+      undefined,
+      true,
+      true,
+      ReplicationSaveBehavior.Overwrite
+    );
+
+    browser.startContext({ title: book.title, imagePath: book.coverImage || '' });
+    await browser.saveBook(
+      { ...book, storageSource: StorageSourceDefault.CALIBRE_DEFAULT },
+      false,
+      false
+    );
+    if (book.coverImage) await browser.saveCover(book.coverImage);
+    calibreReceivedBooks$.next([...new Set([...calibreReceivedBooks$.getValue(), book.title])]);
+    database.dataListChanged$.next(undefined);
+    addImportsToHome([book.title]);
+    return;
+  }
+
   const error = await importData(
     document,
     getStorageHandler(
@@ -342,7 +374,16 @@ export async function receiveBook(offered: IncomingTransfer, title = offered.tit
   live.set(id, { cancelled: false });
   transfers$.next([
     ...transfers$.getValue(),
-    { id, direction: 'receive', friend: from, title, size, bytes: 0, phase: 'connecting' }
+    {
+      id,
+      direction: 'receive',
+      friend: from,
+      title,
+      size,
+      bytes: 0,
+      phase: 'connecting',
+      local: storageSource$.getValue() === StorageKey.CALIBRE
+    }
   ]);
 
   try {

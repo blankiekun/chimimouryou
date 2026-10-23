@@ -4,8 +4,9 @@
  * All rights reserved.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
+  HIGH_WATER,
   TransferError,
   confirm,
   packBook,
@@ -193,5 +194,52 @@ describe('book transfer channel', () => {
     receiver.close();
     await expect(arrived).rejects.toMatchObject({ reason: 'closed' });
     await expect(done).rejects.toMatchObject({ reason: 'closed' });
+  });
+
+  it('stops queueing past the high-water mark until the channel drains', async () => {
+    const chunk = 1024 * 1024;
+    const lows: (() => void)[] = [];
+    const messages: ((event: { data: unknown }) => void)[] = [];
+    let most = 0;
+    let bytes = 0;
+    // Never drains by itself: only when the test says so.
+    const channel = {
+      readyState: 'open',
+      bufferedAmount: 0,
+      bufferedAmountLowThreshold: 0,
+      binaryType: 'arraybuffer',
+      send(data: string | Uint8Array) {
+        if (typeof data === 'string') {
+          setTimeout(() => messages.forEach((listener) => listener({ data: '{"t":"done"}' })));
+          return;
+        }
+        channel.bufferedAmount += data.byteLength;
+        bytes += data.byteLength;
+        most = Math.max(most, channel.bufferedAmount);
+      },
+      addEventListener(type: string, listener: () => void) {
+        if (type === 'bufferedamountlow') lows.push(listener);
+        if (type === 'message') messages.push(listener);
+      }
+    };
+    const size = 10 * chunk;
+    const done = sendBlob(as(channel), new Blob([new Uint8Array(size)]), () => {}, chunk);
+
+    let waits = 0;
+
+    while (bytes < size) {
+      await vi.waitFor(() => expect(lows.length === 1 || bytes === size).toBe(true));
+      if (!lows.length) break;
+      // The sender is waiting: nothing more is queued past the mark until it drains.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(channel.bufferedAmount).toBe(HIGH_WATER + chunk);
+      waits += 1;
+      channel.bufferedAmount = 0;
+      lows.shift()!();
+    }
+    await expect(done).resolves.toBeUndefined();
+    expect(channel.bufferedAmountLowThreshold).toBe(HIGH_WATER / 4);
+    expect(most).toBe(HIGH_WATER + chunk);
+    expect(waits).toBe(1);
   });
 });

@@ -13,6 +13,8 @@
     type IncomingTransfer
   } from '$lib/data/book-transfer';
   import { socialSession$ } from '$lib/data/social-account';
+  import { storageSource$ } from '$lib/data/storage/storage-view';
+  import { StorageKey } from '$lib/data/storage/storage-types';
   import { t$ } from '$lib/i18n';
   import { activePlugins$ } from '$lib/plugins';
   import { onDestroy, onMount } from 'svelte';
@@ -72,6 +74,9 @@
                   newTitle: renames[offer.id]
                 })}</small
               >
+            {/if}
+            {#if $storageSource$ === StorageKey.CALIBRE}
+              <small>{$t$('transfer.keptHere')}</small>
             {/if}
             <small>{$t$('transfer.acceptHint')}</small>
             <span class="transfers-actions">

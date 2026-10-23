@@ -1839,6 +1839,9 @@ export const ja: Record<MessageKey, string> = {
   'transfer.saving': 'ライブラリに追加中…',
   'transfer.sent': '{name} さんに送りました。',
   'transfer.received': 'ライブラリに追加しました。',
+  'transfer.receivedHere': 'このブラウザに保存しました。',
+  'transfer.keptHere':
+    'このブラウザにだけ保存されます。サーバーのライブラリには追加されないので、ほかの読者には届きません。',
   'transfer.error.gone': 'リクエストは期限切れか、キャンセルされました。',
   'transfer.error.busy': 'お二人の間ですでに受け渡しが進行中です。終わるまでお待ちください。',
   'transfer.error.limit': '1日20冊までです。明日もう一度お試しください。',

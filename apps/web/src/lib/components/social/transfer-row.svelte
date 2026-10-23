@@ -25,7 +25,14 @@
               })
             : transfer.phase === 'saving'
               ? $t$('transfer.saving')
-              : $t$(sending ? 'transfer.sent' : 'transfer.received', { name });
+              : $t$(
+                  sending
+                    ? 'transfer.sent'
+                    : transfer.local
+                      ? 'transfer.receivedHere'
+                      : 'transfer.received',
+                  { name }
+                );
 </script>
 
 <div class="transfer" class:transfer-failed={transfer.phase === 'failed'}>

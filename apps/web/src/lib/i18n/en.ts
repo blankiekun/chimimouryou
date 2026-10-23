@@ -1820,6 +1820,9 @@ export const en = {
   'transfer.saving': 'Adding it to your library…',
   'transfer.sent': 'Sent to {name}.',
   'transfer.received': 'Added to your library.',
+  'transfer.receivedHere': 'Kept in this browser.',
+  'transfer.keptHere':
+    'Kept in this browser only: it isn’t added to the server’s library, so other readers there don’t get it.',
   'transfer.error.gone': 'The request expired or was cancelled.',
   'transfer.error.busy': 'A transfer between you two is already under way. Wait for it to finish.',
   'transfer.error.limit': '20 books a day is the most. Try again tomorrow.',
