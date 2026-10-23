@@ -187,3 +187,49 @@ difficulty (easiest first) or length to find the next book: one a little harder
 than the last, with most of its words already known, is usually a good pick. The Store's
 **Known words** sort and Home's **Read next** order books by that share; Difficulty
 details on selected books shows it for each.
+
+## 6. Phones and tablets
+
+The reader works in a phone's browser like on a computer: books, progress and
+highlights live on the device and can sync through your server, Google Drive or
+OneDrive. Lookups are what differ, because a dictionary popup needs Yomitan (or an
+app that does the same job).
+
+### Android: Firefox with Yomitan
+
+Firefox is the only Android browser that runs Yomitan.
+
+1. Install [Firefox for Android](https://play.google.com/store/apps/details?id=org.mozilla.firefox).
+2. In Firefox, add [Yomitan from Mozilla's add-ons site](https://addons.mozilla.org/android/addon/yomitan/)
+   and import dictionaries in its settings as in [section 1](#1-yomitan).
+3. Open the reader in a **Firefox tab** and read: tap a word to look it up (set
+   Yomitan's scanning to work on touch if it doesn't).
+4. For Anki cards, install [AnkiDroid](https://play.google.com/store/apps/details?id=com.ichi2.anki)
+   and [AnkiConnect Android](https://github.com/KamWithK/AnkiconnectAndroid) (APK on its
+   releases page, or the IzzyOnDroid F-Droid repository), open it and start its service,
+   then turn on Anki in Yomitan's settings as its README describes. It answers on
+   `http://localhost:8765` like the desktop add-on.
+
+Untested so far: whether Yomitan also runs once the site is installed from Firefox's menu
+(Install), in its own window; use a tab until that is confirmed. Whether
+chimimouryou's own Anki media (Settings → Anki) reaches AnkiConnect Android is untested too.
+
+### iPhone and iPad: Safari
+
+There is no Yomitan on iOS: no iOS browser runs it, and home-screen web apps run no
+extensions at all.
+
+1. Open the reader in **Safari**, tap Share, then **Add to Home Screen**. Safari deletes
+   a site's stored data after 7 days without a visit; a home-screen app keeps its books.
+2. To read the same books on a computer, sync through your server or through Google
+   Drive (Settings → Sync).
+
+For lookups on iOS, [Hoshi Reader](https://github.com/Manhhao/Hoshi-Reader)
+([App Store](https://apps.apple.com/app/hoshi-reader/id6758244332), free, GPL-3.0) is a
+Japanese EPUB reader with a popup for Yomitan dictionaries and AnkiMobile mining. It
+syncs with ッツ Reader through Google Drive when both use one Google Cloud project you
+create ([its guide](https://github.com/Manhhao/Hoshi-Reader/blob/main/TTUSYNC.md)).
+Sharing chimimouryou's Drive folder with it is **unverified**: Google's `drive.file`
+access lets each app see only the files it made, so it could only work with your own
+client ID entered in both apps, and the standalone web app's folder is named
+`chimi-reader-data` rather than `ttu-reader-data`.
