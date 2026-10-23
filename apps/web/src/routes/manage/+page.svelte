@@ -93,7 +93,13 @@
   import type { SortOption } from '$lib/data/sort-types';
   import { ApiStorageHandler } from '$lib/data/storage/handler/api-handler';
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
-  import { StorageKey } from '$lib/data/storage/storage-types';
+  import { asksBeforeVnUpload, StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
+  import {
+    vnsKeptOnDevice,
+    vnUploadQuestion,
+    vnZipFiles,
+    type VnUpload
+  } from '$lib/data/vn-upload';
   import { storageSource$ } from '$lib/data/storage/storage-view';
   import {
     booklistSortOptions$,
@@ -194,7 +200,7 @@
   let cancelTooltip = '';
   let replicationProgress = 0;
   let replicationToProgress = 0;
-  let replicationProgressRemaining = '~ ??:??:??';
+  let replicationProgressRemaining = 'Estimating…';
   let replicationDone = new Subject<void>();
   let progressBase = 0;
   let executionStart: number;
@@ -537,6 +543,14 @@
     }
 
     const importedTitles: string[] = [];
+    const keepOnDevice = asksBeforeVnUpload($storageSource$)
+      ? await vnsKeptOnDevice(
+          $storageSource$,
+          (await vnZipFiles(files)).map((file) => ({ name: file.name, size: file.size })),
+          askVnUpload
+        )
+      : undefined;
+
     const error = await importData(
       document,
       getStorageHandler(
@@ -552,7 +566,8 @@
       files,
       cancelSignal,
       $fileCountData$,
-      importedTitles
+      importedTitles,
+      keepOnDevice
     ).catch((catchedError) => catchedError.message);
 
     addToHome(importedTitles);
@@ -561,6 +576,38 @@
     if (error) {
       showError(errorTitle, error, 'Error(s) occurred during bookimport');
     }
+  }
+
+  /** Asks whether visual novels go up to a cloud provider; true = upload (vn-upload.ts). */
+  function askVnUpload(games: VnUpload[], target: StorageKey) {
+    return new Promise<boolean>((resolve) => {
+      dialogManager.dialogs$.next([
+        {
+          component: ConfirmDialog,
+          props: {
+            ...vnUploadQuestion(games, target),
+            confirmLabel: 'Upload',
+            cancelLabel: 'Keep on this device',
+            resolver: (wasCanceled: boolean) => resolve(!wasCanceled)
+          },
+          disableCloseOnClick: true
+        }
+      ]);
+    });
+  }
+
+  /** The selected visual novels' sizes, from this browser's copies */
+  async function vnSizes(titles: string[]) {
+    return Promise.all(
+      titles.map(async (name) => {
+        const data = await database.getDataByTitle(name);
+
+        return {
+          name,
+          size: Object.values(data?.blobs || {}).reduce((sum, blob) => sum + blob.size, 0)
+        };
+      })
+    );
   }
 
   /**
@@ -760,7 +807,7 @@
   function initializeReplicationProgressData() {
     replicationDone = new Subject<void>();
     replicationProgress$.pipe(takeUntil(replicationDone)).subscribe(updateProgress);
-    replicationProgressRemaining = '~ ??:??:??';
+    replicationProgressRemaining = 'Estimating…';
     replicationProgress = 0;
     replicationToProgress = 1;
     executionStart = Date.now();
@@ -1117,7 +1164,7 @@
 
       replicationProgressRemaining =
         replicationToProgress > replicationProgress
-          ? `~ ${getTimestamp(Math.ceil(remainingTime))}`
+          ? getTimestamp(Math.ceil(remainingTime))
           : '~ 00:00:01';
     }
   }
@@ -1127,6 +1174,15 @@
       if (!operationAllowed()) {
         return;
       }
+
+      const books = $bookCards$.filter((card) => selectedBookIds.has(card.id));
+      const kept = $lastExportedTypes$.includes(StorageDataType.DATA)
+        ? await vnsKeptOnDevice(
+            $lastExportedTarget$,
+            await vnSizes(books.filter((book) => book.vn).map((book) => book.title)),
+            askVnUpload
+          )
+        : new Set<string>();
 
       cancelTooltip = 'Cancels the current export';
 
@@ -1144,12 +1200,15 @@
           $readingGoalsMergeMode$
         )
       );
-      const books = $bookCards$.filter((card) => selectedBookIds.has(card.id));
       const error = await replicateData(
         handlers[0],
         handlers[1],
         false,
-        books.map((book) => ({ title: book.title, imagePath: book.imagePath })),
+        books.map((book) => ({
+          title: book.title,
+          imagePath: book.imagePath,
+          keepOnDevice: kept.has(book.title)
+        })),
         $lastExportedTypes$,
         cancelSignal
       ).catch((err) => err.message);
@@ -1165,8 +1224,8 @@
 
   function getTimestamp(seconds: number) {
     return seconds && Number.isFinite(seconds)
-      ? new Date(seconds * 1000).toISOString().substr(11, 8)
-      : '??:??:??';
+      ? `~ ${new Date(seconds * 1000).toISOString().substr(11, 8)}`
+      : 'Estimating…';
   }
 </script>
 

@@ -111,6 +111,15 @@ anything a reader or a server operator would notice.
 
 ### Fixed
 
+- Google Drive: files over 5 MB (large manga, games) go up as resumable uploads in 8 MiB
+  chunks, retried on failure, instead of one request that Google refuses. OneDrive sends files
+  over 60 MiB in 10 MiB slices the same way.
+- Importing or exporting a visual novel to Google Drive or OneDrive first asks whether to upload
+  it (with its size) or keep it on this device: a kept game is listed with the source's books,
+  opens from this browser and is never uploaded; its progress and statistics still sync.
+  Deleting it there deletes the browser copy too.
+- The import and export progress shows "Estimating…" instead of "??:??:??" until it can tell
+  the time left.
 - Google Drive (built-in client): the sign-in lasts. Builds with `VITE_GDRIVE_CLIENT_SECRET` now use it, so Google returns a refresh token, which is kept in this browser and renews the session on every page instead of opening sign-in again.
 - Google Drive: book covers show again after a reload (the page's content security policy blocked Drive's thumbnails).
 - Visual novels: right-clicking the game no longer opens the browser's menu.

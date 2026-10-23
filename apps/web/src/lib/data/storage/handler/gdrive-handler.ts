@@ -6,7 +6,8 @@
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 import { gDriveRefreshEndpoint } from '$lib/data/env';
-import { ApiStorageHandler } from '$lib/data/storage/handler/api-handler';
+import { ApiStorageHandler, type FullResponse } from '$lib/data/storage/handler/api-handler';
+import { AbortError } from '$lib/functions/replication/replication-error';
 import { BaseStorageHandler, type ExternalFile } from '$lib/data/storage/handler/base-handler';
 import { StorageKey } from '$lib/data/storage/storage-types';
 import { database, gDriveStorageSource$ } from '$lib/data/store';
@@ -21,6 +22,13 @@ export class GDriveStorageHandler extends ApiStorageHandler {
   private baseFileApiUrl = 'https://www.googleapis.com/drive/v3/files';
 
   private baseUploadApiUrl = 'https://www.googleapis.com/upload/drive/v3/files';
+
+  static multipartLimit = 5 * 1024 * 1024;
+
+  /** A multiple of 256 KiB, as Google requires for every chunk but the last */
+  static chunkSize = 8 * 1024 * 1024;
+
+  static chunkRetries = 3;
 
   constructor(window: Window) {
     super(StorageKey.GDRIVE, window, gDriveRefreshEndpoint);
@@ -89,6 +97,7 @@ export class GDriveStorageHandler extends ApiStorageHandler {
           });
         }
 
+        await this.addDeviceVns();
         this.dataListFetched = true;
       } catch (error) {
         this.clearData();
@@ -223,40 +232,31 @@ export class GDriveStorageHandler extends ApiStorageHandler {
     rootFilePrefix?: string,
     progressBase = 0.8
   ): Promise<GDriveFile> {
-    const form = new FormData();
-    const params = new URLSearchParams();
+    const metadata = JSON.stringify(externalFile ? { name } : { name, parents: [folderId] });
+    const url = `${this.baseUploadApiUrl}${externalFile ? `/${externalFile.id}` : ''}`;
+    const method = externalFile ? 'PATCH' : 'POST';
+    const blob = data instanceof Blob ? data : undefined;
+    let response;
 
-    form.append(
-      'resource',
-      new Blob(
-        [
-          JSON.stringify(
-            externalFile
-              ? {
-                  name
-                }
-              : {
-                  name,
-                  parents: [folderId]
-                }
-          )
-        ],
-        { type: 'application/json' }
-      )
-    );
+    // Google takes multipart uploads only up to 5 MB: larger files go up in resumable chunks.
+    if (blob && blob.size > GDriveStorageHandler.multipartLimit) {
+      response = await this.uploadResumable(url, method, metadata, blob, progressBase);
+    } else {
+      const form = new FormData();
 
-    if (data) {
-      form.append('file', data);
+      form.append('resource', new Blob([metadata], { type: 'application/json' }));
+
+      if (data) {
+        form.append('file', data);
+      }
+
+      response = await this.request(
+        `${url}?uploadType=multipart`,
+        { method, body: form, trackUpload: true },
+        'json',
+        progressBase
+      );
     }
-
-    params.append('uploadType', 'multipart');
-
-    const response = await this.request(
-      `${this.baseUploadApiUrl}${externalFile ? `/${externalFile.id}` : ''}?${params.toString()}`,
-      { method: externalFile ? 'PATCH' : 'POST', body: form, trackUpload: true },
-      'json',
-      progressBase
-    );
 
     this.updateAfterUpload(
       response.id,
@@ -270,6 +270,90 @@ export class GDriveStorageHandler extends ApiStorageHandler {
     );
 
     return response;
+  }
+
+  /** Resumable upload: open a session, then PUT `chunkSize` slices until Google answers 200/201. */
+  private async uploadResumable(
+    url: string,
+    method: string,
+    metadata: string,
+    blob: Blob,
+    progressBase: number
+  ) {
+    const { size } = blob;
+    const session: FullResponse = await this.request(`${url}?uploadType=resumable`, {
+      method,
+      body: metadata,
+      headers: {
+        'Content-Type': 'application/json; charset=UTF-8',
+        'X-Upload-Content-Type': blob.type || 'application/octet-stream',
+        'X-Upload-Content-Length': `${size}`
+      },
+      fullResponse: true
+    });
+    const sessionUrl = session.header('Location');
+
+    if (!sessionUrl) {
+      throw new Error('Upload url was not returned');
+    }
+
+    let start = 0;
+    let failures = 0;
+
+    for (;;) {
+      const end = Math.min(start + GDriveStorageHandler.chunkSize, size);
+      let result: FullResponse | undefined;
+      let sent = true;
+
+      try {
+        result = await this.request(
+          sessionUrl,
+          {
+            method: 'PUT',
+            body: blob.slice(start, end),
+            headers: { 'Content-Range': `bytes ${start}-${end - 1}/${size}` },
+            trackUpload: true,
+            fullResponse: true
+          },
+          'json',
+          (progressBase * (end - start)) / size
+        );
+      } catch (error) {
+        sent = false;
+        failures += 1;
+
+        if (error instanceof AbortError || failures > GDriveStorageHandler.chunkRetries) {
+          throw error;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** failures));
+
+        // Ask how much arrived; on failure the same chunk is sent again.
+        result = await this.request(sessionUrl, {
+          method: 'PUT',
+          headers: { 'Content-Range': `bytes */${size}` },
+          fullResponse: true
+        }).catch(() => undefined);
+      }
+
+      if (result && result.status !== 308) {
+        return result.response;
+      }
+
+      if (result) {
+        // No Range header: nothing was received yet.
+        const range = result.header('Range');
+        const received = range ? Number(range.slice(range.lastIndexOf('-') + 1)) + 1 : 0;
+
+        if (received > start) {
+          failures = 0;
+        } else if (sent && ++failures > GDriveStorageHandler.chunkRetries) {
+          throw new Error('Google Drive did not accept the upload');
+        }
+
+        start = received;
+      }
+    }
   }
 
   protected executeDelete(id: string) {

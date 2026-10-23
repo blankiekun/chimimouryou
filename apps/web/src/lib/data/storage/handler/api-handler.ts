@@ -23,6 +23,7 @@ import {
 import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
 import { StorageOAuthManager } from '$lib/data/storage/storage-oauth-manager';
 import { StorageKey } from '$lib/data/storage/storage-types';
+import { isVn } from '$lib/data/vn';
 import { database } from '$lib/data/store';
 import {
   convertAuthErrorResponse,
@@ -41,6 +42,14 @@ export interface RequestOptions {
   trackDownload?: boolean;
   trackUpload?: boolean;
   skipAuth?: boolean;
+  /** Resolve with the status and response headers too (`FullResponse`) */
+  fullResponse?: boolean;
+}
+
+export interface FullResponse {
+  status: number;
+  response: any;
+  header: (name: string) => string | null;
 }
 
 export abstract class ApiStorageHandler extends BaseStorageHandler {
@@ -444,6 +453,67 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
     return 0;
   }
 
+  /**
+   * Saves a visual novel in this browser only, for this source: listed with its books, opened
+   * from here, never uploaded (the reader chose "Keep on this device").
+   */
+  async keepOnDevice(data: Omit<BooksDbBookData, 'id'>) {
+    const id = await getStorageHandler(
+      this.window,
+      StorageKey.BROWSER,
+      undefined,
+      true,
+      this.cacheStorageData,
+      this.saveBehavior
+    ).saveBook({ ...data, storageSource: this.storageSourceName }, false, false);
+
+    this.addDeviceVnCard(data);
+
+    return id;
+  }
+
+  /** Lists the visual novels this browser keeps for this source (`keepOnDevice`). */
+  protected async addDeviceVns() {
+    const books = await (await database.db).getAll('data');
+
+    books
+      .filter((book) => book.storageSource === this.storageSourceName && isVn(book))
+      .forEach((book) => this.addDeviceVnCard(book));
+  }
+
+  /** Deletes the browser copies of visual novels kept on this device, or they would be listed again. */
+  private async deleteDeviceVns(
+    titles: string[],
+    cancelSignal: AbortSignal,
+    keepStatistics: boolean
+  ) {
+    const idToTitle = new Map<number, string>();
+
+    for (const title of titles) {
+      const book = await database.getDataByTitle(title);
+
+      if (book?.storageSource === this.storageSourceName && isVn(book)) {
+        idToTitle.set(book.id, title);
+      }
+    }
+
+    if (!idToTitle.size) return '';
+
+    return (
+      await database.deleteData([...idToTitle.keys()], idToTitle, cancelSignal, keepStatistics)
+    ).error;
+  }
+
+  private addDeviceVnCard(book: Omit<BooksDbBookData, 'id'>) {
+    this.addBookCard(book.title, {
+      imagePath: book.coverImage || '',
+      characters: BaseStorageHandler.getBookCharacters(book.characters || 0, book.sections || []),
+      lastBookModified: book.lastBookModified || 0,
+      lastBookOpen: book.lastBookOpen || 0,
+      vn: true
+    });
+  }
+
   async saveProgress(data: File | BooksDbBookmarkData) {
     const filename = BaseStorageHandler.getProgressFileName(data);
     const progressData = data instanceof File ? data : JSON.stringify(data);
@@ -569,12 +639,17 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
     await this.upload(titleId, filename, files, file, subtitleData);
   }
 
-  async deleteBookData(booksToDelete: string[], cancelSignal: AbortSignal) {
+  async deleteBookData(
+    booksToDelete: string[],
+    cancelSignal: AbortSignal,
+    keepLocalStatistics = false
+  ) {
     await this.ensureTitle();
 
     let error = '';
 
     const deleted: number[] = [];
+    const removedTitles: string[] = [];
     const deletionLimiter = pLimit(1);
     const deleteTasks: Promise<void>[] = [];
 
@@ -591,6 +666,8 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
             if (externalId) {
               await this.executeDelete(externalId);
             }
+
+            removedTitles.push(bookToDelete);
 
             this.titleToFiles.delete(bookToDelete);
 
@@ -616,6 +693,11 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
     );
 
     await Promise.all(deleteTasks).catch(() => {});
+
+    error =
+      (await this.deleteDeviceVns(removedTitles, cancelSignal, keepLocalStatistics).catch(
+        (err) => err.message
+      )) || error;
 
     return { error, deleted };
   }
@@ -678,7 +760,15 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
         async function stateHandler() {
           if (this.readyState === 4) {
             if (this.status >= 200 && this.status < 400) {
-              resolve(this.response);
+              resolve(
+                options.fullResponse
+                  ? {
+                      status: this.status,
+                      response: this.response,
+                      header: (name: string) => this.getResponseHeader(name)
+                    }
+                  : this.response
+              );
             } else {
               const errorMessage = await convertAuthErrorResponse(this);
 
