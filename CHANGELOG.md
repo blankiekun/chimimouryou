@@ -4,7 +4,7 @@ chimimouryou is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook
 upstream's own changes are not listed here. Each version's section is written when it is released,
 from the pull requests merged since the previous tag (pull requests don't edit this file).
 
-## Unreleased
+## v3.8.0 (2026-10-23)
 
 ### Added
 
@@ -17,6 +17,18 @@ from the pull requests merged since the previous tag (pull requests don't edit t
 - Standalone edition: a book's page shows its number of different kanji, counted in the browser
   from the stored book (furigana left out), and Home's Read next lists the next volumes of
   series you are reading, grouped by the volume numbers in titles.
+- A desktop app (Linux AppImage, Windows installer, macOS universal dmg; unsigned) attached to
+  each release: the standalone edition with Yomitan built in, served from
+  `http://127.0.0.1:41917`. Google Drive signs in through the system browser. Windows and Linux
+  builds download updates in the background and offer "Restart to update"; macOS points at
+  the release page.
+- The standalone edition can connect to a chimimouryou server (Settings → Sync): Calibre books,
+  progress and server visual novels while connected, with a token kept in this browser only.
+- Standalone: a first-run screen, the sync status in the header, Settings → Sync, and install
+  hints per platform (docs on reading with lookups on Android and iOS).
+- Highlights, recaps, lorebook, visual novel saves, kanji, word marks and settings sync through
+  every storage source (Google Drive, OneDrive, folders), not only the server.
+- Statistics in the Study Book look, with a full-width heatmap and streaks shown once.
 
 ### Changed
 
@@ -115,6 +127,17 @@ from the pull requests merged since the previous tag (pull requests don't edit t
 
 ### Fixed
 
+- Continuous mode reopens at the exact character read; jumps from Contents are saved and land
+  clear of the panel and bar, the bar never covers the first line, and opening or closing the
+  panel moves nothing.
+- No sign-in prompt while the server can't be reached; Drive and OneDrive sign-in only open
+  after a click.
+- Standalone: the Drive account is kept, the header names what last synced, and the Yomitan
+  hint hides once Yomitan works.
+- OneDrive covers show (the content security policy blocked its thumbnails).
+- Admin panel: the engine's install status is shown apart from the update's.
+- Study Book finish fixes: a flat audiobook player, the spot-tint token, and new README
+  screenshots.
 - Google Drive: files over 5 MB (large manga, games) go up as resumable uploads in 8 MiB
   chunks, retried on failure, instead of one request that Google refuses. OneDrive sends files
   over 60 MiB in 10 MiB slices the same way.
