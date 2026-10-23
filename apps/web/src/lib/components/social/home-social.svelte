@@ -9,6 +9,7 @@
   import CoverCard from '$lib/components/book-card/cover-card.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import AddFriend from '$lib/components/social/add-friend.svelte';
+  import BookTransfers from '$lib/components/social/book-transfers.svelte';
   import FriendRequests from '$lib/components/social/friend-requests.svelte';
   import FriendsList from '$lib/components/social/friends-list.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
@@ -99,6 +100,7 @@
       </a>
     </section>
   {:else}
+    <BookTransfers />
     {#if reading.length}
       <section class="home-social-reading" aria-labelledby="home-social-reading">
         <SectionHead id="home-social-reading" {number} title={$t$('social.nowReading')} />

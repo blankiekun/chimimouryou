@@ -4,6 +4,7 @@
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import ActivityFeed from '$lib/components/social/activity-feed.svelte';
   import AddFriend from '$lib/components/social/add-friend.svelte';
+  import BookTransfers from '$lib/components/social/book-transfers.svelte';
   import FriendRequests from '$lib/components/social/friend-requests.svelte';
   import FriendsList from '$lib/components/social/friends-list.svelte';
   import ProfileLayer from '$lib/components/social/profile-layer.svelte';
@@ -111,6 +112,7 @@
           {#if userNote}<span role="status">{userNote}</span>{/if}
         </p>
       {/if}
+      <BookTransfers />
       <div class="friends-columns">
         {#if !empty}
           <div class="friends-main">

@@ -1795,7 +1795,48 @@ export const en = {
   'moderation.days': '{days} days',
   'moderation.none': 'Nothing here.',
   'moderation.delete': 'Delete',
-  'moderation.deleteRowConfirm': 'Delete “{title}” from @{username}?'
+  'moderation.deleteRowConfirm': 'Delete “{title}” from @{username}?',
+  'transfer.title': 'Book transfers',
+  'transfer.send': 'Send to a friend',
+  'transfer.sendHint':
+    'Both of you need chimimouryou open. The book goes straight from this browser to theirs; it never passes through the hub.',
+  'transfer.friend': 'Friend',
+  'transfer.sendButton': 'Send',
+  'transfer.noFriends': 'Add a friend first.',
+  'transfer.offers': 'Wants to send you “{title}” ({size}).',
+  'transfer.exists':
+    'You already have “{title}”. It stays as it is; this copy would be saved as “{newTitle}”.',
+  'transfer.acceptHint': 'Keep chimimouryou open while it comes in.',
+  'transfer.accept': 'Accept',
+  'transfer.decline': 'Decline',
+  'transfer.cancel': 'Cancel',
+  'transfer.dismiss': 'Dismiss',
+  'transfer.keepOpen': 'Keep this page open until it’s done.',
+  'transfer.waiting':
+    'Waiting for {name} to accept. They need chimimouryou open on Home or Friends.',
+  'transfer.connecting': 'Connecting to {name}…',
+  'transfer.sending': 'Sending to {name}: {done} of {total}',
+  'transfer.receiving': 'Receiving from {name}: {done} of {total}',
+  'transfer.saving': 'Adding it to your library…',
+  'transfer.sent': 'Sent to {name}.',
+  'transfer.received': 'Added to your library.',
+  'transfer.error.gone': 'The request expired or was cancelled.',
+  'transfer.error.busy': 'A transfer between you two is already under way. Wait for it to finish.',
+  'transfer.error.limit': '20 books a day is the most. Try again tomorrow.',
+  'transfer.error.friend': 'Books can only be sent to friends.',
+  'transfer.error.tooBig': 'Books over 300 MB can’t be sent.',
+  'transfer.error.declined': '{name} declined.',
+  'transfer.error.direct':
+    'Couldn’t connect directly to {name}. Both of you on the same network, or another network, usually works.',
+  'transfer.error.closed': 'The connection to {name} closed before it finished.',
+  'transfer.error.checksum': 'The book arrived damaged. Try again.',
+  'transfer.error.size': 'The book arrived damaged. Try again.',
+  'transfer.error.format': 'The book couldn’t be read.',
+  'transfer.error.import': 'The book couldn’t be added to the library.',
+  'transfer.error.cancelled': 'Cancelled.',
+  'transfer.error.notLocal': 'Open the book once on this device, then send it.',
+  'transfer.error.vn': 'Visual novels can’t be sent to friends yet: they are too big.',
+  'transfer.error.other': 'Something went wrong. Try again.'
 };
 
 export type MessageKey = keyof typeof en;

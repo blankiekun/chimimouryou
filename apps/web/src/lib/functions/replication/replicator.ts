@@ -76,7 +76,8 @@ async function saveLocalCopy(targetHandler: BaseStorageHandler, book: LoadData) 
 export async function importData(
   document: Document,
   targetHandler: BaseStorageHandler,
-  files: (File | VnFolder)[],
+  /** LoadData: a book that is already loaded (one a friend sent, book-transfer.ts) */
+  files: (File | VnFolder | LoadData)[],
   cancelSignal: AbortSignal,
   fileCountData?: Record<string, number>,
   importedTitles: string[] = [],
@@ -111,7 +112,7 @@ export async function importData(
   files.forEach((file) =>
     tasks.push(
       limiter(async () => {
-        let currentTitle = file.name;
+        let currentTitle = 'title' in file ? file.title : file.name;
 
         if (fileCountData && Object.prototype.hasOwnProperty.call(fileCountData, currentTitle)) {
           checkCancelAndProgress(cancelSignal, true, true);
@@ -126,7 +127,9 @@ export async function importData(
 
           let bookContent: LoadData;
 
-          if (!(file instanceof File)) {
+          if ('elementHtml' in file) {
+            bookContent = file;
+          } else if (!(file instanceof File)) {
             bookContent = await loadVnFiles(file.name, file.files, lastBookModified);
           } else if (file.name.endsWith('.epub')) {
             bookContent = await loadEpub(file, document, lastBookModified);
@@ -159,7 +162,7 @@ export async function importData(
           );
 
           // File names of visual novels the reader kept off a cloud provider (vn-upload.ts)
-          if (keepOnDevice?.has(file.name) && isVn(bookContent)) {
+          if ('name' in file && keepOnDevice?.has(file.name) && isVn(bookContent)) {
             dataIds.push(await (targetHandler as ApiStorageHandler).keepOnDevice(bookContent));
           } else {
             dataIds.push(await targetHandler.saveBook(bookContent, false));
