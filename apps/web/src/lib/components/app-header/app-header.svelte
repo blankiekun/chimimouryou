@@ -70,17 +70,12 @@
       icon: faStore,
       href: `${pagePath}/manage`
     },
-    // The Words page reads the server's word lists.
-    ...(standalone
-      ? []
-      : [
-          {
-            key: 'words' as const,
-            label: $t$('nav.words'),
-            icon: faLanguage,
-            href: `${pagePath}/words`
-          }
-        ]),
+    {
+      key: 'words',
+      label: $t$('nav.words'),
+      icon: faLanguage,
+      href: `${pagePath}/words`
+    },
     {
       key: 'statistics',
       label: $t$('nav.statistics'),

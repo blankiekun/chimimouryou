@@ -1539,7 +1539,7 @@
       {:else if $bookCards$.length && isHome}
         <div class="home">
           <LearnerDashboard
-            books={$storageSource$ === StorageKey.CALIBRE ? $bookCards$ : undefined}
+            books={standalone || $storageSource$ === StorageKey.CALIBRE ? $bookCards$ : undefined}
           />
           {#if firstRun}
             <section class="home-start" aria-label={$t$('home.startReading')}>

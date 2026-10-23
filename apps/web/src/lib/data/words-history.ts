@@ -15,14 +15,15 @@
  */
 
 import { particles, type BookWord } from '$lib/data/book-words';
-import {
-  loadCalibreCatalog,
-  loadCalibreDifficulty,
-  type CalibreDifficulty
-} from '$lib/data/calibre';
 import { getKanjiSeen } from '$lib/data/kanji-seen';
 import { readerDb } from '$lib/data/reader-db';
-import { knownMinCount, readFraction, wordKey, wordList } from '$lib/data/words-met';
+import {
+  estimatedBooks,
+  estimatedWordList,
+  knownMinCount,
+  readFraction,
+  wordKey
+} from '$lib/data/words-met';
 
 export interface DayRead {
   title: string;
@@ -100,28 +101,16 @@ export function gainedThisMonth(points: KnownPoint[], todayKey: string) {
 
 /** The history for these statistics, from the cache when its inputs haven't changed. */
 export async function getKnownHistory(days: DayRead[]) {
-  const [records, catalog, difficulty] = await Promise.all([
-    getKanjiSeen(),
-    loadCalibreCatalog().catch(() => []),
-    loadCalibreDifficulty().catch(() => ({}) as Record<string, CalibreDifficulty>)
-  ]);
+  const [records, estimated] = await Promise.all([getKanjiSeen(), estimatedBooks()]);
   const caps = new Map(records.map((record) => [record.title, record]));
   const titles = new Set(days.filter((day) => day.charactersRead > 0).map((day) => day.title));
-  const inputs = catalog
-    .filter((book) => titles.has(book.title) && difficulty[book.id]?.characters)
-    .map(({ id, title }) => {
-      const { computedAt, characters } = difficulty[id];
-      const record = caps.get(title);
+  const inputs = estimated
+    .filter((book) => titles.has(book.title) && book.characters)
+    .map((book) => {
+      const record = caps.get(book.title);
 
-      return {
-        id,
-        title,
-        computedAt,
-        characters,
-        cap: record ? readFraction(record, characters) : 1
-      };
-    })
-    .sort((a, b) => a.id - b.id);
+      return { ...book, cap: record ? readFraction(record, book.characters) : 1 };
+    });
   const inputTitles = new Set(inputs.map((book) => book.title));
   const used = days
     .filter((day) => day.charactersRead > 0 && inputTitles.has(day.title))
@@ -136,9 +125,10 @@ export async function getKnownHistory(days: DayRead[]) {
   const books = new Map<string, HistoryBook>();
   let complete = true;
 
-  for (const { id, title, computedAt, characters, cap } of inputs) {
+  for (const book of inputs) {
+    const { title, characters, cap } = book;
     // Lists are cached by words-met; fetched one at a time when missing.
-    const words = await wordList(id, computedAt).catch(() => {
+    const words = await estimatedWordList(book).catch(() => {
       complete = false;
       return null;
     });

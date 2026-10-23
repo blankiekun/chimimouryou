@@ -7,8 +7,15 @@
   import AnkiKnown from '$lib/components/words/anki-known.svelte';
   import KnownBecause from '$lib/components/words/known-because.svelte';
   import MarkedWords from '$lib/components/words/marked-words.svelte';
+  import {
+    analysisToolsState$,
+    analysisToolsSupported,
+    checkAnalysisTools
+  } from '$lib/data/analysis-tools';
   import { ankiKnownWords$ } from '$lib/data/anki';
-  import { pagePath } from '$lib/data/env';
+  import { pagePath, selfHostingGuideUrl } from '$lib/data/env';
+  import { serverless } from '$lib/data/server';
+  import { readerSyncSource } from '$lib/data/sync-files';
   import { knownWords$ } from '$lib/data/known-words';
   import { setPendingImport, type PendingImport } from '$lib/data/library-home';
   import { pullAccountStatistics } from '$lib/data/statistics-sync';
@@ -33,6 +40,13 @@
 
   let summary: WordsSummary | undefined;
   let gained: number | undefined;
+
+  // Where syncWordMarks puts words.json: the server's account, else the library's own store.
+  const marksSync = !serverless
+    ? 'words.marksAccount'
+    : readerSyncSource()
+      ? 'words.marksLibrary'
+      : 'words.marksBrowser';
 
   const number = (value: number) => value.toLocaleString('en-US');
 
@@ -77,6 +91,7 @@
   }
 
   onMount(() => {
+    if (serverless) checkAnalysisTools();
     // Statistics of books not opened in this browser only exist on the server.
     pullAccountStatistics(window)
       .catch(() => {})
@@ -101,6 +116,21 @@
     <header>
       <h1 class="words-title">{$t$('words.title')}</h1>
       <p class="words-subtitle">{$t$('words.subtitle')}</p>
+      {#if serverless && $analysisToolsState$.difficulty !== 'ready'}
+        <p class="words-tools-note">
+          {#if analysisToolsSupported()}
+            {$t$('words.needsAnalysisTools')}
+            <a href="{pagePath}/settings?section=general#general-analysis"
+              >{$t$('book.downloadAnalysisTools')}</a
+            >
+          {:else}
+            {$t$('book.needsDesktopOrServer')}
+            <a href={selfHostingGuideUrl} target="_blank" rel="noreferrer"
+              >{$t$('book.selfHosting')}</a
+            >
+          {/if}
+        </p>
+      {/if}
     </header>
 
     <div class="words-top">
@@ -121,7 +151,10 @@
         <AnkiKnown />
         <section class="words-how" aria-label={$t$('words.how')}>
           <SectionHead number={3} title={$t$('words.how')} />
-          <p>{$t$('words.howText', { count: knownMinCount })}</p>
+          <p>
+            {$t$('words.howText', { count: knownMinCount })}
+            {$t$(marksSync)}
+          </p>
         </section>
       </div>
     </div>
@@ -154,6 +187,24 @@
     margin-top: 0.25rem;
     color: var(--app-muted-fg);
     font-size: var(--type-small);
+  }
+
+  .words-tools-note {
+    margin-top: 0.75rem;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  .words-tools-note a {
+    margin-left: 0.5rem;
+    white-space: nowrap;
+    color: var(--accent-strong-color);
+    font-weight: 700;
+  }
+
+  .words-tools-note a:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
   }
 
   .words-top,
