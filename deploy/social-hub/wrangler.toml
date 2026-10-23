@@ -7,7 +7,7 @@ compatibility_date = "2026-09-01"
 binding = "DB"
 database_name = "chimi-hub"
 # Printed by `npx wrangler d1 create chimi-hub`.
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "cae5b5cd-7328-4910-bb3a-b8d311a80487"
 
 # Retention: sessions unused 90 days, accounts unused 12 months, old rate-limit counters.
 [triggers]

@@ -20,7 +20,7 @@ import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-s
 import type { MessageKey } from '$lib/i18n';
 
 /** Our hub. shortcut: a placeholder until the Worker is deployed; set it then (deploy/social-hub/README.md). */
-export const socialHubDefault = 'https://chimi-hub.your-subdomain.workers.dev';
+export const socialHubDefault = 'https://chimi-hub.blankiekun.workers.dev';
 
 /** Another hub (Settings → Social; standalone builds only, server builds use ours) */
 export const socialHub$ = writableStringLocalStorageSubject()('socialHub', '');
