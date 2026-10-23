@@ -51,6 +51,13 @@ map $request_uri $cover_expires {
   ~^/calibre/thumbs/ epoch;
 }
 
+# Server connect (CORS_ORIGINS): the standalone app's origins, echoed back by the
+# reader's locations; anyone else gets no Access-Control-Allow-Origin.
+map $http_origin $cors_origin {
+  default "";
+${CORS_ORIGIN_MAP}
+}
+
 # HSTS only when the page itself is HTTPS (an empty value sends no header).
 map $forwarded_proto $hsts {
   default "";
@@ -108,6 +115,7 @@ server {
 
   # Catalog generated from metadata.db by build-catalog.py.
   location = /calibre/catalog.json {
+${CORS_WITH_SECURITY_HEADERS}
     auth_request /_account_shared;
     alias ${CATALOG_FILE};
     expires -1;
@@ -115,12 +123,14 @@ server {
 
   # Difficulty estimates (chimi-difficulty), computed only when started from the library.
   location = /calibre/difficulty.json {
+${CORS_WITH_SECURITY_HEADERS}
     auth_request /_account_shared;
     alias ${DIFFICULTY_FILE};
     expires -1;
   }
 
   location /calibre/difficulty/api/ {
+${CORS_WITH_SECURITY_HEADERS}
     auth_request /_account_difficulty_writes;
     auth_request_set $account_admin $upstream_http_x_account_admin;
     rewrite ^/calibre/difficulty/api/(.*)$ /$1 break;
@@ -166,6 +176,7 @@ server {
   # Readings files (furigana in context): requested and fetched by every reader who may use the
   # shared sync folder, not only those with the difficulty permission.
   location ~ ^/calibre/difficulty/api/readings/-?[0-9]+$ {
+${CORS_WITH_SECURITY_HEADERS}
     auth_request /_account_shared;
     limit_req zone=readings burst=10 nodelay;
     limit_req_status 429;
@@ -179,6 +190,7 @@ server {
 
   # Text of manga pages (mokuro service), by catalog id.
   location ~ ^/calibre/mokuro/(-?[0-9]+\.json)$ {
+${CORS_WITH_SECURITY_HEADERS}
     auth_request /_account_shared;
     alias ${MOKURO_DIR}/$1;
     expires -1;
@@ -186,6 +198,7 @@ server {
 
   # Making it (or uploading .mokuro files) needs the import permission.
   location /calibre/mokuro/api/ {
+${CORS_WITH_SECURITY_HEADERS}
     auth_request /_account_import;
     rewrite ^/calibre/mokuro/api/(.*)$ /$1 break;
     proxy_pass http://$mokuro_upstream;
@@ -198,6 +211,7 @@ server {
 
   # Adding books to the Calibre library (import service).
   location /calibre/import/api/ {
+${CORS_WITH_SECURITY_HEADERS}
     auth_request /_account_import;
     auth_request_set $account_id $upstream_http_x_account_id;
     auth_request_set $account_admin $upstream_http_x_account_admin;
@@ -267,8 +281,23 @@ server {
   # Accounts. The service checks HTTPS, Origin and Host ($http_host keeps the port,
   # which the browser's Origin has on non-standard ports).
   location /account/api/ {
+${CORS_WITH_SECURITY_HEADERS}
     rewrite ^/account/api/(.*)$ /$1 break;
     proxy_pass http://$account_upstream;
+    proxy_set_header X-Internal-Token "${INTERNAL_TOKEN}";
+    proxy_http_version 1.1;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Proto $forwarded_proto;
+    client_max_body_size 16k;
+  }
+
+  # Server connect: tokens for the standalone app, rate-limited like sign-in.
+  location = /account/api/token {
+${CORS_WITH_SECURITY_HEADERS}
+    limit_req zone=account_login burst=5 nodelay;
+    limit_req_status 429;
+    proxy_pass http://$account_upstream/token;
     proxy_set_header X-Internal-Token "${INTERNAL_TOKEN}";
     proxy_http_version 1.1;
     proxy_set_header Host $http_host;
@@ -294,6 +323,7 @@ server {
   # real limit, hence client_max_body_size 0.
   location = /_account_auth {
     internal;
+    proxy_set_header Host $http_host;
     proxy_pass http://$account_upstream/auth;
     proxy_set_header X-Internal-Token "${INTERNAL_TOKEN}";
     proxy_set_header X-Forwarded-Proto $forwarded_proto;
@@ -305,6 +335,7 @@ server {
 
   location = /_account_admin {
     internal;
+    proxy_set_header Host $http_host;
     proxy_pass http://$account_upstream/auth/admin;
     proxy_set_header X-Internal-Token "${INTERNAL_TOKEN}";
     proxy_set_header X-Forwarded-Proto $forwarded_proto;
@@ -315,6 +346,7 @@ server {
 
   location = /_account_series {
     internal;
+    proxy_set_header Host $http_host;
     proxy_pass http://$account_upstream/auth/series;
     proxy_set_header X-Internal-Token "${INTERNAL_TOKEN}";
     proxy_set_header X-Forwarded-Proto $forwarded_proto;
@@ -325,6 +357,7 @@ server {
 
   location = /_account_import {
     internal;
+    proxy_set_header Host $http_host;
     proxy_pass http://$account_upstream/auth/import;
     proxy_set_header X-Internal-Token "${INTERNAL_TOKEN}";
     proxy_set_header X-Forwarded-Proto $forwarded_proto;
@@ -337,6 +370,7 @@ server {
   # account or a trusted network.
   location = /_account_shared {
     internal;
+    proxy_set_header Host $http_host;
     proxy_pass http://$account_upstream/auth/shared/writes;
     proxy_set_header X-Internal-Token "${INTERNAL_TOKEN}";
     # The account service refuses some writes by path (shared_write_allowed).
@@ -354,6 +388,7 @@ server {
   # Reads as above; writes need the permission.
   location = /_account_series_writes {
     internal;
+    proxy_set_header Host $http_host;
     proxy_pass http://$account_upstream/auth/series/writes;
     proxy_set_header X-Internal-Token "${INTERNAL_TOKEN}";
     proxy_set_header X-Forwarded-Proto $forwarded_proto;
@@ -367,6 +402,7 @@ server {
 
   location = /_account_difficulty_writes {
     internal;
+    proxy_set_header Host $http_host;
     proxy_pass http://$account_upstream/auth/difficulty/writes;
     proxy_set_header X-Internal-Token "${INTERNAL_TOKEN}";
     proxy_set_header X-Forwarded-Proto $forwarded_proto;
@@ -381,6 +417,7 @@ server {
   # Each signed-in account's own reader data: progress, statistics, highlights
   # and settings, in the same folder layout as /calibre/sync/.
   location /account/sync/ {
+${CORS}
     auth_request /_account_auth;
     auth_request_set $account_id $upstream_http_x_account_id;
     root ${ACCOUNT_DATA_DIR}/$account_id;
@@ -403,6 +440,7 @@ server {
 
   # Book files and covers only; everything else in the library (metadata.db etc.) is hidden.
   location ~ ^/calibre/library/(.+\.(?:epub|htmlz|txt|cbz|zip)|.+/cover\.jpg)$ {
+${CORS_WITH_SECURITY_HEADERS}
     auth_request /_account_shared;
     alias ${LIBRARY_DIR}/$1;
     types { application/epub+zip epub; application/zip htmlz; text/plain txt; application/zip cbz zip; image/jpeg jpg; }
@@ -413,6 +451,7 @@ server {
   # Library cards' covers: the catalog builder's thumbnails (JPEG, whatever the name),
   # else the full cover from the library or the visual novel folder.
   location ~ ^/calibre/thumbs/(library/.+/cover\.jpg|vn/.+)$ {
+${CORS_WITH_SECURITY_HEADERS}
     auth_request /_account_shared;
     root ${THUMB_DIR};
     try_files /$1 /calibre/$1;
@@ -424,6 +463,7 @@ server {
   # Visual novels (VN_PATH): one unpacked ONScripter game per folder, read file by file
   # by the player, which lists folders through the JSON directory listings.
   location /calibre/vn/ {
+${CORS}
     auth_request /_account_shared;
     alias ${VN_DIR}/;
     autoindex on;
@@ -461,6 +501,7 @@ ${AUDIOBOOKSHELF_LOCATION}
   # Synced reader data (processed books, progress, statistics, highlights) for
   # the Calibre storage source. Plain WebDAV writes plus JSON directory listings.
   location /calibre/sync/ {
+${CORS}
     # MOVEs are checked by the account service (shared_write_allowed).
     auth_request /_account_shared;
     alias ${SYNC_DIR}/;
@@ -483,6 +524,7 @@ ${AUDIOBOOKSHELF_LOCATION}
 
   # Series made by readers apply to everyone, so they need the series permission.
   location = /calibre/sync/series.json {
+${CORS}
     auth_request /_account_series_writes;
     alias ${SYNC_DIR}/series.json;
     dav_methods PUT;
@@ -500,6 +542,7 @@ ${AUDIOBOOKSHELF_LOCATION}
 
   # Book details and covers fetched on a book's page apply to everyone too.
   location = /calibre/sync/metadata.json {
+${CORS}
     auth_request /_account_series_writes;
     alias ${SYNC_DIR}/metadata.json;
     dav_methods PUT;

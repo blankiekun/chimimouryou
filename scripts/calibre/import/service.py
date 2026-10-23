@@ -55,6 +55,8 @@ PORT = int(os.environ.get('IMPORT_PORT', '8767'))
 HOST = os.environ.get('IMPORT_HOST', '127.0.0.1')
 # Same switch as the account service: uploads from plain-HTTP pages too.
 ALLOW_HTTP = os.environ.get('ALLOW_HTTP_ACCOUNTS') == '1'
+# Server connect: the standalone app's origins; nginx's auth check took its bearer token.
+CORS_ORIGINS = set(os.environ.get('CORS_ORIGINS', '').split())
 # Made by the web container; nginx sends it as X-Internal-Token, so only nginx can call this service.
 INTERNAL_TOKEN_FILE = os.environ.get('INTERNAL_TOKEN_FILE', '/data/state/internal-token')
 
@@ -493,7 +495,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def same_origin(self):
         scheme = 'http' if ALLOW_HTTP and self.headers.get('X-Forwarded-Proto') == 'http' else 'https'
-        if self.headers.get('Origin') != f"{scheme}://{self.headers.get('Host', '')}":
+        token_request = CORS_ORIGINS and self.headers.get('X-Forwarded-Proto') == 'https' and \
+            self.headers.get('Authorization', '').lower().startswith('bearer ') and \
+            self.headers.get('Origin') in CORS_ORIGINS
+        if not token_request and self.headers.get('Origin') != f"{scheme}://{self.headers.get('Host', '')}":
             raise ApiError(403, 'Request from another site')
 
     def series(self):

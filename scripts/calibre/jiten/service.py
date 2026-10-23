@@ -134,6 +134,8 @@ HOST = os.environ.get('JITEN_HOST', '127.0.0.1')
 # Made by the web container; nginx sends it as X-Internal-Token, so only nginx can call this service.
 INTERNAL_TOKEN_FILE = os.environ.get('INTERNAL_TOKEN_FILE', '/data/state/internal-token')
 ALLOW_HTTP = os.environ.get('ALLOW_HTTP_ACCOUNTS') == '1'
+# Server connect: the standalone app's origins; nginx's auth check took its bearer token.
+CORS_ORIGINS = set(os.environ.get('CORS_ORIGINS', '').split())
 # Worker processes are replaced after this many books to bound their memory.
 BOOKS_PER_POOL = 300
 
@@ -820,7 +822,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, {'error': 'Only nginx may call this service'})
         # nginx checks the account; this stops other sites from posting with its cookie.
         scheme = 'http' if ALLOW_HTTP and self.headers.get('X-Forwarded-Proto') == 'http' else 'https'
-        if self.headers.get('Origin') != f"{scheme}://{self.headers.get('Host', '')}":
+        token_request = CORS_ORIGINS and self.headers.get('X-Forwarded-Proto') == 'https' and \
+            self.headers.get('Authorization', '').lower().startswith('bearer ') and \
+            self.headers.get('Origin') in CORS_ORIGINS
+        if not token_request and self.headers.get('Origin') != f"{scheme}://{self.headers.get('Host', '')}":
             return self._send(403, {'error': 'Request from another site'})
         parts = self.path.split('?')[0].strip('/').split('/')
         if len(parts) == 2 and parts[0] == 'readings' and re.fullmatch(r'-?[0-9]+', parts[1]):

@@ -20,6 +20,7 @@ each reader enters them in Settings → AI, and they sync with their account.
 | `TRUSTED_NETWORKS`          | empty                     | Signed-out visitors from these networks may read the library and save to the shared sync folder (e.g. `10.0.0.0/8 192.168.0.0/16 100.64.0.0/10 fc00::/7` for LAN and Tailscale). Empty: everything needs an account. Don't add Docker's `172.16.0.0/12` (see [INSTALL.md](INSTALL.md#https)).                                                                                                                                                                                                        |
 | `PUBLIC_READS`              | `0`                       | `1`: anyone who can reach the server may browse and download the library without an account.                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `AUDIOBOOKSHELF_URL`        | empty                     | Your Audiobookshelf server (e.g. `http://192.0.2.10:13378` or `http://host/audiobookshelf`) for the Audiobookshelf plugin. nginx forwards only its API and sign-in, at `/audiobookshelf/`, to signed-in readers, so the browser needs no CORS or HTTPS on it.                                                                                                                                                                                                                                        |
+| `CORS_ORIGINS`              | empty                     | Server connect: the standalone app at these origins (space-separated, exact, `https://` with no path, e.g. `https://read.example`) may sign in to this server and read and sync its library. Empty: off, and the server sends no CORS headers. See [Server connect](#server-connect-cors_origins).                                                                                                                                                                                                   |
 | `ALLOW_HTTP_ACCOUNTS`       | `0`                       | `1`: signing in (and so managing accounts and adding books) also works on plain HTTP, with a warning in the app. Passwords, sessions and synced settings then cross the network unencrypted.                                                                                                                                                                                                                                                                                                         |
 | `MIN_FREE_MB`               | `1024`                    | Uploads to the sync folders are refused while the data disk has less free space.                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `CATALOG_INTERVAL`          | `600`                     | Seconds between checks of `metadata.db`; the catalog is rebuilt only when it changed.                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -52,26 +53,53 @@ yourself.
 The web container runs it at start with these defaults. Server-level extras (TLS, resolver,
 real-IP settings) go in `/etc/nginx/ebook-reader.d/*.conf`.
 
-| Variable                                                 | Default (Docker)                                                            |
-| -------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `WEB_ROOT`                                               | `/srv/www` (the built app)                                                  |
-| `LIBRARY_DIR`                                            | `/library`                                                                  |
-| `VN_DIR`                                                 | `/vn` (`VN_PATH`)                                                           |
-| `SYNC_DIR`                                               | `/data/sync`                                                                |
-| `ACCOUNT_DATA_DIR`                                       | `/data/accounts`                                                            |
-| `CATALOG_FILE`                                           | `/data/state/catalog/catalog.json`                                          |
-| `THUMB_DIR`                                              | `/data/state/catalog/thumbs` (library card thumbnails)                      |
-| `DIFFICULTY_FILE`                                        | `/data/state/difficulty/difficulty.json`                                    |
-| `ACCOUNT_UPSTREAM`                                       | `account:8766`                                                              |
-| `IMPORT_UPSTREAM`                                        | `import:8767`                                                               |
-| `DIFFICULTY_UPSTREAM`                                    | `difficulty:8765`                                                           |
-| `MOKURO_UPSTREAM`                                        | `mokuro:8768`                                                               |
-| `ENGINE_DIR`                                             | `/data/state/engine` (a visual novel engine installed from the admin panel) |
-| `MOKURO_DIR`                                             | `/data/state/mokuro` (served as `/calibre/mokuro/<id>.json`)                |
-| `TRUSTED_NETWORKS`, `PUBLIC_READS`, `AUDIOBOOKSHELF_URL` | as in `.env`                                                                |
-| `INTERNAL_TOKEN_FILE`                                    | `/data/state/internal-token`                                                |
+| Variable                                                                 | Default (Docker)                                                            |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `WEB_ROOT`                                                               | `/srv/www` (the built app)                                                  |
+| `LIBRARY_DIR`                                                            | `/library`                                                                  |
+| `VN_DIR`                                                                 | `/vn` (`VN_PATH`)                                                           |
+| `SYNC_DIR`                                                               | `/data/sync`                                                                |
+| `ACCOUNT_DATA_DIR`                                                       | `/data/accounts`                                                            |
+| `CATALOG_FILE`                                                           | `/data/state/catalog/catalog.json`                                          |
+| `THUMB_DIR`                                                              | `/data/state/catalog/thumbs` (library card thumbnails)                      |
+| `DIFFICULTY_FILE`                                                        | `/data/state/difficulty/difficulty.json`                                    |
+| `ACCOUNT_UPSTREAM`                                                       | `account:8766`                                                              |
+| `IMPORT_UPSTREAM`                                                        | `import:8767`                                                               |
+| `DIFFICULTY_UPSTREAM`                                                    | `difficulty:8765`                                                           |
+| `MOKURO_UPSTREAM`                                                        | `mokuro:8768`                                                               |
+| `ENGINE_DIR`                                                             | `/data/state/engine` (a visual novel engine installed from the admin panel) |
+| `MOKURO_DIR`                                                             | `/data/state/mokuro` (served as `/calibre/mokuro/<id>.json`)                |
+| `TRUSTED_NETWORKS`, `PUBLIC_READS`, `AUDIOBOOKSHELF_URL`, `CORS_ORIGINS` | as in `.env`                                                                |
+| `INTERNAL_TOKEN_FILE`                                                    | `/data/state/internal-token`                                                |
 
 The web container also reads `PUID`, `PGID` and `REAL_IP_FROM` (above).
+
+## Server connect (`CORS_ORIGINS`)
+
+The standalone app (the reader without a server, served from its own address) can connect to
+a server that lists its origin in `CORS_ORIGINS`. It signs in with a username and password
+and gets a token (`POST /account/api/token`), sent as `Authorization: Bearer` on every
+request instead of the sign-in cookie, which browsers don't send to other sites.
+
+- Off by default. With `CORS_ORIGINS` empty nothing changes: no CORS headers, and the server
+  issues no tokens and ignores bearer tokens.
+- The server must have HTTPS, a real certificate included (e.g. Tailscale's, see
+  [INSTALL.md](INSTALL.md#https)): tokens are only issued and accepted over HTTPS, and an HTTPS
+  app can't call an `http://` server anyway (mixed content).
+- Only the reader's own paths answer other origins (the library, catalog, sync folders,
+  difficulty, readings, manga text, import and the account API). Admin tools don't: a token
+  never counts as an admin, so admins manage the server from its own address.
+- A request from another origin counts only with its token: never the cookie, and never
+  `TRUSTED_NETWORKS` (an allowed site could otherwise write to the shared sync folder for
+  any visitor on your network).
+- Tokens expire like sign-ins (30 days unused, 180 days at most). Readers see theirs in
+  `GET /account/api/tokens` and sign them out with `POST /account/api/tokens/revoke`; admins
+  see everyone's from the server's own page. Changing a password signs out all of them.
+- List only origins you trust like the server itself: any page on that origin can act as
+  any reader who signed in there. Never list a shared host (e.g. `https://<user>.github.io`
+  without a custom domain).
+- Chrome 142 and later ask the reader for permission (Local Network Access) when a public
+  site calls a server at a private address such as `192.168.x.x`; allow it once per site.
 
 ## Python services
 
@@ -87,6 +115,7 @@ code are the same container paths.
 | `ACCOUNT_DATA_DIR`               | `/data/accounts` (must match nginx's `ACCOUNT_DATA_DIR`)           | account                                                                              |
 | `ACCOUNT_HOST`, `ACCOUNT_PORT`   | `0.0.0.0`, `8766`                                                  | account                                                                              |
 | `ALLOW_HTTP_ACCOUNTS`            | `0`                                                                | account, import, difficulty, mokuro                                                  |
+| `CORS_ORIGINS`                   | as in `.env`                                                       | account, import, difficulty, mokuro                                                  |
 | `MIN_FREE_MB`                    | `1024`                                                             | account                                                                              |
 | `CATALOG_OUTPUT`                 | `/data/state/catalog/catalog.json`                                 | import (rebuilds the catalog after adding books)                                     |
 | `CATALOG_BUILDER`                | `/usr/local/bin/build-calibre-catalog`                             | import                                                                               |
