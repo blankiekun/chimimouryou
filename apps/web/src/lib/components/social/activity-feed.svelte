@@ -27,7 +27,7 @@
       {#each events.slice(0, limit) as event (event.id)}
         {@const who = event.user ?? person}
         <li class="activity-row">
-          {#if who && !person}<SocialAvatar avatar={who.avatar} size={2} />{/if}
+          {#if who && !person}<SocialAvatar avatar={who.avatar} person={who} size={2} />{/if}
           <span class="activity-text">
             {#if event.type === 'streak'}
               {$t$(sentences.streak, { name: who?.name ?? '', days: event.value })}

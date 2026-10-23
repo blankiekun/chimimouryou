@@ -522,13 +522,12 @@ describe('social hub', () => {
   it('has migrations that apply twice over the schema without changing it', () => {
     const tables = () => db.prepare(`SELECT sql FROM sqlite_master ORDER BY name`).all();
     const before = tables();
-    const migration = readFileSync(
-      new URL('../migrations/0002_profiles.sql', import.meta.url),
-      'utf8'
-    );
+    for (const file of ['0002_profiles.sql', '0003_images.sql']) {
+      const migration = readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8');
 
-    db.exec(migration);
-    db.exec(migration);
+      db.exec(migration);
+      db.exec(migration);
+    }
     expect(tables()).toEqual(before);
   });
 

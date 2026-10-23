@@ -51,7 +51,7 @@
       {#each byLastRead(friends) as friend (friend.id)}
         {@const book = friend.books[0]}
         <li class="friends-row" class:friends-row-manage={manage}>
-          <SocialAvatar avatar={friend.avatar} />
+          <SocialAvatar avatar={friend.avatar} person={friend} />
           <span class="friends-who">
             <button
               type="button"

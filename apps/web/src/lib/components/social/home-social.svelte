@@ -116,7 +116,12 @@
                 <FriendCover {book} {covers} avatar={friend.avatar} />
               </svelte:fragment>
               <span slot="badge" class="home-social-badge">
-                <SocialAvatar avatar={friend.avatar} size={1.75} label={friend.name} />
+                <SocialAvatar
+                  avatar={friend.avatar}
+                  person={friend}
+                  size={1.75}
+                  label={friend.name}
+                />
               </span>
             </CoverCard>
           {/each}
@@ -135,7 +140,7 @@
         {#if list?.friends.length}
           <span class="home-social-avatars">
             {#each byLastRead(list.friends).slice(0, 5) as friend (friend.id)}
-              <SocialAvatar avatar={friend.avatar} label={friend.name} />
+              <SocialAvatar avatar={friend.avatar} person={friend} label={friend.name} />
             {/each}
             {#if list.friends.length > 5}
               <span class="home-social-more">+{list.friends.length - 5}</span>

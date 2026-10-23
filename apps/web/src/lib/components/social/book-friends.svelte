@@ -32,7 +32,7 @@
     <ul>
       {#each rows.slice(0, 5) as { friend, pct, month } (friend.id)}
         <li>
-          <SocialAvatar avatar={friend.avatar} size={1.5} />
+          <SocialAvatar avatar={friend.avatar} person={friend} size={1.5} />
           <span>
             {friend.name} ·
             {month

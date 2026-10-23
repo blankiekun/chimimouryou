@@ -28,8 +28,21 @@ export interface RateLimit {
   limit(options: { key: string }): Promise<{ success: boolean }>;
 }
 
+/** The parts of Cloudflare's R2 binding the hub uses (wrangler.toml `[[r2_buckets]]`) */
+export interface R2Bucket {
+  get(key: string): Promise<{ body: ReadableStream | ArrayBuffer | string } | null>;
+  put(
+    key: string,
+    value: ArrayBuffer,
+    options?: { httpMetadata?: { contentType?: string; cacheControl?: string } }
+  ): Promise<unknown>;
+  delete(keys: string | string[]): Promise<void>;
+}
+
 export interface Env {
   DB: D1Database;
+  /** Cover thumbnails (cover/<content hash>) and pictures (avatar/<user id>/<version>) */
+  MEDIA?: R2Bucket;
   /** Per address, before any D1 access; absent (tests, older configs) means allowed */
   EDGE_LIMIT?: RateLimit;
 }
@@ -60,6 +73,8 @@ interface UserRow {
   code: string;
   share: string;
   created: number;
+  /** The uploaded picture's version (pictures table), 0 for none */
+  picture: number;
 }
 
 const MINUTE = 60;
@@ -92,6 +107,14 @@ const STREAKS = [7, 30, 100, 365, 1000];
 /** A book that shows up at or past this share isn't announced as started */
 const STARTED_BELOW = 0.25;
 const PROFILE_TTL = 15 * MINUTE;
+/** Cover thumbnails: ~160 px wide WebP, one per book key */
+export const COVER_BYTES = 20_480;
+export const COVER_UPLOADS = 50;
+/** Pictures: a 256 px square WebP */
+export const AVATAR_BYTES = 65_536;
+export const AVATAR_UPLOADS = 5;
+/** Image URLs carry a content hash or a version, so they never change */
+const IMMUTABLE = 'public, max-age=31536000, immutable';
 
 const USERNAME = /^[A-Za-z0-9_]{3,20}$/;
 const KEY = /^[0-9a-f]{64}$/;
@@ -124,8 +147,11 @@ function json(body: unknown, status = 200) {
 
 const now = () => Math.floor(Date.now() / 1000);
 
-export async function sha256(text: string) {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+export async function sha256(text: string | Uint8Array<ArrayBuffer>) {
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    typeof text === 'string' ? new TextEncoder().encode(text) : text
+  );
 
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
@@ -261,7 +287,8 @@ async function authenticate(request: Request, env: Env) {
 
   const hash = await sha256(match[1]);
   const user = await env.DB.prepare(
-    'SELECT u.*, s.last_used FROM sessions s JOIN users u ON u.id = s.user WHERE s.hash = ?1'
+    `SELECT u.*, s.last_used, COALESCE(p.version, 0) AS picture FROM sessions s
+     JOIN users u ON u.id = s.user LEFT JOIN pictures p ON p.user = u.id WHERE s.hash = ?1`
   )
     .bind(hash)
     .first<UserRow & { last_used: number }>();
@@ -283,19 +310,28 @@ function me(user: UserRow) {
     username: user.username,
     name: user.name,
     avatar: user.avatar,
+    picture: user.picture,
     code: user.code,
     share: JSON.parse(user.share),
     created: user.created
   };
 }
 
+const userSql = (where: string) =>
+  `SELECT u.*, COALESCE(p.version, 0) AS picture FROM users u
+   LEFT JOIN pictures p ON p.user = u.id WHERE ${where}`;
+
 async function userById(env: Env, id: string) {
-  return env.DB.prepare('SELECT * FROM users WHERE id = ?1').bind(id).first<UserRow>();
+  return env.DB.prepare(userSql('u.id = ?1')).bind(id).first<UserRow>();
 }
 
 async function userByName(env: Env, username: string) {
-  return env.DB.prepare('SELECT * FROM users WHERE username = ?1').bind(username).first<UserRow>();
+  return env.DB.prepare(userSql('u.username = ?1')).bind(username).first<UserRow>();
 }
+
+/** A book's thumbnail on the hub (its content hash), unless removed after a report */
+const coverJoin = (alias: string) =>
+  `LEFT JOIN covers c ON c.book_key = ${alias}.book_key AND c.removed = 0`;
 
 /** The pair's row key: a < b */
 const pair = (x: string, y: string) => (x < y ? [x, y] : [y, x]);
@@ -304,9 +340,12 @@ const pair = (x: string, y: string) => (x < y ? [x, y] : [y, x]);
 export async function friendsOf(env: Env, user: string) {
   const { results } = await env.DB.prepare(
     `SELECT l.state, l.by_user, l.code AS sent_code, l.created, u.id, u.username, u.name, u.avatar,
-       s.book_key, s.title, s.author, s.kind, s.pct, s.read_at
+       COALESCE(p.version, 0) AS picture, s.book_key, s.title, s.author, s.kind, s.pct, s.read_at,
+       c.file AS cover
      FROM links l JOIN users u ON u.id = CASE WHEN l.a = ?1 THEN l.b ELSE l.a END
+     LEFT JOIN pictures p ON p.user = u.id
      LEFT JOIN status s ON s.user = u.id AND l.state = 'accepted'
+     ${coverJoin('s')}
      WHERE (l.a = ?1 OR l.b = ?1) AND l.state != 'blocked'
      ORDER BY s.slot`
   )
@@ -317,7 +356,13 @@ export async function friendsOf(env: Env, user: string) {
   const outgoing: Row[] = [];
 
   for (const row of results) {
-    const person = { id: row.id, username: row.username, name: row.name, avatar: row.avatar };
+    const person = {
+      id: row.id,
+      username: row.username,
+      name: row.name,
+      avatar: row.avatar,
+      picture: row.picture
+    };
 
     if (row.state === 'accepted') {
       const friend = friends.get(row.id as string) ?? { ...person, since: row.created, books: [] };
@@ -330,7 +375,8 @@ export async function friendsOf(env: Env, user: string) {
           author: row.author,
           kind: row.kind,
           pct: row.pct,
-          readAt: row.read_at
+          readAt: row.read_at,
+          cover: row.cover
         });
       }
     } else if (row.by_user === user) {
@@ -350,7 +396,10 @@ export async function friendsOf(env: Env, user: string) {
       .bind(user)
       .all();
   const [finished, stats] = await Promise.all([
-    ofFriends('SELECT t.user, t.book_key, t.title, t.kind, t.month, t.at FROM finished t'),
+    ofFriends(
+      `SELECT t.user, t.book_key, t.title, t.kind, t.month, t.at, c.file AS cover FROM finished t
+       ${coverJoin('t')}`
+    ),
     ofFriends('SELECT t.user, t.data FROM stats t')
   ]);
 
@@ -362,7 +411,8 @@ export async function friendsOf(env: Env, user: string) {
         key: row.book_key,
         title: row.title,
         kind: row.kind,
-        month: row.month
+        month: row.month,
+        cover: row.cover
       })
     );
   stats.results.forEach((row) => {
@@ -456,9 +506,13 @@ async function profile(env: Env, username: string, viewer: UserRow | null) {
   const rows = (sql: string) => env.DB.prepare(sql).bind(user.id).all();
   const [books, finished, stats, events] = await Promise.all([
     rows(
-      'SELECT book_key, title, author, kind, pct, read_at FROM status WHERE user = ?1 ORDER BY slot'
+      `SELECT s.book_key, s.title, s.author, s.kind, s.pct, s.read_at, c.file AS cover
+       FROM status s ${coverJoin('s')} WHERE s.user = ?1 ORDER BY s.slot`
     ),
-    rows('SELECT book_key, title, kind, month FROM finished WHERE user = ?1 ORDER BY at DESC'),
+    rows(
+      `SELECT f.book_key, f.title, f.kind, f.month, c.file AS cover
+       FROM finished f ${coverJoin('f')} WHERE f.user = ?1 ORDER BY f.at DESC`
+    ),
     env.DB.prepare('SELECT data FROM stats WHERE user = ?1')
       .bind(user.id)
       .first<{ data: string }>(),
@@ -475,6 +529,7 @@ async function profile(env: Env, username: string, viewer: UserRow | null) {
       username: user.username,
       name: user.name,
       avatar: user.avatar,
+      picture: user.picture,
       created: user.created,
       public: share.public
     },
@@ -486,13 +541,15 @@ async function profile(env: Env, username: string, viewer: UserRow | null) {
       author: row.author,
       kind: row.kind,
       pct: row.pct,
-      readAt: row.read_at
+      readAt: row.read_at,
+      cover: row.cover
     })),
     finished: finished.results.map((row) => ({
       key: row.book_key,
       title: row.title,
       kind: row.kind,
-      month: row.month
+      month: row.month,
+      cover: row.cover
     })),
     stats: stats ? JSON.parse(stats.data) : null,
     events: events.results.map(eventJson)
@@ -515,10 +572,10 @@ function eventJson(row: Row) {
 async function feed(env: Env, user: string, since: number) {
   const { results } = await env.DB.prepare(
     `SELECT e.id, e.type, e.book_key, e.title, e.kind, e.value, e.at,
-       u.id AS uid, u.username, u.name, u.avatar
+       u.id AS uid, u.username, u.name, u.avatar, COALESCE(p.version, 0) AS picture
      FROM events e
      JOIN links l ON l.state = 'accepted' AND ((l.a = ?1 AND l.b = e.user) OR (l.b = ?1 AND l.a = e.user))
-     JOIN users u ON u.id = e.user
+     JOIN users u ON u.id = e.user LEFT JOIN pictures p ON p.user = u.id
      WHERE e.at > ?2 ORDER BY e.at DESC, e.id DESC LIMIT 100`
   )
     .bind(user, Math.max(since, now() - EVENT_TTL))
@@ -527,30 +584,219 @@ async function feed(env: Env, user: string, since: number) {
   return {
     events: results.map((row) => ({
       ...eventJson(row),
-      user: { id: row.uid, username: row.username, name: row.name, avatar: row.avatar }
+      user: {
+        id: row.uid,
+        username: row.username,
+        name: row.name,
+        avatar: row.avatar,
+        picture: row.picture
+      }
     }))
   };
 }
 
-/** A report of someone's name or picture, once per reporter; read and acted on by hand (README). */
+/**
+ * A report of someone's name or picture (`{username, what}`), or of a cover thumbnail
+ * (`{what: 'cover', key}`: the target is the book key), once per reporter; acted on by hand
+ * (README).
+ */
 async function report(request: Request, env: Env, viewer: UserRow | null) {
   const body = await readBody(request);
-  const username = matching(body.username, USERNAME, 'username');
-  const what = body.what === 'picture' ? 'picture' : 'name';
+  const what = body.what === 'picture' || body.what === 'cover' ? body.what : 'name';
   const reporter = viewer?.id ?? (await ipSubject(request));
+  let target: string;
 
-  await limit(env, reporter, 'report', DAY, 5);
+  if (what === 'cover') {
+    target = text(body.key, 200, 'key');
+    await limit(env, reporter, 'report', DAY, 5);
 
-  const target = await userByName(env, username);
+    const cover = await env.DB.prepare('SELECT 1 FROM covers WHERE book_key = ?1 AND removed = 0')
+      .bind(target)
+      .first();
 
-  if (!target) throw new HttpError(404, 'user');
-  if (target.id === viewer?.id) throw new HttpError(400, 'self');
+    if (!cover) throw new HttpError(404, 'cover');
+  } else {
+    const username = matching(body.username, USERNAME, 'username');
+
+    await limit(env, reporter, 'report', DAY, 5);
+
+    const user = await userByName(env, username);
+
+    if (!user) throw new HttpError(404, 'user');
+    if (user.id === viewer?.id) throw new HttpError(400, 'self');
+    target = user.id;
+  }
   await env.DB.prepare(
     'INSERT OR IGNORE INTO reports (target, reporter, what, at) VALUES (?1, ?2, ?3, ?4)'
   )
-    .bind(target.id, reporter, what, now())
+    .bind(target, reporter, what, now())
     .run();
   return json({ ok: true });
+}
+
+/** Width, height and whether EXIF or XMP is attached, from a WebP's header; null for anything else */
+export function webpSize(bytes: Uint8Array) {
+  const ascii = (at: number, n: number) => String.fromCharCode(...bytes.subarray(at, at + n));
+  const u24 = (at: number) => bytes[at] | (bytes[at + 1] << 8) | (bytes[at + 2] << 16);
+  const riff = (u24(4) | (bytes[7] << 24)) >>> 0;
+
+  if (
+    bytes.length < 30 ||
+    ascii(0, 4) !== 'RIFF' ||
+    ascii(8, 4) !== 'WEBP' ||
+    riff + 8 !== bytes.length
+  ) {
+    return null;
+  }
+  switch (ascii(12, 4)) {
+    case 'VP8 ':
+      if (bytes[23] !== 0x9d || bytes[24] !== 0x01 || bytes[25] !== 0x2a) return null;
+      return {
+        width: (bytes[26] | (bytes[27] << 8)) & 0x3fff,
+        height: (bytes[28] | (bytes[29] << 8)) & 0x3fff,
+        metadata: false
+      };
+    case 'VP8L': {
+      if (bytes[20] !== 0x2f) return null;
+      const bits = (u24(21) | (bytes[24] << 24)) >>> 0;
+
+      return { width: (bits & 0x3fff) + 1, height: ((bits >>> 14) & 0x3fff) + 1, metadata: false };
+    }
+    case 'VP8X':
+      return { width: u24(24) + 1, height: u24(27) + 1, metadata: (bytes[20] & 0x0c) !== 0 };
+  }
+  return null;
+}
+
+function media(env: Env) {
+  if (!env.MEDIA) throw new HttpError(503, 'media');
+  return env.MEDIA;
+}
+
+/** A WebP upload: the type, at most `max` bytes, no EXIF or XMP, and sane dimensions */
+async function readImage(
+  request: Request,
+  max: number,
+  fits: (width: number, height: number) => boolean
+) {
+  if (request.headers.get('Content-Type') !== 'image/webp') throw new HttpError(415, 'type');
+  if (Number(request.headers.get('Content-Length')) > max) throw new HttpError(413, 'size');
+
+  const bytes = new Uint8Array(await request.arrayBuffer());
+
+  if (bytes.length > max) throw new HttpError(413, 'size');
+
+  const size = webpSize(bytes);
+
+  if (!size || size.metadata) throw new HttpError(415, 'type');
+  if (!fits(size.width, size.height)) throw new HttpError(400, 'dimensions');
+  return bytes;
+}
+
+/**
+ * PUT /v1/cover?key=: the first thumbnail of a book key, from a reader who shares the book (in
+ * their current or finished books); any later one, or one for a removed cover, is 409.
+ */
+async function uploadCover(request: Request, env: Env, user: UserRow) {
+  const key = text(new URL(request.url).searchParams.get('key'), 200, 'key');
+
+  await limit(env, user.id, 'cover', DAY, COVER_UPLOADS);
+
+  const bytes = await readImage(
+    request,
+    COVER_BYTES,
+    (width, height) => width >= 32 && width <= 200 && height >= 32 && height <= 400
+  );
+  const shared = await env.DB.prepare(
+    `SELECT 1 FROM status WHERE user = ?1 AND book_key = ?2
+     UNION ALL SELECT 1 FROM finished WHERE user = ?1 AND book_key = ?2`
+  )
+    .bind(user.id, key)
+    .first();
+
+  if (!shared) throw new HttpError(404, 'book');
+
+  const file = (await sha256(bytes)).slice(0, 16);
+  const { meta } = await env.DB.prepare(
+    'INSERT OR IGNORE INTO covers (book_key, file, user, at) VALUES (?1, ?2, ?3, ?4)'
+  )
+    .bind(key, file, user.id, now())
+    .run();
+
+  if (!meta.changes) throw new HttpError(409, 'exists');
+  try {
+    await media(env).put(`cover/${file}`, bytes.slice().buffer, {
+      httpMetadata: { contentType: 'image/webp', cacheControl: IMMUTABLE }
+    });
+  } catch (error) {
+    await env.DB.prepare('DELETE FROM covers WHERE book_key = ?1').bind(key).run();
+    throw error;
+  }
+  return json({ cover: file });
+}
+
+/** PUT /v1/avatar: a new picture (a new version, so a new URL); the old object goes. */
+async function uploadPicture(request: Request, env: Env, user: UserRow) {
+  await limit(env, user.id, 'picture', DAY, AVATAR_UPLOADS);
+
+  const bytes = await readImage(
+    request,
+    AVATAR_BYTES,
+    (width, height) => width === height && width >= 64 && width <= 256
+  );
+  const version = Math.max(now(), user.picture + 1);
+
+  await media(env).put(`avatar/${user.id}/${version}`, bytes.slice().buffer, {
+    httpMetadata: { contentType: 'image/webp', cacheControl: IMMUTABLE }
+  });
+  await env.DB.prepare('INSERT OR REPLACE INTO pictures (user, version) VALUES (?1, ?2)')
+    .bind(user.id, version)
+    .run();
+  if (user.picture) await media(env).delete(`avatar/${user.id}/${user.picture}`);
+  await purgeProfile(request, user.username);
+  return json(me((await userById(env, user.id))!));
+}
+
+/** DELETE /v1/avatar: back to the preset */
+async function removePicture(request: Request, env: Env, user: UserRow) {
+  if (user.picture) {
+    await media(env).delete(`avatar/${user.id}/${user.picture}`);
+    await env.DB.prepare('DELETE FROM pictures WHERE user = ?1').bind(user.id).run();
+    await purgeProfile(request, user.username);
+  }
+  return json(me((await userById(env, user.id))!));
+}
+
+/**
+ * GET /v1/cover/:file and /v1/avatar/:id/:version, from the edge cache, else R2. The URLs never
+ * change, so browsers and the edge keep them for a year.
+ */
+async function serveImage(request: Request, env: Env, ctx: Context | undefined, path: string) {
+  const cache = edgeCache();
+  const hit = await cache?.match(request.url).catch(() => undefined);
+
+  if (hit) return hit;
+
+  const object = await env.MEDIA?.get(path);
+
+  if (!object) return json({ error: 'image' }, 404);
+
+  const response = new Response(object.body, {
+    headers: {
+      ...cors,
+      'Content-Type': 'image/webp',
+      'Cache-Control': IMMUTABLE,
+      'X-Content-Type-Options': 'nosniff'
+    }
+  });
+
+  if (cache) {
+    const put = cache.put(request.url, response.clone()).catch(() => {});
+
+    if (ctx) ctx.waitUntil(put);
+    else await put;
+  }
+  return response;
 }
 
 function linkCounts(env: Env, user: string, other: string) {
@@ -779,6 +1025,25 @@ async function pushStatus(env: Env, user: UserRow, body: Row) {
       ).bind(user.id, type, key, title, kind, value, time, time - EVENT_TTL)
     )
   ]);
+
+  // The shared books the hub has no thumbnail for: the app uploads the ones it has a cover of.
+  const keys = [
+    ...new Set([
+      ...books.filter((book) => book.kind !== 'hidden').map((book) => book.key),
+      ...(done && share.finished ? [done.key] : [])
+    ])
+  ];
+
+  if (!keys.length) return [];
+
+  const { results } = await env.DB.prepare(
+    `SELECT book_key FROM covers WHERE book_key IN (${keys.map((_, i) => `?${i + 1}`).join(', ')})`
+  )
+    .bind(...keys)
+    .all();
+  const have = new Set(results.map((row) => row.book_key));
+
+  return keys.filter((key) => !have.has(key));
 }
 
 async function updateMe(request: Request, env: Env, user: UserRow, body: Row) {
@@ -811,12 +1076,23 @@ async function updateMe(request: Request, env: Env, user: UserRow, body: Row) {
   return me(updated);
 }
 
-/** Every row of these users: accounts, sessions, friend links, status and counters */
-function deleteUsers(env: Env, where: string, ...values: unknown[]) {
+/** Every row of these users (accounts, sessions, friend links, status, counters) and their pictures */
+async function deleteUsers(env: Env, where: string, ...values: unknown[]) {
   const users = `SELECT id FROM users WHERE ${where}`;
+  const { results } = await env.DB.prepare(
+    `SELECT user, version FROM pictures WHERE user IN (${users})`
+  )
+    .bind(...values)
+    .all();
+  const objects = results.map((row) => `avatar/${row.user}/${row.version}`);
 
+  // R2 deletes at most 1,000 keys a call.
+  for (let at = 0; at < objects.length; at += 1000) {
+    await media(env).delete(objects.slice(at, at + 1000));
+  }
   return env.DB.batch(
     [
+      `DELETE FROM pictures WHERE user IN (${users})`,
       `DELETE FROM sessions WHERE user IN (${users})`,
       `DELETE FROM links WHERE a IN (${users}) OR b IN (${users})`,
       `DELETE FROM status WHERE user IN (${users})`,
@@ -987,10 +1263,15 @@ requests, and up to three books you are reading (title, author, kind and how far
 plus the share settings you choose. As far as you share them: your last 50 finished books with
 the month, reading stats (streak, this week, books finished this year, an 84-day activity strip,
 words known only if you turn it on) and activity for friends (started, finished, streaks), kept
-90 days. Turning a share off deletes that data at once. Reports of a name are kept 90 days. Passwords are stretched in your browser and stored only as a
-salted hash; the recovery code and session tokens are stored only as hashes.</p>
-<p>No email, IP address log, book files or covers. Rate limits keep hashed addresses for two days.</p>
-<p>Deleting your account (Settings, Social) removes every row at once. Sessions unused for 90 days
+90 days. Turning a share off deletes that data at once. Reports of a name, picture or cover are
+kept 90 days. Passwords are stretched in your browser and stored only as a salted hash; the
+recovery code and session tokens are stored only as hashes.</p>
+<p>Images: your picture, if you upload one (a 256 px square, re-encoded in your browser, which
+drops EXIF and location data), and small cover thumbnails (about 160 px) of books readers share,
+one per book, uploaded by the first reader who has its cover. Covers are shared by everyone who
+reads the book and stay when an account is deleted; your picture does not.</p>
+<p>No email, IP address log or book files. Rate limits keep hashed addresses for two days.</p>
+<p>Deleting your account (Settings, Social) removes every row and your picture at once. Sessions unused for 90 days
 and accounts unused for 12 months are deleted automatically.</p>`;
 
 /**
@@ -1081,8 +1362,13 @@ async function route(request: Request, env: Env, ctx?: Context): Promise<Respons
         .run();
       return json(me((await userById(env, user.id))!));
     case 'PUT /v1/status':
-      await pushStatus(env, user, await readBody(request));
-      return json({ ok: true });
+      return json({ ok: true, needCovers: await pushStatus(env, user, await readBody(request)) });
+    case 'PUT /v1/cover':
+      return uploadCover(request, env, user);
+    case 'PUT /v1/avatar':
+      return uploadPicture(request, env, user);
+    case 'DELETE /v1/avatar':
+      return removePicture(request, env, user);
     case 'GET /v1/friends':
       await limit(env, user.id, 'friends', MINUTE, 1);
       return json(await friendsOf(env, user.id));
@@ -1146,6 +1432,14 @@ export default {
   async fetch(request: Request, env: Env, ctx?: Context) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     try {
+      const image = /^\/v1\/(cover\/[0-9a-f]{16}|avatar\/[0-9a-f]{16}\/\d{1,12})$/.exec(
+        new URL(request.url).pathname
+      );
+
+      // Images skip the edge limit (a shelf shows a dozen at once); each URL is fetched about
+      // once per device and edge location.
+      if (request.method === 'GET' && image) return await serveImage(request, env, ctx, image[1]);
+
       const edge = await env.EDGE_LIMIT?.limit({
         key: request.headers.get('CF-Connecting-IP') ?? 'unknown'
       });

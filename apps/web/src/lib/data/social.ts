@@ -40,6 +40,8 @@ export interface FriendBook {
   pct: number;
   /** Unix seconds */
   readAt: number;
+  /** The hub's thumbnail (its content hash), when it has one */
+  cover?: string | null;
 }
 
 export interface FinishedBook {
@@ -48,6 +50,7 @@ export interface FinishedBook {
   kind: BookKind;
   /** YYYY-MM */
   month: string;
+  cover?: string | null;
 }
 
 export interface SocialStats {
@@ -65,6 +68,8 @@ export interface Person {
   username: string;
   name: string;
   avatar: number;
+  /** The uploaded picture's version, 0 or absent for the preset */
+  picture?: number;
 }
 
 export interface Friend extends Person {
@@ -361,8 +366,11 @@ export async function loadProfile(username: string, force = false) {
   }
 }
 
-export const reportProfile = (username: string) =>
-  hubFetch('/v1/report', 'POST', { username, what: 'name' });
+export const reportProfile = (username: string, what: 'name' | 'picture' = 'name') =>
+  hubFetch('/v1/report', 'POST', { username, what });
+
+/** A cover thumbnail on the hub, by book key */
+export const reportCover = (key: string) => hubFetch('/v1/report', 'POST', { what: 'cover', key });
 
 export const sendFriendRequest = (code: string) =>
   hubFetch<FriendsList>('/v1/friends/request', 'POST', { code }).then(setList);
@@ -381,11 +389,24 @@ export const removeFriend = (id: string) =>
 export const blockFriend = (id: string) =>
   hubFetch<FriendsList>(`/v1/block/${id}`, 'POST').then(setList);
 
-/** Covers of the books in this browser by book key, for friends' books you have too */
+/**
+ * Covers by book key, for friends' books you have too: the books in this browser, then the
+ * server's Calibre catalog (none in the standalone without a server).
+ */
 export async function localCovers() {
-  const { database } = await import('$lib/data/store');
+  const [{ database }, calibre] = await Promise.all([
+    import('$lib/data/store'),
+    import('$lib/data/calibre')
+  ]);
   const db = await database.db;
   const covers = new Map<string, { title: string; imagePath: string | Blob }>();
+  const catalog = await calibre.loadCalibreCatalog().catch(() => []);
+
+  catalog.forEach((book) => {
+    const imagePath = calibre.calibreCoverUrl(book);
+
+    if (imagePath) covers.set(bookKey(book.title), { title: book.title, imagePath });
+  });
   // shortcut: walks every stored book (values include their HTML); add a title/cover index if
   // libraries get large enough for /friends to feel it.
   let cursor = await db.transaction('data').store.openCursor();
@@ -411,7 +432,7 @@ async function pushStatus(leaving: boolean, keepalive = false) {
   // pagehide can't wait for IndexedDB: the stats of the last push.
   const stats = keepalive ? lastStats : await collectStats().catch(() => lastStats);
 
-  await hubFetch(
+  const { needCovers } = await hubFetch<{ needCovers?: string[] }>(
     '/v1/status',
     'PUT',
     { books, leaving, ...(finished ? { finished } : {}), ...(stats ? { stats } : {}) },
@@ -420,6 +441,49 @@ async function pushStatus(leaving: boolean, keepalive = false) {
   finishedPending$.next(
     finishedPending$.getValue().filter((book) => book !== finished && !isHidden(book))
   );
+  if (!keepalive && needCovers?.length) uploadCovers(needCovers).catch(() => {});
+}
+
+/** Book keys whose cover this page already tried to give the hub */
+const coversTried = new Set<string>();
+
+/**
+ * The hub has no thumbnail of these shared books (it only asks for books just pushed, so never
+ * hidden ones): a 160 px WebP of each cover this reader has, made in the browser.
+ */
+export async function uploadCovers(keys: string[]) {
+  const wanted = keys.filter((key) => !coversTried.has(key));
+
+  if (!wanted.length) return;
+
+  const [covers, { coverThumbnail }, { serverFetch }, { coverThumbUrl }] = await Promise.all([
+    localCovers(),
+    import('$lib/data/social-images'),
+    import('$lib/data/server'),
+    import('$lib/data/calibre')
+  ]);
+
+  for (const key of wanted) {
+    const cover = covers.get(key)?.imagePath;
+
+    coversTried.add(key);
+    if (!cover) continue;
+    try {
+      const image =
+        typeof cover === 'string'
+          ? await serverFetch(coverThumbUrl(cover)).then((response) =>
+              response.ok ? response.blob() : null
+            )
+          : cover;
+      const thumbnail = image && (await coverThumbnail(image));
+
+      if (thumbnail) {
+        await hubFetch(`/v1/cover?key=${encodeURIComponent(key)}`, 'PUT', thumbnail);
+      }
+    } catch (_) {
+      // Another reader's upload may win, or the next page load tries again.
+    }
+  }
 }
 
 if (typeof window !== 'undefined') {

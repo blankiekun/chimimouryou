@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
+  import PictureCrop from '$lib/components/social/picture-crop.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import RecoveryCode from '$lib/components/social/recovery-code.svelte';
   import { account$ } from '$lib/data/account';
@@ -21,6 +22,7 @@
     socialSession$,
     queueProfileChange,
     flushProfileChanges,
+    removePicture,
     type ShareKey,
     type SocialMe
   } from '$lib/data/social-account';
@@ -42,6 +44,9 @@
 
   let error = '';
   let name = '';
+  /** A picture being cropped */
+  let pictureFile: File | undefined;
+  let pictureInput: HTMLInputElement;
 
   $: me = $socialSession$?.me;
   $: if (me && !name) name = me.name;
@@ -69,6 +74,18 @@
   }
 
   onDestroy(() => flushProfileChanges().catch(showError));
+
+  function pickPicture() {
+    const [file] = pictureInput.files ?? [];
+
+    pictureInput.value = '';
+    if (file) pictureFile = file;
+  }
+
+  async function dropPicture() {
+    error = '';
+    await removePicture().catch(showError);
+  }
 
   async function remove() {
     if (!window.confirm($t$('social.deleteConfirm'))) return;
@@ -315,6 +332,39 @@
           </button>
         {/each}
       </div>
+      <div class="social-picture">
+        {#if me.picture}
+          <SocialAvatar avatar={me.avatar} person={me} size={2.75} />
+        {/if}
+        <button type="button" class="app-button" on:click={() => pictureInput.click()}>
+          {$t$('social.uploadPicture')}
+        </button>
+        {#if me.picture}
+          <button type="button" class="app-button app-button-quiet" on:click={dropPicture}>
+            {$t$('social.removePicture')}
+          </button>
+        {:else}
+          <span class="social-picture-hint">{$t$('social.uploadPictureHint')}</span>
+        {/if}
+        <input
+          bind:this={pictureInput}
+          class="sr-only"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          tabindex="-1"
+          aria-hidden="true"
+          on:change={pickPicture}
+        />
+      </div>
+      {#if pictureFile}
+        {#key pictureFile}
+          <PictureCrop
+            file={pictureFile}
+            avatar={me.avatar}
+            on:done={() => (pictureFile = undefined)}
+          />
+        {/key}
+      {/if}
     </SettingsItemGroup>
     <SettingsItemGroup
       title={$t$('social.publicProfile')}
@@ -390,6 +440,19 @@
     display: grid;
     grid-template-columns: repeat(8, max-content);
     gap: 0.4rem;
+  }
+
+  .social-picture {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    margin-top: 0.75rem;
+  }
+
+  .social-picture-hint {
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
   }
 
   .social-avatar-choice {

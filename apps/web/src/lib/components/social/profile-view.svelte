@@ -11,6 +11,7 @@
     monthName,
     relativeTime,
     removeFriend,
+    reportCover,
     reportProfile,
     requestByUsername,
     type Profile
@@ -125,11 +126,30 @@
       .catch(() => {});
   }
 
-  function report() {
+  let reporting = false;
+
+  // Covers shown from the hub (not the reader's own) can be reported too.
+  $: hubCovers = [...profile.books, ...profile.finished].filter(
+    (book, index, all) =>
+      book.cover &&
+      !covers?.get(book.key) &&
+      all.findIndex((other) => other.key === book.key) === index
+  );
+
+  function report(what: 'name' | 'picture') {
     if (window.confirm($t$('social.reportConfirm', { name: person.name }))) {
       act(
-        () => reportProfile(person.username),
-        () => (note = $t$('social.reported'))
+        () => reportProfile(person.username, what),
+        () => ((note = $t$('social.reported')), (reporting = false))
+      );
+    }
+  }
+
+  function reportBookCover(book: { key: string; title: string }) {
+    if (window.confirm($t$('social.reportCoverConfirm', { title: book.title }))) {
+      act(
+        () => reportCover(book.key),
+        () => ((note = $t$('social.reported')), (reporting = false))
       );
     }
   }
@@ -140,7 +160,7 @@
 
 <div class="profile">
   <aside class="profile-who">
-    <SocialAvatar avatar={person.avatar} size={7.5} />
+    <SocialAvatar avatar={person.avatar} {person} size={7.5} />
     <div>
       <h1 id="profile-name" class="profile-name">{person.name}</h1>
       <p class="profile-meta">
@@ -241,7 +261,35 @@
     {/if}
 
     {#if !self}
-      <button type="button" class="profile-report" on:click={report}>{$t$('social.report')}</button>
+      <button
+        type="button"
+        class="profile-report"
+        aria-expanded={reporting}
+        on:click={() => (reporting = !reporting)}>{$t$('social.report')}</button
+      >
+      {#if reporting}
+        <ul class="profile-report-list">
+          <li>
+            <button type="button" class="profile-report" on:click={() => report('name')}
+              >{$t$('social.reportName')}</button
+            >
+          </li>
+          {#if person.picture}
+            <li>
+              <button type="button" class="profile-report" on:click={() => report('picture')}
+                >{$t$('social.reportPicture')}</button
+              >
+            </li>
+          {/if}
+          {#each hubCovers as book (book.key)}
+            <li>
+              <button type="button" class="profile-report" on:click={() => reportBookCover(book)}
+                >{$t$('social.reportCover', { title: book.title })}</button
+              >
+            </li>
+          {/each}
+        </ul>
+      {/if}
     {/if}
     {#if note}<p class="profile-note" role="status">{note}</p>{/if}
     {#if error}<p class="profile-error" role="alert">{error}</p>{/if}
@@ -434,6 +482,15 @@
   .profile-report {
     color: var(--app-muted-fg);
     font-size: var(--type-small);
+    text-align: left;
+  }
+
+  .profile-report-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding-left: 0.75rem;
+    border-left: 1px solid var(--border-color);
   }
 
   .profile-report:hover {

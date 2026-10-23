@@ -9,6 +9,7 @@ import type { BooksDbStatistic } from '$lib/data/database/books-db/versions/book
 import {
   bookKey,
   friendsWithBook,
+  uploadCovers,
   hiddenBooks$,
   noteReading,
   setBookHidden,
@@ -24,9 +25,25 @@ import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 vi.mock('$lib/data/store', () => ({
   database: {
     getStatisticsForTimeWindow: async () => [],
-    getStatisticsForBook: async (title: string) => (title === 'Kept' ? [{ title }] : [])
+    getStatisticsForBook: async (title: string) => (title === 'Kept' ? [{ title }] : []),
+    // One stored book with a cover, for uploadCovers
+    db: Promise.resolve({
+      transaction: () => ({
+        store: {
+          openCursor: async () => ({
+            value: { title: 'Covered', coverImage: new Blob(['jpeg'], { type: 'image/jpeg' }) },
+            continue: async () => null
+          })
+        }
+      })
+    })
   },
   startDayHoursForTracker$: { getValue: () => 0 }
+}));
+
+vi.mock('$lib/data/social-images', () => ({
+  coverThumbnail: async (cover: Blob) =>
+    cover.size ? new Blob(['RIFFthumb'], { type: 'image/webp' }) : null
 }));
 
 const me: SocialMe = {
@@ -147,6 +164,41 @@ describe('social', () => {
     expect(bodies.slice(2).flatMap((body) => body.books as unknown[])).toEqual([
       expect.objectContaining({ kind: 'hidden', key: '', title: '' })
     ]);
+  });
+
+  it('gives the hub the thumbnails it asks for, once, from covers this reader has', async () => {
+    const calls: { path: string; type: string | null; body: unknown }[] = [];
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit = {}) => {
+        const { pathname, search } = new URL(url, 'http://app.example');
+
+        if (pathname.startsWith('/calibre/')) return new Response('', { status: 404 });
+        calls.push({
+          path: `${init.method} ${pathname}${search}`,
+          type: new Headers(init.headers).get('Content-Type'),
+          body: init.body
+        });
+        return new Response(
+          pathname === '/v1/status'
+            ? JSON.stringify({ ok: true, needCovers: [bookKey('Covered'), bookKey('Missing')] })
+            : '{}'
+        );
+      })
+    );
+
+    noteReading('Covered', 10, 100);
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+    expect(calls[1]).toMatchObject({
+      path: `PUT /v1/cover?key=${encodeURIComponent(bookKey('Covered'))}`,
+      type: 'image/webp'
+    });
+    expect(calls[1].body).toBeInstanceOf(Blob);
+
+    // Asked again: this page already tried.
+    await uploadCovers([bookKey('Covered')]);
+    expect(calls).toHaveLength(2);
   });
 
   it('pushes the stats and drops books left without statistics when statistics are deleted', async () => {
