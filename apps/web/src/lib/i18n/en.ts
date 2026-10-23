@@ -427,6 +427,7 @@ export const en = {
   'words.known': 'Words known',
   'words.knownUnit': 'words known',
   'words.met': '{met} met',
+  'words.needsAnalysisTools': 'Words met come from the word lists the analysis tools make.',
   'words.gained': '+{count} this month',
   'words.because': 'Known because',
   'words.becauseMet': 'Met {count}+ times in your reading',

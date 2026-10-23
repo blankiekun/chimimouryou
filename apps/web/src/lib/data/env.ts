@@ -5,7 +5,7 @@
  */
 
 /**
- * The standalone web app (no server: no accounts, Calibre, difficulty or Words).
+ * The standalone web app (no server: no accounts, Calibre or server difficulty).
  * It also implies the Browser default storage source (storage-view.ts).
  */
 export const standalone = import.meta.env.VITE_EDITION === 'standalone';

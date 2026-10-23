@@ -6,15 +6,18 @@
 
 /**
  * Words met while reading, for the Home dashboard. Not recorded: derived from how far
- * each Calibre book was read (the kanji records' `upTo`, minus text skipped by jumps; for
+ * each book was read (the kanji records' `upTo`, minus text skipped by jumps; for
  * books read before kanji were recorded, the synced progress the library listed)
  * and the difficulty service's word list of the book, assuming its words are spread
  * evenly. A word is known when met `knownMinCount` times, mature in Anki (known-words.ts)
  * or marked known or ignored (word-marks.ts).
+ * In the standalone without a server, the books are the ones the analysis tools estimated
+ * (reader-db `estimates`/`wordLists`, by title) instead.
  * Cached in reader-db `known` (keys `met`, `progress` and `list:<id>`), cleared with the known words
  * when the reader changes. Not part of upstream.
  */
 
+import { localEstimates, localWordList } from '$lib/data/analysis-tools';
 import { ankiKnownWords$ } from '$lib/data/anki';
 import {
   foldReadings,
@@ -31,6 +34,7 @@ import {
 import { getKanjiSeen, type KanjiSeen } from '$lib/data/kanji-seen';
 import { getKnownWords } from '$lib/data/known-words';
 import { readerDb } from '$lib/data/reader-db';
+import { serverless } from '$lib/data/server';
 import { getWordMarks, wordMark, type WordMarks } from '$lib/data/word-marks';
 
 /** Times a word must be met to count as known. */
@@ -75,7 +79,7 @@ export function readFraction(record: KanjiSeen, characters: number) {
 }
 
 /**
- * Remembers the synced progress of the Calibre books the library listed, for the books
+ * Remembers the synced progress of the books the library listed, for the books
  * read before kanji were recorded (they have no kanji record). Resolves true if it changed.
  */
 export async function saveReadProgress(books: { title: string; progress: number }[]) {
@@ -212,10 +216,52 @@ export async function wordList(id: number, computedAt: number) {
   return words;
 }
 
+export interface EstimatedBook {
+  /** The catalog id; the title for a local estimate (standalone) */
+  id: number | string;
+  title: string;
+  computedAt: number;
+  characters: number;
+}
+
+/**
+ * The books with an estimate, by id: the Calibre catalog's with the difficulty service's, or in
+ * the standalone without a server the analysis tools' local estimates.
+ */
+export async function estimatedBooks(): Promise<EstimatedBook[]> {
+  if (serverless) {
+    return [...(await localEstimates()).values()]
+      .map(({ title, characters, computedAt }) => ({ id: title, title, computedAt, characters }))
+      .sort((a, b) => (a.id < b.id ? -1 : 1));
+  }
+
+  const [catalog, difficulty] = await Promise.all([
+    loadCalibreCatalog().catch(() => []),
+    loadCalibreDifficulty().catch(() => ({}) as Record<string, CalibreDifficulty>)
+  ]);
+
+  return catalog
+    .filter(({ id }) => difficulty[id])
+    .map(({ id, title }) => ({
+      id,
+      title,
+      computedAt: difficulty[id].computedAt,
+      characters: difficulty[id].characters
+    }))
+    .sort((a, b) => (a.id as number) - (b.id as number));
+}
+
+/** An estimated book's word list (a local one is read from reader-db, never cached again). */
+export async function estimatedWordList({ id, title, computedAt }: EstimatedBook) {
+  return typeof id === 'number'
+    ? wordList(id, computedAt)
+    : ((await localWordList(title))?.words ?? null);
+}
+
 let running: Promise<WordsMetCache> | undefined;
 
 /**
- * Occurrences met per word over every Calibre book read, from the cache when the
+ * Occurrences met per word over every estimated book read, from the cache when the
  * kanji records and estimates haven't changed. Word lists are fetched one at a time.
  * The signature is empty when a list couldn't be loaded (the totals are partial).
  */
@@ -229,28 +275,27 @@ export function getWordsMet() {
 
 async function computeWordsMet(): Promise<WordsMetCache> {
   const db = await readerDb();
-  const [records, catalog, difficulty, progress] = await Promise.all([
+  const [records, estimated, progress] = await Promise.all([
     getKanjiSeen(),
-    loadCalibreCatalog().catch(() => []),
-    loadCalibreDifficulty().catch(() => ({}) as Record<string, CalibreDifficulty>),
+    estimatedBooks(),
     db.get('known', 'progress') as Promise<Record<string, number> | undefined>
   ]);
   const read = new Map(records.map((record) => [record.title, record]));
-  const books = catalog
-    .map(({ id, title }) => {
-      const estimate = difficulty[id];
-      const record = read.get(title);
-      const fraction = !estimate
-        ? 0
-        : record
-          ? readFraction(record, estimate.characters)
-          : fullyRead(Math.min(1, progress?.[title] ?? 0));
+  // Local books are keyed by title, catalog books by id: the signatures never match.
+  const books = estimated
+    .map((book) => {
+      const record = read.get(book.title);
+      const fraction = record
+        ? readFraction(record, book.characters)
+        : fullyRead(Math.min(1, progress?.[book.title] ?? 0));
 
-      return { id, computedAt: estimate?.computedAt, fraction };
+      return { ...book, fraction };
     })
-    .filter((book) => !!book.fraction)
-    .sort((a, b) => a.id - b.id);
-  const signature = JSON.stringify([metVersion, books]);
+    .filter((book) => !!book.fraction);
+  const signature = JSON.stringify([
+    metVersion,
+    books.map(({ id, computedAt, fraction }) => ({ id, computedAt, fraction }))
+  ]);
   const cached = (await db.get('known', 'met')) as WordsMetCache | undefined;
 
   if (cached?.signature === signature) return cached;
@@ -258,13 +303,13 @@ async function computeWordsMet(): Promise<WordsMetCache> {
   const totals: Record<string, number> = {};
   let complete = true;
 
-  for (const { id, computedAt, fraction } of books) {
-    const words = await wordList(id, computedAt!).catch(() => {
+  for (const book of books) {
+    const words = await estimatedWordList(book).catch(() => {
       complete = false;
       return null;
     });
 
-    if (words) addWordsMet(totals, words, fraction);
+    if (words) addWordsMet(totals, words, book.fraction);
   }
 
   if (!complete) return { signature: '', words: foldTotals(totals) };

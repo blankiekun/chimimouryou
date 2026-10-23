@@ -434,6 +434,7 @@ export const ja: Record<MessageKey, string> = {
   'words.known': '既知語',
   'words.knownUnit': '語を知っています',
   'words.met': '出会った語 {met}',
+  'words.needsAnalysisTools': '出会った語は分析ツールが作る単語リストから数えます。',
   'words.gained': '今月 +{count}',
   'words.because': '既知とする理由',
   'words.becauseMet': '読書で{count}回以上出会った',
