@@ -73,8 +73,11 @@ interface UserRow {
   code: string;
   share: string;
   created: number;
+  last_seen: number;
   /** The uploaded picture's version (pictures table), 0 for none */
   picture: number;
+  /** 'dev' for the hub's moderators (granted by hand, README), else '' */
+  role: string;
 }
 
 const MINUTE = 60;
@@ -317,6 +320,7 @@ function me(user: UserRow) {
     name: user.name,
     avatar: user.avatar,
     picture: user.picture,
+    role: user.role,
     code: user.code,
     share: JSON.parse(user.share),
     created: user.created
@@ -346,7 +350,7 @@ const pair = (x: string, y: string) => (x < y ? [x, y] : [y, x]);
 export async function friendsOf(env: Env, user: string) {
   const { results } = await env.DB.prepare(
     `SELECT l.state, l.by_user, l.code AS sent_code, l.created, u.id, u.username, u.name, u.avatar,
-       COALESCE(p.version, 0) AS picture, s.book_key, s.title, s.author, s.kind, s.pct, s.read_at,
+       u.role, COALESCE(p.version, 0) AS picture, s.book_key, s.title, s.author, s.kind, s.pct, s.read_at,
        c.file AS cover
      FROM links l JOIN users u ON u.id = CASE WHEN l.a = ?1 THEN l.b ELSE l.a END
      LEFT JOIN pictures p ON p.user = u.id
@@ -367,7 +371,8 @@ export async function friendsOf(env: Env, user: string) {
       username: row.username,
       name: row.name,
       avatar: row.avatar,
-      picture: row.picture
+      picture: row.picture,
+      role: row.role
     };
 
     if (row.state === 'accepted') {
@@ -536,6 +541,7 @@ async function profile(env: Env, username: string, viewer: UserRow | null) {
       name: user.name,
       avatar: user.avatar,
       picture: user.picture,
+      role: user.role,
       created: user.created,
       public: share.public
     },
@@ -578,7 +584,7 @@ function eventJson(row: Row) {
 async function feed(env: Env, user: string, since: number) {
   const { results } = await env.DB.prepare(
     `SELECT e.id, e.type, e.book_key, e.title, e.kind, e.value, e.at,
-       u.id AS uid, u.username, u.name, u.avatar, COALESCE(p.version, 0) AS picture
+       u.id AS uid, u.username, u.name, u.avatar, u.role, COALESCE(p.version, 0) AS picture
      FROM events e
      JOIN links l ON l.state = 'accepted' AND ((l.a = ?1 AND l.b = e.user) OR (l.b = ?1 AND l.a = e.user))
      JOIN users u ON u.id = e.user LEFT JOIN pictures p ON p.user = u.id
@@ -595,7 +601,8 @@ async function feed(env: Env, user: string, since: number) {
         username: row.username,
         name: row.name,
         avatar: row.avatar,
-        picture: row.picture
+        picture: row.picture,
+        role: row.role
       }
     }))
   };
@@ -603,8 +610,8 @@ async function feed(env: Env, user: string, since: number) {
 
 /**
  * A report of someone's name or picture (`{username, what}`), or of a cover thumbnail
- * (`{what: 'cover', key}`: the target is the book key), once per reporter; acted on by hand
- * (README).
+ * (`{what: 'cover', key}`: the target is the book key), once per reporter; acted on in the app
+ * (/moderation, role dev).
  */
 async function report(request: Request, env: Env, viewer: UserRow | null) {
   const body = await readBody(request);
@@ -1274,6 +1281,198 @@ async function salt(request: Request, env: Env) {
   });
 }
 
+/** Drops an image from this data centre's edge cache (others keep it until it ages out). */
+async function purgeImage(request: Request, path: string) {
+  await edgeCache()
+    ?.delete(`${new URL(request.url).origin}/v1/${path}`)
+    .catch(() => false);
+}
+
+/** Open reports, one row per target and kind, with what was reported */
+async function openReports(env: Env) {
+  const { results } = await env.DB.prepare(
+    `SELECT r.what, r.target, COUNT(*) AS n, MIN(r.at) AS first, MAX(r.at) AS last,
+       u.id, u.username, u.name, u.avatar, u.role, COALESCE(p.version, 0) AS picture,
+       c.file AS cover, c.removed, cu.username AS uploader,
+       (SELECT title FROM finished WHERE book_key = r.target
+        UNION ALL SELECT title FROM status WHERE book_key = r.target LIMIT 1) AS title
+     FROM reports r
+     LEFT JOIN users u ON r.what != 'cover' AND u.id = r.target
+     LEFT JOIN pictures p ON p.user = u.id
+     LEFT JOIN covers c ON r.what = 'cover' AND c.book_key = r.target
+     LEFT JOIN users cu ON cu.id = c.user
+     GROUP BY r.what, r.target ORDER BY n DESC, last DESC, r.what LIMIT 200`
+  ).all();
+
+  return {
+    reports: results.map((row) => ({
+      what: row.what,
+      target: row.target,
+      count: row.n,
+      first: row.first,
+      last: row.last,
+      user: row.id
+        ? {
+            id: row.id,
+            username: row.username,
+            name: row.name,
+            avatar: row.avatar,
+            picture: row.picture,
+            role: row.role
+          }
+        : null,
+      cover: row.cover ?? null,
+      removed: !!row.removed,
+      title: row.title ?? '',
+      uploader: row.uploader ?? ''
+    }))
+  };
+}
+
+/** Everything a moderator may need about one reader: account, current and finished books, events */
+async function lookUp(env: Env, username: string) {
+  const user = await userByName(env, username);
+
+  if (!user) throw new HttpError(404, 'user');
+
+  const rows = (sql: string) => env.DB.prepare(sql).bind(user.id).all();
+  const [books, finished, events] = await Promise.all([
+    rows(
+      'SELECT slot, book_key, title, author, kind, pct, read_at FROM status WHERE user = ?1 ORDER BY slot'
+    ),
+    rows('SELECT book_key, title, kind, month, at FROM finished WHERE user = ?1 ORDER BY at DESC'),
+    rows(
+      'SELECT id, type, book_key, title, kind, value, at FROM events WHERE user = ?1 ORDER BY at DESC, id DESC LIMIT 100'
+    )
+  ]);
+
+  return {
+    user: {
+      id: user.id,
+      username: user.username,
+      name: user.name,
+      avatar: user.avatar,
+      picture: user.picture,
+      role: user.role,
+      created: user.created,
+      lastSeen: user.last_seen,
+      public: sharing(user).public
+    },
+    books: books.results.map((row) => ({
+      slot: row.slot,
+      key: row.book_key,
+      title: row.title,
+      author: row.author,
+      kind: row.kind,
+      pct: row.pct,
+      readAt: row.read_at
+    })),
+    finished: finished.results.map((row) => ({
+      key: row.book_key,
+      title: row.title,
+      kind: row.kind,
+      month: row.month,
+      at: row.at
+    })),
+    events: events.results.map(eventJson)
+  };
+}
+
+const dismiss = (env: Env, what: string, target: string) =>
+  env.DB.prepare('DELETE FROM reports WHERE what = ?1 AND target = ?2').bind(what, target);
+
+/** A user's single rows a moderator can delete: the table and the column the last path part names */
+const ROWS: Record<string, [string, string]> = {
+  status: ['status', 'slot'],
+  finished: ['finished', 'book_key'],
+  events: ['events', 'id']
+};
+
+/**
+ * /v1/admin/*: moderation, for role 'dev' only (403 for everyone else). Reports, reset name,
+ * remove picture or cover, dismiss, and one reader's rows.
+ */
+async function admin(request: Request, env: Env, viewer: UserRow, path: string) {
+  if (viewer.role !== 'dev') throw new HttpError(403, 'role');
+
+  const route = `${request.method} ${path}`;
+  const query = new URL(request.url).searchParams;
+
+  if (route === 'GET reports') return json(await openReports(env));
+  if (route === 'DELETE reports') {
+    const what = query.get('what');
+
+    if (what !== 'name' && what !== 'picture' && what !== 'cover') throw new HttpError(400, 'what');
+    await dismiss(env, what, text(query.get('target'), 200, 'target')).run();
+    return json({ ok: true });
+  }
+  if (route === 'DELETE cover') {
+    const key = text(query.get('key'), 200, 'key');
+    const cover = await env.DB.prepare('SELECT file FROM covers WHERE book_key = ?1')
+      .bind(key)
+      .first<{ file: string }>();
+
+    if (!cover) throw new HttpError(404, 'cover');
+    await env.DB.batch([
+      env.DB.prepare('UPDATE covers SET removed = 1 WHERE book_key = ?1').bind(key),
+      dismiss(env, 'cover', key)
+    ]);
+    // Identical images share one object: keep it while another book still shows it.
+    const shared = await env.DB.prepare('SELECT 1 FROM covers WHERE file = ?1 AND removed = 0')
+      .bind(cover.file)
+      .first();
+
+    if (!shared) await media(env).delete(`cover/${cover.file}`);
+    await purgeImage(request, `cover/${cover.file}`);
+    return json({ ok: true });
+  }
+
+  const lookup = /^user\/([A-Za-z0-9_]{3,20})$/.exec(path);
+
+  if (request.method === 'GET' && lookup) return json(await lookUp(env, lookup[1]));
+
+  const action = /^user\/([0-9a-f]{16})\/(name|picture|status|finished|events)(?:\/([^/]+))?$/.exec(
+    path
+  );
+  const user = action && (await userById(env, action[1]));
+
+  if (!action || !user) throw new HttpError(404, action ? 'user' : 'route');
+
+  const [, , part, rest] = action;
+
+  if (request.method === 'POST' && part === 'name' && !rest) {
+    await env.DB.batch([
+      env.DB.prepare('UPDATE users SET name = username WHERE id = ?1').bind(user.id),
+      dismiss(env, 'name', user.id)
+    ]);
+  } else if (request.method === 'DELETE' && part === 'picture' && !rest) {
+    if (user.picture) {
+      await media(env).delete(`avatar/${user.id}/${user.picture}`);
+      await purgeImage(request, `avatar/${user.id}/${user.picture}`);
+    }
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM pictures WHERE user = ?1').bind(user.id),
+      dismiss(env, 'picture', user.id)
+    ]);
+  } else if (
+    request.method === 'DELETE' &&
+    ROWS[part] &&
+    rest &&
+    (part === 'finished' || /^\d{1,12}$/.test(rest))
+  ) {
+    const [table, column] = ROWS[part];
+    const { meta } = await env.DB.prepare(`DELETE FROM ${table} WHERE user = ?1 AND ${column} = ?2`)
+      .bind(user.id, part === 'finished' ? decodeURIComponent(rest) : Number(rest))
+      .run();
+
+    if (!meta.changes) throw new HttpError(404, 'row');
+  } else {
+    throw new HttpError(404, 'route');
+  }
+  await purgeProfile(request, user.username);
+  return json({ ok: true });
+}
+
 const privacy = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <title>chimimouryou hub: privacy</title>
 <style>body{font:16px/1.6 system-ui,sans-serif;max-width:40rem;margin:2rem auto;padding:0 1rem}</style>
@@ -1349,6 +1548,9 @@ async function route(request: Request, env: Env, ctx?: Context): Promise<Respons
   if (!auth) throw new HttpError(401, 'session');
 
   const { user, hash } = auth;
+  const adminPath = /^\/v1\/admin\/(.+)$/.exec(pathname);
+
+  if (adminPath) return admin(request, env, user, adminPath[1]);
 
   switch (route) {
     case 'GET /v1/feed': {

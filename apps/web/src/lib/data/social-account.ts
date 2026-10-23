@@ -35,6 +35,8 @@ export interface SocialMe {
   avatar: number;
   /** The uploaded picture's version, 0 (or absent, older hubs) for the preset */
   picture?: number;
+  /** 'dev' for the hub's moderators: the badge and /moderation */
+  role?: string;
   code: string;
   share: Partial<Record<ShareKey, boolean>>;
   created: number;
@@ -294,6 +296,11 @@ export async function uploadPicture(picture: Blob) {
 /** Back to the preset */
 export async function removePicture() {
   return setMe(await hubFetch<SocialMe>('/v1/avatar', 'DELETE'));
+}
+
+/** The account as the hub has it now (a role granted since signing in) */
+export async function refreshMe() {
+  return setMe(await hubFetch<SocialMe>('/v1/me'));
 }
 
 /** Retires the friend code for a new one; friends stay. */

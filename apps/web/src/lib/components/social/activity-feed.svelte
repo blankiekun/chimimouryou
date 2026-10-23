@@ -1,5 +1,6 @@
 <script lang="ts">
   import SectionHead from '$lib/components/section-head.svelte';
+  import RoleBadge from '$lib/components/social/role-badge.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import { relativeTime, type Person, type SocialEvent } from '$lib/data/social';
   import { t$, uiLanguage$ } from '$lib/i18n';
@@ -29,6 +30,7 @@
         <li class="activity-row">
           {#if who && !person}<SocialAvatar avatar={who.avatar} person={who} size={2} />{/if}
           <span class="activity-text">
+            {#if !person}<RoleBadge role={who?.role} />{/if}
             {#if event.type === 'streak'}
               {$t$(sentences.streak, { name: who?.name ?? '', days: event.value })}
             {:else}

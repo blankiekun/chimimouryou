@@ -23,12 +23,13 @@
     queueProfileChange,
     flushProfileChanges,
     removePicture,
+    refreshMe,
     type ShareKey,
     type SocialMe
   } from '$lib/data/social-account';
   import { t$, uiLanguage$, type MessageKey } from '$lib/i18n';
   import { setPluginEnabled } from '$lib/plugins';
-  import { onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
 
   /** Settings → Social (boards 16-19): the switch, the hub account, profile and what it shows. */
 
@@ -74,6 +75,10 @@
   }
 
   onDestroy(() => flushProfileChanges().catch(showError));
+  // A role granted since signing in (the Moderation row) shows without signing in again.
+  onMount(() => {
+    if ($socialSession$) refreshMe().catch(() => {});
+  });
 
   function pickPicture() {
     const [file] = pictureInput.files ?? [];
@@ -287,6 +292,13 @@
         {$t$('social.signOutEverywhere')}
       </button>
     </SettingsItemGroup>
+    {#if me.role === 'dev'}
+      <SettingsItemGroup title={$t$('social.moderation')} tooltip={$t$('social.moderationHint')}>
+        <a class="app-button app-button-quiet" href="{pagePath}/moderation"
+          >{$t$('social.moderationOpen')} →</a
+        >
+      </SettingsItemGroup>
+    {/if}
   {:else}
     <SettingsItemGroup title={$t$('social.notSignedIn')} tooltip={$t$('social.notSignedInHint')}>
       <button

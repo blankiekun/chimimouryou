@@ -4,6 +4,7 @@
   import SectionHead from '$lib/components/section-head.svelte';
   import ActivityFeed from '$lib/components/social/activity-feed.svelte';
   import FriendCover from '$lib/components/social/friend-cover.svelte';
+  import RoleBadge from '$lib/components/social/role-badge.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import { pagePath } from '$lib/data/env';
   import {
@@ -162,7 +163,9 @@
   <aside class="profile-who">
     <SocialAvatar avatar={person.avatar} {person} size={7.5} />
     <div>
-      <h1 id="profile-name" class="profile-name">{person.name}</h1>
+      <h1 id="profile-name" class="profile-name">
+        {person.name}<RoleBadge role={person.role} />
+      </h1>
       <p class="profile-meta">
         @{person.username} · {$t$('social.memberSinceShort', {
           since: dateFormat.format(person.created * 1000)

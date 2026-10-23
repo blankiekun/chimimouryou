@@ -4,7 +4,8 @@
 
 -- One row per reader. salt is per user: the browser stretches the password with scrypt
 -- over it, the hub keeps sha256(salt:key). recovery_hash is sha256 of the recovery code.
--- status_at is the 1-minute guard of PUT /v1/status.
+-- status_at is the 1-minute guard of PUT /v1/status. role is 'dev' for moderators (granted by
+-- hand, README), else ''.
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   username TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -17,7 +18,8 @@ CREATE TABLE IF NOT EXISTS users (
   share TEXT NOT NULL DEFAULT '{}',
   created INTEGER NOT NULL,
   last_seen INTEGER NOT NULL,
-  status_at INTEGER NOT NULL DEFAULT 0
+  status_at INTEGER NOT NULL DEFAULT 0,
+  role TEXT NOT NULL DEFAULT ''
 );
 
 -- Session tokens, by their sha256 only.

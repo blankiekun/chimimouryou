@@ -1,4 +1,5 @@
 <script lang="ts">
+  import RoleBadge from '$lib/components/social/role-badge.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import {
     bookKey,
@@ -34,7 +35,7 @@
         <li>
           <SocialAvatar avatar={friend.avatar} person={friend} size={1.5} />
           <span>
-            {friend.name} ·
+            {friend.name}<RoleBadge role={friend.role} /> ·
             {month
               ? $t$('social.finishedMonth', { month: monthName(month, $uiLanguage$) })
               : `${Math.round(pct * 100)}%`}
