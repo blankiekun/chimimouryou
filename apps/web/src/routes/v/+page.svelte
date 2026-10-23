@@ -724,10 +724,10 @@
   .vn-chip {
     display: inline-flex;
     height: 2.75rem;
-    flex: none;
+    flex: 1 0 auto;
     align-items: center;
     justify-content: center;
-    padding: 0 0.75rem;
+    padding: 0 0.5rem;
     border-radius: 2px;
     color: color-mix(in srgb, var(--reader-panel-fg) 68%, transparent);
     font-size: var(--type-small);
@@ -736,7 +736,7 @@
 
   .vn-chip-icon {
     width: 2.75rem;
-    margin-left: auto;
+    flex: none;
     padding: 0;
   }
 
