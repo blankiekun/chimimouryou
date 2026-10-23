@@ -110,6 +110,7 @@ anything a reader or a server operator would notice.
 
 ### Fixed
 
+- Google Drive (built-in client): the sign-in lasts. Builds with `VITE_GDRIVE_CLIENT_SECRET` now use it, so Google returns a refresh token, which is kept in this browser and renews the session on every page instead of opening sign-in again.
 - Google Drive: book covers show again after a reload (the page's content security policy blocked Drive's thumbnails).
 - Visual novels: right-clicking the game no longer opens the browser's menu.
 - An app update no longer deletes every cache of the site: only the service worker's own (now
