@@ -63,12 +63,9 @@ export const ja: Record<MessageKey, string> = {
   'statistics.settings': '設定',
   'statistics.thisPeriod': 'この期間',
   'statistics.daysRead': '読書日数',
-  'statistics.longestStreak': '最長連続',
-  'statistics.currentStreak': '現在の連続',
   'statistics.time': '時間',
   'statistics.speed': '速度',
   'statistics.speedValue': '{count}字/時',
-  'statistics.days': '{count}日',
   'statistics.calendar': 'カレンダー',
   'statistics.readingGoals': '読書目標',
   'statistics.wordsKnownEmpty':

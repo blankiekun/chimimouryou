@@ -83,36 +83,3 @@ export function periodTotals(
     titles: titles.size
   };
 }
-
-const previousDay = (key: string) => advanceDateDays(getDate(key), -1).dateString;
-
-/**
- * The longest run of consecutive days read within start..end, and the current run: the one that
- * ends today, or yesterday when today has nothing yet.
- */
-export function readingStreaks(days: Set<string>, start: string, end: string, todayKey: string) {
-  let longest = 0;
-  let run = 0;
-  let last = '';
-
-  [...days]
-    .filter((day) => day >= start && day <= end)
-    .sort()
-    .forEach((day) => {
-      run = last && previousDay(day) === last ? run + 1 : 1;
-      longest = Math.max(longest, run);
-      last = day;
-    });
-
-  let current = 0;
-
-  for (
-    let day = days.has(todayKey) ? todayKey : previousDay(todayKey);
-    days.has(day);
-    day = previousDay(day)
-  ) {
-    current += 1;
-  }
-
-  return { longest, current };
-}

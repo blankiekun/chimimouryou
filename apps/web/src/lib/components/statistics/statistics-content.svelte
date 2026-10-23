@@ -13,11 +13,7 @@
   } from '$lib/components/statistics/statistics-summary/statistics-summary';
   import WordsKnownChart from '$lib/components/statistics/words-known-chart.svelte';
   import CharactersChart from '$lib/components/statistics/characters-chart.svelte';
-  import {
-    charactersPerDay,
-    periodTotals,
-    readingStreaks
-  } from '$lib/components/statistics/characters-per-day';
+  import { charactersPerDay, periodTotals } from '$lib/components/statistics/characters-per-day';
   import PointBox from '$lib/components/point-box.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import { t$, type MessageKey } from '$lib/i18n';
@@ -326,17 +322,6 @@
     $lastStatisticsStartDate$,
     $lastStatisticsEndDate$
   );
-  $: streaks = readingStreaks(
-    new Set(
-      statisticsData
-        .filter((statistic) => statistic.readingTime && statisticsTitleFilters.get(statistic.title))
-        .map((statistic) => statistic.dateKey)
-    ),
-    $lastStatisticsStartDate$,
-    $lastStatisticsEndDate$,
-    todayKey
-  );
-
   onMount(() => {
     init();
     // Statistics of books not opened in this browser only exist on the server.
@@ -879,14 +864,6 @@
       <div>
         <dt>{$t$('statistics.daysRead')}</dt>
         <dd>{number(totals.days)}</dd>
-      </div>
-      <div>
-        <dt>{$t$('statistics.longestStreak')}</dt>
-        <dd>{$t$('statistics.days', { count: number(streaks.longest) })}</dd>
-      </div>
-      <div>
-        <dt>{$t$('statistics.currentStreak')}</dt>
-        <dd>{$t$('statistics.days', { count: number(streaks.current) })}</dd>
       </div>
       <div>
         <dt>{$t$('statistics.time')}</dt>

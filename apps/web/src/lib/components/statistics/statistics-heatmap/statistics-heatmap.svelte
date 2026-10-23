@@ -235,19 +235,16 @@
       return;
     }
 
-    const containerWidth = heatmapElement.parentElement.clientWidth;
-    const arrowElementsWidth = 0;
-    const gridGap = heatmapGridGapValue * 2;
-    const gridColumnsPerYear = 54;
-    const gridColumnsWidth = gridColumnsPerYear * gridGap;
-    const dayGridColums = 3;
-    const allGridColumns = gridColumnsPerYear + dayGridColums;
+    // Fill the column: two label columns plus the year's weeks, gaps between them, 2px padding each side.
+    const columns = currentHeatmapDays[currentHeatmapDays.length - 1]?.heatmapColumn || 56;
+    const width =
+      heatmapElement.parentElement.clientWidth - 4 - (columns - 1) * heatmapGridGapValue;
 
-    dayElementSize = Math.max(
-      dayElementSize,
-      Math.ceil((containerWidth - arrowElementsWidth - gridColumnsWidth) / allGridColumns)
-    );
+    // Rounded down to 0.1px so the grid never overflows into a scrollbar.
+    dayElementSize = Math.max(heatmapDayElementSize, Math.floor((width / columns) * 10) / 10);
   }
+
+  $: if (currentHeatmapDays) updateHeatmapDimensions();
 
   function updateHeatmapDataAfterFilterChange() {
     globalHeatmapDayData.clear();
