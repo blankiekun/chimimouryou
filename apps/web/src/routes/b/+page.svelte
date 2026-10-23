@@ -1076,7 +1076,7 @@
           .then((index) => recordKanjiSeen(title, index, position))
           .catch(() => {});
         activePlugins().forEach((plugin) =>
-          plugin.onPositionSettled?.(title, getSearchIndex, position)
+          plugin.onPositionSettled?.(title, getSearchIndex, position, bookCharCount)
         );
       },
       15_000,
@@ -1085,7 +1085,16 @@
     );
   }
 
-  onDestroy(() => clearTimeout(readingWorkTimer));
+  onDestroy(() => {
+    clearTimeout(readingWorkTimer);
+    const title = $rawBookData$?.title;
+
+    if (title && exploredCharCount) {
+      activePlugins().forEach((plugin) =>
+        plugin.onBookLeft?.(title, exploredCharCount, bookCharCount)
+      );
+    }
+  });
 
   function createHighlight(color: HighlightColor, withNote = false) {
     const content = document.querySelector('.book-content');

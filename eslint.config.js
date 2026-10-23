@@ -102,6 +102,11 @@ module.exports = (async () => {
       }
     },
     {
+      // The social hub's Worker: its own package, outside the web app's tsconfig.
+      files: ['deploy/social-hub/**/*.ts'],
+      languageOptions: { parserOptions: { project: null } }
+    },
+    {
       files: ['service-worker.ts'],
       rules: {
         'headers/header-format': 'off'

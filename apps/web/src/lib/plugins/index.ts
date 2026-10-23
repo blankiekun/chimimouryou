@@ -6,7 +6,7 @@
 
 /**
  * Built-in plugins: optional features that add to the reader and settings
- * through the extension points below, and can be switched on per account (all start off)
+ * through the extension points below, and can be switched off per account (the built-in ones start on)
  * (Settings → General → Plugins). Not part of upstream.
  */
 
@@ -18,6 +18,7 @@ import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v
 import type { MessageKey } from '$lib/i18n';
 import { aiPlugin } from '$lib/plugins/ai';
 import { audiobookshelfPlugin } from '$lib/plugins/audiobookshelf';
+import { socialPlugin } from '$lib/plugins/social';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 
 export { enabledPlugins$ };
@@ -92,13 +93,16 @@ export interface Plugin {
   onPositionSettled?: (
     title: string,
     getIndex: () => Promise<SearchIndex>,
-    position: number
+    position: number,
+    characters: number
   ) => void;
+  /** Called when the reader leaves a book */
+  onBookLeft?: (title: string, position: number, characters: number) => void;
   /** Sentence audio for Anki cards when the book has no audiobook clip */
   ankiSentenceAudio?: (sentence: string) => Promise<Blob | undefined>;
 }
 
-export const plugins: Plugin[] = [aiPlugin, audiobookshelfPlugin];
+export const plugins: Plugin[] = [aiPlugin, audiobookshelfPlugin, socialPlugin];
 
 export function isPluginEnabled(id: string, enabled = enabledPlugins$.getValue()) {
   return enabled.includes(id);

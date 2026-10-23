@@ -22,6 +22,8 @@
   import LearnerDashboard from '$lib/components/book-card/learner-dashboard.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import ReadNextShelf from '$lib/components/book-card/read-next-shelf.svelte';
+  import HomeSocial from '$lib/components/social/home-social.svelte';
+  import { activePlugins$ } from '$lib/plugins';
   import LibrarySortMenu from '$lib/components/book-card/library-sort-menu.svelte';
   import SeriesGrid from '$lib/components/book-card/series-grid.svelte';
   import SeriesResults from '$lib/components/book-card/series-results.svelte';
@@ -295,8 +297,11 @@
     );
   })();
   $: firstRun = !continueCards.length && !readNextCards.length && !homeCards.length;
-  $: myBooksNumber =
+  $: socialNumber =
     1 + Number(firstRun) + Number(!!continueCards.length) + Number(!!readNextCards.length);
+  $: socialOn = $activePlugins$.some((plugin) => plugin.id === 'social');
+  let socialSections = 0;
+  $: myBooksNumber = socialNumber + (socialOn ? socialSections : 0);
   $: continueCards = isHome && $bookCards$ ? continueReading($bookCards$, $homeRemovedTitles$) : [];
   $: homeCards = (() => {
     const byTitle = new Map(($bookCards$ ?? []).map((card) => [card.title, card]));
@@ -1581,6 +1586,14 @@
               on:bookSelect={(ev) => selectBook(ev.detail.id)}
             />
           </div>
+          {#if socialOn}
+            <HomeSocial
+              books={$bookCards$}
+              number={socialNumber}
+              bind:sections={socialSections}
+              on:bookClick={(ev) => onCoverClick(ev.detail.id)}
+            />
+          {/if}
           {#if homeCards.length}
             <ContinueReadingShelf
               books={homeCards}

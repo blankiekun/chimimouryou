@@ -253,6 +253,53 @@ export const themeTokenGroups = {
       description: 'Text in those panels'
     }
   },
+  Avatars: {
+    avatarText: {
+      label: 'Avatar text',
+      cssVar: '--avatar-text',
+      description: 'The kanji on preset avatars and titles on title cards'
+    },
+    avatar1: {
+      label: 'Avatar 1 (green)',
+      cssVar: '--avatar-1',
+      description: 'Preset avatars and title cards of friends; white text sits on it'
+    },
+    avatar2: {
+      label: 'Avatar 2 (indigo)',
+      cssVar: '--avatar-2',
+      description: 'Preset avatars and title cards of friends; white text sits on it'
+    },
+    avatar3: {
+      label: 'Avatar 3 (brick)',
+      cssVar: '--avatar-3',
+      description: 'Preset avatars and title cards of friends; white text sits on it'
+    },
+    avatar4: {
+      label: 'Avatar 4 (ochre)',
+      cssVar: '--avatar-4',
+      description: 'Preset avatars and title cards of friends; white text sits on it'
+    },
+    avatar5: {
+      label: 'Avatar 5 (teal)',
+      cssVar: '--avatar-5',
+      description: 'Preset avatars and title cards of friends; white text sits on it'
+    },
+    avatar6: {
+      label: 'Avatar 6 (plum)',
+      cssVar: '--avatar-6',
+      description: 'Preset avatars and title cards of friends; white text sits on it'
+    },
+    avatar7: {
+      label: 'Avatar 7 (slate)',
+      cssVar: '--avatar-7',
+      description: 'Preset avatars and title cards of friends; white text sits on it'
+    },
+    avatar8: {
+      label: 'Avatar 8 (ink)',
+      cssVar: '--avatar-8',
+      description: 'Preset avatars and title cards of friends; white text sits on it'
+    }
+  },
   Annotations: {
     highlightYellow: {
       label: 'Highlight 1 (yellow)',

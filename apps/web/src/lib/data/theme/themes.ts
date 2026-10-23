@@ -122,7 +122,17 @@ const lightBase: ThemeColors = {
   highlightBlue: 'rgba(96, 165, 250, 0.38)',
   highlightPink: 'rgba(244, 114, 182, 0.38)',
   searchMatch: 'rgba(249, 115, 22, 0.5)',
-  readingLine: 'rgba(56, 189, 248, 0.32)'
+  readingLine: 'rgba(56, 189, 248, 0.32)',
+  // Friends' preset avatars: white text on each passes WCAG AA (themes.test.ts).
+  avatarText: '#ffffff',
+  avatar1: '#0f7a5c',
+  avatar2: '#3b4a8c',
+  avatar3: '#9b3b2c',
+  avatar4: '#7a5a0f',
+  avatar5: '#0d6b6e',
+  avatar6: '#6b3a6b',
+  avatar7: '#4b5661',
+  avatar8: '#1f2321'
 };
 
 const darkBase: ThemeColors = {
@@ -167,7 +177,16 @@ const darkBase: ThemeColors = {
   highlightBlue: 'rgba(96, 165, 250, 0.3)',
   highlightPink: 'rgba(244, 114, 182, 0.3)',
   searchMatch: 'rgba(249, 115, 22, 0.45)',
-  readingLine: 'rgba(56, 189, 248, 0.28)'
+  readingLine: 'rgba(56, 189, 248, 0.28)',
+  avatarText: '#ffffff',
+  avatar1: '#0f7a5c',
+  avatar2: '#3b4a8c',
+  avatar3: '#9b3b2c',
+  avatar4: '#7a5a0f',
+  avatar5: '#0d6b6e',
+  avatar6: '#6b3a6b',
+  avatar7: '#4b5661',
+  avatar8: '#3c4240'
 };
 
 const defaults = { radius: 1, blur: 24, uiFont: '', customCss: '' };
