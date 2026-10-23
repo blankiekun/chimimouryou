@@ -14,6 +14,8 @@ import { formatPos } from '$lib/functions/format-pos';
 import { getCharacterCount } from '$lib/functions/get-character-count';
 import { getNodeBoundingRect } from '$lib/functions/range-util';
 import { getParagraphNodes } from '$lib/components/book-reader/get-paragraph-nodes';
+import { charRect, firstTextAfterIn } from '$lib/components/book-reader/page-anchor';
+import { countBeforeOffset, offsetForCount } from '$lib/functions/book-text/text-positions';
 
 export class CharacterStatsCalculator {
   readonly charCount: number;
@@ -23,6 +25,10 @@ export class CharacterStatsCalculator {
   readonly paragraphPos: number[];
 
   private readonly paragraphs: Node[];
+
+  private textNodes: Text[] | undefined;
+
+  private paragraphIndex: Map<Node, number> | undefined;
 
   private paragraphPosToAccCharCount = new Map<number, number>();
 
@@ -121,6 +127,34 @@ export class CharacterStatsCalculator {
       charCount >= this.getCharCountByScrollPos(scrollPos) &&
       charCount <= this.getCharCountByScrollPos(scrollPos + screenSize)
     );
+  }
+
+  /**
+   * Characters before the first one whose line hasn't passed `line` (screen x in vertical text,
+   * else y): a precise count, where getCharCountByScrollPos counts whole text nodes.
+   */
+  charCountAtLine(line: number) {
+    const vertical = this.verticalMode;
+    this.textNodes ??= this.paragraphs.filter((n): n is Text => n instanceof Text);
+    const anchor = firstTextAfterIn(this.textNodes, (r) =>
+      vertical ? (r.left + r.right) / 2 > line : (r.top + r.bottom) / 2 < line
+    );
+    if (!anchor) return undefined;
+    this.paragraphIndex ??= new Map(this.paragraphs.map((n, i) => [n, i]));
+    const i = this.paragraphIndex.get(anchor.node) ?? 0;
+    return (
+      (this.accumulatedCharCount[i - 1] || 0) + countBeforeOffset(anchor.node.data, anchor.index)
+    );
+  }
+
+  /** Box of the character after the first `charCount` ones (a gaiji image's box). */
+  charRectForCount(charCount: number) {
+    const i = this.accumulatedCharCount.findIndex((acc) => acc > charCount);
+    const node = this.paragraphs[i];
+    if (!node) return undefined;
+    if (!(node instanceof Text)) return (node as Element).getBoundingClientRect();
+    const index = offsetForCount(node.data, charCount - (this.accumulatedCharCount[i - 1] || 0));
+    return charRect({ node, index });
   }
 
   getCharCountByScrollPos(scrollPos: number) {

@@ -455,7 +455,11 @@
           ? customReadingPointScrollOffset + edgeOffset
           : -customReadingPointScrollOffset - edgeOffset);
       const pages = pageManagerConcrete;
-      resizeScroll(() => pages.scrollTo(scrollPos));
+      const manager = bookmarkManagerConcrete;
+      const offset = customReadingPointScrollOffset + edgeOffset;
+      resizeScroll(() => {
+        if (!manager?.scrollToCharCount(prevIntendedCharCount, offset)) pages.scrollTo(scrollPos);
+      });
     });
 
   function updateCustomReadingPointPosition() {
@@ -504,9 +508,7 @@
   function onContentDisplayChange(_calculator: CharacterStatsCalculator) {
     _calculator.updateParagraphPos();
     updateCustomReadingPointPosition();
-    exploredCharCount = _calculator.calcExploredCharCount(
-      customReadingPointScrollOffset + edgeOffset
-    );
+    exploredCharCount = readCharCount(_calculator);
 
     if (scrollWhenReady) {
       scrollWhenReady = false;
@@ -640,13 +642,17 @@
     }
   }
 
+  /** The count at the reading point, to the character (bookmarks and resizes keep it exactly). */
+  function readCharCount(calc: CharacterStatsCalculator) {
+    const offset = customReadingPointScrollOffset + edgeOffset;
+    return bookmarkManagerConcrete?.charCountAt(offset) ?? calc.calcExploredCharCount(offset);
+  }
+
   function onScroll() {
     requestAnimationFrame(() => {
       if (!calculator) return;
 
-      exploredCharCount = calculator.calcExploredCharCount(
-        customReadingPointScrollOffset + edgeOffset
-      );
+      exploredCharCount = readCharCount(calculator);
 
       if (!isResizeScroll) {
         panelUndo = undefined;

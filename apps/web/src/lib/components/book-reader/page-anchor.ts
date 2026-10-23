@@ -75,11 +75,18 @@ export function charRect(anchor: TextAnchor) {
  * The first character, in document order, that isn't `before` (laid out before the page or
  * reading line). Text flows in document order, so `before` holds for a prefix: binary search.
  */
-export function firstTextAfter(
-  root: Element,
+export function firstTextAfter(root: Element, before: (rect: DOMRect) => boolean) {
+  return firstTextAfterIn(
+    getParagraphNodes(root).filter((n): n is Text => n instanceof Text),
+    before
+  );
+}
+
+/** firstTextAfter over text nodes already collected in document order. */
+export function firstTextAfterIn(
+  nodes: Text[],
   before: (rect: DOMRect) => boolean
 ): TextAnchor | undefined {
-  const nodes = getParagraphNodes(root).filter((n): n is Text => n instanceof Text);
   const range = document.createRange();
   const lastRect = (node: Text) => {
     range.selectNodeContents(node);
