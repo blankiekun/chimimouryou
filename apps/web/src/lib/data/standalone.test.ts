@@ -47,10 +47,12 @@ describe('standalone edition', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('never constructs the Calibre handler', async () => {
+  it('hands out the browser handler for Calibre', async () => {
     const { getStorageHandler } = await import('$lib/data/storage/storage-handler-factory');
     const { StorageKey } = await import('$lib/data/storage/storage-types');
 
-    expect(() => getStorageHandler(window, StorageKey.CALIBRE)).toThrow(/server/);
+    expect(getStorageHandler(window, StorageKey.CALIBRE)).toBe(
+      getStorageHandler(window, StorageKey.BROWSER)
+    );
   });
 });

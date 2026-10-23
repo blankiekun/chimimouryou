@@ -310,11 +310,185 @@ class AccountServiceTest(unittest.TestCase):
                 self.headers = {'Cookie': f'{service.COOKIE}={token}', 'X-Original-Method': 'POST'}
 
             session_token = service.Handler.session_token
+            bearer_token = service.Handler.bearer_token
 
         for name, admin in (('boss', '1'), ('reader', '0')):
             token = service.create_session(service.find_user(name)['id'])
             status, _, headers = service.Handler.get_auth(Request(token), 'import')
             self.assertEqual((status, headers['X-Account-Admin']), (200, admin))
+
+    def serve(self, cors_origins=('https://app.example',)):
+        """Runs the service as nginx sees it; returns call(method, path, body, **headers) -> (status, json, headers)."""
+        import urllib.error
+        import urllib.request
+        from http.server import ThreadingHTTPServer
+        service.INTERNAL_TOKEN_FILE = os.path.join(self.tmp.name, 'internal-token')
+        with open(service.INTERNAL_TOKEN_FILE, 'w') as f:
+            f.write('c0ffee\n')
+        original = service.CORS_ORIGINS
+        service.CORS_ORIGINS = set(cors_origins)
+        server = ThreadingHTTPServer(('127.0.0.1', 0), service.Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+
+        def stop():
+            server.shutdown()
+            server.server_close()
+            service.CORS_ORIGINS = original
+        self.addCleanup(stop)
+
+        def call(method, path, body=None, **headers):
+            headers = {'X-Internal-Token': 'c0ffee', 'Host': 'books.example', 'X-Forwarded-Proto': 'https',
+                       'X-Real-IP': '203.0.113.5', **{k.replace('_', '-'): v for k, v in headers.items()}}
+            headers = {k: v for k, v in headers.items() if v is not None}
+            data = json.dumps(body).encode() if body is not None else (b'' if method == 'POST' else None)
+            request = urllib.request.Request(f'http://127.0.0.1:{server.server_port}/{path}', data=data,
+                                             headers=headers, method=method)
+            try:
+                with urllib.request.urlopen(request) as response:
+                    return response.status, json.loads(response.read() or b'null'), response.headers
+            except urllib.error.HTTPError as error:
+                return error.code, json.loads(error.read() or b'null'), error.headers
+        return call
+
+    APP = 'https://app.example'
+    ALICE = {'username': 'alice', 'password': 'long enough'}
+
+    def test_token_issue_use_revoke(self):
+        call = self.serve()
+        service.create_user('alice', 'long enough')
+        status, body, _ = call('POST', 'token', {**self.ALICE, 'label': 'Phone'}, Origin=self.APP)
+        self.assertEqual(status, 200)
+        token = body['token']
+        bearer = f'Bearer {token}'
+        self.assertEqual(body['user']['username'], 'alice')
+        # Used from the app's origin: the API and nginx's auth checks.
+        self.assertEqual(call('GET', 'me', Origin=self.APP, Authorization=bearer)[1]['user']['username'], 'alice')
+        status, _, headers = call('GET', 'auth/shared/writes', Origin=self.APP, Authorization=bearer,
+                                  X_Original_Method='PUT', X_Original_URI='/calibre/sync/x/progress_1.json')
+        self.assertEqual((status, headers['X-Account-Id']), (200, service.find_user('alice')['id']))
+        # Never over plain HTTP, never for admin checks.
+        self.assertEqual(call('GET', 'me', Authorization=bearer, X_Forwarded_Proto='http')[0], 401)
+        # The Devices list, and revoking.
+        tokens = call('GET', 'tokens', Origin=self.APP, Authorization=bearer)[1]['tokens']
+        self.assertEqual([(t['client'], t['label']) for t in tokens], [(self.APP, 'Phone')])
+        self.assertNotIn(token, json.dumps(tokens))
+        self.assertEqual(call('POST', 'token/revoke', Origin=self.APP, Authorization=bearer)[0], 200)
+        self.assertEqual(call('GET', 'me', Origin=self.APP, Authorization=bearer)[0], 401)
+
+        # A native app (no Origin) names itself; tokens/revoke by id.
+        self.assertEqual(call('POST', 'token', self.ALICE)[0], 400)
+        token = call('POST', 'token', {**self.ALICE, 'client': 'Desktop app'})[1]['token']
+        token_id = call('GET', 'tokens', Authorization=f'Bearer {token}')[1]['tokens'][0]['id']
+        self.assertEqual(call('POST', 'tokens/revoke', {'id': token_id}, Authorization=f'Bearer {token}')[0], 200)
+        self.assertIsNone(service.session_user(token))
+
+    def test_admins_list_everyones_tokens_only_from_their_own_page(self):
+        call = self.serve()
+        service.create_user('boss', 'long enough', admin=True)
+        service.create_user('alice', 'long enough')
+        alice_token = call('POST', 'token', self.ALICE, Origin=self.APP)[1]['token']
+        boss_token = call('POST', 'token', {'username': 'boss', 'password': 'long enough'}, Origin=self.APP)[1]['token']
+        cookie = f'{service.COOKIE}={service.create_session(service.find_user("boss")["id"])}'
+        self.assertEqual(len(call('GET', 'tokens', Cookie=cookie)[1]['tokens']), 2)
+        self.assertEqual(len(call('GET', 'tokens', Origin=self.APP, Authorization=f'Bearer {boss_token}')[1]['tokens']), 1)
+        # Alice can't revoke the admin's; a token never reaches the admin API.
+        boss_id = call('GET', 'tokens', Origin=self.APP, Authorization=f'Bearer {boss_token}')[1]['tokens'][0]['id']
+        self.assertEqual(call('POST', 'tokens/revoke', {'id': boss_id}, Origin=self.APP,
+                              Authorization=f'Bearer {alice_token}')[0], 404)
+        self.assertEqual(call('GET', 'admin/users', Origin=self.APP, Authorization=f'Bearer {boss_token}')[0], 403)
+        self.assertEqual(call('GET', 'admin/users', Authorization=f'Bearer {boss_token}')[0], 403)
+        self.assertEqual(call('GET', 'admin/users', Cookie=cookie)[0], 200)
+        # nginx's admin checks either, and other services don't see an admin.
+        self.assertEqual(call('GET', 'auth/admin', Authorization=f'Bearer {boss_token}')[0], 403)
+        self.assertEqual(call('GET', 'auth/admin', Cookie=cookie)[0], 200)
+        status, _, headers = call('GET', 'auth/import', Authorization=f'Bearer {boss_token}', X_Original_Method='POST')
+        self.assertEqual((status, headers['X-Account-Admin']), (200, '0'))
+
+    def test_token_refusals(self):
+        call = self.serve()
+        service.create_user('alice', 'long enough')
+        status, body, _ = call('POST', 'token', self.ALICE, Origin='https://evil.example')
+        self.assertEqual(status, 403)
+        self.assertIn("doesn't allow apps", body['error'])
+        self.assertEqual(call('POST', 'token', self.ALICE, Origin='http://app.example')[0], 403)
+        self.assertEqual(call('POST', 'token', self.ALICE, Origin=self.APP, X_Forwarded_Proto='http')[0], 403)
+        # Not even with ALLOW_HTTP_ACCOUNTS.
+        service.ALLOW_HTTP = True
+        try:
+            self.assertEqual(call('POST', 'token', self.ALICE, Origin=self.APP, X_Forwarded_Proto='http')[0], 403)
+        finally:
+            service.ALLOW_HTTP = False
+        # The server's own page signs in with the cookie, not a token; the app can't use login.
+        self.assertEqual(call('POST', 'token', self.ALICE, Origin='https://books.example')[0], 403)
+        self.assertEqual(call('POST', 'login', self.ALICE, Origin=self.APP)[0], 403)
+
+    def test_token_off_without_cors_origins(self):
+        call = self.serve(cors_origins=())
+        service.create_user('alice', 'long enough')
+        self.assertEqual(call('POST', 'token', self.ALICE, Origin=self.APP)[0], 403)
+        self.assertEqual(call('POST', 'token', {**self.ALICE, 'client': 'app'})[0], 403)
+        token = service.create_session(service.find_user('alice')['id'], 'token', self.APP)
+        self.assertEqual(call('GET', 'me', Authorization=f'Bearer {token}')[0], 401)
+
+    def test_token_sign_in_is_throttled_like_login(self):
+        call = self.serve()
+        service.create_user('alice', 'long enough')
+        wrong = {'username': 'alice', 'password': 'wrong password'}
+        for _ in range(service.THROTTLE_RULES['userip']):
+            self.assertEqual(call('POST', 'token', wrong, Origin=self.APP)[0], 401)
+        status, _, headers = call('POST', 'token', self.ALICE, Origin=self.APP)
+        self.assertEqual(status, 429)
+        self.assertIn('Retry-After', headers)
+        # Shared with login: the same account and address are locked there too.
+        self.assertEqual(call('POST', 'login', self.ALICE, Origin='https://books.example')[0], 429)
+
+    def test_cookie_sign_in_unchanged(self):
+        call = self.serve()
+        service.create_user('alice', 'long enough')
+        status, _, headers = call('POST', 'login', self.ALICE, Origin='https://books.example')
+        self.assertEqual(status, 200)
+        cookie = headers['Set-Cookie'].split(';')[0]
+        self.assertIn('Secure; HttpOnly; SameSite=Strict', headers['Set-Cookie'])
+        self.assertEqual(call('GET', 'me', Cookie=cookie)[0], 200)
+        self.assertEqual(call('GET', 'tokens', Cookie=cookie)[1], {'tokens': []})
+        # Another bearer (the Audiobookshelf plugin's, proxied by nginx) leaves the cookie in charge.
+        self.assertEqual(call('GET', 'auth', Cookie=cookie, Authorization='Bearer abs-token')[0], 200)
+        # From another site, the cookie doesn't count.
+        self.assertEqual(call('GET', 'me', Cookie=cookie, Origin=self.APP)[0], 401)
+        self.assertEqual(call('POST', 'logout', Cookie=cookie, Origin='https://books.example')[0], 200)
+        self.assertEqual(call('GET', 'me', Cookie=cookie)[0], 401)
+
+    def test_trusted_network_pass_is_same_origin_only(self):
+        status = service.auth_status
+        self.assertEqual(status(None, 'shared', True, 'PUT', True), 200)
+        self.assertEqual(status(None, 'shared', True, 'PUT', True, cross_origin=True), 401)
+        self.assertEqual(status(None, 'shared', True, 'GET', True, cross_origin=True), 401)
+        self.assertEqual(status(None, 'series', True, 'GET', True, cross_origin=True), 401)
+        self.assertEqual(status({'is_admin': 1, 'permissions': ''}, 'admin', False, 'GET', False,
+                                cross_origin=True), 403)
+        # Off without CORS_ORIGINS: nothing changes for servers that don't opt in.
+        self.assertFalse(service.is_cross_origin({'Origin': self.APP, 'Host': 'books.example', 'X-Forwarded-Proto': 'https'}))
+        call = self.serve()
+        headers = {'X_Original_Method': 'PUT', 'X_Trusted_Network': '1',
+                   'X_Original_URI': '/calibre/sync/x/progress_1.json'}
+        self.assertEqual(call('GET', 'auth/shared/writes', Origin='https://books.example', **headers)[0], 200)
+        self.assertEqual(call('GET', 'auth/shared/writes', Origin=self.APP, **headers)[0], 401)
+        self.assertEqual(call('GET', 'auth/shared/writes', Origin='null', **headers)[0], 401)
+        self.assertTrue(service.is_cross_origin({'Origin': self.APP, 'Host': 'books.example', 'X-Forwarded-Proto': 'https'}))
+        self.assertFalse(service.is_cross_origin({'Host': 'books.example', 'X-Forwarded-Proto': 'https'}))
+
+    def test_old_database_gets_token_columns(self):
+        path = os.path.join(self.tmp.name, 'old-sessions.db')
+        old = service.sqlite3.connect(path)
+        old.execute('CREATE TABLE sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, '
+                    'created INTEGER NOT NULL, last_seen INTEGER NOT NULL)')
+        old.execute("INSERT INTO sessions VALUES ('h', 'u1', 0, 0)")
+        old.commit()
+        old.close()
+        migrated = service.Database(path)
+        row = migrated.query('SELECT kind, client, label FROM sessions')[0]
+        self.assertEqual(tuple(row), ('cookie', '', ''))
+        migrated.connection.close()
 
     def test_old_database_gets_admin_column(self):
         path = os.path.join(self.tmp.name, 'old.db')

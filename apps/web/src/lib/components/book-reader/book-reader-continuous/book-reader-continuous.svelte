@@ -41,6 +41,7 @@
     timer
   } from 'rxjs';
   import { createEventDispatcher, onDestroy, onMount } from 'svelte';
+  import { charRect, firstTextAfter, linePos, lineScroll, type TextAnchor } from '../page-anchor';
   import Fa from 'svelte-fa';
   import type { AutoScroller, BookmarkManager, PageManager } from '../types';
   import { AutoScrollerContinuous } from './auto-scroller-continuous';
@@ -181,6 +182,29 @@
   const sectionData = new Map<string, SectionWithProgress>();
 
   let scrollAdjustment = 0;
+
+  // The first whole line past the reading point before the panel re-lays out the book and where
+  // it was on screen, kept there after.
+  let lineAnchor: { anchor: TextAnchor; pos: number; at: number } | undefined;
+
+  /** Screen coordinate of the reading point: x for vertical text, y otherwise */
+  function readingEdge(edge: number) {
+    const offset = (firstDimensionMargin || 0) + customReadingPointScrollOffset + edge;
+    return verticalMode ? window.innerWidth - offset : offset;
+  }
+
+  /** Called before the panel re-lays out the book, while the line being read can still be measured. */
+  export function captureAnchor() {
+    if (!contentEl || !calculator) return;
+    const vertical = verticalMode;
+    const edge = readingEdge(edgeOffset);
+    const anchor = firstTextAfter(contentEl, (r) =>
+      vertical ? r.right > edge + 1 : r.top < edge - 1
+    );
+    const rect = anchor && charRect(anchor);
+    lineAnchor =
+      anchor && rect ? { anchor, pos: linePos(rect, vertical), at: performance.now() } : undefined;
+  }
 
   let willNavigate = false;
 
@@ -382,6 +406,22 @@
     )
     .subscribe(() => {
       if (!calculator || !pageManagerConcrete) return;
+
+      const kept = lineAnchor && performance.now() - lineAnchor.at < 3000 ? lineAnchor : undefined;
+      const rect = kept && charRect(kept.anchor);
+      if (kept && rect) {
+        const delta = lineScroll(
+          linePos(rect, verticalMode),
+          kept.pos,
+          readingEdge(edgeOffset),
+          verticalMode
+        );
+        if (Math.abs(delta) >= 1) {
+          isResizeScroll = true;
+          window.scrollBy(verticalMode ? { left: delta } : { top: delta });
+        }
+        return;
+      }
 
       const scrollPos =
         calculator.getScrollPosByCharCount(prevIntendedCharCount) +

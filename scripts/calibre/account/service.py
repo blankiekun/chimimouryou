@@ -10,6 +10,12 @@ HTTP API (bound to localhost, proxied by nginx at /account/api/):
   POST login          {"username": ..., "password": ...}
   POST logout
   POST password       {"current": ..., "new": ...}; signs out other sessions
+  POST token          {"username", "password", "client"?, "label"?}: a bearer token for the
+       standalone app (server connect, CORS_ORIGINS); HTTPS only, from a listed Origin or,
+       without one, from a native app naming itself in "client"
+  POST token/revoke   signs out the token that sends it
+  GET  tokens         the account's tokens (Devices); admins see everyone's (cookie only)
+  POST tokens/revoke  {"id"}: signs out one of them
   GET  auth           200 with X-Account-Id, or 401 (nginx auth_request)
   GET  auth/<permission>         the same, 403 without that permission
   GET  auth/<permission>/writes  writes (X-Original-Method) need it; reads need
@@ -52,6 +58,10 @@ Security notes:
   without HTTPS: passwords and sessions then cross the network unencrypted.
   HTTP sessions use their own non-Secure cookie, honoured on HTTP requests
   only, so a cookie planted over HTTP can't take over an HTTPS session.
+- Server connect (CORS_ORIGINS, off when empty): tokens are sessions sent as
+  `Authorization: Bearer` over HTTPS only. Requests from another origin are
+  authenticated by their token alone (never the cookie or a trusted network)
+  and never pass admin checks.
 """
 import base64
 import fcntl
@@ -98,6 +108,10 @@ COOKIE = '__Host-ttu_session'
 # browsers drop on HTTP pages.
 HTTP_COOKIE = 'ttu_session'
 ALLOW_HTTP = os.environ.get('ALLOW_HTTP_ACCOUNTS') == '1'
+# Origins of the standalone app allowed to sign in with tokens (exact https origins); empty = off.
+CORS_ORIGINS = {origin for origin in os.environ.get('CORS_ORIGINS', '').split()
+                if re.fullmatch(r'https://[A-Za-z0-9.-]+(:[0-9]{1,5})?', origin)}
+CLIENT_MAX_LENGTH = 64
 SESSION_IDLE_SECONDS = 30 * 86400
 SESSION_MAX_SECONDS = 180 * 86400
 LAST_SEEN_WRITE_INTERVAL = 600
@@ -186,7 +200,10 @@ CREATE TABLE IF NOT EXISTS sessions (
     token_hash TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created INTEGER NOT NULL,
-    last_seen INTEGER NOT NULL
+    last_seen INTEGER NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'cookie',
+    client TEXT NOT NULL DEFAULT '',
+    label TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS sessions_by_user ON sessions(user_id);
 CREATE TABLE IF NOT EXISTS login_throttle (
@@ -218,6 +235,12 @@ class Database:
             self.connection.execute('ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0')
         if 'permissions' not in columns:
             self.connection.execute("ALTER TABLE users ADD COLUMN permissions TEXT NOT NULL DEFAULT ''")
+        # And before tokens (server connect).
+        columns = [row['name'] for row in self.connection.execute('PRAGMA table_info(sessions)')]
+        if 'kind' not in columns:
+            self.connection.execute("ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'cookie'")
+            self.connection.execute("ALTER TABLE sessions ADD COLUMN client TEXT NOT NULL DEFAULT ''")
+            self.connection.execute("ALTER TABLE sessions ADD COLUMN label TEXT NOT NULL DEFAULT ''")
         self.lock = threading.Lock()
 
     def query(self, sql: str, params=()) -> list[sqlite3.Row]:
@@ -396,8 +419,12 @@ READ_METHODS = {'GET', 'HEAD', 'OPTIONS', 'PROPFIND'}
 
 
 def auth_status(user, permission: str, writes_only: bool, method: str, trusted_network: bool,
-                public_reads: bool = False) -> int:
+                public_reads: bool = False, cross_origin: bool = False) -> int:
     """nginx auth_request result. permission: '' or 'shared' (any account), 'admin' or one of PERMISSIONS."""
+    # Another site's page (server connect) is not a reader on this network, nor an admin tool.
+    trusted_network = trusted_network and not cross_origin
+    if cross_origin and permission == 'admin':
+        return 403
     if writes_only and method in READ_METHODS:
         return 200 if user or trusted_network or public_reads else 401
     # Signed-out readers on the LAN/tailnet still sync to the shared folder, as before accounts.
@@ -456,6 +483,15 @@ def request_scheme(proto: str | None) -> str | None:
     if proto == 'https' or (ALLOW_HTTP and proto == 'http'):
         return proto
     return None
+
+
+def is_cross_origin(headers) -> bool:
+    """Whether the request carries an Origin other than this site's (browsers send it on
+    cross-origin requests, and on same-origin ones except GET/HEAD). Only with server connect on:
+    without CORS no other site gets a request through, and a proxy that misreports the scheme
+    keeps working as before."""
+    origin = headers.get('Origin')
+    return bool(CORS_ORIGINS) and origin is not None and origin != f"{headers.get('X-Forwarded-Proto')}://{headers.get('Host', '')}"
 
 
 def session_cookie_name(proto: str | None) -> str | None:
@@ -538,11 +574,12 @@ def token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def create_session(user_id: str) -> str:
+def create_session(user_id: str, kind: str = 'cookie', client: str = '', label: str = '') -> str:
     now = int(time.time())
     token = secrets.token_urlsafe(32)
     db.run(
-        ('INSERT INTO sessions VALUES (?, ?, ?, ?)', (token_hash(token), user_id, now, now)),
+        ('INSERT INTO sessions (token_hash, user_id, created, last_seen, kind, client, label) '
+         'VALUES (?, ?, ?, ?, ?, ?, ?)', (token_hash(token), user_id, now, now, kind, client, label)),
         ('DELETE FROM sessions WHERE last_seen < ? OR created < ?',
          (now - SESSION_IDLE_SECONDS, now - SESSION_MAX_SECONDS)),
     )
@@ -581,6 +618,28 @@ def delete_session(token: str | None):
         db.run(('DELETE FROM sessions WHERE token_hash = ?', (token_hash(token),)))
 
 
+def list_tokens(user_id: str | None) -> list[dict]:
+    """Live tokens of one account, or of everyone (None). Their id is a prefix of the hash, never the token."""
+    now = int(time.time())
+    rows = db.query('''
+        SELECT sessions.*, users.username FROM sessions JOIN users ON users.id = sessions.user_id
+        WHERE kind = 'token' AND last_seen >= ? AND sessions.created >= ? AND (? IS NULL OR user_id = ?)
+        ORDER BY last_seen DESC
+    ''', (now - SESSION_IDLE_SECONDS, now - SESSION_MAX_SECONDS, user_id, user_id))
+    return [{'id': row['token_hash'][:16], 'username': row['username'], 'client': row['client'],
+             'label': row['label'], 'created': row['created'], 'lastSeen': row['last_seen']} for row in rows]
+
+
+def revoke_token(user_id: str | None, token_id: str) -> bool:
+    """Deletes one token (list_tokens' id) of the account, or of anyone (None); whether there was one."""
+    if not re.fullmatch(r'[0-9a-f]{16}', token_id):
+        return False
+    rows = db.query("SELECT token_hash FROM sessions WHERE kind = 'token' AND substr(token_hash, 1, 16) = ? "
+                    'AND (? IS NULL OR user_id = ?)', (token_id, user_id, user_id))
+    db.run(*[('DELETE FROM sessions WHERE token_hash = ?', (row['token_hash'],)) for row in rows])
+    return bool(rows)
+
+
 # ---------------------------------------------------------------------------
 # HTTP
 
@@ -599,7 +658,20 @@ class Handler(BaseHTTPRequestHandler):
         # Only nginx can reach this service; it sets X-Real-IP.
         return self.headers.get('X-Real-IP') or self.client_address[0]
 
+    def bearer_token(self) -> str | None:
+        """The Authorization: Bearer token, when server connect is on and the request is HTTPS."""
+        scheme, _, token = self.headers.get('Authorization', '').partition(' ')
+        if CORS_ORIGINS and scheme.lower() == 'bearer' and self.headers.get('X-Forwarded-Proto') == 'https':
+            return token.strip() or None
+        return None
+
     def session_token(self) -> str | None:
+        # Another site's request counts only with its token, never the cookie. On this site's own
+        # pages a bearer that isn't ours (the Audiobookshelf plugin's, through nginx) leaves the cookie.
+        bearer = self.bearer_token()
+        if is_cross_origin(self.headers) or (
+                bearer and db.query('SELECT 1 FROM sessions WHERE token_hash = ?', (token_hash(bearer),))):
+            return bearer
         cookie = SimpleCookie()
         try:
             cookie.load(self.headers.get('Cookie', ''))
@@ -617,7 +689,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def require_admin(self):
         user = self.require_user()
-        if not user['is_admin']:
+        # Admins use the server's own address; tokens (other sites, apps) never administer.
+        if not user['is_admin'] or self.bearer_token():
             raise ApiError(403, 'Only admins can do this')
         return user
 
@@ -626,6 +699,16 @@ class Handler(BaseHTTPRequestHandler):
         if not user:
             raise ApiError(404, 'No such account')
         return user
+
+    def require_connect_origin(self):
+        """Server connect: HTTPS, from a listed origin or (native apps) none."""
+        if not CORS_ORIGINS:
+            raise ApiError(403, 'This server does not allow other apps to connect')
+        if self.headers.get('X-Forwarded-Proto') != 'https':
+            raise ApiError(403, 'Connecting needs the HTTPS address')
+        origin = self.headers.get('Origin')
+        if origin is not None and origin not in CORS_ORIGINS:
+            raise ApiError(403, f"This server doesn't allow apps at {origin[:100]}")
 
     def require_https_same_origin(self):
         scheme = request_scheme(self.headers.get('X-Forwarded-Proto'))
@@ -671,10 +754,14 @@ class Handler(BaseHTTPRequestHandler):
     # -- routes
 
     def get_auth(self, permission: str = '', writes_only: bool = False):
-        user = session_user(self.session_token())
+        token = self.session_token()
+        user = session_user(token)
+        # Tokens (other sites, apps) never administer: admins use the server's own page.
+        by_token = bool(token) and token == self.bearer_token()
         method = self.headers.get('X-Original-Method', '')
-        status = auth_status(user, permission, writes_only, method,
-                             self.headers.get('X-Trusted-Network') == '1', self.headers.get('X-Public-Reads') == '1')
+        status = 403 if by_token and permission == 'admin' else auth_status(user, permission, writes_only, method,
+                             self.headers.get('X-Trusted-Network') == '1', self.headers.get('X-Public-Reads') == '1',
+                             is_cross_origin(self.headers))
         if status == 200 and permission == 'shared' and not shared_write_allowed(
                 method, self.headers.get('X-Original-URI', ''), self.headers.get('X-Destination')):
             status = 403
@@ -686,7 +773,7 @@ class Handler(BaseHTTPRequestHandler):
         if not (user and status == 200):
             return status, None, {}
         # The import service checks admin itself too (its admin tools share a location prefix).
-        return status, None, {'X-Account-Id': user['id'], 'X-Account-Admin': '1' if user['is_admin'] else '0'}
+        return status, None, {'X-Account-Id': user['id'], 'X-Account-Admin': '1' if user['is_admin'] and not by_token else '0'}
 
     def get_admin_users(self):
         self.require_admin()
@@ -741,8 +828,8 @@ class Handler(BaseHTTPRequestHandler):
     def get_me(self):
         return 200, {'user': self.me(self.require_user())}, {}
 
-    def post_login(self):
-        body = self.read_json()
+    def check_sign_in(self, body: dict):
+        """The account named by a sign-in request, after the throttles and the password check."""
         username, password = str(body.get('username', '')), str(body.get('password', ''))
         keys = throttle_keys(username, self.client_ip())
 
@@ -762,8 +849,43 @@ class Handler(BaseHTTPRequestHandler):
             db.run(('UPDATE users SET password_hash = ? WHERE id = ?', (hash_password(password), user['id'])))
 
         initial_admin_signed_in(user['id'])
+        return user
+
+    def post_login(self):
+        user = self.check_sign_in(self.read_json())
         token = create_session(user['id'])
         return 200, {'user': self.me(user)}, {'Set-Cookie': self.session_cookie(token, SESSION_MAX_SECONDS)}
+
+    def post_token(self):
+        body = self.read_json()
+        client = self.headers.get('Origin') or str(body.get('client', '')).strip()
+        label = str(body.get('label', '')).strip()
+        if not client or not client.isprintable() or not label.isprintable() \
+                or len(client) > CLIENT_MAX_LENGTH or len(label) > CLIENT_MAX_LENGTH:
+            raise ApiError(400, f'Apps name themselves in "client" (and the device in "label"), '
+                                f'up to {CLIENT_MAX_LENGTH} characters')
+        user = self.check_sign_in(body)
+        token = create_session(user['id'], 'token', client, label)
+        return 200, {'token': token, 'user': self.me(user), 'idleSeconds': SESSION_IDLE_SECONDS,
+                     'maxSeconds': SESSION_MAX_SECONDS}, {}
+
+    def post_token_revoke(self):
+        delete_session(self.bearer_token())
+        return 200, {}, {}
+
+    def token_owner(self) -> str | None:
+        """Whose tokens the request may list and revoke: its account's, or everyone's (None) for
+        an admin on the server's own page."""
+        user = self.require_user()
+        return None if user['is_admin'] and not self.bearer_token() else user['id']
+
+    def get_tokens(self):
+        return 200, {'tokens': list_tokens(self.token_owner())}, {}
+
+    def post_tokens_revoke(self):
+        if not revoke_token(self.token_owner(), str(self.read_json().get('id', ''))):
+            raise ApiError(404, 'No such token')
+        return 200, {}, {}
 
     def post_logout(self):
         delete_session(self.session_token())
@@ -835,6 +957,10 @@ class Handler(BaseHTTPRequestHandler):
         ('POST', 'login'): post_login,
         ('POST', 'logout'): post_logout,
         ('POST', 'password'): post_password,
+        ('POST', 'token'): post_token,
+        ('POST', 'token/revoke'): post_token_revoke,
+        ('GET', 'tokens'): get_tokens,
+        ('POST', 'tokens/revoke'): post_tokens_revoke,
     }
 
     def dispatch(self, method: str):
@@ -847,7 +973,11 @@ class Handler(BaseHTTPRequestHandler):
             if not route:
                 raise ApiError(404, 'Not found')
             if method == 'POST':
-                self.require_https_same_origin()
+                # Browsers never send a token on their own, so other origins may use one (no CSRF).
+                if route is Handler.post_token or self.bearer_token():
+                    self.require_connect_origin()
+                else:
+                    self.require_https_same_origin()
             status, body, headers = route(self)
             self.send(status, body, headers)
         except ApiError as error:

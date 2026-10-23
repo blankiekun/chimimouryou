@@ -138,7 +138,8 @@ export function getStorageHandler(
 
       return browserStorageHandler;
     case StorageKey.CALIBRE:
-      if (standalone) throw new Error('The Calibre library needs a chimimouryou server');
+      // No server: Calibre data (e.g. from a backup) goes to the browser instead.
+      if (standalone) return getStorageHandler(window, StorageKey.BROWSER);
       calibreStorageHandler = calibreStorageHandler || new CalibreStorageHandler(window);
       calibreStorageHandler.updateSettings(
         window,

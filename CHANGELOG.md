@@ -17,6 +17,10 @@ anything a reader or a server operator would notice.
 
 ### Changed
 
+- The library's top bar shows only Import and the account: view and sort are in the Store's Sort
+  menu, Select is a Store button (long press still selects on Home), and the storage source and
+  "Report an issue" are in Settings → Data → Storage. The old-domain hint and the `?count` loader
+  are gone, and so is the Q shortcut.
 - The manga reader and visual novel player use the Study Book reader bar: the manga reader has a
   page slider, a settings panel and a new card between volumes; the player shows reading progress
   and asks to keep a large game's files in a bar instead of a browser dialog. On phones it has
@@ -34,6 +38,11 @@ anything a reader or a server operator would notice.
   position is measured in the visible part of the book. A book that re-renders with its
   generated furigana (on opening, or while listening) stays on the bookmarked text instead of
   jumping to the top of the page or back to the start.
+- Opening or closing the reader panel keeps your place exactly: in paginated mode the first
+  line of the page stays the first line (the chapter's first page may start with a blank gap
+  until the next chapter), and closing it without turning a page returns to the same page; in
+  continuous mode the line being read stays where it was on screen unless the panel or bar
+  would cover it.
 - Difficulty meters use each theme's own colours (from its accent for Beginner to its text
   colour for Expert) instead of a fixed rainbow; the Words page has the Import menu too, and
   the last rounded pills are square.
@@ -82,6 +91,17 @@ anything a reader or a server operator would notice.
   Listening goes on with the panel closed. Aa holds size, direction, view, furigana (Show,
   Known, Hide) and theme; changing direction or view saves your place first. More holds the
   bookmark, reading point, auto-scroll, fullscreen, jump, tracker and finish actions.
+
+### Security
+
+- Server connect, off unless the server lists the standalone app's address in
+  `CORS_ORIGINS` (docs/CONFIGURATION.md): the app signs in for a token
+  (`POST /account/api/token`, HTTPS only, from a listed origin, throttled and rate-limited
+  like sign-in) and sends it as `Authorization: Bearer`; tokens are sessions with the same
+  expiry, listed and revoked through `/account/api/tokens`. nginx answers CORS preflights only
+  on the reader's paths, echoes only listed origins and never allows credentials. Requests
+  from another origin count only with a token, never the cookie or `TRUSTED_NETWORKS`, and a
+  token never counts as an admin.
 
 ### Fixed
 
