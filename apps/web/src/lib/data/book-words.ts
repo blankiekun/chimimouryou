@@ -10,6 +10,7 @@
  * list, and their CSV export for Anki. Not part of upstream.
  */
 
+import { serverFetch } from '$lib/data/server';
 import { difficultyApiUrl } from '$lib/data/calibre';
 
 /**
@@ -23,7 +24,7 @@ export type BookWord = [string, string | null, number, number | null, string?];
  * yet (404). Other failures (server restarting, signed out) throw, so they aren't cached.
  */
 export async function loadBookWords(id: number): Promise<BookWord[] | undefined> {
-  const response = await fetch(`${difficultyApiUrl}words/${id}`, { cache: 'no-cache' });
+  const response = await serverFetch(`${difficultyApiUrl}words/${id}`, { cache: 'no-cache' });
 
   if (response.status === 404) return undefined;
   if (!response.ok) throw new Error(`Word list: ${response.status}`);

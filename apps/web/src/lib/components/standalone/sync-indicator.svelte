@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import { pagePath } from '$lib/data/env';
   import { driveSignedIn, signInToDrive } from '$lib/data/standalone-storage';
+  import { serverBase, serverConnected } from '$lib/data/server';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import { storageSource$ } from '$lib/data/storage/storage-view';
   import { isOnline$ } from '$lib/data/store';
@@ -16,6 +17,7 @@
   });
 
   const settingsHref = `${pagePath}/settings?section=sync`;
+  const serverHost = serverBase.replace(/^https:\/\//, '');
 
   // Tokens aren't observable: checked again on the 15 s tick and after signing in here.
   $: signedIn = $storageSource$ !== StorageKey.GDRIVE || driveSignedIn(now);
@@ -28,7 +30,10 @@
   }
 </script>
 
-{#if view.kind === 'syncing'}
+{#if serverConnected && $storageSource$ === StorageKey.CALIBRE}
+  <!-- The Calibre source syncs as you read, without the replicator: name the server instead. -->
+  <a href="{settingsHref}#sync-server" class="sync-indicator">{serverHost}</a>
+{:else if view.kind === 'syncing'}
   <span class="sync-indicator" role="status">
     {view.text}
     <span class="sync-track" aria-hidden="true">

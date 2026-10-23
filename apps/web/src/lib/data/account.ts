@@ -14,6 +14,7 @@
 import { browser } from '$app/environment';
 import { BehaviorSubject } from 'rxjs';
 import { standalone } from '$lib/data/env';
+import { forgetServerToken, serverConnected, serverFetch } from '$lib/data/server';
 
 export interface AccountUser {
   id: string;
@@ -79,16 +80,18 @@ function cachedUser(): AccountUser | null {
 
 async function checkSession(): Promise<AccountUser | null> {
   // No server, so never signed in: every account-only sync bails out on null.
-  if (standalone) return null;
+  if (standalone && !serverConnected) return null;
 
   try {
-    const response = await fetch(`${accountApiUrl}me`, { cache: 'no-store' });
+    const response = await serverFetch(`${accountApiUrl}me`, { cache: 'no-store' });
 
     if (response.ok) {
       return (await response.json()).user;
     }
 
     if (response.status === 401 || response.status === 404) {
+      // A connected server signed this device out: the next page load has no server.
+      if (serverConnected && response.status === 401) forgetServerToken();
       return null;
     }
   } catch {

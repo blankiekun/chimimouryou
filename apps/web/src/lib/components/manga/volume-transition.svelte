@@ -2,6 +2,7 @@
   /** Mihon-style card between volumes: the one just finished (or left) and the one to open. */
   import { createEventDispatcher } from 'svelte';
   import { calibreCoverUrl, type CalibreBook } from '$lib/data/calibre';
+  import { needsServerImage, serverImage } from '$lib/data/server';
 
   /** 1: the end of the book, -1: its start. */
   export let direction: number;
@@ -34,7 +35,12 @@
   {#if volume}
     <div class="volume-body">
       {#if calibreCoverUrl(volume)}
-        <img class="volume-cover" src={calibreCoverUrl(volume)} alt="" />
+        <img
+          class="volume-cover"
+          src={needsServerImage(calibreCoverUrl(volume)) ? undefined : calibreCoverUrl(volume)}
+          use:serverImage={calibreCoverUrl(volume)}
+          alt=""
+        />
       {/if}
       <div class="volume-text">
         <div class="volume-label">{direction > 0 ? 'Next in series' : 'Previous in series'}</div>

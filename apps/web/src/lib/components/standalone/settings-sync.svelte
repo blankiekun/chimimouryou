@@ -6,6 +6,7 @@
   import type { ToggleOption } from '$lib/components/button-toggle-group/toggle-option';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
+  import ServerConnect from '$lib/components/standalone/server-connect.svelte';
   import SettingsStorageSourceList from '$lib/components/settings/settings-storage-source-list.svelte';
   import { exportBackup, libraryHandler, restoreBackup } from '$lib/data/backup';
   import { selfHostingGuideUrl, storageRootName } from '$lib/data/env';
@@ -20,6 +21,7 @@
     signInToDrive,
     signOutOfDrive
   } from '$lib/data/standalone-storage';
+  import { serverConnected } from '$lib/data/server';
   import { isAppDefault } from '$lib/data/storage/storage-source-manager';
   import { defaultStorageSources, StorageKey } from '$lib/data/storage/storage-types';
   import { isStorageSourceAvailable, storageSource$ } from '$lib/data/storage/storage-view';
@@ -33,6 +35,7 @@
 
   const sources: ToggleOption<StorageKey>[] = [
     { id: StorageKey.BROWSER, text: 'This device' },
+    ...(serverConnected ? [{ id: StorageKey.CALIBRE, text: 'Server' }] : []),
     ...(browser && driveAvailable(window) ? [{ id: StorageKey.GDRIVE, text: 'Google Drive' }] : []),
     ...(browser && folderAvailable(window) && !isMobile(window)
       ? [{ id: StorageKey.FS, text: 'Folder' }]
@@ -192,7 +195,7 @@
       </button>
     </SettingsItemGroup>
   {/if}
-  {#if remote}
+  {#if remote && $storageSource$ !== StorageKey.CALIBRE}
     <SettingsItemGroup
       title="Sync automatically"
       tooltip="Upload progress and new books as you read. Off: only when you press Sync now."
@@ -299,6 +302,10 @@
   {#if backupMessage}
     <p class="backup-message" role="status">{backupMessage}</p>
   {/if}
+</SettingsSection>
+
+<SettingsSection id="sync-server" keywords="server calibre connect sign in">
+  <ServerConnect />
 </SettingsSection>
 
 <SettingsSection id="sync-selfhost" keywords="server calibre difficulty install">

@@ -340,6 +340,8 @@ export const en = {
   'settings.section.sync-backup': 'Backup',
   'settings.section.sync-backup.text':
     'A backup holds progress, statistics and reading goals; books are not included.',
+  'settings.section.sync-server': 'Server',
+  'settings.section.sync-server.text': 'Connect to a chimimouryou server and read its library.',
   'settings.section.sync-selfhost': 'Self-hosting',
   'settings.section.sync-selfhost.text': 'What a chimimouryou server adds.',
   'settings.section.data-storage': 'Local storage',

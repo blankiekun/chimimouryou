@@ -35,6 +35,7 @@ import {
 } from '$lib/data/ai-settings';
 import { homeBookTitles$, homeRemovedTitles$ } from '$lib/data/library-home';
 import { logger } from '$lib/data/logger';
+import { standalone } from '$lib/data/env';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 import { audiobookshelfToken$ } from '$lib/data/audiobookshelf';
 import {
@@ -355,7 +356,8 @@ function onVisibilityChange() {
 function releasePreviousOwner(user: AccountUser | null) {
   const owner = window.localStorage.getItem(ownerKey);
 
-  if (user ? owner !== user.id : owner) {
+  // The standalone's keys (no owner) go with it when it connects to a server.
+  if (user ? owner !== user.id && !(standalone && !owner) : owner) {
     secretSettings.forEach((key) => {
       sharedSettings[key].next('');
       window.localStorage.removeItem(key);

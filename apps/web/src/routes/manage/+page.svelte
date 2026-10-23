@@ -1662,7 +1662,9 @@
           </p>
           <a
             class="app-button app-button-primary"
-            href="{pagePath}/settings?section=general#general-account">Sign in</a
+            href="{pagePath}/settings?section={standalone
+              ? 'sync#sync-server'
+              : 'general#general-account'}">Sign in</a
           >
         </div>
       {:else if $storageSource$ === StorageKey.CALIBRE && $libraryOffline$}

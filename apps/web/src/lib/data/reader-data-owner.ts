@@ -13,6 +13,7 @@
 
 import type { AccountUser } from '$lib/data/account';
 import { loadCalibreCatalog } from '$lib/data/calibre';
+import { standalone } from '$lib/data/env';
 import { clearKnownWords } from '$lib/data/known-words';
 import { readerDb } from '$lib/data/reader-db';
 import { database } from '$lib/data/store';
@@ -39,8 +40,9 @@ async function releaseFor(user: AccountUser | null) {
   const owner = window.localStorage.getItem(ownerKey);
   const id = user?.id ?? '';
 
-  // Data from before owners were recorded is adopted, like settings.
-  if (owner !== null && owner !== id) {
+  // Data from before owners were recorded is adopted, like settings. So is the standalone's own
+  // (owner '') when it connects to a server: it was this device's reader all along.
+  if (owner !== null && owner !== id && !(standalone && owner === '')) {
     await clearKnownWords();
     // Throws when the catalog can't be read (signed out): the next page load retries.
     const titles = new Set((await loadCalibreCatalog()).map((book) => book.title));

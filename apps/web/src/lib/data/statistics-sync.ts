@@ -20,10 +20,10 @@ import {
   statisticsMergeMode$
 } from '$lib/data/store';
 import { replicateData } from '$lib/functions/replication/replicator';
-import { standalone } from '$lib/data/env';
+import { serverless } from '$lib/data/server';
 
 export async function pullAccountStatistics(window: Window) {
-  if (standalone) return;
+  if (serverless) return;
 
   // Own handlers: the shared ones switch context while a book opens or the library syncs.
   const calibre = new CalibreStorageHandler(window);

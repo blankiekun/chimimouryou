@@ -15,6 +15,7 @@ import {
   standalone
 } from '$lib/data/env';
 
+import { serverless } from '$lib/data/server';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 import { writableSubject } from '$lib/functions/svelte/store';
 import { faBookOpen } from '@fortawesome/free-solid-svg-icons';
@@ -104,8 +105,8 @@ export function getStorageIconData(storageSource: StorageKey): StorageIcon {
   }
 }
 
-/** The Calibre source needs this app's own server; the standalone edition has none. */
-export const calibreSourceAvailable = !standalone;
+/** The Calibre source needs a server: this app's own, or one the standalone connected to. */
+export const calibreSourceAvailable = !serverless;
 
 // Builds without the Calibre server (static hosting, standalone) default to 'browser'.
 const defaultStorageSource = standalone
@@ -130,7 +131,7 @@ if (!browserSourceAvailable && storageSource$.getValue() === StorageKey.BROWSER)
   storageSource$.next(StorageKey.CALIBRE);
 }
 
-// The standalone edition never constructs the Calibre handler, whatever was saved.
+// The standalone without a server never constructs the Calibre handler, whatever was saved.
 if (!calibreSourceAvailable && storageSource$.getValue() === StorageKey.CALIBRE) {
   storageSource$.next(fallbackStorageSource);
 }

@@ -15,7 +15,7 @@ import { GDriveStorageHandler } from '$lib/data/storage/handler/gdrive-handler';
 import { MergeMode } from '$lib/data/merge-mode';
 import { OneDriveStorageHandler } from '$lib/data/storage/handler/onedrive-handler';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
-import { standalone } from '$lib/data/env';
+import { serverless } from '$lib/data/server';
 
 let backupStorageHandler: BackupStorageHandler;
 let browserStorageHandler: BrowserStorageHandler;
@@ -139,7 +139,7 @@ export function getStorageHandler(
       return browserStorageHandler;
     case StorageKey.CALIBRE:
       // No server: Calibre data (e.g. from a backup) goes to the browser instead.
-      if (standalone) return getStorageHandler(window, StorageKey.BROWSER);
+      if (serverless) return getStorageHandler(window, StorageKey.BROWSER);
       calibreStorageHandler = calibreStorageHandler || new CalibreStorageHandler(window);
       calibreStorageHandler.updateSettings(
         window,
