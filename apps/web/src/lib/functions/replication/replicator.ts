@@ -17,6 +17,7 @@ import { isMangaFileName } from '$lib/data/manga';
 import { isVn } from '$lib/data/vn';
 import type { ApiStorageHandler } from '$lib/data/storage/handler/api-handler';
 import type { LoadData } from '$lib/functions/file-loaders/types';
+import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
 import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
 import { throwIfAborted } from '$lib/functions/replication/replication-error';
 import {
@@ -24,9 +25,51 @@ import {
   type ReplicationContext
 } from '$lib/functions/replication/replication-progress';
 import { isSyncBetween, syncEnded, syncStarted, syncStep } from '$lib/data/sync-status';
+import { standalone } from '$lib/data/env';
 import pLimit from 'p-limit';
 
 export const exporterVersion = 1;
+
+/**
+ * Standalone: books of one import into Drive/OneDrive/a folder that are also kept in this browser,
+ * so their estimate and furigana start without opening them. Past it (someone importing a whole
+ * library) the rest is downloaded on first open, as before, instead of filling the browser.
+ */
+export const LOCAL_COPY_LIMIT = 20;
+/** No local copies when the browser reports less free storage than this. */
+export const LOCAL_COPY_MIN_FREE = 500 * 1024 ** 2;
+
+/** Free browser storage is at least LOCAL_COPY_MIN_FREE; true when the browser won't say. */
+export async function roomForLocalCopies() {
+  try {
+    const { quota, usage } = await navigator.storage.estimate();
+
+    return quota === undefined || usage === undefined || quota - usage >= LOCAL_COPY_MIN_FREE;
+  } catch {
+    return true;
+  }
+}
+
+/** An imported book in this browser too, listed under its source like one opened from there. */
+async function saveLocalCopy(targetHandler: BaseStorageHandler, book: LoadData) {
+  const storageSource = targetHandler.getCurrentStorageSource();
+  const existing = await database.getDataByTitle(book.title);
+
+  // Never take over a book of the browser library or another source with the same title.
+  if (existing && existing.storageSource !== storageSource) return;
+
+  // Imported lazily: the factory's handlers import this module.
+  const { getStorageHandler } = await import('$lib/data/storage/storage-handler-factory');
+
+  await getStorageHandler(
+    document.defaultView || window,
+    StorageKey.BROWSER,
+    undefined,
+    true,
+    true,
+    ReplicationSaveBehavior.Overwrite
+  ).saveBook({ ...book, storageSource }, false, false);
+}
 
 export async function importData(
   document: Document,
@@ -55,6 +98,13 @@ export async function importData(
   }
 
   let newFileData = 0;
+  let localCopies =
+    standalone &&
+    !fileCountData &&
+    targetHandler.storageType !== StorageKey.BROWSER &&
+    (await roomForLocalCopies())
+      ? LOCAL_COPY_LIMIT
+      : 0;
 
   files.forEach((file) =>
     tasks.push(
@@ -104,12 +154,18 @@ export async function importData(
             cancelSignal
           );
 
-          dataIds.push(
-            // File names of visual novels the reader kept off a cloud provider (vn-upload.ts)
-            keepOnDevice?.has(file.name) && isVn(bookContent)
-              ? await (targetHandler as ApiStorageHandler).keepOnDevice(bookContent)
-              : await targetHandler.saveBook(bookContent, false)
-          );
+          // File names of visual novels the reader kept off a cloud provider (vn-upload.ts)
+          if (keepOnDevice?.has(file.name) && isVn(bookContent)) {
+            dataIds.push(await (targetHandler as ApiStorageHandler).keepOnDevice(bookContent));
+          } else {
+            dataIds.push(await targetHandler.saveBook(bookContent, false));
+
+            if (localCopies > 0) {
+              localCopies -= 1;
+              // Without it the book is downloaded on first open, as before.
+              await saveLocalCopy(targetHandler, bookContent).catch(() => undefined);
+            }
+          }
           importedTitles.push(bookContent.title);
 
           checkCancelAndProgress(cancelSignal, false);

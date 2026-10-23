@@ -327,7 +327,30 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
     );
   }
 
+  /**
+   * In the browser, a copy cached for this source that is at least as new as the remote one is
+   * used as is (undefined: nothing to take over), so opening a book doesn't download it again.
+   */
   async getBook() {
+    if (this.isForBrowser) {
+      const localData = await database.getDataByTitle(this.currentContext.title);
+
+      if (localData?.elementHtml && localData.storageSource === this.storageSourceName) {
+        const { file } = await this.getExternalFile('bookdata_');
+        const remoteModified = file
+          ? BaseStorageHandler.getBookMetadata(file.name).lastBookModified
+          : 0;
+
+        if ((localData.lastBookModified || 0) >= (remoteModified || 0)) {
+          return undefined;
+        }
+      }
+    }
+
+    return this.downloadBook();
+  }
+
+  protected async downloadBook() {
     const { file, data } = await this.getExternalFile(
       'bookdata_',
       'blob',

@@ -97,7 +97,11 @@
   import { backgroundAnalysis$, catchUpAnalysis } from '$lib/data/background-analysis';
   import InstallHint from '$lib/components/standalone/install-hint.svelte';
   import LibraryEmpty from '$lib/components/standalone/library-empty.svelte';
-  import { needsFirstRun, storageChosen$ } from '$lib/data/standalone-storage';
+  import {
+    needsFirstRun,
+    showsExternalReadHint,
+    storageChosen$
+  } from '$lib/data/standalone-storage';
   import { logger } from '$lib/data/logger';
   import type { SortOption } from '$lib/data/sort-types';
   import { ApiStorageHandler } from '$lib/data/storage/handler/api-handler';
@@ -398,9 +402,12 @@
         idToOpen = await handler.prepareBookForReading();
 
         if (
-          !$hideExternalReadHint$ &&
-          handler instanceof ApiStorageHandler &&
-          handler.storageType !== StorageKey.CALIBRE
+          showsExternalReadHint(
+            standalone,
+            $hideExternalReadHint$,
+            handler.storageType,
+            handler instanceof ApiStorageHandler
+          )
         ) {
           const nextAction = await new Promise<string>((resolver) => {
             dialogManager.dialogs$.next([

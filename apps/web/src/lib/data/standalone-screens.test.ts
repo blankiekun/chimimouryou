@@ -8,7 +8,7 @@ import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import '$lib/data/storage/storage-handler-factory';
 import { installWay } from '$lib/data/install-app';
-import { needsFirstRun } from '$lib/data/standalone-storage';
+import { needsFirstRun, showsExternalReadHint } from '$lib/data/standalone-storage';
 import { StorageKey } from '$lib/data/storage/storage-types';
 import { syncEnded, syncState$, syncView, type SyncState } from '$lib/data/sync-status';
 
@@ -93,6 +93,16 @@ describe('first run', () => {
     expect(needsFirstRun(true, false)).toBe(true);
     expect(needsFirstRun(true, true)).toBe(false);
     expect(needsFirstRun(false, false)).toBe(false);
+  });
+});
+
+describe('External Read hint', () => {
+  it('is never shown in the standalone, whose library is on Drive by choice', () => {
+    expect(showsExternalReadHint(true, false, StorageKey.GDRIVE, true)).toBe(false);
+    expect(showsExternalReadHint(false, false, StorageKey.GDRIVE, true)).toBe(true);
+    expect(showsExternalReadHint(false, true, StorageKey.GDRIVE, true)).toBe(false);
+    expect(showsExternalReadHint(false, false, StorageKey.CALIBRE, true)).toBe(false);
+    expect(showsExternalReadHint(false, false, StorageKey.FS, false)).toBe(false);
   });
 });
 
