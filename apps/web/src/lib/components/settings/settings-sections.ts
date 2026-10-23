@@ -134,6 +134,11 @@ export const settingsAreas: SettingsArea[] = [
         description: 'settings.section.ai-presets.text'
       },
       {
+        id: 'ai-prompts',
+        label: 'settings.section.ai-prompts',
+        description: 'settings.section.ai-prompts.text'
+      },
+      {
         id: 'ai-read-aloud',
         label: 'settings.section.ai-read-aloud',
         description: 'settings.section.ai-read-aloud.text'
@@ -142,6 +147,11 @@ export const settingsAreas: SettingsArea[] = [
         id: 'ai-recap',
         label: 'settings.section.ai-recap',
         description: 'settings.section.ai-recap.text'
+      },
+      {
+        id: 'ai-syncs',
+        label: 'settings.section.ai-syncs',
+        description: 'settings.section.ai-syncs.text'
       }
     ]
   },

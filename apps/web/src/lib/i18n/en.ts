@@ -320,6 +320,12 @@ export const en = {
   'settings.section.ai-read-aloud.text': 'Text-to-speech with ElevenLabs.',
   'settings.section.ai-recap': 'Story so far & Lorebook',
   'settings.section.ai-recap.text': 'Spoiler-free recaps and the lorebook of what you have read.',
+  'settings.section.ai-prompts': 'System prompts',
+  'settings.section.ai-prompts.text':
+    'What the AI is told before every request. Built-in prompts follow the AI language; editing one makes your own copy.',
+  'settings.section.ai-syncs': 'What syncs',
+  'settings.section.ai-syncs.text':
+    'Requests go straight from this browser to the provider; they never pass through this server.',
   'settings.section.audiobookshelf-connect': 'Server',
   'settings.section.audiobookshelf-connect.text':
     'Your Audiobookshelf account, for Listen → Audiobookshelf.',
@@ -532,6 +538,33 @@ export const en = {
   'ai.lorebookAutoHint':
     'While reading, the lorebook (characters, places, terms) is updated in the background each time you read this many new characters. Only the new text is sent, to the recap model. 0 turns it off.',
   'ai.lorebookInterval': 'Characters between lorebook updates',
+  'ai.promptsLanguageHint': 'Each language has its own prompts.',
+  'ai.prompt.ask': 'Ask AI',
+  'ai.prompt.askHint': 'Explains the passage you select.',
+  'ai.prompt.chapter': 'Chapter summaries',
+  'ai.prompt.chapterHint': 'Summarises each finished chapter once, for recaps.',
+  'ai.prompt.recap': 'Story so far',
+  'ai.prompt.recapHint': 'Writes the recap from the chapter summaries.',
+  'ai.prompt.lore': 'Lorebook',
+  'ai.prompt.loreHint': 'Updates the lorebook entries; the answer must stay JSON in this format.',
+  'ai.builtIn': 'Built-in',
+  'ai.yourCopy': 'Your copy',
+  'ai.showPrompt': 'Show the prompt',
+  'ai.editCopy': 'Edit a copy',
+  'ai.resetPrompt': 'Reset to default',
+  'ai.syncs.setting': 'Setting',
+  'ai.syncs.where': 'Where it is kept',
+  'ai.syncs.keys': 'API keys',
+  'ai.syncs.keysWhere':
+    'This browser, and your account on this server while signed in, so your other devices get them.',
+  'ai.syncs.keysNote':
+    'Never in Drive, OneDrive, a sync folder or any shared file. Removed when you sign out.',
+  'ai.syncs.rest': 'Models, voice, presets, prompts',
+  'ai.syncs.restWhere':
+    "Your account while signed in, otherwise the library's Drive, OneDrive or folder if it has one.",
+  'ai.syncs.restNote': 'About you and the AI language too. Each setting keeps its newest change.',
+  'ai.private': 'Private',
+  'ai.synced': 'Synced',
   'ai.lorebookOff': '0 (off)',
 
   // Library

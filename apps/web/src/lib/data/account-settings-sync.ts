@@ -21,6 +21,7 @@ import type { AccountUser } from '$lib/data/account';
 import { readerSyncStore, syncJsonFile } from '$lib/data/sync-files';
 import {
   aiLanguage$,
+  aiPromptOverrides$,
   askAiDefaultPreset$,
   askAiPresets$,
   askAiReaderNote$,
@@ -109,6 +110,7 @@ const sharedSettings: Record<string, Store> = {
   openRouterRecapModel: openRouterRecapModel$,
   lorebookAutoInterval: lorebookAutoInterval$,
   aiLanguage: aiLanguage$,
+  aiPromptOverrides: aiPromptOverrides$,
   uiLanguage: uiLanguage$,
   enabledPlugins: enabledPlugins$,
   audiobookshelfToken: audiobookshelfToken$,

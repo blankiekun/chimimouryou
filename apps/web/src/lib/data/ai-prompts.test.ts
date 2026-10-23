@@ -5,9 +5,14 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { aiLanguage$, defaultAskAiPresets, openRouterApiKey$ } from '$lib/data/ai-settings';
+import {
+  aiLanguage$,
+  aiPromptOverrides$,
+  defaultAskAiPresets,
+  openRouterApiKey$
+} from '$lib/data/ai-settings';
 import { askAi, buildPassagePrompt } from '$lib/data/ask-ai';
-import { aiPrompts, defaultAskAiPresetsJa, presetsForLanguage } from './ai-prompts';
+import { aiPrompts, builtInPrompt, defaultAskAiPresetsJa, presetsForLanguage } from './ai-prompts';
 
 describe('AI language', () => {
   afterEach(() => {
@@ -64,5 +69,22 @@ describe('AI language', () => {
     const edited = [{ ...saved[0], prompt: 'mine' }, ...saved.slice(1)];
 
     expect(presetsForLanguage(edited, 'ja')).toBe(edited);
+  });
+});
+
+describe('system prompt overrides', () => {
+  afterEach(() => {
+    aiLanguage$.next('en');
+    aiPromptOverrides$.next({});
+  });
+
+  it('uses the copy for its language only and falls back when blank', () => {
+    aiPromptOverrides$.next({ ja: { recap: '自分のあらすじ' }, en: { ask: '  ' } });
+
+    expect(aiPrompts().recap).toBe(builtInPrompt('en', 'recap'));
+    expect(aiPrompts().ask).toBe(builtInPrompt('en', 'ask'));
+    aiLanguage$.next('ja');
+    expect(aiPrompts().recap).toBe('自分のあらすじ');
+    expect(aiPrompts().chapter).toBe(builtInPrompt('ja', 'chapter'));
   });
 });
