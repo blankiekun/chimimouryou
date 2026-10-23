@@ -8,14 +8,21 @@
   } from '@fortawesome/free-solid-svg-icons';
   import {
     defaultElevenLabsModel,
+    deviceVoiceName$,
     elevenLabsApiKey$,
     elevenLabsModel$,
     ttsPlaybackRate$,
     ttsVoiceId$
   } from '$lib/data/ai-settings';
   import {
+    deviceSpeechAvailable,
+    deviceUtterance,
+    deviceVoices,
+    pickDeviceVoice,
     readingTimeline,
+    spokenPhrases,
     synthesizeSpeech,
+    ttsBackend,
     timelineEntryAt,
     type TimelineEntry
   } from '$lib/data/tts';
@@ -54,17 +61,28 @@
   let abortController = new AbortController();
   let audioCache = createAudioCache();
 
-  $: setup = !$elevenLabsApiKey$
-    ? $t$('reader.ttsNoKey')
+  let voices: SpeechSynthesisVoice[] = [];
+  /** The device utterance being spoken; events from older ones are ignored. */
+  let utterance: SpeechSynthesisUtterance | undefined;
+
+  $: device = ttsBackend($elevenLabsApiKey$) === 'device';
+  $: voice = pickDeviceVoice(voices, $deviceVoiceName$);
+  $: setup = device
+    ? deviceSpeechAvailable()
+      ? ''
+      : $t$('reader.ttsNoDevice')
     : !$ttsVoiceId$
       ? $t$('reader.ttsNoVoice')
       : '';
+  // Switching backends (a key added or removed) stops the other one.
+  $: (device, stop());
   $: currentText = displayReadingText(chunks[index]?.text ?? '');
 
   onMount(() => {
     audio = new Audio();
     audio.addEventListener('ended', () => playChunk(index + 1));
     audio.addEventListener('timeupdate', updateReading);
+    deviceVoices().then((list) => (voices = list));
   });
 
   $: if (audio) {
@@ -105,9 +123,52 @@
     return audioCache.get(chunkIndex);
   }
 
+  /** Reads a chunk with the device's voice; `boundary` events move the highlight. */
+  function speakChunk(chunkIndex: number) {
+    const chunk = chunks[chunkIndex];
+    const phrases = spokenPhrases(chunk);
+    const spoken = deviceUtterance(speechText(chunk.text), voice, $ttsPlaybackRate$);
+    const show = (entry: TimelineEntry | undefined) => {
+      if (utterance === spoken && entry && entry !== reading) {
+        reading = entry;
+        dispatch('reading', { start: entry.start, end: entry.end });
+      }
+    };
+
+    speechSynthesis.cancel();
+    // A paused synthesizer would hold the new utterance too.
+    speechSynthesis.resume();
+    utterance = spoken;
+    // Some voices (often Japanese ones) send no boundary events: then the whole chunk stays lit.
+    spoken.onstart = () => show(readingTimeline(chunk)[0]);
+    spoken.onboundary = (event) => show(timelineEntryAt(phrases, event.charIndex));
+    spoken.onend = () => {
+      if (utterance === spoken) {
+        playChunk(chunkIndex + 1);
+      }
+    };
+    spoken.onerror = (event) => {
+      if (utterance === spoken && event.error !== 'interrupted' && event.error !== 'canceled') {
+        error = tr('reader.ttsDeviceError', { error: event.error });
+        playing = false;
+      }
+    };
+    reading = undefined;
+    speechSynthesis.speak(spoken);
+    playing = true;
+    dispatch('position', chunk.startCharCount);
+  }
+
   async function playChunk(chunkIndex: number) {
     if (chunkIndex >= chunks.length) {
       playing = false;
+      return;
+    }
+
+    if (device) {
+      index = chunkIndex;
+      error = '';
+      speakChunk(chunkIndex);
       return;
     }
 
@@ -152,6 +213,10 @@
     abortController.abort();
     abortController = new AbortController();
     audio?.pause();
+    if (utterance) {
+      utterance = undefined;
+      speechSynthesis.cancel();
+    }
     audioCache.clear();
     audioCache = createAudioCache();
     playing = false;
@@ -176,9 +241,16 @@
     if (!chunks.length) {
       start();
     } else if (playing) {
-      audio.pause();
+      if (device) {
+        speechSynthesis.pause();
+      } else {
+        audio.pause();
+      }
       playing = false;
-    } else if (audio.src && !error) {
+    } else if (device && utterance && !error) {
+      speechSynthesis.resume();
+      playing = true;
+    } else if (!device && audio.src && !error) {
       // Resume. After an error, the else branch retries the failed chunk instead
       // of replaying the previous one.
       audio.play().then(() => (playing = true));
@@ -231,7 +303,11 @@
       {:else}
         <span class="voice-line" lang="ja">{currentText || $t$('reader.readAloudPosition')}</span>
       {/if}
-      <span class="voice-meta">ElevenLabs · {$elevenLabsModel$ || defaultElevenLabsModel}</span>
+      <span class="voice-meta"
+        >{device
+          ? `${$t$('reader.deviceVoice')} · ${voice?.name ?? 'ja-JP'}`
+          : `ElevenLabs · ${$elevenLabsModel$ || defaultElevenLabsModel}`}</span
+      >
     </span>
   </div>
 {/if}

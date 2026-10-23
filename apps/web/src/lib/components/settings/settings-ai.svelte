@@ -1,6 +1,7 @@
 <script lang="ts">
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
+  import SettingsAiVoice from '$lib/components/settings/settings-ai-voice.svelte';
   import SettingsAiPrompts from '$lib/components/settings/settings-ai-prompts.svelte';
   import AiConnections from '$lib/components/settings/ai/ai-connections.svelte';
   import AiFeatures from '$lib/components/settings/ai/ai-features.svelte';
@@ -150,6 +151,8 @@
     </select>
   </SettingsItemGroup>
 </SettingsSection>
+
+<SettingsAiVoice />
 
 <SettingsSection id="ai-read-aloud">
   <SettingsItemGroup title={$t$('ai.voiceId')} tooltip={$t$('ai.voiceIdHint')}>

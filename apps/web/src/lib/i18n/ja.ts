@@ -326,6 +326,9 @@ export const ja: Record<MessageKey, string> = {
   'settings.section.ai-features': '機能',
   'settings.section.ai-features.text':
     '各機能が使う接続とモデルです。新しい接続では機能ごとに適したモデルが選ばれます。ここで変更できます。',
+  'settings.section.ai-voice': '端末の音声',
+  'settings.section.ai-voice.text':
+    'ElevenLabs のキーを追加するまで、AI音声はこの端末の音声で読み上げます（無料・キー不要・オフラインで動作）。ハイライトは1文字ずつではなく文節ごとに進みます。',
   'settings.section.ai-prompts': 'システムプロンプト',
   'settings.section.ai-prompts.text':
     '毎回のリクエストの前にAIへ伝える指示です。標準のプロンプトはAIの言語に従い、編集すると自分用のコピーになります。',
@@ -523,6 +526,12 @@ export const ja: Record<MessageKey, string> = {
   'ai.panelOpens': 'パネルを開いたときの動作',
   'ai.waitForChoice': '待機する（自動実行しない）',
   'ai.runPreset': '「{label}」を自動実行',
+  'ai.deviceVoice': '音声',
+  'ai.deviceVoiceHint':
+    'この端末にインストールされている音声です（日本語の音声を先頭に表示）。このブラウザにのみ保存されます。',
+  'ai.deviceVoiceAuto': '自動（最初の日本語音声）',
+  'ai.deviceVoiceNone': 'このブラウザには読み上げ用の音声がありません。',
+  'ai.playSample': 'サンプルを再生',
   'ai.voiceSpeed': 'AI音声の再生速度',
   'ai.voiceSpeedHint':
     '声の高さを変えずに再生速度を調整します（ハイライトも速度に合わせて追従します）。',
@@ -899,7 +908,7 @@ export const ja: Record<MessageKey, string> = {
   'reader.lorebook': '用語集',
   'reader.askAi': 'AIに質問',
   'reader.askAiTitle': '選択箇所についてAIに質問',
-  'reader.aiVoice': 'AI音声（ElevenLabs）',
+  'reader.aiVoice': 'AI音声',
   'reader.audiobookshelf': 'Audiobookshelf',
   'reader.audiobook': 'オーディオブック',
   'reader.notesOnly': 'メモありのみ',
@@ -944,7 +953,10 @@ export const ja: Record<MessageKey, string> = {
   'reader.showMore': 'さらに表示（残り{count}件）',
   'reader.previous': '前へ',
   'reader.next': '次へ',
-  'reader.ttsNoKey': '音声読み上げには ElevenLabs の APIキーが必要です。',
+  'reader.ttsNoDevice':
+    'このブラウザには読み上げ用の音声がありません。読み上げるには AI設定で ElevenLabs のAPIキーを追加してください。',
+  'reader.ttsDeviceError': '端末の音声が停止しました：{error}',
+  'reader.deviceVoice': '端末の音声',
   'reader.openAiSettings': 'AI設定を開く',
   'reader.ttsNoVoice': '音声読み上げには ElevenLabs の音声ID（Voice ID）が必要です。',
   'reader.ttsNoText': '現在の位置より後にテキストがありません',

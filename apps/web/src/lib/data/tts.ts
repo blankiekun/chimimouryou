@@ -5,9 +5,10 @@
  */
 
 /**
- * Text-to-speech with ElevenLabs' API (with timestamps), called directly from the
- * browser with the key from Settings → AI. The per-character timestamps let the
- * reader highlight what is being said. Not part of upstream.
+ * Text-to-speech for the AI voice. Without an ElevenLabs key it uses this device's
+ * Web Speech voices (free, offline; `boundary` events give a phrase-level highlight).
+ * With one it calls ElevenLabs' API (with timestamps) directly from the browser; the
+ * per-character timestamps let the reader highlight what is being said. Not part of upstream.
  */
 
 import {
@@ -101,7 +102,7 @@ export async function synthesizeSpeech(
 }
 
 export interface TimelineEntry {
-  /** Seconds into the chunk's audio */
+  /** Seconds into the chunk's audio (ElevenLabs), or offset in its speech text (device voice) */
   time: number;
   /** Character counts (as bookmarks) of the phrase */
   start: number;
@@ -146,19 +147,90 @@ export function readingTimeline(chunk: ReadingParagraph, alignment?: SpeechAlign
 
     return alignment.character_start_times_seconds[index < 0 ? offsets.length - 1 : index] ?? 0;
   };
-  const timeline: TimelineEntry[] = [];
+  const timeline = phrases(chunk).map(({ offset, start, end }) => ({
+    time: timeAt(offset),
+    start,
+    end
+  }));
+
+  return timeline.length ? timeline : whole;
+}
+
+/** Phrases of a chunk (split after 。！？、 and closing quotes) with their offset in its text. */
+function phrases(chunk: ReadingParagraph) {
+  const result: { offset: number; start: number; end: number }[] = [];
   let count = chunk.startCharCount;
 
   for (const match of chunk.text.matchAll(/[^。！？!?、\n]+[。！？!?、」』）]*|\n/g)) {
     const counted = countTextCharacters(match[0]);
 
     if (counted) {
-      timeline.push({ time: timeAt(match.index ?? 0), start: count, end: count + counted });
+      result.push({ offset: match.index ?? 0, start: count, end: count + counted });
     }
     count += counted;
   }
 
-  return timeline.length ? timeline : whole;
+  return result;
+}
+
+/**
+ * Phrases of a chunk keyed by where they start in its speech text (`time` is that
+ * offset), so `timelineEntryAt(phrases, event.charIndex)` maps a Web Speech
+ * `boundary` event to the phrase being said.
+ */
+export function spokenPhrases(chunk: ReadingParagraph): TimelineEntry[] {
+  return phrases(chunk).map(({ offset, start, end }) => ({
+    time: speechText(chunk.text.slice(0, offset)).length,
+    start,
+    end
+  }));
+}
+
+/** Which voice reads: the device's unless an ElevenLabs key is set. */
+export function ttsBackend(elevenLabsKey: string): 'device' | 'elevenlabs' {
+  return elevenLabsKey.trim() ? 'elevenlabs' : 'device';
+}
+
+export const deviceSpeechAvailable = () => typeof speechSynthesis !== 'undefined';
+
+const isJapanese = (voice: SpeechSynthesisVoice) => /^ja\b/i.test(voice.lang);
+
+/** This device's voices, Japanese first. Browsers may load them late, so this waits briefly. */
+export async function deviceVoices() {
+  if (!deviceSpeechAvailable()) {
+    return [];
+  }
+
+  let voices = speechSynthesis.getVoices();
+
+  if (!voices.length) {
+    await new Promise((resolve) => {
+      speechSynthesis.addEventListener('voiceschanged', resolve, { once: true });
+      setTimeout(resolve, 1500);
+    });
+    voices = speechSynthesis.getVoices();
+  }
+
+  return [...voices].sort((a, b) => Number(isJapanese(b)) - Number(isJapanese(a)));
+}
+
+/** The chosen voice, else the first Japanese one; undefined lets the browser pick for ja-JP. */
+export function pickDeviceVoice(voices: SpeechSynthesisVoice[], name: string) {
+  return voices.find((voice) => voice.name === name) ?? voices.find(isJapanese);
+}
+
+export function deviceUtterance(
+  text: string,
+  voice: SpeechSynthesisVoice | undefined,
+  rate: number
+) {
+  const utterance = new SpeechSynthesisUtterance(text);
+
+  utterance.lang = voice?.lang ?? 'ja-JP';
+  utterance.voice = voice ?? null;
+  utterance.rate = rate;
+
+  return utterance;
 }
 
 /** The entry being spoken at `seconds`. */
