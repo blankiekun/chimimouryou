@@ -326,9 +326,6 @@ export const ja: Record<MessageKey, string> = {
   'settings.section.ai-features': '機能',
   'settings.section.ai-features.text':
     '各機能が使う接続とモデルです。新しい接続では機能ごとに適したモデルが選ばれます。ここで変更できます。',
-  'settings.section.ai-voice': '端末の音声',
-  'settings.section.ai-voice.text':
-    'ElevenLabs のキーを追加するまで、AI音声はこの端末の音声で読み上げます（無料・キー不要・オフラインで動作）。ハイライトは1文字ずつではなく文節ごとに進みます。',
   'settings.section.ai-prompts': 'システムプロンプト',
   'settings.section.ai-prompts.text':
     '毎回のリクエストの前にAIへ伝える指示です。標準のプロンプトはAIの言語に従い、編集すると自分用のコピーになります。',
@@ -536,7 +533,6 @@ export const ja: Record<MessageKey, string> = {
   'ai.voiceSpeedHint':
     '声の高さを変えずに再生速度を調整します（ハイライトも速度に合わせて追従します）。',
   'ai.voiceId': 'ElevenLabs 音声ID（Voice ID）',
-  'ai.voiceIdHint': '本の読み上げに使用する音声のIDです。',
   'ai.voiceIdPlaceholder': '例：{id}',
   'ai.lorebookAuto': '用語集を自動更新する',
   'ai.lorebookAutoHint':
@@ -586,8 +582,6 @@ export const ja: Record<MessageKey, string> = {
   'ai.modelsCount': '{count} 個のモデル',
   'ai.needsKey': 'この端末にキーが必要です',
   'ai.notTested': '未テスト',
-  'ai.noConnections':
-    'まだ接続がありません。OpenRouter（全ベンダー、無料モデルあり）か Google AI Studio（無料の Gemini）のキーで追加してください。',
   'ai.addConnection': '接続を追加',
   'ai.testAll': 'すべてテスト',
   'ai.testing': 'テスト中…',
@@ -634,7 +628,45 @@ export const ja: Record<MessageKey, string> = {
   'ai.sameAsAsk': '「AIに質問」と同じ',
   'ai.sameAsRecap': '「あらすじ」と同じ',
   'ai.needsConnection': '接続が必要です',
-  'ai.needsVoiceConnection': '音声の接続（ElevenLabs）が必要です',
+  'ai.getStarted': 'はじめに',
+  'ai.getStartedText': '接続はひとつで足ります。別のものを選ぶまで、すべての機能がそれを使います。',
+  'ai.startHere': 'ここから',
+  'ai.startHereLead':
+    'プロバイダーをひとつ接続すれば、AIに質問・これまでのあらすじ・ロアブックがすべて使えます。あとから追加もできます。',
+  'ai.connectOpenRouter': 'OpenRouterで接続',
+  'ai.connecting': '接続中…',
+  'ai.connectOpenRouterHint':
+    'openrouter.aiでサインインして承認すると、キーを持ってこのページに戻ります。',
+  'ai.connectOpenRouterHttps':
+    'OpenRouterでの接続にはhttpsのアドレスが必要です。代わりに下にキーを貼り付けてください。',
+  'ai.orPasteKey': 'またはキーを貼り付け',
+  'ai.pasteKey': 'キーを貼り付け',
+  'ai.paste': '貼り付け',
+  'ai.connect': '接続',
+  'ai.gettingKey': '{provider}のキーを取得する',
+  'ai.stepOpenRouterCredits':
+    '任意：クレジットを追加します。「無料」のモデルはクレジットなしで使えます（1日50回まで）。',
+  'ai.stepOpenRouterKey':
+    '{link}で、利用上限つきのキーを作成します。漏れても大きな請求になりません。',
+  'ai.stepOpenRouterPaste':
+    'キー（{prefix}で始まり、一度だけ表示されます）をコピーして上に貼り付けます。',
+  'ai.stepCreateKey': '{link}でアカウントとAPIキーを作成します。',
+  'ai.stepPaste': 'キーをコピーして上に貼り付け、「接続」を押します。',
+  'ai.otherProviders': 'ほかのプロバイダー',
+  'ai.otherProvidersHint': 'Ollama、LM Studioなどのサーバーは、下の「接続を追加」から設定します。',
+  'ai.deviceVoices': 'この端末の音声',
+  'ai.deviceVoicesHint': '無料、キー不要。自然な音声にはElevenLabsのキーを追加します。',
+  'ai.voiceConnectionHint':
+    '音声の接続を追加するまでは、この端末の音声で読みます（無料、キー不要、オフラインでも動作）。「接続」でElevenLabsのキーを追加すると切り替わります。',
+  'ai.voiceNoKeyHint':
+    'この接続のキーはこの端末にありません。「接続」で追加してください。それまではこの端末の音声で読みます。',
+  'ai.voiceModelHint': 'ElevenLabsのモデルです。ハイライトには文字ごとのタイムスタンプが必要です。',
+  'ai.elevenLabsVoiceHint': 'ElevenLabsのライブラリにある音声（日本語が先）。',
+  'ai.chooseVoice': '音声を選択',
+  'ai.loadingVoices': '音声を読み込み中…',
+  'ai.withoutVoiceKey': '音声キーがないとき',
+  'ai.withoutVoiceKeyText':
+    'AI音声はこの端末の音声を使います（無料、キー不要、オフラインでも動作）。ハイライトは文字ごとではなく句ごとに進みます。自然な音声と正確なタイミングには、「接続」でElevenLabsのキーを追加してください。',
   'ai.connectionFor': '{feature}の接続',
   'ai.modelFor': '{feature}のモデル',
   'ai.voiceLink': '音声 ↓',

@@ -12,8 +12,6 @@ import { writableNumberLocalStorageSubject } from '$lib/data/internal/writable-n
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 
-/** ElevenLabs' API, called directly from the browser (it allows cross-origin requests). */
-export const elevenLabsApiUrl = 'https://api.elevenlabs.io/v1';
 export const defaultElevenLabsModel = 'eleven_v4';
 
 /** Removes an API key from text that may be shown or logged (e.g. an echoed error). */

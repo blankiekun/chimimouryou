@@ -11,6 +11,9 @@
   export let wide = false;
   /** Shown after the title, e.g. the number of themes */
   export let count: number | undefined = undefined;
+  /** Replaces the title and description, e.g. Get started while AI has no connection */
+  export let title = '';
+  export let description = '';
 
   const view = getSettingsView();
   const info = findSettingsSection(id);
@@ -28,8 +31,13 @@
     aria-labelledby="{id}-heading"
   >
     <header class="settings-section-header">
-      <SectionHead id="{id}-heading" number={info.number} title={$t$(info.label)} {count} />
-      <p>{$t$(info.description)}</p>
+      <SectionHead
+        id="{id}-heading"
+        number={info.number}
+        title={title || $t$(info.label)}
+        {count}
+      />
+      <p>{description || $t$(info.description)}</p>
     </header>
     <div class="settings-section-grid" class:settings-section-grid-wide={wide}>
       <slot />

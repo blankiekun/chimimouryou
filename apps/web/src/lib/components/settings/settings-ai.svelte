@@ -5,22 +5,53 @@
   import SettingsAiPrompts from '$lib/components/settings/settings-ai-prompts.svelte';
   import AiConnections from '$lib/components/settings/ai/ai-connections.svelte';
   import AiFeatures from '$lib/components/settings/ai/ai-features.svelte';
+  import AiGetStarted from '$lib/components/settings/ai/ai-get-started.svelte';
+  import { testConnection } from '$lib/data/ai-client';
+  import { aiFeatureState$, connectProvider } from '$lib/data/ai-connections';
   import {
     aiConnections$,
     askAiDefaultPreset$,
     askAiPresets$,
     askAiReaderNote$,
     defaultAskAiPresets,
-    lorebookAutoInterval$,
-    ttsPlaybackRate$,
-    ttsVoiceId$
+    lorebookAutoInterval$
   } from '$lib/data/ai-settings';
+  import { exchangeOpenRouterCode, openRouterCallback } from '$lib/data/openrouter-oauth';
   import { t$ } from '$lib/i18n';
+  import { onMount } from 'svelte';
 
   const link = (href: string, text: string) =>
     `<a href="${href}" target="_blank" rel="noreferrer">${text}</a>`;
 
   $: connectionCount = $aiConnections$.filter((c) => !c.deleted).length;
+  // No text connection (nor the previous release's OpenRouter key): show Get started.
+  $: firstRun = !$aiFeatureState$.ask.connection;
+
+  let signingIn = false;
+  let signInError = '';
+
+  onMount(() => {
+    const callback = openRouterCallback(new URL(window.location.href));
+
+    if (!callback) {
+      return;
+    }
+
+    // The code leaves the address bar before anything else runs. This component mounts
+    // before the settings page, whose onMount then opens the section named here;
+    // SvelteKit's replaceState isn't ready yet, so this is the browser's own.
+    const clean = new URL(callback.cleanUrl);
+
+    clean.searchParams.set('section', 'ai');
+    clean.hash = 'ai-connections';
+    window.history.replaceState(window.history.state, '', clean);
+
+    signingIn = true;
+    exchangeOpenRouterCode(callback.code, callback.state)
+      .then((key) => testConnection(connectProvider('openrouter', key)))
+      .catch((error) => (signInError = error instanceof Error ? error.message : String(error)))
+      .finally(() => (signingIn = false));
+  });
 
   function updatePreset(index: number, changes: Partial<{ label: string; prompt: string }>) {
     $askAiPresets$ = $askAiPresets$.map((preset, i) =>
@@ -44,8 +75,17 @@
   }
 </script>
 
-<SettingsSection id="ai-connections" wide count={connectionCount || undefined}>
+<SettingsSection
+  id="ai-connections"
+  wide
+  count={connectionCount || undefined}
+  title={firstRun ? $t$('ai.getStarted') : ''}
+  description={firstRun ? $t$('ai.getStartedText') : ''}
+>
   <div data-settings-item data-settings-search="{$t$('ai.connection')} api key openrouter gemini">
+    {#if firstRun}
+      <AiGetStarted {signingIn} {signInError} />
+    {/if}
     <AiConnections />
   </div>
 </SettingsSection>
@@ -153,31 +193,6 @@
 </SettingsSection>
 
 <SettingsAiVoice />
-
-<SettingsSection id="ai-read-aloud">
-  <SettingsItemGroup title={$t$('ai.voiceId')} tooltip={$t$('ai.voiceIdHint')}>
-    <input
-      id="tts-voice"
-      autocomplete="off"
-      placeholder={$t$('ai.voiceIdPlaceholder', { id: '21m00Tcm4TlvDq8ikWAM' })}
-      aria-label={$t$('ai.voiceId')}
-      class="app-input"
-      bind:value={$ttsVoiceId$}
-    />
-  </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('ai.voiceSpeed')} tooltip={$t$('ai.voiceSpeedHint')}>
-    <select
-      id="tts-speed"
-      class="app-input"
-      aria-label={$t$('ai.voiceSpeed')}
-      bind:value={$ttsPlaybackRate$}
-    >
-      {#each [0.75, 0.9, 1, 1.1, 1.25, 1.5] as rate}
-        <option value={rate}>{rate}×</option>
-      {/each}
-    </select>
-  </SettingsItemGroup>
-</SettingsSection>
 
 <SettingsSection id="ai-guide" keywords="api key openrouter elevenlabs voice">
   <div class="guide-columns">

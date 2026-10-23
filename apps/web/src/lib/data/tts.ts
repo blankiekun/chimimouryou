@@ -12,13 +12,13 @@
  */
 
 import {
-  elevenLabsApiKey$,
-  elevenLabsApiUrl,
-  elevenLabsModel$,
+  aiConnectionKeys$,
   defaultElevenLabsModel,
   redactSecret,
   ttsVoiceId$
 } from '$lib/data/ai-settings';
+import { resolveFeature } from '$lib/data/ai-connections';
+import { authHeaders, connectionBaseUrl } from '$lib/data/ai-providers';
 import { speechText, type ReadingParagraph } from '$lib/functions/tts/extract-reading-text';
 import { countTextCharacters } from '$lib/functions/get-character-count';
 
@@ -44,30 +44,51 @@ function base64ToBlob(base64: string, type: string) {
   return new Blob([bytes], { type });
 }
 
+/**
+ * The AI voice's ElevenLabs connection with its key from the connection store (not the
+ * previous release's mirrored setting); undefined reads with this device's voices.
+ */
+export function elevenLabsVoice() {
+  const { connection, provider, model } = resolveFeature('voice');
+  const key = connection ? (aiConnectionKeys$.getValue()[connection.id] ?? '').trim() : '';
+
+  if (!connection || provider?.id !== 'elevenlabs' || !key) {
+    return undefined;
+  }
+
+  return {
+    provider,
+    key,
+    model: model.trim() || defaultElevenLabsModel,
+    baseUrl: connectionBaseUrl(provider, connection.endpoint)
+  };
+}
+
 /** `previousText`/`nextText` let the voice keep its intonation across chunks; they aren't read. */
 export async function synthesizeSpeech(
   text: string,
   signal?: AbortSignal,
   context: { previousText?: string; nextText?: string } = {}
 ): Promise<Speech> {
-  const apiKey = elevenLabsApiKey$.getValue();
+  const eleven = elevenLabsVoice();
   const voice = ttsVoiceId$.getValue();
 
-  if (!apiKey) {
-    throw new Error('Add an ElevenLabs API key in Settings → AI first');
+  if (!eleven) {
+    throw new Error('Add an ElevenLabs connection in Settings → AI first');
   }
   if (!voice) {
-    throw new Error('Set a voice ID in Settings → AI first');
+    throw new Error('Choose a voice in Settings → AI → Voice first');
   }
 
+  const apiKey = eleven.key;
   const response = await fetch(
-    `${elevenLabsApiUrl}/text-to-speech/${encodeURIComponent(voice)}/with-timestamps?output_format=mp3_44100_128`,
+    `${eleven.baseUrl}/text-to-speech/${encodeURIComponent(voice)}/with-timestamps?output_format=mp3_44100_128`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'xi-api-key': apiKey },
+      headers: { 'Content-Type': 'application/json', ...authHeaders(eleven.provider, apiKey) },
       body: JSON.stringify({
         text,
-        model_id: elevenLabsModel$.getValue().trim() || defaultElevenLabsModel,
+        model_id: eleven.model,
         ...(context.previousText && { previous_text: context.previousText }),
         ...(context.nextText && { next_text: context.nextText })
       }),
@@ -184,11 +205,6 @@ export function spokenPhrases(chunk: ReadingParagraph): TimelineEntry[] {
     start,
     end
   }));
-}
-
-/** Which voice reads: the device's unless an ElevenLabs key is set. */
-export function ttsBackend(elevenLabsKey: string): 'device' | 'elevenlabs' {
-  return elevenLabsKey.trim() ? 'elevenlabs' : 'device';
 }
 
 export const deviceSpeechAvailable = () => typeof speechSynthesis !== 'undefined';
