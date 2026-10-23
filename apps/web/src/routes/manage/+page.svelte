@@ -92,6 +92,7 @@
   import { dialogManager } from '$lib/data/dialog-manager';
   import { pagePath, standalone } from '$lib/data/env';
   import FirstRun from '$lib/components/standalone/first-run.svelte';
+  import { backgroundAnalysis$, catchUpAnalysis } from '$lib/data/background-analysis';
   import InstallHint from '$lib/components/standalone/install-hint.svelte';
   import LibraryEmpty from '$lib/components/standalone/library-empty.svelte';
   import { needsFirstRun, storageChosen$ } from '$lib/data/standalone-storage';
@@ -313,6 +314,8 @@
   }
 
   onDestroy(() => dialogManager.dialogs$.next([]));
+  // Standalone: estimates and furigana still missing are made in the background, once per start.
+  $: if (standalone && $bookCards$ && !isLoading) catchUpAnalysis();
 
   onMount(() => {
     const pending = takePendingImport();
@@ -1514,6 +1517,11 @@
           >
         </div>
       {/if}
+      {#if standalone && $backgroundAnalysis$}
+        <p class="library-analysing" role="status">
+          {$t$('home.analysing', $backgroundAnalysis$)}
+        </p>
+      {/if}
       {#if isLoading}
         <LibrarySkeleton mode={$libraryDisplayMode$} />
       {:else if $bookCards$.length && isHome}
@@ -2018,6 +2026,13 @@
       flex-direction: column;
       align-items: flex-start;
     }
+  }
+
+  .library-analysing {
+    margin-bottom: 1rem;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+    font-variant-numeric: tabular-nums;
   }
 
   .library-empty {

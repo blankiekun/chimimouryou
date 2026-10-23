@@ -372,6 +372,13 @@ export class BrowserStorageHandler extends BaseStorageHandler {
         lastBookOpen: storedBookData.lastBookOpen || 0,
         isPlaceholder: !storedBookData.elementHtml
       });
+
+      // Standalone: its estimate and furigana in the background (background-analysis.ts).
+      if (standalone && storedBookData.elementHtml) {
+        import('$lib/data/background-analysis')
+          .then(({ analyseInBackground }) => analyseInBackground([data.title]))
+          .catch(() => undefined);
+      }
     }
 
     BaseStorageHandler.reportProgress();

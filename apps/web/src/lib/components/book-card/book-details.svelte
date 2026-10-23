@@ -35,6 +35,7 @@
     checkAnalysisTools,
     keptEstimate,
     localEstimate,
+    localEstimateSaved$,
     localWordList,
     type LocalEstimate
   } from '$lib/data/analysis-tools';
@@ -193,7 +194,15 @@
         ? generatedReadings$(book.title).subscribe()
         : undefined;
 
-    return () => readings?.unsubscribe();
+    // Standalone: an estimate made in the background (background-analysis.ts) shows at once.
+    const saved = localEstimateSaved$.subscribe((title) => {
+      if (title === book.title && estimating === undefined) load();
+    });
+
+    return () => {
+      readings?.unsubscribe();
+      saved.unsubscribe();
+    };
   });
 
   function hours(count: number) {

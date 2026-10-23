@@ -1,7 +1,8 @@
 <script lang="ts">
   /**
    * Standalone first run (plan S1): where books live, before Home. The choice becomes
-   * `storageSource$`; Settings → Sync changes it later.
+   * `storageSource$`; Settings → Sync changes it later. Where the analysis tools run, it offers them
+   * and the Generated furigana switch; a download started here carries on after it closes.
    */
   import { browser } from '$app/environment';
   import { faCaretDown, faCaretUp } from '@fortawesome/free-solid-svg-icons';
@@ -20,7 +21,17 @@
     storageChosen$
   } from '$lib/data/standalone-storage';
   import { StorageKey } from '$lib/data/storage/storage-types';
-  import { isOnline$ } from '$lib/data/store';
+  import { generatedFurigana$, isOnline$ } from '$lib/data/store';
+  import {
+    analysisDownload$,
+    analysisToolsSize,
+    analysisToolsState$,
+    analysisToolsSupported,
+    checkAnalysisTools,
+    downloadAnalysisTools,
+    type AnalysisFeature
+  } from '$lib/data/analysis-tools';
+  import { onMount } from 'svelte';
   import { yomitanSeen$ } from '$lib/data/yomitan';
   import { isMobile } from '$lib/functions/utils';
   import Fa from 'svelte-fa';
@@ -42,6 +53,29 @@
   let folderName = '';
   let folderError = '';
   let signedIn = driveSignedIn();
+
+  const toolsSupported = browser && analysisToolsSupported();
+  const mb = (bytes: number) => Math.round(bytes / 1e6).toLocaleString('en-US');
+  let toolsSize: number | undefined;
+  let toolsDeclined = false;
+
+  // Without furigana only the difficulty tools are fetched.
+  $: wantedTools = (
+    $generatedFurigana$ ? ['difficulty', 'furigana'] : ['difficulty']
+  ) as AnalysisFeature[];
+  $: toolsReady = wantedTools.every((feature) => $analysisToolsState$[feature] === 'ready');
+  $: toolsDownloading = !!$analysisDownload$ && !$analysisDownload$.error;
+  $: if (toolsSupported && !toolsDownloading) measureTools(wantedTools);
+
+  onMount(() => {
+    if (toolsSupported) checkAnalysisTools();
+  });
+
+  async function measureTools(features: AnalysisFeature[]) {
+    const size = await analysisToolsSize(features).catch(() => undefined);
+
+    if (features === wantedTools) toolsSize = size;
+  }
 
   $: offline = !$isOnline$;
   $: if (offline && selected === StorageKey.GDRIVE && !signedIn) selected = StorageKey.BROWSER;
@@ -185,6 +219,86 @@
           {morePlaces ? 'Fewer places' : 'More places'}
           <Fa icon={morePlaces ? faCaretUp : faCaretDown} size="xs" />
         </button>
+      {/if}
+
+      {#if toolsSupported && (toolsSize !== undefined || toolsReady || toolsDownloading)}
+        <section class="tools" aria-labelledby="first-run-tools-title">
+          <SectionHead id="first-run-tools-title" number={2} title="Analysis tools" />
+          <p class="first-run-intro">
+            Optional downloads that run in this browser: a difficulty estimate and a word list for
+            each book, and furigana on words the book gives none. Books are analysed in the
+            background after you add them.
+          </p>
+
+          <div class="tools-rows">
+            <div class="tool-row">
+              <span class="place-text">
+                <span class="place-title" id="first-run-furigana">Generated furigana</span>
+                <span class="place-description">
+                  Turn it off any time in Settings → Reader. Readings by
+                  <a href="https://github.com/blankiekun/yurigana" target="_blank" rel="noreferrer"
+                    >yurigana</a
+                  >.
+                </span>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                class="app-switch"
+                aria-checked={$generatedFurigana$}
+                aria-labelledby="first-run-furigana"
+                on:click={() => generatedFurigana$.next(!$generatedFurigana$)}
+              >
+                <span class="app-switch-thumb" />
+              </button>
+            </div>
+          </div>
+
+          {#if toolsReady}
+            <p class="tools-note">Downloaded. Books you add are analysed in the background.</p>
+          {:else if toolsDownloading}
+            {@const total = $analysisDownload$?.total ?? 0}
+            {@const done = $analysisDownload$?.done ?? 0}
+            <div
+              class="tools-track"
+              role="progressbar"
+              aria-label="Downloading the analysis tools"
+              aria-valuemin={0}
+              aria-valuemax={total}
+              aria-valuenow={done}
+            >
+              <div class="tools-fill" style:width="{total ? (done / total) * 100 : 0}%" />
+            </div>
+            <p class="tools-note">
+              {mb(done)} of {total ? mb(total) : '…'} MB. The download carries on after you continue;
+              Settings → Analysis tools shows it.
+            </p>
+          {:else if toolsDeclined}
+            <p class="tools-note">You can download them later in Settings → Analysis tools.</p>
+          {:else}
+            {#if $analysisDownload$?.error}
+              <p class="tools-note tools-error" role="alert">
+                The download failed: {$analysisDownload$.error}
+              </p>
+            {/if}
+            <span class="tools-actions">
+              <button
+                type="button"
+                class="app-button app-button-primary"
+                on:click={() => downloadAnalysisTools(wantedTools)}
+              >
+                Download{toolsSize ? ` (${mb(toolsSize)} MB)` : ''}
+              </button>
+              <button
+                type="button"
+                class="app-button app-button-quiet"
+                on:click={() => (toolsDeclined = true)}
+              >
+                Not now
+              </button>
+            </span>
+          {/if}
+        </section>
       {/if}
 
       <button
@@ -365,6 +479,59 @@
   .first-run-continue {
     display: flex;
     margin-top: 1.75rem;
+  }
+
+  .tools {
+    margin-top: 3rem;
+  }
+
+  .tools-rows {
+    border-top: 2px solid var(--font-color);
+  }
+
+  .tool-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .tool-row a {
+    color: var(--accent-strong-color);
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+
+  .tools-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+  }
+
+  .tools-track {
+    height: 3px;
+    margin-top: 1.25rem;
+    background: var(--app-progress-track);
+  }
+
+  .tools-fill {
+    height: 100%;
+    background: var(--app-progress-fill);
+  }
+
+  .tools-note {
+    margin-top: 0.75rem;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.5;
+  }
+
+  .tools-error {
+    color: var(--app-danger-color);
   }
 
   .first-run-server {
