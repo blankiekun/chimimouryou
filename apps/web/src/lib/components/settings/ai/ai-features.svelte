@@ -142,6 +142,7 @@
   }
 
   .features th[scope='row'] {
+    width: 9rem;
     padding: 0.6rem 0.75rem 0.6rem 0;
     color: var(--font-color);
     font-size: var(--type-body);
@@ -165,7 +166,7 @@
   }
 
   .col-connection {
-    width: 30%;
+    width: 27%;
     vertical-align: top;
   }
 

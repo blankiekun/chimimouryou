@@ -531,7 +531,7 @@ export const ja: Record<MessageKey, string> = {
   'ai.voiceIdPlaceholder': '例：{id}',
   'ai.lorebookAuto': '用語集を自動更新する',
   'ai.lorebookAutoHint':
-    '読書中、指定した文字数を読み進めるたびに、用語集（登場人物・地名・用語）をバックグラウンドで自動更新します。新しく読んだ部分のみがあらすじ用モデルへ送信されます（0で無効）。',
+    '読書中、指定した文字数を読み進めるたびに、用語集（登場人物・地名・用語）をバックグラウンドで自動更新します。新しく読んだ部分のみが用語集のモデルへ送信されます（0で無効）。',
   'ai.lorebookInterval': '用語集の自動更新間隔（文字数）',
   'ai.promptsLanguageHint': 'プロンプトは言語ごとに別々です。',
   'ai.prompt.ask': 'AIに質問',

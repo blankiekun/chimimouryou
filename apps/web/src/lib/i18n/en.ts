@@ -523,7 +523,7 @@ export const en = {
   'ai.voiceIdPlaceholder': 'e.g. {id}',
   'ai.lorebookAuto': 'Update the lorebook automatically',
   'ai.lorebookAutoHint':
-    'While reading, the lorebook (characters, places, terms) is updated in the background each time you read this many new characters. Only the new text is sent, to the recap model. 0 turns it off.',
+    'While reading, the lorebook (characters, places, terms) is updated in the background each time you read this many new characters. Only the new text is sent, to the Lorebook model. 0 turns it off.',
   'ai.lorebookInterval': 'Characters between lorebook updates',
   'ai.promptsLanguageHint': 'Each language has its own prompts.',
   'ai.prompt.ask': 'Ask AI',

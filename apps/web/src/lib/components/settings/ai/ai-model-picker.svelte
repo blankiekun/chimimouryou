@@ -81,6 +81,11 @@
   }
 
   function vendor(model: AiModel) {
+    // OpenRouter names read "Google: Gemma 3 27B"; the vendor is enough under the id.
+    if (model.name?.includes(':')) {
+      return model.name.split(':')[0];
+    }
+
     return model.name ?? (model.id.includes('/') ? model.id.split('/')[0].replace(/^~/, '') : '');
   }
 
@@ -145,58 +150,60 @@
         <p class="note error">{error}</p>
       {/if}
 
-      <table class="app-table models">
-        <thead>
-          <tr>
-            <th scope="col">{$t$('ai.model')}</th>
-            <th scope="col" class="n">{$t$('ai.context')}</th>
-            <th scope="col" class="n">{$t$('ai.perMillionIn')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each matching.slice(0, shownRows) as model (model.id)}
-            {@const tag = freeTag(provider, model)}
-            <tr class:selected={model.id === value}>
-              <td>
-                <button type="button" class="row-button" on:click={() => choose(model.id)}>
-                  <span class="model-id">
-                    {modelShortName(model.id)}
-                    {#if tag === 'trains'}
-                      <span class="app-tag app-tag-warning">{$t$('ai.freeTrains')}</span>
-                    {:else if tag === 'free'}
-                      <span class="app-tag">{$t$('ai.free')}</span>
-                    {/if}
-                  </span>
-                  <span class="model-sub">{vendor(model)}</span>
-                </button>
-              </td>
-              <td class="n">{formatContext(model.context)}</td>
-              <td class="n">{formatPrice(model.price)}</td>
-            </tr>
-          {/each}
-          {#if matching.length > shownRows}
+      <div class="models-scroll">
+        <table class="app-table models">
+          <thead>
             <tr>
-              <td colspan="3" class="note"
-                >{$t$('ai.moreModels', { count: matching.length - shownRows })}</td
-              >
+              <th scope="col">{$t$('ai.model')}</th>
+              <th scope="col" class="n">{$t$('ai.context')}</th>
+              <th scope="col" class="n">{$t$('ai.perMillionIn')}</th>
             </tr>
-          {/if}
-          <tr>
-            <td colspan="3">
-              <form class="typed" on:submit|preventDefault={() => typed.trim() && choose(typed)}>
-                <input
-                  class="typed-input"
-                  placeholder={$t$('ai.typeModelId')}
-                  aria-label={$t$('ai.typeModelId')}
-                  spellcheck="false"
-                  bind:value={typed}
-                />
-                <span class="model-sub">{$t$('ai.typeModelIdHint')}</span>
-              </form>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {#each matching.slice(0, shownRows) as model (model.id)}
+              {@const tag = freeTag(provider, model)}
+              <tr class:selected={model.id === value}>
+                <td>
+                  <button type="button" class="row-button" on:click={() => choose(model.id)}>
+                    <span class="model-id">
+                      {modelShortName(model.id)}
+                      {#if tag === 'trains'}
+                        <span class="app-tag app-tag-warning">{$t$('ai.freeTrains')}</span>
+                      {:else if tag === 'free'}
+                        <span class="app-tag">{$t$('ai.free')}</span>
+                      {/if}
+                    </span>
+                    <span class="model-sub">{vendor(model)}</span>
+                  </button>
+                </td>
+                <td class="n">{formatContext(model.context)}</td>
+                <td class="n">{formatPrice(model.price)}</td>
+              </tr>
+            {/each}
+            {#if matching.length > shownRows}
+              <tr>
+                <td colspan="3" class="note"
+                  >{$t$('ai.moreModels', { count: matching.length - shownRows })}</td
+                >
+              </tr>
+            {/if}
+            <tr>
+              <td colspan="3">
+                <form class="typed" on:submit|preventDefault={() => typed.trim() && choose(typed)}>
+                  <input
+                    class="typed-input"
+                    placeholder={$t$('ai.typeModelId')}
+                    aria-label={$t$('ai.typeModelId')}
+                    spellcheck="false"
+                    bind:value={typed}
+                  />
+                  <span class="model-sub">{$t$('ai.typeModelIdHint')}</span>
+                </form>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   {/if}
 </div>
@@ -267,21 +274,21 @@
     color: var(--app-danger-color);
   }
 
-  .models {
-    display: block;
+  .models-scroll {
     max-height: 22rem;
     overflow-y: auto;
   }
 
-  .models thead,
-  .models tbody {
-    display: table;
-    width: 100%;
+  .models {
     table-layout: fixed;
   }
 
-  .models th:first-child {
-    width: 62%;
+  .models th:nth-child(2) {
+    width: 4.5rem;
+  }
+
+  .models th:nth-child(3) {
+    width: 5.5rem;
   }
 
   .n {

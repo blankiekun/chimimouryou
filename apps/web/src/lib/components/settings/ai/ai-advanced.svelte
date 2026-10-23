@@ -304,6 +304,7 @@
   }
 
   .samplers th[scope='row'] {
+    width: 11rem;
     padding: 0.5rem 0.75rem 0.5rem 0;
     color: var(--font-color);
     font-size: var(--type-body);
@@ -313,6 +314,14 @@
   .samplers td {
     padding-top: 0.5rem;
     padding-bottom: 0.5rem;
+  }
+
+  .samplers .app-segmented {
+    flex-wrap: nowrap;
+  }
+
+  .samplers .app-segment {
+    padding: 0.25rem 0.6rem;
   }
 
   .value-input {
