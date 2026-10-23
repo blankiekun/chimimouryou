@@ -663,6 +663,7 @@ export const en = {
   'ai.voiceModelHint': "From ElevenLabs' list; it needs character timestamps for the highlight.",
   'ai.elevenLabsVoiceHint': 'Voices in your ElevenLabs library, Japanese first.',
   'ai.chooseVoice': 'Choose a voice',
+  'ai.otherVoiceId': 'Paste a voice ID…',
   'ai.loadingVoices': 'Loading voices…',
   'ai.withoutVoiceKey': 'Without a voice key',
   'ai.withoutVoiceKeyText':

@@ -216,6 +216,36 @@ describe('loadModels', () => {
     aiConnectionCache$.next({});
   });
 
+  it('loads ElevenLabs voices and its text-to-speech models; a 404 names the endpoint', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.endsWith('/voices')
+          ? new Response(JSON.stringify({ voices: [{ voice_id: 'v1', name: 'Aya' }] }))
+          : new Response(
+              JSON.stringify([
+                { model_id: 'eleven_new', can_do_text_to_speech: true },
+                { model_id: 'eleven_sts', can_do_text_to_speech: false }
+              ])
+            )
+      )
+    );
+    const eleven = { ...connection('elevenlabs'), kind: 'voice' as const };
+
+    expect((await loadModels(eleven, 'k')).map((model) => model.id)).toEqual(['eleven_new']);
+    expect(aiConnectionCache$.getValue().elevenlabs?.voiceList).toEqual([
+      { id: 'v1', name: 'Aya', lang: undefined }
+    ]);
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{"detail":{"message":"Not here"}}', { status: 404 }))
+    );
+    const error = await loadModels(eleven, 'k').catch((e: AiError) => e);
+
+    expect(error).toMatchObject({ title: 'Not found (404)', detail: 'Not here' });
+  });
+
   it('reads price, context, free models and parameters, and caches them', async () => {
     vi.stubGlobal(
       'fetch',
