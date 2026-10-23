@@ -316,17 +316,15 @@
   .settings-danger-zone {
     margin-top: 1.5rem;
     padding: 0 1rem;
-    border: 1px solid color-mix(in srgb, var(--app-danger-color) 35%, var(--border-color));
-    border-radius: calc(0.6rem * var(--app-radius-scale));
+    border: 1px solid var(--app-danger-color);
+    border-radius: 2px;
   }
 
   .settings-danger-zone-label {
     padding-top: 0.75rem;
     color: var(--app-danger-color);
-    font-size: 0.7rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font-size: var(--type-small);
+    font-weight: 700;
   }
 
   .settings-danger-zone > [data-settings-item]:last-child {

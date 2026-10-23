@@ -1,18 +1,14 @@
 <script lang="ts">
   import { browser } from '$app/environment';
-  import { replaceState } from '$app/navigation';
-  import {
-    faChevronDown,
-    faChevronLeft,
-    faChevronRight,
-    faMagnifyingGlass,
-    faUser
-  } from '@fortawesome/free-solid-svg-icons';
+  import { goto, replaceState } from '$app/navigation';
+  import { faArrowLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons';
   import { onDestroy, onMount, tick } from 'svelte';
   import { writable } from 'svelte/store';
   import { map, share, tap } from 'rxjs';
   import Fa from 'svelte-fa';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
+  import ImportMenu from '$lib/components/book-card/import-menu.svelte';
+  import { setPendingImport, type PendingImport } from '$lib/data/library-home';
   import SettingsAccount from '$lib/components/settings/settings-account.svelte';
   import SettingsLanguage from '$lib/components/settings/settings-language.svelte';
   import SettingsPlugins from '$lib/components/settings/settings-plugins.svelte';
@@ -31,8 +27,7 @@
   } from '$lib/components/settings/settings-sections';
   import SettingsThemeMode from '$lib/components/settings/settings-theme-mode.svelte';
   import SettingsThemes from '$lib/components/settings/settings-themes.svelte';
-  import { account$ } from '$lib/data/account';
-  import { settingsSyncState$ } from '$lib/data/account-settings-sync';
+  import { readerProfile } from '$lib/data/account-settings-sync';
   import { pagePath } from '$lib/data/env';
   import {
     addCharactersOnCompletion$,
@@ -121,10 +116,10 @@
   let noResults = false;
   /** Phones show the list of sections, or one area with a back button. */
   let mobileView: 'list' | 'section' = 'list';
-  let collapsedAreas = new Set<string>();
   let sectionsElement: HTMLElement;
   let searchInput: HTMLInputElement;
   let scrollToMatchTimer: ReturnType<typeof setTimeout> | undefined;
+  let themeCount: number | undefined;
 
   $: view.set({ area: activeArea, query });
   // Again after a language change: the texts searched are translated.
@@ -138,7 +133,15 @@
       )
   );
   $: activeAreaInfo = settingsAreas.find((area) => area.id === activeArea) ?? settingsAreas[0];
-  $: activeSectionInfo = findSettingsSection(activeSection);
+  $: hiddenPluginAreas = visibleAreas.length < settingsAreas.length;
+  $: areaDescription =
+    activeAreaInfo.id === 'reader'
+      ? $t$(
+          readerProfile() === 'phone'
+            ? 'settings.area.reader.phone'
+            : 'settings.area.reader.desktop'
+        )
+      : activeAreaInfo.description && $t$(activeAreaInfo.description);
 
   onMount(() => {
     const url = new URL(window.location.href);
@@ -164,15 +167,6 @@
 
   onDestroy(() => clearTimeout(scrollToMatchTimer));
 
-  function toggleArea(id: string) {
-    const next = new Set(collapsedAreas);
-
-    if (!next.delete(id)) {
-      next.add(id);
-    }
-    collapsedAreas = next;
-  }
-
   function backToList() {
     mobileView = 'list';
     query = '';
@@ -189,9 +183,6 @@
     query = '';
     mobileView = 'section';
     activeArea = section.area;
-    if (collapsedAreas.has(section.area)) {
-      collapsedAreas = new Set([...collapsedAreas].filter((area) => area !== section.area));
-    }
     activeSection = section.id;
     if (updateUrl) {
       replaceState(`?section=${section.area}#${section.id}`, {});
@@ -334,6 +325,11 @@
         // no-op
       });
   }
+
+  function importOnManage(value: PendingImport) {
+    setPendingImport(value);
+    goto(`${pagePath}/manage`);
+  }
 </script>
 
 <svelte:head>
@@ -343,16 +339,18 @@
 <svelte:window on:keydown={onKeydown} on:scroll={onScroll} />
 
 <div class="app-page-shell">
-  <AppHeader active="settings" currentBookId={$currentBookId$} />
+  <AppHeader active="settings" currentBookId={$currentBookId$}>
+    <!-- The import runs (with its progress and errors) in the library. -->
+    <ImportMenu
+      on:filesChange={(ev) => importOnManage({ files: Array.from(ev.detail) })}
+      on:importBackup={(ev) => importOnManage({ backup: ev.detail })}
+    />
+  </AppHeader>
 
-  <div
-    class="settings-layout mx-auto max-w-6xl px-4 pb-28 pt-[5.25rem] md:px-8 xl:px-10 xl:pt-[4.75rem]"
-    data-mobile={searching ? 'search' : mobileView}
-  >
+  <div class="settings-layout" data-mobile={searching ? 'search' : mobileView}>
     <aside class="settings-sidebar" aria-label={$t$('settings.categories')}>
-      <h1 class="settings-title">{$t$('nav.settings')}</h1>
+      <h1 class="settings-index-title">{$t$('nav.settings')}</h1>
       <div class="settings-search" role="search">
-        <Fa icon={faMagnifyingGlass} />
         <input
           bind:this={searchInput}
           bind:value={query}
@@ -362,50 +360,39 @@
           aria-keyshortcuts="Control+F Meta+F"
           on:keydown={onSearchKeydown}
         />
-        <span class="settings-search-shortcut" aria-hidden="true">
-          <span class="keycap">Ctrl</span><span class="keycap">F</span>
-        </span>
+        <kbd class="settings-search-shortcut" aria-hidden="true">Ctrl+F</kbd>
       </div>
       <nav class="settings-nav" aria-label={$t$('settings.sectionsLabel')}>
-        {#each visibleAreas as area (area.id)}
-          {@const collapsed = collapsedAreas.has(area.id)}
+        {#each visibleAreas as area, areaIndex (area.id)}
+          {@const current = !searching && area.id === activeArea}
           <div class="settings-nav-area">
-            <div class="settings-nav-area-heading">
-              <button
-                type="button"
-                class="settings-nav-area-button"
-                class:settings-nav-area-active={!searching && area.id === activeArea}
-                on:click={() => showSection(area.sections[0].id)}
-              >
-                {$t$(area.label)}
-              </button>
-              <button
-                type="button"
-                class="settings-nav-collapse"
-                aria-expanded={!collapsed}
-                aria-label={$t$(collapsed ? 'settings.showSections' : 'settings.hideSections', {
-                  area: $t$(area.label)
-                })}
-                on:click={() => toggleArea(area.id)}
-              >
-                <span class="settings-nav-chevron-down" class:settings-nav-collapsed={collapsed}
-                  ><Fa icon={faChevronDown} /></span
-                >
-              </button>
-            </div>
-            {#if !collapsed}
+            <button
+              type="button"
+              class="settings-nav-area-button"
+              class:settings-nav-area-active={current}
+              aria-current={current ? 'true' : undefined}
+              on:click={() => showSection(area.sections[0].id)}
+            >
+              <span class="settings-nav-number">{String(areaIndex + 1).padStart(2, '0')}</span>
+              <span class="settings-nav-area-text">
+                <span class="settings-nav-area-label">{$t$(area.label)}</span>
+                <span class="settings-nav-area-sections">
+                  {area.sections.map((section) => $t$(section.label)).join(' · ')}
+                </span>
+              </span>
+              <span class="settings-nav-chevron"><Fa icon={faChevronRight} /></span>
+            </button>
+            {#if current}
               <div class="settings-nav-items">
                 {#each area.sections as section (section.id)}
                   <button
                     type="button"
                     class="settings-nav-item"
-                    class:settings-nav-item-active={!searching && section.id === activeSection}
-                    aria-current={!searching && section.id === activeSection ? 'page' : undefined}
+                    class:settings-nav-item-active={section.id === activeSection}
+                    aria-current={section.id === activeSection ? 'location' : undefined}
                     on:click={() => showSection(section.id)}
                   >
-                    <span class="settings-nav-icon"><Fa icon={section.icon} /></span>
-                    <span>{$t$(section.label)}</span>
-                    <span class="settings-nav-chevron"><Fa icon={faChevronRight} /></span>
+                    {$t$(section.label)}
                   </button>
                 {/each}
               </div>
@@ -413,51 +400,43 @@
           </div>
         {/each}
       </nav>
-      <div class="settings-sync-note">
-        {#if $account$}
-          <span class="sync-dot" data-state={$settingsSyncState$.state} />
-          <span class="min-w-0 truncate" title={$t$('settings.syncNote')}>
-            {$account$.username}
-          </span>
-          <button
-            type="button"
-            class="app-button app-button-quiet ml-auto"
-            on:click={() => showSection('general-account')}
-          >
-            {$t$('settings.account')}
-          </button>
-        {:else}
-          <Fa icon={faUser} />
-          <button
-            type="button"
-            class="app-button app-button-quiet"
-            on:click={() => showSection('general-account')}
-          >
-            {$t$('settings.signInToSync')}
-          </button>
-        {/if}
-      </div>
+      {#if hiddenPluginAreas}
+        <p class="settings-plugin-note">{$t$('settings.pluginNote')}</p>
+      {/if}
     </aside>
 
     <main class="settings-main" aria-label={$t$('nav.settings')}>
-      <button type="button" class="settings-back" on:click={backToList}>
-        <Fa icon={faChevronLeft} />
+      <button type="button" class="settings-back app-button app-button-quiet" on:click={backToList}>
+        <Fa icon={faArrowLeft} />
         {$t$('nav.settings')}
       </button>
-      <div class="settings-breadcrumb" aria-live="polite">
-        {#if searching}
-          <span>{$t$('settings.results', { query: query.trim() })}</span>
-        {:else}
-          <span>{$t$(activeAreaInfo.label)}</span>
-          {#if activeSectionInfo}
-            <span class="opacity-50">›</span>
-            <span>{$t$(activeSectionInfo.label)}</span>
-          {/if}
+      {#if searching}
+        <h1 class="settings-title" aria-live="polite">
+          {$t$('settings.results', { query: query.trim() })}
+        </h1>
+      {:else}
+        <header class="settings-area-head">
+          <h1 class="settings-title">{$t$(activeAreaInfo.label)}</h1>
+          {#if areaDescription}<p>{areaDescription}</p>{/if}
+        </header>
+        {#if activeAreaInfo.sections.length > 1}
+          <div class="settings-chips" aria-label={$t$('settings.sectionsLabel')}>
+            {#each activeAreaInfo.sections as section (section.id)}
+              <button
+                type="button"
+                class="settings-chip"
+                class:settings-chip-active={section.id === activeSection}
+                aria-current={section.id === activeSection ? 'location' : undefined}
+                on:click={() => showSection(section.id)}
+              >
+                {$t$(section.label)}
+              </button>
+            {/each}
+          </div>
         {/if}
-      </div>
+      {/if}
       {#if noResults}
         <div class="settings-no-results" role="status">
-          <Fa icon={faMagnifyingGlass} />
           <p>{$t$('settings.noResults', { query: query.trim() })}</p>
           <button type="button" class="app-button" on:click={() => (query = '')}>
             {$t$('settings.clearSearch')}
@@ -473,15 +452,14 @@
           <SettingsSection id="general-language" keywords="language japanese english 日本語 言語">
             <SettingsLanguage />
           </SettingsSection>
-          <SettingsSection id="general-theme">
-            <SettingsThemeMode />
-          </SettingsSection>
           <SettingsSection
-            id="general-custom-themes"
-            keywords="editor colors colours import export json css font roundness blur"
+            id="general-theme"
+            keywords="editor colors colours import export json css font roundness blur custom"
+            count={themeCount}
             wide
           >
-            <SettingsThemes />
+            <SettingsThemeMode />
+            <SettingsThemes bind:count={themeCount} />
           </SettingsSection>
           <SettingsPlugins />
           {#each $activePlugins$ as plugin (plugin.id)}
@@ -569,33 +547,41 @@
 <style>
   .settings-layout {
     display: grid;
-    gap: 1.25rem;
+    max-width: 75rem;
     min-width: 0;
+    gap: 1.5rem;
+    margin: 0 auto;
+    padding: 5.25rem 1rem 3rem;
   }
 
+  .settings-index-title,
   .settings-title {
-    font-family: var(--app-font-display);
-    font-size: 1.6rem;
+    font-size: var(--type-display);
     font-weight: 400;
     line-height: 1.2;
   }
 
+  .settings-area-head p {
+    margin-top: 0.35rem;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
   .settings-search {
-    display: grid;
-    min-height: 2.5rem;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    display: flex;
+    min-height: var(--app-control-height);
     align-items: center;
-    gap: 0.6rem;
-    padding: 0.25rem 0.5rem 0.25rem 0.75rem;
-    border: 1px solid var(--app-control-border);
-    border-radius: calc(0.5rem * var(--app-radius-scale));
+    gap: 0.5rem;
+    padding: 0 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 2px;
     background: var(--app-control-bg);
-    color: var(--app-text-subtle);
   }
 
   .settings-search:focus-within {
     border-color: var(--app-focus-ring);
-    box-shadow: 0 0 0 1px var(--app-focus-ring);
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 2px;
   }
 
   .settings-search input {
@@ -606,216 +592,125 @@
     background: transparent;
     box-shadow: none;
     color: var(--font-color);
-    font-size: 0.9rem;
+    font-size: var(--type-small);
     outline: 0;
   }
 
-  .settings-search-shortcut {
-    display: inline-flex;
-    gap: 0.2rem;
+  .settings-search input::placeholder {
+    color: var(--app-muted-fg);
   }
 
-  .keycap {
-    display: inline-flex;
-    min-width: 1.3rem;
-    height: 1.3rem;
-    align-items: center;
-    justify-content: center;
-    padding: 0 0.3rem;
-    border: 1px solid var(--border-color);
-    border-radius: 0.3rem;
-    color: var(--app-text-subtle);
-    font-size: 0.65rem;
-    font-weight: 600;
-    line-height: 1;
-    text-transform: uppercase;
+  .settings-search-shortcut {
+    flex: none;
+    color: var(--app-muted-fg);
+    font-family: inherit;
+    font-size: var(--type-small);
   }
 
   .settings-nav {
     display: grid;
-    gap: 1rem;
     min-width: 0;
   }
 
-  .settings-nav-area-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
   .settings-nav-area-button {
-    padding: 0.2rem 0.5rem;
-    color: var(--app-text-subtle);
-    font-size: 0.7rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-
-  .settings-nav-area-button:hover,
-  .settings-nav-area-active {
-    color: var(--font-color);
-  }
-
-  .settings-nav-collapse {
-    display: inline-flex;
-    width: 1.6rem;
-    height: 1.6rem;
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    min-height: 2.6rem;
     align-items: center;
-    justify-content: center;
-    border-radius: 0.3rem;
-    color: var(--app-text-subtle);
-    font-size: 0.65rem;
-  }
-
-  .settings-nav-collapse:hover {
+    gap: 0.75rem;
+    padding: 0.4rem 0.75rem;
+    border-left: 3px solid transparent;
     color: var(--font-color);
+    font-size: var(--type-body);
+    text-align: left;
   }
 
-  .settings-nav-chevron-down {
-    display: inline-flex;
-    transition: transform 0.15s ease;
+  .settings-nav-area-button:hover {
+    background: color-mix(in srgb, var(--font-color) 5%, transparent);
   }
 
-  .settings-nav-collapsed {
-    transform: rotate(-90deg);
+  .settings-nav-number {
+    flex: none;
+    color: var(--app-muted-fg);
+    font-size: var(--type-label);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .settings-nav-area-text {
+    display: grid;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .settings-nav-area-sections,
+  .settings-nav-chevron {
+    display: none;
+  }
+
+  .settings-nav-area-active,
+  .settings-nav-area-active:hover {
+    border-left-color: var(--accent-color);
+    background: color-mix(in srgb, var(--accent-color) 10%, var(--background-color));
+  }
+
+  .settings-nav-area-active .settings-nav-number {
+    color: var(--accent-strong-color);
   }
 
   .settings-nav-items {
     display: grid;
-    gap: 1px;
-    min-width: 0;
-    margin-top: 0.15rem;
+    padding: 0.35rem 0 0.5rem 2.6rem;
   }
 
   .settings-nav-item {
-    display: flex;
-    width: 100%;
-    min-width: 0;
     min-height: 2rem;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.3rem 0.6rem;
-    border-radius: calc(0.35rem * var(--app-radius-scale));
+    padding: 0.2rem 0;
     color: var(--app-muted-fg);
-    font-size: 0.88rem;
+    font-size: var(--type-small);
     text-align: left;
-    transition:
-      background-color 0.15s ease,
-      color 0.15s ease;
   }
 
   .settings-nav-item:hover {
-    background: color-mix(in srgb, var(--font-color) 5%, transparent);
     color: var(--font-color);
   }
 
   .settings-nav-item-active,
   .settings-nav-item-active:hover {
-    background: transparent;
-    box-shadow: inset 2px 0 var(--accent-color);
-    color: var(--font-color);
-    font-weight: 600;
+    color: var(--accent-strong-color);
   }
 
-  .settings-nav-icon {
-    display: inline-flex;
-    width: 0.9rem;
-    flex: 0 0 auto;
-    justify-content: center;
-    color: var(--app-text-subtle);
-    font-size: 0.8rem;
-  }
-
-  .settings-nav-item-active .settings-nav-icon {
-    color: var(--accent-color);
-  }
-
-  .settings-nav-item > span:nth-child(2) {
-    min-width: 0;
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .settings-nav-chevron {
-    display: none;
-    color: var(--app-text-subtle);
-    font-size: 0.7rem;
-  }
-
-  .settings-sync-note {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    min-width: 0;
-    padding-top: 0.75rem;
-    border-top: 1px solid var(--border-color);
+  .settings-plugin-note {
     color: var(--app-muted-fg);
-    font-size: 0.8rem;
-  }
-
-  .sync-dot {
-    width: 0.45rem;
-    height: 0.45rem;
-    flex: 0 0 auto;
-    border-radius: 9999px;
-    background: color-mix(in srgb, var(--font-color) 26%, transparent);
-  }
-
-  .sync-dot[data-state='syncing'] {
-    background: var(--app-warning-color);
-  }
-
-  .sync-dot[data-state='synced'] {
-    background: var(--app-success-color);
-  }
-
-  .sync-dot[data-state='error'] {
-    background: var(--app-danger-color);
+    font-size: var(--type-small);
   }
 
   .settings-main {
     display: flex;
     min-width: 0;
-    max-width: 45rem;
     flex-direction: column;
     gap: 0.5rem;
   }
 
   .settings-back {
     display: none;
-    align-items: center;
-    gap: 0.5rem;
     align-self: flex-start;
-    padding: 0.4rem 0;
-    color: var(--accent-strong-color);
-    font-size: 0.9rem;
-    font-weight: 600;
+    margin-bottom: 0.75rem;
   }
 
-  .settings-breadcrumb {
-    display: flex;
-    min-height: 1.5rem;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.4rem;
-    color: var(--app-text-subtle);
-    font-size: 0.78rem;
+  .settings-chips {
+    display: none;
   }
 
   .settings-no-results {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
     gap: 0.75rem;
-    margin-top: 1rem;
-    padding: 2.5rem 1rem;
-    border: 1px dashed var(--border-color);
-    border-radius: calc(0.6rem * var(--app-radius-scale));
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 2px solid var(--font-color);
     color: var(--app-muted-fg);
-    text-align: center;
   }
 
   /* Sections come from several components; CSS order keeps the sidebar's order. */
@@ -823,7 +718,8 @@
     display: flex;
     min-width: 0;
     flex-direction: column;
-    gap: 3rem;
+    gap: 3.5rem;
+    margin-top: 2rem;
   }
 
   .settings-sections :global([data-settings-section][hidden]),
@@ -831,71 +727,127 @@
     display: none;
   }
 
-  /* Phones: a list of sections that drills into one area, with a back button */
+  /* Phones: a ruled list of areas that drills into one area, with a back link */
   @media (max-width: 899px) {
     .settings-layout[data-mobile='list'] .settings-main,
     .settings-layout[data-mobile='section'] .settings-sidebar,
     .settings-layout[data-mobile='search'] .settings-nav,
-    .settings-layout[data-mobile='search'] .settings-sync-note {
+    .settings-layout[data-mobile='search'] .settings-plugin-note,
+    .settings-layout[data-mobile='search'] .settings-index-title,
+    .settings-search-shortcut {
       display: none;
     }
 
     .settings-sidebar {
       display: grid;
-      gap: 1rem;
+      gap: 1.5rem;
     }
 
     .settings-layout[data-mobile='section'] .settings-back {
       display: inline-flex;
     }
 
-    .settings-nav-items {
-      border-top: 1px solid var(--border-color);
+    .settings-nav {
+      border-top: 2px solid var(--font-color);
     }
 
-    .settings-nav-item {
-      min-height: 3rem;
+    .settings-nav-area-button,
+    .settings-nav-area-active,
+    .settings-nav-area-active:hover {
+      min-height: 4.5rem;
+      padding: 0.75rem 0;
+      border-left: 0;
       border-bottom: 1px solid var(--border-color);
-      border-radius: 0;
-      font-size: 0.95rem;
+      background: transparent;
     }
 
-    .settings-nav-item-active,
-    .settings-nav-item-active:hover {
-      box-shadow: none;
-      font-weight: 400;
+    .settings-nav-number {
+      width: 1.25rem;
+      color: var(--accent-strong-color);
+      font-size: var(--type-small);
+    }
+
+    .settings-nav-area-label {
+      font-size: 1.0625rem;
+    }
+
+    .settings-nav-area-sections {
+      display: block;
+      margin-top: 0.2rem;
+      color: var(--app-muted-fg);
+      font-size: var(--type-small);
+      line-height: 1.5;
     }
 
     .settings-nav-chevron {
       display: inline-flex;
+      flex: none;
+      color: var(--app-muted-fg);
+      font-size: 0.7rem;
+    }
+
+    .settings-nav-items {
+      display: none;
+    }
+
+    .settings-chips {
+      display: flex;
+      gap: 0.5rem;
+      margin: 1rem -1rem 0;
+      padding: 0 1rem 0.25rem;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .settings-chip {
+      flex: none;
+      min-height: var(--app-control-height);
+      padding: 0 0.7rem;
+      border: 1px solid var(--border-color);
+      border-radius: 2px;
+      color: var(--font-color);
+      font-size: var(--type-small);
+      white-space: nowrap;
+    }
+
+    .settings-chip-active {
+      border-color: var(--font-color);
+      background: var(--font-color);
+      color: var(--background-color);
+    }
+
+    .settings-sections {
+      gap: 2.5rem;
+      margin-top: 1rem;
     }
   }
 
   @media (min-width: 900px) {
     .settings-layout {
-      grid-template-columns: 14rem minmax(0, 1fr);
+      grid-template-columns: 13.75rem minmax(0, 57rem);
       align-items: start;
-      gap: 3rem;
-      padding-bottom: 3rem;
+      gap: 4rem;
+      padding: 6.25rem 2.5rem 4rem;
+    }
+
+    .settings-index-title {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
     }
 
     .settings-sidebar {
       position: sticky;
-      top: 5.25rem;
+      top: 6.25rem;
       display: grid;
-      max-height: calc(100dvh - 6.5rem);
+      max-height: calc(100dvh - 7.5rem);
       align-content: start;
       gap: 1rem;
       overflow-y: auto;
-      padding: 0.25rem 0.25rem 1.25rem 0;
+      padding-bottom: 1.25rem;
       scrollbar-width: thin;
-    }
-  }
-
-  @media (min-width: 1280px) {
-    .settings-sidebar {
-      top: 4.75rem;
-      max-height: calc(100dvh - 6rem);
     }
   }
 </style>

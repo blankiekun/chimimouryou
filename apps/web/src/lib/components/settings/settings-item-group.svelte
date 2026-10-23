@@ -93,9 +93,9 @@
   }
 
   .settings-item-heading h3 {
-    font-size: 0.95rem;
-    font-weight: 600;
-    line-height: 1.35;
+    font-size: var(--type-body);
+    font-weight: 400;
+    line-height: 1.4;
   }
 
   .settings-item-heading h3::first-letter {
@@ -103,10 +103,11 @@
   }
 
   .settings-item-description {
+    max-width: 34rem;
     margin-top: 0.2rem;
     color: var(--app-muted-fg);
-    font-size: 0.8rem;
-    line-height: 1.5;
+    font-size: var(--type-small);
+    line-height: 1.55;
     white-space: pre-line;
   }
 
@@ -114,6 +115,16 @@
     flex: 0 1 auto;
     min-width: 0;
     max-width: 100%;
+  }
+
+  /* The switch's state shows in its track; the On/Off text stays for screen readers. */
+  .settings-item-control :global(.app-switch-text) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 
   .settings-item-after {
@@ -126,12 +137,22 @@
     max-width: 100%;
   }
 
+  /* Fields beside the label share one width; numbers are narrower. */
+  .settings-item:not(.settings-item-wide) .settings-item-control :global(.app-input) {
+    width: 16rem;
+    margin-top: 0;
+  }
+
+  .settings-item:not(.settings-item-wide)
+    .settings-item-control
+    :global(input.app-input[type='number']) {
+    width: 7rem;
+  }
+
   /* Rows matching the settings search (routes/settings/+page.svelte) */
   :global([data-settings-match]).settings-item {
     margin-inline: -0.75rem;
     padding-inline: 0.75rem;
-    border-radius: calc(0.4rem * var(--app-radius-scale));
-    background: color-mix(in srgb, var(--accent-color) 8%, transparent);
-    box-shadow: inset 2px 0 var(--accent-color);
+    background: color-mix(in srgb, var(--accent-color) 10%, transparent);
   }
 </style>

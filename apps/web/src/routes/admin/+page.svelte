@@ -1,16 +1,19 @@
 <script lang="ts">
-  import { faScrewdriverWrench, faSpinner, faUsers } from '@fortawesome/free-solid-svg-icons';
+  import { goto } from '$app/navigation';
+  import { faSpinner } from '@fortawesome/free-solid-svg-icons';
   import { onMount } from 'svelte';
   import { map, share } from 'rxjs';
   import Fa from 'svelte-fa';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
+  import ImportMenu from '$lib/components/book-card/import-menu.svelte';
+  import { setPendingImport, type PendingImport } from '$lib/data/library-home';
+  import AdminSection from '$lib/components/admin/admin-section.svelte';
   import EngineTool from '$lib/components/admin/engine-tool.svelte';
   import CatalogTool from '$lib/components/admin/catalog-tool.svelte';
   import SeriesTool from '$lib/components/admin/series-tool.svelte';
   import UpdateTool from '$lib/components/admin/update-tool.svelte';
   import DifficultyPanel from '$lib/components/book-card/difficulty-panel.svelte';
   import SettingsAdmin from '$lib/components/settings/settings-admin.svelte';
-  import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import { account$, canOpenAdminPanel, hasPermission } from '$lib/data/account';
   import { pagePath } from '$lib/data/env';
   import { database } from '$lib/data/store';
@@ -29,14 +32,23 @@
   // this only keeps the controls away from people who can't use them.
   $: user = $account$;
   $: tabs = [
-    { id: 'accounts' as Tab, label: 'Accounts', icon: faUsers, show: !!user?.admin },
-    {
-      id: 'tools' as Tab,
-      label: 'Tools',
-      icon: faScrewdriverWrench,
-      show: hasPermission(user, 'difficulty')
-    }
+    { id: 'accounts' as Tab, label: 'Accounts', show: !!user?.admin },
+    { id: 'tools' as Tab, label: 'Tools', show: hasPermission(user, 'difficulty') }
   ].filter((candidate) => candidate.show);
+  // Section numbers follow the tools this account sees.
+  $: tools = [
+    ...(user?.admin
+      ? [
+          { title: 'Updates', component: UpdateTool },
+          { title: 'Visual novel engine', component: EngineTool },
+          { title: 'Catalog', component: CatalogTool },
+          { title: 'Series', component: SeriesTool }
+        ]
+      : []),
+    ...(hasPermission(user, 'difficulty')
+      ? [{ title: 'Estimate difficulty', component: DifficultyPanel }]
+      : [])
+  ];
   $: if (tabs.length && !tabs.some((candidate) => candidate.id === tab)) {
     tab = tabs[0].id;
   }
@@ -48,6 +60,11 @@
       tab = requested;
     }
   });
+
+  function importOnManage(value: PendingImport) {
+    setPendingImport(value);
+    goto(`${pagePath}/manage`);
+  }
 </script>
 
 <svelte:head>
@@ -55,22 +72,27 @@
 </svelte:head>
 
 <div class="app-page-shell">
-  <AppHeader active={undefined} currentBookId={$currentBookId$} />
+  <AppHeader active={undefined} currentBookId={$currentBookId$}>
+    <!-- The import runs (with its progress and errors) in the library. -->
+    <ImportMenu
+      on:filesChange={(ev) => importOnManage({ files: Array.from(ev.detail) })}
+      on:importBackup={(ev) => importOnManage({ backup: ev.detail })}
+    />
+  </AppHeader>
 
-  <main class="mx-auto flex max-w-5xl flex-col gap-5 px-4 pb-28 pt-[5.25rem] md:px-8">
+  <main class="admin">
     <h1 class="admin-title">Admin panel</h1>
 
     {#if user === undefined}
       <p class="flex items-center gap-2"><Fa icon={faSpinner} spin /> Checking sign-in...</p>
     {:else if !canOpenAdminPanel(user)}
-      <SettingsItemGroup title="No access" wide>
-        <p class="text-sm">
-          {user ? 'This account' : 'You need to sign in with an account that'} can't use the admin panel.
-          <a class="underline" href="{pagePath}/settings?section=general#general-account"
-            >Account settings</a
-          >
-        </p>
-      </SettingsItemGroup>
+      <p class="admin-no-access">
+        {user ? 'This account' : 'You need to sign in with an account that'} can't use the admin panel.
+        <a
+          class="app-button app-button-quiet"
+          href="{pagePath}/settings?section=general#general-account">Account settings</a
+        >
+      </p>
     {:else}
       <div class="admin-tabs" role="tablist">
         {#each tabs as candidate (candidate.id)}
@@ -80,35 +102,20 @@
             aria-selected={tab === candidate.id}
             on:click={() => (tab = candidate.id)}
           >
-            <Fa icon={candidate.icon} />
             {candidate.label}
           </button>
         {/each}
       </div>
 
-      <div class="grid gap-[0.85rem]" role="tabpanel">
+      <div class="admin-sections" role="tabpanel">
         {#if tab === 'accounts' && user?.admin}
           <SettingsAdmin self={user} />
         {:else if tab === 'tools'}
-          {#if user?.admin}
-            <SettingsItemGroup title="Updates" wide>
-              <UpdateTool />
-            </SettingsItemGroup>
-            <SettingsItemGroup title="Visual novel engine" wide>
-              <EngineTool />
-            </SettingsItemGroup>
-            <SettingsItemGroup title="Catalog" wide>
-              <CatalogTool />
-            </SettingsItemGroup>
-            <SettingsItemGroup title="Series" wide>
-              <SeriesTool />
-            </SettingsItemGroup>
-          {/if}
-          {#if hasPermission(user, 'difficulty')}
-            <SettingsItemGroup title="Estimate difficulty" wide>
-              <DifficultyPanel />
-            </SettingsItemGroup>
-          {/if}
+          {#each tools as tool, index (tool.title)}
+            <AdminSection number={index + 1} title={tool.title}>
+              <svelte:component this={tool.component} />
+            </AdminSection>
+          {/each}
         {/if}
       </div>
     {/if}
@@ -116,33 +123,60 @@
 </div>
 
 <style>
+  .admin {
+    display: flex;
+    max-width: 60rem;
+    flex-direction: column;
+    gap: 2rem;
+    margin: 0 auto;
+    padding: 6.25rem 1rem calc(5.5rem + env(safe-area-inset-bottom));
+  }
+
+  @media (min-width: 768px) {
+    .admin {
+      padding: 6.25rem 2.5rem 4rem;
+    }
+  }
+
   .admin-title {
-    font-family: var(--app-font-display);
-    font-size: 1.6rem;
+    font-size: var(--type-display);
     font-weight: 400;
     line-height: 1.2;
   }
 
+  .admin-no-access {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+  }
+
   .admin-tabs {
     display: flex;
-    gap: 0.4rem;
-    border-bottom: 1px solid color-mix(in srgb, var(--font-color) 8%, var(--border-color));
+    gap: 1.75rem;
+    border-bottom: 1px solid var(--border-color);
   }
 
   .admin-tab {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
+    min-height: 2.75rem;
     margin-bottom: -1px;
-    padding: 0.5rem 0.9rem;
-    border-bottom: 2px solid transparent;
+    padding: 0;
+    border-bottom: 3px solid transparent;
     color: var(--app-muted-fg);
-    font-size: 0.9rem;
-    font-weight: 650;
+    font-size: var(--type-body);
+  }
+
+  .admin-tab:hover {
+    color: var(--font-color);
   }
 
   .admin-tab[aria-selected='true'] {
     border-bottom-color: var(--accent-color);
     color: var(--font-color);
+  }
+
+  .admin-sections {
+    display: grid;
+    gap: 3.5rem;
   }
 </style>

@@ -1,19 +1,10 @@
 <script lang="ts">
-  import {
-    faCheck,
-    faCopy,
-    faDownload,
-    faFileImport,
-    faPen,
-    faPlus,
-    faTrash
-  } from '@fortawesome/free-solid-svg-icons';
-  import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsThemeColor from '$lib/components/settings/settings-theme-color.svelte';
   import { theme$ } from '$lib/data/store';
   import {
     customAppThemes$,
     darkTheme$,
+    followSystemTheme$,
     previewTheme$,
     selectedThemeId$,
     selectTheme,
@@ -22,7 +13,6 @@
   import { parseCssColor } from '$lib/data/theme/color-utils';
   import { contrastIssues, minimumContrast } from '$lib/data/theme/contrast';
   import { themeTokens, themeTokensByGroup, type ThemeToken } from '$lib/data/theme/theme-tokens';
-  import DifficultyBadge from '$lib/components/book-card/difficulty-badge.svelte';
   import {
     builtInThemeIds,
     defaultDarkThemeId,
@@ -36,9 +26,11 @@
   } from '$lib/data/theme/themes';
   import { downloadBlob } from '$lib/functions/file-dom/download-blob';
   import { inputFile } from '$lib/functions/file-dom/input-file';
-  import { onDestroy } from 'svelte';
-  import { t$ } from '$lib/i18n';
-  import Fa from 'svelte-fa';
+  import { onDestroy, tick } from 'svelte';
+  import { t$, type MessageKey } from '$lib/i18n';
+
+  /** Number of themes in the gallery, for the section head */
+  export let count = 0;
 
   let editing: ThemeDefinition | undefined;
   /** Id the edited theme had when editing started (renames change the id) */
@@ -52,6 +44,7 @@
     definition,
     resolved: resolveTheme(definition.id, $customAppThemes$)
   }));
+  $: count = themes.length;
   $: baseOptions = [
     { id: 'light', name: $t$('prefs.themes.lightBase') },
     { id: 'dark', name: $t$('prefs.themes.darkBase') },
@@ -60,10 +53,7 @@
       .map(({ resolved }) => ({ id: resolved.id, name: resolved.name }))
   ];
   $: parent = editing
-    ? resolveTheme(
-        editing.extends || (editing.dark ? 'dark' : 'light'),
-        $customAppThemes$
-      )
+    ? resolveTheme(editing.extends || (editing.dark ? 'dark' : 'light'), $customAppThemes$)
     : undefined;
   $: previewTheme$.next(editing ? { ...editing } : undefined);
   // Contrast of the theme being edited; a hint only, saving is never blocked.
@@ -86,6 +76,24 @@
     }, 2500);
   }
 
+  /** The tag under a theme in use: one slot, or both while following the system. */
+  function themeStatus(
+    id: string,
+    follow: boolean,
+    light: string,
+    dark: string
+  ): MessageKey | undefined {
+    if (!follow) return id === light ? 'prefs.themes.inUse' : undefined;
+    if (id === light) return 'prefs.themes.lightInUse';
+    if (id === dark) return 'prefs.themes.darkInUse';
+    return undefined;
+  }
+
+  async function showEditor() {
+    await tick();
+    document.getElementById('theme-editor-title')?.scrollIntoView({ behavior: 'smooth' });
+  }
+
   function startNew(from?: ResolvedTheme) {
     const base = from ?? resolveTheme($selectedThemeId$ ?? $theme$, $customAppThemes$);
     const name = from ? `${from.name} (copy)` : 'My theme';
@@ -97,11 +105,13 @@
       colors: {}
     };
     editingOriginalId = '';
+    showEditor();
   }
 
   function startEdit(definition: ThemeDefinition) {
     editing = JSON.parse(JSON.stringify(definition));
     editingOriginalId = definition.id;
+    showEditor();
   }
 
   function setColor(token: ThemeToken, value: string | undefined) {
@@ -205,7 +215,10 @@
       showImport = false;
       flash($t$('prefs.themes.imported', { name: parsed.name }));
     } catch (e: any) {
-      importError = e instanceof SyntaxError ? $t$('prefs.themes.invalidJson', { message: e.message }) : e.message;
+      importError =
+        e instanceof SyntaxError
+          ? $t$('prefs.themes.invalidJson', { message: e.message })
+          : e.message;
     }
   }
 
@@ -218,206 +231,164 @@
   }
 </script>
 
-<div class="flex flex-col gap-5">
-  {#if !editing}
-    <div class="flex flex-wrap items-center gap-2">
-      <button type="button" class="theme-action" on:click={() => startNew()}>
-        <Fa icon={faPlus} /> {$t$('prefs.themes.new')}
-      </button>
-      <button type="button" class="theme-action" on:click={() => (showImport = !showImport)}>
-        <Fa icon={faFileImport} /> {$t$('prefs.themes.import')}
-      </button>
-      <span class="text-sm font-semibold text-[color:var(--app-muted-fg)]">{message}</span>
-      <a
-        class="ml-auto text-sm font-semibold text-[color:var(--app-muted-fg)] underline"
-        href="/themes.md"
-        rel="external"
-        target="_blank"
-        title={$t$('prefs.themes.guideTitle')}
+<div class="theme-toolbar">
+  <button type="button" class="app-button" on:click={() => startNew()}>
+    {$t$('prefs.themes.new')}
+  </button>
+  <button
+    type="button"
+    class="app-button app-button-quiet"
+    aria-expanded={showImport}
+    on:click={() => (showImport = !showImport)}
+  >
+    {$t$('prefs.themes.import')}
+  </button>
+  <a
+    class="app-button app-button-quiet"
+    href="/themes.md"
+    rel="external"
+    target="_blank"
+    title={$t$('prefs.themes.guideTitle')}
+  >
+    {$t$('prefs.themes.guide')}
+  </a>
+  <span class="theme-message" role="status">{message}</span>
+</div>
+
+{#if showImport}
+  <div class="theme-import">
+    <label for="theme-import-text">{$t$('prefs.themes.importHint')}</label>
+    <textarea
+      id="theme-import-text"
+      class="app-input theme-code"
+      rows="8"
+      spellcheck="false"
+      placeholder={'{\n  "name": "My theme",\n  "extends": "dark-theme",\n  "colors": { "accent": "#e879f9" }\n}'}
+      bind:value={importText}
+    />
+    {#if importError}
+      <p class="theme-error">{importError}</p>
+    {/if}
+    <div class="theme-import-actions">
+      <button
+        type="button"
+        class="app-button"
+        disabled={!importText.trim()}
+        on:click={() => importTheme(importText)}
       >
-        {$t$('prefs.themes.guide')}
-      </a>
+        {$t$('prefs.themes.importJson')}
+      </button>
+      <label class="app-button app-button-quiet cursor-pointer">
+        <input type="file" accept="application/json,.json" hidden use:inputFile={importFiles} />
+        {$t$('prefs.themes.chooseFile')}
+      </label>
     </div>
+  </div>
+{/if}
 
-    {#if showImport}
-      <SettingsItemGroup title={$t$('prefs.themes.importTitle')} wide>
-        <p class="mb-2 text-sm text-[color:var(--app-muted-fg)]">
-          {$t$('prefs.themes.importHint')}
-        </p>
-        <textarea
-          class="theme-code w-full"
-          rows="8"
-          spellcheck="false"
-          placeholder={'{\n  "name": "My theme",\n  "extends": "dark-theme",\n  "colors": { "accent": "#e879f9" }\n}'}
-          bind:value={importText}
-        />
-        {#if importError}
-          <p class="mt-1 text-sm text-[color:var(--app-danger-color)]">{importError}</p>
-        {/if}
-        <div class="mt-2 flex gap-2">
-          <button
-            type="button"
-            class="theme-action"
-            disabled={!importText.trim()}
-            on:click={() => importTheme(importText)}
+<ul class="theme-gallery">
+  {#each themes as { definition, resolved } (definition.id)}
+    {@const colors = resolved.colors}
+    {@const custom = !builtInThemeIds.has(definition.id)}
+    {@const status = themeStatus(definition.id, $followSystemTheme$, $theme$, $darkTheme$)}
+    <li class="theme-card">
+      <button
+        type="button"
+        class="theme-preview"
+        class:theme-preview-active={!!status}
+        style:background={colors.background}
+        aria-pressed={$selectedThemeId$ === definition.id}
+        title={$t$('prefs.themes.use', { name: resolved.name })}
+        on:click={() => selectTheme(definition.id)}
+      >
+        <span class="theme-preview-header" style:background={colors.headerBackground}>
+          <span style:background={colors.headerIcon} />
+          <span style:background={colors.headerIcon} />
+        </span>
+        <span class="theme-preview-body">
+          <span
+            class="theme-preview-card"
+            style:background={colors.surfaceStrong}
+            style:border-color={colors.border}
           >
-            {$t$('prefs.themes.importJson')}
-          </button>
-          <label class="theme-action cursor-pointer">
-            <input type="file" accept="application/json,.json" hidden use:inputFile={importFiles} />
-            {$t$('prefs.themes.chooseFile')}
-          </label>
-        </div>
-      </SettingsItemGroup>
-    {/if}
-
-    <div class="theme-gallery">
-      {#each themes as { definition, resolved } (definition.id)}
-        {@const colors = resolved.colors}
-        {@const custom = !builtInThemeIds.has(definition.id)}
-        <div class="theme-card" class:theme-card-active={$selectedThemeId$ === definition.id}>
-          <button
-            type="button"
-            class="theme-preview"
-            style:background={colors.background}
-            title={$t$('prefs.themes.use', { name: resolved.name })}
-            on:click={() => selectTheme(definition.id)}
-          >
-            <span class="theme-preview-header" style:background={colors.headerBackground}>
-              <span style:background={colors.headerIcon} />
-              <span style:background={colors.headerIcon} />
-            </span>
-            <span class="theme-preview-body">
-              <span
-                class="theme-preview-card"
-                style:background={colors.surfaceStrong}
-                style:border-color={colors.border}
-              >
-                <span style:background={colors.text} />
-                <span style:background={colors.mutedText} />
-                <span class="theme-preview-accent" style:background={colors.accent} />
-              </span>
-              <span
-                class="theme-preview-page"
-                style:background={colors.readerBackground}
-                style:color={colors.readerText}
-              >
-                あ亜<mark style:background={colors.highlightYellow} style:color="inherit">ア</mark>
-              </span>
-            </span>
-          </button>
-          <div class="theme-card-footer">
-            <span class="min-w-0 flex-1 truncate font-bold">
-              {#if $selectedThemeId$ === definition.id}<Fa icon={faCheck} class="mr-1 inline" />{/if}
-              {resolved.name}
-            </span>
-            {#if custom}
-              <button class="theme-icon" title={$t$('prefs.edit')} on:click={() => startEdit(definition)}>
-                <Fa icon={faPen} />
-              </button>
-            {/if}
-            <button class="theme-icon" title={$t$('prefs.themes.duplicate')} on:click={() => startNew(resolved)}>
-              <Fa icon={faPlus} />
-            </button>
-            <button class="theme-icon" title={$t$('prefs.themes.copyJson')} on:click={() => copy(definition)}>
-              <Fa icon={faCopy} />
-            </button>
-            <button class="theme-icon" title={$t$('prefs.themes.downloadJson')} on:click={() => download(definition)}>
-              <Fa icon={faDownload} />
-            </button>
-            {#if custom}
-              <button class="theme-icon" title={$t$('prefs.delete')} on:click={() => remove(definition)}>
-                <Fa icon={faTrash} />
-              </button>
-            {/if}
-          </div>
-        </div>
-      {/each}
-    </div>
-  {:else if parent}
-    <div class="theme-editor-bar app-surface-card">
-      <span class="text-sm font-semibold text-[color:var(--app-muted-fg)]">
-        {$t$('prefs.themes.editing')}
-      </span>
-      <span class="flex-1" />
-      <button type="button" class="theme-action" on:click={() => copy(editing ?? { id: '', name: '' })}>
-        <Fa icon={faCopy} /> JSON
-      </button>
-      <button type="button" class="theme-action" on:click={() => (editing = undefined)}>
-        {$t$('prefs.cancel')}
-      </button>
-      <button type="button" class="theme-action theme-action-primary" on:click={save}>
-        <Fa icon={faCheck} /> {$t$('prefs.save')}
-      </button>
-    </div>
-
-    <div class="theme-live-preview" aria-label={$t$('prefs.themes.preview')}>
-      <div class="theme-live-card">
-        <span class="theme-live-cover" />
-        <span class="theme-live-title" lang="ja">吾輩は猫である</span>
-        <span class="theme-live-author" lang="ja">夏目漱石</span>
-        <DifficultyBadge difficulty={2.6} compact />
-        <span class="theme-live-progress"><span /></span>
-      </div>
-      <div class="theme-live-settings">
-        <div class="theme-live-row">
-          <span>
-            <span class="block text-sm font-semibold">{$t$('prefs.themes.previewRow')}</span>
-            <span class="block text-xs text-[color:var(--app-muted-fg)]">{$t$('prefs.themes.previewDescription')}</span>
+            <span style:background={colors.text} />
+            <span style:background={colors.mutedText} />
+            <span class="theme-preview-accent" style:background={colors.accent} />
           </span>
-          <button
-            type="button"
-            role="switch"
-            class="app-switch"
-            aria-checked={previewOn}
-            aria-label={$t$('prefs.themes.previewSwitch')}
-            on:click={() => (previewOn = !previewOn)}
-          >
-            <span class="app-switch-thumb" />
-          </button>
-        </div>
-        <div class="flex flex-wrap gap-2 pt-3">
-          <button type="button" class="app-button app-button-primary">{$t$('prefs.themes.primary')}</button>
-          <button type="button" class="app-button">{$t$('prefs.themes.secondary')}</button>
-          <button type="button" class="app-button app-button-danger">{$t$('prefs.delete')}</button>
-        </div>
-      </div>
-      <p class="theme-live-page" lang="ja">
-        吾輩は<ruby>猫<rt>ねこ</rt></ruby>である。名前はまだ無い。<mark
-          style:background="var(--highlight-yellow)"
-          style:color="inherit">どこで生れたか</mark
-        >とんと見当がつかぬ。
+          <span class="theme-preview-page" style:color={colors.readerText}>あ亜ア</span>
+        </span>
+      </button>
+      <p class="theme-card-name">
+        <span class:theme-card-name-active={!!status}>{resolved.name}</span>
+        {#if status}
+          <span class="app-tag">{$t$(status)}</span>
+        {:else if custom}
+          <span class="app-tag app-tag-muted">{$t$('prefs.themes.custom')}</span>
+        {/if}
       </p>
-    </div>
+      <p class="theme-card-actions">
+        {#if custom}
+          <button type="button" on:click={() => startEdit(definition)}>{$t$('prefs.edit')}</button>
+        {/if}
+        <button
+          type="button"
+          title={$t$('prefs.themes.duplicate')}
+          on:click={() => startNew(resolved)}>{$t$('prefs.themes.duplicateShort')}</button
+        >
+        <button
+          type="button"
+          title={$t$('prefs.themes.downloadJson')}
+          on:click={() => download(definition)}>JSON</button
+        >
+        {#if custom}
+          <button type="button" on:click={() => remove(definition)}>{$t$('prefs.delete')}</button>
+        {/if}
+      </p>
+    </li>
+  {/each}
+</ul>
 
-    {#if lowContrast.length}
-      <div class="theme-contrast-warning" role="status">
-        <strong>{$t$('prefs.themes.lowContrast')}</strong>
-        {$t$('prefs.themes.lowContrastText', { ratio: minimumContrast })}
-        <ul>
-          {#each lowContrast as issue (issue.foreground + issue.background)}
-            <li>
-              {$t$('prefs.themes.contrastIssue', {
-                foreground: tokenLabel(issue.foreground),
-                background: tokenLabel(issue.background),
-                ratio: issue.ratio.toFixed(1)
-              })}
-            </li>
-          {/each}
-        </ul>
+{#if editing && parent}
+  <section class="theme-editor" aria-labelledby="theme-editor-title">
+    <header class="theme-editor-head">
+      <div class="min-w-0">
+        <h3 id="theme-editor-title">
+          {$t$('prefs.themes.editingName', { name: editing.name || '…' })}
+        </h3>
+        <p>{$t$('prefs.themes.editing')}</p>
       </div>
-    {/if}
+      <div class="theme-editor-actions">
+        <button
+          type="button"
+          class="app-button app-button-quiet"
+          on:click={() => copy(editing ?? { id: '', name: '' })}
+        >
+          {$t$('prefs.themes.copyJson')}
+        </button>
+        <button
+          type="button"
+          class="app-button app-button-quiet"
+          on:click={() => (editing = undefined)}
+        >
+          {$t$('prefs.cancel')}
+        </button>
+        <button type="button" class="app-button app-button-primary" on:click={save}>
+          {$t$('prefs.save')}
+        </button>
+      </div>
+    </header>
 
-    <div class="flex flex-col">
-      <SettingsItemGroup title={$t$('prefs.themes.general')} wide>
-        <div class="flex flex-col gap-3 text-sm">
+    <div class="theme-editor-columns">
+      <div class="theme-editor-form">
+        <h4 class="theme-editor-label">{$t$('prefs.themes.general')}</h4>
+        <div class="theme-fields">
           <label class="theme-field">
             <span>{$t$('prefs.themes.name')}</span>
-            <input type="text" bind:value={editing.name} />
+            <input class="app-input" type="text" bind:value={editing.name} />
           </label>
           <label class="theme-field">
             <span>{$t$('prefs.themes.basedOn')}</span>
-            <select bind:value={editing.extends}>
+            <select class="app-input" bind:value={editing.extends}>
               {#each baseOptions as option (option.id)}
                 <option value={option.id}>{option.name}</option>
               {/each}
@@ -426,20 +397,38 @@
           <label class="theme-field">
             <span>{$t$('prefs.themes.dark')}</span>
             <select
+              class="app-input"
               value={editing.dark === undefined ? 'inherit' : String(editing.dark)}
               on:change={(event) => {
                 const { value } = event.currentTarget;
                 if (editing) {
-                  editing = { ...editing, dark: value === 'inherit' ? undefined : value === 'true' };
+                  editing = {
+                    ...editing,
+                    dark: value === 'inherit' ? undefined : value === 'true'
+                  };
                 }
               }}
             >
               <option value="inherit"
-                >{$t$(parent.dark ? 'prefs.themes.sameAsBaseDark' : 'prefs.themes.sameAsBaseLight')}</option
+                >{$t$(
+                  parent.dark ? 'prefs.themes.sameAsBaseDark' : 'prefs.themes.sameAsBaseLight'
+                )}</option
               >
               <option value="true">{$t$('prefs.themes.darkGroup')}</option>
               <option value="false">{$t$('prefs.themes.lightGroup')}</option>
             </select>
+          </label>
+          <label class="theme-field">
+            <span>{$t$('prefs.themes.uiFont')}</span>
+            <input
+              class="app-input"
+              type="text"
+              placeholder="BIZ UDPGothic"
+              value={editing.uiFont ?? ''}
+              on:change={(event) =>
+                editing &&
+                (editing = { ...editing, uiFont: event.currentTarget.value.trim() || undefined })}
+            />
           </label>
           <label class="theme-field">
             <span
@@ -469,124 +458,385 @@
                 editing && (editing = { ...editing, blur: Number(event.currentTarget.value) })}
             />
           </label>
-          <label class="theme-field">
-            <span>{$t$('prefs.themes.uiFont')}</span>
-            <input
-              type="text"
-              placeholder="Noto Sans JP"
-              value={editing.uiFont ?? ''}
-              on:change={(event) =>
-                editing &&
-                (editing = { ...editing, uiFont: event.currentTarget.value.trim() || undefined })}
-            />
-          </label>
         </div>
-      </SettingsItemGroup>
 
-      <SettingsItemGroup
-        wide
-        title={$t$('prefs.themes.customCss')}
-        tooltip={$t$('prefs.themes.customCssHint')}
-      >
-        <textarea
-          class="theme-code h-full min-h-[14rem] w-full"
-          spellcheck="false"
-          placeholder={'/* Example */\n.book-content {\n  letter-spacing: 0.02em;\n}'}
-          value={editing.customCss ?? ''}
-          on:input={(event) =>
-            editing &&
-            (editing = { ...editing, customCss: event.currentTarget.value || undefined })}
-        />
-      </SettingsItemGroup>
-    </div>
+        {#if lowContrast.length}
+          <div class="theme-contrast-warning" role="status">
+            <strong>{$t$('prefs.themes.lowContrast')}</strong>
+            {$t$('prefs.themes.lowContrastText', { ratio: minimumContrast })}
+            <ul>
+              {#each lowContrast as issue (issue.foreground + issue.background)}
+                <li>
+                  {$t$('prefs.themes.contrastIssue', {
+                    foreground: tokenLabel(issue.foreground),
+                    background: tokenLabel(issue.background),
+                    ratio: issue.ratio.toFixed(1)
+                  })}
+                </li>
+              {/each}
+            </ul>
+          </div>
+        {/if}
 
-    {#each themeTokensByGroup as { group, tokens } (group)}
-      <SettingsItemGroup title={group} wide>
-        {#each tokens as info (info.token)}
-          <SettingsThemeColor
-            label={info.label}
-            description={info.description}
-            cssVar={info.cssVar}
-            value={editing.colors?.[info.token]}
-            inherited={parent.colors[info.token]}
-            on:change={({ detail }) => setColor(info.token, detail)}
+        <div class="theme-groups">
+          {#each themeTokensByGroup as { group, tokens }, index (group)}
+            <details class="theme-group" open={index === 0}>
+              <summary>
+                {group}
+                <span>{$t$('prefs.themes.colours', { count: tokens.length })}</span>
+              </summary>
+              {#each tokens as info (info.token)}
+                <SettingsThemeColor
+                  label={info.label}
+                  description={info.description}
+                  cssVar={info.cssVar}
+                  value={editing.colors?.[info.token]}
+                  inherited={parent.colors[info.token]}
+                  on:change={({ detail }) => setColor(info.token, detail)}
+                />
+              {/each}
+            </details>
+          {/each}
+        </div>
+
+        <label class="theme-css">
+          <span class="theme-editor-label">{$t$('prefs.themes.customCss')}</span>
+          <span class="theme-css-hint">{$t$('prefs.themes.customCssHint')}</span>
+          <textarea
+            class="app-input theme-code"
+            rows="5"
+            spellcheck="false"
+            placeholder="e.g. .app-header &#123; letter-spacing: 0.02em; &#125;"
+            value={editing.customCss ?? ''}
+            on:input={(event) =>
+              editing &&
+              (editing = { ...editing, customCss: event.currentTarget.value || undefined })}
           />
-        {/each}
-      </SettingsItemGroup>
-    {/each}
-  {/if}
-</div>
+        </label>
+      </div>
+
+      <aside class="theme-live-preview" aria-label={$t$('prefs.themes.preview')}>
+        <p class="theme-editor-label">{$t$('prefs.themes.preview')}</p>
+        <div class="theme-live-row">
+          <span>
+            <span class="block">{$t$('prefs.themes.previewRow')}</span>
+            <span class="theme-live-muted">{$t$('prefs.themes.previewDescription')}</span>
+          </span>
+          <button
+            type="button"
+            role="switch"
+            class="app-switch"
+            aria-checked={previewOn}
+            aria-label={$t$('prefs.themes.previewSwitch')}
+            on:click={() => (previewOn = !previewOn)}
+          >
+            <span class="app-switch-thumb" />
+          </button>
+        </div>
+        <div class="theme-live-buttons">
+          <button type="button" class="app-button app-button-primary"
+            >{$t$('prefs.themes.primary')}</button
+          >
+          <button type="button" class="app-button">{$t$('prefs.themes.secondary')}</button>
+        </div>
+        <div class="theme-live-page" lang="ja">
+          <p class="theme-live-title">吾輩は猫である</p>
+          <p class="theme-live-muted">夏目漱石</p>
+          <p class="theme-live-text">
+            吾輩は<ruby>猫<rt>ねこ</rt></ruby>である。名前はまだ無い。<mark
+              style:background="var(--highlight-yellow)"
+              style:color="inherit">どこで生れたか</mark
+            >とんと見当がつかぬ。
+          </p>
+        </div>
+      </aside>
+    </div>
+  </section>
+{/if}
 
 <style>
+  .theme-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1.25rem;
+    padding-top: 1rem;
+  }
+
+  .theme-message {
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  .theme-import {
+    display: grid;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    font-size: var(--type-small);
+  }
+
+  .theme-import-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1.25rem;
+  }
+
+  .theme-error {
+    color: var(--app-danger-color);
+    font-size: var(--type-small);
+  }
+
+  .theme-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+    gap: 1.5rem 1.25rem;
+    margin-top: 1rem;
+  }
+
+  .theme-card {
+    min-width: 0;
+  }
+
+  .theme-preview {
+    display: flex;
+    width: 100%;
+    aspect-ratio: 214 / 123;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    border-radius: 2px;
+    text-align: left;
+  }
+
+  .theme-preview-active {
+    border: 2px solid var(--accent-color);
+  }
+
+  .theme-preview-header {
+    display: flex;
+    height: 1.25rem;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0 0.6rem;
+  }
+
+  .theme-preview-header span {
+    width: 0.9rem;
+    height: 0.2rem;
+  }
+
+  .theme-preview-body {
+    display: grid;
+    flex: 1;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem;
+  }
+
+  .theme-preview-card {
+    display: flex;
+    height: 100%;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 0.6rem 0.5rem;
+    border: 1px solid;
+    border-radius: 1px;
+  }
+
+  .theme-preview-card span {
+    width: 70%;
+    height: 0.2rem;
+  }
+
+  .theme-preview-card span:nth-child(2) {
+    width: 50%;
+  }
+
+  .theme-preview-accent {
+    width: 30% !important;
+  }
+
+  .theme-preview-page {
+    font-size: var(--type-body);
+    text-align: center;
+  }
+
+  .theme-card-name {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.5rem;
+    margin-top: 0.5rem;
+    font-size: var(--type-small);
+  }
+
+  .theme-card-name-active {
+    color: var(--accent-strong-color);
+  }
+
+  .theme-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.75rem;
+    margin-top: 0.25rem;
+  }
+
+  .theme-card-actions button {
+    min-height: 1.75rem;
+    color: var(--accent-strong-color);
+    font-size: var(--type-label);
+  }
+
+  .theme-card-actions button:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+
+  .theme-editor {
+    margin-top: 2rem;
+    padding: 1.25rem 1.5rem 1.5rem;
+    border: 2px solid var(--accent-color);
+    border-radius: 2px;
+  }
+
+  .theme-editor-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem 1.5rem;
+  }
+
+  .theme-editor-head h3 {
+    font-size: var(--type-h2);
+    font-weight: 400;
+  }
+
+  .theme-editor-head p {
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  .theme-editor-actions {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+  }
+
+  .theme-editor-columns {
+    display: grid;
+    gap: 1.5rem;
+    margin-top: 1.25rem;
+  }
+
+  @media (min-width: 1024px) {
+    .theme-editor-columns {
+      grid-template-columns: minmax(0, 1fr) 18rem;
+      align-items: start;
+    }
+  }
+
+  .theme-editor-label {
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+    font-weight: 400;
+  }
+
+  .theme-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+    gap: 0.75rem 1rem;
+    margin-top: 0.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid var(--font-color);
+  }
+
+  .theme-field {
+    display: grid;
+    gap: 0.3rem;
+    color: var(--app-muted-fg);
+    font-size: var(--type-label);
+  }
+
+  .theme-field .app-input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .theme-field input[type='range'] {
+    min-height: var(--app-control-height);
+    accent-color: var(--accent-color);
+  }
+
+  .theme-groups {
+    display: grid;
+  }
+
+  .theme-group {
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .theme-group summary {
+    display: flex;
+    min-height: 2.75rem;
+    align-items: center;
+    gap: 0.6rem;
+    cursor: pointer;
+  }
+
+  .theme-group summary span {
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  .theme-group[open] summary {
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .theme-css {
+    display: grid;
+    gap: 0.3rem;
+    margin-top: 1.25rem;
+  }
+
+  .theme-css-hint {
+    color: var(--app-muted-fg);
+    font-size: var(--type-label);
+  }
+
+  .theme-code {
+    width: 100%;
+    font-family: ui-monospace, monospace;
+    font-size: var(--type-label);
+  }
+
+  .theme-contrast-warning {
+    margin-top: 1rem;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--app-warning-color);
+    border-radius: 2px;
+    font-size: var(--type-small);
+  }
+
+  .theme-contrast-warning ul {
+    margin-top: 0.25rem;
+    padding-left: 1.1rem;
+    list-style: disc;
+  }
+
   .theme-live-preview {
     position: sticky;
-    top: 4rem;
-    z-index: 5;
+    top: 5rem;
     display: grid;
-    grid-template-columns: 6.5rem minmax(0, 1fr) minmax(0, 12rem);
-    gap: 1.25rem;
-    align-items: start;
-    margin-top: 1rem;
+    gap: 1rem;
     padding: 1rem;
     border: 1px solid var(--border-color);
-    border-radius: calc(0.6rem * var(--app-radius-scale));
-    background: var(--background-color);
-  }
-
-  @media (max-width: 639px) {
-    .theme-live-preview {
-      position: static;
-      grid-template-columns: 6.5rem minmax(0, 1fr);
-    }
-
-    .theme-live-page {
-      grid-column: 1 / -1;
-    }
-  }
-
-  .theme-live-card {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-  }
-
-  .theme-live-cover {
-    aspect-ratio: 375 / 529;
-    margin-bottom: 0.3rem;
-    border-radius: calc(4px * var(--app-radius-scale));
-    background: linear-gradient(160deg, var(--accent-color), var(--surface-strong-color));
-    box-shadow:
-      0 1px 2px var(--app-cover-shadow),
-      0 10px 22px -12px var(--app-cover-shadow);
-  }
-
-  .theme-live-title {
-    font-family: var(--app-font-display);
-    font-size: 0.8rem;
-  }
-
-  .theme-live-author {
-    color: var(--app-muted-fg);
-    font-size: 0.7rem;
-  }
-
-  .theme-live-progress {
-    height: 3px;
-    margin-top: 0.3rem;
-    border-radius: 999px;
-    background: var(--app-progress-track);
-  }
-
-  .theme-live-progress > span {
-    display: block;
-    width: 40%;
-    height: 100%;
-    background: var(--app-progress-fill);
-  }
-
-  .theme-live-settings {
-    min-width: 0;
-    color: var(--font-color);
+    border-radius: 2px;
+    background: var(--surface-strong-color);
   }
 
   .theme-live-row {
@@ -598,191 +848,37 @@
     border-bottom: 1px solid var(--border-color);
   }
 
+  .theme-live-muted {
+    display: block;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  .theme-live-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
   .theme-live-page {
     padding: 0.75rem;
-    border-radius: calc(0.4rem * var(--app-radius-scale));
     background: var(--reader-background-color);
     color: var(--reader-text-color);
-    font-family: var(--app-font-display);
-    font-size: 0.95rem;
-    line-height: 1.9;
   }
 
-  .theme-contrast-warning {
-    margin-top: 0.75rem;
-    padding: 0.6rem 0.8rem;
-    border: 1px solid color-mix(in srgb, var(--app-warning-color) 55%, transparent);
-    border-radius: calc(0.5rem * var(--app-radius-scale));
-    background: color-mix(in srgb, var(--app-warning-color) 12%, transparent);
-    font-size: 0.85rem;
-  }
-
-  .theme-contrast-warning ul {
-    margin-top: 0.25rem;
-    padding-left: 1.1rem;
-    list-style: disc;
-  }
-
-  .theme-action {
-    display: inline-flex;
-    min-height: 2.4rem;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0 0.85rem;
-    border: 1px solid var(--app-control-border);
-    border-radius: calc(0.85rem * var(--app-radius-scale));
-    background: var(--app-control-bg);
-    font-size: 0.85rem;
+  .theme-live-title {
     font-weight: 700;
   }
 
-  .theme-action:hover:not(:disabled) {
-    border-color: color-mix(in srgb, var(--accent-color) 40%, var(--app-control-border));
+  .theme-live-text {
+    margin-top: 0.5rem;
+    font-size: var(--type-small);
+    line-height: 1.9;
   }
 
-  .theme-action:disabled {
-    opacity: 0.5;
-  }
-
-  .theme-action-primary {
-    border-color: var(--accent-color);
-    background: var(--accent-color);
-    color: var(--app-accent-fg);
-  }
-
-  .theme-gallery {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
-    gap: 1rem;
-  }
-
-  .theme-card {
-    overflow: hidden;
-    border: 1px solid var(--border-color);
-    border-radius: calc(1rem * var(--app-radius-scale));
-    background: var(--surface-strong-color);
-  }
-
-  .theme-card-active {
-    border-color: var(--accent-color);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-color) 35%, transparent);
-  }
-
-  .theme-preview {
-    display: flex;
-    width: 100%;
-    height: 7.5rem;
-    flex-direction: column;
-    text-align: left;
-  }
-
-  .theme-preview-header {
-    display: flex;
-    height: 1.1rem;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 0.25rem;
-    padding: 0 0.4rem;
-  }
-
-  .theme-preview-header span {
-    width: 0.4rem;
-    height: 0.4rem;
-    border-radius: 999px;
-  }
-
-  .theme-preview-body {
-    display: grid;
-    flex: 1;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
-    padding: 0.5rem;
-  }
-
-  .theme-preview-card {
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
-    padding: 0.45rem;
-    border: 1px solid;
-    border-radius: 0.5rem;
-  }
-
-  .theme-preview-card span {
-    height: 0.3rem;
-    border-radius: 999px;
-  }
-
-  .theme-preview-card span:nth-child(2) {
-    width: 70%;
-  }
-
-  .theme-preview-accent {
-    width: 45%;
-    margin-top: auto;
-  }
-
-  .theme-preview-page {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 0.5rem;
-    font-family: 'Noto Serif JP', serif;
-    font-size: 1.15rem;
-  }
-
-  .theme-card-footer {
-    display: flex;
-    align-items: center;
-    gap: 0.15rem;
-    padding: 0.45rem 0.5rem 0.45rem 0.75rem;
-    border-top: 1px solid var(--border-color);
-    font-size: 0.85rem;
-  }
-
-  .theme-icon {
-    padding: 0.35rem;
-    border-radius: 0.5rem;
-    color: var(--app-muted-fg);
-  }
-
-  .theme-icon:hover {
-    background: color-mix(in srgb, var(--font-color) 8%, transparent);
-    color: var(--font-color);
-  }
-
-  .theme-editor-bar {
-    position: sticky;
-    top: 4.5rem;
-    z-index: 5;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.6rem 0.75rem;
-    border-radius: calc(1rem * var(--app-radius-scale));
-  }
-
-  .theme-field {
-    display: grid;
-    grid-template-columns: 9.5rem minmax(0, 1fr);
-    align-items: center;
-    gap: 0.75rem;
-    font-weight: 600;
-  }
-
-  .theme-field input[type='text'],
-  .theme-field select {
-    padding: 0.35rem 0.6rem;
-    border-radius: 0.5rem;
-  }
-
-  .theme-code {
-    padding: 0.6rem;
-    border: 1px solid var(--app-control-border);
-    border-radius: 0.6rem;
-    font-family: ui-monospace, monospace;
-    font-size: 0.8rem;
+  @media (max-width: 1023px) {
+    .theme-live-preview {
+      position: static;
+    }
   }
 </style>

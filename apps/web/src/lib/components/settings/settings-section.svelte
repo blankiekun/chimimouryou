@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SectionHead from '$lib/components/section-head.svelte';
   import { findSettingsSection, getSettingsView } from './settings-sections';
   import { t$ } from '$lib/i18n';
 
@@ -8,6 +9,8 @@
   export let keywords = '';
   /** Single column, for editors and lists */
   export let wide = false;
+  /** Shown after the title, e.g. the number of themes */
+  export let count: number | undefined = undefined;
 
   const view = getSettingsView();
   const info = findSettingsSection(id);
@@ -25,7 +28,7 @@
     aria-labelledby="{id}-heading"
   >
     <header class="settings-section-header">
-      <h2 id="{id}-heading">{$t$(info.label)}</h2>
+      <SectionHead id="{id}-heading" number={info.number} title={$t$(info.label)} {count} />
       <p>{$t$(info.description)}</p>
     </header>
     <div class="settings-section-grid" class:settings-section-grid-wide={wide}>
@@ -42,21 +45,13 @@
   }
 
   .settings-section-header {
-    padding-bottom: 0.6rem;
-    border-bottom: 1px solid color-mix(in srgb, var(--font-color) 22%, var(--border-color));
-  }
-
-  .settings-section-header h2 {
-    font-family: var(--app-font-display);
-    font-size: 1.3rem;
-    font-weight: 400;
-    line-height: 1.3;
+    padding-bottom: 0.25rem;
   }
 
   .settings-section-header p {
-    margin-top: 0.2rem;
+    margin-top: 0.4rem;
     color: var(--app-muted-fg);
-    font-size: 0.82rem;
+    font-size: var(--type-small);
   }
 
   /* A single column of rows (settings-item-group.svelte); "wide" sections hold editors. */

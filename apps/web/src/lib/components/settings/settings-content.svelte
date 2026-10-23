@@ -1,6 +1,6 @@
 <script lang="ts">
   import { browser } from '$app/environment';
-  import { faComputer, faSpinner } from '@fortawesome/free-solid-svg-icons';
+  import { faSpinner } from '@fortawesome/free-solid-svg-icons';
   import {
     TrackerAutoPause,
     TrackerSkipThresholdAction
@@ -9,13 +9,11 @@
   import type { ToggleOption } from '$lib/components/button-toggle-group/toggle-option';
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import SettingsDimensionPopover from '$lib/components/settings/settings-dimension-popover.svelte';
-  import SettingsFontSelector from '$lib/components/settings/settings-font-selector.svelte';
   import SettingsReadingGoals from '$lib/components/settings/settings-reading-goals.svelte';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
   import SettingsStorageSourceList from '$lib/components/settings/settings-storage-source-list.svelte';
   import SettingsUserFontDialog from '$lib/components/settings/settings-user-font-dialog.svelte';
-  import { inputClasses } from '$lib/css-classes';
   import { BlurMode } from '$lib/data/blur-mode';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { LocalFont } from '$lib/data/fonts';
@@ -30,13 +28,13 @@
   import {
     database,
     fontFamilyGroupOne$,
-    fontFamilyGroupTwo$,
     generatedFurigana$,
     horizontalCustomReadingPosition$,
     textMarginMode$,
     textMarginValue$,
     theme$,
     trackerStartOnOpen$,
+    userFonts$,
     verticalCustomReadingPosition$
   } from '$lib/data/store';
   import type { TextMarginMode } from '$lib/data/text-margin-mode';
@@ -44,7 +42,6 @@
   import { ViewMode } from '$lib/data/view-mode';
   import type { WritingMode } from '$lib/data/writing-mode';
   import { secondsToMinutes } from '$lib/functions/statistic-util';
-  import { dummyFn } from '$lib/functions/utils';
   import {
     ReplicationSaveBehavior,
     AutoReplicationType
@@ -387,80 +384,65 @@
 </script>
 
 <SettingsSection id="reader-text">
-  <SettingsItemGroup title={$t$('prefs.font1')}>
-    <div slot="header" class="flex items-center">
-      <SettingsFontSelector
-        availableFonts={[
-          LocalFont.NOTOSERIFJP,
-          LocalFont.KZUDMINCHO,
-          LocalFont.GENEI,
-          LocalFont.SHIPPORIMINCHO,
-          LocalFont.KLEEONE,
-          LocalFont.KLEEONESEMIBOLD,
-          LocalFont.SERIF
-        ]}
-        bind:fontValue={fontFamilyGroupOne}
+  <SettingsItemGroup title={$t$('prefs.fontFamily')} tooltip={$t$('prefs.fontFamilyHint')}>
+    <span class="font-family">
+      <input
+        type="text"
+        class="app-input"
+        list="font-family-one"
+        aria-label={$t$('prefs.font1')}
+        placeholder="Noto Serif JP"
+        bind:value={fontFamilyGroupOne}
       />
-      {#if fontCacheSupported}
-        <div
-          tabindex="0"
-          role="button"
-          title={$t$('prefs.customFont')}
-          on:click={() =>
-            dialogManager.dialogs$.next([
-              {
-                component: SettingsUserFontDialog,
-                props: { fontFamily: fontFamilyGroupOne$ }
-              }
-            ])}
-          on:keyup={dummyFn}
-        >
-          <Fa icon={faComputer} />
-        </div>
-      {/if}
-    </div>
-    <input
-      type="text"
-      class={inputClasses}
-      placeholder="Noto Serif JP"
-      bind:value={fontFamilyGroupOne}
-    />
-  </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('prefs.font2')}>
-    <div slot="header" class="flex items-center">
-      <SettingsFontSelector
-        availableFonts={[LocalFont.NOTOSANSJP, LocalFont.KZUDGOTHIC, LocalFont.SANSSERIF]}
-        bind:fontValue={fontFamilyGroupTwo}
+      <input
+        type="text"
+        class="app-input"
+        list="font-family-two"
+        aria-label={$t$('prefs.font2')}
+        placeholder="Noto Sans JP"
+        bind:value={fontFamilyGroupTwo}
       />
-      {#if fontCacheSupported}
-        <div
-          tabindex="0"
-          role="button"
-          on:click={() =>
-            dialogManager.dialogs$.next([
-              {
-                component: SettingsUserFontDialog,
-                props: { fontFamily: fontFamilyGroupTwo$ }
-              }
-            ])}
-          on:keyup={dummyFn}
-        >
-          <Fa icon={faComputer} />
-        </div>
-      {/if}
-    </div>
-    <input
-      type="text"
-      class={inputClasses}
-      placeholder="Noto Sans JP"
-      bind:value={fontFamilyGroupTwo}
-    />
+    </span>
+    <!-- The bundled fonts of each group, then the reader's own (Custom fonts) -->
+    <datalist id="font-family-one">
+      {#each [LocalFont.NOTOSERIFJP, LocalFont.KZUDMINCHO, LocalFont.GENEI, LocalFont.SHIPPORIMINCHO, LocalFont.KLEEONE, LocalFont.KLEEONESEMIBOLD, LocalFont.SERIF] as font (font)}
+        <option value={font} />
+      {/each}
+      {#each $userFonts$ as font (font.path)}
+        <option value={font.name} />
+      {/each}
+    </datalist>
+    <datalist id="font-family-two">
+      {#each [LocalFont.NOTOSANSJP, LocalFont.KZUDGOTHIC, LocalFont.SANSSERIF] as font (font)}
+        <option value={font} />
+      {/each}
+      {#each $userFonts$ as font (font.path)}
+        <option value={font.name} />
+      {/each}
+    </datalist>
   </SettingsItemGroup>
+  {#if fontCacheSupported}
+    <SettingsItemGroup title={$t$('prefs.customFont')} tooltip={$t$('prefs.customFontHint')}>
+      <button
+        type="button"
+        class="app-button"
+        on:click={() =>
+          dialogManager.dialogs$.next([
+            {
+              component: SettingsUserFontDialog,
+              props: { fontFamily: fontFamilyGroupOne$ }
+            }
+          ])}
+      >
+        {$t$('prefs.addFont')}
+      </button>
+    </SettingsItemGroup>
+  {/if}
   <SettingsItemGroup title={$t$('prefs.fontWeight')} tooltip={$t$('prefs.fontWeightHint')}>
     <input
       type="number"
       placeholder={$t$('prefs.default')}
-      class={inputClasses}
+      class="app-input"
       step="100"
       min="100"
       max="1000"
@@ -479,12 +461,12 @@
     />
   </SettingsItemGroup>
   <SettingsItemGroup title={$t$('prefs.fontSize')}>
-    <input type="number" class={inputClasses} step="1" min="1" bind:value={fontSize} />
+    <input type="number" class="app-input" step="1" min="1" bind:value={fontSize} />
   </SettingsItemGroup>
   <SettingsItemGroup title={$t$('prefs.lineHeight')}>
     <input
       type="number"
-      class={inputClasses}
+      class="app-input"
       step="0.05"
       min="1"
       bind:value={lineHeight}
@@ -498,7 +480,7 @@
   <SettingsItemGroup title={$t$('prefs.indent')} tooltip={$t$('prefs.indentHint')}>
     <input
       type="number"
-      class={inputClasses}
+      class="app-input"
       step=".5"
       min="0"
       bind:value={textIndentation}
@@ -518,7 +500,7 @@
     <SettingsItemGroup title={$t$('prefs.margins')} tooltip={$t$('prefs.marginsHint')}>
       <input
         type="number"
-        class={inputClasses}
+        class="app-input"
         step=".5"
         min="0"
         bind:value={textMarginValue}
@@ -586,7 +568,7 @@
       isVertical={verticalMode}
       bind:dimensionValue={firstDimensionMargin}
     />
-    <input type="number" class={inputClasses} step="1" min="0" bind:value={firstDimensionMargin} />
+    <input type="number" class="app-input" step="1" min="0" bind:value={firstDimensionMargin} />
   </SettingsItemGroup>
   <SettingsItemGroup title={$t$(verticalMode ? 'prefs.maxHeight' : 'prefs.maxWidth')}>
     <SettingsDimensionPopover
@@ -594,13 +576,7 @@
       isVertical={verticalMode}
       bind:dimensionValue={secondDimensionMaxValue}
     />
-    <input
-      type="number"
-      class={inputClasses}
-      step="1"
-      min="0"
-      bind:value={secondDimensionMaxValue}
-    />
+    <input type="number" class="app-input" step="1" min="0" bind:value={secondDimensionMaxValue} />
   </SettingsItemGroup>
   {#if viewMode !== ViewMode.Continuous}
     <SettingsItemGroup title={$t$('prefs.avoidBreak')} tooltip={avoidPageBreakTooltip}>
@@ -608,7 +584,7 @@
     </SettingsItemGroup>
     {#if !verticalMode}
       <SettingsItemGroup title={$t$('prefs.columns')} tooltip={$t$('prefs.columnsHint')}>
-        <input type="number" class={inputClasses} step="1" min="0" bind:value={pageColumns} />
+        <input type="number" class="app-input" step="1" min="0" bind:value={pageColumns} />
       </SettingsItemGroup>
     {/if}
   {/if}
@@ -649,7 +625,7 @@
         type="number"
         step="1"
         min="1"
-        class={inputClasses}
+        class="app-input"
         bind:value={autoBookmarkTime}
         on:blur={() => {
           if (autoBookmarkTime < 1 || typeof autoBookmarkTime !== 'number') {
@@ -695,7 +671,7 @@
       type="number"
       step="1"
       min="10"
-      class={inputClasses}
+      class="app-input"
       bind:value={swipeThreshold}
       on:blur={() => {
         if (swipeThreshold < 10 || typeof swipeThreshold !== 'number') {
@@ -752,7 +728,7 @@
     <SettingsItemGroup title={$t$('prefs.autostart')} tooltip={$t$('prefs.autostartHint')}>
       <input
         type="number"
-        class={inputClasses}
+        class="app-input"
         step="1"
         min="0"
         bind:value={trackerAutoStartTime}
@@ -768,7 +744,7 @@
     <SettingsItemGroup title={$t$('prefs.idle')} tooltip={$t$('prefs.idleHint')}>
       <input
         type="number"
-        class={inputClasses}
+        class="app-input"
         step="0.5"
         min="0"
         bind:value={trackerIdleTimeInMin}
@@ -786,7 +762,7 @@
     <SettingsItemGroup title={$t$('prefs.forwardSkip')} tooltip={$t$('prefs.forwardSkipHint')}>
       <input
         type="number"
-        class={inputClasses}
+        class="app-input"
         step="1"
         min="0"
         bind:value={trackerForwardSkipThreshold}
@@ -802,7 +778,7 @@
     <SettingsItemGroup title={$t$('prefs.backwardSkip')} tooltip={$t$('prefs.backwardSkipHint')}>
       <input
         type="number"
-        class={inputClasses}
+        class="app-input"
         step="1"
         bind:value={trackerBackwardSkipThreshold}
         on:blur={() => {
@@ -849,7 +825,7 @@
       step="1"
       min="0"
       max="23"
-      class={inputClasses}
+      class="app-input"
       bind:value={startDayHoursForTracker}
     />
   </SettingsItemGroup>
@@ -982,6 +958,11 @@
 {/if}
 
 <style>
+  .font-family {
+    display: grid;
+    gap: 0.5rem;
+  }
+
   .settings-panel {
     min-width: 0;
     padding: 1rem 0;

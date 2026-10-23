@@ -195,14 +195,11 @@ export const ja: Record<MessageKey, string> = {
   'settings.search': '設定を検索',
   'settings.searchLabel': '設定を検索',
   'settings.sectionsLabel': '設定項目',
-  'settings.showSections': '{area}の項目を表示',
-  'settings.hideSections': '{area}の項目を隠す',
-  'settings.syncNote': '進捗・統計・リーダー設定・AI設定・テーマはアカウントに同期されます',
-  'settings.account': 'アカウント',
-  'settings.signInToSync': 'ログインして同期',
   'settings.results': '「{query}」の検索結果',
   'settings.noResults': '「{query}」に一致する設定が見つかりませんでした。',
   'settings.clearSearch': '検索をクリア',
+  'settings.pluginNote':
+    'AI と Audiobookshelf は拡張機能をオンにすると表示されます（一般 → 拡張機能）。',
   'settings.on': 'オン',
   'settings.off': 'オフ',
 
@@ -213,6 +210,14 @@ export const ja: Record<MessageKey, string> = {
   'settings.area.anki': 'Anki',
   'settings.area.tracking': '記録・統計',
   'settings.area.data': 'データ管理',
+  'settings.area.anki.text':
+    'Yomitan で作成したカードに音声と画像を追加します。既知語は「単語」タブにあります。',
+  'settings.area.ai.text':
+    'AI プラグイン（一般 → 拡張機能）が必要です。キーはこのブラウザとアカウントに保存されます。',
+  'settings.area.reader.phone':
+    'この種類の端末（スマートフォン）用に保存されます。大きい画面は別の設定を使います。',
+  'settings.area.reader.desktop':
+    'この種類の端末（PC・タブレット）用に保存されます。スマートフォンは別の設定を使います。',
   'settings.section.general-account': 'アカウント',
   'settings.section.general-account.text':
     'ログインして進捗・統計・各種設定を複数端末間で同期します。',
@@ -220,13 +225,10 @@ export const ja: Record<MessageKey, string> = {
   'settings.section.general-language.text': 'メニューやボタンの表示言語を設定します。',
   'settings.section.general-theme': 'テーマ',
   'settings.section.general-theme.text':
-    'アプリ全体の配色や、端末のライト／ダークモードとの連動を設定します。',
-  'settings.section.general-custom-themes': 'カスタムテーマ',
-  'settings.section.general-custom-themes.text':
-    '独自テーマの作成・編集・インポート・エクスポートを行います。',
+    'アプリ全体の配色です。「複製」でどのテーマからでも独自テーマを作れます。',
   'settings.section.general-plugins': '拡張機能',
   'settings.section.general-plugins.text':
-    'オプション機能の有効／無効をアカウント単位で切り替えます。',
+    '追加機能です。オンにすると、それぞれの設定項目が表示されます。',
   'settings.section.reader-text': 'テキストスタイル',
   'settings.section.reader-text.text': 'フォント、文字サイズ、段落の間隔を調整します。',
   'settings.section.reader-writing': '組版・ふりがな',
@@ -415,6 +417,8 @@ export const ja: Record<MessageKey, string> = {
   'ai.openRouterKeyHint':
     'リクエストはブラウザから OpenRouter へ直接送信されます（ログイン中はアカウントに同期されます）。',
   'ai.howToGetKey': 'キーの取得方法',
+  'ai.hideKey': '隠す',
+  'ai.showKey': '表示',
   'ai.language': 'AIの応答言語',
   'ai.languageHint':
     '「AIに質問」「あらすじ」「用語集」で使用するプロンプトと応答の言語です。リーダー内のパネルからも切り替えられます。',
@@ -433,8 +437,11 @@ export const ja: Record<MessageKey, string> = {
     '選択した文章に対する質問（または追加質問）をワンクリックで送信するボタンです。',
   'ai.presetLabel': 'ボタンの表示名',
   'ai.prompt': 'プロンプト',
+  'ai.presetActions': '操作',
   'ai.moveUp': '上へ移動',
   'ai.moveDown': '下へ移動',
+  'ai.down': '下へ',
+  'ai.up': '上へ',
   'ai.delete': '削除',
   'ai.addPreset': 'プリセットを追加',
   'ai.resetPresets': '初期設定に戻す',
@@ -898,24 +905,30 @@ export const ja: Record<MessageKey, string> = {
 
   'prefs.font1': 'フォント（グループ1）',
   'prefs.font2': 'フォント（グループ2）',
-  'prefs.customFont': 'カスタムフォントの管理',
+  'prefs.fontFamilyHint':
+    'グループ1は本文の基本フォント、グループ2は書籍がゴシック体を指定した箇所に使われます。',
+  'prefs.fontFamily': 'フォント',
+  'prefs.customFont': 'カスタムフォント',
+  'prefs.addFont': 'フォントを追加…',
+  'prefs.customFontHint': '端末のフォントファイルを追加すると、フォントの候補に表示されます。',
   'prefs.fontWeight': 'フォントの太さ',
-  'prefs.fontWeightHint': '文字の太さ（ウェイト）を指定します。空欄の場合は標準の太さになります。',
+  'prefs.fontWeightHint': '空欄の場合はフォント標準の太さになります。',
   'prefs.fontSize': '文字サイズ',
   'prefs.lineHeight': '行間',
   'prefs.indent': '段落の字下げ',
   'prefs.indentHint': '段落先頭のインデント幅（rem）を指定します。',
-  'prefs.marginMode': '段落の余白モード',
+  'prefs.marginMode': '段落の余白',
   'prefs.marginModeHint': '「手動」にすると、段落間の余白幅を任意の値で指定できます。',
   'prefs.margins': '段落の余白幅',
   'prefs.marginsHint': '段落間に追加する余白幅（rem）を指定します。',
   'prefs.justify': '文字の両端揃え',
   'prefs.justifyHint': '段落のテキストを両端揃え（ジャスティファイ）で配置します。',
   'prefs.wrapPretty': '自然な行の折り返し',
-  'prefs.wrapPrettyHint': '対応ブラウザで text-wrap: pretty を適用し、行末の折り返しを整えます。',
+  'prefs.wrapPrettyHint':
+    '対応ブラウザで段落の改行位置を整え、最終行が1文字だけにならないようにします。',
   'prefs.prioritize': 'リーダーのスタイルを優先',
   'prefs.prioritizeHint':
-    '余白や両端揃えなどのCSSに !important を付与し、書籍側のスタイルよりもリーダーの設定を優先して適用します。',
+    '余白や両端揃えについて、書籍側のスタイルよりリーダーの設定を優先します。',
   'prefs.writingMode': '文字の方向',
   'prefs.kerning': 'フォントカーニング',
   'prefs.kerningHint':
@@ -924,9 +937,8 @@ export const ja: Record<MessageKey, string> = {
   'prefs.vpalHint':
     'フォントとブラウザが対応している場合、縦書き時の句読点やかぎ括弧などのアキをより自然に調整します。',
   'prefs.orientation': '縦書き時の英数字の向き',
-  'prefs.orientationMixedHint': '半角英数字などの横書き用文字を時計回りに90°回転させて表示します。',
-  'prefs.orientationUprightHint':
-    '半角英数字なども回転させず、日本語と同様に縦向き（正立）で1文字ずつ並べます。',
+  'prefs.orientationMixedHint': '縦書きで、英数字を時計回りに90°回転させて表示します。',
+  'prefs.orientationUprightHint': '縦書きで、英数字を正立させて表示します。',
   'prefs.hideFurigana': 'ふりがなを隠す',
   'prefs.furiganaStyle': 'ふりがなの隠し方',
   'prefs.furiganaHideHint': 'ふりがなを常に非表示にします。',
@@ -962,8 +974,8 @@ export const ja: Record<MessageKey, string> = {
   'prefs.autoBookmark': '自動しおり',
   'prefs.autoBookmarkHint':
     'スクロールやページ移動がない状態で{seconds}秒経過すると自動でしおりを挟みます（すでに画面内にしおりがある場合は維持されます）。',
-  'prefs.autoBookmarkTime': '自動しおりまでの秒数',
-  'prefs.autoBookmarkTimeHint': '自動でしおりを挟むまでの待機時間（秒）を指定します。',
+  'prefs.autoBookmarkTime': '自動しおりまでの時間（秒）',
+  'prefs.autoBookmarkTimeHint': 'ページを移動しない状態が続く秒数です。',
   'prefs.readingPoint': 'カスタム読書位置',
   'prefs.readingPointHint':
     '画面内の任意の位置を基準点として固定し、そこを基準に進捗やしおりの位置を算出できるようにします。',
@@ -978,8 +990,7 @@ export const ja: Record<MessageKey, string> = {
   'prefs.tapFlip': '画面端のタップでページめくり',
   'prefs.tapFlipHint': '画面の左右端にタップ領域を設け、タップでページをめくれるようにします。',
   'prefs.wakeLock': '画面のスリープを防止',
-  'prefs.wakeLockHint':
-    '読書中に端末の画面が暗くなったり自動ロックされたりするのを防ぎます（WakeLock APIを使用）。',
+  'prefs.wakeLockHint': '本を開いている間、画面が暗くなったりロックされたりしないようにします。',
   'prefs.confirmClose': 'タブを閉じる前に確認',
   'prefs.confirmCloseHint':
     '未保存の変更がある状態でリーダーのタブを閉じたり再読み込みしたりする際、確認ダイアログを表示します。',
@@ -1023,7 +1034,7 @@ export const ja: Record<MessageKey, string> = {
   'prefs.rollback': '無操作時間を記録から差し引く',
   'prefs.rollbackHint':
     '無操作による一時停止が働いた際、放置していた時間分をセッションの読書時間から差し引きます。',
-  'prefs.dayStart': '日付の切り替え時刻：{time}',
+  'prefs.dayStart': '一日の始まり：{time}',
   'prefs.dayStartHint':
     '新しい1日が始まる時刻を指定します。\nこの時刻より前の記録は前日分として集計されます。',
   'prefs.overwriteCompletion': '再読時に読了日を上書き',
@@ -1124,6 +1135,9 @@ export const ja: Record<MessageKey, string> = {
   'prefs.account.notStarted': '未同期',
   'prefs.account.syncNow': '今すぐ同期',
   'prefs.account.whatSyncs': '同期される項目',
+  'prefs.account.syncsReaderLabel': 'リーダー',
+  'prefs.account.syncsAiLabel': 'AI設定・テーマ',
+  'prefs.account.syncsProgressLabel': '進捗',
   'prefs.account.syncsProgress': 'Calibre 書籍の読書進捗・統計・読書目標・ハイライト',
   'prefs.account.syncsAi': 'AI設定とテーマ（APIキーはログアウト時にブラウザから削除されます）',
   'prefs.account.syncsReader':
@@ -1149,6 +1163,7 @@ export const ja: Record<MessageKey, string> = {
   'prefs.account.checking': 'ログイン状態を確認中…',
   'prefs.account.signInHint':
     '読書進捗・統計・ハイライト・AI設定・テーマをサーバー上のアカウントに保存し、ログインしたすべての端末で共有します。アカウントは管理パネルまたはサーバーコマンド（ebook-account add NAME）から作成できます。',
+  'prefs.account.remember': 'ブラウザにログイン情報を保存できます。',
   'prefs.account.insecureSignIn':
     'このサーバーは暗号化されていない HTTP でのログインを許可しています。パスワードやセッション情報が平文で送信されるため、同じネットワーク上で傍受される危険があります。',
   'prefs.account.signInAtBefore': 'サーバーが HTTPS に対応している場合は、',
@@ -1164,29 +1179,25 @@ export const ja: Record<MessageKey, string> = {
 
   'prefs.themes.follow': 'システムの配色設定に合わせる',
   'prefs.themes.followHint':
-    'OSや端末のダークモード設定に連動して、ライトテーマとダークテーマを自動で切り替えます。',
-  'prefs.themes.light': 'ライトテーマ',
+    '端末がライトモードのときとダークモードのときで別のテーマを使います。テーマをクリックすると、現在のモードのテーマが置き換わります。',
   'prefs.themes.dark': 'ダークテーマ',
-  'prefs.themes.usedInLight': '端末がライトモードのときに適用されます。',
-  'prefs.themes.inUseLight': '現在適用中（ライトモード）',
-  'prefs.themes.usedInDark': '端末がダークモードのときに適用されます。',
-  'prefs.themes.inUseDark': '現在適用中（ダークモード）',
-  'prefs.themes.theme': 'テーマ',
-  'prefs.themes.themeHint': 'ライブラリ、設定画面、リーダー全体に適用されます。',
-  'prefs.themes.makeOwn': '「カスタムテーマ」で独自のテーマを作成・インポートできます',
   'prefs.themes.lightGroup': 'ライト',
   'prefs.themes.darkGroup': 'ダーク',
-  'prefs.themes.customName': '{name}（カスタム）',
   'prefs.themes.new': '新規テーマ作成',
   'prefs.themes.import': 'インポート',
   'prefs.themes.guideTitle': 'テーマの各設定項目とJSON形式についての解説（英語）',
-  'prefs.themes.guide': 'テーマ作成ガイド (themes.md)',
+  'prefs.themes.guide': 'テーマ作成ガイド',
   'prefs.themes.importTitle': 'テーマのインポート',
   'prefs.themes.importHint': 'テーマの JSON を貼り付けるか、.json ファイルを選択してください。',
   'prefs.themes.importJson': 'JSONをインポート',
   'prefs.themes.chooseFile': 'ファイルを選択',
   'prefs.themes.use': '「{name}」を適用',
+  'prefs.themes.custom': 'カスタム',
+  'prefs.themes.darkInUse': 'ダークで使用中',
+  'prefs.themes.lightInUse': 'ライトで使用中',
+  'prefs.themes.inUse': '使用中',
   'prefs.themes.duplicate': '複製して編集',
+  'prefs.themes.duplicateShort': '複製',
   'prefs.themes.copyJson': 'JSONをコピー',
   'prefs.themes.downloadJson': 'JSONをダウンロード',
   'prefs.themes.copied': 'テーマのJSONをコピーしました',
@@ -1195,6 +1206,7 @@ export const ja: Record<MessageKey, string> = {
   'prefs.themes.deleteConfirm': 'テーマ「{name}」を削除しますか？',
   'prefs.themes.invalidJson': '無効なJSON形式です：{message}',
   'prefs.themes.editing': '編集中（変更はリアルタイムで画面に反映されます）',
+  'prefs.themes.editingName': '「{name}」を編集中',
   'prefs.themes.preview': 'プレビュー',
   'prefs.themes.previewRow': '設定項目のサンプル',
   'prefs.themes.previewDescription': '補足説明テキストのサンプル',
@@ -1206,6 +1218,7 @@ export const ja: Record<MessageKey, string> = {
     '（WCAG AA 基準の {ratio}:1 未満）。文字が読みづらくなる可能性があります：',
   'prefs.themes.contrastIssue': '{background} 背景上の {foreground}：{ratio}:1',
   'prefs.themes.general': '基本設定',
+  'prefs.themes.colours': '{count}色',
   'prefs.themes.name': 'テーマ名',
   'prefs.themes.basedOn': 'ベーステーマ',
   'prefs.themes.lightBase': 'ライトベース',
@@ -1219,7 +1232,7 @@ export const ja: Record<MessageKey, string> = {
   'prefs.themes.customCssHint':
     'テーマ変数の後に読み込まれます。themes.md に記載されている CSS 変数を使用できます（例：.app-surface-card { border-width: 2px; }）。',
 
-  'prefs.plugins.ai': 'AI 機能',
+  'prefs.plugins.ai': 'AI',
   'prefs.plugins.aiHint':
     'AIに質問、これまでのあらすじ、用語集、AI音声読み上げを有効にします（ご自身の OpenRouter / ElevenLabs APIキーを使用します）。',
   'prefs.plugins.abs': 'Audiobookshelf 連携',

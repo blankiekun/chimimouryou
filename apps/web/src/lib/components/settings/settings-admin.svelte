@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { faSpinner, faUserPlus } from '@fortawesome/free-solid-svg-icons';
-  import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
-  import { buttonClasses, inputClasses } from '$lib/css-classes';
+  import { faSpinner } from '@fortawesome/free-solid-svg-icons';
+  import AdminSection from '$lib/components/admin/admin-section.svelte';
   import {
     accountPermissions,
     addAccount,
@@ -122,109 +121,134 @@
     }
   }
 
+  /** YYYY-MM-DD in local time */
   function formatDate(seconds: number) {
-    return new Date(seconds * 1000).toLocaleDateString();
+    return new Date(seconds * 1000).toLocaleDateString('sv-SE');
   }
 </script>
 
-<SettingsItemGroup
+<AdminSection
+  number={1}
   title="Manage accounts"
-  tooltip="Only admins see this. Set what each account may do under User permissions."
-  wide
+  count={loading ? undefined : accounts.length}
+  description="Only admins see this. Set what each account may do under User permissions."
 >
   {#if loading}
     <span class="flex items-center gap-2"><Fa icon={faSpinner} spin /> Loading accounts...</span>
   {:else}
-    <ul class="admin-accounts">
-      {#each accounts as account (account.id)}
-        <li>
-          <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span class="font-bold">{account.username}</span>
-            {#if account.admin}<span class="admin-badge">admin</span>{/if}
-            <span class="flex-1 text-xs text-[color:var(--app-muted-fg)]">
-              since {formatDate(account.created)}
-            </span>
-            <button
-              class={buttonClasses}
-              disabled={busy}
-              on:click={() => {
-                resetting = resetting === account.username ? '' : account.username;
-                resetPassword = '';
-              }}>Reset password</button
-            >
-            <button
-              class={buttonClasses}
-              disabled={busy || account.id === self.id}
-              title={account.id === self.id ? 'You cannot remove your own account' : ''}
-              on:click={() => onRemove(account)}>Remove</button
-            >
-          </div>
+    <table class="app-table admin-accounts">
+      <thead>
+        <tr>
+          <th scope="col">Account</th>
+          <th scope="col">Since</th>
+          <th scope="col"><span class="sr-only">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each accounts as account (account.id)}
+          <tr>
+            <td class="admin-name">
+              {account.username}
+              {#if account.admin}<span class="admin-badge">admin</span>{/if}
+            </td>
+            <td class="admin-since">{formatDate(account.created)}</td>
+            <td class="admin-actions">
+              <button
+                class="app-button"
+                disabled={busy}
+                aria-expanded={resetting === account.username}
+                on:click={() => {
+                  resetting = resetting === account.username ? '' : account.username;
+                  resetPassword = '';
+                }}>Reset password</button
+              >
+              <button
+                class="app-button"
+                disabled={busy || account.id === self.id}
+                title={account.id === self.id ? 'You cannot remove your own account' : ''}
+                on:click={() => onRemove(account)}>Remove</button
+              >
+            </td>
+          </tr>
           {#if resetting === account.username}
-            <form class="mt-2 flex flex-wrap items-end gap-2" on:submit|preventDefault={onReset}>
-              <input type="text" autocomplete="username" value={account.username} hidden readonly />
-              <input
-                type="password"
-                autocomplete="new-password"
-                placeholder="New password for {account.username}"
-                aria-label="New password for {account.username}"
-                minlength={minPasswordLength}
-                required
-                class="{inputClasses} max-w-xs"
-                bind:value={resetPassword}
-              />
-              <button class={buttonClasses} disabled={busy}>Set password</button>
-            </form>
+            <tr>
+              <td colspan="3">
+                <form class="admin-reset" on:submit|preventDefault={onReset}>
+                  <input
+                    type="text"
+                    autocomplete="username"
+                    value={account.username}
+                    hidden
+                    readonly
+                  />
+                  <input
+                    type="password"
+                    autocomplete="new-password"
+                    placeholder="New password for {account.username}"
+                    aria-label="New password for {account.username}"
+                    minlength={minPasswordLength}
+                    required
+                    class="app-input"
+                    bind:value={resetPassword}
+                  />
+                  <button class="app-button" disabled={busy}>Set password</button>
+                </form>
+              </td>
+            </tr>
           {/if}
-        </li>
-      {/each}
-    </ul>
+        {/each}
+      </tbody>
+    </table>
 
     <form class="admin-add" on:submit|preventDefault={onAdd}>
-      <input
-        type="text"
-        autocomplete="off"
-        autocapitalize="none"
-        spellcheck="false"
-        placeholder="New username"
-        aria-label="New username"
-        pattern="[A-Za-z0-9][A-Za-z0-9_.\-]{'{'}2,31{'}'}"
-        title="3-32 characters: letters, digits, '.', '_' and '-'"
-        required
-        class={inputClasses}
-        bind:value={newUsername}
-      />
-      <input
-        type="password"
-        autocomplete="new-password"
-        placeholder="Password"
-        aria-label="Password for the new account"
-        minlength={minPasswordLength}
-        required
-        class={inputClasses}
-        bind:value={newPassword}
-      />
-      <label class="flex items-center gap-2 text-sm">
-        <input type="checkbox" bind:checked={newAdmin} />
-        Admin
-      </label>
-      <button class="{buttonClasses} flex items-center gap-2" disabled={busy}>
-        <Fa icon={faUserPlus} />
-        Add account
-      </button>
+      <p class="admin-add-label">Add account</p>
+      <div class="admin-add-fields">
+        <input
+          type="text"
+          autocomplete="off"
+          autocapitalize="none"
+          spellcheck="false"
+          placeholder="New username"
+          aria-label="New username"
+          pattern="[A-Za-z0-9][A-Za-z0-9_.\-]{'{'}2,31{'}'}"
+          title="3-32 characters: letters, digits, '.', '_' and '-'"
+          required
+          class="app-input"
+          bind:value={newUsername}
+        />
+        <input
+          type="password"
+          autocomplete="new-password"
+          placeholder="Password"
+          aria-label="Password for the new account"
+          minlength={minPasswordLength}
+          required
+          class="app-input"
+          bind:value={newPassword}
+        />
+        <label class="admin-check">
+          <input type="checkbox" bind:checked={newAdmin} />
+          Admin
+        </label>
+        <button class="app-button app-button-primary" disabled={busy}>Add account</button>
+      </div>
+      <p class="admin-hint">
+        3-32 characters: letters, digits, '.', '_' and '-'. Passwords need at least {minPasswordLength}.
+      </p>
     </form>
   {/if}
-  {#if message}<p class="mt-2 text-sm" role="status">{message}</p>{/if}
+  {#if message}<p class="admin-message" role="status">{message}</p>{/if}
   {#if error}<p class="admin-error" role="alert">{error}</p>{/if}
-</SettingsItemGroup>
+</AdminSection>
 
 {#if !loading && accounts.length}
-  <SettingsItemGroup
+  <AdminSection
+    number={2}
     title="User permissions"
-    tooltip="What each account may do besides reading. Admins have every permission and manage accounts. Changes apply on the account's next page load."
-    wide
+    description="What each account may do besides reading. Admins have every permission and manage accounts. Changes apply on the account's next page load."
   >
     <div class="overflow-x-auto">
-      <table class="permissions-table">
+      <table class="app-table permissions-table">
         <thead>
           <tr>
             <th scope="col">Account</th>
@@ -265,52 +289,126 @@
         </tbody>
       </table>
     </div>
-  </SettingsItemGroup>
+    <ul class="admin-legend">
+      {#each accountPermissions as permission (permission.id)}
+        <li>{permission.label}: {permission.description}</li>
+      {/each}
+    </ul>
+  </AdminSection>
 {/if}
 
 <style>
-  .admin-accounts {
-    display: grid;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
-  }
-
-  .admin-badge {
-    border-radius: 9999px;
-    background: color-mix(in srgb, var(--accent-color) 22%, var(--surface-strong-color));
-    padding: 0 0.5rem;
-    font-size: 0.75rem;
+  .admin-name {
     font-weight: 700;
   }
 
-  .admin-add {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-    align-items: center;
+  .admin-since {
+    color: var(--app-muted-fg);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .admin-actions {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .admin-actions button + button {
+    margin-left: 0.6rem;
+  }
+
+  .admin-badge {
+    margin-left: 0.4rem;
+    padding: 0 0.35rem;
+    border: 1px solid var(--accent-color);
+    border-radius: 2px;
+    color: var(--accent-strong-color);
+    font-size: var(--type-label);
+    font-weight: 400;
+  }
+
+  .admin-reset {
+    display: flex;
+    flex-wrap: wrap;
     gap: 0.6rem;
-    max-width: 44rem;
   }
 
-  .permissions-table {
-    border-collapse: collapse;
-    font-size: 0.875rem;
+  .admin-reset input {
+    width: 19rem;
+    max-width: 100%;
   }
 
-  .permissions-table th,
-  .permissions-table td {
-    padding: 0.4rem 0.75rem;
-    border-bottom: 1px solid var(--border-color);
-    text-align: center;
+  .admin-add {
+    margin-top: 1.5rem;
   }
 
-  .permissions-table th[scope='row'],
-  .permissions-table thead th:first-child {
-    text-align: left;
+  .admin-add-label {
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  .admin-add-fields {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.4rem;
+  }
+
+  .admin-add-fields .app-input {
+    width: 15rem;
+    max-width: 100%;
+  }
+
+  .admin-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .admin-hint,
+  .admin-legend {
+    margin-top: 0.6rem;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  .admin-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.5rem;
+    margin-top: 1rem;
+  }
+
+  .admin-message {
+    margin-top: 0.75rem;
+    font-size: var(--type-small);
   }
 
   .admin-error {
-    margin-top: 0.5rem;
+    margin-top: 0.75rem;
     color: var(--app-danger-color);
-    font-size: 0.875rem;
+    font-size: var(--type-small);
+  }
+
+  .permissions-table th[scope='row'] {
+    color: var(--font-color);
+    font-size: var(--type-body);
+    font-weight: 700;
+  }
+
+  @media (max-width: 639px) {
+    .admin-accounts thead {
+      display: none;
+    }
+
+    .admin-accounts tr {
+      display: grid;
+      grid-template-columns: 1fr auto;
+    }
+
+    .admin-accounts .admin-actions {
+      grid-column: 1 / -1;
+      text-align: left;
+    }
   }
 </style>
