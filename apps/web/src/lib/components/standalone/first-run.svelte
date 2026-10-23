@@ -265,7 +265,7 @@
   }
 
   .place-selected {
-    background: color-mix(in srgb, var(--accent-color) 10%, var(--background-color));
+    background: var(--app-spot-tint);
     box-shadow: inset 3px 0 0 var(--accent-color);
   }
 

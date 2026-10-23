@@ -252,7 +252,7 @@
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    border-radius: 999px;
+    border-radius: 2px;
     opacity: 0.75;
   }
 
@@ -268,7 +268,7 @@
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    border-radius: 999px;
+    border-radius: 2px;
     background: var(--accent-color);
     color: var(--app-accent-fg);
   }

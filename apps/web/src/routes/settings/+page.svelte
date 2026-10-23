@@ -660,7 +660,7 @@
   .settings-nav-area-active,
   .settings-nav-area-active:hover {
     border-left-color: var(--accent-color);
-    background: color-mix(in srgb, var(--accent-color) 10%, var(--background-color));
+    background: var(--app-spot-tint);
   }
 
   .settings-nav-area-active .settings-nav-number {

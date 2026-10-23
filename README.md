@@ -7,7 +7,7 @@ Calibre library and everyone in the house reads from it, with accounts, synced
 progress and highlights, Anki mining and difficulty estimates. The reader
 itself, and its Yomitan support, are upstream's.
 
-![Reading 薬屋のひとりごと in vertical text, with a highlight and the selection toolbar](assets/readme/screenshots/reader.png)
+![Reading 薬屋のひとりごと in vertical text, with two highlights and the selection toolbar](assets/readme/screenshots/reader.png)
 
 Books, manga and ONScripter visual novels from one library; highlights, search,
 audiobooks, AI helpers and Anki mining in the reader; difficulty estimates and
@@ -167,10 +167,10 @@ words met and known, then "Continue reading" and "My books". **Store** is the
 whole library, as books or as series, with filters (type, reading status, last
 read, difficulty, length, tags) and sorting.
 
-![Home: today's reading, a week of statistics, Continue reading and My books](assets/readme/screenshots/home.png)
+![Home: today's reading, the week's totals and words known, and Continue reading](assets/readme/screenshots/home.png)
 
-| Store                                                                  | Series                                                                     |
-| ---------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Store                                                                      | Series                                                             |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | ![The Store with filters and sorting](assets/readme/screenshots/store.png) | ![The Store as series](assets/readme/screenshots/store-series.png) |
 
 - Covers are extracted from EPUBs that have none in Calibre; series come from
@@ -186,7 +186,7 @@ time at your speed, progress, the difficulty estimate, Calibre's metadata and
 the rest of the series. "Find details" fills in a description, genres and a
 cover from AniList, VNDB or Jiten.
 
-![A book's page with its difficulty estimate and series](assets/readme/screenshots/details.png)
+![A book's page: difficulty estimate, words, length and series](assets/readme/screenshots/details.png)
 
 ### Reading
 
@@ -196,7 +196,7 @@ Progress, statistics and settings sync across devices with your account, with
 separate reader styles for phones and larger screens.
 
 - **Highlights and notes** in four colours: select text and pick a colour. The
-  reader companion (book icon) lists them by chapter, to jump to, edit, copy or
+  reader panel's Highlights tab lists them by chapter, to jump to, edit, copy or
   download as Markdown.
 - **Search** the book (<kbd>Ctrl</kbd>+<kbd>F</kbd>), ignoring furigana, with
   optional kana-insensitive and regular-expression matching.
@@ -205,9 +205,9 @@ separate reader styles for phones and larger screens.
   browser. Audiobooks can also come from an
   [Audiobookshelf](https://www.audiobookshelf.org/) server (plugin).
 
-| Search                                                              | Highlights                                                                  |
-| ------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| ![Search results for 猫猫](assets/readme/screenshots/search.png) | ![The reader companion with highlights](assets/readme/screenshots/companion.png) |
+| Search                                                                               | Highlights                                                                    |
+| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| ![Search results for 猫猫 in the reader panel](assets/readme/screenshots/search.png) | ![The reader panel's Highlights tab](assets/readme/screenshots/companion.png) |
 
 Desktop keys (physical positions, the same on any layout): <kbd>PageDown</kbd>/<kbd>PageUp</kbd>
 pages, <kbd>n</kbd>/<kbd>m</kbd> chapters, <kbd>b</kbd>/<kbd>r</kbd> bookmark and return,
@@ -228,7 +228,7 @@ control, the tracker and import/export.
   be converted with
   [conscripter-convert](https://github.com/blankiekun/conscripter-convert).
 
-![MONSTER in the manga reader](assets/readme/screenshots/manga.png)
+![A two-page spread of MONSTER in the manga reader](assets/readme/screenshots/manga.png)
 
 ### AI helpers (plugin)
 
@@ -245,7 +245,7 @@ browser:
   as SillyTavern World Info and handed on to the next book of a series.
 - **AI voice**: reads aloud from your position, highlighting each phrase.
 
-![Ask AI on a selection](assets/readme/screenshots/ask-ai.png)
+![Ask AI on a selection, before an OpenRouter key is set](assets/readme/screenshots/ask-ai.png)
 
 ### Accounts, themes and the admin panel
 
@@ -257,9 +257,9 @@ browser:
   `main` (on servers set up with `scripts/deploy.sh`), the visual novel engine,
   catalog and series tools, and difficulty jobs.
 
-| Themes                                                     | Admin panel                                                       | Phone                                                                                 |
-| ---------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| ![Settings → Theme](assets/readme/screenshots/themes.png) | ![Admin panel → Tools](assets/readme/screenshots/admin.png) | <img src="assets/readme/screenshots/phone-home.png" alt="Home on a phone" width="200"> |
+| Themes                                                     | Admin panel                                                 | Phone                                                                                  |
+| ---------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| ![Settings → Themes](assets/readme/screenshots/themes.png) | ![Admin panel → Tools](assets/readme/screenshots/admin.png) | <img src="assets/readme/screenshots/phone-home.png" alt="Home on a phone" width="200"> |
 
 ### Good to know
 

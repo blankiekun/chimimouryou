@@ -381,7 +381,7 @@
 
   .contents-current,
   .contents-current:hover {
-    background: color-mix(in srgb, var(--accent-color) 12%, var(--reader-panel-bg));
+    background: var(--app-spot-tint);
     color: var(--accent-strong-color);
     font-weight: 700;
   }

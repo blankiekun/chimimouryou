@@ -107,6 +107,7 @@ contrast (4.5:1); built-in themes are checked by `themes.test.ts`.
 | `accentStrong`   | `--accent-strong-color`  | Accent used for text and icons                                 |
 | `accentHover`    | `--app-accent-hover`     | Accent buttons and links under the pointer                     |
 | `accentText`     | `--app-accent-fg`        | Text placed on an accent background                            |
+| `spotTint`       | `--app-spot-tint`        | Pale accent field behind selected rows and active tabs         |
 | `control`        | `--app-control-bg`       | Inputs, tabs and buttons                                       |
 | `focusRing`      | `--app-focus-ring`       | Outline around the focused control when using the keyboard     |
 | `controlBorder`  | `--app-control-border`   | Borders of inputs, tabs and buttons                            |

@@ -70,6 +70,11 @@ export const themeTokenGroups = {
       cssVar: '--app-accent-fg',
       description: 'Text placed on an accent background'
     },
+    spotTint: {
+      label: 'Accent tint',
+      cssVar: '--app-spot-tint',
+      description: 'Pale accent field behind selected rows and active tabs'
+    },
     control: {
       label: 'Controls',
       cssVar: '--app-control-bg',

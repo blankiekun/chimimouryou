@@ -101,6 +101,7 @@
 
   .color-option-active {
     border-color: var(--reader-panel-fg);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--reader-panel-fg) 30%, transparent);
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
   }
 </style>
