@@ -545,6 +545,14 @@ export const isOnline$ = writableSubject<boolean>(true);
 /** The Calibre server couldn't be reached: the library lists the books cached in the browser. */
 export const libraryOffline$ = writableSubject<boolean>(false);
 
+/**
+ * Whether the empty Calibre library asks to sign in. Not while the server can't be reached:
+ * offline, a fresh browser has no cached user, so checkSession (account.ts) reads as signed out.
+ */
+export function librarySignInNeeded(account: unknown, offline: boolean) {
+  return account === null && !offline;
+}
+
 export const skipKeyDownListener$ = writableSubject<boolean>(false);
 
 export const userFonts$ = writableArrayLocalStorageSubject<UserFont>()('userfonts', []);

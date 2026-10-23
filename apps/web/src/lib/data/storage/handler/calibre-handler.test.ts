@@ -7,6 +7,7 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it, vi } from 'vitest';
 import { StorageSourceDefault } from '$lib/data/storage/storage-types';
+import { libraryOffline$, librarySignInNeeded } from '$lib/data/store';
 
 const account = vi.hoisted(() => ({ user: null as { id: string; username: string } | null }));
 
@@ -70,6 +71,31 @@ describe('CalibreStorageHandler.getBookList', () => {
     const cards = await new CalibreStorageHandler(window).getBookList();
 
     expect(cards.map((card) => [card.title, card.progress])).toEqual([['本1', 0.5]]);
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('library sign-in prompt', () => {
+  // Offline in a fresh browser, checkSession has no cached user and reads as signed out.
+  it('is not shown when the server is out of reach', async () => {
+    account.user = null;
+    vi.stubGlobal('fetch', async () => {
+      throw new TypeError('Failed to fetch');
+    });
+
+    expect(await new CalibreStorageHandler(window).getBookList()).toEqual([]);
+    expect(libraryOffline$.getValue()).toBe(true);
+    expect(librarySignInNeeded(account.user, libraryOffline$.getValue())).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  it('is shown when the catalog answers 401 to a signed-out reader', async () => {
+    account.user = null;
+    vi.stubGlobal('fetch', async () => new Response('', { status: 401 }));
+
+    expect(await new CalibreStorageHandler(window).getBookList()).toEqual([]);
+    expect(libraryOffline$.getValue()).toBe(false);
+    expect(librarySignInNeeded(account.user, libraryOffline$.getValue())).toBe(true);
     vi.unstubAllGlobals();
   });
 });
