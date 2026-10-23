@@ -55,6 +55,7 @@ export const themeFormatVersion = 1;
 const derivedTokens = {
   subtleText: 'color-mix(in srgb, var(--app-muted-fg) 72%, transparent)',
   accentHover: 'color-mix(in srgb, var(--accent-color) 84%, var(--font-color))',
+  spotTint: 'color-mix(in srgb, var(--accent-color) 12%, var(--background-color))',
   focusRing: 'var(--accent-color)',
   toggleOn: 'var(--accent-color)',
   toggleOff: 'color-mix(in srgb, var(--font-color) 24%, transparent)',
@@ -201,6 +202,7 @@ export const builtInThemes: ThemeDefinition[] = [
       accentStrong: '#0f7a5c',
       accentHover: '#0b6249',
       accentText: '#ffffff',
+      spotTint: '#e6f2ee',
       focusRing: '#0f7a5c',
       control: '#ffffff',
       controlBorder: '#5a5f5d',
@@ -255,6 +257,7 @@ export const builtInThemes: ThemeDefinition[] = [
       accentStrong: '#4fbf95',
       accentHover: '#6fd0ab',
       accentText: '#0b1a15',
+      spotTint: '#16302a',
       focusRing: '#4fbf95',
       control: '#121413',
       controlBorder: '#a3a9a6',

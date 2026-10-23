@@ -220,7 +220,7 @@
 
   .search-result-active,
   .search-result-active:hover {
-    background: color-mix(in srgb, var(--accent-color) 12%, var(--reader-panel-bg));
+    background: var(--app-spot-tint);
   }
 
   .search-result-active .search-chapter {

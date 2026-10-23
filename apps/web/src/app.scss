@@ -450,7 +450,7 @@
     display: inline-block;
     padding: 0.05rem 0.45rem;
     border-radius: 2px;
-    background: color-mix(in srgb, var(--accent-color) 16%, transparent);
+    background: var(--app-spot-tint);
     color: var(--accent-strong-color);
     font-size: var(--type-label);
     white-space: nowrap;
@@ -547,7 +547,7 @@
   }
 
   .app-popover-item-active {
-    background: color-mix(in srgb, var(--accent-color) 10%, transparent);
+    background: var(--app-spot-tint);
     color: var(--accent-strong-color);
     font-weight: 700;
   }
@@ -597,7 +597,7 @@
   .reader-panel-chip-active,
   .reader-panel-chip-active:hover:not(:disabled) {
     border-color: var(--accent-color);
-    background: color-mix(in srgb, var(--accent-color) 14%, transparent);
+    background: var(--app-spot-tint);
   }
 
   .reader-panel-chip:disabled {

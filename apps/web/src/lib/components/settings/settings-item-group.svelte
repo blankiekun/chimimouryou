@@ -153,6 +153,6 @@
   :global([data-settings-match]).settings-item {
     margin-inline: -0.75rem;
     padding-inline: 0.75rem;
-    background: color-mix(in srgb, var(--accent-color) 10%, transparent);
+    background: var(--app-spot-tint);
   }
 </style>

@@ -308,7 +308,6 @@
     <input
       type="range"
       class="player-seek"
-      style:--progress="{duration ? (currentTime / duration) * 100 : 0}%"
       min="0"
       max={duration || 0}
       step="1"
@@ -316,10 +315,19 @@
       aria-label={$t$('reader.abPosition')}
       on:change={(e) => seek(Number(e.currentTarget.value))}
     />
+    <span
+      class="player-seek-fill"
+      style:--progress={duration ? currentTime / duration : 0}
+      aria-hidden="true"
+    ></span>
     <button class="player-icon" title={$t$('reader.prevLine')} on:click={() => skipLine(-1)}>
       <Fa icon={faBackwardStep} />
     </button>
-    <button class="player-play" title={$t$(playing ? 'reader.pause' : 'reader.play')} on:click={togglePlay}>
+    <button
+      class="player-play"
+      title={$t$(playing ? 'reader.pause' : 'reader.play')}
+      on:click={togglePlay}
+    >
       <Fa icon={playing ? faPause : faPlay} fw />
     </button>
     <button class="player-icon" title={$t$('reader.nextLine')} on:click={() => skipLine(1)}>
@@ -397,8 +405,8 @@
     </label>
     <button class="player-pill" disabled={!audioFile || !subtitleFile || matching} on:click={match}>
       {#if matching}<Fa icon={faSpinner} spin /> {$t$('reader.abMatching')}{:else}{$t$(
-        'reader.abMatch'
-      )}{/if}
+          'reader.abMatch'
+        )}{/if}
     </button>
     {#if error}<p class="pt-2 text-xs text-panel-danger">{error}</p>{/if}
   </div>
@@ -407,8 +415,14 @@
 {#if sheet === 'lines' && audiobook}
   <div class="sheet reader-panel" role="dialog" aria-label={$t$('reader.lines')}>
     <div class="sheet-header">
-      <span class="flex-1 text-xs opacity-70">{$t$('reader.abLinesFound', { found: foundCount, total: cues.length })}</span>
-      <button class="player-icon" title={$t$('reader.back10')} on:click={() => seek(currentTime - 10)}>
+      <span class="flex-1 text-xs opacity-70"
+        >{$t$('reader.abLinesFound', { found: foundCount, total: cues.length })}</span
+      >
+      <button
+        class="player-icon"
+        title={$t$('reader.back10')}
+        on:click={() => seek(currentTime - 10)}
+      >
         <Fa icon={faRotateLeft} />
       </button>
       <button
@@ -466,20 +480,26 @@
     left: 1rem;
     height: 3px;
     appearance: none;
-    border-radius: 999px;
-    background: linear-gradient(
-      to right,
-      var(--accent-color) var(--progress),
-      color-mix(in srgb, var(--reader-panel-fg) 15%, transparent) var(--progress)
-    );
+    border-radius: 0;
+    background: var(--app-progress-track);
     cursor: pointer;
+  }
+
+  .player-seek-fill {
+    position: absolute;
+    top: -1px;
+    left: 1rem;
+    width: calc((100% - 2rem) * var(--progress));
+    height: 3px;
+    background: var(--app-progress-fill);
+    pointer-events: none;
   }
 
   .player-seek::-webkit-slider-thumb {
     width: 0.7rem;
     height: 0.7rem;
     appearance: none;
-    border-radius: 999px;
+    border-radius: 2px;
     background: var(--accent-color);
     opacity: 0;
     transition: opacity 0.15s ease;
@@ -489,7 +509,7 @@
     width: 0.7rem;
     height: 0.7rem;
     border: 0;
-    border-radius: 999px;
+    border-radius: 2px;
     background: var(--accent-color);
     opacity: 0;
   }
@@ -511,7 +531,7 @@
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    border-radius: 999px;
+    border-radius: 2px;
     opacity: 0.75;
   }
 
@@ -528,7 +548,7 @@
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    border-radius: 999px;
+    border-radius: 2px;
     background: var(--accent-color);
     color: var(--app-accent-fg);
   }
@@ -568,7 +588,7 @@
     align-items: center;
     gap: 0.35rem;
     padding: 0.3rem 0.65rem;
-    border-radius: 999px;
+    border-radius: 2px;
     background: color-mix(in srgb, var(--reader-panel-fg) 10%, transparent);
     font-size: 0.75rem;
     font-weight: 700;
@@ -594,8 +614,7 @@
     flex-direction: column;
     padding: 0.6rem 0.75rem 0.75rem;
     border: 1px solid color-mix(in srgb, var(--reader-panel-fg) 10%, transparent);
-    border-radius: 1.1rem;
-    box-shadow: 0 10px 30px -12px var(--shadow-color);
+    border-radius: 4px;
   }
 
   .sheet-header {
@@ -628,7 +647,7 @@
     width: 100%;
     gap: 0.6rem;
     padding: 0.3rem 0.5rem;
-    border-radius: 0.5rem;
+    border-radius: 2px;
     text-align: left;
   }
 

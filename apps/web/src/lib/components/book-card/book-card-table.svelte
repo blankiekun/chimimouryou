@@ -276,7 +276,7 @@
   }
 
   .library-list-row-selected {
-    background: color-mix(in srgb, var(--accent-color) 10%, transparent);
+    background: var(--app-spot-tint);
   }
 
   .library-list-row-main {
