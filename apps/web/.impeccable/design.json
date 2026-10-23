@@ -1,0 +1,446 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-22T00:00:00Z",
+  "title": "Design System: chimimouryou",
+  "extensions": {
+    "colorMeta": {
+      "spot": {
+        "role": "primary",
+        "displayName": "Spot Green",
+        "tonalRamp": [
+          "#04261c",
+          "#073d2d",
+          "#0a5440",
+          "#0f7a5c",
+          "#2f9877",
+          "#4fbf95",
+          "#9fdcc4",
+          "#e6f2ee"
+        ]
+      },
+      "spot-hover": {
+        "role": "primary",
+        "displayName": "Spot Green Hover",
+        "tonalRamp": [
+          "#04261c",
+          "#073d2d",
+          "#0b6249",
+          "#0f7a5c",
+          "#2f9877",
+          "#4fbf95",
+          "#9fdcc4",
+          "#e6f2ee"
+        ]
+      },
+      "on-spot": {
+        "role": "primary",
+        "displayName": "On Spot",
+        "tonalRamp": [
+          "#1b1b1b",
+          "#2e3331",
+          "#5a5f5d",
+          "#6a6f6d",
+          "#a3a9a6",
+          "#d5d9d7",
+          "#f3f5f4",
+          "#ffffff"
+        ]
+      },
+      "dark-spot": {
+        "role": "primary",
+        "displayName": "Spot Green (dark)",
+        "tonalRamp": [
+          "#04261c",
+          "#073d2d",
+          "#0a5440",
+          "#0f7a5c",
+          "#2f9877",
+          "#4fbf95",
+          "#9fdcc4",
+          "#e6f2ee"
+        ]
+      },
+      "dark-spot-hover": {
+        "role": "primary",
+        "displayName": "Spot Green Hover (dark)",
+        "tonalRamp": [
+          "#04261c",
+          "#073d2d",
+          "#0a5440",
+          "#0f7a5c",
+          "#2f9877",
+          "#6fd0ab",
+          "#9fdcc4",
+          "#e6f2ee"
+        ]
+      },
+      "dark-on-spot": {
+        "role": "primary",
+        "displayName": "On Spot (dark)",
+        "tonalRamp": [
+          "#0b1a15",
+          "#073d2d",
+          "#0a5440",
+          "#0f7a5c",
+          "#2f9877",
+          "#4fbf95",
+          "#9fdcc4",
+          "#e6f2ee"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "tonalRamp": [
+          "#1b1b1b",
+          "#2e3331",
+          "#5a5f5d",
+          "#6a6f6d",
+          "#a3a9a6",
+          "#d5d9d7",
+          "#f3f5f4",
+          "#ffffff"
+        ]
+      },
+      "paper-2": {
+        "role": "neutral",
+        "displayName": "Paper 2",
+        "tonalRamp": [
+          "#1b1b1b",
+          "#2e3331",
+          "#5a5f5d",
+          "#6a6f6d",
+          "#a3a9a6",
+          "#d5d9d7",
+          "#f3f5f4",
+          "#ffffff"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "tonalRamp": [
+          "#1b1b1b",
+          "#2e3331",
+          "#5a5f5d",
+          "#6a6f6d",
+          "#a3a9a6",
+          "#d5d9d7",
+          "#f3f5f4",
+          "#ffffff"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Ink 2",
+        "tonalRamp": [
+          "#1b1b1b",
+          "#2e3331",
+          "#5a5f5d",
+          "#6a6f6d",
+          "#a3a9a6",
+          "#d5d9d7",
+          "#f3f5f4",
+          "#ffffff"
+        ]
+      },
+      "ink-subtle": {
+        "role": "neutral",
+        "displayName": "Ink Subtle",
+        "tonalRamp": [
+          "#1b1b1b",
+          "#2e3331",
+          "#5a5f5d",
+          "#6a6f6d",
+          "#a3a9a6",
+          "#d5d9d7",
+          "#f3f5f4",
+          "#ffffff"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Rule",
+        "tonalRamp": [
+          "#1b1b1b",
+          "#2e3331",
+          "#5a5f5d",
+          "#6a6f6d",
+          "#a3a9a6",
+          "#d5d9d7",
+          "#f3f5f4",
+          "#ffffff"
+        ]
+      },
+      "dark-paper": {
+        "role": "neutral",
+        "displayName": "Paper (dark)",
+        "tonalRamp": [
+          "#121413",
+          "#1b1e1d",
+          "#2e3331",
+          "#5a5f5d",
+          "#8e9491",
+          "#a3a9a6",
+          "#d5d9d7",
+          "#e9ebea"
+        ]
+      },
+      "dark-paper-2": {
+        "role": "neutral",
+        "displayName": "Paper 2 (dark)",
+        "tonalRamp": [
+          "#121413",
+          "#1b1e1d",
+          "#2e3331",
+          "#5a5f5d",
+          "#8e9491",
+          "#a3a9a6",
+          "#d5d9d7",
+          "#e9ebea"
+        ]
+      },
+      "dark-ink": {
+        "role": "neutral",
+        "displayName": "Ink (dark)",
+        "tonalRamp": [
+          "#121413",
+          "#1b1e1d",
+          "#2e3331",
+          "#5a5f5d",
+          "#8e9491",
+          "#a3a9a6",
+          "#d5d9d7",
+          "#e9ebea"
+        ]
+      },
+      "dark-ink-2": {
+        "role": "neutral",
+        "displayName": "Ink 2 (dark)",
+        "tonalRamp": [
+          "#121413",
+          "#1b1e1d",
+          "#2e3331",
+          "#5a5f5d",
+          "#8e9491",
+          "#a3a9a6",
+          "#d5d9d7",
+          "#e9ebea"
+        ]
+      },
+      "dark-rule": {
+        "role": "neutral",
+        "displayName": "Rule (dark)",
+        "tonalRamp": [
+          "#121413",
+          "#1b1e1d",
+          "#2e3331",
+          "#5a5f5d",
+          "#8e9491",
+          "#a3a9a6",
+          "#d5d9d7",
+          "#e9ebea"
+        ]
+      },
+      "danger": {
+        "role": "error",
+        "displayName": "Danger",
+        "tonalRamp": [
+          "#3d0b07",
+          "#5c120c",
+          "#7e1a12",
+          "#b42318",
+          "#d0473b",
+          "#f28b82",
+          "#f8c2bd",
+          "#fdeceb"
+        ]
+      },
+      "dark-danger": {
+        "role": "error",
+        "displayName": "Danger (dark)",
+        "tonalRamp": [
+          "#3d0b07",
+          "#5c120c",
+          "#7e1a12",
+          "#b42318",
+          "#d0473b",
+          "#f28b82",
+          "#f8c2bd",
+          "#fdeceb"
+        ]
+      },
+      "warning": {
+        "role": "warning",
+        "displayName": "Warning",
+        "tonalRamp": [
+          "#2e1c00",
+          "#4a2d00",
+          "#8a5300",
+          "#a86a10",
+          "#c9861f",
+          "#e5a93c",
+          "#f2d49a",
+          "#fbf0dc"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Rare page-level figures and titles." },
+      "figure": { "displayName": "Figure", "purpose": "The POINT box's key number." },
+      "headline": { "displayName": "H1", "purpose": "Page titles." },
+      "title": { "displayName": "H2", "purpose": "Section head titles." },
+      "number": { "displayName": "Number", "purpose": "Figures in dashboards and tables." },
+      "body": { "displayName": "Body", "purpose": "Default text, inputs, settings labels." },
+      "button": { "displayName": "Button", "purpose": "Buttons and segments." },
+      "small": { "displayName": "Small", "purpose": "Descriptions, counts, table headers." },
+      "label": { "displayName": "Label", "purpose": "Section tags, POINT tags, footers." }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "app-ease",
+        "value": "cubic-bezier(0.2, 0, 0, 1)",
+        "purpose": "Switch track and knob (0.18s)."
+      },
+      {
+        "name": "control-fade",
+        "value": "0.15s ease",
+        "purpose": "Button, input and segment colour changes."
+      }
+    ],
+    "breakpoints": [
+      { "name": "phone", "value": "max-width: 639px", "purpose": "Bottom tab bar." },
+      {
+        "name": "panel-beside",
+        "value": "min-width: 768px",
+        "purpose": "Reader panel beside the book instead of a bottom sheet."
+      },
+      { "name": "wide", "value": "min-width: 1280px", "purpose": "Slimmer header controls." },
+      { "name": "touch", "value": "pointer: coarse", "purpose": "Controls grow to 44px." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Spot fill for the main action.",
+      "html": "<button class=\"ds-btn-primary\">Read</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border: 1px solid var(--accent-color, #0f7a5c); border-radius: 2px; background: var(--accent-color, #0f7a5c); color: var(--app-accent-fg, #fff); font: 700 14px/1.2 'BIZ UDPGothic', sans-serif; cursor: pointer; transition: background-color 0.15s ease, border-color 0.15s ease; } .ds-btn-primary:hover { border-color: var(--app-accent-hover, #0b6249); background: var(--app-accent-hover, #0b6249); } .ds-btn-primary:focus-visible { outline: 2px solid var(--app-focus-ring, #0f7a5c); outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "The default button: a 1px ink outline.",
+      "html": "<button class=\"ds-btn\">Cancel</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border: 1px solid var(--font-color, #1b1b1b); border-radius: 2px; background: transparent; color: var(--font-color, #1b1b1b); font: 700 14px/1.2 'BIZ UDPGothic', sans-serif; cursor: pointer; transition: background-color 0.15s ease; } .ds-btn:hover { background: color-mix(in srgb, var(--font-color, #1b1b1b) 6%, transparent); } .ds-btn:focus-visible { outline: 2px solid var(--app-focus-ring, #0f7a5c); outline-offset: 2px; }"
+    },
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "An inline action in spot text, like a link.",
+      "html": "<button class=\"ds-quiet\">Add key</button>",
+      "css": ".ds-quiet { padding: 2px 0; border: 0; background: none; color: var(--accent-strong-color, #0f7a5c); font: 700 14px/1.2 'BIZ UDPGothic', sans-serif; cursor: pointer; } .ds-quiet:hover { text-decoration: underline; text-underline-offset: 0.2em; } .ds-quiet:focus-visible { outline: 2px solid var(--app-focus-ring, #0f7a5c); outline-offset: 2px; }"
+    },
+    {
+      "name": "Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Text field: 1px ink-2 border, square corners.",
+      "html": "<input class=\"ds-input\" placeholder=\"Search\">",
+      "css": ".ds-input { min-height: 40px; padding: 6px 10px; border: 1px solid var(--app-control-border, #5a5f5d); border-radius: 2px; background: var(--app-control-bg, #fff); color: var(--font-color, #1b1b1b); font: 400 15px 'BIZ UDPGothic', sans-serif; } .ds-input::placeholder { color: var(--app-text-subtle, #6a6f6d); } .ds-input:focus { border-color: var(--app-focus-ring, #0f7a5c); outline: 2px solid var(--app-focus-ring, #0f7a5c); outline-offset: 2px; }"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "chip",
+      "refersTo": "segment-selected",
+      "description": "A choice between a few options; the selected segment is filled with ink.",
+      "html": "<div class=\"ds-seg\"><button class=\"ds-seg-on\">Books</button><button>Series</button></div>",
+      "css": ".ds-seg { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--app-control-border, #5a5f5d); border-radius: 2px; background: var(--app-control-bg, #fff); } .ds-seg button { min-height: 34px; padding: 4px 13px; border: 0; border-radius: 1px; background: none; color: var(--app-muted-fg, #5a5f5d); font: 400 14px 'BIZ UDPGothic', sans-serif; cursor: pointer; transition: background-color 0.15s ease, color 0.15s ease; } .ds-seg button:hover { color: var(--font-color, #1b1b1b); } .ds-seg .ds-seg-on { background: var(--font-color, #1b1b1b); color: var(--background-color, #fff); font-weight: 700; }"
+    },
+    {
+      "name": "Switch",
+      "kind": "custom",
+      "refersTo": "switch-on",
+      "description": "Square on/off track, spot-filled when on.",
+      "html": "<button class=\"ds-switch\" role=\"switch\" aria-checked=\"true\"><span></span></button>",
+      "css": ".ds-switch { position: relative; width: 40px; height: 24px; padding: 0; border: 1px solid var(--app-toggle-off, #5a5f5d); border-radius: 2px; background: transparent; cursor: pointer; transition: background-color 0.18s cubic-bezier(0.2, 0, 0, 1); } .ds-switch span { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 1px; background: var(--app-toggle-off, #5a5f5d); transition: transform 0.18s cubic-bezier(0.2, 0, 0, 1); } .ds-switch[aria-checked='true'] { border-color: var(--app-toggle-on, #0f7a5c); background: var(--app-toggle-on, #0f7a5c); } .ds-switch[aria-checked='true'] span { background: var(--app-accent-fg, #fff); transform: translateX(16px); } .ds-switch:focus-visible { outline: 2px solid var(--app-focus-ring, #0f7a5c); outline-offset: 2px; }"
+    },
+    {
+      "name": "Section Head",
+      "kind": "custom",
+      "refersTo": "section-tag",
+      "description": "Numbered spot tag, title, count and a rule running right.",
+      "html": "<div class=\"ds-sh\"><span class=\"ds-sh-n\">01</span><h2>Continue reading</h2><span class=\"ds-sh-c\">4</span><span class=\"ds-sh-r\"></span></div>",
+      "css": ".ds-sh { display: flex; align-items: center; gap: 12px; font-family: 'BIZ UDPGothic', sans-serif; } .ds-sh-n { display: inline-flex; min-width: 28px; height: 24px; align-items: center; justify-content: center; padding: 0 5px; border-radius: 2px; background: var(--accent-color, #0f7a5c); color: var(--app-accent-fg, #fff); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; } .ds-sh h2 { margin: 0; color: var(--font-color, #1b1b1b); font-size: 20px; font-weight: 400; line-height: 1.3; } .ds-sh-c { color: var(--app-muted-fg, #5a5f5d); font-size: 13px; font-variant-numeric: tabular-nums; } .ds-sh-r { flex: 1 1 32px; border-top: 1px solid var(--border-color, #d5d9d7); }"
+    },
+    {
+      "name": "POINT Box",
+      "kind": "card",
+      "refersTo": "point-box-tag",
+      "description": "The one key figure of a screen in a 2px spot frame.",
+      "html": "<section class=\"ds-pb\"><span class=\"ds-pb-t\">Today</span><p>12,480<span>chars</span></p></section>",
+      "css": ".ds-pb { position: relative; padding: 28px 20px 20px; border: 2px solid var(--accent-color, #0f7a5c); border-radius: 2px; background: var(--background-color, #fff); font-family: 'BIZ UDPGothic', sans-serif; } .ds-pb-t { position: absolute; top: -2px; left: -2px; padding: 3px 10px; border-radius: 2px 0 2px 0; background: var(--accent-color, #0f7a5c); color: var(--app-accent-fg, #fff); font-size: 12px; font-weight: 700; line-height: 1.4; } .ds-pb p { margin: 0; color: var(--font-color, #1b1b1b); font-size: 44px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; } .ds-pb p span { margin-left: 6px; color: var(--app-muted-fg, #5a5f5d); font-size: 15px; font-weight: 400; }"
+    },
+    {
+      "name": "App Header",
+      "kind": "nav",
+      "description": "Flat top bar with text tabs; the active tab gets a 3px spot underline.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-on\">Home</a><a>Store</a><a>Words</a><a>Statistics</a><a>Settings</a></nav>",
+      "css": ".ds-nav { display: flex; gap: 24px; padding: 0 16px; border-bottom: 1px solid var(--app-header-border, #d5d9d7); background: var(--app-header-bg, #fff); font: 400 15px 'BIZ UDPGothic', sans-serif; } .ds-nav a { position: relative; padding: 14px 0; color: var(--app-muted-fg, #5a5f5d); text-decoration: none; cursor: pointer; } .ds-nav a:hover, .ds-nav a.ds-on { color: var(--app-header-fg, #1b1b1b); } .ds-nav a.ds-on::after { content: ''; position: absolute; right: 0; bottom: -1px; left: 0; height: 3px; background: var(--accent-color, #0f7a5c); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Study Book (参考書)",
+    "overview": "The app's chrome is set like a Japanese study book: white paper, near-black ink and one green spot colour that carries all the structure. The green marks where you are and what matters (the active tab, numbered section tags, the POINT box frame, primary buttons, switches that are on, progress, selection). Everything else is ink on paper, divided by rules rather than boxes or shadows. Book text keeps the reader's own font and theme; Study Book dresses the library, settings, statistics, words pages and the reader's chrome around the book.\n\nStudy Book is the default, not a lock: it ships as the built-in themes Chimi Light and Chimi Dark (`chimi-light`/`chimi-dark`, `defaultLightThemeId`/`defaultDarkThemeId` in `src/lib/data/theme/themes.ts`). Washi, Sumi and the other built-ins stay available, and custom themes can recolour every token. The interface is English (\"chars\", \"Vol. 1\"); book content stays Japanese.",
+    "keyCharacteristics": [
+      "One spot colour; all other colour is ink, paper and rule.",
+      "Flat: no shadows, no gradients, no blur (`shadow`, `coverShadow` and `blur` are transparent/0 in both Chimi themes).",
+      "Square corners (2px), 1px rules, 2px ink rules on top of tables.",
+      "One chrome face, BIZ UDPGothic, on a fixed type scale with tabular digits for figures.",
+      "Numbered section heads and one POINT box per screen instead of icons and cards."
+    ],
+    "rules": [
+      {
+        "name": "The One Spot Rule",
+        "body": "Green means structure or state. Never use it for decoration, and never introduce a second accent.",
+        "section": "colors"
+      },
+      {
+        "name": "The Token Rule",
+        "body": "Every colour goes through a theme variable listed in `src/lib/data/theme/theme-tokens.ts` (or the Tailwind colours mapped to them in `tailwind.config.cjs`: `text-fg`, `text-muted`, `border-line`, `bg-accent`, `text-danger`, `bg-overlay`…). A new role is a new token with a value in every built-in theme; `themes.test.ts` checks every built-in theme for WCAG AA.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Figures Rule",
+        "body": "Counts, percentages, tables and tags use `font-variant-numeric: tabular-nums` so columns of figures line up.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Paper Rule",
+        "body": "No shadows, no gradients, no glass. Separate with a rule or a Paper 2 field, never with depth.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do take every colour from a theme variable or its Tailwind mapping, and add a token to every built-in theme for a new role.",
+      "Do open a section with `SectionHead` and give a screen at most one `PointBox`.",
+      "Do use `.app-button`, `.app-input`, `.app-switch`, `.app-segmented` and `.app-table` rather than one-off control styles.",
+      "Do keep controls at `--app-control-height` (40px, 44px on touch) and set text from the `--type-*` scale.",
+      "Do label buttons with words (\"Export\", \"Delete all\", \"Difficulty\").",
+      "Do write the interface in plain English sentence case (\"chars\", \"Vol. 1\")."
+    ],
+    "donts": [
+      "Don't use shadows, gradients, blur or pill shapes.",
+      "Don't put icons before headings, or use unlabelled glyph buttons where a word fits.",
+      "Don't use Tailwind palette classes (`bg-gray-700`, `text-red-500`) or fixed colours in components.",
+      "Don't add a second accent colour or use green as decoration.",
+      "Don't mark rows with a coloured left stripe; use a small square swatch.",
+      "Don't set Japanese text in the interface (badges, labels); only book content is Japanese.",
+      "Don't style book text from chrome; it belongs to the reader's settings and theme."
+    ]
+  }
+}
