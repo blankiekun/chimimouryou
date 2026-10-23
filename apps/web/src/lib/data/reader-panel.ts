@@ -39,30 +39,27 @@ export function readerPanelTabs(
 /** Width of the open panel with its tabs on larger screens (reader-panel.svelte) */
 export const panelWidthRem = 26.75;
 
-/** The width left uncovered by the panel: on phones the sheet lies over the book instead. */
+/** The book's width beside the panel: on larger screens it shrinks, on phones the sheet covers it. */
 export function readerWidth(width: number, panelOpen: boolean, remPx: number) {
   return panelOpen && width >= 768 ? width - panelWidthRem * remPx : width;
-}
-
-/** From this width the book always leaves the panel's room, open or not. */
-export const panelRoomFromPx = 1280;
-
-/**
- * The width the book is laid out in. It never depends on the panel being open, so opening or
- * closing it never moves the text: wide screens always keep the panel's room free (no text is
- * ever under it), narrower ones lay the panel over the book's right side.
- */
-export function bookLayoutWidth(width: number, remPx: number) {
-  return width >= panelRoomFromPx ? width - panelWidthRem * remPx : width;
 }
 
 /** Height of the reader bar (book-reader-header.svelte) */
 export const readerBarRem = 3.5;
 
 /**
- * Continuous mode: how far a jump lands from the screen's start edge so the panel's chrome
- * doesn't cover it. Vertical text starts at the right, under the panel; horizontal text at the
- * top, under the bar, which stays shown while the panel is open. Paginated pages already fit.
+ * Room kept free above the book for the bar while it stays shown beside the open panel on larger
+ * screens (the book's own top padding, 2rem, makes up the rest), so no line starts under it.
+ */
+export function readerTopInset(width: number, panelOpen: boolean, remPx: number) {
+  return panelOpen && width >= 768 ? (readerBarRem - 1) * remPx : 0;
+}
+
+/**
+ * Continuous mode: how far from the screen's start edge the visible book begins, where jumps land
+ * and the reading position is measured. Scrolled text passes under the panel's chrome: under the
+ * panel at the right for vertical text, under the bar (shown while the panel is open) at the top
+ * for horizontal text. Paginated pages fit beside them.
  */
 export function jumpOffset(
   { vertical, paginated, panelOpen }: { vertical: boolean; paginated: boolean; panelOpen: boolean },

@@ -111,9 +111,9 @@
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
   import ReaderPanel from '$lib/components/book-reader/reader-panel.svelte';
   import {
-    bookLayoutWidth,
     currentChapterLabel,
     jumpOffset,
+    readerTopInset,
     readerWidth,
     type PanelTab
   } from '$lib/data/reader-panel';
@@ -494,7 +494,7 @@
             bookmarkData = Promise.resolve(
               placeAfterRerender(
                 savedBookmark,
-                bookmarkManager.formatBookmarkData(rawBookData.id, customReadingPointScrollOffset),
+                bookmarkManager.formatBookmarkData(rawBookData.id, readingOffset),
                 !!saved && bookmarkManager.isCharCountOnScreen(saved)
               )
             );
@@ -693,13 +693,24 @@
 
   $: isPaginated = $viewMode$ === ViewMode.Paginated;
 
-  // Laid out the same with the panel open or closed, so it never moves the text.
+  // The book shrinks to the room beside the open panel and below the bar shown with it; the
+  // readers keep their place when they re-lay out.
   $: bookWidth = browser
-    ? bookLayoutWidth($containerViewportWidth$ ?? 0, convertRemToPixels(window, 1))
-    : 0;
-  $: uncoveredWidth = browser
     ? readerWidth($containerViewportWidth$ ?? 0, panelOpen, convertRemToPixels(window, 1))
     : 0;
+  $: bookTop = browser
+    ? readerTopInset($containerViewportWidth$ ?? 0, panelOpen, convertRemToPixels(window, 1))
+    : 0;
+  // Continuous: scrolled text passes under the panel's chrome, so the visible book (where jumps
+  // land and the position is measured) begins this far from the screen's start edge.
+  $: edgeOffset = browser
+    ? jumpOffset(
+        { vertical: $verticalMode$, paginated: isPaginated, panelOpen },
+        $containerViewportWidth$ ?? 0,
+        convertRemToPixels(window, 1)
+      )
+    : 0;
+  $: readingOffset = customReadingPointScrollOffset + edgeOffset;
 
   $: firstDimensionMargin =
     browser && $enableTapEdgeToFlip$ && isPaginated && $verticalMode$
@@ -830,12 +841,7 @@
         lastBookmarkModified: new Date().getTime(),
         progress: 0
       },
-      customReadingPointScrollOffset +
-        jumpOffset(
-          { vertical: $verticalMode$, paginated: isPaginated, panelOpen },
-          $containerViewportWidth$ ?? 0,
-          convertRemToPixels(window, 1)
-        )
+      readingOffset
     );
   }
 
@@ -1039,7 +1045,7 @@
       rect.width + rect.height > 0 &&
       rect.right > 0 &&
       rect.bottom > 0 &&
-      rect.left < uncoveredWidth &&
+      rect.left < bookWidth &&
       rect.bottom <= window.innerHeight;
 
     if (!visible) {
@@ -1261,12 +1267,7 @@
         lastBookmarkModified: new Date().getTime(),
         progress: 0
       },
-      customReadingPointScrollOffset +
-        jumpOffset(
-          { vertical: $verticalMode$, paginated: isPaginated, panelOpen },
-          $containerViewportWidth$ ?? 0,
-          convertRemToPixels(window, 1)
-        )
+      readingOffset
     );
   }
 
@@ -1394,7 +1395,7 @@
 
       if (bookmarkManager) {
         const data = {
-          ...bookmarkManager.formatBookmarkData($rawBookData$.id, customReadingPointScrollOffset),
+          ...bookmarkManager.formatBookmarkData($rawBookData$.id, readingOffset),
           exploredCharCount: Math.max(0, bookCharCount - 1),
           progress: 1
         };
@@ -1781,7 +1782,7 @@
         clearRange(window);
       }
     } else {
-      data = bookmarkManager.formatBookmarkData(bookId, customReadingPointScrollOffset);
+      data = bookmarkManager.formatBookmarkData(bookId, readingOffset);
     }
 
     await database.putBookmark(data);
@@ -1799,7 +1800,7 @@
       pauseTracker(true);
     }
 
-    bookmarkManager.scrollToBookmark(data, customReadingPointScrollOffset);
+    bookmarkManager.scrollToBookmark(data, readingOffset);
   }
 
   function onFullscreenClick() {
@@ -2335,7 +2336,9 @@
         htmlContent={$bookData$.htmlContent}
         width={bookWidth}
         reserveRight={($containerViewportWidth$ ?? 0) - bookWidth}
-        height={$containerViewportHeight$ ?? 0}
+        reserveTop={bookTop}
+        height={($containerViewportHeight$ ?? 0) - bookTop}
+        {edgeOffset}
         {fontFeatureSettings}
         {verticalTextOrientation}
         prioritizeReaderStyles={$prioritizeReaderStyles$}
