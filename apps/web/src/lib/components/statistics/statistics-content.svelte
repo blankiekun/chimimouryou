@@ -12,10 +12,18 @@
     StatisticsEditRequest
   } from '$lib/components/statistics/statistics-summary/statistics-summary';
   import WordsKnownChart from '$lib/components/statistics/words-known-chart.svelte';
+  import CharactersChart from '$lib/components/statistics/characters-chart.svelte';
+  import {
+    charactersPerDay,
+    periodTotals,
+    readingStreaks
+  } from '$lib/components/statistics/characters-per-day';
+  import PointBox from '$lib/components/point-box.svelte';
+  import SectionHead from '$lib/components/section-head.svelte';
+  import { t$, type MessageKey } from '$lib/i18n';
   import StatisticsTitleFilter from '$lib/components/statistics/statistics-title-filter.svelte';
   import {
     type BookStatistic,
-    StatisticsTab,
     StatisticsReadingDataAggregationMode,
     statisticsRangeTemplates,
     copyStatisticsData$,
@@ -49,7 +57,6 @@
     lastStatisticsEndDate$,
     lastStatisticsRangeTemplate$,
     lastStatisticsStartDate$,
-    lastStatisticsTab$,
     skipKeyDownListener$,
     startDayHoursForTracker$,
     statisticsTabKeybindMap$
@@ -276,6 +283,25 @@
   let aggregratedStatistics: BookStatistic[] = [];
   let readingGoals: BooksDbReadingGoal[] = [];
 
+  const groupLabels: Record<StatisticsReadingDataAggregationMode, MessageKey> = {
+    [StatisticsReadingDataAggregationMode.TITLE]: 'statistics.byBook',
+    [StatisticsReadingDataAggregationMode.DATE]: 'statistics.byDay',
+    [StatisticsReadingDataAggregationMode.NONE]: 'statistics.entries'
+  };
+  const groupModes = [
+    StatisticsReadingDataAggregationMode.TITLE,
+    StatisticsReadingDataAggregationMode.DATE,
+    StatisticsReadingDataAggregationMode.NONE
+  ];
+  const number = (value: number) => value.toLocaleString('en-US');
+
+  function duration(seconds: number) {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+
+    return hours ? `${hours} h ${minutes} min` : `${minutes} min`;
+  }
+
   $: statisticsDateRangeLabel = getDateRangeLabel(
     $lastStatisticsStartDate$,
     $lastStatisticsEndDate$
@@ -292,6 +318,24 @@
 
     updateStatisticsData();
   }
+
+  // After the update above: statisticsForSelection is assigned inside updateStatisticsData.
+  $: totals = periodTotals(statisticsForSelection);
+  $: bars = charactersPerDay(
+    statisticsForSelection,
+    $lastStatisticsStartDate$,
+    $lastStatisticsEndDate$
+  );
+  $: streaks = readingStreaks(
+    new Set(
+      statisticsData
+        .filter((statistic) => statistic.readingTime && statisticsTitleFilters.get(statistic.title))
+        .map((statistic) => statistic.dateKey)
+    ),
+    $lastStatisticsStartDate$,
+    $lastStatisticsEndDate$,
+    todayKey
+  );
 
   onMount(() => {
     init();
@@ -821,8 +865,42 @@
     <Fa icon={faSpinner} spin />
   </div>
 {:else}
-  {#if $lastStatisticsTab$ === StatisticsTab.OVERVIEW}
+  <div class="stats-period">
+    <PointBox
+      label={$t$('statistics.thisPeriod')}
+      figure={totals.characters}
+      unit={$t$('dashboard.unit')}
+    >
+      {#if bars.length > 1}
+        <CharactersChart {bars} {todayKey} />
+      {/if}
+    </PointBox>
+    <dl class="stats-totals">
+      <div>
+        <dt>{$t$('statistics.daysRead')}</dt>
+        <dd>{number(totals.days)}</dd>
+      </div>
+      <div>
+        <dt>{$t$('statistics.longestStreak')}</dt>
+        <dd>{$t$('statistics.days', { count: number(streaks.longest) })}</dd>
+      </div>
+      <div>
+        <dt>{$t$('statistics.currentStreak')}</dt>
+        <dd>{$t$('statistics.days', { count: number(streaks.current) })}</dd>
+      </div>
+      <div>
+        <dt>{$t$('statistics.time')}</dt>
+        <dd>{duration(totals.time)}</dd>
+      </div>
+      <div>
+        <dt>{$t$('statistics.speed')}</dt>
+        <dd>{$t$('statistics.speedValue', { count: number(totals.speed) })}</dd>
+      </div>
+    </dl>
+  </div>
+  <section class="stats-section">
     <StatisticsHeatmap
+      number={1}
       {statisticsData}
       {readingGoals}
       {statisticsTitleFilters}
@@ -831,28 +909,51 @@
       bind:heatmapAggregration={$lastReadingDataHeatmapAggregationMode$}
     />
     {#if readingGoals.length}
-      <div class="mt-8 sm:mt-16">
-        <StatisticsHeatmap
-          {statisticsData}
-          {readingGoals}
-          {statisticsTitleFilters}
-          {today}
-          {todayKey}
-          heatmapType={HeatmapType.READING_GOALS}
-          bind:heatmapAggregration={$lastReadingGoalsHeatmapAggregationMode$}
-        />
-      </div>
+      <StatisticsHeatmap
+        {statisticsData}
+        {readingGoals}
+        {statisticsTitleFilters}
+        {today}
+        {todayKey}
+        heatmapType={HeatmapType.READING_GOALS}
+        bind:heatmapAggregration={$lastReadingGoalsHeatmapAggregationMode$}
+      />
     {/if}
+  </section>
+  <section class="stats-section" aria-label={$t$('statistics.wordsKnown')}>
+    <SectionHead number={2} title={$t$('statistics.wordsKnown')} />
     <WordsKnownChart {statisticsData} {todayKey} />
-  {/if}
-  {#if $lastStatisticsTab$ === StatisticsTab.SUMMARY}
+  </section>
+  <section
+    class="stats-section"
+    aria-label={$t$(groupLabels[$lastPrimaryReadingDataAggregationMode$])}
+  >
+    <SectionHead
+      number={3}
+      title={$t$(groupLabels[$lastPrimaryReadingDataAggregationMode$])}
+      count={aggregratedStatistics.length}
+    />
+    <div class="app-segmented stats-group" role="radiogroup" aria-label={$t$('statistics.group')}>
+      {#each groupModes as mode (mode)}
+        <button
+          type="button"
+          role="radio"
+          aria-checked={$lastPrimaryReadingDataAggregationMode$ === mode}
+          class="app-segment"
+          class:app-segment-selected={$lastPrimaryReadingDataAggregationMode$ === mode}
+          on:click={() => ($lastPrimaryReadingDataAggregationMode$ = mode)}
+        >
+          {$t$(groupLabels[mode])}
+        </button>
+      {/each}
+    </div>
     <StatisticsSummary
       {aggregratedStatistics}
       {statisticsDateRangeLabel}
       on:delete={handleDeleteRequest}
       on:edit={handleEditRequest}
     />
-  {/if}
+  </section>
 {/if}
 {#if $statisticsTitleFilterIsOpen$}
   <div
@@ -875,3 +976,58 @@
     <Fa icon={faSpinner} spin />
   </div>
 {/if}
+
+<style>
+  .stats-period {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem 3rem;
+  }
+
+  @media (min-width: 900px) {
+    .stats-period {
+      grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+      align-items: start;
+    }
+  }
+
+  .stats-period :global(.chars-chart) {
+    margin-top: 1rem;
+  }
+
+  .stats-totals {
+    border-top: 2px solid var(--font-color);
+  }
+
+  .stats-totals > div {
+    display: flex;
+    min-height: 2.5rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .stats-totals dt {
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  .stats-totals dd {
+    font-size: var(--type-body);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .stats-section {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .stats-group {
+    align-self: flex-start;
+  }
+</style>

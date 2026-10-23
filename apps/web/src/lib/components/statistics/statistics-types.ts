@@ -61,22 +61,22 @@ export const statisticsRangeTemplates = [
 ];
 
 export const readingTimeDataSources: StatisticsDataSource[] = [
-  { key: 'readingTime', label: 'Total Time' },
-  { key: 'averageReadingTime', label: 'Average Time' },
-  { key: 'averageWeightedReadingTime', label: 'Weighted Time' }
+  { key: 'readingTime', label: 'Time' },
+  { key: 'averageReadingTime', label: 'Average time' },
+  { key: 'averageWeightedReadingTime', label: 'Weighted time' }
 ];
 
 export const charactersDataSources: StatisticsDataSource[] = [
   { key: 'charactersRead', label: 'Characters' },
-  { key: 'averageCharactersRead', label: 'Average Characters' },
-  { key: 'averageWeightedCharactersRead', label: 'Weighted Characters' }
+  { key: 'averageCharactersRead', label: 'Average characters' },
+  { key: 'averageWeightedCharactersRead', label: 'Weighted characters' }
 ];
 
 export const readingSpeedDataSources: StatisticsDataSource[] = [
   { key: 'lastReadingSpeed', label: 'Speed' },
-  { key: 'minReadingSpeed', label: 'Min Speed' },
-  { key: 'altMinReadingSpeed', label: 'Alt Min Speed' },
-  { key: 'maxReadingSpeed', label: 'Max Speed' }
+  { key: 'minReadingSpeed', label: 'Min speed' },
+  { key: 'altMinReadingSpeed', label: 'Alt min speed' },
+  { key: 'maxReadingSpeed', label: 'Max speed' }
 ];
 
 export const dateDataSources: StatisticsDataSource[] = [{ key: 'dateKey', label: 'Date' }];

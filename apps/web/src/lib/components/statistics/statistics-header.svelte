@@ -1,85 +1,90 @@
 <script lang="ts">
-  import {
-    faCalendarDays,
-    faCopy,
-    faFilter,
-    faMap,
-    faSliders
-  } from '@fortawesome/free-solid-svg-icons';
-  import AppHeader from '$lib/components/app-header/app-header.svelte';
   import Popover from '$lib/components/popover/popover.svelte';
   import {
-    StatisticsTab,
+    StatisticsRangeTemplate,
     copyStatisticsData$,
     statisticsTitleFilterEnabled$,
     statisticsTitleFilterIsOpen$,
     type StatisticsDataSource
   } from '$lib/components/statistics/statistics-types';
-  import { lastStatisticsTab$ } from '$lib/data/store';
-  import Fa from 'svelte-fa';
+  import { getDateRangeLabel } from '$lib/data/reading-goal';
+  import {
+    lastStatisticsEndDate$,
+    lastStatisticsRangeTemplate$,
+    lastStatisticsStartDate$
+  } from '$lib/data/store';
+  import { t$ } from '$lib/i18n';
 
-  export let currentBookId: number | undefined;
+  /** The Statistics page's title, period control and tools (formerly glyph buttons in the app header). */
+
   export let showStatisticsSettings: boolean;
 
   const copyStatisticsDataItems: StatisticsDataSource[] = [
-    { key: 'readingTime', label: 'Reading Time' },
-    { key: 'charactersRead', label: 'Characters Read' }
+    { key: 'readingTime', label: 'Reading time' },
+    { key: 'charactersRead', label: 'Characters read' }
   ];
 
+  const periods = [
+    [StatisticsRangeTemplate.TODAY, 'statistics.today'],
+    [StatisticsRangeTemplate.WEEK, 'statistics.week'],
+    [StatisticsRangeTemplate.MONTH, 'statistics.month'],
+    [StatisticsRangeTemplate.YEAR, 'statistics.year'],
+    [StatisticsRangeTemplate.CUSTOM, 'statistics.custom']
+  ] as const;
+
   let copyStatisticsDataPopover: Popover;
+
+  function choosePeriod(period: StatisticsRangeTemplate) {
+    // Custom dates are set in the settings panel.
+    if (period === StatisticsRangeTemplate.CUSTOM) {
+      showStatisticsSettings = true;
+    } else {
+      $lastStatisticsRangeTemplate$ = period;
+    }
+  }
 </script>
 
-<AppHeader active="statistics" {currentBookId}>
+<header class="stats-header">
+  <div class="stats-header-title">
+    <h1>{$t$('statistics.title')}</h1>
+    <p>{getDateRangeLabel($lastStatisticsStartDate$, $lastStatisticsEndDate$)}</p>
+  </div>
+  <div class="app-segmented" role="radiogroup" aria-label={$t$('statistics.period')}>
+    {#each periods as [period, label] (period)}
+      <button
+        type="button"
+        role="radio"
+        aria-checked={$lastStatisticsRangeTemplate$ === period}
+        class="app-segment"
+        class:app-segment-selected={$lastStatisticsRangeTemplate$ === period}
+        on:click={() => choosePeriod(period)}
+      >
+        {$t$(label)}
+      </button>
+    {/each}
+  </div>
+</header>
+<div class="stats-toolbar">
   <button
     type="button"
-    class="app-header-icon"
-    class:app-header-icon-active={$lastStatisticsTab$ === StatisticsTab.SUMMARY}
-    title="Summary"
-    aria-label="Summary"
-    aria-pressed={$lastStatisticsTab$ === StatisticsTab.SUMMARY}
-    on:click={() => ($lastStatisticsTab$ = StatisticsTab.SUMMARY)}
-  >
-    <Fa icon={faCalendarDays} />
-  </button>
-  <button
-    type="button"
-    class="app-header-icon"
-    class:app-header-icon-active={$lastStatisticsTab$ === StatisticsTab.OVERVIEW}
-    title="Heatmap"
-    aria-label="Heatmap"
-    aria-pressed={$lastStatisticsTab$ === StatisticsTab.OVERVIEW}
-    on:click={() => ($lastStatisticsTab$ = StatisticsTab.OVERVIEW)}
-  >
-    <Fa icon={faMap} />
-  </button>
-  <button
-    type="button"
-    class="app-header-icon"
-    title="Open title filter"
-    aria-label="Open title filter"
+    class="app-button app-button-quiet"
     disabled={!$statisticsTitleFilterEnabled$}
     on:click={() => ($statisticsTitleFilterIsOpen$ = true)}
   >
-    <Fa icon={faFilter} />
+    {$t$('statistics.filterTitles')}
   </button>
   <Popover
-    placement="bottom-end"
-    fallbackPlacements={['bottom', 'bottom-start']}
-    yOffset={10}
+    placement="bottom-start"
+    fallbackPlacements={['bottom', 'bottom-end']}
+    yOffset={6}
     panelClasses="app-popover-panel"
     bind:this={copyStatisticsDataPopover}
   >
-    <button
-      slot="icon"
-      type="button"
-      class="app-header-icon"
-      title="Copy data in TMW log format"
-      aria-label="Copy data in TMW log format"
-    >
-      <Fa icon={faCopy} />
+    <button type="button" class="app-button app-button-quiet" slot="icon">
+      {$t$('statistics.copyLog')}
     </button>
     <div class="flex flex-col" slot="content">
-      <div class="app-popover-heading">Copy as TMW log</div>
+      <div class="app-popover-heading">{$t$('statistics.copyLogHeading')}</div>
       {#each copyStatisticsDataItems as copyStatisticsDataItem (copyStatisticsDataItem.key)}
         <button
           type="button"
@@ -96,11 +101,57 @@
   </Popover>
   <button
     type="button"
-    class="app-header-icon"
-    title="Open statistics settings"
-    aria-label="Open statistics settings"
+    class="app-button app-button-quiet"
     on:click={() => (showStatisticsSettings = true)}
   >
-    <Fa icon={faSliders} />
+    {$t$('statistics.settings')}
   </button>
-</AppHeader>
+</div>
+
+<style>
+  .stats-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem 2rem;
+  }
+
+  .stats-header-title h1 {
+    font-size: var(--type-display);
+    font-weight: 400;
+    line-height: 1.2;
+  }
+
+  .stats-header-title p {
+    margin-top: 0.25rem;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Phones: the five periods share one row */
+  @media (max-width: 479px) {
+    .stats-header .app-segmented {
+      display: flex;
+      width: 100%;
+      flex-wrap: nowrap;
+    }
+
+    .stats-header .app-segment {
+      flex: 1 1 auto;
+      padding-inline: 0.4rem;
+    }
+  }
+
+  .stats-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 1.5rem;
+    margin-top: 1.25rem;
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+  }
+</style>

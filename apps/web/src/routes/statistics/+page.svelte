@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
+  import AppHeader from '$lib/components/app-header/app-header.svelte';
+  import ImportMenu from '$lib/components/book-card/import-menu.svelte';
   import StatisticsContent from '$lib/components/statistics/statistics-content.svelte';
   import StatisticsHeader from '$lib/components/statistics/statistics-header.svelte';
   import StatisticsSettings from '$lib/components/statistics/statistics-settings.svelte';
@@ -8,6 +11,8 @@
     preFilteredTitlesForStatistics$,
     statisticsActionInProgress$
   } from '$lib/components/statistics/statistics-types';
+  import { pagePath } from '$lib/data/env';
+  import { setPendingImport, type PendingImport } from '$lib/data/library-home';
   import {
     database,
     lastStartDayOfWeek$,
@@ -40,6 +45,12 @@
   }
 
   onDestroy(() => ($preFilteredTitlesForStatistics$ = new Set()));
+
+  // The import runs (with its progress and errors) in the library.
+  function importOnManage(value: PendingImport) {
+    setPendingImport(value);
+    goto(`${pagePath}/manage`);
+  }
 
   function handleSelectedStatisticsDateChange({
     detail: { dateString, isStartDate }
@@ -124,22 +135,19 @@
   }
 </script>
 
-<StatisticsHeader currentBookId={$currentBookId$} bind:showStatisticsSettings />
+<AppHeader active="statistics" currentBookId={$currentBookId$}>
+  <ImportMenu
+    on:filesChange={(ev) => importOnManage({ files: Array.from(ev.detail) })}
+    on:importBackup={(ev) => importOnManage({ backup: ev.detail })}
+  />
+</AppHeader>
 
 <div class="app-page-shell">
-  <main
-    class="mx-auto flex max-w-7xl flex-col px-4 pb-12 pt-[5.25rem] md:px-8 xl:px-10 xl:pt-[4.75rem]"
-    aria-label="Statistics"
-  >
-    <div class="mb-6">
-      <h1 class="text-[1.6rem] leading-tight [font-family:var(--app-font-display)]">Statistics</h1>
-      <p class="mt-1 text-sm font-semibold text-[color:var(--app-muted-fg)]">
-        Reading time, characters read and goals for the selected period
-      </p>
+  <main class="statistics" aria-label="Statistics">
+    <div>
+      <StatisticsHeader bind:showStatisticsSettings />
     </div>
-    <section class="app-surface-card p-4 sm:p-6">
-      <StatisticsContent />
-    </section>
+    <StatisticsContent />
   </main>
 </div>
 
@@ -159,3 +167,20 @@
     />
   </div>
 {/if}
+
+<style>
+  .statistics {
+    display: flex;
+    max-width: 75rem;
+    flex-direction: column;
+    gap: 3rem;
+    margin: 0 auto;
+    padding: 6rem 1rem calc(5.5rem + env(safe-area-inset-bottom));
+  }
+
+  @media (min-width: 768px) {
+    .statistics {
+      padding: 6.5rem 2.5rem 4rem;
+    }
+  }
+</style>
