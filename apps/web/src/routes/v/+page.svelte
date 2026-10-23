@@ -128,6 +128,8 @@
   /** A server game over 10 MB asks before its files are kept in the browser. */
   let keepAsk: { size: string; answer: (keep: boolean) => void } | undefined;
   let showMore = false;
+  /** The engine's skip mode, as it reports it (consMode) */
+  let skipping = false;
   /** For the progress line: characters read, and today */
   let readCharacters = 0;
   let todayCharacters = 0;
@@ -363,6 +365,7 @@
       textLines: (bytes: Uint8Array, boxes: Int32Array) =>
         overlayLines(bytes, boxes, info.encoding),
       onSave: uploadSaves,
+      onMode: (auto: boolean, skip: boolean) => (skipping = skip),
       onExit: () => (ended = true)
     });
     started = true;
@@ -468,6 +471,33 @@
     goto(`${pagePath}/manage`);
   }
 
+  function toggleSkip() {
+    skipping = !skipping;
+    engineSet('Skip', skipping ? 1 : 0);
+  }
+
+  function openMenu() {
+    (frame?.contentWindow as any)?.openMenu();
+  }
+
+  /** Toggles in the bar, and on portrait phones in a row under it; Menu and Skip only on phones. */
+  $: chips = [
+    {
+      label: 'Furigana',
+      title: 'Furigana in the game (from the next text; readings stay in the text panel)',
+      on: $furigana$,
+      click: () => furigana$.next(!$furigana$)
+    },
+    {
+      label: 'Instant text',
+      title: 'Show the whole text at once',
+      on: $instantText$,
+      click: () => instantText$.next(!$instantText$)
+    },
+    { label: 'Menu', title: "The game's menu (right-click)", on: undefined, click: openMenu, phone: true },
+    { label: 'Skip', title: 'Skip text', on: skipping, click: toggleSkip, phone: true }
+  ];
+
   function toggleFullscreen() {
     if (fullscreenManager.fullscreenElement) fullscreenManager.exitFullscreen();
     else fullscreenManager.requestFullscreen(document.documentElement);
@@ -505,25 +535,19 @@
     place="Visual novel{book?.characters ? ` · ${Math.floor(percent)}%` : ''}"
     on:back={leave}
   >
-    <button
-      class="bar-text bar-chip"
-      class:bar-icon-active={$furigana$}
-      title="Furigana in the game (from the next text; readings stay in the text panel)"
-      aria-pressed={$furigana$}
-      on:click={() => furigana$.next(!$furigana$)}
-    >
-      Furigana
-    </button>
-    <button
-      class="bar-text bar-chip"
-      class:bar-icon-active={$instantText$}
-      title="Show the whole text at once"
-      aria-pressed={$instantText$}
-      on:click={() => instantText$.next(!$instantText$)}
-    >
-      Instant text
-    </button>
-    <span class="bar-divider" aria-hidden="true" />
+    {#each chips as chip}
+      <button
+        class="bar-text bar-chip vn-bar-chip"
+        class:vn-phone-chip={chip.phone}
+        class:bar-icon-active={chip.on}
+        title={chip.title}
+        aria-pressed={chip.on}
+        on:click={chip.click}
+      >
+        {chip.label}
+      </button>
+    {/each}
+    <span class="bar-divider vn-bar-chip" aria-hidden="true" />
     <button
       class="bar-icon"
       class:bar-icon-active={$showText$}
@@ -547,7 +571,7 @@
       </svg>
     </button>
     {#if fullscreenManager.fullscreenEnabled}
-      <button class="bar-icon bar-wide" title="Full screen" on:click={toggleFullscreen}>
+      <button class="bar-icon vn-bar-chip" title="Full screen" on:click={toggleFullscreen}>
         <Fa icon={faExpand} />
       </button>
     {/if}
@@ -561,6 +585,25 @@
       <Fa icon={faEllipsis} />
     </button>
   </PlayerBar>
+
+  <div class="vn-chip-row">
+    {#each chips as chip}
+      <button
+        class="vn-chip"
+        class:vn-chip-on={chip.on}
+        title={chip.title}
+        aria-pressed={chip.on}
+        on:click={chip.click}
+      >
+        {chip.label}
+      </button>
+    {/each}
+    {#if fullscreenManager.fullscreenEnabled}
+      <button class="vn-chip vn-chip-icon" title="Full screen" on:click={toggleFullscreen}>
+        <Fa icon={faExpand} />
+      </button>
+    {/if}
+  </div>
 
   {#if keepAsk}
     <div class="vn-keep">
@@ -598,8 +641,8 @@
         <div class="vn-notice">
           <p>
             Some saves were made with a newer engine (CONscripter {newerEngine}) than this server's
-            ({engineVersion}). Saves should be backward compatible, so they will most likely still
-            load; if one doesn't, ask an admin to update the engine.
+            ({engineVersion}). They will most likely still load; if one doesn't, ask an admin to
+            update the engine.
           </p>
           <button class="app-button app-button-quiet" on:click={() => (newerEngine = undefined)}>
             Dismiss
@@ -663,6 +706,82 @@
     background: var(--reader-panel-bg);
     color: var(--reader-panel-fg);
     font-family: var(--app-font-ui);
+  }
+
+  /* Menu and Skip are for phones, where right-click and the game's own buttons are hard to reach. */
+  .vn-page .vn-phone-chip,
+  .vn-chip-row {
+    display: none;
+  }
+
+  .vn-chip-row {
+    gap: 0.25rem;
+    overflow-x: auto;
+    padding: 0 0.5rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
+  }
+
+  .vn-chip {
+    display: inline-flex;
+    height: 2.75rem;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0 0.75rem;
+    border-radius: 2px;
+    color: color-mix(in srgb, var(--reader-panel-fg) 68%, transparent);
+    font-size: var(--type-small);
+    font-weight: 700;
+  }
+
+  .vn-chip-icon {
+    width: 2.75rem;
+    margin-left: auto;
+    padding: 0;
+  }
+
+  .vn-chip-on {
+    background: color-mix(in srgb, var(--accent-color) 12%, var(--reader-panel-bg));
+    color: var(--accent-strong-color);
+  }
+
+  @media (orientation: portrait) and (max-width: 767px) {
+    .vn-page .vn-bar-chip {
+      display: none;
+    }
+
+    .vn-chip-row {
+      display: flex;
+    }
+
+    /* The game at its width (most are 4:3), the text panel in the rest of the height */
+    .vn-main-text .vn-game {
+      height: 75vw;
+      flex: none;
+      padding: 0;
+    }
+
+    .vn-main-text .vn-side {
+      display: flex;
+      min-height: 0;
+      flex: 1;
+      flex-direction: column;
+    }
+
+    .vn-main-text .vn-text {
+      max-height: none;
+      flex: 1;
+    }
+  }
+
+  @media (orientation: landscape) and (max-height: 500px) {
+    .vn-page .vn-phone-chip {
+      display: inline-flex;
+    }
+
+    .vn-page .bar-chip {
+      height: 2.75rem;
+    }
   }
 
   .vn-keep {

@@ -163,6 +163,7 @@ var spriteText = '';
 // From consPosition: 1 if the engine has the text as read before, 0 if not, -1 unknown.
 var textRead = -1;
 var autoMode = false;
+var onMode = function () {};
 
 function consVoice(channel, file) {
   if (channel === 0) lineVoice = file;
@@ -172,8 +173,27 @@ function consPosition(offset, total, label, read) {
   textRead = read;
 }
 
-function consMode(auto) {
+function consMode(auto, skip) {
   autoMode = !!auto;
+  onMode(autoMode, !!skip);
+}
+
+/** Opens the game's system menu, as a right-click on the game does. */
+function openMenu() {
+  var canvas = document.getElementById('canvas');
+  var box = canvas.getBoundingClientRect();
+  var at = {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    buttons: 2,
+    clientX: box.left + box.width / 2,
+    clientY: box.top + box.height / 2
+  };
+
+  canvas.dispatchEvent(new MouseEvent('mousedown', at));
+  at.buttons = 0;
+  canvas.dispatchEvent(new MouseEvent('mouseup', at));
 }
 
 /** Calls one of the engine's _consSet* exports (CONscripter v0.19.0+), e.g. ('Ruby', 0). */
@@ -771,7 +791,7 @@ function loadScript(src) {
  * this browser's), keepLines (keep the recent lines with their screenshots for ankiMedia()),
  * recordLines (and record their sound),
  * onText(bytes, skipped, boxes, read), textLines(bytes, boxes) (overlay lines for backlog pages and sprites),
- * onSave(saves), onExit(code).
+ * onSave(saves), onExit(code), onMode(auto, skip) (the engine's auto and skip modes).
  */
 async function startGame(options) {
   var gameDir = '/game';
@@ -790,6 +810,7 @@ async function startGame(options) {
   recordLines = !!options.recordLines && typeof MediaRecorder !== 'undefined';
   if (options.cacheName) fileCache = await caches.open(options.cacheName);
   onSave = options.onSave || onSave;
+  onMode = options.onMode || onMode;
   textEncoding = options.encoding === 'utf8' ? 'utf-8' : 'shift_jis';
   g_cons_index = { gamedir: gameDir, savedir: options.saveDir };
   Object.keys(options.files).forEach(function (path) {
