@@ -17,6 +17,7 @@ anything a reader or a server operator would notice.
 
 ### Changed
 
+- Imported books are added to Home's My books.
 - The library's top bar shows only Import and the account: view and sort are in the Store's Sort
   menu, Select is a Store button (long press still selects on Home), and the storage source and
   "Report an issue" are in Settings → Data → Storage. The old-domain hint and the `?count` loader

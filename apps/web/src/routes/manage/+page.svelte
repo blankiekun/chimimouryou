@@ -534,6 +534,7 @@
       return;
     }
 
+    const importedTitles: string[] = [];
     const error = await importData(
       document,
       getStorageHandler(
@@ -548,9 +549,11 @@
       ),
       files,
       cancelSignal,
-      $fileCountData$
+      $fileCountData$,
+      importedTitles
     ).catch((catchedError) => catchedError.message);
 
+    addToHome(importedTitles);
     resetProgress();
 
     if (error) {
@@ -639,13 +642,16 @@
       database.dataListChanged$.next(handler);
     }
 
-    const newTitles = added.flatMap((job) => {
+    const addedCards = added.flatMap((job) => {
       // Games unpacked into the visual novel folder have no Calibre id.
       const card =
         job.calibreId !== undefined && books.find((book) => book.calibreId === job.calibreId);
 
-      return card && !card.series ? [card.title] : [];
+      return card ? [card] : [];
     });
+    const newTitles = addedCards.filter((card) => !card.series).map((card) => card.title);
+
+    addToHome(addedCards.map((card) => card.title));
 
     await offerSeriesForImports(books, newTitles);
 
