@@ -34,6 +34,8 @@ idempotent), in order, then `npx wrangler@4.147.0 deploy`:
 - `npx wrangler@4.147.0 r2 bucket create chimi-hub-media`, then
   `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file migrations/0003_images.sql`
   (pictures and cover thumbnails)
+- `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file migrations/0004_roles.sql`
+  (`users.role`: moderators; a second run only fails with "duplicate column name")
 
 ## Develop
 
@@ -69,10 +71,32 @@ skip the edge limit (a shelf shows a dozen at once; each device fetches each URL
 `POST friends/request` (`{code}`, or `{username}` of a public profile); `POST friends/:id/accept`;
 `DELETE friends/:id` (decline, cancel, remove); `POST block/:id`. `GET /privacy` is the privacy
 page. Limits are counters in D1 (`limits`).
+People carry `role` (`'dev'` or `''`).
+
+Moderation, role `dev` only (403 for everyone else): `GET admin/reports` (open reports grouped
+by kind and target, with the name, picture or cover reported); `DELETE admin/reports?what=&target=`
+(dismiss); `DELETE admin/cover?key=` (`removed = 1`, the R2 object goes); `GET admin/user/:username`
+(account, current and finished books, events); `POST admin/user/:id/name` (name back to the
+username); `DELETE admin/user/:id/picture`; `DELETE admin/user/:id/status/:slot`,
+`…/finished/:key`, `…/events/:id` (one row). Resolving a report deletes its reports.
+
+## Moderation
+
+Readers with the role `dev` get a Dev badge beside their name and the app's Moderation page
+(Settings → Social → Moderation, `/moderation`): the reports queue and a look-up of any reader by
+username, with buttons for everything below. There is no UI to grant the role; from this folder:
+
+```sh
+npx wrangler@4.147.0 d1 execute chimi-hub --remote --command \
+  "UPDATE users SET role = 'dev' WHERE username = 'NAME'"
+```
+
+(`role = ''` takes it away.) The app picks it up the next time Settings → Social opens.
 
 ## Reports
 
-Reports of a name or picture are kept 90 days. To review them and reset a name:
+Reports of a name, picture or cover are kept 90 days and handled on the Moderation page. By hand,
+to review them and reset a name:
 
 ```sh
 npx wrangler@4.147.0 d1 execute chimi-hub --remote --command \

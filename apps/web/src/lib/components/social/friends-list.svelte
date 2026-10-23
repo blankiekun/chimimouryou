@@ -1,5 +1,6 @@
 <script lang="ts">
   import SectionHead from '$lib/components/section-head.svelte';
+  import RoleBadge from '$lib/components/social/role-badge.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import { pushState } from '$app/navigation';
   import FriendCover from '$lib/components/social/friend-cover.svelte';
@@ -53,11 +54,13 @@
         <li class="friends-row" class:friends-row-manage={manage}>
           <SocialAvatar avatar={friend.avatar} person={friend} />
           <span class="friends-who">
-            <button
-              type="button"
-              class="friends-name"
-              on:click={() => pushState('', { profile: friend.username })}>{friend.name}</button
-            >
+            <span class="friends-name-row">
+              <button
+                type="button"
+                class="friends-name"
+                on:click={() => pushState('', { profile: friend.username })}>{friend.name}</button
+              ><RoleBadge role={friend.role} />
+            </span>
             <small>
               {book
                 ? $t$('social.readAgo', { when: relativeTime(book.readAt, $uiLanguage$) })
@@ -152,8 +155,16 @@
     flex-direction: column;
   }
 
-  .friends-name {
+  .friends-name-row {
+    display: flex;
+    max-width: 100%;
+    min-width: 0;
+    align-items: center;
     align-self: flex-start;
+  }
+
+  .friends-name {
+    min-width: 0;
     max-width: 100%;
     overflow: hidden;
     font-weight: 700;

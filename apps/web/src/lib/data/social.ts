@@ -70,6 +70,8 @@ export interface Person {
   avatar: number;
   /** The uploaded picture's version, 0 or absent for the preset */
   picture?: number;
+  /** 'dev' for the hub's moderators (a Dev badge), else '' or absent (older hubs) */
+  role?: string;
 }
 
 export interface Friend extends Person {
