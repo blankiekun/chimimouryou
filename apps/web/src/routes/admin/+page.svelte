@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { faSpinner } from '@fortawesome/free-solid-svg-icons';
-  import { onMount } from 'svelte';
+  import { onMount, type ComponentType } from 'svelte';
   import { map, share } from 'rxjs';
   import Fa from 'svelte-fa';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
@@ -36,6 +36,7 @@
     { id: 'tools' as Tab, label: 'Tools', show: hasPermission(user, 'difficulty') }
   ].filter((candidate) => candidate.show);
   // Section numbers follow the tools this account sees.
+  let tools: { title: string; component: ComponentType; props?: Record<string, unknown> }[] = [];
   $: tools = [
     ...(user?.admin
       ? [
@@ -46,7 +47,7 @@
         ]
       : []),
     ...(hasPermission(user, 'difficulty')
-      ? [{ title: 'Estimate difficulty', component: DifficultyPanel }]
+      ? [{ title: 'Estimate difficulty', component: DifficultyPanel, props: { admin: true } }]
       : [])
   ];
   $: if (tabs.length && !tabs.some((candidate) => candidate.id === tab)) {
@@ -113,7 +114,7 @@
         {:else if tab === 'tools'}
           {#each tools as tool, index (tool.title)}
             <AdminSection number={index + 1} title={tool.title}>
-              <svelte:component this={tool.component} />
+              <svelte:component this={tool.component} {...tool.props} />
             </AdminSection>
           {/each}
         {/if}

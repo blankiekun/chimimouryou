@@ -409,7 +409,7 @@ export const ja: Record<MessageKey, string> = {
   'ai.guideElevenLabsPaste': 'キー（{prefix} で始まります）をコピーし、{field} に貼り付けます。',
   'ai.guideVoice':
     '「Voices」で日本語対応の音声を選び、メニューの「Copy voice ID」からIDをコピーして {field} に貼り付けます。',
-  'ai.guideListen': '本を開いてヘッドホンアイコンを押し、「AI音声」を選択します。',
+  'ai.guideListen': '本を開き、サイドパネルの「聴く」タブで「AI音声」を選択します。',
   'ai.keysWhere': 'APIキーの保存と扱い',
   'ai.keysWhereHint':
     'キーはこのブラウザに保存されるほか、ログイン中はサーバー上のアカウントにも同期され、他端末でも利用できます。ログアウトするとブラウザから削除され、未ログイン時に入力したキーもログイン時に消去されます。キーはブラウザから OpenRouter および ElevenLabs へ直接送信されます。',

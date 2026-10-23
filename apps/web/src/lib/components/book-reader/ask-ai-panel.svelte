@@ -105,7 +105,7 @@
   <header class="ask-head flex items-center gap-2">
     <h2 class="flex-1">{$t$('reader.askAi')}</h2>
     <span class="truncate text-xs opacity-60">{$openRouterModel$}</span>
-    <AiLanguageToggle />
+    <AiLanguageToggle compact />
     <button class="p-1" title={$t$('reader.close')} on:click={close}><Fa icon={faXmark} /></button>
   </header>
 

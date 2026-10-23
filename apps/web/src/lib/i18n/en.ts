@@ -397,7 +397,7 @@ export const en = {
   'ai.guideElevenLabsPaste': 'Copy the key (it starts with {prefix}) and paste it into {field}.',
   'ai.guideVoice':
     'In Voices, choose a voice that speaks Japanese, open its menu, choose "Copy voice ID" and paste it into {field}.',
-  'ai.guideListen': 'Open a book and press the headphones icon, then "AI voice".',
+  'ai.guideListen': 'Open a book, open the side panel\'s Listen tab and choose "AI voice".',
   'ai.keysWhere': 'Where the keys go',
   'ai.keysWhereHint':
     'Keys are kept in this browser and, when signed in, in your account on this server, so your other devices get them. They are removed from the browser when you sign out, and keys typed while signed out are removed when someone signs in. The browser sends them only to OpenRouter and ElevenLabs.',
@@ -557,7 +557,7 @@ export const en = {
     'The readings of this list agree with the installed one on only {agreement} of its most frequent words. Install it anyway?',
   'library.importDictionary': 'Import frequency list',
   'library.termDictionaries':
-    'Term dictionaries (optional): Yomitan term dictionaries you have give readings of words the frequency list lacks, in word lists and readings files. Estimates made before keep their words until redone.',
+    'Term dictionaries (optional): Yomitan term dictionaries you add give readings of words the frequency list lacks, in word lists and readings files. Estimates made before keep their words until redone.',
   'library.addTermDictionary': 'Add term dictionary',
   'library.removeTermDictionary': 'Remove',
   'library.run': 'Run',
