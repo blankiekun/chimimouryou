@@ -14,10 +14,9 @@
 
 import { BehaviorSubject } from 'rxjs';
 import { csvField, type BookWord } from '$lib/data/book-words';
-import { loadCalibreCatalog, loadCalibreDifficulty } from '$lib/data/calibre';
 import { pullWordMarks, wordMarksChanged } from '$lib/data/extras-sync';
 import { readerDb } from '$lib/data/reader-db';
-import { wordList } from '$lib/data/words-met';
+import { estimatedBooks, estimatedWordList } from '$lib/data/words-met';
 
 export type WordStatus = 'known' | 'ignored';
 
@@ -172,12 +171,13 @@ export async function setWordMarks(
   wordMarksChanged();
 }
 
-/** The written forms of a Calibre book's word list (the reader's "Mark known"). */
+/**
+ * The written forms of a book's word list (the reader's "Mark known"): a Calibre book's, or in
+ * the standalone without a server its local one.
+ */
 export async function bookWordForms(title: string) {
-  const [catalog, difficulty] = await Promise.all([loadCalibreCatalog(), loadCalibreDifficulty()]);
-  const id = catalog.find((book) => book.title === title)?.id;
-  const estimate = id === undefined ? undefined : difficulty[id];
-  const words = estimate && (await wordList(id!, estimate.computedAt));
+  const book = (await estimatedBooks()).find((estimated) => estimated.title === title);
+  const words = book && (await estimatedWordList(book));
 
   return new Set(words?.map(([form]) => form));
 }

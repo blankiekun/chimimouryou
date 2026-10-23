@@ -461,7 +461,10 @@ export const ja: Record<MessageKey, string> = {
   'words.ankiSettings': 'Anki設定',
   'words.how': '既知語の数え方',
   'words.howText':
-    '読んだ本で{count}回出会った語、Ankiのカードが成熟した語（間隔21日以上）、手動で指定した語が既知になります。除外した語も既知として数えます。指定はアカウントに同期されます。',
+    '読んだ本で{count}回出会った語、Ankiのカードが成熟した語（間隔21日以上）、手動で指定した語が既知になります。除外した語も既知として数えます。',
+  'words.marksAccount': '指定はアカウントに同期されます。',
+  'words.marksLibrary': '指定はGoogle Drive・OneDrive・フォルダのライブラリと同期されます。',
+  'words.marksBrowser': '指定はこのブラウザだけに保存されます。',
   'bookWords.crumb': '語彙',
   'bookWords.title': '{title}の語彙',
   'bookWords.subtitle': '頻出上位{count}語。役に立つ語から順に。',

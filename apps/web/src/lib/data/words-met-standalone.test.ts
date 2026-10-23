@@ -8,6 +8,7 @@ import 'fake-indexeddb/auto';
 import { describe, expect, it, vi } from 'vitest';
 import type { BookWord } from '$lib/data/book-words';
 import { readerDb } from '$lib/data/reader-db';
+import { bookWordForms } from '$lib/data/word-marks';
 import { getKnownHistory } from '$lib/data/words-history';
 import { getWordsMet, saveReadProgress } from '$lib/data/words-met';
 
@@ -64,6 +65,9 @@ describe('words met in the standalone', () => {
     ]);
 
     expect(points).toEqual([{ dateKey: '2026-10-01', known: 1 }]);
+    // The reader's "Mark known" reads the local list too.
+    expect(await bookWordForms('猫の本')).toEqual(new Set(['猫', '宦官']));
+    expect(await bookWordForms('Not estimated')).toEqual(new Set());
     expect(fetchMock).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
