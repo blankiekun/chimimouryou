@@ -42,6 +42,7 @@ services:
       REAL_IP_FROM: ${REAL_IP_FROM:-}
       PUBLIC_READS: ${PUBLIC_READS:-0}
       AUDIOBOOKSHELF_URL: ${AUDIOBOOKSHELF_URL:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
     volumes:
       - ${LIBRARY_PATH:?set LIBRARY_PATH in .env}:/library:ro
       - ${VN_PATH:-${DATA_PATH:-./data}/vn}:/vn:ro
@@ -57,6 +58,7 @@ services:
     environment:
       MIN_FREE_MB: ${MIN_FREE_MB:-1024}
       ALLOW_HTTP_ACCOUNTS: ${ALLOW_HTTP_ACCOUNTS:-0}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
 
   # Rebuilds the catalog (and extracts missing covers into the library) when metadata.db
   # or the visual novel folder changes, and makes the library cards' cover thumbnails.
@@ -83,6 +85,7 @@ services:
     command: ['python3', '/app/import/service.py']
     environment:
       ALLOW_HTTP_ACCOUNTS: ${ALLOW_HTTP_ACCOUNTS:-0}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
     volumes:
       - ${DATA_PATH:-./data}:/data
       - ${LIBRARY_PATH:?set LIBRARY_PATH in .env}:/library
@@ -102,6 +105,7 @@ services:
     environment:
       JITEN_WORKERS: ${DIFFICULTY_WORKERS:-2}
       ALLOW_HTTP_ACCOUNTS: ${ALLOW_HTTP_ACCOUNTS:-0}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
     volumes:
       - ${DATA_PATH:-./data}:/data
       - ${LIBRARY_PATH:?set LIBRARY_PATH in .env}:/library:ro
@@ -121,6 +125,7 @@ services:
     cpu_shares: 512
     environment:
       ALLOW_HTTP_ACCOUNTS: ${ALLOW_HTTP_ACCOUNTS:-0}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
     volumes:
       - ${DATA_PATH:-./data}:/data
       - ${LIBRARY_PATH:?set LIBRARY_PATH in .env}:/library:ro

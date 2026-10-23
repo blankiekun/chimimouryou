@@ -70,10 +70,40 @@ if [ -n "$AUDIOBOOKSHELF_URL" ]; then
     '  }')
 fi
 
+# Server connect: exact https origins of the standalone app that may call the reader's
+# locations with a token (CORS). Empty (the default) = no CORS headers at all.
+: "${CORS_ORIGINS:=}"
+CORS_ORIGIN_MAP=''
+CORS=''
+CORS_WITH_SECURITY_HEADERS=''
+if [ -n "$CORS_ORIGINS" ]; then
+  for origin in $CORS_ORIGINS; do
+    if ! printf '%s' "$origin" | grep -Eqx 'https://[A-Za-z0-9.-]+(:[0-9]{1,5})?'; then
+      echo "CORS_ORIGINS: $origin is not an https origin like https://read.example (no path or slash)" >&2; exit 1
+    fi
+  done
+  CORS_ORIGIN_MAP=$(for origin in $CORS_ORIGINS; do printf '  "%s" $http_origin;\n' "$origin"; done)
+  # Preflights are answered before auth_request; never Allow-Credentials (tokens, not cookies).
+  CORS=$(printf '%s\n' \
+    '    if ($request_method = OPTIONS) { return 204; }' \
+    '    add_header Access-Control-Allow-Origin $cors_origin always;' \
+    '    add_header Vary Origin always;' \
+    '    add_header Access-Control-Allow-Headers "Authorization, Content-Type, Depth, Destination, Overwrite, If-None-Match, If-Match" always;' \
+    '    add_header Access-Control-Allow-Methods "GET, HEAD, PUT, DELETE, MKCOL, MOVE, PROPFIND, POST, OPTIONS" always;' \
+    '    add_header Access-Control-Expose-Headers "ETag, Last-Modified, Content-Length, Content-Range, Retry-After" always;' \
+    '    add_header Access-Control-Max-Age 600 always;')
+  # For locations that otherwise inherit the server's headers (an add_header here drops them).
+  CORS_WITH_SECURITY_HEADERS=$(printf '%s\n' "$CORS" \
+    '    add_header X-Content-Type-Options nosniff always;' \
+    '    add_header Referrer-Policy same-origin always;' \
+    "    add_header Content-Security-Policy \"frame-ancestors 'self'; object-src 'none'; base-uri 'self'\" always;" \
+    '    add_header Strict-Transport-Security $hsts always;')
+fi
+
 export WEB_ROOT LIBRARY_DIR VN_DIR SYNC_DIR ACCOUNT_DATA_DIR CATALOG_FILE THUMB_DIR DIFFICULTY_FILE \
   ACCOUNT_UPSTREAM IMPORT_UPSTREAM DIFFICULTY_UPSTREAM MOKURO_UPSTREAM MOKURO_DIR ENGINE_DIR TRUSTED_NETWORKS_GEO REAL_IP_FROM_GEO PUBLIC_READS INTERNAL_TOKEN \
-  AUDIOBOOKSHELF_LOCATION
+  AUDIOBOOKSHELF_LOCATION CORS_ORIGIN_MAP CORS CORS_WITH_SECURITY_HEADERS
 
 # Only these names: the template's own nginx variables ($host, ...) stay as they are.
-envsubst '${WEB_ROOT} ${LIBRARY_DIR} ${VN_DIR} ${SYNC_DIR} ${ACCOUNT_DATA_DIR} ${CATALOG_FILE} ${THUMB_DIR} ${DIFFICULTY_FILE} ${ACCOUNT_UPSTREAM} ${IMPORT_UPSTREAM} ${DIFFICULTY_UPSTREAM} ${MOKURO_UPSTREAM} ${MOKURO_DIR} ${ENGINE_DIR} ${TRUSTED_NETWORKS_GEO} ${REAL_IP_FROM_GEO} ${PUBLIC_READS} ${INTERNAL_TOKEN} ${AUDIOBOOKSHELF_LOCATION}' \
+envsubst '${WEB_ROOT} ${LIBRARY_DIR} ${VN_DIR} ${SYNC_DIR} ${ACCOUNT_DATA_DIR} ${CATALOG_FILE} ${THUMB_DIR} ${DIFFICULTY_FILE} ${ACCOUNT_UPSTREAM} ${IMPORT_UPSTREAM} ${DIFFICULTY_UPSTREAM} ${MOKURO_UPSTREAM} ${MOKURO_DIR} ${ENGINE_DIR} ${TRUSTED_NETWORKS_GEO} ${REAL_IP_FROM_GEO} ${PUBLIC_READS} ${INTERNAL_TOKEN} ${AUDIOBOOKSHELF_LOCATION} ${CORS_ORIGIN_MAP} ${CORS} ${CORS_WITH_SECURITY_HEADERS}' \
   < "$(dirname "$0")/nginx-ebook-reader.conf.template"

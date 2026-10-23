@@ -83,6 +83,17 @@ anything a reader or a server operator would notice.
   Known, Hide) and theme; changing direction or view saves your place first. More holds the
   bookmark, reading point, auto-scroll, fullscreen, jump, tracker and finish actions.
 
+### Security
+
+- Server connect, off unless the server lists the standalone app's address in
+  `CORS_ORIGINS` (docs/CONFIGURATION.md): the app signs in for a token
+  (`POST /account/api/token`, HTTPS only, from a listed origin, throttled and rate-limited
+  like sign-in) and sends it as `Authorization: Bearer`; tokens are sessions with the same
+  expiry, listed and revoked through `/account/api/tokens`. nginx answers CORS preflights only
+  on the reader's paths, echoes only listed origins and never allows credentials. Requests
+  from another origin count only with a token, never the cookie or `TRUSTED_NETWORKS`, and a
+  token never counts as an admin.
+
 ### Fixed
 
 - Visual novels: right-clicking the game no longer opens the browser's menu.
