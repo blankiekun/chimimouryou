@@ -374,20 +374,30 @@ def initial_admin_banner(record) -> str:
             '(shown until that account signs in for the first time)')
 
 
-def update_state() -> dict:
-    """What ebook-update reported: status (state running|done|failed, ref, message),
-    its repository if it is installed (updater) and whether a request waits for it."""
+def read_status(name: str):
     try:
-        with open(os.path.join(UPDATE_DIR, 'status.json'), encoding='utf-8') as f:
-            status = json.load(f)
+        with open(os.path.join(UPDATE_DIR, name), encoding='utf-8') as f:
+            return json.load(f)
     except (OSError, ValueError):
+        return None
+
+
+def update_state() -> dict:
+    """What ebook-update reported: status of the last app update and engineStatus of
+    the last engine install (state running|done|failed, ref, message), its repository
+    if it is installed (updater) and whether a request waits for it."""
+    status = read_status('status.json')
+    engine_status = read_status('engine-status.json')
+    # Older updaters wrote engine installs (ref = a release tag) to status.json too.
+    if status and not COMMIT_PATTERN.fullmatch(str(status.get('ref', ''))):
+        engine_status = engine_status or status
         status = None
     try:
         with open(os.path.join(UPDATE_DIR, 'updater'), encoding='utf-8') as f:
             updater = f.read().strip()
     except OSError:
         updater = ''
-    return {'status': status, 'updater': updater,
+    return {'status': status, 'engineStatus': engine_status, 'updater': updater,
             'requested': os.path.exists(os.path.join(UPDATE_DIR, 'request.json'))}
 
 
@@ -933,7 +943,8 @@ class Handler(BaseHTTPRequestHandler):
         state = update_state()
         if not state['updater']:
             raise ApiError(409, 'The updater is not installed on this server (see docs/INSTALL.md, "Updates")')
-        if state['requested'] or (state['status'] or {}).get('state') == 'running':
+        if state['requested'] or any((state[key] or {}).get('state') == 'running'
+                                     for key in ('status', 'engineStatus')):
             raise ApiError(409, 'An update is already under way')
         write_private_json(os.path.join(UPDATE_DIR, 'request.json'), {**request, 'at': int(time.time())})
         return 200, update_state(), {}

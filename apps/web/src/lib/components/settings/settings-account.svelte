@@ -4,6 +4,7 @@
   import {
     account$,
     accountConfig,
+    accountUnreachable$,
     canOpenAdminPanel,
     changePassword,
     httpsAppUrl,
@@ -239,6 +240,8 @@
   </SettingsItemGroup>
 {:else if user === undefined}
   <p class="account-checking">{$t$('prefs.account.checking')}</p>
+{:else if $accountUnreachable$}
+  <p class="account-warning" role="status">{$t$('prefs.account.unreachable')}</p>
 {:else}
   <div
     class="settings-item account-sign-in"

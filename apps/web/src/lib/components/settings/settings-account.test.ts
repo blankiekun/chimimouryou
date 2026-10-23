@@ -9,7 +9,7 @@
 
 import { BehaviorSubject } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { account$ } from '$lib/data/account';
+import { account$, accountReady } from '$lib/data/account';
 
 // Settings sync pulls in the whole store (IndexedDB, media queries); not under test here.
 vi.mock('$lib/data/account-settings-sync', () => ({
@@ -64,5 +64,27 @@ describe('SettingsAccount on plain HTTP', () => {
 
     expect(target.querySelector('input[type=password]')).not.toBeNull();
     expect(target.querySelector('[role=alert]')?.textContent).toContain('Not encrypted');
+  });
+});
+
+describe('SettingsAccount while the server is unreachable', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = '';
+  });
+
+  it("says the server can't be reached instead of asking to sign in", async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('Failed to fetch');
+      })
+    );
+    // No cached user: the session check reads as null, which isn't "signed out" here.
+    expect(await accountReady()).toBeNull();
+    const target = await mount();
+
+    expect(target.textContent).toContain("The server can't be reached");
+    expect(target.querySelector('form')).toBeNull();
   });
 });

@@ -8,7 +8,7 @@
 # The account service writes DATA_PATH/state/update/request.json; the path unit
 # starts this, which downloads the commit (main's head or the latest release), swaps it into /opt/ebook-reader,
 # builds the images and restarts the stack like deploy.sh. If the build fails
-# the running version stays. Progress goes to status.json for the admin panel.
+# the running version stays. Progress goes to status.json (engine-status.json for engines) for the admin panel.
 # A request naming an "engine" (Tools → Visual novel engine) instead downloads that
 # CONscripter release's web build into DATA_PATH/state/engine, which nginx serves ahead of
 # the built-in engine: nothing is built or restarted.
@@ -72,11 +72,14 @@ ref=$(as_owner sed -n 's/.*"ref": *"\([0-9a-f]\{7,40\}\)".*/\1/p' "$dir/request.
 engine=$(as_owner sed -n 's/.*"engine": *"\([A-Za-z0-9._-]\{1,64\}\)".*/\1/p' "$dir/request.json")
 ref=${engine:-$ref}
 as_owner rm -f "$dir/request.json"
+# Engine installs report apart, so neither hides the last app update's result.
+status_file=status.json
+[ -z "$engine" ] || status_file=engine-status.json
 
 # Messages are fixed strings (no quotes), so this stays valid JSON.
 status() {
   printf '{"state": "%s", "ref": "%s", "at": %s, "message": "%s"}\n' \
-    "$1" "$ref" "$(date +%s)" "$2" | write "$dir/status.json"
+    "$1" "$ref" "$(date +%s)" "$2" | write "$dir/$status_file"
 }
 
 if [ -z "$ref" ]; then

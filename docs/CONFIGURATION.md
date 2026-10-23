@@ -108,36 +108,36 @@ request instead of the sign-in cookie, which browsers don't send to other sites.
 Set by the services image (`docker/services.Dockerfile`); the defaults in the
 code are the same container paths.
 
-| Variable                         | Docker value                                                       | Used by                                                                              |
-| -------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| `CALIBRE_LIBRARY`                | `/library`                                                         | import, difficulty                                                                   |
-| `VN_DIR`                         | `/vn` (`VN_PATH`)                                                  | catalog, import (unpacks game ZIPs there)                                            |
-| `SHARED_SYNC_DIR`                | `/data/sync`                                                       | account (free-space check)                                                           |
-| `ACCOUNT_STATE_DIR`              | `/data/state/account` (`accounts.db`)                              | account                                                                              |
-| `ACCOUNT_DATA_DIR`               | `/data/accounts` (must match nginx's `ACCOUNT_DATA_DIR`)           | account                                                                              |
-| `ACCOUNT_HOST`, `ACCOUNT_PORT`   | `0.0.0.0`, `8766`                                                  | account                                                                              |
-| `ALLOW_HTTP_ACCOUNTS`            | `0`                                                                | account, import, difficulty, mokuro                                                  |
-| `CORS_ORIGINS`                   | as in `.env`                                                       | account, import, difficulty, mokuro                                                  |
-| `MIN_FREE_MB`                    | `1024`                                                             | account                                                                              |
-| `CATALOG_OUTPUT`                 | `/data/state/catalog/catalog.json`                                 | import (rebuilds the catalog after adding books)                                     |
-| `CATALOG_BUILDER`                | `/usr/local/bin/build-calibre-catalog`                             | import                                                                               |
-| `CALIBREDB`                      | `calibredb`                                                        | import                                                                               |
-| `IMPORT_STATE_DIR`               | `/data/state/import` (queue, `jobs.json`)                          | import                                                                               |
-| `IMPORT_HOST`, `IMPORT_PORT`     | `0.0.0.0`, `8767`                                                  | import                                                                               |
-| `CALIBRE_WRITE_LOCK`             | `/data/state/import/calibre-write.lock`                            | import, `assign-series.py`                                                           |
-| `CALIBRE_BACKUP_DIR`             | `/data/state/import/backups` (last 5 `metadata.db` copies)         | `assign-series.py --apply`                                                           |
-| `CALIBRE_DEBUG`, `ASSIGN_SERIES` | `calibre-debug`, `/app/assign-series.py`                           | import (admin panel → Tools → Series)                                                |
-| `INTERNAL_TOKEN_FILE`            | `/data/state/internal-token` (made by the web container)           | web (nginx sends it), account, import, difficulty (only answer requests carrying it) |
-| `UPDATE_STATE_DIR`               | `/data/state/update` (`request.json`, `status.json`, `updater`)    | account, `ebook-update` on the host                                                  |
-| `CALIBRE_CATALOG`                | `/data/state/catalog/catalog.json`                                 | difficulty                                                                           |
-| `JITEN_STATE_DIR`                | `/data/state/difficulty` (results, `frequency-dictionary.zip`)     | difficulty                                                                           |
-| `JITEN_FREQUENCY_DICTIONARY`     | `JITEN_STATE_DIR/frequency-dictionary.zip`, bundled if missing     | difficulty                                                                           |
-| `JITEN_WORKERS`                  | `DIFFICULTY_WORKERS`                                               | difficulty                                                                           |
-| `JITEN_HOST`, `JITEN_PORT`       | `0.0.0.0`, `8765`                                                  | difficulty                                                                           |
-| `SYNC_DIR`                       | `/data/sync` (read-only; `ttu-reader-data/<title>/bookdata_*.zip`) | difficulty (readings files)                                                          |
-| `MOKURO_STATE_DIR`               | `/data/state/mokuro` (`<id>.json` per manga, `models/`, `work/`)   | mokuro                                                                               |
-| `MOKURO_HOST`, `MOKURO_PORT`     | `0.0.0.0`, `8768`                                                  | mokuro                                                                               |
-| `MOKURO_BIN`                     | `/opt/mokuro/bin/mokuro` (without it, only uploads)                | mokuro                                                                               |
+| Variable                         | Docker value                                                                          | Used by                                                                              |
+| -------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `CALIBRE_LIBRARY`                | `/library`                                                                            | import, difficulty                                                                   |
+| `VN_DIR`                         | `/vn` (`VN_PATH`)                                                                     | catalog, import (unpacks game ZIPs there)                                            |
+| `SHARED_SYNC_DIR`                | `/data/sync`                                                                          | account (free-space check)                                                           |
+| `ACCOUNT_STATE_DIR`              | `/data/state/account` (`accounts.db`)                                                 | account                                                                              |
+| `ACCOUNT_DATA_DIR`               | `/data/accounts` (must match nginx's `ACCOUNT_DATA_DIR`)                              | account                                                                              |
+| `ACCOUNT_HOST`, `ACCOUNT_PORT`   | `0.0.0.0`, `8766`                                                                     | account                                                                              |
+| `ALLOW_HTTP_ACCOUNTS`            | `0`                                                                                   | account, import, difficulty, mokuro                                                  |
+| `CORS_ORIGINS`                   | as in `.env`                                                                          | account, import, difficulty, mokuro                                                  |
+| `MIN_FREE_MB`                    | `1024`                                                                                | account                                                                              |
+| `CATALOG_OUTPUT`                 | `/data/state/catalog/catalog.json`                                                    | import (rebuilds the catalog after adding books)                                     |
+| `CATALOG_BUILDER`                | `/usr/local/bin/build-calibre-catalog`                                                | import                                                                               |
+| `CALIBREDB`                      | `calibredb`                                                                           | import                                                                               |
+| `IMPORT_STATE_DIR`               | `/data/state/import` (queue, `jobs.json`)                                             | import                                                                               |
+| `IMPORT_HOST`, `IMPORT_PORT`     | `0.0.0.0`, `8767`                                                                     | import                                                                               |
+| `CALIBRE_WRITE_LOCK`             | `/data/state/import/calibre-write.lock`                                               | import, `assign-series.py`                                                           |
+| `CALIBRE_BACKUP_DIR`             | `/data/state/import/backups` (last 5 `metadata.db` copies)                            | `assign-series.py --apply`                                                           |
+| `CALIBRE_DEBUG`, `ASSIGN_SERIES` | `calibre-debug`, `/app/assign-series.py`                                              | import (admin panel → Tools → Series)                                                |
+| `INTERNAL_TOKEN_FILE`            | `/data/state/internal-token` (made by the web container)                              | web (nginx sends it), account, import, difficulty (only answer requests carrying it) |
+| `UPDATE_STATE_DIR`               | `/data/state/update` (`request.json`, `status.json`, `engine-status.json`, `updater`) | account, `ebook-update` on the host                                                  |
+| `CALIBRE_CATALOG`                | `/data/state/catalog/catalog.json`                                                    | difficulty                                                                           |
+| `JITEN_STATE_DIR`                | `/data/state/difficulty` (results, `frequency-dictionary.zip`)                        | difficulty                                                                           |
+| `JITEN_FREQUENCY_DICTIONARY`     | `JITEN_STATE_DIR/frequency-dictionary.zip`, bundled if missing                        | difficulty                                                                           |
+| `JITEN_WORKERS`                  | `DIFFICULTY_WORKERS`                                                                  | difficulty                                                                           |
+| `JITEN_HOST`, `JITEN_PORT`       | `0.0.0.0`, `8765`                                                                     | difficulty                                                                           |
+| `SYNC_DIR`                       | `/data/sync` (read-only; `ttu-reader-data/<title>/bookdata_*.zip`)                    | difficulty (readings files)                                                          |
+| `MOKURO_STATE_DIR`               | `/data/state/mokuro` (`<id>.json` per manga, `models/`, `work/`)                      | mokuro                                                                               |
+| `MOKURO_HOST`, `MOKURO_PORT`     | `0.0.0.0`, `8768`                                                                     | mokuro                                                                               |
+| `MOKURO_BIN`                     | `/opt/mokuro/bin/mokuro` (without it, only uploads)                                   | mokuro                                                                               |
 
 Readings files: with the `difficulty` profile and the frequency list installed, the service
 also makes a readings file per book (`state/difficulty/readings/<id>.json.gz`, about 1 KB per

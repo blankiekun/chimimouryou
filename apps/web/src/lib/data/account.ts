@@ -50,6 +50,12 @@ const cachedUserKey = 'accountUser';
 /** undefined until the session has been checked, null when signed out. */
 export const account$ = new BehaviorSubject<AccountUser | null | undefined>(undefined);
 
+/**
+ * The session check couldn't reach the account service. Then a null account$ only means no
+ * user is cached in this browser, not signed out: show "can't reach the server", never sign-in prompts.
+ */
+export const accountUnreachable$ = new BehaviorSubject(false);
+
 let sessionChecked: Promise<AccountUser | null> | undefined;
 
 function setUser(user: AccountUser | null) {
@@ -91,6 +97,7 @@ async function checkSession(): Promise<AccountUser | null> {
 
   // Service unreachable: keep the last known state so personal data isn't
   // written to the shared folder by mistake; account requests will fail visibly.
+  accountUnreachable$.next(true);
   return cachedUser();
 }
 
@@ -240,9 +247,18 @@ export async function accountConfig(): Promise<{ httpAccounts: boolean; initialA
   }
 }
 
+export interface UpdateStatus {
+  state: 'running' | 'done' | 'failed';
+  ref: string;
+  at: number;
+  message: string;
+}
+
 export interface UpdateState {
-  /** Written by ebook-update on the server. */
-  status: { state: 'running' | 'done' | 'failed'; ref: string; at: number; message: string } | null;
+  /** Written by ebook-update on the server: the last app update (ref = a commit). */
+  status: UpdateStatus | null;
+  /** The last visual novel engine install (ref = a release tag); absent from older servers. */
+  engineStatus?: UpdateStatus | null;
   /** The GitHub repository it updates from; empty when it isn't installed. */
   updater: string;
   /** A request is waiting for the updater to pick it up. */
