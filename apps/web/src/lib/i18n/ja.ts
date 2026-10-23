@@ -1705,6 +1705,7 @@ export const ja: Record<MessageKey, string> = {
   'social.error.pending': '待機中のリクエストが多すぎます。返事を待ってください。',
   'social.error.username': 'ユーザー名は英数字と _ で3〜20文字です。',
   'social.error.name': '表示名は1〜40文字です。',
+  'social.error.paused': 'このハブでは現在アップロードを停止しています。',
   'social.error.network': 'ハブに接続できません。あとでもう一度お試しください。',
   'social.readingSomething': '何かを読書中',
   'social.event.started': '{name}さんが読み始めました:',

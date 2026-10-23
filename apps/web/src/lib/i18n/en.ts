@@ -1687,6 +1687,7 @@ export const en = {
   'social.error.pending': 'Too many requests are waiting. Wait for some answers.',
   'social.error.username': 'Usernames are 3-20 letters, digits or _.',
   'social.error.name': 'Display names are 1-40 characters.',
+  'social.error.paused': 'Uploads are paused on this hub for now.',
   'social.error.network': 'Can’t reach the hub. Try again later.',
   'social.readingSomething': 'Reading something',
   'social.event.started': '{name} started',

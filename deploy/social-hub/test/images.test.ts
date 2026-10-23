@@ -9,6 +9,7 @@ import hub, {
   AVATAR_BYTES,
   COVER_BYTES,
   COVER_UPLOADS,
+  UPLOADS_PER_DAY,
   cleanUp,
   webpSize,
   type Env
@@ -184,6 +185,22 @@ describe('hub images', () => {
     expect(png.status).toBe(415);
     for (let i = 5; i < COVER_UPLOADS; i += 1) await put(webp(10, 10));
     expect(await put(webp(160, 226))).toBe(429);
+    expect(objects.size).toBe(0);
+  });
+
+  it('pauses uploads from everyone at the hub-wide daily ceiling', async () => {
+    const aki = await signUp('aki');
+    const day = Math.floor(Date.now() / 1000 / 86_400) * 86_400;
+
+    await env.DB.prepare(
+      "INSERT INTO limits (subject, action, win, count) VALUES ('*', 'upload', ?1, ?2)"
+    )
+      .bind(day, UPLOADS_PER_DAY)
+      .run();
+    const paused = await call('PUT', '/v1/avatar', webp(256, 256), aki.token);
+
+    expect(paused.status).toBe(503);
+    expect(paused.body.error).toBe('paused');
     expect(objects.size).toBe(0);
   });
 

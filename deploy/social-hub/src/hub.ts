@@ -113,6 +113,12 @@ export const COVER_UPLOADS = 50;
 /** Pictures: a 256 px square WebP */
 export const AVATAR_BYTES = 65_536;
 export const AVATAR_UPLOADS = 5;
+/**
+ * Hub-wide ceilings so the R2 bill can't grow past the free tier: uploads a day from everyone, and
+ * stored images counted at their size limits (an overestimate, so no byte bookkeeping).
+ */
+export const UPLOADS_PER_DAY = 2_000;
+export const MEDIA_BYTES = 8 * 1024 ** 3;
 /** Image URLs carry a content hash or a version, so they never change */
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 
@@ -668,6 +674,18 @@ export function webpSize(bytes: Uint8Array) {
   return null;
 }
 
+/** 503 `paused` once today's uploads or the stored images reach the hub-wide ceilings */
+async function mediaRoom(env: Env) {
+  const stored = await env.DB.prepare(
+    'SELECT (SELECT COUNT(*) FROM covers) * ?1 + (SELECT COUNT(*) FROM pictures) * ?2 AS n'
+  )
+    .bind(COVER_BYTES, AVATAR_BYTES)
+    .first<{ n: number }>();
+
+  if ((stored?.n ?? 0) + AVATAR_BYTES > MEDIA_BYTES) throw new HttpError(503, 'paused');
+  if (!(await take(env, '*', 'upload', DAY, UPLOADS_PER_DAY))) throw new HttpError(503, 'paused');
+}
+
 function media(env: Env) {
   if (!env.MEDIA) throw new HttpError(503, 'media');
   return env.MEDIA;
@@ -715,6 +733,7 @@ async function uploadCover(request: Request, env: Env, user: UserRow) {
     .first();
 
   if (!shared) throw new HttpError(404, 'book');
+  await mediaRoom(env);
 
   const file = (await sha256(bytes)).slice(0, 16);
   const { meta } = await env.DB.prepare(
@@ -744,6 +763,7 @@ async function uploadPicture(request: Request, env: Env, user: UserRow) {
     AVATAR_BYTES,
     (width, height) => width === height && width >= 64 && width <= 256
   );
+  await mediaRoom(env);
   const version = Math.max(now(), user.picture + 1);
 
   await media(env).put(`avatar/${user.id}/${version}`, bytes.slice().buffer, {
