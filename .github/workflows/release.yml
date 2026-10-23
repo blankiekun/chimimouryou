@@ -96,3 +96,134 @@ jobs:
         run: |
           if [ -z "$GH_TOKEN" ]; then echo "No PAGES_DISPATCH_TOKEN: skipping"; exit 0; fi
           gh workflow run pages.yml -R "$PAGES_REPO" -f ref="$GITHUB_REF_NAME"
+
+  # The desktop app (apps/desktop) with the standalone build inside, attached to the tag's GitHub
+  # release with the latest*.yml files electron-updater reads. Unsigned. The Google Drive client comes
+  # from this repository's secrets VITE_GDRIVE_CLIENT_ID and VITE_GDRIVE_CLIENT_SECRET (the same
+  # client as the Pages build); without them the app has no Drive sign-in.
+  desktop-inputs:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6.1.0
+        with:
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the standalone edition
+        run: pnpm build
+        env:
+          VITE_EDITION: standalone
+          VITE_STORAGE_ROOT_NAME: chimi-reader-data
+          VITE_GDRIVE_CLIENT_ID: ${{ secrets.VITE_GDRIVE_CLIENT_ID }}
+          VITE_GDRIVE_CLIENT_SECRET: ${{ secrets.VITE_GDRIVE_CLIENT_SECRET }}
+
+      - name: Add the theme guide and Yomitan
+        run: |
+          cp themes.md apps/web/build/themes.md
+          bash apps/desktop/scripts/fetch-yomitan.sh
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-inputs
+          path: |
+            apps/web/build
+            apps/desktop/yomitan
+          if-no-files-found: error
+
+  desktop:
+    needs: desktop-inputs
+    name: Desktop ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            args: --linux AppImage --x64
+          - os: windows-latest
+            args: --win nsis --x64
+          - os: macos-latest
+            args: --mac dmg --universal
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/desktop
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6.1.0
+        with:
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --filter desktop
+
+      # The artifact's paths are relative to apps/ (their common folder).
+      - name: Download the web build and Yomitan
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-inputs
+          path: apps
+
+      - name: Package
+        run: |
+          npm pkg set version="${GITHUB_REF_NAME#v}"
+          pnpm exec electron-builder ${{ matrix.args }} --publish never
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os }}
+          path: |
+            apps/desktop/dist/*.AppImage
+            apps/desktop/dist/*-Setup-*.exe
+            apps/desktop/dist/*.dmg
+            apps/desktop/dist/*.blockmap
+            apps/desktop/dist/latest*.yml
+          if-no-files-found: error
+
+  desktop-release:
+    needs: desktop
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download the packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*-latest
+          path: dist
+          merge-multiple: true
+
+      # Uploads to the tag's release, or makes one (edit its notes afterwards).
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ls -l dist
+          gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 ||
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "chimimouryou ${GITHUB_REF_NAME#v}" --notes ""
+          gh release upload "$GITHUB_REF_NAME" dist/* --clobber

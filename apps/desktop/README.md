@@ -1,8 +1,28 @@
 # chimimouryou desktop
 
 The standalone edition (`VITE_EDITION=standalone`) in an Electron window, with
-[Yomitan](https://github.com/yomidevs/yomitan) built in. Early: no installer
-signing or auto-updates yet.
+[Yomitan](https://github.com/yomidevs/yomitan) built in.
+
+## Download
+
+Every release (`v*` tag) attaches the installers to its GitHub release
+(https://github.com/blankiekun/chimimouryou/releases/latest): an AppImage (Linux x64),
+`chimimouryou-Setup-<version>.exe` (Windows x64) and a universal dmg (macOS, Apple silicon and
+Intel). They aren't code-signed yet (the dmg is only ad-hoc signed):
+
+- Windows: SmartScreen says "Windows protected your PC". Click "More info", then "Run anyway".
+- macOS: Gatekeeper refuses to open it ("Apple could not verify…"). Drag it to Applications, try
+  to open it once, then System Settings → Privacy & Security → "Open Anyway" (or run
+  `xattr -dr com.apple.quarantine /Applications/chimimouryou.app`).
+- Linux: make the AppImage executable (`chmod +x`); it needs FUSE 2 (`libfuse2`/`libfuse2t64`).
+
+## Updates
+
+Installed builds check GitHub's latest release once per start (`updater.js`, electron-updater). On
+Windows and in the AppImage the new version downloads in the background and the app offers "Restart
+to update"; it never restarts or installs by itself, and "Later" offers it again next start. macOS
+updates need a signed app, so there the app only says a new version is out and opens its release
+page. Runs from source (`pnpm start`) never check.
 
 ## Run it
 
@@ -49,10 +69,18 @@ root install stays light for the web app and its Docker image; `fetch` downloads
 - Help → About lists the licences (Yomitan is GPL-3.0, a separate program; its source is the
   release tag named there).
 
+## Release builds
+
+`.github/workflows/release.yml` builds the standalone edition once (with Yomitan), packages it on
+GitHub's Linux, Windows and macOS runners with the tag's version (`--publish never`), and attaches the
+installers and electron-updater's `latest*.yml` to the tag's release (making the release if it doesn't
+exist yet). CI packages an unpacked Linux build when `apps/desktop` changes.
+
 ## Google Drive client
 
 `build:web` takes `VITE_GDRIVE_CLIENT_ID` and `VITE_GDRIVE_CLIENT_SECRET` from the environment, like
-the Pages build. Use the same Google Cloud OAuth client as the web build (Web application type) and add
+the Pages build; the release workflow reads them from this repository's secrets of the same names
+(the Pages build reads them from the site repository's). Use the same Google Cloud OAuth client as the web build (Web application type) and add
 `http://127.0.0.1:41917/auth` to its Authorized redirect URIs: Google exempts loopback addresses from
 its https and no-IP rules, and keeping one client lets the app see the Drive files the web build made
 (the `drive.file` scope only shows files made by the app itself).
