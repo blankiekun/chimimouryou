@@ -40,6 +40,19 @@ export function needsFirstRun(isStandalone: boolean, chosen: boolean) {
   return isStandalone && !chosen;
 }
 
+/**
+ * Upstream's "External Read" hint for a book opened from a cloud source. Not in the standalone,
+ * whose library lives there by choice (and imports keep a copy in the browser: replicator.ts).
+ */
+export function showsExternalReadHint(
+  isStandalone: boolean,
+  hidden: boolean,
+  storageType: StorageKey,
+  isApiSource: boolean
+) {
+  return !isStandalone && !hidden && isApiSource && storageType !== StorageKey.CALIBRE;
+}
+
 /** Asks the browser not to evict books (Safari deletes data of sites unused for 7 days). */
 export function persistStorage() {
   storage.persist().catch(() => {});
