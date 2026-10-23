@@ -147,7 +147,7 @@ function json(body: unknown, status = 200) {
 
 const now = () => Math.floor(Date.now() / 1000);
 
-export async function sha256(text: string | Uint8Array) {
+export async function sha256(text: string | Uint8Array<ArrayBuffer>) {
   const digest = await crypto.subtle.digest(
     'SHA-256',
     typeof text === 'string' ? new TextEncoder().encode(text) : text

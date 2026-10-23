@@ -78,7 +78,7 @@ describe('hub images', () => {
           ...(raw ? { 'Content-Type': 'image/webp' } : {}),
           'CF-Connecting-IP': `192.0.2.${++ip}`
         },
-        body: body === undefined ? undefined : raw ? body : JSON.stringify(body)
+        body: body === undefined ? undefined : raw ? (body as BodyInit) : JSON.stringify(body)
       }),
       env
     );
