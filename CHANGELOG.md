@@ -12,11 +12,17 @@ anything a reader or a server operator would notice.
   page slider, a settings panel and a new card between volumes; the player shows reading progress
   and asks to keep a large game's files in a bar instead of a browser dialog. On phones it has
   Menu (the game's right-click menu), Skip and Full screen buttons.
+- Settings and the admin panel in the Study Book look: numbered sections, ruled tables, one theme
+  gallery (built-in and custom themes, with the editor under it) instead of Theme and Custom
+  Themes, an AnkiConnect status line, Show for API keys, and settings labels in plain sentence
+  case; on phones Settings is a numbered list of areas with section tabs. Underscores (`sk_`,
+  `eleven_v4`) are visible again.
 - Library cards load small cover thumbnails (about 30 KB instead of the full cover, often
   700 KB or more), made by the catalog service in `state/catalog/thumbs/` (up to five minutes per
   run, so a large library takes a few runs); the book page still shows the full cover.
-- The reader panel no longer moves the text: on screens 1280 px and wider the book always
-  leaves its room free, narrower ones lay it over the book. A book that re-renders with its
+- The book uses the full width again while the reader panel is closed and shrinks beside it
+  (and below the bar) while it is open, keeping the text being read on screen; the
+  position is measured in the visible part of the book. A book that re-renders with its
   generated furigana (on opening, or while listening) stays on the bookmarked text instead of
   jumping to the top of the page or back to the start.
 - Difficulty meters use each theme's own colours (from its accent for Beginner to its text

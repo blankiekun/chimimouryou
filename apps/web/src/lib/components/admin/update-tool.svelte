@@ -3,7 +3,6 @@
   import { onDestroy, onMount } from 'svelte';
   import Fa from 'svelte-fa';
   import ButtonToggleGroup from '$lib/components/button-toggle-group/button-toggle-group.svelte';
-  import { buttonClasses } from '$lib/css-classes';
   import { getUpdateState, requestUpdate, type UpdateState } from '$lib/data/account';
   import {
     checkForUpdate,
@@ -96,100 +95,144 @@
   }
 </script>
 
-<div class="flex flex-col gap-3 text-sm">
-  <p>
-    Compares this server with the latest release (stable) or the newest commit on main (bleeding
-    edge) of
-    <a class="underline" href="https://github.com/{repo}" target="_blank" rel="noreferrer">{repo}</a
-    >. Updating downloads that version, rebuilds it on the server and restarts everything (about a
-    minute of downtime; a running difficulty job stops).
-  </p>
+<p class="tool-text">
+  Compares this server with the latest release (stable) or the newest commit on main (bleeding edge)
+  of <a href="https://github.com/{repo}" target="_blank" rel="noreferrer">{repo}</a>. Updating
+  downloads that version, rebuilds it on the server and restarts everything (about a minute of
+  downtime; a running difficulty job stops).
+</p>
 
-  <div>
-    <ButtonToggleGroup options={channelOptions} bind:selectedOptionId={$updateChannel$} />
-  </div>
+<table class="app-table tool-table">
+  <tbody>
+    <tr>
+      <th scope="row">Channel</th>
+      <td>
+        <span class="inline-block" role="group" aria-label="Update channel">
+          <ButtonToggleGroup options={channelOptions} bind:selectedOptionId={$updateChannel$} />
+        </span>
+      </td>
+    </tr>
+    {#if checking}
+      <tr>
+        <th scope="row">Running</th>
+        <td
+          ><span class="flex items-center gap-2"
+            ><Fa icon={faSpinner} spin /> Checking GitHub...</span
+          ></td
+        >
+      </tr>
+    {:else if check}
+      <tr>
+        <th scope="row">Running</th>
+        <td>
+          <code>{check.current ? short(check.current) : 'an unknown version'}</code>{check.dirty
+            ? ' with local changes'
+            : ''} ·
+          {#if check.state === 'current'}
+            the latest version
+          {:else if check.state === 'behind'}
+            <strong>{check.commits.length} newer commits</strong> in {check.target}
+          {:else if check.state === 'ahead'}
+            newer than {check.target} on GitHub
+          {:else if check.state === 'diverged'}
+            has commits that aren't in {check.target}
+          {:else}
+            a local build, not on GitHub
+          {/if}
+        </td>
+      </tr>
+      <tr>
+        <th scope="row">Latest</th>
+        <td>
+          {#if check.target !== 'main'}{check.target} ·
+          {/if}<code>{short(check.latest)}</code>
+        </td>
+      </tr>
+    {/if}
+    {#if state}
+      <tr>
+        <th scope="row">Updater</th>
+        <td>
+          {#if state.updater}
+            <span class="tool-status" data-state="ok">Installed</span>
+          {:else}
+            <span class="tool-status" data-state="warn">
+              Not installed: servers set up with scripts/deploy.sh get it (it needs systemd and an
+              absolute DATA_PATH); otherwise update as described in docs/INSTALL.md.
+            </span>
+          {/if}
+        </td>
+      </tr>
+    {/if}
+    {#if status && !(updatingTo && !finished)}
+      <tr>
+        <th scope="row">{updatingTo ? 'Update' : 'Last update'}</th>
+        <td>
+          <span class="tool-status" data-state={status.state === 'failed' ? 'error' : 'ok'}>
+            <span>
+              {status.message} (<code>{short(status.ref)}</code>, {new Date(
+                status.at * 1000
+              ).toLocaleString()}).
+              {#if finished && status.state === 'done'}
+                <button
+                  class="app-button app-button-quiet"
+                  on:click={() => window.location.reload()}>Reload the page</button
+                >
+              {/if}
+            </span>
+          </span>
+        </td>
+      </tr>
+    {/if}
+  </tbody>
+</table>
 
-  {#if checking}
-    <p class="flex items-center gap-2"><Fa icon={faSpinner} spin /> Checking GitHub...</p>
-  {:else if check}
-    <p>
-      Running <code>{check.current ? short(check.current) : 'an unknown version'}</code>{check.dirty
-        ? ' with local changes'
-        : ''}.
-      {#if check.state === 'current'}
-        This is the latest version.
-      {:else if check.state === 'behind'}
-        <strong>{check.commits.length} newer commits</strong> in {check.target} (latest
-        <code>{short(check.latest)}</code>).
-      {:else if check.state === 'ahead'}
-        This is newer than {check.target} on GitHub.
-      {:else if check.state === 'diverged'}
-        It has commits that aren't in {check.target}, which is at
-        <code>{short(check.latest)}</code>.
-      {:else}
-        This version isn't on GitHub (a local build); {check.target} is at
-        <code>{short(check.latest)}</code>.
+{#if check?.commits.length && !checking}
+  <details class="tool-note">
+    <summary class="cursor-pointer">Newer commits ({check.commits.length.toLocaleString()})</summary
+    >
+    <ul class="commit-list">
+      {#each check.commits.slice(0, shownCommits) as commit (commit.sha)}
+        <li><code>{short(commit.sha)}</code> {commit.message}</li>
+      {/each}
+      {#if check.commits.length > shownCommits}
+        <li>... and {check.commits.length - shownCommits} more</li>
       {/if}
-    </p>
-    {#if check.commits.length}
-      <ul class="commit-list">
-        {#each check.commits.slice(0, shownCommits) as commit (commit.sha)}
-          <li><code>{short(commit.sha)}</code> {commit.message}</li>
-        {/each}
-        {#if check.commits.length > shownCommits}
-          <li>... and {check.commits.length - shownCommits} more</li>
-        {/if}
-      </ul>
-    {/if}
-  {/if}
+    </ul>
+  </details>
+{/if}
 
-  {#if state && !state.updater}
-    <p class="text-[color:var(--app-muted-fg)]">
-      The updater isn't installed on this server. Servers set up with scripts/deploy.sh get it (it
-      needs systemd and an absolute DATA_PATH); otherwise update as described in docs/INSTALL.md.
-    </p>
-  {/if}
-
-  <div class="flex flex-wrap items-center gap-2">
-    <button class={buttonClasses} disabled={checking || !!updatingTo} on:click={refresh}>
-      Check again
+<div class="tool-actions">
+  <button class="app-button" disabled={checking || !!updatingTo} on:click={refresh}>
+    Check again
+  </button>
+  {#if canUpdate && !updatingTo && check}
+    <button class="app-button app-button-primary" on:click={update}>
+      Update to {check.target === 'main' ? short(check.latest) : check.target}
     </button>
-    {#if canUpdate && !updatingTo && check}
-      <button class={buttonClasses} on:click={update}>
-        Update to {check.target === 'main' ? short(check.latest) : check.target}
-      </button>
-    {/if}
-  </div>
-
+  {/if}
   {#if updatingTo && !finished}
-    <p class="flex items-center gap-2">
+    <span class="flex items-center gap-2" role="status">
       <Fa icon={faSpinner} spin />
       {#if status?.ref === updatingTo}
         {status.message}...
       {:else}
         Waiting for the server's updater...
       {/if}
-    </p>
-  {:else if status}
-    <p class={status.state === 'failed' ? 'text-[color:var(--app-danger-color)]' : ''}>
-      {updatingTo ? '' : 'Last update: '}{status.message}
-      (<code>{short(status.ref)}</code>, {new Date(status.at * 1000).toLocaleString()}).
-      {#if finished && status.state === 'done'}
-        <button class="underline" on:click={() => window.location.reload()}>Reload the page</button>
-      {/if}
-    </p>
-  {/if}
-
-  {#if error}
-    <p class="text-[color:var(--app-danger-color)]">{error}</p>
+    </span>
   {/if}
 </div>
+
+{#if error}
+  <p class="tool-error">{error}</p>
+{/if}
 
 <style>
   .commit-list {
     display: grid;
     max-height: 16rem;
     gap: 0.2rem;
+    margin-top: 0.5rem;
     overflow-y: auto;
     padding-left: 1.1rem;
     list-style: disc;

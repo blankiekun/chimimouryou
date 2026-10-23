@@ -3,7 +3,6 @@
   import type { ToggleOption } from '$lib/components/button-toggle-group/toggle-option';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
-  import { buttonClasses, inputClasses } from '$lib/css-classes';
   import {
     ankiAudioField$,
     ankiConnectUrl$,
@@ -28,13 +27,17 @@
   ] as ToggleOption<boolean>[];
 
   let testResult = '';
+  let testState: 'busy' | 'ok' | 'error' = 'busy';
 
   async function test() {
+    testState = 'busy';
     testResult = $t$('anki.connecting');
     try {
       testResult = $t$('anki.connected', { version: await ankiInvoke<number>('version') });
+      testState = 'ok';
     } catch (error: any) {
       testResult = error.message;
+      testState = 'error';
     }
   }
 </script>
@@ -44,35 +47,39 @@
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={$ankiEnabled$} />
   </SettingsItemGroup>
   <SettingsItemGroup title={$t$('anki.guide')}>
-    <a class="underline" href={learningGuideUrl} target="_blank" rel="noreferrer">
+    <a class="app-button app-button-quiet" href={learningGuideUrl} target="_blank" rel="noreferrer">
       {$t$('anki.guideLink')}
     </a>
   </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('anki.url')} tooltip={$t$('anki.urlHint', { origin })}>
-    <input
-      id="anki-connect-url"
-      aria-label={$t$('anki.url')}
-      autocomplete="off"
-      class={inputClasses}
-      bind:value={$ankiConnectUrl$}
-    />
-    <button class="{buttonClasses} mt-2" on:click={test}>{$t$('anki.test')}</button>
-    {#if testResult}<p class="mt-2 text-xs text-[color:var(--app-muted-fg)]">{testResult}</p>{/if}
+  <SettingsItemGroup title={$t$('anki.url')} tooltip={$t$('anki.urlHint', { origin })} wide>
+    <span class="anki-url">
+      <input
+        id="anki-connect-url"
+        aria-label={$t$('anki.url')}
+        autocomplete="off"
+        class="app-input"
+        bind:value={$ankiConnectUrl$}
+      />
+      <button class="app-button" on:click={test}>{$t$('anki.test')}</button>
+    </span>
+    {#if testResult}
+      <p class="anki-status" data-state={testState} role="status">{testResult}</p>
+    {/if}
   </SettingsItemGroup>
   <SettingsItemGroup title={$t$('anki.sentenceField')} tooltip={$t$('anki.sentenceFieldHint')}>
     <input
       aria-label={$t$('anki.sentenceField')}
-      class={inputClasses}
+      class="app-input"
       bind:value={$ankiSentenceField$}
     />
   </SettingsItemGroup>
   <SettingsItemGroup title={$t$('anki.audioField')} tooltip={$t$('anki.audioFieldHint')}>
-    <input aria-label={$t$('anki.audioField')} class={inputClasses} bind:value={$ankiAudioField$} />
+    <input aria-label={$t$('anki.audioField')} class="app-input" bind:value={$ankiAudioField$} />
   </SettingsItemGroup>
   <SettingsItemGroup title={$t$('anki.pictureField')} tooltip={$t$('anki.pictureFieldHint')}>
     <input
       aria-label={$t$('anki.pictureField')}
-      class={inputClasses}
+      class="app-input"
       bind:value={$ankiPictureField$}
     />
   </SettingsItemGroup>
@@ -94,3 +101,50 @@
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={$ankiVnAudio$} />
   </SettingsItemGroup>
 </SettingsSection>
+
+<style>
+  .anki-url {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .anki-url input {
+    width: 19rem;
+    max-width: 100%;
+  }
+
+  .anki-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  .anki-status::before {
+    content: '';
+    width: 0.45rem;
+    height: 0.45rem;
+    flex: none;
+    border-radius: 9999px;
+    background: var(--app-muted-fg);
+  }
+
+  .anki-status[data-state='ok'] {
+    color: var(--font-color);
+  }
+
+  .anki-status[data-state='ok']::before {
+    background: var(--app-success-color);
+  }
+
+  .anki-status[data-state='error'] {
+    color: var(--app-danger-color);
+  }
+
+  .anki-status[data-state='error']::before {
+    background: var(--app-danger-color);
+  }
+</style>

@@ -4,13 +4,15 @@
   export let title: string;
   export let count: number | string | undefined = undefined;
   export let level: 'h2' | 'h3' = 'h2';
+  /** Id of the title, for aria-labelledby */
+  export let id: string | undefined = undefined;
 
   $: tag = String(number).padStart(2, '0');
 </script>
 
 <div class="section-head">
   <span class="section-head-number" aria-hidden="true">{tag}</span>
-  <svelte:element this={level} class="section-head-title">{title}</svelte:element>
+  <svelte:element this={level} {id} class="section-head-title">{title}</svelte:element>
   {#if count !== undefined}
     <span class="section-head-count">{count}</span>
   {/if}

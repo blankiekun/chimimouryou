@@ -54,6 +54,10 @@ def chunks(cmap):
     jis2 = []
     for cp in sorted(cmap):
         char = chr(cp)
+        # The font's underscore is a hairline (0.3px at 13px) that reads as a space: left to the
+        # fallback fonts, so sk_ and eleven_v4 show their underscores.
+        if cp == 0x5F:
+            continue
         if cp < 0x0250 or cp in latin_extra:
             named['latin'].append(cp)
         elif cp in kana:

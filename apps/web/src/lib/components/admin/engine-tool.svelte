@@ -2,7 +2,6 @@
   import { faSpinner } from '@fortawesome/free-solid-svg-icons';
   import { onDestroy, onMount } from 'svelte';
   import Fa from 'svelte-fa';
-  import { buttonClasses } from '$lib/css-classes';
   import { getUpdateState, requestEngineUpdate, type UpdateState } from '$lib/data/account';
   import { checkEngineRelease, engineRepo } from '$lib/data/app-update';
 
@@ -72,70 +71,88 @@
   }
 </script>
 
-<div class="flex flex-col gap-3 text-sm">
-  <p>
-    Visual novels play on
-    <a class="underline" href="https://github.com/{engineRepo}" target="_blank" rel="noreferrer"
-      >CONscripter</a
-    >. A new release isn't installed on its own: "Install" downloads the release's web build from
-    GitHub into the server's data folder, where it replaces the built-in engine right away (nothing
-    is built or restarted; games started afterwards use it). An app update that ships the same or a
-    newer engine takes over again. Without the server's updater, run
-    <code>scripts/conscripter/build.sh</code>, commit the files it changes and deploy.
-  </p>
+<p class="tool-text">
+  Visual novels play on
+  <a href="https://github.com/{engineRepo}" target="_blank" rel="noreferrer">CONscripter</a>. A new
+  release isn't installed on its own: "Install" downloads the release's web build from GitHub into
+  the server's data folder, where it replaces the built-in engine right away (nothing is built or
+  restarted; games started afterwards use it). An app update that ships the same or a newer engine
+  takes over again. Without the server's updater, run <code>scripts/conscripter/build.sh</code>,
+  commit the files it changes and deploy.
+</p>
 
-  {#if checking}
-    <p class="flex items-center gap-2"><Fa icon={faSpinner} spin /> Checking GitHub...</p>
-  {:else if check}
-    <p>
-      Installed: <span class="font-semibold">{check.installed}</span>. Latest release:
-      <a class="underline" href={check.url} target="_blank" rel="noreferrer">{check.latest}</a>.
-    </p>
-    <p class="font-semibold">
-      {#if !check.newer}
-        Up to date.
-      {:else if check.webBuild}
-        {check.latest} is available.
-      {:else}
-        {check.latest} has no web build yet; check again later.
+{#if checking}
+  <p class="flex items-center gap-2"><Fa icon={faSpinner} spin /> Checking GitHub...</p>
+{:else if check}
+  <table class="app-table tool-table">
+    <tbody>
+      <tr>
+        <th scope="row">Installed</th>
+        <td>{check.installed}</td>
+      </tr>
+      <tr>
+        <th scope="row">Latest release</th>
+        <td
+          ><a class="underline" href={check.url} target="_blank" rel="noreferrer">{check.latest}</a
+          ></td
+        >
+      </tr>
+      <tr>
+        <th scope="row">Status</th>
+        <td>
+          {#if !check.newer}
+            <span class="tool-status" data-state="ok">Up to date</span>
+          {:else if check.webBuild}
+            <span class="tool-status" data-state="warn">{check.latest} is available</span>
+          {:else}
+            <span class="tool-status">{check.latest} has no web build yet; check again later</span>
+          {/if}
+        </td>
+      </tr>
+      {#if state && !state.updater && check.newer}
+        <tr>
+          <th scope="row">Updater</th>
+          <td>
+            <span class="tool-status" data-state="warn">
+              Not installed on this server (servers set up with scripts/deploy.sh have it)
+            </span>
+          </td>
+        </tr>
       {/if}
-    </p>
+    </tbody>
+  </table>
+{/if}
+
+<div class="tool-actions">
+  <button class="app-button" disabled={checking || !!updatingTo} on:click={refresh}>
+    Check again
+  </button>
+  {#if canUpdate && !updatingTo && check}
+    <button class="app-button app-button-primary" on:click={update}>Install {check.latest}</button>
   {/if}
-
-  {#if state && !state.updater && check?.newer}
-    <p class="text-[color:var(--app-muted-fg)]">
-      The updater isn't installed on this server (servers set up with scripts/deploy.sh have it).
-    </p>
-  {/if}
-
-  <div class="flex flex-wrap items-center gap-2">
-    <button class={buttonClasses} disabled={checking || !!updatingTo} on:click={refresh}>
-      Check again
-    </button>
-    {#if canUpdate && !updatingTo && check}
-      <button class={buttonClasses} on:click={update}>Install {check.latest}</button>
-    {/if}
-  </div>
-
   {#if updatingTo && !finished}
-    <p class="flex items-center gap-2">
+    <span class="flex items-center gap-2" role="status">
       <Fa icon={faSpinner} spin />
       {#if status?.ref === updatingTo}
         {status.message}...
       {:else}
         Waiting for the server's updater...
       {/if}
-    </p>
-  {:else if finished && status}
-    <p class={status.state === 'failed' ? 'text-danger' : ''}>
-      {status.message} ({new Date(status.at * 1000).toLocaleString()}).
-      {#if status.state === 'done'}
-        <button class="underline" on:click={() => window.location.reload()}>Reload the page</button>
-      {/if}
-    </p>
-  {/if}
-
-  {#if error}
-    <p class="text-danger">{error}</p>
+    </span>
   {/if}
 </div>
+
+{#if finished && status}
+  <p class="tool-note" class:tool-error={status.state === 'failed'}>
+    {status.message} ({new Date(status.at * 1000).toLocaleString()}).
+    {#if status.state === 'done'}
+      <button class="app-button app-button-quiet" on:click={() => window.location.reload()}
+        >Reload the page</button
+      >
+    {/if}
+  </p>
+{/if}
+
+{#if error}
+  <p class="tool-error">{error}</p>
+{/if}

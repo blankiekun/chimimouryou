@@ -135,7 +135,7 @@
           >
         {:else if pluginTabs.some((item) => item.key === active.key)}
           <!-- shortcut: assumes every plugin tab is an AI tab; give tabs their own toolbar when another plugin adds one. -->
-          <AiLanguageToggle />
+          <AiLanguageToggle compact />
         {/if}
         <button class="close" title={$t$('reader.close')} on:click={() => dispatch('close')}>
           <Fa icon={faXmark} />
