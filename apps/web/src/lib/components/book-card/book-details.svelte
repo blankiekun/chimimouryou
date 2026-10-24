@@ -47,6 +47,7 @@
   } from '$lib/data/analysis-tools';
   import { wordCoverage, type BookWord, type WordCoverage } from '$lib/data/book-words';
   import { dialogManager } from '$lib/data/dialog-manager';
+  import SeriesDialog from '$lib/components/book-card/series-dialog.svelte';
   import {
     bookCoverage,
     bookWordGroups,
@@ -83,6 +84,8 @@
   export let bookCards: BookCardProps[];
   /** Calibre source: catalog metadata, difficulty and shared details exist */
   export let isCalibre: boolean;
+  /** Browser source: series are made in this browser (series-overrides.ts `browserSeries`) */
+  export let localSeries = false;
   /** The book's word list is shown over the page (Escape is its own) */
   export let covered = false;
 
@@ -149,6 +152,7 @@
       }
     : book;
   $: canEdit = isCalibre && hasPermission($account$, 'series');
+  $: canEditSeries = canEdit || localSeries;
   $: onHome = $homeBookTitles$.includes(book.title) || isContinueReading(book, $homeRemovedTitles$);
   $: seriesBooks = book.series
     ? orderSeries(bookCards.filter((card) => card.series === book.series))
@@ -450,6 +454,20 @@
     if (title === book.title) load();
   }
 
+  /** The library's Make series dialog for this book; Browser books save in this browser. */
+  async function editSeries() {
+    const saved = await new Promise<boolean>((resolver) => {
+      dialogManager.dialogs$.next([
+        {
+          component: SeriesDialog,
+          props: { book, books: bookCards, resolver, local: localSeries }
+        }
+      ]);
+    });
+
+    if (saved) dispatch('changed');
+  }
+
   function showDifficulty() {
     dialogManager.dialogs$.next([{ component: DifficultyDialog, props: { books: [book] } }]);
   }
@@ -523,20 +541,27 @@
         {#if book.authors && book.authors !== 'Unknown'}
           <p class="details-author" lang="ja">{book.authors}</p>
         {/if}
-        {#if book.series}
+        {#if book.series || canEditSeries}
           <p class="details-series">
             {#if book.seriesIndex !== null && book.seriesIndex !== undefined}
               <span class="details-vol">{$t$('book.vol', { index: book.seriesIndex })}</span>
             {/if}
-            <button
-              type="button"
-              class="app-button app-button-quiet"
-              lang="ja"
-              on:click={() => dispatch('showSeries', book.series ?? '')}
-            >
-              {book.series}{#if seriesBooks.length > 1}&nbsp;·
-                {$t$('book.volumes', { count: seriesBooks.length })}{/if}
-            </button>
+            {#if book.series}
+              <button
+                type="button"
+                class="app-button app-button-quiet"
+                lang="ja"
+                on:click={() => dispatch('showSeries', book.series ?? '')}
+              >
+                {book.series}{#if seriesBooks.length > 1}&nbsp;·
+                  {$t$('book.volumes', { count: seriesBooks.length })}{/if}
+              </button>
+            {/if}
+            {#if canEditSeries}
+              <button type="button" class="app-button app-button-quiet" on:click={editSeries}>
+                {$t$('library.makeSeries')}
+              </button>
+            {/if}
           </p>
         {/if}
       </div>

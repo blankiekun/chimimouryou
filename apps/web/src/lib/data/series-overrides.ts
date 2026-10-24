@@ -142,6 +142,8 @@ function normalize(text: string) {
 
 const editionLabel =
   /[\s]*[【[(（〔][^】\])）〕]*(?:版|文庫|ノベル|BOOKS|Books|特典|限定|特装|コミック)[^】\])）〕]*[】\])）〕]$/;
+// build-catalog.py's VOLUME_SUFFIXES word pattern, tried before numbers like there: 上=1, 中=2, 下=3.
+const partMark = /[\s]*[(（[【]?\s*(?:上巻|中巻|下巻|前編|後編|上|中|下)\s*[)）\]】]?$/;
 const volumeMark =
   /[\s]*[(（[【〈《]?\s*(?:vol(?:ume)?\.?\s*|[#＃]|第\s*)?(?:\d+(?:\.\d+)?|[〇一二三四五六七八九十百]+(?=\s*[巻部集冊]))\s*[巻部章話集冊]?\s*[)）\]】〉》]?/gi;
 
@@ -156,8 +158,9 @@ export function guessSeriesName(title: string) {
     .replace(/^\[[^\]]+\]\s*/, '')
     .replace(editionLabel, '')
     .trim();
+  const part = text.match(partMark);
   const marks = [...text.matchAll(volumeMark)];
-  const last = marks[marks.length - 1];
+  const last = part ?? marks[marks.length - 1];
   const base = last?.index ? text.slice(0, last.index) : text;
 
   return base.replace(/[\s\-‐－:：・,、～~―]+$/, '').trim() || text;

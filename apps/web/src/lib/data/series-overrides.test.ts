@@ -129,6 +129,20 @@ describe('inferSeries', () => {
     ]);
   });
 
+  it('groups 上/中/下 volumes in that order, like split_volume', () => {
+    const result = inferSeries([
+      card('風の物語 下'),
+      card('風の物語（上巻）'),
+      card('風の物語 中')
+    ]);
+
+    expect(result.map((book) => [book.series, book.seriesIndex])).toEqual([
+      ['風の物語', 3],
+      ['風の物語', 1],
+      ['風の物語', 2]
+    ]);
+  });
+
   it('adds a single volume to an existing series of that name and keeps given series', () => {
     expect(inferSeries([card('狼と香辛料 3')])[0].series).toBeUndefined();
     expect(inferSeries([card('abc物語 3'), card('別の本', 'ＡＢＣ物語')])).toMatchObject([
