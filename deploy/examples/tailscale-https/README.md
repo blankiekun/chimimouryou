@@ -31,7 +31,8 @@ and the layout of `scripts/deploy.sh` (`/etc/ebook-reader`, `ebook-compose`).
 
 3. In the env file: `PUBLIC_HTTPS_URL=https://<machine>.<tailnet>.ts.net` (the
    plain-HTTP page links there to sign in) and `TRUSTED_NETWORKS` with your LAN
-   and `100.64.0.0/10` if signed-out tailnet readers should have access. Then
+   and `100.64.0.0/10` if signed-out tailnet readers should have access (then also
+   `SERVER_NAMES=<machine>.<tailnet>.ts.net`: the pass only applies to known names). Then
    deploy (or `ebook-compose up -d --build`).
 
 The renewal timer reloads nginx in the container after each renewal.

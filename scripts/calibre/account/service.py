@@ -156,8 +156,10 @@ def b64(data: bytes) -> str:
     return base64.b64encode(data).decode()
 
 
-def scrypt(password: str, salt: bytes, n: int, r: int, p: int) -> bytes:
+def scrypt(password: str, salt: bytes, n: int, r: int, p: int, before=None) -> bytes:
     with hash_slots:
+        if before:
+            before()
         return hashlib.scrypt(password.encode(), salt=salt, n=n, r=r, p=p, maxmem=SCRYPT_MAXMEM, dklen=32)
 
 
@@ -167,11 +169,13 @@ def hash_password(password: str) -> str:
     return f'scrypt${SCRYPT_N}${SCRYPT_R}${SCRYPT_P}${b64(salt)}${b64(digest)}'
 
 
-def verify_password(password: str, stored: str) -> tuple[bool, bool]:
-    """Returns (matches, should be rehashed with the current parameters)."""
+def verify_password(password: str, stored: str, before=None) -> tuple[bool, bool]:
+    """Returns (matches, should be rehashed with the current parameters). before() runs once a
+    hash slot is taken (the throttle check: guesses queued behind others see their failures)."""
     _, n, r, p, salt, digest = stored.split('$')
     params = (int(n), int(r), int(p))
-    matches = hmac.compare_digest(scrypt(password, base64.b64decode(salt), *params), base64.b64decode(digest))
+    matches = hmac.compare_digest(scrypt(password, base64.b64decode(salt), *params, before=before),
+                                  base64.b64decode(digest))
     return matches, params != (SCRYPT_N, SCRYPT_R, SCRYPT_P)
 
 
@@ -459,7 +463,13 @@ SHARED_SYNC_URI = '/calibre/sync'
 
 def uri_path(uri: str) -> str:
     """The decoded, normalized path of a request URI or Destination URL."""
-    return posixpath.normpath(urllib.parse.unquote(urllib.parse.urlsplit(uri).path) or '/')
+    return posixpath.normpath(re.sub('/+', '/', urllib.parse.unquote(raw_path(uri))) or '/')
+
+
+def raw_path(uri: str) -> str:
+    """The undecoded path: a request URI is one already (urlsplit would read '//calibre/…' as a
+    host), a Destination is a full URL."""
+    return uri.split('?')[0] if uri.startswith('/') else urllib.parse.urlsplit(uri).path
 
 
 def shared_write_allowed(method: str, uri: str, destination: str | None) -> bool:
@@ -479,7 +489,8 @@ def shared_write_allowed(method: str, uri: str, destination: str | None) -> bool
     if method != 'MOVE':
         return True
     # nginx drops a ?query from the destination, so 'series.json?' would land on series.json.
-    if not destination or '?' in destination or '#' in destination or urllib.parse.urlsplit(uri).path.endswith('/'):
+    # Two Destination headers reach us joined by ', ' (dav uses the first); the client percent-encodes commas.
+    if not destination or any(c in destination for c in '?#,') or raw_path(uri).endswith('/'):
         return False
     target = uri_path(destination)
     folder = posixpath.dirname(target)
@@ -610,7 +621,7 @@ def session_user(token: str | None):
 
     now = int(time.time())
     rows = db.query('''
-        SELECT users.*, sessions.created AS session_created, sessions.last_seen
+        SELECT users.*, sessions.created AS session_created, sessions.last_seen, sessions.kind AS session_kind
         FROM sessions JOIN users ON users.id = sessions.user_id
         WHERE token_hash = ?
     ''', (token_hash(token),))
@@ -707,7 +718,7 @@ class Handler(BaseHTTPRequestHandler):
     def require_admin(self):
         user = self.require_user()
         # Admins use the server's own address; tokens (other sites, apps) never administer.
-        if not user['is_admin'] or self.bearer_token():
+        if not user['is_admin'] or self.bearer_token() or user['session_kind'] == 'token':
             raise ApiError(403, 'Only admins can do this')
         return user
 
@@ -774,7 +785,7 @@ class Handler(BaseHTTPRequestHandler):
         token = self.session_token()
         user = session_user(token)
         # Tokens (other sites, apps) never administer: admins use the server's own page.
-        by_token = bool(token) and token == self.bearer_token()
+        by_token = bool(token) and token == self.bearer_token() or bool(user) and user['session_kind'] == 'token'
         method = self.headers.get('X-Original-Method', '')
         status = 403 if by_token and permission == 'admin' else auth_status(user, permission, writes_only, method,
                              self.headers.get('X-Trusted-Network') == '1', self.headers.get('X-Public-Reads') == '1',
@@ -853,7 +864,8 @@ class Handler(BaseHTTPRequestHandler):
         check_throttle(keys)
 
         user = find_user(username) if len(password) <= PASSWORD_MAX_LENGTH else None
-        matches, rehash = verify_password(password[:PASSWORD_MAX_LENGTH], user['password_hash'] if user else DUMMY_HASH)
+        matches, rehash = verify_password(password[:PASSWORD_MAX_LENGTH], user['password_hash'] if user else DUMMY_HASH,
+                                          lambda: check_throttle(keys))
 
         if not user or not matches:
             record_failure(keys)
@@ -894,7 +906,7 @@ class Handler(BaseHTTPRequestHandler):
         """Whose tokens the request may list and revoke: its account's, or everyone's (None) for
         an admin on the server's own page."""
         user = self.require_user()
-        return None if user['is_admin'] and not self.bearer_token() else user['id']
+        return None if user['is_admin'] and not self.bearer_token() and user['session_kind'] != 'token' else user['id']
 
     def get_tokens(self):
         return 200, {'tokens': list_tokens(self.token_owner())}, {}
@@ -916,7 +928,7 @@ class Handler(BaseHTTPRequestHandler):
 
         check_throttle(keys)
 
-        if not verify_password(current[:PASSWORD_MAX_LENGTH], user['password_hash'])[0]:
+        if not verify_password(current[:PASSWORD_MAX_LENGTH], user['password_hash'], lambda: check_throttle(keys))[0]:
             record_failure(keys)
             raise ApiError(403, 'The current password is incorrect')
 
