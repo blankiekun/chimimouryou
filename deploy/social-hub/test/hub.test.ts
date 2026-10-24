@@ -6,7 +6,7 @@
 
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import hub, { STATUS_GAP, cleanUp, type Env } from '../src/hub';
+import hub, { STATUS_GAP, cleanUp, clientAddress, type Env } from '../src/hub';
 import { memoryD1 } from './d1';
 
 const key = (n: number) => n.toString(16).padStart(64, '0');
@@ -91,14 +91,58 @@ describe('social hub', () => {
     ).toBe(409);
   });
 
-  it('locks a username after 10 failed logins in an hour', async () => {
+  it('locks an address after 10 failed logins in an hour, a username only after 50', async () => {
     await signUp('ren');
-    for (let i = 0; i < 10; i += 1) {
-      expect((await call('POST', '/v1/login', { username: 'ren', key: key(9) })).status).toBe(401);
-    }
-    expect((await call('POST', '/v1/login', { username: 'ren', key: key(1) })).status).toBe(429);
+    const login = (n: number, address = '') =>
+      call('POST', '/v1/login', { username: 'ren', key: key(n) }, '', address).then(
+        (r) => r.status
+      );
+
+    for (let i = 0; i < 10; i += 1) expect(await login(9, '198.51.100.1')).toBe(401);
+    expect(await login(1, '198.51.100.1')).toBe(429);
+    // One address can't lock Ren out: he still signs in from his own.
+    expect(await login(1)).toBe(200);
+    for (let i = 0; i < 39; i += 1) expect(await login(9)).toBe(401);
+    expect(await login(1)).toBe(200);
+    expect(await login(9)).toBe(401);
+    expect(await login(1)).toBe(429);
     vi.advanceTimersByTime(3600_000);
-    expect((await call('POST', '/v1/login', { username: 'ren', key: key(1) })).status).toBe(200);
+    expect(await login(1)).toBe(200);
+  });
+
+  it('limits IPv6 addresses by their /64', async () => {
+    expect(
+      clientAddress(
+        new Request('https://hub.example', { headers: { 'CF-Connecting-IP': '2001:DB8:0:1::5' } })
+      )
+    ).toBe('2001:db8:0:1::/64');
+    expect(
+      clientAddress(
+        new Request('https://hub.example', { headers: { 'CF-Connecting-IP': '2001:db8::' } })
+      )
+    ).toBe('2001:db8:0:0::/64');
+    expect(
+      clientAddress(
+        new Request('https://hub.example', { headers: { 'CF-Connecting-IP': '203.0.113.9' } })
+      )
+    ).toBe('203.0.113.9');
+
+    const signUpFrom = (username: string, address: string) =>
+      call('POST', '/v1/signup', { username, name: username, salt, key: key(1) }, '', address).then(
+        (r) => r.status
+      );
+
+    expect(await signUpFrom('aki', '2001:db8:1:2::1')).toBe(200);
+    expect(await signUpFrom('ren', '2001:db8:1:2::2')).toBe(200);
+    expect(await signUpFrom('mio', '2001:db8:1:2:abcd::9')).toBe(200);
+    expect(await signUpFrom('sora', '2001:0db8:0001:0002:ffff:1:2:3')).toBe(429);
+    expect(await signUpFrom('sora', '2001:db8:1:3::1')).toBe(200);
+
+    const keys: string[] = [];
+
+    env.EDGE_LIMIT = { limit: async ({ key }) => (keys.push(key), { success: true }) };
+    await call('GET', '/v1/me', undefined, '', '2001:db8:1:2:aaaa::1');
+    expect(keys).toEqual(['2001:db8:1:2::/64']);
   });
 
   it('resets the password with the recovery code once, ending other sessions', async () => {
@@ -215,6 +259,26 @@ describe('social hub', () => {
     expect(
       (await call('POST', '/v1/friends/request', { code: ren.me.code }, aki.token)).status
     ).toBe(429);
+  });
+
+  it('refuses a request whose sender reached 200 friends meanwhile', async () => {
+    const aki = await signUp('aki');
+    const ren = await signUp('ren');
+    const mio = await signUp('mio');
+    const time = Math.floor(Date.now() / 1000);
+    const insert = db.prepare(
+      `INSERT INTO links (a, b, state, by_user, created) VALUES (?, ?, 'accepted', ?, ?)`
+    );
+
+    for (let i = 0; i < 199; i += 1) insert.run(aki.me.id, `z${i}`, aki.me.id, time);
+    await call('POST', '/v1/friends/request', { code: ren.me.code }, aki.token);
+    await call('POST', '/v1/friends/request', { code: mio.me.code }, aki.token);
+    expect(
+      (await call('POST', `/v1/friends/${aki.me.id}/accept`, undefined, ren.token)).status
+    ).toBe(200);
+    expect(
+      (await call('POST', `/v1/friends/${aki.me.id}/accept`, undefined, mio.token)).status
+    ).toBe(409);
   });
 
   it('accepts at once when both entered each other’s code', async () => {
@@ -475,6 +539,19 @@ describe('social hub', () => {
     ).toBe(400);
   });
 
+  it('keeps a reader’s newest 100 events', async () => {
+    const aki = await signUp('aki');
+    const book = (key: string) => ({ key, title: key, kind: 'book', pct: 0.1 });
+
+    for (let i = 0; i < 35; i += 1) {
+      await push(aki, { books: [book(`a${i}`), book(`b${i}`), book(`c${i}`)] });
+    }
+    const keys = rows('events').map((r) => r.book_key);
+    expect(keys).toHaveLength(100);
+    expect(keys).not.toContain('a0');
+    expect(keys).toContain('c34');
+  });
+
   it('drops a finished book and its events for its reader only', async () => {
     const aki = await signUp('aki');
     const ren = await signUp('ren');
@@ -529,6 +606,33 @@ describe('social hub', () => {
       db.exec(migration);
     }
     expect(tables()).toEqual(before);
+  });
+
+  it('moves covers and their reports to one per reader, twice without harm', () => {
+    const migration = readFileSync(
+      new URL('../migrations/0006_covers_per_reader.sql', import.meta.url),
+      'utf8'
+    );
+    const aki = '0123456789abcdef';
+
+    db.exec(`DROP TABLE covers;
+      CREATE TABLE covers (book_key TEXT PRIMARY KEY, file TEXT NOT NULL, user TEXT NOT NULL,
+        at INTEGER NOT NULL, removed INTEGER NOT NULL DEFAULT 0);
+      INSERT INTO covers VALUES ('k1', 'aaaaaaaaaaaaaaaa', '${aki}', 1, 0);
+      INSERT INTO reports VALUES ('k1', 'r1', 'cover', 1), ('gone', 'r1', 'cover', 1),
+        ('${aki}', 'r1', 'name', 1);`);
+    db.exec(migration);
+    db.exec(migration);
+    expect(rows('covers')).toEqual([
+      { user: aki, book_key: 'k1', file: 'aaaaaaaaaaaaaaaa', at: 1, removed: 0 }
+    ]);
+    expect(db.prepare('SELECT target, what FROM reports ORDER BY what').all()).toEqual([
+      { target: `${aki}:k1`, what: 'cover' },
+      { target: aki, what: 'name' }
+    ]);
+    expect(
+      db.prepare(`SELECT name FROM sqlite_master WHERE tbl_name = 'covers' ORDER BY name`).all()
+    ).toEqual([{ name: 'covers' }, { name: 'covers_file' }, { name: 'sqlite_autoindex_covers_1' }]);
   });
 
   it('records reports once per reporter, 5 a day', async () => {

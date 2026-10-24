@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS events_user ON events (user, at);
 
--- Reports of a display name, picture (target: a user id) or cover (target: a book key);
+-- Reports of a display name, picture (target: a user id) or cover (target: "<uploader id>:<book key>");
 -- reporter is a user id or "ip:<sha256>". Kept 90 days.
 CREATE TABLE IF NOT EXISTS reports (
   target TEXT NOT NULL,
@@ -114,16 +114,19 @@ CREATE TABLE IF NOT EXISTS pictures (
   version INTEGER NOT NULL
 );
 
--- One cover thumbnail per book key: R2 object cover/<file> (16 hex of the WebP's sha256),
--- uploaded by the first reader who shared the book with a cover. removed = 1 after a report:
--- the title card shows instead and no new one is taken.
+-- Cover thumbnails, one per reader and book key, shown only on that reader's own status and
+-- finished rows: R2 object cover/<file> (16 hex of the WebP's sha256, shared by identical
+-- uploads). removed = 1 after a report: the title card shows instead and that reader can't upload
+-- another for the key. The daily cron deletes shown covers whose book the reader no longer shares.
 CREATE TABLE IF NOT EXISTS covers (
-  book_key TEXT PRIMARY KEY,
-  file TEXT NOT NULL,
   user TEXT NOT NULL,
+  book_key TEXT NOT NULL,
+  file TEXT NOT NULL,
   at INTEGER NOT NULL,
-  removed INTEGER NOT NULL DEFAULT 0
+  removed INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (user, book_key)
 );
+CREATE INDEX IF NOT EXISTS covers_file ON covers (file);
 -- Signaling only, the book goes browser to browser over WebRTC.
 -- pending (sender asked) -> accepted (the receiver's SDP offer) -> answered (the sender's answer),
 -- or declined. Deleted by the sender once connected, else after 10 minutes (TRANSFER_TTL, cron).

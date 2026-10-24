@@ -3,7 +3,7 @@
 The one hub every chimimouryou build uses for friends: a Cloudflare Worker over D1 (free tier).
 Accounts are a username and a password (stretched with scrypt in the browser, stored as a salted
 SHA-256), friend codes, requests, blocks and up to three current books per reader, and in R2 the
-readers' pictures and one small cover thumbnail per book. No email, IP log or books. The app's client is `apps/web/src/lib/data/social*.ts`.
+readers' pictures and small cover thumbnails of the books they share. No email, IP log or books. The app's client is `apps/web/src/lib/data/social*.ts`.
 
 ## Deploy
 
@@ -21,7 +21,7 @@ With a Cloudflare account, from this folder:
 
 Edge limit: a workers.dev address can't have dashboard WAF rules, so the Worker checks the
 Workers Rate Limiting binding `EDGE_LIMIT` (`[[ratelimits]]` in `wrangler.toml`: 5 requests per
-10 seconds per address) first, before any D1 access, and answers `429 {"error":"busy"}`
+10 seconds per address, IPv6 by its /64 like every per-address limit) first, before any D1 access, and answers `429 {"error":"busy"}`
 (preflights skip it). The counters are per Cloudflare location and approximate; the daily
 limits in D1 stay the real bounds.
 
@@ -38,6 +38,8 @@ idempotent), in order, then `npx wrangler@4.147.0 deploy`:
   (`users.role`: moderators; a second run only fails with "duplicate column name")
 - `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file migrations/0005_transfers.sql`
   (sending a book to a friend; the deploy also adds the 10-minute cron and `SIGNAL_LIMIT`)
+- `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file migrations/0006_covers_per_reader.sql`
+  (covers one per reader and book; deploy right after it)
 
 ## Develop
 
@@ -61,10 +63,11 @@ book and its events, when its statistics are deleted); `GET friends` (with their
 stats; once a minute); `GET feed?since=` (friends' events, 90 days; once a minute);
 `GET profile/:username` (public profiles to anyone, edge-cached 15 minutes; private ones to
 friends; 404 when blocked; 30 a day); `POST report` (`{username, what: name|picture}` or
-`{what: cover, key}`, 5 a day);
-`PUT status` answers `needCovers`: the shared book keys without a thumbnail. `PUT cover?key=`
+`{what: cover, key, username}`: the cover that reader uploaded, 5 a day);
+`PUT status` answers `needCovers`: the shared book keys this reader gave no thumbnail for. `PUT cover?key=`
 (raw `image/webp`, at most 20 KB, 32-200 px wide, no EXIF/XMP; only for a book in the reader's
-current or finished books; the first one per key wins, later ones are 409; 50 a day);
+current or finished books; one per reader and key, shown only on that reader's own rows, a second
+one is 409; 50 a day; the daily cron deletes covers whose book the reader no longer shares);
 `PUT avatar` (raw `image/webp`, a square of 64-256 px, at most 64 KB; 5 a day; a new version
 each time) and `DELETE avatar` (back to the preset). Books carry `cover` (a content hash) and
 people `picture` (a version, 0 for none); `GET cover/:hash` and `GET avatar/:id/:version` serve
@@ -90,7 +93,8 @@ plus one per 3 s while the friend hasn't answered yet (at most ~200 for one left
 
 Moderation, role `dev` only (403 for everyone else): `GET admin/reports` (open reports grouped
 by kind and target, with the name, picture or cover reported); `DELETE admin/reports?what=&target=`
-(dismiss); `DELETE admin/cover?key=` (`removed = 1`, the R2 object goes); `GET admin/user/:username`
+(dismiss); `DELETE admin/cover?target=<uploader id>:<key>` (that upload only: `removed = 1`, the R2
+object goes unless another upload uses the same image); `GET admin/user/:username`
 (account, current and finished books, events); `POST admin/user/:id/name` (name back to the
 username); `DELETE admin/user/:id/picture`; `DELETE admin/user/:id/status/:slot`,
 `…/finished/:key`, `…/events/:id` (one row). Resolving a report deletes its reports.
@@ -136,17 +140,20 @@ npx wrangler@4.147.0 d1 execute chimi-hub --remote --command \
    DELETE FROM reports WHERE what = 'picture' AND target = (SELECT id FROM users WHERE username = 'NAME')"
 ```
 
-Reported covers (the target is the book key) go back to the title card; `removed = 1` keeps the
-key from taking a new upload:
+Reported covers (the target is `<uploader id>:<book key>`) go back to the title card; `removed = 1`
+keeps that reader from uploading another for the key:
 
 ```sh
 npx wrangler@4.147.0 d1 execute chimi-hub --remote --command \
-  "SELECT r.target AS book_key, 'cover/' || c.file AS object, COUNT(*) AS n FROM reports r
-   JOIN covers c ON c.book_key = r.target WHERE r.what = 'cover' GROUP BY r.target ORDER BY n DESC"
+  "SELECT r.target, 'cover/' || c.file AS object, COUNT(*) AS n FROM reports r
+   JOIN covers c ON c.user = substr(r.target, 1, 16) AND c.book_key = substr(r.target, 18)
+   WHERE r.what = 'cover' GROUP BY r.target ORDER BY n DESC"
 npx wrangler@4.147.0 r2 object delete --remote chimi-hub-media/OBJECT
 npx wrangler@4.147.0 d1 execute chimi-hub --remote --command \
-  "UPDATE covers SET removed = 1 WHERE book_key = 'KEY';
-   DELETE FROM reports WHERE what = 'cover' AND target = 'KEY'"
+  "UPDATE covers SET removed = 1 WHERE user = 'USER' AND book_key = 'KEY';
+   DELETE FROM reports WHERE what = 'cover' AND target = 'USER:KEY'"
 ```
+
+(Skip the R2 delete while another upload shows the same object: `SELECT COUNT(*) FROM covers WHERE file = 'FILE' AND removed = 0`.)
 
 Browsers that already showed the image keep it in their cache; friends' lists stop pointing at it.
