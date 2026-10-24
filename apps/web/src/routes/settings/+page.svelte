@@ -16,6 +16,7 @@
   import SettingsLanguage from '$lib/components/settings/settings-language.svelte';
   import SettingsPlugins from '$lib/components/settings/settings-plugins.svelte';
   import { activePlugins$, plugins } from '$lib/plugins';
+  import { aiFeatureState$ } from '$lib/data/ai-connections';
   import SettingsAnki from '$lib/components/settings/settings-anki.svelte';
   import SettingsDictionary from '$lib/components/settings/settings-dictionary.svelte';
   import SettingsDictionaryPopup from '$lib/components/settings/settings-dictionary-popup.svelte';
@@ -102,7 +103,7 @@
   } from '$lib/data/store';
   import { storage } from '$lib/data/window/navigator/storage';
   import { formatPageTitle } from '$lib/functions/format-page-title';
-  import { t$, uiLanguage$ } from '$lib/i18n';
+  import { t$, uiLanguage$, type MessageKey } from '$lib/i18n';
   import { writableSubject } from '$lib/functions/svelte/store';
   import { reduceToEmptyString } from '$lib/functions/rxjs/reduce-to-empty-string';
 
@@ -138,6 +139,11 @@
       )
   );
   $: activeAreaInfo = settingsAreas.find((area) => area.id === activeArea) ?? settingsAreas[0];
+  // While AI has no connection its first section is headed Get started (settings-ai.svelte).
+  $: sectionLabel = (section: { id: string; label: MessageKey }): MessageKey =>
+    section.id === 'ai-connections' && !$aiFeatureState$.ask.connection
+      ? 'ai.getStarted'
+      : section.label;
   $: hiddenPluginAreas = visibleAreas.length < settingsAreas.length;
   $: areaDescription =
     activeAreaInfo.id === 'reader'
@@ -382,7 +388,7 @@
               <span class="settings-nav-area-text">
                 <span class="settings-nav-area-label">{$t$(area.label)}</span>
                 <span class="settings-nav-area-sections">
-                  {area.sections.map((section) => $t$(section.label)).join(' · ')}
+                  {area.sections.map((section) => $t$(sectionLabel(section))).join(' · ')}
                 </span>
               </span>
               <span class="settings-nav-chevron"><Fa icon={faChevronRight} /></span>
@@ -397,7 +403,7 @@
                     aria-current={section.id === activeSection ? 'location' : undefined}
                     on:click={() => showSection(section.id)}
                   >
-                    {$t$(section.label)}
+                    {$t$(sectionLabel(section))}
                   </button>
                 {/each}
               </div>
@@ -434,7 +440,7 @@
                 aria-current={section.id === activeSection ? 'location' : undefined}
                 on:click={() => showSection(section.id)}
               >
-                {$t$(section.label)}
+                {$t$(sectionLabel(section))}
               </button>
             {/each}
           </div>

@@ -39,7 +39,7 @@ import {
   ttsPlaybackRate$,
   ttsVoiceId$
 } from '$lib/data/ai-settings';
-import { mergeConnectionKeys, mergeConnections, migrateAiSettings } from '$lib/data/ai-connections';
+import { mergeConnectionKeys, mergeConnections } from '$lib/data/ai-connections';
 import {
   homeBookTitles$,
   homeRemovedTitles$,
@@ -318,8 +318,6 @@ async function syncOnce() {
     true
   );
 
-  // A device signing in may only now get the settings the move to connections needs.
-  migrateAiSettings();
   lastSynced = Date.now();
   settingsSyncState$.next({ state: 'synced', at: lastSynced });
 }

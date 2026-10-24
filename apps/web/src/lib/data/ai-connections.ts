@@ -5,10 +5,9 @@
  */
 
 /**
- * AI connections and which one each feature uses: per-id merging for sync, the
- * one-time move from the OpenRouter/ElevenLabs settings, and mirroring back into
- * those old settings so devices on the previous release keep working (drop the
- * mirror one release after this). Not part of upstream.
+ * AI connections and which one each feature uses: per-id merging for sync, and
+ * mirroring into the old OpenRouter/ElevenLabs settings so devices on releases
+ * before connections keep working. Not part of upstream.
  */
 
 import { combineLatest, map, type BehaviorSubject } from 'rxjs';
@@ -374,92 +373,4 @@ export function newConnectionId(provider: string) {
   }
 
   return id;
-}
-
-const versionKey = 'aiSettingsVersion';
-
-/**
- * Moves the OpenRouter and ElevenLabs settings into connections, once. Runs when
- * the app loads and after each settings sync: a device signing in may get the old
- * settings only then. Nothing to move leaves the version unset for a later run.
- */
-export function migrateAiSettings() {
-  const storage = window.localStorage;
-
-  if (Number(storage.getItem(versionKey)) >= 1) {
-    return;
-  }
-
-  if (aiConnections$.getValue().length) {
-    // Another device moved them already.
-    storage.setItem(versionKey, '1');
-    return;
-  }
-
-  const has = (key: string) => storage.getItem(key) !== null;
-  const now = Date.now();
-  const connections: AiConnection[] = [];
-  const keys: Record<string, string> = {};
-  const features = { ...defaultAiFeatures, ...aiFeatures$.getValue() };
-
-  if (openRouterApiKey$.getValue() || has('openRouterModel')) {
-    connections.push({
-      id: 'openrouter',
-      name: 'OpenRouter',
-      provider: 'openrouter',
-      kind: 'text',
-      modified: now
-    });
-    keys.openrouter = openRouterApiKey$.getValue();
-    features.ask = {
-      connection: 'openrouter',
-      model: has('openRouterModel') ? openRouterModel$.getValue().trim() : '',
-      params: {}
-    };
-
-    const recapModel = openRouterRecapModel$.getValue().trim();
-
-    features.recap =
-      has('openRouterRecapModel') && !recapModel
-        ? { connection: 'inherit', model: '', params: {} }
-        : {
-            connection: 'openrouter',
-            model: has('openRouterRecapModel') ? recapModel : '',
-            params: {}
-          };
-    features.lore = { connection: 'inherit', model: '', params: {} };
-  }
-
-  if (elevenLabsApiKey$.getValue() || has('elevenLabsModel')) {
-    connections.push({
-      id: 'elevenlabs',
-      name: 'ElevenLabs',
-      provider: 'elevenlabs',
-      kind: 'voice',
-      modified: now
-    });
-    keys.elevenlabs = elevenLabsApiKey$.getValue();
-    features.voice = {
-      connection: 'elevenlabs',
-      model: has('elevenLabsModel') ? elevenLabsModel$.getValue().trim() : '',
-      params: {}
-    };
-  }
-
-  if (!connections.length) {
-    return;
-  }
-
-  aiConnections$.next(connections);
-  aiConnectionKeys$.next(
-    Object.fromEntries(
-      Object.entries({ ...aiConnectionKeys$.getValue(), ...keys }).filter(([, k]) => k)
-    )
-  );
-  aiFeatures$.next(features);
-  storage.setItem(versionKey, '1');
-}
-
-if (typeof window !== 'undefined') {
-  migrateAiSettings();
 }
