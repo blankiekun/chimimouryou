@@ -24,7 +24,7 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 # Bump when a change to CODE_FILES changes any estimate's numbers or word list, then
 # `python3 engine.py --record` and regenerate difficulty-engine.json. A refactor that keeps every
 # output the same only re-records (`--record`), so library estimates stay current.
-ENGINE_VERSION = 1
+ENGINE_VERSION = 2
 # The scoring path's Python, on the server and in Pyodide alike (readings_file.extract gives the
 # browser its text): in the fingerprint through ENGINE_VERSION, guarded by engine-code.json.
 CODE_FILES = ('features.py', 'frequency.py', 'word_list.py', 'deconjugator.py', 'readings_file.py')

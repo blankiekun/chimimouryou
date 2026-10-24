@@ -1,8 +1,9 @@
 """Tests for the analysis tools' Pyodide entry point (scripts/calibre/jiten/browser.py): the tokens it
-gives from the tokenizer worker's rows."""
+gives from Sudachi's rows, and the Reader read a book's two parts share."""
 import os
 import sys
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(__file__)
 sys.path.insert(0, os.path.join(HERE, '..', 'jiten'))
@@ -24,12 +25,6 @@ class BrowserTokensTest(unittest.TestCase):
         found = [(t.surface(), t.reading_form(), t.begin) for t in tokens.tokens('猫が鳴く。\n猫が鳴く。')]
         self.assertEqual(found, [('猫', 'ネコ', 0), ('が', 'ガ', 1), ('鳴く', 'ナク', 2),
                                  ('猫', 'ネコ', 6), ('が', 'ガ', 7), ('鳴く', 'ナク', 8)])
-        self.assertFalse(tokens.misses)
-
-    def test_unknown_text_is_a_miss(self):
-        tokens = browser.BrowserTokens(ROWS.get)
-        self.assertEqual([t.surface() for t in tokens.tokenizer.tokenize('犬')], ['犬'])
-        self.assertEqual(tokens.misses, {'犬'})
 
     def test_a_book_cache_asks_for_each_text_once(self):
         asked, book = [], ({}, {}, {})
@@ -43,19 +38,28 @@ class BrowserTokensTest(unittest.TestCase):
         self.assertEqual([(t.surface(), t.begin) for t in second.tokens('猫が鳴く。')], first)
         self.assertEqual([t.surface() for t in second.tokenizer.tokenize('猫が鳴く。')], ['猫', 'が', '鳴く', '。'])
         self.assertEqual(asked, ['猫が鳴く。'])
-        # a miss is asked for again: the tokenizer may have it next time
-        second.tokenizer.tokenize('犬')
-        second.tokenizer.tokenize('犬')
-        self.assertEqual(asked, ['猫が鳴く。', '犬', '犬'])
 
 
-class FirstTextsTest(unittest.TestCase):
-    def test_only_the_word_list_asks_for_marker_words(self):
-        html = '<p>猫が鳴く。</p>'
-        readings = browser.first_texts(html, 'readings')
-        words = browser.first_texts(html, 'words')
-        self.assertEqual(readings, ['猫が鳴く。'])
-        self.assertTrue(set(readings) < set(words))
+class ReaderTest(unittest.TestCase):
+    def test_the_books_other_part_reuses_a_whole_book_read(self):
+        reads = []
+
+        class FakeReader:
+            @classmethod
+            def load(cls, path, tokenizer=None):
+                return cls()
+
+            def read(self, text, hints=(), carry=None):
+                reads.append(carry)
+                return [text]
+
+        text, hints, kept = '猫が鳴く。', [], {}
+        with mock.patch.object(browser, 'Reader', FakeReader):
+            first = browser._reader('readings tokens', kept).read(text, hints, carry={})
+            second = browser._reader('words tokens', kept).read(text, hints, carry={})
+            browser._reader('tokens', kept).read(text, hints)  # without carry: never kept
+        self.assertIs(first, second)
+        self.assertEqual(reads, [{}, None])
 
 
 if __name__ == '__main__':

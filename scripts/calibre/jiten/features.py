@@ -294,14 +294,15 @@ class Analyzer:
         """`hints`: (start, end, ruby) from book_text. `reader` (a yurigana Reader, made with
         this Analyzer as its tokenizer) gives each occurrence's reading in `readings`: the
         book's ruby, a context rule, the reading model, a default or the list's only reading,
-        else Sudachi's, as in readings files (no carried name ruby). Tokens it reads as part
+        else Sudachi's, as in readings files (carry={}: a name's ruby read for its bare occurrences
+        too, so the browser reads the book once for both). Tokens it reads as part
         of a longer word (a compound: 三日月 みかづき) keep Sudachi's. Word.reading, which the
         model features use, stays Sudachi's."""
         result = Analysis(text=text)
         tokens = self.tokens(text)
         # A number + counter span (三本 さんぼん) and compounds are Words over several tokens:
         # only a Word over exactly the head token is its reading (the counter's own: 本 ほん).
-        read = {(w.start, w.end): w for w in reader.read(text, hints)} if reader else {}
+        read = {(w.start, w.end): w for w in reader.read(text, hints, carry={})} if reader else {}
         self._text = self._text_tokens = None  # don't keep a book's tokens past its analysis
         surfaces = [t.surface() for t in tokens]
         dictionary_forms = [t.dictionary_form() for t in tokens]

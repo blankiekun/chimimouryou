@@ -24,9 +24,9 @@ as hints), a context rule, the reading model, the list's only reading, a default
 言う いう rather than ゆう), number readings (三百 さんびゃく), rendaku, else Sudachi's
 reading; conjugated occurrences get the dictionary form's reading too. One `Reader` per
 worker, with the Analyzer as its tokenizer (no second tokenizing of the book) and the
-worker's reading list. Name ruby is not carried to later bare occurrences (`read()` without
-`carry`): a name's word list row is left out anyway. Readings files carry it and gloss the
-carried readings (below).
+worker's reading list. The whole book is read with `carry={}`, as for readings files (below):
+a name's ruby is carried to its later bare occurrences (蝎 さそり), and the browser reads a book
+once for both.
 
 A row is a Sudachi word (its form, part of speech and lemma), and only a `Reader` word over
 exactly that word's token gives its reading:

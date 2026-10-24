@@ -1,12 +1,11 @@
 """The standalone edition's analysis tools: a book's word list and readings file made in the browser
 (Pyodide) by the difficulty service's own code, with Sudachi's tokens from the browser's wasm build.
 
-Sudachi and Pyodide don't fit in memory together, so they run one after the other in two workers
-(apps/web/src/lib/functions/analysis/): the tokenizer worker tokenizes the texts asked for and stops,
-then this module reads the book with those tokens (`lookup`), for one part: the word list with the
-difficulty model's input (Settings: difficulty estimates) or the readings file (generated furigana). Texts nobody tokenized yet (yurigana
-reads parts of words, the Analyzer conjugated forms) are `misses`: the tokenizer worker takes them and
-the book is read again, until there are none. Not upstream."""
+One worker (apps/web/src/lib/functions/analysis/analysis.worker.ts) runs both: this module reads the
+book with Sudachi's tokens of each text it asks for (`lookup`), for one part: the word list with the
+difficulty model's input (Settings: difficulty estimates) or the readings file (generated furigana).
+Both parts read the book's whole text with yurigana's Reader alike (carry={}), so the book's second
+part reuses the first's read. Not upstream."""
 import json
 import mmap
 import os
@@ -24,18 +23,16 @@ from word_list import word_rows
 
 READER_PACK = '/packs/reader.ygp'
 FREQUENCY_PACK = '/packs/frequency.ygp'
-# Stands in for a text not tokenized yet, so the round goes on and finds the other misses.
-_MISSING = '名詞,普通名詞,一般,*,*,*'
 
 
 class BrowserTokens:
     """SudachiTokenizer's tokens() and its tokenizer's tokenize() over rows looked up by text. `lookup`
     gives a text's morphemes as `surface \\x1f form \\x1f normalized \\x1f reading \\x1f pos,pos…` joined by
-    \\x1e (the tokenizer worker's rows), or None when the text wasn't tokenized: it joins `misses`."""
+    \\x1e (Sudachi's tokenize_rows)."""
 
     def __init__(self, lookup, book=None):
         """`book`: a book's parsed rows and token lists (_book), kept across its parts."""
-        self.lookup, self.misses = lookup, set()
+        self.lookup = lookup
         self._parsed, self._listed, self._pos = book or ({}, {}, {})
         self.tokenizer = self
 
@@ -43,14 +40,10 @@ class BrowserTokens:
         rows = self._parsed.get(text)
         if rows is None:
             raw = self.lookup(text)
-            if raw is None:
-                self.misses.add(text)
-                raw = '\x1f'.join((text, text, text, '', _MISSING))
-            rows = [(*map(sys.intern, (surface, form, normalized, reading)),
-                     self._pos.get(pos) or self._pos.setdefault(pos, tuple(pos.split(','))))
-                    for surface, form, normalized, reading, pos in (row.split('\x1f') for row in raw.split('\x1e') if raw)]
-            if text not in self.misses:
-                self._parsed[text] = rows
+            rows = self._parsed[text] = [
+                (*map(sys.intern, (surface, form, normalized, reading)),
+                 self._pos.get(pos) or self._pos.setdefault(pos, tuple(pos.split(','))))
+                for surface, form, normalized, reading, pos in (row.split('\x1f') for row in raw.split('\x1e') if raw)]
         return rows
 
     def tokenize(self, text: str):
@@ -62,9 +55,7 @@ class BrowserTokens:
         are listed once: the readings file and the Reader both ask for the whole book's."""
         listed = self._listed.get(text)
         if listed is None:
-            listed = list(self._tokens(text))
-            if not self.misses:
-                self._listed[text] = listed
+            listed = self._listed[text] = list(self._tokens(text))
         return iter(listed)
 
     def _tokens(self, text: str):
@@ -108,19 +99,26 @@ def pack_buffer(path: str, size: int) -> int:
     return ctypes.addressof((ctypes.c_char * size).from_buffer(buffer))
 
 
-def first_texts(html: str, part: str) -> list:
-    """What the first round tokenizes: the book's text in the tokenizer's chunks, and for the word
-    list (`part` 'words') the Analyzer's marker words."""
-    tokens = BrowserTokens(lambda text: None)
-    if part == 'words':
-        Analyzer(tokens)
-    text = readings_file.extract(html)[0]
-    for _ in tokens.tokens(text):
-        pass
-    return sorted(tokens.misses)
+def _reader(tokenizer, kept: dict) -> Reader:
+    """yurigana's Reader over `tokenizer`. Its whole-book reads (carry={}) are kept in `kept`, the
+    book's: the readings file and the word list read the same text and hints, so the second part
+    reuses the first's Words (NamedTuples, never changed)."""
+    reader = Reader.load(READER_PACK, tokenizer=tokenizer)
+    read = reader.read
+
+    def read_once(text, hints=(), carry=None):
+        if carry != {}:
+            return read(text, hints, carry)
+        key = id(text), id(hints)  # the book's own objects (_book), alive as long as `kept`
+        if key not in kept:
+            kept[key] = read(text, hints, carry)
+        return kept[key]
+
+    reader.read = read_once
+    return reader
 
 
-def _words(extracted: tuple, tokens, words_per_book: int, reader: bool) -> dict:
+def _words(extracted: tuple, tokens, words_per_book: int, reader: bool, kept: dict) -> dict:
     """The book's word list as the service saves it ({words, uniqueWords, tokens}) and the
     difficulty model's input row (`features`, the service's _estimate) with the estimate's counts.
     Without `reader` (generated furigana not installed: no reader pack) the rows take Sudachi's
@@ -134,7 +132,7 @@ def _words(extracted: tuple, tokens, words_per_book: int, reader: bool) -> dict:
     for start, end, reading in hints:
         _count_ruby(ruby, text[start:end], reading)
     frequency = FrequencyTable.load_packed(FREQUENCY_PACK)
-    analysis = analyzer.analyse(text, hints, Reader.load(READER_PACK, tokenizer=analyzer) if reader else None)
+    analysis = analyzer.analyse(text, hints, _reader(analyzer, kept) if reader else None)
     rows, unique_words, total = word_rows(analysis, frequency)
     features = compute_features(analysis, frequency)
     extra = compute_extra_features(analysis, frequency, ruby)
@@ -144,24 +142,21 @@ def _words(extracted: tuple, tokens, words_per_book: int, reader: bool) -> dict:
             'characters': len(TOKEN_CLEAN.sub('', text)), 'uniqueKanji': len({c for c in text if is_kanji(c)})}
 
 
-# The last book: its text (readings_file.extract), parsed rows and token lists, which its other part
-# asks for again.
-_book = None, None, None
+# The last book: its text (readings_file.extract), parsed rows, token lists and Reader read, which its
+# other part asks for again.
+_book = None, None, None, None
 
 
 def analyse(html: str, lookup, part: str, words_per_book: int = 2000, reader: bool = True) -> str:
-    """JSON: {misses} while texts are missing, else `part`: 'words' (_words, with yurigana's Reader
-    for its rows' readings when `reader`) or 'readings' (the book's readings file, bookdata '':
-    {readings})."""
+    """JSON of `part`: 'words' (_words, with yurigana's Reader for its rows' readings when `reader`)
+    or 'readings' (the book's readings file, bookdata '': {readings})."""
     global _book
     if _book[0] != html:
-        _book = html, ({}, {}, {}), readings_file.extract(html)
+        _book = html, ({}, {}, {}), readings_file.extract(html), {}
     tokens = BrowserTokens(lookup, _book[1])
     if part == 'words':
-        result = _words(_book[2], tokens, words_per_book, reader)
+        result = _words(_book[2], tokens, words_per_book, reader, _book[3])
     else:
-        yurigana = Reader.load(READER_PACK, tokenizer=tokens)
+        yurigana = _reader(tokens, _book[3])
         result = {'readings': readings_file.build(html, yurigana, '', YURIGANA_VERSION, _book[2])}
-    if tokens.misses:
-        return json.dumps({'misses': sorted(tokens.misses)}, ensure_ascii=False)
     return json.dumps(result, ensure_ascii=False, separators=(',', ':'))

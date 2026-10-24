@@ -110,7 +110,9 @@ WORDS_PER_BOOK = 2000
 # 10: yurigana 0.5.0 (ateji, shown idioms, bare-evidence dominant readings such as 私 わたし).
 # 11: yurigana 0.5.1 (行っ on a going cue reads いっ; an uploaded JMnedict is a name dictionary).
 # 12: yurigana 0.5.3 (top readings of 118 forms, voiced tails after a noun, 血肉 ちにく).
-WORDS_VERSION = 15
+# 17: the book's ruby over a name carried to its bare occurrences (carry={}), as in readings files
+#    (蝎 さそり, 叮寧 ていねい), so the browser reads a book once for both.
+WORDS_VERSION = 17
 # Readings files (#17), made from the reader's processed book in the shared sync folder
 # (mounted read-only): <SYNC_DIR>/ttu-reader-data/<title>/bookdata_*.zip.
 SYNC_DIR = os.environ.get('SYNC_DIR', '/data/sync')
