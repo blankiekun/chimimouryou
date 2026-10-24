@@ -1,21 +1,19 @@
 #!/usr/bin/env python3
 """Builds the hard word test's items (apps/web/src/lib/data/placement-hard-items.json).
 
-Each item asks a word's reading and its meaning, four choices each, the right one
+Each item has a word's readings (typed in the test) and four meanings, the right one
 first (the test shuffles them). Words are sampled like build-items.py's, in the
 same bands, but only those Japanese Wiktionary defines with their main reading,
 and no loanwords (their reading is the word itself).
 
-- Readings: the word's most frequent reading in Jiten's list. Wrong ones are
-  slips people make: a kanji's other reading (KANJIDIC2's, from yurigana's
-  kanji-readings.json), voicing (はこ/ばこ), っ and long vowels, preferring
-  slips that are some other word's reading. None is a reading the word has in
-  JMdict, Jiten's list or Wiktionary.
+- Readings: the word's most frequent reading in Jiten's list first, then every
+  other one it has in JMdict, Jiten's list or Wiktionary: the test accepts any.
 - Meanings: Wiktionary's first usable gloss for that reading, cut to about 60
   characters. Wrong ones are glosses of homophones (機会/機械), of words
   sharing a kanji, then of words of about the same rank. None contains the
   headword or its reading, is a gloss of the word itself, or belongs to a
-  synonym or spelling variant of it.
+  synonym or spelling variant of it, and each has as many of the word's kanji
+  as the right one, so the kanji don't point to it (略章: 略式の勲章).
 
     python3 scripts/placement/build-hard-items.py JMdict_e.gz wty-ja-ja.zip
 
@@ -43,12 +41,8 @@ base = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(base)
 
 OUT = ROOT / 'apps/web/src/lib/data/placement-hard-items.json'
-KANJI_READINGS = ROOT / 'apps/web/node_modules/yurigana/yurigana/kanji-readings.json'
 MAX_GLOSS = 60
 
-VOICED = dict(zip('かきくけこさしすせそたちつてとはひふへほ', 'がぎぐげござじずぜぞだぢづでどばびぶべぼ'))
-UNVOICED = {v: k for k, v in VOICED.items()} | dict(zip('ぱぴぷぺぽ', 'はひふへほ'))
-SMALL = set('ぁぃぅぇぉっゃゅょゎ')
 HIRAGANA = re.compile(r'^[ぁ-ゖー]+$')
 # Redirects and grammar notes rather than definitions.
 NOT_A_GLOSS = re.compile(
@@ -56,8 +50,6 @@ NOT_A_GLOSS = re.compile(
 )
 # Notes about usage, names and bare loanwords (ヘンルーダ) aren't meanings anyone can pick.
 NOT_A_MEANING = re.compile(r'(語義|※|《|姓|地名|人名|^[ァ-ヺー・]+$)')
-# KANJIDIC2's unit readings (米 めえとる): nobody's slip.
-NOT_A_READING = {'りっとる', 'めえとる', 'でしめーとる', 'だーす'}
 
 
 def hira(text):
@@ -184,88 +176,6 @@ def load_readings(path):
     return out
 
 
-def morae(text):
-    out = []
-    for c in text:
-        if out and c in SMALL - {'っ'}:
-            out[-1] += c
-        else:
-            out.append(c)
-    return out
-
-
-def segments(form, reading, kanji):
-    """One split of `reading` over `form`'s characters (rendaku and っ allowed), or None."""
-
-    def options(i):
-        c = form[i]
-        if c == '々' and i:
-            c = form[i - 1]
-        if c not in kanji:
-            return [hira(c)]
-        out = []
-        for r in kanji[c]:
-            variants = {r}
-            if i and r[0] in VOICED:
-                variants.add(VOICED[r[0]])
-                variants.add(VOICED[r[0]] + r[1:])
-            if r[0] in 'はひふへほ' and i:
-                variants.add(chr(ord(r[0]) + 2) + r[1:])
-            if len(r) > 1 and r[-1] in 'つくきち':
-                variants.add(r[:-1] + 'っ')
-            out += [v for v in variants if len(v) > 1 or v == r]
-        return out
-
-    def go(i, pos):
-        if i == len(form):
-            return [] if pos == len(reading) else None
-        for o in sorted(options(i), key=len, reverse=True):
-            if reading.startswith(o, pos):
-                rest = go(i + 1, pos + len(o))
-                if rest is not None:
-                    return [o] + rest
-        return None
-
-    return go(0, 0)
-
-
-def reading_slips(form, reading, kanji):
-    """Wrong readings, most telling first: other readings of a kanji, voicing, っ/long vowels."""
-    split = segments(form, reading, kanji)
-    out = []
-    if split:
-        for i, (c, part) in enumerate(zip(form, split)):
-            if c not in kanji:
-                continue
-            for other in kanji[c]:
-                if other != part and not part.startswith(other[:-1] + 'っ'):
-                    out.append(('other', ''.join(split[:i] + [other] + split[i + 1:])))
-        for i, part in enumerate(split):
-            if not i or form[i] not in kanji:
-                continue
-            head = part[0]
-            if head in VOICED:
-                out.append(('voice', ''.join(split[:i] + [VOICED[head] + part[1:]] + split[i + 1:])))
-            elif head in UNVOICED:
-                out.append(('voice', ''.join(split[:i] + [UNVOICED[head] + part[1:]] + split[i + 1:])))
-        for i, part in enumerate(split[:-1]):
-            if part.endswith('っ'):
-                for end in 'くつきち':
-                    out.append(('small', ''.join(split[:i] + [part[:-1] + end] + split[i + 1:])))
-            elif len(part) > 1 and part[-1] in 'くつきち' and split[i + 1][0] in VOICED:
-                out.append(('small', ''.join(split[:i] + [part[:-1] + 'っ'] + split[i + 1:])))
-    else:
-        # Jukujikun (大人): the kanji read one by one.
-        chars = [kanji.get(c, [hira(c)]) for c in form]
-        for k in range(3):
-            out.append(('other', ''.join(r[min(k, len(r) - 1)] for r in chars)))
-    for m in range(len(morae(reading))):
-        mo = morae(reading)
-        if mo[m].endswith('う') and len(mo[m]) == 2 and mo[m][0] in 'こそとのほもよろごぞどぼぽうゅょ':
-            out.append(('long', ''.join(mo[:m] + [mo[m][:-1]] + mo[m + 1:])))
-    return out
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('jmdict', type=Path)
@@ -279,11 +189,7 @@ def main():
     ranks = base.load_frequency(args.freq)
     form_readings = load_readings(args.freq)
     entries = {}
-    _, jm_readings, common, _ = base.load_jmdict(args.jmdict, entries)
-    kanji = {
-        c: [x for x in r.split() if x not in NOT_A_READING]
-        for c, r in json.loads(KANJI_READINGS.read_text()).items()
-    }
+    _, _, common, _ = base.load_jmdict(args.jmdict, entries)
     glosses, synonyms, by_reading, about = load_wiktionary(args.wiktionary, entries)
     wikt_readings = defaultdict(set)
     for term, reading in glosses:
@@ -320,7 +226,7 @@ def main():
     by_kanji = defaultdict(list)
     for rank, form in by_rank:
         for c in set(form):
-            if c in kanji:
+            if base.KANJI.match(c):
                 by_kanji[c].append(form)
 
     def build(form, rank):
@@ -331,27 +237,12 @@ def main():
         right = first_gloss(glosses[form, reading], reading)
         if not right or gives_away(right, form, readings):
             return None
+        def overlap(text):
+            return sum(c in text for c in set(form) if base.KANJI.match(c))
+
         own = {clean_gloss(g, r) for r in wikt_readings[form] for g in glosses[form, r]}
 
-        # Readings: one of each kind first, real words' readings before made-up ones.
-        slips = [(k, s) for k, s in reading_slips(form, reading, kanji)
-                 if s not in readings and HIRAGANA.match(s) and s[0] not in SMALL | {'ん', 'ー'} and len(s) > 1]
-        seen, picked = set(), []
-        for kind_first in (True, False):
-            for real_first in (True, False):
-                kinds = set()
-                for k, s in sorted(slips, key=lambda x: (x[1] not in jm_readings, rng.random())):
-                    if s in seen or len(picked) == 3:
-                        continue
-                    if real_first and s not in jm_readings:
-                        continue
-                    if kind_first and k in kinds:
-                        continue
-                    kinds.add(k)
-                    seen.add(s)
-                    picked.append(s)
-        if len(picked) < 3:
-            return None
+        others = sorted(r for r in readings if r != reading and HIRAGANA.match(r))
 
         # Meanings: a homophone, words sharing a kanji, then words of about the same rank.
         def candidates():
@@ -377,11 +268,13 @@ def main():
                 text = first_gloss(glosses[t, r], r)
                 if not text or text in own or text == right or text in wrong or gives_away(text, form, readings):
                     continue
+                if overlap(text) != overlap(right):
+                    continue
                 wrong.append(text)
                 taken += 1
         if len(wrong) < 3:
             return None
-        return {'w': form, 'r': rank, 'k': [reading] + picked, 'm': [right] + wrong}
+        return {'w': form, 'r': rank, 'k': [reading] + others, 'm': [right] + wrong}
 
     built = {}
 
@@ -398,9 +291,9 @@ def main():
         'about': 'Hard word test items. Words and ranks: Jiten frequency list (https://jiten.moe, '
         'revision "Jiten 26-10-09"), CC BY-SA 4.0. Meanings: excerpts from Japanese Wiktionary '
         f'(https://ja.wiktionary.org) by its contributors, via wiktionary-to-yomitan ({about.get("url")}, '
-        f'revision {about.get("revision")}), CC BY-SA 4.0. Wrong readings use KANJIDIC2 (EDRDG, '
-        'CC BY-SA 4.0) via yurigana. This file is under CC BY-SA 4.0 too. In each item the first '
-        'reading (k) and meaning (m) are right. Built by scripts/placement/build-hard-items.py.',
+        f'revision {about.get("revision")}), CC BY-SA 4.0. Readings: also JMdict (EDRDG, '
+        'CC BY-SA 4.0). This file is under CC BY-SA 4.0 too. Every reading (k) is right, the first '
+        'is the main one; the first meaning (m) is right. Built by scripts/placement/build-hard-items.py.',
         'bands': bands,
         'items': items,
     }

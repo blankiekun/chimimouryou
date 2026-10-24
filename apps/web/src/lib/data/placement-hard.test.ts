@@ -14,6 +14,7 @@ import {
   placementResults$,
   recordPlacement,
   placementLength,
+  readingMatches,
   scorePlacement,
   type HardItem,
   type PlacementAnswer
@@ -28,7 +29,7 @@ function seeded(seed: number) {
   };
 }
 
-/** Right on reading and meaning, given the item and a random source. */
+/** Right on the typed reading and the meaning, given the item and a random source. */
 type Sheet = (item: HardItem, random: () => number) => boolean;
 
 function take(sheet: Sheet, seed = 1, length = placementLength) {
@@ -52,8 +53,16 @@ const readerOnly =
   (rank: number): Sheet =>
   (item, random) =>
     item.r! <= rank || pick(random);
-/** Picks a reading and a meaning at random. */
-const guesser: Sheet = (_, random) => pick(random) && pick(random);
+/** Types a reading built from the kanji's usual readings (right about 60% of the time past
+ * the words it knows, measured on the bank) and rules out meanings down to two. */
+const eliminator =
+  (rank: number): Sheet =>
+  (item, random) =>
+    item.r! <= rank || (random() < 0.6 && random() < 0.5);
+/** Types some reading and picks a meaning at random. */
+const guesser: Sheet = (_, random) => random() < 0.05 && pick(random);
+const kanjiIn = (item: HardItem, text: string) =>
+  [...new Set(item.w)].filter((c) => /[一-鿿々]/.test(c) && text.includes(c)).length;
 
 const cutoffs = (sheet: Sheet, length = placementLength) =>
   Array.from(
@@ -62,21 +71,36 @@ const cutoffs = (sheet: Sheet, length = placementLength) =>
   ).sort((a, b) => a - b);
 
 describe('hard items', () => {
-  it('has 40 words in every band, four distinct choices each, none giving the answer away', () => {
+  it('has 40 words in every band, four distinct meanings each, none giving the answer away', () => {
     expect(hardItems.bands).toEqual(placementBands);
     placementBands.forEach((_, band) =>
       expect(items.filter((item) => item.b === band).length).toBe(40)
     );
     for (const item of items) {
-      expect(new Set(item.k).size).toBe(4);
+      expect(new Set(item.k).size).toBe(item.k.length);
       expect(new Set(item.m).size).toBe(4);
       for (const meaning of item.m) {
         expect(meaning).not.toContain(item.w);
         expect(meaning).not.toContain(item.k[0]);
         expect(meaning.length).toBeLessThanOrEqual(60);
+        // The word's kanji don't point to the right meaning.
+        expect(kanjiIn(item, meaning)).toBe(kanjiIn(item, item.m[0]));
       }
       expect(item.w).toMatch(/[一-鿿々]/);
     }
+  });
+});
+
+describe('typed readings', () => {
+  const item = { w: '今日', r: 1, b: 0, k: ['きょう', 'こんにち'], m: [] } as HardItem;
+
+  it('takes any listed reading, in hiragana, katakana or romaji', () => {
+    expect(readingMatches(item, 'きょう')).toBe(true);
+    expect(readingMatches(item, ' コンニチ ')).toBe(true);
+    expect(readingMatches(item, 'kyou')).toBe(true);
+    expect(readingMatches(item, 'konnnichi')).toBe(true);
+    expect(readingMatches(item, 'きょ')).toBe(false);
+    expect(readingMatches(item, 'こんじつ')).toBe(false);
   });
 });
 
@@ -96,18 +120,22 @@ describe('hard scoring', () => {
     expect(cutoffs(guesser)[19]).toBeLessThan(1000);
   });
 
+  it('keeps a 5k learner who eliminates near 5k, not 400k', () => {
+    expect(cutoffs(eliminator(5000))[19]).toBeLessThan(10000);
+  });
+
   it('saves a hard result as its own record, and the stricter latest counts', () => {
     placementResults$.next([]);
     recordPlacement('yesno', 20000, 40);
     expect(placementCutoff()).toBe(20000);
-    recordPlacement('hard', 12000, 40);
+    recordPlacement('typed', 12000, 40);
     expect(placementCutoff()).toBe(12000);
     expect(
       placementResults$
         .getValue()
         .map(({ mode }) => mode)
         .sort()
-    ).toEqual(['hard', 'yesno']);
+    ).toEqual(['typed', 'yesno']);
     placementResults$.next([]);
   });
 
@@ -115,7 +143,8 @@ describe('hard scoring', () => {
     for (const [name, sheet] of [
       ['20k knower', knower(20000)],
       ['readings only past 10k', readerOnly(10000)],
-      ['random guesser', guesser]
+      ['random guesser', guesser],
+      ['5k + eliminator', eliminator(5000)]
     ] as const) {
       for (const length of [20, 40, 60]) {
         const run = cutoffs(sheet, length);

@@ -24,3 +24,4 @@ export type FuriganaSegment = { text: string; reading: string };
 export function isStringEntirelyKana(str: string): boolean;
 export function getKanaMorae(text: string): string[];
 export function distributeFurigana(term: string, reading: string): FuriganaSegment[];
+export function convertKatakanaToHiragana(text: string, keepProlongedSoundMarks?: boolean): string;

@@ -16,17 +16,21 @@
  * when lower, and the history (words-history.ts) uses the one in force each day.
  * Items: placement-items.json, built by scripts/placement/build-items.py. Not part of upstream.
  *
- * Hard mode (/hard-word-test, /placement?mode=hard) asks each word's reading and meaning, four
- * choices each, and counts a word only when both are right. Same bands, staircase and fit,
- * no made-up words: the target is raised for lucky guesses (`hardGuess`) instead. Its items
- * (placement-hard-items.json, scripts/placement/build-hard-items.py) load only when it starts.
- * Its results are kept as `mode: 'hard'` records; the stricter latest of the two modes counts.
+ * Hard mode (/hard-word-test, /placement?mode=hard) asks each word's reading, typed, then its
+ * meaning from four choices, and counts a word only when both are right. Same bands, staircase
+ * and fit, no made-up words: the target is raised for lucky guesses (`hardGuess`) instead. Its
+ * items (placement-hard-items.json, scripts/placement/build-hard-items.py) load only when it
+ * starts. Its results are kept as `mode: 'typed'` records; the stricter latest of the two modes
+ * counts. The first hard mode (`mode: 'hard'`) chose readings too, which careful elimination
+ * beat (one reader got 400k): its results are kept but count for nothing.
  */
 
 import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
 import { writableArrayLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import { writableNumberLocalStorageSubject } from '$lib/data/internal/writable-number-local-storage-subject';
 import placementItems from '$lib/data/placement-items.json';
+import { convertToHiragana } from '$lib/vendor/yomitan/language/ja/japanese-wanakana';
+import { convertKatakanaToHiragana } from '$lib/vendor/yomitan/language/ja/japanese';
 
 export interface PlacementItem {
   /** The word shown */
@@ -37,7 +41,7 @@ export interface PlacementItem {
   b?: number;
 }
 
-/** A hard-mode item: four readings and four meanings, the right one first in each. */
+/** A hard-mode item: every accepted reading (the main one first) and four meanings, the right one first. */
 export interface HardItem extends PlacementItem {
   k: string[];
   m: string[];
@@ -94,9 +98,9 @@ export function isPseudoSlot(index: number, length = placementLength) {
 }
 const pivot = Math.log(5000);
 
-/** One test result. `hard`: a stricter test that stores its result the same way. */
+/** One test result. `typed`: hard mode, stored the same way; `hard`: its retired first version. */
 export interface PlacementRecord {
-  mode: 'yesno' | 'hard';
+  mode: 'yesno' | 'typed' | 'hard';
   /** When it was taken (ms); 0 for a result from before dates were kept */
   date: number;
   cutoff: number;
@@ -131,12 +135,13 @@ export function mergePlacementResults(
 
 /**
  * The result in force at `date`: each mode's latest one by then, and of those the stricter
- * (lower cutoff). Undefined before the first.
+ * (lower cutoff); retired `hard` results don't count. Undefined before the first.
  */
 export function placementAt(results: PlacementRecord[], date = Infinity) {
   const latest = new Map<string, PlacementRecord>();
 
   for (const record of results) {
+    if (record.mode === 'hard') continue;
     if (record.date <= date && !((latest.get(record.mode)?.date ?? -1) > record.date)) {
       latest.set(record.mode, record);
     }
@@ -190,14 +195,22 @@ export function placementCutoff() {
 }
 
 /**
- * Chance of getting a hard item right without knowing it. The owner's rule is one in four
- * (one 4-choice question guessed); guessing both is one in 16, so this errs on the strict side.
+ * Chance of getting a hard item right without knowing it: the meaning's four choices. A typed
+ * reading is right by luck far less often, so this errs on the strict side.
  */
 export const hardGuess = 0.25;
 
 /** One mode's latest result, if it was taken. */
 export const latestPlacement = (results: PlacementRecord[], mode: PlacementRecord['mode']) =>
   placementAt(results.filter((record) => record.mode === mode));
+
+/** Kana as typed, romaji converted, katakana folded to hiragana. */
+export const typedKana = (text: string) =>
+  convertKatakanaToHiragana(convertToHiragana(text.replace(/\s+/g, '')), true);
+
+/** Whether `typed` is one of the item's readings. */
+export const readingMatches = (item: HardItem, typed: string) =>
+  item.k.some((reading) => typedKana(reading) === typedKana(typed));
 
 /** Hard mode's items, loaded when it starts (bigger than the yes/no ones). */
 export const loadHardItems = () =>
