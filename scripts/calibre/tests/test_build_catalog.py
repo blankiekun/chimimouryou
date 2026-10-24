@@ -146,6 +146,31 @@ class VnFolderTest(unittest.TestCase):
         self.assertEqual(games['Nested']['file'], 'Nested/Game')
         self.assertTrue(all(game['id'] < 0 and game['format'] == 'VN' for game in games.values()))
 
+    def test_a_folder_name_that_is_not_utf8_is_skipped(self):
+        vn_dir = tempfile.mkdtemp()
+        for name in (b'\x83Q\x81[\x83\x80', 'ノベル'.encode()):  # ゲーム in Shift JIS, then UTF-8
+            os.makedirs(os.path.join(os.fsencode(vn_dir), name))
+            open(os.path.join(os.fsencode(vn_dir), name, b'0.txt'), 'w').close()
+        self.assertEqual([game['title'] for game in catalog.vn_games(vn_dir)], ['ノベル'])
+
+
+class UniqueTitlesTest(unittest.TestCase):
+    @staticmethod
+    def titles(*books):
+        books = [{'id': i, 'title': t, 'authors': a, 'added': added} for i, t, a, added in books]
+        catalog.unique_titles(books)
+        return {b['id']: b['title'] for b in books}
+
+    def test_the_newest_keeps_the_plain_title(self):
+        self.assertEqual(self.titles((1, 'こころ', '夏目漱石', 100), (2, 'こころ', '別人', 200)),
+                         {1: 'こころ (夏目漱石)', 2: 'こころ'})
+        # Removing the newest gives the plain title back.
+        self.assertEqual(self.titles((1, 'こころ', '夏目漱石', 100)), {1: 'こころ'})
+
+    def test_ties_go_to_the_higher_id_and_ids_break_the_rest(self):
+        self.assertEqual(self.titles((3, 'A', 'X', 5), (4, 'A', 'X', 5), (5, 'A', '', 1), (6, 'A', 'X', 1)),
+                         {4: 'A', 3: 'A (X)', 6: 'A (X) [6]', 5: 'A [5]'})
+
 
 class BuildTest(unittest.TestCase):
     """A whole build from a minimal Calibre library."""

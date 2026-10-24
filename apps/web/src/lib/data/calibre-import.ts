@@ -45,7 +45,10 @@ async function errorMessage(response: Response) {
 }
 
 export async function uploadToCalibre(file: File, signal?: AbortSignal) {
-  const response = await fetch(`${apiUrl}add?name=${encodeURIComponent(file.name)}`, {
+  // The folder names manga with generic file names (第01巻.cbz), which would otherwise be duplicates.
+  const folder = file.webkitRelativePath?.split('/').slice(-2, -1)[0];
+  const query = `name=${encodeURIComponent(file.name)}${folder ? `&folder=${encodeURIComponent(folder)}` : ''}`;
+  const response = await fetch(`${apiUrl}add?${query}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/octet-stream' },
     body: file,

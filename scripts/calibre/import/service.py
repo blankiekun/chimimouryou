@@ -73,9 +73,12 @@ VN_SCRIPTS = ('0.txt', '00.txt', 'nscr_sec.dat', 'nscript.___', 'nscript.dat', '
 # Kept free when unpacking a game.
 MIN_FREE_BYTES = int(os.environ.get('MIN_FREE_MB', '1024')) * 1024 * 1024
 MAX_PENDING_PER_ACCOUNT = 100
+# A manga file name that is only a volume number (第01巻, Vol.2, 03).
+GENERIC_NAME = re.compile(r'(?:[\W\d_]|[第巻話一二三四五六七八九十]|vol(?:ume)?|v|ch(?:apter)?)*', re.I)
 # Finished jobs are kept this long so the uploader can read the outcome.
 KEEP_FINISHED_SECONDS = 7 * 24 * 3600
 ADD_TIMEOUT_SECONDS = 600
+WORKER_RETRY_SECONDS = 30
 CALIBRE_DEBUG = os.environ.get('CALIBRE_DEBUG', 'calibre-debug')
 ASSIGN_SERIES = os.environ.get('ASSIGN_SERIES', '/app/assign-series.py')
 series_busy = threading.Lock()
@@ -118,16 +121,28 @@ def save_jobs():
     os.replace(tmp, jobs_path())
 
 
-def load_jobs():
+def load_jobs() -> bool:
+    """False when jobs.json exists but couldn't be read (a corrupt one is moved aside):
+    the queued files are then kept rather than taken for leftovers."""
     try:
         with open(jobs_path(), encoding='utf-8') as f:
             jobs.update(json.load(f))
-    except (OSError, ValueError):
+    except FileNotFoundError:
         pass
+    except (OSError, ValueError, TypeError) as error:
+        print(f'jobs.json unreadable, queued files kept: {error!r}', file=sys.stderr)
+        jobs.clear()
+        if not isinstance(error, OSError):
+            try:
+                os.replace(jobs_path(), f'{jobs_path()}.bad-{int(time.time())}')
+            except OSError:
+                pass
+        return False
     # A job interrupted by a restart is retried.
     for job in jobs.values():
         if job['state'] == 'adding':
             job['state'] = 'queued'
+    return True
 
 
 def clean_name(name: str) -> str:
@@ -254,7 +269,11 @@ def add_book(job: dict) -> dict:
     path = os.path.join(queue_dir(), job['file'])
     command = [CALIBREDB, '--library-path', LIBRARY, 'add', path]
     if path.endswith('.cbz'):  # Comics rarely carry metadata; the queued name is a job id.
-        command += ['--title', job['name'].rsplit('.', 1)[0]]
+        title = job['name'].rsplit('.', 1)[0]
+        # 第01巻.cbz in two series' folders would be duplicates: the folder names the series.
+        if job.get('folder') and GENERIC_NAME.fullmatch(title):
+            title = f"{job['folder']} {title}"
+        command += ['--title', title]
     with open(WRITE_LOCK, 'a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         result = subprocess.run(
@@ -307,6 +326,20 @@ def finish_batch():
 
 
 def worker():
+    """Runs the queue; an error (e.g. DATA_PATH full) is logged and retried, never ends it."""
+    while True:
+        try:
+            run_queue()
+        except Exception as error:  # noqa: BLE001
+            print(f'import worker: {error!r}', file=sys.stderr)
+            with lock:  # a job that failed to start is tried again
+                for job in jobs.values():
+                    if job['state'] == 'adding':
+                        job['state'] = 'queued'
+            time.sleep(WORKER_RETRY_SECONDS)
+
+
+def run_queue():
     with lock:
         unlisted = any(j['state'] == 'unlisted' for j in jobs.values())
     if unlisted:
@@ -363,7 +396,10 @@ def remove_books(ids: list[int]) -> dict:
     games = {i for i in ids if i < 0}
     if games and os.path.isdir(VN_DIR):
         for entry in os.scandir(VN_DIR):
-            if entry.name.startswith('.') or vn_folder_id(entry.name) not in games:
+            try:
+                if entry.name.startswith('.') or vn_folder_id(entry.name) not in games:
+                    continue
+            except UnicodeEncodeError:  # a non-UTF-8 name: never in the catalog
                 continue
             games.discard(vn_folder_id(entry.name))
             try:
@@ -592,6 +628,8 @@ class Handler(BaseHTTPRequestHandler):
         now = time.time()
         job = {'id': job_id, 'account': account, 'name': name, 'file': file,
                'state': 'queued', 'created': now, 'updated': now}
+        if folder := clean_name(parse_qs(url.query).get('folder', [''])[0]):
+            job['folder'] = folder
         if vn:
             job['kind'] = 'vn'
 
@@ -607,12 +645,12 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     os.makedirs(queue_dir(), exist_ok=True)
-    load_jobs()
-    # Uploads without a job (interrupted before it was recorded) are removed.
-    known = {j['file'] for j in jobs.values()}
-    for entry in os.scandir(queue_dir()):
-        if entry.name not in known:
-            os.remove(entry.path)
+    if load_jobs():
+        # Uploads without a job (interrupted before it was recorded) are removed.
+        known = {j['file'] for j in jobs.values()}
+        for entry in os.scandir(queue_dir()):
+            if entry.name not in known:
+                os.remove(entry.path)
     # Games half unpacked when the service stopped.
     if os.path.isdir(VN_DIR) and os.access(VN_DIR, os.W_OK):
         for entry in os.scandir(VN_DIR):

@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'jiten'))
 from frequency import TOP_SHARE, FrequencyTable, load_yomitan_ranks, reading_agreement  # noqa: E402
@@ -97,6 +98,23 @@ class InstallDictionaryTest(unittest.TestCase):
         import io
         # Bytes past Content-Length stand in for a socket that stays open: they must not be read.
         return self.service.install_dictionary(io.BytesIO(data + b'next request'), len(data), force)
+
+    def test_no_job_starts_during_an_install(self):
+        runner = self.service.runner
+        # A job asked for while the upload is checked is refused.
+        with mock.patch('frequency.load_yomitan_ranks', side_effect=lambda _: runner.start('x', print)):
+            with self.assertRaisesRegex(RuntimeError, 'being installed'):
+                self.install(b'zip')
+        self.assertIsNone(runner.job)
+        self.assertFalse(runner.installing)
+
+    def test_a_failed_game_is_retried_once_its_folder_changes(self):
+        unchanged = self.service.unchanged_since_failure
+        failure = {'size': 0, 'added': 1}
+        self.assertTrue(unchanged(failure, {'format': 'VN', 'size': 0, 'added': 1}))
+        self.assertFalse(unchanged(failure, {'format': 'VN', 'size': 0, 'added': 2}))
+        self.assertTrue(unchanged({'size': 5}, {'format': 'EPUB', 'size': 5, 'added': 9}))
+        self.assertFalse(unchanged(None, {'format': 'EPUB', 'size': 5, 'added': 9}))
 
     def test_refuses_small_lists(self):
         self.service.MIN_DICTIONARY_TERMS = 6

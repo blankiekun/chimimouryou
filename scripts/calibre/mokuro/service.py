@@ -123,6 +123,7 @@ class Runner:
         self.job = None  # {'id', 'title', 'done', 'total', 'started'}
         self.last = None  # the previous volume's outcome
         self.process = None
+        self.cancelled = False  # Cancel came for the volume now starting, maybe before its process did
         self.wake = threading.Event()
 
     def status(self):
@@ -148,6 +149,7 @@ class Runner:
     def cancel(self):
         with self.lock:
             self.queue = []
+            self.cancelled = True
             if self.process:
                 self.process.kill()
 
@@ -166,6 +168,7 @@ class Runner:
                     self.wake.clear()
                     continue
                 book_id = self.queue.pop(0)
+                self.cancelled = False
             self._run_one(book_id)
 
     def _run_one(self, book_id):
@@ -191,6 +194,8 @@ class Runner:
                 stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, cwd=work)
             with self.lock:
                 self.process = process
+                if self.cancelled:
+                    process.kill()
             try:
                 _, stderr = process.communicate(timeout=VOLUME_TIMEOUT_SECONDS)
             except subprocess.TimeoutExpired:

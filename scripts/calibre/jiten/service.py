@@ -22,6 +22,7 @@ Readings files are made one at a time in their own process, never waiting behind
 
 CLI: service.py serve | compute ID...
 """
+import functools
 import gzip
 import hashlib
 import hmac
@@ -516,11 +517,20 @@ def save_results(results):
 
 
 
+def unchanged_since_failure(failure, book) -> bool:
+    """A failed book is retried once its file changed: by size, or for game folders (size 0) by
+    their folder's time (`added`)."""
+    if not failure:
+        return False
+    return failure.get('added') == book['added'] if book.get('format') == 'VN' else failure.get('size') == book['size']
+
+
 class JobRunner:
     def __init__(self):
         self.lock = threading.Lock()
         self.job = None  # {'type', 'done', 'total', 'started', 'error'}
         self.cancel = threading.Event()
+        self.installing = False  # a dictionary is being replaced (holds_off_jobs)
 
     def status(self):
         with self.lock:
@@ -542,6 +552,8 @@ class JobRunner:
         with self.lock:
             if self.job and not self.job.get('finished'):
                 raise RuntimeError('Another job is running')
+            if self.installing:
+                raise RuntimeError('A dictionary is being installed')
             self.cancel.clear()
             self.job = {'type': job_type, 'done': 0, 'total': 0, 'started': int(time.time() * 1000)}
         threading.Thread(target=self._run, args=(target, args), daemon=True).start()
@@ -579,7 +591,7 @@ class JobRunner:
                                         or results['books'][str(b['id'])].get('words') != WORDS_VERSION
                                         or not os.path.exists(os.path.join(WORDS_DIR, f"{b['id']}.json.gz")))
                  and b['id'] not in no_text
-                 and failed.get(str(b['id']), {}).get('size') != b['size']] \
+                 and not unchanged_since_failure(failed.get(str(b['id'])), b)] \
             if ids is None else [b for b in catalog if b['id'] in wanted]
         self._progress(0, len(books))
         last_save = time.monotonic()
@@ -587,7 +599,7 @@ class JobRunner:
         for book, result in run_in_pools(books, _estimate, self.cancel):
             if isinstance(result, Exception):
                 print(f"compute: {book['file']}: {result}", file=sys.stderr)
-                failed[str(book['id'])] = {'error': str(result)[:200], 'size': book['size']}
+                failed[str(book['id'])] = {'error': str(result)[:200], 'size': book['size'], 'added': book['added']}
             elif result[1]:
                 results['books'][str(result[0])] = result[1]
                 no_text.discard(result[0])
@@ -607,6 +619,21 @@ class JobRunner:
 runner = JobRunner()
 
 
+def holds_off_jobs(install):
+    """No job may start while a dictionary is replaced: its pools would mix the old list and the new."""
+    @functools.wraps(install)
+    def wrapper(*args, **kwargs):
+        with runner.lock:
+            if runner.installing or (runner.job and not runner.job.get('finished')):
+                raise RuntimeError('Wait until the running job has finished')
+            runner.installing = True
+        try:
+            return install(*args, **kwargs)
+        finally:
+            runner.installing = False
+    return wrapper
+
+
 class DictionaryMismatch(ValueError):
     """A replacement list whose readings disagree with the installed one."""
     def __init__(self, agreement: float):
@@ -624,6 +651,7 @@ def install_bundled_dictionary():
     os.replace(FREQUENCY_DICTIONARY + '.tmp', FREQUENCY_DICTIONARY)
 
 
+@holds_off_jobs
 def install_dictionary(source, length: int, force: bool = False) -> int:
     """Checks an uploaded rank-based Yomitan frequency list and makes it the one in use
     (from the next job on); returns its number of terms."""
@@ -631,8 +659,6 @@ def install_dictionary(source, length: int, force: bool = False) -> int:
 
     if not 0 < length <= MAX_DICTIONARY_BYTES:
         raise ValueError('The file is empty or too large')
-    if runner.job and not runner.job.get('finished'):
-        raise RuntimeError('Wait until the running job has finished')
     upload = FREQUENCY_DICTIONARY + '.upload'
     try:
         with open(upload, 'wb') as f:
@@ -675,6 +701,7 @@ def term_dictionary_path(name: str) -> str:
     return os.path.join(TERM_DICTIONARY_DIR, name + '.zip')
 
 
+@holds_off_jobs
 def install_term_dictionary(source, length: int, name: str) -> int:
     """Checks an uploaded Yomitan term dictionary and installs it as `name` (replacing one of that name),
     from the next job on; returns its number of usable terms (yurigana.yomitan.term_readings)."""
@@ -685,8 +712,6 @@ def install_term_dictionary(source, length: int, name: str) -> int:
     path = term_dictionary_path(name)
     if not 0 < length <= MAX_TERM_DICTIONARY_BYTES:
         raise ValueError('The file is empty or too large')
-    if runner.job and not runner.job.get('finished'):
-        raise RuntimeError('Wait until the running job has finished')
     os.makedirs(TERM_DICTIONARY_DIR, exist_ok=True)
     upload = path + '.upload'
     try:
@@ -710,9 +735,8 @@ def install_term_dictionary(source, length: int, name: str) -> int:
             os.remove(upload)
 
 
+@holds_off_jobs
 def remove_term_dictionary(name: str):
-    if runner.job and not runner.job.get('finished'):
-        raise RuntimeError('Wait until the running job has finished')
     try:
         os.remove(term_dictionary_path(name))
     except FileNotFoundError:

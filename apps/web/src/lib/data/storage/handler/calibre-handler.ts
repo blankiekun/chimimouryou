@@ -328,12 +328,22 @@ export class CalibreStorageHandler extends ApiStorageHandler {
   }
 
   async prepareBookForReading() {
-    const localData = await database.getDataByTitle(this.currentContext.title);
+    const { title } = this.currentContext;
+    const localData = await database.getDataByTitle(title);
+    // A book imported with an existing title is its new version (build-catalog.py's unique_titles):
+    // book data processed before the Calibre file was added came from the old one.
+    const added =
+      (
+        this.titleToCalibreBook.get(title) ||
+        (await loadCalibreCatalog().catch((): CalibreBook[] => [])).find(
+          (book) => book.title === title
+        )
+      )?.added || 0;
 
-    if (!localData?.elementHtml) {
+    if (!localData?.elementHtml || (localData.lastBookModified || 0) < added) {
       const { file } = await this.getExternalFile('bookdata_');
 
-      if (!file) {
+      if (!file || BaseStorageHandler.getBookMetadata(file.name).lastBookModified < added) {
         await this.processCalibreBook();
       }
     }
