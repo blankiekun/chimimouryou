@@ -955,6 +955,7 @@ export const ja: Record<MessageKey, string> = {
   'reader.confirmExitMessage': '現在の位置にしおりが挟まれていません。このまま移動しますか？',
   'reader.companion': '読書サポート',
   'reader.highlights': 'ハイライト',
+  'reader.story': 'ストーリー',
   'reader.recap': 'これまでのあらすじ',
   'reader.lorebook': '用語集',
   'reader.askAi': 'AIに質問',

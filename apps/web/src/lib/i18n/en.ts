@@ -947,6 +947,7 @@ export const en = {
   'reader.confirmExitMessage': 'Your current location was not bookmarked. Continue leaving?',
   'reader.companion': 'Reading companion',
   'reader.highlights': 'Highlights',
+  'reader.story': 'Story',
   'reader.recap': 'Story so far',
   'reader.lorebook': 'Lorebook',
   'reader.askAi': 'Ask AI',

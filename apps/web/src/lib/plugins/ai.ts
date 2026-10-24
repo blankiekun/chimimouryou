@@ -4,17 +4,11 @@
  * All rights reserved.
  */
 
-/** The AI tools (Ask AI, Story so far, Lorebook, AI voice) as a plugin. Not part of upstream. */
+/** The AI tools (Ask AI, the Story tab with Story so far and the lorebook, AI voice) as a plugin. Not part of upstream. */
 
-import {
-  faBookAtlas,
-  faBookOpen,
-  faRobot,
-  faWandMagicSparkles
-} from '@fortawesome/free-solid-svg-icons';
+import { faBookOpen, faRobot, faWandMagicSparkles } from '@fortawesome/free-solid-svg-icons';
 import AskAiPanel from '$lib/components/book-reader/ask-ai-panel.svelte';
-import LorebookPanel from '$lib/components/book-reader/lorebook-panel.svelte';
-import RecapPanel from '$lib/components/book-reader/recap-panel.svelte';
+import StoryPanel from '$lib/components/book-reader/story-panel.svelte';
 import TtsPlayer from '$lib/components/book-reader/tts-player.svelte';
 import SettingsAi from '$lib/components/settings/settings-ai.svelte';
 import { featureReady } from '$lib/data/ai-connections';
@@ -31,10 +25,10 @@ export const aiPlugin: Plugin = {
   settings: SettingsAi,
   companionTabs: [
     {
-      key: 'recap',
-      label: 'reader.recap',
+      key: 'story',
+      label: 'reader.story',
       icon: faBookOpen,
-      component: RecapPanel,
+      component: StoryPanel,
       props: ({ title, getIndex, sections, position, bookCharacters, active }) => ({
         title,
         getIndex,
@@ -44,14 +38,7 @@ export const aiPlugin: Plugin = {
         active
       }),
       pausesTracker: true,
-      offerAfterAbsence: () => featureReady('recap')
-    },
-    {
-      key: 'lorebook',
-      label: 'reader.lorebook',
-      icon: faBookAtlas,
-      component: LorebookPanel,
-      props: ({ title, getIndex, position }) => ({ title, getIndex, position })
+      absenceOffer: { ready: () => featureReady('recap'), open: 'recap', label: 'reader.recap' }
     }
   ],
   selectionActions: [

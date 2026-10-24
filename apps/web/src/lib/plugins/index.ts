@@ -16,6 +16,7 @@ import { map } from 'rxjs';
 import type { SearchIndex } from '$lib/functions/book-text/book-search';
 import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v3';
 import type { MessageKey } from '$lib/i18n';
+import type { PanelTab } from '$lib/data/reader-panel';
 import { aiPlugin } from '$lib/plugins/ai';
 import { audiobookshelfPlugin } from '$lib/plugins/audiobookshelf';
 import { socialPlugin } from '$lib/plugins/social';
@@ -44,8 +45,8 @@ export interface CompanionTabContribution {
   props: (context: ReaderContext) => Record<string, unknown>;
   /** Opening the tab pauses the reading tracker */
   pausesTracker?: boolean;
-  /** Offered when the reader comes back after days away */
-  offerAfterAbsence?: () => boolean;
+  /** Offered when the reader comes back after days away: opens `open` (a tab, or an old tab id mapped by resolvePanelTab) */
+  absenceOffer?: { ready: () => boolean; open: PanelTab; label: MessageKey };
 }
 
 export interface SelectionActionContribution {

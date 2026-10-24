@@ -13,6 +13,7 @@ import {
   furiganaSettings,
   jumpOffset,
   readerPanelTabs,
+  resolvePanelTab,
   readerTopInset,
   readerWidth
 } from './reader-panel';
@@ -28,17 +29,29 @@ const section = (reference: string, progress: number, extra = {}) => ({
 describe('readerPanelTabs', () => {
   it('orders the core tabs, then plugin tabs', () => {
     expect(
-      readerPanelTabs([{ key: 'recap', label: 'reader.recap' }], {
+      readerPanelTabs([{ key: 'story', label: 'reader.story' }], {
         hasChapters: true,
         hasText: true
       }).map((tab) => tab.key)
-    ).toEqual(['contents', 'search', 'highlights', 'listen', 'recap']);
+    ).toEqual(['contents', 'search', 'highlights', 'listen', 'story']);
   });
 
   it('leaves out Contents and Search when the book has no chapters or text', () => {
     expect(
       readerPanelTabs([], { hasChapters: false, hasText: false }).map((tab) => tab.key)
     ).toEqual(['highlights', 'listen']);
+  });
+});
+
+describe('resolvePanelTab', () => {
+  it('opens the Story tab on its section for the old Story so far and Lorebook ids', () => {
+    expect(resolvePanelTab('recap')).toEqual({ tab: 'story', section: 'recap' });
+    expect(resolvePanelTab('lorebook')).toEqual({ tab: 'story', section: 'lorebook' });
+  });
+
+  it('keeps other tabs as they are', () => {
+    expect(resolvePanelTab('story')).toEqual({ tab: 'story' });
+    expect(resolvePanelTab('search')).toEqual({ tab: 'search' });
   });
 });
 
