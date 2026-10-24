@@ -160,7 +160,7 @@ export function rankMarks(marks: WordMarks, totals: Record<string, number>) {
 }
 
 export interface RankBook {
-  estimate: BookShape & Pick<CalibreDifficulty, 'difficulty'>;
+  estimate: BookShape & Pick<CalibreDifficulty, 'difficulty' | 'engine'>;
   /** Share read (words-met's `readFraction`) */
   fraction: number;
   /** Seconds of reading time in the statistics */
@@ -263,7 +263,7 @@ export interface ReadingRank {
 
 /**
  * The rank from the inputs and the stored state. `canonical` is the difficulty engine check
- * (only its estimates count for the hard-book gate); it accepts every estimate until wired in.
+ * (only its estimates count for the hard-book gate; reading-rank-data.ts passes isCanonicalEstimate).
  */
 export function readingRank(
   input: RankInput,

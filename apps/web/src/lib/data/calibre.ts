@@ -50,6 +50,11 @@ export interface CalibreDifficulty {
   /** Different words and their occurrences, without noise (`isNoiseWord`); newer estimates only */
   uniqueWords?: number;
   tokens?: number;
+  /**
+   * Fingerprint of the engine that made it (scripts/calibre/jiten/engine.py); older estimates have
+   * none. `isCanonicalEstimate` tells whether it is this release's.
+   */
+  engine?: string;
   computedAt: number;
 }
 

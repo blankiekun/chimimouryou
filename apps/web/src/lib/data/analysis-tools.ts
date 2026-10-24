@@ -632,6 +632,7 @@ async function makeEstimate(
     uniqueKanji: result.uniqueKanji,
     uniqueWords: result.uniqueWords,
     tokens: result.tokens,
+    engine: manifest.engine,
     computedAt: Date.now()
   };
   const db = await readerDb();

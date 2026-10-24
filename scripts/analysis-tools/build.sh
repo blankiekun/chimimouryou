@@ -12,8 +12,9 @@
 #   chimi-difficulty*.onnx, chimi-difficulty-range.json  the difficulty models
 #   ort/                         onnxruntime-web's plain wasm runtime (the app's own copy, which Whisper's
 #                                build lacks the models' ML operators), from apps/web/node_modules
-#   manifest.json                the files, their sizes, the tools' version and which files only one
-#                                feature needs (`features`; the rest serve both difficulty and furigana)
+#   manifest.json                the files, their sizes, the tools' version, the difficulty engine's
+#                                fingerprint (`engine`) and which files only one feature needs
+#                                (`features`; the rest serve both difficulty and furigana)
 # Needs curl, python3 (3.12+), gzip, and Rust (rustup) with the wasm32-unknown-unknown target; installs
 # wasm-bindgen-cli at the version Cargo.lock pins when it is missing.
 set -euo pipefail
@@ -88,9 +89,17 @@ cp "$root/apps/web/node_modules/onnxruntime-web/dist/"ort-wasm-simd-threaded.{mj
 # Raw sizes let the worker preallocate the dictionary and the packs.
 # The version names the Python and the models too (a hash of their files), so a change there redoes the
 # books' analyses. Files only difficulty estimates need: the frequency pack and the models.
-python3 - "$out" "$work" "$SUDACHI_DICT" "$PYODIDE" "$(basename "$yurigana" .tar.gz)" <<'EOF'
+# `engine`: the difficulty engine's fingerprint (scripts/calibre/jiten/engine.py), which the browser's
+# estimates carry; it must be the release's (apps/web/src/lib/data/difficulty-engine.json).
+python3 - "$out" "$work" "$SUDACHI_DICT" "$PYODIDE" "$(basename "$yurigana" .tar.gz)" "$jiten" \
+  "$root/apps/web/src/lib/data/difficulty-engine.json" <<'EOF'
 import hashlib, json, os, sys
-out, work, dic, pyodide, yurigana = sys.argv[1:]
+out, work, dic, pyodide, yurigana, jiten, committed = sys.argv[1:]
+sys.path.insert(0, jiten)
+from engine import BUNDLED_FREQUENCY_LIST, engine_fingerprint
+engine = engine_fingerprint(BUNDLED_FREQUENCY_LIST, yurigana.lstrip('v'), f'core-{dic}')
+if engine != json.load(open(committed))['engine']:
+    sys.exit(f'The engine differs from {committed}: python3 {jiten}/engine.py > {committed}')
 code = hashlib.sha256()
 for d, _, fs in sorted(os.walk(f'{work}/py')):
     for f in sorted(fs):
@@ -102,7 +111,8 @@ for f in sorted(difficulty - {'frequency.ygp.gz', 'ort/ort-wasm-simd-threaded.mj
 raw = {'core.dic.gz': os.path.getsize(f'{work}/core.dic'), 'reader.ygp.gz': os.path.getsize(f'{work}/reader.ygp'),
        'frequency.ygp.gz': os.path.getsize(f'{work}/frequency.ygp')}
 files = sorted(os.path.relpath(os.path.join(d, f), out) for d, _, fs in os.walk(out) for f in fs if f != 'manifest.json')
-json.dump({'version': f'sudachidict-{dic} pyodide-{pyodide} yurigana-{yurigana.lstrip("v")} py-{code.hexdigest()[:12]}',
+json.dump({'version': f'sudachidict-{dic} pyodide-{pyodide} yurigana-{yurigana.lstrip("v")} py-{code.hexdigest()[:12]} engine-{engine[:12]}',
+           'engine': engine,
            'files': [{'name': f, 'bytes': os.path.getsize(f'{out}/{f}'), **({'raw': raw[f]} if f in raw else {}),
                       **({'features': ['difficulty']} if f in difficulty else {})}
                      for f in files]}, open(f'{out}/manifest.json', 'w'), indent=1)
