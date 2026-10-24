@@ -133,6 +133,9 @@ importers:
       idb:
         specifier: 8.0.3
         version: 8.0.3
+      kanji-processor:
+        specifier: 1.0.2
+        version: 1.0.2
       mediabunny:
         specifier: 1.61.4
         version: 1.61.4
@@ -2764,6 +2767,9 @@ packages:
 
   jsonfile@6.2.1:
     resolution: {integrity: sha512-zwOTdL3rFQ/lRdBnntKVOX6k5cKJwEc1HdilT71BWEu7J41gXIB2MRp+vxduPSwZJPWBxEzv4yH1wYLJGUHX4Q==}
+
+  kanji-processor@1.0.2:
+    resolution: {integrity: sha512-3nP/Sdt4BYLxqYv263EIXfA+m93N1o1vIxE4U3TzAuYlJT2BuSjncvqnOjcL/wrSNkMA+lBEMHHH477+KSYiBg==}
 
   keyv@4.5.4:
     resolution: {integrity: sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==}
@@ -6673,6 +6679,8 @@ snapshots:
       universalify: 2.0.1
     optionalDependencies:
       graceful-fs: 4.2.11
+
+  kanji-processor@1.0.2: {}
 
   keyv@4.5.4:
     dependencies:

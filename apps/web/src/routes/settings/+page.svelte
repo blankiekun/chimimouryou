@@ -17,6 +17,7 @@
   import SettingsPlugins from '$lib/components/settings/settings-plugins.svelte';
   import { activePlugins$, plugins } from '$lib/plugins';
   import SettingsAnki from '$lib/components/settings/settings-anki.svelte';
+  import SettingsDictionary from '$lib/components/settings/settings-dictionary.svelte';
   import SettingsContent from '$lib/components/settings/settings-content.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
   import {
@@ -479,6 +480,7 @@
             {/if}
           {/each}
           <SettingsAnki />
+          <SettingsDictionary />
           <SettingsContent
             storageQuota={storageUsed === undefined
               ? ''

@@ -28,6 +28,8 @@ module.exports = (async () => {
         '**/tailwind.config.cjs',
         'apps/web/static/**',
         'apps/desktop/yomitan/**',
+        // Yomitan's own code in its own style (README there); kept as close to upstream as possible.
+        'apps/web/src/lib/vendor/yomitan/**',
         'apps/desktop/dist/**'
       ]
     },

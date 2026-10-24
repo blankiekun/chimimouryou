@@ -113,6 +113,34 @@ export const settingsAreas: SettingsArea[] = [
       }
     ]
   },
+  // The built-in dictionary (lib/data/dictionary.ts), in Yomitan's own sections.
+  {
+    id: 'dictionary',
+    label: 'settings.area.dictionary',
+    description: 'settings.area.dictionary.text',
+    sections: [
+      {
+        id: 'dictionary-general',
+        label: 'settings.section.dictionary-general',
+        description: 'settings.section.dictionary-general.text'
+      },
+      {
+        id: 'dictionary-dictionaries',
+        label: 'settings.section.dictionary-dictionaries',
+        description: 'settings.section.dictionary-dictionaries.text'
+      },
+      {
+        id: 'dictionary-translation',
+        label: 'settings.section.dictionary-translation',
+        description: 'settings.section.dictionary-translation.text'
+      },
+      {
+        id: 'dictionary-backup',
+        label: 'settings.section.dictionary-backup',
+        description: 'settings.section.dictionary-backup.text'
+      }
+    ]
+  },
   {
     id: 'ai',
     label: 'settings.area.ai',
