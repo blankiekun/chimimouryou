@@ -17,13 +17,19 @@
 #                                fingerprint (`engine`) and which files only one feature needs
 #                                (`features`; the rest serve both difficulty and furigana)
 # Needs curl, python3 (3.12+), gzip, and Rust (rustup) with the wasm32-unknown-unknown target; installs
-# wasm-bindgen-cli at the version Cargo.lock pins when it is missing.
+# wasm-bindgen-cli at the version Cargo.lock pins when it is missing, and fetches binaryen's wasm-opt
+# (Linux x86_64 or aarch64).
 set -euo pipefail
 
 SUDACHI_COMMIT=60f529a8ea96428835c8facc350559f562c0e3b2
-SUDACHI_DICT=20260723.1
+SUDACHI_DICT=20261015
 PYODIDE=314.0.7
 WASM_BINDGEN=0.2.128
+BINARYEN=133
+declare -A BINARYEN_SHA256=(
+  [x86_64]=2dc9c7813f5375db93d96ead4b78222fcc3e2677bbb832297af4797782a37489
+  [aarch64]=89c07ea56faf38d0fbecf36ca8ec0721756716185f265b568e133d427f299bf8
+)
 
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
@@ -44,11 +50,21 @@ src=$work/sudachi-wasm333-$SUDACHI_COMMIT
 patch -s -d "$src" -p1 < "$here/sudachi-wasm.patch"
 [ "$(wasm-bindgen --version 2>/dev/null)" = "wasm-bindgen $WASM_BINDGEN" ] ||
   cargo install -q wasm-bindgen-cli --version "$WASM_BINDGEN" --locked
-# Fat LTO: ~10% faster tokenizing, 7% smaller (SIMD measured slower, wasm-opt -O3 no faster)
+# Fat LTO: ~10% faster tokenizing, 7% smaller (SIMD measured slower)
 (cd "$src" && cargo build -q --release --locked --target wasm32-unknown-unknown -p sudachi \
   --config 'profile.release.lto="fat"' --config profile.release.codegen-units=1)
 wasm-bindgen --target web --no-typescript --out-dir "$work/pkg" "$src/target/wasm32-unknown-unknown/release/sudachi.wasm"
-cp "$work/pkg/sudachi.js" "$work/pkg/sudachi_bg.wasm" "$out/"
+# wasm-opt -O3: 16% smaller, as fast (-O3's speed measured the same as without)
+arch=$(uname -m)
+[ -n "${BINARYEN_SHA256[$arch]:-}" ] || { echo "No binaryen build pinned for $arch" >&2; exit 1; }
+curl -fsSL -o "$work/binaryen.tar.gz" \
+  "https://github.com/WebAssembly/binaryen/releases/download/version_$BINARYEN/binaryen-version_$BINARYEN-$arch-linux.tar.gz"
+echo "${BINARYEN_SHA256[$arch]}  $work/binaryen.tar.gz" | sha256sum -c --quiet
+tar -xzf "$work/binaryen.tar.gz" -C "$work"
+"$work/binaryen-version_$BINARYEN/bin/wasm-opt" -O3 --enable-bulk-memory --enable-nontrapping-float-to-int \
+  --enable-sign-ext --enable-mutable-globals --enable-multivalue --enable-reference-types \
+  -o "$out/sudachi_bg.wasm" "$work/pkg/sudachi_bg.wasm"
+cp "$work/pkg/sudachi.js" "$out/"
 
 # The dictionary from its wheel: gzip, which browsers decompress natively (DecompressionStream)
 wheel=$(curl -fsSL "https://pypi.org/pypi/SudachiDict-core/$SUDACHI_DICT/json" |

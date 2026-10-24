@@ -53,7 +53,7 @@ def file_sha256(path: str) -> str:
 
 
 def engine_fingerprint(frequency_list: str, yurigana: str, sudachi_dict: str, extras=(), code_dir: str = HERE) -> str:
-    """`sudachi_dict`: the dictionary's name and version (core-20260723.1); `extras`: paths of other
+    """`sudachi_dict`: the dictionary's name and version (core-20261015); `extras`: paths of other
     files the estimate depends on (the reading-model table), by content."""
     digest = hashlib.sha256()
     digest.update(f'version:{ENGINE_VERSION}\n'.encode())

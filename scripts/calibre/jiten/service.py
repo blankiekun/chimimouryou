@@ -112,7 +112,9 @@ WORDS_PER_BOOK = 2000
 # 12: yurigana 0.5.3 (top readings of 118 forms, voiced tails after a noun, 血肉 ちにく).
 # 17: the book's ruby over a name carried to its bare occurrences (carry={}), as in readings files
 #    (蝎 さそり, 叮寧 ていねい), so the browser reads a book once for both.
-WORDS_VERSION = 17
+# 18: SudachiDict-core 20261015 (normalized forms of ずる verbs: 封ずる 封じる; a few readings and
+#    compounds such as 気に入る).
+WORDS_VERSION = 18
 # Readings files (#17), made from the reader's processed book in the shared sync folder
 # (mounted read-only): <SYNC_DIR>/ttu-reader-data/<title>/bookdata_*.zip.
 SYNC_DIR = os.environ.get('SYNC_DIR', '/data/sync')

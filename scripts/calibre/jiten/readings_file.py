@@ -32,7 +32,8 @@ from yurigana.readings import surface_reading
 # 5: names' ruby carried to their bare occurrences (source 'book') glossed.
 # 8: every reading glossed, not only the sure ones (defaults, Sudachi's, counter spans too).
 # 9: `len`, each occurrence's surface length with its auxiliaries.
-READINGS_VERSION = 9
+# 10: SudachiDict-core 20261015 (a few readings and compounds: 今日 きょう, 気に入る).
+READINGS_VERSION = 10
 
 # Radical and Unified_Ideograph as in Unicode 16.
 # shortcut: newer CJK extensions are missing, add them when browsers count them.
