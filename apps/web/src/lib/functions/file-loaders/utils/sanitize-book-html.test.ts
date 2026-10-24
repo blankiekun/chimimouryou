@@ -39,7 +39,7 @@ describe('parseBookHtml', () => {
     expect(result).toContain('<p>t</p>');
   });
 
-  it('removes javascript:, vbscript: and non-image data: URLs, also when obfuscated', () => {
+  it('removes javascript:, vbscript:, file: and non-image data: URLs, also when obfuscated', () => {
     const result = parseBookHtml(
       '<a id="a" href="javascript:alert(1)">a</a>' +
         '<a id="b" href=" java\tscript:alert(1)">b</a>' +
@@ -47,10 +47,11 @@ describe('parseBookHtml', () => {
         '<a id="d" href="data:text/html,<script>alert(1)</script>">d</a>' +
         '<a id="e" href="vbscript:x">e</a>' +
         '<svg><a id="f" xlink:href="javascript:alert(1)"><text>f</text></a></svg>' +
+        '<svg><image id="h" href="file://evil.example/share/payload.exe"/></svg>' +
         '<a id="g" href="https://example.com/">g</a>'
     );
 
-    for (const id of 'abcdef') {
+    for (const id of 'abcdefh') {
       const link = result.querySelector(`#${id}`)!;
       expect(link.getAttribute('href') ?? link.getAttribute('xlink:href'), id).toBeNull();
     }

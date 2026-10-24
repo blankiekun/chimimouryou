@@ -840,6 +840,12 @@ async function startGame(options) {
 
   g_cons_module.canvas = document.getElementById('canvas');
   g_cons_module.onExit = options.onExit;
+  // The engine's openurl calls window.open at call time: only web links, never javascript: or file:.
+  var open = window.open.bind(window);
+  window.open = function (url) {
+    if (/^https?:\/\//i.test(String(url))) open(String(url), '_blank', 'noopener');
+    return null;
+  };
   await loadScript('conscripter.js');
   // INVOKE_RUN=0: the runtime is ready here and main() waits for callMain.
   g_cons_module = await cons(g_cons_module);
@@ -866,6 +872,8 @@ async function startGame(options) {
     var save = options.saves[name];
     var path = options.saveDir + '/' + name;
 
+    // Synced names become paths: only single path segments.
+    if (/[/\\]/.test(name) || name === '.' || name === '..') return;
     if (!local[name] || local[name].modified < save.modified) {
       FS.writeFile(path, save.bytes);
       FS.utime(path, save.modified, save.modified);

@@ -89,6 +89,16 @@ describe('vn', () => {
     expect(sameVnSaves(mergeVnSaves(remote, remote), remote)).toBe(true);
   });
 
+  it('drops save names that are not a single path segment', () => {
+    const file = { modified: 1, data: 'x' };
+    const merged = mergeVnSaves(
+      { '..': file, 'a/b': file },
+      { '../../game/0.txt': file, 'c\\d': file, '.': file, 'ok.sav': file }
+    );
+
+    expect(Object.keys(merged)).toEqual(['ok.sav']);
+  });
+
   it('finds saves written by a newer engine', () => {
     const saves = {
       'save1.dat': { modified: 1, data: '', engine: 'v0.9.0' },

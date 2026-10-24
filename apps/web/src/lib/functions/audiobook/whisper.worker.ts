@@ -127,5 +127,12 @@ self.onmessage = ({ data }: MessageEvent<WhisperRequest>) =>
   transcribe(data).then(
     () => post({ type: 'done' }),
     (error) =>
-      post({ type: 'error', message: error instanceof Error ? error.message : String(error) })
+      post({
+        type: 'error',
+        // Audiobookshelf stream URLs carry its token, and fetch errors quote the URL.
+        message: (error instanceof Error ? error.message : String(error)).replace(
+          /([?&]token=)[^&\s]+/g,
+          '$1[API key]'
+        )
+      })
   );

@@ -57,7 +57,8 @@ const urlAttributes = new Set([
 // Browsers ignore whitespace and control characters inside the scheme ("java\tscript:").
 // eslint-disable-next-line no-control-regex -- matching control characters is the point
 const ignoredUrlCharacters = /[\u0000- \u007f-\u009f]/g;
-const unsafeUrl = /^(?:javascript:|vbscript:|data:(?!image\/))/i;
+// file: would let the desktop app hand a local or UNC path to the system to open.
+const unsafeUrl = /^(?:javascript:|vbscript:|file:|data:(?!image\/))/i;
 
 /** A document without a browsing context: parsing into it loads nothing and runs nothing. */
 export function createInertDocument() {
