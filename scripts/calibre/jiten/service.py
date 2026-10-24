@@ -175,9 +175,11 @@ def save_kanji(book_id: int, text: str):
     from features import is_kanji
     os.makedirs(KANJI_DIR, exist_ok=True)
     path = os.path.join(KANJI_DIR, f'{book_id}.json.gz')
+    counts = Counter(c for c in text if is_kanji(c))
     with gzip.open(path + '.tmp', 'wt', encoding='utf-8') as f:
-        json.dump(dict(Counter(c for c in text if is_kanji(c))), f, ensure_ascii=False, separators=(',', ':'))
+        json.dump(dict(counts), f, ensure_ascii=False, separators=(',', ':'))
     os.replace(path + '.tmp', path)
+    return len(counts)
 
 
 def save_words(book_id: int, analysis, frequency):
@@ -196,7 +198,7 @@ def save_words(book_id: int, analysis, frequency):
 def _estimate(book: dict):
     import numpy
     from features import (EXTRA_FEATURES, FEATURE_ORDER, TOKEN_CLEAN, book_text, compute_extra_features,
-                          compute_features, is_kanji, vn_text, words_for_coverage)
+                          compute_features, vn_text, words_for_coverage)
     ruby, hints = {}, []
     if book.get('vn'):
         text = vn_text(os.path.join(VN_DIR if book['format'] == 'VN' else LIBRARY, book['file']), ruby, hints)
@@ -212,7 +214,7 @@ def _estimate(book: dict):
                       dtype=numpy.float32)
     scores = {name: round(min(max(float(session.run(None, {'float_input': row})[0][0][0]), 0.0), 5.0), 2)
               for name, session in _sessions.items()}
-    save_kanji(book['id'], text)
+    unique_kanji = save_kanji(book['id'], text)
     unique_words, tokens = save_words(book['id'], analysis, _frequency)
     # 'adjusted' is kept for older readers (deprecated, see CHANGELOG; drop it one release later);
     # the model includes jiten.moe's adjustment.
@@ -226,7 +228,7 @@ def _estimate(book: dict):
         'words': WORDS_VERSION,
         'engine': current_engine(),
         'characters': characters,
-        'uniqueKanji': len({c for c in text if is_kanji(c)}),
+        'uniqueKanji': unique_kanji,
         # All the book's words (rows of its word list before the cap) and their occurrences,
         # without noise; older estimates have neither.
         'uniqueWords': unique_words,

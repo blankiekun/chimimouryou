@@ -369,17 +369,10 @@ class Analyzer:
             # Predicates per sentence (柴崎・原 2010): verbs, adjectives and the copula.
             if pos[0] in ('動詞', '形容詞') or (pos[0] == '助動詞' and head.dictionary_form() in ('だ', 'です')):
                 result.predicates += 1
-            word = Word(
-                key=f'{head.normalized_form()}\t{coarse}',
-                form=head.surface() if suru else head.dictionary_form(),
-                pos=coarse,
-                origin=_origin(head.surface() if pos[0] == '名詞' else head.dictionary_form(), coarse,
-                               head.normalized_form()),
-                conjugations=self._conjugations(surface, target, conj_type) if pos_inflects else (),
-                surface=surface,
-                reading=to_hiragana(head.reading_form()) if head.surface() == head.dictionary_form() else None,
-            )
-            word_key = (word.key, word.form)
+            head_surface, head_form, normalized = surfaces[index], dictionary_forms[index], head.normalized_form()
+            form = head_surface if suru else head_form
+            word_key = (f'{normalized}\t{coarse}', form)
+            word_reading = to_hiragana(head.reading_form()) if head_surface == head_form else None
             window.append(word_key)
             window_counts[word_key] += 1
             distinct += window_counts[word_key] == 1
@@ -393,13 +386,20 @@ class Analyzer:
             entry = result.words.get(word_key)
             if entry:
                 entry[1] += 1
+                occurrence_readings = result.readings[word_key]
             else:
-                result.words[word_key] = [word, 1]
-            own = read.get((head.begin, head.begin + len(head.surface())))
-            reading = own.reading if own and own.form == word.form else None
-            result.readings.setdefault(word_key, Counter())[reading or word.reading] += 1
-            if not (reading or word.reading) and word_key not in result.form_readings:
-                result.form_readings[word_key] = self._form_reading(word.form)
+                # Only a word's first occurrence is kept: its origin and conjugations aren't needed again.
+                result.words[word_key] = [Word(
+                    key=word_key[0], form=form, pos=coarse,
+                    origin=_origin(head_surface if pos[0] == '名詞' else head_form, coarse, normalized),
+                    conjugations=self._conjugations(surface, target, conj_type) if pos_inflects else (),
+                    surface=surface, reading=word_reading), 1]
+                occurrence_readings = result.readings[word_key] = Counter()
+            own = read.get((head.begin, head.begin + len(head_surface)))
+            reading = own.reading if own and own.form == form else None
+            occurrence_readings[reading or word_reading] += 1
+            if not (reading or word_reading) and word_key not in result.form_readings:
+                result.form_readings[word_key] = self._form_reading(form)
             result.word_count += 1
             index = end
 
