@@ -171,6 +171,12 @@ class ImportServiceTest(unittest.TestCase):
             args = eval(f.read().splitlines()[-1])  # noqa: S307 - written by the fake above
         self.assertTrue(args[0].endswith('.cbz'))
         self.assertEqual(args[1:], ['--title', '漫画 1'])
+        # A generic volume name takes its folder's name; a named one doesn't.
+        for name, title in (('%E7%AC%AC01%E5%B7%BB.cbz', 'シリーズ 第01巻'), ('%E6%BC%AB%E7%94%BB%202.cbz', '漫画 2')):
+            _, body = self.request(f'/add?name={name}&folder=%E3%82%B7%E3%83%AA%E3%83%BC%E3%82%BA', data.getvalue())
+            self.wait_for(body['job']['id'])
+            with open(ADDS) as f:
+                self.assertEqual(eval(f.read().splitlines()[-1])[1:], ['--title', title])  # noqa: S307
         self.assertEqual(self.request('/add?name=a.cbz', epub())[0], 400)
 
     def test_game_zip_is_unpacked_into_the_vn_folder(self):
@@ -225,6 +231,10 @@ class ImportServiceTest(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(VN_DIR, 'ゲーム')))
         with open(ADDS) as f:
             self.assertEqual(f.read().splitlines()[-1], 'remove 7,9')
+        # A folder whose name isn't UTF-8 is passed over, not an error.
+        os.makedirs(os.path.join(os.fsencode(VN_DIR), b'\x83Q\x81[\x83\x80'), exist_ok=True)
+        self.assertEqual(self.request('/remove', json.dumps({'ids': [-5]}).encode(), admin=True),
+                         (200, {'removed': [], 'failed': [-5]}))
         for bad in (b'{}', b'{"ids": ["1"]}', b'{"ids": [0]}', b'{"ids": [true]}', b'x'):
             self.assertEqual(self.request('/remove', bad, admin=True)[0], 400)
         self.assertEqual(self.request('/remove', b'{"ids": [1]}', origin=False, admin=True)[0], 403)
@@ -238,6 +248,25 @@ class ImportServiceTest(unittest.TestCase):
         command = run.call_args[0][0]
         self.assertEqual(command[:2], [FAKE_CALIBRE_DEBUG, '-c'])
         self.assertIn(f'db({STATE!r}).new_api.expire_old_trash()', command[2])
+
+    def test_corrupt_jobs_file_keeps_the_queue(self):
+        state = tempfile.mkdtemp()
+        with open(os.path.join(state, 'jobs.json'), 'w') as f:
+            f.write('{"truncated": ')
+        with mock.patch.object(service, 'STATE_DIR', state), mock.patch.object(service, 'jobs', {}):
+            self.assertFalse(service.load_jobs())
+            self.assertFalse(os.path.exists(service.jobs_path()))
+            self.assertEqual(len([n for n in os.listdir(state) if n.startswith('jobs.json.bad-')]), 1)
+            self.assertTrue(service.load_jobs())  # missing: nothing queued
+
+    def test_worker_survives_errors(self):
+        jobs = {'j': {'state': 'adding'}}
+        with mock.patch.object(service, 'jobs', jobs), \
+                mock.patch.object(service, 'run_queue', side_effect=OSError('disk full')), \
+                mock.patch.object(service.time, 'sleep', side_effect=SystemExit):
+            with self.assertRaises(SystemExit):
+                service.worker()
+        self.assertEqual(jobs['j']['state'], 'queued')
 
     def test_jobs_are_per_account(self):
         _, body = self.request('/add?name=b.epub', epub())

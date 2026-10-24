@@ -21,7 +21,7 @@ import unicodedata
 import urllib.request
 import zipfile
 import zlib
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import datetime
 from io import BytesIO
 from urllib.parse import unquote
@@ -146,6 +146,11 @@ def vn_games(vn_dir: str) -> list[dict]:
     for entry in sorted(os.scandir(vn_dir), key=lambda e: e.name):
         if not entry.is_dir() or entry.name.startswith('.'):
             continue
+        try:
+            entry.name.encode()
+        except UnicodeEncodeError:  # not UTF-8 (e.g. raw Shift JIS): can't be listed or served
+            print(f'skipping game folder with a non-UTF-8 name: {entry.name!r}', file=sys.stderr)
+            continue
         root = vn_root(entry.path)
         if not root:
             continue
@@ -169,6 +174,19 @@ def vn_games(vn_dir: str) -> list[dict]:
             'cover': f'{entry.name}/{cover}' if cover else '',
         })
     return games
+
+
+def unique_titles(books) -> None:
+    """The reader identifies books by title, so make titles unique. The newest of equal titles
+    (by added, then id) keeps the plain one, and with it the synced data: an import with an
+    existing title is that book's new version. Older ones get ' (author)', then ' [id]'."""
+    for suffix in (lambda b: f" ({b['authors']})" if b['authors'] else '', lambda b: f" [{b['id']}]"):
+        groups = defaultdict(list)
+        for book in books:
+            groups[book['title']].append(book)
+        for group in groups.values():
+            for book in sorted(group, key=lambda b: (b['added'], b['id']))[:-1]:
+                book['title'] += suffix(book)
 
 
 def vn_mtime(vn_dir: str) -> float:
@@ -514,15 +532,7 @@ def build(library: str, output: str, vn_dir: str | None = None, force: bool = Fa
         for book, number in members:
             book.update(series=series or base, seriesIndex=number, seriesInferred=True)
 
-    # The reader identifies books by title, so make titles unique.
-    title_counts = Counter(book['title'] for book in books.values())
-    for book in books.values():
-        if title_counts[book['title']] > 1 and book['authors']:
-            book['title'] = f"{book['title']} ({book['authors']})"
-    title_counts = Counter(book['title'] for book in books.values())
-    for book in books.values():
-        if title_counts[book['title']] > 1:
-            book['title'] = f"{book['title']} [{book['id']}]"
+    unique_titles(books.values())
 
     catalog = {'books': sorted(books.values(), key=lambda b: b['added'], reverse=True)}
     tmp_output = output + '.tmp'
