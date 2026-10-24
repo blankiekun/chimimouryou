@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     auditTime,
+    combineLatest,
     debounceTime,
     EMPTY,
     filter,
@@ -101,8 +102,10 @@
     enableVerticalFontKerning$,
     enableFontVPAL$,
     verticalTextOrientation$,
-    generatedFurigana$
+    generatedFurigana$,
+    unknownWordUnderline$
   } from '$lib/data/store';
+  import { spansWithin, unknownSpans$, type CountSpan } from '$lib/data/unknown-words';
   import {
     addGeneratedRuby,
     generatedReadings$,
@@ -477,30 +480,66 @@
     reduceToEmptyString()
   );
 
+  /** Where the book's readings file comes from, if it can have one. */
+  function readingsAvailable(book: { storageSource?: string }) {
+    if (book.storageSource === StorageSourceDefault.CALIBRE_DEFAULT) return 'server';
+
+    return analysisToolsSupported() ? 'local' : undefined;
+  }
+
+  // The readings file, while generated furigana or the unknown-word underlines need it.
+  const bookReadings$ = rawBookData$.pipe(
+    switchMap((rawBookData) => {
+      if (!rawBookData) return EMPTY;
+
+      const source = readingsAvailable(rawBookData);
+
+      return combineLatest([generatedFurigana$, unknownWordUnderline$]).pipe(
+        map(([furigana, underline]) => furigana || underline),
+        distinctUntilChanged(),
+        switchMap((on) => {
+          if (!on || !source) return of(undefined);
+
+          return source === 'server'
+            ? generatedReadings$(rawBookData.title, true)
+            : localReadings$(rawBookData.title, rawBookData.elementHtml);
+        }),
+        map((readings) => ({ title: rawBookData.title, readings }))
+      );
+    }),
+    shareReplay({ refCount: true, bufferSize: 1 })
+  );
+
+  let unknownSpans: CountSpan[] = [];
+
+  const unknownWords$ = combineLatest([bookReadings$, unknownWordUnderline$]).pipe(
+    switchMap(([{ title, readings }, on]) =>
+      on && readings ? unknownSpans$(title, readings) : of([])
+    ),
+    tap((spans) => {
+      unknownSpans = spans;
+      scheduleHighlights(true);
+    }),
+    reduceToEmptyString()
+  );
+
   const bookData$ = rawBookData$.pipe(
     switchMap((rawBookData) => {
       if (!rawBookData) return EMPTY;
 
       sectionList$.next(rawBookData.sections || []);
 
-      const isCalibreBook = rawBookData.storageSource === StorageSourceDefault.CALIBRE_DEFAULT;
       let rendered = false;
-      const analysed = !isCalibreBook && analysisToolsSupported();
 
       // Local books with the analysis tools: the difficulty estimate and word list are made on open
-      // (after the furigana, analysis-tools.ts's queue); generated furigana only while they are on.
-      if (analysed) localEstimate(rawBookData.title, rawBookData.elementHtml).catch(() => {});
+      // (after the furigana, analysis-tools.ts's queue).
+      if (readingsAvailable(rawBookData) === 'local') {
+        localEstimate(rawBookData.title, rawBookData.elementHtml).catch(() => {});
+      }
 
-      return generatedFurigana$.pipe(
-        switchMap((on) => {
-          if (!on) return of(undefined);
-
-          if (isCalibreBook) return generatedReadings$(rawBookData.title, true);
-
-          return analysed
-            ? localReadings$(rawBookData.title, rawBookData.elementHtml)
-            : of(undefined);
-        }),
+      return combineLatest([bookReadings$, generatedFurigana$]).pipe(
+        filter(([book]) => book.title === rawBookData.title),
+        map(([{ readings }, on]) => (on ? readings : undefined)),
         distinctUntilChanged(),
         switchMap((readings) => {
           // Re-rendered while reading (switch, or the readings file got ready): keep the place.
@@ -1028,6 +1067,12 @@
         : undefined;
 
     setCssHighlight('ttu-reading', readingRange ? [readingRange] : []);
+    setCssHighlight(
+      'ttu-unknown',
+      spansWithin(unknownSpans, base, end).flatMap(
+        ([start, stop]) => rangeForCounts(document, segments, start, stop, base) ?? []
+      )
+    );
     highlightsDirty = false;
 
     return readingRange;
@@ -2233,6 +2278,7 @@
 
 {$collectReaderImageGallerySpoilerToggles$ ?? ''}
 {$initAnnotations$ ?? ''}
+{$unknownWords$ ?? ''}
 {$handleUpdateImageGalleryPictureSpoilers$ ?? ''}
 <button class="fixed inset-x-0 top-0 z-10 h-8 w-full" on:click={() => (showHeader = true)} />
 {#if showHeader || panelOpen}
@@ -2245,6 +2291,7 @@
   >
     <BookReaderHeader
       title={$rawBookData$?.title ?? ''}
+      canUnderlineUnknown={!!$rawBookData$ && !!readingsAvailable($rawBookData$)}
       chapter={$sectionData$ ? currentChapterLabel($sectionData$) : ''}
       progress={bookCharCount ? `${Math.floor((exploredCharCount / bookCharCount) * 100)}%` : ''}
       {panelOpen}

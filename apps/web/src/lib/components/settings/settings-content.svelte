@@ -9,6 +9,7 @@
   import type { ToggleOption } from '$lib/components/button-toggle-group/toggle-option';
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import { standalone } from '$lib/data/env';
+  import { analysisToolsSupported } from '$lib/data/analysis-tools';
   import SettingsDimensionPopover from '$lib/components/settings/settings-dimension-popover.svelte';
   import SettingsReadingGoals from '$lib/components/settings/settings-reading-goals.svelte';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
@@ -31,6 +32,7 @@
     database,
     fontFamilyGroupOne$,
     generatedFurigana$,
+    unknownWordUnderline$,
     horizontalCustomReadingPosition$,
     textMarginMode$,
     textMarginValue$,
@@ -554,6 +556,14 @@
       tooltip={$t$('prefs.generatedFuriganaHint')}
     >
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={$generatedFurigana$} />
+    </SettingsItemGroup>
+  {/if}
+  {#if !standalone || analysisToolsSupported()}
+    <SettingsItemGroup
+      title={$t$('prefs.unknownWordUnderline')}
+      tooltip={$t$('prefs.unknownWordUnderlineHint')}
+    >
+      <ButtonToggleGroup options={toggle} bind:selectedOptionId={$unknownWordUnderline$} />
     </SettingsItemGroup>
   {/if}
   {#if hideFurigana}

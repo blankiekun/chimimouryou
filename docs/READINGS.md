@@ -102,6 +102,11 @@ later bare occurrences (`source` 'book', also earlier ones for names of 2+ chara
 - `occ`: `Δstart, word, gloss` per kanji word in reading order; `gloss` is `-1` when no
   furigana is to be added. A number + counter span (三本 さんぼん) comes right before its
   tokens' own words, at the same start (Δstart 0 for the first of them).
+- `len` (version 9+): one per `occ` entry, the occurrence's surface length in characters. A
+  verb's or adjective's span takes the auxiliaries (助動詞 tokens, kana only) Sudachi puts right
+  after it: 黙り込んだ 5, 食べさせられた 6, 美しかった 4; not a connective て/ば (書いている: 書い 2)
+  and not after nouns (学生だった: 学生 2). The reader's unknown-word underlines use it; files
+  without it underline up to the kanji runs' end.
 
 **What gets furigana** (a gloss): every hiragana reading on the list, whatever its source (the
 list's only reading, a context rule, the reading model, a name's ruby carried from elsewhere in the

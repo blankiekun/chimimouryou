@@ -367,6 +367,12 @@ export const themeTokenGroups = {
       label: 'Line being read',
       cssVar: '--reading-line-color',
       description: 'What the audiobook or AI voice is reading'
+    },
+    unknownWord: {
+      label: 'Unknown word',
+      cssVar: '--unknown-word-color',
+      description:
+        "Marks words you don't know yet: a dotted underline, a soft tint in vertical text"
     }
   }
 } as const satisfies Record<string, Record<string, ThemeTokenInfo>>;

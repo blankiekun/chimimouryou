@@ -1182,6 +1182,8 @@ export const ja: Record<MessageKey, string> = {
   'reader.furiganaShow': '表示',
   'reader.furiganaKnown': '既知',
   'reader.furiganaHide': '非表示',
+  'reader.unknownWords': '未知語',
+  'reader.underline': '下線',
   'reader.furiganaPreparing': 'ふりがなを準備中… {percent}%',
   'reader.furiganaQueued': 'ふりがなの順番待ち',
   'reader.allSettings': 'リーダー設定をすべて表示',
@@ -1482,6 +1484,9 @@ export const ja: Record<MessageKey, string> = {
   'prefs.generatedFurigana': '自動生成ふりがな',
   'prefs.generatedFuriganaHint':
     'もともとふりがながない単語に対し、サーバー（yurigana）で生成したふりがなを控えめな色で表示します（難易度算出サービスが有効な Calibre 書籍のみ）。初回オープン時は生成に10秒ほどかかる場合があり、完了次第反映されます。',
+  'prefs.unknownWordUnderline': '未知語に下線',
+  'prefs.unknownWordUnderlineHint':
+    'まだ覚えていない漢字語に印を付けます（横書きは点線の下線、縦書きは薄い色）。対象は出会った回数が8回未満、Anki で成熟していない、既知にしていない語です。生成ふりがなのデータが必要です（難易度算出サービスが有効な Calibre 書籍、または解析ツール）。',
   'prefs.furiganaPartialHint': 'ふりがなを薄いグレーで目立たないように表示します。',
   'prefs.viewMode': '表示モード',
   'prefs.marginLeftRight': '左右の余白',

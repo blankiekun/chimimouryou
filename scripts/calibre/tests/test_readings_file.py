@@ -26,11 +26,38 @@ class Word(NamedTuple):
     certainty: float
 
 
+class Token(NamedTuple):
+    begin: int
+    text: str
+    pos: str
+
+    def surface(self):
+        return self.text
+
+    def part_of_speech(self):
+        return (self.pos, '*')
+
+
+class FakeTokenizer:
+    """Tokens given as (surface, part of speech), found in the text in order."""
+
+    def __init__(self, tokens):
+        self.given = tokens
+
+    def tokens(self, text):
+        at = 0
+        for surface, pos in self.given:
+            at = text.index(surface, at)
+            yield Token(at, surface, pos)
+            at += len(surface)
+
+
 class FakeReader:
     """Words given as (surface, form, reading, source), found in the text in order."""
 
-    def __init__(self, *words):
+    def __init__(self, *words, tokens=()):
         self.words = words
+        self.tokenizer = FakeTokenizer(tokens)
 
     def read(self, text, hints=(), carry=None):
         assert carry == {}  # one book, one text
@@ -85,6 +112,15 @@ class GlossTest(unittest.TestCase):
         self.assertEqual(data['glosses'], [[[0, 1, '行', 'い']], [[0, 1, '取', 'と'], [2, 1, '扱', 'あつか']]])
         # Starts 2, 5 and 9 (the gaiji counts); the one under the book's ruby gets none of ours.
         self.assertEqual(data['occ'], [2, 0, -1, 3, 0, 0, 4, 1, 1])
+        self.assertEqual(data['len'], [2, 2, 4])  # no tokens given: the words' own
+
+    def test_lengths_take_a_verbs_or_adjectives_auxiliaries(self):
+        data = readings_file.build('<p>黙り込んだ。学生だった。書いている。</p>', FakeReader(
+            ('黙り込ん', '黙り込む', 'だまりこむ', 'only'), ('学生', '学生', 'がくせい', 'only'),
+            ('書い', '書く', 'かく', 'only'),
+            tokens=[('黙り込ん', '動詞'), ('だ', '助動詞'), ('学生', '名詞'), ('だっ', '助動詞'), ('た', '助動詞'),
+                    ('書い', '動詞'), ('て', '助詞'), ('いる', '動詞')]), 'b', '0')
+        self.assertEqual(data['len'], [5, 2, 2])
 
 
 class ShowTest(unittest.TestCase):

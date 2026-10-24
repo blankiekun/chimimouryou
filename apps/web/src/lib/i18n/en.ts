@@ -1178,6 +1178,8 @@ export const en = {
   'reader.furiganaShow': 'Show',
   'reader.furiganaKnown': 'Known',
   'reader.furiganaHide': 'Hide',
+  'reader.unknownWords': 'Unknown words',
+  'reader.underline': 'Underline',
   'reader.furiganaPreparing': 'Preparing furigana… {percent}%',
   'reader.furiganaQueued': 'Furigana queued',
   'reader.allSettings': 'All reader settings',
@@ -1477,6 +1479,9 @@ export const en = {
   'prefs.generatedFurigana': 'Generated furigana',
   'prefs.generatedFuriganaHint':
     'Adds readings, in a softer colour, to words the book gives none (Calibre books, with the difficulty service). The first open of a book can wait 10 seconds or more for them.',
+  'prefs.unknownWordUnderline': 'Underline unknown words',
+  'prefs.unknownWordUnderlineHint':
+    "Marks kanji words you don't know yet (a dotted underline, a soft tint in vertical text): met fewer than 8 times, not mature in Anki, not marked known. Needs generated readings: Calibre books with the difficulty service, or the analysis tools.",
   'prefs.furiganaPartialHint': 'Display furigana as grayed out text',
   'prefs.viewMode': 'View mode',
   'prefs.marginLeftRight': 'Left and right margin',

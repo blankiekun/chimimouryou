@@ -140,4 +140,20 @@ describe('contrast', () => {
 
     expect(report).toEqual([]);
   });
+
+  // The unknown-word underline (accent unless a theme sets it) is non-text: 3:1 on the page.
+  it('keeps the unknown-word underline visible on the book', () => {
+    const report = builtInThemes.flatMap(({ id }) => {
+      const { colors } = resolveTheme(id, {});
+      const color =
+        colors.unknownWord === 'var(--accent-color)' ? colors.accent : colors.unknownWord;
+      const ratio = contrastRatio(
+        parseSimpleColor(color)!,
+        parseSimpleColor(colors.readerBackground)!
+      );
+      return ratio < 3 ? [`${id}: unknownWord is ${ratio.toFixed(2)}:1`] : [];
+    });
+
+    expect(report).toEqual([]);
+  });
 });

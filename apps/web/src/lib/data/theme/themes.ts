@@ -57,6 +57,7 @@ const derivedTokens = {
   accentHover: 'color-mix(in srgb, var(--accent-color) 84%, var(--font-color))',
   spotTint: 'color-mix(in srgb, var(--accent-color) 12%, var(--background-color))',
   focusRing: 'var(--accent-color)',
+  unknownWord: 'var(--accent-color)',
   toggleOn: 'var(--accent-color)',
   toggleOff: 'color-mix(in srgb, var(--font-color) 24%, transparent)',
   progressTrack: 'color-mix(in srgb, var(--font-color) 12%, transparent)',
