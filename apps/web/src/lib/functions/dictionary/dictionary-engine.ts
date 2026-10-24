@@ -129,6 +129,41 @@ export async function lookup(text: string, options: ProfileOptions): Promise<Loo
     text,
     findTermsOptions
   );
-  dictionaryEntries.splice(maxResults);
-  return { dictionaryEntries, originalTextLength };
+  const sorted = demoteUnlikely(dictionaryEntries).slice(0, maxResults);
+  return {
+    dictionaryEntries: sorted,
+    originalTextLength: sorted[0]?.maxOriginalTextLength ?? originalTextLength
+  };
+}
+
+const kanji = /[\u3400-\u9fff\uf900-\ufaff々]/;
+const kanaOnly = /^[\u3040-\u30ff]+$/;
+const katakanaOnly = /^[\u30a0-\u30ff]+$/;
+
+/**
+ * Yomitan ranks ties by frequency, which the downloadable Wiktionary dictionaries lack, so
+ * entries a reader rarely means can come first (stable re-sort, measured on Aozora Bunko texts):
+ * - a kanji word with no reading (reading = term) or a kanji's on'yomi in katakana (口[ク]) goes
+ *   after the other entries of the same length;
+ * - a name matched from kana (ことは → 詞葉) goes after every other entry.
+ */
+function demoteUnlikely(entries: TermDictionaryEntry[]) {
+  const rank = (entry: TermDictionaryEntry) => {
+    const { term, reading, sources } = entry.headwords[0];
+    const name = entry.definitions.every(({ tags }) => tags.some((tag) => tag.name === 'name'));
+    if (name && sources.every(({ originalText }) => kanaOnly.test(originalText))) return 2;
+    const noReading = reading === term && kanji.test(term);
+    const onyomi = katakanaOnly.test(reading) && !/[\u3040-\u30ff]/.test(term);
+    return noReading || onyomi ? 1 : 0;
+  };
+  const ranked = entries.map((entry, index) => ({ entry, index, rank: rank(entry) }));
+  ranked.sort(
+    (a, b) =>
+      Number(a.rank === 2) - Number(b.rank === 2) ||
+      (a.rank !== 2 && b.rank !== 2
+        ? b.entry.maxOriginalTextLength - a.entry.maxOriginalTextLength || a.rank - b.rank
+        : 0) ||
+      a.index - b.index
+  );
+  return ranked.map(({ entry }) => entry);
 }
