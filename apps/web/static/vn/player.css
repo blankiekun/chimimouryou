@@ -96,3 +96,9 @@ body {
 #progress progress::-moz-progress-bar {
   background: #4fbf95;
 }
+
+/* The built-in dictionary's match (the page's lookup popup): the theme's accent (--accent-color,
+   set by the page) see-through over the canvas, since the overlay text itself is transparent. */
+::highlight(ttu-lookup) {
+  background-color: color-mix(in srgb, var(--accent-color, #4fbf95) 40%, transparent);
+}
