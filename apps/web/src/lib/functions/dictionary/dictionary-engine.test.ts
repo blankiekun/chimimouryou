@@ -22,7 +22,13 @@ async function dictionaryZip() {
       ['食べる', 'たべる', 'v1', 'v1', 10, ['to eat'], 1, ''],
       ['食べ物', 'たべもの', 'n', '', 10, ['food'], 2, ''],
       ['食', 'しょく', 'n', '', 1, ['meal'], 3, ''],
-      ['辞書', 'じしょ', 'n', '', 10, ['dictionary'], 4, '']
+      ['辞書', 'じしょ', 'n', '', 10, ['dictionary'], 4, ''],
+      ['口', 'コウ', 'n', '', 10, ['opening'], 5, ''],
+      ['口', 'くち', 'n', '', 0, ['mouth'], 6, ''],
+      ['近所', '', 'n', '', 10, ['neighbourhood'], 7, ''],
+      ['近所', 'きんじょ', 'n', '', 0, ['neighbourhood'], 8, ''],
+      ['詞葉', 'ことは', 'name', '', 10, ['a given name'], 9, ''],
+      ['こと', 'こと', 'n', '', 0, ['thing'], 10, '']
     ],
     'term_meta_bank_1.json': [
       ['食べる', 'freq', { reading: 'たべる', frequency: 500 }],
@@ -66,7 +72,7 @@ describe('dictionary engine', () => {
 
     expect(errors).toEqual([]);
     expect(result?.title).toBe('Test JMdict');
-    expect(result?.counts?.terms.total).toBe(4);
+    expect(result?.counts?.terms.total).toBe(10);
     expect(progress.length).toBeGreaterThan(0);
     expect((await listDictionaries()).map(({ title }) => title)).toEqual(['Test JMdict']);
   });
@@ -91,6 +97,18 @@ describe('dictionary engine', () => {
     expect(originalTextLength).toBe(3);
     expect(dictionaryEntries[0].headwords[0].term).toBe('食べ物');
     expect(dictionaryEntries.map((entry) => entry.headwords[0].term)).toContain('食');
+  });
+
+  it("puts on'yomi, reading-less entries and names read from kana after the word", async () => {
+    const first = async (text: string) => {
+      const { dictionaryEntries, originalTextLength } = await lookup(text, options);
+      const { term, reading } = dictionaryEntries[0].headwords[0];
+      return [term, reading, originalTextLength];
+    };
+
+    expect(await first('口を')).toEqual(['口', 'くち', 1]);
+    expect(await first('近所の')).toEqual(['近所', 'きんじょ', 2]);
+    expect(await first('ことは')).toEqual(['こと', 'こと', 2]);
   });
 
   it('skips disabled dictionaries and deletes them', async () => {
