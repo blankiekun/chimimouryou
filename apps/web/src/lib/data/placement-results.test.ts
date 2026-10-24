@@ -50,9 +50,14 @@ describe('placement results', () => {
   });
 
   it('takes the stricter of the modes’ latest results', () => {
-    const results = [result(1, 1000, 'hard'), result(2, 5000), result(3, 4000, 'hard')];
+    const results = [result(1, 1000, 'typed'), result(2, 5000), result(3, 4000, 'typed')];
 
     expect(placementAt(results)?.cutoff).toBe(4000);
     expect(placementAt(results, 2)?.cutoff).toBe(1000);
+  });
+
+  it('ignores the retired multiple-choice hard mode', () => {
+    expect(placementAt([result(1, 5000), result(2, 398000, 'hard')])?.cutoff).toBe(5000);
+    expect(placementAt([result(2, 398000, 'hard')])).toBeUndefined();
   });
 });

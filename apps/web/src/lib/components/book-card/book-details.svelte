@@ -364,7 +364,8 @@
   /** Standalone: estimates the stored book with the analysis tools (analysis-tools.ts). */
   async function estimateLocally() {
     const title = book.title;
-    const data = await database.getData(book.id).catch(() => undefined);
+    // By title: cards from other sources carry a dummy id, not the stored record's.
+    const data = await database.getDataByTitle(title).catch(() => undefined);
 
     estimateError = '';
     if (!data?.elementHtml) {

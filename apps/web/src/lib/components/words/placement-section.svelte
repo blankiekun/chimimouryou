@@ -8,7 +8,7 @@
   export let number: number;
 
   $: cutoff = latestPlacement($placementResults$, 'yesno')?.cutoff ?? 0;
-  $: hard = latestPlacement($placementResults$, 'hard')?.cutoff ?? 0;
+  $: hard = latestPlacement($placementResults$, 'typed')?.cutoff ?? 0;
 </script>
 
 <section class="placement-section" aria-label={$t$('words.placement')}>
