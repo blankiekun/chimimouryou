@@ -14,6 +14,9 @@ MAX_TEXT_GROWTH = 10
 MAX_CHAIN_DEPTH_ABOVE_INPUT = 6
 
 
+_new_tuple = tuple.__new__  # Form(*fields) without the call overhead
+
+
 class Form(NamedTuple):
     text: str
     original: str
@@ -22,12 +25,10 @@ class Form(NamedTuple):
     process: tuple
 
 
-class _VirtualRule(NamedTuple):
-    dec_end: str
-    con_end: str
-    dec_tag: str | None
-    con_tag: str | None
-    detail: str
+# Rule modes, as ints for the inner loop.
+_STD, _ONLY_FINAL, _NEVER_FINAL, _REWRITE, _CONTEXT = range(5)
+_MODES = {'stdrule': _STD, 'onlyfinalrule': _ONLY_FINAL, 'neverfinalrule': _NEVER_FINAL,
+          'rewriterule': _REWRITE, 'contextrule': _CONTEXT}
 
 
 def _load_rules(path: str):
@@ -41,24 +42,26 @@ def _load_rules(path: str):
 
 class Deconjugator:
     def __init__(self, rules_path: str = os.path.join(os.path.dirname(__file__), 'deconjugator.json')):
-        self.index: dict[str, list[tuple[dict, _VirtualRule, str]]] = {}
-        self.max_con_end = 0
+        # con_end -> rules ending in it, each (mode, context, con_end, dec_end, con_tag, dec_tag, step,
+        # has_detail), in file order; step is the detail to add to the process (or none).
+        self.index: dict[str, list[tuple]] = {}
 
         for rule in _load_rules(rules_path):
-            mode = rule['type']
+            mode = _MODES.get(rule['type'], _STD)
+            context = rule.get('contextrule') if mode == _CONTEXT else None
             dec_tags = rule.get('dec_tag') or [None]
             con_tags = rule.get('con_tag') or [None]
+            con_ends = rule['con_end']
+            detail = rule['detail']
             for i, dec_end in enumerate(rule['dec_end']):
-                con_ends = rule['con_end']
-                vr = _VirtualRule(
-                    dec_end,
-                    con_ends[i] if i < len(con_ends) else con_ends[0],
-                    dec_tags[i] if i < len(dec_tags) else dec_tags[0],
+                con_end = con_ends[i] if i < len(con_ends) else con_ends[0]
+                self.index.setdefault(con_end, []).append((
+                    mode, context, con_end, dec_end,
                     con_tags[i] if i < len(con_tags) else con_tags[0],
-                    rule['detail'],
-                )
-                self.max_con_end = max(self.max_con_end, len(vr.con_end))
-                self.index.setdefault(vr.con_end, []).append((rule, vr, mode))
+                    dec_tags[i] if i < len(dec_tags) else dec_tags[0],
+                    (detail,) if detail else (), bool(detail)))
+
+        self.suffix_lengths = tuple(sorted({len(con_end) for con_end in self.index}))
 
         # Results hold every intermediate form, so keep the cache small.
         self.deconjugate = lru_cache(maxsize=2000)(self._deconjugate)
@@ -66,71 +69,74 @@ class Deconjugator:
     def _deconjugate(self, text: str) -> tuple[Form, ...]:
         if not text:
             return ()
-        initial = Form(text, text, (), frozenset((text,)), ())
+        # Forms are plain tuples (text, original, tags, seen, process) until the end: equal and hashed as Form.
+        initial = (text, text, (), frozenset((text,)), ())
         seen = {initial}
+        matches = {}
         ordered = [initial]
         novel = [initial]
+        max_text = len(text) + MAX_TEXT_GROWTH
+        max_tags = len(text) + MAX_CHAIN_DEPTH_ABOVE_INPUT
 
         while novel:
             new_novel = []
             for form in novel:
-                if (
-                    not form.text
-                    or len(form.text) > len(form.original) + MAX_TEXT_GROWTH
-                    or len(form.tags) > len(form.original) + MAX_CHAIN_DEPTH_ABOVE_INPUT
-                ):
+                if not form[0] or len(form[0]) > max_text or len(form[2]) > max_tags:
                     continue
-                self._apply_rules(form, new_novel, seen, ordered)
+                self._apply_rules(form, new_novel, seen, ordered, matches)
             novel = new_novel
 
         # Longest text first, then ordinal, keeping discovery order for ties.
-        return tuple(sorted(ordered, key=lambda f: (-len(f.text), f.text)))
+        ordered.sort(key=lambda f: (-len(f[0]), f[0]))
+        return tuple([_new_tuple(Form, f) for f in ordered])
 
-    def _apply_rules(self, form: Form, new_novel: list, seen: set, ordered: list):
-        text = form.text
-        for suffix_len in range(min(self.max_con_end, len(text)) + 1):
-            suffix = text[len(text) - suffix_len:]
-            for rule, vr, mode in self.index.get(suffix, ()):
-                if mode == 'onlyfinalrule' and form.tags:
-                    continue
-                if mode == 'neverfinalrule' and not form.tags:
-                    continue
-                if mode == 'rewriterule' and text != vr.con_end:
-                    continue
-                if mode == 'contextrule':
-                    context = rule.get('contextrule')
-                    if context == 'v1inftrap' and form.tags == ('stem-ren',):
+    def _matches(self, text: str) -> list:
+        """(stem, rules) for each suffix of `text` that rules end in, shortest suffix first."""
+        length = len(text)
+        index = self.index
+        found = []
+        for suffix_len in self.suffix_lengths:
+            if suffix_len > length:
+                break
+            rules = index.get(text[length - suffix_len:])
+            if rules:
+                found.append((text[:length - suffix_len], rules))
+        return found
+
+    def _apply_rules(self, form: tuple, new_novel: list, seen: set, ordered: list, matches: dict):
+        text, original, tags, seen_texts, process = form
+        last_tag = tags[-1] if tags else None
+        found = matches.get(text)
+        if found is None:
+            found = matches[text] = self._matches(text)
+        for stem, rules in found:
+            for mode, context, con_end, dec_end, con_tag, dec_tag, step, has_detail in rules:
+                if tags:
+                    if mode == _ONLY_FINAL or last_tag != con_tag:
                         continue
-                    if context == 'saspecial':
-                        prefix_length = len(text) - len(rule['con_end'][0])
-                        if prefix_length > 0 and text[prefix_length - 1] == 'さ':
-                            continue
-                    if context == 'temirurule':
-                        prefix = text[: len(text) - len(rule['con_end'][0])]
-                        if not prefix.endswith(('て', 'で')):
-                            continue
-
-                if not rule['detail'] and not form.tags:
+                elif mode == _NEVER_FINAL or not has_detail:
                     continue
-                if form.tags and form.tags[-1] != vr.con_tag:
+                if mode == _REWRITE and text != con_end:
                     continue
+                if mode == _CONTEXT:
+                    if context == 'v1inftrap' and tags == ('stem-ren',):
+                        continue
+                    if context == 'saspecial' and stem and stem[-1] == 'さ':
+                        continue
+                    if context == 'temirurule' and not stem.endswith(('て', 'で')):
+                        continue
 
-                new_text = text[: len(text) - len(vr.con_end)] + vr.dec_end
-                if new_text == form.original:
+                new_text = stem + dec_end
+                if new_text == original:
                     continue
 
-                tags = form.tags
-                if not tags and vr.con_tag:
-                    tags = tags + (vr.con_tag,)
-                if vr.dec_tag:
-                    tags = tags + (vr.dec_tag,)
-                new_form = Form(
-                    new_text,
-                    form.original,
-                    tags,
-                    form.seen | {new_text},
-                    form.process + ((vr.detail,) if vr.detail else ()),
-                )
+                if tags:
+                    new_tags = tags + (dec_tag,) if dec_tag else tags
+                elif con_tag:
+                    new_tags = (con_tag, dec_tag) if dec_tag else (con_tag,)
+                else:
+                    new_tags = (dec_tag,) if dec_tag else ()
+                new_form = (new_text, original, new_tags, seen_texts | {new_text}, process + step)
                 if new_form not in seen:
                     seen.add(new_form)
                     ordered.append(new_form)

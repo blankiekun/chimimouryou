@@ -503,7 +503,12 @@ def _median(values):
 
 
 def _stdev(values):
-    return statistics.stdev(values) if len(values) >= 2 else math.nan
+    """Sample standard deviation in floats (statistics.stdev's exact fractions were ~2% of an estimate)."""
+    n = len(values)
+    if n < 2:
+        return math.nan
+    mean = math.fsum(values) / n
+    return math.sqrt(math.fsum([(x - mean) * (x - mean) for x in values]) / (n - 1))
 
 
 def compute_features(analysis: Analysis, frequency) -> dict:
