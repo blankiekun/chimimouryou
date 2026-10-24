@@ -176,6 +176,7 @@ contrast (4.5:1); built-in themes are checked by `themes.test.ts`.
 | `highlightPink`   | `--highlight-pink`     | Fourth highlight colour                   |
 | `searchMatch`     | `--search-match-color` | The search result you jumped to           |
 | `readingLine`     | `--reading-line-color` | What the audiobook or AI voice is reading |
+| `unknownWord`     | `--unknown-word-color` | Dotted underline under unknown words      |
 
 - Highlight colours sit on top of the book text, so give them roughly 30–45%
   opacity. Fully opaque highlights hide the text.

@@ -672,6 +672,13 @@
   background-color: var(--search-match-color);
 }
 
+/* Unknown words (lib/data/unknown-words.ts) */
+::highlight(ttu-unknown) {
+  text-decoration: underline dotted 1px;
+  text-decoration-color: var(--unknown-word-color);
+  text-underline-offset: 0.2em;
+}
+
 ::highlight(ttu-reading) {
   background-color: var(--reading-line-color);
 }

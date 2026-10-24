@@ -24,6 +24,8 @@ import {
 
 export interface ReadingsFile {
   characters: number;
+  /** [dictionary form, reading or null] per word */
+  words?: [string, string | null][];
   /** Furigana per kanji run: [offset from the word's start, length, base, ruby] */
   glosses: [number, number, string, string][][];
   /** [Δstart, word index, gloss index or -1, ...] */

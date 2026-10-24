@@ -9,6 +9,7 @@
     fontSize$,
     furiganaStyle$,
     hideFurigana$,
+    unknownWordUnderline$,
     viewMode$,
     writingMode$
   } from '$lib/data/store';
@@ -30,6 +31,8 @@
    * settings), More, and the panel toggle. Not part of upstream's layout.
    */
   export let title: string;
+  /** The book can have a readings file, so unknown words can be underlined */
+  export let canUnderlineUnknown = false;
   export let chapter: string;
   export let progress: string;
   export let panelOpen: boolean;
@@ -283,6 +286,22 @@
               percent: Math.round($furiganaProgress$.progress * 100)
             })}
       </p>
+    {/if}
+    {#if canUnderlineUnknown}
+      <div class="qs-row">
+        <span>{$t$('reader.unknownWords')}</span>
+        <button
+          type="button"
+          role="switch"
+          class="app-switch"
+          aria-checked={$unknownWordUnderline$}
+          aria-label={$t$('reader.unknownWords')}
+          on:click={() => unknownWordUnderline$.next(!$unknownWordUnderline$)}
+        >
+          <span class="app-switch-thumb" />
+          <span class="app-switch-text">{$t$('reader.underline')}</span>
+        </button>
+      </div>
     {/if}
     <div class="qs-row qs-themes">
       <span>{$t$('reader.theme')}</span>

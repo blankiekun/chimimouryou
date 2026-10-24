@@ -96,6 +96,11 @@ export const generatedFurigana$ = writableBooleanLocalStorageSubject()(
   'generatedFurigana',
   standalone
 );
+// Underlines unknown words in the reader (unknown-words.ts); needs a readings file too.
+export const unknownWordUnderline$ = writableBooleanLocalStorageSubject()(
+  'unknownWordUnderline',
+  false
+);
 export const furiganaStyle$ = writableStringLocalStorageSubject<FuriganaStyle>()(
   'furiganaStyle',
   FuriganaStyle.Partial
