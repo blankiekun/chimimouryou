@@ -104,6 +104,11 @@ let tools: Promise<
   [Awaited<ReturnType<typeof loadSudachi>>, Awaited<ReturnType<typeof loadPython>>]
 >;
 const packed = new Set<string>();
+/**
+ * The last book's texts and their tokens: yurigana asks for most texts twice in a part, and the
+ * book's other part asks for them again.
+ */
+let memo = { html: '', tokens: new Map<string, string>() };
 
 /** Reads a pack once into the bytearray browser.py hands Packed instead of a file. */
 async function loadPack(
@@ -140,6 +145,9 @@ self.onmessage = async ({ data }: MessageEvent<AnalysisRequest>) => {
 
     // Progress: the book's text met so far (texts asked for again, or words, add little).
     const length = data.html.replace(/<rt[^>]*>.*?<\/rt>|<[^>]+>/gs, '').length || 1;
+    if (memo.html !== data.html) memo = { html: data.html, tokens: new Map() };
+
+    const { tokens } = memo;
     const seen = new Set<string>();
     let read = 0;
     let posted = 0;
@@ -155,7 +163,11 @@ self.onmessage = async ({ data }: MessageEvent<AnalysisRequest>) => {
           post({ type: 'progress', share: Math.min(read / length, 0.99) });
         }
 
-        return tokenize(text);
+        let found = tokens.get(text);
+
+        if (found === undefined) tokens.set(text, (found = tokenize(text)));
+
+        return found;
       },
       data.part,
       data.wordsPerBook
