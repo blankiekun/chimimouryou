@@ -678,7 +678,7 @@ export const en = {
   'words.becauseIgnored': 'Ignored (counts as known)',
   'words.becausePlaced': 'Among the {count} most common words (level check)',
   'words.placement': 'Level check',
-  'words.placementResult': 'About {count} words. The {count} most common words count as known.',
+  'words.placementResult': 'About {count} words. The {cutoff} most common words count as known.',
   'words.placementNone':
     'Not taken. A 2-minute yes/no test of common words gives you a starting point.',
   'words.placementTake': 'Take the check',

@@ -1,21 +1,25 @@
 <script lang="ts">
   import SectionHead from '$lib/components/section-head.svelte';
   import { pagePath } from '$lib/data/env';
-  import { latestPlacement, placementResults$ } from '$lib/data/placement';
+  import { latestPlacement, placementResults$, placementWords } from '$lib/data/placement';
   import { t$ } from '$lib/i18n';
 
   /** The Words page's placement check: the current results and links to (re)take them. */
   export let number: number;
 
-  $: cutoff = latestPlacement($placementResults$, 'yesno')?.cutoff ?? 0;
-  $: hard = latestPlacement($placementResults$, 'typed')?.cutoff ?? 0;
+  $: yesno = latestPlacement($placementResults$, 'yesno');
+  $: cutoff = yesno?.cutoff ?? 0;
+  $: hard = placementWords(latestPlacement($placementResults$, 'typed'));
 </script>
 
 <section class="placement-section" aria-label={$t$('words.placement')}>
   <SectionHead {number} title={$t$('words.placement')} />
   <p>
     {cutoff
-      ? $t$('words.placementResult', { count: cutoff.toLocaleString('en-US') })
+      ? $t$('words.placementResult', {
+          count: placementWords(yesno).toLocaleString('en-US'),
+          cutoff: cutoff.toLocaleString('en-US')
+        })
       : $t$('words.placementNone')}
   </p>
   <p>

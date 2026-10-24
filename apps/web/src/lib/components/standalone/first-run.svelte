@@ -10,7 +10,13 @@
   import PointBox from '$lib/components/point-box.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import SocialAccountForm from '$lib/components/social/social-account-form.svelte';
-  import { placementCutoff$, placementFromWordTest$ } from '$lib/data/placement';
+  import {
+    placementAt,
+    placementCutoff$,
+    placementFromWordTest$,
+    placementResults$,
+    placementWords
+  } from '$lib/data/placement';
   import { socialSession$ } from '$lib/data/social-account';
   import { t$ } from '$lib/i18n';
   import { activePlugins$ } from '$lib/plugins';
@@ -425,7 +431,7 @@
         <p class="first-run-word-test">
           <strong
             >{$t$('placement.fromWordTest', {
-              count: $placementCutoff$.toLocaleString('en-US')
+              count: placementWords(placementAt($placementResults$)).toLocaleString('en-US')
             })}</strong
           >
           {$t$('placement.fromWordTestText', { count: $placementCutoff$.toLocaleString('en-US') })}

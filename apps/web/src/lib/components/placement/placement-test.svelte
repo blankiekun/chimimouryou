@@ -17,6 +17,7 @@
     placementPseudoWords,
     placementOffered$,
     placementResults$,
+    placementWords,
     readingMatches,
     recordPlacement,
     scorePlacement,
@@ -154,7 +155,7 @@
 
     result = scorePlacement(answers, undefined, hard ? hardGuess : 0);
     if (!result.retake) {
-      recordPlacement(hard ? 'typed' : 'yesno', result.cutoff, length);
+      recordPlacement(hard ? 'typed' : 'yesno', result.cutoff, length, result.words);
       // Home then says where it came from rather than offering the check.
       $placementFromWordTest$ = shared;
       previous = result.cutoff;
@@ -198,9 +199,9 @@
 
   let copied = false;
 
-  async function shareResult(cutoff: number) {
+  async function shareResult(words: number) {
     const url = `${window.location.origin}${pagePath}${testPath}`;
-    const text = $t$(hard ? 'hardTest.shareText' : 'wordTest.shareText', { count: number(cutoff) });
+    const text = $t$(hard ? 'hardTest.shareText' : 'wordTest.shareText', { count: number(words) });
 
     if (navigator.share) {
       await navigator.share({ text, url }).catch(() => {});
@@ -374,7 +375,7 @@
     </div>
   {:else if result && shared}
     <p class="placement-big">
-      {$t$('wordTest.result', { count: number(result.cutoff) })}
+      {$t$('wordTest.result', { count: number(placementWords(result)) })}
     </p>
     <p class="placement-lede">
       {$t$(
@@ -398,7 +399,7 @@
     </p>
     <div class="placement-actions">
       <a class="app-button app-button-primary" href="{pagePath}/manage">{$t$('wordTest.start')}</a>
-      <button type="button" class="app-button" on:click={() => shareResult(result?.cutoff ?? 0)}
+      <button type="button" class="app-button" on:click={() => shareResult(placementWords(result))}
         >{$t$(copied ? 'wordTest.copied' : 'wordTest.share')}</button
       >
       <button type="button" class="app-button app-button-quiet" on:click={start}
@@ -413,7 +414,7 @@
     <div class="placement-result">
       <PointBox
         label={$t$('placement.result')}
-        figure={$t$('placement.about', { count: number(result.cutoff) })}
+        figure={$t$('placement.about', { count: number(placementWords(result)) })}
         unit={$t$('placement.words')}
       >
         <p class="placement-result-text">
