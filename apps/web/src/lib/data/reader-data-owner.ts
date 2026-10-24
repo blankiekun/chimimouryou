@@ -22,9 +22,12 @@ const ownerKey = 'readerDataOwner';
 
 let release: Promise<void> | undefined;
 
-/** Called once per page load with the session state ('' = signed out). */
-export function releaseReaderData(user: AccountUser | null) {
-  release = releaseFor(user);
+/**
+ * Called once per page load with the session state, and with `signingOut` just before the reader
+ * signs out (while the catalog can still be read).
+ */
+export function releaseReaderData(user: AccountUser | null, signingOut = false) {
+  release = releaseFor(user, signingOut);
 
   return release;
 }
@@ -36,17 +39,21 @@ export async function readerDataOwner() {
   return window.localStorage.getItem(ownerKey);
 }
 
-async function releaseFor(user: AccountUser | null) {
+async function releaseFor(user: AccountUser | null, signingOut: boolean) {
   const owner = window.localStorage.getItem(ownerKey);
   const id = user?.id ?? '';
+
+  // A session that expired (or was ended by the server) keeps its reader's unsynced data: it is
+  // released when they sign out themselves or another account signs in.
+  if (!user && owner && !signingOut) return;
 
   // Data from before owners were recorded is adopted, like settings. So is the standalone's own
   // (owner '') when it connects to a server: it was this device's reader all along.
   if (owner !== null && owner !== id && !(standalone && owner === '')) {
-    await clearKnownWords();
-    // Throws when the catalog can't be read (signed out): the next page load retries.
+    // Throws when the catalog can't be read (signed out): nothing is cleared, the next load retries.
     const titles = new Set((await loadCalibreCatalog()).map((book) => book.title));
 
+    await clearKnownWords();
     await database.clearReaderData(titles);
     // Kanji met sync for every title, so none stay behind.
     await (await readerDb()).clear('kanji');

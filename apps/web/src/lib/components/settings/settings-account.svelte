@@ -20,6 +20,7 @@
     syncAccountSettings
   } from '$lib/data/account-settings-sync';
   import { pagePath } from '$lib/data/env';
+  import { releaseReaderData } from '$lib/data/reader-data-owner';
   import { t$ } from '$lib/i18n';
   import { onMount } from 'svelte';
 
@@ -85,6 +86,8 @@
 
   async function onSignOut() {
     error = await run(async () => {
+      // While still signed in: the catalog names the titles whose progress to forget.
+      await releaseReaderData(null, true).catch(() => {});
       await signOut();
       window.location.reload();
     });

@@ -852,7 +852,7 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
     }
 
     const files = await this.getExternalFiles(titleId);
-    const file = files.find((entry) => entry.name.startsWith(fileIdentifier));
+    const file = BaseStorageHandler.findFile(files, fileIdentifier);
 
     BaseStorageHandler.reportProgress(progressPerStep);
 

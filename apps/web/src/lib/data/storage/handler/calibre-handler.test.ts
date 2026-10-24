@@ -185,3 +185,21 @@ describe('CalibreStorageHandler offline', () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe('BaseStorageHandler.findFile', () => {
+  it('reads the newest progress/statistics file when an older one was left behind', async () => {
+    const { BaseStorageHandler } = await import('./base-handler');
+    const files = [
+      { name: 'bookdata_1_6_100_1_1.zip' },
+      { name: 'progress_1_6_1761000000000_0.2.json' },
+      { name: 'progress_1_6_1761000500000_0.4.json' },
+      { name: 'statistics_1_6_1761000500000_9.json' },
+      { name: 'statistics_1_6_1761000000000_5.json' }
+    ];
+
+    expect(BaseStorageHandler.findFile(files, 'progress_')?.name).toContain('_0.4.');
+    expect(BaseStorageHandler.findFile(files, 'statistics_')?.name).toContain('_9.');
+    expect(BaseStorageHandler.findFile(files, 'bookdata_')).toBe(files[0]);
+    expect(BaseStorageHandler.findFile(files, 'cover_')).toBeUndefined();
+  });
+});

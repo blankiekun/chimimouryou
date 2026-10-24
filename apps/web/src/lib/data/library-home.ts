@@ -75,8 +75,35 @@ export function continueReading(
 export function addToHome(titles: string[]) {
   homeBookTitles$.next([...new Set([...homeBookTitles$.getValue(), ...titles])]);
   const removed = { ...homeRemovedTitles$.getValue() };
-  titles.forEach((title) => delete removed[title]);
+  // A negative time records the add, so syncing with another device's older removal keeps it.
+  titles.forEach((title) => (removed[title] = -Date.now()));
   homeRemovedTitles$.next(removed);
+}
+
+/** Two devices' removals (positive times) and adds (negative), the newest per title. */
+export function mergeHomeRemovals(
+  local: Record<string, number> = {},
+  remote: Record<string, number> = {}
+) {
+  const merged = { ...remote };
+
+  Object.entries(local).forEach(([title, time]) => {
+    if (!(title in merged) || Math.abs(time) > Math.abs(merged[title])) merged[title] = time;
+  });
+
+  return merged;
+}
+
+/** Both devices' Home books, without the ones the newest change removed. */
+export function mergeHomeTitles(
+  local: string[] = [],
+  remote: string[] = [],
+  localRemoved?: Record<string, number>,
+  remoteRemoved?: Record<string, number>
+) {
+  const removed = mergeHomeRemovals(localRemoved, remoteRemoved);
+
+  return [...new Set([...local, ...remote])].filter((title) => !(removed[title] > 0));
 }
 
 /** Imports of more books than this (a library dump, not today's reading) stay in the Store only. */

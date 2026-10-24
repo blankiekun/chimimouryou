@@ -10,6 +10,7 @@
  * before the reading position. Nothing past the position is sent. Not part of upstream.
  */
 
+import { accountReady } from '$lib/data/account';
 import { resolveFeature } from '$lib/data/ai-connections';
 import { aiPrompts } from '$lib/data/ai-prompts';
 import { askAi } from '$lib/data/ask-ai';
@@ -81,8 +82,18 @@ export function sameRecaps(a?: BookRecaps, b?: BookRecaps) {
   return signature(a) === signature(b);
 }
 
+/** Whether a stored recap/lorebook record belongs to the current sign-in state (untagged ones do). */
+export async function ownsRecord(record: { account?: string }) {
+  const owner = (await accountReady())?.id ?? '';
+
+  return (record.account ?? owner) === owner;
+}
+
 async function getRecaps(title: string): Promise<BookRecaps> {
-  return (await (await readerDb()).get('recaps', title)) || { title, chapters: {} };
+  const stored = await (await readerDb()).get('recaps', title);
+
+  // Another sign-in state's copy (see extras-sync) is not this reader's: start empty.
+  return stored && (await ownsRecord(stored)) ? stored : { title, chapters: {} };
 }
 
 async function putRecaps(recaps: BookRecaps) {

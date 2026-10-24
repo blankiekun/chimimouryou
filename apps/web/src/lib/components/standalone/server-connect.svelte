@@ -43,7 +43,7 @@
   async function disconnect() {
     busy = true;
     // While still connected: the server's catalog names the titles whose progress to forget.
-    await releaseReaderData(null).catch(() => {});
+    await releaseReaderData(null, true).catch(() => {});
     await disconnectServer();
     chooseStorage(window, StorageKey.BROWSER);
     window.location.reload();
