@@ -367,13 +367,6 @@ export const en = {
   'settings.section.dictionary-audio.text': 'Where word audio comes from.',
   'settings.section.dictionary-shortcuts': 'Shortcuts',
   'settings.section.dictionary-shortcuts.text': 'Keys that work while the popup is open.',
-  'dict.download': 'Download',
-  'dict.downloading': 'Downloading {name}…',
-  'dict.downloadJaJa': 'Wiktionary Japanese–Japanese',
-  'dict.downloadJaEn': 'Wiktionary Japanese–English',
-  'dict.downloadAttribution':
-    '{size} MB · Wiktionary contributors, CC BY-SA 4.0, via kaikki.org and wiktionary-to-yomitan',
-  'dict.installed': 'Installed',
   'dict.jmdictHint': 'Download the zip from its releases page, then import it here.',
   'dict.fontSize': 'Font size',
   'dict.fontSizeHint': 'Text size in the popup, in pixels.',

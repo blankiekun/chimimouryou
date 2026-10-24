@@ -18,8 +18,6 @@
     deleteAllDictionaries,
     deleteDictionary,
     dictionaries$,
-    downloadDictionary,
-    downloadableDictionaries,
     exportYomitanSettings,
     importDictionary,
     importYomitanSettings,
@@ -43,7 +41,6 @@
   let loadError = '';
   let importing: { name: string; done: number; total: number } | undefined;
   let importErrors: string[] = [];
-  let downloading: { title: string; done: number; total: number } | undefined;
   let confirming = '';
   let backupMessage = '';
   let backupError = '';
@@ -132,28 +129,6 @@
         importErrors = [...importErrors, `${file.name}: ${error.message}`];
       }
     }
-    importing = undefined;
-  }
-
-  const megabytes = (bytes: number) => (bytes / 1e6).toFixed(1);
-
-  async function download(title: string, url: string, size: number) {
-    importErrors = [];
-    importing = { name: title, done: 0, total: 0 };
-    try {
-      const { errors } = await downloadDictionary(
-        url,
-        (done, total) => (downloading = { title, done, total: total || size }),
-        (done, total) => {
-          downloading = undefined;
-          importing = { name: title, done, total };
-        }
-      );
-      importErrors = errors.map((error) => `${title}: ${error}`);
-    } catch (error: any) {
-      importErrors = [`${title}: ${error.message}`];
-    }
-    downloading = undefined;
     importing = undefined;
   }
 
@@ -330,28 +305,6 @@
   <div class="dict-import">
     <p class="dict-lead">{$t$('dict.importLead')}</p>
     <ul class="dict-downloads">
-      {#each downloadableDictionaries as { title, label, size, url } (title)}
-        <li class="dict-download">
-          <span class="dict-name">
-            <span class="dict-title">{$t$(label)}</span>
-            <span class="dict-meta"
-              >{$t$('dict.downloadAttribution', { size: megabytes(size) })}</span
-            >
-          </span>
-          {#if summaries.has(title)}
-            <span class="dict-meta">{$t$('dict.installed')}</span>
-          {:else}
-            <button
-              type="button"
-              class="app-button"
-              disabled={!!importing}
-              on:click={() => download(title, url, size)}
-            >
-              {$t$('dict.download')}
-            </button>
-          {/if}
-        </li>
-      {/each}
       <li class="dict-download">
         <span class="dict-name">
           <span class="dict-title">JMdict</span>
@@ -376,22 +329,7 @@
       />
       {$t$('dict.import')}
     </label>
-    {#if downloading}
-      <div
-        class="dict-track"
-        role="progressbar"
-        aria-label={$t$('dict.downloading', { name: downloading.title })}
-        aria-valuemin={0}
-        aria-valuemax={downloading.total}
-        aria-valuenow={downloading.done}
-      >
-        <div class="dict-fill" style:width="{(downloading.done / downloading.total) * 100}%" />
-      </div>
-      <p class="dict-note">
-        {$t$('dict.downloading', { name: downloading.title })}
-        {megabytes(downloading.done)} / {megabytes(downloading.total)} MB
-      </p>
-    {:else if importing}
+    {#if importing}
       <div
         class="dict-track"
         role="progressbar"
