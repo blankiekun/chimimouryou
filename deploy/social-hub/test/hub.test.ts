@@ -526,6 +526,11 @@ describe('social hub', () => {
       rankAt: 0
     });
     expect(capRank({ streak: 1 } as { rank?: number }, null, 0, 0, day)).toEqual({ streak: 1 });
+    // A first rank from an old account rises from 1, whatever its characters allow.
+    expect(capRank({ rank: 7, chars: 1e7 }, { streak: 1 }, 0, 0, 40 * day)).toMatchObject({
+      rank: 2,
+      rankAt: 40 * day
+    });
   });
 
   it('feeds only friends’ events, once each, for 90 days', async () => {

@@ -1091,12 +1091,13 @@ export function capRank<T extends { rank?: number; chars?: number }>(
   let rank = Math.min(stats.rank, RANK_CHARS.filter((need) => need <= chars).length);
   let rankAt = time;
 
-  if (typeof old?.rank === 'number') {
-    const lastRose = Number(old.rankAt) || 0;
+  // No rank shared before (older stats, or sharing turned back on): rank 1 since the account began,
+  // like the app, so an old account cannot post a top rank in one push.
+  const oldRank = typeof old?.rank === 'number' ? old.rank : 1;
+  const lastRose = Number(old?.rankAt) || created;
 
-    rank = Math.min(rank, time - lastRose >= RANK_RISE ? old.rank + 1 : old.rank);
-    if (rank <= old.rank) rankAt = lastRose;
-  }
+  rank = Math.min(rank, time - lastRose >= RANK_RISE ? oldRank + 1 : oldRank);
+  if (rank <= oldRank) rankAt = lastRose;
   return { ...stats, chars, rank, rankAt };
 }
 
