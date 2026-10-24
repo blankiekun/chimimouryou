@@ -8,6 +8,7 @@
     placementCutoff$,
     placementFromWordTest$,
     placementLength,
+    placementPseudoWords,
     placementOffered$,
     scorePlacement,
     type PlacementAnswer,
@@ -27,7 +28,7 @@
   /** The public word test: share the result, then start reading */
   export let shared = false;
   const number = (value: number) => value.toLocaleString('en-US');
-  const realCount = placementLength - placementLength / 5;
+  const realCount = placementLength - placementPseudoWords;
 
   let step: 'intro' | 'test' | 'result' = 'intro';
   /** Words shown so far; the last one is waiting for an answer */

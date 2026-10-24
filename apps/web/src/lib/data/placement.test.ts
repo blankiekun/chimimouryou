@@ -6,10 +6,12 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  isPseudoSlot,
   nextItem,
   placementBands,
   placementLength,
   placementList,
+  placementPseudoWords,
   scorePlacement,
   type PlacementAnswer,
   type PlacementItem
@@ -44,7 +46,7 @@ function knower(rank: number, falseAlarms = 0) {
 }
 
 describe('placement items', () => {
-  it('has enough real words in every band and made-up words for 1 in 5', () => {
+  it('has enough real words in every band and plenty of made-up words', () => {
     placementBands.forEach((high, band) => {
       const real = placementList.filter((item) => item.b === band);
 
@@ -55,7 +57,7 @@ describe('placement items', () => {
       }
     });
     expect(placementList.filter((item) => item.r === undefined).length).toBeGreaterThanOrEqual(
-      placementLength / 5
+      placementPseudoWords * 20
     );
     expect(new Set(placementList.map((item) => item.w)).size).toBe(placementList.length);
   });
@@ -69,12 +71,13 @@ describe('placement items', () => {
 });
 
 describe('nextItem', () => {
-  it('shows each word once, every 5th one made up, and stops after the test', () => {
+  it('shows each word once, 5 made-up ones spread through it, and stops after the test', () => {
     const answers = take(knower(5000));
 
     expect(answers).toHaveLength(placementLength);
     expect(new Set(answers.map(({ item }) => item.w)).size).toBe(placementLength);
-    answers.forEach(({ item }, i) => expect(item.r === undefined).toBe(i % 5 === 4));
+    answers.forEach(({ item }, i) => expect(item.r === undefined).toBe(isPseudoSlot(i)));
+    expect(answers.filter(({ item }) => item.r === undefined)).toHaveLength(5);
   });
 
   it('spends most words near the boundary', () => {
@@ -111,6 +114,12 @@ describe('scorePlacement', () => {
 
     expect(result).toMatchObject({ cutoff: 0, retake: true });
     expect(result.falseAlarms).toBe(result.pseudoWords);
+  });
+
+  it('keeps a result after one or two slips, not after three', () => {
+    expect(scorePlacement(take(knower(20000, 1))).retake).toBe(false);
+    expect(scorePlacement(take(knower(20000, 2))).retake).toBe(false);
+    expect(scorePlacement(take(knower(20000, 3)))).toMatchObject({ cutoff: 0, retake: true });
   });
 
   it('lowers the estimate for made-up words answered yes', () => {
