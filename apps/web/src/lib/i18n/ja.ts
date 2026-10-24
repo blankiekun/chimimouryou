@@ -1875,7 +1875,7 @@ export const ja: Record<MessageKey, string> = {
   'placement.lede':
     '約2分。語が一つずつ出ます。意味と読みが分かるか答えてください。実在しない語も混ざっていて、それに「はい」と答えると結果が下がります。',
   'placement.items': '語数',
-  'placement.itemsValue': '{count}語（それまでの答えに合わせて選びます）',
+  'placement.lengthNote': '語はそれまでの答えに合わせて選びます。短いほど精度が下がります。',
   'placement.retakeText':
     '実在しない語{total}語のうち{count}語に「はい」と答えたため、結果は保存していません。意味が分かる語にだけ「はい」と答えて、もう一度受けてください。',
   'placement.keys': 'キー',

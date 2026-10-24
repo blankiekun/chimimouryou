@@ -1,13 +1,17 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import ButtonToggleGroup from '$lib/components/button-toggle-group/button-toggle-group.svelte';
+  import type { ToggleOption } from '$lib/components/button-toggle-group/toggle-option';
   import PointBox from '$lib/components/point-box.svelte';
   import { pagePath } from '$lib/data/env';
   import {
     nextItem,
     placementCutoff,
     placementCutoff$,
+    placementCutoffLength$,
     placementFromWordTest$,
     placementLength,
+    placementLengths,
     placementPseudoWords,
     placementOffered$,
     scorePlacement,
@@ -28,7 +32,10 @@
   /** The public word test: share the result, then start reading */
   export let shared = false;
   const number = (value: number) => value.toLocaleString('en-US');
-  const realCount = placementLength - placementPseudoWords;
+  const lengths: ToggleOption<number>[] = placementLengths.map((id) => ({ id, text: `${id}` }));
+
+  /** Words in this test: 20, 40 or 60 */
+  let length = placementLength;
 
   let step: 'intro' | 'test' | 'result' = 'intro';
   /** Words shown so far; the last one is waiting for an answer */
@@ -39,11 +46,15 @@
 
   $: index = answers.length;
   $: item = shown[index];
+  $: realCount = length - placementPseudoWords(length);
+
+  const next = () => nextItem(answers, undefined, undefined, undefined, length);
 
   function start() {
-    $placementOffered$ = true;
+    // The word test leaves Home's offer to say the result carried over.
+    if (!shared) $placementOffered$ = true;
     answers = [];
-    shown = [nextItem(answers)!];
+    shown = [next()!];
     result = undefined;
     step = 'test';
   }
@@ -53,16 +64,17 @@
 
     answers = [...answers, { item, yes: known }];
 
-    const next = nextItem(answers);
+    const following = next();
 
-    if (next) {
-      shown = [...shown.slice(0, answers.length), next];
+    if (following) {
+      shown = [...shown.slice(0, answers.length), following];
       return;
     }
 
     result = scorePlacement(answers);
     if (!result.retake) {
       $placementCutoff$ = result.cutoff;
+      $placementCutoffLength$ = length;
       // Home then says where it came from rather than offering the check.
       $placementFromWordTest$ = shared;
       previous = result.cutoff;
@@ -118,7 +130,10 @@
     <dl class="placement-facts">
       <div>
         <dt>{$t$('placement.items')}</dt>
-        <dd>{$t$('placement.itemsValue', { count: placementLength })}</dd>
+        <dd class="placement-length">
+          <ButtonToggleGroup options={lengths} bind:selectedOptionId={length} />
+          <small>{$t$('placement.lengthNote')}</small>
+        </dd>
       </div>
       <div>
         <dt>{$t$('placement.keys')}</dt>
@@ -142,9 +157,9 @@
     </div>
   {:else if step === 'test' && item}
     <div class="placement-progress">
-      <span>{$t$('placement.progress', { done: index + 1, total: placementLength })}</span>
+      <span>{$t$('placement.progress', { done: index + 1, total: length })}</span>
       <span class="placement-track" aria-hidden="true">
-        <span style:width="{(index / placementLength) * 100}%" />
+        <span style:width="{(index / length) * 100}%" />
       </span>
     </div>
     <p class="placement-question" id="placement-question">{$t$('placement.question')}</p>
@@ -293,6 +308,18 @@
 
   .placement-note {
     line-height: 1.7;
+  }
+
+  .placement-length {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .placement-length small {
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
   }
 
   .placement-actions,

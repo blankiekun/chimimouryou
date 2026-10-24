@@ -6,7 +6,8 @@
 
 /**
  * The placement check (/placement): a yes/no vocabulary test over Jiten frequency bands,
- * LexTALE style, with 7 made-up words spread through it to catch yes-bias. Adaptive: it starts mid-range
+ * LexTALE style, 20, 40 or 60 words with 3, 5 or 7 made-up ones spread through it to catch
+ * yes-bias. Adaptive: it starts mid-range
  * and moves a band up after a yes and down after a no, so most words land near the reader's
  * boundary. The result is one number, a frequency rank where a logistic curve of yes over
  * log(rank), shifted down by the false-alarm rate, crosses one half: word list rows ranked
@@ -44,8 +45,11 @@ export interface PlacementResult {
 
 export const placementBands: number[] = placementItems.bands;
 export const placementList: PlacementItem[] = placementItems.items;
-/** Words per test; 7 of them made up, one in each eighth (`isPseudoSlot`) */
-export const placementLength = 60;
+/** Test lengths the reader picks from, and the default */
+export const placementLengths = [20, 40, 60];
+export const placementLength = 40;
+/** Made-up words per length: about 1 in 8, at least 3 */
+const pseudoWords: Record<number, number> = { 20: 3, 40: 5, 60: 7 };
 
 /** The band of the 5,000 most common words */
 const startBand = Math.max(
@@ -55,17 +59,33 @@ const startBand = Math.max(
 /** The first answers move two bands, so a native reader reaches the last band (the end of
  * the frequency list) in about six answers */
 const fastSteps = 6;
-/** 4 of 7 made-up words answered yes: no result (up to 3 slips only shift the curve) */
+/**
+ * More than half the made-up words answered yes (2 of 3, 3 of 5, 4 of 7): no result. Fewer
+ * slips only shift the curve down.
+ */
 const maxFalseAlarmRate = 0.5;
-const pseudoEvery = 8;
 
-/** Positions 4, 12, 20 … 52: the made-up words, spread through the test. */
-export const isPseudoSlot = (index: number) => index % pseudoEvery === pseudoEvery / 2;
-export const placementPseudoWords = Math.ceil((placementLength - pseudoEvery / 2) / pseudoEvery);
+/** How many of a test's words are made up. */
+export const placementPseudoWords = (length = placementLength) =>
+  pseudoWords[length] ?? Math.max(3, Math.round(length / 8));
+
+/** Whether word `index` of a test of `length` is a made-up one: spread evenly through it. */
+export function isPseudoSlot(index: number, length = placementLength) {
+  const count = placementPseudoWords(length);
+
+  return Array.from({ length: count }, (_, k) => Math.floor(((k + 0.5) * length) / count)).includes(
+    index
+  );
+}
 const pivot = Math.log(5000);
 
 /** 0: not taken (or nothing known). */
 export const placementCutoff$ = writableNumberLocalStorageSubject()('placementCutoff', 0);
+/** Words in the test that gave `placementCutoff$` (20, 40 or 60). */
+export const placementCutoffLength$ = writableNumberLocalStorageSubject()(
+  'placementCutoffLength',
+  0
+);
 /** Home offered the check once (per browser). */
 export const placementOffered$ = writableBooleanLocalStorageSubject()('placementOffered', false);
 /** The result came from the public word test (/word-test): Home says so once. */
@@ -103,15 +123,16 @@ export function nextItem(
   answers: PlacementAnswer[],
   items = placementList,
   random = Math.random,
-  bands = placementBands
+  bands = placementBands,
+  length = placementLength
 ): PlacementItem | undefined {
-  if (answers.length >= placementLength) return undefined;
+  if (answers.length >= length) return undefined;
 
   const used = new Set(answers.map(({ item }) => item.w));
   const unused = items.filter((item) => !used.has(item.w));
   const pick = (pool: PlacementItem[]) => pool[Math.floor(random() * pool.length)];
 
-  if (isPseudoSlot(answers.length)) {
+  if (isPseudoSlot(answers.length, length)) {
     const pseudo = unused.filter((item) => item.b === undefined);
 
     if (pseudo.length) return pick(pseudo);

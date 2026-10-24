@@ -1857,7 +1857,7 @@ export const en = {
   'placement.lede':
     'About 2 minutes. Words appear one at a time: say whether you know each one, its meaning and reading. Some are made up, and saying yes to those lowers the result.',
   'placement.items': 'Words',
-  'placement.itemsValue': '{count}; each one is chosen by your answers so far',
+  'placement.lengthNote': 'Each word is chosen by your answers so far. Shorter is less precise.',
   'placement.retakeText':
     'You said yes to {count} of {total} made-up words, so no result was saved. Take it again and say yes only to words whose meaning you know.',
   'placement.keys': 'Keys',

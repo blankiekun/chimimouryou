@@ -26,13 +26,14 @@ function seeded(seed: number) {
 }
 
 /** Takes the whole test with these answers. */
-function take(says: (item: PlacementItem) => boolean, seed = 1) {
+function take(says: (item: PlacementItem) => boolean, seed = 1, length = placementLength) {
   const random = seeded(seed);
   const answers: PlacementAnswer[] = [];
+  const next = () => nextItem(answers, undefined, random, undefined, length);
 
-  for (let item = nextItem(answers, undefined, random); item; ) {
+  for (let item = next(); item; ) {
     answers.push({ item, yes: says(item) });
-    item = nextItem(answers, undefined, random);
+    item = next();
   }
 
   return answers;
@@ -57,7 +58,7 @@ describe('placement items', () => {
       }
     });
     expect(placementList.filter((item) => item.r === undefined).length).toBeGreaterThanOrEqual(
-      placementPseudoWords * 20
+      placementPseudoWords(60) * 20
     );
     expect(new Set(placementList.map((item) => item.w)).size).toBe(placementList.length);
   });
@@ -71,13 +72,23 @@ describe('placement items', () => {
 });
 
 describe('nextItem', () => {
-  it('shows each word once, 7 made-up ones spread through it, and stops after the test', () => {
-    const answers = take(knower(5000));
+  it('shows each word once, made-up ones spread through it, and stops after the test', () => {
+    for (const [length, pseudo] of [
+      [20, 3],
+      [40, 5],
+      [60, 7]
+    ]) {
+      const answers = take(knower(5000), 1, length);
+      const slots = answers.flatMap(({ item }, i) => (item.r === undefined ? [i] : []));
 
-    expect(answers).toHaveLength(placementLength);
-    expect(new Set(answers.map(({ item }) => item.w)).size).toBe(placementLength);
-    answers.forEach(({ item }, i) => expect(item.r === undefined).toBe(isPseudoSlot(i)));
-    expect(answers.filter(({ item }) => item.r === undefined)).toHaveLength(7);
+      expect(answers).toHaveLength(length);
+      expect(new Set(answers.map(({ item }) => item.w)).size).toBe(length);
+      answers.forEach(({ item }, i) => expect(item.r === undefined).toBe(isPseudoSlot(i, length)));
+      expect(slots).toHaveLength(pseudo);
+      // Not bunched: the first in the first stretch, the last in the last.
+      expect(slots[0]).toBeLessThan(length / pseudo);
+      expect(slots[pseudo - 1]).toBeGreaterThan(length - length / pseudo);
+    }
   });
 
   it('spends most words near the boundary', () => {
@@ -116,11 +127,19 @@ describe('scorePlacement', () => {
     expect(result.falseAlarms).toBe(result.pseudoWords);
   });
 
-  it('keeps a result after up to three slips, not after four', () => {
-    expect(scorePlacement(take(knower(20000, 1))).retake).toBe(false);
-    expect(scorePlacement(take(knower(20000, 2))).retake).toBe(false);
-    expect(scorePlacement(take(knower(20000, 3))).retake).toBe(false);
-    expect(scorePlacement(take(knower(20000, 4)))).toMatchObject({ cutoff: 0, retake: true });
+  it('keeps a result unless more than half the made-up words got a yes', () => {
+    for (const [length, kept] of [
+      [20, 1],
+      [40, 2],
+      [60, 3]
+    ]) {
+      expect(scorePlacement(take(knower(20000, kept), 1, length)).retake).toBe(false);
+      expect(scorePlacement(take(knower(20000, kept + 1), 1, length))).toMatchObject({
+        cutoff: 0,
+        retake: true
+      });
+      expect(scorePlacement(take(() => true, 1, length)).retake).toBe(true);
+    }
   });
 
   it('lowers the estimate for made-up words answered yes', () => {
