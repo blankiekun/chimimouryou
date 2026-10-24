@@ -13,15 +13,20 @@
 export const cssHighlightsSupported =
   typeof CSS !== 'undefined' && 'highlights' in CSS && typeof Highlight !== 'undefined';
 
-export function setCssHighlight(name: string, ranges: Range[]) {
-  if (!cssHighlightsSupported) {
+/** `view`: the window whose document holds the ranges (a same-origin iframe's, for /v). */
+export function setCssHighlight(
+  name: string,
+  ranges: Range[],
+  view: typeof globalThis = globalThis
+) {
+  if (!cssHighlightsSupported || !view.CSS?.highlights) {
     return;
   }
 
   if (ranges.length) {
-    CSS.highlights.set(name, new Highlight(...ranges));
+    view.CSS.highlights.set(name, new view.Highlight(...ranges));
   } else {
-    CSS.highlights.delete(name);
+    view.CSS.highlights.delete(name);
   }
 }
 

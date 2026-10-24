@@ -6,7 +6,9 @@
    *   the mouse scans on its own with Yomitan's scanning inputs (default Shift + hover, or the
    *   modifier pressed while hovering). Only text inside `scope` (and the popup itself, for
    *   nested lookups) is scanned; the match is shown with the CSS Custom Highlight API, so the
-   *   book's DOM is never changed.
+   *   book's DOM is never changed. `attachFrame` adds a same-origin iframe (the VN player's
+   *   text overlay, /v): its pointer and key events are listened to, and points over it are
+   *   scanned in its document.
    * - Popup: near the word on larger screens (Yomitan's placement, app/popup-position.js); a
    *   sheet at the bottom on phones, or at the top when the word is down there.
    * - Nested lookups replace the content with a back button, up to the nesting depth.
@@ -73,6 +75,10 @@
   let hoverTimer: ReturnType<typeof setTimeout> | undefined;
   let viewportWidth = 0;
   let viewportHeight = 0;
+  let frame: HTMLIFrameElement | undefined;
+  let detachFrame = () => {};
+  /** The window the root match is highlighted in */
+  let highlightView: typeof globalThis = globalThis;
 
   $: profile = $yomitanOptions$ ? profileOptions($yomitanOptions$) : undefined;
   $: view = views[index] as View | undefined;
@@ -106,6 +112,8 @@
 
   onDestroy(() => {
     clearTimeout(hoverTimer);
+    detachFrame();
+    setCssHighlight(highlightName, [], highlightView);
     setCssHighlight(highlightName, []);
     setCssHighlight(nestedHighlightName, []);
     stopTermAudio();
@@ -123,9 +131,66 @@
     if (!input?.options.scanOnTouchTap && !(type === 'pen' && input?.options.scanOnPenRelease)) {
       return false;
     }
-    const target = document.elementFromPoint(x, y);
-    if (!target?.closest(scope)) return false;
+    const at = pointAt(x, y);
+    if (!inScope(at.doc.elementFromPoint(at.x, at.y))) return false;
     return searchAt(x, y, false);
+  }
+
+  /**
+   * Scans a same-origin iframe too (loaded: call again after it navigates). Its text counts as
+   * in scope; the host decides which taps there reach `tapAt`.
+   */
+  export function attachFrame(element: HTMLIFrameElement) {
+    detachFrame();
+    const view = element.contentWindow;
+    if (!view) return;
+    frame = element;
+    const offset = () => element.getBoundingClientRect();
+    const down = (event: PointerEvent) => {
+      const { left, top } = offset();
+      pointerDown(event.clientX + left, event.clientY + top, event.pointerType, event.target);
+    };
+    const move = (event: PointerEvent) => {
+      const { left, top } = offset();
+      pointerMove(
+        event.clientX + left,
+        event.clientY + top,
+        event.pointerType,
+        event.target,
+        getActiveModifiersAndButtons(event)
+      );
+    };
+    view.addEventListener('pointerdown', down, true);
+    view.addEventListener('pointermove', move);
+    view.addEventListener('keydown', onKeydown, true);
+    detachFrame = () => {
+      view.removeEventListener('pointerdown', down, true);
+      view.removeEventListener('pointermove', move);
+      view.removeEventListener('keydown', onKeydown, true);
+      frame = undefined;
+      detachFrame = () => {};
+    };
+  }
+
+  /** The document under a viewport point, and the point in it (an attached iframe's, if over it). */
+  function pointAt(x: number, y: number) {
+    const doc = frame?.contentDocument;
+    if (frame && doc) {
+      const { left, top, right, bottom } = frame.getBoundingClientRect();
+      if (x >= left && x < right && y >= top && y < bottom) {
+        return { doc, x: x - left, y: y - top, left, top };
+      }
+    }
+    return { doc: document, x, y, left: 0, top: 0 };
+  }
+
+  // Elements from an iframe aren't `instanceof Element` here.
+  const isElement = (target: unknown): target is Element =>
+    !!target && (target as Node).nodeType === Node.ELEMENT_NODE;
+
+  function inScope(target: unknown) {
+    if (!isElement(target)) return false;
+    return !!target.closest(scope) || (!!frame && target.ownerDocument === frame.contentDocument);
   }
 
   export function close() {
@@ -133,23 +198,24 @@
     views = [];
     index = -1;
     lastScanKey = '';
-    setCssHighlight(highlightName, []);
+    setCssHighlight(highlightName, [], highlightView);
     setCssHighlight(nestedHighlightName, []);
     stopTermAudio();
   }
 
   function searchAt(x: number, y: number, nested: boolean) {
     if (!profile) return false;
-    const scan = scanAt(x, y, profile.scanning);
+    const at = pointAt(x, y);
+    const scan = scanAt(at.x, at.y, profile.scanning, at.doc);
     if (!scan) return false;
     const key = `${nested}:${scan.text}`;
     if (key === lastScanKey && open) return true;
     lastScanKey = key;
-    run(scan, nested);
+    run(scan, nested, at);
     return true;
   }
 
-  async function run(scan: ScannedText, nested: boolean) {
+  async function run(scan: ScannedText, nested: boolean, at: { left: number; top: number }) {
     if (!profile) return;
     const current = ++token;
     let result: LookupResult;
@@ -169,9 +235,13 @@
       setCssHighlight(nestedHighlightName, [range]);
       views = [...views.slice(0, index + 1), nextView];
     } else {
-      setCssHighlight(highlightName, [range]);
+      setCssHighlight(highlightName, [], highlightView);
+      highlightView = range.startContainer.ownerDocument?.defaultView ?? globalThis;
+      setCssHighlight(highlightName, [range], highlightView);
       setCssHighlight(nestedHighlightName, []);
-      sourceRects = [...range.getClientRects()];
+      sourceRects = [...range.getClientRects()].map(
+        ({ x, y, width, height }) => new DOMRect(x + at.left, y + at.top, width, height)
+      );
       const element = range.startContainer.parentElement;
       writingMode = getElementWritingMode(element);
       views = [nextView];
@@ -279,21 +349,39 @@
     return target instanceof Node && !!popupEl?.contains(target);
   }
 
-  function onPointerDown(event: PointerEvent) {
-    lastPointer = { x: event.clientX, y: event.clientY, type: event.pointerType };
-    if (open && !inPopup(event.target)) close();
+  const onPointerDown = (event: PointerEvent) =>
+    pointerDown(event.clientX, event.clientY, event.pointerType, event.target);
+
+  const onPointerMove = (event: PointerEvent) =>
+    pointerMove(
+      event.clientX,
+      event.clientY,
+      event.pointerType,
+      event.target,
+      getActiveModifiersAndButtons(event)
+    );
+
+  function pointerDown(x: number, y: number, type: string, target: EventTarget | null) {
+    lastPointer = { x, y, type };
+    if (open && !inPopup(target)) close();
   }
 
-  function onPointerMove(event: PointerEvent) {
-    lastPointer = { x: event.clientX, y: event.clientY, type: event.pointerType };
-    if (event.pointerType === 'touch') return;
-    scanHover(event.clientX, event.clientY, event.target, getActiveModifiersAndButtons(event));
+  function pointerMove(
+    x: number,
+    y: number,
+    type: string,
+    target: EventTarget | null,
+    modifiers: string[]
+  ) {
+    lastPointer = { x, y, type };
+    if (type === 'touch') return;
+    scanHover(x, y, target, modifiers);
   }
 
   function scanHover(x: number, y: number, target: EventTarget | null, modifiers: string[]) {
-    if (!profile || !$builtInLookups$ || !(target instanceof Element)) return;
+    if (!profile || !$builtInLookups$ || !isElement(target)) return;
     const nested = inPopup(target);
-    if (!nested && !target.closest(scope)) return;
+    if (!nested && !inScope(target)) return;
     if (nested && (!canNest() || target.closest('a, button, summary'))) return;
     const type = lastPointer?.type === 'pen' ? 'pen' : 'mouse';
     const input = matchingInput(profile.scanning.inputs, type, modifiers);
@@ -320,7 +408,8 @@
     }
     // The modifier pressed while the pointer rests on text (scanWithoutMousemove).
     if (profile.scanning.scanWithoutMousemove && lastPointer && lastPointer.type !== 'touch') {
-      const target = document.elementFromPoint(lastPointer.x, lastPointer.y);
+      const at = pointAt(lastPointer.x, lastPointer.y);
+      const target = at.doc.elementFromPoint(at.x, at.y);
       scanHover(lastPointer.x, lastPointer.y, target, getActiveModifiers(event));
     }
   }
