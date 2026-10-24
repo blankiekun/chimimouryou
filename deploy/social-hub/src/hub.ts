@@ -113,6 +113,12 @@ const MAX_FINISHED = 50;
 const MAX_EVENTS = 100;
 /** Streaks that make an event, in days */
 const STREAKS = [7, 30, 100, 365, 1000];
+/** Characters each reading rank needs (the app's reading-rank.ts): a shared rank is capped by them */
+const RANK_CHARS = [0, 100_000, 250_000, 600_000, 1_500_000, 4_000_000, 10_000_000];
+/** Characters a day the hub believes at most, from the account's creation or the last push */
+const RANK_DAILY_CAP = 300_000;
+/** A shared rank rises one tier at most this often */
+const RANK_RISE = 7 * DAY;
 /** A book that shows up at or past this share isn't announced as started */
 const STARTED_BELOW = 0.25;
 const PROFILE_TTL = 15 * MINUTE;
@@ -1052,8 +1058,46 @@ function validStats(value: unknown, wordsKnown: boolean) {
     heat: stats.heat,
     ...(wordsKnown && stats.wordsKnown !== undefined && stats.wordsKnown !== null
       ? { wordsKnown: count(stats.wordsKnown) }
+      : {}),
+    ...(stats.rank !== undefined && stats.rank !== null
+      ? {
+          rank: Math.min(Math.max(count(stats.rank), 1), RANK_CHARS.length),
+          chars: count(stats.chars)
+        }
       : {})
   };
+}
+
+/**
+ * Caps a shared reading rank by what the hub saw: characters grow at most RANK_DAILY_CAP a day
+ * since the last stats (or the account's creation), the rank is at most what those characters
+ * support, and it rises one tier per RANK_RISE (`rankAt`: when it last rose).
+ */
+export function capRank<T extends { rank?: number; chars?: number }>(
+  stats: T,
+  old: Row | null,
+  oldAt: number,
+  created: number,
+  time: number
+) {
+  if (stats.rank === undefined || stats.chars === undefined) return stats;
+
+  const hadChars = typeof old?.chars === 'number';
+  const since = hadChars ? oldAt : created;
+  const chars = Math.min(
+    stats.chars,
+    Math.floor((hadChars ? (old!.chars as number) : 0) + ((time - since) / DAY) * RANK_DAILY_CAP)
+  );
+  let rank = Math.min(stats.rank, RANK_CHARS.filter((need) => need <= chars).length);
+  let rankAt = time;
+
+  if (typeof old?.rank === 'number') {
+    const lastRose = Number(old.rankAt) || 0;
+
+    rank = Math.min(rank, time - lastRose >= RANK_RISE ? old.rank + 1 : old.rank);
+    if (rank <= old.rank) rankAt = lastRose;
+  }
+  return { ...stats, chars, rank, rankAt };
 }
 
 /**
@@ -1063,7 +1107,7 @@ function validStats(value: unknown, wordsKnown: boolean) {
 async function pushStatus(env: Env, user: UserRow, body: Row) {
   const share = sharing(user);
   const books = validBooks(body.books).filter((book) => share.current && !share.hidden(book.kind));
-  const stats = share.stats ? validStats(body.stats, share.wordsKnown) : null;
+  const sent = share.stats ? validStats(body.stats, share.wordsKnown) : null;
   const finishedNow = validFinished(body.finished);
   const done = finishedNow && !share.hidden(finishedNow.kind) ? finishedNow : null;
   const time = now();
@@ -1079,8 +1123,19 @@ async function pushStatus(env: Env, user: UserRow, body: Row) {
 
   const [before, oldStats] = await Promise.all([
     env.DB.prepare('SELECT book_key FROM status WHERE user = ?1').bind(user.id).all(),
-    env.DB.prepare('SELECT data FROM stats WHERE user = ?1').bind(user.id).first<{ data: string }>()
+    env.DB.prepare('SELECT data, at FROM stats WHERE user = ?1')
+      .bind(user.id)
+      .first<{ data: string; at: number }>()
   ]);
+  const stats =
+    sent &&
+    capRank(
+      sent,
+      oldStats ? JSON.parse(oldStats.data) : null,
+      oldStats?.at ?? 0,
+      user.created,
+      time
+    );
   const known = new Set(before.results.map((row) => row.book_key));
   const events: [string, string, string, string, number][] = [];
 

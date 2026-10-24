@@ -1,4 +1,6 @@
 <script lang="ts">
+  import RankBadge from '$lib/components/reading-rank/rank-badge.svelte';
+  import { lightNovels } from '$lib/data/reading-rank';
   import CoverCard from '$lib/components/book-card/cover-card.svelte';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
   import SectionHead from '$lib/components/section-head.svelte';
@@ -62,20 +64,33 @@
   $: link = `${typeof location === 'undefined' ? '' : location.origin}${pagePath}/u?name=${person.username}`;
   $: daysRead = stats ? [...stats.heat].filter((level) => level !== '0').length : 0;
   $: year = new Date().getFullYear();
-  $: statCells = stats
-    ? [
-        {
-          value: $t$(stats.streak === 1 ? 'social.dayOne' : 'social.days', { count: stats.streak }),
-          label: $t$('social.streak')
-        },
-        { value: stats.weekChars.toLocaleString('en-US'), label: $t$('social.charsWeek') },
-        { value: duration(stats.weekMinutes), label: $t$('social.timeWeek') },
-        { value: String(stats.finishedYear), label: $t$('social.finishedIn', { year }) },
-        ...(stats.wordsKnown !== undefined && show('wordsKnown')
-          ? [{ value: stats.wordsKnown.toLocaleString('en-US'), label: $t$('social.wordsKnown') }]
-          : [])
-      ]
-    : [];
+  $: statCells = (
+    stats
+      ? [
+          ...(stats.rank
+            ? [
+                { value: '', tier: stats.rank, label: $t$('social.rank') },
+                {
+                  value: lightNovels(stats.chars ?? 0).toFixed(1),
+                  label: $t$('social.novels')
+                }
+              ]
+            : []),
+          {
+            value: $t$(stats.streak === 1 ? 'social.dayOne' : 'social.days', {
+              count: stats.streak
+            }),
+            label: $t$('social.streak')
+          },
+          { value: stats.weekChars.toLocaleString('en-US'), label: $t$('social.charsWeek') },
+          { value: duration(stats.weekMinutes), label: $t$('social.timeWeek') },
+          { value: String(stats.finishedYear), label: $t$('social.finishedIn', { year }) },
+          ...(stats.wordsKnown !== undefined && show('wordsKnown')
+            ? [{ value: stats.wordsKnown.toLocaleString('en-US'), label: $t$('social.wordsKnown') }]
+            : [])
+        ]
+      : []
+  ) as { value: string; label: string; tier?: number }[];
   $: books = show('current') ? profile.books : [];
   $: finished = show('finished') ? profile.finished.slice(0, 10) : [];
   $: events = self && !shared('activity') ? [] : profile.events;
@@ -305,7 +320,9 @@
         {#each statCells as cell (cell.label)}
           <div class="profile-stat">
             <dt>{cell.label}</dt>
-            <dd>{cell.value}</dd>
+            <dd>
+              {#if cell.tier}<RankBadge tier={cell.tier} />{:else}{cell.value}{/if}
+            </dd>
           </div>
         {/each}
       </dl>

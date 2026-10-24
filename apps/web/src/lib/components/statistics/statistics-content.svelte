@@ -12,6 +12,7 @@
     StatisticsEditRequest
   } from '$lib/components/statistics/statistics-summary/statistics-summary';
   import WordsKnownChart from '$lib/components/statistics/words-known-chart.svelte';
+  import ReadingRankRow from '$lib/components/reading-rank/reading-rank-row.svelte';
   import CharactersChart from '$lib/components/statistics/characters-chart.svelte';
   import { charactersPerDay, periodTotals } from '$lib/components/statistics/characters-per-day';
   import PointBox from '$lib/components/point-box.svelte';
@@ -901,6 +902,7 @@
   </section>
   <section class="stats-section" aria-label={$t$('statistics.wordsKnown')}>
     <SectionHead number={2} title={$t$('statistics.wordsKnown')} />
+    <ReadingRankRow />
     <WordsKnownChart {statisticsData} {todayKey} />
   </section>
   <section

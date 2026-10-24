@@ -6,7 +6,7 @@
 
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import hub, { STATUS_GAP, cleanUp, clientAddress, type Env } from '../src/hub';
+import hub, { STATUS_GAP, capRank, cleanUp, clientAddress, type Env } from '../src/hub';
 import { memoryD1 } from './d1';
 
 const key = (n: number) => n.toString(16).padStart(64, '0');
@@ -472,6 +472,60 @@ describe('social hub', () => {
       stats: stats(7)
     });
     expect([rows('status'), rows('stats'), rows('events')]).toEqual([[], [], []]);
+  });
+
+  it('caps a shared rank by the characters it has seen and one tier a week', async () => {
+    const aki = await signUp('aki');
+    const stored = () => JSON.parse(rows('stats')[0].data as string);
+
+    // A new account can't claim the top rank: characters grow 300,000 a day from its creation.
+    await push(aki, { stats: { ...stats(1), rank: 7, chars: 10_000_000 } });
+    expect(stored()).toMatchObject({ rank: 1 });
+    expect(stored().chars).toBeLessThan(1000);
+
+    const claim = () => push(aki, { stats: { ...stats(1), rank: 7, chars: 10_000_000 } });
+
+    // 300k characters support rank 3, but a rank rises one tier a week.
+    vi.advanceTimersByTime(86400_000);
+    await claim();
+    expect(stored()).toMatchObject({ rank: 1 });
+    vi.advanceTimersByTime(6 * 86400_000);
+    await claim();
+    expect(stored()).toMatchObject({ rank: 2 });
+    vi.advanceTimersByTime(86400_000);
+    await claim();
+    expect(stored()).toMatchObject({ rank: 2 });
+    vi.advanceTimersByTime(6 * 86400_000);
+    await claim();
+    expect(stored()).toMatchObject({ rank: 3 });
+    expect((await call('GET', '/v1/profile/aki')).body.stats).toMatchObject({ rank: 3 });
+  });
+
+  it('caps ranks without a request', () => {
+    const day = 86400;
+    const base = { rank: 4, chars: 700_000 };
+
+    // Three days since the last push at 100k: 1M allowed, rank 3 + 1 after a week.
+    expect(capRank(base, { rank: 3, chars: 100_000, rankAt: 0 }, 0, 0, 8 * day)).toEqual({
+      ...base,
+      rankAt: 8 * day
+    });
+    expect(capRank(base, { rank: 3, chars: 100_000, rankAt: 0 }, 7 * day, 0, 8 * day)).toEqual({
+      chars: 400_000,
+      rank: 3,
+      rankAt: 0
+    });
+    expect(capRank(base, { rank: 2, chars: 1e6, rankAt: day }, day, 0, 2 * day)).toMatchObject({
+      rank: 2,
+      rankAt: day
+    });
+    // A lower claim is taken as it is; stats without a rank pass through.
+    expect(capRank({ rank: 1, chars: 0 }, { rank: 5, chars: 9e6, rankAt: 0 }, 0, 0, day)).toEqual({
+      rank: 1,
+      chars: 0,
+      rankAt: 0
+    });
+    expect(capRank({ streak: 1 } as { rank?: number }, null, 0, 0, day)).toEqual({ streak: 1 });
   });
 
   it('feeds only friends’ events, once each, for 90 days', async () => {
