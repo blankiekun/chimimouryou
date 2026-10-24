@@ -30,12 +30,7 @@ import {
   askAiDefaultPreset$,
   askAiPresets$,
   askAiReaderNote$,
-  openRouterApiKey$,
-  openRouterModel$,
-  openRouterRecapModel$,
   lorebookAutoInterval$,
-  elevenLabsApiKey$,
-  elevenLabsModel$,
   ttsPlaybackRate$,
   ttsVoiceId$
 } from '$lib/data/ai-settings';
@@ -126,9 +121,6 @@ const sharedSettings: Record<string, Store> = {
   aiConnections: aiConnections$,
   aiConnectionKeys: aiConnectionKeys$,
   aiFeatures: aiFeatures$,
-  openRouterApiKey: openRouterApiKey$,
-  openRouterModel: openRouterModel$,
-  openRouterRecapModel: openRouterRecapModel$,
   lorebookAutoInterval: lorebookAutoInterval$,
   aiLanguage: aiLanguage$,
   aiPromptOverrides: aiPromptOverrides$,
@@ -145,8 +137,6 @@ const sharedSettings: Record<string, Store> = {
   askAiPresets: askAiPresets$,
   askAiDefaultPreset: askAiDefaultPreset$,
   askAiReaderNote: askAiReaderNote$,
-  elevenLabsApiKey: elevenLabsApiKey$,
-  elevenLabsModel: elevenLabsModel$,
   ttsVoiceId: ttsVoiceId$,
   ttsPlaybackRate: ttsPlaybackRate$
 };
@@ -158,8 +148,6 @@ const sharedSettings: Record<string, Store> = {
  */
 const secretSettings = [
   'aiConnectionKeys',
-  'openRouterApiKey',
-  'elevenLabsApiKey',
   'audiobookshelfToken',
   // The hub sign-in: other browsers of the server account are signed in to the hub too.
   'socialSession'
@@ -233,9 +221,11 @@ export function mergeEntries(
   ]).forEach((id) => {
     const localTime = localTimes[id] ?? 0;
     const remoteTime = remoteTimes[id] ?? 0;
+    // A tie goes to a deletion, then to the account's copy.
     const useLocal =
       Math.abs(localTime) > Math.abs(remoteTime) ||
-      (Math.abs(localTime) === Math.abs(remoteTime) && !(id in remote));
+      (Math.abs(localTime) === Math.abs(remoteTime) &&
+        (localTime < 0 !== remoteTime < 0 ? localTime < 0 : !(id in remote)));
     const time = useLocal ? localTime : remoteTime;
     const side = useLocal ? local : remote;
 
@@ -413,11 +403,20 @@ async function syncOnce() {
 }
 
 /** Applies the newer remote settings; resolves the file to upload when this browser has newer ones. */
+const oldAiSettings = [
+  'openRouterApiKey',
+  'openRouterModel',
+  'openRouterRecapModel',
+  'elevenLabsApiKey',
+  'elevenLabsModel'
+];
+
 async function mergeSettings(file: Partial<SettingsDocument> | undefined) {
   const remote: SettingsDocument = {
     version: 1,
     values: file?.values ?? {},
-    modified: file?.modified ?? {}
+    modified: file?.modified ?? {},
+    entryModified: file?.entryModified ?? {}
   };
   const localTimes = readChangeTimes();
   const localEntryTimes = readEntryTimes();
@@ -425,6 +424,15 @@ async function mergeSettings(file: Partial<SettingsDocument> | undefined) {
   const localValues = Object.fromEntries(entries.map(({ key, store }) => [key, store.getValue()]));
   const remoteValues = { ...remote.values };
   let changedRemote = false;
+
+  // Settings from before AI connections (#129): an old API key must not stay in the account's copy.
+  oldAiSettings.forEach((key) => {
+    if (key in remote.values || key in remote.modified) {
+      delete remote.values[key];
+      delete remote.modified[key];
+      changedRemote = true;
+    }
+  });
 
   entries.forEach(({ key, storageKey, store }) => {
     const remoteTime = remote.modified[key] || 0;

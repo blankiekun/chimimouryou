@@ -9,17 +9,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   aiConnectionKeys$,
   aiConnections$,
-  openRouterApiKey$,
-  openRouterModel$,
-  elevenLabsApiKey$,
-  askAiPresets$
+  askAiPresets$,
+  askAiReaderNote$
 } from '$lib/data/ai-settings';
 import { mangaSeriesModes$ } from '$lib/data/manga';
 import { theme$ } from '$lib/data/store';
 import { customAppThemes$, darkTheme$ } from '$lib/data/theme/theme-store';
 import { socialSession$ } from '$lib/data/social-account';
 import { homeBookTitles$, homeRemovedTitles$ } from '$lib/data/library-home';
-import { startSettingsSync, syncAccountSettings } from './account-settings-sync';
+import { mergeEntries, startSettingsSync, syncAccountSettings } from './account-settings-sync';
 
 /** The library's Drive/OneDrive/folder while signed out (undefined: none) */
 const folder = vi.hoisted(() => ({ files: undefined as Record<string, string> | undefined }));
@@ -80,14 +78,29 @@ function mockServer(initial?: typeof remote) {
   );
 }
 
+const openRouter = {
+  id: 'or',
+  name: 'OpenRouter',
+  provider: 'openrouter',
+  kind: 'text',
+  modified: 1
+} as const;
+const elevenLabs = {
+  id: 'el',
+  name: 'ElevenLabs',
+  provider: 'elevenlabs',
+  kind: 'voice',
+  modified: 1
+} as const;
+
 /** Settings as left in this browser by `owner` (undefined: before owners were recorded). */
 function leaveSettingsFrom(owner: string | undefined) {
-  openRouterApiKey$.next('sk-or-alice');
-  elevenLabsApiKey$.next('sk_eleven_alice');
-  openRouterModel$.next('model/alice');
+  aiConnections$.next([openRouter, elevenLabs]);
+  aiConnectionKeys$.next({ or: 'sk-or-alice', el: 'sk_eleven_alice' });
+  askAiReaderNote$.next('note/alice');
   window.localStorage.setItem(
     'accountSettingsModified',
-    JSON.stringify({ openRouterApiKey: 2000, elevenLabsApiKey: 2000, openRouterModel: 2000 })
+    JSON.stringify({ aiConnections: 2000, aiConnectionKeys: 2000, askAiReaderNote: 2000 })
   );
   if (owner) {
     window.localStorage.setItem('accountSettingsOwner', owner);
@@ -119,9 +132,8 @@ describe('account settings sync', () => {
     await signInAs(bob);
 
     expect(uploads.join()).not.toContain('sk-');
-    expect(openRouterApiKey$.getValue()).toBe('');
-    expect(elevenLabsApiKey$.getValue()).toBe('');
-    expect(window.localStorage.getItem('openRouterApiKey')).toBeNull();
+    expect(aiConnectionKeys$.getValue()).toEqual({});
+    expect(window.localStorage.getItem('aiConnectionKeys')).toBeNull();
   });
 
   it('removes API keys from the browser when the account is signed out or expired', async () => {
@@ -130,10 +142,10 @@ describe('account settings sync', () => {
 
     await signInAs(null);
 
-    expect(openRouterApiKey$.getValue()).toBe('');
-    expect(elevenLabsApiKey$.getValue()).toBe('');
+    expect(aiConnectionKeys$.getValue()).toEqual({});
     // Non-secret settings stay.
-    expect(openRouterModel$.getValue()).toBe('model/alice');
+    expect(aiConnections$.getValue()).toHaveLength(2);
+    expect(askAiReaderNote$.getValue()).toBe('note/alice');
   });
 
   it('still syncs the same account', async () => {
@@ -143,7 +155,7 @@ describe('account settings sync', () => {
     await signInAs(alice);
 
     expect(uploads.join()).toContain('sk-or-alice');
-    expect(openRouterApiKey$.getValue()).toBe('sk-or-alice');
+    expect(aiConnectionKeys$.getValue().or).toBe('sk-or-alice');
   });
 
   it("doesn't adopt API keys typed while signed out", async () => {
@@ -153,8 +165,8 @@ describe('account settings sync', () => {
     await signInAs(alice);
 
     expect(uploads.join()).not.toContain('sk-');
-    expect(openRouterApiKey$.getValue()).toBe('');
-    expect(openRouterModel$.getValue()).toBe('model/alice');
+    expect(aiConnectionKeys$.getValue()).toEqual({});
+    expect(askAiReaderNote$.getValue()).toBe('note/alice');
   });
 
   it('keeps API keys typed while signed out until someone signs in', async () => {
@@ -163,16 +175,19 @@ describe('account settings sync', () => {
 
     await signInAs(null);
 
-    expect(openRouterApiKey$.getValue()).toBe('sk-or-alice');
+    expect(aiConnectionKeys$.getValue().or).toBe('sk-or-alice');
   });
 
   it("applies the new account's own keys", async () => {
     leaveSettingsFrom('alice');
-    mockServer({ values: { openRouterApiKey: 'sk-or-bob' }, modified: { openRouterApiKey: 1 } });
+    mockServer({
+      values: { aiConnections: [openRouter], aiConnectionKeys: { or: 'sk-or-bob' } },
+      modified: { aiConnections: 1, aiConnectionKeys: 1 }
+    });
 
     await signInAs(bob);
 
-    expect(openRouterApiKey$.getValue()).toBe('sk-or-bob');
+    expect(aiConnectionKeys$.getValue()).toEqual({ or: 'sk-or-bob' });
   });
 
   it('removes connection keys on sign-out but keeps the connections', async () => {
@@ -305,7 +320,7 @@ describe('account settings sync', () => {
 
   it('keeps a hub sign-in made while signed out in this browser, never in the folder', async () => {
     folder.files = {};
-    openRouterModel$.next('model/ren');
+    askAiReaderNote$.next('note/ren');
     socialSession$.next(hubSession('ren'));
     mockServer();
 
@@ -353,5 +368,28 @@ describe('account settings sync', () => {
     expect(mangaSeriesModes$.getValue()).toEqual({ s1: 'vertical', s2: 'ltr' });
     expect(remote?.values.customAppThemes).toEqual({ keep: theme });
     expect((remote as any).entryModified.customAppThemes.old).toBeLessThan(0);
+
+    // Another device deletes this browser's preset later: the deletion wins here too.
+    values.askAiPresets = values.askAiPresets.filter(({ id }: { id: string }) => id !== 'mine');
+    (remote as any).entryModified.askAiPresets.mine = -(Date.now() + 2000);
+    await syncAccountSettings();
+    expect(askAiPresets$.getValue().map(({ id }) => id)).toEqual(['a', 'theirs', 'other']);
+  });
+
+  it('gives a same-time tie to the deletion', () => {
+    expect(mergeEntries({ a: 1 }, {}, { a: 5 }, { a: -5 }).merged).toEqual({});
+    expect(mergeEntries({}, { a: 1 }, { a: -5 }, { a: 5 }).merged).toEqual({});
+  });
+
+  it("drops the old AI settings' keys from the account's copy", async () => {
+    window.localStorage.setItem('accountSettingsOwner', 'alice');
+    mockServer({
+      values: { openRouterApiKey: 'sk-old', elevenLabsModel: 'eleven_v3' },
+      modified: { openRouterApiKey: 4, elevenLabsModel: 4 }
+    });
+    await signInAs(alice);
+    expect(remote?.values).not.toHaveProperty('openRouterApiKey');
+    expect(remote?.values).not.toHaveProperty('elevenLabsModel');
+    expect(remote?.modified).not.toHaveProperty('openRouterApiKey');
   });
 });

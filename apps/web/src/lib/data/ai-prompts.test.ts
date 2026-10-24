@@ -6,19 +6,28 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  aiConnectionKeys$,
+  aiConnections$,
   aiLanguage$,
   aiPromptOverrides$,
-  defaultAskAiPresets,
-  openRouterApiKey$
+  defaultAskAiPresets
 } from '$lib/data/ai-settings';
 import { askAi, buildPassagePrompt } from '$lib/data/ask-ai';
 import { aiPrompts, builtInPrompt, defaultAskAiPresetsJa, presetsForLanguage } from './ai-prompts';
+
+/** An OpenRouter connection with this key; an empty key removes every connection. */
+function setOpenRouterKey(key: string) {
+  aiConnections$.next(
+    key ? [{ id: 'openrouter', name: 'OR', provider: 'openrouter', kind: 'text', modified: 1 }] : []
+  );
+  aiConnectionKeys$.next(key ? { openrouter: key } : {});
+}
 
 describe('AI language', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     aiLanguage$.next('en');
-    openRouterApiKey$.next('');
+    setOpenRouterKey('');
   });
 
   it('switches every prompt with one setting', () => {
@@ -33,7 +42,7 @@ describe('AI language', () => {
 
   it('sends the Japanese system prompt to the model', async () => {
     aiLanguage$.next('ja');
-    openRouterApiKey$.next('sk-or-test');
+    setOpenRouterKey('sk-or-test');
     const fetchMock = vi.fn(
       async (_url: string, _init: RequestInit) =>
         new Response('data: {"choices":[{"delta":{"content":"はい"}}]}\n')

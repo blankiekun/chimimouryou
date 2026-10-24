@@ -7,10 +7,10 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  aiConnectionKeys$,
   aiConnections$,
   aiFeatures$,
-  defaultAiFeatures,
-  openRouterApiKey$
+  defaultAiFeatures
 } from '$lib/data/ai-settings';
 import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v3';
 import { buildSearchIndex } from '$lib/functions/book-text/book-search';
@@ -32,6 +32,14 @@ async function cacheSummary(title: string, key: string, model: string) {
   await (
     await readerDb()
   ).put('recaps', { title, chapters: { [key]: { summary: 's', characters: 3, model } } });
+}
+
+/** An OpenRouter connection with this key; an empty key removes every connection. */
+function setOpenRouterKey(key: string) {
+  aiConnections$.next(
+    key ? [{ id: 'openrouter', name: 'OR', provider: 'openrouter', kind: 'text', modified: 1 }] : []
+  );
+  aiConnectionKeys$.next(key ? { openrouter: key } : {});
 }
 
 describe('planRecap', () => {
@@ -70,11 +78,11 @@ describe('planRecap', () => {
 describe('writeRecap', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
-    openRouterApiKey$.next('');
+    setOpenRouterKey('');
   });
 
   it('saves each recap with the position it covers', async () => {
-    openRouterApiKey$.next('sk-or-test');
+    setOpenRouterKey('sk-or-test');
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response('data: {"choices":[{"delta":{"content":"Recap"}}]}\n'))

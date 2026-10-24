@@ -6,7 +6,7 @@
 
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { openRouterApiKey$ } from '$lib/data/ai-settings';
+import { aiConnectionKeys$, aiConnections$ } from '$lib/data/ai-settings';
 import { buildSearchIndex } from '$lib/functions/book-text/book-search';
 import {
   copyLorebookTo,
@@ -41,6 +41,14 @@ const aoi: LoreEntry = {
   firstSeen: 0,
   updated: 10
 };
+
+/** An OpenRouter connection with this key; an empty key removes every connection. */
+function setOpenRouterKey(key: string) {
+  aiConnections$.next(
+    key ? [{ id: 'openrouter', name: 'OR', provider: 'openrouter', kind: 'text', modified: 1 }] : []
+  );
+  aiConnectionKeys$.next(key ? { openrouter: key } : {});
+}
 
 describe('mergeLoreEntries', () => {
   it('updates entries matched by name or key and adds new ones', () => {
@@ -84,11 +92,11 @@ describe('parseLoreAnswer', () => {
 describe('updateLorebook', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
-    openRouterApiKey$.next('');
+    setOpenRouterKey('');
   });
 
   it('only sends the text after the last update', async () => {
-    openRouterApiKey$.next('sk-or-test');
+    setOpenRouterKey('sk-or-test');
     const index = buildSearchIndex('<p>葵は学生。</p><p>葵は猫が好き。</p>');
     const fetch = vi.fn(async () => answer({ entries: [{ name: '葵', content: 'Student.' }] }));
 
@@ -118,11 +126,11 @@ describe('updateLorebook', () => {
 describe('stopLorebookUpdate', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
-    openRouterApiKey$.next('');
+    setOpenRouterKey('');
   });
 
   it('stops a running update without losing saved progress or reporting an error', async () => {
-    openRouterApiKey$.next('sk-or-test');
+    setOpenRouterKey('sk-or-test');
     vi.stubGlobal(
       'fetch',
       vi.fn(
