@@ -126,6 +126,8 @@
   } from '$lib/data/reader-panel';
   import HighlightEditor from '$lib/components/book-reader/highlight-editor.svelte';
   import SelectionToolbar from '$lib/components/book-reader/selection-toolbar.svelte';
+  import CommunityMarkers from '$lib/components/community/community-markers.svelte';
+  import { lineLinkTarget } from '$lib/data/community-book';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
   import {
     AnnotationsController,
@@ -332,6 +334,14 @@
   const rawBookData$ = bookId$.pipe(
     switchMap(async (id) => {
       let bookData: BooksDbBookData | undefined;
+
+      // A Community line link without a book: this browser's copy, else the thread.
+      const lineTarget = id ? null : await lineLinkTarget(new URL(location.href).searchParams);
+
+      if (lineTarget) {
+        goto(lineTarget, { replaceState: true });
+        return new Promise<never>(() => {});
+      }
 
       try {
         localStorageHandler = getStorageHandler(
@@ -973,13 +983,28 @@
         bookTitle: $rawBookData$?.title ?? '',
         before: getTextWithoutFurigana(before).slice(-(featureParams('ask').context ?? 2000)),
         selection: getTextWithoutFurigana(selectedRange),
-        after: getTextWithoutFurigana(after).slice(0, 600)
+        after: getTextWithoutFurigana(after).slice(0, 600),
+        start: bookmarkManager
+          ? countsForRange(
+              getTextSegments(content),
+              selectedRange,
+              bookmarkManager.getRenderedStartCount()
+            ).start
+          : undefined
       }
     };
     panelOpen = true;
     panelMounted = true;
     selectedRange = undefined;
     document.getSelection()?.removeAllRanges();
+  }
+
+  // A Community line link (/b?id=&line=): the Community tab opens on its thread.
+  let lineLinkOpened = false;
+
+  $: if ($rawBookData$ && !lineLinkOpened && $page.url.searchParams.get('line')) {
+    lineLinkOpened = true;
+    openPanel('community');
   }
 
   /** A plugin tab offered after days away (Story so far) */
@@ -2685,6 +2710,7 @@
       jumpToCount(detail);
       closeSheetAfterJump();
     }}
+    on:reveal={({ detail }) => jumpToCount(detail)}
     on:searchJump={({ detail }) => {
       jumpToSearchResult(detail);
       closeSheetAfterJump();
@@ -2726,6 +2752,15 @@
 
 {#if bookCompleted}
   <BookCompletionConfetti {confettiWidthModifier} {confettiMaxRuns} {window} />
+{/if}
+
+{#if $rawBookData$ && bookmarkManager}
+  <CommunityMarkers
+    title={$rawBookData$.title}
+    vertical={$verticalMode$}
+    renderedStart={() => bookmarkManager?.getRenderedStartCount() ?? 0}
+    on:open={() => openPanel('community')}
+  />
 {/if}
 
 <LookupPopup bind:this={lookupPopup} scope=".book-content" />

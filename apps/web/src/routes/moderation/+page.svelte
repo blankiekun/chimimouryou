@@ -1,5 +1,6 @@
 <script lang="ts">
   import AppHeader from '$lib/components/app-header/app-header.svelte';
+  import CommunityReports from '$lib/components/community/community-reports.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import RoleBadge from '$lib/components/social/role-badge.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
@@ -251,8 +252,10 @@
         {/if}
       </section>
 
+      <div class="moderation-section"><CommunityReports number={2} /></div>
+
       <section class="moderation-section" aria-labelledby="moderation-lookup">
-        <SectionHead id="moderation-lookup" number={2} title={$t$('moderation.lookUp')} />
+        <SectionHead id="moderation-lookup" number={3} title={$t$('moderation.lookUp')} />
         <form class="moderation-form" on:submit|preventDefault={lookUp}>
           <input
             class="app-input"

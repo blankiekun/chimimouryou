@@ -46,7 +46,7 @@ export async function loadReports() {
   return (await hubFetch<{ reports: OpenReport[] }>('/v1/admin/reports')).reports;
 }
 
-export async function dismissReports(report: Pick<OpenReport, 'what' | 'target'>) {
+export async function dismissReports(report: { what: string; target: string }) {
   const query = new URLSearchParams({ what: report.what, target: report.target });
 
   await hubFetch(`/v1/admin/reports?${query}`, 'DELETE');
@@ -73,4 +73,61 @@ export async function removeUserPicture(userId: string) {
 /** One row: a current book (by slot), a finished book (by key) or an event (by id) */
 export async function deleteUserRow(userId: string, rows: UserRows, id: string | number) {
   await hubFetch(`/v1/admin/user/${userId}/${rows}/${encodeURIComponent(String(id))}`, 'DELETE');
+}
+
+/** Community reports (`/v1/admin/community/*`): posts, work matches, and works' titles and covers */
+export interface CommunityReports {
+  posts: {
+    id: string;
+    count: number;
+    last: number;
+    work: string;
+    line: string;
+    body: string;
+    spoiler: boolean;
+    quote: string;
+    at: number;
+    author: Person | null;
+  }[];
+  /** `target` is "<vol>|<book key>"; `work` the key it maps to, with its confirmations */
+  works: { target: string; count: number; last: number; work: string | null; votes: number }[];
+  infos: {
+    work: string;
+    count: number;
+    last: number;
+    title: string;
+    vol: string;
+    cover: string | null;
+    uploader: string;
+  }[];
+}
+
+export function loadCommunityReports() {
+  return hubFetch<CommunityReports>('/v1/admin/community/reports');
+}
+
+export async function removePost(id: string) {
+  await hubFetch(`/v1/admin/community/post/${id}`, 'DELETE');
+}
+
+/** Every post of one reader goes (posts with replies stay as tombstones) */
+export async function removeUserPosts(userId: string) {
+  await hubFetch(`/v1/admin/community/user/${userId}/posts`, 'DELETE');
+}
+
+/** Clear match: drops the confirmations that map a book to the wrong work */
+export async function clearMatch(target: string, work: string) {
+  const split = target.indexOf('|');
+  const query = new URLSearchParams({
+    vol: target.slice(0, split),
+    book: target.slice(split + 1),
+    work
+  });
+
+  await hubFetch(`/v1/admin/community/work?${query}`, 'DELETE');
+}
+
+/** The work's title and cover go (the next post names it again) */
+export async function resetWorkInfo(work: string) {
+  await hubFetch(`/v1/admin/community/workinfo?${new URLSearchParams({ work })}`, 'DELETE');
 }

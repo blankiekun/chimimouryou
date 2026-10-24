@@ -23,6 +23,8 @@ export interface PassageContext {
   before: string;
   selection: string;
   after: string;
+  /** The character count where the selection starts (Post to community finds its line) */
+  start?: number;
 }
 
 export function buildPassagePrompt(passage: PassageContext, question: string) {

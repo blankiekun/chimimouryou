@@ -12,6 +12,7 @@
     statisticsActionInProgress$
   } from '$lib/components/statistics/statistics-types';
   import { pagePath } from '$lib/data/env';
+  import { t$ } from '$lib/i18n';
   import { setPendingImport, type PendingImport } from '$lib/data/library-home';
   import {
     database,
@@ -135,7 +136,7 @@
   }
 </script>
 
-<AppHeader active="statistics" currentBookId={$currentBookId$}>
+<AppHeader active="profile" currentBookId={$currentBookId$}>
   <ImportMenu
     on:filesChange={(ev) => importOnManage({ files: Array.from(ev.detail) })}
     on:importBackup={(ev) => importOnManage({ backup: ev.detail })}
@@ -145,6 +146,10 @@
 <div class="app-page-shell">
   <main class="statistics" aria-label="Statistics">
     <div>
+      <!-- Edit statistics on Profile opens these tools (the header's avatar stays lit) -->
+      <a class="app-button-quiet statistics-back" href="{pagePath}/profile"
+        >← {$t$('nav.profile')}</a
+      >
       <StatisticsHeader bind:showStatisticsSettings />
     </div>
     <StatisticsContent />
@@ -176,6 +181,10 @@
     gap: 3rem;
     margin: 0 auto;
     padding: 6rem 1rem calc(5.5rem + env(safe-area-inset-bottom));
+  }
+
+  .statistics-back {
+    margin-bottom: 1rem;
   }
 
   @media (min-width: 768px) {

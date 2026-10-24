@@ -36,6 +36,18 @@ describe('readerPanelTabs', () => {
     ).toEqual(['contents', 'search', 'highlights', 'listen', 'story']);
   });
 
+  it('puts Community between Highlights and Listen', () => {
+    expect(
+      readerPanelTabs(
+        [
+          { key: 'story', label: 'reader.story' },
+          { key: 'community', label: 'nav.community' }
+        ],
+        { hasChapters: false, hasText: true }
+      ).map((tab) => tab.key)
+    ).toEqual(['search', 'highlights', 'community', 'listen', 'story']);
+  });
+
   it('leaves out Contents and Search when the book has no chapters or text', () => {
     expect(
       readerPanelTabs([], { hasChapters: false, hasText: false }).map((tab) => tab.key)

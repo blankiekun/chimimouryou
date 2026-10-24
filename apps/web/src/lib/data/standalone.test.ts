@@ -93,6 +93,25 @@ describe('standalone edition', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('asks the hub nothing for Community replies or line links signed out, or with social off', async () => {
+    const book = await import('$lib/data/community-book');
+    const plugins = await import('$lib/plugins');
+
+    // Home's replies need a hub account; a line link with social off goes nowhere.
+    await book.refreshNotes();
+    plugins.setPluginEnabled('social', false);
+    expect(
+      await book.lineLinkTarget(new URLSearchParams({ line: 'a'.repeat(32), work: 'anilist:1' }))
+    ).toBeNull();
+    window.localStorage.setItem(
+      'socialSession',
+      JSON.stringify({ token: 't', me: { id: 'a', share: {} } })
+    );
+    vi.resetModules();
+    await (await import('$lib/data/community-book')).refreshNotes();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('takes the public word test without a request, and saves the result for the app', async () => {
     const { default: PlacementTest } = await import(
       '$lib/components/placement/placement-test.svelte'

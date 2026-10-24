@@ -1,5 +1,7 @@
 <script lang="ts">
+  import CommunityNoteRow from '$lib/components/community/community-note-row.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
+  import type { NoteGroup } from '$lib/data/community-book';
   import RoleBadge from '$lib/components/social/role-badge.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import { relativeTime, type Person, type SocialEvent } from '$lib/data/social';
@@ -13,6 +15,8 @@
   export let number: number;
   export let person: Person | undefined = undefined;
   export let limit = 20;
+  /** Replies to the reader's Community posts, first (Home) */
+  export let notes: NoteGroup[] = [];
 
   const sentences = {
     started: 'social.event.started',
@@ -23,8 +27,11 @@
 
 <section class="activity" aria-labelledby="activity-heading-{number}">
   <SectionHead id="activity-heading-{number}" {number} title={$t$('social.activity')} />
-  {#if events.length}
+  {#if events.length || notes.length}
     <ul class="activity-rows">
+      {#each notes as group (group.parent)}
+        <CommunityNoteRow {group} />
+      {/each}
       {#each events.slice(0, limit) as event (event.id)}
         {@const who = event.user ?? person}
         <li class="activity-row">

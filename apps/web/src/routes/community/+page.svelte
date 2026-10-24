@@ -1,0 +1,307 @@
+<script lang="ts">
+  import { browser } from '$app/env';
+  import { goto } from '$app/navigation';
+  import AppHeader from '$lib/components/app-header/app-header.svelte';
+  import ImportMenu from '$lib/components/book-card/import-menu.svelte';
+  import CommunityNotes from '$lib/components/community/community-notes.svelte';
+  import CommunitySignup from '$lib/components/community/community-signup.svelte';
+  import CommunityText from '$lib/components/community/community-text.svelte';
+  import CommunityThread from '$lib/components/community/community-thread.svelte';
+  import CommunityWork from '$lib/components/community/community-work.svelte';
+  import SocialAvatar from '$lib/components/social/social-avatar.svelte';
+  import RoleBadge from '$lib/components/social/role-badge.svelte';
+  import { loadFeed, type FeedPost } from '$lib/data/community';
+  import { communityErrorKey, passedLines } from '$lib/data/community-book';
+  import { pagePath } from '$lib/data/env';
+  import { setPendingImport, type PendingImport } from '$lib/data/library-home';
+  import { page } from '$lib/data/page-store';
+  import { relativeTime } from '$lib/data/social';
+  import { socialSession$ } from '$lib/data/social-account';
+  import { removePost } from '$lib/data/social-moderation';
+  import { t$, uiLanguage$ } from '$lib/i18n';
+  import { activePlugins$ } from '$lib/plugins';
+  import { onMount } from 'svelte';
+
+  /**
+   * Community (header tab, boards 9, 10, D9): lines readers are sharing, newest first, each with
+   * the work's cover, title and volume. Signed out it reads the same feed (anonymous GETs, only
+   * from here); spoiler-marked posts stay blurred until the reader passed the line in their own
+   * copy or taps Show spoiler. `?work=&line=` shows that line's thread (deep links, Home's replies).
+   */
+
+  let posts: FeedPost[] = [];
+  let next: string | null = null;
+  let loading = false;
+  let error = '';
+  /** Spoiler posts whose line the reader passed in their copy, by post id */
+  let passed = new Set<string>();
+
+  $: socialOn = $activePlugins$.some((plugin) => plugin.id === 'social');
+  $: work = browser ? ($page.url.searchParams.get('work') ?? '') : '';
+  $: line = browser ? ($page.url.searchParams.get('line') ?? '') : '';
+  $: threadPassed = work && line ? passedLines(work).then((set) => set.has(line)) : undefined;
+
+  async function more(first = false) {
+    loading = true;
+    error = '';
+    try {
+      const result = await loadFeed(first ? undefined : (next ?? undefined));
+
+      posts = first ? result.posts : [...posts, ...result.posts];
+      next = result.next;
+      checkSpoilers(result.posts);
+    } catch (e) {
+      error = $t$(communityErrorKey(e));
+    } finally {
+      loading = false;
+    }
+  }
+
+  function checkSpoilers(page: FeedPost[]) {
+    page
+      .filter((post) => post.spoiler)
+      .forEach((post) =>
+        passedLines(post.work).then((lines) => {
+          if (lines.has(post.line)) passed = new Set([...passed, post.id]);
+        })
+      );
+  }
+
+  onMount(() => {
+    if (socialOn && !(work && line)) more(true);
+  });
+
+  /** Hub moderators remove any post (the hub checks the role) */
+  $: dev = socialOn && $socialSession$?.me.role === 'dev';
+
+  async function remove(post: FeedPost) {
+    if (!window.confirm($t$('community.removeConfirm'))) return;
+    try {
+      await removePost(post.id);
+      posts = posts.filter((item) => item.id !== post.id);
+    } catch (e) {
+      error = $t$(communityErrorKey(e));
+    }
+  }
+
+  const openThread = (post: { work: string; line: string }) =>
+    goto(`${pagePath}/community?${new URLSearchParams({ work: post.work, line: post.line })}`);
+
+  function closeThread() {
+    goto(`${pagePath}/community`);
+    if (!posts.length) more(true);
+  }
+
+  function importOnManage(value: PendingImport) {
+    setPendingImport(value);
+    goto(`${pagePath}/manage`);
+  }
+</script>
+
+<svelte:head><title>{$t$('nav.community')}</title></svelte:head>
+
+<AppHeader active="community">
+  <ImportMenu
+    on:filesChange={(ev) => importOnManage({ files: Array.from(ev.detail) })}
+    on:importBackup={(ev) => importOnManage({ backup: ev.detail })}
+  />
+</AppHeader>
+
+<div class="app-page-shell">
+  <main class="community">
+    {#if !socialOn}
+      <h1 class="community-title">{$t$('nav.community')}</h1>
+      <p class="community-lead">{$t$('community.off')}</p>
+      <a class="app-button" href="{pagePath}/settings?section=general#general-plugins"
+        >{$t$('nav.settings')}</a
+      >
+    {:else if work && line}
+      <div class="community-main">
+        {#await threadPassed then passedThread}
+          <CommunityThread
+            {work}
+            {line}
+            outside
+            passed={!!passedThread}
+            backLabel={$t$('nav.community')}
+            on:back={closeThread}
+          />
+        {/await}
+      </div>
+    {:else}
+      <div class="community-main">
+        {#if !$socialSession$}<CommunitySignup />{/if}
+        <h1 class="community-title">{$t$('nav.community')}</h1>
+        <p class="community-lead">{$t$('community.lead')}</p>
+
+        <ol class="feed">
+          {#each posts as post (post.id)}
+            {@const hide = post.spoiler && !passed.has(post.id)}
+            <li class="feed-post">
+              <CommunityWork title={post.title} vol={post.vol} cover={post.cover}>
+                {#if post.spoiler}<span class="feed-spoiler">{$t$('community.spoiler')}</span>{/if}
+              </CommunityWork>
+              <div class="feed-quote">
+                <CommunityText text={post.quote} quote blur={hide} button={false} />
+              </div>
+              <CommunityText text={post.body} blur={hide} />
+              <div class="feed-foot">
+                {#if post.author}
+                  <SocialAvatar avatar={post.author.avatar} person={post.author} size={1.5} />
+                  <span class="feed-name">{post.author.name}</span><RoleBadge
+                    role={post.author.role}
+                  />
+                {/if}
+                <span class="feed-when">· {relativeTime(post.at, $uiLanguage$)}</span>
+                {#if dev}
+                  <button
+                    type="button"
+                    class="app-button-quiet feed-remove"
+                    on:click={() => remove(post)}>{$t$('community.remove')}</button
+                  >
+                {/if}
+                <button
+                  type="button"
+                  class="app-button-quiet feed-open"
+                  on:click={() => openThread(post)}
+                  >{post.replies
+                    ? $t$(post.replies === 1 ? 'community.repliesOne' : 'community.replies', {
+                        count: post.replies
+                      })
+                    : $t$('community.reply')}</button
+                >
+              </div>
+            </li>
+          {/each}
+        </ol>
+
+        {#if loading}
+          <p class="community-quiet">{$t$('community.loading')}</p>
+        {:else if error}
+          <p class="community-quiet" role="alert">{error}</p>
+          <button type="button" class="app-button" on:click={() => more(!posts.length)}
+            >{$t$('community.tryAgain')}</button
+          >
+        {:else if !posts.length}
+          <p class="community-quiet">{$t$('community.feedEmpty')}</p>
+        {:else if next}
+          <button type="button" class="app-button" on:click={() => more()}
+            >{$t$('community.more')}</button
+          >
+        {/if}
+      </div>
+      <aside class="community-side">
+        {#if $socialSession$}<CommunityNotes number={1} />{/if}
+        <p class="community-quiet">{$t$('community.howToPost')}</p>
+      </aside>
+    {/if}
+  </main>
+</div>
+
+<style>
+  .community {
+    display: grid;
+    max-width: 75rem;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2.5rem 4rem;
+    margin: 0 auto;
+    padding: 6rem 1rem calc(5.5rem + env(safe-area-inset-bottom));
+  }
+
+  @media (min-width: 768px) {
+    .community {
+      padding: 6.5rem 2.5rem 4rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .community {
+      grid-template-columns: minmax(0, 45rem) minmax(0, 1fr);
+    }
+  }
+
+  .community-main {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .community-title {
+    font-size: var(--type-display);
+    font-weight: 400;
+    line-height: 1.2;
+  }
+
+  .community-lead {
+    margin-top: -0.75rem;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  .community-quiet {
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  .community-side {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .feed {
+    border-top: 2px solid var(--font-color);
+  }
+
+  .feed-post {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .feed-spoiler {
+    align-self: flex-start;
+    padding: 0 0.35em;
+    border: 1px solid var(--font-color);
+    border-radius: 2px;
+    font-size: var(--type-label);
+    line-height: 1.4;
+  }
+
+  .feed-quote {
+    padding: 0.75rem;
+    background: var(--surface-color);
+  }
+
+  .feed-foot {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: var(--type-small);
+  }
+
+  .feed-name {
+    font-weight: 700;
+  }
+
+  .feed-when {
+    color: var(--app-muted-fg);
+  }
+
+  .feed-remove {
+    margin-left: auto;
+    color: var(--app-danger-color);
+  }
+
+  .feed-remove + .feed-open {
+    margin-left: 1rem;
+  }
+
+  .feed-open {
+    margin-left: auto;
+    font-weight: 700;
+  }
+</style>

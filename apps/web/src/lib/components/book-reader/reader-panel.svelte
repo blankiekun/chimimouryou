@@ -20,7 +20,7 @@
 
   /**
    * The reader's one side panel (Study Book): index tabs on its edge for Contents, Search,
-   * Highlights, Listen and the plugins' tabs; a bottom sheet with a tab row on phones.
+   * Highlights, Community (social plugin), Listen and the plugins' tabs; a bottom sheet with a tab row on phones.
    * Stays mounted while closed, so audio, searches and recaps carry on. Not part of upstream.
    */
   export let open: boolean;
@@ -52,6 +52,8 @@
     reading: { start: number; end: number } | undefined;
     position: number;
     closeSelection: void;
+    /** Go to a character count, keeping the panel open (a Community link's line) */
+    reveal: number;
   }>();
 
   let visited = new Set<PanelTab>();
@@ -130,6 +132,7 @@
       <svelte:component
         this={selection.action.panel}
         passage={selection.passage}
+        {getIndex}
         on:close={() => dispatch('closeSelection')}
       />
     {:else}
@@ -269,6 +272,8 @@
                 bookCharacters,
                 active: open && active.key === item.key
               })}
+              on:jump
+              on:reveal
             />
           </div>
         {/if}

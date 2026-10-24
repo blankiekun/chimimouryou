@@ -1,5 +1,5 @@
 <script lang="ts" context="module">
-  export type AppSection = 'library' | 'words' | 'statistics' | 'settings';
+  export type AppSection = 'library' | 'words' | 'community' | 'settings' | 'profile';
 </script>
 
 <script lang="ts">
@@ -7,23 +7,18 @@
     faArrowLeft,
     faBook,
     faBookOpenReader,
-    faChartLine,
+    faComments,
     faGear,
     faHouse,
     faLanguage,
-    faStore,
-    faUser
+    faStore
   } from '@fortawesome/free-solid-svg-icons';
-  import { pushState } from '$app/navigation';
-  import { page } from '$lib/data/page-store';
   import AppHeaderLogo from '$lib/components/app-header/app-header-logo.svelte';
-  import ProfileLayer from '$lib/components/social/profile-layer.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import SyncIndicator from '$lib/components/standalone/sync-indicator.svelte';
-  import { account$, accountUnreachable$ } from '$lib/data/account';
+  import { account$ } from '$lib/data/account';
   import { pagePath, standalone } from '$lib/data/env';
   import { libraryTab$, type LibraryTab } from '$lib/data/library-home';
-  import { localCovers } from '$lib/data/social';
   import { socialSession$ } from '$lib/data/social-account';
   import { t$ } from '$lib/i18n';
   import { activePlugins$ } from '$lib/plugins';
@@ -76,33 +71,23 @@
       icon: faLanguage,
       href: `${pagePath}/words`
     },
-    {
-      key: 'statistics',
-      label: $t$('nav.statistics'),
-      icon: faChartLine,
-      href: `${pagePath}/statistics`
-    },
+    ...(socialOn
+      ? [
+          {
+            key: 'community' as const,
+            label: $t$('nav.community'),
+            icon: faComments,
+            href: `${pagePath}/community`
+          }
+        ]
+      : []),
     { key: 'settings', label: $t$('nav.settings'), icon: faGear, href: `${pagePath}/settings` }
   ];
 
-  // With social on, the account control is the reader's hub account: their avatar opens their
-  // profile; signed out of the hub, the standalone's opens the sign-up (the server build keeps
-  // its server account there until the hub is signed in to).
+  // The avatar at the end opens Profile (statistics; the hub profile when signed in to it): the
+  // hub picture with social on, else the server account's initial, else an empty circle.
   $: socialOn = $activePlugins$.some((plugin) => plugin.id === 'social');
   $: hubMe = socialOn ? $socialSession$?.me : undefined;
-  let covers: Awaited<ReturnType<typeof localCovers>> | undefined;
-
-  function openProfile(event: MouseEvent) {
-    if (!hubMe) return;
-    event.preventDefault();
-    pushState('', { profile: hubMe.username, profileFromHeader: true });
-    if (!covers) {
-      localCovers().then(
-        (found) => (covers = found),
-        () => {}
-      );
-    }
-  }
 
   $: isActive = (section: (typeof sections)[number]) =>
     section.key === active && (!section.tab || section.tab === $libraryTab$);
@@ -169,56 +154,27 @@
         {#if standalone}
           <SyncIndicator />
         {/if}
-        {#if hubMe}
-          <a
-            href="{pagePath}/friends"
-            class="app-header-icon"
-            title={$t$('social.yourProfile')}
-            aria-label={$t$('social.yourProfile')}
-            on:click={openProfile}
-          >
+        <a
+          href="{pagePath}/profile"
+          class="app-profile"
+          class:app-profile-active={active === 'profile'}
+          aria-current={active === 'profile' ? 'page' : undefined}
+          title={$t$('nav.profile')}
+          aria-label={$t$('nav.profile')}
+          on:click={(event) => navigate(event, 'profile', `${pagePath}/profile`)}
+        >
+          {#if hubMe}
             <SocialAvatar avatar={hubMe.avatar} person={hubMe} size={1.75} />
-          </a>
-        {:else if standalone && socialOn}
-          <a
-            href="{pagePath}/friends"
-            class="app-header-icon"
-            title={$t$('social.signUpOrLogIn')}
-            aria-label={$t$('social.signUpOrLogIn')}
-          >
-            <Fa icon={faUser} />
-          </a>
-        {:else if !standalone}
-          <a
-            href="{pagePath}/settings?section=general#general-account"
-            class="app-header-icon"
-            title={$account$
-              ? $t$('nav.signedInAs', { name: $account$.username })
-              : $t$($accountUnreachable$ ? 'nav.serverUnreachable' : 'nav.signIn')}
-            aria-label={$account$
-              ? $t$('nav.account', { name: $account$.username })
-              : $t$($accountUnreachable$ ? 'nav.serverUnreachable' : 'nav.signIn')}
-          >
-            {#if $account$}
-              <span class="account-initial">{$account$.username.charAt(0)}</span>
-            {:else}
-              <Fa icon={faUser} />
-            {/if}
-          </a>
-        {/if}
+          {:else if $account$}
+            <span class="account-initial">{$account$.username.charAt(0)}</span>
+          {:else}
+            <span class="account-empty" />
+          {/if}
+        </a>
       </div>
     </div>
   </div>
 </header>
-
-{#if $page.state.profileFromHeader && $page.state.profile && hubMe}
-  <ProfileLayer
-    username={$page.state.profile}
-    {covers}
-    back={$t$('nav.back')}
-    on:close={() => history.back()}
-  />
-{/if}
 
 {#if !onBack && !bare}
   <nav class="app-bottom-nav" aria-label={$t$('nav.sections')}>
@@ -243,6 +199,31 @@
     flex-shrink: 0;
     align-items: center;
     color: var(--accent-color);
+  }
+
+  /* The avatar opens Profile; a 2px spot ring while there */
+  .app-profile {
+    display: inline-flex;
+    flex-shrink: 0;
+    width: 2.75rem;
+    height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .app-profile > :global(*) {
+    outline-offset: 2px;
+  }
+
+  .app-profile-active > :global(*) {
+    outline: 2px solid var(--accent-color);
+  }
+
+  .account-empty {
+    width: 1.75rem;
+    height: 1.75rem;
+    border: 1px solid var(--app-header-icon-fg);
+    border-radius: 9999px;
   }
 
   .account-initial {
@@ -326,7 +307,8 @@
     justify-content: center;
     gap: 0.25rem;
     color: var(--app-header-icon-fg);
-    font-size: var(--type-label);
+    font-size: var(--type-small);
+    white-space: nowrap;
   }
 
   .bottom-nav-item-active {
