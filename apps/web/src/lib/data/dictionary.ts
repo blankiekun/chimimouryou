@@ -221,8 +221,11 @@ export async function importDictionary(file: Blob, onProgress?: Progress) {
   return { result, errors };
 }
 
-/** What a collection import needs, as a share of the file (its packs, measured in Chrome: 1.04-1.10). */
-const collectionRoomShare = 1.15;
+/**
+ * What a collection import needs, as a share of the file (its pack, measured in Chrome: 0.30-0.35;
+ * media-heavy collections compress less).
+ */
+const collectionRoomShare = 0.5;
 
 /**
  * Imports a Yomitan dictionary collection export (Settings → Backup → Export Dictionary
