@@ -204,6 +204,49 @@ describe('BaseStorageHandler.findFile', () => {
   });
 });
 
+describe('CalibreStorageHandler.saveProgress', () => {
+  it('deletes older leftover progress files after saving, not statistics', async () => {
+    const writes: string[] = [];
+    const folder = '/calibre/sync/ttu-reader-data/%E6%9C%AC/';
+
+    account.user = null;
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      if (init?.method) {
+        writes.push(`${init.method} ${url.slice(folder.length)}`);
+        return new Response('', { status: 201 });
+      }
+      return new Response(
+        JSON.stringify(
+          url === folder
+            ? [
+                'progress_1_6_100_0.1.json',
+                'progress_1_6_300_0.3.json',
+                'statistics_1_6_100_1.json',
+                'statistics_1_6_300_1.json'
+              ].map((name) => ({ name, type: 'file' }))
+            : []
+        )
+      );
+    });
+
+    const handler = new CalibreStorageHandler(window);
+
+    // Uploads go through XMLHttpRequest.
+    handler['request'] = async (url: string, options: RequestInit = {}) => {
+      writes.push(`${options.method} ${url.slice(folder.length)}`);
+    };
+    handler.startContext({ title: '本' } as never);
+    await handler.saveProgress({ dataId: 1, lastBookmarkModified: 400, progress: 0.4 } as never);
+
+    expect(writes.sort()).toEqual([
+      'DELETE progress_1_6_100_0.1.json',
+      'DELETE progress_1_6_300_0.3.json',
+      'PUT progress_1_6_400_0.4.json'
+    ]);
+    vi.unstubAllGlobals();
+  });
+});
+
 describe('CalibreStorageHandler while an expired account still owns the data', () => {
   it("keeps that reader's files out of the shared folder", async () => {
     const urls: string[] = [];
