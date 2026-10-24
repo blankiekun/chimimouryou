@@ -105,6 +105,8 @@ describe('standalone edition', () => {
     const placement = await import('$lib/data/placement');
     const items = await placement.loadHardItems();
     const target = document.createElement('div');
+    // Connected, so its form submits.
+    document.body.append(target);
     const test = new PlacementTest({ target, props: { shared: true, hard: true } });
     const click = async (text: string) => {
       [...target.querySelectorAll('button')]
@@ -121,7 +123,12 @@ describe('standalone edition', () => {
       if (item.r! > 8000) {
         await click('I don’t know');
       } else {
-        await click(item.k[0]);
+        const input = target.querySelector<HTMLInputElement>('.hard-input')!;
+
+        input.value = item.k[0];
+        input.dispatchEvent(new Event('input'));
+        await new Promise((resolve) => setTimeout(resolve));
+        await click('Next');
         await click(item.m[0]);
       }
     }
@@ -129,10 +136,11 @@ describe('standalone edition', () => {
     expect(target.querySelector('.placement-big')?.textContent).toMatch(/About [\d,]+ words/);
     expect(target.querySelector('.placement-credits')?.textContent).toContain('Wiktionary');
     expect(
-      placement.latestPlacement(placement.placementResults$.getValue(), 'hard')?.cutoff
+      placement.latestPlacement(placement.placementResults$.getValue(), 'typed')?.cutoff
     ).toBeGreaterThan(5000);
     expect(fetchMock).not.toHaveBeenCalled();
     test.$destroy();
+    target.remove();
   });
 
   it('hands out the browser handler for Calibre', async () => {

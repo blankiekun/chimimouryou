@@ -106,7 +106,7 @@ describe('words known over time', () => {
       cutoffChanges([
         { mode: 'yesno', date: 0, cutoff: 3000, length: 40 },
         { mode: 'yesno', date: new Date(2026, 9, 3, 12).getTime(), cutoff: 800, length: 40 },
-        { mode: 'hard', date: new Date(2026, 9, 4, 12).getTime(), cutoff: 1500, length: 20 }
+        { mode: 'typed', date: new Date(2026, 9, 4, 12).getTime(), cutoff: 1500, length: 20 }
       ])
     ).toEqual([
       { dateKey: '', cutoff: 3000 },

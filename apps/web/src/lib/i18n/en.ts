@@ -2156,8 +2156,12 @@ export const en = {
   'hardTest.title': 'Level check: hard mode',
   'hardTest.publicTitle': 'How many Japanese words can you read and explain?',
   'hardTest.lede':
-    'About {minutes} min. For each word, pick its reading, then its meaning, from four choices, or say you don’t know. A word counts only when both are right, and lucky guesses are corrected for. Nothing you answer leaves this page.',
-  'hardTest.keysValue': '1–4 pick · 0 or N don’t know',
+    'About {minutes} min. For each word, type its reading in kana (or romaji), then pick its meaning from four choices, or say you don’t know. A wrong reading goes straight to the next word. A word counts only when both are right, and lucky guesses are corrected for. Nothing you answer leaves this page.',
+  'hardTest.keysValue': 'Type the reading, Enter · then 1–4 pick, 0 or N don’t know',
+  'hardTest.typePlaceholder': 'Reading in kana or romaji',
+  'hardTest.next': 'Next',
+  'hardTest.dropped':
+    'Your result from the earlier hard mode, where readings were picked from choices, no longer counts.',
   'hardTest.loading': 'Loading…',
   'hardTest.reading': 'How is it read?',
   'hardTest.meaning': 'What does it mean?',
@@ -2166,7 +2170,7 @@ export const en = {
   'hardTest.meaningText':
     'You can likely read and explain most of the {count} most common words in Japanese books, anime and games (by Jiten’s frequency list). Chimi Reader shows how much of a book they cover before you start it.',
   'hardTest.stricter':
-    'Hard mode counts a word only when you pick both its reading and its meaning, and corrects for lucky guesses, so it is the stricter measure.',
+    'Hard mode counts a word only when you type its reading and pick its meaning, and corrects for lucky guesses, so it is the stricter measure.',
   'hardTest.both': 'When you have taken both tests, the lower result counts.',
   'hardTest.credits':
     'Meanings: Japanese Wiktionary, by its contributors (CC BY-SA 4.0), via wiktionary-to-yomitan. Words and ranks: Jiten’s frequency list (CC BY-SA 4.0).',
@@ -2176,7 +2180,7 @@ export const en = {
     'I can read and explain about {count} Japanese words. Take the hard word test:',
   'hardTest.ogTitle': 'The hard Japanese word test',
   'hardTest.ogDescription':
-    'Pick each word’s reading and meaning from four choices; lucky guesses don’t count. About 5 minutes, nothing to sign up for.',
+    'Type each word’s reading and pick its meaning; lucky guesses don’t count. About 7 minutes, nothing to sign up for.',
   'words.placementHard': 'Hard mode: about {count} words.',
   'words.placementHardNone':
     'Hard mode asks each word’s reading and meaning, the stricter measure.',
