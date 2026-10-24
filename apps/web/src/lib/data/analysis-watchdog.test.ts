@@ -52,4 +52,33 @@ describe('the analysis workers watchdog', () => {
     await expect(result).resolves.toEqual({ type: 'done' });
     expect(worker.terminate).toHaveBeenCalled();
   });
+
+  it('keeps a kept worker after its answer, but not after a failure', async () => {
+    const worker = silentWorker();
+    const ok = runWorker<{ type: string }>(
+      worker as unknown as Worker,
+      {},
+      (m) => m,
+      undefined,
+      true
+    );
+
+    worker.onmessage!({ data: { type: 'done' } });
+    await ok;
+    expect(worker.terminate).not.toHaveBeenCalled();
+
+    const failed = runWorker(
+      worker as unknown as Worker,
+      {},
+      () => {
+        throw new Error('broken');
+      },
+      undefined,
+      true
+    );
+
+    worker.onmessage!({ data: { type: 'error' } });
+    await expect(failed).rejects.toThrow('broken');
+    expect(worker.terminate).toHaveBeenCalled();
+  });
 });
