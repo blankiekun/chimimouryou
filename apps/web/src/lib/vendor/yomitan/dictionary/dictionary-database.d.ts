@@ -37,4 +37,7 @@ export class DictionaryDatabase {
   ): Promise<void>;
   getDictionaryInfo(): Promise<DictionarySummary[]>;
   dictionaryExists(title: string): Promise<boolean>;
+  getMedia(items: { path: string; dictionary: string }[]): Promise<
+    { index: number; dictionary: string; path: string; mediaType: string; content: ArrayBuffer }[]
+  >;
 }
