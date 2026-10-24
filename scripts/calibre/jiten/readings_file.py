@@ -166,9 +166,10 @@ def gloss(surface: str, form: str, reading: str, after: str = ''):
     return match and [(offset, run, ruby) for (offset, run), ruby in zip(runs, match.groups())]
 
 
-def build(html: str, reader, bookdata: str, version: str) -> dict:
-    """The readings file of a book's elementHtml, read by a yurigana Reader."""
-    text, hints, counts = extract(html)
+def build(html: str, reader, bookdata: str, version: str, extracted: tuple | None = None) -> dict:
+    """The readings file of a book's elementHtml, read by a yurigana Reader. `extracted`: extract(html),
+    when the caller has it."""
+    text, hints, counts = extracted or extract(html)
     covering = {}
     for start, end, reading in hints:
         for i in range(start, end):

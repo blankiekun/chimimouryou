@@ -31,6 +31,23 @@ class BrowserTokensTest(unittest.TestCase):
         self.assertEqual([t.surface() for t in tokens.tokenizer.tokenize('犬')], ['犬'])
         self.assertEqual(tokens.misses, {'犬'})
 
+    def test_a_book_cache_asks_for_each_text_once(self):
+        asked, book = [], ({}, {}, {})
+
+        def lookup(text):
+            asked.append(text)
+            return ROWS.get(text)
+
+        first = [(t.surface(), t.begin) for t in browser.BrowserTokens(lookup, book).tokens('猫が鳴く。')]
+        second = browser.BrowserTokens(lookup, book)
+        self.assertEqual([(t.surface(), t.begin) for t in second.tokens('猫が鳴く。')], first)
+        self.assertEqual([t.surface() for t in second.tokenizer.tokenize('猫が鳴く。')], ['猫', 'が', '鳴く', '。'])
+        self.assertEqual(asked, ['猫が鳴く。'])
+        # a miss is asked for again: the tokenizer may have it next time
+        second.tokenizer.tokenize('犬')
+        second.tokenizer.tokenize('犬')
+        self.assertEqual(asked, ['猫が鳴く。', '犬', '犬'])
+
 
 class FirstTextsTest(unittest.TestCase):
     def test_only_the_word_list_asks_for_marker_words(self):

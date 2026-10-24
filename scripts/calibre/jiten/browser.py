@@ -33,25 +33,41 @@ class BrowserTokens:
     gives a text's morphemes as `surface \\x1f form \\x1f normalized \\x1f reading \\x1f pos,pos…` joined by
     \\x1e (the tokenizer worker's rows), or None when the text wasn't tokenized: it joins `misses`."""
 
-    def __init__(self, lookup):
-        self.lookup, self.misses, self._pos = lookup, set(), {}
+    def __init__(self, lookup, book=None):
+        """`book`: a book's parsed rows and token lists (_book), kept across its parts."""
+        self.lookup, self.misses = lookup, set()
+        self._parsed, self._listed, self._pos = book or ({}, {}, {})
         self.tokenizer = self
 
     def _rows(self, text: str):
-        raw = self.lookup(text)
-        if raw is None:
-            self.misses.add(text)
-            raw = '\x1f'.join((text, text, text, '', _MISSING))
-        for row in raw.split('\x1e') if raw else ():
-            surface, form, normalized, reading, pos = map(sys.intern, row.split('\x1f'))
-            yield surface, form, normalized, reading, self._pos.get(pos) or self._pos.setdefault(pos, tuple(pos.split(',')))
+        rows = self._parsed.get(text)
+        if rows is None:
+            raw = self.lookup(text)
+            if raw is None:
+                self.misses.add(text)
+                raw = '\x1f'.join((text, text, text, '', _MISSING))
+            rows = [(*map(sys.intern, (surface, form, normalized, reading)),
+                     self._pos.get(pos) or self._pos.setdefault(pos, tuple(pos.split(','))))
+                    for surface, form, normalized, reading, pos in (row.split('\x1f') for row in raw.split('\x1e') if raw)]
+            if text not in self.misses:
+                self._parsed[text] = rows
+        return rows
 
     def tokenize(self, text: str):
         """Every morpheme, as Sudachi's tokenize (no offsets: the Analyzer reads words alone with it)."""
         return [Token(surface, form, normalized, pos, reading) for surface, form, normalized, reading, pos in self._rows(text)]
 
     def tokens(self, text: str):
-        """yurigana.tokens.SudachiTokenizer.tokens: the same chunks, filter and offsets."""
+        """yurigana.tokens.SudachiTokenizer.tokens: the same chunks, filter and offsets. A text's tokens
+        are listed once: the readings file and the Reader both ask for the whole book's."""
+        listed = self._listed.get(text)
+        if listed is None:
+            listed = list(self._tokens(text))
+            if not self.misses:
+                self._listed[text] = listed
+        return iter(listed)
+
+    def _tokens(self, text: str):
         offset = 0
         for paragraph in text.split('\n'):
             start = offset
@@ -104,7 +120,7 @@ def first_texts(html: str, part: str) -> list:
     return sorted(tokens.misses)
 
 
-def _words(html: str, tokens, words_per_book: int, reader: bool) -> dict:
+def _words(extracted: tuple, tokens, words_per_book: int, reader: bool) -> dict:
     """The book's word list as the service saves it ({words, uniqueWords, tokens}) and the
     difficulty model's input row (`features`, the service's _estimate) with the estimate's counts.
     Without `reader` (generated furigana not installed: no reader pack) the rows take Sudachi's
@@ -112,7 +128,7 @@ def _words(html: str, tokens, words_per_book: int, reader: bool) -> dict:
     analyzer = Analyzer(tokens)
     # The deconjugator's cache holds every intermediate form: a small one (only slower).
     analyzer.deconjugator.deconjugate = lru_cache(maxsize=200)(analyzer.deconjugator._deconjugate)
-    text, hints, _ = readings_file.extract(html)
+    text, hints, _ = extracted
     # book_text's furigana count, from the same ruby
     ruby = {}
     for start, end, reading in hints:
@@ -128,15 +144,24 @@ def _words(html: str, tokens, words_per_book: int, reader: bool) -> dict:
             'characters': len(TOKEN_CLEAN.sub('', text)), 'uniqueKanji': len({c for c in text if is_kanji(c)})}
 
 
+# The last book: its text (readings_file.extract), parsed rows and token lists, which its other part
+# asks for again.
+_book = None, None, None
+
+
 def analyse(html: str, lookup, part: str, words_per_book: int = 2000, reader: bool = True) -> str:
     """JSON: {misses} while texts are missing, else `part`: 'words' (_words, with yurigana's Reader
     for its rows' readings when `reader`) or 'readings' (the book's readings file, bookdata '':
     {readings})."""
-    tokens = BrowserTokens(lookup)
+    global _book
+    if _book[0] != html:
+        _book = html, ({}, {}, {}), readings_file.extract(html)
+    tokens = BrowserTokens(lookup, _book[1])
     if part == 'words':
-        result = _words(html, tokens, words_per_book, reader)
+        result = _words(_book[2], tokens, words_per_book, reader)
     else:
-        result = {'readings': readings_file.build(html, Reader.load(READER_PACK, tokenizer=tokens), '', YURIGANA_VERSION)}
+        yurigana = Reader.load(READER_PACK, tokenizer=tokens)
+        result = {'readings': readings_file.build(html, yurigana, '', YURIGANA_VERSION, _book[2])}
     if tokens.misses:
         return json.dumps({'misses': sorted(tokens.misses)}, ensure_ascii=False)
     return json.dumps(result, ensure_ascii=False, separators=(',', ':'))
