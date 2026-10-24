@@ -259,6 +259,35 @@ class ImportServiceTest(unittest.TestCase):
             self.assertEqual(len([n for n in os.listdir(state) if n.startswith('jobs.json.bad-')]), 1)
             self.assertTrue(service.load_jobs())  # missing: nothing queued
 
+    def test_queue_survives_losing_jobs_json(self):
+        state = tempfile.mkdtemp()
+        with mock.patch.object(service, 'STATE_DIR', state), mock.patch.object(service, 'jobs', {}):
+            os.makedirs(service.queue_dir())
+            job = {'id': 'abc', 'account': 'ren', 'name': '本.epub', 'file': 'abc.epub',
+                   'state': 'adding', 'created': 1, 'updated': 1}
+            for name in ('abc.epub', 'stray.epub', 'gone.epub.job'):
+                open(os.path.join(service.queue_dir(), name), 'wb').close()
+            service.write_job_file(job)
+            with open(service.jobs_path(), 'w') as f:
+                f.write('{"truncated": ')
+
+            # Unreadable: the job comes back from its file; the stray upload is kept this time.
+            self.assertEqual(service.recover_queue(service.load_jobs()), 1)
+            self.assertEqual(service.jobs['abc']['state'], 'queued')
+            self.assertEqual(service.jobs['abc']['name'], '本.epub')
+            service.save_jobs()
+            self.assertEqual(sorted(os.listdir(service.queue_dir())),
+                             ['abc.epub', 'abc.epub.job', 'stray.epub'])
+
+            # Read again at the next start: the job is kept, the stray upload goes.
+            service.jobs.clear()
+            self.assertEqual(service.recover_queue(service.load_jobs()), 0)
+            self.assertIn('abc', service.jobs)
+            self.assertEqual(sorted(os.listdir(service.queue_dir())), ['abc.epub', 'abc.epub.job'])
+
+            service.remove_queued('abc.epub')
+            self.assertEqual(os.listdir(service.queue_dir()), [])
+
     def test_worker_survives_errors(self):
         jobs = {'j': {'state': 'adding'}}
         with mock.patch.object(service, 'jobs', jobs), \
