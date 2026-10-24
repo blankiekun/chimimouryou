@@ -668,6 +668,12 @@
   text-underline-offset: 0.25em;
 }
 
+/* No highlight text-decoration in vertical text (see ttu-unknown below): a note colours the text instead. */
+.book-content--writing-vertical-rl ::highlight(ttu-hl-note) {
+  text-decoration: none;
+  color: var(--accent-color);
+}
+
 ::highlight(ttu-search) {
   background-color: var(--search-match-color);
 }
