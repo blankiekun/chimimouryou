@@ -121,6 +121,58 @@ def save_jobs():
     os.replace(tmp, jobs_path())
 
 
+def job_file(file: str) -> str:
+    """A queued file's job, written beside it so the queue survives losing jobs.json."""
+    return os.path.join(queue_dir(), file + '.job')
+
+
+def write_job_file(job: dict):
+    tmp = job_file(job['file']) + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(job, f, ensure_ascii=False)
+    os.replace(tmp, job_file(job['file']))
+
+
+def remove_queued(file: str):
+    for path in (os.path.join(queue_dir(), file), job_file(file)):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+def recover_queue(loaded: bool) -> int:
+    """Queued files missing from jobs get their job back from its .job file; files without one
+    are leftovers of an interrupted upload, removed only when jobs.json was read. Caller holds
+    `lock` or runs before the worker. Returns the jobs recovered."""
+    known = {j['file'] for j in jobs.values()}
+    names = set(os.listdir(queue_dir()))
+    recovered = 0
+    for name in names:
+        if name.endswith(('.job', '.tmp')) or name in known:
+            continue
+        try:
+            with open(job_file(name), encoding='utf-8') as f:
+                job = json.load(f)
+            if job.get('file') != name or not isinstance(job.get('id'), str):
+                raise ValueError('job file does not match')
+        except (OSError, ValueError):
+            if loaded:
+                remove_queued(name)
+            continue
+        job.update(state='queued', updated=time.time())
+        jobs[job['id']] = job
+        recovered += 1
+    # Job files whose upload is gone, and half-written ones.
+    for name in names:
+        if name.endswith('.tmp') or (name.endswith('.job') and name[:-4] not in names):
+            try:
+                os.remove(os.path.join(queue_dir(), name))
+            except OSError:
+                pass
+    return recovered
+
+
 def load_jobs() -> bool:
     """False when jobs.json exists but couldn't be read (a corrupt one is moved aside):
     the queued files are then kept rather than taken for leftovers."""
@@ -356,10 +408,7 @@ def run_queue():
         except Exception as error:  # noqa: BLE001 - one bad file must not end the worker
             print(f"add {job['name']}: {error!r}", file=sys.stderr)
             update = {'state': 'failed', 'error': 'Calibre could not add this file'}
-        try:
-            os.remove(os.path.join(queue_dir(), job['file']))
-        except OSError:
-            pass
+        remove_queued(job['file'])
         with lock:
             job.update(update, updated=time.time())
             # Added books stay "unlisted" until the catalog, rebuilt once per batch, lists them.
@@ -633,6 +682,11 @@ class Handler(BaseHTTPRequestHandler):
         if vn:
             job['kind'] = 'vn'
 
+        try:
+            write_job_file(job)
+        except OSError as error:
+            remove_queued(file)
+            raise ApiError(507, 'Could not store the file') from error
         with work:
             jobs[job_id] = job
             save_jobs()
@@ -645,12 +699,8 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     os.makedirs(queue_dir(), exist_ok=True)
-    if load_jobs():
-        # Uploads without a job (interrupted before it was recorded) are removed.
-        known = {j['file'] for j in jobs.values()}
-        for entry in os.scandir(queue_dir()):
-            if entry.name not in known:
-                os.remove(entry.path)
+    if recover_queue(load_jobs()):
+        save_jobs()
     # Games half unpacked when the service stopped.
     if os.path.isdir(VN_DIR) and os.access(VN_DIR, os.W_OK):
         for entry in os.scandir(VN_DIR):
