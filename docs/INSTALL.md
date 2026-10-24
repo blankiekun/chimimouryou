@@ -153,12 +153,13 @@ Give `import` only to people you trust: it runs Calibre on their uploads.
 
 To develop on one machine and run the stack on another, `scripts/deploy.sh`
 copies the working tree to the server, builds there and restarts the stack
-(the running stack stays if a build fails; the previous images are kept as
+(if a build or the restart fails, the previous images run again; they are kept as
 `:previous`). Put your settings in `local/` (gitignored):
 
 - `local/deploy.env` from `deploy/deploy.env.example`: the target, a Proxmox
   container (`pct:<id>`), an SSH host (`ssh:root@host`) or this machine (`local`);
-- `local/env` from `.env.example`;
+- `local/env` from `.env.example`, with absolute paths (`DATA_PATH` and the others:
+  a relative one would land in `/opt/ebook-reader`, which every deploy replaces);
 - optionally `local/docker-compose.override.yml`, e.g.
   [deploy/examples/tailscale-https](../deploy/examples/tailscale-https/README.md).
 

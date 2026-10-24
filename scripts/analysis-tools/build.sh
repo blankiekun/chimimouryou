@@ -30,6 +30,8 @@ jiten=$root/scripts/calibre/jiten
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 yurigana=$(grep -o 'https://github.com/blankiekun/yurigana/archive/refs/tags/[^ ]*\.tar\.gz' "$jiten/requirements.txt")
+yurigana_sha256=$(grep -o 'yurigana/archive/refs/tags/[^ ]*\.tar\.gz#sha256=[0-9a-f]\{64\}' "$jiten/requirements.txt" | sed 's/.*=//' || true)
+[ -n "$yurigana_sha256" ] || { echo "No #sha256= for yurigana in scripts/calibre/jiten/requirements.txt" >&2; exit 1; }
 grep -q "SudachiDict-core==$SUDACHI_DICT" "$jiten/requirements.txt" ||
   { echo "SUDACHI_DICT differs from scripts/calibre/jiten/requirements.txt" >&2; exit 1; }
 mkdir -p "$out/pyodide"
@@ -59,7 +61,9 @@ python3 -c 'import json, sys; lock = json.load(open(sys.argv[1])); json.dump({"i
   "$work/package/pyodide-lock.json" "$out/pyodide/pyodide-lock.json"
 
 # yurigana and the service's modules; the packs are built by the same yurigana
-curl -fsSL "$yurigana" | tar -xz -C "$work"
+curl -fsSL -o "$work/yurigana.tar.gz" "$yurigana"
+echo "$yurigana_sha256  $work/yurigana.tar.gz" | sha256sum -c --quiet
+tar -xzf "$work/yurigana.tar.gz" -C "$work"
 yg=$(echo "$work"/yurigana-*/yurigana)
 mkdir -p "$work/py"
 cp -r "$yg" "$work/py/"

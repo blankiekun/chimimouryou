@@ -7,8 +7,8 @@
 #
 # The account service writes DATA_PATH/state/update/request.json; the path unit
 # starts this, which downloads the commit (main's head or the latest release), swaps it into /opt/ebook-reader,
-# builds the images and restarts the stack like deploy.sh. If the build fails
-# the running version stays. Progress goes to status.json (engine-status.json for engines) for the admin panel.
+# builds the images and restarts the stack like deploy.sh. If the build or restart fails
+# the previous version is put back. Progress goes to status.json (engine-status.json for engines) for the admin panel.
 # A request naming an "engine" (Tools → Visual novel engine) instead downloads that
 # CONscripter release's web build into DATA_PATH/state/engine, which nginx serves ahead of
 # the built-in engine: nothing is built or restarted.
@@ -87,7 +87,8 @@ if [ -z "$ref" ]; then
   exit 0
 fi
 
-work=$(mktemp -d)
+# Beside $APP, so moving the new source into place is a rename on the same file system.
+work=$(mktemp -d "$APP.new.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 trap 'status failed "Update failed; see journalctl -u ebook-update on the server"' ERR
 
@@ -100,7 +101,13 @@ if [ -n "$engine" ]; then
     status failed "That is not the latest CONscripter release any more; check again"
     exit 0
   fi
-  CONSCRIPTER_TAG=$engine CONSCRIPTER_OUT=$work/engine "$APP/scripts/conscripter/build.sh"
+  # Checksums come from main: the deployed source only knows the releases up to its own.
+  curl -fsSL -o "$work/sums" "https://raw.githubusercontent.com/$repo/main/scripts/conscripter/sha256sums"
+  if ! awk -v tag="$engine" '$1 == tag { found = 1 } END { exit !found }' "$work/sums"; then
+    status failed "That release has no recorded checksum on main yet; try again later"
+    exit 0
+  fi
+  CONSCRIPTER_TAG=$engine CONSCRIPTER_SUMS=$work/sums CONSCRIPTER_OUT=$work/engine "$APP/scripts/conscripter/build.sh"
   as_owner mkdir -p "$data/state/engine"
   # The version file last, so a half-installed engine is never announced.
   for file in conscripter.js conscripter.wasm conscripter-version.txt; do
@@ -130,22 +137,35 @@ else
 fi
 
 status running "Building"
-for image in $($compose config --images | sort -u); do
+images=$($compose config --images | sort -u)
+for image in $images; do
   docker image tag "$image" "${image%:*}:previous" 2>/dev/null || true
 done
+# Puts back the source and the images that ran (so the next update keeps them as :previous).
+restore() {
+  for image in $images; do
+    docker image tag "${image%:*}:previous" "$image" 2>/dev/null || true
+  done
+  rm -rf "$APP"
+  mv "$APP.previous" "$APP"
+}
 rm -rf "$APP.previous"
 mv "$APP" "$APP.previous"
 mv "$work/src" "$APP"
 export VERSION=${version:-docker}
 if ! $compose build --quiet; then
-  rm -rf "$APP"
-  mv "$APP.previous" "$APP"
+  restore
   status failed "The new version did not build; the running one stays"
   exit 1
 fi
 
 status running "Restarting"
-$compose up -d --remove-orphans
+if ! $compose up -d --remove-orphans; then
+  restore
+  $compose up -d --remove-orphans || true
+  status failed "The new version did not start; the previous one runs again"
+  exit 1
+fi
 docker image prune -f >/dev/null
 rm -rf "$APP.previous"
 for command in $COMMANDS; do

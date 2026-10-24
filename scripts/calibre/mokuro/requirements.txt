@@ -1,4 +1,6 @@
-# CPU-only PyTorch: the CUDA build is several GB larger.
+# CPU-only PyTorch: the CUDA build is several GB larger. Pinned to its +cpu builds (only on that
+# index), so a newer torch on either index never replaces them; bump torch and torchvision together.
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch
+torch==2.14.1+cpu
+torchvision==0.29.1+cpu
 mokuro==0.2.5

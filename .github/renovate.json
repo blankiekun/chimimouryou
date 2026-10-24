@@ -1,6 +1,14 @@
 {
-  "extends": ["config:js-app", ":automergeMinor"],
+  "extends": ["config:js-app", "helpers:pinGitHubActionDigests"],
+  "minimumReleaseAge": "7 days",
   "packageRules": [
+    {
+      "description": "Only npm devDependencies merge themselves (minor and patch); never Actions or runtime packages",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    },
     {
       "matchDatasources": ["docker"],
       "matchPackageNames": ["node"],
