@@ -17,7 +17,7 @@ import { theme$ } from '$lib/data/store';
 import { customAppThemes$, darkTheme$ } from '$lib/data/theme/theme-store';
 import { socialSession$ } from '$lib/data/social-account';
 import { homeBookTitles$, homeRemovedTitles$ } from '$lib/data/library-home';
-import { startSettingsSync, syncAccountSettings } from './account-settings-sync';
+import { mergeEntries, startSettingsSync, syncAccountSettings } from './account-settings-sync';
 
 /** The library's Drive/OneDrive/folder while signed out (undefined: none) */
 const folder = vi.hoisted(() => ({ files: undefined as Record<string, string> | undefined }));
@@ -368,5 +368,28 @@ describe('account settings sync', () => {
     expect(mangaSeriesModes$.getValue()).toEqual({ s1: 'vertical', s2: 'ltr' });
     expect(remote?.values.customAppThemes).toEqual({ keep: theme });
     expect((remote as any).entryModified.customAppThemes.old).toBeLessThan(0);
+
+    // Another device deletes this browser's preset later: the deletion wins here too.
+    values.askAiPresets = values.askAiPresets.filter(({ id }: { id: string }) => id !== 'mine');
+    (remote as any).entryModified.askAiPresets.mine = -(Date.now() + 2000);
+    await syncAccountSettings();
+    expect(askAiPresets$.getValue().map(({ id }) => id)).toEqual(['a', 'theirs', 'other']);
+  });
+
+  it('gives a same-time tie to the deletion', () => {
+    expect(mergeEntries({ a: 1 }, {}, { a: 5 }, { a: -5 }).merged).toEqual({});
+    expect(mergeEntries({}, { a: 1 }, { a: -5 }, { a: 5 }).merged).toEqual({});
+  });
+
+  it("drops the old AI settings' keys from the account's copy", async () => {
+    window.localStorage.setItem('accountSettingsOwner', 'alice');
+    mockServer({
+      values: { openRouterApiKey: 'sk-old', elevenLabsModel: 'eleven_v3' },
+      modified: { openRouterApiKey: 4, elevenLabsModel: 4 }
+    });
+    await signInAs(alice);
+    expect(remote?.values).not.toHaveProperty('openRouterApiKey');
+    expect(remote?.values).not.toHaveProperty('elevenLabsModel');
+    expect(remote?.modified).not.toHaveProperty('openRouterApiKey');
   });
 });
