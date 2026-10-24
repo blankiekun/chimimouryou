@@ -20,3 +20,13 @@ export function analysisKeepAlive(
 
   return small ? 0 : 10_000;
 }
+
+/**
+ * How many analysis workers run at once: two on machines that keep the worker (background batches
+ * then analyse two books at once, ~1.3-1.6x faster, ~400-700 MB more), one on small ones.
+ */
+export function analysisWorkers(
+  machine: { hardwareConcurrency?: number; deviceMemory?: number } = navigator
+) {
+  return analysisKeepAlive(machine) ? 2 : 1;
+}

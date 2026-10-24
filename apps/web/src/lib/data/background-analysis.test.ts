@@ -41,7 +41,10 @@ const storedCursor = vi.hoisted(() => {
 });
 const furigana = vi.hoisted(() => ({ on: undefined as unknown as BehaviorSubject<boolean> }));
 
+const capacity = vi.hoisted(() => ({ workers: 1 }));
+
 vi.mock('$lib/data/analysis-tools', () => tools);
+vi.mock('$lib/data/analysis-capacity', () => ({ analysisWorkers: () => capacity.workers }));
 vi.mock('$lib/data/store', async () => {
   const { BehaviorSubject } = await import('rxjs');
 
@@ -85,6 +88,7 @@ const analysed = (mock: typeof tools.localEstimate | typeof tools.makeReadings) 
 describe('background analysis', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    capacity.workers = 1;
     db.get = (title) => books[title];
     db.refreshed = () => {};
     source.value = 'gdrive';
@@ -198,6 +202,49 @@ describe('background analysis', () => {
     delete books.late;
 
     expect(backgroundAnalysis$.getValue()).toBeUndefined();
+  });
+
+  it('analyses two books at once on large machines, one on small ones, counting each once', async () => {
+    furigana.on.next(false);
+    const batch = ['b1', 'b2', 'b3'];
+
+    batch.forEach((title) => (books[title] = { title, elementHtml: `<p>${title}</p>` }));
+
+    for (const workers of [1, 2]) {
+      capacity.workers = workers;
+      vi.clearAllMocks();
+
+      const running = new Set<string>();
+      const finish = new Map<string, () => void>();
+      let most = 0;
+
+      // Each book's estimate waits until the test lets it finish.
+      tools.localEstimate.mockImplementation(((title: string) => {
+        running.add(title);
+        most = Math.max(most, running.size);
+        return new Promise((resolve) =>
+          finish.set(title, () => {
+            running.delete(title);
+            resolve({ title, etag: 'new' });
+          })
+        );
+      }) as never);
+      analyseInBackground(batch);
+      await vi.waitFor(() => expect(running.size).toBe(workers));
+      expect(backgroundAnalysis$.getValue()).toMatchObject({ current: 1, total: 3 });
+
+      for (const title of batch) {
+        await vi.waitFor(() => expect(finish.has(title)).toBe(true));
+        finish.get(title)!();
+      }
+      await backgroundAnalysisIdle();
+
+      expect(most).toBe(workers);
+      expect(analysed(tools.localEstimate)).toEqual(batch);
+      expect(backgroundAnalysis$.getValue()).toBeUndefined();
+    }
+    batch.forEach((title) => delete books[title]);
+    tools.localEstimate.mockImplementation(async (title) => ({ title, etag: 'new' }));
   });
 
   it("shows the book's percent and gives up a book that stops moving until the next start", async () => {
