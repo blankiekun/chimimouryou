@@ -131,6 +131,19 @@ describe('book transfer channel', () => {
     expect([...new Uint8Array(await unpacked.coverImage!.arrayBuffer())]).toEqual([9, 9]);
   });
 
+  it('carries the series and drops malformed ones', async () => {
+    expect(
+      await unpackBook(packBook({ ...book, series: ' 坊っちゃん ', seriesIndex: 2 }))
+    ).toMatchObject({ series: '坊っちゃん', seriesIndex: 2 });
+
+    const forged = await unpackBook(
+      packBook({ ...book, series: 3, seriesIndex: '2' } as unknown as typeof book)
+    );
+
+    expect(forged.series).toBeUndefined();
+    expect(forged.seriesIndex).toBeUndefined();
+  });
+
   it('keeps a manga record as it is and refuses broken packs and visual novels', async () => {
     const manga = { ...book, elementHtml: mangaElementHtml(['a & b.png']), coverImage: undefined };
     const unpacked = await unpackBook(packBook(manga));

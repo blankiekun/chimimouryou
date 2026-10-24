@@ -51,6 +51,8 @@ interface PackHeader {
   sections?: BooksDbBookData['sections'];
   characters: number;
   language?: string;
+  series?: string;
+  seriesIndex?: number;
   /** [name, size, type] in the order of the bytes after the header */
   blobs: [string, number, string][];
   cover: [number, string] | null;
@@ -68,6 +70,8 @@ export function packBook(book: Omit<BooksDbBookData, 'id'>) {
     sections: book.sections,
     characters: book.characters,
     language: book.language,
+    series: book.series,
+    seriesIndex: book.seriesIndex,
     blobs: names.map((name) => [name, book.blobs[name].size, book.blobs[name].type]),
     cover: cover ? [cover.size, cover.type] : null
   };
@@ -155,6 +159,10 @@ export async function unpackBook(blob: Blob, lastBookModified = Date.now()): Pro
     elementHtml: clean(header.elementHtml),
     ...(typeof header.htmlBackup === 'string' ? { htmlBackup: clean(header.htmlBackup) } : {}),
     ...(typeof header.language === 'string' ? { language: header.language } : {}),
+    ...(typeof header.series === 'string' && header.series.trim()
+      ? { series: header.series.trim().slice(0, 500) }
+      : {}),
+    ...(Number.isFinite(header.seriesIndex) ? { seriesIndex: header.seriesIndex } : {}),
     sections: Array.isArray(header.sections) ? header.sections : [],
     characters: header.characters,
     blobs,

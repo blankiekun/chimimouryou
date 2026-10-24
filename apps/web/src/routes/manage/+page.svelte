@@ -1814,6 +1814,7 @@
     book={detailsBook}
     bookCards={$bookCards$}
     isCalibre={$storageSource$ === StorageKey.CALIBRE}
+    localSeries={$storageSource$ === StorageKey.BROWSER}
     covered={$page.state.bookWords !== undefined}
     on:close={() => history.back()}
     on:words={() => pushState('', { bookDetails: detailsBook?.id, bookWords: detailsBook?.id })}
