@@ -33,6 +33,7 @@
     fontFamilyGroupOne$,
     generatedFurigana$,
     unknownWordUnderline$,
+    chapterPrimer$,
     horizontalCustomReadingPosition$,
     textMarginMode$,
     textMarginValue$,
@@ -564,6 +565,9 @@
       tooltip={$t$('prefs.unknownWordUnderlineHint')}
     >
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={$unknownWordUnderline$} />
+    </SettingsItemGroup>
+    <SettingsItemGroup title={$t$('prefs.chapterPrimer')} tooltip={$t$('prefs.chapterPrimerHint')}>
+      <ButtonToggleGroup options={toggle} bind:selectedOptionId={$chapterPrimer$} />
     </SettingsItemGroup>
   {/if}
   {#if hideFurigana}

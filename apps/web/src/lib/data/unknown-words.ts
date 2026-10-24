@@ -25,17 +25,15 @@ export type CountSpan = [number, number];
 type Known = Pick<KnownSet, 'met' | 'anki' | 'placed'>;
 
 /**
- * The spans of the occurrences of unknown words, in reading order. A readings word takes the
+ * Which of the readings file's words aren't known, per word index. A readings word takes the
  * book's word-list row of the same form and reading (else of the form) for its rank and lemma.
- * shortcut: kana-only words aren't in `occ`, so they never underline; add them to the readings
- * file if readers ask.
  */
-export function unknownSpans(
+export function unknownWordFlags(
   readings: ReadingsFile,
   list: BookWord[],
   known: Known,
   marks: WordMarks
-): CountSpan[] {
+): boolean[] {
   const rows = new Map<string, BookWord>();
 
   for (const row of list) {
@@ -43,7 +41,7 @@ export function unknownSpans(
     if (!rows.has(row[0])) rows.set(row[0], row);
   }
 
-  const unknown = (readings.words ?? []).map(([form, reading]) => {
+  return (readings.words ?? []).map(([form, reading]) => {
     const word: BookWord = rows.get(`${form}\t${reading ?? ''}`) ??
       rows.get(form) ?? [form, reading, 0, null];
 
@@ -55,7 +53,10 @@ export function unknownSpans(
       wordMark(marks, word)
     );
   });
-  const spans: CountSpan[] = [];
+}
+
+/** The file's occurrences in reading order as [start, end, word index]. */
+export function* occurrences(readings: ReadingsFile): Generator<[number, number, number]> {
   let start = 0;
   let claimedEnd = 0;
 
@@ -77,10 +78,33 @@ export function unknownSpans(
       );
 
     claimedEnd = start + length;
-    if (unknown[readings.occ[i + 1]]) spans.push([start, claimedEnd]);
+    yield [start, claimedEnd, readings.occ[i + 1]];
+  }
+}
+
+/** The spans of the occurrences of unknown words (`unknownWordFlags`), in reading order. */
+export function spansOf(readings: ReadingsFile, unknown: boolean[]): CountSpan[] {
+  const spans: CountSpan[] = [];
+
+  for (const [start, end, word] of occurrences(readings)) {
+    if (unknown[word]) spans.push([start, end]);
   }
 
   return spans;
+}
+
+/**
+ * The spans of the occurrences of unknown words, in reading order.
+ * shortcut: kana-only words aren't in `occ`, so they never underline; add them to the readings
+ * file if readers ask.
+ */
+export function unknownSpans(
+  readings: ReadingsFile,
+  list: BookWord[],
+  known: Known,
+  marks: WordMarks
+): CountSpan[] {
+  return spansOf(readings, unknownWordFlags(readings, list, known, marks));
 }
 
 /** The spans overlapping [start, end), for drawing the rendered part of the book. */
@@ -102,8 +126,8 @@ export function spansWithin(spans: CountSpan[], start: number, end: number) {
   return within;
 }
 
-/** The book's unknown-word spans, again whenever the marks change. */
-export function unknownSpans$(title: string, readings: ReadingsFile): Observable<CountSpan[]> {
+/** The book's unknown words (`unknownWordFlags`), again whenever the marks change. */
+export function unknownWordFlags$(title: string, readings: ReadingsFile): Observable<boolean[]> {
   const parts = Promise.all([
     estimatedBooks()
       .then((books) => books.find((book) => book.title === title))
@@ -114,7 +138,7 @@ export function unknownSpans$(title: string, readings: ReadingsFile): Observable
 
   return from(parts).pipe(
     switchMap(([list, known]) =>
-      wordMarks$.pipe(map((marks) => unknownSpans(readings, list ?? [], known, marks)))
+      wordMarks$.pipe(map((marks) => unknownWordFlags(readings, list ?? [], known, marks)))
     )
   );
 }

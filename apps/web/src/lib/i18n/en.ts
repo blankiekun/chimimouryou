@@ -1353,6 +1353,12 @@ export const en = {
   'reader.chapterProgress': 'Chapter Progress: {count} ({percent}%)',
   'reader.closeToc': 'Close Table of Contents',
   'reader.goTo': 'Go to {chapter}',
+  'reader.primerCount': '{count} new',
+  'reader.primerShow': 'Show {count} new words in {chapter}',
+  'reader.primerTitle': '{count} new words',
+  'reader.primerNote': 'Not known yet, and met 3+ times in this chapter.',
+  'reader.primerBack': 'Back to Contents',
+  'reader.primerTimes': '{count} times',
   'reader.prevChapter': 'Previous Chapter',
   'reader.nextChapter': 'Next Chapter',
   'reader.tracker.toggle': 'Toggle Tracker',
@@ -1482,6 +1488,9 @@ export const en = {
   'prefs.unknownWordUnderline': 'Underline unknown words',
   'prefs.unknownWordUnderlineHint':
     "Marks kanji words you don't know yet (a dotted underline, a soft tint in vertical text): met fewer than 8 times, not mature in Anki, not marked known. Needs generated readings: Calibre books with the difficulty service, or the analysis tools.",
+  'prefs.chapterPrimer': 'New words per chapter',
+  'prefs.chapterPrimerHint':
+    "Contents shows how many words you don't know yet each chapter uses 3+ times, and lists them. Needs generated readings, like the underline.",
   'prefs.furiganaPartialHint': 'Display furigana as grayed out text',
   'prefs.viewMode': 'View mode',
   'prefs.marginLeftRight': 'Left and right margin',

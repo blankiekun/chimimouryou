@@ -103,9 +103,11 @@
     enableFontVPAL$,
     verticalTextOrientation$,
     generatedFurigana$,
-    unknownWordUnderline$
+    unknownWordUnderline$,
+    chapterPrimer$
   } from '$lib/data/store';
-  import { spansWithin, unknownSpans$, type CountSpan } from '$lib/data/unknown-words';
+  import { spansOf, spansWithin, unknownWordFlags$, type CountSpan } from '$lib/data/unknown-words';
+  import { chapterPrimer, type ChapterPrimer } from '$lib/data/chapter-primer';
   import {
     addGeneratedRuby,
     generatedReadings$,
@@ -487,15 +489,15 @@
     return analysisToolsSupported() ? 'local' : undefined;
   }
 
-  // The readings file, while generated furigana or the unknown-word underlines need it.
+  // The readings file, while generated furigana, the unknown-word underlines or the chapter primer need it.
   const bookReadings$ = rawBookData$.pipe(
     switchMap((rawBookData) => {
       if (!rawBookData) return EMPTY;
 
       const source = readingsAvailable(rawBookData);
 
-      return combineLatest([generatedFurigana$, unknownWordUnderline$]).pipe(
-        map(([furigana, underline]) => furigana || underline),
+      return combineLatest([generatedFurigana$, unknownWordUnderline$, chapterPrimer$]).pipe(
+        map((wanted) => wanted.some(Boolean)),
         distinctUntilChanged(),
         switchMap((on) => {
           if (!on || !source) return of(undefined);
@@ -511,14 +513,31 @@
   );
 
   let unknownSpans: CountSpan[] = [];
+  let primer: ChapterPrimer | undefined;
 
-  const unknownWords$ = combineLatest([bookReadings$, unknownWordUnderline$]).pipe(
-    switchMap(([{ title, readings }, on]) =>
-      on && readings ? unknownSpans$(title, readings) : of([])
+  const unknownWords$ = combineLatest([
+    bookReadings$,
+    unknownWordUnderline$,
+    chapterPrimer$,
+    sectionList$
+  ]).pipe(
+    switchMap(([{ title, readings }, underline, primerOn, sections]) =>
+      (underline || primerOn) && readings
+        ? unknownWordFlags$(title, readings).pipe(
+            map((flags) => ({ readings, flags, underline, primerOn, sections }))
+          )
+        : of(undefined)
     ),
-    tap((spans) => {
-      unknownSpans = spans;
-      scheduleHighlights(true);
+    tap((state) => {
+      const spans = state?.underline ? spansOf(state.readings, state.flags) : [];
+
+      primer = state?.primerOn
+        ? chapterPrimer(state.readings, state.flags, state.sections)
+        : undefined;
+      if (spans.length || unknownSpans.length) {
+        unknownSpans = spans;
+        scheduleHighlights(true);
+      }
     }),
     reduceToEmptyString()
   );
@@ -2655,6 +2674,7 @@
     getIndex={getSearchIndex}
     sections={$sectionList$}
     sectionData={$sectionData$ ?? []}
+    {primer}
     position={exploredCharCount}
     bookCharacters={bookCharCount}
     selection={selectionPanel}
