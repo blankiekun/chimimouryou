@@ -33,14 +33,16 @@ function pool() {
   workers = [];
   // jsdom (the tests) has no workers: everything runs here.
   if (typeof Worker === 'undefined') return workers;
-  const count = Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 2) - 1));
+  const count = Math.min(8, Math.max(1, (navigator.hardwareConcurrency || 2) - 1));
   for (let i = 0; i < count; i++) {
     const worker = new Worker(new URL('./pack-codec.worker.ts', import.meta.url), {
       type: 'module'
     });
-    worker.onmessage = ({ data: { id, blocks } }) => {
-      waiting.get(id)?.[0](blocks);
+    worker.onmessage = ({ data: { id, blocks, error } }) => {
+      const [resolve, reject] = waiting.get(id)!;
       waiting.delete(id);
+      if (error) reject(new Error(error));
+      else resolve(blocks);
     };
     worker.onerror = (event) => {
       for (const [, reject] of waiting.values()) reject(new Error(event.message));

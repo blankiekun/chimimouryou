@@ -13,9 +13,13 @@
 import { codec } from './pack-codec';
 
 self.onmessage = async ({ data: { id, format, blocks } }) => {
-  const results = await Promise.all(blocks.map((block: Uint8Array) => codec(format, block)));
-  self.postMessage(
-    { id, blocks: results },
-    { transfer: results.map((block: Uint8Array) => block.buffer) }
-  );
+  // One at a time: the streams share this thread, and interleaving them is slower.
+  const results: Uint8Array[] = [];
+  try {
+    for (const block of blocks) results.push(await codec(format, block));
+  } catch (error) {
+    self.postMessage({ id, error: String(error) });
+    return;
+  }
+  self.postMessage({ id, blocks: results }, { transfer: results.map((block) => block.buffer) });
 };
