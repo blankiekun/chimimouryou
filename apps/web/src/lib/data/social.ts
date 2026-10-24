@@ -61,6 +61,9 @@ export interface SocialStats {
   /** 84 days, oldest first, a level 0-4 each */
   heat: string;
   wordsKnown?: number;
+  /** Reading rank 1-7 (reading-rank.ts) and the characters it counted; the hub caps both */
+  rank?: number;
+  chars?: number;
 }
 
 export interface Person {
@@ -250,7 +253,8 @@ export function friendsWithBook(friends: Friend[], title: string) {
 export function socialStats(
   statistics: BooksDbStatistic[],
   today: string,
-  wordsKnown?: number
+  wordsKnown?: number,
+  rank?: { tier: number; characters: number }
 ): SocialStats {
   const stats = learnerStats(statistics, today);
   const week = new Set(
@@ -280,7 +284,8 @@ export function socialStats(
       .map((day) => day.level)
       .join('')
       .padStart(84, '0'),
-    ...(wordsKnown === undefined ? {} : { wordsKnown })
+    ...(wordsKnown === undefined ? {} : { wordsKnown }),
+    ...(rank ? { rank: rank.tier, chars: rank.characters } : {})
   };
 }
 
@@ -301,7 +306,11 @@ async function collectStats() {
         .catch(() => undefined)
     : undefined;
 
-  lastStats = socialStats(statistics, getDateKey(startDayHoursForTracker$.getValue()), known);
+  const rank = await import('$lib/data/reading-rank-data')
+    .then(({ loadReadingRank }) => loadReadingRank(statistics))
+    .catch(() => undefined);
+
+  lastStats = socialStats(statistics, getDateKey(startDayHoursForTracker$.getValue()), known, rank);
   return lastStats;
 }
 

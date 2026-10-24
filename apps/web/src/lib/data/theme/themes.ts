@@ -132,7 +132,15 @@ const lightBase: ThemeColors = {
   avatar5: '#0d6b6e',
   avatar6: '#6b3a6b',
   avatar7: '#4b5661',
-  avatar8: '#1f2321'
+  avatar8: '#1f2321',
+  // Reading ranks rise cool to warm to deep; each is text on the page (themes.test.ts)
+  rank1: '#56616b',
+  rank2: '#2c5d9a',
+  rank3: '#1d7148',
+  rank4: '#835d00',
+  rank5: '#a84a10',
+  rank6: '#a3213a',
+  rank7: '#5b2d86'
 };
 
 const darkBase: ThemeColors = {
@@ -186,7 +194,14 @@ const darkBase: ThemeColors = {
   avatar5: '#0d6b6e',
   avatar6: '#6b3a6b',
   avatar7: '#4b5661',
-  avatar8: '#3c4240'
+  avatar8: '#3c4240',
+  rank1: '#a5afb9',
+  rank2: '#86aee8',
+  rank3: '#6ccb9b',
+  rank4: '#e2b650',
+  rank5: '#f2925f',
+  rank6: '#f27a90',
+  rank7: '#c7a1f2'
 };
 
 const defaults = { radius: 1, blur: 24, uiFont: '', customCss: '' };
