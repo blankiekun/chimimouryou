@@ -679,12 +679,12 @@ async function feed(env: Env, user: string, since: number) {
 /**
  * A report of someone's name or picture (`{username, what}`), or of a cover thumbnail
  * (`{what: 'cover', key}`: the target is the book key), once per reporter; acted on in the app
- * (/moderation, role dev).
+ * (/moderation, role dev). Signed-in readers only, so reports can't be made in bulk by address.
  */
-async function report(request: Request, env: Env, viewer: UserRow | null) {
+async function report(request: Request, env: Env, viewer: UserRow) {
   const body = await readBody(request);
   const what = body.what === 'picture' || body.what === 'cover' ? body.what : 'name';
-  const reporter = viewer?.id ?? (await ipSubject(request));
+  const reporter = viewer.id;
   let target: string;
 
   if (what === 'cover') {
@@ -711,7 +711,7 @@ async function report(request: Request, env: Env, viewer: UserRow | null) {
     const user = await userByName(env, username);
 
     if (!user) throw new HttpError(404, 'user');
-    if (user.id === viewer?.id) throw new HttpError(400, 'self');
+    if (user.id === viewer.id) throw new HttpError(400, 'self');
     target = user.id;
   }
   await env.DB.prepare(
@@ -1811,15 +1811,15 @@ async function route(request: Request, env: Env, ctx?: Context): Promise<Respons
   if (route === 'POST /v1/login') return login(request, env);
   if (route === 'POST /v1/recover') return recover(request, env);
 
-  // Profiles and reports also answer visitors without an account.
+  // Profiles also answer visitors without an account.
   const auth = request.headers.has('Authorization') ? await authenticate(request, env) : null;
   const profilePath = /^\/v1\/profile\/([A-Za-z0-9_]{3,20})$/.exec(pathname);
 
   if (request.method === 'GET' && profilePath) {
     return profileResponse(request, env, ctx, profilePath[1], auth?.user ?? null);
   }
-  if (route === 'POST /v1/report') return report(request, env, auth?.user ?? null);
   if (!auth) throw new HttpError(401, 'session');
+  if (route === 'POST /v1/report') return report(request, env, auth.user);
 
   const { user, hash } = auth;
   const adminPath = /^\/v1\/admin\/(.+)$/.exec(pathname);

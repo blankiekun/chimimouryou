@@ -46,6 +46,8 @@ export const en = {
     "Different words in the Calibre books you have read, estimated from each book's word list and how far you got; particles and skipped text don't count",
   'dashboard.wordsKnown': 'Words known',
   'dashboard.wordsKnownHint': 'Words met at least {count} times, plus mature words from Anki',
+  'dashboard.wordsKnownHintPlaced':
+    'The {cutoff} most common words (word test), plus words met at least {count} times, mature words from Anki and words marked known',
   'dashboard.wordsGained': '+{count} this month',
   'dashboard.wordsGainedHint':
     'Estimated from the characters read each day; Anki words are not included',

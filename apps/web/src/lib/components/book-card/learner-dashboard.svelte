@@ -7,6 +7,7 @@
     type ActivityDay,
     type LearnerStats
   } from '$lib/data/learner-stats';
+  import { placementCutoff$ } from '$lib/data/placement';
   import { pullAccountStatistics } from '$lib/data/statistics-sync';
   import { database, startDayHoursForTracker$, statisticsEnabled$ } from '$lib/data/store';
   import {
@@ -122,7 +123,13 @@
         {
           label: $t$('dashboard.wordsKnown'),
           value: words ? number(words.known) : '–',
-          hint: $t$('dashboard.wordsKnownHint', { count: knownMinCount }),
+          hint:
+            $placementCutoff$ > 0
+              ? $t$('dashboard.wordsKnownHintPlaced', {
+                  count: knownMinCount,
+                  cutoff: number($placementCutoff$)
+                })
+              : $t$('dashboard.wordsKnownHint', { count: knownMinCount }),
           extra: gained ? $t$('dashboard.wordsGained', { count: number(gained) }) : ''
         }
       ]

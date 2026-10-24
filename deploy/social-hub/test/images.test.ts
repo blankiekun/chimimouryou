@@ -337,17 +337,20 @@ describe('hub images', () => {
 
   it('takes reports of a picture and of a cover', async () => {
     const aki = await signUp('aki');
+    const ren = await signUp('ren');
 
     const cover = { what: 'cover', key: 'k1', username: 'aki' };
 
     await call('PUT', '/v1/status', { books: [book('k1')] }, aki.token);
-    expect((await call('POST', '/v1/report', cover)).status).toBe(404);
+    expect((await call('POST', '/v1/report', cover, ren.token)).status).toBe(404);
     await call('PUT', '/v1/cover?key=k1', webp(160, 226), aki.token);
-    expect((await call('POST', '/v1/report', cover)).status).toBe(200);
-    expect((await call('POST', '/v1/report', { ...cover, username: 'ren' })).status).toBe(404);
-    expect((await call('POST', '/v1/report', { username: 'aki', what: 'picture' })).status).toBe(
-      200
-    );
+    expect((await call('POST', '/v1/report', cover, ren.token)).status).toBe(200);
+    expect(
+      (await call('POST', '/v1/report', { ...cover, username: 'ren' }, ren.token)).status
+    ).toBe(404);
+    expect(
+      (await call('POST', '/v1/report', { username: 'aki', what: 'picture' }, ren.token)).status
+    ).toBe(200);
     expect(db.prepare('SELECT target, what FROM reports ORDER BY what').all()).toEqual([
       { target: `${aki.me.id}:k1`, what: 'cover' },
       { target: aki.me.id, what: 'picture' }

@@ -8,7 +8,7 @@
     nextItem,
     placementCutoff,
     placementCutoff$,
-    placementCutoffLength$,
+    recordPlacement,
     placementFromWordTest$,
     placementLength,
     placementLengths,
@@ -73,8 +73,7 @@
 
     result = scorePlacement(answers);
     if (!result.retake) {
-      $placementCutoff$ = result.cutoff;
-      $placementCutoffLength$ = length;
+      recordPlacement('yesno', result.cutoff, length);
       // Home then says where it came from rather than offering the check.
       $placementFromWordTest$ = shared;
       previous = result.cutoff;

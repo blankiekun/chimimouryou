@@ -16,7 +16,7 @@
 
 import { BehaviorSubject, map, merge, skip, type Subscription } from 'rxjs';
 import { mangaSeriesModes$ } from '$lib/data/manga';
-import { placementCutoff$, placementCutoffLength$ } from '$lib/data/placement';
+import { mergePlacementResults, placementResults$ } from '$lib/data/placement';
 import { uiLanguage$ } from '$lib/i18n';
 import type { AccountUser } from '$lib/data/account';
 import { readerSyncStore, syncJsonFile } from '$lib/data/sync-files';
@@ -131,8 +131,8 @@ const sharedSettings: Record<string, Store> = {
   socialSession: socialSession$,
   homeBookTitles: homeBookTitles$,
   homeRemovedTitles: homeRemovedTitles$,
-  placementCutoff: placementCutoff$,
-  placementCutoffLength: placementCutoffLength$,
+  // The cutoff and its length follow from the results.
+  placementResults: placementResults$,
   mangaSeriesModes: mangaSeriesModes$,
   askAiPresets: askAiPresets$,
   askAiDefaultPreset: askAiDefaultPreset$,
@@ -175,7 +175,8 @@ const mergedSettings: Record<
     mergeConnectionKeys(local, remote, localValues.aiConnections, remoteValues.aiConnections),
   homeBookTitles: (local, remote, localValues, remoteValues) =>
     mergeHomeTitles(local, remote, localValues.homeRemovedTitles, remoteValues.homeRemovedTitles),
-  homeRemovedTitles: mergeHomeRemovals
+  homeRemovedTitles: mergeHomeRemovals,
+  placementResults: mergePlacementResults
 };
 
 /** Settings → Reader: localStorage key → store, synced per reader profile. */

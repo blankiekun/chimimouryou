@@ -44,6 +44,8 @@ export const ja: Record<MessageKey, string> = {
     '読んだ Calibre の本に登場した語彙数（各本の単語リストと進捗から推定。助詞やスキップした箇所は除く）',
   'dashboard.wordsKnown': '既知の語彙',
   'dashboard.wordsKnownHint': '{count}回以上出会った語彙＋Ankiの定着済みカード',
+  'dashboard.wordsKnownHintPlaced':
+    '頻出語{cutoff}語（単語テスト）＋{count}回以上出会った語彙・Ankiの定着済みカード・既知にした語',
   'dashboard.wordsGained': '今月 +{count}',
   'dashboard.wordsGainedHint': '日々の読書文字数からの推定（Ankiの語彙は除く）',
   'statistics.wordsKnown': '既知の語彙',

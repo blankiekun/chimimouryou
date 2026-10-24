@@ -87,7 +87,7 @@ describe('hub moderation', () => {
       await call('POST', '/v1/report', { username: 'aki', what }, ren.token);
     }
     await call('POST', '/v1/report', { what: 'cover', key: 'k1', username: 'aki' }, ren.token);
-    await call('POST', '/v1/report', { username: 'aki', what: 'name' });
+    await call('POST', '/v1/report', { username: 'aki', what: 'name' }, blank.token);
     return { blank, aki, ren };
   }
 

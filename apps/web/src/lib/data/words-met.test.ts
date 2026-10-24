@@ -100,6 +100,43 @@ describe('words met', () => {
   });
 });
 
+describe('summarizeWords with the word test cutoff', () => {
+  it('counts the cutoff once, plus known words ranked past it or unranked', () => {
+    const totals = {
+      '猫\tねこ': knownMinCount, // known, ranked within the cutoff: in the cutoff already
+      '犬\tいぬ': knownMinCount, // known, ranked past it
+      '宦官\tかんがん': knownMinCount, // known, unranked
+      '鳥\tとり': 1 // ranked within, not otherwise known: in the cutoff
+    };
+    const ranks = { '猫\tねこ': 50, '犬\tいぬ': 5000, '鳥\tとり': 900 };
+
+    expect(summarizeWords(totals, new Set(), {}, 1000, ranks)).toEqual({
+      met: 4,
+      known: 1002,
+      metEnough: 3
+    });
+    // Anki words in no book read have no rank: past the cutoff.
+    expect(summarizeWords(totals, new Set(['猫', '馬']), {}, 1000, ranks).known).toBe(1003);
+    expect(summarizeWords(totals, new Set(), {}, 0, ranks).known).toBe(3);
+  });
+
+  it('keeps the best rank of a word over the lists', () => {
+    const ranks: Record<string, number> = {};
+
+    addWordsMet({}, [['猫', 'ねこ', 2, 300]], 1, ranks);
+    addWordsMet(
+      {},
+      [
+        ['猫', 'ねこ', 2, 100],
+        ['犬', 'いぬ', 2, null]
+      ],
+      1,
+      ranks
+    );
+    expect(ranks).toEqual({ '猫\tねこ': 100 });
+  });
+});
+
 describe('getWordsMet', () => {
   afterEach(() => vi.unstubAllGlobals());
 

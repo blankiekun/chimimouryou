@@ -30,7 +30,7 @@
   /**
    * A reader's profile (boards 07-11): who, the stats row, Now reading, Finished, the last
    * 12 weeks and (friends and oneself) Activity. Own profile: Edit, Copy link and what it
-   * shows; a friend's: Remove friend, Block; a visitor: Add friend. Others get Report.
+   * shows; a friend's: Remove friend, Block; a visitor: Add friend. Signed-in others get Report.
    */
   export let profile: Profile;
   export let covers: Map<string, { title: string; imagePath: string | Blob }> | undefined =
@@ -263,7 +263,8 @@
       </div>
     {/if}
 
-    {#if !self}
+    <!-- The hub takes reports only from signed-in readers. -->
+    {#if !self && me}
       <button
         type="button"
         class="profile-report"

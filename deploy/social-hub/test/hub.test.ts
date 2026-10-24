@@ -637,18 +637,26 @@ describe('social hub', () => {
 
   it('records reports once per reporter, 5 a day', async () => {
     const aki = await signUp('aki');
+    const ren = await signUp('ren');
 
     for (const name of ['aki', 'aki', 'nobody']) {
-      await call('POST', '/v1/report', { username: name }, '', '198.51.100.1');
+      await call('POST', '/v1/report', { username: name }, ren.token);
     }
     expect(rows('reports')).toHaveLength(1);
     expect((await call('POST', '/v1/report', { username: 'aki' }, aki.token)).status).toBe(400);
     for (let i = 0; i < 2; i += 1) {
-      await call('POST', '/v1/report', { username: 'aki', what: 'picture' }, '', '198.51.100.1');
+      await call('POST', '/v1/report', { username: 'aki', what: 'picture' }, ren.token);
     }
-    expect((await call('POST', '/v1/report', { username: 'aki' }, '', '198.51.100.1')).status).toBe(
-      429
-    );
+    expect((await call('POST', '/v1/report', { username: 'aki' }, ren.token)).status).toBe(429);
     expect(rows('reports')).toHaveLength(2);
+  });
+
+  it('refuses reports from visitors without a session', async () => {
+    await signUp('aki');
+
+    expect((await call('POST', '/v1/report', { username: 'aki' }, '', '198.51.100.1')).status).toBe(
+      401
+    );
+    expect(rows('reports')).toHaveLength(0);
   });
 });
