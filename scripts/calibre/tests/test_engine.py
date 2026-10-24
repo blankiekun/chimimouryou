@@ -47,6 +47,10 @@ class EngineFingerprintTest(unittest.TestCase):
             if (service.YURIGANA_VERSION, 'core-' + _installed('SudachiDict-core')) != engine.pinned_versions():
                 self.skipTest('installed yurigana or SudachiDict-core differ from requirements.txt')
             self.assertEqual(service.current_engine(), engine.canonical_fingerprint())
+            # Term dictionaries change readings only: still canonical
+            os.makedirs(service.TERM_DICTIONARY_DIR)
+            open(os.path.join(service.TERM_DICTIONARY_DIR, 'terms.zip'), 'wb').close()
+            self.assertEqual(service.current_engine(), engine.canonical_fingerprint())
             # An admin's own list
             with open(service.FREQUENCY_DICTIONARY, 'ab') as f:
                 f.write(b'x')

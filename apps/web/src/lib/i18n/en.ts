@@ -1090,7 +1090,7 @@ export const en = {
   'library.customEngineList':
     "Estimates on this server use a custom frequency list; they're shown but don't count for reading rank.",
   'library.customEngine':
-    "Estimates on this server don't come from this release's difficulty engine (term dictionaries, a reading model or other versions); they're shown but don't count for reading rank.",
+    "Estimates on this server don't come from this release's difficulty engine (a reading model or other versions); they're shown but don't count for reading rank.",
   'library.termDictionaries':
     'Term dictionaries (optional): Yomitan term dictionaries you add give readings of words the frequency list lacks, in word lists and readings files. Estimates made before keep their words until redone.',
   'library.addTermDictionary': 'Add term dictionary',

@@ -26,6 +26,7 @@ import {
   type CanonicalCheck,
   type RankBook
 } from '$lib/data/reading-rank';
+import { isCanonicalEstimate } from '$lib/data/difficulty-engine';
 import { getWordMarks, wordMark, type WordMarks } from '$lib/data/word-marks';
 import {
   addWordsMet,
@@ -37,8 +38,8 @@ import {
   summarizeWords
 } from '$lib/data/words-met';
 
-/** Wired to the difficulty engine's `isCanonicalEstimate` once it lands; accepts everything until then. */
-export const canonicalEstimate: CanonicalCheck | undefined = undefined;
+/** Only this release's difficulty engine's estimates count for the hard-book gate. */
+export const canonicalEstimate: CanonicalCheck = isCanonicalEstimate;
 
 export async function loadReadingRank(statistics: BooksDbStatistic[]) {
   const [books, anki, marks] = await Promise.all([

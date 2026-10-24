@@ -322,14 +322,15 @@ def term_options() -> dict:
 
 
 def current_engine() -> str:
-    """This server's engine fingerprint (engine.py): its frequency list, yurigana, Sudachi dictionary,
-    term dictionaries and reading-model table."""
+    """This server's engine fingerprint (engine.py): its frequency list, yurigana, Sudachi dictionary
+    and reading-model table. Term dictionaries are left out: they change word lists' readings only, not
+    the score (features use Sudachi's readings), so a server with them still makes canonical estimates."""
     from importlib.metadata import PackageNotFoundError, version
     try:
         sudachi = 'core-' + version('SudachiDict-core')
     except PackageNotFoundError:
         sudachi = 'core-unknown'
-    extras = [*term_dictionaries(), *(p for p in READING_MODEL_TABLES if os.path.exists(p))]
+    extras = [p for p in READING_MODEL_TABLES if os.path.exists(p)]
     return engine_fingerprint(FREQUENCY_DICTIONARY, YURIGANA_VERSION, sudachi, extras)
 
 

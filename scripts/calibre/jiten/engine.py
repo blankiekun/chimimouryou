@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """The difficulty engine's fingerprint: a sha256 over everything that changes an estimate (the
 models, the scoring Python, the frequency list's content, yurigana's version, the Sudachi
-dictionary, and any term dictionaries or reading-model table the server adds). The service stores
+dictionary, and a reading-model table if the server adds one; not term dictionaries, which change
+word lists' readings only, not the score). The service stores
 it on each estimate as `engine`, and the analysis tools' manifest names it for the browser's
 (scripts/analysis-tools/build.sh). Runtimes (CPython or Pyodide, sudachipy or sudachi.rs wasm,
 onnxruntime or onnxruntime-web) are left out: they give the same numbers (checked on 20 Aozora Bunko
@@ -44,7 +45,7 @@ def file_sha256(path: str) -> str:
 
 def engine_fingerprint(frequency_list: str, yurigana: str, sudachi_dict: str, extras=(), code_dir: str = HERE) -> str:
     """`sudachi_dict`: the dictionary's name and version (core-20260723.1); `extras`: paths of other
-    files the readings come from (term dictionaries, the reading-model table), by content."""
+    files the estimate depends on (the reading-model table), by content."""
     digest = hashlib.sha256()
     for name in ENGINE_FILES:
         digest.update(f'{name}:{file_sha256(os.path.join(code_dir, name))}\n'.encode())
