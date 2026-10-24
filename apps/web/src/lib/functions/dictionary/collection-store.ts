@@ -47,7 +47,7 @@ const sequenceKey = (sequence: number) => `\u0000${sequence}`;
 
 // jsdom (the engine's tests) has none.
 /** Inflated blocks a pack keeps */
-const cachedBlocks = 64;
+const cachedBlocks = 1024;
 
 const opfsAvailable = () => !!(globalThis.navigator?.storage as any)?.getDirectory;
 
@@ -191,12 +191,13 @@ export class PackWriter {
     this.cutBytes += at;
   }
 
-  /** Writes the blocks compressed so far, in order; the import calls it between chunks. */
-  async drain() {
-    const pending = this.pending;
-    this.pending = [];
-    for (const blocks of pending) {
-      for (const bytes of await blocks) {
+  /**
+   * Writes compressed blocks in order. Between chunks the import leaves two cuts compressing,
+   * so parsing goes on meanwhile; `finish` waits for all.
+   */
+  async drain(inFlight = 2) {
+    while (this.pending.length > inFlight) {
+      for (const bytes of await this.pending.shift()!) {
         this.rows.write(bytes, { at: this.written });
         this.written += bytes.length;
         this.blockStarts.push(this.written);
@@ -207,7 +208,7 @@ export class PackWriter {
   /** Writes the index and then the manifest, which makes the pack complete. */
   async finish(titles: string[]) {
     this.cut(true);
-    await this.drain();
+    await this.drain(0);
     this.offsets.push(this.cutBytes);
     this.rows.flush();
     this.rows.close();
