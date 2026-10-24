@@ -37,6 +37,7 @@
   import type { DictionaryOptions, ProfileOptions } from '$lib/vendor/yomitan/types/settings';
 
   const jmdictReleases = 'https://github.com/yomidevs/jmdict-yomitan/releases/latest';
+  const jitenFrequencyLists = 'https://jiten.moe/frequency-dictionaries';
 
   let loadError = '';
   let importing: { name: string; done: number; total: number } | undefined;
@@ -315,6 +316,18 @@
           href={jmdictReleases}
           target="_blank"
           rel="noreferrer">{$t$('dict.getJmdict')}</a
+        >
+      </li>
+      <li class="dict-download">
+        <span class="dict-name">
+          <span class="dict-title">Jiten frequency list</span>
+          <span class="dict-meta">{$t$('dict.jitenFreqHint')}</span>
+        </span>
+        <a
+          class="app-button app-button-quiet"
+          href={jitenFrequencyLists}
+          target="_blank"
+          rel="noreferrer">{$t$('dict.getJitenFreq')}</a
         >
       </li>
     </ul>
