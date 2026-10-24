@@ -19,6 +19,7 @@
   } from '$lib/data/known-words';
   import { markEntry, marksOf, setWordMarks, wordMark, wordMarks$ } from '$lib/data/word-marks';
   import { knownMinCount, wordList } from '$lib/data/words-met';
+  import { placementCutoff$ } from '$lib/data/placement';
   import { t$, tr } from '$lib/i18n';
   import { createEventDispatcher, onMount } from 'svelte';
 
@@ -175,6 +176,16 @@
               value: groups.reasons.met
             },
             { label: $t$('words.becauseAnki'), value: groups.reasons.anki },
+            ...($placementCutoff$ > 0
+              ? [
+                  {
+                    label: $t$('bookWords.becausePlaced', {
+                      count: $placementCutoff$.toLocaleString('en-US')
+                    }),
+                    value: groups.reasons.placed
+                  }
+                ]
+              : []),
             { label: $t$('words.becauseMarked'), value: groups.reasons.marked },
             { label: $t$('words.becauseIgnored'), value: groups.reasons.ignored }
           ]}

@@ -20,6 +20,7 @@ import {
   refreshKnownWords,
   refreshKnownWordsIfStale
 } from '$lib/data/known-words';
+import { placementCutoff$ } from '$lib/data/placement';
 import { readerDb } from '$lib/data/reader-db';
 import { setWordMarks } from '$lib/data/word-marks';
 
@@ -201,6 +202,21 @@ describe('known words', () => {
     expect(words.map(unmarked.isKnown)).toEqual([false, false, true]);
   });
 
+  it('counts words within the placement cutoff and changes the key with it', async () => {
+    const before = await getKnownSet();
+
+    placementCutoff$.next(950);
+
+    const placed = await getKnownSet();
+
+    placementCutoff$.next(0);
+    expect(before.isKnown(['犬', 'いぬ', 5, 950])).toBe(false);
+    expect(placed.isKnown(['犬', 'いぬ', 5, 950])).toBe(true);
+    expect(placed.isKnown(['宦官', 'かんがん', 4, 68872])).toBe(false);
+    expect(placed.isKnown(['呟く', null, 3, null])).toBe(false);
+    expect(placed.key).not.toBe(before.key);
+  });
+
   it("doesn't cache coverage from partial known words", async () => {
     met.signature = '';
     expect(await bookCoverage(7, words, { computedAt: 1 }, await getKnownSet())).toMatchObject({
@@ -254,7 +270,11 @@ describe('bookWordGroups', () => {
       ['毒見', 'どくみ', 3, 21330],
       ['は', null, 90, 1]
     ];
-    const known = { met: (w: BookWord) => w[0] === '猫', anki: (w: BookWord) => w[0] === '犬' };
+    const known = {
+      met: (w: BookWord) => w[0] === '猫',
+      anki: (w: BookWord) => w[0] === '犬',
+      placed: () => false
+    };
     const groups = bookWordGroups(list, 100, known, {
       '猫\t': { status: 'known', modified: 1 },
       '毒見\t': { status: 'ignored', modified: 1 }
@@ -264,6 +284,6 @@ describe('bookWordGroups', () => {
     expect(groups.known.map(([form]) => form)).toEqual(['猫', '犬']);
     expect(groups.ignored.map(([form]) => form)).toEqual(['毒見']);
     expect(groups.all).toHaveLength(4);
-    expect(groups.reasons).toEqual({ met: 1, anki: 1, marked: 1, ignored: 1 });
+    expect(groups.reasons).toEqual({ met: 1, anki: 1, placed: 0, marked: 1, ignored: 1 });
   });
 });

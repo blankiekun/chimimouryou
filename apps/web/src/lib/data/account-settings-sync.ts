@@ -16,6 +16,7 @@
 
 import { BehaviorSubject, map, merge, skip, type Subscription } from 'rxjs';
 import { mangaSeriesModes$ } from '$lib/data/manga';
+import { placementCutoff$, placementCutoffLength$ } from '$lib/data/placement';
 import { uiLanguage$ } from '$lib/i18n';
 import type { AccountUser } from '$lib/data/account';
 import { readerSyncStore, syncJsonFile } from '$lib/data/sync-files';
@@ -130,6 +131,8 @@ const sharedSettings: Record<string, Store> = {
   socialSession: socialSession$,
   homeBookTitles: homeBookTitles$,
   homeRemovedTitles: homeRemovedTitles$,
+  placementCutoff: placementCutoff$,
+  placementCutoffLength: placementCutoffLength$,
   mangaSeriesModes: mangaSeriesModes$,
   askAiPresets: askAiPresets$,
   askAiDefaultPreset: askAiDefaultPreset$,

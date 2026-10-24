@@ -10,6 +10,7 @@
   import PointBox from '$lib/components/point-box.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import SocialAccountForm from '$lib/components/social/social-account-form.svelte';
+  import { placementCutoff$, placementFromWordTest$ } from '$lib/data/placement';
   import { socialSession$ } from '$lib/data/social-account';
   import { t$ } from '$lib/i18n';
   import { activePlugins$ } from '$lib/plugins';
@@ -420,6 +421,16 @@
         </section>
       {/if}
 
+      {#if $placementFromWordTest$ && $placementCutoff$ > 0}
+        <p class="first-run-word-test">
+          <strong
+            >{$t$('placement.fromWordTest', {
+              count: $placementCutoff$.toLocaleString('en-US')
+            })}</strong
+          >
+          {$t$('placement.fromWordTestText', { count: $placementCutoff$.toLocaleString('en-US') })}
+        </p>
+      {/if}
       <button
         type="button"
         class="app-button app-button-primary first-run-continue"
@@ -460,6 +471,17 @@
 </div>
 
 <style>
+  .first-run-word-test {
+    margin-top: 2rem;
+    padding-top: 0.75rem;
+    border-top: 2px solid var(--accent-color);
+    line-height: 1.7;
+  }
+
+  .first-run-word-test strong {
+    display: block;
+  }
+
   /* Covers the library page under it (routes/manage) until a place is chosen. */
   .first-run-page {
     position: fixed;

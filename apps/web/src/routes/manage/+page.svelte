@@ -20,6 +20,7 @@
   import BookWords from '$lib/components/book-card/book-words.svelte';
   import ContinueReadingShelf from '$lib/components/book-card/continue-reading-shelf.svelte';
   import LearnerDashboard from '$lib/components/book-card/learner-dashboard.svelte';
+  import PlacementOffer from '$lib/components/book-card/placement-offer.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import ReadNextShelf from '$lib/components/book-card/read-next-shelf.svelte';
   import HomeSocial from '$lib/components/social/home-social.svelte';
@@ -1618,6 +1619,7 @@
           <LearnerDashboard
             books={standalone || $storageSource$ === StorageKey.CALIBRE ? $bookCards$ : undefined}
           />
+          <PlacementOffer />
           {#if firstRun}
             <section class="home-start" aria-label={$t$('home.startReading')}>
               <SectionHead number={1} title={$t$('home.startReading')} />

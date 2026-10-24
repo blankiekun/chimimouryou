@@ -71,6 +71,33 @@ describe('standalone edition', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('takes the public word test without a request, and saves the result for the app', async () => {
+    const { default: PlacementTest } = await import(
+      '$lib/components/placement/placement-test.svelte'
+    );
+    const placement = await import('$lib/data/placement');
+    const target = document.createElement('div');
+    const test = new PlacementTest({ target, props: { shared: true } });
+    const click = async (text: string) => {
+      [...target.querySelectorAll('button')].find((b) => b.textContent?.includes(text))!.click();
+      await Promise.resolve();
+    };
+
+    await click('Start');
+    for (let i = 0; i < placement.placementLength; i += 1) {
+      const word = target.querySelector('.placement-word')!.textContent!.trim();
+      const real = placement.placementList.find((item) => item.w === word)!.r;
+
+      await click(real && real <= 8000 ? 'I know it' : 'Don’t know');
+    }
+
+    expect(target.querySelector('.placement-big')?.textContent).toMatch(/About [\d,]+ words/);
+    expect(placement.placementCutoff()).toBeGreaterThan(5000);
+    expect(placement.placementFromWordTest$.getValue()).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+    test.$destroy();
+  });
+
   it('hands out the browser handler for Calibre', async () => {
     const { getStorageHandler } = await import('$lib/data/storage/storage-handler-factory');
     const { StorageKey } = await import('$lib/data/storage/storage-types');

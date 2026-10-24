@@ -7,6 +7,7 @@
   import AnkiKnown from '$lib/components/words/anki-known.svelte';
   import KnownBecause from '$lib/components/words/known-because.svelte';
   import MarkedWords from '$lib/components/words/marked-words.svelte';
+  import PlacementSection from '$lib/components/words/placement-section.svelte';
   import {
     analysisToolsState$,
     analysisToolsSupported,
@@ -14,6 +15,7 @@
   } from '$lib/data/analysis-tools';
   import { ankiKnownWords$ } from '$lib/data/anki';
   import { pagePath, selfHostingGuideUrl } from '$lib/data/env';
+  import { placementCutoff$ } from '$lib/data/placement';
   import { serverless } from '$lib/data/server';
   import { readerSyncSource } from '$lib/data/sync-files';
   import { knownWords$ } from '$lib/data/known-words';
@@ -61,6 +63,14 @@
       label: $t$('words.becauseAnki'),
       value: $ankiKnownWords$ ? ($knownWords$?.words.length ?? 0) : 0
     },
+    ...($placementCutoff$ > 0
+      ? [
+          {
+            label: $t$('words.becausePlaced', { count: number($placementCutoff$) }),
+            value: $placementCutoff$
+          }
+        ]
+      : []),
     {
       label: $t$('words.becauseMarked'),
       value: marks.filter((word) => word.status === 'known').length
@@ -149,8 +159,9 @@
       <MarkedWords />
       <div class="words-side">
         <AnkiKnown />
+        <PlacementSection number={3} />
         <section class="words-how" aria-label={$t$('words.how')}>
-          <SectionHead number={3} title={$t$('words.how')} />
+          <SectionHead number={4} title={$t$('words.how')} />
           <p>
             {$t$('words.howText', { count: knownMinCount })}
             {$t$(marksSync)}
