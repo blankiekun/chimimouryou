@@ -1,7 +1,7 @@
 # Contributing
 
 How to change this fork. See `ARCHITECTURE.md` for how the pieces fit together,
-`docs/INSTALL.md` for running it and `CLAUDE.md` for a dense map of the code.
+`docs/INSTALL.md` for running it and `docs/CODEMAP.md` for a dense map of the code.
 
 ## Ground rules
 
