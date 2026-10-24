@@ -556,6 +556,14 @@
     line-height: 1.2;
   }
 
+  /* The rank badge is wider than a cell: body size, and its English gloss wraps under it. */
+  .profile-stat dd :global(.rank-badge) {
+    flex-wrap: wrap;
+    max-width: 100%;
+    font-size: var(--type-body);
+    white-space: normal;
+  }
+
   .profile-stat dt {
     color: var(--app-muted-fg);
     font-size: var(--type-small);
