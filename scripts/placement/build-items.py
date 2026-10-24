@@ -4,8 +4,8 @@
 Real words are sampled from Jiten's frequency list (scripts/calibre/jiten/data/,
 CC BY-SA 4.0), a few per rank band: kanji words in dictionary form whose
 spelling is JMdict's first, common one (no rare/irregular spellings, nothing
-usually written in kana, no archaic or proper nouns), plus one common katakana
-loanword in each band up to rank 15,000; past rank 56,000, where JMdict's
+usually written in kana, no archaic or proper nouns), plus a few common katakana
+loanwords in each band up to rank 15,000; past rank 56,000, where JMdict's
 priority tags run out, any first spelling. The last band runs to the end of the list. Pseudo-words are kanji
 compounds and okurigana words made from parts of common words that are in
 neither list (and, when SudachiPy is installed, not one token in its
@@ -41,8 +41,11 @@ BANDS = [1000, 1700, 2500, 3500, 5000, 7000, 10000, 14000, 20000, 28000, 40000, 
 COMMON_UNTIL = 56000
 # Crude words JMdict doesn't tag; the public word test shows these items too.
 AVOID = {'飲尿'}
-PER_BAND = 8
-PSEUDO = 16  # the test shows 12 of them, 1 in 5 items
+PER_BAND = 40
+LOANS_PER_BAND = 4  # about 1 in 10 in the bands that have them
+PSEUDO = 150  # each test draws 12 (1 in 5 items), so they aren't memorised
+# Honorific and number kanji make almost anything a plausible real word (御合, 二夜).
+NOT_IN_PSEUDO = set('御一二三四五六七八九十百千万何')
 ENDINGS = ['める', 'かす', 'らす', 'まる', 'げる', 'れる', 'しい', 'やか']
 
 KANJI = re.compile(r'[一-鿿々]')
@@ -50,7 +53,7 @@ WORD = re.compile(r'^[一-鿿々ぁ-ゖ]{2,4}$')
 BAD_SPELLING = {'rK', 'iK', 'oK', 'sK', 'ateji', 'io'}
 BAD_SENSE = {'uk', 'arch', 'obs', 'rare', 'vulg', 'X', 'derog', 'sl', 'col', 'abbr', 'on-mim'}
 KATAKANA = re.compile(r'^[ァ-ヺー]{3,6}$')
-# Loanwords: at most one per band, only up to this rank (owner, 2026-10-23: common ones are
+# Loanwords: LOANS_PER_BAND per band, only up to this rank (owner, 2026-10-23: common ones are
 # often not the English word, マンション, but rare ones are easy guesses for English speakers).
 LOAN_MAX_RANK = 15000
 BAD_POS = {'exp', 'int', 'pref', 'suf', 'ctr', 'prt', 'conj', 'aux', 'aux-v', 'aux-adj', 'n-pr', 'num'}
@@ -130,18 +133,20 @@ def real_words(ranks, common, loans, bands, rng):
             and form not in AVOID and WORD.match(form) and KANJI.match(form)
         )
         loan_pool = sorted((rank, form) for form, rank in ranks.items() if low < rank <= high and form in loans)
-        # One loanword slice in bands past the first, up to LOAN_MAX_RANK (about 1 in 12 items).
-        loan_part = rng.randrange(PER_BAND) if band and high <= LOAN_MAX_RANK else -1
-        # One word from each equal slice of the band, so the band is covered evenly.
+        if len(pool) < PER_BAND:
+            sys.exit(f'Only {len(pool)} words between ranks {low} and {high}')
+        # One word from each of PER_BAND equal runs of the band's words, so it is covered
+        # evenly; in bands up to LOAN_MAX_RANK (not the first), LOANS_PER_BAND runs give a
+        # loanword from anywhere in the band instead, when there is one.
+        loan_parts = set(rng.sample(range(PER_BAND), LOANS_PER_BAND)) if band and high <= LOAN_MAX_RANK else set()
+        taken = set()
         for part in range(PER_BAND):
-            start = low + (high - low) * part // PER_BAND
-            end = low + (high - low) * (part + 1) // PER_BAND
-            choices = [p for p in pool if start < p[0] <= end]
-            if part == loan_part:
-                choices = [p for p in loan_pool if start < p[0] <= end] or choices
-            if not choices:
-                sys.exit(f'No word between ranks {start} and {end}')
+            run = pool[len(pool) * part // PER_BAND:len(pool) * (part + 1) // PER_BAND]
+            choices = run
+            if part in loan_parts:
+                choices = [p for p in loan_pool if p[1] not in taken] or run
             rank, form = rng.choice(choices)
+            taken.add(form)
             items.append({'w': form, 'r': rank, 'b': band})
         low = high
     return items
@@ -149,7 +154,7 @@ def real_words(ranks, common, loans, bands, rng):
 
 def pseudo_words(ranks, spellings, readings, common, one_word, rng):
     kanji2 = [f for f, r in ranks.items() if r <= 8000 and common.get(f) and re.fullmatch(r'[一-鿿]{2}', f)]
-    verbs = [f for f, r in ranks.items() if r <= 8000 and common.get(f) and re.fullmatch(r'[一-鿿][ぁ-ゖ]{1,2}', f)]
+    verbs = [f for f, r in ranks.items() if r <= 8000 and common.get(f) and re.fullmatch(r'[一-鿿][ぁ-ゖ]?[うくすつぬぶむる]', f)]
     kanji2.sort()
     verbs.sort()
     taken = set()
@@ -158,7 +163,7 @@ def pseudo_words(ranks, spellings, readings, common, one_word, rng):
         return (
             text not in taken
             and text[0] != text[1]
-            and '御' not in text
+            and not set(text) & NOT_IN_PSEUDO
             and text not in ranks
             and text not in spellings
             and text not in readings
@@ -167,8 +172,8 @@ def pseudo_words(ranks, spellings, readings, common, one_word, rng):
 
     out = []
     # Mostly two-kanji compounds (the bulk of the real items), a few okurigana words.
-    for count, make in ((PSEUDO - 4, lambda: rng.choice(kanji2)[0] + rng.choice(kanji2)[1]),
-                        (4, lambda: rng.choice(verbs)[0] + rng.choice(ENDINGS))):
+    for count, make in ((PSEUDO - 30, lambda: rng.choice(kanji2)[0] + rng.choice(kanji2)[1]),
+                        (30, lambda: rng.choice(verbs)[0] + rng.choice(ENDINGS))):
         made = 0
         while made < count:
             text = make()
