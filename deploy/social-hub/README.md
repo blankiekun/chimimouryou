@@ -130,7 +130,7 @@ stacked combining characters, capped in characters and bytes. Under `/v1/communi
 - Limits: posts 10 an hour and 50 a day per account (3 and 10, and no URLs, in its first 3 days),
   100 a day per address, 10,000 a day hub-wide; one account keeps at most 30 top-level posts per
   work, a thread at most 200 posts; a line's first post keeps the quote, and only a work's first
-  100 lines keep their context. Covers share the 50-a-day cover limit and the hub-wide image
+  10 lines keep their context. Covers share the 50-a-day cover limit and the hub-wide image
   ceilings. Blocks hide posts both ways (threads, listings, feed, notes, replies, helpful).
 - Reports: `POST report` with `{what: post, id}`, `{what: work, book, vol}` (a wrong mapping) or
   `{what: workinfo, work}` (title or cover). Moderators: `GET admin/community/reports`,

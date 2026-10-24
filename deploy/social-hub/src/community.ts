@@ -61,8 +61,8 @@ export const TITLE_LENGTH = 200;
 const BODY_LINES = 20;
 /** Top-level posts one account may keep on one work: bounds the book text it can store */
 export const ROOTS_PER_WORK = 30;
-/** Lines of one work that keep their page of context (60,000 characters at most) */
-export const CONTEXTS_PER_WORK = 100;
+/** Lines of one work that keep their page of context (6,000 characters at most, under a chapter: the owner allows no whole chapter) */
+export const CONTEXTS_PER_WORK = 10;
 export const THREAD_POSTS = 200;
 /** Posts an hour and a day per account (new accounts apart), a day per address and hub-wide */
 export const POST_LIMITS = { hour: 10, day: 50, newHour: 3, newDay: 10, address: 100, hub: 10_000 };

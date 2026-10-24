@@ -6,7 +6,7 @@
 -- vndb:v<id> or title:<book key>), line the first 32 hex of sha256(normalizeLine(line)). A top-level
 -- post has parent '' and kind 'post'; replies have the top-level post's id and kind 'reply'; spoiler
 -- is the poster's mark. Only a line's first post keeps the quote (the line) and context (<= 600
--- characters around it; the work's first 100 lines only). user '' and body '' mark a deleted
+-- characters around it; the work's first 10 lines only). user '' and body '' mark a deleted
 -- top-level post that still has replies.
 CREATE TABLE IF NOT EXISTS posts (
   id TEXT PRIMARY KEY,
