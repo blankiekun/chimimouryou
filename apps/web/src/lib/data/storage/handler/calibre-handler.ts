@@ -28,7 +28,7 @@ import {
   type CalibreBook
 } from '$lib/data/calibre';
 import { ApiStorageHandler, type RequestOptions } from '$lib/data/storage/handler/api-handler';
-import { serverConnected, serverFetch, serverHeaders, serverUrl } from '$lib/data/server';
+import { serverConnected, serverFetch, serverHeaders, serverUrl } from '$lib/data/server-connect';
 import {
   BaseStorageHandler,
   type ExternalFile,

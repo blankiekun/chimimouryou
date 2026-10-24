@@ -20,7 +20,7 @@ import {
   statisticsMergeMode$
 } from '$lib/data/store';
 import { replicateData } from '$lib/functions/replication/replicator';
-import { serverless } from '$lib/data/server';
+import { serverless } from '$lib/data/server-connect';
 
 export async function pullAccountStatistics(window: Window) {
   if (serverless) return;

@@ -1,6 +1,6 @@
 <script lang="ts">
   /** Settings → Sync, the standalone's replacement for Data (plan S4). */
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import { faCaretDown, faCaretRight } from '@fortawesome/free-solid-svg-icons';
   import ButtonToggleGroup from '$lib/components/button-toggle-group/button-toggle-group.svelte';
   import type { ToggleOption } from '$lib/components/button-toggle-group/toggle-option';
@@ -21,7 +21,7 @@
     signInToDrive,
     signOutOfDrive
   } from '$lib/data/standalone-storage';
-  import { serverConnected } from '$lib/data/server';
+  import { serverConnected } from '$lib/data/server-connect';
   import { isAppDefault } from '$lib/data/storage/storage-source-manager';
   import { defaultStorageSources, StorageKey } from '$lib/data/storage/storage-types';
   import { isStorageSourceAvailable, storageSource$ } from '$lib/data/storage/storage-view';

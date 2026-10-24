@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { domainHintSeen$ } from '$lib/data/store';

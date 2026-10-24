@@ -12,7 +12,7 @@ import { bookWordForms } from '$lib/data/word-marks';
 import { getKnownHistory } from '$lib/data/words-history';
 import { getWordsMet, saveReadProgress } from '$lib/data/words-met';
 
-vi.mock('$lib/data/server', () => ({ serverless: true, serverFetch: () => fetch('') }));
+vi.mock('$lib/data/server-connect', () => ({ serverless: true, serverFetch: () => fetch('') }));
 vi.mock('$lib/data/extras-sync', () => ({
   pullKanji: async () => {},
   kanjiChanged: () => {},

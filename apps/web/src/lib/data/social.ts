@@ -471,7 +471,7 @@ export async function uploadCovers(keys: string[]) {
   const [covers, { coverThumbnail }, { serverFetch }, { coverThumbUrl }] = await Promise.all([
     localCovers(),
     import('$lib/data/social-images'),
-    import('$lib/data/server'),
+    import('$lib/data/server-connect'),
     import('$lib/data/calibre')
   ]);
 

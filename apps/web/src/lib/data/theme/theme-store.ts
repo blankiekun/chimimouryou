@@ -10,7 +10,7 @@
  * stored per browser and synced to the account when signed in. Not part of upstream.
  */
 
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 import { BehaviorSubject, combineLatest, distinctUntilChanged, map, shareReplay } from 'rxjs';
 import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';

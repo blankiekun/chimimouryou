@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
-  import { page } from '$app/stores';
+  import { browser } from '$app/env';
+  import { page } from '$lib/data/page-store';
   import DomainHint from '$lib/components/domain-hint.svelte';
   import ThemeStyle from '$lib/components/theme/theme-style.svelte';
   import { accountReady } from '$lib/data/account';

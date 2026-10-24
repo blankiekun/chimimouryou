@@ -24,8 +24,8 @@
   } from 'rxjs';
   import { quintInOut } from 'svelte/easing';
   import { fly } from 'svelte/transition';
-  import { browser } from '$app/environment';
-  import { page } from '$app/stores';
+  import { browser } from '$app/env';
+  import { page } from '$lib/data/page-store';
   import { goto } from '$app/navigation';
   import {
     faCloudBolt,

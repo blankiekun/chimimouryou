@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import { pushState } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$lib/data/page-store';
   import ActivityFeed from '$lib/components/social/activity-feed.svelte';
   import FriendCover from '$lib/components/social/friend-cover.svelte';
   import ProfileLayer from '$lib/components/social/profile-layer.svelte';

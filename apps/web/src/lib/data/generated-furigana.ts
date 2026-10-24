@@ -11,7 +11,7 @@
  * counted, so character counts (bookmarks, highlights) don't change.
  */
 
-import { serverFetch } from '$lib/data/server';
+import { serverFetch } from '$lib/data/server-connect';
 import { BehaviorSubject, lastValueFrom, Observable } from 'rxjs';
 import { difficultyApiUrl, loadCalibreCatalog } from '$lib/data/calibre';
 import { readerDb } from '$lib/data/reader-db';

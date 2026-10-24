@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import { faSpinner } from '@fortawesome/free-solid-svg-icons';
   import { convertAuthErrorResponse } from '$lib/functions/replication/error-handler';
   import Fa from 'svelte-fa';

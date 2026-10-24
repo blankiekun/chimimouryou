@@ -10,9 +10,9 @@
   import { isPluginEnabled } from '$lib/plugins';
   import { onDestroy, onMount, tick } from 'svelte';
   import { fly } from 'svelte/transition';
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$lib/data/page-store';
   import Fa from 'svelte-fa';
   import { faBookOpen, faEllipsis, faExpand, faSliders } from '@fortawesome/free-solid-svg-icons';
   import ButtonToggleGroup from '$lib/components/button-toggle-group/button-toggle-group.svelte';

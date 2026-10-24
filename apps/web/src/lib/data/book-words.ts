@@ -10,7 +10,7 @@
  * list, and their CSV export for Anki. Not part of upstream.
  */
 
-import { serverFetch } from '$lib/data/server';
+import { serverFetch } from '$lib/data/server-connect';
 import { difficultyApiUrl } from '$lib/data/calibre';
 
 /**

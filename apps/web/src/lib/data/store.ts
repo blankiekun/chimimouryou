@@ -5,7 +5,7 @@
  */
 
 import { standalone } from '$lib/data/env';
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 import {
   ReaderImageGalleryAvailableKeybind,
   type ReaderImageGalleryKeybindMap

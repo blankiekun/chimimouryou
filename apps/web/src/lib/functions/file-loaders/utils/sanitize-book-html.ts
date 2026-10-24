@@ -8,7 +8,7 @@
  * Not part of upstream. Book HTML comes from EPUB files and from the shared sync folder,
  * which other people can write, so it must not run script in the reader. It is
  * parsed in an inert document (nothing loads, no handler fires) and cleaned
- * before it reaches the page. The Content-Security-Policy in svelte.config.js
+ * before it reaches the page. The Content-Security-Policy in vite.config.js
  * is the second line of defence.
  */
 

@@ -15,7 +15,7 @@
     faUser
   } from '@fortawesome/free-solid-svg-icons';
   import { pushState } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$lib/data/page-store';
   import AppHeaderLogo from '$lib/components/app-header/app-header-logo.svelte';
   import ProfileLayer from '$lib/components/social/profile-layer.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';

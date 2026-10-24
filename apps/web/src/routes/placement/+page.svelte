@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
-  import { page } from '$app/stores';
+  import { browser } from '$app/env';
+  import { page } from '$lib/data/page-store';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import PlacementTest from '$lib/components/placement/placement-test.svelte';
   import { database } from '$lib/data/store';

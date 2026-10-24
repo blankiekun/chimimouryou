@@ -7,7 +7,7 @@
 import type { BehaviorSubject } from 'rxjs';
 import { CharacterStatsCalculator } from '$lib/components/book-reader/book-reader-continuous/character-stats-calculator';
 import { binarySearchNoNegative } from '$lib/functions/binary-search';
-import { dev } from '$app/environment';
+import { dev } from '$app/env';
 import { formatPos } from '$lib/functions/format-pos';
 import { getCharacterCount } from '$lib/functions/get-character-count';
 import { getParagraphNodes } from '../get-paragraph-nodes';

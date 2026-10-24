@@ -16,7 +16,7 @@
   import { ankiKnownWords$ } from '$lib/data/anki';
   import { pagePath, selfHostingGuideUrl } from '$lib/data/env';
   import { placementCutoff$ } from '$lib/data/placement';
-  import { serverless } from '$lib/data/server';
+  import { serverless } from '$lib/data/server-connect';
   import { readerSyncSource } from '$lib/data/sync-files';
   import { knownWords$ } from '$lib/data/known-words';
   import { setPendingImport, type PendingImport } from '$lib/data/library-home';

@@ -3,7 +3,7 @@
    * How to install the standalone on this browser (plan S6): a ruled note under Home's shelves
    * until "Not now", and a permanent row in Settings → General.
    */
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import {
     installed$,

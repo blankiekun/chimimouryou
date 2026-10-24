@@ -3,7 +3,7 @@
    * Settings → Sync → Server (plan S7): connect the standalone to a chimimouryou server that
    * allows this app (CORS_ORIGINS), see who is signed in, disconnect.
    */
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import { account$ } from '$lib/data/account';
   import { releaseReaderData } from '$lib/data/reader-data-owner';
   import {
@@ -12,7 +12,7 @@
     rememberedServer,
     serverBase,
     serverConnected
-  } from '$lib/data/server';
+  } from '$lib/data/server-connect';
   import { chooseStorage, storageChosen$ } from '$lib/data/standalone-storage';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import { inputClasses } from '$lib/css-classes';

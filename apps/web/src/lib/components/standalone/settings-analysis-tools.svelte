@@ -3,7 +3,7 @@
    * Settings → Analysis tools (standalone): download or remove each feature's tools
    * (lib/data/analysis-tools.ts). Files both features use are downloaded once.
    */
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
   import {

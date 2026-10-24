@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import { goto, replaceState } from '$app/navigation';
   import { faArrowLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons';
   import { onDestroy, onMount, tick } from 'svelte';

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import { activeTheme$ } from '$lib/data/theme/theme-store';
   import { themeTokens } from '$lib/data/theme/theme-tokens';
   import type { ResolvedTheme } from '$lib/data/theme/themes';

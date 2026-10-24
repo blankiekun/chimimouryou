@@ -36,7 +36,7 @@ import { getKanjiSeen, type KanjiSeen } from '$lib/data/kanji-seen';
 import { getKnownWords } from '$lib/data/known-words';
 import { placementCutoff } from '$lib/data/placement';
 import { readerDb } from '$lib/data/reader-db';
-import { serverless } from '$lib/data/server';
+import { serverless } from '$lib/data/server-connect';
 import { getWordMarks, wordMark, type WordMarks } from '$lib/data/word-marks';
 
 /** Times a word must be met to count as known. */

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import AppHeaderLogo from '$lib/components/app-header/app-header-logo.svelte';
   import PlacementTest from '$lib/components/placement/placement-test.svelte';
   import { basePath, pagePath } from '$lib/data/env';

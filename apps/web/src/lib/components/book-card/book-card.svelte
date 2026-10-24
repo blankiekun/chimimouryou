@@ -3,7 +3,7 @@
   import { onDestroy } from 'svelte';
   import Fa from 'svelte-fa';
   import { coverThumbUrl } from '$lib/data/calibre';
-  import { needsServerImage, serverImage } from '$lib/data/server';
+  import { needsServerImage, serverImage } from '$lib/data/server-connect';
 
   export let imagePath: string | Blob;
   export let title: string;
