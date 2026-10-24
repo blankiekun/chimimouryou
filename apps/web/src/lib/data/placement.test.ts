@@ -149,4 +149,25 @@ describe('scorePlacement', () => {
     expect(fooled.cutoff).toBeLessThan(scorePlacement(take(knower(20000))).cutoff);
     expect(scorePlacement(take(() => false)).cutoff).toBe(0);
   });
+
+  it('counts words known along the curve, closer than the cutoff for a gradual knower', () => {
+    // Knows every word to 5,000, then a share falling with log(rank).
+    const knows = (rank: number) => (rank <= 5000 ? 1 : 1 / (1 + (rank / 15000) ** 1.5));
+    let truth = 0;
+
+    for (let r = 1; r <= placementBands[placementBands.length - 1]; r += 1) truth += knows(r);
+
+    let cutoffError = 0;
+    let wordsError = 0;
+
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const random = seeded(seed * 31);
+      const result = scorePlacement(take((item) => random() < (item.r ? knows(item.r) : 0), seed));
+
+      cutoffError += Math.abs(result.cutoff - truth);
+      wordsError += Math.abs((result.words ?? result.cutoff) - truth);
+    }
+
+    expect(wordsError).toBeLessThan(cutoffError * 0.8);
+  });
 });

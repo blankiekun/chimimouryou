@@ -1,7 +1,14 @@
 <script lang="ts">
   import { ankiKnownWords$ } from '$lib/data/anki';
   import { pagePath } from '$lib/data/env';
-  import { placementCutoff$, placementFromWordTest$, placementOffered$ } from '$lib/data/placement';
+  import {
+    placementAt,
+    placementCutoff$,
+    placementFromWordTest$,
+    placementOffered$,
+    placementResults$,
+    placementWords
+  } from '$lib/data/placement';
   import { getWordsSummary } from '$lib/data/words-met';
   import { t$ } from '$lib/i18n';
   import { onMount } from 'svelte';
@@ -29,7 +36,9 @@
   <section class="placement-offer" aria-label={$t$('words.placement')}>
     <div>
       <h2 class="placement-offer-title">
-        {$t$('placement.fromWordTest', { count: $placementCutoff$.toLocaleString('en-US') })}
+        {$t$('placement.fromWordTest', {
+          count: placementWords(placementAt($placementResults$)).toLocaleString('en-US')
+        })}
       </h2>
       <p class="placement-offer-text">
         {$t$('placement.fromWordTestText', { count: $placementCutoff$.toLocaleString('en-US') })}

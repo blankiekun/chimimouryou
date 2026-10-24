@@ -682,7 +682,7 @@ export const ja: Record<MessageKey, string> = {
   'words.becauseIgnored': '除外（既知として数える）',
   'words.becausePlaced': '頻出語{count}語以内（レベルチェック）',
   'words.placement': 'レベルチェック',
-  'words.placementResult': '約{count}語。頻出語の上位{count}語を既知とします。',
+  'words.placementResult': '約{count}語。頻出語の上位{cutoff}語を既知とします。',
   'words.placementNone': '未受験。よく使う語にはい/いいえで答える2分のテストで、出発点を決めます。',
   'words.placementTake': 'チェックする',
   'words.placementRetake': 'もう一度',

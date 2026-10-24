@@ -60,6 +60,8 @@ export interface PlacementResult {
   pseudoWords: number;
   /** Too many made-up words answered yes: nothing is saved */
   retake: boolean;
+  /** Words known, the number shown: the chance of knowing each rank summed over the list */
+  words?: number;
 }
 
 export const placementBands: number[] = placementItems.bands;
@@ -106,6 +108,8 @@ export interface PlacementRecord {
   cutoff: number;
   /** Words in the test (20, 40 or 60) */
   length: number;
+  /** The words known shown for it (`PlacementResult.words`); older results show the cutoff */
+  words?: number;
 }
 
 /** Every result, oldest first. */
@@ -151,13 +155,22 @@ export function placementAt(results: PlacementRecord[], date = Infinity) {
 }
 
 /** Saves a result taken now; it replaces the earlier ones of its mode. */
-export function recordPlacement(mode: PlacementRecord['mode'], cutoff: number, length: number) {
+export function recordPlacement(
+  mode: PlacementRecord['mode'],
+  cutoff: number,
+  length: number,
+  words?: number
+) {
   placementResults$.next(
     mergePlacementResults(placementResults$.getValue(), [
-      { mode, date: Date.now(), cutoff, length }
+      { mode, date: Date.now(), cutoff, length, ...(words !== undefined && { words }) }
     ])
   );
 }
+
+/** The words known a result shows: its estimate, else (older results) its cutoff. */
+export const placementWords = (record?: { cutoff: number; words?: number }) =>
+  record?.words ?? record?.cutoff ?? 0;
 
 // A result saved before dates were kept becomes an undated first one.
 if (!placementResults$.getValue().length && placementCutoff$.getValue() > 0) {
@@ -355,5 +368,21 @@ export function scorePlacement(
     rank = Math.exp((Math.log(target / (1 - target)) - a) / b + pivot);
   }
 
-  return { ...result, cutoff: Math.min(top, Math.round(Math.max(0, rank) / 100) * 100) };
+  const cutoff = Math.min(top, Math.round(Math.max(0, rank) / 100) * 100);
+
+  if (b >= 0) return { ...result, cutoff };
+
+  // Words known: the curve, shifted like the cutoff so it is one half there, summed over the
+  // list, all known below the most common word answered no. Measured against the cutoff on
+  // simulated readers it is about a quarter closer, but the staircase rarely shows words far
+  // past the boundary, so a reader who knows some of the rare ones is still undercounted.
+  const firstNo = Math.min(...real.filter(({ yes }) => !yes).map(({ item }) => item.r!));
+  const shift = a - Math.log(target / (1 - target));
+  let words = 0;
+
+  for (let r = 5; r < top; r += 10) {
+    words += r < firstNo ? 10 : 10 / (1 + Math.exp(-(shift + b * (Math.log(r) - pivot))));
+  }
+
+  return { ...result, cutoff, words: Math.round(words / 100) * 100 };
 }
