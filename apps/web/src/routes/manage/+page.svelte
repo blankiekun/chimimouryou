@@ -808,7 +808,12 @@
     }
 
     const saved = await new Promise<boolean>((resolver) => {
-      dialogManager.dialogs$.next([{ component: SeriesDialog, props: { book, books, resolver } }]);
+      dialogManager.dialogs$.next([
+        {
+          component: SeriesDialog,
+          props: { book, books, resolver, local: $storageSource$ === StorageKey.BROWSER }
+        }
+      ]);
     });
 
     if (saved) {
@@ -1517,7 +1522,7 @@
               <Fa icon={faBookOpen} />
               <span class="library-toolbar-label">{$t$('book.read')}</span>
             </button>
-            {#if $storageSource$ === StorageKey.CALIBRE && hasPermission($account$, 'series')}
+            {#if $storageSource$ === StorageKey.BROWSER || ($storageSource$ === StorageKey.CALIBRE && hasPermission($account$, 'series'))}
               <button
                 type="button"
                 class="library-toolbar-button"

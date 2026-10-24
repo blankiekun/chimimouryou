@@ -12,6 +12,7 @@
  */
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
+import { titleVolume } from '$lib/components/book-card/library-sort';
 import { serverFetch, serverless } from '$lib/data/server-connect';
 
 export interface SeriesOverride {
@@ -77,9 +78,25 @@ export function loadSeriesOverrides(refresh = false) {
   return cache;
 }
 
-/** Sets the series of each title (`''` for none), on top of the latest server copy. */
-export async function saveSeriesOverrides(changes: Record<string, string>) {
+/**
+ * Sets the series of each title (`''` for none), on top of the latest server copy, or with
+ * `local` in this browser's copy for its own books (`withBrowserSeries`).
+ */
+export async function saveSeriesOverrides(changes: Record<string, string>, local = false) {
   const modified = Date.now();
+
+  if (local) {
+    const overrides = { ...readBrowserSeries() };
+
+    Object.entries(changes).forEach(([title, series]) => {
+      overrides[title] = { series: series.trim().slice(0, maxSeriesLength), modified };
+    });
+    writeBrowserSeries(overrides);
+    syncBrowserSeries().catch(() => undefined);
+
+    return overrides;
+  }
+
   // shortcut: read-merge-write without locking, so two readers saving in the same second can lose one change; add ETag checks if that happens.
   const overrides = { ...(await fetchSeriesOverrides()) };
 
@@ -165,4 +182,133 @@ export function seriesForTitle(books: BookCardProps[], title: string) {
   });
 
   return best;
+}
+
+/** Browser books' series made in the library, per browser; synced as series.json (`syncBrowserSeries`). */
+const browserSeriesKey = 'browserSeries';
+
+function readBrowserSeries(): SeriesOverrides {
+  try {
+    return parseSeriesOverrides(JSON.parse(window.localStorage.getItem(browserSeriesKey) || '{}'));
+  } catch {
+    return {};
+  }
+}
+
+function writeBrowserSeries(overrides: SeriesOverrides) {
+  try {
+    window.localStorage.setItem(browserSeriesKey, JSON.stringify(overrides));
+  } catch {
+    // Kept for this page only; the next sync or save tries again.
+  }
+}
+
+/** The newest change per title wins. */
+export function mergeSeriesOverrides(local: SeriesOverrides, remote: SeriesOverrides) {
+  const merged = { ...local };
+
+  Object.entries(remote).forEach(([title, entry]) => {
+    if (!merged[title] || entry.modified > merged[title].modified) merged[title] = entry;
+  });
+
+  return merged;
+}
+
+function sameOverrides(a: SeriesOverrides, b: SeriesOverrides) {
+  const titles = Object.keys(a);
+
+  return (
+    titles.length === Object.keys(b).length &&
+    titles.every(
+      (title) => b[title]?.series === a[title].series && b[title].modified === a[title].modified
+    )
+  );
+}
+
+/**
+ * Merges the browser's series with series.json at the root of the library's Drive, OneDrive or
+ * folder (the auto-replication target for a browser library), like kanji.json. True when this
+ * browser's copy changed. Nothing is sent without such a source.
+ */
+export async function syncBrowserSeries() {
+  const { bookSyncSource, readerSyncSource, syncFileStore, syncJsonFile } = await import(
+    '$lib/data/sync-files'
+  );
+  const { StorageSourceDefault } = await import('$lib/data/storage/storage-types');
+  const name = readerSyncSource() || bookSyncSource(undefined);
+  // The Calibre source has its own shared series.json (`saveSeriesOverrides`).
+  const store =
+    name === StorageSourceDefault.CALIBRE_DEFAULT ? undefined : await syncFileStore(name);
+  let changed = false;
+
+  if (!store) return changed;
+
+  await syncJsonFile<unknown>(store, 'series.json', undefined, async (file) => {
+    const remote = parseSeriesOverrides(file);
+    const local = readBrowserSeries();
+    const merged = mergeSeriesOverrides(local, remote);
+
+    if (!sameOverrides(merged, local)) {
+      writeBrowserSeries(merged);
+      changed = true;
+    }
+
+    return sameOverrides(merged, remote) ? undefined : merged;
+  });
+
+  return changed;
+}
+
+/** Product codes like 'b522apdm' and very short leftovers are no series (`is_series_name`). */
+function isSeriesName(name: string) {
+  return name.length >= 2 && !/^[0-9a-z_-]+$/i.test(name);
+}
+
+/**
+ * Series from volume numbers in titles for books without one, like `split_volume` in
+ * build-catalog.py: two or more volumes with the same name form a series, and a single one joins
+ * an existing series of that name (width and case ignored).
+ */
+export function inferSeries(cards: BookCardProps[]) {
+  const key = (name: string) => name.normalize('NFKC').toLocaleLowerCase();
+  const existing = new Map(
+    cards.filter((card) => card.series).map((card) => [key(card.series!), card.series!])
+  );
+  const groups = new Map<string, BookCardProps[]>();
+
+  cards.forEach((card) => {
+    const name = card.series ? '' : guessSeriesName(card.title);
+
+    if (isSeriesName(name) && titleVolume(card.title) !== undefined) {
+      groups.set(name, [...(groups.get(name) ?? []), card]);
+    }
+  });
+
+  const inferred = new Map<BookCardProps, string>();
+
+  groups.forEach((members, name) => {
+    const series = existing.get(key(name));
+
+    if (series || members.length > 1) {
+      members.forEach((card) => inferred.set(card, series ?? name));
+    }
+  });
+
+  return cards.map((card) =>
+    inferred.has(card)
+      ? {
+          ...card,
+          series: inferred.get(card),
+          seriesIndex: titleVolume(card.title),
+          seriesInferred: true
+        }
+      : card
+  );
+}
+
+/** Browser books with series: their EPUB's, inferred from titles, then the ones made in the library. */
+export function withBrowserSeries(cards: BookCardProps[]) {
+  const overrides = readBrowserSeries();
+
+  return inferSeries(cards).map((card) => applySeriesOverride(card, overrides));
 }
