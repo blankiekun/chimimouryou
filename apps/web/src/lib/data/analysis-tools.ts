@@ -12,10 +12,11 @@
  * word list for Book words and word coverage; also the frequency pack and the models) and
  * generated furigana (the readings file). Files both use are kept while either is installed.
  *
- * Sudachi (~250 MB in memory) and Pyodide (~200 MB) run one after the other in their own workers
- * (functions/analysis/): the tokenizer worker tokenizes what the reader worker asks for and is ended
- * before the reader worker starts; texts the reading turns out to need too (parts of words,
- * dictionary forms) go back for another round. One book at a time. Not part of upstream.
+ * One worker runs both Sudachi (~250 MB in memory) and Pyodide (~200 MB)
+ * (functions/analysis/analysis.worker.ts): Python asks Sudachi for each text as it reads, so a part
+ * is one pass; the worker keeps the last book's tokens for its other part. One job at a time; the
+ * worker (and the scoring one) stays for the next one as long as analysisKeepAlive says
+ * (analysis-capacity.ts). Not part of upstream.
  */
 
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
@@ -28,29 +29,20 @@ import {
   type ReadingsFile
 } from '$lib/data/generated-furigana';
 import { readerDb } from '$lib/data/reader-db';
-import type { ReadMessage, ReadRequest } from '$lib/functions/analysis/analysis-read.worker';
+import type { AnalysisMessage, AnalysisRequest } from '$lib/functions/analysis/analysis.worker';
 import type { ScoreMessage, ScoreRequest } from '$lib/functions/analysis/analysis-score.worker';
-import type {
-  TokenizeMessage,
-  TokenizeRequest
-} from '$lib/functions/analysis/analysis-tokenize.worker';
 import {
   analysisToolsCacheName,
   rawFolder,
   rawName,
-  removeTokenFile,
   type AnalysisToolsManifest
 } from '$lib/functions/analysis/tools-files';
+import { analysisKeepAlive } from '$lib/data/analysis-capacity';
 
 const base = () => new URL(`${pagePath}/analysis-tools/`, location.href).href;
 const manifestName = 'manifest.json';
 /** Rows kept per word list, as the server keeps (WORDS_PER_BOOK, wordsPerBook in book-words.ts) */
 const wordsPerBook = 2000;
-// Texts still missing after this many readings would mean they never settle.
-const maxRounds = 6;
-// Time for the browser to take back the ended worker's memory before the next one starts. Up to
-// 12 pauses per book: 5 s each was a third of a novel's analysis.
-const settlePause = 1000;
 
 /**
  * Desktop browsers only: the dictionary alone takes ~200 MB of memory. Browsers that don't report
@@ -72,7 +64,7 @@ export function analysisToolsSupported() {
 
 export type AnalysisFeature = 'difficulty' | 'furigana';
 export const analysisFeatures: AnalysisFeature[] = ['difficulty', 'furigana'];
-type Part = ReadRequest['part'];
+type Part = AnalysisRequest['part'];
 
 /** The tools' manifest as kept in the cache: the site's, plus the features installed from it. */
 interface KeptManifest extends AnalysisToolsManifest {
@@ -340,13 +332,14 @@ export function runWorker<Message extends { type: string }>(
   worker: Worker,
   request: unknown,
   onMessage: (message: Message) => unknown,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  keep = false
 ) {
   let watchdog: ReturnType<typeof setTimeout> | undefined;
 
   return new Promise<unknown>((resolve, reject) => {
     const stop = () => reject(abortError());
-    // Every message, progress included, shows it is alive (the read worker sends 'alive').
+    // Every message, progress included, shows it is alive.
     const feed = () => {
       clearTimeout(watchdog);
       watchdog = setTimeout(
@@ -371,10 +364,18 @@ export function runWorker<Message extends { type: string }>(
       }
     };
     worker.postMessage(request);
-  }).finally(() => {
-    clearTimeout(watchdog);
-    worker.terminate();
-  });
+  }).then(
+    (result) => {
+      clearTimeout(watchdog);
+      if (!keep) worker.terminate();
+      return result;
+    },
+    (error) => {
+      clearTimeout(watchdog);
+      worker.terminate();
+      throw error;
+    }
+  );
 }
 
 const fail = (message: { type: string; message?: string }) => {
@@ -383,59 +384,99 @@ const fail = (message: { type: string; message?: string }) => {
   return undefined;
 };
 
-function readWorker(request: ReadRequest, signal?: AbortSignal) {
-  return runWorker<ReadMessage>(
-    new Worker(new URL('../functions/analysis/analysis-read.worker.ts', import.meta.url), {
-      type: 'module'
-    }),
-    request,
-    (message) => (message.type === 'texts' || message.type === 'result' ? message : fail(message)),
-    signal
-  ) as Promise<Extract<ReadMessage, { type: 'texts' | 'result' }>>;
+/**
+ * The scoring worker, kept like the analysis worker (analysisKeepAlive) so the next book skips
+ * onnxruntime's start; its own timer, as it runs after the queue's job.
+ */
+let scorer: { worker: Worker; timer?: ReturnType<typeof setTimeout> } | undefined;
+
+function endScorer() {
+  scorer?.worker.terminate();
+  scorer = undefined;
 }
 
-function tokenizeWorker(
-  request: TokenizeRequest,
+async function score(request: ScoreRequest) {
+  clearTimeout(scorer?.timer);
+  scorer ??= {
+    worker: new Worker(new URL('../functions/analysis/analysis-score.worker.ts', import.meta.url), {
+      type: 'module'
+    })
+  };
+
+  try {
+    return (await runWorker<ScoreMessage>(
+      scorer.worker,
+      request,
+      (message) => (message.type === 'scores' ? message : fail(message)),
+      undefined,
+      true
+    )) as Extract<ScoreMessage, { type: 'scores' }>;
+  } catch (error) {
+    // runWorker ended it
+    scorer = undefined;
+    throw error;
+  } finally {
+    const keepAlive = analysisKeepAlive();
+
+    if (scorer && keepAlive) {
+      scorer.timer = setTimeout(endScorer, keepAlive);
+    } else {
+      endScorer();
+    }
+  }
+}
+
+/** One at a time: a book's score runs after its queue job, so the next book's could meet it. */
+let scoring: Promise<unknown> = Promise.resolve();
+
+function scoreWorker(request: ScoreRequest) {
+  const run = scoring.then(() => score(request));
+
+  scoring = run.catch(() => undefined);
+
+  return run;
+}
+
+/** The analysis worker, kept between jobs (analysisKeepAlive); ended when a job fails. */
+let session: { worker: Worker; timer?: ReturnType<typeof setTimeout> } | undefined;
+
+function endSession() {
+  session?.worker.terminate();
+  session = undefined;
+}
+
+function analysisWorker(
+  request: AnalysisRequest,
   onProgress: (share: number) => void,
   signal?: AbortSignal
 ) {
-  return runWorker<TokenizeMessage>(
-    new Worker(new URL('../functions/analysis/analysis-tokenize.worker.ts', import.meta.url), {
+  clearTimeout(session?.timer);
+  session ??= {
+    worker: new Worker(new URL('../functions/analysis/analysis.worker.ts', import.meta.url), {
       type: 'module'
-    }),
-    request,
-    (message) => {
-      if (message.type === 'progress') onProgress(message.done / message.total);
+    })
+  };
 
-      return message.type === 'done' || fail(message);
-    },
-    signal
-  );
-}
+  const { worker } = session;
 
-function scoreWorker(request: ScoreRequest) {
-  return runWorker<ScoreMessage>(
-    new Worker(new URL('../functions/analysis/analysis-score.worker.ts', import.meta.url), {
-      type: 'module'
-    }),
-    request,
-    (message) => (message.type === 'scores' ? message : fail(message))
-  ) as Promise<Extract<ScoreMessage, { type: 'scores' }>>;
-}
+  return (
+    runWorker<AnalysisMessage>(
+      worker,
+      request,
+      (message) => {
+        if (message.type === 'progress') onProgress(message.share);
 
-const settle = (signal?: AbortSignal) =>
-  new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(resolve, settlePause);
-
-    signal?.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timer);
-        reject(abortError());
+        return message.type === 'result' ? message : fail(message);
       },
-      { once: true }
-    );
+      signal,
+      true
+    ) as Promise<Extract<AnalysisMessage, { type: 'result' }>>
+  ).catch((error) => {
+    // runWorker ended it
+    if (session?.worker === worker) session = undefined;
+    throw error;
   });
+}
 
 /**
  * Analyses waiting, one at a time: readings files go ahead of word lists (a reader waits for them),
@@ -449,6 +490,14 @@ async function pump() {
   running = true;
   while (pending.length) await pending.shift()!.start();
   running = false;
+
+  const keepAlive = analysisKeepAlive();
+
+  if (!keepAlive) {
+    endSession();
+  } else if (session) {
+    session.timer = setTimeout(endSession, keepAlive);
+  }
 }
 
 function enqueue<T>(part: Part, background: boolean, task: () => Promise<T>) {
@@ -479,47 +528,19 @@ function analyseBook(
   background = false
 ) {
   return enqueue(part, background, async () => {
-    const dictionaryBytes = manifest.files.find((file) => file.name === 'core.dic.gz')?.raw;
-
-    if (!dictionaryBytes) throw new Error('The analysis tools are not downloaded');
     if (signal?.aborted) throw abortError();
 
     onProgress(0);
 
-    const request = { base: base(), manifest, html, part, wordsPerBook };
-    const tokenFile = `analysis-${Date.now()}-${Math.random().toString(36).slice(2)}.tokens`;
-    let texts = ((await readWorker(request, signal)) as { texts: string[] }).texts;
+    const { json } = await analysisWorker(
+      { base: base(), manifest, html, part, wordsPerBook },
+      onProgress,
+      signal
+    );
 
-    try {
-      for (let round = 0; round < maxRounds; round += 1) {
-        // The first round tokenizes the book: most of the time; later ones only a few words. Each
-        // round still moves the share on (the background analysis gives up on a share that stalls).
-        const [from, to] = round ? [0.71 + 0.04 * round, 0.73 + 0.04 * round] : [0.05, 0.3];
+    onProgress(1);
 
-        await settle(signal);
-        await tokenizeWorker(
-          { base: base(), dictionaryBytes, tokenFile, texts, expand: !round },
-          (share) => onProgress(from + (to - from) * share),
-          signal
-        );
-        onProgress(to);
-        await settle(signal);
-
-        const { json } = (await readWorker({ ...request, tokenFile }, signal)) as { json: string };
-        const analysis = JSON.parse(json) as { misses?: string[] };
-
-        if (!analysis.misses) {
-          onProgress(1);
-          return analysis as unknown;
-        }
-        texts = analysis.misses;
-        onProgress(0.75 + 0.04 * round);
-      }
-    } finally {
-      await removeTokenFile(tokenFile);
-    }
-
-    throw new Error('The analysis did not finish');
+    return JSON.parse(json) as unknown;
   });
 }
 

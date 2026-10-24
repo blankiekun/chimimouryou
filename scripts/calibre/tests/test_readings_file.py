@@ -245,6 +245,12 @@ class ReadingsQueueTest(unittest.TestCase):
         self.assertEqual(queue.request(1), 'queued')
         queue.thread.join(10)
         self.assertEqual((queue.failed, queue.request(1)), ({1: 'bookdata_1_6_10_3_3.zip'}, 'unavailable'))
+        # A request can wait for its file: answered when it is made.
+        os.remove(service.readings_path(1))
+        queue.failed.clear()
+        os.remove(broken)
+        self.assertEqual(queue.request(1, wait=10), 'ready')
+        self.assertEqual(queue.request(1, wait=10), 'ready')
 
     def test_the_worker_stays_loaded_for_the_next_book(self):
         from concurrent.futures import ThreadPoolExecutor

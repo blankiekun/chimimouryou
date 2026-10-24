@@ -10,7 +10,7 @@ HTTP API (bound to localhost, proxied by nginx at /calibre/difficulty/api/):
   GET  kanji/ID                     kanji counts of an estimated book (for each reader's own kanji coverage)
   GET  words/ID                     the book's most frequent words: [form, reading, count, rank, lemma] (WORDS_PER_BOOK)
   GET  readings/ID                  the book's readings file (readings_file.py)
-  POST readings/ID                  make it if missing or stale: {"status": "ready" | "queued" | "unavailable"}
+  POST readings/ID                  make it if missing or stale (waits up to READINGS_WAIT): {"status": "ready" | "queued" | "unavailable"}
   POST compute    {"ids": [...]}    estimate difficulty for these books ({"all": true} for all without a current estimate)
   POST cancel                       stop the running job
   POST dictionary   body: the zip    install Jiten's frequency list (jiten_freq_global.zip); admins only.
@@ -120,6 +120,9 @@ MAX_STATICDATA_BYTES = 30 * 1024 * 1024
 # Building a file takes ~3 s: keep the readings worker this long after its last file so the next
 # book opened doesn't start a process again (its Reader loads from READER_PACK at once).
 READINGS_KEEP_ALIVE = 120
+# A POST holds the request this long for a file that gets ready, so most books are answered at once
+# rather than at the client's first poll (3 s). The client gives up after 5 s.
+READINGS_WAIT = 3.5
 # The Reader's tables (known list, JMdict, term dictionaries): built once (~20 s, ~620 MB) by
 # Reader.save, then every worker maps the file (Reader.load: no parse, ~100 MB, pages shared).
 # The .key file names the inputs it was built from.
@@ -172,9 +175,11 @@ def save_kanji(book_id: int, text: str):
     from features import is_kanji
     os.makedirs(KANJI_DIR, exist_ok=True)
     path = os.path.join(KANJI_DIR, f'{book_id}.json.gz')
+    counts = Counter(c for c in text if is_kanji(c))
     with gzip.open(path + '.tmp', 'wt', encoding='utf-8') as f:
-        json.dump(dict(Counter(c for c in text if is_kanji(c))), f, ensure_ascii=False, separators=(',', ':'))
+        json.dump(dict(counts), f, ensure_ascii=False, separators=(',', ':'))
     os.replace(path + '.tmp', path)
+    return len(counts)
 
 
 def save_words(book_id: int, analysis, frequency):
@@ -193,7 +198,7 @@ def save_words(book_id: int, analysis, frequency):
 def _estimate(book: dict):
     import numpy
     from features import (EXTRA_FEATURES, FEATURE_ORDER, TOKEN_CLEAN, book_text, compute_extra_features,
-                          compute_features, is_kanji, vn_text, words_for_coverage)
+                          compute_features, vn_text, words_for_coverage)
     ruby, hints = {}, []
     if book.get('vn'):
         text = vn_text(os.path.join(VN_DIR if book['format'] == 'VN' else LIBRARY, book['file']), ruby, hints)
@@ -209,7 +214,7 @@ def _estimate(book: dict):
                       dtype=numpy.float32)
     scores = {name: round(min(max(float(session.run(None, {'float_input': row})[0][0][0]), 0.0), 5.0), 2)
               for name, session in _sessions.items()}
-    save_kanji(book['id'], text)
+    unique_kanji = save_kanji(book['id'], text)
     unique_words, tokens = save_words(book['id'], analysis, _frequency)
     # 'adjusted' is kept for older readers (deprecated, see CHANGELOG; drop it one release later);
     # the model includes jiten.moe's adjustment.
@@ -223,7 +228,7 @@ def _estimate(book: dict):
         'words': WORDS_VERSION,
         'engine': current_engine(),
         'characters': characters,
-        'uniqueKanji': len({c for c in text if is_kanji(c)}),
+        'uniqueKanji': unique_kanji,
         # All the book's words (rows of its word list before the cap) and their occurrences,
         # without noise; older estimates have neither.
         'uniqueWords': unique_words,
@@ -392,8 +397,21 @@ class ReadingsQueue:
         self.failed = {}  # book id -> bookdata name it failed on: not retried until that changes
         self.thread = None
         self.added = threading.Event()  # wakes an idle worker thread at once
+        self.finished = threading.Condition(self.lock)  # notified after each file
 
-    def request(self, book_id: int) -> str:
+    def request(self, book_id: int, wait: float = 0) -> str:
+        """The file's status; with `wait`, waits up to that many seconds for a queued one."""
+        status = self._request(book_id)
+        if status != 'queued' or wait <= 0:
+            return status
+        deadline = time.monotonic() + wait
+        with self.lock:
+            while (book_id in self.queue or self.running == book_id) and \
+                    self.finished.wait(max(0, deadline - time.monotonic())):
+                pass
+        return self._request(book_id)
+
+    def _request(self, book_id: int) -> str:
         if not os.path.exists(FREQUENCY_DICTIONARY):
             return 'unavailable'
         book = next((b for b in load_catalog() if b['id'] == book_id and not b.get('vn')), None)
@@ -461,7 +479,9 @@ class ReadingsQueue:
                     if isinstance(error, BrokenProcessPool):
                         pool = None
                 finally:
-                    self.running = None
+                    with self.lock:
+                        self.running = None
+                        self.finished.notify_all()
                     idle_since = time.monotonic()
         finally:
             if pool:
@@ -836,7 +856,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, {'error': 'Request from another site'})
         parts = self.path.split('?')[0].strip('/').split('/')
         if len(parts) == 2 and parts[0] == 'readings' and re.fullmatch(r'-?[0-9]+', parts[1]):
-            return self._send(200, {'status': readings.request(int(parts[1]))})
+            return self._send(200, {'status': readings.request(int(parts[1]), READINGS_WAIT)})
         if parts == ['dictionary']:
             # nginx sends it from the account check of every location that reaches this path.
             if self.headers.get('X-Account-Admin') != '1':
