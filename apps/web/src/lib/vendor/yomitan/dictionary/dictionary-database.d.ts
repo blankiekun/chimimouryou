@@ -38,6 +38,14 @@ export class DictionaryDatabase {
   ): Promise<void>;
   getDictionaryInfo(): Promise<DictionarySummary[]>;
   dictionaryExists(title: string): Promise<boolean>;
+  // The translator's lookups (collection-store.ts overrides them); rows as Yomitan types them.
+  findTermsBulk(termList: string[], dictionaries: any, matchType: string): Promise<any[]>;
+  findTermsExactBulk(termList: { term: string; reading: string }[], dictionaries: any): Promise<any[]>;
+  findTermsBySequenceBulk(items: { query: number; dictionary: string }[]): Promise<any[]>;
+  findTermMetaBulk(termList: string[], dictionaries: any): Promise<any[]>;
+  findKanjiBulk(kanjiList: string[], dictionaries: any): Promise<any[]>;
+  findKanjiMetaBulk(kanjiList: string[], dictionaries: any): Promise<any[]>;
+  findTagMetaBulk(items: { query: string; dictionary: string }[]): Promise<any[]>;
   getMedia(items: { path: string; dictionary: string }[]): Promise<
     { index: number; dictionary: string; path: string; mediaType: string; content: ArrayBuffer }[]
   >;

@@ -10,8 +10,8 @@
  * dictionary.worker.ts; the tests call it directly. Not part of upstream.
  */
 
-import { DictionaryDatabase } from '$lib/vendor/yomitan/dictionary/dictionary-database';
 import { importCollection } from './collection-import';
+import { DictionaryStore } from './collection-store';
 import {
   DictionaryImporter,
   type DictionarySummary,
@@ -41,12 +41,12 @@ const mediaLoader: MediaLoader = {
   }
 };
 
-let database: DictionaryDatabase | undefined;
+let database: DictionaryStore | undefined;
 let translator: Translator | undefined;
 
 async function ready() {
   if (!database) {
-    const db = new DictionaryDatabase();
+    const db = new DictionaryStore();
     await db.prepare();
     const tr = new Translator(db);
     tr.prepare();

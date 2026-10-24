@@ -10,11 +10,15 @@ import { Blob as NodeBlob } from 'node:buffer';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DictionaryDatabase } from '$lib/vendor/yomitan/dictionary/dictionary-database';
 import { importCollection } from './collection-import';
+import { DictionaryStore } from './collection-store';
 
 const title = 'Test Dict';
+const reverse = (text: string) => [...text].reverse().join('');
 const terms = Array.from({ length: 150 }, (_, i) => ({
   expression: i % 3 ? `語${i}` : '辞書',
   reading: i % 2 ? `ご${i}` : i % 3 ? `語${i}` : 'じしょ',
+  expressionReverse: reverse(i % 3 ? `語${i}` : '辞書'),
+  readingReverse: reverse(i % 2 ? `ご${i}` : i % 3 ? `語${i}` : 'じしょ'),
   definitionTags: 'n',
   rules: '',
   score: i,
@@ -88,18 +92,85 @@ function collection(version = 6, dictionaries = [summary]) {
 
 const noProgress = () => undefined;
 const notCancelled = () => false;
-const words = ['辞書', 'じしょ', '語4', 'ご5', '語', 'ない'];
+const words = ['辞書', 'じしょ', '語4', 'ご5', '語', 'ない', '5'];
 const withoutIds = (entries: any[]) => entries.map(({ id: _id, ...entry }) => entry);
 
 async function database(name = 'dict') {
-  const db = new DictionaryDatabase();
+  const db = new DictionaryStore();
   (db as any)._dbName = name;
   await db.prepare();
   return db;
 }
 
+async function reference() {
+  const db = new DictionaryDatabase();
+  (db as any)._dbName = 'reference';
+  await db.prepare();
+  await db.bulkAdd('terms', terms, 0, terms.length);
+  await db.bulkAdd('termMeta', termMeta, 0, termMeta.length);
+  return db as any;
+}
+
+/** The origin private file system as far as collection-store.ts uses it. */
+class FakeDirectory {
+  entries = new Map<string, FakeDirectory | FakeFile>();
+  async getDirectoryHandle(name: string, { create = false } = {}) {
+    if (!this.entries.has(name) && create) this.entries.set(name, new FakeDirectory());
+    const entry = this.entries.get(name);
+    if (!(entry instanceof FakeDirectory)) throw new DOMException(name, 'NotFoundError');
+    return entry;
+  }
+  async getFileHandle(name: string, { create = false } = {}) {
+    if (!this.entries.has(name) && create) this.entries.set(name, new FakeFile());
+    const entry = this.entries.get(name);
+    if (!(entry instanceof FakeFile)) throw new DOMException(name, 'NotFoundError');
+    return entry;
+  }
+  async removeEntry(name: string) {
+    if (!this.entries.delete(name)) throw new DOMException(name, 'NotFoundError');
+  }
+  async *keys() {
+    yield* [...this.entries.keys()];
+  }
+}
+
+class FakeFile {
+  bytes = new Uint8Array(0);
+  async getFile() {
+    return new NodeBlob([this.bytes.slice()]);
+  }
+  async createSyncAccessHandle() {
+    return {
+      write: (data: ArrayBufferView, { at }: { at: number }) => {
+        const chunk = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+        if (at + chunk.length > this.bytes.length) {
+          const grown = new Uint8Array(at + chunk.length);
+          grown.set(this.bytes);
+          this.bytes = grown;
+        }
+        this.bytes.set(chunk, at);
+        return chunk.length;
+      },
+      read: (data: Uint8Array, { at }: { at: number }) => {
+        const chunk = this.bytes.subarray(at, at + data.length);
+        data.set(chunk);
+        return chunk.length;
+      },
+      flush: () => undefined,
+      close: () => undefined
+    };
+  }
+}
+
+let opfs: FakeDirectory;
+
 beforeEach(() => {
   globalThis.indexedDB = new IDBFactory();
+  opfs = new FakeDirectory();
+  Object.defineProperty(navigator, 'storage', {
+    configurable: true,
+    value: { getDirectory: async () => opfs }
+  });
 });
 
 describe('collection import', () => {
@@ -109,18 +180,23 @@ describe('collection import', () => {
     expect(result.imported.map(({ title }) => title)).toEqual([title]);
     expect(result.orphanRows).toBe(1);
 
-    const reference = await database('reference');
-    await reference.bulkAdd('terms', terms, 0, terms.length);
-    await reference.bulkAdd('termMeta', termMeta, 0, termMeta.length);
-
     const set = new Set([title]);
-    const [c, y] = [db as any, reference as any];
-    for (const matchType of ['exact', 'prefix']) {
+    const [c, y] = [db as any, await reference()];
+    for (const matchType of ['exact', 'prefix', 'suffix']) {
       expect(withoutIds(await c.findTermsBulk(words, set, matchType))).toEqual(
         withoutIds(await y.findTermsBulk(words, set, matchType))
       );
     }
     expect(await c.findTermMetaBulk(words, set)).toEqual(await y.findTermMetaBulk(words, set));
+    const exact = words.map((term) => ({ term, reading: 'じしょ' }));
+    expect(withoutIds(await c.findTermsExactBulk(exact, set))).toEqual(
+      withoutIds(await y.findTermsExactBulk(exact, set))
+    );
+    const sequences = [0, 4, 7, 999].map((query) => ({ query, dictionary: title }));
+    expect(withoutIds(await c.findTermsBySequenceBulk(sequences))).toEqual(
+      withoutIds(await y.findTermsBySequenceBulk(sequences))
+    );
+    expect(await c.findTermsBulk(words, new Set(['Other']), 'exact')).toEqual([]);
     const [media] = await c.getMedia([{ path: 'img/a.png', dictionary: title }]);
     expect(new TextDecoder().decode(media.content)).toBe('png');
   });
@@ -140,6 +216,30 @@ describe('collection import', () => {
       importCollection(db, collection(), noProgress, () => ++chunks > 1)
     ).rejects.toThrow('Import cancelled');
     expect(await db.getDictionaryInfo()).toEqual([]);
+    expect((opfs.entries.get('dictionary-collections') as FakeDirectory).entries.size).toBe(0);
+  });
+
+  it('deletes a pack with its last dictionary, also after a restart', async () => {
+    const db = await database();
+    await importCollection(db, collection(), noProgress, notCancelled);
+    const packs = opfs.entries.get('dictionary-collections') as FakeDirectory;
+    expect(packs.entries.size).toBe(1);
+    const again = await database();
+    expect(await again.findTermsBulk(['辞書'], new Set([title]), 'exact')).toHaveLength(50);
+    await again.deleteDictionary(title, 1000, () => undefined);
+    expect(await again.getDictionaryInfo()).toEqual([]);
+    expect(await again.findTermsBulk(['辞書'], new Set([title]), 'exact')).toEqual([]);
+    expect(packs.entries.size).toBe(0);
+  });
+
+  it('keeps zip-imported dictionaries in IndexedDB beside a pack', async () => {
+    const db = await database();
+    await importCollection(db, collection(), noProgress, notCancelled);
+    const other = { ...terms[0], dictionary: 'Zip', score: 99 };
+    await db.bulkAdd('terms', [other], 0, 1);
+    const found = await db.findTermsBulk(['辞書'], new Set([title, 'Zip']), 'exact');
+    expect(found).toHaveLength(51);
+    expect(found.filter(({ dictionary }: any) => dictionary === 'Zip')).toHaveLength(1);
   });
 
   it('refuses a collection from a newer Yomitan', async () => {
