@@ -24,6 +24,7 @@ import type {
   DictionaryResponse
 } from '$lib/functions/dictionary/dictionary.worker';
 import type { LookupResult } from '$lib/functions/dictionary/dictionary-engine';
+import type { CollectionResult } from '$lib/functions/dictionary/collection-import';
 import { canRunYomitan } from '$lib/functions/can-run-yomitan';
 import { writableSubject } from '$lib/functions/svelte/store';
 import { writableStorageSubject } from '$lib/data/internal/writable-storage-subject';
@@ -248,6 +249,45 @@ export async function downloadDictionary(url: string, onDownload: Progress, onIm
     onDownload(done, total);
   }
   return importDictionary(new Blob(chunks as BlobPart[], { type: 'application/zip' }), onImport);
+}
+
+/** What a collection import needs, as a share of the file (measured in Chrome: about 0.5 while writing). */
+const collectionRoomShare = 0.6;
+
+/**
+ * Imports a Yomitan dictionary collection export (Settings → Backup → Export Dictionary
+ * Collection), streamed in the worker. Installed titles are skipped; the new dictionaries are
+ * enabled after the installed ones. A cancelled or failed import keeps none of them.
+ */
+export async function importDictionaryCollection(file: File, onProgress?: Progress) {
+  await navigator.storage?.persist?.().catch(() => false);
+  const estimate = await navigator.storage?.estimate?.().catch(() => undefined);
+  if (estimate?.quota !== undefined) {
+    const room = estimate.quota - (estimate.usage ?? 0);
+    const needed = file.size * collectionRoomShare;
+    if (room < needed) {
+      const gb = (bytes: number) => (bytes / 1e9).toFixed(1);
+      throw new Error(
+        `Not enough room: this collection needs about ${gb(needed)} GB and the browser allows ${gb(room)} GB more.`
+      );
+    }
+  }
+  try {
+    const result = await call<CollectionResult>({ type: 'importCollection', file }, onProgress);
+    await updateProfileOptions((profile) => {
+      for (const { title, styles } of result.imported) {
+        profile.dictionaries = profile.dictionaries.filter(({ name }) => name !== title);
+        profile.dictionaries.push(defaultDictionarySettings(title, true, styles ?? ''));
+      }
+    });
+    return result;
+  } finally {
+    await refreshDictionaries();
+  }
+}
+
+export function cancelDictionaryCollectionImport() {
+  return call({ type: 'cancelImport' });
 }
 
 export async function deleteDictionary(name: string) {

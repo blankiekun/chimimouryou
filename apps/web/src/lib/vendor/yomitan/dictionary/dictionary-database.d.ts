@@ -24,6 +24,7 @@ export class DictionaryDatabase {
   prepare(): Promise<void>;
   close(): Promise<void>;
   isPrepared(): boolean;
+  bulkAdd(objectStoreName: string, items: unknown[], start: number, count: number): Promise<void>;
   purge(): Promise<boolean>;
   deleteDictionary(
     dictionaryName: string,
