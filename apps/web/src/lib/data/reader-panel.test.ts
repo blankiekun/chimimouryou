@@ -44,14 +44,14 @@ describe('readerPanelTabs', () => {
 });
 
 describe('resolvePanelTab', () => {
-  it('opens the Story tab on its section for the old Story so far and Lorebook ids', () => {
-    expect(resolvePanelTab('recap')).toEqual({ tab: 'story', section: 'recap' });
-    expect(resolvePanelTab('lorebook')).toEqual({ tab: 'story', section: 'lorebook' });
+  it('opens the Story tab for the old Story so far and lore tab ids', () => {
+    expect(resolvePanelTab('recap')).toBe('story');
+    expect(resolvePanelTab('lorebook')).toBe('story');
   });
 
   it('keeps other tabs as they are', () => {
-    expect(resolvePanelTab('story')).toEqual({ tab: 'story' });
-    expect(resolvePanelTab('search')).toEqual({ tab: 'search' });
+    expect(resolvePanelTab('story')).toBe('story');
+    expect(resolvePanelTab('search')).toBe('search');
   });
 });
 

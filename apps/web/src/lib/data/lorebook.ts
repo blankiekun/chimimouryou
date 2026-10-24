@@ -349,31 +349,6 @@ export async function autoUpdateLorebook(
   }
 }
 
-/** SillyTavern World Info JSON. */
-export function toSillyTavern(lorebook: Lorebook) {
-  return {
-    name: lorebook.title,
-    entries: Object.fromEntries(
-      lorebook.entries.map((entry, uid) => [
-        uid,
-        {
-          uid,
-          key: entry.keys,
-          keysecondary: [],
-          comment: entry.reading ? `${entry.name} (${entry.reading})` : entry.name,
-          content: entry.content,
-          constant: false,
-          selective: true,
-          order: 100,
-          position: 0,
-          disable: false,
-          group: entry.category
-        }
-      ])
-    )
-  };
-}
-
 export interface SeriesBook {
   title: string;
   series?: string;

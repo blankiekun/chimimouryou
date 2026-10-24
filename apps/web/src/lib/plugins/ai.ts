@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-/** The AI tools (Ask AI, the Story tab with Story so far and the lorebook, AI voice) as a plugin. Not part of upstream. */
+/** The AI tools (Ask AI, the Story tab with Story so far and the lore, AI voice) as a plugin. Not part of upstream. */
 
 import { faBookOpen, faRobot, faWandMagicSparkles } from '@fortawesome/free-solid-svg-icons';
 import AskAiPanel from '$lib/components/book-reader/ask-ai-panel.svelte';
@@ -38,7 +38,7 @@ export const aiPlugin: Plugin = {
         active
       }),
       pausesTracker: true,
-      absenceOffer: { ready: () => featureReady('recap'), open: 'recap', label: 'reader.recap' }
+      absenceOffer: { ready: () => featureReady('recap'), label: 'reader.recap' }
     }
   ],
   selectionActions: [

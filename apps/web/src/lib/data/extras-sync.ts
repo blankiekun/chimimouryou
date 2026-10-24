@@ -168,7 +168,7 @@ async function syncOnce<T extends { title: string; account?: string }>(
 
     setError(kind, '');
   } catch (error: any) {
-    const message = `${kind === 'recaps' ? 'Recap' : 'Lorebook'} sync failed: ${error.message}`;
+    const message = `${kind === 'recaps' ? 'Recap' : 'Lore'} sync failed: ${error.message}`;
 
     logger.warn(message);
     setError(kind, message);

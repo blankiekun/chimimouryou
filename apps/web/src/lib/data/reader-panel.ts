@@ -13,7 +13,6 @@ import type { SectionWithProgress } from '$lib/components/book-reader/book-toc/b
 import { FuriganaStyle } from '$lib/data/furigana-style';
 import { getWeightedAverage } from '$lib/functions/utils';
 import type { MessageKey } from '$lib/i18n';
-import { BehaviorSubject } from 'rxjs';
 
 /** 'contents' | 'search' | 'highlights' | 'listen' | a plugin tab's key */
 export type PanelTab = string;
@@ -23,15 +22,9 @@ export interface PanelTabEntry {
   label: MessageKey;
 }
 
-/** The Story tab's two sections (story-panel.svelte) */
-export type StorySection = 'recap' | 'lorebook';
-
-/** The section the Story tab shows */
-export const storySection$ = new BehaviorSubject<StorySection>('recap');
-
-/** Story so far and Lorebook were tabs of their own: their ids open the Story tab on that section. */
-export function resolvePanelTab(key: PanelTab): { tab: PanelTab; section?: StorySection } {
-  return key === 'recap' || key === 'lorebook' ? { tab: 'story', section: key } : { tab: key };
+/** Story so far and the lore were tabs of their own (`recap`, `lorebook`); both are the Story tab now. */
+export function resolvePanelTab(key: PanelTab): PanelTab {
+  return key === 'recap' || key === 'lorebook' ? 'story' : key;
 }
 
 /** Index tabs in their order on the panel's edge; plugin tabs (Story) last. */

@@ -261,7 +261,7 @@ Flat paper bar with a 1px rule under it; tabs are text in ink, the active one in
 
 ### Reader Panel
 
-`book-reader/reader-panel.svelte`: index tabs standing vertically on the panel's edge (Contents, Search, Highlights | Listen | Story with the AI plugin, a segmented control between Story so far and Lorebook); the active tab joins the panel with a spot border. Each tab opens with its title over a 2px ink rule, and rows are divided by 1px rules. Ask AI opens inside the panel. On phones it is a bottom sheet with the tabs in a row.
+`book-reader/reader-panel.svelte`: index tabs standing vertically on the panel's edge (Contents, Search, Highlights | Listen | Story with the AI plugin: Story so far, then Lore, in one scrolling view); the active tab joins the panel with a spot border. Each tab opens with its title over a 2px ink rule, and rows are divided by 1px rules. Ask AI opens inside the panel. On phones it is a bottom sheet with the tabs in a row.
 
 ## Do's and Don'ts
 
