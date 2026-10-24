@@ -15,6 +15,7 @@
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsLibrarySource from '$lib/components/settings/settings-library-source.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
+  import GenerateReadings from '$lib/components/standalone/generate-readings.svelte';
   import SettingsStorageSourceList from '$lib/components/settings/settings-storage-source-list.svelte';
   import SettingsUserFontDialog from '$lib/components/settings/settings-user-font-dialog.svelte';
   import { BlurMode } from '$lib/data/blur-mode';
@@ -550,13 +551,18 @@
   <SettingsItemGroup title={$t$('prefs.hideFurigana')}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={hideFurigana} />
   </SettingsItemGroup>
-  <!-- Generated furigana come from the server's difficulty service. -->
-  {#if !standalone}
+  <!-- Generated furigana come from the server's difficulty service, or standalone the analysis tools. -->
+  {#if !standalone || analysisToolsSupported()}
     <SettingsItemGroup
       title={$t$('prefs.generatedFurigana')}
-      tooltip={$t$('prefs.generatedFuriganaHint')}
+      tooltip={standalone
+        ? 'Adds readings, in a softer colour, to words the book gives none. Made in this browser by the Generated furigana analysis tools (Settings → General → Analysis tools).'
+        : $t$('prefs.generatedFuriganaHint')}
     >
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={$generatedFurigana$} />
+      <svelte:fragment slot="after">
+        {#if standalone}<GenerateReadings />{/if}
+      </svelte:fragment>
     </SettingsItemGroup>
   {/if}
   {#if !standalone || analysisToolsSupported()}

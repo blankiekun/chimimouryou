@@ -104,9 +104,11 @@ def first_texts(html: str, part: str) -> list:
     return sorted(tokens.misses)
 
 
-def _words(html: str, tokens, words_per_book: int) -> dict:
+def _words(html: str, tokens, words_per_book: int, reader: bool) -> dict:
     """The book's word list as the service saves it ({words, uniqueWords, tokens}) and the
-    difficulty model's input row (`features`, the service's _estimate) with the estimate's counts."""
+    difficulty model's input row (`features`, the service's _estimate) with the estimate's counts.
+    Without `reader` (generated furigana not installed: no reader pack) the rows take Sudachi's
+    readings; the features never use the Reader, so the estimate is the same."""
     analyzer = Analyzer(tokens)
     # The deconjugator's cache holds every intermediate form: a small one (only slower).
     analyzer.deconjugator.deconjugate = lru_cache(maxsize=200)(analyzer.deconjugator._deconjugate)
@@ -116,7 +118,7 @@ def _words(html: str, tokens, words_per_book: int) -> dict:
     for start, end, reading in hints:
         _count_ruby(ruby, text[start:end], reading)
     frequency = FrequencyTable.load_packed(FREQUENCY_PACK)
-    analysis = analyzer.analyse(text, hints, Reader.load(READER_PACK, tokenizer=analyzer))
+    analysis = analyzer.analyse(text, hints, Reader.load(READER_PACK, tokenizer=analyzer) if reader else None)
     rows, unique_words, total = word_rows(analysis, frequency)
     features = compute_features(analysis, frequency)
     extra = compute_extra_features(analysis, frequency, ruby)
@@ -126,12 +128,13 @@ def _words(html: str, tokens, words_per_book: int) -> dict:
             'characters': len(TOKEN_CLEAN.sub('', text)), 'uniqueKanji': len({c for c in text if is_kanji(c)})}
 
 
-def analyse(html: str, lookup, part: str, words_per_book: int = 2000) -> str:
-    """JSON: {misses} while texts are missing, else `part`: 'words' (_words) or 'readings' (the
-    book's readings file, bookdata '': {readings})."""
+def analyse(html: str, lookup, part: str, words_per_book: int = 2000, reader: bool = True) -> str:
+    """JSON: {misses} while texts are missing, else `part`: 'words' (_words, with yurigana's Reader
+    for its rows' readings when `reader`) or 'readings' (the book's readings file, bookdata '':
+    {readings})."""
     tokens = BrowserTokens(lookup)
     if part == 'words':
-        result = _words(html, tokens, words_per_book)
+        result = _words(html, tokens, words_per_book, reader)
     else:
         result = {'readings': readings_file.build(html, Reader.load(READER_PACK, tokenizer=tokens), '', YURIGANA_VERSION)}
     if tokens.misses:

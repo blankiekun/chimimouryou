@@ -516,6 +516,19 @@ function enqueue<T>(part: Part, background: boolean, task: () => Promise<T>) {
 }
 
 /**
+ * Whether a part runs yurigana's Reader: the readings file always; the word list only while
+ * generated furigana is installed (its rows' readings in context), else its rows take Sudachi's
+ * readings and the reader pack is never downloaded or loaded. Tools older than that (their
+ * manifest doesn't tag the pack) always need it. The estimate is the same either way, and so is
+ * the etag: a word list made without the Reader is kept when furigana is added.
+ */
+export function usesReader(part: Part, manifest: AnalysisToolsManifest, furigana: boolean) {
+  const pack = manifest.files.find((file) => file.name === 'reader.ygp.gz');
+
+  return part === 'readings' || furigana || !pack?.features;
+}
+
+/**
  * One part of the book's analysis from its HTML (the processed book's elementHtml): browser.py's
  * JSON. `onProgress` gets a share from 0 to 1; `signal` stops it (between and inside stages).
  */
@@ -523,6 +536,7 @@ function analyseBook(
   html: string,
   part: Part,
   manifest: AnalysisToolsManifest,
+  reader: boolean,
   onProgress: (share: number) => void,
   signal?: AbortSignal,
   background = false
@@ -533,7 +547,7 @@ function analyseBook(
     onProgress(0);
 
     const { json } = await analysisWorker(
-      { base: base(), manifest, html, part, wordsPerBook },
+      { base: base(), manifest, html, part, wordsPerBook, reader },
       onProgress,
       signal
     );
@@ -562,6 +576,8 @@ export interface LocalWordList {
   title: string;
   etag: string;
   words: BookWord[];
+  /** false: made without yurigana's Reader (usesReader), so redoWordList can redo it; older: with */
+  reader?: boolean;
 }
 
 /** The jobs running or queued, by part and title: a second ask for the same one waits for it. */
@@ -635,10 +651,12 @@ async function makeEstimate(
   signal: AbortSignal | undefined,
   background: boolean
 ) {
+  const reader = usesReader('words', manifest, !!(await installedTools('furigana')));
   const result = (await analyseBook(
     html,
     'words',
     manifest,
+    reader,
     (share) => onProgress(share * 0.95),
     signal,
     background
@@ -660,7 +678,7 @@ async function makeEstimate(
   };
   const db = await readerDb();
 
-  await db.put('wordLists', { title, etag, words: result.words });
+  await db.put('wordLists', { title, etag, words: result.words, reader });
   await db.put('estimates', estimate);
   onProgress(1);
   localEstimateSaved$.next(title);
@@ -668,10 +686,65 @@ async function makeEstimate(
   return estimate;
 }
 
+export async function keptWordList(title: string) {
+  return (await readerDb()).get('wordLists', title).catch(() => undefined);
+}
+
+/**
+ * Generated furigana installed later: the book's current word list made without the Reader is
+ * made again with it (its rows' readings in context; opt-in, never automatic). The estimate's
+ * score stays (the features don't use the Reader); its word totals and `computedAt` change, so the
+ * coverage caches keyed on it are redone. Undefined when there is nothing to redo.
+ */
+export async function redoWordList(
+  title: string,
+  html: string,
+  onProgress: (share: number) => void = () => {},
+  signal?: AbortSignal,
+  background = false
+): Promise<LocalEstimate | undefined> {
+  const [kept, list, manifest, furigana] = await Promise.all([
+    keptEstimate(title),
+    keptWordList(title),
+    installedTools('difficulty'),
+    installedTools('furigana')
+  ]);
+
+  if (!manifest || !furigana || !kept || list?.reader !== false || list.etag !== kept.etag) {
+    return undefined;
+  }
+  if (kept.etag !== (await analysisTag(html, manifest.version))) return undefined;
+
+  return once(`words ${title}`, onProgress, async (progress) => {
+    const result = (await analyseBook(
+      html,
+      'words',
+      manifest,
+      true,
+      progress,
+      signal,
+      background
+    )) as WordsResult;
+    const estimate: LocalEstimate = {
+      ...kept,
+      uniqueWords: result.uniqueWords,
+      tokens: result.tokens,
+      computedAt: Date.now()
+    };
+    const db = await readerDb();
+
+    await db.put('wordLists', { title, etag: kept.etag, words: result.words, reader: true });
+    await db.put('estimates', estimate);
+    localEstimateSaved$.next(title);
+
+    return estimate;
+  });
+}
+
 /** A local book's word list and its totals, from its kept estimate. */
 export async function localWordList(
   title: string
-): Promise<{ words: BookWord[]; totals: WordTotals } | undefined> {
+): Promise<{ words: BookWord[]; totals: WordTotals; withoutReader: boolean } | undefined> {
   const db = await readerDb();
   const [estimate, list] = await Promise.all([
     db.get('estimates', title),
@@ -682,7 +755,8 @@ export async function localWordList(
 
   return {
     words: foldReadings(list.words),
-    totals: { uniqueWords: estimate.uniqueWords, tokens: estimate.tokens }
+    totals: { uniqueWords: estimate.uniqueWords, tokens: estimate.tokens },
+    withoutReader: list.reader === false
   };
 }
 
@@ -715,6 +789,7 @@ export async function makeReadings(
       html,
       'readings',
       manifest,
+      true,
       progress,
       signal,
       background

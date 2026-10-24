@@ -88,7 +88,8 @@ cp "$root/apps/web/node_modules/onnxruntime-web/dist/"ort-wasm-simd-threaded.{mj
 
 # Raw sizes let the worker preallocate the dictionary and the packs.
 # The version names the Python and the models too (a hash of their files), so a change there redoes the
-# books' analyses. Files only difficulty estimates need: the frequency pack and the models.
+# books' analyses. Files only difficulty estimates need: the frequency pack and the models; only generated
+# furigana: the reader pack (word lists take Sudachi's readings without it).
 # `engine`: the difficulty engine's fingerprint (scripts/calibre/jiten/engine.py), which the browser's
 # estimates carry; it must be the release's (apps/web/src/lib/data/difficulty-engine.json).
 python3 - "$out" "$work" "$SUDACHI_DICT" "$PYODIDE" "$(basename "$yurigana" .tar.gz)" "$jiten" \
@@ -114,7 +115,8 @@ files = sorted(os.path.relpath(os.path.join(d, f), out) for d, _, fs in os.walk(
 json.dump({'version': f'sudachidict-{dic} pyodide-{pyodide} yurigana-{yurigana.lstrip("v")} py-{code.hexdigest()[:12]} engine-{engine[:12]}',
            'engine': engine,
            'files': [{'name': f, 'bytes': os.path.getsize(f'{out}/{f}'), **({'raw': raw[f]} if f in raw else {}),
-                      **({'features': ['difficulty']} if f in difficulty else {})}
+                      **({'features': ['difficulty']} if f in difficulty else {}),
+                      **({'features': ['furigana']} if f == 'reader.ygp.gz' else {})}
                      for f in files]}, open(f'{out}/manifest.json', 'w'), indent=1)
 EOF
 du -sh "$out"

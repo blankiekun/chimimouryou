@@ -22,7 +22,9 @@ const tools = vi.hoisted(() => ({
   keptEstimate: vi.fn(async (_title: string) => undefined as { etag: string } | undefined),
   keptReadings: vi.fn(async (_title: string) => undefined as { etag: string } | undefined),
   localEstimate: vi.fn(async (title: string) => ({ title, etag: 'new' })),
-  makeReadings: vi.fn(async () => undefined)
+  makeReadings: vi.fn(async () => undefined),
+  keptWordList: vi.fn(async (_title: string) => undefined as unknown),
+  redoWordList: vi.fn(async () => undefined)
 }));
 const db = vi.hoisted(() => ({
   get: (title: string) => books[title] as unknown,
@@ -52,8 +54,15 @@ vi.mock('$lib/data/storage/storage-handler-factory', () => ({
   getStorageHandler: () => ({ clearData: () => {} })
 }));
 
-const { analyseInBackground, backgroundAnalysis$, backgroundAnalysisIdle, BACKGROUND_STALL_MS } =
-  await import('./background-analysis');
+const {
+  analyseInBackground,
+  backgroundAnalysis$,
+  backgroundAnalysisIdle,
+  BACKGROUND_STALL_MS,
+  booksWithoutReadings,
+  redoWordLists,
+  wordListsWithoutReader
+} = await import('./background-analysis');
 
 const titles = Object.keys(books);
 const analysed = (mock: typeof tools.localEstimate | typeof tools.makeReadings) =>
@@ -93,6 +102,28 @@ describe('background analysis', () => {
     expect(analysed(tools.localEstimate)).toEqual(['novel']);
     // Behind the reader's own jobs.
     expect(tools.localEstimate.mock.calls[0]).toContain(true);
+  });
+
+  it('lists the books Generate readings would make readings for', async () => {
+    expect(await booksWithoutReadings(titles)).toEqual(['novel']);
+    tools.installedTools.mockResolvedValueOnce(undefined as never);
+    expect(await booksWithoutReadings(titles)).toEqual([]);
+  });
+
+  it('redoes word lists made without the Reader only when asked, after the estimate', async () => {
+    tools.keptWordList.mockImplementation(async (title) =>
+      title === 'done' ? { etag: `v1 ${books.done.elementHtml}`, reader: false } : undefined
+    );
+    expect(await wordListsWithoutReader(titles)).toEqual(['done']);
+
+    furigana.on.next(true);
+    analyseInBackground(titles);
+    await backgroundAnalysisIdle();
+    expect(tools.redoWordList).not.toHaveBeenCalled();
+
+    redoWordLists(['done']);
+    await backgroundAnalysisIdle();
+    expect(analysed(tools.redoWordList)).toEqual(['done']);
   });
 
   it('does nothing without the tools', async () => {

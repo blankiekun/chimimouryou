@@ -27,6 +27,8 @@ export interface AnalysisRequest {
   /** browser.py's part: the word list and the difficulty model's input, or the readings file */
   part: 'words' | 'readings';
   wordsPerBook: number;
+  /** Whether the part runs yurigana's Reader (usesReader in analysis-tools.ts) */
+  reader: boolean;
 }
 
 export type AnalysisMessage =
@@ -137,7 +139,9 @@ self.onmessage = async ({ data }: MessageEvent<AnalysisRequest>) => {
 
     const [tokenize, python] = await tools;
 
-    await loadPack(python, data.manifest, 'reader.ygp.gz', python.browser.READER_PACK);
+    if (data.reader) {
+      await loadPack(python, data.manifest, 'reader.ygp.gz', python.browser.READER_PACK);
+    }
     // Only the word list ranks words.
     if (data.part === 'words') {
       await loadPack(python, data.manifest, 'frequency.ygp.gz', python.browser.FREQUENCY_PACK);
@@ -170,7 +174,9 @@ self.onmessage = async ({ data }: MessageEvent<AnalysisRequest>) => {
         return found;
       },
       data.part,
-      data.wordsPerBook
+      data.wordsPerBook,
+      // Only when false: browser.py from tools older than the flag takes four arguments.
+      ...(data.reader ? [] : [false])
     );
 
     post({ type: 'result', json });

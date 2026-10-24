@@ -6,7 +6,7 @@
 
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { analysisToolsSize } from '$lib/data/analysis-tools';
+import { analysisToolsSize, usesReader } from '$lib/data/analysis-tools';
 
 describe('analysis tools', () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -30,5 +30,18 @@ describe('analysis tools', () => {
     expect(await analysisToolsSize(['difficulty'])).toBe(120);
     expect(await analysisToolsSize(['furigana'])).toBe(103);
     expect(await analysisToolsSize(['difficulty', 'furigana'])).toBe(123);
+  });
+
+  it('runs the Reader for word lists only while furigana is installed, or with older tools', () => {
+    const tagged = {
+      version: '2',
+      files: [{ name: 'reader.ygp.gz', bytes: 1, features: ['furigana' as const] }]
+    };
+    const old = { version: '1', files: [{ name: 'reader.ygp.gz', bytes: 1 }] };
+
+    expect(usesReader('readings', tagged, false)).toBe(true);
+    expect(usesReader('words', tagged, true)).toBe(true);
+    expect(usesReader('words', tagged, false)).toBe(false);
+    expect(usesReader('words', old, false)).toBe(true);
   });
 });

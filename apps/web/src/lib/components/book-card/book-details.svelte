@@ -37,9 +37,12 @@
     analysisToolsSupported,
     checkAnalysisTools,
     keptEstimate,
+    keptReadings,
     localEstimate,
     localEstimateSaved$,
     localWordList,
+    makeReadings,
+    redoWordList,
     type LocalEstimate
   } from '$lib/data/analysis-tools';
   import { wordCoverage, type BookWord, type WordCoverage } from '$lib/data/book-words';
@@ -101,6 +104,13 @@
   let localScored: LocalEstimate | undefined;
   let estimating: number | undefined;
   let estimateError = '';
+  /** Standalone, generated furigana: no readings file kept yet; one being made, and its error */
+  let readingsMissing = false;
+  let generating: number | undefined;
+  let readingsError = '';
+  /** Standalone: the word list was made without yurigana's Reader (redoWordList), and its redo */
+  let listWithoutReader = false;
+  let redoing: number | undefined;
   /** The book's word list and the words known, for the Words row */
   let listWords: BookWord[] = [];
   let knownSet: KnownSet | undefined;
@@ -128,6 +138,7 @@
     (isCalibre && kind !== 'manga' && book.calibreId !== undefined) || !!localScored;
   $: canEstimate =
     standalone && kind === 'book' && !localScored && $analysisToolsState$.difficulty === 'ready';
+  $: furiganaReady = standalone && kind === 'book' && $analysisToolsState$.furigana === 'ready';
   $: scored = localScored
     ? {
         ...book,
@@ -242,6 +253,9 @@
     localScored = undefined;
     estimating = undefined;
     estimateError = '';
+    readingsMissing = listWithoutReader = false;
+    generating = redoing = undefined;
+    readingsError = '';
 
     if (standalone && kind === 'book') {
       bookKanjiCount(book.id, title, book.characters)
@@ -253,15 +267,20 @@
 
     if (standalone && kind === 'book') {
       // The estimate and word list the analysis tools made (analysis-tools.ts).
-      const [scores, local, known] = await Promise.all([
+      const [scores, local, known, readings] = await Promise.all([
         keptEstimate(title),
         localWordList(title).catch(() => undefined),
         refreshKnownWordsIfStale()
           .then(getKnownSet)
-          .catch(() => undefined)
+          .catch(() => undefined),
+        keptReadings(title)
       ]);
 
-      if (title === book.title) estimate = localScored = scores;
+      if (title === book.title) {
+        estimate = localScored = scores;
+        readingsMissing = !readings;
+        listWithoutReader = !!local?.withoutReader;
+      }
       if (title === book.title && local && known) {
         listWords = local.words;
         knownSet = known;
@@ -385,6 +404,50 @@
         message: error instanceof Error ? error.message : String(error)
       });
     }
+  }
+
+  /** Standalone: makes the book's readings file now, ahead of the background (analysis-tools.ts). */
+  async function generateReadings() {
+    const title = book.title;
+    const data = await database.getDataByTitle(title).catch(() => undefined);
+
+    readingsError = '';
+    if (!data?.elementHtml) {
+      readingsError = 'This book has no text stored in this browser.';
+      return;
+    }
+    generating = 0;
+    try {
+      await makeReadings(title, data.elementHtml, (share) => {
+        if (title === book.title) generating = share;
+      });
+      if (title === book.title) readingsMissing = false;
+    } catch (error) {
+      if (title === book.title) {
+        readingsError = `Generating readings failed: ${error instanceof Error ? error.message : String(error)}`;
+      }
+    } finally {
+      if (title === book.title) generating = undefined;
+    }
+  }
+
+  /** Standalone: makes the word list again with yurigana's readings; the score stays. */
+  async function redoList() {
+    const title = book.title;
+    const data = await database.getDataByTitle(title).catch(() => undefined);
+
+    if (!data?.elementHtml) return;
+    redoing = 0;
+    try {
+      await redoWordList(title, data.elementHtml, (share) => {
+        if (title === book.title) redoing = share;
+      });
+    } catch (error) {
+      console.warn(`Word list for “${title}”:`, error);
+    } finally {
+      if (title === book.title) redoing = undefined;
+    }
+    if (title === book.title) load();
   }
 
   function showDifficulty() {
@@ -624,6 +687,44 @@
                 >
                   {$t$('book.wordList')}
                 </button>
+                {#if furiganaReady && listWithoutReader}
+                  {#if redoing === undefined}
+                    <button
+                      type="button"
+                      class="app-button details-row-button"
+                      title="Made before generated furigana was installed. Redoing it reads each word in context; the difficulty stays the same."
+                      on:click={redoList}
+                    >
+                      Redo with readings
+                    </button>
+                  {:else}
+                    <span class="details-note" role="status">
+                      Redoing the word list… {Math.round(redoing * 100)}%
+                    </span>
+                  {/if}
+                {/if}
+              </dd>
+            </div>
+          {/if}
+          {#if furiganaReady && $generatedFurigana$ && readingsMissing}
+            <div>
+              <dt>Furigana</dt>
+              <dd>
+                {#if generating === undefined}
+                  No readings yet
+                  <button
+                    type="button"
+                    class="app-button details-row-button"
+                    on:click={generateReadings}
+                  >
+                    Generate readings
+                  </button>
+                  {#if readingsError}
+                    <span class="details-note" role="alert">{readingsError}</span>
+                  {/if}
+                {:else}
+                  <span role="status">Generating readings… {Math.round(generating * 100)}%</span>
+                {/if}
               </dd>
             </div>
           {/if}
