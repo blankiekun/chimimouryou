@@ -328,6 +328,8 @@ export const ja: Record<MessageKey, string> = {
   'dict.importLead':
     'Yomitan 辞書ファイル(.zip)を読み込みます。語彙・頻度・アクセントに対応しています。大きな辞書は数分かかります。',
   'dict.getJmdict': 'Yomitan 用 JMdict を入手',
+  'dict.jitenFreqHint': '読み込むと、よく使われる語が先に表示されます。',
+  'dict.getJitenFreq': 'Jiten の頻度リストを入手',
   'dict.import': '辞書を読み込む',
   'dict.importing': '{name} を読み込み中…',
   'dict.enabledCount': '{count} 件中 {enabled} 件が有効',

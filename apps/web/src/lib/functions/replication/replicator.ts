@@ -506,11 +506,8 @@ export async function replicateData(
 
 async function persistStorage(target: StorageKey) {
   if (target === StorageKey.BROWSER && requestPersistentStorage$.getValue()) {
-    try {
-      await storage.persist();
-    } catch (_) {
-      // no-op
-    }
+    // not awaited: Firefox holds the promise until its permission prompt is answered
+    storage.persist().catch(() => {});
   }
 }
 

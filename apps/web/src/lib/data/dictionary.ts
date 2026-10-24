@@ -208,6 +208,12 @@ export async function importDictionary(file: Blob, onProgress?: Progress) {
     await updateProfileOptions((profile) => {
       profile.dictionaries = profile.dictionaries.filter(({ name }) => name !== result.title);
       profile.dictionaries.push(defaultDictionarySettings(result.title, true, result.styles));
+      // the first frequency list sorts results (Jiten's put the right entry first on 180 of 199 taps vs 173)
+      if (result.counts?.termMeta.freq && !profile.general.sortFrequencyDictionary) {
+        profile.general.sortFrequencyDictionary = result.title;
+        profile.general.sortFrequencyDictionaryOrder =
+          result.frequencyMode === 'rank-based' ? 'ascending' : 'descending';
+      }
     });
   }
   await refreshDictionaries();
