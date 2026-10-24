@@ -41,6 +41,15 @@ describe('unknownSpans', () => {
     ]);
   });
 
+  it("takes the file's surface lengths, the conjugated word whole", () => {
+    expect(unknownSpans({ ...readings, len: [2, 1, 3, 2, 1, 1] }, list, nobody, {})).toEqual([
+      [0, 2],
+      [3, 4],
+      [5, 8],
+      [9, 11]
+    ]);
+  });
+
   it('leaves out known words: met, Anki by lemma, placement rank, marks', () => {
     const known = {
       met: ([form]: BookWord) => form === '先生',

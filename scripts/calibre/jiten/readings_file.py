@@ -14,6 +14,8 @@ get-character-count.ts), so offsets are bookmark positions. The output, gzipped 
   occ             [Δstart, word index, gloss index or -1, ...]: each kanji word in reading
                   order, start in characters from the previous one's; a number + counter
                   span (三本 さんぼん) comes right before its tokens' own words, at the same start
+  len             [length, ...]: each occ entry's surface length in characters, a verb's or
+                  adjective's auxiliaries included (黙り込んだ 5, 食べさせられた 6; not て)
 """
 import gzip
 import json
@@ -29,7 +31,8 @@ from yurigana.readings import surface_reading
 # 4: yurigana 0.5.0 (ateji, shown idioms, bare-evidence dominant readings, name ruby carried back).
 # 5: names' ruby carried to their bare occurrences (source 'book') glossed.
 # 8: every reading glossed, not only the sure ones (defaults, Sudachi's, counter spans too).
-READINGS_VERSION = 8
+# 9: `len`, each occurrence's surface length with its auxiliaries.
+READINGS_VERSION = 9
 
 # Radical and Unified_Ideograph as in Unicode 16.
 # shortcut: newer CJK extensions are missing, add them when browsers count them.
@@ -170,7 +173,12 @@ def build(html: str, reader, bookdata: str, version: str) -> dict:
     for start, end, reading in hints:
         for i in range(start, end):
             covering[i] = (start, end, reading)
-    words, glosses, occ = {}, {}, []
+    words, glosses, occ, lengths = {}, {}, [], []
+    # A verb's or adjective's span takes the auxiliaries after it (黙り込ん|だ, 食べ|させ|られ|た).
+    begins, ends = {}, {}
+    for token in reader.tokenizer.tokens(text):
+        begins[token.begin] = token
+        ends[token.begin + len(token.surface())] = token.part_of_speech()[0]
     flavoured = set()  # forms the book gave a ruby that isn't their reading (マジ over 本気)
     last = 0
     # carry: a name's ruby read for its bare occurrences (source 'book'), glossed like the others.
@@ -194,10 +202,15 @@ def build(html: str, reader, bookdata: str, version: str) -> dict:
                 shown = glosses.setdefault(key, len(glosses))
         index = words.setdefault((word.form, word.reading), len(words))
         occ += [counts[word.start] - last, index, shown]
+        end = word.end
+        if ends.get(end) in ('動詞', '形容詞'):
+            while (token := begins.get(end)) and token.part_of_speech()[0] == '助動詞' and not KANJI_RUN.search(token.surface()):
+                end += len(token.surface())
+        lengths.append(counts[end] - counts[word.start])
         last = counts[word.start]
     return {'v': READINGS_VERSION, 'yurigana': version, 'bookdata': bookdata, 'characters': counts[-1],
             'words': [list(key) for key in words], 'glosses': [[list(part) for part in key] for key in glosses],
-            'occ': occ}
+            'occ': occ, 'len': lengths}
 
 
 def write(path: str, data: dict):

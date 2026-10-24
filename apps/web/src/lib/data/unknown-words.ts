@@ -67,13 +67,14 @@ export function unknownSpans(
 
     const [form] = readings.words?.[readings.occ[i + 1]] ?? [''];
     const gloss = readings.glosses[readings.occ[i + 2]];
-    // shortcut: the file has no surface length; the kanji runs' end, else the form up to its
-    // okurigana (食べた: 食), so conjugated verbs underline their stem only.
-    const length = Math.max(
-      1,
-      form.match(/^[^\p{Script=Hiragana}]+/u)?.[0].length ?? 0,
-      ...(gloss ?? []).map(([offset, size]) => offset + size)
-    );
+    // Files before `len`: the kanji runs' end, else the form up to its okurigana (食べた: 食).
+    const length =
+      readings.len?.[i / 3] ??
+      Math.max(
+        1,
+        form.match(/^[^\p{Script=Hiragana}]+/u)?.[0].length ?? 0,
+        ...(gloss ?? []).map(([offset, size]) => offset + size)
+      );
 
     claimedEnd = start + length;
     if (unknown[readings.occ[i + 1]]) spans.push([start, claimedEnd]);

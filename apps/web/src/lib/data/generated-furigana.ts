@@ -30,6 +30,8 @@ export interface ReadingsFile {
   glosses: [number, number, string, string][][];
   /** [Δstart, word index, gloss index or -1, ...] */
   occ: number[];
+  /** Each occurrence's surface length, auxiliaries included (READINGS_VERSION 9+) */
+  len?: number[];
 }
 
 /**
@@ -82,8 +84,8 @@ async function requestReadings(
 
 /** Whether two files add the same furigana (their metadata, such as the bookdata name, may differ). */
 function sameReadings(a: ReadingsFile, b: ReadingsFile) {
-  const rendered = ({ characters, glosses, occ }: ReadingsFile) =>
-    JSON.stringify([characters, glosses, occ]);
+  const rendered = ({ characters, glosses, occ, len }: ReadingsFile) =>
+    JSON.stringify([characters, glosses, occ, len]);
   return rendered(a) === rendered(b);
 }
 
