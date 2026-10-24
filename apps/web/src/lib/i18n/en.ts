@@ -331,6 +331,8 @@ export const en = {
   'dict.importLead':
     'Import Yomitan dictionary files (.zip): term banks, frequency lists and pitch accents. Large dictionaries take a few minutes.',
   'dict.getJmdict': 'Get JMdict for Yomitan',
+  'dict.jitenFreqHint': 'Once imported, lookups show the most common word first.',
+  'dict.getJitenFreq': 'Get the Jiten list',
   'dict.import': 'Import dictionaries',
   'dict.importing': 'Importing {name}…',
   'dict.enabledCount': '{enabled} of {count} enabled',
