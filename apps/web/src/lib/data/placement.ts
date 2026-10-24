@@ -6,7 +6,7 @@
 
 /**
  * The placement check (/placement): a yes/no vocabulary test over Jiten frequency bands,
- * LexTALE style, with 5 made-up words spread through it to catch yes-bias. Adaptive: it starts mid-range
+ * LexTALE style, with 7 made-up words spread through it to catch yes-bias. Adaptive: it starts mid-range
  * and moves a band up after a yes and down after a no, so most words land near the reader's
  * boundary. The result is one number, a frequency rank where a logistic curve of yes over
  * log(rank), shifted down by the false-alarm rate, crosses one half: word list rows ranked
@@ -44,7 +44,7 @@ export interface PlacementResult {
 
 export const placementBands: number[] = placementItems.bands;
 export const placementList: PlacementItem[] = placementItems.items;
-/** Words per test; 5 of them made up, one in each twelfth (`isPseudoSlot`) */
+/** Words per test; 7 of them made up, one in each eighth (`isPseudoSlot`) */
 export const placementLength = 60;
 
 /** The band of the 5,000 most common words */
@@ -55,13 +55,13 @@ const startBand = Math.max(
 /** The first answers move two bands, so a native reader reaches the last band (the end of
  * the frequency list) in about six answers */
 const fastSteps = 6;
-/** 3 of 5 made-up words answered yes: no result (one or two slips only shift the curve) */
+/** 4 of 7 made-up words answered yes: no result (up to 3 slips only shift the curve) */
 const maxFalseAlarmRate = 0.5;
-const pseudoEvery = 12;
+const pseudoEvery = 8;
 
-/** Positions 6, 18, 30, 42, 54: the made-up words, spread through the test. */
+/** Positions 4, 12, 20 … 52: the made-up words, spread through the test. */
 export const isPseudoSlot = (index: number) => index % pseudoEvery === pseudoEvery / 2;
-export const placementPseudoWords = placementLength / pseudoEvery;
+export const placementPseudoWords = Math.ceil((placementLength - pseudoEvery / 2) / pseudoEvery);
 const pivot = Math.log(5000);
 
 /** 0: not taken (or nothing known). */

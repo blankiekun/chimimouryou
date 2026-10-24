@@ -43,7 +43,7 @@ COMMON_UNTIL = 56000
 AVOID = {'飲尿'}
 PER_BAND = 40
 LOANS_PER_BAND = 4  # about 1 in 10 in the bands that have them
-PSEUDO = 150  # each test draws 5, so they aren't memorised
+PSEUDO = 150  # each test draws 7, so they aren't memorised
 # Honorific and number kanji make almost anything a plausible real word (御合, 二夜).
 NOT_IN_PSEUDO = set('御一二三四五六七八九十百千万何')
 ENDINGS = ['める', 'かす', 'らす', 'まる', 'げる', 'れる', 'しい', 'やか']

@@ -71,13 +71,13 @@ describe('placement items', () => {
 });
 
 describe('nextItem', () => {
-  it('shows each word once, 5 made-up ones spread through it, and stops after the test', () => {
+  it('shows each word once, 7 made-up ones spread through it, and stops after the test', () => {
     const answers = take(knower(5000));
 
     expect(answers).toHaveLength(placementLength);
     expect(new Set(answers.map(({ item }) => item.w)).size).toBe(placementLength);
     answers.forEach(({ item }, i) => expect(item.r === undefined).toBe(isPseudoSlot(i)));
-    expect(answers.filter(({ item }) => item.r === undefined)).toHaveLength(5);
+    expect(answers.filter(({ item }) => item.r === undefined)).toHaveLength(7);
   });
 
   it('spends most words near the boundary', () => {
@@ -116,10 +116,11 @@ describe('scorePlacement', () => {
     expect(result.falseAlarms).toBe(result.pseudoWords);
   });
 
-  it('keeps a result after one or two slips, not after three', () => {
+  it('keeps a result after up to three slips, not after four', () => {
     expect(scorePlacement(take(knower(20000, 1))).retake).toBe(false);
     expect(scorePlacement(take(knower(20000, 2))).retake).toBe(false);
-    expect(scorePlacement(take(knower(20000, 3)))).toMatchObject({ cutoff: 0, retake: true });
+    expect(scorePlacement(take(knower(20000, 3))).retake).toBe(false);
+    expect(scorePlacement(take(knower(20000, 4)))).toMatchObject({ cutoff: 0, retake: true });
   });
 
   it('lowers the estimate for made-up words answered yes', () => {
