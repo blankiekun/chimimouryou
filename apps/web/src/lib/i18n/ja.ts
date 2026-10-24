@@ -1358,6 +1358,12 @@ export const ja: Record<MessageKey, string> = {
   'reader.chapterProgress': '章の進捗: {count}（{percent}%）',
   'reader.closeToc': '目次を閉じる',
   'reader.goTo': '「{chapter}」へ移動',
+  'reader.primerCount': '新出{count}',
+  'reader.primerShow': '「{chapter}」の新出語{count}語を表示',
+  'reader.primerTitle': '新出語 {count}語',
+  'reader.primerNote': 'まだ知らない語のうち、この章で3回以上出てくるもの。',
+  'reader.primerBack': '目次に戻る',
+  'reader.primerTimes': '{count}回',
   'reader.prevChapter': '前の章',
   'reader.nextChapter': '次の章',
   'reader.tracker.toggle': 'トラッカーのオン・オフ切替',
@@ -1487,6 +1493,9 @@ export const ja: Record<MessageKey, string> = {
   'prefs.unknownWordUnderline': '未知語に下線',
   'prefs.unknownWordUnderlineHint':
     'まだ覚えていない漢字語に印を付けます（横書きは点線の下線、縦書きは薄い色）。対象は出会った回数が8回未満、Anki で成熟していない、既知にしていない語です。生成ふりがなのデータが必要です（難易度算出サービスが有効な Calibre 書籍、または解析ツール）。',
+  'prefs.chapterPrimer': '章ごとの新出語',
+  'prefs.chapterPrimerHint':
+    '目次に、各章で3回以上出てくる未知語の数を表示し、一覧で確認できます。下線と同じく生成ふりがなのデータが必要です。',
   'prefs.furiganaPartialHint': 'ふりがなを薄いグレーで目立たないように表示します。',
   'prefs.viewMode': '表示モード',
   'prefs.marginLeftRight': '左右の余白',

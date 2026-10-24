@@ -101,6 +101,8 @@ export const unknownWordUnderline$ = writableBooleanLocalStorageSubject()(
   'unknownWordUnderline',
   false
 );
+// Counts the new words of each chapter in the reader's Contents (chapter-primer.ts); needs a readings file.
+export const chapterPrimer$ = writableBooleanLocalStorageSubject()('chapterPrimer', true);
 export const furiganaStyle$ = writableStringLocalStorageSubject<FuriganaStyle>()(
   'furiganaStyle',
   FuriganaStyle.Partial

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { faXmark } from '@fortawesome/free-solid-svg-icons';
+  import { faChevronLeft, faXmark } from '@fortawesome/free-solid-svg-icons';
   import AnnotationsPanel from '$lib/components/book-reader/annotations-panel.svelte';
   import BookSearchPanel from '$lib/components/book-reader/book-search-panel.svelte';
   import ListenPanel from '$lib/components/book-reader/listen-panel.svelte';
@@ -8,6 +8,7 @@
     type SectionWithProgress
   } from '$lib/components/book-reader/book-toc/book-toc';
   import type { Highlight } from '$lib/data/annotations';
+  import type { ChapterPrimer } from '$lib/data/chapter-primer';
   import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v3';
   import { contentsRows, readerPanelTabs, type PanelTab } from '$lib/data/reader-panel';
   import type { SearchIndex, SearchResult } from '$lib/functions/book-text/book-search';
@@ -31,6 +32,8 @@
   export let getIndex: () => Promise<SearchIndex>;
   export let sections: Section[];
   export let sectionData: SectionWithProgress[];
+  /** New words per chapter (chapter-primer.ts); undefined while off or without a readings file */
+  export let primer: ChapterPrimer | undefined = undefined;
   export let position: number;
   export let bookCharacters: number;
   /** A selection action (Ask AI) shown in place of the tabs' content */
@@ -75,6 +78,10 @@
   });
   $: active = tabs.find((item) => item.key === tab) ?? tabs[0];
   $: rows = tab === 'contents' ? contentsRows(sectionData) : [];
+  /** The chapter whose primer list is open in Contents */
+  let primerChapter: string | undefined;
+  $: primerRow = primerChapter ? rows.find((row) => row.reference === primerChapter) : undefined;
+  $: primerWords = (primerChapter && primer?.[primerChapter]) || [];
 
   function select(key: PanelTab) {
     tab = key;
@@ -141,27 +148,75 @@
 
     <div class="content" class:hidden={!!selection}>
       {#if active.key === 'contents'}
-        <ol class="toc">
-          {#each rows as row (row.reference)}
-            <li>
+        {#if primerRow && primerWords.length}
+          <section class="primer" aria-labelledby="primer-title">
+            <div class="primer-head">
               <button
-                class="contents-row"
-                class:contents-current={row.current}
-                aria-current={row.current ? 'location' : undefined}
-                title={$t$('reader.goTo', { chapter: row.label })}
-                on:click={() => {
-                  nextChapter$.next(row.reference);
-                  dispatch('navigated');
-                }}
+                class="primer-back"
+                title={$t$('reader.primerBack')}
+                aria-label={$t$('reader.primerBack')}
+                on:click={() => (primerChapter = undefined)}
               >
-                <span class="contents-label" lang="ja">{row.label}</span>
-                <span class="track" aria-hidden="true">
-                  <span style:width="{row.progress}%" />
-                </span>
+                <Fa icon={faChevronLeft} />
               </button>
-            </li>
-          {/each}
-        </ol>
+              <h3 id="primer-title">
+                <span lang="ja">{primerRow.label}</span> · {$t$('reader.primerTitle', {
+                  count: primerWords.length
+                })}
+              </h3>
+            </div>
+            <p class="primer-note">{$t$('reader.primerNote')}</p>
+            <ol class="primer-words">
+              {#each primerWords as word (`${word.form}\t${word.reading}`)}
+                <li>
+                  <span class="primer-form" lang="ja">{word.form}</span>
+                  {#if word.reading && word.reading !== word.form}
+                    <span class="primer-reading" lang="ja">{word.reading}</span>
+                  {/if}
+                  <span
+                    class="primer-times"
+                    title={$t$('reader.primerTimes', { count: word.count })}>×{word.count}</span
+                  >
+                </li>
+              {/each}
+            </ol>
+          </section>
+        {:else}
+          <ol class="toc">
+            {#each rows as row (row.reference)}
+              {@const words = primer?.[row.reference]?.length ?? 0}
+              <li class="contents-item">
+                <button
+                  class="contents-row"
+                  class:contents-current={row.current}
+                  aria-current={row.current ? 'location' : undefined}
+                  title={$t$('reader.goTo', { chapter: row.label })}
+                  on:click={() => {
+                    nextChapter$.next(row.reference);
+                    dispatch('navigated');
+                  }}
+                >
+                  <span class="contents-label" class:contents-label-primer={words} lang="ja"
+                    >{row.label}</span
+                  >
+                  <span class="track" aria-hidden="true">
+                    <span style:width="{row.progress}%" />
+                  </span>
+                </button>
+                {#if words}
+                  <button
+                    class="primer-count"
+                    aria-label={$t$('reader.primerShow', { count: words, chapter: row.label })}
+                    title={$t$('reader.primerShow', { count: words, chapter: row.label })}
+                    on:click={() => (primerChapter = row.reference)}
+                  >
+                    <span>{$t$('reader.primerCount', { count: words })}</span>
+                  </button>
+                {/if}
+              </li>
+            {/each}
+          </ol>
+        {/if}
       {/if}
 
       <!-- Visited tabs stay mounted (hidden), so a search, the audio or a recap being written survive. -->
@@ -391,6 +446,109 @@
     flex: 1;
   }
 
+  /* The primer count sits over the row, before its progress track. */
+  .contents-item {
+    position: relative;
+  }
+
+  .contents-label-primer {
+    margin-right: 4.5rem;
+  }
+
+  .primer-count {
+    position: absolute;
+    top: 0;
+    right: calc(0.5rem + 3.5rem + 0.5rem);
+    bottom: 1px;
+    display: flex;
+    align-items: center;
+    padding: 0 0.5rem;
+    color: var(--accent-strong-color);
+    font-size: var(--type-small);
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .primer-count span {
+    padding: 0.1rem 0.4rem;
+    border: 1px solid var(--accent-color);
+    border-radius: 2px;
+  }
+
+  .primer-count:hover span {
+    background: var(--app-spot-tint);
+  }
+
+  .primer {
+    margin: 0 1rem 1rem;
+  }
+
+  .primer-head {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0;
+    border-bottom: 1px solid var(--reader-panel-fg);
+  }
+
+  .primer-head h3 {
+    margin: 0;
+    font-size: var(--type-body);
+    font-weight: 700;
+  }
+
+  .primer-back {
+    display: inline-flex;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex: none;
+    margin-left: -0.75rem;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+  }
+
+  .primer-back:hover {
+    color: var(--reader-panel-fg);
+  }
+
+  .primer-note {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--rule);
+    color: var(--muted);
+    font-size: var(--type-small);
+  }
+
+  .primer-words li {
+    display: flex;
+    min-height: 2.75rem;
+    align-items: baseline;
+    gap: 0.6rem;
+    padding: 0.55rem 0.5rem;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .primer-form {
+    font-size: 1.25rem;
+    line-height: 1.3;
+  }
+
+  .primer-reading {
+    min-width: 0;
+    flex: 1;
+    color: var(--muted);
+    font-size: var(--type-small);
+  }
+
+  .primer-times {
+    margin-left: auto;
+    color: var(--muted);
+    font-size: var(--type-small);
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+  }
+
   .track {
     position: relative;
     width: 3.5rem;
@@ -526,7 +684,8 @@
       padding-left: 1.5rem;
     }
 
-    .toc {
+    .toc,
+    .primer {
       margin: 0 1.5rem 1.5rem;
     }
   }
