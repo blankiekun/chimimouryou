@@ -47,6 +47,9 @@ interface BooksDbV6BookData {
   htmlBackup?: string;
   /** A visual novel's files are in the vn-files database under this key, not in blobs */
   vnFiles?: string;
+  /** From the EPUB's metadata (epub-series.ts) */
+  series?: string;
+  seriesIndex?: number;
 }
 
 interface BooksDbV6BookmarkData {

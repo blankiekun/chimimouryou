@@ -17,6 +17,7 @@ import { database, lastReadingGoalsModified$ } from '$lib/data/store';
 import { isManga } from '$lib/data/manga';
 import { isVn } from '$lib/data/vn';
 import { standalone } from '$lib/data/env';
+import { syncBrowserSeries, withBrowserSeries } from '$lib/data/series-overrides';
 
 import type { MergeMode } from '$lib/data/merge-mode';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
@@ -67,6 +68,8 @@ export class BrowserStorageHandler extends BaseStorageHandler {
             isPlaceholder: !book.elementHtml,
             manga: isManga(book),
             vn: isVn(book),
+            series: book.series,
+            seriesIndex: book.seriesIndex,
             difficulty: estimate?.difficulty,
             difficultyLow: estimate?.low,
             difficultyHigh: estimate?.high,
@@ -75,13 +78,20 @@ export class BrowserStorageHandler extends BaseStorageHandler {
         }
 
         this.dataListFetched = true;
+        // Series made on another device: listed again when the synced file changed something.
+        if (standalone) {
+          syncBrowserSeries()
+            .then((changed) => changed && database.dataListChanged$.next(undefined))
+            .catch(() => undefined);
+        }
       } catch (error) {
         this.clearData();
         throw error;
       }
     }
 
-    return [...this.titleToBookCard.values()];
+    // Applied on every call, so a series made in the library shows without listing again.
+    return withBrowserSeries([...this.titleToBookCard.values()]);
   }
 
   clearData(clearAll = true) {
@@ -373,7 +383,9 @@ export class BrowserStorageHandler extends BaseStorageHandler {
         ),
         lastBookModified: storedBookData.lastBookModified || 0,
         lastBookOpen: storedBookData.lastBookOpen || 0,
-        isPlaceholder: !storedBookData.elementHtml
+        isPlaceholder: !storedBookData.elementHtml,
+        series: storedBookData.series,
+        seriesIndex: storedBookData.seriesIndex
       });
 
       // Standalone: its estimate and furigana in the background (background-analysis.ts).

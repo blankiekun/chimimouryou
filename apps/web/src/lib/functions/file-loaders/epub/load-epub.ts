@@ -9,6 +9,7 @@ import extractEpub from './extract-epub';
 import generateEpubHtml from './generate-epub-html';
 import generateEpubStyleSheet from './generate-epub-style-sheet';
 import getEpubCoverImageFilename from './get-epub-cover-image-filename';
+import { epubSeries } from './epub-series';
 import { isOPFType } from './types';
 import reduceObjToBlobs from '../utils/reduce-obj-to-blobs';
 import { createInertDocument, sanitizeBookElement } from '../utils/sanitize-book-html';
@@ -74,6 +75,11 @@ export default async function loadEpub(
     console.warn(`no language data found for ${file.name} - fallback to ja`);
   }
 
+  const series = epubSeries(
+    isOPFType(contents)
+      ? contents['opf:package']['opf:metadata']?.['opf:meta']
+      : contents.package.metadata?.meta
+  );
   const blobData = reduceObjToBlobs(data);
   const coverImageFilename = await getEpubCoverImageFilename(blobData, contents);
   let coverImage: Blob | undefined;
@@ -84,6 +90,7 @@ export default async function loadEpub(
 
   return {
     ...displayData,
+    ...series,
     elementHtml: result.element.innerHTML,
     blobs: blobData,
     coverImage,

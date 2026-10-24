@@ -15,11 +15,13 @@
   /**
    * Series generator: makes a series (a folder in Store → Series) from one book
    * and the other books whose title contains the series name. Shared with every
-   * reader (series-overrides.ts). Not part of upstream.
+   * reader (series-overrides.ts), or for browser books kept in this browser. Not part of upstream.
    */
   export let book: BookCardProps;
   export let books: BookCardProps[];
   export let resolver: (saved: boolean) => void;
+  /** Browser books: kept in this browser and its synced library instead of the server */
+  export let local = false;
 
   const resultLimit = 200;
   const dispatch = createEventDispatcher<{ close: void }>();
@@ -76,7 +78,7 @@
     error = '';
 
     try {
-      await saveSeriesOverrides(changes);
+      await saveSeriesOverrides(changes, local);
       close(true);
     } catch (e: any) {
       error = e.message;
@@ -101,9 +103,7 @@
     <p class="py-2 text-xs opacity-70">
       {$t$('library.seriesNote', { checked: checked.size, total: candidates.length })}
     </p>
-    <label
-      class="flex cursor-pointer items-center gap-3 border-b border-line py-2 font-medium"
-    >
+    <label class="flex cursor-pointer items-center gap-3 border-b border-line py-2 font-medium">
       <input
         type="checkbox"
         checked={allChecked}

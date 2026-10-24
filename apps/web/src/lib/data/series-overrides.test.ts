@@ -10,9 +10,12 @@ import {
   applySeriesOverride,
   findSeriesBooks,
   guessSeriesName,
+  inferSeries,
+  mergeSeriesOverrides,
   parseSeriesOverrides,
   saveSeriesOverrides,
-  seriesForTitle
+  seriesForTitle,
+  withBrowserSeries
 } from './series-overrides';
 
 function card(title: string, series?: string): BookCardProps {
@@ -104,5 +107,71 @@ describe('saveSeriesOverrides', () => {
     expect(put[0]).toBe('/calibre/sync/series.json');
     expect(Object.keys(JSON.parse(put[1]!.body as string))).toEqual(['other', 'mine']);
     expect(result.mine.series).toBe('Y');
+  });
+});
+
+describe('inferSeries', () => {
+  it('groups two or more volumes by the name before their number', () => {
+    const result = inferSeries([
+      card('ダンタリアンの書架１'),
+      card('ダンタリアンの書架２'),
+      card('狼と香辛料 第十二巻'),
+      card('b522apdm 1'),
+      card('b522apdm 2')
+    ]);
+
+    expect(result.map((book) => [book.series, book.seriesIndex, book.seriesInferred])).toEqual([
+      ['ダンタリアンの書架', 1, true],
+      ['ダンタリアンの書架', 2, true],
+      [undefined, 1, undefined],
+      [undefined, 1, undefined],
+      [undefined, 1, undefined]
+    ]);
+  });
+
+  it('adds a single volume to an existing series of that name and keeps given series', () => {
+    expect(inferSeries([card('狼と香辛料 3')])[0].series).toBeUndefined();
+    expect(inferSeries([card('abc物語 3'), card('別の本', 'ＡＢＣ物語')])).toMatchObject([
+      { series: 'ＡＢＣ物語', seriesIndex: 3, seriesInferred: true },
+      { series: 'ＡＢＣ物語', seriesIndex: 1 }
+    ]);
+  });
+});
+
+describe('browser series', () => {
+  afterEach(() => localStorage.clear());
+
+  it('merges by the newest change per title', () => {
+    expect(
+      mergeSeriesOverrides(
+        { a: { series: 'A', modified: 2 }, b: { series: 'B', modified: 1 } },
+        {
+          a: { series: 'X', modified: 1 },
+          b: { series: '', modified: 3 },
+          c: { series: 'C', modified: 1 }
+        }
+      )
+    ).toEqual({
+      a: { series: 'A', modified: 2 },
+      b: { series: '', modified: 3 },
+      c: { series: 'C', modified: 1 }
+    });
+  });
+
+  it('saves locally without a request and applies over the inferred series', async () => {
+    const fetchMock = vi.fn();
+
+    vi.stubGlobal('fetch', fetchMock);
+    await saveSeriesOverrides({ ダンタリアンの書架２: '', Other: 'Mine' }, true);
+
+    const result = withBrowserSeries([
+      card('ダンタリアンの書架１'),
+      card('ダンタリアンの書架２'),
+      card('Other')
+    ]);
+
+    expect(result.map((book) => book.series)).toEqual(['ダンタリアンの書架', undefined, 'Mine']);
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });

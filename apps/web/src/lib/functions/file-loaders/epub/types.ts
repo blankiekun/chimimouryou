@@ -7,6 +7,10 @@
 export interface EpubMetadataMeta {
   '@_name': string;
   '@_content': string;
+  '@_property'?: string;
+  '@_refines'?: string;
+  '@_id'?: string;
+  '#text'?: string | number;
 }
 
 export interface EpubManifestItem {
