@@ -1,8 +1,8 @@
 <script lang="ts">
   /**
    * Settings → Dictionary lookups: the built-in dictionary's settings in Yomitan's own sections
-   * and options shape (lib/data/dictionary.ts). Popup, Scanning, Audio and Shortcuts come with the
-   * lookup popup. Not part of upstream.
+   * and options shape (lib/data/dictionary.ts). Popup, Scanning, Audio and Shortcuts are in
+   * settings-dictionary-popup.svelte. Not part of upstream.
    */
   import { faArrowDown, faArrowUp } from '@fortawesome/free-solid-svg-icons';
   import Fa from 'svelte-fa';
@@ -17,6 +17,8 @@
     deleteAllDictionaries,
     deleteDictionary,
     dictionaries$,
+    downloadDictionary,
+    downloadableDictionaries,
     exportYomitanSettings,
     importDictionary,
     importYomitanSettings,
@@ -40,6 +42,7 @@
   let loadError = '';
   let importing: { name: string; done: number; total: number } | undefined;
   let importErrors: string[] = [];
+  let downloading: { title: string; done: number; total: number } | undefined;
   let confirming = '';
   let backupMessage = '';
   let backupError = '';
@@ -128,6 +131,28 @@
         importErrors = [...importErrors, `${file.name}: ${error.message}`];
       }
     }
+    importing = undefined;
+  }
+
+  const megabytes = (bytes: number) => (bytes / 1e6).toFixed(1);
+
+  async function download(title: string, url: string, size: number) {
+    importErrors = [];
+    importing = { name: title, done: 0, total: 0 };
+    try {
+      const { errors } = await downloadDictionary(
+        url,
+        (done, total) => (downloading = { title, done, total: total || size }),
+        (done, total) => {
+          downloading = undefined;
+          importing = { name: title, done, total };
+        }
+      );
+      importErrors = errors.map((error) => `${title}: ${error}`);
+    } catch (error: any) {
+      importErrors = [`${title}: ${error.message}`];
+    }
+    downloading = undefined;
     importing = undefined;
   }
 
@@ -302,10 +327,43 @@
     <p class="dict-error" role="alert">{loadError}</p>
   {/if}
   <div class="dict-import">
-    <p class="dict-lead">
-      {$t$('dict.importLead')}
-      <a href={jmdictReleases} target="_blank" rel="noreferrer">{$t$('dict.getJmdict')}</a>
-    </p>
+    <p class="dict-lead">{$t$('dict.importLead')}</p>
+    <ul class="dict-downloads">
+      {#each downloadableDictionaries as { title, label, size, url } (title)}
+        <li class="dict-download">
+          <span class="dict-name">
+            <span class="dict-title">{$t$(label)}</span>
+            <span class="dict-meta"
+              >{$t$('dict.downloadAttribution', { size: megabytes(size) })}</span
+            >
+          </span>
+          {#if summaries.has(title)}
+            <span class="dict-meta">{$t$('dict.installed')}</span>
+          {:else}
+            <button
+              type="button"
+              class="app-button"
+              disabled={!!importing}
+              on:click={() => download(title, url, size)}
+            >
+              {$t$('dict.download')}
+            </button>
+          {/if}
+        </li>
+      {/each}
+      <li class="dict-download">
+        <span class="dict-name">
+          <span class="dict-title">JMdict</span>
+          <span class="dict-meta">{$t$('dict.jmdictHint')}</span>
+        </span>
+        <a
+          class="app-button app-button-quiet"
+          href={jmdictReleases}
+          target="_blank"
+          rel="noreferrer">{$t$('dict.getJmdict')}</a
+        >
+      </li>
+    </ul>
     <label class="app-button app-button-primary dict-file" class:dict-disabled={!!importing}>
       <input
         type="file"
@@ -317,7 +375,22 @@
       />
       {$t$('dict.import')}
     </label>
-    {#if importing}
+    {#if downloading}
+      <div
+        class="dict-track"
+        role="progressbar"
+        aria-label={$t$('dict.downloading', { name: downloading.title })}
+        aria-valuemin={0}
+        aria-valuemax={downloading.total}
+        aria-valuenow={downloading.done}
+      >
+        <div class="dict-fill" style:width="{(downloading.done / downloading.total) * 100}%" />
+      </div>
+      <p class="dict-note">
+        {$t$('dict.downloading', { name: downloading.title })}
+        {megabytes(downloading.done)} / {megabytes(downloading.total)} MB
+      </p>
+    {:else if importing}
       <div
         class="dict-track"
         role="progressbar"
@@ -647,12 +720,6 @@
     line-height: 1.6;
   }
 
-  .dict-lead a {
-    color: var(--accent-strong-color);
-    text-decoration: underline;
-    text-underline-offset: 0.2em;
-  }
-
   .dict-import {
     display: grid;
     justify-items: start;
@@ -662,6 +729,20 @@
 
   .dict-file {
     cursor: pointer;
+  }
+
+  .dict-downloads {
+    width: 100%;
+    max-width: 48rem;
+    border-top: 2px solid var(--font-color);
+  }
+
+  .dict-download {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem 1rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--border-color);
   }
 
   .dict-disabled {

@@ -87,6 +87,12 @@ export async function deleteAllDictionaries() {
   translator.clearDatabaseCaches();
 }
 
+/** A structured-content image or other file from a dictionary, as a Blob (null if missing). */
+export async function getMedia(path: string, dictionary: string) {
+  const [media] = await (await ready()).database.getMedia([{ path, dictionary }]);
+  return media ? new Blob([media.content], { type: media.mediaType }) : null;
+}
+
 /**
  * Terms at the start of `text`, longest match first, as Yomitan's `termsFind` API returns them
  * (backend.js `_onApiTermsFind`): deinflected, with frequencies and pitch accents.

@@ -130,9 +130,29 @@ export const settingsAreas: SettingsArea[] = [
         description: 'settings.section.dictionary-dictionaries.text'
       },
       {
+        id: 'dictionary-popup',
+        label: 'settings.section.dictionary-popup',
+        description: 'settings.section.dictionary-popup.text'
+      },
+      {
+        id: 'dictionary-scanning',
+        label: 'settings.section.dictionary-scanning',
+        description: 'settings.section.dictionary-scanning.text'
+      },
+      {
         id: 'dictionary-translation',
         label: 'settings.section.dictionary-translation',
         description: 'settings.section.dictionary-translation.text'
+      },
+      {
+        id: 'dictionary-audio',
+        label: 'settings.section.dictionary-audio',
+        description: 'settings.section.dictionary-audio.text'
+      },
+      {
+        id: 'dictionary-shortcuts',
+        label: 'settings.section.dictionary-shortcuts',
+        description: 'settings.section.dictionary-shortcuts.text'
       },
       {
         id: 'dictionary-backup',

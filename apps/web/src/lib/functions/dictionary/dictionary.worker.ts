@@ -14,6 +14,7 @@ import type { ProfileOptions } from '$lib/vendor/yomitan/types/settings';
 import {
   deleteAllDictionaries,
   deleteDictionary,
+  getMedia,
   importDictionary,
   listDictionaries,
   lookup
@@ -24,7 +25,8 @@ export type DictionaryRequest =
   | { id: number; type: 'list' }
   | { id: number; type: 'delete'; name: string }
   | { id: number; type: 'deleteAll' }
-  | { id: number; type: 'lookup'; text: string; options: ProfileOptions };
+  | { id: number; type: 'lookup'; text: string; options: ProfileOptions }
+  | { id: number; type: 'media'; path: string; dictionary: string };
 
 export type DictionaryResponse =
   | { id: number; type: 'progress'; done: number; total: number }
@@ -47,6 +49,8 @@ async function handle(request: DictionaryRequest) {
       return deleteAllDictionaries();
     case 'lookup':
       return lookup(request.text, request.options);
+    case 'media':
+      return getMedia(request.path, request.dictionary);
   }
 }
 

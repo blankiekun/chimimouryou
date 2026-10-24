@@ -676,6 +676,13 @@
   background-color: var(--reading-line-color);
 }
 
+/* The built-in dictionary's match (components/dictionary/lookup-popup.svelte) */
+::highlight(ttu-lookup),
+::highlight(ttu-lookup-nested) {
+  background-color: var(--reader-selection-bg);
+  color: var(--reader-selection-color);
+}
+
 @font-face {
   font-family: 'KZ UDMincho';
   font-style: normal;

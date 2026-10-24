@@ -26,6 +26,7 @@
   import ReaderSheet from '$lib/components/book-reader/reader-sheet.svelte';
   import VolumeTransition from '$lib/components/manga/volume-transition.svelte';
   import MokuroOverlay from '$lib/components/manga/mokuro-overlay.svelte';
+  import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
   import { calibreCoverUrl, loadCalibreCatalog, type CalibreBook } from '$lib/data/calibre';
   import { loadSeriesOverrides } from '$lib/data/series-overrides';
   import {
@@ -158,6 +159,7 @@
   let external: BaseStorageHandler | undefined;
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let pointerStart: { x: number; y: number } | undefined;
+  let lookupPopup: LookupPopup | undefined;
   let viewWidth = 0;
   let viewHeight = 0;
   let zoom = 1;
@@ -810,6 +812,9 @@
 
   /** The tap zones turn the page, unless zoomed in; the rest toggles the menu. */
   function singleTap(x: number, y: number) {
+    // A tap on the mokuro text looks it up (built-in dictionary) instead.
+    if (lookupPopup?.tapAt(x, y)) return;
+
     const dir = zoom > 1 ? 0 : tapDirection(x, y, view, mode, $mangaTapLayout$, $mangaTapInvert$);
 
     if (dir) {
@@ -831,6 +836,8 @@
     if (Math.abs(dx) >= 10 || Math.abs(dy) >= 10 || (event.target as Element).closest('button')) {
       return;
     }
+
+    if (lookupPopup?.tapAt(event.clientX, event.clientY)) return;
 
     const dir = tapDirection(
       event.clientX,
@@ -969,6 +976,7 @@
 </svelte:head>
 
 <svelte:window on:keydown={onKeydown} />
+<LookupPopup bind:this={lookupPopup} scope=".mokuro-block" />
 <svelte:document on:visibilitychange={onVisibilityChange} />
 
 <div

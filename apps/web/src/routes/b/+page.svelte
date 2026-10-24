@@ -121,6 +121,7 @@
   } from '$lib/data/reader-panel';
   import HighlightEditor from '$lib/components/book-reader/highlight-editor.svelte';
   import SelectionToolbar from '$lib/components/book-reader/selection-toolbar.svelte';
+  import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
   import {
     AnnotationsController,
     highlightColors,
@@ -277,6 +278,7 @@
   let highlightRanges: { highlight: Highlight; range: Range }[] = [];
   let highlightsDirty = true;
   let selectedRange: Range | undefined;
+  let lookupPopup: LookupPopup | undefined;
   /** A plugin's selection action, open with the passage it was given */
   let selectionPanel: { action: SelectionActionContribution; passage: PassageContext } | undefined;
   let customReadingPointRange: Range | undefined;
@@ -1150,7 +1152,7 @@
 
   /** Clicking a highlight opens it for editing. */
   function onDocumentClick(event: MouseEvent) {
-    if (!highlightRanges.length || document.getSelection()?.toString()) {
+    if (document.getSelection()?.toString()) {
       return;
     }
 
@@ -1160,23 +1162,23 @@
       return;
     }
 
-    const caret = caretAt(event.clientX, event.clientY);
-
-    if (!caret) {
-      return;
-    }
-
-    const hit = highlightRanges.find(({ range }) => {
-      try {
-        return range.isPointInRange(caret.node, caret.offset);
-      } catch (_) {
-        return false;
-      }
-    });
+    const caret = highlightRanges.length ? caretAt(event.clientX, event.clientY) : undefined;
+    const hit =
+      caret &&
+      highlightRanges.find(({ range }) => {
+        try {
+          return range.isPointInRange(caret.node, caret.offset);
+        } catch (_) {
+          return false;
+        }
+      });
 
     if (hit) {
       editingHighlight = hit.highlight;
       editingFocusNote = false;
+    } else {
+      // A tap on text looks it up (built-in dictionary); elsewhere nothing changes.
+      lookupPopup?.tapAt(event.clientX, event.clientY);
     }
   }
 
@@ -2658,6 +2660,8 @@
 {#if bookCompleted}
   <BookCompletionConfetti {confettiWidthModifier} {confettiMaxRuns} {window} />
 {/if}
+
+<LookupPopup bind:this={lookupPopup} scope=".book-content" />
 
 <svelte:document on:selectionchange={onSelectionChange} on:click={onDocumentClick} />
 
