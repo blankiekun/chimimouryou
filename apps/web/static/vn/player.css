@@ -96,3 +96,9 @@ body {
 #progress progress::-moz-progress-bar {
   background: #4fbf95;
 }
+
+/* The built-in dictionary's match (the page's lookup popup): the game area's green over the
+   canvas, since the overlay text itself is transparent. */
+::highlight(ttu-lookup) {
+  background-color: rgba(79, 191, 149, 0.4);
+}

@@ -203,6 +203,13 @@ function engineSet(name, value) {
   if (typeof set === 'function') set(value);
 }
 
+/**
+ * Set by the page while its built-in dictionary is on: textTap(x, y) looks up the text at a tap
+ * (frame coordinates) and is true when it found a word, so the game doesn't get the tap.
+ */
+var textTap = null;
+var heldTouch = null;
+
 // Yomitan's scan keys stop auto mode, so the text doesn't move on during a lookup.
 window.addEventListener(
   'keydown',
@@ -225,17 +232,38 @@ window.addEventListener(
   'touchend'
 ].forEach(function (type) {
   document.getElementById('overlay').addEventListener(type, function (event) {
-    var Copy = event.constructor;
-
     // Hover stays with the page (Yomitan scans on mousemove); the rest is the game's.
     if (type !== 'mousemove') event.preventDefault();
-    try {
-      document.getElementById('canvas').dispatchEvent(new Copy(type, event));
-    } catch (error) {
-      console.warn('Could not pass ' + type + ' to the game', error);
+    // While the page's built-in lookups are on, a tap on text is held until it ends: a tap
+    // that finds a word is the popup's, anything else goes to the game after all.
+    if (type === 'touchstart' && textTap && event.touches.length === 1) {
+      heldTouch = event;
+      return;
     }
+    if (heldTouch) {
+      var held = heldTouch;
+      heldTouch = null;
+      var touch = event.changedTouches && event.changedTouches[0];
+      if (type === 'touchend' && touch && textTap && textTap(touch.clientX, touch.clientY)) return;
+      passToGame(held);
+    }
+    passToGame(event);
   });
 });
+
+document.getElementById('overlay').addEventListener('touchcancel', function () {
+  heldTouch = null;
+});
+
+function passToGame(event) {
+  var Copy = event.constructor;
+
+  try {
+    document.getElementById('canvas').dispatchEvent(new Copy(event.type, event));
+  } catch (error) {
+    console.warn('Could not pass ' + event.type + ' to the game', error);
+  }
+}
 
 // Right-click is the game's (menu, skip): never the browser's menu, on the canvas or the black bars.
 document.addEventListener('contextmenu', function (event) {

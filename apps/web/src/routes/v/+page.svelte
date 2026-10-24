@@ -79,6 +79,8 @@
     updateStatistic
   } from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker';
   import AnkiWatcher from '$lib/components/anki-watcher.svelte';
+  import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
+  import { builtInLookups$ } from '$lib/data/dictionary';
   import {
     ankiEnabled$,
     ankiSentenceField$,
@@ -107,6 +109,8 @@
 
   let book: BooksDbBookData | undefined;
   let frame: HTMLIFrameElement | undefined;
+  let frameLoaded = false;
+  let lookupPopup: LookupPopup | undefined;
   let lines: VnLine[] = [];
   let ended = false;
   let read: VnRead;
@@ -127,6 +131,17 @@
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let savesQueue = Promise.resolve();
   let started = false;
+
+  // The player holds taps on its text for the built-in dictionary only while it is on.
+  $: if (frameLoaded && frame?.contentWindow) {
+    (frame.contentWindow as any).textTap = $builtInLookups$ ? textTap : null;
+  }
+
+  /** A tap on the game's text (frame coordinates): true when it found a word. */
+  function textTap(x: number, y: number) {
+    const box = frame?.getBoundingClientRect();
+    return !!box && !!lookupPopup?.tapAt(x + box.left, y + box.top);
+  }
   /** A server game over 10 MB asks before its files are kept in the browser. */
   let keepAsk: { size: string; answer: (keep: boolean) => void } | undefined;
   let showMore = false;
@@ -638,8 +653,11 @@
           src="{pagePath}/vn/player.html"
           title={book.title}
           allow="autoplay; fullscreen"
-          on:load={() =>
-            start().catch((error) => logger.error(`Error starting game: ${error.message}`))}
+          on:load={() => {
+            if (frame) lookupPopup?.attachFrame(frame);
+            frameLoaded = true;
+            start().catch((error) => logger.error(`Error starting game: ${error.message}`));
+          }}
         />
       {/if}
     </div>
@@ -661,7 +679,13 @@
       {#if ended}
         <p class="vn-text">The game has ended.</p>
       {:else if $showText$}
-        <div class="vn-text" class:vn-text-ruled={lines.length} lang="ja">
+        <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+        <div
+          class="vn-text"
+          class:vn-text-ruled={lines.length}
+          lang="ja"
+          on:click={(event) => lookupPopup?.tapAt(event.clientX, event.clientY)}
+        >
           {#each lines as line}
             <p>
               {#each line as part}{#if part.ruby}<ruby>{part.text}<rt>{part.ruby}</rt></ruby
@@ -688,6 +712,8 @@
     </div>
   </div>
 </div>
+
+<LookupPopup bind:this={lookupPopup} scope=".vn-text" />
 
 {#if showMore}
   <ReaderSheet title="More" on:close={() => (showMore = false)}>
