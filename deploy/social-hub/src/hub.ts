@@ -10,6 +10,16 @@
  * out under /v1, bearer tokens (the hub is another origin than every reader), limits in D1.
  */
 
+import {
+  communityAdmin,
+  communityRead,
+  communityRoute,
+  communityTarget,
+  deleteUserCommunitySql,
+  dropUnusedWorks,
+  postsOf
+} from './community';
+
 /** The parts of Cloudflare's D1 binding the hub uses */
 export interface D1PreparedStatement {
   bind(...values: unknown[]): D1PreparedStatement;
@@ -56,15 +66,15 @@ interface EdgeCache {
   delete(key: string): Promise<boolean>;
 }
 
-interface Context {
+export interface Context {
   waitUntil(promise: Promise<unknown>): void;
 }
 
-const edgeCache = () => (globalThis as { caches?: { default?: EdgeCache } }).caches?.default;
+export const edgeCache = () => (globalThis as { caches?: { default?: EdgeCache } }).caches?.default;
 
-type Row = Record<string, unknown>;
+export type Row = Record<string, unknown>;
 
-interface UserRow {
+export interface UserRow {
   id: string;
   username: string;
   salt: string;
@@ -82,9 +92,9 @@ interface UserRow {
   role: string;
 }
 
-const MINUTE = 60;
-const HOUR = 3600;
-const DAY = 86400;
+export const MINUTE = 60;
+export const HOUR = 3600;
+export const DAY = 86400;
 const MAX_FRIENDS = 200;
 const MAX_PENDING = 50;
 /** Failed sign-ins an hour per address; per username (from anywhere) only past MAX_NAME_FAILURES */
@@ -135,7 +145,7 @@ export const AVATAR_UPLOADS = 5;
 export const UPLOADS_PER_DAY = 2_000;
 export const MEDIA_BYTES = 8 * 1024 ** 3;
 /** Image URLs carry a content hash or a version, so they never change */
-const IMMUTABLE = 'public, max-age=31536000, immutable';
+export const IMMUTABLE = 'public, max-age=31536000, immutable';
 
 /** Sending a book: signaling only (the book goes browser to browser over WebRTC) */
 export const TRANSFER_TTL = 10 * MINUTE;
@@ -148,10 +158,10 @@ const SDP_LENGTH = 12_000;
 const USERNAME = /^[A-Za-z0-9_]{3,20}$/;
 const KEY = /^[0-9a-f]{64}$/;
 const SALT = /^[0-9a-f]{32}$/;
-const ID = /^[0-9a-f]{16}$/;
+export const ID = /^[0-9a-f]{16}$/;
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
-class HttpError extends Error {
+export class HttpError extends Error {
   constructor(
     public status: number,
     public code: string
@@ -167,14 +177,14 @@ const cors = {
   'Access-Control-Max-Age': '86400'
 };
 
-function json(body: unknown, status = 200) {
+export function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...cors, 'Content-Type': 'application/json' }
   });
 }
 
-const now = () => Math.floor(Date.now() / 1000);
+export const now = () => Math.floor(Date.now() / 1000);
 
 export async function sha256(text: string | Uint8Array<ArrayBuffer>) {
   const digest = await crypto.subtle.digest(
@@ -192,7 +202,7 @@ function randomCode(length: number) {
     .join('');
 }
 
-function randomHex(bytes: number) {
+export function randomHex(bytes: number) {
   return [...crypto.getRandomValues(new Uint8Array(bytes))]
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');
@@ -214,7 +224,7 @@ export function normalizeCode(text: string) {
 
 const passHash = (salt: string, key: string) => sha256(`${salt}:${key}`);
 
-async function readBody(request: Request): Promise<Row> {
+export async function readBody(request: Request): Promise<Row> {
   const text = await request.text();
 
   if (text.length > 16_384) throw new HttpError(413, 'size');
@@ -228,7 +238,7 @@ async function readBody(request: Request): Promise<Row> {
   throw new HttpError(400, 'json');
 }
 
-function matching(value: unknown, pattern: RegExp, code: string) {
+export function matching(value: unknown, pattern: RegExp, code: string) {
   if (typeof value !== 'string' || !pattern.test(value)) throw new HttpError(400, code);
   return value;
 }
@@ -273,12 +283,12 @@ export function clientAddress(request: Request) {
     .join(':')}::/64`;
 }
 
-async function ipSubject(request: Request) {
+export async function ipSubject(request: Request) {
   return `ip:${await sha256(clientAddress(request))}`;
 }
 
 /** Counts one use of `action` in the current window; false once `max` were used. */
-async function take(env: Env, subject: string, action: string, window: number, max: number) {
+export async function take(env: Env, subject: string, action: string, window: number, max: number) {
   const win = Math.floor(now() / window) * window;
   const row = await env.DB.prepare(
     `INSERT INTO limits (subject, action, win, count) VALUES (?1, ?2, ?3, 1)
@@ -291,7 +301,13 @@ async function take(env: Env, subject: string, action: string, window: number, m
   return !!row;
 }
 
-async function limit(env: Env, subject: string, action: string, window: number, max: number) {
+export async function limit(
+  env: Env,
+  subject: string,
+  action: string,
+  window: number,
+  max: number
+) {
   if (!(await take(env, subject, action, window, max))) throw new HttpError(429, 'limit');
 }
 
@@ -682,18 +698,24 @@ async function feed(env: Env, user: string, since: number) {
   };
 }
 
+const REPORTS = ['name', 'picture', 'cover', 'post', 'work', 'workinfo'];
+
 /**
- * A report of someone's name or picture (`{username, what}`), or of a cover thumbnail
- * (`{what: 'cover', key}`: the target is the book key), once per reporter; acted on in the app
+ * A report of someone's name or picture (`{username, what}`), of a cover thumbnail
+ * (`{what: 'cover', key}`: the target is the book key), of a community post (`{what: 'post', id}`),
+ * work key (`{what: 'work', book, vol}`) or work title and cover (`{what: 'workinfo', work}`), once per reporter; acted on in the app
  * (/moderation, role dev). Signed-in readers only, so reports can't be made in bulk by address.
  */
 async function report(request: Request, env: Env, viewer: UserRow) {
   const body = await readBody(request);
-  const what = body.what === 'picture' || body.what === 'cover' ? body.what : 'name';
+  const what = REPORTS.includes(body.what as string) ? (body.what as string) : 'name';
   const reporter = viewer.id;
   let target: string;
 
-  if (what === 'cover') {
+  if (what === 'post' || what === 'work' || what === 'workinfo') {
+    await limit(env, reporter, 'report', DAY, 5);
+    target = await communityTarget(env, viewer, body);
+  } else if (what === 'cover') {
     // The cover shown on this reader's profile: their own upload.
     const key = text(body.key, 200, 'key');
     const username = matching(body.username, USERNAME, 'username');
@@ -763,9 +785,10 @@ export function webpSize(bytes: Uint8Array) {
 }
 
 /** 503 `paused` once the stored images reach the hub-wide ceiling */
-async function mediaRoom(env: Env) {
+export async function mediaRoom(env: Env) {
   const stored = await env.DB.prepare(
-    'SELECT (SELECT COUNT(*) FROM covers WHERE removed = 0) * ?1 + (SELECT COUNT(*) FROM pictures) * ?2 AS n'
+    `SELECT ((SELECT COUNT(*) FROM covers WHERE removed = 0) + (SELECT COUNT(*) FROM works WHERE cover != '')) * ?1
+       + (SELECT COUNT(*) FROM pictures) * ?2 AS n`
   )
     .bind(COVER_BYTES, AVATAR_BYTES)
     .first<{ n: number }>();
@@ -774,15 +797,15 @@ async function mediaRoom(env: Env) {
 }
 
 /** Counts one upload towards today's hub-wide ceiling; false once it is reached */
-const takeUpload = (env: Env) => take(env, '*', 'upload', DAY, UPLOADS_PER_DAY);
+export const takeUpload = (env: Env) => take(env, '*', 'upload', DAY, UPLOADS_PER_DAY);
 
-function media(env: Env) {
+export function media(env: Env) {
   if (!env.MEDIA) throw new HttpError(503, 'media');
   return env.MEDIA;
 }
 
 /** A WebP upload: the type, at most `max` bytes, no EXIF or XMP, and sane dimensions */
-async function readImage(
+export async function readImage(
   request: Request,
   max: number,
   fits: (width: number, height: number) => boolean
@@ -1280,6 +1303,7 @@ async function deleteUsers(env: Env, where: string, ...values: unknown[]) {
   }
   return env.DB.batch(
     [
+      ...deleteUserCommunitySql(users),
       `DELETE FROM pictures WHERE user IN (${users})`,
       `DELETE FROM sessions WHERE user IN (${users})`,
       `DELETE FROM links WHERE a IN (${users}) OR b IN (${users})`,
@@ -1321,6 +1345,7 @@ export async function cleanUp(env: Env) {
     env,
     orphans.results.map((row) => row.file)
   );
+  await dropUnusedWorks(env);
 }
 
 /** Transfers (and the network addresses in their SDP) last minutes: also run every 10 minutes. */
@@ -1607,7 +1632,7 @@ async function salt(request: Request, env: Env) {
 }
 
 /** Drops an image from this data centre's edge cache (others keep it until it ages out). */
-async function purgeImage(request: Request, path: string) {
+export async function purgeImage(request: Request, path: string) {
   await edgeCache()
     ?.delete(`${new URL(request.url).origin}/v1/${path}`)
     .catch(() => false);
@@ -1627,6 +1652,7 @@ async function openReports(env: Env) {
      LEFT JOIN covers c ON r.what = 'cover' AND c.user = substr(r.target, 1, 16)
        AND c.book_key = substr(r.target, 18)
      LEFT JOIN users cu ON cu.id = c.user
+     WHERE r.what IN ('name', 'picture', 'cover')
      GROUP BY r.what, r.target ORDER BY n DESC, last DESC, r.what LIMIT 200`
   ).all();
 
@@ -1662,17 +1688,19 @@ async function lookUp(env: Env, username: string) {
   if (!user) throw new HttpError(404, 'user');
 
   const rows = (sql: string) => env.DB.prepare(sql).bind(user.id).all();
-  const [books, finished, events] = await Promise.all([
+  const [books, finished, events, posts] = await Promise.all([
     rows(
       'SELECT slot, book_key, title, author, kind, pct, read_at FROM status WHERE user = ?1 ORDER BY slot'
     ),
     rows('SELECT book_key, title, kind, month, at FROM finished WHERE user = ?1 ORDER BY at DESC'),
     rows(
       'SELECT id, type, book_key, title, kind, value, at FROM events WHERE user = ?1 ORDER BY at DESC, id DESC LIMIT 100'
-    )
+    ),
+    postsOf(env, user.id)
   ]);
 
   return {
+    posts,
     user: {
       id: user.id,
       username: user.username,
@@ -1724,11 +1752,12 @@ async function admin(request: Request, env: Env, viewer: UserRow, path: string) 
   const route = `${request.method} ${path}`;
   const query = new URL(request.url).searchParams;
 
+  if (path.startsWith('community/')) return communityAdmin(request, env, path.slice(10));
   if (route === 'GET reports') return json(await openReports(env));
   if (route === 'DELETE reports') {
-    const what = query.get('what');
+    const what = query.get('what') ?? '';
 
-    if (what !== 'name' && what !== 'picture' && what !== 'cover') throw new HttpError(400, 'what');
+    if (!REPORTS.includes(what)) throw new HttpError(400, 'what');
     await dismiss(env, what, text(query.get('target'), 200, 'target')).run();
     return json({ ok: true });
   }
@@ -1819,6 +1848,11 @@ reads the book and stay when an account is deleted; your picture does not.</p>
 <p>Sending a book to a friend: the book goes directly from one browser to the other. The hub
 only passes the connection details between the two of you (including network addresses), with the
 title, kind and size, and deletes them once connected or after 10 minutes.</p>
+<p>Community: your posts on a line of a book (what you wrote, the line and up to 600 characters of
+the page around it), your helpful marks and which AniList or VNDB entry you confirmed a book as. Posts
+are public (readable without an account), with the book's title and cover and your name and, if your profile is public and shares stats, your
+reading rank and words known; never how far you have read. Deleting a post or your account deletes it
+(a post that has replies stays as an empty placeholder).</p>
 <p>No email, IP address log or book files. Rate limits keep hashed addresses for two days.</p>
 <p>Deleting your account (Settings, Social) removes every row and your picture at once. Sessions unused for 90 days
 and accounts unused for 12 months are deleted automatically.</p>`;
@@ -1874,6 +1908,13 @@ async function route(request: Request, env: Env, ctx?: Context): Promise<Respons
   if (request.method === 'GET' && profilePath) {
     return profileResponse(request, env, ctx, profilePath[1], auth?.user ?? null);
   }
+
+  const read = /^\/v1\/community\/(feed|threads|thread)$/.exec(pathname);
+
+  // Community reads are public too (read-only); writes need an account.
+  if (request.method === 'GET' && read) {
+    return communityRead(request, env, ctx, auth?.user ?? null, read[1]);
+  }
   if (!auth) throw new HttpError(401, 'session');
   if (route === 'POST /v1/report') return report(request, env, auth.user);
 
@@ -1881,6 +1922,10 @@ async function route(request: Request, env: Env, ctx?: Context): Promise<Respons
   const adminPath = /^\/v1\/admin\/(.+)$/.exec(pathname);
 
   if (adminPath) return admin(request, env, user, adminPath[1]);
+
+  const community = /^\/v1\/community\/(.+)$/.exec(pathname);
+
+  if (community) return communityRoute(request, env, user, community[1]);
 
   const transfer = /^\/v1\/transfers(?:\/([^/]+)(?:\/(accept|answer))?)?$/.exec(pathname);
 
@@ -1992,7 +2037,7 @@ export default {
   async fetch(request: Request, env: Env, ctx?: Context) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     try {
-      const image = /^\/v1\/(cover\/[0-9a-f]{16}|avatar\/[0-9a-f]{16}\/\d{1,12})$/.exec(
+      const image = /^\/v1\/((?:cover|work)\/[0-9a-f]{16}|avatar\/[0-9a-f]{16}\/\d{1,12})$/.exec(
         new URL(request.url).pathname
       );
 

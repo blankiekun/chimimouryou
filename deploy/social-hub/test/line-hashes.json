@@ -1,0 +1,74 @@
+[
+  {
+    "line": "「吾輩は猫である。名前はまだ無い。」",
+    "note": "one edition",
+    "normal": "吾輩は猫である名前はまだ無い",
+    "hash": "06ca1fe37a916ef5a6a9c7e9bc1fd9de"
+  },
+  {
+    "line": "吾輩は猫である、名前はまだ無い",
+    "note": "other punctuation, no brackets: same line",
+    "normal": "吾輩は猫である名前はまだ無い",
+    "hash": "06ca1fe37a916ef5a6a9c7e9bc1fd9de"
+  },
+  {
+    "line": "吾輩《わがはい》は猫である。名前はまだ無い。",
+    "note": "Aozora ruby: same line",
+    "normal": "吾輩は猫である名前はまだ無い",
+    "hash": "06ca1fe37a916ef5a6a9c7e9bc1fd9de"
+  },
+  {
+    "line": "｜吾輩《わがはい》は 猫である。　名前は　まだ無い……",
+    "note": "ruby bar, spaces, ellipsis: same line",
+    "normal": "吾輩は猫である名前はまだ無い",
+    "hash": "06ca1fe37a916ef5a6a9c7e9bc1fd9de"
+  },
+  {
+    "line": "ＡＢＣ　ｄｅｆ　１２３だ！",
+    "note": "full width",
+    "normal": "abcdef123だ",
+    "hash": "37f4f76ef1c996cbd219a5d9891e9077"
+  },
+  {
+    "line": "abc def 123だ?",
+    "note": "half width, other punctuation: same line",
+    "normal": "abcdef123だ",
+    "hash": "37f4f76ef1c996cbd219a5d9891e9077"
+  },
+  {
+    "line": "「ﾊﾝｶｸｶﾀｶﾅのセリフ」",
+    "note": "half-width katakana",
+    "normal": "ハンカクカタカナのセリフ",
+    "hash": "abbd2e2a981cfd056f5ccaaf20d3d931"
+  },
+  {
+    "line": "「ハンカクカタカナのセリフ」",
+    "note": "full-width katakana: same line",
+    "normal": "ハンカクカタカナのセリフ",
+    "hash": "abbd2e2a981cfd056f5ccaaf20d3d931"
+  },
+  {
+    "line": "ゼロ​幅の⁠文字が入った行",
+    "note": "format characters",
+    "normal": "ゼロ幅の文字が入った行",
+    "hash": "3792d2f000469f24c07b82f84fed35f5"
+  },
+  {
+    "line": "ゼロ幅の文字が入った行",
+    "note": "without them: same line",
+    "normal": "ゼロ幅の文字が入った行",
+    "hash": "3792d2f000469f24c07b82f84fed35f5"
+  },
+  {
+    "line": "彼は二十歳になった。",
+    "note": "kanji numerals",
+    "normal": "彼は二十歳になった",
+    "hash": "c04a603c97753a1b16b391dff5cd4f24"
+  },
+  {
+    "line": "彼は20歳になった。",
+    "note": "digits: a different line (not folded)",
+    "normal": "彼は20歳になった",
+    "hash": "f653df196564e8a0d45e044317973707"
+  }
+]

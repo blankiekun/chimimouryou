@@ -133,7 +133,7 @@ export function absCleanTitle(text: string) {
 }
 
 /** The cleaned title without a trailing volume number: the series name, for searching. */
-function absBaseTitle(text: string) {
+export function absBaseTitle(text: string) {
   return absCleanTitle(text)
     .replace(/\s*(第?\d+(?:\.\d+)?[巻部集]?|[上中下])\s*$/, '')
     .trim();

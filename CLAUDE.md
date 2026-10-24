@@ -28,7 +28,7 @@ The details of a particular deployment (hosts, addresses, how it is deployed and
 ## Rules that hold everywhere
 
 - Security: `kit.csp` (hash mode) allows only the site's own scripts, so boot code goes in `static/`, with no inline scripts or `on*=` attributes. Book HTML goes through `parseBookHtml`/`sanitizeBookElement` (`file-loaders/utils/sanitize-book-html.ts`). API keys and tokens stay out of shared files, URLs and error messages (`redactSecret`); secret settings are listed in `account-settings-sync.ts`.
-- Privacy: nothing goes to the social hub before sign-up or while the `social` plugin is off (`standalone.test.ts`). Reading tables or word rows built from copyrighted books stay on the machine that made them, never in git.
+- Privacy: nothing goes to the social hub before sign-up or while the `social` plugin is off (`standalone.test.ts`), except anonymous GETs of public Community posts (feed, threads, thread, covers; no token), sent only when the reader opens the Community tab or a line deep link. Reading tables or word rows built from copyrighted books stay on the machine that made them, never in git.
 - Design: "Study Book" (`apps/web/DESIGN.md`) is the default UI: flat, square 2px corners, one green spot colour, English UI text. Components use theme colours only: CSS variables or the Tailwind colours mapped to them in `tailwind.config.cjs` (`themes.test.ts` checks every built-in theme for WCAG AA).
 - Settings that should follow the account go in `sharedSettings` (`account-settings-sync.ts`).
 - Jiten's API is for personal projects and small-scale research only; the server never calls it.

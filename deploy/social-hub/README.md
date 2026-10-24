@@ -40,6 +40,8 @@ idempotent), in order, then `npx wrangler@4.147.0 deploy`:
   (sending a book to a friend; the deploy also adds the 10-minute cron and `SIGNAL_LIMIT`)
 - `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file migrations/0006_covers_per_reader.sql`
   (covers one per reader and book; deploy right after it)
+- `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file migrations/0007_community.sql`
+  (Community: posts on a line, works and their covers, helpful marks, work-key confirmations)
 
 ## Develop
 
@@ -100,6 +102,46 @@ object goes unless another upload uses the same image); `GET admin/user/:usernam
 (account, current and finished books, events); `POST admin/user/:id/name` (name back to the
 username); `DELETE admin/user/:id/picture`; `DELETE admin/user/:id/status/:slot`,
 `…/finished/:key`, `…/events/:id` (one row). Resolving a report deletes its reports.
+
+## Community
+
+Posts on a line of a book (`src/community.ts`; the app's client is `apps/web/src/lib/data/community.ts`).
+A work key is `anilist:<id>[/<volume>]`, `vndb:v<id>` or `title:<book key>`; a line is the first
+32 hex of sha256 of the normalised line (`normalizeLine`; `test/line-hashes.json` keeps the app's
+copy in step). Bodies, titles and quotes are plain text: NFC, no control, direction-override or
+stacked combining characters, capped in characters and bytes. Under `/v1/community/`:
+
+- Public (token optional; without one, edge-cached and counted per address, no blocks applied):
+  `GET threads?work=&after=` (8-hex line prefixes with post counts and a spoiler flag, 1,000 a
+  page; a prefix isn't enough to open a thread), `GET thread?work=&line=` (work title, volume and
+  cover, the line, its context and the posts), `GET feed?before=<at>:<id>` (top-level posts of
+  every work, newest first, 30 a page, with the line, title, cover, reply count and spoiler flag).
+  Posts with 3 open reports are left out until a moderator decides. `GET /v1/work/:hash` serves a
+  work's cover like the other images.
+- Signed in: `POST posts` (`{work, title, vol, quote, context, body, spoiler}`: the hub hashes the
+  quote and the context (<= 600) must contain it; or `{parent, body, spoiler}` for a reply);
+  `PUT|DELETE posts/:id` (own only; a post with replies stays as an empty tombstone);
+  `POST|DELETE posts/:id/helpful` (replies only, not one's own; counted from accounts 7+ days
+  old); `GET notes?since=` (replies to one's posts, once a minute); `GET work?book=&vol=` (the work
+  most accounts 7+ days old confirmed, a suggestion the app still asks the reader to confirm) and
+  `PUT work` (`{book, vol, work}`, one confirmation per account; AniList volumes must match);
+  `PUT cover?work=` (the work's one cover: raw WebP, <= 20 KB, 32-200 px wide, no EXIF/XMP, from
+  an account past its first 3 days with a post on the work; 409 once there is one).
+- Limits: posts 10 an hour and 50 a day per account (3 and 10, and no URLs, in its first 3 days),
+  100 a day per address, 10,000 a day hub-wide; one account keeps at most 30 top-level posts per
+  work, a thread at most 200 posts; a line's first post keeps the quote, and only a work's first
+  10 lines keep their context. Covers share the 50-a-day cover limit and the hub-wide image
+  ceilings. Blocks hide posts both ways (threads, listings, feed, notes, replies, helpful).
+- Reports: `POST report` with `{what: post, id}`, `{what: work, book, vol}` (a wrong mapping) or
+  `{what: workinfo, work}` (title or cover). Moderators: `GET admin/community/reports`,
+  `DELETE admin/community/post/:id`, `DELETE admin/community/user/:id/posts`,
+  `DELETE admin/community/work?book=&vol=&work=` (drops those confirmations),
+  `DELETE admin/community/workinfo?work=` (title and cover reset; the next post names the work
+  again, and the removed cover's uploader can't give another). `GET admin/user/:username`
+  includes the reader's latest 50 posts.
+- Deleting an account deletes its posts (answered ones become tombstones), helpful marks and
+  confirmations; a cover it gave stays with the work. The daily cron deletes works without posts
+  and their covers.
 
 ## Moderation
 
