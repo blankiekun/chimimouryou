@@ -11,7 +11,7 @@
  * Not part of upstream.
  */
 
-import { serverFetch } from '$lib/data/server';
+import { serverFetch } from '$lib/data/server-connect';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 
 export interface MokuroBlock {

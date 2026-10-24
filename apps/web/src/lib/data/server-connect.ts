@@ -16,7 +16,7 @@
  * of the synced `secretSettings`: it stays in this browser's localStorage, out of every sync file.
  */
 
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 import { standalone } from '$lib/data/env';
 
 const baseKey = 'serverBase';

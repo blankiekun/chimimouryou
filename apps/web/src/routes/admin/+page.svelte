@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { faSpinner } from '@fortawesome/free-solid-svg-icons';
-  import { onMount, type ComponentType } from 'svelte';
+  import { onMount, type Component } from 'svelte';
   import { map, share } from 'rxjs';
   import Fa from 'svelte-fa';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
@@ -41,7 +41,7 @@
     { id: 'tools' as Tab, label: 'Tools', show: hasPermission(user, 'difficulty') }
   ].filter((candidate) => candidate.show);
   // Section numbers follow the tools this account sees.
-  let tools: { title: string; component: ComponentType; props?: Record<string, unknown> }[] = [];
+  let tools: { title: string; component: Component<any>; props?: Record<string, unknown> }[] = [];
   $: tools = [
     ...(user?.admin
       ? [

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import { popovers } from '$lib/components/popover/popover';
   import { CLOSE_POPOVER } from '$lib/data/events';
   import { clickOutside } from '$lib/functions/use-click-outside';

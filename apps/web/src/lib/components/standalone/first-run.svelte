@@ -4,7 +4,7 @@
    * `storageSource$`; Settings → Sync changes it later. Where the analysis tools run, it offers them
    * and the Generated furigana switch; a download started here carries on after it closes.
    */
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import { faCaretDown, faCaretUp } from '@fortawesome/free-solid-svg-icons';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import PointBox from '$lib/components/point-box.svelte';

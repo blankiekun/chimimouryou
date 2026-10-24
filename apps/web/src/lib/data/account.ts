@@ -11,10 +11,10 @@
  * /account/sync/ instead of the shared /calibre/sync/. Not part of upstream.
  */
 
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 import { BehaviorSubject } from 'rxjs';
 import { standalone } from '$lib/data/env';
-import { forgetServerToken, serverConnected, serverFetch } from '$lib/data/server';
+import { forgetServerToken, serverConnected, serverFetch } from '$lib/data/server-connect';
 
 export interface AccountUser {
   id: string;

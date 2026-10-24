@@ -8,7 +8,7 @@ import { BlobWriter, Uint8ArrayWriter, type Entry } from '@zip.js/zip.js';
 import type { LoadData } from '../types';
 import { getMimeTypeFromName } from '../htmlz/extract-htmlz';
 import { analyzeScripts, encodePath, isScriptPath, vnElementHtml } from '$lib/data/vn';
-import { serverFetch } from '$lib/data/server';
+import { serverFetch } from '$lib/data/server-connect';
 import { throwIfAborted } from '$lib/functions/replication/replication-error';
 import { reportBytes } from '$lib/functions/replication/replication-progress';
 

@@ -14,7 +14,7 @@
  */
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-import { serverFetch, serverless } from '$lib/data/server';
+import { serverFetch, serverless } from '$lib/data/server-connect';
 
 export type MetadataKind = 'book' | 'manga' | 'vn';
 

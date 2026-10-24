@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import { faSpinner } from '@fortawesome/free-solid-svg-icons';
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import SettingsStorageSource from '$lib/components/settings/settings-storage-source.svelte';

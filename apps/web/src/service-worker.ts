@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 
-import { build, files, prerendered, version } from '$service-worker';
+import { version } from '$app/env';
+import { assets, immutable, prerendered as prerenderedPaths } from '$app/manifest';
 
 import { pagePath } from '$lib/data/env';
 import { shareCacheName, sharePath, stashSharedFiles } from '$lib/data/launch-files';
@@ -9,6 +10,13 @@ import { staleServiceWorkerCaches, swCachePrefix } from '$lib/functions/service-
 
 // eslint-disable-next-line no-restricted-globals
 const worker = self as unknown as ServiceWorkerGlobalScope;
+// `$app/manifest` paths are relative to the base path, where this worker is served; requests are
+// matched by absolute pathname.
+const pathOf = ({ path }: { path: string }) =>
+  new URL(path.replace(/^\//, ''), new URL('./', worker.location.href)).pathname;
+const build = immutable.map(pathOf);
+const files = assets.map(pathOf);
+const prerendered = prerenderedPaths.map(pathOf);
 const BUILD_CACHE_NAME = `${swCachePrefix}build:${version}`;
 const OTHER_CACHE_NAME = `${swCachePrefix}other:${version}`;
 // The visual novel engine can be replaced on the server without a new build (admin panel),

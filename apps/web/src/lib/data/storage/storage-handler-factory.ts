@@ -15,7 +15,7 @@ import { GDriveStorageHandler } from '$lib/data/storage/handler/gdrive-handler';
 import { MergeMode } from '$lib/data/merge-mode';
 import { OneDriveStorageHandler } from '$lib/data/storage/handler/onedrive-handler';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
-import { serverless } from '$lib/data/server';
+import { serverless } from '$lib/data/server-connect';
 
 let backupStorageHandler: BackupStorageHandler;
 let browserStorageHandler: BrowserStorageHandler;

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import { goto, pushState } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$lib/data/page-store';
   import {
     faCalendarXmark,
     faChartLine,

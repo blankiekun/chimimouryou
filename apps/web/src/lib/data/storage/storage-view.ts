@@ -15,7 +15,7 @@ import {
   standalone
 } from '$lib/data/env';
 
-import { serverless } from '$lib/data/server';
+import { serverless } from '$lib/data/server-connect';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 import { writableSubject } from '$lib/functions/svelte/store';
 import { faBookOpen } from '@fortawesome/free-solid-svg-icons';

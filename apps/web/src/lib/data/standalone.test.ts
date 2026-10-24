@@ -116,6 +116,8 @@ describe('standalone edition', () => {
     };
 
     await click('Start');
+    // Start loads the items with a dynamic import, which can take more than one task.
+    await vi.waitFor(() => expect(target.querySelector('.placement-word')).not.toBeNull());
     for (let i = 0; i < placement.placementLength; i += 1) {
       const word = target.querySelector('.placement-word')!.textContent!.trim();
       const item = items.find((entry) => entry.w === word)!;
@@ -186,7 +188,7 @@ describe('standalone edition', () => {
     });
 
     it('leaves other URLs alone', async () => {
-      const { serverUrl } = await import('$lib/data/server');
+      const { serverUrl } = await import('$lib/data/server-connect');
 
       expect(serverUrl('/calibre/sync/a')).toBe('https://books.example/calibre/sync/a');
       expect(serverUrl('/jiten/search')).toBe('/jiten/search');
@@ -195,7 +197,7 @@ describe('standalone edition', () => {
 
     it('is ignored by the self-hosted build', async () => {
       vi.stubEnv('VITE_EDITION', '');
-      const { serverConnected, serverUrl } = await import('$lib/data/server');
+      const { serverConnected, serverUrl } = await import('$lib/data/server-connect');
 
       expect(serverConnected).toBe(false);
       expect(serverUrl('/calibre/catalog.json')).toBe('/calibre/catalog.json');
@@ -203,7 +205,7 @@ describe('standalone edition', () => {
   });
 
   it('accepts only https server addresses', async () => {
-    const { serverOrigin } = await import('$lib/data/server');
+    const { serverOrigin } = await import('$lib/data/server-connect');
 
     expect(serverOrigin('books.example/')).toBe('https://books.example');
     expect(serverOrigin(' https://books.example:8443/x ')).toBe('https://books.example:8443');

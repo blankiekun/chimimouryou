@@ -17,7 +17,7 @@ import { logger } from '$lib/data/logger';
 import { database } from '$lib/data/store';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
 import { MergeMode } from '$lib/data/merge-mode';
-import { serverless } from '$lib/data/server';
+import { serverless } from '$lib/data/server-connect';
 
 let pending: string[] | undefined;
 let running: Promise<void> | undefined;

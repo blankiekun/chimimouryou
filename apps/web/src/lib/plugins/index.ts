@@ -11,7 +11,7 @@
  */
 
 import type { IconDefinition } from '@fortawesome/free-solid-svg-icons';
-import type { ComponentType } from 'svelte';
+import type { Component } from 'svelte';
 import { map } from 'rxjs';
 import type { SearchIndex } from '$lib/functions/book-text/book-search';
 import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v3';
@@ -39,7 +39,7 @@ export interface CompanionTabContribution {
   key: string;
   label: MessageKey;
   icon: IconDefinition;
-  component: ComponentType;
+  component: Component<any>;
   /** The component's props, picked from the reader context */
   props: (context: ReaderContext) => Record<string, unknown>;
   /** Opening the tab pauses the reading tracker */
@@ -53,7 +53,7 @@ export interface SelectionActionContribution {
   title: MessageKey;
   icon: IconDefinition;
   /** Shown with `passage` (PassageContext from data/ask-ai: the selection and text around it, without furigana); dispatches `close` */
-  panel: ComponentType;
+  panel: Component<any>;
 }
 
 export interface ListenContext {
@@ -73,7 +73,7 @@ export interface ListenModeContribution {
   key: string;
   title: MessageKey;
   icon: IconDefinition;
-  component: ComponentType;
+  component: Component<any>;
   props: (context: ListenContext) => Record<string, unknown>;
 }
 
@@ -85,7 +85,7 @@ export interface Plugin {
   /** Settings area (settings-sections.ts) shown only while the plugin is on */
   settingsArea?: string;
   /** Rendered on the settings page; holds its SettingsSections */
-  settings?: ComponentType;
+  settings?: Component<any>;
   companionTabs?: CompanionTabContribution[];
   selectionActions?: SelectionActionContribution[];
   listenModes?: ListenModeContribution[];

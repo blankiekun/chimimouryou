@@ -10,7 +10,7 @@
   import { isPluginEnabled } from '$lib/plugins';
   import { onDestroy, onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$lib/data/page-store';
   import Fa from 'svelte-fa';
   import { faEllipsis, faExpand } from '@fortawesome/free-solid-svg-icons';
   import PlayerBar from '$lib/components/player-bar.svelte';
@@ -90,7 +90,7 @@
     vnLineFor,
     type AnkiNote
   } from '$lib/data/anki';
-  import { serverConnected, serverFetch } from '$lib/data/server';
+  import { serverConnected, serverFetch } from '$lib/data/server-connect';
   import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
 
   /** Time between two clicks counted as reading at most, so breaks don't count. */

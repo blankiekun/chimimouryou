@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import { pagePath } from '$lib/data/env';
   import { driveSignedIn, signInToDrive } from '$lib/data/standalone-storage';
-  import { serverBase, serverConnected } from '$lib/data/server';
+  import { serverBase, serverConnected } from '$lib/data/server-connect';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import { storageSource$ } from '$lib/data/storage/storage-view';
   import { isOnline$ } from '$lib/data/store';

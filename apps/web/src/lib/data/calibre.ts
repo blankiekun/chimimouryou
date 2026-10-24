@@ -9,7 +9,7 @@
  * (see scripts/calibre/). Not part of upstream.
  */
 
-import { serverFetch, serverless } from '$lib/data/server';
+import { serverFetch, serverless } from '$lib/data/server-connect';
 
 export interface CalibreBook {
   id: number;
