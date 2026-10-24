@@ -11,11 +11,14 @@
  * and moves a band up after a yes and down after a no, so most words land near the reader's
  * boundary. The result is one number, a frequency rank where a logistic curve of yes over
  * log(rank), shifted down by the false-alarm rate, crosses one half: word list rows ranked
- * at or above it count as known (`getKnownSet`). Synced in sharedSettings.
+ * at or above it count as known (`getKnownSet`). Every result is kept with its date
+ * (`placementResults$`, synced in sharedSettings, merged by date): the latest one counts, also
+ * when lower, and the history (words-history.ts) uses the one in force each day.
  * Items: placement-items.json, built by scripts/placement/build-items.py. Not part of upstream.
  */
 
 import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
+import { writableArrayLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import { writableNumberLocalStorageSubject } from '$lib/data/internal/writable-number-local-storage-subject';
 import placementItems from '$lib/data/placement-items.json';
 
@@ -79,13 +82,86 @@ export function isPseudoSlot(index: number, length = placementLength) {
 }
 const pivot = Math.log(5000);
 
-/** 0: not taken (or nothing known). */
+/** One test result. `hard`: a stricter test that stores its result the same way. */
+export interface PlacementRecord {
+  mode: 'yesno' | 'hard';
+  /** When it was taken (ms); 0 for a result from before dates were kept */
+  date: number;
+  cutoff: number;
+  /** Words in the test (20, 40 or 60) */
+  length: number;
+}
+
+/** Every result, oldest first. */
+export const placementResults$ = writableArrayLocalStorageSubject<PlacementRecord>()(
+  'placementResults',
+  []
+);
+/** The cutoff in force now, from `placementResults$` (0: not taken, or nothing known). */
 export const placementCutoff$ = writableNumberLocalStorageSubject()('placementCutoff', 0);
 /** Words in the test that gave `placementCutoff$` (20, 40 or 60). */
 export const placementCutoffLength$ = writableNumberLocalStorageSubject()(
   'placementCutoffLength',
   0
 );
+
+/** Both devices' results, one per mode and date, oldest first. */
+export function mergePlacementResults(
+  local: PlacementRecord[] = [],
+  remote: PlacementRecord[] = []
+) {
+  const byKey = new Map(
+    [...local, ...remote].map((record) => [`${record.mode}|${record.date}`, record])
+  );
+
+  return [...byKey.values()].sort((a, b) => a.date - b.date || (a.mode < b.mode ? -1 : 1));
+}
+
+/**
+ * The result in force at `date`: each mode's latest one by then, and of those the stricter
+ * (lower cutoff). Undefined before the first.
+ */
+export function placementAt(results: PlacementRecord[], date = Infinity) {
+  const latest = new Map<string, PlacementRecord>();
+
+  for (const record of results) {
+    if (record.date <= date && !((latest.get(record.mode)?.date ?? -1) > record.date)) {
+      latest.set(record.mode, record);
+    }
+  }
+
+  return [...latest.values()].sort((a, b) => a.cutoff - b.cutoff)[0];
+}
+
+/** Saves a result taken now; it replaces the earlier ones of its mode. */
+export function recordPlacement(mode: PlacementRecord['mode'], cutoff: number, length: number) {
+  placementResults$.next(
+    mergePlacementResults(placementResults$.getValue(), [
+      { mode, date: Date.now(), cutoff, length }
+    ])
+  );
+}
+
+// A result saved before dates were kept becomes an undated first one.
+if (!placementResults$.getValue().length && placementCutoff$.getValue() > 0) {
+  placementResults$.next([
+    {
+      mode: 'yesno',
+      date: 0,
+      cutoff: placementCutoff$.getValue(),
+      length: placementCutoffLength$.getValue()
+    }
+  ]);
+}
+placementResults$.subscribe((results) => {
+  const current = placementAt(results);
+
+  if (!current) return;
+  if (placementCutoff$.getValue() !== current.cutoff) placementCutoff$.next(current.cutoff);
+  if (placementCutoffLength$.getValue() !== current.length) {
+    placementCutoffLength$.next(current.length);
+  }
+});
 /** Home offered the check once (per browser). */
 export const placementOffered$ = writableBooleanLocalStorageSubject()('placementOffered', false);
 /** The result came from the public word test (/word-test): Home says so once. */

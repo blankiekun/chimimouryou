@@ -52,7 +52,7 @@ idempotent), in order, then `npx wrangler@4.147.0 deploy`:
 ## API
 
 JSON under `/v1`, `Authorization: Bearer <token>` except `salt`, `signup`, `login`, `recover`,
-and (token optional) `profile/:username` and `report`.
+and (token optional) `profile/:username`.
 `POST salt`, `signup`, `login`, `logout`, `recover`; `POST logout-all` (every session of the account);
 `POST password` (`{key, next}`: the current and new stretched password, same salt; other sessions end);
 `POST recovery` (`{key}`: a new recovery code, the old one stops working); `GET|PUT|DELETE me` (turning a share off
@@ -63,7 +63,7 @@ book and its events, when its statistics are deleted); `GET friends` (with their
 stats; once a minute); `GET feed?since=` (friends' events, 90 days; once a minute);
 `GET profile/:username` (public profiles to anyone, edge-cached 15 minutes; private ones to
 friends; 404 when blocked; 30 a day); `POST report` (`{username, what: name|picture}` or
-`{what: cover, key, username}`: the cover that reader uploaded, 5 a day);
+`{what: cover, key, username}`: the cover that reader uploaded, 5 a day; signed-in readers only, 401 otherwise);
 `PUT status` answers `needCovers`: the shared book keys this reader gave no thumbnail for. `PUT cover?key=`
 (raw `image/webp`, at most 20 KB, 32-200 px wide, no EXIF/XMP; only for a book in the reader's
 current or finished books; one per reader and key, shown only on that reader's own rows, a second

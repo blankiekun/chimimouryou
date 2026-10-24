@@ -10,7 +10,8 @@
  * books read before kanji were recorded, the synced progress the library listed)
  * and the difficulty service's word list of the book, assuming its words are spread
  * evenly. A word is known when met `knownMinCount` times, mature in Anki (known-words.ts)
- * or marked known or ignored (word-marks.ts).
+ * or marked known or ignored (word-marks.ts), and every word ranked within the word test's
+ * cutoff (placement.ts) is known too.
  * In the standalone without a server, the books are the ones the analysis tools estimated
  * (reader-db `estimates`/`wordLists`, by title) instead.
  * Cached in reader-db `known` (keys `met`, `progress` and `list:<id>`), cleared with the known words
@@ -33,6 +34,7 @@ import {
 } from '$lib/data/calibre';
 import { getKanjiSeen, type KanjiSeen } from '$lib/data/kanji-seen';
 import { getKnownWords } from '$lib/data/known-words';
+import { placementCutoff } from '$lib/data/placement';
 import { readerDb } from '$lib/data/reader-db';
 import { serverless } from '$lib/data/server';
 import { getWordMarks, wordMark, type WordMarks } from '$lib/data/word-marks';
@@ -45,6 +47,8 @@ export interface WordsMetCache {
   signature: string;
   /** `form\treading` → occurrences met over all books */
   words: Record<string, number>;
+  /** `form\treading` → its best Jiten rank over the word lists (unranked words absent) */
+  ranks: Record<string, number>;
 }
 
 export interface WordList {
@@ -57,7 +61,8 @@ export interface WordList {
 export interface WordsSummary {
   /** Different words met at least once */
   met: number;
-  /** Words met `knownMinCount` times, plus Anki's mature words and the words marked */
+  /** Words met `knownMinCount` times, plus Anki's mature words, the words marked and the word
+   * test's cutoff (words ranked within it counted once) */
   known: number;
   /** Words met `knownMinCount` times (the Words page's "Known because") */
   metEnough: number;
@@ -66,7 +71,7 @@ export interface WordsSummary {
 export const wordKey = ([form, reading]: BookWord) => `${form}\t${reading ?? ''}`;
 
 /** Bumped when the totals are computed differently, so cached ones are redone. */
-const metVersion = 2;
+const metVersion = 3;
 
 /** A finished book's position is the start of its last page: count it as read through. */
 const fullyRead = (fraction: number) => (fraction >= 0.97 ? 1 : fraction);
@@ -97,13 +102,19 @@ export async function saveReadProgress(books: { title: string; progress: number 
   return true;
 }
 
-/** Adds each word's count × the share read to `totals`. */
-export function addWordsMet(totals: Record<string, number>, words: BookWord[], fraction: number) {
+/** Adds each word's count × the share read to `totals`, and its rank to `ranks`. */
+export function addWordsMet(
+  totals: Record<string, number>,
+  words: BookWord[],
+  fraction: number,
+  ranks: Record<string, number> = {}
+) {
   for (const word of words) {
     if (!isNoiseWord(word)) {
       const key = wordKey(word);
 
       totals[key] = (totals[key] ?? 0) + word[2] * fraction;
+      if (word[3] !== null && !(ranks[key] <= word[3])) ranks[key] = word[3];
     }
   }
 
@@ -154,10 +165,13 @@ export function metCounter(totals: Record<string, number>) {
 export function summarizeWords(
   totals: Record<string, number>,
   anki: ReadonlySet<string> = new Set(),
-  marks: WordMarks = {}
+  marks: WordMarks = {},
+  cutoff = 0,
+  ranks: Record<string, number> = {}
 ): WordsSummary {
   let met = 0;
-  let known = 0;
+  // Every word ranked within the cutoff is known: known words count only when ranked past it.
+  let known = cutoff;
   let metEnough = 0;
   const forms = new Set<string>();
 
@@ -169,14 +183,16 @@ export function summarizeWords(
     if (count >= 1) met += 1;
     if (count >= knownMinCount) metEnough += 1;
     if (
-      count >= knownMinCount ||
-      anki.has(form) ||
-      wordMark(marks, [form, key.slice(tab + 1) || null, count, null])
+      !(ranks[key] <= cutoff) &&
+      (count >= knownMinCount ||
+        anki.has(form) ||
+        wordMark(marks, [form, key.slice(tab + 1) || null, count, null]))
     ) {
       known += 1;
     }
   }
 
+  // Words in no book read have no rank: counted as past the cutoff.
   for (const form of anki) {
     if (!forms.has(form) && !particles.has(form)) known += 1;
   }
@@ -301,6 +317,7 @@ async function computeWordsMet(): Promise<WordsMetCache> {
   if (cached?.signature === signature) return cached;
 
   const totals: Record<string, number> = {};
+  const ranks: Record<string, number> = {};
   let complete = true;
 
   for (const book of books) {
@@ -309,12 +326,12 @@ async function computeWordsMet(): Promise<WordsMetCache> {
       return null;
     });
 
-    if (words) addWordsMet(totals, words, book.fraction);
+    if (words) addWordsMet(totals, words, book.fraction, ranks);
   }
 
-  if (!complete) return { signature: '', words: foldTotals(totals) };
+  if (!complete) return { signature: '', words: foldTotals(totals), ranks };
 
-  const met = { signature, words: foldTotals(totals) };
+  const met = { signature, words: foldTotals(totals), ranks };
 
   await db.put('known', met, 'met');
 
@@ -323,11 +340,11 @@ async function computeWordsMet(): Promise<WordsMetCache> {
 
 /** Words met and known, for the dashboard. */
 export async function getWordsSummary() {
-  const [{ words: totals }, anki, marks] = await Promise.all([
+  const [{ words: totals, ranks }, anki, marks] = await Promise.all([
     getWordsMet(),
     ankiKnownWords$.getValue() ? getKnownWords().catch(() => undefined) : undefined,
     getWordMarks().catch(() => ({}) as WordMarks)
   ]);
 
-  return summarizeWords(totals, new Set(anki?.words), marks);
+  return summarizeWords(totals, new Set(anki?.words), marks, placementCutoff(), ranks);
 }

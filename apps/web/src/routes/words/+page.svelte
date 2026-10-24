@@ -55,7 +55,7 @@
   $: marks = markedWords($wordMarks$);
   // Recount when the marks or Anki's words change (reading them re-emits the stores, so
   // only a changed signature, a string, triggers this).
-  $: changes = `${marksSignature($wordMarks$)}|${$knownWords$?.read}|${$ankiKnownWords$}`;
+  $: changes = `${marksSignature($wordMarks$)}|${$knownWords$?.read}|${$ankiKnownWords$}|${$placementCutoff$}`;
   $: (changes, loadSummary());
   $: because = [
     { label: $t$('words.becauseMet', { count: knownMinCount }), value: summary?.metEnough },
