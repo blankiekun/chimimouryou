@@ -11,10 +11,12 @@ import {
   aiConnections$,
   openRouterApiKey$,
   openRouterModel$,
-  elevenLabsApiKey$
+  elevenLabsApiKey$,
+  askAiPresets$
 } from '$lib/data/ai-settings';
+import { mangaSeriesModes$ } from '$lib/data/manga';
 import { theme$ } from '$lib/data/store';
-import { darkTheme$ } from '$lib/data/theme/theme-store';
+import { customAppThemes$, darkTheme$ } from '$lib/data/theme/theme-store';
 import { socialSession$ } from '$lib/data/social-account';
 import { homeBookTitles$, homeRemovedTitles$ } from '$lib/data/library-home';
 import { startSettingsSync, syncAccountSettings } from './account-settings-sync';
@@ -312,5 +314,44 @@ describe('account settings sync', () => {
     expect(folder.files['settings.json']).toBeDefined();
     expect(folder.files['settings.json']).not.toContain('hub-token');
     expect(folder.files['settings.json']).not.toContain('socialSession');
+  });
+
+  it('merges presets, custom themes and series modes per entry, deletions included', async () => {
+    const preset = (id: string) => ({ id, label: id, prompt: id });
+    const theme = { name: 'x' } as never;
+
+    window.localStorage.setItem('accountSettingsOwner', 'alice');
+    askAiPresets$.next([preset('a')]);
+    customAppThemes$.next({ old: theme });
+    mockServer({
+      values: {
+        askAiPresets: [preset('a'), preset('theirs')],
+        customAppThemes: { old: theme, keep: theme },
+        mangaSeriesModes: { s1: 'rtl' }
+      },
+      modified: { askAiPresets: 4, customAppThemes: 4, mangaSeriesModes: 4 }
+    });
+    await signInAs(alice);
+    expect(askAiPresets$.getValue().map(({ id }) => id)).toEqual(['a', 'theirs']);
+
+    // This browser adds a preset, deletes a theme and sets a series; another device does too.
+    askAiPresets$.next([...askAiPresets$.getValue(), preset('mine')]);
+    customAppThemes$.next({ keep: theme });
+    mangaSeriesModes$.next({ ...mangaSeriesModes$.getValue(), s2: 'ltr' });
+    const values = remote!.values as Record<string, any>;
+    values.askAiPresets = [...values.askAiPresets, preset('other')];
+    values.mangaSeriesModes = { s1: 'vertical' };
+    (remote as any).entryModified = {
+      ...(remote as any).entryModified,
+      askAiPresets: { other: Date.now() + 1000 },
+      mangaSeriesModes: { s1: Date.now() + 1000 }
+    };
+    await syncAccountSettings();
+
+    expect(askAiPresets$.getValue().map(({ id }) => id)).toEqual(['a', 'theirs', 'mine', 'other']);
+    expect(customAppThemes$.getValue()).toEqual({ keep: theme });
+    expect(mangaSeriesModes$.getValue()).toEqual({ s1: 'vertical', s2: 'ltr' });
+    expect(remote?.values.customAppThemes).toEqual({ keep: theme });
+    expect((remote as any).entryModified.customAppThemes.old).toBeLessThan(0);
   });
 });

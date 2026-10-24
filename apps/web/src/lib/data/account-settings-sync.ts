@@ -109,7 +109,11 @@ interface SettingsDocument {
   values: Record<string, unknown>;
   /** Setting key → time it was last changed */
   modified: Record<string, number>;
+  /** entrySettings key → entry id → time it was last changed, negative when deleted */
+  entryModified?: Record<string, EntryTimes>;
 }
+
+type EntryTimes = Record<string, number>;
 
 type Store = BehaviorSubject<any>;
 
@@ -183,6 +187,64 @@ const mergedSettings: Record<
   placementResults: mergePlacementResults,
   readingRank: mergeRankState
 };
+
+const asRecord = {
+  toMap: (value: Record<string, unknown> = {}) => value,
+  fromMap: (map: Record<string, unknown>) => map
+};
+
+/**
+ * Settings merged per entry (theme id, preset id, series): each entry's newest change wins, a
+ * deletion too, so two devices editing different entries keep both. Changes are timed in
+ * `recordEntryChanges`.
+ */
+const entrySettings: Record<
+  string,
+  { toMap: (value: any) => Record<string, unknown>; fromMap: (map: Record<string, any>) => unknown }
+> = {
+  customAppThemes: asRecord,
+  mangaSeriesModes: asRecord,
+  askAiPresets: {
+    toMap: (presets: { id: string }[] = []) =>
+      Object.fromEntries(presets.map((preset) => [preset.id, preset])),
+    fromMap: (map) => Object.values(map)
+  }
+};
+
+/**
+ * Per-entry merge: the side with the entry's newer change (|time|) supplies it, or its deletion
+ * (negative time). Entries from before times were kept (0) are kept from either side, the
+ * account's copy first.
+ */
+export function mergeEntries(
+  local: Record<string, unknown>,
+  remote: Record<string, unknown>,
+  localTimes: EntryTimes = {},
+  remoteTimes: EntryTimes = {}
+) {
+  const merged: Record<string, unknown> = {};
+  const times: EntryTimes = {};
+
+  new Set([
+    ...Object.keys(local),
+    ...Object.keys(remote),
+    ...Object.keys(localTimes),
+    ...Object.keys(remoteTimes)
+  ]).forEach((id) => {
+    const localTime = localTimes[id] ?? 0;
+    const remoteTime = remoteTimes[id] ?? 0;
+    const useLocal =
+      Math.abs(localTime) > Math.abs(remoteTime) ||
+      (Math.abs(localTime) === Math.abs(remoteTime) && !(id in remote));
+    const time = useLocal ? localTime : remoteTime;
+    const side = useLocal ? local : remote;
+
+    if (time) times[id] = time;
+    if (time >= 0 && id in side) merged[id] = side[id];
+  });
+
+  return { merged, times };
+}
 
 /** Settings → Reader: localStorage key → store, synced per reader profile. */
 const readerSettings: Record<string, Store> = {
@@ -260,6 +322,7 @@ export type SettingsSyncState =
 export const settingsSyncState$ = new BehaviorSubject<SettingsSyncState>({ state: 'off' });
 
 const changeTimesKey = 'accountSettingsModified';
+const entryTimesKey = 'accountSettingsEntryModified';
 /** Account whose settings this browser holds (its change times and API keys). */
 const ownerKey = 'accountSettingsOwner';
 const uploadDelayMs = 1500;
@@ -272,6 +335,8 @@ let applyingRemote = false;
 let uploadTimer: ReturnType<typeof setTimeout> | undefined;
 let lastSynced = 0;
 let queue = Promise.resolve();
+/** entrySettings' last values, to see which entries a change touched. */
+let entryValues: Record<string, Record<string, unknown>> = {};
 
 function readChangeTimes(): Record<string, number> {
   try {
@@ -283,6 +348,31 @@ function readChangeTimes(): Record<string, number> {
 
 function writeChangeTimes(times: Record<string, number>) {
   window.localStorage.setItem(changeTimesKey, JSON.stringify(times));
+}
+
+function readEntryTimes(): Record<string, EntryTimes> {
+  try {
+    return JSON.parse(window.localStorage.getItem(entryTimesKey) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+/** Times the entries of an entrySettings value that changed here (deleted: negative). */
+function recordEntryChanges(key: string, value: unknown) {
+  const previous = entryValues[key] ?? {};
+  const next = entrySettings[key].toMap(value);
+  const now = Date.now();
+  const all = readEntryTimes();
+  const times = { ...all[key] };
+
+  new Set([...Object.keys(previous), ...Object.keys(next)]).forEach((id) => {
+    if (JSON.stringify(previous[id]) !== JSON.stringify(next[id])) {
+      times[id] = id in next ? now : -now;
+    }
+  });
+  entryValues[key] = next;
+  window.localStorage.setItem(entryTimesKey, JSON.stringify({ ...all, [key]: times }));
 }
 
 function applyRemoteValue(store: Store, value: unknown) {
@@ -330,6 +420,8 @@ async function mergeSettings(file: Partial<SettingsDocument> | undefined) {
     modified: file?.modified ?? {}
   };
   const localTimes = readChangeTimes();
+  const localEntryTimes = readEntryTimes();
+  const remoteEntryTimes = { ...remote.entryModified };
   const localValues = Object.fromEntries(entries.map(({ key, store }) => [key, store.getValue()]));
   const remoteValues = { ...remote.values };
   let changedRemote = false;
@@ -346,8 +438,32 @@ async function mergeSettings(file: Partial<SettingsDocument> | undefined) {
     }
 
     const merge = mergedSettings[key];
+    const entrySetting = entrySettings[key];
 
-    if (merge && key in remote.values) {
+    if (entrySetting && key in remote.values) {
+      const { merged, times } = mergeEntries(
+        entrySetting.toMap(store.getValue()),
+        entrySetting.toMap(remote.values[key]),
+        localEntryTimes[key],
+        remoteEntryTimes[key]
+      );
+      const value = entrySetting.fromMap(merged);
+
+      applyRemoteValue(store, value);
+
+      if (
+        JSON.stringify(value) !== JSON.stringify(remote.values[key]) ||
+        JSON.stringify(times) !== JSON.stringify(remoteEntryTimes[key] ?? {})
+      ) {
+        remote.values[key] = value;
+        remote.modified[key] = Date.now();
+        remoteEntryTimes[key] = times;
+        changedRemote = true;
+      }
+
+      localEntryTimes[key] = times;
+      localTimes[key] = remote.modified[key];
+    } else if (merge && key in remote.values) {
       const merged = merge(store.getValue(), remote.values[key], localValues, remoteValues);
 
       applyRemoteValue(store, merged);
@@ -365,14 +481,16 @@ async function mergeSettings(file: Partial<SettingsDocument> | undefined) {
     } else if (localTime > remoteTime || window.localStorage.getItem(storageKey) !== null) {
       remote.values[key] = store.getValue();
       remote.modified[key] = localTime || Date.now();
+      if (entrySettings[key]) remoteEntryTimes[key] = localEntryTimes[key] ?? {};
       localTimes[key] = remote.modified[key];
       changedRemote = true;
     }
   });
 
   writeChangeTimes(localTimes);
+  window.localStorage.setItem(entryTimesKey, JSON.stringify(localEntryTimes));
 
-  return changedRemote ? remote : undefined;
+  return changedRemote ? { ...remote, entryModified: remoteEntryTimes } : undefined;
 }
 
 /** Queues a sync; runs never overlap. */
@@ -429,6 +547,7 @@ function releasePreviousOwner(user: AccountUser | null) {
       window.localStorage.removeItem(key);
     });
     window.localStorage.removeItem(changeTimesKey);
+    window.localStorage.removeItem(entryTimesKey);
     window.localStorage.removeItem(ownerKey);
   }
 
@@ -451,14 +570,25 @@ export function startSettingsSync(user: AccountUser | null) {
   entries = syncEntries(readerProfile()).filter(
     ({ key }) => signedIn || !secretSettings.includes(key)
   );
+  entryValues = Object.fromEntries(
+    Object.entries(entrySettings).map(([key, { toMap }]) => [
+      key,
+      toMap(sharedSettings[key].getValue())
+    ])
+  );
   changeSubscription = merge(
     ...entries.map(({ key, store }) =>
       store.pipe(
         skip(1),
-        map(() => key)
+        map((value) => [key, value] as const)
       )
     )
-  ).subscribe((key) => {
+  ).subscribe(([key, value]) => {
+    if (entrySettings[key]) {
+      if (applyingRemote) entryValues[key] = entrySettings[key].toMap(value);
+      else recordEntryChanges(key, value);
+    }
+
     if (!applyingRemote) {
       writeChangeTimes({ ...readChangeTimes(), [key]: Date.now() });
       scheduleUpload();
