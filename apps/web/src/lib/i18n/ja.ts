@@ -1873,7 +1873,7 @@ export const ja: Record<MessageKey, string> = {
   'transfer.error.other': '問題が発生しました。もう一度お試しください。',
   'placement.title': 'レベルチェック',
   'placement.lede':
-    '約2分。語が一つずつ出ます。意味と読みが分かるか答えてください。実在しない語も混ざっていて、それに「はい」と答えると結果が下がります。',
+    '約{minutes}分。語が一つずつ出ます。意味と読みが分かるか答えてください。実在しない語も混ざっていて、それに「はい」と答えると結果が下がります。',
   'placement.items': '語数',
   'placement.lengthNote': '語はそれまでの答えに合わせて選びます。短いほど精度が下がります。',
   'placement.retakeText':
@@ -1907,7 +1907,7 @@ export const ja: Record<MessageKey, string> = {
   'bookWords.becausePlaced': 'レベルチェックの頻出語{count}語以内',
   'wordTest.title': '日本語の単語をいくつ知っていますか？',
   'wordTest.lede':
-    '2分のはい/いいえテスト。語が一つずつ出ます。意味と読みが分かるか答えてください。実在しない語も混ざっていて、それに「はい」と答えると結果が下がります。答えはこのページの外に送られません。',
+    '約{minutes}分のはい/いいえテスト。語が一つずつ出ます。意味と読みが分かるか答えてください。実在しない語も混ざっていて、それに「はい」と答えると結果が下がります。答えはこのページの外に送られません。',
   'wordTest.result': '約{count}語',
   'wordTest.meaning':
     '日本の本、アニメ、ゲームでよく使う上位{count}語（Jitenの頻度リスト）の大半を知っているようです。Chimi Readerは、読み始める前に本の何割をカバーしているか示します。',

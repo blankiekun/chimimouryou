@@ -1855,7 +1855,7 @@ export const en = {
   'transfer.error.other': 'Something went wrong. Try again.',
   'placement.title': 'Level check',
   'placement.lede':
-    'About 2 minutes. Words appear one at a time: say whether you know each one, its meaning and reading. Some are made up, and saying yes to those lowers the result.',
+    'About {minutes} min. Words appear one at a time: say whether you know each one, its meaning and reading. Some are made up, and saying yes to those lowers the result.',
   'placement.items': 'Words',
   'placement.lengthNote': 'Each word is chosen by your answers so far. Shorter is less precise.',
   'placement.retakeText':
@@ -1889,7 +1889,7 @@ export const en = {
   'bookWords.becausePlaced': 'Within the level check’s {count} common words',
   'wordTest.title': 'How many Japanese words do you know?',
   'wordTest.lede':
-    'A 2-minute yes/no test. Words appear one at a time: say whether you know each one, its meaning and reading. Some are made up, and saying yes to those lowers the result. Nothing you answer leaves this page.',
+    'A yes/no test of about {minutes} min. Words appear one at a time: say whether you know each one, its meaning and reading. Some are made up, and saying yes to those lowers the result. Nothing you answer leaves this page.',
   'wordTest.result': 'About {count} words',
   'wordTest.meaning':
     'You likely know most of the {count} most common words in Japanese books, anime and games (by Jiten’s frequency list). Chimi Reader shows how much of a book they cover before you start it.',

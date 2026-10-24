@@ -126,7 +126,9 @@
 <main class="placement">
   {#if step === 'intro'}
     <h1 class="placement-title">{$t$(shared ? 'wordTest.title' : 'placement.title')}</h1>
-    <p class="placement-lede">{$t$(shared ? 'wordTest.lede' : 'placement.lede')}</p>
+    <p class="placement-lede">
+      {$t$(shared ? 'wordTest.lede' : 'placement.lede', { minutes: length / 20 })}
+    </p>
     <dl class="placement-facts">
       <div>
         <dt>{$t$('placement.items')}</dt>
