@@ -23,6 +23,12 @@ set -eu
 # 172.16.0.0/12: that is Docker's own range, where a reverse proxy on the same
 # host connects from, so every internet visitor would count as trusted.
 : "${TRUSTED_NETWORKS:=}"
+# Host names this server answers to (space-separated, e.g. books.example.ts.net): only requests
+# to them, an IP address or localhost get the TRUSTED_NETWORKS pass (DNS rebinding).
+: "${SERVER_NAMES:=}"
+for name in $SERVER_NAMES; do
+  printf '%s' "$name" | grep -Eqx '[A-Za-z0-9.-]+' || { echo "SERVER_NAMES: $name is not a host name" >&2; exit 1; }
+done
 # 1 = anyone who can reach the server may read the library without signing in.
 : "${PUBLIC_READS:=0}"
 # The reverse proxy in front, if any: only it may report the scheme (X-Forwarded-Proto).
@@ -40,6 +46,7 @@ case "$INTERNAL_TOKEN" in
 esac
 
 TRUSTED_NETWORKS_GEO=$(for network in $TRUSTED_NETWORKS; do printf '  %s 1;\n' "$network"; done)
+SERVER_NAMES_MAP=$(for name in $SERVER_NAMES; do printf '  %s 1;\n' "$(printf '%s' "$name" | tr A-Z a-z)"; done)
 REAL_IP_FROM_GEO=$(for network in $REAL_IP_FROM; do printf '  %s 1;\n' "$network"; done)
 
 # Only its API and sign-in, for signed-in readers: never its web UI, whose scripts
@@ -102,9 +109,9 @@ if [ -n "$CORS_ORIGINS" ]; then
 fi
 
 export WEB_ROOT LIBRARY_DIR VN_DIR SYNC_DIR ACCOUNT_DATA_DIR CATALOG_FILE THUMB_DIR DIFFICULTY_FILE \
-  ACCOUNT_UPSTREAM IMPORT_UPSTREAM DIFFICULTY_UPSTREAM MOKURO_UPSTREAM MOKURO_DIR ENGINE_DIR TRUSTED_NETWORKS_GEO REAL_IP_FROM_GEO PUBLIC_READS INTERNAL_TOKEN \
+  ACCOUNT_UPSTREAM IMPORT_UPSTREAM DIFFICULTY_UPSTREAM MOKURO_UPSTREAM MOKURO_DIR ENGINE_DIR TRUSTED_NETWORKS_GEO SERVER_NAMES_MAP REAL_IP_FROM_GEO PUBLIC_READS INTERNAL_TOKEN \
   AUDIOBOOKSHELF_LOCATION CORS_ORIGIN_MAP CORS CORS_WITH_SECURITY_HEADERS
 
 # Only these names: the template's own nginx variables ($host, ...) stay as they are.
-envsubst '${WEB_ROOT} ${LIBRARY_DIR} ${VN_DIR} ${SYNC_DIR} ${ACCOUNT_DATA_DIR} ${CATALOG_FILE} ${THUMB_DIR} ${DIFFICULTY_FILE} ${ACCOUNT_UPSTREAM} ${IMPORT_UPSTREAM} ${DIFFICULTY_UPSTREAM} ${MOKURO_UPSTREAM} ${MOKURO_DIR} ${ENGINE_DIR} ${TRUSTED_NETWORKS_GEO} ${REAL_IP_FROM_GEO} ${PUBLIC_READS} ${INTERNAL_TOKEN} ${AUDIOBOOKSHELF_LOCATION} ${CORS_ORIGIN_MAP} ${CORS} ${CORS_WITH_SECURITY_HEADERS}' \
+envsubst '${WEB_ROOT} ${LIBRARY_DIR} ${VN_DIR} ${SYNC_DIR} ${ACCOUNT_DATA_DIR} ${CATALOG_FILE} ${THUMB_DIR} ${DIFFICULTY_FILE} ${ACCOUNT_UPSTREAM} ${IMPORT_UPSTREAM} ${DIFFICULTY_UPSTREAM} ${MOKURO_UPSTREAM} ${MOKURO_DIR} ${ENGINE_DIR} ${TRUSTED_NETWORKS_GEO} ${SERVER_NAMES_MAP} ${REAL_IP_FROM_GEO} ${PUBLIC_READS} ${INTERNAL_TOKEN} ${AUDIOBOOKSHELF_LOCATION} ${CORS_ORIGIN_MAP} ${CORS} ${CORS_WITH_SECURITY_HEADERS}' \
   < "$(dirname "$0")/nginx-ebook-reader.conf.template"

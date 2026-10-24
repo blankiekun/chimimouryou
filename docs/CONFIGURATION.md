@@ -18,6 +18,7 @@ each reader enters them in Settings → AI, and they sync with their account.
 | `PUBLIC_HTTPS_URL`          | empty                     | The HTTPS address, if people also use a plain-HTTP address with a different name: the HTTP page links there to sign in. Build-time (`docker compose build web` after changing).                                                                                                                                                                                                                                                                                                                      |
 | `REAL_IP_FROM`              | empty                     | Addresses of your reverse proxy (space-separated, CIDR allowed). nginx then takes the client address from `X-Forwarded-For`, so `TRUSTED_NETWORKS` and sign-in throttling see real visitors. Only these addresses may report HTTPS with `X-Forwarded-Proto`, so behind a TLS-terminating proxy sign-in needs it.                                                                                                                                                                                     |
 | `TRUSTED_NETWORKS`          | empty                     | Signed-out visitors from these networks may read the library and save to the shared sync folder (e.g. `10.0.0.0/8 192.168.0.0/16 100.64.0.0/10 fc00::/7` for LAN and Tailscale). Empty: everything needs an account. Don't add Docker's `172.16.0.0/12` (see [INSTALL.md](INSTALL.md#https)).                                                                                                                                                                                                        |
+| `SERVER_NAMES`              | empty                     | Host names this server is reached by (space-separated, e.g. `books.example.ts.net`). The `TRUSTED_NETWORKS` pass only applies to requests addressed to these, an IP address or `localhost`, so a website can't borrow it by pointing its own name at your server (DNS rebinding). Signed-in readers work under any name.                                                                                                                                                                             |
 | `PUBLIC_READS`              | `0`                       | `1`: anyone who can reach the server may browse and download the library without an account.                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `AUDIOBOOKSHELF_URL`        | empty                     | Your Audiobookshelf server (e.g. `http://192.0.2.10:13378` or `http://host/audiobookshelf`) for the Audiobookshelf plugin. nginx forwards only its API and sign-in, at `/audiobookshelf/`, to signed-in readers, so the browser needs no CORS or HTTPS on it.                                                                                                                                                                                                                                        |
 | `CORS_ORIGINS`              | empty                     | Server connect: the standalone app at these origins (space-separated, exact, `https://` with no path, e.g. `https://read.example`; or `http://127.0.0.1:41917` for the desktop app) may sign in to this server and read and sync its library. Empty: off, and the server sends no CORS headers. See [Server connect](#server-connect-cors_origins).                                                                                                                                                  |
@@ -55,24 +56,24 @@ yourself.
 The web container runs it at start with these defaults. Server-level extras (TLS, resolver,
 real-IP settings) go in `/etc/nginx/ebook-reader.d/*.conf`.
 
-| Variable                                                                 | Default (Docker)                                                            |
-| ------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| `WEB_ROOT`                                                               | `/srv/www` (the built app)                                                  |
-| `LIBRARY_DIR`                                                            | `/library`                                                                  |
-| `VN_DIR`                                                                 | `/vn` (`VN_PATH`)                                                           |
-| `SYNC_DIR`                                                               | `/data/sync`                                                                |
-| `ACCOUNT_DATA_DIR`                                                       | `/data/accounts`                                                            |
-| `CATALOG_FILE`                                                           | `/data/state/catalog/catalog.json`                                          |
-| `THUMB_DIR`                                                              | `/data/state/catalog/thumbs` (library card thumbnails)                      |
-| `DIFFICULTY_FILE`                                                        | `/data/state/difficulty/difficulty.json`                                    |
-| `ACCOUNT_UPSTREAM`                                                       | `account:8766`                                                              |
-| `IMPORT_UPSTREAM`                                                        | `import:8767`                                                               |
-| `DIFFICULTY_UPSTREAM`                                                    | `difficulty:8765`                                                           |
-| `MOKURO_UPSTREAM`                                                        | `mokuro:8768`                                                               |
-| `ENGINE_DIR`                                                             | `/data/state/engine` (a visual novel engine installed from the admin panel) |
-| `MOKURO_DIR`                                                             | `/data/state/mokuro` (served as `/calibre/mokuro/<id>.json`)                |
-| `TRUSTED_NETWORKS`, `PUBLIC_READS`, `AUDIOBOOKSHELF_URL`, `CORS_ORIGINS` | as in `.env`                                                                |
-| `INTERNAL_TOKEN_FILE`                                                    | `/data/state/internal-token`                                                |
+| Variable                                                                                 | Default (Docker)                                                            |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `WEB_ROOT`                                                                               | `/srv/www` (the built app)                                                  |
+| `LIBRARY_DIR`                                                                            | `/library`                                                                  |
+| `VN_DIR`                                                                                 | `/vn` (`VN_PATH`)                                                           |
+| `SYNC_DIR`                                                                               | `/data/sync`                                                                |
+| `ACCOUNT_DATA_DIR`                                                                       | `/data/accounts`                                                            |
+| `CATALOG_FILE`                                                                           | `/data/state/catalog/catalog.json`                                          |
+| `THUMB_DIR`                                                                              | `/data/state/catalog/thumbs` (library card thumbnails)                      |
+| `DIFFICULTY_FILE`                                                                        | `/data/state/difficulty/difficulty.json`                                    |
+| `ACCOUNT_UPSTREAM`                                                                       | `account:8766`                                                              |
+| `IMPORT_UPSTREAM`                                                                        | `import:8767`                                                               |
+| `DIFFICULTY_UPSTREAM`                                                                    | `difficulty:8765`                                                           |
+| `MOKURO_UPSTREAM`                                                                        | `mokuro:8768`                                                               |
+| `ENGINE_DIR`                                                                             | `/data/state/engine` (a visual novel engine installed from the admin panel) |
+| `MOKURO_DIR`                                                                             | `/data/state/mokuro` (served as `/calibre/mokuro/<id>.json`)                |
+| `TRUSTED_NETWORKS`, `SERVER_NAMES`, `PUBLIC_READS`, `AUDIOBOOKSHELF_URL`, `CORS_ORIGINS` | as in `.env`                                                                |
+| `INTERNAL_TOKEN_FILE`                                                                    | `/data/state/internal-token`                                                |
 
 The web container also reads `PUID`, `PGID` and `REAL_IP_FROM` (above).
 

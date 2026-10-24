@@ -19,9 +19,25 @@ limit_req_zone $binary_remote_addr zone=readings:1m rate=6r/m;
 
 # Behind a reverse proxy every client looks like the proxy, so set
 # real_ip_header/set_real_ip_from for it (REAL_IP_FROM in Docker) first.
-geo $trusted_network {
+geo $trusted_address {
   default 0;
 ${TRUSTED_NETWORKS_GEO}
+}
+
+# Only for a Host this server answers to: under DNS rebinding another site's page reaches it
+# from the reader's own (trusted) address with its own name as Host. IP literals, localhost and
+# SERVER_NAMES are known; any other name needs an account.
+map $host $known_host {
+  default 0;
+  ~^[0-9.]+$ 1;
+  ~^\[[0-9a-f:.]+\]$ 1;
+  localhost 1;
+${SERVER_NAMES_MAP}
+}
+
+map "$trusted_address:$known_host" $trusted_network {
+  default 0;
+  "1:1" 1;
 }
 
 # Keep the scheme a TLS-terminating proxy in front of this server reports, so

@@ -186,6 +186,12 @@ class AccountServiceTest(unittest.TestCase):
         self.assertTrue(allowed('DELETE', '/calibre/sync/%E6%9C%AC/', None))
         self.assertTrue(allowed('PUT', '/calibre/sync/%E6%9C%AC/progress_1.json', None))
         self.assertTrue(allowed('DELETE', '/calibre/catalog.json', None))  # not this location
+        # nginx merges slashes; '//calibre/…' is not a host.
+        for uri in ('//calibre/sync/', '//calibre//sync//', '/calibre//sync/', '//calibre/sync/?x://y'):
+            self.assertFalse(allowed('DELETE', uri, None), uri)
+        self.assertFalse(allowed('PUT', '//calibre/sync/.tmp/0000000001', None))
+        self.assertFalse(allowed('MOVE', '//calibre/sync/x.json', 'https://h/calibre/sync/series.json'))
+        self.assertFalse(allowed('MOVE', '//calibre/sync/x.json', 'https://h//calibre//sync/series.json'))
 
     def test_shared_moves_only_rename_within_a_folder(self):
         allowed = service.shared_write_allowed
@@ -202,6 +208,9 @@ class AccountServiceTest(unittest.TestCase):
         self.assertFalse(allowed('MOVE', '/calibre/sync/x.json', 'https://h/calibre/sync/series.json?'))
         self.assertFalse(allowed('MOVE', '/calibre/sync/x.json', 'https://h/calibre/sync/metadata.json'))
         self.assertFalse(allowed('MOVE', '/calibre/sync/%E6%9C%AC/', 'https://h/calibre/sync/other/'))
+        # Two Destination headers, joined by nginx: dav moves to the first.
+        self.assertFalse(allowed('MOVE', '/calibre/sync/x.json', 'https://h/calibre/sync/series.json, https://h/calibre/sync/y.json'))
+        self.assertFalse(allowed('MOVE', '/calibre/sync/x.json', 'https://h/calibre/sync/y,z.json'))
 
     def test_plain_http_is_off_by_default(self):
         self.assertFalse(service.ALLOW_HTTP)
@@ -415,6 +424,30 @@ class AccountServiceTest(unittest.TestCase):
         self.assertEqual(call('GET', 'auth/admin', Cookie=cookie)[0], 200)
         status, _, headers = call('GET', 'auth/import', Authorization=f'Bearer {boss_token}', X_Original_Method='POST')
         self.assertEqual((status, headers['X-Account-Admin']), (200, '0'))
+
+    def test_token_as_cookie_never_administers(self):
+        call = self.serve()
+        service.create_user('boss', 'long enough', admin=True)
+        token = call('POST', 'token', {'username': 'boss', 'password': 'long enough'}, Origin=self.APP)[1]['token']
+        cookie = f'{service.COOKIE}={token}'
+        self.assertEqual(call('GET', 'me', Cookie=cookie)[0], 200)
+        self.assertEqual(call('GET', 'admin/users', Cookie=cookie)[0], 403)
+        self.assertEqual(call('POST', 'admin/add', {'username': 'mallory', 'password': 'long enough'},
+                              Cookie=cookie, Origin='https://books.example')[0], 403)
+        self.assertEqual(call('GET', 'auth/admin', Cookie=cookie)[0], 403)
+        status, _, headers = call('GET', 'auth/import', Cookie=cookie, X_Original_Method='POST')
+        self.assertEqual((status, headers['X-Account-Admin']), (200, '0'))
+        self.assertEqual(len(call('GET', 'tokens', Cookie=cookie)[1]['tokens']), 1)  # its own only
+
+    def test_throttle_rechecked_once_a_hash_slot_is_taken(self):
+        stored = service.hash_password('long enough')
+        keys = service.throttle_keys('alice', '10.0.0.1')
+        for _ in range(service.THROTTLE_RULES['userip']):
+            service.record_failure(keys)
+        # A guess that passed the first check while others held the slots is stopped before scrypt.
+        with self.assertRaises(service.ApiError) as raised:
+            service.verify_password('guess', stored, lambda: service.check_throttle(keys))
+        self.assertEqual(raised.exception.status, 429)
 
     def test_token_refusals(self):
         call = self.serve()
