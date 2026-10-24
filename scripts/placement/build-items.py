@@ -77,8 +77,10 @@ def load_frequency(path):
     return ranks
 
 
-def load_jmdict(path):
-    """Every kanji spelling, every reading, first spellings (with whether they are common) and loanwords."""
+def load_jmdict(path, entries=None):
+    """Every kanji spelling, every reading, first spellings (with whether they are common) and loanwords.
+
+    `entries`, when given, gets each spelling's (entry number, readings) pairs."""
     spellings, readings, loans = set(), set(), set()
     common = {}  # first spelling -> has a JMdict priority tag
     # JMdict's tags are entities (&n; …) declared in its DTD: keep their names instead.
@@ -89,10 +91,12 @@ def load_jmdict(path):
         if entry.tag != 'entry':
             continue
         kebs = entry.findall('k_ele')
+        rebs = [r.findtext('reb') for r in entry.findall('r_ele')]
         for k in kebs:
             spellings.add(k.findtext('keb'))
-        for r in entry.findall('r_ele'):
-            readings.add(r.findtext('reb'))
+            if entries is not None:
+                entries.setdefault(k.findtext('keb'), []).append((entry.findtext('ent_seq'), rebs))
+        readings.update(rebs)
         senses = entry.findall('sense')
         if kebs and senses:
             first = kebs[0]
@@ -154,7 +158,8 @@ def sudachi_word():
     return lambda text: len(tokenizer.tokenize(text)) == 1
 
 
-def real_words(ranks, common, loans, bands, rng):
+def real_words(ranks, common, loans, bands, rng, keep=None):
+    """PER_BAND words per band; with `keep`, only words it accepts (tried in random order)."""
     items = []
     low = 0
     for band, high in enumerate(bands):
@@ -177,6 +182,12 @@ def real_words(ranks, common, loans, bands, rng):
             choices = run
             if part in loan_parts:
                 choices = [p for p in loan_pool if p[1] not in taken] or run
+            if keep:
+                choices = choices[:]
+                rng.shuffle(choices)
+                choices = [next((p for p in choices if keep(p[1])), None)]
+                if not choices[0]:
+                    sys.exit(f'No word kept between ranks {run[0][0]} and {run[-1][0]}')
             rank, form = rng.choice(choices)
             taken.add(form)
             items.append({'w': form, 'r': rank, 'b': band})

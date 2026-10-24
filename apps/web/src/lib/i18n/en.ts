@@ -2132,6 +2132,35 @@ export const en = {
   'placement.fromWordTest': 'From your word test: about {count} words',
   'placement.fromWordTestText':
     'The {count} most common words count as known, so coverage and Read next start from your level.',
+  'hardTest.title': 'Level check: hard mode',
+  'hardTest.publicTitle': 'How many Japanese words can you read and explain?',
+  'hardTest.lede':
+    'About {minutes} min. For each word, pick its reading, then its meaning, from four choices, or say you don’t know. A word counts only when both are right, and lucky guesses are corrected for. Nothing you answer leaves this page.',
+  'hardTest.keysValue': '1–4 pick · 0 or N don’t know',
+  'hardTest.loading': 'Loading…',
+  'hardTest.reading': 'How is it read?',
+  'hardTest.meaning': 'What does it mean?',
+  'hardTest.picked': 'Reading',
+  'hardTest.dontKnow': 'I don’t know',
+  'hardTest.meaningText':
+    'You can likely read and explain most of the {count} most common words in Japanese books, anime and games (by Jiten’s frequency list). Chimi Reader shows how much of a book they cover before you start it.',
+  'hardTest.stricter':
+    'Hard mode counts a word only when you pick both its reading and its meaning, and corrects for lucky guesses, so it is the stricter measure.',
+  'hardTest.both': 'When you have taken both tests, the lower result counts.',
+  'hardTest.credits':
+    'Meanings: Japanese Wiktionary, by its contributors (CC BY-SA 4.0), via wiktionary-to-yomitan. Words and ranks: Jiten’s frequency list (CC BY-SA 4.0).',
+  'hardTest.try': 'Try hard mode',
+  'hardTest.yesNo': 'Take the yes/no test',
+  'hardTest.shareText':
+    'I can read and explain about {count} Japanese words. Take the hard word test:',
+  'hardTest.ogTitle': 'The hard Japanese word test',
+  'hardTest.ogDescription':
+    'Pick each word’s reading and meaning from four choices; lucky guesses don’t count. About 5 minutes, nothing to sign up for.',
+  'words.placementHard': 'Hard mode: about {count} words.',
+  'words.placementHardNone':
+    'Hard mode asks each word’s reading and meaning, the stricter measure.',
+  'words.placementHardTake': 'Take hard mode',
+  'words.placementHardRetake': 'Retake hard mode',
   'placement.ok': 'OK'
 };
 

@@ -2147,5 +2147,33 @@ export const ja: Record<MessageKey, string> = {
   'placement.fromWordTest': '単語テストの結果：約{count}語',
   'placement.fromWordTestText':
     '頻出語の上位{count}語を既知とします。カバー率と次に読む本があなたのレベルから始まります。',
+  'hardTest.title': 'レベルチェック：ハードモード',
+  'hardTest.publicTitle': '日本語の語を、読めて意味も言えるのはいくつ？',
+  'hardTest.lede':
+    '約{minutes}分。語ごとに、4つの選択肢から読み方、次に意味を選ぶか、「わからない」を選びます。両方正しいときだけ数え、当て推量の分は差し引きます。答えがこのページの外に送られることはありません。',
+  'hardTest.keysValue': '1〜4 選ぶ · 0 または N わからない',
+  'hardTest.loading': '読み込み中…',
+  'hardTest.reading': '読み方は？',
+  'hardTest.meaning': '意味は？',
+  'hardTest.picked': '読み方',
+  'hardTest.dontKnow': 'わからない',
+  'hardTest.meaningText':
+    '日本語の本・アニメ・ゲームでよく使う上位{count}語（Jiten の頻度リスト）の多くを、読めて意味も言えるでしょう。Chimi Reader は、読む前に本のどれだけをそれらの語が占めるかを示します。',
+  'hardTest.stricter':
+    'ハードモードは読み方と意味の両方を選べた語だけを数え、当て推量の分を差し引くので、より厳しい目安です。',
+  'hardTest.both': '両方のテストを受けた場合は、低いほうの結果を使います。',
+  'hardTest.credits':
+    '意味：日本語版ウィクショナリー（寄稿者、CC BY-SA 4.0、wiktionary-to-yomitan 経由）。語と順位：Jiten の頻度リスト（CC BY-SA 4.0）。',
+  'hardTest.try': 'ハードモードを試す',
+  'hardTest.yesNo': 'はい/いいえのテストを受ける',
+  'hardTest.shareText':
+    '日本語の語を約{count}語、読めて意味も言えます。ハードな語彙テストはこちら：',
+  'hardTest.ogTitle': 'ハードな日本語語彙テスト',
+  'hardTest.ogDescription':
+    '4つの選択肢から各語の読み方と意味を選びます。当て推量は数えません。約5分、登録不要。',
+  'words.placementHard': 'ハードモード：約{count}語。',
+  'words.placementHardNone': 'ハードモードは各語の読み方と意味を問う、より厳しい目安です。',
+  'words.placementHardTake': 'ハードモードを受ける',
+  'words.placementHardRetake': 'ハードモードをもう一度',
   'placement.ok': 'OK'
 };
