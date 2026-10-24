@@ -19,8 +19,10 @@ import {
   installedTools,
   keptEstimate,
   keptReadings,
+  keptWordList,
   localEstimate,
-  makeReadings
+  makeReadings,
+  redoWordList
 } from '$lib/data/analysis-tools';
 import { isManga } from '$lib/data/manga';
 import { database, generatedFurigana$ } from '$lib/data/store';
@@ -39,6 +41,8 @@ export const BACKGROUND_STALL_MS = 10 * 60 * 1000;
 const waiting: string[] = [];
 /** Books given up or failed: not tried again until the next start. */
 const skipped = new Set<string>();
+/** Books whose word list made without the Reader is redone after their estimate (redoWordLists). */
+const redo = new Set<string>();
 let done = 0;
 let percent = 0;
 let checking = Promise.resolve();
@@ -85,7 +89,9 @@ async function analyse(title: string) {
 
   const controller = new AbortController();
   const { signal } = controller;
-  const parts = generatedFurigana$.getValue() ? 2 : 1;
+  const readings = generatedFurigana$.getValue();
+  const redoList = redo.has(title);
+  const parts = 1 + +readings + +redoList;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let giveUp = () => {};
   // Rejects once the book's percent has stood still for BACKGROUND_STALL_MS.
@@ -114,7 +120,7 @@ async function analyse(title: string) {
 
   const work = async () => {
     // Readings first: they are what a reader opening the book waits for.
-    if (parts === 2) {
+    if (readings) {
       await makeReadings(title, book.elementHtml, progress(0), signal, true).catch((error) => {
         if (signal.aborted) throw error;
         console.warn(`Background analysis: no readings file for “${title}”`, error);
@@ -125,12 +131,17 @@ async function analyse(title: string) {
     const estimate = await localEstimate(
       title,
       book.elementHtml,
-      progress(parts - 1),
+      progress(+readings),
       signal,
       true
     );
 
     if (estimate && estimate.etag !== before) estimated = true;
+    // Right after the book's other parts, so the worker still has its tokens.
+    if (redoList) {
+      redo.delete(title);
+      await redoWordList(title, book.elementHtml, progress(parts - 1), signal, true);
+    }
   };
 
   // The race lets the queue go on even when the stalled job never settles.
@@ -197,10 +208,27 @@ export function analyseInBackground(titles: string[]) {
         !skipped.has(title) &&
         (await stale(title, difficulty, furigana).catch(() => false))
       ) {
-        waiting.push(title);
-        report();
-        running ??= run();
+        queue(title);
       }
+    }
+  });
+
+  return checking;
+}
+
+function queue(title: string) {
+  waiting.push(title);
+  report();
+  running ??= run();
+}
+
+/** Queues these books' word lists made without the Reader to be made with it (opt-in). */
+export function redoWordLists(titles: string[]) {
+  checking = checking.then(() => {
+    for (const title of titles) {
+      redo.add(title);
+      // The book running now has passed its redo: queued again.
+      if (waiting.indexOf(title) < 1) queue(title);
     }
   });
 
@@ -220,8 +248,7 @@ export function catchUpAnalysis() {
   idle(() => analyseStoredBooks().catch((error) => console.warn('Background analysis:', error)));
 }
 
-/** Queues every stored book the installed tools have something new for. */
-export async function analyseStoredBooks() {
+async function storedTitles() {
   const db = await database.db;
   const titles: string[] = [];
   let cursor = await db.transaction('data').store.index('title').openKeyCursor();
@@ -231,7 +258,47 @@ export async function analyseStoredBooks() {
     cursor = await cursor.continue();
   }
 
-  return analyseInBackground(titles);
+  return titles;
+}
+
+/** Queues every stored book the installed tools have something new for. */
+export async function analyseStoredBooks() {
+  return analyseInBackground(await storedTitles());
+}
+
+/**
+ * The stored books (of `titles`, else all) the furigana tools would make a readings file for and
+ * that aren't queued yet: Generate readings queues them with analyseInBackground.
+ */
+export async function booksWithoutReadings(titles?: string[]) {
+  const furigana = await installedTools('furigana');
+  const found: string[] = [];
+
+  if (!furigana) return found;
+  for (const title of titles ?? (await storedTitles())) {
+    if (!waiting.includes(title) && (await stale(title, undefined, furigana).catch(() => false))) {
+      found.push(title);
+    }
+  }
+
+  return found;
+}
+
+/** The stored books whose current word list was made without the Reader, once furigana is installed. */
+export async function wordListsWithoutReader(titles?: string[]) {
+  const furigana = await installedTools('furigana');
+  const found: string[] = [];
+
+  if (!furigana) return found;
+  for (const title of titles ?? (await storedTitles())) {
+    const [estimate, list] = await Promise.all([keptEstimate(title), keptWordList(title)]);
+
+    if (!redo.has(title) && list?.reader === false && list.etag === estimate?.etag) {
+      found.push(title);
+    }
+  }
+
+  return found;
 }
 
 /** Resolves when nothing is queued or being checked (tests). */
