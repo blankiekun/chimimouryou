@@ -1,3 +1,5 @@
 pnpm-lock.yaml
 build/
 .svelte-kit/
+# Yomitan code in its own style (apps/web/src/lib/vendor/yomitan/README.md)
+apps/web/src/lib/vendor/yomitan/

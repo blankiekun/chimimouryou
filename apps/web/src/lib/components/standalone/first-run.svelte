@@ -38,6 +38,7 @@
   } from '$lib/data/analysis-tools';
   import { onMount } from 'svelte';
   import { yomitanSeen$ } from '$lib/data/yomitan';
+  import { builtInLookups$, builtInLookupsChoice$ } from '$lib/data/dictionary';
   import { isMobile } from '$lib/functions/utils';
   import Fa from 'svelte-fa';
 
@@ -339,11 +340,47 @@
         </section>
       {/if}
 
+      <section class="lookups-step" aria-labelledby="first-run-lookups-title">
+        <SectionHead
+          id="first-run-lookups-title"
+          number={toolsShown ? 3 : 2}
+          title={$t$('firstRun.lookups')}
+        />
+        <p class="first-run-intro">{$t$('firstRun.lookupsLead')}</p>
+        <div class="tools-rows">
+          <div class="tool-row">
+            <span class="place-text">
+              <span class="place-title" id="first-run-lookups">{$t$('firstRun.lookupsSwitch')}</span
+              >
+              {#if !$yomitanSeen$}
+                <!-- Looking it up with Yomitan shows its popup: watchYomitan turns the switch off. -->
+                <span class="place-description">
+                  {$t$('firstRun.lookupsTest')} <span class="lookups-word" lang="ja">辞書</span>
+                </span>
+              {/if}
+            </span>
+            <button
+              type="button"
+              role="switch"
+              class="app-switch"
+              aria-checked={$builtInLookups$}
+              aria-labelledby="first-run-lookups"
+              on:click={() => builtInLookupsChoice$.next(!$builtInLookups$)}
+            >
+              <span class="app-switch-thumb" />
+            </button>
+          </div>
+        </div>
+        <a class="first-run-server" href="{pagePath}/settings?section=dictionary">
+          {$t$('firstRun.lookupsSettings')}
+        </a>
+      </section>
+
       {#if socialOn}
         <section class="social" aria-labelledby="first-run-social-title">
           <SectionHead
             id="first-run-social-title"
-            number={toolsShown ? 3 : 2}
+            number={toolsShown ? 4 : 3}
             title={$t$('social.friends')}
           />
           <p class="first-run-intro">{$t$('social.firstRunLead')}</p>
@@ -564,6 +601,7 @@
   }
 
   .tools,
+  .lookups-step,
   .social {
     margin-top: 3rem;
   }
@@ -628,6 +666,12 @@
     color: var(--font-color);
     text-decoration: underline;
     text-underline-offset: 0.2em;
+  }
+
+  .lookups-word {
+    color: var(--font-color);
+    font-size: var(--type-h2);
+    font-weight: 700;
   }
 
   .lookups {

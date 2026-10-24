@@ -8,6 +8,8 @@ export default defineConfig({
   resolve: { conditions: ['browser'] },
   test: {
     include: ['src/**/*.test.ts'],
-    environment: 'jsdom'
+    environment: 'jsdom',
+    // Imports JSON without import attributes, which Node refuses outside Vite.
+    server: { deps: { inline: ['kanji-processor'] } }
   }
 });

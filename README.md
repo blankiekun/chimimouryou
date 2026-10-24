@@ -281,4 +281,7 @@ deconjugation rules (Apache-2.0, see [NOTICE](NOTICE)). Readings in context and 
 furigana style come from [yurigana](https://github.com/blankiekun/yurigana), whose reading model is
 trained on public-domain works from [Aozora Bunko](https://www.aozora.gr.jp/) and on
 sentences with reviewed readings from [Tatoeba](https://tatoeba.org/) (CC BY 2.0 FR, by
-Tatoeba's contributors); neither is redistributed here. chimimouryou is not affiliated with or endorsed by any of these projects.
+Tatoeba's contributors); neither is redistributed here. The built-in dictionary runs
+[Yomitan](https://github.com/yomidevs/yomitan)'s lookup engine by the Yomitan Authors
+(GPL-3.0-or-later, see [its LICENSE](apps/web/src/lib/vendor/yomitan/LICENSE)), with kanji
+variants from [kanji-processor](https://www.npmjs.com/package/kanji-processor) (MIT). chimimouryou is not affiliated with or endorsed by any of these projects.
