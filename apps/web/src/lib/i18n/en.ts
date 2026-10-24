@@ -434,6 +434,13 @@ export const en = {
   'words.becauseAnki': 'Mature in Anki',
   'words.becauseMarked': 'Marked known by you',
   'words.becauseIgnored': 'Ignored (counts as known)',
+  'words.becausePlaced': 'Among the {count} most common words (level check)',
+  'words.placement': 'Level check',
+  'words.placementResult': 'About {count} words. The {count} most common words count as known.',
+  'words.placementNone':
+    'Not taken. A 2-minute yes/no test of common words gives you a starting point.',
+  'words.placementTake': 'Take the check',
+  'words.placementRetake': 'Retake',
   'words.marked': 'Marked by you',
   'words.filter': 'Show',
   'words.all': 'All {count}',
@@ -454,7 +461,7 @@ export const en = {
   'words.ankiSettings': 'Anki settings',
   'words.how': 'How words count',
   'words.howText':
-    'A word is known when you have met it {count} times in what you read, its Anki card is mature (interval 21 days or more), or you marked it. Ignored words count as known too.',
+    'A word is known when you have met it {count} times in what you read, its Anki card is mature (interval 21 days or more), you marked it, or it is among the most common words your level check covers. Ignored words count as known too.',
   'words.marksAccount': 'Marks sync to your account.',
   'words.marksLibrary': 'Marks sync with your library on Google Drive, OneDrive or in its folder.',
   'words.marksBrowser': 'Marks stay in this browser.',
@@ -1845,7 +1852,60 @@ export const en = {
   'transfer.error.cancelled': 'Cancelled.',
   'transfer.error.notLocal': 'Open the book once on this device, then send it.',
   'transfer.error.vn': 'Visual novels can’t be sent to friends yet: they are too big.',
-  'transfer.error.other': 'Something went wrong. Try again.'
+  'transfer.error.other': 'Something went wrong. Try again.',
+  'placement.title': 'Level check',
+  'placement.lede':
+    'About 2 minutes. Words appear one at a time: say whether you know each one, its meaning and reading. Some are made up, and saying yes to those lowers the result.',
+  'placement.items': 'Words',
+  'placement.itemsValue': '{count}; each one is chosen by your answers so far',
+  'placement.retakeText':
+    'You said yes to {count} of {total} made-up words, so no result was saved. Take it again and say yes only to words whose meaning you know.',
+  'placement.keys': 'Keys',
+  'placement.keysValue': 'Y or → know · N or ← don’t know',
+  'placement.result': 'Result',
+  'placement.resultValue': 'How many of the most common words you know',
+  'placement.current': 'Current result: about {count} words.',
+  'placement.start': 'Start',
+  'placement.notNow': 'Not now',
+  'placement.progress': '{done} of {total}',
+  'placement.question': 'Do you know this word?',
+  'placement.know': 'I know it',
+  'placement.dontKnow': 'Don’t know',
+  'placement.back': 'Back',
+  'placement.stop': 'Stop',
+  'placement.about': 'about {count}',
+  'placement.words': 'words',
+  'placement.resultText':
+    'The {count} most common words now count as known, so coverage, New words and Read next start from your level. Words you meet in reading, mark or have in Anki still count too.',
+  'placement.zeroText':
+    'No words count as known from this check. Mark words you know, or take it again later.',
+  'placement.falseAlarms':
+    'You said yes to {count} of {total} made-up words, so the result was lowered.',
+  'placement.rough': 'It is a rough estimate from {count} words.',
+  'placement.done': 'Done',
+  'placement.offerTitle': 'Set your level',
+  'placement.offerText':
+    'You have no known words yet, so coverage and Read next can’t tell what fits you. A 2-minute level check fixes that.',
+  'bookWords.becausePlaced': 'Within the level check’s {count} common words',
+  'wordTest.title': 'How many Japanese words do you know?',
+  'wordTest.lede':
+    'A 2-minute yes/no test. Words appear one at a time: say whether you know each one, its meaning and reading. Some are made up, and saying yes to those lowers the result. Nothing you answer leaves this page.',
+  'wordTest.result': 'About {count} words',
+  'wordTest.meaning':
+    'You likely know most of the {count} most common words in Japanese books, anime and games (by Jiten’s frequency list). Chimi Reader shows how much of a book they cover before you start it.',
+  'wordTest.meaningZero':
+    'You are at the very start. Graded readers and manga with furigana are the place to begin; Chimi Reader shows how much of a book you know before you start it.',
+  'wordTest.start': 'Start reading with Chimi Reader',
+  'wordTest.share': 'Share',
+  'wordTest.copied': 'Copied',
+  'wordTest.shareText': 'I know about {count} Japanese words. Take the 2-minute word test:',
+  'wordTest.ogTitle': 'How many Japanese words do you know?',
+  'wordTest.ogDescription':
+    'A 2-minute yes/no test across common and rare words gives you one number. Free, nothing to sign up for.',
+  'placement.fromWordTest': 'From your word test: about {count} words',
+  'placement.fromWordTestText':
+    'The {count} most common words count as known, so coverage and Read next start from your level.',
+  'placement.ok': 'OK'
 };
 
 export type MessageKey = keyof typeof en;

@@ -19,6 +19,8 @@
   import '../app.scss';
 
   let path = '';
+  // The public word test talks to no server and brings its own tags.
+  const wordTest = $page.route.id === '/word-test';
   // Prerendered pages don't know their origin: without VITE_BASE_PATH the tags are set in the browser.
   const siteOrigin = basePath || (browser ? window.location.origin : '');
   let dialogs: Dialog[] = [];
@@ -31,10 +33,12 @@
       watchInstall(window);
       watchYomitan(window);
     }
-    accountReady().then(async (user) => {
-      await releaseReaderData(user).catch(() => {});
-      startSettingsSync(user);
-    });
+    if (!wordTest) {
+      accountReady().then(async (user) => {
+        await releaseReaderData(user).catch(() => {});
+        startSettingsSync(user);
+      });
+    }
   }
 
   $: if (browser) {
@@ -108,23 +112,25 @@
 
 <svelte:window bind:online={$isOnline$} />
 
-<MetaTags
-  title="Chimimouryou"
-  description="Online e-book reader that supports dictionary extensions like Yomitan"
-  canonical={siteOrigin ? `${siteOrigin}${path !== '/' ? path : ''}` : undefined}
-  openGraph={{
-    type: 'website',
-    images: siteOrigin
-      ? [
-          {
-            url: `${siteOrigin}${pagePath}/icons/regular-icon@512x512.png`,
-            width: 512,
-            height: 512
-          }
-        ]
-      : []
-  }}
-/>
+{#if !wordTest}
+  <MetaTags
+    title="Chimimouryou"
+    description="Online e-book reader that supports dictionary extensions like Yomitan"
+    canonical={siteOrigin ? `${siteOrigin}${path !== '/' ? path : ''}` : undefined}
+    openGraph={{
+      type: 'website',
+      images: siteOrigin
+        ? [
+            {
+              url: `${siteOrigin}${pagePath}/icons/regular-icon@512x512.png`,
+              width: 512,
+              height: 512
+            }
+          ]
+        : []
+    }}
+  />
+{/if}
 
 <ThemeStyle />
 

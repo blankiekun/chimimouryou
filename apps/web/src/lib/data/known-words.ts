@@ -32,6 +32,7 @@ import {
   wordMarks$,
   type WordMarks
 } from '$lib/data/word-marks';
+import { placementCutoff } from '$lib/data/placement';
 import { getWordsMet, knownMinCount, metCounter, wordList } from '$lib/data/words-met';
 
 export interface KnownWords {
@@ -48,6 +49,8 @@ export interface KnownSet {
   met: (word: BookWord) => boolean;
   /** Mature in Anki (by form or lemma) */
   anki: (word: BookWord) => boolean;
+  /** Ranked within the placement check's cutoff */
+  placed: (word: BookWord) => boolean;
 }
 
 export interface BookWordGroups {
@@ -59,7 +62,7 @@ export interface BookWordGroups {
   /** Every word of the list, noise left out */
   all: BookWord[];
   /** Why the list's words are known (a word can have several reasons) */
-  reasons: { met: number; anki: number; marked: number; ignored: number };
+  reasons: { met: number; anki: number; placed: number; marked: number; ignored: number };
 }
 
 export interface CoverageCache {
@@ -165,7 +168,8 @@ export async function refreshKnownWordsIfStale() {
 
 /**
  * The words the reader knows: met `knownMinCount` times (words-met.ts) or, when Settings →
- * Anki → Known Words is on, mature in Anki (by written form), or marked known or ignored.
+ * Anki → Known Words is on, mature in Anki (by written form), or marked known or ignored,
+ * or ranked within the placement check's cutoff.
  */
 export async function getKnownSet(): Promise<KnownSet> {
   const [met, anki, marks] = await Promise.all([
@@ -177,12 +181,15 @@ export async function getKnownSet(): Promise<KnownSet> {
   const metCount = metCounter(met.words);
   const isMet = (word: BookWord) => metCount(word) >= knownMinCount;
   const inAnki = (word: BookWord) => forms.has(word[0]) || (!!word[4] && forms.has(word[4]));
+  const cutoff = placementCutoff();
+  const placed = (word: BookWord) => word[3] !== null && word[3] <= cutoff;
 
   return {
-    key: met.signature && `${met.signature}|${anki?.read ?? ''}|${marksSignature(marks)}`,
-    isKnown: (word) => isMet(word) || inAnki(word) || !!wordMark(marks, word),
+    key: met.signature && `${met.signature}|${anki?.read ?? ''}|${marksSignature(marks)}|${cutoff}`,
+    isKnown: (word) => isMet(word) || inAnki(word) || placed(word) || !!wordMark(marks, word),
     met: isMet,
-    anki: inAnki
+    anki: inAnki,
+    placed
   };
 }
 
@@ -193,18 +200,18 @@ export async function getKnownSet(): Promise<KnownSet> {
 export function bookWordGroups(
   list: BookWord[],
   words95: number | null | undefined,
-  known: Pick<KnownSet, 'met' | 'anki'>,
+  known: Pick<KnownSet, 'met' | 'anki' | 'placed'>,
   marks: WordMarks
 ): BookWordGroups {
   const all = list.filter((word) => !isNoiseWord(word));
   const isKnown = (word: BookWord) =>
-    known.met(word) || known.anki(word) || !!wordMark(marks, word);
+    known.met(word) || known.anki(word) || known.placed(word) || !!wordMark(marks, word);
   const groups: BookWordGroups = {
     new: newWords(wordsToStudy(list, words95 ?? 0), isKnown),
     known: [],
     ignored: [],
     all,
-    reasons: { met: 0, anki: 0, marked: 0, ignored: 0 }
+    reasons: { met: 0, anki: 0, placed: 0, marked: 0, ignored: 0 }
   };
 
   for (const word of all) {
@@ -214,6 +221,7 @@ export function bookWordGroups(
     else if (isKnown(word)) groups.known.push(word);
     if (known.met(word)) groups.reasons.met += 1;
     if (known.anki(word)) groups.reasons.anki += 1;
+    if (known.placed(word)) groups.reasons.placed += 1;
     if (mark === 'known') groups.reasons.marked += 1;
     if (mark === 'ignored') groups.reasons.ignored += 1;
   }

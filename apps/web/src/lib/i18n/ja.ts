@@ -441,6 +441,12 @@ export const ja: Record<MessageKey, string> = {
   'words.becauseAnki': 'Ankiで成熟',
   'words.becauseMarked': '既知に指定',
   'words.becauseIgnored': '除外（既知として数える）',
+  'words.becausePlaced': '頻出語{count}語以内（レベルチェック）',
+  'words.placement': 'レベルチェック',
+  'words.placementResult': '約{count}語。頻出語の上位{count}語を既知とします。',
+  'words.placementNone': '未受験。よく使う語にはい/いいえで答える2分のテストで、出発点を決めます。',
+  'words.placementTake': 'チェックする',
+  'words.placementRetake': 'もう一度',
   'words.marked': '手動指定',
   'words.filter': '表示',
   'words.all': 'すべて {count}',
@@ -461,7 +467,7 @@ export const ja: Record<MessageKey, string> = {
   'words.ankiSettings': 'Anki設定',
   'words.how': '既知語の数え方',
   'words.howText':
-    '読んだ本で{count}回出会った語、Ankiのカードが成熟した語（間隔21日以上）、手動で指定した語が既知になります。除外した語も既知として数えます。',
+    '読んだ本で{count}回出会った語、Ankiのカードが成熟した語（間隔21日以上）、手動で指定した語、レベルチェックの範囲内の頻出語が既知になります。除外した語も既知として数えます。',
   'words.marksAccount': '指定はアカウントに同期されます。',
   'words.marksLibrary': '指定はGoogle Drive・OneDrive・フォルダのライブラリと同期されます。',
   'words.marksBrowser': '指定はこのブラウザだけに保存されます。',
@@ -1864,5 +1870,58 @@ export const ja: Record<MessageKey, string> = {
   'transfer.error.cancelled': 'キャンセルしました。',
   'transfer.error.notLocal': 'このデバイスで一度本を開いてから送ってください。',
   'transfer.error.vn': 'ビジュアルノベルはサイズが大きいため、まだフレンドに送れません。',
-  'transfer.error.other': '問題が発生しました。もう一度お試しください。'
+  'transfer.error.other': '問題が発生しました。もう一度お試しください。',
+  'placement.title': 'レベルチェック',
+  'placement.lede':
+    '約2分。語が一つずつ出ます。意味と読みが分かるか答えてください。実在しない語も混ざっていて、それに「はい」と答えると結果が下がります。',
+  'placement.items': '語数',
+  'placement.itemsValue': '{count}語（それまでの答えに合わせて選びます）',
+  'placement.retakeText':
+    '実在しない語{total}語のうち{count}語に「はい」と答えたため、結果は保存していません。意味が分かる語にだけ「はい」と答えて、もう一度受けてください。',
+  'placement.keys': 'キー',
+  'placement.keysValue': 'Y または → 知っている · N または ← 知らない',
+  'placement.result': '結果',
+  'placement.resultValue': '頻出語をいくつ知っているか',
+  'placement.current': '現在の結果：約{count}語。',
+  'placement.start': '始める',
+  'placement.notNow': '今はしない',
+  'placement.progress': '{done} / {total}',
+  'placement.question': 'この語を知っていますか？',
+  'placement.know': '知っている',
+  'placement.dontKnow': '知らない',
+  'placement.back': '戻る',
+  'placement.stop': 'やめる',
+  'placement.about': '約{count}',
+  'placement.words': '語',
+  'placement.resultText':
+    '頻出語の上位{count}語を既知とします。カバー率、新出語、次に読む本があなたのレベルから始まります。読書で出会った語、指定した語、Ankiの語も引き続き数えます。',
+  'placement.zeroText':
+    'このチェックで既知になった語はありません。知っている語を指定するか、後でもう一度受けてください。',
+  'placement.falseAlarms':
+    '実在しない語{total}語のうち{count}語に「はい」と答えたため、結果を下げました。',
+  'placement.rough': '{count}語からのおおまかな推定です。',
+  'placement.done': '完了',
+  'placement.offerTitle': 'レベルを設定',
+  'placement.offerText':
+    'まだ既知語がないため、カバー率や次に読む本があなたに合うか判断できません。2分のレベルチェックで設定できます。',
+  'bookWords.becausePlaced': 'レベルチェックの頻出語{count}語以内',
+  'wordTest.title': '日本語の単語をいくつ知っていますか？',
+  'wordTest.lede':
+    '2分のはい/いいえテスト。語が一つずつ出ます。意味と読みが分かるか答えてください。実在しない語も混ざっていて、それに「はい」と答えると結果が下がります。答えはこのページの外に送られません。',
+  'wordTest.result': '約{count}語',
+  'wordTest.meaning':
+    '日本の本、アニメ、ゲームでよく使う上位{count}語（Jitenの頻度リスト）の大半を知っているようです。Chimi Readerは、読み始める前に本の何割をカバーしているか示します。',
+  'wordTest.meaningZero':
+    'まだ始めたばかりです。多読用の本やふりがな付きの漫画から始めましょう。Chimi Readerは、読み始める前に本の何割を知っているか示します。',
+  'wordTest.start': 'Chimi Readerで読み始める',
+  'wordTest.share': '共有',
+  'wordTest.copied': 'コピーしました',
+  'wordTest.shareText': '日本語の単語を約{count}語知っています。2分の単語テスト：',
+  'wordTest.ogTitle': '日本語の単語をいくつ知っていますか？',
+  'wordTest.ogDescription':
+    'よく使う語から珍しい語まで、2分のはい/いいえテストで一つの数字が分かります。無料、登録不要。',
+  'placement.fromWordTest': '単語テストの結果：約{count}語',
+  'placement.fromWordTestText':
+    '頻出語の上位{count}語を既知とします。カバー率と次に読む本があなたのレベルから始まります。',
+  'placement.ok': 'OK'
 };
