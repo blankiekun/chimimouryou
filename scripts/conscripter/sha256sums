@@ -1,0 +1,4 @@
+# sha256 of each CONscripter release's conscripter_<tag>_web.7z, checked by build.sh.
+# ebook-update reads this file from main to install a newer engine from the admin panel.
+v0.30.0 b236cdfc426e6b73c8efa9dd5fea2d1e86450251763c5d30323928d1f9e702b9
+v0.33.0 8ef995884bfc61c482e7adcb136d57288484d048ccb327530939fab57066eb61

@@ -106,8 +106,10 @@ services:
       JITEN_WORKERS: ${DIFFICULTY_WORKERS:-2}
       ALLOW_HTTP_ACCOUNTS: ${ALLOW_HTTP_ACCOUNTS:-0}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
+    # Reads the catalog and token; writes only its own state.
     volumes:
-      - ${DATA_PATH:-./data}:/data
+      - ${DATA_PATH:-./data}:/data:ro
+      - ${DATA_PATH:-./data}/state/difficulty:/data/state/difficulty
       - ${LIBRARY_PATH:?set LIBRARY_PATH in .env}:/library:ro
       - ${VN_PATH:-${DATA_PATH:-./data}/vn}:/vn:ro
       # Readings files are made from the reader's processed books (bookdata_*.zip).
@@ -127,5 +129,6 @@ services:
       ALLOW_HTTP_ACCOUNTS: ${ALLOW_HTTP_ACCOUNTS:-0}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
     volumes:
-      - ${DATA_PATH:-./data}:/data
+      - ${DATA_PATH:-./data}:/data:ro
+      - ${DATA_PATH:-./data}/state/mokuro:/data/state/mokuro
       - ${LIBRARY_PATH:?set LIBRARY_PATH in .env}:/library:ro

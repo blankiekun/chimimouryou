@@ -26,6 +26,15 @@ fi
 . "$LOCAL/deploy.env"
 : "${TARGET:?set TARGET in $LOCAL/deploy.env}"
 
+# A relative path would resolve inside /opt/ebook-reader, which every deploy deletes.
+for name in DATA_PATH LIBRARY_PATH VN_PATH SYNC_PATH; do
+  value=$(sed -n "s/^$name=//p" "$LOCAL/env" | tail -n 1 | tr -d '"'"'")
+  case "$name:$value" in
+    DATA_PATH:/* | LIBRARY_PATH:/* | VN_PATH:/* | VN_PATH: | SYNC_PATH:/* | SYNC_PATH:) ;;
+    *) echo "$name in $LOCAL/env must be an absolute path (got '$value')" >&2; exit 1 ;;
+  esac
+done
+
 # Runs a command on the server as root; stdin is passed through.
 run() {
   case "$TARGET" in
@@ -64,20 +73,31 @@ for command in ebook-compose ebook-account ebook-update; do
   put "$REPO_ROOT/deploy/server/$command" "/usr/local/bin/$command" 755
 done
 
-# shellcheck disable=SC2016 # expands on the server
-run env LANG=C.UTF-8 VERSION="$VERSION" bash -c '
+# The script goes on stdin, so a dash login shell over SSH never parses it; the braces make
+# bash read all of it before anything runs (nothing inside can eat the rest).
+run env LANG=C.UTF-8 VERSION="$VERSION" bash -s <<'EOF'
+{
   set -euo pipefail
   compose=/usr/local/bin/ebook-compose
-  for image in $($compose config --images | sort -u); do
+  images=$($compose config --images | sort -u)
+  for image in $images; do
     docker image tag "$image" "${image%:*}:previous" 2>/dev/null || true
   done
-  $compose build --quiet
-  $compose up -d --remove-orphans
+  # On failure the images that ran get their tags back, so the next deploy keeps them as :previous.
+  if ! $compose build --quiet || ! $compose up -d --remove-orphans; then
+    for image in $images; do
+      docker image tag "${image%:*}:previous" "$image" 2>/dev/null || true
+    done
+    $compose up -d --remove-orphans || true
+    echo "Deploy failed: the previous images run again" >&2
+    exit 1
+  fi
   docker image prune -f >/dev/null
   if [ -d /run/systemd/system ]; then
     /usr/local/bin/ebook-update install || echo "Updates from the admin panel stay off (see above)"
   fi
-'
+}
+EOF
 
 # The first admin account and its temporary password, until it has signed in.
 run /usr/local/bin/ebook-account initial-admin || true

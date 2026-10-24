@@ -2,7 +2,7 @@
 # Fetches the CONscripter web engine (GPL-2.0, https://github.com/blankiekun/CONscripter, a fork of
 # ONScripter-yuri) from its newest GitHub release (CONSCRIPTER_TAG=<tag> picks another) into
 # apps/web/static/vn/. Needs curl and 7z, or curl and Docker. The files are committed, so this only
-# runs when CONscripter has a new release.
+# runs when CONscripter has a new release (with CONSCRIPTER_RECORD=1, which adds its sum to sha256sums).
 set -euo pipefail
 
 REPO=https://github.com/blankiekun/CONscripter
@@ -17,6 +17,18 @@ trap 'rm -rf "$work"' EXIT
 tag=${CONSCRIPTER_TAG:-$(curl -fsSLI -o /dev/null -w '%{url_effective}' "$REPO/releases/latest" | sed 's|.*/tag/||')}
 [ -n "$tag" ] || { echo "No CONscripter release found" >&2; exit 1; }
 curl -fsSL -o "$work/web.7z" "$REPO/releases/download/$tag/conscripter_${tag}_web.7z"
+
+# Each release's sum is recorded once (CONSCRIPTER_RECORD=1 for a new release, then commit the file),
+# so a replaced release asset is refused. CONSCRIPTER_SUMS: another list (ebook-update uses main's).
+sums=${CONSCRIPTER_SUMS:-$here/sha256sums}
+sum=$(awk -v tag="$tag" '$1 == tag { print $2 }' "$sums")
+if [ -z "$sum" ] && [ "${CONSCRIPTER_RECORD:-}" = 1 ]; then
+  sum=$(sha256sum "$work/web.7z" | cut -d' ' -f1)
+  echo "$tag $sum" >> "$sums"
+  echo "Recorded the sha256 of CONscripter $tag in $sums"
+fi
+[ -n "$sum" ] || { echo "No sha256 for CONscripter $tag in $sums (CONSCRIPTER_RECORD=1 records a new release's)" >&2; exit 1; }
+echo "$sum  $work/web.7z" | sha256sum -c --quiet
 
 files=(conscripter_web/conscripter.js conscripter_web/conscripter.wasm)
 if command -v 7z >/dev/null; then
