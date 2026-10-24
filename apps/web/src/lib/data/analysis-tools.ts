@@ -14,8 +14,9 @@
  *
  * One worker runs both Sudachi (~250 MB in memory) and Pyodide (~200 MB)
  * (functions/analysis/analysis.worker.ts): Python asks Sudachi for each text as it reads, so a part
- * is one pass. One job at a time; the worker stays for the next one as long as analysisKeepAlive
- * says (analysis-capacity.ts). Not part of upstream.
+ * is one pass; the worker keeps the last book's tokens for its other part. One job at a time; the
+ * worker (and the scoring one) stays for the next one as long as analysisKeepAlive says
+ * (analysis-capacity.ts). Not part of upstream.
  */
 
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
@@ -383,14 +384,57 @@ const fail = (message: { type: string; message?: string }) => {
   return undefined;
 };
 
-function scoreWorker(request: ScoreRequest) {
-  return runWorker<ScoreMessage>(
-    new Worker(new URL('../functions/analysis/analysis-score.worker.ts', import.meta.url), {
+/**
+ * The scoring worker, kept like the analysis worker (analysisKeepAlive) so the next book skips
+ * onnxruntime's start; its own timer, as it runs after the queue's job.
+ */
+let scorer: { worker: Worker; timer?: ReturnType<typeof setTimeout> } | undefined;
+
+function endScorer() {
+  scorer?.worker.terminate();
+  scorer = undefined;
+}
+
+async function score(request: ScoreRequest) {
+  clearTimeout(scorer?.timer);
+  scorer ??= {
+    worker: new Worker(new URL('../functions/analysis/analysis-score.worker.ts', import.meta.url), {
       type: 'module'
-    }),
-    request,
-    (message) => (message.type === 'scores' ? message : fail(message))
-  ) as Promise<Extract<ScoreMessage, { type: 'scores' }>>;
+    })
+  };
+
+  try {
+    return (await runWorker<ScoreMessage>(
+      scorer.worker,
+      request,
+      (message) => (message.type === 'scores' ? message : fail(message)),
+      undefined,
+      true
+    )) as Extract<ScoreMessage, { type: 'scores' }>;
+  } catch (error) {
+    // runWorker ended it
+    scorer = undefined;
+    throw error;
+  } finally {
+    const keepAlive = analysisKeepAlive();
+
+    if (scorer && keepAlive) {
+      scorer.timer = setTimeout(endScorer, keepAlive);
+    } else {
+      endScorer();
+    }
+  }
+}
+
+/** One at a time: a book's score runs after its queue job, so the next book's could meet it. */
+let scoring: Promise<unknown> = Promise.resolve();
+
+function scoreWorker(request: ScoreRequest) {
+  const run = scoring.then(() => score(request));
+
+  scoring = run.catch(() => undefined);
+
+  return run;
 }
 
 /** The analysis worker, kept between jobs (analysisKeepAlive); ended when a job fails. */
