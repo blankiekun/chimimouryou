@@ -9,12 +9,15 @@
  * private file system instead of Yomitan's IndexedDB tables: IndexedDB costs ~33 µs a row
  * whatever its size, so a 6 GB collection took 10 minutes. Each import is one pack, a folder of
  * `dictionary-collections/`:
- * - `rows.bin`: every row's JSON as the export wrote it (UTF-8, revived on read);
- * - `rows.idx`: Float64 offsets of the rows in `rows.bin` (one more than the rows);
+ * - `rows.bin`: every row's JSON as the export wrote it (UTF-8, revived on read), one stream cut
+ *   into `block`-byte blocks, each compressed alone (deflate-raw); rows may span blocks;
+ * - `blocks.idx`: Float64 starts of the compressed blocks in `rows.bin` (one more than the blocks);
+ * - `rows.idx`: Float64 offsets of the rows in the uncompressed stream (one more than the rows);
  * - `keys.bin`: the distinct lookup keys, sorted like IndexedDB sorts strings (UTF-16 code units);
  * - `keys.idx`: Uint32 key starts in `keys.bin` (K + 1), then posting starts (K + 1);
  * - `postings.bin`: per key, [row, kind << 16 | dictionary] pairs (Uint32), rows in import order;
- * - `manifest.json`, written last: the dictionary titles (null once deleted).
+ * - `manifest.json`, written last: version 2 and `block`, the dictionary titles (null once
+ *   deleted). Version-1 packs (#181) have no blocks: `rows.bin` is uncompressed.
  * `DictionaryStore` answers the translator's find* calls from the packs for their dictionaries
  * and from IndexedDB for the rest, with the rows and order IndexedDB would give. Summaries stay in
  * IndexedDB's `dictionaries` table, so listing, enabling and the importer's duplicate check are
@@ -42,6 +45,9 @@ export const enum Kind {
 const sequenceKey = (sequence: number) => `\u0000${sequence}`;
 
 // jsdom (the engine's tests) has none.
+/** Inflated blocks a pack keeps (64 KB each) */
+const cachedBlocks = 64;
+
 const opfsAvailable = () => !!(globalThis.navigator?.storage as any)?.getDirectory;
 
 const opfsRoot = async (create: boolean) => {
@@ -79,22 +85,88 @@ async function writeFile(dir: FileSystemDirectoryHandle, name: string, data: Arr
   }
 }
 
+const deflate = async (block: Uint8Array) =>
+  new Uint8Array(
+    await new Response(
+      new Response(block as BlobPart).body!.pipeThrough(new CompressionStream('deflate-raw'))
+    ).arrayBuffer()
+  );
+
+const inflate = async (block: ArrayBuffer) =>
+  new Uint8Array(
+    await new Response(
+      new Response(block).body!.pipeThrough(new DecompressionStream('deflate-raw'))
+    ).arrayBuffer()
+  );
+
+/** Compresses blocks in workers (CompressionStream runs on its caller's thread), else here. */
+class Deflater {
+  private workers: Worker[] = [];
+  private waiting = new Map<number, [(bytes: Uint8Array) => void, (error: unknown) => void]>();
+  private next = 0;
+
+  constructor() {
+    // jsdom (the tests) has no workers.
+    if (typeof Worker === 'undefined') return;
+    const count = Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 2) - 1));
+    for (let i = 0; i < count; i++) {
+      const worker = new Worker(new URL('./pack-deflate.worker.ts', import.meta.url), {
+        type: 'module'
+      });
+      worker.onmessage = ({ data: { id, bytes } }) => {
+        this.waiting.get(id)![0](new Uint8Array(bytes));
+        this.waiting.delete(id);
+      };
+      worker.onerror = (event) => {
+        for (const [, reject] of this.waiting.values()) reject(new Error(event.message));
+        this.waiting.clear();
+      };
+      this.workers.push(worker);
+    }
+  }
+
+  compress(block: Uint8Array) {
+    if (!this.workers.length) return deflate(block);
+    const id = this.next++;
+    return new Promise<Uint8Array>((resolve, reject) => {
+      this.waiting.set(id, [resolve, reject]);
+      this.workers[id % this.workers.length].postMessage({ id, block }, [block.buffer]);
+    });
+  }
+
+  close() {
+    for (const worker of this.workers) worker.terminate();
+  }
+}
+
 /** Writes one pack while a collection streams in; `finish` sorts the keys and writes the index. */
 export class PackWriter {
+  /** Uncompressed bytes per block of `rows.bin` (0 writes a version-1 pack, for the tests) */
+  static blockSize = 1 << 16;
   private keyIds = new Map<string, number>();
   /** [key id, row, kind << 16 | dictionary] per posting */
   private postings = new Grow(new Uint32Array(3 << 16));
   private offsets = new Grow(new Float64Array(1 << 16));
+  private blockStarts = new Grow(new Float64Array(1 << 12));
+  private block = PackWriter.blockSize;
+  /** Rows not yet cut into blocks; a multiple of the block size */
   private buffer = new Uint8Array(8 << 20);
   private used = 0;
+  /** Uncompressed bytes before `buffer` */
+  private cutBytes = 0;
+  /** Bytes in `rows.bin` */
   private written = 0;
+  private pending: Promise<Uint8Array>[] = [];
+  private deflater = this.block ? new Deflater() : undefined;
   private encoder = new TextEncoder();
 
   constructor(
     readonly dir: FileSystemDirectoryHandle,
     readonly name: string,
     private rows: SyncHandle
-  ) {}
+  ) {
+    this.blockStarts.push(0);
+  }
 
   get rowCount() {
     return this.offsets.n;
@@ -103,12 +175,17 @@ export class PackWriter {
   /** One row of `table` (its id-less value for the keys, the export's text to store). */
   add(table: string, value: any, text: string, dictionary: number) {
     const row = this.offsets.n;
-    this.offsets.push(this.written + this.used);
-    if (this.used + text.length * 3 > this.buffer.length) this.flush();
-    if (text.length * 3 > this.buffer.length) {
+    this.offsets.push(this.cutBytes + this.used);
+    if (this.used + text.length * 3 > this.buffer.length) this.cut(false);
+    if (this.used + text.length * 3 > this.buffer.length) {
       const bytes = this.encoder.encode(text);
-      this.rows.write(bytes, { at: this.written });
-      this.written += bytes.length;
+      for (let at = 0; at < bytes.length; ) {
+        const n = Math.min(bytes.length - at, this.buffer.length - this.used);
+        this.buffer.set(bytes.subarray(at, at + n), this.used);
+        this.used += n;
+        at += n;
+        if (this.used === this.buffer.length) this.cut(false);
+      }
     } else {
       this.used += this.encoder.encodeInto(text, this.buffer.subarray(this.used)).written;
     }
@@ -146,19 +223,46 @@ export class PackWriter {
     }
   }
 
-  private flush() {
-    if (!this.used) return;
-    this.rows.write(this.buffer.subarray(0, this.used), { at: this.written });
-    this.written += this.used;
-    this.used = 0;
+  /** Hands the buffer's full blocks (and the rest when `last`) to compression. */
+  private cut(last: boolean) {
+    if (!this.block) {
+      this.rows.write(this.buffer.subarray(0, this.used), { at: this.written });
+      this.written += this.used;
+      this.cutBytes += this.used;
+      this.used = 0;
+      return;
+    }
+    let at = 0;
+    while (this.used - at >= this.block || (last && at < this.used)) {
+      const end = Math.min(at + this.block, this.used);
+      this.pending.push(this.deflater!.compress(this.buffer.slice(at, end)));
+      at = end;
+    }
+    this.buffer.copyWithin(0, at, this.used);
+    this.used -= at;
+    this.cutBytes += at;
+  }
+
+  /** Writes the blocks compressed so far, in order; the import calls it between chunks. */
+  async drain() {
+    const pending = this.pending;
+    this.pending = [];
+    for (const block of pending) {
+      const bytes = await block;
+      this.rows.write(bytes, { at: this.written });
+      this.written += bytes.length;
+      this.blockStarts.push(this.written);
+    }
   }
 
   /** Writes the index and then the manifest, which makes the pack complete. */
   async finish(titles: string[]) {
-    this.flush();
-    this.offsets.push(this.written);
+    this.cut(true);
+    await this.drain();
+    this.offsets.push(this.cutBytes);
     this.rows.flush();
     this.rows.close();
+    this.deflater?.close();
 
     // Keys in IndexedDB's order; a counting sort by key keeps each key's rows in import order.
     const ids = this.keyIds;
@@ -195,12 +299,18 @@ export class PackWriter {
     await writeFile(this.dir, 'keys.idx', index);
     await writeFile(this.dir, 'postings.bin', out);
     await writeFile(this.dir, 'rows.idx', this.offsets.a.subarray(0, this.offsets.n));
-    const manifest = new TextEncoder().encode(JSON.stringify({ version: 1, titles }));
-    await writeFile(this.dir, 'manifest.json', manifest);
+    if (this.block) {
+      await writeFile(this.dir, 'blocks.idx', this.blockStarts.a.subarray(0, this.blockStarts.n));
+    }
+    const manifest: Manifest = this.block
+      ? { version: 2, block: this.block, titles }
+      : { version: 1, titles };
+    await writeFile(this.dir, 'manifest.json', new TextEncoder().encode(JSON.stringify(manifest)));
   }
 
   /** Drops the unfinished pack. */
   async abort() {
+    this.deflater?.close();
     try {
       this.rows.close();
     } catch {
@@ -212,6 +322,8 @@ export class PackWriter {
 
 interface Manifest {
   version: number;
+  /** Uncompressed bytes per block of `rows.bin` (version 2) */
+  block?: number;
   titles: (string | null)[];
 }
 
@@ -229,6 +341,9 @@ class Pack {
   private keys!: Uint16Array;
   private keyStart!: Uint32Array;
   private postStart!: Uint32Array;
+  private blockStarts?: Float64Array;
+  /** Recently inflated blocks, oldest first */
+  private blocks = new Map<number, Promise<Uint8Array>>();
   private files: Record<string, File> = {};
   private handles: Record<string, ReadHandle> = {};
 
@@ -246,10 +361,12 @@ class Pack {
 
   ready() {
     return (this.loaded ??= (async () => {
-      for (const name of ['rows.bin', 'rows.idx', 'keys.bin', 'keys.idx', 'postings.bin']) {
+      const names = ['rows.bin', 'rows.idx', 'keys.bin', 'keys.idx', 'postings.bin'];
+      if (this.manifest.block) names.push('blocks.idx');
+      for (const name of names) {
         const handle = (await this.dir.getFileHandle(name)) as any;
         this.files[name] = await handle.getFile();
-        if (name.startsWith('keys')) continue;
+        if (name.startsWith('keys') || name === 'blocks.idx') continue;
         try {
           this.handles[name] = await handle.createSyncAccessHandle({ mode: 'read-only' });
         } catch {
@@ -261,6 +378,9 @@ class Pack {
       const count = index.length / 2;
       this.keyStart = index.subarray(0, count);
       this.postStart = index.subarray(count);
+      if (this.manifest.block) {
+        this.blockStarts = new Float64Array(await this.files['blocks.idx'].arrayBuffer());
+      }
     })());
   }
 
@@ -276,6 +396,7 @@ class Pack {
     for (const handle of Object.values(this.handles)) handle.close();
     this.handles = {};
     this.files = {};
+    this.blocks = new Map();
     this.loaded = undefined;
   }
 
@@ -343,15 +464,51 @@ class Pack {
     );
   }
 
+  /** Block b of `rows.bin`, inflated (kept among the last `cachedBlocks`). */
+  private block(b: number) {
+    let bytes = this.blocks.get(b);
+    if (bytes) this.blocks.delete(b);
+    else {
+      bytes = this.read('rows.bin', this.blockStarts![b], this.blockStarts![b + 1]).then(inflate);
+      bytes.catch(() => this.blocks.delete(b));
+    }
+    this.blocks.set(b, bytes);
+    if (this.blocks.size > cachedBlocks) this.blocks.delete(this.blocks.keys().next().value!);
+    return bytes;
+  }
+
+  /** Bytes [start, end) of the uncompressed rows. */
+  private async rowBytes(start: number, end: number, blocks: Map<number, Promise<Uint8Array>>) {
+    const size = this.manifest.block;
+    if (!size) return new Uint8Array(await this.read('rows.bin', start, end));
+    const parts: Promise<Uint8Array>[] = [];
+    for (let b = Math.floor(start / size); b * size < end; b++) {
+      if (!blocks.has(b)) blocks.set(b, this.block(b));
+      parts.push(blocks.get(b)!);
+    }
+    const first = Math.floor(start / size) * size;
+    const all = await Promise.all(parts);
+    if (all.length === 1) return all[0].subarray(start - first, end - first);
+    const bytes = new Uint8Array(end - start);
+    all.forEach((part, i) => {
+      const from = Math.max(start, first + i * size);
+      const to = Math.min(end, first + (i + 1) * size);
+      bytes.set(part.subarray(from - first - i * size, to - first - i * size), from - start);
+    });
+    return bytes;
+  }
+
   /** The rows, parsed and revived (keyed by row number). */
   async rows(rowNumbers: Iterable<number>) {
     const rows = new Map<number, any>();
     const decoder = new TextDecoder();
+    // This call's blocks, so it never inflates one twice whatever the cache drops
+    const blocks = new Map<number, Promise<Uint8Array>>();
     await Promise.all(
       [...rowNumbers].map(async (row) => {
         const [start, end] = new Float64Array(await this.read('rows.idx', row * 8, row * 8 + 16));
         const value: any = revive(
-          JSON.parse(decoder.decode(await this.read('rows.bin', start, end)))
+          JSON.parse(decoder.decode(await this.rowBytes(start, end, blocks)))
         );
         rows.set(row, Array.isArray(value) ? value[1] : value);
       })

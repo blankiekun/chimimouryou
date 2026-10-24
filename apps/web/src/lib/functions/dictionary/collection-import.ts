@@ -97,6 +97,7 @@ export async function importCollection(
       if (done) break;
       read += value.length;
       reader.push(decoder.decode(value, { stream: true }));
+      await pack.drain();
       onProgress(read, file.size);
     }
     reader.push(decoder.decode());

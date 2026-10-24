@@ -10,7 +10,7 @@ import { Blob as NodeBlob } from 'node:buffer';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DictionaryDatabase } from '$lib/vendor/yomitan/dictionary/dictionary-database';
 import { importCollection } from './collection-import';
-import { DictionaryStore } from './collection-store';
+import { DictionaryStore, PackWriter } from './collection-store';
 
 const title = 'Test Dict';
 const reverse = (text: string) => [...text].reverse().join('');
@@ -174,32 +174,38 @@ beforeEach(() => {
 });
 
 describe('collection import', () => {
-  it('imports every table and finds what a direct import finds', async () => {
-    const db = await database();
-    const result = await importCollection(db, collection(), noProgress, notCancelled);
-    expect(result.imported.map(({ title }) => title)).toEqual([title]);
-    expect(result.orphanRows).toBe(1);
+  // 256-byte blocks split rows across blocks; 0 writes a version-1 pack (#181: uncompressed).
+  it.each([65536, 256, 0])(
+    'imports every table and finds what a direct import finds (blocks of %i)',
+    async (block) => {
+      PackWriter.blockSize = block;
+      const db = await database();
+      const result = await importCollection(db, collection(), noProgress, notCancelled);
+      expect(result.imported.map(({ title }) => title)).toEqual([title]);
+      expect(result.orphanRows).toBe(1);
 
-    const set = new Set([title]);
-    const [c, y] = [db as any, await reference()];
-    for (const matchType of ['exact', 'prefix', 'suffix']) {
-      expect(withoutIds(await c.findTermsBulk(words, set, matchType))).toEqual(
-        withoutIds(await y.findTermsBulk(words, set, matchType))
+      const set = new Set([title]);
+      const [c, y] = [db as any, await reference()];
+      for (const matchType of ['exact', 'prefix', 'suffix']) {
+        expect(withoutIds(await c.findTermsBulk(words, set, matchType))).toEqual(
+          withoutIds(await y.findTermsBulk(words, set, matchType))
+        );
+      }
+      expect(await c.findTermMetaBulk(words, set)).toEqual(await y.findTermMetaBulk(words, set));
+      const exact = words.map((term) => ({ term, reading: 'じしょ' }));
+      expect(withoutIds(await c.findTermsExactBulk(exact, set))).toEqual(
+        withoutIds(await y.findTermsExactBulk(exact, set))
       );
+      const sequences = [0, 4, 7, 999].map((query) => ({ query, dictionary: title }));
+      expect(withoutIds(await c.findTermsBySequenceBulk(sequences))).toEqual(
+        withoutIds(await y.findTermsBySequenceBulk(sequences))
+      );
+      expect(await c.findTermsBulk(words, new Set(['Other']), 'exact')).toEqual([]);
+      const [media] = await c.getMedia([{ path: 'img/a.png', dictionary: title }]);
+      expect(new TextDecoder().decode(media.content)).toBe('png');
+      PackWriter.blockSize = 65536;
     }
-    expect(await c.findTermMetaBulk(words, set)).toEqual(await y.findTermMetaBulk(words, set));
-    const exact = words.map((term) => ({ term, reading: 'じしょ' }));
-    expect(withoutIds(await c.findTermsExactBulk(exact, set))).toEqual(
-      withoutIds(await y.findTermsExactBulk(exact, set))
-    );
-    const sequences = [0, 4, 7, 999].map((query) => ({ query, dictionary: title }));
-    expect(withoutIds(await c.findTermsBySequenceBulk(sequences))).toEqual(
-      withoutIds(await y.findTermsBySequenceBulk(sequences))
-    );
-    expect(await c.findTermsBulk(words, new Set(['Other']), 'exact')).toEqual([]);
-    const [media] = await c.getMedia([{ path: 'img/a.png', dictionary: title }]);
-    expect(new TextDecoder().decode(media.content)).toBe('png');
-  });
+  );
 
   it('skips installed dictionaries', async () => {
     const db = await database();
