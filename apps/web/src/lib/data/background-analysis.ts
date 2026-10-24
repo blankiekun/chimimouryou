@@ -8,11 +8,11 @@
  * Standalone: stored books get their difficulty estimate and word list, and their readings file
  * while Generated furigana is on, in the background with the downloaded analysis tools
  * (analysis-tools.ts): when a book is saved (BrowserStorageHandler.saveBook), and once per app
- * start for books still without them. One book at a time, behind what the reader asks for.
+ * start (and when Generated furigana is turned on) for books still without them. One book at a time, behind what the reader asks for.
  * Manga, visual novels and placeholders are skipped. Not part of upstream.
  */
 
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, filter, skip } from 'rxjs';
 import {
   analysisTag,
   analysisToolsSupported,
@@ -235,10 +235,19 @@ export function redoWordLists(titles: string[]) {
   return checking;
 }
 
-/** Once per app start, when the page is idle: every stored book still missing something. */
+/**
+ * Once per app start, when the page is idle: every stored book still missing something; and again
+ * whenever Generated furigana is turned on, for their readings files.
+ */
 export function catchUpAnalysis() {
   if (caughtUp || !analysisToolsSupported()) return;
   caughtUp = true;
+
+  generatedFurigana$
+    .pipe(skip(1), filter(Boolean))
+    .subscribe(() =>
+      analyseStoredBooks().catch((error) => console.warn('Background analysis:', error))
+    );
 
   const idle = (callback: () => void) =>
     'requestIdleCallback' in window

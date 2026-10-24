@@ -31,6 +31,14 @@ const db = vi.hoisted(() => ({
   refreshed: () => {}
 }));
 const source = vi.hoisted(() => ({ value: 'gdrive' }));
+const storedCursor = vi.hoisted(() => {
+  const cursor = (i: number): unknown =>
+    i < Object.keys(books).length
+      ? { key: Object.keys(books)[i], continue: async () => cursor(i + 1) }
+      : null;
+
+  return cursor;
+});
 const furigana = vi.hoisted(() => ({ on: undefined as unknown as BehaviorSubject<boolean> }));
 
 vi.mock('$lib/data/analysis-tools', () => tools);
@@ -41,6 +49,11 @@ vi.mock('$lib/data/store', async () => {
 
   return {
     database: {
+      db: Promise.resolve({
+        transaction: () => ({
+          store: { index: () => ({ openKeyCursor: async () => storedCursor(0) }) }
+        })
+      }),
       getDataByTitle: async (title: string) => db.get(title),
       dataListChanged$: { next: () => db.refreshed() }
     },
@@ -60,6 +73,7 @@ const {
   backgroundAnalysisIdle,
   BACKGROUND_STALL_MS,
   booksWithoutReadings,
+  catchUpAnalysis,
   redoWordLists,
   wordListsWithoutReader
 } = await import('./background-analysis');
@@ -102,6 +116,16 @@ describe('background analysis', () => {
     expect(analysed(tools.localEstimate)).toEqual(['novel']);
     // Behind the reader's own jobs.
     expect(tools.localEstimate.mock.calls[0]).toContain(true);
+  });
+
+  it('queues readings files when Generated furigana is turned on later', async () => {
+    vi.useFakeTimers();
+    furigana.on.next(false);
+    catchUpAnalysis();
+    furigana.on.next(true);
+    await vi.waitFor(() => expect(analysed(tools.makeReadings)).toEqual(['novel']));
+    await backgroundAnalysisIdle();
+    vi.useRealTimers();
   });
 
   it('lists the books Generate readings would make readings for', async () => {

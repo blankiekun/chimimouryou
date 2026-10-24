@@ -12,8 +12,12 @@ export const standalone = import.meta.env.VITE_EDITION === 'standalone';
 /** Where the standalone points readers who want a server (Settings → Sync, book pages). */
 export const selfHostingGuideUrl =
   'https://github.com/blankiekun/chimimouryou/blob/main/docs/INSTALL.md';
-/** Absolute address of the site for canonical links; '' uses the current origin. */
-export const basePath = import.meta.env.VITE_BASE_PATH || '';
+/**
+ * Absolute address of the site for canonical links and preview images; '' uses the current
+ * origin (in the browser only, so crawlers see no preview image). Docker builds have only
+ * VITE_HTTPS_URL (PUBLIC_HTTPS_URL), the same origin over HTTPS.
+ */
+export const basePath = import.meta.env.VITE_BASE_PATH || import.meta.env.VITE_HTTPS_URL || '';
 export const pagePath = import.meta.env.VITE_PAGE_PATH || '';
 export const clearConsoleOnReload = !!import.meta.env.VITE_CLEAR_ON_RELOAD || false;
 export const storageRootName = import.meta.env.VITE_STORAGE_ROOT_NAME || 'ttu-reader-data';

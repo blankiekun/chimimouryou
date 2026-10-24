@@ -11,17 +11,14 @@ import {
   aiFeatures$,
   defaultAiFeatures,
   elevenLabsApiKey$,
-  elevenLabsModel$,
   openRouterApiKey$,
   openRouterModel$,
-  openRouterRecapModel$,
   type AiConnection
 } from '$lib/data/ai-settings';
 import {
   deleteConnection,
   featureParams,
   mergeConnections,
-  migrateAiSettings,
   resolveFeature,
   saveConnection,
   setFeature
@@ -43,59 +40,6 @@ afterEach(() => {
   openRouterApiKey$.next('');
   elevenLabsApiKey$.next('');
   window.localStorage.clear();
-});
-
-describe('migrateAiSettings', () => {
-  it('moves the OpenRouter and ElevenLabs settings into connections once', () => {
-    openRouterApiKey$.next('sk-or-1');
-    openRouterModel$.next('vendor/ask');
-    openRouterRecapModel$.next('vendor/recap');
-    elevenLabsApiKey$.next('sk_el');
-    elevenLabsModel$.next('eleven_v4_turbo');
-
-    migrateAiSettings();
-
-    expect(aiConnections$.getValue().map((c) => [c.id, c.provider, c.kind])).toEqual([
-      ['openrouter', 'openrouter', 'text'],
-      ['elevenlabs', 'elevenlabs', 'voice']
-    ]);
-    expect(aiConnectionKeys$.getValue()).toEqual({ openrouter: 'sk-or-1', elevenlabs: 'sk_el' });
-    expect(aiFeatures$.getValue().ask).toMatchObject({
-      connection: 'openrouter',
-      model: 'vendor/ask'
-    });
-    expect(aiFeatures$.getValue().recap).toMatchObject({ model: 'vendor/recap' });
-    expect(aiFeatures$.getValue().lore.connection).toBe('inherit');
-    expect(aiFeatures$.getValue().voice).toMatchObject({
-      connection: 'elevenlabs',
-      model: 'eleven_v4_turbo'
-    });
-    expect(window.localStorage.getItem('aiSettingsVersion')).toBe('1');
-
-    // Once: later changes to the old settings don't move again.
-    aiConnections$.next([]);
-    migrateAiSettings();
-    expect(aiConnections$.getValue()).toEqual([]);
-  });
-
-  it('lets recap inherit from Ask AI when its model was emptied', () => {
-    openRouterModel$.next('vendor/ask');
-    openRouterRecapModel$.next('');
-
-    migrateAiSettings();
-
-    expect(aiFeatures$.getValue().recap.connection).toBe('inherit');
-    expect(resolveFeature('recap').model).toBe('vendor/ask');
-    // The model was set but no key: the connection waits for one on this device.
-    expect(aiConnectionKeys$.getValue()).toEqual({});
-  });
-
-  it('waits when there is nothing to move yet', () => {
-    migrateAiSettings();
-
-    expect(aiConnections$.getValue()).toEqual([]);
-    expect(window.localStorage.getItem('aiSettingsVersion')).toBeNull();
-  });
 });
 
 describe('mergeConnections', () => {

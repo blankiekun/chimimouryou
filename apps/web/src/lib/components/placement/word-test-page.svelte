@@ -17,7 +17,8 @@
   /** Hard mode (/hard-word-test): reading and meaning, its own tags and card */
   export let hard = false;
 
-  // Prerendered pages don't know their origin: without VITE_BASE_PATH the tags are set in the browser.
+  // Prerendered pages don't know their origin: without VITE_BASE_PATH or VITE_HTTPS_URL
+  // the tags are set in the browser.
   const siteOrigin = basePath || (browser ? window.location.origin : '');
   const title = tr(hard ? 'hardTest.ogTitle' : 'wordTest.ogTitle');
   const description = tr(hard ? 'hardTest.ogDescription' : 'wordTest.ogDescription');
