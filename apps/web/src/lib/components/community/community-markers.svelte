@@ -24,6 +24,7 @@
   let tags: { hash: string; posts: number; x: number; y: number }[] = [];
   let rules: { x: number; y: number; height: number }[] = [];
   let frame = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   let observed: Element | null = null;
 
   const observer = new MutationObserver(() => schedule(true));
@@ -31,11 +32,18 @@
   $: marks = $communityMarks$.title === title ? $communityMarks$.marks : [];
   $: if (marks || vertical) schedule(true);
 
-  /** Ranges again after the marks or the rendered text changed; positions on every scroll */
+  /**
+   * Ranges again (200 ms after the marks or the rendered text last changed, as for highlights:
+   * continuous mode holds the whole book); on scrolls only the positions, once a frame.
+   */
   function schedule(rebuild = false) {
-    if (rebuild) ranges = [];
     cancelAnimationFrame(frame);
-    frame = requestAnimationFrame(() => (rebuild || !ranges.length ? build() : place()));
+    if (rebuild) {
+      clearTimeout(timer);
+      timer = setTimeout(build, 200);
+    } else {
+      frame = requestAnimationFrame(place);
+    }
   }
 
   function build() {
@@ -108,6 +116,7 @@
 
   onDestroy(() => {
     cancelAnimationFrame(frame);
+    clearTimeout(timer);
     observer.disconnect();
     document.removeEventListener('scroll', onScroll, { capture: true });
     document.removeEventListener(PAGE_CHANGE, onScroll);

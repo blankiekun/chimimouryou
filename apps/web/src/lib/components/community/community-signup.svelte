@@ -27,8 +27,10 @@
 {:else}
   <p class="signup-line">
     <span>{$t$('community.readOnly')}</span>
-    <a class="app-button-quiet" href="{pagePath}/friends">{$t$('social.signUp')}</a>
-    <a class="app-button-quiet" href="{pagePath}/friends?mode=login">{$t$('social.logIn')}</a>
+    <span class="signup-links">
+      <a class="app-button-quiet" href="{pagePath}/friends">{$t$('social.signUp')}</a>
+      <a class="app-button-quiet" href="{pagePath}/friends?mode=login">{$t$('social.logIn')}</a>
+    </span>
   </p>
 {/if}
 
@@ -67,7 +69,13 @@
     font-size: var(--type-small);
   }
 
-  .signup-line span {
+  .signup-line > span:first-child {
     margin-right: auto;
+  }
+
+  .signup-links {
+    display: flex;
+    gap: 1rem;
+    white-space: nowrap;
   }
 </style>

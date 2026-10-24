@@ -58,7 +58,12 @@
   $: visible = index ? visibleThreads(threads, index, passed) : [];
   $: rows = order === 'book' ? visible : [...visible].sort((a, b) => b.posts - a.posts);
   $: total = visible.reduce((sum, thread) => sum + thread.posts, 0);
-  $: communityMarks$.next({ title, marks: markedLines(visible, lines) });
+  // Markers: every thread of the book; only lines on screen are drawn, and a line on the screen
+  // being read counts as reached (the reader's position is the page's start).
+  $: communityMarks$.next({
+    title,
+    marks: markedLines(index ? visibleThreads(threads, index, lines.length) : [], lines)
+  });
   $: openLine = open
     ? lines[visible.find((thread) => thread.hash === open)?.index ?? -1]
     : undefined;

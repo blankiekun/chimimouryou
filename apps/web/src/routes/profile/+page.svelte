@@ -152,8 +152,9 @@
           <p class="profile-meta profile-week">
             {$t$(stats.streak === 1 ? 'dashboard.streakOne' : 'dashboard.streak', {
               count: stats.streak
-            })}{#if stats.speed}
-              · {$t$('dashboard.speedValue', { speed: number(stats.speed) })}{/if}
+            })}{stats.speed
+              ? ` · ${$t$('dashboard.speedValue', { speed: number(stats.speed) })}`
+              : ''}
           </p>
         </PointBox>
         <dl class="profile-table">
@@ -209,6 +210,11 @@
     font-size: var(--type-display);
     font-weight: 400;
     line-height: 1.2;
+  }
+
+  .profile-title + .profile-meta,
+  .profile-name + .profile-meta {
+    margin-top: 0.4rem;
   }
 
   .profile-meta {
