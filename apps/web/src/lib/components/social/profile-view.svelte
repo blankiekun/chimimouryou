@@ -149,7 +149,7 @@
   function reportBookCover(book: { key: string; title: string }) {
     if (window.confirm($t$('social.reportCoverConfirm', { title: book.title }))) {
       act(
-        () => reportCover(book.key),
+        () => reportCover(book.key, profile.profile.username),
         () => ((note = $t$('social.reported')), (reporting = false))
       );
     }

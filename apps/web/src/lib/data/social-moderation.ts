@@ -11,7 +11,7 @@ import type { Person, SocialEvent } from '$lib/data/social';
 
 export interface OpenReport {
   what: 'name' | 'picture' | 'cover';
-  /** A user id, or for covers the book key */
+  /** A user id, or for covers "<uploader id>:<book key>" */
   target: string;
   count: number;
   first: number;
@@ -52,9 +52,9 @@ export async function dismissReports(report: Pick<OpenReport, 'what' | 'target'>
   await hubFetch(`/v1/admin/reports?${query}`, 'DELETE');
 }
 
-/** The thumbnail goes (title card instead) and the key takes no new one */
-export async function removeCover(key: string) {
-  await hubFetch(`/v1/admin/cover?${new URLSearchParams({ key })}`, 'DELETE');
+/** One reader's thumbnail goes (title card instead) and they can't upload another for the key */
+export async function removeCover(target: string) {
+  await hubFetch(`/v1/admin/cover?${new URLSearchParams({ target })}`, 'DELETE');
 }
 
 export async function lookUpUser(username: string) {

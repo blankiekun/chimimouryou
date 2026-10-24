@@ -371,8 +371,9 @@ export async function loadProfile(username: string, force = false) {
 export const reportProfile = (username: string, what: 'name' | 'picture' = 'name') =>
   hubFetch('/v1/report', 'POST', { username, what });
 
-/** A cover thumbnail on the hub, by book key */
-export const reportCover = (key: string) => hubFetch('/v1/report', 'POST', { what: 'cover', key });
+/** A cover thumbnail on the hub: the one this reader (username) uploaded for the book key */
+export const reportCover = (key: string, username: string) =>
+  hubFetch('/v1/report', 'POST', { what: 'cover', key, username });
 
 export const sendFriendRequest = (code: string) =>
   hubFetch<FriendsList>('/v1/friends/request', 'POST', { code }).then(setList);
@@ -483,7 +484,7 @@ export async function uploadCovers(keys: string[]) {
         await hubFetch(`/v1/cover?key=${encodeURIComponent(key)}`, 'PUT', thumbnail);
       }
     } catch (_) {
-      // Another reader's upload may win, or the next page load tries again.
+      // Already given (409), or the next page load tries again.
     }
   }
 }

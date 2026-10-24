@@ -86,7 +86,7 @@ describe('hub moderation', () => {
     for (const what of ['name', 'picture']) {
       await call('POST', '/v1/report', { username: 'aki', what }, ren.token);
     }
-    await call('POST', '/v1/report', { what: 'cover', key: 'k1' }, ren.token);
+    await call('POST', '/v1/report', { what: 'cover', key: 'k1', username: 'aki' }, ren.token);
     await call('POST', '/v1/report', { username: 'aki', what: 'name' });
     return { blank, aki, ren };
   }
@@ -109,7 +109,7 @@ describe('hub moderation', () => {
     const routes: [string, string][] = [
       ['GET', '/v1/admin/reports'],
       ['DELETE', '/v1/admin/reports?what=name&target=x'],
-      ['DELETE', '/v1/admin/cover?key=k1'],
+      ['DELETE', `/v1/admin/cover?target=${aki.me.id}:k1`],
       ['GET', '/v1/admin/user/aki'],
       ['POST', `/v1/admin/user/${aki.me.id}/name`],
       ['DELETE', `/v1/admin/user/${aki.me.id}/picture`],
@@ -139,7 +139,7 @@ describe('hub moderation', () => {
       }),
       expect.objectContaining({
         what: 'cover',
-        target: 'k1',
+        target: `${aki.me.id}:k1`,
         count: 1,
         user: null,
         cover: 'aaaaaaaaaaaaaaaa',
@@ -156,7 +156,7 @@ describe('hub moderation', () => {
 
     expect((await as('POST', `/v1/admin/user/${aki.me.id}/name`)).status).toBe(200);
     expect((await as('DELETE', `/v1/admin/user/${aki.me.id}/picture`)).status).toBe(200);
-    expect((await as('DELETE', '/v1/admin/cover?key=k1')).status).toBe(200);
+    expect((await as('DELETE', `/v1/admin/cover?target=${aki.me.id}:k1`)).status).toBe(200);
     expect(db.prepare(`SELECT name FROM users WHERE username = 'aki'`).get()).toEqual({
       name: 'aki'
     });
@@ -171,7 +171,8 @@ describe('hub moderation', () => {
     );
     expect(db.prepare('SELECT COUNT(*) AS n FROM reports').get()).toEqual({ n: 0 });
     expect((await as('DELETE', '/v1/admin/reports?what=other&target=x')).status).toBe(400);
-    expect((await as('DELETE', '/v1/admin/cover?key=none')).status).toBe(404);
+    expect((await as('DELETE', `/v1/admin/cover?target=${aki.me.id}:none`)).status).toBe(404);
+    expect((await as('DELETE', '/v1/admin/cover?target=k1')).status).toBe(400);
   });
 
   it('looks up a reader and deletes single rows of theirs', async () => {

@@ -127,7 +127,7 @@ describe('hub images', () => {
     expect(webpSize(webp(160, 226).subarray(0, 100))).toBeNull();
   });
 
-  it('asks for a cover once per book key, takes the first and shows it to friends', async () => {
+  it('takes one cover per reader and book key and shows it on that reader’s rows only', async () => {
     const aki = await signUp('aki');
     const ren = await signUp('ren');
 
@@ -140,10 +140,19 @@ describe('hub images', () => {
     expect(uploaded.status).toBe(200);
     expect([...objects.keys()]).toEqual([`cover/${uploaded.body.cover}`]);
 
-    // One per key: Ren reads it too, isn't asked and can't replace it.
+    expect((await call('PUT', '/v1/cover?key=k1', webp(160, 230), aki.token)).status).toBe(409);
+    vi.advanceTimersByTime(60_000);
+    expect(
+      (await call('PUT', '/v1/status', { books: [book('k1'), book('k2')] }, aki.token)).body
+        .needCovers
+    ).toEqual(['k2']);
+
+    // Ren reads it too: asked for his own, which shows on his rows only, and Aki's on hers.
     const renPush = await call('PUT', '/v1/status', { books: [book('k1')] }, ren.token);
-    expect(renPush.body.needCovers).toEqual([]);
-    expect((await call('PUT', '/v1/cover?key=k1', webp(160, 230), ren.token)).status).toBe(409);
+    expect(renPush.body.needCovers).toEqual(['k1']);
+    const renCover = await call('PUT', '/v1/cover?key=k1', webp(160, 230), ren.token);
+    expect(renCover.status).toBe(200);
+    expect(renCover.body.cover).not.toBe(uploaded.body.cover);
     // Only for a book the uploader shares.
     expect((await call('PUT', '/v1/cover?key=k9', webp(160, 226), ren.token)).status).toBe(404);
 
@@ -152,8 +161,12 @@ describe('hub images', () => {
       { key: 'k1', cover: uploaded.body.cover },
       { key: 'k2', cover: null }
     ]);
-    const profile = await call('GET', '/v1/profile/aki');
-    expect(profile.body.books[0].cover).toBe(uploaded.body.cover);
+    const akiList = await call('GET', '/v1/friends', undefined, aki.token);
+    expect(akiList.body.friends[0].books).toMatchObject([
+      { key: 'k1', cover: renCover.body.cover }
+    ]);
+    expect((await call('GET', '/v1/profile/aki')).body.books[0].cover).toBe(uploaded.body.cover);
+    expect((await call('GET', '/v1/profile/ren')).body.books[0].cover).toBe(renCover.body.cover);
 
     const image = await call('GET', `/v1/cover/${uploaded.body.cover}`);
     expect(image.status).toBe(200);
@@ -186,6 +199,43 @@ describe('hub images', () => {
     for (let i = 5; i < COVER_UPLOADS; i += 1) await put(webp(10, 10));
     expect(await put(webp(160, 226))).toBe(429);
     expect(objects.size).toBe(0);
+  });
+
+  it('serves an image from the edge cache whatever the query string', async () => {
+    const aki = await signUp('aki');
+    const store = new Map<string, Response>();
+    const keys: string[] = [];
+
+    vi.stubGlobal('caches', {
+      default: {
+        match: async (key: string) => (keys.push(key), store.get(key)?.clone()),
+        put: async (key: string, response: Response) => void store.set(key, response),
+        delete: async (key: string) => store.delete(key)
+      }
+    });
+    try {
+      await call('PUT', '/v1/status', { books: [book('k1')] }, aki.token);
+      const { body } = await call('PUT', '/v1/cover?key=k1', webp(160, 226), aki.token);
+
+      expect((await call('GET', `/v1/cover/${body.cover}?n=1`)).status).toBe(200);
+      objects.clear();
+      expect((await call('GET', `/v1/cover/${body.cover}?n=2`)).status).toBe(200);
+      expect(new Set(keys)).toEqual(new Set([`https://hub.example/v1/cover/${body.cover}`]));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('counts a cover towards the daily ceiling only once its row is in', async () => {
+    const aki = await signUp('aki');
+    const uploads = () =>
+      db.prepare(`SELECT count FROM limits WHERE subject = '*' AND action = 'upload'`).get();
+
+    await call('PUT', '/v1/status', { books: [book('k1')] }, aki.token);
+    await call('PUT', '/v1/cover?key=k1', webp(160, 226), aki.token);
+    expect(uploads()).toEqual({ count: 1 });
+    expect((await call('PUT', '/v1/cover?key=k1', webp(160, 230), aki.token)).status).toBe(409);
+    expect(uploads()).toEqual({ count: 1 });
   });
 
   it('pauses uploads from everyone at the hub-wide daily ceiling', async () => {
@@ -250,7 +300,7 @@ describe('hub images', () => {
     expect(db.prepare('SELECT * FROM pictures').all()).toEqual([]);
   });
 
-  it('deletes the pictures of accounts unused for a year; covers stay', async () => {
+  it('deletes the pictures and covers of accounts unused for a year', async () => {
     const aki = await signUp('aki');
 
     await call('PUT', '/v1/status', { books: [book('k1')] }, aki.token);
@@ -259,25 +309,51 @@ describe('hub images', () => {
     expect(objects.size).toBe(2);
     vi.advanceTimersByTime(366 * 86_400_000);
     await cleanUp(env);
-    expect([...objects.keys()]).toEqual([expect.stringMatching(/^cover\//)]);
+    expect(objects.size).toBe(0);
+    expect(db.prepare('SELECT * FROM covers').all()).toEqual([]);
+  });
+
+  it('deletes covers no shared book shows any more, keeping files another upload uses', async () => {
+    const aki = await signUp('aki');
+    const ren = await signUp('ren');
+
+    await call('PUT', '/v1/status', { books: [book('k1'), book('k2')] }, aki.token);
+    await call('PUT', '/v1/status', { books: [book('k1')] }, ren.token);
+    const same = await call('PUT', '/v1/cover?key=k1', webp(160, 226), aki.token);
+    await call('PUT', '/v1/cover?key=k1', webp(160, 226), ren.token);
+    const other = await call('PUT', '/v1/cover?key=k2', webp(160, 230), aki.token);
+    expect(objects.size).toBe(2);
+
+    // Aki stops reading both: her rows go, Ren's identical upload keeps the shared file.
+    vi.advanceTimersByTime(60_000);
+    await call('PUT', '/v1/status', { books: [] }, aki.token);
+    await cleanUp(env);
+    expect(db.prepare('SELECT user, book_key FROM covers').all()).toEqual([
+      { user: ren.me.id, book_key: 'k1' }
+    ]);
+    expect([...objects.keys()]).toEqual([`cover/${same.body.cover}`]);
+    expect(objects.has(`cover/${other.body.cover}`)).toBe(false);
   });
 
   it('takes reports of a picture and of a cover', async () => {
     const aki = await signUp('aki');
 
+    const cover = { what: 'cover', key: 'k1', username: 'aki' };
+
     await call('PUT', '/v1/status', { books: [book('k1')] }, aki.token);
-    expect((await call('POST', '/v1/report', { what: 'cover', key: 'k1' })).status).toBe(404);
+    expect((await call('POST', '/v1/report', cover)).status).toBe(404);
     await call('PUT', '/v1/cover?key=k1', webp(160, 226), aki.token);
-    expect((await call('POST', '/v1/report', { what: 'cover', key: 'k1' })).status).toBe(200);
+    expect((await call('POST', '/v1/report', cover)).status).toBe(200);
+    expect((await call('POST', '/v1/report', { ...cover, username: 'ren' })).status).toBe(404);
     expect((await call('POST', '/v1/report', { username: 'aki', what: 'picture' })).status).toBe(
       200
     );
     expect(db.prepare('SELECT target, what FROM reports ORDER BY what').all()).toEqual([
-      { target: 'k1', what: 'cover' },
+      { target: `${aki.me.id}:k1`, what: 'cover' },
       { target: aki.me.id, what: 'picture' }
     ]);
 
-    // Removed by hand (README): friends get the title card and nobody can upload another.
+    // Removed by hand (README): friends get the title card and she can't upload another.
     db.exec(`UPDATE covers SET removed = 1 WHERE book_key = 'k1'`);
     vi.advanceTimersByTime(60_000);
     expect(
