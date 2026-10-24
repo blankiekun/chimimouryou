@@ -143,7 +143,8 @@ export const plausibleFinish = (characters: number, seconds: number) =>
  * either mode) count, so retaking it until a lucky score does nothing.
  */
 export function rankPlacementCutoff(results: PlacementRecord[]) {
-  const sorted = [...results].sort((a, b) => a.date - b.date);
+  // Retired hard results count for nothing, so they must not start a gap either.
+  const sorted = results.filter(({ mode }) => mode !== 'hard').sort((a, b) => a.date - b.date);
   const counted = sorted.filter((record, i) => !i || record.date - sorted[i - 1].date >= testGap);
 
   return placementAt(counted)?.cutoff ?? 0;
