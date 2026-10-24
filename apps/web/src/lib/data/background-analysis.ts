@@ -28,13 +28,19 @@ import { StorageKey } from '$lib/data/storage/storage-types';
 import { storageSource$ } from '$lib/data/storage/storage-view';
 import { isVn } from '$lib/data/vn';
 
-/** The book being analysed (1-based) and how many are queued with it, while any are. */
+/** The book being analysed (1-based), how many are queued with it and its percent, while any are. */
 export const backgroundAnalysis$ = new BehaviorSubject<
-  { current: number; total: number } | undefined
+  { current: number; total: number; percent: number } | undefined
 >(undefined);
 
+/** A book whose analysis gets no further for this long is given up (a large novel takes ~3 min). */
+export const BACKGROUND_STALL_MS = 10 * 60 * 1000;
+
 const waiting: string[] = [];
+/** Books given up or failed: not tried again until the next start. */
+const skipped = new Set<string>();
 let done = 0;
+let percent = 0;
 let checking = Promise.resolve();
 let running: Promise<void> | undefined;
 let estimated = false;
@@ -68,7 +74,7 @@ async function stale(title: string, difficulty: Tools, furigana: Tools) {
 
 function report() {
   backgroundAnalysis$.next(
-    waiting.length ? { current: done + 1, total: done + waiting.length } : undefined
+    waiting.length ? { current: done + 1, total: done + waiting.length, percent } : undefined
   );
 }
 
@@ -76,34 +82,89 @@ async function analyse(title: string) {
   const book = await storedBook(title);
 
   if (!book) return;
-  // Readings first: they are what a reader opening the book waits for.
-  if (generatedFurigana$.getValue()) {
-    await makeReadings(title, book.elementHtml, undefined, undefined, true).catch(() => undefined);
+
+  const controller = new AbortController();
+  const { signal } = controller;
+  const parts = generatedFurigana$.getValue() ? 2 : 1;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let giveUp = () => {};
+  // Rejects once the book's percent has stood still for BACKGROUND_STALL_MS.
+  const stalled = new Promise<never>((_, reject) => {
+    giveUp = () => {
+      controller.abort();
+      reject(new Error(`no progress for ${BACKGROUND_STALL_MS / 60000} minutes`));
+    };
+  });
+  const wait = () => {
+    clearTimeout(timer);
+    timer = setTimeout(giveUp, BACKGROUND_STALL_MS);
+  };
+  // Each part's share (readings, then the estimate) moves the book's percent and the stall timer.
+  const progress = (part: number) => (share: number) => {
+    const value = Math.floor(((part + share) / parts) * 100);
+
+    // signal: an abandoned job that still reports must not move the next book's percent.
+    if (signal.aborted || value <= percent) return;
+    percent = value;
+    wait();
+    report();
+  };
+
+  wait();
+
+  const work = async () => {
+    // Readings first: they are what a reader opening the book waits for.
+    if (parts === 2) {
+      await makeReadings(title, book.elementHtml, progress(0), signal, true).catch((error) => {
+        if (signal.aborted) throw error;
+        console.warn(`Background analysis: no readings file for “${title}”`, error);
+      });
+    }
+
+    const before = (await keptEstimate(title))?.etag;
+    const estimate = await localEstimate(
+      title,
+      book.elementHtml,
+      progress(parts - 1),
+      signal,
+      true
+    );
+
+    if (estimate && estimate.etag !== before) estimated = true;
+  };
+
+  // The race lets the queue go on even when the stalled job never settles.
+  stalled.catch(() => undefined);
+  try {
+    await Promise.race([work(), stalled]);
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
   }
-
-  const before = (await keptEstimate(title))?.etag;
-  const estimate = await localEstimate(title, book.elementHtml, undefined, undefined, true).catch(
-    () => undefined
-  );
-
-  if (estimate && estimate.etag !== before) estimated = true;
 }
 
 async function run() {
   while (waiting.length) {
+    const title = waiting[0];
+
+    percent = 0;
     report();
-    // A book that fails is passed over: the queue and its progress go on.
-    await analyse(waiting[0]).catch(() => undefined);
+    // A book that fails is passed over until the next start: the queue and its progress go on.
+    await analyse(title).catch((error) => {
+      skipped.add(title);
+      console.warn(`Background analysis: skipped “${title}” until the next start`, error);
+    });
     waiting.shift();
     done += 1;
   }
   // In the same tick as the last shift: a title queued after it starts a new run, not this one.
   running = undefined;
   done = 0;
+  percent = 0;
   report();
   if (estimated) {
     estimated = false;
-    await refreshLibrary().catch(() => undefined);
+    await refreshLibrary().catch((error) => console.warn('Background analysis:', error));
   }
 }
 
@@ -133,6 +194,7 @@ export function analyseInBackground(titles: string[]) {
     for (const title of titles) {
       if (
         !waiting.includes(title) &&
+        !skipped.has(title) &&
         (await stale(title, difficulty, furigana).catch(() => false))
       ) {
         waiting.push(title);
@@ -155,7 +217,7 @@ export function catchUpAnalysis() {
       ? requestIdleCallback(callback, { timeout: 10000 })
       : setTimeout(callback, 2000);
 
-  idle(() => analyseStoredBooks().catch(() => undefined));
+  idle(() => analyseStoredBooks().catch((error) => console.warn('Background analysis:', error)));
 }
 
 /** Queues every stored book the installed tools have something new for. */

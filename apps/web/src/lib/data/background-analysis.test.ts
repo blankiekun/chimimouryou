@@ -52,9 +52,8 @@ vi.mock('$lib/data/storage/storage-handler-factory', () => ({
   getStorageHandler: () => ({ clearData: () => {} })
 }));
 
-const { analyseInBackground, backgroundAnalysis$, backgroundAnalysisIdle } = await import(
-  './background-analysis'
-);
+const { analyseInBackground, backgroundAnalysis$, backgroundAnalysisIdle, BACKGROUND_STALL_MS } =
+  await import('./background-analysis');
 
 const titles = Object.keys(books);
 const analysed = (mock: typeof tools.localEstimate | typeof tools.makeReadings) =>
@@ -107,21 +106,25 @@ describe('background analysis', () => {
 
   it('passes over a book that fails and clears the progress', async () => {
     furigana.on.next(false);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     let reads = 0;
 
-    // "novel" is readable when checked, then its record fails to load when analysed.
+    // "broken" is readable when checked, then its record fails to load when analysed.
+    books.broken = { title: 'broken', elementHtml: '<p>壊</p>' };
     db.get = (title) => {
-      if (title === 'novel' && (reads += 1) > 1) throw new Error('UnknownError');
+      if (title === 'broken' && (reads += 1) > 1) throw new Error('UnknownError');
       return books[title];
     };
     tools.localEstimate.mockImplementation(async (title) => ({ title, etag: 'new' }));
-    analyseInBackground(['novel', 'other']);
+    analyseInBackground(['broken', 'other']);
     books.other = { title: 'other', elementHtml: '<p>他</p>' };
     await backgroundAnalysisIdle();
     delete books.other;
+    delete books.broken;
 
     expect(analysed(tools.localEstimate)).toEqual(['other']);
     expect(backgroundAnalysis$.getValue()).toBeUndefined();
+    expect(console.warn).toHaveBeenCalled();
   });
 
   it('runs a book queued while the last one is being finished', async () => {
@@ -140,5 +143,44 @@ describe('background analysis', () => {
     delete books.late;
 
     expect(backgroundAnalysis$.getValue()).toBeUndefined();
+  });
+
+  it("shows the book's percent and gives up a book that stops moving until the next start", async () => {
+    furigana.on.next(false);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.useFakeTimers();
+
+    const seen: (number | undefined)[] = [];
+    const subscription = backgroundAnalysis$.subscribe((value) => seen.push(value?.percent));
+    let signal: AbortSignal | undefined;
+
+    // Moves to 40%, then never settles.
+    tools.localEstimate.mockImplementationOnce((async (
+      _title: string,
+      _html: string,
+      onProgress: (share: number) => void,
+      stop: AbortSignal
+    ) => {
+      signal = stop;
+      onProgress(0.4);
+      return new Promise(() => {});
+    }) as never);
+    analyseInBackground(['novel']);
+    await vi.advanceTimersByTimeAsync(BACKGROUND_STALL_MS - 1000);
+    expect(backgroundAnalysis$.getValue()).toEqual({ current: 1, total: 1, percent: 40 });
+    await vi.advanceTimersByTimeAsync(2000);
+    await backgroundAnalysisIdle();
+    vi.useRealTimers();
+    subscription.unsubscribe();
+
+    expect(signal?.aborted).toBe(true);
+    expect(seen).toContain(40);
+    expect(backgroundAnalysis$.getValue()).toBeUndefined();
+    expect(console.warn).toHaveBeenCalled();
+
+    // Not tried again in this session.
+    analyseInBackground(['novel']);
+    await backgroundAnalysisIdle();
+    expect(analysed(tools.localEstimate)).toEqual(['novel']);
   });
 });
