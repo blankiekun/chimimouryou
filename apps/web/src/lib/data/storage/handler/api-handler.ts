@@ -546,8 +546,46 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
     const { lastBookmarkModified, progress } = BaseStorageHandler.getProgressMetadata(filename);
 
     await this.upload(titleId, filename, files, file, progressData);
+    await this.deleteOlderProgress(files, file, lastBookmarkModified);
 
     this.addBookCard(this.currentContext.title, { lastBookmarkModified, progress });
+  }
+
+  /**
+   * Leftover progress files (a failed DELETE, two devices saving at once) older than the one just
+   * saved: best effort, the reader picks the newest anyway. Not statistics: an older duplicate can
+   * hold days the newest lacks.
+   */
+  private async deleteOlderProgress(
+    files: ExternalFile[],
+    replaced: ExternalFile | undefined,
+    savedTime: number
+  ) {
+    const older = files.filter(
+      (other) =>
+        other !== replaced &&
+        other.name.startsWith('progress_') &&
+        BaseStorageHandler.getProgressMetadata(other.name).lastBookmarkModified < savedTime
+    );
+
+    if (!older.length) return;
+
+    const deleted = new Set<ExternalFile>();
+
+    await Promise.all(
+      older.map((other) =>
+        this.executeDelete(other.id).then(
+          () => deleted.add(other),
+          () => {}
+        )
+      )
+    );
+    this.titleToFiles.set(
+      this.currentContext.title,
+      (this.titleToFiles.get(this.currentContext.title) || files).filter(
+        (other) => !deleted.has(other)
+      )
+    );
   }
 
   async saveStatistics(statistics: BooksDbStatistic[], lastStatisticModified: number) {

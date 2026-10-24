@@ -19,6 +19,7 @@
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 import { accountReady, accountSyncUrl, currentAccount } from '$lib/data/account';
+import { readerDataOwner } from '$lib/data/reader-data-owner';
 import {
   calibreCoverUrl,
   calibreVnUrl,
@@ -81,10 +82,10 @@ const serverRootName = 'ttu-reader-data';
 const signInPlace = serverConnected ? 'Settings → Sync → Server' : 'Settings → General → Account';
 
 /** 401 from the sync folder: an expired session, or a signed-out reader outside the trusted networks. */
-function unauthorizedError() {
+function unauthorizedError(expired = !!currentAccount()) {
   return Object.assign(
     new Error(
-      currentAccount()
+      expired
         ? `Your sign-in has expired. Sign in again in ${signInPlace}.`
         : `Using the library from this network needs an account. Sign in in ${signInPlace}.`
     ),
@@ -159,7 +160,7 @@ export class CalibreStorageHandler extends ApiStorageHandler {
   private static async syncUrl(name: string, title?: string) {
     if (title === undefined) return `${accountSyncUrl}${encodeURIComponent(name)}`;
 
-    await accountReady();
+    if (await CalibreStorageHandler.holdsAccountData()) throw unauthorizedError(true);
 
     return CalibreStorageHandler.syncFileUrl(title, name);
   }
@@ -179,10 +180,21 @@ export class CalibreStorageHandler extends ApiStorageHandler {
   }
 
   /**
+   * Signed out while this browser still holds an account's data (its session expired): that
+   * reader's files wait in the browser for sign-in, never mixing with the shared folder's.
+   */
+  private static async holdsAccountData() {
+    return !(await accountReady()) && !!(await readerDataOwner());
+  }
+
+  /**
    * Whether personal files go to the account folder. Refreshed in ensureTitle,
    * which every storage operation calls first.
    */
   private useAccountFolder = false;
+
+  /** holdsAccountData(), refreshed with useAccountFolder: shared personal files are skipped. */
+  private holdPersonal = false;
 
   private titleToCalibreBook = new Map<string, CalibreBook>();
 
@@ -381,6 +393,7 @@ export class CalibreStorageHandler extends ApiStorageHandler {
 
   protected async ensureTitle(name = BaseStorageHandler.rootName, _parent = '', readOnly = false) {
     this.useAccountFolder = !!(await accountReady());
+    this.holdPersonal = await CalibreStorageHandler.holdsAccountData();
 
     if (name === BaseStorageHandler.rootName) {
       if (!this.rootId) {
@@ -453,6 +466,10 @@ export class CalibreStorageHandler extends ApiStorageHandler {
     rootFilePrefix?: string,
     progressBase = 0.8
   ): Promise<ExternalFile> {
+    if (this.holdPersonal && CalibreStorageHandler.isPersonalFile(name)) {
+      throw unauthorizedError(true);
+    }
+
     const id = this.fileId(folderId, name);
 
     // Metadata lives in the filename, so an update usually means a new name.
@@ -515,7 +532,9 @@ export class CalibreStorageHandler extends ApiStorageHandler {
       throw new Error(`${title} was not found in the Calibre library`);
     }
 
-    const lastBookModified = Date.now();
+    // Not before `added`: a device clock behind the server's would make prepareBookForReading
+    // take this book data for the old version and process the book again on every open.
+    const lastBookModified = Math.max(Date.now(), calibreBook.added || 0);
 
     if (calibreBook.format === 'VN') {
       const game = await loadVnFolder(title, calibreVnUrl(calibreBook), lastBookModified);
@@ -638,7 +657,9 @@ export class CalibreStorageHandler extends ApiStorageHandler {
   /** Files of a title: the shared folder, with personal files from the account while signed in. */
   private async listTitleFiles(titleId: string): Promise<ExternalFile[]> {
     if (!this.useAccountFolder) {
-      return filesIn(titleId, await this.listDirectory(titleId));
+      return filesIn(titleId, await this.listDirectory(titleId)).filter(
+        (file) => !this.belongsInAccount(file.name)
+      );
     }
 
     const personalId = this.toPersonal(titleId);
@@ -662,7 +683,9 @@ export class CalibreStorageHandler extends ApiStorageHandler {
   }
 
   private belongsInAccount(name: string) {
-    return this.useAccountFolder && CalibreStorageHandler.isPersonalFile(name);
+    return (
+      (this.useAccountFolder || this.holdPersonal) && CalibreStorageHandler.isPersonalFile(name)
+    );
   }
 
   /** Maps a shared /calibre/sync/ URL to the same path in the account folder. */
