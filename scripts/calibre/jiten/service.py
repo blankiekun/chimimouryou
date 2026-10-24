@@ -44,6 +44,7 @@ from yurigana import __version__ as YURIGANA_VERSION
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 import readings_file  # noqa: E402
+from engine import engine_fingerprint, file_sha256  # noqa: E402
 from word_list import KANJI, NUMBER, PARTICLES, SINGLE_KANA, is_noise_word, word_rows  # noqa: E402,F401
 
 LIBRARY = os.environ.get('CALIBRE_LIBRARY', '/library')
@@ -220,6 +221,7 @@ def _estimate(book: dict):
         'words95': words_for_coverage(extra) if extra['CoverageRank95'] == extra['CoverageRank95'] else None,
         'model': MODEL_VERSION,
         'words': WORDS_VERSION,
+        'engine': current_engine(),
         'characters': characters,
         'uniqueKanji': len({c for c in text if is_kanji(c)}),
         # All the book's words (rows of its word list before the cap) and their occurrences,
@@ -317,6 +319,18 @@ def term_options() -> dict:
     names = [p for p in paths if is_name_dictionary(p)]
     terms = [p for p in paths if p not in names]
     return ({'terms': terms} if terms else {}) | ({'names': names} if names else {})
+
+
+def current_engine() -> str:
+    """This server's engine fingerprint (engine.py): its frequency list, yurigana, Sudachi dictionary,
+    term dictionaries and reading-model table."""
+    from importlib.metadata import PackageNotFoundError, version
+    try:
+        sudachi = 'core-' + version('SudachiDict-core')
+    except PackageNotFoundError:
+        sudachi = 'core-unknown'
+    extras = [*term_dictionaries(), *(p for p in READING_MODEL_TABLES if os.path.exists(p))]
+    return engine_fingerprint(FREQUENCY_DICTIONARY, YURIGANA_VERSION, sudachi, extras)
 
 
 def reader_version() -> str:
@@ -538,9 +552,15 @@ class JobRunner:
             if job and not job.get('finished') and self.cancel.is_set():
                 job['cancelling'] = True
         results = load_results()
+        dictionary = os.path.exists(FREQUENCY_DICTIONARY)
         return {
             'job': job,
-            'dictionary': os.path.exists(FREQUENCY_DICTIONARY),
+            'dictionary': dictionary,
+            # The app compares it with its release's (isCanonicalEstimate): another list, term
+            # dictionaries or reading model make estimates that don't count for reading rank.
+            'engine': current_engine() if dictionary else None,
+            'customFrequencyList': dictionary and os.path.exists(BUNDLED_FREQUENCY_DICTIONARY)
+                                   and file_sha256(FREQUENCY_DICTIONARY) != file_sha256(BUNDLED_FREQUENCY_DICTIONARY),
             'termDictionaries': [os.path.basename(p) for p in term_dictionaries()],
             'results': len(results.get('books', {})),
             'noText': len(results.get('noText', [])),
@@ -585,10 +605,12 @@ class JobRunner:
         # failed ones are broken files (not a zip, no container.xml), retried once the file changes.
         no_text = set(results.get('noText', []))
         failed = results.setdefault('failed', {})
-        # All books: only those not tried yet, estimated by another model or with an older word list, or
-        # whose file changed since it failed. Selected books are always recomputed.
+        # All books: only those not tried yet, estimated by another model or engine or with an older word
+        # list, or whose file changed since it failed. Selected books are always recomputed.
+        engine = current_engine()
         books = [b for b in catalog if (results['books'].get(str(b['id']), {}).get('model') != MODEL_VERSION
                                         or results['books'][str(b['id'])].get('words') != WORDS_VERSION
+                                        or results['books'][str(b['id'])].get('engine') != engine
                                         or not os.path.exists(os.path.join(WORDS_DIR, f"{b['id']}.json.gz")))
                  and b['id'] not in no_text
                  and not unchanged_since_failure(failed.get(str(b['id'])), b)] \

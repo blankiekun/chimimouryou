@@ -3,6 +3,7 @@
   import { buttonClasses } from '$lib/css-classes';
   import { account$ } from '$lib/data/account';
   import { difficultyApiUrl } from '$lib/data/calibre';
+  import { isCanonicalEstimate } from '$lib/data/difficulty-engine';
   import { t$, tr } from '$lib/i18n';
   import { onDestroy, onMount } from 'svelte';
   import Fa from 'svelte-fa';
@@ -26,6 +27,9 @@
     } | null;
     /** Whether the frequency list is installed on the server */
     dictionary: boolean;
+    /** The engine new estimates carry (older services: missing), and whether its list is an admin's own */
+    engine?: string | null;
+    customFrequencyList?: boolean;
     /** File names of the installed term dictionaries (older services: missing) */
     termDictionaries?: string[];
     results: number;
@@ -222,6 +226,11 @@
           <p class:tool-text={admin}>{$t$('library.dictionaryNeededAdmin')}</p>
         {/if}
       </div>
+    {/if}
+    {#if admin && status.engine && !isCanonicalEstimate({ engine: status.engine })}
+      <p class="tool-text">
+        {$t$(status.customFrequencyList ? 'library.customEngineList' : 'library.customEngine')}
+      </p>
     {/if}
     {#if admin}
       {#if $account$?.admin && status.termDictionaries}

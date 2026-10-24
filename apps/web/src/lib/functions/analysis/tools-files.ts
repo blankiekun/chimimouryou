@@ -15,6 +15,8 @@ export const analysisToolsCacheName = 'analysis-tools';
 
 export interface AnalysisToolsManifest {
   version: string;
+  /** The difficulty engine's fingerprint (scripts/calibre/jiten/engine.py); older tools: none */
+  engine?: string;
   /**
    * `raw`: the size once gunzipped, for the files streamed into wasm memory; `features`: the only
    * features that need the file (none: every feature)
