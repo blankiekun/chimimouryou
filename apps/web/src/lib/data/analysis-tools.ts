@@ -14,8 +14,9 @@
  *
  * One worker runs both Sudachi (~250 MB in memory) and Pyodide (~200 MB)
  * (functions/analysis/analysis.worker.ts): Python asks Sudachi for each text as it reads, so a part
- * is one pass; the worker keeps the last book's tokens for its other part. One job at a time; the
- * worker (and the scoring one) stays for the next one as long as analysisKeepAlive says
+ * is one pass; the worker keeps the last book's tokens for its other part. One job at a time, two
+ * on large machines (analysisWorkers: a background batch analyses two books at once); the workers
+ * (and the scoring one) stay for the next job as long as analysisKeepAlive says
  * (analysis-capacity.ts). Not part of upstream.
  */
 
@@ -37,7 +38,7 @@ import {
   rawName,
   type AnalysisToolsManifest
 } from '$lib/functions/analysis/tools-files';
-import { analysisKeepAlive } from '$lib/data/analysis-capacity';
+import { analysisKeepAlive, analysisWorkers } from '$lib/data/analysis-capacity';
 
 const base = () => new URL(`${pagePath}/analysis-tools/`, location.href).href;
 const manifestName = 'manifest.json';
@@ -437,31 +438,33 @@ function scoreWorker(request: ScoreRequest) {
   return run;
 }
 
-/** The analysis worker, kept between jobs (analysisKeepAlive); ended when a job fails. */
-let session: { worker: Worker; timer?: ReturnType<typeof setTimeout> } | undefined;
+/**
+ * The analysis workers (up to analysisWorkers at once), kept between jobs (analysisKeepAlive); one
+ * is ended when its job fails. `html` is the last book it read: its tokens are still in it.
+ */
+interface Session {
+  worker: Worker;
+  html: string;
+  busy: boolean;
+}
 
-function endSession() {
-  session?.worker.terminate();
-  session = undefined;
+let sessions: Session[] = [];
+let idleTimer: ReturnType<typeof setTimeout> | undefined;
+
+function endSessions() {
+  sessions.forEach((session) => session.worker.terminate());
+  sessions = [];
 }
 
 function analysisWorker(
+  session: Session,
   request: AnalysisRequest,
   onProgress: (share: number) => void,
   signal?: AbortSignal
 ) {
-  clearTimeout(session?.timer);
-  session ??= {
-    worker: new Worker(new URL('../functions/analysis/analysis.worker.ts', import.meta.url), {
-      type: 'module'
-    })
-  };
-
-  const { worker } = session;
-
   return (
     runWorker<AnalysisMessage>(
-      worker,
+      session.worker,
       request,
       (message) => {
         if (message.type === 'progress') onProgress(message.share);
@@ -473,37 +476,91 @@ function analysisWorker(
     ) as Promise<Extract<AnalysisMessage, { type: 'result' }>>
   ).catch((error) => {
     // runWorker ended it
-    if (session?.worker === worker) session = undefined;
+    sessions = sessions.filter((kept) => kept !== session);
     throw error;
   });
 }
 
 /**
- * Analyses waiting, one at a time: readings files go ahead of word lists (a reader waits for them),
- * and both ahead of the background analysis (background-analysis.ts).
+ * Analyses waiting: readings files go ahead of word lists (a reader waits for them), and both
+ * ahead of the background analysis (background-analysis.ts). A job starts on the first free worker
+ * (a new one while there are fewer than analysisWorkers), never beside another job of its book, so
+ * a book's parts keep their order and its tokens. A reader's job asked for while every worker runs
+ * a background job takes the first worker freed (the background never starts ahead of it).
  */
-const pending: { rank: number; start: () => Promise<void> }[] = [];
-let running = false;
+const pending: { rank: number; html: string; start: (session: Session) => Promise<void> }[] = [];
 
-async function pump() {
-  if (running) return;
-  running = true;
-  while (pending.length) await pending.shift()!.start();
-  running = false;
+/**
+ * The first job in `pending` (in rank order) that can start, and its worker: its book's free one
+ * (the tokens of its other part), else null for a new one while there are fewer than `limit`, else
+ * any free one. Undefined when none can start.
+ */
+export function nextJob<S extends { html: string; busy: boolean }>(
+  pending: { html: string }[],
+  sessions: S[],
+  limit: number
+) {
+  const at = pending.findIndex(
+    (job) => !sessions.some((session) => session.busy && session.html === job.html)
+  );
+
+  if (at < 0) return undefined;
+
+  const { html } = pending[at];
+  const session =
+    sessions.find((kept) => !kept.busy && kept.html === html) ??
+    (sessions.length < limit ? null : sessions.find((kept) => !kept.busy));
+
+  return session === undefined ? undefined : { at, session };
+}
+
+function pump() {
+  for (
+    let next = nextJob(pending, sessions, analysisWorkers());
+    next;
+    next = nextJob(pending, sessions, analysisWorkers())
+  ) {
+    const session = next.session ?? {
+      worker: new Worker(new URL('../functions/analysis/analysis.worker.ts', import.meta.url), {
+        type: 'module'
+      }),
+      html: '',
+      busy: false
+    };
+
+    if (!next.session) sessions = [...sessions, session];
+
+    const [job] = pending.splice(next.at, 1);
+
+    clearTimeout(idleTimer);
+    session.busy = true;
+    session.html = job.html;
+    job.start(session).finally(() => {
+      session.busy = false;
+      pump();
+    });
+  }
+
+  if (pending.length || sessions.some((session) => session.busy)) return;
 
   const keepAlive = analysisKeepAlive();
 
   if (!keepAlive) {
-    endSession();
-  } else if (session) {
-    session.timer = setTimeout(endSession, keepAlive);
+    endSessions();
+  } else if (sessions.length) {
+    idleTimer = setTimeout(endSessions, keepAlive);
   }
 }
 
-function enqueue<T>(part: Part, background: boolean, task: () => Promise<T>) {
+function enqueue<T>(
+  part: Part,
+  background: boolean,
+  html: string,
+  task: (session: Session) => Promise<T>
+) {
   return new Promise<T>((resolve, reject) => {
     const rank = background ? 2 : part === 'readings' ? 0 : 1;
-    const job = { rank, start: () => task().then(resolve, reject) };
+    const job = { rank, html, start: (session: Session) => task(session).then(resolve, reject) };
     const at = pending.findIndex((queued) => queued.rank > rank);
 
     if (at < 0) {
@@ -541,12 +598,13 @@ function analyseBook(
   signal?: AbortSignal,
   background = false
 ) {
-  return enqueue(part, background, async () => {
+  return enqueue(part, background, html, async (session) => {
     if (signal?.aborted) throw abortError();
 
     onProgress(0);
 
     const { json } = await analysisWorker(
+      session,
       { base: base(), manifest, html, part, wordsPerBook, reader },
       onProgress,
       signal

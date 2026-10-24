@@ -8,7 +8,8 @@
  * Standalone: stored books get their difficulty estimate and word list, and their readings file
  * while Generated furigana is on, in the background with the downloaded analysis tools
  * (analysis-tools.ts): when a book is saved (BrowserStorageHandler.saveBook), and once per app
- * start (and when Generated furigana is turned on) for books still without them. One book at a time, behind what the reader asks for.
+ * start (and when Generated furigana is turned on) for books still without them. One book at a
+ * time (two on large machines, analysisWorkers), behind what the reader asks for.
  * Manga, visual novels and placeholders are skipped. Not part of upstream.
  */
 
@@ -24,13 +25,17 @@ import {
   makeReadings,
   redoWordList
 } from '$lib/data/analysis-tools';
+import { analysisWorkers } from '$lib/data/analysis-capacity';
 import { isManga } from '$lib/data/manga';
 import { database, generatedFurigana$ } from '$lib/data/store';
 import { StorageKey } from '$lib/data/storage/storage-types';
 import { storageSource$ } from '$lib/data/storage/storage-view';
 import { isVn } from '$lib/data/vn';
 
-/** The book being analysed (1-based), how many are queued with it and its percent, while any are. */
+/**
+ * The first unfinished book (1-based), how many are queued with it and the percent of the books
+ * being analysed (their mean: two at once on large machines), while any are.
+ */
 export const backgroundAnalysis$ = new BehaviorSubject<
   { current: number; total: number; percent: number } | undefined
 >(undefined);
@@ -38,15 +43,20 @@ export const backgroundAnalysis$ = new BehaviorSubject<
 /** A book whose analysis gets no further for this long is given up (a large novel takes ~3 min). */
 export const BACKGROUND_STALL_MS = 10 * 60 * 1000;
 
+/** Books queued and not started */
 const waiting: string[] = [];
+/** Books being analysed, with their percent */
+const active = new Map<string, number>();
 /** Books given up or failed: not tried again until the next start. */
 const skipped = new Set<string>();
 /** Books whose word list made without the Reader is redone after their estimate (redoWordLists). */
 const redo = new Set<string>();
 let done = 0;
-let percent = 0;
 let checking = Promise.resolve();
+/** The lanes analysing books (up to analysisWorkers), and the promise of the batch they run */
+let lanes = 0;
 let running: Promise<void> | undefined;
+let finished = () => {};
 let estimated = false;
 let caughtUp = false;
 
@@ -77,8 +87,19 @@ async function stale(title: string, difficulty: Tools, furigana: Tools) {
 }
 
 function report() {
+  const total = done + active.size + waiting.length;
+  const percents = [...active.values()];
+
   backgroundAnalysis$.next(
-    waiting.length ? { current: done + 1, total: done + waiting.length, percent } : undefined
+    total > done
+      ? {
+          current: done + 1,
+          total,
+          percent: Math.floor(
+            percents.reduce((sum, value) => sum + value, 0) / percents.length || 0
+          )
+        }
+      : undefined
   );
 }
 
@@ -110,8 +131,8 @@ async function analyse(title: string) {
     const value = Math.floor(((part + share) / parts) * 100);
 
     // signal: an abandoned job that still reports must not move the next book's percent.
-    if (signal.aborted || value <= percent) return;
-    percent = value;
+    if (signal.aborted || value <= (active.get(title) ?? 100)) return;
+    active.set(title, value);
     wait();
     report();
   };
@@ -154,28 +175,51 @@ async function analyse(title: string) {
   }
 }
 
-async function run() {
-  while (waiting.length) {
-    const title = waiting[0];
+/** The next queued book not being analysed (a redo queues a book again while it runs). */
+function next() {
+  const at = waiting.findIndex((title) => !active.has(title));
 
-    percent = 0;
+  return at < 0 ? undefined : waiting.splice(at, 1)[0];
+}
+
+/** Analyses queued books one after another, beside the other lanes. */
+async function lane() {
+  for (let title = next(); title !== undefined; title = next()) {
+    active.set(title, 0);
     report();
     // A book that fails is passed over until the next start: the queue and its progress go on.
     await analyse(title).catch((error) => {
-      skipped.add(title);
+      skipped.add(title!);
       console.warn(`Background analysis: skipped “${title}” until the next start`, error);
     });
-    waiting.shift();
+    active.delete(title);
     done += 1;
+    report();
   }
-  // In the same tick as the last shift: a title queued after it starts a new run, not this one.
+  lanes -= 1;
+  if (lanes) return;
+  // In the same tick as the last book: a title queued after it starts a new batch, not this one.
+  const end = finished;
+
   running = undefined;
   done = 0;
-  percent = 0;
   report();
   if (estimated) {
     estimated = false;
     await refreshLibrary().catch((error) => console.warn('Background analysis:', error));
+  }
+  end();
+}
+
+/**
+ * Starts lanes for the queued books, up to analysisWorkers: two books at once on large machines
+ * (the analysis queue still puts the reader's jobs first), one after another elsewhere.
+ */
+function startLanes() {
+  while (lanes < analysisWorkers() && waiting.some((title) => !active.has(title))) {
+    running ??= new Promise((resolve) => (finished = resolve));
+    lanes += 1;
+    lane();
   }
 }
 
@@ -205,6 +249,7 @@ export function analyseInBackground(titles: string[]) {
     for (const title of titles) {
       if (
         !waiting.includes(title) &&
+        !active.has(title) &&
         !skipped.has(title) &&
         (await stale(title, difficulty, furigana).catch(() => false))
       ) {
@@ -219,7 +264,7 @@ export function analyseInBackground(titles: string[]) {
 function queue(title: string) {
   waiting.push(title);
   report();
-  running ??= run();
+  startLanes();
 }
 
 /** Queues these books' word lists made without the Reader to be made with it (opt-in). */
@@ -227,8 +272,8 @@ export function redoWordLists(titles: string[]) {
   checking = checking.then(() => {
     for (const title of titles) {
       redo.add(title);
-      // The book running now has passed its redo: queued again.
-      if (waiting.indexOf(title) < 1) queue(title);
+      // A book running now has passed its redo: queued again.
+      if (!waiting.includes(title)) queue(title);
     }
   });
 
@@ -285,7 +330,11 @@ export async function booksWithoutReadings(titles?: string[]) {
 
   if (!furigana) return found;
   for (const title of titles ?? (await storedTitles())) {
-    if (!waiting.includes(title) && (await stale(title, undefined, furigana).catch(() => false))) {
+    if (
+      !waiting.includes(title) &&
+      !active.has(title) &&
+      (await stale(title, undefined, furigana).catch(() => false))
+    ) {
       found.push(title);
     }
   }
