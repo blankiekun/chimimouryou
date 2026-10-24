@@ -147,7 +147,7 @@ export const ja: Record<MessageKey, string> = {
   'home.openLibrary': 'ライブラリを開く',
   'home.offline':
     'サーバーに接続できません。ブラウザに保存済みの本を表示しています。進捗はオンライン復帰後に同期されます。',
-  'home.analysing': '分析中 {current} / {total}…',
+  'home.analysing': '分析中 {current} / {total}… {percent}%',
   'home.retry': '再試行',
   'home.atYourLevel': 'あなたのレベル',
   'home.difficultyScore': '{band} {score}',

@@ -150,7 +150,7 @@ export const en = {
   'home.openLibrary': 'Open the Library',
   'home.offline':
     "The server can't be reached: showing the books downloaded to this browser. Progress syncs once it's back",
-  'home.analysing': 'Analysing {current} of {total}…',
+  'home.analysing': 'Analysing {current} of {total}… {percent}%',
   'home.retry': 'Retry',
   'home.atYourLevel': 'at your level',
   'home.difficultyScore': '{band} {score}',

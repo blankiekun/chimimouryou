@@ -48,8 +48,9 @@ const manifestName = 'manifest.json';
 const wordsPerBook = 2000;
 // Texts still missing after this many readings would mean they never settle.
 const maxRounds = 6;
-// Time for the browser to take back the ended worker's memory before the next one starts.
-const settlePause = 5000;
+// Time for the browser to take back the ended worker's memory before the next one starts. Up to
+// 12 pauses per book: 5 s each was a third of a novel's analysis.
+const settlePause = 1000;
 
 /**
  * Desktop browsers only: the dictionary alone takes ~200 MB of memory. Browsers that don't report
@@ -260,7 +261,7 @@ export async function downloadAnalysisTools(wanted: AnalysisFeature[]) {
     // The books already stored get what the new tools make.
     import('$lib/data/background-analysis')
       .then(({ analyseStoredBooks }) => analyseStoredBooks())
-      .catch(() => undefined);
+      .catch((error) => console.warn('Background analysis:', error));
   } catch (error) {
     analysisDownload$.next(
       signal.aborted
@@ -491,8 +492,9 @@ function analyseBook(
 
     try {
       for (let round = 0; round < maxRounds; round += 1) {
-        // The first round tokenizes the book: most of the time; later ones only a few words.
-        const [from, to] = round ? [0.75, 0.8] : [0.05, 0.3];
+        // The first round tokenizes the book: most of the time; later ones only a few words. Each
+        // round still moves the share on (the background analysis gives up on a share that stalls).
+        const [from, to] = round ? [0.71 + 0.04 * round, 0.73 + 0.04 * round] : [0.05, 0.3];
 
         await settle(signal);
         await tokenizeWorker(
@@ -511,7 +513,7 @@ function analyseBook(
           return analysis as unknown;
         }
         texts = analysis.misses;
-        onProgress(0.75);
+        onProgress(0.75 + 0.04 * round);
       }
     } finally {
       await removeTokenFile(tokenFile);
@@ -725,7 +727,9 @@ export function localReadings$(title: string, html: string) {
 
       if (readings) subscriber.next(readings);
     })()
-      .catch(() => undefined)
+      .catch((error) => {
+        if (!controller.signal.aborted) console.warn(`Generated furigana for “${title}”:`, error);
+      })
       .finally(() => {
         endFuriganaProgress(title);
         subscriber.complete();
