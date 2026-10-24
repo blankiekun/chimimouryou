@@ -237,8 +237,10 @@ def _estimate(book: dict):
 
 def _init_readings_worker():
     global _reader
+    from features import Analyzer
     # The known list and the server's reading model the estimates use (yurigana adds its public table).
-    _reader = _load_reader()
+    # The Analyzer keeps the last text's tokens: readings_file.build and Reader.read tokenize the book once.
+    _reader = _load_reader(Analyzer())
 
 
 def _load_reader(tokenizer=None, known=lambda: FREQUENCY_DICTIONARY):
@@ -389,6 +391,7 @@ class ReadingsQueue:
         self.running = None
         self.failed = {}  # book id -> bookdata name it failed on: not retried until that changes
         self.thread = None
+        self.added = threading.Event()  # wakes an idle worker thread at once
 
     def request(self, book_id: int) -> str:
         if not os.path.exists(FREQUENCY_DICTIONARY):
@@ -419,6 +422,7 @@ class ReadingsQueue:
             if self.failed.get(book_id) == name or len(self.queue) >= READINGS_QUEUE_MAX:
                 return 'unavailable'
             self.queue[book_id] = bookdata
+            self.added.set()
             if not self.thread:
                 self.thread = self._start()
         return 'queued'
@@ -433,6 +437,7 @@ class ReadingsQueue:
         idle_since = time.monotonic()
         try:
             while True:
+                self.added.clear()
                 with self.lock:
                     job = next(iter(self.queue.items()), None)
                     if job:
@@ -442,7 +447,7 @@ class ReadingsQueue:
                         self.thread = None
                         return
                 if not job:
-                    time.sleep(1)
+                    self.added.wait(1)
                     continue
                 book_id, bookdata = job
                 if not pool:
