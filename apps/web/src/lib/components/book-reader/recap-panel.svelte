@@ -5,7 +5,6 @@
     deleteSavedRecap,
     getSavedRecaps,
     planRecap,
-    recapModel,
     recapsChanged$,
     writeRecap,
     type RecapPlan,
@@ -14,7 +13,6 @@
   import { extrasSyncError$, syncExtras } from '$lib/data/extras-sync';
   import { chapterLabelAt, type SearchIndex } from '$lib/functions/book-text/book-search';
   import { onDestroy, onMount } from 'svelte';
-  import AiLanguageToggle from '$lib/components/ai-language-toggle.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import { modelShortName } from '$lib/data/ai-settings';
   import { t$ } from '$lib/i18n';
@@ -41,9 +39,6 @@
   let error = '';
   let running = false;
   let abortController = new AbortController();
-
-  // Read when the tab opens; changing the model in Settings means leaving the reader.
-  const model = recapModel();
 
   const percent = (count: number) =>
     bookCharacters ? `${((count / bookCharacters) * 100).toFixed(1)}%` : '';
@@ -127,11 +122,8 @@
   }
 </script>
 
-<div class="panel-meta">
-  <span class="panel-meta-text" title={model}>{modelShortName(model)}</span>
-  <AiLanguageToggle compact />
-</div>
-<div class="recap panel-body flex-1 overflow-y-auto">
+<div class="recap panel-body">
+  <SectionHead number={1} title={$t$('reader.recap')} />
   {#if error}
     <p class="text-panel-danger">{error}</p>
   {/if}
@@ -175,7 +167,7 @@
 
   {#if saved.length}
     <div class="recap-saved">
-      <SectionHead number={1} title={$t$('reader.savedRecaps')} count={saved.length} level="h3" />
+      <h3 class="recap-saved-head">{$t$('reader.savedRecaps')} · {saved.length}</h3>
       <ul class="recap-list">
         {#each [...saved].reverse() as item (item.created)}
           {@const ahead = item.position > position}
@@ -234,8 +226,14 @@
     margin-top: 0.75rem;
   }
 
+  .recap-saved-head {
+    color: var(--muted);
+    font-size: var(--type-small);
+    font-weight: 700;
+  }
+
   .recap-list {
-    margin-top: 0.75rem;
+    margin-top: 0.5rem;
     border-top: 2px solid var(--reader-panel-fg);
   }
 

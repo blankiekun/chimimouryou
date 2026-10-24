@@ -116,6 +116,7 @@
     jumpOffset,
     readerTopInset,
     readerWidth,
+    resolvePanelTab,
     type PanelTab
   } from '$lib/data/reader-panel';
   import HighlightEditor from '$lib/components/book-reader/highlight-editor.svelte';
@@ -921,11 +922,11 @@
     document.getSelection()?.removeAllRanges();
   }
 
-  /** A plugin tab offered after days away ("Story so far") */
+  /** A plugin tab offered after days away (Story so far) */
   $: absenceTab = welcomeBackDays
     ? $activePlugins$
         .flatMap((plugin) => plugin.companionTabs ?? [])
-        .find((tab) => tab.offerAfterAbsence?.())
+        .find((tab) => tab.absenceOffer?.ready())
     : undefined;
 
   $: highlights$ = annotations?.highlights$;
@@ -1231,7 +1232,8 @@
     return searchIndexPromise;
   }
 
-  function openPanel(panel: PanelTab) {
+  function openPanel(key: PanelTab) {
+    const panel = resolvePanelTab(key);
     panelTab = panel;
     panelOpen = true;
     panelMounted = true;
@@ -2641,7 +2643,7 @@
       class="font-bold underline underline-offset-2"
       on:click={() => absenceTab && openPanel(absenceTab.key)}
     >
-      {$t$(absenceTab.label)}
+      {$t$(absenceTab.absenceOffer?.label ?? absenceTab.label)}
     </button>
     <button
       class="inline-flex h-9 w-9 items-center justify-center opacity-80"

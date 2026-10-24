@@ -30,23 +30,18 @@ const tabLabels = (target: HTMLElement) =>
   [...target.querySelectorAll('[role=tab]')].map((tab) => tab.textContent?.trim());
 
 describe('ReaderPanel', () => {
-  it('loads Story so far and Lorebook when their tabs are clicked', async () => {
+  it('loads Story so far and the lore in the Story tab', async () => {
     const target = document.createElement('div');
 
     setPluginEnabled('ai', true);
     new ReaderPanel({ target, props: props('Tabs', '<p>猫が好き。</p>', 6) });
 
-    const click = async (label: string) => {
-      [...target.querySelectorAll<HTMLElement>('[role=tab]')]
-        .find((tab) => tab.textContent?.trim() === label)!
-        .click();
-      await tick();
-    };
+    [...target.querySelectorAll<HTMLElement>('[role=tab]')]
+      .find((tab) => tab.textContent?.trim() === 'Story')!
+      .click();
+    await tick();
 
-    await click('Story so far');
     await vi.waitFor(() => expect(target.textContent).toContain('Write recap at this position'));
-
-    await click('Lorebook');
     await vi.waitFor(() => expect(target.textContent).toContain('Read up to 0 characters'));
   });
 

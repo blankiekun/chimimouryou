@@ -22,7 +22,12 @@ export interface PanelTabEntry {
   label: MessageKey;
 }
 
-/** Index tabs in their order on the panel's edge; plugin tabs (Story so far, Lorebook) last. */
+/** Story so far and the lore were tabs of their own (`recap`, `lorebook`); both are the Story tab now. */
+export function resolvePanelTab(key: PanelTab): PanelTab {
+  return key === 'recap' || key === 'lorebook' ? 'story' : key;
+}
+
+/** Index tabs in their order on the panel's edge; plugin tabs (Story) last. */
 export function readerPanelTabs(
   pluginTabs: PanelTabEntry[],
   { hasChapters, hasText }: { hasChapters: boolean; hasText: boolean }

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { faSpinner } from '@fortawesome/free-solid-svg-icons';
-  import AiLanguageToggle from '$lib/components/ai-language-toggle.svelte';
+  import SectionHead from '$lib/components/section-head.svelte';
   import { lorebookAutoInterval$, modelShortName } from '$lib/data/ai-settings';
   import {
     clearLorebook,
@@ -14,7 +14,6 @@
     minUpdateCharacters,
     saveLoreEntries,
     stopLorebookUpdate,
-    toSillyTavern,
     updateLorebook,
     type LoreCategory,
     type Lorebook
@@ -29,7 +28,6 @@
   import { homeBookTitles$ } from '$lib/data/library-home';
   import { recapModel } from '$lib/data/recap';
   import type { SearchIndex } from '$lib/functions/book-text/book-search';
-  import { downloadBlob } from '$lib/functions/file-dom/download-blob';
   import { onDestroy, onMount } from 'svelte';
   import { t$, tr } from '$lib/i18n';
   import Fa from 'svelte-fa';
@@ -184,23 +182,11 @@
       await clearLorebook(title);
     }
   }
-
-  function exportJson() {
-    if (lorebook) {
-      downloadBlob(
-        new Blob([JSON.stringify(toSillyTavern(lorebook), null, 2)], { type: 'application/json' }),
-        `${title.replace(/[\\/:*?"<>|]/g, '_')} - lorebook.json`
-      );
-    }
-  }
 </script>
 
-<div class="panel-meta">
-  <span class="panel-meta-text" title={model}>{modelShortName(model)}</span>
-  <AiLanguageToggle compact />
-</div>
-<div class="flex min-h-0 flex-1 flex-col">
+<div>
   <div class="lore-top panel-body">
+    <SectionHead number={2} title={$t$('reader.lorebook')} count={lorebook?.entries.length} />
     {#if lorebook}
       <p class="panel-note">
         {$t$('reader.loreReadUpTo', { count: lorebook.processedUpTo.toLocaleString() })}
@@ -241,14 +227,6 @@
           on:click={showSendTargets}
         >
           {$t$('reader.loreSendShort')}
-        </button>
-        <button
-          class="app-button app-button-quiet"
-          title={$t$('reader.loreExport')}
-          disabled={!lorebook.entries.length}
-          on:click={exportJson}
-        >
-          {$t$('reader.loreExportShort')}
         </button>
         <button
           class="app-button app-button-quiet"
@@ -307,7 +285,7 @@
     {/if}
   </div>
 
-  <div class="panel-body flex-1 overflow-y-auto pb-6">
+  <div class="panel-body pb-6">
     {#if lorebook && !lorebook.entries.length}
       <p class="panel-note py-6">
         {$t$('reader.loreEmpty')}

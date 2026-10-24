@@ -644,7 +644,7 @@ export const ja: Record<MessageKey, string> = {
   'ai.getStartedText': '接続はひとつで足ります。別のものを選ぶまで、すべての機能がそれを使います。',
   'ai.startHere': 'ここから',
   'ai.startHereLead':
-    'プロバイダーをひとつ接続すれば、AIに質問・これまでのあらすじ・ロアブックがすべて使えます。あとから追加もできます。',
+    'プロバイダーをひとつ接続すれば、AIに質問・これまでのあらすじ・用語集がすべて使えます。あとから追加もできます。',
   'ai.connectOpenRouter': 'OpenRouterで接続',
   'ai.connecting': '接続中…',
   'ai.connectOpenRouterHint':
@@ -955,6 +955,7 @@ export const ja: Record<MessageKey, string> = {
   'reader.confirmExitMessage': '現在の位置にしおりが挟まれていません。このまま移動しますか？',
   'reader.companion': '読書サポート',
   'reader.highlights': 'ハイライト',
+  'reader.story': 'ストーリー',
   'reader.recap': 'これまでのあらすじ',
   'reader.lorebook': '用語集',
   'reader.askAi': 'AIに質問',
@@ -1078,10 +1079,8 @@ export const ja: Record<MessageKey, string> = {
   'reader.loreStopTitle': '更新を停止（途中まで処理した内容は保持されます）',
   'reader.stop': '停止',
   'reader.loreSend': 'シリーズの次巻へ引き継ぐ',
-  'reader.loreExport': 'SillyTavern 形式でエクスポート',
   'reader.loreClear': '用語集を消去',
   'reader.loreSendShort': '次の巻へ',
-  'reader.loreExportShort': 'エクスポート',
   'reader.loreClearShort': 'すべて削除',
   'reader.loreCategory': '表示',
   'reader.loreCopy': '項目をコピー',

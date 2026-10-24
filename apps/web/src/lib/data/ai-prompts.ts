@@ -47,7 +47,7 @@ Write in English with these short sections:
 **Characters** - the important characters so far, Japanese name with reading, one line each.
 **Where you left off** - the situation at the exact point they stopped.
 Never mention or hint at anything beyond the text provided.`,
-    lore: `You maintain a lorebook (like a SillyTavern World Info) for someone reading a Japanese book.
+    lore: `You keep a list of the characters, places and terms of a Japanese book for someone reading it.
 You get the existing entries that are relevant and a new passage. Return JSON only, no prose:
 ${loreFormat}
 - Include only entries that are new or that the passage adds to. Omit everything else.
@@ -73,7 +73,7 @@ ${loreFormat}
 **登場人物** - これまでの主要人物。名前と読み、一人一行。
 **前回の続き** - 読者が止めたちょうどその時点の状況。
 与えられた内容より先のことには、触れたりほのめかしたりしないでください。`,
-    lore: `日本語の本を読む人のために、ロアブック（SillyTavernのWorld Infoのようなもの）を管理します。
+    lore: `日本語の本を読む人のために、登場人物・場所・用語の一覧を管理します。
 関係する既存の項目と新しい本文が与えられます。JSONだけを返し、説明文は書かないでください：
 ${loreFormat}
 - 新しい項目と、本文で情報が増えた項目だけを含め、それ以外は省いてください。

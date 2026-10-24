@@ -44,8 +44,8 @@ export interface CompanionTabContribution {
   props: (context: ReaderContext) => Record<string, unknown>;
   /** Opening the tab pauses the reading tracker */
   pausesTracker?: boolean;
-  /** Offered when the reader comes back after days away */
-  offerAfterAbsence?: () => boolean;
+  /** Offered when the reader comes back after days away, named `label` */
+  absenceOffer?: { ready: () => boolean; label: MessageKey };
 }
 
 export interface SelectionActionContribution {

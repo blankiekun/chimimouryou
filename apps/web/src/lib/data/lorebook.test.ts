@@ -17,7 +17,6 @@ import {
   stopLorebookUpdate,
   mergeLoreEntries,
   parseLoreAnswer,
-  toSillyTavern,
   updateLorebook,
   type LoreEntry
 } from './lorebook';
@@ -187,18 +186,5 @@ describe('copyLorebookTo', () => {
       ['東京', 'A student.', 0, 'Vol 1']
     ]);
     expect(target.processedUpTo).toBe(0);
-  });
-});
-
-describe('toSillyTavern', () => {
-  it('exports World Info entries', () => {
-    const exported = toSillyTavern({ title: 'Book', entries: [aoi], processedUpTo: 10 });
-
-    expect(exported.entries[0]).toMatchObject({
-      uid: 0,
-      key: ['葵'],
-      comment: '葵 (あおい)',
-      content: 'A student.'
-    });
   });
 });
