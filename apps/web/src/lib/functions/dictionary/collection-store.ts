@@ -26,6 +26,7 @@
 
 import { DictionaryDatabase } from '$lib/vendor/yomitan/dictionary/dictionary-database';
 import { revive } from './dexie-json';
+import { codecAll } from './pack-codec';
 
 const folder = 'dictionary-collections';
 
@@ -45,7 +46,7 @@ export const enum Kind {
 const sequenceKey = (sequence: number) => `\u0000${sequence}`;
 
 // jsdom (the engine's tests) has none.
-/** Inflated blocks a pack keeps (64 KB each) */
+/** Inflated blocks a pack keeps */
 const cachedBlocks = 64;
 
 const opfsAvailable = () => !!(globalThis.navigator?.storage as any)?.getDirectory;
@@ -85,60 +86,6 @@ async function writeFile(dir: FileSystemDirectoryHandle, name: string, data: Arr
   }
 }
 
-const deflate = async (block: Uint8Array) =>
-  new Uint8Array(
-    await new Response(
-      new Response(block as BlobPart).body!.pipeThrough(new CompressionStream('deflate-raw'))
-    ).arrayBuffer()
-  );
-
-const inflate = async (block: ArrayBuffer) =>
-  new Uint8Array(
-    await new Response(
-      new Response(block).body!.pipeThrough(new DecompressionStream('deflate-raw'))
-    ).arrayBuffer()
-  );
-
-/** Compresses blocks in workers (CompressionStream runs on its caller's thread), else here. */
-class Deflater {
-  private workers: Worker[] = [];
-  private waiting = new Map<number, [(bytes: Uint8Array) => void, (error: unknown) => void]>();
-  private next = 0;
-
-  constructor() {
-    // jsdom (the tests) has no workers.
-    if (typeof Worker === 'undefined') return;
-    const count = Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 2) - 1));
-    for (let i = 0; i < count; i++) {
-      const worker = new Worker(new URL('./pack-deflate.worker.ts', import.meta.url), {
-        type: 'module'
-      });
-      worker.onmessage = ({ data: { id, bytes } }) => {
-        this.waiting.get(id)![0](new Uint8Array(bytes));
-        this.waiting.delete(id);
-      };
-      worker.onerror = (event) => {
-        for (const [, reject] of this.waiting.values()) reject(new Error(event.message));
-        this.waiting.clear();
-      };
-      this.workers.push(worker);
-    }
-  }
-
-  compress(block: Uint8Array) {
-    if (!this.workers.length) return deflate(block);
-    const id = this.next++;
-    return new Promise<Uint8Array>((resolve, reject) => {
-      this.waiting.set(id, [resolve, reject]);
-      this.workers[id % this.workers.length].postMessage({ id, block }, [block.buffer]);
-    });
-  }
-
-  close() {
-    for (const worker of this.workers) worker.terminate();
-  }
-}
-
 /** Writes one pack while a collection streams in; `finish` sorts the keys and writes the index. */
 export class PackWriter {
   /** Uncompressed bytes per block of `rows.bin` (0 writes a version-1 pack, for the tests) */
@@ -156,8 +103,7 @@ export class PackWriter {
   private cutBytes = 0;
   /** Bytes in `rows.bin` */
   private written = 0;
-  private pending: Promise<Uint8Array>[] = [];
-  private deflater = this.block ? new Deflater() : undefined;
+  private pending: Promise<Uint8Array[]>[] = [];
   private encoder = new TextEncoder();
 
   constructor(
@@ -233,11 +179,13 @@ export class PackWriter {
       return;
     }
     let at = 0;
+    const blocks: Uint8Array[] = [];
     while (this.used - at >= this.block || (last && at < this.used)) {
       const end = Math.min(at + this.block, this.used);
-      this.pending.push(this.deflater!.compress(this.buffer.slice(at, end)));
+      blocks.push(this.buffer.slice(at, end));
       at = end;
     }
+    if (blocks.length) this.pending.push(codecAll('compress', blocks));
     this.buffer.copyWithin(0, at, this.used);
     this.used -= at;
     this.cutBytes += at;
@@ -247,11 +195,12 @@ export class PackWriter {
   async drain() {
     const pending = this.pending;
     this.pending = [];
-    for (const block of pending) {
-      const bytes = await block;
-      this.rows.write(bytes, { at: this.written });
-      this.written += bytes.length;
-      this.blockStarts.push(this.written);
+    for (const blocks of pending) {
+      for (const bytes of await blocks) {
+        this.rows.write(bytes, { at: this.written });
+        this.written += bytes.length;
+        this.blockStarts.push(this.written);
+      }
     }
   }
 
@@ -262,7 +211,6 @@ export class PackWriter {
     this.offsets.push(this.cutBytes);
     this.rows.flush();
     this.rows.close();
-    this.deflater?.close();
 
     // Keys in IndexedDB's order; a counting sort by key keeps each key's rows in import order.
     const ids = this.keyIds;
@@ -310,7 +258,6 @@ export class PackWriter {
 
   /** Drops the unfinished pack. */
   async abort() {
-    this.deflater?.close();
     try {
       this.rows.close();
     } catch {
@@ -343,7 +290,7 @@ class Pack {
   private postStart!: Uint32Array;
   private blockStarts?: Float64Array;
   /** Recently inflated blocks, oldest first */
-  private blocks = new Map<number, Promise<Uint8Array>>();
+  private blocks = new Map<number, Uint8Array>();
   private files: Record<string, File> = {};
   private handles: Record<string, ReadHandle> = {};
 
@@ -464,52 +411,72 @@ class Pack {
     );
   }
 
-  /** Block b of `rows.bin`, inflated (kept among the last `cachedBlocks`). */
-  private block(b: number) {
-    let bytes = this.blocks.get(b);
-    if (bytes) this.blocks.delete(b);
-    else {
-      bytes = this.read('rows.bin', this.blockStarts![b], this.blockStarts![b + 1]).then(inflate);
-      bytes.catch(() => this.blocks.delete(b));
+  /** The inflated blocks the rows [start, end) need, from the cache or inflated together. */
+  private async blocksFor(spans: Float64Array[]) {
+    const size = this.manifest.block!;
+    const found = new Map<number, Uint8Array>();
+    const missing = new Set<number>();
+    for (const [start, end] of spans) {
+      for (let b = Math.floor(start / size); b * size < end; b++) {
+        if (found.has(b) || missing.has(b)) continue;
+        const cached = this.blocks.get(b);
+        if (!cached) {
+          missing.add(b);
+          continue;
+        }
+        this.blocks.delete(b);
+        this.blocks.set(b, cached);
+        found.set(b, cached);
+      }
     }
-    this.blocks.set(b, bytes);
-    if (this.blocks.size > cachedBlocks) this.blocks.delete(this.blocks.keys().next().value!);
-    return bytes;
-  }
-
-  /** Bytes [start, end) of the uncompressed rows. */
-  private async rowBytes(start: number, end: number, blocks: Map<number, Promise<Uint8Array>>) {
-    const size = this.manifest.block;
-    if (!size) return new Uint8Array(await this.read('rows.bin', start, end));
-    const parts: Promise<Uint8Array>[] = [];
-    for (let b = Math.floor(start / size); b * size < end; b++) {
-      if (!blocks.has(b)) blocks.set(b, this.block(b));
-      parts.push(blocks.get(b)!);
-    }
-    const first = Math.floor(start / size) * size;
-    const all = await Promise.all(parts);
-    if (all.length === 1) return all[0].subarray(start - first, end - first);
-    const bytes = new Uint8Array(end - start);
-    all.forEach((part, i) => {
-      const from = Math.max(start, first + i * size);
-      const to = Math.min(end, first + (i + 1) * size);
-      bytes.set(part.subarray(from - first - i * size, to - first - i * size), from - start);
+    const list = [...missing];
+    const compressed = await Promise.all(
+      list.map(
+        async (b) =>
+          new Uint8Array(
+            await this.read('rows.bin', this.blockStarts![b], this.blockStarts![b + 1])
+          )
+      )
+    );
+    (await codecAll('inflate', compressed)).forEach((bytes, i) => {
+      found.set(list[i], bytes);
+      this.blocks.set(list[i], bytes);
+      if (this.blocks.size > cachedBlocks) this.blocks.delete(this.blocks.keys().next().value!);
     });
-    return bytes;
+    return found;
   }
 
   /** The rows, parsed and revived (keyed by row number). */
   async rows(rowNumbers: Iterable<number>) {
+    const list = [...rowNumbers];
+    const spans = await Promise.all(
+      list.map(async (row) => new Float64Array(await this.read('rows.idx', row * 8, row * 8 + 16)))
+    );
+    const size = this.manifest.block;
+    const blocks = size ? await this.blocksFor(spans) : undefined;
     const rows = new Map<number, any>();
     const decoder = new TextDecoder();
-    // This call's blocks, so it never inflates one twice whatever the cache drops
-    const blocks = new Map<number, Promise<Uint8Array>>();
     await Promise.all(
-      [...rowNumbers].map(async (row) => {
-        const [start, end] = new Float64Array(await this.read('rows.idx', row * 8, row * 8 + 16));
-        const value: any = revive(
-          JSON.parse(decoder.decode(await this.rowBytes(start, end, blocks)))
-        );
+      list.map(async (row, i) => {
+        const [start, end] = spans[i];
+        let bytes: Uint8Array;
+        if (!size) bytes = new Uint8Array(await this.read('rows.bin', start, end));
+        else {
+          // A row may span blocks.
+          const first = Math.floor(start / size);
+          const last = Math.floor((end - 1) / size);
+          if (first === last) {
+            bytes = blocks!.get(first)!.subarray(start - first * size, end - first * size);
+          } else {
+            bytes = new Uint8Array(end - start);
+            for (let b = first; b <= last; b++) {
+              const from = Math.max(start, b * size);
+              const to = Math.min(end, (b + 1) * size);
+              bytes.set(blocks!.get(b)!.subarray(from - b * size, to - b * size), from - start);
+            }
+          }
+        }
+        const value: any = revive(JSON.parse(decoder.decode(bytes)));
         rows.set(row, Array.isArray(value) ? value[1] : value);
       })
     );
