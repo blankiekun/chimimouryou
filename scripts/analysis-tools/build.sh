@@ -4,7 +4,8 @@
 # (ANALYSIS_TOOLS_OUT picks another folder). Run after `pnpm build`; nothing here is committed:
 #   sudachi.js, sudachi_bg.wasm  sudachi.rs for wasm (Benjas333/sudachi-wasm333 at SUDACHI_COMMIT, Apache-2.0)
 #                                with sudachi-wasm.patch: wasm32 build fixes and dict_alloc/initialize_from_ptr,
-#                                so the dictionary streams into wasm memory without a copy
+#                                so the dictionary streams into wasm memory without a copy, and tokenize_rows
+#                                (a text's morphemes as one string, ~2.6x faster than tokenize_raw's objects)
 #   core.dic.gz                  SudachiDict-core, the server's dictionary (scripts/calibre/jiten/requirements.txt)
 #   pyodide/                     Pyodide (MPL-2.0), the core files only (a lock file without packages)
 #   analysis.zip                 yurigana (pinned like the server) and the difficulty service's Python
@@ -43,7 +44,9 @@ src=$work/sudachi-wasm333-$SUDACHI_COMMIT
 patch -s -d "$src" -p1 < "$here/sudachi-wasm.patch"
 [ "$(wasm-bindgen --version 2>/dev/null)" = "wasm-bindgen $WASM_BINDGEN" ] ||
   cargo install -q wasm-bindgen-cli --version "$WASM_BINDGEN" --locked
-(cd "$src" && cargo build -q --release --locked --target wasm32-unknown-unknown -p sudachi)
+# Fat LTO: ~10% faster tokenizing, 7% smaller (SIMD measured slower, wasm-opt -O3 no faster)
+(cd "$src" && cargo build -q --release --locked --target wasm32-unknown-unknown -p sudachi \
+  --config 'profile.release.lto="fat"' --config profile.release.codegen-units=1)
 wasm-bindgen --target web --no-typescript --out-dir "$work/pkg" "$src/target/wasm32-unknown-unknown/release/sudachi.wasm"
 cp "$work/pkg/sudachi.js" "$work/pkg/sudachi_bg.wasm" "$out/"
 

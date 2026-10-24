@@ -168,7 +168,7 @@ diff --git a/sudachi/src/lib.rs b/sudachi/src/lib.rs
 index aa6ae77..c88b75e 100644
 --- a/sudachi/src/lib.rs
 +++ b/sudachi/src/lib.rs
-@@ -69,6 +69,15 @@ use crate::dic::dictionary::JapaneseDictionary;
+@@ -69,6 +69,15 @@
  use crate::dic::storage::{Storage, SudachiDicData};
  use crate::prelude::{Morpheme, MorphemeList};
  
@@ -184,7 +184,7 @@ index aa6ae77..c88b75e 100644
  #[wasm_bindgen(start)]
  pub fn main() {
      #[cfg(feature = "console_error_panic_hook")]
-@@ -152,7 +161,7 @@ pub struct TokenMorpheme {
+@@ -152,7 +161,7 @@
      pub end: usize,
  }
  
@@ -193,7 +193,7 @@ index aa6ae77..c88b75e 100644
      fn from(morpheme: Morpheme<'a, D>) -> Self {
          Self {
              surface: morpheme.surface().to_string(),
-@@ -336,7 +345,7 @@ async fn load_dict_from_url(
+@@ -336,7 +345,7 @@
      Ok(dict_bytes)
  }
  
@@ -202,7 +202,7 @@ index aa6ae77..c88b75e 100644
      if dict_bytes.is_empty() {
          return Err(JsValue::from(WasmError {
              error: "InvalidDictionary".to_string(),
-@@ -350,7 +359,7 @@ fn create_config_and_dictionary(dict_bytes: &[u8]) -> Result<(Config, Arc<Japane
+@@ -350,7 +359,7 @@
              details: format!("Failed to initialize config: {}", e)
          }))?;
      
@@ -211,7 +211,58 @@ index aa6ae77..c88b75e 100644
  
      let dictionary = JapaneseDictionary::from_cfg_storage_with_embedded_chardef(&config, storage)
          .map_err(|e| JsValue::from(WasmError {
-@@ -386,7 +395,7 @@ impl SudachiStateless {
+@@ -368,6 +377,7 @@
+ pub struct SudachiStateless {
+     tokenizer: Option<StatelessTokenizer<Arc<JapaneseDictionary>>>,
+     config: Option<Config>,
++    rows: std::cell::RefCell<Option<StatefulTokenizer<Arc<JapaneseDictionary>>>>,
+ }
+ 
+ #[wasm_bindgen]
+@@ -377,16 +387,50 @@
+         Self {
+             tokenizer: None,
+             config: None,
++            rows: std::cell::RefCell::new(None),
+         }
+     }
+ 
++    /// Split mode C morphemes as `surface \x1f dictionary form \x1f normalized \x1f reading \x1f pos,pos…`
++    /// rows joined by \x1e: tokenize_raw's fields as one string, from one reused stateful tokenizer
++    /// that reads only those fields (no JS object per morpheme).
++    #[wasm_bindgen]
++    pub fn tokenize_rows(&self, input: &str) -> Result<String, JsValue> {
++        let err = |e: crate::error::SudachiError| JsValue::from(WasmError {
++            error: "TokenizationError".to_string(),
++            details: format!("Failed to tokenize: {}", e),
++        });
++        let mut guard = self.rows.borrow_mut();
++        let tok = guard.as_mut().ok_or_else(|| JsValue::from(WasmError {
++            error: "InitializationError".to_string(),
++            details: "Tokenizer not initialized. Call initialize() first.".to_string()
++        }))?;
++        tok.reset().push_str(input);
++        tok.do_tokenize().map_err(err)?;
++        let mut list = MorphemeList::empty(tok.dict_clone());
++        list.collect_results(tok).map_err(err)?;
++        let mut out = String::with_capacity(input.len() * 4);
++        for (i, m) in list.iter().enumerate() {
++            if i > 0 { out.push('\x1e'); }
++            out.push_str(&m.surface()); out.push('\x1f');
++            out.push_str(m.dictionary_form()); out.push('\x1f');
++            out.push_str(m.normalized_form()); out.push('\x1f');
++            out.push_str(m.reading_form()); out.push('\x1f');
++            for (j, p) in m.part_of_speech().iter().enumerate() {
++                if j > 0 { out.push(','); }
++                out.push_str(p);
++            }
++        }
++        Ok(out)
++    }
++
+     /// Initializes the tokenizer with the given dictionary file url. If not given, the default one is used.
+     /// 
+     /// Returns an error object `{ error: string, details: string }` if initialization fails.
      #[wasm_bindgen]
      pub async fn initialize_browser(&mut self, dict_url: Option<String>) -> Result<(), JsValue> {
          let dict_bytes = load_dict_from_url(dict_url).await?;
@@ -220,7 +271,7 @@ index aa6ae77..c88b75e 100644
      }
  
      /// Initializes the tokenizer with the given dictionary file path. If not given, the default one is used.
-@@ -397,13 +406,20 @@ impl SudachiStateless {
+@@ -397,14 +441,25 @@
      #[wasm_bindgen]
      pub async fn initialize_node(&mut self, read_file_func: Function, dict_path: Option<String>) -> Result<(), JsValue> {
          let dict_bytes = load_dict_from_path(dict_path, read_file_func).await?;
@@ -241,9 +292,14 @@ index aa6ae77..c88b75e 100644
 +
 +    pub fn initialize_from_bytes(&mut self, dict_bytes: Vec<u8>) -> Result<(), JsValue> {
          let (config, dictionary) = create_config_and_dictionary(dict_bytes)?;
++        let mut rows = StatefulTokenizer::new(dictionary.clone(), Mode::C);
++        rows.set_subset(crate::dic::subset::InfoSubset::POS_ID | crate::dic::subset::InfoSubset::READING_FORM
++            | crate::dic::subset::InfoSubset::NORMALIZED_FORM | crate::dic::subset::InfoSubset::DICTIONARY_FORM);
++        *self.rows.borrow_mut() = Some(rows);
          let tokenizer = StatelessTokenizer::new(dictionary);
  
-@@ -513,7 +529,7 @@ impl SudachiStateful {
+         self.tokenizer = Some(tokenizer);
+@@ -513,7 +568,7 @@
      #[wasm_bindgen]
      pub async fn initialize_browser(&mut self, mode: TokenizeMode, debug: Option<bool>, dict_url: Option<String>) -> Result<(), JsValue> {
          let dict_bytes = load_dict_from_url(dict_url).await?;
@@ -252,7 +308,7 @@ index aa6ae77..c88b75e 100644
      }
  
      /// Initializes the tokenizer with the given dictionary file path. If not given, the default one is used.
-@@ -524,13 +540,13 @@ impl SudachiStateful {
+@@ -524,13 +579,13 @@
      #[wasm_bindgen]
      pub async fn initialize_node(&mut self, read_file_func: Function, mode: TokenizeMode, debug: Option<bool>, dict_path: Option<String>) -> Result<(), JsValue> {
          let dict_bytes = load_dict_from_path(dict_path, read_file_func).await?;

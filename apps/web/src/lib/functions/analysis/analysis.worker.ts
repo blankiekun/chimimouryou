@@ -75,7 +75,10 @@ async function loadSudachi(manifest: AnalysisToolsManifest) {
 
   sudachi.initialize_from_ptr(address, bytes);
 
-  // A text's morphemes as browser.py's BrowserTokens reads them
+  // A text's morphemes as browser.py's BrowserTokens reads them: tokenize_rows builds the same
+  // string in wasm; tools installed before it have only tokenize_raw.
+  if (sudachi.tokenize_rows) return (text: string) => sudachi.tokenize_rows(text) as string;
+
   return (text: string) =>
     (sudachi.tokenize_raw(text, 2) as Morpheme[])
       .map((m) =>
