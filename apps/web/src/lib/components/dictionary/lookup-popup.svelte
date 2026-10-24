@@ -634,9 +634,12 @@
     font-size: var(--type-small);
   }
 
-  .ttu-dict :global(.inflection + .inflection)::before,
-  .ttu-dict :global(.inflection:first-child)::before {
+  .ttu-dict :global(.inflection-rule-chain)::before {
     content: '« ';
+  }
+
+  .ttu-dict :global(.inflection + .inflection)::before {
+    content: ' « ';
   }
 
   .ttu-dict :global(.tag-list),

@@ -356,7 +356,7 @@ export const en = {
   'dict.jmdictHint': 'Download the zip from its releases page, then import it here.',
   'dict.fontSize': 'Font size',
   'dict.fontSizeHint': 'Text size in the popup, in pixels.',
-  'dict.popupDisplay': 'Popup',
+  'dict.popupDisplay': 'Placement',
   'dict.popupDisplayHint':
     'Near the word, or full width at the top or bottom. Phones always use full width.',
   'dict.popupNear': 'Near the word',

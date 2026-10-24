@@ -14,6 +14,8 @@ diffed file by file.
 except the preprocessors, `language/ko/korean.js` and `language/zh/chinese.js` (code-point helpers
 the translator imports), `data/database.js`, `data/json-schema.js`, `general/cache-map.js`,
 `general/regex-util.js`, `media/media-util.js`, `core/{json,object-utilities,safe-performance,to-error,utilities}.js`,
+`data/string-util.js`, `dom/dom-text-scanner.js`, `dom/document-util.js`, `display/pronunciation-generator.js`,
+`language/text-utilities.js`,
 `data/schemas/options-schema.json` and the type files in `types/`.
 
 ## Changed (each change is marked `chimimouryou:` in the file)
@@ -31,10 +33,29 @@ the translator imports), `data/database.js`, `data/json-schema.js`, `general/cac
   patches and the welcome page in the upgrades are skipped (the app does not use Yomitan's Anki
   templates).
 - `core/log.js`: the console instead of the extension's logger.
+- `dictionary/dictionary-data-util.js`: `getFrequencyNumbers`/`getFrequencyHarmonic` copied in from
+  `data/anki-note-data-creator.js` (the rest of that module is Anki's).
+- `display/structured-content-generator.js`: one content manager from the app
+  (`components/dictionary/structured-content.ts`) instead of the display and Anki ones: images are
+  `<img>` from blob URLs out of the dictionary database (the Anki renderer's path, not the
+  extension's canvas drawing), links are checked there (only http(s) opens, in a new tab; internal
+  `?query=` links do a nested lookup).
+- `dom/text-source-generator.js`: only the text path of `getRangeFromPoint` (`_caretRangeFromPoint`,
+  `_caretPositionFromPoint`, `_isPointInRange`) as a function; no imposters for inputs, shadow
+  roots, images or deep DOM scan.
+- `app/popup-position.js`: `Popup._getPosition` and its helpers from `app/popup.js`, as functions
+  taking the frame size and offsets.
 - `background/find-terms-options.js`: `Backend._getTranslatorFindTermsOptions` and its helpers
   from `background/backend.js`, as functions.
 - `*.d.ts` beside the entry modules: declarations for the TypeScript side (Yomitan types its
   JavaScript with JSDoc).
 
-Left out: the extension (backend, messaging, `chrome.*`), the popup and display, the settings
-pages, Anki, audio, the kanji lookup path's UI, and every language but Japanese.
+The popup itself is the app's (`components/dictionary/lookup-popup.svelte`, `term-entry.svelte`):
+the entry layout follows `display/display-generator.js` with Yomitan's class names, so custom popup
+CSS and dictionary styles (scoped with `addScopeToCssLegacy`, as `display.js` does) still apply.
+Word audio follows `media/audio-downloader.js` and `audio-system.js` in `lib/data/dictionary-audio.ts`
+for the sources a web page can reach.
+
+Left out: the extension (backend, messaging, `chrome.*`), the display's templates and its text
+scanner (`language/text-scanner.js`; the app's `functions/dictionary/scan.ts` uses the scanner pieces
+above), the settings pages, Anki, the kanji lookup path's UI, and every language but Japanese.

@@ -353,7 +353,7 @@ export const ja: Record<MessageKey, string> = {
   'dict.jmdictHint': 'リリースページから zip をダウンロードし、ここで読み込みます。',
   'dict.fontSize': '文字サイズ',
   'dict.fontSizeHint': 'ポップアップの文字サイズ（ピクセル）。',
-  'dict.popupDisplay': 'ポップアップ',
+  'dict.popupDisplay': '表示位置',
   'dict.popupDisplayHint': '単語の近く、または上下に全幅で表示。スマートフォンでは常に全幅です。',
   'dict.popupNear': '単語の近く',
   'dict.popupFullWidth': '全幅',

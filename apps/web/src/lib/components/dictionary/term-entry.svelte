@@ -138,6 +138,7 @@
         type="button"
         class="entry-action entry-known"
         title={$t$('book.markKnown', { word: first.term })}
+        aria-label={$t$('book.markKnown', { word: first.term })}
         aria-pressed={known}
         disabled={known}
         on:click={() => dispatch('markKnown', first.term)}
