@@ -7,7 +7,9 @@ How to change this fork. See `ARCHITECTURE.md` for how the pieces fit together,
 
 - Avoid editing upstream files when a new file will do, so merging upstream
   (`git fetch upstream && git merge upstream/main`) stays easy.
-- New modules start with the license header ESLint requires, then a short
+- The project is GPL-3.0-or-later (README → License). New modules start with the license header ESLint requires
+  (still the BSD one: it is GPL-compatible and keeps upstream merges simple; code ported from GPL projects such as
+  Yomitan keeps its own GPL header and is exempted in `eslint.config.js`), then a short
   comment saying what the module is for and "Not part of upstream":
 
   ```ts
