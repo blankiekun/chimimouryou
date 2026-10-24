@@ -71,6 +71,28 @@ describe('standalone edition', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('reads Community anonymously only when asked, never with social off, and writes nothing signed out', async () => {
+    fetchMock.mockImplementation(async () => new Response('{"posts":[],"next":null}'));
+
+    const community = await import('$lib/data/community');
+    const plugins = await import('$lib/plugins');
+
+    // Loading the module (as the app does) asks nothing.
+    await community.resolveWork('本 3', '');
+    expect(fetchMock).not.toHaveBeenCalled();
+    await expect(community.replyTo('0123456789abcdef', 'x')).rejects.toMatchObject({
+      status: 401
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    // Opening the Community tab signed out: a public read, without a token.
+    await community.loadFeed();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1].headers).not.toHaveProperty('Authorization');
+    plugins.setPluginEnabled('social', false);
+    await expect(community.loadFeed()).rejects.toMatchObject({ code: 'off' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('takes the public word test without a request, and saves the result for the app', async () => {
     const { default: PlacementTest } = await import(
       '$lib/components/placement/placement-test.svelte'

@@ -14,31 +14,7 @@ import hub, {
   webpSize,
   type Env
 } from '../src/hub';
-import { memoryD1 } from './d1';
-
-/** A WebP header (the hub reads no further): VP8L, or VP8X with metadata flags */
-function webp(width: number, height: number, size = 200, flags = -1) {
-  const bytes = new Uint8Array(size);
-  const ascii = (at: number, text: string) =>
-    [...text].forEach((char, i) => (bytes[at + i] = char.charCodeAt(0)));
-  const u32 = (at: number, value: number) =>
-    [0, 1, 2, 3].forEach((i) => (bytes[at + i] = (value >>> (8 * i)) & 255));
-
-  ascii(0, 'RIFF');
-  u32(4, size - 8);
-  ascii(8, 'WEBP');
-  if (flags < 0) {
-    ascii(12, 'VP8L');
-    bytes[20] = 0x2f;
-    u32(21, (width - 1) | ((height - 1) << 14));
-  } else {
-    ascii(12, 'VP8X');
-    bytes[20] = flags;
-    u32(24, width - 1);
-    u32(27, height - 1);
-  }
-  return bytes;
-}
+import { memoryD1, webp } from './d1';
 
 describe('hub images', () => {
   let env: Env;
