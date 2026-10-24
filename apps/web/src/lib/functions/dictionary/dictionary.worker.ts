@@ -12,16 +12,20 @@
 
 import type { ProfileOptions } from '$lib/vendor/yomitan/types/settings';
 import {
+  cancelCollectionImport,
   deleteAllDictionaries,
   deleteDictionary,
   getMedia,
   importDictionary,
+  importDictionaryCollection,
   listDictionaries,
   lookup
 } from './dictionary-engine';
 
 export type DictionaryRequest =
   | { id: number; type: 'import'; file: Blob }
+  | { id: number; type: 'importCollection'; file: Blob }
+  | { id: number; type: 'cancelImport' }
   | { id: number; type: 'list' }
   | { id: number; type: 'delete'; name: string }
   | { id: number; type: 'deleteAll' }
@@ -41,6 +45,12 @@ async function handle(request: DictionaryRequest) {
       return importDictionary(await request.file.arrayBuffer(), (done, total) =>
         post({ id: request.id, type: 'progress', done, total })
       );
+    case 'importCollection':
+      return importDictionaryCollection(request.file, (done, total) =>
+        post({ id: request.id, type: 'progress', done, total })
+      );
+    case 'cancelImport':
+      return cancelCollectionImport();
     case 'list':
       return listDictionaries();
     case 'delete':

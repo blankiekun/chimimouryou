@@ -238,6 +238,7 @@ export interface EstimatedBook {
   title: string;
   computedAt: number;
   characters: number;
+  estimate: CalibreDifficulty;
 }
 
 /**
@@ -247,7 +248,13 @@ export interface EstimatedBook {
 export async function estimatedBooks(): Promise<EstimatedBook[]> {
   if (serverless) {
     return [...(await localEstimates()).values()]
-      .map(({ title, characters, computedAt }) => ({ id: title, title, computedAt, characters }))
+      .map((estimate) => ({
+        id: estimate.title,
+        title: estimate.title,
+        computedAt: estimate.computedAt,
+        characters: estimate.characters,
+        estimate
+      }))
       .sort((a, b) => (a.id < b.id ? -1 : 1));
   }
 
@@ -262,7 +269,8 @@ export async function estimatedBooks(): Promise<EstimatedBook[]> {
       id,
       title,
       computedAt: difficulty[id].computedAt,
-      characters: difficulty[id].characters
+      characters: difficulty[id].characters,
+      estimate: difficulty[id]
     }))
     .sort((a, b) => (a.id as number) - (b.id as number));
 }
@@ -289,7 +297,8 @@ export function getWordsMet() {
   return running;
 }
 
-async function computeWordsMet(): Promise<WordsMetCache> {
+/** The estimated books read, with the share read of each. */
+export async function readBooks() {
   const db = await readerDb();
   const [records, estimated, progress] = await Promise.all([
     getKanjiSeen(),
@@ -298,7 +307,7 @@ async function computeWordsMet(): Promise<WordsMetCache> {
   ]);
   const read = new Map(records.map((record) => [record.title, record]));
   // Local books are keyed by title, catalog books by id: the signatures never match.
-  const books = estimated
+  return estimated
     .map((book) => {
       const record = read.get(book.title);
       const fraction = record
@@ -308,6 +317,11 @@ async function computeWordsMet(): Promise<WordsMetCache> {
       return { ...book, fraction };
     })
     .filter((book) => !!book.fraction);
+}
+
+async function computeWordsMet(): Promise<WordsMetCache> {
+  const db = await readerDb();
+  const books = await readBooks();
   const signature = JSON.stringify([
     metVersion,
     books.map(({ id, computedAt, fraction }) => ({ id, computedAt, fraction }))

@@ -1,5 +1,6 @@
 <script lang="ts">
   import PointBox from '$lib/components/point-box.svelte';
+  import ReadingRankRow from '$lib/components/reading-rank/reading-rank-row.svelte';
   import { learningGuideUrl } from '$lib/data/app-update';
   import {
     activityWeeks,
@@ -34,6 +35,8 @@
   let week: ActivityDay[] = [];
   let words: WordsSummary | undefined;
   let gained: number | undefined;
+  /** Bumped when the server's statistics arrived, so the rank is read again */
+  let pulledAt = 0;
 
   const number = (value: number) => value.toLocaleString('en-US');
 
@@ -81,7 +84,11 @@
     // Statistics of books not opened in this browser only exist on the server.
     const pulled = pullAccountStatistics(window)
       .catch(() => {})
-      .then(loadStats);
+      .then(loadStats)
+      .then((loaded) => {
+        pulledAt = Date.now();
+        return loaded;
+      });
 
     // After the summary, which fetches the same word lists.
     Promise.all([pulled, summary])
@@ -190,6 +197,7 @@
         </div>
       {/each}
     </dl>
+    <div class="dashboard-rank"><ReadingRankRow refresh={pulledAt} /></div>
   {:else if stats && !$statisticsEnabled$}
     <p class="dashboard-note">
       {$t$('dashboard.trackerOff')}
@@ -213,6 +221,7 @@
       align-items: start;
     }
 
+    .dashboard-rank,
     .dashboard-note,
     .dashboard-guide {
       grid-column: 1 / -1;

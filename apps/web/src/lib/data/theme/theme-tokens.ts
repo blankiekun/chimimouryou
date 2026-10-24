@@ -300,6 +300,43 @@ export const themeTokenGroups = {
       description: 'Preset avatars and title cards of friends; white text sits on it'
     }
   },
+  Ranks: {
+    rank1: {
+      label: 'Rank 1 (slate)',
+      cssVar: '--rank-1',
+      description: 'The reading rank 見習い: its badge and progress track only'
+    },
+    rank2: {
+      label: 'Rank 2 (blue)',
+      cssVar: '--rank-2',
+      description: 'The reading rank 駆け出し: its badge and progress track only'
+    },
+    rank3: {
+      label: 'Rank 3 (green)',
+      cssVar: '--rank-3',
+      description: 'The reading rank 冒険者: its badge and progress track only'
+    },
+    rank4: {
+      label: 'Rank 4 (ochre)',
+      cssVar: '--rank-4',
+      description: 'The reading rank 熟練者: its badge and progress track only'
+    },
+    rank5: {
+      label: 'Rank 5 (orange)',
+      cssVar: '--rank-5',
+      description: 'The reading rank 英雄: its badge and progress track only'
+    },
+    rank6: {
+      label: 'Rank 6 (crimson)',
+      cssVar: '--rank-6',
+      description: 'The reading rank 勇者: its badge and progress track only'
+    },
+    rank7: {
+      label: 'Rank 7 (violet)',
+      cssVar: '--rank-7',
+      description: 'The reading rank 魔王: its badge and progress track only'
+    }
+  },
   Annotations: {
     highlightYellow: {
       label: 'Highlight 1 (yellow)',

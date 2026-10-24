@@ -46,6 +46,9 @@ vi.mock('$lib/data/social-images', () => ({
     cover.size ? new Blob(['RIFFthumb'], { type: 'image/webp' }) : null
 }));
 
+// Its import chain is slow on a cold CI worker and outlasts vi.waitFor; rank has its own tests.
+vi.mock('$lib/data/reading-rank-data', () => ({ loadReadingRank: async () => undefined }));
+
 const me: SocialMe = {
   id: '0123456789abcdef',
   username: 'aki',

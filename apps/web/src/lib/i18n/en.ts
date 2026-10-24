@@ -48,6 +48,25 @@ export const en = {
   'dashboard.wordsKnownHint': 'Words met at least {count} times, plus mature words from Anki',
   'dashboard.wordsKnownHintPlaced':
     'The {cutoff} most common words (word test), plus words met at least {count} times, mature words from Anki and words marked known',
+  'rank.label': 'Reading rank',
+  'rank.progress': '{met} of {total} for {rank}',
+  'rank.top': 'The top rank',
+  'rank.rises': 'Rises to {rank} on {date}',
+  'rank.novels': "{count} light novels' worth",
+  'rank.novelsHint': 'Characters read at a plausible speed, 100,000 to a light novel',
+  'rank.next': 'For {rank}',
+  'rank.reqWords': 'Words known: {have} of {need}',
+  'rank.reqCharacters': 'Characters read: {have} of {need}',
+  'rank.reqDays': 'Reading days: {have} of {need}',
+  'rank.reqBook': 'A finished book of difficulty {need} or more, 95% of its words known',
+  'rank.all': 'All ranks',
+  'rank.colRank': 'Rank',
+  'rank.colCharacters': 'Characters',
+  'rank.colDays': 'Days',
+  'rank.colWords': 'Words',
+  'rank.colBook': 'Book',
+  'rank.rules':
+    "Every requirement counts: easy reading alone never raises the rank, and it never drops. It rises one rank a week at most. Characters count up to 1,000 a minute of reading time and 300,000 a day; word test retakes within a week, and words marked known but never met, don't count.",
   'dashboard.wordsGained': '+{count} this month',
   'dashboard.wordsGainedHint':
     'Estimated from the characters read each day; Anki words are not included',
@@ -1068,6 +1087,10 @@ export const en = {
     'The readings of this list agree with the installed one on only {agreement} of its most frequent words. Install it anyway?',
   'library.importDictionary': 'Import frequency list',
   'library.replaceDictionary': 'Replace frequency list',
+  'library.customEngineList':
+    "Estimates on this server use a custom frequency list; they're shown but don't count for reading rank.",
+  'library.customEngine':
+    "Estimates on this server don't come from this release's difficulty engine (a reading model or other versions); they're shown but don't count for reading rank.",
   'library.termDictionaries':
     'Term dictionaries (optional): Yomitan term dictionaries you add give readings of words the frequency list lacks, in word lists and readings files. Estimates made before keep their words until redone.',
   'library.addTermDictionary': 'Add term dictionary',
@@ -1961,6 +1984,8 @@ export const en = {
   'social.charsWeek': 'Chars this week',
   'social.timeWeek': 'Read this week',
   'social.finishedIn': 'Finished in {year}',
+  'social.rank': 'Reading rank',
+  'social.novels': "Light novels' worth",
   'social.wordsKnown': 'Words known',
   'social.memberSinceShort': 'member since {since}',
   'social.friendsSince': 'Friends since {since}',
@@ -2140,8 +2165,12 @@ export const en = {
   'hardTest.title': 'Level check: hard mode',
   'hardTest.publicTitle': 'How many Japanese words can you read and explain?',
   'hardTest.lede':
-    'About {minutes} min. For each word, pick its reading, then its meaning, from four choices, or say you don’t know. A word counts only when both are right, and lucky guesses are corrected for. Nothing you answer leaves this page.',
-  'hardTest.keysValue': '1–4 pick · 0 or N don’t know',
+    'About {minutes} min. For each word, type its reading in kana (or romaji), then pick its meaning from four choices, or say you don’t know. A wrong reading goes straight to the next word. A word counts only when both are right, and lucky guesses are corrected for. Nothing you answer leaves this page.',
+  'hardTest.keysValue': 'Type the reading, Enter · then 1–4 pick, 0 or N don’t know',
+  'hardTest.typePlaceholder': 'Reading in kana or romaji',
+  'hardTest.next': 'Next',
+  'hardTest.dropped':
+    'Your result from the earlier hard mode, where readings were picked from choices, no longer counts.',
   'hardTest.loading': 'Loading…',
   'hardTest.reading': 'How is it read?',
   'hardTest.meaning': 'What does it mean?',
@@ -2150,7 +2179,7 @@ export const en = {
   'hardTest.meaningText':
     'You can likely read and explain most of the {count} most common words in Japanese books, anime and games (by Jiten’s frequency list). Chimi Reader shows how much of a book they cover before you start it.',
   'hardTest.stricter':
-    'Hard mode counts a word only when you pick both its reading and its meaning, and corrects for lucky guesses, so it is the stricter measure.',
+    'Hard mode counts a word only when you type its reading and pick its meaning, and corrects for lucky guesses, so it is the stricter measure.',
   'hardTest.both': 'When you have taken both tests, the lower result counts.',
   'hardTest.credits':
     'Meanings: Japanese Wiktionary, by its contributors (CC BY-SA 4.0), via wiktionary-to-yomitan. Words and ranks: Jiten’s frequency list (CC BY-SA 4.0).',
@@ -2160,7 +2189,7 @@ export const en = {
     'I can read and explain about {count} Japanese words. Take the hard word test:',
   'hardTest.ogTitle': 'The hard Japanese word test',
   'hardTest.ogDescription':
-    'Pick each word’s reading and meaning from four choices; lucky guesses don’t count. About 5 minutes, nothing to sign up for.',
+    'Type each word’s reading and pick its meaning; lucky guesses don’t count. About 7 minutes, nothing to sign up for.',
   'words.placementHard': 'Hard mode: about {count} words.',
   'words.placementHardNone':
     'Hard mode asks each word’s reading and meaning, the stricter measure.',

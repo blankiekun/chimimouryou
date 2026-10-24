@@ -113,6 +113,20 @@ describe('contrast', () => {
     expect(report).toEqual([]);
   });
 
+  // The rank badge's name is in its colour: AA text on the page (the track then passes 3:1 too).
+  it('keeps every rank colour readable on the page', () => {
+    const report = builtInThemes.flatMap(({ id }) => {
+      const { colors } = resolveTheme(id, {});
+      const page = parseSimpleColor(colors.background)!;
+      return ([1, 2, 3, 4, 5, 6, 7] as const)
+        .map((n) => [n, contrastRatio(parseSimpleColor(colors[`rank${n}`])!, page)] as const)
+        .filter(([, ratio]) => ratio < 4.5)
+        .map(([n, ratio]) => `${id}: rank${n} is ${ratio.toFixed(2)}:1`);
+    });
+
+    expect(report).toEqual([]);
+  });
+
   // The difficulty scale runs from accent to text: both ends need 3:1 (non-text) on the page.
   it('keeps the difficulty scale visible', () => {
     const report = builtInThemes.flatMap(({ id }) => {

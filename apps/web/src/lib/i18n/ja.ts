@@ -46,6 +46,25 @@ export const ja: Record<MessageKey, string> = {
   'dashboard.wordsKnownHint': '{count}回以上出会った語彙＋Ankiの定着済みカード',
   'dashboard.wordsKnownHintPlaced':
     '頻出語{cutoff}語（単語テスト）＋{count}回以上出会った語彙・Ankiの定着済みカード・既知にした語',
+  'rank.label': '読書ランク',
+  'rank.progress': '{rank}まで {met}/{total}',
+  'rank.top': '最高ランク',
+  'rank.rises': '{date}に{rank}へ昇格',
+  'rank.novels': 'ラノベ{count}冊分',
+  'rank.novelsHint': '妥当な速度で読んだ文字数（ラノベ1冊＝10万字）',
+  'rank.next': '{rank}の条件',
+  'rank.reqWords': '既知の語彙：{have}／{need}',
+  'rank.reqCharacters': '読んだ文字数：{have}／{need}',
+  'rank.reqDays': '読書日数：{have}／{need}',
+  'rank.reqBook': '難易度{need}以上の本を読了（語彙の95%が既知）',
+  'rank.all': '全ランク',
+  'rank.colRank': 'ランク',
+  'rank.colCharacters': '文字数',
+  'rank.colDays': '日数',
+  'rank.colWords': '語彙',
+  'rank.colBook': '本',
+  'rank.rules':
+    'すべての条件が必要です。易しい本だけではランクは上がらず、下がることもありません。昇格は週に1ランクまで。文字数は読書時間1分あたり1,000字・1日30万字まで数え、1週間以内の単語テストの再受験と、出会っていない語の既知マークは数えません。',
   'dashboard.wordsGained': '今月 +{count}',
   'dashboard.wordsGainedHint': '日々の読書文字数からの推定（Ankiの語彙は除く）',
   'statistics.wordsKnown': '既知の語彙',
@@ -1072,6 +1091,10 @@ export const ja: Record<MessageKey, string> = {
     'このリストの読みは、導入済みリストの頻出語と {agreement} しか一致しません。このまま導入しますか？',
   'library.importDictionary': '頻度リストをインポート',
   'library.replaceDictionary': '頻度リストを置き換え',
+  'library.customEngineList':
+    'このサーバーの推定は独自の頻度リストを使っています。表示されますが、読書ランクには数えられません。',
+  'library.customEngine':
+    'このサーバーの推定はこのリリースの難易度エンジンによるものではありません（読みモデル、別のバージョン）。表示されますが、読書ランクには数えられません。',
   'library.termDictionaries':
     '用語辞書（任意）：お手持ちの Yomitan 用語辞書を追加すると、頻度リストにない単語の読みを補完できます（算出済みのデータは再実行するまで変更されません）。',
   'library.addTermDictionary': '用語辞書を追加',
@@ -1975,6 +1998,8 @@ export const ja: Record<MessageKey, string> = {
   'social.charsWeek': '今週の文字数',
   'social.timeWeek': '今週の読書時間',
   'social.finishedIn': '{year}年の読了',
+  'social.rank': '読書ランク',
+  'social.novels': 'ラノベ換算',
   'social.wordsKnown': '既知語',
   'social.memberSinceShort': '{since}から',
   'social.friendsSince': '{since}からフレンド',
@@ -2155,8 +2180,11 @@ export const ja: Record<MessageKey, string> = {
   'hardTest.title': 'レベルチェック：ハードモード',
   'hardTest.publicTitle': '日本語の語を、読めて意味も言えるのはいくつ？',
   'hardTest.lede':
-    '約{minutes}分。語ごとに、4つの選択肢から読み方、次に意味を選ぶか、「わからない」を選びます。両方正しいときだけ数え、当て推量の分は差し引きます。答えがこのページの外に送られることはありません。',
-  'hardTest.keysValue': '1〜4 選ぶ · 0 または N わからない',
+    '約{minutes}分。語ごとに、読み方をかな（またはローマ字）で入力し、次に4つの選択肢から意味を選ぶか、「わからない」を選びます。読み方が違うとすぐ次の語に進みます。両方正しいときだけ数え、当て推量の分は差し引きます。答えがこのページの外に送られることはありません。',
+  'hardTest.keysValue': '読み方を入力して Enter · 次に 1〜4 選ぶ、0 または N わからない',
+  'hardTest.typePlaceholder': '読み方（かな・ローマ字）',
+  'hardTest.next': '次へ',
+  'hardTest.dropped': '読み方を選択肢から選んでいた以前のハードモードの結果は、もう使いません。',
   'hardTest.loading': '読み込み中…',
   'hardTest.reading': '読み方は？',
   'hardTest.meaning': '意味は？',
@@ -2165,7 +2193,7 @@ export const ja: Record<MessageKey, string> = {
   'hardTest.meaningText':
     '日本語の本・アニメ・ゲームでよく使う上位{count}語（Jiten の頻度リスト）の多くを、読めて意味も言えるでしょう。Chimi Reader は、読む前に本のどれだけをそれらの語が占めるかを示します。',
   'hardTest.stricter':
-    'ハードモードは読み方と意味の両方を選べた語だけを数え、当て推量の分を差し引くので、より厳しい目安です。',
+    'ハードモードは読み方を入力でき、意味も選べた語だけを数え、当て推量の分を差し引くので、より厳しい目安です。',
   'hardTest.both': '両方のテストを受けた場合は、低いほうの結果を使います。',
   'hardTest.credits':
     '意味：日本語版ウィクショナリー（寄稿者、CC BY-SA 4.0、wiktionary-to-yomitan 経由）。語と順位：Jiten の頻度リスト（CC BY-SA 4.0）。',
@@ -2175,7 +2203,7 @@ export const ja: Record<MessageKey, string> = {
     '日本語の語を約{count}語、読めて意味も言えます。ハードな語彙テストはこちら：',
   'hardTest.ogTitle': 'ハードな日本語語彙テスト',
   'hardTest.ogDescription':
-    '4つの選択肢から各語の読み方と意味を選びます。当て推量は数えません。約5分、登録不要。',
+    '各語の読み方を入力し、意味を選びます。当て推量は数えません。約7分、登録不要。',
   'words.placementHard': 'ハードモード：約{count}語。',
   'words.placementHardNone': 'ハードモードは各語の読み方と意味を問う、より厳しい目安です。',
   'words.placementHardTake': 'ハードモードを受ける',

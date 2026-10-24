@@ -17,6 +17,7 @@
     placementPseudoWords,
     placementOffered$,
     placementResults$,
+    readingMatches,
     recordPlacement,
     scorePlacement,
     shuffle,
@@ -26,14 +27,16 @@
     type PlacementResult
   } from '$lib/data/placement';
   import { t$, type MessageKey } from '$lib/i18n';
-  import { onMount } from 'svelte';
+  import { convertToKanaIME } from '$lib/vendor/yomitan/language/ja/japanese-wanakana';
+  import { onMount, tick } from 'svelte';
 
   /**
    * The placement check: an intro, the words one at a time (yes/no, keys Y/N or arrows) and
    * the result, saved as `placementCutoff$`. In the app (/placement, from Home's offer and the
    * Words tab) and, `shared`, as the public word test (/word-test) with Share and a way into
-   * the app. `hard`: hard mode, the reading then the meaning of each word from four choices
-   * (keys 1-4, 0 or N for don't know), saved as a `hard` record. Sends nothing
+   * the app. `hard`: hard mode, each word's reading typed (romaji becomes kana as it is typed;
+   * a wrong one moves on) then its meaning from four choices (keys 1-4, 0 or N for don't know),
+   * saved as a `typed` record. Sends nothing
    * anywhere. Not part of upstream.
    */
 
@@ -54,12 +57,14 @@
   let shown: PlacementItem[] = [];
   let answers: PlacementAnswer[] = [];
   let result: PlacementResult | undefined;
-  let previous = latestPlacement($placementResults$, hard ? 'hard' : 'yesno')?.cutoff ?? 0;
-  /** Hard mode: which question of the word, the choices in shown order, the reading picked */
+  let previous = latestPlacement($placementResults$, hard ? 'typed' : 'yesno')?.cutoff ?? 0;
+  /** A result of the first hard mode (readings chosen) was kept but no longer counts */
+  $: droppedHard = hard && $placementResults$.some(({ mode }) => mode === 'hard');
+  /** Hard mode: which question of the word, the meanings in shown order, the reading typed */
   let stage: 'reading' | 'meaning' = 'reading';
-  let readings: string[] = [];
   let meanings: string[] = [];
-  let picked = '';
+  let typed = '';
+  let readingInput: HTMLInputElement | undefined;
 
   $: index = answers.length;
   $: item = shown[index];
@@ -87,10 +92,39 @@
   const next = () => nextItem(answers, items, undefined, undefined, length);
 
   function prepare(word: HardItem) {
-    readings = shuffle(word.k);
     meanings = shuffle(word.m);
     stage = 'reading';
-    picked = '';
+    typed = '';
+    focusReading();
+  }
+
+  const focusReading = () => tick().then(() => readingInput?.focus());
+
+  /** Romaji typed becomes kana as it goes (an IME's own input is left alone). */
+  function onReadingInput(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+
+    if ((event as InputEvent).isComposing || !/[a-z]/i.test(input.value)) return;
+
+    const { kanaString, newSelectionStart } = convertToKanaIME(
+      input.value.toLowerCase(),
+      input.selectionStart ?? input.value.length
+    );
+
+    input.value = kanaString;
+    input.setSelectionRange(newSelectionStart, newSelectionStart);
+    typed = kanaString;
+  }
+
+  /** Hard mode: a right reading goes on to the meaning, a wrong one to the next word. */
+  function submitReading() {
+    if (step !== 'test' || !hardItem || !typed.trim()) return;
+    if (!readingMatches(hardItem, typed)) {
+      answer(false);
+      return;
+    }
+    readingInput?.blur();
+    stage = 'meaning';
   }
 
   async function start() {
@@ -120,7 +154,7 @@
 
     result = scorePlacement(answers, undefined, hard ? hardGuess : 0);
     if (!result.retake) {
-      recordPlacement(hard ? 'hard' : 'yesno', result.cutoff, length);
+      recordPlacement(hard ? 'typed' : 'yesno', result.cutoff, length);
       // Home then says where it came from rather than offering the check.
       $placementFromWordTest$ = shared;
       previous = result.cutoff;
@@ -128,22 +162,17 @@
     step = 'result';
   }
 
-  /** Hard mode: a reading, then a meaning (by shown position), or null for don't know. */
+  /** Hard mode: a meaning (by shown position), or null for don't know. */
   function choose(choice: number | null) {
     if (step !== 'test' || !hardItem) return;
-    if (choice === null) {
-      answer(false);
-    } else if (stage === 'reading') {
-      picked = readings[choice];
-      stage = 'meaning';
-    } else {
-      answer(picked === hardItem.k[0] && meanings[choice] === hardItem.m[0]);
-    }
+    answer(choice !== null && stage === 'meaning' && meanings[choice] === hardItem.m[0]);
   }
 
   function back() {
-    if (hard && stage === 'meaning') stage = 'reading';
-    else answers = answers.slice(0, -1);
+    if (hard && stage === 'meaning') {
+      stage = 'reading';
+      focusReading();
+    } else answers = answers.slice(0, -1);
   }
 
   function onKeydown(event: KeyboardEvent) {
@@ -151,8 +180,10 @@
 
     const key = event.key.toLowerCase();
 
-    if (hard && /^[1-4]$/.test(key)) choose(Number(key) - 1);
-    else if (hard && (key === '0' || key === 'n')) choose(null);
+    // Typing the reading: the input has the keys (Enter submits its form).
+    if (event.target === readingInput) return;
+    if (hard && stage === 'meaning' && /^[1-4]$/.test(key)) choose(Number(key) - 1);
+    else if (hard && stage === 'meaning' && (key === '0' || key === 'n')) choose(null);
     else if (!hard && (key === 'y' || key === 'arrowright')) answer(true);
     else if (!hard && (key === 'n' || key === 'arrowleft')) answer(false);
     else if (key === 'backspace' && (index || stage === 'meaning')) back();
@@ -190,7 +221,7 @@
     <h1 class="placement-title">{$t$(title)}</h1>
     <p class="placement-lede">
       {#if hard}
-        {$t$('hardTest.lede', { minutes: Math.round(length / 8) })}
+        {$t$('hardTest.lede', { minutes: Math.round(length / 6) })}
       {:else}
         {$t$(shared ? 'wordTest.lede' : 'placement.lede', { minutes: length / 20 })}
       {/if}
@@ -215,6 +246,9 @@
     {#if previous && !shared}
       <p class="placement-note">{$t$('placement.current', { count: number(previous) })}</p>
     {/if}
+    {#if droppedHard && !shared}
+      <p class="placement-note">{$t$('hardTest.dropped')}</p>
+    {/if}
     <div class="placement-actions">
       <button
         type="button"
@@ -236,31 +270,57 @@
     <p class="placement-question" id="placement-question">
       {$t$(stage === 'reading' ? 'hardTest.reading' : 'hardTest.meaning')}
     </p>
-    <p class="placement-word" lang="ja" aria-live="polite" aria-describedby="placement-question">
+    <p
+      class="placement-word placement-word-hard"
+      lang="ja"
+      aria-live="polite"
+      aria-describedby="placement-question"
+    >
       {hardItem.w}
     </p>
-    <div
-      class="hard-choices"
-      class:hard-meanings={stage === 'meaning'}
-      role="group"
-      aria-labelledby="placement-question"
-    >
-      {#if stage === 'meaning'}
-        <p class="hard-picked">
-          {$t$('hardTest.picked')} <strong lang="ja">{picked}</strong>
-        </p>
-      {/if}
-      {#each stage === 'reading' ? readings : meanings as text, i (`${stage}${text}`)}
-        <button type="button" class="app-button hard-choice" on:click={() => choose(i)}
-          ><kbd>{i + 1}</kbd><span lang="ja">{text}</span></button
+    {#if stage === 'reading'}
+      <form class="hard-typed" on:submit|preventDefault={submitReading}>
+        <input
+          class="app-input hard-input"
+          type="text"
+          lang="ja"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          enterkeyhint="next"
+          placeholder={$t$('hardTest.typePlaceholder')}
+          aria-labelledby="placement-question"
+          bind:this={readingInput}
+          bind:value={typed}
+          on:input={onReadingInput}
+        />
+        <button type="submit" class="app-button app-button-primary" disabled={!typed.trim()}
+          >{$t$('hardTest.next')}</button
         >
-      {/each}
-      <button
-        type="button"
-        class="app-button hard-choice hard-unknown"
-        on:click={() => choose(null)}><kbd>0</kbd><span>{$t$('hardTest.dontKnow')}</span></button
-      >
-    </div>
+        <button
+          type="button"
+          class="app-button hard-choice hard-unknown"
+          on:click={() => choose(null)}>{$t$('hardTest.dontKnow')}</button
+        >
+      </form>
+    {:else}
+      <div class="hard-choices" role="group" aria-labelledby="placement-question">
+        <p class="hard-picked">
+          {$t$('hardTest.picked')} <strong lang="ja">{typed}</strong>
+        </p>
+        {#each meanings as text, i (text)}
+          <button type="button" class="app-button hard-choice" on:click={() => choose(i)}
+            ><kbd>{i + 1}</kbd><span lang="ja">{text}</span></button
+          >
+        {/each}
+        <button
+          type="button"
+          class="app-button hard-choice hard-unknown"
+          on:click={() => choose(null)}><kbd>0</kbd><span>{$t$('hardTest.dontKnow')}</span></button
+        >
+      </div>
+    {/if}
     <div class="placement-minor">
       <button
         type="button"
@@ -365,6 +425,7 @@
     </div>
     <p class="placement-note">
       {#if hard}{$t$('hardTest.stricter')} {$t$('hardTest.both')}{/if}
+      {#if droppedHard}{$t$('hardTest.dropped')}{/if}
       {#if result.falseAlarms}
         {$t$('placement.falseAlarms', {
           count: result.falseAlarms,
@@ -545,12 +606,27 @@
 
   .hard-choices {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.5rem;
   }
 
-  .hard-meanings {
-    grid-template-columns: minmax(0, 1fr);
+  .hard-typed {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.5rem;
+  }
+
+  .hard-input {
+    min-width: 0;
+    font-size: 1.25rem;
+    /* Scrolled to, the Next and Don't know buttons stay above the on-screen keyboard */
+    scroll-margin-bottom: 5rem;
+  }
+
+  @media (pointer: coarse) {
+    /* Room for the word, the input and the keyboard on a phone */
+    .placement-word-hard {
+      padding: 1.25rem 0;
+    }
   }
 
   .hard-choice {
@@ -563,7 +639,7 @@
     text-align: left;
   }
 
-  .hard-meanings .hard-choice {
+  .hard-choices .hard-choice {
     font-size: var(--type-body);
     line-height: 1.6;
   }
