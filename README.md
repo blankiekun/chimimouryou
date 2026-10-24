@@ -285,7 +285,7 @@ whole is GPL-3.0-or-later.
 Authors (BSD 3-Clause, see [LICENSE-BSD](LICENSE-BSD)), from which this fork derives;
 [Jiten](https://github.com/Sirush/Jiten) for the difficulty features and
 deconjugation rules (Apache-2.0, see [NOTICE](NOTICE)). The level check's and word test's words and ranks
-(`apps/web/src/lib/data/placement-items.json`) are sampled from Jiten's frequency list (CC BY-SA 4.0). Readings in context and the "Known"
+(`apps/web/src/lib/data/placement-items.json`) are sampled from Jiten's frequency list (CC BY-SA 4.0); its made-up words were checked against JMdict, JMnedict, Japanese Wiktionary and further dictionaries. The hard word test's meanings (`apps/web/src/lib/data/placement-hard-items.json`) are short excerpts from [Japanese Wiktionary](https://ja.wiktionary.org/) by its contributors (CC BY-SA 4.0), via [wiktionary-to-yomitan](https://github.com/yomidevs/wiktionary-to-yomitan); its wrong readings use KANJIDIC2 (EDRDG, CC BY-SA 4.0) through yurigana. Readings in context and the "Known"
 furigana style come from [yurigana](https://github.com/blankiekun/yurigana), whose reading model is
 trained on public-domain works from [Aozora Bunko](https://www.aozora.gr.jp/) and on
 sentences with reviewed readings from [Tatoeba](https://tatoeba.org/) (CC BY 2.0 FR, by

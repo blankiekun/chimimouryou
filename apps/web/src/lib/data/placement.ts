@@ -15,6 +15,12 @@
  * (`placementResults$`, synced in sharedSettings, merged by date): the latest one counts, also
  * when lower, and the history (words-history.ts) uses the one in force each day.
  * Items: placement-items.json, built by scripts/placement/build-items.py. Not part of upstream.
+ *
+ * Hard mode (/hard-word-test, /placement?mode=hard) asks each word's reading and meaning, four
+ * choices each, and counts a word only when both are right. Same bands, staircase and fit,
+ * no made-up words: the target is raised for lucky guesses (`hardGuess`) instead. Its items
+ * (placement-hard-items.json, scripts/placement/build-hard-items.py) load only when it starts.
+ * Its results are kept as `mode: 'hard'` records; the stricter latest of the two modes counts.
  */
 
 import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
@@ -29,6 +35,12 @@ export interface PlacementItem {
   r?: number;
   /** Band index into `bands`; absent for made-up words */
   b?: number;
+}
+
+/** A hard-mode item: four readings and four meanings, the right one first in each. */
+export interface HardItem extends PlacementItem {
+  k: string[];
+  m: string[];
 }
 
 export interface PlacementAnswer {
@@ -177,6 +189,33 @@ export function placementCutoff() {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
+/**
+ * Chance of getting a hard item right without knowing it. The owner's rule is one in four
+ * (one 4-choice question guessed); guessing both is one in 16, so this errs on the strict side.
+ */
+export const hardGuess = 0.25;
+
+/** One mode's latest result, if it was taken. */
+export const latestPlacement = (results: PlacementRecord[], mode: PlacementRecord['mode']) =>
+  placementAt(results.filter((record) => record.mode === mode));
+
+/** Hard mode's items, loaded when it starts (bigger than the yes/no ones). */
+export const loadHardItems = () =>
+  import('$lib/data/placement-hard-items.json').then((m) => m.default.items as HardItem[]);
+
+/** A copy of `list` in random order. */
+export function shuffle<T>(list: T[], random = Math.random) {
+  const out = [...list];
+
+  for (let i = out.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+
+  return out;
+}
+
 /** The band the next real word comes from: one step up per yes, down per no. */
 export function currentBand(answers: PlacementAnswer[], bands = placementBands) {
   let band = Math.min(startBand, bands.length - 1);
@@ -272,11 +311,13 @@ export function fitLogistic(points: { x: number; y: number }[], ridge = 0.05) {
 /**
  * The rank where the fitted yes rate on real words, less the false-alarm rate, crosses
  * one half; rounded to 100 and kept within the bands. No result when more than half of
- * the made-up words got a yes.
+ * the made-up words got a yes. `guess`, the chance of a right answer by luck (hard mode),
+ * moves the target to where the share actually known is one half: g + (1 − g) / 2.
  */
 export function scorePlacement(
   answers: PlacementAnswer[],
-  bands = placementBands
+  bands = placementBands,
+  guess = 0
 ): PlacementResult {
   const pseudo = answers.filter(({ item }) => item.r === undefined);
   const real = answers.filter(({ item }) => item.r !== undefined);
@@ -290,7 +331,7 @@ export function scorePlacement(
   const { a, b } = fitLogistic(
     real.map(({ item, yes }) => ({ x: Math.log(item.r!) - pivot, y: yes ? 1 : 0 }))
   );
-  const target = 0.5 + falseRate;
+  const target = 0.5 + falseRate + guess / 2;
   const top = bands[bands.length - 1];
   let rank: number;
 

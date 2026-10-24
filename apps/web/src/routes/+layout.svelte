@@ -19,8 +19,8 @@
   import '../app.scss';
 
   let path = '';
-  // The public word test talks to no server and brings its own tags.
-  const wordTest = $page.route.id === '/word-test';
+  // The public word tests talk to no server and bring their own tags.
+  const wordTest = $page.route.id === '/word-test' || $page.route.id === '/hard-word-test';
   // Prerendered pages don't know their origin: without VITE_BASE_PATH the tags are set in the browser.
   const siteOrigin = basePath || (browser ? window.location.origin : '');
   let dialogs: Dialog[] = [];

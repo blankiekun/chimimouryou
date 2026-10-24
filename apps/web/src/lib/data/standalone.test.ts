@@ -98,6 +98,43 @@ describe('standalone edition', () => {
     test.$destroy();
   });
 
+  it('takes the hard word test without a request, and keeps its result apart', async () => {
+    const { default: PlacementTest } = await import(
+      '$lib/components/placement/placement-test.svelte'
+    );
+    const placement = await import('$lib/data/placement');
+    const items = await placement.loadHardItems();
+    const target = document.createElement('div');
+    const test = new PlacementTest({ target, props: { shared: true, hard: true } });
+    const click = async (text: string) => {
+      [...target.querySelectorAll('button')]
+        .find((b) => b.textContent?.trim().endsWith(text))!
+        .click();
+      await new Promise((resolve) => setTimeout(resolve));
+    };
+
+    await click('Start');
+    for (let i = 0; i < placement.placementLength; i += 1) {
+      const word = target.querySelector('.placement-word')!.textContent!.trim();
+      const item = items.find((entry) => entry.w === word)!;
+
+      if (item.r! > 8000) {
+        await click('I don’t know');
+      } else {
+        await click(item.k[0]);
+        await click(item.m[0]);
+      }
+    }
+
+    expect(target.querySelector('.placement-big')?.textContent).toMatch(/About [\d,]+ words/);
+    expect(target.querySelector('.placement-credits')?.textContent).toContain('Wiktionary');
+    expect(
+      placement.latestPlacement(placement.placementResults$.getValue(), 'hard')?.cutoff
+    ).toBeGreaterThan(5000);
+    expect(fetchMock).not.toHaveBeenCalled();
+    test.$destroy();
+  });
+
   it('hands out the browser handler for Calibre', async () => {
     const { getStorageHandler } = await import('$lib/data/storage/storage-handler-factory');
     const { StorageKey } = await import('$lib/data/storage/storage-types');
