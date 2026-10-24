@@ -88,8 +88,9 @@ async function writeFile(dir: FileSystemDirectoryHandle, name: string, data: Arr
 
 /** Writes one pack while a collection streams in; `finish` sorts the keys and writes the index. */
 export class PackWriter {
-  /** Uncompressed bytes per block of `rows.bin` (0 writes a version-1 pack, for the tests) */
-  static blockSize = 1 << 16;
+  /** Uncompressed bytes per block of `rows.bin` (0 writes a version-1 pack, for the tests). 16 KB
+   * measured best for lookups: blocks cost mostly per call, and a big lookup reads ~1,000. */
+  static blockSize = 1 << 14;
   private keyIds = new Map<string, number>();
   /** [key id, row, kind << 16 | dictionary] per posting */
   private postings = new Grow(new Uint32Array(3 << 16));

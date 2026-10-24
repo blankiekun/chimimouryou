@@ -33,6 +33,7 @@ function pool() {
   workers = [];
   // jsdom (the tests) has no workers: everything runs here.
   if (typeof Worker === 'undefined') return workers;
+  // A big lookup inflates ~1,000 blocks: on the full test collection p95 was 51 ms with 8, 69 with 4.
   const count = Math.min(8, Math.max(1, (navigator.hardwareConcurrency || 2) - 1));
   for (let i = 0; i < count; i++) {
     const worker = new Worker(new URL('./pack-codec.worker.ts', import.meta.url), {

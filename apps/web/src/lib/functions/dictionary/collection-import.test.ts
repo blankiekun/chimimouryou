@@ -175,7 +175,7 @@ beforeEach(() => {
 
 describe('collection import', () => {
   // 256-byte blocks split rows across blocks; 0 writes a version-1 pack (#181: uncompressed).
-  it.each([65536, 256, 0])(
+  it.each([16384, 256, 0])(
     'imports every table and finds what a direct import finds (blocks of %i)',
     async (block) => {
       PackWriter.blockSize = block;
@@ -203,7 +203,7 @@ describe('collection import', () => {
       expect(await c.findTermsBulk(words, new Set(['Other']), 'exact')).toEqual([]);
       const [media] = await c.getMedia([{ path: 'img/a.png', dictionary: title }]);
       expect(new TextDecoder().decode(media.content)).toBe('png');
-      PackWriter.blockSize = 65536;
+      PackWriter.blockSize = 16384;
     }
   );
 
