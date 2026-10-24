@@ -67,5 +67,5 @@ def canonical_fingerprint() -> str:
 
 
 if __name__ == '__main__':
-    json.dump({'engine': canonical_fingerprint()}, sys.stdout, indent=1)
+    json.dump({'engine': canonical_fingerprint()}, sys.stdout, indent=2)
     print()
