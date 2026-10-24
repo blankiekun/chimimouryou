@@ -5,23 +5,17 @@
  */
 
 /**
- * AI connections and which one each feature uses: per-id merging for sync, and
- * mirroring into the old OpenRouter/ElevenLabs settings so devices on releases
- * before connections keep working. Not part of upstream.
+ * AI connections and which one each feature uses, with per-id merging for sync.
+ * Not part of upstream.
  */
 
-import { combineLatest, map, type BehaviorSubject } from 'rxjs';
+import { combineLatest, map } from 'rxjs';
 import {
   aiConnectionKeys$,
   aiConnections$,
   aiFeatureDefaults,
   aiFeatures$,
   defaultAiFeatures,
-  elevenLabsApiKey$,
-  elevenLabsModel$,
-  openRouterApiKey$,
-  openRouterModel$,
-  openRouterRecapModel$,
   type AiConnection,
   type AiFeature,
   type AiFeatureSetting,
@@ -121,17 +115,8 @@ export function mergeConnectionKeys(
   );
 }
 
-/** Key of the previous release's settings, while devices may still set only those. */
-function legacyKey(connection: AiConnection) {
-  if (connection.provider === 'openrouter') {
-    return openRouterApiKey$.getValue();
-  }
-
-  return connection.provider === 'elevenlabs' ? elevenLabsApiKey$.getValue() : '';
-}
-
 export function connectionKey(connection: AiConnection) {
-  return aiConnectionKeys$.getValue()[connection.id] || legacyKey(connection);
+  return aiConnectionKeys$.getValue()[connection.id] ?? '';
 }
 
 export function featureSetting(feature: AiFeature): AiFeatureSetting {
@@ -196,21 +181,10 @@ export function resolveFeature(feature: AiFeature): ResolvedFeature {
 
   const live = liveConnections(feature === 'voice' ? 'voice' : 'text');
   // 'device': the AI voice reads with this device's voices even when a voice connection exists.
-  let connection =
+  const connection =
     setting.connection === deviceVoice
       ? undefined
       : (live.find((c) => c.id === setting.connection) ?? live[0]);
-
-  // shortcut: the previous release's OpenRouter key works without a connection; drop with the mirror.
-  if (!connection && feature !== 'voice' && openRouterApiKey$.getValue()) {
-    connection = {
-      id: 'openrouter',
-      name: 'OpenRouter',
-      provider: 'openrouter',
-      kind: 'text',
-      modified: 0
-    };
-  }
 
   const provider = findProvider(connection?.provider);
 
@@ -241,9 +215,7 @@ export const aiFeatureState$ = combineLatest([
   aiConnections$,
   aiConnectionKeys$,
   aiFeatures$,
-  aiConnectionCache$,
-  openRouterApiKey$,
-  elevenLabsApiKey$
+  aiConnectionCache$
 ]).pipe(
   map(
     () =>
@@ -252,40 +224,6 @@ export const aiFeatureState$ = combineLatest([
       ) as Record<AiFeature, ResolvedFeature>
   )
 );
-
-function setIfChanged<T>(store: BehaviorSubject<T>, value: T) {
-  if (store.getValue() !== value) {
-    store.next(value);
-  }
-}
-
-/** Writes the previous release's settings from the connections (older devices read only those). */
-export function mirrorOldSettings() {
-  const live = liveConnections();
-  const openRouter = live.find((c) => c.provider === 'openrouter');
-  const elevenLabs = live.find((c) => c.provider === 'elevenlabs');
-
-  setIfChanged(openRouterApiKey$, openRouter ? connectionKey(openRouter) : '');
-  setIfChanged(elevenLabsApiKey$, elevenLabs ? connectionKey(elevenLabs) : '');
-
-  const ask = resolveFeature('ask');
-  const recap = resolveFeature('recap');
-  const voice = resolveFeature('voice');
-
-  if (ask.provider?.id === 'openrouter' && ask.model) {
-    setIfChanged(openRouterModel$, ask.model);
-  }
-
-  if (featureSetting('recap').connection === 'inherit') {
-    setIfChanged(openRouterRecapModel$, '');
-  } else if (recap.provider?.id === 'openrouter' && recap.model) {
-    setIfChanged(openRouterRecapModel$, recap.model);
-  }
-
-  if (voice.provider?.id === 'elevenlabs' && voice.model) {
-    setIfChanged(elevenLabsModel$, voice.model);
-  }
-}
 
 /** Adds or changes a connection; an empty key removes it from this browser and the account. */
 export function saveConnection(connection: Omit<AiConnection, 'modified'>, key: string) {
@@ -298,16 +236,9 @@ export function saveConnection(connection: Omit<AiConnection, 'modified'>, key: 
     keys[saved.id] = key.trim();
   } else {
     delete keys[saved.id];
-    // Or connectionKey would fall back to the old setting.
-    if (saved.provider === 'openrouter') {
-      setIfChanged(openRouterApiKey$, '');
-    } else if (saved.provider === 'elevenlabs') {
-      setIfChanged(elevenLabsApiKey$, '');
-    }
   }
 
   aiConnectionKeys$.next(keys);
-  mirrorOldSettings();
 
   return saved;
 }
@@ -331,7 +262,6 @@ export function deleteConnection(id: string) {
       ])
     ) as Record<AiFeature, AiFeatureSetting>
   );
-  mirrorOldSettings();
 }
 
 export function setFeature(feature: AiFeature, changes: Partial<AiFeatureSetting>) {
@@ -340,7 +270,6 @@ export function setFeature(feature: AiFeature, changes: Partial<AiFeatureSetting
     ...aiFeatures$.getValue(),
     [feature]: { ...featureSetting(feature), ...changes }
   });
-  mirrorOldSettings();
 }
 
 /** Get started: a new connection for a provider with the key the reader pasted or OpenRouter sent. */

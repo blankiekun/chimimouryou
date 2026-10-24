@@ -8,6 +8,7 @@
  * Settings for text-to-speech and "Ask AI", stored per browser. Not part of upstream.
  */
 
+import { localStorage } from '$lib/data/window/local-storage';
 import { writableNumberLocalStorageSubject } from '$lib/data/internal/writable-number-local-storage-subject';
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
@@ -19,30 +20,20 @@ export function redactSecret(text: string, secret: string) {
   return secret ? text.split(secret).join('[API key]') : text;
 }
 
-export const elevenLabsApiKey$ = writableStringLocalStorageSubject()('elevenLabsApiKey', '');
-export const elevenLabsModel$ = writableStringLocalStorageSubject()(
-  'elevenLabsModel',
-  defaultElevenLabsModel
-);
 export const ttsVoiceId$ = writableStringLocalStorageSubject()('ttsVoiceId', '');
 /** This device's Web Speech voice (by name) used without an ElevenLabs key; empty picks a Japanese one. Not synced: voices differ per device. */
 export const deviceVoiceName$ = writableStringLocalStorageSubject()('deviceVoiceName', '');
 /** Playback speed of the AI voice (the highlight follows the audio clock). */
 export const ttsPlaybackRate$ = writableNumberLocalStorageSubject()('ttsPlaybackRate', 1);
 
-export const defaultOpenRouterModel = '~google/gemini-flash-latest';
-
-export const openRouterApiKey$ = writableStringLocalStorageSubject()('openRouterApiKey', '');
-export const openRouterModel$ = writableStringLocalStorageSubject()(
+// Settings from before AI connections (#129), last mirrored in v3.8.0: an old API key must not linger.
+[
+  'openRouterApiKey',
   'openRouterModel',
-  defaultOpenRouterModel
-);
-
-/** Model for "Story so far" recaps and the lorebook; empty means the Ask AI model. */
-export const openRouterRecapModel$ = writableStringLocalStorageSubject()(
   'openRouterRecapModel',
-  '~deepseek/deepseek-flash-latest'
-);
+  'elevenLabsApiKey',
+  'elevenLabsModel'
+].forEach((key) => localStorage.removeItem(key));
 
 /**
  * A provider, where requests go and a name (Settings → AI → Connections). Synced and

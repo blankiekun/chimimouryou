@@ -10,7 +10,6 @@ import {
   aiConnections$,
   aiFeatures$,
   defaultAiFeatures,
-  elevenLabsApiKey$,
   ttsVoiceId$
 } from '$lib/data/ai-settings';
 import { setFeature } from '$lib/data/ai-connections';
@@ -63,7 +62,6 @@ describe('synthesizeSpeech', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    elevenLabsApiKey$.next('');
     aiConnections$.next([]);
     aiConnectionKeys$.next({});
     aiFeatures$.next(defaultAiFeatures);
@@ -162,7 +160,6 @@ describe('device voice', () => {
 
 describe('elevenLabsVoice', () => {
   afterEach(() => {
-    elevenLabsApiKey$.next('');
     aiConnections$.next([]);
     aiConnectionKeys$.next({});
     aiFeatures$.next(defaultAiFeatures);
@@ -180,13 +177,6 @@ describe('elevenLabsVoice', () => {
       model: 'eleven_multilingual_v2',
       baseUrl: 'https://api.elevenlabs.io/v1'
     });
-  });
-
-  it("reads the key from the connection store, not the previous release's setting", () => {
-    aiConnections$.next([elevenLabs]);
-    elevenLabsApiKey$.next('sk_old');
-
-    expect(elevenLabsVoice()).toBeUndefined();
   });
 
   it("keeps this device's voices when chosen over a keyed connection", () => {

@@ -44,10 +44,7 @@ function base64ToBlob(base64: string, type: string) {
   return new Blob([bytes], { type });
 }
 
-/**
- * The AI voice's ElevenLabs connection with its key from the connection store (not the
- * previous release's mirrored setting); undefined reads with this device's voices.
- */
+/** The AI voice's ElevenLabs connection with its key; undefined reads with this device's voices. */
 export function elevenLabsVoice() {
   const { connection, provider, model } = resolveFeature('voice');
   const key = connection ? (aiConnectionKeys$.getValue()[connection.id] ?? '').trim() : '';

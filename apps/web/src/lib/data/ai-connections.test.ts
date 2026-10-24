@@ -4,15 +4,12 @@
  * All rights reserved.
  */
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   aiConnectionKeys$,
   aiConnections$,
   aiFeatures$,
   defaultAiFeatures,
-  elevenLabsApiKey$,
-  openRouterApiKey$,
-  openRouterModel$,
   type AiConnection
 } from '$lib/data/ai-settings';
 import {
@@ -37,8 +34,6 @@ afterEach(() => {
   aiConnections$.next([]);
   aiConnectionKeys$.next({});
   aiFeatures$.next(defaultAiFeatures);
-  openRouterApiKey$.next('');
-  elevenLabsApiKey$.next('');
   window.localStorage.clear();
 });
 
@@ -70,7 +65,7 @@ describe('features', () => {
     expect(featureParams('lore')).toMatchObject({ temperature: 0.2, stream: false });
   });
 
-  it('turn off a setting with null and mirror the old settings', () => {
+  it('turn off a setting with null', () => {
     saveConnection({ id: 'openrouter', name: 'OR', provider: 'openrouter', kind: 'text' }, 'sk-or');
     setFeature('ask', {
       connection: 'openrouter',
@@ -79,12 +74,23 @@ describe('features', () => {
     });
 
     expect(featureParams('ask')).not.toHaveProperty('top_p');
-    expect(openRouterApiKey$.getValue()).toBe('sk-or');
-    expect(openRouterModel$.getValue()).toBe('vendor/m');
+    expect(resolveFeature('ask')).toMatchObject({ key: 'sk-or', model: 'vendor/m' });
 
     deleteConnection('openrouter');
-    expect(openRouterApiKey$.getValue()).toBe('');
+    expect(aiConnectionKeys$.getValue()).toEqual({});
     expect(aiConnections$.getValue()[0].deleted).toBe(true);
     expect(aiFeatures$.getValue().ask.connection).toBe('');
+  });
+});
+
+describe('settings from before connections', () => {
+  it('are removed from this browser on load', async () => {
+    window.localStorage.setItem('openRouterApiKey', 'sk-or-old');
+    window.localStorage.setItem('elevenLabsApiKey', 'sk_old');
+    vi.resetModules();
+    await import('$lib/data/ai-settings');
+
+    expect(window.localStorage.getItem('openRouterApiKey')).toBeNull();
+    expect(window.localStorage.getItem('elevenLabsApiKey')).toBeNull();
   });
 });

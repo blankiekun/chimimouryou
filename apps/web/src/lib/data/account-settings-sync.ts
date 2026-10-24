@@ -30,12 +30,7 @@ import {
   askAiDefaultPreset$,
   askAiPresets$,
   askAiReaderNote$,
-  openRouterApiKey$,
-  openRouterModel$,
-  openRouterRecapModel$,
   lorebookAutoInterval$,
-  elevenLabsApiKey$,
-  elevenLabsModel$,
   ttsPlaybackRate$,
   ttsVoiceId$
 } from '$lib/data/ai-settings';
@@ -126,9 +121,6 @@ const sharedSettings: Record<string, Store> = {
   aiConnections: aiConnections$,
   aiConnectionKeys: aiConnectionKeys$,
   aiFeatures: aiFeatures$,
-  openRouterApiKey: openRouterApiKey$,
-  openRouterModel: openRouterModel$,
-  openRouterRecapModel: openRouterRecapModel$,
   lorebookAutoInterval: lorebookAutoInterval$,
   aiLanguage: aiLanguage$,
   aiPromptOverrides: aiPromptOverrides$,
@@ -145,8 +137,6 @@ const sharedSettings: Record<string, Store> = {
   askAiPresets: askAiPresets$,
   askAiDefaultPreset: askAiDefaultPreset$,
   askAiReaderNote: askAiReaderNote$,
-  elevenLabsApiKey: elevenLabsApiKey$,
-  elevenLabsModel: elevenLabsModel$,
   ttsVoiceId: ttsVoiceId$,
   ttsPlaybackRate: ttsPlaybackRate$
 };
@@ -158,8 +148,6 @@ const sharedSettings: Record<string, Store> = {
  */
 const secretSettings = [
   'aiConnectionKeys',
-  'openRouterApiKey',
-  'elevenLabsApiKey',
   'audiobookshelfToken',
   // The hub sign-in: other browsers of the server account are signed in to the hub too.
   'socialSession'

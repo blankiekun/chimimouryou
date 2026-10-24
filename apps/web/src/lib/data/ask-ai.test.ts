@@ -5,22 +5,30 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { askAiReaderNote$, openRouterApiKey$ } from '$lib/data/ai-settings';
+import { aiConnectionKeys$, aiConnections$, askAiReaderNote$ } from '$lib/data/ai-settings';
 import { askAi } from './ask-ai';
 
 function stream(lines: string[]) {
   return new Response(lines.join('\n'), { headers: { 'Content-Type': 'text/event-stream' } });
 }
 
+/** An OpenRouter connection with this key; an empty key removes every connection. */
+function setOpenRouterKey(key: string) {
+  aiConnections$.next(
+    key ? [{ id: 'openrouter', name: 'OR', provider: 'openrouter', kind: 'text', modified: 1 }] : []
+  );
+  aiConnectionKeys$.next(key ? { openrouter: key } : {});
+}
+
 describe('askAi', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
-    openRouterApiKey$.next('');
+    setOpenRouterKey('');
     askAiReaderNote$.next('');
   });
 
   it('streams the answer', async () => {
-    openRouterApiKey$.next('sk-or-secret');
+    setOpenRouterKey('sk-or-secret');
     vi.stubGlobal(
       'fetch',
       vi.fn(async () =>
@@ -41,7 +49,7 @@ describe('askAi', () => {
   });
 
   it('adds the reader note to the default instructions only', async () => {
-    openRouterApiKey$.next('sk-or-secret');
+    setOpenRouterKey('sk-or-secret');
     askAiReaderNote$.next('I am at JLPT N3.');
     const fetch = vi.fn(async () =>
       stream(['data: {"choices":[{"delta":{"content":"a"}}]}', 'data: [DONE]'])
@@ -59,7 +67,7 @@ describe('askAi', () => {
   });
 
   it('keeps the key out of error messages', async () => {
-    openRouterApiKey$.next('sk-or-secret');
+    setOpenRouterKey('sk-or-secret');
     vi.stubGlobal(
       'fetch',
       vi.fn(
@@ -76,7 +84,7 @@ describe('askAi', () => {
   });
 
   it('keeps the key out of stream errors', async () => {
-    openRouterApiKey$.next('sk-or-secret');
+    setOpenRouterKey('sk-or-secret');
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => stream(['data: {"error":{"message":"key sk-or-secret revoked"}}']))
