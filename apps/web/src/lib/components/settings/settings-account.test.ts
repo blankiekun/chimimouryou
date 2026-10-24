@@ -11,7 +11,9 @@ import { BehaviorSubject } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { account$, accountReady } from '$lib/data/account';
 
-// Settings sync pulls in the whole store (IndexedDB, media queries); not under test here.
+// Settings sync and the reader-data release pull in the whole store (IndexedDB, media queries);
+// not under test here.
+vi.mock('$lib/data/reader-data-owner', () => ({ releaseReaderData: async () => {} }));
 vi.mock('$lib/data/account-settings-sync', () => ({
   readerProfile: () => 'desktop',
   settingsSyncState$: new BehaviorSubject({ state: 'idle' }),

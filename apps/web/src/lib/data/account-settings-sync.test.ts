@@ -16,6 +16,7 @@ import {
 import { theme$ } from '$lib/data/store';
 import { darkTheme$ } from '$lib/data/theme/theme-store';
 import { socialSession$ } from '$lib/data/social-account';
+import { homeBookTitles$, homeRemovedTitles$ } from '$lib/data/library-home';
 import { startSettingsSync, syncAccountSettings } from './account-settings-sync';
 
 /** The library's Drive/OneDrive/folder while signed out (undefined: none) */
@@ -212,6 +213,44 @@ describe('account settings sync', () => {
 
     expect(names(aiConnections$.getValue())).toEqual(expected);
     expect(names(remote?.values.aiConnections as never)).toEqual(expected);
+  });
+
+  it("keeps both devices' new connection keys and Home books", async () => {
+    const connection = (id: string, modified: number) => ({
+      id,
+      name: id,
+      provider: 'groq',
+      kind: 'text' as const,
+      modified
+    });
+
+    // This browser added key y; the account has key x from another device, and its Home lost 'gone'.
+    aiConnections$.next([connection('y', 5)]);
+    aiConnectionKeys$.next({ y: 'key-y' });
+    homeBookTitles$.next(['mine', 'gone']);
+    homeRemovedTitles$.next({ mine: -5 });
+    window.localStorage.setItem('accountSettingsOwner', 'alice');
+    window.localStorage.setItem(
+      'accountSettingsModified',
+      JSON.stringify({ aiConnections: 5, aiConnectionKeys: 5, homeBookTitles: 5 })
+    );
+    mockServer({
+      values: {
+        aiConnections: [connection('x', 3), { ...connection('z', 4), deleted: true }],
+        aiConnectionKeys: { x: 'key-x', z: 'key-z' },
+        homeBookTitles: ['theirs'],
+        homeRemovedTitles: { gone: 4 }
+      },
+      modified: { aiConnections: 4, aiConnectionKeys: 4, homeBookTitles: 4, homeRemovedTitles: 4 }
+    });
+
+    await signInAs(alice);
+
+    const keys = { x: 'key-x', y: 'key-y' };
+    expect(aiConnectionKeys$.getValue()).toEqual(keys);
+    expect(remote?.values.aiConnectionKeys).toEqual(keys);
+    expect(homeBookTitles$.getValue()).toEqual(['mine', 'theirs']);
+    expect(remote?.values.homeBookTitles).toEqual(['mine', 'theirs']);
   });
 
   it('moves the account from the old default themes to chimi-light, but keeps a later choice', async () => {

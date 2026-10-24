@@ -744,6 +744,23 @@ export abstract class BaseStorageHandler {
     return `cover_${exporterVersion}_${currentDbVersion}.${type}`;
   }
 
+  /**
+   * The file with this prefix to read: for progress and statistics the newest by the time in its
+   * name, so a leftover older file (a failed delete, two devices racing) is never read.
+   */
+  static findFile<T extends { name: string }>(files: T[], prefix: string) {
+    const matching = files.filter((file) => file.name.startsWith(prefix));
+
+    if (prefix !== 'progress_' && prefix !== 'statistics_') return matching[0];
+
+    const time = (file: T) => +file.name.split('_')[3] || 0;
+
+    return matching.reduce<T | undefined>(
+      (newest, file) => (!newest || time(file) > time(newest) ? file : newest),
+      undefined
+    );
+  }
+
   protected static getBookMetadata(filename: string) {
     const parts = filename.split('_').map((part) => part.replace(/\.zip$/, ''));
 

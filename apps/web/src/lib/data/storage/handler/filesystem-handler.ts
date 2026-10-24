@@ -859,7 +859,7 @@ export class FilesystemStorageHandler extends BaseStorageHandler implements Sync
     BaseStorageHandler.reportProgress(progressPerStep);
 
     const files = await this.getExternalFiles(rootDirectory);
-    const file = files.find((entry) => entry.name.startsWith(fileIdentifier));
+    const file = BaseStorageHandler.findFile(files, fileIdentifier);
 
     BaseStorageHandler.reportProgress(progressPerStep);
 

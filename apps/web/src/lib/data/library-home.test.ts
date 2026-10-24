@@ -73,7 +73,7 @@ describe('home titles', () => {
       isContinueReading({ ...reading, lastBookOpen: Date.now() + 1 }, homeRemovedTitles$.getValue())
     ).toBe(true);
     addToHome(['r']);
-    expect(homeRemovedTitles$.getValue()).not.toHaveProperty('r');
+    expect(isContinueReading(reading, homeRemovedTitles$.getValue())).toBe(true);
   });
 });
 

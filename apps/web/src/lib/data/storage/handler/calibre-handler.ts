@@ -672,6 +672,7 @@ export class CalibreStorageHandler extends ApiStorageHandler {
     }
 
     const bookCard = { ...(this.titleToBookCard.get(title) || this.createBookCard(title)) };
+    const progressFile = BaseStorageHandler.findFile(files, 'progress_');
 
     for (let index = 0, { length } = files; index < length; index += 1) {
       const file = files[index];
@@ -684,7 +685,7 @@ export class CalibreStorageHandler extends ApiStorageHandler {
         bookCard.characters = characters;
         bookCard.lastBookModified = lastBookModified;
         bookCard.lastBookOpen = lastBookOpen;
-      } else if (file.name.startsWith('progress_')) {
+      } else if (file === progressFile) {
         const { progress, lastBookmarkModified } = BaseStorageHandler.getProgressMetadata(
           file.name
         );

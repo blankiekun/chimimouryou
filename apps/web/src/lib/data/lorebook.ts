@@ -17,7 +17,7 @@ import { lorebookAutoInterval$ } from '$lib/data/ai-settings';
 import { aiPrompts } from '$lib/data/ai-prompts';
 import { askAi } from '$lib/data/ask-ai';
 import { readerDb } from '$lib/data/reader-db';
-import { textBetween } from '$lib/data/recap';
+import { ownsRecord, textBetween } from '$lib/data/recap';
 import { orderSeries, seriesVolumes } from '$lib/components/book-card/library-sort';
 import type { SearchIndex } from '$lib/functions/book-text/book-search';
 import { BehaviorSubject, Subject } from 'rxjs';
@@ -82,9 +82,10 @@ const defaultChunkCharacters = 20_000;
 export const minUpdateCharacters = 500;
 
 async function getStored(title: string): Promise<Lorebook> {
-  return (
-    (await (await readerDb()).get('lorebooks', title)) || { title, entries: [], processedUpTo: 0 }
-  );
+  const stored = await (await readerDb()).get('lorebooks', title);
+
+  // Another sign-in state's copy (see extras-sync) is not this reader's: start empty.
+  return stored && (await ownsRecord(stored)) ? stored : { title, entries: [], processedUpTo: 0 };
 }
 
 const processedCache = new Map<string, number>();

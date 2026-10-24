@@ -22,6 +22,9 @@ import {
   type LoreEntry
 } from './lorebook';
 
+// Signed out: no session check (fetch is stubbed for the AI calls).
+vi.mock('$lib/data/account', () => ({ accountReady: async () => null }));
+
 function answer(json: unknown) {
   const content = '```json\n' + JSON.stringify(json) + '\n```';
 

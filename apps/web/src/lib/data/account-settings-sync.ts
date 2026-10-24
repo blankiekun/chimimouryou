@@ -37,8 +37,13 @@ import {
   ttsPlaybackRate$,
   ttsVoiceId$
 } from '$lib/data/ai-settings';
-import { mergeConnections, migrateAiSettings } from '$lib/data/ai-connections';
-import { homeBookTitles$, homeRemovedTitles$ } from '$lib/data/library-home';
+import { mergeConnectionKeys, mergeConnections, migrateAiSettings } from '$lib/data/ai-connections';
+import {
+  homeBookTitles$,
+  homeRemovedTitles$,
+  mergeHomeRemovals,
+  mergeHomeTitles
+} from '$lib/data/library-home';
 import { logger } from '$lib/data/logger';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 import { audiobookshelfToken$ } from '$lib/data/audiobookshelf';
@@ -149,9 +154,25 @@ const secretSettings = [
   'socialSession'
 ];
 
-/** Settings merged with the account's copy instead of replaced by the newer one. */
-const mergedSettings: Record<string, (local: any, remote: any) => unknown> = {
-  aiConnections: mergeConnections
+/**
+ * Settings merged with the account's copy instead of replaced by the newer one, so two devices'
+ * changes both survive. They also get both sides' values of every setting from before the merge.
+ */
+const mergedSettings: Record<
+  string,
+  (
+    local: any,
+    remote: any,
+    localValues: Record<string, any>,
+    remoteValues: Record<string, any>
+  ) => unknown
+> = {
+  aiConnections: mergeConnections,
+  aiConnectionKeys: (local, remote, localValues, remoteValues) =>
+    mergeConnectionKeys(local, remote, localValues.aiConnections, remoteValues.aiConnections),
+  homeBookTitles: (local, remote, localValues, remoteValues) =>
+    mergeHomeTitles(local, remote, localValues.homeRemovedTitles, remoteValues.homeRemovedTitles),
+  homeRemovedTitles: mergeHomeRemovals
 };
 
 /** Settings → Reader: localStorage key → store, synced per reader profile. */
@@ -300,6 +321,8 @@ async function mergeSettings(file: Partial<SettingsDocument> | undefined) {
     modified: file?.modified ?? {}
   };
   const localTimes = readChangeTimes();
+  const localValues = Object.fromEntries(entries.map(({ key, store }) => [key, store.getValue()]));
+  const remoteValues = { ...remote.values };
   let changedRemote = false;
 
   entries.forEach(({ key, storageKey, store }) => {
@@ -316,7 +339,7 @@ async function mergeSettings(file: Partial<SettingsDocument> | undefined) {
     const merge = mergedSettings[key];
 
     if (merge && key in remote.values) {
-      const merged = merge(store.getValue(), remote.values[key]);
+      const merged = merge(store.getValue(), remote.values[key], localValues, remoteValues);
 
       applyRemoteValue(store, merged);
 

@@ -7,8 +7,13 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const catalog = vi.hoisted(() => ({ fails: false }));
+
 vi.mock('$lib/data/calibre', () => ({
-  loadCalibreCatalog: async () => [{ title: 'Calibre' }]
+  loadCalibreCatalog: async () => {
+    if (catalog.fails) throw new Error('HTTP 401');
+    return [{ title: 'Calibre' }];
+  }
 }));
 
 const { database } = await import('$lib/data/store');
@@ -46,6 +51,7 @@ const user = (id: string) => ({ id, username: id });
 describe('releaseReaderData', () => {
   beforeEach(async () => {
     window.localStorage.clear();
+    catalog.fails = false;
     await seed();
   });
 
@@ -77,7 +83,19 @@ describe('releaseReaderData', () => {
 
   it('treats signing out as another reader', async () => {
     await releaseReaderData(user('a'));
-    await releaseReaderData(null);
+    await releaseReaderData(null, true);
     expect(await counts()).toEqual([2, 1, 1, 1, 0]);
+  });
+
+  it('keeps everything when the session merely expired, or the catalog cannot be read', async () => {
+    await releaseReaderData(user('a'));
+    await (await readerDb()).put('known', { words: ['猫'], read: 1 }, 'words');
+    await releaseReaderData(null);
+    expect(window.localStorage.getItem('readerDataOwner')).toBe('a');
+    catalog.fails = true;
+    await expect(releaseReaderData(user('b'))).rejects.toThrow();
+    expect(await counts()).toEqual([2, 2, 2, 2, 1]);
+    expect(await (await readerDb()).count('known')).toBe(1);
+    expect(await kanjiCount()).toBe(1);
   });
 });
