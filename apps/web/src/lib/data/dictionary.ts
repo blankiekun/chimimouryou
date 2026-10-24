@@ -6,7 +6,8 @@
 
 /**
  * The built-in dictionary: Yomitan's engine (lib/vendor/yomitan) in a worker
- * (functions/dictionary/dictionary.worker.ts) with dictionaries in this browser's IndexedDB, for
+ * (functions/dictionary/dictionary.worker.ts) with dictionaries in this browser's IndexedDB (imported
+ * collections in its private file system), for
  * readers whose browser can't run the extension (phones). Settings are Yomitan's own options
  * object (one profile), so an exported Yomitan settings file imports as it is. Per browser, no
  * sync. Not part of upstream.
@@ -220,8 +221,8 @@ export async function importDictionary(file: Blob, onProgress?: Progress) {
   return { result, errors };
 }
 
-/** What a collection import needs, as a share of the file (measured in Chrome: about 0.5 while writing). */
-const collectionRoomShare = 0.6;
+/** What a collection import needs, as a share of the file (its packs, measured in Chrome: 1.04-1.10). */
+const collectionRoomShare = 1.15;
 
 /**
  * Imports a Yomitan dictionary collection export (Settings → Backup → Export Dictionary

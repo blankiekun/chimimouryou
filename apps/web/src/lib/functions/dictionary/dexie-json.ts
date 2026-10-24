@@ -23,8 +23,11 @@ export interface DexieHeader {
 export interface DexieHandlers {
   /** Called once, before the first table's rows */
   header(header: DexieHeader): void;
-  /** One row of `table`, revived (outbound tables give their [key, value] pair); size: its characters */
-  row(table: string, row: unknown, size: number): void;
+  /**
+   * One row of `table`, revived (outbound tables give their [key, value] pair); text: its JSON as
+   * written (not revived)
+   */
+  row(table: string, row: unknown, text: string): void;
 }
 
 // Containers walked into; any other value is captured whole.
@@ -223,15 +226,15 @@ export class DexieJsonReader {
       top.state = 'colon';
       return;
     }
-    if (wanted.has(cap.path)) this.take(cap.path, JSON.parse(text), text.length);
+    if (wanted.has(cap.path)) this.take(cap.path, JSON.parse(text), text);
     this.afterValue();
   }
 
-  private take(path: string, value: unknown, size: number) {
+  private take(path: string, value: unknown, text: string) {
     switch (path) {
       case 'data.data.*.rows.*':
         if (!this.headerSent) this.sendHeader();
-        this.handlers.row(this.table, revive(value), size);
+        this.handlers.row(this.table, revive(value), text);
         break;
       case 'data.data.*.tableName':
         this.table = String(value);
