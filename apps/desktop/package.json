@@ -3,7 +3,7 @@
   "productName": "chimimouryou",
   "version": "0.0.1",
   "description": "chimimouryou's standalone reader as a desktop app, with Yomitan",
-  "license": "BSD-3-Clause",
+  "license": "GPL-3.0-or-later",
   "private": true,
   "type": "module",
   "main": "main.js",

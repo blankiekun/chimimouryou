@@ -272,10 +272,17 @@ browser:
   lives in the browser's storage, which the browser may clear when the disk fills
   up. Settings → Data shows whether storage is persistent.
 
+## License
+
+chimimouryou is licensed under the [GNU General Public License v3.0 or later](LICENSE).
+Files whose header says `@license BSD-3-Clause` (upstream's, and this fork's from before the
+switch) are also available under the BSD 3-Clause terms in [LICENSE-BSD](LICENSE-BSD); the work as a
+whole is GPL-3.0-or-later.
+
 ## Credits
 
 [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook-reader) by ッツ Reader
-Authors (BSD 3-Clause, see [LICENSE](LICENSE)), from which this fork derives;
+Authors (BSD 3-Clause, see [LICENSE-BSD](LICENSE-BSD)), from which this fork derives;
 [Jiten](https://github.com/Sirush/Jiten) for the difficulty features and
 deconjugation rules (Apache-2.0, see [NOTICE](NOTICE)). Readings in context and the "Known"
 furigana style come from [yurigana](https://github.com/blankiekun/yurigana), whose reading model is
