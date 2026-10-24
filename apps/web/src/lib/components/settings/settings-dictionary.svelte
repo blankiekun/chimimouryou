@@ -11,6 +11,7 @@
   import type { ToggleOption } from '$lib/components/button-toggle-group/toggle-option';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
+  import DictionaryCollectionImport from '$lib/components/settings/dictionary-collection-import.svelte';
   import {
     builtInLookups$,
     builtInLookupsChoice$,
@@ -660,7 +661,10 @@
     </SettingsItemGroup>
   </SettingsSection>
 
-  <SettingsSection id="dictionary-backup" keywords="export import yomitan settings json reset">
+  <SettingsSection
+    id="dictionary-backup"
+    keywords="export import yomitan settings json reset collection"
+  >
     <SettingsItemGroup title={$t$('dict.export')} tooltip={$t$('dict.exportHint')}>
       <button type="button" class="app-button" on:click={exportSettings}>
         {$t$('dict.exportButton')}
@@ -676,6 +680,7 @@
         {#if backupError}<p class="dict-error" role="alert">{backupError}</p>{/if}
       </svelte:fragment>
     </SettingsItemGroup>
+    <DictionaryCollectionImport />
     <SettingsItemGroup title={$t$('dict.reset')} tooltip={$t$('dict.resetHint')}>
       <span class="dict-actions">
         <button

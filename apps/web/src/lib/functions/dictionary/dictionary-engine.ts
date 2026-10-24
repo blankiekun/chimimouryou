@@ -11,6 +11,7 @@
  */
 
 import { DictionaryDatabase } from '$lib/vendor/yomitan/dictionary/dictionary-database';
+import { importCollection } from './collection-import';
 import {
   DictionaryImporter,
   type DictionarySummary,
@@ -69,6 +70,26 @@ export async function importDictionary(
   });
   translator.clearDatabaseCaches();
   return { result, errors: errors.map((error) => error.message) };
+}
+
+let collectionCancelled = false;
+
+/** Imports a Yomitan dictionary collection export (collection-import.ts), streamed. */
+export async function importDictionaryCollection(
+  file: Blob,
+  onProgress: (read: number, total: number) => void
+) {
+  const { database, translator } = await ready();
+  collectionCancelled = false;
+  try {
+    return await importCollection(database, file, onProgress, () => collectionCancelled);
+  } finally {
+    translator.clearDatabaseCaches();
+  }
+}
+
+export function cancelCollectionImport() {
+  collectionCancelled = true;
 }
 
 export async function listDictionaries(): Promise<DictionarySummary[]> {
