@@ -679,6 +679,12 @@
   text-underline-offset: 0.2em;
 }
 
+/* Chromium doesn't paint a highlight's text-decoration in vertical text: a soft tint there. */
+.book-content--writing-vertical-rl ::highlight(ttu-unknown) {
+  text-decoration: none;
+  background-color: color-mix(in srgb, var(--unknown-word-color) 16%, transparent);
+}
+
 ::highlight(ttu-reading) {
   background-color: var(--reading-line-color);
 }

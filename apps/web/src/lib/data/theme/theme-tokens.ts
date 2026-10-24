@@ -334,7 +334,8 @@ export const themeTokenGroups = {
     unknownWord: {
       label: 'Unknown word',
       cssVar: '--unknown-word-color',
-      description: "Dotted underline under words you don't know yet"
+      description:
+        "Marks words you don't know yet: a dotted underline, a soft tint in vertical text"
     }
   }
 } as const satisfies Record<string, Record<string, ThemeTokenInfo>>;
