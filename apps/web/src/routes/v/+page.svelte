@@ -655,6 +655,10 @@
           allow="autoplay; fullscreen"
           on:load={() => {
             if (frame) lookupPopup?.attachFrame(frame);
+            frame?.contentDocument?.documentElement.style.setProperty(
+              '--accent-color',
+              getComputedStyle(document.documentElement).getPropertyValue('--accent-color')
+            );
             frameLoaded = true;
             start().catch((error) => logger.error(`Error starting game: ${error.message}`));
           }}
