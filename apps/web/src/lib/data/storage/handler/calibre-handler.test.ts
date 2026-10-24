@@ -203,3 +203,46 @@ describe('BaseStorageHandler.findFile', () => {
     expect(BaseStorageHandler.findFile(files, 'cover_')).toBeUndefined();
   });
 });
+
+describe('CalibreStorageHandler while an expired account still owns the data', () => {
+  it("keeps that reader's files out of the shared folder", async () => {
+    const urls: string[] = [];
+
+    account.user = null;
+    window.localStorage.setItem('readerDataOwner', 'a');
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      urls.push(`${init?.method ?? 'GET'} ${url}`);
+      if (url === '/calibre/catalog.json') {
+        return new Response(
+          JSON.stringify({
+            books: [{ id: 1, title: '本1', authors: '', series: '', seriesIndex: null, added: 0 }]
+          })
+        );
+      }
+      if (url === '/calibre/difficulty.json') return new Response('{"books":{}}');
+      if (url === '/calibre/sync/ttu-reader-data/') {
+        return new Response(JSON.stringify([{ name: '本1', type: 'directory' }]));
+      }
+      if (url.startsWith('/calibre/sync/ttu-reader-data/')) {
+        return new Response(JSON.stringify([{ name: 'progress_1_6_100_0.5.json', type: 'file' }]));
+      }
+      return new Response('', { status: 404 });
+    });
+
+    await expect(
+      CalibreStorageHandler.writeSyncFile('annotations.json', '{}', { title: '本1' })
+    ).rejects.toThrow('has expired');
+
+    const handler = new CalibreStorageHandler(window);
+    const cards = await handler.getBookList();
+
+    expect(cards.map((card) => card.progress ?? 0)).toEqual([0]);
+    await expect(
+      handler['upload']('/calibre/sync/x/', 'progress_1_6_200_0.6.json', [], undefined, '{}')
+    ).rejects.toThrow('has expired');
+    expect(urls.filter((url) => !url.startsWith('GET'))).toEqual([]);
+
+    window.localStorage.removeItem('readerDataOwner');
+    vi.unstubAllGlobals();
+  });
+});
