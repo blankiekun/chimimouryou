@@ -22,6 +22,15 @@ class EngineFingerprintTest(unittest.TestCase):
                          'The engine changed: python3 scripts/calibre/jiten/engine.py > '
                          'apps/web/src/lib/data/difficulty-engine.json')
 
+    def test_code_record_is_current(self):
+        with open(engine.CODE_RECORD, encoding='utf-8') as f:
+            record = json.load(f)
+        self.assertEqual((record['version'], record['code']), (engine.ENGINE_VERSION, engine.code_hash()),
+                         'The scoring Python changed. If any estimate, word list or readings file changes, '
+                         'bump ENGINE_VERSION in scripts/calibre/jiten/engine.py; if every output stays the same, '
+                         'only re-record the hash. Either way: python3 scripts/calibre/jiten/engine.py --record '
+                         '&& python3 scripts/calibre/jiten/engine.py > apps/web/src/lib/data/difficulty-engine.json')
+
     def test_inputs_change_it(self):
         with tempfile.TemporaryDirectory() as tmp:
             own = os.path.join(tmp, 'list.zip')
