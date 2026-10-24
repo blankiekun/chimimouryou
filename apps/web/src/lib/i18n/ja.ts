@@ -364,13 +364,6 @@ export const ja: Record<MessageKey, string> = {
   'settings.section.dictionary-audio.text': '単語の音声の取得元。',
   'settings.section.dictionary-shortcuts': 'ショートカット',
   'settings.section.dictionary-shortcuts.text': 'ポップアップ表示中に使えるキー。',
-  'dict.download': 'ダウンロード',
-  'dict.downloading': '{name} をダウンロード中…',
-  'dict.downloadJaJa': 'Wiktionary 国語辞典（日→日）',
-  'dict.downloadJaEn': 'Wiktionary 和英辞典（日→英）',
-  'dict.downloadAttribution':
-    '{size} MB · Wiktionary の執筆者、CC BY-SA 4.0、kaikki.org と wiktionary-to-yomitan 経由',
-  'dict.installed': 'インストール済み',
   'dict.jmdictHint': 'リリースページから zip をダウンロードし、ここで読み込みます。',
   'dict.fontSize': '文字サイズ',
   'dict.fontSizeHint': 'ポップアップの文字サイズ（ピクセル）。',

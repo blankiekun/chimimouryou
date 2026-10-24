@@ -214,43 +214,6 @@ export async function importDictionary(file: Blob, onProgress?: Progress) {
   return { result, errors };
 }
 
-/**
- * Dictionaries offered for download from the Dictionaries settings: wiktionary-to-yomitan's
- * Japanese ones on Hugging Face, which serves them with CORS. `title` is the index's title.
- */
-export const downloadableDictionaries = [
-  {
-    title: 'wty-ja-ja',
-    label: 'dict.downloadJaJa',
-    size: 13_939_852,
-    url: 'https://huggingface.co/datasets/daxida/wty-release/resolve/main/latest/dict/ja/ja/wty-ja-ja.zip?download=true'
-  },
-  {
-    title: 'wty-ja-en',
-    label: 'dict.downloadJaEn',
-    size: 16_677_700,
-    url: 'https://huggingface.co/datasets/daxida/wty-release/resolve/main/latest/dict/ja/en/wty-ja-en.zip?download=true'
-  }
-] as const;
-
-/** Downloads a dictionary zip (progress in bytes), then imports it like a chosen file. */
-export async function downloadDictionary(url: string, onDownload: Progress, onImport?: Progress) {
-  const response = await fetch(url, { credentials: 'omit', referrerPolicy: 'no-referrer' });
-  if (!response.ok || !response.body) throw new Error(`Download failed: ${response.status}`);
-  const total = Number(response.headers.get('content-length')) || 0;
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let done = 0;
-  for (;;) {
-    const { value, done: finished } = await reader.read();
-    if (finished) break;
-    chunks.push(value);
-    done += value.length;
-    onDownload(done, total);
-  }
-  return importDictionary(new Blob(chunks as BlobPart[], { type: 'application/zip' }), onImport);
-}
-
 /** What a collection import needs, as a share of the file (measured in Chrome: about 0.5 while writing). */
 const collectionRoomShare = 0.6;
 

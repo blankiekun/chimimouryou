@@ -141,7 +141,7 @@ const kanaOnly = /^[\u3040-\u30ff]+$/;
 const katakanaOnly = /^[\u30a0-\u30ff]+$/;
 
 /**
- * Yomitan ranks ties by frequency, which the downloadable Wiktionary dictionaries lack, so
+ * Yomitan ranks ties by frequency, which many dictionaries lack (Wiktionary's, measured), so
  * entries a reader rarely means can come first (stable re-sort, measured on Aozora Bunko texts):
  * - a kanji word with no reading (reading = term) or a kanji's on'yomi in katakana (口[ク]) goes
  *   after the other entries of the same length;
