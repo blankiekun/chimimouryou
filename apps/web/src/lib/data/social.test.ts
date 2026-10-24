@@ -153,7 +153,8 @@ describe('social', () => {
 
     noteReading('Book A', 50, 100);
     noteReading('Book A', 99, 100);
-    await vi.waitFor(() => expect(bodies).toHaveLength(2));
+    // The first push imports its stats modules, which can outlast waitFor's 1 s on a cold CI worker.
+    await vi.waitFor(() => expect(bodies).toHaveLength(2), { timeout: 5000 });
     expect(bodies.map((body) => body.finished).filter(Boolean)).toEqual([
       { key: bookKey('Book A'), title: 'Book A', kind: 'book' }
     ]);
@@ -161,13 +162,13 @@ describe('social', () => {
     setBookHidden('Book B', true);
     noteReading('Book B', 10, 100);
     noteReading('Book B', 100, 100);
-    await vi.waitFor(() => expect(bodies).toHaveLength(4));
+    await vi.waitFor(() => expect(bodies).toHaveLength(4), { timeout: 5000 });
     expect(JSON.stringify(bodies.slice(2))).not.toContain('Book B');
     // The two pushes may land in either order.
     expect(bodies.slice(2).flatMap((body) => body.books as unknown[])).toEqual([
       expect.objectContaining({ kind: 'hidden', key: '', title: '' })
     ]);
-  });
+  }, 15000);
 
   it('gives the hub the thumbnails it asks for, once, from covers this reader has', async () => {
     const calls: { path: string; type: string | null; body: unknown }[] = [];
