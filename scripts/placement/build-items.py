@@ -12,6 +12,11 @@ neither list (and, when SudachiPy is installed, not one token in its
 dictionary either).
 
     python3 scripts/placement/build-items.py JMdict_e.gz [--freq ZIP] [--out JSON]
+        [--check-dicts DIR_OR_ZIP ...]
+
+--check-dicts also rejects pseudo-words that are a headword or reading in any of
+the given Yomitan dictionaries (a folder means every .zip in it); include
+JMnedict so names are out too. Nothing from them goes into the output.
 
 JMdict_e.gz is EDRDG's file (https://www.edrdg.org/jmdict/j_jmdict.html); it is
 read only to filter, nothing from it goes into the output. The sampling is
@@ -112,6 +117,33 @@ def load_jmdict(path):
     return spellings, readings, common, loans
 
 
+def dictionary_terms(paths, lengths=range(2, 4)):
+    """Yomitan zip name → its headwords and readings of `lengths` characters (the pseudo-words')."""
+    zips = []
+    for path in paths:
+        zips += sorted(path.glob('*.zip')) if path.is_dir() else [path]
+    out = {}
+    for path in zips:
+        terms = set()
+        try:
+            archive = zipfile.ZipFile(path)
+        except zipfile.BadZipFile:
+            continue
+        with archive:
+            for name in archive.namelist():
+                if not name.startswith(('term_bank', 'term_meta_bank')):
+                    continue
+                for row in json.loads(archive.read(name)):
+                    data = row[2] if len(row) > 2 else None
+                    found = [row[0], row[1] if isinstance(row[1], str) else '']
+                    if isinstance(data, dict):
+                        found.append(data.get('reading') or '')
+                    terms.update(t for t in found if len(t) in lengths)
+        if terms:
+            out[path.stem] = terms
+    return out
+
+
 def sudachi_word():
     """A test 'is this one dictionary word', or None without SudachiPy."""
     try:
@@ -152,7 +184,7 @@ def real_words(ranks, common, loans, bands, rng):
     return items
 
 
-def pseudo_words(ranks, spellings, readings, common, one_word, rng):
+def pseudo_words(ranks, spellings, readings, common, one_word, rng, dicts=None, rejected=None):
     kanji2 = [f for f, r in ranks.items() if r <= 8000 and common.get(f) and re.fullmatch(r'[一-鿿]{2}', f)]
     verbs = [f for f, r in ranks.items() if r <= 8000 and common.get(f) and re.fullmatch(r'[一-鿿][ぁ-ゖ]?[うくすつぬぶむる]', f)]
     kanji2.sort()
@@ -168,7 +200,14 @@ def pseudo_words(ranks, spellings, readings, common, one_word, rng):
             and text not in spellings
             and text not in readings
             and not (one_word and one_word(text))
+            and not in_dicts(text)
         )
+
+    def in_dicts(text):
+        hits = [name for name, terms in (dicts or {}).items() if text in terms]
+        for name in hits:
+            rejected[name] = rejected.get(name, 0) + 1
+        return bool(hits)
 
     out = []
     # Mostly two-kanji compounds (the bulk of the real items), a few okurigana words.
@@ -190,6 +229,7 @@ def main():
     parser.add_argument('--freq', type=Path, default=FREQ)
     parser.add_argument('--out', type=Path, default=OUT)
     parser.add_argument('--seed', type=int, default=1)
+    parser.add_argument('--check-dicts', type=Path, nargs='+', default=[], metavar='DIR_OR_ZIP')
     args = parser.parse_args()
 
     rng = random.Random(args.seed)
@@ -199,12 +239,21 @@ def main():
     if not one_word:
         print('SudachiPy not installed: pseudo-words are checked against the lists only', file=sys.stderr)
 
+    dicts = dictionary_terms(args.check_dicts)
+    rejected = {}
+
     bands = BANDS + [max(ranks.values())]
-    items = real_words(ranks, common, loans, bands, rng) + pseudo_words(ranks, spellings, readings, common, one_word, rng)
+    items = real_words(ranks, common, loans, bands, rng) + pseudo_words(
+        ranks, spellings, readings, common, one_word, rng, dicts, rejected
+    )
+    for name in dicts:
+        print(f'{name}: rejected {rejected.get(name, 0)} pseudo-word candidates', file=sys.stderr)
     data = {
         'about': 'Placement check items. Real words and ranks: Jiten frequency list '
         '(https://jiten.moe, revision "Jiten 26-10-09"), CC BY-SA 4.0; this file is under '
-        'CC BY-SA 4.0 too. Built by scripts/placement/build-items.py.',
+        'CC BY-SA 4.0 too. Made-up words are in none of JMdict, JMnedict and Japanese Wiktionary '
+        '(wiktionary-to-yomitan), and were checked against further dictionaries. '
+        'Built by scripts/placement/build-items.py.',
         'bands': bands,
         'items': items,
     }

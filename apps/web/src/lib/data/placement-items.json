@@ -1,5 +1,5 @@
 {
-  "about": "Placement check items. Real words and ranks: Jiten frequency list (https://jiten.moe, revision \"Jiten 26-10-09\"), CC BY-SA 4.0; this file is under CC BY-SA 4.0 too. Built by scripts/placement/build-items.py.",
+  "about": "Placement check items. Real words and ranks: Jiten frequency list (https://jiten.moe, revision \"Jiten 26-10-09\"), CC BY-SA 4.0; this file is under CC BY-SA 4.0 too. Made-up words are in none of JMdict, JMnedict and Japanese Wiktionary (wiktionary-to-yomitan), and were checked against further dictionaries. Built by scripts/placement/build-items.py.",
   "bands": [
     1000, 1700, 2500, 3500, 5000, 7000, 10000, 14000, 20000, 28000, 40000, 56000, 80000, 115000,
     165000, 240000, 398255
@@ -3415,25 +3415,13 @@
       "w": "体由"
     },
     {
-      "w": "満詮"
-    },
-    {
-      "w": "人退"
-    },
-    {
       "w": "指瞬"
-    },
-    {
-      "w": "出新"
     },
     {
       "w": "素席"
     },
     {
       "w": "祝置"
-    },
-    {
-      "w": "意境"
     },
     {
       "w": "社気"
@@ -3532,9 +3520,6 @@
       "w": "兵謀"
     },
     {
-      "w": "外援"
-    },
-    {
       "w": "条張"
     },
     {
@@ -3581,9 +3566,6 @@
     },
     {
       "w": "物導"
-    },
-    {
-      "w": "平視"
     },
     {
       "w": "返国"
@@ -3679,16 +3661,10 @@
       "w": "追向"
     },
     {
-      "w": "世井"
-    },
-    {
       "w": "観号"
     },
     {
       "w": "投議"
-    },
-    {
-      "w": "勢人"
     },
     {
       "w": "優殺"
@@ -3719,9 +3695,6 @@
     },
     {
       "w": "手言"
-    },
-    {
-      "w": "空階"
     },
     {
       "w": "延点"
@@ -3766,25 +3739,37 @@
       "w": "了徒"
     },
     {
-      "w": "化やか"
+      "w": "会色"
     },
     {
-      "w": "落れる"
+      "w": "議装"
     },
     {
-      "w": "信らす"
+      "w": "教色"
     },
     {
-      "w": "訴める"
+      "w": "後質"
     },
     {
-      "w": "砕らす"
+      "w": "寝能"
     },
     {
-      "w": "潜やか"
+      "w": "側拠"
     },
     {
-      "w": "伝げる"
+      "w": "下摘"
+    },
+    {
+      "w": "目慢"
+    },
+    {
+      "w": "隙夢"
+    },
+    {
+      "w": "破める"
+    },
+    {
+      "w": "討げる"
     },
     {
       "w": "包げる"
@@ -3854,6 +3839,21 @@
     },
     {
       "w": "生げる"
+    },
+    {
+      "w": "書れる"
+    },
+    {
+      "w": "控れる"
+    },
+    {
+      "w": "触める"
+    },
+    {
+      "w": "託かす"
+    },
+    {
+      "w": "変れる"
     }
   ]
 }
