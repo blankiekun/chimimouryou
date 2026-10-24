@@ -204,6 +204,42 @@ describe('BaseStorageHandler.findFile', () => {
   });
 });
 
+describe('CalibreStorageHandler processing a just-imported book', () => {
+  it("dates the book data no earlier than the catalog's added, whatever the device clock", async () => {
+    const added = Date.now() + 3_600_000;
+    const book = {
+      id: 1,
+      title: '本',
+      authors: '',
+      series: '',
+      format: 'TXT',
+      file: 'a/b.txt',
+      added
+    };
+
+    account.user = null;
+    vi.stubGlobal('fetch', async (url: string) =>
+      url === '/calibre/catalog.json'
+        ? new Response(JSON.stringify({ books: [book] }))
+        : new Response('本文')
+    );
+
+    const handler = new CalibreStorageHandler(window);
+    const saved: number[] = [];
+
+    handler['saveBook'] = async (data: { lastBookModified: number }) => {
+      saved.push(data.lastBookModified);
+    };
+    handler['saveCover'] = async () => {};
+    handler['saveLocally'] = async () => {};
+    handler.startContext({ title: '本' } as never);
+    await handler['processCalibreBook']();
+
+    expect(saved).toEqual([added]);
+    vi.unstubAllGlobals();
+  });
+});
+
 describe('CalibreStorageHandler.saveProgress', () => {
   it('deletes older leftover progress files after saving, not statistics', async () => {
     const writes: string[] = [];

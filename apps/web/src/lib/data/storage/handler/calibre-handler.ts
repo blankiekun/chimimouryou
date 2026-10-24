@@ -532,7 +532,9 @@ export class CalibreStorageHandler extends ApiStorageHandler {
       throw new Error(`${title} was not found in the Calibre library`);
     }
 
-    const lastBookModified = Date.now();
+    // Not before `added`: a device clock behind the server's would make prepareBookForReading
+    // take this book data for the old version and process the book again on every open.
+    const lastBookModified = Math.max(Date.now(), calibreBook.added || 0);
 
     if (calibreBook.format === 'VN') {
       const game = await loadVnFolder(title, calibreVnUrl(calibreBook), lastBookModified);
