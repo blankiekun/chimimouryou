@@ -260,7 +260,7 @@ export function newerSaveEngine(saves: VnSaves, installed: string) {
   if (!/^v?\d+(\.\d+)*$/.test(installed)) return undefined;
 
   return Object.values(saves)
-    .map((file) => file.engine)
+    .map((file) => file?.engine)
     .filter((engine): engine is string => !!engine && /^v?\d+(\.\d+)*$/.test(engine))
     .reduce<string | undefined>(
       (newest, engine) => (newer(engine, newest ?? installed) ? engine : newest),
@@ -270,14 +270,20 @@ export function newerSaveEngine(saves: VnSaves, installed: string) {
 
 /** Per file, the newer copy wins; nothing is ever deleted (the engine doesn't delete saves). */
 export function mergeVnSaves(local: VnSaves, remote: VnSaves): VnSaves {
-  const merged = { ...remote };
+  const merged: VnSaves = {};
 
-  Object.entries(local).forEach(([name, file]) => {
-    if (!merged[name] || merged[name].modified < file.modified) merged[name] = file;
-  });
+  // Names become paths in the save folder: only single path segments.
+  [remote, local].forEach((saves) =>
+    Object.entries(saves).forEach(([name, file]) => {
+      if (!isSaveName(name)) return;
+      if (!merged[name] || merged[name].modified < file.modified) merged[name] = file;
+    })
+  );
 
   return merged;
 }
+
+const isSaveName = (name: string) => !/[/\\]/.test(name) && name !== '.' && name !== '..';
 
 export function sameVnSaves(a: VnSaves, b: VnSaves) {
   const names = Object.keys(a);

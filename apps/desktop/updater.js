@@ -10,6 +10,7 @@
 
 import { app, dialog, net, shell } from 'electron';
 import updater from 'electron-updater';
+import { isNewerVersion } from './version.js';
 
 const repo = 'blankiekun/chimimouryou';
 
@@ -17,8 +18,8 @@ async function offerReleasePage(window) {
   const response = await net.fetch(`https://api.github.com/repos/${repo}/releases/latest`);
   if (!response.ok) return;
   const { tag_name: tag, html_url: url } = await response.json();
-  // /releases/latest is the newest published release, so any other version is newer.
-  if (!tag || tag === `v${app.getVersion()}`) return;
+  // A build newer than /releases/latest (prerelease, local dist) must not be offered an older one.
+  if (!tag || !isNewerVersion(tag, app.getVersion())) return;
   const { response: choice } = await dialog.showMessageBox(window, {
     type: 'info',
     buttons: ['Open the release page', 'Later'],

@@ -36,6 +36,9 @@ const electronDir = app.isPackaged
 
 let mainWindow;
 
+/** The file: URLs the About window links to (licences): the only local files a window may open. */
+const aboutFiles = new Set();
+
 /** The app's own windows (not extension pages or About) learn they run in the desktop app. */
 const appPreferences = { preload: join(import.meta.dirname, 'preload.cjs') };
 
@@ -50,7 +53,7 @@ function keepExternalLinksOut(contents) {
     if (url.startsWith(`${origin}/`))
       return { action: 'allow', overrideBrowserWindowOptions: { webPreferences: appPreferences } };
     if (/^https?:/.test(url)) shell.openExternal(url);
-    else if (url.startsWith('file:')) shell.openPath(fileURLToPath(url));
+    else if (aboutFiles.has(url)) shell.openPath(fileURLToPath(url));
     return { action: 'deny' };
   });
   contents.on('will-navigate', (event, url) => {
@@ -145,7 +148,11 @@ function openWindow(url, options = {}, webPreferences = {}) {
 }
 
 function aboutHtml(yomitan) {
-  const file = (path) => pathToFileURL(path).href;
+  const file = (path) => {
+    const url = pathToFileURL(path).href;
+    aboutFiles.add(url);
+    return url;
+  };
   const link = (href, text) => `<a href="${href}" target="_blank">${text}</a>`;
   const yomitanVersion = yomitan?.version ?? 'not bundled';
   return `<!doctype html><meta charset="utf-8"><title>About chimimouryou</title>

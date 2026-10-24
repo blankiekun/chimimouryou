@@ -345,10 +345,15 @@
       encoding: info.encoding,
       saveDir: `/save/${hashPage(book.title)}`,
       saves: Object.fromEntries(
-        Object.entries(saves).map(([name, file]) => [
-          name,
-          { modified: file.modified, bytes: fromBase64(file.data) }
-        ])
+        Object.entries(saves).flatMap(([name, file]) => {
+          // One bad entry in the synced file must not stop the game starting.
+          if (typeof file?.data !== 'string' || typeof file.modified !== 'number') return [];
+          try {
+            return [[name, { modified: file.modified, bytes: fromBase64(file.data) }]];
+          } catch {
+            return [];
+          }
+        })
       ),
       onText: (bytes: Uint8Array, skipped: number, boxes: Int32Array, readBefore: number) => {
         player.showText(overlayLines(bytes, boxes, info.encoding));

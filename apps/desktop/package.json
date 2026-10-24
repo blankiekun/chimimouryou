@@ -11,7 +11,7 @@
     "fetch": "node node_modules/electron/install.js && bash scripts/fetch-yomitan.sh",
     "build:web": "cd ../web && VITE_EDITION=standalone VITE_STORAGE_ROOT_NAME=chimi-reader-data pnpm build",
     "start": "electron .",
-    "test": "node --test serve.test.js oauth.test.js",
+    "test": "node --test serve.test.js oauth.test.js version.test.js",
     "dist": "electron-builder"
   },
   "devDependencies": {
@@ -26,6 +26,7 @@
       "preload.cjs",
       "serve.js",
       "updater.js",
+      "version.js",
       "yomitan-shim.cjs",
       "package.json"
     ],
