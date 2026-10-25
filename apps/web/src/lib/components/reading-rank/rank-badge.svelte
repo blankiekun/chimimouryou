@@ -3,7 +3,7 @@
 
   /**
    * A reading rank's name in its own colour (`--rank-N`, the only place it is used besides the
-   * rank track): the Japanese name with a small English gloss, ruled in a 1px frame.
+   * rank track): the Japanese name, ruled in a 1px frame.
    */
   export let tier: number;
   export let small = false;
@@ -15,7 +15,6 @@
 <span class="rank-badge" class:rank-badge-small={small} style:--rank="var(--rank-{level})">
   <span class="rank-badge-level">{level}</span>
   <span class="rank-badge-name" lang="ja">{rank.ja}</span>
-  <span class="rank-badge-gloss">{rank.en}</span>
 </span>
 
 <style>
@@ -39,10 +38,6 @@
   .rank-badge-name {
     font-size: var(--type-body);
     font-weight: 700;
-  }
-
-  .rank-badge-gloss {
-    font-size: var(--type-label);
   }
 
   .rank-badge-small {

@@ -37,20 +37,13 @@ export interface RankTier {
  * Characters rise about ×2.5 a tier up to 10M; 300 reading days is about a year.
  */
 export const rankTiers: RankTier[] = [
-  { ja: '見習い', en: 'Apprentice', characters: 0, days: 0, words: 0, difficulty: 0 },
-  { ja: '駆け出し', en: 'Rookie', characters: 100_000, days: 7, words: 1_500, difficulty: 2.0 },
-  { ja: '冒険者', en: 'Adventurer', characters: 250_000, days: 20, words: 3_000, difficulty: 2.5 },
-  { ja: '熟練者', en: 'Veteran', characters: 600_000, days: 45, words: 6_000, difficulty: 3.0 },
-  { ja: '英雄', en: 'Hero', characters: 1_500_000, days: 90, words: 10_000, difficulty: 3.3 },
-  { ja: '勇者', en: 'Brave', characters: 4_000_000, days: 180, words: 15_000, difficulty: 3.6 },
-  {
-    ja: '魔王',
-    en: 'Demon Lord',
-    characters: 10_000_000,
-    days: 300,
-    words: 20_000,
-    difficulty: 3.9
-  }
+  { ja: '見習い', characters: 0, days: 0, words: 0, difficulty: 0 },
+  { ja: '駆け出し', characters: 100_000, days: 7, words: 1_500, difficulty: 2.0 },
+  { ja: '冒険者', characters: 250_000, days: 20, words: 3_000, difficulty: 2.5 },
+  { ja: '熟練者', characters: 600_000, days: 45, words: 6_000, difficulty: 3.0 },
+  { ja: '英雄', characters: 1_500_000, days: 90, words: 10_000, difficulty: 3.3 },
+  { ja: '勇者', characters: 4_000_000, days: 180, words: 15_000, difficulty: 3.6 },
+  { ja: '魔王', characters: 10_000_000, days: 300, words: 20_000, difficulty: 3.9 }
 ];
 
 /** Characters a minute nobody reads faster than (fast readers' statistics show about 500). */
