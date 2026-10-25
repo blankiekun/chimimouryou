@@ -347,7 +347,8 @@ async function thread(request: Request, env: Env, user: UserRow | null, query: U
 /**
  * GET feed?before=<at>:<id>: top-level posts of every work, newest first, 30 a page, with the
  * work's title, volume and cover, the line and the spoiler mark (the app blurs those until the
- * reader is past the line). Posts FEED_REPORTS readers reported wait for a moderator.
+ * reader is past the line). Posts FEED_REPORTS readers reported wait for a moderator; posts made
+ * for their line only (`in_feed` 0) stay out.
  */
 async function feed(request: Request, env: Env, user: UserRow | null, query: URLSearchParams) {
   const viewer = user?.id ?? '';
@@ -362,7 +363,7 @@ async function feed(request: Request, env: Env, user: UserRow | null, query: URL
        (SELECT COUNT(*) FROM posts r WHERE r.parent = p.id) AS replies,
        w.title, w.vol, w.cover, ${authorColumns}
      FROM posts p LEFT JOIN works w ON w.work = p.work ${authorJoins('p.user')}
-     WHERE p.parent = '' AND p.user != '' AND (p.at < ?2 OR (p.at = ?2 AND p.id < ?3))
+     WHERE p.parent = '' AND p.user != '' AND p.in_feed = 1 AND (p.at < ?2 OR (p.at = ?2 AND p.id < ?3))
        AND ${unblocked('p.user', '?1')}
        AND ${unreported()}
      ORDER BY p.at DESC, p.id DESC LIMIT ${FEED_PAGE}`
@@ -398,7 +399,8 @@ function workVolume(work: string, given: unknown) {
 }
 
 /**
- * POST posts: `{work, title, vol, quote, context, body, spoiler}` posts on a line (the hub hashes
+ * POST posts: `{work, title, vol, quote, context, body, spoiler, feed?}` posts on a line (`feed:
+ * false`: in the line's thread only, not the feed) (the hub hashes
  * the quote, and the context must contain it; the first post on a work names it: title first
  * wins, moderators reset it); `{parent, body, spoiler}` replies to a top-level post. Only a line's
  * first post keeps its quote and context, and only on the work's first CONTEXTS_PER_WORK lines.
@@ -408,6 +410,8 @@ async function createPost(request: Request, env: Env, user: UserRow) {
   const text = plain(body.body, BODY_LENGTH, 'body');
   const spoiler = body.spoiler === true ? 1 : 0;
   const reply = body.parent !== undefined;
+  // "This line only": the post stays in its line's thread, out of the feed (replies never show there)
+  const inFeed = reply || body.feed !== false ? 1 : 0;
   let work: string;
   let line: string;
   let parent = '';
@@ -471,8 +475,8 @@ async function createPost(request: Request, env: Env, user: UserRow) {
           ).bind(work, title, vol, time)
         ]),
     env.DB.prepare(
-      `INSERT INTO posts (id, work, line, parent, user, kind, body, spoiler, quote, context, at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`
+      `INSERT INTO posts (id, work, line, parent, user, kind, body, spoiler, quote, context, at, in_feed)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`
     ).bind(
       id,
       work,
@@ -484,7 +488,8 @@ async function createPost(request: Request, env: Env, user: UserRow) {
       spoiler,
       quote,
       context,
-      time
+      time,
+      inFeed
     )
   ]);
 

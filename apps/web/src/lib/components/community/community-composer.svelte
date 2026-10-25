@@ -20,6 +20,7 @@
     communityErrorKey,
     communityMarkTap$,
     lineAt,
+    refreshBookMarks,
     splitContext,
     workTitles
   } from '$lib/data/community-book';
@@ -47,6 +48,8 @@
   let context = '';
   let body = '';
   let spoiler = false;
+  /** Where the post goes: the Community feed and the line's thread, or the thread only */
+  let feed = true;
   let sending = false;
   let error = '';
 
@@ -111,10 +114,12 @@
         quote: line,
         context,
         body: body.trim(),
-        spoiler
+        spoiler,
+        feed
       });
 
       if (!posted.cover) sendCover().catch(() => {});
+      refreshBookMarks(title, getIndex).catch(() => {});
       communityMarkTap$.next(posted.line);
       dispatch('close');
     } catch (e) {
@@ -173,6 +178,23 @@
           <small>{$t$('community.spoilerHint')}</small>
         </span>
       </label>
+
+      <fieldset class="composer-where">
+        <legend>{$t$('community.where')}</legend>
+        <div class="app-segmented" role="radiogroup" aria-label={$t$('community.where')}>
+          {#each [[true, 'community.whereFeed'], [false, 'community.whereLine']] as const as [key, label] (key)}
+            <button
+              type="button"
+              role="radio"
+              aria-checked={feed === key}
+              class="app-segment"
+              class:app-segment-selected={feed === key}
+              on:click={() => (feed = key)}>{$t$(label)}</button
+            >
+          {/each}
+        </div>
+        <small>{$t$(feed ? 'community.whereFeedHint' : 'community.whereLineHint')}</small>
+      </fieldset>
 
       <h3>{$t$('community.shared')}</h3>
       <figure class="composer-context">
@@ -283,6 +305,23 @@
 
   .composer-spoiler small {
     display: block;
+    color: var(--muted);
+    font-size: var(--type-small);
+  }
+
+  .composer-where {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+  }
+
+  .composer-where legend {
+    margin-bottom: 0.4rem;
+    font-weight: 700;
+  }
+
+  .composer-where small {
     color: var(--muted);
     font-size: var(--type-small);
   }

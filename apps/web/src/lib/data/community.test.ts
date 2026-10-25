@@ -153,7 +153,8 @@ describe('community', () => {
       quote: '文章です。',
       context: '文章です。',
       body: 'x',
-      spoiler: false
+      spoiler: false,
+      feed: true
     };
 
     await expect(postOnLine('title:本', post)).rejects.toMatchObject({ status: 401 });

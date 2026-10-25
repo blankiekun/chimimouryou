@@ -125,9 +125,10 @@
     if (hash && state === 'ready' && !visible.some((thread) => thread.hash === hash)) load();
   });
 
+  // The markers stay: the panel unmounts when it closes or a selection action (the composer)
+  // takes its place, and the book is still open.
   onMount(() => () => {
     forgetBookCommunity();
-    communityMarks$.next({ title: '', marks: [] });
     communityMarkTap$.next('');
   });
   onDestroy(() => tapped.unsubscribe());

@@ -21,6 +21,7 @@ import {
   loadBookCommunity,
   markBookOnOpen,
   passedLine,
+  refreshBookMarks,
   splitContext,
   unseenNotes
 } from '$lib/data/community-book';
@@ -170,6 +171,37 @@ describe('community in the book', () => {
     // The tab opened later reuses it.
     expect((await loadBookCommunity('本', getIndex)).threads).toHaveLength(1);
     expect(hubCalls()).toHaveLength(1);
+
+    // A post: the book's threads again, its new line marked without the tab.
+    const first = (await lineHash(bookLines(paragraphs)[1].text))!;
+
+    fetchMock.mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            threads: [
+              { prefix: first.slice(0, 8), posts: 1, spoiler: false },
+              { prefix: later.slice(0, 8), posts: 2, spoiler: false }
+            ],
+            next: null
+          })
+        )
+    );
+    await refreshBookMarks('本', getIndex);
+    expect(communityMarks$.getValue().marks.map((mark) => mark.hash)).toEqual([first, later]);
+
+    // The book opened again (another getIndex): fresh markers replace the ones kept from before.
+    fetchMock.mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            threads: [{ prefix: first.slice(0, 8), posts: 3, spoiler: false }],
+            next: null
+          })
+        )
+    );
+    await markBookOnOpen('本', async () => ({ paragraphs }) as unknown as SearchIndex);
+    expect(communityMarks$.getValue().marks).toMatchObject([{ hash: first, posts: 3 }]);
     socialSession$.next(null);
     communityWorks$.next({});
   });
