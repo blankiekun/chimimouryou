@@ -6,7 +6,17 @@
 
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// The match toast's AniList search
+vi.mock('$lib/data/book-metadata', async (original) => ({
+  ...(await original<typeof import('$lib/data/book-metadata')>()),
+  searchMetadata: async () => [
+    { title: 'Wagahai wa Neko de Aru', url: 'https://anilist.co/manga/7', cover: 'c.jpg' }
+  ]
+}));
+
 import {
+  communityMatchAsked$,
   communityWorks$,
   lineHash,
   lineIndex,
@@ -20,9 +30,14 @@ import {
   lineAt,
   lineLinkTarget,
   loadBookCommunity,
+  answerMatch,
+  communityMarksCache$,
   markBookOnOpen,
+  matchOffer$,
   passedLine,
   refreshBookMarks,
+  restoreBookMarks,
+  shouldOfferMatch,
   splitContext,
   splitThread,
   unseenNotes
@@ -157,9 +172,13 @@ describe('community in the book', () => {
     expect(fetchMock).not.toHaveBeenCalled();
 
     socialSession$.next({ token: 't', me: { id: 'a', share: {} } } as never);
-    // Not matched yet: the tab's match sheet comes first, so nothing on open.
+    // Not matched yet: only the hub's suggestion is asked for (the match toast), no threads.
     await markBookOnOpen('別の本', getIndex);
-    expect(hubCalls()).toEqual([]);
+    expect(hubCalls().map(([url]) => String(url))).toEqual([
+      expect.stringContaining('/v1/community/work?')
+    ]);
+    expect(matchOffer$.getValue()).toBeNull();
+    fetchMock.mockClear();
 
     await markBookOnOpen('本', getIndex);
     expect(hubCalls()).toHaveLength(1);
@@ -223,5 +242,99 @@ describe('community in the book', () => {
     expect(feed.map(({ root, replies }) => [root.id, replies.map((one) => one.id)])).toEqual([
       ['a', ['b']]
     ]);
+  });
+
+  it('asks to match only signed in with social on, unmatched, with a suggestion, once', () => {
+    const suggested = { work: null, suggestion: 'anilist:7' };
+
+    communityMatchAsked$.next({ 答えた本: 1 });
+    // Signed out
+    expect(shouldOfferMatch('本', suggested)).toBe(false);
+    socialSession$.next({ token: 't', me: { id: 'a', share: {} } } as never);
+    expect(shouldOfferMatch('本', suggested)).toBe(true);
+    // Matched, no suggestion, answered before
+    expect(shouldOfferMatch('本', { work: 'anilist:7', suggestion: null })).toBe(false);
+    expect(shouldOfferMatch('本', { work: null, suggestion: null })).toBe(false);
+    expect(shouldOfferMatch('答えた本', suggested)).toBe(false);
+    // Social off
+    enabledPlugins$.next([]);
+    expect(shouldOfferMatch('本', suggested)).toBe(false);
+    socialSession$.next(null);
+    communityMatchAsked$.next({});
+  });
+
+  it('offers the suggestion on open and Match marks the lines', async () => {
+    const title = '吾輩は猫である';
+    const first = (await lineHash(bookLines(paragraphs)[1].text))!;
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/v1/community/work')) {
+        return new Response(JSON.stringify(init?.method === 'PUT' ? {} : { work: 'anilist:7' }));
+      }
+      return new Response(
+        JSON.stringify({
+          threads: [{ prefix: first.slice(0, 8), posts: 1, spoiler: false }],
+          next: null
+        })
+      );
+    });
+    const getIndex = async () => ({ paragraphs }) as unknown as SearchIndex;
+
+    vi.stubGlobal('fetch', fetchMock);
+    socialSession$.next({ token: 't', me: { id: 'a', share: {} } } as never);
+    await markBookOnOpen(title, getIndex);
+
+    const offer = matchOffer$.getValue()!;
+
+    expect(offer).toMatchObject({ title, work: 'anilist:7', name: 'Wagahai wa Neko de Aru' });
+    await answerMatch(offer, true);
+    expect(matchOffer$.getValue()).toBeNull();
+    expect(communityWorks$.getValue()[title]).toBe('anilist:7');
+    expect(communityMatchAsked$.getValue()[title]).toBeGreaterThan(0);
+    expect(communityMarks$.getValue()).toMatchObject({ title, marks: [{ hash: first }] });
+
+    // Answered: the next open of another unmatched copy asks the hub nothing for it.
+    communityWorks$.next({});
+    fetchMock.mockClear();
+    await markBookOnOpen(title, getIndex);
+    expect(fetchMock).not.toHaveBeenCalled();
+    socialSession$.next(null);
+    communityMatchAsked$.next({});
+  });
+
+  it('keeps marks per book in this browser, without the lines, and restores them on open', () => {
+    const mark = { prefix: 'abcd1234', hash: 'abcd1234'.repeat(4), posts: 2, spoiler: false };
+
+    communityMarksCache$.next({});
+    communityMarks$.next({
+      title: '本',
+      marks: [{ ...mark, index: 1, text: '吾輩は猫である。', start: 2, end: 10 }]
+    });
+    expect(communityMarksCache$.getValue()['本'].marks).toEqual([
+      { ...mark, index: 1, text: '', start: 2, end: 10 }
+    ]);
+
+    // Another book opened, then this one again: its bubbles at once.
+    communityMarks$.next({ title: '別の本', marks: [] });
+    expect(Object.keys(communityMarksCache$.getValue())).toEqual(['本']);
+    restoreBookMarks('本');
+    expect(communityMarks$.getValue()).toMatchObject({ title: '本', marks: [{ start: 2 }] });
+
+    // Social off: nothing shown from the cache.
+    communityMarks$.next({ title: '', marks: [] });
+    enabledPlugins$.next([]);
+    restoreBookMarks('本');
+    expect(communityMarks$.getValue().title).toBe('');
+
+    // At most 30 books, the latest kept.
+    enabledPlugins$.next(['social']);
+    for (let i = 0; i < 31; i++) {
+      communityMarks$.next({
+        title: `b${i}`,
+        marks: [{ ...mark, index: 0, text: '', start: 0, end: 1 }]
+      });
+    }
+    expect(Object.keys(communityMarksCache$.getValue())).toHaveLength(30);
+    expect(communityMarksCache$.getValue()['b30']).toBeDefined();
+    communityMarksCache$.next({});
   });
 });

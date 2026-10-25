@@ -264,6 +264,12 @@ export const communityWorks$ = writableObjectLocalStorageSubject<Record<string, 
   {}
 );
 
+/** Books whose match toast the reader answered, by title (when): the toast never asks again */
+export const communityMatchAsked$ = writableObjectLocalStorageSubject<Record<string, number>>()(
+  'communityMatchAsked',
+  {}
+);
+
 function remember(title: string, work: string) {
   communityWorks$.next({ ...communityWorks$.getValue(), [title]: work });
 }

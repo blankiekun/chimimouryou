@@ -45,7 +45,7 @@ import { logger } from '$lib/data/logger';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 import { audiobookshelfToken$ } from '$lib/data/audiobookshelf';
 import { socialSession$ } from '$lib/data/social-account';
-import { communityWorks$ } from '$lib/data/community';
+import { communityMatchAsked$, communityWorks$ } from '$lib/data/community';
 import {
   autoBookmark$,
   autoBookmarkTime$,
@@ -131,6 +131,8 @@ const sharedSettings: Record<string, Store> = {
   socialSession: socialSession$,
   // Books matched to their Community work: the other devices mark their lines on open too.
   communityWorks: communityWorks$,
+  // Books whose match toast was answered: other devices don't ask again.
+  communityMatchAsked: communityMatchAsked$,
   homeBookTitles: homeBookTitles$,
   homeRemovedTitles: homeRemovedTitles$,
   // The cutoff and its length follow from the results.
@@ -196,6 +198,7 @@ const entrySettings: Record<
   customAppThemes: asRecord,
   mangaSeriesModes: asRecord,
   communityWorks: asRecord,
+  communityMatchAsked: asRecord,
   askAiPresets: {
     toMap: (presets: { id: string }[] = []) =>
       Object.fromEntries(presets.map((preset) => [preset.id, preset])),

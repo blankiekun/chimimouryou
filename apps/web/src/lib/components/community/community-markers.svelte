@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { communityMarks$, communityMarkTap$ } from '$lib/data/community-book';
+  import { communityMarks$, communityMarkTap$, restoreBookMarks } from '$lib/data/community-book';
   import { PAGE_CHANGE } from '$lib/data/events';
   import { setCssHighlight } from '$lib/functions/book-text/css-highlights';
   import { getTextSegments, rangeForCounts } from '$lib/functions/book-text/text-positions';
@@ -34,7 +34,11 @@
       schedule(true);
     }
   });
+  // Reflows without a scroll (the side panel opening or closing, font or margin changes): the text
+  // moved under the bubbles, so they are placed again.
+  const resized = new ResizeObserver(() => schedule());
 
+  $: restoreBookMarks(title);
   $: marks = $communityMarks$.title === title ? $communityMarks$.marks : [];
   $: if (marks || vertical) schedule(true);
 
@@ -60,7 +64,11 @@
 
     if (content !== observed) {
       observer.disconnect();
-      if (content) observer.observe(content, { childList: true, subtree: true });
+      resized.disconnect();
+      if (content) {
+        observer.observe(content, { childList: true, subtree: true });
+        [content, ...content.children].forEach((element) => resized.observe(element));
+      }
       observed = content;
     }
     if (!content || !marks.length) {
@@ -102,8 +110,13 @@
   function place() {
     const width = window.innerWidth;
     const height = window.innerHeight;
+    // The book's visible box: paginated text narrowed beside the panel lays its next page under it.
+    const box = observed?.getBoundingClientRect() ?? new DOMRect(0, 0, width, height);
     const onScreen = (rect: DOMRect) =>
-      rect.right > 0 && rect.left < width && rect.bottom > 0 && rect.top < height;
+      rect.right > Math.max(0, box.left) &&
+      rect.left < Math.min(width, box.right) &&
+      rect.bottom > Math.max(0, box.top) &&
+      rect.top < Math.min(height, box.bottom);
     const nextTags: typeof tags = [];
     const nextRules: typeof rules = [];
 
@@ -154,6 +167,7 @@
     cancelAnimationFrame(frame);
     clearTimeout(timer);
     observer.disconnect();
+    resized.disconnect();
     document.removeEventListener('scroll', onScroll, { capture: true });
     document.removeEventListener(PAGE_CHANGE, onScroll);
     window.removeEventListener('resize', onScroll);
