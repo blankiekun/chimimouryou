@@ -108,7 +108,7 @@ describe('Discord status relay', () => {
       activity,
       kind: 'book',
       updatedAt: Date.now() / 1000,
-      expiresAt: Date.now() / 1000 + 300,
+      expiresAt: Date.now() / 1000 + 600,
       next: 30
     });
     // One update per 20 s.
@@ -122,7 +122,7 @@ describe('Discord status relay', () => {
     expect((await call('PUT', '/v1/presence', { kind: 'x', activity }, aki.token)).status).toBe(
       400
     );
-    vi.advanceTimersByTime(300_000);
+    vi.advanceTimersByTime(600_000);
     expect((await current(pk)).status).toBe(204);
 
     vi.advanceTimersByTime(20_000);
@@ -271,7 +271,7 @@ describe('Discord status relay', () => {
     expect(await seen('')).toBeUndefined();
     expect(stored.size).toBe(1);
     expect(await stored.values().next().value!.clone().text()).not.toContain('presence');
-    vi.advanceTimersByTime(300_000);
+    vi.advanceTimersByTime(600_000);
     expect(await seen(ren.token)).toBeUndefined();
   });
 
@@ -310,10 +310,10 @@ describe('Discord status relay', () => {
 
     await call('POST', '/v1/presence/codes', undefined, aki.token);
     await call('PUT', '/v1/presence', { kind: 'book', activity }, aki.token);
-    vi.advanceTimersByTime(299_000);
+    vi.advanceTimersByTime(599_000);
     await hub.scheduled({ cron: TRANSFER_CRON }, env);
     expect(rows('presence')).toHaveLength(1);
-    vi.advanceTimersByTime(301_000);
+    vi.advanceTimersByTime(1_000);
     await hub.scheduled({ cron: TRANSFER_CRON }, env);
     // The activity goes at once; the times (for the wait hint) after an hour.
     expect(rows('presence')).toEqual([expect.objectContaining({ activity: '{}', kind: '' })]);
@@ -359,27 +359,51 @@ describe('Discord status relay', () => {
     expect([revoked.status, revoked.headers.get('X-Next')]).toEqual([401, '300']);
   });
 
-  it('skips the write for an unchanged status with more than 2 minutes left', async () => {
+  it('skips the write for an unchanged status and ttl with more than 2 minutes left', async () => {
     const aki = await signUp('aki');
     const put = (body: unknown) => call('PUT', '/v1/presence', body, aki.token);
-    const updated = () => db.prepare('SELECT updated_at FROM presence').get()!.updated_at;
+    const row = () =>
+      db.prepare('SELECT updated_at, expires_at - updated_at AS ttl FROM presence').get();
     const start = Date.now() / 1000;
 
-    await put({ kind: 'book', activity });
+    await put({ kind: 'book', activity, ttl: 5 });
+    expect(row()).toEqual({ updated_at: start, ttl: 300 });
     vi.advanceTimersByTime(60_000);
     // 4 minutes left: skipped (unknown fields are dropped first, so this is unchanged too).
-    expect((await put({ kind: 'book', activity: { ...activity, extra: 1 } })).status).toBe(204);
-    expect(updated()).toBe(start);
-    vi.advanceTimersByTime(121_000);
-    // Under 2 minutes left: written.
-    expect((await put({ kind: 'book', activity })).status).toBe(204);
-    expect(updated()).toBe(start + 181);
-    vi.advanceTimersByTime(60_000);
-    expect((await put({ kind: 'book', activity })).status).toBe(204);
-    expect(updated()).toBe(start + 181);
+    expect((await put({ kind: 'book', activity: { ...activity, extra: 1 }, ttl: 5 })).status).toBe(
+      204
+    );
+    expect(row()).toEqual({ updated_at: start, ttl: 300 });
+    // Another ttl is written.
+    expect((await put({ kind: 'book', activity, ttl: 12 })).status).toBe(204);
+    expect(row()).toEqual({ updated_at: start + 60, ttl: 720 });
+    vi.advanceTimersByTime(599_000);
+    // 2 minutes and 1 s left: skipped; at 2 minutes: written.
+    await put({ kind: 'book', activity, ttl: 12 });
+    expect(row()!.updated_at).toBe(start + 60);
+    vi.advanceTimersByTime(1_000);
+    await put({ kind: 'book', activity, ttl: 12 });
+    expect(row()!.updated_at).toBe(start + 660);
     // A change is written (past the 20 s gap).
-    expect((await put({ kind: 'book', activity: { ...activity, state: '43%' } })).status).toBe(204);
-    expect(updated()).toBe(start + 241);
+    vi.advanceTimersByTime(20_000);
+    await put({ kind: 'book', activity: { ...activity, state: '43%' }, ttl: 12 });
+    expect(row()!.updated_at).toBe(start + 680);
+  });
+
+  it('clamps ttl to 5-30 minutes, 10 by default', async () => {
+    const aki = await signUp('aki');
+    const ttlOf = async (ttl: unknown) => {
+      vi.advanceTimersByTime(20_000);
+      await call('PUT', '/v1/presence', { kind: 'book', activity, ttl }, aki.token);
+      return db.prepare('SELECT expires_at - updated_at AS t FROM presence').get()!.t;
+    };
+
+    expect(await ttlOf(undefined)).toBe(600);
+    expect(await ttlOf(1)).toBe(300);
+    expect(await ttlOf(99)).toBe(1800);
+    expect(await ttlOf(7.4)).toBe(420);
+    expect(await ttlOf('20')).toBe(600);
+    expect(await ttlOf(-Infinity)).toBe(600);
   });
 
   it('clamps an activity like the add-on', () => {

@@ -30,8 +30,10 @@ import {
 } from './hub';
 import { DAY, HOUR, MINUTE } from './time';
 
-/** A status shows this long after its last update */
-export const PRESENCE_TTL = 5 * MINUTE;
+/** A status shows `ttl` minutes after its last update (the reader's "Away after"), 5-30, default 10 */
+export const TTL_DEFAULT = 10;
+const TTL_MIN = 5;
+const TTL_MAX = 30;
 /** Seconds between two PUT presence */
 export const PRESENCE_GAP = 20;
 export const CODE_TTL = 10 * MINUTE;
@@ -41,7 +43,7 @@ const MAX_CODES = 5;
 export const MAX_PAIR_FAILURES = 10;
 /** last_seen is a daily write at most (the add-on polls every 30 s) */
 const SEEN_EVERY = DAY;
-/** An unchanged PUT presence is written only once less than this is left of PRESENCE_TTL */
+/** An unchanged PUT presence is written only once less than this is left of its ttl */
 const REFRESH_LEFT = 2 * MINUTE;
 /** Expired rows keep only their times for this long, so `next` can slow an idle add-on down */
 const IDLE_KEPT = HOUR;
@@ -57,10 +59,18 @@ export const revokePresenceSql = [
   'DELETE FROM presence WHERE user = ?1'
 ];
 
-/** The add-on's wait hint: 30 s while a status was seen in the last 10 minutes, 2 min within the hour, else 5 */
-export function nextPoll(updatedAt: number | undefined, time: number) {
-  if (updatedAt === undefined) return 300;
-  return updatedAt > time - 10 * MINUTE ? 30 : updatedAt > time - HOUR ? 120 : 300;
+/** The add-on's wait hint from when the last status ended: 30 s within 10 minutes, 2 min within the hour, else 5 */
+export function nextPoll(endedAt: number | undefined, time: number) {
+  if (endedAt === undefined) return 300;
+  return endedAt > time - 10 * MINUTE ? 30 : endedAt > time - HOUR ? 120 : 300;
+}
+
+/** `ttl` in minutes, clamped to 5-30; anything but a number is the default */
+export function clampTtl(value: unknown) {
+  const minutes =
+    typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : TTL_DEFAULT;
+
+  return Math.min(TTL_MAX, Math.max(TTL_MIN, minutes)) * MINUTE;
 }
 
 // The activity goes once expired; the row (times only) an hour later.
@@ -68,7 +78,7 @@ export const expirePresenceSql = (env: Env) => [
   env.DB.prepare(
     `UPDATE presence SET activity = '{}', kind = '' WHERE expires_at <= ?1 AND kind != ''`
   ).bind(now()),
-  env.DB.prepare('DELETE FROM presence WHERE updated_at <= ?1').bind(now() - IDLE_KEPT),
+  env.DB.prepare('DELETE FROM presence WHERE expires_at <= ?1').bind(now() - IDLE_KEPT),
   env.DB.prepare('DELETE FROM presence_codes WHERE expires_at <= ?1').bind(now())
 ];
 
@@ -250,10 +260,11 @@ export async function currentPresence(request: Request, env: Env) {
   )
     .bind(key.user)
     .first<{ activity: string; kind: string; updated_at: number; expires_at: number }>();
-  const next = nextPoll(row?.updated_at, time);
-
   if (!row || row.expires_at <= time || !row.kind) {
-    return empty({ 'Cache-Control': 'no-store', 'X-Next': String(next) });
+    return empty({
+      'Cache-Control': 'no-store',
+      'X-Next': String(nextPoll(row?.expires_at, time))
+    });
   }
 
   const response = json({
@@ -261,7 +272,7 @@ export async function currentPresence(request: Request, env: Env) {
     kind: row.kind,
     updatedAt: row.updated_at,
     expiresAt: row.expires_at,
-    next
+    next: 30
   });
 
   response.headers.set('Cache-Control', 'no-store');
@@ -297,15 +308,21 @@ export async function presenceRoute(request: Request, env: Env, user: UserRow, p
       throw new HttpError(413, 'size');
     }
 
+    const ttl = clampTtl(body.ttl);
     const time = now();
     const old = await env.DB.prepare(
-      'SELECT activity, kind, expires_at FROM presence WHERE user = ?1'
+      'SELECT activity, kind, updated_at, expires_at FROM presence WHERE user = ?1'
     )
       .bind(user.id)
-      .first<{ activity: string; kind: string; expires_at: number }>();
+      .first<{ activity: string; kind: string; updated_at: number; expires_at: number }>();
 
-    // A keep-alive with nothing new: no D1 write until the status is near its end.
-    if (old?.activity === activity && old.kind === kind && old.expires_at > time + REFRESH_LEFT) {
+    // Nothing new (activity, kind and ttl): no D1 write until the status is near its end.
+    if (
+      old?.activity === activity &&
+      old.kind === kind &&
+      old.expires_at - old.updated_at === ttl &&
+      old.expires_at > time + REFRESH_LEFT
+    ) {
       return empty();
     }
 
@@ -314,7 +331,7 @@ export async function presenceRoute(request: Request, env: Env, user: UserRow, p
        ON CONFLICT (user) DO UPDATE SET activity = ?2, kind = ?3, updated_at = ?4, expires_at = ?5
        WHERE presence.updated_at <= ?4 - ?6`
     )
-      .bind(user.id, activity, kind, time, time + PRESENCE_TTL, PRESENCE_GAP)
+      .bind(user.id, activity, kind, time, time + ttl, PRESENCE_GAP)
       .run();
 
     if (!meta.changes) throw new HttpError(429, 'soon');

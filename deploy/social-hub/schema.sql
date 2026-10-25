@@ -209,7 +209,7 @@ CREATE TABLE IF NOT EXISTS work_votes (
 CREATE INDEX IF NOT EXISTS work_votes_user ON work_votes (user);
 
 -- Discord status relay (src/presence.ts). presence: the reader's rendered activity (JSON, <= 4 KB),
--- shown until expires_at (5 minutes after the last update). presence_keys: what a paired Anki
+-- shown until expires_at (ttl minutes, 5-30, after the last update). presence_keys: what a paired Anki
 -- add-on reads it with, by the key's sha256 only. presence_codes: pairing codes by their sha256,
 -- 10 minutes, used once. The 10-minute cron blanks expired statuses (activity '{}', kind '', times
 -- kept an hour for the add-on's wait hint) and deletes expired codes.

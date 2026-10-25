@@ -1892,7 +1892,7 @@ are public (readable without an account), with the book's title and cover and yo
 reading rank and words known; never how far you have read. Deleting a post or your account deletes it
 (a post that has replies stays as an empty placeholder).</p>
 <p>Discord status, if you use it: the status your other devices last sent (the finished text and
-links), kept 5 minutes after its last update (when it was sent, an hour); with "Show on my profile" on, your friends see it
+links), kept 5 to 30 minutes after its last update (your Away after setting; when it was sent, an hour); with "Show on my profile" on, your friends see it
 there. Paired computers are kept as a name you choose, when they were added and last seen; their
 keys and pairing codes only as hashes. Signing out everywhere, changing your password or deleting
 your account removes them.</p>

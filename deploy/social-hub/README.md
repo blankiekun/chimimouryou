@@ -103,8 +103,9 @@ plus one per 3 s while the friend hasn't answered yet (at most ~200 for one left
 
 Discord status relay (`src/presence.ts`; times in Unix seconds): the reader's other devices send the
 rendered activity, the Anki add-on on their computer reads it. `PUT presence` (`{activity, kind:
-book|manga|vn|idle}`, 204; clamped and stripped of unknown fields like the add-on's `activity.py`, at most
-4 KB, kept 5 minutes; one per 20 s, else 429; an unchanged one is not written while more than 2 of its 5
+book|manga|vn|idle, ttl}`, 204; clamped and stripped of unknown fields like the add-on's `activity.py`, at
+most 4 KB, kept `ttl` minutes (the reader's Away after, 5-30, default 10; clients send on a change, no
+keep-alive); one per 20 s, else 429; the same activity and ttl are not written again while more than 2
 minutes are left); `DELETE presence` (ends it now); `POST presence/keys` (`{name}`, at most
 40 characters → `{id, key}`: `pk_` + 32 random bytes, shown once, only its sha256 kept; 10 per account,
 409 past that); `GET presence/keys` (`[{id, name, createdAt, lastSeen}]`); `DELETE presence/keys/:id`;
