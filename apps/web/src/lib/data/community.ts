@@ -167,11 +167,10 @@ export function sentences(text: string) {
 export async function lineIndex(lines: string[]) {
   const last = new Map<string, number>();
 
-  for (const [index, line] of lines.entries()) {
-    const hash = await lineHash(line);
-
+  // All at once: one await per line takes seconds on a long book.
+  (await Promise.all(lines.map(lineHash))).forEach((hash, index) => {
     if (hash) last.set(hash, index);
-  }
+  });
 
   const byPrefix = new Map<string, { hash: string; index: number }[]>();
 

@@ -27,20 +27,29 @@
   let timer: ReturnType<typeof setTimeout> | undefined;
   let observed: Element | null = null;
 
-  const observer = new MutationObserver(() => schedule(true));
+  // A rebuild only when the text marked went away (paginated mode swaps sections); continuous
+  // mode holds the whole book and changes inside it all the time.
+  const observer = new MutationObserver(() => {
+    if (!ranges.length || ranges.some(({ range }) => !range.startContainer.isConnected)) {
+      schedule(true);
+    }
+  });
 
   $: marks = $communityMarks$.title === title ? $communityMarks$.marks : [];
   $: if (marks || vertical) schedule(true);
 
   /**
-   * Ranges again (200 ms after the marks or the rendered text last changed, as for highlights:
-   * continuous mode holds the whole book); on scrolls only the positions, once a frame.
+   * Ranges again at most every 200 ms after the marks or the rendered text changed (a throttle,
+   * not a debounce: continuous mode's text changes often enough to starve one); on scrolls only
+   * the positions, once a frame.
    */
   function schedule(rebuild = false) {
     cancelAnimationFrame(frame);
     if (rebuild) {
-      clearTimeout(timer);
-      timer = setTimeout(build, 200);
+      timer ??= setTimeout(() => {
+        timer = undefined;
+        build();
+      }, 200);
     } else {
       frame = requestAnimationFrame(place);
     }
@@ -85,25 +94,41 @@
     const height = window.innerHeight;
     const onScreen = (rect: DOMRect) =>
       rect.right > 0 && rect.left < width && rect.bottom > 0 && rect.top < height;
+    const nextTags: typeof tags = [];
+    const nextRules: typeof rules = [];
 
-    tags = [];
-    rules = [];
     ranges.forEach(({ hash, posts, range }) => {
       const rects = [...range.getClientRects()].filter((rect) => rect.width && rect.height);
       const first = rects[0];
 
       if (!first || !rects.some(onScreen)) return;
-      tags.push(
-        vertical
-          ? { hash, posts, x: first.left + first.width / 2, y: first.top - 18 }
-          : { hash, posts, x: first.left - 22, y: first.top + first.height / 2 }
-      );
+
+      // In the margin before the paragraph, so a line starting mid-paragraph covers no text.
+      const block = range.startContainer.parentElement
+        ?.closest('p, div, li, blockquote, h1, h2, h3, h4, h5, h6')
+        ?.getBoundingClientRect();
+
+      const tag = vertical
+        ? { hash, posts, x: first.left + first.width / 2, y: (block?.top ?? first.top) - 18 }
+        : { hash, posts, x: (block?.left ?? first.left) - 22, y: first.top + first.height / 2 };
+
+      // Lines sharing a column or a row: their tags line up outwards instead of overlapping.
+      while (nextTags.some((other) => Math.hypot(other.x - tag.x, other.y - tag.y) < 20)) {
+        if (vertical) tag.y -= 24;
+        else tag.x -= 24;
+      }
+      nextTags.push(tag);
       if (vertical) {
-        rects.forEach((rect) => rules.push({ x: rect.left - 3, y: rect.top, height: rect.height }));
+        rects
+          .filter(onScreen)
+          .forEach((rect) =>
+            nextRules.push({ x: rect.left - 3, y: rect.top, height: rect.height })
+          );
       }
     });
-    tags = [...tags];
-    rules = [...rules];
+    // Only real changes reach the DOM.
+    if (JSON.stringify(nextTags) !== JSON.stringify(tags)) tags = nextTags;
+    if (JSON.stringify(nextRules) !== JSON.stringify(rules)) rules = nextRules;
   }
 
   const onScroll = () => schedule();
@@ -125,42 +150,53 @@
   });
 </script>
 
-{#each rules as rule, i (i)}
-  <span
-    class="community-rule"
-    style:left="{rule.x}px"
-    style:top="{rule.y}px"
-    style:height="{rule.height}px"
-    aria-hidden="true"
-  />
-{/each}
-{#each tags as tag (tag.hash)}
-  <button
-    type="button"
-    class="community-tag writing-horizontal-tb"
-    style:left="{tag.x}px"
-    style:top="{tag.y}px"
-    title={$t$('community.markerTitle', { count: tag.posts })}
-    aria-label={$t$('community.markerTitle', { count: tag.posts })}
-    on:click={() => {
-      communityMarkTap$.next(tag.hash);
-      dispatch('open');
-    }}>{tag.posts}</button
-  >
-{/each}
+<!-- One clipped layer: nothing drawn here can add to the page's scroll size. -->
+<div class="community-layer">
+  {#each rules as rule, i (i)}
+    <span
+      class="community-rule"
+      style:left="{rule.x}px"
+      style:top="{rule.y}px"
+      style:height="{rule.height}px"
+      aria-hidden="true"
+    />
+  {/each}
+  {#each tags as tag (tag.hash)}
+    <button
+      type="button"
+      class="community-tag writing-horizontal-tb"
+      style:left="{tag.x}px"
+      style:top="{tag.y}px"
+      title={$t$('community.markerTitle', { count: tag.posts })}
+      aria-label={$t$('community.markerTitle', { count: tag.posts })}
+      on:click={() => {
+        communityMarkTap$.next(tag.hash);
+        dispatch('open');
+      }}>{tag.posts}</button
+    >
+  {/each}
+</div>
 
 <style>
-  .community-rule {
+  .community-layer {
     position: fixed;
-    z-index: 10;
+    z-index: 11;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    contain: strict;
+  }
+
+  .community-rule {
+    position: absolute;
     border-left: 2px dotted var(--accent-color);
     pointer-events: none;
   }
 
   /* A 24px square drawn on a 40px tap target */
   .community-tag {
-    position: fixed;
-    z-index: 11;
+    position: absolute;
+    pointer-events: auto;
     display: inline-flex;
     width: 2.5rem;
     height: 2.5rem;
