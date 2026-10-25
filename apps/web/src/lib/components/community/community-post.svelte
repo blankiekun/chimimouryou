@@ -26,6 +26,8 @@
    * post's text stays blurred until its own Show spoiler.
    */
   export let post: CommunityPost;
+  /** Off in a line's list of feed posts, where "Reply →" opens the post's discussion */
+  export let replyable = true;
 
   const dispatch = createEventDispatcher<{
     reply: CommunityPost;
@@ -238,12 +240,14 @@
               >{$t$('community.helpfulCount', { count: post.helpful })}</span
             >
           {/if}
-          <button
-            type="button"
-            class="app-button-quiet"
-            on:click={() => (signedIn ? dispatch('reply', post) : dispatch('signUp'))}
-            >{$t$('community.reply')}</button
-          >
+          {#if replyable}
+            <button
+              type="button"
+              class="app-button-quiet"
+              on:click={() => (signedIn ? dispatch('reply', post) : dispatch('signUp'))}
+              >{$t$('community.reply')}</button
+            >
+          {/if}
         </div>
       {/if}
       {#if error}<p class="post-error" role="alert">{error}</p>{/if}

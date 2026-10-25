@@ -241,6 +241,7 @@
               <div class="thread-feed-post">
                 <CommunityPost
                   post={group.root}
+                  replyable={false}
                   on:show={() => (revealed ||= group.root === root)}
                   on:reply={({ detail }) => reply(detail)}
                   on:changed={load}

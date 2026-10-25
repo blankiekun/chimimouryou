@@ -160,15 +160,16 @@
       }}
     />
   {:else if open}
-    <CommunityThread
-      {work}
-      line={open}
-      bookTitle={title}
-      {getIndex}
-      backLabel={$t$('nav.community')}
-      goToLine={openLine ? () => openLine && dispatch('jump', openLine.start) : undefined}
-      on:back={() => communityMarkTap$.next('')}
-    />
+    <!-- Keyed: the thread loads on mount, so another bubble's tap needs a fresh one -->
+    {#key open}<CommunityThread
+        {work}
+        line={open}
+        bookTitle={title}
+        {getIndex}
+        backLabel={$t$('nav.community')}
+        goToLine={openLine ? () => openLine && dispatch('jump', openLine.start) : undefined}
+        on:back={() => communityMarkTap$.next('')}
+      />{/key}
   {:else if !rows.length}
     <p class="tab-text">{$t$('community.empty')}</p>
     <p class="tab-quiet">{$t$('community.emptyHint')}</p>
