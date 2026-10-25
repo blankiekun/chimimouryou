@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CommunityComposer from '$lib/components/community/community-composer.svelte';
   import CommunityPost from '$lib/components/community/community-post.svelte';
   import CommunitySignup from '$lib/components/community/community-signup.svelte';
   import CommunityWork from '$lib/components/community/community-work.svelte';
@@ -18,6 +19,7 @@
     splitThread
   } from '$lib/data/community-book';
   import { socialSession$ } from '$lib/data/social-account';
+  import type { SearchIndex } from '$lib/functions/book-text/book-search';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher, onMount } from 'svelte';
 
@@ -26,7 +28,7 @@
    * the line's own comments ("This line only") with their replies, and the feed posts on it, each
    * opening its own discussion (the post and its replies). A reply box (with its own Spoiler mark)
    * at the end. A spoiler-marked post stays blurred until its Show spoiler; the line's page with it
-   * while the shown root is one.
+   * while the shown root is one. Post on this line opens the composer on the line (no selection).
    */
   export let work: string;
   export let line: string;
@@ -35,6 +37,9 @@
   /** Go to line: the host opens the book there (a link otherwise) */
   export let goToLine: (() => void) | undefined = undefined;
   export let backLabel: string;
+  /** The open book (the reader panel): a new post's cover and markers */
+  export let bookTitle = '';
+  export let getIndex: (() => Promise<SearchIndex>) | undefined = undefined;
 
   const dispatch = createEventDispatcher<{ back: void }>();
 
@@ -49,6 +54,8 @@
   let signUp = false;
   let copied = false;
   let replyBox: HTMLTextAreaElement;
+  /** Post on this line: the composer in place of the posts */
+  let composing = false;
 
   let focus = post;
   $: parts = thread ? splitThread(thread.posts) : undefined;
@@ -142,6 +149,14 @@
     <button type="button" class="app-button thread-retry" on:click={load}
       >{$t$('community.tryAgain')}</button
     >
+  {:else if thread && context && composing}
+    <CommunityComposer
+      {thread}
+      {bookTitle}
+      {getIndex}
+      on:posted={load}
+      on:close={() => (composing = false)}
+    />
   {:else if thread && context}
     <CommunityWork title={thread.title} vol={thread.vol} cover={thread.cover} />
     <figure class="thread-context">
@@ -165,6 +180,14 @@
         >
       </figcaption>
     </figure>
+    {#if thread.quote && !focused}
+      <button
+        type="button"
+        class="app-button thread-new"
+        on:click={() => ($socialSession$ ? (composing = true) : (signUp = true))}
+        >{$t$('community.postOnLine')}</button
+      >
+    {/if}
 
     {#if focused}
       <div class="thread-posts">
@@ -323,6 +346,10 @@
     display: flex;
     gap: 1.25rem;
     margin-top: 0.5rem;
+  }
+
+  .thread-new {
+    align-self: flex-start;
   }
 
   .thread-posts {

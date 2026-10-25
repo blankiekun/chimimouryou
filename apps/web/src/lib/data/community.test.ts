@@ -14,6 +14,7 @@ import {
   contextLength,
   lineHash,
   lineIndex,
+  occurrenceFor,
   occurrenceOf,
   loadFeed,
   postOnLine,
@@ -57,6 +58,13 @@ describe('community', () => {
       expect(await lineHash(line, occurrence)).toBe(hash);
     }
     expect(await lineHash('「はい。」')).toBeNull();
+  });
+
+  it("finds which copy of a thread's line to post on", async () => {
+    const line = '繰り返す文章です。';
+
+    expect(await occurrenceFor(line, (await lineHash(line, 3))!)).toBe(3);
+    expect(await occurrenceFor('「はい。」', 'x')).toBeNull();
   });
 
   it('splits text into sentences with their closing brackets', () => {

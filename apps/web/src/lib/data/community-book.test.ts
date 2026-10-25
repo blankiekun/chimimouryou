@@ -39,6 +39,7 @@ import {
   restoreBookMarks,
   shouldOfferMatch,
   splitContext,
+  notePath,
   splitThread,
   unseenNotes
 } from '$lib/data/community-book';
@@ -129,6 +130,17 @@ describe('community in the book', () => {
     expect(groups).toEqual([
       expect.objectContaining({ parent: 'p1', count: 3, at: 30, names: ['Mio', 'Ren'] })
     ]);
+  });
+
+  it("opens a reply's feed post, or a line comment's line", () => {
+    const group = { parent: 'p1', work: 'anilist:1', line: 'h', title: '', vol: '', cover: null };
+    const open = (inFeed?: boolean) =>
+      new URL(notePath({ ...group, names: [], count: 1, at: 1, inFeed }), 'http://x').searchParams;
+
+    expect(open(true).get('post')).toBe('p1');
+    expect(open().get('post')).toBe('p1');
+    expect(open(false).get('post')).toBeNull();
+    expect(open(false).get('line')).toBe('h');
   });
 
   it('sends line links nowhere with social off or a malformed line', async () => {

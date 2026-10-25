@@ -99,6 +99,8 @@ export interface VisibleThread extends ThreadSummary {
 export interface CommunityNote extends CommunityPost, CommunityWork {
   work: string;
   line: string;
+  /** Whether the post it answers is a feed post (false: "This line only"; older hubs leave it out) */
+  inFeed?: boolean;
 }
 
 export interface FeedPost extends CommunityPost, CommunityWork {
@@ -167,6 +169,17 @@ export function occurrenceOf(lines: string[], at: number) {
   const normal = normalizeLine(lines[at] ?? '');
 
   return lines.slice(0, at + 1).filter((line) => normalizeLine(line) === normal).length || 1;
+}
+
+/** Which copy of `quote` hashes to `hash` (a thread's line), null when none does (up to the hub's 9999) */
+export async function occurrenceFor(quote: string, hash: string) {
+  for (let occurrence = 1; occurrence <= 9999; occurrence++) {
+    const found = await lineHash(quote, occurrence);
+
+    if (!found) return null;
+    if (found === hash) return occurrence;
+  }
+  return null;
 }
 
 /** Every line's hash (lineHash), a repeated line's later copies with their own */

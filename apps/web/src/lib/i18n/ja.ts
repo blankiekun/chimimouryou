@@ -2289,6 +2289,7 @@ export const ja: Record<MessageKey, string> = {
   'community.tooManyLines': '投稿は20行までです。',
   'community.spoilerHint':
     '読者には、本のタイトルと表紙とともに、「ネタバレを表示」を押すまでぼかして表示されます。',
+  'community.postOnLine': 'この行に投稿',
   'community.lineComments': 'この行へのコメント',
   'community.feedPosts': 'コミュニティの投稿',
   'community.thisLine': 'この行',

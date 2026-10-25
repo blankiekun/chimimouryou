@@ -2276,6 +2276,7 @@ export const en = {
   'community.tooManyLines': 'Posts have at most 20 lines.',
   'community.spoilerHint':
     'Readers see it blurred, with the book’s title and cover, until they tap Show spoiler.',
+  'community.postOnLine': 'Post on this line',
   'community.lineComments': 'Comments on this line',
   'community.feedPosts': 'Community posts',
   'community.thisLine': 'This line',

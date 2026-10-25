@@ -1,11 +1,11 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import CommunityWork from '$lib/components/community/community-work.svelte';
-  import { markNotesSeen, threadPath, type NoteGroup } from '$lib/data/community-book';
+  import { markNotesSeen, notePath, type NoteGroup } from '$lib/data/community-book';
   import { relativeTime } from '$lib/data/social';
   import { t$, uiLanguage$ } from '$lib/i18n';
 
-  /** "3 replies to your post" (board 7): opens the thread and marks the replies seen */
+  /** "3 replies to your post" (board 7): opens the post (a line comment: its line) and marks the replies seen */
   export let group: NoteGroup;
 
   $: names =
@@ -18,7 +18,7 @@
 
   function open() {
     markNotesSeen(group.parent, group.at);
-    goto(threadPath(group.work, group.line, group.parent));
+    goto(notePath(group));
   }
 </script>
 

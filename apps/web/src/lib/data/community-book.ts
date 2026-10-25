@@ -438,7 +438,13 @@ export interface NoteGroup {
   names: string[];
   count: number;
   at: number;
+  /** false: the reader's post is a line comment ("This line only"); missing from older hubs */
+  inFeed?: boolean;
 }
+
+/** A note opens its post's discussion; a line comment's opens the line, where its replies are */
+export const notePath = (group: NoteGroup) =>
+  threadPath(group.work, group.line, group.inFeed === false ? undefined : group.parent);
 
 /** Unseen replies grouped by the reader's post, newest first */
 export function unseenNotes(notes: CommunityNote[], seen: Record<string, number>): NoteGroup[] {
@@ -467,7 +473,8 @@ export function unseenNotes(notes: CommunityNote[], seen: Record<string, number>
         cover: note.cover,
         names: name ? [name] : [],
         count: 1,
-        at: note.at
+        at: note.at,
+        inFeed: note.inFeed
       });
     }
   });
