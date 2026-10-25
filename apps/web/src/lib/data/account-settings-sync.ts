@@ -46,6 +46,7 @@ import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 import { audiobookshelfToken$ } from '$lib/data/audiobookshelf';
 import { socialSession$ } from '$lib/data/social-account';
 import { communityMatchAsked$, communityWorks$ } from '$lib/data/community';
+import { discordActivities$, discordOptions$ } from '$lib/data/discord-settings';
 import {
   autoBookmark$,
   autoBookmarkTime$,
@@ -143,7 +144,10 @@ const sharedSettings: Record<string, Store> = {
   askAiDefaultPreset: askAiDefaultPreset$,
   askAiReaderNote: askAiReaderNote$,
   ttsVoiceId: ttsVoiceId$,
-  ttsPlaybackRate: ttsPlaybackRate$
+  ttsPlaybackRate: ttsPlaybackRate$,
+  // Discord status: the activity templates (merged per activity) and its switches.
+  discordActivities: discordActivities$,
+  discordOptions: discordOptions$
 };
 
 /**
@@ -199,6 +203,7 @@ const entrySettings: Record<
   mangaSeriesModes: asRecord,
   communityWorks: asRecord,
   communityMatchAsked: asRecord,
+  discordActivities: asRecord,
   askAiPresets: {
     toMap: (presets: { id: string }[] = []) =>
       Object.fromEntries(presets.map((preset) => [preset.id, preset])),

@@ -276,4 +276,38 @@ describe('standalone edition', () => {
     expect(serverOrigin(' https://books.example:8443/x ')).toBe('https://books.example:8443');
     expect(() => serverOrigin('http://192.0.2.1')).toThrow(/HTTPS/);
   });
+
+  it('asks the Anki add-on nothing while the Discord plugin is off', async () => {
+    fetchMock.mockImplementation(async () => new Response(null, { status: 204 }));
+
+    const plugins = await import('$lib/plugins');
+    const hooks = await import('$lib/data/reader-hooks');
+    const discord = await import('$lib/data/discord');
+    const addonCalls = () =>
+      fetchMock.mock.calls.filter(([url]) => String(url).startsWith(discord.addonUrl));
+
+    // Off by default: reading, the library and the status line send nothing.
+    hooks.readingActivity({ kind: 'book', title: '本', position: 10, characters: 100 });
+    hooks.readingActivity({ kind: 'idle' });
+    await discord.checkConnection();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    plugins.setPluginEnabled('discord', true);
+    await discord.checkConnection();
+    expect(addonCalls()).toHaveLength(1);
+
+    // Switched off again: one clear for what it sent, then nothing.
+    hooks.readingActivity({ kind: 'book', title: '本', position: 10, characters: 100 });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    plugins.setPluginEnabled('discord', false);
+    const sent = addonCalls().length;
+
+    hooks.readingActivity({ kind: 'book', title: '本', position: 20, characters: 100 });
+    await discord.checkConnection();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(addonCalls()).toHaveLength(sent);
+    expect(addonCalls().at(-1)?.[1]?.method).toBe('DELETE');
+    discord.resetSender();
+  });
 });

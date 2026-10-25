@@ -160,7 +160,7 @@
   import { bookSentenceAudio, noteSentence } from '$lib/data/anki';
   import { enableExtrasSync } from '$lib/data/extras-sync';
   import { bookSyncSource } from '$lib/data/sync-files';
-  import { bookLeft, bookOpened, positionSettled } from '$lib/data/reader-hooks';
+  import { bookLeft, bookOpened, positionSettled, readingActivity } from '$lib/data/reader-hooks';
   import { bookWordForms, getWordMarks, selectionForm } from '$lib/data/word-marks';
   import type { PassageContext } from '$lib/data/ask-ai';
   import { featureParams } from '$lib/data/ai-connections';
@@ -1061,6 +1061,17 @@
     );
   }
 
+  // What is open, for the plugins (Discord status): each page turn and chapter.
+  $: if ($rawBookData$ && bookCharCount) {
+    readingActivity({
+      kind: 'book',
+      title: $rawBookData$.title,
+      position: exploredCharCount,
+      characters: bookCharCount,
+      sections: $sectionData$ ?? []
+    });
+  }
+
   // The plugins' work on an opened book (Community markers), once it rendered and the browser idles.
   let openedTitle = '';
   // A Community line link's jump waits for that run: earlier, the reader isn't ready or its
@@ -1080,6 +1091,7 @@
 
   onDestroy(() => {
     clearTimeout(readingWorkTimer);
+    readingActivity();
     const title = $rawBookData$?.title;
 
     if (title && exploredCharCount) {
