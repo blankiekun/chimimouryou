@@ -12,6 +12,9 @@
   export let blur = false;
   /** The quoted line: set in Japanese, a step larger */
   export let quote = false;
+  /** A quote's page around it (splitContext): the line stays bold, the page muted and smaller */
+  export let before = '';
+  export let after = '';
   /** Off where one Show spoiler serves several texts */
   export let button = true;
 
@@ -26,11 +29,13 @@
   <p
     class="community-text"
     class:community-text-quote={quote}
+    class:community-text-context={quote && !!(before || after)}
     class:community-text-blurred={hidden}
     aria-hidden={hidden || undefined}
     lang={quote ? 'ja' : undefined}
   >
-    {#if quote}{text}{:else}{#each mentionParts(text) as part, index (index)}{#if 'href' in part}<a
+    {#if quote}{before}<strong>{text}</strong
+      >{after}{:else}{#each mentionParts(text) as part, index (index)}{#if 'href' in part}<a
             class="community-mention"
             href={part.href}
             target="_blank"
@@ -62,6 +67,18 @@
   .community-text-quote {
     margin-top: 0;
     font-weight: 700;
+  }
+
+  .community-text-context {
+    color: var(--c-muted, var(--app-muted-fg));
+    font-size: var(--type-small);
+    font-weight: 400;
+    line-height: 1.7;
+  }
+
+  .community-text-context strong {
+    color: var(--c-ink, var(--font-color));
+    font-size: var(--type-body);
   }
 
   .community-mention {
