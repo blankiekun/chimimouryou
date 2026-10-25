@@ -43,14 +43,7 @@ export const rankTiers: RankTier[] = [
   { ja: '熟練者', characters: 600_000, days: 45, words: 6_000, difficulty: 3.0 },
   { ja: '英雄', characters: 1_500_000, days: 90, words: 10_000, difficulty: 3.3 },
   { ja: '勇者', characters: 4_000_000, days: 180, words: 15_000, difficulty: 3.6 },
-  {
-    ja: '魔王',
-   
-    characters: 10_000_000,
-    days: 300,
-    words: 20_000,
-    difficulty: 3.9
-  }
+  { ja: '魔王', characters: 10_000_000, days: 300, words: 20_000, difficulty: 3.9 }
 ];
 
 /** Characters a minute nobody reads faster than (fast readers' statistics show about 500). */
