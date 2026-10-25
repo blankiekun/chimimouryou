@@ -9,9 +9,9 @@
   /**
    * Lines with threads in the text (board 2, D3): a dotted green line (the CSS Highlight API's
    * underline in horizontal text; Chromium paints no highlight decoration in vertical text, so
-   * there a dotted rule is drawn left of the column) and a count tag in the margin, the tap target
-   * (taps on the text stay dictionary lookups). The book's DOM is never touched. Shown once the
-   * Community tab has listed the book's threads.
+   * there a dotted rule is drawn left of the column) and a chat bubble with the post count after
+   * the end of the paragraph holding the line, the tap target (taps on the text stay dictionary
+   * lookups). The book's DOM is never touched: everything is an overlay.
    */
   export let title: string;
   export let vertical: boolean;
@@ -20,7 +20,7 @@
 
   const dispatch = createEventDispatcher<{ open: void }>();
 
-  let ranges: { hash: string; posts: number; range: Range }[] = [];
+  let ranges: { hash: string; posts: number; range: Range; block: Range }[] = [];
   let tags: { hash: string; posts: number; x: number; y: number }[] = [];
   let rules: { x: number; y: number; height: number }[] = [];
   let frame = 0;
@@ -82,7 +82,17 @@
             base
           );
 
-          return range ? [{ hash: mark.hash, posts: mark.posts, range }] : [];
+          if (!range) return [];
+
+          // The paragraph holding the line's end (its box on this page: paginated text splits it)
+          const block = document.createRange();
+          const element = range.endContainer.parentElement?.closest(
+            'p, div, li, blockquote, h1, h2, h3, h4, h5, h6'
+          );
+
+          if (element && content.contains(element)) block.selectNodeContents(element);
+          else block.setStart(range.endContainer, range.endOffset);
+          return [{ hash: mark.hash, posts: mark.posts, range, block }];
         });
     }
     setCssHighlight('ttu-community', vertical ? [] : ranges.map((item) => item.range));
@@ -96,37 +106,25 @@
       rect.right > 0 && rect.left < width && rect.bottom > 0 && rect.top < height;
     const nextTags: typeof tags = [];
     const nextRules: typeof rules = [];
-    const contentTop = document.querySelector('.book-content')?.getBoundingClientRect().top ?? 0;
-    // Vertical tags stay clear of the reader bar while it shows.
-    const barBottom = document.querySelector('.reader-bar')?.getBoundingClientRect().bottom ?? 0;
 
-    ranges.forEach(({ hash, posts, range }) => {
+    ranges.forEach(({ hash, posts, range, block }) => {
       const rects = [...range.getClientRects()].filter((rect) => rect.width && rect.height);
-      const first = rects[0];
 
-      if (!first || !rects.some(onScreen)) return;
+      if (!rects.some(onScreen)) return;
 
-      // In the margin before the paragraph (its box on this page: paginated text splits it), so a
-      // line starting mid-paragraph covers no text; above the column in vertical text.
-      const block = [
-        ...(range.startContainer.parentElement
-          ?.closest('p, div, li, blockquote, h1, h2, h3, h4, h5, h6')
-          ?.getClientRects() ?? [])
-      ].find((box) => box.top <= first.top + 1 && first.bottom <= box.bottom + 1);
-
+      // After the paragraph's last line on screen: its end in the text's direction
+      const end = [...block.getClientRects()]
+        .filter((rect) => rect.width && rect.height && onScreen(rect))
+        .pop();
+      const last = end ?? rects[rects.length - 1];
       const tag = vertical
-        ? {
-            hash,
-            posts,
-            x: first.left + first.width / 2,
-            y: Math.max(Math.min(contentTop, first.top) - 18, barBottom + 12)
-          }
-        : { hash, posts, x: (block?.left ?? first.left) - 22, y: first.top + first.height / 2 };
+        ? { hash, posts, x: last.left + last.width / 2, y: Math.min(last.bottom + 16, height - 16) }
+        : { hash, posts, x: Math.min(last.right + 16, width - 16), y: last.top + last.height / 2 };
 
-      // Lines sharing a column or a row: their tags line up outwards instead of overlapping.
-      while (nextTags.some((other) => Math.hypot(other.x - tag.x, other.y - tag.y) < 20)) {
-        if (vertical) tag.y -= 24;
-        else tag.x -= 24;
+      // Lines ending one paragraph: their bubbles line up along the line instead of overlapping.
+      while (nextTags.some((other) => Math.hypot(other.x - tag.x, other.y - tag.y) < 24)) {
+        if (vertical) tag.y += 28;
+        else tag.x += 28;
       }
       nextTags.push(tag);
       if (vertical) {
@@ -143,6 +141,8 @@
   }
 
   const onScroll = () => schedule();
+  const label = (count: number) =>
+    $t$(count === 1 ? 'community.markerTitleOne' : 'community.markerTitle', { count });
 
   onMount(() => {
     document.addEventListener('scroll', onScroll, { capture: true, passive: true });
@@ -178,12 +178,12 @@
       class="community-tag writing-horizontal-tb"
       style:left="{tag.x}px"
       style:top="{tag.y}px"
-      title={$t$('community.markerTitle', { count: tag.posts })}
-      aria-label={$t$('community.markerTitle', { count: tag.posts })}
+      title={label(tag.posts)}
+      aria-label={label(tag.posts)}
       on:click={() => {
         communityMarkTap$.next(tag.hash);
         dispatch('open');
-      }}>{tag.posts}</button
+      }}><span class="community-bubble">{tag.posts > 99 ? '99+' : tag.posts}</span></button
     >
   {/each}
 </div>
@@ -204,13 +204,13 @@
     pointer-events: none;
   }
 
-  /* A 24px square drawn on a 40px tap target */
+  /* A 28px tap target holding a square-cornered speech bubble in the spot colour */
   .community-tag {
     position: absolute;
     pointer-events: auto;
     display: inline-flex;
-    width: 2.5rem;
-    height: 2.5rem;
+    width: 1.75rem;
+    height: 1.75rem;
     align-items: center;
     justify-content: center;
     transform: translate(-50%, -50%);
@@ -218,16 +218,37 @@
     font-family: var(--app-font-ui);
     font-size: var(--type-label);
     font-weight: 700;
+    line-height: 1;
     font-variant-numeric: tabular-nums;
   }
 
-  .community-tag::before {
-    content: '';
-    position: absolute;
-    z-index: -1;
-    width: 1.375rem;
-    height: 1.375rem;
+  .community-bubble {
+    position: relative;
+    display: inline-flex;
+    min-width: 1.25rem;
+    height: 1rem;
+    align-items: center;
+    justify-content: center;
+    margin-top: -0.25rem;
+    padding: 0 0.2rem;
     border-radius: 2px;
     background: var(--accent-color);
+  }
+
+  /* The tail, lower left */
+  .community-bubble::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 0.2rem;
+    width: 0.375rem;
+    height: 0.3rem;
+    background: var(--accent-color);
+    clip-path: polygon(0 0, 100% 0, 0 100%);
+  }
+
+  .community-tag:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 0;
   }
 </style>

@@ -2279,7 +2279,8 @@ export const ja: Record<MessageKey, string> = {
   'community.note': 'あなたの投稿に返信{count}件',
   'community.noteOne': 'あなたの投稿に返信{count}件',
   'community.namesAnd': '{names}、{last}',
-  'community.markerTitle': 'コミュニティ:この行に{count}件の投稿',
+  'community.markerTitle': 'この行に{count}件の投稿',
+  'community.markerTitleOne': 'この行に{count}件の投稿',
   'community.postAction': 'コミュニティに投稿',
   'community.postActionTitle': 'この行をコミュニティに投稿:質問、感想、または一文だけでも',
   'community.postTitle': 'コミュニティに投稿',
@@ -2290,6 +2291,12 @@ export const ja: Record<MessageKey, string> = {
   'community.tooManyLines': '投稿は20行までです。',
   'community.spoilerHint':
     '本の外では、読者がこの行に着くまでぼかされます。本の中では、この行を読み終えた読者にだけ表示されます。',
+  'community.where': '投稿先',
+  'community.whereFeed': 'コミュニティのフィードとこの行',
+  'community.whereLine': 'この行のみ',
+  'community.whereFeedHint': '公開のコミュニティフィードと、この行のスレッドに表示されます。',
+  'community.whereLineHint':
+    'この行のスレッドにだけ表示され、この本の読者が見られます。フィードには出ません。',
   'community.shared': '投稿と一緒に共有されるもの',
   'community.contextCount': '行とページの文脈 · {count} / {max}文字',
   'community.change': '変更',

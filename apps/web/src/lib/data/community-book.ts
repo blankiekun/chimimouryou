@@ -234,15 +234,31 @@ export async function markBookOnOpen(title: string, getIndex: () => Promise<Sear
   if (!communityOn() || !socialSession$.getValue()) return;
   if (!communityWorks$.getValue()[title] && !workFromUrl(await metadataUrl(title), title)) return;
 
+  const before = communityMarks$.getValue();
   const found = await loadBookCommunity(title, getIndex);
 
-  // The tab may have set them first (and fresher, after a post).
-  if (found.work && communityMarks$.getValue().title !== title) {
+  // The tab or a post may have set fresher ones meanwhile; older ones (this book opened before) go.
+  if (found.work && communityMarks$.getValue() === before) {
     communityMarks$.next({ title, marks: bookMarks(found) });
   }
 }
 
-/** Threads marked in the open book (set by its Community tab or the book open), and a marker's tap */
+/**
+ * After a post on a line of the open book: its threads again (the post matched the book, so the
+ * next book open marks it too), so the new line's marker shows without the Community tab.
+ */
+export async function refreshBookMarks(title: string, getIndex: () => Promise<SearchIndex>) {
+  forgetBookCommunity();
+
+  const found = await loadBookCommunity(title, getIndex);
+
+  if (found.work) communityMarks$.next({ title, marks: bookMarks(found) });
+}
+
+/**
+ * Threads marked in a book (set by its Community tab, the book open or a post; kept while the book
+ * is open, whatever the panel does: the markers show only the open book's), and a marker's tap
+ */
 export const communityMarks$ = new BehaviorSubject<{
   title: string;
   marks: (VisibleThread & BookLine)[];

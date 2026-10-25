@@ -151,7 +151,7 @@ CREATE INDEX IF NOT EXISTS transfers_created ON transfers (created);
 -- post has parent '' and kind 'post'; replies have the top-level post's id and kind 'reply'; spoiler
 -- is the poster's mark. Only a line's first post keeps the quote (the line) and context (<= 600
 -- characters around it; the work's first 10 lines only). user '' and body '' mark a deleted
--- top-level post that still has replies.
+-- top-level post that still has replies. in_feed 0: posted for the line's thread only, not GET feed.
 CREATE TABLE IF NOT EXISTS posts (
   id TEXT PRIMARY KEY,
   work TEXT NOT NULL,
@@ -164,7 +164,8 @@ CREATE TABLE IF NOT EXISTS posts (
   quote TEXT NOT NULL DEFAULT '',
   context TEXT NOT NULL DEFAULT '',
   at INTEGER NOT NULL,
-  edited INTEGER NOT NULL DEFAULT 0
+  edited INTEGER NOT NULL DEFAULT 0,
+  in_feed INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS posts_line ON posts (work, line);
 CREATE INDEX IF NOT EXISTS posts_user ON posts (user, work);

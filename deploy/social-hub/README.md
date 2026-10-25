@@ -42,6 +42,9 @@ idempotent), in order, then `npx wrangler@4.147.0 deploy`:
   (covers one per reader and book; deploy right after it)
 - `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file migrations/0007_community.sql`
   (Community: posts on a line, works and their covers, helpful marks, work-key confirmations)
+- `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file migrations/0008_post_in_feed.sql`
+  (`posts.in_feed`: posts for their line only stay out of the feed; apply before deploying the
+  code that reads it; a second run only fails with "duplicate column name")
 
 ## Develop
 
@@ -118,8 +121,9 @@ stacked combining characters, capped in characters and bytes. Under `/v1/communi
   every work, newest first, 30 a page, with the line, title, cover, reply count and spoiler flag).
   Posts with 3 open reports are left out until a moderator decides. `GET /v1/work/:hash` serves a
   work's cover like the other images.
-- Signed in: `POST posts` (`{work, title, vol, quote, context, body, spoiler}`: the hub hashes the
-  quote and the context (<= 600) must contain it; or `{parent, body, spoiler}` for a reply);
+- Signed in: `POST posts` (`{work, title, vol, quote, context, body, spoiler, feed}`: the hub hashes the
+  quote and the context (<= 600) must contain it; `feed: false` keeps it out of `GET feed`, in its
+  line's thread only; or `{parent, body, spoiler}` for a reply);
   `PUT|DELETE posts/:id` (own only; a post with replies stays as an empty tombstone);
   `POST|DELETE posts/:id/helpful` (replies only, not one's own; counted from accounts 7+ days
   old); `GET notes?since=` (replies to one's posts, once a minute); `GET work?book=&vol=` (the work

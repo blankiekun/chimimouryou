@@ -581,6 +581,22 @@ describe('hub community', () => {
     );
   });
 
+  it('keeps "this line only" posts out of the feed, in their thread', async () => {
+    const aki = await signUp('aki');
+    const shared = (await post(aki.token)).body.id;
+    const lineOnly = (await post(aki.token, { body: 'ここだけ', feed: false })).body.id;
+    const reply = (
+      await call('POST', '/v1/community/posts', { parent: lineOnly, body: 'うん' }, aki.token)
+    ).body.id;
+
+    expect(
+      (await call('GET', '/v1/community/feed')).body.posts.map((one: { id: string }) => one.id)
+    ).toEqual([shared]);
+    expect((await thread(aki.token)).body.posts.map((one: { id: string }) => one.id)).toEqual(
+      expect.arrayContaining([shared, lineOnly, reply])
+    );
+  });
+
   it('hides a post only on reports from accounts past their first days', async () => {
     const aki = await signUp('aki');
     const dev = await signUp('dev');

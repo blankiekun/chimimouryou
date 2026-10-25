@@ -2265,7 +2265,8 @@ export const en = {
   'community.note': '{count} replies to your post',
   'community.noteOne': '{count} reply to your post',
   'community.namesAnd': '{names} and {last}',
-  'community.markerTitle': 'Community: {count} posts on this line',
+  'community.markerTitle': '{count} posts on this line',
+  'community.markerTitleOne': '{count} post on this line',
   'community.postAction': 'Post to community',
   'community.postActionTitle':
     'Post this line to the community: a question, a comment or just the line',
@@ -2277,6 +2278,12 @@ export const en = {
   'community.tooManyLines': 'Posts have at most 20 lines.',
   'community.spoilerHint':
     'Blurred outside this book until readers reach this line. In the book it only ever shows to readers past it.',
+  'community.where': 'Where it goes',
+  'community.whereFeed': 'Community feed and this line',
+  'community.whereLine': 'This line only',
+  'community.whereFeedHint': 'In the public Community feed and in this line’s thread.',
+  'community.whereLineHint':
+    'Only in this line’s thread, where readers of this book see it. Not in the feed.',
   'community.shared': 'Shared with your post',
   'community.contextCount': 'Line and page context · {count} / {max} chars',
   'community.change': 'Change',

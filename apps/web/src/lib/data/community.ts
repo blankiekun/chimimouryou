@@ -355,7 +355,8 @@ export function blurred(post: { spoiler: boolean }, passedLine = false) {
 
 /**
  * Posts on a line; `context` is the page around it (clipContext), `title` the work's (the AniList
- * or VNDB title when matched, else the book's) and `vol` its volume (volumeOf).
+ * or VNDB title when matched, else the book's) and `vol` its volume (volumeOf); `feed` false keeps
+ * it out of the Community feed, in the line's thread only.
  */
 export function postOnLine(
   work: string,
@@ -366,6 +367,7 @@ export function postOnLine(
     context: string;
     body: string;
     spoiler: boolean;
+    feed: boolean;
   }
 ) {
   return write<{ id: string; line: string } & CommunityWork>('/v1/community/posts', 'POST', {
