@@ -48,7 +48,9 @@
   let replyBox: HTMLTextAreaElement;
 
   $: root = thread?.posts.find((post) => !post.parent);
-  $: replies = thread ? thread.posts.length - (root ? 1 : 0) : 0;
+  $: replies = thread ? thread.posts.filter((post) => post.parent).length : 0;
+  // A line can have several top-level posts; a hidden first post leaves its replies' parent.
+  $: target = replyingTo?.parent ?? replyingTo?.id ?? root?.id ?? thread?.posts[0]?.parent;
   $: context = thread ? splitContext(thread.context, thread.quote) : undefined;
   let revealed = false;
 
@@ -58,7 +60,7 @@
     error = '';
     try {
       thread = await loadThread(work, line);
-      if (root?.mine) markNotesSeen(root.id);
+      for (const post of thread.posts) if (!post.parent && post.mine) markNotesSeen(post.id);
     } catch (e) {
       error = $t$(communityErrorKey(e));
     } finally {
@@ -74,7 +76,7 @@
   }
 
   async function send() {
-    const parent = root?.id;
+    const parent = target;
 
     if (!parent || !draft.trim()) return;
     sending = true;
@@ -167,14 +169,14 @@
       {#if signUp}
         <CommunitySignup box on:close={() => (signUp = false)} />
       {/if}
-    {:else if root}
+    {:else if target}
       <form class="thread-reply" on:submit|preventDefault={send}>
         <textarea
           class="app-input"
           rows="2"
           maxlength={bodyLength}
           placeholder={$t$('community.replyTo', {
-            name: replyingTo?.author?.name ?? root.author?.name ?? ''
+            name: replyingTo?.author?.name ?? root?.author?.name ?? ''
           })}
           aria-label={$t$('community.reply')}
           bind:this={replyBox}
