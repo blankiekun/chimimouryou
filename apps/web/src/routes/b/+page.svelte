@@ -132,7 +132,9 @@
   import HighlightEditor from '$lib/components/book-reader/highlight-editor.svelte';
   import SelectionToolbar from '$lib/components/book-reader/selection-toolbar.svelte';
   import CommunityMarkers from '$lib/components/community/community-markers.svelte';
-  import { lineLinkTarget } from '$lib/data/community-book';
+  import CommunityMatchToast from '$lib/components/community/community-match-toast.svelte';
+  import { communityWorks$ } from '$lib/data/community';
+  import { lineLinkTarget, matchOffer$ } from '$lib/data/community-book';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
   import {
     AnnotationsController,
@@ -291,6 +293,7 @@
   let highlightsDirty = true;
   let selectedRange: Range | undefined;
   let lookupPopup: LookupPopup | undefined;
+  let lookupOpen = false;
   /** A plugin's selection action, open with the passage it was given */
   let selectionPanel: { action: SelectionActionContribution; passage: PassageContext } | undefined;
   let customReadingPointRange: Range | undefined;
@@ -2792,7 +2795,11 @@
   />
 {/if}
 
-<LookupPopup bind:this={lookupPopup} scope=".book-content" />
+{#if $matchOffer$ && $matchOffer$.title === $rawBookData$?.title && !$communityWorks$[$matchOffer$.title] && !panelOpen && !selectedRange && !lookupOpen}
+  <CommunityMatchToast offer={$matchOffer$} onchoose={() => openPanel('community')} />
+{/if}
+
+<LookupPopup bind:this={lookupPopup} bind:open={lookupOpen} scope=".book-content" />
 
 <svelte:document on:selectionchange={onSelectionChange} on:click={onDocumentClick} />
 

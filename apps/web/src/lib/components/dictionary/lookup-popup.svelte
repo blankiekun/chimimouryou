@@ -82,6 +82,8 @@
 
   $: profile = $yomitanOptions$ ? profileOptions($yomitanOptions$) : undefined;
   $: view = views[index] as View | undefined;
+  /** Bindable: the popup is showing (the reader hides its toast meanwhile) */
+  export let open = false;
   $: open = !!view && !!profile;
   $: sheet =
     profile?.general.popupDisplayMode === 'full-width' ||

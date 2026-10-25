@@ -15,15 +15,19 @@ import { BehaviorSubject } from 'rxjs';
 import { pagePath } from '$lib/data/env';
 import { loadBookMetadata } from '$lib/data/book-metadata';
 import {
+  communityMatchAsked$,
   communityOn,
   communityWorks$,
+  confirmWork,
   lineIndex,
   listThreads,
   loadNotes,
   resolveWork,
+  searchWorks,
   sentences,
   titleWork,
   visibleThreads,
+  volumeOf,
   workFromUrl,
   type CommunityNote,
   type CommunityPost,
@@ -213,11 +217,15 @@ export const bookMarks = ({ lines, index, threads }: Omit<BookCommunity, 'work' 
 /**
  * On book open (after it rendered): the markers without opening the tab, only signed in with
  * social on and for a book already matched to its work in this browser or by its Find details
- * url. Never the match sheet; other books wait for the tab.
+ * url. Other books: the match toast when the hub suggests a work (offerMatch).
  */
 export async function markBookOnOpen(title: string, getIndex: () => Promise<SearchIndex>) {
   if (!communityOn() || !socialSession$.getValue()) return;
-  if (!communityWorks$.getValue()[title] && !workFromUrl(await metadataUrl(title), title)) return;
+  if (!communityWorks$.getValue()[title] && !workFromUrl(await metadataUrl(title), title)) {
+    // No suggestion reachable: the Community tab still offers the match sheet.
+    await offerMatch(title, getIndex).catch(() => {});
+    return;
+  }
 
   const before = communityMarks$.getValue();
   const found = await loadBookCommunity(title, getIndex);
@@ -226,6 +234,76 @@ export async function markBookOnOpen(title: string, getIndex: () => Promise<Sear
   if (found.work && communityMarks$.getValue() === before) {
     communityMarks$.next({ title, marks: bookMarks(found) });
   }
+}
+
+/** The match toast's question: the hub's suggested work for the open book, as AniList shows it */
+export interface MatchOffer {
+  title: string;
+  work: string;
+  name: string;
+  cover: string;
+  vol: string;
+  getIndex: () => Promise<SearchIndex>;
+}
+
+export const matchOffer$ = new BehaviorSubject<MatchOffer | null>(null);
+
+/**
+ * Whether the toast asks about this book: signed in with social on, not matched, the hub suggests
+ * a work, and the reader hasn't answered it for this title before.
+ */
+export function shouldOfferMatch(
+  title: string,
+  found: { work: string | null; suggestion: string | null }
+) {
+  return (
+    communityOn() &&
+    !!socialSession$.getValue() &&
+    !found.work &&
+    !!found.suggestion &&
+    !communityMatchAsked$.getValue()[title]
+  );
+}
+
+async function offerMatch(title: string, getIndex: () => Promise<SearchIndex>) {
+  // Answered before: the hub isn't even asked for its suggestion.
+  if (communityMatchAsked$.getValue()[title]) return;
+
+  const found = await resolveWork(title);
+
+  if (!shouldOfferMatch(title, found)) return;
+
+  // The match sheet's search: the toast names the work only when AniList knows it.
+  const candidate = (await searchWorks(title, 'book').catch(() => [])).find(
+    (item) => item.work === found.suggestion
+  );
+
+  if (candidate) {
+    matchOffer$.next({
+      title,
+      work: candidate.work,
+      name: candidate.title,
+      cover: candidate.cover ?? '',
+      vol: volumeOf(title),
+      getIndex
+    });
+  }
+}
+
+/**
+ * The toast's answer; the title is never asked again. Match confirms the suggestion as the match
+ * sheet's Yes does (kept in this browser before the hub's vote, so a failed vote still matches)
+ * and marks the lines.
+ */
+export async function answerMatch(offer: MatchOffer, match: boolean) {
+  matchOffer$.next(null);
+  communityMatchAsked$.next({ ...communityMatchAsked$.getValue(), [offer.title]: Date.now() });
+  if (!match) return;
+
+  const chosen = await confirmWork(offer.title, offer.work).catch(() => offer.work);
+
+  if (chosen) workTitles.set(chosen, offer.name);
+  await refreshBookMarks(offer.title, offer.getIndex);
 }
 
 /**
@@ -248,6 +326,41 @@ export const communityMarks$ = new BehaviorSubject<{
   title: string;
   marks: (VisibleThread & BookLine)[];
 }>({ title: '', marks: [] });
+
+/**
+ * The last marks of recently opened books, by title: kept in this browser only (never synced),
+ * without the lines' text, so a book shows its bubbles at once on open, before the hub answers.
+ */
+export const communityMarksCache$ = writableObjectLocalStorageSubject<
+  Record<string, { at: number; marks: (VisibleThread & BookLine)[] }>
+>()('communityMarksCache', {});
+
+const cachedBooks = 30;
+
+communityMarks$.subscribe(({ title, marks }) => {
+  if (!title) return;
+
+  const others = Object.entries(communityMarksCache$.getValue())
+    .filter(([key]) => key !== title)
+    .sort(([, a], [, b]) => b.at - a.at)
+    .slice(0, cachedBooks - 1);
+  const mine = { at: Date.now(), marks: marks.map((mark) => ({ ...mark, text: '' })) };
+
+  communityMarksCache$.next(Object.fromEntries(marks.length ? [[title, mine], ...others] : others));
+});
+
+/**
+ * On book open: its cached marks at once, with social on (showing them sends nothing, so signed
+ * out too); markBookOnOpen refreshes them from the hub after.
+ */
+export function restoreBookMarks(title: string) {
+  const cached = communityMarksCache$.getValue()[title];
+
+  if (cached && communityOn() && communityMarks$.getValue().title !== title) {
+    communityMarks$.next({ title, marks: cached.marks });
+  }
+}
+
 /** The thread to show in the Community tab (a marker's tap, a new post): a line's hash */
 export const communityMarkTap$ = new BehaviorSubject('');
 
