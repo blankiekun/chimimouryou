@@ -108,13 +108,14 @@
       >
     {:else if work && line}
       <div class="community-main">
-        <CommunityThread
-          {work}
-          {line}
-          post={focusPost}
-          backLabel={$t$('nav.community')}
-          on:back={closeThread}
-        />
+        <!-- Keyed: the thread loads on mount, so another thread's link needs a fresh one -->
+        {#key `${work} ${line} ${focusPost}`}<CommunityThread
+            {work}
+            {line}
+            post={focusPost}
+            backLabel={$t$('nav.community')}
+            on:back={closeThread}
+          />{/key}
       </div>
     {:else}
       <div class="community-main">
