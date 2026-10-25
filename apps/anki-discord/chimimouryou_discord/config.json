@@ -1,4 +1,5 @@
 {
   "port": 41918,
-  "extraOrigins": []
+  "extraOrigins": [],
+  "hub": "https://chimi-hub.blankiekun.workers.dev"
 }

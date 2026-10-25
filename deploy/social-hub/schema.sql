@@ -5,7 +5,7 @@
 -- One row per reader. salt is per user: the browser stretches the password with scrypt
 -- over it, the hub keeps sha256(salt:key). recovery_hash is sha256 of the recovery code.
 -- status_at is the 1-minute guard of PUT /v1/status. role is 'dev' for moderators (granted by
--- hand, README), else ''.
+-- hand, README), else ''. presence_profile 1: the Discord status shows on the profile (friends, self).
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   username TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS users (
   created INTEGER NOT NULL,
   last_seen INTEGER NOT NULL,
   status_at INTEGER NOT NULL DEFAULT 0,
-  role TEXT NOT NULL DEFAULT ''
+  role TEXT NOT NULL DEFAULT '',
+  presence_profile INTEGER NOT NULL DEFAULT 0
 );
 
 -- Session tokens, by their sha256 only.
@@ -206,3 +207,31 @@ CREATE TABLE IF NOT EXISTS work_votes (
   PRIMARY KEY (book, vol, user)
 );
 CREATE INDEX IF NOT EXISTS work_votes_user ON work_votes (user);
+
+-- Discord status relay (src/presence.ts). presence: the reader's rendered activity (JSON, <= 4 KB),
+-- shown until expires_at (ttl minutes, 5-30, after the last update). presence_keys: what a paired Anki
+-- add-on reads it with, by the key's sha256 only. presence_codes: pairing codes by their sha256,
+-- 10 minutes, used once. The 10-minute cron blanks expired statuses (activity '{}', kind '', times
+-- kept an hour for the add-on's wait hint) and deletes expired codes.
+CREATE TABLE IF NOT EXISTS presence (
+  user TEXT PRIMARY KEY,
+  activity TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS presence_keys (
+  id TEXT PRIMARY KEY,
+  user TEXT NOT NULL,
+  key_hash TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  last_seen INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS presence_keys_user ON presence_keys (user);
+CREATE TABLE IF NOT EXISTS presence_codes (
+  code_hash TEXT PRIMARY KEY,
+  user TEXT NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS presence_codes_user ON presence_codes (user);

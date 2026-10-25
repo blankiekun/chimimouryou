@@ -19,6 +19,14 @@ import {
   dropUnusedWorks,
   postsOf
 } from './community';
+import {
+  currentPresence,
+  expirePresenceSql,
+  pairPresence,
+  presenceRoute,
+  profilePresence,
+  revokePresenceSql
+} from './presence';
 import { DAY, HOUR, MINUTE } from './time';
 
 /** The parts of Cloudflare's D1 binding the hub uses */
@@ -91,6 +99,8 @@ export interface UserRow {
   picture: number;
   /** 'dev' for the hub's moderators (granted by hand, README), else '' */
   role: string;
+  /** 1 when the reader's Discord status shows on their profile (friends and self only) */
+  presence_profile: number;
 }
 
 export { DAY, HOUR, MINUTE };
@@ -169,7 +179,7 @@ export class HttpError extends Error {
   }
 }
 
-const cors = {
+export const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Authorization, Content-Type',
@@ -195,7 +205,7 @@ export async function sha256(text: string | Uint8Array<ArrayBuffer>) {
 }
 
 /** Crockford base32 (256 is a multiple of 32, so every character is equally likely) */
-function randomCode(length: number) {
+export function randomCode(length: number) {
   return [...crypto.getRandomValues(new Uint8Array(length))]
     .map((byte) => CROCKFORD[byte & 31])
     .join('');
@@ -207,7 +217,7 @@ export function randomHex(bytes: number) {
     .join('');
 }
 
-function randomToken() {
+export function randomToken() {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
 
   return btoa(String.fromCharCode(...bytes))
@@ -222,6 +232,16 @@ export function normalizeCode(text: string) {
 }
 
 const passHash = (salt: string, key: string) => sha256(`${salt}:${key}`);
+
+/** Compares two hex digests without stopping at the first difference */
+export function sameHash(a: string, b: string) {
+  let diff = a.length ^ b.length;
+
+  for (let i = 0; i < Math.min(a.length, b.length); i += 1) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
 
 export async function readBody(request: Request): Promise<Row> {
   const text = await request.text();
@@ -243,7 +263,7 @@ export function matching(value: unknown, pattern: RegExp, code: string) {
 }
 
 /** 1-40 characters, spaces collapsed, no control or direction-override characters */
-function displayName(value: unknown) {
+export function displayName(value: unknown) {
   const name = typeof value === 'string' ? value.normalize('NFC').replace(/\s+/g, ' ').trim() : '';
 
   // eslint-disable-next-line no-control-regex
@@ -382,6 +402,7 @@ function me(user: UserRow) {
     role: user.role,
     code: user.code,
     share: JSON.parse(user.share),
+    presenceProfile: !!user.presence_profile,
     created: user.created
   };
 }
@@ -604,7 +625,7 @@ async function profile(env: Env, username: string, viewer: UserRow | null) {
   if (relation === 'visitor' && !share.public) throw new HttpError(404, 'user');
 
   const rows = (sql: string) => env.DB.prepare(sql).bind(user.id).all();
-  const [books, finished, stats, events] = await Promise.all([
+  const [books, finished, stats, events, presence] = await Promise.all([
     rows(
       `SELECT s.book_key, s.title, s.author, s.kind, s.pct, s.read_at, c.file AS cover
        FROM status s ${coverJoin('s')} WHERE s.user = ?1 ORDER BY s.slot`
@@ -620,7 +641,9 @@ async function profile(env: Env, username: string, viewer: UserRow | null) {
       ? Promise.resolve({ results: [] })
       : rows(
           'SELECT id, type, book_key, title, kind, value, at FROM events WHERE user = ?1 ORDER BY at DESC, id DESC LIMIT 30'
-        )
+        ),
+    // Never for visitors: only their (anonymous) responses enter the edge cache.
+    relation === 'visitor' ? Promise.resolve(null) : profilePresence(env, user)
   ]);
 
   return {
@@ -653,7 +676,8 @@ async function profile(env: Env, username: string, viewer: UserRow | null) {
       cover: row.cover
     })),
     stats: stats ? JSON.parse(stats.data) : null,
-    events: events.results.map(eventJson)
+    events: events.results.map(eventJson),
+    ...(presence ? { presence } : {})
   };
 }
 
@@ -1258,6 +1282,13 @@ async function updateMe(request: Request, env: Env, user: UserRow, body: Row) {
   if (!Number.isInteger(avatar) || avatar < 0 || avatar >= AVATARS) {
     throw new HttpError(400, 'avatar');
   }
+  if (body.presenceProfile !== undefined && typeof body.presenceProfile !== 'boolean') {
+    throw new HttpError(400, 'presenceProfile');
+  }
+
+  const presenceProfile =
+    body.presenceProfile === undefined ? user.presence_profile : Number(body.presenceProfile);
+
   if (body.share !== undefined) {
     if (!body.share || typeof body.share !== 'object') throw new HttpError(400, 'share');
     Object.entries(body.share).forEach(([key, value]) => {
@@ -1267,8 +1298,10 @@ async function updateMe(request: Request, env: Env, user: UserRow, body: Row) {
       share[key] = value;
     });
   }
-  await env.DB.prepare('UPDATE users SET name = ?1, avatar = ?2, share = ?3 WHERE id = ?4')
-    .bind(name, avatar, JSON.stringify(share), user.id)
+  await env.DB.prepare(
+    'UPDATE users SET name = ?1, avatar = ?2, share = ?3, presence_profile = ?4 WHERE id = ?5'
+  )
+    .bind(name, avatar, JSON.stringify(share), presenceProfile, user.id)
     .run();
 
   const updated = (await userById(env, user.id))!;
@@ -1313,6 +1346,7 @@ async function deleteUsers(env: Env, where: string, ...values: unknown[]) {
       `DELETE FROM reports WHERE target IN (${users}) OR reporter IN (${users})`,
       `DELETE FROM limits WHERE subject IN (${users})`,
       `DELETE FROM transfers WHERE sender IN (${users}) OR receiver IN (${users})`,
+      ...revokePresenceSql.map((sql) => sql.replace('= ?1', `IN (${users})`)),
       `DELETE FROM users WHERE ${where}`
     ].map((sql) => env.DB.prepare(sql).bind(...values))
   );
@@ -1328,7 +1362,8 @@ export async function cleanUp(env: Env) {
     env.DB.prepare('DELETE FROM reports WHERE at < ?1').bind(time - EVENT_TTL),
     env.DB.prepare('DELETE FROM sessions WHERE last_used < ?1').bind(time - SESSION_TTL),
     env.DB.prepare('DELETE FROM limits WHERE win < ?1').bind(time - 2 * DAY),
-    expireTransfers(env)
+    expireTransfers(env),
+    ...expirePresenceSql(env)
   ]);
 
   // Covers no current or finished book of their uploader shows any more (removed ones stay, so
@@ -1548,7 +1583,7 @@ async function login(request: Request, env: Env) {
 
   const user = await userByName(env, username);
 
-  if (!user || (await passHash(user.salt, key)) !== user.pass_hash) {
+  if (!user || !sameHash(await passHash(user.salt, key), user.pass_hash)) {
     return recordFailure(env, subjects);
   }
   return json({ token: await newSession(env, user.id), me: me(user) });
@@ -1566,7 +1601,9 @@ async function recover(request: Request, env: Env) {
   const user = await userByName(env, username);
   const code = normalizeCode(text(body.recovery, 40, 'recovery'));
 
-  if (!user || (await sha256(code)) !== user.recovery_hash) return recordFailure(env, subjects);
+  if (!user || !sameHash(await sha256(code), user.recovery_hash)) {
+    return recordFailure(env, subjects);
+  }
 
   const recovery = randomCode(20);
 
@@ -1576,7 +1613,8 @@ async function recover(request: Request, env: Env) {
       await sha256(recovery),
       user.id
     ),
-    env.DB.prepare('DELETE FROM sessions WHERE user = ?1').bind(user.id)
+    env.DB.prepare('DELETE FROM sessions WHERE user = ?1').bind(user.id),
+    ...revokePresenceSql.map((sql) => env.DB.prepare(sql).bind(user.id))
   ]);
   return json({ token: await newSession(env, user.id), recovery, me: me(user) });
 }
@@ -1586,7 +1624,7 @@ async function checkPassword(request: Request, env: Env, user: UserRow, key: unk
   const subjects = [`name:${user.username.toLowerCase()}`, await ipSubject(request)];
 
   await checkFailures(env, subjects);
-  if ((await passHash(user.salt, matching(key, KEY, 'key'))) !== user.pass_hash) {
+  if (!sameHash(await passHash(user.salt, matching(key, KEY, 'key')), user.pass_hash)) {
     await recordFailure(env, subjects);
   }
 }
@@ -1602,7 +1640,8 @@ async function changePassword(request: Request, env: Env, user: UserRow, hash: s
       await passHash(user.salt, next),
       user.id
     ),
-    env.DB.prepare('DELETE FROM sessions WHERE user = ?1 AND hash != ?2').bind(user.id, hash)
+    env.DB.prepare('DELETE FROM sessions WHERE user = ?1 AND hash != ?2').bind(user.id, hash),
+    ...revokePresenceSql.map((sql) => env.DB.prepare(sql).bind(user.id))
   ]);
   return json({ ok: true });
 }
@@ -1852,6 +1891,11 @@ the page around it), your helpful marks and which AniList or VNDB entry you conf
 are public (readable without an account), with the book's title and cover and your name and, if your profile is public and shares stats, your
 reading rank and words known; never how far you have read. Deleting a post or your account deletes it
 (a post that has replies stays as an empty placeholder).</p>
+<p>Discord status, if you use it: the status your other devices last sent (the finished text and
+links), kept 5 to 30 minutes after its last update (your Away after setting; when it was sent, an hour); with "Show on my profile" on, your friends see it
+there. Paired computers are kept as a name you choose, when they were added and last seen; their
+keys and pairing codes only as hashes. Signing out everywhere, changing your password or deleting
+your account removes them.</p>
 <p>No email, IP address log or book files. Rate limits keep hashed addresses for two days.</p>
 <p>Deleting your account (Settings, Social) removes every row and your picture at once. Sessions unused for 90 days
 and accounts unused for 12 months are deleted automatically.</p>`;
@@ -1899,6 +1943,9 @@ async function route(request: Request, env: Env, ctx?: Context): Promise<Respons
   if (route === 'POST /v1/signup') return signup(request, env);
   if (route === 'POST /v1/login') return login(request, env);
   if (route === 'POST /v1/recover') return recover(request, env);
+  // The add-on's two calls: no session (a pairing code, or a presence key that reads nothing else).
+  if (route === 'POST /v1/presence/pair') return pairPresence(request, env);
+  if (route === 'GET /v1/presence/current') return currentPresence(request, env);
 
   // Profiles also answer visitors without an account.
   const auth = request.headers.has('Authorization') ? await authenticate(request, env) : null;
@@ -1926,6 +1973,10 @@ async function route(request: Request, env: Env, ctx?: Context): Promise<Respons
 
   if (community) return communityRoute(request, env, user, community[1]);
 
+  const presence = /^\/v1\/presence(?:\/(.+))?$/.exec(pathname);
+
+  if (presence) return presenceRoute(request, env, user, presence[1] ?? '');
+
   const transfer = /^\/v1\/transfers(?:\/([^/]+)(?:\/(accept|answer))?)?$/.exec(pathname);
 
   if (transfer?.[1]) return transferRoute(request, env, user, transfer[1], transfer[2]);
@@ -1945,7 +1996,11 @@ async function route(request: Request, env: Env, ctx?: Context): Promise<Respons
       await env.DB.prepare('DELETE FROM sessions WHERE hash = ?1').bind(hash).run();
       return json({ ok: true });
     case 'POST /v1/logout-all':
-      await env.DB.prepare('DELETE FROM sessions WHERE user = ?1').bind(user.id).run();
+      await env.DB.batch(
+        ['DELETE FROM sessions WHERE user = ?1', ...revokePresenceSql].map((sql) =>
+          env.DB.prepare(sql).bind(user.id)
+        )
+      );
       return json({ ok: true });
     case 'POST /v1/password':
       return changePassword(request, env, user, hash);
@@ -2060,7 +2115,7 @@ export default {
   },
   async scheduled(event: { cron?: string }, env: Env) {
     if (event?.cron === TRANSFER_CRON) {
-      await expireTransfers(env).run();
+      await env.DB.batch([expireTransfers(env), ...expirePresenceSql(env)]);
       return;
     }
     await cleanUp(env);

@@ -45,6 +45,9 @@ idempotent), in order, then `npx wrangler@4.147.0 deploy`:
 - `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file migrations/0008_post_in_feed.sql`
   (`posts.in_feed`: posts for their line only stay out of the feed; apply before deploying the
   code that reads it; a second run only fails with "duplicate column name")
+- `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file migrations/0009_presence.sql`
+  (Discord status relay: `presence`, `presence_keys`, `presence_codes`, `users.presence_profile`; apply
+  before deploying; a second run only fails with "duplicate column name")
 
 ## Develop
 
@@ -97,6 +100,26 @@ lives 10 minutes; a 10-minute cron deletes expired ones. `/v1/transfers*` take t
 `SIGNAL_LIMIT` binding (30 per 10 s per address) instead of `EDGE_LIMIT`: the app polls about
 once a second only while one is being set up. A typical transfer costs 10-20 Worker requests,
 plus one per 3 s while the friend hasn't answered yet (at most ~200 for one left waiting).
+
+Discord status relay (`src/presence.ts`; times in Unix seconds): the reader's other devices send the
+rendered activity, the Anki add-on on their computer reads it. `PUT presence` (`{activity, kind:
+book|manga|vn|idle, ttl}`, 204; clamped and stripped of unknown fields like the add-on's `activity.py`, at
+most 4 KB, kept `ttl` minutes (the reader's Away after, 5-30, default 10; clients send on a change, no
+keep-alive); one per 20 s, else 429; the same activity and ttl are not written again while more than 2
+minutes are left); `DELETE presence` (ends it now); `POST presence/keys` (`{name}`, at most
+40 characters → `{id, key}`: `pk_` + 32 random bytes, shown once, only its sha256 kept; 10 per account,
+409 past that); `GET presence/keys` (`[{id, name, createdAt, lastSeen}]`); `DELETE presence/keys/:id`;
+`POST presence/codes` (→ `{code: "XXX-XXX-XXX", expiresAt}`, Crockford, 10 minutes, single use, sha256
+only, 5 open per account). Without a session: `POST presence/pair` (`{code, name}` → `{id, key}`; wrong or
+expired is 404 `code`, and 10 of those an hour lock the hashed address, 429 `locked`) and
+`GET presence/current` with `Authorization: Bearer pk_…` (200 `{activity, kind, updatedAt, expiresAt, next}`,
+204 when nothing is current, 401 for a revoked key; `Cache-Control: no-store`; `next`, or the `X-Next`
+header on 204 and 401, is the seconds the add-on waits: 30 while a status was seen in the last 10
+minutes, 120 within the hour, else 300; `lastSeen` is written at most once a day and nothing else is). A presence key opens nothing else: every other route answers it 401. `GET profile`
+adds `presence` (`{activity, updatedAt}`) for the reader and friends when `PUT me {presenceProfile: true}`
+(`me.presenceProfile`) is on; anonymous (edge-cached) responses never carry it. Sign out everywhere,
+a password change, recovery and account deletion delete the account's keys, codes and status; the
+10-minute cron blanks expired statuses (their times stay an hour for `next`) and deletes expired codes.
 
 Moderation, role `dev` only (403 for everyone else): `GET admin/reports` (open reports grouped
 by kind and target, with the name, picture or cover reported); `DELETE admin/reports?what=&target=`

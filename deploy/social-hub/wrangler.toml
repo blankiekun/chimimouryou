@@ -10,7 +10,8 @@ database_name = "chimi-hub"
 database_id = "cae5b5cd-7328-4910-bb3a-b8d311a80487"
 
 # Retention: sessions unused 90 days, accounts unused 12 months, old rate-limit counters; every
-# 10 minutes, expired book transfers (their SDP holds network addresses). Matches TRANSFER_CRON.
+# 10 minutes, expired book transfers (their SDP holds network addresses), Discord statuses and
+# pairing codes. Matches TRANSFER_CRON.
 [triggers]
 crons = ["17 3 * * *", "*/10 * * * *"]
 
