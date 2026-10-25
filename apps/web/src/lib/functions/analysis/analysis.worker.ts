@@ -31,6 +31,12 @@ export interface AnalysisRequest {
   reader: boolean;
 }
 
+/** Loads the tools without a book (prewarmAnalysis in analysis-tools.ts): the job that follows skips the ~2 s start */
+export interface AnalysisLoad {
+  base: string;
+  manifest: AnalysisToolsManifest;
+}
+
 export type AnalysisMessage =
   /** The share of the book's text read so far; also shows the page's watchdog it is alive */
   | { type: 'progress'; share: number }
@@ -151,12 +157,17 @@ async function loadPack(
   packed.add(name);
 }
 
-self.onmessage = async ({ data }: MessageEvent<AnalysisRequest>) => {
+self.onmessage = async ({ data }: MessageEvent<AnalysisRequest | AnalysisLoad>) => {
   try {
     const start = performance.now();
 
     base = data.base;
     tools ??= Promise.all([loadSudachi(data.manifest), loadPython()]);
+    if (!('part' in data)) {
+      // Load only: a failed load fails the job that follows (the same promise).
+      tools.catch(() => undefined);
+      return;
+    }
 
     const [tokenize, python] = await tools;
     const loaded = performance.now();

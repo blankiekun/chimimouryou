@@ -113,7 +113,12 @@
     generatedReadings$,
     placeAfterRerender
   } from '$lib/data/generated-furigana';
-  import { analysisToolsSupported, localEstimate, localReadings$ } from '$lib/data/analysis-tools';
+  import {
+    analysisToolsSupported,
+    localEstimate,
+    localReadings$,
+    prewarmAnalysis
+  } from '$lib/data/analysis-tools';
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
   import ReaderPanel from '$lib/components/book-reader/reader-panel.svelte';
   import {
@@ -367,6 +372,15 @@
         if (isManga(bookData) || isVn(bookData)) {
           goto(`${pagePath}/${isVn(bookData) ? 'v' : 'm'}?id=${id}`, { replaceState: true });
           return new Promise<never>(() => {});
+        }
+
+        // The analysis worker loads beside the sync and the first render (bookData$ queues the jobs).
+        if (bookData.elementHtml && readingsAvailable(bookData) === 'local') {
+          prewarmAnalysis(
+            bookData.title,
+            bookData.elementHtml,
+            $generatedFurigana$ || $unknownWordUnderline$ || $chapterPrimer$
+          ).catch(() => {});
         }
 
         const currentContext = {

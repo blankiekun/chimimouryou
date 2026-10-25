@@ -30,7 +30,11 @@ import {
   type ReadingsFile
 } from '$lib/data/generated-furigana';
 import { readerDb } from '$lib/data/reader-db';
-import type { AnalysisMessage, AnalysisRequest } from '$lib/functions/analysis/analysis.worker';
+import type {
+  AnalysisLoad,
+  AnalysisMessage,
+  AnalysisRequest
+} from '$lib/functions/analysis/analysis.worker';
 import type { ScoreMessage, ScoreRequest } from '$lib/functions/analysis/analysis-score.worker';
 import {
   analysisToolsCacheName,
@@ -518,6 +522,15 @@ export function nextJob<S extends { html: string; busy: boolean }>(
   return session === undefined ? undefined : { at, session };
 }
 
+const newSession = (html: string): Session => ({
+  worker: new Worker(new URL('../functions/analysis/analysis.worker.ts', import.meta.url), {
+    type: 'module'
+  }),
+  html,
+  busy: false,
+  parts: 0
+});
+
 function pump() {
   const keepAlive = analysisKeepAlive();
 
@@ -526,14 +539,7 @@ function pump() {
     next;
     next = nextJob(pending, sessions, analysisWorkers())
   ) {
-    const session = next.session ?? {
-      worker: new Worker(new URL('../functions/analysis/analysis.worker.ts', import.meta.url), {
-        type: 'module'
-      }),
-      html: '',
-      busy: false,
-      parts: 0
-    };
+    const session = next.session ?? newSession('');
 
     if (!next.session) sessions = [...sessions, session];
 
@@ -577,6 +583,41 @@ function enqueue<T>(
     }
     pump();
   });
+}
+
+/**
+ * The reader opening a local book: when its readings file (`readings`: the reader wants one) or
+ * estimate will be made, a worker starts loading its tools (~2 s) now, beside the book's first
+ * render, instead of when the job is queued. Only while no worker is free and there is room for
+ * one (analysisWorkers); unused, it ends as pump's idle workers do.
+ */
+export async function prewarmAnalysis(title: string, html: string, readings: boolean) {
+  const [furigana, difficulty, keptFile, kept] = await Promise.all([
+    readings ? installedTools('furigana') : undefined,
+    installedTools('difficulty'),
+    keptReadings(title),
+    keptEstimate(title)
+  ]);
+  const manifest = furigana ?? difficulty;
+
+  if (!manifest) return;
+
+  const etag = await analysisTag(html, manifest.version);
+
+  if ((!furigana || keptFile?.etag === etag) && (!difficulty || kept?.etag === etag)) return;
+  // A free worker, a full house, or this book already being analysed (the background's)
+  if (
+    sessions.some((session) => !session.busy || session.html === html) ||
+    sessions.length >= analysisWorkers()
+  ) {
+    return;
+  }
+
+  const session = newSession(html);
+
+  sessions = [...sessions, session];
+  session.worker.postMessage({ base: base(), manifest } satisfies AnalysisLoad);
+  pump();
 }
 
 /**
