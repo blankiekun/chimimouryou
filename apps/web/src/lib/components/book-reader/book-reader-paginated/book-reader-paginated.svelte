@@ -506,12 +506,14 @@
   });
 
   if (autoBookmark) {
+    // Only the reader's own moves count: a re-layout right after a page turn (the side panel,
+    // a resize) must not cancel the turn's save, or reopening goes back to the old page.
     pageChange$
-      .pipe(debounceTime(autoBookmarkTime * 1000), takeUntil(destroy$))
-      .subscribe((isUser) => {
+      .pipe(filter(Boolean), debounceTime(autoBookmarkTime * 1000), takeUntil(destroy$))
+      .subscribe(() => {
         // A bookmark on this page may point mid-page (selection or reading point);
         // saving the page start would move it back.
-        if (isUser && !isBookmarkScreen) {
+        if (!isBookmarkScreen) {
           dispatch('bookmark');
         }
       });
