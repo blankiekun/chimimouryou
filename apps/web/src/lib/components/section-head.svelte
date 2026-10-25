@@ -1,13 +1,17 @@
 <script lang="ts">
   /** Study Book section head: a numbered tag, the title, an optional count and a rule to the right. */
-  export let number: number;
-  export let title: string;
-  export let count: number | string | undefined = undefined;
-  export let level: 'h1' | 'h2' | 'h3' = 'h2';
-  /** Id of the title, for aria-labelledby */
-  export let id: string | undefined = undefined;
+  interface Props {
+    number: number;
+    title: string;
+    count?: number | string;
+    level?: 'h1' | 'h2' | 'h3';
+    /** Id of the title, for aria-labelledby */
+    id?: string;
+  }
 
-  $: tag = String(number).padStart(2, '0');
+  let { number, title, count, level = 'h2', id }: Props = $props();
+
+  const tag = $derived(String(number).padStart(2, '0'));
 </script>
 
 <div class="section-head">
@@ -16,7 +20,7 @@
   {#if count !== undefined}
     <span class="section-head-count">{count}</span>
   {/if}
-  <span class="section-head-rule" aria-hidden="true" />
+  <span class="section-head-rule" aria-hidden="true"></span>
 </div>
 
 <style>

@@ -24,6 +24,7 @@ module.exports = (async () => {
         '**/material-elevation.cjs',
         '**/vite.config.js',
         '**/vitest.config.js',
+        '**/vitest.browser.config.js',
         '**/eslint.config.js',
         '**/tailwind.config.cjs',
         'apps/web/static/**',

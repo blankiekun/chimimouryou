@@ -1,4 +1,4 @@
-import { defineConfig, mergeConfig } from 'vitest/config';
+import { configDefaults, defineConfig, mergeConfig } from 'vitest/config';
 import viteConfig from './vite.config.js';
 
 // Unit tests (`pnpm test`); see CONTRIBUTING.md for running them without Node.js.
@@ -9,6 +9,8 @@ export default mergeConfig(
     resolve: { conditions: ['browser'] },
     test: {
       include: ['src/**/*.test.ts'],
+      // Chromium only: `pnpm test:browser` (vitest.browser.config.js).
+      exclude: [...configDefaults.exclude, 'src/**/*.browser.test.ts'],
       environment: 'jsdom',
       // Imports JSON without import attributes, which Node refuses outside Vite.
       server: { deps: { inline: ['kanji-processor'] } }

@@ -24,8 +24,10 @@ How to change this fork. See `ARCHITECTURE.md` for how the pieces fit together,
    */
   ```
 
-- Svelte 4 syntax (`export let`, `$:`, stores with `$`), not runes. RxJS
-  `BehaviorSubject` stores for settings (`writable*LocalStorageSubject`).
+- New components use runes (`$props`, `$state`, `$derived`; `section-head.svelte` is the example).
+  Existing ones stay in Svelte 4 syntax (`export let`, `$:`, stores with `$`) until converted;
+  `routes/b/+page.svelte` stays legacy for now. Svelte picks the mode per component, so don't mix
+  the two in one file. RxJS `BehaviorSubject` stores for settings (`writable*LocalStorageSubject`).
 - Colours come from theme CSS variables (`var(--surface-strong-color)`,
   `var(--reader-panel-bg)`, …), never fixed values.
 - Commit messages: `fix: …`, `feat: …`, `refactor: …`, `test: …`, `docs: …`,
@@ -46,6 +48,7 @@ Front end (Node 24; pnpm 10 comes from `packageManager` via `corepack enable`):
 ```sh
 pnpm install
 cd apps/web && pnpm test && pnpm check   # Vitest; svelte-check (13 known errors)
+pnpm exec playwright install --only-shell chromium && pnpm test:browser   # browser tests
 cd ../.. && npx eslint .                 # clean
 cd apps/web && pnpm dev                  # dev server; the server side needs the Docker stack
 ```
@@ -109,6 +112,11 @@ git merge upstream/main`, open a PR and merge it with **Create a merge
 
 - Unit tests sit next to the module (`foo.ts` → `foo.test.ts`) and use Vitest with
   jsdom. Python tests live in `scripts/calibre/tests/` and use `unittest`.
+- Browser tests (`foo.browser.test.ts`, `pnpm test:browser`, `vitest.browser.config.js`) run in
+  headless Chromium (Vitest browser mode, Playwright), apart from `pnpm test`. Write one only for
+  what jsdom can't do: layout and positions (where the reader lands, what is on screen), vertical
+  text, `::highlight` and other rendering. They use the real IndexedDB, no `fake-indexeddb`; see
+  `routes/b/bookmark-restore.browser.test.ts`, which mounts the whole `/b` page.
 - A bug fix comes with a test that fails before the fix.
 - Before refactoring code without tests, add tests that pin its current behaviour.
 - Svelte compiles with `immutable: true`: a store or variable only updates when
@@ -126,7 +134,7 @@ git merge upstream/main`, open a PR and merge it with **Create a merge
     `calibre-handler` (see `calibre-handler.test.ts`).
 - `pnpm check` has 13 errors that predate the fork; only new ones matter.
 - Reader changes also need a manual check with a book open (paginated and
-  continuous modes), since the reader page has no automated tests.
+  continuous modes): the browser tests cover only reopening at the bookmark.
 
 ## Adding things
 

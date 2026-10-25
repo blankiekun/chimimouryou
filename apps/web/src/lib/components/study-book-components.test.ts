@@ -4,14 +4,18 @@
  * All rights reserved.
  */
 
+import { flushSync } from 'svelte';
 import { describe, expect, it } from 'vitest';
 import PointBox from './point-box.svelte';
 import SectionHead from './section-head.svelte';
 
-function mount<T>(Component: new (options: { target: Element; props: T }) => unknown, props: T) {
+type Legacy = new (options: { target: Element; props: object }) => { $set(props: object): void };
+
+// Runes components are typed as functions; `compatibility.componentApi: 4` makes them classes too.
+function mount(Component: unknown, props: object) {
   const target = document.createElement('div');
-  new Component({ target, props });
-  return target;
+  const component = new (Component as Legacy)({ target, props });
+  return Object.assign(target, { component });
 }
 
 describe('SectionHead', () => {
@@ -24,11 +28,22 @@ describe('SectionHead', () => {
   });
 
   it('leaves the count out when there is none and takes another heading level', () => {
-    const target = mount(SectionHead, { number: 12, title: 'Read next', level: 'h3' as const });
+    const target = mount(SectionHead, { number: 12, title: 'Read next', level: 'h3' });
 
     expect(target.querySelector('.section-head-number')?.textContent).toBe('12');
     expect(target.querySelector('h3')?.textContent).toBe('Read next');
     expect(target.querySelector('.section-head-count')).toBeNull();
+  });
+
+  // SectionHead is a runes component: Svelte 4's $set still reaches its $props.
+  it('updates when its props change', () => {
+    const target = mount(SectionHead, { number: 1, title: 'Old' });
+
+    target.component.$set({ number: 3, title: 'New' });
+    flushSync();
+
+    expect(target.querySelector('.section-head-number')?.textContent).toBe('03');
+    expect(target.querySelector('h2')?.textContent).toBe('New');
   });
 });
 
