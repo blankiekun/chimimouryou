@@ -96,6 +96,9 @@
       rect.right > 0 && rect.left < width && rect.bottom > 0 && rect.top < height;
     const nextTags: typeof tags = [];
     const nextRules: typeof rules = [];
+    const contentTop = document.querySelector('.book-content')?.getBoundingClientRect().top ?? 0;
+    // Vertical tags stay clear of the reader bar while it shows.
+    const barBottom = document.querySelector('.reader-bar')?.getBoundingClientRect().bottom ?? 0;
 
     ranges.forEach(({ hash, posts, range }) => {
       const rects = [...range.getClientRects()].filter((rect) => rect.width && rect.height);
@@ -103,13 +106,21 @@
 
       if (!first || !rects.some(onScreen)) return;
 
-      // In the margin before the paragraph, so a line starting mid-paragraph covers no text.
-      const block = range.startContainer.parentElement
-        ?.closest('p, div, li, blockquote, h1, h2, h3, h4, h5, h6')
-        ?.getBoundingClientRect();
+      // In the margin before the paragraph (its box on this page: paginated text splits it), so a
+      // line starting mid-paragraph covers no text; above the column in vertical text.
+      const block = [
+        ...(range.startContainer.parentElement
+          ?.closest('p, div, li, blockquote, h1, h2, h3, h4, h5, h6')
+          ?.getClientRects() ?? [])
+      ].find((box) => box.top <= first.top + 1 && first.bottom <= box.bottom + 1);
 
       const tag = vertical
-        ? { hash, posts, x: first.left + first.width / 2, y: (block?.top ?? first.top) - 18 }
+        ? {
+            hash,
+            posts,
+            x: first.left + first.width / 2,
+            y: Math.max(Math.min(contentTop, first.top) - 18, barBottom + 12)
+          }
         : { hash, posts, x: (block?.left ?? first.left) - 22, y: first.top + first.height / 2 };
 
       // Lines sharing a column or a row: their tags line up outwards instead of overlapping.
