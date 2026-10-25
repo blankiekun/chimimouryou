@@ -4,7 +4,9 @@
 
 """The hub relay: shows the status your other devices (a phone) send to the social hub.
 
-Paired with a presence key (`pk_…`), the add-on asks the hub for the current activity every 30 s.
+Paired with a presence key (`pk_…`), the add-on asks the hub for the current activity, only while
+Discord is connected: every 30 s, every 2 min after 10 min without a status, every 5 min after an
+hour, or later when the hub says so (`next`).
 A status a page on this computer sent in the last 2 minutes, and didn't clear, wins over the hub's.
 The key and hub address live in the add-on's user_files (kept across add-on updates), never in logs.
 """
@@ -22,7 +24,10 @@ import urllib.request
 from . import activity as activity_mod
 
 DEFAULT_HUB = "https://chimi-hub.blankiekun.workers.dev"
-POLL_INTERVAL = 30.0
+# Cloudflare's free plan counts every request: (seconds without a hub status, poll every N seconds).
+TIERS = ((0, 30.0), (600, 120.0), (3600, 300.0))
+MAX_HINT = 3600.0
+DISCORD_CHECK = 30.0  # how often to look (locally) whether Discord came back
 MAX_BACKOFF = 600.0
 LOCAL_WINS = 120.0
 TIMEOUT = 10.0
@@ -72,7 +77,7 @@ _opener = urllib.request.build_opener(_NoRedirect)
 
 
 def request(method, url, key=None, body=None, timeout=TIMEOUT):
-    """(status, parsed JSON or None). Raises RelayError when the hub can't be reached."""
+    """(status, parsed JSON or None, headers). Raises RelayError when the hub can't be reached."""
     headers = {"Accept": "application/json", "User-Agent": "chimimouryou-discord"}
     data = None
     if body is not None:
@@ -85,7 +90,7 @@ def request(method, url, key=None, body=None, timeout=TIMEOUT):
         resp = _opener.open(req, timeout=timeout)
     except urllib.error.HTTPError as err:
         err.close()
-        return err.code, None  # callers only need the status of an error
+        return err.code, None, err.headers  # callers only need the status of an error
     except (OSError, ValueError) as err:  # URLError, timeouts, refused connections
         raise RelayError(type(err).__name__) from None
     with resp:
@@ -95,17 +100,34 @@ def request(method, url, key=None, body=None, timeout=TIMEOUT):
         except OSError:
             raise RelayError("read") from None
     if not raw or len(raw) > MAX_RESPONSE:
-        return status, None
+        return status, None, resp.headers
     try:
-        return status, json.loads(raw.decode("utf-8"))
+        return status, json.loads(raw.decode("utf-8")), resp.headers
     except (ValueError, UnicodeDecodeError):
-        return status, None
+        return status, None, resp.headers
+
+
+def _hint(value):
+    """The hub's `next` (seconds to wait), or 0 when missing or not a sane number."""
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return min(value, MAX_HINT) if value > 0 else 0.0
+
+
+def poll_delay(idle, hint=0.0, tiers=TIERS):
+    """Seconds until the next poll: by how long the hub has had no status (`idle`), or the hub's hint if longer."""
+    for after, delay in reversed(tiers):
+        if idle >= after:
+            return max(delay, hint)
+    return max(tiers[0][1], hint)
 
 
 def pair_with_code(hub, code, name=None):
     """Trades a pairing code from chimimouryou's settings for a presence key. Returns the key."""
     try:
-        status, body = request("POST", hub + "/v1/presence/pair", body={"code": normalise_code(code),
+        status, body, _headers = request("POST", hub + "/v1/presence/pair", body={"code": normalise_code(code),
                                                                        "name": name or device_name()})
     except RelayError:
         raise RelayError("Can't reach the hub. Check the internet connection and try again.") from None
@@ -156,11 +178,13 @@ class Relay:
     The local API calls set()/clear() in place of Presence's, so it has the same names.
     """
 
-    def __init__(self, presence, store, poll_interval=POLL_INTERVAL, local_wins=LOCAL_WINS,
-                 max_backoff=MAX_BACKOFF):
+    def __init__(self, presence, store, tiers=TIERS, local_wins=LOCAL_WINS, max_backoff=MAX_BACKOFF,
+                 discord_check=DISCORD_CHECK):
         self.presence = presence
         self.store = store
-        self.poll_interval = poll_interval
+        self.tiers = tiers
+        self.discord_check = discord_check
+        self._seen = time.monotonic()  # when the hub last had a status (pairing counts as one)
         self.local_wins = local_wins
         self.max_backoff = max_backoff
         self._lock = threading.Lock()
@@ -210,6 +234,7 @@ class Relay:
         self.store.save(hub, key)
         with self._lock:
             self._pairing = (hub, key)
+            self._seen = time.monotonic()
         self._wake.set()
 
     def unpair(self):
@@ -232,32 +257,36 @@ class Relay:
         self._thread.join(timeout)
 
     def poll_once(self):
-        """One GET /v1/presence/current. True when the hub answered as expected."""
+        """One GET /v1/presence/current: (answered as expected, the hub's `next` hint in seconds)."""
         pairing = self._pairing
         if pairing is None:
-            return True
+            return True, 0.0
         hub, key = pairing
         try:
-            status, body = request("GET", hub + "/v1/presence/current", key=key)
+            status, body, headers = request("GET", hub + "/v1/presence/current", key=key)
         except RelayError:
-            return False
+            return False, 0.0
+        hint = _hint(body.get("next") if isinstance(body, dict) else headers.get("X-Next"))
         if status == 401:  # revoked in chimimouryou's settings
             with self._lock:
                 if self._pairing == pairing:
                     self.store.forget()
                     self._pairing = None
             self._from_hub(None)
-            return True
+            return True, hint
         if status == 204:
             self._from_hub(None)
-            return True
+            return True, hint
         if status == 200 and isinstance(body, dict):
             try:
-                self._from_hub(activity_mod.clean(body.get("activity")))
+                activity = activity_mod.clean(body.get("activity"))
             except activity_mod.InvalidActivity:
-                self._from_hub(None)
-            return True
-        return False
+                activity = None
+            if activity is not None:
+                self._seen = time.monotonic()
+            self._from_hub(activity)
+            return True, hint
+        return False, hint
 
     def _run(self):
         failures = 0
@@ -266,7 +295,15 @@ class Relay:
                 self._wake.wait()
                 self._wake.clear()
                 continue
-            failures = 0 if self.poll_once() else failures + 1
-            delay = min(self.poll_interval * (2 ** failures), self.max_backoff)
+            if self.presence.status != "connected":  # nobody would see it: don't spend hub requests
+                self._wake.wait(self.discord_check)
+                self._wake.clear()
+                continue
+            ok, hint = self.poll_once()
+            failures = 0 if ok else failures + 1
+            delay = poll_delay(time.monotonic() - self._seen, hint, self.tiers)
+            if failures:
+                delay = max(delay, min(delay * (2 ** failures), self.max_backoff))
             self._wake.wait(delay)
             self._wake.clear()
+

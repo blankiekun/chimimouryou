@@ -33,7 +33,9 @@ Tools → Add-ons → chimimouryou Discord companion → Config (`config.json`, 
 
 Paired with your chimimouryou social account, the add-on also shows what you read on other devices
 (a phone, a computer without Anki) in this computer's Discord: those devices send their status to the
-social hub, and the add-on asks the hub for it every 30 s (less often while the hub can't be reached).
+social hub, and the add-on asks the hub for it, only while Discord is running: every 30 s, every 2
+minutes after 10 minutes without a status, every 5 minutes after an hour, later when the hub asks
+for that, and less often while the hub can't be reached.
 
 - Automatic: signed in to Social on this computer, chimimouryou pairs the add-on itself
   (`PUT /v1/pair`).

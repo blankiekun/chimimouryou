@@ -34,6 +34,7 @@ class FakeHub:
 
     def __init__(self):
         self.current = (204, None)  # what GET /v1/presence/current answers
+        self.headers = {}
         self.codes = {"ABC-DEF-GHJ": KEY}
         self.requests = []
         hub = self
@@ -59,7 +60,7 @@ class FakeHub:
                         return self._send(302, headers={"Location": "/elsewhere"})
                     if self.headers.get("Authorization") != "Bearer " + KEY:
                         return self._send(401, {"error": "key"})
-                    return self._send(code, body)
+                    return self._send(code, body, hub.headers)
                 self._send(200 if self.path == "/elsewhere" else 404, {})
 
             def do_POST(self):
@@ -141,7 +142,8 @@ class RelayTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.store = relay.Store(os.path.join(self.tmp.name, "pairing.json"))
         self.p = FakePresence()
-        self.r = relay.Relay(self.p, self.store, poll_interval=0.1, local_wins=0.4, max_backoff=0.4)
+        self.r = relay.Relay(self.p, self.store, tiers=((0, 0.1),), local_wins=0.4, max_backoff=0.4,
+                             discord_check=0.05)
         self.r.start()
 
     def tearDown(self):
@@ -212,11 +214,68 @@ class RelayTest(unittest.TestCase):
         self.assertTrue(wait_for(lambda: self.p.now is None))
 
 
+    def test_polls_only_while_discord_is_connected(self):
+        self.p.status = "closed"
+        self.r.pair(self.hub.url, KEY)
+        time.sleep(0.3)
+        self.assertEqual(self.hub.polls(), [])
+        self.p.status = "connected"
+        self.assertTrue(wait_for(lambda: len(self.hub.polls()) >= 1))
+
+    def test_hub_hints(self):
+        self.r.stop()
+        self.r._pairing = (self.hub.url, KEY)
+        self.hub.headers = {"X-Next": "900"}
+        self.assertEqual(self.r.poll_once(), (True, 900.0))
+        self.hub.current = (200, {"activity": {"name": "Phone"}, "kind": "book", "next": 45})
+        self.assertEqual(self.r.poll_once(), (True, 45.0))
+        self.hub.current = (200, {"activity": {"name": "Phone"}, "kind": "book"})
+        self.assertEqual(self.r.poll_once(), (True, 0.0))
+        self.hub.current = (204, None)
+        self.hub.headers = {"X-Next": "120"}
+        self.r._pairing = (self.hub.url, "pk_" + "B" * 43)  # 401 carries X-Next too
+        self.assertEqual(self.r.poll_once()[0], True)
+        self.assertFalse(self.r.paired)
+
+
+class ScheduleTest(unittest.TestCase):
+    def test_tiers_and_hints(self):
+        for idle, delay in ((0, 30), (599, 30), (600, 120), (3599, 120), (3600, 300), (86400, 300)):
+            self.assertEqual(relay.poll_delay(idle), delay, idle)
+        self.assertEqual(relay.poll_delay(0, 900), 900)  # a larger hint wins
+        self.assertEqual(relay.poll_delay(3600, 60), 300)  # a smaller one doesn't
+        for raw, hint in (("45", 45), (60, 60), (-1, 0), ("x", 0), (None, 0), (99999, relay.MAX_HINT)):
+            self.assertEqual(relay._hint(raw), hint, raw)
+
+    def test_slows_down_without_a_status(self):
+        hub = FakeHub()
+        p = FakePresence()
+        with tempfile.TemporaryDirectory() as tmp:
+            r = relay.Relay(p, relay.Store(os.path.join(tmp, "p.json")), tiers=((0, 0.05), (0.5, 0.6)))
+            r.start()
+            try:
+                r.pair(hub.url, KEY)  # 204s: nothing seen since pairing
+                time.sleep(0.5)
+                fast = len(hub.polls())
+                time.sleep(1.2)
+                slow = len(hub.polls()) - fast
+                self.assertGreaterEqual(fast, 5)
+                self.assertLessEqual(slow, 3)
+                hub.current = (200, {"activity": {"name": "Phone"}, "kind": "book"})
+                self.assertTrue(wait_for(lambda: p.now == {"type": 0, "name": "Phone"}))
+                n = len(hub.polls())
+                time.sleep(0.3)  # a status seen: fast again
+                self.assertGreaterEqual(len(hub.polls()) - n, 3)
+            finally:
+                r.stop()
+                hub.close()
+
+
 class PairEndpointTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.p = FakePresence()
-        self.r = relay.Relay(self.p, relay.Store(os.path.join(self.tmp.name, "pairing.json")), poll_interval=60)
+        self.r = relay.Relay(self.p, relay.Store(os.path.join(self.tmp.name, "pairing.json")), tiers=((0, 60),))
         self.srv = server.make_server(self.p, 0, relay=self.r)
         self.port = self.srv.server_address[1]
         server.serve_in_thread(self.srv)
