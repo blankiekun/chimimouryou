@@ -106,7 +106,7 @@ describe('/b reopens where reading stopped (page turns, the auto bookmark; a nov
             .catch(() => {}); // Checked below, with what was on screen.
           await settle(1500);
           const shown = visibleParagraphs();
-          const saved = (await database.getBookmark(id))!.exploredCharCount;
+          const saved = (await database.getBookmark(id))!.exploredCharCount ?? 0;
           const marked = paragraphAt(saved, true);
           const what = `read ${read}, left at ${shown}, bookmark ${saved} in ${marked}`;
           // Continuous may settle a few lines off; the bookmark must be in what was read.
