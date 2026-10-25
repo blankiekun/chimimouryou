@@ -13,8 +13,8 @@ import threading
 from .presence import Presence
 from .server import DEFAULT_PORT, make_server, serve_in_thread
 
-# placeholder: replace with the "Chimi Reader" application id from the Discord developer portal.
-CLIENT_ID = "000000000000000000"
+# The "Chimi Reader" application in the Discord developer portal (public, not a secret).
+CLIENT_ID = "1564044085365309470"
 
 _lock = threading.Lock()
 _running = {}
