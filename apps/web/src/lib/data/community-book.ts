@@ -220,7 +220,8 @@ export const bookMarks = ({ lines, index, threads }: Omit<BookCommunity, 'work' 
  * url. Other books: the match toast when the hub suggests a work (offerMatch).
  */
 export async function markBookOnOpen(title: string, getIndex: () => Promise<SearchIndex>) {
-  if (!communityOn() || !socialSession$.getValue()) return;
+  // Signed out too (owner 2026-10-25): an anonymous threads GET, only for a matched book.
+  if (!communityOn()) return;
   if (!communityWorks$.getValue()[title] && !workFromUrl(await metadataUrl(title), title)) {
     // No suggestion reachable: the Community tab still offers the match sheet.
     await offerMatch(title, getIndex).catch(() => {});
