@@ -120,10 +120,12 @@ it('times the analysis of a book', async () => {
     record('words part: Python (yurigana + features)', w.analyse - w.tokenize);
     record('words part: Sudachi tokenize', w.tokenize);
     record('total: cold worker, both parts', afterWords - start);
+    // Bytes / 1000: the seconds column then shows MB.
+    record('worker after both parts: wasm memory (MB)', w.wasm / 1000);
   }
 
   // Tiers: the same book opened (readings, then the estimate) and a two-book background batch,
-  // through analysis-tools.ts. Small: the worker ends after every part, one at a time; large: kept
+  // through analysis-tools.ts. Small: the worker ends after each book, one at a time; large: kept
   // 10 s, two at once. Each run starts cold (the kept workers are waited out).
   for (const [tier, cores] of [
     ['small (4 cores)', 4],
@@ -142,8 +144,8 @@ it('times the analysis of a book', async () => {
       await clearAnalyses();
 
       const batch = performance.now();
-      // Parts that failed, as background-analysis.ts skips them: two workers starting at once both
-      // open the dictionary's OPFS file, and only one sync access handle is allowed.
+      // Parts that failed, as background-analysis.ts skips them (two workers starting at once both
+      // open the dictionary's OPFS file: read-only handles since this was found).
       let failed = 0;
       const tolerate = (part: Promise<unknown>) =>
         part.catch((error) => {

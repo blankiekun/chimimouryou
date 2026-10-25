@@ -446,9 +446,13 @@ interface Session {
   worker: Worker;
   html: string;
   busy: boolean;
+  /** the jobs it ran on `html`: small machines end it after the book's two parts */
+  parts: number;
 }
 
 let sessions: Session[] = [];
+/** How long a small machine's worker waits for its book's other part */
+const BOOK_PART_WAIT_MS = 10_000;
 let idleTimer: ReturnType<typeof setTimeout> | undefined;
 
 function endSessions() {
@@ -515,6 +519,8 @@ export function nextJob<S extends { html: string; busy: boolean }>(
 }
 
 function pump() {
+  const keepAlive = analysisKeepAlive();
+
   for (
     let next = nextJob(pending, sessions, analysisWorkers());
     next;
@@ -525,7 +531,8 @@ function pump() {
         type: 'module'
       }),
       html: '',
-      busy: false
+      busy: false,
+      parts: 0
     };
 
     if (!next.session) sessions = [...sessions, session];
@@ -534,6 +541,7 @@ function pump() {
 
     clearTimeout(idleTimer);
     session.busy = true;
+    session.parts = session.html === job.html ? session.parts + 1 : 1;
     session.html = job.html;
     job.start(session).finally(() => {
       session.busy = false;
@@ -543,13 +551,12 @@ function pump() {
 
   if (pending.length || sessions.some((session) => session.busy)) return;
 
-  const keepAlive = analysisKeepAlive();
-
   if (!keepAlive) {
-    endSessions();
-  } else if (sessions.length) {
-    idleTimer = setTimeout(endSessions, keepAlive);
+    // Small machines keep the worker only for its book's other part (its tokens, ~1.9 s start).
+    sessions.filter((session) => session.parts > 1).forEach((done) => done.worker.terminate());
+    sessions = sessions.filter((session) => session.parts < 2);
   }
+  if (sessions.length) idleTimer = setTimeout(endSessions, keepAlive || BOOK_PART_WAIT_MS);
 }
 
 function enqueue<T>(
