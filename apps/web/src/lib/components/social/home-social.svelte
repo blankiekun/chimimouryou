@@ -13,6 +13,12 @@
   import FriendRequests from '$lib/components/social/friend-requests.svelte';
   import FriendsList from '$lib/components/social/friends-list.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
+  import {
+    communityNotes$,
+    communityNotesSeen$,
+    refreshNotes,
+    unseenNotes
+  } from '$lib/data/community-book';
   import { pagePath } from '$lib/data/env';
   import { bookKey, byLastRead, feed$, friends$, loadFeed, loadFriends } from '$lib/data/social';
   import { hubDown$, socialSession$ } from '$lib/data/social-account';
@@ -39,6 +45,7 @@
   onMount(() => {
     loadFriends();
     loadFeed();
+    refreshNotes();
   });
 
   $: list =
@@ -81,12 +88,15 @@
     ? 0
     : !$socialSession$
       ? 1
-      : Number(!!reading.length) +
-        Number(!!events.length) +
-        (phone ? 1 : 2 + Number(requestsShown));
+      : Number(!!reading.length) + Number(activityShown) + (phone ? 1 : 2 + Number(requestsShown));
   $: events = $socialSession$ && $feed$?.user === $socialSession$.me.id ? $feed$.events : [];
+  $: notes =
+    $socialSession$ && $communityNotes$?.user === $socialSession$.me.id
+      ? unseenNotes($communityNotes$.notes, $communityNotesSeen$)
+      : [];
+  $: activityShown = events.length + notes.length > 0;
   $: activityNumber = friendsNumber + 1;
-  $: sideNumber = activityNumber + Number(!!events.length);
+  $: sideNumber = activityNumber + Number(activityShown);
   $: friendsNumber = number + Number(!!reading.length);
 </script>
 
@@ -165,15 +175,15 @@
           <a class="app-button-quiet" href="{pagePath}/friends">{$t$('social.allFriends')} →</a>
         </span>
       </section>
-      {#if events.length}
-        <ActivityFeed {events} number={activityNumber} limit={5} />
+      {#if activityShown}
+        <ActivityFeed {events} {notes} number={activityNumber} limit={5} />
       {/if}
     {:else}
       <div class="home-social-pair">
         <div class="home-social-side">
           <FriendsList friends={list?.friends ?? []} number={friendsNumber} {covers} />
-          {#if events.length}
-            <ActivityFeed {events} number={activityNumber} limit={8} />
+          {#if activityShown}
+            <ActivityFeed {events} {notes} number={activityNumber} limit={8} />
           {/if}
         </div>
         <div class="home-social-side">
@@ -187,7 +197,7 @@
   {/if}
 {/if}
 
-{#if $page.state.profile && !$page.state.profileFromHeader}
+{#if $page.state.profile}
   <ProfileLayer
     username={$page.state.profile}
     {covers}

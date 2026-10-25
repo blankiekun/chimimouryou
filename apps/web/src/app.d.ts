@@ -18,8 +18,6 @@ declare global {
       bookWords?: number;
       /** Home and /friends: username of the social profile shown */
       profile?: string;
-      /** The profile was opened from the app header's account control, which shows it */
-      profileFromHeader?: boolean;
     }
   }
   interface HTMLElement {

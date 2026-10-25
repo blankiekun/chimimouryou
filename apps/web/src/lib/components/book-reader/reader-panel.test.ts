@@ -49,6 +49,7 @@ describe('ReaderPanel', () => {
     const target = document.createElement('div');
 
     setPluginEnabled('ai', false);
+    setPluginEnabled('social', false);
     new ReaderPanel({ target, props: props('Off', '', 0) });
     await tick();
 
@@ -59,9 +60,10 @@ describe('ReaderPanel', () => {
     const target = document.createElement('div');
 
     setPluginEnabled('ai', false);
+    setPluginEnabled('social', true);
     new ReaderPanel({ target, props: props('Text', '<p>猫</p>', 1) });
     await tick();
 
-    expect(tabLabels(target)).toEqual(['Search', 'Highlights', 'Listen']);
+    expect(tabLabels(target)).toEqual(['Search', 'Highlights', 'Community', 'Listen']);
   });
 });

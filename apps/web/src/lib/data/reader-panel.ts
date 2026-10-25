@@ -27,17 +27,20 @@ export function resolvePanelTab(key: PanelTab): PanelTab {
   return key === 'recap' || key === 'lorebook' ? 'story' : key;
 }
 
-/** Index tabs in their order on the panel's edge; plugin tabs (Story) last. */
+/** Index tabs in their order on the panel's edge: Community after Highlights, other plugin tabs (Story) last. */
 export function readerPanelTabs(
   pluginTabs: PanelTabEntry[],
   { hasChapters, hasText }: { hasChapters: boolean; hasText: boolean }
 ): PanelTabEntry[] {
+  const entry = ({ key, label }: PanelTabEntry) => ({ key, label });
+
   return [
     ...(hasChapters ? [{ key: 'contents', label: 'reader.contents' as const }] : []),
     ...(hasText ? [{ key: 'search', label: 'reader.searchTab' as const }] : []),
     { key: 'highlights', label: 'reader.highlights' },
+    ...pluginTabs.filter((tab) => tab.key === 'community').map(entry),
     { key: 'listen', label: 'reader.listen' },
-    ...pluginTabs.map(({ key, label }) => ({ key, label }))
+    ...pluginTabs.filter((tab) => tab.key !== 'community').map(entry)
   ];
 }
 

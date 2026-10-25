@@ -1,0 +1,325 @@
+<script lang="ts">
+  import CommunityMatch from '$lib/components/community/community-match.svelte';
+  import CommunitySignup from '$lib/components/community/community-signup.svelte';
+  import CommunityWork from '$lib/components/community/community-work.svelte';
+  import type { PassageContext } from '$lib/data/ask-ai';
+  import { absBaseTitle } from '$lib/data/audiobookshelf';
+  import {
+    bodyLength,
+    clipContext,
+    contextLength,
+    lineHash,
+    postOnLine,
+    quoteLength,
+    uploadWorkCover,
+    volumeOf
+  } from '$lib/data/community';
+  import {
+    bookLines,
+    bookWork,
+    communityErrorKey,
+    communityMarkTap$,
+    lineAt,
+    splitContext,
+    workTitles
+  } from '$lib/data/community-book';
+  import { socialSession$ } from '$lib/data/social-account';
+  import type { SearchIndex } from '$lib/functions/book-text/book-search';
+  import { t$ } from '$lib/i18n';
+  import { createEventDispatcher, onMount } from 'svelte';
+
+  /**
+   * Post to community (board 5), the selection's action: the post's text (a question, a comment
+   * or nothing but the line), a Spoiler mark, and what goes with it: the selected sentence, its
+   * page (<= 600 characters) and the work. Signed out it asks to sign up; the first post on a
+   * book matches it to its work (board 6). Plain text, 1,000 characters and 20 lines at most.
+   */
+  export let passage: PassageContext;
+  export let getIndex: () => Promise<SearchIndex>;
+
+  const bodyLines = 20;
+  const dispatch = createEventDispatcher<{ close: void }>();
+
+  let state: 'loading' | 'match' | 'ready' | 'error' = 'loading';
+  let suggestion: string | null = null;
+  let work = '';
+  let line = '';
+  let context = '';
+  let body = '';
+  let spoiler = false;
+  let sending = false;
+  let error = '';
+
+  $: title = passage.bookTitle;
+  $: workTitle = workTitles.get(work) || absBaseTitle(title) || title;
+  $: vol = volumeOf(title);
+  $: shown = splitContext(context, line);
+  $: count = [...body].length;
+  $: tooLong = body.split('\n').length > bodyLines;
+
+  onMount(async () => {
+    if (!$socialSession$) return;
+    try {
+      const [resolved, index] = await Promise.all([bookWork(title), getIndex()]);
+      const lines = bookLines(index.paragraphs);
+      const at = lineAt(lines, passage.start ?? -1);
+
+      line = at >= 0 ? lines[at].text : passage.selection.trim();
+      context = clipContext(
+        lines
+          .slice(Math.max(0, at - 6), at + 7)
+          .map((item) => item.text)
+          .join(''),
+        line
+      );
+      if (!(await lineHash(line))) {
+        error = $t$('community.lineShort');
+        state = 'error';
+      } else if ([...line].length > quoteLength) {
+        error = $t$('community.lineLong');
+        state = 'error';
+      } else if (resolved.work) {
+        work = resolved.work;
+        state = 'ready';
+      } else {
+        suggestion = resolved.suggestion;
+        state = 'match';
+      }
+    } catch (e) {
+      error = $t$(communityErrorKey(e));
+      state = 'error';
+    }
+  });
+
+  /** The work's first cover on the hub: this reader's copy, as a thumbnail */
+  async function sendCover() {
+    const { database } = await import('$lib/data/store');
+    const cover = (await database.getDataByTitle(title))?.coverImage;
+    const blob =
+      typeof cover === 'string' && cover ? await (await fetch(cover)).blob() : cover || undefined;
+
+    if (blob instanceof Blob) await uploadWorkCover(work, blob);
+  }
+
+  async function post() {
+    sending = true;
+    error = '';
+    try {
+      const posted = await postOnLine(work, {
+        title: workTitle,
+        vol,
+        quote: line,
+        context,
+        body: body.trim(),
+        spoiler
+      });
+
+      if (!posted.cover) sendCover().catch(() => {});
+      communityMarkTap$.next(posted.line);
+      dispatch('close');
+    } catch (e) {
+      error = $t$(communityErrorKey(e));
+    } finally {
+      sending = false;
+    }
+  }
+</script>
+
+<div class="composer">
+  <header class="composer-head">
+    <h2>{$t$('community.postTitle')}</h2>
+  </header>
+
+  {#if !$socialSession$}
+    <CommunitySignup box on:close={() => dispatch('close')} />
+  {:else if state === 'loading'}
+    <p class="composer-quiet">{$t$('community.loading')}</p>
+  {:else if state === 'error'}
+    <p role="alert">{error}</p>
+    <button type="button" class="app-button composer-start" on:click={() => dispatch('close')}
+      >{$t$('social.cancel')}</button
+    >
+  {:else if state === 'match'}
+    <CommunityMatch
+      {title}
+      {suggestion}
+      on:done={({ detail }) => {
+        work = detail;
+        state = 'ready';
+      }}
+    />
+  {:else}
+    <form class="composer-form" on:submit|preventDefault={post}>
+      <p class="composer-quiet">{$t$('community.postLead')}</p>
+      <textarea
+        class="app-input"
+        rows="4"
+        maxlength={bodyLength}
+        aria-label={$t$('community.postTitle')}
+        placeholder={$t$('community.postPlaceholder')}
+        bind:value={body}
+      />
+      <p class="composer-row composer-quiet">
+        <span>{$t$('community.plainText')}</span>
+        <span class="composer-count" class:composer-over={tooLong}
+          >{count.toLocaleString('en-US')} / {bodyLength.toLocaleString('en-US')}</span
+        >
+      </p>
+      {#if tooLong}<p class="composer-error">{$t$('community.tooManyLines')}</p>{/if}
+      <label class="composer-spoiler">
+        <input type="checkbox" bind:checked={spoiler} />
+        <span>
+          <strong>{$t$('community.spoiler')}</strong>
+          <small>{$t$('community.spoilerHint')}</small>
+        </span>
+      </label>
+
+      <h3>{$t$('community.shared')}</h3>
+      <figure class="composer-context">
+        <blockquote lang="ja">{shown.before}<strong>{shown.line}</strong>{shown.after}</blockquote>
+        <figcaption>
+          {$t$('community.contextCount', {
+            count: [...context].length,
+            max: contextLength
+          })}
+        </figcaption>
+      </figure>
+      <CommunityWork title={workTitle} {vol} cover={null}>
+        <button
+          type="button"
+          class="app-button-quiet composer-change"
+          on:click={() => (state = 'match')}>{$t$('community.change')}</button
+        >
+      </CommunityWork>
+      <p class="composer-quiet">{$t$('community.alsoShown')}</p>
+
+      {#if error}<p class="composer-error" role="alert">{error}</p>{/if}
+      <div class="composer-actions">
+        <button type="submit" class="app-button app-button-primary" disabled={sending || tooLong}
+          >{$t$('community.post')}</button
+        >
+        <button type="button" class="app-button" on:click={() => dispatch('close')}
+          >{$t$('social.cancel')}</button
+        >
+      </div>
+    </form>
+  {/if}
+</div>
+
+<style>
+  .composer {
+    --c-ink: var(--reader-panel-fg);
+    --c-muted: var(--muted);
+    --c-rule: var(--rule);
+    --c-field: color-mix(in srgb, var(--reader-panel-fg) 6%, transparent);
+
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: auto;
+    padding: 0 1rem 1rem;
+  }
+
+  .composer-head {
+    padding: 0.9rem 0 0.6rem;
+    border-bottom: 2px solid var(--reader-panel-fg);
+  }
+
+  .composer-head h2 {
+    font-size: var(--type-h2);
+    font-weight: 700;
+  }
+
+  .composer-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .composer-form textarea {
+    width: 100%;
+    resize: vertical;
+  }
+
+  .composer-form h3 {
+    margin-top: 0.5rem;
+    font-weight: 700;
+  }
+
+  .composer-quiet {
+    color: var(--muted);
+    font-size: var(--type-small);
+  }
+
+  .composer-row {
+    display: flex;
+    justify-content: space-between;
+    margin-top: -0.4rem;
+  }
+
+  .composer-count {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .composer-over,
+  .composer-error {
+    color: var(--app-danger-color);
+  }
+
+  .composer-error {
+    font-size: var(--type-small);
+  }
+
+  .composer-spoiler {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+  }
+
+  .composer-spoiler input {
+    margin-top: 0.2rem;
+  }
+
+  .composer-spoiler small {
+    display: block;
+    color: var(--muted);
+    font-size: var(--type-small);
+  }
+
+  .composer-context {
+    padding: 0.75rem;
+    background: var(--c-field);
+  }
+
+  .composer-context blockquote {
+    color: var(--muted);
+    font-size: var(--type-small);
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+  }
+
+  .composer-context strong {
+    color: var(--reader-panel-fg);
+    font-size: var(--type-body);
+  }
+
+  .composer-context figcaption {
+    margin-top: 0.5rem;
+    color: var(--muted);
+    font-size: var(--type-small);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .composer-change {
+    margin-left: auto;
+    font-weight: 700;
+  }
+
+  .composer-actions,
+  .composer-start {
+    display: flex;
+    gap: 0.75rem;
+    align-self: flex-start;
+  }
+</style>

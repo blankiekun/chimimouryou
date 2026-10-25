@@ -674,6 +674,14 @@
   color: var(--accent-color);
 }
 
+/* Lines with Community threads (components/community/community-markers.svelte); vertical text
+   gets a drawn rule there, since Chromium paints no highlight decoration in it. */
+::highlight(ttu-community) {
+  text-decoration: underline dotted 2px;
+  text-decoration-color: var(--accent-color);
+  text-underline-offset: 0.3em;
+}
+
 ::highlight(ttu-search) {
   background-color: var(--search-match-color);
 }

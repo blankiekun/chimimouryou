@@ -137,7 +137,7 @@ Study Book is the default, not a lock: it ships as the built-in themes Chimi Lig
 **Key Characteristics:**
 
 - One spot colour; all other colour is ink, paper and rule.
-- Flat: no shadows, no gradients, no blur (`shadow`, `coverShadow` and `blur` are transparent/0 in both Chimi themes).
+- Flat: no shadows, no gradients, no blur (`shadow`, `coverShadow` and `blur` are transparent/0 in both Chimi themes). One exception: a spoiler-marked Community post is blurred until shown (`community-text.svelte`).
 - Square corners (2px), 1px rules, 2px ink rules on top of tables.
 - One chrome face, BIZ UDPGothic, on a fixed type scale with tabular digits for figures.
 - Numbered section heads and one POINT box per screen instead of icons and cards.
@@ -197,7 +197,7 @@ The scale lives in `src/app.scss` as `--type-*` and in Tailwind as `text-display
 
 ## Layout
 
-- **Shell:** every page and the reader use the shared `app-header` (`src/lib/components/app-header/`): a flat bar with the ち logo alone on the left, text tabs Home / Store / Words / Statistics / Settings (the active one gets a 3px spot underline), and Import and the account on the right. Below 640px the tabs move to a bottom tab bar (body padding 3.5rem plus the safe area); the reader has no bottom bar.
+- **Shell:** every page and the reader use the shared `app-header` (`src/lib/components/app-header/`): a flat bar with the ち logo alone on the left, text tabs Home / Store / Words / Community / Settings (the active one gets a 3px spot underline; Community only with the Social plugin on), and Import and the avatar on the right. The avatar opens Profile (your statistics, plus the hub profile when signed in; it works with no account) and wears a 2px spot ring while there, also on Statistics, which Profile's Edit statistics opens. Below 640px the tabs move to a bottom tab bar with 13px labels so Community fits (body padding 3.5rem plus the safe area); the reader has no bottom bar.
 - **Controls:** 40px tall, 44px on coarse pointers (`--app-control-height`).
 - **Settings:** sidebar areas with collapsible section groups; each row is `SettingsItemGroup`: label left, control right (`wide` stacks them). On phones the sidebar becomes a list that drills into one area.
 - **Shelves:** covers share one size and one baseline on every shelf and in the Store grid.
@@ -261,7 +261,7 @@ Flat paper bar with a 1px rule under it; tabs are text in ink, the active one in
 
 ### Reader Panel
 
-`book-reader/reader-panel.svelte`: index tabs standing vertically on the panel's edge (Contents, Search, Highlights | Listen | Story with the AI plugin: Story so far, then Lore, in one scrolling view); the active tab joins the panel with a spot border. Each tab opens with its title over a 2px ink rule, and rows are divided by 1px rules. Ask AI opens inside the panel. On phones it is a bottom sheet with the tabs in a row.
+`book-reader/reader-panel.svelte`: index tabs standing vertically on the panel's edge (Contents, Search, Highlights | Community | Listen | Story with the AI plugin: Story so far, then Lore, in one scrolling view); the active tab joins the panel with a spot border. Each tab opens with its title over a 2px ink rule, and rows are divided by 1px rules. Ask AI opens inside the panel. On phones it is a bottom sheet with the tabs in a row.
 
 ## Do's and Don'ts
 
@@ -276,7 +276,7 @@ Flat paper bar with a 1px rule under it; tabs are text in ink, the active one in
 
 ### Don't:
 
-- **Don't** use shadows, gradients, blur or pill shapes.
+- **Don't** use shadows, gradients, blur or pill shapes (the spoiler blur on Community posts is the one exception).
 - **Don't** put icons before headings, or use unlabelled glyph buttons where a word fits.
 - **Don't** use Tailwind palette classes (`bg-gray-700`, `text-red-500`) or fixed colours in components.
 - **Don't** add a second accent colour or use green as decoration.
