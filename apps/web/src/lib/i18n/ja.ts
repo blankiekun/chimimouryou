@@ -2291,12 +2291,16 @@ export const ja: Record<MessageKey, string> = {
   'community.tooManyLines': '投稿は20行までです。',
   'community.spoilerHint':
     '本の外では、読者がこの行に着くまでぼかされます。本の中では、この行を読み終えた読者にだけ表示されます。',
+  'community.lineComments': 'この行へのコメント',
+  'community.feedPosts': 'コミュニティの投稿',
+  'community.thisLine': 'この行',
   'community.where': '投稿先',
   'community.whereFeed': 'コミュニティのフィードとこの行',
   'community.whereLine': 'この行のみ',
-  'community.whereFeedHint': '公開のコミュニティフィードと、この行のスレッドに表示されます。',
+  'community.whereFeedHint':
+    '公開のコミュニティフィードに返信付きの投稿として表示され、この行にも並びます。',
   'community.whereLineHint':
-    'この行のスレッドにだけ表示され、この本の読者が見られます。フィードには出ません。',
+    'この行へのコメントです。この本の読者が行を開いたときに表示されます。フィードには出ません。',
   'community.shared': '投稿と一緒に共有されるもの',
   'community.contextCount': '行とページの文脈 · {count} / {max}文字',
   'community.change': '変更',

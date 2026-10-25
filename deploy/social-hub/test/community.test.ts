@@ -606,9 +606,14 @@ describe('hub community', () => {
     expect(
       (await call('GET', '/v1/community/feed')).body.posts.map((one: { id: string }) => one.id)
     ).toEqual([shared]);
-    expect((await thread(aki.token)).body.posts.map((one: { id: string }) => one.id)).toEqual(
-      expect.arrayContaining([shared, lineOnly, reply])
-    );
+    expect(
+      Object.fromEntries(
+        (await thread(aki.token)).body.posts.map((one: { id: string; inFeed: boolean }) => [
+          one.id,
+          one.inFeed
+        ])
+      )
+    ).toEqual({ [shared]: true, [lineOnly]: false, [reply]: true });
   });
 
   it('hides a post only on reports from accounts past their first days', async () => {

@@ -61,6 +61,8 @@ export interface CommunityPost {
   mine: boolean;
   /** null for a deleted post */
   author: CommunityAuthor | null;
+  /** In a thread: false for a "This line only" post (older hubs leave it out: in the feed) */
+  inFeed?: boolean;
 }
 
 /** The work as its first post named it, and its cover thumbnail (`workCoverUrl`) */

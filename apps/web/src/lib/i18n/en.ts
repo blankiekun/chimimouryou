@@ -2278,12 +2278,16 @@ export const en = {
   'community.tooManyLines': 'Posts have at most 20 lines.',
   'community.spoilerHint':
     'Blurred outside this book until readers reach this line. In the book it only ever shows to readers past it.',
+  'community.lineComments': 'Comments on this line',
+  'community.feedPosts': 'Community posts',
+  'community.thisLine': 'This line',
   'community.where': 'Where it goes',
   'community.whereFeed': 'Community feed and this line',
   'community.whereLine': 'This line only',
-  'community.whereFeedHint': 'In the public Community feed and in this line’s thread.',
+  'community.whereFeedHint':
+    'A post in the public Community feed with its own replies, also listed on this line.',
   'community.whereLineHint':
-    'Only in this line’s thread, where readers of this book see it. Not in the feed.',
+    'A comment on this line: readers of this book see it when they open the line. Not in the feed.',
   'community.shared': 'Shared with your post',
   'community.contextCount': 'Line and page context · {count} / {max} chars',
   'community.change': 'Change',

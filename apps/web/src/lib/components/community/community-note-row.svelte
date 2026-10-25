@@ -18,7 +18,7 @@
 
   function open() {
     markNotesSeen(group.parent, group.at);
-    goto(threadPath(group.work, group.line));
+    goto(threadPath(group.work, group.line, group.parent));
   }
 </script>
 
