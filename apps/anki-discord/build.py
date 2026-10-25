@@ -17,7 +17,7 @@ MANIFEST = {"package": "chimimouryou_discord", "name": "chimimouryou Discord com
 def build(out=os.path.join(HERE, "chimimouryou-discord.ankiaddon")):
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
         for root, dirs, files in os.walk(SOURCE):
-            dirs[:] = sorted(d for d in dirs if d != "__pycache__")
+            dirs[:] = sorted(d for d in dirs if d not in ("__pycache__", "user_files"))  # user_files: a paired key
             for name in sorted(files):
                 if not name.endswith((".pyc", ".pyo")) and name != "meta.json":
                     path = os.path.join(root, name)
