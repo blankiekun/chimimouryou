@@ -705,8 +705,11 @@
     }
   }
 
-  function onSwipe(ev: CustomEvent<{ direction: 'top' | 'right' | 'left' | 'bottom' }>) {
-    if (!concretePageManager || $skipKeyDownListener$) return;
+  function onSwipe(
+    ev: CustomEvent<{ direction: 'top' | 'right' | 'left' | 'bottom'; pointerType: string }>
+  ) {
+    // A mouse drag is a text selection; mice turn pages with clicks, keys and the wheel
+    if (!concretePageManager || $skipKeyDownListener$ || ev.detail.pointerType === 'mouse') return;
     if (ev.detail.direction !== 'left' && ev.detail.direction !== 'right') return;
     const swipeLeft = ev.detail.direction === 'left';
     const nextPage = verticalMode ? !swipeLeft : swipeLeft;
