@@ -6,7 +6,14 @@
 
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { analysisToolsSize, nextJob, usesReader } from '$lib/data/analysis-tools';
+import {
+  analysisTag,
+  analysisToolsSize,
+  nextJob,
+  prewarmAnalysis,
+  usesReader
+} from '$lib/data/analysis-tools';
+import { readerDb } from '$lib/data/reader-db';
 
 describe('analysis tools', () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -66,5 +73,41 @@ describe('analysis tools', () => {
     });
     a.busy = false;
     expect(nextJob([{ html: 'A' }], [b, a], 2)).toEqual({ at: 0, session: a });
+  });
+
+  it('prewarms a worker only for a book whose analysis will be made, one at a time', async () => {
+    const manifest = { version: '1', installed: ['difficulty', 'furigana'], files: [] };
+    const posted: unknown[] = [];
+
+    vi.stubGlobal('caches', {
+      open: async () => ({ match: async () => new Response(JSON.stringify(manifest)) })
+    });
+    vi.stubGlobal(
+      'Worker',
+      class {
+        postMessage = (message: unknown) => posted.push(message);
+        terminate() {}
+      }
+    );
+
+    const db = await readerDb();
+    const etag = await analysisTag('<p>本</p>', '1');
+
+    await db.put('readings', { title: 'Book', etag, file: {} as never });
+    await db.put('estimates', { title: 'Book', etag } as never);
+    // Both current: nothing to load.
+    await prewarmAnalysis('Book', '<p>本</p>', true);
+    expect(posted).toEqual([]);
+
+    await db.delete('readings', 'Book');
+    // Readings not wanted: the estimate is current.
+    await prewarmAnalysis('Book', '<p>本</p>', false);
+    expect(posted).toEqual([]);
+
+    await prewarmAnalysis('Book', '<p>本</p>', true);
+    expect(posted).toEqual([{ base: expect.any(String), manifest }]);
+    // The worker is free for the job: no second one.
+    await prewarmAnalysis('Book', '<p>本</p>', true);
+    expect(posted).toHaveLength(1);
   });
 });

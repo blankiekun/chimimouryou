@@ -12,8 +12,10 @@ import {
   downloadAnalysisTools,
   installedTools,
   localEstimate,
-  makeReadings
+  makeReadings,
+  prewarmAnalysis
 } from '$lib/data/analysis-tools';
+import { parseBookHtml } from '$lib/functions/file-loaders/utils/sanitize-book-html';
 import { readerDb } from '$lib/data/reader-db';
 import type { AnalysisMessage } from './analysis.worker';
 import type { ScoreMessage } from './analysis-score.worker';
@@ -162,6 +164,55 @@ it('times the analysis of a book', async () => {
       record(`${tier}: background batch (2 books)`, performance.now() - batch);
       record(`${tier}: background batch, failed parts (count)`, failed * 1000);
       await sleep(11_000);
+    }
+  }
+
+  // The reader opening the book (routes/b): the clock starts at the open; the page parses and lays
+  // out the book (its first render, vertical) before it queues the jobs, as bookData$ does. The real
+  // route (production build, Chromium) queues them ~1 s after the open; the rest of that second is
+  // waited out here. Prewarm off is how it ran before prewarmAnalysis.
+  const ROUTE_MS = 1000;
+  const view = document.body.appendChild(document.createElement('div'));
+
+  view.style.cssText = 'writing-mode: vertical-rl; height: 800px; font-size: 20px';
+
+  for (const [tier, cores] of [
+    ['small (4 cores)', 4],
+    ['large (8 cores, 8 GB)', 8]
+  ] as const) {
+    setMachine(cores, 8);
+    for (let run = 0; run < RUNS; run++) {
+      for (const prewarm of [false, true]) {
+        await clearAnalyses();
+
+        const start = performance.now();
+        const warming = prewarm ? prewarmAnalysis('botchan', html, true) : undefined;
+
+        // A frame first, as the page yields between loading the book and rendering it.
+        await new Promise(requestAnimationFrame);
+        view.replaceChildren(...parseBookHtml(html).childNodes);
+        void view.offsetHeight;
+        await new Promise(requestAnimationFrame);
+
+        const rendered = performance.now();
+
+        while (performance.now() - start < ROUTE_MS) await new Promise(requestAnimationFrame);
+        const estimate = localEstimate('botchan', html);
+
+        await makeReadings('botchan', html);
+
+        const ready = performance.now();
+
+        await Promise.all([estimate, warming]);
+
+        const name = `${tier}: reader open, prewarm ${prewarm ? 'on' : 'off'}`;
+
+        record(`${name}: first render`, rendered - start);
+        record(`${name}: readings ready`, ready - start);
+        record(`${name}: readings + estimate`, performance.now() - start);
+        view.replaceChildren();
+        await sleep(11_000);
+      }
     }
   }
 
