@@ -8,7 +8,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // @ts-expect-error tsconfig's moduleResolution "node" doesn't read package exports; Vitest does.
 import { page as browserPage } from 'vitest/browser';
 import { ViewMode } from '$lib/data/view-mode';
-import { onScreen, openReader, position, visibleParagraphs, waitOnScreen } from './reader-fixture';
+import {
+  onScreen,
+  openReader,
+  panelOpen,
+  position,
+  togglePanel,
+  visibleParagraphs,
+  waitOnScreen
+} from './reader-fixture';
 
 /*
  * Where the reader is after page turns, chapter jumps, the side panel and a resize, in Chromium
@@ -40,18 +48,6 @@ const key = (code: string) => dispatchEvent(new KeyboardEvent('keydown', { code,
 
 /** Lets a re-layout (and the reader's debounced listeners) finish before checking it held. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 250));
-
-/** The bar's panel button; the bar shows after a tap on the strip at the top. */
-async function togglePanel() {
-  (document.querySelector('button.fixed.inset-x-0.top-0') as HTMLElement).click();
-  await vi.waitFor(() => {
-    const toggle = document.querySelector<HTMLElement>('button[title^="Contents, search"]');
-    expect(toggle).toBeTruthy();
-    toggle!.click();
-  });
-}
-
-const panelOpen = () => !!document.querySelector('aside.reader-index:not(.hidden)');
 
 /** a is before b in reading order */
 const before = (a: string, b: string) => {
