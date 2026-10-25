@@ -145,16 +145,22 @@
 
   let panelRoom = '';
 
+  let edgeOffsetWas = edgeOffset;
+
   // The panel's room changes before the reader gets its new size: let it measure its place first.
+  // Svelte 5 hands the reader the new edgeOffset already, so it gets the one its layout still has.
   beforeUpdate(() => {
     const room = `${reserveRight} ${reserveTop} ${edgeOffset}`;
-    if (panelRoom && room !== panelRoom) reader?.captureAnchor();
+    if (panelRoom && room !== panelRoom) reader?.captureAnchor(edgeOffsetWas);
     panelRoom = room;
+    edgeOffsetWas = edgeOffset;
   });
 
-  const width$ = new Subject<number>();
+  // Replayed: the template subscribes (computedStyle$) after `$:` sent the first size, and a
+  // later change of one dimension alone must still re-measure.
+  const width$ = new ReplaySubject<number>(1);
 
-  const height$ = new Subject<number>();
+  const height$ = new ReplaySubject<number>(1);
 
   const containerEl$ = writableSubject<HTMLElement | null>(null);
 

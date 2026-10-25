@@ -105,33 +105,22 @@ for (const view of [ViewMode.Paginated, ViewMode.Continuous]) {
         [1, 40]
       ]) {
         const id = `p-${chapter}-${index}`;
-        // Known bugs: continuous horizontal scrolls back about a screen and a half on opening;
-        // paginated vertical loses a chapter's last page. Drop `.fails` once fixed.
-        const known =
-          view === ViewMode.Continuous
-            ? writing === 'horizontal-tb'
-            : writing === 'vertical-rl' && chapter === 1;
-        (known ? it.fails : it)(
-          `opening and closing the side panel keeps ${id} on screen`,
-          async () => {
-            component = await openReader(view, writing, chapter, index);
-            await settle();
+        it(`opening and closing the side panel keeps ${id} on screen`, async () => {
+          component = await openReader(view, writing, chapter, index);
+          await settle();
 
-            await togglePanel();
-            await vi.waitFor(() => expect(panelOpen()).toBe(true));
-            await settle();
-            expect(onScreen(document.getElementById(id)), `open: ${visibleParagraphs()}`).toBe(
-              true
-            );
+          await togglePanel();
+          await vi.waitFor(() => expect(panelOpen()).toBe(true));
+          await settle();
+          expect(onScreen(document.getElementById(id)), `open: ${visibleParagraphs()}`).toBe(true);
 
-            await togglePanel();
-            await vi.waitFor(() => expect(panelOpen()).toBe(false));
-            await settle();
-            expect(onScreen(document.getElementById(id)), `closed: ${visibleParagraphs()}`).toBe(
-              true
-            );
-          }
-        );
+          await togglePanel();
+          await vi.waitFor(() => expect(panelOpen()).toBe(false));
+          await settle();
+          expect(onScreen(document.getElementById(id)), `closed: ${visibleParagraphs()}`).toBe(
+            true
+          );
+        });
       }
 
       it('a resize to phone width and back keeps the paragraph on screen', async () => {

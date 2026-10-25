@@ -199,10 +199,10 @@
   }
 
   /** Called before the panel re-lays out the book, while the line being read can still be measured. */
-  export function captureAnchor() {
+  export function captureAnchor(edgeOffsetWas = edgeOffset) {
     if (!contentEl || !calculator) return;
     const vertical = verticalMode;
-    const edge = readingEdge(edgeOffset);
+    const edge = readingEdge(edgeOffsetWas);
     const anchor = firstTextAfter(contentEl, (r) =>
       vertical ? r.right > edge + 1 : r.top < edge - 1
     );
@@ -662,8 +662,13 @@
     });
   }
 
+  let loadedHtml: string | undefined;
+
   function onHtmlLoad() {
-    if (!contentEl) return;
+    // Once per book html: Svelte 5 runs HtmlRenderer's afterUpdate again on re-renders (a
+    // resize), and a load resets the counts the resize handler keeps the place with.
+    if (!contentEl || htmlContent === loadedHtml) return;
+    loadedHtml = htmlContent;
 
     calculator = new CharacterStatsCalculator(
       contentEl,

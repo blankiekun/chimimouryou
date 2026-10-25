@@ -458,7 +458,10 @@
       calculator.updateParagraphPos();
 
       if (keptPos !== undefined) {
-        concretePageManager.scrollTo(keptPos, false);
+        // A place inside the page (a bookmark, the reading point) a narrower page pushed onto a
+        // later one wins over the page's first line.
+        const intendedPos = calculator.getScrollPosByCharCount(previousIntendedCount);
+        concretePageManager.scrollTo(Math.max(keptPos, intendedPos), false);
         isResizing = false;
         return;
       }
@@ -488,6 +491,8 @@
       previousIntendedCount = exploredCharCount;
       undoLayout = undefined;
       restoreLayout = undefined;
+      // The reader moved (a page turn, a Contents jump) before a pending re-layout kept the old page.
+      pageAnchor = undefined;
 
       if ($selectionToBookmarkEnabled$) {
         clearRange(window);
