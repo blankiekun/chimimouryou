@@ -125,6 +125,7 @@ yourself.
 - Phones: Firefox for Android runs Yomitan; on iPhone, add the site to the Home Screen ([docs/LEARNING.md → Phones and tablets](docs/LEARNING.md#6-phones-and-tablets))
 - [ARCHITECTURE.md](ARCHITECTURE.md): how it works; [CONTRIBUTING.md](CONTRIBUTING.md): changing it
 - [docs/READINGS.md](docs/READINGS.md): how word lists read ambiguous words, and the "Known" furigana style
+- [Privacy policy](docs/PRIVACY.md) and [Terms of service](docs/TERMS.md): the social hub, Community and Discord status
 - [docs/QA.md](docs/QA.md): test plan; [CHANGELOG.md](CHANGELOG.md); [themes.md](themes.md): writing themes
 - Prebuilt images: `ghcr.io/blankiekun/chimimouryou-{web,services,import,difficulty,mokuro}` (see INSTALL.md, "Updating")
 
