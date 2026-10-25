@@ -2,6 +2,7 @@
   import RankBadge from '$lib/components/reading-rank/rank-badge.svelte';
   import RoleBadge from '$lib/components/social/role-badge.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
+  import CommunityMentions from '$lib/components/community/community-mentions.svelte';
   import CommunityText from '$lib/components/community/community-text.svelte';
   import {
     bodyLength,
@@ -40,6 +41,7 @@
   let error = '';
   let note = '';
   let busy = false;
+  let editBox: HTMLTextAreaElement | undefined;
 
   $: signedIn = !!$socialSession$;
   /** Hub moderators remove any post here (the hub checks the role) */
@@ -194,8 +196,10 @@
           rows="4"
           maxlength={bodyLength}
           aria-label={$t$('community.edit')}
+          bind:this={editBox}
           bind:value={draft}
         />
+        <CommunityMentions textarea={editBox} />
         <label class="post-edit-spoiler">
           <input type="checkbox" bind:checked={draftSpoiler} />
           {$t$('community.spoiler')}

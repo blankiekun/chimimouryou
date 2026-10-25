@@ -426,6 +426,20 @@ export async function uploadWorkCover(work: string, cover: Blob) {
   ).cover;
 }
 
+/** The work key of a plain post (on no book line: a question, a recommendation, chat) */
+export const plainWork = 'post';
+
+export const isPlain = (post: { work: string }) => post.work === plainWork;
+
+/** A plain post: in the feed with no work or line, opened like a feed post (its `line` is its own) */
+export function postPlain(body: string, spoiler: boolean) {
+  return write<{ id: string; work: string; line: string }>('/v1/community/posts', 'POST', {
+    plain: true,
+    body,
+    spoiler
+  });
+}
+
 export function replyTo(parent: string, body: string, spoiler = false) {
   return write<{ id: string }>('/v1/community/posts', 'POST', { parent, body, spoiler });
 }

@@ -123,7 +123,11 @@ stacked combining characters, capped in characters and bytes. Under `/v1/communi
   work's cover like the other images.
 - Signed in: `POST posts` (`{work, title, vol, quote, context, body, spoiler, feed}`: the hub hashes the
   quote and the context (<= 600) must contain it; `feed: false` keeps it out of `GET feed`, in its
-  line's thread only; or `{parent, body, spoiler}` for a reply);
+  line's thread only; `{plain: true, body, spoiler}` for a plain post, on no line: work key `post`
+  and a random line of its own, so `GET thread?work=post&line=` opens it, replies and notes work
+  as for a line, and the 30-per-work cap doesn't apply; or `{parent, body, spoiler}` for a reply).
+  A body may mention a work as `@[Title](anilist:<id>)` or `@[Title](vndb:v<id>)`; any other
+  target in `@[…](…)` is a 400 `mention`;
   `PUT|DELETE posts/:id` (own only; a post with replies stays as an empty tombstone);
   `POST|DELETE posts/:id/helpful` (replies only, not one's own; counted from accounts 7+ days
   old); `GET notes?since=` (replies to one's posts, once a minute); `GET work?book=&vol=` (the work

@@ -74,6 +74,15 @@ const WORK =
 const BOOK = /^[\p{L}\p{N}]{1,100}$/u;
 const VOL = /^(?:\d{1,4}(?:\.\d{1,2})?)?$/;
 const LINE = /^[0-9a-f]{32}$/;
+/**
+ * Plain posts (not on a book line: a question, a recommendation, chat) have this work key and a
+ * random 32-hex line of their own, so thread caps, replies, notes and `GET thread` work as for a
+ * line; WORK never matches it, so no listing, cover or work mapping takes it.
+ */
+export const PLAIN = 'post';
+/** A mention of a work: `@[Title](anilist:<id>)` or `@[Title](vndb:v<id>)`, nothing else in the parentheses */
+const MENTION = /@\[[^[\]\n]{1,200}\]\(([^()\n]*)\)/g;
+const MENTION_TARGET = /^(?:anilist:[1-9]\d{0,8}|vndb:v[1-9]\d{0,8})$/;
 const AFTER = /^(?:[0-9a-f]{8}|[0-9a-f]{32})$/;
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/;
@@ -310,7 +319,7 @@ async function threads(request: Request, env: Env, user: UserRow | null, query: 
 async function thread(request: Request, env: Env, user: UserRow | null, query: URLSearchParams) {
   const viewer = user?.id ?? '';
 
-  const work = matching(query.get('work'), WORK, 'work');
+  const work = query.get('work') === PLAIN ? PLAIN : matching(query.get('work'), WORK, 'work');
   const line = matching(query.get('line'), LINE, 'line');
 
   await limit(env, user?.id ?? (await ipSubject(request)), 'thread', DAY, 1000);
@@ -389,8 +398,11 @@ async function feed(request: Request, env: Env, user: UserRow | null, query: URL
   };
 }
 
-/** Links in posts from accounts still in their first days: the usual spam */
+/** Links in posts from accounts still in their first days (the usual spam), and malformed mentions */
 function checkLinks(user: UserRow, body: string) {
+  for (const [, target] of body.matchAll(MENTION)) {
+    if (!MENTION_TARGET.test(target)) throw new HttpError(400, 'mention');
+  }
   if (now() - user.created < NEW_ACCOUNT && /:\/\/|www\.|\.(?:com|net|org|io|gg)\b/i.test(body)) {
     throw new HttpError(403, 'links');
   }
@@ -405,7 +417,8 @@ function workVolume(work: string, given: unknown) {
 /**
  * POST posts: `{work, title, vol, quote, context, body, spoiler, feed?, occurrence?}` posts on a
  * line (`feed: false`: in the line's thread only, not the feed; `occurrence`: which copy of a line
- * the book repeats, 1 by default) (the hub hashes
+ * the book repeats, 1 by default); `{plain: true, body, spoiler}` a plain post (work PLAIN, a line
+ * of its own, in the feed; not counted in ROOTS_PER_WORK, the rate limits bound it) (the hub hashes
  * the quote, and the context must contain it; the first post on a work names it: title first
  * wins, moderators reset it); `{parent, body, spoiler}` replies to a top-level post. Only a line's
  * first post keeps its quote and context, and only on the work's first CONTEXTS_PER_WORK lines.
@@ -415,6 +428,7 @@ async function createPost(request: Request, env: Env, user: UserRow) {
   const text = plain(body.body, BODY_LENGTH, 'body');
   const spoiler = body.spoiler === true ? 1 : 0;
   const reply = body.parent !== undefined;
+  const plainPost = !reply && body.plain === true;
   // "This line only": the post stays in its line's thread, out of the feed (replies never show there)
   const inFeed = reply || body.feed !== false ? 1 : 0;
   let work: string;
@@ -432,6 +446,9 @@ async function createPost(request: Request, env: Env, user: UserRow) {
     if (root.parent) throw new HttpError(400, 'parent');
     ({ work, line } = root);
     parent = root.id;
+  } else if (plainPost) {
+    work = PLAIN;
+    line = randomHex(16);
   } else {
     work = matching(body.work, WORK, 'work');
     title = plain(body.title, TITLE_LENGTH, 'title', true);
@@ -466,7 +483,8 @@ async function createPost(request: Request, env: Env, user: UserRow) {
     .first<{ thread: number; roots: number; quoted: number; contexts: number }>();
 
   if ((counts?.thread ?? 0) >= THREAD_POSTS) throw new HttpError(409, 'full');
-  if (!reply && (counts?.roots ?? 0) >= ROOTS_PER_WORK) throw new HttpError(429, 'work');
+  if (!reply && !plainPost && (counts?.roots ?? 0) >= ROOTS_PER_WORK)
+    throw new HttpError(429, 'work');
 
   const fresh = now() - user.created < NEW_ACCOUNT;
 
@@ -481,7 +499,7 @@ async function createPost(request: Request, env: Env, user: UserRow) {
   const time = now();
 
   await env.DB.batch([
-    ...(reply
+    ...(reply || plainPost
       ? []
       : [
           env.DB.prepare(

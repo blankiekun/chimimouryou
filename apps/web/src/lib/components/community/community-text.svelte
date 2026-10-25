@@ -1,9 +1,11 @@
 <script lang="ts">
+  import { mentionParts } from '$lib/data/community-mentions';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher } from 'svelte';
 
   /**
-   * A post's text: plain text only (never HTML, no links made from it), line breaks kept. A
+   * A post's text: plain text only (never HTML; the one link is a work mention, `@Title` to its
+   * AniList or VNDB page, community-mentions.ts; a quote has none), line breaks kept. A
    * spoiler is blurred (the one blur Study Book allows) until "Show spoiler" (`show` tells the host).
    */
   export let text: string;
@@ -28,7 +30,13 @@
     aria-hidden={hidden || undefined}
     lang={quote ? 'ja' : undefined}
   >
-    {text}
+    {#if quote}{text}{:else}{#each mentionParts(text) as part, index (index)}{#if 'href' in part}<a
+            class="community-mention"
+            href={part.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            tabindex={hidden ? -1 : undefined}>@{part.title}</a
+          >{:else}{part.text}{/if}{/each}{/if}
   </p>
 {/if}
 {#if hidden && button}
@@ -54,6 +62,16 @@
   .community-text-quote {
     margin-top: 0;
     font-weight: 700;
+  }
+
+  .community-mention {
+    color: var(--accent-strong-color);
+    font-weight: 700;
+  }
+
+  .community-mention:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
   }
 
   /* Study Book's one blur: a spoiler's text (DESIGN.md) */

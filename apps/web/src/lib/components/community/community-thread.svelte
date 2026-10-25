@@ -1,11 +1,13 @@
 <script lang="ts">
   import CommunityComposer from '$lib/components/community/community-composer.svelte';
+  import CommunityMentions from '$lib/components/community/community-mentions.svelte';
   import CommunityPost from '$lib/components/community/community-post.svelte';
   import CommunitySignup from '$lib/components/community/community-signup.svelte';
   import CommunityWork from '$lib/components/community/community-work.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import {
     bodyLength,
+    isPlain,
     loadThread,
     replyTo,
     type CommunityPost as Post,
@@ -29,6 +31,7 @@
    * opening its own discussion (the post and its replies). A reply box (with its own Spoiler mark)
    * at the end. A spoiler-marked post stays blurred until its Show spoiler; the line's page with it
    * while the shown root is one. Post on this line opens the composer on the line (no selection).
+   * A plain post (`isPlain`, on no line) shows only itself and its replies.
    */
   export let work: string;
   export let line: string;
@@ -158,35 +161,37 @@
       on:close={() => (composing = false)}
     />
   {:else if thread && context}
-    <CommunityWork title={thread.title} vol={thread.vol} cover={thread.cover} />
-    <figure class="thread-context">
-      <blockquote
-        lang="ja"
-        class:thread-context-blurred={!revealed && root?.spoiler}
-        aria-hidden={(!revealed && root?.spoiler) || undefined}
-      >
-        {context.before}<strong>{context.line}</strong>{context.after}
-      </blockquote>
-      <figcaption>
-        {#if goToLine}
-          <button type="button" class="app-button-quiet" on:click={goToLine}
-            >{$t$('community.goToLine')}</button
-          >
-        {:else}
-          <a class="app-button-quiet" href={lineLink(work, line)}>{$t$('community.goToLine')}</a>
-        {/if}
-        <button type="button" class="app-button-quiet" on:click={copyLink}
-          >{$t$(copied ? 'community.linkCopied' : 'social.copyLink')}</button
+    {#if !isPlain(thread)}
+      <CommunityWork title={thread.title} vol={thread.vol} cover={thread.cover} />
+      <figure class="thread-context">
+        <blockquote
+          lang="ja"
+          class:thread-context-blurred={!revealed && root?.spoiler}
+          aria-hidden={(!revealed && root?.spoiler) || undefined}
         >
-      </figcaption>
-    </figure>
-    {#if thread.quote && !focused}
-      <button
-        type="button"
-        class="app-button thread-new"
-        on:click={() => ($socialSession$ ? (composing = true) : (signUp = true))}
-        >{$t$('community.postOnLine')}</button
-      >
+          {context.before}<strong>{context.line}</strong>{context.after}
+        </blockquote>
+        <figcaption>
+          {#if goToLine}
+            <button type="button" class="app-button-quiet" on:click={goToLine}
+              >{$t$('community.goToLine')}</button
+            >
+          {:else}
+            <a class="app-button-quiet" href={lineLink(work, line)}>{$t$('community.goToLine')}</a>
+          {/if}
+          <button type="button" class="app-button-quiet" on:click={copyLink}
+            >{$t$(copied ? 'community.linkCopied' : 'social.copyLink')}</button
+          >
+        </figcaption>
+      </figure>
+      {#if thread.quote && !focused}
+        <button
+          type="button"
+          class="app-button thread-new"
+          on:click={() => ($socialSession$ ? (composing = true) : (signUp = true))}
+          >{$t$('community.postOnLine')}</button
+        >
+      {/if}
     {/if}
 
     {#if focused}
@@ -276,6 +281,7 @@
           bind:this={replyBox}
           bind:value={draft}
         />
+        <CommunityMentions textarea={replyBox} />
         <div class="thread-reply-row">
           <label class="thread-reply-spoiler">
             <input type="checkbox" bind:checked={spoiler} />

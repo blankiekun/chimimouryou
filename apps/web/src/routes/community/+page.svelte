@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import ImportMenu from '$lib/components/book-card/import-menu.svelte';
+  import CommunityPlainComposer from '$lib/components/community/community-plain-composer.svelte';
   import CommunityNotes from '$lib/components/community/community-notes.svelte';
   import CommunitySignup from '$lib/components/community/community-signup.svelte';
   import CommunityText from '$lib/components/community/community-text.svelte';
@@ -10,7 +11,7 @@
   import CommunityWork from '$lib/components/community/community-work.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import RoleBadge from '$lib/components/social/role-badge.svelte';
-  import { loadFeed, type FeedPost } from '$lib/data/community';
+  import { isPlain, loadFeed, type FeedPost } from '$lib/data/community';
   import { communityErrorKey, threadPath } from '$lib/data/community-book';
   import { pagePath } from '$lib/data/env';
   import { setPendingImport, type PendingImport } from '$lib/data/library-home';
@@ -26,7 +27,8 @@
    * Community (header tab, boards 9, 10, D9): lines readers are sharing, newest first, each with
    * the work's cover, title and volume. Signed out it reads the same feed (anonymous GETs, only
    * from here); a spoiler-marked post's line and text stay blurred until the reader taps Show
-   * spoiler, its work's cover, title and volume shown. `?work=&line=` shows that line's thread (deep
+   * spoiler, its work's cover, title and volume shown. Signed in, a post box on top makes plain
+   * posts (no book line: shown with the poster only). `?work=&line=` shows that line's thread (deep
    * links), `&post=` that feed post's discussion (the feed, Home's replies).
    */
 
@@ -119,17 +121,23 @@
         {#if !$socialSession$}<CommunitySignup />{/if}
         <h1 class="community-title">{$t$('nav.community')}</h1>
         <p class="community-lead">{$t$('community.lead')}</p>
+        {#if $socialSession$}<CommunityPlainComposer onposted={() => more(true)} />{/if}
 
         <ol class="feed">
           {#each posts as post (post.id)}
             {@const hide = post.spoiler && !shown.has(post.id)}
             <li class="feed-post">
-              <CommunityWork title={post.title} vol={post.vol} cover={post.cover}>
+              {#if isPlain(post)}
                 {#if post.spoiler}<span class="feed-spoiler">{$t$('community.spoiler')}</span>{/if}
-              </CommunityWork>
-              <div class="feed-quote">
-                <CommunityText text={post.quote} quote blur={hide} button={false} />
-              </div>
+              {:else}
+                <CommunityWork title={post.title} vol={post.vol} cover={post.cover}>
+                  {#if post.spoiler}<span class="feed-spoiler">{$t$('community.spoiler')}</span
+                    >{/if}
+                </CommunityWork>
+                <div class="feed-quote">
+                  <CommunityText text={post.quote} quote blur={hide} button={false} />
+                </div>
+              {/if}
               <CommunityText
                 text={post.body}
                 blur={post.spoiler}

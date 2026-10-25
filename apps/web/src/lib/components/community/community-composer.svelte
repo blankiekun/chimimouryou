@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CommunityMentions from '$lib/components/community/community-mentions.svelte';
   import CommunityMatch from '$lib/components/community/community-match.svelte';
   import CommunitySignup from '$lib/components/community/community-signup.svelte';
   import CommunityWork from '$lib/components/community/community-work.svelte';
@@ -61,6 +62,7 @@
   let feed = true;
   let sending = false;
   let error = '';
+  let box: HTMLTextAreaElement | undefined;
 
   $: title = passage?.bookTitle ?? bookTitle;
   $: workTitle = thread?.title || workTitles.get(work) || absBaseTitle(title) || title;
@@ -193,8 +195,10 @@
         maxlength={bodyLength}
         aria-label={$t$('community.postTitle')}
         placeholder={$t$('community.postPlaceholder')}
+        bind:this={box}
         bind:value={body}
       />
+      <CommunityMentions textarea={box} />
       <p class="composer-row composer-quiet">
         <span>{$t$('community.plainText')}</span>
         <span class="composer-count" class:composer-over={tooLong}

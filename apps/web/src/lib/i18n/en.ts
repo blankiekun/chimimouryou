@@ -2211,7 +2211,7 @@ export const en = {
   'profile.editStatistics': 'Edit statistics',
   'profile.editStatisticsHint': 'Period, goals and data',
   'community.lead':
-    'Lines readers are sharing, newest first. Spoilers stay blurred until you tap Show spoiler.',
+    'Posts and lines readers are sharing, newest first. Spoilers stay blurred until you tap Show spoiler.',
   'community.off':
     'Community is part of the Social plugin, which is off. Turn it on in Settings → Plugins.',
   'community.readOnly': 'Reading only. Sign up to post.',
@@ -2224,7 +2224,8 @@ export const en = {
   'community.downNote': 'Your book, notes and progress are not affected.',
   'community.empty': 'No posts on this book yet.',
   'community.emptyHint': 'Select a line and choose Post to community to start one.',
-  'community.feedEmpty': 'No posts yet. Select a line in a book and choose Post to community.',
+  'community.feedEmpty':
+    'No posts yet. Write one above, or select a line in a book and choose Post to community.',
   'community.guardNote':
     'Spoilers stay blurred until you tap Show spoiler. To post, select a line and choose Post to community.',
   'community.howToPost':
@@ -2293,6 +2294,11 @@ export const en = {
   'community.alsoShown':
     'Also shown: the book’s cover and title, your username, rank and words known.',
   'community.post': 'Post',
+  'community.plainTitle': 'New post',
+  'community.plainPlaceholder': 'A question, a recommendation, anything. Type @ to mention a work.',
+  'community.mentionList': 'Works to mention',
+  'community.mentionNone': 'No works found',
+  'community.error.mention': 'A mention can only point to AniList or VNDB.',
   'community.lineShort': 'This line is too short to post on. Select a longer sentence.',
   'community.lineLong': 'This sentence is too long to post on (300 characters at most).',
   'community.matchTitle': 'Is this {title}?',
