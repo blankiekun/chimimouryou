@@ -18,6 +18,23 @@ import {
   type StatisticsTabKeybindMap
 } from '$lib/data/statistics-tab-keybind';
 
+/** Ctrl/Cmd+F: the reader opens its Search tab instead of the browser's. */
+export function isSearchShortcut(ev: KeyboardEvent) {
+  return (ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'f';
+}
+
+/** Keys the reader's keybinds leave alone: typing in a field, modifiers and repeats. */
+export function isIgnoredReaderKey(ev: KeyboardEvent) {
+  return (
+    (ev.target instanceof HTMLElement && !!ev.target.closest('input, textarea, select')) ||
+    ev.altKey ||
+    ev.ctrlKey ||
+    ev.shiftKey ||
+    ev.metaKey ||
+    ev.repeat
+  );
+}
+
 export function onKeydownReader(
   ev: KeyboardEvent,
   bookReaderKeybindMap: BookReaderKeybindMap,

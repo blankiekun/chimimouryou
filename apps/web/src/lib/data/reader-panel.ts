@@ -9,7 +9,10 @@
  * and the Aa sheet's furigana choice. Not part of upstream.
  */
 
-import type { SectionWithProgress } from '$lib/components/book-reader/book-toc/book-toc';
+import {
+  getChapterData,
+  type SectionWithProgress
+} from '$lib/components/book-reader/book-toc/book-toc';
 import { FuriganaStyle } from '$lib/data/furigana-style';
 import { getWeightedAverage } from '$lib/functions/utils';
 import type { MessageKey } from '$lib/i18n';
@@ -121,6 +124,72 @@ export function contentsRows(sections: SectionWithProgress[]): ContentsRow[] {
 
 export function currentChapterLabel(sections: SectionWithProgress[]) {
   return contentsRows(sections).find((row) => row.current)?.label ?? '';
+}
+
+/** The footer's chapter progress ("12 / 340 45.00% C"), or '' when both parts are off. */
+export function chapterProgressLabel(
+  sectionData: SectionWithProgress[],
+  exploredCharCount: number,
+  showCharacters: boolean,
+  showPercentage: boolean
+) {
+  if ((!showCharacters && !showPercentage) || !sectionData?.length) {
+    return '';
+  }
+
+  let chapterProgress = '';
+  let chapterCharacters = '';
+
+  const [mainChapters, chapterIndex, referenceId] = getChapterData(sectionData);
+
+  if (showPercentage) {
+    const relevantSections = sectionData.filter(
+      (section) => section.reference === referenceId || section.parentChapter === referenceId
+    );
+
+    chapterProgress = `${getWeightedAverage(
+      relevantSections.map((section) => section.progress),
+      relevantSections.map((section) => section.charactersWeight)
+    ).toFixed(2)}%`;
+  }
+
+  if (showCharacters) {
+    const currentChapter = mainChapters[chapterIndex];
+
+    if (currentChapter) {
+      const endCharacter = currentChapter.characters as number;
+
+      chapterCharacters = `${Math.min(
+        Math.max(exploredCharCount - (currentChapter.startCharacter as number), 0),
+        endCharacter
+      )} / ${endCharacter}`;
+    }
+  }
+
+  return [chapterCharacters, chapterProgress, 'C'].filter(Boolean).join(' ');
+}
+
+/** The footer's book progress ("1,234 / 5,678 chars · 21%"), " T" added when a chapter part shows. */
+export function bookProgressLabel(
+  exploredCharCount: number,
+  bookCharCount: number,
+  showCharacters: boolean,
+  showPercentage: boolean,
+  showChapter: boolean
+) {
+  return [
+    [
+      showCharacters
+        ? `${exploredCharCount.toLocaleString('en-US')} / ${bookCharCount.toLocaleString('en-US')} chars`
+        : '',
+      showPercentage ? `${Math.floor((exploredCharCount / bookCharCount) * 100)}%` : ''
+    ]
+      .filter(Boolean)
+      .join(' · '),
+    showChapter ? 'T' : ''
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 /** The Aa sheet's three furigana choices; the other styles stay in Settings → Reader. */

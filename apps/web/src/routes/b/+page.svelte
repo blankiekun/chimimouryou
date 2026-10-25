@@ -27,14 +27,9 @@
   import { browser } from '$app/env';
   import { page } from '$lib/data/page-store';
   import { goto } from '$app/navigation';
-  import {
-    faCloudBolt,
-    faPause,
-    faPlay,
-    faSpinner,
-    faXmark
-  } from '@fortawesome/free-solid-svg-icons';
+  import { faCloudBolt, faPause, faPlay, faSpinner } from '@fortawesome/free-solid-svg-icons';
   import BookReader from '$lib/components/book-reader/book-reader.svelte';
+  import WelcomeBackToast from '$lib/components/book-reader/welcome-back-toast.svelte';
   import type {
     AutoScroller,
     BookmarkManager,
@@ -90,7 +85,6 @@
     openTrackerOnCompletion$,
     addCharactersOnCompletion$,
     statisticsMergeMode$,
-    isOnline$,
     manualBookmark$,
     overwriteBookCompletion$,
     startDayHoursForTracker$,
@@ -106,7 +100,7 @@
     unknownWordUnderline$,
     chapterPrimer$
   } from '$lib/data/store';
-  import { spansOf, spansWithin, unknownWordFlags$, type CountSpan } from '$lib/data/unknown-words';
+  import { spansOf, unknownWordFlags$, type CountSpan } from '$lib/data/unknown-words';
   import { chapterPrimer, type ChapterPrimer } from '$lib/data/chapter-primer';
   import {
     addGeneratedRuby,
@@ -114,14 +108,16 @@
     placeAfterRerender
   } from '$lib/data/generated-furigana';
   import {
-    analysisToolsSupported,
     localEstimate,
     localReadings$,
-    prewarmAnalysis
+    prewarmAnalysis,
+    readingsAvailable
   } from '$lib/data/analysis-tools';
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
   import ReaderPanel from '$lib/components/book-reader/reader-panel.svelte';
   import {
+    bookProgressLabel,
+    chapterProgressLabel,
     currentChapterLabel,
     jumpOffset,
     readerTopInset,
@@ -138,44 +134,43 @@
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
   import {
     AnnotationsController,
-    highlightColors,
     type Highlight,
     type HighlightColor
   } from '$lib/data/annotations';
   import {
-    buildSearchIndex,
     chapterLabelAt,
-    type SearchIndex,
+    searchIndexCache,
     type SearchResult
   } from '$lib/functions/book-text/book-search';
   import {
     clearCssHighlights,
-    cssHighlightsSupported,
-    setCssHighlight
+    cssHighlightsSupported
   } from '$lib/functions/book-text/css-highlights';
+  import { countsForRange, getTextSegments } from '$lib/functions/book-text/text-positions';
   import {
-    countsForRange,
-    getTextSegments,
-    rangeForCounts
-  } from '$lib/functions/book-text/text-positions';
+    getTextWithoutFurigana,
+    highlightAt,
+    isOnScreen,
+    paintHighlights,
+    selectionPassage,
+    type HighlightRange
+  } from '$lib/functions/book-text/reader-highlights';
   import BookReaderHeader from '$lib/components/book-reader/book-reader-header.svelte';
   import AnkiWatcher from '$lib/components/anki-watcher.svelte';
   import { bookSentenceAudio, noteSentence } from '$lib/data/anki';
   import { enableExtrasSync } from '$lib/data/extras-sync';
   import { bookSyncSource } from '$lib/data/sync-files';
-  import { recordKanjiSeen } from '$lib/data/kanji-seen';
+  import { bookLeft, bookOpened, positionSettled } from '$lib/data/reader-hooks';
   import { bookWordForms, getWordMarks, selectionForm } from '$lib/data/word-marks';
   import type { PassageContext } from '$lib/data/ask-ai';
   import { featureParams } from '$lib/data/ai-connections';
-  import { activePlugins, activePlugins$, type SelectionActionContribution } from '$lib/plugins';
+  import { activePlugins$, type SelectionActionContribution } from '$lib/plugins';
   import {
-    readerImageGalleryPictures$,
-    toggleImageGalleryPictureSpoiler$,
-    updateImageGalleryPictureSpoilers$
+    imageGallerySpoilerSync,
+    readerImageGalleryPictures$
   } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';
   import BookReaderImageGallery from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery.svelte';
   import {
-    getDefaultStatistic,
     isTrackerMenuOpen$,
     isTrackerPaused$
   } from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker';
@@ -194,54 +189,41 @@
   import {
     currentDbVersion,
     type BooksDbBookData,
-    type BooksDbBookmarkData,
-    type BooksDbStatistic
+    type BooksDbBookmarkData
   } from '$lib/data/database/books-db/versions/books-db';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { pagePath } from '$lib/data/env';
   import { DB_VERSION, PAGE_CHANGE, SKIPKEYLISTENER, SYNCED } from '$lib/data/events';
   import { fullscreenManager } from '$lib/data/fullscreen-manager';
   import { logger } from '$lib/data/logger';
-  import { MergeMode } from '$lib/data/merge-mode';
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
+  import { storeBookCompletion } from '$lib/data/book-completion';
   import { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
   import type { BrowserStorageHandler } from '$lib/data/storage/handler/browser-handler';
-  import {
-    StorageDataType,
-    StorageSourceDefault,
-    StorageKey
-  } from '$lib/data/storage/storage-types';
+  import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
   import { storageSource$ } from '$lib/data/storage/storage-view';
+  import {
+    getStorageHandlerByName,
+    saveExternalLastRead,
+    syncDownData
+  } from '$lib/data/storage/reader-storage';
   import { activeTheme$ } from '$lib/data/theme/theme-store';
   import { toReaderThemeOption } from '$lib/data/theme/themes';
   import { ViewMode } from '$lib/data/view-mode';
   import loadBookData from '$lib/functions/book-data-loader/load-book-data';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { iffBrowser } from '$lib/functions/rxjs/iff-browser';
-  import {
-    AutoReplicationType,
-    ReplicationSaveBehavior
-  } from '$lib/functions/replication/replication-options';
+  import { AutoReplicationType } from '$lib/functions/replication/replication-options';
   import { replicateData } from '$lib/functions/replication/replicator';
   import { readableToObservable } from '$lib/functions/rxjs/readable-to-observable';
   import { reduceToEmptyString } from '$lib/functions/rxjs/reduce-to-empty-string';
   import { takeWhenBrowser } from '$lib/functions/rxjs/take-when-browser';
   import { tapDom } from '$lib/functions/rxjs/tap-dom';
   import { multiClickHandler } from '$lib/functions/multi-click-handler';
-  import {
-    executeReplicate$,
-    type ReplicationContext
-  } from '$lib/functions/replication/replication-progress';
-  import { getDateKey } from '$lib/functions/statistic-util';
+  import { executeReplicate$ } from '$lib/functions/replication/replication-progress';
   import { clickOutside } from '$lib/functions/use-click-outside';
-  import {
-    convertRemToPixels,
-    dummyFn,
-    isMobile$,
-    limitToRange,
-    getWeightedAverage
-  } from '$lib/functions/utils';
-  import { onKeydownReader } from './on-keydown-reader';
+  import { convertRemToPixels, dummyFn, isMobile$, limitToRange } from '$lib/functions/utils';
+  import { isIgnoredReaderKey, isSearchShortcut, onKeydownReader } from './on-keydown-reader';
   import { shouldBookmarkOnLeave } from '$lib/functions/bookmark-on-leave';
   import { onDestroy, onMount, tick } from 'svelte';
   import { isManga } from '$lib/data/manga';
@@ -280,8 +262,7 @@
   let panelMounted = false;
   let panelTab: PanelTab = 'contents';
   let searchMatch: { start: number; end: number } | undefined;
-  let searchIndexPromise: Promise<SearchIndex> | undefined;
-  let searchIndexHtml = '';
+  const searchIndexOf = searchIndexCache();
   let annotations: AnnotationsController | undefined;
   let editingHighlight: Highlight | undefined;
   let editingFocusNote = false;
@@ -289,7 +270,7 @@
   let readingMatch: { start: number; end: number } | undefined;
   /** Days since the book was last opened, if long enough to offer a recap */
   let welcomeBackDays = 0;
-  let highlightRanges: { highlight: Highlight; range: Range }[] = [];
+  let highlightRanges: HighlightRange[] = [];
   let highlightsDirty = true;
   let selectedRange: Range | undefined;
   let lookupPopup: LookupPopup | undefined;
@@ -325,7 +306,6 @@
   const syncedPromise = new Promise<void>((resolver) => {
     syncedResolver = resolver;
   });
-  const queuedReaderImageGalleryPictures = new Map<string, boolean>();
   const fontFeatureSettings = [
     $enableVerticalFontKerning$ && '"vkrn"',
     $enableFontVPAL$ && '"vpal"'
@@ -407,7 +387,7 @@
         await localStorageHandler.updateLastRead(bookData);
 
         try {
-          await syncDownData(externalStorageHandler, currentContext);
+          await syncDownData(localStorageHandler, externalStorageHandler, currentContext);
           bookData = await saveExternalLastRead(externalStorageHandler, bookData);
         } catch (error: any) {
           // Reading works offline from the browser copy; progress syncs on the next save.
@@ -510,13 +490,6 @@
     }),
     reduceToEmptyString()
   );
-
-  /** Where the book's readings file comes from, if it can have one. */
-  function readingsAvailable(book: { storageSource?: string }) {
-    if (book.storageSource === StorageSourceDefault.CALIBRE_DEFAULT) return 'server';
-
-    return analysisToolsSupported() ? 'local' : undefined;
-  }
 
   // The readings file, while generated furigana, the unknown-word underlines or the chapter primer need it.
   const bookReadings$ = rawBookData$.pipe(
@@ -638,35 +611,10 @@
 
   const backgroundColor$ = themeOption$.pipe(map((o) => o.backgroundColor));
 
-  const collectReaderImageGallerySpoilerToggles$ = toggleImageGalleryPictureSpoiler$.pipe(
-    tap((readerImageGalleryPicture) => {
-      queuedReaderImageGalleryPictures.set(
-        readerImageGalleryPicture.url,
-        readerImageGalleryPicture.unspoilered
-      );
-
-      updateImageGalleryPictureSpoilers$.next();
-    }),
-    reduceToEmptyString()
-  );
-
-  const handleUpdateImageGalleryPictureSpoilers$ = updateImageGalleryPictureSpoilers$.pipe(
-    debounceTime(250),
-    tap(() => {
-      $readerImageGalleryPictures$ = $readerImageGalleryPictures$.map((galleryPicture) => {
-        const picture = galleryPicture;
-
-        if (queuedReaderImageGalleryPictures.has(picture.url)) {
-          picture.unspoilered = queuedReaderImageGalleryPictures.get(picture.url)!;
-        }
-
-        return picture;
-      });
-
-      queuedReaderImageGalleryPictures.clear();
-    }),
-    reduceToEmptyString()
-  );
+  const {
+    collect$: collectReaderImageGallerySpoilerToggles$,
+    apply$: handleUpdateImageGalleryPictureSpoilers$
+  } = imageGallerySpoilerSync();
 
   const backgroundStyleName = 'background-color';
   const setBackgroundColor$ = backgroundColor$.pipe(
@@ -945,14 +893,6 @@
     );
   }
 
-  function getTextWithoutFurigana(range: Range) {
-    const fragment = range.cloneContents();
-
-    fragment.querySelectorAll('rt, rp').forEach((element) => element.remove());
-
-    return (fragment.textContent || '').replace(/\s+/g, ' ').trim();
-  }
-
   function onSelectionChange() {
     const selection = document.getSelection();
     const range = selection?.rangeCount ? selection.getRangeAt(0) : undefined;
@@ -988,29 +928,15 @@
       return;
     }
 
-    const before = document.createRange();
-    const after = document.createRange();
-
-    before.setStart(content, 0);
-    before.setEnd(selectedRange.startContainer, selectedRange.startOffset);
-    after.setStart(selectedRange.endContainer, selectedRange.endOffset);
-    after.setEnd(content, content.childNodes.length);
-
     selectionPanel = {
       action,
-      passage: {
-        bookTitle: $rawBookData$?.title ?? '',
-        before: getTextWithoutFurigana(before).slice(-(featureParams('ask').context ?? 2000)),
-        selection: getTextWithoutFurigana(selectedRange),
-        after: getTextWithoutFurigana(after).slice(0, 600),
-        start: bookmarkManager
-          ? countsForRange(
-              getTextSegments(content),
-              selectedRange,
-              bookmarkManager.getRenderedStartCount()
-            ).start
-          : undefined
-      }
+      passage: selectionPassage(
+        content,
+        selectedRange,
+        $rawBookData$?.title ?? '',
+        featureParams('ask').context ?? 2000,
+        bookmarkManager?.getRenderedStartCount()
+      )
     };
     panelOpen = true;
     panelMounted = true;
@@ -1079,66 +1005,19 @@
       return;
     }
 
-    const base = bookmarkManager.getRenderedStartCount();
-    const segments = getTextSegments(content);
-    const lastSegment = segments[segments.length - 1];
-    const end = base + (lastSegment ? lastSegment.startCount + lastSegment.count : 0);
-    const byColor = new Map<HighlightColor, Range[]>(highlightColors.map((color) => [color, []]));
-    const withNotes: Range[] = [];
-
-    highlightRanges = [];
-
-    ($highlights$ || []).forEach((highlight) => {
-      if (highlight.end <= base || highlight.start >= end) {
-        return;
-      }
-
-      const range = rangeForCounts(
-        document,
-        segments,
-        Math.max(highlight.start, base),
-        Math.min(highlight.end, end),
-        base
-      );
-
-      if (!range) {
-        return;
-      }
-
-      byColor.get(highlight.color)?.push(range);
-
-      if (highlight.note) {
-        withNotes.push(range);
-      }
-
-      highlightRanges.push({ highlight, range });
-    });
-
-    byColor.forEach((ranges, color) => setCssHighlight(`ttu-hl-${color}`, ranges));
-    setCssHighlight('ttu-hl-note', withNotes);
-
-    const searchRange =
-      searchMatch && searchMatch.end > base && searchMatch.start < end
-        ? rangeForCounts(document, segments, searchMatch.start, searchMatch.end, base)
-        : undefined;
-
-    setCssHighlight('ttu-search', searchRange ? [searchRange] : []);
-
-    const readingRange =
-      readingMatch && readingMatch.end > base && readingMatch.start < end
-        ? rangeForCounts(document, segments, readingMatch.start, readingMatch.end, base)
-        : undefined;
-
-    setCssHighlight('ttu-reading', readingRange ? [readingRange] : []);
-    setCssHighlight(
-      'ttu-unknown',
-      spansWithin(unknownSpans, base, end).flatMap(
-        ([start, stop]) => rangeForCounts(document, segments, start, stop, base) ?? []
-      )
+    const painted = paintHighlights(
+      content,
+      bookmarkManager.getRenderedStartCount(),
+      $highlights$ || [],
+      searchMatch,
+      readingMatch,
+      unknownSpans
     );
+
+    highlightRanges = painted.highlightRanges;
     highlightsDirty = false;
 
-    return readingRange;
+    return painted.readingRange;
   }
 
   /** Highlights the line being read and turns the page or scrolls when it isn't visible. */
@@ -1160,16 +1039,7 @@
       return;
     }
 
-    const rect = range?.getBoundingClientRect();
-    const visible =
-      rect &&
-      rect.width + rect.height > 0 &&
-      rect.right > 0 &&
-      rect.bottom > 0 &&
-      rect.left < bookWidth &&
-      rect.bottom <= window.innerHeight;
-
-    if (!visible) {
+    if (!isOnScreen(range?.getBoundingClientRect(), bookWidth, window.innerHeight)) {
       scrollToCount(match.start);
       scheduleHighlights(true);
     }
@@ -1182,14 +1052,8 @@
   $: if (exploredCharCount && $rawBookData$ && $bookData$) {
     clearTimeout(readingWorkTimer);
     readingWorkTimer = setTimeout(
-      (title: string, position: number) => {
-        getSearchIndex()
-          .then((index) => recordKanjiSeen(title, index, position))
-          .catch(() => {});
-        activePlugins().forEach((plugin) =>
-          plugin.onPositionSettled?.(title, getSearchIndex, position, bookCharCount)
-        );
-      },
+      (title: string, position: number) =>
+        positionSettled(title, getSearchIndex, position, bookCharCount),
       15_000,
       $rawBookData$.title,
       exploredCharCount
@@ -1200,12 +1064,8 @@
   let openedTitle = '';
 
   $: if (bookmarkManager && $bookData$ && $rawBookData$ && openedTitle !== $rawBookData$.title) {
-    const title = (openedTitle = $rawBookData$.title);
-    const run = () =>
-      activePlugins().forEach((plugin) => plugin.onBookOpened?.(title, getSearchIndex));
-
-    if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 3000 });
-    else setTimeout(run, 1000);
+    openedTitle = $rawBookData$.title;
+    bookOpened(openedTitle, getSearchIndex);
   }
 
   onDestroy(() => {
@@ -1213,9 +1073,7 @@
     const title = $rawBookData$?.title;
 
     if (title && exploredCharCount) {
-      activePlugins().forEach((plugin) =>
-        plugin.onBookLeft?.(title, exploredCharCount, bookCharCount)
-      );
+      bookLeft(title, exploredCharCount, bookCharCount);
     }
   });
 
@@ -1256,20 +1114,6 @@
     }
   }
 
-  function caretAt(x: number, y: number) {
-    const doc = document as any;
-
-    if (doc.caretPositionFromPoint) {
-      const position = doc.caretPositionFromPoint(x, y);
-
-      return position && { node: position.offsetNode as Node, offset: position.offset as number };
-    }
-
-    const range: Range | null = doc.caretRangeFromPoint?.(x, y);
-
-    return range && { node: range.startContainer, offset: range.startOffset };
-  }
-
   /** Clicking a highlight opens it for editing. */
   function onDocumentClick(event: MouseEvent) {
     if (document.getSelection()?.toString()) {
@@ -1282,19 +1126,10 @@
       return;
     }
 
-    const caret = highlightRanges.length ? caretAt(event.clientX, event.clientY) : undefined;
-    const hit =
-      caret &&
-      highlightRanges.find(({ range }) => {
-        try {
-          return range.isPointInRange(caret.node, caret.offset);
-        } catch (_) {
-          return false;
-        }
-      });
+    const hit = highlightAt(highlightRanges, event.clientX, event.clientY);
 
     if (hit) {
-      editingHighlight = hit.highlight;
+      editingHighlight = hit;
       editingFocusNote = false;
     } else {
       // A tap on text looks it up (built-in dictionary); elsewhere nothing changes.
@@ -1340,18 +1175,7 @@
   }
 
   function getSearchIndex() {
-    const html = $bookData$?.htmlContent ?? '';
-
-    // Rebuilt when the book's HTML changes (e.g. another book opened).
-    if (!searchIndexPromise || searchIndexHtml !== html) {
-      searchIndexHtml = html;
-      searchIndexPromise = new Promise((resolve) => {
-        // Let the panel render before the (synchronous) indexing.
-        setTimeout(() => resolve(buildSearchIndex(html)), 50);
-      });
-    }
-
-    return searchIndexPromise;
+    return searchIndexOf($bookData$?.htmlContent ?? '');
   }
 
   function openPanel(key: PanelTab) {
@@ -1478,60 +1302,14 @@
         }
       }
 
-      const finishedStatistic = await database.getStatisticForCompletedBook($rawBookData$.title);
-      const todayKey = getDateKey($startDayHoursForTracker$);
-      const statisticsUntilToday = await database.getStatisticsUntilDate(
+      const completion = await storeBookCompletion(
         $rawBookData$.title,
-        todayKey
+        $startDayHoursForTracker$,
+        $overwriteBookCompletion$
       );
-      const todayStatistic =
-        statisticsUntilToday.find((statistic) => statistic.dateKey === todayKey) ||
-        getDefaultStatistic($rawBookData$.title, todayKey);
-      const statisticsToStore: BooksDbStatistic[] = [];
-      const lastStatisticModified = Date.now();
 
-      todayStatistic.lastStatisticModified = lastStatisticModified;
-      todayStatistic.completedBook = 1;
-      todayStatistic.completedData = {
-        ...{ dateKey: todayKey },
-        ...BaseStorageHandler.getStatisticsMetadata(
-          BaseStorageHandler.getStatisticsFileName(
-            statisticsUntilToday,
-            todayStatistic.lastStatisticModified
-          )
-        )
-      };
-
-      let updateFinishedStatistic = false;
-
-      if (!finishedStatistic) {
-        statisticsToStore.push(todayStatistic);
-      } else if (
-        $overwriteBookCompletion$ &&
-        finishedStatistic.dateKey !== todayStatistic.dateKey
-      ) {
-        delete finishedStatistic.completedBook;
-        delete finishedStatistic.completedData;
-        finishedStatistic.lastStatisticModified = lastStatisticModified;
-        statisticsToStore.push(todayStatistic, finishedStatistic);
-        updateFinishedStatistic = true;
-      } else if ($overwriteBookCompletion$) {
-        statisticsToStore.push(todayStatistic);
-      }
-
-      if (statisticsToStore.length) {
-        await database.storeStatistics(
-          $rawBookData$.title,
-          statisticsToStore,
-          ReplicationSaveBehavior.Overwrite,
-          MergeMode.LOCAL,
-          lastStatisticModified
-        );
-
-        trackerElm?.updateCompletedBook(
-          todayStatistic,
-          updateFinishedStatistic ? finishedStatistic : undefined
-        );
+      if (completion.stored.length) {
+        trackerElm?.updateCompletedBook(completion.todayStatistic, completion.finishedStatistic);
 
         scheduleReplication(StorageDataType.STATISTICS);
       }
@@ -1580,44 +1358,14 @@
     }
   }
 
+  // Called from a reactive line that only follows the sections, as before the move.
   function getCurrentChapterProgress(sectionData: SectionWithProgress[]) {
-    if (
-      (!$showFooterChapterCharacterCounter$ && !$showFooterChapterPercentage$) ||
-      !sectionData?.length
-    ) {
-      return '';
-    }
-
-    let chapterProgress = '';
-    let chapterCharacters = '';
-
-    const [mainChapters, chapterIndex, referenceId] = getChapterData($sectionData$);
-
-    if ($showFooterChapterPercentage$) {
-      const relevantSections = sectionData.filter(
-        (section) => section.reference === referenceId || section.parentChapter === referenceId
-      );
-
-      chapterProgress = `${getWeightedAverage(
-        relevantSections.map((section) => section.progress),
-        relevantSections.map((section) => section.charactersWeight)
-      ).toFixed(2)}%`;
-    }
-
-    if ($showFooterChapterCharacterCounter$) {
-      const currentChapter = mainChapters[chapterIndex];
-
-      if (currentChapter) {
-        const endCharacter = currentChapter.characters as number;
-
-        chapterCharacters = `${Math.min(
-          Math.max(exploredCharCount - (currentChapter.startCharacter as number), 0),
-          endCharacter
-        )} / ${endCharacter}`;
-      }
-    }
-
-    return [chapterCharacters, chapterProgress, 'C'].filter(Boolean).join(' ');
+    return chapterProgressLabel(
+      sectionData,
+      exploredCharCount,
+      $showFooterChapterCharacterCounter$,
+      $showFooterChapterPercentage$
+    );
   }
 
   function copyCurrentProgress(currentProgress: string) {
@@ -1641,236 +1389,14 @@
     }
   }
 
-  async function getStorageHandlerByName(storageSourceName: string, throwIfNotFound = false) {
-    if (!storageSourceName) {
-      if (throwIfNotFound) {
-        throw new Error(`No storage source found`);
-      }
-
-      return undefined;
-    }
-
-    if (storageSourceName === StorageSourceDefault.CALIBRE_DEFAULT) {
-      return getStorageHandler(
-        window,
-        StorageKey.CALIBRE,
-        storageSourceName,
-        true,
-        $cacheStorageData$,
-        $replicationSaveBehavior$,
-        $statisticsMergeMode$,
-        $readingGoalsMergeMode$
-      );
-    }
-    if (storageSourceName === StorageSourceDefault.GDRIVE_DEFAULT) {
-      if (!$isOnline$) {
-        dialogManager.dialogs$.next([
-          {
-            component: MessageDialog,
-            props: {
-              title: tr('reader.loadError'),
-              message: tr('reader.offline')
-            }
-          }
-        ]);
-
-        return undefined;
-      }
-
-      return getStorageHandler(
-        window,
-        StorageKey.GDRIVE,
-        storageSourceName,
-        true,
-        $cacheStorageData$,
-        $replicationSaveBehavior$,
-        $statisticsMergeMode$,
-        $readingGoalsMergeMode$
-      );
-    }
-    if (storageSourceName === StorageSourceDefault.ONEDRIVE_DEFAULT) {
-      if (!$isOnline$) {
-        dialogManager.dialogs$.next([
-          {
-            component: MessageDialog,
-            props: {
-              title: tr('reader.loadError'),
-              message: tr('reader.offline')
-            }
-          }
-        ]);
-
-        return undefined;
-      }
-
-      return getStorageHandler(
-        window,
-        StorageKey.ONEDRIVE,
-        storageSourceName,
-        true,
-        $cacheStorageData$,
-        $replicationSaveBehavior$,
-        $statisticsMergeMode$,
-        $readingGoalsMergeMode$
-      );
-    }
-    if (storageSourceName) {
-      const db = await database.db;
-      const storageSource = await db.get('storageSource', storageSourceName);
-
-      if (storageSource) {
-        if (storageSource.type !== StorageKey.FS && !$isOnline$) {
-          dialogManager.dialogs$.next([
-            {
-              component: MessageDialog,
-              props: {
-                title: tr('reader.loadError'),
-                message: tr('reader.offline')
-              }
-            }
-          ]);
-
-          return undefined;
-        }
-
-        return getStorageHandler(
-          window,
-          storageSource.type,
-          storageSourceName,
-          true,
-          $cacheStorageData$,
-          $replicationSaveBehavior$,
-          $statisticsMergeMode$,
-          $readingGoalsMergeMode$
-        );
-      }
-      if (throwIfNotFound) {
-        throw new Error(`No storage source with name ${storageSourceName} found`);
-      }
-    }
-
-    const message = tr('reader.noStorageSource', { name: storageSourceName });
-
-    logger.warn(message);
-
-    dialogManager.dialogs$.next([
-      {
-        component: MessageDialog,
-        props: {
-          title: tr('reader.configError'),
-          message
-        }
-      }
-    ]);
-
-    return undefined;
-  }
-
-  async function saveExternalLastRead(
-    storageHandler: BaseStorageHandler | undefined,
-    localBookData: BooksDbBookData
-  ) {
-    if (!storageHandler) {
-      return localBookData;
-    }
-
-    // eslint-disable-next-line prefer-const
-    let { id, ...bookData } = localBookData;
-
-    if (localBookData.storageSource) {
-      const externalBookData = await storageHandler.getBook();
-
-      if (externalBookData && !(externalBookData instanceof File)) {
-        bookData = {
-          ...externalBookData,
-          ...{
-            id: localBookData.id,
-            lastBookOpen: localBookData.lastBookOpen,
-            storageSource: localBookData.storageSource
-          }
-        };
-      }
-    } else if (!localBookData.elementHtml) {
-      throw new Error('Book has no data stored');
-    }
-
-    const dataToReturn = { id, ...bookData };
-
-    await storageHandler.updateLastRead(dataToReturn).catch((error: any) => {
-      const message = tr('reader.lastReadError', { error: error.message });
-
-      logger.warn(message);
-
-      dialogManager.dialogs$.next([
-        {
-          component: MessageDialog,
-          props: {
-            title: tr('reader.updateError'),
-            message
-          }
-        }
-      ]);
-    });
-
-    return dataToReturn;
-  }
-
-  async function syncDownData(
-    storageHandler: BaseStorageHandler | undefined,
-    context: ReplicationContext
-  ) {
-    if (localStorageHandler && storageHandler) {
-      storageHandler.startContext(context);
-    }
-
-    if (
-      localStorageHandler &&
-      storageHandler &&
-      (storageHandler.storageType === StorageKey.CALIBRE ||
-        $autoReplication$ === AutoReplicationType.Down ||
-        $autoReplication$ === AutoReplicationType.All)
-    ) {
-      const error = await replicateData(
-        storageHandler,
-        localStorageHandler,
-        false,
-        [context],
-        [
-          StorageDataType.PROGRESS,
-          StorageDataType.STATISTICS,
-          StorageDataType.READING_GOALS,
-          StorageDataType.AUDIOBOOK,
-          StorageDataType.SUBTITLE
-        ]
-      );
-
-      if (error) {
-        throw new Error(error);
-      }
-    }
-  }
-
   function onKeydown(ev: KeyboardEvent) {
-    if (
-      (ev.ctrlKey || ev.metaKey) &&
-      ev.key.toLowerCase() === 'f' &&
-      !$skipKeyDownListener$ &&
-      bookCharCount
-    ) {
+    if (isSearchShortcut(ev) && !$skipKeyDownListener$ && bookCharCount) {
       ev.preventDefault();
       openPanel('search');
       return;
     }
 
-    if (
-      $skipKeyDownListener$ ||
-      (ev.target instanceof HTMLElement && ev.target.closest('input, textarea, select')) ||
-      ev.altKey ||
-      ev.ctrlKey ||
-      ev.shiftKey ||
-      ev.metaKey ||
-      ev.repeat
-    ) {
+    if ($skipKeyDownListener$ || isIgnoredReaderKey(ev)) {
       return;
     }
 
@@ -2631,19 +2157,13 @@
     {/if}
   </div>
   {#if showFooter && bookCharCount}
-    {@const currentProgress = [
-      [
-        $showCharacterCounter$
-          ? `${exploredCharCount.toLocaleString('en-US')} / ${bookCharCount.toLocaleString('en-US')} chars`
-          : '',
-        $showPercentage$ ? `${Math.floor((exploredCharCount / bookCharCount) * 100)}%` : ''
-      ]
-        .filter(Boolean)
-        .join(' · '),
-      $showFooterChapterCharacterCounter$ || $showFooterChapterPercentage$ ? 'T' : ''
-    ]
-      .filter(Boolean)
-      .join(' ')}
+    {@const currentProgress = bookProgressLabel(
+      exploredCharCount,
+      bookCharCount,
+      $showCharacterCounter$,
+      $showPercentage$,
+      $showFooterChapterCharacterCounter$ || $showFooterChapterPercentage$
+    )}
     <div
       tabindex="0"
       role="button"
@@ -2761,25 +2281,12 @@
 {/if}
 
 {#if welcomeBackDays && storedExploredCharacter > 0 && absenceTab && !(panelOpen && panelTab === absenceTab.key)}
-  <div
-    class="writing-horizontal-tb fixed left-1/2 top-10 z-20 flex -translate-x-1/2 items-center gap-4 rounded-sm bg-[var(--reader-panel-fg)] py-2 pl-4 pr-1 text-sm text-[var(--reader-panel-bg)]"
-    role="status"
-  >
-    <span>{$t$('reader.welcomeBack', { days: welcomeBackDays })}</span>
-    <button
-      class="font-bold underline underline-offset-2"
-      on:click={() => absenceTab && openPanel(absenceTab.key)}
-    >
-      {$t$(absenceTab.absenceOffer?.label ?? absenceTab.label)}
-    </button>
-    <button
-      class="inline-flex h-9 w-9 items-center justify-center opacity-80"
-      title={$t$('reader.dismiss')}
-      on:click={() => (welcomeBackDays = 0)}
-    >
-      <Fa icon={faXmark} />
-    </button>
-  </div>
+  <WelcomeBackToast
+    days={welcomeBackDays}
+    label={absenceTab.absenceOffer?.label ?? absenceTab.label}
+    onopen={() => absenceTab && openPanel(absenceTab.key)}
+    ondismiss={() => (welcomeBackDays = 0)}
+  />
 {/if}
 
 {#if bookCompleted}

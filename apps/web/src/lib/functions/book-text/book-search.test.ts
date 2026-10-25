@@ -4,8 +4,8 @@
  * All rights reserved.
  */
 
-import { describe, expect, it } from 'vitest';
-import { buildSearchIndex, chapterLabelAt, searchBook } from './book-search';
+import { describe, expect, it, vi } from 'vitest';
+import { buildSearchIndex, chapterLabelAt, searchBook, searchIndexCache } from './book-search';
 import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v3';
 
 const html =
@@ -59,5 +59,25 @@ describe('chapterLabelAt', () => {
   it('uses the last section starting at or before the count', () => {
     expect(chapterLabelAt(sections, 6)).toBe('One');
     expect(chapterLabelAt(sections, 7)).toBe('Two');
+  });
+});
+
+describe('searchIndexCache', () => {
+  it('builds the index once per HTML', async () => {
+    vi.useFakeTimers();
+
+    const indexOf = searchIndexCache();
+    const first = indexOf(html);
+
+    expect(indexOf(html)).toBe(first);
+    vi.runAllTimers();
+    expect((await first).paragraphs).toHaveLength(2);
+
+    const other = indexOf('<p>別</p>');
+
+    expect(other).not.toBe(first);
+    vi.runAllTimers();
+    expect((await other).paragraphs).toHaveLength(1);
+    vi.useRealTimers();
   });
 });

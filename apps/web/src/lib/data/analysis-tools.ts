@@ -24,6 +24,7 @@ import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { foldReadings, type BookWord, type WordTotals } from '$lib/data/book-words';
 import type { CalibreDifficulty } from '$lib/data/calibre';
 import { pagePath, standalone } from '$lib/data/env';
+import { StorageSourceDefault } from '$lib/data/storage/storage-types';
 import {
   endFuriganaProgress,
   furiganaProgress$,
@@ -65,6 +66,13 @@ export function analysisToolsSupported() {
     'caches' in window &&
     'createWritable' in (window.FileSystemFileHandle?.prototype ?? {})
   );
+}
+
+/** Where a book's readings file comes from (the reader), if it can have one. */
+export function readingsAvailable(book: { storageSource?: string }) {
+  if (book.storageSource === StorageSourceDefault.CALIBRE_DEFAULT) return 'server';
+
+  return analysisToolsSupported() ? 'local' : undefined;
 }
 
 export type AnalysisFeature = 'difficulty' | 'furigana';
