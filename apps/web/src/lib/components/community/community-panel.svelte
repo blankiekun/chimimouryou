@@ -11,7 +11,6 @@
     communityMarkTap$,
     forgetBookCommunity,
     loadBookCommunity,
-    passedLine,
     type BookCommunity,
     type BookLine
   } from '$lib/data/community-book';
@@ -23,16 +22,15 @@
   import { createEventDispatcher, onDestroy, onMount } from 'svelte';
 
   /**
-   * The reader panel's Community tab (board 3): threads on the lines of this book the reader has
-   * passed (the position guard; later ones appear on the way), in book order or by posts, and a
-   * line's thread. The first visit matches the book to its work (board 6). Its threads also mark
+   * The reader panel's Community tab (board 3): threads on every line of this book wherever the
+   * reader is (a spoiler thread's line blurred, its posts behind Show spoiler), in book order or by
+   * posts, and a line's thread. The first visit matches the book to its work (board 6). Its threads also mark
    * the lines in the text (community-markers.svelte); a marker or a `/b?line=` link opens one.
    * Hub requests start only here, when the tab is first opened.
    */
   export let title: string;
   export let getIndex: () => Promise<SearchIndex>;
   export let sections: Section[];
-  export let position: number;
   export let bookCharacters: number;
   export let active: boolean;
 
@@ -55,8 +53,7 @@
   let started = false;
   let linkedDone = false;
 
-  $: passed = passedLine(lines, position);
-  $: visible = index ? visibleThreads(threads, index, passed) : [];
+  $: visible = index ? visibleThreads(threads, index) : [];
   $: rows = order === 'book' ? visible : [...visible].sort((a, b) => b.posts - a.posts);
   $: total = visible.reduce((sum, thread) => sum + thread.posts, 0);
   // Markers: every thread of the book; only lines on screen are drawn. Not before the tab has
@@ -202,7 +199,12 @@
           >
             <span class="thread-where" lang="ja">{where(line)}</span>
             {#if thread.spoiler}<span class="thread-spoiler">{$t$('community.spoiler')}</span>{/if}
-            <span class="thread-line" lang="ja">{line.text}</span>
+            <span
+              class="thread-line"
+              class:thread-line-blurred={thread.spoiler}
+              aria-hidden={thread.spoiler || undefined}
+              lang="ja">{line.text}</span
+            >
             <span class="tab-quiet"
               >{$t$(thread.posts === 1 ? 'community.postsOne' : 'community.posts', {
                 count: thread.posts
@@ -285,5 +287,11 @@
 
   .thread-line {
     overflow-wrap: anywhere;
+  }
+
+  /* Study Book's one blur: a spoiler thread's line (DESIGN.md) */
+  .thread-line-blurred {
+    filter: blur(6px);
+    user-select: none;
   }
 </style>

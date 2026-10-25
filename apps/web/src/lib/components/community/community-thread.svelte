@@ -25,16 +25,13 @@
    * One line's thread (board 4): the work, the line in its page with Go to line and Copy link, then
    * the line's own comments ("This line only") with their replies, and the feed posts on it, each
    * opening its own discussion (the post and its replies). A reply box (with its own Spoiler mark)
-   * at the end. Outside the book, spoiler-marked posts stay blurred until the reader passed the
-   * line or taps Show spoiler.
+   * at the end. A spoiler-marked post stays blurred until its Show spoiler; the line's page with it
+   * while the shown root is one.
    */
   export let work: string;
   export let line: string;
   /** A feed post to open on (the feed, replies to it): its discussion rather than the line */
   export let post: string | undefined = undefined;
-  /** Outside the book: blur spoilers unless `passed` */
-  export let outside = false;
-  export let passed = false;
   /** Go to line: the host opens the book there (a link otherwise) */
   export let goToLine: (() => void) | undefined = undefined;
   export let backLabel: string;
@@ -62,9 +59,8 @@
   // On the line, replies go to its comments; a hidden first comment leaves its replies' parent.
   $: target = replyingTo?.parent ?? replyingTo?.id ?? root?.id ?? comments[0]?.parent;
   $: context = thread ? splitContext(thread.context, thread.quote) : undefined;
+  /** The first post's Show spoiler also shows the line's page */
   let revealed = false;
-
-  $: hide = outside && !passed && !revealed;
 
   async function load() {
     error = '';
@@ -149,7 +145,11 @@
   {:else if thread && context}
     <CommunityWork title={thread.title} vol={thread.vol} cover={thread.cover} />
     <figure class="thread-context">
-      <blockquote lang="ja" class:thread-context-blurred={hide && root?.spoiler}>
+      <blockquote
+        lang="ja"
+        class:thread-context-blurred={!revealed && root?.spoiler}
+        aria-hidden={(!revealed && root?.spoiler) || undefined}
+      >
         {context.before}<strong>{context.line}</strong>{context.after}
       </blockquote>
       <figcaption>
@@ -166,22 +166,12 @@
       </figcaption>
     </figure>
 
-    {#if hide && thread.posts.some((post) => post.spoiler)}
-      <p class="thread-spoiler">
-        <button type="button" class="app-button" on:click={() => (revealed = true)}
-          >{$t$('community.showSpoiler')}</button
-        >
-        <span>{$t$('community.notReached')}</span>
-      </p>
-    {/if}
-
     {#if focused}
       <div class="thread-posts">
         {#each [focused.root, ...focused.replies] as one (one.id)}
           <CommunityPost
             post={one}
-            hideSpoiler={hide}
-            spoilerButton={false}
+            on:show={() => (revealed ||= one === root)}
             on:reply={({ detail }) => reply(detail)}
             on:changed={load}
             on:signUp={() => (signUp = true)}
@@ -201,8 +191,7 @@
             {#each comments as one (one.id)}
               <CommunityPost
                 post={one}
-                hideSpoiler={hide}
-                spoilerButton={false}
+                on:show={() => (revealed ||= one === root)}
                 on:reply={({ detail }) => reply(detail)}
                 on:changed={load}
                 on:signUp={() => (signUp = true)}
@@ -224,8 +213,7 @@
               <div class="thread-feed-post">
                 <CommunityPost
                   post={group.root}
-                  hideSpoiler={hide}
-                  spoilerButton={false}
+                  on:show={() => (revealed ||= group.root === root)}
                   on:reply={({ detail }) => reply(detail)}
                   on:changed={load}
                   on:signUp={() => (signUp = true)}
@@ -329,15 +317,6 @@
   .thread-context-blurred {
     filter: blur(6px);
     user-select: none;
-  }
-
-  .thread-spoiler {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.5rem 1rem;
-    color: var(--c-muted, var(--app-muted-fg));
-    font-size: var(--type-small);
   }
 
   .thread-context figcaption {

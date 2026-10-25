@@ -20,9 +20,10 @@
  * threads, thread, covers: no token, the hub caches them); writes need a hub account and are
  * refused here without one.
  *
- * Spoilers are the app's to hide: in the book, `visibleThreads` keeps lines the reader has passed;
- * elsewhere `blurred` hides spoiler-marked posts until then. Someone calling the API directly
- * sees every post, spoilers included, and a thread's page of context for any line they know.
+ * Every thread shows wherever the reader is; spoilers are the app's to hide: a spoiler-marked
+ * post's text (and the line it quotes) stays blurred until the reader taps Show spoiler, the work's
+ * title, volume and cover beside it. Someone calling the API directly sees every post, spoilers
+ * included, and a thread's page of context for any line they know.
  */
 
 import { titleVolume } from '$lib/components/book-card/library-sort';
@@ -205,18 +206,13 @@ export async function lineIndex(lines: string[]) {
   return byPrefix;
 }
 
-/** The spoiler guard: threads on lines of this book at or before `passed` (a line index) */
+/** Threads on lines of this book, in book order, wherever the reader is (spoilers are blurred instead) */
 export function visibleThreads(
   threads: ThreadSummary[],
-  index: Awaited<ReturnType<typeof lineIndex>>,
-  passed: number
+  index: Awaited<ReturnType<typeof lineIndex>>
 ): VisibleThread[] {
   return threads
-    .flatMap((thread) =>
-      (index.get(thread.prefix) ?? [])
-        .filter((line) => line.index <= passed)
-        .map((line) => ({ ...thread, ...line }))
-    )
+    .flatMap((thread) => (index.get(thread.prefix) ?? []).map((line) => ({ ...thread, ...line })))
     .sort((a, b) => a.index - b.index);
 }
 
@@ -365,15 +361,6 @@ export function loadFeed(before?: string) {
   return read<{ posts: FeedPost[]; next: string | null }>(
     `/v1/community/feed${before ? `?${new URLSearchParams({ before })}` : ''}`
   );
-}
-
-/**
- * A spoiler-marked post stays blurred outside the book's own tab until the reader is past its
- * line in their copy (`passedLine`: that line's index is at or before the reader's), or taps
- * "Show spoiler"; signed out or without the book, the position is unknown, so blurred.
- */
-export function blurred(post: { spoiler: boolean }, passedLine = false) {
-  return post.spoiler && !passedLine;
 }
 
 /**

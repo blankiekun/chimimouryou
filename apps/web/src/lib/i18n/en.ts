@@ -2211,7 +2211,7 @@ export const en = {
   'profile.editStatistics': 'Edit statistics',
   'profile.editStatisticsHint': 'Period, goals and data',
   'community.lead':
-    'Lines readers are sharing, newest first. Spoilers stay blurred until you reach the line.',
+    'Lines readers are sharing, newest first. Spoilers stay blurred until you tap Show spoiler.',
   'community.off':
     'Community is part of the Social plugin, which is off. Turn it on in Settings → Plugins.',
   'community.readOnly': 'Reading only. Sign up to post.',
@@ -2222,12 +2222,11 @@ export const en = {
   'community.loading': 'Loading posts…',
   'community.tryAgain': 'Try again',
   'community.downNote': 'Your book, notes and progress are not affected.',
-  'community.empty': 'No posts on the lines you’ve read yet.',
-  'community.emptyHint':
-    'Select a line and choose Post to community to start one. Posts further on appear when you get there.',
+  'community.empty': 'No posts on this book yet.',
+  'community.emptyHint': 'Select a line and choose Post to community to start one.',
   'community.feedEmpty': 'No posts yet. Select a line in a book and choose Post to community.',
   'community.guardNote':
-    'Only lines you have passed are shown; posts further on appear when you get there. To post, select a line and choose Post to community.',
+    'Spoilers stay blurred until you tap Show spoiler. To post, select a line and choose Post to community.',
   'community.howToPost':
     'Post from a book: select a line and choose Post to community. Posts carry the line, its page and the book’s cover.',
   'community.order': 'Order',
@@ -2242,7 +2241,6 @@ export const en = {
   'community.more': 'More',
   'community.spoiler': 'Spoiler',
   'community.showSpoiler': 'Show spoiler',
-  'community.notReached': 'You haven’t reached this line',
   'community.vol': 'Vol. {vol}',
   'community.goToLine': 'Go to line',
   'community.linkCopied': 'Link copied',
@@ -2277,7 +2275,7 @@ export const en = {
   'community.plainText': 'Plain text',
   'community.tooManyLines': 'Posts have at most 20 lines.',
   'community.spoilerHint':
-    'Blurred outside this book until readers reach this line. In the book it only ever shows to readers past it.',
+    'Readers see it blurred, with the book’s title and cover, until they tap Show spoiler.',
   'community.lineComments': 'Comments on this line',
   'community.feedPosts': 'Community posts',
   'community.thisLine': 'This line',

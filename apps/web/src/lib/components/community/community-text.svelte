@@ -1,18 +1,19 @@
 <script lang="ts">
   import { t$ } from '$lib/i18n';
+  import { createEventDispatcher } from 'svelte';
 
   /**
    * A post's text: plain text only (never HTML, no links made from it), line breaks kept. A
-   * spoiler is blurred (the one blur Study Book allows) until "Show spoiler".
+   * spoiler is blurred (the one blur Study Book allows) until "Show spoiler" (`show` tells the host).
    */
   export let text: string;
   export let blur = false;
-  /** Set by the host when the reader has the book but hasn't reached the line */
-  export let notReached = true;
   /** The quoted line: set in Japanese, a step larger */
   export let quote = false;
   /** Off where one Show spoiler serves several texts */
   export let button = true;
+
+  const dispatch = createEventDispatcher<{ show: void }>();
 
   let shown = false;
 
@@ -32,10 +33,14 @@
 {/if}
 {#if hidden && button}
   <p class="community-spoiler">
-    <button type="button" class="app-button" on:click={() => (shown = true)}
-      >{$t$('community.showSpoiler')}</button
+    <button
+      type="button"
+      class="app-button"
+      on:click={() => {
+        shown = true;
+        dispatch('show');
+      }}>{$t$('community.showSpoiler')}</button
     >
-    {#if notReached}<span>{$t$('community.notReached')}</span>{/if}
   </p>
 {/if}
 

@@ -8,7 +8,6 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  blurred,
   clipContext,
   communityWorks$,
   confirmWork,
@@ -69,7 +68,7 @@ describe('community', () => {
     ]);
   });
 
-  it('shows threads only on lines passed, a repeated line with a thread per copy', async () => {
+  it('shows threads on every line of the book, a repeated line with a thread per copy', async () => {
     const lines = [
       '最初の文章です。',
       '繰り返す文章です。',
@@ -94,9 +93,7 @@ describe('community', () => {
 
     expect(occurrenceOf(lines, 1)).toBe(1);
     expect(occurrenceOf(lines, 3)).toBe(2);
-    expect(visibleThreads(threads, index, 0).map((one) => one.index)).toEqual([0]);
-    expect(visibleThreads(threads, index, 2).map((one) => one.index)).toEqual([0, 1]);
-    expect(visibleThreads(threads, index, 3).map((one) => one.index)).toEqual([0, 1, 3]);
+    expect(visibleThreads(threads, index).map((one) => one.index)).toEqual([0, 1, 3]);
   });
 
   it('clips the page around the line', () => {
@@ -174,11 +171,5 @@ describe('community', () => {
     enabledPlugins$.next([]);
     await expect(loadFeed()).rejects.toMatchObject({ code: 'off' });
     expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('blurs spoilers until the reader is past the line', () => {
-    expect(blurred({ spoiler: true })).toBe(true);
-    expect(blurred({ spoiler: true }, true)).toBe(false);
-    expect(blurred({ spoiler: false })).toBe(false);
   });
 });

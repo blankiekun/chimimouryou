@@ -17,7 +17,6 @@ import { loadBookMetadata } from '$lib/data/book-metadata';
 import {
   communityOn,
   communityWorks$,
-  lineHashes,
   lineIndex,
   listThreads,
   loadNotes,
@@ -151,44 +150,6 @@ export async function localBookFor(work: string) {
   return null;
 }
 
-const passedCache = new Map<string, Promise<Set<string>>>();
-
-/**
- * Line hashes of a work the reader has passed in their own copy (empty without one), for the
- * feed's spoiler blur. Hashes the copy once per page view.
- */
-export function passedLines(work: string) {
-  let found = passedCache.get(work);
-
-  if (!found) {
-    found = (async () => {
-      const book = await localBookFor(work);
-
-      if (!book) return new Set<string>();
-
-      const [{ database }, { getParagraphs }] = await Promise.all([
-        import('$lib/data/store'),
-        import('$lib/functions/book-text/book-search')
-      ]);
-      const [data, bookmark] = await Promise.all([
-        database.getData(book.id),
-        database.getBookmark(book.id)
-      ]);
-      const position = bookmark?.exploredCharCount ?? 0;
-
-      if (!data?.elementHtml || !position) return new Set<string>();
-
-      const lines = bookLines(getParagraphs(data.elementHtml));
-      const passed = lines.slice(0, passedLine(lines, position) + 1);
-      const hashes = await lineHashes(passed.map((line) => line.text));
-
-      return new Set(hashes.filter((hash): hash is string => !!hash));
-    })().catch(() => new Set<string>());
-    passedCache.set(work, found);
-  }
-  return found;
-}
-
 const metadataUrl = (title: string) =>
   loadBookMetadata().then(
     (map) => map[title]?.url ?? '',
@@ -247,7 +208,7 @@ export function forgetBookCommunity() {
 
 /** Every thread of the book as markers (a line on the screen being read counts as reached) */
 export const bookMarks = ({ lines, index, threads }: Omit<BookCommunity, 'work' | 'suggestion'>) =>
-  markedLines(visibleThreads(threads, index, lines.length), lines);
+  markedLines(visibleThreads(threads, index), lines);
 
 /**
  * On book open (after it rendered): the markers without opening the tab, only signed in with
