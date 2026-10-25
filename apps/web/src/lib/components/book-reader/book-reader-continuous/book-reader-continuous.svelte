@@ -760,6 +760,9 @@
             : 0)
       );
     }
+    // The jump is the intended place now: a re-layout before onScroll's frame (an image or the
+    // window settling) would otherwise put the reader back where it was.
+    if (calculator) prevIntendedCharCount = readCharCount(calculator);
   });
 </script>
 

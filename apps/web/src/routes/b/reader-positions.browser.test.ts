@@ -9,6 +9,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { page as browserPage } from 'vitest/browser';
 import { ViewMode } from '$lib/data/view-mode';
 import {
+  addBook,
+  mountReader,
   onScreen,
   openReader,
   panelOpen,
@@ -94,6 +96,24 @@ for (const view of [ViewMode.Paginated, ViewMode.Continuous]) {
         await waitOnScreen('p-2-1');
         expect(visibleParagraphs().every((id) => !before(id, 'p-1-40'))).toBe(true);
         expect(onScreen(document.getElementById('p-2-25'))).toBe(false);
+      });
+
+      it('previous chapter right after next chapter lands on chapter 2, on a novel-like book', async () => {
+        component = await mountReader(await addBook(2, 25, true), view, writing);
+        // The key as soon as the book shows (each frame, not waitFor's 50 ms): the reader's first
+        // re-layout for the window's size comes just after and used to undo the jump.
+        while (!onScreen(document.getElementById('p-2-25'))) {
+          await new Promise(requestAnimationFrame);
+        }
+
+        key(nextChapterKey);
+        await waitOnScreen('p-3-1');
+        await settle();
+        expect(onScreen(document.getElementById('p-3-1')), `${visibleParagraphs()}`).toBe(true);
+
+        key(prevChapterKey);
+        await waitOnScreen('p-2-1');
+        expect(visibleParagraphs().every((id) => !before(id, 'p-1-40'))).toBe(true);
       });
 
       for (const [chapter, index] of [
