@@ -11,8 +11,8 @@
   import CommunityWork from '$lib/components/community/community-work.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import RoleBadge from '$lib/components/social/role-badge.svelte';
-  import { isPlain, loadFeed, type FeedPost } from '$lib/data/community';
-  import { communityErrorKey, threadPath } from '$lib/data/community-book';
+  import { isPlain, loadFeed, loadThread, type FeedPost } from '$lib/data/community';
+  import { communityErrorKey, splitContext, threadPath } from '$lib/data/community-book';
   import { pagePath } from '$lib/data/env';
   import { setPendingImport, type PendingImport } from '$lib/data/library-home';
   import { page } from '$lib/data/page-store';
@@ -38,6 +38,33 @@
   let error = '';
   /** Spoiler posts the reader showed, by id: the quote follows the text's Show spoiler */
   let shown = new Set<string>();
+  /** Show context: each row's line page, fetched once from its thread and kept for the page */
+  let contexts = new Map<
+    string,
+    'loading' | 'error' | 'none' | { before: string; after: string }
+  >();
+  let contextOpen = new Set<string>();
+
+  async function toggleContext(post: FeedPost) {
+    const have = contexts.get(post.id);
+
+    if (contextOpen.has(post.id) && have !== 'error') {
+      contextOpen = new Set([...contextOpen].filter((id) => id !== post.id));
+      return;
+    }
+    contextOpen = new Set([...contextOpen, post.id]);
+    if (have && have !== 'error') return;
+    contexts = new Map(contexts).set(post.id, 'loading');
+    const value = await loadThread(post.work, post.line).then(
+      (thread) => {
+        const { before, after } = splitContext(thread.context, post.quote);
+
+        return before || after ? { before, after } : ('none' as const);
+      },
+      () => 'error' as const
+    );
+    contexts = new Map(contexts).set(post.id, value);
+  }
 
   $: socialOn = $activePlugins$.some((plugin) => plugin.id === 'social');
   $: work = browser ? ($page.url.searchParams.get('work') ?? '') : '';
@@ -130,12 +157,42 @@
               {#if isPlain(post)}
                 {#if post.spoiler}<span class="feed-spoiler">{$t$('community.spoiler')}</span>{/if}
               {:else}
+                {@const context = contexts.get(post.id)}
+                {@const open = contextOpen.has(post.id)}
+                {@const lineContext = open && typeof context === 'object' ? context : undefined}
                 <CommunityWork title={post.title} vol={post.vol} cover={post.cover}>
                   {#if post.spoiler}<span class="feed-spoiler">{$t$('community.spoiler')}</span
                     >{/if}
                 </CommunityWork>
                 <div class="feed-quote">
-                  <CommunityText text={post.quote} quote blur={hide} button={false} />
+                  <CommunityText
+                    text={post.quote}
+                    quote
+                    blur={hide}
+                    button={false}
+                    before={lineContext?.before ?? ''}
+                    after={lineContext?.after ?? ''}
+                  />
+                  {#if open && context === 'none'}
+                    <p class="feed-context-note">{$t$('community.contextNone')}</p>
+                  {:else if context !== 'none'}
+                    <button
+                      type="button"
+                      class="app-button-quiet feed-context"
+                      disabled={context === 'loading'}
+                      aria-expanded={!!lineContext}
+                      on:click={() => toggleContext(post)}
+                      >{$t$(
+                        context === 'loading'
+                          ? 'community.contextLoading'
+                          : open && context === 'error'
+                            ? 'community.contextError'
+                            : lineContext
+                              ? 'community.hideContext'
+                              : 'community.showContext'
+                      )}</button
+                    >
+                  {/if}
                 </div>
               {/if}
               <CommunityText
@@ -272,6 +329,17 @@
   .feed-quote {
     padding: 0.75rem;
     background: var(--surface-color);
+  }
+
+  .feed-context {
+    margin-top: 0.5rem;
+    font-size: var(--type-label);
+  }
+
+  .feed-context-note {
+    margin-top: 0.5rem;
+    color: var(--app-muted-fg);
+    font-size: var(--type-label);
   }
 
   .feed-foot {
