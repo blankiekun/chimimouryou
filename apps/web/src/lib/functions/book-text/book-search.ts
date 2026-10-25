@@ -81,6 +81,25 @@ export function buildSearchIndex(htmlContent: string): SearchIndex {
   return { paragraphs: getParagraphs(htmlContent) };
 }
 
+/** The reader's index of the open book: built once per HTML, after the panel had time to render. */
+export function searchIndexCache() {
+  let promise: Promise<SearchIndex> | undefined;
+  let indexedHtml = '';
+
+  return (html: string) => {
+    // Rebuilt when the book's HTML changes (e.g. another book opened).
+    if (!promise || indexedHtml !== html) {
+      indexedHtml = html;
+      promise = new Promise((resolve) => {
+        // Let the panel render before the (synchronous) indexing.
+        setTimeout(() => resolve(buildSearchIndex(html)), 50);
+      });
+    }
+
+    return promise;
+  };
+}
+
 /** Paragraph text for display or for sending elsewhere. */
 export function displayText(text: string) {
   return text.replaceAll(gaijiPlaceholder, '〓');

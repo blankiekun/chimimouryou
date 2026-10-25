@@ -4,7 +4,8 @@
  * All rights reserved.
  */
 
-import { Subject } from 'rxjs';
+import { debounceTime, Subject, tap } from 'rxjs';
+import { reduceToEmptyString } from '$lib/functions/rxjs/reduce-to-empty-string';
 import { writableSubject } from '$lib/functions/svelte/store';
 
 export enum ReaderImageGalleryAvailableKeybind {
@@ -27,3 +28,42 @@ export const readerImageGalleryPictures$ = writableSubject<ReaderImageGalleryPic
 export const toggleImageGalleryPictureSpoiler$ = new Subject<ReaderImageGalleryPicture>();
 
 export const updateImageGalleryPictureSpoilers$ = new Subject<void>();
+
+/**
+ * The reader's spoiler toggles from the gallery: collected, then applied to the pictures together
+ * 250 ms after the last one. Both streams are subscribed while the reader is open.
+ */
+export function imageGallerySpoilerSync() {
+  const queued = new Map<string, boolean>();
+
+  const collect$ = toggleImageGalleryPictureSpoiler$.pipe(
+    tap((picture) => {
+      queued.set(picture.url, picture.unspoilered);
+
+      updateImageGalleryPictureSpoilers$.next();
+    }),
+    reduceToEmptyString()
+  );
+
+  const apply$ = updateImageGalleryPictureSpoilers$.pipe(
+    debounceTime(250),
+    tap(() => {
+      readerImageGalleryPictures$.next(
+        readerImageGalleryPictures$.getValue().map((galleryPicture) => {
+          const picture = galleryPicture;
+
+          if (queued.has(picture.url)) {
+            picture.unspoilered = queued.get(picture.url)!;
+          }
+
+          return picture;
+        })
+      );
+
+      queued.clear();
+    }),
+    reduceToEmptyString()
+  );
+
+  return { collect$, apply$ };
+}

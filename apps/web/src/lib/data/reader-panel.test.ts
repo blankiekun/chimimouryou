@@ -7,6 +7,8 @@
 import { describe, expect, it } from 'vitest';
 import { FuriganaStyle } from '$lib/data/furigana-style';
 import {
+  bookProgressLabel,
+  chapterProgressLabel,
   contentsRows,
   currentChapterLabel,
   furiganaChoice,
@@ -132,5 +134,27 @@ describe('furigana choice', () => {
 
       expect(furiganaChoice(hideFurigana, style ?? FuriganaStyle.Partial)).toBe(choice);
     }
+  });
+});
+
+describe('footer progress', () => {
+  const sections = [
+    section('a', 100, { startCharacter: 0, characters: 100 }),
+    section('b', 40, { startCharacter: 100, characters: 200 }),
+    section('b1', 20, { startCharacter: 150, characters: 50, parentChapter: 'b' })
+  ];
+
+  it('gives the current chapter characters and weighted percentage', () => {
+    expect(chapterProgressLabel(sections, 180, true, true)).toBe('80 / 200 30.00% C');
+    expect(chapterProgressLabel(sections, 180, false, true)).toBe('30.00% C');
+    expect(chapterProgressLabel(sections, 50, true, false)).toBe('0 / 200 C');
+    expect(chapterProgressLabel(sections, 180, false, false)).toBe('');
+    expect(chapterProgressLabel([], 180, true, true)).toBe('');
+  });
+
+  it('gives the book characters and percentage, marked when a chapter part follows', () => {
+    expect(bookProgressLabel(1234, 5678, true, true, false)).toBe('1,234 / 5,678 chars · 21%');
+    expect(bookProgressLabel(1234, 5678, false, true, true)).toBe('21% T');
+    expect(bookProgressLabel(1234, 5678, false, false, true)).toBe('T');
   });
 });
