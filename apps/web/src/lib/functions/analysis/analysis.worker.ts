@@ -34,11 +34,15 @@ export interface AnalysisRequest {
 export type AnalysisMessage =
   /** The share of the book's text read so far; also shows the page's watchdog it is alive */
   | { type: 'progress'; share: number }
-  /** browser.analyse's JSON */
-  | { type: 'result'; json: string }
+  /** browser.analyse's JSON; `timings`: where the request's time went (ms), for the analysis bench */
+  | { type: 'result'; json: string; timings: Record<string, number> }
   | { type: 'error'; message: string };
 
 const post = (message: AnalysisMessage) => self.postMessage(message);
+
+/** Load times of the request that loaded the tools (analysis-bench.browser.ts) */
+let loadTimes: Record<string, number> = {};
+const since = (start: number) => performance.now() - start;
 
 let base = '';
 const networkFetch = self.fetch.bind(self);
@@ -61,6 +65,7 @@ interface Morpheme {
 }
 
 async function loadSudachi(manifest: AnalysisToolsManifest) {
+  const start = performance.now();
   const bytes = manifest.files.find((file) => file.name === 'core.dic.gz')?.raw;
 
   if (!bytes) throw new Error('core.dic.gz: not in the tools');
@@ -74,6 +79,7 @@ async function loadSudachi(manifest: AnalysisToolsManifest) {
   const sudachi = new glue.SudachiStateless();
 
   sudachi.initialize_from_ptr(address, bytes);
+  loadTimes.sudachi = since(start);
 
   // A text's morphemes as browser.py's BrowserTokens reads them: tokenize_rows builds the same
   // string in wasm; tools installed before it have only tokenize_raw.
@@ -90,19 +96,27 @@ async function loadSudachi(manifest: AnalysisToolsManifest) {
 }
 
 async function loadPython() {
+  const start = performance.now();
   const { loadPyodide } = await importToolsModule(base, 'pyodide/pyodide.mjs');
   const asm = await importToolsModule(base, 'pyodide/pyodide.asm.mjs');
   const py = await loadPyodide({
     indexURL: new URL('pyodide/', base).href,
     createPyodideModule: asm.default
   });
+  const booted = performance.now();
+
+  loadTimes.pyodide = booted - start;
 
   py.unpackArchive(await (await toolsFile(base, 'analysis.zip')).arrayBuffer(), 'zip', {
     extractDir: '/home/pyodide/analysis'
   });
   py.runPython("import sys; sys.path.insert(0, '/home/pyodide/analysis')");
 
-  return { py, browser: py.pyimport('browser') };
+  const browser = py.pyimport('browser');
+
+  loadTimes.python = since(booted);
+
+  return { py, browser };
 }
 
 let tools: Promise<
@@ -137,10 +151,13 @@ async function loadPack(
 
 self.onmessage = async ({ data }: MessageEvent<AnalysisRequest>) => {
   try {
+    const start = performance.now();
+
     base = data.base;
     tools ??= Promise.all([loadSudachi(data.manifest), loadPython()]);
 
     const [tokenize, python] = await tools;
+    const loaded = performance.now();
 
     if (data.reader) {
       await loadPack(python, data.manifest, 'reader.ygp.gz', python.browser.READER_PACK);
@@ -158,6 +175,9 @@ self.onmessage = async ({ data }: MessageEvent<AnalysisRequest>) => {
     const seen = new Set<string>();
     let read = 0;
     let posted = 0;
+    let tokenizing = 0;
+    const packs = since(loaded);
+    const analysing = performance.now();
     const json = python.browser.analyse(
       data.html,
       (text: string) => {
@@ -172,7 +192,12 @@ self.onmessage = async ({ data }: MessageEvent<AnalysisRequest>) => {
 
         let found = tokens.get(text);
 
-        if (found === undefined) tokens.set(text, (found = tokenize(text)));
+        if (found === undefined) {
+          const asked = performance.now();
+
+          tokens.set(text, (found = tokenize(text)));
+          tokenizing += since(asked);
+        }
 
         return found;
       },
@@ -182,7 +207,18 @@ self.onmessage = async ({ data }: MessageEvent<AnalysisRequest>) => {
       ...(data.reader ? [] : [false])
     );
 
-    post({ type: 'result', json });
+    post({
+      type: 'result',
+      json,
+      timings: {
+        ...loadTimes,
+        load: loaded - start,
+        packs,
+        analyse: since(analysing),
+        tokenize: tokenizing
+      }
+    });
+    loadTimes = {};
   } catch (error) {
     post({ type: 'error', message: String((error as Error)?.message ?? JSON.stringify(error)) });
   }

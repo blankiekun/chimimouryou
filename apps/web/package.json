@@ -10,7 +10,8 @@
     "check:types": "tsc --noEmit",
     "check:watch": "svelte-check --tsconfig ./tsconfig.json --watch",
     "test": "vitest run",
-    "test:browser": "vitest run -c vitest.browser.config.js"
+    "test:browser": "vitest run -c vitest.browser.config.js",
+    "bench:analysis": "vitest run -c vitest.bench.config.js"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "4.0.0",
