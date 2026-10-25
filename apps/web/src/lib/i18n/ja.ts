@@ -2224,7 +2224,7 @@ export const ja: Record<MessageKey, string> = {
   'profile.editStatistics': '統計を編集',
   'profile.editStatisticsHint': '期間・目標・データ',
   'community.lead':
-    '読者が共有している一文。新しい順です。ネタバレは「ネタバレを表示」を押すまでぼかされます。',
+    '読者の投稿と共有されている一文。新しい順です。ネタバレは「ネタバレを表示」を押すまでぼかされます。',
   'community.off':
     'コミュニティはソーシャルプラグインの機能で、今はオフです。設定 → プラグインでオンにできます。',
   'community.readOnly': '閲覧のみ。投稿するには登録してください。',
@@ -2238,7 +2238,7 @@ export const ja: Record<MessageKey, string> = {
   'community.empty': 'この本にはまだ投稿がありません。',
   'community.emptyHint': '行を選んで「コミュニティに投稿」で始められます。',
   'community.feedEmpty':
-    'まだ投稿がありません。本で行を選んで「コミュニティに投稿」を選んでください。',
+    'まだ投稿がありません。上で書くか、本で行を選んで「コミュニティに投稿」を選んでください。',
   'community.guardNote':
     'ネタバレは「ネタバレを表示」を押すまでぼかされます。投稿するには行を選んで「コミュニティに投稿」を選んでください。',
   'community.howToPost':
@@ -2305,6 +2305,11 @@ export const ja: Record<MessageKey, string> = {
   'community.change': '変更',
   'community.alsoShown': 'ほかに表示されるもの:本の表紙とタイトル、ユーザー名、ランク、既知語数。',
   'community.post': '投稿',
+  'community.plainTitle': '新しい投稿',
+  'community.plainPlaceholder': '質問、おすすめ、なんでも。@ で作品を紹介できます。',
+  'community.mentionList': '紹介する作品',
+  'community.mentionNone': '作品が見つかりません',
+  'community.error.mention': '作品の紹介は AniList か VNDB のみです。',
   'community.lineShort': 'この行は短すぎて投稿できません。もっと長い文を選んでください。',
   'community.lineLong': 'この文は長すぎて投稿できません(300文字まで)。',
   'community.matchTitle': 'これは{title}ですか?',

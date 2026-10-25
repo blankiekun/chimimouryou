@@ -607,6 +607,79 @@ describe('hub community', () => {
     );
   });
 
+  it('takes plain posts: in the feed with no work or line, their own thread, replies and notes', async () => {
+    const aki = await signUp('aki');
+    const ben = await signUp('ben');
+    const plain = (body: object, token = aki.token) =>
+      call('POST', '/v1/community/posts', { plain: true, ...body }, token);
+
+    // An account's line posts on a work don't cap its plain posts, nor the other way round.
+    for (let n = 0; n < ROOTS_PER_WORK; n++) {
+      await post(aki.token, { body: `投稿${n}` });
+      vi.advanceTimersByTime(400_000);
+    }
+    const made = await plain({ body: 'おすすめは？ @[狼と香辛料](anilist:30001)', spoiler: true });
+
+    expect(made.status).toBe(200);
+    expect(made.body).toMatchObject({ work: 'post', title: '', cover: null });
+    expect(made.body.line).toMatch(/^[0-9a-f]{32}$/);
+    expect(db.prepare(`SELECT COUNT(*) AS n FROM works WHERE work = 'post'`).get()).toEqual({
+      n: 0
+    });
+
+    const { id, line } = made.body;
+    const top = (await call('GET', '/v1/community/feed')).body.posts[0];
+
+    expect(top).toMatchObject({ id, work: 'post', line, quote: '', title: '', spoiler: true });
+    vi.advanceTimersByTime(1000);
+    const reply = await call(
+      'POST',
+      '/v1/community/posts',
+      { parent: id, body: 'いいね' },
+      ben.token
+    );
+
+    expect(reply.status).toBe(200);
+    const opened = await call('GET', `/v1/community/thread?work=post&line=${line}`);
+
+    expect(opened.status).toBe(200);
+    expect(opened.body.posts.map((one: { id: string }) => one.id)).toEqual([id, reply.body.id]);
+    expect(
+      (await call('GET', '/v1/community/notes', undefined, aki.token)).body.notes[0]
+    ).toMatchObject({ work: 'post', line, parent: id, inFeed: true });
+    // The sentinel is no work: no listing, cover or line post takes it.
+    expect(
+      (await call('GET', '/v1/community/threads?work=post', undefined, aki.token)).status
+    ).toBe(400);
+    expect((await post(aki.token, { work: 'post' })).status).toBe(400);
+    expect((await plain({ body: '' })).status).toBe(400);
+    expect((await plain({ body: 'a\u202eb' })).status).toBe(400);
+  });
+
+  it('accepts only AniList and VNDB mentions, and not as links', async () => {
+    const fresh = await signUp('new', 1);
+    const plain = (body: string) =>
+      call('POST', '/v1/community/posts', { plain: true, body }, fresh.token);
+
+    expect((await plain('@[狼と香辛料](anilist:30001) と @[Ever17](vndb:v17)')).status).toBe(200);
+    for (const bad of [
+      '@[x](https://evil.example)',
+      '@[x](anilist:0)',
+      '@[x](vndb:17)',
+      '@[x](mal:5)'
+    ]) {
+      expect((await plain(bad)).status).toBe(400);
+    }
+    // Brackets that aren't a mention stay plain text
+    expect((await plain('[メモ](あとで) @名前')).status).toBe(200);
+    const { id } = (await plain('前')).body;
+
+    expect(
+      (await call('PUT', `/v1/community/posts/${id}`, { body: '@[x](javascript:1)' }, fresh.token))
+        .status
+    ).toBe(400);
+  });
+
   it('keeps "this line only" posts out of the feed, in their thread', async () => {
     const aki = await signUp('aki');
     const shared = (await post(aki.token)).body.id;
