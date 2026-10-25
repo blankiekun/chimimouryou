@@ -3,15 +3,16 @@
   import CommunityMatch from '$lib/components/community/community-match.svelte';
   import CommunitySignup from '$lib/components/community/community-signup.svelte';
   import CommunityThread from '$lib/components/community/community-thread.svelte';
-  import { lineIndex, listThreads, visibleThreads, type ThreadSummary } from '$lib/data/community';
+  import { listThreads, visibleThreads, type ThreadSummary } from '$lib/data/community';
   import {
-    bookLines,
-    bookWork,
+    bookMarks,
     communityErrorKey,
     communityMarks$,
     communityMarkTap$,
-    markedLines,
+    forgetBookCommunity,
+    loadBookCommunity,
     passedLine,
+    type BookCommunity,
     type BookLine
   } from '$lib/data/community-book';
   import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v3';
@@ -45,7 +46,7 @@
   let suggestion: string | null = null;
   let work = '';
   let lines: BookLine[] = [];
-  let index: Awaited<ReturnType<typeof lineIndex>> | undefined;
+  let index: BookCommunity['index'] | undefined;
   let threads: ThreadSummary[] = [];
   let error = '';
   let order: 'book' | 'posts' = 'book';
@@ -58,12 +59,9 @@
   $: visible = index ? visibleThreads(threads, index, passed) : [];
   $: rows = order === 'book' ? visible : [...visible].sort((a, b) => b.posts - a.posts);
   $: total = visible.reduce((sum, thread) => sum + thread.posts, 0);
-  // Markers: every thread of the book; only lines on screen are drawn, and a line on the screen
-  // being read counts as reached (the reader's position is the page's start).
-  $: communityMarks$.next({
-    title,
-    marks: markedLines(index ? visibleThreads(threads, index, lines.length) : [], lines)
-  });
+  // Markers: every thread of the book; only lines on screen are drawn. Not before the tab has
+  // loaded, so the markers the book open set stay meanwhile.
+  $: if (index) communityMarks$.next({ title, marks: bookMarks({ lines, index, threads }) });
   $: openLine = open
     ? lines[visible.find((thread) => thread.hash === open)?.index ?? -1]
     : undefined;
@@ -74,15 +72,18 @@
     state = 'loading';
     error = '';
     try {
-      const [resolved, searchIndex] = await Promise.all([bookWork(title), getIndex()]);
+      // The book open may have loaded it already (markBookOnOpen).
+      const found = await loadBookCommunity(title, getIndex);
 
-      lines = bookLines(searchIndex.paragraphs);
-      index = await lineIndex(lines.map((line) => line.text));
-      if (resolved.work) {
-        work = resolved.work;
-        await load();
+      lines = found.lines;
+      index = found.index;
+      if (found.work) {
+        work = found.work;
+        threads = found.threads;
+        state = 'ready';
+        openLinked();
       } else {
-        suggestion = resolved.suggestion;
+        suggestion = found.suggestion;
         state = 'match';
       }
     } catch (e) {
@@ -125,6 +126,7 @@
   });
 
   onMount(() => () => {
+    forgetBookCommunity();
     communityMarks$.next({ title: '', marks: [] });
     communityMarkTap$.next('');
   });

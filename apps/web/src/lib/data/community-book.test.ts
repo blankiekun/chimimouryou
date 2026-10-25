@@ -6,15 +6,26 @@
 
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { lineHash, lineIndex, visibleThreads, type CommunityNote } from '$lib/data/community';
+import {
+  communityWorks$,
+  lineHash,
+  lineIndex,
+  visibleThreads,
+  type CommunityNote
+} from '$lib/data/community';
 import {
   bookLines,
+  communityMarks$,
   lineAt,
   lineLinkTarget,
+  loadBookCommunity,
+  markBookOnOpen,
   passedLine,
   splitContext,
   unseenNotes
 } from '$lib/data/community-book';
+import { socialSession$ } from '$lib/data/social-account';
+import type { SearchIndex } from '$lib/functions/book-text/book-search';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 
 const paragraphs = [
@@ -122,5 +133,44 @@ describe('community in the book', () => {
     expect(
       await lineLinkTarget(new URLSearchParams({ line: 'a'.repeat(32), work: 'anilist:1/2' }))
     ).toBe(`/community?work=anilist%3A1%2F2&line=${'a'.repeat(32)}`);
+  });
+
+  it('marks a matched book on open signed in, once for the tab too, and asks nothing otherwise', async () => {
+    const later = (await lineHash(bookLines(paragraphs)[3].text))!;
+    const fetchMock = vi.fn(async (url: string) =>
+      String(url).includes('/v1/community/threads')
+        ? new Response(
+            JSON.stringify({
+              threads: [{ prefix: later.slice(0, 8), posts: 2, spoiler: false }],
+              next: null
+            })
+          )
+        : new Response('', { status: 404 })
+    );
+    const hubCalls = () => fetchMock.mock.calls.filter(([url]) => String(url).includes('/v1/'));
+    const getIndex = async () => ({ paragraphs }) as unknown as SearchIndex;
+
+    vi.stubGlobal('fetch', fetchMock);
+    communityWorks$.next({ 本: 'anilist:1' });
+    // Signed out: nothing, even for a matched book.
+    await markBookOnOpen('本', getIndex);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    socialSession$.next({ token: 't', me: { id: 'a', share: {} } } as never);
+    // Not matched yet: the tab's match sheet comes first, so nothing on open.
+    await markBookOnOpen('別の本', getIndex);
+    expect(hubCalls()).toEqual([]);
+
+    await markBookOnOpen('本', getIndex);
+    expect(hubCalls()).toHaveLength(1);
+    expect(communityMarks$.getValue()).toMatchObject({
+      title: '本',
+      marks: [{ hash: later, posts: 2, start: 46 }]
+    });
+    // The tab opened later reuses it.
+    expect((await loadBookCommunity('本', getIndex)).threads).toHaveLength(1);
+    expect(hubCalls()).toHaveLength(1);
+    socialSession$.next(null);
+    communityWorks$.next({});
   });
 });

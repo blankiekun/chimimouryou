@@ -18,16 +18,22 @@ import {
   communityOn,
   communityWorks$,
   lineHash,
+  lineIndex,
+  listThreads,
   loadNotes,
   resolveWork,
   sentences,
   titleWork,
+  visibleThreads,
+  workFromUrl,
   type CommunityNote,
+  type ThreadSummary,
   type VisibleThread
 } from '$lib/data/community';
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import { HubError, socialSession$ } from '$lib/data/social-account';
 import type { MessageKey } from '$lib/i18n';
+import type { SearchIndex } from '$lib/functions/book-text/book-search';
 import { countCharacters } from '$lib/functions/book-text/text-positions';
 
 export interface BookLine {
@@ -159,17 +165,84 @@ export function passedLines(work: string) {
   return found;
 }
 
-/** The book's work (community.ts resolveWork), with its Find details url when it has one */
-export async function bookWork(title: string) {
-  const url = await loadBookMetadata().then(
+const metadataUrl = (title: string) =>
+  loadBookMetadata().then(
     (map) => map[title]?.url ?? '',
     () => ''
   );
 
-  return resolveWork(title, url);
+/** The book's work (community.ts resolveWork), with its Find details url when it has one */
+export async function bookWork(title: string) {
+  return resolveWork(title, await metadataUrl(title));
 }
 
-/** Threads marked in the open book (set by its Community tab), and a marker's tap */
+export interface BookCommunity {
+  work: string | null;
+  /** The hub's suggestion for the match sheet, when there is no work */
+  suggestion: string | null;
+  lines: BookLine[];
+  index: Awaited<ReturnType<typeof lineIndex>>;
+  /** The work's threads (none without a work) */
+  threads: ThreadSummary[];
+}
+
+let loaded: {
+  title: string;
+  getIndex: () => Promise<SearchIndex>;
+  result: Promise<BookCommunity>;
+} | null = null;
+
+/**
+ * What the Community tab loads on its first visit, also run on book open (markBookOnOpen): the
+ * work, the lines, their index and the work's threads. Kept per open book (`getIndex` is the
+ * reader page's), so the tab reuses what the book open asked; a failure is not kept.
+ */
+export function loadBookCommunity(title: string, getIndex: () => Promise<SearchIndex>) {
+  if (loaded?.title !== title || loaded.getIndex !== getIndex) {
+    const result = (async () => {
+      const [resolved, searchIndex] = await Promise.all([bookWork(title), getIndex()]);
+      const lines = bookLines(searchIndex.paragraphs);
+      const index = await lineIndex(lines.map((line) => line.text));
+      const threads = resolved.work ? await listThreads(resolved.work) : [];
+
+      return { ...resolved, lines, index, threads };
+    })();
+
+    loaded = { title, getIndex, result };
+    result.catch(() => {
+      if (loaded?.result === result) loaded = null;
+    });
+  }
+  return loaded.result;
+}
+
+/** The tab went away: its next visit asks again */
+export function forgetBookCommunity() {
+  loaded = null;
+}
+
+/** Every thread of the book as markers (a line on the screen being read counts as reached) */
+export const bookMarks = ({ lines, index, threads }: Omit<BookCommunity, 'work' | 'suggestion'>) =>
+  markedLines(visibleThreads(threads, index, lines.length), lines);
+
+/**
+ * On book open (after it rendered): the markers without opening the tab, only signed in with
+ * social on and for a book already matched to its work in this browser or by its Find details
+ * url. Never the match sheet; other books wait for the tab.
+ */
+export async function markBookOnOpen(title: string, getIndex: () => Promise<SearchIndex>) {
+  if (!communityOn() || !socialSession$.getValue()) return;
+  if (!communityWorks$.getValue()[title] && !workFromUrl(await metadataUrl(title), title)) return;
+
+  const found = await loadBookCommunity(title, getIndex);
+
+  // The tab may have set them first (and fresher, after a post).
+  if (found.work && communityMarks$.getValue().title !== title) {
+    communityMarks$.next({ title, marks: bookMarks(found) });
+  }
+}
+
+/** Threads marked in the open book (set by its Community tab or the book open), and a marker's tap */
 export const communityMarks$ = new BehaviorSubject<{
   title: string;
   marks: (VisibleThread & BookLine)[];

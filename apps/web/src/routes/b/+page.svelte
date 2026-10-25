@@ -1177,6 +1177,18 @@
     );
   }
 
+  // The plugins' work on an opened book (Community markers), once it rendered and the browser idles.
+  let openedTitle = '';
+
+  $: if (bookmarkManager && $bookData$ && $rawBookData$ && openedTitle !== $rawBookData$.title) {
+    const title = (openedTitle = $rawBookData$.title);
+    const run = () =>
+      activePlugins().forEach((plugin) => plugin.onBookOpened?.(title, getSearchIndex));
+
+    if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 3000 });
+    else setTimeout(run, 1000);
+  }
+
   onDestroy(() => {
     clearTimeout(readingWorkTimer);
     const title = $rawBookData$?.title;
