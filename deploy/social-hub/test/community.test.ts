@@ -458,12 +458,14 @@ describe('hub community', () => {
     const first = (await listing(aki.token)).body;
 
     expect(first.threads).toHaveLength(1000);
-    expect(first.next).toBe('00000000');
-    // Lines are hex and these share their first 8: the next page starts past all of them.
+    expect(first.next).toBe((999).toString(16).padStart(32, '0'));
+    // These share their first 8 hex: the cursor is the full line, so none is skipped.
     expect((await listing(aki.token, `&after=${first.next}`)).body).toEqual({
-      threads: [],
+      threads: [{ prefix: '00000000', posts: 1, spoiler: false }],
       next: null
     });
+    // Old clients' 8-hex cursors still work (past every line with that prefix).
+    expect((await listing(aki.token, '&after=00000000')).body.threads).toEqual([]);
     expect((await listing(aki.token, '&after=zz')).status).toBe(400);
   });
 
@@ -577,6 +579,60 @@ describe('hub community', () => {
     expect((await thread(aki.token)).body.posts.map((one: { id: string }) => one.id)).not.toContain(
       ids[31]
     );
+  });
+
+  it('hides a post only on reports from accounts past their first days', async () => {
+    const aki = await signUp('aki');
+    const dev = await signUp('dev');
+    const { id } = (await post(aki.token)).body;
+    const feedIds = async () =>
+      (await call('GET', '/v1/community/feed')).body.posts.map((one: { id: string }) => one.id);
+
+    db.prepare(`UPDATE users SET role = 'dev' WHERE id = ?`).run(dev.me.id);
+    for (const name of ['nnn', 'ooo', 'ppp']) {
+      await call('POST', '/v1/report', { what: 'post', id }, (await signUp(name, 1)).token);
+    }
+    expect(await feedIds()).toEqual([id]);
+    // Moderators still see every report.
+    expect(
+      (await call('GET', '/v1/admin/community/reports', undefined, dev.token)).body.posts
+    ).toEqual([expect.objectContaining({ id, count: 3 })]);
+  });
+
+  it('keeps the line of a thread whose first post is hidden', async () => {
+    const aki = await signUp('aki');
+    const bea = await signUp('bea');
+    const { id } = (await post(aki.token)).body;
+
+    vi.advanceTimersByTime(1000);
+    await call('POST', '/v1/community/posts', { parent: id, body: '答え' }, bea.token);
+    for (const name of ['rrr', 'sss', 'ttt']) {
+      await call('POST', '/v1/report', { what: 'post', id }, (await signUp(name)).token);
+    }
+
+    const { body } = await thread(bea.token);
+
+    expect(body.posts.map((one: { parent: string }) => one.parent)).toEqual([id]);
+    expect(body.quote).toBe(LINE);
+    expect(body.context).toBe(CONTEXT);
+  });
+
+  it('moves the line to the next post when the one keeping it goes', async () => {
+    const aki = await signUp('aki');
+    const bea = await signUp('bea');
+    const { id } = (await post(aki.token)).body;
+
+    vi.advanceTimersByTime(1000);
+    const second = (await post(bea.token, { body: '私も' })).body.id;
+
+    await call('DELETE', `/v1/community/posts/${id}`, undefined, aki.token);
+
+    const { body } = await thread(bea.token);
+
+    expect(body.posts.map((one: { id: string }) => one.id)).toEqual([second]);
+    expect(body.quote).toBe(LINE);
+    expect(body.context).toBe(CONTEXT);
+    expect((await call('GET', '/v1/community/feed')).body.posts[0].quote).toBe(LINE);
   });
 
   it('keeps the page of context only for a work’s first lines', async () => {

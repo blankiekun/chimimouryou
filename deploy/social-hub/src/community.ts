@@ -76,7 +76,7 @@ const WORK =
 const BOOK = /^[\p{L}\p{N}]{1,100}$/u;
 const VOL = /^(?:\d{1,4}(?:\.\d{1,2})?)?$/;
 const LINE = /^[0-9a-f]{32}$/;
-const PREFIX = /^[0-9a-f]{8}$/;
+const AFTER = /^(?:[0-9a-f]{8}|[0-9a-f]{32})$/;
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/;
 /** Direction overrides, isolates and marks: they reorder what readers see */
@@ -139,8 +139,9 @@ const unblocked = (column: string, viewer: string) =>
   `NOT EXISTS (SELECT 1 FROM links l WHERE l.state = 'blocked'
      AND l.a = min(${column}, ${viewer}) AND l.b = max(${column}, ${viewer}))`;
 
-/** Posts FEED_REPORTS readers reported wait for a moderator */
-const unreported = `(SELECT COUNT(*) FROM reports r WHERE r.what = 'post' AND r.target = p.id) < ${FEED_REPORTS}`;
+/** Posts FEED_REPORTS readers past their first days reported wait for a moderator */
+const unreported = () => `(SELECT COUNT(*) FROM reports r JOIN users ru ON ru.id = r.reporter
+  WHERE r.what = 'post' AND r.target = p.id AND ru.created <= ${now() - NEW_ACCOUNT}) < ${FEED_REPORTS}`;
 
 const authorColumns = `u.id AS uid, u.username, u.name, u.avatar, u.role, u.share,
   COALESCE(pi.version, 0) AS picture, st.data AS stats`;
@@ -216,6 +217,17 @@ export function deletePostsSql(where: string) {
 
   // Each statement uses `where`'s parameters (D1 refuses unused bindings).
   return [
+    // A line's quote and context move to its oldest remaining post when their post goes for good
+    `UPDATE posts SET
+       quote = (SELECT d.quote FROM posts d WHERE d.work = posts.work AND d.line = posts.line
+         AND d.quote != '' AND d.id IN (${posts})),
+       context = (SELECT d.context FROM posts d WHERE d.work = posts.work AND d.line = posts.line
+         AND d.quote != '' AND d.id IN (${posts}))
+     WHERE quote = '' AND id = (SELECT o.id FROM posts o WHERE o.work = posts.work
+         AND o.line = posts.line AND o.user != '' AND o.id NOT IN (${posts}) ORDER BY o.at, o.id LIMIT 1)
+       AND EXISTS (SELECT 1 FROM posts d WHERE d.work = posts.work AND d.line = posts.line
+         AND d.quote != '' AND d.id IN (${posts})
+         AND NOT EXISTS (SELECT 1 FROM posts k WHERE k.parent = d.id AND k.id NOT IN (${posts})))`,
     `DELETE FROM helpful WHERE post IN (${posts})`,
     `DELETE FROM reports WHERE what = 'post' AND target IN (${posts})`,
     // Tombstones whose remaining replies all go now
@@ -266,8 +278,8 @@ export async function dropUnusedWorks(env: Env) {
 
 /**
  * GET threads?work=&after=: the lines of a work with posts, as 8-hex prefixes of their hash, with
- * post counts and whether any is a spoiler, 1,000 a page by prefix. Positions are the client's
- * to check.
+ * post counts and whether any is a spoiler, 1,000 a page; `next` is the last line's full hash
+ * (an 8-hex `after` from older clients still works). Positions are the client's to check.
  */
 async function threads(request: Request, env: Env, user: UserRow | null, query: URLSearchParams) {
   const viewer = user?.id ?? '';
@@ -275,21 +287,21 @@ async function threads(request: Request, env: Env, user: UserRow | null, query: 
   const work = matching(query.get('work'), WORK, 'work');
   const after = query.get('after');
 
-  if (after !== null) matching(after, PREFIX, 'after');
+  if (after !== null) matching(after, AFTER, 'after');
   await limit(env, user?.id ?? (await ipSubject(request)), 'threads', DAY, 300);
 
   const { results } = await env.DB.prepare(
-    `SELECT substr(p.line, 1, 8) AS p, COUNT(*) AS n, MAX(p.spoiler) AS s FROM posts p
+    `SELECT p.line, substr(p.line, 1, 8) AS p, COUNT(*) AS n, MAX(p.spoiler) AS s FROM posts p
      WHERE p.work = ?1 AND p.line > ?2 AND p.user != '' AND ${unblocked('p.user', '?3')}
      GROUP BY p.line ORDER BY p.line LIMIT ${PAGE}`
   )
-    // Past every line that starts with the prefix ('g' sorts after the hex digits).
-    .bind(work, after ? `${after}g` : '', viewer)
-    .all<{ p: string; n: number; s: number }>();
+    // An old 8-hex cursor: past every line that starts with it ('g' sorts after the hex digits).
+    .bind(work, after?.length === 8 ? `${after}g` : (after ?? ''), viewer)
+    .all<{ line: string; p: string; n: number; s: number }>();
 
   return {
     threads: results.map((row) => ({ prefix: row.p, posts: row.n, spoiler: !!row.s })),
-    next: results.length === PAGE ? results[PAGE - 1].p : null
+    next: results.length === PAGE ? results[PAGE - 1].line : null
   };
 }
 
@@ -302,7 +314,7 @@ async function thread(request: Request, env: Env, user: UserRow | null, query: U
 
   await limit(env, user?.id ?? (await ipSubject(request)), 'thread', DAY, 1000);
 
-  const [{ results }, info] = await Promise.all([
+  const [{ results }, info, first] = await Promise.all([
     env.DB.prepare(
       `SELECT p.id, p.parent, p.body, p.spoiler, p.quote, p.context, p.at, p.edited,
          (SELECT COUNT(*) FROM helpful h JOIN users hu ON hu.id = h.user
@@ -310,20 +322,26 @@ async function thread(request: Request, env: Env, user: UserRow | null, query: U
          EXISTS (SELECT 1 FROM helpful h WHERE h.post = p.id AND h.user = ?3) AS voted,
          ${authorColumns}
        FROM posts p ${authorJoins('p.user')}
-       WHERE p.work = ?1 AND p.line = ?2 AND ${unblocked('p.user', '?3')} AND ${unreported}
+       WHERE p.work = ?1 AND p.line = ?2 AND ${unblocked('p.user', '?3')} AND ${unreported()}
        ORDER BY p.at, p.id LIMIT ${THREAD_POSTS}`
     )
       .bind(work, line, viewer, now() - AGED)
       .all(),
-    env.DB.prepare('SELECT title, vol, cover FROM works WHERE work = ?1').bind(work).first()
+    env.DB.prepare('SELECT title, vol, cover FROM works WHERE work = ?1').bind(work).first(),
+    // The line even when the post that keeps it is hidden
+    env.DB.prepare(
+      `SELECT quote, context FROM posts WHERE work = ?1 AND line = ?2 AND quote != '' LIMIT 1`
+    )
+      .bind(work, line)
+      .first<{ quote: string; context: string }>()
   ]);
 
   return {
     work,
     ...workJson(info),
     line,
-    quote: results.find((row) => row.quote)?.quote ?? '',
-    context: results.find((row) => row.context)?.context ?? '',
+    quote: first?.quote ?? '',
+    context: first?.context ?? '',
     posts: results.map((row) => postJson(row, viewer))
   };
 }
@@ -348,7 +366,7 @@ async function feed(request: Request, env: Env, user: UserRow | null, query: URL
      FROM posts p LEFT JOIN works w ON w.work = p.work ${authorJoins('p.user')}
      WHERE p.parent = '' AND p.user != '' AND (p.at < ?2 OR (p.at = ?2 AND p.id < ?3))
        AND ${unblocked('p.user', '?1')}
-       AND ${unreported}
+       AND ${unreported()}
      ORDER BY p.at DESC, p.id DESC LIMIT ${FEED_PAGE}`
   )
     .bind(viewer, before ? Number(before[1]) : 2 ** 40, before ? before[2] : 'g')
