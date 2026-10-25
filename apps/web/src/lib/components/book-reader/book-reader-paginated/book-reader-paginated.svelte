@@ -727,6 +727,8 @@
     if (
       !concretePageManager ||
       $skipKeyDownListener$ ||
+      // Typing in the panel (Community, Ask AI…) must not turn pages
+      (ev.target instanceof HTMLElement && ev.target.closest('input, textarea, select')) ||
       ev.altKey ||
       ev.ctrlKey ||
       ev.shiftKey ||
