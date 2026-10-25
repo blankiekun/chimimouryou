@@ -42,6 +42,7 @@ const post = (message: AnalysisMessage) => self.postMessage(message);
 
 /** Load times of the request that loaded the tools (analysis-bench.browser.ts) */
 let loadTimes: Record<string, number> = {};
+let sudachiMemory: WebAssembly.Memory | undefined;
 const since = (start: number) => performance.now() - start;
 
 let base = '';
@@ -79,6 +80,7 @@ async function loadSudachi(manifest: AnalysisToolsManifest) {
   const sudachi = new glue.SudachiStateless();
 
   sudachi.initialize_from_ptr(address, bytes);
+  sudachiMemory = wasm.memory;
   loadTimes.sudachi = since(start);
 
   // A text's morphemes as browser.py's BrowserTokens reads them: tokenize_rows builds the same
@@ -215,7 +217,9 @@ self.onmessage = async ({ data }: MessageEvent<AnalysisRequest>) => {
         load: loaded - start,
         packs,
         analyse: since(analysing),
-        tokenize: tokenizing
+        tokenize: tokenizing,
+        // Sudachi's and Pyodide's wasm memory (bytes): it only grows, so this is its peak so far.
+        wasm: (sudachiMemory?.buffer.byteLength ?? 0) + python.py._module.HEAPU8.buffer.byteLength
       }
     });
     loadTimes = {};

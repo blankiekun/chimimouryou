@@ -58,10 +58,29 @@ interface SyncAccessHandle {
   close(): void;
 }
 
-const syncHandle = (file: FileSystemFileHandle) =>
-  (
-    file as FileSystemFileHandle & { createSyncAccessHandle(): Promise<SyncAccessHandle> }
-  ).createSyncAccessHandle();
+/**
+ * Read-only, so two workers (analysisWorkers) can read the dictionary at once: a read-write handle
+ * is exclusive. Browsers without the mode ignore it and open an exclusive one: then it waits for
+ * the other worker's read (about 0.3 s) to end.
+ */
+async function syncHandle(file: FileSystemFileHandle) {
+  const open = () =>
+    (
+      file as FileSystemFileHandle & {
+        createSyncAccessHandle(options: { mode: 'read-only' }): Promise<SyncAccessHandle>;
+      }
+    ).createSyncAccessHandle({ mode: 'read-only' });
+
+  for (let tries = 1; ; tries++) {
+    try {
+      return await open();
+    } catch (error) {
+      if ((error as DOMException)?.name !== 'NoModificationAllowedError' || tries >= 50)
+        throw error;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+}
 
 /**
  * The OPFS folder where the tools' big files (the dictionary, the packs; `raw` in the manifest) are

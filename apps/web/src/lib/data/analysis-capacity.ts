@@ -7,9 +7,9 @@
 /**
  * How long the analysis worker (Sudachi and Pyodide, ~700 MB) stays alive after its last job, by
  * the machine (analysis-tools.ts). Kept alive, the next job (the book's other part, the next book of
- * a background run) skips the ~2 s start. Small machines (4 cores or fewer, under 8 GB) end it after
- * every job instead: ~300 MB less at a batch's peak, ~2 s more per part. deviceMemory is
- * Chromium's, capped at 8; other browsers don't say and count by their cores. Not part of upstream.
+ * a background run) skips the ~2 s start. Small machines (4 cores or fewer, under 8 GB), 0, keep it
+ * only for the book's other part and end it after the book: ~300 MB less at a batch's peak.
+ * deviceMemory is Chromium's, capped at 8; other browsers don't say and count by their cores. Not part of upstream.
  */
 export function analysisKeepAlive(
   machine: { hardwareConcurrency?: number; deviceMemory?: number } = navigator
