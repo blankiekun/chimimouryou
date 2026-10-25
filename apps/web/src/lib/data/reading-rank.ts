@@ -20,7 +20,6 @@ import type { WordMarks } from '$lib/data/word-marks';
 
 export interface RankTier {
   ja: string;
-  en: string;
   /** Characters read, counted at a plausible speed (`countedReading`) */
   characters: number;
   /** Distinct days with counted reading */

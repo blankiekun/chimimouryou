@@ -328,6 +328,8 @@
 
   const bookId$ = iffBrowser(() => readableToObservable(page)).pipe(
     map((pageObj) => Number(pageObj.url.searchParams.get('id'))),
+    // The page store emits on any URL/state change (hash, ?line=, replaceState): only a new id reloads.
+    distinctUntilChanged(),
     shareReplay({ refCount: true, bufferSize: 1 })
   );
 
