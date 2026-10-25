@@ -25,6 +25,7 @@ module.exports = (async () => {
         '**/vite.config.js',
         '**/vitest.config.js',
         '**/vitest.browser.config.js',
+        '**/vitest.bench.config.js',
         '**/eslint.config.js',
         '**/tailwind.config.cjs',
         'apps/web/static/**',
