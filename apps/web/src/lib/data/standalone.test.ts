@@ -112,6 +112,17 @@ describe('standalone edition', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('opens a matched book signed out without asking the hub for its markers', async () => {
+    window.localStorage.setItem('communityWorks', JSON.stringify({ 本: 'anilist:1' }));
+
+    const { activePlugins } = await import('$lib/plugins');
+    const getIndex = async () => ({ paragraphs: [{ text: '本文の一行目です。', startCount: 0 }] });
+
+    activePlugins().forEach((plugin) => plugin.onBookOpened?.('本', getIndex as never));
+    await (await import('$lib/data/community-book')).markBookOnOpen('本', getIndex as never);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('takes the public word test without a request, and saves the result for the app', async () => {
     const { default: PlacementTest } = await import(
       '$lib/components/placement/placement-test.svelte'

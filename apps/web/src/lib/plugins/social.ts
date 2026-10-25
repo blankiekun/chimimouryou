@@ -14,6 +14,7 @@ import { faComments } from '@fortawesome/free-solid-svg-icons';
 import CommunityComposer from '$lib/components/community/community-composer.svelte';
 import CommunityPanel from '$lib/components/community/community-panel.svelte';
 import SettingsSocial from '$lib/components/settings/settings-social.svelte';
+import { markBookOnOpen } from '$lib/data/community-book';
 import { noteReading } from '$lib/data/social';
 import type { Plugin } from '$lib/plugins';
 
@@ -47,6 +48,7 @@ export const socialPlugin: Plugin = {
       panel: CommunityComposer
     }
   ],
+  onBookOpened: (title, getIndex) => markBookOnOpen(title, getIndex).catch(() => {}),
   onPositionSettled: (title, _getIndex, position, characters) =>
     noteReading(title, position, characters),
   onBookLeft: (title, position, characters) => noteReading(title, position, characters, true)

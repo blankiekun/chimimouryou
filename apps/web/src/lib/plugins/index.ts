@@ -96,6 +96,8 @@ export interface Plugin {
     position: number,
     characters: number
   ) => void;
+  /** Called once an opened book has rendered, when the browser is idle */
+  onBookOpened?: (title: string, getIndex: () => Promise<SearchIndex>) => void;
   /** Called when the reader leaves a book */
   onBookLeft?: (title: string, position: number, characters: number) => void;
   /** Sentence audio for Anki cards when the book has no audiobook clip */
