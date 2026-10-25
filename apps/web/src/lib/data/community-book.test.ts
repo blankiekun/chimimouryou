@@ -162,7 +162,7 @@ describe('community in the book', () => {
     ).toBe(`/community?work=anilist%3A1%2F2&line=${'a'.repeat(32)}`);
   });
 
-  it('marks a matched book on open signed in, once for the tab too, and asks nothing otherwise', async () => {
+  it('marks a matched book on open, once for the tab too, and asks only for the suggestion otherwise', async () => {
     const later = (await lineHash(bookLines(paragraphs)[3].text))!;
     const fetchMock = vi.fn(async (url: string) =>
       String(url).includes('/v1/community/threads')
@@ -179,8 +179,15 @@ describe('community in the book', () => {
 
     vi.stubGlobal('fetch', fetchMock);
     communityWorks$.next({ 本: 'anilist:1' });
-    // Signed out: nothing, even for a matched book.
-    await markBookOnOpen('本', getIndex);
+    // Signed out: a matched book's threads alone (no suggestion asked).
+    await markBookOnOpen('本', async () => ({ paragraphs }) as unknown as SearchIndex);
+    expect(hubCalls().map(([url]) => String(url))).toEqual([
+      expect.stringContaining('/v1/community/threads?')
+    ]);
+    expect(communityMarks$.getValue()).toMatchObject({ title: '本', marks: [{ hash: later }] });
+    fetchMock.mockClear();
+    // Signed out and not matched: nothing.
+    await markBookOnOpen('別の本', getIndex);
     expect(fetchMock).not.toHaveBeenCalled();
 
     socialSession$.next({ token: 't', me: { id: 'a', share: {} } } as never);

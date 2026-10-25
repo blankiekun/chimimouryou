@@ -112,15 +112,28 @@ describe('standalone edition', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('opens a matched book signed out without asking the hub for its markers', async () => {
+  it('opens a matched book signed out with one anonymous threads GET, and nothing with social off', async () => {
     window.localStorage.setItem('communityWorks', JSON.stringify({ 本: 'anilist:1' }));
+    fetchMock.mockImplementation(
+      async () => new Response(JSON.stringify({ threads: [], next: null }))
+    );
 
-    const { activePlugins } = await import('$lib/plugins');
+    const plugins = await import('$lib/plugins');
+    const { markBookOnOpen } = await import('$lib/data/community-book');
     const getIndex = async () => ({ paragraphs: [{ text: '本文の一行目です。', startCount: 0 }] });
 
-    activePlugins().forEach((plugin) => plugin.onBookOpened?.('本', getIndex as never));
-    await (await import('$lib/data/community-book')).markBookOnOpen('本', getIndex as never);
+    plugins.setPluginEnabled('social', false);
+    await markBookOnOpen('本', getIndex as never);
     expect(fetchMock).not.toHaveBeenCalled();
+
+    plugins.setPluginEnabled('social', true);
+    await markBookOnOpen('本', getIndex as never);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const [url, init] = fetchMock.mock.calls[0];
+
+    expect(String(url)).toContain('/v1/community/threads?');
+    expect(JSON.stringify(init?.headers ?? {})).not.toContain('Bearer');
   });
 
   it('takes the public word test without a request, and saves the result for the app', async () => {
