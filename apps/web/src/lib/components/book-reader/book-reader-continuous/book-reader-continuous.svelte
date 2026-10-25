@@ -222,6 +222,17 @@
     isResizeScroll = `${window.scrollX} ${window.scrollY}` !== was;
   }
 
+  /**
+   * After a jump of the reader's (Contents, search, a cue, return to bookmark): it is the intended
+   * place now, not a pending re-layout's (the window settling after mount, a panel's line), which
+   * would otherwise put the reader back where it was before onScroll's frame.
+   */
+  function jumped(count = calculator && readCharCount(calculator)) {
+    if (count) prevIntendedCharCount = count;
+    lineAnchor = undefined;
+    panelUndo = undefined;
+  }
+
   let willNavigate = false;
 
   $: fullLengthDimension = verticalMode ? 'height' : 'width';
@@ -273,7 +284,7 @@
       bookmarkManagerConcrete =
         browser &&
         calculator &&
-        new BookmarkManagerContinuous(calculator, window, firstDimensionMargin || 0);
+        new BookmarkManagerContinuous(calculator, window, firstDimensionMargin || 0, jumped);
       bookmarkManager = bookmarkManagerConcrete;
     }
   }
@@ -347,6 +358,7 @@
           behavior: detail.scrollBehavior || 'instant'
         });
       }
+      jumped();
     } else if (
       detail.type === 'pauseTracker' &&
       needScroll(detail.selector, detail.scrollMode).scroll
@@ -760,9 +772,7 @@
             : 0)
       );
     }
-    // The jump is the intended place now: a re-layout before onScroll's frame (an image or the
-    // window settling) would otherwise put the reader back where it was.
-    if (calculator) prevIntendedCharCount = readCharCount(calculator);
+    jumped();
   });
 </script>
 

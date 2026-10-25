@@ -12,11 +12,13 @@ export class BookmarkManagerContinuous implements BookmarkManager {
   constructor(
     private calculator: CharacterStatsCalculator,
     private window: Window,
-    private firstDimensionMargin: number
+    private firstDimensionMargin: number,
+    private onJump?: (charCount: number) => void
   ) {}
 
   scrollToBookmark(bookmarkData: BooksDbBookmarkData, customReadingPointScrollOffset = 0) {
     if (!bookmarkData.exploredCharCount) return;
+    this.onJump?.(bookmarkData.exploredCharCount);
 
     if (this.scrollToCharCount(bookmarkData.exploredCharCount, customReadingPointScrollOffset)) {
       return;

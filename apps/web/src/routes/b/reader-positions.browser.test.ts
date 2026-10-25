@@ -46,10 +46,28 @@ afterEach(async () => {
   await browserPage.viewport(1000, 700);
 });
 
-const key = (code: string) => dispatchEvent(new KeyboardEvent('keydown', { code, key: code }));
+const key = (code: string, init: KeyboardEventInit = {}) =>
+  dispatchEvent(new KeyboardEvent('keydown', { code, key: code, ...init }));
 
 /** Lets a re-layout (and the reader's debounced listeners) finish before checking it held. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 250));
+
+/** Mounts the novel-like book and returns on the first frame it shows (not waitFor's 50 ms). */
+async function openFirstFrame(view: ViewMode, writing: 'horizontal-tb' | 'vertical-rl') {
+  const mounted = await mountReader(await addBook(2, 25, true), view, writing);
+  while (!onScreen(document.getElementById('p-2-25'))) {
+    await new Promise(requestAnimationFrame);
+  }
+  return mounted;
+}
+
+/** `id` is shown and stays shown once the reader's re-layouts are done. */
+async function lands(id: string) {
+  await waitOnScreen(id);
+  await settle();
+  await settle();
+  expect(onScreen(document.getElementById(id)), `${visibleParagraphs()}`).toBe(true);
+}
 
 /** a is before b in reading order */
 const before = (a: string, b: string) => {
@@ -99,12 +117,9 @@ for (const view of [ViewMode.Paginated, ViewMode.Continuous]) {
       });
 
       it('previous chapter right after next chapter lands on chapter 2, on a novel-like book', async () => {
-        component = await mountReader(await addBook(2, 25, true), view, writing);
-        // The key as soon as the book shows (each frame, not waitFor's 50 ms): the reader's first
-        // re-layout for the window's size comes just after and used to undo the jump.
-        while (!onScreen(document.getElementById('p-2-25'))) {
-          await new Promise(requestAnimationFrame);
-        }
+        // The key as soon as the book shows: the reader's first re-layout for the window's size
+        // comes just after and used to undo the jump.
+        component = await openFirstFrame(view, writing);
 
         key(nextChapterKey);
         await waitOnScreen('p-3-1');
@@ -168,6 +183,68 @@ for (const view of [ViewMode.Paginated, ViewMode.Continuous]) {
         rows[2].click();
         await waitOnScreen('p-3-1');
         expect(visibleParagraphs().every((id) => !before(id, 'p-2-40'))).toBe(true);
+      });
+
+      // Jumps right before a re-layout (the first one after mount, a resize, the panel's) used to
+      // be undone in continuous mode: the re-layout went back to the place before the jump.
+      it('a cue (ttu-action) right after the book opens stays', async () => {
+        component = await openFirstFrame(view, writing);
+        document.dispatchEvent(
+          new CustomEvent('ttu-action', { detail: { type: 'cue', selector: '#p-3-5' } })
+        );
+        await lands('p-3-5');
+      });
+
+      it('a Contents row right after the book opens stays', async () => {
+        component = await openFirstFrame(view, writing);
+        await togglePanel();
+        const rows = await vi.waitFor(
+          () => {
+            const found = document.querySelectorAll<HTMLElement>('.contents-row');
+            expect(found.length).toBe(3);
+            return found;
+          },
+          { interval: 1 }
+        );
+        rows[2].click();
+        await lands('p-3-1');
+      });
+
+      it('a search result stays through a resize right after it', async () => {
+        component = await openReader(view, writing);
+        await settle();
+        key('f', { ctrlKey: true });
+        const input = await vi.waitFor(() => {
+          const found = document.querySelector<HTMLInputElement>('.search-field input');
+          expect(found).toBeTruthy();
+          return found!;
+        });
+        await settle();
+        input.value = '第3章の5段落目';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        const result = await vi.waitFor(() => {
+          const found = document.querySelector<HTMLElement>('.search-result');
+          expect(found).toBeTruthy();
+          return found!;
+        });
+        await settle();
+        result.click();
+        void browserPage.viewport(990, 690); // Both sides: vertical text re-lays out on the height.
+        await lands('p-3-5');
+      });
+
+      it('return to bookmark stays through a resize right after it', async () => {
+        component = await openReader(view, writing);
+        await settle();
+        for (let turn = 0; turn < 3; turn++) {
+          key('PageDown');
+          await settle();
+        }
+        expect(onScreen(document.getElementById('p-2-25'))).toBe(false);
+
+        key('KeyR');
+        void browserPage.viewport(990, 690);
+        await lands('p-2-25');
       });
     });
   }
