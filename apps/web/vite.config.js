@@ -15,7 +15,10 @@ const config = {
     sveltekit({
       compilerOptions: {
         // Svelte 5 still honours this in legacy (non-runes) mode: === checks, as with Svelte 4.
+        // `runes` isn't set, so Svelte picks per component: one that uses runes compiles in runes
+        // mode, where `immutable` is ignored (its deprecation warning is dropped below).
         immutable: true,
+        warningFilter: (warning) => warning.code !== 'options_deprecated_immutable',
         // Component tests mount with `new Component({ target, props })`, Svelte 4's API.
         ...(process.env.VITEST ? { compatibility: { componentApi: 4 } } : {})
       },
