@@ -2333,6 +2333,8 @@
 </svelte:head>
 
 {$collectReaderImageGallerySpoilerToggles$ ?? ''}
+<!-- Subscribed before the book loads: rawBookData$ doesn't replay, and Svelte 5 subscribes on first render. -->
+{$initBookmarkData$ ?? ''}
 {$initAnnotations$ ?? ''}
 {$unknownWords$ ?? ''}
 {$handleUpdateImageGalleryPictureSpoilers$ ?? ''}
@@ -2512,7 +2514,6 @@
         on:trackerPause={() => pauseTracker(true)}
       />
     {/key}{/key}
-  {$initBookmarkData$ ?? ''}
   {$setBackgroundColor$ ?? ''}
   {$setWritingMode$ ?? ''}
   {$textSelector$ ?? ''}
