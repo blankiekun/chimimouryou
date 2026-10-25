@@ -26,13 +26,16 @@ export const paragraph = (chapter: number, index: number, real = false) =>
   real
     ? `<p id="p-${chapter}-${index}">第${chapter}章の${index}段落目。${'<ruby>漢字<rt>かんじ</rt></ruby>あいうえおかきくけこさしすせそ'.repeat(1 + ((chapter * 7 + index * 5) % 9))}</p>${index % 9 === 0 ? image : ''}`
     : `<p id="p-${chapter}-${index}">第${chapter}章の${index}段落目。${'あいうえおかきくけこさしすせそ'.repeat(4)}</p>`;
-const chapters = (real: boolean) =>
+/** `lines`: Aozora Bunko's layout, one block per chapter with a <br> after each paragraph. */
+const asLine = (html: string) => html.replace(/^<p /, '<span ').replace(/<\/p>/, '</span><br>');
+const chapters = (real: boolean, lines = false) =>
   [1, 2, 3].map(
     (chapter) =>
-      `<div id="ttu-ch${chapter}"><div class="ttu-book-html-wrapper"><div class="ttu-book-body-wrapper">${Array.from(
+      `<div id="ttu-ch${chapter}"><div class="ttu-book-html-wrapper"><div class="ttu-book-body-wrapper">${lines ? '<div>' : ''}${Array.from(
         { length: 40 },
-        (_, index) => paragraph(chapter, index + 1, real)
-      ).join('')}</div></div></div>`
+        (_, index) =>
+          lines ? asLine(paragraph(chapter, index + 1, real)) : paragraph(chapter, index + 1, real)
+      ).join('')}${lines ? '</div>' : ''}</div></div></div>`
   );
 
 function countOf(html: string) {
@@ -54,9 +57,22 @@ export function paragraphAt(count: number, real = false) {
   return 'p-3-40';
 }
 
+/** Character counts at the start and end of paragraph `index` of `chapter` (the reader's positions). */
+export function paragraphCounts(chapter: number, index: number, real = false) {
+  let start = 0;
+  for (let c = 1; c <= 3; c++) {
+    for (let i = 1; i <= 40; i++) {
+      const count = countOf(paragraph(c, i, real));
+      if (c === chapter && i === index) return { start, end: start + count };
+      start += count;
+    }
+  }
+  throw new Error(`no paragraph ${chapter}-${index}`);
+}
+
 /** Adds the book with a bookmark at the start of paragraph `index` of `chapter`; returns its id. */
-export async function addBook(chapter = 2, index = 25, real = false) {
-  const html = chapters(real);
+export async function addBook(chapter = 2, index = 25, real = false, lines = false) {
+  const html = chapters(real, lines);
   const counts = html.map(countOf);
   const startOf = (n: number) => counts.slice(0, n - 1).reduce((sum, c) => sum + c, 0);
   const total = startOf(4);

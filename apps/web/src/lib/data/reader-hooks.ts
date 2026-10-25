@@ -32,8 +32,11 @@ export function positionSettled(
 }
 
 /** The book rendered: the plugins' work runs once the browser idles. */
-export function bookOpened(title: string, getIndex: GetIndex) {
-  const run = () => activePlugins().forEach((plugin) => plugin.onBookOpened?.(title, getIndex));
+export function bookOpened(title: string, getIndex: GetIndex, before?: () => void) {
+  const run = () => {
+    before?.();
+    activePlugins().forEach((plugin) => plugin.onBookOpened?.(title, getIndex));
+  };
 
   if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 3000 });
   else setTimeout(run, 1000);

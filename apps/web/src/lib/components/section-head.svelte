@@ -66,7 +66,9 @@
   }
 
   .section-head-rule {
-    flex: 1 1 2rem;
+    /* No basis: in a narrow column the title keeps its room and the rule shrinks first. */
+    flex: 1 1 0;
+    min-width: 1rem;
     border-top: 1px solid var(--border-color);
   }
 </style>
