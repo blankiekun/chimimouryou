@@ -640,7 +640,7 @@ async function notes(env: Env, user: UserRow, query: URLSearchParams) {
 
   const since = Math.max(Number(query.get('since')) || 0, now() - 90 * DAY);
   const { results } = await env.DB.prepare(
-    `SELECT r.id, r.work, r.line, r.parent, r.body, r.spoiler, r.at, r.edited, w.title, w.vol, w.cover,
+    `SELECT r.id, r.work, r.line, r.parent, r.body, r.spoiler, r.at, r.edited, p.in_feed, w.title, w.vol, w.cover,
        ${authorColumns}
      FROM posts p JOIN posts r ON r.parent = p.id LEFT JOIN works w ON w.work = r.work
      ${authorJoins('r.user')}
@@ -655,6 +655,8 @@ async function notes(env: Env, user: UserRow, query: URLSearchParams) {
       ...postJson(row, user.id),
       work: row.work,
       line: row.line,
+      // The post answered: false for a "This line only" comment (the app opens its line)
+      inFeed: !!row.in_feed,
       ...workJson(row)
     }))
   };

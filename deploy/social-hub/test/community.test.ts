@@ -439,19 +439,31 @@ describe('hub community', () => {
     expect((await thread(ren.token)).body.posts[0].author.level).toBeNull();
   });
 
-  it('notifies a poster of replies, not of their own', async () => {
+  it('notifies a poster of replies, not of their own, saying which posts are line comments', async () => {
     const aki = await signUp('aki');
     const ren = await signUp('ren');
     const { id } = (await post(aki.token)).body;
+    const comment = (await post(aki.token, { feed: false })).body;
 
     await call('POST', '/v1/community/posts', { parent: id, body: '自分で' }, aki.token);
     await call('POST', '/v1/community/posts', { parent: id, body: '答え' }, ren.token);
+    await call('POST', '/v1/community/posts', { parent: comment.id, body: '行で' }, ren.token);
 
     const { body } = await call('GET', '/v1/community/notes', undefined, aki.token);
 
-    expect(body.notes).toEqual([
-      expect.objectContaining({ body: '答え', parent: id, work: WORK, line: await lineHash(LINE) })
-    ]);
+    expect(body.notes).toHaveLength(2);
+    expect(body.notes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          body: '答え',
+          parent: id,
+          work: WORK,
+          line: await lineHash(LINE),
+          inFeed: true
+        }),
+        expect.objectContaining({ body: '行で', parent: comment.id, inFeed: false })
+      ])
+    );
   });
 
   it('pages a listing by prefix', async () => {

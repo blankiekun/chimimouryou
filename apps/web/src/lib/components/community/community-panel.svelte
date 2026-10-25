@@ -163,6 +163,8 @@
     <CommunityThread
       {work}
       line={open}
+      bookTitle={title}
+      {getIndex}
       backLabel={$t$('nav.community')}
       goToLine={openLine ? () => openLine && dispatch('jump', openLine.start) : undefined}
       on:back={() => communityMarkTap$.next('')}
