@@ -133,7 +133,10 @@
         this={selection.action.panel}
         passage={selection.passage}
         {getIndex}
-        on:close={() => dispatch('closeSelection')}
+        on:close={({ detail }) => {
+          if (detail && tabs.some((item) => item.key === detail)) tab = detail;
+          dispatch('closeSelection');
+        }}
       />
     {:else}
       <header class="head">

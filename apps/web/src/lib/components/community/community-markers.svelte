@@ -98,8 +98,16 @@
             'p, div, li, blockquote, h1, h2, h3, h4, h5, h6'
           );
 
-          if (element && content.contains(element)) block.selectNodeContents(element);
-          else block.setStart(range.endContainer, range.endOffset);
+          if (element && content.contains(element)) {
+            block.selectNodeContents(element);
+            // Aozora-style books end paragraphs with <br> inside one block: the next one ends it.
+            const br = [...element.querySelectorAll('br')].find(
+              (item) =>
+                item.compareDocumentPosition(range.endContainer) & Node.DOCUMENT_POSITION_PRECEDING
+            );
+
+            if (br) block.setEndBefore(br);
+          } else block.setStart(range.endContainer, range.endOffset);
           return [{ hash: mark.hash, posts: mark.posts, range, block }];
         });
     }
@@ -134,10 +142,13 @@
         ? { hash, posts, x: last.left + last.width / 2, y: Math.min(last.bottom + 16, height - 16) }
         : { hash, posts, x: Math.min(last.right + 16, width - 16), y: last.top + last.height / 2 };
 
-      // Lines ending one paragraph: their bubbles line up along the line instead of overlapping.
+      // Lines ending one paragraph: their bubbles line up along the line instead of overlapping,
+      // back towards the text when the first sits at the window's edge.
+      const step = (vertical ? tag.y >= height - 44 : tag.x >= width - 44) ? -28 : 28;
+
       while (nextTags.some((other) => Math.hypot(other.x - tag.x, other.y - tag.y) < 24)) {
-        if (vertical) tag.y += 28;
-        else tag.x += 28;
+        if (vertical) tag.y += step;
+        else tag.x += step;
       }
       nextTags.push(tag);
       if (vertical) {
@@ -190,6 +201,7 @@
     <button
       type="button"
       class="community-tag writing-horizontal-tb"
+      data-hash={tag.hash}
       style:left="{tag.x}px"
       style:top="{tag.y}px"
       title={label(tag.posts)}

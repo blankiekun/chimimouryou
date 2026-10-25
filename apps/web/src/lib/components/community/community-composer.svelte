@@ -47,7 +47,8 @@
   export let bookTitle = '';
 
   const bodyLines = 20;
-  const dispatch = createEventDispatcher<{ close: void; posted: void }>();
+  /** close: the reader panel's tab to show next (the new thread's, after a post from a selection) */
+  const dispatch = createEventDispatcher<{ close: string | void; posted: void }>();
 
   let state: 'loading' | 'match' | 'ready' | 'error' = 'loading';
   let suggestion: string | null = null;
@@ -152,9 +153,13 @@
 
       if (!posted.cover && title) sendCover().catch(() => {});
       if (title && getIndex) refreshBookMarks(title, getIndex).catch(() => {});
-      if (thread) dispatch('posted');
-      else communityMarkTap$.next(posted.line);
-      dispatch('close');
+      if (thread) {
+        dispatch('posted');
+        dispatch('close');
+      } else {
+        communityMarkTap$.next(posted.line);
+        dispatch('close', 'community');
+      }
     } catch (e) {
       error = $t$(communityErrorKey(e));
     } finally {
@@ -362,6 +367,17 @@
   .composer-where legend {
     margin-bottom: 0.4rem;
     font-weight: 700;
+  }
+
+  /* Two long labels in the panel: one row of equal halves, each label free to wrap. */
+  .composer-where .app-segmented {
+    display: flex;
+    flex-wrap: nowrap;
+  }
+
+  .composer-where .app-segment {
+    flex: 1 1 0;
+    white-space: normal;
   }
 
   .composer-where small {

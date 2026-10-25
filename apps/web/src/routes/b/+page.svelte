@@ -885,7 +885,8 @@
     bookmarkManager.scrollToBookmark(
       {
         dataId,
-        exploredCharCount: count,
+        // The managers take 0 for no bookmark: a line at the book's very start is 1 away.
+        exploredCharCount: Math.max(1, count),
         lastBookmarkModified: new Date().getTime(),
         progress: 0
       },
@@ -1062,10 +1063,19 @@
 
   // The plugins' work on an opened book (Community markers), once it rendered and the browser idles.
   let openedTitle = '';
+  // A Community line link's jump waits for that run: earlier, the reader isn't ready or its
+  // restore of the bookmark moves the book back.
+  let openedDone = '';
+  let pendingReveal: number | undefined;
 
   $: if (bookmarkManager && $bookData$ && $rawBookData$ && openedTitle !== $rawBookData$.title) {
-    openedTitle = $rawBookData$.title;
-    bookOpened(openedTitle, getSearchIndex);
+    const title = (openedTitle = $rawBookData$.title);
+
+    bookOpened(title, getSearchIndex, () => {
+      openedDone = title;
+      if (pendingReveal !== undefined) jumpToCount(pendingReveal);
+      pendingReveal = undefined;
+    });
   }
 
   onDestroy(() => {
@@ -2262,7 +2272,10 @@
       jumpToCount(detail);
       closeSheetAfterJump();
     }}
-    on:reveal={({ detail }) => jumpToCount(detail)}
+    on:reveal={({ detail }) => {
+      if (openedDone && openedDone === $rawBookData$?.title) jumpToCount(detail);
+      else pendingReveal = detail;
+    }}
     on:searchJump={({ detail }) => {
       jumpToSearchResult(detail);
       closeSheetAfterJump();
