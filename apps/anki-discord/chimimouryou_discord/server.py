@@ -4,7 +4,8 @@
 
 """The local HTTP API pages call: 127.0.0.1 only, listed origins only.
 
-GET /v1/status, PUT /v1/activity (the finished activity JSON), DELETE /v1/activity.
+GET /v1/status, PUT /v1/activity (the finished activity JSON), DELETE /v1/activity,
+PUT /v1/pair {hub, key} (automatic pairing with the hub relay), DELETE /v1/pair.
 """
 
 import json
@@ -12,14 +13,17 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import activity as activity_mod
+from . import relay as relay_mod
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 DEFAULT_PORT = 41918
 DEFAULT_ORIGINS = ("https://chimireader.github.io", "http://127.0.0.1:41917")
 MAX_BODY = 16 * 1024
 
 
-def make_server(presence, port=DEFAULT_PORT, extra_origins=()):
+def make_server(presence, port=DEFAULT_PORT, extra_origins=(), relay=None):
+    """relay (relay.Relay) decides between local and hub activities; without one, /v1/pair is 404."""
+    sink = relay or presence
     origins = {o.rstrip("/").lower() for o in (*DEFAULT_ORIGINS, *extra_origins) if isinstance(o, str) and o}
 
     class Handler(BaseHTTPRequestHandler):
@@ -87,14 +91,18 @@ def make_server(presence, port=DEFAULT_PORT, extra_origins=()):
             if self.path != "/v1/status":
                 return self._reply(404, {"error": "not found"}, origin)
             self._reply(200, {"version": VERSION, "discord": presence.status,
-                              "lastSent": presence.last_sent}, origin)
+                              "lastSent": presence.last_sent, "paired": bool(relay and relay.paired)}, origin)
+
+        def _known(self, origin):
+            if self.path == "/v1/activity" or (relay and self.path == "/v1/pair"):
+                return True
+            self._reply(404, {"error": "not found"}, origin)
+            return False
 
         def do_PUT(self):
             origin = self._guard()
-            if origin is None:
+            if origin is None or not self._known(origin):
                 return
-            if self.path != "/v1/activity":
-                return self._reply(404, {"error": "not found"}, origin)
             try:
                 length = int(self.headers.get("Content-Length", ""))
             except ValueError:
@@ -105,20 +113,29 @@ def make_server(presence, port=DEFAULT_PORT, extra_origins=()):
                 return self._reply(413, {"error": "too large"}, origin)
             try:
                 raw = json.loads(self.rfile.read(length).decode("utf-8"))
+                if self.path == "/v1/pair":
+                    hub = relay_mod.valid_hub(raw.get("hub")) if isinstance(raw, dict) else None
+                    if not hub or not relay_mod.valid_key(raw.get("key")):
+                        return self._reply(400, {"error": "hub must be https and key a pk_ key"}, origin)
+                    relay.pair(hub, raw["key"])
+                    return self._reply(204, origin=origin)
                 clean = activity_mod.clean(raw)
             except (ValueError, UnicodeDecodeError) as err:
                 message = str(err) if isinstance(err, activity_mod.InvalidActivity) else "invalid JSON"
                 return self._reply(400, {"error": message}, origin)
-            presence.set(clean)
+            except OSError:  # user_files not writable
+                return self._reply(500, {"error": "can't save the pairing"}, origin)
+            sink.set(clean)
             self._reply(204, origin=origin)
 
         def do_DELETE(self):
             origin = self._guard()
-            if origin is None:
+            if origin is None or not self._known(origin):
                 return
-            if self.path != "/v1/activity":
-                return self._reply(404, {"error": "not found"}, origin)
-            presence.clear()
+            if self.path == "/v1/pair":
+                relay.unpair()
+            else:
+                sink.clear()
             self._reply(204, origin=origin)
 
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
