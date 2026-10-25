@@ -70,5 +70,12 @@
     "note": "digits: a different line (not folded)",
     "normal": "彼は20歳になった",
     "hash": "f653df196564e8a0d45e044317973707"
+  },
+  {
+    "line": "吾輩は猫である。名前はまだ無い。",
+    "occurrence": 2,
+    "note": "the second copy of a line the book repeats: its own thread",
+    "normal": "吾輩は猫である名前はまだ無い",
+    "hash": "217d70b8703dca8952de63486bd38e31"
   }
 ]

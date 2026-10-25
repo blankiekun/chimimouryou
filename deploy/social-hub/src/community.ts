@@ -7,8 +7,8 @@
 /**
  * Community: posts on a line of a book (/v1/community/*, README → Community). A thread is the
  * posts on one line of one work: the work key (an AniList id and volume, a VNDB id, or the book's
- * own title key) and the line's hash (sha256 of `normalizeLine`, 32 hex; the client hashes the
- * same way, test/line-hashes.json). A post is anything about the line (a question, a comment, a
+ * own title key) and the line's hash (sha256 of `normalizeLine`, `#n` added for a repeated line's
+ * copy n, 32 hex; the client hashes the same way, test/line-hashes.json). A post is anything about the line (a question, a comment, a
  * quote worth sharing), optionally marked as a spoiler; replies answer it. Works carry a title,
  * volume and one cover thumbnail. Everything here needs a session. The client is
  * apps/web/src/lib/data/community.ts.
@@ -96,8 +96,11 @@ export function normalizeLine(line: string) {
     .replace(/[\s\p{P}\p{S}\p{Cf}]/gu, '');
 }
 
-export async function lineHash(line: string) {
-  return (await sha256(normalizeLine(line))).slice(0, 32);
+/** A line the book repeats has a thread per copy: copy n > 1 hashes the line with `#n` after it */
+export async function lineHash(line: string, occurrence = 1) {
+  const normal = normalizeLine(line);
+
+  return (await sha256(occurrence > 1 ? `${normal}#${occurrence}` : normal)).slice(0, 32);
 }
 
 /**
@@ -399,8 +402,9 @@ function workVolume(work: string, given: unknown) {
 }
 
 /**
- * POST posts: `{work, title, vol, quote, context, body, spoiler, feed?}` posts on a line (`feed:
- * false`: in the line's thread only, not the feed) (the hub hashes
+ * POST posts: `{work, title, vol, quote, context, body, spoiler, feed?, occurrence?}` posts on a
+ * line (`feed: false`: in the line's thread only, not the feed; `occurrence`: which copy of a line
+ * the book repeats, 1 by default) (the hub hashes
  * the quote, and the context must contain it; the first post on a work names it: title first
  * wins, moderators reset it); `{parent, body, spoiler}` replies to a top-level post. Only a line's
  * first post keeps its quote and context, and only on the work's first CONTEXTS_PER_WORK lines.
@@ -438,7 +442,17 @@ async function createPost(request: Request, env: Env, user: UserRow) {
 
     if ([...normal].length < MIN_LINE) throw new HttpError(400, 'line');
     if (!normalizeLine(context).includes(normal)) throw new HttpError(400, 'context');
-    line = await lineHash(quote);
+    const occurrence = body.occurrence ?? 1;
+
+    if (
+      typeof occurrence !== 'number' ||
+      !Number.isInteger(occurrence) ||
+      occurrence < 1 ||
+      occurrence > 9999
+    ) {
+      throw new HttpError(400, 'occurrence');
+    }
+    line = await lineHash(quote, occurrence);
   }
 
   const counts = await env.DB.prepare(

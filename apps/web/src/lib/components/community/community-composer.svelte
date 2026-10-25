@@ -9,6 +9,7 @@
     clipContext,
     contextLength,
     lineHash,
+    occurrenceOf,
     postOnLine,
     quoteLength,
     uploadWorkCover,
@@ -45,6 +46,8 @@
   let suggestion: string | null = null;
   let work = '';
   let line = '';
+  /** Which copy of the line: a line the book repeats has a thread per copy */
+  let occurrence = 1;
   let context = '';
   let body = '';
   let spoiler = false;
@@ -68,6 +71,13 @@
       const at = lineAt(lines, passage.start ?? -1);
 
       line = at >= 0 ? lines[at].text : passage.selection.trim();
+      occurrence =
+        at >= 0
+          ? occurrenceOf(
+              lines.map((item) => item.text),
+              at
+            )
+          : 1;
       context = clipContext(
         lines
           .slice(Math.max(0, at - 6), at + 7)
@@ -115,7 +125,8 @@
         context,
         body: body.trim(),
         spoiler,
-        feed
+        feed,
+        occurrence
       });
 
       if (!posted.cover) sendCover().catch(() => {});

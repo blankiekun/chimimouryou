@@ -17,7 +17,7 @@ import { loadBookMetadata } from '$lib/data/book-metadata';
 import {
   communityOn,
   communityWorks$,
-  lineHash,
+  lineHashes,
   lineIndex,
   listThreads,
   loadNotes,
@@ -156,7 +156,7 @@ export function passedLines(work: string) {
 
       const lines = bookLines(getParagraphs(data.elementHtml));
       const passed = lines.slice(0, passedLine(lines, position) + 1);
-      const hashes = await Promise.all(passed.map((line) => lineHash(line.text)));
+      const hashes = await lineHashes(passed.map((line) => line.text));
 
       return new Set(hashes.filter((hash): hash is string => !!hash));
     })().catch(() => new Set<string>());

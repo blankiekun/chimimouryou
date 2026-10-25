@@ -15,6 +15,7 @@ import {
   contextLength,
   lineHash,
   lineIndex,
+  occurrenceOf,
   loadFeed,
   postOnLine,
   resolveWork,
@@ -28,7 +29,7 @@ import { socialSession$, type SocialMe } from '$lib/data/social-account';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 
 // The hub's own fixture: both sides must hash a line the same way.
-const fixtures: { line: string; hash: string }[] = JSON.parse(
+const fixtures: { line: string; occurrence?: number; hash: string }[] = JSON.parse(
   readFileSync(resolve(process.cwd(), '../../deploy/social-hub/test/line-hashes.json'), 'utf8')
 );
 
@@ -53,7 +54,9 @@ describe('community', () => {
   });
 
   it('hashes lines like the hub, so two editions of a line meet', async () => {
-    for (const { line, hash } of fixtures) expect(await lineHash(line)).toBe(hash);
+    for (const { line, occurrence, hash } of fixtures) {
+      expect(await lineHash(line, occurrence)).toBe(hash);
+    }
     expect(await lineHash('「はい。」')).toBeNull();
   });
 
@@ -66,25 +69,34 @@ describe('community', () => {
     ]);
   });
 
-  it('shows threads only on lines passed, a repeated line only once past its last time', async () => {
+  it('shows threads only on lines passed, a repeated line with a thread per copy', async () => {
     const lines = [
       '最初の文章です。',
       '繰り返す文章です。',
       '途中の文章です。',
-      '繰り返す文章です。'
+      '「繰り返す文章です！」'
     ];
     const index = await lineIndex(lines);
-    const prefix = async (line: string) => (await lineHash(line))!.slice(0, 8);
     const threads = await Promise.all(
-      ['最初の文章です。', '繰り返す文章です。', 'この本にない文章。'].map(async (line) => ({
-        prefix: await prefix(line),
+      (
+        [
+          ['最初の文章です。', 1],
+          ['繰り返す文章です。', 1],
+          ['繰り返す文章です。', 2],
+          ['この本にない文章。', 1]
+        ] as const
+      ).map(async ([line, occurrence]) => ({
+        prefix: (await lineHash(line, occurrence))!.slice(0, 8),
         posts: 1,
         spoiler: false
       }))
     );
 
-    expect(visibleThreads(threads, index, 2).map((one) => one.index)).toEqual([0]);
-    expect(visibleThreads(threads, index, 3).map((one) => one.index)).toEqual([0, 3]);
+    expect(occurrenceOf(lines, 1)).toBe(1);
+    expect(occurrenceOf(lines, 3)).toBe(2);
+    expect(visibleThreads(threads, index, 0).map((one) => one.index)).toEqual([0]);
+    expect(visibleThreads(threads, index, 2).map((one) => one.index)).toEqual([0, 1]);
+    expect(visibleThreads(threads, index, 3).map((one) => one.index)).toEqual([0, 1, 3]);
   });
 
   it('clips the page around the line', () => {
@@ -154,7 +166,8 @@ describe('community', () => {
       context: '文章です。',
       body: 'x',
       spoiler: false,
-      feed: true
+      feed: true,
+      occurrence: 1
     };
 
     await expect(postOnLine('title:本', post)).rejects.toMatchObject({ status: 401 });
