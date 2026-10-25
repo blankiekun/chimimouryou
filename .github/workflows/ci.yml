@@ -104,6 +104,9 @@ jobs:
       - name: Unit tests
         run: python -m unittest discover -s scripts/calibre/tests
 
+      - name: Discord companion (Anki add-on) tests
+        run: python -m unittest discover -s apps/anki-discord/tests
+
       - name: Render the nginx config
         run: scripts/calibre/render-nginx.sh > /dev/null
 
