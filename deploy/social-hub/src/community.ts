@@ -21,12 +21,9 @@
 
 import {
   COVER_BYTES,
-  DAY,
-  HOUR,
   HttpError,
   ID,
   IMMUTABLE,
-  MINUTE,
   edgeCache,
   ipSubject,
   json,
@@ -47,6 +44,7 @@ import {
   type Row,
   type UserRow
 } from './hub';
+import { DAY, HOUR, MINUTE } from './time';
 
 /** Accounts younger than this post less, upload no covers and post no URLs */
 export const NEW_ACCOUNT = 3 * DAY;

@@ -268,7 +268,8 @@ export function communityErrorKey(error: unknown): MessageKey {
   if (code === 'session' || status === 401) return 'community.error.session';
   if (code === 'links') return 'community.error.links';
   if (code === 'full') return 'community.error.full';
-  if (status === 429) return 'community.error.limit';
+  // 'busy' is the hub's per-address burst limit, not a posting limit
+  if (status === 429 && code !== 'busy') return 'community.error.limit';
   if (code === 'network' || code === 'paused' || status >= 500) return 'community.error.down';
   return 'community.error.other';
 }

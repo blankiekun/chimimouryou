@@ -19,6 +19,7 @@ import {
   dropUnusedWorks,
   postsOf
 } from './community';
+import { DAY, HOUR, MINUTE } from './time';
 
 /** The parts of Cloudflare's D1 binding the hub uses */
 export interface D1PreparedStatement {
@@ -92,9 +93,7 @@ export interface UserRow {
   role: string;
 }
 
-export const MINUTE = 60;
-export const HOUR = 3600;
-export const DAY = 86400;
+export { DAY, HOUR, MINUTE };
 const MAX_FRIENDS = 200;
 const MAX_PENDING = 50;
 /** Failed sign-ins an hour per address; per username (from anywhere) only past MAX_NAME_FAILURES */
