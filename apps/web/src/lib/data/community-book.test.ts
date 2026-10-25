@@ -70,16 +70,13 @@ describe('community in the book', () => {
     expect(passedLine(lines, 19)).toBe(2);
   });
 
-  it('shows threads only on lines the reader passed', async () => {
+  it('shows threads on lines ahead of the reader too', async () => {
     const lines = bookLines(paragraphs);
     const index = await lineIndex(lines.map((line) => line.text));
     const later = (await lineHash(lines[3].text))!;
     const threads = [{ prefix: later.slice(0, 8), posts: 2, spoiler: false }];
 
-    expect(visibleThreads(threads, index, passedLine(lines, 20))).toEqual([]);
-    expect(visibleThreads(threads, index, passedLine(lines, 47))).toMatchObject([
-      { hash: later, index: 3, posts: 2 }
-    ]);
+    expect(visibleThreads(threads, index)).toMatchObject([{ hash: later, index: 3, posts: 2 }]);
   });
 
   it('marks the line in its page', () => {

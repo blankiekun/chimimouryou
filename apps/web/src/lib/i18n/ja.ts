@@ -2224,7 +2224,7 @@ export const ja: Record<MessageKey, string> = {
   'profile.editStatistics': '統計を編集',
   'profile.editStatisticsHint': '期間・目標・データ',
   'community.lead':
-    '読者が共有している一文。新しい順です。ネタバレはその行に着くまでぼかされます。',
+    '読者が共有している一文。新しい順です。ネタバレは「ネタバレを表示」を押すまでぼかされます。',
   'community.off':
     'コミュニティはソーシャルプラグインの機能で、今はオフです。設定 → プラグインでオンにできます。',
   'community.readOnly': '閲覧のみ。投稿するには登録してください。',
@@ -2235,13 +2235,12 @@ export const ja: Record<MessageKey, string> = {
   'community.loading': '投稿を読み込み中…',
   'community.tryAgain': 'もう一度',
   'community.downNote': '本・メモ・進み具合には影響しません。',
-  'community.empty': '読んだ行にはまだ投稿がありません。',
-  'community.emptyHint':
-    '行を選んで「コミュニティに投稿」で始められます。先の行の投稿は、そこまで読むと表示されます。',
+  'community.empty': 'この本にはまだ投稿がありません。',
+  'community.emptyHint': '行を選んで「コミュニティに投稿」で始められます。',
   'community.feedEmpty':
     'まだ投稿がありません。本で行を選んで「コミュニティに投稿」を選んでください。',
   'community.guardNote':
-    '読み終えた行の投稿だけを表示します。先の投稿はそこまで読むと表示されます。投稿するには行を選んで「コミュニティに投稿」を選んでください。',
+    'ネタバレは「ネタバレを表示」を押すまでぼかされます。投稿するには行を選んで「コミュニティに投稿」を選んでください。',
   'community.howToPost':
     '本から投稿:行を選んで「コミュニティに投稿」。投稿にはその行、ページ、本の表紙が付きます。',
   'community.order': '並び順',
@@ -2256,7 +2255,6 @@ export const ja: Record<MessageKey, string> = {
   'community.more': 'もっと見る',
   'community.spoiler': 'ネタバレ',
   'community.showSpoiler': 'ネタバレを表示',
-  'community.notReached': 'まだこの行まで読んでいません',
   'community.vol': '{vol}巻',
   'community.goToLine': 'この行へ',
   'community.linkCopied': 'リンクをコピーしました',
@@ -2290,7 +2288,7 @@ export const ja: Record<MessageKey, string> = {
   'community.plainText': 'プレーンテキスト',
   'community.tooManyLines': '投稿は20行までです。',
   'community.spoilerHint':
-    '本の外では、読者がこの行に着くまでぼかされます。本の中では、この行を読み終えた読者にだけ表示されます。',
+    '読者には、本のタイトルと表紙とともに、「ネタバレを表示」を押すまでぼかして表示されます。',
   'community.lineComments': 'この行へのコメント',
   'community.feedPosts': 'コミュニティの投稿',
   'community.thisLine': 'この行',

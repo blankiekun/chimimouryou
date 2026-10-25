@@ -30,11 +30,10 @@ export const socialPlugin: Plugin = {
       label: 'nav.community',
       icon: faComments,
       component: CommunityPanel,
-      props: ({ title, getIndex, sections, position, bookCharacters, active }) => ({
+      props: ({ title, getIndex, sections, bookCharacters, active }) => ({
         title,
         getIndex,
         sections,
-        position,
         bookCharacters,
         active
       })

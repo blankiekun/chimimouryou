@@ -21,13 +21,10 @@
   /**
    * One post of a thread (board 4): avatar, name, rank and words known, the text (plain), and
    * Helpful (replies only) and Reply; ••• has Report and Block, or Edit and Delete on one's own.
-   * A deleted post with replies stays as a quiet "This post was deleted." row.
+   * A deleted post with replies stays as a quiet "This post was deleted." row. A spoiler-marked
+   * post's text stays blurred until its own Show spoiler.
    */
   export let post: CommunityPost;
-  /** Spoiler-marked text stays blurred until shown (outside the book) */
-  export let hideSpoiler = false;
-  /** The thread has one Show spoiler for all its posts */
-  export let spoilerButton = true;
 
   const dispatch = createEventDispatcher<{
     reply: CommunityPost;
@@ -215,7 +212,7 @@
           >
         </div>
       {:else}
-        <CommunityText text={post.body} blur={hideSpoiler && post.spoiler} button={spoilerButton} />
+        <CommunityText text={post.body} blur={post.spoiler} on:show />
         <div class="post-actions">
           {#if post.parent && !post.mine}
             <button
