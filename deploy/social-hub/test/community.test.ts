@@ -10,7 +10,7 @@ import { CONTEXTS_PER_WORK, lineHash, ROOTS_PER_WORK } from '../src/community';
 import hub, { cleanUp, type Env } from '../src/hub';
 import { memoryD1, webp } from './d1';
 
-const fixtures: { line: string; hash: string }[] = JSON.parse(
+const fixtures: { line: string; occurrence?: number; hash: string }[] = JSON.parse(
   readFileSync(new URL('line-hashes.json', import.meta.url), 'utf8')
 );
 const DAY = 86400;
@@ -100,7 +100,9 @@ describe('hub community', () => {
     call('GET', `/v1/community/threads?work=${WORK}${query}`, undefined, token);
 
   it('hashes lines like the app (two editions of a line meet)', async () => {
-    for (const { line, hash } of fixtures) expect(await lineHash(line)).toBe(hash);
+    for (const { line, occurrence, hash } of fixtures) {
+      expect(await lineHash(line, occurrence)).toBe(hash);
+    }
     expect(new Set(fixtures.slice(0, 4).map((one) => one.hash)).size).toBe(1);
   });
 
@@ -168,6 +170,18 @@ describe('hub community', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it('gives a repeated line a thread per copy', async () => {
+    const aki = await signUp('aki');
+    const first = await post(aki.token);
+    const second = await post(aki.token, { occurrence: 2 });
+
+    expect(first.body.line).toBe(await lineHash(LINE));
+    expect(second.body.line).toBe(await lineHash(LINE, 2));
+    expect(second.body.line).not.toBe(first.body.line);
+    expect((await post(aki.token, { occurrence: 0 })).status).toBe(400);
+    expect((await post(aki.token, { occurrence: '2' })).status).toBe(400);
   });
 
   it('lists hash prefixes only; the line, context and posts need the full hash', async () => {

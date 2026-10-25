@@ -89,7 +89,7 @@ export interface ThreadSummary {
 
 export interface VisibleThread extends ThreadSummary {
   hash: string;
-  /** The index of the line in the reader's book (its last occurrence) */
+  /** The index of the line in the reader's book (the last occurrence passed) */
   index: number;
 }
 
@@ -139,18 +139,47 @@ export function normalizeLine(line: string) {
     .replace(/[\s\p{P}\p{S}\p{Cf}]/gu, '');
 }
 
-/** The first 32 hex of the normalised line's SHA-256; null for lines too short to have threads */
-export async function lineHash(line: string) {
+/**
+ * The first 32 hex of the normalised line's SHA-256; null for lines too short to have threads. A
+ * line the book repeats has a thread per copy: copy n > 1 hashes the line with `#n` after it.
+ */
+export async function lineHash(line: string, occurrence = 1) {
   const normal = normalizeLine(line);
 
   if ([...normal].length < minLine) return null;
 
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(normal));
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(occurrence > 1 ? `${normal}#${occurrence}` : normal)
+  );
 
   return [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('')
     .slice(0, 32);
+}
+
+/** Which copy of its line `lines[at]` is: 1 for the first time the book has it */
+export function occurrenceOf(lines: string[], at: number) {
+  const normal = normalizeLine(lines[at] ?? '');
+
+  return lines.slice(0, at + 1).filter((line) => normalizeLine(line) === normal).length || 1;
+}
+
+/** Every line's hash (lineHash), a repeated line's later copies with their own */
+export function lineHashes(lines: string[]) {
+  const seen = new Map<string, number>();
+
+  // All at once: one await per line takes seconds on a long book.
+  return Promise.all(
+    lines.map((line) => {
+      const normal = normalizeLine(line);
+      const occurrence = (seen.get(normal) ?? 0) + 1;
+
+      seen.set(normal, occurrence);
+      return lineHash(line, occurrence);
+    })
+  );
 }
 
 /** A book's text as lines: sentences ending in 。！？!? (with their closing brackets), or a line break */
@@ -160,21 +189,13 @@ export function sentences(text: string) {
     .filter(Boolean);
 }
 
-/**
- * The book's lines by hash prefix, each hash with the index of its last occurrence: a line that
- * repeats counts as passed only once the reader is past all of it.
- */
+/** The book's lines by hash prefix, each hash with its line's index */
 export async function lineIndex(lines: string[]) {
-  const last = new Map<string, number>();
-
-  // All at once: one await per line takes seconds on a long book.
-  (await Promise.all(lines.map(lineHash))).forEach((hash, index) => {
-    if (hash) last.set(hash, index);
-  });
-
   const byPrefix = new Map<string, { hash: string; index: number }[]>();
 
-  last.forEach((index, hash) => {
+  (await lineHashes(lines)).forEach((hash, index) => {
+    if (!hash) return;
+
     const prefix = hash.slice(0, 8);
 
     byPrefix.set(prefix, [...(byPrefix.get(prefix) ?? []), { hash, index }]);
@@ -368,6 +389,8 @@ export function postOnLine(
     body: string;
     spoiler: boolean;
     feed: boolean;
+    /** Which copy of the line (occurrenceOf) */
+    occurrence: number;
   }
 ) {
   return write<{ id: string; line: string } & CommunityWork>('/v1/community/posts', 'POST', {
