@@ -11,7 +11,8 @@ import {
   lineHash,
   lineIndex,
   visibleThreads,
-  type CommunityNote
+  type CommunityNote,
+  type CommunityPost
 } from '$lib/data/community';
 import {
   bookLines,
@@ -23,6 +24,7 @@ import {
   passedLine,
   refreshBookMarks,
   splitContext,
+  splitThread,
   unseenNotes
 } from '$lib/data/community-book';
 import { socialSession$ } from '$lib/data/social-account';
@@ -204,5 +206,25 @@ describe('community in the book', () => {
     expect(communityMarks$.getValue().marks).toMatchObject([{ hash: first, posts: 3 }]);
     socialSession$.next(null);
     communityWorks$.next({});
+  });
+
+  it('keeps line comments apart from feed posts and their replies', () => {
+    const post = (id: string, parent: string | null, inFeed?: boolean) =>
+      ({ id, parent, ...(inFeed !== undefined && { inFeed }) }) as CommunityPost;
+    // a feed post (old hubs send no inFeed), its reply, a line comment and its reply, a reply
+    // whose post is hidden
+    const posts = [
+      post('a', null),
+      post('b', 'a', true),
+      post('c', null, false),
+      post('d', 'x', true),
+      post('e', 'c', true)
+    ];
+    const { comments, feed } = splitThread(posts);
+
+    expect(comments.map((one) => one.id)).toEqual(['c', 'e', 'd']);
+    expect(feed.map(({ root, replies }) => [root.id, replies.map((one) => one.id)])).toEqual([
+      ['a', ['b']]
+    ]);
   });
 });

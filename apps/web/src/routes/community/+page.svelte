@@ -11,7 +11,7 @@
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import RoleBadge from '$lib/components/social/role-badge.svelte';
   import { loadFeed, type FeedPost } from '$lib/data/community';
-  import { communityErrorKey, passedLines } from '$lib/data/community-book';
+  import { communityErrorKey, passedLines, threadPath } from '$lib/data/community-book';
   import { pagePath } from '$lib/data/env';
   import { setPendingImport, type PendingImport } from '$lib/data/library-home';
   import { page } from '$lib/data/page-store';
@@ -26,7 +26,8 @@
    * Community (header tab, boards 9, 10, D9): lines readers are sharing, newest first, each with
    * the work's cover, title and volume. Signed out it reads the same feed (anonymous GETs, only
    * from here); spoiler-marked posts stay blurred until the reader passed the line in their own
-   * copy or taps Show spoiler. `?work=&line=` shows that line's thread (deep links, Home's replies).
+   * copy or taps Show spoiler. `?work=&line=` shows that line's thread (deep links), `&post=` that
+   * feed post's discussion (the feed, Home's replies).
    */
 
   let posts: FeedPost[] = [];
@@ -39,6 +40,7 @@
   $: socialOn = $activePlugins$.some((plugin) => plugin.id === 'social');
   $: work = browser ? ($page.url.searchParams.get('work') ?? '') : '';
   $: line = browser ? ($page.url.searchParams.get('line') ?? '') : '';
+  $: focusPost = browser ? ($page.url.searchParams.get('post') ?? undefined) : undefined;
   $: threadPassed = work && line ? passedLines(work).then((set) => set.has(line)) : undefined;
 
   async function more(first = false) {
@@ -84,8 +86,7 @@
     }
   }
 
-  const openThread = (post: { work: string; line: string }) =>
-    goto(`${pagePath}/community?${new URLSearchParams({ work: post.work, line: post.line })}`);
+  const openThread = (post: FeedPost) => goto(threadPath(post.work, post.line, post.id));
 
   function closeThread() {
     goto(`${pagePath}/community`);
@@ -121,6 +122,7 @@
           <CommunityThread
             {work}
             {line}
+            post={focusPost}
             outside
             passed={!!passedThread}
             backLabel={$t$('nav.community')}

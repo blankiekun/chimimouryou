@@ -2,6 +2,7 @@
   import CommunityPost from '$lib/components/community/community-post.svelte';
   import CommunitySignup from '$lib/components/community/community-signup.svelte';
   import CommunityWork from '$lib/components/community/community-work.svelte';
+  import SectionHead from '$lib/components/section-head.svelte';
   import {
     bodyLength,
     loadThread,
@@ -13,19 +14,24 @@
     communityErrorKey,
     lineLink,
     markNotesSeen,
-    splitContext
+    splitContext,
+    splitThread
   } from '$lib/data/community-book';
   import { socialSession$ } from '$lib/data/social-account';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher, onMount } from 'svelte';
 
   /**
-   * One line's thread (board 4): the work, the line in its page with Go to line and Copy link, the
-   * posts oldest first, and a reply box (with its own Spoiler mark) at the end. Outside the book,
-   * spoiler-marked posts stay blurred until the reader passed the line or taps Show spoiler.
+   * One line's thread (board 4): the work, the line in its page with Go to line and Copy link, then
+   * the line's own comments ("This line only") with their replies, and the feed posts on it, each
+   * opening its own discussion (the post and its replies). A reply box (with its own Spoiler mark)
+   * at the end. Outside the book, spoiler-marked posts stay blurred until the reader passed the
+   * line or taps Show spoiler.
    */
   export let work: string;
   export let line: string;
+  /** A feed post to open on (the feed, replies to it): its discussion rather than the line */
+  export let post: string | undefined = undefined;
   /** Outside the book: blur spoilers unless `passed` */
   export let outside = false;
   export let passed = false;
@@ -47,10 +53,14 @@
   let copied = false;
   let replyBox: HTMLTextAreaElement;
 
-  $: root = thread?.posts.find((post) => !post.parent);
-  $: replies = thread ? thread.posts.filter((post) => post.parent).length : 0;
-  // A line can have several top-level posts; a hidden first post leaves its replies' parent.
-  $: target = replyingTo?.parent ?? replyingTo?.id ?? root?.id ?? thread?.posts[0]?.parent;
+  let focus = post;
+  $: parts = thread ? splitThread(thread.posts) : undefined;
+  /** The feed post whose discussion is shown (a line comment's post opens the line) */
+  $: focused = parts?.feed.find((group) => group.root.id === focus);
+  $: comments = parts?.comments ?? [];
+  $: root = focused?.root ?? comments.find((one) => !one.parent);
+  // On the line, replies go to its comments; a hidden first comment leaves its replies' parent.
+  $: target = replyingTo?.parent ?? replyingTo?.id ?? root?.id ?? comments[0]?.parent;
   $: context = thread ? splitContext(thread.context, thread.quote) : undefined;
   let revealed = false;
 
@@ -71,6 +81,10 @@
   onMount(load);
 
   function reply(post: Post) {
+    // Replying to a feed post opens its discussion
+    if (parts?.feed.some((group) => group.root.id === (post.parent ?? post.id))) {
+      focus = post.parent ?? post.id;
+    }
     replyingTo = post;
     replyBox?.focus();
   }
@@ -104,13 +118,22 @@
 
 <div class="thread">
   <div class="thread-top">
-    <button type="button" class="app-button-quiet" on:click={() => dispatch('back')}
-      >← {backLabel}</button
-    >
-    {#if thread}
+    {#if focused && focus !== post}
+      <button
+        type="button"
+        class="app-button-quiet"
+        on:click={() => ((focus = undefined), (replyingTo = undefined))}
+        >← {$t$('community.thisLine')}</button
+      >
+    {:else}
+      <button type="button" class="app-button-quiet" on:click={() => dispatch('back')}
+        >← {backLabel}</button
+      >
+    {/if}
+    {#if focused}
       <span class="thread-count"
-        >{$t$(replies === 1 ? 'community.repliesOne' : 'community.replies', {
-          count: replies
+        >{$t$(focused.replies.length === 1 ? 'community.repliesOne' : 'community.replies', {
+          count: focused.replies.length
         })}</span
       >
     {/if}
@@ -152,18 +175,78 @@
       </p>
     {/if}
 
-    <div class="thread-posts">
-      {#each thread.posts as post (post.id)}
-        <CommunityPost
-          {post}
-          hideSpoiler={hide}
-          spoilerButton={false}
-          on:reply={({ detail }) => reply(detail)}
-          on:changed={load}
-          on:signUp={() => (signUp = true)}
-        />
-      {/each}
-    </div>
+    {#if focused}
+      <div class="thread-posts">
+        {#each [focused.root, ...focused.replies] as one (one.id)}
+          <CommunityPost
+            post={one}
+            hideSpoiler={hide}
+            spoilerButton={false}
+            on:reply={({ detail }) => reply(detail)}
+            on:changed={load}
+            on:signUp={() => (signUp = true)}
+          />
+        {/each}
+      </div>
+    {:else if parts}
+      {#if comments.length}
+        <section class="thread-section">
+          <SectionHead
+            number={1}
+            level="h3"
+            title={$t$('community.lineComments')}
+            count={comments.length}
+          />
+          <div class="thread-posts">
+            {#each comments as one (one.id)}
+              <CommunityPost
+                post={one}
+                hideSpoiler={hide}
+                spoilerButton={false}
+                on:reply={({ detail }) => reply(detail)}
+                on:changed={load}
+                on:signUp={() => (signUp = true)}
+              />
+            {/each}
+          </div>
+        </section>
+      {/if}
+      {#if parts.feed.length}
+        <section class="thread-section">
+          <SectionHead
+            number={comments.length ? 2 : 1}
+            level="h3"
+            title={$t$('community.feedPosts')}
+            count={parts.feed.length}
+          />
+          <div class="thread-posts">
+            {#each parts.feed as group (group.root.id)}
+              <div class="thread-feed-post">
+                <CommunityPost
+                  post={group.root}
+                  hideSpoiler={hide}
+                  spoilerButton={false}
+                  on:reply={({ detail }) => reply(detail)}
+                  on:changed={load}
+                  on:signUp={() => (signUp = true)}
+                />
+                <button
+                  type="button"
+                  class="app-button-quiet thread-open"
+                  on:click={() => ((focus = group.root.id), (replyingTo = undefined))}
+                  >{group.replies.length
+                    ? $t$(
+                        group.replies.length === 1 ? 'community.repliesOne' : 'community.replies',
+                        { count: group.replies.length }
+                      )
+                    : $t$('community.reply')} →</button
+                >
+              </div>
+            {/each}
+          </div>
+        </section>
+      {/if}
+    {/if}
 
     {#if signUp || !$socialSession$}
       {#if signUp}
@@ -265,6 +348,32 @@
 
   .thread-posts {
     border-top: 1px solid var(--c-rule, var(--border-color));
+  }
+
+  .thread-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .thread-section .thread-posts {
+    border-top: none;
+  }
+
+  .thread-feed-post {
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--c-rule, var(--border-color));
+  }
+
+  .thread-feed-post :global(.post) {
+    padding-bottom: 0.25rem;
+    border-bottom: none;
+  }
+
+  .thread-open {
+    align-self: flex-start;
   }
 
   .thread-reply {

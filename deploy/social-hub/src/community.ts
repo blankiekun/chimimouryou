@@ -317,7 +317,7 @@ async function thread(request: Request, env: Env, user: UserRow | null, query: U
 
   const [{ results }, info, first] = await Promise.all([
     env.DB.prepare(
-      `SELECT p.id, p.parent, p.body, p.spoiler, p.quote, p.context, p.at, p.edited,
+      `SELECT p.id, p.parent, p.body, p.spoiler, p.quote, p.context, p.at, p.edited, p.in_feed,
          (SELECT COUNT(*) FROM helpful h JOIN users hu ON hu.id = h.user
           WHERE h.post = p.id AND hu.created <= ?4) AS helpful,
          EXISTS (SELECT 1 FROM helpful h WHERE h.post = p.id AND h.user = ?3) AS voted,
@@ -343,7 +343,8 @@ async function thread(request: Request, env: Env, user: UserRow | null, query: U
     line,
     quote: first?.quote ?? '',
     context: first?.context ?? '',
-    posts: results.map((row) => postJson(row, viewer))
+    // inFeed: false for "This line only" posts (the app lists them apart from feed posts)
+    posts: results.map((row) => ({ ...postJson(row, viewer), inFeed: !!row.in_feed }))
   };
 }
 

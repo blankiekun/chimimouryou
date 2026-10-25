@@ -27,6 +27,7 @@ import {
   visibleThreads,
   workFromUrl,
   type CommunityNote,
+  type CommunityPost,
   type ThreadSummary,
   type VisibleThread
 } from '$lib/data/community';
@@ -79,9 +80,32 @@ export function lineLink(work: string, line: string, origin = location.origin) {
   return `${origin}${pagePath}/b?${new URLSearchParams({ line, work })}`;
 }
 
-/** The thread on the Community page, for readers without the book */
-export const threadPath = (work: string, line: string) =>
-  `${pagePath}/community?${new URLSearchParams({ work, line })}`;
+/** The thread on the Community page, for readers without the book; `post`: that feed post's discussion */
+export const threadPath = (work: string, line: string, post?: string) =>
+  `${pagePath}/community?${new URLSearchParams({ work, line, ...(post && { post }) })}`;
+
+/**
+ * A line's thread in two kinds: comments made for the line ("This line only") with their replies,
+ * each comment followed by its own, then replies whose post is hidden; and the feed posts, each
+ * its own discussion with its replies.
+ */
+export function splitThread(posts: CommunityPost[]) {
+  const roots = posts.filter((post) => !post.parent);
+  const repliesTo = (root: CommunityPost) => posts.filter((post) => post.parent === root.id);
+  const shown = new Set(roots.map((root) => root.id));
+
+  return {
+    comments: [
+      ...roots
+        .filter((root) => root.inFeed === false)
+        .flatMap((root) => [root, ...repliesTo(root)]),
+      ...posts.filter((post) => post.parent && !shown.has(post.parent))
+    ],
+    feed: roots
+      .filter((root) => root.inFeed !== false)
+      .map((root) => ({ root, replies: repliesTo(root) }))
+  };
+}
 
 /**
  * Where a `/b?line=&work=` link without a book id goes: this browser's copy of the work at the
