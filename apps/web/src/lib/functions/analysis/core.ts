@@ -37,8 +37,12 @@ export interface WordUnit {
   name: boolean;
 }
 
-export const CORE_VERSION = 3;
+export const CORE_VERSION = 4;
 export const REPEAT_CAP = 10;
+/** core.py's untagged names: katakana words met this often and rarer than this rank */
+const KATAKANA_NAME_COUNT = 3;
+const KATAKANA_NAME_RANK = 50_000;
+const katakanaPattern = /^[ァ-ヺー]+$/;
 const BUCKETS_PER_DECADE = 4;
 export const RANKED_BUCKETS = 6 * BUCKETS_PER_DECADE;
 /** Lower edges of the ranked buckets (core.py's EDGES) */
@@ -364,7 +368,7 @@ export function summarise(
   units: Iterable<WordUnit>,
   rankOf: (lemma: string) => number | null | undefined
 ): CoreNumbers {
-  const words = new Map<string, [count: number, rank: number | null]>();
+  const words = new Map<string, [count: number, rank: number | null, katakana: boolean]>();
   let names = 0;
 
   for (const { lemma, form, name } of units) {
@@ -379,9 +383,16 @@ export function summarise(
       const rank = rankOf(lemma) ?? null;
 
       if (isNoise(form, rank)) continue;
-      words.set(lemma, (word = [0, rank]));
+      words.set(lemma, (word = [0, rank, katakanaPattern.test(form)]));
     }
     word[0]++;
+  }
+
+  for (const [lemma, [n, rank, katakana]] of words) {
+    if (katakana && n >= KATAKANA_NAME_COUNT && rank !== null && rank > KATAKANA_NAME_RANK) {
+      names += n;
+      words.delete(lemma);
+    }
   }
 
   const all = [...words.values()];

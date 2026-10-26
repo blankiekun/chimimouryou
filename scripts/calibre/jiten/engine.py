@@ -26,7 +26,8 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 # output the same only re-records (`--record`), so library estimates stay current.
 # 4: the estimate is the fast core (core.py: V98, its histogram and the facets); the GBDT model is gone.
 # 5: core version 3 (ranks by the best spelling; source line breaks folded in book_text), scale version 2.
-ENGINE_VERSION = 5
+# 6: core version 4 (rare katakana words met 3 times are names), scale version 3.
+ENGINE_VERSION = 6
 # The scoring path's Python, on the server and in Pyodide alike (readings_file.extract gives the
 # browser its text; core.ts is checked against core.py by the shared fixture): in the fingerprint
 # through ENGINE_VERSION, guarded by engine-code.json.
