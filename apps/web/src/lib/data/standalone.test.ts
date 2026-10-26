@@ -314,6 +314,36 @@ describe('standalone edition', () => {
     discord.resetSender();
   });
 
+  it('searches AniList/VNDB for a Discord cover only with the plugin and Show on and titles shown', async () => {
+    fetchMock.mockImplementation(async () => new Response(null, { status: 404 }));
+
+    const plugins = await import('$lib/plugins');
+    const hooks = await import('$lib/data/reader-hooks');
+    const discord = await import('$lib/data/discord');
+    const { discordActivities$, discordOptions$ } = await import('$lib/data/discord-settings');
+    const searches = () =>
+      fetchMock.mock.calls.filter(([url]) => /anilist|vndb/.test(String(url))).length;
+    const read = async (title: string) => {
+      hooks.readingActivity({ kind: 'book', title, position: 10, characters: 100 });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    };
+
+    discordActivities$.next({ book: { details: '', state: '', largeImage: 'cover' } });
+    await read('本');
+    plugins.setPluginEnabled('discord', true);
+    discordOptions$.next({ show: false });
+    await read('本 2');
+    discordOptions$.next({ show: true, hideTitles: true });
+    await read('本 3');
+    expect(searches()).toBe(0);
+
+    discordOptions$.next({ hideTitles: false });
+    await read('本 4');
+    expect(searches()).toBe(1);
+    plugins.setPluginEnabled('discord', false);
+    discord.resetSender();
+  });
+
   it('asks the Anki add-on nothing while the Discord plugin is off', async () => {
     fetchMock.mockImplementation(async () => new Response(null, { status: 204 }));
 
