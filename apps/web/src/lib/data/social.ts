@@ -471,12 +471,7 @@ export async function uploadCovers(keys: string[]) {
 
   if (!wanted.length) return;
 
-  const [covers, { coverThumbnail }, { serverFetch }, { coverThumbUrl }] = await Promise.all([
-    localCovers(),
-    import('$lib/data/social-images'),
-    import('$lib/data/server-connect'),
-    import('$lib/data/calibre')
-  ]);
+  const covers = await localCovers();
 
   for (const key of wanted) {
     const cover = covers.get(key)?.imagePath;
@@ -484,13 +479,7 @@ export async function uploadCovers(keys: string[]) {
     coversTried.add(key);
     if (!cover) continue;
     try {
-      const image =
-        typeof cover === 'string'
-          ? await serverFetch(coverThumbUrl(cover)).then((response) =>
-              response.ok ? response.blob() : null
-            )
-          : cover;
-      const thumbnail = image && (await coverThumbnail(image));
+      const thumbnail = await bookThumbnail(cover);
 
       if (thumbnail) {
         await hubFetch(`/v1/cover?key=${encodeURIComponent(key)}`, 'PUT', thumbnail);
@@ -499,6 +488,23 @@ export async function uploadCovers(keys: string[]) {
       // Already given (409), or the next page load tries again.
     }
   }
+}
+
+/** The hub's 160 px WebP of a cover from `localCovers` (a Calibre cover URL or a stored image) */
+export async function bookThumbnail(cover: string | Blob) {
+  const [{ coverThumbnail }, { serverFetch }, { coverThumbUrl }] = await Promise.all([
+    import('$lib/data/social-images'),
+    import('$lib/data/server-connect'),
+    import('$lib/data/calibre')
+  ]);
+  const image =
+    typeof cover === 'string'
+      ? await serverFetch(coverThumbUrl(cover)).then((response) =>
+          response.ok ? response.blob() : null
+        )
+      : cover;
+
+  return image && coverThumbnail(image);
 }
 
 if (typeof window !== 'undefined') {

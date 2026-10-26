@@ -201,6 +201,100 @@ describe('discord automatic covers', () => {
     await read('D');
     expect(searches()).toBe(0);
   });
+
+  describe('from the hub', () => {
+    const hubCovers = () =>
+      fetchMock.mock.calls.filter(([url]) => String(url).includes('/v1/cover')).length;
+    const largeImage = () => {
+      const put = fetchMock.mock.calls
+        .filter(([url, init]) => String(url).endsWith('/v1/activity') && init.method === 'PUT')
+        .at(-1);
+      return put && JSON.parse(put[1].body).assets?.large_image;
+    };
+    let picked = '';
+
+    beforeEach(async () => {
+      picked = '';
+      fetchMock.mockImplementation(async (url: string) => {
+        if (url.includes('/v1/cover?key=')) {
+          return new Response(JSON.stringify({ cover: '0123456789abcdef' }), { status: 200 });
+        }
+        if (url.includes('metadata.json') && picked) {
+          return new Response(
+            JSON.stringify({
+              A: {
+                source: 'anilist',
+                url: 'https://anilist.co/manga/1',
+                cover: picked,
+                modified: 1
+              }
+            }),
+            { status: 200 }
+          );
+        }
+        return new Response(null, { status: url.endsWith('/v1/activity') ? 204 : 404 });
+      });
+      (await import('./book-metadata')).loadBookMetadata(true).catch(() => {});
+      socialSession$.next({ token: 't', me: { id: 'a', share: {} } as never });
+      enabledPlugins$.next(['discord', 'social']);
+    });
+
+    afterEach(() => socialSession$.next(null));
+
+    it('uses a cover picked in Find details, else the hub thumbnail, else the matched one', async () => {
+      window.localStorage.setItem(
+        'discordCoverMatches',
+        JSON.stringify({ A: { cover: 'https://s4.anilist.co/file/a.jpg' } })
+      );
+      await read('A');
+      expect(largeImage()).toBe(
+        'https://chimi-hub.blankiekun.workers.dev/v1/cover/0123456789abcdef'
+      );
+
+      resetSender();
+      enabledPlugins$.next(['discord']);
+      await read('A');
+      expect(largeImage()).toBe('https://s4.anilist.co/file/a.jpg');
+
+      resetSender();
+      picked = 'https://s4.anilist.co/file/picked.jpg';
+      (await import('./book-metadata')).loadBookMetadata(true).catch(() => {});
+      enabledPlugins$.next(['discord', 'social']);
+      fetchMock.mockClear();
+      await read('A');
+      expect(largeImage()).toBe(picked);
+      expect(hubCovers()).toBe(0);
+      expect(searches()).toBe(0);
+    });
+
+    it("asks the hub only signed in, with social on and for a book that isn't private", async () => {
+      const { bookKey, hiddenBooks$ } = await import('$lib/data/social');
+
+      socialSession$.next(null);
+      await read('A');
+      resetSender();
+      socialSession$.next({ token: 't', me: { id: 'a', share: {} } as never });
+      enabledPlugins$.next(['discord']);
+      await read('B');
+      resetSender();
+      enabledPlugins$.next(['discord', 'social']);
+      hiddenBooks$.next([bookKey('C')]);
+      await read('C');
+      resetSender();
+      discordOptions$.next({ hideTitles: true });
+      await read('D');
+      resetSender();
+      enabledPlugins$.next(['social']);
+      discordOptions$.next({ hideTitles: false });
+      await read('E');
+      expect(hubCovers()).toBe(0);
+
+      resetSender();
+      enabledPlugins$.next(['discord', 'social']);
+      await read('F');
+      expect(hubCovers()).toBe(1);
+    });
+  });
 });
 
 describe('discord hub relay', () => {

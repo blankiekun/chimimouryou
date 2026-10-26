@@ -54,7 +54,7 @@ What the hub stores once you sign up:
 
 - **Pictures**: your profile picture if you upload one (re-encoded in your browser, which drops
   EXIF and location data) and small cover thumbnails of the books you share, shown on your own
-  rows.
+  rows, or of the book in your Discord status (see below). A thumbnail's address is public.
 - **Community posts**: what you write, and for a post on a line, that line and up to about 600
   characters of the page around it, never whole books. Posts are public: anyone can read them,
   with the book's title and cover and your display name. Also stored: your "helpful" marks and
@@ -92,10 +92,13 @@ set it up:
   status as it would appear in Discord, so an Anki add-on you paired can show it, and with
   **Show on my profile** also on, your friends see it on your profile. It is removed when you
   stop reading, or after your Away time (5 to 30 minutes, 10 by default) without an update.
-- With **Book cover** as the large image, a book without saved details is looked up by its
-  series or title on AniList (VNDB for visual novels), from your browser, to find its cover; an
-  exact match is saved as the book's details. Books hidden from friends and **Hide titles** are
-  never looked up, and nothing is searched while the plugin or **Show my status** is off.
+- With **Book cover** as the large image and no cover picked in Find details, the book's own
+  cover goes to the social hub as a small thumbnail when you open the book (only while you are
+  signed in to Social with the social plugin on), so Discord can load it from a public address.
+  Only when there is no cover that way is the book's series or title looked up on AniList (VNDB
+  for visual novels), from your browser; an exact match's cover is kept in this browser and its
+  details saved as the book's. Books hidden from friends and **Hide titles** send no thumbnail
+  and are never looked up, and nothing is sent while the plugin or **Show my status** is off.
 
 What Discord shows and stores is covered by
 [Discord's privacy policy](https://discord.com/privacy).

@@ -45,6 +45,7 @@ import {
   resetRelay
 } from '$lib/data/discord-relay';
 import { socialSession$ } from '$lib/data/social-account';
+import { resetHubCovers } from '$lib/data/discord-covers';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 
 export const addonUrl = 'http://127.0.0.1:41918';
@@ -284,10 +285,12 @@ async function extrasFor(title: string, used: Set<VariableName>): Promise<ValueE
 }
 
 /**
- * A public https cover: the one Find details saved (AniList, VNDB, Jiten), else one this browser
- * matched (discord-covers.ts), else none. Reloaded after any save of Find details.
+ * A public https cover, in this order: the one picked in Find details (AniList, VNDB, Jiten;
+ * automatic matches save no cover), the book's own cover as a hub thumbnail (signed in, social
+ * on and the book not private; uploaded once when the hub has none), the AniList/VNDB cover this
+ * browser matched (discord-covers.ts), else none. Find details are reloaded after any save.
  */
-async function coverFor(title: string) {
+async function coverFor(title: string, hidden: boolean) {
   const metadata = await import('$lib/data/book-metadata');
 
   if (coverCache?.saves !== metadata.metadataSaves) {
@@ -297,10 +300,18 @@ async function coverFor(title: string) {
     };
   }
 
-  const saved = await coverCache.value;
-  const { localCover } = await import('$lib/data/discord-covers');
+  const picked = (await coverCache.value)[title]?.cover;
+  const covers = await import('$lib/data/discord-covers');
+  const hub =
+    !picked &&
+    !hidden &&
+    allowed() &&
+    socialSession$.getValue() &&
+    enabledPlugins$.getValue().includes('social')
+      ? await covers.hubCover(title)
+      : undefined;
 
-  return saved[title]?.cover || localCover(title);
+  return picked || hub || covers.localCover(title);
 }
 
 /** No cover yet: search for one in the background; the next update shows it. */
@@ -332,10 +343,12 @@ export async function renderActivity(
 ) {
   const template = activityTemplate(activity.kind);
   const title = activity.title ?? '';
-  const [extras, cover, hidden] = await Promise.all([
+  const hidden = await isPrivate(activity);
+  const [extras, cover] = await Promise.all([
     extrasFor(title, templateVariables(template)),
-    template.largeImage === 'cover' && title ? coverFor(title) : undefined,
-    isPrivate(activity)
+    template.largeImage === 'cover' && title && activity.kind !== 'idle'
+      ? coverFor(title, hidden)
+      : undefined
   ]);
   const filled = readingValues(activity, extras, times);
 
@@ -555,6 +568,7 @@ export function resetSender() {
   openedAt.clear();
   statsCache = wordsCache = undefined;
   catalogCache = difficultyCache = coverCache = undefined;
+  resetHubCovers();
   discordValues$.next(null);
   resetRelay();
 }

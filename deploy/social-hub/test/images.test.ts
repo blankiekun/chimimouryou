@@ -311,6 +311,55 @@ describe('hub images', () => {
     expect(objects.has(`cover/${other.body.cover}`)).toBe(false);
   });
 
+  it('finds a cover by book key, the reader’s own first', async () => {
+    const aki = await signUp('aki');
+    const ren = await signUp('ren');
+
+    expect((await call('GET', '/v1/cover?key=k1', undefined, aki.token)).status).toBe(404);
+    expect((await call('GET', '/v1/cover?key=k1')).status).toBe(401);
+    await call('PUT', '/v1/status', { books: [book('k1')] }, aki.token);
+    const akis = await call('PUT', '/v1/cover?key=k1', webp(160, 226), aki.token);
+
+    // Anyone's while Ren has none, then his own.
+    expect((await call('GET', '/v1/cover?key=k1', undefined, ren.token)).body).toEqual({
+      cover: akis.body.cover
+    });
+    await call('PUT', '/v1/status', { books: [book('k1')] }, ren.token);
+    const rens = await call('PUT', '/v1/cover?key=k1', webp(160, 230), ren.token);
+    expect((await call('GET', '/v1/cover?key=k1', undefined, ren.token)).body.cover).toBe(
+      rens.body.cover
+    );
+    expect((await call('GET', '/v1/cover?key=k1', undefined, aki.token)).body.cover).toBe(
+      akis.body.cover
+    );
+  });
+
+  it('takes a cover of an unshared book while the Discord status is live, kept while it shows', async () => {
+    const aki = await signUp('aki');
+    const put = () => call('PUT', '/v1/cover?key=k1', webp(160, 226), aki.token);
+
+    expect((await put()).status).toBe(404);
+    const presence = (activity: object) =>
+      call('PUT', '/v1/presence', { kind: 'book', activity, ttl: 10 }, aki.token);
+    await presence({ name: 'chimimouryou', details: 'Reading' });
+    const uploaded = await put();
+    expect(uploaded.status).toBe(200);
+
+    // The status shows its URL: kept by the cron; once it stops, the cover goes.
+    vi.advanceTimersByTime(60_000);
+    await presence({
+      name: 'chimimouryou',
+      details: 'Reading',
+      assets: { large_image: `https://hub.example/v1/cover/${uploaded.body.cover}` }
+    });
+    await cleanUp(env);
+    expect(objects.size).toBe(1);
+    vi.advanceTimersByTime(11 * 60_000);
+    await cleanUp(env);
+    expect(objects.size).toBe(0);
+    expect(db.prepare('SELECT * FROM covers').all()).toEqual([]);
+  });
+
   it('takes reports of a picture and of a cover', async () => {
     const aki = await signUp('aki');
     const ren = await signUp('ren');

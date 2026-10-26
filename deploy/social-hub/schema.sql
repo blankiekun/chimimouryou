@@ -119,7 +119,8 @@ CREATE TABLE IF NOT EXISTS pictures (
 -- Cover thumbnails, one per reader and book key, shown only on that reader's own status and
 -- finished rows: R2 object cover/<file> (16 hex of the WebP's sha256, shared by identical
 -- uploads). removed = 1 after a report: the title card shows instead and that reader can't upload
--- another for the key. The daily cron deletes shown covers whose book the reader no longer shares.
+-- another for the key. The daily cron deletes shown covers whose book the reader no longer shares
+-- and whose URL their live Discord status (presence) doesn't show.
 CREATE TABLE IF NOT EXISTS covers (
   user TEXT NOT NULL,
   book_key TEXT NOT NULL,

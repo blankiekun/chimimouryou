@@ -344,6 +344,43 @@ describe('standalone edition', () => {
     discord.resetSender();
   });
 
+  it('gives the hub a Discord cover only signed in, with social on and titles shown', async () => {
+    fetchMock.mockImplementation(async () => new Response(null, { status: 404 }));
+
+    const plugins = await import('$lib/plugins');
+    const hooks = await import('$lib/data/reader-hooks');
+    const discord = await import('$lib/data/discord');
+    const { socialSession$ } = await import('$lib/data/social-account');
+    const { discordActivities$, discordOptions$ } = await import('$lib/data/discord-settings');
+    const coverCalls = () =>
+      fetchMock.mock.calls.filter(([url]) => String(url).includes('/v1/cover')).length;
+    const read = async (title: string) => {
+      hooks.readingActivity({ kind: 'book', title, position: 10, characters: 100 });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    };
+
+    discordActivities$.next({ book: { details: '', state: '', largeImage: 'cover' } });
+    plugins.setPluginEnabled('discord', true);
+    await read('本');
+    socialSession$.next({ token: 't', me: { id: 'a', share: {} } as never });
+    plugins.setPluginEnabled('social', false);
+    await read('本 2');
+    discordOptions$.next({ hideTitles: true });
+    plugins.setPluginEnabled('social', true);
+    await read('本 3');
+    expect(coverCalls()).toBe(0);
+
+    discordOptions$.next({ hideTitles: false });
+    await read('本 4');
+    expect(coverCalls()).toBeGreaterThan(0);
+    expect(fetchMock.mock.calls.some(([url]) => /\/calibre\/|\/account\//.test(String(url)))).toBe(
+      false
+    );
+    plugins.setPluginEnabled('discord', false);
+    socialSession$.next(null);
+    discord.resetSender();
+  });
+
   it('asks the Anki add-on nothing while the Discord plugin is off', async () => {
     fetchMock.mockImplementation(async () => new Response(null, { status: 204 }));
 
