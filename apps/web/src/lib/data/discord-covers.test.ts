@@ -10,10 +10,24 @@ import {
   coverQuery,
   exactMatch,
   findCover,
+  hubCover,
   localCover,
-  matchKey
+  matchKey,
+  resetHubCovers
 } from './discord-covers';
 import type { MetadataCandidate } from './book-metadata';
+
+const thumbnails = vi.hoisted(() => ({ made: 0 }));
+
+vi.mock('$lib/data/social', async (original) => ({
+  ...(await original<typeof import('$lib/data/social')>()),
+  localCovers: async () => new Map([['own', { title: 'own', imagePath: new Blob(['jpeg']) }]]),
+  bookKey: (title: string) => title,
+  bookThumbnail: async () => {
+    thumbnails.made += 1;
+    return new Blob(['webp'], { type: 'image/webp' });
+  }
+}));
 
 const reZero: MetadataCandidate = {
   source: 'anilist',
@@ -87,6 +101,33 @@ describe('discord covers', () => {
       );
     });
 
+    it("saves a match's details without its cover, keeping the cover in this browser", async () => {
+      const puts: Record<string, { cover: string }>[] = [];
+      fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+        if (url.includes('anilist')) return aniList([reZeroMedia]);
+        if (init?.method === 'PUT') {
+          puts.push(JSON.parse(String(init.body)));
+          return new Response('{}', { status: 200 });
+        }
+        return new Response(JSON.stringify(puts.at(-1) ?? {}), { status: 200 });
+      });
+      const { loadBookMetadata } = await import('./book-metadata');
+
+      await loadBookMetadata(true);
+      expect(await findCover('Re：ゼロから始める異世界生活 1', 'book')).toBe(true);
+      expect(puts).toHaveLength(1);
+      expect(puts[0]['Re：ゼロから始める異世界生活 1']).toMatchObject({
+        cover: '',
+        url: reZero.url
+      });
+      expect(localCover('Re：ゼロから始める異世界生活 1')).toBe(reZero.cover);
+
+      // Details already there (picked in the dialog) are never replaced.
+      window.localStorage.clear();
+      expect(await findCover('Re：ゼロから始める異世界生活 1', 'book')).toBe(true);
+      expect(puts).toHaveLength(1);
+    });
+
     it('remembers a miss for 7 days and runs one search at a time', async () => {
       let answer: (response: Response) => void = () => {};
       fetchMock.mockImplementation(() => new Promise((resolve) => (answer = resolve)));
@@ -104,6 +145,64 @@ describe('discord covers', () => {
       vi.setSystemTime(Date.now() + 8 * 24 * 3600_000);
       expect(canSearch('A')).toBe(true);
       vi.useRealTimers();
+    });
+  });
+
+  describe('hubCover', () => {
+    const fetchMock = vi.fn();
+    const hub = 'https://chimi-hub.blankiekun.workers.dev/v1';
+    const requests = () =>
+      fetchMock.mock.calls.map(([url, init]) => `${init?.method ?? 'GET'} ${url}`);
+
+    beforeEach(() => {
+      vi.stubGlobal('fetch', fetchMock);
+      resetHubCovers();
+      thumbnails.made = 0;
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+      fetchMock.mockReset();
+    });
+
+    it("uses the hub's thumbnail of the book key without uploading, once per page", async () => {
+      fetchMock.mockImplementation(
+        async () => new Response(JSON.stringify({ cover: '0123456789abcdef' }), { status: 200 })
+      );
+
+      expect(await hubCover('own')).toBe(`${hub}/cover/0123456789abcdef`);
+      expect(await hubCover('own')).toBe(`${hub}/cover/0123456789abcdef`);
+      expect(requests()).toEqual([`GET ${hub}/cover?key=own`]);
+      expect(thumbnails.made).toBe(0);
+    });
+
+    it("uploads the book's own cover when the hub has none, and nothing without a cover", async () => {
+      fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+        init?.method === 'PUT'
+          ? new Response(JSON.stringify({ cover: 'fedcba9876543210' }), { status: 200 })
+          : new Response(JSON.stringify({ error: 'route' }), { status: 404 })
+      );
+
+      expect(await hubCover('own')).toBe(`${hub}/cover/fedcba9876543210`);
+      expect(requests()).toEqual([`GET ${hub}/cover?key=own`, `PUT ${hub}/cover?key=own`]);
+      expect(await hubCover('none')).toBeUndefined();
+      expect(requests()).toHaveLength(3);
+    });
+
+    it('asks again after an upload the hub refused, 3 times at most', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      fetchMock.mockImplementation(
+        async () => new Response(JSON.stringify({ error: 'book' }), { status: 404 })
+      );
+
+      expect(await hubCover('own')).toBeUndefined();
+      expect(await hubCover('own')).toBeUndefined();
+      expect(thumbnails.made).toBe(1);
+      for (let i = 0; i < 4; i += 1) {
+        vi.setSystemTime(Date.now() + 5 * 60_000);
+        await hubCover('own');
+      }
+      expect(thumbnails.made).toBe(3);
     });
   });
 });

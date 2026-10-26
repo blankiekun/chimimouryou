@@ -858,8 +858,27 @@ export async function readImage(
 }
 
 /**
+ * GET /v1/cover?key=: a shown thumbnail of the book key, this reader's first, else anyone's (the
+ * Discord status uses its public URL; the app uploads only when there is none). 404 when none.
+ */
+async function coverByKey(request: Request, env: Env, user: UserRow) {
+  const key = text(new URL(request.url).searchParams.get('key'), 200, 'key');
+  const row = await env.DB.prepare(
+    `SELECT file FROM covers WHERE book_key = ?1 AND removed = 0
+     ORDER BY user = ?2 DESC, at LIMIT 1`
+  )
+    .bind(key, user.id)
+    .first<{ file: string }>();
+
+  if (!row) throw new HttpError(404, 'cover');
+  return json({ cover: row.file });
+}
+
+/**
  * PUT /v1/cover?key=: this reader's thumbnail of a book they share (in their current or finished
- * books), shown on their own rows only; a second one, or one after a removal, is 409.
+ * books) or of any book while their Discord status is live (presence; the cron keeps it while
+ * that status shows its URL), shown on their own rows only; a second one, or one after a
+ * removal, is 409.
  */
 async function uploadCover(request: Request, env: Env, user: UserRow) {
   const key = text(new URL(request.url).searchParams.get('key'), 200, 'key');
@@ -873,9 +892,10 @@ async function uploadCover(request: Request, env: Env, user: UserRow) {
   );
   const shared = await env.DB.prepare(
     `SELECT 1 FROM status WHERE user = ?1 AND book_key = ?2
-     UNION ALL SELECT 1 FROM finished WHERE user = ?1 AND book_key = ?2`
+     UNION ALL SELECT 1 FROM finished WHERE user = ?1 AND book_key = ?2
+     UNION ALL SELECT 1 FROM presence WHERE user = ?1 AND kind != '' AND expires_at > ?3`
   )
-    .bind(user.id, key)
+    .bind(user.id, key, now())
     .first();
 
   if (!shared) throw new HttpError(404, 'book');
@@ -1376,12 +1396,14 @@ export async function cleanUp(env: Env) {
     ...expirePresenceSql(env)
   ]);
 
-  // Covers no current or finished book of their uploader shows any more (removed ones stay, so
-  // the uploader can't put the same one back).
+  // Covers no current or finished book or live Discord status of their uploader shows any more
+  // (removed ones stay, so the uploader can't put the same one back).
   const orphans = await env.DB.prepare(
     `DELETE FROM covers WHERE removed = 0
        AND NOT EXISTS (SELECT 1 FROM status s WHERE s.user = covers.user AND s.book_key = covers.book_key)
        AND NOT EXISTS (SELECT 1 FROM finished f WHERE f.user = covers.user AND f.book_key = covers.book_key)
+       AND NOT EXISTS (SELECT 1 FROM presence p WHERE p.user = covers.user AND p.kind != ''
+         AND instr(p.activity, '/v1/cover/' || covers.file) > 0)
      RETURNING file`
   ).all<{ file: string }>();
 
@@ -1892,8 +1914,8 @@ words known only if you turn it on) and activity for friends (started, finished,
 kept 90 days. Passwords are stretched in your browser and stored only as a salted hash; the
 recovery code and session tokens are stored only as hashes.</p>
 <p>Images: your picture, if you upload one (a 256 px square, re-encoded in your browser, which
-drops EXIF and location data), and small cover thumbnails (about 160 px) of books readers share,
-one per book, uploaded by the first reader who has its cover. Covers are shared by everyone who
+drops EXIF and location data), and small cover thumbnails (about 160 px) of books readers share
+or show in their Discord status, one per book, uploaded by the first reader who has its cover. Covers are shared by everyone who
 reads the book and stay when an account is deleted; your picture does not.</p>
 <p>Sending a book to a friend: the book goes directly from one browser to the other. The hub
 only passes the connection details between the two of you (including network addresses), with the
@@ -2037,6 +2059,8 @@ async function route(request: Request, env: Env, ctx?: Context): Promise<Respons
       return json(me((await userById(env, user.id))!));
     case 'PUT /v1/status':
       return json({ ok: true, needCovers: await pushStatus(env, user, await readBody(request)) });
+    case 'GET /v1/cover':
+      return coverByKey(request, env, user);
     case 'PUT /v1/cover':
       return uploadCover(request, env, user);
     case 'PUT /v1/avatar':

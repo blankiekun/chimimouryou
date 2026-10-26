@@ -48,6 +48,8 @@ idempotent), in order, then `npx wrangler@4.147.0 deploy`:
 - `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file migrations/0009_presence.sql`
   (Discord status relay: `presence`, `presence_keys`, `presence_codes`, `users.presence_profile`; apply
   before deploying; a second run only fails with "duplicate column name")
+- `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file migrations/0010_covers_book_key.sql`
+  (index for `GET cover?key=`, the Discord status's cover lookup; safe to run again)
 - Push to the add-on (`PresenceStream`, a Durable Object): nothing to run by hand. `wrangler.toml`
   binds it as `PRESENCE` with the migration `v1` (`new_sqlite_classes`, the free plan's only kind),
   which the next `npm run deploy` applies once. It stores nothing. Each deploy closes every push
@@ -81,8 +83,11 @@ friends; 404 when blocked; 30 a day); `POST report` (`{username, what: name|pict
 `{what: cover, key, username}`: the cover that reader uploaded, 5 a day; signed-in readers only, 401 otherwise);
 `PUT status` answers `needCovers`: the shared book keys this reader gave no thumbnail for. `PUT cover?key=`
 (raw `image/webp`, at most 20 KB, 32-200 px wide, no EXIF/XMP; only for a book in the reader's
-current or finished books; one per reader and key, shown only on that reader's own rows, a second
-one is 409; 50 a day; the daily cron deletes covers whose book the reader no longer shares);
+current or finished books, or for any book while the reader's Discord status (`presence`) is live;
+one per reader and key, shown only on that reader's own rows, a second one is 409; 50 a day; the
+daily cron deletes covers whose book the reader no longer shares and whose URL no live Discord
+status shows); `GET cover?key=` (`{cover}`: a shown thumbnail of the book key, the reader's own
+first, else anyone's; 404 when none; the Discord status uses it before uploading);
 `PUT avatar` (raw `image/webp`, a square of 64-256 px, at most 64 KB; 5 a day; a new version
 each time) and `DELETE avatar` (back to the preset). Books carry `cover` (a content hash) and
 people `picture` (a version, 0 for none); `GET cover/:hash` and `GET avatar/:id/:version` serve

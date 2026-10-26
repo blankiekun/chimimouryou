@@ -5,10 +5,11 @@
  */
 
 /**
- * Covers for the Discord status of books without Find details: the series (or the title without
- * its volume and store tags) is searched on AniList (books, manga) or VNDB (VNs), and only an
- * exact title match is kept: saved as the book's Find details for everyone, or in this browser
- * when the server refuses it or there is none. Misses are remembered for 7 days (errors for an hour) and one search
+ * Covers for the Discord status. First the book's own cover as a public hub thumbnail
+ * (`hubCover`). Without one, the series (or the title without its volume and store tags) is
+ * searched on AniList (books, manga) or VNDB (VNs), and only an exact title match is kept: its
+ * details (never its cover: one per series would replace every volume's card) are saved as the
+ * book's Find details, its cover in this browser only. Misses are remembered for 7 days (errors for an hour) and one search
  * runs at a time, so the sources' rate limits are never hit. The sender (discord.ts) decides when
  * a search is allowed. Not part of upstream.
  */
@@ -74,7 +75,7 @@ export function exactMatch(query: string, candidates: MetadataCandidate[]) {
     : undefined;
 }
 
-/** A cover this browser matched (standalone, or the server refused to save it) */
+/** The AniList/VNDB cover this browser matched */
 export const localCover = (title: string) =>
   readMap<{ cover?: string }>(matchesKey)[title]?.cover || undefined;
 
@@ -86,8 +87,8 @@ export function canSearch(title: string) {
 }
 
 /**
- * Searches once for the title's cover and keeps an exact match (Find details on the server, else
- * this browser). Resolves true when a cover was found. Never throws.
+ * Searches once for the title's cover and keeps an exact match: its cover in this browser, its
+ * details as Find details on the server. Resolves true when a cover was found. Never throws.
  */
 export async function findCover(title: string, kind: MetadataKind, series = '') {
   if (!canSearch(title)) return false;
@@ -102,15 +103,16 @@ export async function findCover(title: string, kind: MetadataKind, series = '') 
       return false;
     }
 
-    const { serverless } = await import('$lib/data/server-connect');
-    const saved =
-      !serverless &&
-      (await metadata.saveBookMetadata(title, match).then(
-        () => true,
-        () => false
-      ));
+    writeEntry(matchesKey, title, { cover: match.cover });
 
-    if (!saved) writeEntry(matchesKey, title, { cover: match.cover });
+    const { serverless } = await import('$lib/data/server-connect');
+
+    // Details only, and never over details the book already has (picked in the dialog).
+    const saved = serverless ? undefined : await metadata.loadBookMetadata().catch(() => undefined);
+
+    if (saved && !saved[title]) {
+      await metadata.saveBookMetadata(title, { ...match, cover: '' }).catch(() => {});
+    }
     return true;
   } catch {
     // Network errors and rate limits: stored as a miss that ends an hour from now.
@@ -120,3 +122,74 @@ export async function findCover(title: string, kind: MetadataKind, series = '') 
     searching = false;
   }
 }
+
+const retryAfter = 5 * 60_000;
+const maxTries = 3;
+/** Per title: the public URL (or none), and when a refused upload may be tried again */
+const hubCovers = new Map<
+  string,
+  { value: Promise<string | undefined>; tries: number; retryAt?: number }
+>();
+
+/**
+ * The book's own cover as a public https thumbnail on the social hub (Discord fetches it with no
+ * session): the hub's thumbnail for its book key, else one made from this browser's or the
+ * Calibre catalog's cover and uploaded. Asked once per book and page; an upload the hub refused
+ * (the book isn't shared or in a live Discord status yet) is tried again 5 minutes later, 3
+ * times at most. The sender checks that the reader is signed in, social is on and the book isn't
+ * private. Undefined when there is none.
+ */
+export function hubCover(title: string) {
+  const cached = hubCovers.get(title);
+
+  if (cached && !(cached.retryAt && Date.now() >= cached.retryAt)) return cached.value;
+
+  const entry = {
+    tries: (cached?.tries ?? 0) + 1,
+    value: Promise.resolve<string | undefined>(undefined)
+  };
+
+  entry.value = loadHubCover(title, () => {
+    if (entry.tries < maxTries) Object.assign(entry, { retryAt: Date.now() + retryAfter });
+  }).catch(() => undefined);
+  hubCovers.set(title, entry);
+  return entry.value;
+}
+
+async function loadHubCover(title: string, refused: () => void) {
+  const [{ bookKey, bookThumbnail, localCovers }, { HubError, hubFetch, hubImageUrl }] =
+    await Promise.all([import('$lib/data/social'), import('$lib/data/social-account')]);
+  const key = encodeURIComponent(bookKey(title));
+  const url = (file: unknown) => {
+    const address =
+      typeof file === 'string' && /^[0-9a-f]{16}$/.test(file) && hubImageUrl(`cover/${file}`);
+
+    return address && address.startsWith('https://') ? address : undefined;
+  };
+  // Hubs from before GET cover?key answer 404: the upload below still works.
+  const lookup = () =>
+    hubFetch<{ cover?: string }>(`/v1/cover?key=${key}`).then(
+      (body) => url(body.cover),
+      () => undefined
+    );
+  const existing = await lookup();
+
+  if (existing) return existing;
+
+  const cover = (await localCovers()).get(bookKey(title))?.imagePath;
+  const thumbnail = cover && (await bookThumbnail(cover));
+
+  if (!thumbnail) return undefined;
+  try {
+    return url(
+      (await hubFetch<{ cover?: string }>(`/v1/cover?key=${key}`, 'PUT', thumbnail)).cover
+    );
+  } catch (error) {
+    if (error instanceof HubError && error.status === 409) return lookup();
+    refused();
+    return undefined;
+  }
+}
+
+/** For tests */
+export const resetHubCovers = () => hubCovers.clear();

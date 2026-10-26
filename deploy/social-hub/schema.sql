@@ -119,7 +119,8 @@ CREATE TABLE IF NOT EXISTS pictures (
 -- Cover thumbnails, one per reader and book key, shown only on that reader's own status and
 -- finished rows: R2 object cover/<file> (16 hex of the WebP's sha256, shared by identical
 -- uploads). removed = 1 after a report: the title card shows instead and that reader can't upload
--- another for the key. The daily cron deletes shown covers whose book the reader no longer shares.
+-- another for the key. The daily cron deletes shown covers whose book the reader no longer shares
+-- and whose URL their live Discord status (presence) doesn't show.
 CREATE TABLE IF NOT EXISTS covers (
   user TEXT NOT NULL,
   book_key TEXT NOT NULL,
@@ -129,6 +130,8 @@ CREATE TABLE IF NOT EXISTS covers (
   PRIMARY KEY (user, book_key)
 );
 CREATE INDEX IF NOT EXISTS covers_file ON covers (file);
+-- GET /v1/cover?key= (the Discord status) looks covers up by book alone.
+CREATE INDEX IF NOT EXISTS covers_book_key ON covers (book_key);
 -- Signaling only, the book goes browser to browser over WebRTC.
 -- pending (sender asked) -> accepted (the receiver's SDP offer) -> answered (the sender's answer),
 -- or declined. Deleted by the sender once connected, else after 10 minutes (TRANSFER_TTL, cron).
