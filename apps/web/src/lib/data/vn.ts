@@ -43,8 +43,10 @@ export interface VnInfo {
    * `vnbox/<folder>`), the program to run in it, and an optional text hook script */
   folder?: string;
   exe?: string;
-  /** A dc00 script (github.com/0xDC00/scripts) that sends the game's text */
+  /** A dc00 script (github.com/0xDC00/scripts) that sends the game's text: a chosen file's
+   * text, or a bundled script by file name (`vn/vnbox/hooks/`, scripts/vnbox/build.sh) */
   hook?: string;
+  hookFile?: string;
 }
 
 export interface VnRead {

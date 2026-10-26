@@ -7,6 +7,8 @@
 import { describe, expect, it } from 'vitest';
 import { isVn, vnInfo } from '$lib/data/vn';
 import {
+  hookSuggestion,
+  searchHookScripts,
   vnboxPlayerUrl,
   windowsGameBook,
   windowsGameFolder,
@@ -70,5 +72,52 @@ describe('vnboxPlayerUrl', () => {
     expect(url.searchParams.get('p')).toBe('信天翁.exe');
     expect(url.searchParams.get('frida')).toBe('blob:http://x/1');
     expect(url.search).toContain('env=%22LC_ALL:ja_JP.UTF-8%22');
+  });
+});
+
+describe('bundled hook scripts', () => {
+  const scripts = [
+    { file: 'PC_Albatross_Koukairoku.js', name: 'Albatross Koukairoku (信天翁航海録)', exes: [] },
+    { file: 'PC_Steam_Fate_Stay_Night.js', name: 'Fate/stay night REMASTERED', exes: [] },
+    { file: 'PC_Muv_Luv.js', name: 'Muv-Luv', exes: ['muvluv.exe'] },
+    { file: 'PC_Summer_Pockets.js', name: 'Summer Pockets', exes: ['SiglusEngine.exe'] }
+  ];
+  const suggest = (exe: string, ...names: string[]) => hookSuggestion(scripts, { exe, names });
+
+  it('suggests by the hand-kept table, then the program a script names', () => {
+    expect(suggest('信天翁航海録.exe', 'whatever')).toBe('PC_Albatross_Koukairoku.js');
+    expect(suggest('bin/MuvLuv.EXE')).toBe('PC_Muv_Luv.js');
+  });
+
+  it('else by name: romaji or Japanese, folder or title, never a generic program name', () => {
+    expect(suggest('game.exe', 'Summer Pockets')).toBe('PC_Summer_Pockets.js');
+    expect(suggest('game.exe', 'fate stay night')).toBe('PC_Steam_Fate_Stay_Night.js');
+    expect(suggest('start.exe', '信天翁航海録 体験版')).toBe('PC_Albatross_Koukairoku.js');
+    expect(suggest('game.exe', 'game')).toBeUndefined();
+    expect(suggest('foo.exe', 'Unknown Novel')).toBeUndefined();
+  });
+
+  it('searches names and file names', () => {
+    expect(searchHookScripts(scripts, 'muv luv').map((s) => s.file)).toEqual(['PC_Muv_Luv.js']);
+    expect(searchHookScripts(scripts, '航海')).toHaveLength(1);
+    expect(searchHookScripts(scripts, ' ')).toHaveLength(4);
+  });
+
+  it('gives VNBox a bundled script under /vn/ when no blob: script is passed', () => {
+    const info = {
+      encoding: 'sjis',
+      files: [],
+      engine: 'vnbox',
+      folder: 'gabc',
+      exe: 'a.exe',
+      hookFile: 'PC_Muv_Luv.js'
+    } as const;
+    const frida = (hookUrl?: string) =>
+      new URL(vnboxPlayerUrl({ ...info, files: [] }, hookUrl), 'http://x/').searchParams.get(
+        'frida'
+      );
+
+    expect(frida()).toBe('vnbox/hooks/PC_Muv_Luv.js');
+    expect(frida('blob:http://x/1')).toBe('blob:http://x/1');
   });
 });

@@ -9,12 +9,16 @@
   import { formatBytes } from '$lib/data/vn-upload';
   import {
     copyWindowsGame,
+    hookScripts,
+    hookSuggestion,
+    searchHookScripts,
     windowsGameBlocker,
     windowsGameBlockerText,
     windowsGameBook,
     windowsGameFolder,
     windowsPrograms
   } from '$lib/data/windows-game';
+  import type { HookScript } from '$lib/data/windows-game';
   import type { LoadData } from '$lib/functions/file-loaders/types';
 
   interface Props {
@@ -33,6 +37,10 @@
   let title = $state('');
   let exe = $state('');
   let hook = $state<{ name: string; text: string }>();
+  let scripts = $state<HookScript[]>([]);
+  let query = $state('');
+  /** The reader's pick once they touch the list ('' none, CHOSEN their file, else a bundled file) */
+  let picked = $state<string>();
   let copied = $state<{ done: number; total: number }>();
   let error = $state('');
   let showAll = $state(false);
@@ -43,6 +51,20 @@
   const size = $derived(Object.values(files).reduce((sum, file) => sum + file.size, 0));
   const count = $derived(Object.keys(files).length);
   const busy = $derived(!!copied);
+  const suggested = $derived(hookSuggestion(scripts, { exe, names: [title, folderName] }));
+  const choice = $derived(picked ?? suggested ?? '');
+  /** The suggestion, the current pick and the search results, each once */
+  const listed = $derived(
+    scripts.filter(
+      (script) =>
+        script.file === suggested ||
+        script.file === choice ||
+        (query.trim() && searchHookScripts([script], query).length)
+    )
+  );
+  const CHOSEN = '#chosen';
+
+  hookScripts().then((found) => (scripts = found));
 
   function useFolder(name: string, picked: Record<string, File>) {
     files = picked;
@@ -107,7 +129,10 @@
   async function hookPicked(list: FileList | null) {
     const file = list?.[0];
 
-    if (file) hook = { name: file.name, text: await file.text() };
+    if (!file) return;
+
+    hook = { name: file.name, text: await file.text() };
+    picked = CHOSEN;
   }
 
   function close() {
@@ -141,7 +166,15 @@
         (done, total) => (copied = { done, total }),
         abort.signal
       );
-      await save(windowsGameBook(name, exe, hook?.text, undefined));
+      await save(
+        windowsGameBook(
+          name,
+          exe,
+          choice === CHOSEN ? hook?.text : undefined,
+          undefined,
+          choice === CHOSEN ? undefined : choice || undefined
+        )
+      );
       dialogManager.dialogs$.next([]);
     } catch (addError: any) {
       if (addError?.name !== 'AbortError') error = addError.message;
@@ -228,6 +261,60 @@
             rel="noreferrer">Find a script</a
           >
         </p>
+        {#if scripts.length}
+          <input
+            class="app-input"
+            type="search"
+            placeholder="Search {scripts.length} scripts"
+            aria-label="Search hook scripts"
+            bind:value={query}
+            disabled={busy}
+          />
+        {/if}
+        <ul class="wg-programs">
+          <li>
+            <label class="wg-program">
+              <input
+                type="radio"
+                name="wg-hook"
+                checked={choice === ''}
+                disabled={busy}
+                onchange={() => (picked = '')}
+              />
+              <span>No script</span>
+            </label>
+          </li>
+          {#each listed as script (script.file)}
+            <li>
+              <label class="wg-program">
+                <input
+                  type="radio"
+                  name="wg-hook"
+                  checked={choice === script.file}
+                  disabled={busy}
+                  onchange={() => (picked = script.file)}
+                />
+                <span lang="ja">{script.name}</span>
+                {#if script.file === suggested}<span class="wg-dim">Suggested</span>{/if}
+              </label>
+            </li>
+          {/each}
+          {#if hook}
+            <li>
+              <label class="wg-program">
+                <input
+                  type="radio"
+                  name="wg-hook"
+                  checked={choice === CHOSEN}
+                  disabled={busy}
+                  onchange={() => (picked = CHOSEN)}
+                />
+                <span>{hook.name}</span>
+                <span class="wg-dim">Your file</span>
+              </label>
+            </li>
+          {/if}
+        </ul>
         <div class="wg-row">
           <label class="app-button" class:wg-disabled={busy}>
             <input
@@ -237,19 +324,8 @@
               disabled={busy}
               onchange={(event) => hookPicked(event.currentTarget.files)}
             />
-            {hook ? 'Change script' : 'Choose script'}
+            {hook ? 'Choose another file' : 'Choose file…'}
           </label>
-          {#if hook}
-            <span class="wg-meta">{hook.name}</span>
-            <button
-              type="button"
-              class="app-button-quiet"
-              disabled={busy}
-              onclick={() => (hook = undefined)}
-            >
-              Remove
-            </button>
-          {/if}
         </div>
       </div>
     {/if}
