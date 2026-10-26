@@ -70,11 +70,20 @@ class FrequencyTable:
     """word(key) -> (rank, share of occurrences); form(key, spelling) -> (rank, share, percentage).
     Keys are Sudachi's normalised form plus a part of speech ('有る\\tverb'), looked up by
     the normalised form, and by its reading when known (事: こと is common, じ rare); a
-    spelling's percentage is how close its rank is to the word's."""
+    spelling's percentage is how close its rank is to the word's. `compounds`: the JMdict compounds
+    the list ranks (compound_merge.compound_table), made when first asked for."""
 
-    def __init__(self, ranks: dict, reading_ranks: dict | None = None):
+    def __init__(self, ranks: dict, reading_ranks: dict | None = None, compounds=None):
         self.ranks = ranks
         self.reading_ranks = reading_ranks or {}
+        self._compounds = compounds
+
+    @property
+    def compounds(self):
+        if self._compounds is None:
+            from compound_merge import compound_table
+            self._compounds = compound_table(self.ranks, self.reading_ranks)
+        return self._compounds
 
     @classmethod
     def load(cls, path: str) -> 'FrequencyTable':
@@ -90,13 +99,15 @@ class FrequencyTable:
         from yurigana import packed
         packed.write(path, {'ranks': {term: repr(rank) for term, rank in self.ranks.items()},
                             'reading_ranks': {f'{term}\t{reading}': repr(rank)
-                                              for (term, reading), rank in self.reading_ranks.items()}})
+                                              for (term, reading), rank in self.reading_ranks.items()},
+                            'compounds': dict(self.compounds)})
 
     @classmethod
     def load_packed(cls, path: str) -> 'FrequencyTable':
         from yurigana.packed import Decoded, Packed, PairMap
         pack = Packed(path)
-        return cls(Decoded(pack.table('ranks'), _rank), PairMap(pack.table('reading_ranks'), _rank))
+        return cls(Decoded(pack.table('ranks'), _rank), PairMap(pack.table('reading_ranks'), _rank),
+                   pack.table('compounds'))
 
     def word(self, key, reading=None):
         term = key.split('\t')[0]

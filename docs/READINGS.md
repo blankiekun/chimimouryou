@@ -37,6 +37,15 @@ exactly that word's token gives its reading:
   (一回) is a row with the span's reading (いっかい, not Sudachi's いちかい).
 - Tokens the `Reader` joins into a compound the list gives one reading (三日月 みかづき, 3-4%
   of a book's kanji tokens) keep Sudachi's reading each.
+- A JMdict compound Sudachi splits is one row again when the list ranks it better than its
+  rarest part as read here (`compound_merge.py`: 心配|顔 read しんぱい|がお is 心配顔 しんぱいがお,
+  54,486, not 顔 がお, 75,124). Adjacent tokens only (never across punctuation), no particle,
+  auxiliary or number inside (目を通す, 三本 stay apart), at most 4 tokens, the last one's
+  dictionary form (引き|返し: 引き返す); the row takes JMdict's reading the list ranks best.
+  Common parts stay apart (その|日, 理学|博士): the compound is rarer than either. The table
+  (JMdict's forms from yurigana's `jmdict-pairs.json.gz` that the list ranks) is in the
+  frequency pack. On 7 Aozora Bunko texts this was 2.4% fewer unknown occurrences at a
+  62,000 cutoff with the rank fold below; switching back to SudachiDict-full changed 0.3%.
 
 The reading list (`known`) is Jiten's frequency list (`FrequencyTable.reading_ranks`): a
 reading is always hiragana and one that list gives for the written form. Katakana ruby still
@@ -48,7 +57,8 @@ An occurrence without a reading goes to the word's most common reading in the bo
 (`Analysis.form_readings`). Rows of one form and reading are merged, and each row also carries
 the lemma (Sudachi's normalized form). A voiced reading the list lacks counts for the
 unvoiced one it gives (この箱 read ばこ: はこ), so it gets the word's rank; a voiced reading the
-list has stays (造り in 石造り: づくり).
+list has stays (造り in 石造り: づくり) but takes the unvoiced one's rank when that is better
+(a split compound's tail, 顔 がお, ranks as かお).
 
 **Tables** (`READING_MODEL_TABLES` in `service.py`): `state/difficulty/reading-model.json.gz`
 is the server's own table, when one has been built from its library (optional: none exists

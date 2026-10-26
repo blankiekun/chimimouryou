@@ -373,17 +373,21 @@ class SaveWordsTest(unittest.TestCase):
         other = Word('他\tnoun', '他', 'noun', 'kango', (), '他', 'ほか')
         run = Word('走る\tverb', '走る', 'verb', 'wago', (), '走る', 'はしる')
         box = Word('箱\tnoun', '箱', 'noun', 'wago', (), '箱', 'はこ')
+        face = Word('顔\tnoun', '顔', 'noun', 'wago', (), '顔', 'かお')
         analysis = Analysis(text='', words={(other.key, '他'): [other, 7], (run.key, '走る'): [run, 4],
-                                            (box.key, '箱'): [box, 3]})
+                                            (box.key, '箱'): [box, 3], (face.key, '顔'): [face, 1]})
         # 走った has no reading: it counts for the word's most common one.
         analysis.readings = {(other.key, '他'): Counter({'ほか': 5, 'た': 2}),
                              (run.key, '走る'): Counter({None: 3, 'はしる': 1}),
-                             (box.key, '箱'): Counter({'ばこ': 2, 'はこ': 1})}  # この箱 ばこ: the list has only はこ
-        service.save_words(8, analysis, FrequencyTable({'他': 145038, '箱': 2000},
-                                                       {('他', 'ほか'): 382, ('他', 'た'): 145038, ('箱', 'はこ'): 2000}))
+                             (box.key, '箱'): Counter({'ばこ': 2, 'はこ': 1}),  # この箱 ばこ: the list has only はこ
+                             (face.key, '顔'): Counter({'がお': 1})}  # a split tail: がお ranks, かお better
+        service.save_words(8, analysis, FrequencyTable({'他': 145038, '箱': 2000, '顔': 113},
+                                                       {('他', 'ほか'): 382, ('他', 'た'): 145038, ('箱', 'はこ'): 2000,
+                                                        ('顔', 'かお'): 113, ('顔', 'がお'): 75124}))
         with gzip.open(os.path.join(service.WORDS_DIR, '8.json.gz'), 'rt', encoding='utf-8') as f:
             self.assertEqual(json.load(f), [['他', 'ほか', 5, 382, '他'], ['走る', 'はしる', 4, None, '走る'],
-                                            ['箱', 'はこ', 3, 2000, '箱'], ['他', 'た', 2, 145038, '他']])
+                                            ['箱', 'はこ', 3, 2000, '箱'], ['他', 'た', 2, 145038, '他'],
+                                            ['顔', 'がお', 1, 113, '顔']])
 
     def test_merges_fills_and_drops(self):
         import gzip

@@ -34,7 +34,10 @@ The readings in context and the "Known" furigana check are yurigana
 from its release; its kanji-readings.json is derived from KANJIDIC2 (CC BY-SA
 4.0) and its reading model is trained on public-domain works from Aozora Bunko
 (https://www.aozora.gr.jp/) and on sentences from Tatoeba
-(https://tatoeba.org/), CC BY 2.0 FR. See yurigana's NOTICE.
+(https://tatoeba.org/), CC BY 2.0 FR. See yurigana's NOTICE. Its
+jmdict-pairs.json.gz, from JMdict (EDRDG, CC BY-SA 4.0, below), also gives the
+word lists the compounds they join (scripts/calibre/jiten/compound_merge.py),
+kept in the frequency pack the server and the analysis tools build.
 
 The built-in dictionary's one-tap download (dictionaries/JMdict_english.zip in
 the built site, fetched from jmdict-yomitan's latest release when the Pages
