@@ -5,29 +5,23 @@
  */
 
 /**
- * Difficulty bands as shown on jiten.moe (score 0-5). Not part of upstream.
+ * How a book's 1-10 level (`levelOf`, difficulty-core.ts) is shown: its book tier (Slime … Demon
+ * King, one per whole step) and five groups of two steps for the library's filters and colours.
+ * Not part of upstream.
  */
 
+import { difficultyScale } from '$lib/data/difficulty-core';
 import type { MessageKey } from '$lib/i18n/en';
 
-/** The bands, lowest first, as message keys `difficulty.<band>` (name) and `…Hint` (meaning). */
-const bands = ['beginner', 'easy', 'average', 'hard', 'expert', 'insane'] as const;
+/** The book tier of a level's whole step */
+export const levelTier = (level: number) =>
+  difficultyScale.tiers[Math.min(Math.max(Math.floor(level), 1), 10) - 1];
 
-export function difficultyBand(difficulty: number) {
-  return Math.min(Math.max(Math.floor(difficulty), 0), bands.length - 1);
-}
+/** The level's group of two steps, 0 (1-2) to 4 (9-10) */
+export const levelGroup = (level: number) => Math.min(Math.max(Math.floor((level - 1) / 2), 0), 4);
 
-/** Message key of the band's name, for `$t$`. */
-export function difficultyNameKey(difficulty: number): MessageKey {
-  return `difficulty.${bands[difficultyBand(difficulty)]}`;
-}
+/** Message key of a group's name ("Levels 1–2"), for `$t$`. */
+export const levelGroupKey = (group: number) => `difficulty.levels${group + 1}` as MessageKey;
 
-/** Message key of what the band means for a learner, one line, for `$t$`. */
-export function difficultyDescriptionKey(difficulty: number): MessageKey {
-  return `difficulty.${bands[difficultyBand(difficulty)]}Hint`;
-}
-
-/** Theme colour of the band (difficulty1-5; Insane shares Expert's). */
-export function difficultyColor(difficulty: number) {
-  return `var(--difficulty-${Math.min(difficultyBand(difficulty) + 1, 5)})`;
-}
+/** Theme colour of the level's group (difficulty1-5). */
+export const levelColor = (level: number) => `var(--difficulty-${levelGroup(level) + 1})`;

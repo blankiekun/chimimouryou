@@ -15,6 +15,7 @@ import type {
 } from '$lib/data/database/books-db/versions/books-db';
 import { database, lastReadingGoalsModified$ } from '$lib/data/store';
 import { isManga } from '$lib/data/manga';
+import { levelOf } from '$lib/data/difficulty-core';
 import { isVn } from '$lib/data/vn';
 import { standalone } from '$lib/data/env';
 import { syncBrowserSeries, withBrowserSeries } from '$lib/data/series-overrides';
@@ -70,10 +71,7 @@ export class BrowserStorageHandler extends BaseStorageHandler {
             vn: isVn(book),
             series: book.series,
             seriesIndex: book.seriesIndex,
-            difficulty: estimate?.difficulty,
-            difficultyLow: estimate?.low,
-            difficultyHigh: estimate?.high,
-            words95: estimate?.words95 ?? undefined
+            difficulty: levelOf(estimate)
           });
         }
 

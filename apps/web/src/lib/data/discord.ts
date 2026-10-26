@@ -208,8 +208,9 @@ const templateVariables = (template: DiscordActivityTemplate) =>
 // Lookups shared by every update, each made only when a template needs it.
 let statsCache: { at: number; value: Promise<ReadingStats | undefined> } | undefined;
 let wordsCache: { at: number; value: Promise<number | undefined> } | undefined;
-let catalogCache: Promise<Map<string, { author: string; series: string }>> | undefined;
-let difficultyCache: Promise<Record<string, { difficulty: number }>> | undefined;
+let catalogCache: Promise<Map<string, { id: number; author: string; series: string }>> | undefined;
+/** The 1-10 level by catalog id */
+let difficultyCache: Promise<Record<string, number | undefined>> | undefined;
 let coverCache: { saves: number; value: Promise<Record<string, { cover: string }>> } | undefined;
 
 async function loadStats(): Promise<ReadingStats | undefined> {
@@ -241,7 +242,12 @@ async function catalogBook(title: string) {
     .then(({ loadCalibreCatalog }) => loadCalibreCatalog())
     .then(
       (books) =>
-        new Map(books.map((book) => [book.title, { author: book.authors, series: book.series }]))
+        new Map(
+          books.map((book) => [
+            book.title,
+            { id: book.id, author: book.authors, series: book.series }
+          ])
+        )
     )
     .catch(() => new Map());
   return (await catalogCache).get(title);
@@ -276,10 +282,23 @@ async function extrasFor(title: string, used: Set<VariableName>): Promise<ValueE
     extras.series = book?.series || guessSeriesName(title);
   }
   if (title && needs('difficulty')) {
-    difficultyCache ??= import('$lib/data/calibre')
-      .then(({ loadCalibreDifficulty }) => loadCalibreDifficulty())
+    difficultyCache ??= Promise.all([
+      import('$lib/data/calibre'),
+      import('$lib/data/difficulty-core')
+    ])
+      .then(async ([{ loadCalibreDifficulty }, { levelOf }]) =>
+        Object.fromEntries(
+          Object.entries(await loadCalibreDifficulty()).map(([id, estimate]) => [
+            id,
+            levelOf(estimate)
+          ])
+        )
+      )
       .catch(() => ({}));
-    extras.difficulty = (await difficultyCache)[title]?.difficulty;
+
+    const book = await catalogBook(title);
+
+    extras.difficulty = book && (await difficultyCache)[book.id];
   }
   return extras;
 }

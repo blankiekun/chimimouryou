@@ -7,7 +7,7 @@
   import { account$, hasPermission } from '$lib/data/account';
   import type { WordCoverage } from '$lib/data/book-words';
   import { loadCalibreDifficulty, type CalibreDifficulty } from '$lib/data/calibre';
-  import { bookLevel } from '$lib/data/difficulty-core';
+  import { bookLevel, relativeLevel } from '$lib/data/difficulty-core';
   import { bookCoverage, getKnownSet } from '$lib/data/known-words';
   import { knownMinCount, wordList } from '$lib/data/words-met';
   import { t$ } from '$lib/i18n';
@@ -60,42 +60,26 @@
         <li class="flex flex-col gap-0.5">
           <span class="flex items-center gap-2">
             <span class="truncate font-semibold" title={book.title}>{book.title}</span>
-            {#if book.difficulty !== undefined}
-              <DifficultyBadge
-                difficulty={book.difficulty}
-                low={book.difficultyLow}
-                high={book.difficultyHigh}
-                words95={book.words95}
-              />
+            {#if level}
+              <DifficultyBadge difficulty={level.score} />
             {/if}
           </span>
-          {#if book.difficulty === undefined}
+          {#if !level}
             <span class="opacity-70">{$t$('book.noEstimate')}</span>
           {:else}
-            {#if level}
-              <span>
-                {$t$(level.v98 === null ? 'difficulty.levelBeyond' : 'difficulty.level', {
-                  score: level.score.toFixed(1),
-                  tier: level.tier,
-                  words: level.v98?.toLocaleString('en-US') ?? ''
-                })}
-              </span>
-            {/if}
-            {#if book.difficultyLow !== undefined && book.difficultyHigh !== undefined}
-              <span class="opacity-70">
-                {$t$('library.likelyRange', {
-                  low: book.difficultyLow.toFixed(1),
-                  high: book.difficultyHigh.toFixed(1)
-                })}
-              </span>
-            {/if}
-            {#if book.words95}
-              <span class="opacity-70">
-                {$t$('difficulty.words95', { count: book.words95.toLocaleString() })}
-              </span>
-            {/if}
+            <span>
+              {$t$(level.v98 === null ? 'difficulty.levelBeyond' : 'difficulty.level', {
+                words: level.v98?.toLocaleString('en-US') ?? ''
+              })}
+            </span>
             {#if words}
               <span>
+                {$t$('difficulty.forYou', {
+                  level: relativeLevel(words.share).toFixed(1),
+                  percent: (Math.floor(words.share * 1000) / 10).toFixed(1)
+                })}
+              </span>
+              <span class="opacity-70">
                 {$t$(
                   words.unlisted
                     ? 'book.wordCoverageTail'
@@ -115,6 +99,7 @@
         </li>
       {/each}
     </ul>
+    <p class="opacity-70">{$t$('difficulty.scaleNote')}</p>
     {#if Object.values(coverage).some(Boolean)}
       <p class="opacity-70">{$t$('library.wordsNote', { count: knownMinCount })}</p>
     {/if}

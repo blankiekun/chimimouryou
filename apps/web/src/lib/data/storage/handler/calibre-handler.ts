@@ -55,6 +55,7 @@ import loadCbz from '$lib/functions/file-loaders/cbz/load-cbz';
 import { loadVnFolder } from '$lib/functions/file-loaders/vn/load-vn';
 import { deleteOrphanVnCaches, isVn } from '$lib/data/vn';
 import { isManga } from '$lib/data/manga';
+import { levelOf } from '$lib/data/difficulty-core';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
 import { writableArrayLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import pLimit from 'p-limit';
@@ -261,10 +262,7 @@ export class CalibreStorageHandler extends ApiStorageHandler {
             seriesInferred: book.seriesInferred,
             tags: book.tags,
             rating: book.rating,
-            difficulty: difficulty[book.id]?.difficulty,
-            difficultyLow: difficulty[book.id]?.low,
-            difficultyHigh: difficulty[book.id]?.high,
-            words95: difficulty[book.id]?.words95 ?? undefined,
+            difficulty: levelOf(difficulty[book.id]),
             manga: (book.format === 'CBZ' || book.format === 'ZIP') && !book.vn,
             vn: !!book.vn,
             // Game folders (format VN) aren't in Calibre, but their catalog ids key estimates too.

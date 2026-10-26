@@ -32,7 +32,6 @@
     type CalibreBook,
     type CalibreDifficulty
   } from '$lib/data/calibre';
-  import { difficultyNameKey } from '$lib/data/difficulty';
   import { bookLevel, forYou, relativeLevel } from '$lib/data/difficulty-core';
   import type { CoreNumbers } from '$lib/functions/analysis/core';
   import { bookKanjiCount } from '$lib/data/book-kanji';
@@ -155,22 +154,13 @@
       ? $t$('book.unknownEvery', { count: number(Math.round(characters / you.unknownTokens)) })
       : '';
   /** Manga are estimated from their mokuro text, so one without has nothing to estimate yet. */
-  $: mangaWithoutText = kind === 'manga' && mokuro === null && scored.difficulty === undefined;
+  $: mangaWithoutText = kind === 'manga' && mokuro === null && !level;
   $: canEstimate =
     standalone &&
     (kind === 'book' || (kind === 'manga' && !!mokuro)) &&
     !localScored &&
     $analysisToolsState$.difficulty === 'ready';
   $: furiganaReady = standalone && kind === 'book' && $analysisToolsState$.furigana === 'ready';
-  $: scored = localScored
-    ? {
-        ...book,
-        difficulty: localScored.difficulty,
-        difficultyLow: localScored.low,
-        difficultyHigh: localScored.high,
-        words95: localScored.words95 ?? undefined
-      }
-    : book;
   $: canEdit = isCalibre && hasPermission($account$, 'series');
   $: canEditSeries = canEdit || localSeries;
   $: onHome = $homeBookTitles$.includes(book.title) || isContinueReading(book, $homeRemovedTitles$);
@@ -187,23 +177,15 @@
       ? bookWordGroups(listWords, estimate?.words95, knownSet, $wordMarks$)
       : undefined;
   /** The difficulty note: a few whole sentences, each only when its numbers exist */
-  $: difficultyNote =
-    scored.difficulty === undefined
-      ? ''
-      : [
-          scored.difficultyLow !== undefined && scored.difficultyHigh !== undefined
-            ? $t$('book.scoreRange', {
-                score: scored.difficulty.toFixed(1),
-                low: scored.difficultyLow.toFixed(1),
-                high: scored.difficultyHigh.toFixed(1)
-              })
-            : $t$('book.score', { score: scored.difficulty.toFixed(1) }),
-          scored.words95 ? $t$('book.words95', { count: number(scored.words95) }) : '',
-          wordStats ? coverageSentence(wordStats, $t$) : '',
-          estimate?.uniqueKanji ? $t$('book.kanji', { count: number(estimate.uniqueKanji) }) : ''
-        ]
-          .filter(Boolean)
-          .join($uiLanguage$ === 'ja' ? '' : ' ');
+  $: difficultyNote = !level
+    ? ''
+    : [
+        $t$('book.levelNote', { score: level.score.toFixed(1), tier: level.tier }),
+        wordStats ? coverageSentence(wordStats, $t$) : '',
+        estimate?.uniqueKanji ? $t$('book.kanji', { count: number(estimate.uniqueKanji) }) : ''
+      ]
+        .filter(Boolean)
+        .join($uiLanguage$ === 'ja' ? '' : ' ');
 
   /** One decimal, rounded down: 97.96% is not 98.0% */
   const percent1 = (share: number) => (Math.floor(share * 1000) / 10).toFixed(1);
@@ -626,50 +608,23 @@
           </div>
         {/if}
 
-        {#if hasDifficulty && (level || scored.difficulty !== undefined)}
+        {#if hasDifficulty && level}
           <PointBox
             label={$t$('book.difficulty')}
-            figure={level ? level.score.toFixed(1) : scored.difficulty?.toFixed(1)}
-            unit={level
-              ? $t$('book.levelOutOf', { tier: level.tier })
-              : $t$('book.outOf', { band: $t$(difficultyNameKey(scored.difficulty ?? 0)) })}
+            figure={level.score.toFixed(1)}
+            unit={$t$('book.levelOutOf', { tier: level.tier })}
           >
             <div class="details-difficulty" title={difficultyNote}>
               <div class="details-difficulty-score">
-                {#if level}
-                  <span class="details-meter details-meter-ten" aria-hidden="true">
-                    {#each [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as i (i)}
-                      <span
-                        ><span
-                          style:width="{Math.min(Math.max(level.score - i + 1, 0), 1) * 100}%"
-                        /></span
-                      >
-                    {/each}
-                  </span>
-                  {#if scored.difficulty !== undefined}
-                    <span class="details-small">
-                      {$t$('book.modelScore', { score: scored.difficulty.toFixed(1) })}
-                    </span>
-                  {/if}
-                {:else if scored.difficulty !== undefined}
-                  <span class="details-meter" aria-hidden="true">
-                    {#each [0, 1, 2, 3, 4] as i (i)}
-                      <span
-                        ><span
-                          style:width="{Math.min(Math.max(scored.difficulty - i, 0), 1) * 100}%"
-                        /></span
-                      >
-                    {/each}
-                  </span>
-                  {#if scored.difficultyLow !== undefined && scored.difficultyHigh !== undefined}
-                    <span class="details-small">
-                      {$t$('book.likely', {
-                        low: scored.difficultyLow.toFixed(1),
-                        high: scored.difficultyHigh.toFixed(1)
-                      })}
-                    </span>
-                  {/if}
-                {/if}
+                <span class="details-meter details-meter-ten" aria-hidden="true">
+                  {#each [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as i (i)}
+                    <span
+                      ><span
+                        style:width="{Math.min(Math.max(level.score - i + 1, 0), 1) * 100}%"
+                      /></span
+                    >
+                  {/each}
+                </span>
               </div>
               <dl class="details-figures">
                 {#if wordStats && !you}
@@ -678,22 +633,14 @@
                     <dd>{$t$('book.knownFigure')}</dd>
                   </div>
                 {/if}
-                {#if level}
-                  <div>
-                    <dt>{level.v98 === null ? $t$('book.v98Beyond') : number(level.v98)}</dt>
-                    <dd>{$t$(level.v98 === null ? 'book.v98BeyondFigure' : 'book.v98Figure')}</dd>
-                  </div>
-                {/if}
+                <div>
+                  <dt>{level.v98 === null ? $t$('book.v98Beyond') : number(level.v98)}</dt>
+                  <dd>{$t$(level.v98 === null ? 'book.v98BeyondFigure' : 'book.v98Figure')}</dd>
+                </div>
                 {#if estimate?.uniqueKanji}
                   <div>
                     <dt>{number(estimate.uniqueKanji)}</dt>
                     <dd>{$t$('book.kanjiFigureOnly')}</dd>
-                  </div>
-                {/if}
-                {#if scored.words95 && !level}
-                  <div>
-                    <dt>{number(scored.words95)}</dt>
-                    <dd>{$t$('book.words95Figure')}</dd>
                   </div>
                 {/if}
               </dl>
@@ -726,7 +673,7 @@
               <dt>{$t$('book.difficulty')}</dt>
               <dd>{$t$('book.mangaNoText')}</dd>
             </div>
-          {:else if hasDifficulty && scored.difficulty === undefined}
+          {:else if hasDifficulty && !level}
             <div>
               <dt>{$t$('book.difficulty')}</dt>
               <dd>

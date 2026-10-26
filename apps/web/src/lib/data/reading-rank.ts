@@ -13,6 +13,7 @@
  */
 
 import type { CalibreDifficulty } from '$lib/data/calibre';
+import { levelOf } from '$lib/data/difficulty-core';
 import type { BooksDbStatistic } from '$lib/data/database/books-db/versions/books-db';
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import { placementAt, type PlacementRecord } from '$lib/data/placement';
@@ -26,23 +27,25 @@ export interface RankTier {
   days: number;
   /** Words known for rank (`rankMarks`, `rankPlacementCutoff`) */
   words: number;
-  /** A finished real book at or above this difficulty, read with `minCoverage` known */
+  /** A finished real book at or above this 1-10 level (`levelOf`), read with `minCoverage` known */
   difficulty: number;
 }
 
 /**
- * Difficulty on jiten.moe's 0-5 scale as the library's estimates use it: of the books of 50k+
- * characters, 5% are under 2.0, the median is 3.0, 25% are over 3.3 and 3% over 3.9.
+ * Book levels on the 1-10 scale (difficulty-core.ts). The thresholds are the old 0-5 ones (2.0,
+ * 2.5, 3.0, 3.3, 3.6, 3.9) moved to the same quantiles of the library's books of 50k+ characters,
+ * rounded up, never lower: 5.5% of them are under 2.4, 24% under 4.1, 53% under 5.6, 74% under
+ * 6.7, 91% under 8.1 and 98% under 9.2 (5,739 books sampled, 2026-10).
  * Characters rise about ×2.5 a tier up to 10M; 300 reading days is about a year.
  */
 export const rankTiers: RankTier[] = [
   { ja: '見習い', characters: 0, days: 0, words: 0, difficulty: 0 },
-  { ja: '駆け出し', characters: 100_000, days: 7, words: 1_500, difficulty: 2.0 },
-  { ja: '冒険者', characters: 250_000, days: 20, words: 3_000, difficulty: 2.5 },
-  { ja: '熟練者', characters: 600_000, days: 45, words: 6_000, difficulty: 3.0 },
-  { ja: '英雄', characters: 1_500_000, days: 90, words: 10_000, difficulty: 3.3 },
-  { ja: '勇者', characters: 4_000_000, days: 180, words: 15_000, difficulty: 3.6 },
-  { ja: '魔王', characters: 10_000_000, days: 300, words: 20_000, difficulty: 3.9 }
+  { ja: '駆け出し', characters: 100_000, days: 7, words: 1_500, difficulty: 2.4 },
+  { ja: '冒険者', characters: 250_000, days: 20, words: 3_000, difficulty: 4.1 },
+  { ja: '熟練者', characters: 600_000, days: 45, words: 6_000, difficulty: 5.6 },
+  { ja: '英雄', characters: 1_500_000, days: 90, words: 10_000, difficulty: 6.7 },
+  { ja: '勇者', characters: 4_000_000, days: 180, words: 15_000, difficulty: 8.1 },
+  { ja: '魔王', characters: 10_000_000, days: 300, words: 20_000, difficulty: 9.2 }
 ];
 
 /** Characters a minute nobody reads faster than (fast readers' statistics show about 500). */
@@ -95,34 +98,33 @@ export function readingTimeByTitle(statistics: BooksDbStatistic[]) {
 }
 
 /** The estimate's figures the shape check reads. */
-export type BookShape = Pick<CalibreDifficulty, 'characters' | 'uniqueKanji'> &
-  Partial<Pick<CalibreDifficulty, 'uniqueWords' | 'tokens'>>;
+export type BookShape = Pick<CalibreDifficulty, 'characters' | 'uniqueKanji' | 'core'>;
 
 /**
- * Real-book shape: unique words, unique kanji and word tokens within the 1st-99th percentile
- * band of the library's 16,000 estimates of 50k+ characters for a book of this length (power
- * fits, as they grow slower than its characters), so a crafted text repeating rare words falls
- * outside it. 96% of real books pass (long omnibuses less often). Estimates without word totals
- * (older ones) never pass.
+ * Real-book shape: the core's different words and running words (`types`, `tokens`) and the
+ * unique kanji within the 0.5-99.5th percentile band of the library's books of 50k+ characters
+ * for a book of this length (power fits, as they grow slower than its characters; 5,739 books
+ * sampled), so a crafted text repeating rare words falls outside it. 96% of real books pass (long
+ * omnibuses less often). Estimates without core numbers never pass.
  */
 export const bookShape = {
   characters: 50_000,
-  uniqueWords: [2, 5.5, 0.63] as const,
+  types: [2.25, 5.8, 0.61] as const,
   kanji: [22, 50, 0.32] as const,
-  tokens: [0.21, 0.3, 1] as const
+  tokens: [0.235, 0.31, 1] as const
 };
 
 const within = (value: number, characters: number, [low, high, power]: readonly number[]) =>
   value >= low * characters ** power && value <= high * characters ** power;
 
-export function realBook({ characters, uniqueKanji, uniqueWords, tokens }: BookShape) {
-  if (!uniqueWords || !tokens) return false;
+export function realBook({ characters, uniqueKanji, core }: BookShape) {
+  if (!core?.types || !core.tokens) return false;
 
   return (
     characters >= bookShape.characters &&
-    within(uniqueWords, characters, bookShape.uniqueWords) &&
+    within(core.types, characters, bookShape.types) &&
     within(uniqueKanji, characters, bookShape.kanji) &&
-    within(tokens, characters, bookShape.tokens)
+    within(core.tokens, characters, bookShape.tokens)
   );
 }
 
@@ -152,7 +154,7 @@ export function rankMarks(marks: WordMarks, totals: Record<string, number>) {
 }
 
 export interface RankBook {
-  estimate: BookShape & Pick<CalibreDifficulty, 'difficulty' | 'engine'>;
+  estimate: BookShape & Pick<CalibreDifficulty, 'engine'>;
   /** Share read (words-met's `readFraction`) */
   fraction: number;
   /** Seconds of reading time in the statistics */
@@ -172,7 +174,7 @@ export interface RankInput {
 /** Whether the estimate came from this release's difficulty engine; injected, see `readingRank`. */
 export type CanonicalCheck = (estimate: RankBook['estimate']) => boolean;
 
-/** The hardest difficulty among the books that count for the gate (0 when none). */
+/** The hardest 1-10 level among the books that count for the gate (0 when none). */
 export function hardestBook(books: RankBook[], canonical: CanonicalCheck = () => true) {
   return Math.max(
     0,
@@ -185,7 +187,7 @@ export function hardestBook(books: RankBook[], canonical: CanonicalCheck = () =>
           plausibleFinish(book.estimate.characters, book.seconds) &&
           canonical(book.estimate)
       )
-      .map((book) => book.estimate.difficulty)
+      .map((book) => levelOf(book.estimate) ?? 0)
   );
 }
 

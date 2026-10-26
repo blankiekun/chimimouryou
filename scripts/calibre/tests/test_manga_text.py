@@ -29,21 +29,16 @@ class MangaTextTest(unittest.TestCase):
                 {'id': 3, 'title': '漫画 2', 'format': 'ZIP', 'size': 10, 'added': 0},
                 {'id': 4, 'title': 'ゲーム', 'format': 'ZIP', 'size': 10, 'added': 0, 'vn': True},
             ]}, f)
-        self.scored, self.cored = [], []
+        self.scored = []
+        self.characters = 2000
 
         def run_in_pools(books, task, cancel, initializer=None):
             for book in books:
-                if task is service._core_estimate:
-                    self.cored.append(book['id'])
-                    yield book, (book['id'], {'v': service.core.CORE_VERSION})
-                    continue
                 self.scored.append(book['id'])
-                text = service.manga_text(book['id']) if book.get('manga') else 'x' * 2000
+                text = service.manga_text(book['id']) if book.get('manga') else 'x' * self.characters
                 yield book, (book['id'], None if len(text) < 10 else {
-                    'model': service.MODEL_VERSION, 'words': service.WORDS_VERSION, 'engine': 'e1',
-                    'core': {'v': service.core.CORE_VERSION},
+                    'engine': 'e1', 'characters': len(text), 'core': {'v': service.core.CORE_VERSION},
                     **({'text': book['text']} if book.get('manga') else {})})
-                open(os.path.join(service.WORDS_DIR, f"{book['id']}.json.gz"), 'w').close()
         service.run_in_pools = run_in_pools
 
     def tearDown(self):
@@ -61,14 +56,17 @@ class MangaTextTest(unittest.TestCase):
         self.service.runner.compute(ids)
         return self.scored
 
-    def test_estimates_without_core_get_only_the_core(self):
-        self.compute()
-        results = self.service.load_results()
-        del results['books']['1']['core']
-        self.service.save_results(results)
+    def test_a_new_engine_redoes_estimates_and_other_text_drops_the_word_list(self):
+        service = self.service
+        self.assertEqual(self.compute(), [1, 4])
         self.assertEqual(self.compute(), [])
-        self.assertEqual(self.cored, [1])
-        self.assertEqual(self.service.load_results()['books']['1']['core'], {'v': self.service.core.CORE_VERSION})
+        service.write_words(1, {'words': [], 'uniqueWords': 0, 'tokens': 0})
+        service.current_engine = lambda: 'e2'
+        self.assertEqual(self.compute(), [1, 4])
+        self.assertTrue(os.path.exists(service.words_path(1)))  # same text: the list stays
+        self.characters = 3000
+        self.compute([1])
+        self.assertFalse(os.path.exists(service.words_path(1)))
 
     def test_text_is_a_line_per_bubble(self):
         self.write_text(2, [{'blocks': [{'lines': ['吾輩は', '猫である。']}, {'lines': [' ']}]},

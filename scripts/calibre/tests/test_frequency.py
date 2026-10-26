@@ -342,8 +342,9 @@ class SaveWordsTest(unittest.TestCase):
             analysis.words[w.key, w.form] = [w, count]
         # The totals count the rows past the cap (稀) too.
         self.assertEqual(service.save_words(7, analysis, FrequencyTable({'猫': 1200})), (3, 9))
-        with gzip.open(os.path.join(service.WORDS_DIR, '7.json.gz'), 'rt', encoding='utf-8') as f:
-            self.assertEqual(json.load(f), [['走る', None, 5, None, '走る'], ['猫', 'ねこ', 3, 1200, '猫']])
+        with gzip.open(service.words_path(7), 'rt', encoding='utf-8') as f:
+            self.assertEqual(json.load(f), {'words': [['走る', None, 5, None, '走る'], ['猫', 'ねこ', 3, 1200, '猫']],
+                                            'uniqueWords': 3, 'tokens': 9})
 
     def test_totals_leave_noise_out(self):
         import importlib.util
@@ -384,8 +385,8 @@ class SaveWordsTest(unittest.TestCase):
         service.save_words(8, analysis, FrequencyTable({'他': 145038, '箱': 2000, '顔': 113},
                                                        {('他', 'ほか'): 382, ('他', 'た'): 145038, ('箱', 'はこ'): 2000,
                                                         ('顔', 'かお'): 113, ('顔', 'がお'): 75124}))
-        with gzip.open(os.path.join(service.WORDS_DIR, '8.json.gz'), 'rt', encoding='utf-8') as f:
-            self.assertEqual(json.load(f), [['他', 'ほか', 5, 382, '他'], ['走る', 'はしる', 4, None, '走る'],
+        with gzip.open(service.words_path(8), 'rt', encoding='utf-8') as f:
+            self.assertEqual(json.load(f)['words'], [['他', 'ほか', 5, 382, '他'], ['走る', 'はしる', 4, None, '走る'],
                                             ['箱', 'はこ', 3, 2000, '箱'], ['他', 'た', 2, 145038, '他'],
                                             ['顔', 'がお', 1, 113, '顔']])
 
@@ -414,7 +415,7 @@ class SaveWordsTest(unittest.TestCase):
         # Sudachi's reading of the form, for words met only conjugated.
         analysis.form_readings = {(mutter.key, '呟く'): 'つぶやく', (know.key, 'わかる'): 'わからない'}
         service.save_words(5, analysis, FrequencyTable({'有る': 900, '或る': 300}))
-        with gzip.open(os.path.join(service.WORDS_DIR, '5.json.gz'), 'rt', encoding='utf-8') as f:
+        with gzip.open(service.words_path(5), 'rt', encoding='utf-8') as f:
             # わかる takes the form's reading in the book, not Sudachi's.
-            self.assertEqual(json.load(f), [['ある', 'ある', 8, 300, '有る'], ['わかる', 'わかる', 5, None, '分かる'],
+            self.assertEqual(json.load(f)['words'], [['ある', 'ある', 8, 300, '有る'], ['わかる', 'わかる', 5, None, '分かる'],
                                             ['呟く', 'つぶやく', 3, None, '呟く']])

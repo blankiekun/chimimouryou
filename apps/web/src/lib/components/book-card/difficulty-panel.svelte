@@ -3,6 +3,7 @@
   import { buttonClasses } from '$lib/css-classes';
   import { account$ } from '$lib/data/account';
   import { difficultyApiUrl } from '$lib/data/calibre';
+  import { levelTier } from '$lib/data/difficulty';
   import { isCanonicalEstimate } from '$lib/data/difficulty-engine';
   import { t$, tr } from '$lib/i18n';
   import { onDestroy, onMount } from 'svelte';
@@ -183,8 +184,8 @@
 <div class="flex flex-col gap-4" class:admin class:max-w-xl={!admin} class:text-sm={!admin}>
   <p class:tool-text={admin}>
     {$t$('library.difficultyIntro', {
-      beginner: $t$('difficulty.beginner'),
-      insane: $t$('difficulty.insane')
+      first: levelTier(1),
+      last: levelTier(10)
     })}
   </p>
 

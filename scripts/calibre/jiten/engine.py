@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """The difficulty engine's fingerprint: a sha256 over everything that changes an estimate (the
-models and tables, ENGINE_VERSION for the scoring Python, the frequency list's content, yurigana's version, the Sudachi
+1-10 scale and the deconjugation rules, ENGINE_VERSION for the scoring Python, the frequency list's content, yurigana's version, the Sudachi
 dictionary, and a reading-model table if the server adds one; not term dictionaries, which change
 word lists' readings only, not the score). The service stores
 it on each estimate as `engine`, and the analysis tools' manifest names it for the browser's
 (scripts/analysis-tools/build.sh). Runtimes (CPython or Pyodide, sudachipy or sudachi.rs wasm,
-onnxruntime or onnxruntime-web) are left out: they give the same numbers (checked on 20 Aozora Bunko
+core.py or core.ts) are left out: they give the same numbers (checked on 20 Aozora Bunko
 books when this was added).
 
 `python3 engine.py` prints this release's canonical fingerprint (the bundled list, the pinned
@@ -24,14 +24,16 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 # Bump when a change to CODE_FILES changes any estimate's numbers or word list, then
 # `python3 engine.py --record` and regenerate difficulty-engine.json. A refactor that keeps every
 # output the same only re-records (`--record`), so library estimates stay current.
-ENGINE_VERSION = 3
+# 4: the estimate is the fast core (core.py: V98 and its histogram); the GBDT model is gone.
+ENGINE_VERSION = 4
 # The scoring path's Python, on the server and in Pyodide alike (readings_file.extract gives the
-# browser its text): in the fingerprint through ENGINE_VERSION, guarded by engine-code.json.
-CODE_FILES = ('features.py', 'compound_merge.py', 'frequency.py', 'word_list.py', 'deconjugator.py', 'readings_file.py')
-# What the scoring reads, by content: the models, the tables and the deconjugation rules (vendored
-# from Jiten: data, and any edit to it is a rule change).
-DATA_FILES = ('deconjugator.json', 'goshu.json.gz', 'kanji-grades.json', 'chimi-difficulty.onnx',
-              'chimi-difficulty-low.onnx', 'chimi-difficulty-high.onnx', 'chimi-difficulty-range.json')
+# browser its text; core.ts is checked against core.py by the shared fixture): in the fingerprint
+# through ENGINE_VERSION, guarded by engine-code.json.
+CODE_FILES = ('core.py', 'features.py', 'compound_merge.py', 'frequency.py', 'word_list.py', 'deconjugator.py',
+              'readings_file.py')
+# What the estimate reads, by content: the 1-10 scale and the deconjugation rules (vendored from
+# Jiten: data, and any edit to it is a rule change; they shape the word totals of local estimates).
+DATA_FILES = ('core-scale.json', 'deconjugator.json')
 CODE_RECORD = os.path.join(HERE, 'engine-code.json')
 BUNDLED_FREQUENCY_LIST = os.path.join(HERE, 'data', 'jiten_freq_global.zip')
 REQUIREMENTS = os.path.join(HERE, 'requirements.txt')

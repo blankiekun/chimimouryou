@@ -18,7 +18,6 @@ import {
 import { parseBookHtml } from '$lib/functions/file-loaders/utils/sanitize-book-html';
 import { readerDb } from '$lib/data/reader-db';
 import type { AnalysisMessage } from './analysis.worker';
-import type { ScoreMessage } from './analysis-score.worker';
 
 /*
  * The analysis bench (`pnpm bench:analysis`, vitest.bench.config.js, results also in .analysis-bench/results.txt): the real tools in Chromium on
@@ -82,7 +81,7 @@ it('times the analysis of a book', async () => {
 
   report(`Book: 坊っちゃん, ${html.replace(/<rt[^>]*>.*?<\/rt>|<[^>]+>/gs, '').length} characters`);
 
-  // Stages: a fresh analysis worker and scoring worker each run, as a book opened cold.
+  // Stages: a fresh analysis worker each run, as a book opened cold.
   for (let run = 0; run < RUNS; run++) {
     const start = performance.now();
     const worker = new Worker(new URL('./analysis.worker.ts', import.meta.url), { type: 'module' });
@@ -92,21 +91,6 @@ it('times the analysis of a book', async () => {
     const afterWords = performance.now();
 
     worker.terminate();
-
-    const scorer = new Worker(new URL('./analysis-score.worker.ts', import.meta.url), {
-      type: 'module'
-    });
-    const { features } = JSON.parse(words.json) as { features: number[] };
-    const scoreStart = performance.now();
-
-    await ask<ScoreMessage>(scorer, { base, features }, 'scores');
-
-    const warmStart = performance.now();
-
-    await ask<ScoreMessage>(scorer, { base, features }, 'scores');
-    record('score: warm (3 models)', performance.now() - warmStart);
-    record('score: cold (onnxruntime + 3 sessions)', warmStart - scoreStart);
-    scorer.terminate();
 
     const r = readings.timings;
     const w = words.timings;
@@ -119,7 +103,7 @@ it('times the analysis of a book', async () => {
     record('readings part: Python (yurigana)', r.analyse - r.tokenize);
     record('readings part: Sudachi tokenize', r.tokenize);
     record('frequency pack', w.packs);
-    record('words part: Python (yurigana + features)', w.analyse - w.tokenize);
+    record('words part: Python (yurigana)', w.analyse - w.tokenize);
     record('words part: Sudachi tokenize', w.tokenize);
     record('total: cold worker, both parts', afterWords - start);
     // Bytes / 1000: the seconds column then shows MB.
@@ -168,19 +152,8 @@ it('times the analysis of a book', async () => {
     );
 
     worker.terminate();
-
-    const scorer = new Worker(new URL('./analysis-score.worker.ts', import.meta.url), {
-      type: 'module'
-    });
-
-    await ask<ScoreMessage>(
-      scorer,
-      { base, features: (JSON.parse(words.json) as { features: number[] }).features },
-      'scores'
-    );
-    scorer.terminate();
     record(
-      'before the core: 吾輩は猫である, cold words part + score (1 run)',
+      `吾輩は猫である, cold words part (1 run, ${JSON.parse(words.json).words.length} rows)`,
       performance.now() - start
     );
   }
@@ -202,7 +175,7 @@ it('times the analysis of a book', async () => {
       const start = performance.now();
 
       expect(await makeReadings('botchan', html)).toBeTruthy();
-      expect((await localEstimate('botchan', html))?.difficulty).toBeTypeOf('number');
+      expect((await localEstimate('botchan', html))?.core?.v98).toBeTypeOf('number');
       record(`${tier}: open a book (readings + estimate)`, performance.now() - start);
       await sleep(11_000);
       await clearAnalyses();

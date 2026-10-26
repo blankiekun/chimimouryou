@@ -31,7 +31,7 @@ One self-hosted place where a learner's whole library (books, manga, visual nove
 
 - Static SvelteKit app (no server-side rendering at runtime); Python services for accounts, import, catalog, difficulty and manga text.
 - Reading: vertical and horizontal text, paginated and continuous modes, furigana styles (including Known and generated furigana), highlights and notes, search, audiobooks and AI voice.
-- Learner tools: difficulty estimates (chimi-difficulty), known-word coverage, New words, words met, Read next, statistics, Anki mining.
+- Learner tools: difficulty estimates (a 1-10 level from V98, and a For you level), known-word coverage, New words, words met, Read next, statistics, Anki mining.
 - Library: Home (dashboard, Continue reading, Read next, My books) and Store (books or series), book pages with details from AniList/VNDB/Jiten.
 - Must stay Yomitan-friendly: the book DOM is never modified for highlights; VN text is laid out as real text over the canvas.
 - Strict CSP: no inline scripts or `on*=` attributes.

@@ -142,12 +142,13 @@ section in paginated mode. `annotations.json` is merged per highlight (newest
 - **Import** (`import/service.py`): a queue that adds uploaded files to Calibre
   with `calibredb add`, one at a time, then rebuilds the catalog; the only writer
   of `metadata.db`.
-- **Difficulty** (`jiten/service.py`): on demand only; worker pools run Sudachi,
-  Jiten's features plus our own (`EXTRA_FEATURES`) and the chimi-difficulty ONNX models
-  (estimate and 10-90% range); results in `state/difficulty/difficulty.json`,
+- **Difficulty** (`jiten/service.py`): on demand only; worker pools run Sudachi
+  and the fast core (`core.py`: V98, shown on a 1-10 scale, and a log-rank histogram);
+  results in `state/difficulty/difficulty.json`,
   each book's kanji counts in `state/difficulty/kanji/` (`GET kanji/ID`, for each
   reader's own kanji coverage, compared in the browser with the kanji they met) and its
-  2,000 most frequent words with frequency ranks in `state/difficulty/words/` (`GET words/ID`).
+  2,000 most frequent words with frequency ranks in `state/difficulty/words/` (`GET words/ID`,
+  made on first request by a worker of its own).
   How those words get their readings (yurigana's `Reader`: book ruby, context rules, a reading model, defaults, Sudachi):
   [docs/READINGS.md](docs/READINGS.md); the engine is the
   [yurigana](https://github.com/blankiekun/yurigana) package (pinned tag, in the difficulty

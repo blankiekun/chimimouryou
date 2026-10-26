@@ -1,22 +1,18 @@
-"""Jiten's difficulty features, computed locally (Python port of Jiten.Core/ML/MLHelper.cs
-and the deck statistics in Jiten.Parser/Parser.cs, Apache-2.0).
+"""A book's text and its analysis into words for the word lists (word_list.py): a Python port of the
+word grouping in Jiten.Parser/Parser.cs (Apache-2.0), which once fed the retired difficulty model
+(chimi-difficulty; the estimate is core.py now).
 
-Jiten parses text into JMdict words with its own Sudachi-based parser and looks word
-frequencies up in its database. Here, Sudachi tokens are grouped into words the same
-way (a verb or adjective together with its auxiliaries is one conjugated word, suru
-verbs are merged), words are identified by Sudachi's normalised form, and frequencies
-come from Jiten's Yomitan frequency list (see frequency.py).
-
-EXTRA_FEATURES are not Jiten's: known-word coverage, syntax, kanji and furigana
-measures from the Japanese readability literature (distil/README.md).
+Sudachi tokens are grouped into words as Jiten does (a verb or adjective together with its
+auxiliaries is one conjugated word, suru verbs are merged), words are identified by Sudachi's
+normalised form, and frequencies come from Jiten's Yomitan frequency list (see frequency.py).
+The Analysis still counts the model's other inputs (sentences, origins, conjugations, MATTR);
+nothing reads them now.
 """
 import gzip
 import json
 import os
-import math
 import posixpath
 import re
-import statistics
 import zipfile
 from collections import Counter, defaultdict, deque
 from dataclasses import dataclass, field
@@ -29,50 +25,15 @@ from yurigana.readings import is_kanji, to_hiragana  # noqa: F401
 from yurigana.text import _count_ruby, _mark_ruby, _take_hints, aozora_text, book_text  # noqa: F401
 from yurigana.tokens import SudachiTokenizer, Token  # noqa: F401
 
-# Feature order of Jiten's model (DifficultyPredictor.cs); chimi-difficulty appends EXTRA_FEATURES.
-FEATURE_ORDER = [
-    'Ttr', 'AverageSentenceLength', 'DialoguePercentage', 'KanjiRatio',
-    'KangoPercentage', 'WagoPercentage', 'GairaigoPercentage', 'VerbPercentage', 'ParticlePercentage',
-    'AvgWordPerSentence', 'ReadabilityScore',
-    'LogicalConnectorRatio', 'ModalMarkerRatio', 'RelativeClauseMarkerRatio', 'MetaphorMarkerRatio',
-    'AvgLogFreqRank', 'StdLogFreqRank', 'AvgLogObsFreq', 'StdLogObsFreq',
-    'LowFreqRankPerc', 'AvgReadingFreqRank', 'MedianReadingFreqRank', 'AvgReadingObsFreq',
-    'MedianReadingObsFreq', 'AvgReadingFreqPerc', 'AvgCustomScorePerWord',
-    'StdCustomWordScore', 'PercCustomScoreAboveSoftcapStart',
-    'ratio_negative_conj', 'ratio_polite_conj', 'ratio_conditional_conj', 'ratio_passive_causative_conj',
-    'ratio_potential_conj', 'ratio_volitional_conj', 'ratio_imperative_conj', 'ratio_te_form_conj',
-    'ratio_past_conj', 'ratio_stem_conj', 'ratio_garu_conj', 'ratio_seemingness_conj', 'ratio_shimau_conj',
-    'ratio_contracted_conj', 'ratio_other_conj', 'RatioConjugations', 'ratio_noun_pos', 'ratio_verb_pos',
-    'ratio_adj_pos', 'ratio_adv_pos', 'ratio_conjunc_pos', 'ratio_aux_pos', 'ratio_inter_pos',
-    'ratio_fix_pos', 'ratio_pn_pos', 'ratio_exp_pos', 'ratio_other_pos',
-]
-
-# Not Jiten's; appended to FEATURE_ORDER as model inputs (compute_extra_features).
-EXTRA_FEATURES = [
-    'LogCharacters', 'LogUniqueKanji',
-    'CoverageRank90', 'CoverageRank95', 'CoverageRank98', 'Mattr',
-    'LineSentenceLength', 'PredicatesPerSentence', 'RelativeClausesPerSentence', 'HiraganaRatio',
-    'NonJoyoKanjiShare', 'UpperJoyoKanjiShare', 'RubyKanjiShare', 'RubyKatakanaShare',
-]
 # Moving-average type/token ratio window (Covington & McFall 2010).
 MATTR_WINDOW = 500
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-# 常用 kanji -> school grade (1-6 教育漢字, 8 the rest), from KANJIDIC2 (distil/make_tables.py).
-with open(os.path.join(HERE, 'kanji-grades.json'), encoding='utf-8') as _f:
-    KANJI_GRADES = json.load(_f)
 # 語種 of kanji-spelled words from UniDic (distil/make_tables.py): 和, 漢, 外 or 混.
 with gzip.open(os.path.join(HERE, 'goshu.json.gz'), 'rt', encoding='utf-8') as _f:
     GOSHU = json.load(_f)
 GOSHU_ORIGIN = {'和': 'wago', '漢': 'kango', '外': 'gairaigo', '混': 'unknown'}
 
-# MLConfig.cs
-LOW_FREQ_RANK_THRESHOLD = 30000
-RANK_BASE = 5000
-RANK_EXP_BASE = 10000
-RANK_SOFTCAP_START = 90000
-RANK_SOFTCAP_STEP = 10000
-RANK_HARDCAP = 115000
 
 CONJUGATION_CATEGORIES = {
     'negative': ['negative', 'slurred negative', 'adverbial negative', 'without doing so', 'archaic negative',
@@ -449,221 +410,3 @@ def count_sentences(text: str) -> int:
             count += 1
             seen_ender = False
     return count + (1 if pending else 0)
-
-
-# ---------------------------------------------------------------------------
-# Features
-
-def _score_hardcap() -> float:
-    score = RANK_BASE
-    threshold = RANK_BASE
-    multiplier = 1.0
-    while threshold < RANK_SOFTCAP_START:
-        multiplier *= 2
-        next_threshold = threshold + RANK_EXP_BASE
-        score += (RANK_EXP_BASE if next_threshold <= RANK_SOFTCAP_START else RANK_SOFTCAP_START - threshold) * multiplier
-        threshold = next_threshold
-    multiplier = 2 ** math.ceil((RANK_SOFTCAP_START - RANK_BASE) / RANK_EXP_BASE)
-    threshold = RANK_SOFTCAP_START
-    while threshold < RANK_HARDCAP:
-        next_threshold = threshold + RANK_SOFTCAP_STEP
-        score += (RANK_SOFTCAP_STEP if next_threshold <= RANK_HARDCAP else RANK_HARDCAP - threshold) * multiplier
-        threshold = next_threshold
-    return score
-
-
-SCORE_HARDCAP = _score_hardcap()
-
-
-def custom_rank_score(rank: int) -> float:
-    if rank <= RANK_BASE:
-        return float(rank)
-    if rank >= RANK_HARDCAP:
-        return SCORE_HARDCAP
-    score = float(RANK_BASE)
-    threshold = RANK_BASE
-    multiplier = 1.0
-    while threshold < RANK_SOFTCAP_START and threshold < rank:
-        multiplier *= 2
-        next_threshold = threshold + RANK_EXP_BASE
-        score += (min(rank, next_threshold) - threshold) * multiplier
-        threshold = next_threshold
-        if rank <= threshold:
-            return score
-    while threshold < RANK_HARDCAP and threshold < rank:
-        next_threshold = threshold + RANK_SOFTCAP_STEP
-        score += (min(rank, next_threshold) - threshold) * multiplier
-        threshold = next_threshold
-        if rank <= threshold:
-            return score
-    return score
-
-
-def _mean(values):
-    return statistics.fmean(values) if values else math.nan
-
-
-def _median(values):
-    return statistics.median(values) if values else math.nan
-
-
-def _stdev(values):
-    """Sample standard deviation in floats (statistics.stdev's exact fractions were ~2% of an estimate)."""
-    n = len(values)
-    if n < 2:
-        return math.nan
-    mean = math.fsum(values) / n
-    return math.sqrt(math.fsum([(x - mean) * (x - mean) for x in values]) / (n - 1))
-
-
-def compute_features(analysis: Analysis, frequency) -> dict:
-    """The 55 model features. `frequency` provides word(key) and form(key, form) lookups."""
-    text = analysis.text
-    words = list(analysis.words.values())
-    word_count = float(analysis.word_count)
-    f: dict[str, float] = {}
-
-    character_count = len(TOKEN_CLEAN.sub('', text))
-    sentence_count = analysis.sentence_count
-    f['Ttr'] = len(words) / word_count if word_count else 0
-    f['AverageSentenceLength'] = 0 if sentence_count in (0, 1) else character_count / sentence_count
-
-    without_punctuation = len(TOKEN_CLEAN.sub('', text))
-    without_dialogue = len(TOKEN_CLEAN.sub('', DIALOGUE.sub('', text)))
-    f['DialoguePercentage'] = (without_punctuation - without_dialogue) / without_punctuation * 100 if without_punctuation else 0
-
-    f['KanjiRatio'] = sum(1 for c in text if is_kanji(c)) / len(text) if text else 0
-
-    # Readability (jreadability), MLHelper.ExtractReadabilityScore
-    def occurrences(predicate):
-        return sum(n for w, n in words if predicate(w))
-
-    kango = 100 * occurrences(lambda w: w.origin == 'kango') / word_count
-    wago = 100 * occurrences(lambda w: w.origin == 'wago') / word_count
-    gairaigo = 100 * occurrences(lambda w: w.origin == 'gairaigo') / word_count
-    verb = 100 * occurrences(lambda w: w.pos == 'verb') / word_count
-    particle = occurrences(lambda w: w.pos == 'particle') / word_count
-    per_sentence = word_count / sentence_count if sentence_count > 0 else 5
-    f.update(KangoPercentage=kango, WagoPercentage=wago, GairaigoPercentage=gairaigo, VerbPercentage=verb,
-             ParticlePercentage=particle, AvgWordPerSentence=per_sentence,
-             # jReadability takes particles as a percentage, like the other shares.
-             ReadabilityScore=per_sentence * -0.056 + kango * -0.126 + wago * -0.042 + verb * -0.145
-             + particle * 100 * -0.044 + 11.724)
-
-    f['LogicalConnectorRatio'] = analysis.markers['logical'] / word_count
-    f['ModalMarkerRatio'] = analysis.markers['modal'] / word_count
-    f['RelativeClauseMarkerRatio'] = analysis.markers['relative'] / word_count
-    f['MetaphorMarkerRatio'] = analysis.markers['metaphor'] / word_count
-
-    # Frequency statistics, MLHelper.ExtractFrequencyStats
-    ranks, obs, reading_ranks, reading_obs, reading_perc, custom = [], [], [], [], [], []
-    low_rank = 0
-    above_softcap = 0
-    custom_sum = 0.0
-    softcap_score = custom_rank_score(RANK_SOFTCAP_START)
-    for word, n in words:
-        data = frequency.word(word.key, word.reading) if word.pos != 'name' else None
-        if not data:
-            continue
-        rank, observed = data
-        score = custom_rank_score(rank)
-        custom.extend([score] * n)
-        custom_sum += score * n
-        if score >= softcap_score:
-            above_softcap += n
-        ranks.extend([math.log(rank + 1)] * n)
-        obs.extend([math.log(observed + 1)] * n)
-        if rank > LOW_FREQ_RANK_THRESHOLD:
-            low_rank += n
-        form = frequency.form(word.key, word.form)
-        if form:
-            form_rank, form_observed, form_percentage = form
-            reading_ranks.extend([math.log(form_rank + 1)] * n)
-            reading_obs.extend([math.log(form_observed + 1)] * n)
-            reading_perc.extend([form_percentage] * n)
-
-    f['AvgLogFreqRank'] = _mean(ranks)
-    f['StdLogFreqRank'] = _stdev(ranks)
-    f['AvgLogObsFreq'] = _mean(obs)
-    f['StdLogObsFreq'] = _stdev(obs)
-    f['LowFreqRankPerc'] = low_rank / word_count
-    f['AvgReadingFreqRank'] = _mean(reading_ranks)
-    f['MedianReadingFreqRank'] = _median(reading_ranks)
-    f['AvgReadingObsFreq'] = _mean(reading_obs)
-    f['MedianReadingObsFreq'] = _median(reading_obs)
-    f['AvgReadingFreqPerc'] = _mean(reading_perc)
-    f['AvgCustomScorePerWord'] = custom_sum / word_count
-    f['StdCustomWordScore'] = _stdev(custom)
-    f['PercCustomScoreAboveSoftcapStart'] = above_softcap / word_count
-
-    # Conjugation and part-of-speech statistics, MLHelper.ExtractConjugationStats.
-    # As in Jiten, only words with conjugations count, using their first occurrence.
-    conj_counts = dict.fromkeys(CONJUGATION_CATEGORIES, 0)
-    pos_counts = dict.fromkeys(POS_CATEGORIES, 0)
-    total_conjugations = 0
-    for word, n in words:
-        if not word.conjugations:
-            continue
-        for detail in word.conjugations:
-            total_conjugations += n
-            conj_counts[CONJUGATION_DETAIL_TO_CATEGORY.get(detail, 'other')] += n
-        pos_counts[word.pos if word.pos in pos_counts else 'other'] += n
-    for category, count in conj_counts.items():
-        f[f'ratio_{category}_conj'] = count / word_count
-    for category, count in pos_counts.items():
-        f[f'ratio_{category}_pos'] = count / word_count
-    f['RatioConjugations'] = total_conjugations / word_count
-
-    return f
-
-
-def _coverage_rank(ranked: list, share: float) -> float:
-    """Frequency rank a reader must know up to for `share` of the tokens; `ranked` is sorted
-    (rank, occurrences). Learners need about 95-98% known words to read unaided."""
-    total = sum(n for _, n in ranked)
-    covered = 0
-    for rank, n in ranked:
-        covered += n
-        if covered >= share * total:
-            return rank
-    return ranked[-1][0] if ranked else math.nan
-
-
-def compute_extra_features(analysis: Analysis, frequency, ruby: dict | None = None) -> dict:
-    """EXTRA_FEATURES. `ruby` is the furigana count from book_text."""
-    text = analysis.text
-    ruby = ruby or {}
-    kanji = [c for c in text if is_kanji(c)]
-    unique_kanji = len(set(kanji))
-    sentences = max(analysis.line_sentence_count, 1)
-
-    # Words without a rank are mostly names and numbers, skipped as in the frequency features.
-    by_rank = Counter()
-    for word, n in analysis.words.values():
-        data = frequency.word(word.key, word.reading) if word.pos != 'name' else None
-        if data:
-            by_rank[data[0]] += n
-    ranked = sorted(by_rank.items())
-    content = len(TOKEN_CLEAN.sub('', text)) or 1
-
-    return {
-        'LogCharacters': math.log(max(len(TOKEN_CLEAN.sub('', text)), 1)),
-        'LogUniqueKanji': math.log(max(unique_kanji, 10)),
-        'CoverageRank90': math.log(_coverage_rank(ranked, 0.90)),
-        'CoverageRank95': math.log(_coverage_rank(ranked, 0.95)),
-        'CoverageRank98': math.log(_coverage_rank(ranked, 0.98)),
-        'Mattr': analysis.mattr,
-        'LineSentenceLength': content / sentences,
-        'PredicatesPerSentence': analysis.predicates / sentences,
-        'RelativeClausesPerSentence': analysis.relative_clauses / sentences,
-        'HiraganaRatio': len(HIRAGANA.findall(text)) / content,
-        'NonJoyoKanjiShare': sum(1 for c in kanji if c not in KANJI_GRADES) / len(kanji) if kanji else 0,
-        'UpperJoyoKanjiShare': sum(1 for c in kanji if KANJI_GRADES.get(c) == 8) / len(kanji) if kanji else 0,
-        'RubyKanjiShare': min(ruby.get('kanji', 0) / len(kanji), 1) if kanji else 0,
-        'RubyKatakanaShare': ruby.get('katakana', 0) / ruby['ruby'] if ruby.get('ruby') else 0,
-    }
-
-
-def words_for_coverage(extra: dict) -> int:
-    """Top-N words a reader needs to know for 95% of the book's words."""
-    return int(round(math.exp(extra['CoverageRank95'])))

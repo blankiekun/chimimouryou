@@ -196,8 +196,11 @@ export function seriesGroups(bookCards: BookCardProps[]): SeriesGroup[] {
     .sort((a, b) => a.series.localeCompare(b.series, 'ja'));
 }
 
-/** Read next: books this close to the recent finished books' median difficulty */
-const readNextRange = 0.3;
+/**
+ * Read next: books this close to the recent finished books' median 1-10 level (the 0-5 score's
+ * ±0.3 at the same library quantiles)
+ */
+const readNextRange = 1;
 // shortcut: only the books closest in difficulty get a coverage worked out (one word list
 // fetch each); rank the whole range once coverages are computed server-side.
 const readNextPoolSize = 40;
@@ -245,7 +248,7 @@ export function standaloneReadNext(cards: BookCardProps[], limit = 12) {
 
 /**
  * Home's Read next candidates: the next unread volume of each series the reader has
- * started, and the unread books within ±0.3 of the median difficulty of the last 3
+ * started, and the unread books within ±1 of the median 1-10 level of the last 3
  * finished books (closest first, at most `readNextPoolSize`). Nothing when no finished
  * book has a difficulty estimate.
  */

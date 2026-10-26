@@ -6,19 +6,19 @@
 
 import { describe, expect, it } from 'vitest';
 import { translate } from '$lib/i18n';
-import { difficultyDescriptionKey, difficultyNameKey } from './difficulty';
+import { levelGroup, levelGroupKey, levelTier } from './difficulty';
 
-describe('difficulty bands', () => {
-  it('follows the band of the score, clamped to the scale', () => {
-    expect(difficultyDescriptionKey(-1)).toBe('difficulty.beginnerHint');
-    expect(difficultyDescriptionKey(0.99)).toBe('difficulty.beginnerHint');
-    expect(difficultyNameKey(2.4)).toBe('difficulty.average');
-    expect(difficultyNameKey(5)).toBe('difficulty.insane');
-    expect(difficultyDescriptionKey(7)).toBe('difficulty.insaneHint');
-  });
-
-  it('names the bands in English or Japanese', () => {
-    expect(translate('en', difficultyNameKey(0))).toBe('Beginner');
-    expect(translate('ja', difficultyNameKey(1.5))).toBe('初級');
+describe('book levels', () => {
+  it('names the tier of the whole step and groups two steps, clamped to the scale', () => {
+    expect([0.5, 1, 5.99, 10, 11].map(levelTier)).toEqual([
+      'Slime',
+      'Slime',
+      'Ogre',
+      'Demon King',
+      'Demon King'
+    ]);
+    expect([1, 2.99, 3, 8.5, 10].map(levelGroup)).toEqual([0, 0, 1, 3, 4]);
+    expect(translate('en', levelGroupKey(4))).toBe('Levels 9–10');
+    expect(translate('ja', levelGroupKey(0))).toBe('レベル1〜2');
   });
 });

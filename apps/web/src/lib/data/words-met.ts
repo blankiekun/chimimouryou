@@ -25,7 +25,10 @@ import {
   isNoiseWord,
   loadBookWords,
   particles,
-  type BookWord
+  totalsOf,
+  withTotals,
+  type BookWord,
+  type WordTotals
 } from '$lib/data/book-words';
 import {
   loadCalibreCatalog,
@@ -56,6 +59,8 @@ export interface WordList {
   computedAt: number;
   /** null: the book has no word list */
   words: BookWord[] | null;
+  /** The list's totals (lists made on request; `withTotals`) */
+  totals?: WordTotals;
 }
 
 export interface WordsSummary {
@@ -222,12 +227,20 @@ export async function wordList(id: number, computedAt: number) {
   const cached = (await db.get('known', key)) as WordList | undefined;
 
   // Lists cached before readings were folded are folded here.
-  if (cached?.computedAt === computedAt) return cached.words && foldReadings(cached.words);
+  if (cached?.computedAt === computedAt) {
+    return cached.words && withTotals(foldReadings(cached.words), cached.totals);
+  }
 
-  // Throws when offline or the server fails: nothing is cached and it is retried next time.
+  // Throws when offline or the server fails (or is still making the list): nothing is cached and
+  // it is retried next time.
   const words = (await loadBookWords(id)) ?? null;
+  const totals = words ? totalsOf(words) : {};
 
-  await db.put('known', { computedAt, words }, key);
+  await db.put(
+    'known',
+    { computedAt, words, ...(totals.tokens !== undefined && { totals }) } satisfies WordList,
+    key
+  );
 
   return words;
 }
