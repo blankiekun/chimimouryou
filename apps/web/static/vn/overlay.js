@@ -3,7 +3,8 @@
  * CONscripter, vnbox.html for Windows games), loaded before the player's own script. The
  * player defines g_screen_width/g_screen_height (the screen the overlay lines are laid out
  * in), lineVoice (the voice of the line being read), voiceFile(file) and shownPages() (backlog
- * text on screen); the page's text source (lib/data/vn-text.ts) gives it the lines to show.
+ * text on screen), and may redefine screenCanvas(); the page's text source
+ * (lib/data/vn-text.ts) gives it the lines to show.
  */
 function overlayLine(line) {
   var div = document.createElement('div');
@@ -205,8 +206,13 @@ async function ankiMedia(kept, shown, want) {
   };
 }
 
+/** The canvas the game is shown on; a player whose engine presents elsewhere redefines it. */
+function screenCanvas() {
+  return document.getElementById('canvas');
+}
+
 function screenshot() {
   return new Promise(function (resolve) {
-    document.getElementById('canvas').toBlob(resolve, 'image/webp', 0.9);
+    screenCanvas().toBlob(resolve, 'image/webp', 0.9);
   });
 }

@@ -5,6 +5,13 @@ body {
   background: #000;
 }
 
+/* The app's UI stack (--app-font-ui in app.scss) in place of VNBox's Arial; the frame has no
+   access to the app's variables or its self-hosted BIZ UDPGothic, so local copies are used. */
+body,
+.modalDialog {
+  font-family: 'BIZ UDPGothic', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', Meiryo, sans-serif;
+}
+
 #controls,
 #console,
 .modalDialog,
@@ -30,7 +37,7 @@ div.emscripten_border {
   border-radius: 2px;
   background: rgba(0, 0, 0, 0.8);
   color: #ddd;
-  font: 0.8rem sans-serif;
+  font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
 }
 

@@ -21,6 +21,18 @@ function shownPages() {
   return [];
 }
 
+// Wine's frames go to the present canvas while it is shown (VNBox hides it when the game
+// draws with GL on #canvas), so screenshots for Anki come from whichever is visible.
+function screenCanvas() {
+  var present = document.getElementById('boxedwine-webgl-canvas-0');
+  var style = present && getComputedStyle(present);
+
+  // The same test as VNBox's own activeCanvas (boxedwine.js).
+  return present && present.width && style.display !== 'none' && style.visibility !== 'hidden'
+    ? present
+    : document.getElementById('canvas');
+}
+
 // The page's CONscripter settings (furigana, text speed) have no VNBox counterpart.
 function engineSet() {}
 
