@@ -12,6 +12,10 @@ CORE_VERSION bump). Not upstream.
 - Ranks (version 3): a lemma's best (lowest) rank over its spellings met: Sudachi's normalized form
   (often the rare spelling: 見付かる 22,806, 見つかる 490), the dictionary form and, for an all-kana
   form, the best rank of any term read that way (すわる: 座る's 526). `best_ranks`.
+- Untagged names (version 4): a word written in katakana, met at least KATAKANA_NAME_COUNT times and rarer
+  than KATAKANA_NAME_RANK, counts as a name (クーク, ゲンゲン, ゴジュウカラ: Sudachi doesn't tag them, and in a
+  5,000-word children's book a few of them decided V98); so do katakana technical terms that rare (サブネット).
+  Unranked kana words are noise already.
 - V98: the vocabulary size (top-N words of the frequency list) at which 98% of the book's running
   words are known, with a repetition discount: a word met more than REPEAT_CAP times counts as
   learned after REPEAT_CAP, so book-specific terms (聖女 300 times) cost what 10 occurrences cost.
@@ -38,9 +42,11 @@ from compound_merge import merge_compounds
 from word_list import is_noise_word
 
 # 1: first version. 2: rubyKanji and sentLen (facets). 3: ranks by the best spelling (best_ranks), source
-# line breaks folded in book_text (features.py).
-CORE_VERSION = 3
+# line breaks folded in book_text (features.py). 4: rare katakana words met KATAKANA_NAME_COUNT times are names.
+CORE_VERSION = 4
 REPEAT_CAP = 10
+KATAKANA_NAME_COUNT = 3
+KATAKANA_NAME_RANK = 50_000
 BUCKETS_PER_DECADE = 4
 RANKED_BUCKETS = 6 * BUCKETS_PER_DECADE
 # Lower edges of the ranked buckets: bucket b holds ranks in [EDGES[b], EDGES[b + 1]); integer ranks
@@ -58,7 +64,8 @@ KANA = re.compile('[ぁ-ヿ]+')
 # library books Jiten lists (Spearman +0.63 -> +0.71, the books below the ramp unchanged).
 FURIGANA_DROP = 2
 FURIGANA_RAMP = (0.5, 0.9)
-SCALE_PATH =os.path.join(os.path.dirname(os.path.realpath(__file__)), 'core-scale.json')
+KATAKANA = re.compile('[ァ-ヺー]+')
+SCALE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'core-scale.json')
 
 
 def to_hiragana(text: str) -> str:
@@ -98,7 +105,7 @@ def bucket(rank) -> int:
 
 def summarise(units, rank_of) -> dict:
     """The book's core numbers from word_units; `rank_of(lemma)` gives a frequency rank or None."""
-    words = {}  # lemma -> [count, rank]
+    words = {}  # lemma -> [count, rank, written in katakana]
     names = 0
     for lemma, form, _, name in units:
         if name:
@@ -109,18 +116,22 @@ def summarise(units, rank_of) -> dict:
             rank = rank_of(lemma)
             if is_noise_word(form, rank):
                 continue
-            word = words[lemma] = [0, rank]
+            word = words[lemma] = [0, rank, bool(KATAKANA.fullmatch(form))]
         word[0] += 1
-    tokens = sum(n for n, _ in words.values())
+    for lemma, (n, rank, katakana) in list(words.items()):
+        if katakana and n >= KATAKANA_NAME_COUNT and rank is not None and rank > KATAKANA_NAME_RANK:
+            names += n
+            del words[lemma]
+    tokens = sum(n for n, *_ in words.values())
     hist, types = [0] * (RANKED_BUCKETS + 1), [0] * (RANKED_BUCKETS + 1)
-    for n, rank in words.values():
+    for n, rank, _ in words.values():
         hist[bucket(rank)] += n
         types[bucket(rank)] += 1
     # 98% = 49/50, in integers so both languages agree exactly.
-    covered = sum(max(n - REPEAT_CAP, 0) for n, _ in words.values())
+    covered = sum(max(n - REPEAT_CAP, 0) for n, *_ in words.values())
     v98 = 1 if tokens and covered * 50 >= tokens * 49 else None
     if v98 is None:
-        for n, rank in sorted((w for w in words.values() if w[1] is not None), key=lambda w: w[1]):
+        for n, rank, _ in sorted((w for w in words.values() if w[1] is not None), key=lambda w: w[1]):
             covered += min(n, REPEAT_CAP)
             if covered * 50 >= tokens * 49:
                 v98 = rank
