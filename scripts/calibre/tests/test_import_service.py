@@ -316,5 +316,52 @@ class ImportServiceTest(unittest.TestCase):
         self.assertEqual(service.vn_title('.a/b:c.ZIP'), 'a_b_c')
 
 
+class CreateEmptyLibraryTest(unittest.TestCase):
+    """create_empty_library: metadata.db only in a completely empty folder this user may write."""
+
+    def setUp(self):
+        self.folder = tempfile.mkdtemp()
+        # A calibredb that makes metadata.db where --library-path points, as the real one does.
+        fake = os.path.join(self.folder, 'calibredb')
+        with open(fake, 'w') as f:
+            f.write(f'#!{sys.executable}\nimport sys, os\nopen(os.path.join(sys.argv[2], "metadata.db"), "w")\n')
+        os.chmod(fake, 0o755)
+        self.calibredb = mock.patch.object(service, 'CALIBREDB', fake)
+        self.calibredb.start()
+        self.library = os.path.join(self.folder, 'library')
+        os.mkdir(self.library)
+
+    def tearDown(self):
+        self.calibredb.stop()
+
+    def test_empty_folder_gets_a_library(self):
+        with mock.patch('sys.stderr', io.StringIO()) as log:
+            self.assertTrue(service.create_empty_library(self.library))
+        self.assertTrue(os.path.exists(os.path.join(self.library, 'metadata.db')))
+        self.assertIn('made a new, empty Calibre library', log.getvalue())
+
+    def test_folder_with_any_file_is_left_alone(self):
+        open(os.path.join(self.library, '.hidden'), 'w').close()
+        self.assertFalse(service.create_empty_library(self.library))
+        self.assertEqual(os.listdir(self.library), ['.hidden'])
+
+    def test_missing_folder_is_left_alone(self):
+        with mock.patch('sys.stderr', io.StringIO()):
+            self.assertFalse(service.create_empty_library(os.path.join(self.folder, 'typo')))
+        self.assertFalse(os.path.exists(os.path.join(self.folder, 'typo')))
+
+    def test_folder_owned_by_someone_else_is_left_alone(self):
+        with mock.patch('os.getuid', return_value=os.getuid() + 1), \
+                mock.patch('sys.stderr', io.StringIO()) as log:
+            self.assertFalse(service.create_empty_library(self.library))
+        self.assertEqual(os.listdir(self.library), [])
+        self.assertIn('may not write', log.getvalue())
+
+    def test_read_only_folder_is_left_alone(self):
+        with mock.patch('os.access', return_value=False), mock.patch('sys.stderr', io.StringIO()):
+            self.assertFalse(service.create_empty_library(self.library))
+        self.assertEqual(os.listdir(self.library), [])
+
+
 if __name__ == '__main__':
     unittest.main()

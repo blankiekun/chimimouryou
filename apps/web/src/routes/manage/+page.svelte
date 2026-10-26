@@ -86,6 +86,7 @@
   import { saveSeriesOverrides, seriesForTitle } from '$lib/data/series-overrides';
   import { account$, currentAccount, hasPermission } from '$lib/data/account';
   import {
+    importServiceRunning,
     isFinished,
     removeFromCalibre,
     uploadToCalibre,
@@ -94,7 +95,7 @@
   } from '$lib/data/calibre-import';
   import { clearReadingProgress } from '$lib/functions/clear-reading-progress';
   import { dialogManager } from '$lib/data/dialog-manager';
-  import { pagePath, standalone } from '$lib/data/env';
+  import { pagePath, selfHostingGuideUrl, standalone } from '$lib/data/env';
   import FirstRun from '$lib/components/standalone/first-run.svelte';
   import { backgroundAnalysis$, catchUpAnalysis } from '$lib/data/background-analysis';
   import InstallHint from '$lib/components/standalone/install-hint.svelte';
@@ -130,6 +131,7 @@
     hideExternalReadHint$,
     isOnline$,
     keepLocalStatisticsOnDeletion$,
+    libraryBuilding$,
     libraryOffline$,
     librarySignInNeeded,
     libraryDisplayMode$,
@@ -330,7 +332,27 @@
     selectMode = false;
   }
 
+  // The server's first catalog build: look again until catalog.json is there.
+  let catalogPoll: ReturnType<typeof setInterval> | undefined;
+  $: {
+    clearInterval(catalogPoll);
+    catalogPoll =
+      $libraryBuilding$ && $storageSource$ === StorageKey.CALIBRE
+        ? setInterval(() => database.dataListChanged$.next(undefined), 15000)
+        : undefined;
+  }
+  // An empty Calibre library: Import is offered only when this account may and the service runs.
+  $: calibreImportReady =
+    !standalone &&
+    $storageSource$ === StorageKey.CALIBRE &&
+    !$libraryBuilding$ &&
+    $bookCards$?.length === 0 &&
+    hasPermission($account$, 'import')
+      ? importServiceRunning()
+      : Promise.resolve(false);
+
   onDestroy(() => {
+    clearInterval(catalogPoll);
     dialogManager.dialogs$.next([]);
     readingActivity();
   });
@@ -702,6 +724,10 @@
           break;
         }
         failures.push(error.message);
+        // The import service isn't running: the other files would only repeat it.
+        if (error.status === 502) {
+          break;
+        }
       }
 
       replicationProgress$.next({ progressToAdd: 1 });
@@ -1802,6 +1828,40 @@
         </div>
       {:else if standalone}
         <LibraryEmpty onFiles={onFilesChange} />
+      {:else if $storageSource$ === StorageKey.CALIBRE && $libraryBuilding$}
+        <div class="library-empty" role="status">
+          <span class="library-empty-title">{$t$('library.calibreBuilding')}</span>
+          <span class="library-empty-text">{$t$('library.calibreBuildingText')}</span>
+        </div>
+      {:else if $storageSource$ === StorageKey.CALIBRE}
+        {#await calibreImportReady then importReady}
+          {#if importReady}
+            <label class="library-empty library-empty-import">
+              <input
+                type="file"
+                accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,.cbz,.zip"
+                multiple
+                hidden
+                use:inputFile={onFilesChange}
+              />
+              <span class="library-empty-title">{$t$('library.calibreEmpty')}</span>
+              <span class="library-empty-text">{$t$('library.calibreEmptyImport')}</span>
+            </label>
+          {:else}
+            <div class="library-empty">
+              <span class="library-empty-title">{$t$('library.calibreEmpty')}</span>
+              <span class="library-empty-text">
+                {$t$('library.calibreEmptyNoImport')}
+                <a
+                  class="underline"
+                  href="{selfHostingGuideUrl}#what-runs"
+                  target="_blank"
+                  rel="noreferrer">{$t$('library.calibreProfiles')}</a
+                >
+              </span>
+            </div>
+          {/if}
+        {/await}
       {:else}
         <label class="library-empty library-empty-import">
           <input

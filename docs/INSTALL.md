@@ -62,6 +62,11 @@ Signing in needs HTTPS (see [HTTPS](#https)); to try it on a home network first,
 set `ALLOW_HTTP_ACCOUNTS=1` (see [Accounts](#accounts-and-permissions)).
 
 - `LIBRARY_PATH` is the Calibre library folder (the one with `metadata.db`).
+  For a new library, point it at an empty folder you made (`mkdir`, owned by
+  `PUID`): the import service turns it into an empty Calibre library on its
+  first start and says so in `docker compose logs import`. It never writes into
+  a folder with anything in it, or one Docker made for a missing (mistyped)
+  path. Without the import profile, make the library with Calibre itself.
   `PUID`/`PGID` must be able to read it; the catalog also writes `cover.jpg`
   into book folders that have no cover, and the import profile adds books.
 - Everything the server stores is in `DATA_PATH` (default `./data`):

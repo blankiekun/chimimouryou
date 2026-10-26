@@ -42,6 +42,7 @@ import { applySeriesOverride, loadSeriesOverrides } from '$lib/data/series-overr
 import { applyMetadata, loadBookMetadata } from '$lib/data/book-metadata';
 import {
   database,
+  libraryBuilding$,
   libraryOffline$,
   readingGoalsMergeMode$,
   statisticsMergeMode$
@@ -273,6 +274,7 @@ export class CalibreStorageHandler extends ApiStorageHandler {
 
         this.dataListFetched = true;
         libraryOffline$.next(false);
+        libraryBuilding$.next(false);
         // Only after the catalog loaded: a failed or signed-out load must not drop kept games.
         deleteOrphanVnCaches(catalogTitles).catch(() => {});
       } catch (error) {
@@ -281,6 +283,13 @@ export class CalibreStorageHandler extends ApiStorageHandler {
         // sign in (manage page), not a failure that switches the source to the browser.
         if (!currentAccount() && (error as { status?: number }).status === 401) {
           libraryOffline$.next(false);
+          return [];
+        }
+
+        // No catalog.json yet (nginx 404): the first build is running; the manage page looks again.
+        if ((error as { status?: number }).status === 404) {
+          libraryOffline$.next(false);
+          libraryBuilding$.next(true);
           return [];
         }
 

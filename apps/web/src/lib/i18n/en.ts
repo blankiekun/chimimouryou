@@ -1039,6 +1039,15 @@ export const en = {
   'library.ascending': 'Ascending',
   'library.descending': 'Descending',
   'library.notSorted': 'Not sorted',
+  'library.calibreBuilding': 'The library is being built',
+  'library.calibreBuildingText':
+    'The server is reading the Calibre library for the first time, usually a minute; covers take longer. This page updates on its own.',
+  'library.calibreEmpty': 'No books in Calibre yet',
+  'library.calibreEmptyImport':
+    'Import adds them: drop EPUB, HTMLZ, TXT or CBZ files here, or click to choose them.',
+  'library.calibreEmptyNoImport':
+    'Add books in Calibre, or ask an admin to turn on the import service.',
+  'library.calibreProfiles': 'Server profiles',
   'library.sortId': 'Date added',
   'library.sortTitle': 'Title',
   'library.sortSeries': 'Series',
