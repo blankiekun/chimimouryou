@@ -67,6 +67,13 @@ jobs:
           rustup target add wasm32-unknown-unknown
           scripts/analysis-tools/build.sh
 
+      # Settings → Dictionary's one-tap JMdict (EDRDG, CC BY-SA 4.0, see NOTICE), served same-origin.
+      - name: Add JMdict
+        run: |
+          mkdir -p apps/web/build/dictionaries
+          curl -fsSL --retry 3 -o apps/web/build/dictionaries/JMdict_english.zip \
+            https://github.com/yomidevs/jmdict-yomitan/releases/latest/download/JMdict_english.zip
+
       # Settings → Themes links to the theme guide (the web image copies it the same way).
       - name: Add the theme guide
         run: cp themes.md apps/web/build/themes.md

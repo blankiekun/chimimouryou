@@ -36,6 +36,15 @@ from its release; its kanji-readings.json is derived from KANJIDIC2 (CC BY-SA
 (https://www.aozora.gr.jp/) and on sentences from Tatoeba
 (https://tatoeba.org/), CC BY 2.0 FR. See yurigana's NOTICE.
 
+The built-in dictionary's one-tap download (dictionaries/JMdict_english.zip in
+the built site, fetched from jmdict-yomitan's latest release when the Pages
+site and the web image are built; it isn't in the repository) is JMdict
+(https://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project) by the
+Electronic Dictionary Research and Development Group, licensed under CC BY-SA
+4.0 (https://www.edrdg.org/edrdg/licence.html), in the Yomitan format made by
+jmdict-yomitan (https://github.com/yomidevs/jmdict-yomitan), redistributed
+unmodified.
+
 The visual novel player (apps/web/static/vn/conscripter.js and conscripter.wasm) is
 CONscripter (https://github.com/blankiekun/CONscripter), a fork of
 ONScripter-yuri (https://github.com/YuriSizuku/OnscripterYuri), based on

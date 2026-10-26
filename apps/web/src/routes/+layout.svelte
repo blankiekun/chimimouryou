@@ -1,7 +1,6 @@
 <script lang="ts">
   import { browser } from '$app/env';
   import { page } from '$lib/data/page-store';
-  import DomainHint from '$lib/components/domain-hint.svelte';
   import ThemeStyle from '$lib/components/theme/theme-style.svelte';
   import { accountReady } from '$lib/data/account';
   import { startSettingsSync } from '$lib/data/account-settings-sync';
@@ -166,5 +165,3 @@
 {/if}
 
 <span style={`font-family: ${$fontFamilyGroupOne$ || 'Noto Serif JP'}`} />
-
-<DomainHint />

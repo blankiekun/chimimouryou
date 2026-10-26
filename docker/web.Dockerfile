@@ -18,6 +18,11 @@ WORKDIR /src/apps/web
 RUN pnpm svelte-kit sync && pnpm build \
   && echo "$VERSION" > build/version.txt \
   && cp /src/themes.md build/themes.md
+# Settings → Dictionary's one-tap JMdict (EDRDG, CC BY-SA 4.0, see NOTICE), served same-origin.
+# Without it (an offline build) the app links to jmdict-yomitan's releases instead.
+ARG JMDICT_URL=https://github.com/yomidevs/jmdict-yomitan/releases/latest/download/JMdict_english.zip
+RUN mkdir -p build/dictionaries && node -e "fetch(process.argv[1]).then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); }).then((b) => require('fs').writeFileSync('build/dictionaries/JMdict_english.zip', Buffer.from(b)))" "$JMDICT_URL" \
+  || echo 'JMdict was not downloaded: Settings → Dictionary links to its releases instead' >&2
 
 FROM nginx:1.29-alpine
 COPY --from=build /src/apps/web/build /srv/www

@@ -1,6 +1,7 @@
 <script lang="ts">
   /** The standalone's empty library (plan S2): import files or a folder, or drop them. */
   import SectionHead from '$lib/components/section-head.svelte';
+  import { t$ } from '$lib/i18n';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import { storageSource$ } from '$lib/data/storage/storage-view';
   import { inputAllowDirectory } from '$lib/functions/file-dom/input-allow-directory';
@@ -8,6 +9,9 @@
   import { isMobile$ } from '$lib/functions/utils';
 
   export let onFiles: (files: FileList) => void;
+
+  const booksGuide =
+    'https://github.com/blankiekun/chimimouryou/blob/main/docs/LEARNING.md#7-where-to-get-japanese-books';
 
   const places: Partial<Record<StorageKey, string>> = {
     [StorageKey.GDRIVE]: 'Books you import go to your Drive and open offline on this device.',
@@ -58,6 +62,9 @@
   <p class="empty-formats">
     EPUB and HTMLZ books · CBZ and ZIP manga · visual novels as a ZIP with their script
   </p>
+  <a class="empty-guide" href={booksGuide} target="_blank" rel="noreferrer"
+    >{$t$('library.whereToGetBooks')}</a
+  >
 </section>
 
 <style>
@@ -109,6 +116,19 @@
   .empty-formats {
     margin-top: 1.5rem;
     line-height: 1.6;
+  }
+
+  .empty-guide {
+    align-self: flex-start;
+    margin-top: 0.5rem;
+    color: var(--accent-strong-color);
+    font-size: var(--type-small);
+    font-weight: 700;
+  }
+
+  .empty-guide:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
   }
 
   @media (max-width: 639px) {
