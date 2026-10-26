@@ -118,6 +118,10 @@ WORDS_VERSION = 18
 # Readings files (#17), made from the reader's processed book in the shared sync folder
 # (mounted read-only): <SYNC_DIR>/ttu-reader-data/<title>/bookdata_*.zip.
 SYNC_DIR = os.environ.get('SYNC_DIR', '/data/sync')
+# Manga text from the mokuro service (<id>.json, mokuro/service.py), read-only here: a manga volume is
+# estimated from it, and again whenever the file changes (watch_manga_text, every MANGA_TEXT_CHECK_SECONDS).
+MOKURO_DIR = os.environ.get('MOKURO_STATE_DIR', '/data/state/mokuro')
+MANGA_TEXT_CHECK_SECONDS = 60
 READINGS_DIR = os.path.join(STATE_DIR, 'readings')
 READINGS_QUEUE_MAX = 100
 MAX_STATICDATA_BYTES = 30 * 1024 * 1024
@@ -199,12 +203,38 @@ def save_words(book_id: int, analysis, frequency):
     return unique_words, tokens
 
 
+def manga_path(book_id: int) -> str:
+    return os.path.join(MOKURO_DIR, f'{book_id}.json')
+
+
+def manga_text_stamp(book_id: int):
+    """The mokuro file's time (ms), None without one: an estimate made from older text is redone."""
+    try:
+        return int(os.path.getmtime(manga_path(book_id)) * 1000)
+    except OSError:
+        return None
+
+
+def manga_text(book_id: int) -> str:
+    """A manga volume's text, one speech bubble a line (mokuro splits a bubble into the lines it
+    drew; they are one text). Empty without a mokuro file. mokuroPlainText in mokuro.ts reads alike."""
+    try:
+        with open(manga_path(book_id), encoding='utf-8') as f:
+            pages = json.load(f)['pages']
+    except (OSError, ValueError, KeyError, TypeError):
+        return ''
+    return '\n'.join(text for page in pages for block in page.get('blocks', [])
+                     if (text := ''.join(block.get('lines', [])).strip()))
+
+
 def _estimate(book: dict):
     import numpy
     from features import (EXTRA_FEATURES, FEATURE_ORDER, TOKEN_CLEAN, book_text, compute_extra_features,
                           compute_features, vn_text, words_for_coverage)
     ruby, hints = {}, []
-    if book.get('vn'):
+    if book.get('manga'):
+        text = manga_text(book['id'])
+    elif book.get('vn'):
         text = vn_text(os.path.join(VN_DIR if book['format'] == 'VN' else LIBRARY, book['file']), ruby, hints)
     else:
         text = book_text(os.path.join(LIBRARY, book['file']), book['format'], ruby, hints)
@@ -238,6 +268,8 @@ def _estimate(book: dict):
         'uniqueWords': unique_words,
         'tokens': tokens,
         'computedAt': int(time.time() * 1000),
+        # Manga: the mokuro text it was made from (manga_text_stamp).
+        **({'text': book['text']} if book.get('manga') else {}),
     }
 
 
@@ -418,7 +450,8 @@ class ReadingsQueue:
     def _request(self, book_id: int) -> str:
         if not os.path.exists(FREQUENCY_DICTIONARY):
             return 'unavailable'
-        book = next((b for b in load_catalog() if b['id'] == book_id and not b.get('vn')), None)
+        book = next((b for b in load_catalog() if b['id'] == book_id and not b.get('vn') and not b.get('manga')),
+                    None)
         bookdata = book and find_bookdata(book['title'])
         if not bookdata:
             return 'unavailable'
@@ -540,9 +573,14 @@ def _run_pool(books, task, cancel: threading.Event, workers: int, lost: list):
 
 
 def load_catalog():
+    """The books with text: EPUB, HTMLZ, TXT, visual novels (their scripts) and manga (CBZ/ZIP, their mokuro
+    text: 'manga', and 'text', its manga_text_stamp, None while they have none)."""
     with open(CATALOG_PATH, encoding='utf-8') as f:
-        # Manga (CBZ/ZIP) has no text to score; visual novels have their scripts.
-        return [b for b in json.load(f)['books'] if b['format'] in ('EPUB', 'HTMLZ', 'TXT') or b.get('vn')]
+        books = json.load(f)['books']
+    for book in books:
+        if book['format'] in ('CBZ', 'ZIP') and not book.get('vn'):
+            book.update(manga=True, text=manga_text_stamp(book['id']))
+    return [b for b in books if b['format'] in ('EPUB', 'HTMLZ', 'TXT') or b.get('vn') or b.get('manga')]
 
 
 def load_results():
@@ -562,11 +600,27 @@ def save_results(results):
 
 
 def unchanged_since_failure(failure, book) -> bool:
-    """A failed book is retried once its file changed: by size, or for game folders (size 0) by
-    their folder's time (`added`)."""
-    if not failure:
+    """A failed book is retried once its file changed: by size, for game folders (size 0) by
+    their folder's time (`added`), for manga also by their text."""
+    if not failure or failure.get('text') != book.get('text'):
         return False
     return failure.get('added') == book['added'] if book.get('format') == 'VN' else failure.get('size') == book['size']
+
+
+def needs_estimate(book, results, engine) -> bool:
+    """Whether a whole-library run estimates the book: never tried, estimated by another model or engine,
+    with an older word list, or (manga) from other text; not a book without text or whose file is
+    unchanged since it failed. Manga without text are tried once some appears."""
+    key = str(book['id'])
+    if book.get('manga') and not book.get('text'):
+        return False
+    if book['id'] in results.get('noText', []) and results.get('noTextStamps', {}).get(key) == book.get('text'):
+        return False
+    estimate = results['books'].get(key, {})
+    return (estimate.get('model') != MODEL_VERSION or estimate.get('words') != WORDS_VERSION
+            or estimate.get('engine') != engine or estimate.get('text') != book.get('text')
+            or not os.path.exists(os.path.join(WORDS_DIR, f'{key}.json.gz'))) \
+        and not unchanged_since_failure(results.get('failed', {}).get(key), book)
 
 
 class JobRunner:
@@ -631,19 +685,15 @@ class JobRunner:
         catalog = load_catalog()
         results = load_results()
         wanted = set(ids or ())
-        # Books with too little text (image-only manga and scans) can't be estimated, and
+        # Books with too little text (scans, manga without mokuro text) can't be estimated, and
         # failed ones are broken files (not a zip, no container.xml), retried once the file changes.
         no_text = set(results.get('noText', []))
+        # Manga in noText: the text they had then (none: None), so new text is tried.
+        no_text_stamps = results.setdefault('noTextStamps', {})
         failed = results.setdefault('failed', {})
-        # All books: only those not tried yet, estimated by another model or engine or with an older word
-        # list, or whose file changed since it failed. Selected books are always recomputed.
+        # All books: needs_estimate. Selected books are always recomputed.
         engine = current_engine()
-        books = [b for b in catalog if (results['books'].get(str(b['id']), {}).get('model') != MODEL_VERSION
-                                        or results['books'][str(b['id'])].get('words') != WORDS_VERSION
-                                        or results['books'][str(b['id'])].get('engine') != engine
-                                        or not os.path.exists(os.path.join(WORDS_DIR, f"{b['id']}.json.gz")))
-                 and b['id'] not in no_text
-                 and not unchanged_since_failure(failed.get(str(b['id'])), b)] \
+        books = [b for b in catalog if needs_estimate(b, results, engine)] \
             if ids is None else [b for b in catalog if b['id'] in wanted]
         self._progress(0, len(books))
         last_save = time.monotonic()
@@ -651,13 +701,17 @@ class JobRunner:
         for book, result in run_in_pools(books, _estimate, self.cancel):
             if isinstance(result, Exception):
                 print(f"compute: {book['file']}: {result}", file=sys.stderr)
-                failed[str(book['id'])] = {'error': str(result)[:200], 'size': book['size'], 'added': book['added']}
+                failed[str(book['id'])] = {'error': str(result)[:200], 'size': book['size'], 'added': book['added'],
+                                           **({'text': book['text']} if book.get('manga') else {})}
             elif result[1]:
                 results['books'][str(result[0])] = result[1]
                 no_text.discard(result[0])
+                no_text_stamps.pop(str(result[0]), None)
                 failed.pop(str(result[0]), None)
             else:
                 no_text.add(result[0])
+                if book.get('manga'):
+                    no_text_stamps[str(result[0])] = book['text']
                 failed.pop(str(result[0]), None)
             results['noText'] = sorted(no_text)
             done += 1
@@ -669,6 +723,29 @@ class JobRunner:
 
 
 runner = JobRunner()
+
+
+def stale_manga() -> list:
+    """Manga whose mokuro text appeared or changed since their estimate (needs_estimate)."""
+    if not os.path.exists(FREQUENCY_DICTIONARY):
+        return []
+    results = load_results()
+    engine = current_engine()
+    return [b['id'] for b in load_catalog() if b.get('manga') and needs_estimate(b, results, engine)]
+
+
+def watch_manga_text():
+    """Estimates manga as their text is made or uploaded (mokuro service), when no other job runs."""
+    while True:
+        time.sleep(MANGA_TEXT_CHECK_SECONDS)
+        try:
+            ids = stale_manga()
+            if ids:
+                runner.start('compute', runner.compute, ids)
+        except RuntimeError:
+            pass  # another job or a dictionary install: next time
+        except Exception as error:
+            print(f'manga text: {error}', file=sys.stderr, flush=True)
 
 
 def holds_off_jobs(install):
@@ -925,6 +1002,7 @@ def main(argv):
     install_bundled_dictionary()
     command = argv[1] if len(argv) > 1 else 'serve'
     if command == 'serve':
+        threading.Thread(target=watch_manga_text, daemon=True).start()
         ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
     elif command == 'compute':
         runner.job = {'type': 'compute'}

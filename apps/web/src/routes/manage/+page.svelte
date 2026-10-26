@@ -285,10 +285,7 @@
       $bookCards$
         .filter(
           (card) =>
-            onHome.has(card.title) &&
-            !card.manga &&
-            card.calibreId !== undefined &&
-            card.difficulty !== undefined
+            onHome.has(card.title) && card.calibreId !== undefined && card.difficulty !== undefined
         )
         .map((card) => card.calibreId!)
     );

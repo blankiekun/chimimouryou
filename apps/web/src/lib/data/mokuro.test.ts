@@ -5,7 +5,14 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { blockStyle, pagesText, type MokuroPage, type MokuroText } from './mokuro';
+import {
+  blockStyle,
+  mokuroHtml,
+  mokuroPlainText,
+  pagesText,
+  type MokuroPage,
+  type MokuroText
+} from './mokuro';
 
 const page = (name: string): MokuroPage => ({ name, width: 800, height: 1200, blocks: [] });
 const text = (...names: string[]): MokuroText => ({
@@ -51,5 +58,29 @@ describe('blockStyle', () => {
     expect(blockStyle(block, page('1.jpg'), 0.5)).toBe(
       'left: 10%; top: 10%;width: 10%; height: 20%;font-size: 10px;'
     );
+  });
+});
+
+describe('mokuroPlainText', () => {
+  const block = (...lines: string[]) => ({
+    box: [0, 0, 1, 1] as [number, number, number, number],
+    vertical: true,
+    fontSize: 20,
+    lines
+  });
+  const volume: MokuroText = {
+    ...text(),
+    pages: [
+      { ...page('1.jpg'), blocks: [block('吾輩は', '猫である。'), block(' ')] },
+      { ...page('2.jpg'), blocks: [block('<名前>&')] }
+    ]
+  };
+
+  it('gives a line per bubble, as the difficulty service reads it', () => {
+    expect(mokuroPlainText(volume)).toBe('吾輩は猫である。\n<名前>&');
+  });
+
+  it('escapes the text as HTML for the analysis tools', () => {
+    expect(mokuroHtml(volume)).toBe('<p>吾輩は猫である。</p><p>&lt;名前&gt;&amp;</p>');
   });
 });

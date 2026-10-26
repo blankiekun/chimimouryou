@@ -206,6 +206,7 @@ export const en = {
   'book.copy': 'Copy',
   'book.copied': 'Copied',
   'book.noEstimate': 'No estimate yet',
+  'book.mangaNoText': 'No text yet — make text first',
   'book.difficultyDetails': 'Difficulty details',
   'book.estimate': 'Estimate',
   'book.estimating': 'Estimating… {percent}%',
