@@ -326,6 +326,10 @@ class WordsQueueTest(unittest.TestCase):
 
     def test_legacy_lists_keep_their_estimates_totals(self):
         service = self.service
+        # Migration runs only while WORDS_VERSION is the legacy lists' version.
+        version = service.WORDS_VERSION
+        service.WORDS_VERSION = service.LEGACY_WORDS_VERSION
+        self.addCleanup(setattr, service, 'WORDS_VERSION', version)
         os.makedirs(service.WORDS_DIR)
         for book_id in (1, 5):
             with gzip.open(service.legacy_words_path(book_id), 'wt', encoding='utf-8') as f:
