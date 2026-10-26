@@ -132,6 +132,7 @@
   import { communityWorks$ } from '$lib/data/community';
   import { lineLinkTarget, matchOffer$ } from '$lib/data/community-book';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
+  import LookupHint from '$lib/components/book-reader/lookup-hint.svelte';
   import {
     AnnotationsController,
     type Highlight,
@@ -2332,6 +2333,7 @@
 {/if}
 
 <LookupPopup bind:this={lookupPopup} bind:open={lookupOpen} scope=".book-content" />
+<LookupHint />
 
 <svelte:document on:selectionchange={onSelectionChange} on:click={onDocumentClick} />
 

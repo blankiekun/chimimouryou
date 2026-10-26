@@ -1,13 +1,34 @@
 <script lang="ts">
-  /** The standalone's empty library (plan S2): import files or a folder, or drop them. */
+  /**
+   * The standalone's empty library (plan S2): import files or a folder, or drop them, or try the
+   * bundled sample (手袋を買いに, public domain, from Aozora Bunko; static/sample/).
+   */
   import SectionHead from '$lib/components/section-head.svelte';
+  import { pagePath } from '$lib/data/env';
+  import { t$ } from '$lib/i18n';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import { storageSource$ } from '$lib/data/storage/storage-view';
   import { inputAllowDirectory } from '$lib/functions/file-dom/input-allow-directory';
   import { inputFile } from '$lib/functions/file-dom/input-file';
   import { isMobile$ } from '$lib/functions/utils';
 
-  export let onFiles: (files: FileList) => void;
+  export let onFiles: (files: FileList | File[]) => void;
+
+  const sampleName = 'tebukuro-wo-kai-ni.epub';
+  const booksGuide =
+    'https://github.com/blankiekun/chimimouryou/blob/main/docs/LEARNING.md#7-where-to-get-japanese-books';
+  let sampleError = '';
+
+  async function trySample() {
+    sampleError = '';
+    try {
+      const response = await fetch(`${pagePath}/sample/${sampleName}`);
+      if (!response.ok) throw new Error(String(response.status));
+      onFiles([new File([await response.blob()], sampleName, { type: 'application/epub+zip' })]);
+    } catch {
+      sampleError = $t$('library.sampleFailed');
+    }
+  }
 
   const places: Partial<Record<StorageKey, string>> = {
     [StorageKey.GDRIVE]: 'Books you import go to your Drive and open offline on this device.',
@@ -48,7 +69,13 @@
         Import a folder
       </button>
     {/if}
+    <button type="button" class="app-button app-button-quiet" on:click={trySample}>
+      {$t$('library.trySample')}
+    </button>
   </div>
+  {#if sampleError}
+    <p class="empty-formats empty-error" role="alert">{sampleError}</p>
+  {/if}
   {#if !$isMobile$}
     <div class="empty-drop" aria-hidden="true">
       <span class="empty-drop-title">Drop files here</span>
@@ -58,6 +85,9 @@
   <p class="empty-formats">
     EPUB and HTMLZ books · CBZ and ZIP manga · visual novels as a ZIP with their script
   </p>
+  <a class="empty-guide" href={booksGuide} target="_blank" rel="noreferrer"
+    >{$t$('library.whereToGetBooks')}</a
+  >
 </section>
 
 <style>
@@ -109,6 +139,23 @@
   .empty-formats {
     margin-top: 1.5rem;
     line-height: 1.6;
+  }
+
+  .empty-error {
+    color: var(--app-danger-color);
+  }
+
+  .empty-guide {
+    align-self: flex-start;
+    margin-top: 0.5rem;
+    color: var(--accent-strong-color);
+    font-size: var(--type-small);
+    font-weight: 700;
+  }
+
+  .empty-guide:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
   }
 
   @media (max-width: 639px) {

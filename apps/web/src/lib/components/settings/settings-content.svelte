@@ -280,6 +280,8 @@
     ])
   );
 
+  /** Standalone where the analysis tools can't run (phones): their switches are greyed out */
+  const analysisOff = browser && standalone && !analysisToolsSupported();
   let showSpinner = false;
   let furiganaStyleTooltip = '';
   let importHTMLFixModeTooltip = '';
@@ -551,31 +553,39 @@
   <SettingsItemGroup title={$t$('prefs.hideFurigana')}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={hideFurigana} />
   </SettingsItemGroup>
-  <!-- Generated furigana come from the server's difficulty service, or standalone the analysis tools. -->
-  {#if !standalone || analysisToolsSupported()}
-    <SettingsItemGroup
-      title={$t$('prefs.generatedFurigana')}
-      tooltip={standalone
+  <!-- Generated furigana come from the server's difficulty service, or standalone the analysis tools;
+       where those can't run (phones) the switches stay, greyed out, saying why. -->
+  <SettingsItemGroup
+    title={$t$('prefs.generatedFurigana')}
+    tooltip={analysisOff
+      ? $t$('prefs.needsDesktop')
+      : standalone
         ? 'Adds readings, in a softer colour, to words the book gives none. Made in this browser by the Generated furigana analysis tools (Settings → General → Analysis tools).'
         : $t$('prefs.generatedFuriganaHint')}
-    >
+  >
+    <fieldset class="contents" disabled={analysisOff}>
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={$generatedFurigana$} />
-      <svelte:fragment slot="after">
-        {#if standalone}<GenerateReadings />{/if}
-      </svelte:fragment>
-    </SettingsItemGroup>
-  {/if}
-  {#if !standalone || analysisToolsSupported()}
-    <SettingsItemGroup
-      title={$t$('prefs.unknownWordUnderline')}
-      tooltip={$t$('prefs.unknownWordUnderlineHint')}
-    >
+    </fieldset>
+    <svelte:fragment slot="after">
+      {#if standalone && !analysisOff}<GenerateReadings />{/if}
+    </svelte:fragment>
+  </SettingsItemGroup>
+  <SettingsItemGroup
+    title={$t$('prefs.unknownWordUnderline')}
+    tooltip={analysisOff ? $t$('prefs.needsDesktop') : $t$('prefs.unknownWordUnderlineHint')}
+  >
+    <fieldset class="contents" disabled={analysisOff}>
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={$unknownWordUnderline$} />
-    </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('prefs.chapterPrimer')} tooltip={$t$('prefs.chapterPrimerHint')}>
+    </fieldset>
+  </SettingsItemGroup>
+  <SettingsItemGroup
+    title={$t$('prefs.chapterPrimer')}
+    tooltip={analysisOff ? $t$('prefs.needsDesktop') : $t$('prefs.chapterPrimerHint')}
+  >
+    <fieldset class="contents" disabled={analysisOff}>
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={$chapterPrimer$} />
-    </SettingsItemGroup>
-  {/if}
+    </fieldset>
+  </SettingsItemGroup>
   {#if hideFurigana}
     <SettingsItemGroup title={$t$('prefs.furiganaStyle')} tooltip={furiganaStyleTooltip}>
       <ButtonToggleGroup options={optionsForFuriganaStyle} bind:selectedOptionId={furiganaStyle} />

@@ -1,15 +1,15 @@
 <script lang="ts">
   /**
-   * Standalone first run (plan S1): where books live, before Home. The choice becomes
-   * `storageSource$`; Settings → Sync changes it later. Where the analysis tools run, it offers them
-   * and the Generated furigana switch; a download started here carries on after it closes.
+   * Standalone first run (plan S1): one question, where books live, before Home. The choice becomes
+   * `storageSource$`; Settings → Sync changes it later. The rest is offered where it is useful:
+   * the analysis tools on Home (analysis-tools-offer.svelte), lookups in the reader
+   * (lookup-hint.svelte), Friends on Home and in Community.
    */
   import { browser } from '$app/env';
   import { faCaretDown, faCaretUp } from '@fortawesome/free-solid-svg-icons';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import PointBox from '$lib/components/point-box.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
-  import SocialAccountForm from '$lib/components/social/social-account-form.svelte';
   import {
     placementAt,
     placementCutoff$,
@@ -17,9 +17,7 @@
     placementResults$,
     placementWords
   } from '$lib/data/placement';
-  import { socialSession$ } from '$lib/data/social-account';
   import { t$ } from '$lib/i18n';
-  import { activePlugins$ } from '$lib/plugins';
   import { pagePath, storageRootName } from '$lib/data/env';
   import {
     chooseStorage,
@@ -32,20 +30,10 @@
     storageChosen$
   } from '$lib/data/standalone-storage';
   import { StorageKey } from '$lib/data/storage/storage-types';
-  import { generatedFurigana$, isOnline$ } from '$lib/data/store';
-  import {
-    analysisDownload$,
-    analysisFeatures,
-    analysisToolsSize,
-    analysisToolsState$,
-    analysisToolsSupported,
-    checkAnalysisTools,
-    downloadAnalysisTools,
-    type AnalysisFeature
-  } from '$lib/data/analysis-tools';
-  import { onMount } from 'svelte';
+  import { isOnline$ } from '$lib/data/store';
   import { yomitanSeen$ } from '$lib/data/yomitan';
-  import { builtInLookups$, builtInLookupsChoice$ } from '$lib/data/dictionary';
+  import { dialogManager } from '$lib/data/dialog-manager';
+  import TtsuMigrationDialog from '$lib/components/standalone/ttsu-migration-dialog.svelte';
   import { isMobile } from '$lib/functions/utils';
   import Fa from 'svelte-fa';
 
@@ -66,42 +54,6 @@
   let folderName = '';
   let folderError = '';
   let signedIn = driveSignedIn();
-
-  const toolsSupported = browser && analysisToolsSupported();
-  const mb = (bytes: number) => Math.round(bytes / 1e6).toLocaleString('en-US');
-  let toolsSize: number | undefined;
-  let toolsDeclined = false;
-
-  let wantDifficulty = true;
-
-  // Only the features switched on are fetched (the furigana switch is the reader setting itself).
-  $: wantedTools = analysisFeatures.filter((feature) =>
-    feature === 'furigana' ? $generatedFurigana$ : wantDifficulty
-  );
-  $: toolsReady =
-    !!wantedTools.length &&
-    wantedTools.every((feature) => $analysisToolsState$[feature] === 'ready');
-  $: toolsDownloading = !!$analysisDownload$ && !$analysisDownload$.error;
-  $: if (toolsSupported && !toolsDownloading) measureTools(wantedTools);
-  $: toolsShown = toolsSupported && (toolsSize !== undefined || toolsReady || toolsDownloading);
-
-  // Friends (the social plugin): nothing goes to the hub until Sign up or Log in is sent.
-  $: socialOn = $activePlugins$.some((plugin) => plugin.id === 'social');
-  let socialForm: 'signup' | 'login' | undefined;
-  let socialDeclined = false;
-
-  onMount(() => {
-    if (toolsSupported) checkAnalysisTools();
-  });
-
-  async function measureTools(features: AnalysisFeature[]) {
-    // Nothing chosen: no size, and Download is off.
-    const size = features.length
-      ? await analysisToolsSize(features).catch(() => undefined)
-      : (toolsSize ?? 0);
-
-    if (features === wantedTools) toolsSize = size;
-  }
 
   $: offline = !$isOnline$;
   $: if (offline && selected === StorageKey.GDRIVE && !signedIn) selected = StorageKey.BROWSER;
@@ -247,186 +199,6 @@
         </button>
       {/if}
 
-      {#if toolsShown}
-        <section class="tools" aria-labelledby="first-run-tools-title">
-          <SectionHead id="first-run-tools-title" number={2} title="Analysis tools" />
-          <p class="first-run-intro">
-            Optional downloads that run in this browser: a difficulty estimate and a word list for
-            each book, and furigana on words the book gives none. Books are analysed in the
-            background after you add them.
-          </p>
-
-          <div class="tools-rows">
-            <div class="tool-row">
-              <span class="place-text">
-                <span class="place-title" id="first-run-difficulty">
-                  {$t$('firstRun.difficulty')}
-                </span>
-                <span class="place-description">{$t$('firstRun.difficultyHint')}</span>
-              </span>
-              <button
-                type="button"
-                role="switch"
-                class="app-switch"
-                aria-checked={wantDifficulty}
-                aria-labelledby="first-run-difficulty"
-                disabled={toolsDownloading}
-                on:click={() => (wantDifficulty = !wantDifficulty)}
-              >
-                <span class="app-switch-thumb" />
-              </button>
-            </div>
-            <div class="tool-row">
-              <span class="place-text">
-                <span class="place-title" id="first-run-furigana">Generated furigana</span>
-                <span class="place-description">
-                  Turn it off any time in Settings → Reader. Readings by
-                  <a href="https://github.com/blankiekun/yurigana" target="_blank" rel="noreferrer"
-                    >yurigana</a
-                  >.
-                </span>
-              </span>
-              <button
-                type="button"
-                role="switch"
-                class="app-switch"
-                aria-checked={$generatedFurigana$}
-                aria-labelledby="first-run-furigana"
-                on:click={() => generatedFurigana$.next(!$generatedFurigana$)}
-              >
-                <span class="app-switch-thumb" />
-              </button>
-            </div>
-          </div>
-
-          {#if toolsReady}
-            <p class="tools-note">Downloaded. Books you add are analysed in the background.</p>
-          {:else if toolsDownloading}
-            {@const total = $analysisDownload$?.total ?? 0}
-            {@const done = $analysisDownload$?.done ?? 0}
-            <div
-              class="tools-track"
-              role="progressbar"
-              aria-label="Downloading the analysis tools"
-              aria-valuemin={0}
-              aria-valuemax={total}
-              aria-valuenow={done}
-            >
-              <div class="tools-fill" style:width="{total ? (done / total) * 100 : 0}%" />
-            </div>
-            <p class="tools-note">
-              {mb(done)} of {total ? mb(total) : '…'} MB. The download carries on after you continue;
-              Settings → Analysis tools shows it.
-            </p>
-          {:else if toolsDeclined}
-            <p class="tools-note">You can download them later in Settings → Analysis tools.</p>
-          {:else}
-            {#if $analysisDownload$?.error}
-              <p class="tools-note tools-error" role="alert">
-                The download failed: {$analysisDownload$.error}
-              </p>
-            {/if}
-            <span class="tools-actions">
-              <button
-                type="button"
-                class="app-button app-button-primary"
-                disabled={!wantedTools.length}
-                on:click={() => downloadAnalysisTools(wantedTools)}
-              >
-                Download{toolsSize && wantedTools.length ? ` (${mb(toolsSize)} MB)` : ''}
-              </button>
-              <button
-                type="button"
-                class="app-button app-button-quiet"
-                on:click={() => (toolsDeclined = true)}
-              >
-                Not now
-              </button>
-            </span>
-          {/if}
-        </section>
-      {/if}
-
-      <section class="lookups-step" aria-labelledby="first-run-lookups-title">
-        <SectionHead
-          id="first-run-lookups-title"
-          number={toolsShown ? 3 : 2}
-          title={$t$('firstRun.lookups')}
-        />
-        <p class="first-run-intro">{$t$('firstRun.lookupsLead')}</p>
-        <div class="tools-rows">
-          <div class="tool-row">
-            <span class="place-text">
-              <span class="place-title" id="first-run-lookups">{$t$('firstRun.lookupsSwitch')}</span
-              >
-              {#if !$yomitanSeen$}
-                <!-- Looking it up with Yomitan shows its popup: watchYomitan turns the switch off. -->
-                <span class="place-description">
-                  {$t$('firstRun.lookupsTest')} <span class="lookups-word" lang="ja">辞書</span>
-                </span>
-              {/if}
-            </span>
-            <button
-              type="button"
-              role="switch"
-              class="app-switch"
-              aria-checked={$builtInLookups$}
-              aria-labelledby="first-run-lookups"
-              on:click={() => builtInLookupsChoice$.next(!$builtInLookups$)}
-            >
-              <span class="app-switch-thumb" />
-            </button>
-          </div>
-        </div>
-        <a class="first-run-server" href="{pagePath}/settings?section=dictionary">
-          {$t$('firstRun.lookupsSettings')}
-        </a>
-      </section>
-
-      {#if socialOn}
-        <section class="social" aria-labelledby="first-run-social-title">
-          <SectionHead
-            id="first-run-social-title"
-            number={toolsShown ? 4 : 3}
-            title={$t$('social.friends')}
-          />
-          <p class="first-run-intro">{$t$('social.firstRunLead')}</p>
-          {#if $socialSession$ && !socialForm}
-            <p class="tools-note" role="status">
-              {$t$('social.firstRunSignedIn', { name: $socialSession$.me.username })}
-            </p>
-          {:else if socialForm}
-            <SocialAccountForm mode={socialForm} compact on:done={() => (socialForm = undefined)} />
-          {:else if socialDeclined}
-            <p class="tools-note">{$t$('social.firstRunLater')}</p>
-          {:else}
-            <span class="tools-actions">
-              <button
-                type="button"
-                class="app-button app-button-primary"
-                on:click={() => (socialForm = 'signup')}
-              >
-                {$t$('social.signUp')}
-              </button>
-              <button
-                type="button"
-                class="app-button app-button-quiet"
-                on:click={() => (socialForm = 'login')}
-              >
-                {$t$('social.logIn')}
-              </button>
-              <button
-                type="button"
-                class="app-button app-button-quiet"
-                on:click={() => (socialDeclined = true)}
-              >
-                {$t$('social.notNow')}
-              </button>
-            </span>
-          {/if}
-        </section>
-      {/if}
-
       {#if $placementFromWordTest$ && $placementCutoff$ > 0}
         <p class="first-run-word-test">
           <strong
@@ -444,11 +216,20 @@
       >
         Continue
       </button>
-      {#if $isOnline$}
-        <a class="first-run-server" href="{pagePath}/settings?section=sync#sync-server">
-          I have a chimimouryou server
-        </a>
-      {/if}
+      <span class="first-run-links">
+        {#if $isOnline$}
+          <a class="first-run-server" href="{pagePath}/settings?section=sync#sync-server">
+            I have a chimimouryou server
+          </a>
+        {/if}
+        <button
+          type="button"
+          class="first-run-server"
+          on:click={() => dialogManager.dialogs$.next([{ component: TtsuMigrationDialog }])}
+        >
+          {$t$('migrate.title')}
+        </button>
+      </span>
     </main>
 
     {#if !$yomitanSeen$}
@@ -628,59 +409,10 @@
     margin-top: 1.75rem;
   }
 
-  .tools,
-  .lookups-step,
-  .social {
-    margin-top: 3rem;
-  }
-
-  .tools-rows {
-    border-top: 2px solid var(--font-color);
-  }
-
-  .tool-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 1rem;
-    border-bottom: 1px solid var(--border-color);
-  }
-
-  .tool-row a {
-    color: var(--accent-strong-color);
-    text-decoration: underline;
-    text-underline-offset: 0.2em;
-  }
-
-  .tools-actions {
+  .first-run-links {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.75rem;
-    margin-top: 1.25rem;
-  }
-
-  .tools-track {
-    height: 3px;
-    margin-top: 1.25rem;
-    background: var(--app-progress-track);
-  }
-
-  .tools-fill {
-    height: 100%;
-    background: var(--app-progress-fill);
-  }
-
-  .tools-note {
-    margin-top: 0.75rem;
-    color: var(--app-muted-fg);
-    font-size: var(--type-small);
-    font-variant-numeric: tabular-nums;
-    line-height: 1.5;
-  }
-
-  .tools-error {
-    color: var(--app-danger-color);
+    gap: 0 1.5rem;
   }
 
   .first-run-server {
@@ -694,12 +426,6 @@
     color: var(--font-color);
     text-decoration: underline;
     text-underline-offset: 0.2em;
-  }
-
-  .lookups-word {
-    color: var(--font-color);
-    font-size: var(--type-h2);
-    font-weight: 700;
   }
 
   .lookups {

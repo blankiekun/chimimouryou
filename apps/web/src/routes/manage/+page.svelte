@@ -99,6 +99,7 @@
   import { backgroundAnalysis$, catchUpAnalysis } from '$lib/data/background-analysis';
   import InstallHint from '$lib/components/standalone/install-hint.svelte';
   import LibraryEmpty from '$lib/components/standalone/library-empty.svelte';
+  import AnalysisToolsOffer from '$lib/components/standalone/analysis-tools-offer.svelte';
   import {
     needsFirstRun,
     showsExternalReadHint,
@@ -1712,6 +1713,7 @@
             </section>
           {/if}
           {#if standalone}
+            <AnalysisToolsOffer />
             <InstallHint />
           {/if}
         </div>

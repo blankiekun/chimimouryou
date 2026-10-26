@@ -370,7 +370,7 @@ export const en = {
   'settings.section.dictionary-audio.text': 'Where word audio comes from.',
   'settings.section.dictionary-shortcuts': 'Shortcuts',
   'settings.section.dictionary-shortcuts.text': 'Keys that work while the popup is open.',
-  'dict.jmdictHint': 'Download the zip from its releases page, then import it here.',
+  'dict.jmdictHint': 'The free Japanese–English dictionary most Yomitan readers start with.',
   'dict.fontSize': 'Font size',
   'dict.fontSizeHint': 'Text size in the popup, in pixels.',
   'dict.popupDisplay': 'Placement',
@@ -514,12 +514,6 @@ export const en = {
   'dict.resetHint': "Back to Yomitan's defaults. Dictionaries stay.",
   'dict.resetButton': 'Reset',
   'dict.resetConfirm': 'Reset for good',
-  'firstRun.lookups': 'Dictionary lookups',
-  'firstRun.lookupsLead':
-    'A dictionary built into the app, for browsers without Yomitan. Import dictionaries in Settings → Dictionary lookups.',
-  'firstRun.lookupsSwitch': 'Use the built-in dictionary instead of Yomitan',
-  'firstRun.lookupsTest': 'Already use Yomitan? Look up this word with it:',
-  'firstRun.lookupsSettings': 'Set up dictionaries',
   'settings.area.ai': 'AI',
   'settings.area.audiobookshelf': 'Audiobookshelf',
   'settings.area.anki': 'Anki',
@@ -1989,14 +1983,6 @@ export const en = {
   'settings.section.social-hub': 'Hub and data',
   'settings.section.social-hub.text': 'Where your social account lives, and deleting it.',
   'social.serverAccount': 'Server account',
-  'social.firstRunLead':
-    'Friends see the books you are reading and how far along you are, nothing more unless you share it. Nothing is sent until you sign up or log in.',
-  'social.notNow': 'Not now',
-  'social.firstRunLater': 'You can sign up later from Friends on Home.',
-  'social.firstRunSignedIn': 'Signed in to Friends as @{name}.',
-  'firstRun.difficulty': 'Difficulty estimates',
-  'firstRun.difficultyHint':
-    'A difficulty and a word list for each book, with your known-word coverage and Read next.',
   'social.friends': 'Friends',
   'social.lead': 'What your friends are reading. They see only what you choose to share.',
   'social.emptyLead':
@@ -2541,7 +2527,46 @@ export const en = {
   'community.removeAll': 'Remove all posts by {name}',
   'community.removeConfirm': 'Remove this post? It goes for everyone; replies stay.',
   'community.removeAllConfirm':
-    'Remove every post by {name}? Posts with replies stay as “This post was deleted.”'
+    'Remove every post by {name}? Posts with replies stay as “This post was deleted.”',
+  'dict.installJmdict': 'Install dictionary ({size} MB)',
+  'dict.installJmdictNoSize': 'Install dictionary',
+  'dict.installingJmdict': 'Downloading and importing JMdict…',
+  'dict.jmdictInstalled': 'JMdict is installed.',
+  'dict.jmdictCredit': 'JMdict by EDRDG, CC BY-SA 4.0',
+  'dict.installFailed': "The dictionary couldn't be imported.",
+  'dict.noneYet': 'No dictionary yet: lookups find nothing until one is installed.',
+  'lookup.noDictionary': 'No dictionary yet',
+  'lookup.noDictionaryText': 'Lookups need a dictionary: install JMdict here, or import your own.',
+  'lookup.dictionarySettings': 'Dictionary settings',
+  'lookup.hintTitle': 'Look up a word',
+  'lookup.hintTap': 'Tap a word to look it up in the built-in dictionary.',
+  'lookup.hintHover':
+    'Hold Shift and move the mouse over a word to look it up in the built-in dictionary.',
+  'lookup.hintNoDictionary': 'First install a dictionary, about a minute:',
+  'prefs.needsDesktop': 'Needs a desktop browser; books with their own furigana still show it.',
+  'analysisOffer.title': 'Get furigana and difficulty',
+  'analysisOffer.text':
+    'Optional tools that run in this browser: a difficulty estimate and word list for each book, and furigana on words the book gives none.',
+  'analysisOffer.download': 'Download ({size} MB)',
+  'analysisOffer.downloadNoSize': 'Download',
+  'analysisOffer.downloading': 'Downloading. It carries on in the background:',
+  'analysisOffer.settings': 'Settings → Analysis tools',
+  'analysisOffer.ready': 'Downloaded. Your books are analysed in the background.',
+  'analysisOffer.failed': 'The download failed: {error}',
+  'analysisOffer.notNow': 'Not now',
+  'analysisOffer.hide': 'Hide',
+  'library.trySample': 'Try a sample book',
+  'library.sampleFailed': "The sample book couldn't be loaded.",
+  'library.whereToGetBooks': 'Where to get Japanese books',
+  'migrate.title': 'Coming from ッツ Reader?',
+  'migrate.export':
+    'In ッツ Reader, open the book manager, select your books, then Export → Zip File.',
+  'migrate.import':
+    'Here, choose where your books live and press Continue, then Library → Import → Import Backup and pick that zip.',
+  'migrate.what': 'Books, reading progress, statistics and reading goals come across.',
+  'migrate.drive':
+    'Google Drive sync here uses its own {folder} folder, so books ッツ Reader synced don’t show up by themselves: import the backup instead.',
+  'migrate.close': 'Got it'
 };
 
 export type MessageKey = keyof typeof en;

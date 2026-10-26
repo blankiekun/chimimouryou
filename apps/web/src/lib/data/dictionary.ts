@@ -30,6 +30,7 @@ import { canRunYomitan } from '$lib/functions/can-run-yomitan';
 import { writableSubject } from '$lib/functions/svelte/store';
 import { writableStorageSubject } from '$lib/data/internal/writable-storage-subject';
 import { localStorage } from '$lib/data/window/local-storage';
+import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
 import { yomitanSeen$ } from '$lib/data/yomitan';
 
 export type { DictionarySummary, LookupResult, Options as YomitanOptions };
@@ -60,6 +61,12 @@ export function builtInLookupsOn(choice: boolean | null, canRun: boolean, seen: 
 const thisBrowserRunsYomitan = () =>
   typeof navigator !== 'undefined' &&
   canRunYomitan(navigator.userAgent, navigator.maxTouchPoints || 0, 'chimiDesktop' in globalThis);
+
+/** The reader closed the "No dictionary yet" note (lookup-popup.svelte). */
+export const noDictionaryNoteSeen$ = writableBooleanLocalStorageSubject()(
+  'noDictionaryNoteSeen',
+  false
+);
 
 export const builtInLookups$ = combineLatest([builtInLookupsChoice$, yomitanSeen$]).pipe(
   map(([choice, seen]) => builtInLookupsOn(choice, thisBrowserRunsYomitan(), seen))

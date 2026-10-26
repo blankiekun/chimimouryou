@@ -22,6 +22,7 @@
     dictionaries$,
     loadYomitanOptions,
     lookup,
+    noDictionaryNoteSeen$,
     profileOptions,
     refreshDictionaries,
     yomitanOptions$,
@@ -46,6 +47,9 @@
   } from '$lib/vendor/yomitan/dom/document-util';
   import { addScopeToCssLegacy } from '$lib/vendor/yomitan/core/utilities';
   import TermEntry from './term-entry.svelte';
+  import InstallDictionary from './install-dictionary.svelte';
+  import Toast from '$lib/components/toast.svelte';
+  import { pagePath } from '$lib/data/env';
 
   /** Selector of the elements whose text is scanned (e.g. `.book-content`) */
   export let scope: string;
@@ -79,9 +83,15 @@
   let detachFrame = () => {};
   /** The window the root match is highlighted in */
   let highlightView: typeof globalThis = globalThis;
+  /** The installed dictionaries are known (refreshDictionaries) */
+  let listed = false;
+  /** The one-time note after a lookup with no dictionary to look in */
+  let emptyNote = false;
 
   $: profile = $yomitanOptions$ ? profileOptions($yomitanOptions$) : undefined;
   $: view = views[index] as View | undefined;
+  // Nothing to look in: taps pass through (page turns, manga and VN taps) instead of finding nothing.
+  $: noDictionary = listed && !!profile && !profile.dictionaries.some(({ enabled }) => enabled);
   /** Bindable: the popup is showing (the reader hides its toast meanwhile) */
   export let open = false;
   $: open = !!view && !!profile;
@@ -109,6 +119,7 @@
   onMount(() => {
     loadYomitanOptions()
       .then(() => refreshDictionaries())
+      .then(() => (listed = true))
       .catch(() => undefined);
   });
 
@@ -210,6 +221,13 @@
     const at = pointAt(x, y);
     const scan = scanAt(at.x, at.y, profile.scanning, at.doc);
     if (!scan) return false;
+    if (noDictionary && !nested) {
+      if (!$noDictionaryNoteSeen$) {
+        emptyNote = true;
+        noDictionaryNoteSeen$.next(true);
+      }
+      return false;
+    }
     const key = `${nested}:${scan.text}`;
     if (key === lastScanKey && open) return true;
     lastScanKey = key;
@@ -536,7 +554,33 @@
   </section>
 {/if}
 
+{#if emptyNote}
+  <Toast label={$t$('lookup.noDictionary')} onclose={() => (emptyNote = false)}>
+    <p class="dict-empty-title">{$t$('lookup.noDictionary')}</p>
+    <p class="dict-empty-text">
+      {$t$('lookup.noDictionaryText')}
+      <a href="{pagePath}/settings?section=dictionary">{$t$('lookup.dictionarySettings')}</a>
+    </p>
+    <InstallDictionary ondone={() => (emptyNote = false)} />
+  </Toast>
+{/if}
+
 <style lang="scss">
+  .dict-empty-title {
+    font-weight: 700;
+  }
+
+  .dict-empty-text {
+    margin: 0.25rem 0 0.75rem;
+    font-size: var(--type-small);
+    line-height: 1.5;
+
+    a {
+      text-decoration: underline;
+      text-underline-offset: 0.2em;
+    }
+  }
+
   .ttu-dict {
     position: fixed;
     z-index: 70;

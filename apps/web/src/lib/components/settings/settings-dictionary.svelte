@@ -11,6 +11,7 @@
   import type { ToggleOption } from '$lib/components/button-toggle-group/toggle-option';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
+  import InstallDictionary from '$lib/components/dictionary/install-dictionary.svelte';
   import DictionaryCollectionImport from '$lib/components/settings/dictionary-collection-import.svelte';
   import {
     builtInLookups$,
@@ -36,10 +37,11 @@
   import { t$ } from '$lib/i18n';
   import type { DictionaryOptions, ProfileOptions } from '$lib/vendor/yomitan/types/settings';
 
-  const jmdictReleases = 'https://github.com/yomidevs/jmdict-yomitan/releases/latest';
   const jitenFrequencyLists = 'https://jiten.moe/frequency-dictionaries';
 
   let loadError = '';
+  /** The installed dictionaries are known (refreshDictionaries) */
+  let listed = false;
   let importing: { name: string; done: number; total: number } | undefined;
   let importErrors: string[] = [];
   let confirming = '';
@@ -49,6 +51,7 @@
   onMount(() => {
     loadYomitanOptions()
       .then(() => refreshDictionaries())
+      .then(() => (listed = true))
       .catch((error) => (loadError = error.message));
   });
 
@@ -243,6 +246,9 @@
         <p class="dict-note" role="status">{$t$('dict.yomitanSeenOn')}</p>
       {:else if $yomitanSeen$ && $builtInLookupsChoice$ === null}
         <p class="dict-note" role="status">{$t$('dict.yomitanSeenOff')}</p>
+      {:else if $builtInLookups$ && listed && !$dictionaries$.length}
+        <p class="dict-note" role="status">{$t$('dict.noneYet')}</p>
+        <InstallDictionary />
       {/if}
     </svelte:fragment>
   </SettingsItemGroup>
@@ -311,12 +317,7 @@
           <span class="dict-title">JMdict</span>
           <span class="dict-meta">{$t$('dict.jmdictHint')}</span>
         </span>
-        <a
-          class="app-button app-button-quiet"
-          href={jmdictReleases}
-          target="_blank"
-          rel="noreferrer">{$t$('dict.getJmdict')}</a
-        >
+        <InstallDictionary />
       </li>
       <li class="dict-download">
         <span class="dict-name">

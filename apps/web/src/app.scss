@@ -370,6 +370,11 @@
       background-color 0.18s var(--app-ease);
   }
 
+  .app-switch:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
   .app-switch[aria-checked='true'] {
     color: var(--font-color);
   }

@@ -1,11 +1,26 @@
 # chimimouryou
 
-A self-hosted Japanese e-book reader for your Calibre library, built for
-learners. It is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook-reader)
-that turns the browser-based reader into one for your own server: point it at a
-Calibre library and everyone in the house reads from it, with accounts, synced
-progress and highlights, Anki mining and difficulty estimates. The reader
-itself, and its Yomitan support, are upstream's.
+A Japanese e-book reader built for learners, in your browser or on your own
+server. It is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook-reader):
+lookups with Yomitan or a built-in dictionary, furigana, difficulty estimates,
+reading statistics and Anki mining. The reader itself, and its Yomitan support,
+are upstream's.
+
+## Try it in your browser
+
+Open **[chimireader.github.io](https://chimireader.github.io)** and add an EPUB,
+or try the sample book in the empty library. Nothing to install and no account:
+books stay in your browser, or sync through your Google Drive or a folder.
+Settings → Dictionary installs JMdict in one tap, and desktop browsers can
+download the furigana and difficulty tools. Coming from ッツ Reader? Export a
+Zip File there and use Import Backup here. Phones and Yomitan:
+[docs/LEARNING.md](docs/LEARNING.md).
+
+## Or host it for your Calibre library
+
+Point it at a Calibre library and everyone in the house reads from it, with
+accounts, synced progress and highlights, Anki mining and server-side
+difficulty estimates.
 
 ![Reading 薬屋のひとりごと in vertical text, with two highlights and the selection toolbar](assets/readme/screenshots/reader.png)
 
@@ -15,7 +30,7 @@ reading statistics for learners. See [Features](#features).
 
 <sub>Screenshots show books from the maintainer's own library; the titles belong to their publishers.</sub>
 
-## Setup
+### Setup
 
 You need [Docker](https://docs.docker.com/get-docker/) with the Compose plugin
 (Docker Desktop on Windows and macOS). Prebuilt images exist for amd64 and arm64.
@@ -293,4 +308,9 @@ sentences with reviewed readings from [Tatoeba](https://tatoeba.org/) (CC BY 2.0
 Tatoeba's contributors); neither is redistributed here. The built-in dictionary runs
 [Yomitan](https://github.com/yomidevs/yomitan)'s lookup engine by the Yomitan Authors
 (GPL-3.0-or-later, see [its LICENSE](apps/web/src/lib/vendor/yomitan/LICENSE)), with kanji
-variants from [kanji-processor](https://www.npmjs.com/package/kanji-processor) (MIT). chimimouryou is not affiliated with or endorsed by any of these projects.
+variants from [kanji-processor](https://www.npmjs.com/package/kanji-processor) (MIT). Its
+one-tap dictionary is [JMdict](https://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project)
+by the Electronic Dictionary Research and Development Group (CC BY-SA 4.0), packed for Yomitan
+by [jmdict-yomitan](https://github.com/yomidevs/jmdict-yomitan) and downloaded when the site is
+built (it isn't in the repository). The sample book, 新美南吉's 手袋を買いに, is public domain,
+from Aozora Bunko. chimimouryou is not affiliated with or endorsed by any of these projects.
