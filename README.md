@@ -174,7 +174,8 @@ yourself.
   audiobook (or the AI voice) and, in visual novels, a screenshot and the
   line's voice.
 - **Manga text**: page text from [mokuro](https://github.com/kha-white/mokuro),
-  made on the server or uploaded, laid over the pages for Yomitan.
+  made on the server or uploaded, laid over the pages for Yomitan. Without a
+  server, `.mokuro` files work too, or a desktop browser makes the text itself.
 
 ### Library
 
@@ -312,5 +313,10 @@ variants from [kanji-processor](https://www.npmjs.com/package/kanji-processor) (
 one-tap dictionary is [JMdict](https://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project)
 by the Electronic Dictionary Research and Development Group (CC BY-SA 4.0), packed for Yomitan
 by [jmdict-yomitan](https://github.com/yomidevs/jmdict-yomitan) and downloaded when the site is
-built (it isn't in the repository).
+built (it isn't in the repository). Manga text made in the browser downloads, from Hugging Face,
+[ogkalu's comic text detector](https://huggingface.co/ogkalu/comic-text-and-bubble-detector)
+and [manga-ocr](https://github.com/kha-white/manga-ocr) by kha-white (in
+[onnx-community's ONNX export](https://huggingface.co/onnx-community/manga-ocr-base-ONNX)), all Apache-2.0;
+audiobook subtitles download OpenAI's [Whisper](https://github.com/openai/whisper) (MIT, ONNX
+exports by onnx-community); none is redistributed here.
 chimimouryou is not affiliated with or endorsed by any of these projects.

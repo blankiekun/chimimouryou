@@ -31,7 +31,9 @@
   import { calibreCoverUrl, loadCalibreCatalog, type CalibreBook } from '$lib/data/calibre';
   import { loadSeriesOverrides } from '$lib/data/series-overrides';
   import {
+    keptMokuro,
     loadMokuro,
+    localMokuroChanged$,
     mangaText$,
     pagesText,
     type MangaText,
@@ -362,12 +364,10 @@
     goToPage(savedIndex);
     ready = true;
 
+    loadText(data).catch(({ message }) => logger.warn(`Could not load the page text: ${message}`));
     if (external?.storageType === StorageKey.CALIBRE) {
       loadVolumes(data.title).catch(({ message }) =>
         logger.warn(`Could not find the series' other volumes: ${message}`)
-      );
-      loadText(data).catch(({ message }) =>
-        logger.warn(`Could not load the page text: ${message}`)
       );
     }
   }
@@ -383,13 +383,28 @@
     currentVolume = books.find((entry) => entry.title === title);
   }
 
-  // shortcut: needs the catalog for the id, so there is no text offline; cache it in IndexedDB if missed.
+  /** The text kept in this browser (mokuro.ts), else the server's for Calibre manga. */
+  // shortcut: the server's needs the catalog for the id, so Calibre manga have no text offline; cache it in IndexedDB if missed.
   async function loadText(data: BooksDbBookData) {
-    const calibreBook = (await loadCalibreCatalog()).find((entry) => entry.title === data.title);
-    const text = calibreBook && (await loadMokuro(calibreBook.id));
+    let text = await keptMokuro(data.title);
 
-    if (text) pageText = pagesText(text, mangaPages(data));
+    if (!text && external?.storageType === StorageKey.CALIBRE) {
+      const calibreBook = (await loadCalibreCatalog()).find((entry) => entry.title === data.title);
+
+      text = calibreBook && (await loadMokuro(calibreBook.id));
+    }
+
+    pageText = text ? pagesText(text, mangaPages(data)) : [];
   }
+
+  // Text uploaded or made in this browser while the volume is open shows at once.
+  const textChanged = localMokuroChanged$.subscribe((title) => {
+    if (book && title === book.title) {
+      loadText(book).catch(({ message }) =>
+        logger.warn(`Could not load the page text: ${message}`)
+      );
+    }
+  });
 
   /** Opens another volume like the library does: downloaded and processed when first read. */
   async function openVolume(target: CalibreBook) {
@@ -964,6 +979,7 @@
   });
 
   onDestroy(() => {
+    textChanged.unsubscribe();
     save();
     readingActivity();
     if (book && pageCount && isPluginEnabled('social')) {

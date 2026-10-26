@@ -134,8 +134,14 @@ Manga are pictures, so Yomitan needs text laid over them. That text comes from
   one volume at a time.
 - **Upload .mokuro**: a file made by running mokuro on your own computer.
 
+Manga stored in the browser (any manga in the standalone edition) keep their text
+in that browser only: upload a `.mokuro` on the book's page, import one beside its
+CBZ (same name, e.g. `Vol 1.cbz` and `Vol 1.mokuro`), or, on a desktop browser,
+download **Manga text** in Settings → Analysis tools and press **Make text in this
+browser** (about 10 seconds a page; a text detector and manga-ocr run in the tab).
+
 In the manga reader, Reader settings → **Page text** shows it under the pointer
-(default), always, or not at all. Page text isn't kept for offline reading.
+(default), always, or not at all. The server's page text isn't kept for offline reading.
 
 ## 5. Choosing what to read next
 

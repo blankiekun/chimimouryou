@@ -47,6 +47,10 @@ async function transcribe({ model, sources }: WhisperRequest) {
       }
     }
   });
+
+  // No audio: the model's download only (Settings).
+  if (!sources.length) return;
+
   const inputs = sources.map(
     (source) =>
       new Input({

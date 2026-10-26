@@ -353,6 +353,8 @@
       <!-- Another audiobook stops the transcription. -->
       {#key forCandidate}
         <WhisperSubtitles
+          {title}
+          audio={absCandidateKey(forCandidate)}
           name={forCandidate.label}
           sources={() =>
             forCandidate.tracks.map((item) => ({

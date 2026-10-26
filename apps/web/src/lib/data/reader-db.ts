@@ -7,8 +7,8 @@
 /**
  * The browser database for reader extras (highlights, "Story so far" summaries,
  * lorebooks, audiobooks, kanji seen, visual novel pages read, Audiobookshelf subtitles,
- * generated furigana readings files, the analysis tools' difficulty estimates and word lists and
- * known words from Anki), separate from upstream's books
+ * generated furigana readings files, the analysis tools' difficulty estimates and word lists,
+ * browser-stored manga's text, Whisper's audiobook subtitles and known words from Anki), separate from upstream's books
  * database. Not part of upstream.
  */
 
@@ -16,6 +16,8 @@ import { openDB, type DBSchema } from 'idb';
 import type { BookAnnotations } from '$lib/data/annotations';
 import type { BookAudiobook } from '$lib/data/audiobook';
 import type { LocalEstimate, LocalWordList } from '$lib/data/analysis-tools';
+import type { LocalMokuro } from '$lib/data/mokuro';
+import type { WhisperSubtitles } from '$lib/data/whisper';
 import type { CachedReadings } from '$lib/data/generated-furigana';
 import type { ImmersionLog } from '$lib/data/immersion-log';
 import type { AbsSubtitles } from '$lib/data/audiobookshelf';
@@ -41,6 +43,10 @@ interface ReaderDb extends DBSchema {
   /** Local books' difficulty estimates and word lists, made by the analysis tools */
   estimates: { key: string; value: LocalEstimate };
   wordLists: { key: string; value: LocalWordList };
+  /** Browser-stored manga's text (mokuro.ts) */
+  mokuro: { key: string; value: LocalMokuro };
+  /** Audiobook subtitles made by Whisper in this browser (whisper.ts) */
+  whisperSubtitles: { key: string; value: WhisperSubtitles };
   /**
    * 'words' and 'coverage' (known-words.ts), 'met' and 'list:<id>' (words-met.ts), 'marks'
    * (word-marks.ts), 'history' (words-history.ts), 'kanji:<title>' (book-kanji.ts),
@@ -65,7 +71,7 @@ let dbPromise: ReturnType<typeof openDB<ReaderDb>> | undefined;
 /** Named ttu-annotations for historical reasons; it holds every reader extra. */
 export function readerDb() {
   dbPromise ??= new Promise((resolve, reject) => {
-    openDB<ReaderDb>('ttu-annotations', 7, {
+    openDB<ReaderDb>('ttu-annotations', 8, {
       upgrade(database, oldVersion) {
         if (oldVersion < 1) {
           database.createObjectStore('annotations', { keyPath: 'title' });
@@ -91,6 +97,10 @@ export function readerDb() {
         if (oldVersion < 7) {
           database.createObjectStore('estimates', { keyPath: 'title' });
           database.createObjectStore('wordLists', { keyPath: 'title' });
+        }
+        if (oldVersion < 8) {
+          database.createObjectStore('mokuro', { keyPath: 'title' });
+          database.createObjectStore('whisperSubtitles', { keyPath: 'title' });
         }
       },
       // Another tab still has the previous version open; the upgrade waits for it.

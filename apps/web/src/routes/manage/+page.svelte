@@ -119,6 +119,7 @@
     formatBytes,
     type VnUpload
   } from '$lib/data/vn-upload';
+  import { importMokuroFiles } from '$lib/data/mokuro';
   import { storageSource$ } from '$lib/data/storage/storage-view';
   import {
     booklistSortOptions$,
@@ -573,6 +574,8 @@
     // Unpacked game folders become one visual novel each, like a ZIP of them.
     const { games, rest } = vnFolders(Array.from(fileList));
     const files = rest.filter((f) => supportedExtRegex.test(f.name));
+    // A .mokuro beside its CBZ is that manga's text (mokuro.ts).
+    const mokuroFiles = rest.filter((f) => /\.mokuro$/i.test(f.name));
     const errorTitle = 'Bookimport failed';
 
     if (!files.length && !games.length) {
@@ -614,10 +617,14 @@
       importedTitles,
       keepOnDevice
     ).catch((catchedError) => catchedError.message);
+    const textError = mokuroFiles.length
+      ? await importMokuroFiles(mokuroFiles, importedTitles)
+      : '';
 
     addImportsToHome(importedTitles);
     resetProgress();
 
+    if (textError && !error) showError(errorTitle, textError, textError);
     if (error) {
       showError(errorTitle, error, 'Error(s) occurred during bookimport');
     }
@@ -1646,7 +1653,7 @@
                 <label class="app-button">
                   <input
                     type="file"
-                    accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,.cbz,.zip"
+                    accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,.cbz,.zip,.mokuro"
                     multiple
                     hidden
                     use:inputFile={onFilesChange}
@@ -1799,7 +1806,7 @@
         <label class="library-empty library-empty-import">
           <input
             type="file"
-            accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,.cbz,.zip"
+            accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,.cbz,.zip,.mokuro"
             multiple
             hidden
             use:inputFile={onFilesChange}
