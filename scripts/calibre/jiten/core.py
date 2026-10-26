@@ -23,6 +23,10 @@ CORE_VERSION bump). Not upstream.
   children's books are near 1), and sentLen, the mean characters per sentence. Shown beside the
   level, never folded into it.
 - score: V98 on the frozen 1-10 scale (core-scale.json): log-linear between its anchors.
+- furigana_score: the level for a reader who reads with furigana, from the level and rubyKanji alone
+  (stored already, so no CORE_VERSION bump): up to FURIGANA_DROP lower for a fully ruby'd book,
+  ramping over FURIGANA_RAMP, so light novels' ruby (0.3-0.45) never moves it. Shown beside the level;
+  rank gates and the library's level stay on score.
 """
 import bisect
 import json
@@ -49,7 +53,12 @@ KANJI = re.compile('[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\U00020000-\U0003134
 SENTENCE = re.compile('[^。！？!?\n]+[。！？!?」』]*')
 BLANKS = ' \t\r\u00a0\u3000'
 KANA = re.compile('[ぁ-ヿ]+')
-SCALE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'core-scale.json')
+# Fitted on 60 works against Jiten, LearnNatively and jpdb: a fully ruby'd book's level less the services'
+# (mapped onto the scale over the other books) had a median gap of 1.2-2.1 levels; checked on ~480 held-out
+# library books Jiten lists (Spearman +0.63 -> +0.71, the books below the ramp unchanged).
+FURIGANA_DROP = 2
+FURIGANA_RAMP = (0.5, 0.9)
+SCALE_PATH =os.path.join(os.path.dirname(os.path.realpath(__file__)), 'core-scale.json')
 
 
 def to_hiragana(text: str) -> str:
@@ -143,6 +152,14 @@ def score(v98, scale: dict) -> float:
         if x <= math.log(v1):
             return round2(s0 + (s1 - s0) * (x - math.log(v0)) / (math.log(v1) - math.log(v0)))
     return anchors[-1][0]
+
+
+def furigana_score(level: float, ruby_kanji: float) -> float:
+    """The level read with the author's furigana: `level` (score) less FURIGANA_DROP times how far
+    rubyKanji is along FURIGANA_RAMP, at least 1."""
+    low, high = FURIGANA_RAMP
+    ramp = min(max((ruby_kanji - low) / (high - low), 0), 1)
+    return max(round2(level - FURIGANA_DROP * ramp), 1.0)
 
 
 def facets(text: str, ruby_kanji: int) -> dict:

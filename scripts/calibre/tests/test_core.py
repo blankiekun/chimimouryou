@@ -43,6 +43,10 @@ class CoreTest(unittest.TestCase):
         for v98, expected in self.fixture['scores']:
             self.assertEqual(core.score(v98, scale), expected)
 
+    def test_furigana_scores(self):
+        for level, ruby_kanji, expected in self.fixture['furiganaScores']:
+            self.assertEqual(core.furigana_score(level, ruby_kanji), expected)
+
     def test_scale_is_monotone(self):
         scale = core.load_scale()
         anchors = scale['anchors']

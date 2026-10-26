@@ -82,6 +82,9 @@
               <span>
                 {[
                   facets.fullFurigana ? $t$('difficulty.fullFurigana') : '',
+                  facets.withFurigana === undefined
+                    ? ''
+                    : $t$('difficulty.withFurigana', { level: facets.withFurigana.toFixed(1) }),
                   $t$(sentenceKeys[facets.sentBand])
                 ]
                   .filter(Boolean)
