@@ -40,8 +40,8 @@ out=${ANALYSIS_TOOLS_OUT:-$root/apps/web/build/analysis-tools}
 jiten=$root/scripts/calibre/jiten
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
-yurigana=$(grep -o 'https://github.com/blankiekun/yurigana/archive/refs/tags/[^ ]*\.tar\.gz' "$jiten/requirements.txt")
-yurigana_sha256=$(grep -o 'yurigana/archive/refs/tags/[^ ]*\.tar\.gz#sha256=[0-9a-f]\{64\}' "$jiten/requirements.txt" | sed 's/.*=//' || true)
+yurigana=$(grep -o 'https://github.com/blankiekun/yurigana/archive/[^ ]*\.tar\.gz' "$jiten/requirements.txt")
+yurigana_sha256=$(grep -o 'yurigana/archive/[^ ]*\.tar\.gz#sha256=[0-9a-f]\{64\}' "$jiten/requirements.txt" | sed 's/.*=//' || true)
 [ -n "$yurigana_sha256" ] || { echo "No #sha256= for yurigana in scripts/calibre/jiten/requirements.txt" >&2; exit 1; }
 grep -q "SudachiDict-core==$SUDACHI_DICT" "$jiten/requirements.txt" ||
   { echo "SUDACHI_DICT differs from scripts/calibre/jiten/requirements.txt" >&2; exit 1; }
@@ -120,12 +120,13 @@ cp "$root/apps/web/node_modules/onnxruntime-web/dist/"ort-wasm-simd-threaded.{mj
 # furigana: the reader pack (word lists take Sudachi's readings without it).
 # `engine`: the difficulty engine's fingerprint (scripts/calibre/jiten/engine.py), which the browser's
 # estimates carry; it must be the release's (apps/web/src/lib/data/difficulty-engine.json).
-python3 - "$out" "$work" "$SUDACHI_DICT" "$PYODIDE" "$(basename "$yurigana" .tar.gz)" "$jiten" \
+python3 - "$out" "$work" "$SUDACHI_DICT" "$PYODIDE" "$jiten" \
   "$root/apps/web/src/lib/data/difficulty-engine.json" <<'EOF'
 import hashlib, json, os, sys
-out, work, dic, pyodide, yurigana, jiten, committed = sys.argv[1:]
+out, work, dic, pyodide, jiten, committed = sys.argv[1:]
 sys.path.insert(0, jiten)
-from engine import BUNDLED_FREQUENCY_LIST, engine_fingerprint
+from engine import BUNDLED_FREQUENCY_LIST, engine_fingerprint, pinned_versions
+yurigana = pinned_versions()[0]  # a tag's version, or a commit pin's (requirements.txt)
 engine = engine_fingerprint(BUNDLED_FREQUENCY_LIST, yurigana.lstrip('v'), f'core-{dic}')
 if engine != json.load(open(committed))['engine']:
     sys.exit(f'The engine differs from {committed}: python3 {jiten}/engine.py > {committed}')

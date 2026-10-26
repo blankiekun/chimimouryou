@@ -66,10 +66,11 @@ def engine_fingerprint(frequency_list: str, yurigana: str, sudachi_dict: str, ex
 
 
 def pinned_versions() -> tuple:
-    """yurigana's and SudachiDict-core's versions in requirements.txt: (yurigana, 'core-<version>')."""
+    """yurigana's and SudachiDict-core's versions in requirements.txt: (yurigana, 'core-<version>'). A pin to a
+    commit between releases (archive/<sha>.tar.gz) gives its version in a `# yurigana <version> at` line."""
     with open(REQUIREMENTS, encoding='utf-8') as f:
         text = f.read()
-    return (re.search(r'yurigana/archive/refs/tags/v([^/]+)\.tar\.gz', text)[1],
+    return ((re.search(r'yurigana/archive/refs/tags/v([^/]+)\.tar\.gz', text) or re.search(r'^# yurigana (\S+) at ', text, re.M))[1],
             'core-' + re.search(r'SudachiDict-core==(\S+)', text)[1])
 
 
