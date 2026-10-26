@@ -7,6 +7,7 @@
    * games on a synced source sync through vnsaves.json in the game's folder (sync-files.ts).
    */
   import { noteReading } from '$lib/data/social';
+  import { readingActivity } from '$lib/data/reader-hooks';
   import { isPluginEnabled } from '$lib/plugins';
   import { onDestroy, onMount } from 'svelte';
   import { goto } from '$app/navigation';
@@ -152,6 +153,15 @@
   let todayCharacters = 0;
 
   $: percent = book?.characters ? Math.min(100, (readCharacters / book.characters) * 100) : 0;
+  // What is open, for the plugins (Discord status).
+  $: if (book && readCharacters >= 0) {
+    readingActivity({
+      kind: 'vn',
+      title: book.title,
+      position: readCharacters,
+      characters: book.characters
+    });
+  }
 
   $: if (started) engineSet('Ruby', $furigana$ ? 1 : 0);
   $: if (started) engineSet('TextSpeed', $instantText$ ? 0 : -1);
@@ -540,6 +550,7 @@
 
   onDestroy(() => {
     save();
+    readingActivity();
     if (book && isPluginEnabled('social')) {
       noteReading(book.title, read.characters, book.characters, true, 'vn');
     }

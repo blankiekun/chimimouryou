@@ -7,6 +7,7 @@
    * Book-only extras (highlights, recap, listen, search, statistics) are left out.
    */
   import { noteReading } from '$lib/data/social';
+  import { readingActivity } from '$lib/data/reader-hooks';
   import { isPluginEnabled } from '$lib/plugins';
   import { onDestroy, onMount, tick } from 'svelte';
   import { fly } from 'svelte/transition';
@@ -200,6 +201,10 @@
       ? pageIndex
       : (groups[groupIndex]?.at(groupIndex === groups.length - 1 ? -1 : 0) ?? pageIndex);
   $: if (ready && shownPage !== savedIndex) scheduleSave();
+  // What is open, for the plugins (Discord status).
+  $: if (ready && book && pageCount) {
+    readingActivity({ kind: 'manga', title: book.title, page: shownPage + 1, pageCount });
+  }
   // Next is to the left in right-to-left manga.
   $: sign = mode === 'rtl' ? -1 : 1;
   $: base = groupSize(groupIndex, groups, sizes, $mangaScale$, view);
@@ -960,6 +965,7 @@
 
   onDestroy(() => {
     save();
+    readingActivity();
     if (book && pageCount && isPluginEnabled('social')) {
       noteReading(book.title, shownPage + 1, pageCount, true, 'manga');
     }

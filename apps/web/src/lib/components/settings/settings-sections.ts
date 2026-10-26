@@ -247,6 +247,28 @@ export const settingsAreas: SettingsArea[] = [
     ]
   },
   {
+    id: 'discord',
+    label: 'settings.area.discord',
+    description: 'settings.area.discord.text',
+    sections: [
+      {
+        id: 'discord-connection',
+        label: 'settings.section.discord-connection',
+        description: 'settings.section.discord-connection.text'
+      },
+      {
+        id: 'discord-activities',
+        label: 'settings.section.discord-activities',
+        description: 'settings.section.discord-activities.text'
+      },
+      {
+        id: 'discord-away',
+        label: 'settings.section.discord-away',
+        description: 'settings.section.discord-away.text'
+      }
+    ]
+  },
+  {
     id: 'anki',
     label: 'settings.area.anki',
     description: 'settings.area.anki.text',
