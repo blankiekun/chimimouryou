@@ -11,5 +11,7 @@
 data
 # Agent worktrees and local tool state
 .claude
+# VNBox fetched for pnpm dev; the image fetches its own (scripts/vnbox/build.sh)
+apps/web/static/vn/vnbox
 # The desktop app is built on its own (apps/desktop), never in the images
 apps/desktop

@@ -6,3 +6,5 @@ package
 .firebaserc
 *.local
 .analysis-bench
+# VNBox, fetched by scripts/vnbox/build.sh
+static/vn/vnbox
