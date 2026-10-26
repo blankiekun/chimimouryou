@@ -28,8 +28,11 @@
     type SmallImage,
     type TimestampMode
   } from '$lib/data/discord-template';
+  import { relayLastSent$ } from '$lib/data/discord-relay';
+  import { relativeTime } from '$lib/data/social';
   import { socialSession$ } from '$lib/data/social-account';
-  import { t$, type MessageKey } from '$lib/i18n';
+  import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
+  import { t$, uiLanguage$, type MessageKey } from '$lib/i18n';
 
   /** One activity's editor (boards 2, 3, 5, 6): every field, saved as it is typed. */
   let { kind, onback }: { kind: DiscordKind; onback: () => void } = $props();
@@ -76,7 +79,9 @@
   const reading = $derived(kind !== 'idle');
   const live = $derived($discordValues$?.kind === kind ? $discordValues$ : null);
   const values = $derived(live?.values ?? sampleValues[kind]);
-  const hideTitles = $derived(discordOptions($discordOptions$).hideTitles);
+  const options = $derived(discordOptions($discordOptions$));
+  const hideTitles = $derived(options.hideTitles);
+  const hubReady = $derived($enabledPlugins$.includes('social') && !!$socialSession$);
   const preset = $derived(matchingPreset(kind, template));
   const problems = $derived(activityProblems(template, values).length);
   const activity = $derived(
@@ -141,6 +146,34 @@
       <span class="app-switch-thumb"></span>
     </button>
   </header>
+
+  {#if hubReady}
+    <!-- Board 5: on phones the hub relay is what reaches Discord. -->
+    <div class="editor-relay">
+      <div>
+        <p class="editor-relay-title">{$t$('discord.relayPhone')}</p>
+        <p class="editor-relay-note">
+          {#if options.relay && $relayLastSent$}
+            {$t$('discord.lastSent', {
+              ago: relativeTime($relayLastSent$ / 1000, $uiLanguage$)
+            })}
+          {:else}
+            {$t$('discord.relayPhoneHint')}
+          {/if}
+        </p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        class="app-switch"
+        aria-checked={options.relay}
+        aria-label={$t$('discord.relayPhone')}
+        onclick={() => setDiscordOption('relay', !options.relay)}
+      >
+        <span class="app-switch-thumb"></span>
+      </button>
+    </div>
+  {/if}
 
   <div class="editor-layout">
     <div class="editor-preview">
@@ -472,8 +505,28 @@
     font-size: var(--type-small);
   }
 
-  .editor-phone {
+  .editor-phone,
+  .editor-relay {
     display: none;
+  }
+
+  .editor-relay {
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 0;
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .editor-relay-title {
+    font-size: var(--type-body);
+  }
+
+  .editor-relay-note {
+    margin-top: 0.2rem;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
   }
 
   .editor-layout {
@@ -636,6 +689,10 @@
   @media (max-width: 640px) {
     .editor-phone {
       display: block;
+    }
+
+    .editor-relay {
+      display: flex;
     }
 
     .editor-button-fields {

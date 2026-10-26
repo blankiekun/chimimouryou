@@ -9,6 +9,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 import { discordActivities$, discordOptions$ } from './discord-settings';
 import { discordActivity, formatDuration, readingValues, resetSender } from './discord';
+import { socialSession$ } from './social-account';
 
 const fetchMock = vi.fn();
 // Real ticks for the dynamic imports and promises; only timers and the clock are fake.
@@ -137,6 +138,125 @@ describe('discord sender', () => {
     await settle();
     vi.advanceTimersByTime(15_000);
     expect(calls()).toEqual(['PUT Reading A']);
+  });
+});
+
+describe('discord hub relay', () => {
+  const hubCalls = () =>
+    fetchMock.mock.calls
+      .filter(([url]) => String(url).endsWith('/v1/presence'))
+      .map(([, init]) => {
+        if (init.method !== 'PUT') return init.method;
+        const body = JSON.parse(init.body);
+        return `PUT ${body.kind} ${body.activity.name} ttl ${body.ttl}`;
+      });
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockImplementation(async () => new Response(null, { status: 204 }));
+    resetSender();
+    socialSession$.next({ token: 't', me: { id: 'a', share: {} } as never });
+    discordOptions$.next({ awayMinutes: 7, relay: true });
+    discordActivities$.next({
+      book: { name: 'Reading {title}', details: '', state: '', largeImage: 'logo' },
+      idle: { show: true, name: 'In the library', details: '', state: '' }
+    });
+    enabledPlugins$.next(['discord', 'social']);
+    fetchMock.mockClear();
+  });
+
+  afterEach(() => {
+    enabledPlugins$.next([]);
+    socialSession$.next(null);
+    resetSender();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    fetchMock.mockReset();
+  });
+
+  it('sends a change with its kind and ttl at once, then at most once a minute', async () => {
+    discordActivity({ kind: 'book', title: 'A', position: 1, characters: 100 });
+    await settle();
+    expect(hubCalls()).toEqual(['PUT book Reading A ttl 7']);
+
+    discordActivity({ kind: 'book', title: 'B', position: 1, characters: 100 });
+    await settle();
+    vi.advanceTimersByTime(15_000);
+    await settle();
+    expect(hubCalls()).toEqual(['PUT book Reading A ttl 7']);
+
+    vi.advanceTimersByTime(45_000);
+    expect(hubCalls()).toEqual(['PUT book Reading A ttl 7', 'PUT book Reading B ttl 7']);
+  });
+
+  it('refreshes an unchanged status on a page turn only near its end, no timer', async () => {
+    discordActivity({ kind: 'book', title: 'A', position: 1, characters: 100 });
+    await settle();
+
+    // Within ttl - 2 min a page turn sends nothing.
+    vi.advanceTimersByTime(4 * 60_000);
+    discordActivity({ kind: 'book', title: 'A', position: 2, characters: 100 });
+    await settle();
+    expect(hubCalls()).toHaveLength(1);
+
+    // Later, with no page turn, nothing either.
+    vi.advanceTimersByTime(60_000 + 1);
+    await settle();
+    expect(hubCalls()).toHaveLength(1);
+
+    discordActivity({ kind: 'book', title: 'A', position: 3, characters: 100 });
+    await settle();
+    expect(hubCalls()).toEqual(['PUT book Reading A ttl 7', 'PUT book Reading A ttl 7']);
+  });
+
+  it('clamps the ttl to 5-30 minutes', async () => {
+    discordOptions$.next({ awayMinutes: 240, relay: true });
+    discordActivity({ kind: 'book', title: 'A', position: 1, characters: 100 });
+    await settle();
+    expect(hubCalls()).toEqual(['PUT book Reading A ttl 30']);
+  });
+
+  it('deletes when away shows nothing, and when the switch goes off', async () => {
+    discordOptions$.next({ awayMinutes: 7, awayIdle: false, relay: true });
+    discordActivity({ kind: 'book', title: 'A', position: 1, characters: 100 });
+    await settle();
+    vi.advanceTimersByTime(7 * 60_000);
+    await settle();
+    expect(hubCalls()).toEqual(['PUT book Reading A ttl 7', 'DELETE']);
+
+    discordActivity({ kind: 'book', title: 'A', position: 2, characters: 100 });
+    await settle();
+    discordOptions$.next({ awayMinutes: 7, awayIdle: false, relay: false });
+    await settle();
+    expect(hubCalls()).toEqual([
+      'PUT book Reading A ttl 7',
+      'DELETE',
+      'PUT book Reading A ttl 7',
+      'DELETE'
+    ]);
+    discordActivity({ kind: 'book', title: 'B', position: 1, characters: 100 });
+    await settle();
+    vi.advanceTimersByTime(60_000);
+    expect(hubCalls()).toHaveLength(4);
+  });
+
+  it('sends nothing to the hub with the switch, social or the account off', async () => {
+    for (const off of [
+      () => discordOptions$.next({ relay: false }),
+      () => enabledPlugins$.next(['discord']),
+      () => socialSession$.next(null)
+    ]) {
+      resetSender();
+      off();
+      discordActivity({ kind: 'book', title: 'A', position: 1, characters: 100 });
+      await settle();
+      vi.advanceTimersByTime(60_000);
+      await settle();
+    }
+    expect(hubCalls()).toEqual([]);
+    // The add-on still got the status.
+    expect(fetchMock).toHaveBeenCalled();
   });
 });
 

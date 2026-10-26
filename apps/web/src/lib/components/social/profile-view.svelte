@@ -6,6 +6,7 @@
   import SectionHead from '$lib/components/section-head.svelte';
   import ActivityFeed from '$lib/components/social/activity-feed.svelte';
   import FriendCover from '$lib/components/social/friend-cover.svelte';
+  import PresenceCard from '$lib/components/social/presence-card.svelte';
   import RoleBadge from '$lib/components/social/role-badge.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import { pagePath } from '$lib/data/env';
@@ -315,6 +316,9 @@
   </aside>
 
   <div class="profile-main">
+    {#if profile.presence?.activity}
+      <PresenceCard activity={profile.presence.activity} {self} />
+    {/if}
     {#if statCells.length}
       <dl class="profile-stats">
         {#each statCells as cell (cell.label)}

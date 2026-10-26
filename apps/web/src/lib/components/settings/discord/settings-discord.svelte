@@ -23,8 +23,27 @@
     saveActivityTemplate,
     setDiscordOption
   } from '$lib/data/discord-settings';
+  import {
+    allowAutoPair,
+    autoPairAllowed,
+    newPairingCode,
+    pairAutomatically,
+    pairedAddons,
+    unpairAddon,
+    type PairedAddon
+  } from '$lib/data/discord-relay';
   import { buildActivity, type DiscordKind } from '$lib/data/discord-template';
-  import { t$, type MessageKey } from '$lib/i18n';
+  import { pagePath } from '$lib/data/env';
+  import { relativeTime } from '$lib/data/social';
+  import {
+    HubError,
+    hubErrorKey,
+    queueProfileChange,
+    socialSession$
+  } from '$lib/data/social-account';
+  import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
+  import { t$, uiLanguage$, type MessageKey } from '$lib/i18n';
+  import { untrack } from 'svelte';
 
   /**
    * Settings → Discord (boards 1, 4, 4b): the connection to the Anki add-on, the four
@@ -121,6 +140,114 @@
     editing = kind;
     requestAnimationFrame(() => window.scrollTo({ top: 0 }));
   }
+
+  // The hub relay (SPEC PR 3c): only with the social plugin on and a hub account.
+  const socialOn = $derived($enabledPlugins$.includes('social'));
+  const hubReady = $derived(socialOn && !!$socialSession$);
+  const presenceProfile = $derived(!!$socialSession$?.me.presenceProfile);
+  let addons = $state<PairedAddon[] | null>(null);
+  let code = $state<{ code: string; expiresAt: number } | null>(null);
+  let codeCopied = $state(false);
+  let hubError = $state('');
+  let autoTried = false;
+
+  const codeLeft = $derived(
+    code ? Math.max(0, Math.ceil((code.expiresAt * 1000 - now) / 1000)) : 0
+  );
+  const showError = (error: unknown) => (hubError = $t$(hubErrorKey(error)));
+
+  async function loadAddons() {
+    try {
+      addons = await pairedAddons();
+    } catch (error) {
+      showError(error);
+    }
+  }
+
+  $effect(() => {
+    if (hubReady) untrack(loadAddons);
+    else addons = null;
+  });
+
+  // Automatic pairing: signed in, the relay on and this computer's add-on answering unpaired.
+  $effect(() => {
+    if (
+      hubReady &&
+      options.relay &&
+      connection.state === 'connected' &&
+      connection.paired === false &&
+      !autoTried &&
+      autoPairAllowed()
+    ) {
+      autoTried = true;
+      const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
+      const platform = nav.userAgentData?.platform || nav.platform;
+
+      pairAutomatically((platform ? `Anki on ${platform}` : 'Anki').slice(0, 40))
+        .then(() => {
+          loadAddons();
+          checkConnection();
+        })
+        .catch((error) =>
+          error instanceof HubError ? showError(error) : (hubError = $t$('discord.pairFailed'))
+        );
+    }
+  });
+
+  $effect(() => {
+    if (code && !codeLeft) code = null;
+  });
+
+  // While a code is shown, look for the add-on it pairs (every 15 s, the hub's keys list).
+  $effect(() => {
+    if (!code) return;
+
+    const count = untrack(() => addons?.length ?? 0);
+    const poll = setInterval(async () => {
+      const list = await pairedAddons().catch(() => null);
+
+      if (list && list.length > count) {
+        addons = list;
+        code = null;
+      }
+    }, 15_000);
+
+    return () => clearInterval(poll);
+  });
+
+  async function startCode() {
+    hubError = '';
+    try {
+      code = await newPairingCode();
+    } catch (error) {
+      showError(error);
+    }
+  }
+
+  async function copyCode() {
+    try {
+      await navigator.clipboard.writeText(code?.code ?? '');
+      codeCopied = true;
+      setTimeout(() => (codeCopied = false), 2000);
+    } catch {
+      // Clipboard refused: the code stays selectable.
+    }
+  }
+
+  async function unpair(addon: PairedAddon) {
+    hubError = '';
+    try {
+      await unpairAddon(addon.id);
+      addons = (addons ?? []).filter((other) => other.id !== addon.id);
+      checkConnection();
+    } catch (error) {
+      showError(error);
+    }
+  }
+
+  const countdown = $derived(
+    `${Math.floor(codeLeft / 60)}:${String(codeLeft % 60).padStart(2, '0')}`
+  );
 
   async function copyOrigin() {
     try {
@@ -263,6 +390,119 @@
         <span class="app-switch-text">{$t$(options.show ? 'settings.on' : 'settings.off')}</span>
       </button>
     </SettingsItemGroup>
+
+    {#if hubReady}
+      <SettingsItemGroup
+        title={$t$('discord.addon')}
+        tooltip={$t$(
+          code
+            ? 'discord.addonCodeHint'
+            : addons?.length
+              ? 'discord.addonPairedHint'
+              : 'discord.addonUnpairedHint'
+        )}
+      >
+        {#if code}
+          <div class="pair-code">
+            <div class="pair-code-row">
+              <input
+                class="app-input pair-code-input"
+                readonly
+                value={code.code}
+                aria-label={$t$('discord.pairWithCode')}
+              />
+              <button type="button" class="app-button" onclick={copyCode}>
+                {$t$(codeCopied ? 'discord.copied' : 'discord.copy')}
+              </button>
+              <button
+                type="button"
+                class="app-button app-button-quiet"
+                onclick={() => (code = null)}
+              >
+                {$t$('discord.cancel')}
+              </button>
+            </div>
+            <p class="pair-note">{$t$('discord.expiresIn', { time: countdown })}</p>
+          </div>
+        {:else}
+          <div class="addons">
+            {#each addons ?? [] as addon (addon.id)}
+              <div class="addon">
+                <span class="addon-name">{addon.name}</span>
+                <span class="addon-seen">
+                  {addon.lastSeen
+                    ? $t$('discord.seen', { ago: relativeTime(addon.lastSeen, $uiLanguage$) })
+                    : $t$('discord.notSeen')}
+                </span>
+                <button
+                  type="button"
+                  class="app-button app-button-quiet"
+                  aria-label={$t$('discord.unpairName', { name: addon.name })}
+                  onclick={() => unpair(addon)}
+                >
+                  {$t$('discord.unpair')}
+                </button>
+              </div>
+            {/each}
+            <button
+              type="button"
+              class="app-button"
+              class:app-button-quiet={!!addons?.length}
+              onclick={startCode}
+            >
+              {$t$('discord.pairWithCode')}
+            </button>
+          </div>
+        {/if}
+      </SettingsItemGroup>
+    {/if}
+
+    <SettingsItemGroup title={$t$('discord.relay')} tooltip={$t$('discord.relayHint')}>
+      {#if hubReady}
+        <button
+          type="button"
+          role="switch"
+          class="app-switch"
+          aria-checked={options.relay}
+          aria-label={$t$('discord.relay')}
+          onclick={() => {
+            if (!options.relay) allowAutoPair();
+            setDiscordOption('relay', !options.relay);
+          }}
+        >
+          <span class="app-switch-thumb"></span>
+          <span class="app-switch-text">{$t$(options.relay ? 'settings.on' : 'settings.off')}</span>
+        </button>
+      {:else}
+        <a
+          class="app-button app-button-quiet"
+          href={socialOn
+            ? `${pagePath}/settings?section=social#social-account`
+            : `${pagePath}/settings?section=general#general-plugins`}
+        >
+          {$t$(socialOn ? 'discord.signInToSocial' : 'discord.turnOnSocial')}
+        </a>
+      {/if}
+    </SettingsItemGroup>
+
+    {#if hubReady}
+      <SettingsItemGroup title={$t$('discord.profile')} tooltip={$t$('discord.profileHint')}>
+        <button
+          type="button"
+          role="switch"
+          class="app-switch"
+          aria-checked={presenceProfile}
+          aria-label={$t$('discord.profile')}
+          onclick={() => queueProfileChange({ presenceProfile: !presenceProfile }, showError)}
+        >
+          <span class="app-switch-thumb"></span>
+          <span class="app-switch-text"
+            >{$t$(presenceProfile ? 'settings.on' : 'settings.off')}</span
+          >
+        </button>
+      </SettingsItemGroup>
+    {/if}
+    {#if hubError}<p class="hub-error" role="alert">{hubError}</p>{/if}
     <p class="phone-note">{$t$('discord.phoneNote')}</p>
   </SettingsSection>
 
@@ -478,6 +718,54 @@
     gap: 1rem;
   }
 
+  .pair-code {
+    display: grid;
+    gap: 0.4rem;
+  }
+
+  .pair-code-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .pair-code-input {
+    width: 11rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+  }
+
+  .pair-note,
+  .addon-seen,
+  .hub-error {
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  .hub-error {
+    padding-top: 0.75rem;
+    color: var(--app-danger-color);
+  }
+
+  .addons {
+    display: grid;
+    justify-items: end;
+    gap: 0.4rem;
+  }
+
+  .addon {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 0.25rem 0.75rem;
+  }
+
+  .addon-name {
+    font-size: var(--type-body);
+  }
+
   .phone-note {
     display: none;
     padding-top: 0.75rem;
@@ -540,6 +828,14 @@
   @media (max-width: 640px) {
     .phone-note {
       display: block;
+    }
+
+    .addons {
+      justify-items: start;
+    }
+
+    .addon {
+      justify-content: flex-start;
     }
 
     .activities .activities-name {

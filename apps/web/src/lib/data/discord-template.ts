@@ -353,3 +353,24 @@ export function activityKey(activity: DiscordActivity | undefined) {
 
   return JSON.stringify(rest);
 }
+
+/** Discord's clock under an activity: "02:14" or "1:02:14" elapsed since start, else left until end */
+export function activityClock(
+  timestamps: DiscordActivity['timestamps'],
+  now: number
+): { mode: 'elapsed' | 'left'; text: string } | undefined {
+  const { start, end } = timestamps ?? {};
+
+  if (!start && !end) return undefined;
+
+  const seconds = Math.max(0, Math.round((start ? now - start : end! - now) / 1000));
+  const pad = (n: number) => String(n).padStart(2, '0');
+
+  return {
+    mode: start ? 'elapsed' : 'left',
+    text:
+      seconds >= 3600
+        ? `${Math.floor(seconds / 3600)}:${pad(Math.floor(seconds / 60) % 60)}:${pad(seconds % 60)}`
+        : `${pad(Math.floor(seconds / 60))}:${pad(seconds % 60)}`
+  };
+}

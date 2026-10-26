@@ -37,6 +37,14 @@ import {
   discordOptions,
   discordOptions$
 } from '$lib/data/discord-settings';
+import {
+  relayActivity,
+  relayAllowed,
+  relayClear,
+  relayPageTurn,
+  resetRelay
+} from '$lib/data/discord-relay';
+import { socialSession$ } from '$lib/data/social-account';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 
 export const addonUrl = 'http://127.0.0.1:41918';
@@ -91,6 +99,8 @@ export interface DiscordConnection {
   state: ConnectionState;
   /** Epoch ms of the add-on's last send to Discord */
   lastSent: number | null;
+  /** The add-on holds a presence key (hub relay) */
+  paired?: boolean;
   checkedAt: number;
 }
 
@@ -366,7 +376,8 @@ export async function checkConnection() {
 
   setConnection({
     state: status.discord === 'connected' ? 'connected' : 'discordClosed',
-    lastSent: typeof status.lastSent === 'number' ? status.lastSent : null
+    lastSent: typeof status.lastSent === 'number' ? status.lastSent : null,
+    paired: status.paired === true
   });
 }
 
@@ -419,6 +430,7 @@ function deliver(activity: DiscordActivity | undefined) {
 
 /** DELETE, once, if this page sent a status */
 export function clear(keepalive = false) {
+  relayClear(keepalive);
   clearTimeout(sendTimer);
   sendTimer = undefined;
   pending = undefined;
@@ -447,6 +459,7 @@ async function update() {
 
   if (run !== renderRun || !allowed()) return;
   if (result.blocked) return; // the last status that worked stays
+  relayActivity(shown.kind, result.activity);
   deliver(result.activity);
 }
 
@@ -480,6 +493,7 @@ export function discordActivity(activity: ReadingActivity | undefined) {
     const now = Date.now();
 
     away = false;
+    relayPageTurn();
     sessionStart ||= now;
     if (activity.title && !openedAt.has(activity.title)) openedAt.set(activity.title, now);
     clearTimeout(awayTimer);
@@ -511,13 +525,17 @@ export function resetSender() {
   statsCache = wordsCache = undefined;
   catalogCache = difficultyCache = coverCache = undefined;
   discordValues$.next(null);
+  resetRelay();
 }
 
 if (typeof window !== 'undefined') {
   // The plugin or Show my status going off clears the status; templates changing resend it.
-  combineLatest([enabledPlugins$, discordOptions$, discordActivities$]).subscribe(() => {
-    if (allowed()) update();
-    else clear();
-  });
+  combineLatest([enabledPlugins$, discordOptions$, discordActivities$, socialSession$]).subscribe(
+    () => {
+      if (!relayAllowed()) relayClear();
+      if (allowed()) update();
+      else clear();
+    }
+  );
   window.addEventListener('pagehide', () => clear(true));
 }
