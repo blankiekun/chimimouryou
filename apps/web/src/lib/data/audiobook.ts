@@ -48,6 +48,17 @@ export function saveAudiobookPosition(title: string, position: number, rate: num
   localStorage.setItem(positionKey(title), JSON.stringify({ position, rate }));
 }
 
+const rateKey = (title: string) => `audiobookRate:${title}`;
+
+/** Playback speed of the book's audiobook, in either player (once kept with the position). */
+export function getAudiobookRate(title: string): number {
+  return Number(localStorage.getItem(rateKey(title))) || getAudiobookPosition(title).rate || 1;
+}
+
+export function saveAudiobookRate(title: string, rate: number) {
+  localStorage.setItem(rateKey(title), `${rate}`);
+}
+
 export async function deleteAudiobook(title: string) {
   localStorage.removeItem(positionKey(title));
   await (await readerDb()).delete('audiobooks', title);

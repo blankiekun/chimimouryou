@@ -8,6 +8,10 @@
     faWandMagicSparkles
   } from '@fortawesome/free-solid-svg-icons';
   import WhisperSubtitles from '$lib/components/book-reader/whisper-subtitles.svelte';
+  import AudiobookControls from '$lib/components/book-reader/audiobook-controls.svelte';
+  import AudiobookControlsPanel from '$lib/components/book-reader/audiobook-controls-panel.svelte';
+  import { audiobookControls } from '$lib/data/audiobook-controls';
+  import { PlaybackController } from '$lib/functions/audiobook/playback-controller';
   import {
     absCandidateKey,
     absFileText,
@@ -43,7 +47,7 @@
   export let position: number;
 
   const dispatch = createEventDispatcher<{
-    reading: { start: number; end: number } | undefined;
+    reading: { start: number; end: number; follow: boolean } | undefined;
     jump: number;
   }>();
 
@@ -68,6 +72,28 @@
   $: track = candidate?.tracks[trackIndex];
   $: src = candidate && track ? absTrackUrl(candidate.itemId, track) : '';
   $: total = candidate?.tracks.reduce((sum, item) => sum + item.duration, 0) ?? 0;
+
+  const controller = new PlaybackController(
+    {
+      time: currentPosition,
+      duration: () => total,
+      seek: seekTo,
+      play: () => audio?.play().catch(() => {}),
+      pause: () => audio?.pause(),
+      paused: () => audio?.paused ?? true,
+      setRate: (rate) => {
+        if (audio) {
+          audio.defaultPlaybackRate = audio.playbackRate = rate;
+          audio.preservesPitch = true;
+        }
+      }
+    },
+    title
+  );
+
+  $: controller.setCues(cues);
+
+  onMount(() => controller.start());
 
   onMount(async () => {
     if (!$audiobookshelfToken$) {
@@ -202,12 +228,18 @@
     if (index === trackIndex && audio && audio.readyState > 0) {
       audio.currentTime = offset;
     } else {
+      if (audio && !audio.paused) {
+        // The other track's src loads after the update; keep playing it.
+        audio.addEventListener('loadedmetadata', () => audio?.play(), { once: true });
+      }
       trackIndex = index;
       resumeAt = offset;
     }
   }
 
   function onTimeUpdate() {
+    controller.tick();
+
     const time = currentPosition();
 
     if (time === undefined || !cues.length) {
@@ -223,7 +255,9 @@
 
       dispatch(
         'reading',
-        cue?.start !== undefined ? { start: cue.start, end: cue.end! } : undefined
+        cue?.start !== undefined
+          ? { start: cue.start, end: cue.end!, follow: audiobookControls().follow }
+          : undefined
       );
     }
   }
@@ -260,6 +294,7 @@
   }
 
   function onLoaded() {
+    controller.applyRate();
     if (audio && resumeAt) {
       audio.currentTime = resumeAt;
       resumeAt = 0;
@@ -277,17 +312,19 @@
   }
 
   function onPlay() {
+    controller.playing(true);
     clearInterval(saveTimer);
     saveTimer = setInterval(save, 15_000);
   }
 
   function onPause() {
+    controller.playing(false);
     clearInterval(saveTimer);
     save();
   }
 </script>
 
-<div class="flex min-w-0 flex-1 items-center gap-2">
+<div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
   {#if candidates.length > 1}
     <select
       class="abs-select"
@@ -315,7 +352,10 @@
       on:play={onPlay}
       on:pause={onPause}
       on:timeupdate={onTimeUpdate}
+      on:ratechange={() =>
+        audio && audio.playbackRate !== controller.rate && controller.setRate(audio.playbackRate)}
     />
+    <AudiobookControls {controller} hasLines={cues.length > 0} />
     {#if cues.length}
       <button class="abs-icon" title="Play from the reading position" on:click={playFromHere}>
         <Fa icon={faPlay} />
@@ -377,6 +417,9 @@
     <span class="min-w-0 truncate opacity-70" role="status">{status}</span>
   {/if}
 </div>
+{#if src}
+  <AudiobookControlsPanel {controller} hasLines={cues.length > 0} />
+{/if}
 
 <style>
   .abs-select {
