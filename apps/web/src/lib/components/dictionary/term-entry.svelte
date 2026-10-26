@@ -22,6 +22,8 @@
   import { distributeFurigana } from '$lib/vendor/yomitan/language/ja/japanese';
   import type { Tag, TermDictionaryEntry } from '$lib/vendor/yomitan/types/dictionary';
   import type { ProfileOptions } from '$lib/vendor/yomitan/types/settings';
+  import type { AnkiNoteContext } from '$lib/vendor/yomitan/data/anki-note-builder';
+  import AnkiAddButton from './anki-add-button.svelte';
   import { glossary, pitchAccent } from './structured-content';
 
   export let entry: TermDictionaryEntry;
@@ -29,6 +31,8 @@
   export let summaries: DictionarySummary[];
   export let current = false;
   export let audio = false;
+  /** Where the word was looked up, for Add to Anki (none: no button) */
+  export let ankiContext: AnkiNoteContext | undefined = undefined;
 
   const dispatch = createEventDispatcher<{
     lookup: string;
@@ -146,6 +150,9 @@
         <Fa icon={faCheck} />
         <span>{$t$(known ? 'reader.wordKnown' : 'reader.markKnown')}</span>
       </button>
+      {#if ankiContext}
+        <AnkiAddButton {entry} {options} {summaries} context={ankiContext} />
+      {/if}
     </div>
   </header>
 

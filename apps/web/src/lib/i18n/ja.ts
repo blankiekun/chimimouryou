@@ -469,6 +469,12 @@ export const ja: Record<MessageKey, string> = {
   'lookup.close': '閉じる',
   'lookup.copy': '単語をコピー',
   'lookup.copied': 'コピーしました',
+  'lookup.anki': 'Anki',
+  'lookup.addToAnki': 'Anki に追加',
+  'lookup.addAgain': 'もう一度 Anki に追加',
+  'lookup.inAnki': 'Anki にあり',
+  'lookup.addedToAnki': '追加済み',
+  'lookup.openInAnki': 'Anki で開く',
   'lookup.playAudio': '音声を再生',
   'lookup.definitions': '語義 {count} 件',
   'dict.cancel': 'キャンセル',
@@ -579,6 +585,9 @@ export const ja: Record<MessageKey, string> = {
   'settings.section.anki-connect': 'AnkiConnect',
   'settings.section.anki-connect.text':
     'Anki との接続設定およびノートへの入力フィールドを指定します。',
+  'settings.section.anki-dictionary': '辞書のカード',
+  'settings.section.anki-dictionary.text':
+    '内蔵辞書の「Anki に追加」で作るカードのデッキ・ノートタイプ・フィールドを Yomitan と同じ形式で設定します。',
   'settings.section.anki-media': 'カードのメディア',
   'settings.section.anki-media.text':
     '読書やプレイ中に作成したカードへ追加する音声・スクリーンショットを設定します。',
@@ -633,6 +642,36 @@ export const ja: Record<MessageKey, string> = {
   'anki.pictureField': '画像フィールド',
   'anki.pictureFieldHint':
     'ビジュアルノベルのスクリーンショットを格納するフィールドです（すでに値がある場合は上書きされません）。',
+  'anki.dict.route': 'カードの追加方法',
+  'anki.dict.routeHint':
+    'AnkiConnect はパソコンの Anki（または Android の AnkiDroid と AnkiConnect Android アプリ）に追加し、重複を確認します。iPhone と iPad には AnkiConnect がないため、AnkiMobile が入力済みのカードで開き、追加後にここへ戻ります。',
+  'anki.dict.import': 'Yomitan から読み込む',
+  'anki.dict.importHint':
+    'Yomitan の設定ファイル（Yomitan → 設定 → バックアップ → 設定をエクスポート）から、デッキ・ノートタイプ・フィールド・タグ・重複確認・カスタムテンプレートを読み込みます。辞書の設定は変わりません。',
+  'anki.dict.imported': '読み込みました: {deck}、{model}',
+  'anki.dict.importFailed': '読み込めませんでした: {error}',
+  'anki.dict.model': 'ノートタイプ',
+  'anki.dict.modelHint':
+    'AnkiConnect 使用時は、選ぶとフィールドが入り、名前から Yomitan のマーカーが推測されます。',
+  'anki.dict.fields': 'フィールド',
+  'anki.dict.fieldsHint':
+    '各フィールドの値です。{expression}、{reading}、{furigana-plain}、{glossary}、{sentence}、{frequencies}、{pitch-accents} などの Yomitan マーカーが使えます。重複確認には最初のフィールドを使います。辞書の画像と {screenshot} は空になり、{audio} は AnkiConnect 使用時に JapanesePod101 の音声が入ります。',
+  'anki.dict.newField': 'フィールド名',
+  'anki.dict.addField': 'フィールドを追加',
+  'anki.dict.remove': '削除',
+  'anki.dict.removeField': '{field} を削除',
+  'anki.dict.tags': 'タグ',
+  'anki.dict.tagsHint': 'スペース区切りです。',
+  'anki.dict.duplicates': '重複確認',
+  'anki.dict.duplicatesHint':
+    '最初のフィールドが同じノートです。AnkiConnect 使用時は、ポップアップに「Anki にあり」と表示されます。',
+  'anki.dict.duplicatesOff': 'オフ',
+  'anki.dict.duplicatesCollection': 'コレクション全体',
+  'anki.dict.duplicatesDeck': 'このデッキ',
+  'anki.dict.duplicatesDeckRoot': 'このデッキと親デッキ',
+  'anki.dict.templates': 'カスタムテンプレート',
+  'anki.dict.templatesHint': 'Yomitan から読み込んだ Handlebars テンプレートを使います。',
+  'anki.dict.templatesReset': 'Yomitan の既定に戻す',
   'anki.bookAudio': 'オーディオブックの音声',
   'anki.bookAudioHint':
     'インポート済みのオーディオブック（聴く → オーディオブック）から、該当する文の音声をリアルタイムで録音して追加します。',

@@ -35,6 +35,7 @@
     matchingInput,
     scanAt,
     scannedRange,
+    scannedSentence,
     type ScannedText
   } from '$lib/functions/dictionary/scan';
   import { hotkeyAction } from '$lib/functions/dictionary/hotkeys';
@@ -57,6 +58,9 @@
   interface View {
     query: string;
     result: LookupResult;
+    /** The text scanned and the sentence around the match, for Add to Anki */
+    fullQuery: string;
+    sentence: { text: string; offset: number };
   }
 
   const highlightName = 'ttu-lookup';
@@ -250,7 +254,14 @@
       return;
     }
     const range = scannedRange(scan, result.originalTextLength, profile.scanning.layoutAwareScan);
-    const nextView = { query: range.toString(), result };
+    const query = range.toString();
+    const sentence = scannedSentence(
+      scan,
+      result.originalTextLength,
+      profile.scanning.layoutAwareScan,
+      profile.sentenceParsing
+    );
+    const nextView = { query, result, fullQuery: scan.text, sentence };
     if (nested) {
       setCssHighlight(nestedHighlightName, [range]);
       views = [...views.slice(0, index + 1), nextView];
@@ -279,7 +290,10 @@
     const current = ++token;
     const result = await lookup(query).catch(() => undefined);
     if (current !== token || !result?.dictionaryEntries.length) return;
-    views = [...views.slice(0, index + 1), { query, result }];
+    views = [
+      ...views.slice(0, index + 1),
+      { query, result, fullQuery: query, sentence: { text: query, offset: 0 } }
+    ];
     index = views.length - 1;
     selected = 0;
     await tick();
@@ -543,6 +557,13 @@
           summaries={$dictionaries$}
           current={entryIndex === selected && view.result.dictionaryEntries.length > 1}
           audio={profile.audio.enabled}
+          ankiContext={{
+            url: location.href,
+            documentTitle: document.title,
+            query: view.query,
+            fullQuery: view.fullQuery,
+            sentence: view.sentence
+          }}
           on:lookup={({ detail }) => lookupQuery(detail)}
           on:audio={({ detail }) =>
             profile && playTermAudio(detail.term, detail.reading, profile.audio)}
@@ -726,7 +747,9 @@
 
   .ttu-dict :global(.entry-actions) {
     display: flex;
-    flex: 0 0 auto;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 0.125rem;
   }
 

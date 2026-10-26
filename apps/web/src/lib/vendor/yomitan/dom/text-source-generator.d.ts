@@ -24,3 +24,15 @@ export function getRangeFromPoint(
   normalizeCssZoom: boolean,
   doc?: Document
 ): Range | null;
+
+export function extractSentence(
+  node: Node,
+  offset: number,
+  length: number,
+  layoutAwareScan: boolean,
+  extent: number,
+  terminateAtNewlines: boolean,
+  terminatorMap: Map<string, [boolean, boolean]>,
+  forwardQuoteMap: Map<string, [string, boolean]>,
+  backwardQuoteMap: Map<string, [string, boolean]>
+): { text: string; offset: number };
