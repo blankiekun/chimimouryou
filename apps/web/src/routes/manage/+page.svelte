@@ -77,6 +77,9 @@
   import SeriesSuggestionsDialog from '$lib/components/book-card/series-suggestions-dialog.svelte';
   import BookExportDialog from '$lib/components/book-export/book-export-dialog.svelte';
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
+  import WindowsGameDialog from '$lib/components/book-card/windows-game-dialog.svelte';
+  import { deleteWindowsGame, windowsGameFolder } from '$lib/data/windows-game';
+  import type { LoadData } from '$lib/functions/file-loaders/types';
   import ExternalReadDialog from '$lib/components/external-read-dialog.svelte';
   import LogReportDialog from '$lib/components/log-report-dialog.svelte';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
@@ -652,6 +655,41 @@
     }
   }
 
+  /** Import → Windows game: the dialog copies the folder, this adds the game to the library. */
+  function openWindowsGame() {
+    dialogManager.dialogs$.next([
+      {
+        component: WindowsGameDialog as any,
+        props: { save: saveWindowsGame },
+        disableCloseOnClick: true
+      }
+    ]);
+  }
+
+  /**
+   * A Windows game is only ever in this browser: under a cloud or Calibre source it is kept on
+   * this device like a visual novel kept off the cloud (ApiStorageHandler.keepOnDevice).
+   */
+  async function saveWindowsGame(book: LoadData) {
+    const handler = getStorageHandler(window, $storageSource$, '');
+
+    if (handler instanceof ApiStorageHandler) {
+      await handler.keepOnDevice(book);
+    } else {
+      await getStorageHandler(
+        window,
+        StorageKey.BROWSER,
+        undefined,
+        true,
+        $cacheStorageData$,
+        $replicationSaveBehavior$
+      ).saveBook(book, false, false);
+    }
+
+    addImportsToHome([book.title]);
+    database.dataListChanged$.next(handler);
+  }
+
   /** Asks whether visual novels go up to a cloud provider; true = upload (vn-upload.ts). */
   function askVnUpload(games: VnUpload[], target: StorageKey) {
     return new Promise<boolean>((resolve) => {
@@ -988,6 +1026,7 @@
       .filter((card) => deleted.includes(card.id))
       .forEach((card) => {
         deleteVnCache(card.title).catch(() => {});
+        deleteWindowsGame(windowsGameFolder(card.title)).catch(() => {});
         deleteCachedReadings(card.title).catch(() => {});
         deleteBookKanji(card.title).catch(() => {});
       });
@@ -1390,6 +1429,7 @@
     disabled={!!replicationToProgress}
     on:filesChange={(ev) => onFilesChange(ev.detail)}
     on:importBackup={(ev) => onImportBackup(ev.detail)}
+    on:windowsGame={openWindowsGame}
   />
 
   <div class="library-layout" class:library-layout-home={isHome}>

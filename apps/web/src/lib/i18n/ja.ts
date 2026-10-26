@@ -1035,6 +1035,7 @@ export const ja: Record<MessageKey, string> = {
   'library.progress.left': '{progress} · 残り {time}',
   'library.importFiles': 'ファイルをインポート',
   'library.importFolders': 'フォルダをインポート',
+  'library.importWindowsGame': 'Windows のゲーム…',
   'library.importBackup': 'バックアップをインポート',
   'library.storageSource': '保存先',
   'library.sourceBrowser': 'ブラウザ',

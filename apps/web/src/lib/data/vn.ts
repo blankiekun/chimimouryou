@@ -36,6 +36,15 @@ export interface VnInfo {
   /** URL of the game's folder on the server (VN_PATH games); the files are fetched from
    * there instead of being blobs */
   base?: string;
+  /** Windows games run in VNBox (static/vn/vnbox.html, windows-game.ts); ONScripter games
+   * in CONscripter */
+  engine?: 'vnbox';
+  /** Windows games: their folder in this browser's origin private file system (OPFS
+   * `vnbox/<folder>`), the program to run in it, and an optional text hook script */
+  folder?: string;
+  exe?: string;
+  /** A dc00 script (github.com/0xDC00/scripts) that sends the game's text */
+  hook?: string;
 }
 
 export interface VnRead {
@@ -388,5 +397,37 @@ export function overlayLines(
     size,
     pitch: count > 1 ? (last - (vertical ? y : x)) / (count - 1) : size,
     ...(vertical && { vertical })
+  }));
+}
+
+/** The screen VNBox's overlay lines are laid out in (vnbox.js scales it to the game). */
+export const vnboxScreen = { width: 800, height: 600 };
+
+/**
+ * A line from a Windows game's text hook as overlay rows over the bottom of the screen, where
+ * most games draw their text box: the hook gives no positions, so these only give Yomitan
+ * something to scan there (the text panel shows the line itself).
+ * shortcut: fixed rows of 30 characters; lay the text where the game drew it once the hook
+ * reports positions.
+ */
+export function vnboxLines(text: string): VnOverlayLine[] {
+  const size = 24;
+  const perRow = 30;
+  const rows = text.split('\n').flatMap((line) => {
+    const chars = [...line];
+
+    return chars.length
+      ? Array.from({ length: Math.ceil(chars.length / perRow) }, (_, index) =>
+          chars.slice(index * perRow, (index + 1) * perRow).join('')
+        )
+      : [];
+  });
+
+  return rows.map((row, index) => ({
+    text: row,
+    x: (vnboxScreen.width - perRow * size) / 2,
+    y: Math.round(vnboxScreen.height * 0.72) + index * size * 1.5,
+    size,
+    pitch: size
   }));
 }

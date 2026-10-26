@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
-// static/vn/player.js holds a tap on its text overlay while the page's built-in lookups are on
+// static/vn/overlay.js (with player.js) holds a tap on its text overlay while the page's built-in lookups are on
 // (window.textTap set): a tap that finds a word never reaches the game, any other does.
 describe('VN player text taps', () => {
   let canvasEvents: string[] = [];
@@ -20,6 +20,7 @@ describe('VN player text taps', () => {
     // Plain script, run as the frame would (its top-level vars become globals); it patches
     // AudioNode, which jsdom lacks.
     vi.stubGlobal('AudioNode', class {});
+    window.eval(readFileSync('static/vn/overlay.js', 'utf8'));
     window.eval(readFileSync('static/vn/player.js', 'utf8'));
     for (const type of ['touchstart', 'touchend', 'touchmove']) {
       document.getElementById('canvas')!.addEventListener(type, () => canvasEvents.push(type));

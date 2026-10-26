@@ -6,13 +6,20 @@
   import { inputFile } from '$lib/functions/file-dom/input-file';
   import { isMobile$ } from '$lib/functions/utils';
   import { t$, type MessageKey } from '$lib/i18n';
-  import { faChevronDown, faFileImport } from '@fortawesome/free-solid-svg-icons';
+  import { faChevronDown, faDesktop, faFileImport } from '@fortawesome/free-solid-svg-icons';
   import { createEventDispatcher } from 'svelte';
   import Fa from 'svelte-fa';
 
   export let disabled = false;
+  /** The library offers Windows games (windows-game-dialog.svelte); computers only */
+  export let windowsGames = false;
 
-  const dispatch = createEventDispatcher<{ filesChange: FileList; importBackup: File }>();
+  const dispatch = createEventDispatcher<{
+    filesChange: FileList;
+    importBackup: File;
+    windowsGame: void;
+  }>();
+  const windowsGameEntry = { label: 'Windows game', icon: faDesktop };
 
   let fileImportElm: HTMLElement;
   let folderImportElm: HTMLElement;
@@ -23,12 +30,14 @@
   const importLabels: Record<string, MessageKey> = {
     [mergeEntries.FILE_IMPORT.label]: 'library.importFiles',
     [mergeEntries.FOLDER_IMPORT.label]: 'library.importFolders',
-    [mergeEntries.BACKUP_IMPORT.label]: 'library.importBackup'
+    [mergeEntries.BACKUP_IMPORT.label]: 'library.importBackup',
+    [windowsGameEntry.label]: 'library.importWindowsGame'
   };
 
   $: importMenuItems = [
     mergeEntries.FILE_IMPORT,
     ...($isMobile$ ? [] : [mergeEntries.FOLDER_IMPORT]),
+    ...(windowsGames && !$isMobile$ ? [windowsGameEntry] : []),
     mergeEntries.BACKUP_IMPORT
   ];
 
@@ -40,6 +49,10 @@
 
       case mergeEntries.BACKUP_IMPORT.label:
         backupImportElm.click();
+        break;
+
+      case windowsGameEntry.label:
+        dispatch('windowsGame');
         break;
 
       default:

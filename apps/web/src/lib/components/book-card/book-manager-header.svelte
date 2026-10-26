@@ -9,6 +9,7 @@
   const dispatch = createEventDispatcher<{
     filesChange: FileList;
     importBackup: File;
+    windowsGame: void;
   }>();
 </script>
 
@@ -17,5 +18,7 @@
     {disabled}
     on:filesChange={(ev) => dispatch('filesChange', ev.detail)}
     on:importBackup={(ev) => dispatch('importBackup', ev.detail)}
+    windowsGames
+    on:windowsGame={() => dispatch('windowsGame')}
   />
 </AppHeader>

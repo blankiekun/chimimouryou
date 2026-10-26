@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>VNBox</title>
+    <link rel="stylesheet" href="vnbox/boxedwine.css" />
+    <link rel="stylesheet" href="vnbox.css" />
+  </head>
+  <body>
+    <!-- The elements boxedwine-shell.js looks up (VNBox's boxedwine.html, without its controls'
+         handlers); only the game, the overlay and the loading readout are shown. -->
+    <div id="loading">
+      <figure id="spinner"><div class="spinner"></div></figure>
+      <div id="status" class="emscripten">Downloading…</div>
+      <div class="emscripten"><progress id="progress" max="100" value="0"></progress></div>
+    </div>
+    <div id="app">
+      <div id="controls" class="emscripten">
+        <button id="startbtn" style="display: none">Start</button>
+        <button id="downloadbtn" style="display: none">Get File(s)</button>
+        <button id="savejitbtn" style="display: none">Save JIT Cache</button>
+        <select id="cdromdisc" style="display: none"></select>
+        <button id="cdromejectbtn" style="display: none">Eject</button>
+        <a href="#openModal" id="modalLink" style="display: none">Open</a>
+        <a href="#openModalExe" id="modalLinkExe" style="display: none">Open</a>
+        <input id="pointerLock" type="checkbox" />
+        <input id="showConsole" type="checkbox" />
+      </div>
+      <div id="dropzone">
+        <div class="emscripten_border">
+          <canvas class="emscripten" id="canvas" tabindex="0"></canvas>
+          <canvas class="emscripten boxedwine-webgl-canvas" id="boxedwine-webgl-canvas-0"></canvas>
+          <div id="overlay" lang="ja">
+            <div id="page-text"></div>
+            <div id="sprite-text"></div>
+            <div id="choices"></div>
+          </div>
+        </div>
+      </div>
+      <div id="console"><textarea class="emscripten" id="output" rows="8"></textarea></div>
+      <div id="openModal" class="modalDialog">
+        <div>
+          <input id="selectedItem" readonly />
+          <div id="tree"></div>
+          <div id="overlayRow"></div>
+          <h3 id="loadStatus"></h3>
+        </div>
+      </div>
+      <div id="openModalExe" class="modalDialog">
+        <div>
+          <a href="#close" id="openModalExeClick">X</a>
+          <div id="message"></div>
+          <div id="items"></div>
+        </div>
+      </div>
+    </div>
+    <script src="overlay.js"></script>
+    <script src="vnbox.js"></script>
+  </body>
+</html>

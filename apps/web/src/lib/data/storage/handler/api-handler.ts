@@ -498,11 +498,11 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
   }
 
   /** Lists the visual novels this browser keeps for this source (`keepOnDevice`). */
-  protected async addDeviceVns() {
+  protected async addDeviceVns(only = isVn) {
     const books = await (await database.db).getAll('data');
 
     books
-      .filter((book) => book.storageSource === this.storageSourceName && isVn(book))
+      .filter((book) => book.storageSource === this.storageSourceName && only(book))
       .forEach((book) => this.addDeviceVnCard(book));
   }
 
