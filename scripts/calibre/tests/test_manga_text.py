@@ -68,6 +68,14 @@ class MangaTextTest(unittest.TestCase):
         self.compute([1])
         self.assertFalse(os.path.exists(service.words_path(1)))
 
+    def test_a_new_core_version_redoes_estimates(self):
+        self.assertEqual(self.compute(), [1, 4])
+        self.service.core.CORE_VERSION += 1
+        try:
+            self.assertEqual(self.compute(), [1, 4])
+        finally:
+            self.service.core.CORE_VERSION -= 1
+
     def test_text_is_a_line_per_bubble(self):
         self.write_text(2, [{'blocks': [{'lines': ['吾輩は', '猫である。']}, {'lines': [' ']}]},
                             {'blocks': [{'lines': ['名前はまだ無い。']}]}, {}], 100)

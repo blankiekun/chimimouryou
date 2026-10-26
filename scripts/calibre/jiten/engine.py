@@ -24,7 +24,7 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 # Bump when a change to CODE_FILES changes any estimate's numbers or word list, then
 # `python3 engine.py --record` and regenerate difficulty-engine.json. A refactor that keeps every
 # output the same only re-records (`--record`), so library estimates stay current.
-# 4: the estimate is the fast core (core.py: V98 and its histogram); the GBDT model is gone.
+# 4: the estimate is the fast core (core.py: V98, its histogram and the facets); the GBDT model is gone.
 ENGINE_VERSION = 4
 # The scoring path's Python, on the server and in Pyodide alike (readings_file.extract gives the
 # browser its text; core.ts is checked against core.py by the shared fixture): in the fingerprint
