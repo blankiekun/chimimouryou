@@ -20,12 +20,14 @@ import {
   postsOf
 } from './community';
 import {
+  closeStreams,
   currentPresence,
   expirePresenceSql,
   pairPresence,
   presenceRoute,
   profilePresence,
-  revokePresenceSql
+  revokePresenceSql,
+  streamPresence
 } from './presence';
 import { DAY, HOUR, MINUTE } from './time';
 
@@ -66,6 +68,14 @@ export interface Env {
   EDGE_LIMIT?: RateLimit;
   /** Per address for /v1/transfers (polled while a transfer is set up), instead of EDGE_LIMIT */
   SIGNAL_LIMIT?: RateLimit;
+  /** The add-on's push connections, one PresenceStream (stream.ts) per user; absent means polling only */
+  PRESENCE?: DurableObjectNamespace;
+}
+
+/** The parts of a Durable Object namespace binding the hub uses */
+export interface DurableObjectNamespace {
+  idFromName(name: string): unknown;
+  get(id: unknown): { fetch(input: string, init?: RequestInit): Promise<Response> };
 }
 
 /** The parts of Cloudflare's edge cache (caches.default) the hub uses */
@@ -1616,6 +1626,7 @@ async function recover(request: Request, env: Env) {
     env.DB.prepare('DELETE FROM sessions WHERE user = ?1').bind(user.id),
     ...revokePresenceSql.map((sql) => env.DB.prepare(sql).bind(user.id))
   ]);
+  await closeStreams(env, user.id);
   return json({ token: await newSession(env, user.id), recovery, me: me(user) });
 }
 
@@ -1643,6 +1654,7 @@ async function changePassword(request: Request, env: Env, user: UserRow, hash: s
     env.DB.prepare('DELETE FROM sessions WHERE user = ?1 AND hash != ?2').bind(user.id, hash),
     ...revokePresenceSql.map((sql) => env.DB.prepare(sql).bind(user.id))
   ]);
+  await closeStreams(env, user.id);
   return json({ ok: true });
 }
 
@@ -1946,6 +1958,7 @@ async function route(request: Request, env: Env, ctx?: Context): Promise<Respons
   // The add-on's two calls: no session (a pairing code, or a presence key that reads nothing else).
   if (route === 'POST /v1/presence/pair') return pairPresence(request, env);
   if (route === 'GET /v1/presence/current') return currentPresence(request, env);
+  if (route === 'GET /v1/presence/stream') return streamPresence(request, env);
 
   // Profiles also answer visitors without an account.
   const auth = request.headers.has('Authorization') ? await authenticate(request, env) : null;
@@ -2001,6 +2014,7 @@ async function route(request: Request, env: Env, ctx?: Context): Promise<Respons
           env.DB.prepare(sql).bind(user.id)
         )
       );
+      await closeStreams(env, user.id);
       return json({ ok: true });
     case 'POST /v1/password':
       return changePassword(request, env, user, hash);
@@ -2012,6 +2026,7 @@ async function route(request: Request, env: Env, ctx?: Context): Promise<Respons
       return json(await updateMe(request, env, user, await readBody(request)));
     case 'DELETE /v1/me':
       await deleteUsers(env, 'id = ?1', user.id);
+      await closeStreams(env, user.id);
       await purgeProfile(request, user.username);
       return json({ ok: true });
     case 'POST /v1/code':
