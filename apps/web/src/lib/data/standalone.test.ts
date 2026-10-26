@@ -278,6 +278,42 @@ describe('standalone edition', () => {
     expect(() => serverOrigin('http://192.0.2.1')).toThrow(/HTTPS/);
   });
 
+  it('sends no Discord status to the hub unless the relay switch, social and an account are on', async () => {
+    fetchMock.mockImplementation(async () => new Response(null, { status: 204 }));
+    window.localStorage.setItem(
+      'socialSession',
+      JSON.stringify({ token: 't', me: { id: 'a', share: {} } })
+    );
+
+    const plugins = await import('$lib/plugins');
+    const hooks = await import('$lib/data/reader-hooks');
+    const discord = await import('$lib/data/discord');
+    const { discordOptions$ } = await import('$lib/data/discord-settings');
+    const hubCalls = () =>
+      fetchMock.mock.calls.filter(([url]) => String(url).includes('/v1/presence'));
+    const read = async (position: number) => {
+      hooks.readingActivity({ kind: 'book', title: '本', position, characters: 100 });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    };
+
+    // Signed in with the plugin on, but the switch is off by default.
+    plugins.setPluginEnabled('discord', true);
+    await read(10);
+    expect(hubCalls()).toHaveLength(0);
+
+    // The switch on but social off.
+    plugins.setPluginEnabled('social', false);
+    discordOptions$.next({ relay: true });
+    await read(20);
+    expect(hubCalls()).toHaveLength(0);
+
+    plugins.setPluginEnabled('social', true);
+    await read(30);
+    expect(hubCalls()).toHaveLength(1);
+    plugins.setPluginEnabled('discord', false);
+    discord.resetSender();
+  });
+
   it('asks the Anki add-on nothing while the Discord plugin is off', async () => {
     fetchMock.mockImplementation(async () => new Response(null, { status: 204 }));
 

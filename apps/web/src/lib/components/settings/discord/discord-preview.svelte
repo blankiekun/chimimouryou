@@ -1,6 +1,6 @@
 <script lang="ts">
   import AppHeaderLogo from '$lib/components/app-header/app-header-logo.svelte';
-  import type { DiscordActivity } from '$lib/data/discord-template';
+  import { activityClock, type DiscordActivity } from '$lib/data/discord-template';
   import { t$ } from '$lib/i18n';
 
   /**
@@ -29,17 +29,12 @@
   const small = $derived(activity?.assets?.small_image);
   const party = $derived(activity?.party ? ` (${activity.party.size.join(' of ')})` : '');
   const clock = $derived.by(() => {
-    const { start, end } = activity?.timestamps ?? {};
-    const seconds = Math.max(0, Math.round((start ? now - start : end ? end - now : 0) / 1000));
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const text =
-      seconds >= 3600
-        ? `${Math.floor(seconds / 3600)}:${pad(Math.floor(seconds / 60) % 60)}:${pad(seconds % 60)}`
-        : `${pad(Math.floor(seconds / 60))}:${pad(seconds % 60)}`;
+    const time = activityClock(activity?.timestamps, now);
 
-    if (start) return $t$('discord.elapsed', { time: text });
-    if (end) return $t$('discord.left', { time: text });
-    return '';
+    if (!time) return '';
+    return time.mode === 'elapsed'
+      ? $t$('discord.elapsed', { time: time.text })
+      : $t$('discord.left', { time: time.text });
   });
 
   $effect(() => {

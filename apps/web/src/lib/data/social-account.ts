@@ -39,6 +39,8 @@ export interface SocialMe {
   role?: string;
   code: string;
   share: Partial<Record<ShareKey, boolean>>;
+  /** Settings → Discord → Show on my profile: friends and you see the current Discord status */
+  presenceProfile?: boolean;
   created: number;
 }
 
@@ -249,11 +251,13 @@ function setMe(me: SocialMe) {
   return me;
 }
 
-export async function updateProfile(patch: Partial<Pick<SocialMe, 'name' | 'avatar' | 'share'>>) {
+export async function updateProfile(
+  patch: Partial<Pick<SocialMe, 'name' | 'avatar' | 'share' | 'presenceProfile'>>
+) {
   return setMe(await hubFetch<SocialMe>('/v1/me', 'PUT', patch));
 }
 
-type ProfilePatch = Partial<Pick<SocialMe, 'name' | 'avatar' | 'share'>>;
+type ProfilePatch = Partial<Pick<SocialMe, 'name' | 'avatar' | 'share' | 'presenceProfile'>>;
 
 let pendingPatch: ProfilePatch = {};
 let patchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -334,7 +338,9 @@ export function hubErrorKey(error: unknown): MessageKey {
     'user',
     'name',
     'network',
-    'paused'
+    'paused',
+    'keys',
+    'codes'
   ];
 
   return `social.error.${known.includes(code) ? code : 'other'}` as MessageKey;
