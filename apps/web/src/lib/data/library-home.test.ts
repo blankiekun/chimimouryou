@@ -111,7 +111,7 @@ describe('readNext', () => {
     expect(readNext([book('a', { difficulty: 2 }), book('b', { progress: 1 })], {})).toEqual([]);
   });
 
-  it('puts next volumes first, then books near the median of the last 3 finished, by coverage', () => {
+  it('puts next volumes first, then books near the median of the last 3 finished, closest to 98% known first', () => {
     const titles = readNext(
       [
         done('old', 5, 1),
@@ -123,13 +123,14 @@ describe('readNext', () => {
         book('S 3', { series: 'S', seriesIndex: 3 }),
         book('near', { difficulty: 2.5, calibreId: 1 }),
         book('known', { difficulty: 2.8, calibreId: 2 }),
+        book('easy', { difficulty: 2.7, calibreId: 3 }),
         book('far', { difficulty: 3.2 }),
         book('started', { difficulty: 2.6, progress: 0.2 })
       ],
-      { 1: 0.5, 2: 0.9 }
+      { 1: 0.5, 2: 0.975, 3: 1 }
     ).map((card) => card.title);
 
-    expect(titles).toEqual(['S 2', 'known', 'near']);
+    expect(titles).toEqual(['S 2', 'known', 'easy', 'near']);
   });
 
   it('takes an unstarted series only by its first unread volume', () => {

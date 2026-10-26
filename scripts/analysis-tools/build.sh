@@ -10,6 +10,9 @@
 #   pyodide/                     Pyodide (MPL-2.0), the core files only (a lock file without packages)
 #   analysis.zip                 yurigana (pinned like the server) and the difficulty service's Python
 #   reader.ygp.gz, frequency.ygp.gz  yurigana's Reader and the frequency table, packed as the server packs them
+#   core-frequency.tsv.gz        the frequency list's ranks, reading ranks and JMdict compounds for the
+#                                fast core (core.core_table_text; apps/web/src/lib/functions/analysis/core.ts),
+#                                read without Pyodide
 #   chimi-difficulty*.onnx, chimi-difficulty-range.json  the difficulty models
 #   ort/                         onnxruntime-web's plain wasm runtime (the app's own copy, which Whisper's
 #                                build lacks the models' ML operators), from apps/web/node_modules
@@ -94,20 +97,26 @@ python3 -c 'import shutil, sys; shutil.make_archive(sys.argv[1], "zip", sys.argv
 PYTHONPATH="$(dirname "$yg"):$jiten" python3 - "$jiten/data/jiten_freq_global.zip" "$work" <<'EOF'
 import sys
 from yurigana import Reader
+from core import core_table_text
 from frequency import FrequencyTable
 freq, work = sys.argv[1:]
-FrequencyTable.load(freq).save(f'{work}/frequency.ygp')
+table = FrequencyTable.load(freq)
+table.save(f'{work}/frequency.ygp')
+with open(f'{work}/core-frequency.tsv', 'w', encoding='utf-8') as f:
+    f.write(core_table_text(table))
 # The tokenizer is the browser's; building needs none (the server's _save_reader_pack, without term dictionaries)
 Reader(known=freq, tokenizer=False).save(f'{work}/reader.ygp')
 EOF
 for pack in reader frequency; do gzip -9 -c "$work/$pack.ygp" > "$out/$pack.ygp.gz"; done
+# -n: no name or time in the header, so the same list gives the same file (it is in the version)
+gzip -9 -n -c "$work/core-frequency.tsv" > "$out/core-frequency.tsv.gz"
 cp "$jiten/"chimi-difficulty{,-low,-high}.onnx "$jiten/chimi-difficulty-range.json" "$out/"
 mkdir -p "$out/ort"
 cp "$root/apps/web/node_modules/onnxruntime-web/dist/"ort-wasm-simd-threaded.{mjs,wasm} "$out/ort/"
 
 # Raw sizes let the worker preallocate the dictionary and the packs.
 # The version names the Python and the models too (a hash of their files), so a change there redoes the
-# books' analyses. Files only difficulty estimates need: the frequency pack and the models; only generated
+# books' analyses. Files only difficulty estimates need: the frequency pack, the core's list and the models; only generated
 # furigana: the reader pack (word lists take Sudachi's readings without it).
 # `engine`: the difficulty engine's fingerprint (scripts/calibre/jiten/engine.py), which the browser's
 # estimates carry; it must be the release's (apps/web/src/lib/data/difficulty-engine.json).
@@ -124,7 +133,7 @@ code = hashlib.sha256()
 for d, _, fs in sorted(os.walk(f'{work}/py')):
     for f in sorted(fs):
         code.update(f.encode() + open(os.path.join(d, f), 'rb').read())
-difficulty = {'frequency.ygp.gz', 'chimi-difficulty.onnx', 'chimi-difficulty-low.onnx', 'chimi-difficulty-high.onnx',
+difficulty = {'frequency.ygp.gz', 'core-frequency.tsv.gz', 'chimi-difficulty.onnx', 'chimi-difficulty-low.onnx', 'chimi-difficulty-high.onnx',
               'chimi-difficulty-range.json', 'ort/ort-wasm-simd-threaded.mjs', 'ort/ort-wasm-simd-threaded.wasm'}
 for f in sorted(difficulty - {'frequency.ygp.gz', 'ort/ort-wasm-simd-threaded.mjs', 'ort/ort-wasm-simd-threaded.wasm'}):
     code.update(f.encode() + open(f'{out}/{f}', 'rb').read())

@@ -23,10 +23,14 @@ export const toolsDir = process.env.ANALYSIS_TOOLS_DIR
   ? resolve(process.env.ANALYSIS_TOOLS_DIR)
   : join(benchDir, 'analysis-tools');
 
-/** Aozora Bunko pages (Shift_JIS XHTML): 坊っちゃん (Natsume Sōseki), 銀河鉄道の夜 (Miyazawa Kenji) */
+/**
+ * Aozora Bunko pages (Shift_JIS XHTML): 坊っちゃん (Natsume Sōseki), 銀河鉄道の夜 (Miyazawa Kenji), and
+ * 吾輩は猫である (Natsume Sōseki) as the long book
+ */
 export const books = {
   botchan: 'https://www.aozora.gr.jp/cards/000148/files/752_14964.html',
-  ginga: 'https://www.aozora.gr.jp/cards/000081/files/456_15050.html'
+  ginga: 'https://www.aozora.gr.jp/cards/000081/files/456_15050.html',
+  neko: 'https://www.aozora.gr.jp/cards/000148/files/789_14547.html'
 };
 
 async function download(url: string, file: string) {

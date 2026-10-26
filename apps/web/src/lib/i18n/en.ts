@@ -154,8 +154,9 @@ export const en = {
   'home.retry': 'Retry',
   'home.atYourLevel': 'at your level',
   'home.difficultyScore': '{band} {score}',
-  'home.wordsKnown': '{percent}% of words known',
-  'home.readNextReason': 'Near the level of the last books you finished ({range}).',
+  'home.wordsKnownForYou': '{percent}% known · {level} for you',
+  'home.readNextReason':
+    'Near the level of the last books you finished ({range}), closest to 98% known first.',
   'home.readNextReasonSeries':
     'The next volumes of series you are reading, then books near the level of the last ones you finished ({range}).',
   'home.nextInSeries': 'next in series',
@@ -182,6 +183,17 @@ export const en = {
   'book.knownFigure': 'of its words are known to you',
   'book.kanjiFigureOnly': 'different kanji',
   'book.words95Figure': 'common words cover 95% of it',
+  'book.levelOutOf': '/ 10  {tier}',
+  'book.v98Figure': 'common words cover 98% of it',
+  'book.v98Beyond': 'beyond the list',
+  'book.v98BeyondFigure': '98% of it needs words rarer than any ranked',
+  'book.modelScore': 'Model score {score} / 5, used for Reading rank',
+  'book.forYou': 'For you',
+  'book.forYouLevel': '{level} / 5',
+  'book.forYouLine': '{percent}% known · learn {learn} to reach 98%',
+  'book.forYouLineMore': '{percent}% known · learn {learn}+ to reach 98%',
+  'book.forYouReached': '{percent}% known · past 98% already',
+  'book.unknownEvery': '1 unknown word every {count} chars',
   'book.seriesVolume': '{series} #{index}',
   'book.from': 'From {source}',
   'book.length': 'Length',
@@ -282,6 +294,8 @@ export const en = {
   'difficulty.rangeNote': 'The likely range holds the true score for about 8 books in 10',
   'difficulty.words95':
     'The {count} most common words (by frequency rank) cover 95% of its words, words outside the frequency list aside',
+  'difficulty.level': 'Level {score} {tier} · 98% at {words} words',
+  'difficulty.levelBeyond': 'Level {score} {tier} · 98% needs words beyond the frequency list',
 
   'settings.uiLanguage': 'Interface language',
   'settings.uiLanguageHint':

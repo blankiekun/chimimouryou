@@ -43,6 +43,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from yurigana import __version__ as YURIGANA_VERSION
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+import core  # noqa: E402
 import readings_file  # noqa: E402
 from engine import engine_fingerprint, file_sha256  # noqa: E402
 from word_list import KANJI, NUMBER, PARTICLES, SINGLE_KANA, is_noise_word, word_rows  # noqa: E402,F401
@@ -230,10 +231,9 @@ def manga_text(book_id: int) -> str:
                      if (text := ''.join(block.get('lines', [])).strip()))
 
 
-def _estimate(book: dict):
-    import numpy
-    from features import (EXTRA_FEATURES, FEATURE_ORDER, TOKEN_CLEAN, book_text, compute_extra_features,
-                          compute_features, vn_text, words_for_coverage)
+def _book_text(book: dict):
+    """The book's text, its ruby counts and hints (features.book_text), and its character count."""
+    from features import TOKEN_CLEAN, book_text, vn_text
     ruby, hints = {}, []
     if book.get('manga'):
         text = manga_text(book['id'])
@@ -241,9 +241,22 @@ def _estimate(book: dict):
         text = vn_text(os.path.join(VN_DIR if book['format'] == 'VN' else LIBRARY, book['file']), ruby, hints)
     else:
         text = book_text(os.path.join(LIBRARY, book['file']), book['format'], ruby, hints)
-    characters = len(TOKEN_CLEAN.sub('', text))
+    return text, ruby, hints, len(TOKEN_CLEAN.sub('', text))
+
+
+def _core(tokens) -> dict:
+    """core.py's numbers from Sudachi tokens (yurigana's Token, with offsets)."""
+    return core.book_core(tokens, _frequency)
+
+
+def _estimate(book: dict):
+    import numpy
+    from features import EXTRA_FEATURES, FEATURE_ORDER, compute_extra_features, compute_features, words_for_coverage
+    text, ruby, hints, characters = _book_text(book)
     if characters < 1000:
         return book['id'], None
+    # The Analyzer keeps the text's tokens, so analyse() doesn't tokenize it again.
+    numbers = _core(_analyzer.tokens(text))
     analysis = _analyzer.analyse(text, hints, _reader, _frequency)
     features = compute_features(analysis, _frequency)
     extra = compute_extra_features(analysis, _frequency, ruby)
@@ -271,9 +284,36 @@ def _estimate(book: dict):
         'uniqueWords': unique_words,
         'tokens': tokens,
         'computedAt': int(time.time() * 1000),
+        # The fast core (core.py): V98, names and the log-rank histogram; not part of the engine yet.
+        'core': numbers,
         # Manga: the mokuro text it was made from (manga_text_stamp).
         **({'text': book['text']} if book.get('manga') else {}),
     }
+
+
+def _init_core_worker():
+    """A worker for core numbers only: Sudachi and the frequency list, no Reader or models."""
+    global _tokenizer, _frequency
+    from yurigana.tokens import SudachiTokenizer
+    from frequency import FrequencyTable
+    _tokenizer = SudachiTokenizer()
+    _frequency = (FrequencyTable.load_packed(FREQUENCY_PACK) if reader_pack_current()
+                  else FrequencyTable.load(FREQUENCY_DICTIONARY))
+
+
+_tokenizer = None
+
+
+def _core_estimate(book: dict):
+    """(id, core numbers) of a book whose estimate is current but lacks them (None: too little text)."""
+    text, _, _, characters = _book_text(book)
+    return book['id'], _core(_tokenizer.tokens(text)) if characters >= 1000 else None
+
+
+def needs_core(book, results) -> bool:
+    """An estimate made before the core (or by an older CORE_VERSION): only its core is redone."""
+    estimate = results['books'].get(str(book['id']))
+    return bool(estimate) and (estimate.get('core') or {}).get('v') != core.CORE_VERSION
 
 
 # ---------------------------------------------------------------------------
@@ -538,28 +578,28 @@ readings = ReadingsQueue()
 # ---------------------------------------------------------------------------
 # Jobs
 
-def run_in_pools(books, task, cancel: threading.Event):
+def run_in_pools(books, task, cancel: threading.Event, initializer=None):
     """Yields (book, result or exception), using fresh worker pools per chunk.
     Books lost when a worker process dies (e.g. out of memory) are retried one at a
     time, so only a book that kills a worker on its own is reported as failed."""
     ensure_reader_pack()
     for start in range(0, len(books), BOOKS_PER_POOL):
         lost = []
-        yield from _run_pool(books[start:start + BOOKS_PER_POOL], task, cancel, WORKERS, lost)
+        yield from _run_pool(books[start:start + BOOKS_PER_POOL], task, cancel, WORKERS, lost, initializer)
         for book in lost:
             if cancel.is_set():
                 return
             lost_again = []
-            yield from _run_pool([book], task, cancel, 1, lost_again)
+            yield from _run_pool([book], task, cancel, 1, lost_again, initializer)
             if lost_again:
                 yield book, RuntimeError('the worker process died on this book (out of memory?)')
         if cancel.is_set():
             return
 
 
-def _run_pool(books, task, cancel: threading.Event, workers: int, lost: list):
+def _run_pool(books, task, cancel: threading.Event, workers: int, lost: list, initializer=None):
     """Yields results of one pool; books whose worker died are added to `lost`."""
-    with ProcessPoolExecutor(workers, initializer=_init_worker) as pool:
+    with ProcessPoolExecutor(workers, initializer=initializer or _init_worker) as pool:
         futures = [pool.submit(task, book) for book in books]
         for book, future in zip(books, futures):
             while not future.done() and not cancel.wait(0.5):
@@ -721,6 +761,19 @@ class JobRunner:
                     no_text_stamps[str(result[0])] = book['text']
                 failed.pop(str(result[0]), None)
             results['noText'] = sorted(no_text)
+            done += 1
+            self._progress(done)
+            if time.monotonic() - last_save > 10:
+                save_results(results)
+                last_save = time.monotonic()
+        # Library runs: estimates still current but made before the core get only its numbers (~0.3 s
+        # a book: Sudachi and the frequency list, no Reader or models).
+        stale = [b for b in catalog if needs_core(b, results)] if ids is None and not self.cancel.is_set() else []
+        if stale:
+            self._progress(done, done + len(stale))
+        for book, result in run_in_pools(stale, _core_estimate, self.cancel, _init_core_worker):
+            if not isinstance(result, Exception) and result[1]:
+                results['books'][str(result[0])]['core'] = result[1]
             done += 1
             self._progress(done)
             if time.monotonic() - last_save > 10:

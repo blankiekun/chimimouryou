@@ -19,6 +19,7 @@ import { deleteCachedReadings } from '$lib/data/generated-furigana';
 import { deleteVnCache } from '$lib/data/vn';
 import { standalone } from '$lib/data/env';
 import { guessSeriesName } from '$lib/data/series-overrides';
+import { coverageTarget } from '$lib/data/difficulty-core';
 
 export type LibraryTab = 'home' | 'store';
 
@@ -279,14 +280,18 @@ export function readNextPool(cards: BookCardProps[]) {
 
 /**
  * Home's Read next shelf: next volumes first, then the pool by known-word coverage
- * (`known-words.ts`, Calibre id → share; books without one after, closest difficulty first).
+ * (`known-words.ts`, Calibre id → share), closest to the 98% target first; books without one
+ * after, closest difficulty first.
  */
 export function readNext(cards: BookCardProps[], coverage: Record<number, number>, limit = 12) {
   if (standalone) return standaloneReadNext(cards, limit);
 
   const { next, pool } = readNextPool(cards);
-  const share = (card: BookCardProps) =>
-    card.calibreId === undefined ? -1 : (coverage[card.calibreId] ?? -1);
+  const distance = (card: BookCardProps) => {
+    const share = card.calibreId === undefined ? undefined : coverage[card.calibreId];
 
-  return [...next, ...pool.sort((a, b) => share(b) - share(a))].slice(0, limit);
+    return share === undefined ? 2 : Math.abs(share - coverageTarget);
+  };
+
+  return [...next, ...pool.sort((a, b) => distance(a) - distance(b))].slice(0, limit);
 }

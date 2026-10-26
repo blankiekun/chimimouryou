@@ -126,6 +126,68 @@ it('times the analysis of a book', async () => {
     record('worker after both parts: wasm memory (MB)', w.wasm / 1000);
   }
 
+  // The fast core (core.ts, no Pyodide): a fresh worker on 坊っちゃん, then the same worker on
+  // 銀河鉄道の夜 and 坊っちゃん again (another book in between: its tokens aren't reused). Then the
+  // long book: the core, and once the words part and score as estimates were made before it.
+  const long = await book('neko');
+
+  for (let run = 0; run < RUNS; run++) {
+    const worker = new Worker(new URL('./analysis.worker.ts', import.meta.url), { type: 'module' });
+    type Result = Extract<AnalysisMessage, { type: 'result' }>;
+    const core = (html: string) =>
+      ask<Result>(worker, { ...request, html, part: 'core' }, 'result');
+    const start = performance.now();
+    const cold = await core(html);
+
+    record('core: cold worker (Sudachi + core list + book)', performance.now() - start);
+    record('core: Sudachi load', cold.timings.sudachi);
+    record('core: core list load (ranks, readings, compounds)', cold.timings.coreTable);
+    record('core: tokenize', cold.timings.tokenize);
+    record('core: count and V98', cold.timings.analyse);
+    await core(other);
+
+    const warm = performance.now();
+
+    await core(html);
+    record('core: warm worker', performance.now() - warm);
+
+    const longStart = performance.now();
+
+    await core(long);
+    record('core: warm worker, 吾輩は猫である', performance.now() - longStart);
+    worker.terminate();
+  }
+  {
+    const worker = new Worker(new URL('./analysis.worker.ts', import.meta.url), { type: 'module' });
+    type Result = Extract<AnalysisMessage, { type: 'result' }>;
+    const start = performance.now();
+    const words = await ask<Result>(
+      worker,
+      { ...request, html: long, part: 'words', reader: false },
+      'result'
+    );
+
+    worker.terminate();
+
+    const scorer = new Worker(new URL('./analysis-score.worker.ts', import.meta.url), {
+      type: 'module'
+    });
+
+    await ask<ScoreMessage>(
+      scorer,
+      { base, features: (JSON.parse(words.json) as { features: number[] }).features },
+      'scores'
+    );
+    scorer.terminate();
+    record(
+      'before the core: 吾輩は猫である, cold words part + score (1 run)',
+      performance.now() - start
+    );
+  }
+  report(
+    `Long book: 吾輩は猫である, ${long.replace(/<rt[^>]*>.*?<\/rt>|<[^>]+>/gs, '').length} characters`
+  );
+
   // Tiers: the same book opened (readings, then the estimate) and a two-book background batch,
   // through analysis-tools.ts. Small: the worker ends after each book, one at a time; large: kept
   // 10 s, two at once. Each run starts cold (the kept workers are waited out).

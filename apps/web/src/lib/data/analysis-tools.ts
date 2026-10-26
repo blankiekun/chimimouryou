@@ -44,6 +44,7 @@ import {
   type AnalysisToolsManifest
 } from '$lib/functions/analysis/tools-files';
 import { analysisKeepAlive, analysisWorkers } from '$lib/data/analysis-capacity';
+import { CORE_VERSION, type CoreNumbers } from '$lib/functions/analysis/core';
 
 const base = () => new URL(`${pagePath}/analysis-tools/`, location.href).href;
 const manifestName = 'manifest.json';
@@ -580,7 +581,9 @@ function enqueue<T>(
   task: (session: Session) => Promise<T>
 ) {
   return new Promise<T>((resolve, reject) => {
-    const rank = background ? 2 : part === 'readings' ? 0 : 1;
+    // The core (under a second) after the reader's readings file, ahead of the word list: the book page
+    // shows its numbers well before the estimate, and furigana don't wait for it.
+    const rank = background ? 2 : part === 'readings' ? 0 : part === 'core' ? 0.5 : 1;
     const job = { rank, html, start: (session: Session) => task(session).then(resolve, reject) };
     const at = pending.findIndex((queued) => queued.rank > rank);
 
@@ -641,6 +644,10 @@ export function usesReader(part: Part, manifest: AnalysisToolsManifest, furigana
   return part === 'readings' || furigana || !pack?.features;
 }
 
+/** Tools built before the core have no core frequency list: their estimates have no core numbers. */
+const hasCore = (manifest: AnalysisToolsManifest) =>
+  manifest.files.some((file) => file.name === 'core-frequency.tsv.gz');
+
 /**
  * One part of the book's analysis from its HTML (the processed book's elementHtml): browser.py's
  * JSON. `onProgress` gets a share from 0 to 1; `signal` stops it (between and inside stages).
@@ -652,7 +659,8 @@ function analyseBook(
   reader: boolean,
   onProgress: (share: number) => void,
   signal?: AbortSignal,
-  background = false
+  background = false,
+  python = false
 ) {
   return enqueue(part, background, html, async (session) => {
     if (signal?.aborted) throw abortError();
@@ -661,7 +669,7 @@ function analyseBook(
 
     const { json } = await analysisWorker(
       session,
-      { base: base(), manifest, html, part, wordsPerBook, reader },
+      { base: base(), manifest, html, part, wordsPerBook, reader, python },
       onProgress,
       signal
     );
@@ -732,16 +740,25 @@ export async function localEstimates() {
   return new Map(estimates.map((estimate) => [estimate.title, estimate]));
 }
 
+/** The fast core's result (analysis.worker.ts): its numbers and the book's characters */
+export interface CoreResult {
+  core: CoreNumbers;
+  characters: number;
+}
+
 /**
  * The book's difficulty estimate and word list: the kept one when made from this HTML by these
  * tools, else a new one (undefined when the difficulty tools aren't downloaded: then the kept one).
+ * `onCore` gets the fast core's numbers first, well before the estimate (tools with the core only).
+ * A kept estimate without current core numbers gets only those.
  */
 export async function localEstimate(
   title: string,
   html: string,
   onProgress: (share: number) => void = () => {},
   signal?: AbortSignal,
-  background = false
+  background = false,
+  onCore: (result: CoreResult) => void = () => {}
 ): Promise<LocalEstimate | undefined> {
   const [kept, manifest] = await Promise.all([keptEstimate(title), installedTools('difficulty')]);
 
@@ -749,11 +766,42 @@ export async function localEstimate(
 
   const etag = await analysisTag(html, manifest.version);
 
-  if (kept?.etag === etag) return kept;
+  if (kept?.etag === etag) {
+    if (kept.core?.v === CORE_VERSION || !hasCore(manifest)) return kept;
+
+    return once(`core ${title}`, onProgress, async () => {
+      const { core } = await coreJob(html, manifest, signal, background, false);
+      const estimate = { ...kept, core };
+
+      await (await readerDb()).put('estimates', estimate);
+      localEstimateSaved$.next(title);
+
+      return estimate;
+    });
+  }
 
   return once(`words ${title}`, onProgress, (progress) =>
-    makeEstimate(title, html, etag, manifest, progress, signal, background)
+    makeEstimate(title, html, etag, manifest, progress, signal, background, onCore)
   );
+}
+
+function coreJob(
+  html: string,
+  manifest: AnalysisToolsManifest,
+  signal: AbortSignal | undefined,
+  background: boolean,
+  python: boolean
+) {
+  return analyseBook(
+    html,
+    'core',
+    manifest,
+    false,
+    () => {},
+    signal,
+    background,
+    python
+  ) as Promise<CoreResult>;
 }
 
 async function makeEstimate(
@@ -763,8 +811,16 @@ async function makeEstimate(
   manifest: AnalysisToolsManifest,
   onProgress: (share: number) => void,
   signal: AbortSignal | undefined,
-  background: boolean
+  background: boolean,
+  onCore: (result: CoreResult) => void
 ) {
+  // The core first, on the worker that then reads the word list (Pyodide loads meanwhile).
+  const core = hasCore(manifest)
+    ? await coreJob(html, manifest, signal, background, true).then((result) => {
+        onCore(result);
+        return result.core;
+      })
+    : undefined;
   const reader = usesReader('words', manifest, !!(await installedTools('furigana')));
   const result = (await analyseBook(
     html,
@@ -788,7 +844,8 @@ async function makeEstimate(
     uniqueWords: result.uniqueWords,
     tokens: result.tokens,
     engine: manifest.engine,
-    computedAt: Date.now()
+    computedAt: Date.now(),
+    ...(core && { core })
   };
   const db = await readerDb();
 
