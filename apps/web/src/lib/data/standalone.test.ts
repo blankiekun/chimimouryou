@@ -381,6 +381,17 @@ describe('standalone edition', () => {
     discord.resetSender();
   });
 
+  it('offers no library cover upload and sends nothing, even signed in as a dev', async () => {
+    const covers = await import('$lib/data/library-covers');
+    const { socialSession$ } = await import('$lib/data/social-account');
+
+    socialSession$.next({ token: 't', me: { id: 'a', role: 'dev', share: {} } as never });
+    expect(covers.libraryCoversAvailable).toBe(false);
+    await covers.uploadLibraryCovers();
+    expect(fetchMock).not.toHaveBeenCalled();
+    socialSession$.next(null);
+  });
+
   it('asks the Anki add-on nothing while the Discord plugin is off', async () => {
     fetchMock.mockImplementation(async () => new Response(null, { status: 204 }));
 

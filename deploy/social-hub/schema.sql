@@ -120,13 +120,16 @@ CREATE TABLE IF NOT EXISTS pictures (
 -- finished rows: R2 object cover/<file> (16 hex of the WebP's sha256, shared by identical
 -- uploads). removed = 1 after a report: the title card shows instead and that reader can't upload
 -- another for the key. The daily cron deletes shown covers whose book the reader no longer shares
--- and whose URL their live Discord status (presence) doesn't show.
+-- and whose URL their live Discord status (presence) doesn't show. library = 1: a dev's upload
+-- for the Discord status of anyone reading the book (PUT /v1/admin/library-cover), never deleted
+-- by the cron.
 CREATE TABLE IF NOT EXISTS covers (
   user TEXT NOT NULL,
   book_key TEXT NOT NULL,
   file TEXT NOT NULL,
   at INTEGER NOT NULL,
   removed INTEGER NOT NULL DEFAULT 0,
+  library INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (user, book_key)
 );
 CREATE INDEX IF NOT EXISTS covers_file ON covers (file);

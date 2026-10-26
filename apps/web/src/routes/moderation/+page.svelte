@@ -2,6 +2,7 @@
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import CommunityReports from '$lib/components/community/community-reports.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
+  import LibraryCovers from '$lib/components/social/library-covers.svelte';
   import RoleBadge from '$lib/components/social/role-badge.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import { pagePath } from '$lib/data/env';
@@ -19,6 +20,7 @@
     type OpenReport,
     type UserRows
   } from '$lib/data/social-moderation';
+  import { libraryCoversAvailable } from '$lib/data/library-covers';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { t$, uiLanguage$, type MessageKey } from '$lib/i18n';
   import { onMount } from 'svelte';
@@ -403,6 +405,10 @@
           {/if}
         {/if}
       </section>
+
+      {#if libraryCoversAvailable}
+        <div class="moderation-section"><LibraryCovers number={4} /></div>
+      {/if}
     {/if}
   </main>
 </div>

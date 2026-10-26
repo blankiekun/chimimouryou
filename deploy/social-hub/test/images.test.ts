@@ -9,11 +9,14 @@ import hub, {
   AVATAR_BYTES,
   COVER_BYTES,
   COVER_UPLOADS,
+  LIBRARY_UPLOADS,
   UPLOADS_PER_DAY,
   cleanUp,
   webpSize,
   type Env
 } from '../src/hub';
+import { readFileSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import { memoryD1, webp } from './d1';
 
 describe('hub images', () => {
@@ -389,5 +392,124 @@ describe('hub images', () => {
     ).toEqual([]);
     expect((await call('GET', '/v1/profile/aki')).body.books[0].cover).toBeNull();
     expect((await call('PUT', '/v1/cover?key=k1', webp(160, 226), aki.token)).status).toBe(409);
+  });
+
+  describe('library covers', () => {
+    const put = (key: string, token: string, image = webp(160, 226)) =>
+      call('PUT', `/v1/admin/library-cover?key=${encodeURIComponent(key)}`, image, token);
+    const list = (token: string, after = '') =>
+      call('GET', `/v1/admin/library-covers?after=${encodeURIComponent(after)}`, undefined, token);
+
+    async function dev(username = 'blank') {
+      const account = await signUp(username);
+
+      db.prepare(`UPDATE users SET role = 'dev' WHERE id = ?`).run(account.me.id);
+      return account;
+    }
+
+    it('takes a dev’s covers of unshared books, for anyone’s lookup, and refuses everyone else', async () => {
+      const blank = await dev();
+      const aki = await signUp('aki');
+
+      expect((await put('k1', aki.token)).status).toBe(403);
+      expect((await list(aki.token)).status).toBe(403);
+      expect((await put('k1', '')).status).toBe(401);
+      expect((await put('k1', blank.token, webp(300, 400))).status).toBe(400);
+
+      const first = await put('k1', blank.token);
+      expect(first.status).toBe(200);
+      expect(objects.has(`cover/${first.body.cover}`)).toBe(true);
+      expect((await put('k1', blank.token, webp(160, 230))).status).toBe(409);
+      expect((await call('GET', '/v1/cover?key=k1', undefined, aki.token)).body).toEqual({
+        cover: first.body.cover
+      });
+      // The reader's own comes first, the library cover after it.
+      await call('PUT', '/v1/status', { books: [book('k1')] }, aki.token);
+      const own = await call('PUT', '/v1/cover?key=k1', webp(160, 230), aki.token);
+      expect((await call('GET', '/v1/cover?key=k1', undefined, aki.token)).body.cover).toBe(
+        own.body.cover
+      );
+      // Not counted towards the hub-wide ceiling, its own counter instead.
+      expect(
+        db
+          .prepare(
+            `SELECT subject, count FROM limits WHERE action IN ('upload', 'library') ORDER BY subject`
+          )
+          .all()
+      ).toEqual([
+        { subject: '*', count: 1 },
+        { subject: blank.me.id, count: 3 }
+      ]);
+    });
+
+    it('lists library keys a page at a time, removed ones too', async () => {
+      const blank = await dev();
+      const other = await dev('other');
+      const aki = await signUp('aki');
+      const keys = Array.from({ length: 1001 }, (_, i) => `k${String(i).padStart(4, '0')}`);
+      const insert = db.prepare(
+        `INSERT INTO covers (user, book_key, file, at, library, removed) VALUES (?, ?, 'aaaaaaaaaaaaaaaa', 1, 1, ?)`
+      );
+
+      keys.forEach((key, i) => insert.run(blank.me.id, key, i === 5 ? 1 : 0));
+      insert.run(other.me.id, 'k0000', 0);
+      // A reader's own cover isn't a library cover.
+      await call('PUT', '/v1/status', { books: [book('z1')] }, aki.token);
+      await call('PUT', '/v1/cover?key=z1', webp(160, 226), aki.token);
+
+      const page = await list(blank.token);
+      expect(page.body.keys).toEqual(keys.slice(0, 1000));
+      expect(page.body.next).toBe('k0999');
+      expect((await list(blank.token, page.body.next)).body).toEqual({
+        keys: ['k1000'],
+        next: null
+      });
+    });
+
+    it('keeps library covers through the cron, deletes them with the dev’s account', async () => {
+      const blank = await dev();
+      const cover = (await put('k1', blank.token)).body.cover;
+
+      vi.advanceTimersByTime(60_000);
+      await cleanUp(env);
+      expect(db.prepare('SELECT book_key, library FROM covers').all()).toEqual([
+        { book_key: 'k1', library: 1 }
+      ]);
+      expect(objects.has(`cover/${cover}`)).toBe(true);
+      expect((await call('DELETE', '/v1/me', undefined, blank.token)).status).toBe(200);
+      expect(db.prepare('SELECT COUNT(*) AS n FROM covers').get()).toEqual({ n: 0 });
+      expect(objects.has(`cover/${cover}`)).toBe(false);
+    });
+
+    it('stops at the daily cap', async () => {
+      const blank = await dev();
+      const day = Math.floor(Date.now() / 1000 / 86_400) * 86_400;
+
+      db.prepare(
+        "INSERT INTO limits (subject, action, win, count) VALUES (?, 'library', ?, ?)"
+      ).run(blank.me.id, day, LIBRARY_UPLOADS);
+      expect((await put('k1', blank.token)).status).toBe(429);
+      expect(objects.size).toBe(0);
+    });
+
+    it('adds the column once and changes nothing on a second run', () => {
+      const migration = readFileSync(
+        new URL('../migrations/0011_library_covers.sql', import.meta.url),
+        'utf8'
+      );
+      const old = new DatabaseSync(':memory:');
+
+      old.exec(`CREATE TABLE covers (user TEXT NOT NULL, book_key TEXT NOT NULL, file TEXT NOT NULL,
+        at INTEGER NOT NULL, removed INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user, book_key));
+        INSERT INTO covers VALUES ('u', 'k1', 'f', 1, 0);`);
+      old.exec(migration);
+      expect(old.prepare('SELECT library FROM covers').get()).toEqual({ library: 0 });
+      expect(() => old.exec(migration)).toThrow('duplicate column name');
+      expect(old.prepare('SELECT COUNT(*) AS n FROM covers').get()).toEqual({ n: 1 });
+      // Same columns as schema.sql's table.
+      const columns = (on: DatabaseSync) =>
+        on.prepare('SELECT name, type, dflt_value FROM pragma_table_info(?)').all('covers');
+      expect(columns(old)).toEqual(columns(db));
+    });
   });
 });

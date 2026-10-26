@@ -2224,6 +2224,17 @@ export const ja: Record<MessageKey, string> = {
   'social.moderation': 'モデレーション',
   'social.moderationHint': 'ハブへの通報と読者のデータ。開発者にだけ表示されます。',
   'social.moderationOpen': '開く',
+  'moderation.libraryCovers': 'ライブラリの表紙',
+  'moderation.libraryCoversHint':
+    'ライブラリの本とマンガの表紙の縮小版をハブにアップロードし、誰のDiscordステータスにも表示できるようにします。このブラウザで友達に非表示にした本は除外します。1日10,000件まで。いつでも一時停止でき、ハブにあるものの続きから再開します。',
+  'moderation.libraryCoversStart': 'ライブラリの表紙をアップロード',
+  'moderation.libraryCoversPause': '一時停止',
+  'moderation.libraryCoversResume': '再開',
+  'moderation.libraryCoversDone': '完了',
+  'moderation.libraryCoversSkipped': 'スキップ',
+  'moderation.libraryCoversFailed': '失敗',
+  'moderation.libraryCoversLeft': '残り',
+  'moderation.libraryCoversLimit': '今日の10,000件を使い切りました。明日再開してください。',
   'moderation.title': 'モデレーション',
   'moderation.devOnly':
     'モデレーションはハブの開発者だけが使えます。開発者のアカウントでハブにログインしてください。',

@@ -2210,6 +2210,17 @@ export const en = {
   'social.moderation': 'Moderation',
   'social.moderationHint': 'Reports and readers’ data on the hub. Only developers see this.',
   'social.moderationOpen': 'Open',
+  'moderation.libraryCovers': 'Library covers',
+  'moderation.libraryCoversHint':
+    'Uploads a small copy of every library book’s and manga’s cover to the hub, so anyone’s Discord status can show it. Books hidden from friends in this browser are skipped. Up to 10,000 a day; pause at any time and continue later from what the hub already has.',
+  'moderation.libraryCoversStart': 'Upload library covers',
+  'moderation.libraryCoversPause': 'Pause',
+  'moderation.libraryCoversResume': 'Resume',
+  'moderation.libraryCoversDone': 'Done',
+  'moderation.libraryCoversSkipped': 'Skipped',
+  'moderation.libraryCoversFailed': 'Failed',
+  'moderation.libraryCoversLeft': 'Left',
+  'moderation.libraryCoversLimit': 'Today’s 10,000 uploads are used up. Resume tomorrow.',
   'moderation.title': 'Moderation',
   'moderation.devOnly':
     'Only the hub’s developers can moderate. Sign in to the hub with a developer account.',
