@@ -114,7 +114,10 @@ WORDS_PER_BOOK = 2000
 #    (蝎 さそり, 叮寧 ていねい), so the browser reads a book once for both.
 # 18: SudachiDict-core 20261015 (normalized forms of ずる verbs: 封ずる 封じる; a few readings and
 #    compounds such as 気に入る).
-WORDS_VERSION = 18
+# 19: JMdict compounds Sudachi splits joined again when commoner than their rarest part
+#    (compound_merge: 心配顔, not 顔 がお), and a voiced reading the list ranks takes the unvoiced
+#    one's rank when better (顔 がお: かお's).
+WORDS_VERSION = 19
 # Readings files (#17), made from the reader's processed book in the shared sync folder
 # (mounted read-only): <SYNC_DIR>/ttu-reader-data/<title>/bookdata_*.zip.
 SYNC_DIR = os.environ.get('SYNC_DIR', '/data/sync')
@@ -241,7 +244,7 @@ def _estimate(book: dict):
     characters = len(TOKEN_CLEAN.sub('', text))
     if characters < 1000:
         return book['id'], None
-    analysis = _analyzer.analyse(text, hints, _reader)
+    analysis = _analyzer.analyse(text, hints, _reader, _frequency)
     features = compute_features(analysis, _frequency)
     extra = compute_extra_features(analysis, _frequency, ruby)
     row = numpy.array([[features[name] for name in FEATURE_ORDER] + [extra[name] for name in EXTRA_FEATURES]],
@@ -297,9 +300,13 @@ def _load_reader(tokenizer=None, known=lambda: FREQUENCY_DICTIONARY):
     return Reader(known=known(), tables=READING_MODEL_TABLES, tokenizer=tokenizer, **term_options())
 
 
+# 2: FREQUENCY_PACK has the JMdict compound table (compound_merge), so older packs are rebuilt.
+PACK_FORMAT = 2
+
+
 def reader_pack_key() -> str:
     paths = [FREQUENCY_DICTIONARY, *term_dictionaries()]
-    return reader_version() + ' ' + ','.join(f'{os.path.basename(p)}:{os.path.getsize(p)}:{os.path.getmtime(p)}'
+    return f'{reader_version()} pack{PACK_FORMAT} ' + ','.join(f'{os.path.basename(p)}:{os.path.getsize(p)}:{os.path.getmtime(p)}'
                                              for p in paths if os.path.exists(p))
 
 

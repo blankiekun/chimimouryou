@@ -26,7 +26,8 @@ def word_rows(analysis, frequency):
     (他: ほか and た). Rows of one form and reading from different Sudachi words (ある: 有る and 或る)
     are merged. A word met only conjugated takes the form's most common reading in the book, else
     Sudachi's reading of the form (None only when neither exists). A voiced reading the list lacks
-    counts for the unvoiced one it gives (箱 ばこ: はこ). Names, affixes (今 read こん, from 今回),
+    counts for the unvoiced one it gives (箱 ばこ: はこ); one it has takes the better of the two ranks
+    (顔 がお: かお's). Names, affixes (今 read こん, from 今回),
     particles, auxiliaries and unclassified tokens are left out. Also returns the number of rows and
     their occurrences, without noise (is_noise_word)."""
     merged = {}  # (form, reading) -> [form, reading, count, rank, lemma, the lemma's count]
@@ -41,6 +42,9 @@ def word_rows(analysis, frequency):
             reading = plain
         data = frequency.word(word.key, reading)
         rank = data[0] if data else None
+        # A compound tail the list ranks voiced too (顔 がお 75,124, from 心配顔) is as common as the word (かお 113).
+        if plain != reading and (lemma, plain) in frequency.reading_ranks:
+            rank = min(rank or float('inf'), frequency.reading_ranks[lemma, plain])
         row = merged.get((word.form, reading))
         if row is None:
             merged[word.form, reading] = [word.form, reading, n, rank, lemma, n]

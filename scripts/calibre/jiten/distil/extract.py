@@ -22,7 +22,7 @@ def work(book):
         text = book_text(os.path.join(LIBRARY, book['file']), book['format'], ruby)
         if len(TOKEN_CLEAN.sub('', text)) < 1000:
             return None
-        a = _a.analyse(text)
+        a = _a.analyse(text, frequency=_table)
         return {'id': book['id'], 'words': a.word_count, 'uniqueWords': len(a.words),
                 'features': compute_features(a, _table), 'extra': compute_extra_features(a, _table, ruby)}
     except Exception as error:  # noqa: BLE001

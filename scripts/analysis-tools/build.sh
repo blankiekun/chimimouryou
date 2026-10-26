@@ -89,7 +89,7 @@ mkdir -p "$work/py"
 cp -r "$yg" "$work/py/"
 # All of the package: Reader.load checks the packs against a hash of its files (_source_hash)
 rm -rf "$work/py/yurigana/__pycache__"
-cp "$jiten/"{features.py,deconjugator.py,deconjugator.json,frequency.py,readings_file.py,word_list.py,goshu.json.gz,kanji-grades.json,browser.py} "$work/py/"
+cp "$jiten/"{features.py,compound_merge.py,deconjugator.py,deconjugator.json,frequency.py,readings_file.py,word_list.py,goshu.json.gz,kanji-grades.json,browser.py} "$work/py/"
 python3 -c 'import shutil, sys; shutil.make_archive(sys.argv[1], "zip", sys.argv[2])' "$out/analysis" "$work/py"
 PYTHONPATH="$(dirname "$yg"):$jiten" python3 - "$jiten/data/jiten_freq_global.zip" "$work" <<'EOF'
 import sys

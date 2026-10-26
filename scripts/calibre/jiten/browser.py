@@ -118,6 +118,12 @@ def _reader(tokenizer, kept: dict) -> Reader:
     return reader
 
 
+@lru_cache(maxsize=1)
+def _frequency() -> FrequencyTable:
+    """The worker's table (its pack is loaded once), kept with its compound table for the next book."""
+    return FrequencyTable.load_packed(FREQUENCY_PACK)
+
+
 def _words(extracted: tuple, tokens, words_per_book: int, reader: bool, kept: dict) -> dict:
     """The book's word list as the service saves it ({words, uniqueWords, tokens}) and the
     difficulty model's input row (`features`, the service's _estimate) with the estimate's counts.
@@ -131,8 +137,8 @@ def _words(extracted: tuple, tokens, words_per_book: int, reader: bool, kept: di
     ruby = {}
     for start, end, reading in hints:
         _count_ruby(ruby, text[start:end], reading)
-    frequency = FrequencyTable.load_packed(FREQUENCY_PACK)
-    analysis = analyzer.analyse(text, hints, _reader(analyzer, kept) if reader else None)
+    frequency = _frequency()
+    analysis = analyzer.analyse(text, hints, _reader(analyzer, kept) if reader else None, frequency)
     rows, unique_words, total = word_rows(analysis, frequency)
     features = compute_features(analysis, frequency)
     extra = compute_extra_features(analysis, frequency, ruby)

@@ -22,6 +22,7 @@ from collections import Counter, defaultdict, deque
 from dataclasses import dataclass, field
 from functools import lru_cache
 
+from compound_merge import merge_compounds
 from deconjugator import Deconjugator
 # Book text with its ruby and Sudachi tokens come from yurigana (the readings in context too: a Reader).
 from yurigana.readings import is_kanji, to_hiragana  # noqa: F401
@@ -290,20 +291,23 @@ class Analyzer:
             self._text, self._text_tokens = text, list(self._tokens(text))
         return self._text_tokens
 
-    def analyse(self, text: str, hints=(), reader=None) -> Analysis:
+    def analyse(self, text: str, hints=(), reader=None, frequency=None) -> Analysis:
         """`hints`: (start, end, ruby) from book_text. `reader` (a yurigana Reader, made with
         this Analyzer as its tokenizer) gives each occurrence's reading in `readings`: the
         book's ruby, a context rule, the reading model, a default or the list's only reading,
         else Sudachi's, as in readings files (carry={}: a name's ruby read for its bare occurrences
         too, so the browser reads the book once for both). Tokens it reads as part
         of a longer word (a compound: 三日月 みかづき) keep Sudachi's. Word.reading, which the
-        model features use, stays Sudachi's."""
+        model features use, stays Sudachi's. With `frequency` (a FrequencyTable), JMdict compounds
+        Sudachi splits are words again (compound_merge: 心配顔 しんぱいがお, not 顔 がお)."""
         result = Analysis(text=text)
         tokens = self.tokens(text)
         # A number + counter span (三本 さんぼん) and compounds are Words over several tokens:
         # only a Word over exactly the head token is its reading (the counter's own: 本 ほん).
         read = {(w.start, w.end): w for w in reader.read(text, hints, carry={})} if reader else {}
         self._text = self._text_tokens = None  # don't keep a book's tokens past its analysis
+        if frequency is not None:
+            tokens = merge_compounds(tokens, frequency, {span: w.reading for span, w in read.items() if w.reading})
         surfaces = [t.surface() for t in tokens]
         dictionary_forms = [t.dictionary_form() for t in tokens]
 
