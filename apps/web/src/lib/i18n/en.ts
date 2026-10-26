@@ -74,7 +74,7 @@ export const en = {
   'statistics.wordsKnownNow': '{count} now',
   'statistics.wordsKnownLabel': 'Words known from {from} to {to}, {count} now',
   'statistics.wordsKnownNote':
-    "Estimate: rebuilt from the characters read each day and each book's word list, as words met at least {count} times. Anki's mature words are not in the history; they only count in Home's total.",
+    "Estimate: your word test result, plus words met at least {count} times (rebuilt from the characters read each day and each book's word list) and words you marked, from the day you marked them. Anki's mature words count from the start, as Anki doesn't say when each one matured.",
   'statistics.title': 'Statistics',
   'statistics.period': 'Period',
   'statistics.today': 'Today',

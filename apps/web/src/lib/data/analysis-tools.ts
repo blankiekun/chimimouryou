@@ -41,6 +41,7 @@ import {
   analysisToolsCacheName,
   rawFolder,
   rawName,
+  toolsFile,
   type AnalysisToolsManifest
 } from '$lib/functions/analysis/tools-files';
 import { analysisKeepAlive, analysisWorkers } from '$lib/data/analysis-capacity';
@@ -592,6 +593,35 @@ export function usesReader(part: Part, manifest: AnalysisToolsManifest, furigana
 /** Tools built before the core have no core frequency list: their estimates have no core numbers. */
 const hasCore = (manifest: AnalysisToolsManifest) =>
   manifest.files.some((file) => file.name === 'core-frequency.tsv.gz');
+
+/**
+ * The core frequency list's rank of each of `forms` it lists (words known, standalone); undefined
+ * without the tools' core list.
+ */
+export async function coreFormRanks(forms: string[]) {
+  const manifest = await installedTools('difficulty');
+
+  if (!manifest || !hasCore(manifest)) return undefined;
+
+  const response = await toolsFile(base(), 'core-frequency.tsv.gz');
+  const text = await new Response(
+    response.body!.pipeThrough(
+      new DecompressionStream('gzip') as ReadableWritablePair<Uint8Array, Uint8Array>
+    )
+  ).text();
+  const end = text.indexOf('\n\n');
+  const wanted = new Set(forms);
+  const ranks: Record<string, number> = {};
+
+  // The first section of parseCoreTable's format: `term \t rank` lines.
+  for (const line of text.slice(0, end < 0 ? undefined : end).split('\n')) {
+    const tab = line.lastIndexOf('\t');
+
+    if (wanted.has(line.slice(0, tab))) ranks[line.slice(0, tab)] = +line.slice(tab + 1);
+  }
+
+  return ranks;
+}
 
 /**
  * One part of the book's analysis from its HTML (the processed book's elementHtml): browser.py's

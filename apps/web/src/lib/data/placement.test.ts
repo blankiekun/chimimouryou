@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   isPseudoSlot,
+  knownChance,
   nextItem,
   placementBands,
   placementLength,
@@ -169,5 +170,23 @@ describe('scorePlacement', () => {
     }
 
     expect(wordsError).toBeLessThan(cutoffError * 0.8);
+  });
+
+  it('keeps the curve that words sums, for words known to add to', () => {
+    const knows = (rank: number) => (rank <= 5000 ? 1 : 1 / (1 + (rank / 15000) ** 1.5));
+    const random = seeded(7);
+    const result = scorePlacement(take((item) => random() < (item.r ? knows(item.r) : 0), 3));
+    let sum = 0;
+
+    for (let r = 1; r < placementBands[placementBands.length - 1]; r += 1) {
+      sum += knownChance(result, r);
+    }
+
+    expect(result.curve).toBeDefined();
+    expect(Math.abs(sum - result.words!)).toBeLessThan(200);
+    // Without a curve: within the cutoff or not.
+    expect(knownChance({ cutoff: 1000 }, 1000)).toBe(1);
+    expect(knownChance({ cutoff: 1000 }, 1001)).toBe(0);
+    expect(knownChance(result, null)).toBe(0);
   });
 });

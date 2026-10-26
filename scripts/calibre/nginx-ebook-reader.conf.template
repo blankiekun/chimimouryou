@@ -204,6 +204,20 @@ ${CORS_WITH_SECURITY_HEADERS}
     proxy_set_header X-Forwarded-Proto $forwarded_proto;
   }
 
+  # Ranks of a reader's Anki words and marks (words known): read-only, for every reader of the shared folder.
+  location = /calibre/difficulty/api/ranks {
+${CORS_WITH_SECURITY_HEADERS}
+    auth_request /_account_shared;
+    limit_req zone=readings burst=10 nodelay;
+    limit_req_status 429;
+    client_max_body_size 1m;
+    proxy_pass http://$difficulty_upstream/ranks;
+    proxy_set_header X-Internal-Token "${INTERNAL_TOKEN}";
+    proxy_http_version 1.1;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-Proto $forwarded_proto;
+  }
+
   # Text of manga pages (mokuro service), by catalog id.
   location ~ ^/calibre/mokuro/(-?[0-9]+\.json)$ {
 ${CORS_WITH_SECURITY_HEADERS}

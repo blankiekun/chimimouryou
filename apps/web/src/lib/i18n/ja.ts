@@ -71,7 +71,7 @@ export const ja: Record<MessageKey, string> = {
   'statistics.wordsKnownNow': '現在 {count}語',
   'statistics.wordsKnownLabel': '{from}〜{to} の既知の語彙（現在 {count}語）',
   'statistics.wordsKnownNote':
-    '推定値：日々の読書文字数と各本の語彙リストから、{count}回以上出会った語彙として算出しています。Ankiの定着済み語彙は推移には含まれず、ホーム画面の合計にのみ加算されます。',
+    '推定値：語彙テストの結果に、{count}回以上出会った語彙（日々の読書文字数と各本の語彙リストから算出）と、マークした語彙（マークした日から）を加えています。Ankiの定着済み語彙は、定着した日が分からないため最初から含めています。',
   'statistics.title': '統計',
   'statistics.period': '期間',
   'statistics.today': '今日',

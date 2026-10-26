@@ -9,20 +9,35 @@
  * estimate rebuilt from the daily statistics with words-met's rule: each day, the share
  * of every book read so far (characters read since the start over the book's length,
  * capped by its kanji record's share when there is one) × its word list; a word is known
- * once met `knownMinCount` times, or ranked within the word test's cutoff in force that day (a
- * test is a step up or down on its day, counted in `tests`, not as words gained). Anki's words
- * and the marks aren't in the history (only today's total has them). Cached in reader-db `known` (key `history`), cleared with the known words.
+ * once met `knownMinCount` times, on top of the word test's estimate in force that day as
+ * words-met's `summarizeWords` counts it (a test is a step up or down on its day, counted in
+ * `tests`, not as words gained). Marks count from the day they were made; Anki's words from the
+ * start (Anki gives no date per word, and the deck's read time is only its latest refresh), so
+ * the last point is the Words known box. Cached in reader-db `known` (key `history`), cleared
+ * with the known words.
  * Not part of upstream.
  */
 
-import { particles, type BookWord } from '$lib/data/book-words';
+import { ankiKnownWords$ } from '$lib/data/anki';
+import { isNoiseWord, type BookWord } from '$lib/data/book-words';
 import { getKanjiSeen } from '$lib/data/kanji-seen';
-import { placementAt, placementResults$, type PlacementRecord } from '$lib/data/placement';
+import { getKnownWords } from '$lib/data/known-words';
+import {
+  knownChance,
+  placementAt,
+  placementResults$,
+  placementWords,
+  type PlacementEstimate,
+  type PlacementRecord
+} from '$lib/data/placement';
 import { readerDb } from '$lib/data/reader-db';
+import { getWordMarks, type WordMarks } from '$lib/data/word-marks';
 import { getDateString } from '$lib/functions/statistic-util';
 import {
   estimatedBooks,
   estimatedWordList,
+  knownBeyond,
+  knownFormRanks,
   knownMinCount,
   readFraction,
   wordKey
@@ -48,10 +63,16 @@ export interface KnownPoint {
   tests?: number;
 }
 
-/** A word test's cutoff, in force from `dateKey` ('' for an undated one: from the start). */
-export interface CutoffChange {
+/** The word test result in force from `dateKey` ('' for an undated one: from the start). */
+export interface CutoffChange extends PlacementEstimate {
   dateKey: string;
-  cutoff: number;
+}
+
+/** Anki's words (by form), the marks and their forms' ranks, as words-met's box takes them. */
+export interface HistoryExtras {
+  anki: ReadonlySet<string>;
+  marks: WordMarks;
+  formRanks: Record<string, number | null>;
 }
 
 export interface HistoryCache {
@@ -60,38 +81,76 @@ export interface HistoryCache {
 }
 
 /**
- * Words known (met `knownMinCount` times, or ranked within the cutoff then) at the end of each
- * day with statistics or a word test.
+ * Words known (`summarizeWords`: the word test's estimate in force then, plus the words met
+ * `knownMinCount` times, marked by then or in Anki) at the end of each day with statistics, a
+ * word test or a mark.
  */
 export function knownHistory(
   days: DayRead[],
   books: Map<string, HistoryBook>,
-  cutoffs: CutoffChange[] = []
+  cutoffs: CutoffChange[] = [],
+  { anki, marks, formRanks }: HistoryExtras = { anki: new Set(), marks: {}, formRanks: {} }
 ) {
   const read = new Map<string, number>();
   const counted = new Map<string, number>();
   const totals = new Map<string, number>();
   const points: KnownPoint[] = [];
-  // Ranks of the words met enough; `within`: how many of them the cutoff covers.
+  // Words of a form in Anki or marked go through words-met's `knownBeyond` at each point; the
+  // others add up here: the ranks of those met enough, and what they add to the estimate.
+  const formOf = (key: string) => key.slice(0, key.indexOf('\t'));
+  const watched = new Set([...anki, ...Object.keys(marks).map(formOf)]);
+  const watchedTotals: Record<string, number> = {};
+  const watchedRanks: Record<string, number> = {};
   const knownRanks: (number | null)[] = [];
-  let within = 0;
-  let cutoff = 0;
+  let placement: PlacementEstimate | undefined;
+  let beyond = 0;
   let tests = 0;
-  const covered = (rank: number | null) => rank !== null && rank <= cutoff;
-  const total = () => cutoff + knownRanks.length - within;
+  const unseen = (rank: number | null) => 1 - knownChance(placement, rank);
+  const marked = Object.entries(marks)
+    .map(([key, mark]) => ({ key, mark, dateKey: getDateString(new Date(mark.modified)) }))
+    .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+  let markedSoFar: WordMarks = {};
+  let mark = 0;
+  const total = () =>
+    placementWords(placement) +
+    beyond +
+    knownBeyond(watchedTotals, anki, markedSoFar, placement, watchedRanks, formRanks);
+  // A form without a reading joins its most frequent reading over the books, as `foldTotals` does.
+  const byReading = new Map<string, number>();
+  const top = new Map<string, string>();
+
+  for (const { words } of books.values()) {
+    for (const word of words) {
+      if (word[1] !== null)
+        byReading.set(wordKey(word), (byReading.get(wordKey(word)) ?? 0) + word[2]);
+    }
+  }
+  for (const [key, count] of byReading) {
+    const form = key.slice(0, key.indexOf('\t'));
+
+    if (!(byReading.get(top.get(form)!)! >= count)) top.set(form, key);
+  }
 
   const sorted = days
     .filter((day) => day.charactersRead > 0 && books.get(day.title)?.characters)
     .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
   const changes = [...cutoffs].sort((a, b) => a.dateKey.localeCompare(b.dateKey));
-  const dateKeys = [...new Set([...sorted, ...changes].map(({ dateKey }) => dateKey))].sort();
+  const dateKeys = [
+    ...new Set([...sorted, ...changes, ...marked].map(({ dateKey }) => dateKey))
+  ].sort();
   let day = 0;
   let change = 0;
 
   const push = (dateKey: string) => {
     if (!dateKey) return;
     if (points.at(-1)?.dateKey === dateKey) points.pop();
-    points.push({ dateKey, known: total(), ...(tests ? { tests } : {}) });
+    const roundedTests = Math.round(tests);
+
+    points.push({
+      dateKey,
+      known: Math.round(total()),
+      ...(roundedTests ? { tests: roundedTests } : {})
+    });
   };
 
   for (const dateKey of dateKeys) {
@@ -99,10 +158,16 @@ export function knownHistory(
     while (changes[change]?.dateKey === dateKey) {
       const before = total();
 
-      cutoff = changes[change].cutoff;
-      within = knownRanks.filter(covered).length;
+      placement = changes[change];
+      beyond = knownRanks.reduce<number>((sum, rank) => sum + unseen(rank), 0);
       tests += total() - before;
       change += 1;
+    }
+    if (marked[mark]?.dateKey === dateKey) {
+      markedSoFar = { ...markedSoFar };
+      for (; marked[mark]?.dateKey === dateKey; mark += 1) {
+        markedSoFar[marked[mark].key] = marked[mark].mark;
+      }
     }
     for (; sorted[day]?.dateKey === dateKey; day += 1) addDay(sorted[day]);
     push(dateKey);
@@ -122,8 +187,19 @@ export function knownHistory(
       counted.set(title, fraction);
 
       for (const word of book.words) {
-        if (!particles.has(word[0])) {
-          const key = wordKey(word);
+        // The words words-met counts (`addWordsMet`): no particles, numbers or lone kana.
+        if (!isNoiseWord(word)) {
+          const key = (word[1] === null && top.get(word[0])) || wordKey(word);
+
+          if (watched.has(word[0])) {
+            watchedTotals[key] = (watchedTotals[key] ?? 0) + word[2] * delta;
+            // As `addWordsMet` keeps them: the best rank per unfolded key.
+            if (word[3] !== null && !(watchedRanks[wordKey(word)] <= word[3])) {
+              watchedRanks[wordKey(word)] = word[3];
+            }
+            continue;
+          }
+
           const before = totals.get(key) ?? 0;
           const after = before + word[2] * delta;
 
@@ -131,7 +207,7 @@ export function knownHistory(
           // The epsilon absorbs rounding from adding the shares day by day.
           if (before < knownMinCount - 1e-9 && after >= knownMinCount - 1e-9) {
             knownRanks.push(word[3]);
-            if (covered(word[3])) within += 1;
+            beyond += unseen(word[3]);
           }
         }
       }
@@ -139,13 +215,14 @@ export function knownHistory(
   }
 }
 
-/** The results as cutoff changes, by local day: the one in force after each test. */
+/** The results as changes, by local day: the one in force after each test. */
 export function cutoffChanges(results: PlacementRecord[]): CutoffChange[] {
-  return results.map(({ date }) => ({
+  return results.map(({ date }) => {
+    const { cutoff = 0, words, curve } = placementAt(results, date) ?? {};
+
     // shortcut: local midnight, not the tracker's start-of-day hour; upgrade if days look off.
-    dateKey: date ? getDateString(new Date(date)) : '',
-    cutoff: placementAt(results, date)?.cutoff ?? 0
-  }));
+    return { dateKey: date ? getDateString(new Date(date)) : '', cutoff, words, curve };
+  });
 }
 
 /** Known words gained by reading since the start of the month `todayKey` is in (not by tests). */
@@ -175,7 +252,23 @@ export async function getKnownHistory(days: DayRead[]) {
     .map(({ title, dateKey, charactersRead }) => [title, dateKey, charactersRead])
     .sort();
   const cutoffs = cutoffChanges(placementResults$.getValue());
-  const signature = JSON.stringify([inputs, used, cutoffs]);
+  // The same Anki words and marks as words-met's box (`getWordsSummary`).
+  const [known, marks] = await Promise.all([
+    ankiKnownWords$.getValue() ? getKnownWords().catch(() => undefined) : undefined,
+    getWordMarks().catch(() => ({}) as WordMarks)
+  ]);
+  const anki = new Set(known?.words);
+  const formRanks = await knownFormRanks(anki, marks);
+  // 3: the test's estimate as the base, Anki words and marks counted.
+  const signature = JSON.stringify([
+    3,
+    inputs,
+    used,
+    cutoffs,
+    known?.read ?? 0,
+    marks,
+    Object.keys(formRanks).length
+  ]);
   const db = await readerDb();
   const cached = (await db.get('known', 'history')) as HistoryCache | undefined;
 
@@ -195,7 +288,7 @@ export async function getKnownHistory(days: DayRead[]) {
     if (words) books.set(title, { words, characters, cap });
   }
 
-  const points = knownHistory(days, books, cutoffs);
+  const points = knownHistory(days, books, cutoffs, { anki, marks, formRanks });
 
   if (complete) await db.put('known', { signature, points }, 'history');
 

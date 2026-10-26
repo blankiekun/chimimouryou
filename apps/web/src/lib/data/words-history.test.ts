@@ -7,6 +7,7 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it, vi } from 'vitest';
 import type { BookWord } from '$lib/data/book-words';
+import { summarizeWords } from '$lib/data/words-met';
 import {
   cutoffChanges,
   gainedThisMonth,
@@ -50,6 +51,68 @@ describe('words known over time', () => {
       { dateKey: '2026-10-02', known: 1 },
       { dateKey: '2026-10-03', known: 2 }
     ]);
+  });
+
+  it('counts as words-met does: a form without a reading joins its reading, noise left out', () => {
+    const books = new Map([
+      [
+        'A',
+        book([
+          ['呟く', 'つぶやく', 4, 9000],
+          ['三', null, 20, null]
+        ])
+      ],
+      ['B', book([['呟く', null, 4, 9000]])]
+    ]);
+    const points = knownHistory(
+      [
+        { title: 'A', dateKey: '2026-10-01', charactersRead: 1000 },
+        { title: 'B', dateKey: '2026-10-02', charactersRead: 1000 }
+      ],
+      books
+    );
+
+    expect(points.map((point) => point.known)).toEqual([0, 1]);
+  });
+
+  it("starts from the test's estimate and ends at words-met's total, Anki words and marks in", () => {
+    const books = new Map([
+      [
+        'A',
+        book([
+          ['猫', 'ねこ', 16, 500],
+          ['犬', 'いぬ', 16, 5000]
+        ])
+      ]
+    ]);
+    const placement = { cutoff: 5000, words: 6000, curve: { shift: 0, slope: -2, firstNo: 1000 } };
+    const anki = new Set(['犬', '魑魅']);
+    const marks = {
+      '謎語\t': { status: 'known' as const, modified: new Date(2026, 9, 3, 12).getTime() }
+    };
+    const formRanks = { 魑魅: 50000, 謎語: null };
+    const points = knownHistory(
+      [{ title: 'A', dateKey: '2026-10-01', charactersRead: 1000 }],
+      books,
+      [{ dateKey: '', ...placement }],
+      { anki, marks, formRanks }
+    );
+
+    // 6000, 犬 +0.5 (rank 5000), 魑魅 +0.99 from the start; the mark +1 on its day.
+    expect(points).toEqual([
+      { dateKey: '2026-10-01', known: 6001, tests: 6000 },
+      { dateKey: '2026-10-03', known: 6002, tests: 6000 }
+    ]);
+    expect(points.at(-1)!.known).toBe(
+      summarizeWords(
+        { '猫\tねこ': 16, '犬\tいぬ': 16 },
+        anki,
+        marks,
+        placement,
+        { '猫\tねこ': 500, '犬\tいぬ': 5000 },
+        formRanks
+      ).known
+    );
   });
 
   it('never counts more than the kanji record read, nor rereads', () => {

@@ -7,7 +7,7 @@
 /**
  * Loads the reading rank (reading-rank.ts) from the daily statistics, the books read and their
  * word lists, and stores how far it rose. Words met count only from books of a real-book shape,
- * marks only for words met, the word test only per `rankPlacementCutoff`. Not part of upstream.
+ * marks only for words met, the word test only per `rankPlacement`. Not part of upstream.
  */
 
 import { ankiKnownWords$ } from '$lib/data/anki';
@@ -18,7 +18,7 @@ import { placementResults$ } from '$lib/data/placement';
 import {
   countedReading,
   rankMarks,
-  rankPlacementCutoff,
+  rankPlacement,
   readingRank,
   readingRank$,
   readingTimeByTitle,
@@ -32,6 +32,7 @@ import {
   addWordsMet,
   estimatedWordList,
   foldTotals,
+  knownFormRanks,
   knownMinCount,
   metCounter,
   readBooks,
@@ -64,7 +65,8 @@ export async function loadReadingRank(statistics: BooksDbStatistic[]) {
 
   const totals = foldTotals(raw);
   const forms = new Set(anki?.words);
-  const cutoff = rankPlacementCutoff(placementResults$.getValue());
+  const placement = rankPlacement(placementResults$.getValue());
+  const cutoff = placement?.cutoff ?? 0;
   const counted = rankMarks(marks, totals);
   const metCount = metCounter(totals);
   const isKnown = (word: BookWord) =>
@@ -85,7 +87,14 @@ export async function loadReadingRank(statistics: BooksDbStatistic[]) {
   const rank = readingRank(
     {
       ...countedReading(statistics),
-      wordsKnown: summarizeWords(totals, forms, counted, cutoff, ranks).known,
+      wordsKnown: summarizeWords(
+        totals,
+        forms,
+        counted,
+        placement,
+        ranks,
+        await knownFormRanks(forms, counted)
+      ).known,
       books: rankBooks
     },
     readingRank$.getValue(),

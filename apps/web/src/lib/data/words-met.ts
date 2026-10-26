@@ -18,7 +18,7 @@
  * when the reader changes. Not part of upstream.
  */
 
-import { localEstimates, localWordList } from '$lib/data/analysis-tools';
+import { coreFormRanks, localEstimates, localWordList } from '$lib/data/analysis-tools';
 import { ankiKnownWords$ } from '$lib/data/anki';
 import {
   foldReadings,
@@ -31,15 +31,23 @@ import {
   type WordTotals
 } from '$lib/data/book-words';
 import {
+  difficultyApiUrl,
   loadCalibreCatalog,
   loadCalibreDifficulty,
   type CalibreDifficulty
 } from '$lib/data/calibre';
 import { getKanjiSeen, type KanjiSeen } from '$lib/data/kanji-seen';
 import { getKnownWords } from '$lib/data/known-words';
-import { placementCutoff } from '$lib/data/placement';
+import {
+  knownChance,
+  placementAt,
+  placementCutoff,
+  placementResults$,
+  placementWords,
+  type PlacementEstimate
+} from '$lib/data/placement';
 import { readerDb } from '$lib/data/reader-db';
-import { serverless } from '$lib/data/server-connect';
+import { serverFetch, serverless } from '$lib/data/server-connect';
 import { getWordMarks, wordMark, type WordMarks } from '$lib/data/word-marks';
 
 /** Times a word must be met to count as known. */
@@ -171,13 +179,40 @@ export function summarizeWords(
   totals: Record<string, number>,
   anki: ReadonlySet<string> = new Set(),
   marks: WordMarks = {},
-  cutoff = 0,
-  ranks: Record<string, number> = {}
+  placement?: PlacementEstimate,
+  ranks: Record<string, number> = {},
+  formRanks: Record<string, number | null> = {}
 ): WordsSummary {
   let met = 0;
-  // Every word ranked within the cutoff is known: known words count only when ranked past it.
-  let known = cutoff;
   let metEnough = 0;
+
+  for (const count of Object.values(totals)) {
+    if (count >= 1) met += 1;
+    if (count >= knownMinCount) metEnough += 1;
+  }
+
+  // The word test's estimate, then what the evidence adds to it.
+  const known = Math.round(
+    placementWords(placement) + knownBeyond(totals, anki, marks, placement, ranks, formRanks)
+  );
+
+  return { met, known, metEnough };
+}
+
+/**
+ * Words known by evidence (met `knownMinCount` times, Anki mature, marked), each less the chance
+ * the word test's estimate already counts it (`knownChance`; unranked words count whole).
+ */
+export function knownBeyond(
+  totals: Record<string, number>,
+  anki: ReadonlySet<string>,
+  marks: WordMarks,
+  placement: PlacementEstimate | undefined,
+  ranks: Record<string, number>,
+  formRanks: Record<string, number | null>
+) {
+  const unseen = (rank: number | null | undefined) => 1 - knownChance(placement, rank);
+  let known = 0;
   const forms = new Set<string>();
 
   for (const [key, count] of Object.entries(totals)) {
@@ -185,22 +220,26 @@ export function summarizeWords(
     const form = key.slice(0, tab);
 
     forms.add(form);
-    if (count >= 1) met += 1;
-    if (count >= knownMinCount) metEnough += 1;
     if (
-      !(ranks[key] <= cutoff) &&
-      (count >= knownMinCount ||
-        anki.has(form) ||
-        wordMark(marks, [form, key.slice(tab + 1) || null, count, null]))
+      count >= knownMinCount ||
+      anki.has(form) ||
+      wordMark(marks, [form, key.slice(tab + 1) || null, count, null])
     ) {
-      known += 1;
+      known += unseen(ranks[key]);
     }
   }
 
-  // Words in no book read have no rank: counted as past the cutoff.
+  // Words in no book read: by the form's own rank (`formRanks`), so the estimate doesn't count them twice.
   for (const form of anki) {
-    if (!forms.has(form) && !particles.has(form)) known += 1;
+    if (!forms.has(form) && !particles.has(form)) known += unseen(formRanks[form]);
   }
+
+  // Forms marked with a reading: a mark of the bare form is the same word.
+  const readingMarked = new Set(
+    Object.entries(marks)
+      .filter(([key, mark]) => mark.status && !key.endsWith('\t'))
+      .map(([key]) => key.slice(0, key.indexOf('\t')))
+  );
 
   // Marked words not met yet (a mark without a reading covers the form's words met).
   for (const [key, mark] of Object.entries(marks)) {
@@ -209,15 +248,15 @@ export function summarizeWords(
     if (
       mark.status &&
       !(key in totals) &&
-      !(key.endsWith('\t') && forms.has(form)) &&
+      !(key.endsWith('\t') && (forms.has(form) || readingMarked.has(form))) &&
       !anki.has(form) &&
       !particles.has(form)
     ) {
-      known += 1;
+      known += unseen(formRanks[form]);
     }
   }
 
-  return { met, known, metEnough };
+  return known;
 }
 
 /** The book's word list, cached per estimate. */
@@ -373,5 +412,60 @@ export async function getWordsSummary() {
     getWordMarks().catch(() => ({}) as WordMarks)
   ]);
 
-  return summarizeWords(totals, new Set(anki?.words), marks, placementCutoff(), ranks);
+  const forms = new Set(anki?.words);
+
+  return summarizeWords(
+    totals,
+    forms,
+    marks,
+    placementAt(placementResults$.getValue()),
+    ranks,
+    await knownFormRanks(forms, marks)
+  );
+}
+
+/** `formRanks` for the Anki words and marks. */
+export const knownFormRanks = (anki: ReadonlySet<string>, marks: WordMarks) =>
+  formRanks([...anki, ...Object.keys(marks).map((key) => key.slice(0, key.indexOf('\t')))]);
+
+/**
+ * Frequency ranks of forms (null: not in the list), for the Anki words and marks met in no book:
+ * the difficulty service's list, or the standalone's analysis tools. Cached in reader-db `known`
+ * (`ranks`); a form not looked up (offline, no tools) is missing and counts as unranked.
+ */
+export async function formRanks(forms: string[]) {
+  if (!placementCutoff()) return {};
+
+  const db = await readerDb();
+  // shortcut: kept until the known words are cleared, so a replaced frequency list's ranks aren't
+  // refetched; key it by the list if that ever matters.
+  const cached = ((await db.get('known', 'ranks')) ?? {}) as Record<string, number | null>;
+  const missing = [...new Set(forms)].filter((form) => !(form in cached));
+
+  if (!missing.length) return cached;
+
+  const found = await (serverless ? coreFormRanks(missing) : serverFormRanks(missing)).catch(
+    () => undefined
+  );
+
+  if (!found) return cached;
+
+  const ranks = { ...cached };
+
+  for (const form of missing) ranks[form] = found[form] ?? null;
+  await db.put('known', ranks, 'ranks');
+
+  return ranks;
+}
+
+async function serverFormRanks(forms: string[]) {
+  const response = await serverFetch(`${difficultyApiUrl}ranks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ forms })
+  });
+
+  if (!response.ok) throw new Error(`Ranks: ${response.status}`);
+
+  return (await response.json()).ranks as Record<string, number>;
 }
