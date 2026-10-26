@@ -8,7 +8,7 @@
  * Covers for the Discord status of books without Find details: the series (or the title without
  * its volume and store tags) is searched on AniList (books, manga) or VNDB (VNs), and only an
  * exact title match is kept: saved as the book's Find details for everyone, or in this browser
- * when the server refuses it or there is none. Misses are remembered for 7 days and one search
+ * when the server refuses it or there is none. Misses are remembered for 7 days (errors for an hour) and one search
  * runs at a time, so the sources' rate limits are never hit. The sender (discord.ts) decides when
  * a search is allowed. Not part of upstream.
  */
@@ -19,6 +19,8 @@ import type { MetadataCandidate, MetadataKind } from '$lib/data/book-metadata';
 const matchesKey = 'discordCoverMatches';
 const missesKey = 'discordCoverMisses';
 const missAge = 7 * 24 * 3600_000;
+/** A failed search (offline, rate limit) is retried after an hour, not a week */
+const errorRetry = 3600_000;
 
 let searching = false;
 
@@ -111,8 +113,8 @@ export async function findCover(title: string, kind: MetadataKind, series = '') 
     if (!saved) writeEntry(matchesKey, title, { cover: match.cover });
     return true;
   } catch {
-    // Network errors and rate limits count as misses: no retry for 7 days.
-    writeEntry(missesKey, title, Date.now());
+    // Network errors and rate limits: stored as a miss that ends an hour from now.
+    writeEntry(missesKey, title, Date.now() - missAge + errorRetry);
     return false;
   } finally {
     searching = false;
