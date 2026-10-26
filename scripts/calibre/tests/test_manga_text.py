@@ -29,14 +29,19 @@ class MangaTextTest(unittest.TestCase):
                 {'id': 3, 'title': '漫画 2', 'format': 'ZIP', 'size': 10, 'added': 0},
                 {'id': 4, 'title': 'ゲーム', 'format': 'ZIP', 'size': 10, 'added': 0, 'vn': True},
             ]}, f)
-        self.scored = []
+        self.scored, self.cored = [], []
 
-        def run_in_pools(books, task, cancel):
+        def run_in_pools(books, task, cancel, initializer=None):
             for book in books:
+                if task is service._core_estimate:
+                    self.cored.append(book['id'])
+                    yield book, (book['id'], {'v': service.core.CORE_VERSION})
+                    continue
                 self.scored.append(book['id'])
                 text = service.manga_text(book['id']) if book.get('manga') else 'x' * 2000
                 yield book, (book['id'], None if len(text) < 10 else {
                     'model': service.MODEL_VERSION, 'words': service.WORDS_VERSION, 'engine': 'e1',
+                    'core': {'v': service.core.CORE_VERSION},
                     **({'text': book['text']} if book.get('manga') else {})})
                 open(os.path.join(service.WORDS_DIR, f"{book['id']}.json.gz"), 'w').close()
         service.run_in_pools = run_in_pools
@@ -55,6 +60,15 @@ class MangaTextTest(unittest.TestCase):
         self.service.runner.job = {'type': 'compute'}
         self.service.runner.compute(ids)
         return self.scored
+
+    def test_estimates_without_core_get_only_the_core(self):
+        self.compute()
+        results = self.service.load_results()
+        del results['books']['1']['core']
+        self.service.save_results(results)
+        self.assertEqual(self.compute(), [])
+        self.assertEqual(self.cored, [1])
+        self.assertEqual(self.service.load_results()['books']['1']['core'], {'v': self.service.core.CORE_VERSION})
 
     def test_text_is_a_line_per_bubble(self):
         self.write_text(2, [{'blocks': [{'lines': ['吾輩は', '猫である。']}, {'lines': [' ']}]},

@@ -14,6 +14,16 @@
  */
 
 import {
+  bookCore,
+  chunks,
+  coreText,
+  countCharacters,
+  parseCoreTable,
+  tokensOf,
+  type CoreNumbers,
+  type CoreTable
+} from './core';
+import {
   importToolsModule,
   readRawInto,
   toolsFile,
@@ -24,11 +34,16 @@ export interface AnalysisRequest {
   base: string;
   manifest: AnalysisToolsManifest;
   html: string;
-  /** browser.py's part: the word list and the difficulty model's input, or the readings file */
-  part: 'words' | 'readings';
+  /**
+   * browser.py's part: the word list and the difficulty model's input, or the readings file; or
+   * `core` (core.ts: Sudachi and the core frequency list only, no Pyodide)
+   */
+  part: 'words' | 'readings' | 'core';
   wordsPerBook: number;
   /** Whether the part runs yurigana's Reader (usesReader in analysis-tools.ts) */
   reader: boolean;
+  /** core: start loading Pyodide meanwhile (the book's word list follows) */
+  python?: boolean;
 }
 
 /** Loads the tools without a book (prewarmAnalysis in analysis-tools.ts): the job that follows skips the ~2 s start */
@@ -103,6 +118,25 @@ async function loadSudachi(manifest: AnalysisToolsManifest) {
       .join('\x1e');
 }
 
+/** The core's frequency list (build.sh's core-frequency.tsv.gz) */
+let coreTable: Promise<CoreTable> | undefined;
+
+async function loadCoreTable() {
+  const start = performance.now();
+  const response = await toolsFile(base, 'core-frequency.tsv.gz');
+  const table = parseCoreTable(
+    await new Response(
+      response.body!.pipeThrough(
+        new DecompressionStream('gzip') as ReadableWritablePair<Uint8Array, Uint8Array>
+      )
+    ).text()
+  );
+
+  loadTimes.coreTable = since(start);
+
+  return table;
+}
+
 async function loadPython() {
   const start = performance.now();
   const { loadPyodide } = await importToolsModule(base, 'pyodide/pyodide.mjs');
@@ -127,9 +161,8 @@ async function loadPython() {
   return { py, browser };
 }
 
-let tools: Promise<
-  [Awaited<ReturnType<typeof loadSudachi>>, Awaited<ReturnType<typeof loadPython>>]
->;
+let sudachi: ReturnType<typeof loadSudachi> | undefined;
+let python: ReturnType<typeof loadPython> | undefined;
 const packed = new Set<string>();
 /**
  * The last book's texts and their tokens: yurigana asks for most texts twice in a part, and the
@@ -162,36 +195,67 @@ self.onmessage = async ({ data }: MessageEvent<AnalysisRequest | AnalysisLoad>) 
     const start = performance.now();
 
     base = data.base;
-    tools ??= Promise.all([loadSudachi(data.manifest), loadPython()]);
+    sudachi ??= loadSudachi(data.manifest);
+    // The core needs no Python: Pyodide starts only for browser.py's parts (or a load).
+    if (!('part' in data) || data.part !== 'core' || data.python) python ??= loadPython();
     if (!('part' in data)) {
-      // Load only: a failed load fails the job that follows (the same promise).
-      tools.catch(() => undefined);
+      // Load only: a failed load fails the job that follows (the same promises).
+      Promise.all([sudachi, python]).catch(() => undefined);
+      return;
+    }
+    if (memo.html !== data.html) memo = { html: data.html, tokens: new Map() };
+
+    const { tokens } = memo;
+
+    if (data.part === 'core') {
+      const [tokenize, table] = await Promise.all([sudachi, (coreTable ??= loadCoreTable())]);
+      const loaded = performance.now();
+      const text = coreText(data.html);
+      const bookTokens = [...chunks(text)].flatMap(([chunk, at]) => {
+        let found = tokens.get(chunk);
+
+        if (found === undefined) tokens.set(chunk, (found = tokenize(chunk)));
+
+        return tokensOf(found, at);
+      });
+      const tokenized = performance.now();
+      const core: CoreNumbers = bookCore(bookTokens, table);
+
+      post({
+        type: 'result',
+        json: JSON.stringify({ core, characters: countCharacters(text) }),
+        timings: {
+          ...loadTimes,
+          load: loaded - start,
+          tokenize: tokenized - loaded,
+          analyse: since(tokenized),
+          wasm: sudachiMemory?.buffer.byteLength ?? 0
+        }
+      });
+      loadTimes = {};
       return;
     }
 
-    const [tokenize, python] = await tools;
+    const [tokenize, py] = await Promise.all([sudachi, python!]);
     const loaded = performance.now();
 
     if (data.reader) {
-      await loadPack(python, data.manifest, 'reader.ygp.gz', python.browser.READER_PACK);
+      await loadPack(py, data.manifest, 'reader.ygp.gz', py.browser.READER_PACK);
     }
     // Only the word list ranks words.
     if (data.part === 'words') {
-      await loadPack(python, data.manifest, 'frequency.ygp.gz', python.browser.FREQUENCY_PACK);
+      await loadPack(py, data.manifest, 'frequency.ygp.gz', py.browser.FREQUENCY_PACK);
     }
 
     // Progress: the book's text met so far (texts asked for again, or words, add little).
     const length = data.html.replace(/<rt[^>]*>.*?<\/rt>|<[^>]+>/gs, '').length || 1;
-    if (memo.html !== data.html) memo = { html: data.html, tokens: new Map() };
-
-    const { tokens } = memo;
     const seen = new Set<string>();
     let read = 0;
     let posted = 0;
     let tokenizing = 0;
     const packs = since(loaded);
     const analysing = performance.now();
-    const json = python.browser.analyse(
+    const json = py.browser.analyse(
       data.html,
       (text: string) => {
         if (!seen.has(text)) {
@@ -230,7 +294,7 @@ self.onmessage = async ({ data }: MessageEvent<AnalysisRequest | AnalysisLoad>) 
         analyse: since(analysing),
         tokenize: tokenizing,
         // Sudachi's and Pyodide's wasm memory (bytes): it only grows, so this is its peak so far.
-        wasm: (sudachiMemory?.buffer.byteLength ?? 0) + python.py._module.HEAPU8.buffer.byteLength
+        wasm: (sudachiMemory?.buffer.byteLength ?? 0) + py.py._module.HEAPU8.buffer.byteLength
       }
     });
     loadTimes = {};

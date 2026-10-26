@@ -6,7 +6,8 @@
   import { buttonClasses } from '$lib/css-classes';
   import { account$, hasPermission } from '$lib/data/account';
   import type { WordCoverage } from '$lib/data/book-words';
-  import { loadCalibreDifficulty } from '$lib/data/calibre';
+  import { loadCalibreDifficulty, type CalibreDifficulty } from '$lib/data/calibre';
+  import { bookLevel } from '$lib/data/difficulty-core';
   import { bookCoverage, getKnownSet } from '$lib/data/known-words';
   import { knownMinCount, wordList } from '$lib/data/words-met';
   import { t$ } from '$lib/i18n';
@@ -21,6 +22,7 @@
 
   let finishedCompute = false;
   let coverage: Record<number, WordCoverage | null> = {};
+  let estimates: Record<number, CalibreDifficulty> = {};
 
   $: selectedIds = books.map((book) => book.calibreId as number);
 
@@ -30,6 +32,7 @@
       loadCalibreDifficulty().catch(() => undefined)
     ]);
 
+    if (difficulty) estimates = difficulty;
     if (!known || !difficulty) {
       return;
     }
@@ -53,6 +56,7 @@
     <ul class="flex flex-col gap-2">
       {#each books.slice(0, maxCoverageBooks) as book (book.id)}
         {@const words = coverage[book.calibreId ?? -1]}
+        {@const level = bookLevel(estimates[book.calibreId ?? -1]?.core)}
         <li class="flex flex-col gap-0.5">
           <span class="flex items-center gap-2">
             <span class="truncate font-semibold" title={book.title}>{book.title}</span>
@@ -68,6 +72,15 @@
           {#if book.difficulty === undefined}
             <span class="opacity-70">{$t$('book.noEstimate')}</span>
           {:else}
+            {#if level}
+              <span>
+                {$t$(level.v98 === null ? 'difficulty.levelBeyond' : 'difficulty.level', {
+                  score: level.score.toFixed(1),
+                  tier: level.tier,
+                  words: level.v98?.toLocaleString('en-US') ?? ''
+                })}
+              </span>
+            {/if}
             {#if book.difficultyLow !== undefined && book.difficultyHigh !== undefined}
               <span class="opacity-70">
                 {$t$('library.likelyRange', {

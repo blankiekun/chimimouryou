@@ -14,6 +14,7 @@ import {
   cacheCoverage,
   cleanAnkiField,
   clearKnownWords,
+  estimatedShares,
   getKnownSet,
   knownCoverage$,
   loadCoverageCache,
@@ -285,5 +286,26 @@ describe('bookWordGroups', () => {
     expect(groups.ignored.map(([form]) => form)).toEqual(['毒見']);
     expect(groups.all).toHaveLength(4);
     expect(groups.reasons).toEqual({ met: 1, anki: 1, placed: 0, marked: 1, ignored: 1 });
+  });
+});
+
+describe('estimatedShares', () => {
+  // Half the words in bucket 8 (ranks 100-177), half in bucket 16 (10,000-17,782).
+  const hist = Array.from({ length: 25 }, (_, b) => (b === 8 || b === 16 ? 50 : 0));
+  const core = { v: 1, tokens: 100, types: 2, names: 0, v98: 17000, hist, histTypes: hist };
+
+  afterEach(() => placementCutoff$.next(0));
+
+  it('fits the cutoff to the books whose coverage is known, and estimates the rest with it', () => {
+    const shares = estimatedShares({ 1: { core }, 2: { core }, 3: {} }, { 1: 0.5 });
+
+    expect(shares[2]).toBeCloseTo(0.5, 1);
+    expect(shares[3]).toBeUndefined();
+  });
+
+  it('uses the placement cutoff without such books, and nothing without either', () => {
+    expect(estimatedShares({ 1: { core } }, {})).toEqual({});
+    placementCutoff$.next(20_000);
+    expect(estimatedShares({ 1: { core } }, {})[1]).toBe(1);
   });
 });

@@ -3,6 +3,7 @@
   import CoverCard from '$lib/components/book-card/cover-card.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import { difficultyNameKey } from '$lib/data/difficulty';
+  import { relativeLevel } from '$lib/data/difficulty-core';
   import { standalone } from '$lib/data/env';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher } from 'svelte';
@@ -56,7 +57,10 @@
                 <span class="read-next-meter" aria-hidden="true"
                   ><span style:width="{Math.floor(known * 100)}%" /></span
                 >
-                {$t$('home.wordsKnown', { percent: Math.floor(known * 100) })}
+                {$t$('home.wordsKnownForYou', {
+                  percent: (Math.floor(known * 1000) / 10).toFixed(1),
+                  level: relativeLevel(known).toFixed(1)
+                })}
               {/if}
             </span>
           </CoverCard>

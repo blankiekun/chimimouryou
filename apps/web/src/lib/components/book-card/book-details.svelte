@@ -33,6 +33,8 @@
     type CalibreDifficulty
   } from '$lib/data/calibre';
   import { difficultyNameKey } from '$lib/data/difficulty';
+  import { bookLevel, forYou, relativeLevel } from '$lib/data/difficulty-core';
+  import type { CoreNumbers } from '$lib/functions/analysis/core';
   import { bookKanjiCount } from '$lib/data/book-kanji';
   import {
     analysisToolsState$,
@@ -108,6 +110,8 @@
   /** Standalone: the analysis tools' estimate of a stored book, and its progress while made */
   let localScored: LocalEstimate | undefined;
   let estimating: number | undefined;
+  /** Standalone: the fast core's numbers, shown while the rest of the estimate is made */
+  let coreFirst: CoreNumbers | undefined;
   let estimateError = '';
   /** Standalone, generated furigana: no readings file kept yet; one being made, and its error */
   let readingsMissing = false;
@@ -141,7 +145,15 @@
   $: source ??= defaultSource(kind);
   $: characters = book.characters || estimate?.characters || 0;
   $: remaining = isReading(book) ? characters * (1 - book.progress) : characters;
-  $: hasDifficulty = (isCalibre && book.calibreId !== undefined) || !!localScored;
+  $: hasDifficulty = (isCalibre && book.calibreId !== undefined) || !!localScored || !!coreFirst;
+  /** The objective 1-10 level (fast core), and this reader's numbers from the word list */
+  $: level = bookLevel(estimate?.core ?? coreFirst);
+  $: you = listWords.length && knownSet ? forYou(listWords, knownSet.isKnown, estimate) : undefined;
+  $: youLine = you && forYouLine(you.share, you.learn, you.atLeast);
+  $: unknownEvery =
+    you?.unknownTokens && characters
+      ? $t$('book.unknownEvery', { count: number(Math.round(characters / you.unknownTokens)) })
+      : '';
   /** Manga are estimated from their mokuro text, so one without has nothing to estimate yet. */
   $: mangaWithoutText = kind === 'manga' && mokuro === null && scored.difficulty === undefined;
   $: canEstimate =
@@ -192,6 +204,16 @@
         ]
           .filter(Boolean)
           .join($uiLanguage$ === 'ja' ? '' : ' ');
+
+  /** One decimal, rounded down: 97.96% is not 98.0% */
+  const percent1 = (share: number) => (Math.floor(share * 1000) / 10).toFixed(1);
+
+  function forYouLine(share: number, learn: number, atLeast: boolean) {
+    return $t$(
+      !learn ? 'book.forYouReached' : atLeast ? 'book.forYouLineMore' : 'book.forYouLine',
+      { percent: percent1(share), learn: number(learn) }
+    );
+  }
 
   function coverageSentence(stats: WordCoverage, t: typeof $t$) {
     return t(
@@ -263,6 +285,7 @@
     searchError = '';
     browserKanji = undefined;
     localScored = undefined;
+    coreFirst = undefined;
     estimating = undefined;
     estimateError = '';
     readingsMissing = listWithoutReader = false;
@@ -415,9 +438,18 @@
     }
     estimating = 0;
     try {
-      await localEstimate(title, html, (share) => {
-        if (title === book.title) estimating = share;
-      });
+      await localEstimate(
+        title,
+        html,
+        (share) => {
+          if (title === book.title) estimating = share;
+        },
+        undefined,
+        false,
+        (result) => {
+          if (title === book.title) coreFirst = result.core;
+        }
+      );
       if (title === book.title) load();
     } catch (error) {
       if (title !== book.title) return;
@@ -594,37 +626,62 @@
           </div>
         {/if}
 
-        {#if hasDifficulty && scored.difficulty !== undefined}
+        {#if hasDifficulty && (level || scored.difficulty !== undefined)}
           <PointBox
             label={$t$('book.difficulty')}
-            figure={scored.difficulty.toFixed(1)}
-            unit={$t$('book.outOf', { band: $t$(difficultyNameKey(scored.difficulty)) })}
+            figure={level ? level.score.toFixed(1) : scored.difficulty?.toFixed(1)}
+            unit={level
+              ? $t$('book.levelOutOf', { tier: level.tier })
+              : $t$('book.outOf', { band: $t$(difficultyNameKey(scored.difficulty ?? 0)) })}
           >
             <div class="details-difficulty" title={difficultyNote}>
               <div class="details-difficulty-score">
-                <span class="details-meter" aria-hidden="true">
-                  {#each [0, 1, 2, 3, 4] as i (i)}
-                    <span
-                      ><span
-                        style:width="{Math.min(Math.max(scored.difficulty - i, 0), 1) * 100}%"
-                      /></span
-                    >
-                  {/each}
-                </span>
-                {#if scored.difficultyLow !== undefined && scored.difficultyHigh !== undefined}
-                  <span class="details-small">
-                    {$t$('book.likely', {
-                      low: scored.difficultyLow.toFixed(1),
-                      high: scored.difficultyHigh.toFixed(1)
-                    })}
+                {#if level}
+                  <span class="details-meter details-meter-ten" aria-hidden="true">
+                    {#each [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as i (i)}
+                      <span
+                        ><span
+                          style:width="{Math.min(Math.max(level.score - i + 1, 0), 1) * 100}%"
+                        /></span
+                      >
+                    {/each}
                   </span>
+                  {#if scored.difficulty !== undefined}
+                    <span class="details-small">
+                      {$t$('book.modelScore', { score: scored.difficulty.toFixed(1) })}
+                    </span>
+                  {/if}
+                {:else if scored.difficulty !== undefined}
+                  <span class="details-meter" aria-hidden="true">
+                    {#each [0, 1, 2, 3, 4] as i (i)}
+                      <span
+                        ><span
+                          style:width="{Math.min(Math.max(scored.difficulty - i, 0), 1) * 100}%"
+                        /></span
+                      >
+                    {/each}
+                  </span>
+                  {#if scored.difficultyLow !== undefined && scored.difficultyHigh !== undefined}
+                    <span class="details-small">
+                      {$t$('book.likely', {
+                        low: scored.difficultyLow.toFixed(1),
+                        high: scored.difficultyHigh.toFixed(1)
+                      })}
+                    </span>
+                  {/if}
                 {/if}
               </div>
               <dl class="details-figures">
-                {#if wordStats}
+                {#if wordStats && !you}
                   <div>
                     <dt>{Math.floor(wordStats.share * 100)}%</dt>
                     <dd>{$t$('book.knownFigure')}</dd>
+                  </div>
+                {/if}
+                {#if level}
+                  <div>
+                    <dt>{level.v98 === null ? $t$('book.v98Beyond') : number(level.v98)}</dt>
+                    <dd>{$t$(level.v98 === null ? 'book.v98BeyondFigure' : 'book.v98Figure')}</dd>
                   </div>
                 {/if}
                 {#if estimate?.uniqueKanji}
@@ -633,7 +690,7 @@
                     <dd>{$t$('book.kanjiFigureOnly')}</dd>
                   </div>
                 {/if}
-                {#if scored.words95}
+                {#if scored.words95 && !level}
                   <div>
                     <dt>{number(scored.words95)}</dt>
                     <dd>{$t$('book.words95Figure')}</dd>
@@ -641,6 +698,20 @@
                 {/if}
               </dl>
             </div>
+            {#if you}
+              <div class="details-for-you">
+                <p class="details-for-you-head">
+                  <span class="details-for-you-label">{$t$('book.forYou')}</span>
+                  <span class="details-for-you-level">
+                    {$t$('book.forYouLevel', { level: relativeLevel(you.share).toFixed(1) })}
+                  </span>
+                </p>
+                <p>{youLine}</p>
+                {#if unknownEvery}
+                  <p class="details-small">{unknownEvery}</p>
+                {/if}
+              </div>
+            {/if}
             {#if book.calibreId !== undefined}
               <button type="button" class="app-button app-button-quiet" on:click={showDifficulty}>
                 {$t$('book.difficultyDetails')}
@@ -1210,6 +1281,37 @@
     display: block;
     height: 100%;
     background: var(--accent-color);
+  }
+
+  .details-meter-ten > span {
+    width: 0.875rem;
+  }
+
+  .details-for-you {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin: 1.25rem 0 0.75rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .details-for-you-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+  }
+
+  .details-for-you-label {
+    color: var(--app-muted-fg);
+    font-size: var(--type-label);
+    font-weight: 700;
+  }
+
+  .details-for-you-level {
+    font-size: var(--type-number);
+    font-weight: 700;
   }
 
   .details-figures {

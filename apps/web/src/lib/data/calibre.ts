@@ -9,6 +9,7 @@
  * (see scripts/calibre/). Not part of upstream.
  */
 
+import type { CoreNumbers } from '$lib/functions/analysis/core';
 import { serverFetch, serverless } from '$lib/data/server-connect';
 
 export interface CalibreBook {
@@ -56,6 +57,8 @@ export interface CalibreDifficulty {
    */
   engine?: string;
   computedAt: number;
+  /** The fast core's numbers (V98, histogram; difficulty-core.ts); estimates before it have none */
+  core?: CoreNumbers;
 }
 
 const catalogUrl = '/calibre/catalog.json';

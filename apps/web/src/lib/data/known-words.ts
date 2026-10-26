@@ -23,7 +23,9 @@ import {
   type BookWord,
   type WordTotals
 } from '$lib/data/book-words';
-import { loadCalibreDifficulty } from '$lib/data/calibre';
+import { loadCalibreDifficulty, type CalibreDifficulty } from '$lib/data/calibre';
+import { histogramShare } from '$lib/data/difficulty-core';
+import type { CoreNumbers } from '$lib/functions/analysis/core';
 import { readerDb } from '$lib/data/reader-db';
 import {
   getWordMarks,
@@ -251,14 +253,56 @@ function currentShares(
   return shares;
 }
 
-/** Loads the cached coverages for the current known words into `knownCoverage$`. */
+/** Loads the cached coverages for the current known words into `knownCoverage$`, the rest estimated. */
 export async function loadCoverageCache() {
   const [known, difficulty] = await Promise.all([
     getKnownSet(),
-    loadCalibreDifficulty().catch(() => ({}))
+    loadCalibreDifficulty().catch(() => ({}) as Record<number, CalibreDifficulty>)
   ]);
+  const exact = currentShares((await coverageCache(known.key)).books, difficulty);
 
-  knownCoverage$.next(currentShares((await coverageCache(known.key)).books, difficulty));
+  knownCoverage$.next({ ...estimatedShares(difficulty, exact), ...exact });
+}
+
+const logit = (share: number) => {
+  const p = Math.min(Math.max(share, 0.001), 0.999);
+
+  return Math.log(p / (1 - p));
+};
+
+/**
+ * Every book's coverage estimated from its core histogram (`histogramShare`), for a reader who knows
+ * the top C words: C fitted to the books whose exact coverage is known (their word lists, so met,
+ * Anki and marked words count too), else the placement cutoff. None without either.
+ */
+export function estimatedShares(
+  difficulty: Record<number, { core?: CoreNumbers } | undefined>,
+  exact: Record<number, number>
+) {
+  const cores = Object.entries(difficulty).filter(([, estimate]) => estimate?.core?.tokens) as [
+    string,
+    { core: CoreNumbers }
+  ][];
+  const pairs = cores.filter(([id]) => exact[+id] !== undefined);
+  let cutoff = placementCutoff();
+
+  if (pairs.length) {
+    let best = Infinity;
+
+    // 10^2 to 10^5.5 in steps of 10^0.05
+    for (let step = 0; step <= 70; step++) {
+      const c = 10 ** (2 + step / 20);
+      const error = pairs.reduce(
+        (sum, [id, { core }]) => sum + (logit(histogramShare(core, c)!) - logit(exact[+id])) ** 2,
+        0
+      );
+
+      if (error < best) [best, cutoff] = [error, c];
+    }
+  }
+  if (!cutoff) return {};
+
+  return Object.fromEntries(cores.map(([id, { core }]) => [+id, histogramShare(core, cutoff)!]));
 }
 
 /**
