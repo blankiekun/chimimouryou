@@ -1022,7 +1022,7 @@
   }
 
   /** Highlights the line being read and turns the page or scrolls when it isn't visible. */
-  function showReading(match: { start: number; end: number } | undefined) {
+  function showReading(match: { start: number; end: number; follow?: boolean } | undefined) {
     readingMatch = match;
     highlightsDirty = true;
 
@@ -1040,7 +1040,10 @@
       return;
     }
 
-    if (!isOnScreen(range?.getBoundingClientRect(), bookWidth, window.innerHeight)) {
+    if (
+      match.follow !== false &&
+      !isOnScreen(range?.getBoundingClientRect(), bookWidth, window.innerHeight)
+    ) {
       scrollToCount(match.start);
       scheduleHighlights(true);
     }

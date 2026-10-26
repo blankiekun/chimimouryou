@@ -1,14 +1,14 @@
 <script lang="ts">
   import {
+    faBackward,
     faBackwardStep,
     faCrosshairs,
     faFileAudio,
+    faForward,
     faForwardStep,
     faList,
     faPause,
     faPlay,
-    faRotateLeft,
-    faRotateRight,
     faSpinner,
     faTrash,
     faXmark
@@ -30,7 +30,11 @@
   } from '$lib/functions/audiobook/subtitles';
   import { toTimeString } from '$lib/functions/statistic-util';
   import WhisperSubtitles from '$lib/components/book-reader/whisper-subtitles.svelte';
-  import { createEventDispatcher, onDestroy, tick } from 'svelte';
+  import AudiobookControls from '$lib/components/book-reader/audiobook-controls.svelte';
+  import AudiobookControlsPanel from '$lib/components/book-reader/audiobook-controls-panel.svelte';
+  import { audiobookControls } from '$lib/data/audiobook-controls';
+  import { PlaybackController } from '$lib/functions/audiobook/playback-controller';
+  import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
   import { t$, tr } from '$lib/i18n';
   import Fa from 'svelte-fa';
 
@@ -42,20 +46,39 @@
   export let position: number;
 
   const dispatch = createEventDispatcher<{
-    reading: { start: number; end: number } | undefined;
+    reading: { start: number; end: number; follow: boolean } | undefined;
     jump: number;
     changed: BookAudiobook | undefined;
   }>();
-
-  const rates = [0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
 
   let audio: HTMLAudioElement | undefined;
   let audioUrl = '';
   let playing = false;
   let currentTime = 0;
   let duration = 0;
-  let rate = 1;
   let activeIndex = -1;
+
+  const controller = new PlaybackController(
+    {
+      time: () => audio?.currentTime,
+      duration: () => duration,
+      seek,
+      play: () => audio?.play().catch((e) => (error = e.message)),
+      pause: () => audio?.pause(),
+      paused: () => audio?.paused ?? true,
+      setRate: (rate) => {
+        if (audio) {
+          audio.defaultPlaybackRate = audio.playbackRate = rate;
+          audio.preservesPitch = true;
+        }
+      }
+    },
+    title
+  );
+
+  $: controller.setCues(cues);
+
+  onMount(() => controller.start());
   /** Sheet open above the bar */
   let sheet: '' | 'lines' | 'setup' = '';
   let linesElm: HTMLElement | undefined;
@@ -79,7 +102,7 @@
       URL.revokeObjectURL(audioUrl);
     }
     audioUrl = URL.createObjectURL(book.audio);
-    ({ position: currentTime, rate } = getAudiobookPosition(title));
+    ({ position: currentTime } = getAudiobookPosition(title));
     activeIndex = cueAt(book.cues, currentTime);
   }
 
@@ -90,16 +113,11 @@
     if (audioUrl) {
       URL.revokeObjectURL(audioUrl);
     }
-    if ('mediaSession' in navigator) {
-      ['play', 'pause', 'previoustrack', 'nexttrack'].forEach((action) =>
-        navigator.mediaSession.setActionHandler(action as MediaSessionAction, null)
-      );
-    }
   });
 
   function savePosition() {
     if (audiobook && audio) {
-      saveAudiobookPosition(title, audio.currentTime, rate);
+      saveAudiobookPosition(title, audio.currentTime, controller.rate);
     }
   }
 
@@ -111,6 +129,7 @@
     }
 
     currentTime = audio.currentTime;
+    controller.tick();
 
     const index = cueAt(cues, currentTime);
 
@@ -121,7 +140,9 @@
 
       dispatch(
         'reading',
-        cue?.start !== undefined ? { start: cue.start, end: cue.end! } : undefined
+        cue?.start !== undefined
+          ? { start: cue.start, end: cue.end!, follow: audiobookControls().follow }
+          : undefined
       );
 
       if (sheet === 'lines') {
@@ -144,15 +165,7 @@
 
     duration = audio.duration;
     audio.currentTime = currentTime;
-    audio.playbackRate = rate;
-
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.metadata = new MediaMetadata({ title });
-      navigator.mediaSession.setActionHandler('play', () => audio?.play());
-      navigator.mediaSession.setActionHandler('pause', () => audio?.pause());
-      navigator.mediaSession.setActionHandler('previoustrack', () => skipLine(-1));
-      navigator.mediaSession.setActionHandler('nexttrack', () => skipLine(1));
-    }
+    controller.applyRate();
   }
 
   function togglePlay() {
@@ -186,10 +199,6 @@
     }
   }
 
-  function skipLine(offset: number) {
-    playCue(Math.min(Math.max(activeIndex + offset, 0), cues.length - 1));
-  }
-
   /** Continues the audio from the reading position. */
   function playFromHere() {
     const index = cues.findIndex((cue) => cue.end !== undefined && cue.end > position);
@@ -201,18 +210,6 @@
 
     seek(cues[index].startSeconds);
     audio?.play();
-  }
-
-  function cycleRate() {
-    setRate(rates[(rates.indexOf(rate) + 1) % rates.length] ?? 1);
-  }
-
-  function setRate(value: number) {
-    rate = value;
-    if (audio) {
-      audio.playbackRate = value;
-    }
-    savePosition();
   }
 
   async function match() {
@@ -255,7 +252,7 @@
         error = tr('reader.abNoStorage');
       }
 
-      saveAudiobookPosition(title, 0, rate);
+      saveAudiobookPosition(title, 0, controller.rate);
       sheet = '';
       dispatch('changed', stored);
     } catch (e: any) {
@@ -299,9 +296,13 @@
       preload="metadata"
       on:loadedmetadata={onLoaded}
       on:timeupdate={onTimeUpdate}
-      on:play={() => (playing = true)}
+      on:play={() => {
+        playing = true;
+        controller.playing(true);
+      }}
       on:pause={() => {
         playing = false;
+        controller.playing(false);
         savePosition();
       }}
     />
@@ -320,7 +321,7 @@
       style:--progress={duration ? currentTime / duration : 0}
       aria-hidden="true"
     ></span>
-    <button class="player-icon" title={$t$('reader.prevLine')} on:click={() => skipLine(-1)}>
+    <button class="player-icon" title={$t$('reader.prevLine')} on:click={() => controller.line(-1)}>
       <Fa icon={faBackwardStep} />
     </button>
     <button
@@ -330,7 +331,7 @@
     >
       <Fa icon={playing ? faPause : faPlay} fw />
     </button>
-    <button class="player-icon" title={$t$('reader.nextLine')} on:click={() => skipLine(1)}>
+    <button class="player-icon" title={$t$('reader.nextLine')} on:click={() => controller.line(1)}>
       <Fa icon={faForwardStep} />
     </button>
     <span class="player-text">
@@ -341,7 +342,7 @@
       {/if}
       <span class="player-meta">{toTimeString(currentTime)} / {toTimeString(duration)}</span>
     </span>
-    <button class="player-pill" title={$t$('reader.speed')} on:click={cycleRate}>{rate}×</button>
+    <AudiobookControls {controller} hasLines={cues.length > 0} />
     <button
       class="player-icon hidden sm:inline-flex"
       title={$t$('reader.playFromPosition')}
@@ -359,6 +360,10 @@
     </button>
   {/if}
 </div>
+
+{#if audiobook}
+  <AudiobookControlsPanel {controller} hasLines={cues.length > 0} />
+{/if}
 
 {#if sheet === 'setup' && !audiobook}
   <div class="sheet reader-panel" role="dialog" aria-label={$t$('reader.abSetupTitle')}>
@@ -420,17 +425,17 @@
       >
       <button
         class="player-icon"
-        title={$t$('reader.back10')}
-        on:click={() => seek(currentTime - 10)}
+        title={$t$('reader.abKeyBack')}
+        on:click={() => controller.run('back')}
       >
-        <Fa icon={faRotateLeft} />
+        <Fa icon={faBackward} />
       </button>
       <button
         class="player-icon"
-        title={$t$('reader.forward10')}
-        on:click={() => seek(currentTime + 10)}
+        title={$t$('reader.abKeyForward')}
+        on:click={() => controller.run('forward')}
       >
-        <Fa icon={faRotateRight} />
+        <Fa icon={faForward} />
       </button>
       <button
         class="player-icon sm:hidden"

@@ -44,6 +44,7 @@ import {
 import { logger } from '$lib/data/logger';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 import { audiobookshelfToken$ } from '$lib/data/audiobookshelf';
+import { audiobookControls$ } from '$lib/data/audiobook-controls';
 import { socialSession$ } from '$lib/data/social-account';
 import { communityMatchAsked$, communityWorks$ } from '$lib/data/community';
 import { discordActivities$, discordOptions$ } from '$lib/data/discord-settings';
@@ -145,6 +146,8 @@ const sharedSettings: Record<string, Store> = {
   askAiReaderNote: askAiReaderNote$,
   ttsVoiceId: ttsVoiceId$,
   ttsPlaybackRate: ttsPlaybackRate$,
+  // Audiobook listening options (seek step, line repeats, auto-pause, follow); the speed is per book.
+  audiobookControls: audiobookControls$,
   // Discord status: the activity templates (merged per activity) and its switches.
   discordActivities: discordActivities$,
   discordOptions: discordOptions$

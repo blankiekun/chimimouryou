@@ -116,9 +116,20 @@
     display: flex;
     min-height: 3rem;
     flex-wrap: wrap;
+    align-content: flex-start;
     align-items: center;
     gap: 0.25rem;
     padding-top: 0.9rem;
+  }
+
+  /* The audiobook bar's buttons go on a second row when the line text would get too narrow. */
+  .listen-player :global(.player) {
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+  }
+
+  .listen-player :global(.player-text) {
+    min-width: 9rem;
   }
 
   /* Their seek bar ran along the bar's top edge and their sheets opened above it. */

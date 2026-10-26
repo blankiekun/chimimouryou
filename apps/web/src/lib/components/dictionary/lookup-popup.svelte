@@ -28,6 +28,7 @@
     type LookupResult
   } from '$lib/data/dictionary';
   import { playTermAudio, stopTermAudio } from '$lib/data/dictionary-audio';
+  import { builtInPopupOpen$ } from '$lib/data/yomitan';
   import { setWordMarks } from '$lib/data/word-marks';
   import { setCssHighlight } from '$lib/functions/book-text/css-highlights';
   import {
@@ -85,6 +86,7 @@
   /** Bindable: the popup is showing (the reader hides its toast meanwhile) */
   export let open = false;
   $: open = !!view && !!profile;
+  $: builtInPopupOpen$.next(open);
   $: sheet =
     profile?.general.popupDisplayMode === 'full-width' ||
     (viewportWidth > 0 && viewportWidth < 640 && matchMedia('(pointer: coarse)').matches);
@@ -114,6 +116,7 @@
 
   onDestroy(() => {
     clearTimeout(hoverTimer);
+    builtInPopupOpen$.next(false);
     detachFrame();
     setCssHighlight(highlightName, [], highlightView);
     setCssHighlight(highlightName, []);
