@@ -37,7 +37,7 @@ export interface WordUnit {
   name: boolean;
 }
 
-export const CORE_VERSION = 2;
+export const CORE_VERSION = 3;
 export const REPEAT_CAP = 10;
 const BUCKETS_PER_DECADE = 4;
 export const RANKED_BUCKETS = 6 * BUCKETS_PER_DECADE;
@@ -82,6 +82,8 @@ export interface CoreTable {
   readingRanks: Map<string, number>;
   /** JMdict compounds the list ranks → their reading (compound_merge.compound_table) */
   compounds: Map<string, string>;
+  /** reading → the best rank of any term read that way (`bestByReading`, made when first asked for) */
+  byReading?: Map<string, number>;
 }
 
 /** yurigana's HAS_CONTENT */
@@ -207,10 +209,54 @@ export function* wordUnits(tokens: Iterable<CoreToken>): Generator<WordUnit> {
   }
 }
 
+/** FrequencyTable.best_by_reading */
+function bestByReading(table: CoreTable) {
+  if (!table.byReading) {
+    table.byReading = new Map();
+    for (const [key, rank] of table.readingRanks) {
+      const reading = key.slice(key.lastIndexOf('\t') + 1);
+
+      if (!(rank >= table.byReading.get(reading)!)) table.byReading.set(reading, rank);
+    }
+  }
+
+  return table.byReading;
+}
+
+const kanaPattern = /^[ぁ-ヿ]+$/;
+
+/**
+ * core.py's best_ranks: lemma → its best rank over the units' spellings (normalized form, dictionary
+ * form, an all-kana form's reading), undefined when the list ranks none. Names are left out.
+ */
+export function bestRanks(units: WordUnit[], table: CoreTable) {
+  const byReading = bestByReading(table);
+  const best = new Map<string, number | undefined>();
+
+  for (const { lemma, form, name } of units) {
+    if (name) continue;
+
+    const found = [
+      table.ranks.get(lemma),
+      table.ranks.get(form),
+      kanaPattern.test(form) ? byReading.get(toHiragana(form)) : undefined
+    ].filter((r) => r !== undefined);
+    const rank = found.length ? Math.min(...found) : undefined;
+    const old = best.get(lemma);
+
+    best.set(lemma, old === undefined || (rank !== undefined && rank < old) ? rank : old);
+  }
+
+  return best;
+}
+
 /** core.py's book_core: the book's core numbers from its tokens, with the facets of its text and ruby. */
 export function bookCore(tokens: CoreToken[], table: CoreTable, text = '', rubyKanji = 0) {
+  const units = [...wordUnits(mergeCompounds(tokens, table))];
+  const best = bestRanks(units, table);
+
   return {
-    ...summarise(wordUnits(mergeCompounds(tokens, table)), (lemma) => table.ranks.get(lemma)),
+    ...summarise(units, (lemma) => best.get(lemma)),
     ...coreFacets(text, rubyKanji)
   };
 }
@@ -409,17 +455,22 @@ const entities: Record<string, string> = {
  * a few words to the estimate.
  */
 export function coreText(html: string) {
-  return html
-    .replace(/<(rt|rp)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
-    .replace(/<br\b[^>]*>|<\/(p|div|h[1-6]|li|blockquote|tr|dd|dt|section|article)>/gi, '\n')
-    .replace(/<[^>]*>/g, '')
-    .replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (entity, name: string) => {
-      if (name[0] !== '#') return entities[name.toLowerCase()] ?? entity;
+  return (
+    html
+      // Source line breaks in text nodes are HTML whitespace: pretty-printed EPUBs put them around
+      // <ruby>, and kept they split the word (features.py's fold_source_breaks).
+      .replace(/>[^<]+/g, (node) => node.replace(/[ \t\r]*\n[ \t\r\n]*/g, ''))
+      .replace(/<(rt|rp)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
+      .replace(/<br\b[^>]*>|<\/(p|div|h[1-6]|li|blockquote|tr|dd|dt|section|article)>/gi, '\n')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (entity, name: string) => {
+        if (name[0] !== '#') return entities[name.toLowerCase()] ?? entity;
 
-      const code = /^#x/i.test(name) ? parseInt(name.slice(2), 16) : +name.slice(1);
+        const code = /^#x/i.test(name) ? parseInt(name.slice(2), 16) : +name.slice(1);
 
-      return code <= 0x10ffff ? String.fromCodePoint(code) : entity;
-    });
+        return code <= 0x10ffff ? String.fromCodePoint(code) : entity;
+      })
+  );
 }
 
 /** Characters as the estimate counts them (features.TOKEN_CLEAN keeps these) */

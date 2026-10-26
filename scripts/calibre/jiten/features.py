@@ -22,8 +22,45 @@ from compound_merge import merge_compounds
 from deconjugator import Deconjugator
 # Book text with its ruby and Sudachi tokens come from yurigana (the readings in context too: a Reader).
 from yurigana.readings import is_kanji, to_hiragana  # noqa: F401
-from yurigana.text import _count_ruby, _mark_ruby, _take_hints, aozora_text, book_text  # noqa: F401
+from yurigana import text as _text
+from yurigana.text import _count_ruby, _mark_ruby, _take_hints, aozora_text  # noqa: F401
 from yurigana.tokens import SudachiTokenizer, Token  # noqa: F401
+
+# A text node's source line breaks with the blanks around them (HTML whitespace, not line breaks).
+_TEXT_NODE = re.compile(r'>[^<]+')
+_SOURCE_BREAK = re.compile(r'[ \t\r]*\n[ \t\r\n]*')
+
+
+def fold_source_breaks(markup: str) -> str:
+    """Markup with its text nodes' source line breaks taken out: pretty-printed EPUBs put them around
+    <ruby> (`と男は\\n<ruby>呟…</ruby>\\nいた`), and kept as lines they split the word for Sudachi. Line
+    breaks come from block ends and <br> only (core.ts's coreText folds alike)."""
+    return _TEXT_NODE.sub(lambda m: _SOURCE_BREAK.sub('', m.group()), markup)
+
+
+def book_text(path: str, fmt: str, ruby: dict | None = None, hints: list | None = None) -> str:
+    """yurigana's book_text with fold_source_breaks on each EPUB/HTMLZ document (TXT lines are real)."""
+    if fmt == 'TXT':
+        return _text.book_text(path, fmt, ruby, hints)
+    with zipfile.ZipFile(path) as archive:
+        if fmt == 'HTMLZ':
+            names = sorted(n for n in archive.namelist() if n.lower().endswith(('.html', '.xhtml', '.htm')))
+        else:
+            names = list(_text._epub_documents(archive))
+        parts, offset = [], 0
+        for name in names:
+            try:
+                markup = fold_source_breaks(archive.read(name).decode('utf-8', 'replace'))
+            except KeyError:
+                continue
+            part_hints = [] if hints is not None else None
+            part = _text._markup_to_text(markup, ruby, part_hints)
+            if part:
+                if part_hints:
+                    hints.extend((start + offset, end + offset, reading) for start, end, reading in part_hints)
+                parts.append(part)
+                offset += len(part) + 1
+    return '\n'.join(parts)
 
 # Moving-average type/token ratio window (Covington & McFall 2010).
 MATTR_WINDOW = 500

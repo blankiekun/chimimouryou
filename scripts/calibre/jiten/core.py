@@ -7,8 +7,11 @@ CORE_VERSION bump). Not upstream.
 - Segmentation: compound_merge.merge_compounds (the word lists' seam, #259; without the Reader's
   readings: the core never runs it), then word_units: tokens → (lemma, form, reading, name) units.
   Only these two decide what a "word" is; the scoring below never looks at tokens.
-- summarise: per lemma, its count and frequency rank (the list's rank of Sudachi's normalized form;
-  noise left out as word_list.is_noise_word does). Names are counted apart (`names`).
+- summarise: per lemma, its count and frequency rank (noise left out as word_list.is_noise_word
+  does). Names are counted apart (`names`).
+- Ranks (version 3): a lemma's best (lowest) rank over its spellings met: Sudachi's normalized form
+  (often the rare spelling: 見付かる 22,806, 見つかる 490), the dictionary form and, for an all-kana
+  form, the best rank of any term read that way (すわる: 座る's 526). `best_ranks`.
 - V98: the vocabulary size (top-N words of the frequency list) at which 98% of the book's running
   words are known, with a repetition discount: a word met more than REPEAT_CAP times counts as
   learned after REPEAT_CAP, so book-specific terms (聖女 300 times) cost what 10 occurrences cost.
@@ -30,8 +33,9 @@ import re
 from compound_merge import merge_compounds
 from word_list import is_noise_word
 
-# 1: first version. 2: rubyKanji and sentLen (facets).
-CORE_VERSION = 2
+# 1: first version. 2: rubyKanji and sentLen (facets). 3: ranks by the best spelling (best_ranks), source
+# line breaks folded in book_text (features.py).
+CORE_VERSION = 3
 REPEAT_CAP = 10
 BUCKETS_PER_DECADE = 4
 RANKED_BUCKETS = 6 * BUCKETS_PER_DECADE
@@ -44,6 +48,7 @@ VOCABULARY = {'名詞', '代名詞', '形状詞', '連体詞', '形容詞', '動
 KANJI = re.compile('[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\U00020000-\U0003134f]')
 SENTENCE = re.compile('[^。！？!?\n]+[。！？!?」』]*')
 BLANKS = ' \t\r\u00a0\u3000'
+KANA = re.compile('[ぁ-ヿ]+')
 SCALE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'core-scale.json')
 
 
@@ -58,6 +63,21 @@ def word_units(tokens):
         if pos[0] in VOCABULARY:
             yield (token.normalized_form(), token.dictionary_form(), to_hiragana(token.reading_form()),
                    pos[0] == '名詞' and pos[1] == '固有名詞')
+
+
+def best_ranks(units, frequency) -> dict:
+    """lemma -> its best rank over the units' spellings (normalized form, dictionary form, an all-kana
+    form's reading), None when the list ranks none of them. Names are left out."""
+    ranks, by_reading, best = frequency.ranks, frequency.best_by_reading, {}
+    for lemma, form, _, name in units:
+        if name:
+            continue
+        found = [r for r in (ranks.get(lemma), ranks.get(form),
+                             by_reading.get(to_hiragana(form)) if KANA.fullmatch(form) else None) if r is not None]
+        rank = min(found, default=None)
+        old = best.get(lemma)
+        best[lemma] = rank if old is None or (rank is not None and rank < old) else old
+    return best
 
 
 def bucket(rank) -> int:
@@ -141,8 +161,8 @@ def book_core(tokens, frequency, text: str = '', ruby_kanji: int = 0) -> dict:
     """The book's core numbers from its Sudachi tokens (yurigana's SudachiTokenizer.tokens: offsets,
     symbols and blanks left out) and a FrequencyTable (frequency.py), with the facets of its text
     and ruby."""
-    ranks = frequency.ranks
-    core = summarise(word_units(merge_compounds(list(tokens), frequency)), lambda lemma: ranks.get(lemma))
+    units = list(word_units(merge_compounds(list(tokens), frequency)))
+    core = summarise(units, best_ranks(units, frequency).get)
     return {**core, **facets(text, ruby_kanji)}
 
 
