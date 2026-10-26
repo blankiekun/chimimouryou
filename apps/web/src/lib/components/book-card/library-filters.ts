@@ -5,7 +5,7 @@
  */
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-import { difficultyBand, difficultyNameKey } from '$lib/data/difficulty';
+import { levelGroup, levelGroupKey } from '$lib/data/difficulty';
 import type { MessageKey } from '$lib/i18n';
 
 export interface LibraryFilter {
@@ -91,11 +91,12 @@ export const libraryFilterSections: LibraryFilterSection[] = [
     key: 'difficulty',
     label: 'book.difficulty',
     filters: [
-      ...[0, 1, 2, 3, 4].map((band) => ({
-        key: `difficulty-${band}`,
-        label: difficultyNameKey(band),
+      // 1-10 levels in groups of two (the 0-5 bands' keys were difficulty-N: those filters reset)
+      ...[0, 1, 2, 3, 4].map((group) => ({
+        key: `level-${group + 1}`,
+        label: levelGroupKey(group),
         test: (card: BookCardProps) =>
-          card.difficulty !== undefined && Math.min(difficultyBand(card.difficulty), 4) === band
+          card.difficulty !== undefined && levelGroup(card.difficulty) === group
       })),
       {
         key: 'difficulty-none',

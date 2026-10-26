@@ -1,7 +1,7 @@
 # The Python services (scripts/calibre/). One file, three targets:
 #   base        accounts and the catalog builder (Python standard library + Pillow)
 #   import      + Calibre, for adding books to the library (large)
-#   difficulty  + Sudachi and ONNX Runtime, for Jiten's difficulty model (large)
+#   difficulty  + Sudachi and yurigana, for difficulty estimates and word lists
 #   mokuro      + mokuro and CPU PyTorch, for manga OCR (about 2 GB)
 # Built by docker-compose.yml from the repository root. Runs as PUID (compose `user:`).
 

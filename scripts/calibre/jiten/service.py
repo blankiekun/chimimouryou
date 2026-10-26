@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""On-demand difficulty estimates for the Calibre library, with Jiten's features and a
-model of our own, chimi-difficulty, trained on jiten.moe's scores (distil/). Word frequencies come from Jiten's
+"""On-demand difficulty estimates for the Calibre library: the fast core (core.py: V98 and a log-rank
+histogram from Sudachi's tokens), the character and kanji counts. Word frequencies come from Jiten's
 Yomitan frequency list (FREQUENCY_DICTIONARY; the bundled copy in data/ unless an admin replaced it).
+A book's word list is made when it is first asked for (GET words/ID), not with its estimate.
 
 Nothing runs until asked: the reader (or the CLI) requests difficulty for chosen books.
 
 HTTP API (bound to localhost, proxied by nginx at /calibre/difficulty/api/):
   GET  status                       progress of the current job
   GET  kanji/ID                     kanji counts of an estimated book (for each reader's own kanji coverage)
-  GET  words/ID                     the book's most frequent words: [form, reading, count, rank, lemma] (WORDS_PER_BOOK)
+  GET  words/ID                     the book's word list: {words: [[form, reading, count, rank, lemma]…] (WORDS_PER_BOOK),
+                                    uniqueWords, tokens}, made first if missing (waits up to WORDS_WAIT, else 503)
   GET  readings/ID                  the book's readings file (readings_file.py)
   POST readings/ID                  make it if missing or stale (waits up to READINGS_WAIT): {"status": "ready" | "queued" | "unavailable"}
   POST compute    {"ids": [...]}    estimate difficulty for these books ({"all": true} for all without a current estimate)
@@ -18,7 +20,8 @@ HTTP API (bound to localhost, proxied by nginx at /calibre/difficulty/api/):
   POST terms?name=NAME  body: zip   install a Yomitan term dictionary (TERM_DICTIONARY_DIR); admins only
   POST terms/remove {"name": NAME}  remove one; admins only
 Results are written to RESULTS_PATH, which nginx serves as /calibre/difficulty.json.
-Readings files are made one at a time in their own process, never waiting behind an estimate job.
+Readings files and word lists are made one at a time in processes of their own, never waiting behind an
+estimate job.
 
 CLI: service.py serve | compute ID...
 """
@@ -73,27 +76,19 @@ MIN_AGREEMENT = 0.95
 TERM_DICTIONARY_DIR = os.path.join(STATE_DIR, 'term-dictionaries')
 MAX_TERM_DICTIONARY_BYTES = 256 * 1024 * 1024
 MIN_TERM_DICTIONARY_TERMS = 1_000
-# chimi-difficulty, trained on jiten.moe's own scores (distil/, README there): their scale directly,
-# adjustment included, from Jiten's 55 features plus EXTRA_FEATURES. The -low/-high models
-# are its 10th and 90th percentiles, shown as a range.
-MODEL_DIR = os.path.dirname(os.path.realpath(__file__))
-MODEL_PATHS = {name: os.path.join(MODEL_DIR, f'chimi-difficulty{suffix}.onnx')
-               for name, suffix in (('difficulty', ''), ('low', '-low'), ('high', '-high'))}
-# Added to both sides of the range so it holds 80% of books (written by distil/train.py).
-with open(os.path.join(MODEL_DIR, 'chimi-difficulty-range.json'), encoding='utf-8') as _f:
-    RANGE_WIDEN = json.load(_f)['widen']
 # Readings in context for word lists and readings files (a yurigana Reader): the server's own
 # reading-model table, built from its library by `python -m yurigana.reading_context build`; the
 # Reader adds yurigana's public one (Aozora Bunko and Tatoeba) for other forms.
 READING_MODEL_TABLES = [os.path.join(STATE_DIR, 'reading-model.json.gz')]
-# Stored with each estimate; whole-library runs redo estimates made by another model.
-MODEL_VERSION = 'chimi-difficulty-1'
 # Per-book kanji counts, gzipped JSON, for the reader's own coverage.
 KANJI_DIR = os.path.join(STATE_DIR, 'kanji')
-# Per-book word lists, gzipped JSON, for "words to study"; capped to bound disk use (~19k books).
+# Per-book word lists, gzipped JSON, for "words to study": made on first request, in a folder per
+# WORDS_VERSION (words_path), capped to bound their size.
 WORDS_DIR = os.path.join(STATE_DIR, 'words')
 WORDS_PER_BOOK = 2000
-# Stored with each estimate ('words'); whole-library runs redo word lists made by an older version.
+# A request for a missing list waits this long for it (most books take 1-3 s), else gets a 503.
+WORDS_WAIT = 20
+# The word lists' version (words_path); a list of another is made again when asked for.
 # 2: one row per (form, reading). 3: the book's own ruby gives readings (yurigana's ruby_reading).
 # 4: context rules for ambiguous forms (yurigana's context_reading).
 # 5: more of the ruby: per-kanji spans, kanji stems of inflected words, large kana; 人気がない
@@ -119,6 +114,9 @@ WORDS_PER_BOOK = 2000
 #    (compound_merge: 心配顔, not 顔 がお), and a voiced reading the list ranks takes the unvoiced
 #    one's rank when better (顔 がお: かお's).
 WORDS_VERSION = 19
+# Lists made with their estimate, before lists were made on request: WORDS_DIR/<id>.json.gz, a bare
+# list of rows, version 19 (its totals were the estimate's: migrate_word_lists keeps them).
+LEGACY_WORDS_VERSION = 19
 # Readings files (#17), made from the reader's processed book in the shared sync folder
 # (mounted read-only): <SYNC_DIR>/ttu-reader-data/<title>/bookdata_*.zip.
 SYNC_DIR = os.environ.get('SYNC_DIR', '/data/sync')
@@ -156,31 +154,37 @@ BOOKS_PER_POOL = 300
 # ---------------------------------------------------------------------------
 # Worker processes (one Sudachi tokenizer each)
 
-_analyzer = None
+# Estimate workers: Sudachi and the frequency list (core.py), no Reader or models.
+_tokenizer = None
 _frequency = None
-_sessions = None
-# A yurigana Reader: word-list readings in estimate workers, readings files in the readings worker.
+# The word-list worker: the Analyzer (Sudachi, deconjugation) and a yurigana Reader for the rows' readings.
+_analyzer = None
+# A yurigana Reader: word-list readings in the word-list worker, readings files in the readings worker.
 _reader = None
 
 
-def _init_worker():
-    global _analyzer, _frequency, _sessions, _reader
-    from yurigana.yomitan import with_extra_readings
-    import warnings
-    warnings.filterwarnings('ignore')
-    import onnxruntime
-    from features import Analyzer
+def _load_frequency():
     from frequency import FrequencyTable
+    return (FrequencyTable.load_packed(FREQUENCY_PACK) if reader_pack_current()
+            else FrequencyTable.load(FREQUENCY_DICTIONARY))
+
+
+def _init_worker():
+    global _tokenizer, _frequency
+    from yurigana.tokens import SudachiTokenizer
+    _tokenizer = SudachiTokenizer()
+    _frequency = _load_frequency()
+
+
+def _init_words_worker():
+    global _analyzer, _frequency, _reader
+    from yurigana.yomitan import with_extra_readings
+    from features import Analyzer
     _analyzer = Analyzer()
-    _frequency = (FrequencyTable.load_packed(FREQUENCY_PACK) if reader_pack_current()
-                  else FrequencyTable.load(FREQUENCY_DICTIONARY))
+    _frequency = _load_frequency()
     # Sharing the Analyzer's tokens and the list's readings: no second Sudachi or copy of the list.
-    # The extra readings (描く かく…) as Reader(known=path) adds them; the features keep the plain list.
+    # The extra readings (描く かく…) as Reader(known=path) adds them.
     _reader = _load_reader(_analyzer, lambda: with_extra_readings(_frequency.reading_ranks))
-    options = onnxruntime.SessionOptions()
-    options.intra_op_num_threads = 1
-    options.inter_op_num_threads = 1
-    _sessions = {name: onnxruntime.InferenceSession(path, options) for name, path in MODEL_PATHS.items()}
 
 
 def save_kanji(book_id: int, text: str):
@@ -194,17 +198,38 @@ def save_kanji(book_id: int, text: str):
     return len(counts)
 
 
-def save_words(book_id: int, analysis, frequency):
-    """The book's WORDS_PER_BOOK most frequent words (word_list.word_rows) in WORDS_DIR. Returns the
-    number of rows and their occurrences before the cap, without noise (is_noise_word), so the
-    reader can count the words past the cap as unknown."""
-    rows, unique_words, tokens = word_rows(analysis, frequency)
-    os.makedirs(WORDS_DIR, exist_ok=True)
-    path = os.path.join(WORDS_DIR, f'{book_id}.json.gz')
+def words_path(book_id: int) -> str:
+    return os.path.join(WORDS_DIR, f'v{WORDS_VERSION}', f'{book_id}.json.gz')
+
+
+def legacy_words_path(book_id: int) -> str:
+    return os.path.join(WORDS_DIR, f'{book_id}.json.gz')
+
+
+def write_words(book_id: int, data: dict):
+    path = words_path(book_id)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     with gzip.open(path + '.tmp', 'wt', encoding='utf-8') as f:
-        json.dump(rows[:WORDS_PER_BOOK], f, ensure_ascii=False, separators=(',', ':'))
+        json.dump(data, f, ensure_ascii=False, separators=(',', ':'))
     os.replace(path + '.tmp', path)
+
+
+def save_words(book_id: int, analysis, frequency):
+    """The book's WORDS_PER_BOOK most frequent words (word_list.word_rows) at words_path, with the
+    number of rows and their occurrences before the cap, without noise (is_noise_word), so the
+    reader can count the words past the cap as unknown. Returns those two."""
+    rows, unique_words, tokens = word_rows(analysis, frequency)
+    write_words(book_id, {'words': rows[:WORDS_PER_BOOK], 'uniqueWords': unique_words, 'tokens': tokens})
     return unique_words, tokens
+
+
+def remove_words(book_id: int):
+    """Drops a book's word list (its text changed): the next request makes it again."""
+    for path in (words_path(book_id), legacy_words_path(book_id)):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
 
 
 def manga_path(book_id: int) -> str:
@@ -244,76 +269,30 @@ def _book_text(book: dict):
     return text, ruby, hints, len(TOKEN_CLEAN.sub('', text))
 
 
-def _core(tokens) -> dict:
-    """core.py's numbers from Sudachi tokens (yurigana's Token, with offsets)."""
-    return core.book_core(tokens, _frequency)
-
-
 def _estimate(book: dict):
-    import numpy
-    from features import EXTRA_FEATURES, FEATURE_ORDER, compute_extra_features, compute_features, words_for_coverage
-    text, ruby, hints, characters = _book_text(book)
+    """(id, estimate) of a book (None: too little text): the core's numbers (core.py), the character
+    and kanji counts. No Reader, features or model: ~0.4 s a book."""
+    text, _, _, characters = _book_text(book)
     if characters < 1000:
         return book['id'], None
-    # The Analyzer keeps the text's tokens, so analyse() doesn't tokenize it again.
-    numbers = _core(_analyzer.tokens(text))
-    analysis = _analyzer.analyse(text, hints, _reader, _frequency)
-    features = compute_features(analysis, _frequency)
-    extra = compute_extra_features(analysis, _frequency, ruby)
-    row = numpy.array([[features[name] for name in FEATURE_ORDER] + [extra[name] for name in EXTRA_FEATURES]],
-                      dtype=numpy.float32)
-    scores = {name: round(min(max(float(session.run(None, {'float_input': row})[0][0][0]), 0.0), 5.0), 2)
-              for name, session in _sessions.items()}
-    unique_kanji = save_kanji(book['id'], text)
-    unique_words, tokens = save_words(book['id'], analysis, _frequency)
-    # 'adjusted' is kept for older readers (deprecated, see CHANGELOG; drop it one release later);
-    # the model includes jiten.moe's adjustment.
     return book['id'], {
-        'difficulty': scores['difficulty'],
-        'adjusted': scores['difficulty'],
-        'low': round(max(min(scores['low'], scores['difficulty']) - RANGE_WIDEN, 0.0), 2),
-        'high': round(min(max(scores['high'], scores['difficulty']) + RANGE_WIDEN, 5.0), 2),
-        'words95': words_for_coverage(extra) if extra['CoverageRank95'] == extra['CoverageRank95'] else None,
-        'model': MODEL_VERSION,
-        'words': WORDS_VERSION,
-        'engine': current_engine(),
         'characters': characters,
-        'uniqueKanji': unique_kanji,
-        # All the book's words (rows of its word list before the cap) and their occurrences,
-        # without noise; older estimates have neither.
-        'uniqueWords': unique_words,
-        'tokens': tokens,
+        'uniqueKanji': save_kanji(book['id'], text),
+        # V98, names and the log-rank histogram; the app puts V98 on the 1-10 scale (core-scale.json).
+        'core': core.book_core(_tokenizer.tokens(text), _frequency),
+        'engine': current_engine(),
         'computedAt': int(time.time() * 1000),
-        # The fast core (core.py): V98, names and the log-rank histogram; not part of the engine yet.
-        'core': numbers,
         # Manga: the mokuro text it was made from (manga_text_stamp).
         **({'text': book['text']} if book.get('manga') else {}),
     }
 
 
-def _init_core_worker():
-    """A worker for core numbers only: Sudachi and the frequency list, no Reader or models."""
-    global _tokenizer, _frequency
-    from yurigana.tokens import SudachiTokenizer
-    from frequency import FrequencyTable
-    _tokenizer = SudachiTokenizer()
-    _frequency = (FrequencyTable.load_packed(FREQUENCY_PACK) if reader_pack_current()
-                  else FrequencyTable.load(FREQUENCY_DICTIONARY))
-
-
-_tokenizer = None
-
-
-def _core_estimate(book: dict):
-    """(id, core numbers) of a book whose estimate is current but lacks them (None: too little text)."""
-    text, _, _, characters = _book_text(book)
-    return book['id'], _core(_tokenizer.tokens(text)) if characters >= 1000 else None
-
-
-def needs_core(book, results) -> bool:
-    """An estimate made before the core (or by an older CORE_VERSION): only its core is redone."""
-    estimate = results['books'].get(str(book['id']))
-    return bool(estimate) and (estimate.get('core') or {}).get('v') != core.CORE_VERSION
+def _make_words(book_id: int, book: dict):
+    """The book's word list (save_words), with yurigana's readings in context."""
+    text, _, hints, characters = _book_text(book)
+    if characters < 1000:
+        raise ValueError('too little text')
+    save_words(book_id, _analyzer.analyse(text, hints, _reader, _frequency), _frequency)
 
 
 # ---------------------------------------------------------------------------
@@ -414,7 +393,7 @@ def term_options() -> dict:
 def current_engine() -> str:
     """This server's engine fingerprint (engine.py): its frequency list, yurigana, Sudachi dictionary
     and reading-model table. Term dictionaries are left out: they change word lists' readings only, not
-    the score (features use Sudachi's readings), so a server with them still makes canonical estimates."""
+    the estimate (the core uses Sudachi's tokens), so a server with them still makes canonical estimates."""
     from importlib.metadata import PackageNotFoundError, version
     try:
         sudachi = 'core-' + version('SudachiDict-core')
@@ -471,7 +450,10 @@ def find_bookdata(title: str):
 
 class ReadingsQueue:
     """Readings files to make, in request order, by one worker process that lives while there
-    is work."""
+    is work. WordsQueue makes word lists the same way."""
+    # Run in the worker as task(book_id, job): here the job is the bookdata's path.
+    task = staticmethod(_make_readings)
+    initializer = staticmethod(_init_readings_worker)
 
     def __init__(self):
         self.lock = threading.Lock()
@@ -529,6 +511,11 @@ class ReadingsQueue:
                 self.thread = self._start()
         return 'queued'
 
+    @staticmethod
+    def failure(job):
+        """What a failure is remembered by: not retried until the job's input changes."""
+        return os.path.basename(job)
+
     def _start(self):
         thread = threading.Thread(target=self._run, daemon=True)
         thread.start()
@@ -554,12 +541,12 @@ class ReadingsQueue:
                 book_id, bookdata = job
                 if not pool:
                     ensure_reader_pack()
-                    pool = ProcessPoolExecutor(1, initializer=_init_readings_worker)
+                    pool = ProcessPoolExecutor(1, initializer=self.initializer)
                 try:
-                    pool.submit(_make_readings, book_id, bookdata).result()
+                    pool.submit(self.task, book_id, bookdata).result()
                 except Exception as error:
-                    print(f'readings {book_id}: {error}', file=sys.stderr, flush=True)
-                    self.failed[book_id] = os.path.basename(bookdata)
+                    print(f'{type(self).__name__} {book_id}: {error}', file=sys.stderr, flush=True)
+                    self.failed[book_id] = self.failure(bookdata)
                     if isinstance(error, BrokenProcessPool):
                         pool = None
                 finally:
@@ -573,6 +560,90 @@ class ReadingsQueue:
 
 
 readings = ReadingsQueue()
+
+
+class WordsQueue(ReadingsQueue):
+    """Word lists to make on request (GET words/ID), one at a time in a worker process of their own
+    with the Analyzer and a yurigana Reader (~1-3 s a book). The job is the catalog's book."""
+    task = staticmethod(_make_words)
+    initializer = staticmethod(_init_words_worker)
+
+    @staticmethod
+    def failure(book):
+        return book.get('size'), book.get('added'), book.get('text')
+
+    def _request(self, book_id: int) -> str:
+        if os.path.exists(words_path(book_id)) or migrate_legacy_words(book_id):
+            return 'ready'
+        if not os.path.exists(FREQUENCY_DICTIONARY):
+            return 'unavailable'
+        book = next((b for b in load_catalog() if b['id'] == book_id), None)
+        if not book or (book.get('manga') and not book.get('text')):
+            return 'unavailable'
+        with self.lock:
+            if book_id in self.queue or self.running == book_id:
+                return 'queued'
+            if self.failed.get(book_id) == self.failure(book) or len(self.queue) >= READINGS_QUEUE_MAX:
+                return 'unavailable'
+            self.queue[book_id] = book
+            self.added.set()
+            if not self.thread:
+                self.thread = self._start()
+        return 'queued'
+
+
+word_lists = WordsQueue()
+# Legacy lists' totals ([uniqueWords, tokens]) by book id, from the estimates they were made with
+# (legacy-totals.json, written once by migrate_word_lists before a new estimate replaces them).
+_legacy_totals = None
+
+
+def legacy_totals_path() -> str:
+    return os.path.join(WORDS_DIR, 'legacy-totals.json')
+
+
+def migrate_word_lists():
+    """On start, before any job: records the totals of the lists made with their estimate (version
+    LEGACY_WORDS_VERSION; only the estimate has their totals), so they stay usable once a new
+    estimate replaces it. Lists of an older version are made again when asked for."""
+    path = legacy_totals_path()
+    if LEGACY_WORDS_VERSION != WORDS_VERSION or os.path.exists(path):
+        return
+    try:
+        legacy = {name[:-len('.json.gz')] for name in os.listdir(WORDS_DIR) if name.endswith('.json.gz')}
+    except OSError:
+        return
+    totals = {key: [estimate['uniqueWords'], estimate['tokens']]
+              for key, estimate in load_results().get('books', {}).items()
+              if key in legacy and estimate.get('words') == LEGACY_WORDS_VERSION
+              and estimate.get('uniqueWords') is not None and estimate.get('tokens') is not None}
+    with open(path + '.tmp', 'w', encoding='utf-8') as f:
+        json.dump(totals, f, separators=(',', ':'))
+    os.replace(path + '.tmp', path)
+
+
+def migrate_legacy_words(book_id: int) -> bool:
+    """A legacy list moved to words_path with its totals (True); one without them is removed."""
+    global _legacy_totals
+    legacy = legacy_words_path(book_id)
+    if LEGACY_WORDS_VERSION != WORDS_VERSION or not os.path.exists(legacy):
+        return False
+    if _legacy_totals is None:
+        try:
+            with open(legacy_totals_path(), encoding='utf-8') as f:
+                _legacy_totals = json.load(f)
+        except (OSError, ValueError):
+            _legacy_totals = {}
+    totals = _legacy_totals.get(str(book_id))
+    try:
+        if totals:
+            with gzip.open(legacy, 'rt', encoding='utf-8') as f:
+                rows = json.load(f)
+            write_words(book_id, {'words': rows, 'uniqueWords': totals[0], 'tokens': totals[1]})
+        os.remove(legacy)
+    except (OSError, ValueError):
+        return False
+    return bool(totals)
 
 
 # ---------------------------------------------------------------------------
@@ -655,18 +726,16 @@ def unchanged_since_failure(failure, book) -> bool:
 
 
 def needs_estimate(book, results, engine) -> bool:
-    """Whether a whole-library run estimates the book: never tried, estimated by another model or engine,
-    with an older word list, or (manga) from other text; not a book without text or whose file is
-    unchanged since it failed. Manga without text are tried once some appears."""
+    """Whether a whole-library run estimates the book: never tried, estimated by another engine or
+    (manga) from other text; not a book without text or whose file is unchanged since it failed.
+    Manga without text are tried once some appears. Word lists aren't made here (WordsQueue)."""
     key = str(book['id'])
     if book.get('manga') and not book.get('text'):
         return False
     if book['id'] in results.get('noText', []) and results.get('noTextStamps', {}).get(key) == book.get('text'):
         return False
     estimate = results['books'].get(key, {})
-    return (estimate.get('model') != MODEL_VERSION or estimate.get('words') != WORDS_VERSION
-            or estimate.get('engine') != engine or estimate.get('text') != book.get('text')
-            or not os.path.exists(os.path.join(WORDS_DIR, f'{key}.json.gz'))) \
+    return (estimate.get('engine') != engine or estimate.get('text') != book.get('text')) \
         and not unchanged_since_failure(results.get('failed', {}).get(key), book)
 
 
@@ -751,6 +820,11 @@ class JobRunner:
                 failed[str(book['id'])] = {'error': str(result)[:200], 'size': book['size'], 'added': book['added'],
                                            **({'text': book['text']} if book.get('manga') else {})}
             elif result[1]:
+                before = results['books'].get(str(result[0]), {})
+                # Its text changed (another file or mokuro text): the word list is made again on request.
+                if before and (before.get('characters'), before.get('text')) != \
+                        (result[1]['characters'], result[1].get('text')):
+                    remove_words(result[0])
                 results['books'][str(result[0])] = result[1]
                 no_text.discard(result[0])
                 no_text_stamps.pop(str(result[0]), None)
@@ -761,19 +835,6 @@ class JobRunner:
                     no_text_stamps[str(result[0])] = book['text']
                 failed.pop(str(result[0]), None)
             results['noText'] = sorted(no_text)
-            done += 1
-            self._progress(done)
-            if time.monotonic() - last_save > 10:
-                save_results(results)
-                last_save = time.monotonic()
-        # Library runs: estimates still current but made before the core get only its numbers (~0.3 s
-        # a book: Sudachi and the frequency list, no Reader or models).
-        stale = [b for b in catalog if needs_core(b, results)] if ids is None and not self.cancel.is_set() else []
-        if stale:
-            self._progress(done, done + len(stale))
-        for book, result in run_in_pools(stale, _core_estimate, self.cancel, _init_core_worker):
-            if not isinstance(result, Exception) and result[1]:
-                results['books'][str(result[0])]['core'] = result[1]
             done += 1
             self._progress(done)
             if time.monotonic() - last_save > 10:
@@ -962,9 +1023,16 @@ class Handler(BaseHTTPRequestHandler):
         if parts == ['status']:
             self._send(200, runner.status())
         elif len(parts) == 2 and parts[0] in ('kanji', 'words', 'readings') and re.fullmatch(r'-?[0-9]+', parts[1]):
-            folder = {'kanji': KANJI_DIR, 'words': WORDS_DIR, 'readings': READINGS_DIR}[parts[0]]
+            book_id = int(parts[1])
+            if parts[0] == 'words':
+                path = words_path(book_id)
+                status = 'ready' if os.path.exists(path) else word_lists.request(book_id, WORDS_WAIT)
+                if status == 'queued':
+                    return self._send(503, {'status': 'queued'})
+            else:
+                path = os.path.join(KANJI_DIR if parts[0] == 'kanji' else READINGS_DIR, f'{book_id}.json.gz')
             try:
-                with open(os.path.join(folder, f'{int(parts[1])}.json.gz'), 'rb') as f:
+                with open(path, 'rb') as f:
                     stat = os.fstat(f.fileno())
                     etag = f'"{stat.st_mtime_ns:x}-{stat.st_size:x}"'
                     if self.headers.get('If-None-Match') == etag:
@@ -1062,6 +1130,7 @@ def main(argv):
     install_bundled_dictionary()
     command = argv[1] if len(argv) > 1 else 'serve'
     if command == 'serve':
+        migrate_word_lists()
         threading.Thread(target=watch_manga_text, daemon=True).start()
         ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
     elif command == 'compute':

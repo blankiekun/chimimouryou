@@ -1,11 +1,14 @@
 """Checks the estimates against how fast readers actually read: for each reader (sync
 root), a book's reading speed relative to that reader's median speed, which falls as
-books get harder. Prints the Spearman correlation with the estimate (expected negative).
+books get harder. Prints the Spearman correlation with the 1-10 level (expected negative).
 
 python3 validate_speed.py difficulty.json catalog.json SYNC_ROOT...
 (e.g. /data/sync/ttu-reader-data and /data/accounts/*/account/sync/ttu-reader-data)
 """
 import glob, json, os, statistics, sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+import core  # noqa: E402
 
 # Books read for less than this give no reliable speed.
 MIN_SECONDS = 20 * 60
@@ -39,7 +42,9 @@ for root in sys.argv[3:]:
     if len(speeds) < 3:
         continue
     median = statistics.median(speeds.values())
-    pairs += [(difficulty[by_title[t]]['difficulty'], s / median) for t, s in speeds.items()]
+    scale = core.load_scale()
+    pairs += [(core.score(difficulty[by_title[t]]['core']['v98'], scale), s / median)
+              for t, s in speeds.items() if difficulty[by_title[t]].get('core')]
 
 print(len(pairs), 'books with enough reading time')
 if len(pairs) >= 10:

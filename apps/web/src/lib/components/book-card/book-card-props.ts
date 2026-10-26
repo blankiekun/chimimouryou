@@ -22,13 +22,8 @@ export interface BookCardProps {
   seriesInferred?: boolean;
   tags?: string[];
   rating?: number | null;
-  /** Jiten-style difficulty, 0-5 */
+  /** The estimate's 1-10 level (`levelOf` in difficulty-core.ts) */
   difficulty?: number;
-  /** 10th-90th percentile range of the estimate */
-  difficultyLow?: number;
-  difficultyHigh?: number;
-  /** Top-N words a reader needs to know for 95% of the book's words */
-  words95?: number;
   /** Cached share of the book's word occurrences that are known (`known-words.ts`), for sorting */
   coverage?: number;
   /** CBZ/ZIP read in the manga reader */

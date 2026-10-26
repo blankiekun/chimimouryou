@@ -8,15 +8,16 @@
  * Analysis tools (standalone edition, desktop browsers): optional downloads (Settings) of Sudachi,
  * Pyodide and yurigana (scripts/analysis-tools/build.sh) that make a stored book's data in the
  * browser, in the formats the server's difficulty service gives (scripts/calibre/jiten/browser.py).
- * Two features, each its own pipeline and download: difficulty estimates (the estimate, and the
- * word list for Book words and word coverage; also the frequency pack and the models) and
- * generated furigana (the readings file). Files both use are kept while either is installed.
+ * Two features, each its own pipeline and download: difficulty estimates (the estimate: the fast
+ * core's numbers, core.ts, without Pyodide; and the word list for Book words and word coverage;
+ * also the frequency pack and the core's list) and generated furigana (the readings file). Files
+ * both use are kept while either is installed.
  *
  * One worker runs both Sudachi (~250 MB in memory) and Pyodide (~200 MB)
  * (functions/analysis/analysis.worker.ts): Python asks Sudachi for each text as it reads, so a part
  * is one pass; the worker keeps the last book's tokens for its other part. One job at a time, two
  * on large machines (analysisWorkers: a background batch analyses two books at once); the workers
- * (and the scoring one) stay for the next job as long as analysisKeepAlive says
+ * stay for the next job as long as analysisKeepAlive says
  * (analysis-capacity.ts). Not part of upstream.
  */
 
@@ -36,7 +37,6 @@ import type {
   AnalysisMessage,
   AnalysisRequest
 } from '$lib/functions/analysis/analysis.worker';
-import type { ScoreMessage, ScoreRequest } from '$lib/functions/analysis/analysis-score.worker';
 import {
   analysisToolsCacheName,
   rawFolder,
@@ -326,13 +326,11 @@ export async function removeAnalysisTools(feature: AnalysisFeature) {
   await checkAnalysisTools();
 }
 
-/** browser.py's word list, the difficulty model's input row and the estimate's counts */
+/** browser.py's word list and the estimate's counts */
 interface WordsResult {
   words: BookWord[];
   uniqueWords: number;
   tokens: number;
-  features: number[];
-  words95: number | null;
   characters: number;
   uniqueKanji: number;
 }
@@ -397,59 +395,6 @@ const fail = (message: { type: string; message?: string }) => {
 
   return undefined;
 };
-
-/**
- * The scoring worker, kept like the analysis worker (analysisKeepAlive) so the next book skips
- * onnxruntime's start; its own timer, as it runs after the queue's job.
- */
-let scorer: { worker: Worker; timer?: ReturnType<typeof setTimeout> } | undefined;
-
-function endScorer() {
-  scorer?.worker.terminate();
-  scorer = undefined;
-}
-
-async function score(request: ScoreRequest) {
-  clearTimeout(scorer?.timer);
-  scorer ??= {
-    worker: new Worker(new URL('../functions/analysis/analysis-score.worker.ts', import.meta.url), {
-      type: 'module'
-    })
-  };
-
-  try {
-    return (await runWorker<ScoreMessage>(
-      scorer.worker,
-      request,
-      (message) => (message.type === 'scores' ? message : fail(message)),
-      undefined,
-      true
-    )) as Extract<ScoreMessage, { type: 'scores' }>;
-  } catch (error) {
-    // runWorker ended it
-    scorer = undefined;
-    throw error;
-  } finally {
-    const keepAlive = analysisKeepAlive();
-
-    if (scorer && keepAlive) {
-      scorer.timer = setTimeout(endScorer, keepAlive);
-    } else {
-      endScorer();
-    }
-  }
-}
-
-/** One at a time: a book's score runs after its queue job, so the next book's could meet it. */
-let scoring: Promise<unknown> = Promise.resolve();
-
-function scoreWorker(request: ScoreRequest) {
-  const run = scoring.then(() => score(request));
-
-  scoring = run.catch(() => undefined);
-
-  return run;
-}
 
 /**
  * The analysis workers (up to analysisWorkers at once), kept between jobs (analysisKeepAlive); one
@@ -831,14 +776,9 @@ async function makeEstimate(
     signal,
     background
   )) as WordsResult;
-  const scores = await scoreWorker({ base: base(), features: result.features });
   const estimate: LocalEstimate = {
     title,
     etag,
-    difficulty: scores.difficulty,
-    low: scores.low,
-    high: scores.high,
-    words95: result.words95,
     characters: result.characters,
     uniqueKanji: result.uniqueKanji,
     uniqueWords: result.uniqueWords,
@@ -864,7 +804,7 @@ export async function keptWordList(title: string) {
 /**
  * Generated furigana installed later: the book's current word list made without the Reader is
  * made again with it (its rows' readings in context; opt-in, never automatic). The estimate's
- * score stays (the features don't use the Reader); its word totals and `computedAt` change, so the
+ * level stays (the core doesn't use the Reader); its word totals and `computedAt` change, so the
  * coverage caches keyed on it are redone. Undefined when there is nothing to redo.
  */
 export async function redoWordList(

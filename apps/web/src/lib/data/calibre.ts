@@ -37,18 +37,21 @@ export interface CalibreBook {
   cover: string;
 }
 
-/** Difficulty estimate (chimi-difficulty, run on demand on the server), 0-5. */
+/**
+ * Difficulty estimate (run on demand on the server, or by the analysis tools): its level is the
+ * core's V98 on the 1-10 scale (`levelOf` in difficulty-core.ts).
+ */
 export interface CalibreDifficulty {
-  /** chimi-difficulty's estimate, on jiten.moe's scale */
-  difficulty: number;
-  /** 10th and 90th percentile of the estimate (older estimates have none) */
-  low?: number;
-  high?: number;
-  /** Top-N words a reader needs to know for 95% of the book's words */
+  /** The retired model's 0-5 score: older estimates only, no longer shown or used */
+  difficulty?: number;
+  /** Top-N words a reader needs to know for 95% of the book's words (older estimates only) */
   words95?: number | null;
   characters: number;
   uniqueKanji: number;
-  /** Different words and their occurrences, without noise (`isNoiseWord`); newer estimates only */
+  /**
+   * Different words and their occurrences, without noise (`isNoiseWord`): older server estimates
+   * and local ones; newer server lists carry their own (`totalsOf`)
+   */
   uniqueWords?: number;
   tokens?: number;
   /**

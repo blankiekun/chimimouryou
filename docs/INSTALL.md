@@ -15,7 +15,7 @@ features) use `docker compose -f docker-compose.static.yml up -d` instead.
 | `difficulty` | difficulty   | optional (`--profile difficulty`): difficulty estimates       |
 | `mokuro`     | mokuro       | optional (`--profile mokuro`): manga text (OCR) for Yomitan   |
 
-`import` installs Calibre, `difficulty` Sudachi and ONNX Runtime and `mokuro`
+`import` installs Calibre, `difficulty` Sudachi and yurigana and `mokuro`
 PyTorch (about 2 GB), so these images are large; leave them out unless you want those features.
 
 ## Server size

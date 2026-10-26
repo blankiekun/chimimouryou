@@ -20,8 +20,27 @@ import { difficultyApiUrl } from '$lib/data/calibre';
 export type BookWord = [string, string | null, number, number | null, string?];
 
 /**
+ * The totals a server word list came with ({words, uniqueWords, tokens}: lists made on request);
+ * older lists were bare rows with the estimate's totals. Kept beside the list's array, so
+ * `wordCoverage` and `forYou` find them for whichever list they are given.
+ */
+const listTotals = new WeakMap<BookWord[], WordTotals>();
+
+/** `words` with the totals it came with (`listTotals`); returns it */
+export function withTotals(words: BookWord[], totals: WordTotals | undefined) {
+  if (totals?.tokens !== undefined) listTotals.set(words, totals);
+
+  return words;
+}
+
+/** The list's own totals, else `fallback` (an older estimate's) */
+export const totalsOf = (words: BookWord[], fallback: WordTotals = {}) =>
+  listTotals.get(words) ?? fallback;
+
+/**
  * The book's most frequent words, most frequent first; undefined if it has no word list
- * yet (404). Other failures (server restarting, signed out) throw, so they aren't cached.
+ * (404). Other failures (server restarting, signed out, the list still being made: 503) throw,
+ * so they aren't cached.
  */
 export async function loadBookWords(id: number): Promise<BookWord[] | undefined> {
   const response = await serverFetch(`${difficultyApiUrl}words/${id}`, { cache: 'no-cache' });
@@ -29,7 +48,11 @@ export async function loadBookWords(id: number): Promise<BookWord[] | undefined>
   if (response.status === 404) return undefined;
   if (!response.ok) throw new Error(`Word list: ${response.status}`);
 
-  return foldReadings(await response.json());
+  const list = (await response.json()) as BookWord[] | ({ words: BookWord[] } & WordTotals);
+
+  return Array.isArray(list)
+    ? foldReadings(list)
+    : withTotals(foldReadings(list.words), { uniqueWords: list.uniqueWords, tokens: list.tokens });
 }
 
 /**
@@ -116,7 +139,7 @@ export function newWords(study: BookWord[], isKnown: (word: BookWord) => boolean
   return study.filter((word) => !isKnown(word)).sort((a, b) => weight(b) - weight(a));
 }
 
-/** The estimate's totals over all the book's words (newer estimates only) */
+/** The totals over all the book's words: its word list's, or an older estimate's */
 export interface WordTotals {
   uniqueWords?: number;
   tokens?: number;
@@ -158,6 +181,8 @@ export function wordCoverage(
       else unknown += 1;
     }
   }
+
+  totals = totalsOf(words, totals);
 
   const hasTotals = totals.uniqueWords !== undefined && totals.tokens !== undefined;
   const unlisted = hasTotals ? Math.max(0, totals.uniqueWords! - unique) : 0;

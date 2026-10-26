@@ -283,6 +283,69 @@ class ReadingsQueueTest(unittest.TestCase):
             self.service._make_readings(1, self.bookdata)
 
 
+class WordsQueueTest(unittest.TestCase):
+    """Word lists are made on first request; lists made with their estimate keep its totals."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        tmp = self.tmp.name
+        self.service = service = load_service()
+        service.FREQUENCY_DICTIONARY = os.path.join(tmp, 'frequency-dictionary.zip')
+        open(service.FREQUENCY_DICTIONARY, 'w').close()
+        service.CATALOG_PATH = os.path.join(tmp, 'catalog.json')
+        with open(service.CATALOG_PATH, 'w') as f:
+            json.dump({'books': [{'id': i, 'title': f'本{i}', 'format': 'EPUB', 'size': 10, 'added': 0}
+                                 for i in (1, 5, 6)]}, f)
+        service.WORDS_DIR = os.path.join(tmp, 'words')
+        service.RESULTS_PATH = os.path.join(tmp, 'difficulty.json')
+        service.ensure_reader_pack = lambda: None
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_queued_once_then_ready(self):
+        queue = self.service.WordsQueue()
+        queue._start = lambda: 'thread'
+        self.assertEqual([queue.request(i) for i in (1, 1, 99)], ['queued', 'queued', 'unavailable'])
+        queue.queue.clear()
+        self.service.write_words(1, {'words': [], 'uniqueWords': 0, 'tokens': 0})
+        self.assertEqual(queue.request(1), 'ready')
+        queue.failed[5] = queue.failure({'size': 10, 'added': 0})
+        self.assertEqual(queue.request(5), 'unavailable')
+
+    def test_the_worker_makes_it_while_the_request_waits(self):
+        from concurrent.futures import ThreadPoolExecutor
+        service = self.service
+        service.ProcessPoolExecutor = lambda workers, initializer: ThreadPoolExecutor(workers)
+        service.READINGS_KEEP_ALIVE = 0
+        queue = service.WordsQueue()
+        queue.task = lambda book_id, book: service.write_words(book_id, {'words': [book['title']]})
+        self.assertEqual(queue.request(6, wait=10), 'ready')
+        with gzip.open(service.words_path(6), 'rt', encoding='utf-8') as f:
+            self.assertEqual(json.load(f), {'words': ['本6']})
+
+    def test_legacy_lists_keep_their_estimates_totals(self):
+        service = self.service
+        os.makedirs(service.WORDS_DIR)
+        for book_id in (1, 5):
+            with gzip.open(service.legacy_words_path(book_id), 'wt', encoding='utf-8') as f:
+                json.dump([['猫', 'ねこ', 3, 1200, '猫']], f)
+        service.save_results({'books': {'1': {'words': 19, 'uniqueWords': 7, 'tokens': 30},
+                                        '5': {'words': 18, 'uniqueWords': 7, 'tokens': 30}}})
+        service.migrate_word_lists()
+        # A new estimate replaces the old one: the totals were kept.
+        service.save_results({'books': {'1': {'core': {}}, '5': {'core': {}}}})
+        service.migrate_word_lists()
+        queue = service.WordsQueue()
+        queue._start = lambda: 'thread'
+        self.assertEqual(queue.request(1), 'ready')
+        with gzip.open(service.words_path(1), 'rt', encoding='utf-8') as f:
+            self.assertEqual(json.load(f), {'words': [['猫', 'ねこ', 3, 1200, '猫']], 'uniqueWords': 7, 'tokens': 30})
+        # An older list has no totals to keep: it is made again.
+        self.assertEqual(queue.request(5), 'queued')
+        self.assertFalse(os.path.exists(service.legacy_words_path(1)) or os.path.exists(service.legacy_words_path(5)))
+
+
 class NginxTest(unittest.TestCase):
     def test_readers_reach_readings_files_without_the_difficulty_permission(self):
         with open(os.path.join(HERE, '..', 'nginx-ebook-reader.conf.template'), encoding='utf-8') as f:

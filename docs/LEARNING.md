@@ -149,11 +149,13 @@ A book's page (click its cover) shows under **Difficulty**, once an estimate
 exists (made by the server's `difficulty` service; readers with the
 `difficulty` permission start it with **Difficulty details**):
 
-- **A score from 0 to 5** with its band: Beginner (0-1), Easy, Average, Hard,
-  Expert (4-5), the same bands as jiten.moe, and the **likely range**, which holds
-  jiten.moe's score for about 8 books in 10. A narrow range is a surer estimate.
-- **The most common words that cover 95%** of the book: how many words you would
-  need to know to understand 95% of it. Lower is easier.
+- **A level from 1 to 10** with its tier (1 Slime, 2 Goblin … 5 Ogre … 10 Demon King):
+  how many of the most common words cover 98% of the book's running words (V98; a word
+  met more than 10 times counts as learned after 10), on a fixed scale over the library
+  where 5.5 is a typical book. The figure under it is that word count.
+- **For you**, from 0 (everything known) to 5, with 2 at 98% known: the share of the
+  book's running words you know, how many words to learn to reach 98%, and how often an
+  unknown word comes.
 - **Different words** in the book and how much of its text you **already know**: the
   share of its word occurrences that are known words (see Words known below), and how
   many of its words would be new. Particles, numbers and lone kana don't count.
@@ -188,7 +190,7 @@ gained this month. The history is rebuilt from the characters read each day (as 
 the book's recorded position at most) with the same rule, so it is an estimate too;
 Anki's mature words count only in today's total, not in the history.
 
-Manga have no estimate. In the Store, filter by difficulty band and sort by
+Manga have no estimate. In the Store, filter by level (in groups of two) and sort by
 difficulty (easiest first) or length to find the next book: one a little harder
 than the last, with most of its words already known, is usually a good pick. The Store's
 **Known words** sort and Home's **Read next** order books by that share; Difficulty

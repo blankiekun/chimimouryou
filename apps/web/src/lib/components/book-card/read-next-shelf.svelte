@@ -2,7 +2,7 @@
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
   import CoverCard from '$lib/components/book-card/cover-card.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
-  import { difficultyNameKey } from '$lib/data/difficulty';
+  import { levelTier } from '$lib/data/difficulty';
   import { relativeLevel } from '$lib/data/difficulty-core';
   import { standalone } from '$lib/data/env';
   import { t$ } from '$lib/i18n';
@@ -44,7 +44,7 @@
             meta={book.difficulty === undefined
               ? ''
               : $t$('home.difficultyScore', {
-                  band: $t$(difficultyNameKey(book.difficulty)),
+                  tier: levelTier(book.difficulty),
                   score: book.difficulty.toFixed(1)
                 })}
             current={book.id === currentBookId}

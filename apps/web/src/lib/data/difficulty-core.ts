@@ -6,9 +6,10 @@
 
 /**
  * The two difficulty measures built on the fast core (functions/analysis/core.ts, the service's
- * core.py), beside the 0-5 model score, which Reading rank keeps using:
+ * core.py):
  * - objective: the book's V98 on the frozen 1-10 scale (difficulty-scale.json, a bell curve over
- *   the reference library: mean 5.5, SD 2) with a book tier name per whole step;
+ *   the reference library: mean 5.5, SD 2) with a book tier name per whole step; the library's
+ *   difficulty column, sort and filters, Read next and Reading rank's gate use it;
  * - relative ("for you"): this reader's share of the book's running words known, and a 0-5 level
  *   from it (`relativeLevel`), with the words to learn to reach 98%.
  * Not part of upstream.
@@ -21,7 +22,7 @@ import {
   type CoreNumbers,
   type CoreScale
 } from '$lib/functions/analysis/core';
-import { isNoiseWord, type BookWord, type WordTotals } from '$lib/data/book-words';
+import { isNoiseWord, totalsOf, type BookWord, type WordTotals } from '$lib/data/book-words';
 import scaleJson from '$lib/data/difficulty-scale.json';
 
 export const difficultyScale = scaleJson as unknown as CoreScale;
@@ -45,6 +46,10 @@ export function bookLevel(core: CoreNumbers | undefined): BookLevel | undefined 
 
   return { score, tier: difficultyScale.tiers[Math.min(Math.floor(score), 10) - 1], v98: core.v98 };
 }
+
+/** An estimate's 1-10 level (`bookLevel`), undefined without core numbers */
+export const levelOf = (estimate: { core?: CoreNumbers } | undefined) =>
+  bookLevel(estimate?.core)?.score;
 
 /**
  * Coverage → the reader's 0-5 level for a book, piecewise linear in the unknown share and clamped:
@@ -103,7 +108,7 @@ export function forYou(
     else unknownCounts.push(word[2]);
   }
 
-  const tokens = Math.max(listed, totals.tokens ?? 0);
+  const tokens = Math.max(listed, totalsOf(words, totals).tokens ?? 0);
 
   if (!tokens) return undefined;
 

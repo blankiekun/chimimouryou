@@ -3,7 +3,8 @@
 
 One worker (apps/web/src/lib/functions/analysis/analysis.worker.ts) runs both: this module reads the
 book with Sudachi's tokens of each text it asks for (`lookup`), for one part: the word list with the
-difficulty model's input (Settings: difficulty estimates) or the readings file (generated furigana).
+estimate's counts (Settings: difficulty estimates; the level itself is core.ts's, without Pyodide) or
+the readings file (generated furigana).
 Both parts read the book's whole text with yurigana's Reader alike (carry={}), so the book's second
 part reuses the first's read. Not upstream."""
 import json
@@ -16,8 +17,7 @@ from yurigana import Reader, __version__ as YURIGANA_VERSION, packed
 from yurigana.tokens import HAS_CONTENT, Token
 
 import readings_file
-from features import (EXTRA_FEATURES, FEATURE_ORDER, TOKEN_CLEAN, Analyzer, _count_ruby, compute_extra_features,
-                      compute_features, is_kanji, words_for_coverage)
+from features import TOKEN_CLEAN, Analyzer, is_kanji
 from frequency import FrequencyTable
 from word_list import word_rows
 
@@ -125,26 +125,17 @@ def _frequency() -> FrequencyTable:
 
 
 def _words(extracted: tuple, tokens, words_per_book: int, reader: bool, kept: dict) -> dict:
-    """The book's word list as the service saves it ({words, uniqueWords, tokens}) and the
-    difficulty model's input row (`features`, the service's _estimate) with the estimate's counts.
-    Without `reader` (generated furigana not installed: no reader pack) the rows take Sudachi's
-    readings; the features never use the Reader, so the estimate is the same."""
+    """The book's word list as the service saves it ({words, uniqueWords, tokens}) with the
+    estimate's counts (characters, uniqueKanji). Without `reader` (generated furigana not installed:
+    no reader pack) the rows take Sudachi's readings."""
     analyzer = Analyzer(tokens)
     # The deconjugator's cache holds every intermediate form: a small one (only slower).
     analyzer.deconjugator.deconjugate = lru_cache(maxsize=200)(analyzer.deconjugator._deconjugate)
     text, hints, _ = extracted
-    # book_text's furigana count, from the same ruby
-    ruby = {}
-    for start, end, reading in hints:
-        _count_ruby(ruby, text[start:end], reading)
     frequency = _frequency()
     analysis = analyzer.analyse(text, hints, _reader(analyzer, kept) if reader else None, frequency)
     rows, unique_words, total = word_rows(analysis, frequency)
-    features = compute_features(analysis, frequency)
-    extra = compute_extra_features(analysis, frequency, ruby)
     return {'words': rows[:words_per_book], 'uniqueWords': unique_words, 'tokens': total,
-            'features': [features[name] for name in FEATURE_ORDER] + [extra[name] for name in EXTRA_FEATURES],
-            'words95': words_for_coverage(extra) if extra['CoverageRank95'] == extra['CoverageRank95'] else None,
             'characters': len(TOKEN_CLEAN.sub('', text)), 'uniqueKanji': len({c for c in text if is_kanji(c)})}
 
 

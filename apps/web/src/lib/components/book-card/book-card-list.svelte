@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
   import CoverCard from '$lib/components/book-card/cover-card.svelte';
+  import { levelTier } from '$lib/data/difficulty';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher } from 'svelte';
 
@@ -21,12 +22,12 @@
     };
   }>();
 
-  /** Author (Calibre's placeholder author is noise) and difficulty or kind */
+  /** Author (Calibre's placeholder author is noise) and the 1-10 level or kind */
   function meta(book: BookCardProps, t: typeof $t$) {
     return [
       book.authors !== 'Unknown' ? book.authors : '',
       book.difficulty !== undefined
-        ? book.difficulty.toFixed(1)
+        ? `${book.difficulty.toFixed(1)} ${levelTier(book.difficulty)}`
         : book.manga
           ? t('library.manga')
           : book.vn

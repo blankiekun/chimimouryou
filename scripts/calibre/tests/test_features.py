@@ -1,7 +1,6 @@
 """Tests for the parts of jiten/features.py that don't need Sudachi. Run from the repo root:
 python3 -m unittest discover -s scripts/calibre/tests
 """
-import math
 import os
 import sys
 import tempfile
@@ -9,22 +8,12 @@ import unittest
 import zipfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'jiten'))
-from features import (EXTRA_FEATURES, Analysis, Word, _coverage_rank, _origin, aozora_text,  # noqa: E402
-                      compute_extra_features, compute_features, to_hiragana, vn_text)
+from features import _origin, aozora_text, to_hiragana, vn_text  # noqa: E402
 
 try:
     import sudachipy  # noqa: F401  (only in the difficulty image)
 except ImportError:
     sudachipy = None
-
-class Frequency:
-    def __init__(self, ranks):
-        self.ranks = ranks
-
-    def word(self, key, reading=None):
-        rank = self.ranks.get(key.split('\t')[0])
-        return (rank, 1 / rank) if rank else None
-
 
 class VnTextTest(unittest.TestCase):
     def test_vn_script_in_folder_and_zip(self):
@@ -63,9 +52,8 @@ def reader(analyzer, known):
 
 @unittest.skipUnless(sudachipy, 'needs Sudachi (difficulty image)')
 class RubyReadingAnalysisTest(unittest.TestCase):
-    def test_ruby_sets_the_occurrence_reading_but_not_the_features(self):
+    def test_ruby_sets_the_occurrence_reading_but_not_the_words(self):
         from features import Analyzer
-        from frequency import FrequencyTable
         hints = []
         text = aozora_text('夜の公園は｜人気《ひとけ》がない。\nこの店は人気だ。宇宙《そら》を見る。本気《マジ》だ。\n', None, hints)
         known = {('人気', 'ひとけ'), ('人気', 'にんき'), ('宇宙', 'うちゅう')}
@@ -76,9 +64,6 @@ class RubyReadingAnalysisTest(unittest.TestCase):
         self.assertEqual(readings['宇宙'], {'うちゅう': 1})
         self.assertEqual(readings['本気'], {'ほんき': 1})
         self.assertEqual(hinted.words, plain.words)
-        frequency = FrequencyTable({'人気': 1500, '公園': 2000, '宇宙': 3000, '本気': 4000}, {('人気', 'ひとけ'): 40000})
-        self.assertEqual(compute_features(hinted, frequency), compute_features(plain, frequency))
-        self.assertEqual(compute_extra_features(hinted, frequency), compute_extra_features(plain, frequency))
 
     def test_words_met_only_conjugated_get_the_forms_reading(self):
         from features import Analyzer
@@ -114,9 +99,8 @@ class RubyReadingAnalysisTest(unittest.TestCase):
         self.assertEqual(ruled.words, plain.words)
         self.assertEqual(dict(plain.readings[next(k for k in plain.readings if k[1] == '人気')]), {'にんき': 3})
 
-    def test_counters_and_the_readers_rules_but_not_the_features(self):
+    def test_counters_and_the_readers_rules(self):
         from features import Analyzer
-        from frequency import FrequencyTable
         text = '鉛筆を三本買った。\nもう一回本を読む。\n私は行く。\n'
         known = {('鉛筆', 'えんぴつ'), ('本', 'ほん'), ('本', 'もと'), ('買う', 'かう'), ('読む', 'よむ'),
                  ('一回', 'いっかい'), ('一回', 'いちかい'), ('私', 'わたし'), ('私', 'わたくし'), ('行く', 'いく'),
@@ -133,9 +117,6 @@ class RubyReadingAnalysisTest(unittest.TestCase):
         self.assertEqual(dict(plain.readings['一回\tnoun', '一回']), {'いちかい': 1})
         self.assertEqual(read.words, plain.words)
         self.assertIsNone(analyzer._text)  # the book's tokens aren't kept
-        frequency = FrequencyTable({'本': 100, '鉛筆': 3000, '一回': 500}, {('一回', 'いっかい'): 500})
-        self.assertEqual(compute_features(read, frequency), compute_features(plain, frequency))
-        self.assertEqual(compute_extra_features(read, frequency), compute_extra_features(plain, frequency))
 
 
 class FeatureTest(unittest.TestCase):
@@ -146,30 +127,8 @@ class FeatureTest(unittest.TestCase):
         self.assertEqual(_origin('テレビ', 'noun'), 'gairaigo')
         self.assertEqual(_origin('東京', 'name'), 'unknown')
 
-    def test_coverage_rank(self):
-        ranked = [(1, 50), (10, 40), (5000, 8), (90000, 2)]
-        self.assertEqual(_coverage_rank(ranked, 0.90), 10)
-        self.assertEqual(_coverage_rank(ranked, 0.95), 5000)
-        self.assertEqual(_coverage_rank(ranked, 0.99), 90000)
-        self.assertTrue(math.isnan(_coverage_rank([], 0.95)))
-
     def test_to_hiragana(self):
         self.assertEqual(to_hiragana('コト'), 'こと')
-
-    def test_extra_features(self):
-        words = {('の\tparticle', 'の'): [Word('の\tparticle', 'の', 'particle', 'wago', (), 'の'), 95],
-                 ('魔法\tnoun', '魔法'): [Word('魔法\tnoun', '魔法', 'noun', 'kango', (), '魔法'), 5]}
-        analysis = Analysis(text='魔法の本を読んだ。\n鬱だ', words=words, word_count=100, line_sentence_count=2,
-                            predicates=3, relative_clauses=1, mattr=0.5)
-        extra = compute_extra_features(analysis, Frequency({'の': 1, '魔法': 2000}), {'ruby': 1, 'kanji': 1, 'katakana': 1})
-        self.assertEqual(list(extra), EXTRA_FEATURES)
-        self.assertAlmostEqual(extra['CoverageRank95'], math.log(1))
-        self.assertAlmostEqual(extra['CoverageRank98'], math.log(2000))
-        self.assertEqual(extra['PredicatesPerSentence'], 1.5)
-        self.assertEqual(extra['RelativeClausesPerSentence'], 0.5)
-        self.assertAlmostEqual(extra['NonJoyoKanjiShare'], 0)  # 鬱 became 常用 in 2010
-        self.assertAlmostEqual(extra['RubyKanjiShare'], 1 / 5)  # 魔法本読鬱
-        self.assertEqual(extra['RubyKatakanaShare'], 1)
 
 
 if __name__ == '__main__':

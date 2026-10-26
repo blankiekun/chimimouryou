@@ -23,10 +23,33 @@ import {
   type RankBook,
   type RankInput
 } from '$lib/data/reading-rank';
+import { difficultyScale } from '$lib/data/difficulty-core';
+import { coreScore, type CoreNumbers } from '$lib/functions/analysis/core';
 
-const shape = { characters: 120_000, uniqueKanji: 1600, uniqueWords: 5000, tokens: 28_000 };
-const book = (difficulty: number, extra: Partial<RankBook> = {}): RankBook => ({
-  estimate: { ...shape, difficulty },
+const core = (types: number, tokens: number, v98: number | null = 40_000): CoreNumbers => ({
+  v: 1,
+  tokens,
+  types,
+  names: 0,
+  v98,
+  hist: [],
+  histTypes: []
+});
+const shape = { characters: 120_000, uniqueKanji: 1600, core: core(5000, 33_000) };
+/** The smallest V98 at this 1-10 level or above */
+function v98At(level: number) {
+  let [low, high] = [1, 1_000_000];
+
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+
+    if (coreScore(mid, difficultyScale) >= level) high = mid;
+    else low = mid + 1;
+  }
+  return low;
+}
+const book = (level: number, extra: Partial<RankBook> = {}): RankBook => ({
+  estimate: { ...shape, core: { ...shape.core, v98: v98At(level) } },
   fraction: 1,
   seconds: 4 * 3600,
   coverage: 0.96,
@@ -62,8 +85,8 @@ describe('eligibleTier', () => {
   });
 
   it('needs 95% coverage of the hard book', () => {
-    expect(eligibleTier(enough(4, [book(3.0, { coverage: 0.949 })]))).toBe(1);
-    expect(eligibleTier(enough(4, [book(3.0, { coverage: 0.95 })]))).toBe(4);
+    expect(eligibleTier(enough(4, [book(5.6, { coverage: 0.949 })]))).toBe(1);
+    expect(eligibleTier(enough(4, [book(5.6, { coverage: 0.95 })]))).toBe(4);
   });
 
   it('does not rise from easy reading, however much', () => {
@@ -74,10 +97,10 @@ describe('eligibleTier', () => {
   });
 
   it('counts only finished, plausibly read, real books', () => {
-    expect(eligibleTier(enough(4, [book(3.0, { fraction: 0.96 })]))).toBe(1);
+    expect(eligibleTier(enough(4, [book(5.6, { fraction: 0.96 })]))).toBe(1);
     // 120k characters at 1,000 a minute is two hours.
-    expect(eligibleTier(enough(4, [book(3.0, { seconds: 7100 })]))).toBe(1);
-    expect(eligibleTier(enough(4, [book(3.0, { seconds: 7200 })]))).toBe(4);
+    expect(eligibleTier(enough(4, [book(5.6, { seconds: 7100 })]))).toBe(1);
+    expect(eligibleTier(enough(4, [book(5.6, { seconds: 7200 })]))).toBe(4);
   });
 
   it('takes the canonical engine check', () => {
@@ -89,20 +112,27 @@ describe('eligibleTier', () => {
 describe('realBook', () => {
   it('accepts real books, long ones too', () => {
     expect(realBook(shape)).toBe(true);
-    expect(
-      realBook({ characters: 827_000, uniqueWords: 20_000, tokens: 229_000, uniqueKanji: 2600 })
-    ).toBe(true);
+    expect(realBook({ characters: 827_000, uniqueKanji: 2600, core: core(20_000, 229_000) })).toBe(
+      true
+    );
   });
 
   it('rejects short, small, repetitive or odd-kanji texts and older estimates', () => {
     expect(realBook({ ...shape, characters: 49_999 })).toBe(false);
-    expect(realBook({ ...shape, uniqueWords: 3000 })).toBe(false);
-    expect(realBook({ ...shape, uniqueWords: 9000 })).toBe(false);
-    expect(realBook({ ...shape, tokens: 37_000 })).toBe(false);
-    expect(realBook({ ...shape, tokens: 25_000 })).toBe(false);
+    expect(realBook({ ...shape, core: core(2500, 33_000) })).toBe(false);
+    expect(realBook({ ...shape, core: core(9000, 33_000) })).toBe(false);
+    expect(realBook({ ...shape, core: core(5000, 37_500) })).toBe(false);
+    expect(realBook({ ...shape, core: core(5000, 28_000) })).toBe(false);
     expect(realBook({ ...shape, uniqueKanji: 2200 })).toBe(false);
     expect(realBook({ ...shape, uniqueKanji: 900 })).toBe(false);
     expect(realBook({ characters: 120_000, uniqueKanji: 1600 })).toBe(false);
+    // The thresholds are 1-10 levels; a book beyond the frequency list is the top.
+    expect(eligibleTier(enough(7, [book(9.2)]))).toBe(7);
+    expect(
+      eligibleTier(
+        enough(7, [{ ...book(1), estimate: { ...shape, core: core(5000, 33_000, null) } }])
+      )
+    ).toBe(7);
   });
 });
 
@@ -185,7 +215,7 @@ describe('advanceRank', () => {
 describe('readingRank', () => {
   it('gives the next tier with progress and the light novels', () => {
     const rank = readingRank(
-      { characters: 1_234_567, days: 50, wordsKnown: 7000, books: [book(3.1)] },
+      { characters: 1_234_567, days: 50, wordsKnown: 7000, books: [book(6)] },
       { tier: 3, at: 0 },
       riseGap
     );
