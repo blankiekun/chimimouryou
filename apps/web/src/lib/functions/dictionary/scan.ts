@@ -12,8 +12,12 @@
  */
 
 import { DOMTextScanner } from '$lib/vendor/yomitan/dom/dom-text-scanner';
-import { getRangeFromPoint } from '$lib/vendor/yomitan/dom/text-source-generator';
-import type { ScanningInput, ScanningOptions } from '$lib/vendor/yomitan/types/settings';
+import { extractSentence, getRangeFromPoint } from '$lib/vendor/yomitan/dom/text-source-generator';
+import type {
+  ScanningInput,
+  ScanningOptions,
+  SentenceParsingOptions
+} from '$lib/vendor/yomitan/types/settings';
 
 export interface ScannedText {
   /** Where the text starts (a ruby's start when the point is on ruby) */
@@ -49,6 +53,46 @@ export function scannedRange(scan: ScannedText, length: number, layoutAware: boo
   else range.setStart(scan.node, scan.offset);
   range.setEnd(end.node, end.offset);
   return range;
+}
+
+/**
+ * The sentence around a match of `length` characters, for Anki's {sentence}: Yomitan's sentence
+ * parsing options turned into its maps (TextScanner.setOptions), then its extractSentence.
+ */
+export function scannedSentence(
+  scan: ScannedText,
+  length: number,
+  layoutAware: boolean,
+  { scanExtent, terminationCharacterMode, terminationCharacters }: SentenceParsingOptions
+) {
+  const terminators = new Map<string, [boolean, boolean]>();
+  const forwardQuotes = new Map<string, [string, boolean]>();
+  const backwardQuotes = new Map<string, [string, boolean]>();
+  if (terminationCharacterMode === 'custom' || terminationCharacterMode === 'custom-no-newlines') {
+    for (const { enabled, character1, character2, ...include } of terminationCharacters) {
+      if (!enabled) continue;
+      if (character2 === null) {
+        terminators.set(character1, [
+          include.includeCharacterAtStart,
+          include.includeCharacterAtEnd
+        ]);
+      } else {
+        forwardQuotes.set(character1, [character2, include.includeCharacterAtStart]);
+        backwardQuotes.set(character2, [character1, include.includeCharacterAtEnd]);
+      }
+    }
+  }
+  return extractSentence(
+    scan.node,
+    scan.offset,
+    length,
+    layoutAware,
+    scanExtent,
+    terminationCharacterMode === 'custom' || terminationCharacterMode === 'newlines',
+    terminators,
+    forwardQuotes,
+    backwardQuotes
+  );
 }
 
 const inputArray = (value: string) =>

@@ -34,6 +34,7 @@ import {
   ttsPlaybackRate$,
   ttsVoiceId$
 } from '$lib/data/ai-settings';
+import { dictionaryAnki$ } from '$lib/data/anki-dictionary';
 import { mergeConnectionKeys, mergeConnections } from '$lib/data/ai-connections';
 import {
   homeBookTitles$,
@@ -147,7 +148,9 @@ const sharedSettings: Record<string, Store> = {
   ttsPlaybackRate: ttsPlaybackRate$,
   // Discord status: the activity templates (merged per activity) and its switches.
   discordActivities: discordActivities$,
-  discordOptions: discordOptions$
+  discordOptions: discordOptions$,
+  // The popup's Add to Anki card format (deck, note type, fields); how notes go is per browser.
+  dictionaryAnki: dictionaryAnki$
 };
 
 /**

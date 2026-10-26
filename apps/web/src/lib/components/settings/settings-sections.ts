@@ -279,6 +279,11 @@ export const settingsAreas: SettingsArea[] = [
         description: 'settings.section.anki-connect.text'
       },
       {
+        id: 'anki-dictionary',
+        label: 'settings.section.anki-dictionary',
+        description: 'settings.section.anki-dictionary.text'
+      },
+      {
         id: 'anki-media',
         label: 'settings.section.anki-media',
         description: 'settings.section.anki-media.text'
