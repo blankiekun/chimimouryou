@@ -209,7 +209,7 @@ let statsCache: { at: number; value: Promise<ReadingStats | undefined> } | undef
 let wordsCache: { at: number; value: Promise<number | undefined> } | undefined;
 let catalogCache: Promise<Map<string, { author: string; series: string }>> | undefined;
 let difficultyCache: Promise<Record<string, { difficulty: number }>> | undefined;
-let coverCache: Promise<Record<string, { cover: string }>> | undefined;
+let coverCache: { saves: number; value: Promise<Record<string, { cover: string }>> } | undefined;
 
 async function loadStats(): Promise<ReadingStats | undefined> {
   const [{ database, startDayHoursForTracker$ }, { getDateKey }, { learnerStats }] =
@@ -235,6 +235,17 @@ async function loadStats(): Promise<ReadingStats | undefined> {
 const fresh = <T>(cache: { at: number; value: T } | undefined, age: number) =>
   cache && Date.now() - cache.at < age ? cache : undefined;
 
+async function catalogBook(title: string) {
+  catalogCache ??= import('$lib/data/calibre')
+    .then(({ loadCalibreCatalog }) => loadCalibreCatalog())
+    .then(
+      (books) =>
+        new Map(books.map((book) => [book.title, { author: book.authors, series: book.series }]))
+    )
+    .catch(() => new Map());
+  return (await catalogCache).get(title);
+}
+
 async function extrasFor(title: string, used: Set<VariableName>): Promise<ValueExtras> {
   const extras: ValueExtras = {};
   const needs = (...names: VariableName[]) => names.some((name) => used.has(name));
@@ -257,14 +268,7 @@ async function extrasFor(title: string, used: Set<VariableName>): Promise<ValueE
     extras.wordsKnown = await wordsCache.value;
   }
   if (title && needs('author', 'series')) {
-    catalogCache ??= import('$lib/data/calibre')
-      .then(({ loadCalibreCatalog }) => loadCalibreCatalog())
-      .then(
-        (books) =>
-          new Map(books.map((book) => [book.title, { author: book.authors, series: book.series }]))
-      )
-      .catch(() => new Map());
-    const book = (await catalogCache).get(title);
+    const book = await catalogBook(title);
     const { guessSeriesName } = await import('$lib/data/series-overrides');
 
     extras.author = book?.author;
@@ -279,12 +283,35 @@ async function extrasFor(title: string, used: Set<VariableName>): Promise<ValueE
   return extras;
 }
 
-/** A public https cover: the one Find details saved (AniList, VNDB, Jiten), else none */
+/**
+ * A public https cover: the one Find details saved (AniList, VNDB, Jiten), else one this browser
+ * matched (discord-covers.ts), else none. Reloaded after any save of Find details.
+ */
 async function coverFor(title: string) {
-  coverCache ??= import('$lib/data/book-metadata')
-    .then(({ loadBookMetadata }) => loadBookMetadata())
-    .catch(() => ({}));
-  return (await coverCache)[title]?.cover || undefined;
+  const metadata = await import('$lib/data/book-metadata');
+
+  if (coverCache?.saves !== metadata.metadataSaves) {
+    coverCache = {
+      saves: metadata.metadataSaves,
+      value: metadata.loadBookMetadata().catch(() => ({}))
+    };
+  }
+
+  const saved = await coverCache.value;
+  const { localCover } = await import('$lib/data/discord-covers');
+
+  return saved[title]?.cover || localCover(title);
+}
+
+/** No cover yet: search for one in the background; the next update shows it. */
+async function discoverCover(activity: ReadingActivity) {
+  const { kind, title } = activity;
+  const { canSearch, findCover } = await import('$lib/data/discord-covers');
+
+  if (kind === 'idle' || !title || !canSearch(title)) return;
+  const series = (await catalogBook(title))?.series;
+
+  if (allowed()) findCover(title, kind, series);
 }
 
 const isPrivate = async (activity: ReadingActivity) => {
@@ -312,6 +339,10 @@ export async function renderActivity(
   ]);
   const filled = readingValues(activity, extras, times);
 
+  // Only while sending is allowed, and never for a private book: the title would leave the browser.
+  if (template.show && template.largeImage === 'cover' && title && !cover && !hidden && allowed()) {
+    discoverCover(activity);
+  }
   discordValues$.next({ kind: activity.kind, values: filled.values, cover });
   return {
     template,

@@ -36,7 +36,10 @@ export interface BookMetadata {
   modified: number;
 }
 
-export type MetadataCandidate = Omit<BookMetadata, 'modified'>;
+export type MetadataCandidate = Omit<BookMetadata, 'modified'> & {
+  /** Every title the source knows it by (search results only, never saved) */
+  names?: string[];
+};
 
 export type BookMetadataMap = Record<string, BookMetadata>;
 
@@ -47,6 +50,8 @@ const coverPrefixes = ['https://s4.anilist.co/', 'https://t.vndb.org/', 'https:/
 const maxDescription = 5000;
 
 let cache: Promise<BookMetadataMap> | undefined;
+/** Counts saves, so other caches of the map (the Discord sender's) know to reload */
+export let metadataSaves = 0;
 
 const text = (value: unknown, max: number) =>
   typeof value === 'string' ? value.slice(0, max) : '';
@@ -125,7 +130,9 @@ export async function saveBookMetadata(title: string, entry: MetadataCandidate |
   const map = { ...(await fetchBookMetadata()) };
 
   if (entry) {
-    map[title] = { ...entry, modified: Date.now() };
+    const { names: _names, ...saved } = entry;
+
+    map[title] = { ...saved, modified: Date.now() };
   } else {
     delete map[title];
   }
@@ -141,6 +148,7 @@ export async function saveBookMetadata(title: string, entry: MetadataCandidate |
   }
 
   cache = Promise.resolve(map);
+  metadataSaves += 1;
 
   return map;
 }
@@ -196,7 +204,8 @@ const aniListQuery = `query ($search: String, $formats: [MediaFormat]) {
   Page(perPage: 8) {
     media(search: $search, type: MANGA, format_in: $formats) {
       siteUrl
-      title { native romaji }
+      title { native romaji english }
+      synonyms
       description(asHtml: false)
       coverImage { extraLarge }
       genres
@@ -216,6 +225,12 @@ async function searchAniList(query: string, kind: 'book' | 'manga'): Promise<Met
     source: 'anilist',
     url: media.siteUrl,
     title: media.title?.native || media.title?.romaji || '',
+    names: [
+      media.title?.native,
+      media.title?.romaji,
+      media.title?.english,
+      ...(media.synonyms ?? [])
+    ].filter(Boolean),
     description: cleanDescription(media.description || ''),
     cover: media.coverImage?.extraLarge || '',
     genres: media.genres ?? [],
@@ -231,7 +246,7 @@ async function searchVndb(query: string): Promise<MetadataCandidate[]> {
   const { results } = await postJson('https://api.vndb.org/kana/vn', {
     filters: ['search', '=', query],
     fields:
-      'title,alttitle,description,image.url,released,rating,tags.name,tags.rating,tags.spoiler',
+      'title,alttitle,titles.title,aliases,description,image.url,released,rating,tags.name,tags.rating,tags.spoiler',
     sort: 'searchrank',
     results: 8
   });
@@ -240,6 +255,12 @@ async function searchVndb(query: string): Promise<MetadataCandidate[]> {
     source: 'vndb',
     url: `https://vndb.org/${vn.id}`,
     title: vn.alttitle || vn.title || '',
+    names: [
+      vn.title,
+      vn.alttitle,
+      ...(vn.titles ?? []).map((entry: any) => entry.title),
+      ...(vn.aliases ?? [])
+    ].filter(Boolean),
     description: cleanDescription(vn.description || ''),
     cover: vn.image?.url || '',
     genres: (vn.tags ?? [])

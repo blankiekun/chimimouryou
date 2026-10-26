@@ -1883,7 +1883,7 @@ export const ja: Record<MessageKey, string> = {
   'discord.images': '画像',
   'discord.largeImage': '大きい画像',
   'discord.coverHint':
-    'Discord には公開された https の表紙が必要です（「詳細を探す」で保存した AniList、VNDB、Jiten のもの）。ない本はアプリのロゴになります。',
+    'Discord には公開された https の表紙が必要です（「詳細を探す」で保存した AniList、VNDB、Jiten のもの）。ない本はシリーズ名かタイトルで AniList（ビジュアルノベルは VNDB）を検索し（非表示の本と「タイトルを隠す」のときは検索しません）、完全に一致したものを詳細として保存します。それまでと一致がないときはアプリのロゴになります。',
   'discord.customImage': '画像キーか https://… のアドレス',
   'discord.hoverText': 'ホバー時のテキスト',
   'discord.smallImage': '小さい画像',

@@ -92,6 +92,10 @@ set it up:
   status as it would appear in Discord, so an Anki add-on you paired can show it, and with
   **Show on my profile** also on, your friends see it on your profile. It is removed when you
   stop reading, or after your Away time (5 to 30 minutes, 10 by default) without an update.
+- With **Book cover** as the large image, a book without saved details is looked up by its
+  series or title on AniList (VNDB for visual novels), from your browser, to find its cover; an
+  exact match is saved as the book's details. Books hidden from friends and **Hide titles** are
+  never looked up, and nothing is searched while the plugin or **Show my status** is off.
 
 What Discord shows and stores is covered by
 [Discord's privacy policy](https://discord.com/privacy).
@@ -106,8 +110,8 @@ policy applies:
 - AI providers whose API key you enter (such as OpenRouter, OpenAI, Anthropic, Google, Groq,
   Mistral) and ElevenLabs for speech, which receive the text you send them;
 - Audiobookshelf, through your own server;
-- AniList and VNDB, to look up a book's details, match it to a Community work or mention a
-  work;
+- AniList and VNDB, to look up a book's details or its Discord status cover, match it to a
+  Community work or mention a work;
 - dictionary audio sources such as JapanesePod101;
 - Google Drive and OneDrive sync.
 

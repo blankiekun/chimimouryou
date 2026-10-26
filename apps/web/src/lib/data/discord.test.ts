@@ -141,6 +141,68 @@ describe('discord sender', () => {
   });
 });
 
+describe('discord automatic covers', () => {
+  const searches = () =>
+    fetchMock.mock.calls.filter(([url]) => /anilist|vndb/.test(String(url))).length;
+  const read = async (title: string) => {
+    discordActivity({ kind: 'book', title, position: 1, characters: 100 });
+    await settle();
+  };
+
+  beforeEach(async () => {
+    await import('$lib/data/social');
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockImplementation(async () => new Response(null, { status: 404 }));
+    resetSender();
+    discordOptions$.next({ hideTitles: false });
+    discordActivities$.next({
+      book: { name: 'Reading {title}', details: '', state: '', largeImage: 'cover' }
+    });
+    enabledPlugins$.next(['discord']);
+  });
+
+  afterEach(async () => {
+    enabledPlugins$.next([]);
+    resetSender();
+    vi.unstubAllGlobals();
+    fetchMock.mockReset();
+    window.localStorage.clear();
+    (await import('$lib/data/social')).hiddenBooks$.next([]);
+  });
+
+  it('searches for a book without details, and remembers the miss', async () => {
+    await read('Ｒｅ：ゼロから始める異世界生活 1');
+    await vi.waitFor(() => expect(searches()).toBe(1));
+    await settle();
+    discordActivity({ kind: 'book', title: 'Ｒｅ：ゼロから始める異世界生活 1', position: 2 });
+    await settle();
+    await settle();
+    expect(searches()).toBe(1);
+  });
+
+  it('never searches with a logo, Hide titles, a hidden book or the plugin off', async () => {
+    const { bookKey, hiddenBooks$ } = await import('$lib/data/social');
+
+    discordActivities$.next({
+      book: { name: 'Reading {title}', details: '', state: '', largeImage: 'logo' }
+    });
+    await read('A');
+    resetSender(); // the open book would be searched when the template changes
+    discordActivities$.next({
+      book: { name: 'Reading {title}', details: '', state: '', largeImage: 'cover' }
+    });
+    discordOptions$.next({ hideTitles: true });
+    await read('B');
+    resetSender();
+    discordOptions$.next({ hideTitles: false });
+    hiddenBooks$.next([bookKey('C')]);
+    await read('C');
+    enabledPlugins$.next([]);
+    await read('D');
+    expect(searches()).toBe(0);
+  });
+});
+
 describe('discord hub relay', () => {
   const hubCalls = () =>
     fetchMock.mock.calls

@@ -12,6 +12,7 @@ import {
   checkField,
   clampText,
   renderTemplate,
+  halfWidth,
   suggestVariable,
   unknownVariables,
   type DiscordActivityTemplate
@@ -68,6 +69,13 @@ describe('renderTemplate', () => {
     );
     expect(renderTemplate('{title} ({volume})', { title: 'A' })).toBe('A');
     expect(renderTemplate('{title}', {})).toBe('');
+  });
+
+  it('turns full-width English half-width, keeping Japanese punctuation', () => {
+    expect(renderTemplate('{title}', { title: 'Ｒｅ：ゼロ「１２」・本、。' })).toBe(
+      'Re:ゼロ「12」・本、。'
+    );
+    expect(halfWidth('ＡＢＣ！～　')).toBe('ABC!~　');
   });
 
   it('keeps unknown names as typed and reports them', () => {

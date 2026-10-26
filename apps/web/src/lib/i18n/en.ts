@@ -1873,7 +1873,7 @@ export const en = {
   'discord.images': 'Images',
   'discord.largeImage': 'Large image',
   'discord.coverHint':
-    'Discord needs a public https cover: the one Find details saved (AniList, VNDB, Jiten). Books without one show the app logo.',
+    'Discord needs a public https cover: the one Find details saved (AniList, VNDB, Jiten). Books without one are looked up by series or title on AniList (VNDB for visual novels), never hidden books or with Hide titles; an exact match is saved as their details. Until then, and without a match, the app logo shows.',
   'discord.customImage': 'Image key or https://… address',
   'discord.hoverText': 'Hover text',
   'discord.smallImage': 'Small image',

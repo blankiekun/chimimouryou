@@ -158,13 +158,17 @@ export function suggestVariable(name: string) {
   return best.score <= Math.max(2, Math.floor(name.length / 3)) ? best.variable : undefined;
 }
 
+/** Full-width ASCII (Ｒｅ：１２) as half-width (Re:12); Japanese punctuation and spaces stay */
+export const halfWidth = (text: string) =>
+  text.replace(/[\uFF01-\uFF5E]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0));
+
 /**
- * The template with its variables filled in. An empty value is left out with the separator
- * before it (or after it, at the start), so "{title} · {author}" without an author is "{title}".
- * Unknown {names} stay as typed (`unknownVariables` reports them).
+ * The template with its variables filled in, full-width English as half-width. An empty value is
+ * left out with the separator before it (or after it, at the start), so "{title} · {author}"
+ * without an author is "{title}". Unknown {names} stay as typed (`unknownVariables` reports them).
  */
 export function renderTemplate(template: string, values: DiscordValues) {
-  return template
+  const filled = template
     .replace(variablePattern, (match, name: string) =>
       isVariable(name) ? values[name]?.replace(/\s+/g, ' ').trim() || empty : match
     )
@@ -172,6 +176,8 @@ export function renderTemplate(template: string, values: DiscordValues) {
     .replace(/[(（[]\s*[)）\]]/g, '')
     .replace(/\s+/g, ' ')
     .replace(edges, '');
+
+  return halfWidth(filled);
 }
 
 export const isHttps = (url: string) => /^https:\/\/[^\s/?#]+\.[^\s]*$/i.test(url);
