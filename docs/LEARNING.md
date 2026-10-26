@@ -241,7 +241,6 @@ chimimouryou opens EPUB, HTMLZ and TXT books, and CBZ/ZIP manga, without DRM.
 - **Aozora Bunko** ([aozora.gr.jp](https://www.aozora.gr.jp/)): thousands of public-domain
   works (Natsume Sōseki, Miyazawa Kenji, Niimi Nankichi and many more), with the authors'
   ruby. [AozoraEpub3](https://github.com/hmdev/AozoraEpub3) turns its text files into EPUBs.
-  The sample book in the empty library, 新美南吉's 手袋を買いに, comes from there.
 - **Web novels** (Shōsetsuka ni Narō, Kakuyomu): the
   [WebToEpub](https://github.com/dteviot/WebToEpub) browser extension saves a series as an EPUB.
 - **Store-bought e-books**: most Japanese stores sell books with DRM, which this reader can't

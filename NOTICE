@@ -45,11 +45,6 @@ Electronic Dictionary Research and Development Group, licensed under CC BY-SA
 jmdict-yomitan (https://github.com/yomidevs/jmdict-yomitan), redistributed
 unmodified.
 
-apps/web/static/sample/tebukuro-wo-kai-ni.epub is 手袋を買いに by 新美南吉
-(public domain), from Aozora Bunko
-(https://www.aozora.gr.jp/cards/000121/card637.html), repacked as an EPUB with
-its colophon.
-
 The visual novel player (apps/web/static/vn/conscripter.js and conscripter.wasm) is
 CONscripter (https://github.com/blankiekun/CONscripter), a fork of
 ONScripter-yuri (https://github.com/YuriSizuku/OnscripterYuri), based on

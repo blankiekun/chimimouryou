@@ -2565,8 +2565,6 @@ export const ja: Record<MessageKey, string> = {
   'analysisOffer.failed': 'ダウンロードに失敗しました: {error}',
   'analysisOffer.notNow': '後で',
   'analysisOffer.hide': '閉じる',
-  'library.trySample': 'サンプルの本を試す',
-  'library.sampleFailed': 'サンプルの本を読み込めませんでした。',
   'library.whereToGetBooks': '日本語の本の入手先',
   'migrate.title': 'ッツ Reader から移行しますか?',
   'migrate.export': 'ッツ Reader で本の管理画面を開き、本を選んで「Export → Zip File」を選びます。',

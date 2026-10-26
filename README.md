@@ -8,8 +8,8 @@ are upstream's.
 
 ## Try it in your browser
 
-Open **[chimireader.github.io](https://chimireader.github.io)** and add an EPUB,
-or try the sample book in the empty library. Nothing to install and no account:
+Open **[chimireader.github.io](https://chimireader.github.io)** and add an EPUB.
+Nothing to install and no account:
 books stay in your browser, or sync through your Google Drive or a folder.
 Settings → Dictionary installs JMdict in one tap, and desktop browsers can
 download the furigana and difficulty tools. Coming from ッツ Reader? Export a
@@ -312,5 +312,5 @@ variants from [kanji-processor](https://www.npmjs.com/package/kanji-processor) (
 one-tap dictionary is [JMdict](https://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project)
 by the Electronic Dictionary Research and Development Group (CC BY-SA 4.0), packed for Yomitan
 by [jmdict-yomitan](https://github.com/yomidevs/jmdict-yomitan) and downloaded when the site is
-built (it isn't in the repository). The sample book, 新美南吉's 手袋を買いに, is public domain,
-from Aozora Bunko. chimimouryou is not affiliated with or endorsed by any of these projects.
+built (it isn't in the repository).
+chimimouryou is not affiliated with or endorsed by any of these projects.

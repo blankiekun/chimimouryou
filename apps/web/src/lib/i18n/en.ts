@@ -2555,8 +2555,6 @@ export const en = {
   'analysisOffer.failed': 'The download failed: {error}',
   'analysisOffer.notNow': 'Not now',
   'analysisOffer.hide': 'Hide',
-  'library.trySample': 'Try a sample book',
-  'library.sampleFailed': "The sample book couldn't be loaded.",
   'library.whereToGetBooks': 'Where to get Japanese books',
   'migrate.title': 'Coming from ッツ Reader?',
   'migrate.export':
