@@ -1937,7 +1937,7 @@ export const ja: Record<MessageKey, string> = {
   'discord.setup1':
     'このパソコンの Anki に chimimouryou Discord アドオンを入れて、Anki を再起動します。',
   'discord.setupReadme': 'アドオンの入れ方',
-  'discord.ankiWebComing': 'AnkiWeb のコードは準備中',
+  'discord.ankiWebCode': 'AnkiWeb のコード {code}',
   'discord.setupOrigin':
     'アドオンは知っているサイトにだけ応答します。このアドレスを extraOrigins に加えて（Anki → ツール → アドオン → 設定）、Anki を再起動してください。',
   'discord.siteAddress': 'このサイトのアドレス',

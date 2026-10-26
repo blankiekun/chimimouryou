@@ -10,7 +10,10 @@ Pure Python, standard library only (Anki's own Python is enough).
 
 ## Install
 
-Until it is on AnkiWeb: build the package and open it with Anki.
+From AnkiWeb: Anki → Tools → Add-ons → Get Add-ons…, code **25885905**
+([AnkiWeb page](https://ankiweb.net/shared/info/25885905)), then restart Anki.
+
+Or build the package yourself and open it with Anki:
 
 ```sh
 python3 apps/anki-discord/build.py   # writes apps/anki-discord/chimimouryou-discord.ankiaddon

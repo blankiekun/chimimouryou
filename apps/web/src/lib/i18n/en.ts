@@ -1926,7 +1926,7 @@ export const en = {
   'discord.setup1':
     'Install the chimimouryou Discord add-on in Anki on this computer, then restart Anki.',
   'discord.setupReadme': 'How to install the add-on',
-  'discord.ankiWebComing': 'AnkiWeb code coming',
+  'discord.ankiWebCode': 'AnkiWeb code {code}',
   'discord.setupOrigin':
     'The add-on only answers sites it knows: add this address to its extraOrigins (Anki → Tools → Add-ons → Config), then restart Anki.',
   'discord.siteAddress': 'This site’s address',
