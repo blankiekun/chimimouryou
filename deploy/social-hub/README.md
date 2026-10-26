@@ -48,6 +48,8 @@ idempotent), in order, then `npx wrangler@4.147.0 deploy`:
 - `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file migrations/0009_presence.sql`
   (Discord status relay: `presence`, `presence_keys`, `presence_codes`, `users.presence_profile`; apply
   before deploying; a second run only fails with "duplicate column name")
+- `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file migrations/0010_covers_book_key.sql`
+  (index for `GET cover?key=`, the Discord status's cover lookup; safe to run again)
 - Push to the add-on (`PresenceStream`, a Durable Object): nothing to run by hand. `wrangler.toml`
   binds it as `PRESENCE` with the migration `v1` (`new_sqlite_classes`, the free plan's only kind),
   which the next `npm run deploy` applies once. It stores nothing. Each deploy closes every push

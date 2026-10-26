@@ -130,6 +130,8 @@ CREATE TABLE IF NOT EXISTS covers (
   PRIMARY KEY (user, book_key)
 );
 CREATE INDEX IF NOT EXISTS covers_file ON covers (file);
+-- GET /v1/cover?key= (the Discord status) looks covers up by book alone.
+CREATE INDEX IF NOT EXISTS covers_book_key ON covers (book_key);
 -- Signaling only, the book goes browser to browser over WebRTC.
 -- pending (sender asked) -> accepted (the receiver's SDP offer) -> answered (the sender's answer),
 -- or declined. Deleted by the sender once connected, else after 10 minutes (TRANSFER_TTL, cron).
