@@ -657,6 +657,12 @@
                     <dd>{$t$('book.fullFuriganaFigure')}</dd>
                   </div>
                 {/if}
+                {#if facets?.withFurigana !== undefined}
+                  <div>
+                    <dt>{facets.withFurigana.toFixed(1)}</dt>
+                    <dd>{$t$('book.withFuriganaFigure')}</dd>
+                  </div>
+                {/if}
                 {#if facets}
                   <div>
                     <dt>{Math.round(facets.sentLen)}</dt>

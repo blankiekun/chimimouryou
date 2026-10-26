@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   bookCore,
   chunks,
+  coreFuriganaScore,
   coreScore,
   coreText,
   parseCoreTable,
@@ -32,6 +33,7 @@ const fixture = JSON.parse(fixtureJson) as {
     expected: unknown;
   }[];
   scores: [number | null, number][];
+  furiganaScores: [number, number, number][];
 };
 
 describe('the shared difficulty core fixture', () => {
@@ -66,6 +68,12 @@ describe('the shared difficulty core fixture', () => {
   it('scores V98 as the service does', () => {
     for (const [v98, expected] of fixture.scores) {
       expect(coreScore(v98, scale as unknown as CoreScale)).toBe(expected);
+    }
+  });
+
+  it('lowers fully ruby’d books as the service does', () => {
+    for (const [level, rubyKanji, expected] of fixture.furiganaScores) {
+      expect(coreFuriganaScore(level, rubyKanji)).toBe(expected);
     }
   });
 

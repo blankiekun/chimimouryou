@@ -440,6 +440,21 @@ export function coreScore(v98: number | null, scale: CoreScale) {
   return top;
 }
 
+/** core.py's FURIGANA_DROP and FURIGANA_RAMP (fitted there) */
+const FURIGANA_DROP = 2;
+const FURIGANA_RAMP = [0.5, 0.9] as const;
+
+/**
+ * core.py's furigana_score: the level read with the author's furigana, up to FURIGANA_DROP lower
+ * as rubyKanji goes along FURIGANA_RAMP, at least 1. Beside the level only: gates stay on it.
+ */
+export function coreFuriganaScore(level: number, rubyKanji: number) {
+  const [low, high] = FURIGANA_RAMP;
+  const ramp = Math.min(Math.max((rubyKanji - low) / (high - low), 0), 1);
+
+  return Math.max(round2(level - FURIGANA_DROP * ramp), 1);
+}
+
 const entities: Record<string, string> = {
   amp: '&',
   lt: '<',

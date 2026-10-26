@@ -16,6 +16,7 @@
  */
 
 import {
+  coreFuriganaScore,
   coreScore,
   EDGES,
   RANKED_BUCKETS,
@@ -57,9 +58,14 @@ export const fullFuriganaShare = 0.5;
  */
 export const sentenceCuts = [22.3, 25.9] as const;
 
+/** The furigana level is shown from this far below the level (a fully ruby'd book: 2) */
+const furiganaShown = 0.5;
+
 export interface BookFacets {
   rubyKanji: number;
   fullFurigana: boolean;
+  /** The level read with the author's furigana (`coreFuriganaScore`) when it is lower enough to show */
+  withFurigana?: number;
   sentLen: number;
   sentBand: SentenceBand;
 }
@@ -69,10 +75,13 @@ export function bookFacets(core: CoreNumbers | undefined): BookFacets | undefine
   if (!core?.tokens || core.rubyKanji === undefined || !core.sentLen) return undefined;
 
   const { rubyKanji, sentLen } = core;
+  const level = coreScore(core.v98, difficultyScale);
+  const withFurigana = coreFuriganaScore(level, rubyKanji);
 
   return {
     rubyKanji,
     fullFurigana: rubyKanji >= fullFuriganaShare,
+    withFurigana: level - withFurigana >= furiganaShown ? withFurigana : undefined,
     sentLen,
     sentBand: sentLen < sentenceCuts[0] ? 'short' : sentLen < sentenceCuts[1] ? 'average' : 'long'
   };
