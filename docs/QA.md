@@ -300,6 +300,7 @@ Needs a book opened in that browser. Use a Japanese EPUB from Calibre.
 | VN-8   | Chrome or Edge: Library → Import → Windows game…; choose a game folder (e.g. 信天翁航海録), keep the first program | Step 3 pre-selects the matching hook script tagged Suggested (or No script); search finds others; "Choose file…" adds your own. Add game copies with progress, and the game is under Visual novels |
 | VN-9   | Open the Windows game                                                                                              | VNBox boots and runs the program (first boot fetches the root fs); with a hook, lines arrive below the game and hover lookups, statistics and Anki (screenshot) work as in VN-1 to VN-2            |
 | VN-10  | Save in the Windows game, reload the page and reopen it                                                            | The save is there (saves stay in this browser, keyed by the game's folder)                                                                                                                         |
+| VN-11  | Open `/vn/vnbox.html?frida=https://example.com/x.js`, then `?frida=vnbox/hooks/..%2F..%2Fx.js`                     | The console shows "frida: script URL refused" both times and no script loads (only same-origin blob: or files under `/vn/`)                                                                        |
 
 ## 16. Import and covers
 

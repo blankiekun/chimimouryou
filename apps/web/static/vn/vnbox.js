@@ -68,6 +68,21 @@ async function startGame(options) {
     options.onText(line);
     keepLine(lines);
   };
+  // VNBox takes mouse events on window (capture, stopImmediatePropagation) anywhere over the game,
+  // so Yomitan never saw a mousemove over the lines. Events on the overlay's text skip the page's
+  // window mouse listeners (VNBox's, added once it runs; Yomitan's world has its own) and go
+  // overlay.js's way: hover stays with the page, the rest reaches VNBox as passToGame's copy.
+  var overlay = document.getElementById('overlay');
+  var addWindowListener = window.addEventListener;
+  window.addEventListener = function (type, listener, options) {
+    var own =
+      this === window && /^mouse/.test(type) && typeof listener === 'function'
+        ? function (event) {
+            if (!overlay.contains(event.target)) return listener.call(this, event);
+          }
+        : listener;
+    return addWindowListener.call(this, type, own, options);
+  };
   // In order: the shell uses the libraries before it, and boxedwine.js starts the shell's setup.
   var scripts = ['fsfs.js', 'lazyfs.js', 'frida-compat.js', 'boxedwine-shell.js', 'boxedwine.js'];
 

@@ -326,6 +326,9 @@
             />
             {hook ? 'Choose another file' : 'Choose file…'}
           </label>
+          <span class="wg-dim"
+            >A chosen file must be self-contained: require() only works for listed scripts.</span
+          >
         </div>
       </div>
     {/if}
