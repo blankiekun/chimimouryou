@@ -332,7 +332,14 @@
                 <a href={addonReadme} target="_blank" rel="noopener noreferrer">
                   {$t$('discord.setupReadme')}
                 </a>
-                · {$t$('discord.ankiWebComing')}
+                ·
+                <a
+                  href="https://ankiweb.net/shared/info/25885905"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {$t$('discord.ankiWebCode', { code: '25885905' })}
+                </a>
               </p>
             </div>
           </li>
