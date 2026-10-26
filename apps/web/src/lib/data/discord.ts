@@ -366,17 +366,23 @@ export async function renderActivity(
   };
 }
 
-// The add-on's answers set the status line; failures are quiet (no console spam).
-async function unreachableState(): Promise<ConnectionState> {
+/** Chrome's Local Network Access permission was refused: requests to this computer fail. */
+export async function localNetworkDenied() {
   try {
     const permission = await navigator.permissions.query({
       name: 'local-network-access' as PermissionName
     });
 
-    if (permission.state === 'denied') return 'blocked';
+    return permission.state === 'denied';
   } catch {
     // Browsers without Local Network Access
+    return false;
   }
+}
+
+// The add-on's answers set the status line; failures are quiet (no console spam).
+async function unreachableState(): Promise<ConnectionState> {
+  if (await localNetworkDenied()) return 'blocked';
   return window.localStorage.getItem('discordAddonSeen') ? 'ankiClosed' : 'missing';
 }
 

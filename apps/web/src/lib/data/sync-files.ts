@@ -7,8 +7,9 @@
 /**
  * Where the reader's extra files sync, beside the book data of any storage source: per book
  * (annotations.json, recaps.json, lorebook.json, vnsaves.json) in the book's folder on its own
- * source; per reader (kanji.json, words.json, settings.json) in the account's folder while signed
- * in to the server, else at the root of the library's Google Drive, OneDrive or folder source.
+ * source; per reader (kanji.json, words.json, immersion.json, settings.json) in the account's
+ * folder while signed in to the server, else at the root of the library's Google Drive, OneDrive
+ * or folder source.
  * Not part of upstream.
  */
 

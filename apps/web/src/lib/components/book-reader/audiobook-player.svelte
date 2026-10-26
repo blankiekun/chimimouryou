@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { listening } from '$lib/data/immersion-log';
   import {
     faBackwardStep,
     faCrosshairs,
@@ -295,6 +296,7 @@
   {:else}
     <audio
       bind:this={audio}
+      use:listening={title}
       src={audioUrl}
       preload="metadata"
       on:loadedmetadata={onLoaded}

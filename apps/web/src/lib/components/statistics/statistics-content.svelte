@@ -6,6 +6,7 @@
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import { HeatmapType } from '$lib/components/statistics/statistics-heatmap/statistics-heatmap';
   import StatisticsHeatmap from '$lib/components/statistics/statistics-heatmap/statistics-heatmap.svelte';
+  import ImmersionLog from '$lib/components/statistics/immersion-log.svelte';
   import StatisticsSummary from '$lib/components/statistics/statistics-summary/statistics-summary.svelte';
   import type {
     StatisticsDeleteRequest,
@@ -935,6 +936,14 @@
       on:edit={handleEditRequest}
     />
   </section>
+  <ImmersionLog
+    number={4}
+    start={$lastStatisticsStartDate$}
+    end={$lastStatisticsEndDate$}
+    {todayKey}
+    readingSeconds={totals.time}
+    readingCharacters={totals.characters}
+  />
 {/if}
 {#if $statisticsTitleFilterIsOpen$}
   <div
