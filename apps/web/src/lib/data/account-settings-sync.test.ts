@@ -17,6 +17,8 @@ import { theme$ } from '$lib/data/store';
 import { customAppThemes$, darkTheme$ } from '$lib/data/theme/theme-store';
 import { socialSession$ } from '$lib/data/social-account';
 import { homeBookTitles$, homeRemovedTitles$ } from '$lib/data/library-home';
+import { placementCutoff$, placementResults$, type PlacementRecord } from '$lib/data/placement';
+import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 import { mergeEntries, startSettingsSync, syncAccountSettings } from './account-settings-sync';
 
 /** The library's Drive/OneDrive/folder while signed out (undefined: none) */
@@ -61,13 +63,29 @@ const bob = { id: 'bob', username: 'bob' };
 
 let remote: { values: Record<string, unknown>; modified: Record<string, number> } | undefined;
 let uploads: string[] = [];
+/** The hub's settings document (GET|PUT /v1/settings) */
+let hub: { doc: typeof remote | null; version: number } = { doc: null, version: 0 };
+let hubUploads: string[] = [];
 
-function mockServer(initial?: typeof remote) {
+function mockServer(initial?: typeof remote, hubDoc: typeof remote | null = null) {
   remote = initial;
   uploads = [];
+  hub = { doc: hubDoc, version: hubDoc ? 1 : 0 };
+  hubUploads = [];
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (_url: string, init?: RequestInit) => {
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/v1/settings')) {
+        if (init?.method !== 'PUT') return new Response(JSON.stringify(hub));
+        const body = JSON.parse(String(init.body));
+
+        if (body.version !== hub.version) {
+          return new Response('{"error":"conflict"}', { status: 409 });
+        }
+        hubUploads.push(String(init.body));
+        hub = { doc: body.doc, version: hub.version + 1 };
+        return new Response(JSON.stringify({ ok: true, version: hub.version }));
+      }
       if (init?.method === 'PUT') {
         uploads.push(String(init.body));
         remote = JSON.parse(String(init.body));
@@ -120,8 +138,13 @@ describe('account settings sync', () => {
     window.matchMedia = vi.fn(() => ({ matches: false }) as MediaQueryList);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // A sync queued by the test (a hub sign-in applied) runs against its mocks, not the network.
+    await syncAccountSettings();
+    socialSession$.next(null);
+    enabledPlugins$.next(['ai', 'social']);
     startSettingsSync(null);
+    await syncAccountSettings();
     vi.unstubAllGlobals();
   });
 
@@ -391,5 +414,73 @@ describe('account settings sync', () => {
     expect(remote?.values).not.toHaveProperty('openRouterApiKey');
     expect(remote?.values).not.toHaveProperty('elevenLabsModel');
     expect(remote?.modified).not.toHaveProperty('openRouterApiKey');
+  });
+
+  const result = (mode: PlacementRecord['mode'], date: number, cutoff: number) => ({
+    mode,
+    date,
+    cutoff,
+    length: 40
+  });
+  const hubDoc = (results: PlacementRecord[]) => ({
+    values: { placementResults: results },
+    modified: { placementResults: 1 }
+  });
+
+  it('syncs shared settings with the hub without secrets, word test results merged', async () => {
+    placementResults$.next([result('yesno', 1, 3000)]);
+    aiConnectionKeys$.next({ or: 'sk-or-ren' });
+    socialSession$.next(hubSession('ren'));
+    mockServer(undefined, hubDoc([result('typed', 2, 8000)]));
+
+    await signInAs(null);
+
+    const both = [result('yesno', 1, 3000), result('typed', 2, 8000)];
+    expect(placementResults$.getValue()).toEqual(both);
+    expect(placementCutoff$.getValue()).toBe(3000);
+    expect(hub.doc?.values.placementResults).toEqual(both);
+    expect(hubUploads.join()).not.toMatch(/sk-|hub-token|socialSession|aiConnectionKeys/);
+  });
+
+  it('converges the server account and the hub without flip-flopping', async () => {
+    window.localStorage.setItem('accountSettingsOwner', 'alice');
+    aiConnectionKeys$.next({ or: 'sk-or-alice' });
+    placementResults$.next([result('yesno', 1, 3000)]);
+    socialSession$.next(hubSession('aki'));
+    mockServer(
+      { values: { placementResults: [result('yesno', 5, 4000)] }, modified: {} },
+      hubDoc([result('typed', 2, 8000)])
+    );
+
+    await signInAs(alice);
+    await syncAccountSettings();
+
+    const all = [result('yesno', 1, 3000), result('typed', 2, 8000), result('yesno', 5, 4000)];
+    expect(remote?.values.placementResults).toEqual(all);
+    expect(hub.doc?.values.placementResults).toEqual(all);
+    expect(uploads.join()).toContain('sk-or-alice');
+    expect(hubUploads.join()).not.toMatch(/sk-|hub-token/);
+
+    uploads = [];
+    hubUploads = [];
+    await syncAccountSettings();
+    expect(uploads).toEqual([]);
+    expect(hubUploads).toEqual([]);
+  });
+
+  it('asks the hub nothing signed out of it or with social off', async () => {
+    mockServer(undefined, hubDoc([result('typed', 2, 8000)]));
+    await signInAs(null);
+    expect(fetch).not.toHaveBeenCalled();
+
+    enabledPlugins$.next(['ai']);
+    socialSession$.next(hubSession('ren'));
+    await syncAccountSettings();
+    expect(fetch).not.toHaveBeenCalled();
+
+    // Turning social on pulls the hub's copy.
+    enabledPlugins$.next(['ai', 'social']);
+    await syncAccountSettings();
+    expect(fetch).toHaveBeenCalled();
   });
 });

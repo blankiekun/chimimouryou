@@ -2150,6 +2150,8 @@ export const en = {
     'Friends and Now reading on Home. Off hides them; your account and friends are kept.',
   'social.signedInAs': 'Signed in to the hub as @{username}',
   'social.memberSince': 'Member since {since}.',
+  'social.settingsSync':
+    'Your settings and word test results sync through the hub with your other devices signed in here. API keys stay on each device.',
   'social.signOut': 'Sign out',
   'social.remembered':
     'Remembered for this server account: your other browsers are signed in when you sign in to this server.',

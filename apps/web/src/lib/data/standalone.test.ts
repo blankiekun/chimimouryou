@@ -82,6 +82,33 @@ describe('standalone edition', () => {
     // The first import of the plugins pulls in most of the app: slow on CI runners.
   }, 15_000);
 
+  it('syncs settings with the hub only signed in with social on, never its secrets', async () => {
+    // jsdom has no matchMedia; the theme store reads it on import.
+    vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {} }));
+    const sync = await import('$lib/data/account-settings-sync');
+    const { enabledPlugins$ } = await import('$lib/plugins/plugin-settings');
+    const { aiConnectionKeys$ } = await import('$lib/data/ai-settings');
+    const { socialSession$ } = await import('$lib/data/social-account');
+
+    aiConnectionKeys$.next({ or: 'sk-or-ren' });
+    sync.startSettingsSync(null);
+    await sync.syncAccountSettings();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    enabledPlugins$.next(['ai']);
+    socialSession$.next({ token: 'hub-token', me: { id: 'a', share: {} } as never });
+    await sync.syncAccountSettings();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fetchMock.mockImplementation(async () => new Response('{"doc":null,"version":0}'));
+    enabledPlugins$.next(['ai', 'social']);
+    await sync.syncAccountSettings();
+    const calls = fetchMock.mock.calls.map(([url, init]) => `${url} ${init?.body ?? ''}`);
+    expect(calls.some((call) => call.includes('/v1/settings'))).toBe(true);
+    expect(calls.join()).not.toMatch(/sk-or|hub-token|socialSession/);
+    socialSession$.next(null);
+  }, 15_000);
+
   it('reads Community anonymously only when asked, never with social off, and writes nothing signed out', async () => {
     fetchMock.mockImplementation(async () => new Response('{"posts":[],"next":null}'));
 

@@ -2164,6 +2164,8 @@ export const ja: Record<MessageKey, string> = {
     'ホームのフレンドと読書中。オフにすると隠れます。アカウントとフレンドは残ります。',
   'social.signedInAs': '@{username} としてハブにサインイン中',
   'social.memberSince': '{since}から利用。',
+  'social.settingsSync':
+    '設定と単語テストの結果は、ハブを通じて同じアカウントでサインインした他の端末と同期されます。APIキーは各端末に残ります。',
   'social.signOut': 'サインアウト',
   'social.remembered':
     'このサーバーのアカウントに記憶されます。他のブラウザーでもこのサーバーにサインインすると、ハブにもサインインします。',

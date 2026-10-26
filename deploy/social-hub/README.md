@@ -53,6 +53,8 @@ idempotent), in order, then `npx wrangler@4.147.0 deploy`:
 - `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file migrations/0011_library_covers.sql`
   (`covers.library`, the dev's library covers; apply before deploying; a second run only fails with
   "duplicate column name"). `wrangler.toml` adds the `LIBRARY_LIMIT` rate limit, applied by the deploy.
+- `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file migrations/0012_settings.sql`
+  (`settings`, the readers' synced settings; apply before deploying; safe to run again)
 - Push to the add-on (`PresenceStream`, a Durable Object): nothing to run by hand. `wrangler.toml`
   binds it as `PRESENCE` with the migration `v1` (`new_sqlite_classes`, the free plan's only kind),
   which the next `npm run deploy` applies once. It stores nothing. Each deploy closes every push
@@ -113,6 +115,12 @@ lives 10 minutes; a 10-minute cron deletes expired ones. `/v1/transfers*` take t
 `SIGNAL_LIMIT` binding (30 per 10 s per address) instead of `EDGE_LIMIT`: the app polls about
 once a second only while one is being set up. A typical transfer costs 10-20 Worker requests,
 plus one per 3 s while the friend hasn't answered yet (at most ~200 for one left waiting).
+
+Settings sync (`settings` table): `GET settings` (`{doc, version}`, `doc` null before the first
+write) and `PUT settings` (`{doc, version}`: the JSON object the app keeps, without API keys or
+tokens, at most 64 KB; `version` is the one read, 0 for none, a write in between answers 409
+`conflict`; 120 an hour). The hub stores the document as is and never logs or reads it; it goes
+with the account.
 
 Discord status relay (`src/presence.ts`; times in Unix seconds): the reader's other devices send the
 rendered activity, the Anki add-on on their computer reads it. `PUT presence` (`{activity, kind:
