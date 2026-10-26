@@ -68,6 +68,8 @@ export interface Env {
   EDGE_LIMIT?: RateLimit;
   /** Per address for /v1/transfers (polled while a transfer is set up), instead of EDGE_LIMIT */
   SIGNAL_LIMIT?: RateLimit;
+  /** Per address for /v1/admin/library-cover(s) (a dev's bulk cover upload), instead of EDGE_LIMIT */
+  LIBRARY_LIMIT?: RateLimit;
   /** The add-on's push connections, one PresenceStream (stream.ts) per user; absent means polling only */
   PRESENCE?: DurableObjectNamespace;
 }
@@ -154,6 +156,13 @@ const PROFILE_TTL = 15 * MINUTE;
 /** Cover thumbnails: ~160 px wide WebP, one per book key and uploader */
 export const COVER_BYTES = 20_480;
 export const COVER_UPLOADS = 50;
+/**
+ * Library covers (a dev's bulk upload for the Discord status) a day per dev: each writes about 5 D1
+ * rows (the row, its 3 indexes, the counter), so 10,000 stay at half the free 100,000 a day.
+ */
+export const LIBRARY_UPLOADS = 10_000;
+/** The stored-images check counts every cover (rows read), so library uploads run it this often */
+const LIBRARY_ROOM_EVERY = 500;
 /** Pictures: a 256 px square WebP */
 export const AVATAR_BYTES = 65_536;
 export const AVATAR_UPLOADS = 5;
@@ -317,6 +326,7 @@ export async function ipSubject(request: Request) {
 }
 
 /** Counts one use of `action` in the current window; false once `max` were used. */
+/** Counts one action in the window: the count so far, 0 once it reached max */
 export async function take(env: Env, subject: string, action: string, window: number, max: number) {
   const win = Math.floor(now() / window) * window;
   const row = await env.DB.prepare(
@@ -325,9 +335,9 @@ export async function take(env: Env, subject: string, action: string, window: nu
      RETURNING count`
   )
     .bind(subject, action, win, max)
-    .first();
+    .first<{ count: number }>();
 
-  return !!row;
+  return Number(row?.count ?? 0);
 }
 
 export async function limit(
@@ -927,6 +937,58 @@ async function uploadCover(request: Request, env: Env, user: UserRow) {
   return json({ cover: file });
 }
 
+/**
+ * PUT /v1/admin/library-cover?key=: a dev's thumbnail of a library book, for anyone's Discord
+ * status (GET /v1/cover?key=). Same checks and R2 layout as PUT /v1/cover, but no shared book is
+ * needed, the cron keeps it (library = 1) and it has its own daily cap instead of the hub-wide one.
+ */
+async function uploadLibraryCover(request: Request, env: Env, user: UserRow) {
+  const key = text(new URL(request.url).searchParams.get('key'), 200, 'key');
+  const count = await take(env, user.id, 'library', DAY, LIBRARY_UPLOADS);
+
+  if (!count) throw new HttpError(429, 'limit');
+  const bytes = await readImage(
+    request,
+    COVER_BYTES,
+    (width, height) => width >= 32 && width <= 200 && height >= 32 && height <= 400
+  );
+
+  if (count % LIBRARY_ROOM_EVERY === 1) await mediaRoom(env);
+
+  const file = (await sha256(bytes)).slice(0, 16);
+  const { meta } = await env.DB.prepare(
+    'INSERT OR IGNORE INTO covers (book_key, file, user, at, library) VALUES (?1, ?2, ?3, ?4, 1)'
+  )
+    .bind(key, file, user.id, now())
+    .run();
+
+  if (!meta.changes) throw new HttpError(409, 'exists');
+  try {
+    await media(env).put(`cover/${file}`, bytes.slice().buffer, {
+      httpMetadata: { contentType: 'image/webp', cacheControl: IMMUTABLE }
+    });
+  } catch (error) {
+    await env.DB.prepare('DELETE FROM covers WHERE user = ?1 AND book_key = ?2')
+      .bind(user.id, key)
+      .run();
+    throw error;
+  }
+  return json({ cover: file });
+}
+
+/** GET /v1/admin/library-covers?after=: book keys with a library cover (removed too), 1,000 a page */
+async function libraryCovers(env: Env, after: string) {
+  const { results } = await env.DB.prepare(
+    `SELECT DISTINCT book_key FROM covers WHERE library = 1 AND book_key > ?1
+     ORDER BY book_key LIMIT 1000`
+  )
+    .bind(after)
+    .all<{ book_key: string }>();
+  const keys = results.map((row) => row.book_key);
+
+  return json({ keys, next: keys.length === 1000 ? keys[999] : null });
+}
+
 /** PUT /v1/avatar: a new picture (a new version, so a new URL); the old object goes. */
 async function uploadPicture(request: Request, env: Env, user: UserRow) {
   await limit(env, user.id, 'picture', DAY, AVATAR_UPLOADS);
@@ -1397,9 +1459,9 @@ export async function cleanUp(env: Env) {
   ]);
 
   // Covers no current or finished book or live Discord status of their uploader shows any more
-  // (removed ones stay, so the uploader can't put the same one back).
+  // (removed ones stay, so the uploader can't put the same one back; library ones always stay).
   const orphans = await env.DB.prepare(
-    `DELETE FROM covers WHERE removed = 0
+    `DELETE FROM covers WHERE removed = 0 AND library = 0
        AND NOT EXISTS (SELECT 1 FROM status s WHERE s.user = covers.user AND s.book_key = covers.book_key)
        AND NOT EXISTS (SELECT 1 FROM finished f WHERE f.user = covers.user AND f.book_key = covers.book_key)
        AND NOT EXISTS (SELECT 1 FROM presence p WHERE p.user = covers.user AND p.kind != ''
@@ -1826,6 +1888,8 @@ async function admin(request: Request, env: Env, viewer: UserRow, path: string) 
 
   if (path.startsWith('community/')) return communityAdmin(request, env, path.slice(10));
   if (route === 'GET reports') return json(await openReports(env));
+  if (route === 'GET library-covers') return libraryCovers(env, query.get('after') ?? '');
+  if (route === 'PUT library-cover') return uploadLibraryCover(request, env, viewer);
   if (route === 'DELETE reports') {
     const what = query.get('what') ?? '';
 
@@ -2139,8 +2203,13 @@ export default {
       if (request.method === 'GET' && image) return await serveImage(request, env, ctx, image[1]);
 
       // Transfers poll about once a second while one is being set up: their own, looser limit.
-      const signaling = new URL(request.url).pathname.startsWith('/v1/transfers');
-      const edge = await (signaling ? env.SIGNAL_LIMIT : env.EDGE_LIMIT)?.limit({
+      const { pathname } = new URL(request.url);
+      const signaling = pathname.startsWith('/v1/transfers');
+      // The dev's bulk library upload (and its listing): about 4 a second, its own limit.
+      const library = pathname.startsWith('/v1/admin/library-cover');
+      const edge = await (
+        signaling ? env.SIGNAL_LIMIT : library ? env.LIBRARY_LIMIT : env.EDGE_LIMIT
+      )?.limit({
         key: clientAddress(request) || 'unknown'
       });
 

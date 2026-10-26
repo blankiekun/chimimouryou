@@ -50,6 +50,9 @@ idempotent), in order, then `npx wrangler@4.147.0 deploy`:
   before deploying; a second run only fails with "duplicate column name")
 - `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file migrations/0010_covers_book_key.sql`
   (index for `GET cover?key=`, the Discord status's cover lookup; safe to run again)
+- `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file migrations/0011_library_covers.sql`
+  (`covers.library`, the dev's library covers; apply before deploying; a second run only fails with
+  "duplicate column name"). `wrangler.toml` adds the `LIBRARY_LIMIT` rate limit, applied by the deploy.
 - Push to the add-on (`PresenceStream`, a Durable Object): nothing to run by hand. `wrangler.toml`
   binds it as `PRESENCE` with the migration `v1` (`new_sqlite_classes`, the free plan's only kind),
   which the next `npm run deploy` applies once. It stores nothing. Each deploy closes every push
@@ -157,6 +160,14 @@ object goes unless another upload uses the same image); `GET admin/user/:usernam
 (account, current and finished books, events); `POST admin/user/:id/name` (name back to the
 username); `DELETE admin/user/:id/picture`; `DELETE admin/user/:id/status/:slot`,
 `…/finished/:key`, `…/events/:id` (one row). Resolving a report deletes its reports.
+Library covers, role `dev` only, for the Discord status of anyone reading a book: `PUT
+admin/library-cover?key=` (raw WebP, the same checks and R2 layout as `PUT cover`, stored with
+`library = 1`: no shared book needed, the cron keeps it; 10,000 a day per dev, about 4 a second by
+address through `LIBRARY_LIMIT`, which the listing uses too; 409 when this dev already has a cover of the key) and `GET
+admin/library-covers?after=<key>` (`{keys, next}`: book keys with a library cover, removed ones
+too, 1,000 a page by key; `next` is null on the last page). `GET cover?key=` finds them after the
+reader's own. Reports and `DELETE admin/cover` treat them like any upload; deleting the dev's
+account (or a year unused) deletes them like the rest of its covers.
 
 ## Community
 
