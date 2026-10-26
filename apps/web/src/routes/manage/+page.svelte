@@ -25,6 +25,7 @@
   import ReadNextShelf from '$lib/components/book-card/read-next-shelf.svelte';
   import HomeSocial from '$lib/components/social/home-social.svelte';
   import { activePlugins$ } from '$lib/plugins';
+  import { readingActivity } from '$lib/data/reader-hooks';
   import LibrarySortMenu from '$lib/components/book-card/library-sort-menu.svelte';
   import SeriesGrid from '$lib/components/book-card/series-grid.svelte';
   import SeriesResults from '$lib/components/book-card/series-results.svelte';
@@ -330,7 +331,12 @@
     selectMode = false;
   }
 
-  onDestroy(() => dialogManager.dialogs$.next([]));
+  onDestroy(() => {
+    dialogManager.dialogs$.next([]);
+    readingActivity();
+  });
+  // In the library, for the plugins (Discord's idle status).
+  onMount(() => readingActivity({ kind: 'idle' }));
   // Standalone: estimates and furigana still missing are made in the background, once per start.
   $: if (standalone && $bookCards$ && !isLoading) catchUpAnalysis();
 

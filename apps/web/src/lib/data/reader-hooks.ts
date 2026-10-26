@@ -10,6 +10,7 @@
  * Moved out of routes/b/+page.svelte unchanged.
  */
 
+import type { ReadingActivity } from '$lib/data/discord';
 import { recordKanjiSeen } from '$lib/data/kanji-seen';
 import type { SearchIndex } from '$lib/functions/book-text/book-search';
 import { activePlugins } from '$lib/plugins';
@@ -40,6 +41,11 @@ export function bookOpened(title: string, getIndex: GetIndex, before?: () => voi
 
   if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 3000 });
   else setTimeout(run, 1000);
+}
+
+/** What is open now (a reader's position or the library), undefined when leaving it: Discord status. */
+export function readingActivity(activity?: ReadingActivity) {
+  activePlugins().forEach((plugin) => plugin.onReadingActivity?.(activity));
 }
 
 /** The reader is leaving the book. */

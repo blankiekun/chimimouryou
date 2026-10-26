@@ -16,8 +16,10 @@ import { map } from 'rxjs';
 import type { SearchIndex } from '$lib/functions/book-text/book-search';
 import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v3';
 import type { MessageKey } from '$lib/i18n';
+import type { ReadingActivity } from '$lib/data/discord';
 import { aiPlugin } from '$lib/plugins/ai';
 import { audiobookshelfPlugin } from '$lib/plugins/audiobookshelf';
+import { discordPlugin } from '$lib/plugins/discord';
 import { socialPlugin } from '$lib/plugins/social';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 
@@ -100,11 +102,13 @@ export interface Plugin {
   onBookOpened?: (title: string, getIndex: () => Promise<SearchIndex>) => void;
   /** Called when the reader leaves a book */
   onBookLeft?: (title: string, position: number, characters: number) => void;
+  /** What is open changed (a reader's position, the library), or undefined on leaving it */
+  onReadingActivity?: (activity: ReadingActivity | undefined) => void;
   /** Sentence audio for Anki cards when the book has no audiobook clip */
   ankiSentenceAudio?: (sentence: string) => Promise<Blob | undefined>;
 }
 
-export const plugins: Plugin[] = [aiPlugin, audiobookshelfPlugin, socialPlugin];
+export const plugins: Plugin[] = [aiPlugin, audiobookshelfPlugin, socialPlugin, discordPlugin];
 
 export function isPluginEnabled(id: string, enabled = enabledPlugins$.getValue()) {
   return enabled.includes(id);

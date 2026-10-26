@@ -7,7 +7,7 @@
 import { writableArrayLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import { localStorage } from '$lib/data/window/local-storage';
 
-/** Ids of plugins switched on; built-in ones start on except Audiobookshelf. Synced with the account. */
+/** Ids of plugins switched on; built-in ones start on except Audiobookshelf and Discord. Synced with the account. */
 export const enabledPlugins$ = writableArrayLocalStorageSubject<string>()('enabledPlugins', [
   'ai',
   'social'

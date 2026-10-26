@@ -85,7 +85,7 @@ The activity is rendered by the page; the add-on has no templates. Fields (all o
   "assets": {
     "large_image": "https://…/cover.jpg",
     "large_text": "Cover",
-    "small_image": "logo",
+    "small_image": "applogo",
     "small_text": "chimimouryou"
   },
   "timestamps": { "start": 1761350400000, "end": 1761354000000 },
