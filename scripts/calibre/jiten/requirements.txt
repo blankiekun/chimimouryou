@@ -2,4 +2,4 @@ numpy==2.5.4
 onnxruntime==1.31.0
 SudachiDict-core==20261015
 SudachiPy==0.7.0
-yurigana @ https://github.com/blankiekun/yurigana/archive/refs/tags/v0.5.10.tar.gz#sha256=64241756ac8ef8f92215f420386c5f6a659b6dab27396ab446ef40e32bcff19c
+yurigana @ https://github.com/blankiekun/yurigana/archive/refs/tags/v0.5.11.tar.gz#sha256=e2f275e29dcdc6f571dcd256b03d4bff01e6139f88ab7ff8ae147b1e196b61c6
