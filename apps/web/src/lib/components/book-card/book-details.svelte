@@ -9,6 +9,7 @@
   import ContinueReadingShelf from '$lib/components/book-card/continue-reading-shelf.svelte';
   import DifficultyDialog from '$lib/components/book-card/difficulty-dialog.svelte';
   import MokuroText from '$lib/components/book-card/mokuro-text.svelte';
+  import LocalMokuroText from '$lib/components/book-card/local-mokuro-text.svelte';
   import { localMokuro, mokuroHtml, type MokuroText as MokuroFile } from '$lib/data/mokuro';
   import { isFinished, isReading } from '$lib/components/book-card/library-filters';
   import { orderSeries } from '$lib/components/book-card/library-sort';
@@ -787,6 +788,11 @@
             <div>
               <dt>{$t$('book.text')}</dt>
               <dd><MokuroText calibreId={book.calibreId} bind:text={mokuro} /></dd>
+            </div>
+          {:else if !isCalibre && kind === 'manga'}
+            <div>
+              <dt>{$t$('book.text')}</dt>
+              <dd><LocalMokuroText title={book.title} /></dd>
             </div>
           {/if}
           {#if calibreBook?.publisher}

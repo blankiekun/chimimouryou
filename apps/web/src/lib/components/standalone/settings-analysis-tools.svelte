@@ -18,6 +18,25 @@
     removeAnalysisTools,
     type AnalysisFeature
   } from '$lib/data/analysis-tools';
+  import {
+    cancelMangaTextDownload,
+    checkMangaText,
+    downloadMangaText,
+    mangaTextBytes,
+    mangaTextDownload$,
+    mangaTextState$,
+    removeMangaText
+  } from '$lib/data/manga-ocr';
+  import {
+    cancelWhisperDownload,
+    checkWhisper,
+    downloadWhisper,
+    removeWhisper,
+    whisperDownload$,
+    whisperModel$,
+    whisperModels,
+    whisperState$
+  } from '$lib/data/whisper';
   import { onMount } from 'svelte';
 
   const supported = browser && analysisToolsSupported();
@@ -45,8 +64,14 @@
   // What is left to fetch changes with what is installed.
   $: if (supported && !downloading) sizes($analysisToolsState$);
 
+  // Whisper runs wherever the browser has WebGPU or wasm, phones included (it did before it was a tool).
+  $: if (browser) checkWhisper($whisperModel$);
+
   onMount(() => {
-    if (supported) checkAnalysisTools();
+    if (supported) {
+      checkAnalysisTools();
+      checkMangaText();
+    }
   });
 
   async function sizes(_state: unknown) {
@@ -64,7 +89,7 @@
 
 <SettingsSection
   id="general-analysis"
-  keywords="analysis tools difficulty estimate word list coverage furigana sudachi download"
+  keywords="analysis tools difficulty estimate word list coverage furigana sudachi download manga text ocr mokuro audiobook subtitles whisper"
 >
   {#each analysisFeatures as feature (feature)}
     {@const state = $analysisToolsState$[feature]}
@@ -128,6 +153,111 @@
       </svelte:fragment>
     </SettingsItemGroup>
   {/each}
+  <SettingsItemGroup
+    title="Manga text"
+    tooltip="Text over the pages of your manga for lookups, made in this browser from a volume's book page (about 10 seconds a page). Models from Hugging Face: a text detector by ogkalu and manga-ocr by kha-white, Apache-2.0."
+    wide={$mangaTextState$ === 'downloading'}
+  >
+    {#if !supported}
+      <p class="analysis-note">
+        Needs a desktop browser on a computer with 8 GB of memory or more.
+      </p>
+    {:else if $mangaTextState$ === 'ready'}
+      <button
+        type="button"
+        class="app-button app-button-danger"
+        on:click={() => {
+          if (confirm('Remove manga text? The text made already stays.')) removeMangaText();
+        }}
+      >
+        Remove
+      </button>
+    {:else if $mangaTextState$ === 'downloading'}
+      {@const total = $mangaTextDownload$?.total ?? 0}
+      {@const done = $mangaTextDownload$?.done ?? 0}
+      <div class="analysis-progress">
+        <div
+          class="analysis-track"
+          role="progressbar"
+          aria-label="Downloading manga text"
+          aria-valuemin={0}
+          aria-valuemax={total}
+          aria-valuenow={done}
+        >
+          <div class="analysis-fill" style:width="{total ? (done / total) * 100 : 0}%"></div>
+        </div>
+        <span class="analysis-note">{mb(done)} of {mb(total)} MB</span>
+        <button type="button" class="app-button" on:click={cancelMangaTextDownload}>Cancel</button>
+      </div>
+    {:else if $mangaTextState$ === 'absent'}
+      <button type="button" class="app-button app-button-primary" on:click={downloadMangaText}>
+        Download ({mb(mangaTextBytes)} MB)
+      </button>
+    {/if}
+    <svelte:fragment slot="after">
+      {#if $mangaTextDownload$?.error}
+        <p class="analysis-note" role="alert">The download failed: {$mangaTextDownload$.error}</p>
+      {:else if supported && $mangaTextState$ === 'ready'}
+        <p class="analysis-note">
+          Downloaded. Make a volume's text from its book page; it stays in this browser.
+        </p>
+      {/if}
+    </svelte:fragment>
+  </SettingsItemGroup>
+  <SettingsItemGroup
+    title="Audiobook subtitles"
+    tooltip="Subtitles for an audiobook made with Whisper in this browser, from the audiobook setup or the Audiobookshelf bar; a GPU with WebGPU makes it much faster. Models from Hugging Face (OpenAI's Whisper, MIT). The subtitles made stay in this browser."
+    wide={$whisperState$ === 'downloading'}
+  >
+    {#if $whisperState$ === 'downloading'}
+      {@const progress = $whisperDownload$?.progress ?? 0}
+      <div class="analysis-progress">
+        <div
+          class="analysis-track"
+          role="progressbar"
+          aria-label="Downloading audiobook subtitles"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(progress * 100)}
+        >
+          <div class="analysis-fill" style:width="{progress * 100}%"></div>
+        </div>
+        <span class="analysis-note">{Math.round(progress * 100)}%</span>
+        <button type="button" class="app-button" on:click={cancelWhisperDownload}>Cancel</button>
+      </div>
+    {:else}
+      <span class="analysis-progress">
+        <select class="app-input" aria-label="Whisper model" bind:value={$whisperModel$}>
+          {#each whisperModels as model (model.id)}
+            <option value={model.id}>{model.name}</option>
+          {/each}
+        </select>
+        {#if $whisperState$ === 'ready'}
+          <button
+            type="button"
+            class="app-button app-button-danger"
+            on:click={() => {
+              if (confirm('Remove the Whisper models? Subtitles made already stay.'))
+                removeWhisper();
+            }}
+          >
+            Remove
+          </button>
+        {:else if $whisperState$ === 'absent'}
+          <button type="button" class="app-button app-button-primary" on:click={downloadWhisper}>
+            Download
+          </button>
+        {/if}
+      </span>
+    {/if}
+    <svelte:fragment slot="after">
+      {#if $whisperDownload$?.error}
+        <p class="analysis-note" role="alert">The download failed: {$whisperDownload$.error}</p>
+      {:else if $whisperState$ === 'ready'}
+        <p class="analysis-note">Downloaded. The audiobook players offer Make subtitles.</p>
+      {/if}
+    </svelte:fragment>
+  </SettingsItemGroup>
 </SettingsSection>
 
 <style>

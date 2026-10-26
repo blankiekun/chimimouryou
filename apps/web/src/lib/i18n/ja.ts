@@ -1147,6 +1147,15 @@ export const ja: Record<MessageKey, string> = {
   'library.mokuroMakeAgain': 'サーバーで再生成',
   'library.mokuroMake': 'サーバーでテキストを生成',
   'library.mokuroUpload': '.mokuro をアップロード',
+  'library.mokuroBrowser': 'このブラウザで作成したページテキスト（{date}）',
+  'library.mokuroLocal': 'このブラウザにのみ保存されます。',
+  'library.mokuroMakeHere': 'このブラウザでテキストを作成',
+  'library.mokuroMakeHereAgain': 'このブラウザで再作成',
+  'library.mokuroMakeHint': '1ページあたり約10秒かかります。処理中はタブを閉じないでください',
+  'library.mokuroLoading': 'モデルを読み込み中…',
+  'library.mokuroGetTools':
+    'このブラウザでテキストを作成するには、設定で「マンガのテキスト」を入手してください',
+  'library.mokuroOtherJob': '{title} のテキストを作成中…',
   'library.remove': '削除',
   'library.seriesName': 'シリーズ名',
   'library.seriesNote':
@@ -1337,6 +1346,11 @@ export const ja: Record<MessageKey, string> = {
     'ブラウザ上で音声から字幕を作成します（WebGPU 対応 GPU があると高速化されます）。処理中はタブを閉じないでください。',
   'reader.whisperMake': 'Whisper で字幕を生成',
   'reader.whisperDownload': '字幕をダウンロード',
+  'reader.whisperUseKept': '{date} に作成した字幕を使う',
+  'reader.whisperRegenerate': '再生成',
+  'reader.whisperDelete': '作成した字幕を削除',
+  'reader.whisperGetTools':
+    'Whisper で字幕を作成するには、設定で「オーディオブックの字幕」を入手してください',
   'reader.preparing': '準備中…',
   'reader.recapIntro':
     '現在の読書位置（{count}文字・{percent}）までのネタバレなしあらすじです。読了済みの章は1度だけ要約されてブラウザにキャッシュされ、生成したあらすじは位置ごとに保存されます。',

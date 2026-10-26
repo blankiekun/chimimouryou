@@ -392,6 +392,8 @@
     {#if audioFile}
       <div class="mb-3">
         <WhisperSubtitles
+          {title}
+          audio="{audioFile.name}:{audioFile.size}"
           name={audioFile.name.replace(/\.[^.]+$/, '')}
           sources={() => (audioFile ? [{ blob: audioFile, offset: 0 }] : [])}
           on:srt={({ detail }) => {

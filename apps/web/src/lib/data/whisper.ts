@@ -7,9 +7,16 @@
 /**
  * Subtitles for an audiobook made by Whisper in this browser
  * (functions/audiobook/whisper.worker.ts), for the audiobook and Audiobookshelf
- * players. Models come from Hugging Face and stay in the browser's cache. Not part of upstream.
+ * players. Models come from Hugging Face and stay in the browser's cache (transformers.js's
+ * `transformers-cache`). Standalone: an analysis tool (Settings → Analysis tools → Audiobook
+ * subtitles) downloaded before the players offer it. The SRT made is kept per book in reader-db
+ * `whisperSubtitles`, in this browser only. Not part of upstream.
  */
 
+import { BehaviorSubject } from 'rxjs';
+import type { AnalysisToolsState } from '$lib/data/analysis-tools';
+import { standalone } from '$lib/data/env';
+import { readerDb } from '$lib/data/reader-db';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 import type { SubtitleCue } from '$lib/functions/audiobook/subtitles';
 import { cuesToSrt } from '$lib/functions/audiobook/whisper-audio';
@@ -89,4 +96,113 @@ export function transcribeAudio(
     };
     worker.postMessage({ model: whisperModel$.getValue(), sources } satisfies WhisperRequest);
   });
+}
+
+/** An SRT Whisper made for a book's audio (reader-db `whisperSubtitles`) */
+export interface WhisperSubtitles {
+  /** The book's title */
+  title: string;
+  /** The audio it was made from (file name, or the Audiobookshelf item), so another isn't taken for it */
+  audio: string;
+  model: string;
+  created: number;
+  srt: string;
+}
+
+export async function keptWhisperSubtitles(title: string, audio: string) {
+  const kept = await (await readerDb()).get('whisperSubtitles', title).catch(() => undefined);
+
+  return kept?.audio === audio ? kept : undefined;
+}
+
+export async function saveWhisperSubtitles(subtitles: Omit<WhisperSubtitles, 'created'>) {
+  await (await readerDb()).put('whisperSubtitles', { ...subtitles, created: Date.now() });
+}
+
+export async function removeWhisperSubtitles(title: string) {
+  await (await readerDb()).delete('whisperSubtitles', title);
+}
+
+/**
+ * Standalone: whether the players offer Whisper, which needs the model downloaded in Settings
+ * first. The server edition offers it as before, downloading the model on first use.
+ */
+export const whisperNeedsDownload = standalone;
+
+export const whisperState$ = new BehaviorSubject<AnalysisToolsState>('unknown');
+export const whisperDownload$ = new BehaviorSubject<
+  { progress: number; error?: string } | undefined
+>(undefined);
+
+const transformersCache = 'transformers-cache';
+/** The models whose download finished (the cache alone can't tell a cut one) */
+const readyModels$ = writableStringLocalStorageSubject()('whisperReady', '');
+const readyModels = () => readyModels$.getValue().split(' ').filter(Boolean);
+
+/** Sets whisperState$ for the model chosen: downloaded whole and still in the cache. */
+export async function checkWhisper(model = whisperModel$.getValue()) {
+  if (downloadController) return;
+
+  try {
+    const keys = await (await caches.open(transformersCache)).keys();
+
+    whisperState$.next(
+      readyModels().includes(model) && keys.some(({ url }) => url.includes(`/${model}/`))
+        ? 'ready'
+        : 'absent'
+    );
+  } catch {
+    whisperState$.next('absent');
+  }
+}
+
+let downloadController: AbortController | undefined;
+
+export function cancelWhisperDownload() {
+  downloadController?.abort();
+}
+
+/** Loads the chosen model once (transformers.js caches its files). Never throws. */
+export async function downloadWhisper() {
+  if (downloadController) return;
+
+  const model = whisperModel$.getValue();
+
+  downloadController = new AbortController();
+  whisperState$.next('downloading');
+  whisperDownload$.next({ progress: 0 });
+
+  try {
+    await navigator.storage?.persist?.().catch(() => false);
+    await transcribeAudio(
+      [],
+      (text) => {
+        const percent = /(\d+)%/.exec(text);
+
+        if (percent) whisperDownload$.next({ progress: Number(percent[1]) / 100 });
+      },
+      downloadController.signal
+    );
+    readyModels$.next([...new Set([...readyModels(), model])].join(' '));
+    whisperDownload$.next(undefined);
+  } catch (error: any) {
+    whisperDownload$.next(
+      error.name === 'AbortError' ? undefined : { progress: 0, error: error.message }
+    );
+  } finally {
+    downloadController = undefined;
+    await checkWhisper();
+  }
+}
+
+/** Removes every Whisper model from the cache; subtitles made stay. */
+export async function removeWhisper() {
+  const cache = await caches.open(transformersCache);
+
+  for (const request of await cache.keys()) {
+    if (whisperModels.some(({ id }) => request.url.includes(`/${id}/`)))
+      await cache.delete(request);
+  }
+  readyModels$.next('');
+  await checkWhisper();
 }

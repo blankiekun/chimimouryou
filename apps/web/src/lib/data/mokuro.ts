@@ -5,12 +5,16 @@
  */
 
 /**
- * Text of Calibre manga pages from mokuro (https://github.com/kha-white/mokuro): made by the
+ * Text of manga pages from mokuro (https://github.com/kha-white/mokuro). Calibre manga: made by the
  * server's mokuro service or uploaded as a .mokuro file, stored by catalog id
- * (scripts/calibre/mokuro/service.py). The manga reader lays it over the pages for Yomitan.
+ * (scripts/calibre/mokuro/service.py). Manga stored in this browser: a .mokuro file uploaded or
+ * imported beside its CBZ, or text made in this browser (manga-ocr.ts), kept in reader-db `mokuro`
+ * by title; never synced. The manga reader lays it over the pages for Yomitan.
  * Not part of upstream.
  */
 
+import { Subject } from 'rxjs';
+import { readerDb } from '$lib/data/reader-db';
 import { serverFetch } from '$lib/data/server-connect';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 
@@ -32,11 +36,17 @@ export interface MokuroPage {
 }
 
 export interface MokuroText {
-  source: 'server' | 'upload';
+  /** browser: made in this browser (manga-ocr.ts) */
+  source: 'server' | 'upload' | 'browser';
   /** mokuro's version */
   mokuro: string;
   created: number;
   pages: MokuroPage[];
+}
+
+/** A browser-stored manga's text (reader-db `mokuro`) */
+export interface LocalMokuro extends MokuroText {
+  title: string;
 }
 
 export interface MokuroStatus {
@@ -144,13 +154,147 @@ export function mokuroHtml(text: MokuroText) {
     .join('');
 }
 
-/**
- * Standalone: a manga volume's text kept in this browser, for its estimate and word list made by the
- * analysis tools. Calibre manga need none: the server estimates them from their mokuro file.
- * HOOK: the browser keeps no manga text yet (a .mokuro upload or OCR in the browser, branch
- * feat/standalone-manga-text); once reader-db stores it, read it here by title.
- */
-export async function localMokuro(title: string): Promise<MokuroText | undefined> {
-  void title;
-  return undefined;
+// The limits of service.py's convert (keep them in sync).
+const MAX_UPLOAD_BYTES = 64 * 1024 * 1024;
+const MAX_PAGES = 5000;
+const MAX_BLOCKS = 1000;
+const MAX_LINES = 100;
+const MAX_LINE = 2000;
+
+function number(value: unknown) {
+  if (typeof value !== 'number' || Number.isNaN(value)) throw new Error('not a number');
+
+  return Math.round(value * 10) / 10;
 }
+
+const isObject = (value: unknown): value is Record<string, any> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * mokuro's .mokuro output → what the reader loads, as service.py's convert: per page its path in
+ * the CBZ, size and text blocks. Throws on anything else, since files come from anywhere.
+ */
+export function convertMokuro(mokuro: unknown, source: MokuroText['source']): MokuroText {
+  const pages = isObject(mokuro) ? mokuro.pages : undefined;
+
+  if (!Array.isArray(pages) || !pages.length || pages.length > MAX_PAGES) {
+    throw new Error('Not a .mokuro file (no pages)');
+  }
+
+  const result = pages.map((page): MokuroPage => {
+    try {
+      if (!isObject(page)) throw new Error();
+
+      const width = number(page.img_width);
+      const height = number(page.img_height);
+      const name = page.img_path;
+      const blocks = page.blocks ?? [];
+
+      if (
+        typeof name !== 'string' ||
+        !Array.isArray(blocks) ||
+        blocks.length > MAX_BLOCKS ||
+        width <= 0 ||
+        height <= 0
+      ) {
+        throw new Error();
+      }
+
+      return {
+        name: name.replace(/\\/g, '/').replace(/^(\.\/)+/, ''),
+        width,
+        height,
+        blocks: blocks.map((block): MokuroBlock => {
+          if (!isObject(block) || !Array.isArray(block.box)) throw new Error();
+
+          const box = block.box.map(number);
+          const { lines } = block;
+
+          if (
+            box.length !== 4 ||
+            !Array.isArray(lines) ||
+            lines.length > MAX_LINES ||
+            !lines.every((line) => typeof line === 'string' && line.length <= MAX_LINE)
+          ) {
+            throw new Error();
+          }
+
+          return {
+            box: box as MokuroBlock['box'],
+            vertical: !!block.vertical,
+            fontSize: number(block.font_size ?? 0),
+            lines
+          };
+        })
+      };
+    } catch {
+      throw new Error('Not a .mokuro file (a page is malformed)');
+    }
+  });
+  const { version } = mokuro as Record<string, unknown>;
+
+  return {
+    source,
+    mokuro: typeof version === 'string' ? version : '',
+    created: Date.now(),
+    pages: result
+  };
+}
+
+/** A .mokuro file chosen or dropped by the reader, converted. */
+export async function readMokuroFile(file: Blob) {
+  if (file.size > MAX_UPLOAD_BYTES) throw new Error('The .mokuro file is too large');
+
+  let json: unknown;
+
+  try {
+    json = JSON.parse(await file.text());
+  } catch {
+    throw new Error('Not a .mokuro file (not JSON)');
+  }
+
+  return convertMokuro(json, 'upload');
+}
+
+/** The title of a browser-stored manga whose text changed */
+export const localMokuroChanged$ = new Subject<string>();
+
+export async function keptMokuro(title: string): Promise<MokuroText | undefined> {
+  return (await readerDb()).get('mokuro', title).catch(() => undefined);
+}
+
+export async function saveLocalMokuro(title: string, text: MokuroText) {
+  await (await readerDb()).put('mokuro', { ...text, title });
+  localMokuroChanged$.next(title);
+}
+
+export async function removeLocalMokuro(title: string) {
+  await (await readerDb()).delete('mokuro', title);
+  localMokuroChanged$.next(title);
+}
+
+/**
+ * .mokuro files imported with their CBZs (same base name), stored for the books imported; the
+ * error of the first file that isn't one.
+ */
+export async function importMokuroFiles(files: File[], titles: string[]) {
+  const imported = new Set(titles);
+  let error = '';
+
+  for (const file of files) {
+    const title = file.name.replace(/\.mokuro$/i, '');
+
+    if (!imported.has(title)) continue;
+
+    try {
+      await saveLocalMokuro(title, await readMokuroFile(file));
+    } catch (err: any) {
+      error ||= `${file.name}: ${err.message}`;
+    }
+  }
+
+  return error;
+}
+
+/** A browser-stored manga's text, for its estimate and word list (localEstimate). */
+export const localMokuro = keptMokuro;

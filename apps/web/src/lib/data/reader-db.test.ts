@@ -25,7 +25,7 @@ describe('readerDb', () => {
 
     const db = await readerDb();
 
-    expect(db.version).toBe(7);
+    expect(db.version).toBe(8);
     expect(await db.get('recaps', 'Kept')).toEqual({ title: 'Kept', chapters: {} });
     expect([...db.objectStoreNames]).toContain('lorebooks');
     expect([...db.objectStoreNames]).toContain('vnRead');
