@@ -23,6 +23,8 @@ const OTHER_CACHE_NAME = `${swCachePrefix}other:${version}`;
 // so it is fetched network-first and kept across builds for offline play.
 const ENGINE_CACHE_NAME = `${swCachePrefix}vn-engine`;
 const engineFile = /\/vn\/conscripter(\.js|\.wasm|-version\.txt)$/;
+// VNBox (Windows games, ~125 MB with its root fs zips) is never precached: it keeps the zips in OPFS.
+const vnboxFile = /\/vn\/vnbox\//;
 // The UI font is split into unicode-range chunks (4 MB in all); a page loads only the ones it
 // shows, so they are cached on first use, across builds, rather than precached. So is KZ UDMincho
 // (17 MB), the old Washi & Sumi display font, now only a reader font choice.
@@ -41,7 +43,7 @@ const assetsToCache = build
         file
       ) && !uiFontFile.test(file)
   )
-  .concat(files.filter((file) => !engineFile.test(file)))
+  .concat(files.filter((file) => !engineFile.test(file) && !vnboxFile.test(file)))
   .concat(prerendered);
 const cachedAssets = new Set(assetsToCache);
 
