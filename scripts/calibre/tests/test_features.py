@@ -8,12 +8,23 @@ import unittest
 import zipfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'jiten'))
-from features import _origin, aozora_text, to_hiragana, vn_text  # noqa: E402
+from features import _origin, aozora_text, book_text, to_hiragana, vn_text  # noqa: E402
 
 try:
     import sudachipy  # noqa: F401  (only in the difficulty image)
 except ImportError:
     sudachipy = None
+
+class BookTextTest(unittest.TestCase):
+    def test_source_line_breaks_inside_a_paragraph_are_folded(self):
+        """Pretty-printed ruby (と男は\\n<ruby>…\\nいた) stays one word; block ends still break lines."""
+        path = os.path.join(tempfile.mkdtemp(), 'book.htmlz')
+        with zipfile.ZipFile(path, 'w') as archive:
+            archive.writestr('index.html', '<p>と男は\n  <ruby>呟<rt>つぶや</rt></ruby>\n  いた。</p>\n<p>\n次</p>')
+        hints = []
+        self.assertEqual(book_text(path, 'HTMLZ', {}, hints), 'と男は呟いた。\n次')
+        self.assertEqual(hints, [(3, 4, 'つぶや')])
+
 
 class VnTextTest(unittest.TestCase):
     def test_vn_script_in_folder_and_zip(self):

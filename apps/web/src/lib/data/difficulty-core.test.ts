@@ -15,7 +15,7 @@ import {
 } from '$lib/data/difficulty-core';
 import { RANKED_BUCKETS, type CoreNumbers } from '$lib/functions/analysis/core';
 
-const core = (hist: Record<number, number>, v98: number | null = 45037): CoreNumbers => {
+const core = (hist: Record<number, number>, v98: number | null = 38909): CoreNumbers => {
   const counts = Array.from({ length: RANKED_BUCKETS + 1 }, (_, b) => hist[b] ?? 0);
 
   return {
@@ -31,7 +31,7 @@ const core = (hist: Record<number, number>, v98: number | null = 45037): CoreNum
 
 describe('bookLevel', () => {
   it('puts the reference median at 5.5, an Ogre, and beyond-the-list books at the top', () => {
-    expect(bookLevel(core({ 8: 10 }))).toEqual({ score: 5.5, tier: 'Ogre', v98: 45037 });
+    expect(bookLevel(core({ 8: 10 }))).toEqual({ score: 5.5, tier: 'Ogre', v98: 38909 });
     expect(bookLevel(core({ 8: 10 }, null))?.tier).toBe('Demon King');
     expect(bookLevel(core({}))).toBeUndefined();
   });

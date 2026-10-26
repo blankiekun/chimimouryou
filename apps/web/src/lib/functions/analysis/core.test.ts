@@ -93,6 +93,12 @@ describe('coreText', () => {
     ).toBe('漢字&あ\n次\n行\n');
   });
 
+  it('folds source line breaks inside a paragraph (pretty-printed ruby)', () => {
+    expect(
+      coreText('<p>と男は\n  <ruby>呟<rt>つぶや</rt></ruby>\n  いた。</p>\n<p>\n　次</p>')
+    ).toBe('と男は呟いた。\n　次\n');
+  });
+
   it('cuts long paragraphs at a sentence end', () => {
     const text = `${'あ'.repeat(4000)}。${'い'.repeat(2000)}`;
 

@@ -115,7 +115,9 @@ WORDS_WAIT = 20
 # 19: JMdict compounds Sudachi splits joined again when commoner than their rarest part
 #    (compound_merge: 心配顔, not 顔 がお), and a voiced reading the list ranks takes the unvoiced
 #    one's rank when better (顔 がお: かお's).
-WORDS_VERSION = 19
+# 20: source line breaks folded in book_text (features.fold_source_breaks): pretty-printed ruby no
+#    longer splits words (呟 いた).
+WORDS_VERSION = 20
 # Lists made with their estimate, before lists were made on request: WORDS_DIR/<id>.json.gz, a bare
 # list of rows, version 19 (its totals were the estimate's: migrate_word_lists keeps them).
 LEGACY_WORDS_VERSION = 19

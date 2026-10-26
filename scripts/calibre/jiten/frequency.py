@@ -77,6 +77,7 @@ class FrequencyTable:
         self.ranks = ranks
         self.reading_ranks = reading_ranks or {}
         self._compounds = compounds
+        self._by_reading = None
 
     @property
     def compounds(self):
@@ -84,6 +85,17 @@ class FrequencyTable:
             from compound_merge import compound_table
             self._compounds = compound_table(self.ranks, self.reading_ranks)
         return self._compounds
+
+    @property
+    def best_by_reading(self) -> dict:
+        """reading -> the best rank of any term read that way (core.best_ranks' kana fallback), made when
+        first asked for (~0.7 s from a pack)."""
+        if self._by_reading is None:
+            self._by_reading = {}
+            for (_, reading), rank in self.reading_ranks.items():
+                if rank < self._by_reading.get(reading, rank + 1):
+                    self._by_reading[reading] = rank
+        return self._by_reading
 
     @classmethod
     def load(cls, path: str) -> 'FrequencyTable':
