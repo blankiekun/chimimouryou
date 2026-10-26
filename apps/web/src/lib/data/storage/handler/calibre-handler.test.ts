@@ -7,7 +7,7 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it, vi } from 'vitest';
 import { StorageSourceDefault } from '$lib/data/storage/storage-types';
-import { libraryOffline$, librarySignInNeeded } from '$lib/data/store';
+import { libraryBuilding$, libraryOffline$, librarySignInNeeded } from '$lib/data/store';
 
 const account = vi.hoisted(() => ({ user: null as { id: string; username: string } | null }));
 
@@ -96,6 +96,27 @@ describe('library sign-in prompt', () => {
     expect(await new CalibreStorageHandler(window).getBookList()).toEqual([]);
     expect(libraryOffline$.getValue()).toBe(false);
     expect(librarySignInNeeded(account.user, libraryOffline$.getValue())).toBe(true);
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('first catalog build', () => {
+  it('lists no books while catalog.json is missing, then the catalog once it is there', async () => {
+    account.user = { id: 'a', username: 'a' };
+    let built = false;
+    vi.stubGlobal('fetch', async (url: string) =>
+      url === '/calibre/catalog.json' && !built
+        ? new Response('', { status: 404 })
+        : new Response(url === '/calibre/catalog.json' ? '{"books":[]}' : '[]')
+    );
+    const handler = new CalibreStorageHandler(window);
+
+    expect(await handler.getBookList()).toEqual([]);
+    expect(libraryBuilding$.getValue()).toBe(true);
+
+    built = true;
+    expect(await handler.getBookList()).toEqual([]);
+    expect(libraryBuilding$.getValue()).toBe(false);
     vi.unstubAllGlobals();
   });
 });

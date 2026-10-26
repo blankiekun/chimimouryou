@@ -55,14 +55,10 @@ For learners, `COMPOSE_PROFILES=import,difficulty,mokuro` also runs the
   in the app go into Calibre. Back the library up first, and close Calibre
   while you add books from the app.
 
-- **A new, empty library**: set `LIBRARY_PATH=./library`, then create it:
-
-  ```sh
-  mkdir library
-  docker compose run --rm --no-deps import calibredb --with-library /library list
-  ```
-
-  After you sign in, add books with Import in the library or by dropping files
+- **A new, empty library**: set `LIBRARY_PATH=./library` and create the empty
+  folder (`mkdir library`). With the import profile on, the import service makes
+  a Calibre library there on its first start (only in a completely empty folder
+  you own; its log says so). After you sign in, add books with Import in the library or by dropping files
   on it. The library is a normal Calibre library, so Calibre can open it later.
 
 **3. Choose how you reach it**

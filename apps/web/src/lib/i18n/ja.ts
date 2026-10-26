@@ -1008,6 +1008,15 @@ export const ja: Record<MessageKey, string> = {
   'library.ascending': '昇順',
   'library.descending': '降順',
   'library.notSorted': '未指定',
+  'library.calibreBuilding': 'ライブラリを準備しています',
+  'library.calibreBuildingText':
+    'サーバーが Calibre ライブラリを初めて読み込んでいます。通常は1分ほどで、表紙はもう少しかかります。このページは自動で更新されます。',
+  'library.calibreEmpty': 'Calibre にはまだ本がありません',
+  'library.calibreEmptyImport':
+    'インポートで追加できます。EPUB・HTMLZ・TXT・CBZ ファイルをここにドロップするか、クリックして選んでください。',
+  'library.calibreEmptyNoImport':
+    'Calibre で本を追加するか、管理者にインポートサービスを有効にしてもらってください。',
+  'library.calibreProfiles': 'サーバーのプロファイル',
   'library.sortId': '追加日',
   'library.sortTitle': 'タイトル',
   'library.sortSeries': 'シリーズ',

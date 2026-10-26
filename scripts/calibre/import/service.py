@@ -341,6 +341,42 @@ def add_book(job: dict) -> dict:
     return {'state': 'failed', 'error': 'Calibre could not add this file'}
 
 
+def create_empty_library(library: str = LIBRARY) -> bool:
+    """A completely empty LIBRARY_PATH becomes a new Calibre library (calibredb makes metadata.db),
+    so a new install needs no hand-run calibredb. Anything else is left alone: a folder with any
+    file in it, one this user doesn't own (Docker makes a missing, maybe mistyped, path as root)
+    or a read-only one. Returns whether it made the library."""
+    try:
+        if os.listdir(library):
+            return False
+        owner = os.stat(library).st_uid
+    except OSError as error:
+        print(f'LIBRARY_PATH: {error}', file=sys.stderr)
+        return False
+    if owner != os.getuid() or not os.access(library, os.W_OK):
+        print(f'LIBRARY_PATH is an empty folder this service may not write (owner uid {owner}, '
+              f'running as uid {os.getuid()}), so no Calibre library was made there. Check the path; '
+              'for a new library, create the folder yourself (mkdir) owned by PUID, or run calibredb '
+              '(docs/INSTALL.md).', file=sys.stderr)
+        return False
+    try:
+        result = subprocess.run([CALIBREDB, '--library-path', library, 'list'],
+                                capture_output=True, text=True, timeout=120, check=False)
+    except (OSError, subprocess.SubprocessError) as error:
+        print(f'Making a Calibre library in LIBRARY_PATH failed: {error}', file=sys.stderr)
+        return False
+    if not os.path.exists(os.path.join(library, 'metadata.db')):
+        print(f'Making a Calibre library in LIBRARY_PATH failed: {result.stderr.strip()[-500:]}',
+              file=sys.stderr)
+        return False
+    print('=' * 72, file=sys.stderr)
+    print('LIBRARY_PATH was an empty folder: made a new, empty Calibre library in it (metadata.db).',
+          file=sys.stderr)
+    print('Add books with Import in the library. Calibre can open this folder too.', file=sys.stderr)
+    print('=' * 72, file=sys.stderr)
+    return True
+
+
 def rebuild_catalog(force=False) -> bool:
     try:
         result = subprocess.run([CATALOG_BUILDER, LIBRARY, CATALOG_OUTPUT] + (['--force'] if force else []),
@@ -699,6 +735,9 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     os.makedirs(queue_dir(), exist_ok=True)
+    # The new library's empty catalog now, rather than at the catalog service's next run.
+    if create_empty_library():
+        rebuild_catalog()
     if recover_queue(load_jobs()):
         save_jobs()
     # Games half unpacked when the service stopped.

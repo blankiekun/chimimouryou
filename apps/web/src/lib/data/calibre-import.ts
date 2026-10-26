@@ -31,6 +31,11 @@ async function errorMessage(response: Response) {
     return 'Sign in (Settings → Account, on the HTTPS address) to add books to Calibre';
   }
 
+  // nginx's answer when the service isn't running (or its profile is off).
+  if (response.status === 502) {
+    return 'The import service is not running (add import to COMPOSE_PROFILES)';
+  }
+
   try {
     const body = await response.json();
 
@@ -56,7 +61,9 @@ export async function uploadToCalibre(file: File, signal?: AbortSignal) {
   });
 
   if (!response.ok) {
-    throw new Error(`${file.name}: ${await errorMessage(response)}`);
+    throw Object.assign(new Error(`${file.name}: ${await errorMessage(response)}`), {
+      status: response.status
+    });
   }
 
   return ((await response.json()) as { job: CalibreImportJob }).job;
@@ -107,6 +114,14 @@ export interface SeriesReport {
   backup?: string;
 }
 
+/** Whether the import service answers for this account (any job list; 502 when it isn't running). */
+export async function importServiceRunning() {
+  return fetch(`${apiUrl}jobs?ids=`).then(
+    (response) => response.ok,
+    () => false
+  );
+}
+
 /** Checks the library's series, or applies the changes when `apply` (admins only). */
 export async function checkSeries(apply: boolean): Promise<SeriesReport> {
   const response = await fetch(`${apiUrl}series`, {
@@ -116,11 +131,7 @@ export async function checkSeries(apply: boolean): Promise<SeriesReport> {
   });
 
   if (!response.ok) {
-    throw new Error(
-      response.status === 502
-        ? 'The import service is not running (add import to COMPOSE_PROFILES)'
-        : await errorMessage(response)
-    );
+    throw new Error(await errorMessage(response));
   }
 
   return response.json();
@@ -131,11 +142,7 @@ export async function rebuildCatalog(): Promise<{ books: number; visualNovels: n
   const response = await fetch(`${apiUrl}catalog`, { method: 'POST' });
 
   if (!response.ok) {
-    throw new Error(
-      response.status === 502
-        ? 'The import service is not running (add import to COMPOSE_PROFILES)'
-        : await errorMessage(response)
-    );
+    throw new Error(await errorMessage(response));
   }
 
   return response.json();
@@ -155,11 +162,7 @@ export async function removeFromCalibre(
   });
 
   if (!response.ok) {
-    throw new Error(
-      response.status === 502
-        ? 'The import service is not running (add import to COMPOSE_PROFILES)'
-        : await errorMessage(response)
-    );
+    throw new Error(await errorMessage(response));
   }
 
   return response.json();
