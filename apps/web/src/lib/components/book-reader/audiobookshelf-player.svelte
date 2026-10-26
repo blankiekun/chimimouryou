@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { listening } from '$lib/data/immersion-log';
   import {
     faClosedCaptioning,
     faCrosshairs,
@@ -303,6 +304,7 @@
     <!-- svelte-ignore a11y-media-has-caption: the subtitles are shown as the book's own text -->
     <audio
       bind:this={audio}
+      use:listening={title}
       class="min-w-0 flex-1"
       controls
       preload="metadata"

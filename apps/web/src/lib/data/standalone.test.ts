@@ -47,6 +47,16 @@ describe('standalone edition', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('logs texthooker and manual immersion without a request', async () => {
+    await import('fake-indexeddb/auto');
+    const log = await import('$lib/data/immersion-log');
+
+    await log.addImmersionTime('hook', 'vn', 'ゲーム', 30, 12);
+    await log.getImmersionLog();
+    expect(Object.values(log.immersionLog$.getValue())).toHaveLength(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('sends nothing to the social hub before signing up, or while social is off', async () => {
     const social = await import('$lib/data/social');
     const { activePlugins } = await import('$lib/plugins');

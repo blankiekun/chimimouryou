@@ -17,6 +17,7 @@ import type { BookAnnotations } from '$lib/data/annotations';
 import type { BookAudiobook } from '$lib/data/audiobook';
 import type { LocalEstimate, LocalWordList } from '$lib/data/analysis-tools';
 import type { CachedReadings } from '$lib/data/generated-furigana';
+import type { ImmersionLog } from '$lib/data/immersion-log';
 import type { AbsSubtitles } from '$lib/data/audiobookshelf';
 import type { BookKanji } from '$lib/data/book-kanji';
 import type { KanjiSeen } from '$lib/data/kanji-seen';
@@ -42,7 +43,8 @@ interface ReaderDb extends DBSchema {
   wordLists: { key: string; value: LocalWordList };
   /**
    * 'words' and 'coverage' (known-words.ts), 'met' and 'list:<id>' (words-met.ts), 'marks'
-   * (word-marks.ts), 'history' (words-history.ts), 'kanji:<title>' (book-kanji.ts)
+   * (word-marks.ts), 'history' (words-history.ts), 'kanji:<title>' (book-kanji.ts),
+   * 'immersion' (immersion-log.ts)
    */
   known: {
     key: string;
@@ -53,7 +55,8 @@ interface ReaderDb extends DBSchema {
       | WordList
       | WordMarks
       | HistoryCache
-      | BookKanji;
+      | BookKanji
+      | ImmersionLog;
   };
 }
 
