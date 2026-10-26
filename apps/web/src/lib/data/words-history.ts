@@ -15,7 +15,7 @@
  * Not part of upstream.
  */
 
-import { particles, type BookWord } from '$lib/data/book-words';
+import { isNoiseWord, type BookWord } from '$lib/data/book-words';
 import { getKanjiSeen } from '$lib/data/kanji-seen';
 import { placementAt, placementResults$, type PlacementRecord } from '$lib/data/placement';
 import { readerDb } from '$lib/data/reader-db';
@@ -79,6 +79,21 @@ export function knownHistory(
   let tests = 0;
   const covered = (rank: number | null) => rank !== null && rank <= cutoff;
   const total = () => cutoff + knownRanks.length - within;
+  // A form without a reading joins its most frequent reading over the books, as `foldTotals` does.
+  const byReading = new Map<string, number>();
+  const top = new Map<string, string>();
+
+  for (const { words } of books.values()) {
+    for (const word of words) {
+      if (word[1] !== null)
+        byReading.set(wordKey(word), (byReading.get(wordKey(word)) ?? 0) + word[2]);
+    }
+  }
+  for (const [key, count] of byReading) {
+    const form = key.slice(0, key.indexOf('\t'));
+
+    if (!(byReading.get(top.get(form)!)! >= count)) top.set(form, key);
+  }
 
   const sorted = days
     .filter((day) => day.charactersRead > 0 && books.get(day.title)?.characters)
@@ -122,8 +137,9 @@ export function knownHistory(
       counted.set(title, fraction);
 
       for (const word of book.words) {
-        if (!particles.has(word[0])) {
-          const key = wordKey(word);
+        // The words words-met counts (`addWordsMet`): no particles, numbers or lone kana.
+        if (!isNoiseWord(word)) {
+          const key = (word[1] === null && top.get(word[0])) || wordKey(word);
           const before = totals.get(key) ?? 0;
           const after = before + word[2] * delta;
 
@@ -175,7 +191,8 @@ export async function getKnownHistory(days: DayRead[]) {
     .map(({ title, dateKey, charactersRead }) => [title, dateKey, charactersRead])
     .sort();
   const cutoffs = cutoffChanges(placementResults$.getValue());
-  const signature = JSON.stringify([inputs, used, cutoffs]);
+  // 2: noise words left out and readings folded, as words-met counts.
+  const signature = JSON.stringify([2, inputs, used, cutoffs]);
   const db = await readerDb();
   const cached = (await db.get('known', 'history')) as HistoryCache | undefined;
 

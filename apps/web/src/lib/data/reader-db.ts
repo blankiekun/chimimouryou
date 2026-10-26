@@ -48,7 +48,7 @@ interface ReaderDb extends DBSchema {
   /** Audiobook subtitles made by Whisper in this browser (whisper.ts) */
   whisperSubtitles: { key: string; value: WhisperSubtitles };
   /**
-   * 'words' and 'coverage' (known-words.ts), 'met' and 'list:<id>' (words-met.ts), 'marks'
+   * 'words' and 'coverage' (known-words.ts), 'met', 'ranks' and 'list:<id>' (words-met.ts), 'marks'
    * (word-marks.ts), 'history' (words-history.ts), 'kanji:<title>' (book-kanji.ts),
    * 'immersion' (immersion-log.ts)
    */
@@ -62,7 +62,8 @@ interface ReaderDb extends DBSchema {
       | WordMarks
       | HistoryCache
       | BookKanji
-      | ImmersionLog;
+      | ImmersionLog
+      | Record<string, number | null>;
   };
 }
 

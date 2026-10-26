@@ -32,6 +32,7 @@ import {
   addWordsMet,
   estimatedWordList,
   foldTotals,
+  knownFormRanks,
   knownMinCount,
   metCounter,
   readBooks,
@@ -85,7 +86,14 @@ export async function loadReadingRank(statistics: BooksDbStatistic[]) {
   const rank = readingRank(
     {
       ...countedReading(statistics),
-      wordsKnown: summarizeWords(totals, forms, counted, cutoff, ranks).known,
+      wordsKnown: summarizeWords(
+        totals,
+        forms,
+        counted,
+        cutoff,
+        ranks,
+        await knownFormRanks(forms, counted)
+      ).known,
       books: rankBooks
     },
     readingRank$.getValue(),

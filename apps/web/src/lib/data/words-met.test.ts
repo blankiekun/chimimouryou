@@ -120,6 +120,22 @@ describe('summarizeWords with the word test cutoff', () => {
     expect(summarizeWords(totals, new Set(), {}, 0, ranks).known).toBe(3);
   });
 
+  it("counts Anki words and marks in no book read only past the cutoff, by the form's rank", () => {
+    const totals = { '犬\tいぬ': 1 };
+    const mark = { status: 'known' as const, modified: 1 };
+    // 本 and 机 are common: the cutoff counts them already. 魑魅 is rare, 謎語 unranked.
+    const formRanks = { 本: 30, 机: 800, 魑魅: 90000, 謎語: null };
+    const anki = new Set(['本', '魑魅', '謎語', '犬']);
+    const marks = { '机\t': mark, '机\tつくえ': mark, '本\t': mark };
+
+    // 犬 met once, ranked past: +1; 魑魅 +1; 謎語 +1; 机 and 本 within the cutoff.
+    expect(summarizeWords(totals, anki, marks, 1000, { '犬\tいぬ': 5000 }, formRanks).known).toBe(
+      1003
+    );
+    // Not looked up: past the cutoff, as before (机 once, not once per mark).
+    expect(summarizeWords(totals, anki, marks, 1000, { '犬\tいぬ': 5000 }).known).toBe(1005);
+  });
+
   it('keeps the best rank of a word over the lists', () => {
     const ranks: Record<string, number> = {};
 

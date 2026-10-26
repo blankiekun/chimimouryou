@@ -308,6 +308,48 @@ class KanjiEndpointTest(unittest.TestCase):
             server.server_close()
 
 
+class RanksEndpointTest(unittest.TestCase):
+    def test_ranks_of_listed_forms(self):
+        import importlib.util
+        import threading
+        import urllib.error
+        import urllib.request
+        from http.server import ThreadingHTTPServer
+        spec = importlib.util.spec_from_file_location(
+            'jiten_service_ranks', os.path.join(os.path.dirname(__file__), '..', 'jiten', 'service.py'))
+        service = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(service)
+        service.FREQUENCY_DICTIONARY = dictionary()
+        service.READER_PACK = os.path.join(tempfile.mkdtemp(), 'missing.ygp')
+        service.INTERNAL_TOKEN_FILE = os.path.join(tempfile.mkdtemp(), 'token')
+        with open(service.INTERNAL_TOKEN_FILE, 'w') as f:
+            f.write('c0ffee')
+        server = ThreadingHTTPServer(('127.0.0.1', 0), service.Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+
+        def post(body, origin='https://reader.example'):
+            headers = {'X-Internal-Token': 'c0ffee', 'Host': 'reader.example', 'Origin': origin,
+                       'Content-Type': 'application/json'}
+            request = urllib.request.Request(f'http://127.0.0.1:{server.server_port}/ranks', data=body, headers=headers)
+            try:
+                with urllib.request.urlopen(request) as response:
+                    return response.status, json.loads(response.read())
+            except urllib.error.HTTPError as error:
+                return error.code, None
+        try:
+            # Unlisted forms and non-strings are left out; a form takes its best rank over its readings.
+            status, body = post(json.dumps({'forms': ['事', '魔法', '無い', 3]}).encode())
+            self.assertEqual((status, body), (200, {'ranks': {'事': 30, '魔法': 1986}}))
+            self.assertEqual(post(b'{"forms": "x"}')[0], 400)
+            self.assertEqual(post(b'not json')[0], 400)
+            self.assertEqual(post(json.dumps({'forms': ['x'] * (service.MAX_RANK_FORMS + 1)}).encode())[0], 400)
+            self.assertEqual(post(b'x' * (service.MAX_RANKS_BYTES + 1))[0], 413)
+            self.assertEqual(post(b'{"forms": []}', origin='https://evil.example')[0], 403)
+        finally:
+            server.shutdown()
+            server.server_close()
+
+
 class NginxTest(unittest.TestCase):
     def test_frequency_list_upload_is_admin_only(self):
         import re
@@ -319,6 +361,16 @@ class NginxTest(unittest.TestCase):
         # The service's own check reads X-Account-Admin: every location reaching it sets it from the account.
         api = re.search(r'location /calibre/difficulty/api/ \{(.*?)\n  \}', template, re.S).group(1)
         self.assertIn('proxy_set_header X-Account-Admin $account_admin;', api)
+
+    def test_ranks_are_for_shared_readers_with_a_capped_body(self):
+        import re
+        path = os.path.join(os.path.dirname(__file__), '..', 'nginx-ebook-reader.conf.template')
+        with open(path, encoding='utf-8') as f:
+            template = f.read()
+        block = re.search(r'location = /calibre/difficulty/api/ranks \{(.*?)\n  \}', template, re.S).group(1)
+        self.assertIn('auth_request /_account_shared;', block)
+        self.assertIn('client_max_body_size 1m;', block)
+        self.assertIn('limit_req zone=', block)
 
 
 class SaveWordsTest(unittest.TestCase):

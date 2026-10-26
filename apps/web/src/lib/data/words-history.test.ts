@@ -52,6 +52,28 @@ describe('words known over time', () => {
     ]);
   });
 
+  it('counts as words-met does: a form without a reading joins its reading, noise left out', () => {
+    const books = new Map([
+      [
+        'A',
+        book([
+          ['呟く', 'つぶやく', 4, 9000],
+          ['三', null, 20, null]
+        ])
+      ],
+      ['B', book([['呟く', null, 4, 9000]])]
+    ]);
+    const points = knownHistory(
+      [
+        { title: 'A', dateKey: '2026-10-01', charactersRead: 1000 },
+        { title: 'B', dateKey: '2026-10-02', charactersRead: 1000 }
+      ],
+      books
+    );
+
+    expect(points.map((point) => point.known)).toEqual([0, 1]);
+  });
+
   it('never counts more than the kanji record read, nor rereads', () => {
     const books = new Map([['A', book([['猫', 'ねこ', 10, 100]], 0.5)]]);
 

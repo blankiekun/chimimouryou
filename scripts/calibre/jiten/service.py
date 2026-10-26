@@ -13,6 +13,8 @@ HTTP API (bound to localhost, proxied by nginx at /calibre/difficulty/api/):
                                     uniqueWords, tokens}, made first if missing (waits up to WORDS_WAIT, else 503)
   GET  readings/ID                  the book's readings file (readings_file.py)
   POST readings/ID                  make it if missing or stale (waits up to READINGS_WAIT): {"status": "ready" | "queued" | "unavailable"}
+  POST ranks      {"forms": [...]}  {"ranks": {form: rank}}: the installed frequency list's best rank of each form it lists
+                                    (a reader's Anki words and marks met in no book, for words known); read-only, capped
   POST compute    {"ids": [...]}    estimate difficulty for these books ({"all": true} for all without a current estimate)
   POST cancel                       stop the running job
   POST dictionary   body: the zip    install Jiten's frequency list (jiten_freq_global.zip); admins only.
@@ -320,6 +322,32 @@ def _load_reader(tokenizer=None, known=lambda: FREQUENCY_DICTIONARY):
 
 # 2: FREQUENCY_PACK has the JMdict compound table (compound_merge), so older packs are rebuilt.
 PACK_FORMAT = 2
+
+
+# POST ranks: a reader's Anki deck and marks, sent once and cached by the reader.
+MAX_RANKS_BYTES = 1024 * 1024
+MAX_RANK_FORMS = 50_000
+_form_ranks = (None, {})
+_form_ranks_lock = threading.Lock()
+
+
+def form_ranks(forms) -> dict:
+    """form -> its best rank in the installed frequency list, for the forms it lists. The packed table when
+    current (shared pages, nothing parsed), else the list itself, kept until the list changes."""
+    global _form_ranks
+    from frequency import FrequencyTable, load_yomitan_ranks
+    try:
+        stat = os.stat(FREQUENCY_DICTIONARY)
+    except OSError:
+        return {}
+    key = (stat.st_mtime_ns, stat.st_size)
+    with _form_ranks_lock:
+        if _form_ranks[0] != key:
+            ranks = (FrequencyTable.load_packed(FREQUENCY_PACK).ranks if reader_pack_current()
+                     else load_yomitan_ranks(FREQUENCY_DICTIONARY))
+            _form_ranks = (key, ranks)
+        ranks = _form_ranks[1]
+    return {form: ranks[form] for form in forms if isinstance(form, str) and form in ranks}
 
 
 def reader_pack_key() -> str:
@@ -1067,6 +1095,20 @@ class Handler(BaseHTTPRequestHandler):
         parts = self.path.split('?')[0].strip('/').split('/')
         if len(parts) == 2 and parts[0] == 'readings' and re.fullmatch(r'-?[0-9]+', parts[1]):
             return self._send(200, {'status': readings.request(int(parts[1]), READINGS_WAIT)})
+        if parts == ['ranks']:
+            length = int(self.headers.get('Content-Length') or 0)
+            if not 0 < length <= MAX_RANKS_BYTES:
+                return self._send(413 if length > 0 else 400, {'error': 'Empty or too large'})
+            try:
+                forms = json.loads(self.rfile.read(length)).get('forms')
+            except (ValueError, AttributeError):
+                return self._send(400, {'error': 'invalid JSON'})
+            if not isinstance(forms, list) or len(forms) > MAX_RANK_FORMS:
+                return self._send(400, {'error': 'invalid request'})
+            try:
+                return self._send(200, {'ranks': form_ranks(forms)})
+            except (OSError, ValueError, KeyError, zipfile.BadZipFile) as error:
+                return self._send(503, {'error': str(error)})
         if parts == ['dictionary']:
             # nginx sends it from the account check of every location that reaches this path.
             if self.headers.get('X-Account-Admin') != '1':
