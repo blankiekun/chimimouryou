@@ -23,6 +23,7 @@ import {
   mergeKanji,
   mergeWordMarks,
   syncExtras,
+  syncImmersion,
   syncKanji,
   syncWordMarks
 } from './extras-sync';
@@ -285,6 +286,57 @@ describe('kanji sync', () => {
     window.localStorage.setItem('readerDataOwner', 'alice');
     await syncKanji();
 
+    expect(calls).toEqual([]);
+  });
+});
+
+describe('immersion sync', () => {
+  const logged = (id: string, modified: number, seconds = 60) => ({
+    id,
+    type: 'vn',
+    title: 'ゲーム',
+    day: '2026-10-21',
+    seconds,
+    characters: 10,
+    source: 'hook',
+    modified
+  });
+
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    account.user = null;
+    window.localStorage.clear();
+    await (await readerDb()).delete('known', 'immersion');
+  });
+
+  it('merges immersion.json in the account folder, dropping malformed entries', async () => {
+    const { files } = server({
+      '/account/sync/immersion.json': {
+        entries: {
+          a: logged('a', 1, 999),
+          b: logged('b', 4),
+          bad: { id: 'bad' },
+          c: logged('x', 1)
+        }
+      }
+    });
+    const db = await readerDb();
+
+    await db.put('known', { a: logged('a', 2) } as any, 'immersion');
+    account.user = { id: 'bob', username: 'bob' };
+    window.localStorage.setItem('readerDataOwner', 'bob');
+    await syncImmersion();
+
+    const merged = { a: logged('a', 2), b: logged('b', 4) };
+
+    expect(await db.get('known', 'immersion')).toEqual(merged);
+    expect(files['/account/sync/immersion.json']).toEqual({ entries: merged });
+  });
+
+  it("doesn't sync signed out without a library source", async () => {
+    const { calls } = server();
+
+    await syncImmersion();
     expect(calls).toEqual([]);
   });
 });

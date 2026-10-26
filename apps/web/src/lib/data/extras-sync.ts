@@ -15,11 +15,18 @@
  * Kanji met (kanji-seen.ts) sync for every book as one kanji.json in the account's
  * folder while signed in (else at the root of the library's Drive, OneDrive or folder),
  * after releaseReaderData has run. Words marked known or ignored (word-marks.ts) sync
- * the same way as words.json. Not part of upstream.
+ * the same way as words.json, and so does the immersion log (immersion-log.ts) as immersion.json.
+ * Not part of upstream.
  */
 
 import { BehaviorSubject, type Subject } from 'rxjs';
 import { accountReady, currentAccount } from '$lib/data/account';
+import {
+  isImmersionEntry,
+  mergeImmersion,
+  sameImmersion,
+  type ImmersionLog
+} from '$lib/data/immersion-log';
 import type { KanjiSeen } from '$lib/data/kanji-seen';
 import { logger } from '$lib/data/logger';
 import { lorebookChanged$, mergeLorebooks, sameLorebooks, type Lorebook } from '$lib/data/lorebook';
@@ -341,5 +348,62 @@ async function syncWordMarksOnce() {
     wordsSyncedAt = Date.now();
   } catch (error: any) {
     logger.warn(`Word marks sync failed: ${error.message}`);
+  }
+}
+
+let immersionTimer: ReturnType<typeof setTimeout> | undefined;
+let immersionQueue = Promise.resolve();
+let immersionSyncedAt = 0;
+
+/**
+ * Uploads a while after the first unsynced change: not reset by later ones, since the texthooker
+ * writes at every line.
+ */
+export function immersionChanged() {
+  immersionTimer ??= setTimeout(() => {
+    immersionTimer = undefined;
+    syncImmersion();
+  }, kanjiUploadDelay);
+}
+
+/** Downloads before the log is shown, unless synced a moment ago. */
+export function pullImmersion() {
+  return Date.now() - immersionSyncedAt < kanjiFreshFor ? Promise.resolve() : syncImmersion();
+}
+
+export function syncImmersion(): Promise<void> {
+  immersionQueue = immersionQueue.then(syncImmersionOnce);
+
+  return immersionQueue;
+}
+
+async function syncImmersionOnce() {
+  try {
+    const store = await readerStore();
+
+    if (!store) return;
+
+    await syncJsonFile<{ entries?: unknown }>(store, 'immersion.json', undefined, async (file) => {
+      const entries = file?.entries;
+      const remote = Object.fromEntries(
+        Object.entries(typeof entries === 'object' && entries ? entries : {}).filter(
+          ([id, entry]) => isImmersionEntry(entry) && entry.id === id
+        )
+      ) as ImmersionLog;
+      const tx = (await readerDb()).transaction('known', 'readwrite');
+      const local = ((await tx.store.get('immersion')) ?? {}) as ImmersionLog;
+      const merged = mergeImmersion(local, remote);
+
+      if (!sameImmersion(merged, local)) {
+        await tx.store.put(merged, 'immersion');
+      }
+      await tx.done;
+
+      return sameImmersion(merged, remote) ? undefined : { entries: merged };
+    });
+
+    immersionSyncedAt = Date.now();
+  } catch (error: any) {
+    logger.warn(`Immersion log sync failed: ${error.message}`);
   }
 }
