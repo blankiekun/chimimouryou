@@ -178,7 +178,7 @@
       <PointBox label={$t$('hook.session')} figure={sessionCharacters} unit={$t$('dashboard.unit')}>
         <p class="hook-session">
           {formatDuration(sessionSeconds) || $t$('hook.underMinute')} ·
-          <a href="{pagePath}/statistics#immersion-log">{$t$('hook.toLog')}</a>
+          <a href="{pagePath}/statistics">{$t$('hook.toLog')}</a>
         </p>
         {#if !$statisticsEnabled$}
           <p class="hook-hint">{$t$('hook.statisticsOff')}</p>
