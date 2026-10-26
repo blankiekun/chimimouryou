@@ -230,53 +230,129 @@ export async function pairPresence(request: Request, env: Env) {
   return json(await newKey(env, row.user, name));
 }
 
-/** GET /v1/presence/current with `Authorization: Bearer pk_…`: the key owner's live status */
-export async function currentPresence(request: Request, env: Env) {
+type PresenceRow = { activity: string; kind: string; updated_at: number; expires_at: number };
+
+const revoked = () =>
+  new Response(JSON.stringify({ error: 'key' }), {
+    status: 401,
+    headers: { ...cors, 'Content-Type': 'application/json', 'X-Next': '300' }
+  });
+
+/** The presence key in `Authorization: Bearer pk_…` (last_seen written at most daily), or null */
+async function presenceKey(request: Request, env: Env) {
   const match = /^Bearer (pk_[A-Za-z0-9_-]{43})$/.exec(request.headers.get('Authorization') ?? '');
 
-  const revoked = () =>
-    new Response(JSON.stringify({ error: 'key' }), {
-      status: 401,
-      headers: { ...cors, 'Content-Type': 'application/json', 'X-Next': '300' }
-    });
-
-  if (!match) return revoked();
+  if (!match) return null;
 
   const hash = await sha256(match[1]);
-  const key = await env.DB.prepare('SELECT user, last_seen FROM presence_keys WHERE key_hash = ?1')
+  const key = await env.DB.prepare(
+    'SELECT id, user, last_seen FROM presence_keys WHERE key_hash = ?1'
+  )
     .bind(hash)
-    .first<{ user: string; last_seen: number }>();
+    .first<{ id: string; user: string; last_seen: number }>();
   const time = now();
 
-  if (!key) return revoked();
-  if (key.last_seen < time - SEEN_EVERY) {
+  if (key && key.last_seen < time - SEEN_EVERY) {
     await env.DB.prepare('UPDATE presence_keys SET last_seen = ?1 WHERE key_hash = ?2')
       .bind(time, hash)
       .run();
   }
+  return key;
+}
 
-  const row = await env.DB.prepare(
-    'SELECT activity, kind, updated_at, expires_at FROM presence WHERE user = ?1'
-  )
-    .bind(key.user)
-    .first<{ activity: string; kind: string; updated_at: number; expires_at: number }>();
-  if (!row || row.expires_at <= time || !row.kind) {
+const presenceRow = (env: Env, user: string) =>
+  env.DB.prepare('SELECT activity, kind, updated_at, expires_at FROM presence WHERE user = ?1')
+    .bind(user)
+    .first<PresenceRow>();
+
+/** GET presence/current's 200 body, or null when nothing is current */
+function statusBody(row: PresenceRow | null, time: number) {
+  if (!row || row.expires_at <= time || !row.kind) return null;
+  return {
+    activity: JSON.parse(row.activity),
+    kind: row.kind,
+    updatedAt: row.updated_at,
+    expiresAt: row.expires_at,
+    next: 30
+  };
+}
+
+/** What a push connection is sent: the 200 body, or {activity: null} to clear */
+const streamMessage = (row: PresenceRow | null, time: number) =>
+  JSON.stringify(statusBody(row, time) ?? { activity: null });
+
+/** GET /v1/presence/current with `Authorization: Bearer pk_…`: the key owner's live status */
+export async function currentPresence(request: Request, env: Env) {
+  const key = await presenceKey(request, env);
+
+  if (!key) return revoked();
+
+  const time = now();
+  const row = await presenceRow(env, key.user);
+  const body = statusBody(row, time);
+
+  if (!body) {
     return empty({
       'Cache-Control': 'no-store',
       'X-Next': String(nextPoll(row?.expires_at, time))
     });
   }
 
-  const response = json({
-    activity: JSON.parse(row.activity),
-    kind: row.kind,
-    updatedAt: row.updated_at,
-    expiresAt: row.expires_at,
-    next: 30
-  });
+  const response = json(body);
 
   response.headers.set('Cache-Control', 'no-store');
   return response;
+}
+
+/** POST to the user's PresenceStream (stream.ts); its failure never fails the write that called it */
+async function tellStream(env: Env, user: string, path: string, body?: string) {
+  if (!env.PRESENCE) return;
+  try {
+    await env.PRESENCE.get(env.PRESENCE.idFromName(user)).fetch(`https://presence/${path}`, {
+      method: 'POST',
+      body
+    });
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+/** Closes the user's push connections: one key's after its revocation, all of them without `key` */
+export const closeStreams = (env: Env, user: string, key = '') =>
+  tellStream(env, user, `close?key=${key}`);
+
+/** Sends a status change to the user's push connections, when they have a paired add-on */
+async function notifyStreams(env: Env, user: string, message: string) {
+  if (!env.PRESENCE) return;
+
+  const paired = await env.DB.prepare('SELECT 1 FROM presence_keys WHERE user = ?1 LIMIT 1')
+    .bind(user)
+    .first();
+
+  if (paired) await tellStream(env, user, 'send', message);
+}
+
+/**
+ * GET /v1/presence/stream (WebSocket) with `Authorization: Bearer pk_…`: the add-on's push
+ * connection, held by the user's PresenceStream, with the current status as its first message.
+ */
+export async function streamPresence(request: Request, env: Env) {
+  if (!env.PRESENCE) throw new HttpError(404, 'route');
+  if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
+    throw new HttpError(426, 'upgrade');
+  }
+
+  const key = await presenceKey(request, env);
+
+  if (!key) return revoked();
+
+  const message = streamMessage(await presenceRow(env, key.user), now());
+
+  return env.PRESENCE.get(env.PRESENCE.idFromName(key.user)).fetch(
+    `https://presence/connect?key=${key.id}`,
+    // Header values are bytes: the activity (Japanese text) goes percent-encoded.
+    { headers: { Upgrade: 'websocket', 'X-Message': encodeURIComponent(message) } }
+  );
 }
 
 /** The status a profile shows its owner and friends, when they turned "Show on my profile" on */
@@ -310,11 +386,7 @@ export async function presenceRoute(request: Request, env: Env, user: UserRow, p
 
     const ttl = clampTtl(body.ttl);
     const time = now();
-    const old = await env.DB.prepare(
-      'SELECT activity, kind, updated_at, expires_at FROM presence WHERE user = ?1'
-    )
-      .bind(user.id)
-      .first<{ activity: string; kind: string; updated_at: number; expires_at: number }>();
+    const old = await presenceRow(env, user.id);
 
     // Nothing new (activity, kind and ttl): no D1 write until the status is near its end.
     if (
@@ -335,15 +407,22 @@ export async function presenceRoute(request: Request, env: Env, user: UserRow, p
       .run();
 
     if (!meta.changes) throw new HttpError(429, 'soon');
+    await notifyStreams(
+      env,
+      user.id,
+      streamMessage({ activity, kind, updated_at: time, expires_at: time + ttl }, time)
+    );
     return empty();
   }
   if (route === 'DELETE ') {
     // Ended now; its times stay (for the add-on's wait hint) until the cron drops the row.
-    await env.DB.prepare(
-      `UPDATE presence SET activity = '{}', kind = '', expires_at = ?2 WHERE user = ?1`
+    const { meta } = await env.DB.prepare(
+      `UPDATE presence SET activity = '{}', kind = '', expires_at = ?2 WHERE user = ?1 AND kind != ''`
     )
       .bind(user.id, now())
       .run();
+
+    if (meta.changes) await notifyStreams(env, user.id, streamMessage(null, now()));
     return empty();
   }
   if (route === 'POST keys') {
@@ -369,9 +448,11 @@ export async function presenceRoute(request: Request, env: Env, user: UserRow, p
   const keyPath = /^keys\/([0-9a-f]{16})$/.exec(path);
 
   if (request.method === 'DELETE' && keyPath) {
-    await env.DB.prepare('DELETE FROM presence_keys WHERE id = ?1 AND user = ?2')
+    const { meta } = await env.DB.prepare('DELETE FROM presence_keys WHERE id = ?1 AND user = ?2')
       .bind(keyPath[1], user.id)
       .run();
+
+    if (meta.changes) await closeStreams(env, user.id, keyPath[1]);
     return empty();
   }
   if (route === 'POST codes') {

@@ -37,6 +37,7 @@ class FakeHub:
         self.headers = {}
         self.codes = {"ABC-DEF-GHJ": KEY}
         self.requests = []
+        self.stream = None  # a push connection handler (test_stream.py); None answers 404 like an older hub
         hub = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -54,6 +55,8 @@ class FakeHub:
 
             def do_GET(self):
                 hub.requests.append(("GET", self.path, self.headers.get("Authorization")))
+                if self.path == "/v1/presence/stream" and hub.stream:
+                    return hub.stream.handle(self)
                 if self.path == "/v1/presence/current":
                     code, body = hub.current
                     if code == 302:

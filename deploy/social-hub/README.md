@@ -48,6 +48,11 @@ idempotent), in order, then `npx wrangler@4.147.0 deploy`:
 - `npx wrangler@4.147.0 d1 execute chimi-hub --remote --file migrations/0009_presence.sql`
   (Discord status relay: `presence`, `presence_keys`, `presence_codes`, `users.presence_profile`; apply
   before deploying; a second run only fails with "duplicate column name")
+- Push to the add-on (`PresenceStream`, a Durable Object): nothing to run by hand. `wrangler.toml`
+  binds it as `PRESENCE` with the migration `v1` (`new_sqlite_classes`, the free plan's only kind),
+  which the next `npm run deploy` applies once. It stores nothing. Each deploy closes every push
+  connection; the add-ons poll until they reconnect (1 minute later). Without the binding the
+  stream route answers 404 and add-ons poll.
 
 ## Develop
 
@@ -120,6 +125,25 @@ adds `presence` (`{activity, updatedAt}`) for the reader and friends when `PUT m
 (`me.presenceProfile`) is on; anonymous (edge-cached) responses never carry it. Sign out everywhere,
 a password change, recovery and account deletion delete the account's keys, codes and status; the
 10-minute cron blanks expired statuses (their times stay an hour for `next`) and deletes expired codes.
+
+Push (`src/stream.ts`): `GET presence/stream` with `Upgrade: websocket` and the same
+`Authorization: Bearer pk_…` opens a WebSocket instead of polling (426 without the Upgrade header,
+401 like `presence/current`, 404 when the hub has no `PRESENCE` binding). The Worker checks the
+key (the same daily `last_seen`), then hands the connection to the user's `PresenceStream` Durable
+Object (`idFromName(user id)`), which holds it with the hibernation API (tagged with the key id, 10
+per user, a new one closes the oldest with 4008). The first message is the current status: the
+JSON body of `presence/current`'s 200, or `{"activity": null}` when nothing is current. After a
+`PUT presence` or `DELETE presence` that wrote (not the unchanged case), the Worker sends the new
+status (or `{"activity": null}`) to every connection, and only for a reader with a paired key. A
+status isn't pushed again when it expires: the add-on clears it itself at `expiresAt`. The add-on's
+keep-alive is the text `ping` every 50 s (Cloudflare closes a WebSocket idle for 100 s), answered
+`pong` by `setWebSocketAutoResponse` without waking the object; it sends nothing else. Removing a
+key closes that key's connections, and sign out everywhere, a password change, recovery and account
+deletion close all the account's, with code 4001 (the add-on then polls, gets 401 and forgets the
+key). Budget (free plan: 100k Durable Object requests a day; connects are one request, the
+Worker's push to the object one per status change, outgoing messages and auto-answered pings
+free, no duration while hibernated): an add-on costs a few Worker requests a day for connects
+against up to 2,880 polls.
 
 Moderation, role `dev` only (403 for everyone else): `GET admin/reports` (open reports grouped
 by kind and target, with the name, picture or cover reported); `DELETE admin/reports?what=&target=`

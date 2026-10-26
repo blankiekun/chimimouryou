@@ -33,9 +33,13 @@ Tools → Add-ons → chimimouryou Discord companion → Config (`config.json`, 
 
 Paired with your chimimouryou social account, the add-on also shows what you read on other devices
 (a phone, a computer without Anki) in this computer's Discord: those devices send their status to the
-social hub, and the add-on asks the hub for it, only while Discord is running: every 30 s, every 2
-minutes after 10 minutes without a status, every 5 minutes after an hour, later when the hub asks
-for that, and less often while the hub can't be reached.
+social hub, which pushes each change to the add-on at once over a WebSocket the add-on keeps open
+only while Discord is running (`GET /v1/presence/stream`; a `ping` every 50 s keeps it open; a
+status clears itself at its `expiresAt`). Without that connection (the hub can't be reached, or is
+older) the add-on asks the hub instead: every 30 s, every 2 minutes after 10 minutes without a
+status, every 5 minutes after an hour, later when the hub asks for that, and less often while the
+hub can't be reached; it tries the connection again after 1 minute, doubling to 10 (an older hub
+that answers 404 or 426: not again until the profile is opened again).
 
 - Automatic: signed in to Social on this computer, chimimouryou pairs the add-on itself
   (`PUT /v1/pair`).
@@ -49,7 +53,7 @@ A status sent by a page on this computer in the last 2 minutes, and not cleared,
 When the hub has nothing current, only a status that came from the hub is cleared.
 
 Privacy: unpaired, the add-on makes no internet requests. Paired, it only asks the hub for your current
-status, with a presence key that can read nothing else; it never sends what this computer reads to the
+status (the push connection sends nothing but `ping`), with a presence key that can read nothing else; it never sends what this computer reads to the
 hub (chimimouryou's pages do that, and only when you turn the relay on). The key and the hub address
 are kept in `chimimouryou_discord/user_files/pairing.json` (kept across add-on updates, readable only
 by you where the system has file modes, never packaged by `build.py`) and never logged. Requests don't
@@ -61,7 +65,7 @@ What chimimouryou's `discord` plugin implements. Base URL `http://127.0.0.1:4191
 
 | Request               | Body                                  | Answer                                                                                                           |
 | --------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `GET /v1/status`      |                                       | `200 {"version": "0.2.0", "discord": "connected" \| "closed", "lastSent": <epoch ms> \| null, "paired": <bool>}` |
+| `GET /v1/status`      |                                       | `200 {"version": "0.3.0", "discord": "connected" \| "closed", "lastSent": <epoch ms> \| null, "paired": <bool>}` |
 | `PUT /v1/activity`    | the finished activity, JSON, ≤ 16 KB  | `204`; `400 {"error"}` if invalid, `413` if too large                                                            |
 | `DELETE /v1/activity` |                                       | `204`: clears the status                                                                                         |
 | `PUT /v1/pair`        | `{"hub": "https://…", "key": "pk_…"}` | `204`: paired (replaces an earlier pairing); `400` unless the hub is https and the key a presence key            |
@@ -116,7 +120,7 @@ python3 -m unittest discover -s apps/anki-discord/tests
 ```
 
 The tests need no Anki or Discord: they run against a fake Discord on a Unix socket and a fake hub
-(`tests/test_relay.py`). `aqt` is only
+(`tests/test_relay.py`, its push connection in `tests/test_stream.py`). `aqt` is only
 imported in `chimimouryou_discord/__init__.py`. The Discord application id is `CLIENT_ID` there.
 
 ## Licence
