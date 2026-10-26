@@ -35,7 +35,8 @@ class CoreTest(unittest.TestCase):
             table = FrequencyTable(case['ranks'], {tuple(k.split('\t')): v for k, v in case['readingRanks'].items()},
                                    case['compounds'])
             with self.subTest(case['name']):
-                self.assertEqual(core.book_core(tokens_of(case['morphemes']), table), case['expected'])
+                self.assertEqual(core.book_core(tokens_of(case['morphemes']), table, case.get('text', ''),
+                                                 case.get('rubyKanji', 0)), case['expected'])
 
     def test_scores(self):
         scale = core.load_scale()

@@ -19,6 +19,7 @@ import {
   coreText,
   countCharacters,
   parseCoreTable,
+  rubyKanjiCount,
   tokensOf,
   type CoreNumbers,
   type CoreTable
@@ -219,7 +220,7 @@ self.onmessage = async ({ data }: MessageEvent<AnalysisRequest | AnalysisLoad>) 
         return tokensOf(found, at);
       });
       const tokenized = performance.now();
-      const core: CoreNumbers = bookCore(bookTokens, table);
+      const core: CoreNumbers = bookCore(bookTokens, table, text, rubyKanjiCount(data.html));
 
       post({
         type: 'result',

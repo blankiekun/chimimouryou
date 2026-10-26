@@ -11,6 +11,7 @@ import {
   coreScore,
   coreText,
   parseCoreTable,
+  rubyKanjiCount,
   tokensOf,
   type CoreScale
 } from './core';
@@ -26,6 +27,8 @@ const fixture = JSON.parse(fixtureJson) as {
     ranks: Record<string, number>;
     readingRanks: Record<string, number>;
     compounds: Record<string, string>;
+    text?: string;
+    rubyKanji?: number;
     expected: unknown;
   }[];
   scores: [number | null, number][];
@@ -34,7 +37,7 @@ const fixture = JSON.parse(fixtureJson) as {
 describe('the shared difficulty core fixture', () => {
   it.each(fixture.cases.map((c) => [c.name, c] as const))(
     '%s',
-    (_, { morphemes, ranks, readingRanks, compounds, expected }) => {
+    (_, { morphemes, ranks, readingRanks, compounds, text, rubyKanji, expected }) => {
       // A 6th field repeats the row (runs are stored once).
       const rows = morphemes
         .flatMap((row) => Array<string>(Number(row[5] ?? 1)).fill(row.slice(0, 5).join('\x1f')))
@@ -45,7 +48,7 @@ describe('the shared difficulty core fixture', () => {
         compounds: new Map(Object.entries(compounds))
       };
 
-      expect(bookCore(tokensOf(rows), table)).toEqual(expected);
+      expect(bookCore(tokensOf(rows), table, text, rubyKanji)).toEqual(expected);
     }
   );
 
@@ -68,6 +71,16 @@ describe('the shared difficulty core fixture', () => {
 
   it('uses the service’s scale', () => {
     expect(scale).toEqual(JSON.parse(serverScale));
+  });
+});
+
+describe('rubyKanjiCount', () => {
+  it('counts the kanji of ruby bases, not their readings', () => {
+    expect(
+      rubyKanjiCount(
+        '<p><ruby>漢字<rp>(</rp><rt>かんじ</rt><rp>)</rp></ruby>と<RUBY>𠮟<rt>しっ</rt></RUBY>る字</p>'
+      )
+    ).toBe(3);
   });
 });
 

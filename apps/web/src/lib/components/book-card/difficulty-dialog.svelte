@@ -7,7 +7,7 @@
   import { account$, hasPermission } from '$lib/data/account';
   import type { WordCoverage } from '$lib/data/book-words';
   import { loadCalibreDifficulty, type CalibreDifficulty } from '$lib/data/calibre';
-  import { bookLevel, relativeLevel } from '$lib/data/difficulty-core';
+  import { bookFacets, bookLevel, relativeLevel } from '$lib/data/difficulty-core';
   import { bookCoverage, getKnownSet } from '$lib/data/known-words';
   import { knownMinCount, wordList } from '$lib/data/words-met';
   import { t$ } from '$lib/i18n';
@@ -18,6 +18,11 @@
 
   /** Word coverage needs each book's word list, so only for the first few. */
   const maxCoverageBooks = 20;
+  const sentenceKeys = {
+    short: 'difficulty.sentShort',
+    average: 'difficulty.sentAverage',
+    long: 'difficulty.sentLong'
+  } as const;
   const dispatch = createEventDispatcher<{ close: void }>();
 
   let finishedCompute = false;
@@ -57,6 +62,7 @@
       {#each books.slice(0, maxCoverageBooks) as book (book.id)}
         {@const words = coverage[book.calibreId ?? -1]}
         {@const level = bookLevel(estimates[book.calibreId ?? -1]?.core)}
+        {@const facets = bookFacets(estimates[book.calibreId ?? -1]?.core)}
         <li class="flex flex-col gap-0.5">
           <span class="flex items-center gap-2">
             <span class="truncate font-semibold" title={book.title}>{book.title}</span>
@@ -72,6 +78,16 @@
                 words: level.v98?.toLocaleString('en-US') ?? ''
               })}
             </span>
+            {#if facets}
+              <span>
+                {[
+                  facets.fullFurigana ? $t$('difficulty.fullFurigana') : '',
+                  $t$(sentenceKeys[facets.sentBand])
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+            {/if}
             {#if words}
               <span>
                 {$t$('difficulty.forYou', {

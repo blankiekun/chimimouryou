@@ -47,6 +47,37 @@ export function bookLevel(core: CoreNumbers | undefined): BookLevel | undefined 
   return { score, tier: difficultyScale.tiers[Math.min(Math.floor(score), 10) - 1], v98: core.v98 };
 }
 
+export type SentenceBand = 'short' | 'average' | 'long';
+
+/** From this share of the kanji under the author's ruby a book counts as full furigana (総ルビ) */
+export const fullFuriganaShare = 0.5;
+/**
+ * The library's sentence-length tertiles (mean characters per sentence; core.py's facets), from
+ * 3,000 random library books: below the first is short, from the second on long.
+ */
+export const sentenceCuts = [22.3, 25.9] as const;
+
+export interface BookFacets {
+  rubyKanji: number;
+  fullFurigana: boolean;
+  sentLen: number;
+  sentBand: SentenceBand;
+}
+
+/** The facets beside the level (core version 2); undefined for older core numbers. */
+export function bookFacets(core: CoreNumbers | undefined): BookFacets | undefined {
+  if (!core?.tokens || core.rubyKanji === undefined || !core.sentLen) return undefined;
+
+  const { rubyKanji, sentLen } = core;
+
+  return {
+    rubyKanji,
+    fullFurigana: rubyKanji >= fullFuriganaShare,
+    sentLen,
+    sentBand: sentLen < sentenceCuts[0] ? 'short' : sentLen < sentenceCuts[1] ? 'average' : 'long'
+  };
+}
+
 /** An estimate's 1-10 level (`bookLevel`), undefined without core numbers */
 export const levelOf = (estimate: { core?: CoreNumbers } | undefined) =>
   bookLevel(estimate?.core)?.score;

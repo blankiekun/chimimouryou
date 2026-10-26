@@ -6,7 +6,13 @@
 
 import { describe, expect, it } from 'vitest';
 import type { BookWord } from '$lib/data/book-words';
-import { bookLevel, forYou, histogramShare, relativeLevel } from '$lib/data/difficulty-core';
+import {
+  bookFacets,
+  bookLevel,
+  forYou,
+  histogramShare,
+  relativeLevel
+} from '$lib/data/difficulty-core';
 import { RANKED_BUCKETS, type CoreNumbers } from '$lib/functions/analysis/core';
 
 const core = (hist: Record<number, number>, v98: number | null = 45037): CoreNumbers => {
@@ -28,6 +34,18 @@ describe('bookLevel', () => {
     expect(bookLevel(core({ 8: 10 }))).toEqual({ score: 5.5, tier: 'Ogre', v98: 45037 });
     expect(bookLevel(core({ 8: 10 }, null))?.tier).toBe('Demon King');
     expect(bookLevel(core({}))).toBeUndefined();
+  });
+});
+
+describe('bookFacets', () => {
+  it('flags full furigana and bands sentence length by the library tertiles', () => {
+    const facets = (rubyKanji: number, sentLen: number) =>
+      bookFacets({ ...core({ 8: 10 }), rubyKanji, sentLen });
+
+    expect(facets(0.5, 22.29)).toMatchObject({ fullFurigana: true, sentBand: 'short' });
+    expect(facets(0.49, 22.3)).toMatchObject({ fullFurigana: false, sentBand: 'average' });
+    expect(facets(0, 25.9)?.sentBand).toBe('long');
+    expect(bookFacets(core({ 8: 10 }))).toBeUndefined();
   });
 });
 

@@ -16,18 +16,22 @@ CORE_VERSION bump). Not upstream.
 - hist / histTypes: occurrences and different words per log-rank bucket (BUCKETS_PER_DECADE per
   factor of 10, ranks 1 to 10^6; the last entry holds the unranked words), for a reader's coverage
   of any book without its word list (coverage.ts in the app).
+- facets (version 2): rubyKanji, the share of the text's kanji under the author's ruby (総ルビ
+  children's books are near 1), and sentLen, the mean characters per sentence. Shown beside the
+  level, never folded into it.
 - score: V98 on the frozen 1-10 scale (core-scale.json): log-linear between its anchors.
 """
 import bisect
 import json
 import math
 import os
+import re
 
 from compound_merge import merge_compounds
 from word_list import is_noise_word
 
-# 1: first version.
-CORE_VERSION = 1
+# 1: first version. 2: rubyKanji and sentLen (facets).
+CORE_VERSION = 2
 REPEAT_CAP = 10
 BUCKETS_PER_DECADE = 4
 RANKED_BUCKETS = 6 * BUCKETS_PER_DECADE
@@ -36,6 +40,10 @@ RANKED_BUCKETS = 6 * BUCKETS_PER_DECADE
 EDGES = [10 ** (b / BUCKETS_PER_DECADE) for b in range(RANKED_BUCKETS)]
 # Parts of speech that are vocabulary: particles, auxiliaries, affixes, symbols and blanks are not.
 VOCABULARY = {'名詞', '代名詞', '形状詞', '連体詞', '形容詞', '動詞', '副詞', '接続詞', '感動詞'}
+# yurigana's is_kanji, and sentences as the difficulty-features study cut them (core.ts: the same).
+KANJI = re.compile('[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\U00020000-\U0003134f]')
+SENTENCE = re.compile('[^。！？!?\n]+[。！？!?」』]*')
+BLANKS = ' \t\r\u00a0\u3000'
 SCALE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'core-scale.json')
 
 
@@ -117,11 +125,25 @@ def score(v98, scale: dict) -> float:
     return anchors[-1][0]
 
 
-def book_core(tokens, frequency) -> dict:
+def facets(text: str, ruby_kanji: int) -> dict:
+    """rubyKanji: kanji under the author's ruby (`ruby_kanji`, book_text's ruby['kanji']) per kanji
+    of the text (ruby left out), at most 1. sentLen: mean characters per sentence; a sentence with
+    fewer than two non-blank characters doesn't count."""
+    kanji = len(text) - len(KANJI.sub('', text))
+    # Two non-blank characters at least = two or more left once the ends are stripped.
+    sentences = [s for s in SENTENCE.findall(text) if len(s.strip(BLANKS)) >= 2]
+    total, count = sum(map(len, sentences)), len(sentences)
+    return {'rubyKanji': round2(min(ruby_kanji / kanji, 1)) if kanji else 0,
+            'sentLen': round2(total / count) if count else 0}
+
+
+def book_core(tokens, frequency, text: str = '', ruby_kanji: int = 0) -> dict:
     """The book's core numbers from its Sudachi tokens (yurigana's SudachiTokenizer.tokens: offsets,
-    symbols and blanks left out) and a FrequencyTable (frequency.py)."""
+    symbols and blanks left out) and a FrequencyTable (frequency.py), with the facets of its text
+    and ruby."""
     ranks = frequency.ranks
-    return summarise(word_units(merge_compounds(list(tokens), frequency)), lambda lemma: ranks.get(lemma))
+    core = summarise(word_units(merge_compounds(list(tokens), frequency)), lambda lemma: ranks.get(lemma))
+    return {**core, **facets(text, ruby_kanji)}
 
 
 def core_table_text(frequency) -> str:

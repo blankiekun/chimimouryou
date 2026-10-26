@@ -32,7 +32,7 @@
     type CalibreBook,
     type CalibreDifficulty
   } from '$lib/data/calibre';
-  import { bookLevel, forYou, relativeLevel } from '$lib/data/difficulty-core';
+  import { bookFacets, bookLevel, forYou, relativeLevel } from '$lib/data/difficulty-core';
   import type { CoreNumbers } from '$lib/functions/analysis/core';
   import { bookKanjiCount } from '$lib/data/book-kanji';
   import {
@@ -147,6 +147,8 @@
   $: hasDifficulty = (isCalibre && book.calibreId !== undefined) || !!localScored || !!coreFirst;
   /** The objective 1-10 level (fast core), and this reader's numbers from the word list */
   $: level = bookLevel(estimate?.core ?? coreFirst);
+  /** Full furigana and sentence length beside the level (core version 2) */
+  $: facets = bookFacets(estimate?.core ?? coreFirst);
   $: you = listWords.length && knownSet ? forYou(listWords, knownSet.isKnown, estimate) : undefined;
   $: youLine = you && forYouLine(you.share, you.learn, you.atLeast);
   $: unknownEvery =
@@ -186,6 +188,12 @@
       ]
         .filter(Boolean)
         .join($uiLanguage$ === 'ja' ? '' : ' ');
+
+  const sentLenKeys = {
+    short: 'book.sentLenShort',
+    average: 'book.sentLenAverage',
+    long: 'book.sentLenLong'
+  } as const;
 
   /** One decimal, rounded down: 97.96% is not 98.0% */
   const percent1 = (share: number) => (Math.floor(share * 1000) / 10).toFixed(1);
@@ -641,6 +649,18 @@
                   <div>
                     <dt>{number(estimate.uniqueKanji)}</dt>
                     <dd>{$t$('book.kanjiFigureOnly')}</dd>
+                  </div>
+                {/if}
+                {#if facets?.fullFurigana}
+                  <div>
+                    <dt>{Math.round(facets.rubyKanji * 100)}%</dt>
+                    <dd>{$t$('book.fullFuriganaFigure')}</dd>
+                  </div>
+                {/if}
+                {#if facets}
+                  <div>
+                    <dt>{Math.round(facets.sentLen)}</dt>
+                    <dd>{$t$(sentLenKeys[facets.sentBand])}</dd>
                   </div>
                 {/if}
               </dl>

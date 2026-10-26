@@ -24,6 +24,10 @@ export interface CoreNumbers {
   /** Occurrences and different words per log-rank bucket (`bucket`); the last: unranked */
   hist: number[];
   histTypes: number[];
+  /** Share of the kanji under the author's ruby, 0-1 (version 2; core.py's facets) */
+  rubyKanji?: number;
+  /** Mean characters per sentence (version 2) */
+  sentLen?: number;
 }
 
 export interface WordUnit {
@@ -33,7 +37,7 @@ export interface WordUnit {
   name: boolean;
 }
 
-export const CORE_VERSION = 1;
+export const CORE_VERSION = 2;
 export const REPEAT_CAP = 10;
 const BUCKETS_PER_DECADE = 4;
 export const RANKED_BUCKETS = 6 * BUCKETS_PER_DECADE;
@@ -53,6 +57,9 @@ const VOCABULARY = new Set([
   '接続詞',
   '感動詞'
 ]);
+
+/** Half up, as core.py's round2 */
+const round2 = (value: number) => Math.floor(value * 100 + 0.5) / 100;
 
 const toHiragana = (text: string) =>
   text.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
@@ -200,9 +207,51 @@ export function* wordUnits(tokens: Iterable<CoreToken>): Generator<WordUnit> {
   }
 }
 
-/** core.py's book_core: the book's core numbers from its tokens. */
-export function bookCore(tokens: CoreToken[], table: CoreTable) {
-  return summarise(wordUnits(mergeCompounds(tokens, table)), (lemma) => table.ranks.get(lemma));
+/** core.py's book_core: the book's core numbers from its tokens, with the facets of its text and ruby. */
+export function bookCore(tokens: CoreToken[], table: CoreTable, text = '', rubyKanji = 0) {
+  return {
+    ...summarise(wordUnits(mergeCompounds(tokens, table)), (lemma) => table.ranks.get(lemma)),
+    ...coreFacets(text, rubyKanji)
+  };
+}
+
+const kanjiGlobal = /[㐀-䶿一-鿿豈-﫿\u{20000}-\u{3134f}]/gu;
+const sentencePattern = /[^。！？!?\n]+[。！？!?」』]*/g;
+const blankPattern = /[ \t\r\u00a0\u3000]/g;
+/** Code points, as Python's len (astral kanji are two UTF-16 units) */
+const codePoints = (text: string) => text.length - (text.match(/[\udc00-\udfff]/g)?.length ?? 0);
+
+/**
+ * core.py's facets: rubyKanji, kanji under the author's ruby (`rubyKanji`, rubyKanjiCount) per
+ * kanji of the text, at most 1; sentLen, mean characters per sentence (two non-blank at least).
+ */
+export function coreFacets(text: string, rubyKanji: number) {
+  const kanji = text.match(kanjiGlobal)?.length ?? 0;
+  let total = 0;
+  let count = 0;
+
+  for (const [sentence] of text.matchAll(sentencePattern)) {
+    if (sentence.replace(blankPattern, '').length >= 2) {
+      total += codePoints(sentence);
+      count++;
+    }
+  }
+
+  return {
+    rubyKanji: kanji ? round2(Math.min(rubyKanji / kanji, 1)) : 0,
+    sentLen: count ? round2(total / count) : 0
+  };
+}
+
+/** Kanji in the HTML's ruby bases (yurigana's _count_ruby over book_text's ruby) */
+export function rubyKanjiCount(html: string) {
+  let count = 0;
+
+  for (const [, base] of html.matchAll(/<ruby\b[^>]*>([\s\S]*?)<\/ruby>/gi)) {
+    count += coreText(base).match(kanjiGlobal)?.length ?? 0;
+  }
+
+  return count;
 }
 
 /**
@@ -322,8 +371,6 @@ export interface CoreScale {
   /** [score, V98], both rising */
   anchors: [number, number][];
 }
-
-const round2 = (value: number) => Math.floor(value * 100 + 0.5) / 100;
 
 /** core.py's score: V98 on the 1-10 scale, log-linear between the anchors, clamped. */
 export function coreScore(v98: number | null, scale: CoreScale) {

@@ -188,10 +188,9 @@ def _init_words_worker():
 
 
 def save_kanji(book_id: int, text: str):
-    from features import is_kanji
     os.makedirs(KANJI_DIR, exist_ok=True)
     path = os.path.join(KANJI_DIR, f'{book_id}.json.gz')
-    counts = Counter(c for c in text if is_kanji(c))
+    counts = Counter(core.KANJI.findall(text))  # features.is_kanji's characters, in C
     with gzip.open(path + '.tmp', 'wt', encoding='utf-8') as f:
         json.dump(dict(counts), f, ensure_ascii=False, separators=(',', ':'))
     os.replace(path + '.tmp', path)
@@ -272,14 +271,14 @@ def _book_text(book: dict):
 def _estimate(book: dict):
     """(id, estimate) of a book (None: too little text): the core's numbers (core.py), the character
     and kanji counts. No Reader, features or model: ~0.4 s a book."""
-    text, _, _, characters = _book_text(book)
+    text, ruby, _, characters = _book_text(book)
     if characters < 1000:
         return book['id'], None
     return book['id'], {
         'characters': characters,
         'uniqueKanji': save_kanji(book['id'], text),
-        # V98, names and the log-rank histogram; the app puts V98 on the 1-10 scale (core-scale.json).
-        'core': core.book_core(_tokenizer.tokens(text), _frequency),
+        # V98, names, the log-rank histogram and the facets; the app puts V98 on the 1-10 scale (core-scale.json).
+        'core': core.book_core(_tokenizer.tokens(text), _frequency, text, ruby.get('kanji', 0)),
         'engine': current_engine(),
         'computedAt': int(time.time() * 1000),
         # Manga: the mokuro text it was made from (manga_text_stamp).
@@ -727,7 +726,8 @@ def unchanged_since_failure(failure, book) -> bool:
 
 def needs_estimate(book, results, engine) -> bool:
     """Whether a whole-library run estimates the book: never tried, estimated by another engine or
-    (manga) from other text; not a book without text or whose file is unchanged since it failed.
+    an older CORE_VERSION (the estimate is the core: ~0.4 s a book), or (manga) from other text;
+    not a book without text or whose file is unchanged since it failed.
     Manga without text are tried once some appears. Word lists aren't made here (WordsQueue)."""
     key = str(book['id'])
     if book.get('manga') and not book.get('text'):
@@ -735,7 +735,8 @@ def needs_estimate(book, results, engine) -> bool:
     if book['id'] in results.get('noText', []) and results.get('noTextStamps', {}).get(key) == book.get('text'):
         return False
     estimate = results['books'].get(key, {})
-    return (estimate.get('engine') != engine or estimate.get('text') != book.get('text')) \
+    return (estimate.get('engine') != engine or estimate.get('text') != book.get('text')
+            or (estimate.get('core') or {}).get('v') != core.CORE_VERSION) \
         and not unchanged_since_failure(results.get('failed', {}).get(key), book)
 
 
