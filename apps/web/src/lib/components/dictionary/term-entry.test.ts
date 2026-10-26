@@ -98,6 +98,33 @@ describe('TermEntry', () => {
     internal.click();
     expect(lookups).toEqual(['食う']);
   });
+
+  it('shows Add to Anki once a card format is set', async () => {
+    const { dictionaryAnki$, dictionaryAnkiRoute$ } = await import('$lib/data/anki-dictionary');
+    const ankiContext = {
+      url: '',
+      documentTitle: '',
+      query: '食べた',
+      fullQuery: '食べた',
+      sentence: { text: '食べた', offset: 0 }
+    };
+    const target = document.createElement('div');
+    const props = { entry, options, summaries: [], ankiContext };
+    new TermEntry({ target, props });
+    expect(target.querySelector('.entry-anki')).toBeNull();
+
+    dictionaryAnkiRoute$.next('ankimobile');
+    dictionaryAnki$.next({
+      deck: 'D',
+      model: 'M',
+      fields: { Front: { value: '{expression}', overwriteMode: 'coalesce' } }
+    });
+    const ready = document.createElement('div');
+    new TermEntry({ target: ready, props });
+    await Promise.resolve();
+    expect(ready.querySelector('.entry-anki')?.getAttribute('aria-label')).toBe('Add to Anki');
+    dictionaryAnki$.next({});
+  });
 });
 
 describe('lookup helpers', () => {
@@ -116,7 +143,7 @@ describe('lookup helpers', () => {
     expect(key('Escape')).toBe('close');
     expect(key('KeyP', { altKey: true })).toBe('playAudio');
     expect(key('KeyP')).toBeUndefined();
-    expect(key('KeyE', { altKey: true })).toBeUndefined(); // addNote: no Anki here
+    expect(key('KeyE', { altKey: true })).toBeUndefined(); // addNote: the + button only
   });
 
   it('places the popup below horizontal text, flipping when there is no room', () => {

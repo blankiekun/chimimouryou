@@ -146,6 +146,143 @@ function caretPositionFromPoint(x, y, doc) {
     }
 }
 
+// chimimouryou: `TextSourceGenerator.extractSentence` as a function over the match (where it
+// starts and its length in scanned characters) instead of a TextSource: the text before and
+// after it comes from DOMTextScanner as TextSourceRange's setStartOffset/setEndOffset get it.
+
+/**
+ * Extract a sentence from a document.
+ * @param {Node} node Where the match starts.
+ * @param {number} offset
+ * @param {number} length The match's length.
+ * @param {boolean} layoutAwareScan Whether or not layout-aware scan mode should be used.
+ * @param {number} extent The length of the sentence to extract.
+ * @param {boolean} terminateAtNewlines Whether or not a sentence should be terminated at newline characters.
+ * @param {Map<string, [boolean, boolean]>} terminatorMap A mapping of characters that terminate a sentence.
+ * @param {Map<string, [string, boolean]>} forwardQuoteMap A mapping of quote characters that delimit a sentence.
+ * @param {Map<string, [string, boolean]>} backwardQuoteMap A mapping of quote characters that delimit a sentence, which is the inverse of forwardQuoteMap.
+ * @returns {{text: string, offset: number}} The sentence and the offset to the original source.
+ */
+export function extractSentence(node, offset, length, layoutAwareScan, extent, terminateAtNewlines, terminatorMap, forwardQuoteMap, backwardQuoteMap) {
+    // Scan text
+    const before = new DOMTextScanner(node, offset, !layoutAwareScan, layoutAwareScan).seek(-extent);
+    const startLength = extent - before.remainder;
+    const match = new DOMTextScanner(node, offset, !layoutAwareScan, layoutAwareScan).seek(length);
+    const afterLength = extent * 2 - startLength;
+    const after = new DOMTextScanner(match.node, match.offset, !layoutAwareScan, layoutAwareScan).seek(afterLength);
+    const endLength = afterLength - after.remainder;
+    const text = [...(before.content + match.content + after.content)];
+    const textLength = text.length;
+    const textEndAnchor = textLength - endLength;
+
+    /** Relative start position of the sentence (inclusive). */
+    let cursorStart = startLength;
+    /** Relative end position of the sentence (exclusive). */
+    let cursorEnd = textEndAnchor;
+
+    // Move backward
+    let quoteStack = [];
+    for (; cursorStart > 0; --cursorStart) {
+        // Check if the previous character should be included.
+        let c = text[cursorStart - 1];
+        if (c === '\n' && terminateAtNewlines) { break; }
+
+        if (quoteStack.length === 0) {
+            let terminatorInfo = terminatorMap.get(c);
+            if (typeof terminatorInfo !== 'undefined') {
+                // Include the previous character while it is a terminator character and is included at start.
+                while (terminatorInfo[0] && cursorStart > 0) {
+                    --cursorStart;
+                    if (cursorStart === 0) { break; }
+                    c = text[cursorStart - 1];
+                    terminatorInfo = terminatorMap.get(c);
+                    if (typeof terminatorInfo === 'undefined') { break; }
+                }
+                break;
+            }
+        }
+
+        let quoteInfo = forwardQuoteMap.get(c);
+        if (typeof quoteInfo !== 'undefined') {
+            if (quoteStack.length === 0) {
+                // Include the previous character while it is a quote character and is included at start.
+                while (quoteInfo[1] && cursorStart > 0) {
+                    --cursorStart;
+                    if (cursorStart === 0) { break; }
+                    c = text[cursorStart - 1];
+                    quoteInfo = forwardQuoteMap.get(c);
+                    if (typeof quoteInfo === 'undefined') { break; }
+                }
+                break;
+            } else if (quoteStack[0] === c) {
+                quoteStack.pop();
+                continue;
+            }
+        }
+
+        quoteInfo = backwardQuoteMap.get(c);
+        if (typeof quoteInfo !== 'undefined') {
+            quoteStack.unshift(quoteInfo[0]);
+        }
+    }
+
+    // Move forward
+    quoteStack = [];
+    for (; cursorEnd < textLength; ++cursorEnd) {
+        // Check if the following character should be included.
+        let c = text[cursorEnd];
+        if (c === '\n' && terminateAtNewlines) { break; }
+
+        if (quoteStack.length === 0) {
+            let terminatorInfo = terminatorMap.get(c);
+            if (typeof terminatorInfo !== 'undefined') {
+                // Include the following character while it is a terminator character and is included at end.
+                while (terminatorInfo[1] && cursorEnd < textLength) {
+                    ++cursorEnd;
+                    if (cursorEnd === textLength) { break; }
+                    c = text[cursorEnd];
+                    terminatorInfo = terminatorMap.get(c);
+                    if (typeof terminatorInfo === 'undefined') { break; }
+                }
+                break;
+            }
+        }
+
+        let quoteInfo = backwardQuoteMap.get(c);
+        if (typeof quoteInfo !== 'undefined') {
+            if (quoteStack.length === 0) {
+                // Include the following character while it is a quote character and is included at end.
+                while (quoteInfo[1] && cursorEnd < textLength) {
+                    ++cursorEnd;
+                    if (cursorEnd === textLength) { break; }
+                    c = text[cursorEnd];
+                    quoteInfo = forwardQuoteMap.get(c);
+                    if (typeof quoteInfo === 'undefined') { break; }
+                }
+                break;
+            } else if (quoteStack[0] === c) {
+                quoteStack.pop();
+                continue;
+            }
+        }
+
+        quoteInfo = forwardQuoteMap.get(c);
+        if (typeof quoteInfo !== 'undefined') {
+            quoteStack.unshift(quoteInfo[0]);
+        }
+    }
+
+    // Trim whitespace
+    for (; cursorStart < startLength && isWhitespace(text[cursorStart]); ++cursorStart) { /* NOP */ }
+    for (; cursorEnd > textEndAnchor && isWhitespace(text[cursorEnd - 1]); --cursorEnd) { /* NOP */ }
+
+    // Result
+    return {
+        text: text.slice(cursorStart, cursorEnd).join(''),
+        offset: startLength - cursorStart,
+    };
+}
+
 /**
  * @param {string} string
  * @returns {boolean}

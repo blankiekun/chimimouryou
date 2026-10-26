@@ -3,6 +3,7 @@
   import type { ToggleOption } from '$lib/components/button-toggle-group/toggle-option';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
+  import SettingsAnkiDictionary from '$lib/components/settings/settings-anki-dictionary.svelte';
   import {
     ankiAudioField$,
     ankiConnectUrl$,
@@ -84,6 +85,8 @@
     />
   </SettingsItemGroup>
 </SettingsSection>
+
+<SettingsAnkiDictionary />
 
 <SettingsSection id="anki-media">
   <SettingsItemGroup title={$t$('anki.bookAudio')} tooltip={$t$('anki.bookAudioHint')}>
