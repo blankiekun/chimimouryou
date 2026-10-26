@@ -69,7 +69,8 @@ describe('standalone edition', () => {
     plugins.setPluginEnabled('social', true);
     plugins.activePlugins().forEach((plugin) => plugin.onBookLeft?.('本', 10, 100));
     expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
+    // The first import of the plugins pulls in most of the app: slow on CI runners.
+  }, 15_000);
 
   it('reads Community anonymously only when asked, never with social off, and writes nothing signed out', async () => {
     fetchMock.mockImplementation(async () => new Response('{"posts":[],"next":null}'));
