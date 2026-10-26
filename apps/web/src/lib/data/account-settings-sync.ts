@@ -8,13 +8,24 @@
  * Syncs AI settings, themes and reader settings to the signed-in account
  * (settings.json in the account's WebDAV folder), or while signed out to the
  * root of the library's Google Drive, OneDrive or folder source, without the
- * API keys (sync-files.ts). Reader settings are kept
+ * API keys (sync-files.ts). Signed in to the social hub with the social plugin on, the shared
+ * settings without API keys and tokens also sync with the hub (GET|PUT /v1/settings), merged the
+ * same way, so devices on the hub alone end up alike. Reader settings are kept
  * separately for phones and larger screens, e.g. one column on the phone and
  * two on the desktop. Each setting keeps the time it was last changed in this
  * browser, and the newer value wins per setting. Not part of upstream.
  */
 
-import { BehaviorSubject, map, merge, skip, type Subscription } from 'rxjs';
+import {
+  BehaviorSubject,
+  combineLatest,
+  distinctUntilChanged,
+  filter,
+  map,
+  merge,
+  skip,
+  type Subscription
+} from 'rxjs';
 import { mangaSeriesModes$ } from '$lib/data/manga';
 import { mergePlacementResults, placementResults$ } from '$lib/data/placement';
 import { mergeRankState, readingRank$ } from '$lib/data/reading-rank';
@@ -46,7 +57,8 @@ import { logger } from '$lib/data/logger';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 import { audiobookshelfToken$ } from '$lib/data/audiobookshelf';
 import { audiobookControls$ } from '$lib/data/audiobook-controls';
-import { socialSession$ } from '$lib/data/social-account';
+import { HubError, hubFetch, socialSession$ } from '$lib/data/social-account';
+import { SyncConflictError, type SyncFileStore } from '$lib/data/storage/handler/base-handler';
 import { communityMatchAsked$, communityWorks$ } from '$lib/data/community';
 import { discordActivities$, discordOptions$ } from '$lib/data/discord-settings';
 import {
@@ -393,28 +405,67 @@ function applyRemoteValue(store: Store, value: unknown) {
   applyingRemote = false;
 }
 
+/** The hub's copy: sharedSettings without the secrets, not the reader profiles' settings. */
+const hubEntry = ({ key }: SyncEntry) => key in sharedSettings && !secretSettings.includes(key);
+
+/** Signed in to the hub with the social plugin on: nothing goes to the hub otherwise. */
+const hubSyncOn = () =>
+  !!socialSession$.getValue() && enabledPlugins$.getValue().includes('social');
+
+/** The hub's settings document (GET|PUT /v1/settings), read and written like settings.json. */
+const hubSettingsStore: SyncFileStore = {
+  async readSyncFile() {
+    const { doc, version } = await hubFetch<{ doc: unknown; version: number }>('/v1/settings');
+
+    return doc ? { text: JSON.stringify(doc), version: String(version) } : undefined;
+  },
+  async writeSyncFile(_name, text, options) {
+    const body = { doc: JSON.parse(text), version: Number(options?.version) || 0 };
+
+    try {
+      await hubFetch('/v1/settings', 'PUT', body, options?.keepalive);
+    } catch (error) {
+      throw error instanceof HubError && error.code === 'conflict'
+        ? new SyncConflictError()
+        : error;
+    }
+  }
+};
+
 /**
- * Applies settings that are newer in the account, and uploads settings that are
- * newer here (or were set before signing in and are missing from the account).
+ * Applies settings that are newer in the account (and the hub), and uploads settings that are
+ * newer here (or were set before signing in and are missing from the account). Both copies use
+ * the same change times and merges, so a device on both converges them instead of flip-flopping.
  */
 async function syncOnce() {
   const store = await readerSyncStore(signedIn);
+  const targets = [
+    ...(store ? [{ store, synced: entries }] : []),
+    ...(hubSyncOn() ? [{ store: hubSettingsStore, synced: entries.filter(hubEntry) }] : [])
+  ];
 
-  if (!store) {
+  if (!targets.length) {
     settingsSyncState$.next({ state: 'off' });
     return;
   }
 
   settingsSyncState$.next({ state: 'syncing' });
 
-  // keepalive: finishes even if the tab is closed right after a change.
-  await syncJsonFile<Partial<SettingsDocument>>(
-    store,
-    'settings.json',
-    undefined,
-    mergeSettings,
-    true
-  );
+  let failed: unknown;
+
+  for (const { store: target, synced } of targets) {
+    // keepalive: finishes even if the tab is closed right after a change.
+    await syncJsonFile<Partial<SettingsDocument>>(
+      target,
+      'settings.json',
+      undefined,
+      (file) => mergeSettings(file, synced),
+      true
+    ).catch((error) => {
+      failed ??= error;
+    });
+  }
+  if (failed) throw failed;
 
   lastSynced = Date.now();
   settingsSyncState$.next({ state: 'synced', at: lastSynced });
@@ -429,7 +480,7 @@ const oldAiSettings = [
   'elevenLabsModel'
 ];
 
-async function mergeSettings(file: Partial<SettingsDocument> | undefined) {
+async function mergeSettings(file: Partial<SettingsDocument> | undefined, synced: SyncEntry[]) {
   const remote: SettingsDocument = {
     version: 1,
     values: file?.values ?? {},
@@ -439,7 +490,7 @@ async function mergeSettings(file: Partial<SettingsDocument> | undefined) {
   const localTimes = readChangeTimes();
   const localEntryTimes = readEntryTimes();
   const remoteEntryTimes = { ...remote.entryModified };
-  const localValues = Object.fromEntries(entries.map(({ key, store }) => [key, store.getValue()]));
+  const localValues = Object.fromEntries(synced.map(({ key, store }) => [key, store.getValue()]));
   const remoteValues = { ...remote.values };
   let changedRemote = false;
 
@@ -452,7 +503,7 @@ async function mergeSettings(file: Partial<SettingsDocument> | undefined) {
     }
   });
 
-  entries.forEach(({ key, storageKey, store }) => {
+  synced.forEach(({ key, storageKey, store }) => {
     const remoteTime = remote.modified[key] || 0;
     const localTime = localTimes[key] || 0;
     const newDefault = replacedOldDefaultTheme(key, remote.values[key], remoteTime);
@@ -620,6 +671,17 @@ export function startSettingsSync(user: AccountUser | null) {
       scheduleUpload();
     }
   });
+  // Signing in to the hub (or turning social on) pulls its copy.
+  changeSubscription.add(
+    combineLatest([socialSession$, enabledPlugins$])
+      .pipe(
+        map(() => (hubSyncOn() ? socialSession$.getValue()!.token : '')),
+        distinctUntilChanged(),
+        skip(1),
+        filter(Boolean)
+      )
+      .subscribe(() => syncAccountSettings())
+  );
 
   window.addEventListener('focus', onFocus);
   document.addEventListener('visibilitychange', onVisibilityChange);
