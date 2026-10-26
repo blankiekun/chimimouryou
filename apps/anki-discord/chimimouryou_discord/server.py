@@ -15,7 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import activity as activity_mod
 from . import relay as relay_mod
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 DEFAULT_PORT = 41918
 DEFAULT_ORIGINS = ("https://chimireader.github.io", "http://127.0.0.1:41917")
 MAX_BODY = 16 * 1024

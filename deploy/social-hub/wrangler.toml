@@ -33,3 +33,14 @@ simple = { limit = 30, period = 10 }
 [[r2_buckets]]
 binding = "MEDIA"
 bucket_name = "chimi-hub-media"
+
+# The Anki add-on's push connections (GET /v1/presence/stream): one PresenceStream per user, holding
+# its WebSockets with the hibernation API. SQLite-backed (the free plan's only kind); stores
+# nothing. `wrangler deploy` applies the migration once.
+[[durable_objects.bindings]]
+name = "PRESENCE"
+class_name = "PresenceStream"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["PresenceStream"]
