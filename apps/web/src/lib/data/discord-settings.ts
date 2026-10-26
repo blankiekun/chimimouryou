@@ -22,13 +22,16 @@ export interface DiscordOptions {
   awayIdle: boolean;
   /** Every book shows its privacy text */
   hideTitles: boolean;
+  /** Show activity from my other devices: this device also sends its status through the hub */
+  relay: boolean;
 }
 
 export const discordOptionDefaults: DiscordOptions = {
   show: true,
   awayMinutes: 10,
   awayIdle: true,
-  hideTitles: false
+  hideTitles: false,
+  relay: false
 };
 
 export const discordOptions$ = writableObjectLocalStorageSubject<Partial<DiscordOptions>>()(

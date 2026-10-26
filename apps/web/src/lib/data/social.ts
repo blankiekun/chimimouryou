@@ -14,6 +14,7 @@
 
 import { absCleanTitle, absMatchKey } from '$lib/data/audiobookshelf';
 import type { BooksDbStatistic } from '$lib/data/database/books-db/versions/books-db';
+import type { DiscordActivity } from '$lib/data/discord-template';
 import {
   writableArrayLocalStorageSubject,
   writableObjectLocalStorageSubject
@@ -112,6 +113,8 @@ export interface Profile {
   finished: FinishedBook[];
   stats: SocialStats | null;
   events: SocialEvent[];
+  /** The current Discord status (Show on my profile), for friends and oneself; updatedAt in Unix seconds */
+  presence?: { activity: DiscordActivity; updatedAt: number };
 }
 
 const cacheTime = 15 * 60_000;

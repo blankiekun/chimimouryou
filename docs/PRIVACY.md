@@ -89,8 +89,9 @@ set it up:
   same computer, which passes it to the Discord app running there. This stays on your computer;
   the chimimouryou project receives nothing.
 - If you turn on **Show activity from my other devices**, the hub also keeps your current
-  status as it would appear in Discord, visible to you and, on your profile, to your friends. It
-  is removed after about 5 minutes without an update.
+  status as it would appear in Discord, so an Anki add-on you paired can show it, and with
+  **Show on my profile** also on, your friends see it on your profile. It is removed when you
+  stop reading, or after your Away time (5 to 30 minutes, 10 by default) without an update.
 
 What Discord shows and stores is covered by
 [Discord's privacy policy](https://discord.com/privacy).
