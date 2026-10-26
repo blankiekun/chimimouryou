@@ -62,6 +62,19 @@ export interface PlacementResult {
   retake: boolean;
   /** Words known, the number shown: the chance of knowing each rank summed over the list */
   words?: number;
+  /** The curve `words` sums (`knownChance`) */
+  curve?: PlacementCurve;
+}
+
+/**
+ * A result's fitted curve: the chance a word of rank r is known is
+ * 1 / (1 + e^-(shift + slope·(ln r − ln 5000))), 1 below `firstNo` (the most common word
+ * answered no), 0 past the list.
+ */
+export interface PlacementCurve {
+  shift: number;
+  slope: number;
+  firstNo: number;
 }
 
 export const placementBands: number[] = placementItems.bands;
@@ -110,7 +123,12 @@ export interface PlacementRecord {
   length: number;
   /** The words known shown for it (`PlacementResult.words`); older results show the cutoff */
   words?: number;
+  /** The curve `words` sums; older results have none */
+  curve?: PlacementCurve;
 }
+
+/** What words known needs of a result. */
+export type PlacementEstimate = Pick<PlacementRecord, 'cutoff' | 'words' | 'curve'>;
 
 /** Every result, oldest first. */
 export const placementResults$ = writableArrayLocalStorageSubject<PlacementRecord>()(
@@ -159,11 +177,19 @@ export function recordPlacement(
   mode: PlacementRecord['mode'],
   cutoff: number,
   length: number,
-  words?: number
+  words?: number,
+  curve?: PlacementCurve
 ) {
   placementResults$.next(
     mergePlacementResults(placementResults$.getValue(), [
-      { mode, date: Date.now(), cutoff, length, ...(words !== undefined && { words }) }
+      {
+        mode,
+        date: Date.now(),
+        cutoff,
+        length,
+        ...(words !== undefined && { words }),
+        ...(curve && { curve })
+      }
     ])
   );
 }
@@ -171,6 +197,26 @@ export function recordPlacement(
 /** The words known a result shows: its estimate, else (older results) its cutoff. */
 export const placementWords = (record?: { cutoff: number; words?: number }) =>
   record?.words ?? record?.cutoff ?? 0;
+
+/**
+ * The chance `placementWords` already counts a word of this rank as known: its curve, or for
+ * a result without one, 1 within the cutoff. 0 without a result or a rank.
+ */
+export function knownChance(
+  record: PlacementEstimate | undefined,
+  rank: number | null | undefined
+) {
+  if (!record || rank == null) return 0;
+
+  const { curve } = record;
+
+  if (!curve) return rank <= record.cutoff ? 1 : 0;
+  if (rank >= placementBands[placementBands.length - 1]) return 0;
+
+  return rank < curve.firstNo
+    ? 1
+    : 1 / (1 + Math.exp(-(curve.shift + curve.slope * (Math.log(rank) - pivot))));
+}
 
 // A result saved before dates were kept becomes an undated first one.
 if (!placementResults$.getValue().length && placementCutoff$.getValue() > 0) {
@@ -376,7 +422,8 @@ export function scorePlacement(
   // list, all known below the most common word answered no. Measured against the cutoff on
   // simulated readers it is about a quarter closer, but the staircase rarely shows words far
   // past the boundary, so a reader who knows some of the rare ones is still undercounted.
-  const firstNo = Math.min(...real.filter(({ yes }) => !yes).map(({ item }) => item.r!));
+  // Capped at the list's end: no "no" at all stays a finite number when synced.
+  const firstNo = Math.min(top, ...real.filter(({ yes }) => !yes).map(({ item }) => item.r!));
   const shift = a - Math.log(target / (1 - target));
   let words = 0;
 
@@ -384,5 +431,10 @@ export function scorePlacement(
     words += r < firstNo ? 10 : 10 / (1 + Math.exp(-(shift + b * (Math.log(r) - pivot))));
   }
 
-  return { ...result, cutoff, words: Math.round(words / 100) * 100 };
+  return {
+    ...result,
+    cutoff,
+    words: Math.round(words / 100) * 100,
+    curve: { shift, slope: b, firstNo }
+  };
 }

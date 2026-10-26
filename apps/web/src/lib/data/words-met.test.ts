@@ -110,14 +110,16 @@ describe('summarizeWords with the word test cutoff', () => {
     };
     const ranks = { '猫\tねこ': 50, '犬\tいぬ': 5000, '鳥\tとり': 900 };
 
-    expect(summarizeWords(totals, new Set(), {}, 1000, ranks)).toEqual({
+    expect(summarizeWords(totals, new Set(), {}, { cutoff: 1000 }, ranks)).toEqual({
       met: 4,
       known: 1002,
       metEnough: 3
     });
     // Anki words in no book read have no rank: past the cutoff.
-    expect(summarizeWords(totals, new Set(['猫', '馬']), {}, 1000, ranks).known).toBe(1003);
-    expect(summarizeWords(totals, new Set(), {}, 0, ranks).known).toBe(3);
+    expect(summarizeWords(totals, new Set(['猫', '馬']), {}, { cutoff: 1000 }, ranks).known).toBe(
+      1003
+    );
+    expect(summarizeWords(totals, new Set(), {}, undefined, ranks).known).toBe(3);
   });
 
   it("counts Anki words and marks in no book read only past the cutoff, by the form's rank", () => {
@@ -129,11 +131,40 @@ describe('summarizeWords with the word test cutoff', () => {
     const marks = { '机\t': mark, '机\tつくえ': mark, '本\t': mark };
 
     // 犬 met once, ranked past: +1; 魑魅 +1; 謎語 +1; 机 and 本 within the cutoff.
-    expect(summarizeWords(totals, anki, marks, 1000, { '犬\tいぬ': 5000 }, formRanks).known).toBe(
-      1003
-    );
+    expect(
+      summarizeWords(totals, anki, marks, { cutoff: 1000 }, { '犬\tいぬ': 5000 }, formRanks).known
+    ).toBe(1003);
     // Not looked up: past the cutoff, as before (机 once, not once per mark).
-    expect(summarizeWords(totals, anki, marks, 1000, { '犬\tいぬ': 5000 }).known).toBe(1005);
+    expect(summarizeWords(totals, anki, marks, { cutoff: 1000 }, { '犬\tいぬ': 5000 }).known).toBe(
+      1005
+    );
+  });
+
+  it("adds to the test's estimate each known word's chance of being outside it", () => {
+    const totals = {
+      '猫\tねこ': knownMinCount, // rank 500, below the first no: in the estimate already
+      '犬\tいぬ': knownMinCount, // rank 5000, where the curve is one half: +0.5
+      '宦官\tかんがん': knownMinCount // unranked: +1
+    };
+    const ranks = { '猫\tねこ': 500, '犬\tいぬ': 5000 };
+    const placement = {
+      cutoff: 5000,
+      words: 6000,
+      curve: { shift: 0, slope: -2, firstNo: 1000 }
+    };
+
+    // 6000 + 0.5 + 1 = 6001.5; Anki's 魑魅 (rank 50,000: 1 / (1 + 10²) in the estimate) +0.99.
+    expect(summarizeWords(totals, new Set(), {}, placement, ranks).known).toBe(6002);
+    expect(
+      summarizeWords(totals, new Set(['魑魅']), {}, placement, ranks, { 魑魅: 50000 }).known
+    ).toBe(6002);
+    expect(
+      summarizeWords(totals, new Set(['魑魅', '謎語']), {}, placement, ranks, { 魑魅: 50000 }).known
+    ).toBe(6003);
+    // A result without a curve: its words, then the cutoff's rule.
+    expect(summarizeWords(totals, new Set(), {}, { cutoff: 5000, words: 6000 }, ranks).known).toBe(
+      6001
+    );
   });
 
   it('keeps the best rank of a word over the lists', () => {

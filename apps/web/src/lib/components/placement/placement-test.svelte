@@ -155,7 +155,7 @@
 
     result = scorePlacement(answers, undefined, hard ? hardGuess : 0);
     if (!result.retake) {
-      recordPlacement(hard ? 'typed' : 'yesno', result.cutoff, length, result.words);
+      recordPlacement(hard ? 'typed' : 'yesno', result.cutoff, length, result.words, result.curve);
       // Home then says where it came from rather than offering the check.
       $placementFromWordTest$ = shared;
       previous = result.cutoff;

@@ -25,7 +25,7 @@ export interface RankTier {
   characters: number;
   /** Distinct days with counted reading */
   days: number;
-  /** Words known for rank (`rankMarks`, `rankPlacementCutoff`) */
+  /** Words known for rank (`rankMarks`, `rankPlacement`) */
   words: number;
   /** A finished real book at or above this 1-10 level (`levelOf`), read with `minCoverage` known */
   difficulty: number;
@@ -133,16 +133,20 @@ export const plausibleFinish = (characters: number, seconds: number) =>
   seconds >= (characters / maxSpeed) * 60;
 
 /**
- * The word test cutoff for rank: only results taken `testGap` after the one before them (of
+ * The word test result for rank: only results taken `testGap` after the one before them (of
  * either mode) count, so retaking it until a lucky score does nothing.
  */
-export function rankPlacementCutoff(results: PlacementRecord[]) {
+export function rankPlacement(results: PlacementRecord[]) {
   // Retired hard results count for nothing, so they must not start a gap either.
   const sorted = results.filter(({ mode }) => mode !== 'hard').sort((a, b) => a.date - b.date);
   const counted = sorted.filter((record, i) => !i || record.date - sorted[i - 1].date >= testGap);
 
-  return placementAt(counted)?.cutoff ?? 0;
+  return placementAt(counted);
 }
+
+/** `rankPlacement`'s cutoff, 0 without one. */
+export const rankPlacementCutoff = (results: PlacementRecord[]) =>
+  rankPlacement(results)?.cutoff ?? 0;
 
 /** Marks of words met in a book (`totals`, folded words-met keys): marking unmet words does nothing. */
 export function rankMarks(marks: WordMarks, totals: Record<string, number>) {

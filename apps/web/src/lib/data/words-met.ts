@@ -38,7 +38,14 @@ import {
 } from '$lib/data/calibre';
 import { getKanjiSeen, type KanjiSeen } from '$lib/data/kanji-seen';
 import { getKnownWords } from '$lib/data/known-words';
-import { placementCutoff } from '$lib/data/placement';
+import {
+  knownChance,
+  placementAt,
+  placementCutoff,
+  placementResults$,
+  placementWords,
+  type PlacementEstimate
+} from '$lib/data/placement';
 import { readerDb } from '$lib/data/reader-db';
 import { serverFetch, serverless } from '$lib/data/server-connect';
 import { getWordMarks, wordMark, type WordMarks } from '$lib/data/word-marks';
@@ -172,38 +179,59 @@ export function summarizeWords(
   totals: Record<string, number>,
   anki: ReadonlySet<string> = new Set(),
   marks: WordMarks = {},
-  cutoff = 0,
+  placement?: PlacementEstimate,
   ranks: Record<string, number> = {},
   formRanks: Record<string, number | null> = {}
 ): WordsSummary {
   let met = 0;
-  // Every word ranked within the cutoff is known: known words count only when ranked past it.
-  let known = cutoff;
   let metEnough = 0;
+
+  for (const count of Object.values(totals)) {
+    if (count >= 1) met += 1;
+    if (count >= knownMinCount) metEnough += 1;
+  }
+
+  // The word test's estimate, then what the evidence adds to it.
+  const known = Math.round(
+    placementWords(placement) + knownBeyond(totals, anki, marks, placement, ranks, formRanks)
+  );
+
+  return { met, known, metEnough };
+}
+
+/**
+ * Words known by evidence (met `knownMinCount` times, Anki mature, marked), each less the chance
+ * the word test's estimate already counts it (`knownChance`; unranked words count whole).
+ */
+export function knownBeyond(
+  totals: Record<string, number>,
+  anki: ReadonlySet<string>,
+  marks: WordMarks,
+  placement: PlacementEstimate | undefined,
+  ranks: Record<string, number>,
+  formRanks: Record<string, number | null>
+) {
+  const unseen = (rank: number | null | undefined) => 1 - knownChance(placement, rank);
+  let known = 0;
   const forms = new Set<string>();
-  // Unranked (or not looked up yet) counts as past the cutoff.
-  const past = (rank: number | null | undefined) => rank == null || rank > cutoff;
 
   for (const [key, count] of Object.entries(totals)) {
     const tab = key.indexOf('\t');
     const form = key.slice(0, tab);
 
     forms.add(form);
-    if (count >= 1) met += 1;
-    if (count >= knownMinCount) metEnough += 1;
     if (
-      past(ranks[key]) &&
-      (count >= knownMinCount ||
-        anki.has(form) ||
-        wordMark(marks, [form, key.slice(tab + 1) || null, count, null]))
+      count >= knownMinCount ||
+      anki.has(form) ||
+      wordMark(marks, [form, key.slice(tab + 1) || null, count, null])
     ) {
-      known += 1;
+      known += unseen(ranks[key]);
     }
   }
 
-  // Words in no book read: by the form's own rank (`formRanks`), so the cutoff doesn't count them twice.
+  // Words in no book read: by the form's own rank (`formRanks`), so the estimate doesn't count them twice.
   for (const form of anki) {
-    if (!forms.has(form) && !particles.has(form) && past(formRanks[form])) known += 1;
+    if (!forms.has(form) && !particles.has(form)) known += unseen(formRanks[form]);
   }
 
   // Forms marked with a reading: a mark of the bare form is the same word.
@@ -222,14 +250,13 @@ export function summarizeWords(
       !(key in totals) &&
       !(key.endsWith('\t') && (forms.has(form) || readingMarked.has(form))) &&
       !anki.has(form) &&
-      !particles.has(form) &&
-      past(formRanks[form])
+      !particles.has(form)
     ) {
-      known += 1;
+      known += unseen(formRanks[form]);
     }
   }
 
-  return { met, known, metEnough };
+  return known;
 }
 
 /** The book's word list, cached per estimate. */
@@ -391,13 +418,13 @@ export async function getWordsSummary() {
     totals,
     forms,
     marks,
-    placementCutoff(),
+    placementAt(placementResults$.getValue()),
     ranks,
     await knownFormRanks(forms, marks)
   );
 }
 
-/** `formRanks` for the Anki words and marks (marks only count when the cutoff does). */
+/** `formRanks` for the Anki words and marks. */
 export const knownFormRanks = (anki: ReadonlySet<string>, marks: WordMarks) =>
   formRanks([...anki, ...Object.keys(marks).map((key) => key.slice(0, key.indexOf('\t')))]);
 
