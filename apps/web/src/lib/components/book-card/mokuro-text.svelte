@@ -19,7 +19,8 @@
 
   export let calibreId: number;
 
-  let text: MokuroText | undefined;
+  /** The volume's text: undefined while loading, null when it has none (bound by the book page) */
+  export let text: MokuroText | null | undefined = undefined;
   let status: MokuroStatus | undefined;
   let error = '';
   let busy = false;
@@ -38,7 +39,7 @@
     text = undefined;
     status = undefined;
     error = '';
-    text = await loadMokuro(id).catch(() => undefined);
+    text = (await loadMokuro(id).catch(() => undefined)) ?? null;
 
     if (edit) await poll();
   }
@@ -63,7 +64,7 @@
     if (isActive(status)) {
       pollTimer = setTimeout(poll, 3000);
     } else if (wasActive) {
-      text = await loadMokuro(calibreId).catch(() => undefined);
+      text = (await loadMokuro(calibreId).catch(() => undefined)) ?? null;
       error = status.last?.id === calibreId && status.last.error ? status.last.error : '';
     }
   }
@@ -96,7 +97,7 @@
   const remove = () =>
     run(async () => {
       await removeMokuro(calibreId);
-      text = undefined;
+      text = null;
     });
 
   function upload(event: Event) {
@@ -108,7 +109,7 @@
 
     run(async () => {
       await uploadMokuro(calibreId, file);
-      text = await loadMokuro(calibreId);
+      text = (await loadMokuro(calibreId)) ?? null;
     });
   }
 

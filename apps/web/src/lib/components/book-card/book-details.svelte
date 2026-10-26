@@ -9,6 +9,7 @@
   import ContinueReadingShelf from '$lib/components/book-card/continue-reading-shelf.svelte';
   import DifficultyDialog from '$lib/components/book-card/difficulty-dialog.svelte';
   import MokuroText from '$lib/components/book-card/mokuro-text.svelte';
+  import { localMokuro, mokuroHtml, type MokuroText as MokuroFile } from '$lib/data/mokuro';
   import { isFinished, isReading } from '$lib/components/book-card/library-filters';
   import { orderSeries } from '$lib/components/book-card/library-sort';
   import { account$, hasPermission } from '$lib/data/account';
@@ -118,6 +119,8 @@
   let listWords: BookWord[] = [];
   let knownSet: KnownSet | undefined;
   let wordStats: WordCoverage | undefined;
+  /** A manga's mokuro text: undefined while loading, null when it has none */
+  let mokuro: MokuroFile | null | undefined;
   /** Standalone: different kanji counted from the stored book */
   let browserKanji: number | undefined;
   let speed = 0;
@@ -137,10 +140,14 @@
   $: source ??= defaultSource(kind);
   $: characters = book.characters || estimate?.characters || 0;
   $: remaining = isReading(book) ? characters * (1 - book.progress) : characters;
-  $: hasDifficulty =
-    (isCalibre && kind !== 'manga' && book.calibreId !== undefined) || !!localScored;
+  $: hasDifficulty = (isCalibre && book.calibreId !== undefined) || !!localScored;
+  /** Manga are estimated from their mokuro text, so one without has nothing to estimate yet. */
+  $: mangaWithoutText = kind === 'manga' && mokuro === null && scored.difficulty === undefined;
   $: canEstimate =
-    standalone && kind === 'book' && !localScored && $analysisToolsState$.difficulty === 'ready';
+    standalone &&
+    (kind === 'book' || (kind === 'manga' && !!mokuro)) &&
+    !localScored &&
+    $analysisToolsState$.difficulty === 'ready';
   $: furiganaReady = standalone && kind === 'book' && $analysisToolsState$.furigana === 'ready';
   $: scored = localScored
     ? {
@@ -269,7 +276,14 @@
         .catch(() => {});
     }
 
-    if (standalone && kind === 'book') {
+    if (standalone && kind === 'manga') {
+      mokuro = undefined;
+      const text = await localMokuro(title).catch(() => undefined);
+
+      if (title === book.title) mokuro = text ?? null;
+    }
+
+    if (standalone && kind !== 'vn') {
       // The estimate and word list the analysis tools made (analysis-tools.ts).
       const [scores, local, known, readings] = await Promise.all([
         keptEstimate(title),
@@ -314,7 +328,7 @@
       const id = book.calibreId;
       const bookEstimate = estimate;
       const [list, known] = await Promise.all([
-        kind === 'manga' ? null : wordList(id, bookEstimate.computedAt).catch(() => null),
+        wordList(id, bookEstimate.computedAt).catch(() => null),
         refreshKnownWordsIfStale()
           .then(getKnownSet)
           .catch(() => undefined)
@@ -388,16 +402,19 @@
   async function estimateLocally() {
     const title = book.title;
     // By title: cards from other sources carry a dummy id, not the stored record's.
-    const data = await database.getDataByTitle(title).catch(() => undefined);
+    const html =
+      kind === 'manga'
+        ? mokuro && mokuroHtml(mokuro)
+        : (await database.getDataByTitle(title).catch(() => undefined))?.elementHtml;
 
     estimateError = '';
-    if (!data?.elementHtml) {
-      estimateError = $t$('book.estimateNoText');
+    if (!html) {
+      estimateError = $t$(kind === 'manga' ? 'book.mangaNoText' : 'book.estimateNoText');
       return;
     }
     estimating = 0;
     try {
-      await localEstimate(title, data.elementHtml, (share) => {
+      await localEstimate(title, html, (share) => {
         if (title === book.title) estimating = share;
       });
       if (title === book.title) load();
@@ -632,7 +649,12 @@
         {/if}
 
         <dl class="details-facts">
-          {#if hasDifficulty && scored.difficulty === undefined}
+          {#if mangaWithoutText}
+            <div>
+              <dt>{$t$('book.difficulty')}</dt>
+              <dd>{$t$('book.mangaNoText')}</dd>
+            </div>
+          {:else if hasDifficulty && scored.difficulty === undefined}
             <div>
               <dt>{$t$('book.difficulty')}</dt>
               <dd>
@@ -764,7 +786,7 @@
           {#if isCalibre && kind === 'manga' && book.calibreId !== undefined}
             <div>
               <dt>{$t$('book.text')}</dt>
-              <dd><MokuroText calibreId={book.calibreId} /></dd>
+              <dd><MokuroText calibreId={book.calibreId} bind:text={mokuro} /></dd>
             </div>
           {/if}
           {#if calibreBook?.publisher}

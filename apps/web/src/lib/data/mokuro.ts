@@ -124,3 +124,33 @@ export function uploadMokuro(id: number, file: File): Promise<{ pages: number }>
     body: file
   });
 }
+
+/** A volume's text for word lists: one speech bubble a line, as manga_text in jiten/service.py. */
+export function mokuroPlainText(text: MokuroText) {
+  return text.pages
+    .flatMap((page) => (page.blocks ?? []).map((block) => block.lines.join('').trim()))
+    .filter(Boolean)
+    .join('\n');
+}
+
+/** The same as book HTML for the analysis tools (localEstimate): a paragraph per bubble. */
+export function mokuroHtml(text: MokuroText) {
+  const escape = (line: string) =>
+    line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  return mokuroPlainText(text)
+    .split('\n')
+    .map((line) => `<p>${escape(line)}</p>`)
+    .join('');
+}
+
+/**
+ * Standalone: a manga volume's text kept in this browser, for its estimate and word list made by the
+ * analysis tools. Calibre manga need none: the server estimates them from their mokuro file.
+ * HOOK: the browser keeps no manga text yet (a .mokuro upload or OCR in the browser, branch
+ * feat/standalone-manga-text); once reader-db stores it, read it here by title.
+ */
+export async function localMokuro(title: string): Promise<MokuroText | undefined> {
+  void title;
+  return undefined;
+}

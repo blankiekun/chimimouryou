@@ -202,6 +202,7 @@ export const ja: Record<MessageKey, string> = {
   'book.copy': 'コピー',
   'book.copied': 'コピーしました',
   'book.noEstimate': '未算出',
+  'book.mangaNoText': 'テキストがまだありません。先にテキストを生成してください',
   'book.difficultyDetails': '難易度の詳細',
   'book.estimate': '算出する',
   'book.estimating': '算出中… {percent}%',
