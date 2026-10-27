@@ -205,7 +205,7 @@ export function windowsGameBook(
  * hookUrl: a blob: URL of a chosen script, made by the embedding page (VNBox loads only
  * same-origin blob: or /vn/ scripts); else a bundled script by its path from vnbox.html.
  */
-export function vnboxPlayerUrl(info: VnInfo, hookUrl?: string) {
+export function vnboxPlayerUrl(info: VnInfo, hookUrl?: string, tuning = '') {
   const frida = hookUrl ?? (info.hookFile && `${hookBase}/${encodeURIComponent(info.hookFile)}`);
   const params = [
     'root=TinyCore15Wine11.0-web',
@@ -227,7 +227,43 @@ export function vnboxPlayerUrl(info: VnInfo, hookUrl?: string) {
     ...(frida ? [`frida=${encodeURIComponent(frida)}`] : [])
   ];
 
+  // The tuning panel's `a=b&c=d`, as typed (VNBox reads raw values, e.g. env's %22). VNBox takes
+  // the first `key=` in the address, so a tuned key replaces the default in place.
+  for (const pair of tuning.replaceAll('#', '%23').split('&')) {
+    const key = pair.split('=')[0];
+
+    if (!key || lockedParams.has(key)) continue;
+
+    const at = params.findIndex((param) => param.split('=')[0] === key);
+
+    if (at < 0) params.push(pair);
+    else params[at] = pair;
+  }
+
   return `${pagePath}/vn/vnbox.html?${params.join('&')}`;
+}
+
+/** The game folder, program and hook: never tuned. */
+const lockedParams = new Set(['lazy', 'p', 'frida']);
+
+const tuningKey = (folder: string) => `vnboxTuning:${folder}`;
+
+/** A game's VNBox tuning (`a=b&c=d`), in this browser only, keyed by its folder like its saves. */
+export function loadVnboxTuning(folder: string) {
+  try {
+    return localStorage.getItem(tuningKey(folder)) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+export function saveVnboxTuning(folder: string, tuning: string) {
+  try {
+    if (tuning) localStorage.setItem(tuningKey(folder), tuning);
+    else localStorage.removeItem(tuningKey(folder));
+  } catch {
+    // Storage blocked: the restart runs with the defaults.
+  }
 }
 
 /** The bundled dc00 scripts (scripts/vnbox/build.sh), relative to vnbox.html. */

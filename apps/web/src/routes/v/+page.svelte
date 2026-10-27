@@ -53,6 +53,8 @@
   import { VnReading, vnTextSource } from '$lib/data/vn-text';
   import {
     hasWindowsGame,
+    loadVnboxTuning,
+    saveVnboxTuning,
     vnboxPlayerUrl,
     windowsGameBlocker,
     windowsGameBlockerText
@@ -76,6 +78,7 @@
   import { vnFolderSize } from '$lib/functions/file-loaders/vn/load-vn';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import AnkiWatcher from '$lib/components/anki-watcher.svelte';
+  import VnboxTuning from '$lib/components/vn/vnbox-tuning.svelte';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
   import { builtInLookups$ } from '$lib/data/dictionary';
   import {
@@ -117,12 +120,15 @@
   let blocked: string | undefined;
   /** A Windows game's text hook script, as a URL VNBox can fetch */
   let hookUrl: string | undefined;
+  /** A Windows game's VNBox settings from the Tuning sheet; a new value restarts the game. */
+  let tuning = '';
+  let showTuning = false;
   /** The frame waits for load(): a Windows game's address depends on it. */
   let loaded = false;
   $: playerUrl =
     loaded && info && source && !blocked
       ? windows
-        ? vnboxPlayerUrl(info, hookUrl)
+        ? vnboxPlayerUrl(info, hookUrl, tuning)
         : `${pagePath}/vn/${source.player}`
       : undefined;
   /** CONscripter version of this build, stamped on uploaded saves. */
@@ -148,6 +154,8 @@
   /** A server game over 10 MB asks before its files are kept in the browser. */
   let keepAsk: { size: string; answer: (keep: boolean) => void } | undefined;
   let showMore = false;
+  /** Bumped to load the player frame again (Tuning's restart) */
+  let restarts = 0;
   /** The engine's skip mode, as it reports it (consMode) */
   let skipping = false;
   /** For the progress line: characters read, and today */
@@ -276,6 +284,7 @@
         : !(await hasWindowsGame(game.folder!))
           ? "This game's files aren't in this browser. Add its folder again with Import → Windows game."
           : undefined;
+      tuning = loadVnboxTuning(game.folder!);
       if (game.hook) {
         hookUrl = URL.createObjectURL(new Blob([game.hook], { type: 'text/javascript' }));
       }
@@ -505,6 +514,17 @@
     engineSet('Skip', skipping ? 1 : 0);
   }
 
+  /** Saves the Tuning sheet's settings and starts the game again with them. */
+  async function applyTuning(next: string) {
+    showTuning = false;
+    await save().catch((error) => logger.warn(error.message));
+    saveVnboxTuning(info!.folder!, next);
+    tuning = next;
+    frameLoaded = false;
+    started = false;
+    restarts += 1;
+  }
+
   function openMenu() {
     (frame?.contentWindow as any)?.openMenu();
   }
@@ -672,22 +692,24 @@
         </div>
       {:else if book && playerUrl}
         <AnkiWatcher media={ankiMedia} />
-        <iframe
-          bind:this={frame}
-          class="h-full w-full border-0"
-          src={playerUrl}
-          title={book.title}
-          allow="autoplay; fullscreen"
-          on:load={() => {
-            if (frame) lookupPopup?.attachFrame(frame);
-            frame?.contentDocument?.documentElement.style.setProperty(
-              '--accent-color',
-              getComputedStyle(document.documentElement).getPropertyValue('--accent-color')
-            );
-            frameLoaded = true;
-            start().catch((error) => logger.error(`Error starting game: ${error.message}`));
-          }}
-        />
+        {#key restarts}
+          <iframe
+            bind:this={frame}
+            class="h-full w-full border-0"
+            src={playerUrl}
+            title={book.title}
+            allow="autoplay; fullscreen"
+            on:load={() => {
+              if (frame) lookupPopup?.attachFrame(frame);
+              frame?.contentDocument?.documentElement.style.setProperty(
+                '--accent-color',
+                getComputedStyle(document.documentElement).getPropertyValue('--accent-color')
+              );
+              frameLoaded = true;
+              start().catch((error) => logger.error(`Error starting game: ${error.message}`));
+            }}
+          />
+        {/key}
       {/if}
     </div>
 
@@ -759,8 +781,26 @@
           </button>
         </li>
       {/if}
+      {#if windows && !blocked}
+        <li>
+          <button
+            on:click={() => {
+              showMore = false;
+              showTuning = true;
+            }}
+          >
+            Tuning
+          </button>
+        </li>
+      {/if}
       <li><button on:click={openStatistics}>Statistics</button></li>
     </ul>
+  </ReaderSheet>
+{/if}
+
+{#if showTuning}
+  <ReaderSheet title="Tuning" on:close={() => (showTuning = false)}>
+    <VnboxTuning {tuning} {frame} onapply={applyTuning} />
   </ReaderSheet>
 {/if}
 
