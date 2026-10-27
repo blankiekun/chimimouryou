@@ -241,13 +241,3 @@ CREATE TABLE IF NOT EXISTS presence_codes (
   expires_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS presence_codes_user ON presence_codes (user);
-
--- Settings sync (GET|PUT /v1/settings): the reader's shared settings as the app's JSON document
--- (no API keys or tokens; the app leaves them out), at most SETTINGS_BYTES. version counts the
--- writes: a PUT names the one it read and gets 409 when another device wrote in between.
-CREATE TABLE IF NOT EXISTS settings (
-  user TEXT PRIMARY KEY,
-  doc TEXT NOT NULL,
-  version INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);

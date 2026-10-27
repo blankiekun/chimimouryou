@@ -17,8 +17,11 @@ import { AnnotationsController, type Highlight } from '$lib/data/annotations';
 import { readerDb } from '$lib/data/reader-db';
 import { GDriveStorageHandler } from '$lib/data/storage/handler/gdrive-handler';
 import { storageOAuthTokens } from '$lib/data/storage/storage-oauth-manager';
-import { StorageSourceDefault } from '$lib/data/storage/storage-types';
-import { syncFileStore, syncJsonFile } from './sync-files';
+import { StorageKey, StorageSourceDefault } from '$lib/data/storage/storage-types';
+import { storageSource$ } from '$lib/data/storage/storage-view';
+import { autoReplication$, syncTarget$ } from '$lib/data/store';
+import { AutoReplicationType } from '$lib/functions/replication/replication-options';
+import { readerSyncSource, syncFileStore, syncJsonFile } from './sync-files';
 
 interface DriveFile {
   id: string;
@@ -180,5 +183,21 @@ describe('extra files on Google Drive', () => {
     storageOAuthTokens.delete(drive);
 
     expect(await syncFileStore(drive)).toBeUndefined();
+  });
+});
+
+describe('reader files for a browser library', () => {
+  it('sync with the auto-replication target, never the server signed out', () => {
+    storageSource$.next(StorageKey.BROWSER);
+    syncTarget$.next(drive);
+    expect(readerSyncSource()).toBe('');
+
+    autoReplication$.next(AutoReplicationType.All);
+    expect(readerSyncSource()).toBe(drive);
+
+    syncTarget$.next(StorageSourceDefault.CALIBRE_DEFAULT);
+    expect(readerSyncSource()).toBe('');
+    autoReplication$.next(AutoReplicationType.Off);
+    syncTarget$.next('');
   });
 });
