@@ -47,7 +47,8 @@ export function vnTextSource(info: VnInfo, onText: OnVnText): VnTextSource {
     // A hook sends each line once, as the game shows it; nothing says it was skipped or read.
     return {
       player: 'vnbox.html',
-      textLines: (line: string) => vnboxLines(line),
+      textLines: (line: string, width: number, height: number) =>
+        vnboxLines(line, { width, height }),
       onText: (line: string) => onText(line, false, false)
     };
   }

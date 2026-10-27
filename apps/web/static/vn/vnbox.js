@@ -7,7 +7,8 @@
  * player.js does with CONscripter's pages. The page calls startGame() once the frame loaded.
  */
 
-// The screen overlay lines are laid out in (vnboxScreen in lib/data/vn.ts).
+// The game's screen, which overlay lines are laid out in (vnboxLines in lib/data/vn.ts): VNBox
+// sizes its screen to the game's window (fitWindow), so it is read from the canvas.
 var g_screen_width = 800;
 var g_screen_height = 600;
 // overlay.js's hooks: hooks give no voice files and there is no backlog to read.
@@ -37,11 +38,18 @@ function screenCanvas() {
 function engineSet() {}
 
 // Overlay lines scale with the game, which VNBox fits into the frame.
-new ResizeObserver(function (entries) {
+function fitOverlay() {
+  var canvas = screenCanvas();
+  var border = document.querySelector('.emscripten_border');
+
+  g_screen_width = canvas.width || 800;
+  g_screen_height = canvas.height || 600;
   document
     .getElementById('overlay')
-    .style.setProperty('--scale', entries[0].contentRect.width / g_screen_width);
-}).observe(document.querySelector('.emscripten_border'));
+    .style.setProperty('--scale', border.getBoundingClientRect().width / g_screen_width);
+}
+
+new ResizeObserver(fitOverlay).observe(document.querySelector('.emscripten_border'));
 
 function loadScript(src) {
   return new Promise(function (resolve, reject) {
@@ -62,7 +70,9 @@ async function startGame(options) {
   keepLines = !!options.keepLines;
   recordLines = !!options.recordLines && typeof MediaRecorder !== 'undefined';
   window.boxedwineText = function (line) {
-    var lines = options.textLines(line);
+    // The screen can change size without the frame's box changing (same aspect).
+    fitOverlay();
+    var lines = options.textLines(line, g_screen_width, g_screen_height);
 
     showText(lines);
     options.onText(line);
