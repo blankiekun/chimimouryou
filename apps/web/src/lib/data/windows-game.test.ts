@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isVn, vnInfo } from '$lib/data/vn';
 import {
   copyWindowsGame,
+  fittedTuning,
   hookSuggestion,
   searchHookScripts,
   vnboxPlayerUrl,
@@ -96,6 +97,30 @@ describe('vnboxPlayerUrl', () => {
       'p=a.exe',
       'frida=blob%3Ahttp%3A%2F%2Fx%2F1'
     ]);
+  });
+});
+
+describe('fittedTuning', () => {
+  it('starts a capped game once on a big screen, then keeps the size its window took', () => {
+    // Muramasa: 1024x576, capped to 806x576 on the 800x600 start.
+    expect(fittedTuning('stats=1', 806, 576)).toEqual({
+      tuning: 'stats=1&resolution=1920x1200',
+      restart: true
+    });
+    // The big screen itself, then its 320x240 splash, before the game's window.
+    expect(fittedTuning('stats=1&resolution=1920x1200', 1920, 1200)).toBeUndefined();
+    expect(fittedTuning('stats=1&resolution=1920x1200', 320, 240)).toBeUndefined();
+    expect(fittedTuning('stats=1&resolution=1920x1200', 1024, 576)).toEqual({
+      tuning: 'stats=1&resolution=1024x576',
+      restart: false
+    });
+  });
+
+  it('leaves games that fit, display modes and tuned sizes alone', () => {
+    expect(fittedTuning('', 800, 600)).toBeUndefined();
+    expect(fittedTuning('', 640, 480)).toBeUndefined();
+    expect(fittedTuning('', 1024, 768)).toBeUndefined();
+    expect(fittedTuning('resolution=1024x576', 806, 576)).toBeUndefined();
   });
 });
 
