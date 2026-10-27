@@ -5,7 +5,7 @@
 # Secrets: VPS_HOST (the VPS's IP: SSH doesn't pass Cloudflare's proxy), VPS_USER, VPS_SSH_KEY (the
 # deploy key's private half), VPS_KNOWN_HOSTS (`ssh-keyscan -t ed25519 <VPS_HOST>`, checked on the
 # VPS console), and VITE_GDRIVE_CLIENT_ID/SECRET for Drive sync. Without the VPS secrets it skips.
-# Variable VPS_SITE_URL: the site's address (default https://chimireader.blank.moe).
+# Variable VPS_SITE_URL: the site's address (default https://chimireader.blankie.moe).
 name: VPS site
 on:
   workflow_dispatch:
@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: vps
-      url: ${{ vars.VPS_SITE_URL || 'https://chimireader.blank.moe' }}
+      url: ${{ vars.VPS_SITE_URL || 'https://chimireader.blankie.moe' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -85,7 +85,7 @@ jobs:
       - name: Build the site
         run: scripts/build-standalone.sh
         env:
-          VITE_BASE_PATH: ${{ vars.VPS_SITE_URL || 'https://chimireader.blank.moe' }}
+          VITE_BASE_PATH: ${{ vars.VPS_SITE_URL || 'https://chimireader.blankie.moe' }}
           VITE_GDRIVE_CLIENT_ID: ${{ secrets.VITE_GDRIVE_CLIENT_ID }}
           VITE_GDRIVE_CLIENT_SECRET: ${{ secrets.VITE_GDRIVE_CLIENT_SECRET }}
           VNBOX_CACHE: ${{ runner.temp }}/vnbox

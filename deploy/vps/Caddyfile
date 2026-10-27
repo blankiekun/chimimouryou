@@ -1,7 +1,7 @@
 # The standalone site on a VPS behind Cloudflare's proxy (deploy/vps/README.md).
 # Install as /etc/caddy/Caddyfile. .github/workflows/vps-site.yml uploads each build into
 # /srv/chimireader/releases/<id>/ and points /srv/chimireader/current at it.
-chimireader.blank.moe {
+chimireader.blankie.moe {
 	# Cloudflare (SSL mode Full (strict)) connects with this Cloudflare Origin CA certificate;
 	# readers only ever see Cloudflare's. No ACME, so nothing to issue through the proxy.
 	tls /etc/caddy/origin.pem /etc/caddy/origin.key
@@ -47,5 +47,31 @@ chimireader.blank.moe {
 	# Like GitHub Pages: prerendered pages by path (/settings → settings.html), else the SPA
 	# fallback (adapter-static's 404.html), served as 200 so the app can route it.
 	try_files {path} {path}.html {path}/index.html /404.html
+	file_server
+}
+
+# blankiekun.github.io's site, deployed by its own vps-site.yml with the second deploy key
+# (CHIMIREADER_SITE=/srv/blankie). Same Origin CA certificate (blankie.moe and *.blankie.moe).
+blankie.moe {
+	tls /etc/caddy/origin.pem /etc/caddy/origin.key
+
+	root * /srv/blankie/current
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options nosniff
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	# VNBox keeps its file names across versions: a day (purge /vnbox/ after a bump). The rest of
+	# the site has unhashed names, so it is revalidated.
+	@big path /vnbox/*
+	header @big Cache-Control "public, max-age=86400"
+	@other not path /vnbox/*
+	header @other Cache-Control no-cache
+
+	# Like GitHub Pages: /sites/help → sites/help.html.
+	try_files {path} {path}.html {path}/index.html
 	file_server
 }

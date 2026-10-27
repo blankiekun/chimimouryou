@@ -52,7 +52,7 @@ export const addonUrl = 'http://127.0.0.1:41918';
 /** Origins the add-on allows without `extraOrigins` (server.py DEFAULT_ORIGINS) */
 export const addonOrigins = [
   'https://chimireader.github.io',
-  'https://chimireader.blank.moe',
+  'https://chimireader.blankie.moe',
   'http://127.0.0.1:41917'
 ];
 export const addonReadme =

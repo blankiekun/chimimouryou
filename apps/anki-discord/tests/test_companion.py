@@ -238,8 +238,8 @@ class HttpTest(unittest.TestCase):
         body = json.loads(data)
         self.assertEqual(body["version"], server.VERSION)
         self.assertIn(body["discord"], ("connected", "closed"))
-        resp, _ = self.request("GET", "/v1/status", origin="https://chimireader.blank.moe")
-        self.assertEqual(resp.getheader("Access-Control-Allow-Origin"), "https://chimireader.blank.moe")
+        resp, _ = self.request("GET", "/v1/status", origin="https://chimireader.blankie.moe")
+        self.assertEqual(resp.getheader("Access-Control-Allow-Origin"), "https://chimireader.blankie.moe")
 
     def test_preflight(self):
         resp, _ = self.request("OPTIONS", "/v1/activity", origin="https://books.example.net",
