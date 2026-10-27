@@ -35,7 +35,8 @@ export function readerPath(id: number, route: ReaderRoute = 'b') {
  * the site un-isolated). Where /v isn't isolated (GitHub Pages), leaving it stays client-side.
  */
 export function needsFullLoad(from: URL, to: URL, isolated: boolean) {
-  const player = (url: URL) => url.pathname === `${pagePath}/v` || url.pathname === `${pagePath}/v.html`;
+  const player = (url: URL) =>
+    url.pathname === `${pagePath}/v` || url.pathname === `${pagePath}/v.html`;
 
   if (from.origin !== to.origin || player(from) === player(to)) return false;
 
