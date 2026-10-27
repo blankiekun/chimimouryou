@@ -74,6 +74,29 @@ describe('vnboxPlayerUrl', () => {
     expect(url.searchParams.get('frida')).toBe('blob:http://x/1');
     expect(url.search).toContain('env=%22LC_ALL:ja_JP.UTF-8%22');
   });
+
+  it('puts tuning over the defaults in place, but never the folder, program or hook', () => {
+    const info = { encoding: 'sjis', files: [], engine: 'vnbox', folder: 'gabc', exe: 'a.exe' };
+    const search = vnboxPlayerUrl(
+      info as any,
+      'blob:http://x/1',
+      'audioFreq=22050&fitWindow=false&stats=1&lazy=opfs:x&p=evil.exe&frida=x&env=%22WINEDEBUG:-all%22&a#b'
+    ).split('?')[1];
+    const pairs = search.split('&');
+
+    // VNBox reads the first key=, so each key appears once.
+    expect(pairs.filter((pair) => pair.startsWith('audioFreq='))).toEqual(['audioFreq=22050']);
+    expect(pairs).toContain('fitWindow=false');
+    expect(pairs).not.toContain('fitWindow=true');
+    expect(pairs).toContain('stats=1');
+    expect(pairs).toContain('env=%22WINEDEBUG:-all%22');
+    expect(pairs).toContain('a%23b');
+    expect(pairs.filter((pair) => /^(lazy|p|frida)=/.test(pair))).toEqual([
+      'lazy=opfs%3Avnbox%2Fgabc',
+      'p=a.exe',
+      'frida=blob%3Ahttp%3A%2F%2Fx%2F1'
+    ]);
+  });
 });
 
 describe('bundled hook scripts', () => {
