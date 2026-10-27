@@ -54,12 +54,12 @@
   const suggested = $derived(hookSuggestion(scripts, { exe, names: [title, folderName] }));
   const choice = $derived(picked ?? suggested ?? '');
   /** The suggestion, the current pick and the search results, each once */
+  const hits = $derived(
+    new Set(query.trim() ? searchHookScripts(scripts, query).map((script) => script.file) : [])
+  );
   const listed = $derived(
     scripts.filter(
-      (script) =>
-        script.file === suggested ||
-        script.file === choice ||
-        (query.trim() && searchHookScripts([script], query).length)
+      (script) => script.file === suggested || script.file === choice || hits.has(script.file)
     )
   );
   const CHOSEN = '#chosen';
@@ -80,15 +80,17 @@
 
   async function readHandle(dir: FileSystemDirectoryHandle, prefix = '') {
     const found: Record<string, File> = {};
+    const reads: Promise<void>[] = [];
 
     for await (const [name, handle] of (dir as any).entries()) {
       const path = `${prefix}${name}`;
 
       if (hidden(path)) continue;
       if (handle.kind === 'directory') Object.assign(found, await readHandle(handle, `${path}/`));
-      else found[path] = await handle.getFile();
+      else reads.push(handle.getFile().then((file: File) => void (found[path] = file)));
     }
 
+    await Promise.all(reads);
     return found;
   }
 

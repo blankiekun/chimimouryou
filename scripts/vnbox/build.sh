@@ -22,8 +22,14 @@ trap 'rm -rf "$work"' EXIT
 
 assets=("vnbox-web-$tag.tar.gz" TinyCore15Wine11.0-web.zip jp.zip)
 for f in "${assets[@]}"; do
-  curl -fsSL --retry 3 -o "$work/$f" "$REPO/releases/download/$tag/$f"
   sum=$(awk -v tag="$tag" -v f="$f" '$1 == tag && $2 == f { print $3 }' "$sums")
+  # Zips from the last run that still pass their sums are kept (the tarball is unpacked, so fetched).
+  if [ -n "$sum" ] && [ -f "$out/$f" ] && echo "$sum  $out/$f" | sha256sum -c --quiet 2>/dev/null; then
+    cp "$out/$f" "$work/$f"
+    echo "Kept $f"
+    continue
+  fi
+  curl -fsSL --retry 3 -o "$work/$f" "$REPO/releases/download/$tag/$f"
   if [ -z "$sum" ] && [ "${VNBOX_RECORD:-}" = 1 ]; then
     sum=$(sha256sum "$work/$f" | cut -d' ' -f1)
     echo "$tag $f $sum" >> "$sums"

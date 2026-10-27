@@ -4,9 +4,10 @@
  * All rights reserved.
  */
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isVn, vnInfo } from '$lib/data/vn';
 import {
+  copyWindowsGame,
   hookSuggestion,
   searchHookScripts,
   vnboxPlayerUrl,
@@ -119,5 +120,108 @@ describe('bundled hook scripts', () => {
 
     expect(frida()).toBe('vnbox/hooks/PC_Muv_Luv.js');
     expect(frida('blob:http://x/1')).toBe('blob:http://x/1');
+  });
+});
+
+describe('copyWindowsGame', () => {
+  /** An in-memory OPFS: folders are Maps, files their bytes; writes land on close only. */
+  function fakeOpfs() {
+    const lookups: string[] = [];
+    const dir = (path: string, entries = new Map<string, any>()): any => ({
+      entries,
+      async getDirectoryHandle(name: string, { create = false } = {}) {
+        lookups.push(`${path}${name}/`);
+        if (!entries.has(name)) {
+          if (!create) throw new DOMException('missing', 'NotFoundError');
+          entries.set(name, dir(`${path}${name}/`));
+        }
+        return entries.get(name);
+      },
+      async getFileHandle(name: string) {
+        if (!entries.has(name)) entries.set(name, { bytes: new Uint8Array(), writes: 0 });
+
+        const entry = entries.get(name);
+
+        return {
+          getFile: async () => ({ size: entry.bytes.length }),
+          createWritable: async () => {
+            const chunks: Uint8Array[] = [];
+
+            return new WritableStream<Uint8Array>({
+              write: (chunk) => void chunks.push(chunk),
+              close: () => {
+                entry.bytes = new Uint8Array(chunks.flatMap((chunk) => [...chunk]));
+                entry.writes += 1;
+              }
+            });
+          }
+        };
+      }
+    });
+    const root = dir('');
+
+    vi.stubGlobal('navigator', { storage: { getDirectory: async () => root } });
+    return { root, lookups };
+  }
+
+  const file = (text: string, gate?: Promise<void>) =>
+    ({
+      size: text.length,
+      stream: () =>
+        new ReadableStream({
+          async pull(controller) {
+            await gate;
+            controller.enqueue(new TextEncoder().encode(text));
+            controller.close();
+          }
+        })
+    }) as unknown as File;
+  const game = (root: any) => root.entries.get('vnbox').entries.get('g1').entries;
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('copies every file, looks each folder up once and skips files already copied', async () => {
+    const { root, lookups } = fakeOpfs();
+    const files = Object.fromEntries(
+      Array.from({ length: 20 }, (_, i) => [`data/sub/f${i}.bin`, file(`file ${i}`)])
+    );
+
+    files['game.exe'] = file('MZ');
+    await copyWindowsGame('g1', files, () => {});
+
+    const sub = game(root).get('data').entries.get('sub').entries;
+
+    expect(sub.size).toBe(20);
+    expect(new TextDecoder().decode(sub.get('f7.bin').bytes)).toBe('file 7');
+    expect(lookups.filter((path) => path === 'vnbox/g1/data/sub/')).toHaveLength(1);
+
+    const progress: number[] = [];
+
+    await copyWindowsGame('g1', files, (done) => progress.push(done));
+    expect(sub.get('f7.bin').writes).toBe(1);
+    expect(progress.at(-1)).toBe(Object.values(files).reduce((sum, f) => sum + f.size, 0));
+  });
+
+  it('stops on abort, keeps no cut-off file and resumes by size', async () => {
+    const { root } = fakeOpfs();
+    const abort = new AbortController();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const files = {
+      'a.txt': file('aaa'),
+      'slow.bin': file('slow', gate),
+      'z.txt': file('zzz')
+    };
+    const copying = copyWindowsGame('g1', files, () => {}, abort.signal);
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    abort.abort();
+    release();
+    await expect(copying).rejects.toThrow();
+    expect(game(root).get('slow.bin').bytes.length).toBe(0);
+
+    await copyWindowsGame('g1', files, () => {});
+    expect(new TextDecoder().decode(game(root).get('slow.bin').bytes)).toBe('slow');
+    expect(game(root).get('a.txt').writes).toBe(1);
   });
 });

@@ -75,8 +75,18 @@ jobs:
             https://github.com/yomidevs/jmdict-yomitan/releases/latest/download/JMdict_english.zip
 
       # VNBox (Windows games) and its root fs, served same-origin (release assets have no CORS).
+      # Cached outside the build: build.sh keeps the ~125 MB of zips that still pass their sums.
+      - name: Cache VNBox
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/vnbox
+          key: vnbox-${{ hashFiles('scripts/vnbox/sha256sums') }}
+
       - name: Add VNBox
-        run: VNBOX_OUT=apps/web/build/vn/vnbox scripts/vnbox/build.sh
+        run: |
+          VNBOX_OUT="$RUNNER_TEMP/vnbox" scripts/vnbox/build.sh
+          mkdir -p apps/web/build/vn
+          cp -r "$RUNNER_TEMP/vnbox" apps/web/build/vn/vnbox
 
       # Settings → Themes links to the theme guide (the web image copies it the same way).
       - name: Add the theme guide
