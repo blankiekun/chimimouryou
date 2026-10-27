@@ -229,6 +229,7 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import { isManga } from '$lib/data/manga';
   import { isVn } from '$lib/data/vn';
+  import { bookRoute, readerPath, replacePage } from '$lib/data/reader-route';
   import { t$, tr } from '$lib/i18n';
   import Fa from 'svelte-fa';
   import {
@@ -354,7 +355,7 @@
         }
 
         if (isManga(bookData) || isVn(bookData)) {
-          goto(`${pagePath}/${isVn(bookData) ? 'v' : 'm'}?id=${id}`, { replaceState: true });
+          replacePage(readerPath(id, bookRoute(bookData)));
           return new Promise<never>(() => {});
         }
 
@@ -409,7 +410,7 @@
 
         // A synced book not cached here yet only gets its data above.
         if (isManga(bookData) || isVn(bookData)) {
-          goto(`${pagePath}/${isVn(bookData) ? 'v' : 'm'}?id=${id}`, { replaceState: true });
+          replacePage(readerPath(id, bookRoute(bookData)));
           return new Promise<never>(() => {});
         }
 

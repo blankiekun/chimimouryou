@@ -99,6 +99,7 @@
   import { clearReadingProgress } from '$lib/functions/clear-reading-progress';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { pagePath, selfHostingGuideUrl, standalone } from '$lib/data/env';
+  import { bookRoute, readerPath, readerRoute, type ReaderRoute } from '$lib/data/reader-route';
   import FirstRun from '$lib/components/standalone/first-run.svelte';
   import { backgroundAnalysis$, catchUpAnalysis } from '$lib/data/background-analysis';
   import InstallHint from '$lib/components/standalone/install-hint.svelte';
@@ -416,6 +417,7 @@
       ]);
 
       let idToOpen = bookId;
+      let route: ReaderRoute = 'b';
 
       try {
         const bookItem = $bookCards$.find((book) => book.id === bookId);
@@ -447,6 +449,10 @@
         });
 
         idToOpen = await handler.prepareBookForReading();
+        // Straight to the manga or VN player when this browser has it; else the reader syncs it down first.
+        const local = readerRoute(bookItem) === 'b' ? undefined : await database.getData(idToOpen);
+
+        route = local ? bookRoute(local) : 'b';
 
         if (
           showsExternalReadHint(
@@ -501,7 +507,7 @@
         return;
       }
 
-      openBook(idToOpen);
+      openBook(idToOpen, route);
       return;
     }
 
@@ -573,17 +579,13 @@
     return !replicationToProgress && connectivityPass;
   }
 
-  function openBook(bookId: number) {
+  function openBook(bookId: number, route: ReaderRoute) {
     if (!bookId) {
       return;
     }
 
-    database.putLastItem(bookId);
-    gotoBook(bookId);
-  }
-
-  async function gotoBook(id: number) {
-    await goto(`${pagePath}/b?id=${id}`);
+    database.putLastItem(bookId, route);
+    goto(readerPath(bookId, route));
   }
 
   async function onFilesChange(fileList: FileList | File[]) {

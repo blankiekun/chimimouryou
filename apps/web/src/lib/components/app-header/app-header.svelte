@@ -19,6 +19,8 @@
   import { account$ } from '$lib/data/account';
   import { pagePath, standalone } from '$lib/data/env';
   import { libraryTab$, type LibraryTab } from '$lib/data/library-home';
+  import { readerPath } from '$lib/data/reader-route';
+  import { database } from '$lib/data/store';
   import { socialSession$ } from '$lib/data/social-account';
   import { t$ } from '$lib/i18n';
   import { activePlugins$ } from '$lib/plugins';
@@ -26,6 +28,9 @@
 
   export let active: AppSection | undefined;
   export let currentBookId: number | undefined = undefined;
+
+  // The last item's page (VN, manga or reader), so Continue skips the reader's redirect.
+  const lastItem$ = database.lastItem$;
   /** Intercepts section links, e.g. so the reader can save progress before leaving. */
   export let onNavigate: ((section: AppSection, href: string) => void) | undefined = undefined;
   /** When set, small screens show a back button instead of the section navigation. */
@@ -138,7 +143,10 @@
       <div class="ml-auto flex min-w-0 items-center gap-1" class:hidden={bare}>
         {#if currentBookId}
           <a
-            href="{pagePath}/b?id={currentBookId}"
+            href={readerPath(
+              currentBookId,
+              $lastItem$?.dataId === currentBookId ? $lastItem$.route : undefined
+            )}
             class="app-header-icon app-header-continue"
             title={$t$('nav.continueReading')}
           >
