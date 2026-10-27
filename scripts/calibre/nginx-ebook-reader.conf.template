@@ -80,6 +80,20 @@ map $forwarded_proto $hsts {
   https "max-age=31536000";
 }
 
+# Cross-origin isolation for the visual novel player only (/v and its frames under /vn/):
+# VNBox plays sound through an AudioWorklet fed from a SharedArrayBuffer there. credentialless,
+# so cross-origin images (covers) keep loading. Empty elsewhere (no header).
+map $uri $vn_coop {
+  default "";
+  ~^/v(\.html)?$ same-origin;
+  ~^/vn/ same-origin;
+}
+map $uri $vn_coep {
+  default "";
+  ~^/v(\.html)?$ credentialless;
+  ~^/vn/ credentialless;
+}
+
 server_tokens off;
 
 server {
@@ -96,6 +110,8 @@ server {
   add_header Referrer-Policy same-origin always;
   add_header Content-Security-Policy "frame-ancestors 'self'; object-src 'none'; base-uri 'self'" always;
   add_header Strict-Transport-Security $hsts always;
+  add_header Cross-Origin-Opener-Policy $vn_coop always;
+  add_header Cross-Origin-Embedder-Policy $vn_coep always;
 
   gzip on;
   gzip_types application/json text/css application/javascript application/wasm;
