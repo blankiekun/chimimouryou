@@ -175,6 +175,9 @@ export function vnboxPlayerUrl(info: VnInfo, hookUrl?: string) {
     // VNBox's own syntax: a quoted key:value, the quotes as %22.
     'env=%22LC_ALL:ja_JP.UTF-8%22',
     'wine-override=[nomono]',
+    // The MS Japanese font names (ＭＳ ゴシック…) as jp.zip's IPA fonts: without them titles
+    // show tofu, and games that check the font they got (最果てのイマ) stop.
+    'registry=jpfonts',
     // VNBox defaults to 11025 Hz.
     'audioFreq=44100',
     // The game's window fills VNBox's screen, which takes its size: no title bar or desktop.
