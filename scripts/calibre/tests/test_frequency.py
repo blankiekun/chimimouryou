@@ -327,9 +327,11 @@ class RanksEndpointTest(unittest.TestCase):
         server = ThreadingHTTPServer(('127.0.0.1', 0), service.Handler)
         threading.Thread(target=server.serve_forever, daemon=True).start()
 
-        def post(body, origin='https://reader.example'):
+        def post(body, origin='https://reader.example', length=None):
             headers = {'X-Internal-Token': 'c0ffee', 'Host': 'reader.example', 'Origin': origin,
                        'Content-Type': 'application/json'}
+            if length is not None:
+                headers['Content-Length'] = str(length)
             request = urllib.request.Request(f'http://127.0.0.1:{server.server_port}/ranks', data=body, headers=headers)
             try:
                 with urllib.request.urlopen(request) as response:
@@ -343,7 +345,8 @@ class RanksEndpointTest(unittest.TestCase):
             self.assertEqual(post(b'{"forms": "x"}')[0], 400)
             self.assertEqual(post(b'not json')[0], 400)
             self.assertEqual(post(json.dumps({'forms': ['x'] * (service.MAX_RANK_FORMS + 1)}).encode())[0], 400)
-            self.assertEqual(post(b'x' * (service.MAX_RANKS_BYTES + 1))[0], 413)
+            # Only the header is too large: a real 1 MB body races the early 413 into a broken pipe.
+            self.assertEqual(post(b'{}', length=service.MAX_RANKS_BYTES + 1)[0], 413)
             self.assertEqual(post(b'{"forms": []}', origin='https://evil.example')[0], 403)
         finally:
             server.shutdown()
