@@ -266,6 +266,51 @@ export function saveVnboxTuning(folder: string, tuning: string) {
   }
 }
 
+/** The screen VNBox starts at without a `resolution` (its StartUpArgs default). */
+const startScreen = { width: 800, height: 600 };
+/** The screen a capped game is started on once to get its size: room for 1920x1080 and a title bar. */
+export const learnResolution = '1920x1200';
+
+const withResolution = (tuning: string, resolution: string) =>
+  [
+    ...tuning.split('&').filter((pair) => pair && !pair.startsWith('resolution=')),
+    `resolution=${resolution}`
+  ].join('&');
+
+/**
+ * The game's tuning after VNBox's screen took the game window's size (fitWindow), or undefined to
+ * keep it. Wine caps a new window at the screen plus its frame, so a game bigger than the 800x600
+ * start comes out a few pixels over it, cut off (Muramasa, 1024x576: 806x576). Such a game is
+ * started once on a big screen (`restart`), where the window gets its own size, which is then
+ * kept as its resolution for the next start. Games that fit, and tuned sizes, are left alone.
+ */
+export function fittedTuning(
+  tuning: string,
+  width: number,
+  height: number
+): { tuning: string; restart: boolean } | undefined {
+  const resolution = tuning
+    .split('&')
+    .find((pair) => pair.startsWith('resolution='))
+    ?.slice(11);
+  // Display mode changes (1024x768…) land far over the start; a capped window only its frame's width.
+  const over = (size: number, start: number) => size > start && size <= start + 32;
+
+  if (!resolution) {
+    return over(width, startScreen.width) || over(height, startScreen.height)
+      ? { tuning: withResolution(tuning, learnResolution), restart: true }
+      : undefined;
+  }
+  // On the big screen: a splash window can come first, so only a size the start couldn't hold.
+  if (
+    resolution === learnResolution &&
+    `${width}x${height}` !== learnResolution &&
+    (width > startScreen.width || height > startScreen.height)
+  ) {
+    return { tuning: withResolution(tuning, `${width}x${height}`), restart: false };
+  }
+}
+
 /** The bundled dc00 scripts (scripts/vnbox/build.sh), relative to vnbox.html. */
 const hookBase = 'vnbox/hooks';
 

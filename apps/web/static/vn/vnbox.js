@@ -51,6 +51,24 @@ function fitOverlay() {
 
 new ResizeObserver(fitOverlay).observe(document.querySelector('.emscripten_border'));
 
+// startGame's onScreen(width, height): each size VNBox's screen takes (fitWindow sizes it to the
+// game's window), so the page can keep a game's size (fittedTuning in lib/data/windows-game.ts).
+var onScreen = function () {};
+var screenSize = '';
+
+new MutationObserver(function () {
+  var canvas = screenCanvas();
+  var size = canvas.width + 'x' + canvas.height;
+
+  if (size === screenSize) return;
+  screenSize = size;
+  onScreen(canvas.width, canvas.height);
+}).observe(document.getElementById('dropzone'), {
+  subtree: true,
+  attributes: true,
+  attributeFilter: ['width', 'height', 'style']
+});
+
 function loadScript(src) {
   return new Promise(function (resolve, reject) {
     var script = document.createElement('script');
@@ -64,10 +82,12 @@ function loadScript(src) {
 }
 
 /**
- * options: textLines(line) (overlay lines), onText(line), keepLines (keep the recent lines with
- * their screenshots for ankiMedia()), recordLines (and record their sound).
+ * options: textLines(line) (overlay lines), onText(line), onScreen(width, height) (screen size
+ * changes), keepLines (keep the recent lines with their screenshots for ankiMedia()), recordLines
+ * (and record their sound).
  */
 async function startGame(options) {
+  onScreen = options.onScreen || onScreen;
   keepLines = !!options.keepLines;
   recordLines = !!options.recordLines && typeof MediaRecorder !== 'undefined';
   window.boxedwineText = function (line) {

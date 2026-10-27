@@ -52,6 +52,7 @@
   } from '$lib/data/vn';
   import { VnReading, vnTextSource } from '$lib/data/vn-text';
   import {
+    fittedTuning,
     hasWindowsGame,
     loadVnboxTuning,
     saveVnboxTuning,
@@ -378,7 +379,8 @@
         keepLines: $ankiEnabled$,
         recordLines: $ankiEnabled$ && $ankiVnAudio$,
         textLines: source.textLines,
-        onText: source.onText
+        onText: source.onText,
+        onScreen: fitScreen
       });
       started = true;
       return;
@@ -523,6 +525,16 @@
     frameLoaded = false;
     started = false;
     restarts += 1;
+  }
+
+  /** A Windows game's screen took a new size: a game Wine cut off restarts once to keep its own. */
+  function fitScreen(width: number, height: number) {
+    // Until the restarted frame has started: the old one's sizes are stale.
+    const fitted = started && fittedTuning(loadVnboxTuning(info!.folder!), width, height);
+
+    if (!fitted) return;
+    if (fitted.restart) applyTuning(fitted.tuning);
+    else saveVnboxTuning(info!.folder!, fitted.tuning);
   }
 
   function openMenu() {
