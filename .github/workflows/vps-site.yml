@@ -1,0 +1,113 @@
+# Publishes the standalone web app to the VPS behind Cloudflare (deploy/vps/README.md): builds it
+# like deploy/pages/pages.yml, uploads it into a new release folder over SSH and then switches the
+# site to it in one step, so readers never get half a site. Run it from the Actions tab with main or
+# a v* tag; release.yml runs it with each tag once CI passes.
+# Secrets: VPS_HOST (the VPS's IP: SSH doesn't pass Cloudflare's proxy), VPS_USER, VPS_SSH_KEY (the
+# deploy key's private half), VPS_KNOWN_HOSTS (`ssh-keyscan -t ed25519 <VPS_HOST>`, checked on the
+# VPS console), and VITE_GDRIVE_CLIENT_ID/SECRET for Drive sync. Without the VPS secrets it skips.
+# Variable VPS_SITE_URL: the site's address (default https://chimireader.blank.moe).
+name: VPS site
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Tag or branch to publish
+        default: main
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vps-site
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.secrets.outputs.ready }}
+    steps:
+      # Only main or a release tag: never a pull request's head or another branch.
+      - name: Check the ref
+        env:
+          REF: ${{ inputs.ref }}
+        run: '[[ "$REF" =~ ^(main|v[0-9.]+)$ ]] || { echo "Publish main or a v* tag, not $REF" >&2; exit 1; }'
+
+      - name: Check the secrets
+        id: secrets
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          if [ -n "$VPS_HOST" ] && [ -n "$VPS_USER" ] && [ -n "$VPS_SSH_KEY" ] && [ -n "$VPS_KNOWN_HOSTS" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::VPS_HOST, VPS_USER, VPS_SSH_KEY and VPS_KNOWN_HOSTS aren't all set: skipping (deploy/vps/README.md)"
+          fi
+
+  deploy:
+    needs: check
+    if: needs.check.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: vps
+      url: ${{ vars.VPS_SITE_URL || 'https://chimireader.blank.moe' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache VNBox
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/vnbox
+          key: vnbox-${{ hashFiles('scripts/vnbox/sha256sums') }}
+
+      - name: Build the site
+        run: scripts/build-standalone.sh
+        env:
+          VITE_BASE_PATH: ${{ vars.VPS_SITE_URL || 'https://chimireader.blank.moe' }}
+          VITE_GDRIVE_CLIENT_ID: ${{ secrets.VITE_GDRIVE_CLIENT_ID }}
+          VITE_GDRIVE_CLIENT_SECRET: ${{ secrets.VITE_GDRIVE_CLIENT_SECRET }}
+          VNBOX_CACHE: ${{ runner.temp }}/vnbox
+
+      # The deploy key may only run deploy/vps/chimireader-deploy there: prepare (a hard-linked copy
+      # of the live release), rsync into releases/, activate (flip the `current` symlink).
+      - name: Upload and switch
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/vps
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/vps
+          ssh=(ssh -i ~/.ssh/vps -o BatchMode=yes -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes)
+          id="$(date -u +%Y%m%d%H%M%S)-${GITHUB_SHA::12}"
+          "${ssh[@]}" "$VPS_USER@$VPS_HOST" prepare "$id"
+          # --checksum leaves unchanged files (VNBox, analysis tools) as the hard links prepare made.
+          rsync -rl --checksum --delete --chmod=D755,F644 -e "${ssh[*]}" \
+            apps/web/build/ "$VPS_USER@$VPS_HOST:$id/"
+          "${ssh[@]}" "$VPS_USER@$VPS_HOST" activate "$id"
+          rm -f ~/.ssh/vps

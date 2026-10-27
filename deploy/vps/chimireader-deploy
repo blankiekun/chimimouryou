@@ -1,0 +1,46 @@
+#!/bin/sh
+# The only command the deploy key may run on the VPS (authorized_keys: command="...",restrict),
+# called by .github/workflows/vps-site.yml:
+#   prepare ID   releases/ID as a hard-linked copy of the live release (rsync then sends only changes)
+#   rsync ...    rrsync, limited to releases/
+#   activate ID  points `current` (Caddy's root) at releases/ID in one rename; keeps the last 3 releases
+# ID is <UTC yyyymmddHHMMSS>-<12 hex>, so names sort by age.
+set -eu
+site=${CHIMIREADER_SITE:-/srv/chimireader}
+releases=$site/releases
+set -f
+# shellcheck disable=SC2086 # split on purpose; globbing is off
+set -- ${SSH_ORIGINAL_COMMAND:-}
+
+check_id() {
+  echo "$1" | grep -Eqx '[0-9]{14}-[0-9a-f]{12}' || { echo "Bad release id: $1" >&2; exit 1; }
+}
+
+case "${1:-}" in
+  rsync)
+    exec rrsync "$releases" ;;
+  prepare)
+    [ $# -eq 2 ] || exit 1
+    check_id "$2"
+    mkdir -p "$releases"
+    [ ! -e "$releases/$2" ] || { echo "Release $2 exists" >&2; exit 1; }
+    if [ -d "$site/current" ]; then
+      cp -al "$(readlink -f "$site/current")" "$releases/$2"
+    else
+      mkdir "$releases/$2"
+    fi ;;
+  activate)
+    [ $# -eq 2 ] || exit 1
+    check_id "$2"
+    [ -f "$releases/$2/index.html" ] || { echo "Release $2 has no index.html" >&2; exit 1; }
+    ln -sfn "releases/$2" "$site/.current.new"
+    mv -Tf "$site/.current.new" "$site/current"
+    live=$(basename "$(readlink -f "$site/current")")
+    # Ids are [0-9a-f-] only, so ls is safe here; unfinished uploads go too.
+    ls -1 "$releases" | sort -r | tail -n +4 | while read -r old; do
+      [ "$old" = "$live" ] || rm -rf "${releases:?}/$old"
+    done ;;
+  *)
+    echo "Only prepare, rsync and activate" >&2
+    exit 1 ;;
+esac

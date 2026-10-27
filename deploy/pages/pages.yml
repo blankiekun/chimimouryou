@@ -4,7 +4,8 @@
 # set Settings → Pages → Source to "GitHub Actions", and add the repository secrets
 # VITE_GDRIVE_CLIENT_ID and VITE_GDRIVE_CLIENT_SECRET (no OneDrive in the standalone)
 # (OAuth redirect URI: https://chimireader.github.io/auth). Run it from the Actions tab,
-# with a tag such as v1.2.3 or main.
+# with a tag such as v1.2.3 or main (tags up to v3.8.0 have no scripts/build-standalone.sh:
+# publish those with this file's copy from v3.8.0).
 name: Pages
 on:
   workflow_dispatch:
@@ -52,45 +53,21 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build the standalone edition
-        run: pnpm build
-        env:
-          VITE_EDITION: standalone
-          VITE_STORAGE_ROOT_NAME: chimi-reader-data
-          VITE_BASE_PATH: https://chimireader.github.io
-          VITE_GDRIVE_CLIENT_ID: ${{ secrets.VITE_GDRIVE_CLIENT_ID }}
-          VITE_GDRIVE_CLIENT_SECRET: ${{ secrets.VITE_GDRIVE_CLIENT_SECRET }}
-
-      # Settings → Analysis tools: Sudachi (wasm), Pyodide and yurigana, built from source (~10 min).
-      - name: Build the analysis tools
-        run: |
-          rustup target add wasm32-unknown-unknown
-          scripts/analysis-tools/build.sh
-
-      # Settings → Dictionary's one-tap JMdict (EDRDG, CC BY-SA 4.0, see NOTICE), served same-origin.
-      - name: Add JMdict
-        run: |
-          mkdir -p apps/web/build/dictionaries
-          curl -fsSL --retry 3 -o apps/web/build/dictionaries/JMdict_english.zip \
-            https://github.com/yomidevs/jmdict-yomitan/releases/latest/download/JMdict_english.zip
-
-      # VNBox (Windows games) and its root fs, served same-origin (release assets have no CORS).
-      # Cached outside the build: build.sh keeps the ~125 MB of zips that still pass their sums.
+      # Cached outside the build: build.sh keeps the ~125 MB of VNBox zips that still pass their sums.
       - name: Cache VNBox
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/vnbox
           key: vnbox-${{ hashFiles('scripts/vnbox/sha256sums') }}
 
-      - name: Add VNBox
-        run: |
-          VNBOX_OUT="$RUNNER_TEMP/vnbox" scripts/vnbox/build.sh
-          mkdir -p apps/web/build/vn
-          cp -r "$RUNNER_TEMP/vnbox" apps/web/build/vn/vnbox
-
-      # Settings → Themes links to the theme guide (the web image copies it the same way).
-      - name: Add the theme guide
-        run: cp themes.md apps/web/build/themes.md
+      # The app, the analysis tools (~10 min), JMdict, VNBox and the theme guide.
+      - name: Build the site
+        run: scripts/build-standalone.sh
+        env:
+          VITE_BASE_PATH: https://chimireader.github.io
+          VITE_GDRIVE_CLIENT_ID: ${{ secrets.VITE_GDRIVE_CLIENT_ID }}
+          VITE_GDRIVE_CLIENT_SECRET: ${{ secrets.VITE_GDRIVE_CLIENT_SECRET }}
+          VNBOX_CACHE: ${{ runner.temp }}/vnbox
 
       - name: Upload the site
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0

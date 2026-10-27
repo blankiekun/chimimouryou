@@ -114,6 +114,21 @@ jobs:
           if [ -z "$GH_TOKEN" ]; then echo "No PAGES_DISPATCH_TOKEN: skipping"; exit 0; fi
           gh workflow run pages.yml -R "$PAGES_REPO" -f ref="$GITHUB_REF_NAME"
 
+  # Publishes the tag on the VPS site (vps-site.yml) once its secrets are set (deploy/vps/README.md).
+  vps:
+    needs: [ci, on-main]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Run the VPS workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          if [ -z "$VPS_HOST" ]; then echo "No VPS_HOST: skipping"; exit 0; fi
+          gh workflow run vps-site.yml -R "$GITHUB_REPOSITORY" -f ref="$GITHUB_REF_NAME"
+
   # The desktop app (apps/desktop) with the standalone build inside, attached to the tag's GitHub
   # release with the latest*.yml files electron-updater reads. Unsigned. The Google Drive client comes
   # from this repository's secrets VITE_GDRIVE_CLIENT_ID and VITE_GDRIVE_CLIENT_SECRET (the same
