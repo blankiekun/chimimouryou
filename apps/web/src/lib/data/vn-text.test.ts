@@ -32,7 +32,7 @@ describe('vnTextSource', () => {
     expect(source.player).toBe('vnbox.html');
     source.onText('「こんにちは」');
     expect(onText).toHaveBeenCalledWith('「こんにちは」', false, false);
-    expect(source.textLines('あ')).toEqual(vnboxLines('あ'));
+    expect(source.textLines('あ', 640, 480)).toEqual(vnboxLines('あ', { width: 640, height: 480 }));
   });
 });
 

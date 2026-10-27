@@ -402,19 +402,17 @@ export function overlayLines(
   }));
 }
 
-/** The screen VNBox's overlay lines are laid out in (vnbox.js scales it to the game). */
-export const vnboxScreen = { width: 800, height: 600 };
-
 /**
- * A line from a Windows game's text hook as overlay rows over the bottom of the screen, where
- * most games draw their text box: the hook gives no positions, so these only give Yomitan
- * something to scan there (the text panel shows the line itself).
- * shortcut: fixed rows of 30 characters; lay the text where the game drew it once the hook
- * reports positions.
+ * A line from a Windows game's text hook as overlay rows over the bottom of its screen (the
+ * game's own size, from vnbox.js), where most games draw their text box: the hook gives no
+ * positions, so these only give Yomitan something to scan there (the text panel shows the
+ * line itself).
+ * shortcut: fixed rows across 90% of the width; lay the text where the game drew it once the
+ * hook reports positions.
  */
-export function vnboxLines(text: string): VnOverlayLine[] {
+export function vnboxLines(text: string, screen = { width: 800, height: 600 }): VnOverlayLine[] {
   const size = 24;
-  const perRow = 30;
+  const perRow = Math.floor((screen.width * 0.9) / size);
   const rows = text.split('\n').flatMap((line) => {
     const chars = [...line];
 
@@ -427,8 +425,8 @@ export function vnboxLines(text: string): VnOverlayLine[] {
 
   return rows.map((row, index) => ({
     text: row,
-    x: (vnboxScreen.width - perRow * size) / 2,
-    y: Math.round(vnboxScreen.height * 0.72) + index * size * 1.5,
+    x: (screen.width - perRow * size) / 2,
+    y: Math.round(screen.height * 0.72) + index * size * 1.5,
     size,
     pitch: size
   }));

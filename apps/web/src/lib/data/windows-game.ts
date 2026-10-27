@@ -177,6 +177,8 @@ export function vnboxPlayerUrl(info: VnInfo, hookUrl?: string) {
     'wine-override=[nomono]',
     // VNBox defaults to 11025 Hz.
     'audioFreq=44100',
+    // The game's window fills VNBox's screen, which takes its size: no title bar or desktop.
+    'fitWindow=true',
     ...(frida ? [`frida=${encodeURIComponent(frida)}`] : [])
   ];
 
