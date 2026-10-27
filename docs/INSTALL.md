@@ -272,3 +272,5 @@ To publish every release automatically, give this repository the secret `PAGES_D
 (a fine-grained token for the site repository only, with Actions: read and write) and, if the
 site isn't `chimireader/chimireader.github.io`, the variable `PAGES_REPO`: `release.yml` then runs
 the site's workflow with each `v*` tag once CI passes.
+To serve it from your own VPS behind Cloudflare instead (or as well), see
+[deploy/vps/README.md](../deploy/vps/README.md).

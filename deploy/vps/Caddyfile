@@ -1,0 +1,51 @@
+# The standalone site on a VPS behind Cloudflare's proxy (deploy/vps/README.md).
+# Install as /etc/caddy/Caddyfile. .github/workflows/vps-site.yml uploads each build into
+# /srv/chimireader/releases/<id>/ and points /srv/chimireader/current at it.
+chimireader.blank.moe {
+	# Cloudflare (SSL mode Full (strict)) connects with this Cloudflare Origin CA certificate;
+	# readers only ever see Cloudflare's. No ACME, so nothing to issue through the proxy.
+	tls /etc/caddy/origin.pem /etc/caddy/origin.key
+
+	root * /srv/chimireader/current
+	encode zstd gzip
+
+	# The same as the Docker image's nginx.
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy same-origin
+		Content-Security-Policy "frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	# Hashed file names: kept for a year. VNBox, its root fs and JMdict keep their names across
+	# versions, so a day (purge /vn/vnbox/ in Cloudflare after a VNBox bump to switch at once).
+	# Everything else (pages, service worker, _app/version.json, manifests) is revalidated.
+	@immutable path /_app/immutable/*
+	header @immutable Cache-Control "public, max-age=31536000, immutable"
+	@big path /vn/vnbox/* /dictionaries/*
+	header @big Cache-Control "public, max-age=86400"
+	@other not path /_app/immutable/* /vn/vnbox/* /dictionaries/*
+	header @other Cache-Control no-cache
+
+	@themes path /themes.md
+	header @themes Content-Type "text/plain; charset=utf-8"
+
+	# Cross-origin isolation for the Windows game player only: OFF. The owner approved it for the
+	# VN player alone (2026-10-26), for AudioWorklet and threads (SharedArrayBuffer). Turning it on
+	# changes VNBox's audio and lazy-fs paths, so it is its own step with its own testing. VNBox runs
+	# in /v (the VN reader) and its frame /vn/vnbox.html (with /vn/vnbox/*): both documents need the
+	# headers, and /v only gets them on a full page load (the app reaches /v by client-side
+	# navigation, which keeps the previous page's headers, so that needs a reload link too).
+	# credentialless rather than require-corp, so cross-origin images (covers) keep loading.
+	# @isolated path /v /v.html /vn/*
+	# header @isolated {
+	# 	Cross-Origin-Opener-Policy same-origin
+	# 	Cross-Origin-Embedder-Policy credentialless
+	# }
+
+	# Like GitHub Pages: prerendered pages by path (/settings → settings.html), else the SPA
+	# fallback (adapter-static's 404.html), served as 200 so the app can route it.
+	try_files {path} {path}.html {path}/index.html /404.html
+	file_server
+}

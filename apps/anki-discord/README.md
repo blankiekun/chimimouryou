@@ -28,7 +28,7 @@ Tools → Add-ons → chimimouryou Discord companion → Config (`config.json`, 
 
 - `port`: default `41918` (the desktop app uses 41917, AnkiConnect 8765).
 - `extraOrigins`: your own chimimouryou servers, e.g. `["https://books.example.net"]`.
-  `https://chimireader.github.io` and `http://127.0.0.1:41917` are always allowed.
+  `https://chimireader.github.io`, `https://chimireader.blank.moe` and `http://127.0.0.1:41917` are always allowed.
 - `hub`: the social hub used for pairing codes, default `https://chimi-hub.blankiekun.workers.dev`
   (`https://` only).
 
@@ -68,7 +68,7 @@ What chimimouryou's `discord` plugin implements. Base URL `http://127.0.0.1:4191
 
 | Request               | Body                                  | Answer                                                                                                           |
 | --------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `GET /v1/status`      |                                       | `200 {"version": "0.3.0", "discord": "connected" \| "closed", "lastSent": <epoch ms> \| null, "paired": <bool>}` |
+| `GET /v1/status`      |                                       | `200 {"version": "0.3.1", "discord": "connected" \| "closed", "lastSent": <epoch ms> \| null, "paired": <bool>}` |
 | `PUT /v1/activity`    | the finished activity, JSON, ≤ 16 KB  | `204`; `400 {"error"}` if invalid, `413` if too large                                                            |
 | `DELETE /v1/activity` |                                       | `204`: clears the status                                                                                         |
 | `PUT /v1/pair`        | `{"hub": "https://…", "key": "pk_…"}` | `204`: paired (replaces an earlier pairing); `400` unless the hub is https and the key a presence key            |
