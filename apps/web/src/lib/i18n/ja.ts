@@ -749,7 +749,7 @@ export const ja: Record<MessageKey, string> = {
   'words.howText':
     '読んだ本で{count}回出会った語、Ankiのカードが成熟した語（間隔21日以上）、手動で指定した語、レベルチェックの範囲内の頻出語が既知になります。除外した語も既知として数えます。',
   'words.marksAccount': '指定はアカウントに同期されます。',
-  'words.marksLibrary': '指定はGoogle Drive・OneDrive・フォルダのライブラリと同期されます。',
+  'words.marksLibrary': '指定はGoogle Drive・OneDrive・フォルダと同期されます。',
   'words.marksBrowser': '指定はこのブラウザだけに保存されます。',
   'bookWords.crumb': '語彙',
   'bookWords.title': '{title}の語彙',
@@ -2171,8 +2171,6 @@ export const ja: Record<MessageKey, string> = {
     'ホームのフレンドと読書中。オフにすると隠れます。アカウントとフレンドは残ります。',
   'social.signedInAs': '@{username} としてハブにサインイン中',
   'social.memberSince': '{since}から利用。',
-  'social.settingsSync':
-    '設定と単語テストの結果は、ハブを通じて同じアカウントでサインインした他の端末と同期されます。APIキーは各端末に残ります。',
   'social.signOut': 'サインアウト',
   'social.remembered':
     'このサーバーのアカウントに記憶されます。他のブラウザーでもこのサーバーにサインインすると、ハブにもサインインします。',

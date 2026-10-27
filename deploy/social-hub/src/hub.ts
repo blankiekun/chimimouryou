@@ -182,9 +182,6 @@ export const TRANSFERS_PER_DAY = 20;
 export const TRANSFER_CRON = '*/10 * * * *';
 export const TRANSFER_BYTES = 300 * 1024 ** 2;
 const SDP_LENGTH = 12_000;
-/** Settings sync: one document per reader, its JSON at most this many bytes */
-export const SETTINGS_BYTES = 64 * 1024;
-export const SETTINGS_PUTS_PER_HOUR = 120;
 
 const USERNAME = /^[A-Za-z0-9_]{3,20}$/;
 const KEY = /^[0-9a-f]{64}$/;
@@ -380,61 +377,6 @@ async function recordFailure(env: Env, subjects: string[]): Promise<never> {
     )
   );
   throw new HttpError(401, 'credentials');
-}
-
-/** Settings sync: the reader's document (null before the first PUT) and its version. */
-async function readSettings(env: Env, user: string) {
-  const row = await env.DB.prepare('SELECT doc, version FROM settings WHERE user = ?1')
-    .bind(user)
-    .first<{ doc: string; version: number }>();
-
-  return { doc: row ? JSON.parse(row.doc) : null, version: row?.version ?? 0 };
-}
-
-/**
- * `{doc, version}`: replaces the document when `version` is still the stored one (0: none yet),
- * else 409 `conflict` (another device wrote; the app reads and merges again). Contents are never
- * logged or looked at beyond their size.
- */
-async function writeSettings(request: Request, env: Env, user: string) {
-  const raw = await request.text();
-
-  if (raw.length > SETTINGS_BYTES + 1024) throw new HttpError(413, 'size');
-
-  let body: Row;
-
-  try {
-    body = JSON.parse(raw);
-  } catch (_) {
-    throw new HttpError(400, 'json');
-  }
-
-  const { doc, version } = body ?? {};
-
-  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) throw new HttpError(400, 'doc');
-  if (!Number.isSafeInteger(version) || (version as number) < 0) {
-    throw new HttpError(400, 'version');
-  }
-
-  const stored = JSON.stringify(doc);
-
-  if (new TextEncoder().encode(stored).length > SETTINGS_BYTES) throw new HttpError(413, 'size');
-  await limit(env, user, 'settings', HOUR, SETTINGS_PUTS_PER_HOUR);
-
-  const { meta } = await (
-    version
-      ? env.DB.prepare(
-          `UPDATE settings SET doc = ?2, version = version + 1, updated_at = ?3
-           WHERE user = ?1 AND version = ?4`
-        ).bind(user, stored, now(), version)
-      : env.DB.prepare(
-          `INSERT INTO settings (user, doc, version, updated_at) VALUES (?1, ?2, 1, ?3)
-           ON CONFLICT (user) DO NOTHING`
-        ).bind(user, stored, now())
-  ).run();
-
-  if (!meta.changes) throw new HttpError(409, 'conflict');
-  return { ok: true, version: (version as number) + 1 };
 }
 
 async function newSession(env: Env, user: string) {
@@ -1491,7 +1433,6 @@ async function deleteUsers(env: Env, where: string, ...values: unknown[]) {
       `DELETE FROM links WHERE a IN (${users}) OR b IN (${users})`,
       `DELETE FROM status WHERE user IN (${users})`,
       `DELETE FROM stats WHERE user IN (${users})`,
-      `DELETE FROM settings WHERE user IN (${users})`,
       `DELETE FROM finished WHERE user IN (${users})`,
       `DELETE FROM events WHERE user IN (${users})`,
       `DELETE FROM reports WHERE target IN (${users}) OR reporter IN (${users})`,
@@ -2053,9 +1994,6 @@ links), kept 5 to 30 minutes after its last update (your Away after setting; whe
 there. Paired computers are kept as a name you choose, when they were added and last seen; their
 keys and pairing codes only as hashes. Signing out everywhere, changing your password or deleting
 your account removes them.</p>
-<p>Settings: the reader's settings your devices share (themes, word test results, Ask AI presets
-and the like; never API keys or tokens), so your other signed-in devices get them. Only you can
-read them.</p>
 <p>No email, IP address log or book files. Rate limits keep hashed addresses for two days.</p>
 <p>Deleting your account (Settings, Social) removes every row and your picture at once. Sessions unused for 90 days
 and accounts unused for 12 months are deleted automatically.</p>`;
@@ -2199,10 +2137,6 @@ async function route(request: Request, env: Env, ctx?: Context): Promise<Respons
     case 'POST /v1/friends/request':
       await sendRequest(env, user, await readBody(request));
       return json(await friendsOf(env, user.id));
-    case 'GET /v1/settings':
-      return json(await readSettings(env, user.id));
-    case 'PUT /v1/settings':
-      return json(await writeSettings(request, env, user.id));
   }
 
   const finished = /^\/v1\/finished\/([^/]+)$/.exec(pathname);

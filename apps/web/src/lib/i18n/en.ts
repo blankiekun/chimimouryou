@@ -747,7 +747,7 @@ export const en = {
   'words.howText':
     'A word is known when you have met it {count} times in what you read, its Anki card is mature (interval 21 days or more), you marked it, or it is among the most common words your level check covers. Ignored words count as known too.',
   'words.marksAccount': 'Marks sync to your account.',
-  'words.marksLibrary': 'Marks sync with your library on Google Drive, OneDrive or in its folder.',
+  'words.marksLibrary': 'Marks sync with your Google Drive, OneDrive or folder.',
   'words.marksBrowser': 'Marks stay in this browser.',
   'bookWords.crumb': 'Words',
   'bookWords.title': 'Words in {title}',
@@ -2157,8 +2157,6 @@ export const en = {
     'Friends and Now reading on Home. Off hides them; your account and friends are kept.',
   'social.signedInAs': 'Signed in to the hub as @{username}',
   'social.memberSince': 'Member since {since}.',
-  'social.settingsSync':
-    'Your settings and word test results sync through the hub with your other devices signed in here. API keys stay on each device.',
   'social.signOut': 'Sign out',
   'social.remembered':
     'Remembered for this server account: your other browsers are signed in when you sign in to this server.',

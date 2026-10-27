@@ -105,7 +105,10 @@ export async function syncFileStore(name: string): Promise<SyncFileStore | undef
   return handler;
 }
 
-/** Where kanji, word marks and settings sync while signed out: the library's own cloud or folder. */
+/**
+ * Where kanji, word marks and settings sync while signed out: the library's own cloud or folder,
+ * else (books in the browser) the auto-replication target.
+ */
 export function readerSyncSource() {
   switch (storageSource$.getValue()) {
     case StorageKey.GDRIVE:
@@ -114,8 +117,12 @@ export function readerSyncSource() {
       return oneDriveStorageSource$.getValue();
     case StorageKey.FS:
       return fsStorageSource$.getValue();
-    default:
-      return '';
+    default: {
+      const target = bookSyncSource(undefined);
+
+      // The server's folder is the account's: readerSyncStore uses it only signed in.
+      return target === StorageSourceDefault.CALIBRE_DEFAULT ? '' : target;
+    }
   }
 }
 

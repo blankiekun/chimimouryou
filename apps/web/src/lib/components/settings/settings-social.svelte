@@ -187,7 +187,7 @@
       title={$t$('social.signedInAs', { username: me.username })}
       tooltip="{remembered ? `${$t$('social.remembered')} ` : ''}{$t$('social.memberSince', {
         since
-      })} {$t$('social.settingsSync')}"
+      })}"
     >
       <button type="button" class="app-button" on:click={logOut}>{$t$('social.signOut')}</button>
     </SettingsItemGroup>
