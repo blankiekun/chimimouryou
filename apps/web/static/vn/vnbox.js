@@ -56,6 +56,7 @@ function loadScript(src) {
     var script = document.createElement('script');
 
     script.src = src;
+    script.async = false;
     script.onload = resolve;
     script.onerror = reject;
     document.body.appendChild(script);
@@ -84,20 +85,33 @@ async function startGame(options) {
   // overlay.js's way: hover stays with the page, the rest reaches VNBox as passToGame's copy.
   var overlay = document.getElementById('overlay');
   var addWindowListener = window.addEventListener;
-  window.addEventListener = function (type, listener, options) {
-    var own =
-      this === window && /^mouse/.test(type) && typeof listener === 'function'
-        ? function (event) {
-            if (!overlay.contains(event.target)) return listener.call(this, event);
-          }
-        : listener;
-    return addWindowListener.call(this, type, own, options);
+  var removeWindowListener = window.removeEventListener;
+  // listener → its wrapper, so removeEventListener(type, listener) removes the wrapper.
+  var wrappers = new WeakMap();
+  var wrapped = function (target, type, listener) {
+    if (target !== window || !/^mouse/.test(type) || typeof listener !== 'function')
+      return listener;
+    if (!wrappers.has(listener)) {
+      wrappers.set(listener, function (event) {
+        if (!overlay.contains(event.target)) return listener.call(this, event);
+      });
+    }
+    return wrappers.get(listener);
   };
-  // In order: the shell uses the libraries before it, and boxedwine.js starts the shell's setup.
+  window.addEventListener = function (type, listener, options) {
+    return addWindowListener.call(this, type, wrapped(this, type, listener), options);
+  };
+  window.removeEventListener = function (type, listener, options) {
+    return removeWindowListener.call(this, type, wrapped(this, type, listener), options);
+  };
+  // Fetched in parallel, run in order (async = false): the shell uses the libraries before it,
+  // and boxedwine.js starts the shell's setup.
   var scripts = ['fsfs.js', 'lazyfs.js', 'frida-compat.js', 'boxedwine-shell.js', 'boxedwine.js'];
 
-  for (var index = 0; index < scripts.length; index += 1) {
-    await loadScript('vnbox/' + scripts[index]);
-  }
+  await Promise.all(
+    scripts.map(function (name) {
+      return loadScript('vnbox/' + name);
+    })
+  );
   document.getElementById('canvas').focus();
 }

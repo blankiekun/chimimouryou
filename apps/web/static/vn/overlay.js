@@ -109,9 +109,10 @@ AudioNode.prototype.connect = function (target) {
   return nativeConnect.apply(this, arguments);
 };
 
-// Keeps the last frame readable after it is shown, for screenshots.
+// Keeps the last frame readable after it is shown, for screenshots. Only while mining: it costs a
+// buffer copy per frame. startGame sets keepLines before it loads the engine, so before any context.
 HTMLCanvasElement.prototype.getContext = function (type, attributes) {
-  if (type === 'webgl' || type === 'webgl2') {
+  if (keepLines && (type === 'webgl' || type === 'webgl2')) {
     attributes = Object.assign({}, attributes, { preserveDrawingBuffer: true });
   }
   return nativeGetContext.call(this, type, attributes);
@@ -149,7 +150,8 @@ function stopLineRecorder() {
 
 function restartLineRecorder(event) {
   // Modifier keys are Yomitan's scan keys, not the game's.
-  if (event && /^(Shift|Control|Alt|Meta)$/.test(event.key)) return;
+  // Held keys repeat: the line's sound goes on.
+  if (event && (event.repeat || /^(Shift|Control|Alt|Meta)$/.test(event.key))) return;
   stopLineRecorder();
   if (!soundTap) return;
 
