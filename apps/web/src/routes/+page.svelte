@@ -1,14 +1,16 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { pagePath } from '$lib/data/env';
+  import { readerPath } from '$lib/data/reader-route';
   import { database } from '$lib/data/store';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { observe } from '$lib/functions/rxjs/use-observable';
-  import { map, tap } from 'rxjs';
+  import { map, take, tap } from 'rxjs';
 
   const autoNavigate$ = database.lastItem$.pipe(
-    map((lastItem) => (lastItem ? `${pagePath}/b?id=${lastItem.dataId}` : 'manage')),
-    tap(goto)
+    // Once: a later change of the last item must not navigate again from the page it opened.
+    take(1),
+    map((lastItem) => (lastItem ? readerPath(lastItem.dataId, lastItem.route) : 'manage')),
+    tap((path) => goto(path))
   );
 </script>
 

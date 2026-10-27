@@ -15,6 +15,7 @@ import type {
 } from '$lib/data/database/books-db/versions/books-db';
 import { Observable, Subject, from } from 'rxjs';
 import { StorageDataType } from '$lib/data/storage/storage-types';
+import type { ReaderRoute } from '$lib/data/reader-route';
 import {
   advanceDateDays,
   getDate,
@@ -407,9 +408,9 @@ export class DatabaseService {
     return db.put('subtitle', subtitleData);
   }
 
-  async putLastItem(dataId: number) {
+  async putLastItem(dataId: number, route?: ReaderRoute) {
     const db = await this.db;
-    const result = await db.put('lastItem', { dataId }, LAST_ITEM_KEY);
+    const result = await db.put('lastItem', route ? { dataId, route } : { dataId }, LAST_ITEM_KEY);
     this.lastItemChanged$.next();
     return result;
   }

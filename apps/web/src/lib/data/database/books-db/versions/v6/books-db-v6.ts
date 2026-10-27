@@ -142,6 +142,8 @@ export default interface BooksDbV6 extends DBSchema {
     key: number;
     value: {
       dataId: number;
+      /** The page that opens it (reader-route.ts); missing on items saved before it was kept. */
+      route?: 'b' | 'm' | 'v';
     };
   };
   storageSource: {
