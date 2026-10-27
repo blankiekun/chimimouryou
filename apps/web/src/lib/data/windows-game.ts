@@ -59,8 +59,10 @@ export function windowsPrograms(files: Record<string, { size: number }>) {
 }
 
 /**
- * Copies a picked folder's files (path inside the game folder → file) into OPFS. Files already
- * there with the same size are kept, so a cancelled copy resumes.
+ * Copies a picked folder's files (path inside the game folder → file) into OPFS, a few at a
+ * time. Files already there with the same size are kept, so a cancelled copy resumes; a file
+ * cut off by the abort is discarded by its writable. Progress is reported when the whole
+ * percent changes or every 100 ms, and once at the end.
  */
 export async function copyWindowsGame(
   folder: string,
@@ -75,29 +77,69 @@ export async function copyWindowsGame(
   });
   const game = await root.getDirectoryHandle(folder, { create: true });
   const total = Object.values(files).reduce((sum, file) => sum + file.size, 0);
+  // Promises, so files copied in parallel share one getDirectoryHandle per folder.
+  const dirs = new Map([['', Promise.resolve(game)]]);
+  const dirOf = (path: string): Promise<FileSystemDirectoryHandle> => {
+    let dir = dirs.get(path);
+
+    if (!dir) {
+      const cut = path.lastIndexOf('/');
+
+      dir = dirOf(path.slice(0, Math.max(cut, 0))).then((parent) =>
+        parent.getDirectoryHandle(path.slice(cut + 1), { create: true })
+      );
+      dirs.set(path, dir);
+    }
+
+    return dir;
+  };
+  const queue = Object.entries(files);
+  let next = 0;
   let done = 0;
+  let percent = 0;
+  let reported = Date.now();
 
   onProgress(0, total);
 
-  for (const [path, file] of Object.entries(files)) {
-    signal?.throwIfAborted();
+  async function worker() {
+    try {
+      while (next < queue.length) {
+        signal?.throwIfAborted();
 
-    const parts = path.split('/');
-    let dir = game;
+        const [path, file] = queue[next++];
+        const cut = path.lastIndexOf('/');
+        const dir = await dirOf(path.slice(0, Math.max(cut, 0)));
+        const handle = await dir.getFileHandle(path.slice(cut + 1), { create: true });
 
-    for (const part of parts.slice(0, -1)) {
-      dir = await dir.getDirectoryHandle(part, { create: true });
+        if ((await handle.getFile()).size !== file.size) {
+          await file.stream().pipeTo(await handle.createWritable(), { signal });
+        }
+
+        done += file.size;
+
+        const now = Date.now();
+        const whole = Math.floor((done * 100) / (total || 1));
+
+        if (whole !== percent || now - reported >= 100) {
+          percent = whole;
+          reported = now;
+          onProgress(done, total);
+        }
+      }
+    } catch (error) {
+      // The other workers stop after their current file.
+      next = queue.length;
+      throw error;
     }
-
-    const handle = await dir.getFileHandle(parts[parts.length - 1], { create: true });
-
-    if ((await handle.getFile()).size !== file.size) {
-      await file.stream().pipeTo(await handle.createWritable(), { signal });
-    }
-
-    done += file.size;
-    onProgress(done, total);
   }
+
+  // Settled, so nothing is still writing when a failed copy returns.
+  const failed = (await Promise.allSettled(Array.from({ length: 6 }, worker))).find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected'
+  );
+
+  if (failed) throw failed.reason;
+  onProgress(done, total);
 }
 
 /** Whether the game's files are in this browser (another device, or cleared site data: not). */
