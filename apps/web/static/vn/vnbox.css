@@ -1,0 +1,103 @@
+/* VNBox's page (vnbox/boxedwine.css) trimmed to the game: no controls, console or dialogs, the
+   game filling the frame on its own dark ground, which is content and doesn't follow the theme. */
+html,
+body {
+  background: #000;
+}
+
+/* The app's UI stack (--app-font-ui in app.scss) in place of VNBox's Arial; the frame has no
+   access to the app's variables or its self-hosted BIZ UDPGothic, so local copies are used. */
+body,
+.modalDialog {
+  font-family: 'BIZ UDPGothic', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', Meiryo, sans-serif;
+}
+
+#controls,
+#console,
+.modalDialog,
+#spinner {
+  display: none !important;
+}
+
+#dropzone {
+  padding: 0;
+}
+
+div.emscripten_border {
+  border: 0;
+}
+
+/* Loading readout, as player.css's: a dark label at the top left, a thin bar along the bottom. */
+#loading {
+  position: absolute;
+  z-index: 1;
+  top: 12px;
+  left: 12px;
+  padding: 0.3rem 0.6rem;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #ddd;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+#loading:has(#status:empty) {
+  display: none;
+}
+
+#loading progress {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 3px;
+  appearance: none;
+  border: 0;
+  background: #2e3331;
+}
+
+#loading progress::-webkit-progress-bar {
+  background: #2e3331;
+}
+
+#loading progress::-webkit-progress-value {
+  background: #4fbf95;
+}
+
+#loading progress::-moz-progress-bar {
+  background: #4fbf95;
+}
+
+/* The hooked line, invisible, over the bottom of the game where text boxes usually are
+   (vnboxLines in lib/data/vn.ts): Yomitan reads it on hover. Same rules as player.css. */
+#overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  line-height: 1;
+}
+
+#page-text,
+#sprite-text,
+#choices {
+  position: absolute;
+  inset: 0;
+}
+
+#page-text div {
+  position: absolute;
+  white-space: pre;
+  line-height: 1;
+  color: transparent;
+  pointer-events: auto;
+  cursor: default;
+}
+
+#overlay div div::selection {
+  background: rgba(255, 220, 120, 0.35);
+}
+
+::highlight(ttu-lookup) {
+  background-color: color-mix(in srgb, var(--accent-color, #4fbf95) 40%, transparent);
+}

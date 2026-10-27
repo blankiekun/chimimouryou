@@ -1,10 +1,12 @@
 <script lang="ts">
   /**
-   * Visual novel player (ONScripter games, not part of upstream): the engine runs in a
-   * same-origin frame (static/vn/player.html); its text hook sends every page's text here
-   * with where each character was drawn: laid invisibly over the game for Yomitan (and
-   * optionally shown in a panel below it), and counted for progress and statistics. Saves of
-   * games on a synced source sync through vnsaves.json in the game's folder (sync-files.ts).
+   * Visual novel player (not part of upstream): the engine runs in a same-origin frame,
+   * CONscripter for ONScripter games (static/vn/player.html) or VNBox for Windows games
+   * (static/vn/vnbox.html, windows-game.ts); its text hook sends the text the game shows,
+   * which the frame lays invisibly over the game for Yomitan and this page shows in a panel
+   * below it (optional) and counts for progress and statistics (vn-text.ts). Saves of
+   * ONScripter games on a synced source sync through vnsaves.json in the game's folder
+   * (sync-files.ts).
    */
   import { noteReading } from '$lib/data/social';
   import { readingActivity } from '$lib/data/reader-hooks';
@@ -32,15 +34,12 @@
   import { logger } from '$lib/data/logger';
   import { MergeMode } from '$lib/data/merge-mode';
   import {
-    decodeText,
     encodePath,
     fromBase64,
     hashPage,
     loadVnRead,
     mergeVnSaves,
     newerSaveEngine,
-    newText,
-    overlayLines,
     vnCacheName,
     parseVnPage,
     sameVnSaves,
@@ -49,16 +48,18 @@
     vnBookmark,
     vnInfo,
     type VnLine,
-    type VnRead,
     type VnSaves
   } from '$lib/data/vn';
+  import { VnReading, vnTextSource } from '$lib/data/vn-text';
+  import {
+    hasWindowsGame,
+    vnboxPlayerUrl,
+    windowsGameBlocker,
+    windowsGameBlockerText
+  } from '$lib/data/windows-game';
   import { bookSyncSource, syncFileStore, syncJsonFile } from '$lib/data/sync-files';
   import { recordKanjiText } from '$lib/data/kanji-seen';
-  import { countTextCharacters } from '$lib/functions/get-character-count';
-  import type {
-    BooksDbBookData,
-    BooksDbStatistic
-  } from '$lib/data/database/books-db/versions/books-db';
+  import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
   import type { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
   import type { BrowserStorageHandler } from '$lib/data/storage/handler/browser-handler';
@@ -74,11 +75,6 @@
   import { replicateData } from '$lib/functions/replication/replicator';
   import { vnFolderSize } from '$lib/functions/file-loaders/vn/load-vn';
   import { formatPageTitle } from '$lib/functions/format-page-title';
-  import { getDateKey } from '$lib/functions/statistic-util';
-  import {
-    getDefaultStatistic,
-    updateStatistic
-  } from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker';
   import AnkiWatcher from '$lib/components/anki-watcher.svelte';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
   import { builtInLookups$ } from '$lib/data/dictionary';
@@ -94,8 +90,6 @@
   import { serverConnected, serverFetch } from '$lib/data/server-connect';
   import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
 
-  /** Time between two clicks counted as reading at most, so breaks don't count. */
-  const maxSecondsPerPage = 120;
   /** The text panel below the game; hovering the game's own text works without it. */
   const showText$ = writableBooleanLocalStorageSubject()('vnTextPanel', false);
   /** Furigana drawn by the game; off, the readings are still in the overlay and text panel. */
@@ -114,19 +108,27 @@
   let lookupPopup: LookupPopup | undefined;
   let lines: VnLine[] = [];
   let ended = false;
-  let read: VnRead;
-  let seen = new Set<string>();
-  let previousText = '';
-  /** Read since the last save, for "Kanji met" */
-  let unsavedText = '';
-  let lastTextTime = 0;
+  let reading: VnReading | undefined;
+  /** The game's text source and frame (CONscripter or VNBox) */
+  $: info = book && vnInfo(book);
+  $: source = info && vnTextSource(info, onText);
+  $: windows = info?.engine === 'vnbox';
+  /** Why a Windows game can't start here: a phone, an older browser, or no game files */
+  let blocked: string | undefined;
+  /** A Windows game's text hook script, as a URL VNBox can fetch */
+  let hookUrl: string | undefined;
+  /** The frame waits for load(): a Windows game's address depends on it. */
+  let loaded = false;
+  $: playerUrl =
+    loaded && info && source && !blocked
+      ? windows
+        ? vnboxPlayerUrl(info, hookUrl)
+        : `${pagePath}/vn/${source.player}`
+      : undefined;
   /** CONscripter version of this build, stamped on uploaded saves. */
   let engineVersion: string | undefined;
   /** Set when synced saves were written by a newer engine than this one. */
   let newerEngine: string | undefined;
-  let statistics = new Map<string, BooksDbStatistic>();
-  let changedDays = new Set<string>();
-  let dirty = false;
   let local: BrowserStorageHandler;
   let external: BaseStorageHandler | undefined;
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -250,23 +252,41 @@
       logger.warn(`Visual novel sync failed: ${error.message}`);
     }
 
-    read = await loadVnRead(data.title);
-    seen = new Set(read.pages);
+    const read = await loadVnRead(data.title);
 
     // Another device may be further along: keep the larger position.
     const bookmark = await database.getBookmark(data.id);
 
     read.characters = Math.max(read.characters, bookmark?.exploredCharCount || 0);
-    statistics = new Map(
-      (await database.getStatisticsForBook(data.title)).map((stat) => [stat.dateKey, stat])
+    reading = new VnReading(
+      read,
+      new Map((await database.getStatisticsForBook(data.title)).map((stat) => [stat.dateKey, stat]))
     );
     updateProgress();
+
+    const game = vnInfo(data);
+
+    if (game.engine === 'vnbox') {
+      // The OPFS game copy and VNBox's saves must not be evicted.
+      navigator.storage?.persist?.();
+      const blocker = windowsGameBlocker();
+
+      blocked = blocker
+        ? windowsGameBlockerText[blocker]
+        : !(await hasWindowsGame(game.folder!))
+          ? "This game's files aren't in this browser. Add its folder again with Import → Windows game."
+          : undefined;
+      if (game.hook) {
+        hookUrl = URL.createObjectURL(new Blob([game.hook], { type: 'text/javascript' }));
+      }
+    }
+    loaded = true;
   }
 
   function updateProgress() {
-    readCharacters = read.characters;
-    todayCharacters =
-      statistics.get(getDateKey($startDayHoursForTracker$, new Date()))?.charactersRead ?? 0;
+    if (!reading) return;
+    readCharacters = reading.read.characters;
+    todayCharacters = reading.today($startDayHoursForTracker$);
   }
 
   function savesStore() {
@@ -339,10 +359,21 @@
   }
 
   async function start() {
-    if (!book || !frame?.contentWindow) return;
+    if (!book || !info || !source || !reading || !frame?.contentWindow) return;
 
-    const info = vnInfo(book);
     const player = frame.contentWindow as any;
+
+    if (windows) {
+      reading.lastTextTime = Date.now();
+      await player.startGame({
+        keepLines: $ankiEnabled$,
+        recordLines: $ankiEnabled$ && $ankiVnAudio$,
+        textLines: source.textLines,
+        onText: source.onText
+      });
+      started = true;
+      return;
+    }
 
     const saves = await fetchSaves().catch((error): VnSaves => {
       // Offline: play with this browser's saves.
@@ -356,7 +387,7 @@
     newerEngine = engineVersion && newerSaveEngine(saves, engineVersion);
     const cacheName = await gameCache(info.base);
 
-    lastTextTime = Date.now();
+    reading.lastTextTime = Date.now();
     await player.startGame({
       // Server folder games are fetched by URL; imported ones are blobs.
       files: info.base
@@ -380,12 +411,8 @@
           }
         })
       ),
-      onText: (bytes: Uint8Array, skipped: number, boxes: Int32Array, readBefore: number) => {
-        player.showText(overlayLines(bytes, boxes, info.encoding));
-        onText(decodeText(bytes, info.encoding), !!skipped, readBefore === 1);
-      },
-      textLines: (bytes: Uint8Array, boxes: Int32Array) =>
-        overlayLines(bytes, boxes, info.encoding),
+      onText: source.onText,
+      textLines: source.textLines,
       onSave: uploadSaves,
       onMode: (auto: boolean, skip: boolean) => (skipping = skip),
       onExit: () => (ended = true)
@@ -414,33 +441,15 @@
   }
 
   function onText(text: string, skipped: boolean, readBefore: boolean) {
-    const now = Date.now();
+    if (!reading) return;
 
     lines = parseVnPage(text);
 
-    if (!skipped) {
-      const added = newText(previousText, text, seen, readBefore);
-      const characters = countTextCharacters(added);
-      const seconds = Math.min((now - lastTextTime) / 1000, maxSecondsPerPage);
+    const dirty = reading.add(text, skipped, readBefore, {
+      statistics: $statisticsEnabled$,
+      startDayHours: $startDayHoursForTracker$
+    });
 
-      if (characters) {
-        read.characters += characters;
-        unsavedText += added;
-        dirty = true;
-      }
-
-      if ($statisticsEnabled$ && (characters || seconds >= 1)) {
-        const day = getDateKey($startDayHoursForTracker$, new Date(now));
-        const stat = statistics.get(day) ?? getDefaultStatistic(book!.title, day);
-
-        statistics.set(day, updateStatistic(stat, Math.round(seconds), characters, now));
-        changedDays.add(day);
-        dirty = true;
-      }
-    }
-
-    previousText = text;
-    lastTextTime = now;
     updateProgress();
 
     if (dirty) {
@@ -452,17 +461,13 @@
   async function save() {
     clearTimeout(saveTimer);
 
-    if (!dirty || !book) return;
+    const changes = book && reading?.takeChanges();
 
-    dirty = false;
+    if (!book || !changes) return;
 
-    const days = [...changedDays];
-    const text = unsavedText;
+    const { read, text, days } = changes;
 
-    unsavedText = '';
-
-    changedDays = new Set();
-    await saveVnRead({ ...read, pages: [...seen] });
+    await saveVnRead(read);
     await recordKanjiText(book.title, text, read.characters);
     await database.putBookmark(vnBookmark(book.id, read.characters, book.characters));
     if (isPluginEnabled('social'))
@@ -473,7 +478,7 @@
     if (days.length) {
       await database.storeStatistics(
         book.title,
-        days.map((day) => statistics.get(day)!),
+        days,
         ReplicationSaveBehavior.Overwrite,
         MergeMode.LOCAL
       );
@@ -505,28 +510,30 @@
   }
 
   /** Toggles in the bar, and on portrait phones in a row under it; Menu and Skip only on phones. */
-  $: chips = [
-    {
-      label: 'Furigana',
-      title: 'Furigana in the game (from the next text; readings stay in the text panel)',
-      on: $furigana$,
-      click: () => furigana$.next(!$furigana$)
-    },
-    {
-      label: 'Instant text',
-      title: 'Show the whole text at once',
-      on: $instantText$,
-      click: () => instantText$.next(!$instantText$)
-    },
-    {
-      label: 'Menu',
-      title: "The game's menu (right-click)",
-      on: undefined,
-      click: openMenu,
-      phone: true
-    },
-    { label: 'Skip', title: 'Skip text', on: skipping, click: toggleSkip, phone: true }
-  ];
+  $: chips = windows
+    ? []
+    : [
+        {
+          label: 'Furigana',
+          title: 'Furigana in the game (from the next text; readings stay in the text panel)',
+          on: $furigana$,
+          click: () => furigana$.next(!$furigana$)
+        },
+        {
+          label: 'Instant text',
+          title: 'Show the whole text at once',
+          on: $instantText$,
+          click: () => instantText$.next(!$instantText$)
+        },
+        {
+          label: 'Menu',
+          title: "The game's menu (right-click)",
+          on: undefined,
+          click: openMenu,
+          phone: true
+        },
+        { label: 'Skip', title: 'Skip text', on: skipping, click: toggleSkip, phone: true }
+      ];
 
   function toggleFullscreen() {
     if (fullscreenManager.fullscreenElement) fullscreenManager.exitFullscreen();
@@ -551,9 +558,10 @@
   onDestroy(() => {
     save();
     readingActivity();
-    if (book && isPluginEnabled('social')) {
-      noteReading(book.title, read.characters, book.characters, true, 'vn');
+    if (book && reading && isPluginEnabled('social')) {
+      noteReading(book.title, reading.read.characters, book.characters, true, 'vn');
     }
+    if (hookUrl) URL.revokeObjectURL(hookUrl);
   });
 </script>
 
@@ -655,13 +663,19 @@
 
   <div class="vn-main" class:vn-main-text={$showText$ && !ended}>
     <!-- The game's own dark ground: part of the content, not the theme -->
-    <div class="vn-game">
-      {#if book}
+    <div class="vn-game" class:vn-game-blocked={blocked}>
+      {#if blocked}
+        <div class="vn-blocked" role="status">
+          <p class="vn-blocked-title">This game can't start here</p>
+          <p>{blocked}</p>
+          <button class="app-button" on:click={leave}>Back to the library</button>
+        </div>
+      {:else if book && playerUrl}
         <AnkiWatcher media={ankiMedia} />
         <iframe
           bind:this={frame}
           class="h-full w-full border-0"
-          src="{pagePath}/vn/player.html"
+          src={playerUrl}
           title={book.title}
           allow="autoplay; fullscreen"
           on:load={() => {
@@ -865,6 +879,31 @@
     flex: 1;
     padding: 1.5rem 0;
     background: #000;
+  }
+
+  /* No game to show: the page's own paper instead of the game's dark ground. */
+  .vn-game-blocked {
+    background: none;
+  }
+
+  .vn-blocked {
+    display: flex;
+    height: 100%;
+    max-width: 32rem;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 1rem;
+    margin: 0 auto;
+    padding: 0 1.25rem;
+    color: var(--reader-panel-fg);
+    font-size: var(--type-body);
+    line-height: 1.7;
+  }
+
+  .vn-blocked-title {
+    font-size: var(--type-h2);
+    line-height: 1.3;
   }
 
   .vn-notice {

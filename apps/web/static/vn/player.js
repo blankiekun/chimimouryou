@@ -5,7 +5,8 @@
  * consChoice, consOverlay, consBacklog, consSprites, consVoice, consPosition, consMode,
  * consLanguage) from its C code; the loader is
  * cons() (CONscripter v0.23.0 renamed them from ONScripter-yuri's onsyuri names).
- * The page calls startGame() once the frame has loaded.
+ * The page calls startGame() once the frame has loaded. The overlay and Anki mining are in
+ * overlay.js, shared with the Windows game player (vnbox.html).
  */
 
 var g_cons_module = {};
@@ -47,26 +48,6 @@ function scale_full(canvas, ratio) {
   canvas.style.height = overlay.style.height = h + 'px';
   // Overlay lines are laid out in screen pixels, scaled like the canvas.
   overlay.style.setProperty('--scale', w / g_screen_width);
-}
-
-function overlayLine(line) {
-  var div = document.createElement('div');
-
-  div.textContent = line.text;
-  div.style.left = (100 * line.x) / g_screen_width + '%';
-  div.style.top = (100 * line.y) / g_screen_height + '%';
-  div.style.fontSize = 'calc(var(--scale) * ' + line.size + 'px)';
-  div.style.letterSpacing = 'calc(var(--scale) * ' + (line.pitch - line.size) + 'px)';
-  // Yomitan reads the writing mode to scan the column and place its popup beside it.
-  if (line.vertical) div.style.writingMode = 'vertical-rl';
-  return div;
-}
-
-/** lines: [{ text, x, y, size, pitch, vertical? }] in screen pixels (overlayLines in lib/data/vn.ts). */
-function showText(lines) {
-  document
-    .getElementById('page-text')
-    .replaceChildren.apply(document.getElementById('page-text'), lines.map(overlayLine));
 }
 
 /** A choice (or system menu item) drawn by the engine: its text in script bytes. */
@@ -203,13 +184,6 @@ function engineSet(name, value) {
   if (typeof set === 'function') set(value);
 }
 
-/**
- * Set by the page while its built-in dictionary is on: textTap(x, y) looks up the text at a tap
- * (frame coordinates) and is true when it found a word, so the game doesn't get the tap.
- */
-var textTap = null;
-var heldTouch = null;
-
 // Yomitan's scan keys stop auto mode, so the text doesn't move on during a lookup.
 window.addEventListener(
   'keydown',
@@ -219,147 +193,8 @@ window.addEventListener(
   true
 );
 
-// Clicks on the overlay's text go to the game, as if the text weren't there.
-[
-  'mousedown',
-  'mouseup',
-  'mousemove',
-  'click',
-  'contextmenu',
-  'wheel',
-  'touchstart',
-  'touchmove',
-  'touchend'
-].forEach(function (type) {
-  document.getElementById('overlay').addEventListener(type, function (event) {
-    // Hover stays with the page (Yomitan scans on mousemove); the rest is the game's.
-    if (type !== 'mousemove') event.preventDefault();
-    // While the page's built-in lookups are on, a tap on text is held until it ends: a tap
-    // that finds a word is the popup's, anything else goes to the game after all.
-    if (type === 'touchstart' && textTap && event.touches.length === 1) {
-      heldTouch = event;
-      return;
-    }
-    if (heldTouch) {
-      var held = heldTouch;
-      heldTouch = null;
-      var touch = event.changedTouches && event.changedTouches[0];
-      if (type === 'touchend' && touch && textTap && textTap(touch.clientX, touch.clientY)) return;
-      passToGame(held);
-    }
-    passToGame(event);
-  });
-});
-
-document.getElementById('overlay').addEventListener('touchcancel', function () {
-  heldTouch = null;
-});
-
-function passToGame(event) {
-  var Copy = event.constructor;
-
-  try {
-    document.getElementById('canvas').dispatchEvent(new Copy(event.type, event));
-  } catch (error) {
-    console.warn('Could not pass ' + event.type + ' to the game', error);
-  }
-}
-
-// Right-click is the game's (menu, skip): never the browser's menu, on the canvas or the black bars.
-document.addEventListener('contextmenu', function (event) {
-  event.preventDefault();
-});
-
 window.addEventListener('resize', function () {
   scale_full(document.getElementById('canvas'), g_screen_width / g_screen_height);
-});
-
-// Anki mining (lib/data/anki.ts): the recent lines with their voice files, and for the newest
-// their screenshot and sound, so a note gets those of the line it was mined from (vnLineFor),
-// however late it is noticed or from however far back in a backlog.
-var KEPT_LINES = 500;
-var KEPT_MEDIA = 30;
-var keptLines = []; // [{ text, voice, picture?: Promise<Blob>, audio?: Promise<Blob> }], oldest first
-var keepLines = false;
-var soundTap;
-var lineRecorder;
-var recordLines = false;
-var nativeConnect = AudioNode.prototype.connect;
-var nativeGetContext = HTMLCanvasElement.prototype.getContext;
-
-// Whatever the engine sends to the speakers is also sent to soundTap.
-AudioNode.prototype.connect = function (target) {
-  if (recordLines && target instanceof AudioDestinationNode) {
-    if (!soundTap) {
-      soundTap = this.context.createMediaStreamDestination();
-      restartLineRecorder();
-    }
-    if (soundTap.context === this.context) nativeConnect.call(this, soundTap);
-  }
-  return nativeConnect.apply(this, arguments);
-};
-
-// Keeps the last frame readable after it is shown, for screenshots.
-HTMLCanvasElement.prototype.getContext = function (type, attributes) {
-  if (type === 'webgl' || type === 'webgl2') {
-    attributes = Object.assign({}, attributes, { preserveDrawingBuffer: true });
-  }
-  return nativeGetContext.call(this, type, attributes);
-};
-
-/** At each click wait while mining: the page so far, its voice, screen and (being recorded) sound. */
-function keepLine(lines) {
-  if (!keepLines) return;
-
-  var line = {
-    text: lines
-      .map(function (l) {
-        return l.text;
-      })
-      .join(''),
-    voice: lineVoice,
-    picture: screenshot()
-  };
-
-  // The sound recorded since the click that brought this line is its sound.
-  if (lineRecorder && lineRecorder.state !== 'inactive') lineRecorder.line = line;
-  keptLines.push(line);
-  if (keptLines.length > KEPT_LINES) keptLines.shift();
-
-  var old = keptLines[keptLines.length - 1 - KEPT_MEDIA];
-
-  if (old) old.picture = old.audio = undefined;
-}
-
-function stopLineRecorder() {
-  if (!lineRecorder || lineRecorder.state === 'inactive') return;
-  lineRecorder.stop();
-  if (lineRecorder.line) lineRecorder.line.audio = lineRecorder.stopped;
-}
-
-function restartLineRecorder(event) {
-  // Modifier keys are Yomitan's scan keys, not the game's.
-  if (event && /^(Shift|Control|Alt|Meta)$/.test(event.key)) return;
-  stopLineRecorder();
-  if (!soundTap) return;
-
-  var chunks = [];
-  var recorder = new MediaRecorder(soundTap.stream);
-
-  recorder.ondataavailable = function (e) {
-    chunks.push(e.data);
-  };
-  recorder.stopped = new Promise(function (resolve) {
-    recorder.onstop = function () {
-      resolve(new Blob(chunks, { type: recorder.mimeType }));
-    };
-  });
-  recorder.start();
-  lineRecorder = recorder;
-}
-
-['mousedown', 'touchstart', 'keydown'].forEach(function (type) {
-  window.addEventListener(type, restartLineRecorder, true);
 });
 
 var voiceTypes = { ogg: 'audio/ogg', wav: 'audio/wav', mp3: 'audio/mpeg' };
@@ -377,13 +212,6 @@ function voiceFile(file) {
   }
 }
 
-/** The kept lines' text, oldest first, for vnLineFor. */
-function ankiTexts() {
-  return keptLines.map(function (line) {
-    return line.text;
-  });
-}
-
 /** Backlog text on screen now: the built-in backlog's page, and script-drawn (strsp) text. */
 function shownPages() {
   var pages = [];
@@ -391,39 +219,6 @@ function shownPages() {
   if (inSystem && inBacklog) pages.push({ text: backlogText, voice: backlogVoice });
   if (!inSystem && spriteText) pages.push({ text: spriteText, voice: null });
   return pages;
-}
-
-function ankiShownTexts() {
-  return shownPages().map(function (page) {
-    return page.text;
-  });
-}
-
-/**
- * Media for a mined line: kept line ankiTexts()[kept] and/or backlog page
- * ankiShownTexts()[shown] (-1 for none). The picture is the screen when the line was shown,
- * if still kept, else the screen as it is now (the backlog). The sound is the line's voice
- * file, else the sound recorded from the click that brought it to the next, else the backlog
- * page's voice file (null without sound).
- */
-async function ankiMedia(kept, shown, want) {
-  var line = keptLines[kept] || {};
-  var page = shownPages()[shown] || {};
-
-  // Still being recorded: stop here, so its sound ends now.
-  if (lineRecorder && lineRecorder.line === line) stopLineRecorder();
-  return {
-    picture: want.picture ? (await line.picture) || (await screenshot()) : null,
-    audio: want.audio
-      ? voiceFile(line.voice) || (await line.audio) || voiceFile(page.voice) || null
-      : null
-  };
-}
-
-function screenshot() {
-  return new Promise(function (resolve) {
-    document.getElementById('canvas').toBlob(resolve, 'image/webp', 0.9);
-  });
 }
 
 // Cache API cache of a server game the reader chose to keep in the browser (startGame's cacheName).
@@ -823,7 +618,7 @@ function loadScript(src) {
  * saves (synced save files, written when newer than
  * this browser's), keepLines (keep the recent lines with their screenshots for ankiMedia()),
  * recordLines (and record their sound),
- * onText(bytes, skipped, boxes, read), textLines(bytes, boxes) (overlay lines for backlog pages and sprites),
+ * onText(bytes, skipped, boxes, read), textLines(bytes, boxes) (overlay lines of a page, backlog page or sprites),
  * onSave(saves), onExit(code), onMode(auto, skip) (the engine's auto and skip modes).
  */
 async function startGame(options) {
@@ -836,9 +631,12 @@ async function startGame(options) {
   textLines = options.textLines || textLines;
   keepLines = !!options.keepLines;
   consText = function (bytes, skipped, boxes) {
+    var lines = textLines(bytes, boxes);
+
+    showText(lines);
     options.onText(bytes, skipped, boxes, textRead);
     // Skipped text goes by too fast to mine.
-    if (!skipped) keepLine(textLines(bytes, boxes));
+    if (!skipped) keepLine(lines);
   };
   recordLines = !!options.recordLines && typeof MediaRecorder !== 'undefined';
   if (options.fetchFile) fetchFile = options.fetchFile;

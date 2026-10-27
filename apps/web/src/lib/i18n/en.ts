@@ -1032,6 +1032,7 @@ export const en = {
   'library.progress.left': '{progress} · {time} left',
   'library.importFiles': 'Import File(s)',
   'library.importFolders': 'Import Folder(s)',
+  'library.importWindowsGame': 'Windows game…',
   'library.importBackup': 'Import Backup',
   'library.storageSource': 'Storage source',
   'library.sourceBrowser': 'Browser',

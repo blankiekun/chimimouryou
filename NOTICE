@@ -59,6 +59,12 @@ source. Its fallback font
 (apps/web/static/vn/default.ttf) is Noto Sans JP, licensed under the SIL Open
 Font License 1.1.
 
+The Windows game player's text hook scripts (vn/vnbox/hooks/ in the built site,
+fetched from https://github.com/0xDC00/scripts at the commit pinned in
+scripts/vnbox/dc00-sha256sums when the Pages site and the web image are built;
+not in the repository) are 0xDC00's scripts, Copyright (c) 0xDC00, licensed under
+the MIT License (vn/vnbox/hooks/LICENSE), redistributed unmodified.
+
 The desktop app (apps/desktop) bundles Yomitan
 (https://github.com/yomidevs/yomitan), a separate program licensed under the
 GNU General Public License version 3, unmodified: the Chrome build of the

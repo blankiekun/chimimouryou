@@ -53,7 +53,7 @@ import loadHtmlz from '$lib/functions/file-loaders/htmlz/load-htmlz';
 import loadTxt from '$lib/functions/file-loaders/txt/load-txt';
 import loadCbz from '$lib/functions/file-loaders/cbz/load-cbz';
 import { loadVnFolder } from '$lib/functions/file-loaders/vn/load-vn';
-import { deleteOrphanVnCaches, isVn } from '$lib/data/vn';
+import { deleteOrphanVnCaches, isVn, vnInfo } from '$lib/data/vn';
 import { isManga } from '$lib/data/manga';
 import { levelOf } from '$lib/data/difficulty-core';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
@@ -270,6 +270,8 @@ export class CalibreStorageHandler extends ApiStorageHandler {
           });
         }
 
+        // Windows games live in this browser only (windows-game.ts), never in the catalog.
+        await this.addDeviceVns((book) => isVn(book) && vnInfo(book).engine === 'vnbox');
         this.dataListFetched = true;
         libraryOffline$.next(false);
         libraryBuilding$.next(false);

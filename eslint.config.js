@@ -32,7 +32,9 @@ module.exports = (async () => {
         'apps/desktop/yomitan/**',
         // Yomitan's own code in its own style (README there); kept as close to upstream as possible.
         'apps/web/src/lib/vendor/yomitan/**',
-        'apps/desktop/dist/**'
+        'apps/desktop/dist/**',
+        // Build-time Node scripts outside the web app's tsconfig.
+        'scripts/**/*.mjs'
       ]
     },
     {
