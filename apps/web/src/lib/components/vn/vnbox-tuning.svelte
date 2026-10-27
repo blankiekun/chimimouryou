@@ -34,9 +34,20 @@
     off?: string;
   }
 
-  // What each does: boxedwine-shell.js and startupArgs.cpp in VNBox. skipFrameFPS is left out:
-  // VNBox stores it and never reads it.
+  // What each does: boxedwine-shell.js, startupArgs.cpp and (fps) mainloop.cpp in VNBox.
+  // skipFrameFPS is left out: VNBox stores it and never reads it.
   const knobs: Knob[] = [
+    {
+      key: 'fps',
+      title: 'Frame rate',
+      hint: 'Frames shown per second at most. Lower leaves more time for the game; Unlocked shows every frame it draws. VNBox after v0.1.3.',
+      initial: '60',
+      shown: '60',
+      options: [
+        ...['30', '60', '90', '120'].map((id) => ({ id, text: id })),
+        { id: '0', text: 'Unlocked' }
+      ]
+    },
     {
       key: 'audioFreq',
       title: 'Sound rate',
