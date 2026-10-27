@@ -36,6 +36,10 @@ big files. The social hub stays on Cloudflare Workers; no server data lives here
    echo 'command="/usr/local/bin/chimireader-deploy",restrict ssh-ed25519 AAAA… vps-deploy' > /home/deploy/.ssh/authorized_keys
    chown deploy:deploy /home/deploy/.ssh/authorized_keys
    ```
+   The blankie.moe site (blankiekun.github.io's `vps-site.yml`) gets its own key and folder: make a
+   second pair (`vps-deploy-blankie`), `install -d -o deploy -g deploy -m 755 /srv/blankie`, and add
+   a second line to the same `authorized_keys`:
+   `command="env CHIMIREADER_SITE=/srv/blankie /usr/local/bin/chimireader-deploy",restrict ssh-ed25519 AAAA… vps-deploy-blankie`.
    `restrict` turns off shells, forwarding and ptys; the command allows only the three steps, and
    rsync only into `/srv/chimireader/releases` (`rrsync`, part of Debian's rsync package).
 4. The certificate (see "Cloudflare" below) in `/etc/caddy/origin.pem` and `/etc/caddy/origin.key`
@@ -46,32 +50,34 @@ big files. The social hub stays on Cloudflare Workers; no server data lives here
    `vps-deploy`), `VPS_KNOWN_HOSTS` (the output of `ssh-keyscan -t ed25519 <IP>`; compare its key
    with `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the VPS console before saving it),
    plus `VITE_GDRIVE_CLIENT_ID`/`VITE_GDRIVE_CLIENT_SECRET` for Drive sync. A variable
-   `VPS_SITE_URL` changes the address from `https://chimireader.blank.moe`
+   `VPS_SITE_URL` changes the address from `https://chimireader.blankie.moe`
    (then change the `Caddyfile`'s site name too). Run "VPS site" from the Actions tab with `main`.
 
 ## Cloudflare
 
 - DNS: an `A` (and `AAAA`) record `chimireader` → the VPS's addresses, **Proxied** (orange cloud).
 - SSL/TLS → Overview: **Full (strict)**. SSL/TLS → Origin Server → Create Certificate for
-  `chimireader.blank.moe` (RSA or ECC, PEM, 15 years): the certificate goes into `origin.pem`, the
+  `blankie.moe` and `*.blankie.moe` (RSA or ECC, PEM, 15 years; one certificate for both sites): the certificate goes into `origin.pem`, the
   private key into `origin.key`. Cloudflare trusts it; browsers never see it. This is simpler than
   getting a Let's Encrypt certificate through the proxy (no ACME, no API token on the VPS); the
   catch is that visiting the IP directly shows an untrusted certificate, which is fine.
-- Caching → Cache Rules → a rule "Static files": hostname equals `chimireader.blank.moe` and
+- Caching → Cache Rules → a rule "Static files": hostname equals `chimireader.blankie.moe` and
   URI path starts with `/vn/`, `/_app/immutable/` or `/dictionaries/` → Eligible for cache, Edge
   TTL: use the origin's Cache-Control. Cloudflare caches `.zip` and `.js` by default but not `.wasm`
   (nor HTML), so without the rule VNBox's wasm goes to the VPS each time. Files up to 512 MB are
   cached on the free plan (the largest, the Wine root fs, is ~100 MB).
 - After a VNBox bump (`scripts/vnbox/sha256sums`) its files keep their names: purge
-  `https://chimireader.blank.moe/vn/vnbox/` (Caching → Configuration → Custom Purge, prefix) after
+  `https://chimireader.blankie.moe/vn/vnbox/` (Caching → Configuration → Custom Purge, prefix) after
   the deploy, or browsers and Cloudflare keep the old ones for up to a day.
+- blankie.moe: an `A` (and `AAAA`) record `@`, Proxied, and a Cache Rule: hostname equals
+  `blankie.moe` and URI path starts with `/vnbox/` → Eligible for cache, origin's Cache-Control.
 - Speed → Optimization: keep **Rocket Loader** and Email Address Obfuscation off. Both inject
   scripts, which the app's CSP (hash mode) blocks.
 
 ## OAuth and other origins
 
-- Google Drive: add `https://chimireader.blank.moe` as an authorised JavaScript origin and
-  `https://chimireader.blank.moe/auth` as a redirect URI on the OAuth client in Google Cloud Console.
+- Google Drive: add `https://chimireader.blankie.moe` as an authorised JavaScript origin and
+  `https://chimireader.blankie.moe/auth` as a redirect URI on the OAuth client in Google Cloud Console.
   The standalone has no OneDrive. OpenRouter needs nothing: its sign-in sends the page's own
   address as the callback.
 - The Discord companion allows this origin from version 0.3.1 on (`DEFAULT_ORIGINS`); older add-ons
