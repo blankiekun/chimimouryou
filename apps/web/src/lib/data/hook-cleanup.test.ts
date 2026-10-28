@@ -92,6 +92,18 @@ describe('hook cleanup filters', () => {
     expect(cleanHookLine('ＡＢ……ｶﾅ①', {})).toBe('ＡＢ……ｶﾅ①');
   });
 
+  it('keeps only the new text after a finished line, per thread', () => {
+    const clean = hookCleaner({ newOnly: true });
+
+    expect(clean('少しばかり無邪気すぎる。', 'a')).toBe('少しばかり無邪気すぎる。');
+    expect(clean('少しばかり無邪気すぎる。忍「ところで」', 'a')).toBe('忍「ところで」');
+    expect(clean('少しばかり無邪気すぎる。', 'b')).toBe('少しばかり無邪気すぎる。');
+    expect(clean('新しいページ。', 'a')).toBe('新しいページ。');
+    // A typewriter sending each character: the previous line isn't finished, kept whole.
+    expect(clean('あ', 'c')).toBe('あ');
+    expect(clean('あい', 'c')).toBe('あい');
+  });
+
   it('drops lines seen lately, per thread, and empty lines', () => {
     const clean = hookCleaner({ recentLines: true, recentSize: 2, markup: true });
 
@@ -106,6 +118,16 @@ describe('hook cleanup filters', () => {
 });
 
 describe('suggestCleanup', () => {
+  it('suggests new text only for a page the game adds each line to', () => {
+    expect(
+      suggestCleanup([
+        '少しばかり。',
+        '少しばかり。忍「ところで」',
+        '少しばかり。忍「ところで」行こうか。'
+      ])
+    ).toEqual({ newOnly: true });
+  });
+
   it('suggests the repeated-characters filter for a hook doubling every character', () => {
     expect(
       suggestCleanup([

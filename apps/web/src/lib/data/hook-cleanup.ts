@@ -43,6 +43,8 @@ export interface HookCleanup {
   /** The rules' regular expressions replaced, in order */
   replace?: boolean;
   rules?: HookRule[];
+  /** A line starting with the thread's last one keeps only the new text (a page the game adds to) */
+  newOnly?: boolean;
   /** Drop a line seen in the last recentSize lines (a game's backlog screen firing the hook) */
   recentLines?: boolean;
   recentSize?: number;
@@ -83,6 +85,11 @@ export const hookFilters: { key: HookFilter; title: string; hint: string }[] = [
     hint: 'Keeps the quoted speech, drops a name before it.'
   },
   { key: 'replace', title: 'Replace', hint: 'Your regular expressions, in order.' },
+  {
+    key: 'newOnly',
+    title: 'New text only',
+    hint: 'Drops the previous line when the next one repeats it first.'
+  },
   {
     key: 'recentLines',
     title: 'Recent lines',
@@ -256,7 +263,10 @@ export function applyRules(text: string, rules: HookRule[] = []) {
   );
 }
 
-/** The stateless filters, in order (everything but recentLines). */
+// A line ends at one of these; a redraw cut mid-sentence (あ, あい) is not a finished line.
+const lineEnd = /[。！？!?」』）)…―〜～♪]$/u;
+
+/** The stateless filters, in order (everything but newOnly and recentLines). */
 export function cleanHookLine(line: string, cleanup: HookCleanup) {
   let text = line;
 
@@ -281,11 +291,21 @@ export function cleanHookLine(line: string, cleanup: HookCleanup) {
  */
 export function hookCleaner(cleanup: HookCleanup) {
   const recent = new Map<string, string[]>();
+  const last = new Map<string, string>();
   const size = cleanup.recentSize || defaultRecentSize;
 
   return (line: string, threadId = '') => {
-    const text = cleanHookLine(line, cleanup);
+    let text = cleanHookLine(line, cleanup);
 
+    if (text && cleanup.newOnly) {
+      const previous = last.get(threadId) ?? '';
+
+      last.set(threadId, text);
+      // shortcut: only a finished previous line counts, so a typewriter sent one fire per
+      // character isn't cut to single characters; a game redrawing mid-sentence would need more.
+      if (lineEnd.test(previous) && text.length > previous.length && text.startsWith(previous))
+        text = text.slice(previous.length).trim();
+    }
     if (!text || !cleanup.recentLines) return text;
 
     const seen = recent.get(threadId) ?? [];
@@ -316,6 +336,7 @@ const suggestable: HookFilter[] = [
   'repeatedLine',
   'repeatedPhrases',
   'trailingRepeat',
+  'newOnly',
   'recentLines'
 ];
 
@@ -336,7 +357,10 @@ export function suggestCleanup(lines: string[]): HookCleanup | undefined {
     const changed =
       key === 'recentLines'
         ? before.length - cleanLines(before, { recentLines: true }).length
-        : before.filter((line) => cleanHookLine(line, { [key]: true }) !== line).length;
+        : key === 'newOnly'
+          ? cleanLines(before, { newOnly: true }).filter((line, index) => line !== before[index])
+              .length
+          : before.filter((line) => cleanHookLine(line, { [key]: true }) !== line).length;
 
     if (changed * 4 >= before.length && changed > 0) cleanup = { ...cleanup, [key]: true };
   }
