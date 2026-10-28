@@ -7,7 +7,7 @@ be625f4) ported to JavaScript hook scripts. VNBox runs them in the game process 
 that, so a port is a near line-by-line copy of the C++. This file is the rulebook for the ports: follow it
 exactly, and a port reads like every other port.
 
-- Source: `/home/saya/lead-data/scratch/luna/src/src/NativeImpl/LunaHook/LunaHook/engine32/<Name>.cpp` and
+- Source: `$LUNA/src/NativeImpl/LunaHook/LunaHook/engine32/<Name>.cpp` (`$LUNA`: a LunaTranslator clone at commit be625f4) and
   `<Name>.h` (read-only). LunaHook's helpers: `util/util.cc`, `util/memdbg/memsearch.cc`,
   `util/stringfilters.cpp`, `texthook.cc` (TextHook::Send), `include/types.h` (HookParam).
 - Licence: LunaTranslator is GPL-3.0; these files are GPL-3.0-or-later. Every port carries the header
@@ -36,7 +36,7 @@ which suggests the first engine whose file checks the imported folder passes whe
    constants, patterns and comments that explain a pattern (a short `// mov eax, …` is fine).
 3. `node order.mjs` (adds it to `PC_LunaEngines.js`; it fails when the class name is not in LunaHook's order).
 4. `node engines.check.mjs` (must end with "… find no match on an empty guest").
-5. `python3 -I /home/saya/lead-data/scratch/luna/check-port.py scripts/vnbox/engines <Name>`: every byte run,
+5. `LUNA=… python3 -I scripts/vnbox/engines/check-port.py scripts/vnbox/engines <Name>`: every byte run,
    number and string of the C++ should be in the port. Fix real misses. Misses that are fine (dead code,
    skipped embed parts, the checker misreading `R"(…)"` raw strings or `//*` in comments) go in the
    "Checker misses" column of the status table with the reason.
@@ -454,7 +454,7 @@ text_fun(context, hp) {
 cd scripts/vnbox/engines
 node order.mjs                      # after adding or renaming an engine
 node engines.check.mjs              # libLuna tests + every engine on an empty fake guest
-python3 -I /home/saya/lead-data/scratch/luna/check-port.py . [Name …]   # C++ patterns/numbers/strings carried over
+LUNA=… python3 -I check-port.py . [Name …]   # C++ patterns/numbers/strings carried over
 ```
 `engines.check.mjs` proves a port loads and runs its checks and searches without throwing; it cannot
 prove the hook finds text. Only a real game does that (the owner tests those).
