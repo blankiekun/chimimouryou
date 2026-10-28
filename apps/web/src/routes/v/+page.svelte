@@ -80,6 +80,7 @@
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import AnkiWatcher from '$lib/components/anki-watcher.svelte';
   import VnboxTuning from '$lib/components/vn/vnbox-tuning.svelte';
+  import VnboxHooks from '$lib/components/vn/vnbox-hooks.svelte';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
   import { builtInLookups$ } from '$lib/data/dictionary';
   import {
@@ -124,6 +125,7 @@
   /** A Windows game's VNBox settings from the Tuning sheet; a new value restarts the game. */
   let tuning = '';
   let showTuning = false;
+  let showHooks = false;
   /** The frame waits for load(): a Windows game's address depends on it. */
   let loaded = false;
   $: playerUrl =
@@ -804,6 +806,16 @@
             Tuning
           </button>
         </li>
+        <li>
+          <button
+            on:click={() => {
+              showMore = false;
+              showHooks = true;
+            }}
+          >
+            Hooks
+          </button>
+        </li>
       {/if}
       <li><button on:click={openStatistics}>Statistics</button></li>
     </ul>
@@ -813,6 +825,12 @@
 {#if showTuning}
   <ReaderSheet title="Tuning" on:close={() => (showTuning = false)}>
     <VnboxTuning {tuning} {frame} onapply={applyTuning} />
+  </ReaderSheet>
+{/if}
+
+{#if showHooks && book}
+  <ReaderSheet title="Hooks" on:close={() => (showHooks = false)}>
+    <VnboxHooks {frame} bookId={book.id} />
   </ReaderSheet>
 {/if}
 
