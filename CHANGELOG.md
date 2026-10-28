@@ -4,6 +4,40 @@ chimimouryou is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook
 upstream's own changes are not listed here. Each version's section is written when it is released,
 from the pull requests merged since the previous tag (pull requests don't edit this file).
 
+## v3.10.0 (2026-10-28)
+
+### Added
+
+- Visual novels: Windows games install from a disc image (ISO, BIN+CUE, MDS+MDF) or an installer
+  folder in the import dialog. The disc is read from browser storage on demand, the installer runs
+  in the player (silently where it can, else clicked through), and the installed program is picked
+  from what it created. Copy protection found on the disc is named.
+- Visual novels: a per-game Compatibility section in Tuning: renderer, Windows version, movies
+  off, a virtual desktop, DLL overrides, registry values and Wine environment variables.
+- Visual novels: a save file explorer (More → Saves) for ONScripter and Windows games: browse,
+  download, upload, replace and delete, with a backup ZIP before anything is overwritten.
+- Visual novels: Windows game saves sync between devices, and "This game is already in my
+  library" adds a game's files on a new device to the record that synced there.
+- Visual novels: Windows games play on phones, with a side rail (Menu, Skip, Full screen) and
+  gamepads in both engines.
+- Visual novels: LunaHook's game engines ported as text hook scripts (GPL-3.0-or-later), picked
+  automatically by the engine's files, with API-hook engines and a status table.
+- Reader: on phones the side panel and the Aa/More sheets swipe up to full height and down to
+  close. While Listen isn't shown, a docked mini player drives the audiobook, Audiobookshelf or AI
+  voice: play/pause, previous/next line, speed, and a button back to Listen.
+
+### Changed
+
+- VNBox v0.2.2: faster MMX drawing loops (forward jumps inside compiled blocks), Wine environment,
+  registry, DLL override and virtual desktop settings from the address, MDS+MDF discs and discs
+  read lazily from browser storage.
+
+### Fixed
+
+- The texthooker no longer counts the time a tab was closed as reading time.
+- A reading-help switch turned on from a desktop through settings sync can be turned off on a
+  phone.
+
 ## v3.9.0 (2026-10-28)
 
 ### Added
