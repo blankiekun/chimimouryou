@@ -1,0 +1,115 @@
+/**
+ * @license BSD-3-Clause
+ * Copyright (c) 2026, ッツ Reader Authors
+ * All rights reserved.
+ */
+
+import { describe, expect, it } from 'vitest';
+import {
+  autorunProgram,
+  copyProtection,
+  discsOf,
+  installerKind,
+  listDisc,
+  lnkTarget,
+  silentArgs
+} from './windows-install';
+
+// jsdom's Blob has no arrayBuffer().
+Blob.prototype.arrayBuffer ??= function (this: Blob) {
+  return new Promise<ArrayBuffer>((resolve) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
+    reader.readAsArrayBuffer(this);
+  });
+};
+
+describe('windows-install', () => {
+  it('reads autorun.inf', () => {
+    expect(autorunProgram('[AutoRun]\r\nicon=a.ico\r\nopen=SETUP\\Setup.exe /lang jp\r\n')).toEqual(
+      { program: 'SETUP/Setup.exe', args: '/lang jp' }
+    );
+    expect(autorunProgram('[autorun]\nopen="My Setup.exe"')).toEqual({
+      program: 'My Setup.exe',
+      args: ''
+    });
+    expect(autorunProgram('[other]\nopen=x.exe')).toBeUndefined();
+  });
+
+  it('names installers and their silent switches', () => {
+    const ascii = (text: string) => new TextEncoder().encode(`MZ....${text}....`);
+    const wide = (text: string) =>
+      new Uint8Array([...text].flatMap((char) => [char.charCodeAt(0), 0]));
+
+    expect(installerKind(ascii('Inno Setup Setup Data'))).toBe('inno');
+    expect(installerKind(wide('Nullsoft Install System'))).toBe('nsis');
+    expect(installerKind(ascii('InstallShield'))).toBe('installshield');
+    expect(installerKind(ascii('nothing'))).toBeUndefined();
+    expect(silentArgs('nsis', 'C:\\files\\g1')).toBe('/S /D=C:\\files\\g1');
+  });
+
+  it('finds copy protection by its files', () => {
+    expect(copyProtection(['SETUP.EXE', 'GAME/CMS32_95.DLL', 'secdrv.sys'])).toEqual([
+      'SecuROM',
+      'SafeDisc'
+    ]);
+    expect(copyProtection(['setup.exe'])).toEqual([]);
+  });
+
+  it('reads a shortcut target', () => {
+    const path = 'C:\\files\\g1\\game.exe';
+    const lnk = new Uint8Array(0x4c + 0x24 + path.length * 2 + 2);
+    const view = new DataView(lnk.buffer);
+
+    view.setUint32(0, 0x4c, true);
+    view.setUint32(0x14, 2, true); // HasLinkInfo
+    view.setUint32(0x4c + 4, 0x24, true);
+    view.setUint32(0x4c + 8, 1, true);
+    view.setUint32(0x4c + 0x10, 0x24 + path.length * 2, true); // ANSI path: the terminator
+    view.setUint32(0x4c + 0x1c, 0x24, true);
+    [...path].forEach((char, i) => view.setUint16(0x4c + 0x24 + i * 2, char.charCodeAt(0), true));
+    expect(lnkTarget(lnk)).toBe(path);
+  });
+
+  it('groups images into discs and lists an ISO', async () => {
+    const sector = (n: number) => new Uint8Array(2048 * n);
+    const iso = sector(20);
+
+    // Primary descriptor at 16: root directory at sector 18, one file at 19.
+    iso.set([1, ...new TextEncoder().encode('CD001')], 16 * 2048);
+    iso.set(new TextEncoder().encode('GAMEDISC'), 16 * 2048 + 40);
+    const record = (at: number, lba: number, size: number, flags: number, name: number[]) => {
+      iso[at] = 33 + name.length + (name.length % 2 ? 0 : 1);
+      new DataView(iso.buffer).setUint32(at + 2, lba, true);
+      new DataView(iso.buffer).setUint32(at + 10, size, true);
+      iso[at + 25] = flags;
+      iso[at + 32] = name.length;
+      iso.set(name, at + 33);
+      return at + iso[at];
+    };
+    record(16 * 2048 + 156, 18, 2048, 2, [0]);
+    let at = record(18 * 2048, 18, 2048, 2, [0]);
+    at = record(at, 18, 2048, 2, [1]);
+    record(at, 19, 5, 0, [...new TextEncoder().encode('AUTORUN.INF;1')]);
+    iso.set(new TextEncoder().encode('hello'), 19 * 2048);
+    expect(iso[17 * 2048]).toBe(0); // no Joliet descriptor
+
+    const files = [
+      new File([iso], 'disc2.iso'),
+      new File(['x'], 'Game.mdf'),
+      new File(['x'], 'Game.mds'),
+      new File([iso], 'disc1.iso')
+    ];
+    const discs = await discsOf(files);
+
+    expect(discs.map((disc) => disc.main.name)).toEqual(['disc1.iso', 'disc2.iso', 'Game.mds']);
+    expect(discs[2].files.map((file) => file.name)).toEqual(['Game.mds', 'Game.mdf']);
+
+    const listing = await listDisc(discs[0]);
+
+    expect(listing?.label).toBe('GAMEDISC');
+    expect(listing?.files.map((file) => file.path)).toEqual(['AUTORUN.INF']);
+    expect(new TextDecoder().decode(await listing!.read(listing!.files[0]))).toBe('hello');
+  });
+});
