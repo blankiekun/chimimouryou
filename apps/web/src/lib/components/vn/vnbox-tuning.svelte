@@ -40,7 +40,7 @@
     {
       key: 'fps',
       title: 'Frame rate',
-      hint: 'Frames shown per second at most. Lower leaves more time for the game; Unlocked shows every frame it draws. VNBox after v0.1.3.',
+      hint: 'Frames shown per second at most. Lower leaves more time for the game; Unlocked shows every frame it draws. VNBox v0.2.0+.',
       initial: '60',
       shown: '60',
       options: [
@@ -104,7 +104,7 @@
     {
       key: 'stats',
       title: 'Stats',
-      hint: 'Every 2 seconds, frame pacing, present and GL timings, shown under Speed now and in the console. VNBox after v0.1.3.',
+      hint: 'Every 2 seconds, frame pacing, present and GL timings, shown under Speed now and in the console. VNBox v0.2.0+.',
       initial: '',
       shown: 'off',
       on: '1',
