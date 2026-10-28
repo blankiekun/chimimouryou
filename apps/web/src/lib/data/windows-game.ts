@@ -12,6 +12,7 @@
  * uploaded anywhere. Not upstream.
  */
 
+import { hookCleaner, type HookCleanup } from '$lib/data/hook-cleanup';
 import { pagePath } from '$lib/data/env';
 import { hashPage, vnElementHtml, type VnInfo } from '$lib/data/vn';
 import type { LoadData } from '$lib/functions/file-loaders/types';
@@ -468,4 +469,52 @@ export function searchHookScripts(scripts: HookScript[], query: string) {
   return wanted
     ? scripts.filter((script) => hookKey(`${script.name} ${script.file}`).includes(wanted))
     : scripts;
+}
+
+/** A hook thread as vnbox.js keeps it (VNBox's boxedwineText(line, thread)). */
+export interface HookThread {
+  id: string;
+  label?: string;
+  kind: 'script' | 'hcode' | 'search';
+  address?: string;
+  module?: string;
+  last?: string;
+  count: number;
+  /** The newest lines (up to 20), with the count of clicks and keys before each */
+  recent: { text: string; click: number }[];
+}
+
+// Kana, kanji and Japanese punctuation (、。「」 and full-width forms)
+const japaneseChar = /[\u3000-\u30ff\u3400-\u9fff\uff00-\uffef]/u;
+
+/**
+ * Threads best first for picking the game's text: one line per click (char-by-char hooks send
+ * many), mostly Japanese, few repeats (menus and redraws repeat) and longer than one character,
+ * after the game's text cleanup (lines it drops don't count). score is 0-1.
+ */
+export function rankThreads(threads: HookThread[], cleanup: HookCleanup = {}) {
+  return threads
+    .map((thread) => {
+      const clean = hookCleaner(cleanup);
+      const lines = thread.recent
+        .map((line) => ({ ...line, text: clean(line.text) }))
+        .filter((line) => line.text);
+      const share = (count: number) => (lines.length ? count / lines.length : 0);
+      const chars = lines.flatMap((line) => [...line.text.replace(/\s/g, '')]);
+      const score =
+        share(new Set(lines.map((line) => line.click)).size) *
+        (chars.length ? chars.filter((char) => japaneseChar.test(char)).length / chars.length : 0) *
+        share(new Set(lines.map((line) => line.text)).size) *
+        share(lines.filter((line) => [...line.text.trim()].length > 1).length);
+
+      return { thread, score };
+    })
+    .sort((a, b) => b.score - a.score);
+}
+
+/** The game's saved hook for people: the script's @name, its file, or undefined for none. */
+export function savedHookName(info: Pick<VnInfo, 'hook' | 'hookFile'>) {
+  if (info.hook) return info.hook.match(/@name\s+(.+)/)?.[1].trim() || 'Chosen script';
+
+  return info.hookFile;
 }

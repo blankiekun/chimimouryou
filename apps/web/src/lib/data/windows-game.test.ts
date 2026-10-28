@@ -10,11 +10,14 @@ import {
   copyWindowsGame,
   fittedTuning,
   hookSuggestion,
+  rankThreads,
+  savedHookName,
   searchHookScripts,
   vnboxPlayerUrl,
   windowsGameBook,
   windowsGameFolder,
-  windowsPrograms
+  windowsPrograms,
+  type HookThread
 } from '$lib/data/windows-game';
 
 describe('windowsPrograms', () => {
@@ -323,5 +326,59 @@ describe('copyWindowsGame', () => {
     await copyWindowsGame('g1', files, () => {});
     expect(new TextDecoder().decode(game(root).get('slow.bin').bytes)).toBe('slow');
     expect(game(root).get('a.txt').writes).toBe(1);
+  });
+});
+
+describe('rankThreads', () => {
+  const thread = (id: string, recent: [string, number][]): HookThread => ({
+    id,
+    kind: 'search',
+    count: recent.length,
+    recent: recent.map(([text, click]) => ({ text, click }))
+  });
+
+  it('puts the one-line-per-click Japanese thread first', () => {
+    const ranked = rankThreads([
+      thread('chars', [
+        ['今', 1],
+        ['日', 1],
+        ['は', 1]
+      ]),
+      thread('menu', [
+        ['Start', 1],
+        ['Start', 2],
+        ['Start', 3]
+      ]),
+      thread('lines', [
+        ['今日は晴れ。', 1],
+        ['「行こうか」', 2],
+        ['空が青い。', 3]
+      ]),
+      thread('quiet', [])
+    ]);
+
+    expect(ranked[0]).toEqual({ thread: expect.objectContaining({ id: 'lines' }), score: 1 });
+    expect(ranked.slice(1).map(({ score }) => score)).toEqual([0, 0, 0]);
+  });
+
+  it('scores the lines after the cleanup', () => {
+    const doubled = thread('doubled', [
+      ['今今日日はは', 1],
+      ['今今日日はは', 2],
+      ['晴晴れれ', 3]
+    ]);
+
+    expect(rankThreads([doubled])[0].score).toBeCloseTo(2 / 3);
+    // Collapsed, then the repeat dropped: two clean lines, one per click.
+    expect(rankThreads([doubled], { repeatedChars: true, recentLines: true })[0].score).toBe(1);
+  });
+});
+
+describe('savedHookName', () => {
+  it('names the script, the bundled file or none', () => {
+    expect(savedHookName({ hook: '// @name  Muramasa\nfoo()' })).toBe('Muramasa');
+    expect(savedHookName({ hook: 'foo()' })).toBe('Chosen script');
+    expect(savedHookName({ hookFile: 'PC_Muramasa.js' })).toBe('PC_Muramasa.js');
+    expect(savedHookName({})).toBeUndefined();
   });
 });
