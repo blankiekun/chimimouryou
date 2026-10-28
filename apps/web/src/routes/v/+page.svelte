@@ -112,6 +112,7 @@
   } from '$lib/data/anki';
   import { serverConnected, serverFetch } from '$lib/data/server-connect';
   import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
+  import { watchGamepads, type PadAction } from '$lib/data/vn-gamepad';
 
   /** The text panel below the game; hovering the game's own text works without it. */
   const showText$ = writableBooleanLocalStorageSubject()('vnTextPanel', false);
@@ -119,6 +120,8 @@
   const furigana$ = writableBooleanLocalStorageSubject()('vnFurigana', true);
   /** The whole text at once instead of the game's text speed. */
   const instantText$ = writableBooleanLocalStorageSubject()('vnInstantText', false);
+  /** The touch rail's big Menu, Skip and Full screen buttons (landscape); folded, its handle. */
+  const railOpen$ = writableBooleanLocalStorageSubject()('vnRailOpen', true);
   const defaultSources: Record<string, StorageKey> = {
     [StorageSourceDefault.CALIBRE_DEFAULT]: StorageKey.CALIBRE,
     [StorageSourceDefault.GDRIVE_DEFAULT]: StorageKey.GDRIVE,
@@ -473,6 +476,8 @@
 
     if (windows) {
       await pullWindowsSaves();
+      // A new frame holds no Ctrl.
+      skipping = false;
       reading.lastTextTime = Date.now();
       await player.startGame({
         keepLines: $ankiEnabled$,
@@ -682,35 +687,70 @@
     (frame?.contentWindow as any)?.openMenu();
   }
 
-  /** Toggles in the bar, and on portrait phones in a row under it; Menu and Skip only on phones. */
-  $: chips = windows
-    ? []
-    : [
-        {
-          label: 'Furigana',
-          title: 'Furigana in the game (from the next text; readings stay in the text panel)',
-          on: $furigana$,
-          click: () => furigana$.next(!$furigana$)
-        },
-        {
-          label: 'Instant text',
-          title: 'Show the whole text at once',
-          on: $instantText$,
-          click: () => instantText$.next(!$instantText$)
-        },
-        {
-          label: 'Menu',
-          title: "The game's menu (right-click)",
-          on: undefined,
-          click: openMenu,
-          phone: true
-        },
-        { label: 'Skip', title: 'Skip text', on: skipping, click: toggleSkip, phone: true }
-      ];
+  $: skipTitle = windows ? 'Skip text (holds Ctrl in the game)' : 'Skip text';
+  /**
+   * Toggles in the bar, and on portrait phones in a row under it. Menu and Skip only on touch
+   * screens (in the rail when landscape); Furigana and Instant text are CONscripter's.
+   */
+  $: chips = [
+    ...(windows
+      ? []
+      : [
+          {
+            label: 'Furigana',
+            title: 'Furigana in the game (from the next text; readings stay in the text panel)',
+            on: $furigana$,
+            click: () => furigana$.next(!$furigana$)
+          },
+          {
+            label: 'Instant text',
+            title: 'Show the whole text at once',
+            on: $instantText$,
+            click: () => instantText$.next(!$instantText$)
+          }
+        ]),
+    {
+      label: 'Menu',
+      title: "The game's menu (right-click)",
+      on: undefined,
+      click: openMenu,
+      phone: true
+    },
+    { label: 'Skip', title: skipTitle, on: skipping, click: toggleSkip, phone: true }
+  ];
 
   function toggleFullscreen() {
-    if (fullscreenManager.fullscreenElement) fullscreenManager.exitFullscreen();
-    else fullscreenManager.requestFullscreen(document.documentElement);
+    (fullscreenManager.fullscreenElement
+      ? fullscreenManager.exitFullscreen()
+      : fullscreenManager.requestFullscreen(document.documentElement)
+    ).catch((error) => logger.warn(`Full screen failed: ${error.message}`));
+  }
+
+  /** Gamepad buttons (vn-gamepad.ts): the page's own actions here, the game's in the frame. */
+  function padChange(pressed: PadAction[], released: PadAction[]) {
+    const player = frame?.contentWindow as any;
+
+    released.forEach((action) => player?.padButton?.(action, false));
+    for (const action of pressed) {
+      if (action === 'skip') {
+        if (started) toggleSkip();
+      } else if (action === 'backlog') {
+        showMore = false;
+        showBacklog = !showBacklog && !blocked;
+      } else if (action === 'more') {
+        showBacklog = false;
+        showMore = !showMore;
+      } else if (action === 'fullscreen') {
+        toggleFullscreen();
+      } else if (action === 'menu' && (showMore || showBacklog || showTuning || showHooks)) {
+        // B closes a sheet before it reaches the game.
+        showMore = showBacklog = showTuning = showHooks = false;
+      } else if (action === 'menu' && showSaves) {
+        closeSaves();
+      } else {
+        player?.padButton?.(action, true);
+      }
+    }
   }
 
   async function openStatistics() {
@@ -728,6 +768,17 @@
   onMount(() => {
     load(Number($page.url.searchParams.get('id'))).catch((error) =>
       logger.error(`Error loading visual novel: ${error.message}`)
+    );
+    // The frame hides the pads from its engine (overlay.js) but can still read them.
+    return watchGamepads(
+      () => [
+        ...(navigator.getGamepads?.() ?? []),
+        ...((frame?.contentWindow as any)?.framePads?.() ?? [])
+      ],
+      {
+        change: padChange,
+        cursor: (dx, dy, ms) => (frame?.contentWindow as any)?.padMove?.(dx, dy, ms)
+      }
     );
   });
 
@@ -839,6 +890,45 @@
   {/if}
 
   <div class="vn-main" class:vn-main-text={$showText$ && !ended}>
+    {#if playerUrl && !showSaves}
+      <div class="vn-rail" class:vn-rail-open={$railOpen$}>
+        <button
+          class="vn-rail-handle"
+          title={$railOpen$ ? 'Hide the buttons' : 'Show the buttons'}
+          aria-expanded={$railOpen$}
+          on:click={() => railOpen$.next(!$railOpen$)}
+        >
+          <svg viewBox="0 0 12 20" width="12" height="20" aria-hidden="true">
+            <path
+              d={$railOpen$ ? 'M8 4 2 10l6 6' : 'M4 4l6 6-6 6'}
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+        {#if $railOpen$}
+          <button class="vn-rail-button" title="The game's menu (right-click)" on:click={openMenu}>
+            Menu
+          </button>
+          <button
+            class="vn-rail-button"
+            class:vn-rail-on={skipping}
+            title={skipTitle}
+            aria-pressed={skipping}
+            on:click={toggleSkip}
+          >
+            Skip
+          </button>
+          {#if fullscreenManager.fullscreenEnabled}
+            <button class="vn-rail-button" on:click={toggleFullscreen}>
+              <Fa icon={faExpand} />
+              <span>Full screen</span>
+            </button>
+          {/if}
+        {/if}
+      </div>
+    {/if}
     <!-- The game's own dark ground: part of the content, not the theme -->
     <div class="vn-game" class:vn-game-blocked={blocked || showSaves}>
       {#if blocked}
@@ -1036,10 +1126,18 @@
     font-family: var(--app-font-ui);
   }
 
-  /* Menu and Skip are for phones, where right-click and the game's own buttons are hard to reach. */
+  /* Menu and Skip are for touch screens, where right-click and the game's own buttons are hard
+     to reach: in the bar (portrait tablets), the row (portrait phones) or the rail (landscape). */
   .vn-page .vn-phone-chip,
-  .vn-chip-row {
+  .vn-chip-row,
+  .vn-rail {
     display: none;
+  }
+
+  @media (pointer: coarse) and (orientation: portrait) {
+    .vn-page .vn-phone-chip {
+      display: inline-flex;
+    }
   }
 
   .vn-chip-row {
@@ -1110,13 +1208,74 @@
   }
 
   @media (orientation: landscape) and (max-height: 500px) {
-    .vn-page .vn-phone-chip {
-      display: inline-flex;
-    }
-
     .vn-page .bar-chip {
       height: 2.75rem;
     }
+  }
+
+  /* The rail: big buttons down the game's left edge, beside the game; the handle folds it to a
+     strip. A Steam Deck's primary pointer is fine, so it gets no rail. */
+  @media (pointer: coarse) and (orientation: landscape) {
+    .vn-main {
+      position: relative;
+    }
+
+    .vn-rail {
+      position: absolute;
+      z-index: 1;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      padding: 0.25rem;
+      border-right: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
+      background: var(--reader-panel-bg);
+    }
+
+    .vn-rail-open ~ .vn-game {
+      margin-left: 5rem;
+    }
+
+    .vn-rail:not(.vn-rail-open) ~ .vn-game {
+      margin-left: 2.25rem;
+    }
+  }
+
+  .vn-rail-handle {
+    display: flex;
+    height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 2px;
+    color: color-mix(in srgb, var(--reader-panel-fg) 68%, transparent);
+  }
+
+  .vn-rail-button {
+    display: flex;
+    width: 4.5rem;
+    min-height: 4.5rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    border: 1px solid color-mix(in srgb, var(--reader-panel-fg) 24%, transparent);
+    border-radius: 2px;
+    font-size: var(--type-small);
+    font-weight: 700;
+    line-height: 1.2;
+    text-align: center;
+  }
+
+  .vn-rail-button:active {
+    background: var(--app-spot-tint);
+  }
+
+  .vn-rail-on {
+    border-color: var(--accent-color);
+    background: var(--app-spot-tint);
+    color: var(--accent-strong-color);
   }
 
   .vn-keep {

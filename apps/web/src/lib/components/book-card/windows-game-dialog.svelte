@@ -160,6 +160,10 @@
     const first = list?.[0]?.webkitRelativePath.split('/')[0];
 
     if (first) useFolder(first, picked);
+    // Browsers that ignore webkitdirectory (some on phones) hand back loose files.
+    else if (list?.length)
+      error =
+        'This browser picked files, not a folder. Add the game from a browser that can pick folders.';
   }
 
   async function hookPicked(list: FileList | null) {

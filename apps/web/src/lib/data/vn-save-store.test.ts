@@ -177,6 +177,12 @@ describe('vn save store', () => {
     expect(isWindowsSaveKey(`${user}/AppData`)).toBe(false);
     expect(isWindowsSaveKey('wine/drive_c/windows/system32/x.dll')).toBe(false);
     expect(isWindowsSaveKey('wine/user.reg')).toBe(false);
+    expect(isWindowsSaveKey('wine/drive_c/ProgramData/Maker/Game/save1.dat')).toBe(true);
+    expect(isWindowsSaveKey('wine/drive_c/ProgramData/Microsoft/Windows/x.dat')).toBe(false);
+    expect(isWindowsSaveKey('wine/drive_c/ProgramData/Maker/Cache/x')).toBe(false);
+    expect(isWindowsSaveKey('wine/drive_c/ProgramData/Maker/temp/x')).toBe(false);
+    expect(isWindowsSaveKey('wine/drive_c/ProgramData/x.dat')).toBe(true);
+    expect(isWindowsSaveKey('wine/drive_c/ProgramData')).toBe(false);
     expect(isWindowsSaveKey('game/../x')).toBe(false);
     expect(isWindowsSaveKey('game')).toBe(false);
   });

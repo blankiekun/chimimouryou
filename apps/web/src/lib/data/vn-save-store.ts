@@ -366,14 +366,16 @@ export async function unzipSaves(zip: Blob) {
 /** A Windows game's saves sync up to this size (vnsaves.json, base64). */
 export const windowsSavesCap = 20 * 1024 * 1024;
 
-const userFolders = /^wine\/drive_c\/users\/[^/]+\/(?:AppData|Documents|Saved Games)\/(.+)$/;
+const userFolders =
+  /^wine\/drive_c\/(?:users\/[^/]+\/(?:AppData|Documents|Saved Games)|ProgramData(?=\/(?!Microsoft\/)))\/(.+)$/;
 const notSaves = /^(?:temp|tmp)$|cache/i;
 const areaKey = (area: SaveArea) => (area.db.startsWith('/lazyapp/') ? 'game' : 'wine');
 
 /**
  * Whether a Windows game's synced name is a save: `game/<path>` (anything the game wrote into
- * its folder) or `wine/drive_c/users/<user>/{AppData,Documents,Saved Games}/<path>` in the
- * prefix, temp and cache folders left out. Never system32, windows or the registry.
+ * its folder), `wine/drive_c/users/<user>/{AppData,Documents,Saved Games}/<path>` or
+ * `wine/drive_c/ProgramData/<path>` (not Microsoft's own folder) in the prefix, temp and cache
+ * folders left out. Never system32, windows or the registry.
  */
 export function isWindowsSaveKey(name: string) {
   const parts = savePathParts(name);

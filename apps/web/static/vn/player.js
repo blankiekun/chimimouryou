@@ -177,6 +177,27 @@ function openMenu() {
   canvas.dispatchEvent(new MouseEvent('mouseup', at));
 }
 
+// Gamepad actions (lib/data/vn-gamepad.ts) as the keys ONScripter knows: A Enter, the d-pad the
+// arrow keys (choices and menus), the shoulders the wheel (up opens the backlog).
+var padKeys = {
+  advance: ['Enter', 'Enter', 13],
+  up: ['ArrowUp', 'ArrowUp', 38],
+  down: ['ArrowDown', 'ArrowDown', 40],
+  left: ['ArrowLeft', 'ArrowLeft', 37],
+  right: ['ArrowRight', 'ArrowRight', 39]
+};
+
+/** A pad action pressed (down) or released. */
+function padButton(action, down) {
+  var key = padKeys[action];
+  var middle = canvasMiddle();
+
+  if (key) gameKey(down, key[0], key[1], key[2]);
+  else if (action === 'menu' && down) openMenu();
+  else if (action === 'wheelUp' && down) gameWheel(-120, middle.x, middle.y);
+  else if (action === 'wheelDown' && down) gameWheel(120, middle.x, middle.y);
+}
+
 /** Calls one of the engine's _consSet* exports (CONscripter v0.19.0+), e.g. ('Ruby', 0). */
 function engineSet(name, value) {
   var set = g_cons_module['_consSet' + name];
