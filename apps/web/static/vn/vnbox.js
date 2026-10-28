@@ -13,6 +13,7 @@ var g_screen_width = 800;
 var g_screen_height = 600;
 // overlay.js's hooks: hooks give no voice files and there is no backlog to read.
 var lineVoice = null;
+hookedLines = true;
 
 function voiceFile() {
   return null;

@@ -3,7 +3,7 @@
  * CONscripter, vnbox.html for Windows games), loaded before the player's own script. The
  * player defines g_screen_width/g_screen_height (the screen the overlay lines are laid out
  * in), lineVoice (the voice of the line being read), voiceFile(file) and shownPages() (backlog
- * text on screen), and may redefine screenCanvas(); the page's text source
+ * text on screen), and may redefine screenCanvas() and set hookedLines; the page's text source
  * (lib/data/vn-text.ts) gives it the lines to show.
  */
 function overlayLine(line) {
@@ -91,6 +91,11 @@ var KEPT_LINES = 500;
 var KEPT_MEDIA = 30;
 var keptLines = []; // [{ text, voice, picture?: Promise<Blob>, audio?: Promise<Blob> }], oldest first
 var keepLines = false;
+// Set by players whose lines come from a text hook (vnbox.js), which fires before the text is
+// fully drawn and again when the game's own backlog screen shows a line.
+var hookedLines = false;
+// A hooked line whose screenshot is retaken at the next click or key (keepLine).
+var retakeLine = null;
 var soundTap;
 var lineRecorder;
 var recordLines = false;
@@ -122,18 +127,29 @@ HTMLCanvasElement.prototype.getContext = function (type, attributes) {
 function keepLine(lines) {
   if (!keepLines) return;
 
-  var line = {
-    text: lines
-      .map(function (l) {
-        return l.text;
-      })
-      .join(''),
-    voice: lineVoice,
-    picture: screenshot()
-  };
+  var text = lines
+    .map(function (l) {
+      return l.text;
+    })
+    .join('');
+  // A hooked line shown again (the game's backlog screen) keeps the media it had the first time.
+  var earlier = hookedLines
+    ? keptLines
+        .slice()
+        .reverse()
+        .find(function (kept) {
+          return kept.text === text && kept.picture;
+        })
+    : null;
+  var line = earlier
+    ? { text: text, voice: earlier.voice, picture: earlier.picture, audio: earlier.audio }
+    : { text: text, voice: lineVoice, picture: screenshot() };
 
+  // A hook fires before its text is drawn: the screen at the next click or key is the line's,
+  // if one comes before the next line.
+  retakeLine = hookedLines && !earlier ? line : null;
   // The sound recorded since the click that brought this line is its sound.
-  if (lineRecorder && lineRecorder.state !== 'inactive') lineRecorder.line = line;
+  if (!earlier && lineRecorder && lineRecorder.state !== 'inactive') lineRecorder.line = line;
   keptLines.push(line);
   if (keptLines.length > KEPT_LINES) keptLines.shift();
 
@@ -170,7 +186,16 @@ function restartLineRecorder(event) {
   lineRecorder = recorder;
 }
 
+function retakeScreenshot(event) {
+  if (!retakeLine || event.repeat || /^(Shift|Control|Alt|Meta)$/.test(event.key)) return;
+  // Not once its media was dropped (older than KEPT_MEDIA).
+  if (retakeLine.picture) retakeLine.picture = screenshot();
+  retakeLine = null;
+}
+
 ['mousedown', 'touchstart', 'keydown'].forEach(function (type) {
+  // First: the screen as it is before the game takes the click.
+  window.addEventListener(type, retakeScreenshot, true);
   window.addEventListener(type, restartLineRecorder, true);
 });
 
@@ -178,6 +203,24 @@ function restartLineRecorder(event) {
 function ankiTexts() {
   return keptLines.map(function (line) {
     return line.text;
+  });
+}
+
+/**
+ * The kept lines for the page's Backlog sheet, oldest first: their text and whether their
+ * screenshot and sound (voice file, recorded or being recorded) are still kept.
+ */
+function keptLineList() {
+  return keptLines.map(function (line) {
+    if (line.hasVoice === undefined) line.hasVoice = !!voiceFile(line.voice);
+    return {
+      text: line.text,
+      picture: !!line.picture,
+      sound:
+        line.hasVoice ||
+        !!line.audio ||
+        (!!lineRecorder && lineRecorder.line === line && lineRecorder.state !== 'inactive')
+    };
   });
 }
 

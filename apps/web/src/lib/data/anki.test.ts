@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   addMediaToNote,
   sentenceClip,
+  useForLastNote,
   vnLineFor,
   watchAddedNotes,
   type AnkiNote
@@ -142,5 +143,31 @@ describe('AnkiConnect', () => {
       fields: ['SentenceAudio']
     });
     expect(params.note.picture).toBeUndefined();
+  });
+
+  it('puts a line on the newest note added today', async () => {
+    const fetchMock = stubAnki((action, params) =>
+      action === 'findNotes'
+        ? [3, 9, 4]
+        : action === 'notesInfo'
+          ? params.notes.map((noteId: number) => ({
+              noteId,
+              fields: { Sentence: { value: 'old', order: 0 } }
+            }))
+          : null
+    );
+
+    expect(await useForLastNote('猫<だ>', async () => ({}))).toEqual(['Sentence']);
+
+    const calls = fetchMock.mock.calls.map((call) => JSON.parse(call[1].body as string));
+
+    expect(calls[1].params.notes).toEqual([9]);
+    expect(calls[2].params.note).toEqual({ id: 9, fields: { Sentence: '猫&lt;だ&gt;' } });
+  });
+
+  it('says so when no note was added today', async () => {
+    stubAnki(() => []);
+
+    await expect(useForLastNote('猫', async () => ({}))).rejects.toThrow('no card');
   });
 });
