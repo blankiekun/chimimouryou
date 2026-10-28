@@ -11,6 +11,7 @@
  * the player for the text panel (Yomitan), statistics and progress. Not upstream.
  */
 
+import type { HookCleanup } from '$lib/data/hook-cleanup';
 import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
 import { readerDb } from '$lib/data/reader-db';
 import { countTextCharacters } from '$lib/functions/get-character-count';
@@ -47,6 +48,8 @@ export interface VnInfo {
    * text, or a bundled script by file name (`vn/vnbox/hooks/`, scripts/vnbox/build.sh) */
   hook?: string;
   hookFile?: string;
+  /** The hooked lines' text cleanup (hook-cleanup.ts), set in the Hooks sheet */
+  hookCleanup?: HookCleanup;
 }
 
 export interface VnRead {

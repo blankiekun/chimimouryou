@@ -360,6 +360,18 @@ describe('rankThreads', () => {
     expect(ranked[0]).toEqual({ thread: expect.objectContaining({ id: 'lines' }), score: 1 });
     expect(ranked.slice(1).map(({ score }) => score)).toEqual([0, 0, 0]);
   });
+
+  it('scores the lines after the cleanup', () => {
+    const doubled = thread('doubled', [
+      ['今今日日はは', 1],
+      ['今今日日はは', 2],
+      ['晴晴れれ', 3]
+    ]);
+
+    expect(rankThreads([doubled])[0].score).toBeCloseTo(2 / 3);
+    // Collapsed, then the repeat dropped: two clean lines, one per click.
+    expect(rankThreads([doubled], { repeatedChars: true, recentLines: true })[0].score).toBe(1);
+  });
 });
 
 describe('savedHookName', () => {

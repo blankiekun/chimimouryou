@@ -82,6 +82,7 @@
   import VnboxTuning from '$lib/components/vn/vnbox-tuning.svelte';
   import VnBacklog from '$lib/components/vn/vn-backlog.svelte';
   import VnboxHooks from '$lib/components/vn/vnbox-hooks.svelte';
+  import { hookCleaner, type HookCleanup } from '$lib/data/hook-cleanup';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
   import { builtInLookups$ } from '$lib/data/dictionary';
   import {
@@ -129,6 +130,9 @@
   /** The Backlog sheet: the lines kept for Anki mining */
   let showBacklog = false;
   let showHooks = false;
+  /** A Windows game's text cleanup, run on hooked lines in vnbox.js (`clean`) */
+  let hookCleanup: HookCleanup = {};
+  $: cleanLine = hookCleaner(hookCleanup);
   /** The frame waits for load(): a Windows game's address depends on it. */
   let loaded = false;
   $: playerUrl =
@@ -237,6 +241,7 @@
     }
 
     book = data;
+    hookCleanup = vnInfo(data).hookCleanup ?? {};
     local.startContext(context());
     data.lastBookOpen = Date.now();
     await local.updateLastRead(data);
@@ -385,7 +390,8 @@
         recordLines: $ankiEnabled$ && $ankiVnAudio$,
         textLines: source.textLines,
         onText: source.onText,
-        onScreen: fitScreen
+        onScreen: fitScreen,
+        clean: (line: string, thread: string) => cleanLine(line, thread)
       });
       started = true;
       return;
@@ -851,7 +857,12 @@
 
 {#if showHooks && book}
   <ReaderSheet title="Hooks" on:close={() => (showHooks = false)}>
-    <VnboxHooks {frame} bookId={book.id} />
+    <VnboxHooks
+      {frame}
+      bookId={book.id}
+      cleanup={hookCleanup}
+      oncleanup={(next) => (hookCleanup = next)}
+    />
   </ReaderSheet>
 {/if}
 

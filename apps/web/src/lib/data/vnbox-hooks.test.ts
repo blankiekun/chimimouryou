@@ -11,6 +11,8 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 // default the hook script's, reaches the page; live hooks through a fake boxedwineFrida.
 describe('VNBox hook threads', () => {
   const onText = vi.fn();
+  // The page's cleanup: doubled characters halved, 'skip' dropped.
+  const clean = vi.fn((line: string) => (line === 'skip' ? '' : line.replace(/(.)\1/g, '$1')));
   let hooks: any;
   const text = (line: string, thread?: object) => (window as any).boxedwineText(line, thread);
 
@@ -28,7 +30,7 @@ describe('VNBox hook threads', () => {
     window.eval(readFileSync('static/vn/overlay.js', 'utf8'));
     window.eval(readFileSync('static/vn/vnbox.js', 'utf8'));
     // VNBox's scripts never load here: the hooks are set before startGame waits for them.
-    (window as any).startGame({ textLines: () => [], onText });
+    (window as any).startGame({ textLines: () => [], onText, clean });
     hooks = (window as any).vnboxHooks;
   });
 
@@ -80,5 +82,15 @@ describe('VNBox hook threads', () => {
     onText.mockClear();
     text('三行目');
     expect(onText).toHaveBeenLastCalledWith('三行目');
+  });
+
+  it("cleans the driving thread's lines and drops the ones cleaned away", () => {
+    onText.mockClear();
+    text('今今日日');
+    text('skip');
+    expect(onText.mock.calls).toEqual([['今日']]);
+    expect(clean).toHaveBeenLastCalledWith('skip', 'script');
+    // The sheet keeps the hooked text, which it cleans itself.
+    expect(hooks.threads().find((thread: any) => thread.id === 'script').last).toBe('skip');
   });
 });
