@@ -3,8 +3,9 @@
  * scripts/vnbox/build.sh) in a same-origin iframe of the reader's /v page. VNBox reads its
  * settings from this page's address (vnboxPlayerUrl in lib/data/windows-game.ts): the game
  * folder in OPFS, the program and the dc00 text hook script, whose lines arrive at
- * window.boxedwineText(line). Each line goes to the overlay (overlay.js) and the page, as
- * player.js does with CONscripter's pages. The page calls startGame() once the frame loaded.
+ * window.boxedwineText(line, thread). The selected thread's lines go to the overlay (overlay.js)
+ * and the page, as player.js does with CONscripter's pages; the others only to vnboxHooks (the
+ * Hooks sheet). The page calls startGame() once the frame loaded.
  */
 
 // The game's screen, which overlay lines are laid out in (vnboxLines in lib/data/vn.ts): VNBox
@@ -82,6 +83,125 @@ function loadScript(src) {
   });
 }
 
+// Hook threads (VNBox's boxedwineText(line, thread), hooks contract): every thread's last line,
+// count and recent lines with the click they came after, for the Hooks sheet and rankThreads.
+var hookThreads = {};
+// The thread whose lines drive the overlay, stats and Anki; null: hook scripts (today's behaviour).
+var hookSelected = null;
+// After a live load: the kind whose next new thread is picked, so a loaded hook drives at once.
+var hookFollow = null;
+// Handles of hooks loaded here, which "Back to the saved hook" unloads.
+var hookHandles = [];
+var hookListeners = [];
+var hookTimer = 0;
+var clicks = 0;
+
+['mousedown', 'touchstart', 'keydown'].forEach(function (type) {
+  window.addEventListener(
+    type,
+    function () {
+      clicks += 1;
+    },
+    true
+  );
+});
+
+function hookChanged() {
+  // Search hooks can fire per character: tell the sheet at most 4 times a second.
+  hookTimer =
+    hookTimer ||
+    setTimeout(function () {
+      hookTimer = 0;
+      hookListeners.forEach(function (listener) {
+        listener();
+      });
+    }, 250);
+}
+
+function drives(thread) {
+  return hookSelected ? thread.id === hookSelected : thread.kind === 'script';
+}
+
+// Feature-detected: VNBox before the hooks contract has no runtime loading.
+function frida() {
+  var api = window.boxedwineFrida;
+  return api && typeof api.load === 'function' ? api : null;
+}
+
+function loaded(kind, handle) {
+  hookHandles.push(handle);
+  hookFollow = kind;
+  hookChanged();
+  return handle;
+}
+
+/** The Hooks sheet's view of the hooks (vnbox-hooks.svelte). */
+var vnboxHooks = {
+  live: function () {
+    return !!frida();
+  },
+  threads: function () {
+    return Object.keys(hookThreads).map(function (id) {
+      return hookThreads[id];
+    });
+  },
+  selected: function () {
+    return hookSelected;
+  },
+  select: function (id) {
+    hookSelected = id;
+    hookFollow = null;
+    hookChanged();
+  },
+  /** Calls listener() after thread changes; returns the unsubscribe. */
+  listen: function (listener) {
+    hookListeners.push(listener);
+    return function () {
+      hookListeners = hookListeners.filter(function (other) {
+        return other !== listener;
+      });
+    };
+  },
+  load: function (source) {
+    return loaded('script', frida().load(source, 'Hooks sheet'));
+  },
+  loadHcode: function (code) {
+    return loaded('hcode', frida().loadHcode(code));
+  },
+  searching: function () {
+    return !!frida()?.search.running;
+  },
+  searchStart: function () {
+    frida().search.start();
+    hookChanged();
+  },
+  searchStop: function () {
+    var api = frida();
+    var thread = hookThreads[hookSelected];
+
+    // A picked search thread stays as its own hook; stop() detaches the other search hooks.
+    if (thread && thread.kind === 'search') hookHandles.push(api.keep(thread.id));
+    api.search.stop();
+    hookChanged();
+  },
+  scriptFor: function (id) {
+    return frida().scriptFor(id);
+  },
+  /** Back to the boot hook: unloads what was loaded here and stops a search. */
+  reset: function () {
+    var api = frida();
+
+    if (api) {
+      hookHandles.forEach(function (handle) {
+        api.unload(handle);
+      });
+      if (api.search.running) api.search.stop();
+    }
+    hookHandles = [];
+    vnboxHooks.select(null);
+  }
+};
+
 /**
  * options: textLines(line) (overlay lines), onText(line), onScreen(width, height) (screen size
  * changes), keepLines (keep the recent lines with their screenshots for ankiMedia()), recordLines
@@ -91,7 +211,20 @@ async function startGame(options) {
   onScreen = options.onScreen || onScreen;
   keepLines = !!options.keepLines;
   recordLines = !!options.recordLines && typeof MediaRecorder !== 'undefined';
-  window.boxedwineText = function (line) {
+  window.boxedwineText = function (line, thread) {
+    // VNBox before the hooks contract sends no thread: its lines are the boot hook script's.
+    thread = thread || { id: 'script', kind: 'script' };
+    var known = hookThreads[thread.id];
+
+    if (!known) {
+      known = hookThreads[thread.id] = Object.assign({}, thread, { count: 0, recent: [] });
+      if (hookFollow === thread.kind) vnboxHooks.select(thread.id);
+    }
+    known.last = line;
+    known.count += 1;
+    known.recent = known.recent.slice(-19).concat([{ text: line, click: clicks }]);
+    hookChanged();
+    if (!drives(known)) return;
     // The screen can change size without the frame's box changing (same aspect).
     fitOverlay();
     var lines = options.textLines(line, g_screen_width, g_screen_height);
