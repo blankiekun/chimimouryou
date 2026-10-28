@@ -160,8 +160,8 @@ export async function hasWindowsGame(folder: string) {
 }
 
 /**
- * Frees a deleted game's files. Its Wine prefix and saves stay in VNBox's IndexedDB, so adding
- * the game again keeps them.
+ * Frees a deleted game's files, its disc images included (windows-install discFolder). Its Wine
+ * prefix and saves stay in VNBox's IndexedDB, so adding the game again keeps them.
  */
 export async function deleteWindowsGame(folder: string) {
   const root = await (await navigator.storage.getDirectory()).getDirectoryHandle(opfsRoot);
@@ -216,13 +216,22 @@ export function vnboxPlayerUrl(info: VnInfo, hookUrl?: string, tuning = '') {
   // Per path segment: LunaHook engine ports live in engines/, and VNBox refuses an encoded /.
   const hookPath = info.hookFile?.split('/').map(encodeURIComponent).join('/');
   const frida = hookUrl ?? (hookPath && `${hookBase}/${hookPath}`);
+  // VNBox mounts the game folder there (boxedwine-shell.js appDirPrefix + its name).
+  const gameDir = `C:\\files\\${info.folder}`;
   const params = [
     'root=TinyCore15Wine11.0-web',
     'rootBase=vnbox',
     'overlay=jp.zip',
     'overlayBase=vnbox',
     `lazy=${encodeURIComponent(`opfs:${opfsRoot}/${info.folder}`)}`,
-    `p=${encodeURIComponent(info.exe ?? '')}`,
+    // A program in a subfolder: its full Windows path (a `cmd /c` chain reads `a/b.exe` as a
+    // switch), run in its own folder as a shortcut would, so it finds its files.
+    ...(info.exe?.includes('/')
+      ? [
+          `p=${encodeURIComponent(`${gameDir}\\${info.exe.replaceAll('/', '\\')}`)}`,
+          `w=${encodeURIComponent(`${gameDir}\\${info.exe.slice(0, info.exe.lastIndexOf('/')).replaceAll('/', '\\')}`)}`
+        ]
+      : [`p=${encodeURIComponent(info.exe ?? '')}`]),
     // VNBox's own syntax: a quoted key:value, the quotes as %22.
     'env=%22LC_ALL:ja_JP.UTF-8%22',
     'wine-override=[nomono]',

@@ -13,8 +13,10 @@
   import SectionHead from '$lib/components/section-head.svelte';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { formatBytes } from '$lib/data/vn-upload';
+  import { deleteSaves, listSaves, vnSaveAreas } from '$lib/data/vn-save-store';
   import {
     copyWindowsGame,
+    deleteWindowsGame,
     hasWindowsGame,
     hookScripts,
     hookSuggestion,
@@ -101,6 +103,11 @@
   let frameUrl = $state<string>();
   let frame: HTMLIFrameElement | undefined = $state();
   let installStart = 0;
+  // A new game's install, freed on Cancel: its OPFS folder (discs, installer copy) and, when it
+  // held nothing before, the files the installer wrote into VNBox's game-folder layer.
+  let discard: { folder: string; layer: boolean } | undefined;
+  /** Finish was clicked once during a silent install: the next click finishes anyway */
+  let finishEarly = $state(false);
   let found = $state<InstalledProgram[]>([]);
   let foundPick = $state(0);
   let moving = $state(false);
@@ -325,8 +332,13 @@
       const folder = windowsGameFolder(name);
       const progress = (done: number, total: number) => (copied = { done, total });
 
+      if (!(await hasWindowsGame(folder))) {
+        const [layer] = vnSaveAreas(name, { encoding: 'sjis', files: [], engine: 'vnbox', folder });
+
+        discard = { folder, layer: !(await listSaves(layer)).length };
+      }
       copied = { done: 0, total: folderSize };
-      if (discs.length) await copyDiscs(discs, progress, abort.signal);
+      if (discs.length) await copyDiscs(discs, folder, progress, abort.signal);
       // The game's folder (VNBox mounts it as C:\files\<folder>, the install target) holds the
       // installer folder's copy while it runs.
       await copyWindowsGame(
@@ -372,6 +384,7 @@
         : undefined;
 
     installStart = Date.now();
+    finishEarly = false;
     phase = 'installing';
     frameUrl = installUrl(
       folder,
@@ -380,7 +393,7 @@
         ? `/i "${discDrive}:\\${msi.path.replaceAll('/', '\\')}" /qn`
         : [own, quiet].filter(Boolean).join(' '),
       workingDir,
-      discs.map(discPath)
+      discs.map((disc) => discPath(disc, folder))
     );
   }
 
@@ -437,9 +450,10 @@
           choice === CHOSEN ? hook?.text : undefined,
           undefined,
           choice === CHOSEN ? undefined : choice || undefined,
-          discs.map(discPath)
+          discs.map((disc) => discPath(disc, windowsGameFolder(name)))
         )
       );
+      discard = undefined;
       dialogManager.dialogs$.next([]);
     } catch (moveError: any) {
       error = moveError.message;
@@ -452,6 +466,29 @@
   function close() {
     abort?.abort();
     dialogManager.dialogs$.next([]);
+    if (discard) freeInstall(discard);
+  }
+
+  async function freeInstall({ folder, layer }: { folder: string; layer: boolean }) {
+    discard = undefined;
+    frameUrl = undefined;
+    await deleteWindowsGame(folder).catch(() => undefined);
+    if (layer) {
+      const [area] = vnSaveAreas(title.trim(), {
+        encoding: 'sjis',
+        files: [],
+        engine: 'vnbox',
+        folder
+      });
+
+      await deleteSaves(area, await listSaves(area), '').catch(() => undefined);
+    }
+  }
+
+  /** A silent installer shows nothing: finishing before it exits leaves the game half-installed. */
+  function finishClicked() {
+    if (silent && kind && !finishEarly) finishEarly = true;
+    else installerDone();
   }
 
   async function add() {
@@ -635,6 +672,12 @@
         ></iframe>
       {/if}
     </div>
+    {#if finishEarly && phase === 'installing'}
+      <p class="wg-error" role="alert">
+        The installer may still be copying files. Finishing now can leave the game half-installed:
+        wait until it closes by itself unless it has been idle for several minutes.
+      </p>
+    {/if}
     {#if error}
       <p class="wg-error" role="alert">{error}</p>
     {/if}
@@ -644,9 +687,9 @@
         type="button"
         class="app-button app-button-primary"
         disabled={phase === 'finding'}
-        onclick={installerDone}
+        onclick={finishClicked}
       >
-        The installer is done
+        {finishEarly ? 'Finish anyway' : 'The installer is done'}
       </button>
     </footer>
   {:else if phase === 'installed'}
