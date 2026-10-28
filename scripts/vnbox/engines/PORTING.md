@@ -35,7 +35,7 @@ which suggests the first engine whose file checks the imported folder passes whe
 2. Write `<Name>.js` from the template, translating with the tables below. Keep function names, order,
    constants, patterns and comments that explain a pattern (a short `// mov eax, …` is fine).
 3. `node order.mjs` (adds it to `PC_LunaEngines.js`; it fails when the class name is not in LunaHook's order).
-4. `node engines.check.mjs` (must end with "… find no match on an empty guest").
+4. `node engines.check.mjs` (must end with "… find no match on an empty guest"; an engine with no pattern that hooks an export goes in `ATTACH_ANY`).
 5. `LUNA=… python3 -I scripts/vnbox/engines/check-port.py scripts/vnbox/engines <Name>`: every byte run,
    number and string of the C++ should be in the port. Fix real misses. Misses that are fine (dead code,
    skipped embed parts, the checker misreading `R"(…)"` raw strings or `//*` in comments) go in the
@@ -465,31 +465,266 @@ Engines are named by C++ file (`engine32/<Name>.cpp`); a file can hold several e
 
 ### Ported
 
-| File | Engines | Checker misses (and why they are fine) |
+217 of engine32's 225 files.
+
+| File | Engines | PR |
 | --- | --- | --- |
-| A98SYS | A98SYS | none |
-| ANOS | ANOS | none |
-| AZScript | AZScript | none |
-| AbogadoPowers | AbogadoPowers | none |
-| AB2Try | AB2Try | none (finds nothing until SearchMemory sees JIT pages) |
-| Abalone | Abalone | none |
-| akatombo | akatombo | none |
-| Anisetta | Anisetta | none |
-| Azurite | Azurite | none |
-| AZSystem | AZSystem | none |
-| Broccoli | Broccoli | none |
-| KiriKiri | KiriKiri | patterns `66 83 3c 48 5b`, `66 83 3c 41 5b`, numbers 0x41 0x5b, `KAGParserEx(.dll)`: the `#if 0` KAGParser hooks; strings with `FUCK(`, `(\[.*?\])` etc. are the checker misreading `R"(…)"` raw strings (they are in the port as `String.raw`); the long multi-line "strings" are the checker pairing quotes across `L'['` char literals |
+| 5pb | _5pb, _5pb_2 | #299 |
+| A98SYS | A98SYS | #291 |
+| AB2Try | AB2Try | #291 |
+| Abalone | Abalone | #291 |
+| Abel | Abel | #299 |
+| AbogadoPowers | AbogadoPowers | #291 |
+| ACTGS | ACTGS | #296 |
+| ADVSystem | ADVSystem | #296 |
+| AGE_System | AGE_System | #296 |
+| Ages3ResT | Ages3ResT | #296 |
+| AGS | AGS | #296 |
+| AIL | AIL | #296 |
+| akatombo | akatombo | #291 |
+| Aksys | Aksys | #296 |
+| AksysGames | AksysGames | #296 |
+| Alice | Alice | #296 |
+| Anex86 | Anex86 | #296 |
+| Anim | Anim | #296 |
+| AniSeed | AniSeed | #296 |
+| Anisetta | Anisetta | #291 |
+| ANOS | ANOS | #291 |
+| antique | antique | #296 |
+| AOS | AOS | #299 |
+| ApricoT | ApRicoT, ApRicoTlast, ApRicoTOld | #299 |
+| ArcSystemWorks | ArcSystemWorks | #296 |
+| Arcturus | Arcturus | #296 |
+| Aromarie | Aromarie | #296 |
+| Artemis | Artemis | #299 |
+| Atelier | Atelier, Atelier2 | #299 |
+| AXL | AXL | #296 |
+| AZScript | AZScript | #291 |
+| AZSystem | AZSystem | #291 |
+| Azurite | Azurite | #291 |
+| BGI | BGI | #299 |
+| Bishop | Bishop, Bishop2 | #296 |
+| BKEngine | BKEngine | #296 |
+| Bootup | Bootup | #299 |
+| Broccoli | Broccoli | #291 |
+| Bruns | Bruns | #296 |
+| BunBun | BunBun | #296 |
+| C4 | C4 | #296 |
+| Cage | Cage | #296 |
+| Candy | Candy, WillowSoft | #299 |
+| CaramelBox | CaramelBox, CaramelBoxMilkAji, CaramelBox2 | #299 |
+| CatSystem | CatSystem | #299 |
+| Ciel | Ciel | #296 |
+| Circus | Circus | #299 |
+| CisLugI | CisLugI | #296 |
+| CMVS | CMVS | #299 |
+| CodeX | CodeX | #299 |
+| CoffeeMaker | CoffeeMaker | #296 |
+| Cotopha | Cotopha | #299 |
+| DAC | DAC | #296 |
+| Debonosu | Debonosu | #296 |
+| DISCOVERY | DISCOVERY | #296 |
+| Diskdream | Diskdream | #296 |
+| DxLib | DxLib | #296 |
+| e_Erekiteru | e_Erekiteru | #296 |
+| Eagls | Eagls | this PR |
+| Elf | Elf, ElfFunClubFinal | #299 |
+| EME | EME | #296 |
+| EntisGLS | EntisGLS | #296 |
+| Erogos | Erogos | this PR |
+| Escude | Escude | #299 |
+| Eushully | Eushully | #299 |
+| Exp | Exp | #299 |
+| Fizz | Fizz | #296 |
+| FocasLens | FocasLens | #296 |
+| Footy2 | Footy2 | #296 |
+| For | For | #296 |
+| FrontWing | FrontWing, FrontWing2 | #296 |
+| Furaiki | Furaiki | #296 |
+| FVP | FVP | #299 |
+| GameMaker | GameMaker | #296 |
+| GASTRO | GASTRO | #296 |
+| Giga | Giga | #296 |
+| GJ | GJ | #296 |
+| GLuer | GLuer | #296 |
+| GROOVER | GROOVER | #298 |
+| GSX | GSX | #298 |
+| GXP | GXP | #298 |
+| H_do_C | H_do_C | #298 |
+| hibiki | hibiki | #298 |
+| HorkEye | HorkEye | #298 |
+| Hug | Hug | #298 |
+| HXP | HXP | #298 |
+| InteractiveNovelEngine | InteractiveNovelEngine | #298 |
+| Interheart | Interheart | #298 |
+| Interlude | Interlude | #298 |
+| IronGameSystem | IronGameSystem | this PR |
+| ivory | ivory | #298 |
+| Jellyfish | Jellyfish | #298 |
+| Jisatu101 | Jisatu101 | #298 |
+| jukujojidai | jukujojidai | #298 |
+| KiriKiri | KiriKiri | #291 |
+| KISS | KISS | #298 |
+| LCScript | LCScript | #298 |
+| Leaf | Leaf | #298 |
+| Lightvn | Lightvn | #298 |
+| littlecheese | littlecheese | #298 |
+| Live | Live | #298 |
+| LizardFactory | LizardFactory | #298 |
+| LovaGame | LovaGame | #298 |
+| LucaSystem | LucaSystem | #298 |
+| lucifen | Lucifen | #298 |
+| LunaSoft | LunaSoft | #298 |
+| Majiro | Majiro | #298 |
+| Malie | Malie | #298 |
+| MarineHeart | MarineHeart | #298 |
+| MBLMED | MBLMED | #298 |
+| MBSTRUTH | MBSTRUTH | #298 |
+| MerRouge | MerRouge | this PR |
+| Milk | Milk | #298 |
+| Mink | Mink, Mink2, Mink3 | #298 |
+| Minori | Minori | #298 |
+| mirage | mirage | #298 |
+| MixwillSoft | MixwillSoft | #298 |
+| Monochrome | Monochrome | #298 |
+| Moonstone | Moonstone | #298 |
+| morning | morning | #298 |
+| Nekopack | Nekopack | #298 |
+| Nekotaro | Nekotaro | #298 |
+| NeXAS | NeXAS | #298 |
+| Nexton | Nexton, Nexton1 | #298 |
+| Nijyuei | Nijyuei | #298 |
+| Nitroplus | Nitroplus, Nitroplusplus | #298 |
+| Nitroplus2 | Nitroplus2 | #298 |
+| NNNConfig | NNNConfig, gazelle | #298 |
+| NUGSystem | NUGSystem | #298 |
+| Ohgetsu | Ohgetsu | #298 |
+| Onscripter | Onscripter | #298 |
+| ONScripterru | ONScripterru | #297 |
+| OVERDRIVE | OVERDRIVE | #297 |
+| Overflow | Overflow | #297 |
+| Pal | Pal | #297 |
+| Palette | Palette | #297 |
+| Pensil | Pensil | #297 |
+| PinkQuestion | PinkQuestion | #297 |
+| Pinpai | Pinpai | #297 |
+| PixelGameMakerMVplayer | PixelGameMakerMVplayer | #297 |
+| PONScripter | PONScripter | #297 |
+| Purple | Purple, Purple2 | #297 |
+| QLIE | QLIE | #297 |
+| R11 | R11 | #297 |
+| ransel | ransel | #297 |
+| Reallive | Reallive, Reallive_old, avg3216d, RealliveX | #297 |
+| Regista | Regista | #297 |
+| Rejet | Rejet | #297 |
+| Retouch | Retouch | #297 |
+| RibbonMagic | RibbonMagic | #295 |
+| RPGMaker | RPGMaker | #295 |
+| RPGMakerRGSS3 | RPGMakerRGSS3, RPGMakerRGSS300 | #300 |
+| RpgmXP | RpgmXP | #295 |
+| RRE | RRE | #295 |
+| RScript | RScript | #295 |
+| RUGP | RUGP | #295 |
+| RUNE | RUNE | #295 |
+| Ryokucha | Ryokucha, Ryokucha2, ScenarioPlayer_last, Ryokuchaold | #300 |
+| sakanagl | sakanagl | #295 |
+| Sakuradog | Sakuradog | #295 |
+| sakusesu | sakusesu | #295 |
+| ScrPlayer | ScrPlayer | #295 |
+| Seraphim | Seraphim | #295 |
+| ShinyDaysGame | ShinyDaysGame | #295 |
+| shyakunage | shyakunage | #295 |
+| SideB | SideB | #295 |
+| Siglus | Siglus | #300 |
+| Silkys | Silkys, SilkysOld, Siglusold, Silkyssakura, Silkysveryveryold, Aisystem6 | #300 |
+| SmartAdv | SmartAdv | #295 |
+| solfasys | solfasys | #295 |
+| Speed | Speed | #295 |
+| splushwave | splushwave | #295 |
+| Sprite | Sprite | #295 |
+| SRPGStudio | SRPGStudio | #295 |
+| Stronger | Stronger | #295 |
+| Suika2 | Suika2 | #295 |
+| SYSD | SYSD | #295 |
+| System4x | System4x | #300 |
+| SystemAoi | SystemAoi | #300 |
+| Syuntada | Syuntada | #295 |
+| T2U | T2U | #295 |
+| TACTICS | TACTICS | #295 |
+| TAKUYO | TAKUYO | #295 |
+| Tamamo | Tamamo | #300 |
+| TamaokaSoft | TamaokaSoft | #295 |
+| tamasoft | TamaSoft | #295 |
+| Tanuki | Tanuki, Tanuki_last | #295 |
+| Tarte | Tarte | #295 |
+| Taskforce2 | Taskforce2 | #300 |
+| TEANAM | TEANAM | #295 |
+| TeethingRing | TeethingRing | #295 |
+| Tenco | Tenco | #295 |
+| TERIOS | TERIOS | #295 |
+| TerraLunar | TerraLunar | #295 |
+| TinkerBell | TinkerBell, TinkerBellold | #300 |
+| Tomato | Tomato | #295 |
+| Triangle | Triangle, Triangle2, TriangleM | #300 |
+| Troy | Troy | #295 |
+| TSSystem | TSSystem | #295 |
+| TYPEMOON | TYPEMOON | #295 |
+| Unicorn | Unicorn, Unicorn_Anesen | #300 |
+| UnisonShift | UnisonShift, UnisonShift2 | #295 |
+| UnknownEngine | UnknownEngine | #295 |
+| utawarerumono | utawarerumono | #295 |
+| VALKYRIA | VALKYRIA | #295 |
+| VanillawareGC | VanillawareGC | #300 |
+| VitaminSoft | VitaminSoft | #295 |
+| Waffle | Waffle | #300 |
+| WillPlus | WillPlusETERNAL, WillPlus, Willold | #301 |
+| Winters | Winters | #295 |
+| Wolf | Wolf | #301 |
+| Xbangbang | Xbangbang | #295 |
+| XUSE | XUSE | #300 |
+| Yatagarasu | Yatagarasu | #295 |
+| YukaSystem2 | YukaSystem2 | #300 |
+| Yuris | Yuris | #300 |
+| ZeroEscape | ZeroEscape | #295 |
 
-### Not ported yet (port these next, in this order)
+### Parts left out (the rest of the file is ported)
 
-The rest of the first batch (alphabetical, engines 1-40 of luna-engines.txt), then the big ones:
-5pb, Abel, ACTGS, AdobeFlash10, ADVSystem, Ages3ResT, AGE_System, AGS, AIL, Aksys,
-AksysGames, Alice, Anex86, Anim, AniSeed, antique, AOS, ApricoT, ArcSystemWorks, Arcturus, Aromarie,
-Artemis, Atelier, AXL, BGI, Bishop, BKEngine, Bootup; then CatSystem, Siglus, Reallive, Majiro,
-Malie, Yuris, and every other file in luna-engines.txt.
+Checker misses for every file are in its PR's table; the ones that matter, where a hook or class does not run:
 
-### Skipped (whole engines)
+| File | Left out, and why |
+| --- | --- |
+| Alice | `SP_TextDraw` hook: needs LunaHook's length disassembler (`::disasm`) |
+| CaramelBox | `CaramelBox2`: its only hook comes from `trigger_fun` (returns false) |
+| Cotopha | `eslHeapFree` hook (`Cotopha2`): calls the guest's `eslHeapGetLength` |
+| Debonosu | izumo4 branch: needs `PcHooks::hookOtherPcFunctions` |
+| EME | `egoto` (hooks a LunaHook-internal function) and `takeout` (`trigger_fun`) |
+| GXP | `InsertGXP1Hook`: needs `::disasm` |
+| Ohgetsu | `_5`: DIRECT_READ |
+| Reallive | `veryold()` and the dynamic hook (`trigger_fun`) |
+| RPGMakerRGSS3 | RGSS300's `trigger_fun` hook |
+| Ryokucha, SystemAoi, Triangle, Waffle | the dynamic `trigger_fun` hook (GDI hooks stay the fallback) |
+| Seraphim | `Seraphimattach_function2` (School Captain 2): `trigger_fun` |
+| TACTICS | `TACTICS_R`: DIRECT_READ |
+| TeethingRing | `TeethingRing_attach_function`: calls a guest virtual function from `text_fun` |
+| TinkerBell | the `tkbl2` hook on a native function, `hookOtherPcFunctions(GetStringTypeExW)` |
+| UnisonShift | `InsertUnisonShift3Hook`: DIRECT_READ |
+| WillPlus | `InsertOldWillPlusHook`/`SpecialHookWillPlus` (WillPlus1): needs `::disasm` (never ran in LunaHook either) |
+| Wolf | the GuruGuruSMF4 `trigger_fun` hook (its static `h1` hook is ported) |
+| Yatagarasu | never attaches: LunaHook's `attach_function` returns false unconditionally |
 
-None in engine32 so far. Out of scope from the start (not in engine32, or bridges to a JIT, script runtime
-or emulator): PPSSPPWindows, Unity, Patisserie, Renpy, lua51 and the other `LunaHook/engines/` entries
-of LunaHook's order. `order.mjs` keeps their names so the order stays LunaHook's.
+Engines with no pattern search (`ATTACH_ANY` in `engines.check.mjs`) hook an exported API, as LunaHook does, so
+they attach on any guest that has it: T2U, TamaokaSoft, Reallive (+ Reallive_old, RealliveX), TinkerBellold, Eagls,
+Erogos, IronGameSystem, MerRouge. Their file checks decide whether they run.
+
+### Skipped (whole files)
+
+| File | Why |
+| --- | --- |
+| AdobeAir, AdobeFlash10, cef, godot, V8 | JIT / bytecode bridges (skip rules) |
+| PiAS | needs `LoadResCharSet(L"PiAS")`, a character table in LunaHook's resources |
+| Sceplay | its only hook comes from a `trigger_fun` on GetGlyphOutlineA |
+| ShinaRio | chooses its hooks from RIO.INI's contents; libLuna lists file names only |
+
+Out of scope from the start (not in engine32, or bridges to a JIT, script runtime or emulator): PPSSPPWindows, Unity,
+Patisserie, Renpy, lua51 and the other `LunaHook/engines/` entries of LunaHook's order. `order.mjs` keeps their names
+so the order stays LunaHook's.
