@@ -37,9 +37,15 @@ if (isMain) {
     const missing = [...owner.keys()].filter((n) => !ORDER.includes(n));
     if (missing.length) throw new Error('engines not in LunaHook order: ' + missing.join(', '));
     const used = [...new Set(ORDER.filter((n) => owner.has(n)).map((n) => owner.get(n)))];
-    const requires = used.map((f) => `    require('./${f}'),`).join('\n');
+    const names = ORDER.filter((n) => owner.has(n));
+    const block = [
+        'const files = [',
+        ...used.map((f) => `    require('./${f}'),`),
+        '];',
+        `const order = ${JSON.stringify(names)};`,
+    ].join('\n');
     const target = path.join(dir, 'PC_LunaEngines.js');
-    const text = fs.readFileSync(target, 'utf8').replace(/(\/\/ <engines>\n)[\s\S]*?(\n\s*\/\/ <\/engines>)/, `$1${requires}$2`);
+    const text = fs.readFileSync(target, 'utf8').replace(/(\/\/ <engines>\n)[\s\S]*?(\/\/ <\/engines>)/, `$1${block}\n$2`);
     fs.writeFileSync(target, text);
     console.log(`PC_LunaEngines.js: ${owner.size} engines in ${used.length} files`);
 }

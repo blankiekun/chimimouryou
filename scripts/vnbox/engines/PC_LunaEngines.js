@@ -10,10 +10,23 @@ const L = require('./libLuna.js');
 
 const files = [
     // <engines>
-    // </engines>
+const files = [
+    require('./KiriKiri.js'),
+    require('./AB2Try.js'),
+    require('./akatombo.js'),
+    require('./A98SYS.js'),
+    require('./Abalone.js'),
+    require('./Anisetta.js'),
+    require('./Broccoli.js'),
+    require('./Azurite.js'),
+    require('./AZSystem.js'),
 ];
-// LunaHook's order (order.mjs ORDER) is kept by the list above; files with several engines export an array.
-const engines = files.flatMap((e) => [].concat(e));
+const order = ["KiriKiri","AB2Try","akatombo","A98SYS","Abalone","Anisetta","Broccoli","Azurite","AZSystem"];
+// </engines>
+];
+// Files with several engines export an array; the engines run in LunaHook's order (the order line above).
+const order = JSON.parse(/\/\/ order: (.*)/.exec(String(files.length && ORDER_LINE))[1]);
+const engines = files.flatMap((e) => [].concat(e)).sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
 
 module.exports = engines;
 if (!module.parent) L.auto(engines);

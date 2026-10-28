@@ -60,7 +60,8 @@ if (fs.existsSync(engineDir)) {
     }
     const luna = exported.map((engine) => ({
       order: ORDER.indexOf(engine.name),
-      ...fileChecks(engine.check)
+      // a custom check (a function) names the files that pass it alone in `files`
+      ...(engine.files ? { any: engine.files } : fileChecks(engine.check))
     }));
     engines += luna.length;
     scripts.push({

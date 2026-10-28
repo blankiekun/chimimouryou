@@ -370,6 +370,13 @@ function matchAll(buf, pat, from = 0, limit = Infinity, step = 1) {
     }
     return out;
 }
+// MatchPattern(addr, pattern): the bytes at addr match (XX any byte); false when unreadable.
+function MatchPattern(addr, p) {
+    const pat = pattern(p);
+    let b;
+    try { b = readLive(u32(addr), pat.bytes.length); } catch (e) { return false; }
+    return pat.bytes.every((x, i) => (b[i] & pat.masks[i]) === x);
+}
 // MemDbg::findBytes(pattern, lo, hi) → address or 0.
 function findBytes(p, lo, hi, _unused) {
     const r = region(lo, hi), m = matchAll(r.bytes, pattern(p), 0, 1);
@@ -805,6 +812,7 @@ function strlenBytes(addr, hp) {
 }
 // TextHook::Send for one hit.
 function send(hp, context, address) {
+    if (hp.type & T.HOOK_EMPTY) return; // a dummy hook only for dynamic hooks
     const buffer = new TextBuffer();
     const split = { value: 0 };
     let lpRetn = context.retaddr;
@@ -1022,14 +1030,14 @@ Object.assign(L, T, filters, {
     readW: (addr, n) => bytesToW(n === undefined ? cstr(addr, 2) : readLive(addr, 2 * n)), // (wchar_t *) as text
     strlen: (addr) => cstr(addr, 1).length, wcslen: (addr) => cstr(addr, 2).length / 2,
     // codecs and strings
-    StringToWideString, WideStringToString, wcasta, acastw, IsDBCSLeadByte, IsDBCSLeadByteEx, IsShiftjisWord,
+    StringToWideString, WideStringToString, utf8A: (w) => WideStringToString(w, CP_UTF8), wcasta, acastw, IsDBCSLeadByte, IsDBCSLeadByteEx, IsShiftjisWord,
     IsShiftjisLeadByte, utf8charlen, all_ascii, strReplace, startWith, endWith, strSplit, re, katakanaMap, remapkatakana,
     bytesToA, aToBytes, bytesToW, wToBytes, TextBuffer,
     // modules
     GetModuleHandle, GetModuleHandleW, GetModuleHandleA, GetProcAddress, FindFunction, sections, GetCodeRange, QueryModuleLimits,
     FindImportEntry, SearchResourceString, SearchStringFileInfo,
     // searches
-    pattern, findBytes, findBytesAll, iterFindBytes, iterMatchBytes, reverseFindBytes, find_pattern, SearchMemory,
+    pattern, MatchPattern, le32, findBytes, findBytesAll, iterFindBytes, iterMatchBytes, reverseFindBytes, find_pattern, SearchMemory,
     findEnclosingAlignedFunction, findEnclosingAlignedFunction_strict, findEnclosingFunctionAfterDword,
     findEnclosingFunctionBeforeDword, findEnclosingFunctionAfterInt3, findEnclosingFunctionAfterNop, findfuncstart,
     findNearCallAddress, findShortJumpAddress, findFarCallAddress, findLongJumpAddress, findLastNearCallAddress,
