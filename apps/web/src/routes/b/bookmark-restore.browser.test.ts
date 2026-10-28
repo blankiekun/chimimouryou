@@ -126,3 +126,50 @@ describe('/b reopens where reading stopped (page turns, the auto bookmark; a nov
     }
   }
 });
+
+/** The first character on screen, as `paragraph id:offset` (plain paragraphs, one text node). */
+function firstOnScreen() {
+  const range = document.createRange();
+  for (const id of visibleParagraphs()) {
+    const text = document.getElementById(id)!.firstChild as Text;
+    for (let i = 0; i < text.length; i += 1) {
+      range.setStart(text, i);
+      range.setEnd(text, i + 1);
+      const r = range.getBoundingClientRect();
+      if (r.width && r.right > 0 && r.left < innerWidth && r.bottom > 0 && r.top < innerHeight) {
+        return `${id}:${i}`;
+      }
+    }
+  }
+  return '';
+}
+
+describe('/b paginated: the auto bookmark follows pages inside a paragraph (phones)', () => {
+  for (const writing of ['horizontal-tb', 'vertical-rl'] as const) {
+    it(writing, async () => {
+      // Phone-sized pages: each paragraph is one text node over a few pages.
+      await browserPage.viewport(412, 915);
+      autoBookmarkTime$.next(0.3);
+      const id = await addBook(2, 25, 'long');
+      component = await mountReader(id, ViewMode.Paginated, writing);
+      await waitOnScreen('p-2-25');
+      await settle();
+
+      const saved: number[] = [];
+      for (let turn = 0; turn < 4; turn++) {
+        key('PageDown');
+        await settle(800);
+        saved.push((await database.getBookmark(id))!.exploredCharCount ?? 0);
+      }
+      const left = firstOnScreen();
+      // Each page saves its own place, not the start of the paragraph it is in.
+      expect(new Set(saved).size, `${saved}`).toBe(saved.length);
+      close();
+
+      component = await mountReader(id, ViewMode.Paginated, writing);
+      await waitOnScreen(left.split(':')[0]);
+      await settle(800);
+      expect(firstOnScreen(), `saved ${saved}`).toBe(left);
+    });
+  }
+});

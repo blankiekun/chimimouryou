@@ -11,6 +11,7 @@ import { dev } from '$app/env';
 import { formatPos } from '$lib/functions/format-pos';
 import { getCharacterCount } from '$lib/functions/get-character-count';
 import { getParagraphNodes } from '../get-paragraph-nodes';
+import { flowPosition, type PageGeometry } from '../page-anchor';
 
 export class SectionCharacterStatsCalculator {
   readonly charCount: number;
@@ -30,7 +31,9 @@ export class SectionCharacterStatsCalculator {
     private getPageGap: () => number,
     public verticalMode: boolean,
     private readonly scrollEl: HTMLElement,
-    private readonly document: Document
+    private readonly document: Document,
+    // The multicol content and its geometry: counts and jumps to the character, not the text node
+    private getContent: () => { el: HTMLElement; g: PageGeometry } | undefined = () => undefined
   ) {
     const getSectionCharCount = (section: Element) => {
       const paragraphs = getParagraphNodes(section);
@@ -76,6 +79,10 @@ export class SectionCharacterStatsCalculator {
       );
     }
 
+    // A text node can span pages (long paragraphs on a phone): count to the page's first character.
+    const pageStart = this.pageStartCount();
+    if (pageStart !== undefined) return pageStart;
+
     const offset = this.verticalMode ? 0 : -this.screenSize;
     return this.getCharCountByScrollPos(this.virtualScrollPos$.getValue() + offset);
   }
@@ -98,6 +105,9 @@ export class SectionCharacterStatsCalculator {
     const isEndChar = charCount === endCount && endCount - startCount > 0;
     if (mirroredCount < 0 || charCount > endCount || isEndChar) return -1;
     if (mirroredCount === 0) return 0;
+
+    const page = this.pageOfCount(mirroredCount);
+    if (page !== undefined) return page * this.screenSize;
 
     const index = binarySearchNoNegative(this.calculator.accumulatedCharCount, mirroredCount);
     const { accumulatedCharCount, paragraphPos } = this.calculator;
@@ -134,6 +144,27 @@ export class SectionCharacterStatsCalculator {
       node: undefined,
       isFirstNode: true
     };
+  }
+
+  private pageStartCount() {
+    const content = this.getContent();
+    if (!content || !this.calculator) return undefined;
+    const { el, g } = content;
+    const box = el.getBoundingClientRect();
+    const page = Math.round(this.virtualScrollPos$.getValue() / this.screenSize);
+    const count = this.calculator.charCountBefore(
+      (rect) => flowPosition(rect, box, g).column < page * g.columnsPerPage
+    );
+    return count === undefined ? undefined : this.getSectionStartCount() + count;
+  }
+
+  /** Page of the character after the first `count` ones of the section. */
+  private pageOfCount(count: number) {
+    const content = this.getContent();
+    const rect = this.calculator?.charRectForCount(count);
+    if (!content || !rect) return undefined;
+    const { el, g } = content;
+    return Math.floor(flowPosition(rect, el.getBoundingClientRect(), g).column / g.columnsPerPage);
   }
 
   getOffsetToRange(customReadingPointRange: Range | undefined, columns: number) {

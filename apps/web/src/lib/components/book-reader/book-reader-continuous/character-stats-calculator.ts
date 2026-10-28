@@ -135,10 +135,15 @@ export class CharacterStatsCalculator {
    */
   charCountAtLine(line: number) {
     const vertical = this.verticalMode;
-    this.textNodes ??= this.paragraphs.filter((n): n is Text => n instanceof Text);
-    const anchor = firstTextAfterIn(this.textNodes, (r) =>
+    return this.charCountBefore((r) =>
       vertical ? (r.left + r.right) / 2 > line : (r.top + r.bottom) / 2 < line
     );
+  }
+
+  /** Characters before the first one not laid out `before` (see firstTextAfterIn): a precise count. */
+  charCountBefore(before: (rect: DOMRect) => boolean) {
+    this.textNodes ??= this.paragraphs.filter((n): n is Text => n instanceof Text);
+    const anchor = firstTextAfterIn(this.textNodes, before);
     if (!anchor) return undefined;
     this.paragraphIndex ??= new Map(this.paragraphs.map((n, i) => [n, i]));
     const i = this.paragraphIndex.get(anchor.node) ?? 0;

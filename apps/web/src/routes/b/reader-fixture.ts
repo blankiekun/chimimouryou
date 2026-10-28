@@ -19,16 +19,20 @@ import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-
  */
 
 // Generated text, no book: 3 chapters of 40 numbered paragraphs. Even ones by default; `real`
-// makes them uneven, with ruby and now and then an image between them, like a novel.
+// makes them uneven, with ruby and now and then an image between them, like a novel; 'long'
+// makes each one text node over several phone pages.
+type Kind = boolean | 'long';
 const image =
   '<div class="fixture-image"><img alt="" width="300" height="200" src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22200%22/%3E"></div>';
-export const paragraph = (chapter: number, index: number, real = false) =>
-  real
-    ? `<p id="p-${chapter}-${index}">第${chapter}章の${index}段落目。${'<ruby>漢字<rt>かんじ</rt></ruby>あいうえおかきくけこさしすせそ'.repeat(1 + ((chapter * 7 + index * 5) % 9))}</p>${index % 9 === 0 ? image : ''}`
-    : `<p id="p-${chapter}-${index}">第${chapter}章の${index}段落目。${'あいうえおかきくけこさしすせそ'.repeat(4)}</p>`;
+export const paragraph = (chapter: number, index: number, real: Kind = false) =>
+  real === 'long'
+    ? `<p id="p-${chapter}-${index}">第${chapter}章の${index}段落目。${'あいうえおかきくけこさしすせそ'.repeat(60)}</p>`
+    : real
+      ? `<p id="p-${chapter}-${index}">第${chapter}章の${index}段落目。${'<ruby>漢字<rt>かんじ</rt></ruby>あいうえおかきくけこさしすせそ'.repeat(1 + ((chapter * 7 + index * 5) % 9))}</p>${index % 9 === 0 ? image : ''}`
+      : `<p id="p-${chapter}-${index}">第${chapter}章の${index}段落目。${'あいうえおかきくけこさしすせそ'.repeat(4)}</p>`;
 /** `lines`: Aozora Bunko's layout, one block per chapter with a <br> after each paragraph. */
 const asLine = (html: string) => html.replace(/^<p /, '<span ').replace(/<\/p>/, '</span><br>');
-const chapters = (real: boolean, lines = false) =>
+const chapters = (real: Kind, lines = false) =>
   [1, 2, 3].map(
     (chapter) =>
       `<div id="ttu-ch${chapter}"><div class="ttu-book-html-wrapper"><div class="ttu-book-body-wrapper">${lines ? '<div>' : ''}${Array.from(
@@ -46,7 +50,7 @@ function countOf(html: string) {
 }
 
 /** Id of the paragraph the character count `count` falls in. */
-export function paragraphAt(count: number, real = false) {
+export function paragraphAt(count: number, real: Kind = false) {
   let start = 0;
   for (let chapter = 1; chapter <= 3; chapter++) {
     for (let index = 1; index <= 40; index++) {
@@ -58,7 +62,7 @@ export function paragraphAt(count: number, real = false) {
 }
 
 /** Character counts at the start and end of paragraph `index` of `chapter` (the reader's positions). */
-export function paragraphCounts(chapter: number, index: number, real = false) {
+export function paragraphCounts(chapter: number, index: number, real: Kind = false) {
   let start = 0;
   for (let c = 1; c <= 3; c++) {
     for (let i = 1; i <= 40; i++) {
@@ -71,7 +75,7 @@ export function paragraphCounts(chapter: number, index: number, real = false) {
 }
 
 /** Adds the book with a bookmark at the start of paragraph `index` of `chapter`; returns its id. */
-export async function addBook(chapter = 2, index = 25, real = false, lines = false) {
+export async function addBook(chapter = 2, index = 25, real: Kind = false, lines = false) {
   const html = chapters(real, lines);
   const counts = html.map(countOf);
   const startOf = (n: number) => counts.slice(0, n - 1).reduce((sum, c) => sum + c, 0);
