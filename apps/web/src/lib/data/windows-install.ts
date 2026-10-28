@@ -73,17 +73,22 @@ export async function discsOf(picked: File[]): Promise<Disc[]> {
   return discs.sort((a, b) => a.main.name.localeCompare(b.main.name, undefined, { numeric: true }));
 }
 
-/** A disc's OPFS folder under vnbox/ (from its file names and sizes: hashing GBs takes too long) */
-export function discFolder(disc: Disc) {
-  return `discs/d${hashPage(disc.files.map((file) => `${file.name}:${file.size}`).join('/'))}`;
+/**
+ * A disc's OPFS folder under vnbox/, inside the game's folder so deleting the game frees it (from
+ * its file names and sizes: hashing GBs takes too long).
+ */
+export function discFolder(disc: Disc, folder: string) {
+  return `${folder}/_discs/d${hashPage(disc.files.map((file) => `${file.name}:${file.size}`).join('/'))}`;
 }
 
 /** A disc as VnInfo.discs and VNBox's cdrom= list name it: its main file under vnbox/ */
-export const discPath = (disc: Disc) => `${discFolder(disc)}/${disc.main.name}`;
+export const discPath = (disc: Disc, folder: string) =>
+  `${discFolder(disc, folder)}/${disc.main.name}`;
 
 /** Copies the discs into OPFS (files already there with the same size are kept). */
 export async function copyDiscs(
   discs: Disc[],
+  folder: string,
   onProgress: (done: number, total: number) => void,
   signal?: AbortSignal
 ) {
@@ -97,7 +102,7 @@ export async function copyDiscs(
     const files = Object.fromEntries(disc.files.map((file) => [file.name, file]));
 
     await copyWindowsGame(
-      discFolder(disc),
+      discFolder(disc, folder),
       files,
       (done) => onProgress(before + done, total),
       signal

@@ -104,6 +104,22 @@ describe('vnboxPlayerUrl', () => {
       'frida=blob%3Ahttp%3A%2F%2Fx%2F1'
     ]);
   });
+
+  it('runs a program in a subfolder by its Windows path, in its own folder', () => {
+    const search = new URL(
+      vnboxPlayerUrl({
+        encoding: 'sjis',
+        files: [],
+        engine: 'vnbox',
+        folder: 'g1',
+        exe: 'a/b/c.exe'
+      }),
+      'http://x/'
+    ).searchParams;
+
+    expect(search.get('p')).toBe('C:\\files\\g1\\a\\b\\c.exe');
+    expect(search.get('w')).toBe('C:\\files\\g1\\a\\b');
+  });
 });
 
 describe('compatParams', () => {
