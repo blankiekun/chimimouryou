@@ -554,7 +554,7 @@
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={hideFurigana} />
   </SettingsItemGroup>
   <!-- Generated furigana come from the server's difficulty service, or standalone the analysis tools;
-       where those can't run (phones) the switches stay, greyed out, saying why. -->
+       where those can't run (phones) the switches stay, greyed out, saying why, but one that synced on can still be turned off. -->
   <SettingsItemGroup
     title={$t$('prefs.generatedFurigana')}
     tooltip={analysisOff
@@ -563,7 +563,7 @@
         ? 'Adds readings, in a softer colour, to words the book gives none. Made in this browser by the Generated furigana analysis tools (Settings → General → Analysis tools).'
         : $t$('prefs.generatedFuriganaHint')}
   >
-    <fieldset class="contents" disabled={analysisOff}>
+    <fieldset class="contents" disabled={analysisOff && !$generatedFurigana$}>
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={$generatedFurigana$} />
     </fieldset>
     <svelte:fragment slot="after">
@@ -574,7 +574,7 @@
     title={$t$('prefs.unknownWordUnderline')}
     tooltip={analysisOff ? $t$('prefs.needsDesktop') : $t$('prefs.unknownWordUnderlineHint')}
   >
-    <fieldset class="contents" disabled={analysisOff}>
+    <fieldset class="contents" disabled={analysisOff && !$unknownWordUnderline$}>
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={$unknownWordUnderline$} />
     </fieldset>
   </SettingsItemGroup>
@@ -582,7 +582,7 @@
     title={$t$('prefs.chapterPrimer')}
     tooltip={analysisOff ? $t$('prefs.needsDesktop') : $t$('prefs.chapterPrimerHint')}
   >
-    <fieldset class="contents" disabled={analysisOff}>
+    <fieldset class="contents" disabled={analysisOff && !$chapterPrimer$}>
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={$chapterPrimer$} />
     </fieldset>
   </SettingsItemGroup>
