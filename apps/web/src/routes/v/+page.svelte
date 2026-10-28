@@ -81,6 +81,7 @@
   import AnkiWatcher from '$lib/components/anki-watcher.svelte';
   import VnboxTuning from '$lib/components/vn/vnbox-tuning.svelte';
   import VnBacklog from '$lib/components/vn/vn-backlog.svelte';
+  import VnboxHooks from '$lib/components/vn/vnbox-hooks.svelte';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
   import { builtInLookups$ } from '$lib/data/dictionary';
   import {
@@ -127,6 +128,7 @@
   let showTuning = false;
   /** The Backlog sheet: the lines kept for Anki mining */
   let showBacklog = false;
+  let showHooks = false;
   /** The frame waits for load(): a Windows game's address depends on it. */
   let loaded = false;
   $: playerUrl =
@@ -807,6 +809,16 @@
             Tuning
           </button>
         </li>
+        <li>
+          <button
+            on:click={() => {
+              showMore = false;
+              showHooks = true;
+            }}
+          >
+            Hooks
+          </button>
+        </li>
       {/if}
       {#if !blocked}
         <li>
@@ -834,6 +846,12 @@
 {#if showBacklog}
   <ReaderSheet title="Backlog" on:close={() => (showBacklog = false)}>
     <VnBacklog {frame} keeping={$ankiEnabled$} ontap={(x, y) => lookupPopup?.tapAt(x, y)} />
+  </ReaderSheet>
+{/if}
+
+{#if showHooks && book}
+  <ReaderSheet title="Hooks" on:close={() => (showHooks = false)}>
+    <VnboxHooks {frame} bookId={book.id} />
   </ReaderSheet>
 {/if}
 
