@@ -227,7 +227,7 @@
   import { convertRemToPixels, dummyFn, isMobile$, limitToRange } from '$lib/functions/utils';
   import { isIgnoredReaderKey, isSearchShortcut, onKeydownReader } from './on-keydown-reader';
   import { shouldBookmarkOnLeave } from '$lib/functions/bookmark-on-leave';
-  import { onDestroy, onMount, tick } from 'svelte';
+  import { onDestroy, onMount, tick, untrack } from 'svelte';
   import { isManga } from '$lib/data/manga';
   import { isVn } from '$lib/data/vn';
   import { bookRoute, readerPath, replacePage } from '$lib/data/reader-route';
@@ -241,68 +241,76 @@
     pulseElement
   } from '$lib/functions/range-util';
 
-  let showSpinner = true;
-  let showHeader = false;
-  let isBookmarkScreen = false;
-  let showFooter = true;
-  let exploredCharCount = 0;
-  let bookCharCount = 0;
-  let autoScroller: AutoScroller | undefined;
-  let bookmarkManager: BookmarkManager | undefined;
-  let pageManager: PageManager | undefined;
-  let bookmarkData: Promise<BooksDbBookmarkData | undefined> = Promise.resolve(undefined);
+  // Runes: $state.raw keeps the old immutable semantics (only a new object or array re-renders).
+  let showSpinner = $state.raw(true);
+  let showHeader = $state.raw(false);
+  let isBookmarkScreen = $state.raw(false);
+  let showFooter = $state.raw(true);
+  let exploredCharCount = $state.raw(0);
+  let bookCharCount = $state.raw(0);
+  let autoScroller = $state.raw<AutoScroller>();
+  let bookmarkManager = $state.raw<BookmarkManager>();
+  let pageManager = $state.raw<PageManager>();
+  let bookmarkData = $state.raw<Promise<BooksDbBookmarkData | undefined>>(
+    Promise.resolve(undefined)
+  );
   /** bookmarkData once resolved, for a re-render that must decide at once where to reopen */
   let savedBookmark: BooksDbBookmarkData | undefined;
-  $: bookmarkData.then((data) => (savedBookmark = data));
-  let customReadingPointTop = -2;
-  let customReadingPointLeft = -2;
-  let customReadingPoint = $verticalMode$
-    ? $verticalCustomReadingPosition$
-    : $horizontalCustomReadingPosition$;
-  let customReadingPointScrollOffset = 0;
+  $effect.pre(() => {
+    bookmarkData.then((data) => (savedBookmark = data));
+  });
+  let customReadingPointTop = $state.raw(-2);
+  let customReadingPointLeft = $state.raw(-2);
+  let customReadingPoint = $state.raw(
+    $verticalMode$ ? $verticalCustomReadingPosition$ : $horizontalCustomReadingPosition$
+  );
+  let customReadingPointScrollOffset = $state.raw(0);
   /** The side panel (Contents, Search, Highlights, Listen, plugin tabs); mounted once opened */
-  let panelOpen = false;
-  let panelMounted = false;
-  let panelTab: PanelTab = 'contents';
+  let panelOpen = $state.raw(false);
+  let panelMounted = $state.raw(false);
+  let panelTab = $state.raw<PanelTab>('contents');
   let searchMatch: { start: number; end: number } | undefined;
   const searchIndexOf = searchIndexCache();
-  let annotations: AnnotationsController | undefined;
-  let editingHighlight: Highlight | undefined;
-  let editingFocusNote = false;
+  let annotations = $state.raw<AnnotationsController>();
+  let editingHighlight = $state.raw<Highlight>();
+  let editingFocusNote = $state.raw(false);
   /** Line being read aloud (audiobook or AI voice) */
   let readingMatch: { start: number; end: number } | undefined;
   /** Days since the book was last opened, if long enough to offer a recap */
-  let welcomeBackDays = 0;
+  let welcomeBackDays = $state.raw(0);
   let highlightRanges: HighlightRange[] = [];
   let highlightsDirty = true;
-  let selectedRange: Range | undefined;
-  let lookupPopup: LookupPopup | undefined;
-  let lookupOpen = false;
+  let selectedRange = $state.raw<Range>();
+  let lookupPopup = $state.raw<LookupPopup>();
+  let lookupOpen = $state.raw(false);
   /** A plugin's selection action, open with the passage it was given */
-  let selectionPanel: { action: SelectionActionContribution; passage: PassageContext } | undefined;
-  let customReadingPointRange: Range | undefined;
+  let selectionPanel = $state.raw<{
+    action: SelectionActionContribution;
+    passage: PassageContext;
+  }>();
+  let customReadingPointRange = $state.raw<Range>();
   let lastSelectedRange: Range | undefined;
   let lastSelectedRangeWasEmpty = true;
-  let isSelectingCustomReadingPoint = false;
-  let showCustomReadingPoint = false;
+  let isSelectingCustomReadingPoint = $state.raw(false);
+  let showCustomReadingPoint = $state.raw(false);
   let localStorageHandler: BrowserStorageHandler;
-  let dataToReplicate: StorageDataType[] = [];
+  let dataToReplicate = $state.raw<StorageDataType[]>([]);
   let dataToReplicateQueue: StorageDataType[] = [];
-  let externalStorageHandler: BaseStorageHandler | undefined;
-  let externalStorageErrors = 0;
-  let isReplicating = false;
-  let storedExploredCharacter = 0;
-  let hasBookmarkData = false;
-  let blockDataUpdates = false;
-  let trackerElm: BookReadingTracker;
-  let showTrackerIcon = false;
-  let wasTrackerPaused = true;
-  let frozenPosition = -1;
+  let externalStorageHandler = $state.raw<BaseStorageHandler>();
+  let externalStorageErrors = $state.raw(0);
+  let isReplicating = $state.raw(false);
+  let storedExploredCharacter = $state.raw(0);
+  let hasBookmarkData = $state.raw(false);
+  let blockDataUpdates = $state.raw(false);
+  let trackerElm = $state.raw<BookReadingTracker>();
+  let showTrackerIcon = $state.raw(false);
+  let wasTrackerPaused = $state.raw(true);
+  let frozenPosition = $state.raw(-1);
   let skipFirstFreezeChange = false;
-  let bookCompleted = false;
-  let confettiWidthModifier = 36;
-  let confettiMaxRuns = 0;
-  let showReaderImageGallery = false;
+  let bookCompleted = $state.raw(false);
+  let confettiWidthModifier = $state.raw(36);
+  let confettiMaxRuns = $state.raw(0);
+  let showReaderImageGallery = $state.raw(false);
   let dismissDialogs = true;
   let syncedResolver: () => void;
 
@@ -518,7 +526,7 @@
   );
 
   let unknownSpans: CountSpan[] = [];
-  let primer: ChapterPrimer | undefined;
+  let primer = $state.raw<ChapterPrimer>();
 
   const unknownWords$ = combineLatest([
     bookReadings$,
@@ -687,9 +695,11 @@
   // background must not count, and auto-pause only reacts to the page becoming hidden.
   const bookLoaded$ = new Subject<void>();
 
-  $: if (browser && !showSpinner) {
-    bookLoaded$.next();
-  }
+  $effect.pre(() => {
+    if (browser && !showSpinner) {
+      untrack(() => bookLoaded$.next());
+    }
+  });
 
   const startTrackerOnOpen$ = iffBrowser(() =>
     $statisticsEnabled$ && $trackerStartOnOpen$
@@ -710,87 +720,125 @@
     reduceToEmptyString()
   );
 
-  $: if (panelOpen) {
-    autoScroller?.off();
-  }
+  // The former `$:` statements: each body runs untracked and only re-runs on what the statement
+  // named, as before; the pre effects keep their timing (before the DOM updates).
+  $effect.pre(() => {
+    if (panelOpen) {
+      const scroller = autoScroller;
 
-  $: if (browser && bookCharCount) {
-    document.dispatchEvent(new CustomEvent(PAGE_CHANGE, { detail: { exploredCharCount } }));
-  }
-
-  $: if (browser) {
-    document.dispatchEvent(new CustomEvent(PAGE_CHANGE, { detail: { bookCharCount } }));
-  }
-
-  $: if (showCustomReadingPoint) {
-    pauseTracker();
-
-    pulseElement(customReadingPointRange?.endContainer?.parentElement, 'add', 1);
-
-    fromEvent(document, 'click')
-      .pipe(skip(1), take(1))
-      .subscribe(() => {
-        showCustomReadingPoint = false;
-        pulseElement(customReadingPointRange?.endContainer?.parentElement, 'remove', 1);
-        restartTrackerAfterCharacterChangeOrTime(1);
-      });
-  }
-
-  $: if (frozenPosition !== -1 && exploredCharCount >= frozenPosition) {
-    if (skipFirstFreezeChange) {
-      skipFirstFreezeChange = false;
-    } else {
-      frozenPosition = -1;
+      untrack(() => scroller?.off());
     }
-  }
+  });
 
-  $: isPaginated = $viewMode$ === ViewMode.Paginated;
+  $effect.pre(() => {
+    if (browser && bookCharCount) {
+      const detail = { exploredCharCount };
+
+      untrack(() => document.dispatchEvent(new CustomEvent(PAGE_CHANGE, { detail })));
+    }
+  });
+
+  $effect.pre(() => {
+    if (browser) {
+      const detail = { bookCharCount };
+
+      untrack(() => document.dispatchEvent(new CustomEvent(PAGE_CHANGE, { detail })));
+    }
+  });
+
+  $effect.pre(() => {
+    if (showCustomReadingPoint) {
+      const pointRange = customReadingPointRange;
+
+      untrack(() => {
+        pauseTracker();
+
+        pulseElement(pointRange?.endContainer?.parentElement, 'add', 1);
+
+        fromEvent(document, 'click')
+          .pipe(skip(1), take(1))
+          .subscribe(() => {
+            showCustomReadingPoint = false;
+            pulseElement(customReadingPointRange?.endContainer?.parentElement, 'remove', 1);
+            restartTrackerAfterCharacterChangeOrTime(1);
+          });
+      });
+    }
+  });
+
+  $effect.pre(() => {
+    if (frozenPosition !== -1 && exploredCharCount >= frozenPosition) {
+      if (skipFirstFreezeChange) {
+        skipFirstFreezeChange = false;
+      } else {
+        frozenPosition = -1;
+      }
+    }
+  });
+
+  const isPaginated = $derived($viewMode$ === ViewMode.Paginated);
 
   // The book shrinks to the room beside the open panel and always leaves the bar's room above it;
   // the readers keep their place when they re-lay out.
-  $: bookWidth = browser
-    ? readerWidth($containerViewportWidth$ ?? 0, panelOpen, convertRemToPixels(window, 1))
-    : 0;
-  $: bookTop = browser ? readerTopInset(convertRemToPixels(window, 1)) : 0;
+  const bookWidth = $derived(
+    browser
+      ? readerWidth($containerViewportWidth$ ?? 0, panelOpen, convertRemToPixels(window, 1))
+      : 0
+  );
+  const bookTop = browser ? readerTopInset(convertRemToPixels(window, 1)) : 0;
   // Continuous: scrolled text passes under the panel's chrome, so the visible book (where jumps
   // land and the position is measured) begins this far from the screen's start edge.
-  $: edgeOffset = browser
-    ? jumpOffset(
-        { vertical: $verticalMode$, paginated: isPaginated, panelOpen },
-        $containerViewportWidth$ ?? 0,
-        convertRemToPixels(window, 1)
-      )
-    : 0;
-  $: readingOffset = customReadingPointScrollOffset + edgeOffset;
+  const edgeOffset = $derived(
+    browser
+      ? jumpOffset(
+          { vertical: $verticalMode$, paginated: isPaginated, panelOpen },
+          $containerViewportWidth$ ?? 0,
+          convertRemToPixels(window, 1)
+        )
+      : 0
+  );
+  const readingOffset = $derived(customReadingPointScrollOffset + edgeOffset);
 
-  $: firstDimensionMargin =
+  const firstDimensionMargin = $derived(
     browser && $enableTapEdgeToFlip$ && isPaginated && $verticalMode$
       ? limitToRange(convertRemToPixels(window, 0.5), window.innerWidth, $firstDimensionMargin$)
-      : ($firstDimensionMargin$ ?? 0);
+      : ($firstDimensionMargin$ ?? 0)
+  );
 
-  $: tapButtonHeight = `calc(100% - ${showHeader ? 5 : 4}rem)`;
+  const tapButtonHeight = $derived(`calc(100% - ${showHeader ? 5 : 4}rem)`);
 
-  $: tapButtonTop = `${showHeader ? 3 : 2}rem`;
+  const tapButtonTop = $derived(`${showHeader ? 3 : 2}rem`);
 
-  $: footerChapterProgress = getCurrentChapterProgress($sectionData$);
+  const footerChapterProgress = $derived.by(() => {
+    const sections = $sectionData$;
+
+    return untrack(() => getCurrentChapterProgress(sections));
+  });
 
   // Books from the Calibre source always sync, since the server is their home.
-  $: upSyncEnabled =
+  const upSyncEnabled = $derived(
     externalStorageHandler &&
-    (externalStorageHandler.storageType === StorageKey.CALIBRE ||
-      $autoReplication$ === AutoReplicationType.Up ||
-      $autoReplication$ === AutoReplicationType.All);
+      (externalStorageHandler.storageType === StorageKey.CALIBRE ||
+        $autoReplication$ === AutoReplicationType.Up ||
+        $autoReplication$ === AutoReplicationType.All)
+  );
 
-  $: bookmarkData.then((data) => {
-    hasBookmarkData = !!data;
-    storedExploredCharacter = data?.exploredCharCount || 0;
+  $effect.pre(() => {
+    bookmarkData.then((data) => {
+      hasBookmarkData = !!data;
+      storedExploredCharacter = data?.exploredCharCount || 0;
+    });
   });
 
   /** Experimental Code - May be removed any time without warning */
 
-  $: if (browser) {
-    document.dispatchEvent(new CustomEvent(SKIPKEYLISTENER, { detail: $skipKeyDownListener$ }));
-  }
+  $effect.pre(() => {
+    if (browser) {
+      const detail = $skipKeyDownListener$;
+
+      untrack(() => document.dispatchEvent(new CustomEvent(SKIPKEYLISTENER, { detail })));
+    }
+  });
 
   onMount(() => document.addEventListener('ttu-action', handleAction, false));
 
@@ -909,21 +957,26 @@
   }
 
   /** The book's word list forms, loaded on the first selection ("Mark known") */
-  let wordForms: { title: string; forms: Set<string> } | undefined;
+  let wordForms = $state.raw<{ title: string; forms: Set<string> }>();
 
-  $: if (selectedRange && $rawBookData$ && wordForms?.title !== $rawBookData$.title) {
-    const title = $rawBookData$.title;
+  $effect.pre(() => {
+    if (selectedRange && $rawBookData$ && wordForms?.title !== $rawBookData$.title) {
+      const title = $rawBookData$.title;
 
-    wordForms = { title, forms: new Set() };
-    getWordMarks().catch(() => undefined);
-    bookWordForms(title).then(
-      (forms) => wordForms?.title === title && (wordForms = { title, forms }),
-      () => {}
-    );
-  }
+      untrack(() => {
+        wordForms = { title, forms: new Set() };
+        getWordMarks().catch(() => undefined);
+        bookWordForms(title).then(
+          (forms) => wordForms?.title === title && (wordForms = { title, forms }),
+          () => {}
+        );
+      });
+    }
+  });
 
-  $: selectedWord =
-    selectedRange && wordForms?.forms.size ? getTextWithoutFurigana(selectedRange) : '';
+  const selectedWord = $derived(
+    selectedRange && wordForms?.forms.size ? getTextWithoutFurigana(selectedRange) : ''
+  );
 
   function openSelectionAction(action: SelectionActionContribution) {
     const content = document.querySelector('.book-content');
@@ -951,24 +1004,32 @@
   // A Community line link (/b?id=&line=): the Community tab opens on its thread.
   let lineLinkOpened = false;
 
-  $: if ($rawBookData$ && !lineLinkOpened && $page.url.searchParams.get('line')) {
-    lineLinkOpened = true;
-    openPanel('community');
-  }
+  $effect.pre(() => {
+    if ($rawBookData$ && !lineLinkOpened && $page.url.searchParams.get('line')) {
+      untrack(() => {
+        lineLinkOpened = true;
+        openPanel('community');
+      });
+    }
+  });
 
   /** A plugin tab offered after days away (Story so far) */
-  $: absenceTab = welcomeBackDays
-    ? $activePlugins$
-        .flatMap((plugin) => plugin.companionTabs ?? [])
-        .find((tab) => tab.absenceOffer?.ready())
-    : undefined;
+  const absenceTab = $derived.by(() => {
+    if (!welcomeBackDays) return undefined;
 
-  $: highlights$ = annotations?.highlights$;
-  $: highlightSyncError$ = annotations?.syncError$;
+    const tabs = $activePlugins$.flatMap((plugin) => plugin.companionTabs ?? []);
 
-  $: if (bookmarkManager && $highlights$) {
-    scheduleHighlights(true);
-  }
+    return untrack(() => tabs.find((tab) => tab.absenceOffer?.ready()));
+  });
+
+  const highlights$ = $derived(annotations?.highlights$);
+  const highlightSyncError$ = $derived(annotations?.syncError$);
+
+  $effect.pre(() => {
+    if (bookmarkManager && $highlights$) {
+      untrack(() => scheduleHighlights(true));
+    }
+  });
 
   let highlightTimer: ReturnType<typeof setTimeout> | undefined;
   let observedContent: Element | null = null;
@@ -1056,27 +1117,35 @@
   // and the plugins' (e.g. the automatic lorebook update).
   let readingWorkTimer: ReturnType<typeof setTimeout> | undefined;
 
-  $: if (exploredCharCount && $rawBookData$ && $bookData$) {
-    clearTimeout(readingWorkTimer);
-    readingWorkTimer = setTimeout(
-      (title: string, position: number) =>
-        positionSettled(title, getSearchIndex, position, bookCharCount),
-      15_000,
-      $rawBookData$.title,
-      exploredCharCount
-    );
-  }
+  $effect.pre(() => {
+    if (exploredCharCount && $rawBookData$ && $bookData$) {
+      // Read now so a change of the book's length restarts the wait, as before.
+      void bookCharCount;
+      clearTimeout(readingWorkTimer);
+      readingWorkTimer = setTimeout(
+        (title: string, position: number) =>
+          positionSettled(title, getSearchIndex, position, bookCharCount),
+        15_000,
+        $rawBookData$.title,
+        exploredCharCount
+      );
+    }
+  });
 
   // What is open, for the plugins (Discord status): each page turn and chapter.
-  $: if ($rawBookData$ && bookCharCount) {
-    readingActivity({
-      kind: 'book',
-      title: $rawBookData$.title,
-      position: exploredCharCount,
-      characters: bookCharCount,
-      sections: $sectionData$ ?? []
-    });
-  }
+  $effect.pre(() => {
+    if ($rawBookData$ && bookCharCount) {
+      const activity = {
+        kind: 'book' as const,
+        title: $rawBookData$.title,
+        position: exploredCharCount,
+        characters: bookCharCount,
+        sections: $sectionData$ ?? []
+      };
+
+      untrack(() => readingActivity(activity));
+    }
+  });
 
   // The plugins' work on an opened book (Community markers), once it rendered and the browser idles.
   let openedTitle = '';
@@ -1085,15 +1154,19 @@
   let openedDone = '';
   let pendingReveal: number | undefined;
 
-  $: if (bookmarkManager && $bookData$ && $rawBookData$ && openedTitle !== $rawBookData$.title) {
-    const title = (openedTitle = $rawBookData$.title);
+  $effect.pre(() => {
+    if (bookmarkManager && $bookData$ && $rawBookData$ && openedTitle !== $rawBookData$.title) {
+      const title = (openedTitle = $rawBookData$.title);
 
-    bookOpened(title, getSearchIndex, () => {
-      openedDone = title;
-      if (pendingReveal !== undefined) jumpToCount(pendingReveal);
-      pendingReveal = undefined;
-    });
-  }
+      untrack(() =>
+        bookOpened(title, getSearchIndex, () => {
+          openedDone = title;
+          if (pendingReveal !== undefined) jumpToCount(pendingReveal);
+          pendingReveal = undefined;
+        })
+      );
+    }
+  });
 
   onDestroy(() => {
     clearTimeout(readingWorkTimer);
@@ -1323,7 +1396,7 @@
 
     try {
       if (diffToComplete) {
-        const [hadError] = await trackerElm.processStatistics(diffToComplete);
+        const [hadError] = await trackerElm!.processStatistics(diffToComplete);
 
         if (hadError) {
           throw new Error('Character Update failed');
@@ -1917,13 +1990,13 @@
 {$initAnnotations$ ?? ''}
 {$unknownWords$ ?? ''}
 {$handleUpdateImageGalleryPictureSpoilers$ ?? ''}
-<button class="fixed inset-x-0 top-0 z-10 h-8 w-full" on:click={() => (showHeader = true)} />
+<button class="fixed inset-x-0 top-0 z-10 h-8 w-full" onclick={() => (showHeader = true)} />
 {#if showHeader || panelOpen}
   <div
     class="writing-horizontal-tb fixed left-0 right-0 top-0 z-[61] {panelOpen
       ? 'md:right-[26.75rem]'
       : ''}"
-    transition:fly|local={{ y: -300, easing: quintInOut }}
+    transition:fly={{ y: -300, easing: quintInOut }}
     use:clickOutside={() => (showHeader = false)}
   >
     <BookReaderHeader
@@ -2119,13 +2192,13 @@
 {#if $enableTapEdgeToFlip$ && isPaginated && !$skipKeyDownListener$}
   <button
     class="fixed left-0 z-10 w-5"
-    on:click={$verticalMode$ ? () => pageManager?.nextPage() : () => pageManager?.prevPage()}
+    onclick={$verticalMode$ ? () => pageManager?.nextPage() : () => pageManager?.prevPage()}
     style:height={tapButtonHeight}
     style:top={tapButtonTop}
   />
   <button
     class="fixed right-0 z-10 w-5"
-    on:click={$verticalMode$ ? () => pageManager?.prevPage() : () => pageManager?.nextPage()}
+    onclick={$verticalMode$ ? () => pageManager?.prevPage() : () => pageManager?.nextPage()}
     style:height={tapButtonHeight}
     style:top={tapButtonTop}
   />
@@ -2143,8 +2216,8 @@
   role="button"
   class="writing-horizontal-tb fixed bottom-0 left-0 z-10 flex h-8 w-full items-center justify-between text-xs leading-none"
   style:color={$themeOption$?.tooltipTextFontColor}
-  on:click={() => (showFooter = !showFooter)}
-  on:keyup={dummyFn}
+  onclick={() => (showFooter = !showFooter)}
+  onkeyup={dummyFn}
 >
   <div class="flex h-full">
     {#if showTrackerIcon}
@@ -2166,7 +2239,9 @@
         class="flex h-full w-8 items-center justify-center text-sm sm:text-lg"
         class:text-danger={externalStorageErrors > 1}
         class:animate-pulse={externalStorageErrors > 1 || isReplicating}
-        on:click|stopPropagation={() => {
+        onclick={(event) => {
+          event.stopPropagation();
+
           if ($statisticsEnabled$) {
             wasTrackerPaused = $isTrackerPaused$;
             isTrackerPaused$.next(true);
@@ -2178,7 +2253,7 @@
             }
           });
         }}
-        on:keyup={dummyFn}
+        onkeyup={dummyFn}
       >
         <Fa icon={faCloudBolt} />
       </div>
@@ -2204,7 +2279,11 @@
         !$showFooterChapterCharacterCounter$ &&
         !$showFooterChapterPercentage$}
       style:color={$themeOption$?.tooltipTextFontColor}
-      on:click|stopPropagation={({ target }) => {
+      onclick={(event) => {
+        event.stopPropagation();
+
+        const { target } = event;
+
         if (!$showCharacterCounter$ && !$showPercentage$) {
           return;
         }
@@ -2215,7 +2294,7 @@
           pulseElement(target.parentElement || target, 'add', 0.5, 500);
         }
       }}
-      on:keyup={dummyFn}
+      onkeyup={dummyFn}
     >
       <span class="mr-4" class:invisible={!footerChapterProgress}>{footerChapterProgress}</span>
       <span class:invisible={!$showCharacterCounter$ && !$showPercentage$}>{currentProgress}</span>
@@ -2344,14 +2423,14 @@
 <LookupPopup bind:this={lookupPopup} bind:open={lookupOpen} scope=".book-content" />
 <LookupHint />
 
-<svelte:document on:selectionchange={onSelectionChange} on:click={onDocumentClick} />
+<svelte:document onselectionchange={onSelectionChange} onclick={onDocumentClick} />
 
 <svelte:window
-  on:keydown={onKeydown}
-  on:online={() => !blockDataUpdates && executeReplicate$.next()}
-  on:beforeunload={handleUnload}
-  on:pagehide={() => isTrackerPaused$.next(true)}
-  on:resize={() => {
+  onkeydown={onKeydown}
+  ononline={() => !blockDataUpdates && executeReplicate$.next()}
+  onbeforeunload={handleUnload}
+  onpagehide={() => isTrackerPaused$.next(true)}
+  onresize={() => {
     if ($statisticsEnabled$ && !$isTrackerPaused$) {
       pauseTracker();
 
