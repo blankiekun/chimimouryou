@@ -58,6 +58,7 @@
     loadVnboxTuning,
     saveVnboxTuning,
     vnboxPlayerUrl,
+    vnboxErrorText,
     windowsGameBlocker,
     windowsGameBlockerText
   } from '$lib/data/windows-game';
@@ -769,6 +770,15 @@
     }
   }
 
+  // VNBox's lazyfs posts its load errors (a full storage quota above all): without them the
+  // player just stays black.
+  function frameMessage(event: MessageEvent) {
+    if (event.origin !== location.origin || event.source !== frame?.contentWindow) return;
+    if (event.data?.type === 'vnbox-error' && event.data.source === 'lazyfs') {
+      blocked = vnboxErrorText(String(event.data.message ?? ''));
+    }
+  }
+
   onMount(() => {
     load(Number($page.url.searchParams.get('id'))).catch((error) =>
       logger.error(`Error loading visual novel: ${error.message}`)
@@ -796,6 +806,8 @@
     if (hookUrl) URL.revokeObjectURL(hookUrl);
   });
 </script>
+
+<svelte:window on:message={frameMessage} />
 
 <svelte:head>
   <title>{formatPageTitle(book?.title ?? '')}</title>

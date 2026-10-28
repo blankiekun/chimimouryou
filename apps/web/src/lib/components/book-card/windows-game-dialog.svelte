@@ -25,7 +25,8 @@
     windowsGameBlockerText,
     windowsGameBook,
     windowsGameFolder,
-    windowsPrograms
+    windowsPrograms,
+    vnboxZipsSize
   } from '$lib/data/windows-game';
   import type { HookScript } from '$lib/data/windows-game';
   import {
@@ -310,6 +311,21 @@
     picked = CHOSEN;
   }
 
+  /**
+   * Asks to store data persistently first (big games must not be evicted, and Firefox keeps a
+   * site to 10% of the disk until then), then checks the quota has room for `needed` bytes.
+   */
+  async function roomFor(needed: number) {
+    const persisted = (await navigator.storage.persist?.()) ?? false;
+    const { quota = 0, usage = 0 } = (await navigator.storage.estimate?.()) ?? {};
+
+    if (quota && quota - usage < needed) {
+      throw new Error(
+        `Not enough room in this browser's storage: this needs about ${formatBytes(needed)}, ${formatBytes(quota - usage)} is free.${persisted ? '' : ' Allowing the site to store data persistently (the browser asks, or see its site settings) gives it more room.'}`
+      );
+    }
+  }
+
   async function startInstall() {
     const name = title.trim();
 
@@ -319,15 +335,8 @@
     abort = new AbortController();
 
     try {
-      const { quota = 0, usage = 0 } = (await navigator.storage.estimate?.()) ?? {};
-
-      // Room for the copy and about as much again for what the installer writes.
-      if (quota && quota - usage < folderSize * 2) {
-        throw new Error(
-          `Not enough room in this browser's storage: installing needs about ${formatBytes(folderSize * 2)}, ${formatBytes(quota - usage)} is free.`
-        );
-      }
-      await navigator.storage.persist?.();
+      // Room for the copy, about as much again for what the installer writes, and VNBox's zips.
+      await roomFor(folderSize * 2 + vnboxZipsSize);
 
       const folder = windowsGameFolder(name);
       const progress = (done: number, total: number) => (copied = { done, total });
@@ -500,16 +509,7 @@
     abort = new AbortController();
 
     try {
-      const { quota = 0, usage = 0 } = (await navigator.storage.estimate?.()) ?? {};
-
-      if (quota && quota - usage < size) {
-        throw new Error(
-          `Not enough room in this browser's storage: the game is ${formatBytes(size)}, ${formatBytes(quota - usage)} is free.`
-        );
-      }
-
-      // Big games must not be evicted when the disk fills up.
-      await navigator.storage.persist?.();
+      await roomFor(size + vnboxZipsSize);
       copied = { done: 0, total: size };
       await copyWindowsGame(
         record ? record.info.folder! : windowsGameFolder(name),
