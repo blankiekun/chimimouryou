@@ -16,11 +16,14 @@ const files = [
     require('./A98SYS.js'),
     require('./Abalone.js'),
     require('./Anisetta.js'),
+    require('./AbogadoPowers.js'),
     require('./Broccoli.js'),
+    require('./AZScript.js'),
+    require('./ANOS.js'),
     require('./Azurite.js'),
     require('./AZSystem.js'),
 ];
-const order = ["KiriKiri","AB2Try","akatombo","A98SYS","Abalone","Anisetta","Broccoli","Azurite","AZSystem"];
+const order = ["KiriKiri","AB2Try","akatombo","A98SYS","Abalone","Anisetta","AbogadoPowers","Broccoli","AZScript","ANOS","Azurite","AZSystem"];
 // </engines>
 // Files with several engines export an array; the engines run in LunaHook's order.
 const engines = files.flatMap((e) => [].concat(e)).sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));

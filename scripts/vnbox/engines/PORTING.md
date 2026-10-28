@@ -468,6 +468,9 @@ Engines are named by C++ file (`engine32/<Name>.cpp`); a file can hold several e
 | File | Engines | Checker misses (and why they are fine) |
 | --- | --- | --- |
 | A98SYS | A98SYS | none |
+| ANOS | ANOS | none |
+| AZScript | AZScript | none |
+| AbogadoPowers | AbogadoPowers | none |
 | AB2Try | AB2Try | none (finds nothing until SearchMemory sees JIT pages) |
 | Abalone | Abalone | none |
 | akatombo | akatombo | none |
@@ -480,9 +483,9 @@ Engines are named by C++ file (`engine32/<Name>.cpp`); a file can hold several e
 ### Not ported yet (port these next, in this order)
 
 The rest of the first batch (alphabetical, engines 1-40 of luna-engines.txt), then the big ones:
-5pb, Abel, AbogadoPowers, ACTGS, AdobeFlash10, ADVSystem, Ages3ResT, AGE_System, AGS, AIL, Aksys,
-AksysGames, Alice, Anex86, Anim, AniSeed, ANOS, antique, AOS, ApricoT, ArcSystemWorks, Arcturus, Aromarie,
-Artemis, Atelier, AXL, AZScript, BGI, Bishop, BKEngine, Bootup; then CatSystem, Siglus, Reallive, Majiro,
+5pb, Abel, ACTGS, AdobeFlash10, ADVSystem, Ages3ResT, AGE_System, AGS, AIL, Aksys,
+AksysGames, Alice, Anex86, Anim, AniSeed, antique, AOS, ApricoT, ArcSystemWorks, Arcturus, Aromarie,
+Artemis, Atelier, AXL, BGI, Bishop, BKEngine, Bootup; then CatSystem, Siglus, Reallive, Majiro,
 Malie, Yuris, and every other file in luna-engines.txt.
 
 ### Skipped (whole engines)
