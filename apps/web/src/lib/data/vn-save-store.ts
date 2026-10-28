@@ -224,6 +224,14 @@ export async function listSaves(area: SaveArea): Promise<SaveEntry[]> {
   return [...found.values()].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }
 
+/** One file's contents, by its IndexedDB key. */
+export async function readSaveFile(area: SaveArea, key: string) {
+  const request = await withStore(area, 'readonly', (store) => store.get(key));
+  const contents = (request.result as IdbEntry | undefined)?.contents;
+
+  return contents && new Uint8Array(contents);
+}
+
 /** The entries at `path` and below it ('' = the whole area). */
 export function savesUnder(entries: SaveEntry[], path: string) {
   return entries.filter(

@@ -74,7 +74,13 @@ export async function copyWindowsGame(
   ).getDirectoryHandle(opfsRoot, {
     create: true
   });
-  const game = await root.getDirectoryHandle(folder, { create: true });
+  // A folder path (discs/<id>) is made a folder at a time.
+  const game = await folder
+    .split('/')
+    .reduce(
+      (dir, name) => dir.then((parent) => parent.getDirectoryHandle(name, { create: true })),
+      Promise.resolve(root)
+    );
   const total = Object.values(files).reduce((sum, file) => sum + file.size, 0);
   // Promises, so files copied in parallel share one getDirectoryHandle per folder.
   const dirs = new Map([['', Promise.resolve(game)]]);
@@ -169,7 +175,8 @@ export function windowsGameBook(
   exe: string,
   hook: string | undefined,
   cover: Blob | undefined,
-  hookFile?: string
+  hookFile?: string,
+  discs?: string[]
 ): LoadData {
   const info: VnInfo = {
     encoding: 'sjis',
@@ -178,7 +185,8 @@ export function windowsGameBook(
     folder: windowsGameFolder(title),
     exe,
     ...(hook && { hook }),
-    ...(hookFile && { hookFile })
+    ...(hookFile && { hookFile }),
+    ...(discs?.length && { discs })
   };
 
   return {
@@ -225,7 +233,13 @@ export function vnboxPlayerUrl(info: VnInfo, hookUrl?: string, tuning = '') {
     'audioFreq=44100',
     // The game's window fills VNBox's screen, which takes its size: no title bar or desktop.
     'fitWindow=true',
-    ...(frida ? [`frida=${encodeURIComponent(frida)}`] : [])
+    ...(frida ? [`frida=${encodeURIComponent(frida)}`] : []),
+    // Read from OPFS on demand, disc 1 in the drive (VNBox after v0.2.0; the page swaps discs).
+    ...(info.discs?.length
+      ? [
+          `cdrom=${encodeURIComponent(info.discs.map((disc) => `opfs:${opfsRoot}/${disc}`).join(';'))}`
+        ]
+      : [])
   ];
 
   // The tuning panel's `a=b&c=d`, as typed (VNBox reads raw values, e.g. env's %22). VNBox takes
@@ -245,7 +259,7 @@ export function vnboxPlayerUrl(info: VnInfo, hookUrl?: string, tuning = '') {
 }
 
 /** The game folder, program and hook: never tuned. */
-const lockedParams = new Set(['lazy', 'p', 'frida']);
+const lockedParams = new Set(['lazy', 'p', 'frida', 'cdrom']);
 
 const tuningKey = (folder: string) => `vnboxTuning:${folder}`;
 
