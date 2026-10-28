@@ -19,12 +19,13 @@ chimireader.blankie.moe {
 	}
 
 	# Hashed file names: kept for a year. VNBox, its root fs and JMdict keep their names across
-	# versions, so a day (purge /vn/vnbox/ in Cloudflare after a VNBox bump to switch at once).
+	# versions, so Cloudflare keeps them a day (purge /vn/vnbox/ after a VNBox bump) and browsers
+	# revalidate: a stale boxedwine.wasm next to a new boxedwine.js fails with ASM_CONSTS errors.
 	# Everything else (pages, service worker, _app/version.json, manifests) is revalidated.
 	@immutable path /_app/immutable/*
 	header @immutable Cache-Control "public, max-age=31536000, immutable"
 	@big path /vn/vnbox/* /dictionaries/*
-	header @big Cache-Control "public, max-age=86400"
+	header @big Cache-Control "public, max-age=0, must-revalidate, s-maxage=86400"
 	@other not path /_app/immutable/* /vn/vnbox/* /dictionaries/*
 	header @other Cache-Control no-cache
 
@@ -64,10 +65,11 @@ blankie.moe {
 		-Server
 	}
 
-	# VNBox keeps its file names across versions: a day (purge /vnbox/ after a bump). The rest of
+	# VNBox keeps its file names across versions: Cloudflare a day (purge /vnbox/ after a bump),
+	# browsers revalidate so the .js and .wasm stay a pair. The rest of
 	# the site has unhashed names, so it is revalidated.
 	@big path /vnbox/*
-	header @big Cache-Control "public, max-age=86400"
+	header @big Cache-Control "public, max-age=0, must-revalidate, s-maxage=86400"
 	@other not path /vnbox/*
 	header @other Cache-Control no-cache
 
