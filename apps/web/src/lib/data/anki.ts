@@ -196,6 +196,31 @@ export async function addMediaToNote(note: AnkiNote, media: AnkiMedia) {
 }
 
 /**
+ * For a card mined elsewhere: puts `sentence` in the sentence field of the newest note added
+ * today and `media` in its empty audio and picture fields. Returns the names of the fields filled.
+ */
+export async function useForLastNote(sentence: string, media: () => Promise<AnkiMedia>) {
+  const ids = await ankiInvoke<number[]>('findNotes', { query: 'added:1' });
+
+  if (!ids.length) {
+    throw new Error('no card was added to Anki today');
+  }
+
+  const [note] = await ankiInvoke<AnkiNote[]>('notesInfo', { notes: [Math.max(...ids)] });
+  const field = ankiSentenceField$.getValue().trim();
+  const filled: string[] = [];
+
+  if (note.fields[field]) {
+    const html = sentence.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    await ankiInvoke('updateNoteFields', { note: { id: note.noteId, fields: { [field]: html } } });
+    filled.push(field);
+  }
+
+  return [...filled, ...(await addMediaToNote(note, await media()))];
+}
+
+/**
  * Seconds of the audiobook that read `sentence`: its occurrence nearest the reading position
  * (`bookText` is the book's matchable text, so offsets are character counts) and the matched
  * subtitle lines over it.
