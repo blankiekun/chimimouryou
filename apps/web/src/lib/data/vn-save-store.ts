@@ -25,7 +25,7 @@ import {
   ZipReader,
   ZipWriter
 } from '@zip.js/zip.js';
-import { hashPage, type VnInfo } from '$lib/data/vn';
+import { fromBase64, hashPage, toBase64, type VnInfo, type VnSaves } from '$lib/data/vn';
 
 export interface SaveArea {
   label: string;
@@ -43,6 +43,8 @@ export interface SaveEntry {
   /** Shown path relative to the area, '/'-separated, names unescaped */
   path: string;
   dir: boolean;
+  /** A symbolic link (never synced or overwritten by sync) */
+  link?: boolean;
   size: number;
   modified: number;
 }
@@ -211,6 +213,7 @@ export async function listSaves(area: SaveArea): Promise<SaveEntry[]> {
         key,
         path: shown.join('/'),
         dir: isDirMode(value.mode),
+        ...((value.mode & 0o170000) === 0o120000 && { link: true }),
         size: value.contents?.byteLength ?? 0,
         modified: new Date(value.timestamp).getTime()
       });
@@ -261,7 +264,7 @@ export function savePathParts(path: string) {
  */
 export async function writeSaves(
   area: SaveArea,
-  files: { path: string; bytes: Uint8Array }[],
+  files: { path: string; bytes: Uint8Array; modified?: number }[],
   entries: SaveEntry[]
 ): Promise<SaveEntry[]> {
   const byPath = new Map(entries.map((entry) => [entry.path, entry]));
@@ -308,7 +311,8 @@ export async function writeSaves(
     puts.push([
       key,
       {
-        timestamp: now,
+        // Synced files keep their time, or newest-wins would send them back.
+        timestamp: file.modified === undefined ? now : new Date(file.modified),
         mode: (modes.get(path)?.result as IdbEntry | undefined)?.mode ?? FILE_MODE,
         contents: file.bytes
       }
@@ -318,7 +322,7 @@ export async function writeSaves(
       path,
       dir: false,
       size: file.bytes.byteLength,
-      modified: now.getTime()
+      modified: file.modified ?? now.getTime()
     });
   }
 
@@ -357,4 +361,129 @@ export async function unzipSaves(zip: Blob) {
   } finally {
     await reader.close();
   }
+}
+
+/** A Windows game's saves sync up to this size (vnsaves.json, base64). */
+export const windowsSavesCap = 20 * 1024 * 1024;
+
+const userFolders = /^wine\/drive_c\/users\/[^/]+\/(?:AppData|Documents|Saved Games)\/(.+)$/;
+const notSaves = /^(?:temp|tmp)$|cache/i;
+const areaKey = (area: SaveArea) => (area.db.startsWith('/lazyapp/') ? 'game' : 'wine');
+
+/**
+ * Whether a Windows game's synced name is a save: `game/<path>` (anything the game wrote into
+ * its folder) or `wine/drive_c/users/<user>/{AppData,Documents,Saved Games}/<path>` in the
+ * prefix, temp and cache folders left out. Never system32, windows or the registry.
+ */
+export function isWindowsSaveKey(name: string) {
+  const parts = savePathParts(name);
+
+  if (!parts || parts.join('/') !== name) return false;
+  if (parts[0] === 'game') return parts.length > 1;
+
+  const inUser = userFolders.exec(name)?.[1];
+
+  return !!inUser && !inUser.split('/').some((part) => notSaves.test(part));
+}
+
+/** The sync name of an area's shown path. */
+export function windowsSaveKey(area: SaveArea, path: string) {
+  return `${areaKey(area)}/${path}`;
+}
+
+/** A Windows game's save files in this browser by sync name, and each area's listing. */
+export async function windowsSaveFiles(areas: SaveArea[]) {
+  const files = new Map<string, { area: SaveArea; entry: SaveEntry }>();
+  const listed = new Map<SaveArea, SaveEntry[]>();
+
+  for (const area of areas) {
+    const entries = await listSaves(area);
+
+    listed.set(area, entries);
+    for (const entry of entries) {
+      const name = windowsSaveKey(area, entry.path);
+
+      if (!entry.dir && !entry.link && isWindowsSaveKey(name)) files.set(name, { area, entry });
+    }
+  }
+
+  return { files, listed };
+}
+
+export type WindowsSaveFiles = Awaited<ReturnType<typeof windowsSaveFiles>>;
+
+/** What changed since the last sync: each file's name and time. */
+export function windowsSavesStamp({ files }: WindowsSaveFiles) {
+  return [...files]
+    .map(([name, { entry }]) => `${name}\0${entry.modified}`)
+    .sort()
+    .join('\n');
+}
+
+/** The files' contents for vnsaves.json, or only their size when it is over the cap. */
+export async function readWindowsSaves({ files }: WindowsSaveFiles, cap = windowsSavesCap) {
+  const all = [...files];
+  const size = all.reduce((sum, [, { entry }]) => sum + entry.size, 0);
+
+  if (size > cap) return { size };
+
+  const saves: VnSaves = {};
+
+  for (const area of new Set(all.map(([, file]) => file.area))) {
+    const mine = all.filter(([, file]) => file.area === area);
+    const values = await withStore(area, 'readonly', (store) =>
+      mine.map(([, file]) => store.get(file.entry.key))
+    );
+
+    mine.forEach(([name, { entry }], index) => {
+      const contents = (values[index].result as IdbEntry | undefined)?.contents;
+
+      if (contents) {
+        saves[name] = { modified: entry.modified, data: toBase64(new Uint8Array(contents)) };
+      }
+    });
+  }
+
+  return { size, saves };
+}
+
+/**
+ * Writes the synced files newer than this browser's into the areas (the game stopped).
+ * Folders, links and paths under a local file are left alone. Returns how many were written.
+ */
+export async function writeWindowsSaves(areas: SaveArea[], synced: VnSaves) {
+  const { listed } = await windowsSaveFiles(areas);
+  let written = 0;
+
+  for (const area of areas) {
+    const entries = listed.get(area) ?? [];
+    const byPath = new Map(entries.map((entry) => [entry.path, entry]));
+    const prefix = `${areaKey(area)}/`;
+    const writes = Object.entries(synced).flatMap(([name, file]) => {
+      if (!name.startsWith(prefix) || !isWindowsSaveKey(name)) return [];
+      if (typeof file?.data !== 'string' || typeof file.modified !== 'number') return [];
+
+      const path = name.slice(prefix.length);
+      const local = byPath.get(path);
+      const parents = path.split('/').slice(0, -1);
+
+      if (local && (local.dir || local.link || local.modified >= file.modified)) return [];
+      // A file or link where the synced copy has a folder: left alone.
+      if (parents.some((_, i) => byPath.get(parents.slice(0, i + 1).join('/'))?.dir === false))
+        return [];
+      try {
+        return [{ path, bytes: fromBase64(file.data), modified: file.modified }];
+      } catch {
+        // One bad entry in the synced file must not stop the others.
+        return [];
+      }
+    });
+
+    if (writes.length) {
+      await writeSaves(area, writes, entries);
+      written += writes.length;
+    }
+  }
+
+  return written;
 }

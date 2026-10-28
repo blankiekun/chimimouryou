@@ -282,14 +282,21 @@ export function newerSaveEngine(saves: VnSaves, installed: string) {
     );
 }
 
-/** Per file, the newer copy wins; nothing is ever deleted (the engine doesn't delete saves). */
-export function mergeVnSaves(local: VnSaves, remote: VnSaves): VnSaves {
+/**
+ * Per file, the newer copy wins; nothing is ever deleted (the engine doesn't delete saves).
+ * `valid`: which names may be kept (Windows games: isWindowsSaveKey's paths).
+ */
+export function mergeVnSaves(
+  local: VnSaves,
+  remote: VnSaves,
+  valid: (name: string) => boolean = isSaveName
+): VnSaves {
   const merged: VnSaves = {};
 
   // Names become paths in the save folder: only single path segments.
   [remote, local].forEach((saves) =>
     Object.entries(saves).forEach(([name, file]) => {
-      if (!isSaveName(name)) return;
+      if (!valid(name)) return;
       if (!merged[name] || merged[name].modified < file.modified) merged[name] = file;
     })
   );

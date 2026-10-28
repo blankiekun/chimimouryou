@@ -10,14 +10,19 @@ import { configure } from '@zip.js/zip.js';
 import {
   deleteSaves,
   escapeName,
+  isWindowsSaveKey,
   listSaves,
+  readWindowsSaves,
   unescapeName,
   unzipSaves,
   vnSaveAreas,
+  windowsSaveFiles,
+  windowsSavesStamp,
   writeSaves,
+  writeWindowsSaves,
   zipSaves
 } from './vn-save-store';
-import { hashPage } from './vn';
+import { hashPage, mergeVnSaves } from './vn';
 
 // jsdom has no Worker.
 configure({ useWebWorkers: false });
@@ -157,5 +162,87 @@ describe('vn save store', () => {
       `${area.root}/a`,
       `${area.root}/a/b`
     ]);
+  });
+
+  it('syncs only a Windows game’s saves', () => {
+    const user = 'wine/drive_c/users/username';
+
+    expect(isWindowsSaveKey('game/save/01.sav')).toBe(true);
+    expect(isWindowsSaveKey(`${user}/AppData/Roaming/Maker/save.dat`)).toBe(true);
+    expect(isWindowsSaveKey(`${user}/Documents/Game/s.dat`)).toBe(true);
+    expect(isWindowsSaveKey(`${user}/Saved Games/Game/s.dat`)).toBe(true);
+    expect(isWindowsSaveKey('wine/drive_c/users/Public/Documents/Game/s.dat')).toBe(true);
+    expect(isWindowsSaveKey(`${user}/AppData/Local/Temp/x.tmp`)).toBe(false);
+    expect(isWindowsSaveKey(`${user}/AppData/Local/Microsoft/Windows/INetCache/x`)).toBe(false);
+    expect(isWindowsSaveKey(`${user}/AppData`)).toBe(false);
+    expect(isWindowsSaveKey('wine/drive_c/windows/system32/x.dll')).toBe(false);
+    expect(isWindowsSaveKey('wine/user.reg')).toBe(false);
+    expect(isWindowsSaveKey('game/../x')).toBe(false);
+    expect(isWindowsSaveKey('game')).toBe(false);
+  });
+
+  it('round-trips a Windows game’s saves through vnsaves.json', async () => {
+    const info = { encoding: 'sjis' as const, files: [], engine: 'vnbox' as const };
+    const pcA = vnSaveAreas('a', { ...info, folder: 'gA' });
+    const pcB = vnSaveAreas('b', { ...info, folder: 'gB' });
+    const [game, prefix] = pcA;
+    const at = new Date(2025, 0, 1);
+
+    await engineWrite(game.db, `${game.root}/save/01.sav`, {
+      timestamp: at,
+      mode: 0o100644,
+      contents: bytes('game save')
+    });
+    await engineWrite(
+      prefix.db,
+      `${prefix.root}/drive_c/users/username/AppData/Roaming/(_xE3_)(_x82_)(_xBB_)/s.dat`,
+      { timestamp: at, mode: 0o100644, contents: bytes('roaming') }
+    );
+    await engineWrite(prefix.db, `${prefix.root}/drive_c/windows/system32/x.dll`, {
+      timestamp: at,
+      mode: 0o100644,
+      contents: bytes('dll')
+    });
+    await engineWrite(prefix.db, `${prefix.root}/user.reg`, {
+      timestamp: at,
+      mode: 0o100644,
+      contents: bytes('reg')
+    });
+
+    const files = await windowsSaveFiles(pcA);
+    const { saves = {} } = await readWindowsSaves(files);
+
+    expect(Object.keys(saves).sort()).toEqual([
+      'game/save/01.sav',
+      'wine/drive_c/users/username/AppData/Roaming/セ/s.dat'
+    ]);
+    expect((await readWindowsSaves(files, 5)).saves).toBeUndefined();
+
+    // PC B already has an older copy of the game save and a newer one of nothing else.
+    await engineWrite(pcB[0].db, `${pcB[0].root}/save/01.sav`, {
+      timestamp: new Date(2024, 0, 1),
+      mode: 0o100644,
+      contents: bytes('older')
+    });
+
+    const synced = mergeVnSaves(
+      saves,
+      { 'wine/user.reg': saves['game/save/01.sav'] },
+      isWindowsSaveKey
+    );
+
+    expect(Object.keys(synced)).not.toContain('wine/user.reg');
+    expect(await writeWindowsSaves(pcB, synced)).toBe(2);
+
+    const onB = await windowsSaveFiles(pcB);
+    const back = (await readWindowsSaves(onB)).saves!;
+
+    expect(Object.keys(back).sort()).toEqual(Object.keys(saves).sort());
+    expect(text(Uint8Array.from(atob(back['game/save/01.sav'].data), (c) => c.charCodeAt(0)))).toBe(
+      'game save'
+    );
+    // Written with the synced times, so nothing is newer and a second pull writes nothing.
+    expect(windowsSavesStamp(onB)).toBe(windowsSavesStamp(files));
+    expect(await writeWindowsSaves(pcB, synced)).toBe(0);
   });
 });
