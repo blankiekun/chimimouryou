@@ -4,6 +4,16 @@ chimimouryou is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook
 upstream's own changes are not listed here. Each version's section is written when it is released,
 from the pull requests merged since the previous tag (pull requests don't edit this file).
 
+## v3.10.1 (2026-10-28)
+
+### Fixed
+
+- Reader: in paginated mode the auto bookmark follows every page inside a long paragraph. On
+  phones it used to stay on the paragraph's start (or jump to the next one), and reopening the
+  book went back there.
+- Visual novels: the Windows game dialog lists every bundled hook script after an update; browsers
+  kept the old script list for up to a day.
+
 ## v3.10.0 (2026-10-28)
 
 ### Added
