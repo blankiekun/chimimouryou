@@ -6,7 +6,7 @@
 
 /**
  * Book details fetched from AniList (books, manga), VNDB (visual novels) or
- * Jiten (all three, through nginx's /jiten/search: its API only allows
+ * Jiten (all three, through nginx's or the VPS's /jiten/ proxy: its API only allows
  * jiten.moe) on a book's page, shared by everyone through
  * /calibre/sync/metadata.json and keyed by title like series.json. A saved
  * cover replaces the card's, a VNDB title the card's title.
@@ -39,6 +39,8 @@ export interface BookMetadata {
 export type MetadataCandidate = Omit<BookMetadata, 'modified'> & {
   /** Every title the source knows it by (search results only, never saved) */
   names?: string[];
+  /** Jiten's character count (search results only, never saved) */
+  characters?: number;
 };
 
 export type BookMetadataMap = Record<string, BookMetadata>;
@@ -130,7 +132,7 @@ export async function saveBookMetadata(title: string, entry: MetadataCandidate |
   const map = { ...(await fetchBookMetadata()) };
 
   if (entry) {
-    const { names: _names, ...saved } = entry;
+    const { names: _names, characters: _characters, ...saved } = entry;
 
     map[title] = { ...saved, modified: Date.now() };
   } else {
@@ -315,18 +317,56 @@ export function parseJitenDecks(data: any, kind: MetadataKind): MetadataCandidat
           .map((tag: any) => tag.name)
       ],
       released: (deck.releaseDate || '').slice(0, 10),
-      score: typeof deck.externalRating === 'number' ? deck.externalRating : null
+      score: typeof deck.externalRating === 'number' ? deck.externalRating : null,
+      ...(deck.characterCount > 0 && { characters: deck.characterCount })
     }));
 }
 
-async function searchJiten(query: string, kind: MetadataKind) {
-  const response = await fetch(`/jiten/search?titleFilter=${encodeURIComponent(query)}`);
+/** A deck's details (`/api/media-deck/<id>/detail`): its count if it is a whole VN deck linked to `vndbUrl`. */
+export function jitenVnCharacters(detail: any, vndbUrl: string): number | undefined {
+  const deck = detail?.data?.mainDeck;
+  const linked = (deck?.links ?? []).some((link: any) => link.url === vndbUrl);
+
+  return linked && deck.mediaType === 7 && !deck.parentDeckId && deck.characterCount > 0
+    ? deck.characterCount
+    : undefined;
+}
+
+async function jitenGet(path: string) {
+  const response = await fetch(`/jiten/${path}`);
 
   if (!response.ok) {
-    throw new Error(`Search failed (HTTP ${response.status})`);
+    throw new Error(`HTTP ${response.status}`);
   }
 
-  return parseJitenDecks(await response.json(), kind);
+  return response.json();
+}
+
+/**
+ * A picked entry's length from Jiten: a Jiten deck's own count, or for a VNDB entry the Jiten
+ * deck linked to that VNDB id (looked up only on the player's pick: Jiten's API is small scale).
+ */
+export async function jitenCharacters(candidate: MetadataCandidate): Promise<number | undefined> {
+  if (candidate.source === 'jiten') return candidate.characters;
+
+  const vndbId =
+    candidate.source === 'vndb' && candidate.url.match(/^https:\/\/vndb\.org\/(v\d+)$/)?.[1];
+
+  if (!vndbId) return undefined;
+
+  // shortcut: only the first linked deck is checked; loop over the ids if Jiten starts linking several.
+  const [deckId] = await jitenGet(`api/media-deck/by-link-id/2/${vndbId}`);
+
+  if (typeof deckId !== 'number') return undefined;
+
+  return jitenVnCharacters(
+    await jitenGet(`api/media-deck/${deckId}/detail?pageSize=1`),
+    candidate.url
+  );
+}
+
+async function searchJiten(query: string, kind: MetadataKind) {
+  return parseJitenDecks(await jitenGet(`search?titleFilter=${encodeURIComponent(query)}`), kind);
 }
 
 export const sourceNames: Record<MetadataSource, string> = {

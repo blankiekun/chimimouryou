@@ -18,6 +18,7 @@
   import {
     loadBookMetadata,
     defaultSource,
+    jitenCharacters,
     saveBookMetadata,
     searchMetadata,
     sourceNames,
@@ -26,6 +27,8 @@
     type MetadataKind,
     type MetadataSource
   } from '$lib/data/book-metadata';
+  import { vnBookmark, vnInfo } from '$lib/data/vn';
+  import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
   import {
     loadCalibreCatalog,
     loadCalibreDifficulty,
@@ -137,6 +140,9 @@
   let saving = false;
   let candidates: MetadataCandidate[] | undefined;
   let source: MetadataSource | undefined;
+  /** A Windows game in this browser: a pick sets its length from Jiten (it has no count of its own) */
+  let windowsGame = false;
+  let lengthNote = '';
 
   const number = (value: number) => value.toLocaleString('en-US');
 
@@ -165,6 +171,8 @@
   $: furiganaReady = standalone && kind === 'book' && $analysisToolsState$.furigana === 'ready';
   $: canEdit = isCalibre && hasPermission($account$, 'series');
   $: canEditSeries = canEdit || localSeries;
+  /** Without `canEdit` (Browser source, standalone) a pick only sets a Windows game's length. */
+  $: canFind = canEdit || windowsGame;
   $: onHome = $homeBookTitles$.includes(book.title) || isContinueReading(book, $homeRemovedTitles$);
   $: seriesBooks = book.series
     ? orderSeries(bookCards.filter((card) => card.series === book.series))
@@ -281,6 +289,17 @@
     readingsMissing = listWithoutReader = false;
     generating = redoing = undefined;
     readingsError = '';
+    windowsGame = false;
+    lengthNote = '';
+
+    if (kind === 'vn') {
+      database
+        .getDataByTitle(title)
+        .then((data) => {
+          if (title === book.title) windowsGame = !!data && vnInfo(data).engine === 'vnbox';
+        })
+        .catch(() => {});
+    }
 
     if (standalone && kind === 'book') {
       bookKanjiCount(book.id, title, book.characters)
@@ -401,14 +420,45 @@
   async function save(entry: MetadataCandidate | undefined) {
     saving = true;
     searchError = '';
+    lengthNote = '';
     try {
-      metadata = (await saveBookMetadata(book.title, entry))[book.title];
+      if (canEdit) metadata = (await saveBookMetadata(book.title, entry))[book.title];
+      if (entry && windowsGame) await useJitenLength(entry);
       searchOpen = false;
       dispatch('changed');
     } catch (error: any) {
       searchError = error.message;
     } finally {
       saving = false;
+    }
+  }
+
+  /**
+   * A Windows game's length from the pick's Jiten deck replaces the record's (and the 0 it was
+   * saved with): a newer lastBookModified syncs it like any book record change.
+   */
+  async function useJitenLength(entry: MetadataCandidate) {
+    const characters = await jitenCharacters(entry);
+    const stored = characters && (await database.getDataByTitle(book.title));
+
+    if (!characters) {
+      lengthNote = $t$('book.noJitenLength');
+      return;
+    }
+    if (!stored) return;
+    await database.upsertData(
+      { ...stored, characters, lastBookModified: Date.now() },
+      ReplicationSaveBehavior.Overwrite,
+      false,
+      false
+    );
+
+    const bookmark = await database.getBookmark(stored.id);
+
+    if (bookmark) {
+      await database.putBookmark(
+        vnBookmark(stored.id, bookmark.exploredCharCount ?? 0, characters)
+      );
     }
   }
 
@@ -911,16 +961,18 @@
           />
         {/if}
 
-        {#if canEdit}
+        {#if canFind}
           <section class="details-fetch" aria-labelledby="book-details-fetch">
             {#if !searchOpen}
               <button type="button" class="app-button" on:click={openSearch}>
                 <Fa icon={faMagnifyingGlass} />
-                {metadata
+                {canEdit && metadata
                   ? $t$('book.changeDetails')
-                  : $t$('book.findDetailsOn', { source: sourceNames[defaultSource(kind)] })}
+                  : $t$(canEdit ? 'book.findDetailsOn' : 'book.findLengthOn', {
+                      source: sourceNames[defaultSource(kind)]
+                    })}
               </button>
-              {#if metadata}
+              {#if canEdit && metadata}
                 <button
                   type="button"
                   class="app-button app-button-quiet"
@@ -999,9 +1051,9 @@
                             disabled={saving}
                             on:click={() => save({ ...candidate, cover: '' })}
                           >
-                            {$t$('book.useDetails')}
+                            {$t$(canEdit ? 'book.useDetails' : 'book.useLength')}
                           </button>
-                          {#if candidate.cover}
+                          {#if canEdit && candidate.cover}
                             <button
                               type="button"
                               class="app-button"
@@ -1020,6 +1072,9 @@
             {/if}
             {#if searchError}
               <p class="text-danger" role="alert">{searchError}</p>
+            {/if}
+            {#if lengthNote}
+              <p class="details-note" role="status">{lengthNote}</p>
             {/if}
           </section>
         {/if}

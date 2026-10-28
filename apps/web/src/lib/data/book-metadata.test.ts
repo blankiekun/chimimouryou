@@ -4,10 +4,12 @@
  * All rights reserved.
  */
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   applyMetadata,
   cleanDescription,
+  jitenCharacters,
+  jitenVnCharacters,
   parseBookMetadata,
   parseJitenDecks
 } from './book-metadata';
@@ -115,5 +117,76 @@ describe('parseJitenDecks', () => {
       score: 85
     });
     expect(parseBookMetadata({ a: { ...candidate, modified: 1 } }).a.cover).toBe(deck.coverName);
+  });
+});
+
+describe('Jiten lengths', () => {
+  const vndbUrl = 'https://vndb.org/v17';
+  const mainDeck = {
+    deckId: 118931,
+    mediaType: 7,
+    parentDeckId: null,
+    characterCount: 626352,
+    links: [{ linkType: 2, url: vndbUrl }]
+  };
+  const vndb = {
+    source: 'vndb' as const,
+    url: vndbUrl,
+    title: 'Ever17',
+    description: '',
+    cover: '',
+    genres: [],
+    released: '',
+    score: null
+  };
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('takes a search result deck count', () => {
+    const [candidate] = parseJitenDecks({ data: [mainDeck] }, 'vn');
+
+    expect(candidate.characters).toBe(626352);
+    expect(
+      parseJitenDecks({ data: [{ ...mainDeck, characterCount: 0 }] }, 'vn')[0]
+    ).not.toHaveProperty('characters');
+  });
+
+  it('takes a deck count only from a whole VN deck linked to the VNDB entry', () => {
+    expect(jitenVnCharacters({ data: { mainDeck } }, vndbUrl)).toBe(626352);
+    expect(jitenVnCharacters({ data: { mainDeck } }, 'https://vndb.org/v1')).toBeUndefined();
+    expect(
+      jitenVnCharacters({ data: { mainDeck: { ...mainDeck, mediaType: 4 } } }, vndbUrl)
+    ).toBeUndefined();
+    expect(
+      jitenVnCharacters({ data: { mainDeck: { ...mainDeck, parentDeckId: 5 } } }, vndbUrl)
+    ).toBeUndefined();
+    expect(jitenVnCharacters({}, vndbUrl)).toBeUndefined();
+  });
+
+  it('finds the Jiten deck of a VNDB pick by its link', async () => {
+    const fetch = vi.fn(async (url: string) =>
+      Response.json(url.includes('by-link-id') ? [118931] : { data: { mainDeck } })
+    );
+
+    vi.stubGlobal('fetch', fetch);
+
+    expect(await jitenCharacters(vndb)).toBe(626352);
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+      '/jiten/api/media-deck/by-link-id/2/v17',
+      '/jiten/api/media-deck/118931/detail?pageSize=1'
+    ]);
+  });
+
+  it('asks nothing for an AniList pick or a VNDB entry Jiten lacks', async () => {
+    const fetch = vi.fn(async () => Response.json([]));
+
+    vi.stubGlobal('fetch', fetch);
+
+    expect(
+      await jitenCharacters({ ...vndb, source: 'anilist', url: 'https://anilist.co/manga/1' })
+    ).toBeUndefined();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(await jitenCharacters(vndb)).toBeUndefined();
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

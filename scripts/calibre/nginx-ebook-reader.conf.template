@@ -510,12 +510,18 @@ ${CORS}
   }
 
   # Book page → Find details → Jiten. Its API only answers jiten.moe's own
-  # origin, so searches go through here, without the reader's cookies.
-  location = /jiten/search {
-    auth_request /_account_series;
+  # origin, so searches go through here, without the reader's cookies. Any
+  # signed-in reader: a pick also sets a Windows game's length (its Jiten deck,
+  # found by VNDB id), which is the reader's own. Read-only GETs, three paths.
+  location ~ ^/jiten/(?<jiten_path>search|api/media-deck/(?:by-link-id/2/v[0-9]+|[0-9]+/detail))$ {
+    auth_request /_account_auth;
+    limit_except GET { deny all; }
     limit_req zone=jiten burst=5 nodelay;
     set $jiten_host api.jiten.moe;
-    proxy_pass https://$jiten_host/api/media-deck/get-media-decks$is_args$args;
+    if ($jiten_path = search) {
+      set $jiten_path api/media-deck/get-media-decks;
+    }
+    proxy_pass https://$jiten_host/$jiten_path$is_args$args;
     proxy_ssl_server_name on;
     proxy_set_header Host $jiten_host;
     proxy_set_header Cookie "";
