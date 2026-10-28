@@ -29,6 +29,11 @@ describe('texthooker', () => {
     expect(lineCount('今日は', last, 12_400, 300)).toMatchObject({ characters: 3, seconds: 12 });
     expect(lineCount('今日は', last, 3_600_000, 300).seconds).toBe(300);
     expect(lineCount('今日は', last, 3_600_000, 0).seconds).toBe(120);
+    // Closed and reopened: a line kept from before the page opened adds no time.
+    expect(lineCount('今日は', last, 3_600_000, 300, 3_000_000).seconds).toBe(0);
+    expect(lineCount('今日は', { ...last, at: 3_590_000 }, 3_600_000, 300, 3_000_000).seconds).toBe(
+      10
+    );
     expect(lineCount('前の行', last, 9000, 300)).toEqual({
       characters: 0,
       seconds: 0,
