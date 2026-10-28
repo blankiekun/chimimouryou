@@ -7,7 +7,8 @@
 # The tag is the last one in sha256sums (VNBOX_TAG=<tag> picks another; VNBOX_RECORD=1 records a
 # new release's sums, then commit the file). Also fetches 0xDC00's text hook scripts (MIT,
 # https://github.com/0xDC00/scripts) at the commit pinned in dc00-sha256sums into <out>/hooks/,
-# with index.json for the Windows game dialog (hook-index.mjs). Needs curl, tar, sha256sum, node.
+# and the LunaHook engine ports (engines/, GPL-3.0-or-later) into <out>/hooks/engines/, with index.json
+# for the Windows game dialog (hook-index.mjs). Needs curl, tar, sha256sum, node.
 set -euo pipefail
 
 REPO=https://github.com/blankiekun/VNBox
@@ -54,5 +55,8 @@ echo "$dc00sum  $work/dc00.tar.gz" | sha256sum -c --quiet
 mkdir -p "$work/dc00" "$out/hooks"
 tar -C "$work/dc00" --strip-components=1 -xzf "$work/dc00.tar.gz"
 cp "$work/dc00"/PC_*.js "$work/dc00"/lib*.js "$work/dc00/LICENSE" "$out/hooks/"
+# LunaHook's engines ported to the same scripts (GPL-3.0-or-later, scripts/vnbox/engines/PORTING.md).
+mkdir -p "$out/hooks/engines"
+cp "$here"/engines/*.js "$out/hooks/engines/"
 node "$here/hook-index.mjs" "$out/hooks"
 echo "Copied 0xDC00's hook scripts ${dc00:0:12} to $out/hooks"

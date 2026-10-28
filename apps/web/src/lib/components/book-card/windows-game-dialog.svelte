@@ -51,7 +51,9 @@
   const size = $derived(Object.values(files).reduce((sum, file) => sum + file.size, 0));
   const count = $derived(Object.keys(files).length);
   const busy = $derived(!!copied);
-  const suggested = $derived(hookSuggestion(scripts, { exe, names: [title, folderName] }));
+  const suggested = $derived(
+    hookSuggestion(scripts, { exe, names: [title, folderName], files: Object.keys(files) })
+  );
   const choice = $derived(picked ?? suggested ?? '');
   /** The suggestion, the current pick and the search results, each once */
   const hits = $derived(
