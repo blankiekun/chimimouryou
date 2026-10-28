@@ -309,6 +309,10 @@
       new Map((await database.getStatisticsForBook(data.title)).map((stat) => [stat.dateKey, stat]))
     );
     updateProgress();
+    // A game of unknown length (Windows) counts as being read once opened, hooked or not.
+    if (!data.characters && !bookmark?.progress) {
+      await database.putBookmark(vnBookmark(data.id, read.characters, 0));
+    }
 
     const game = vnInfo(data);
 

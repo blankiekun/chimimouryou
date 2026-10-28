@@ -256,7 +256,8 @@ export function vnBookmark(dataId: number, read: number, total: number): BooksDb
   return {
     dataId,
     exploredCharCount: read,
-    progress: total ? Math.min(read / total, 1) : 0,
+    // A Windows game's length is unknown: a bit above 0 so it shows as being read (Continue reading).
+    progress: total ? Math.min(read / total, 1) : 0.001,
     lastBookmarkModified: Date.now()
   };
 }

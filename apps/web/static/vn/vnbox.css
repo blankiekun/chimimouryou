@@ -27,6 +27,11 @@ div.emscripten_border {
   border: 0;
 }
 
+/* The canvas takes focus (tabindex) for the game's keys; no ring around the game. */
+canvas {
+  outline: none;
+}
+
 /* Loading readout, as player.css's: a dark label at the top left, a thin bar along the bottom. */
 #loading {
   position: absolute;
