@@ -15,7 +15,9 @@ import {
   rankThreads,
   savedHookName,
   searchHookScripts,
+  vnboxErrorText,
   vnboxPlayerUrl,
+  windowsGameBlocker,
   windowsGameBook,
   windowsGameFolder,
   windowsPrograms,
@@ -463,5 +465,22 @@ describe('savedHookName', () => {
     expect(savedHookName({ hook: 'foo()' })).toBe('Chosen script');
     expect(savedHookName({ hookFile: 'PC_Muramasa.js' })).toBe('PC_Muramasa.js');
     expect(savedHookName({})).toBeUndefined();
+  });
+});
+
+describe('windowsGameBlocker', () => {
+  it('names HTTPS before the browser on a plain-HTTP page', () => {
+    const win = { isSecureContext: false, navigator: { storage: {} } } as unknown as Window;
+
+    expect(windowsGameBlocker(win)).toBe('https');
+  });
+
+  it("explains a full storage quota, else shows VNBox's message", () => {
+    expect(vnboxErrorText('Unable to load x.zip: QuotaExceededError: full')).toMatch(
+      /persistently/
+    );
+    expect(vnboxErrorText('Unable to load x.zip: 404')).toBe(
+      "The player couldn't load its files: Unable to load x.zip: 404"
+    );
   });
 });
