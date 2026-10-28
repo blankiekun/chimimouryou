@@ -16,7 +16,7 @@ export interface HookRule {
   replacement: string;
 }
 
-/** Every filter is off unless set. */
+/** Every filter is off unless set, except newOnly: on unless false. */
 export interface HookCleanup {
   /** Control characters (line breaks stay) */
   control?: boolean;
@@ -43,7 +43,10 @@ export interface HookCleanup {
   /** The rules' regular expressions replaced, in order */
   replace?: boolean;
   rules?: HookRule[];
-  /** A line starting with the thread's last one keeps only the new text (a page the game adds to) */
+  /**
+   * A line starting with the thread's last one keeps only the new text (a page the game adds
+   * to). On unless false, so saved cleanups from before it get it too.
+   */
   newOnly?: boolean;
   /** Drop a line seen in the last recentSize lines (a game's backlog screen firing the hook) */
   recentLines?: boolean;
@@ -98,6 +101,11 @@ export const hookFilters: { key: HookFilter; title: string; hint: string }[] = [
 ];
 
 export const defaultRecentSize = 10;
+
+/** Whether a filter runs: newOnly is on by default, the rest off. */
+export function filterOn(cleanup: HookCleanup, key: HookFilter) {
+  return key === 'newOnly' ? cleanup.newOnly !== false : !!cleanup[key];
+}
 
 export function stripControl(text: string) {
   // eslint-disable-next-line no-control-regex
@@ -297,7 +305,7 @@ export function hookCleaner(cleanup: HookCleanup) {
   return (line: string, threadId = '') => {
     let text = cleanHookLine(line, cleanup);
 
-    if (text && cleanup.newOnly) {
+    if (text && filterOn(cleanup, 'newOnly')) {
       const previous = last.get(threadId) ?? '';
 
       last.set(threadId, text);
@@ -325,7 +333,7 @@ export function cleanLines(lines: string[], cleanup: HookCleanup) {
 }
 
 // Filters the suggestion tries, in chain order: the ones fixing what a hook breaks, not the
-// matters of taste (only 「…」, replace).
+// matters of taste (only 「…」, replace). newOnly is on by default, so it is never suggested.
 const suggestable: HookFilter[] = [
   'control',
   'markup',
@@ -336,7 +344,6 @@ const suggestable: HookFilter[] = [
   'repeatedLine',
   'repeatedPhrases',
   'trailingRepeat',
-  'newOnly',
   'recentLines'
 ];
 
@@ -356,11 +363,8 @@ export function suggestCleanup(lines: string[]): HookCleanup | undefined {
     const before = cleanLines(texts, cleanup);
     const changed =
       key === 'recentLines'
-        ? before.length - cleanLines(before, { recentLines: true }).length
-        : key === 'newOnly'
-          ? cleanLines(before, { newOnly: true }).filter((line, index) => line !== before[index])
-              .length
-          : before.filter((line) => cleanHookLine(line, { [key]: true }) !== line).length;
+        ? before.length - cleanLines(before, { recentLines: true, newOnly: false }).length
+        : before.filter((line) => cleanHookLine(line, { [key]: true }) !== line).length;
 
     if (changed * 4 >= before.length && changed > 0) cleanup = { ...cleanup, [key]: true };
   }

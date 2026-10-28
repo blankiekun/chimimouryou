@@ -13,6 +13,7 @@
   import {
     cleanHookLine,
     defaultRecentSize,
+    filterOn,
     hookFilters,
     ruleError,
     suggestCleanup,
@@ -90,7 +91,7 @@
   const suggestion = $derived.by(() => {
     const found = shown && suggestCleanup(shown.recent.map((line) => line.text));
     const missing = Object.keys(found ?? {}).filter(
-      (key) => !cleanup[key as HookFilter]
+      (key) => !filterOn(cleanup, key as HookFilter)
     ) as HookFilter[];
 
     return missing.length ? missing : undefined;
@@ -281,7 +282,8 @@
         <ButtonToggleGroup
           options={optionsForToggle}
           bind:selectedOptionId={
-            () => !!cleanup[filter.key], (on) => setCleanup({ ...cleanup, [filter.key]: on })
+            () => filterOn(cleanup, filter.key),
+            (on) => setCleanup({ ...cleanup, [filter.key]: on })
           }
         />
       </SettingsItemGroup>
