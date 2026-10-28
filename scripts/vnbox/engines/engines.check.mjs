@@ -7,6 +7,8 @@ import path from 'node:path';
 
 const dir = path.dirname(new URL(import.meta.url).pathname);
 const GLOBALS = ['Process', 'Memory', 'Module', 'Interceptor', 'ptr', 'trans'];
+// engines with no pattern: they hook an exported API (TextOutA …), so they attach on any guest that has it
+const ATTACH_ANY = new Set(['T2U', 'TamaokaSoft', 'Reallive', 'Reallive_old', 'RealliveX', 'TinkerBellold', 'Eagls', 'Erogos', 'IronGameSystem', 'MerRouge']);
 
 // ---- a fake guest: game.exe at 0x400000 (PE header, one executable section), gdi32.dll with exports --
 class P {
@@ -171,7 +173,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
             assert.doesNotThrow(() => L.check_function(e), file + ': check');
             let attached;
             assert.doesNotThrow(() => { attached = e.attach(); }, file + ': attach');
-            assert.ok(!attached, file + ': attached on a guest with no match');
+            if (ATTACH_ANY.has(e.name)) assert.ok(attached, file + ': ' + e.name + ' hooks its API');
+            else assert.ok(!attached, file + ': ' + e.name + ' attached on a guest with no match');
             engines++;
         }
     }
@@ -181,7 +184,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     load('PC_LunaEngines.js', G.g);
     await wait(50);
     assert.ok(G.hooks.length === 3, 'auto: GDI fallback');
-    console.log(engines + ' engines in ' + (files.length - 1) + ' files load, check and find no match on an empty guest');
+    console.log(engines + ' engines in ' + (files.length - 1) + ' files load, check and find no match on an empty guest (' + ATTACH_ANY.size + ' API hooks attach)');
 }
 
 function le(v) { return [v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff]; }
