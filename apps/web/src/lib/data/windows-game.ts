@@ -432,14 +432,19 @@ export function fittedTuning(
       ? { tuning: withResolution(tuning, learnResolution), restart: true }
       : undefined;
   }
-  // On the big screen: a splash window can come first, so only a size the start couldn't hold.
+  // On the big screen: a splash window can come first, so only a size the start couldn't hold,
+  // shaped like a game screen (a crash dialog or launcher strip can be 1777x400).
   if (
     resolution === learnResolution &&
     `${width}x${height}` !== learnResolution &&
-    (width > startScreen.width || height > startScreen.height)
+    (width > startScreen.width || height > startScreen.height) &&
+    width >= 640 &&
+    height >= 480 &&
+    width <= height * 2
   ) {
     return { tuning: withResolution(tuning, `${width}x${height}`), restart: false };
   }
+  return undefined;
 }
 
 /** The bundled dc00 scripts (scripts/vnbox/build.sh), relative to vnbox.html. */
