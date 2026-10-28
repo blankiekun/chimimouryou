@@ -12,6 +12,9 @@
   import AudiobookControlsPanel from '$lib/components/book-reader/audiobook-controls-panel.svelte';
   import { audiobookControls } from '$lib/data/audiobook-controls';
   import { PlaybackController } from '$lib/functions/audiobook/playback-controller';
+  import { ratePresets } from '$lib/functions/audiobook/playback';
+  import { nowPlayingPublisher } from '$lib/data/now-playing';
+  import { toTimeString } from '$lib/functions/statistic-util';
   import {
     absCandidateKey,
     absFileText,
@@ -93,6 +96,28 @@
 
   $: controller.setCues(cues);
 
+  const playback$ = controller.state$;
+  const publish = nowPlayingPublisher();
+  let playing = false;
+  /** Seconds into the whole audiobook, for the mini player */
+  let elapsed = 0;
+
+  // The mini player drives this one while Listen isn't shown.
+  $: publish(
+    src
+      ? {
+          playing,
+          text: activeCue?.text ?? candidate?.label ?? '',
+          time: `${toTimeString(elapsed)} / ${toTimeString(total)}`,
+          rate: $playback$.rate,
+          rates: ratePresets,
+          toggle: () => controller.toggle(),
+          step: (offset) => controller.line(offset),
+          setRate: (rate) => controller.setRate(rate)
+        }
+      : undefined
+  );
+
   onMount(() => controller.start());
 
   onMount(async () => {
@@ -120,6 +145,7 @@
   });
 
   onDestroy(() => {
+    publish(undefined);
     clearInterval(saveTimer);
     save();
     dispatch('reading', undefined);
@@ -242,6 +268,8 @@
 
     const time = currentPosition();
 
+    elapsed = time ?? 0;
+
     if (time === undefined || !cues.length) {
       return;
     }
@@ -312,12 +340,14 @@
   }
 
   function onPlay() {
+    playing = true;
     controller.playing(true);
     clearInterval(saveTimer);
     saveTimer = setInterval(save, 15_000);
   }
 
   function onPause() {
+    playing = false;
     controller.playing(false);
     clearInterval(saveTimer);
     save();

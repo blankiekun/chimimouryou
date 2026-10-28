@@ -115,6 +115,7 @@
   } from '$lib/data/analysis-tools';
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
   import ReaderPanel from '$lib/components/book-reader/reader-panel.svelte';
+  import MiniPlayer from '$lib/components/book-reader/mini-player.svelte';
   import {
     bookProgressLabel,
     chapterProgressLabel,
@@ -2308,6 +2309,10 @@
     }}
     on:reading={(ev) => showReading(ev.detail)}
   />
+{/if}
+
+{#if !(panelOpen && panelTab === 'listen')}
+  <MiniPlayer {panelOpen} onopen={() => openPanel('listen')} />
 {/if}
 
 {#if welcomeBackDays && storedExploredCharacter > 0 && absenceTab && !(panelOpen && panelTab === absenceTab.key)}
