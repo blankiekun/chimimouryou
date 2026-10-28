@@ -205,7 +205,8 @@ var vnboxHooks = {
 /**
  * options: textLines(line) (overlay lines), onText(line), onScreen(width, height) (screen size
  * changes), keepLines (keep the recent lines with their screenshots for ankiMedia()), recordLines
- * (and record their sound).
+ * (and record their sound), clean(line, threadId) (the game's text cleanup: the line to use, ''
+ * to drop it).
  */
 async function startGame(options) {
   onScreen = options.onScreen || onScreen;
@@ -225,6 +226,8 @@ async function startGame(options) {
     known.recent = known.recent.slice(-19).concat([{ text: line, click: clicks }]);
     hookChanged();
     if (!drives(known)) return;
+    if (options.clean) line = options.clean(line, thread.id);
+    if (!line) return;
     // The screen can change size without the frame's box changing (same aspect).
     fitOverlay();
     var lines = options.textLines(line, g_screen_width, g_screen_height);

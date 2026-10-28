@@ -3,9 +3,22 @@
    * The /v player's Hooks sheet for Windows games: the text threads VNBox's hooks send, which
    * one drives the overlay, statistics and Anki, a hook search, H-codes and scripts loaded while
    * the game runs, and saving the pick as the game's hook (vnbox.js `vnboxHooks`, VNBox's hooks
-   * contract). VNBox without runtime hooks only shows the saved hook. Not upstream.
+   * contract), and the game's text cleanup (hook-cleanup.ts), saved with the hook. VNBox
+   * without runtime hooks only shows the saved hook and the cleanup. Not upstream.
    */
   import SectionHead from '$lib/components/section-head.svelte';
+  import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
+  import ButtonToggleGroup from '$lib/components/button-toggle-group/button-toggle-group.svelte';
+  import { optionsForToggle } from '$lib/components/button-toggle-group/toggle-option';
+  import {
+    cleanHookLine,
+    defaultRecentSize,
+    hookFilters,
+    ruleError,
+    suggestCleanup,
+    type HookCleanup,
+    type HookFilter
+  } from '$lib/data/hook-cleanup';
   import { database } from '$lib/data/store';
   import { vnElementHtml, vnInfo } from '$lib/data/vn';
   import { rankThreads, savedHookName, type HookThread } from '$lib/data/windows-game';
@@ -15,9 +28,12 @@
     /** The player frame, whose vnbox.js keeps the threads */
     frame?: HTMLIFrameElement;
     bookId: number;
+    /** The game's text cleanup, which the page applies to hooked lines */
+    cleanup: HookCleanup;
+    oncleanup: (cleanup: HookCleanup) => void;
   }
 
-  let { frame, bookId }: Props = $props();
+  let { frame, bookId, cleanup, oncleanup }: Props = $props();
 
   interface VnboxHooks {
     live(): boolean;
@@ -66,9 +82,20 @@
     return hooks.listen(read);
   });
 
-  const ranked = $derived(rankThreads(threads));
+  const ranked = $derived(rankThreads(threads, cleanup));
   const suggested = $derived(ranked[0]?.score >= 0.5 ? ranked[0].thread.id : undefined);
   const picked = $derived(threads.find((thread) => thread.id === selected));
+  /** The thread the cleanup is previewed and suggested on: the picked one, else the best. */
+  const shown = $derived(picked ?? ranked[0]?.thread);
+  const suggestion = $derived.by(() => {
+    const found = shown && suggestCleanup(shown.recent.map((line) => line.text));
+    const missing = Object.keys(found ?? {}).filter(
+      (key) => !cleanup[key as HookFilter]
+    ) as HookFilter[];
+
+    return missing.length ? missing : undefined;
+  });
+  const titleOf = (key: HookFilter) => hookFilters.find((filter) => filter.key === key)!.title;
   const nameOf = (thread: HookThread) =>
     thread.label || (thread.kind === 'script' ? 'Hook script' : thread.id);
 
@@ -87,6 +114,34 @@
       if (kind === 'hcode') hcodeError = error.message;
       else scriptError = error.message;
     }
+  }
+
+  let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Applied at once; written to the book half a second after the last change. */
+  function setCleanup(next: HookCleanup) {
+    oncleanup(next);
+    clearTimeout(cleanupTimer);
+    cleanupTimer = setTimeout(async () => {
+      const stored = await database.getData(bookId);
+
+      if (!stored) return;
+      await database.upsertData(
+        { ...stored, elementHtml: vnElementHtml({ ...vnInfo(stored), hookCleanup: next }) },
+        ReplicationSaveBehavior.Overwrite,
+        false,
+        false
+      );
+    }, 500);
+  }
+
+  const rules = $derived(cleanup.rules ?? []);
+
+  function setRule(index: number, part: 'pattern' | 'replacement', value: string) {
+    setCleanup({
+      ...cleanup,
+      rules: rules.map((rule, at) => (at === index ? { ...rule, [part]: value } : rule))
+    });
   }
 
   async function save() {
@@ -172,14 +227,146 @@
                 {/if}
                 <span class="hooks-thread-count">{thread.count.toLocaleString('en')} lines</span>
               </span>
-              <span class="hooks-thread-line" lang="ja">{thread.last ?? ''}</span>
+              <span class="hooks-thread-line" lang="ja">
+                {cleanHookLine(thread.last ?? '', cleanup) || thread.last || ''}
+              </span>
             </button>
           </li>
         {/each}
       </ul>
     {/if}
+  {/if}
 
-    <SectionHead number={3} title="H-code" level="h3" />
+  <SectionHead number={live ? 3 : 2} title="Text cleanup" level="h3" />
+  <p class="hooks-muted">
+    Fixes the hooked text before the overlay, statistics, Anki and the backlog get it. Saved for
+    this game.
+  </p>
+  <table class="hooks-preview">
+    <tbody>
+      <tr>
+        <th scope="row">Hooked</th>
+        <td lang="ja">{shown?.last ?? ''}</td>
+      </tr>
+      <tr>
+        <th scope="row">Cleaned</th>
+        {#if !shown}
+          <td class="hooks-muted">Lines from the game show here.</td>
+        {:else if cleanHookLine(shown.last ?? '', cleanup)}
+          <td lang="ja">{cleanHookLine(shown.last ?? '', cleanup)}</td>
+        {:else}
+          <td class="hooks-muted">Dropped</td>
+        {/if}
+      </tr>
+    </tbody>
+  </table>
+  {#if suggestion}
+    <div class="hooks-suggestion">
+      <p>
+        <strong>Suggested</strong>
+        {suggestion.map(titleOf).join(', ')}
+      </p>
+      <button
+        class="app-button"
+        onclick={() =>
+          setCleanup({ ...cleanup, ...Object.fromEntries(suggestion.map((key) => [key, true])) })}
+      >
+        Apply
+      </button>
+    </div>
+  {/if}
+  <div class="hooks-filters">
+    {#each hookFilters as filter (filter.key)}
+      <SettingsItemGroup title={filter.title} tooltip={filter.hint}>
+        <ButtonToggleGroup
+          options={optionsForToggle}
+          bind:selectedOptionId={
+            () => !!cleanup[filter.key], (on) => setCleanup({ ...cleanup, [filter.key]: on })
+          }
+        />
+      </SettingsItemGroup>
+      {#if filter.key === 'repeatedChars' && cleanup.repeatedChars}
+        <label class="hooks-sub">
+          <span>Repeat count <span class="hooks-muted">(0 guesses it per line)</span></span>
+          <input
+            class="app-input hooks-number"
+            type="number"
+            min="0"
+            max="9"
+            value={cleanup.repeatCount ?? 0}
+            onchange={(event) =>
+              setCleanup({ ...cleanup, repeatCount: Math.max(0, +event.currentTarget.value || 0) })}
+          />
+        </label>
+      {:else if filter.key === 'recentLines' && cleanup.recentLines}
+        <label class="hooks-sub">
+          <span>Lines remembered</span>
+          <input
+            class="app-input hooks-number"
+            type="number"
+            min="1"
+            max="200"
+            value={cleanup.recentSize ?? defaultRecentSize}
+            onchange={(event) =>
+              setCleanup({
+                ...cleanup,
+                recentSize: Math.max(1, +event.currentTarget.value || defaultRecentSize)
+              })}
+          />
+        </label>
+      {:else if filter.key === 'replace' && cleanup.replace}
+        <div class="hooks-sub hooks-rules">
+          {#each rules as rule, index}
+            <div class="hooks-row">
+              <input
+                class="app-input hooks-field"
+                aria-label="Pattern {index + 1}"
+                aria-invalid={!!ruleError(rule.pattern)}
+                placeholder="Pattern, e.g. ^【.+?】"
+                spellcheck="false"
+                autocomplete="off"
+                value={rule.pattern}
+                onchange={(event) => setRule(index, 'pattern', event.currentTarget.value)}
+              />
+              <input
+                class="app-input hooks-field"
+                aria-label="Replacement {index + 1}"
+                placeholder="Replacement"
+                spellcheck="false"
+                autocomplete="off"
+                value={rule.replacement}
+                onchange={(event) => setRule(index, 'replacement', event.currentTarget.value)}
+              />
+              <button
+                class="app-button"
+                onclick={() =>
+                  setCleanup({ ...cleanup, rules: rules.filter((_, at) => at !== index) })}
+              >
+                Remove
+              </button>
+            </div>
+            {#if ruleError(rule.pattern)}
+              <p class="hooks-error" role="alert">
+                Rule {index + 1} is skipped: {ruleError(rule.pattern)}
+              </p>
+            {/if}
+          {/each}
+          <div class="hooks-actions">
+            <button
+              class="app-button"
+              onclick={() =>
+                setCleanup({ ...cleanup, rules: [...rules, { pattern: '', replacement: '' }] })}
+            >
+              Add rule
+            </button>
+          </div>
+        </div>
+      {/if}
+    {/each}
+  </div>
+
+  {#if live}
+    <SectionHead number={4} title="H-code" level="h3" />
     <form class="hooks-row" onsubmit={(event) => (event.preventDefault(), load('hcode'))}>
       <input
         class="app-input hooks-field"
@@ -195,7 +382,7 @@
       <p class="hooks-error" role="alert">{hcodeError}</p>
     {/if}
 
-    <SectionHead number={4} title="Hook script" level="h3" />
+    <SectionHead number={5} title="Hook script" level="h3" />
     <textarea
       class="app-input hooks-script"
       aria-label="Hook script"
@@ -333,6 +520,72 @@
     flex: none;
     margin-left: auto;
     color: var(--app-muted-fg);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .hooks-preview {
+    width: 100%;
+    border-collapse: collapse;
+    border-top: 2px solid var(--font-color);
+  }
+
+  .hooks-preview th,
+  .hooks-preview td {
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+    text-align: left;
+    vertical-align: baseline;
+  }
+
+  .hooks-preview th {
+    width: 6rem;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+    font-weight: 400;
+  }
+
+  .hooks-preview td {
+    font-size: var(--type-body);
+    overflow-wrap: anywhere;
+  }
+
+  .hooks-suggestion {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 2px;
+    background: var(--app-spot-tint);
+  }
+
+  .hooks-suggestion p {
+    margin: 0;
+  }
+
+  .hooks-suggestion strong {
+    margin-right: 0.5rem;
+    color: var(--accent-strong-color);
+  }
+
+  .hooks-sub {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0 0 0.75rem 1rem;
+    font-size: var(--type-small);
+  }
+
+  .hooks-rules {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hooks-number {
+    width: 5rem;
     font-variant-numeric: tabular-nums;
   }
 

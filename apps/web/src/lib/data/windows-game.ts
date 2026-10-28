@@ -12,6 +12,7 @@
  * uploaded anywhere. Not upstream.
  */
 
+import { hookCleaner, type HookCleanup } from '$lib/data/hook-cleanup';
 import { pagePath } from '$lib/data/env';
 import { hashPage, vnElementHtml, type VnInfo } from '$lib/data/vn';
 import type { LoadData } from '$lib/functions/file-loaders/types';
@@ -423,13 +424,16 @@ const japaneseChar = /[\u3000-\u30ff\u3400-\u9fff\uff00-\uffef]/u;
 
 /**
  * Threads best first for picking the game's text: one line per click (char-by-char hooks send
- * many), mostly Japanese, few repeats (menus and redraws repeat) and longer than one character.
- * score is 0-1.
+ * many), mostly Japanese, few repeats (menus and redraws repeat) and longer than one character,
+ * after the game's text cleanup (lines it drops don't count). score is 0-1.
  */
-export function rankThreads(threads: HookThread[]) {
+export function rankThreads(threads: HookThread[], cleanup: HookCleanup = {}) {
   return threads
     .map((thread) => {
-      const lines = thread.recent;
+      const clean = hookCleaner(cleanup);
+      const lines = thread.recent
+        .map((line) => ({ ...line, text: clean(line.text) }))
+        .filter((line) => line.text);
       const share = (count: number) => (lines.length ? count / lines.length : 0);
       const chars = lines.flatMap((line) => [...line.text.replace(/\s/g, '')]);
       const score =
