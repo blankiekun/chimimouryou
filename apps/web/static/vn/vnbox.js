@@ -207,7 +207,8 @@ function hookChanged() {
     }, 250);
 }
 
-function drives(thread) {
+// Not `drives`: VNBox v0.2.2's boxedwine-shell.js has a global `var drives` in this frame.
+function threadDrives(thread) {
   return hookSelected ? thread.id === hookSelected : thread.kind === 'script';
 }
 
@@ -314,7 +315,7 @@ async function startGame(options) {
     known.count += 1;
     known.recent = known.recent.slice(-19).concat([{ text: line, click: clicks }]);
     hookChanged();
-    if (!drives(known)) return;
+    if (!threadDrives(known)) return;
     if (options.clean) line = options.clean(line, thread.id);
     if (!line) return;
     // The screen can change size without the frame's box changing (same aspect).
