@@ -65,6 +65,12 @@ scripts/vnbox/dc00-sha256sums when the Pages site and the web image are built;
 not in the repository) are 0xDC00's scripts, Copyright (c) 0xDC00, licensed under
 the MIT License (vn/vnbox/hooks/LICENSE), redistributed unmodified.
 
+The LunaHook engine hooks (scripts/vnbox/engines/, vn/vnbox/hooks/engines/ in the
+built site) are ported from LunaHook in LunaTranslator
+(https://github.com/HIllya51/LunaTranslator, commit be625f4), Copyright (c)
+HIllya51 and contributors, licensed under the GNU General Public License v3.0; the
+ports are GPL-3.0-or-later (see LICENSE).
+
 The desktop app (apps/desktop) bundles Yomitan
 (https://github.com/yomidevs/yomitan), a separate program licensed under the
 GNU General Public License version 3, unmodified: the Chrome build of the

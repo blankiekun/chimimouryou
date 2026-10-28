@@ -146,6 +146,52 @@ describe('bundled hook scripts', () => {
     expect(suggest('foo.exe', 'Unknown Novel')).toBeUndefined();
   });
 
+  it('else the first LunaHook engine (in LunaHook order) whose file checks pass', () => {
+    const engines = [
+      ...scripts,
+      {
+        file: 'engines/KiriKiri.js',
+        name: 'KiriKiri (LunaHook engine)',
+        exes: [],
+        luna: [{ order: 11, any: ['*.xp3'] }]
+      },
+      {
+        file: 'engines/Azurite.js',
+        name: 'Azurite (LunaHook engine)',
+        exes: [],
+        luna: [{ order: 265, all: ['Data01', 'PCM/*.mp3'] }]
+      },
+      {
+        file: 'engines/Majiro.js',
+        name: 'Majiro (LunaHook engine)',
+        exes: [],
+        luna: [{ order: 19, any: ['data*.arc', 'stream*.arc'] }]
+      },
+      {
+        file: 'engines/akatombo.js',
+        name: 'akatombo (LunaHook engine)',
+        exes: [],
+        luna: [{ order: 147 }]
+      }
+    ];
+    const pick = (exe: string, files: string[]) =>
+      hookSuggestion(engines, { exe, names: ['Unknown Novel'], files });
+
+    expect(pick('game.exe', ['game.exe', 'DATA.XP3', 'scenario1.arc'])).toBe('engines/KiriKiri.js');
+    expect(pick('game.exe', ['game.exe', 'data2.arc', 'data.xp3'])).toBe('engines/KiriKiri.js');
+    expect(pick('bin/game.exe', ['bin/game.exe', 'bin/Data01/a.bin', 'bin/PCM/op.mp3'])).toBe(
+      'engines/Azurite.js'
+    );
+    expect(
+      pick('bin/game.exe', ['bin/game.exe', 'Data01/a.bin', 'bin/PCM/op.mp3'])
+    ).toBeUndefined();
+    expect(pick('game.exe', ['game.exe', 'stream01.arc'])).toBe('engines/Majiro.js');
+    expect(pick('game.exe', ['game.exe'])).toBeUndefined();
+    expect(hookSuggestion(engines, { exe: 'muvluv.exe', names: [], files: ['a.xp3'] })).toBe(
+      'PC_Muv_Luv.js'
+    );
+  });
+
   it('searches names and file names', () => {
     expect(searchHookScripts(scripts, 'muv luv').map((s) => s.file)).toEqual(['PC_Muv_Luv.js']);
     expect(searchHookScripts(scripts, '航海')).toHaveLength(1);
@@ -167,6 +213,12 @@ describe('bundled hook scripts', () => {
       );
 
     expect(frida()).toBe('vnbox/hooks/PC_Muv_Luv.js');
+    expect(
+      new URL(
+        vnboxPlayerUrl({ ...info, files: [], hookFile: 'engines/KiriKiri.js' }),
+        'http://x/'
+      ).searchParams.get('frida')
+    ).toBe('vnbox/hooks/engines/KiriKiri.js');
     expect(frida('blob:http://x/1')).toBe('blob:http://x/1');
   });
 });

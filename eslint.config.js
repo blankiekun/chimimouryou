@@ -34,7 +34,9 @@ module.exports = (async () => {
         'apps/web/src/lib/vendor/yomitan/**',
         'apps/desktop/dist/**',
         // Build-time Node scripts outside the web app's tsconfig.
-        'scripts/**/*.mjs'
+        'scripts/**/*.mjs',
+        // Hook scripts run inside the game by VNBox's frida-compat (its globals, dc00's style).
+        'scripts/vnbox/engines/**'
       ]
     },
     {

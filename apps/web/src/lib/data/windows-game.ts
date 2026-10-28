@@ -206,7 +206,9 @@ export function windowsGameBook(
  * same-origin blob: or /vn/ scripts); else a bundled script by its path from vnbox.html.
  */
 export function vnboxPlayerUrl(info: VnInfo, hookUrl?: string, tuning = '') {
-  const frida = hookUrl ?? (info.hookFile && `${hookBase}/${encodeURIComponent(info.hookFile)}`);
+  // Per path segment: LunaHook engine ports live in engines/, and VNBox refuses an encoded /.
+  const hookPath = info.hookFile?.split('/').map(encodeURIComponent).join('/');
+  const frida = hookUrl ?? (hookPath && `${hookBase}/${hookPath}`);
   const params = [
     'root=TinyCore15Wine11.0-web',
     'rootBase=vnbox',
@@ -314,11 +316,17 @@ export function fittedTuning(
 /** The bundled dc00 scripts (scripts/vnbox/build.sh), relative to vnbox.html. */
 const hookBase = 'vnbox/hooks';
 
-/** A bundled dc00 script: hook-index.mjs's index.json */
+/** A bundled script: hook-index.mjs's index.json */
 export interface HookScript {
   file: string;
   name: string;
   exes: string[];
+  /**
+   * A LunaHook engine port (scripts/vnbox/engines/): per engine its place in LunaHook's check
+   * order and the game files it checks for, all of them or any one (CheckFile names: * and ?
+   * wildcards, relative to the program's folder)
+   */
+  luna?: { order: number; all?: string[]; any?: string[] }[];
 }
 
 /** The bundled scripts, or none when the build has no VNBox (pnpm dev without build.sh). */
@@ -354,12 +362,69 @@ function scriptKeys(script: HookScript) {
 }
 
 /**
+ * LunaHook's Util::CheckFile over the game's files: a name with * and ? wildcards, matched
+ * case-insensitively against the files and folders in the program's folder (or below it, for a
+ * name with a folder in it).
+ */
+export function lunaFileCheck(name: string, files: string[], exe: string) {
+  const exeDir = exe.includes('/') ? exe.slice(0, exe.lastIndexOf('/') + 1) : '';
+  const paths = new Set<string>();
+
+  for (const file of files) {
+    if (!file.startsWith(exeDir)) continue;
+
+    const parts = file.slice(exeDir.length).split('/');
+
+    parts.forEach((_, at) =>
+      paths.add(
+        parts
+          .slice(0, at + 1)
+          .join('/')
+          .toLowerCase()
+      )
+    );
+  }
+
+  const spec = name.replaceAll('\\', '/').replace(/^\.\//, '').toLowerCase();
+  const pattern = new RegExp(
+    `^${spec
+      .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+      .replaceAll('*', '[^/]*')
+      .replaceAll('?', '[^/]')}$`
+  );
+
+  return [...paths].some((path) => pattern.test(path));
+}
+
+/** The LunaHook engine first in LunaHook's order whose file checks pass, or undefined. */
+function lunaSuggestion(scripts: HookScript[], files: string[], exe: string) {
+  let best: { file: string; order: number } | undefined;
+
+  for (const script of scripts) {
+    for (const engine of script.luna ?? []) {
+      const check = (name: string) => lunaFileCheck(name, files, exe);
+      const passes = engine.all
+        ? engine.all.every(check)
+        : engine.any
+          ? engine.any.some(check)
+          : false;
+
+      if (passes && (!best || engine.order < best.order))
+        best = { file: script.file, order: engine.order };
+    }
+  }
+
+  return best?.file;
+}
+
+/**
  * The script for a game, or undefined: the hand-kept table, then a script that names the
- * program, then the best name match with the program's name, the folder's or the title.
+ * program, then the best name match with the program's name, the folder's or the title, then
+ * the LunaHook engine whose file checks the game's files pass.
  */
 export function hookSuggestion(
   scripts: HookScript[],
-  game: { exe: string; names: string[] }
+  game: { exe: string; names: string[]; files?: string[] }
 ): string | undefined {
   const program = game.exe.split(/[\\/]/).pop() ?? '';
   const known = knownHooks[program];
@@ -393,7 +458,7 @@ export function hookSuggestion(
     }
   }
 
-  return best?.file;
+  return best?.file ?? (game.files && lunaSuggestion(scripts, game.files, game.exe));
 }
 
 /** The scripts whose name or file name has the query in it. */
