@@ -452,7 +452,8 @@ export interface HookScript {
 /** The bundled scripts, or none when the build has no VNBox (pnpm dev without build.sh). */
 export async function hookScripts(): Promise<HookScript[]> {
   try {
-    const response = await fetch(`${pagePath}/vn/${hookBase}/index.json`);
+    // Hosts cache /vn/vnbox/ for a day, but the index changes under the same name
+    const response = await fetch(`${pagePath}/vn/${hookBase}/index.json`, { cache: 'no-cache' });
 
     return response.ok ? await response.json() : [];
   } catch {
