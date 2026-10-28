@@ -267,6 +267,9 @@ export const ja: Record<MessageKey, string> = {
   'book.undated': '日付なし',
   'book.useDetails': 'この情報を使用',
   'book.useDetailsCover': '情報と表紙を使用',
+  'book.findLengthOn': '{source} または Jiten で長さを検索',
+  'book.useLength': 'この長さを使用',
+  'book.noJitenLength': 'Jiten にこのゲームのデッキがないため、長さは不明のままです。',
 
   'difficulty.summary': 'レベル {score}/10（{tier}）',
   'difficulty.level': '本文の98%が頻出上位{words}語',

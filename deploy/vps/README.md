@@ -4,7 +4,8 @@ The standalone edition (the same build as GitHub Pages, Windows games included) 
 [Caddy](https://caddyserver.com) on a small VPS, with Cloudflare's free proxy in front to cache the
 big files. The social hub stays on Cloudflare Workers; no server data lives here, only the static site.
 
-- `Caddyfile`: the site, its headers and cache lifetimes, and the SPA fallback (like Pages).
+- `Caddyfile`: the site, its headers and cache lifetimes, the SPA fallback (like Pages) and the
+  rate-limited `/jiten/` proxy for Find details (Jiten's API only answers jiten.moe's own origin).
 - `chimireader-deploy`: the only command the deploy key may run (prepare, rsync, activate).
 - `.github/workflows/vps-site.yml`: builds the site (`scripts/build-standalone.sh`, as the Pages
   workflow does), uploads it to a new folder in `/srv/chimireader/releases/` and then flips the
@@ -26,7 +27,12 @@ big files. The social hub stays on Cloudflare Workers; no server data lives here
    curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
    curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt > /etc/apt/sources.list.d/caddy-stable.list
    apt update && apt install -y caddy
+   caddy add-package github.com/mholt/caddy-ratelimit
+   apt-mark hold caddy
    ```
+   The module gives the `/jiten/` proxy its `rate_limit`; the `Caddyfile` doesn't load without it.
+   An `apt upgrade` of caddy would put back a stock binary (hence the hold): upgrade with
+   `caddy upgrade`, which keeps added modules, then `systemctl restart caddy`.
 3. The deploy user and the site folder. Make a key pair just for this (`ssh-keygen -t ed25519 -N ''
 -f vps-deploy`), copy `chimireader-deploy` to `/usr/local/bin/` (mode 755), then:
    ```sh

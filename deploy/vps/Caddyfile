@@ -45,10 +45,53 @@ chimireader.blankie.moe {
 	# 	Cross-Origin-Embedder-Policy credentialless
 	# }
 
+	# Book page → Find details → Jiten (searches, and a Windows game's length by its VNDB id), as
+	# the Docker image's nginx does: Jiten's API only answers jiten.moe's own origin. Read-only GETs
+	# on three paths, rate-limited (the caddy-ratelimit module, see README.md), without the reader's
+	# cookies or address. Keyed by CF-Connecting-IP (every request comes through Cloudflare), plus
+	# a cap for everyone together: Jiten's API is for small-scale use.
+	@jiten {
+		method GET
+		path_regexp jiten ^/jiten/(search|api/media-deck/(by-link-id/2/v[0-9]+|[0-9]+/detail))$
+	}
+	# route: in this order (rate_limit has no place in Caddy's standard directive order).
+	handle @jiten {
+		route {
+			rate_limit {
+				zone jiten_reader {
+					key {http.request.header.CF-Connecting-IP}
+					events 20
+					window 1m
+				}
+				zone jiten_all {
+					key static
+					events 200
+					window 1m
+				}
+			}
+			rewrite /jiten/search /api/media-deck/get-media-decks?{query}
+			uri strip_prefix /jiten
+			reverse_proxy https://api.jiten.moe {
+				header_up Host api.jiten.moe
+				header_up -Cookie
+				header_up -Origin
+				header_up -Referer
+				header_up -X-Forwarded-For
+				header_up -Cf-Connecting-Ip
+				header_up -True-Client-Ip
+				header_up -Cf-Ipcountry
+				header_down -Set-Cookie
+			}
+		}
+	}
+
 	# Like GitHub Pages: prerendered pages by path (/settings → settings.html), else the SPA
-	# fallback (adapter-static's 404.html), served as 200 so the app can route it.
-	try_files {path} {path}.html {path}/index.html /404.html
-	file_server
+	# fallback (adapter-static's 404.html), served as 200 so the app can route it. In a handle so
+	# that it never sees /jiten/ paths (try_files runs before route in Caddy's standard order).
+	handle {
+		try_files {path} {path}.html {path}/index.html /404.html
+		file_server
+	}
 }
 
 # blankiekun.github.io's site, deployed by its own vps-site.yml with the second deploy key

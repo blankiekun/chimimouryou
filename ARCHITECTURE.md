@@ -26,7 +26,7 @@ nginx: the `web` container (scripts/calibre/nginx-ebook-reader.conf.template)
  ├─ /calibre/difficulty/…   → `difficulty` container (difficulty:8765, optional)
  ├─ /calibre/mokuro/…       → manga text files; `api/` → `mokuro` container (mokuro:8768, optional)
  ├─ /audiobookshelf/…       → AUDIOBOOKSHELF_URL (API and sign-in only, optional)
- └─ /jiten/search           → jiten.moe search (Find details, `series` permission)
+ └─ /jiten/…                → jiten.moe search and deck lengths (Find details, signed in)
 
 Every location except the app itself is checked by auth_request against the
 account service: reads need an account, a trusted network (TRUSTED_NETWORKS) or
