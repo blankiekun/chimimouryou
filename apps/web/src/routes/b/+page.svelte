@@ -755,10 +755,10 @@
   /** How far up the docked mini player reaches (mini-player.svelte); 0 while it isn't shown */
   let miniPlayerRoom = 0;
   // The book ends above the mini player: its own 2rem bottom padding (book-reader.svelte's py-8)
-  // already covers part of it, and 0.5rem stays free between them.
+  // already covers part of it, and about 0.5rem stays free between them (glyph boxes overhang).
   $: bookBottom =
     browser && miniPlayerRoom && !(panelOpen && panelTab === 'listen')
-      ? Math.max(0, miniPlayerRoom - convertRemToPixels(window, 1.5))
+      ? Math.max(0, miniPlayerRoom - convertRemToPixels(window, 1))
       : 0;
   // Continuous: scrolled text passes under the panel's chrome, so the visible book (where jumps
   // land and the position is measured) begins this far from the screen's start edge.
