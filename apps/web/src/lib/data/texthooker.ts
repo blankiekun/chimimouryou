@@ -76,17 +76,19 @@ export function parseHookMessage(data: unknown) {
 /**
  * What a new line adds: its characters (none for a repeat of the last line, which tools send
  * when a game redraws) and the time since the last line, at most `idleSeconds` so breaks count
- * like the reading tracker's idle pause.
+ * like the reading tracker's idle pause. A last line from before `since` (the page was opened,
+ * the lines are kept in localStorage) adds no time: the page was closed in between.
  */
 export function lineCount(
   text: string,
   last: HookLine | undefined,
   now: number,
-  idleSeconds: number
+  idleSeconds: number,
+  since = 0
 ) {
   if (last?.text === text) return { characters: 0, seconds: 0, repeat: true };
 
-  const gap = last ? Math.max(0, (now - last.at) / 1000) : 0;
+  const gap = last && last.at >= since ? Math.max(0, (now - last.at) / 1000) : 0;
 
   return {
     characters: countTextCharacters(text),

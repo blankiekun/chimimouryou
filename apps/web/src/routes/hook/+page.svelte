@@ -44,6 +44,7 @@
   let title = $state(hookTitle$.getValue());
   let status = $state<Status>('off');
   let lines = $state<HookLine[]>(loadLines());
+  const opened = Date.now();
   let sessionCharacters = $state(0);
   let sessionSeconds = $state(0);
   let list = $state<HTMLOListElement>();
@@ -101,7 +102,7 @@
     if (!text) return;
 
     const now = Date.now();
-    const count = lineCount(text, lines.at(-1), now, $trackerIdleTime$);
+    const count = lineCount(text, lines.at(-1), now, $trackerIdleTime$, opened);
 
     if (count.repeat) return;
 
