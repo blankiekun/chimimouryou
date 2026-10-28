@@ -1,5 +1,6 @@
 <script lang="ts">
   import { faXmark } from '@fortawesome/free-solid-svg-icons';
+  import { sheetDrag } from '$lib/functions/sheet-drag';
   import { createEventDispatcher } from 'svelte';
   import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';
@@ -16,7 +17,16 @@
 <svelte:window on:keydown={(event) => event.key === 'Escape' && dispatch('close')} />
 
 <div class="sheet-scrim" aria-hidden="true" on:click={() => dispatch('close')} />
-<div class="sheet writing-horizontal-tb" role="dialog" aria-label={title}>
+<div
+  class="sheet writing-horizontal-tb"
+  role="dialog"
+  aria-label={title}
+  use:sheetDrag={{
+    handles: '.sheet-grabber, .sheet-head',
+    fullClass: 'sheet-full',
+    close: () => dispatch('close')
+  }}
+>
   <div class="sheet-grabber" aria-hidden="true" />
   <header class="sheet-head">
     <h2>{title}</h2>
@@ -43,6 +53,7 @@
     z-index: 62;
     max-height: 85vh;
     overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 0 1rem 1.5rem;
     border-top: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
     /* A flat layer on the opaque page colour: some themes' panel colour is translucent (it was blurred). */
@@ -53,12 +64,26 @@
     font-size: var(--type-body);
   }
 
+  /* Phones: dragged up (sheet-drag.ts), the sheet may grow to the screen's height. */
+  @media (max-width: 767px) {
+    .sheet:global(.sheet-full) {
+      max-height: calc(100dvh - env(safe-area-inset-top));
+    }
+  }
+
   .sheet-grabber {
     width: 2.5rem;
     height: 4px;
-    margin: 0.5rem auto 0;
+    margin: 0 auto;
+    padding: 0.5rem 0 0;
     border-radius: 2px;
     background: color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
+    background-clip: content-box;
+    touch-action: none;
+  }
+
+  .sheet-head {
+    touch-action: none;
   }
 
   .sheet-head {

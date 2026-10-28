@@ -14,6 +14,7 @@
   import type { SearchIndex, SearchResult } from '$lib/functions/book-text/book-search';
   import { activePlugins$, type SelectionActionContribution } from '$lib/plugins';
   import type { PassageContext } from '$lib/data/ask-ai';
+  import { sheetDrag } from '$lib/functions/sheet-drag';
   import { createEventDispatcher } from 'svelte';
   import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';
@@ -111,6 +112,12 @@
   class:hidden={!open}
   aria-label={$t$('reader.panel')}
   on:keydown={onKeydown}
+  use:sheetDrag={{
+    handles: '.grabber, .tabs, .head',
+    fullClass: 'sheet-full',
+    close: () => dispatch('close'),
+    open
+  }}
 >
   <div class="grabber md:hidden" aria-hidden="true" />
   <div class="tabs" role="tablist" aria-orientation="vertical">
@@ -320,6 +327,7 @@
 
   .grabber {
     width: 2.5rem;
+    touch-action: none;
     height: 4px;
     flex: none;
     margin: 0.5rem auto 0.4rem;
@@ -604,8 +612,33 @@
     line-height: 1.6;
   }
 
-  /* Phones: the tab row already names the tab, so the header keeps only the count and close. */
+  /* Phones: the tab row already names the tab, so the header keeps only the count and close.
+     The sheet drags from the grabber, tab row and header (sheet-drag.ts); dragged up it stands
+     full height under the reader bar. */
   @media (max-width: 767px) {
+    .reader-index:global(.sheet-full) {
+      height: calc(100dvh - 3.5rem - env(safe-area-inset-top));
+    }
+
+    .grabber {
+      padding: 0.5rem 0;
+      margin: 0 auto;
+      box-sizing: content-box;
+      background-clip: content-box;
+    }
+
+    .tabs {
+      touch-action: pan-x;
+    }
+
+    .head {
+      touch-action: none;
+    }
+
+    .content {
+      overscroll-behavior: contain;
+    }
+
     .head {
       padding: 0.35rem 0;
     }

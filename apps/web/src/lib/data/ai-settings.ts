@@ -25,6 +25,8 @@ export const ttsVoiceId$ = writableStringLocalStorageSubject()('ttsVoiceId', '')
 export const deviceVoiceName$ = writableStringLocalStorageSubject()('deviceVoiceName', '');
 /** Playback speed of the AI voice (the highlight follows the audio clock). */
 export const ttsPlaybackRate$ = writableNumberLocalStorageSubject()('ttsPlaybackRate', 1);
+/** The AI voice's speeds (Settings → AI → Voice, the mini player) */
+export const ttsRates = [0.75, 0.9, 1, 1.1, 1.25, 1.5];
 
 // Settings from before AI connections (#129), last mirrored in v3.8.0: an old API key must not linger.
 [

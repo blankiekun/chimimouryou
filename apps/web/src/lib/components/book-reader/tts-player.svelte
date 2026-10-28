@@ -6,7 +6,8 @@
     faPlay,
     faSpinner
   } from '@fortawesome/free-solid-svg-icons';
-  import { deviceVoiceName$, ttsPlaybackRate$, ttsVoiceId$ } from '$lib/data/ai-settings';
+  import { deviceVoiceName$, ttsPlaybackRate$, ttsRates, ttsVoiceId$ } from '$lib/data/ai-settings';
+  import { nowPlayingPublisher } from '$lib/data/now-playing';
   import { aiFeatureState$ } from '$lib/data/ai-connections';
   import {
     deviceSpeechAvailable,
@@ -99,7 +100,28 @@
     }
   }
 
-  onDestroy(stop);
+  const publish = nowPlayingPublisher();
+
+  // The mini player drives the voice while Listen isn't shown; it has something once started.
+  $: publish(
+    chunks.length && !setup
+      ? {
+          playing: playing || loading,
+          text: currentText,
+          time: '',
+          rate: $ttsPlaybackRate$,
+          rates: ttsRates,
+          toggle: togglePlay,
+          step: skip,
+          setRate: (rate) => ttsPlaybackRate$.next(rate)
+        }
+      : undefined
+  );
+
+  onDestroy(() => {
+    publish(undefined);
+    stop();
+  });
 
   function createAudioCache() {
     const { signal } = abortController;

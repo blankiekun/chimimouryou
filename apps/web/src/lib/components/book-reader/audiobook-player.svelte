@@ -35,6 +35,8 @@
   import AudiobookControlsPanel from '$lib/components/book-reader/audiobook-controls-panel.svelte';
   import { audiobookControls } from '$lib/data/audiobook-controls';
   import { PlaybackController } from '$lib/functions/audiobook/playback-controller';
+  import { ratePresets } from '$lib/functions/audiobook/playback';
+  import { nowPlayingPublisher } from '$lib/data/now-playing';
   import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
   import { t$, tr } from '$lib/i18n';
   import Fa from 'svelte-fa';
@@ -79,6 +81,25 @@
 
   $: controller.setCues(cues);
 
+  const playback$ = controller.state$;
+  const publish = nowPlayingPublisher();
+
+  // The mini player drives this one while Listen isn't shown.
+  $: publish(
+    audiobook
+      ? {
+          playing,
+          text: activeCue?.text ?? audiobook.audioName,
+          time: `${toTimeString(currentTime)} / ${toTimeString(duration)}`,
+          rate: $playback$.rate,
+          rates: ratePresets,
+          toggle: togglePlay,
+          step: (offset) => controller.line(offset),
+          setRate: (rate) => controller.setRate(rate)
+        }
+      : undefined
+  );
+
   onMount(() => controller.start());
   /** Sheet open above the bar */
   let sheet: '' | 'lines' | 'setup' = '';
@@ -108,6 +129,7 @@
   }
 
   onDestroy(() => {
+    publish(undefined);
     savePosition();
     audio?.pause();
     dispatch('reading', undefined);

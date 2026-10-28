@@ -12,6 +12,7 @@
     aiConnections$,
     deviceVoiceName$,
     ttsPlaybackRate$,
+    ttsRates,
     ttsVoiceId$
   } from '$lib/data/ai-settings';
   import {
@@ -237,7 +238,7 @@
       aria-label={$t$('ai.voiceSpeed')}
       bind:value={$ttsPlaybackRate$}
     >
-      {#each [0.75, 0.9, 1, 1.1, 1.25, 1.5] as rate}
+      {#each ttsRates as rate}
         <option value={rate}>{rate}×</option>
       {/each}
     </select>
