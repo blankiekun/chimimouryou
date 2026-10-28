@@ -7,6 +7,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isVn, vnInfo } from '$lib/data/vn';
 import {
+  compatFromTuning,
+  compatParams,
   copyWindowsGame,
   fittedTuning,
   hookSuggestion,
@@ -17,7 +19,8 @@ import {
   windowsGameBook,
   windowsGameFolder,
   windowsPrograms,
-  type HookThread
+  type HookThread,
+  type VnboxCompat
 } from '$lib/data/windows-game';
 
 describe('windowsPrograms', () => {
@@ -100,6 +103,68 @@ describe('vnboxPlayerUrl', () => {
       'p=a.exe',
       'frida=blob%3Ahttp%3A%2F%2Fx%2F1'
     ]);
+  });
+});
+
+describe('compatParams', () => {
+  const none: VnboxCompat = {
+    renderer: '',
+    version: '',
+    movies: true,
+    desktop: '',
+    dlls: [],
+    registry: [],
+    env: []
+  };
+
+  it('adds nothing by default and keeps jpfonts and nomono with a setting', () => {
+    expect(compatParams(none)).toEqual([]);
+
+    const compat: VnboxCompat = {
+      renderer: 'gdi',
+      version: 'win98',
+      movies: false,
+      desktop: '1024x768',
+      dlls: [{ name: 'D3D9', mode: 'n' }],
+      registry: [
+        { key: 'HKCU\\Software\\Some Maker\\Game', name: 'Mode', type: 'REG_DWORD', value: '0x1' }
+      ],
+      env: [{ name: 'WINEDEBUG', value: '-all&p=evil.exe#x' }]
+    };
+    const params = compatParams(compat);
+    const info = { encoding: 'sjis', files: [], engine: 'vnbox', folder: 'gabc', exe: 'a.exe' };
+    const search = new URLSearchParams(
+      vnboxPlayerUrl(info as any, undefined, params.join('&')).split('?')[1]
+    );
+
+    expect(search.get('registry')).toBe('jpfonts,gdi,win98');
+    expect(search.get('wine-override')).toBe('nomono,quartz=,d3d9=n');
+    expect(search.get('wine-env')).toBe('WINEDEBUG=-all&p=evil.exe#x');
+    expect(search.get('reg')).toBe('HKCU\\Software\\Some Maker\\Game\tMode\tREG_DWORD\t0x1');
+    expect(search.get('desktop')).toBe('1024x768');
+    expect(search.getAll('p')).toEqual(['a.exe']);
+    expect(compatFromTuning(params)).toEqual({ ...compat, dlls: [{ name: 'd3d9', mode: 'n' }] });
+  });
+
+  it('leaves out rows VNBox would refuse', () => {
+    expect(
+      compatParams({
+        ...none,
+        desktop: '1024',
+        dlls: [{ name: 'a,b', mode: 'n' }],
+        registry: [
+          { key: 'HKCU\\System\\X', name: 'v', type: 'REG_SZ', value: '1' },
+          { key: 'HKLM\\Software\\X', name: 'v', type: 'REG_SZ', value: '1 & calc' },
+          { key: 'HKLM\\Software\\X', name: 'v', type: 'REG_SZ', value: '%PATH%' },
+          { key: 'HKLM\\Software\\X', name: 'v', type: 'REG_DWORD', value: 'ten' }
+        ],
+        env: [
+          { name: 'WINEDLLOVERRIDES', value: 'd3d9=n' },
+          { name: '1X', value: 'a' },
+          { name: 'A', value: 'a\nb' }
+        ]
+      })
+    ).toEqual([]);
   });
 });
 

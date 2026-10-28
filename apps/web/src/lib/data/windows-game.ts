@@ -267,6 +267,113 @@ export function saveVnboxTuning(folder: string, tuning: string) {
   }
 }
 
+/**
+ * A game's Wine fixes from the Tuning sheet's Compatibility section, kept in its tuning as VNBox
+ * address settings (`registry`, `wine-override`, `wine-env`, `reg`, `desktop`; VNBox #37 for the
+ * last four and dll items). Players set them; nothing is guessed.
+ */
+export interface VnboxCompat {
+  /** registry= preset: Wine's Direct3D renderer ('' = not set) */
+  renderer: string;
+  /** registry= preset: the Windows version Wine reports, win95…win10 ('' = not set) */
+  version: string;
+  /** false: quartz disabled, so DirectShow movies don't play (games often skip them) */
+  movies: boolean;
+  /** A Wine virtual desktop WIDTHxHEIGHT ('' = none) */
+  desktop: string;
+  dlls: { name: string; mode: 'n' | 'b' | '' }[];
+  registry: { key: string; name: string; type: 'REG_SZ' | 'REG_DWORD'; value: string }[];
+  env: { name: string; value: string }[];
+}
+
+export const compatKeys = new Set(['registry', 'wine-override', 'wine-env', 'reg', 'desktop']);
+const versions = ['win95', 'win98', 'winme', 'win2k', 'winxp', 'win7', 'win10'];
+
+// The same checks as VNBox's shell: values reach a `cmd /c reg add … &` chain and Wine's env.
+export const validDesktop = (size: string) => /^\d{3,4}x\d{3,4}$/.test(size);
+export const validDll = (dll: VnboxCompat['dlls'][number]) => /^[a-z0-9_.-]{1,64}$/i.test(dll.name);
+export const validEnv = ({ name, value }: VnboxCompat['env'][number]) =>
+  /^[A-Za-z_]\w{0,63}$/.test(name) &&
+  name.toUpperCase() !== 'WINEDLLOVERRIDES' &&
+  // eslint-disable-next-line no-control-regex
+  !/[\x00-\x1f]/.test(value) &&
+  value.length <= 1000;
+export const validReg = ({ key, name, type, value }: VnboxCompat['registry'][number]) =>
+  /^(HKCU|HKLM|HKEY_CURRENT_USER|HKEY_LOCAL_MACHINE)\\Software(\\[^\\]+)*$/i.test(key) &&
+  // eslint-disable-next-line no-control-regex
+  [key, name, value].every((field) => field.length <= 260 && !/["&|<>^%\x00-\x1f]/.test(field)) &&
+  (type === 'REG_SZ' || /^(0x[0-9a-f]{1,8}|\d{1,10})$/i.test(value));
+
+/** Reads the Compatibility settings back from a tuning's `a=b` pairs. */
+export function compatFromTuning(pairs: string[]): VnboxCompat {
+  const get = (key: string) => {
+    const pair = pairs.find((p) => p.split('=')[0] === key);
+
+    try {
+      return pair ? decodeURIComponent(pair.slice(key.length + 1)) : '';
+    } catch {
+      return '';
+    }
+  };
+  const lines = (key: string) => get(key).split('\n').filter(Boolean);
+  const list = (key: string) =>
+    get(key)
+      .replace(/^\[|\]$/g, '')
+      .split(',');
+  const presets = list('registry');
+  const overrides = list('wine-override').filter((item) => item.includes('='));
+
+  return {
+    renderer: presets.find((name) => name === 'gl' || name === 'gdi') ?? '',
+    version: presets.find((name) => versions.includes(name)) ?? '',
+    movies: !overrides.includes('quartz='),
+    desktop: get('desktop'),
+    dlls: overrides
+      .filter((item) => item !== 'quartz=')
+      .map((item) => {
+        const [name, mode] = item.split('=');
+
+        return { name, mode: mode === 'n' || mode === 'b' ? mode : '' };
+      }),
+    registry: lines('reg').map((line) => {
+      const [key = '', name = '', type, value = ''] = line.split('\t');
+
+      return { key, name, type: type === 'REG_DWORD' ? type : 'REG_SZ', value };
+    }),
+    env: lines('wine-env').map((line) => ({
+      name: line.slice(0, Math.max(0, line.indexOf('='))),
+      value: line.slice(line.indexOf('=') + 1)
+    }))
+  };
+}
+
+/**
+ * The Compatibility settings as VNBox address settings (encoded: no `&`, `=` or `#` inside a
+ * value), invalid rows left out. They replace vnboxPlayerUrl's `registry=jpfonts` and
+ * `wine-override=[nomono]`, so both stay in.
+ */
+export function compatParams(compat: VnboxCompat): string[] {
+  const presets = [compat.renderer, compat.version].filter(Boolean);
+  const overrides = [
+    ...(compat.movies ? [] : ['quartz=']),
+    ...compat.dlls.filter(validDll).map((dll) => `${dll.name.toLowerCase()}=${dll.mode}`)
+  ];
+  const reg = compat.registry
+    .filter(validReg)
+    .map((row) => [row.key, row.name, row.type, row.value].join('\t'));
+  const env = compat.env.filter(validEnv).map((row) => `${row.name}=${row.value}`);
+  const param = (key: string, items: string[], join: string) =>
+    items.length ? [`${key}=${encodeURIComponent(items.join(join))}`] : [];
+
+  return [
+    ...param('registry', presets.length ? ['jpfonts', ...presets] : [], ','),
+    ...param('wine-override', overrides.length ? ['nomono', ...overrides] : [], ','),
+    ...param('wine-env', env.slice(0, 32), '\n'),
+    ...param('reg', reg.slice(0, 64), '\n'),
+    ...(validDesktop(compat.desktop) ? [`desktop=${compat.desktop}`] : [])
+  ];
+}
+
 /** The screen VNBox starts at without a `resolution` (its StartUpArgs default). */
 const startScreen = { width: 800, height: 600 };
 /** The screen a capped game is started on once to get its size: room for 1920x1080 and a title bar. */

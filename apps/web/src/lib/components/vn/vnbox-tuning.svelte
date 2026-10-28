@@ -9,6 +9,15 @@
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import ButtonToggleGroup from '$lib/components/button-toggle-group/button-toggle-group.svelte';
   import { optionsForToggle } from '$lib/components/button-toggle-group/toggle-option';
+  import {
+    compatFromTuning,
+    compatKeys,
+    compatParams,
+    validDesktop,
+    validDll,
+    validEnv,
+    validReg
+  } from '$lib/data/windows-game';
 
   interface Props {
     /** The game's saved tuning, `a=b&c=d` */
@@ -116,7 +125,37 @@
   const pairs = untrack(() => tuning)
     .split('&')
     .filter(Boolean);
-  const isKnob = (pair: string) => knobs.some((knob) => knob.key === keyOf(pair));
+  const isKnob = (pair: string) =>
+    knobs.some((knob) => knob.key === keyOf(pair)) || compatKeys.has(keyOf(pair));
+
+  let compat = $state(compatFromTuning(pairs));
+
+  const rendererOptions = [
+    { id: '', text: 'Default' },
+    { id: 'gl', text: 'OpenGL' },
+    { id: 'gdi', text: 'GDI' }
+  ];
+  const versionOptions = [
+    { id: '', text: 'Default' },
+    ...[
+      ['win95', '95'],
+      ['win98', '98'],
+      ['winme', 'ME'],
+      ['win2k', '2000'],
+      ['winxp', 'XP'],
+      ['win7', '7'],
+      ['win10', '10']
+    ].map(([id, text]) => ({ id, text }))
+  ];
+  const dllModes = [
+    { id: 'n', text: 'Native' },
+    { id: 'b', text: 'Built-in' },
+    { id: '', text: 'Off' }
+  ];
+  const regTypes = [
+    { id: 'REG_SZ', text: 'Text' },
+    { id: 'REG_DWORD', text: 'Number' }
+  ];
 
   let values: Record<string, string> = $state(
     Object.fromEntries(
@@ -138,6 +177,7 @@
         ...knobs.flatMap((knob) =>
           values[knob.key] === undefined ? [] : [`${knob.key}=${values[knob.key]}`]
         ),
+        ...compatParams(compat),
         extra.trim().replace(/^[?&]+|&+$/g, '')
       ]
         .filter(Boolean)
@@ -222,7 +262,7 @@
   {/each}
   <SettingsItemGroup
     title="Extra settings"
-    tooltip="Added to VNBox's address as typed (a=b&c=d), for settings not listed here. The game folder, program and hook stay. VNBox takes one env, which holds the Japanese locale."
+    tooltip="Added to VNBox's address as typed (a=b&c=d), for settings not listed here. The game folder, program and hook stay. Wine fixes go under Compatibility."
     wide
   >
     <input
@@ -233,6 +273,166 @@
       autocomplete="off"
       bind:value={extra}
     />
+  </SettingsItemGroup>
+
+  <SectionHead number={3} title="Compatibility" level="h3" />
+  <p class="tuning-muted">
+    Wine fixes for a game that won't start, shows nothing or stops at a movie. The Japanese locale
+    and fonts are always on. Renderer, Windows version and registry values stay in this game's Wine
+    setup when you set them back to Default: pick the other value to undo them.
+  </p>
+  <SettingsItemGroup
+    title="Renderer"
+    tooltip="How Wine draws Direct3D and DirectDraw. GDI helps some older 2D games that show a black screen. Default: Wine's own (OpenGL)."
+  >
+    <ButtonToggleGroup options={rendererOptions} bind:selectedOptionId={compat.renderer} />
+  </SettingsItemGroup>
+  <SettingsItemGroup
+    title="Windows version"
+    tooltip="The Windows version Wine reports, for games that refuse to run on a newer one. Default: Wine's own (10)."
+    wide
+  >
+    <ButtonToggleGroup options={versionOptions} bind:selectedOptionId={compat.version} />
+  </SettingsItemGroup>
+  <SettingsItemGroup
+    title="Movies"
+    tooltip="Off turns DirectShow (quartz) off, so a game that hangs on its opening movie can skip it. Some games stop instead. Older VNBox builds ignore it."
+  >
+    <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={compat.movies} />
+  </SettingsItemGroup>
+  <SettingsItemGroup
+    title="Virtual desktop"
+    tooltip="Runs the game inside a Wine desktop of this size (WIDTHxHEIGHT), for games that change the screen mode. Empty: off. Older VNBox builds ignore it."
+  >
+    <input
+      class="app-input"
+      aria-label="Virtual desktop size"
+      placeholder="e.g. 800x600"
+      bind:value={compat.desktop}
+    />
+    {#if compat.desktop && !validDesktop(compat.desktop)}
+      <p class="compat-error">Not WIDTHxHEIGHT: left out.</p>
+    {/if}
+  </SettingsItemGroup>
+
+  <SettingsItemGroup
+    title="DLL overrides"
+    tooltip="Which copy of a DLL Wine loads: Native (one the game ships), Built-in (Wine's) or Off. Name without .dll, e.g. d3d9. Older VNBox builds ignore it."
+    wide
+  >
+    {#each compat.dlls as dll, i}
+      <div class="compat-row">
+        <input
+          class="app-input"
+          aria-label="DLL name"
+          placeholder="d3d9"
+          spellcheck="false"
+          bind:value={dll.name}
+        />
+        <ButtonToggleGroup options={dllModes} bind:selectedOptionId={dll.mode} />
+        <button class="app-button app-button-quiet" onclick={() => compat.dlls.splice(i, 1)}>
+          Remove
+        </button>
+      </div>
+      {#if !validDll(dll) && dll.name}
+        <p class="compat-error">Not valid: left out.</p>
+      {/if}
+    {/each}
+    {#if compat.dlls.length < 32}
+      <button
+        class="app-button app-button-quiet"
+        onclick={() => compat.dlls.push({ name: '', mode: 'n' })}
+      >
+        Add DLL
+      </button>
+    {/if}
+  </SettingsItemGroup>
+
+  <SettingsItemGroup
+    title="Registry values"
+    tooltip="Set with reg add before the game starts. Keys under HKCU\Software or HKLM\Software only; no quotes, &, |, <, >, ^ or %. An empty name sets the key's default value. Older VNBox builds ignore it."
+    wide
+  >
+    {#each compat.registry as row, i}
+      <div class="compat-row">
+        <input
+          class="app-input compat-wide"
+          aria-label="Registry key"
+          placeholder="HKCU\Software\Wine\Direct3D"
+          spellcheck="false"
+          bind:value={row.key}
+        />
+        <input
+          class="app-input"
+          aria-label="Value name"
+          placeholder="Name"
+          spellcheck="false"
+          bind:value={row.name}
+        />
+        <ButtonToggleGroup options={regTypes} bind:selectedOptionId={row.type} />
+        <input
+          class="app-input"
+          aria-label="Value"
+          placeholder={row.type === 'REG_DWORD' ? '0x1' : 'Value'}
+          spellcheck="false"
+          bind:value={row.value}
+        />
+        <button class="app-button app-button-quiet" onclick={() => compat.registry.splice(i, 1)}>
+          Remove
+        </button>
+      </div>
+      {#if !validReg(row) && (row.value || row.name)}
+        <p class="compat-error">Not valid: left out.</p>
+      {/if}
+    {/each}
+    {#if compat.registry.length < 64}
+      <button
+        class="app-button app-button-quiet"
+        onclick={() =>
+          compat.registry.push({ key: 'HKCU\\Software\\', name: '', type: 'REG_SZ', value: '' })}
+      >
+        Add value
+      </button>
+    {/if}
+  </SettingsItemGroup>
+
+  <SettingsItemGroup
+    title="Environment variables"
+    tooltip="Passed to Wine, e.g. WINEDEBUG=-all. DLL overrides go above, not as WINEDLLOVERRIDES. Older VNBox builds ignore it."
+    wide
+  >
+    {#each compat.env as row, i}
+      <div class="compat-row">
+        <input
+          class="app-input"
+          aria-label="Variable name"
+          placeholder="NAME"
+          spellcheck="false"
+          bind:value={row.name}
+        />
+        <input
+          class="app-input compat-wide"
+          aria-label="Variable value"
+          placeholder="Value"
+          spellcheck="false"
+          bind:value={row.value}
+        />
+        <button class="app-button app-button-quiet" onclick={() => compat.env.splice(i, 1)}>
+          Remove
+        </button>
+      </div>
+      {#if !validEnv(row) && (row.name || row.value)}
+        <p class="compat-error">Not valid: left out.</p>
+      {/if}
+    {/each}
+    {#if compat.env.length < 32}
+      <button
+        class="app-button app-button-quiet"
+        onclick={() => compat.env.push({ name: '', value: '' })}
+      >
+        Add variable
+      </button>
+    {/if}
   </SettingsItemGroup>
 
   <div class="tuning-actions">
@@ -273,6 +473,29 @@
     line-height: 1.5;
     list-style: none;
     overflow-wrap: anywhere;
+  }
+
+  .compat-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .compat-row .app-input {
+    flex: 1 1 7rem;
+    min-width: 0;
+  }
+
+  .compat-row .compat-wide {
+    flex-basis: 14rem;
+  }
+
+  .compat-error {
+    margin: -0.25rem 0 0.5rem;
+    color: var(--app-danger-color);
+    font-size: var(--type-small);
   }
 
   .tuning-actions {
