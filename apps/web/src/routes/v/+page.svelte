@@ -81,6 +81,8 @@
   import AnkiWatcher from '$lib/components/anki-watcher.svelte';
   import VnboxTuning from '$lib/components/vn/vnbox-tuning.svelte';
   import VnBacklog from '$lib/components/vn/vn-backlog.svelte';
+  import VnSavesSheet from '$lib/components/vn/vn-saves.svelte';
+  import { vnSaveAreas, type SaveArea } from '$lib/data/vn-save-store';
   import VnboxHooks from '$lib/components/vn/vnbox-hooks.svelte';
   import { hookCleaner, type HookCleanup } from '$lib/data/hook-cleanup';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
@@ -130,6 +132,8 @@
   /** The Backlog sheet: the lines kept for Anki mining */
   let showBacklog = false;
   let showHooks = false;
+  /** The Saves sheet; the game is stopped while it is open. */
+  let showSaves = false;
   /** A Windows game's text cleanup, run on hooked lines in vnbox.js (`clean`) */
   let hookCleanup: HookCleanup = {};
   $: cleanLine = hookCleaner(hookCleanup);
@@ -397,6 +401,8 @@
       return;
     }
 
+    // A delete from the Saves sheet reaches vnsaves.json first, or the game would bring it back.
+    await savesQueue;
     const saves = await fetchSaves().catch((error): VnSaves => {
       // Offline: play with this browser's saves.
       logger.warn(`Visual novel save sync failed: ${error.message}`);
@@ -536,6 +542,40 @@
     frameLoaded = false;
     started = false;
     restarts += 1;
+  }
+
+  /** Stops the game for the Saves sheet; closing the sheet starts it again. */
+  async function openSaves() {
+    showMore = false;
+    await save().catch((error) => logger.warn(error.message));
+    frameLoaded = false;
+    started = false;
+    showSaves = true;
+  }
+
+  function closeSaves() {
+    showSaves = false;
+    restarts += 1;
+  }
+
+  /** CONscripter saves deleted in the sheet leave vnsaves.json too (merges never delete). */
+  function savesDeleted(_area: SaveArea, paths: string[]) {
+    const title = book?.title;
+    const names = new Set(paths.filter((path) => !path.includes('/')));
+
+    if (windows || !title || !names.size) return;
+    savesQueue = savesQueue
+      .then(async () => {
+        const store = await savesStore();
+
+        if (!store) return;
+        await syncJsonFile<VnSaves>(store, 'vnsaves.json', title, async (remote = {}) =>
+          Object.keys(remote).some((name) => names.has(name))
+            ? Object.fromEntries(Object.entries(remote).filter(([name]) => !names.has(name)))
+            : undefined
+        );
+      })
+      .catch((error) => logger.warn(`Visual novel save sync failed: ${error.message}`));
   }
 
   /** A Windows game's screen took a new size: a game Wine cut off restarts once to keep its own. */
@@ -706,13 +746,15 @@
 
   <div class="vn-main" class:vn-main-text={$showText$ && !ended}>
     <!-- The game's own dark ground: part of the content, not the theme -->
-    <div class="vn-game" class:vn-game-blocked={blocked}>
+    <div class="vn-game" class:vn-game-blocked={blocked || showSaves}>
       {#if blocked}
         <div class="vn-blocked" role="status">
           <p class="vn-blocked-title">This game can't start here</p>
           <p>{blocked}</p>
           <button class="app-button" on:click={leave}>Back to the library</button>
         </div>
+      {:else if showSaves}
+        <div class="vn-blocked" role="status"><p>The game is stopped while Saves is open.</p></div>
       {:else if book && playerUrl}
         <AnkiWatcher media={ankiMedia} />
         {#key restarts}
@@ -838,6 +880,7 @@
           </button>
         </li>
       {/if}
+      <li><button on:click={openSaves}>Saves</button></li>
       <li><button on:click={openStatistics}>Statistics</button></li>
     </ul>
   </ReaderSheet>
@@ -852,6 +895,16 @@
 {#if showBacklog}
   <ReaderSheet title="Backlog" on:close={() => (showBacklog = false)}>
     <VnBacklog {frame} keeping={$ankiEnabled$} ontap={(x, y) => lookupPopup?.tapAt(x, y)} />
+  </ReaderSheet>
+{/if}
+
+{#if showSaves && book && info}
+  <ReaderSheet title="Saves" on:close={closeSaves}>
+    <VnSavesSheet
+      areas={vnSaveAreas(book.title, info)}
+      title={book.title}
+      ondelete={savesDeleted}
+    />
   </ReaderSheet>
 {/if}
 
