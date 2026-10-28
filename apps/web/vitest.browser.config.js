@@ -12,7 +12,8 @@ export default mergeConfig(
       browser: {
         enabled: true,
         headless: true,
-        provider: playwright(),
+        // CI uses the runner's Google Chrome instead of downloading Playwright's Chromium.
+        provider: playwright(process.env.CI ? { launchOptions: { channel: 'chrome' } } : {}),
         instances: [{ browser: 'chromium' }],
         viewport: { width: 1000, height: 700 },
         screenshotFailures: false

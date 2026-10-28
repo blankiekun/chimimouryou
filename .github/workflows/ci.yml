@@ -37,24 +37,29 @@ jobs:
     if: needs.changes.outputs.code
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - &checkout
+        name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install pnpm
+      - &pnpm
+        name: Install pnpm
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           run_install: false
 
-      - name: Install Node.js
+      - &node
+        name: Install Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24.21.0
           cache: pnpm
 
-      - name: Install dependencies
+      - &install
+        name: Install dependencies
         run: pnpm install
 
-      - name: Postinstall steps
+      - &sync
+        name: Postinstall steps
         run: pnpm svelte-kit sync
         working-directory: apps/web
 
@@ -62,30 +67,6 @@ jobs:
         run: pnpm eslint .
 
       # svelte-check isn't run: it has 13 known errors from upstream files.
-      - name: Unit tests
-        run: pnpm test
-        working-directory: apps/web
-
-      # Browser tests (*.browser.test.ts) in headless Chromium; the browser is cached per Playwright version.
-      - name: Playwright version
-        id: playwright
-        run: echo "version=$(pnpm exec playwright --version)" >> "$GITHUB_OUTPUT"
-        working-directory: apps/web
-
-      - name: Cache Chromium
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-
-      - name: Install Chromium
-        run: pnpm exec playwright install --with-deps --only-shell chromium
-        working-directory: apps/web
-
-      - name: Browser tests
-        run: pnpm test:browser
-        working-directory: apps/web
-
       - name: Social hub tests
         run: pnpm --filter chimi-social-hub test
 
@@ -101,6 +82,41 @@ jobs:
         env:
           VITE_EDITION: standalone
           VITE_STORAGE_ROOT_NAME: chimi-reader-data
+
+  # The front end's tests run beside it in their own jobs, so the slowest decides the wait.
+  unit:
+    name: Front end unit tests
+    needs: changes
+    if: needs.changes.outputs.code
+    runs-on: ubuntu-latest
+    steps:
+      - *checkout
+      - *pnpm
+      - *node
+      - *install
+      - *sync
+
+      - name: Unit tests
+        run: pnpm test
+        working-directory: apps/web
+
+  browser:
+    name: Front end browser tests
+    needs: changes
+    if: needs.changes.outputs.code
+    runs-on: ubuntu-latest
+    steps:
+      - *checkout
+      - *pnpm
+      - *node
+      - *install
+      - *sync
+
+      # *.browser.test.ts in the runner's preinstalled Google Chrome (vitest.browser.config.js), so
+      # nothing is downloaded.
+      - name: Browser tests
+        run: pnpm test:browser
+        working-directory: apps/web
 
   python:
     name: Server scripts
