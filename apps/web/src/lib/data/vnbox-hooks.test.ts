@@ -93,4 +93,16 @@ describe('VNBox hook threads', () => {
     // The sheet keeps the hooked text, which it cleans itself.
     expect(hooks.threads().find((thread: any) => thread.id === 'script').last).toBe('skip');
   });
+
+  it('keeps the 200 threads heard last, and the selected one', () => {
+    text('選', { id: 'picked', kind: 'search' });
+    hooks.select('picked');
+    for (let i = 0; i < 300; i++) text('字', { id: `call:${i}`, kind: 'search' });
+    const ids = hooks.threads().map((thread: any) => thread.id);
+    expect(ids).toHaveLength(200);
+    expect(ids).toContain('picked');
+    expect(ids).toContain('call:299');
+    expect(ids).not.toContain('call:100');
+    hooks.select(null);
+  });
 });

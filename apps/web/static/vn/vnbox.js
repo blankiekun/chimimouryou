@@ -174,6 +174,9 @@ function loadScript(src) {
 // Hook threads (VNBox's boxedwineText(line, thread), hooks contract): every thread's last line,
 // count and recent lines with the click they came after, for the Hooks sheet and rankThreads.
 var hookThreads = {};
+// A search can make a thread per call site: keep the most recently heard ones.
+var HOOK_THREADS = 200;
+var hookHeard = 0;
 // The thread whose lines drive the overlay, stats and Anki; null: hook scripts (today's behaviour).
 var hookSelected = null;
 // After a live load: the kind whose next new thread is picked, so a loaded hook drives at once.
@@ -205,6 +208,18 @@ function hookChanged() {
         listener();
       });
     }, 250);
+}
+
+// Over HOOK_THREADS: drops the thread heard longest ago, never the selected one.
+function pruneHookThreads() {
+  var ids = Object.keys(hookThreads);
+  if (ids.length <= HOOK_THREADS) return;
+  var oldest = null;
+  ids.forEach(function (id) {
+    if (id === String(hookSelected)) return;
+    if (!oldest || hookThreads[id].heard < hookThreads[oldest].heard) oldest = id;
+  });
+  if (oldest) delete hookThreads[oldest];
 }
 
 // Not `drives`: VNBox v0.2.2's boxedwine-shell.js has a global `var drives` in this frame.
@@ -308,9 +323,11 @@ async function startGame(options) {
     var known = hookThreads[thread.id];
 
     if (!known) {
-      known = hookThreads[thread.id] = Object.assign({}, thread, { count: 0, recent: [] });
+      known = hookThreads[thread.id] = Object.assign({}, thread, { count: 0, recent: [], heard: ++hookHeard });
       if (hookFollow === thread.kind) vnboxHooks.select(thread.id);
+      pruneHookThreads();
     }
+    known.heard = ++hookHeard;
     known.last = line;
     known.count += 1;
     known.recent = known.recent.slice(-19).concat([{ text: line, click: clicks }]);
