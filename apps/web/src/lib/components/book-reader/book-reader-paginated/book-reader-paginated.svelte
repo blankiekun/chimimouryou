@@ -594,7 +594,11 @@
       () => gap,
       verticalMode,
       scrollEl,
-      document
+      document,
+      () => {
+        const g = pageGeometry(width, height, columnCount);
+        return g && contentEl ? { el: contentEl, g } : undefined;
+      }
     );
     exploredCharCount = 0;
     previousIntendedCount = 0;
