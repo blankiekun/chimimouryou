@@ -101,3 +101,25 @@ div.emscripten_border {
 ::highlight(ttu-lookup) {
   background-color: color-mix(in srgb, var(--accent-color, #4fbf95) 40%, transparent);
 }
+
+/* Taps are the game's left button (touchMouse in vnbox.js), never a pan or zoom. */
+body {
+  touch-action: none;
+}
+
+/* The gamepad's cursor (padMove in vnbox.js): a ring in the app's dark-theme ink and spot. */
+#pad-cursor {
+  position: fixed;
+  z-index: 2;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 2px solid #4fbf95;
+  border-radius: 50%;
+  outline: 1px solid #0b1a15;
+  pointer-events: none;
+}
+
+#pad-cursor[hidden] {
+  display: none;
+}

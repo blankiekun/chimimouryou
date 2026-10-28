@@ -36,8 +36,96 @@ function screenCanvas() {
     : document.getElementById('canvas');
 }
 
-// The page's CONscripter settings (furigana, text speed) have no VNBox counterpart.
-function engineSet() {}
+// The page's CONscripter settings (furigana, text speed) have no VNBox counterpart; Skip holds
+// Ctrl, the key most Windows visual novels skip with while it is down.
+function engineSet(name, value) {
+  if (name === 'Skip') gameKey(!!value, 'ControlLeft', 'Control', 17);
+}
+
+/** The game's menu: a right click where the pad's cursor is, else in the middle of the game. */
+function openMenu() {
+  var at = cursorAt();
+
+  gameMouse('mousedown', 2, at.x, at.y);
+  gameMouse('mouseup', 2, at.x, at.y);
+}
+
+// Touch (phones, tablets): VNBox only takes the mouse, so a finger is the left button, sent the way
+// passToGame's copies go; SDL's own touch handling never gets it. Touches on the overlay's text
+// are overlay.js's, which passes them on to the canvas as copies, so they come back here.
+var touchId = null;
+
+function touchMouse(event) {
+  if (document.getElementById('overlay').contains(event.target)) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  padCursor.hidden = true;
+
+  var touch = Array.prototype.find.call(event.changedTouches, function (each) {
+    return event.type === 'touchstart' ? touchId === null : each.identifier === touchId;
+  });
+
+  if (!touch) return;
+  if (event.type === 'touchstart') {
+    touchId = touch.identifier;
+    gameMouse('mousemove', 0, touch.clientX, touch.clientY);
+    gameMouse('mousedown', 0, touch.clientX, touch.clientY);
+  } else if (event.type === 'touchmove') {
+    gameMouse('mousemove', 0, touch.clientX, touch.clientY);
+  } else {
+    touchId = null;
+    gameMouse('mouseup', 0, touch.clientX, touch.clientY);
+  }
+}
+
+['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(function (type) {
+  window.addEventListener(type, touchMouse, { capture: true, passive: false });
+});
+
+// Gamepads (the page's watchGamepads): a visible cursor the left stick and d-pad move, clicks
+// and the wheel where it is. A real mouse hides it.
+var padCursor = document.createElement('div');
+
+padCursor.id = 'pad-cursor';
+padCursor.hidden = true;
+document.body.appendChild(padCursor);
+window.addEventListener(
+  'mousemove',
+  function (event) {
+    if (event.isTrusted) padCursor.hidden = true;
+  },
+  true
+);
+
+function cursorAt() {
+  if (padCursor.hidden) return canvasMiddle();
+  return { x: parseFloat(padCursor.style.left), y: parseFloat(padCursor.style.top) };
+}
+
+/** Moves the cursor by its speed (each axis -1…1) for ms milliseconds, within the game. */
+function padMove(dx, dy, ms) {
+  var box = screenCanvas().getBoundingClientRect();
+  var at = cursorAt();
+  // Crossing the game in about two seconds at full tilt.
+  var speed = (Math.max(box.width, box.height) / 2000) * ms;
+  var x = Math.max(box.left, Math.min(box.right - 1, at.x + dx * speed));
+  var y = Math.max(box.top, Math.min(box.bottom - 1, at.y + dy * speed));
+
+  padCursor.style.left = x + 'px';
+  padCursor.style.top = y + 'px';
+  padCursor.hidden = false;
+  gameMouse('mousemove', 0, x, y);
+}
+
+/** A pad action pressed (down) or released (lib/data/vn-gamepad.ts; directions move the cursor). */
+function padButton(action, down) {
+  var at = cursorAt();
+
+  if (action === 'advance') gameMouse(down ? 'mousedown' : 'mouseup', 0, at.x, at.y);
+  else if (action === 'menu' && down) openMenu();
+  else if (action === 'wheelUp' && down) gameWheel(-120, at.x, at.y);
+  else if (action === 'wheelDown' && down) gameWheel(120, at.x, at.y);
+}
 
 // Overlay lines scale with the game, which VNBox fits into the frame.
 function fitOverlay() {
@@ -96,7 +184,8 @@ var hookListeners = [];
 var hookTimer = 0;
 var clicks = 0;
 
-['mousedown', 'touchstart', 'keydown'].forEach(function (type) {
+// Touches reach the game as mousedowns (touchMouse), so they aren't counted twice.
+['mousedown', 'keydown'].forEach(function (type) {
   window.addEventListener(
     type,
     function () {

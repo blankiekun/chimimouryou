@@ -79,6 +79,68 @@ function passToGame(event) {
   }
 }
 
+// Gamepads (lib/data/vn-gamepad.ts): the page reads them and sends the game mouse and keys, so the
+// engines' own SDL never sees one (it would act twice); framePads() keeps them for the page.
+var framePads = navigator.getGamepads ? navigator.getGamepads.bind(navigator) : null;
+
+if (framePads) {
+  navigator.getGamepads = function () {
+    return [];
+  };
+}
+window.addEventListener('gamepadconnected', function () {
+  parent.dispatchEvent(new Event('gamepadconnected'));
+});
+
+/** A mouse event at x, y (frame coordinates) on the game's canvas, as passToGame's copies go. */
+function gameMouse(type, button, x, y) {
+  document.getElementById('canvas').dispatchEvent(
+    new MouseEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      button: button,
+      buttons: type === 'mousedown' ? 1 << button : 0,
+      clientX: x,
+      clientY: y
+    })
+  );
+}
+
+function gameWheel(deltaY, x, y) {
+  document.getElementById('canvas').dispatchEvent(
+    new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      deltaY: deltaY,
+      clientX: x,
+      clientY: y
+    })
+  );
+}
+
+/** A key (KeyboardEvent code, key and legacy keyCode) pressed or released on the game. */
+function gameKey(down, code, key, keyCode) {
+  var event = new KeyboardEvent(down ? 'keydown' : 'keyup', {
+    bubbles: true,
+    cancelable: true,
+    code: code,
+    key: key,
+    ctrlKey: down && key === 'Control'
+  });
+
+  // Engines that still read keyCode get it too (the constructor leaves it 0).
+  Object.defineProperty(event, 'keyCode', { value: keyCode });
+  Object.defineProperty(event, 'which', { value: keyCode });
+  document.getElementById('canvas').dispatchEvent(event);
+}
+
+/** The middle of the game's canvas, in frame coordinates. */
+function canvasMiddle() {
+  var box = screenCanvas().getBoundingClientRect();
+
+  return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+}
+
 // Right-click is the game's (menu, skip): never the browser's menu, on the canvas or the black bars.
 document.addEventListener('contextmenu', function (event) {
   event.preventDefault();

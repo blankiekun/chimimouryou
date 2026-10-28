@@ -20,9 +20,8 @@ import type { LoadData } from '$lib/functions/file-loaders/types';
 const opfsRoot = 'vnbox';
 
 /** Why this browser can't play Windows games, or undefined when it can. */
-export function windowsGameBlocker(win: Window = window): 'phone' | 'browser' | undefined {
-  // Games want a mouse, a big screen and GBs of memory: phones and tablets are parked.
-  if (!win.matchMedia?.('(any-pointer: fine)').matches) return 'phone';
+export function windowsGameBlocker(win: Window = window): 'browser' | undefined {
+  // Phones and tablets play too (taps are the left button, /v adds Menu and Skip buttons).
   // VNBox's jitJspi build suspends WebAssembly on file reads (JSPI) and reads games from OPFS.
   if (!('Suspending' in WebAssembly) || !win.navigator.storage?.getDirectory) return 'browser';
 
@@ -30,7 +29,6 @@ export function windowsGameBlocker(win: Window = window): 'phone' | 'browser' | 
 }
 
 export const windowsGameBlockerText = {
-  phone: 'Windows games play on a computer with a mouse. Open this game on a desktop browser.',
   browser:
     'Windows games need a browser with WebAssembly JSPI, such as Chrome or Edge 137 or newer.'
 };
