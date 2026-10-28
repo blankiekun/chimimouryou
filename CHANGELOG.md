@@ -4,6 +4,142 @@ chimimouryou is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook
 upstream's own changes are not listed here. Each version's section is written when it is released,
 from the pull requests merged since the previous tag (pull requests don't edit this file).
 
+## v3.9.0 (2026-10-28)
+
+### Added
+
+- A built-in dictionary for browsers where Yomitan can't run (iPhone, iPad, Safari, Android):
+  Yomitan's lookup engine (GPL-3.0) with a tap-to-look-up popup in books and in the visual novel
+  player, Add to Anki from each entry with Yomitan's note builder and card settings, and Yomitan
+  dictionaries or whole exported dictionary collections imported in the background and stored
+  compressed. Lookups sort by the first frequency list imported (Settings → Dictionary links
+  Jiten's), and JMdict (EDRDG, CC BY-SA 4.0) installs with one tap. With no dictionary installed,
+  taps go on turning pages.
+- Words: a level check (20, 40 or 60 yes/no words, about two minutes) and a hard mode that asks
+  each word's reading and meaning set the words you know by frequency rank, shown as the words
+  known along the fitted curve. Unknown words can be underlined in the book, and each chapter in
+  Contents shows "N new" with the words you don't know that it uses three or more times.
+- Reading rank: seven tiers (見習い to 魔王), each gated on words known, characters read, reading
+  days and a finished book at a difficulty level, rising at most one tier a week; shown on Home,
+  Statistics and social profiles.
+- Social (the `social` plugin, a hub on Cloudflare Workers in `deploy/social-hub/`): friends,
+  profiles with activity, finished books, picture avatars and covers, a header account control,
+  password change, a recovery code and Sign out everywhere, moderation with a Dev badge, and
+  sending a book to a friend peer to peer over WebRTC. On server builds the hub sign-in follows
+  the server account. The hub keeps only public data (status, stats, finished books, Community,
+  covers); settings and other private data sync only through Drive, OneDrive, a folder or the
+  server.
+- Community: a tab with a feed and threads, posts on a line of a book (or on that line only),
+  plain posts, @ mentions of works, Show context under feed lines, and spoilers behind Show
+  spoiler. Books matched to their work show bubbles on commented lines when they open, signed
+  out too; an unmatched book offers a match. Statistics moves into the profile.
+- Discord: a `discord` plugin (off by default) shows what you are reading or playing as your
+  Discord status through an Anki add-on (AnkiWeb code 25885905), with an editable status, covers
+  from the hub, AniList or VNDB, and status from your other devices relayed through the hub to
+  the paired add-on. The status shows on profiles. A privacy policy and terms of service are in
+  `docs/PRIVACY.md` and `docs/TERMS.md`.
+- Windows games in the visual novel player, run by VNBox (a fork of Boxedwine, GPL-2.0, fetched
+  for the web image and the Pages build): games fill the player at their own size without Wine's
+  title bar and get Japanese font replacements. More → Tuning changes VNBox's settings per game
+  (sound, colour depth, CPU, screen size, frame rate) with a speed readout; More → Hooks picks a
+  text hook, from engine hooks ported from LunaTranslator's LunaHook (GPL-3.0), with a per-game
+  text cleanup chain; More → Backlog lists the lines kept for mining, with Use for last card to
+  fill the newest Anki card.
+- A texthooker page (`/hook`) for game text from Textractor, LunaTranslator or agent over a local
+  WebSocket, or pasted, with lookups; and an immersion log in Statistics with manual entries
+  (visual novels, anime, podcasts…) and time from the texthooker and audiobook players.
+- Audiobook listening practice for both players: 0.5-2× speed with pitch kept, replay, repeat
+  each line, pause after each line, pause while looking up a word, a sleep timer, a follow
+  toggle, keyboard shortcuts and media keys.
+- Manga get a difficulty estimate, coverage and Book words from their mokuro text. Standalone:
+  a `.mokuro` file can be added to a browser manga, and Manga text (an analysis tool: text
+  detection and manga-ocr models, Apache-2.0) makes it in the browser; Whisper subtitles are an
+  analysis tool too.
+- Standalone: analysis tools to download on desktop browsers (Settings → General → Analysis
+  tools) for difficulty, word lists and generated furigana, run in the background on stored books;
+  the Words tab; series for browser books (from EPUB metadata or titles, Make series on the book
+  page, 上/中/下 volumes) that travel with sent books.
+- AI: connections to any provider (OpenRouter, Google AI Studio, Groq, OpenAI, Anthropic, Ollama,
+  LM Studio, any OpenAI-compatible server…) with a model and samplers per feature, editable
+  system prompts per language, sign-in with OpenRouter on first use, and ElevenLabs as a voice
+  connection. Read aloud uses the device's voices until an ElevenLabs key is set. Story so far
+  and Lore are one Story tab.
+- `deploy/vps/`: hosting the standalone site on a small server with Caddy behind Cloudflare.
+
+### Changed
+
+- The project is now licensed GPL-3.0-or-later, so GPL code (Yomitan) can be included; upstream's
+  BSD 3-Clause licence stays in `LICENSE-BSD` and BSD-licensed files keep it.
+- Difficulty: one 1-10 book level everywhere (from the vocabulary that covers 98% of the text),
+  with a 0-5 "for you" line and the share of words known, full furigana and sentence length
+  beside it, and a with-furigana level for books in full ruby. Reading rank gates on it. The old
+  model is gone (the service no longer needs onnxruntime or numpy), word lists are made the first
+  time they are asked for, and every estimate carries one engine fingerprint shared by server and
+  browser. Stored estimates must be redone: run "Books without an estimate" after upgrading.
+- Faster analysis: Sudachi tokenizes about three times faster in the browser, one worker runs a
+  book in one pass (two on large machines) and starts loading as a book opens, readings files
+  come back sooner, and yurigana 0.5.11 reads about 40% faster with the same readings
+  (SudachiDict-core 20261015).
+- First run asks one question (where books live); the analysis tools are offered on Home, a
+  "Coming from ッツ Reader?" dialog explains moving a backup over, and the first book shows how
+  to look up a word. The README opens with the hosted standalone site.
+- New defaults: phones keep the screen on while reading, themes follow the system's light or
+  dark mode, reading time stops after 5 idle minutes, Anki cards get the book's audio, and the
+  Audiobookshelf plugin starts off. Existing choices are kept.
+- Visual novels: a game ZIP imports without unpacking its stored files, Windows games import with
+  six parallel copies, and VNBox's downloads are cached.
+- Imports of more than three books stay off Home.
+- SvelteKit 3, Svelte 5 (legacy mode), Vite 8 and Vitest 4.
+
+### Removed
+
+- The Wiktionary dictionary downloads (their entries mixed senses); the JMdict link stays.
+- The copy of AI connections into the old OpenRouter and ElevenLabs settings, kept for one
+  release for devices on older versions.
+
+### Security
+
+- Visual novels: game scripts can only open web pages, save names from synced saves can't be
+  paths, and the desktop app opens no `file:` links from books. VNBox's player page no longer
+  loads hook scripts from other sites.
+- Account service: a `//` path could bypass the shared folder's checks, two Destination headers
+  could move files past the series permission, a server-connect token could pass admin checks,
+  and the trusted network now also needs a known Host (new optional `SERVER_NAMES`) against DNS
+  rebinding.
+- Deploys stop when `DATA_PATH` or `LIBRARY_PATH` is relative; CI runs with least privilege and
+  pinned actions and downloads.
+- Social hub: covers per reader, fair sign-in lockouts, rate limits per IPv6 /64, capped event
+  rows, and hub-wide limits on image uploads and storage.
+
+### Fixed
+
+- Reader: books reopen at their bookmark again; a mouse drag selects text instead of turning the
+  page; typing in a panel box no longer turns pages; opening the side panel or resizing right
+  after a page turn keeps the auto bookmark; continuous-mode jumps right after opening or before a
+  re-layout are no longer undone; highlights with a note are marked in vertical text.
+- Sync: an expired session no longer wipes word marks or unsynced progress; the newest progress
+  file wins over leftovers, and older duplicates are removed; AI keys, Home titles, themes and
+  presets merge per entry. Browser libraries that replicate to Drive, OneDrive or a folder sync
+  settings, words, kanji and the immersion log there.
+- Server: a game folder with a non-UTF-8 name no longer stops the catalog build; of two books
+  with the same title, the newest keeps it; the import queue survives errors and a lost job
+  list; manga volumes named only by number import with their folder's name. The library says
+  when it is still being built, and importing into an empty `LIBRARY_PATH` creates a library.
+  The desktop app's `http://127.0.0.1` origin is allowed in `CORS_ORIGINS`.
+- Difficulty and words: ruby words split by line breaks in the EPUB source, words ranked by
+  their best spelling, rare katakana names counted as names, compounds Sudachi splits joined as
+  JMdict words, and words known counting Anki and marked words once.
+- Dictionary popup: kanji readings, entries without a reading and name entries rank after the
+  word.
+- Visual novels: background analysis can't stick, a game folder imports as one visual novel,
+  large imports cancel cleanly and show their size, visual novels and manga open straight from
+  Home and Continue, and Windows games larger than 800x600 keep their size.
+- Standalone: the book page points to the analysis tools and says why an estimate failed, the
+  analysis shows its percent and gives up a stalled book, Firefox says why the tools can't be
+  stored, and imports into Drive keep a browser copy.
+- Firefox imports no longer wait for the persistent-storage prompt.
+- ElevenLabs connections use the right endpoint, model list and voice IDs.
+
 ## v3.8.0 (2026-10-23)
 
 ### Added
