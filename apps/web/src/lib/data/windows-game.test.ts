@@ -194,6 +194,8 @@ describe('fittedTuning', () => {
     // The big screen itself, then its 320x240 splash, before the game's window.
     expect(fittedTuning('stats=1&resolution=1920x1200', 1920, 1200)).toBeUndefined();
     expect(fittedTuning('stats=1&resolution=1920x1200', 320, 240)).toBeUndefined();
+    // A crash dialog or launcher strip wider than the start isn't the game's screen.
+    expect(fittedTuning('stats=1&resolution=1920x1200', 1777, 400)).toBeUndefined();
     expect(fittedTuning('stats=1&resolution=1920x1200', 1024, 576)).toEqual({
       tuning: 'stats=1&resolution=1024x576',
       restart: false
