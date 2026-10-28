@@ -6,6 +6,8 @@
 # deploy key's private half), VPS_KNOWN_HOSTS (`ssh-keyscan -t ed25519 <VPS_HOST>`, checked on the
 # VPS console), and VITE_GDRIVE_CLIENT_ID/SECRET for Drive sync. Without the VPS secrets it skips.
 # Variable VPS_SITE_URL: the site's address (default https://chimireader.blankie.moe).
+# Optional: secret CF_API_TOKEN (Zone → Cache Purge) and variable CF_ZONE_ID purge /vn/vnbox/ from
+# Cloudflare after each deploy, since VNBox's files keep their names across versions. Without them it skips.
 name: VPS site
 on:
   workflow_dispatch:
@@ -111,3 +113,16 @@ jobs:
             apps/web/build/ "$VPS_USER@$VPS_HOST:$id/"
           "${ssh[@]}" "$VPS_USER@$VPS_HOST" activate "$id"
           rm -f ~/.ssh/vps
+
+      - name: Purge VNBox from Cloudflare
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ZONE_ID: ${{ vars.CF_ZONE_ID }}
+          SITE_URL: ${{ vars.VPS_SITE_URL || 'https://chimireader.blankie.moe' }}
+        run: |
+          if [ -z "$CF_API_TOKEN" ] || [ -z "$CF_ZONE_ID" ]; then echo "No CF_API_TOKEN/CF_ZONE_ID: purge skipped"; exit 0; fi
+          prefix="${SITE_URL#https://}/vn/vnbox/"
+          curl -fsS -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
+            -H "Authorization: Bearer $CF_API_TOKEN" -H 'Content-Type: application/json' \
+            --data "{\"prefixes\":[\"$prefix\"]}" > /dev/null
+          echo "Purged $prefix"
