@@ -6,7 +6,8 @@
    * which the frame lays invisibly over the game for Yomitan and this page shows in a panel
    * below it (optional) and counts for progress and statistics (vn-text.ts). Saves of
    * ONScripter games on a synced source sync through vnsaves.json in the game's folder
-   * (sync-files.ts).
+   * (sync-files.ts); so do Windows games' save files (vn-save-store.ts: pulled before the game
+   * starts, pushed when the tab is hidden or the game closes).
    */
   import { noteReading } from '$lib/data/social';
   import { readingActivity } from '$lib/data/reader-hooks';
@@ -82,7 +83,20 @@
   import VnboxTuning from '$lib/components/vn/vnbox-tuning.svelte';
   import VnBacklog from '$lib/components/vn/vn-backlog.svelte';
   import VnSavesSheet from '$lib/components/vn/vn-saves.svelte';
-  import { vnSaveAreas, type SaveArea } from '$lib/data/vn-save-store';
+  import {
+    isWindowsSaveKey,
+    readWindowsSaves,
+    vnSaveAreas,
+    windowsSaveFiles,
+    windowsSaveKey,
+    windowsSavesCap,
+    windowsSavesStamp,
+    writeWindowsSaves,
+    type SaveArea
+  } from '$lib/data/vn-save-store';
+  import { formatBytes } from '$lib/data/vn-upload';
+  import { dialogManager } from '$lib/data/dialog-manager';
+  import WindowsGameDialog from '$lib/components/book-card/windows-game-dialog.svelte';
   import VnboxHooks from '$lib/components/vn/vnbox-hooks.svelte';
   import { hookCleaner, type HookCleanup } from '$lib/data/hook-cleanup';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
@@ -154,6 +168,12 @@
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let savesQueue = Promise.resolve();
   let started = false;
+  /** A Windows game's save files as last pushed (windowsSavesStamp) */
+  let windowsStamp: string | undefined;
+  /** Why a Windows game's saves don't sync */
+  let savesNote: string | undefined;
+  /** This game's files are missing here: the import dialog can add them to this record. */
+  let missingFiles = false;
 
   // The player holds taps on its text for the built-in dictionary only while it is on.
   $: if (frameLoaded && frame?.contentWindow) {
@@ -294,10 +314,11 @@
       navigator.storage?.persist?.();
       const blocker = windowsGameBlocker();
 
+      missingFiles = !blocker && !(await hasWindowsGame(game.folder!));
       blocked = blocker
         ? windowsGameBlockerText[blocker]
-        : !(await hasWindowsGame(game.folder!))
-          ? "This game's files aren't in this browser. Add its folder again with Import → Windows game."
+        : missingFiles
+          ? "This game's files aren't in this browser. Add its folder to play it here; its saves come along when they sync."
           : undefined;
       tuning = loadVnboxTuning(game.folder!);
       if (game.hook) {
@@ -352,6 +373,69 @@
       .catch((error) => logger.warn(`Visual novel save sync failed: ${error.message}`));
   }
 
+  /** Before a Windows game starts: synced save files newer than this browser's are written in. */
+  async function pullWindowsSaves() {
+    await savesQueue;
+    try {
+      await writeWindowsSaves(vnSaveAreas(book!.title, info!), await fetchSaves());
+    } catch (error: any) {
+      // Offline: play with this browser's saves.
+      logger.warn(`Visual novel save sync failed: ${error.message}`);
+    }
+  }
+
+  /** A Windows game's save files (vn-save-store.ts) merged into vnsaves.json, when they changed. */
+  function pushWindowsSaves() {
+    const title = book?.title;
+    const game = info;
+
+    if (!windows || !title || !game) return;
+
+    savesQueue = savesQueue
+      .then(async () => {
+        const store = await savesStore();
+
+        if (!store) return;
+
+        const files = await windowsSaveFiles(vnSaveAreas(title, game));
+        const stamp = windowsSavesStamp(files);
+
+        if (stamp === windowsStamp) return;
+
+        const { size, saves } = await readWindowsSaves(files);
+
+        if (!saves) {
+          savesNote = `This game's saves are ${formatBytes(size)}, over the ${formatBytes(windowsSavesCap)} that sync. They stay in this browser.`;
+          return;
+        }
+        savesNote = undefined;
+        await syncJsonFile<VnSaves>(store, 'vnsaves.json', title, async (remote = {}) => {
+          const merged = mergeVnSaves(saves, remote, isWindowsSaveKey);
+
+          return sameVnSaves(merged, remote) ? undefined : merged;
+        });
+        windowsStamp = stamp;
+      })
+      .catch((error) => logger.warn(`Visual novel save sync failed: ${error.message}`));
+  }
+
+  /** /v with a Windows game's files missing: the import dialog copies them in for this record. */
+  function addGameFolder() {
+    dialogManager.dialogs$.next([
+      {
+        component: WindowsGameDialog as any,
+        props: {
+          existing: book!.title,
+          added: () => {
+            missingFiles = false;
+            blocked = undefined;
+          }
+        },
+        disableCloseOnClick: true
+      }
+    ]);
+  }
+
   /** Games served by URL over 10 MB can be kept in the browser (Cache API, HTTPS only). */
   async function gameCache(base: string | undefined) {
     if (!base || !('caches' in window)) return undefined;
@@ -388,6 +472,7 @@
     const player = frame.contentWindow as any;
 
     if (windows) {
+      await pullWindowsSaves();
       reading.lastTextTime = Date.now();
       await player.startGame({
         keepLines: $ankiEnabled$,
@@ -547,6 +632,7 @@
   /** Stops the game for the Saves sheet; closing the sheet starts it again. */
   async function openSaves() {
     showMore = false;
+    pushWindowsSaves();
     await save().catch((error) => logger.warn(error.message));
     frameLoaded = false;
     started = false;
@@ -558,12 +644,16 @@
     restarts += 1;
   }
 
-  /** CONscripter saves deleted in the sheet leave vnsaves.json too (merges never delete). */
-  function savesDeleted(_area: SaveArea, paths: string[]) {
+  /** Saves deleted in the sheet leave vnsaves.json too (merges never delete). */
+  function savesDeleted(area: SaveArea, paths: string[]) {
     const title = book?.title;
-    const names = new Set(paths.filter((path) => !path.includes('/')));
+    const names = new Set(
+      windows
+        ? paths.map((path) => windowsSaveKey(area, path))
+        : paths.filter((path) => !path.includes('/'))
+    );
 
-    if (windows || !title || !names.size) return;
+    if (!title || !names.size) return;
     savesQueue = savesQueue
       .then(async () => {
         const store = await savesStore();
@@ -629,7 +719,10 @@
   }
 
   function onVisibilityChange() {
-    if (document.visibilityState === 'hidden') save();
+    if (document.visibilityState === 'hidden') {
+      save();
+      if (started) pushWindowsSaves();
+    }
   }
 
   onMount(() => {
@@ -640,6 +733,7 @@
 
   onDestroy(() => {
     save();
+    if (started) pushWindowsSaves();
     readingActivity();
     if (book && reading && isPluginEnabled('social')) {
       noteReading(book.title, reading.read.characters, book.characters, true, 'vn');
@@ -751,7 +845,14 @@
         <div class="vn-blocked" role="status">
           <p class="vn-blocked-title">This game can't start here</p>
           <p>{blocked}</p>
-          <button class="app-button" on:click={leave}>Back to the library</button>
+          <div class="flex flex-wrap gap-2">
+            {#if missingFiles}
+              <button class="app-button app-button-primary" on:click={addGameFolder}>
+                Add the game folder
+              </button>
+            {/if}
+            <button class="app-button" on:click={leave}>Back to the library</button>
+          </div>
         </div>
       {:else if showSaves}
         <div class="vn-blocked" role="status"><p>The game is stopped while Saves is open.</p></div>
@@ -787,6 +888,15 @@
             update the engine.
           </p>
           <button class="app-button app-button-quiet" on:click={() => (newerEngine = undefined)}>
+            Dismiss
+          </button>
+        </div>
+      {/if}
+
+      {#if savesNote}
+        <div class="vn-notice">
+          <p>{savesNote}</p>
+          <button class="app-button app-button-quiet" on:click={() => (savesNote = undefined)}>
             Dismiss
           </button>
         </div>

@@ -3,12 +3,17 @@
    * Import → Windows game: a game folder is copied into this browser (windows-game.ts) and
    * added to the library as a visual novel that VNBox plays. Pick the folder, the program to
    * run and, optionally, a dc00 text hook script; then the copy runs with its progress here.
+   * "This game is already in my library" copies the folder for a game whose record synced from
+   * another device but whose files aren't here: its record (program, hook, cover) is kept.
    */
+  import { database } from '$lib/data/store';
+  import { isVn, vnInfo, type VnInfo } from '$lib/data/vn';
   import SectionHead from '$lib/components/section-head.svelte';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { formatBytes } from '$lib/data/vn-upload';
   import {
     copyWindowsGame,
+    hasWindowsGame,
     hookScripts,
     hookSuggestion,
     searchHookScripts,
@@ -23,10 +28,14 @@
 
   interface Props {
     /** Adds the game's book record to the library (the manage page's storage source) */
-    save: (book: LoadData) => Promise<void>;
+    save?: (book: LoadData) => Promise<void>;
+    /** Title of a game in the library to add the files for (/v, files missing) */
+    existing?: string;
+    /** Called once an existing game's files are copied */
+    added?: () => void;
   }
 
-  let { save }: Props = $props();
+  let { save, existing, added }: Props = $props();
 
   const blocker = windowsGameBlocker();
   /** Programs listed before "More": most folders have one game and a few tools */
@@ -46,6 +55,13 @@
   let showAll = $state(false);
   let abort: AbortController | undefined;
   let folderInput: HTMLInputElement | undefined = $state();
+  /** Games in this browser's library whose files aren't here */
+  let missing = $state<{ title: string; info: VnInfo }[]>([]);
+  /** The picked one ('' = a new game) */
+  let target = $state('');
+  const record = $derived(missing.find((game) => game.title === target));
+  /** The folder lacks the program the record runs */
+  const wrongFolder = $derived(!!record && !!folderName && !files[record.info.exe!]);
 
   const programs = $derived(windowsPrograms(files));
   const size = $derived(Object.values(files).reduce((sum, file) => sum + file.size, 0));
@@ -67,6 +83,22 @@
   const CHOSEN = '#chosen';
 
   hookScripts().then((found) => (scripts = found));
+
+  async function findMissing() {
+    const found: typeof missing = [];
+
+    for (const book of await (await database.db).getAll('data')) {
+      const info = isVn(book) ? vnInfo(book) : undefined;
+
+      if (info?.engine === 'vnbox' && info.folder && !(await hasWindowsGame(info.folder))) {
+        found.push({ title: book.title, info });
+      }
+    }
+    missing = found.sort((a, b) => a.title.localeCompare(b.title));
+    target = existing ?? '';
+  }
+
+  if (!blocker) findMissing();
 
   function useFolder(name: string, picked: Record<string, File>) {
     files = picked;
@@ -145,9 +177,9 @@
   }
 
   async function add() {
-    const name = title.trim();
+    const name = record ? record.title : title.trim();
 
-    if (!name || !exe) return;
+    if (!name || (record ? wrongFolder : !exe)) return;
 
     error = '';
     abort = new AbortController();
@@ -165,20 +197,22 @@
       await navigator.storage.persist?.();
       copied = { done: 0, total: size };
       await copyWindowsGame(
-        windowsGameFolder(name),
+        record ? record.info.folder! : windowsGameFolder(name),
         files,
         (done, total) => (copied = { done, total }),
         abort.signal
       );
-      await save(
-        windowsGameBook(
-          name,
-          exe,
-          choice === CHOSEN ? hook?.text : undefined,
-          undefined,
-          choice === CHOSEN ? undefined : choice || undefined
-        )
-      );
+      if (record) added?.();
+      else
+        await save?.(
+          windowsGameBook(
+            name,
+            exe,
+            choice === CHOSEN ? hook?.text : undefined,
+            undefined,
+            choice === CHOSEN ? undefined : choice || undefined
+          )
+        );
       dialogManager.dialogs$.next([]);
     } catch (addError: any) {
       if (addError?.name !== 'AbortError') error = addError.message;
@@ -218,7 +252,29 @@
         bind:this={folderInput}
         onchange={(event) => folderPicked(event.currentTarget.files)}
       />
-      {#if folderName}
+      {#if missing.length}
+        <label class="wg-field">
+          <span class="wg-label">This game is already in my library</span>
+          <select class="app-input" lang="ja" bind:value={target} disabled={busy}>
+            <option value="">No, it's a new game</option>
+            {#each missing as game (game.title)}
+              <option value={game.title}>{game.title}</option>
+            {/each}
+          </select>
+        </label>
+      {/if}
+      {#if record}
+        <p class="wg-note">
+          Its files are copied for the game in your library, which keeps its program, text hook and
+          cover. Saves synced from another device load when it starts.
+        </p>
+        {#if wrongFolder}
+          <p class="wg-error" role="alert" lang="ja">
+            This folder has no {record.info.exe}, the program this game runs. Choose the folder it
+            runs from.
+          </p>
+        {/if}
+      {:else if folderName}
         <label class="wg-field">
           <span class="wg-label">Title</span>
           <input class="app-input" lang="ja" bind:value={title} disabled={busy} />
@@ -226,7 +282,7 @@
       {/if}
     </div>
 
-    {#if programs.length}
+    {#if programs.length && !record}
       <div class="wg-step">
         <SectionHead number={2} title="Program" level="h3" count={programs.length} />
         <ul class="wg-programs">
@@ -360,10 +416,10 @@
       <button
         type="button"
         class="app-button app-button-primary"
-        disabled={busy || !exe || !title.trim()}
+        disabled={busy || !folderName || (record ? wrongFolder : !exe || !title.trim())}
         onclick={add}
       >
-        Add game
+        {record ? 'Add files' : 'Add game'}
       </button>
     </footer>
   {/if}
