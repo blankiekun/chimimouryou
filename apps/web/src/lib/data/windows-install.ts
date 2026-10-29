@@ -20,10 +20,18 @@ import {
   listSaves,
   readSaveFile,
   vnSaveAreas,
+  writeSaves,
   type SaveArea,
   type SaveEntry
 } from '$lib/data/vn-save-store';
-import { copyWindowsGame, vnboxPlayerUrl, windowsPrograms } from '$lib/data/windows-game';
+import {
+  copyWindowsGame,
+  deleteWindowsGame,
+  notGames,
+  readHead,
+  vnboxPlayerUrl,
+  windowsPrograms
+} from '$lib/data/windows-game';
 
 /** VNBox's CD-ROM drive (DEFAULT_CDROM_DRIVE in boxedwine-shell.js) */
 export const discDrive = 'e';
@@ -32,6 +40,12 @@ export const discDrive = 'e';
 export const setupFolder = '_setup';
 
 export const discFilePattern = /\.(iso|cue|bin|mds|mdf|img|wav)$/i;
+
+/** Files only a disc image is made of (.wav and the rest can be game data too) */
+const discMainPattern = /\.(iso|cue|mds|mdf|img|bin)$/i;
+
+/** Where a ZIP's disc images are unpacked (unpackDiscs), under vnbox/ */
+export const unpackFolder = '_unpack';
 
 /** One disc: the file VNBox opens (`main`) and the files it reads through it */
 export interface Disc {
@@ -53,8 +67,13 @@ export async function discsOf(picked: File[]): Promise<Disc[]> {
     for (const main of picked.filter((file) => extension(file.name) === kind && !used.has(file))) {
       const files = [main];
 
+      used.add(main);
       if (kind === 'cue') {
-        for (const match of (await main.text()).matchAll(/^\s*FILE\s+(?:"([^"]*)"|(\S+))/gim)) {
+        const text = cueText(new Uint8Array(await main.arrayBuffer()));
+
+        // VNBox reads the sheet as UTF-8: a Shift JIS one goes to OPFS re-encoded.
+        files[0] = new File([text], main.name);
+        for (const match of text.matchAll(/^\s*FILE\s+(?:"([^"]*)"|(\S+))/gim)) {
           const file = byName.get((match[1] ?? match[2]).replace(/^.*[\\/]/, '').toLowerCase());
 
           if (file && !files.includes(file)) files.push(file);
@@ -66,11 +85,62 @@ export async function discsOf(picked: File[]): Promise<Disc[]> {
         );
       }
       files.forEach((file) => used.add(file));
-      discs.push({ main, files });
+      discs.push({ main: files[0], files });
     }
   }
 
   return discs.sort((a, b) => a.main.name.localeCompare(b.main.name, undefined, { numeric: true }));
+}
+
+/** A CUE sheet's text: UTF-8, else Shift JIS (sheets made on Japanese Windows). */
+export function cueText(bytes: Uint8Array) {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return new TextDecoder('shift_jis').decode(bytes);
+  }
+}
+
+/** A picked folder's (or ZIP's) disc images, when it is only that: no program, a disc file. */
+export function folderDiscs(files: Record<string, File>) {
+  const paths = Object.keys(files);
+
+  return !windowsPrograms(files).length && paths.some((path) => discMainPattern.test(path))
+    ? paths.filter((path) => discFilePattern.test(path))
+    : [];
+}
+
+async function opfsFolder(path: string) {
+  let dir = await navigator.storage.getDirectory();
+
+  for (const name of `vnbox/${path}`.split('/'))
+    dir = await dir.getDirectoryHandle(name, { create: true });
+
+  return dir;
+}
+
+/**
+ * A ZIP's disc images (zipGameFiles' files, which only stream from their start) unpacked into
+ * OPFS vnbox/_unpack, where they can be read anywhere, as Files from there. copyDiscs moves them.
+ */
+export async function unpackDiscs(
+  files: Record<string, File>,
+  paths: string[],
+  onProgress: (done: number, total: number) => void,
+  signal?: AbortSignal
+) {
+  // shortcut: names are flattened (CUE sheets name their BINs without folders), so same-named
+  // images in two folders of one ZIP clash; pick such discs one ZIP at a time.
+  const images = Object.fromEntries(paths.map((path) => [files[path].name, files[path]]));
+
+  await deleteWindowsGame(unpackFolder).catch(() => undefined);
+  await copyWindowsGame(unpackFolder, images, onProgress, signal);
+
+  const dir = await opfsFolder(unpackFolder);
+
+  return Promise.all(
+    Object.keys(images).map(async (name) => (await dir.getFileHandle(name)).getFile())
+  );
 }
 
 /**
@@ -85,12 +155,16 @@ export function discFolder(disc: Disc, folder: string) {
 export const discPath = (disc: Disc, folder: string) =>
   `${discFolder(disc, folder)}/${disc.main.name}`;
 
-/** Copies the discs into OPFS (files already there with the same size are kept). */
+/**
+ * Copies the discs into OPFS (files already there with the same size are kept); `staged` ones
+ * (unpackDiscs) are moved there instead where the browser can, so GBs aren't stored twice.
+ */
 export async function copyDiscs(
   discs: Disc[],
   folder: string,
   onProgress: (done: number, total: number) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  staged = false
 ) {
   const total = discs.reduce(
     (sum, disc) => sum + disc.files.reduce((size, file) => size + file.size, 0),
@@ -99,7 +173,24 @@ export async function copyDiscs(
   let before = 0;
 
   for (const disc of discs) {
-    const files = Object.fromEntries(disc.files.map((file) => [file.name, file]));
+    let files = Object.fromEntries(disc.files.map((file) => [file.name, file]));
+
+    if (staged) {
+      const from = await opfsFolder(unpackFolder);
+      const to = await opfsFolder(discFolder(disc, folder));
+      const left: typeof files = {};
+
+      for (const [name, file] of Object.entries(files)) {
+        const handle = await from.getFileHandle(name).catch(() => undefined);
+        const move = (handle as { move?: (dir: FileSystemDirectoryHandle) => Promise<void> })?.move;
+
+        // No handle: moved by an earlier try. Another size: discsOf's re-encoded CUE sheet.
+        if (!handle) continue;
+        if (move && (await handle.getFile()).size === file.size) await move.call(handle, to);
+        else left[name] = file;
+      }
+      files = left;
+    }
 
     await copyWindowsGame(
       discFolder(disc, folder),
@@ -300,12 +391,14 @@ export function copyProtection(paths: string[]) {
   ];
 }
 
-export type InstallerKind = 'inno' | 'nsis' | 'installshield';
+/** 'msi': a setup.exe beside its Windows Installer package (besideMsi), run through msiexec */
+export type InstallerKind = 'inno' | 'nsis' | 'installshield' | 'msi';
 
 export const installerNames: Record<InstallerKind, string> = {
   inno: 'Inno Setup',
   nsis: 'NSIS',
-  installshield: 'InstallShield'
+  installshield: 'InstallShield',
+  msi: 'Windows Installer'
 };
 
 /** The installer an .exe is, from the start of it (its resources name the tool), if known. */
@@ -319,13 +412,76 @@ export function installerKind(bytes: Uint8Array): InstallerKind | undefined {
   return undefined;
 }
 
+/**
+ * The Windows Installer package in an installer's folder, when it holds one: InstallShield's and
+ * Visual Studio's setup.exe only start msiexec on it, and `setup.exe /s` stalls in VNBox.
+ */
+export function besideMsi(installer: string, paths: string[]) {
+  const dir = installer.slice(0, installer.lastIndexOf('/') + 1).toLowerCase();
+  const packages = paths.filter(
+    (path) =>
+      /\.msi$/i.test(path) &&
+      path.toLowerCase().startsWith(dir) &&
+      !path.slice(dir.length).includes('/')
+  );
+
+  return packages.length === 1 ? packages[0] : undefined;
+}
+
+/**
+ * msiexec's arguments installing a package (a Windows path) without windows into dir: TARGETDIR
+ * moves the install's root, INSTALLDIR InstallShield's own folder, so neither lands in Program
+ * Files and the registry points where the game runs.
+ */
+export const msiArgs = (pkg: string, dir: string) =>
+  `/i "${pkg}" /qn TARGETDIR="${dir}" INSTALLDIR="${dir}"`;
+
+/**
+ * The installer a picked folder (or ZIP) holds instead of a game: its top-level programs (any
+ * depth when it has none) are all setup tools, with autorun.inf's program, a setup*.exe or
+ * install*.exe (only when every program is one), or an .exe made with a known installer
+ * (installerKind) among them; undefined for
+ * a game folder. Reads the start of each program it can't tell by name, the likeliest game first,
+ * and stops at the first that isn't an installer.
+ */
+export async function folderSetup(files: Record<string, File>) {
+  const programs = windowsPrograms(files);
+  const top = programs.filter((path) => !path.includes('/'));
+  const inf = Object.keys(files).find((path) => /^autorun\.inf$/i.test(path));
+  const run = inf
+    ? autorunProgram(new TextDecoder('shift_jis').decode(await readHead(files[inf], 1 << 16)))
+    : undefined;
+  const autorun = programs.find((path) => path.toLowerCase() === run?.program.toLowerCase());
+  const named: string[] = [];
+  const kinds = new Map<string, InstallerKind>();
+
+  for (const path of top.length ? top : programs) {
+    if (/setup|install/i.test(path)) named.push(path);
+    else if (path !== autorun && !notGames.test(path)) {
+      const kind = installerKind(await readHead(files[path], 4 << 20));
+
+      if (!kind) return undefined;
+      kinds.set(path, kind);
+    }
+  }
+
+  // A setup.exe by its name alone only when nothing else could be the game (as before).
+  const installer =
+    autorun ??
+    [...kinds.keys()][0] ??
+    (programs.every((path) => /setup|install/i.test(path)) ? named[0] : undefined);
+
+  return installer ? { installer, args: (installer === autorun && run?.args) || '' } : undefined;
+}
+
 /** Arguments that install without asking, into dir (InstallShield: its own default folder). */
 export function silentArgs(kind: InstallerKind, dir: string) {
   if (kind === 'inno') return `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /DIR="${dir}"`;
   // NSIS takes /D= last and unquoted.
   if (kind === 'nsis') return `/S /D=${dir}`;
   // InstallShield's MSI setup.exe hands /v's text to msiexec (/qn: no windows). It installs where
-  // the package says, often Program Files: installedPrograms looks there too.
+  // the package says, often Program Files: installedPrograms looks there too. ('msi' runs
+  // msiexec itself, msiArgs.)
   return '/s /v/qn';
 }
 
@@ -456,10 +612,67 @@ export function programRoot(program: InstalledProgram) {
   return parts.slice(0, Math.min(depth, parts.length - 1)).join('/');
 }
 
+/** A Wine .reg file's string, unescaped (\\, \", \xHHHH, \n…; wine/server/unicode.c) */
+function regUnescape(raw: string) {
+  const named: Record<string, string> = {
+    a: '\x07',
+    b: '\b',
+    t: '\t',
+    n: '\n',
+    v: '\v',
+    f: '\f',
+    r: '\r',
+    e: '\x1b'
+  };
+
+  return raw.replace(/\\(x[0-9a-fA-F]{1,4}|[0-7]{1,3}|.)/g, (_, code: string) =>
+    code[0] === 'x' && code.length > 1
+      ? String.fromCharCode(parseInt(code.slice(1), 16))
+      : /^[0-7]/.test(code)
+        ? String.fromCharCode(parseInt(code, 8))
+        : (named[code] ?? code)
+  );
+}
+
+/** A string as Wine writes it into a .reg file */
+function regEscape(text: string) {
+  let out = '';
+
+  for (let at = 0; at < text.length; at++) {
+    const code = text.charCodeAt(at);
+
+    if (code > 127) {
+      // Four digits when a hex digit follows, so it isn't read as part of the code.
+      out += `\\x${code.toString(16).padStart(/[0-9a-fA-F]/.test(text[at + 1] ?? '') ? 4 : 0, '0')}`;
+    } else if (code < 32) out += `\\${code.toString(8).padStart(3, '0')}`;
+    else out += text[at] === '\\' || text[at] === '"' ? `\\${text[at]}` : text[at];
+  }
+
+  return out;
+}
+
+/**
+ * A registry file (system.reg, user.reg) with every string naming `from` or a path under it (a
+ * Windows path, any case) naming the same place under `to`; other strings are left as written.
+ * shortcut: 8.3 short names (C:\PROGRA~1\…) and binary values aren't rewritten; add them if a game
+ * stores its folder that way.
+ */
+export function registryMoved(text: string, from: string, to: string) {
+  const pattern = new RegExp(`${from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=\\\\|"|$)`, 'gi');
+
+  return text.replace(/"((?:[^"\\]|\\.)*)"/g, (whole, raw: string) => {
+    const value = regUnescape(raw);
+    const moved = value.replace(pattern, () => to);
+
+    return moved === value ? whole : `"${regEscape(moved)}"`;
+  });
+}
+
 /**
  * Moves an installed game into its OPFS folder (vnbox/<folder>) and out of VNBox's IndexedDB
- * layer, where it would load whole into memory each start; removes the installer's copy.
- * Returns the program's path in the folder.
+ * layer, where it would load whole into memory each start; removes the installer's copy. A game
+ * moved out of the prefix (Program Files) has the registry's paths to it pointed at its folder
+ * (C:\files\<folder>). Returns the program's path in the folder.
  */
 export async function moveInstalledGame(
   folder: string,
@@ -485,6 +698,21 @@ export async function moveInstalledGame(
     onProgress(done, total);
   }
   await deleteSaves(program.area, entries, '');
+  if (root) {
+    const from = `C:\\${root.slice('drive_c/'.length).replaceAll('/', '\\')}`;
+    const all = await listSaves(program.area);
+    const moved = [];
+
+    for (const entry of all.filter((entry) => /^(system|user)\.reg$/i.test(entry.path))) {
+      const bytes = await readSaveFile(program.area, entry.key);
+      const text = bytes && new TextDecoder().decode(bytes);
+      const rewritten = text && registryMoved(text, from, installDir(folder));
+
+      if (rewritten && rewritten !== text)
+        moved.push({ path: entry.path, bytes: new TextEncoder().encode(rewritten) });
+    }
+    if (moved.length) await writeSaves(program.area, moved, all);
+  }
 
   const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle('vnbox');
   const game = await dir.getDirectoryHandle(folder);

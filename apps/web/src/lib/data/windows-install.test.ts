@@ -8,24 +8,37 @@ import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import {
   autorunProgram,
+  besideMsi,
   copyProtection,
   discsOf,
+  folderDiscs,
+  folderSetup,
   installedPrograms,
   installerKind,
   listDisc,
   lnkTarget,
+  msiArgs,
   prefixSnapshot,
+  registryMoved,
   silentArgs
 } from './windows-install';
 import { vnSaveAreas } from './vn-save-store';
 
-// jsdom's Blob has no arrayBuffer().
+// jsdom's Blob has no arrayBuffer() or stream().
 Blob.prototype.arrayBuffer ??= function (this: Blob) {
   return new Promise<ArrayBuffer>((resolve) => {
     const reader = new FileReader();
 
     reader.onload = () => resolve(reader.result as ArrayBuffer);
     reader.readAsArrayBuffer(this);
+  });
+};
+Blob.prototype.stream ??= function (this: Blob) {
+  return new ReadableStream({
+    start: async (controller) => {
+      controller.enqueue(new Uint8Array(await this.arrayBuffer()));
+      controller.close();
+    }
   });
 };
 
@@ -166,5 +179,79 @@ describe('windows-install', () => {
     expect(listing?.label).toBe('GAMEDISC');
     expect(listing?.files.map((file) => file.path)).toEqual(['AUTORUN.INF']);
     expect(new TextDecoder().decode(await listing!.read(listing!.files[0]))).toBe('hello');
+  });
+
+  it('tells installer folders and disc images from game folders', async () => {
+    const exe = (text: string) => new File([`MZ....${text}....`], 'x.exe');
+
+    // An Inno Setup installer named after the game, beside its readme.
+    expect(
+      await folderSetup({ 'ゲーム.exe': exe('Inno Setup Setup Data'), 'readme.txt': exe('') })
+    ).toEqual({ installer: 'ゲーム.exe', args: '' });
+    // autorun.inf's program, with its arguments, whatever its name.
+    expect(
+      await folderSetup({
+        'AUTORUN.INF': new File(['[autorun]\r\nopen=menu.exe /jp'], 'AUTORUN.INF'),
+        'menu.exe': exe(''),
+        'DirectX/dxsetup.exe': exe('')
+      })
+    ).toEqual({ installer: 'menu.exe', args: '/jp' });
+    // A game folder: its program is no installer, whatever setup tools sit beside it.
+    expect(await folderSetup({ 'game.exe': exe(''), 'setup.exe': exe('') })).toBeUndefined();
+    expect(await folderSetup({ 'Setup.exe': exe(''), 'data/game.exe': exe('') })).toBeUndefined();
+    expect(await folderSetup({ 'Setup.exe': exe(''), 'DirectX/dxsetup.exe': exe('') })).toEqual({
+      installer: 'Setup.exe',
+      args: ''
+    });
+
+    const files = { 'disc/game.cue': exe(''), 'disc/game.bin': exe(''), 'track02.wav': exe('') };
+
+    expect(folderDiscs(files)).toEqual(['disc/game.cue', 'disc/game.bin', 'track02.wav']);
+    expect(folderDiscs({ ...files, 'game.exe': exe('') })).toEqual([]);
+    expect(folderDiscs({ 'bgm.wav': exe('') })).toEqual([]);
+  });
+
+  it("matches a CUE's Shift JIS file names", async () => {
+    const name = 'ゴア.iso';
+    const sjis = new Uint8Array([
+      ...new TextEncoder().encode('FILE "'),
+      0x83,
+      0x53,
+      0x83,
+      0x41,
+      ...new TextEncoder().encode('.iso" BINARY\r\n')
+    ]);
+    const discs = await discsOf([new File([sjis], 'ゴア.cue'), new File(['x'], name)]);
+
+    expect(discs.map((disc) => disc.files.map((file) => file.name))).toEqual([['ゴア.cue', name]]);
+    expect(new TextDecoder().decode(await discs[0].main.arrayBuffer())).toBe(
+      'FILE "ゴア.iso" BINARY\r\n'
+    );
+  });
+
+  it('runs msiexec on the package beside a setup', () => {
+    expect(besideMsi('setup.exe', ['setup.exe', 'Game.MSI', 'sub/other.msi'])).toBe('Game.MSI');
+    expect(besideMsi('cd/setup.exe', ['cd/a.msi', 'cd/b.msi'])).toBeUndefined();
+    expect(msiArgs('E:\\Game.msi', 'C:\\files\\g1')).toBe(
+      '/i "E:\\Game.msi" /qn TARGETDIR="C:\\files\\g1" INSTALLDIR="C:\\files\\g1"'
+    );
+  });
+
+  it('points registry paths at the moved game', () => {
+    const reg = [
+      '[Software\\\\raiL\\\\Game] 1700000000',
+      '"Path"="C:\\\\Program Files\\\\raiL\\\\\\x30b2\\x30fc\\x30e0"',
+      '"Exe"="\\"c:\\\\program files\\\\rail\\\\Game\\\\play.exe\\" %1"',
+      '"Other"="C:\\\\Program Files\\\\raiLsoft"',
+      '"Kept"="as \\x30b2 written"'
+    ].join('\n');
+
+    expect(registryMoved(reg, 'C:\\Program Files\\raiL', 'C:\\files\\g1').split('\n')).toEqual([
+      '[Software\\\\raiL\\\\Game] 1700000000',
+      '"Path"="C:\\\\files\\\\g1\\\\\\x30b2\\x30fc\\x30e0"',
+      '"Exe"="\\"C:\\\\files\\\\g1\\\\Game\\\\play.exe\\" %1"',
+      '"Other"="C:\\\\Program Files\\\\raiLsoft"',
+      '"Kept"="as \\x30b2 written"'
+    ]);
   });
 });

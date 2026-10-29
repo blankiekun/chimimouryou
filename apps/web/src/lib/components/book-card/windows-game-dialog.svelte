@@ -6,8 +6,9 @@
    * run and, optionally, a dc00 text hook script; then the copy runs with its progress here.
    * "This game is already in my library" copies the folder for a game whose record synced from
    * another device but whose files aren't here: its record (program, hook, cover) is kept.
-   * A disc image, or a folder holding an installer, is installed instead (windows-install.ts):
-   * the installer runs in a player frame here, then the program it installed is picked.
+   * A disc image, or a folder (or ZIP) holding an installer or disc images, is installed instead
+   * (windows-install.ts): the installer runs in a player frame here, then the program it
+   * installed is picked.
    */
   import { database } from '$lib/data/store';
   import { isMobile$ } from '$lib/functions/utils';
@@ -35,12 +36,15 @@
   import type { HookScript } from '$lib/data/windows-game';
   import {
     autorunProgram,
+    besideMsi,
     copyDiscs,
     copyProtection,
     discDrive,
     discFilePattern,
     discPath,
     discsOf,
+    folderDiscs,
+    folderSetup,
     installDir,
     installedPrograms,
     prefixSnapshot,
@@ -49,8 +53,11 @@
     installUrl,
     listDisc,
     moveInstalledGame,
+    msiArgs,
     setupFolder,
     silentArgs,
+    unpackDiscs,
+    unpackFolder,
     type Disc,
     type InstalledProgram,
     type InstallerKind
@@ -98,7 +105,18 @@
   let discs = $state<Disc[]>([]);
   /** The discs' programs (disc 1), autorun's first, and copy protection found on them */
   let discPrograms = $state<{ path: string; size: number }[]>([]);
+  /** autorun.inf's program (a disc's, or the folder's installer that folderSetup found) */
   let autorun = $state<{ program: string; args: string }>();
+  /** The discs came out of a ZIP: they're in OPFS vnbox/_unpack (unpackDiscs) */
+  let staged = false;
+  /** Counts folder picks, so a slow read of an earlier one is dropped */
+  let picks = 0;
+
+  /** Frees a ZIP's unpacked discs once another pick replaces them. */
+  function dropStaged() {
+    if (staged) deleteWindowsGame(unpackFolder).catch(() => undefined);
+    staged = false;
+  }
   let protection = $state<string[]>([]);
   /** The folder holds an installer to run, not the game */
   let install = $state(false);
@@ -124,7 +142,11 @@
     discs.length
       ? discPrograms
       : windowsPrograms(files)
-          .sort((a, b) => Number(/setup|install/i.test(b)) - Number(/setup|install/i.test(a)))
+          .sort(
+            (a, b) =>
+              Number(b === autorun?.program) - Number(a === autorun?.program) ||
+              Number(/setup|install/i.test(b)) - Number(/setup|install/i.test(a))
+          )
           .map((path) => ({ path, size: files[path].size }))
   );
   const folderSize = $derived(
@@ -174,25 +196,67 @@
 
   if (!blocker) findMissing();
 
-  function useFolder(name: string, picked: Record<string, File>) {
+  /** A folder's (or ZIP's) files: a game, an installer (folderSetup) or disc images. */
+  async function useFolder(name: string, picked: Record<string, File>, zipped = false) {
+    const images = folderDiscs(picked);
+    const pick = ++picks;
+
+    error = '';
+    if (images.length) {
+      abort = new AbortController();
+      try {
+        // Only the ZIP's start can be read: its images go into OPFS first (copyDiscs moves them).
+        const size = images.reduce((sum, path) => sum + picked[path].size, 0);
+
+        if (zipped) await roomFor(size + vnboxZipsSize);
+        const found = zipped
+          ? await unpackDiscs(
+              picked,
+              images,
+              (done, total) => (copied = { done, total }),
+              abort.signal
+            )
+          : images.map((path) => picked[path]);
+
+        copied = undefined;
+        await useDiscs(found, zipped);
+      } catch (unpackError: any) {
+        copied = undefined;
+        if (unpackError?.name !== 'AbortError') error = unpackError.message;
+      }
+      return;
+    }
+
     files = picked;
     folderName = name;
     title = name;
     discs = [];
+    dropStaged();
+    autorun = undefined;
     exe = windowsPrograms(picked)[0] ?? '';
-    // Only setup tools: it's an installer folder.
-    install = !!exe && windowsPrograms(picked).every((path) => /setup|install/i.test(path));
-    if (install) chooseInstaller(installers[0].path);
-    error = exe
-      ? ''
-      : 'This folder has no Windows program (.exe). Choose the folder the game runs from.';
+    install = false;
+    if (!exe) {
+      error = 'This folder has no Windows program (.exe). Choose the folder the game runs from.';
+      return;
+    }
+
+    const setup = await folderSetup(picked);
+
+    if (pick !== picks || !setup) return;
+    autorun = { program: setup.installer, args: setup.args };
+    install = true;
+    await chooseInstaller(setup.installer);
   }
 
   async function discsPicked(list: FileList | null) {
-    const picked = Array.from(list ?? []).filter((file) => discFilePattern.test(file.name));
+    await useDiscs(Array.from(list ?? []).filter((file) => discFilePattern.test(file.name)));
+  }
 
+  async function useDiscs(picked: File[], unpacked = false) {
     if (!picked.length) return;
     error = '';
+    if (!unpacked) dropStaged();
+    staged = unpacked;
     discs = await discsOf(picked);
     files = {};
     install = false;
@@ -237,7 +301,14 @@
 
   let listing: Awaited<ReturnType<typeof listDisc>>;
 
-  /** Picks the installer and reads which kind it is (its first 4 MB). */
+  /** The installer's folder's files (the disc's or the picked folder's) */
+  const installerPaths = () =>
+    discs.length ? (listing?.files.map((file) => file.path) ?? []) : Object.keys(files);
+
+  /**
+   * Picks the installer and reads which kind it is (its first 4 MB); one that only starts
+   * msiexec on the package beside it runs msiexec itself ('msi').
+   */
   async function chooseInstaller(path: string, discListing = listing) {
     listing = discListing;
     installer = path;
@@ -248,8 +319,10 @@
     const bytes = disc
       ? await listing!.read(disc, head)
       : files[path] && (await readHead(files[path], head));
+    const found = bytes && installerKind(bytes);
+    const msi = (!found || found === 'installshield') && besideMsi(path, installerPaths());
 
-    if (bytes && installer === path) kind = installerKind(bytes);
+    if (bytes && installer === path) kind = msi ? 'msi' : found;
   }
 
   const hidden = (path: string) => path.split('/').some((part) => part.startsWith('.'));
@@ -282,7 +355,7 @@
     try {
       const dir: FileSystemDirectoryHandle = await picker({ id: 'windows-game', mode: 'read' });
 
-      useFolder(dir.name, await readHandle(dir));
+      await useFolder(dir.name, await readHandle(dir));
     } catch (pickError: any) {
       if (pickError?.name !== 'AbortError')
         error = `Could not read the folder: ${pickError.message}`;
@@ -316,7 +389,7 @@
     try {
       const { name, files: picked } = await zipGameFiles(zip);
 
-      useFolder(name, picked);
+      await useFolder(name, picked, true);
     } catch (zipError: any) {
       error = `Could not read the ZIP: ${zipError.message}`;
     }
@@ -355,8 +428,9 @@
     abort = new AbortController();
 
     try {
-      // Room for the copy, about as much again for what the installer writes, and VNBox's zips.
-      await roomFor(folderSize * 2 + vnboxZipsSize);
+      // Room for the copy (unpacked discs are moved), about as much again for what the
+      // installer writes, and VNBox's zips.
+      await roomFor(folderSize * (staged ? 1 : 2) + vnboxZipsSize);
 
       const folder = windowsGameFolder(name);
       const progress = (done: number, total: number) => (copied = { done, total });
@@ -367,7 +441,8 @@
         discard = { folder, layer: !(await listSaves(layer)).length };
       }
       copied = { done: 0, total: folderSize };
-      if (discs.length) await copyDiscs(discs, folder, progress, abort.signal);
+      if (discs.length) await copyDiscs(discs, folder, progress, abort.signal, staged);
+      if (staged) await deleteWindowsGame(unpackFolder).catch(() => undefined);
       // The game's folder (VNBox mounts it as C:\files\<folder>, the install target) holds the
       // installer folder's copy while it runs.
       await copyWindowsGame(
@@ -396,21 +471,9 @@
       ? `${discDrive}:\\${windows}`
       : `${dir}\\${setupFolder}\\${windows}`;
     const workingDir = program.slice(0, program.lastIndexOf('\\') + 1);
-    const quiet = silent && kind ? silentArgs(kind, dir) : '';
-    const own =
-      discs.length && autorun?.program.toLowerCase() === installer.toLowerCase()
-        ? autorun.args
-        : '';
-    // InstallShield's setup.exe /s stalls in VNBox; msiexec on the package beside it doesn't.
-    const msi =
-      quiet && kind === 'installshield' && discs.length
-        ? listing?.files.find(
-            (file) =>
-              /\.msi$/i.test(file.path) &&
-              file.path.lastIndexOf('/') === installer.lastIndexOf('/') &&
-              file.path.startsWith(installer.slice(0, installer.lastIndexOf('/') + 1))
-          )
-        : undefined;
+    const msi = silent && kind === 'msi' && besideMsi(installer, installerPaths());
+    const quiet = silent && kind && kind !== 'msi' ? silentArgs(kind, dir) : '';
+    const own = autorun?.program.toLowerCase() === installer.toLowerCase() ? autorun.args : '';
 
     installBefore = await prefixSnapshot(title.trim(), folder);
     finishEarly = false;
@@ -419,7 +482,7 @@
       folder,
       msi ? 'msiexec' : program,
       msi
-        ? `/i "${discDrive}:\\${msi.path.replaceAll('/', '\\')}" /qn`
+        ? msiArgs(`${workingDir}${msi.slice(msi.lastIndexOf('/') + 1)}`, dir)
         : [own, quiet].filter(Boolean).join(' '),
       workingDir,
       discs.map((disc) => discPath(disc, folder))
@@ -496,6 +559,7 @@
     abort?.abort();
     dialogManager.dialogs$.next([]);
     if (discard) freeInstall(discard);
+    dropStaged();
   }
 
   async function freeInstall({ folder, layer }: { folder: string; layer: boolean }) {
