@@ -10,6 +10,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(DriveAuthPlugin.class);
+        registerPlugin(FileSavePlugin.class);
         super.onCreate(savedInstanceState);
 
         // Back goes back in the app's history; at its first page it leaves the app.

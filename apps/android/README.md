@@ -14,7 +14,7 @@ APK installs over the old one and keeps its books, as long as it is signed with 
 
 There is no self-updater: install the next release's APK the same way.
 
-CI builds a debug APK when `apps/android` (or the lockfile, the workflows, `android-drive.ts`)
+CI builds a debug APK when `apps/android` (or the lockfile, the workflows, `android-drive.ts`, `native-save.ts`)
 changes: the run's Summary → Artifacts → `chimimouryou-debug-apk` (a zip holding `app-debug.apk`).
 It is signed with a debug key, so it can't update a release install (uninstall first, which
 deletes the app's books), and Drive sign-in works only once that key is registered (step 4 below).
@@ -49,6 +49,16 @@ cd android && ./gradlew assembleDebug    # android/app/build/outputs/apk/debug/a
 - `<input type=file>` opens Android's file picker (Capacitor's `BridgeWebChromeClient`); links to
   other sites, `window.open` included, open in the browser (`Bridge.launchIntent`).
 - CapacitorHttp's global `fetch` patch is off (the default): it breaks streaming and abort.
+- Downloads (Export → Zip File, CSVs, reports): the WebView drops `<a download>` saves, so
+  `apps/web/src/lib/data/native-save.ts` (`catchDownloads`, from the root layout, in the app only)
+  takes every `<a download>` of a blob/data URL (clicked, or a detached link's `click()`) and hands
+  it to `FileSavePlugin.java` in 3 MB chunks; Android's "Save to" screen asks where (Downloads by
+  default), so no storage permission is needed.
+- `android:allowBackup="false"`: the WebView's storage holds API keys and tokens, which Android's
+  backup to Google would copy. Readers back up through Drive or Export.
+- Icon: the ち logo as an adaptive icon (`res/drawable/ic_launcher_foreground.xml`, a vector: the
+  green circle with ち cut out on paper; also the themed-icon layer and the splash icon), a plain
+  vector on Android 7. The launch screen is that icon on paper.
 
 ## Google Drive
 
@@ -103,8 +113,6 @@ Then add the repository secrets `ANDROID_KEYSTORE` (`base64 -w0 chimimouryou-rel
 - No Yomitan (Android WebViews have no extensions); the built-in dictionary works.
 - No folder sync: `showDirectoryPicker` doesn't exist in the WebView. Books stay in the app or on
   Google Drive.
-- Downloads from the page (Export → Zip File, saved files) don't work: the WebView has no
-  download handler. Sync to Drive to keep a copy.
 - The APK carries the same build as the desktop app: no analysis tools, JMdict or VNBox files
   (the published site serves those same-origin). Capacitor sends no COOP/COEP headers, so `/v` is
   never cross-origin isolated (no `SharedArrayBuffer`), as on GitHub Pages: even with VNBox's files

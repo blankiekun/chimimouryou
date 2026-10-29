@@ -210,7 +210,7 @@ jobs:
       - name: Android inputs changed?
         id: inputs
         run: |
-          if git diff --name-only HEAD^1 HEAD | grep -qE '^(apps/android/|apps/web/src/lib/data/android-drive\.ts|pnpm-lock\.yaml|\.github/workflows/)'; then
+          if git diff --name-only HEAD^1 HEAD | grep -qE '^(apps/android/|apps/web/src/lib/data/(android-drive|native-save)\.ts|pnpm-lock\.yaml|\.github/workflows/)'; then
             echo build=true >> "$GITHUB_OUTPUT"
           fi
 

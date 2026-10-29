@@ -8,6 +8,7 @@
   import { releaseReaderData } from '$lib/data/reader-data-owner';
   import { basePath, clearConsoleOnReload, pagePath, standalone } from '$lib/data/env';
   import { watchInstall } from '$lib/data/install-app';
+  import { catchDownloads } from '$lib/data/native-save';
   import { watchYomitan } from '$lib/data/yomitan';
   import { dialogManager, type Dialog } from '$lib/data/dialog-manager';
   import { userFontsCacheName, type UserFont } from '$lib/data/fonts';
@@ -31,6 +32,7 @@
 
   if (browser) {
     reloadOnStaleBuild(window);
+    catchDownloads(window);
     if (standalone) {
       watchInstall(window);
       watchYomitan(window);
