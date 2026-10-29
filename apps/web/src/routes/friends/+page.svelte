@@ -92,7 +92,7 @@
       <header class="friends-header">
         <div>
           <h1 class="friends-title">{$t$('social.friends')}</h1>
-          <p class="friends-lead">{$t$(empty ? 'social.emptyLead' : 'social.lead')}</p>
+          {#if empty}<p class="friends-lead">{$t$('social.emptyLead')}</p>{/if}
         </div>
         <button
           type="button"

@@ -148,7 +148,6 @@
       <div class="community-main">
         {#if !$socialSession$}<CommunitySignup />{/if}
         <h1 class="community-title">{$t$('nav.community')}</h1>
-        <p class="community-lead">{$t$('community.lead')}</p>
         {#if $socialSession$}<CommunityPlainComposer onposted={() => more(true)} />{/if}
 
         <ol class="feed">

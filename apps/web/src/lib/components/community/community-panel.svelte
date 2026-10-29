@@ -217,7 +217,6 @@
         </li>
       {/each}
     </ul>
-    <p class="tab-quiet">{$t$('community.guardNote')}</p>
   {/if}
 </div>
 

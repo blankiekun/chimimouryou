@@ -156,7 +156,6 @@
       <span>{$t$('social.zoom')}</span>
       <input type="range" min="1" max="4" step="0.01" bind:value={zoom} on:input={() => settle()} />
     </label>
-    <p class="picture-crop-hint">{$t$('social.cropHint')}</p>
   </div>
 
   <div class="picture-crop-preview">

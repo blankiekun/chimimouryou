@@ -125,7 +125,6 @@
   <main class="words">
     <header>
       <h1 class="words-title">{$t$('words.title')}</h1>
-      <p class="words-subtitle">{$t$('words.subtitle')}</p>
       {#if serverless && $analysisToolsState$.difficulty !== 'ready'}
         <p class="words-tools-note">
           {#if analysisToolsSupported()}
@@ -192,12 +191,6 @@
     font-size: var(--type-display);
     font-weight: 400;
     line-height: 1.2;
-  }
-
-  .words-subtitle {
-    margin-top: 0.25rem;
-    color: var(--app-muted-fg);
-    font-size: var(--type-small);
   }
 
   .words-tools-note {

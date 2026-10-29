@@ -63,14 +63,14 @@ export const ja: Record<MessageKey, string> = {
   'rank.colWords': '語彙',
   'rank.colBook': '本',
   'rank.rules':
-    'すべての条件が必要です。易しい本だけではランクは上がらず、下がることもありません。昇格は週に1ランクまで。文字数は読書時間1分あたり1,000字・1日30万字まで数え、1週間以内の単語テストの再受験と、出会っていない語の既知マークは数えません。',
+    'すべての条件が必要です。昇格は週に1ランクまでで、下がることはありません。文字数は1分あたり1,000字、1日300,000字まで。1週間以内の語彙テストの再受験と、出会っていないのに既知にした語は数えません。',
   'dashboard.wordsGained': '今月 +{count}',
   'dashboard.wordsGainedHint': '日々の読書文字数からの推定（Ankiの語彙は除く）',
   'statistics.wordsKnown': '既知の語彙',
   'statistics.wordsKnownNow': '現在 {count}語',
   'statistics.wordsKnownLabel': '{from}〜{to} の既知の語彙（現在 {count}語）',
   'statistics.wordsKnownNote':
-    '推定値：語彙テストの結果に、{count}回以上出会った語彙（日々の読書文字数と各本の語彙リストから算出）と、マークした語彙（マークした日から）を加えています。Ankiの定着済み語彙は、定着した日が分からないため最初から含めています。',
+    '推定値：語彙テスト、{count}回以上出会った語、マークした語、Ankiで成熟した語。',
   'statistics.title': '統計',
   'statistics.period': '期間',
   'statistics.today': '今日',
@@ -90,7 +90,7 @@ export const ja: Record<MessageKey, string> = {
   'statistics.calendar': 'カレンダー',
   'statistics.readingGoals': '読書目標',
   'statistics.wordsKnownEmpty':
-    'まだ推定がありません。難易度推定のあるCalibreの本を読んだ日が必要です。',
+    'まだ推定がありません。難易度推定のあるCalibreの本を読んでください。',
   'statistics.byBook': '本別',
   'statistics.byDay': '日別',
   'statistics.entries': '記録',
@@ -702,7 +702,6 @@ export const ja: Record<MessageKey, string> = {
   'anki.noMarkedWords': '手動指定した語彙はありません。',
 
   'words.title': '語彙',
-  'words.subtitle': '読書・Anki・手動指定からわかる、あなたの既知語。',
   'words.known': '既知語',
   'words.knownUnit': '語を知っています',
   'words.met': '出会った語 {met}',
@@ -716,7 +715,7 @@ export const ja: Record<MessageKey, string> = {
   'words.becausePlaced': '頻出語{count}語以内（レベルチェック）',
   'words.placement': 'レベルチェック',
   'words.placementResult': '約{count}語。頻出語の上位{cutoff}語を既知とします。',
-  'words.placementNone': '未受験。よく使う語にはい/いいえで答える2分のテストで、出発点を決めます。',
+  'words.placementNone': '未受験。',
   'words.placementTake': 'チェックする',
   'words.placementRetake': 'もう一度',
   'words.marked': '手動指定',
@@ -739,7 +738,7 @@ export const ja: Record<MessageKey, string> = {
   'words.ankiSettings': 'Anki設定',
   'words.how': '既知語の数え方',
   'words.howText':
-    '読んだ本で{count}回出会った語、Ankiのカードが成熟した語（間隔21日以上）、手動で指定した語、レベルチェックの範囲内の頻出語が既知になります。除外した語も既知として数えます。',
+    '既知：読書で{count}回以上出会った語、Ankiで成熟した語（間隔21日以上）、指定した語、レベルチェックの範囲内の語。無視した語も含みます。',
   'words.marksAccount': '指定はアカウントに同期されます。',
   'words.marksLibrary': '指定はGoogle Drive・OneDrive・フォルダと同期されます。',
   'words.marksBrowser': '指定はこのブラウザだけに保存されます。',
@@ -2078,28 +2077,24 @@ export const ja: Record<MessageKey, string> = {
   'settings.section.social-hub.text': 'ソーシャルアカウントの置き場所と削除。',
   'social.serverAccount': 'サーバーアカウント',
   'social.friends': 'フレンド',
-  'social.lead': 'フレンドが読んでいる本。フレンドに見えるのは共有すると決めたものだけです。',
   'social.emptyLead':
-    'フレンドには読んでいる本と進み具合だけが見えます。共有しない限りそれ以上は見えません。コードを送ってフレンドを追加しましょう。',
+    'フレンドに見えるのは読んでいる本と進み具合だけです。共有しない限りそれ以上は見えません。',
   'social.emptyText':
     'まだフレンドがいません。コードを送るか、フレンドのコードを入力してください。',
-  'social.signUpLead':
-    'フレンドが読んでいる本を見て、自分の本も見せましょう。chimimouryou ハブの無料アカウント、メール不要。',
+  'social.signUpLead': 'ハブの無料アカウント、メール不要。',
   'social.account': 'アカウント',
   'social.signUp': '登録',
   'social.logIn': 'ログイン',
   'social.username': 'ユーザー名',
   'social.usernameHint': '公開アドレス:/u?name={username}。英数字と _ で3〜20文字。',
   'social.displayName': '表示名',
-  'social.displayNameHint': 'フレンドに表示されます。あとで変更できます。',
   'social.password': 'パスワード',
   'social.newPassword': '新しいパスワード',
   'social.passwordHint': '10文字以上。',
   'social.passwordShort': 'パスワードは10文字以上にしてください。',
   'social.haveAccount': 'アカウントをお持ちですか?',
   'social.forgot': 'パスワードを忘れた場合',
-  'social.privacyNote':
-    '登録するまでハブには何も届きません。フレンドに見えるのは選んだものだけで、本はこのブラウザに残ります。',
+  'social.privacyNote': '登録するまでハブには何も届きません。本はこのブラウザに残ります。',
   'social.whatHubStores': 'ハブが保存するもの →',
   'social.step2': 'ステップ 2/2',
   'social.recoveryTitle': '復旧コード',
@@ -2124,11 +2119,10 @@ export const ja: Record<MessageKey, string> = {
   'social.copyLink': 'リンクをコピー',
   'social.newCode': '新しいコード',
   'social.qrLabel': 'フレンドリンクのQRコード',
-  'social.qrHint':
-    'スキャンするかリンクを送ってください。新しいコードにすると今のコードは使えなくなります。フレンドはそのままです。',
+  'social.qrHint': '新しいコードにすると今のコードは使えなくなります。フレンドはそのままです。',
   'social.enterCode': 'フレンドのコードを入力',
   'social.add': '追加',
-  'social.requestSent': '{code} にリクエストを送りました。承認されるまでここに表示されます。',
+  'social.requestSent': '{code} にリクエストを送りました。',
   'social.requests': 'リクエスト',
   'social.wantsFriends': 'フレンド申請 · {when}',
   'social.sentWaiting': '{when}に送信 · 待機中',
@@ -2144,14 +2138,12 @@ export const ja: Record<MessageKey, string> = {
   'social.blockConfirm':
     '{name} をブロックしますか?フレンドから外れ、リクエストを送れなくなります。',
   'social.nowReading': '読書中',
-  'social.homeSignUp':
-    'フレンドが読んでいる本を見て、自分の本も見せましょう。登録するまで何も送信しません。',
+  'social.homeSignUp': '登録するまで何も送信しません。',
   'social.signUpOrLogIn': '登録・ログイン',
   'social.requestCount': 'リクエスト {count} 件',
   'social.requestCountOne': 'リクエスト 1 件',
   'social.allFriends': 'すべてのフレンド',
-  'social.hubDown':
-    'ハブが混雑しているか接続できません。応答があればフレンドが戻ります。読書には影響しません。',
+  'social.hubDown': 'ハブに接続できません。読書には影響しません。',
   'social.offText': 'ソーシャル機能はオフです。設定 → 一般 → 拡張機能でオンにしてください。',
   'social.features': 'ソーシャル機能',
   'social.featuresHint':
@@ -2187,12 +2179,11 @@ export const ja: Record<MessageKey, string> = {
   'social.uploadPictureHint': '正方形に切り抜き・JPG、PNG、WebP',
   'social.removePicture': '画像を削除',
   'social.zoom': '拡大',
-  'social.cropHint': 'ドラッグで移動、拡大で合わせます。256 px の正方形で保存し、円で表示します。',
+  'social.cropHint': 'ドラッグで移動',
   'social.picturePreview': 'プレビュー',
   'social.savePicture': '保存',
   'social.pictureSaving': '保存中…',
-  'social.pictureReportNote':
-    '公開プロフィールから画像を報告できます。読み込めないときは漢字が表示されます。',
+  'social.pictureReportNote': '画像はほかの人から報告できます。',
   'social.pictureUnsupported':
     'このブラウザでは画像を作成できません。別のブラウザでお試しください。',
   'social.reportName': '名前',
@@ -2296,7 +2287,7 @@ export const ja: Record<MessageKey, string> = {
   'social.moderationOpen': '開く',
   'moderation.libraryCovers': 'ライブラリの表紙',
   'moderation.libraryCoversHint':
-    'ライブラリの本とマンガの表紙の縮小版をハブにアップロードし、誰のDiscordステータスにも表示できるようにします。このブラウザで友達に非表示にした本は除外します。1日10,000件まで。いつでも一時停止でき、ハブにあるものの続きから再開します。',
+    'ライブラリの表紙の縮小版をDiscordステータス用にハブへアップロードします。フレンドに非表示の本は除きます。1日10,000件まで。いつでも一時停止・再開できます。',
   'moderation.libraryCoversStart': 'ライブラリの表紙をアップロード',
   'moderation.libraryCoversPause': '一時停止',
   'moderation.libraryCoversResume': '再開',
@@ -2352,7 +2343,7 @@ export const ja: Record<MessageKey, string> = {
   'transfer.title': '本の受け渡し',
   'transfer.send': 'フレンドに送る',
   'transfer.sendHint':
-    'お互いに chimimouryou を開いておく必要があります。本はこのブラウザから相手のブラウザへ直接送られ、ハブは通りません。',
+    'お互いに chimimouryou を開いておく必要があります。本はハブを通らず直接届きます。',
   'transfer.friend': 'フレンド',
   'transfer.sendButton': '送る',
   'transfer.noFriends': '先にフレンドを追加してください。',
@@ -2374,8 +2365,7 @@ export const ja: Record<MessageKey, string> = {
   'transfer.sent': '{name} さんに送りました。',
   'transfer.received': 'ライブラリに追加しました。',
   'transfer.receivedHere': 'このブラウザに保存しました。',
-  'transfer.keptHere':
-    'このブラウザにだけ保存されます。サーバーのライブラリには追加されないので、ほかの読者には届きません。',
+  'transfer.keptHere': 'このブラウザにだけ保存され、サーバーのライブラリには追加されません。',
   'transfer.error.gone': 'リクエストは期限切れか、キャンセルされました。',
   'transfer.error.busy': 'お二人の間ですでに受け渡しが進行中です。終わるまでお待ちください。',
   'transfer.error.limit': '1日20冊までです。明日もう一度お試しください。',
@@ -2395,15 +2385,14 @@ export const ja: Record<MessageKey, string> = {
   'transfer.error.other': '問題が発生しました。もう一度お試しください。',
   'placement.title': 'レベルチェック',
   'placement.lede':
-    '約{minutes}分。語が一つずつ出ます。意味と読みが分かるか答えてください。実在しない語も混ざっていて、それに「はい」と答えると結果が下がります。',
+    '約{minutes}分。各語の意味と読みが分かるか答えてください。実在しない語に「はい」と答えると結果が下がります。',
   'placement.items': '語数',
-  'placement.lengthNote': '語はそれまでの答えに合わせて選びます。短いほど精度が下がります。',
+  'placement.lengthNote': '短いほど精度が下がります',
   'placement.retakeText':
     '実在しない語{total}語のうち{count}語に「はい」と答えたため、結果は保存していません。意味が分かる語にだけ「はい」と答えて、もう一度受けてください。',
   'placement.keys': 'キー',
   'placement.keysValue': 'Y または → 知っている · N または ← 知らない',
   'placement.result': '結果',
-  'placement.resultValue': '頻出語をいくつ知っているか',
   'placement.current': '現在の結果：約{count}語。',
   'placement.start': '始める',
   'placement.notNow': '今はしない',
@@ -2415,20 +2404,19 @@ export const ja: Record<MessageKey, string> = {
   'placement.stop': 'やめる',
   'placement.about': '約{count}',
   'placement.words': '語',
-  'placement.resultText':
-    '頻出語の上位{count}語を既知とします。カバー率、新出語、次に読む本があなたのレベルから始まります。読書で出会った語、指定した語、Ankiの語も引き続き数えます。',
+  'placement.resultText': '頻出語の上位{count}語を既知とします。',
   'placement.zeroText':
     'このチェックで既知になった語はありません。知っている語を指定するか、後でもう一度受けてください。',
   'placement.falseAlarms':
     '実在しない語{total}語のうち{count}語に「はい」と答えたため、結果を下げました。',
-  'placement.rough': '{count}語からのおおまかな推定です。',
+  'placement.rough': '{count}語からのおおまかな推定。',
   'placement.done': '完了',
   'placement.offerTitle': 'レベルを設定',
   'placement.offerText': '2分のレベルチェックで、あなたに合う本がわかります。',
   'bookWords.becausePlaced': 'レベルチェックの頻出語{count}語以内',
   'wordTest.title': '日本語の単語をいくつ知っていますか？',
   'wordTest.lede':
-    '約{minutes}分のはい/いいえテスト。語が一つずつ出ます。意味と読みが分かるか答えてください。実在しない語も混ざっていて、それに「はい」と答えると結果が下がります。答えはこのページの外に送られません。',
+    '約{minutes}分。各語の意味と読みが分かるか答えてください。実在しない語に「はい」と答えると結果が下がります。回答はこのページの外に送られません。',
   'wordTest.result': '約{count}語',
   'wordTest.meaning':
     '日本の本、アニメ、ゲームでよく使う上位{count}語（Jitenの頻度リスト）の大半を知っているようです。Chimi Readerは、読み始める前に本の何割をカバーしているか示します。',
@@ -2446,7 +2434,7 @@ export const ja: Record<MessageKey, string> = {
   'hardTest.title': 'レベルチェック：ハードモード',
   'hardTest.publicTitle': '日本語の語を、読めて意味も言えるのはいくつ？',
   'hardTest.lede':
-    '約{minutes}分。語ごとに、読み方をかな（またはローマ字）で入力し、次に4つの選択肢から意味を選ぶか、「わからない」を選びます。読み方が違うとすぐ次の語に進みます。両方正しいときだけ数え、当て推量の分は差し引きます。答えがこのページの外に送られることはありません。',
+    '約{minutes}分。各語の読み方をかなかローマ字で入力し、意味を選ぶか「わからない」を選びます。両方正しい語だけを数え、まぐれ当たりは補正します。回答はこのページの外に送られません。',
   'hardTest.keysValue': '読み方を入力して Enter · 次に 1〜4 選ぶ、0 または N わからない',
   'hardTest.typePlaceholder': '読み方（かな・ローマ字）',
   'hardTest.next': '次へ',
@@ -2458,8 +2446,6 @@ export const ja: Record<MessageKey, string> = {
   'hardTest.dontKnow': 'わからない',
   'hardTest.meaningText':
     '日本語の本・アニメ・ゲームでよく使う上位{count}語（Jiten の頻度リスト）の多くを、読めて意味も言えるでしょう。Chimi Reader は、読む前に本のどれだけをそれらの語が占めるかを示します。',
-  'hardTest.stricter':
-    'ハードモードは読み方を入力でき、意味も選べた語だけを数え、当て推量の分を差し引くので、より厳しい目安です。',
   'hardTest.both': '両方のテストを受けた場合は、低いほうの結果を使います。',
   'hardTest.credits':
     '意味：日本語版ウィクショナリー（寄稿者、CC BY-SA 4.0、wiktionary-to-yomitan 経由）。語と順位：Jiten の頻度リスト（CC BY-SA 4.0）。',
@@ -2471,28 +2457,23 @@ export const ja: Record<MessageKey, string> = {
   'hardTest.ogDescription':
     '各語の読み方を入力し、意味を選びます。当て推量は数えません。約7分、登録不要。',
   'words.placementHard': 'ハードモード：約{count}語。',
-  'words.placementHardNone': 'ハードモードは各語の読み方と意味を問う、より厳しい目安です。',
+  'words.placementHardNone': 'ハードモード：未受験。',
   'words.placementHardTake': 'ハードモードを受ける',
   'words.placementHardRetake': 'ハードモードをもう一度',
   'placement.ok': 'OK',
   'nav.community': 'コミュニティ',
   'nav.profile': 'プロフィール',
-  'profile.lead': 'この端末での読書記録です。',
   'profile.signUp': '登録して共有する',
   'profile.chars': '文字',
   'profile.charactersRead': '読んだ文字数',
   'profile.readingDays': '読書日数',
-  'profile.empty': 'まだ記録がありません。本を開くとここに統計が表示されます。',
+  'profile.empty': 'まだ記録がありません。',
   'profile.editStatistics': '統計を編集',
-  'profile.editStatisticsHint': '期間・目標・データ',
-  'community.lead':
-    '読者の投稿と共有されている一文。新しい順です。ネタバレは「ネタバレを表示」を押すまでぼかされます。',
   'community.off':
     'コミュニティはソーシャルプラグインの機能で、今はオフです。設定 → プラグインでオンにできます。',
   'community.readOnly': '閲覧のみ。投稿するには登録してください。',
   'community.signUpTitle': '登録して投稿',
-  'community.signUpText':
-    '投稿・返信・「役に立った」にはソーシャルのアカウント(ユーザー名とパスワード、メール不要)が必要です。読むだけならアカウントは要りません。',
+  'community.signUpText': '投稿と返信には無料アカウントが必要です（メール不要）。',
   'community.notNow': '今はしない',
   'community.loading': '投稿を読み込み中…',
   'community.showContext': '前後の文を表示',
@@ -2504,12 +2485,8 @@ export const ja: Record<MessageKey, string> = {
   'community.downNote': '本・メモ・進み具合には影響しません。',
   'community.empty': 'この本にはまだ投稿がありません。',
   'community.emptyHint': '行を選んで「コミュニティに投稿」で始められます。',
-  'community.feedEmpty':
-    'まだ投稿がありません。上で書くか、本で行を選んで「コミュニティに投稿」を選んでください。',
-  'community.guardNote':
-    'ネタバレは「ネタバレを表示」を押すまでぼかされます。投稿するには行を選んで「コミュニティに投稿」を選んでください。',
-  'community.howToPost':
-    '本から投稿:行を選んで「コミュニティに投稿」。投稿にはその行、ページ、本の表紙が付きます。',
+  'community.feedEmpty': 'まだ投稿がありません。',
+  'community.howToPost': '投稿するには、本で行を選んで「コミュニティに投稿」を選びます。',
   'community.order': '並び順',
   'community.inOrder': '本の順',
   'community.mostPosts': '投稿が多い順',
@@ -2549,13 +2526,10 @@ export const ja: Record<MessageKey, string> = {
   'community.postAction': 'コミュニティに投稿',
   'community.postActionTitle': 'この行をコミュニティに投稿:質問、感想、または一文だけでも',
   'community.postTitle': 'コミュニティに投稿',
-  'community.postLead':
-    'この行について質問したり、感想を書いたり、良い一文として共有したりできます。返信はホームに表示されます。',
   'community.postPlaceholder': '任意:質問や感想',
   'community.plainText': 'プレーンテキスト',
   'community.tooManyLines': '投稿は20行までです。',
-  'community.spoilerHint':
-    '読者には、本のタイトルと表紙とともに、「ネタバレを表示」を押すまでぼかして表示されます。',
+  'community.spoilerHint': '「ネタバレを表示」を押すまでぼかして表示されます。',
   'community.postOnLine': 'この行に投稿',
   'community.lineComments': 'この行へのコメント',
   'community.feedPosts': 'コミュニティの投稿',
@@ -2563,10 +2537,6 @@ export const ja: Record<MessageKey, string> = {
   'community.where': '投稿先',
   'community.whereFeed': 'コミュニティのフィードとこの行',
   'community.whereLine': 'この行のみ',
-  'community.whereFeedHint':
-    '公開のコミュニティフィードに返信付きの投稿として表示され、この行にも並びます。',
-  'community.whereLineHint':
-    'この行へのコメントです。この本の読者が行を開いたときに表示されます。フィードには出ません。',
   'community.shared': '投稿と一緒に共有されるもの',
   'community.contextCount': '行とページの文脈 · {count} / {max}文字',
   'community.change': '変更',
@@ -2581,8 +2551,7 @@ export const ja: Record<MessageKey, string> = {
   'community.lineLong': 'この文は長すぎて投稿できません(300文字まで)。',
   'community.matchTitle': 'これは{title}ですか?',
   'community.matchTitleVol': 'これは{title} {vol}巻ですか?',
-  'community.matchLead':
-    '同じ巻の別の版でも投稿が共有されるよう、本を一度だけ照合します。答えはこの本に保存されます。',
+  'community.matchLead': '別の版の投稿とつながるよう、本ごとに一度だけ確認します。',
   'community.searching': '本を検索中…',
   'community.matchNone': 'AniListやVNDBに見つかりませんでした。',
   'community.matchYes': 'はい、これです',
@@ -2696,8 +2665,7 @@ export const ja: Record<MessageKey, string> = {
   'immersion.cancel': 'キャンセル',
   'immersion.save': '追加',
   'immersion.delete': '記録を削除',
-  'immersion.empty':
-    'この期間の記録はありません。テキストフッカーとListenは自動で記録します。アニメやポッドキャストなどは手動で追加できます。',
+  'immersion.empty': 'この期間の記録はありません。',
   'immersion.source.manual': '手動',
   'immersion.source.hook': 'テキストフッカー',
   'immersion.source.listen': 'Listen'
