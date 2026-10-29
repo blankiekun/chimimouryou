@@ -15,6 +15,9 @@ Settings → Dictionary installs JMdict in one tap, and desktop browsers can
 download the furigana and difficulty tools. Coming from ッツ Reader? Export a
 Zip File there and use Import Backup here. Phones and Yomitan:
 [docs/LEARNING.md](docs/LEARNING.md).
+On Android there is also an APK of it on each
+[release](https://github.com/blankiekun/chimimouryou/releases/latest)
+([apps/android](apps/android/README.md)).
 
 ## Or host it for your Calibre library
 

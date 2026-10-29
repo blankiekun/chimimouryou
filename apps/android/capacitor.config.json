@@ -1,0 +1,9 @@
+{
+  "appId": "moe.blankie.chimireader",
+  "appName": "chimimouryou",
+  "webDir": "../web/build",
+  "server": {
+    "androidScheme": "https",
+    "hostname": "chimimouryou.localhost"
+  }
+}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import PointBox from '$lib/components/point-box.svelte';
+  import { downloadBlob } from '$lib/functions/file-dom/download-blob';
   import { formatCode } from '$lib/data/social-account';
   import { t$ } from '$lib/i18n';
 
@@ -13,12 +14,7 @@
 
   function download() {
     const text = `${$t$('social.recoveryFile', { username })}\n\n${formatCode(code, 5)}\n`;
-    const link = document.createElement('a');
-
-    link.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
-    link.download = `chimimouryou-recovery-${username}.txt`;
-    link.click();
-    URL.revokeObjectURL(link.href);
+    downloadBlob(new Blob([text], { type: 'text/plain' }), `chimimouryou-recovery-${username}.txt`);
   }
 </script>
 

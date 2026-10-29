@@ -33,6 +33,8 @@ module.exports = (async () => {
         // Yomitan's own code in its own style (README there); kept as close to upstream as possible.
         'apps/web/src/lib/vendor/yomitan/**',
         'apps/desktop/dist/**',
+        // The Gradle project: the web build copied in, Gradle's output.
+        'apps/android/android/**',
         // Build-time Node scripts outside the web app's tsconfig.
         'scripts/**/*.mjs',
         // Hook scripts run inside the game by VNBox's frida-compat (its globals, dc00's style).
