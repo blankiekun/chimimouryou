@@ -66,7 +66,7 @@ export const en = {
   'rank.colWords': 'Words',
   'rank.colBook': 'Book',
   'rank.rules':
-    "Every requirement counts: easy reading alone never raises the rank, and it never drops. It rises one rank a week at most. Characters count up to 1,000 a minute of reading time and 300,000 a day; word test retakes within a week, and words marked known but never met, don't count.",
+    "Every requirement counts. The rank rises at most once a week and never drops. Up to 1,000 characters a minute and 300,000 a day count; word test retakes within a week and words marked known but never met don't.",
   'dashboard.wordsGained': '+{count} this month',
   'dashboard.wordsGainedHint':
     'Estimated from the characters read each day; Anki words are not included',
@@ -74,7 +74,7 @@ export const en = {
   'statistics.wordsKnownNow': '{count} now',
   'statistics.wordsKnownLabel': 'Words known from {from} to {to}, {count} now',
   'statistics.wordsKnownNote':
-    "Estimate: your word test result, plus words met at least {count} times (rebuilt from the characters read each day and each book's word list) and words you marked, from the day you marked them. Anki's mature words count from the start, as Anki doesn't say when each one matured.",
+    'Estimate: your word test, words met {count}+ times, words you marked, and mature Anki words.',
   'statistics.title': 'Statistics',
   'statistics.period': 'Period',
   'statistics.today': 'Today',
@@ -94,7 +94,7 @@ export const en = {
   'statistics.calendar': 'Calendar',
   'statistics.readingGoals': 'Reading goals',
   'statistics.wordsKnownEmpty':
-    'No estimate yet: it needs days read in Calibre books with a difficulty estimate.',
+    'No estimate yet: read Calibre books that have a difficulty estimate.',
   'statistics.byBook': 'By book',
   'statistics.byDay': 'By day',
   'statistics.entries': 'Entries',
@@ -710,7 +710,6 @@ export const en = {
   'anki.noMarkedWords': 'No marked words.',
 
   'words.title': 'Words',
-  'words.subtitle': 'Everything you know, from your reading, Anki and your own marks.',
   'words.known': 'Words known',
   'words.knownUnit': 'words known',
   'words.met': '{met} met',
@@ -724,8 +723,7 @@ export const en = {
   'words.becausePlaced': 'Among the {count} most common words (level check)',
   'words.placement': 'Level check',
   'words.placementResult': 'About {count} words. The {cutoff} most common words count as known.',
-  'words.placementNone':
-    'Not taken. A 2-minute yes/no test of common words gives you a starting point.',
+  'words.placementNone': 'Not taken.',
   'words.placementTake': 'Take the check',
   'words.placementRetake': 'Retake',
   'words.marked': 'Marked by you',
@@ -748,7 +746,7 @@ export const en = {
   'words.ankiSettings': 'Anki settings',
   'words.how': 'How words count',
   'words.howText':
-    'A word is known when you have met it {count} times in what you read, its Anki card is mature (interval 21 days or more), you marked it, or it is among the most common words your level check covers. Ignored words count as known too.',
+    'Known: met {count}+ times in your reading, mature in Anki (interval 21+ days), marked by you, or within your level check. Ignored words count too.',
   'words.marksAccount': 'Marks sync to your account.',
   'words.marksLibrary': 'Marks sync with your Google Drive, OneDrive or folder.',
   'words.marksBrowser': 'Marks stay in this browser.',
@@ -2081,19 +2079,16 @@ export const en = {
   'settings.section.social-hub.text': 'Where your social account lives, and deleting it.',
   'social.serverAccount': 'Server account',
   'social.friends': 'Friends',
-  'social.lead': 'What your friends are reading. They see only what you choose to share.',
   'social.emptyLead':
-    'Friends see the books you are reading and how far along you are, nothing more unless you share it. Send your code to add someone.',
+    'Friends see what you are reading and how far along, nothing more unless you share it.',
   'social.emptyText': 'No friends yet. Send your code, or enter a friend’s.',
-  'social.signUpLead':
-    'See what friends are reading and show them yours. One free account on the chimimouryou hub, no email.',
+  'social.signUpLead': 'One free hub account, no email.',
   'social.account': 'Account',
   'social.signUp': 'Sign up',
   'social.logIn': 'Log in',
   'social.username': 'Username',
   'social.usernameHint': 'Your public address: /u?name={username}. 3-20 letters, digits or _.',
   'social.displayName': 'Display name',
-  'social.displayNameHint': 'What friends see. You can change it later.',
   'social.password': 'Password',
   'social.newPassword': 'New password',
   'social.passwordHint': 'At least 10 characters.',
@@ -2101,7 +2096,7 @@ export const en = {
   'social.haveAccount': 'Have an account?',
   'social.forgot': 'Forgot password?',
   'social.privacyNote':
-    'Nothing reaches the hub until you sign up. Friends see only what you choose; your books stay in this browser.',
+    'Nothing reaches the hub until you sign up. Your books stay in this browser.',
   'social.whatHubStores': 'What the hub stores →',
   'social.step2': 'Step 2 of 2',
   'social.recoveryTitle': 'Your recovery code',
@@ -2127,11 +2122,10 @@ export const en = {
   'social.copyLink': 'Copy link',
   'social.newCode': 'New code',
   'social.qrLabel': 'QR code of your friend link',
-  'social.qrHint':
-    'Scan to add me, or send the link. New code retires this one; your friends stay.',
+  'social.qrHint': 'A new code retires this one; your friends stay.',
   'social.enterCode': 'Enter a friend’s code',
   'social.add': 'Add',
-  'social.requestSent': 'Request sent to {code}. It shows here until they accept.',
+  'social.requestSent': 'Request sent to {code}.',
   'social.requests': 'Requests',
   'social.wantsFriends': 'Wants to be friends · {when}',
   'social.sentWaiting': 'Sent {when} · waiting',
@@ -2146,14 +2140,12 @@ export const en = {
   'social.removeConfirm': 'Remove {name} from your friends?',
   'social.blockConfirm': 'Block {name}? They are removed and can’t send you requests.',
   'social.nowReading': 'Now reading',
-  'social.homeSignUp':
-    'See what friends are reading and show them yours. Nothing is sent until you sign up.',
+  'social.homeSignUp': 'Nothing is sent until you sign up.',
   'social.signUpOrLogIn': 'Sign up or log in',
   'social.requestCount': '{count} requests',
   'social.requestCountOne': '1 request',
   'social.allFriends': 'All friends',
-  'social.hubDown':
-    'The hub is busy or unreachable. Friends come back when it answers; reading is unaffected.',
+  'social.hubDown': 'The hub is unreachable. Reading is unaffected.',
   'social.offText': 'Social features are off. Turn them on in Settings → General → Plugins.',
   'social.features': 'Social features',
   'social.featuresHint':
@@ -2187,12 +2179,11 @@ export const en = {
   'social.uploadPictureHint': 'Square crop · JPG, PNG or WebP',
   'social.removePicture': 'Remove picture',
   'social.zoom': 'Zoom',
-  'social.cropHint': 'Drag to move, zoom to fit. Saved as a 256 px square; shown as a circle.',
+  'social.cropHint': 'Drag to move',
   'social.picturePreview': 'Preview',
   'social.savePicture': 'Save',
   'social.pictureSaving': 'Saving…',
-  'social.pictureReportNote':
-    'Others can report a picture from your public profile. Your kanji shows if it can’t load.',
+  'social.pictureReportNote': 'Others can report your picture.',
   'social.pictureUnsupported': 'This browser can’t make the picture. Try another browser.',
   'social.reportName': 'The name',
   'social.reportPicture': 'The picture',
@@ -2295,7 +2286,7 @@ export const en = {
   'social.moderationOpen': 'Open',
   'moderation.libraryCovers': 'Library covers',
   'moderation.libraryCoversHint':
-    'Uploads a small copy of every library book’s and manga’s cover to the hub, so anyone’s Discord status can show it. Books hidden from friends in this browser are skipped. Up to 10,000 a day; pause at any time and continue later from what the hub already has.',
+    'Uploads a small copy of each library cover to the hub for Discord statuses, skipping books hidden from friends. 10,000 a day; pause and resume any time.',
   'moderation.libraryCoversStart': 'Upload library covers',
   'moderation.libraryCoversPause': 'Pause',
   'moderation.libraryCoversResume': 'Resume',
@@ -2351,7 +2342,7 @@ export const en = {
   'transfer.title': 'Book transfers',
   'transfer.send': 'Send to a friend',
   'transfer.sendHint':
-    'Both of you need chimimouryou open. The book goes straight from this browser to theirs; it never passes through the hub.',
+    'Both of you need chimimouryou open. The book goes straight to them, never through the hub.',
   'transfer.friend': 'Friend',
   'transfer.sendButton': 'Send',
   'transfer.noFriends': 'Add a friend first.',
@@ -2373,8 +2364,7 @@ export const en = {
   'transfer.sent': 'Sent to {name}.',
   'transfer.received': 'Added to your library.',
   'transfer.receivedHere': 'Kept in this browser.',
-  'transfer.keptHere':
-    'Kept in this browser only: it isn’t added to the server’s library, so other readers there don’t get it.',
+  'transfer.keptHere': 'Kept in this browser only, not added to the server library.',
   'transfer.error.gone': 'The request expired or was cancelled.',
   'transfer.error.busy': 'A transfer between you two is already under way. Wait for it to finish.',
   'transfer.error.limit': '20 books a day is the most. Try again tomorrow.',
@@ -2394,15 +2384,14 @@ export const en = {
   'transfer.error.other': 'Something went wrong. Try again.',
   'placement.title': 'Level check',
   'placement.lede':
-    'About {minutes} min. Words appear one at a time: say whether you know each one, its meaning and reading. Some are made up, and saying yes to those lowers the result.',
+    'About {minutes} min. Say whether you know each word’s meaning and reading. Some are made up: saying yes to those lowers the result.',
   'placement.items': 'Words',
-  'placement.lengthNote': 'Each word is chosen by your answers so far. Shorter is less precise.',
+  'placement.lengthNote': 'Shorter is less precise',
   'placement.retakeText':
     'You said yes to {count} of {total} made-up words, so no result was saved. Take it again and say yes only to words whose meaning you know.',
   'placement.keys': 'Keys',
   'placement.keysValue': 'Y or → know · N or ← don’t know',
   'placement.result': 'Result',
-  'placement.resultValue': 'How many of the most common words you know',
   'placement.current': 'Current result: about {count} words.',
   'placement.start': 'Start',
   'placement.notNow': 'Not now',
@@ -2414,13 +2403,12 @@ export const en = {
   'placement.stop': 'Stop',
   'placement.about': 'about {count}',
   'placement.words': 'words',
-  'placement.resultText':
-    'The {count} most common words now count as known, so coverage, New words and Read next start from your level. Words you meet in reading, mark or have in Anki still count too.',
+  'placement.resultText': 'The {count} most common words now count as known.',
   'placement.zeroText':
     'No words count as known from this check. Mark words you know, or take it again later.',
   'placement.falseAlarms':
     'You said yes to {count} of {total} made-up words, so the result was lowered.',
-  'placement.rough': 'It is a rough estimate from {count} words.',
+  'placement.rough': 'Rough estimate from {count} words.',
   'placement.done': 'Done',
   'placement.offerTitle': 'Set your level',
   'placement.offerText':
@@ -2428,7 +2416,7 @@ export const en = {
   'bookWords.becausePlaced': 'Within the level check’s {count} common words',
   'wordTest.title': 'How many Japanese words do you know?',
   'wordTest.lede':
-    'A yes/no test of about {minutes} min. Words appear one at a time: say whether you know each one, its meaning and reading. Some are made up, and saying yes to those lowers the result. Nothing you answer leaves this page.',
+    'About {minutes} min. Say whether you know each word’s meaning and reading. Some are made up: saying yes to those lowers the result. Your answers stay on this page.',
   'wordTest.result': 'About {count} words',
   'wordTest.meaning':
     'You likely know most of the {count} most common words in Japanese books, anime and games (by Jiten’s frequency list). Chimi Reader shows how much of a book they cover before you start it.',
@@ -2447,7 +2435,7 @@ export const en = {
   'hardTest.title': 'Level check: hard mode',
   'hardTest.publicTitle': 'How many Japanese words can you read and explain?',
   'hardTest.lede':
-    'About {minutes} min. For each word, type its reading in kana (or romaji), then pick its meaning from four choices, or say you don’t know. A wrong reading goes straight to the next word. A word counts only when both are right, and lucky guesses are corrected for. Nothing you answer leaves this page.',
+    'About {minutes} min. Type each word’s reading in kana or romaji, then pick its meaning, or say you don’t know. A word counts only when both are right; lucky guesses are corrected for. Your answers stay on this page.',
   'hardTest.keysValue': 'Type the reading, Enter · then 1–4 pick, 0 or N don’t know',
   'hardTest.typePlaceholder': 'Reading in kana or romaji',
   'hardTest.next': 'Next',
@@ -2460,8 +2448,6 @@ export const en = {
   'hardTest.dontKnow': 'I don’t know',
   'hardTest.meaningText':
     'You can likely read and explain most of the {count} most common words in Japanese books, anime and games (by Jiten’s frequency list). Chimi Reader shows how much of a book they cover before you start it.',
-  'hardTest.stricter':
-    'Hard mode counts a word only when you type its reading and pick its meaning, and corrects for lucky guesses, so it is the stricter measure.',
   'hardTest.both': 'When you have taken both tests, the lower result counts.',
   'hardTest.credits':
     'Meanings: Japanese Wiktionary, by its contributors (CC BY-SA 4.0), via wiktionary-to-yomitan. Words and ranks: Jiten’s frequency list (CC BY-SA 4.0).',
@@ -2473,29 +2459,23 @@ export const en = {
   'hardTest.ogDescription':
     'Type each word’s reading and pick its meaning; lucky guesses don’t count. About 7 minutes, nothing to sign up for.',
   'words.placementHard': 'Hard mode: about {count} words.',
-  'words.placementHardNone':
-    'Hard mode asks each word’s reading and meaning, the stricter measure.',
+  'words.placementHardNone': 'Hard mode: not taken.',
   'words.placementHardTake': 'Take hard mode',
   'words.placementHardRetake': 'Retake hard mode',
   'placement.ok': 'OK',
   'nav.community': 'Community',
   'nav.profile': 'Profile',
-  'profile.lead': 'Your reading, on this device.',
   'profile.signUp': 'Sign up to share',
   'profile.chars': 'chars',
   'profile.charactersRead': 'Characters read',
   'profile.readingDays': 'Reading days',
-  'profile.empty': 'Nothing read yet. Open a book and your statistics start here.',
+  'profile.empty': 'Nothing read yet.',
   'profile.editStatistics': 'Edit statistics',
-  'profile.editStatisticsHint': 'Period, goals and data',
-  'community.lead':
-    'Posts and lines readers are sharing, newest first. Spoilers stay blurred until you tap Show spoiler.',
   'community.off':
     'Community is part of the Social plugin, which is off. Turn it on in Settings → Plugins.',
   'community.readOnly': 'Reading only. Sign up to post.',
   'community.signUpTitle': 'Sign up to post',
-  'community.signUpText':
-    'Posting, replying and Helpful need a Social account: a username and password, no email. Reading stays open without one.',
+  'community.signUpText': 'Posting and replying need a free account, no email.',
   'community.notNow': 'Not now',
   'community.loading': 'Loading posts…',
   'community.showContext': 'Show context',
@@ -2507,12 +2487,8 @@ export const en = {
   'community.downNote': 'Your book, notes and progress are not affected.',
   'community.empty': 'No posts on this book yet.',
   'community.emptyHint': 'Select a line and choose Post to community to start one.',
-  'community.feedEmpty':
-    'No posts yet. Write one above, or select a line in a book and choose Post to community.',
-  'community.guardNote':
-    'Spoilers stay blurred until you tap Show spoiler. To post, select a line and choose Post to community.',
-  'community.howToPost':
-    'Post from a book: select a line and choose Post to community. Posts carry the line, its page and the book’s cover.',
+  'community.feedEmpty': 'No posts yet.',
+  'community.howToPost': 'To post, select a line in a book and choose Post to community.',
   'community.order': 'Order',
   'community.inOrder': 'In order',
   'community.mostPosts': 'Most posts',
@@ -2553,13 +2529,10 @@ export const en = {
   'community.postActionTitle':
     'Post this line to the community: a question, a comment or just the line',
   'community.postTitle': 'Post to community',
-  'community.postLead':
-    'Ask about this line, say what you think, or share it because it’s good. Replies show on your Home.',
   'community.postPlaceholder': 'Optional: a question or a comment',
   'community.plainText': 'Plain text',
   'community.tooManyLines': 'Posts have at most 20 lines.',
-  'community.spoilerHint':
-    'Readers see it blurred, with the book’s title and cover, until they tap Show spoiler.',
+  'community.spoilerHint': 'Blurred until a reader taps Show spoiler.',
   'community.postOnLine': 'Post on this line',
   'community.lineComments': 'Comments on this line',
   'community.feedPosts': 'Community posts',
@@ -2567,10 +2540,6 @@ export const en = {
   'community.where': 'Where it goes',
   'community.whereFeed': 'Community feed and this line',
   'community.whereLine': 'This line only',
-  'community.whereFeedHint':
-    'A post in the public Community feed with its own replies, also listed on this line.',
-  'community.whereLineHint':
-    'A comment on this line: readers of this book see it when they open the line. Not in the feed.',
   'community.shared': 'Shared with your post',
   'community.contextCount': 'Line and page context · {count} / {max} chars',
   'community.change': 'Change',
@@ -2586,8 +2555,7 @@ export const en = {
   'community.lineLong': 'This sentence is too long to post on (300 characters at most).',
   'community.matchTitle': 'Is this {title}?',
   'community.matchTitleVol': 'Is this {title} Vol. {vol}?',
-  'community.matchLead':
-    'Posts meet across editions of the same volume, so we match the book once. Your answer is kept for this book.',
+  'community.matchLead': 'Asked once per book, so posts from other editions meet.',
   'community.searching': 'Looking up the book…',
   'community.matchNone': 'No match found on AniList or VNDB.',
   'community.matchYes': 'Yes, this is it',
@@ -2705,8 +2673,7 @@ export const en = {
   'immersion.cancel': 'Cancel',
   'immersion.save': 'Add',
   'immersion.delete': 'Delete entry',
-  'immersion.empty':
-    'Nothing logged in these days. The texthooker and Listen log automatically; add anime, podcasts or anything else by hand.',
+  'immersion.empty': 'Nothing logged in these days.',
   'immersion.source.manual': 'Added by hand',
   'immersion.source.hook': 'Texthooker',
   'immersion.source.listen': 'Listen'

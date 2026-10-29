@@ -129,7 +129,6 @@
       <header>
         <h1 class="profile-title">{$t$('nav.profile')}</h1>
         <p class="profile-meta">
-          {$t$('profile.lead')}
           {#if socialOn}
             <a class="app-button-quiet" href="{pagePath}/friends">{$t$('profile.signUp')}</a>
           {:else if !standalone && !$account$}
@@ -173,7 +172,6 @@
       {/if}
       <p class="profile-edit">
         <a class="app-button" href="{pagePath}/statistics">{$t$('profile.editStatistics')}</a>
-        <span class="profile-meta">{$t$('profile.editStatisticsHint')}</span>
       </p>
     </section>
   </main>
