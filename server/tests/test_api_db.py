@@ -1,0 +1,83 @@
+"""Tests for the API database: schema, FTS5, the rev counter and the newer-modified-wins rule."""
+
+import os
+import sys
+import tempfile
+import unittest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'api'))
+import apidb  # noqa: E402
+
+
+def add_book(connection, rev, title='吾輩は猫である', key='k1'):
+    connection.execute(
+        'INSERT INTO books (key, calibre_id, title, unique_title, format, file, updated, rev) '
+        "VALUES (?, 1, ?, ?, 'epub', 'a.epub', 0, ?)", (key, title, title, rev()))
+    return connection.execute('SELECT id FROM books WHERE key = ?', (key,)).fetchone()['id']
+
+
+class ApiDbTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = os.path.join(self.tmp.name, 'api', 'library.db')
+        self.db = apidb.Database(self.path)
+
+    def tearDown(self):
+        self.db.connection.close()
+        self.tmp.cleanup()
+
+    def test_schema_twice(self):
+        again = apidb.Database(self.path)
+        self.assertEqual(again.query('PRAGMA journal_mode')[0][0], 'wal')
+        again.connection.close()
+
+    def test_fts5_trigram(self):
+        book = self.db.transaction(lambda c: add_book(c, apidb.Rev(c)))
+        match = "SELECT rowid FROM books_fts WHERE books_fts MATCH '\"猫であ\"'"
+        self.assertEqual([row[0] for row in self.db.query(match)], [book])
+        self.db.transaction(lambda c: c.execute("UPDATE books SET title = '坊っちゃん' WHERE id = ?", (book,)))
+        self.assertEqual(self.db.query(match), [])
+
+    def test_rev_once_per_transaction(self):
+        def two(c):
+            rev = apidb.Rev(c)
+            book = add_book(c, rev)
+            apidb.put_row(c, rev, 'progress', {'account': '', 'book': book}, 1, {'data': '{}', 'progress': 0})
+            apidb.put_row(c, rev, 'book_docs', {'account': '', 'book': book, 'kind': 'recaps'}, 1, {'data': '{}'})
+            return book
+        book = self.db.transaction(two)
+        self.assertEqual(self.db.query('SELECT rev FROM progress')[0][0], 1)
+        self.assertEqual(self.db.query('SELECT rev FROM book_docs')[0][0], 1)
+        self.db.transaction(lambda c: apidb.put_row(
+            c, apidb.Rev(c), 'progress', {'account': '', 'book': book}, 2, {'data': '{}', 'progress': 0}))
+        self.assertEqual(self.db.query('SELECT rev FROM progress')[0][0], 2)
+        self.assertEqual(apidb.current_rev(self.db.connection), 2)
+
+    def test_put_row_rules(self):
+        book = self.db.transaction(lambda c: add_book(c, apidb.Rev(c)))
+        key = {'account': 'a' * 32, 'book': book}
+
+        def put(modified):
+            return self.db.transaction(lambda c: apidb.put_row(
+                c, apidb.Rev(c), 'progress', key, modified, {'data': '{"x":1}', 'progress': 0.5}))
+
+        self.assertEqual(put(10)[0], 'written')
+        rev = self.db.query('SELECT rev FROM progress')[0][0]
+        self.assertEqual(put(10)[0], 'same')
+        self.assertEqual(self.db.query('SELECT rev FROM progress')[0][0], rev)
+        self.assertEqual(apidb.current_rev(self.db.connection), rev)
+        status, row = put(5)
+        self.assertEqual(status, 'conflict')
+        self.assertEqual(row['modified'], 10)
+        self.assertEqual(put(20)[0], 'written')
+        row = self.db.query('SELECT modified, rev FROM progress')[0]
+        self.assertEqual(row['modified'], 20)
+        self.assertGreater(row['rev'], rev)
+
+    def test_unknown_table(self):
+        with self.assertRaises(ValueError):
+            self.db.transaction(lambda c: apidb.put_row(c, apidb.Rev(c), 'users', {'id': 1}, 1, {}))
+
+
+if __name__ == '__main__':
+    unittest.main()
