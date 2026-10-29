@@ -20,8 +20,10 @@ import type { LoadData } from '$lib/functions/file-loaders/types';
 const opfsRoot = 'vnbox';
 
 /** Why this browser can't play Windows games, or undefined when it can. */
-export function windowsGameBlocker(win: Window = window): 'browser' | undefined {
+export function windowsGameBlocker(win: Window = window): 'https' | 'browser' | undefined {
   // Phones and tablets play too (taps are the left button, /v adds Menu and Skip buttons).
+  // OPFS exists only in secure contexts: a plain-HTTP install has none, whatever the browser.
+  if (!win.isSecureContext) return 'https';
   // VNBox's jitJspi build suspends WebAssembly on file reads (JSPI) and reads games from OPFS.
   if (!('Suspending' in WebAssembly) || !win.navigator.storage?.getDirectory) return 'browser';
 
@@ -29,9 +31,23 @@ export function windowsGameBlocker(win: Window = window): 'browser' | undefined 
 }
 
 export const windowsGameBlockerText = {
+  https: 'Windows games need this site over HTTPS: browsers keep game files only for secure pages.',
   browser:
-    'Windows games need a browser with WebAssembly JSPI, such as Chrome or Edge 137 or newer.'
+    'Windows games need a browser with WebAssembly JSPI, such as Chrome or Edge 137 or newer, or Firefox 153 or newer.'
 };
+
+/** About the root fs and jp.zip VNBox copies into OPFS on first start, on top of the game. */
+export const vnboxZipsSize = 120 * 1024 ** 2;
+
+/**
+ * VNBox's error (lazyfs.js vnbox-error) as /v shows it: a full browser storage gets its fix,
+ * since Firefox keeps a site to 10% of the disk until the site may store data persistently.
+ */
+export function vnboxErrorText(message: string) {
+  return /quota/i.test(message)
+    ? "This browser's storage for the site is full, so the game's files couldn't be copied. Allow the site to store data persistently when the browser asks (Firefox: the permission in the address bar), or free space by removing games you don't play, then open the game again."
+    : `The player couldn't load its files: ${message}`;
+}
 
 /** The game's OPFS folder name: ASCII, from its title (VNBox keys its saves by it). */
 export function windowsGameFolder(title: string) {
@@ -234,7 +250,7 @@ export function vnboxPlayerUrl(info: VnInfo, hookUrl?: string, tuning = '') {
       : [`p=${encodeURIComponent(info.exe ?? '')}`]),
     // VNBox's own syntax: a quoted key:value, the quotes as %22.
     'env=%22LC_ALL:ja_JP.UTF-8%22',
-    'wine-override=[nomono]',
+    `wine-override=${encodeURIComponent(`[${wineOverrides}]`)}`,
     // The MS Japanese font names (ＭＳ ゴシック…) as jp.zip's IPA fonts: without them titles
     // show tofu, and games that check the font they got (最果てのイマ) stop.
     'registry=jpfonts',
@@ -309,6 +325,12 @@ export interface VnboxCompat {
   env: { name: string; value: string }[];
 }
 
+/**
+ * vnboxPlayerUrl's wine-override: no Mono/Gecko installs, and no crash debugger (a launcher that
+ * faults as it hands over to its game would start winedbg, which is slow here and takes the screen).
+ */
+export const wineOverrides = ['nomono', 'winedbg.exe='];
+
 export const compatKeys = new Set(['registry', 'wine-override', 'wine-env', 'reg', 'desktop']);
 const versions = ['win95', 'win98', 'winme', 'win2k', 'winxp', 'win7', 'win10'];
 
@@ -344,7 +366,9 @@ export function compatFromTuning(pairs: string[]): VnboxCompat {
       .replace(/^\[|\]$/g, '')
       .split(',');
   const presets = list('registry');
-  const overrides = list('wine-override').filter((item) => item.includes('='));
+  const overrides = list('wine-override').filter(
+    (item) => item.includes('=') && !wineOverrides.includes(item)
+  );
 
   return {
     renderer: presets.find((name) => name === 'gl' || name === 'gdi') ?? '',
@@ -373,7 +397,7 @@ export function compatFromTuning(pairs: string[]): VnboxCompat {
 /**
  * The Compatibility settings as VNBox address settings (encoded: no `&`, `=` or `#` inside a
  * value), invalid rows left out. They replace vnboxPlayerUrl's `registry=jpfonts` and
- * `wine-override=[nomono]`, so both stay in.
+ * `wineOverrides`, so both stay in.
  */
 export function compatParams(compat: VnboxCompat): string[] {
   const presets = [compat.renderer, compat.version].filter(Boolean);
@@ -390,7 +414,7 @@ export function compatParams(compat: VnboxCompat): string[] {
 
   return [
     ...param('registry', presets.length ? ['jpfonts', ...presets] : [], ','),
-    ...param('wine-override', overrides.length ? ['nomono', ...overrides] : [], ','),
+    ...param('wine-override', overrides.length ? [...wineOverrides, ...overrides] : [], ','),
     ...param('wine-env', env.slice(0, 32), '\n'),
     ...param('reg', reg.slice(0, 64), '\n'),
     ...(validDesktop(compat.desktop) ? [`desktop=${compat.desktop}`] : [])
@@ -432,14 +456,19 @@ export function fittedTuning(
       ? { tuning: withResolution(tuning, learnResolution), restart: true }
       : undefined;
   }
-  // On the big screen: a splash window can come first, so only a size the start couldn't hold.
+  // On the big screen: a splash window can come first, so only a size the start couldn't hold,
+  // shaped like a game screen (a crash dialog or launcher strip can be 1777x400).
   if (
     resolution === learnResolution &&
     `${width}x${height}` !== learnResolution &&
-    (width > startScreen.width || height > startScreen.height)
+    (width > startScreen.width || height > startScreen.height) &&
+    width >= 640 &&
+    height >= 480 &&
+    width <= height * 2
   ) {
     return { tuning: withResolution(tuning, `${width}x${height}`), restart: false };
   }
+  return undefined;
 }
 
 /** The bundled dc00 scripts (scripts/vnbox/build.sh), relative to vnbox.html. */

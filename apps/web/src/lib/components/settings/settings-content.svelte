@@ -284,20 +284,12 @@
   const analysisOff = browser && standalone && !analysisToolsSupported();
   let showSpinner = false;
   let furiganaStyleTooltip = '';
-  let importHTMLFixModeTooltip = '';
-  let autoReplicationTypeTooltip = '';
   let trackerAutoPauseTooltip = '';
 
   $: if ($textMarginMode$ === 'auto') {
     $textMarginValue$ = 0;
   }
 
-  $: verticalTextOrientationTooltip = $t$(
-    verticalTextOrientation === 'mixed'
-      ? 'prefs.orientationMixedHint'
-      : 'prefs.orientationUprightHint'
-  );
-  $: autoBookmarkTooltip = $t$('prefs.autoBookmarkHint', { seconds: autoBookmarkTime });
   $: wakeLockSupported = browser && 'wakeLock' in navigator;
   $: verticalMode = writingMode === 'vertical-rl';
   $: fontCacheSupported = browser && 'caches' in window;
@@ -321,46 +313,13 @@
       furiganaStyleTooltip = $t$('prefs.furiganaPartialHint');
       break;
   }
-  $: avoidPageBreakTooltip = $t$(
-    avoidPageBreak ? 'prefs.avoidBreakOnHint' : 'prefs.avoidBreakOffHint'
-  );
-  $: persistentStorageTooltip = $t$(
-    persistentStorage ? 'prefs.persistentOnHint' : 'prefs.persistentOffHint'
-  );
-  $: switch (importHTMLFixMode) {
-    case ImportHTMLFixMode.OFF:
-      importHTMLFixModeTooltip = $t$('prefs.importFixesOffHint');
-      break;
-    case ImportHTMLFixMode.EXTENDED:
-      importHTMLFixModeTooltip = $t$('prefs.importFixesExtendedHint');
-      break;
-    default:
-      importHTMLFixModeTooltip = $t$('prefs.importFixesStandardHint');
-      break;
-  }
-  $: cacheStorageDataTooltip = $t$(cacheStorageData ? 'prefs.cacheOnHint' : 'prefs.cacheOffHint');
-  $: replicationSaveBehaviorTooltip = $t$(
+  // Only the settings that can lose data say so.
+  $: persistentStorageTooltip = persistentStorage ? '' : $t$('prefs.persistentOffHint');
+  $: cacheStorageDataTooltip = cacheStorageData ? $t$('prefs.cacheOnHint') : '';
+  $: replicationSaveBehaviorTooltip =
     replicationSaveBehavior === ReplicationSaveBehavior.Overwrite
-      ? 'prefs.saveBehaviorOverwriteHint'
-      : 'prefs.saveBehaviorNewHint'
-  );
-  $: switch (autoReplication) {
-    case AutoReplicationType.Up:
-      autoReplicationTypeTooltip = $t$('prefs.autoSyncUpHint');
-      break;
-    case AutoReplicationType.Down:
-      autoReplicationTypeTooltip = $t$('prefs.autoSyncDownHint');
-      break;
-    case AutoReplicationType.All:
-      autoReplicationTypeTooltip = $t$('prefs.autoSyncAllHint');
-      break;
-    default:
-      autoReplicationTypeTooltip = $t$('prefs.autoSyncOffHint');
-      break;
-  }
-  $: showExternalPlaceholderToolTip = $t$(
-    showExternalPlaceholder ? 'prefs.placeholderOnHint' : 'prefs.placeholderOffHint'
-  );
+      ? $t$('prefs.saveBehaviorOverwriteHint')
+      : '';
 
   $: startOfDayHours = `${`${startDayHoursForTracker}`.padStart(2, '0')}:00`;
 
@@ -368,7 +327,7 @@
 
   $: switch (trackerAutoPause) {
     case TrackerAutoPause.OFF:
-      trackerAutoPauseTooltip = $t$('prefs.autoPauseOffHint');
+      trackerAutoPauseTooltip = '';
       break;
     case TrackerAutoPause.STRICT:
       trackerAutoPauseTooltip = $t$('prefs.autoPauseStrictHint');
@@ -392,7 +351,7 @@
 </script>
 
 <SettingsSection id="reader-text">
-  <SettingsItemGroup title={$t$('prefs.fontFamily')} tooltip={$t$('prefs.fontFamilyHint')}>
+  <SettingsItemGroup title={$t$('prefs.fontFamily')}>
     <span class="font-family">
       <input
         type="text"
@@ -430,7 +389,7 @@
     </datalist>
   </SettingsItemGroup>
   {#if fontCacheSupported}
-    <SettingsItemGroup title={$t$('prefs.customFont')} tooltip={$t$('prefs.customFontHint')}>
+    <SettingsItemGroup title={$t$('prefs.customFont')}>
       <button
         type="button"
         class="app-button"
@@ -446,7 +405,7 @@
       </button>
     </SettingsItemGroup>
   {/if}
-  <SettingsItemGroup title={$t$('prefs.fontWeight')} tooltip={$t$('prefs.fontWeightHint')}>
+  <SettingsItemGroup title={$t$('prefs.fontWeight')}>
     <input
       type="number"
       placeholder={$t$('prefs.default')}
@@ -485,7 +444,7 @@
       }}
     />
   </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('prefs.indent')} tooltip={$t$('prefs.indentHint')}>
+  <SettingsItemGroup title={$t$('prefs.indent')}>
     <input
       type="number"
       class="app-input"
@@ -501,11 +460,11 @@
       }}
     />
   </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('prefs.marginMode')} tooltip={$t$('prefs.marginModeHint')}>
+  <SettingsItemGroup title={$t$('prefs.marginMode')}>
     <ButtonToggleGroup options={optionsForTextMarginMode} bind:selectedOptionId={textMarginMode} />
   </SettingsItemGroup>
   {#if textMarginMode === 'manual'}
-    <SettingsItemGroup title={$t$('prefs.margins')} tooltip={$t$('prefs.marginsHint')}>
+    <SettingsItemGroup title={$t$('prefs.margins')}>
       <input
         type="number"
         class="app-input"
@@ -522,13 +481,13 @@
       />
     </SettingsItemGroup>
   {/if}
-  <SettingsItemGroup title={$t$('prefs.justify')} tooltip={$t$('prefs.justifyHint')}>
+  <SettingsItemGroup title={$t$('prefs.justify')}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={enableTextJustification} />
   </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('prefs.wrapPretty')} tooltip={$t$('prefs.wrapPrettyHint')}>
+  <SettingsItemGroup title={$t$('prefs.wrapPretty')}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={enableTextWrapPretty} />
   </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('prefs.prioritize')} tooltip={$t$('prefs.prioritizeHint')}>
+  <SettingsItemGroup title={$t$('prefs.prioritize')}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={prioritizeReaderStyles} />
   </SettingsItemGroup>
 </SettingsSection>
@@ -537,13 +496,13 @@
     <ButtonToggleGroup options={optionsForWritingMode} bind:selectedOptionId={writingMode} />
   </SettingsItemGroup>
   {#if verticalMode}
-    <SettingsItemGroup title={$t$('prefs.kerning')} tooltip={$t$('prefs.kerningHint')}>
+    <SettingsItemGroup title={$t$('prefs.kerning')}>
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={enableFontKerning} />
     </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('prefs.vpal')} tooltip={$t$('prefs.vpalHint')}>
+    <SettingsItemGroup title={$t$('prefs.vpal')}>
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={enableFontVPAL} />
     </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('prefs.orientation')} tooltip={verticalTextOrientationTooltip}>
+    <SettingsItemGroup title={$t$('prefs.orientation')}>
       <ButtonToggleGroup
         options={optionsForVerticalTextOrientation}
         bind:selectedOptionId={verticalTextOrientation}
@@ -557,11 +516,7 @@
        where those can't run (phones) the switches stay, greyed out, saying why, but one that synced on can still be turned off. -->
   <SettingsItemGroup
     title={$t$('prefs.generatedFurigana')}
-    tooltip={analysisOff
-      ? $t$('prefs.needsDesktop')
-      : standalone
-        ? 'Adds readings, in a softer colour, to words the book gives none. Made in this browser by the Generated furigana analysis tools (Settings → General → Analysis tools).'
-        : $t$('prefs.generatedFuriganaHint')}
+    tooltip={analysisOff ? $t$('prefs.needsDesktop') : ''}
   >
     <fieldset class="contents" disabled={analysisOff && !$generatedFurigana$}>
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={$generatedFurigana$} />
@@ -572,7 +527,7 @@
   </SettingsItemGroup>
   <SettingsItemGroup
     title={$t$('prefs.unknownWordUnderline')}
-    tooltip={analysisOff ? $t$('prefs.needsDesktop') : $t$('prefs.unknownWordUnderlineHint')}
+    tooltip={analysisOff ? $t$('prefs.needsDesktop') : ''}
   >
     <fieldset class="contents" disabled={analysisOff && !$unknownWordUnderline$}>
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={$unknownWordUnderline$} />
@@ -580,7 +535,7 @@
   </SettingsItemGroup>
   <SettingsItemGroup
     title={$t$('prefs.chapterPrimer')}
-    tooltip={analysisOff ? $t$('prefs.needsDesktop') : $t$('prefs.chapterPrimerHint')}
+    tooltip={analysisOff ? $t$('prefs.needsDesktop') : ''}
   >
     <fieldset class="contents" disabled={analysisOff && !$chapterPrimer$}>
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={$chapterPrimer$} />
@@ -614,11 +569,11 @@
     <input type="number" class="app-input" step="1" min="0" bind:value={secondDimensionMaxValue} />
   </SettingsItemGroup>
   {#if viewMode !== ViewMode.Continuous}
-    <SettingsItemGroup title={$t$('prefs.avoidBreak')} tooltip={avoidPageBreakTooltip}>
+    <SettingsItemGroup title={$t$('prefs.avoidBreak')}>
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={avoidPageBreak} />
     </SettingsItemGroup>
     {#if !verticalMode}
-      <SettingsItemGroup title={$t$('prefs.columns')} tooltip={$t$('prefs.columnsHint')}>
+      <SettingsItemGroup title={$t$('prefs.columns')}>
         <input type="number" class="app-input" step="1" min="0" bind:value={pageColumns} />
       </SettingsItemGroup>
     {/if}
@@ -627,7 +582,7 @@
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={blurImage} />
   </SettingsItemGroup>
   {#if blurImage}
-    <SettingsItemGroup title={$t$('prefs.blurMode')} tooltip={$t$('prefs.blurModeHint')}>
+    <SettingsItemGroup title={$t$('prefs.blurMode')}>
       <ButtonToggleGroup options={optionsForBlurMode} bind:selectedOptionId={blurImageMode} />
     </SettingsItemGroup>
   {/if}
@@ -648,14 +603,11 @@
   <SettingsItemGroup title={$t$('prefs.manualBookmark')} tooltip={$t$('prefs.manualBookmarkHint')}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={manualBookmark} />
   </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('prefs.autoBookmark')} tooltip={autoBookmarkTooltip}>
+  <SettingsItemGroup title={$t$('prefs.autoBookmark')}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={autoBookmark} />
   </SettingsItemGroup>
   {#if autoBookmark}
-    <SettingsItemGroup
-      title={$t$('prefs.autoBookmarkTime')}
-      tooltip={$t$('prefs.autoBookmarkTimeHint')}
-    >
+    <SettingsItemGroup title={$t$('prefs.autoBookmarkTime')}>
       <input
         type="number"
         step="1"
@@ -671,7 +623,7 @@
     </SettingsItemGroup>
   {/if}
   {#if viewMode === ViewMode.Continuous}
-    <SettingsItemGroup title={$t$('prefs.readingPoint')} tooltip={$t$('prefs.readingPointHint')}>
+    <SettingsItemGroup title={$t$('prefs.readingPoint')}>
       <div class="flex items-center">
         <ButtonToggleGroup options={toggle} bind:selectedOptionId={customReadingPointEnabled} />
         {#if customReadingPointEnabled}
@@ -692,16 +644,13 @@
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={autoPositionOnResize} />
     </SettingsItemGroup>
   {:else}
-    <SettingsItemGroup
-      title={$t$('prefs.selectionBookmark')}
-      tooltip={$t$('prefs.selectionBookmarkHint')}
-    >
+    <SettingsItemGroup title={$t$('prefs.selectionBookmark')}>
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={selectionToBookmarkEnabled} />
     </SettingsItemGroup>
   {/if}
 </SettingsSection>
 <SettingsSection id="reader-navigation">
-  <SettingsItemGroup title={$t$('prefs.swipe')} tooltip={$t$('prefs.swipeHint')}>
+  <SettingsItemGroup title={$t$('prefs.swipe')}>
     <input
       type="number"
       step="1"
@@ -719,27 +668,27 @@
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={disableWheelNavigation} />
   </SettingsItemGroup>
   {#if viewMode !== ViewMode.Continuous}
-    <SettingsItemGroup title={$t$('prefs.tapFlip')} tooltip={$t$('prefs.tapFlipHint')}>
+    <SettingsItemGroup title={$t$('prefs.tapFlip')}>
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={enableTapEdgeToFlip} />
     </SettingsItemGroup>
   {/if}
 </SettingsSection>
 <SettingsSection id="reader-session">
   {#if wakeLockSupported}
-    <SettingsItemGroup title={$t$('prefs.wakeLock')} tooltip={$t$('prefs.wakeLockHint')}>
+    <SettingsItemGroup title={$t$('prefs.wakeLock')}>
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={enableReaderWakeLock} />
     </SettingsItemGroup>
   {/if}
-  <SettingsItemGroup title={$t$('prefs.confirmClose')} tooltip={$t$('prefs.confirmCloseHint')}>
+  <SettingsItemGroup title={$t$('prefs.confirmClose')}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={confirmClose} />
   </SettingsItemGroup>
 </SettingsSection>
 <SettingsSection id="tracking-statistics">
-  <SettingsItemGroup title={$t$('prefs.statistics')} tooltip={$t$('prefs.statisticsHint')}>
+  <SettingsItemGroup title={$t$('prefs.statistics')}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={statisticsEnabled} />
   </SettingsItemGroup>
   {#if statisticsEnabled}
-    <SettingsItemGroup title={$t$('prefs.pointPauses')} tooltip={$t$('prefs.pointPausesHint')}>
+    <SettingsItemGroup title={$t$('prefs.pointPauses')}>
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={pauseTrackerOnCustomPointChange} />
     </SettingsItemGroup>
     <SettingsItemGroup title={$t$('prefs.autoPause')} tooltip={trackerAutoPauseTooltip}>
@@ -751,16 +700,13 @@
     <SettingsItemGroup title={$t$('prefs.openOnCompletion')}>
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={openTrackerOnCompletion} />
     </SettingsItemGroup>
-    <SettingsItemGroup
-      title={$t$('prefs.updateOnCompletion')}
-      tooltip={$t$('prefs.updateOnCompletionHint')}
-    >
+    <SettingsItemGroup title={$t$('prefs.updateOnCompletion')}>
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={addCharactersOnCompletion} />
     </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('prefs.startOnOpen')} tooltip={$t$('prefs.startOnOpenHint')}>
+    <SettingsItemGroup title={$t$('prefs.startOnOpen')}>
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={$trackerStartOnOpen$} />
     </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('prefs.autostart')} tooltip={$t$('prefs.autostartHint')}>
+    <SettingsItemGroup title={$t$('prefs.autostart')}>
       <input
         type="number"
         class="app-input"
@@ -776,7 +722,7 @@
         }}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('prefs.idle')} tooltip={$t$('prefs.idleHint')}>
+    <SettingsItemGroup title={$t$('prefs.idle')}>
       <input
         type="number"
         class="app-input"
@@ -794,7 +740,7 @@
         }}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('prefs.forwardSkip')} tooltip={$t$('prefs.forwardSkipHint')}>
+    <SettingsItemGroup title={$t$('prefs.forwardSkip')}>
       <input
         type="number"
         class="app-input"
@@ -810,7 +756,7 @@
         }}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('prefs.backwardSkip')} tooltip={$t$('prefs.backwardSkipHint')}>
+    <SettingsItemGroup title={$t$('prefs.backwardSkip')}>
       <input
         type="number"
         class="app-input"
@@ -828,10 +774,7 @@
       />
     </SettingsItemGroup>
     {#if trackerForwardSkipThreshold || trackerBackwardSkipThreshold}
-      <SettingsItemGroup
-        title={$t$('prefs.thresholdAction')}
-        tooltip={$t$('prefs.thresholdActionHint')}
-      >
+      <SettingsItemGroup title={$t$('prefs.thresholdAction')}>
         <ButtonToggleGroup
           options={optionsForTrackerSkipThresholdAction}
           bind:selectedOptionId={trackerSkipThresholdAction}
@@ -844,17 +787,14 @@
       </SettingsItemGroup>
     {/if}
     {#if trackerIdleTime > 0}
-      <SettingsItemGroup title={$t$('prefs.rollback')} tooltip={$t$('prefs.rollbackHint')}>
+      <SettingsItemGroup title={$t$('prefs.rollback')}>
         <ButtonToggleGroup options={toggle} bind:selectedOptionId={adjustStatisticsAfterIdleTime} />
       </SettingsItemGroup>
     {/if}
   {/if}
 </SettingsSection>
 <SettingsSection id="tracking-day">
-  <SettingsItemGroup
-    title={$t$('prefs.dayStart', { time: startOfDayHours })}
-    tooltip={$t$('prefs.dayStartHint')}
-  >
+  <SettingsItemGroup title={$t$('prefs.dayStart', { time: startOfDayHours })}>
     <input
       type="range"
       step="1"
@@ -864,13 +804,10 @@
       bind:value={startDayHoursForTracker}
     />
   </SettingsItemGroup>
-  <SettingsItemGroup
-    title={$t$('prefs.overwriteCompletion')}
-    tooltip={$t$('prefs.overwriteCompletionHint')}
-  >
+  <SettingsItemGroup title={$t$('prefs.overwriteCompletion')}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={overwriteBookCompletion} />
   </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('prefs.keepLocal')} tooltip={$t$('prefs.keepLocalHint')}>
+  <SettingsItemGroup title={$t$('prefs.keepLocal')}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={keepLocalStatisticsOnDeletion} />
   </SettingsItemGroup>
   <div class="settings-danger-zone" role="group" aria-label={$t$('prefs.dangerZone')}>
@@ -907,13 +844,10 @@
   </div>
 </SettingsSection>
 <SettingsSection id="tracking-merge">
-  <SettingsItemGroup
-    title={$t$('prefs.statisticsMerge')}
-    tooltip={$t$('prefs.statisticsMergeHint')}
-  >
+  <SettingsItemGroup title={$t$('prefs.statisticsMerge')}>
     <ButtonToggleGroup options={optionsForMergeMode} bind:selectedOptionId={statisticsMergeMode} />
   </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('prefs.goalsMerge')} tooltip={$t$('prefs.goalsMergeHint')}>
+  <SettingsItemGroup title={$t$('prefs.goalsMerge')}>
     <ButtonToggleGroup
       options={optionsForMergeMode}
       bind:selectedOptionId={readingGoalsMergeMode}
@@ -939,7 +873,7 @@
     <div class="flex items-center">
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={persistentStorage} />
       {#if storageQuota}
-        <span class="ml-4 text-sm text-[color:var(--app-muted-fg)]">{storageQuota}</span>
+        <span class="ml-4 text-small text-[color:var(--app-muted-fg)]">{storageQuota}</span>
       {/if}
     </div>
   </SettingsItemGroup>
@@ -949,20 +883,20 @@
   <SettingsLibrarySource />
 </SettingsSection>
 <SettingsSection id="data-import">
-  <SettingsItemGroup title={$t$('prefs.importFixes')} tooltip={importHTMLFixModeTooltip}>
+  <SettingsItemGroup title={$t$('prefs.importFixes')}>
     <ButtonToggleGroup
       options={optionsForImportHTMLFixes}
       bind:selectedOptionId={importHTMLFixMode}
     />
   </SettingsItemGroup>
   {#if importHTMLFixMode !== ImportHTMLFixMode.OFF}
-    <SettingsItemGroup title={$t$('prefs.restrictLinks')} tooltip={$t$('prefs.restrictLinksHint')}>
+    <SettingsItemGroup title={$t$('prefs.restrictLinks')}>
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={restrictImportFixToAnchor} />
     </SettingsItemGroup>
   {/if}
 </SettingsSection>
 <SettingsSection id="data-sync">
-  <SettingsItemGroup title={$t$('prefs.autoSync')} tooltip={autoReplicationTypeTooltip}>
+  <SettingsItemGroup title={$t$('prefs.autoSync')}>
     <ButtonToggleGroup
       options={optionsForAutoReplicationType}
       bind:selectedOptionId={autoReplication}
@@ -974,10 +908,10 @@
       bind:selectedOptionId={replicationSaveBehavior}
     />
   </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('prefs.placeholder')} tooltip={showExternalPlaceholderToolTip}>
+  <SettingsItemGroup title={$t$('prefs.placeholder')}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={showExternalPlaceholder} />
   </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('prefs.hideSourceHint')} tooltip={$t$('prefs.hideSourceHintHint')}>
+  <SettingsItemGroup title={$t$('prefs.hideSourceHint')}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={hideExternalReadHint} />
   </SettingsItemGroup>
 </SettingsSection>

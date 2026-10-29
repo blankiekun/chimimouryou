@@ -1707,9 +1707,6 @@
           {#if firstRun}
             <section class="home-start" aria-label={$t$('home.startReading')}>
               <SectionHead number={1} title={$t$('home.startReading')} />
-              <p class="library-empty-text">
-                {$t$(standalone ? 'home.startTextLibrary' : 'home.startText')}
-              </p>
               <span class="home-start-actions">
                 <button
                   type="button"
@@ -1798,7 +1795,7 @@
         <SeriesResults matches={seriesMatches} on:showSeries={(ev) => showSeries(ev.detail)} />
         {#if !visibleBookCards.length}
           <div class="library-empty">
-            <p class="library-empty-title">No books match this filter.</p>
+            <p class="library-empty-title">No books match this filter</p>
             <button type="button" class="library-toolbar-button" on:click={clearFilters}>
               Show all books
             </button>
@@ -1841,7 +1838,7 @@
           {/key}
         {/if}
         {#if hasActiveFilter && visibleBookCards.length}
-          <p class="pb-4 text-center text-xs font-semibold text-[color:var(--app-muted-fg)]">
+          <p class="pb-4 text-center text-small font-semibold text-[color:var(--app-muted-fg)]">
             Showing {visibleBookCards.length} of {$bookCards$.length} books ·
             <button type="button" class="underline" on:click={clearFilters}>show all</button>
           </p>
@@ -1849,10 +1846,7 @@
       {:else if $storageSource$ === StorageKey.CALIBRE && librarySignInNeeded($account$, $libraryOffline$)}
         <div class="library-signed-out">
           <h1 class="library-signed-out-title">Sign in to see the library</h1>
-          <p class="library-empty-text">
-            This server keeps its books, progress and highlights per account. Ask whoever runs it
-            for one: there is no sign-up.
-          </p>
+          <p class="library-empty-text">Ask the server's admin for an account.</p>
           <a
             class="app-button app-button-primary"
             href="{pagePath}/settings?section={standalone
@@ -1863,10 +1857,7 @@
       {:else if $storageSource$ === StorageKey.CALIBRE && $libraryOffline$}
         <div class="library-signed-out">
           <h1 class="library-signed-out-title">The server can't be reached</h1>
-          <p class="library-empty-text">
-            No books are downloaded to this browser yet. Books you open while the server is
-            reachable stay readable here.
-          </p>
+          <p class="library-empty-text">No books downloaded to this browser yet.</p>
         </div>
       {:else if standalone}
         <LibraryEmpty onFiles={onFilesChange} />
@@ -1914,9 +1905,7 @@
             use:inputFile={onFilesChange}
           />
           <span class="library-empty-title">Your library is empty</span>
-          <span class="library-empty-text">
-            Drop EPUB, HTMLZ or TXT files here, or click to import
-          </span>
+          <span class="library-empty-text">Drop EPUB, HTMLZ or TXT files, or click to import</span>
         </label>
       {/if}
     </main>

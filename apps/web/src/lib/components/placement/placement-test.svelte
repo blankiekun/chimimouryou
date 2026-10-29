@@ -239,10 +239,6 @@
         <dt>{$t$('placement.keys')}</dt>
         <dd>{$t$(hard ? 'hardTest.keysValue' : 'placement.keysValue')}</dd>
       </div>
-      <div>
-        <dt>{$t$('placement.result')}</dt>
-        <dd>{$t$('placement.resultValue')}</dd>
-      </div>
     </dl>
     {#if previous && !shared}
       <p class="placement-note">{$t$('placement.current', { count: number(previous) })}</p>
@@ -388,7 +384,6 @@
       )}
     </p>
     <p class="placement-note">
-      {#if hard}{$t$('hardTest.stricter')}{/if}
       {#if result.falseAlarms}
         {$t$('placement.falseAlarms', {
           count: result.falseAlarms,
@@ -425,7 +420,7 @@
       </PointBox>
     </div>
     <p class="placement-note">
-      {#if hard}{$t$('hardTest.stricter')} {$t$('hardTest.both')}{/if}
+      {#if hard}{$t$('hardTest.both')}{/if}
       {#if droppedHard}{$t$('hardTest.dropped')}{/if}
       {#if result.falseAlarms}
         {$t$('placement.falseAlarms', {

@@ -193,7 +193,6 @@
     />
   {:else}
     <form class="composer-form" on:submit|preventDefault={post}>
-      <p class="composer-quiet">{$t$('community.postLead')}</p>
       <textarea
         class="app-input"
         rows="4"
@@ -233,7 +232,6 @@
             >
           {/each}
         </div>
-        <small>{$t$(feed ? 'community.whereFeedHint' : 'community.whereLineHint')}</small>
       </fieldset>
 
       <h3>{$t$('community.shared')}</h3>
@@ -378,11 +376,6 @@
   .composer-where .app-segment {
     flex: 1 1 0;
     white-space: normal;
-  }
-
-  .composer-where small {
-    color: var(--c-muted, var(--app-muted-fg));
-    font-size: var(--type-small);
   }
 
   .composer-context {

@@ -18,20 +18,15 @@
 </script>
 
 <DialogTemplate>
-  <svelte:fragment slot="header">External Read</svelte:fragment>
+  <svelte:fragment slot="header">Read from external storage</svelte:fragment>
   <svelte:fragment slot="content">
-    <p class="my-2">You are opening a book from an external storage Source.</p>
     <p class="my-2">
-      Note: This will redownload the complete book every time and may override other configured sync
-      target configurations.
-    </p>
-    <p class="my-2">
-      Consider an export to the local browser and switching to / reading from browser storage view
-      to prevent such behaviour.
+      The whole book downloads again each time and may overwrite other sync targets. Export it to
+      this browser to avoid that.
     </p>
     <p class="flex items-center mt-4">
       <input id="show-hint" type="checkbox" bind:checked={$hideExternalReadHint$} />
-      <label class="ml-2" for="show-hint">Remember and hide this message</label>
+      <label class="ml-2" for="show-hint">Don't show again</label>
     </p>
   </svelte:fragment>
   <div class="flex flex-col sm:flex-row grow sm:justify-between" slot="footer">
@@ -40,11 +35,11 @@
       <Ripple />
     </button>
     <button class={buttonClasses} on:click={() => closeDialog('export')}>
-      Open Export
+      Export
       <Ripple />
     </button>
     <button class={buttonClasses} on:click={() => closeDialog()}>
-      Confirm
+      Open
       <Ripple />
     </button>
   </div>

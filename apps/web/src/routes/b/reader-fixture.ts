@@ -181,7 +181,7 @@ export async function openReader(
 export async function togglePanel() {
   (document.querySelector('button.fixed.inset-x-0.top-0') as HTMLElement).click();
   await vi.waitFor(() => {
-    const toggle = document.querySelector<HTMLElement>('button[title^="Contents, search"]');
+    const toggle = document.querySelector<HTMLElement>('button[title="Side panel"]');
     expect(toggle).toBeTruthy();
     toggle!.click();
   });

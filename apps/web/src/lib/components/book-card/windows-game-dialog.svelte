@@ -25,7 +25,8 @@
     windowsGameBlockerText,
     windowsGameBook,
     windowsGameFolder,
-    windowsPrograms
+    windowsPrograms,
+    vnboxZipsSize
   } from '$lib/data/windows-game';
   import type { HookScript } from '$lib/data/windows-game';
   import {
@@ -310,6 +311,21 @@
     picked = CHOSEN;
   }
 
+  /**
+   * Asks to store data persistently first (big games must not be evicted, and Firefox keeps a
+   * site to 10% of the disk until then), then checks the quota has room for `needed` bytes.
+   */
+  async function roomFor(needed: number) {
+    const persisted = (await navigator.storage.persist?.()) ?? false;
+    const { quota = 0, usage = 0 } = (await navigator.storage.estimate?.()) ?? {};
+
+    if (quota && quota - usage < needed) {
+      throw new Error(
+        `Not enough room in this browser's storage: this needs about ${formatBytes(needed)}, ${formatBytes(quota - usage)} is free.${persisted ? '' : ' Allowing the site to store data persistently (the browser asks, or see its site settings) gives it more room.'}`
+      );
+    }
+  }
+
   async function startInstall() {
     const name = title.trim();
 
@@ -319,15 +335,8 @@
     abort = new AbortController();
 
     try {
-      const { quota = 0, usage = 0 } = (await navigator.storage.estimate?.()) ?? {};
-
-      // Room for the copy and about as much again for what the installer writes.
-      if (quota && quota - usage < folderSize * 2) {
-        throw new Error(
-          `Not enough room in this browser's storage: installing needs about ${formatBytes(folderSize * 2)}, ${formatBytes(quota - usage)} is free.`
-        );
-      }
-      await navigator.storage.persist?.();
+      // Room for the copy, about as much again for what the installer writes, and VNBox's zips.
+      await roomFor(folderSize * 2 + vnboxZipsSize);
 
       const folder = windowsGameFolder(name);
       const progress = (done: number, total: number) => (copied = { done, total });
@@ -500,16 +509,7 @@
     abort = new AbortController();
 
     try {
-      const { quota = 0, usage = 0 } = (await navigator.storage.estimate?.()) ?? {};
-
-      if (quota && quota - usage < size) {
-        throw new Error(
-          `Not enough room in this browser's storage: the game is ${formatBytes(size)}, ${formatBytes(quota - usage)} is free.`
-        );
-      }
-
-      // Big games must not be evicted when the disk fills up.
-      await navigator.storage.persist?.();
+      await roomFor(size + vnboxZipsSize);
       copied = { done: 0, total: size };
       await copyWindowsGame(
         record ? record.info.folder! : windowsGameFolder(name),
@@ -540,8 +540,7 @@
   <div class="wg-step">
     <SectionHead {number} title="Text hook" level="h3" count="Optional" />
     <p class="wg-note">
-      A dc00 script for this game sends its text to the reader: lookups over the game, statistics
-      and Anki cards. Without one the game plays, but no text arrives.
+      Without a dc00 script the game plays, but no text reaches lookups, statistics or Anki.
       <a
         class="app-button-quiet wg-link"
         href="https://github.com/0xDC00/scripts"
@@ -614,9 +613,7 @@
         />
         {hook ? 'Choose another file' : 'Choose file…'}
       </label>
-      <span class="wg-dim"
-        >A chosen file must be self-contained: require() only works for listed scripts.</span
-      >
+      <span class="wg-dim">Your own file can't use require()</span>
     </div>
   </div>
 {/snippet}
@@ -639,10 +636,7 @@
 
 <section class="wg" class:wg-wide={phase === 'installing'} aria-labelledby="wg-title">
   <h2 id="wg-title" class="wg-title">Add a Windows game</h2>
-  <p class="wg-lead">
-    The game folder, or a disc image to install from, is copied into this browser and runs here,
-    offline. Nothing is uploaded.
-  </p>
+  <p class="wg-lead">Copied into this browser and run here, offline. Nothing is uploaded.</p>
 
   {#if blocker}
     <p class="wg-note" role="status">{windowsGameBlockerText[blocker]}</p>
@@ -815,10 +809,6 @@
         </label>
       {/if}
       {#if record}
-        <p class="wg-note">
-          Its files are copied for the game in your library, which keeps its program, text hook and
-          cover. Saves synced from another device load when it starts.
-        </p>
         {#if wrongFolder}
           <p class="wg-error" role="alert" lang="ja">
             This folder has no {record.info.exe}, the program this game runs. Choose the folder it
@@ -872,11 +862,6 @@
             <input type="checkbox" bind:checked={silent} disabled={busy} />
             <span>Install without the installer's windows ({installerNames[kind]})</span>
           </label>
-        {:else if installer}
-          <p class="wg-note">
-            The installer runs in a player here; you click through it. The program and text hook are
-            picked once it closes.
-          </p>
         {/if}
       </div>
     {:else if programs.length && !record}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { browser } from '$app/env';
+  import { beforeNavigate } from '$app/navigation';
   import { page } from '$lib/data/page-store';
   import ThemeStyle from '$lib/components/theme/theme-style.svelte';
   import { accountReady } from '$lib/data/account';
@@ -12,6 +13,7 @@
   import { userFontsCacheName, type UserFont } from '$lib/data/fonts';
   import { fontFamilyGroupOne$, isOnline$, userFonts$ } from '$lib/data/store';
   import { reloadOnStaleBuild } from '$lib/functions/reload-on-stale-build';
+  import { needsFullLoad } from '$lib/data/reader-route';
   import { dummyFn, isMobile, isMobile$ } from '$lib/functions/utils';
   import { MetaTags } from 'svelte-meta-tags';
   import '$lib/assets/fonts/biz-udpgothic/biz-udpgothic.css';
@@ -40,6 +42,19 @@
       });
     }
   }
+
+  // The VN player's isolation headers only come with a full page load (needsFullLoad).
+  beforeNavigate(({ from, to, type, cancel }) => {
+    if (!from || !to || type === 'leave') return;
+    if (!needsFullLoad(from.url, to.url, window.crossOriginIsolated)) return;
+    // Back/forward has already moved the address: load it.
+    if (type === 'popstate') {
+      window.location.reload();
+      return;
+    }
+    cancel();
+    window.location.assign(to.url.href);
+  });
 
   $: if (browser) {
     isMobile$.next(isMobile(window));

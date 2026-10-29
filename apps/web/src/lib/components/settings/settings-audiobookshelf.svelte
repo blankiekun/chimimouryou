@@ -35,7 +35,7 @@
 
 <SettingsSection id="audiobookshelf-connect" keywords="abs audiobook server token api key">
   {#if $audiobookshelfToken$}
-    <SettingsItemGroup title={$t$('prefs.abs.connected')} tooltip={$t$('prefs.abs.connectedHint')}>
+    <SettingsItemGroup title={$t$('prefs.abs.connected')}>
       <button class="app-button" on:click={() => audiobookshelfToken$.next('')}>
         {$t$('prefs.abs.disconnect')}
       </button>

@@ -3,7 +3,7 @@
   import { findSettingsSection, getSettingsView } from './settings-sections';
   import { t$ } from '$lib/i18n';
 
-  /** Id from settings-sections.ts; title, description and order come from there. */
+  /** Id from settings-sections.ts; title, description (if any) and order come from there. */
   export let id: string;
   /** Extra words the settings search should match for content without items */
   export let keywords = '';
@@ -19,6 +19,7 @@
   const info = findSettingsSection(id);
 
   $: visible = !$view || !!$view.query.trim() || $view.area === info?.area;
+  $: text = description || (info?.description ? $t$(info.description) : '');
 </script>
 
 {#if visible && info}
@@ -27,7 +28,7 @@
     class="settings-section"
     style:order={info.order}
     data-settings-section
-    data-settings-search="{$t$(info.label)} {$t$(info.description)} {keywords}"
+    data-settings-search="{$t$(info.label)} {text} {keywords}"
     aria-labelledby="{id}-heading"
   >
     <header class="settings-section-header">
@@ -37,7 +38,7 @@
         title={title || $t$(info.label)}
         {count}
       />
-      <p>{description || $t$(info.description)}</p>
+      {#if text}<p>{text}</p>{/if}
     </header>
     <div class="settings-section-grid" class:settings-section-grid-wide={wide}>
       <slot />

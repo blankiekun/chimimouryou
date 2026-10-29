@@ -123,7 +123,7 @@
   }
 
   .summary-th-sort {
-    font-size: 0.7rem;
+    font-size: var(--type-label);
     opacity: 0.35;
   }
 

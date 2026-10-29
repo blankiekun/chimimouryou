@@ -178,7 +178,7 @@
     id="dictionary-popup"
     keywords="popup size position furigana pitch frequency css"
   >
-    <SettingsItemGroup title={$t$('dict.fontSize')} tooltip={$t$('dict.fontSizeHint')}>
+    <SettingsItemGroup title={$t$('dict.fontSize')}>
       <input
         class="app-input dict-number"
         type="number"
@@ -189,7 +189,7 @@
         on:change={(e) => setGeneral('fontSize', number(e.currentTarget.value, 8, 64))}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('dict.popupDisplay')} tooltip={$t$('dict.popupDisplayHint')}>
+    <SettingsItemGroup title={$t$('dict.popupDisplay')}>
       <select
         class="app-input"
         aria-label={$t$('dict.popupDisplay')}
@@ -203,7 +203,7 @@
         {#each selects.displayMode as [id, label]}<option value={id}>{$t$(label)}</option>{/each}
       </select>
     </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('dict.sheetPosition')} tooltip={$t$('dict.sheetPositionHint')}>
+    <SettingsItemGroup title={$t$('dict.sheetPosition')}>
       <select
         class="app-input"
         aria-label={$t$('dict.sheetPosition')}
@@ -215,7 +215,7 @@
           >{/each}
       </select>
     </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('dict.popupSize')} tooltip={$t$('dict.popupSizeHint')}>
+    <SettingsItemGroup title={$t$('dict.popupSize')}>
       <span class="dict-pair">
         <input
           class="app-input dict-number"
@@ -236,7 +236,7 @@
         />
       </span>
     </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('dict.scale')} tooltip={$t$('dict.scaleHint')}>
+    <SettingsItemGroup title={$t$('dict.scale')}>
       <input
         class="app-input dict-number"
         type="number"
@@ -297,7 +297,7 @@
         {#each selects.glossary as [id, label]}<option value={id}>{$t$(label)}</option>{/each}
       </select>
     </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('dict.compactTags')} tooltip={$t$('dict.compactTagsHint')}>
+    <SettingsItemGroup title={$t$('dict.compactTags')}>
       <DictSwitch
         checked={general.compactTags}
         label={$t$('dict.compactTags')}
@@ -318,10 +318,7 @@
         {#each selects.frequency as [id, label]}<option value={id}>{$t$(label)}</option>{/each}
       </select>
     </SettingsItemGroup>
-    <SettingsItemGroup
-      title={$t$('dict.averageFrequency')}
-      tooltip={$t$('dict.averageFrequencyHint')}
-    >
+    <SettingsItemGroup title={$t$('dict.averageFrequency')}>
       <DictSwitch
         checked={general.averageFrequency}
         label={$t$('dict.averageFrequency')}
@@ -337,7 +334,7 @@
         />
       </SettingsItemGroup>
     {/each}
-    <SettingsItemGroup title={$t$('dict.customCss')} tooltip={$t$('dict.customCssHint')} wide>
+    <SettingsItemGroup title={$t$('dict.customCss')} wide>
       <textarea
         class="app-input dict-css"
         rows="4"
@@ -350,7 +347,7 @@
   </SettingsSection>
 
   <SettingsSection id="dictionary-scanning" keywords="scan shift hover tap modifier delay length">
-    <SettingsItemGroup title={$t$('dict.scanTap')} tooltip={$t$('dict.scanTapHint')}>
+    <SettingsItemGroup title={$t$('dict.scanTap')}>
       <DictSwitch
         checked={!!scanning.inputs[touchIndex]?.options.scanOnTouchTap}
         label={$t$('dict.scanTap')}
@@ -358,7 +355,7 @@
       />
     </SettingsItemGroup>
     {#if mouseIndex >= 0}
-      <SettingsItemGroup title={$t$('dict.scanKey')} tooltip={$t$('dict.scanKeyHint')}>
+      <SettingsItemGroup title={$t$('dict.scanKey')}>
         <select
           class="app-input"
           aria-label={$t$('dict.scanKey')}
@@ -377,17 +374,14 @@
         </select>
       </SettingsItemGroup>
     {/if}
-    <SettingsItemGroup
-      title={$t$('dict.scanWithoutMove')}
-      tooltip={$t$('dict.scanWithoutMoveHint')}
-    >
+    <SettingsItemGroup title={$t$('dict.scanWithoutMove')}>
       <DictSwitch
         checked={scanning.scanWithoutMousemove}
         label={$t$('dict.scanWithoutMove')}
         on:change={({ detail }) => setScanning('scanWithoutMousemove', detail)}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('dict.scanDelay')} tooltip={$t$('dict.scanDelayHint')}>
+    <SettingsItemGroup title={$t$('dict.scanDelay')}>
       <input
         class="app-input dict-number"
         type="number"
@@ -397,7 +391,7 @@
         on:change={(e) => setScanning('delay', number(e.currentTarget.value, 0, 5000))}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('dict.scanLength')} tooltip={$t$('dict.scanLengthHint')}>
+    <SettingsItemGroup title={$t$('dict.scanLength')}>
       <input
         class="app-input dict-number"
         type="number"
@@ -408,21 +402,21 @@
         on:change={(e) => setScanning('length', number(e.currentTarget.value, 1, 100))}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('dict.layoutAware')} tooltip={$t$('dict.layoutAwareHint')}>
+    <SettingsItemGroup title={$t$('dict.layoutAware')}>
       <DictSwitch
         checked={scanning.layoutAwareScan}
         label={$t$('dict.layoutAware')}
         on:change={({ detail }) => setScanning('layoutAwareScan', detail)}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('dict.autoHide')} tooltip={$t$('dict.autoHideHint')}>
+    <SettingsItemGroup title={$t$('dict.autoHide')}>
       <DictSwitch
         checked={scanning.autoHideResults}
         label={$t$('dict.autoHide')}
         on:change={({ detail }) => setScanning('autoHideResults', detail)}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('dict.nesting')} tooltip={$t$('dict.nestingHint')}>
+    <SettingsItemGroup title={$t$('dict.nesting')}>
       <input
         class="app-input dict-number"
         type="number"
@@ -436,7 +430,7 @@
   </SettingsSection>
 
   <SettingsSection id="dictionary-audio" keywords="audio pronunciation jpod101 wiktionary voice">
-    <SettingsItemGroup title={$t$('dict.audioEnabled')} tooltip={$t$('dict.audioEnabledHint')}>
+    <SettingsItemGroup title={$t$('dict.audioEnabled')}>
       <DictSwitch
         checked={profile.audio.enabled}
         label={$t$('dict.audioEnabled')}
@@ -444,7 +438,7 @@
       />
     </SettingsItemGroup>
     {#if profile.audio.enabled}
-      <SettingsItemGroup title={$t$('dict.autoPlay')} tooltip={$t$('dict.autoPlayHint')}>
+      <SettingsItemGroup title={$t$('dict.autoPlay')}>
         <DictSwitch
           checked={profile.audio.autoPlay}
           label={$t$('dict.autoPlay')}
@@ -461,21 +455,14 @@
           on:change={(e) => set((p) => (p.audio.volume = number(e.currentTarget.value, 0, 100)))}
         />
       </SettingsItemGroup>
-      <SettingsItemGroup
-        title={$t$('dict.defaultSources')}
-        tooltip={$t$('dict.defaultSourcesHint')}
-      >
+      <SettingsItemGroup title={$t$('dict.defaultSources')}>
         <DictSwitch
           checked={profile.audio.enableDefaultAudioSources}
           label={$t$('dict.defaultSources')}
           on:change={({ detail }) => set((p) => (p.audio.enableDefaultAudioSources = detail))}
         />
       </SettingsItemGroup>
-      <SettingsItemGroup
-        title={$t$('dict.audioSources')}
-        tooltip={$t$('dict.audioSourcesHint')}
-        wide
-      >
+      <SettingsItemGroup title={$t$('dict.audioSources')} wide>
         {#each profile.audio.sources as source, index}
           <div class="dict-row">
             <select

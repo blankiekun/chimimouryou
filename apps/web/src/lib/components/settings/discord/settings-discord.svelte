@@ -384,7 +384,7 @@
       </div>
     {/if}
 
-    <SettingsItemGroup title={$t$('discord.showStatus')} tooltip={$t$('discord.showStatusHint')}>
+    <SettingsItemGroup title={$t$('discord.showStatus')}>
       <button
         type="button"
         role="switch"
@@ -401,13 +401,11 @@
     {#if hubReady}
       <SettingsItemGroup
         title={$t$('discord.addon')}
-        tooltip={$t$(
-          code
-            ? 'discord.addonCodeHint'
-            : addons?.length
-              ? 'discord.addonPairedHint'
-              : 'discord.addonUnpairedHint'
-        )}
+        tooltip={code
+          ? $t$('discord.addonCodeHint')
+          : addons?.length
+            ? ''
+            : $t$('discord.addonUnpairedHint')}
       >
         {#if code}
           <div class="pair-code">

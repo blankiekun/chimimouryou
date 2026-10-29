@@ -120,7 +120,7 @@
 
 <!-- AI voice (tts.ts): this device's Web Speech voices by default, ElevenLabs once a voice connection has a key. -->
 <SettingsSection id="ai-read-aloud" keywords="web speech tts device voice elevenlabs">
-  <SettingsItemGroup title={$t$('ai.connection')} tooltip={$t$('ai.voiceConnectionHint')}>
+  <SettingsItemGroup title={$t$('ai.connection')}>
     <select
       id="voice-connection"
       class="app-input"
@@ -141,7 +141,7 @@
       <span class="muted">{$t$('ai.needsKey')}</span>
     </SettingsItemGroup>
   {:else if connection}
-    <SettingsItemGroup title={$t$('ai.model')} tooltip={$t$('ai.voiceModelHint')}>
+    <SettingsItemGroup title={$t$('ai.model')}>
       <select
         id="voice-model"
         class="app-input"
@@ -158,7 +158,7 @@
         {/each}
       </select>
     </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('ai.deviceVoice')} tooltip={$t$('ai.elevenLabsVoiceHint')}>
+    <SettingsItemGroup title={$t$('ai.deviceVoice')}>
       <span class="voice-field">
         {#if voiceList.length && !typingVoiceId}
           <select
@@ -203,7 +203,7 @@
       </span>
     </SettingsItemGroup>
   {:else}
-    <SettingsItemGroup title={$t$('ai.deviceVoice')} tooltip={$t$('ai.deviceVoiceHint')}>
+    <SettingsItemGroup title={$t$('ai.deviceVoice')}>
       {#if loaded && !voices.length}
         <span class="muted">{$t$('ai.deviceVoiceNone')}</span>
       {:else}
@@ -231,7 +231,7 @@
     <p class="sample-error" role="alert">{sampleError}</p>
   {/if}
 
-  <SettingsItemGroup title={$t$('ai.voiceSpeed')} tooltip={$t$('ai.voiceSpeedHint')}>
+  <SettingsItemGroup title={$t$('ai.voiceSpeed')}>
     <select
       id="tts-speed"
       class="app-input"
@@ -243,13 +243,6 @@
       {/each}
     </select>
   </SettingsItemGroup>
-
-  {#if !eleven}
-    <aside class="note" data-settings-item>
-      <h3>{$t$('ai.withoutVoiceKey')}</h3>
-      <p>{$t$('ai.withoutVoiceKeyText')}</p>
-    </aside>
-  {/if}
 </SettingsSection>
 
 <style>
@@ -273,24 +266,5 @@
     padding: 0.5rem 0;
     color: var(--app-danger-color);
     font-size: var(--type-small);
-  }
-
-  .note {
-    margin: 1rem 0;
-    padding: 0.85rem 1rem;
-    border-radius: 2px;
-    background: var(--surface-color);
-  }
-
-  .note h3 {
-    font-size: var(--type-small);
-    font-weight: 700;
-  }
-
-  .note p {
-    margin-top: 0.3rem;
-    color: var(--app-muted-fg);
-    font-size: var(--type-small);
-    line-height: 1.55;
   }
 </style>

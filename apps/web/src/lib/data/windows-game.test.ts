@@ -15,7 +15,9 @@ import {
   rankThreads,
   savedHookName,
   searchHookScripts,
+  vnboxErrorText,
   vnboxPlayerUrl,
+  windowsGameBlocker,
   windowsGameBook,
   windowsGameFolder,
   windowsPrograms,
@@ -133,7 +135,7 @@ describe('compatParams', () => {
     env: []
   };
 
-  it('adds nothing by default and keeps jpfonts and nomono with a setting', () => {
+  it('adds nothing by default and keeps jpfonts and the default overrides with a setting', () => {
     expect(compatParams(none)).toEqual([]);
 
     const compat: VnboxCompat = {
@@ -154,7 +156,7 @@ describe('compatParams', () => {
     );
 
     expect(search.get('registry')).toBe('jpfonts,gdi,win98');
-    expect(search.get('wine-override')).toBe('nomono,quartz=,d3d9=n');
+    expect(search.get('wine-override')).toBe('nomono,winedbg.exe=,quartz=,d3d9=n');
     expect(search.get('wine-env')).toBe('WINEDEBUG=-all&p=evil.exe#x');
     expect(search.get('reg')).toBe('HKCU\\Software\\Some Maker\\Game\tMode\tREG_DWORD\t0x1');
     expect(search.get('desktop')).toBe('1024x768');
@@ -194,6 +196,8 @@ describe('fittedTuning', () => {
     // The big screen itself, then its 320x240 splash, before the game's window.
     expect(fittedTuning('stats=1&resolution=1920x1200', 1920, 1200)).toBeUndefined();
     expect(fittedTuning('stats=1&resolution=1920x1200', 320, 240)).toBeUndefined();
+    // A crash dialog or launcher strip wider than the start isn't the game's screen.
+    expect(fittedTuning('stats=1&resolution=1920x1200', 1777, 400)).toBeUndefined();
     expect(fittedTuning('stats=1&resolution=1920x1200', 1024, 576)).toEqual({
       tuning: 'stats=1&resolution=1024x576',
       restart: false
@@ -461,5 +465,22 @@ describe('savedHookName', () => {
     expect(savedHookName({ hook: 'foo()' })).toBe('Chosen script');
     expect(savedHookName({ hookFile: 'PC_Muramasa.js' })).toBe('PC_Muramasa.js');
     expect(savedHookName({})).toBeUndefined();
+  });
+});
+
+describe('windowsGameBlocker', () => {
+  it('names HTTPS before the browser on a plain-HTTP page', () => {
+    const win = { isSecureContext: false, navigator: { storage: {} } } as unknown as Window;
+
+    expect(windowsGameBlocker(win)).toBe('https');
+  });
+
+  it("explains a full storage quota, else shows VNBox's message", () => {
+    expect(vnboxErrorText('Unable to load x.zip: QuotaExceededError: full')).toMatch(
+      /persistently/
+    );
+    expect(vnboxErrorText('Unable to load x.zip: 404')).toBe(
+      "The player couldn't load its files: Unable to load x.zip: 404"
+    );
   });
 });

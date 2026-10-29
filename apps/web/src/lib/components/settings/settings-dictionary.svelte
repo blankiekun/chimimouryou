@@ -171,9 +171,9 @@
   }
 
   const dictionaryToggles = [
-    ['allowSecondarySearches', 'dict.secondarySearches', 'dict.secondarySearchesHint'],
-    ['partsOfSpeechFilter', 'dict.posFilter', 'dict.posFilterHint'],
-    ['useDeinflections', 'dict.deinflections', 'dict.deinflectionsHint']
+    ['allowSecondarySearches', 'dict.secondarySearches'],
+    ['partsOfSpeechFilter', 'dict.posFilter'],
+    ['useDeinflections', 'dict.deinflections']
   ] as const;
 
   async function exportSettings() {
@@ -229,7 +229,7 @@
 </script>
 
 <SettingsSection id="dictionary-general" keywords="yomitan popup lookup dictionary 辞書">
-  <SettingsItemGroup title={$t$('dict.builtIn')} tooltip={$t$('dict.builtInHint')}>
+  <SettingsItemGroup title={$t$('dict.builtIn')}>
     <button
       type="button"
       role="switch"
@@ -253,7 +253,7 @@
     </svelte:fragment>
   </SettingsItemGroup>
   {#if profile}
-    <SettingsItemGroup title={$t$('dict.resultMode')} tooltip={$t$('dict.resultModeHint')}>
+    <SettingsItemGroup title={$t$('dict.resultMode')}>
       <select
         class="app-input"
         aria-label={$t$('dict.resultMode')}
@@ -266,10 +266,7 @@
       </select>
     </SettingsItemGroup>
     {#if profile.general.resultOutputMode === 'merge'}
-      <SettingsItemGroup
-        title={$t$('dict.mainDictionary')}
-        tooltip={$t$('dict.mainDictionaryHint')}
-      >
+      <SettingsItemGroup title={$t$('dict.mainDictionary')}>
         <select
           class="app-input"
           aria-label={$t$('dict.mainDictionary')}
@@ -283,7 +280,7 @@
         </select>
       </SettingsItemGroup>
     {/if}
-    <SettingsItemGroup title={$t$('dict.maxResults')} tooltip={$t$('dict.maxResultsHint')}>
+    <SettingsItemGroup title={$t$('dict.maxResults')}>
       <input
         class="app-input dict-number"
         type="number"
@@ -310,19 +307,16 @@
     <p class="dict-error" role="alert">{loadError}</p>
   {/if}
   <div class="dict-import">
-    <p class="dict-lead">{$t$('dict.importLead')}</p>
     <ul class="dict-downloads">
       <li class="dict-download">
         <span class="dict-name">
           <span class="dict-title">JMdict</span>
-          <span class="dict-meta">{$t$('dict.jmdictHint')}</span>
         </span>
         <InstallDictionary />
       </li>
       <li class="dict-download">
         <span class="dict-name">
           <span class="dict-title">Jiten frequency list</span>
-          <span class="dict-meta">{$t$('dict.jitenFreqHint')}</span>
         </span>
         <a
           class="app-button app-button-quiet"
@@ -426,12 +420,9 @@
                       })}
                   />
                 </label>
-                {#each dictionaryToggles as [key, label, hint]}
+                {#each dictionaryToggles as [key, label]}
                   <div class="dict-option">
-                    <span class="dict-option-text">
-                      <span>{$t$(label)}</span>
-                      <span class="dict-meta">{$t$(hint)}</span>
-                    </span>
+                    <span class="dict-option-text">{$t$(label)}</span>
                     <button
                       type="button"
                       role="switch"
@@ -490,7 +481,7 @@
     {/if}
 
     {#if frequencyDictionaries.length}
-      <SettingsItemGroup title={$t$('dict.sortFrequency')} tooltip={$t$('dict.sortFrequencyHint')}>
+      <SettingsItemGroup title={$t$('dict.sortFrequency')}>
         <select
           class="app-input"
           aria-label={$t$('dict.sortFrequency')}
@@ -536,10 +527,10 @@
 
 {#if profile}
   <SettingsSection id="dictionary-translation" keywords="deinflection replacement alphanumeric">
-    <SettingsItemGroup title={$t$('dict.resolution')} tooltip={$t$('dict.resolutionHint')}>
+    <SettingsItemGroup title={$t$('dict.resolution')}>
       <ButtonToggleGroup options={resolutions} bind:selectedOptionId={resolution} />
     </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('dict.alphanumeric')} tooltip={$t$('dict.alphanumericHint')}>
+    <SettingsItemGroup title={$t$('dict.alphanumeric')}>
       <button
         type="button"
         role="switch"
@@ -554,7 +545,7 @@
         </span>
       </button>
     </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('dict.replacements')} tooltip={$t$('dict.replacementsHint')} wide>
+    <SettingsItemGroup title={$t$('dict.replacements')} wide>
       <div class="dict-option">
         <span class="dict-option-text"><span>{$t$('dict.searchOriginal')}</span></span>
         <button
@@ -617,12 +608,12 @@
     id="dictionary-backup"
     keywords="export import yomitan settings json reset collection"
   >
-    <SettingsItemGroup title={$t$('dict.export')} tooltip={$t$('dict.exportHint')}>
+    <SettingsItemGroup title={$t$('dict.export')}>
       <button type="button" class="app-button" on:click={exportSettings}>
         {$t$('dict.exportButton')}
       </button>
     </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('dict.importSettings')} tooltip={$t$('dict.importSettingsHint')}>
+    <SettingsItemGroup title={$t$('dict.importSettings')}>
       <label class="app-button dict-file">
         <input type="file" accept="application/json,.json" hidden use:inputFile={importSettings} />
         {$t$('dict.chooseFile')}
@@ -668,13 +659,6 @@
     color: var(--app-danger-color);
     font-size: var(--type-small);
     line-height: 1.5;
-  }
-
-  .dict-lead {
-    max-width: 48rem;
-    color: var(--font-color);
-    font-size: var(--type-body);
-    line-height: 1.6;
   }
 
   .dict-import {

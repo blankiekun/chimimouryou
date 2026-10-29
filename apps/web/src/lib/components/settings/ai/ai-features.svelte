@@ -14,16 +14,15 @@
   interface FeatureRow {
     id: AiFeature;
     label: MessageKey;
-    hint: MessageKey;
     /** Option that uses the feature above */
     inherit?: MessageKey;
   }
 
   const rows: FeatureRow[] = [
-    { id: 'ask', label: 'ai.featureAsk', hint: 'ai.featureAskHint' },
-    { id: 'recap', label: 'ai.featureRecap', hint: 'ai.featureRecapHint', inherit: 'ai.sameAsAsk' },
-    { id: 'lore', label: 'ai.featureLore', hint: 'ai.featureLoreHint', inherit: 'ai.sameAsRecap' },
-    { id: 'voice', label: 'ai.featureVoice', hint: 'ai.featureVoiceHint' }
+    { id: 'ask', label: 'ai.featureAsk' },
+    { id: 'recap', label: 'ai.featureRecap', inherit: 'ai.sameAsAsk' },
+    { id: 'lore', label: 'ai.featureLore', inherit: 'ai.sameAsRecap' },
+    { id: 'voice', label: 'ai.featureVoice' }
   ];
 
   let advanced: AiFeature | '' = '';
@@ -61,14 +60,12 @@
       <tr class:open={advanced === row.id}>
         <th scope="row">
           <span class="name">{$t$(row.label)}</span>
-          <span class="sub">{$t$(row.hint)}</span>
         </th>
         {#if !r.connection}
           <td colspan="3" class="needs">
             {#if row.id === 'voice'}
               <!-- The device's Web Speech voices are the default, not a missing setting. -->
               <span class="device">{$t$('ai.deviceVoices')}</span>
-              <span class="sub">{$t$('ai.deviceVoicesHint')}</span>
             {:else}
               <span class="needs-text">{$t$('ai.needsConnection')}</span>
             {/if}
@@ -160,13 +157,6 @@
     display: block;
   }
 
-  .sub {
-    display: block;
-    margin-top: 0.1rem;
-    color: var(--app-muted-fg);
-    font-size: var(--type-small);
-  }
-
   .needs {
     vertical-align: middle;
   }
@@ -180,7 +170,6 @@
     color: var(--app-muted-fg);
   }
 
-  .needs .sub,
   .needs .device {
     display: inline;
   }

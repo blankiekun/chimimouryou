@@ -100,7 +100,7 @@
       {$t$('library.seriesName')}
       <input type="text" class={inputClasses} bind:value={name} maxlength="200" />
     </label>
-    <p class="py-2 text-xs opacity-70">
+    <p class="py-2 text-small opacity-70">
       {$t$('library.seriesNote', { checked: checked.size, total: candidates.length })}
     </p>
     <label class="flex cursor-pointer items-center gap-3 border-b border-line py-2 font-medium">
@@ -125,7 +125,7 @@
             />
             <span class="min-w-0 flex-1">
               <span class="block truncate font-medium">{card.title}</span>
-              <span class="block truncate text-xs opacity-70">
+              <span class="block truncate text-small opacity-70">
                 {card.authors || ''}{card.series && card.series !== name.trim()
                   ? ` · ${$t$('library.nowIn', { series: card.series })}`
                   : ''}

@@ -197,7 +197,6 @@
                     spellcheck="false"
                     bind:value={typed}
                   />
-                  <span class="model-sub">{$t$('ai.typeModelIdHint')}</span>
                 </form>
               </td>
             </tr>

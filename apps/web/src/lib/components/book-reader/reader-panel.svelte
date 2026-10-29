@@ -178,7 +178,6 @@
                 })}
               </h3>
             </div>
-            <p class="primer-note">{$t$('reader.primerNote')}</p>
             <ol class="primer-words">
               {#each primerWords as word (`${word.form}\t${word.reading}`)}
                 <li>
@@ -527,13 +526,6 @@
 
   .primer-back:hover {
     color: var(--reader-panel-fg);
-  }
-
-  .primer-note {
-    padding: 0.5rem 0;
-    border-bottom: 1px solid var(--rule);
-    color: var(--muted);
-    font-size: var(--type-small);
   }
 
   .primer-words li {

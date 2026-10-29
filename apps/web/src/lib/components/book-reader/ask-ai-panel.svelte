@@ -155,7 +155,7 @@
       {#each presets as preset (preset.id)}
         <button
           type="button"
-          class="reader-panel-chip rounded-sm px-3 py-1 text-xs font-semibold"
+          class="reader-panel-chip rounded-sm px-3 py-1 text-small font-semibold"
           title={preset.prompt}
           disabled={busy}
           on:click={() => runPreset(preset)}

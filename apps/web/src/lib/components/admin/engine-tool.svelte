@@ -74,13 +74,9 @@
 </script>
 
 <p class="tool-text">
-  Visual novels play on
-  <a href="https://github.com/{engineRepo}" target="_blank" rel="noreferrer">CONscripter</a>. A new
-  release isn't installed on its own: "Install" downloads the release's web build from GitHub into
-  the server's data folder, where it replaces the built-in engine right away (nothing is built or
-  restarted; games started afterwards use it). An app update that ships the same or a newer engine
-  takes over again. Without the server's updater, run <code>scripts/conscripter/build.sh</code>,
-  commit the files it changes and deploy.
+  <a href="https://github.com/{engineRepo}" target="_blank" rel="noreferrer">CONscripter</a> releases
+  aren't installed on their own. Install replaces the built-in engine at once; an app update with the
+  same or a newer engine takes over again.
 </p>
 
 {#if checking}

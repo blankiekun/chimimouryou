@@ -25,11 +25,14 @@
 </script>
 
 <SettingsSection id="ai-prompts">
-  <SettingsItemGroup title={$t$('ai.language')} tooltip={$t$('ai.promptsLanguageHint')}>
+  <SettingsItemGroup title={$t$('ai.language')}>
     <AiLanguageToggle />
   </SettingsItemGroup>
   {#each keys as key (key)}
-    <SettingsItemGroup title={$t$(`ai.prompt.${key}`)} tooltip={$t$(`ai.prompt.${key}Hint`)}>
+    <SettingsItemGroup
+      title={$t$(`ai.prompt.${key}`)}
+      tooltip={key === 'lore' ? $t$('ai.prompt.loreHint') : ''}
+    >
       <span slot="header" class="app-tag" class:app-tag-muted={own[key] === undefined}
         >{own[key] === undefined ? $t$('ai.builtIn') : $t$('ai.yourCopy')}</span
       >
@@ -91,7 +94,6 @@
         </th>
         <td>
           {$t$('ai.syncs.connectionsWhere')}
-          <small>{$t$('ai.syncs.connectionsNote')}</small>
         </td>
       </tr>
       <tr>
@@ -101,7 +103,6 @@
         </th>
         <td>
           {$t$('ai.syncs.restWhere')}
-          <small>{$t$('ai.syncs.restNote')}</small>
         </td>
       </tr>
     </tbody>
@@ -147,5 +148,6 @@
     display: block;
     margin-top: 0.25rem;
     color: var(--app-muted-fg);
+    font-size: var(--type-small);
   }
 </style>

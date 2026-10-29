@@ -131,7 +131,6 @@
           maxlength="40"
           autocomplete="nickname"
         />
-        <small>{$t$('social.displayNameHint')}</small>
       </label>
     {/if}
     {#if mode === 'forgot'}

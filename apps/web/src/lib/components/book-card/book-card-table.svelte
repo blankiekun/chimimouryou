@@ -243,7 +243,7 @@
   .library-list-sort-icon {
     display: inline-flex;
     color: var(--accent-strong-color);
-    font-size: 0.66rem;
+    font-size: var(--type-label);
     transition: transform 0.16s ease;
   }
 
@@ -364,5 +364,27 @@
   .library-list-action-button:focus-visible {
     border-color: var(--app-danger-color);
     color: var(--app-danger-color);
+  }
+
+  /* Phones: title and progress only, so the row fits without sideways scrolling; sort the rest from the menu. */
+  @media (max-width: 639px) {
+    .library-list {
+      --library-list-columns: minmax(0, 1fr) 5.5rem;
+    }
+
+    .library-list-header,
+    .library-list-row {
+      min-width: 0;
+    }
+
+    .library-list-cells > :not(:nth-child(1), :nth-child(4)) {
+      display: none;
+    }
+
+    .library-list-select-button,
+    .library-list-action-button {
+      width: 2.75rem;
+      height: 2.75rem;
+    }
   }
 </style>

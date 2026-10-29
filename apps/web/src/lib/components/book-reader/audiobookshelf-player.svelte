@@ -387,7 +387,7 @@
     />
     <AudiobookControls {controller} hasLines={cues.length > 0} />
     {#if cues.length}
-      <button class="abs-icon" title="Play from the reading position" on:click={playFromHere}>
+      <button class="abs-icon" title="Play from my reading position" on:click={playFromHere}>
         <Fa icon={faPlay} />
       </button>
       <button
@@ -403,8 +403,8 @@
       class="abs-icon"
       class:abs-icon-active={cues.length}
       title={cues.length
-        ? `Subtitles: ${subtitleName}, ${foundCount} of ${cues.length} lines found. Load others (SRT or VTT)`
-        : 'Load subtitles (SRT or VTT) to follow the text'}
+        ? `${subtitleName}: ${foundCount} of ${cues.length} lines found. Load other subtitles`
+        : 'Load subtitles (SRT, VTT)'}
       disabled={matching}
       on:click={() => subtitleInput.click()}
     >
@@ -413,7 +413,7 @@
     <button
       class="abs-icon"
       class:abs-icon-active={whisperOpen}
-      title="Make subtitles with Whisper in this browser"
+      title="Make subtitles with Whisper"
       on:click={() => (whisperOpen = !whisperOpen)}
     >
       <Fa icon={faWandMagicSparkles} />
@@ -456,7 +456,7 @@
     max-width: 9rem;
     border-radius: 0.5rem;
     background: transparent;
-    font-size: 0.8rem;
+    font-size: var(--type-small);
   }
 
   audio {
