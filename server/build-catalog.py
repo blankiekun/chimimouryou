@@ -190,6 +190,18 @@ def unique_titles(books) -> None:
                 book['title'] += suffix(book)
 
 
+def api_db_empty(db_path: str) -> bool:
+    """Whether library.db is missing or has no books yet (the api service creates it empty)."""
+    try:
+        connection = sqlite3.connect(f'file:{urllib.request.pathname2url(db_path)}?mode=ro', uri=True)
+        try:
+            return connection.execute('SELECT COUNT(*) FROM books').fetchone()[0] == 0
+        finally:
+            connection.close()
+    except sqlite3.Error:
+        return True
+
+
 def store_books(db_path: str, books: list[dict]) -> None:
     """Upserts the books into the API database (library.db) and gives each its sticky unique title.
     The first build on an empty table takes today's unique_titles(), so catalog.json titles don't change."""
@@ -467,7 +479,7 @@ def build(library: str, output: str, vn_dir: str | None = None, force: bool = Fa
                        vn_mtime(vn_dir) if vn_dir else 0)
     api_db = os.environ.get('API_DB')
     if (not force and os.path.exists(output) and os.path.getmtime(output) >= newest_input
-            and not (api_db and not os.path.exists(api_db))):
+            and not (api_db and api_db_empty(api_db))):
         return
 
     # Work on a copy so we don't block Calibre for the whole build. SQLite's backup takes

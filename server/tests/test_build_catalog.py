@@ -322,6 +322,16 @@ class CatalogDbTest(unittest.TestCase):
         row = self.rows()[1]
         self.assertEqual((row['title'], row['unique_title']), ('吾輩は猫である', '猫'))
 
+    def test_rebuilds_when_db_has_no_books(self):
+        # The api service creates an empty library.db when it starts: an up-to-date catalog.json
+        # must not keep the builder from filling it.
+        write_library(self.library, [self.book(1, '猫')])
+        with mock.patch.dict(os.environ, {'API_DB': ''}):
+            catalog.main(self.library, self.output)
+        apidb.Database(self.db_path).connection.close()
+        catalog.main(self.library, self.output)
+        self.assertEqual(list(self.rows()), [1])
+
     def test_vn_key(self):
         os.makedirs(os.path.join(self.vn, 'game1'))
         open(os.path.join(self.vn, 'game1', '0.txt'), 'w').close()
