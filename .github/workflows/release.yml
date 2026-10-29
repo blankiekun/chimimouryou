@@ -263,3 +263,87 @@ jobs:
           gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 ||
             gh release create "$GITHUB_REF_NAME" --verify-tag --title "chimimouryou ${GITHUB_REF_NAME#v}" --notes ""
           gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+
+  # The Android app (apps/android) with the same standalone build, signed with the release key and
+  # attached to the release (after the desktop builds, which make it). Needs the secrets
+  # ANDROID_KEYSTORE (the keystore, base64), ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and
+  # ANDROID_KEY_PASSWORD (apps/android/README.md); without them it skips.
+  android:
+    needs: desktop-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+    steps:
+      - name: Signing key set?
+        id: key
+        run: |
+          if [ -z "$ANDROID_KEYSTORE" ]; then
+            echo "::notice::No ANDROID_KEYSTORE secret: no APK for this release"
+          else
+            echo build=true >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.key.outputs.build
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        if: steps.key.outputs.build
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          run_install: false
+
+      - name: Install Node.js
+        if: steps.key.outputs.build
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+
+      - name: Install Java
+        if: steps.key.outputs.build
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install dependencies
+        if: steps.key.outputs.build
+        run: pnpm install --frozen-lockfile --filter android
+
+      - name: Download the web build
+        if: steps.key.outputs.build
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: desktop-inputs
+          path: apps
+
+      # versionCode must grow with every release: v3.10.1 → 3010001 (minor and patch below 1000).
+      - name: Build and sign
+        working-directory: apps/android
+        if: steps.key.outputs.build
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          IFS=. read -r major minor patch <<< "${version%%-*}"
+          code=$((major * 1000000 + minor * 1000 + patch))
+          export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/release.jks"
+          base64 -d <<< "$ANDROID_KEYSTORE" > "$ANDROID_KEYSTORE_FILE"
+          pnpm exec cap sync android
+          (cd android && ./gradlew --no-daemon assembleRelease -PversionName="$version" -PversionCode="$code")
+          rm "$ANDROID_KEYSTORE_FILE"
+          mv android/app/build/outputs/apk/release/app-release.apk "chimimouryou-$version.apk"
+
+      - name: Attach to the release
+        if: steps.key.outputs.build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release upload "$GITHUB_REF_NAME" apps/android/chimimouryou-*.apk --clobber

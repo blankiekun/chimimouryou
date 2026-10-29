@@ -5,6 +5,7 @@
  */
 
 import { StorageKey, StorageSourceDefault } from '$lib/data/storage/storage-types';
+import { nativeDrive } from '$lib/data/android-drive';
 import {
   gDriveAuthEndpoint,
   gDriveClientId,
@@ -46,7 +47,8 @@ export function isStorageSourceAvailable(
     case StorageKey.GDRIVE:
       hasValidEnvironment =
         ((storageSourceManager && storageSourceManager !== StorageSourceDefault.GDRIVE_DEFAULT) ||
-          gDriveClientId) &&
+          gDriveClientId ||
+          nativeDrive()) &&
         gDriveAuthEndpoint &&
         gDriveScope;
       break;

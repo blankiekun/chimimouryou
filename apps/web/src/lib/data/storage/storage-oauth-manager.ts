@@ -5,6 +5,7 @@
  */
 
 import StorageUnlock from '$lib/components/storage-unlock.svelte';
+import { nativeDrive, nativeDriveToken, nativeGrant } from '$lib/data/android-drive';
 import type { BooksDbStorageSource } from '$lib/data/database/books-db/versions/books-db';
 import { dialogManager } from '$lib/data/dialog-manager';
 import {
@@ -125,6 +126,19 @@ export class StorageOAuthManager {
     }
 
     this.remoteData = undefined;
+
+    // Not part of upstream: the Android app signs in through Play services (android-drive.ts).
+    if (storageSourceName === StorageSourceDefault.GDRIVE_DEFAULT && nativeDrive()) {
+      try {
+        token = await nativeDriveToken(StorageOAuthManager.fromClick(window));
+      } catch (error: any) {
+        if (error.code === 'needsConsent') storeRefreshToken(storageSourceName, undefined);
+        throw error;
+      }
+      storageOAuthTokens.set(storageSourceName, token);
+      storeRefreshToken(storageSourceName, nativeGrant);
+      return token.accessToken;
+    }
 
     let secret: string | undefined;
     let unlockResult = oldUnlockResult;

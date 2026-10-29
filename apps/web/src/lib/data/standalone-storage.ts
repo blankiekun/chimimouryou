@@ -10,6 +10,7 @@
  * source). Not part of upstream.
  */
 
+import { nativeDrive, nativeGrant } from '$lib/data/android-drive';
 import { gDriveRefreshEndpoint, gDriveRevokeEndpoint, pagePath } from '$lib/data/env';
 import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
@@ -103,14 +104,17 @@ export async function signInToDrive(window: Window): Promise<string> {
     return '';
   }
 
-  const popup = StorageOAuthManager.createWindow(
-    `${pagePath}/auth?ttu-init-wait=1`,
-    'auth',
-    Math.min(Math.max(window.innerWidth, 300), 560),
-    Math.min(Math.max(window.innerHeight, 300), 560),
-    window
-  );
-  if (!popup) return 'blocked';
+  // The Android app signs in natively, without the pop-up.
+  const popup = nativeDrive()
+    ? undefined
+    : StorageOAuthManager.createWindow(
+        `${pagePath}/auth?ttu-init-wait=1`,
+        'auth',
+        Math.min(Math.max(window.innerWidth, 300), 560),
+        Math.min(Math.max(window.innerHeight, 300), 560),
+        window
+      );
+  if (popup === null) return 'blocked';
 
   try {
     await new StorageOAuthManager(StorageKey.GDRIVE, gDriveRefreshEndpoint).getToken(
@@ -123,7 +127,7 @@ export async function signInToDrive(window: Window): Promise<string> {
     return error.message || 'Sign-in failed';
   } finally {
     // A kept refresh token renews the session without the window.
-    if (!popup.closed) popup.close();
+    if (popup && !popup.closed) popup.close();
   }
 
   await loadDriveEmail();
@@ -134,7 +138,8 @@ export function signOutOfDrive(window: Window) {
   const name = driveSourceName();
   const token = storageOAuthTokens.get(name);
   // Revoking the refresh token also ends its access tokens.
-  const revoke = storedRefreshToken(name) || token?.refreshToken || token?.accessToken;
+  const kept = storedRefreshToken(name);
+  const revoke = (kept !== nativeGrant && kept) || token?.refreshToken || token?.accessToken;
   if (revoke) StorageOAuthManager.revokeToken(gDriveRevokeEndpoint, revoke);
   storeRefreshToken(name, undefined);
   storageOAuthTokens.delete(name);

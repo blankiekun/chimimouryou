@@ -274,3 +274,7 @@ site isn't `chimireader/chimireader.github.io`, the variable `PAGES_REPO`: `rele
 the site's workflow with each `v*` tag once CI passes.
 To serve it from your own VPS behind Cloudflare instead (or as well), see
 [deploy/vps/README.md](../deploy/vps/README.md).
+
+Each release also attaches desktop installers ([apps/desktop](../apps/desktop/README.md)) and
+an Android APK ([apps/android](../apps/android/README.md)) of the standalone build. The APK is
+signed with the repository's `ANDROID_KEYSTORE*` secrets and skipped without them.

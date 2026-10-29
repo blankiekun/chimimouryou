@@ -13,7 +13,8 @@ data
 .claude
 # VNBox fetched for pnpm dev; the image fetches its own (scripts/vnbox/build.sh)
 apps/web/static/vn/vnbox
-# The desktop app is built on its own (apps/desktop), never in the images
+# The desktop and Android apps are built on their own, never in the images
 apps/desktop
+apps/android
 # Engine tests (the difficulty image copies engine/ whole)
 engine/tests
