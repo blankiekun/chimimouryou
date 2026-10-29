@@ -135,7 +135,7 @@ describe('compatParams', () => {
     env: []
   };
 
-  it('adds nothing by default and keeps jpfonts and nomono with a setting', () => {
+  it('adds nothing by default and keeps jpfonts and the default overrides with a setting', () => {
     expect(compatParams(none)).toEqual([]);
 
     const compat: VnboxCompat = {
@@ -156,7 +156,7 @@ describe('compatParams', () => {
     );
 
     expect(search.get('registry')).toBe('jpfonts,gdi,win98');
-    expect(search.get('wine-override')).toBe('nomono,quartz=,d3d9=n');
+    expect(search.get('wine-override')).toBe('nomono,winedbg.exe=,quartz=,d3d9=n');
     expect(search.get('wine-env')).toBe('WINEDEBUG=-all&p=evil.exe#x');
     expect(search.get('reg')).toBe('HKCU\\Software\\Some Maker\\Game\tMode\tREG_DWORD\t0x1');
     expect(search.get('desktop')).toBe('1024x768');
