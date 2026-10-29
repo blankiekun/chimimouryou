@@ -157,6 +157,7 @@ def vn_games(vn_dir: str) -> list[dict]:
         cover = next((name for name in os.listdir(entry.path) if name.lower() in VN_COVERS), '')
         games.append({
             'id': -(zlib.crc32(entry.name.encode()) & 0x7fffffff) or -1,
+            'key': f'vn:{entry.name}',
             'title': unicodedata.normalize('NFC', entry.name),
             'authors': '',
             'series': '',
@@ -187,6 +188,28 @@ def unique_titles(books) -> None:
         for group in groups.values():
             for book in sorted(group, key=lambda b: (b['added'], b['id']))[:-1]:
                 book['title'] += suffix(book)
+
+
+def store_books(db_path: str, books: list[dict]) -> None:
+    """Upserts the books into the API database (library.db) and gives each its sticky unique title.
+    The first build on an empty table takes today's unique_titles(), so catalog.json titles don't change."""
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), 'api'))
+    import apidb
+
+    db = apidb.Database(db_path)
+    try:
+        def work(connection):
+            seed = None
+            if connection.execute('SELECT COUNT(*) FROM books').fetchone()[0] == 0:
+                copies = [dict(book) for book in books]
+                unique_titles(copies)
+                seed = {book['key']: book['title'] for book in copies}
+            return apidb.upsert_books(connection, books, seed, int(time.time() * 1000))
+        titles = db.transaction(work)
+    finally:
+        db.connection.close()
+    for book in books:
+        book['title'] = titles[book['key']]
 
 
 def vn_mtime(vn_dir: str) -> float:
@@ -442,7 +465,9 @@ def build(library: str, output: str, vn_dir: str | None = None, force: bool = Fa
     # added while a build ran is picked up by the next one.
     newest_input = max(os.path.getmtime(db_path), os.path.getmtime(__file__),
                        vn_mtime(vn_dir) if vn_dir else 0)
-    if not force and os.path.exists(output) and os.path.getmtime(output) >= newest_input:
+    api_db = os.environ.get('API_DB')
+    if (not force and os.path.exists(output) and os.path.getmtime(output) >= newest_input
+            and not (api_db and not os.path.exists(api_db))):
         return
 
     # Work on a copy so we don't block Calibre for the whole build. SQLite's backup takes
@@ -456,7 +481,7 @@ def build(library: str, output: str, vn_dir: str | None = None, force: bool = Fa
             source.close()
         rows = conn.execute(
             f"""
-            SELECT b.id, b.title, b.path, b.timestamp, d.name, d.format, d.uncompressed_size,
+            SELECT b.id, b.uuid, b.title, b.path, b.timestamp, d.name, d.format, d.uncompressed_size,
                    (SELECT group_concat(a.name, ' & ') FROM books_authors_link bal
                       JOIN authors a ON a.id = bal.author WHERE bal.book = b.id),
                    (SELECT s.name FROM books_series_link bsl
@@ -477,7 +502,7 @@ def build(library: str, output: str, vn_dir: str | None = None, force: bool = Fa
         conn.close()
 
     books = {}
-    for (book_id, title, path, added, name, fmt, size, authors, series, series_index, tags, rating,
+    for (book_id, uuid, title, path, added, name, fmt, size, authors, series, series_index, tags, rating,
          publisher, pubdate) in rows:
         current = books.get(book_id)
         if current and FORMATS.index(current['format']) <= FORMATS.index(fmt):
@@ -487,6 +512,7 @@ def build(library: str, output: str, vn_dir: str | None = None, force: bool = Fa
             continue
         books[book_id] = {
             'id': book_id,
+            'key': uuid or f'calibre:{book_id}',
             'title': title,
             'authors': authors or '',
             'series': series or '',
@@ -532,9 +558,13 @@ def build(library: str, output: str, vn_dir: str | None = None, force: bool = Fa
         for book, number in members:
             book.update(series=series or base, seriesIndex=number, seriesInferred=True)
 
-    unique_titles(books.values())
+    if api_db:
+        store_books(api_db, list(books.values()))
+    else:
+        unique_titles(books.values())
 
-    catalog = {'books': sorted(books.values(), key=lambda b: b['added'], reverse=True)}
+    catalog = {'books': sorted(({k: v for k, v in book.items() if k != 'key'} for book in books.values()),
+                               key=lambda b: b['added'], reverse=True)}
     tmp_output = output + '.tmp'
     with open(tmp_output, 'w', encoding='utf-8') as f:
         json.dump(catalog, f, ensure_ascii=False, separators=(',', ':'))

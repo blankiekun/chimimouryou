@@ -4,6 +4,7 @@ The api service, the catalog builder and the migration all write through this mo
 replaced by one with a newer `modified`, and every change takes the next value of the shared rev counter.
 """
 
+import json
 import os
 import re
 import sqlite3
@@ -204,3 +205,73 @@ def put_row(connection: sqlite3.Connection, rev: Rev, table: str, key: dict, mod
         f'INSERT INTO {table} ({", ".join(columns)}) VALUES ({", ".join("?" * len(columns))}) '
         f'ON CONFLICT ({", ".join(key_columns)}) DO UPDATE SET {updates}', params)
     return 'written', connection.execute(f'SELECT * FROM {table} WHERE {where}', key_values).fetchone()
+
+
+def to_json(value) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(',', ':'))
+
+
+def book_columns(book: dict) -> dict:
+    """books columns (besides key, unique_title and the bookkeeping ones) from a catalog builder dict."""
+    return {
+        'calibre_id': book['id'], 'title': book['title'], 'authors': book['authors'], 'series': book['series'],
+        'series_index': book['seriesIndex'], 'series_inferred': int(bool(book['seriesInferred'])),
+        'tags': to_json(book['tags']), 'rating': book['rating'], 'publisher': book['publisher'],
+        'published': book['published'], 'added': book['added'], 'format': book['format'], 'file': book['file'],
+        'size': book['size'] or 0, 'cover': book['cover'], 'vn': int(bool(book['vn'])),
+    }
+
+
+def upsert_books(connection: sqlite3.Connection, books: list[dict], seed_titles: dict[str, str] | None,
+                 now_ms: int) -> dict[str, str]:
+    """Brings the books table in line with the catalog builder's list (dicts with 'key') and returns
+    key -> unique_title of every live book. A book keeps its unique title for good; a new book with a taken
+    title gets ' (authors)', then ' [calibre id]'. Books gone from the list are soft-deleted, never removed,
+    so their rows and data come back with them. Call inside a transaction."""
+    rev = Rev(connection)
+    stored = {row['key']: row for row in connection.execute('SELECT * FROM books')}
+    listed = {book['key']: book for book in books}
+    taken = {row['unique_title'] for row in stored.values() if not row['deleted'] and row['key'] in listed}
+
+    for key, row in stored.items():
+        if key not in listed and not row['deleted']:
+            connection.execute('UPDATE books SET deleted = 1, updated = ?, rev = ? WHERE id = ?',
+                               (now_ms, rev(), row['id']))
+
+    def free_title(book: dict, preferred: str | None) -> str:
+        candidates = [preferred] if preferred else []
+        candidate = book['title']
+        candidates.append(candidate)
+        if book['authors']:
+            candidate = f"{candidate} ({book['authors']})"
+            candidates.append(candidate)
+        while True:
+            for title in candidates:
+                if title not in taken:
+                    taken.add(title)
+                    return title
+            candidate = f"{candidate} [{book['id']}]"
+            candidates = [candidate]
+
+    # Returning books first, so they get their old titles back before a new book can take them.
+    order = sorted(listed.values(), key=lambda b: (b['key'] not in stored, -b['added'], -b['id']))
+    for book in order:
+        columns = book_columns(book)
+        row = stored.get(book['key'])
+        if row is None:
+            unique_title = free_title(book, (seed_titles or {}).get(book['key']))
+            names = ['key', 'unique_title', *columns, 'updated', 'rev']
+            connection.execute(
+                f'INSERT INTO books ({", ".join(names)}) VALUES ({", ".join("?" * len(names))})',
+                (book['key'], unique_title, *columns.values(), now_ms, rev()))
+            continue
+        changes = {name: value for name, value in columns.items() if row[name] != value}
+        if row['deleted']:
+            changes['deleted'] = 0
+            changes['unique_title'] = free_title(book, row['unique_title'])
+        if changes:
+            assignments = ', '.join(f'{name} = ?' for name in changes)
+            connection.execute(f'UPDATE books SET {assignments}, updated = ?, rev = ? WHERE id = ?',
+                               (*changes.values(), now_ms, rev(), row['id']))
+    return {row['key']: row['unique_title']
+            for row in connection.execute('SELECT key, unique_title FROM books WHERE deleted = 0')}

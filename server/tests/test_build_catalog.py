@@ -6,13 +6,17 @@ import io
 import json
 import os
 import tempfile
+import sys
 import unittest
 import zipfile
+from unittest import mock
 
 spec = importlib.util.spec_from_file_location(
     'build_catalog', os.path.join(os.path.dirname(__file__), '..', 'build-catalog.py'))
 catalog = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(catalog)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'api'))
+import apidb  # noqa: E402
 
 
 class SplitVolumeTest(unittest.TestCase):
@@ -172,42 +176,56 @@ class UniqueTitlesTest(unittest.TestCase):
                          {4: 'A', 3: 'A (X)', 6: 'A (X) [6]', 5: 'A [5]'})
 
 
+def write_library(library, books):
+    """A minimal Calibre library: metadata.db (rewritten) and one EPUB per book. Books are dicts with
+    id, title and optionally series, uuid, authors, added (Calibre timestamp)."""
+    import sqlite3
+    db_path = os.path.join(library, 'metadata.db')
+    if os.path.exists(db_path):
+        os.remove(db_path)
+    db = sqlite3.connect(db_path)
+    db.executescript("""
+        CREATE TABLE books (id INTEGER PRIMARY KEY, title TEXT, path TEXT, timestamp TEXT,
+                            series_index REAL, pubdate TEXT, uuid TEXT);
+        CREATE TABLE data (book INTEGER, format TEXT, name TEXT, uncompressed_size INTEGER);
+        CREATE TABLE authors (id INTEGER PRIMARY KEY, name TEXT UNIQUE);
+        CREATE TABLE books_authors_link (book INTEGER, author INTEGER);
+        CREATE TABLE series (id INTEGER PRIMARY KEY, name TEXT);
+        CREATE TABLE books_series_link (book INTEGER, series INTEGER);
+        CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT);
+        CREATE TABLE books_tags_link (book INTEGER, tag INTEGER);
+        CREATE TABLE ratings (id INTEGER PRIMARY KEY, rating INTEGER);
+        CREATE TABLE books_ratings_link (book INTEGER, rating INTEGER);
+        CREATE TABLE publishers (id INTEGER PRIMARY KEY, name TEXT);
+        CREATE TABLE books_publishers_link (book INTEGER, publisher INTEGER);
+    """)
+    for book in books:
+        book_id = book['id']
+        os.makedirs(os.path.join(library, str(book_id)), exist_ok=True)
+        with zipfile.ZipFile(os.path.join(library, str(book_id), 'b.epub'), 'w') as epub:
+            epub.writestr('META-INF/container.xml', '<container/>')
+        db.execute('INSERT INTO books VALUES (?, ?, ?, ?, 1, NULL, ?)',
+                   (book_id, book['title'], str(book_id), book.get('added', '2026-01-01 00:00:00+00:00'),
+                    book.get('uuid')))
+        db.execute('INSERT INTO data VALUES (?, "EPUB", "b", 1)', (book_id,))
+        if book.get('series'):
+            db.execute('INSERT OR IGNORE INTO series (name) VALUES (?)', (book['series'],))
+            db.execute('INSERT INTO books_series_link SELECT ?, id FROM series WHERE name = ?',
+                       (book_id, book['series']))
+        if book.get('authors'):
+            db.execute('INSERT OR IGNORE INTO authors (name) VALUES (?)', (book['authors'],))
+            db.execute('INSERT INTO books_authors_link SELECT ?, id FROM authors WHERE name = ?',
+                       (book_id, book['authors']))
+    db.commit()
+    db.close()
+
+
 class BuildTest(unittest.TestCase):
     """A whole build from a minimal Calibre library."""
 
     def build(self, books):
-        import sqlite3
-        import tempfile
         library = tempfile.mkdtemp()
-        db = sqlite3.connect(os.path.join(library, 'metadata.db'))
-        db.executescript("""
-            CREATE TABLE books (id INTEGER PRIMARY KEY, title TEXT, path TEXT, timestamp TEXT,
-                                series_index REAL, pubdate TEXT);
-            CREATE TABLE data (book INTEGER, format TEXT, name TEXT, uncompressed_size INTEGER);
-            CREATE TABLE authors (id INTEGER PRIMARY KEY, name TEXT);
-            CREATE TABLE books_authors_link (book INTEGER, author INTEGER);
-            CREATE TABLE series (id INTEGER PRIMARY KEY, name TEXT);
-            CREATE TABLE books_series_link (book INTEGER, series INTEGER);
-            CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT);
-            CREATE TABLE books_tags_link (book INTEGER, tag INTEGER);
-            CREATE TABLE ratings (id INTEGER PRIMARY KEY, rating INTEGER);
-            CREATE TABLE books_ratings_link (book INTEGER, rating INTEGER);
-            CREATE TABLE publishers (id INTEGER PRIMARY KEY, name TEXT);
-            CREATE TABLE books_publishers_link (book INTEGER, publisher INTEGER);
-        """)
-        for book_id, title, series in books:
-            os.makedirs(os.path.join(library, str(book_id)))
-            with zipfile.ZipFile(os.path.join(library, str(book_id), 'b.epub'), 'w') as epub:
-                epub.writestr('META-INF/container.xml', '<container/>')
-            db.execute('INSERT INTO books VALUES (?, ?, ?, ?, 1, NULL)',
-                       (book_id, title, str(book_id), '2026-01-01 00:00:00+00:00'))
-            db.execute('INSERT INTO data VALUES (?, "EPUB", "b", 1)', (book_id,))
-            if series:
-                db.execute('INSERT OR IGNORE INTO series (name) VALUES (?)', (series,))
-                db.execute('INSERT INTO books_series_link SELECT ?, id FROM series WHERE name = ?',
-                           (book_id, series))
-        db.commit()
-        db.close()
+        write_library(library, [{'id': i, 'title': t, 'series': s} for i, t, s in books])
         output = os.path.join(library, 'out', 'catalog.json')
         os.makedirs(os.path.dirname(output))
         catalog.main(library, output)
@@ -225,6 +243,94 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(result[2], (series, 2.0))
         # A single volume without a matching series stays on its own.
         self.assertEqual(result[3], ('', None))
+
+
+class CatalogDbTest(unittest.TestCase):
+    """Builds with API_DB set: books are kept in library.db and their unique titles are sticky."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.library = os.path.join(tmp.name, 'library')
+        self.vn = os.path.join(tmp.name, 'vn')
+        os.makedirs(self.library)
+        self.output = os.path.join(tmp.name, 'state', 'catalog', 'catalog.json')
+        os.makedirs(os.path.dirname(self.output))
+        self.db_path = os.path.join(tmp.name, 'state', 'api', 'library.db')
+        patcher = mock.patch.dict(os.environ, {'API_DB': self.db_path})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    @staticmethod
+    def book(book_id, title, authors='', day=1):
+        return {'id': book_id, 'title': title, 'authors': authors, 'uuid': f'uuid-{book_id}',
+                'added': f'2026-01-{day:02d} 00:00:00+00:00'}
+
+    def build(self, books, vn_dir=None):
+        write_library(self.library, books)
+        catalog.main(self.library, self.output, vn_dir, force=True)
+        with open(self.output, encoding='utf-8') as f:
+            return {b['id']: b['title'] for b in json.load(f)['books']}
+
+    def rows(self):
+        db = apidb.Database(self.db_path)
+        try:
+            return {row['calibre_id']: row for row in db.query('SELECT * FROM books')}
+        finally:
+            db.connection.close()
+
+    def rev(self):
+        db = apidb.Database(self.db_path)
+        try:
+            return apidb.current_rev(db.connection)
+        finally:
+            db.connection.close()
+
+    def test_first_build_keeps_todays_titles(self):
+        books = [self.book(1, '猫', 'A', 1), self.book(2, '猫', 'A', 2), self.book(3, '猫', 'B', 3)]
+        with mock.patch.dict(os.environ, {'API_DB': ''}):
+            today = self.build(books)
+        self.assertEqual(today, {3: '猫', 2: '猫 (A)', 1: '猫 (A) [1]'})
+        self.assertEqual(self.build(books), today)
+        self.assertEqual({i: row['unique_title'] for i, row in self.rows().items()}, today)
+
+    def test_new_same_title_gets_suffix(self):
+        self.assertEqual(self.build([self.book(1, '猫', 'A', 1)]), {1: '猫'})
+        self.assertEqual(self.build([self.book(1, '猫', 'A', 1), self.book(2, '猫', 'B', 2)]),
+                         {1: '猫', 2: '猫 (B)'})
+
+    def test_soft_delete_and_return_keeps_title(self):
+        books = [self.book(1, '猫', 'A', 1), self.book(2, '犬', 'B', 2)]
+        self.build(books)
+        before = self.rows()[1]
+        self.assertEqual(self.build(books[1:]), {2: '犬'})
+        self.assertEqual(self.rows()[1]['deleted'], 1)
+        self.assertEqual(self.build(books), {1: '猫', 2: '犬'})
+        after = self.rows()[1]
+        self.assertEqual((after['deleted'], after['id'], after['unique_title']), (0, before['id'], '猫'))
+
+    def test_unchanged_build_bumps_no_rev(self):
+        books = [self.book(1, '猫', 'A', 1), self.book(2, '犬', 'B', 2)]
+        self.build(books)
+        rev = self.rev()
+        self.build(books)
+        self.assertEqual(self.rev(), rev)
+
+    def test_calibre_title_edit_keeps_unique_title(self):
+        self.build([self.book(1, '猫', 'A', 1)])
+        self.assertEqual(self.build([self.book(1, '吾輩は猫である', 'A', 1)]), {1: '猫'})
+        row = self.rows()[1]
+        self.assertEqual((row['title'], row['unique_title']), ('吾輩は猫である', '猫'))
+
+    def test_vn_key(self):
+        os.makedirs(os.path.join(self.vn, 'game1'))
+        open(os.path.join(self.vn, 'game1', '0.txt'), 'w').close()
+        self.build([self.book(1, '猫')], self.vn)
+        db = apidb.Database(self.db_path)
+        try:
+            self.assertEqual([row['key'] for row in db.query('SELECT key FROM books WHERE vn = 1')], ['vn:game1'])
+        finally:
+            db.connection.close()
 
 
 @unittest.skipUnless(catalog.Image, 'needs Pillow (python3-pil)')
