@@ -179,7 +179,7 @@ Paper, ink and one green; dark mode inverts paper and ink and lifts the green.
 
 ### Hierarchy
 
-The scale lives in `src/app.scss` as `--type-*` and in Tailwind as `text-display`, `text-h1`… Nothing is set below 12px. The sizes below are at 1×: `--type-scale` multiplies every token (and Tailwind's `text-xs`…`text-2xl`) by 1.125 from 1440px wide and 1.25 from 1920px, so large screens get larger chrome text. Phones and laptops keep these sizes; book text keeps the reader's own size.
+The scale lives in `src/app.scss` as `--type-*` and in Tailwind as `text-display`, `text-h1`… Nothing is set below 12px.
 
 - **Display** (40px): rare page-level figures and titles.
 - **Figure** (44px, bold, tabular): the POINT box's key number.

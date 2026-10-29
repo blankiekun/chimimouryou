@@ -53,22 +53,21 @@
   /* BIZ UDPGothic is self-hosted in unicode-range chunks (lib/assets/fonts/biz-udpgothic). */
   --app-font-ui: 'BIZ UDPGothic', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', Meiryo, sans-serif;
   --app-font-display: var(--app-font-ui);
-  /* Type scale (Study Book); nothing below 12px. --type-scale grows it on wide screens (below). */
-  --type-scale: 1;
-  --type-display: calc(2.5rem * var(--type-scale));
-  --type-h1: calc(1.75rem * var(--type-scale));
-  --type-h2: calc(1.25rem * var(--type-scale));
-  --type-body: calc(0.9375rem * var(--type-scale));
-  --type-button: calc(0.875rem * var(--type-scale));
-  --type-small: calc(0.8125rem * var(--type-scale));
-  --type-label: calc(0.75rem * var(--type-scale));
-  --type-number: calc(1.375rem * var(--type-scale));
-  --type-figure: calc(2.75rem * var(--type-scale));
+  /* Type scale (Study Book); nothing below 12px. */
+  --type-display: 2.5rem;
+  --type-h1: 1.75rem;
+  --type-h2: 1.25rem;
+  --type-body: 0.9375rem;
+  --type-button: 0.875rem;
+  --type-small: 0.8125rem;
+  --type-label: 0.75rem;
+  --type-number: 1.375rem;
+  --type-figure: 2.75rem;
   /* Buttons and other controls: 40px, 44px on touch screens. */
   --app-control-height: 2.5rem;
   --app-header-control-height: 2.6rem;
   --app-header-pill-height: 3.1rem;
-  --app-header-label-size: calc(0.92rem * var(--type-scale));
+  --app-header-label-size: 0.92rem;
   --app-header-icon-size: 1rem;
   --app-ease: cubic-bezier(0.2, 0, 0, 1);
   scrollbar-color: var(--app-scrollbar-color) transparent;
@@ -78,19 +77,6 @@
 @media (max-width: 639px) {
   body:has(.app-bottom-nav) {
     padding-bottom: calc(3.5rem + env(safe-area-inset-bottom));
-  }
-}
-
-/* Larger chrome text on large, high-resolution screens; book text keeps the reader's size. */
-@media (min-width: 1440px) {
-  :root {
-    --type-scale: 1.125;
-  }
-}
-
-@media (min-width: 1920px) {
-  :root {
-    --type-scale: 1.25;
   }
 }
 
