@@ -65,8 +65,9 @@ scripts import [yurigana](https://github.com/blankiekun/yurigana); install the p
 first (its Sudachi dependencies are only needed for the tests that skip without them):
 
 ```sh
-pip install --no-deps "$(grep '^yurigana' scripts/calibre/jiten/requirements.txt)"
-python3 -m unittest discover -s scripts/calibre/tests
+pip install --no-deps "$(grep '^yurigana' engine/requirements.txt)"
+python3 -m unittest discover -s engine/tests
+python3 -m unittest discover -s server/tests
 ```
 
 Run the whole thing: `docker compose up -d --build` (see `docs/INSTALL.md`).
@@ -111,7 +112,7 @@ git merge upstream/main`, open a PR and merge it with **Create a merge
 ## Testing expectations
 
 - Unit tests sit next to the module (`foo.ts` → `foo.test.ts`) and use Vitest with
-  jsdom. Python tests live in `scripts/calibre/tests/` and use `unittest`.
+  jsdom. Python tests live in `server/tests/` (the difficulty engine's in `engine/tests/`) and use `unittest`.
 - Browser tests (`foo.browser.test.ts`, `pnpm test:browser`, `vitest.browser.config.js`) run in
   headless Chromium (Vitest browser mode, Playwright), apart from `pnpm test`. Write one only for
   what jsdom can't do: layout and positions (where the reader lands, what is on screen), vertical
@@ -163,7 +164,7 @@ own through `CalibreStorageHandler.syncFileUrl(title, name)` (like
 **A server endpoint** - add a route to the service's `ROUTES` (accounts) or
 `do_GET`/`do_POST` (difficulty), proxy it in `nginx-ebook-reader.conf.template` if it
 needs a new location (with an `auth_request` check; new `${…}` placeholders go in
-`render-nginx.sh`'s list), add a test in `scripts/calibre/tests/`, and rebuild the
+`render-nginx.sh`'s list), add a test in `server/tests/`, and rebuild the
 stack. Account POST routes get the HTTPS and Origin checks automatically.
 
 **A configuration option** - read it from the environment in the service (or

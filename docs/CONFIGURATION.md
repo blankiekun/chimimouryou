@@ -52,7 +52,7 @@ yourself.
 
 ## Web server (nginx template)
 
-`scripts/calibre/render-nginx.sh` fills in `nginx-ebook-reader.conf.template`.
+`server/render-nginx.sh` fills in `nginx-ebook-reader.conf.template`.
 The web container runs it at start with these defaults. Server-level extras (TLS, resolver,
 real-IP settings) go in `/etc/nginx/ebook-reader.d/*.conf`.
 

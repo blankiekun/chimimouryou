@@ -14,7 +14,7 @@ Browser (static SvelteKit app, apps/web)
  ├─ localStorage: settings, API keys, theme, settings-sync change times
  └─ fetch ─────────────────────────────────────────────┐
                                                         ▼
-nginx: the `web` container (scripts/calibre/nginx-ebook-reader.conf.template)
+nginx: the `web` container (server/nginx-ebook-reader.conf.template)
  ├─ /                       static build (the app)
  ├─ /calibre/catalog.json   ← `catalog` container (build-catalog.py), DATA_PATH/state/catalog
  ├─ /calibre/library/…      book files + cover.jpg, read-only (Calibre library)
