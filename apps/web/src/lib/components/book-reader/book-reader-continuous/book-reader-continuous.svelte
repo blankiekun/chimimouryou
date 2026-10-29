@@ -162,6 +162,9 @@
 
   let isResizeScroll = false;
 
+  // The window's reading dimension at the last resize: only a change to it re-lays out the book.
+  let windowReach = browser ? (verticalMode ? innerHeight : innerWidth) : 0;
+
   let restoreScrolled = false;
 
   let bookmarkAdjustment = window.matchMedia('(min-width: 640px)').matches ? '0.5rem' : '0.25rem';
@@ -888,9 +891,13 @@
 <svelte:window
   on:scroll={onScroll}
   on:resize={() => {
-    if (autoPositionOnResize) {
+    const reach = verticalMode ? innerHeight : innerWidth;
+    // Without a re-layout no resize scroll comes to clear the flag, and the next user scroll would
+    // not move the intended place (a phone's URL bar, fullscreen toggled back).
+    if (autoPositionOnResize && reach !== windowReach) {
       isResizeScroll = true;
     }
+    windowReach = reach;
   }}
 />
 
