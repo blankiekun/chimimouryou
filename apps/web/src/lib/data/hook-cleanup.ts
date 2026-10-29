@@ -299,20 +299,24 @@ export function cleanHookLine(line: string, cleanup: HookCleanup) {
  */
 export function hookCleaner(cleanup: HookCleanup) {
   const recent = new Map<string, string[]>();
-  const last = new Map<string, string>();
+  // The thread's last finished line (ends at lineEnd): the page text a new line starts with.
+  const finished = new Map<string, string>();
   const size = cleanup.recentSize || defaultRecentSize;
 
   return (line: string, threadId = '') => {
     let text = cleanHookLine(line, cleanup);
 
     if (text && filterOn(cleanup, 'newOnly')) {
-      const previous = last.get(threadId) ?? '';
+      const previous = finished.get(threadId) ?? '';
+      const full = text.trimEnd();
+      const continues = !!previous && full.startsWith(previous);
 
-      last.set(threadId, text);
-      // shortcut: only a finished previous line counts, so a typewriter sent one fire per
-      // character isn't cut to single characters; a game redrawing mid-sentence would need more.
-      if (lineEnd.test(previous) && text.length > previous.length && text.startsWith(previous))
-        text = text.slice(previous.length).trim();
+      // Kept while a game redraws the new line in pieces (あ。い, あ。いう), so each piece is cut too.
+      if (lineEnd.test(full)) finished.set(threadId, full);
+      else if (!continues) finished.delete(threadId);
+      // Only a finished line counts, so a typewriter sending one fire per character isn't cut
+      // to single characters.
+      if (continues && full.length > previous.length) text = full.slice(previous.length).trim();
     }
     if (!text || !cleanup.recentLines) return text;
 
