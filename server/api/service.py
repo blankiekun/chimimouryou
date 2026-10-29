@@ -25,6 +25,9 @@ ACCOUNT_DATA_DIR = os.environ.get('ACCOUNT_DATA_DIR', '/data/accounts')
 INTERNAL_TOKEN_FILE = os.environ.get('INTERNAL_TOKEN_FILE', '/data/state/internal-token')
 MIN_FREE_BYTES = int(os.environ.get('MIN_FREE_MB', '1024')) * 1024 * 1024
 VERSION = os.environ.get('VERSION', 'docker')
+MAX_JSON_BYTES = 10 * 1024 * 1024
+DATE_RE = re.compile(r'\d{4}-\d{2}-\d{2}')
+HID_RE = re.compile(r'[A-Za-z0-9-]{1,100}')
 
 db: apidb.Database
 
@@ -87,6 +90,10 @@ def book_json(row) -> dict:
         'size': row['size'], 'cover': row['cover'], 'vn': bool(row['vn']), 'deleted': bool(row['deleted']),
         'rev': row['rev'],
     }
+
+
+def reject_constant(name: str):
+    raise ValueError(name)
 
 
 def int_param(query: dict, name: str, default: int, low: int, high: int | None = None) -> int:
@@ -174,11 +181,135 @@ class Handler(BaseHTTPRequestHandler):
             return result
         return 200, db.transaction(read)
 
+    # -- writes
+
+    def read_body(self, types: tuple[str, ...], limit: int, disk: str = '') -> bytes:
+        """The request body, checked before it is read; disk: refuse while that disk is nearly full."""
+        content_type = self.headers.get('Content-Type', '').split(';')[0].strip().lower()
+        if content_type not in types:
+            # application/json forces a CORS preflight: other sites can't post as a trusted-network reader.
+            raise ApiError(415, 'Unsupported content type')
+        length = self.headers.get('Content-Length', '')
+        if not length.isdigit():
+            raise ApiError(411, 'Content-Length required')
+        if int(length) > limit:
+            raise ApiError(413, 'Too large')
+        data = self.rfile.read(int(length))
+        if disk_full(disk or API_STATE_DIR) or (disk and disk_full(API_STATE_DIR)):
+            raise ApiError(507, "The server's disk is full")
+        return data
+
+    def read_json(self) -> dict:
+        try:
+            # NaN and Infinity aren't JSON: the browsers couldn't read them back.
+            body = json.loads(self.read_body(('application/json',), MAX_JSON_BYTES), parse_constant=reject_constant)
+        except ValueError:
+            raise ApiError(400, 'Invalid JSON') from None
+        if not isinstance(body, dict):
+            raise ApiError(400, 'Expected an object')
+        modified = body.get('modified')
+        if type(modified) is not int or not 0 <= modified < 2 ** 53:
+            raise ApiError(400, 'Bad modified')
+        return body
+
+    @staticmethod
+    def data_of(body: dict) -> str:
+        if 'data' not in body:
+            raise ApiError(400, 'Missing data')
+        return apidb.to_json(body['data'])
+
+    def book_of(self, match) -> int:
+        """books.id from the path; deleted books too, so their data is never refused."""
+        book = int(match[1])
+        if not db.query('SELECT 1 FROM books WHERE id = ?', (book,)):
+            raise ApiError(404, 'No such book')
+        return book
+
+    def needs_account(self):
+        if not self.account:
+            raise ApiError(403, 'Needs an account')
+
+    @staticmethod
+    def put(table: str, key: dict, modified: int, values: dict):
+        status, row = db.transaction(lambda c: apidb.put_row(c, apidb.Rev(c), table, key, modified, values))
+        if status == 'conflict':
+            raise ApiError(409, 'Newer on the server', {'row': row_json(table, row)})
+        return 200, {'rev': row['rev']}
+
+    def put_progress(self, match):
+        book, body = self.book_of(match), self.read_json()
+        progress = body.get('progress')
+        if progress is not None and type(progress) not in (int, float):
+            raise ApiError(400, 'Bad progress')
+        return self.put('progress', {'account': self.account, 'book': book}, body['modified'],
+                        {'data': self.data_of(body), 'progress': progress or 0})
+
+    def put_statistics(self, match):
+        book, body = self.book_of(match), self.read_json()
+        if not DATE_RE.fullmatch(match[2]):
+            raise ApiError(400, 'Bad date')
+        return self.put('statistics', {'account': self.account, 'book': book, 'date_key': match[2]},
+                        body['modified'], {'data': self.data_of(body)})
+
+    def highlight_key(self, match) -> dict:
+        book = self.book_of(match)
+        if not HID_RE.fullmatch(match[2]):
+            raise ApiError(400, 'Bad highlight id')
+        return {'account': self.account, 'book': book, 'hid': match[2]}
+
+    def put_highlight(self, match):
+        key, body = self.highlight_key(match), self.read_json()
+        return self.put('highlights', key, body['modified'], {'data': self.data_of(body), 'deleted': 0})
+
+    def delete_highlight(self, match):
+        key, body = self.highlight_key(match), self.read_json()
+        return self.put('highlights', key, body['modified'], {'data': '{}', 'deleted': 1})
+
+    def put_book_doc(self, match):
+        book, body = self.book_of(match), self.read_json()
+        return self.put('book_docs', {'account': self.account, 'book': book, 'kind': match[2]}, body['modified'],
+                        {'data': self.data_of(body)})
+
+    def put_account_doc(self, match):
+        self.needs_account()
+        body = self.read_json()
+        return self.put('account_docs', {'account': self.account, 'kind': match[1]}, body['modified'],
+                        {'data': self.data_of(body)})
+
+    def put_goals(self, match):
+        if not DATE_RE.fullmatch(match[1]):
+            raise ApiError(400, 'Bad date')
+        body = self.read_json()
+        return self.put('goals', {'account': self.account, 'goal_start': match[1]}, body['modified'],
+                        {'data': self.data_of(body)})
+
+    def put_series(self, match):
+        book, body = self.book_of(match), self.read_json()
+        series = body.get('series')
+        if not isinstance(series, str) or len(series) > 200:
+            raise ApiError(400, 'Bad series')
+        return self.put('series_overrides', {'book': book}, body['modified'], {'series': series})
+
+    def put_metadata(self, match):
+        book, body = self.book_of(match), self.read_json()
+        if not isinstance(body.get('data'), dict):
+            raise ApiError(400, 'Bad data')
+        return self.put('book_metadata', {'book': book}, body['modified'], {'data': self.data_of(body)})
+
     ROUTES = [
         ('GET', re.compile(r'/api/v1/version'), get_version),
         ('GET', re.compile(r'/api/v1/catalog'), get_catalog),
         ('GET', re.compile(r'/api/v1/books'), get_books),
         ('GET', re.compile(r'/api/v1/sync'), get_sync),
+        ('PUT', re.compile(r'/api/v1/books/(\d+)/progress'), put_progress),
+        ('PUT', re.compile(r'/api/v1/books/(\d+)/statistics/([^/]+)'), put_statistics),
+        ('PUT', re.compile(r'/api/v1/books/(\d+)/highlights/([^/]+)'), put_highlight),
+        ('DELETE', re.compile(r'/api/v1/books/(\d+)/highlights/([^/]+)'), delete_highlight),
+        ('PUT', re.compile(r'/api/v1/books/(\d+)/docs/(recaps|lorebook|vnsaves)'), put_book_doc),
+        ('PUT', re.compile(r'/api/v1/docs/(settings|kanji|words|immersion)'), put_account_doc),
+        ('PUT', re.compile(r'/api/v1/goals/([^/]+)'), put_goals),
+        ('PUT', re.compile(r'/api/v1/series/(\d+)'), put_series),
+        ('PUT', re.compile(r'/api/v1/metadata/(\d+)'), put_metadata),
     ]
 
     def dispatch(self, method: str):

@@ -147,5 +147,112 @@ class ReadTest(ServiceTestCase):
         self.assertEqual(self.call('DELETE', '/api/v1/catalog')[0], 405)
 
 
+class WriteTest(ServiceTestCase):
+    def setUp(self):
+        super().setUp()
+        self.books([catalog_book(1, '猫', added=1)])
+        self.book = self.book_id('uuid-1')
+
+    def sync(self, account=''):
+        status, body = self.call('GET', '/api/v1/sync?since=0', account=account)
+        self.assertEqual(status, 200)
+        return body
+
+    def test_progress_round_trip(self):
+        status, body = self.call('PUT', f'/api/v1/books/{self.book}/progress',
+                                 {'modified': 10, 'progress': 0.5, 'data': {'chapter': 2}}, account=ACCOUNT_A)
+        self.assertEqual(status, 200)
+        [row] = self.sync(ACCOUNT_A)['progress']
+        self.assertEqual(row, {'book': self.book, 'progress': 0.5, 'data': {'chapter': 2}, 'modified': 10,
+                               'rev': body['rev']})
+
+    def test_conflict_returns_stored_row(self):
+        path = f'/api/v1/books/{self.book}/progress'
+        status, body = self.call('PUT', path, {'modified': 20, 'progress': 0.2, 'data': {}})
+        self.assertEqual(status, 200)
+        rev = body['rev']
+        status, body = self.call('PUT', path, {'modified': 10, 'progress': 0.1, 'data': {}})
+        self.assertEqual(status, 409)
+        self.assertEqual((body['error'], body['row']['modified'], body['row']['progress']),
+                         ('Newer on the server', 20, 0.2))
+        self.assertEqual(self.call('PUT', path, {'modified': 20, 'progress': 0.3, 'data': {}}), (200, {'rev': rev}))
+        self.assertEqual(self.sync()['rev'], rev)
+
+    def test_highlight_tombstone(self):
+        path = f'/api/v1/books/{self.book}/highlights/h-1'
+        self.assertEqual(self.call('PUT', path, {'modified': 1, 'data': {'text': '猫'}})[0], 200)
+        self.assertEqual(self.call('DELETE', path, {'modified': 2})[0], 200)
+        [row] = self.sync()['highlights']
+        self.assertEqual((row['hid'], row['deleted'], row['data']), ('h-1', True, {}))
+        self.assertEqual(self.call('DELETE', path, {'modified': 1})[0], 409)
+        self.assertEqual(self.call('PUT', f'/api/v1/books/{self.book}/highlights/a%20b', {'modified': 1, 'data': {}})[0],
+                         400)
+
+    def test_accounts_are_isolated(self):
+        self.call('PUT', f'/api/v1/books/{self.book}/progress', {'modified': 1, 'progress': 0, 'data': {}},
+                  account=ACCOUNT_A)
+        self.call('PUT', f'/api/v1/books/{self.book}/statistics/2026-10-01', {'modified': 1, 'data': {}})
+        self.assertEqual(len(self.sync(ACCOUNT_A)['progress']), 1)
+        self.assertEqual(self.sync(ACCOUNT_A)['statistics'], [])
+        self.assertEqual(self.sync()['progress'], [])
+        self.assertEqual(len(self.sync()['statistics']), 1)
+        self.assertEqual(self.sync(ACCOUNT_B)['progress'], [])
+
+    def test_account_docs_need_account(self):
+        self.assertEqual(self.call('PUT', '/api/v1/docs/settings', {'modified': 1, 'data': {}}),
+                         (403, {'error': 'Needs an account'}))
+        self.assertEqual(self.call('PUT', '/api/v1/docs/settings', {'modified': 1, 'data': {'a': 1}},
+                                   account=ACCOUNT_A)[0], 200)
+        self.assertEqual(self.sync(ACCOUNT_A)['accountDocs'][0]['kind'], 'settings')
+        self.assertEqual(self.call('PUT', '/api/v1/goals/2026-10-01', {'modified': 1, 'data': []},
+                                   account=ACCOUNT_A)[0], 200)
+        self.assertEqual(self.sync(ACCOUNT_A)['goals'][0]['goalStart'], '2026-10-01')
+        self.assertEqual(self.call('PUT', f'/api/v1/books/{self.book}/docs/recaps', {'modified': 1, 'data': {}})[0],
+                         200)
+
+    def test_validation(self):
+        body = {'modified': 1, 'data': {}}
+        self.assertEqual(self.call('PUT', f'/api/v1/books/{self.book}/statistics/2026-1-1', body)[0], 400)
+        self.assertEqual(self.call('PUT', f'/api/v1/books/{self.book}/docs/other', body)[0], 404)
+        self.assertEqual(self.call('PUT', '/api/v1/books/999/docs/recaps', body)[0], 404)
+        self.assertEqual(self.call('PUT', '/api/v1/docs/settings', b'{}', account=ACCOUNT_A,
+                                   headers={'Content-Type': 'text/plain'})[0], 415)
+        self.assertEqual(self.call('PUT', f'/api/v1/books/{self.book}/docs/recaps', {'data': {}})[0], 400)
+        self.assertEqual(self.call('PUT', f'/api/v1/books/{self.book}/docs/recaps', {'modified': 1.5, 'data': {}})[0],
+                         400)
+        self.assertEqual(self.call('PUT', f'/api/v1/books/{self.book}/docs/recaps', [1])[0], 400)
+        self.assertEqual(self.call('PUT', f'/api/v1/books/{self.book}/docs/recaps', b'{', account=ACCOUNT_A,
+                                   headers={'Content-Type': 'application/json'})[0], 400)
+
+    def test_too_large(self):
+        import http.client
+        connection = http.client.HTTPConnection('127.0.0.1', self.server.server_port)
+        connection.putrequest('PUT', f'/api/v1/books/{self.book}/progress')
+        for name, value in (('X-Internal-Token', TOKEN), ('Content-Type', 'application/json'),
+                            ('Content-Length', str(service.MAX_JSON_BYTES + 1))):
+            connection.putheader(name, value)
+        connection.endheaders()
+        self.assertEqual(connection.getresponse().status, 413)
+        connection.close()
+
+    def test_disk_full(self):
+        service.MIN_FREE_BYTES = 1 << 62
+        self.assertEqual(self.call('PUT', f'/api/v1/books/{self.book}/progress',
+                                   {'modified': 1, 'progress': 0, 'data': {}}),
+                         (507, {'error': "The server's disk is full"}))
+        self.assertEqual(self.sync()['progress'], [])
+
+    def test_series_and_metadata(self):
+        self.assertEqual(self.call('PUT', f'/api/v1/series/{self.book}', {'modified': 1, 'series': 'S'},
+                                   account=ACCOUNT_A)[0], 200)
+        self.assertEqual(self.call('PUT', f'/api/v1/metadata/{self.book}', {'modified': 1, 'data': {'a': 1}})[0], 200)
+        self.assertEqual(self.call('PUT', f'/api/v1/metadata/{self.book}', {'modified': 2, 'data': [1]})[0], 400)
+        self.assertEqual(self.call('PUT', f'/api/v1/series/{self.book}', {'modified': 2, 'series': 'x' * 201})[0], 400)
+        for account in ('', ACCOUNT_A, ACCOUNT_B):
+            body = self.sync(account)
+            self.assertEqual([row['series'] for row in body['series']], ['S'])
+            self.assertEqual([row['data'] for row in body['metadata']], [{'a': 1}])
+
+
 if __name__ == '__main__':
     unittest.main()
