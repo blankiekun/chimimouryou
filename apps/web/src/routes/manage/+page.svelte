@@ -1858,6 +1858,9 @@
         <div class="library-signed-out">
           <h1 class="library-signed-out-title">The server can't be reached</h1>
           <p class="library-empty-text">No books downloaded to this browser yet.</p>
+          <button type="button" class="app-button" on:click={retryLibrary}
+            >{$t$('home.retry')}</button
+          >
         </div>
       {:else if standalone}
         <LibraryEmpty onFiles={onFilesChange} />
