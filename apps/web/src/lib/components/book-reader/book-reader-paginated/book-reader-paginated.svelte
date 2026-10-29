@@ -468,14 +468,15 @@
 
       const scrollPos = calculator.getScrollPosByCharCount(previousIntendedCount);
 
-      if (scrollPos < 0) return;
-
-      concretePageManager.scrollTo(scrollPos, false);
+      if (scrollPos >= 0) concretePageManager.scrollTo(scrollPos, false);
       isResizing = false;
     });
 
   pageChange$.pipe(takeUntil(destroy$)).subscribe((isUser) => {
     if (!calculator) return;
+
+    // A window resize that left the size as it was never re-lays out, so never clears the flag.
+    if (isUser) isResizing = false;
 
     if (!isResizing) {
       showCustomReadingPoint = false;
