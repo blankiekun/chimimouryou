@@ -108,6 +108,18 @@ describe('hook cleanup filters', () => {
     expect(clean('あい', 'c')).toBe('あい');
   });
 
+  it('keeps cutting a finished line while the next one is redrawn in pieces', () => {
+    const clean = hookCleaner({});
+
+    expect(clean('「だって、もう子供じゃないもん」\n')).toBe('「だって、もう子供じゃないもん」\n');
+    expect(clean('「だって、もう子供じゃないもん」あずさ')).toBe('あずさ');
+    expect(clean('「だって、もう子供じゃないもん」あずさ　満面の笑顔で言うのだ。')).toBe(
+      'あずさ　満面の笑顔で言うのだ。'
+    );
+    expect(clean('次のページ')).toBe('次のページ');
+    expect(clean('次のページです')).toBe('次のページです');
+  });
+
   it('drops lines seen lately, per thread, and empty lines', () => {
     const clean = hookCleaner({ recentLines: true, recentSize: 2, markup: true });
 
