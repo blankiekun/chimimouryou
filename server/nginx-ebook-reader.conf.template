@@ -57,6 +57,7 @@ map "$from_proxy:$http_x_forwarded_proto" $forwarded_proto {
 # Service addresses as variables: nginx then starts even when an optional service
 # (import, difficulty) isn't running, and resolves Docker names at request time.
 map $host $account_upstream { default ${ACCOUNT_UPSTREAM}; }
+map $host $api_upstream { default ${API_UPSTREAM}; }
 map $host $import_upstream { default ${IMPORT_UPSTREAM}; }
 map $host $difficulty_upstream { default ${DIFFICULTY_UPSTREAM}; }
 map $host $mokuro_upstream { default ${MOKURO_UPSTREAM}; }
@@ -608,6 +609,55 @@ ${CORS}
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy same-origin always;
     add_header Strict-Transport-Security $hsts always;
+  }
+
+  # The v1 API (server/api): catalog, search and reading data. Signed out on a trusted
+  # network, rows go to the shared account ''.
+  location /api/v1/ {
+${CORS_WITH_SECURITY_HEADERS}
+    auth_request /_account_shared;
+    auth_request_set $account_id $upstream_http_x_account_id;
+    proxy_pass http://$api_upstream;
+    proxy_set_header X-Internal-Token "${INTERNAL_TOKEN}";
+    # Empty (signed out) drops the header: the client's own never reaches the service.
+    proxy_set_header X-Account-Id $account_id;
+    proxy_http_version 1.1;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Proto $forwarded_proto;
+    client_max_body_size 32m;
+  }
+
+  # Series, book details and covers apply to everyone: writes need the series permission.
+  location ~ ^/api/v1/(series|metadata)/|^/api/v1/books/[0-9]+/cover$ {
+${CORS_WITH_SECURITY_HEADERS}
+    auth_request /_account_series_writes;
+    auth_request_set $account_id $upstream_http_x_account_id;
+    proxy_pass http://$api_upstream;
+    proxy_set_header X-Internal-Token "${INTERNAL_TOKEN}";
+    # Empty (signed out) drops the header: the client's own never reaches the service.
+    proxy_set_header X-Account-Id $account_id;
+    proxy_http_version 1.1;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Proto $forwarded_proto;
+    client_max_body_size 10m;
+  }
+
+  # Windows game records: signed-in accounts only.
+  location ~ ^/api/v1/games(/|$) {
+${CORS_WITH_SECURITY_HEADERS}
+    auth_request /_account_auth;
+    auth_request_set $account_id $upstream_http_x_account_id;
+    proxy_pass http://$api_upstream;
+    proxy_set_header X-Internal-Token "${INTERNAL_TOKEN}";
+    # Empty (signed out) drops the header: the client's own never reaches the service.
+    proxy_set_header X-Account-Id $account_id;
+    proxy_http_version 1.1;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Proto $forwarded_proto;
+    client_max_body_size 100m;
   }
 
   location /calibre/ {

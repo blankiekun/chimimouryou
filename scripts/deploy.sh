@@ -92,6 +92,11 @@ run env LANG=C.UTF-8 VERSION="$VERSION" bash -s <<'EOF'
     echo "Deploy failed: the previous images run again" >&2
     exit 1
   fi
+  # Fill library.db's books, then copy the sync folders in (idempotent; the folders stay as they are).
+  {
+    $compose run --rm --no-deps -T catalog build-calibre-catalog /library /data/state/catalog/catalog.json \
+      && $compose run --rm --no-deps -T api python3 /app/api/migrate.py --apply
+  } || echo "Migration to the API database failed; the old sync folders are untouched" >&2
   docker image prune -f >/dev/null
   if [ -d /run/systemd/system ]; then
     /usr/local/bin/ebook-update install || echo "Updates from the admin panel stay off (see above)"
