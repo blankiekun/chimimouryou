@@ -254,5 +254,86 @@ class WriteTest(ServiceTestCase):
             self.assertEqual([row['data'] for row in body['metadata']], [{'a': 1}])
 
 
+PNG = b'\x89PNG\r\n\x1a\n' + b'0' * 16
+
+
+class FileTest(ServiceTestCase):
+    def setUp(self):
+        super().setUp()
+        self.books([catalog_book(1, '猫', added=1)])
+        self.book = self.book_id('uuid-1')
+
+    def test_text_round_trip(self):
+        import gzip
+        text = {'elementHtml': '<p>猫</p>', 'sections': [{'reference': 'a'}], 'styleSheet': 'p{}',
+                'blobs': {'x': 'y'}, 'coverImage': 'z'}
+        path = f'/api/v1/books/{self.book}/text'
+        self.assertEqual(self.request('GET', path)[0], 404)
+        self.assertEqual(self.call('PUT', path, gzip.compress(json.dumps(text).encode()),
+                                   headers={'Content-Type': 'application/gzip'}), (200, {}))
+        status, headers, data = self.request('GET', path)
+        self.assertEqual((status, headers['Content-Type'], headers['Content-Encoding']),
+                         (200, 'application/json', 'gzip'))
+        self.assertEqual(json.loads(gzip.decompress(data)),
+                         {'elementHtml': '<p>猫</p>', 'sections': [{'reference': 'a'}], 'styleSheet': 'p{}'})
+        self.assertTrue(os.path.exists(apidb.text_path(service.API_STATE_DIR, self.book)))
+
+    def test_text_rejects_bad_gzip_and_bombs(self):
+        import zlib
+        path = f'/api/v1/books/{self.book}/text'
+        gzip_headers = {'Content-Type': 'application/gzip'}
+        self.assertEqual(self.call('PUT', path, b'not gzip', headers=gzip_headers)[0], 400)
+        compressor = zlib.compressobj(1, zlib.DEFLATED, 31)
+        chunk = b'\0' * (1 << 20)
+        bomb = b''.join(compressor.compress(chunk) for _ in range(300)) + compressor.flush()
+        self.assertEqual(self.call('PUT', path, bomb, headers=gzip_headers)[0], 400)
+        import gzip
+        missing = gzip.compress(json.dumps({'elementHtml': ''}).encode())
+        self.assertEqual(self.call('PUT', path, missing, headers=gzip_headers)[0], 400)
+        self.assertEqual(self.request('GET', path)[0], 404)
+
+    def test_cover_type_checked(self):
+        path = f'/api/v1/books/{self.book}/cover'
+        self.assertEqual(self.request('GET', path)[0], 404)
+        self.assertEqual(self.call('PUT', path, PNG, headers={'Content-Type': 'image/jpeg'})[0], 415)
+        self.assertEqual(self.call('PUT', path, b'<svg/>', headers={'Content-Type': 'image/svg+xml'})[0], 415)
+        jpeg = b'\xff\xd8\xff' + b'0' * 16
+        self.assertEqual(self.call('PUT', path, jpeg, headers={'Content-Type': 'image/jpeg'})[0], 200)
+        self.assertEqual(self.call('PUT', path, PNG, headers={'Content-Type': 'image/png'})[0], 200)
+        status, headers, data = self.request('GET', path)
+        self.assertEqual((status, headers['Content-Type'], headers['X-Content-Type-Options'], data),
+                         (200, 'image/png', 'nosniff', PNG))
+        self.assertIn('sandbox', headers['Content-Security-Policy'])
+        self.assertEqual(sorted(os.listdir(os.path.join(service.API_STATE_DIR, 'covers'))), [f'{self.book}.png'])
+
+    def test_games_round_trip_and_tombstone(self):
+        name = urllib.request.quote('ゲーム/1', safe='')
+        game = b'PK\x03\x04' + b'0' * 16
+        zip_headers = {'Content-Type': 'application/zip'}
+        self.assertEqual(self.call('PUT', f'/api/v1/games/{name}?modified=5', game, ACCOUNT_A, zip_headers)[0], 200)
+        self.assertEqual(self.call('PUT', f'/api/v1/games/{name}?modified=4', game, ACCOUNT_A, zip_headers)[0], 409)
+        self.assertEqual(self.call('PUT', f'/api/v1/games/{name}?modified=6', b'nope', ACCOUNT_A, zip_headers)[0],
+                         415)
+        self.assertEqual(self.call('PUT', f'/api/v1/games/{name}', game, ACCOUNT_A, zip_headers)[0], 400)
+        status, body = self.call('GET', '/api/v1/games', account=ACCOUNT_A)
+        self.assertEqual([(g['name'], g['size'], g['modified']) for g in body['games']], [('ゲーム/1', 20, 5)])
+        self.assertEqual(self.request('GET', f'/api/v1/games/{name}', account=ACCOUNT_A)[2], game)
+        self.assertEqual(self.request('GET', f'/api/v1/games/{name}', account=ACCOUNT_B)[0], 404)
+        file = apidb.game_path(service.ACCOUNT_DATA_DIR, ACCOUNT_A, 'ゲーム/1')
+        self.assertTrue(os.path.exists(file))
+        self.assertEqual(self.call('DELETE', f'/api/v1/games/{name}?modified=7', account=ACCOUNT_A)[0], 200)
+        self.assertFalse(os.path.exists(file))
+        self.assertEqual(self.call('GET', '/api/v1/games', account=ACCOUNT_A)[1], {'games': []})
+        self.assertEqual(self.request('GET', f'/api/v1/games/{name}', account=ACCOUNT_A)[0], 404)
+        [row] = self.call('GET', '/api/v1/sync?since=0', account=ACCOUNT_A)[1]['games']
+        self.assertTrue(row['deleted'])
+        self.assertEqual(self.call('PUT', '/api/v1/games/%01x?modified=1', game, ACCOUNT_A, zip_headers)[0], 400)
+
+    def test_games_need_account(self):
+        self.assertEqual(self.call('GET', '/api/v1/games')[0], 403)
+        self.assertEqual(self.call('PUT', '/api/v1/games/g?modified=1', b'PK\x03\x04',
+                                   headers={'Content-Type': 'application/zip'})[0], 403)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -4,8 +4,10 @@ The api service, the catalog builder and the migration all write through this mo
 replaced by one with a newer `modified`, and every change takes the next value of the shared rev counter.
 """
 
+import hashlib
 import json
 import os
+import tempfile
 import re
 import sqlite3
 import threading
@@ -275,3 +277,25 @@ def upsert_books(connection: sqlite3.Connection, books: list[dict], seed_titles:
                                (*changes.values(), now_ms, rev(), row['id']))
     return {row['key']: row['unique_title']
             for row in connection.execute('SELECT key, unique_title FROM books WHERE deleted = 0')}
+
+
+def text_path(state_dir: str, book_id: int) -> str:
+    """A book's text copy (the client's parsed HTML without images), gzipped JSON."""
+    return os.path.join(state_dir, 'text', f'{book_id}.json.gz')
+
+
+def game_path(accounts_dir: str, account: str, name: str) -> str:
+    """A Windows game record (they aren't catalog books, so they go by title, hashed for the file name)."""
+    return os.path.join(accounts_dir, account, 'games', hashlib.sha256(name.encode()).hexdigest()[:32] + '.zip')
+
+
+def write_atomic(path: str, data: bytes):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix='.tmp-')
+    try:
+        with os.fdopen(fd, 'wb') as f:
+            f.write(data)
+        os.replace(tmp, path)
+    except BaseException:
+        os.unlink(tmp)
+        raise

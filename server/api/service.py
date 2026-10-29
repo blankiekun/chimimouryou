@@ -6,14 +6,18 @@ X-Account-Id; none means a signed-out reader on a trusted network, whose rows ar
 Usage: service.py [serve]
 """
 
+import glob
+import gzip
 import hmac
+import io
 import json
 import os
 import re
 import shutil
 import sys
+import unicodedata
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 import apidb
 
@@ -28,6 +32,12 @@ VERSION = os.environ.get('VERSION', 'docker')
 MAX_JSON_BYTES = 10 * 1024 * 1024
 DATE_RE = re.compile(r'\d{4}-\d{2}-\d{2}')
 HID_RE = re.compile(r'[A-Za-z0-9-]{1,100}')
+MAX_TEXT_BYTES = 32 * 1024 * 1024
+MAX_TEXT_UNPACKED_BYTES = 256 * 1024 * 1024
+MAX_COVER_BYTES = 10 * 1024 * 1024
+MAX_GAME_BYTES = 100 * 1024 * 1024
+TEXT_KEYS = {'elementHtml': str, 'sections': list, 'styleSheet': str}
+COVER_TYPES = {'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif'}
 
 db: apidb.Database
 
@@ -90,6 +100,37 @@ def book_json(row) -> dict:
         'size': row['size'], 'cover': row['cover'], 'vn': bool(row['vn']), 'deleted': bool(row['deleted']),
         'rev': row['rev'],
     }
+
+
+def image_type(data: bytes) -> str | None:
+    """The image type from the magic bytes."""
+    if data.startswith(b'\xff\xd8\xff'):
+        return 'image/jpeg'
+    if data.startswith(b'\x89PNG\r\n\x1a\n'):
+        return 'image/png'
+    if data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+        return 'image/webp'
+    if data[:6] in (b'GIF87a', b'GIF89a'):
+        return 'image/gif'
+    return None
+
+
+def gunzip(data: bytes, limit: int) -> bytes:
+    """Decompresses up to limit bytes (more is refused: a gzip bomb)."""
+    out = bytearray()
+    try:
+        with gzip.GzipFile(fileobj=io.BytesIO(data)) as f:
+            while chunk := f.read(1024 * 1024):
+                out += chunk
+                if len(out) > limit:
+                    raise ApiError(400, 'Too large unpacked')
+    except (OSError, EOFError):
+        raise ApiError(400, 'Not gzip') from None
+    return bytes(out)
+
+
+def cover_files(book: int) -> list[str]:
+    return glob.glob(os.path.join(glob.escape(API_STATE_DIR), 'covers', f'{book}.*'))
 
 
 def reject_constant(name: str):
@@ -296,6 +337,113 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError(400, 'Bad data')
         return self.put('book_metadata', {'book': book}, body['modified'], {'data': self.data_of(body)})
 
+    # -- files
+
+    def put_text(self, match):
+        book = self.book_of(match)
+        data = gunzip(self.read_body(('application/gzip',), MAX_TEXT_BYTES), MAX_TEXT_UNPACKED_BYTES)
+        try:
+            text = json.loads(data, parse_constant=reject_constant)
+        except ValueError:
+            raise ApiError(400, 'Invalid JSON') from None
+        if not isinstance(text, dict) or not all(isinstance(text.get(k), t) for k, t in TEXT_KEYS.items()):
+            raise ApiError(400, 'Expected elementHtml, sections and styleSheet')
+        # Text only: no images (blobs) or cover, which the server has in the library.
+        kept = {key: text[key] for key in TEXT_KEYS}
+        apidb.write_atomic(apidb.text_path(API_STATE_DIR, book), gzip.compress(apidb.to_json(kept).encode()))
+        return 200, {}
+
+    def get_text(self, match):
+        book = self.book_of(match)
+        try:
+            with open(apidb.text_path(API_STATE_DIR, book), 'rb') as f:
+                data = f.read()
+        except FileNotFoundError:
+            raise ApiError(404, 'No text copy') from None
+        return 200, data, {'Content-Type': 'application/json', 'Content-Encoding': 'gzip'}
+
+    def put_cover(self, match):
+        book = self.book_of(match)
+        content_type = self.headers.get('Content-Type', '').split(';')[0].strip().lower()
+        data = self.read_body(tuple(COVER_TYPES), MAX_COVER_BYTES)
+        if image_type(data) != content_type:
+            raise ApiError(415, 'Not that image type')
+        path = os.path.join(API_STATE_DIR, 'covers', f'{book}.{COVER_TYPES[content_type]}')
+        apidb.write_atomic(path, data)
+        for other in cover_files(book):
+            if other != path:
+                os.unlink(other)
+        return 200, {}
+
+    def get_cover(self, match):
+        book = self.book_of(match)
+        for path in cover_files(book):
+            content_type = next((t for t, ext in COVER_TYPES.items() if path.endswith('.' + ext)), None)
+            if content_type:
+                with open(path, 'rb') as f:
+                    return 200, f.read(), {'Content-Type': content_type, 'X-Content-Type-Options': 'nosniff',
+                                           'Content-Security-Policy': "sandbox; default-src 'none'"}
+        raise ApiError(404, 'No cover')
+
+    def game_name(self, match) -> str:
+        self.needs_account()
+        try:
+            name = unquote(match[1], errors='strict')
+        except UnicodeDecodeError:
+            raise ApiError(400, 'Bad name') from None
+        if not 1 <= len(name) <= 300 or any(unicodedata.category(c) == 'Cc' for c in name):
+            raise ApiError(400, 'Bad name')
+        return name
+
+    def modified_param(self) -> int:
+        if 'modified' not in self.query:
+            raise ApiError(400, 'Bad modified')
+        return int_param(self.query, 'modified', 0, 0, 2 ** 53 - 1)
+
+    def get_games(self, match):
+        self.needs_account()
+        rows = db.query('SELECT * FROM games WHERE account = ? AND deleted = 0 ORDER BY name', (self.account,))
+        return 200, {'games': [row_json('games', row) for row in rows]}
+
+    def put_game(self, match):
+        name, modified = self.game_name(match), self.modified_param()
+        data = self.read_body(('application/zip',), MAX_GAME_BYTES, ACCOUNT_DATA_DIR)
+        if not data.startswith(b'PK\x03\x04'):
+            raise ApiError(415, 'Not a zip')
+        return self.write_game(name, modified, data)
+
+    def delete_game(self, match):
+        return self.write_game(self.game_name(match), self.modified_param(), None)
+
+    def write_game(self, name: str, modified: int, data: bytes | None):
+        path = apidb.game_path(ACCOUNT_DATA_DIR, self.account, name)
+
+        def work(connection):
+            values = {'size': len(data), 'deleted': 0} if data is not None else {'size': 0, 'deleted': 1}
+            status, row = apidb.put_row(connection, apidb.Rev(connection), 'games',
+                                        {'account': self.account, 'name': name}, modified, values)
+            # In the transaction: a failed file write leaves the row as it was.
+            if status == 'written' and data is not None:
+                apidb.write_atomic(path, data)
+            elif status == 'written' and os.path.exists(path):
+                os.unlink(path)
+            return status, row
+        status, row = db.transaction(work)
+        if status == 'conflict':
+            raise ApiError(409, 'Newer on the server', {'row': row_json('games', row)})
+        return 200, {'rev': row['rev']}
+
+    def get_game(self, match):
+        name = self.game_name(match)
+        rows = db.query('SELECT 1 FROM games WHERE account = ? AND name = ? AND deleted = 0', (self.account, name))
+        try:
+            if rows:
+                with open(apidb.game_path(ACCOUNT_DATA_DIR, self.account, name), 'rb') as f:
+                    return 200, f.read(), {'Content-Type': 'application/zip'}
+        except FileNotFoundError:
+            pass
+        raise ApiError(404, 'No such game')
+
     ROUTES = [
         ('GET', re.compile(r'/api/v1/version'), get_version),
         ('GET', re.compile(r'/api/v1/catalog'), get_catalog),
@@ -310,6 +458,14 @@ class Handler(BaseHTTPRequestHandler):
         ('PUT', re.compile(r'/api/v1/goals/([^/]+)'), put_goals),
         ('PUT', re.compile(r'/api/v1/series/(\d+)'), put_series),
         ('PUT', re.compile(r'/api/v1/metadata/(\d+)'), put_metadata),
+        ('PUT', re.compile(r'/api/v1/books/(\d+)/text'), put_text),
+        ('GET', re.compile(r'/api/v1/books/(\d+)/text'), get_text),
+        ('PUT', re.compile(r'/api/v1/books/(\d+)/cover'), put_cover),
+        ('GET', re.compile(r'/api/v1/books/(\d+)/cover'), get_cover),
+        ('GET', re.compile(r'/api/v1/games'), get_games),
+        ('PUT', re.compile(r'/api/v1/games/([^/]+)'), put_game),
+        ('GET', re.compile(r'/api/v1/games/([^/]+)'), get_game),
+        ('DELETE', re.compile(r'/api/v1/games/([^/]+)'), delete_game),
     ]
 
     def dispatch(self, method: str):
