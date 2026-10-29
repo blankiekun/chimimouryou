@@ -1,4 +1,4 @@
-# The Python services (scripts/calibre/). One file, three targets:
+# The Python services (server/). One file, three targets:
 #   base        accounts and the catalog builder (Python standard library + Pillow)
 #   import      + Calibre, for adding books to the library (large)
 #   difficulty  + Sudachi and yurigana, for difficulty estimates and word lists
@@ -9,9 +9,9 @@ FROM debian:trixie-slim AS base
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 python3-pil ca-certificates \
   && rm -rf /var/lib/apt/lists/*
-COPY scripts/calibre/build-catalog.py scripts/calibre/assign-series.py /app/
-COPY scripts/calibre/account /app/account
-COPY scripts/calibre/import /app/import
+COPY server/build-catalog.py server/assign-series.py /app/
+COPY server/account /app/account
+COPY server/import /app/import
 RUN ln -s /app/build-catalog.py /usr/local/bin/build-calibre-catalog \
   && printf '#!/bin/sh\nexec python3 /app/account/service.py "$@"\n' > /usr/local/bin/ebook-account \
   && chmod 755 /app/build-catalog.py /usr/local/bin/ebook-account
@@ -43,18 +43,19 @@ FROM base AS difficulty
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3-venv \
   && rm -rf /var/lib/apt/lists/*
-COPY scripts/calibre/jiten/requirements.txt /app/jiten/requirements.txt
+COPY engine/requirements.txt /app/jiten/requirements.txt
 RUN python3 -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir -r /app/jiten/requirements.txt
-COPY scripts/calibre/jiten /app/jiten
+COPY engine /app/jiten
+COPY server/jiten /app/jiten
 CMD ["/opt/venv/bin/python", "-W", "ignore", "/app/jiten/service.py", "serve"]
 
 FROM base AS mokuro
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3-venv libgl1 libglib2.0-0 \
   && rm -rf /var/lib/apt/lists/*
-COPY scripts/calibre/mokuro/requirements.txt /app/mokuro/requirements.txt
+COPY server/mokuro/requirements.txt /app/mokuro/requirements.txt
 RUN python3 -m venv /opt/mokuro && /opt/mokuro/bin/pip install --no-cache-dir -r /app/mokuro/requirements.txt
-COPY scripts/calibre/mokuro /app/mokuro
+COPY server/mokuro /app/mokuro
 # The models (about 450 MB) are downloaded on the first volume and kept in /data.
 ENV HOME=/data/state/mokuro HF_HOME=/data/state/mokuro/models
 CMD ["python3", "/app/mokuro/service.py", "serve"]

@@ -31,3 +31,6 @@ cp -r "$vnbox" apps/web/build/vn/vnbox
 
 # Settings → Themes links to the theme guide (the web image copies it the same way).
 cp themes.md apps/web/build/themes.md
+
+# No file from server/ in the published site (the engine it needs lives in engine/).
+python3 scripts/check-standalone-artifact.py apps/web/build

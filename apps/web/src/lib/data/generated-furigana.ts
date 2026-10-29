@@ -6,7 +6,7 @@
 
 /**
  * Generated furigana (#17): the difficulty service's readings file for a Calibre book
- * (yurigana's readings in context, scripts/calibre/jiten/readings_file.py) turned into
+ * (yurigana's readings in context, engine/readings_file.py) turned into
  * `<ruby class="ttu-gen-ruby">` in the book's HTML before it is rendered. `rt` isn't
  * counted, so character counts (bookmarks, highlights) don't change.
  */

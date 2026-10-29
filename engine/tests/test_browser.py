@@ -1,4 +1,4 @@
-"""Tests for the analysis tools' Pyodide entry point (scripts/calibre/jiten/browser.py): the tokens it
+"""Tests for the analysis tools' Pyodide entry point (engine/browser.py): the tokens it
 gives from Sudachi's rows, and the Reader read a book's two parts share."""
 import os
 import sys
@@ -6,7 +6,7 @@ import unittest
 from unittest import mock
 
 HERE = os.path.dirname(__file__)
-sys.path.insert(0, os.path.join(HERE, '..', 'jiten'))
+sys.path.insert(0, os.path.join(HERE, '..'))
 import browser  # noqa: E402
 
 ROWS = {

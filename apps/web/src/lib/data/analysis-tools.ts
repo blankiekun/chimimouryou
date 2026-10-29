@@ -7,7 +7,7 @@
 /**
  * Analysis tools (standalone edition, desktop browsers): optional downloads (Settings) of Sudachi,
  * Pyodide and yurigana (scripts/analysis-tools/build.sh) that make a stored book's data in the
- * browser, in the formats the server's difficulty service gives (scripts/calibre/jiten/browser.py).
+ * browser, in the formats the server's difficulty service gives (engine/browser.py).
  * Two features, each its own pipeline and download: difficulty estimates (the estimate: the fast
  * core's numbers, core.ts, without Pyodide; and the word list for Book words and word coverage;
  * also the frequency pack and the core's list) and generated furigana (the readings file). Files

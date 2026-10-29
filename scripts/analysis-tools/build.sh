@@ -6,7 +6,7 @@
 #                                with sudachi-wasm.patch: wasm32 build fixes and dict_alloc/initialize_from_ptr,
 #                                so the dictionary streams into wasm memory without a copy, and tokenize_rows
 #                                (a text's morphemes as one string, ~2.6x faster than tokenize_raw's objects)
-#   core.dic.gz                  SudachiDict-core, the server's dictionary (scripts/calibre/jiten/requirements.txt)
+#   core.dic.gz                  SudachiDict-core, the server's dictionary (engine/requirements.txt)
 #   pyodide/                     Pyodide (MPL-2.0), the core files only (a lock file without packages)
 #   analysis.zip                 yurigana (pinned like the server) and the difficulty service's Python
 #   reader.ygp.gz, frequency.ygp.gz  yurigana's Reader and the frequency table, packed as the server packs them
@@ -34,14 +34,14 @@ declare -A BINARYEN_SHA256=(
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
 out=${ANALYSIS_TOOLS_OUT:-$root/apps/web/build/analysis-tools}
-jiten=$root/scripts/calibre/jiten
+jiten=$root/engine
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 yurigana=$(grep -o 'https://github.com/blankiekun/yurigana/archive/refs/tags/[^ ]*\.tar\.gz' "$jiten/requirements.txt")
 yurigana_sha256=$(grep -o 'yurigana/archive/refs/tags/[^ ]*\.tar\.gz#sha256=[0-9a-f]\{64\}' "$jiten/requirements.txt" | sed 's/.*=//' || true)
-[ -n "$yurigana_sha256" ] || { echo "No #sha256= for yurigana in scripts/calibre/jiten/requirements.txt" >&2; exit 1; }
+[ -n "$yurigana_sha256" ] || { echo "No #sha256= for yurigana in engine/requirements.txt" >&2; exit 1; }
 grep -q "SudachiDict-core==$SUDACHI_DICT" "$jiten/requirements.txt" ||
-  { echo "SUDACHI_DICT differs from scripts/calibre/jiten/requirements.txt" >&2; exit 1; }
+  { echo "SUDACHI_DICT differs from engine/requirements.txt" >&2; exit 1; }
 mkdir -p "$out/pyodide"
 
 # Sudachi
@@ -112,7 +112,7 @@ gzip -9 -n -c "$work/core-frequency.tsv" > "$out/core-frequency.tsv.gz"
 # The version names the Python and the core's list too (a hash of their files), so a change there redoes the
 # books' analyses. Files only difficulty estimates need: the frequency pack and the core's list; only generated
 # furigana: the reader pack (word lists take Sudachi's readings without it).
-# `engine`: the difficulty engine's fingerprint (scripts/calibre/jiten/engine.py), which the browser's
+# `engine`: the difficulty engine's fingerprint (engine/engine.py), which the browser's
 # estimates carry; it must be the release's (apps/web/src/lib/data/difficulty-engine.json).
 python3 - "$out" "$work" "$SUDACHI_DICT" "$PYODIDE" "$(basename "$yurigana" .tar.gz)" "$jiten" \
   "$root/apps/web/src/lib/data/difficulty-engine.json" <<'EOF'

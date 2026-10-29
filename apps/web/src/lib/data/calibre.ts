@@ -6,7 +6,7 @@
 
 /**
  * Access to the self-hosted Calibre library, served read-only by nginx
- * (see scripts/calibre/). Not part of upstream.
+ * (see server/). Not part of upstream.
  */
 
 import type { CoreNumbers } from '$lib/functions/analysis/core';
@@ -55,7 +55,7 @@ export interface CalibreDifficulty {
   uniqueWords?: number;
   tokens?: number;
   /**
-   * Fingerprint of the engine that made it (scripts/calibre/jiten/engine.py); older estimates have
+   * Fingerprint of the engine that made it (engine/engine.py); older estimates have
    * none. `isCanonicalEstimate` tells whether it is this release's.
    */
   engine?: string;

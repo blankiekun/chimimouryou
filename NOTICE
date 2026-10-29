@@ -6,9 +6,9 @@ This project is a fork of ッツ Ebook Reader
 Authors, licensed under the BSD 3-Clause License (see LICENSE). It is not
 affiliated with or endorsed by the ッツ Ebook Reader authors.
 
-The difficulty estimates (scripts/calibre/jiten/) include material from Jiten
+The difficulty estimates (engine/) include material from Jiten
 (https://github.com/Sirush/Jiten), licensed under the Apache License 2.0 (see
-scripts/calibre/jiten/LICENSE):
+engine/LICENSE):
 - deconjugator.json, Jiten's deconjugation rules;
 - features.py and deconjugator.py, a Python port of Jiten's feature extraction;
 - chimi-difficulty*.onnx, models trained on Jiten's features and
@@ -16,17 +16,17 @@ scripts/calibre/jiten/LICENSE):
 These files were modified or derived for this project. Jiten is not affiliated
 with this project.
 
-scripts/calibre/jiten/data/jiten_freq_global.zip is Jiten's word frequency
+engine/data/jiten_freq_global.zip is Jiten's word frequency
 list from jiten.moe (https://jiten.moe/frequency-dictionaries), by Jiten,
 licensed under CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/),
 redistributed unmodified; files packed from it (frequency.ygp) are under the
-same licence. See scripts/calibre/jiten/data/README.md.
+same licence. See engine/data/README.md.
 
-scripts/calibre/jiten/kanji-grades.json is derived from KANJIDIC2 by the
+engine/kanji-grades.json is derived from KANJIDIC2 by the
 Electronic Dictionary Research and Development Group
 (https://www.edrdg.org/kanjidic/), licensed under CC BY-SA 4.0; it is
 distributed under the same licence.
-scripts/calibre/jiten/goshu.json.gz holds word origins (語種) from UniDic
+engine/goshu.json.gz holds word origins (語種) from UniDic
 (https://clrd.ninjal.ac.jp/unidic/, via unidic-lite), Copyright (c) 2011-2013,
 The UniDic Consortium, used under its BSD licence.
 The readings in context and the "Known" furigana check are yurigana
@@ -36,7 +36,7 @@ from its release; its kanji-readings.json is derived from KANJIDIC2 (CC BY-SA
 (https://www.aozora.gr.jp/) and on sentences from Tatoeba
 (https://tatoeba.org/), CC BY 2.0 FR. See yurigana's NOTICE. Its
 jmdict-pairs.json.gz, from JMdict (EDRDG, CC BY-SA 4.0, below), also gives the
-word lists the compounds they join (scripts/calibre/jiten/compound_merge.py),
+word lists the compounds they join (engine/compound_merge.py),
 kept in the frequency pack the server and the analysis tools build.
 
 The built-in dictionary's one-tap download (dictionaries/JMdict_english.zip in

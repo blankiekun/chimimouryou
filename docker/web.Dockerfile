@@ -34,7 +34,7 @@ RUN mkdir -p build/dictionaries && node -e "fetch(process.argv[1]).then((r) => {
 
 FROM nginx:1.29-alpine
 COPY --from=build /src/apps/web/build /srv/www
-COPY scripts/calibre/nginx-ebook-reader.conf.template scripts/calibre/render-nginx.sh /opt/ebook-reader/
+COPY server/nginx-ebook-reader.conf.template server/render-nginx.sh /opt/ebook-reader/
 COPY docker/40-ebook-reader.sh /docker-entrypoint.d/
 # Checked every second while starting, so the services (which wait for this) follow
 # quickly: until the account service is up, every access check fails.

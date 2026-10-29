@@ -15,3 +15,5 @@ data
 apps/web/static/vn/vnbox
 # The desktop app is built on its own (apps/desktop), never in the images
 apps/desktop
+# Engine tests (the difficulty image copies engine/ whole)
+engine/tests

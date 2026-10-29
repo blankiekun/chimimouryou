@@ -8,9 +8,9 @@ import { describe, expect, it } from 'vitest';
 import { getParagraphNodes } from '$lib/components/book-reader/get-paragraph-nodes';
 import { getCharacterCount, isCountedCharacter } from './get-character-count';
 import { isNodeGaiji } from './is-node-gaiji';
-// Shared with the difficulty service's readings files (scripts/calibre/jiten/readings_file.py,
+// Shared with the difficulty service's readings files (engine/readings_file.py,
 // test_readings_file.py): both must count a book's HTML the same way.
-import fixtureJson from '../../../../../scripts/calibre/tests/fixtures/character-count.json?raw';
+import fixtureJson from '../../../../../engine/tests/fixtures/character-count.json?raw';
 
 const fixture = JSON.parse(fixtureJson) as { html: string; characters: number; counted: string };
 

@@ -2,7 +2,7 @@
 
 Two pieces of the app decide how a kanji word is read. Both come from
 [yurigana](https://github.com/blankiekun/yurigana), a separate package pinned to a release
-(`scripts/calibre/jiten/requirements.txt` and `apps/web/package.json`). Its README describes
+(`engine/requirements.txt` and `apps/web/package.json`). Its README describes
 the engine: the order of readings, the flavour rule, the reading model, certainty, how to
 build a table and the accuracy numbers.
 
@@ -16,7 +16,7 @@ Neither one changes the book or the difficulty scores.
 
 ## Word-list readings (difficulty service)
 
-`Analyzer.analyse` in [`scripts/calibre/jiten/features.py`](../scripts/calibre/jiten/features.py)
+`Analyzer.analyse` in [`engine/features.py`](../engine/features.py)
 counts a reading for each occurrence of a word in `Analysis.readings`, and `save_words` in
 `service.py` writes the rows. The readings are yurigana's `Reader`, the same one readings files
 use (below), so both agree: the book's ruby (`book_text`, `aozora_text` and `vn_text` give it
@@ -82,7 +82,7 @@ entries for those forms are dropped.
 
 ## Readings files
 
-`scripts/calibre/jiten/readings_file.py`, made on request by the difficulty service
+`engine/readings_file.py`, made on request by the difficulty service
 (`POST /calibre/difficulty/api/readings/<id>`, docs/CONFIGURATION.md) into
 `state/difficulty/readings/<id>.json.gz`. The reader does not use them yet.
 
@@ -91,7 +91,7 @@ entries for those forms are dropped.
 as `sanitizeForFilename` writes it). It is counted exactly like the reader counts bookmarks
 (`get-paragraph-nodes.ts`, `get-character-count.ts`): `<rt>` and `[hidden]`/`[aria-hidden]`
 subtrees left out, a gaiji image is one character, the same set of counted characters, code
-points. `scripts/calibre/tests/fixtures/character-count.json` is checked by both sides
+points. `engine/tests/fixtures/character-count.json` is checked by both sides
 (`test_readings_file.py`, `character-count-fixture.test.ts`). The book's ruby goes to yurigana
 as hints, like `book_text`.
 

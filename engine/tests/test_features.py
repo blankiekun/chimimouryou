@@ -1,5 +1,5 @@
 """Tests for the parts of jiten/features.py that don't need Sudachi. Run from the repo root:
-python3 -m unittest discover -s scripts/calibre/tests
+python3 -m unittest discover -s server/tests
 """
 import os
 import sys
@@ -7,7 +7,7 @@ import tempfile
 import unittest
 import zipfile
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'jiten'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from features import _origin, aozora_text, book_text, to_hiragana, vn_text  # noqa: E402
 
 try:

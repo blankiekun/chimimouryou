@@ -7,7 +7,7 @@
 /**
  * Which difficulty engine made an estimate. Every estimate (the server's difficulty service and the
  * browser's analysis tools) carries `engine`, a fingerprint of the models, the scoring code, the
- * frequency list, yurigana and the Sudachi dictionary (scripts/calibre/jiten/engine.py), and
+ * frequency list, yurigana and the Sudachi dictionary (engine/engine.py), and
  * difficulty-engine.json is this release's. An estimate from another engine (an older one, a
  * server's own frequency list or term dictionaries) is still shown, but only canonical ones count
  * where estimates must be comparable (reading rank). Not part of upstream.

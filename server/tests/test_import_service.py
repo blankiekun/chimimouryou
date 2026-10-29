@@ -1,5 +1,5 @@
 """Tests for import/service.py with fake calibredb and catalog builder. Run from the repo root:
-python3 -m unittest discover -s scripts/calibre/tests
+python3 -m unittest discover -s server/tests
 """
 import importlib.util
 import io

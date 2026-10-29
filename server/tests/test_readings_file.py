@@ -1,4 +1,4 @@
-"""Tests for readings files (scripts/calibre/jiten/readings_file.py) and the difficulty service's
+"""Tests for readings files (engine/readings_file.py) and the difficulty service's
 readings queue. The reader is faked: yurigana's Reader needs Sudachi."""
 import gzip
 import importlib.util
@@ -13,7 +13,7 @@ import zipfile
 from typing import NamedTuple
 
 HERE = os.path.dirname(__file__)
-sys.path.insert(0, os.path.join(HERE, '..', 'jiten'))
+sys.path.insert(0, os.path.join(HERE, '..', '..', 'engine'))
 import readings_file  # noqa: E402
 
 
@@ -76,7 +76,7 @@ def build(html, *words):
 class CountingTest(unittest.TestCase):
     def test_the_shared_fixture(self):
         # The same fixture is counted by the reader in character-count-fixture.test.ts.
-        with open(os.path.join(HERE, 'fixtures', 'character-count.json'), encoding='utf-8') as f:
+        with open(os.path.join(HERE, '..', '..', 'engine', 'tests', 'fixtures', 'character-count.json'), encoding='utf-8') as f:
             fixture = json.load(f)
         text, hints, counts = readings_file.extract(fixture['html'])
         self.assertEqual(text, fixture['text'])

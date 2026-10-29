@@ -2,8 +2,11 @@
 import gzip
 import json
 import os
+import sys
 import tempfile
 import unittest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'engine'))
 
 
 class ServiceTest(unittest.TestCase):
