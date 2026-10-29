@@ -397,7 +397,7 @@
         ><Fa icon={faXmark} /></button
       >
     </div>
-    <p class="mb-3 text-xs opacity-75">
+    <p class="mb-3 text-small opacity-75">
       {$t$('reader.abSetupHint')}
     </p>
     <label class="sheet-field">
@@ -430,7 +430,7 @@
         />
       </div>
     {/if}
-    <label class="mb-3 flex items-center gap-2 text-xs">
+    <label class="mb-3 flex items-center gap-2 text-small">
       <input type="checkbox" bind:checked={fromCurrentPosition} />
       {$t$('reader.abFromPosition')}
     </label>
@@ -439,14 +439,14 @@
           'reader.abMatch'
         )}{/if}
     </button>
-    {#if error}<p class="pt-2 text-xs text-panel-danger">{error}</p>{/if}
+    {#if error}<p class="pt-2 text-small text-panel-danger">{error}</p>{/if}
   </div>
 {/if}
 
 {#if sheet === 'lines' && audiobook}
   <div class="sheet reader-panel" role="dialog" aria-label={$t$('reader.lines')}>
     <div class="sheet-header">
-      <span class="flex-1 text-xs opacity-70"
+      <span class="flex-1 text-small opacity-70"
         >{$t$('reader.abLinesFound', { found: foundCount, total: cues.length })}</span
       >
       <button
@@ -606,7 +606,7 @@
 
   .player-meta {
     overflow: hidden;
-    font-size: 0.7rem;
+    font-size: var(--type-label);
     font-variant-numeric: tabular-nums;
     opacity: 0.55;
     text-overflow: ellipsis;
@@ -693,7 +693,7 @@
   .line-time {
     flex-shrink: 0;
     padding-top: 0.1rem;
-    font-size: 0.7rem;
+    font-size: var(--type-label);
     font-variant-numeric: tabular-nums;
     opacity: 0.55;
   }

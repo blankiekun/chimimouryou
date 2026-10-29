@@ -77,7 +77,7 @@
   </div>
 
   {#if syncError}
-    <p class="px-4 pb-2 text-xs text-panel-danger md:px-6">{syncError}</p>
+    <p class="px-4 pb-2 text-small text-panel-danger md:px-6">{syncError}</p>
   {/if}
 
   <div class="ann-list">

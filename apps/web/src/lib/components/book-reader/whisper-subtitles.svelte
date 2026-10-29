@@ -84,7 +84,7 @@
   }
 </script>
 
-<span class="flex min-w-0 flex-wrap items-center gap-2 text-xs">
+<span class="flex min-w-0 flex-wrap items-center gap-2 text-small">
   {#if controller}
     <Fa icon={faSpinner} spin />
     <span class="truncate" role="status">{progress}</span>

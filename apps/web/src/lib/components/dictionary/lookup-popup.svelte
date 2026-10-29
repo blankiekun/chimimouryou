@@ -582,7 +582,6 @@
   <Toast label={$t$('lookup.noDictionary')} onclose={() => (emptyNote = false)}>
     <p class="dict-empty-title">{$t$('lookup.noDictionary')}</p>
     <p class="dict-empty-text">
-      {$t$('lookup.noDictionaryText')}
       <a href="{pagePath}/settings?section=dictionary">{$t$('lookup.dictionarySettings')}</a>
     </p>
     <InstallDictionary ondone={() => (emptyNote = false)} />
@@ -735,7 +734,7 @@
   }
 
   .ttu-dict :global(.headword-term rt) {
-    font-size: 0.45em;
+    font-size: 0.5em;
     color: var(--app-muted-fg);
   }
 
@@ -890,7 +889,7 @@
 
   .ttu-dict :global(.pronunciation-disambiguation) {
     color: var(--app-muted-fg);
-    font-size: 0.85em;
+    font-size: 0.875em;
   }
 
   /* Yomitan's display-pronunciation.css */
@@ -960,7 +959,7 @@
 
   .ttu-dict :global(.pronunciation-downstep-notation) {
     color: var(--app-muted-fg);
-    font-size: 0.85em;
+    font-size: 0.875em;
   }
 
   .ttu-dict :global(.pronunciation-graph) {

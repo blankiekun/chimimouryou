@@ -303,7 +303,7 @@
     style:background-color={backgroundColor}
     style:border-color={fontColor}
   >
-    The reader is currently blurred due to an external application (e. g. exstatic)
+    Blurred by an external app (e.g. exstatic)
   </div>
 {/if}
 <div

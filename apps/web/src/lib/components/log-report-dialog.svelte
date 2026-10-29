@@ -195,11 +195,11 @@
       target="_blank"
       rel="noreferrer"
     >
-      Open Repository
+      Open repository
       <Ripple />
     </a>
     <a class={buttonClasses} href={downloadableLog} download="log.json">
-      Download Report
+      Download report
       <Ripple />
     </a>
   </svelte:fragment>
