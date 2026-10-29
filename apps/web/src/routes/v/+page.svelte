@@ -82,6 +82,7 @@
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import AnkiWatcher from '$lib/components/anki-watcher.svelte';
   import VnboxTuning from '$lib/components/vn/vnbox-tuning.svelte';
+  import VnboxDiscs from '$lib/components/vn/vnbox-discs.svelte';
   import VnBacklog from '$lib/components/vn/vn-backlog.svelte';
   import VnSavesSheet from '$lib/components/vn/vn-saves.svelte';
   import {
@@ -1048,6 +1049,9 @@
 
 {#if showMore}
   <ReaderSheet title="More" on:close={() => (showMore = false)}>
+    {#if windows && !blocked && (info?.discs?.length ?? 0) > 1}
+      <VnboxDiscs count={info?.discs?.length ?? 0} {frame} />
+    {/if}
     <ul class="vn-more">
       {#if fullscreenManager.fullscreenEnabled}
         <li>

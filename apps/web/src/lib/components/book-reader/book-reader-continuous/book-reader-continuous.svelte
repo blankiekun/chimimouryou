@@ -785,6 +785,7 @@
     ? `${secondDimensionMaxValue}px`
     : undefined}
   style:max-height={maxHeight ? `${maxHeight}px` : undefined}
+  style:height={verticalMode && height ? `${height}px` : undefined}
   style:padding-left={verticalMode && firstDimensionMargin
     ? `${firstDimensionMargin}px`
     : undefined}

@@ -786,6 +786,15 @@
       : 0
   );
   const bookTop = browser ? readerTopInset(convertRemToPixels(window, 1)) : 0;
+  /** How far up the docked mini player reaches (mini-player.svelte); 0 while it isn't shown */
+  let miniPlayerRoom = $state(0);
+  // The book ends above the mini player: its own 2rem bottom padding (book-reader.svelte's py-8)
+  // already covers part of it, and about 0.5rem stays free between them (glyph boxes overhang).
+  const bookBottom = $derived(
+    browser && miniPlayerRoom && !(panelOpen && panelTab === 'listen')
+      ? Math.max(0, miniPlayerRoom - convertRemToPixels(window, 1))
+      : 0
+  );
   // Continuous: scrolled text passes under the panel's chrome, so the visible book (where jumps
   // land and the position is measured) begins this far from the screen's start edge.
   const edgeOffset = $derived(
@@ -2117,7 +2126,7 @@
         width={bookWidth}
         reserveRight={($containerViewportWidth$ ?? 0) - bookWidth}
         reserveTop={bookTop}
-        height={($containerViewportHeight$ ?? 0) - bookTop}
+        height={($containerViewportHeight$ ?? 0) - bookTop - bookBottom}
         {edgeOffset}
         {fontFeatureSettings}
         {verticalTextOrientation}
@@ -2391,7 +2400,7 @@
 {/if}
 
 {#if !(panelOpen && panelTab === 'listen')}
-  <MiniPlayer {panelOpen} onopen={() => openPanel('listen')} />
+  <MiniPlayer {panelOpen} onopen={() => openPanel('listen')} bind:room={miniPlayerRoom} />
 {/if}
 
 {#if welcomeBackDays && storedExploredCharacter > 0 && absenceTab && !(panelOpen && panelTab === absenceTab.key)}

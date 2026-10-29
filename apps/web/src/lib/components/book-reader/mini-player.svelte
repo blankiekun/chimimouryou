@@ -17,14 +17,33 @@
     /** The panel is open (on another tab): on phones the sheet covers this, so it hides */
     panelOpen: boolean;
     onopen: () => void;
+    /** Out: how far up from the bottom of the window it reaches (px), 0 when not shown */
+    room?: number;
   }
 
-  let { panelOpen, onopen }: Props = $props();
+  let { panelOpen, onopen, room = $bindable(0) }: Props = $props();
+  let box = $state<HTMLElement>();
+
+  $effect(() => {
+    if (!box) return;
+    const el = box;
+    const measure = () => {
+      // Hidden under the phone sheet: keep the room, so the book doesn't reflow behind the sheet.
+      if (el.offsetHeight) room = el.offsetHeight + parseFloat(getComputedStyle(el).bottom);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      room = 0;
+    };
+  });
 </script>
 
 {#if $nowPlaying$}
   {@const now = $nowPlaying$}
   <div
+    bind:this={box}
     class="mini writing-horizontal-tb"
     class:mini-panel-open={panelOpen}
     role="region"
