@@ -30,8 +30,6 @@ INTERNAL_TOKEN_FILE = os.environ.get('INTERNAL_TOKEN_FILE', '/data/state/interna
 MIN_FREE_BYTES = int(os.environ.get('MIN_FREE_MB', '1024')) * 1024 * 1024
 VERSION = os.environ.get('VERSION', 'docker')
 MAX_JSON_BYTES = 10 * 1024 * 1024
-DATE_RE = re.compile(r'\d{4}-\d{2}-\d{2}')
-HID_RE = re.compile(r'[A-Za-z0-9-]{1,100}')
 MAX_TEXT_BYTES = 32 * 1024 * 1024
 MAX_TEXT_UNPACKED_BYTES = 256 * 1024 * 1024
 MAX_COVER_BYTES = 10 * 1024 * 1024
@@ -287,14 +285,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def put_statistics(self, match):
         book, body = self.book_of(match), self.read_json()
-        if not DATE_RE.fullmatch(match[2]):
+        if not apidb.DATE_RE.fullmatch(match[2]):
             raise ApiError(400, 'Bad date')
         return self.put('statistics', {'account': self.account, 'book': book, 'date_key': match[2]},
                         body['modified'], {'data': self.data_of(body)})
 
     def highlight_key(self, match) -> dict:
         book = self.book_of(match)
-        if not HID_RE.fullmatch(match[2]):
+        if not apidb.HID_RE.fullmatch(match[2]):
             raise ApiError(400, 'Bad highlight id')
         return {'account': self.account, 'book': book, 'hid': match[2]}
 
@@ -318,7 +316,7 @@ class Handler(BaseHTTPRequestHandler):
                         {'data': self.data_of(body)})
 
     def put_goals(self, match):
-        if not DATE_RE.fullmatch(match[1]):
+        if not apidb.DATE_RE.fullmatch(match[1]):
             raise ApiError(400, 'Bad date')
         body = self.read_json()
         return self.put('goals', {'account': self.account, 'goal_start': match[1]}, body['modified'],

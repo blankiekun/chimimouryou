@@ -13,6 +13,8 @@ import sqlite3
 import threading
 
 ACCOUNT_RE = re.compile(r'[0-9a-f]{32}')
+DATE_RE = re.compile(r'\d{4}-\d{2}-\d{2}')
+HID_RE = re.compile(r'[A-Za-z0-9-]{1,100}')
 
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS sync_counter (id INTEGER PRIMARY KEY CHECK (id = 1), rev INTEGER NOT NULL);
