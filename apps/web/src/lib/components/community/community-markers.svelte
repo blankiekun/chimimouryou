@@ -28,9 +28,10 @@
   let observed: Element | null = null;
 
   // A rebuild only when the text marked went away (paginated mode swaps sections); continuous
-  // mode holds the whole book and changes inside it all the time.
+  // mode holds the whole book and changes inside it all the time. A live Range whose text is
+  // removed collapses onto the parent that stays, so collapsed is the sign, not isConnected.
   const observer = new MutationObserver(() => {
-    if (!ranges.length || ranges.some(({ range }) => !range.startContainer.isConnected)) {
+    if (!ranges.length || ranges.some(({ range }) => range.collapsed)) {
       schedule(true);
     }
   });
