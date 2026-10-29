@@ -1,0 +1,163 @@
+{
+  "titles": [
+    { "title": "a/b?", "sanitized": "a%2Fb%3F" },
+    { "title": "<x>\\:|%\"", "sanitized": "%3Cx%3E%5C%3A%7C%25%22" },
+    { "title": "star*s*", "sanitized": "star~ttu-star~s~ttu-star~" },
+    { "title": "trailing ", "sanitized": "trailing~ttu-spc~" },
+    { "title": "end.", "sanitized": "end~ttu-dend~" },
+    { "title": "a. ", "sanitized": "a.~ttu-spc~" },
+    { "title": " mid dle.x", "sanitized": " mid dle.x" },
+    { "title": "吾輩は猫である 1", "sanitized": "吾輩は猫である 1" },
+    { "title": "100%", "sanitized": "100%25" }
+  ],
+  "parse": [
+    {
+      "kind": "book",
+      "name": "bookdata_1_6_123456_1700000000000_1700000000001.zip",
+      "expected": {
+        "exporterVersion": 1,
+        "dbVersion": 6,
+        "characters": 123456,
+        "lastBookModified": 1700000000000,
+        "lastBookOpen": 1700000000001
+      }
+    },
+    {
+      "kind": "progress",
+      "name": "progress_1_6_1700000000000_0.4231.json",
+      "expected": {
+        "exporterVersion": 1,
+        "dbVersion": 6,
+        "lastBookmarkModified": 1700000000000,
+        "progress": 0.4231
+      }
+    },
+    {
+      "kind": "progress",
+      "name": "progress_1_6_1700000000000_1.json",
+      "expected": {
+        "exporterVersion": 1,
+        "dbVersion": 6,
+        "lastBookmarkModified": 1700000000000,
+        "progress": 1
+      }
+    },
+    {
+      "kind": "progress",
+      "name": "progress_1_6_abc_.json",
+      "expected": {
+        "exporterVersion": 1,
+        "dbVersion": 6,
+        "lastBookmarkModified": null,
+        "progress": 0
+      }
+    },
+    {
+      "kind": "statistics",
+      "name": "statistics_1_6_1700000000000_5000_3600000_10_12_20.5_30_1800000_1900000_2500_2600_40.25_41_na.json",
+      "expected": {
+        "exporterVersion": 1,
+        "dbVersion": 6,
+        "lastStatisticModified": 1700000000000,
+        "charactersRead": 5000,
+        "readingTime": 3600000,
+        "minReadingSpeed": 10,
+        "altMinReadingSpeed": 12,
+        "lastReadingSpeed": 20.5,
+        "maxReadingSpeed": 30,
+        "averageReadingTime": 1800000,
+        "averageWeightedRedingTime": 1900000,
+        "averageCharactersRead": 2500,
+        "averageWeightedCharatersRead": 2600,
+        "averageReadingSpeed": 40.25,
+        "averageWeightedReadingSpeed": 41,
+        "finishDate": "na"
+      }
+    },
+    {
+      "kind": "statistics",
+      "name": "statistics_1_6_1700000000000_5000_3600000_10_12_20_30_1800000_1900000_2500_2600_40_41_2026-10-01.json",
+      "expected": {
+        "exporterVersion": 1,
+        "dbVersion": 6,
+        "lastStatisticModified": 1700000000000,
+        "charactersRead": 5000,
+        "readingTime": 3600000,
+        "minReadingSpeed": 10,
+        "altMinReadingSpeed": 12,
+        "lastReadingSpeed": 20,
+        "maxReadingSpeed": 30,
+        "averageReadingTime": 1800000,
+        "averageWeightedRedingTime": 1900000,
+        "averageCharactersRead": 2500,
+        "averageWeightedCharatersRead": 2600,
+        "averageReadingSpeed": 40,
+        "averageWeightedReadingSpeed": 41,
+        "finishDate": "2026-10-01"
+      }
+    },
+    {
+      "kind": "statistics",
+      "name": "statistics_1_6_17.json",
+      "expected": {
+        "exporterVersion": 1,
+        "dbVersion": 6,
+        "lastStatisticModified": 17,
+        "charactersRead": null,
+        "readingTime": null,
+        "minReadingSpeed": null,
+        "altMinReadingSpeed": null,
+        "lastReadingSpeed": null,
+        "maxReadingSpeed": null,
+        "averageReadingTime": null,
+        "averageWeightedRedingTime": null,
+        "averageCharactersRead": null,
+        "averageWeightedCharatersRead": null,
+        "averageReadingSpeed": null,
+        "averageWeightedReadingSpeed": null,
+        "finishDate": "na"
+      }
+    },
+    {
+      "kind": "goals",
+      "name": "ttu-user-goals_1_6_1700000000000.json",
+      "expected": { "exporterVersion": 1, "dbVersion": 6, "lastGoalModified": 1700000000000 }
+    }
+  ],
+  "findFile": [
+    {
+      "names": [
+        "bookdata_1_6_1_2_3.zip",
+        "progress_1_6_1700000000000_0.1.json",
+        "progress_1_6_1700000000005_0.2.json"
+      ],
+      "prefix": "progress_",
+      "expected": "progress_1_6_1700000000005_0.2.json"
+    },
+    {
+      "names": ["progress_1_6_x_0.json", "progress_1_6_5_0.json"],
+      "prefix": "progress_",
+      "expected": "progress_1_6_5_0.json"
+    },
+    {
+      "names": ["progress_1_6_5_0.1.json", "progress_1_6_5_0.2.json"],
+      "prefix": "progress_",
+      "expected": "progress_1_6_5_0.1.json"
+    },
+    {
+      "names": ["statistics_1_6_9_1.json", "statistics_1_6_3_1.json"],
+      "prefix": "statistics_",
+      "expected": "statistics_1_6_9_1.json"
+    },
+    {
+      "names": ["cover_1_6.jpeg", "bookdata_1_6_1_2_3.zip", "bookdata_1_6_1_2_4.zip"],
+      "prefix": "bookdata_",
+      "expected": "bookdata_1_6_1_2_3.zip"
+    },
+    {
+      "names": ["cover_1_6.jpeg"],
+      "prefix": "progress_",
+      "expected": null
+    }
+  ]
+}
