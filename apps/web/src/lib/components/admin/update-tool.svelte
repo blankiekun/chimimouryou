@@ -97,10 +97,8 @@
 </script>
 
 <p class="tool-text">
-  Compares this server with the latest release (stable) or the newest commit on main (bleeding edge)
-  of <a href="https://github.com/{repo}" target="_blank" rel="noreferrer">{repo}</a>. Updating
-  downloads that version, rebuilds it on the server and restarts everything (about a minute of
-  downtime; a running difficulty job stops).
+  From <a href="https://github.com/{repo}" target="_blank" rel="noreferrer">{repo}</a>. Updating
+  means about a minute of downtime; a running difficulty job stops.
 </p>
 
 <table class="app-table tool-table">

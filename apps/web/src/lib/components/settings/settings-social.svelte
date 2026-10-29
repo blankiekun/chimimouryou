@@ -5,7 +5,6 @@
   import PictureCrop from '$lib/components/social/picture-crop.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import RecoveryCode from '$lib/components/social/recovery-code.svelte';
-  import { account$ } from '$lib/data/account';
   import { pagePath, standalone } from '$lib/data/env';
   import {
     avatarKanji,
@@ -33,14 +32,14 @@
 
   /** Settings → Social (boards 16-19): the switch, the hub account, profile and what it shows. */
 
-  const shareRows: { key: ShareKey; hint?: MessageKey }[] = [
-    { key: 'current', hint: 'social.shows.currentHint' },
-    { key: 'finished' },
-    { key: 'activity', hint: 'social.shows.activityHint' },
-    { key: 'stats', hint: 'social.shows.statsHint' },
-    { key: 'wordsKnown', hint: 'social.shows.wordsKnownHint' },
-    { key: 'hideManga' },
-    { key: 'hideVn' }
+  const shareKeys: ShareKey[] = [
+    'current',
+    'finished',
+    'activity',
+    'stats',
+    'wordsKnown',
+    'hideManga',
+    'hideVn'
   ];
 
   let error = '';
@@ -103,9 +102,6 @@
     }
   }
 
-  /** Server builds signed in to the server: the hub sign-in syncs with the server account. */
-  $: remembered = !standalone && !!$account$;
-
   let open: '' | 'password' | 'recovery' = '';
   let current = '';
   let next = '';
@@ -166,7 +162,7 @@
 </script>
 
 <SettingsSection id="social-features" keywords="friends social hub">
-  <SettingsItemGroup title={$t$('social.features')} tooltip={$t$('social.featuresHint')}>
+  <SettingsItemGroup title={$t$('social.features')}>
     <button
       type="button"
       role="switch"
@@ -185,9 +181,7 @@
   {#if me}
     <SettingsItemGroup
       title={$t$('social.signedInAs', { username: me.username })}
-      tooltip="{remembered ? `${$t$('social.remembered')} ` : ''}{$t$('social.memberSince', {
-        since
-      })}"
+      tooltip={$t$('social.memberSince', { since })}
     >
       <button type="button" class="app-button" on:click={logOut}>{$t$('social.signOut')}</button>
     </SettingsItemGroup>
@@ -269,7 +263,6 @@
                 required
                 autocomplete="current-password"
               />
-              <small>{$t$('social.newRecoveryHint')}</small>
             </label>
             {#if formError}<p class="social-settings-error" role="alert">{formError}</p>{/if}
             <span class="social-settings-actions">
@@ -284,16 +277,13 @@
         {/if}
       </svelte:fragment>
     </SettingsItemGroup>
-    <SettingsItemGroup
-      title={$t$('social.otherDevices')}
-      tooltip={$t$(remembered ? 'social.signOutEverywhereServer' : 'social.signOutEverywhereHint')}
-    >
+    <SettingsItemGroup title={$t$('social.otherDevices')}>
       <button type="button" class="app-button" on:click={signOutEverywhere}>
         {$t$('social.signOutEverywhere')}
       </button>
     </SettingsItemGroup>
     {#if me.role === 'dev'}
-      <SettingsItemGroup title={$t$('social.moderation')} tooltip={$t$('social.moderationHint')}>
+      <SettingsItemGroup title={$t$('social.moderation')}>
         <a class="app-button app-button-quiet" href="{pagePath}/moderation"
           >{$t$('social.moderationOpen')} →</a
         >
@@ -314,7 +304,7 @@
 
 {#if me}
   <SettingsSection id="social-profile" keywords="display name avatar public">
-    <SettingsItemGroup title={$t$('social.viewProfile')} tooltip={$t$('social.viewProfileHint')}>
+    <SettingsItemGroup title={$t$('social.viewProfile')}>
       <a
         class="app-button app-button-quiet"
         href="{pagePath}/u?name={encodeURIComponent(me.username)}">{$t$('social.yourProfile')} →</a
@@ -329,7 +319,7 @@
         on:change={() => name.trim() && save({ name: name.trim() })}
       />
     </SettingsItemGroup>
-    <SettingsItemGroup title={$t$('social.avatar')} tooltip={$t$('social.avatarHint')} wide>
+    <SettingsItemGroup title={$t$('social.avatar')} wide>
       <div class="social-avatars" role="radiogroup" aria-label={$t$('social.avatar')}>
         {#each avatarKanji as _, index}
           <button
@@ -355,8 +345,6 @@
           <button type="button" class="app-button app-button-quiet" on:click={dropPicture}>
             {$t$('social.removePicture')}
           </button>
-        {:else}
-          <span class="social-picture-hint">{$t$('social.uploadPictureHint')}</span>
         {/if}
         <input
           bind:this={pictureInput}
@@ -397,18 +385,18 @@
   </SettingsSection>
 
   <SettingsSection id="social-shows" keywords="share current finished activity stats words manga">
-    {#each shareRows as row (row.key)}
-      <SettingsItemGroup title={$t$(showsLabel(row.key))} tooltip={row.hint ? $t$(row.hint) : ''}>
+    {#each shareKeys as key (key)}
+      <SettingsItemGroup title={$t$(showsLabel(key))}>
         <button
           type="button"
           role="switch"
           class="app-switch"
-          aria-checked={shared(row.key)}
-          aria-label={$t$(showsLabel(row.key))}
-          on:click={() => save({ share: { [row.key]: !shared(row.key) } })}
+          aria-checked={shared(key)}
+          aria-label={$t$(showsLabel(key))}
+          on:click={() => save({ share: { [key]: !shared(key) } })}
         >
           <span class="app-switch-thumb" />
-          <span class="app-switch-text">{switchLabel(shared(row.key))}</span>
+          <span class="app-switch-text">{switchLabel(shared(key))}</span>
         </button>
       </SettingsItemGroup>
     {/each}
@@ -431,7 +419,7 @@
     />
   </SettingsItemGroup>
   {#if privacyUrl}
-    <SettingsItemGroup title={$t$('social.privacy')} tooltip={$t$('social.privacyHint')}>
+    <SettingsItemGroup title={$t$('social.privacy')}>
       <a class="app-button app-button-quiet" href={privacyUrl} target="_blank" rel="noreferrer"
         >{$t$('social.read')} →</a
       >
@@ -460,11 +448,6 @@
     align-items: center;
     gap: 0.5rem 0.75rem;
     margin-top: 0.75rem;
-  }
-
-  .social-picture-hint {
-    color: var(--app-muted-fg);
-    font-size: var(--type-small);
   }
 
   .social-avatar-choice {

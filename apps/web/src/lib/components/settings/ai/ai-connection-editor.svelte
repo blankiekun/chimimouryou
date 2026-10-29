@@ -119,7 +119,6 @@
   <div class="field">
     <div class="field-text">
       <label for="ai-provider-{draft.id}">{$t$('ai.provider')}</label>
-      <p>{$t$('ai.providerHint')}</p>
     </div>
     <div class="field-control">
       <select
@@ -152,7 +151,6 @@
   <div class="field">
     <div class="field-text">
       <label for="ai-name-{draft.id}">{$t$('ai.connectionName')}</label>
-      <p>{$t$('ai.connectionNameHint')}</p>
     </div>
     <div class="field-control">
       <input id="ai-name-{draft.id}" class="app-input w-full" bind:value={draft.name} />
@@ -198,7 +196,7 @@
   <div class="field">
     <div class="field-text">
       <label for="ai-endpoint-{draft.id}">{$t$('ai.endpoint')}</label>
-      <p>{$t$(provider?.id === 'custom' ? 'ai.endpointCustomHint' : 'ai.endpointHint')}</p>
+      {#if provider?.id === 'custom'}<p>{$t$('ai.endpointCustomHint')}</p>{/if}
     </div>
     <div class="field-control">
       <input
@@ -216,7 +214,6 @@
   <div class="field">
     <div class="field-text">
       <span class="field-label">{$t$('ai.models')}</span>
-      <p>{$t$('ai.modelsHint')}</p>
     </div>
     <div class="field-control models-line" aria-live="polite">
       <span class="muted">

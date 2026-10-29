@@ -10,6 +10,6 @@
   ];
 </script>
 
-<SettingsItemGroup title={$t$('settings.uiLanguage')} tooltip={$t$('settings.uiLanguageHint')}>
+<SettingsItemGroup title={$t$('settings.uiLanguage')}>
   <ButtonToggleGroup {options} bind:selectedOptionId={$uiLanguage$} />
 </SettingsItemGroup>

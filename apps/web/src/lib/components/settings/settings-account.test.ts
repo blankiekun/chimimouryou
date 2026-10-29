@@ -86,7 +86,7 @@ describe('SettingsAccount while the server is unreachable', () => {
     expect(await accountReady()).toBeNull();
     const target = await mount();
 
-    expect(target.textContent).toContain("The server can't be reached");
+    expect(target.textContent).toContain("Can't reach the server");
     expect(target.querySelector('form')).toBeNull();
   });
 });

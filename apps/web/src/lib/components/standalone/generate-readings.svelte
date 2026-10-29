@@ -57,7 +57,7 @@
         <button
           type="button"
           class="app-button app-button-quiet"
-          title="Word lists made before generated furigana was installed take Sudachi's readings. Redoing them reads each word in context; difficulty stays the same."
+          title="Reads each word in context; difficulty stays the same."
           on:click={redo}
         >
           Redo word lists with readings ({books(lists.length)})

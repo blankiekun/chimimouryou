@@ -28,9 +28,8 @@
 </script>
 
 <p class="tool-text">
-  Puts books without a series into the series their titles name (volume numbers in the title), and
-  merges series whose names differ only in width, case, spaces or separators. Books by another
-  author are left out. Check first; nothing is written until you apply.
+  Fills in series from titles and merges near-duplicate series names. Nothing is written until you
+  apply.
 </p>
 
 {#if report}

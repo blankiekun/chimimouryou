@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { browser } from '$app/env';
   import { faSpinner } from '@fortawesome/free-solid-svg-icons';
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import SettingsStorageSource from '$lib/components/settings/settings-storage-source.svelte';
@@ -37,10 +36,6 @@
   $: if (storageSources) {
     listLoading = false;
   }
-
-  $: fileSystemAvailable = browser && 'showDirectoryPicker' in window;
-
-  $: listTooltip = $t$(fileSystemAvailable ? 'prefs.sourcesHintFs' : 'prefs.sourcesHint');
 
   function isSyncTarget(name: string, referenceName: string) {
     return name === referenceName;
@@ -201,7 +196,6 @@
 <div class="sources">
   <div class="sources-head">
     <p class="sources-hint">
-      {listTooltip}
       {#if $autoReplication$ !== AutoReplicationType.Off && !$syncTarget$}
         <span class="sources-warn">{$t$('prefs.sourcesNoTarget')}</span>
       {/if}

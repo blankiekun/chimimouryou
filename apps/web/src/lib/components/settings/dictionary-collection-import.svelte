@@ -50,7 +50,7 @@
 
 <SettingsItemGroup
   title="Import dictionary collection"
-  tooltip="A Yomitan dictionary collection (Yomitan: Settings → Backup → Export Dictionary Collection), added to the dictionaries here. Large collections take a while; keep this tab open."
+  tooltip="From Yomitan → Backup → Export Dictionary Collection. Keep this tab open while it imports."
 >
   {#if progress}
     <button type="button" class="app-button" disabled={cancelling} on:click={cancel}>

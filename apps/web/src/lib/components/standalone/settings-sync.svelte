@@ -161,10 +161,7 @@
 
 <SettingsSection id="sync-storage">
   {#if sources.length > 1}
-    <SettingsItemGroup
-      title="Storage"
-      tooltip="Books and progress sync through the place you choose."
-    >
+    <SettingsItemGroup title="Storage">
       <ButtonToggleGroup options={sources} bind:selectedOptionId={selected} />
     </SettingsItemGroup>
   {/if}
@@ -181,7 +178,7 @@
         <div class="account-text">
           <p class="account-name">Google Drive</p>
           <p class="account-detail">
-            {$isOnline$ ? 'Not signed in. Sign in to sync your books.' : 'Needs a connection.'}
+            {$isOnline$ ? 'Not signed in.' : 'Needs a connection.'}
           </p>
           {#if accountError}<p class="account-error" role="alert">{accountError}</p>{/if}
         </div>
@@ -191,28 +188,19 @@
       {/if}
     </div>
   {:else if $storageSource$ === StorageKey.FS}
-    <SettingsItemGroup
-      title="Folder"
-      tooltip="Books and progress are kept in a {storageRootName} folder there."
-    >
+    <SettingsItemGroup title="Folder">
       <button type="button" class="app-button" on:click={() => pickFolder(window)}>
         Change folder
       </button>
     </SettingsItemGroup>
   {/if}
   {#if remote && $storageSource$ !== StorageKey.CALIBRE}
-    <SettingsItemGroup
-      title="Sync automatically"
-      tooltip="Upload progress and new books as you read. Off: only when you press Sync now."
-    >
+    <SettingsItemGroup title="Sync automatically">
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={autoSync} />
     </SettingsItemGroup>
   {/if}
   {#if sources.some((source) => source.id === StorageKey.GDRIVE)}
-    <SettingsItemGroup
-      title="Own Google client"
-      tooltip="Use your own OAuth client ID instead of the built-in one."
-    >
+    <SettingsItemGroup title="Own Google client ID">
       <button
         type="button"
         class="app-button app-button-quiet"
@@ -244,10 +232,7 @@
       </button>
     </SettingsItemGroup>
   {:else}
-    <SettingsItemGroup
-      title="Last sync"
-      tooltip="Books stay on this device, so nothing syncs. Choose Google Drive or a folder above to sync."
-    />
+    <SettingsItemGroup title="Last sync" tooltip="Nothing syncs while books stay on this device." />
   {/if}
   <div class="errors" data-settings-item data-settings-search="Recent errors">
     <h3 class="errors-title">Recent errors</h3>
@@ -273,7 +258,7 @@
 </SettingsSection>
 
 <SettingsSection id="sync-backup">
-  <SettingsItemGroup title="Export a backup" tooltip="Saves one file to this device.">
+  <SettingsItemGroup title="Export a backup">
     <button
       type="button"
       class="app-button"
@@ -283,10 +268,7 @@
       Export
     </button>
   </SettingsItemGroup>
-  <SettingsItemGroup
-    title="Restore a backup"
-    tooltip="Merges a backup file into this library; newer entries win."
-  >
+  <SettingsItemGroup title="Restore a backup" tooltip="Newer entries win.">
     <input
       hidden
       type="file"
@@ -315,11 +297,7 @@
 
 <SettingsSection id="sync-selfhost" keywords="server calibre difficulty install">
   <div class="selfhost" data-settings-item>
-    <p>
-      A chimimouryou server on your own computer adds a Calibre library, difficulty estimates, word
-      lists and known-word coverage, generated furigana, Read next, and accounts for everyone in
-      your household.
-    </p>
+    <p>Adds a Calibre library, difficulty estimates, word lists, Read next and accounts.</p>
     <a href={selfHostingGuideUrl} target="_blank" rel="noreferrer">Self-hosting guide →</a>
   </div>
 </SettingsSection>

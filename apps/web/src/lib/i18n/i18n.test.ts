@@ -43,10 +43,11 @@ describe('i18n', () => {
   it('has the settings areas and sections', () => {
     const keys = settingsAreas.flatMap((area) => [
       area.label,
+      area.description,
       ...area.sections.flatMap((section) => [section.label, section.description])
     ]);
 
-    expect(keys.filter((key) => !(key in en))).toEqual([]);
+    expect(keys.filter((key) => key && !(key in en))).toEqual([]);
   });
 
   it('fills in params and falls back to English', () => {

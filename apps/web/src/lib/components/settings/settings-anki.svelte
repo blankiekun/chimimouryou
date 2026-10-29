@@ -44,7 +44,7 @@
 </script>
 
 <SettingsSection id="anki-connect">
-  <SettingsItemGroup title={$t$('anki.enabled')} tooltip={$t$('anki.enabledHint')}>
+  <SettingsItemGroup title={$t$('anki.enabled')}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={$ankiEnabled$} />
   </SettingsItemGroup>
   <SettingsItemGroup title={$t$('anki.guide')}>
@@ -67,17 +67,17 @@
       <p class="anki-status" data-state={testState} role="status">{testResult}</p>
     {/if}
   </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('anki.sentenceField')} tooltip={$t$('anki.sentenceFieldHint')}>
+  <SettingsItemGroup title={$t$('anki.sentenceField')}>
     <input
       aria-label={$t$('anki.sentenceField')}
       class="app-input"
       bind:value={$ankiSentenceField$}
     />
   </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('anki.audioField')} tooltip={$t$('anki.audioFieldHint')}>
+  <SettingsItemGroup title={$t$('anki.audioField')}>
     <input aria-label={$t$('anki.audioField')} class="app-input" bind:value={$ankiAudioField$} />
   </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('anki.pictureField')} tooltip={$t$('anki.pictureFieldHint')}>
+  <SettingsItemGroup title={$t$('anki.pictureField')}>
     <input
       aria-label={$t$('anki.pictureField')}
       class="app-input"
@@ -89,7 +89,7 @@
 <SettingsAnkiDictionary />
 
 <SettingsSection id="anki-media">
-  <SettingsItemGroup title={$t$('anki.bookAudio')} tooltip={$t$('anki.bookAudioHint')}>
+  <SettingsItemGroup title={$t$('anki.bookAudio')}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={$ankiBookAudio$} />
   </SettingsItemGroup>
   {#if $activePlugins$.some((plugin) => plugin.ankiSentenceAudio)}
@@ -97,10 +97,10 @@
       <ButtonToggleGroup options={toggle} bind:selectedOptionId={$ankiBookAiFallback$} />
     </SettingsItemGroup>
   {/if}
-  <SettingsItemGroup title={$t$('anki.vnScreenshot')} tooltip={$t$('anki.vnScreenshotHint')}>
+  <SettingsItemGroup title={$t$('anki.vnScreenshot')}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={$ankiVnScreenshot$} />
   </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('anki.vnAudio')} tooltip={$t$('anki.vnAudioHint')}>
+  <SettingsItemGroup title={$t$('anki.vnAudio')}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={$ankiVnAudio$} />
   </SettingsItemGroup>
 </SettingsSection>

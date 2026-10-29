@@ -189,7 +189,6 @@
       >{$t$('ai.resetFeature', { feature: title })}</button
     >
   </header>
-  <p class="intro">{$t$('ai.advancedHint')}</p>
 
   <table class="app-table samplers">
     <thead>
@@ -292,11 +291,6 @@
 
   .head button {
     min-height: 2rem;
-  }
-
-  .intro {
-    color: var(--app-muted-fg);
-    font-size: var(--type-small);
   }
 
   .samplers {
