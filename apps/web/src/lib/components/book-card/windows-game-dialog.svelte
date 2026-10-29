@@ -1,7 +1,8 @@
 <script lang="ts">
   /**
    * Import → Windows game: a game folder is copied into this browser (windows-game.ts) and
-   * added to the library as a visual novel that VNBox plays. Pick the folder, the program to
+   * added to the library as a visual novel that VNBox plays. Pick the folder (or a ZIP of it:
+   * phones can't pick folders, zipGameFiles), the program to
    * run and, optionally, a dc00 text hook script; then the copy runs with its progress here.
    * "This game is already in my library" copies the folder for a game whose record synced from
    * another device but whose files aren't here: its record (program, hook, cover) is kept.
@@ -9,6 +10,7 @@
    * the installer runs in a player frame here, then the program it installed is picked.
    */
   import { database } from '$lib/data/store';
+  import { isMobile$ } from '$lib/functions/utils';
   import { isVn, vnInfo, type VnInfo } from '$lib/data/vn';
   import SectionHead from '$lib/components/section-head.svelte';
   import { dialogManager } from '$lib/data/dialog-manager';
@@ -20,13 +22,15 @@
     hasWindowsGame,
     hookScripts,
     hookSuggestion,
+    readHead,
     searchHookScripts,
     windowsGameBlocker,
     windowsGameBlockerText,
     windowsGameBook,
     windowsGameFolder,
     windowsPrograms,
-    vnboxZipsSize
+    vnboxZipsSize,
+    zipGameFiles
   } from '$lib/data/windows-game';
   import type { HookScript } from '$lib/data/windows-game';
   import {
@@ -114,6 +118,7 @@
   let foundPick = $state(0);
   let moving = $state(false);
   let discInput: HTMLInputElement | undefined = $state();
+  let zipInput: HTMLInputElement | undefined = $state();
   const installing = $derived(!!discs.length || install);
   const installers = $derived(
     discs.length
@@ -242,7 +247,7 @@
     const disc = discs.length && listing?.files.find((file) => file.path === path);
     const bytes = disc
       ? await listing!.read(disc, head)
-      : files[path] && new Uint8Array(await files[path].slice(0, head).arrayBuffer());
+      : files[path] && (await readHead(files[path], head));
 
     if (bytes && installer === path) kind = installerKind(bytes);
   }
@@ -299,8 +304,22 @@
     if (first) useFolder(first, picked);
     // Browsers that ignore webkitdirectory (some on phones) hand back loose files.
     else if (list?.length)
-      error =
-        'This browser picked files, not a folder. Add the game from a browser that can pick folders.';
+      error = 'This browser picked files, not a folder. Choose a ZIP of the game folder instead.';
+  }
+
+  /** A ZIP of the game folder: phones can't pick folders. */
+  async function zipPicked(list: FileList | null) {
+    const zip = list?.[0];
+
+    if (!zip) return;
+    error = '';
+    try {
+      const { name, files: picked } = await zipGameFiles(zip);
+
+      useFolder(name, picked);
+    } catch (zipError: any) {
+      error = `Could not read the ZIP: ${zipError.message}`;
+    }
   }
 
   async function hookPicked(list: FileList | null) {
@@ -756,9 +775,11 @@
     <div class="wg-step">
       <SectionHead number={1} title="Game folder" level="h3" />
       <div class="wg-row">
-        <button type="button" class="app-button" disabled={busy} onclick={chooseFolder}>
-          {folderName && !discs.length ? 'Change folder' : 'Choose folder'}
-        </button>
+        {#if !$isMobile$ || 'showDirectoryPicker' in window}
+          <button type="button" class="app-button" disabled={busy} onclick={chooseFolder}>
+            {folderName && !discs.length ? 'Change folder' : 'Choose folder'}
+          </button>
+        {/if}
         <button
           type="button"
           class="app-button"
@@ -766,6 +787,9 @@
           onclick={() => discInput?.click()}
         >
           Choose disc image…
+        </button>
+        <button type="button" class="app-button" disabled={busy} onclick={() => zipInput?.click()}>
+          Choose ZIP of the folder…
         </button>
         {#if folderName}
           <span class="wg-meta" lang="ja">
@@ -797,6 +821,13 @@
         webkitdirectory
         bind:this={folderInput}
         onchange={(event) => folderPicked(event.currentTarget.files)}
+      />
+      <!-- No accept: Android's picker greys out ZIPs whose provider reports another type. -->
+      <input
+        hidden
+        type="file"
+        bind:this={zipInput}
+        onchange={(event) => zipPicked(event.currentTarget.files)}
       />
       {#if missing.length}
         <label class="wg-field">

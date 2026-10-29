@@ -11,7 +11,7 @@
   import Fa from 'svelte-fa';
 
   export let disabled = false;
-  /** The library offers Windows games (windows-game-dialog.svelte); computers only */
+  /** The library offers Windows games (windows-game-dialog.svelte; phones pick a ZIP) */
   export let windowsGames = false;
 
   const dispatch = createEventDispatcher<{
@@ -37,7 +37,7 @@
   $: importMenuItems = [
     mergeEntries.FILE_IMPORT,
     ...($isMobile$ ? [] : [mergeEntries.FOLDER_IMPORT]),
-    ...(windowsGames && !$isMobile$ ? [windowsGameEntry] : []),
+    ...(windowsGames ? [windowsGameEntry] : []),
     mergeEntries.BACKUP_IMPORT
   ];
 
@@ -80,10 +80,11 @@
   use:inputFile={(fileList) => dispatch('filesChange', fileList)}
   bind:this={folderImportElm}
 />
+<!-- Phones: no accept, Android's picker greys out ZIPs whose provider reports another type. -->
 <input
   hidden
   type="file"
-  accept=".zip,application/zip"
+  accept={$isMobile$ ? undefined : '.zip,application/zip'}
   use:inputFile={(fileList) => dispatch('importBackup', fileList[0])}
   bind:this={backupImportElm}
 />

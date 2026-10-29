@@ -327,8 +327,15 @@
       blocked = blocker
         ? windowsGameBlockerText[blocker]
         : missingFiles
-          ? "This game's files aren't in this browser. Add its folder to play it here; its saves come along when they sync."
+          ? "This game's files aren't in this browser: it was added on another device. Add its folder, or a ZIP of it on a phone, to play it here; its saves come along when they sync."
           : undefined;
+      // Its record (program, hook; no files) goes up with each start, so other devices list
+      // the game and open it here to ask for the files instead of failing.
+      if (!missingFiles && external) {
+        external
+          .saveBook(data, false)
+          .catch((error) => logger.warn(`Visual novel sync failed: ${error.message}`));
+      }
       tuning = loadVnboxTuning(game.folder!);
       if (game.hook) {
         hookUrl = URL.createObjectURL(new Blob([game.hook], { type: 'text/javascript' }));
@@ -955,7 +962,7 @@
           <div class="flex flex-wrap gap-2">
             {#if missingFiles}
               <button class="app-button app-button-primary" on:click={addGameFolder}>
-                Add the game folder
+                Add the game files
               </button>
             {/if}
             <button class="app-button" on:click={leave}>Back to the library</button>
