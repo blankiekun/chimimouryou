@@ -1,5 +1,5 @@
 # ebook-reader with a Calibre library: copy .env.example to .env, adjust it, then
-#   docker compose up -d                          reader, accounts, catalog
+#   docker compose up -d                          reader, accounts, API, catalog
 #   docker compose --profile import up -d         + adding books to Calibre
 #   docker compose --profile difficulty up -d     + difficulty estimates
 #   docker compose --profile mokuro up -d         + manga OCR (text for Yomitan)
@@ -60,6 +60,17 @@ services:
       MIN_FREE_MB: ${MIN_FREE_MB:-1024}
       ALLOW_HTTP_ACCOUNTS: ${ALLOW_HTTP_ACCOUNTS:-0}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
+
+  # The v1 API (/api/v1/): catalog, search and reading data in state/api/library.db.
+  api:
+    <<: *services
+    command: ['python3', '/app/api/service.py', 'serve']
+    volumes:
+      - ${DATA_PATH:-./data}:/data
+      - ${SYNC_PATH:-${DATA_PATH:-./data}/sync}:/data/sync:ro
+    environment:
+      MIN_FREE_MB: ${MIN_FREE_MB:-1024}
+      VERSION: ${VERSION:-docker}
 
   # Rebuilds the catalog (and extracts missing covers into the library) when metadata.db
   # or the visual novel folder changes, and makes the library cards' cover thumbnails.

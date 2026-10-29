@@ -1,5 +1,5 @@
 # The Python services (server/). One file, three targets:
-#   base        accounts and the catalog builder (Python standard library + Pillow)
+#   base        accounts, the v1 API (library.db) and the catalog builder (Python standard library + Pillow)
 #   import      + Calibre, for adding books to the library (large)
 #   difficulty  + Sudachi and yurigana, for difficulty estimates and word lists
 #   mokuro      + mokuro and CPU PyTorch, for manga OCR (about 2 GB)
@@ -12,6 +12,7 @@ RUN apt-get update \
 COPY server/build-catalog.py server/assign-series.py /app/
 COPY server/account /app/account
 COPY server/import /app/import
+COPY server/api /app/api
 RUN ln -s /app/build-catalog.py /usr/local/bin/build-calibre-catalog \
   && printf '#!/bin/sh\nexec python3 /app/account/service.py "$@"\n' > /usr/local/bin/ebook-account \
   && chmod 755 /app/build-catalog.py /usr/local/bin/ebook-account
@@ -21,6 +22,9 @@ ENV PYTHONUNBUFFERED=1 \
   ACCOUNT_STATE_DIR=/data/state/account \
   ACCOUNT_DATA_DIR=/data/accounts \
   ACCOUNT_HOST=0.0.0.0 \
+  API_STATE_DIR=/data/state/api \
+  API_DB=/data/state/api/library.db \
+  API_HOST=0.0.0.0 \
   CATALOG_OUTPUT=/data/state/catalog/catalog.json \
   CALIBRE_CATALOG=/data/state/catalog/catalog.json \
   IMPORT_STATE_DIR=/data/state/import \
