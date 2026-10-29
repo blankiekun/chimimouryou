@@ -1,4 +1,4 @@
-"""Tests for the difficulty engine's fingerprint (scripts/calibre/jiten/engine.py)."""
+"""Tests for the difficulty engine's fingerprint (engine/engine.py)."""
 import json
 import os
 import shutil
@@ -7,11 +7,11 @@ import tempfile
 import unittest
 
 HERE = os.path.dirname(__file__)
-sys.path.insert(0, os.path.join(HERE, '..', 'jiten'))
+sys.path.insert(0, os.path.join(HERE, '..', '..', 'engine'))
 import engine  # noqa: E402
 from test_readings_file import load_service  # noqa: E402
 
-COMMITTED = os.path.join(HERE, '..', '..', '..', 'apps', 'web', 'src', 'lib', 'data', 'difficulty-engine.json')
+COMMITTED = os.path.join(HERE, '..', '..', 'apps', 'web', 'src', 'lib', 'data', 'difficulty-engine.json')
 
 
 class EngineFingerprintTest(unittest.TestCase):
@@ -19,7 +19,7 @@ class EngineFingerprintTest(unittest.TestCase):
         with open(COMMITTED, encoding='utf-8') as f:
             committed = json.load(f)['engine']
         self.assertEqual(committed, engine.canonical_fingerprint(),
-                         'The engine changed: python3 scripts/calibre/jiten/engine.py > '
+                         'The engine changed: python3 engine/engine.py > '
                          'apps/web/src/lib/data/difficulty-engine.json')
 
     def test_code_record_is_current(self):
@@ -27,9 +27,9 @@ class EngineFingerprintTest(unittest.TestCase):
             record = json.load(f)
         self.assertEqual((record['version'], record['code']), (engine.ENGINE_VERSION, engine.code_hash()),
                          'The scoring Python changed. If any estimate, word list or readings file changes, '
-                         'bump ENGINE_VERSION in scripts/calibre/jiten/engine.py; if every output stays the same, '
-                         'only re-record the hash. Either way: python3 scripts/calibre/jiten/engine.py --record '
-                         '&& python3 scripts/calibre/jiten/engine.py > apps/web/src/lib/data/difficulty-engine.json')
+                         'bump ENGINE_VERSION in engine/engine.py; if every output stays the same, '
+                         'only re-record the hash. Either way: python3 engine/engine.py --record '
+                         '&& python3 engine/engine.py > apps/web/src/lib/data/difficulty-engine.json')
 
     def test_inputs_change_it(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -6,7 +6,7 @@
 
 /**
  * Adding books to the Calibre library through the server's import queue
- * (scripts/calibre/import/service.py, signed-in readers only). The server adds
+ * (server/import/service.py, signed-in readers only). The server adds
  * one book at a time and rebuilds the catalog, so a finished job's book is
  * already in /calibre/catalog.json. ZIPs of ONScripter games are unpacked into the
  * visual novel folder (VN_PATH) instead. Not part of upstream.

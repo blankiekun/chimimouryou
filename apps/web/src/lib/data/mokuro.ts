@@ -7,7 +7,7 @@
 /**
  * Text of manga pages from mokuro (https://github.com/kha-white/mokuro). Calibre manga: made by the
  * server's mokuro service or uploaded as a .mokuro file, stored by catalog id
- * (scripts/calibre/mokuro/service.py). Manga stored in this browser: a .mokuro file uploaded or
+ * (server/mokuro/service.py). Manga stored in this browser: a .mokuro file uploaded or
  * imported beside its CBZ, or text made in this browser (manga-ocr.ts), kept in reader-db `mokuro`
  * by title; never synced. The manga reader lays it over the pages for Yomitan.
  * Not part of upstream.

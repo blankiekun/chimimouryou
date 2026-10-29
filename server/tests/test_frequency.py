@@ -1,5 +1,5 @@
 """Tests for jiten/frequency.py (Yomitan ranks). Run from the repo root:
-python3 -m unittest discover -s scripts/calibre/tests
+python3 -m unittest discover -s server/tests
 """
 import json
 import os
@@ -9,7 +9,7 @@ import unittest
 import zipfile
 from unittest import mock
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'jiten'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'engine'))
 from frequency import TOP_SHARE, FrequencyTable, load_yomitan_ranks, reading_agreement  # noqa: E402
 
 ENTRIES = [

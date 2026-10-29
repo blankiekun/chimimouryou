@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Builds the placement check's items (apps/web/src/lib/data/placement-items.json).
 
-Real words are sampled from Jiten's frequency list (scripts/calibre/jiten/data/,
+Real words are sampled from Jiten's frequency list (engine/data/,
 CC BY-SA 4.0), a few per rank band: kanji words in dictionary form whose
 spelling is JMdict's first, common one (no rare/irregular spellings, nothing
 usually written in kana, no archaic or proper nouns), plus a few common katakana
@@ -35,7 +35,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-FREQ = ROOT / 'scripts/calibre/jiten/data/jiten_freq_global.zip'
+FREQ = ROOT / 'engine/data/jiten_freq_global.zip'
 OUT = ROOT / 'apps/web/src/lib/data/placement-items.json'
 
 # Upper rank of each band (the first starts at 1), log-spaced: the test (placement.ts) walks

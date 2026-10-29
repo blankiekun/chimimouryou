@@ -1,5 +1,5 @@
 """Tests for assign-series.py (the planning part; no Calibre needed). Run from the repo root:
-python3 -m unittest discover -s scripts/calibre/tests
+python3 -m unittest discover -s server/tests
 """
 import importlib.machinery
 import importlib.util

@@ -5,7 +5,7 @@
  */
 
 /**
- * Accounts on this server (scripts/calibre/account/). While signed in, reading
+ * Accounts on this server (server/account/). While signed in, reading
  * progress, statistics and highlights of Calibre books, and the settings in
  * account-settings-sync.ts, are stored in the account's own WebDAV folder at
  * /account/sync/ instead of the shared /calibre/sync/. Not part of upstream.

@@ -3,7 +3,7 @@ import os
 import sys
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'jiten'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from compound_merge import compound_table, merge_compounds  # noqa: E402
 from yurigana.tokens import Token  # noqa: E402
 

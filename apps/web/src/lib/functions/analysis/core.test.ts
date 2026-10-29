@@ -17,9 +17,9 @@ import {
   type CoreScale
 } from './core';
 import scale from '$lib/data/difficulty-scale.json';
-// Shared with the difficulty service (scripts/calibre/jiten/core.py, test_core.py): both must give these.
-import fixtureJson from '../../../../../../scripts/calibre/tests/fixtures/difficulty-core.json?raw';
-import serverScale from '../../../../../../scripts/calibre/jiten/core-scale.json?raw';
+// Shared with the difficulty service (engine/core.py, test_core.py): both must give these.
+import fixtureJson from '../../../../../../engine/tests/fixtures/difficulty-core.json?raw';
+import serverScale from '../../../../../../engine/core-scale.json?raw';
 
 const fixture = JSON.parse(fixtureJson) as {
   cases: {

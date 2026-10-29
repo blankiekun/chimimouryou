@@ -5,9 +5,9 @@
  */
 
 /**
- * The fast difficulty core, the same as scripts/calibre/jiten/core.py (read its notes): Sudachi's
+ * The fast difficulty core, the same as engine/core.py (read its notes): Sudachi's
  * tokens → JMdict compounds joined → word units → frequency ranks → V98 and a log-rank histogram. Both check
- * scripts/calibre/tests/fixtures/difficulty-core.json; change them together. Not part of upstream.
+ * engine/tests/fixtures/difficulty-core.json; change them together. Not part of upstream.
  */
 
 /** The book's core numbers, as the difficulty service stores them (estimate `core`) */

@@ -26,7 +26,7 @@ here = Path(__file__).resolve().parent
 root = here.parent.parent
 src = Path(sys.argv[1])
 out = Path(sys.argv[2]) if len(sys.argv) > 2 else root / 'apps/web/src/lib/assets/fonts/biz-udpgothic'
-grades = json.loads((root / 'scripts/calibre/jiten/kanji-grades.json').read_text())
+grades = json.loads((root / 'engine/kanji-grades.json').read_text())
 
 WEIGHTS = {400: 'BIZUDPGothic-Regular.ttf', 700: 'BIZUDPGothic-Bold.ttf'}
 

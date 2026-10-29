@@ -1,5 +1,5 @@
 """Tests for mokuro/service.py with a fake mokuro. Run from the repo root:
-python3 -m unittest discover -s scripts/calibre/tests
+python3 -m unittest discover -s server/tests
 """
 import importlib.util
 import json

@@ -135,20 +135,22 @@ jobs:
 
       - name: Install yurigana
         # The difficulty scripts import it; its Sudachi dependencies are only needed in the image.
-        run: pip install --no-deps "$(grep '^yurigana' scripts/calibre/jiten/requirements.txt)"
+        run: pip install --no-deps "$(grep '^yurigana' engine/requirements.txt)"
 
       - name: Install Pillow
         # The services image has Debian's python3-pil (covers and thumbnails).
         run: pip install pillow
 
       - name: Unit tests
-        run: python -m unittest discover -s scripts/calibre/tests
+        run: |
+          python -m unittest discover -s engine/tests
+          python -m unittest discover -s server/tests
 
       - name: Discord companion (Anki add-on) tests
         run: python -m unittest discover -s apps/anki-discord/tests
 
       - name: Render the nginx config
-        run: scripts/calibre/render-nginx.sh > /dev/null
+        run: server/render-nginx.sh > /dev/null
 
   # Packages the desktop app (Linux, unpacked) when apps/desktop changes; Front end already lints and
   # tests it. A stub page stands in for the web build, which Front end builds anyway.
@@ -223,7 +225,7 @@ jobs:
         id: inputs
         run: |
           if [ "${{ github.event_name }}" != pull_request ] ||
-            git diff --name-only HEAD^1 HEAD | grep -qE '^(docker/|docker-compose|\.dockerignore|scripts/calibre/|package\.json|pnpm-|apps/web/package\.json|themes\.md|\.github/workflows/)'; then
+            git diff --name-only HEAD^1 HEAD | grep -qE '^(docker/|docker-compose|\.dockerignore|server/|engine/|package\.json|pnpm-|apps/web/package\.json|themes\.md|\.github/workflows/)'; then
             echo build=true >> "$GITHUB_OUTPUT"
           fi
 

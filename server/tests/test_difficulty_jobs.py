@@ -1,4 +1,4 @@
-"""Tests for the difficulty service's job pools (scripts/calibre/jiten/service.py)."""
+"""Tests for the difficulty service's job pools (server/jiten/service.py)."""
 import threading
 import time
 import unittest

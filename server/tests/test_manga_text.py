@@ -1,4 +1,4 @@
-"""Tests for manga estimates from mokuro text in the difficulty service (scripts/calibre/jiten/service.py).
+"""Tests for manga estimates from mokuro text in the difficulty service (server/jiten/service.py).
 Scoring is faked: the real one needs Sudachi."""
 import json
 import os

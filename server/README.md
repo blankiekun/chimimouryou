@@ -2,8 +2,8 @@
 
 Everything that runs next to the static app: the nginx configuration, the
 catalog builder and the Python services. With Docker (the usual way) they run
-from `docker-compose.yml`, see [docs/INSTALL.md](../../docs/INSTALL.md); every
-setting is in [docs/CONFIGURATION.md](../../docs/CONFIGURATION.md).
+from `docker-compose.yml`, see [docs/INSTALL.md](../docs/INSTALL.md); every
+setting is in [docs/CONFIGURATION.md](../docs/CONFIGURATION.md).
 
 | Path                                                  | What it is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
