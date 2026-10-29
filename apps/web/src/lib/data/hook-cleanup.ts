@@ -301,6 +301,7 @@ export function hookCleaner(cleanup: HookCleanup) {
   const recent = new Map<string, string[]>();
   // The thread's last finished line (ends at lineEnd): the page text a new line starts with.
   const finished = new Map<string, string>();
+  const last = new Map<string, string>();
   const size = cleanup.recentSize || defaultRecentSize;
 
   return (line: string, threadId = '') => {
@@ -310,6 +311,12 @@ export function hookCleaner(cleanup: HookCleanup) {
       const previous = finished.get(threadId) ?? '';
       const full = text.trimEnd();
       const continues = !!previous && full.startsWith(previous);
+      const before = last.get(threadId) ?? '';
+
+      last.set(threadId, full);
+      // The line just sent again behind the end of the one before it (忍「…」, then
+      // 満面の笑顔で言うのだ。忍「…」): nothing new.
+      if (before.length > 1 && full.length > before.length && full.endsWith(before)) return '';
 
       // Kept while a game redraws the new line in pieces (あ。い, あ。いう), so each piece is cut too.
       if (lineEnd.test(full)) finished.set(threadId, full);

@@ -120,6 +120,27 @@ describe('hook cleanup filters', () => {
     expect(clean('次のページです')).toBe('次のページです');
   });
 
+  it('drops a line that is the one before it behind the end of an older one', () => {
+    const clean = hookCleaner({});
+    // Each click: the new line, then the previous line's end with the new line again.
+    const sent = [
+      '満面の笑顔で言うのだ。',
+      '忍「…………」',
+      '満面の笑顔で言うのだ。忍「…………」',
+      'あずさ「……だ、黙るの？」',
+      '「…………」忍あずさ「……だ、黙るの？」',
+      '忍「あ、いや」',
+      '「……だ、黙るの？」あずさ忍「あ、いや」'
+    ];
+
+    expect(sent.map((line) => clean(line)).filter(Boolean)).toEqual([
+      '満面の笑顔で言うのだ。',
+      '忍「…………」',
+      'あずさ「……だ、黙るの？」',
+      '忍「あ、いや」'
+    ]);
+  });
+
   it('drops lines seen lately, per thread, and empty lines', () => {
     const clean = hookCleaner({ recentLines: true, recentSize: 2, markup: true });
 
