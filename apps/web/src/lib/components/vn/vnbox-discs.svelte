@@ -26,6 +26,12 @@
     if (index === current) return;
     player()?.insertCDRomDisc?.(index);
     current = index;
+    // VNBox loads the disc asynchronously and may fail: follow the drive once it's done
+    const settle = setInterval(() => {
+      if (player()?.cdromLoading >= 0) return;
+      clearInterval(settle);
+      current = player()?.cdromCurrent ?? current;
+    }, 500);
   }
 </script>
 
