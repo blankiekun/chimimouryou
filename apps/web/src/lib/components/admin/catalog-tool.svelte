@@ -25,9 +25,7 @@
 </script>
 
 <p class="tool-text">
-  The catalog lists the Calibre library and the visual novel folder. It is rebuilt on its own when
-  either changes (checked every few minutes); rebuild it now after changing files by hand. A large
-  library takes a few minutes.
+  Rebuilds on its own when the library changes. Rebuild now after editing files by hand.
 </p>
 
 {#if result}

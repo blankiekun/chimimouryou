@@ -19,7 +19,7 @@ import { standalone } from '$lib/data/env';
 export interface SettingsSectionInfo {
   id: string;
   label: MessageKey;
-  description: MessageKey;
+  description?: MessageKey;
 }
 
 export interface SettingsArea {
@@ -47,33 +47,28 @@ export const settingsAreas: SettingsArea[] = [
           ]),
       {
         id: 'general-language',
-        label: 'settings.section.general-language',
-        description: 'settings.section.general-language.text'
+        label: 'settings.section.general-language'
       },
       {
         id: 'general-theme',
-        label: 'settings.section.general-theme',
-        description: 'settings.section.general-theme.text'
+        label: 'settings.section.general-theme'
       },
       // The standalone edition is a web app people install; the server edition is reached by URL.
       ...(standalone
         ? [
             {
               id: 'general-install',
-              label: 'settings.section.general-install' as const,
-              description: 'settings.section.general-install.text' as const
+              label: 'settings.section.general-install' as const
             },
             {
               id: 'general-analysis',
-              label: 'settings.section.general-analysis' as const,
-              description: 'settings.section.general-analysis.text' as const
+              label: 'settings.section.general-analysis' as const
             }
           ]
         : []),
       {
         id: 'general-plugins',
-        label: 'settings.section.general-plugins',
-        description: 'settings.section.general-plugins.text'
+        label: 'settings.section.general-plugins'
       }
     ]
   },
@@ -83,33 +78,27 @@ export const settingsAreas: SettingsArea[] = [
     sections: [
       {
         id: 'reader-text',
-        label: 'settings.section.reader-text',
-        description: 'settings.section.reader-text.text'
+        label: 'settings.section.reader-text'
       },
       {
         id: 'reader-writing',
-        label: 'settings.section.reader-writing',
-        description: 'settings.section.reader-writing.text'
+        label: 'settings.section.reader-writing'
       },
       {
         id: 'reader-layout',
-        label: 'settings.section.reader-layout',
-        description: 'settings.section.reader-layout.text'
+        label: 'settings.section.reader-layout'
       },
       {
         id: 'reader-progress',
-        label: 'settings.section.reader-progress',
-        description: 'settings.section.reader-progress.text'
+        label: 'settings.section.reader-progress'
       },
       {
         id: 'reader-navigation',
-        label: 'settings.section.reader-navigation',
-        description: 'settings.section.reader-navigation.text'
+        label: 'settings.section.reader-navigation'
       },
       {
         id: 'reader-session',
-        label: 'settings.section.reader-session',
-        description: 'settings.section.reader-session.text'
+        label: 'settings.section.reader-session'
       }
     ]
   },
@@ -121,75 +110,61 @@ export const settingsAreas: SettingsArea[] = [
     sections: [
       {
         id: 'dictionary-general',
-        label: 'settings.section.dictionary-general',
-        description: 'settings.section.dictionary-general.text'
+        label: 'settings.section.dictionary-general'
       },
       {
         id: 'dictionary-dictionaries',
-        label: 'settings.section.dictionary-dictionaries',
-        description: 'settings.section.dictionary-dictionaries.text'
+        label: 'settings.section.dictionary-dictionaries'
       },
       {
         id: 'dictionary-popup',
-        label: 'settings.section.dictionary-popup',
-        description: 'settings.section.dictionary-popup.text'
+        label: 'settings.section.dictionary-popup'
       },
       {
         id: 'dictionary-scanning',
-        label: 'settings.section.dictionary-scanning',
-        description: 'settings.section.dictionary-scanning.text'
+        label: 'settings.section.dictionary-scanning'
       },
       {
         id: 'dictionary-translation',
-        label: 'settings.section.dictionary-translation',
-        description: 'settings.section.dictionary-translation.text'
+        label: 'settings.section.dictionary-translation'
       },
       {
         id: 'dictionary-audio',
-        label: 'settings.section.dictionary-audio',
-        description: 'settings.section.dictionary-audio.text'
+        label: 'settings.section.dictionary-audio'
       },
       {
         id: 'dictionary-shortcuts',
-        label: 'settings.section.dictionary-shortcuts',
-        description: 'settings.section.dictionary-shortcuts.text'
+        label: 'settings.section.dictionary-shortcuts'
       },
       {
         id: 'dictionary-backup',
-        label: 'settings.section.dictionary-backup',
-        description: 'settings.section.dictionary-backup.text'
+        label: 'settings.section.dictionary-backup'
       }
     ]
   },
   {
     id: 'ai',
     label: 'settings.area.ai',
-    description: 'settings.area.ai.text',
     sections: [
       {
         id: 'ai-connections',
-        label: 'settings.section.ai-connections',
-        description: 'settings.section.ai-connections.text'
+        label: 'settings.section.ai-connections'
       },
       {
         id: 'ai-features',
-        label: 'settings.section.ai-features',
-        description: 'settings.section.ai-features.text'
+        label: 'settings.section.ai-features'
       },
       {
         id: 'ai-presets',
-        label: 'settings.section.ai-presets',
-        description: 'settings.section.ai-presets.text'
+        label: 'settings.section.ai-presets'
       },
       {
         id: 'ai-prompts',
-        label: 'settings.section.ai-prompts',
-        description: 'settings.section.ai-prompts.text'
+        label: 'settings.section.ai-prompts'
       },
       {
         id: 'ai-read-aloud',
-        label: 'settings.section.ai-read-aloud',
-        description: 'settings.section.ai-read-aloud.text'
+        label: 'settings.section.ai-read-aloud'
       },
       {
         id: 'ai-syncs',
@@ -198,8 +173,7 @@ export const settingsAreas: SettingsArea[] = [
       },
       {
         id: 'ai-guide',
-        label: 'settings.section.ai-guide',
-        description: 'settings.section.ai-guide.text'
+        label: 'settings.section.ai-guide'
       }
     ]
   },
@@ -209,15 +183,13 @@ export const settingsAreas: SettingsArea[] = [
     sections: [
       {
         id: 'audiobookshelf-connect',
-        label: 'settings.section.audiobookshelf-connect',
-        description: 'settings.section.audiobookshelf-connect.text'
+        label: 'settings.section.audiobookshelf-connect'
       }
     ]
   },
   {
     id: 'social',
     label: 'settings.area.social',
-    description: 'settings.area.social.text',
     sections: [
       {
         id: 'social-features',
@@ -231,8 +203,7 @@ export const settingsAreas: SettingsArea[] = [
       },
       {
         id: 'social-profile',
-        label: 'settings.section.social-profile',
-        description: 'settings.section.social-profile.text'
+        label: 'settings.section.social-profile'
       },
       {
         id: 'social-shows',
@@ -241,8 +212,7 @@ export const settingsAreas: SettingsArea[] = [
       },
       {
         id: 'social-hub',
-        label: 'settings.section.social-hub',
-        description: 'settings.section.social-hub.text'
+        label: 'settings.section.social-hub'
       }
     ]
   },
@@ -253,8 +223,7 @@ export const settingsAreas: SettingsArea[] = [
     sections: [
       {
         id: 'discord-connection',
-        label: 'settings.section.discord-connection',
-        description: 'settings.section.discord-connection.text'
+        label: 'settings.section.discord-connection'
       },
       {
         id: 'discord-activities',
@@ -263,30 +232,25 @@ export const settingsAreas: SettingsArea[] = [
       },
       {
         id: 'discord-away',
-        label: 'settings.section.discord-away',
-        description: 'settings.section.discord-away.text'
+        label: 'settings.section.discord-away'
       }
     ]
   },
   {
     id: 'anki',
     label: 'settings.area.anki',
-    description: 'settings.area.anki.text',
     sections: [
       {
         id: 'anki-connect',
-        label: 'settings.section.anki-connect',
-        description: 'settings.section.anki-connect.text'
+        label: 'settings.section.anki-connect'
       },
       {
         id: 'anki-dictionary',
-        label: 'settings.section.anki-dictionary',
-        description: 'settings.section.anki-dictionary.text'
+        label: 'settings.section.anki-dictionary'
       },
       {
         id: 'anki-media',
-        label: 'settings.section.anki-media',
-        description: 'settings.section.anki-media.text'
+        label: 'settings.section.anki-media'
       }
     ]
   },
@@ -296,23 +260,19 @@ export const settingsAreas: SettingsArea[] = [
     sections: [
       {
         id: 'tracking-statistics',
-        label: 'settings.section.tracking-statistics',
-        description: 'settings.section.tracking-statistics.text'
+        label: 'settings.section.tracking-statistics'
       },
       {
         id: 'tracking-day',
-        label: 'settings.section.tracking-day',
-        description: 'settings.section.tracking-day.text'
+        label: 'settings.section.tracking-day'
       },
       {
         id: 'tracking-merge',
-        label: 'settings.section.tracking-merge',
-        description: 'settings.section.tracking-merge.text'
+        label: 'settings.section.tracking-merge'
       },
       {
         id: 'tracking-goals',
-        label: 'settings.section.tracking-goals',
-        description: 'settings.section.tracking-goals.text'
+        label: 'settings.section.tracking-goals'
       }
     ]
   },
@@ -321,17 +281,14 @@ export const settingsAreas: SettingsArea[] = [
     ? {
         id: 'sync',
         label: 'settings.area.sync',
-        description: 'settings.area.sync.text',
         sections: [
           {
             id: 'sync-storage',
-            label: 'settings.section.sync-storage',
-            description: 'settings.section.sync-storage.text'
+            label: 'settings.section.sync-storage'
           },
           {
             id: 'sync-status',
-            label: 'settings.section.sync-status',
-            description: 'settings.section.sync-status.text'
+            label: 'settings.section.sync-status'
           },
           {
             id: 'sync-backup',
@@ -340,13 +297,11 @@ export const settingsAreas: SettingsArea[] = [
           },
           {
             id: 'sync-server',
-            label: 'settings.section.sync-server',
-            description: 'settings.section.sync-server.text'
+            label: 'settings.section.sync-server'
           },
           {
             id: 'sync-selfhost',
-            label: 'settings.section.sync-selfhost',
-            description: 'settings.section.sync-selfhost.text'
+            label: 'settings.section.sync-selfhost'
           }
         ]
       }
@@ -356,23 +311,19 @@ export const settingsAreas: SettingsArea[] = [
         sections: [
           {
             id: 'data-storage',
-            label: 'settings.section.data-storage',
-            description: 'settings.section.data-storage.text'
+            label: 'settings.section.data-storage'
           },
           {
             id: 'data-import',
-            label: 'settings.section.data-import',
-            description: 'settings.section.data-import.text'
+            label: 'settings.section.data-import'
           },
           {
             id: 'data-sync',
-            label: 'settings.section.data-sync',
-            description: 'settings.section.data-sync.text'
+            label: 'settings.section.data-sync'
           },
           {
             id: 'data-sources',
-            label: 'settings.section.data-sources',
-            description: 'settings.section.data-sources.text'
+            label: 'settings.section.data-sources'
           }
         ]
       }

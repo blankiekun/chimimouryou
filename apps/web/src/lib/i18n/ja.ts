@@ -278,8 +278,6 @@ export const ja: Record<MessageKey, string> = {
   'difficulty.levels5': 'レベル9〜10',
 
   'settings.uiLanguage': '表示言語',
-  'settings.uiLanguageHint':
-    'メニューやボタンの表示言語です（一部英語のみの箇所があります）。AIの応答言語は「設定 → AI」から変更できます。',
   'settings.categories': '設定カテゴリ',
   'settings.search': '設定を検索',
   'settings.searchLabel': '設定を検索',
@@ -298,37 +296,22 @@ export const ja: Record<MessageKey, string> = {
   'settings.area.dictionary.text':
     'Yomitan が使えないブラウザ(iPhone・iPad の Safari など)向けの内蔵辞書です。Yomitan のエンジンと設定で動き、辞書はこのブラウザに保存されます。',
   'settings.section.dictionary-general': '一般',
-  'settings.section.dictionary-general.text':
-    '内蔵辞書で検索するかどうかと、結果のまとめ方を設定します。',
   'settings.section.dictionary-dictionaries': '辞書',
-  'settings.section.dictionary-dictionaries.text':
-    'このブラウザにある Yomitan 辞書です。上から順に検索されます。',
   'settings.section.dictionary-translation': '検索処理',
-  'settings.section.dictionary-translation.text': 'テキストを辞書と照合する方法を設定します。',
   'settings.section.dictionary-backup': 'バックアップ',
-  'settings.section.dictionary-backup.text':
-    'Yomitan の設定ファイルの書き出し・読み込み・リセット。',
   'dict.builtIn': '内蔵辞書で検索',
-  'dict.builtInHint':
-    'Yomitan の代わりに下の辞書で単語を調べます。Yomitan が使えるブラウザでは最初はオフです。',
   'dict.yomitanSeenOn':
     'このブラウザでは Yomitan も動いているため、ポップアップが二つ開くことがあります。Yomitan だけを使うにはオフにしてください。',
   'dict.yomitanSeenOff': 'このブラウザで Yomitan が見つかったためオフになっています。',
   'dict.resultMode': '結果のまとめ方',
-  'dict.resultModeHint': 'Yomitan の結果表示モードです。',
   'dict.resultSplit': 'まとめない',
   'dict.resultGroup': '語と読み',
   'dict.resultTerm': '語ごと',
   'dict.resultMerge': '関連語',
   'dict.mainDictionary': 'メイン辞書',
-  'dict.mainDictionaryHint': '統合した結果はこの辞書を中心にまとめられます。',
   'dict.none': 'なし',
   'dict.maxResults': '最大件数',
-  'dict.maxResultsHint': '一回の検索で表示する項目数です。',
-  'dict.importLead':
-    'Yomitan 辞書ファイル(.zip)を読み込みます。語彙・頻度・アクセントに対応しています。大きな辞書は数分かかります。',
   'dict.getJmdict': 'Yomitan 用 JMdict を入手',
-  'dict.jitenFreqHint': '読み込むと、よく使われる語が先に表示されます。',
   'dict.getJitenFreq': 'Jiten の頻度リストを入手',
   'dict.import': '辞書を読み込む',
   'dict.importing': '{name} を読み込み中…',
@@ -344,11 +327,8 @@ export const ja: Record<MessageKey, string> = {
   'dict.options': 'オプション',
   'dict.alias': '表示名',
   'dict.secondarySearches': '二次検索',
-  'dict.secondarySearchesHint': '統合した結果の関連語を探すのに使います。',
   'dict.posFilter': '品詞フィルター',
-  'dict.posFilterHint': '活用形が語の品詞と一致する場合だけ表示します。',
   'dict.deinflections': '活用の解析',
-  'dict.deinflectionsHint': '活用形からこの辞書の語を探します。',
   'dict.collapsible': '定義の折りたたみ',
   'dict.collapseNever': 'しない',
   'dict.collapseExpanded': '開いた状態',
@@ -358,31 +338,20 @@ export const ja: Record<MessageKey, string> = {
   'dict.delete': '削除',
   'dict.deleteConfirm': '完全に削除',
   'settings.section.dictionary-popup': 'ポップアップ',
-  'settings.section.dictionary-popup.text': '検索ポップアップの見た目と表示位置。',
   'settings.section.dictionary-scanning': 'スキャン',
-  'settings.section.dictionary-scanning.text':
-    '単語の選び方：タップ、またはキーを押しながらマウスを重ねる。',
   'settings.section.dictionary-audio': '音声',
-  'settings.section.dictionary-audio.text': '単語の音声の取得元。',
   'settings.section.dictionary-shortcuts': 'ショートカット',
-  'settings.section.dictionary-shortcuts.text': 'ポップアップ表示中に使えるキー。',
-  'dict.jmdictHint': 'Yomitan 利用者の多くが最初に使う、無料の和英辞書です。',
   'dict.fontSize': '文字サイズ',
-  'dict.fontSizeHint': 'ポップアップの文字サイズ（ピクセル）。',
   'dict.popupDisplay': '表示位置',
-  'dict.popupDisplayHint': '単語の近く、または上下に全幅で表示。スマートフォンでは常に全幅です。',
   'dict.popupNear': '単語の近く',
   'dict.popupFullWidth': '全幅',
   'dict.sheetPosition': '全幅の位置',
-  'dict.sheetPositionHint': '単語が隠れるときは反対側に移ります。',
   'dict.bottom': '下',
   'dict.top': '上',
   'dict.popupSize': 'サイズ',
-  'dict.popupSizeHint': '単語の近くに出るポップアップの幅 × 高さ（ピクセル）。',
   'dict.width': '幅',
   'dict.height': '高さ',
   'dict.scale': '拡大率',
-  'dict.scaleHint': 'サイズと位置のずれに掛けます。',
   'dict.horizontalPosition': '横書きでの位置',
   'dict.verticalPosition': '縦書きでの位置',
   'dict.below': '下',
@@ -401,45 +370,28 @@ export const ja: Record<MessageKey, string> = {
   'dict.glossaryDefault': 'リスト',
   'dict.glossaryCompact': 'コンパクト',
   'dict.compactTags': 'タグをまとめる',
-  'dict.compactTagsHint': '同じ辞書の語義が続くとき、辞書タグを一度だけ表示します。',
   'dict.frequencyDisplay': '頻度',
   'dict.frequencyTags': 'タグ',
   'dict.frequencyList': 'リスト',
   'dict.averageFrequency': '平均頻度',
-  'dict.averageFrequencyHint': 'すべての頻度リストの調和平均を加えます。',
   'dict.pitchDownstep': 'アクセント：読みの上の線',
   'dict.pitchPosition': 'アクセント：数字',
   'dict.pitchGraph': 'アクセント：グラフ',
   'dict.customCss': 'カスタム CSS',
-  'dict.customCssHint': 'ポップアップ内にのみ適用されます（Yomitan のカスタムポップアップ CSS）。',
   'dict.scanTap': 'タップで検索',
-  'dict.scanTapHint':
-    'タッチ画面とペン：文字をタップすると検索し、それ以外のタップは通常どおりです。',
   'dict.scanKey': 'マウスのスキャンキー',
-  'dict.scanKeyHint': '単語を指しながら押し続けます。「なし」はマウスの下を常に検索します。',
   'dict.scanKeyNone': 'なし（ホバー）',
   'dict.scanWithoutMove': 'キーを押した時点でスキャン',
-  'dict.scanWithoutMoveHint': 'キーを押すと、止まっているマウスの下の単語をすぐに検索します。',
   'dict.scanDelay': '遅延',
-  'dict.scanDelayHint': 'マウスでスキャンするまでのミリ秒。',
   'dict.scanLength': 'スキャンの長さ',
-  'dict.scanLengthHint': '指した位置から検索に使う文字数。',
   'dict.layoutAware': 'レイアウトを考慮',
-  'dict.layoutAwareHint': '改行や段落の区切りで止まります。',
   'dict.autoHide': '見つからないときは閉じる',
-  'dict.autoHideHint': '単語が見つからないとポップアップを閉じます。',
   'dict.nesting': '入れ子の検索',
-  'dict.nestingHint': '語義の中の単語をたどれる深さ。0 で無効。',
   'dict.audioEnabled': '単語の音声',
-  'dict.audioEnabledHint': '各見出しに再生ボタンを付けます。',
   'dict.autoPlay': '自動再生',
-  'dict.autoPlayHint': 'ポップアップを開くと最初の見出しの音声を再生します。',
   'dict.volume': '音量',
   'dict.defaultSources': '既定の取得元',
-  'dict.defaultSourcesHint': '下の取得元の後に JapanesePod101 を試します。',
   'dict.audioSources': '取得元',
-  'dict.audioSourcesHint':
-    '上から順に試します。LanguagePod101 と Jisho はウェブページから読めないため使えません。',
   'dict.audioSource': '取得元',
   'dict.audioUrl': 'URL',
   'dict.voice': '音声',
@@ -480,20 +432,16 @@ export const ja: Record<MessageKey, string> = {
   'dict.cancel': 'キャンセル',
   'dict.empty': 'まだ辞書がありません。読み込むと単語を調べられます。',
   'dict.sortFrequency': '頻度で並べ替え',
-  'dict.sortFrequencyHint': 'この頻度辞書で結果を並べ替えます。',
   'dict.sortOrder': '頻度の順序',
   'dict.sortDescending': '降順',
   'dict.sortAscending': '昇順',
   'dict.deleteAll': 'すべての辞書を削除',
   'dict.deleteAllConfirm': 'すべて完全に削除',
   'dict.resolution': '検索の単位',
-  'dict.resolutionHint': '一致を探すときにテキストを一文字ずつ、または単語ずつ短くします。',
   'dict.resolutionLetter': '文字',
   'dict.resolutionWord': '単語',
   'dict.alphanumeric': '英数字も検索',
-  'dict.alphanumericHint': 'ローマ字や数字を含むテキストも照合します。',
   'dict.replacements': 'テキスト置換',
-  'dict.replacementsHint': '検索する前にテキストへ適用する正規表現です。',
   'dict.searchOriginal': '元のテキストも検索',
   'dict.pattern': 'パターン',
   'dict.replacement': '置換後',
@@ -501,10 +449,8 @@ export const ja: Record<MessageKey, string> = {
   'dict.remove': '削除',
   'dict.addPattern': 'パターンを追加',
   'dict.export': '設定を書き出す',
-  'dict.exportHint': 'Yomitan でも読み込める設定ファイルです。',
   'dict.exportButton': '書き出す',
   'dict.importSettings': '設定を読み込む',
-  'dict.importSettingsHint': 'Yomitan またはここで書き出した設定ファイルです。辞書は含まれません。',
   'dict.chooseFile': 'ファイルを選択',
   'dict.importedSettings': '設定を読み込みました。',
   'dict.importSettingsFailed': '設定を読み込めませんでした: {error}',
@@ -518,11 +464,6 @@ export const ja: Record<MessageKey, string> = {
   'settings.area.tracking': '記録・統計',
   'settings.area.data': 'データ管理',
   'settings.area.sync': '同期',
-  'settings.area.sync.text': 'このブラウザの保存先、同期の状態とバックアップ。',
-  'settings.area.anki.text':
-    'Yomitan で作成したカードに音声と画像を追加します。既知語は「単語」タブにあります。',
-  'settings.area.ai.text':
-    'AI プラグイン（一般 → 拡張機能）が必要です。接続は1つあれば十分です。下で別の接続を選ぶまで、すべての機能がそれを使います。',
   'settings.area.reader.phone':
     'この種類の端末（スマートフォン）用に保存されます。大きい画面は別の設定を使います。',
   'settings.area.reader.desktop':
@@ -531,100 +472,45 @@ export const ja: Record<MessageKey, string> = {
   'settings.section.general-account.text':
     'ログインして進捗・統計・各種設定を複数端末間で同期します。',
   'settings.section.general-language': '言語 · Language',
-  'settings.section.general-language.text': 'メニューやボタンの表示言語を設定します。',
   'settings.section.general-theme': 'テーマ',
-  'settings.section.general-theme.text':
-    'アプリ全体の配色です。「複製」でどのテーマからでも独自テーマを作れます。',
   'settings.section.general-install': 'アプリとしてインストール',
-  'settings.section.general-install.text': 'この端末にアプリとして置いておけます。',
   'settings.section.general-analysis': '解析ツール',
-  'settings.section.general-analysis.text':
-    'サーバーなしで難易度、単語リスト、ふりがなを作ります。',
   'settings.section.general-plugins': '拡張機能',
-  'settings.section.general-plugins.text':
-    '追加機能です。オンにすると、それぞれの設定項目が表示されます。',
   'settings.section.reader-text': 'テキストスタイル',
-  'settings.section.reader-text.text': 'フォント、文字サイズ、段落の間隔を調整します。',
   'settings.section.reader-writing': '組版・ふりがな',
-  'settings.section.reader-writing.text':
-    '縦書き／横書きの切り替えや、ふりがなの表示方法を設定します。',
   'settings.section.reader-layout': 'ページレイアウト',
-  'settings.section.reader-layout.text': '表示モード、余白、段組み、画像の表示方法を設定します。',
   'settings.section.reader-progress': '進捗・しおり',
-  'settings.section.reader-progress.text': 'フッターの進捗表示や、しおりの保存方法を設定します。',
   'settings.section.reader-navigation': 'ページ移動',
-  'settings.section.reader-navigation.text':
-    'スワイプ、スクロール、タップによるページめくり動作を設定します。',
   'settings.section.reader-session': 'セッション',
-  'settings.section.reader-session.text':
-    '画面のスリープ防止や、リーダーを閉じる際の確認動作を設定します。',
   'settings.section.ai-guide': 'セットアップガイド',
-  'settings.section.ai-guide.text':
-    'OpenRouter や ElevenLabs のキーを取得する手順と、キーの保存場所を説明します。',
   'settings.section.ai-presets': 'プロンプト',
-  'settings.section.ai-presets.text':
-    'AI に伝える内容です。自己紹介と「AIに質問」パネルのボタンを設定します。',
   'settings.section.ai-read-aloud': '音声',
-  'settings.section.ai-read-aloud.text':
-    '現在位置から本を読み上げる音声です。読んでいる行がハイライトされます。',
   'settings.section.ai-connections': '接続',
-  'settings.section.ai-connections.text':
-    '接続はプロバイダー、そのキー、リクエストの送信先の組み合わせです。モデルはプロバイダーの一覧から読み込みます。',
   'settings.section.ai-features': '機能',
-  'settings.section.ai-features.text':
-    '各機能が使う接続とモデルです。新しい接続では機能ごとに適したモデルが選ばれます。ここで変更できます。',
   'settings.section.ai-prompts': 'システムプロンプト',
-  'settings.section.ai-prompts.text':
-    '毎回のリクエストの前にAIへ伝える指示です。標準のプロンプトはAIの言語に従い、編集すると自分用のコピーになります。',
   'settings.section.ai-syncs': '同期される内容',
   'settings.section.ai-syncs.text':
     'リクエストはこのブラウザからプロバイダーへ直接送られ、このサーバーを経由しません。',
   'settings.section.audiobookshelf-connect': 'サーバー接続',
-  'settings.section.audiobookshelf-connect.text':
-    '「聴く → Audiobookshelf」で使用するアカウントを設定します。',
   'settings.section.anki-connect': 'AnkiConnect',
-  'settings.section.anki-connect.text':
-    'Anki との接続設定およびノートへの入力フィールドを指定します。',
   'settings.section.anki-dictionary': '辞書のカード',
-  'settings.section.anki-dictionary.text':
-    '内蔵辞書の「Anki に追加」で作るカードのデッキ・ノートタイプ・フィールドを Yomitan と同じ形式で設定します。',
   'settings.section.anki-media': 'カードのメディア',
-  'settings.section.anki-media.text':
-    '読書やプレイ中に作成したカードへ追加する音声・スクリーンショットを設定します。',
   'settings.section.tracking-statistics': 'トラッカー',
-  'settings.section.tracking-statistics.text':
-    '読書トラッカーの動作や自動一時停止の条件を設定します。',
   'settings.section.tracking-day': '日付と読了の扱い',
-  'settings.section.tracking-day.text': '日付の切り替え時刻や、読了時のカウント方法を設定します。',
   'settings.section.tracking-merge': '同期と統合',
-  'settings.section.tracking-merge.text': '他端末の統計データや読書目標との統合方法を設定します。',
   'settings.section.tracking-goals': '読書目標',
-  'settings.section.tracking-goals.text': '日次・週次・月次の読書目標を設定します。',
   'settings.section.sync-storage': '保存先',
-  'settings.section.sync-storage.text': '書籍と読書データの保存場所です。',
   'settings.section.sync-status': '状態',
-  'settings.section.sync-status.text': '最後の同期とエラー。',
   'settings.section.sync-backup': 'バックアップ',
   'settings.section.sync-backup.text': '進捗、統計、読書目標を保存します。書籍は含まれません。',
   'settings.section.sync-server': 'サーバー',
-  'settings.section.sync-server.text': 'chimimouryouサーバーに接続し、そのライブラリを読みます。',
   'settings.section.sync-selfhost': 'セルフホスト',
-  'settings.section.sync-selfhost.text': 'chimimouryouサーバーでできること。',
   'settings.section.data-storage': 'ローカルストレージ',
-  'settings.section.data-storage.text': 'このブラウザでの書籍やデータの保存方法を設定します。',
   'settings.section.data-import': 'インポート',
-  'settings.section.data-import.text':
-    'EPUB ファイルのインポート時に適用する自動修正を設定します。',
   'settings.section.data-sync': 'データ同期',
-  'settings.section.data-sync.text':
-    '保存先間でのデータの自動インポート／エクスポートを設定します。',
   'settings.section.data-sources': '保存先（ソース）',
-  'settings.section.data-sources.text':
-    'Calibre、ブラウザ、クラウド、ローカルフォルダなどの保存先を管理します。',
 
   'anki.enabled': '作成したカードにメディアを自動追加',
-  'anki.enabledHint':
-    '本やビジュアルノベルを開いている間、Yomitan 等で Anki に追加したノートへ以下の音声やスクリーンショットを自動で添付します。',
   'anki.guide': 'セットアップガイド',
   'anki.guideLink': 'Yomitan・AnkiConnect・フィールドの設定手順',
   'anki.url': 'AnkiConnect のアドレス',
@@ -634,55 +520,36 @@ export const ja: Record<MessageKey, string> = {
   'anki.connecting': '接続中…',
   'anki.connected': '接続済み（AnkiConnect v{version}）',
   'anki.sentenceField': '例文フィールド',
-  'anki.sentenceFieldHint':
-    '抽出した例文が入るフィールドです。AI音声の読み上げやオーディオブックの検索、ビジュアルノベルでの対象セリフ（画像・音声）の特定に使用されます。',
   'anki.audioField': '音声フィールド',
-  'anki.audioFieldHint':
-    '例文やセリフの音声を格納するフィールドです（すでに値がある場合は上書きされません）。',
   'anki.pictureField': '画像フィールド',
-  'anki.pictureFieldHint':
-    'ビジュアルノベルのスクリーンショットを格納するフィールドです（すでに値がある場合は上書きされません）。',
   'anki.dict.route': 'カードの追加方法',
-  'anki.dict.routeHint':
-    'AnkiConnect はパソコンの Anki（または Android の AnkiDroid と AnkiConnect Android アプリ）に追加し、重複を確認します。iPhone と iPad には AnkiConnect がないため、AnkiMobile が入力済みのカードで開き、追加後にここへ戻ります。',
   'anki.dict.import': 'Yomitan から読み込む',
   'anki.dict.importHint':
     'Yomitan の設定ファイル（Yomitan → 設定 → バックアップ → 設定をエクスポート）から、デッキ・ノートタイプ・フィールド・タグ・重複確認・カスタムテンプレートを読み込みます。辞書の設定は変わりません。',
   'anki.dict.imported': '読み込みました: {deck}、{model}',
   'anki.dict.importFailed': '読み込めませんでした: {error}',
   'anki.dict.model': 'ノートタイプ',
-  'anki.dict.modelHint':
-    'AnkiConnect 使用時は、選ぶとフィールドが入り、名前から Yomitan のマーカーが推測されます。',
   'anki.dict.fields': 'フィールド',
   'anki.dict.fieldsHint':
-    '各フィールドの値です。{expression}、{reading}、{furigana-plain}、{glossary}、{sentence}、{frequencies}、{pitch-accents} などの Yomitan マーカーが使えます。重複確認には最初のフィールドを使います。辞書の画像と {screenshot} は空になり、{audio} は AnkiConnect 使用時に JapanesePod101 の音声が入ります。',
+    'Yomitan マーカー（{expression}、{reading}、{glossary}、{sentence} など）が使えます。重複確認には最初のフィールドを使います。',
   'anki.dict.newField': 'フィールド名',
   'anki.dict.addField': 'フィールドを追加',
   'anki.dict.remove': '削除',
   'anki.dict.removeField': '{field} を削除',
   'anki.dict.tags': 'タグ',
-  'anki.dict.tagsHint': 'スペース区切りです。',
   'anki.dict.duplicates': '重複確認',
-  'anki.dict.duplicatesHint':
-    '最初のフィールドが同じノートです。AnkiConnect 使用時は、ポップアップに「Anki にあり」と表示されます。',
   'anki.dict.duplicatesOff': 'オフ',
   'anki.dict.duplicatesCollection': 'コレクション全体',
   'anki.dict.duplicatesDeck': 'このデッキ',
   'anki.dict.duplicatesDeckRoot': 'このデッキと親デッキ',
   'anki.dict.templates': 'カスタムテンプレート',
-  'anki.dict.templatesHint': 'Yomitan から読み込んだ Handlebars テンプレートを使います。',
   'anki.dict.templatesReset': 'Yomitan の既定に戻す',
   'anki.bookAudio': 'オーディオブックの音声',
-  'anki.bookAudioHint':
-    'インポート済みのオーディオブック（聴く → オーディオブック）から、該当する文の音声をリアルタイムで録音して追加します。',
   'anki.aiFallback': 'オーディオブックがない場合は ElevenLabs の音声を使用',
   'anki.aiFallbackHint':
     'AI音声で読み上げた例文を追加します（キーと音声は「設定 → AI」で指定）。カードごとに ElevenLabs のクレジットを消費します。',
   'anki.vnScreenshot': 'ビジュアルノベルのスクリーンショット',
-  'anki.vnScreenshotHint': 'カード追加時点のゲーム画面を保存します。',
   'anki.vnAudio': 'ビジュアルノベルの音声',
-  'anki.vnAudioHint':
-    '直前のクリックまたはキー操作以降に再生されたゲーム音声（ボイス・BGM）を保存します。設定変更後に起動したゲームから有効になります。',
   'anki.known': 'Anki の既知語彙',
   'anki.knownHint':
     '指定デッキの定着済みカード（復習間隔21日以上）を1日1回まで読み込み、各本の語彙カバー率や新出語彙の判定で「既知」として扱います（データはこのブラウザにのみ保存されます）。',
@@ -782,9 +649,6 @@ export const ja: Record<MessageKey, string> = {
   'ai.guideVoice':
     '「Voices」で日本語対応の音声を選び、メニューの「Copy voice ID」からIDをコピーして {field} に貼り付けます。',
   'ai.guideListen': '本を開き、サイドパネルの「聴く」タブで「AI音声」を選択します。',
-  'ai.keysWhere': 'APIキーの保存と扱い',
-  'ai.keysWhereHint':
-    'キーはこのブラウザに保存されるほか、ログイン中はサーバー上のアカウントにも同期され、他端末でも利用できます。ログアウトするとブラウザから削除され、未ログイン時に入力したキーもログイン時に消去されます。各キーはブラウザからそのプロバイダーにのみ直接送信されます。接続・機能の選択・詳細設定はキーなしで同期され、キーのない端末には「この端末にキーが必要です」と表示されます。',
   'ai.hideKey': '隠す',
   'ai.showKey': '表示',
   'ai.language': 'AIの応答言語',
@@ -792,12 +656,8 @@ export const ja: Record<MessageKey, string> = {
     '「AIに質問」「あらすじ」「用語集」で使用するプロンプトと応答の言語です。リーダー内のパネルからも切り替えられます。',
   'ai.model': '使用モデル',
   'ai.aboutYou': 'ユーザー情報・要望',
-  'ai.aboutYouHint':
-    '「AIに質問」のすべてのプロンプトに付加されます。日本語レベルや解説の好みなどを記入してください（例：「JLPT N3レベルです。解説は簡潔にし、N3以上の漢字には読み仮名を振ってください」）。',
   'ai.optional': '任意',
   'ai.presets': '「AIに質問」のプリセット',
-  'ai.presetsHint':
-    '選択した文章に対する質問（または追加質問）をワンクリックで送信するボタンです。',
   'ai.presetLabel': 'ボタンの表示名',
   'ai.prompt': 'プロンプト',
   'ai.presetActions': '操作',
@@ -812,27 +672,19 @@ export const ja: Record<MessageKey, string> = {
   'ai.waitForChoice': '待機する（自動実行しない）',
   'ai.runPreset': '「{label}」を自動実行',
   'ai.deviceVoice': '音声',
-  'ai.deviceVoiceHint':
-    'この端末にインストールされている音声です（日本語の音声を先頭に表示）。このブラウザにのみ保存されます。',
   'ai.deviceVoiceAuto': '自動（最初の日本語音声）',
   'ai.deviceVoiceNone': 'このブラウザには読み上げ用の音声がありません。',
   'ai.playSample': 'サンプルを再生',
   'ai.voiceSpeed': 'AI音声の再生速度',
-  'ai.voiceSpeedHint':
-    '声の高さを変えずに再生速度を調整します（ハイライトも速度に合わせて追従します）。',
   'ai.voiceId': 'ElevenLabs 音声ID（Voice ID）',
   'ai.voiceIdPlaceholder': '例：{id}',
   'ai.lorebookAuto': '用語集を自動更新する',
   'ai.lorebookAutoHint':
     '読書中、指定した文字数を読み進めるたびに、用語集（登場人物・地名・用語）をバックグラウンドで自動更新します。新しく読んだ部分のみが用語集のモデルへ送信されます（0で無効）。',
   'ai.lorebookInterval': '用語集の自動更新間隔（文字数）',
-  'ai.promptsLanguageHint': 'プロンプトは言語ごとに別々です。',
   'ai.prompt.ask': 'AIに質問',
-  'ai.prompt.askHint': '選んだ一節を説明します。',
   'ai.prompt.chapter': '章の要約',
-  'ai.prompt.chapterHint': '読み終えた章を1回ずつ要約し、あらすじに使います。',
   'ai.prompt.recap': 'これまでのあらすじ',
-  'ai.prompt.recapHint': '章の要約からあらすじを書きます。',
   'ai.prompt.lore': '用語集',
   'ai.prompt.loreHint': '用語集の項目を更新します。答えはこの形式のJSONのままにしてください。',
   'ai.builtIn': '標準',
@@ -849,12 +701,9 @@ export const ja: Record<MessageKey, string> = {
     'Drive、OneDrive、同期フォルダや共有ファイルには保存しません。ログアウトすると削除されます。',
   'ai.syncs.connections': '接続',
   'ai.syncs.connectionsWhere': 'プロバイダー、名前、エンドポイント。キーは含みません。',
-  'ai.syncs.connectionsNote':
-    '接続ごとに統合されます（新しい編集が優先、削除も反映）。キーのない端末には「この端末にキーが必要です」と表示されます。',
   'ai.syncs.rest': '機能、詳細設定、プロンプト',
   'ai.syncs.restWhere':
     'ログイン中はアカウント、それ以外はライブラリのDrive、OneDrive、フォルダ（ある場合）。',
-  'ai.syncs.restNote': 'ユーザー情報とAIの言語も同様です。設定ごとに最新の変更が残ります。',
   'ai.private': '非公開',
   'ai.synced': '同期',
   'ai.lorebookOff': '0（オフ）',
@@ -885,17 +734,13 @@ export const ja: Record<MessageKey, string> = {
   'ai.free': '無料',
   'ai.freeTrains': '無料・学習に使われる場合あり',
   'ai.provider': 'プロバイダー',
-  'ai.providerHint': '変更するとエンドポイントが入力され、モデルを読み込み直します。',
   'ai.connectionName': '名前',
-  'ai.connectionNameHint': '機能の選択欄に表示されます。',
   'ai.apiKey': 'API キー',
   'ai.apiKeyHint': '→ でキーを作成します。このプロバイダーにのみ送信されます。',
   'ai.apiKeyOptional': 'サーバーが求める場合のみ。このサーバーにのみ送信されます。',
   'ai.endpoint': 'エンドポイント',
-  'ai.endpointHint': 'プロキシや互換サーバーを使う場合のみ変更します。',
   'ai.endpointCustomHint':
     '/chat/completions の前までのベース URL（例: https://example.com/v1）。ネットワーク上のサーバーには https が必要です。',
-  'ai.modelsHint': 'プロバイダーから読み込みます。無料モデルは選択欄に表示されます。',
   'ai.loadingModels': 'モデルを読み込み中…',
   'ai.loaded': '{when}に読み込み',
   'ai.modelsAfterKey': 'キーを入力すると読み込みます。',
@@ -906,25 +751,16 @@ export const ja: Record<MessageKey, string> = {
   'ai.deleteConnection': '接続を削除',
   'ai.feature': '機能',
   'ai.featureAsk': 'AIに質問',
-  'ai.featureAskHint': '選択したテキスト',
   'ai.featureRecap': 'これまでのあらすじ',
-  'ai.featureRecapHint': 'あらすじ',
   'ai.featureLore': '用語集',
-  'ai.featureLoreHint': '登場人物など',
   'ai.featureVoice': 'AI音声',
-  'ai.featureVoiceHint': '読み上げ',
   'ai.sameAsAsk': '「AIに質問」と同じ',
   'ai.sameAsRecap': '「あらすじ」と同じ',
   'ai.needsConnection': '接続が必要です',
   'ai.getStarted': 'はじめに',
-  'ai.getStartedText': '接続はひとつで足ります。別のものを選ぶまで、すべての機能がそれを使います。',
   'ai.startHere': 'ここから',
-  'ai.startHereLead':
-    'プロバイダーをひとつ接続すれば、AIに質問・これまでのあらすじ・用語集がすべて使えます。あとから追加もできます。',
   'ai.connectOpenRouter': 'OpenRouterで接続',
   'ai.connecting': '接続中…',
-  'ai.connectOpenRouterHint':
-    'openrouter.aiでサインインして承認すると、キーを持ってこのページに戻ります。',
   'ai.connectOpenRouterHttps':
     'OpenRouterでの接続にはhttpsのアドレスが必要です。代わりに下にキーを貼り付けてください。',
   'ai.orPasteKey': 'またはキーを貼り付け',
@@ -943,19 +779,11 @@ export const ja: Record<MessageKey, string> = {
   'ai.otherProviders': 'ほかのプロバイダー',
   'ai.otherProvidersHint': 'Ollama、LM Studioなどのサーバーは、下の「接続を追加」から設定します。',
   'ai.deviceVoices': 'この端末の音声',
-  'ai.deviceVoicesHint': '無料、キー不要。自然な音声にはElevenLabsのキーを追加します。',
-  'ai.voiceConnectionHint':
-    '音声の接続を追加するまでは、この端末の音声で読みます（無料、キー不要、オフラインでも動作）。「接続」でElevenLabsのキーを追加すると切り替わります。',
   'ai.voiceNoKeyHint':
     'この接続のキーはこの端末にありません。「接続」で追加してください。それまではこの端末の音声で読みます。',
-  'ai.voiceModelHint': 'ElevenLabsのモデルです。ハイライトには文字ごとのタイムスタンプが必要です。',
-  'ai.elevenLabsVoiceHint': 'ElevenLabsのライブラリにある音声（日本語が先）。',
   'ai.otherVoiceId': 'ボイスIDを貼り付け…',
   'ai.chooseVoice': '音声を選択',
   'ai.loadingVoices': '音声を読み込み中…',
-  'ai.withoutVoiceKey': '音声キーがないとき',
-  'ai.withoutVoiceKeyText':
-    'AI音声はこの端末の音声を使います（無料、キー不要、オフラインでも動作）。ハイライトは文字ごとではなく句ごとに進みます。自然な音声と正確なタイミングには、「接続」でElevenLabsのキーを追加してください。',
   'ai.connectionFor': '{feature}の接続',
   'ai.modelFor': '{feature}のモデル',
   'ai.voiceLink': '音声 ↓',
@@ -971,10 +799,8 @@ export const ja: Record<MessageKey, string> = {
   'ai.sortedByPrice': '価格順',
   'ai.moreModels': 'ほか {count} 件。検索で絞り込めます。',
   'ai.typeModelId': 'モデル ID を入力…',
-  'ai.typeModelIdHint': '一覧にないモデル用。Enter で使用します。',
   'ai.advancedTitle': '詳細設定: {feature}',
   'ai.resetFeature': '{feature}の初期値に戻す',
-  'ai.advancedHint': 'リクエストごとに送信されます。モデルが受け付けない設定は送りません。',
   'ai.setting': '設定',
   'ai.value': '値',
   'ai.defaultValue': '初期値',
@@ -1516,40 +1342,22 @@ export const ja: Record<MessageKey, string> = {
 
   'prefs.font1': 'フォント（グループ1）',
   'prefs.font2': 'フォント（グループ2）',
-  'prefs.fontFamilyHint':
-    'グループ1は本文の基本フォント、グループ2は書籍がゴシック体を指定した箇所に使われます。',
   'prefs.fontFamily': 'フォント',
   'prefs.customFont': 'カスタムフォント',
   'prefs.addFont': 'フォントを追加…',
-  'prefs.customFontHint': '端末のフォントファイルを追加すると、フォントの候補に表示されます。',
   'prefs.fontWeight': 'フォントの太さ',
-  'prefs.fontWeightHint': '空欄の場合はフォント標準の太さになります。',
   'prefs.fontSize': '文字サイズ',
   'prefs.lineHeight': '行間',
   'prefs.indent': '段落の字下げ',
-  'prefs.indentHint': '段落先頭のインデント幅（rem）を指定します。',
   'prefs.marginMode': '段落の余白',
-  'prefs.marginModeHint': '「手動」にすると、段落間の余白幅を任意の値で指定できます。',
   'prefs.margins': '段落の余白幅',
-  'prefs.marginsHint': '段落間に追加する余白幅（rem）を指定します。',
   'prefs.justify': '文字の両端揃え',
-  'prefs.justifyHint': '段落のテキストを両端揃え（ジャスティファイ）で配置します。',
   'prefs.wrapPretty': '自然な行の折り返し',
-  'prefs.wrapPrettyHint':
-    '対応ブラウザで段落の改行位置を整え、最終行が1文字だけにならないようにします。',
   'prefs.prioritize': 'リーダーのスタイルを優先',
-  'prefs.prioritizeHint':
-    '余白や両端揃えについて、書籍側のスタイルよりリーダーの設定を優先します。',
   'prefs.writingMode': '文字の方向',
   'prefs.kerning': 'フォントカーニング',
-  'prefs.kerningHint':
-    'フォントとブラウザが対応している場合、縦書き時の文字間隔のバランスを改善します。',
   'prefs.vpal': '縦書きプロポーショナルメトリクス (VPAL)',
-  'prefs.vpalHint':
-    'フォントとブラウザが対応している場合、縦書き時の句読点やかぎ括弧などのアキをより自然に調整します。',
   'prefs.orientation': '縦書き時の英数字の向き',
-  'prefs.orientationMixedHint': '縦書きで、英数字を時計回りに90°回転させて表示します。',
-  'prefs.orientationUprightHint': '縦書きで、英数字を正立させて表示します。',
   'prefs.hideFurigana': 'ふりがなを隠す',
   'prefs.furiganaStyle': 'ふりがなの隠し方',
   'prefs.furiganaHideHint': 'ふりがなを常に非表示にします。',
@@ -1559,14 +1367,8 @@ export const ja: Record<MessageKey, string> = {
     'すべての構成漢字に読書中で{count}回以上出会っており、かつ一般的なひらがな読みである場合のみ非表示にします（クリックで切替）。カタカナ・漢字ルビや当て字（本気→マジ、宇宙→そら）、熟字訓（今日→きょう）、常用・人名用外の漢字は常に表示されます。漢字の出現回数は本を開き直すと更新されます。',
   'prefs.furiganaHoverHint': 'カーソルを重ねている間のみ表示します（タッチ端末ではタップで切替）。',
   'prefs.generatedFurigana': '自動生成ふりがな',
-  'prefs.generatedFuriganaHint':
-    'もともとふりがながない単語に対し、サーバー（yurigana）で生成したふりがなを控えめな色で表示します（難易度算出サービスが有効な Calibre 書籍のみ）。初回オープン時は生成に10秒ほどかかる場合があり、完了次第反映されます。',
   'prefs.unknownWordUnderline': '未知語に下線',
-  'prefs.unknownWordUnderlineHint':
-    'まだ覚えていない漢字語に印を付けます（横書きは点線の下線、縦書きは薄い色）。対象は出会った回数が8回未満、Anki で成熟していない、既知にしていない語です。生成ふりがなのデータが必要です（難易度算出サービスが有効な Calibre 書籍、または解析ツール）。',
   'prefs.chapterPrimer': '章ごとの新出語',
-  'prefs.chapterPrimerHint':
-    '目次に、各章で3回以上出てくる未知語の数を表示し、一覧で確認できます。下線と同じく生成ふりがなのデータが必要です。',
   'prefs.furiganaPartialHint': 'ふりがなを薄いグレーで目立たないように表示します。',
   'prefs.viewMode': '表示モード',
   'prefs.marginLeftRight': '左右の余白',
@@ -1574,13 +1376,9 @@ export const ja: Record<MessageKey, string> = {
   'prefs.maxHeight': '最大高さ',
   'prefs.maxWidth': '最大幅',
   'prefs.avoidBreak': '文途中の改ページを防ぐ',
-  'prefs.avoidBreakOnHint': '単語や文がページをまたいで分断されないように調整します。',
-  'prefs.avoidBreakOffHint': 'ページの端に達した位置でそのまま改ページします。',
   'prefs.columns': '段組み（カラム数）',
-  'prefs.columnsHint': '1画面に表示する段の数を指定します。',
   'prefs.blur': '画像をぼかす',
   'prefs.blurMode': 'ぼかしの対象範囲',
-  'prefs.blurModeHint': 'すべての画像をぼかすか、目次より後の挿絵のみをぼかすかを選択します。',
   'prefs.charCounter': '文字数を表示',
   'prefs.percentage': '進捗率（%）を表示',
   'prefs.chapterChars': '章の文字数を表示',
@@ -1589,77 +1387,39 @@ export const ja: Record<MessageKey, string> = {
   'prefs.manualBookmarkHint':
     '有効にすると、メニューからリーダーを閉じる際に現在位置へ自動でしおりを挟みません。',
   'prefs.autoBookmark': '自動しおり',
-  'prefs.autoBookmarkHint':
-    'スクロールやページ移動がない状態で{seconds}秒経過すると自動でしおりを挟みます（すでに画面内にしおりがある場合は維持されます）。',
   'prefs.autoBookmarkTime': '自動しおりまでの時間（秒）',
-  'prefs.autoBookmarkTimeHint': 'ページを移動しない状態が続く秒数です。',
   'prefs.readingPoint': 'カスタム読書位置',
-  'prefs.readingPointHint':
-    '画面内の任意の位置を基準点として固定し、そこを基準に進捗やしおりの位置を算出できるようにします。',
   'prefs.resetPoints': '位置をリセット',
   'prefs.autoPosition': '画面リサイズ時に位置を維持',
   'prefs.selectionBookmark': '選択箇所にしおりを挟む',
-  'prefs.selectionBookmarkHint':
-    '有効にすると、ページの先頭ではなく、選択中（または直前に選択した）テキスト付近の段落にしおりを挟みます。',
   'prefs.swipe': 'スワイプの感度（しきい値）',
-  'prefs.swipeHint': 'ページめくりが反応するまでに必要なスワイプ距離を指定します。',
   'prefs.noWheel': 'マウスホイールでのページ移動を無効化',
   'prefs.tapFlip': '画面端のタップでページめくり',
-  'prefs.tapFlipHint': '画面の左右端にタップ領域を設け、タップでページをめくれるようにします。',
   'prefs.wakeLock': '画面のスリープを防止',
-  'prefs.wakeLockHint': '本を開いている間、画面が暗くなったりロックされたりしないようにします。',
   'prefs.confirmClose': 'タブを閉じる前に確認',
-  'prefs.confirmCloseHint':
-    '未保存の変更がある状態でリーダーのタブを閉じたり再読み込みしたりする際、確認ダイアログを表示します。',
 
   'prefs.statistics': '読書統計を有効化',
-  'prefs.statisticsHint':
-    'リーダーの左下にトラッカーアイコンを表示し、読書時間や文字数を記録できるようにします。',
   'prefs.pointPauses': '読書位置の調整中は一時停止',
-  'prefs.pointPausesHint':
-    'カスタム読書位置を設定している間、トラッカーを自動で一時停止・再開します。',
   'prefs.autoPause': 'トラッカーの自動一時停止',
-  'prefs.autoPauseOffHint': '特定のリーダー操作時を除き、自動では一時停止しません。',
   'prefs.autoPauseStrictHint':
     '特定の操作時や、画面からフォーカスが外れた際（辞書のポップアップ操作時などを含む）に自動で一時停止します。',
   'prefs.autoPauseModerateHint':
     '特定の操作時や、別タブ・別アプリに切り替えた際に自動で一時停止します。',
   'prefs.openOnCompletion': '読了時にトラッカー画面を開く',
   'prefs.updateOnCompletion': '読了時に残りの文字数を加算',
-  'prefs.updateOnCompletionHint':
-    '読了にした際、現在位置から末尾までの未読文字数を統計に加算するかどうかを設定します。',
   'prefs.startOnOpen': '本を開いたときにトラッカーを自動開始',
-  'prefs.startOnOpenHint':
-    '本の読み込みと位置合わせが完了した時点で、再生ボタンを押さなくても自動で計測を開始します。',
   'prefs.autostart': 'トラッカーの自動開始待機時間（秒）',
-  'prefs.autostartHint':
-    '文字数の変動がなくなってからトラッカーを自動開始するまでの秒数です（0で無効。処理の競合を防ぐため大きめの値を推奨します）。',
   'prefs.idle': '無操作での一時停止（分）',
-  'prefs.idleHint':
-    'ページ操作がない状態が続いた際に、トラッカーを自動一時停止するまでの分数です（0で無効、最大12時間）。',
   'prefs.forwardSkip': '前方スキップのしきい値',
-  'prefs.forwardSkipHint':
-    '1回の計測間隔で進んだ文字数がこの値を超えた場合、スキップとみなして指定の動作を実行します（0で無効）。',
   'prefs.backwardSkip': '後方スキップのしきい値',
-  'prefs.backwardSkipHint':
-    '1回の計測間隔で戻った文字数がこの値を超えた場合、スキップとみなして指定の動作を実行します（0で無効）。',
   'prefs.thresholdAction': 'スキップ検出時の動作',
-  'prefs.thresholdActionHint': '前後のスキップしきい値を超えた際に実行する動作を選択します。',
   'prefs.dictionary': '辞書ポップアップの検出',
   'prefs.dictionaryHint':
     'Yomitan や jpdb-browser-reader のポップアップが開いている間は、自動一時停止をスキップします（Yomitan 側で「Secure Container」をオフにする必要があります）。',
   'prefs.rollback': '無操作時間を記録から差し引く',
-  'prefs.rollbackHint':
-    '無操作による一時停止が働いた際、放置していた時間分をセッションの読書時間から差し引きます。',
   'prefs.dayStart': '一日の始まり：{time}',
-  'prefs.dayStartHint':
-    '新しい1日が始まる時刻を指定します。\nこの時刻より前の記録は前日分として集計されます。',
   'prefs.overwriteCompletion': '再読時に読了日を上書き',
-  'prefs.overwriteCompletionHint':
-    '初回の読了日を維持するか、再読完了時に最新の読了日で上書きするかを設定します。',
   'prefs.keepLocal': '書籍削除時に統計データを残す',
-  'prefs.keepLocalHint':
-    'ブラウザから書籍データを削除する際、その本の統計データを残すかどうかを設定します。',
   'prefs.dangerZone': '危険な操作（取り消し不可）',
   'prefs.zombie': '削除済み書籍の統計を消去',
   'prefs.zombieHint':
@@ -1668,11 +1428,7 @@ export const ja: Record<MessageKey, string> = {
   'prefs.zombieError': '不要な統計データの削除に失敗しました：{message}',
   'prefs.clear': '削除する',
   'prefs.statisticsMerge': '統計データの同期方法',
-  'prefs.statisticsMergeHint':
-    '同期時に統計データを項目ごとに統合（マージ）するか、完全に置き換えるかを設定します。',
   'prefs.goalsMerge': '読書目標の同期方法',
-  'prefs.goalsMergeHint':
-    '同期時に読書目標を項目ごとに統合（マージ）するか、完全に置き換えるかを設定します。',
   'prefs.goals': '読書目標',
   'prefs.goalsSearch': '読書目標 毎日 毎週 毎月 日次 週次 月次 目標 reading goals',
   'prefs.goalsOff':
@@ -1693,42 +1449,20 @@ export const ja: Record<MessageKey, string> = {
   'prefs.goals.noHistory': '過去の読書目標はまだありません',
 
   'prefs.persistent': '永続ストレージ',
-  'prefs.persistentOnHint':
-    'ブラウザのストレージ上限を拡張し、ローカルデータが自動消去されないようにします。',
   'prefs.persistentOffHint':
     '通常のテンポラリストレージを使用します。\n永続化を有効にするには、サイトのブックマーク登録や通知の許可が必要になる場合があります。',
   'prefs.cache': 'データのキャッシュ',
   'prefs.cacheOnHint':
     'ストレージのデータをキャッシュして通信量と待ち時間を削減します（他での変更を反映するには再読み込みが必要です）。',
-  'prefs.cacheOffHint':
-    '操作のたびにデータを再取得します。通信量は増えますが、常に最新の状態が保たれます。',
   'prefs.importFixes': 'EPUB インポート時の自動修正',
-  'prefs.importFixesOffHint': 'EPUB ファイルを修正せずそのまま取り込みます。',
-  'prefs.importFixesExtendedHint':
-    '標準の修正に加え、制御文字の削除や HTML エンティティの置換などの拡張修正を適用します。',
-  'prefs.importFixesStandardHint': '不正な自己終了タグの修正など、標準的な互換性修正を適用します。',
   'prefs.restrictLinks': 'リンクタグのみに限定',
-  'prefs.restrictLinksHint': '自己終了タグの修正対象をリンク（aタグ）のみに限定します。',
   'prefs.autoSync': '自動インポート／エクスポート',
-  'prefs.autoSyncUpHint': '読書中、1分ごとに更新データを同期先へエクスポートします。',
-  'prefs.autoSyncDownHint': '本を開く際に、同期先から最新データをインポートします。',
-  'prefs.autoSyncAllHint': '本を開く際のインポートと、読書中のエクスポートの両方を自動で行います。',
-  'prefs.autoSyncOffHint': 'データの自動インポート／エクスポートを行いません。',
   'prefs.saveBehavior': '保存時の上書きルール',
   'prefs.saveBehaviorOverwriteHint': '新旧にかかわらず、常にデータを上書きします。',
-  'prefs.saveBehaviorNewHint':
-    '同期先にデータが存在しない場合や、同期先のデータより新しい場合のみ書き込みます。',
   'prefs.placeholder': '外部書籍のプレースホルダー表示',
-  'prefs.placeholderOnHint':
-    '外部ストレージにある本のプレースホルダーをブラウザのライブラリにも表示します。',
-  'prefs.placeholderOffHint': '外部ストレージにある本のプレースホルダーを非表示にします。',
   'prefs.hideSourceHint': '外部ソースの警告を非表示',
-  'prefs.hideSourceHintHint': '外部ストレージから本を開く際の確認メッセージを非表示にします。',
   'prefs.sources': '保存先（ストレージソース）',
   'prefs.sourcesSearch': '保存先 ストレージ ソース Calibre ブラウザ Google Drive OneDrive フォルダ',
-  'prefs.sourcesHint': '外部ストレージの認証情報を追加・管理します。',
-  'prefs.sourcesHintFs':
-    '外部ストレージの認証情報やローカルフォルダへのアクセスを追加・管理します。',
   'prefs.sourcesNoTarget':
     '自動インポート／エクスポートが有効ですが、一覧から同期先のソースが選択されていません。',
   'prefs.sourceEdit': 'ソースを編集',
@@ -1747,25 +1481,11 @@ export const ja: Record<MessageKey, string> = {
     'このページは暗号化されていない HTTP で接続されているため、パスワードやセッション、同期される設定（AIのAPIキーを含む）がネットワーク上で傍受される危険があります。アカウント管理で設定するパスワードも同様です。',
   'prefs.account.useHttpsBefore': 'サーバーが HTTPS に対応している場合は、',
   'prefs.account.useHttpsAfter': 'を使用してください。',
-  'prefs.account.identity': 'ログイン中 · リーダー設定プロファイル：{profile}',
-  'prefs.account.identityAdmin': 'ログイン中（管理者） · リーダー設定プロファイル：{profile}',
-  'prefs.account.phone': 'スマートフォン',
-  'prefs.account.desktop': 'PC・タブレット',
   'prefs.account.settingsSync': '設定の同期',
   'prefs.account.syncing': '同期中…',
   'prefs.account.syncedAt': '{time} に同期済み',
   'prefs.account.notStarted': '未同期',
   'prefs.account.syncNow': '今すぐ同期',
-  'prefs.account.whatSyncs': '同期される項目',
-  'prefs.account.syncsReaderLabel': 'リーダー',
-  'prefs.account.syncsAiLabel': 'AI設定・テーマ',
-  'prefs.account.syncsProgressLabel': '進捗',
-  'prefs.account.syncsProgress': 'Calibre 書籍の読書進捗・統計・読書目標・ハイライト',
-  'prefs.account.syncsAi': 'AI設定とテーマ（APIキーはログアウト時にブラウザから削除されます）',
-  'prefs.account.syncsReader':
-    'リーダー設定（スマートフォン用とPC・タブレット用で別々に保持されます。この端末：{profile}）',
-  'prefs.account.syncsWhere':
-    'これらのデータはこのサーバーのアカウントに保存され、ログインしたすべての端末間で共有されます（書籍データ自体はサーバーの全ユーザーで共有されます）。',
   'prefs.account.tempPassword': '仮パスワードの使用中',
   'prefs.account.tempPasswordText':
     'サーバー構築時に自動生成された仮パスワードでログインしています。以下からパスワードを変更してください。',
@@ -1777,17 +1497,13 @@ export const ja: Record<MessageKey, string> = {
   'prefs.account.change': '変更する',
   'prefs.account.passwordChanged': 'パスワードを変更しました。他の端末からはログアウトされました。',
   'prefs.account.adminPanel': '管理パネル',
-  'prefs.account.adminPanelHint':
-    'アカウントや権限の管理、難易度算出などのサーバーツールを実行します。',
   'prefs.account.open': '開く',
   'prefs.account.signOut': 'ログアウト',
-  'prefs.account.signOutHint': 'このブラウザからAPIキーと同期設定を削除してログアウトします。',
   'prefs.account.checking': 'ログイン状態を確認中…',
   'prefs.account.unreachable':
     'サーバーに接続できないため、今はログインもアカウントの表示もできません。サーバーが復旧したらページを再読み込みしてください。',
   'prefs.account.signInHint':
     '読書進捗・統計・ハイライト・AI設定・テーマをサーバー上のアカウントに保存し、ログインしたすべての端末で共有します。アカウントは管理パネルまたはサーバーコマンド（ebook-account add NAME）から作成できます。',
-  'prefs.account.remember': 'ブラウザにログイン情報を保存できます。',
   'prefs.account.insecureSignIn':
     'このサーバーは暗号化されていない HTTP でのログインを許可しています。パスワードやセッション情報が平文で送信されるため、同じネットワーク上で傍受される危険があります。',
   'prefs.account.signInAtBefore': 'サーバーが HTTPS に対応している場合は、',
@@ -1829,7 +1545,6 @@ export const ja: Record<MessageKey, string> = {
   'prefs.themes.imported': '「{name}」をインポートしました',
   'prefs.themes.deleteConfirm': 'テーマ「{name}」を削除しますか？',
   'prefs.themes.invalidJson': '無効なJSON形式です：{message}',
-  'prefs.themes.editing': '編集中（変更はリアルタイムで画面に反映されます）',
   'prefs.themes.editingName': '「{name}」を編集中',
   'prefs.themes.preview': 'プレビュー',
   'prefs.themes.previewRow': '設定項目のサンプル',
@@ -1863,8 +1578,6 @@ export const ja: Record<MessageKey, string> = {
   'prefs.plugins.absHint':
     'Audiobookshelf サーバーからオーディオブックをストリーミング再生します（サーバー側で AUDIOBOOKSHELF_URL の設定が必要です）。',
   'prefs.abs.connected': '接続済み',
-  'prefs.abs.connectedHint':
-    'リーダーの「聴く → Audiobookshelf」からオーディオブックを再生できます。',
   'prefs.abs.disconnect': '接続を解除',
   'prefs.abs.passwordHint': '認証トークンの取得時に1度だけ使用され、保存されません。',
   'prefs.abs.apiKey': 'または APIキーを使用',
@@ -1887,13 +1600,10 @@ export const ja: Record<MessageKey, string> = {
   'settings.area.discord.text':
     'Anki 用 chimimouryou アドオンを通じて、読んでいるものを Discord のステータスに表示します。組み込み、初期設定はオフ。',
   'settings.section.discord-connection': '接続',
-  'settings.section.discord-connection.text':
-    'Anki の chimimouryou アドオンが、このパソコンの Discord にステータスを渡します。',
   'settings.section.discord-activities': 'アクティビティ',
   'settings.section.discord-activities.text':
     'アクティビティごとに一つのステータス。{variables} は開いているものから埋まります。',
   'settings.section.discord-away': '離席',
-  'settings.section.discord-away.text': 'ページをめくらなくなったときの表示。',
   'discord.closePicker': '変数の一覧を閉じる',
   'discord.insertVariable': '変数を挿入',
   'discord.escToClose': 'Esc で閉じる',
@@ -1904,7 +1614,6 @@ export const ja: Record<MessageKey, string> = {
   'discord.group.today': '今日',
   'discord.group.you': 'あなた',
   'discord.noVariables': '一致する変数はありません。',
-  'discord.pickerNote': 'カーソル位置に挿入します。値は開いている本から。空の値は省かれます。',
   'discord.unknownVariable': '{name} は変数ではありません。',
   'discord.didYouMean': '{name} のことですか？',
   'discord.httpsOnly': 'https:// で始まるリンクにしてください',
@@ -1923,15 +1632,10 @@ export const ja: Record<MessageKey, string> = {
   'discord.nothingShown': 'このアクティビティでは何も表示しません。',
   'discord.problems':
     '直すべき問題が {count} 件。直すまで Discord は最後に送れたステータスを表示し続けます。',
-  'discord.previewNote': 'Discord での表示に近いものです。最終的なレイアウトは Discord 次第です。',
   'discord.kind.book': '本を読んでいる',
   'discord.kind.manga': 'マンガを読んでいる',
   'discord.kind.vn': 'ビジュアルノベルをプレイ中',
   'discord.kind.idle': 'ライブラリ（待機中）',
-  'discord.kindHint.book': 'リーダーで本を開いている間に表示。{variables} はその本から埋まります。',
-  'discord.kindHint.manga': 'マンガを開いている間に表示。{variables} はその巻から埋まります。',
-  'discord.kindHint.vn':
-    'ビジュアルノベルを開いている間に表示。{variables} はそのゲームから埋まります。',
   'discord.kindHint.idle':
     'ライブラリで、また離席時に待機ステータスを出す設定なら離席中に表示。本の {variables} は空のままです。',
   'discord.preset.minimal': '最小',
@@ -1951,7 +1655,6 @@ export const ja: Record<MessageKey, string> = {
   'discord.startFrom': 'ひな形',
   'discord.text': 'テキスト',
   'discord.name': '名前の横',
-  'discord.nameHint': 'メンバーリストと、アクティビティのタイトルに表示されます。',
   'discord.details': '1 行目',
   'discord.link': 'リンク',
   'discord.linkPlaceholder': '任意: https://… 行をクリックすると開きます',
@@ -1967,7 +1670,6 @@ export const ja: Record<MessageKey, string> = {
   'discord.time': '時間',
   'discord.timestamp': 'タイムスタンプ',
   'discord.party': 'パーティー',
-  'discord.partyHint': '2 行目のあとに「3 of 12」のように表示されます。',
   'discord.partyCurrent': 'パーティーの人数',
   'discord.partyMax': 'パーティーの定員',
   'discord.of': '/',
@@ -1981,11 +1683,8 @@ export const ja: Record<MessageKey, string> = {
   'discord.buttonsMax': 'Discord が表示するボタンは 2 つまでです。',
   'discord.privacy': 'プライバシー',
   'discord.privacyText': 'フレンドに隠した本の表示',
-  'discord.privacyHint': '両方の行の代わりに、アプリのロゴと一緒に使います。',
   'discord.hideTitles': 'すべてのタイトルを隠す',
-  'discord.hideTitlesHint': 'どの本も上の行を表示します。',
   'discord.reset': 'このアクティビティを戻す',
-  'discord.resetHint': '「進み具合」のひな形に戻します。',
   'discord.state.checking': '確認中…',
   'discord.state.checkingHint': 'このパソコンのアドオンに問い合わせています。',
   'discord.state.connected': '接続済み',
@@ -2024,7 +1723,6 @@ export const ja: Record<MessageKey, string> = {
     'ブラウザがローカルネットワーク上のデバイスへのアクセスを尋ねたら、許可してください。',
   'discord.lastChecked': '最後の確認 {ago}',
   'discord.showStatus': 'ステータスを表示',
-  'discord.showStatusHint': 'オフにするとステータスを消し、何も送りません。',
   'discord.activity': 'アクティビティ',
   'discord.edit': '編集',
   'discord.awayAfter': '離席までの時間',
@@ -2035,8 +1733,6 @@ export const ja: Record<MessageKey, string> = {
   'discord.awayIdle': '待機ステータスを表示',
   'discord.awayNothing': '何も表示しない',
   'discord.addon': 'Anki アドオン',
-  'discord.addonPairedHint':
-    'Anki の chimimouryou アドオンがステータスを Discord に渡します。このブラウザがサインインしている間は自動でペアリングされます。',
   'discord.addonUnpairedHint':
     'このパソコンでアドオンが動いていて「他のデバイスのアクティビティを表示」がオンなら自動でペアリングされます。別のパソコンではコードを使います。',
   'discord.addonCodeHint':
@@ -2062,7 +1758,6 @@ export const ja: Record<MessageKey, string> = {
   'discord.now': '現在',
   'discord.profileNote': 'あなたと友達だけに表示されます。設定 → Discord → プロフィールに表示。',
   'settings.area.social': 'ソーシャル',
-  'settings.area.social.text': 'フレンド、読書中、プロフィール。組み込み、既定でオン。',
   'settings.section.social-features': 'ソーシャル機能',
   'settings.section.social-features.text':
     'オフにするとすべて隠れます。ハブのアカウントとフレンドは残ります。',
@@ -2070,11 +1765,9 @@ export const ja: Record<MessageKey, string> = {
   'settings.section.social-account.text':
     'ハブのアカウント:ユーザー名とパスワードのみ、メール不要。',
   'settings.section.social-profile': 'プロフィール',
-  'settings.section.social-profile.text': 'フレンドに見えるあなたの情報。',
   'settings.section.social-shows': 'プロフィールに表示するもの',
   'settings.section.social-shows.text': 'アクティビティとリクエストは常にフレンドのみです。',
   'settings.section.social-hub': 'ハブとデータ',
-  'settings.section.social-hub.text': 'ソーシャルアカウントの置き場所と削除。',
   'social.serverAccount': 'サーバーアカウント',
   'social.friends': 'フレンド',
   'social.emptyLead':
@@ -2146,13 +1839,9 @@ export const ja: Record<MessageKey, string> = {
   'social.hubDown': 'ハブに接続できません。読書には影響しません。',
   'social.offText': 'ソーシャル機能はオフです。設定 → 一般 → 拡張機能でオンにしてください。',
   'social.features': 'ソーシャル機能',
-  'social.featuresHint':
-    'ホームのフレンドと読書中。オフにすると隠れます。アカウントとフレンドは残ります。',
   'social.signedInAs': '@{username} としてハブにサインイン中',
   'social.memberSince': '{since}から利用。',
   'social.signOut': 'サインアウト',
-  'social.remembered':
-    'このサーバーのアカウントに記憶されます。他のブラウザーでもこのサーバーにサインインすると、ハブにもサインインします。',
   'social.changePassword': 'パスワードを変更',
   'social.currentPassword': '現在のパスワード',
   'social.passwordOthers': '他のセッションはサインアウトされます。',
@@ -2160,23 +1849,16 @@ export const ja: Record<MessageKey, string> = {
   'social.recoveryRowHint':
     'パスワードなしで戻る唯一の方法です。新しいコードを作ると古いコードは使えなくなります。',
   'social.newRecoveryCode': '新しい復旧コード',
-  'social.newRecoveryHint': '本人確認のためパスワードを入力してください。',
   'social.newRecoveryLead':
     '古いコードはもう使えません。このコードは一度だけ表示されるので保存してください。',
   'social.otherDevices': '他の端末',
   'social.signOutEverywhere': 'すべての端末でサインアウト',
-  'social.signOutEverywhereHint':
-    'この端末を含む、すべてのブラウザーと端末からサインアウトします。',
-  'social.signOutEverywhereServer':
-    'この端末を含む、すべてのブラウザーと端末からサインアウトし、このサーバーのアカウントに記憶されたサインインも消します。',
   'social.signOutEverywhereConfirm':
     'この端末を含む、すべてのブラウザーと端末でハブからサインアウトしますか？',
   'social.notSignedIn': 'サインインしていません',
   'social.notSignedInHint': '登録かログインするまでハブには何も送信しません。',
   'social.avatar': 'アバター',
-  'social.avatarHint': '色の上に漢字一字、または自分の画像。',
   'social.uploadPicture': '画像をアップロード',
-  'social.uploadPictureHint': '正方形に切り抜き・JPG、PNG、WebP',
   'social.removePicture': '画像を削除',
   'social.zoom': '拡大',
   'social.cropHint': 'ドラッグで移動',
@@ -2195,14 +1877,10 @@ export const ja: Record<MessageKey, string> = {
     'リンクを知っていれば誰でも、アカウントなしで見られるようになります:/u?name={username}。オフ:フレンドのみ。',
   'social.shows.public': '公開プロフィール',
   'social.shows.current': '読書中の本',
-  'social.shows.currentHint': 'オフ:読んでいる本がフレンドに見えません。',
   'social.shows.finished': '読了した本',
   'social.shows.activity': 'アクティビティ',
-  'social.shows.activityHint': '読み始め、読了、連続記録。',
   'social.shows.stats': '統計',
-  'social.shows.statsHint': '連続日数、今週、今年の冊数。',
   'social.shows.wordsKnown': '既知語数',
-  'social.shows.wordsKnownHint': '既定でオフ。',
   'social.shows.hideManga': 'マンガをすべて隠す',
   'social.shows.hideVn': 'ビジュアルノベルをすべて隠す',
   'social.hubAddress': 'ハブのアドレス',
@@ -2210,7 +1888,6 @@ export const ja: Record<MessageKey, string> = {
     '自分のハブ(deploy/social-hub)を運用しない限り空のままにしてください。変更するにはサインアウトします。',
   'social.hubAddressServer': 'スタンドアロン版のみ。このビルドは chimimouryou ハブを使います。',
   'social.privacy': 'プライバシー',
-  'social.privacyHint': 'ハブが保存するものと保存期間。',
   'social.read': '読む',
   'social.deleteAccount': 'アカウントを削除',
   'social.deleteHint': 'ハブからプロフィールとフレンドを削除します。本と読書記録はここに残ります。',
@@ -2268,7 +1945,6 @@ export const ja: Record<MessageKey, string> = {
   'social.profileEmpty': 'まだ何も共有されていません。',
   'social.yourProfile': '自分のプロフィール',
   'social.viewProfile': 'プロフィールを見る',
-  'social.viewProfileHint': 'フレンドから見たプロフィールとそのリンク。',
   'social.profileGoneTitle': 'プロフィールが見つかりません',
   'social.profileGone': 'このプロフィールは存在しないか、フレンドにのみ公開されています。',
   'social.profileDescription': '{name}さんの chimimouryou での読書:読書中と読了の本。',
@@ -2283,7 +1959,6 @@ export const ja: Record<MessageKey, string> = {
   'social.devBadge': 'Dev',
   'social.devBadgeHint': 'chimimouryouの開発者・ハブのモデレーター',
   'social.moderation': 'モデレーション',
-  'social.moderationHint': 'ハブへの通報と読者のデータ。開発者にだけ表示されます。',
   'social.moderationOpen': '開く',
   'moderation.libraryCovers': 'ライブラリの表紙',
   'moderation.libraryCoversHint':

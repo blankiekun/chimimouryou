@@ -96,9 +96,9 @@
         {#if user}
           This account can't use the admin panel.
         {:else if $accountUnreachable$}
-          The server can't be reached, so the admin panel can't open right now.
+          Can't reach the server.
         {:else}
-          You need to sign in with an account that can use the admin panel.
+          Sign in with an admin account.
         {/if}
         <a
           class="app-button app-button-quiet"

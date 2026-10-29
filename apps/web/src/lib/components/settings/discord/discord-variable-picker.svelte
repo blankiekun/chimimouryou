@@ -94,7 +94,6 @@
         <p class="picker-none">{$t$('discord.noVariables')}</p>
       {/each}
     </div>
-    <p class="picker-note">{$t$('discord.pickerNote')}</p>
   </div>
 </div>
 
@@ -196,8 +195,7 @@
     white-space: nowrap;
   }
 
-  .picker-none,
-  .picker-note {
+  .picker-none {
     color: var(--app-muted-fg);
     font-size: var(--type-label);
     font-weight: 400;
@@ -245,10 +243,6 @@
 
     .picker-groups {
       columns: 1;
-    }
-
-    .picker-note {
-      display: none;
     }
   }
 </style>

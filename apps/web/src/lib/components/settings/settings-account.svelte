@@ -14,11 +14,7 @@
     signInAvailableHere,
     signOut
   } from '$lib/data/account';
-  import {
-    readerProfile,
-    settingsSyncState$,
-    syncAccountSettings
-  } from '$lib/data/account-settings-sync';
+  import { settingsSyncState$, syncAccountSettings } from '$lib/data/account-settings-sync';
   import { pagePath } from '$lib/data/env';
   import { releaseReaderData } from '$lib/data/reader-data-owner';
   import { t$ } from '$lib/i18n';
@@ -34,11 +30,6 @@
   let checkingHttp = insecure;
   /** The first admin hasn't signed in yet: its password is on the server. */
   let initialAdmin = false;
-
-  $: profileLabel =
-    available || $account$
-      ? $t$(readerProfile() === 'phone' ? 'prefs.account.phone' : 'prefs.account.desktop')
-      : '';
 
   let busy = false;
   let error = '';
@@ -124,24 +115,14 @@
   <div
     class="settings-item account-identity"
     data-settings-item
-    data-settings-search="{$t$('prefs.account.signedIn')} {$t$('prefs.account.signOut')} {$t$(
-      'prefs.account.signOutHint'
-    )}"
+    data-settings-search="{$t$('prefs.account.signedIn')} {$t$('prefs.account.signOut')}"
   >
     <span class="account-avatar" aria-hidden="true">{user.username.charAt(0)}</span>
-    <span class="account-identity-text">
-      <span class="account-name">{user.username}</span>
-      <span class="account-meta">
-        {$t$(user.admin ? 'prefs.account.identityAdmin' : 'prefs.account.identity', {
-          profile: profileLabel
-        })}
-      </span>
-    </span>
+    <span class="account-name">{user.username}</span>
     <span class="account-sign-out">
       <button class="app-button" disabled={busy} on:click={onSignOut}>
         {$t$('prefs.account.signOut')}
       </button>
-      <span class="account-meta">{$t$('prefs.account.signOutHint')}</span>
       {#if error}<span class="account-error">{error}</span>{/if}
     </span>
   </div>
@@ -155,10 +136,7 @@
   {/if}
 
   {#if canOpenAdminPanel(user)}
-    <SettingsItemGroup
-      title={$t$('prefs.account.adminPanel')}
-      tooltip={$t$('prefs.account.adminPanelHint')}
-    >
+    <SettingsItemGroup title={$t$('prefs.account.adminPanel')}>
       <a class="app-button app-button-primary" href="{pagePath}/admin">
         {$t$('prefs.account.open')}
       </a>
@@ -183,31 +161,6 @@
       {$t$('prefs.account.syncNow')}
     </button>
   </SettingsItemGroup>
-
-  <div
-    class="settings-item account-syncs"
-    data-settings-item
-    data-settings-search={$t$('prefs.account.whatSyncs')}
-  >
-    <h3>{$t$('prefs.account.whatSyncs')}</h3>
-    <table class="app-table">
-      <tbody>
-        <tr>
-          <th scope="row">{$t$('prefs.account.syncsProgressLabel')}</th>
-          <td>{$t$('prefs.account.syncsProgress')}</td>
-        </tr>
-        <tr>
-          <th scope="row">{$t$('prefs.account.syncsAiLabel')}</th>
-          <td>{$t$('prefs.account.syncsAi')}</td>
-        </tr>
-        <tr>
-          <th scope="row">{$t$('prefs.account.syncsReaderLabel')}</th>
-          <td>{$t$('prefs.account.syncsReader', { profile: profileLabel })}</td>
-        </tr>
-      </tbody>
-    </table>
-    <p class="account-meta">{$t$('prefs.account.syncsWhere')}</p>
-  </div>
 
   <SettingsItemGroup
     title={$t$('prefs.account.changePassword')}
@@ -249,9 +202,8 @@
   <div
     class="settings-item account-sign-in"
     data-settings-item
-    data-settings-search="{$t$('nav.signIn')} {$t$('prefs.account.signInHint')}"
+    data-settings-search={$t$('nav.signIn')}
   >
-    <p class="account-intro">{$t$('prefs.account.signInHint')}</p>
     {#if checkingHttp}
       <p class="account-checking">{$t$('prefs.account.checking')}</p>
     {:else if available}
@@ -308,7 +260,7 @@
           <button class="app-button app-button-primary" disabled={busy}>
             {$t$('nav.signIn')}
           </button>
-          <span class="account-meta">{$t$('prefs.account.remember')}</span>
+          <span class="account-meta">{$t$('prefs.account.signInHint')}</span>
         </p>
       </form>
       {#if error}<p class="account-error">{error}</p>{/if}
@@ -341,13 +293,9 @@
     gap: 0.75rem 1rem;
   }
 
-  .account-identity-text {
-    display: grid;
-    min-width: 0;
-    flex: 1 1 14rem;
-  }
-
   .account-name {
+    min-width: 0;
+    flex: 1 1 10rem;
     overflow: hidden;
     font-size: var(--type-body);
     text-overflow: ellipsis;
@@ -379,29 +327,6 @@
     gap: 0.35rem;
     margin-left: auto;
     text-align: right;
-  }
-
-  .account-syncs h3 {
-    padding-bottom: 0.75rem;
-    font-size: var(--type-body);
-  }
-
-  .account-syncs th {
-    width: 12rem;
-    color: var(--font-color);
-    font-size: var(--type-body);
-    vertical-align: top;
-  }
-
-  .account-syncs td,
-  .account-syncs th {
-    padding-block: 0.8rem;
-    line-height: 1.55;
-  }
-
-  .account-syncs .account-meta {
-    max-width: 40rem;
-    margin-top: 0.75rem;
   }
 
   .account-intro {
@@ -470,10 +395,6 @@
   }
 
   @media (max-width: 639px) {
-    .account-syncs th {
-      width: 7rem;
-    }
-
     .account-sign-out {
       justify-items: start;
       margin-left: 0;

@@ -23,7 +23,7 @@
     way === 'none'
       ? {
           title: 'Install chimimouryou',
-          text: "This browser doesn't offer to install it. Chrome, Edge, Firefox on Android and Safari on iPhone do."
+          text: "This browser can't install apps. Chrome, Edge and Safari on iPhone can."
         }
       : installTexts[way];
 </script>

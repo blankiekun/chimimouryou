@@ -52,8 +52,6 @@
 </script>
 
 <PointBox label={$t$('ai.startHere')}>
-  <p class="lead">{$t$('ai.startHereLead')}</p>
-
   {#if oauth}
     <div class="oauth">
       <button
@@ -62,7 +60,6 @@
         disabled={starting || signingIn}
         on:click={signIn}>{$t$(signingIn ? 'ai.connecting' : 'ai.connectOpenRouter')}</button
       >
-      <p class="hint">{$t$('ai.connectOpenRouterHint')}</p>
     </div>
   {:else}
     <p class="hint http-note">{$t$('ai.connectOpenRouterHttps')}</p>
@@ -147,22 +144,11 @@
 </PointBox>
 
 <style>
-  .lead {
-    max-width: 40rem;
-    font-size: var(--type-h2);
-    line-height: 1.45;
-  }
-
   .oauth {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.75rem 1rem;
-    margin-top: 1rem;
-  }
-
-  .oauth .hint {
-    max-width: 26rem;
   }
 
   .hint {
@@ -288,10 +274,6 @@
   }
 
   @media (max-width: 640px) {
-    .lead {
-      font-size: var(--type-body);
-    }
-
     .paste-row {
       grid-template-columns: minmax(0, 1fr);
     }

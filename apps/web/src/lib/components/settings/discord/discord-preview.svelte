@@ -135,8 +135,6 @@
 
   {#if problems}
     <p class="preview-problems" role="status">{$t$('discord.problems', { count: problems })}</p>
-  {:else}
-    <p class="preview-note preview-extra">{$t$('discord.previewNote')}</p>
   {/if}
 </section>
 

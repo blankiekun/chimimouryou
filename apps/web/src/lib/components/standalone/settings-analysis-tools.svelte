@@ -41,19 +41,10 @@
 
   const supported = browser && analysisToolsSupported();
   const mb = (bytes: number) => Math.round(bytes / 1e6).toLocaleString('en-US');
-  const text: Record<AnalysisFeature, { title: string; tooltip: string; ready: string }> = {
-    difficulty: {
-      title: 'Difficulty estimates',
-      tooltip:
-        'Difficulty, word lists and word coverage for your books, made in this browser in the background when a book is added; a long novel takes about two minutes.',
-      ready: 'Downloaded. Books are estimated in the background when you add them.'
-    },
-    furigana: {
-      title: 'Generated furigana',
-      tooltip:
-        'Furigana for your books, made in this browser in the background while Reader → Generated furigana is on; a long novel takes about two minutes.',
-      ready: 'Downloaded. Used while Generated furigana is on in the reader settings.'
-    }
+  // ready: the step left once downloaded, if any.
+  const text: Record<AnalysisFeature, { title: string; ready: string }> = {
+    difficulty: { title: 'Difficulty estimates', ready: '' },
+    furigana: { title: 'Generated furigana', ready: 'Turn on Reader → Generated furigana.' }
   };
 
   let size: Partial<Record<AnalysisFeature, number>> = {};
@@ -93,15 +84,9 @@
 >
   {#each analysisFeatures as feature (feature)}
     {@const state = $analysisToolsState$[feature]}
-    <SettingsItemGroup
-      title={text[feature].title}
-      tooltip={text[feature].tooltip}
-      wide={state === 'downloading'}
-    >
+    <SettingsItemGroup title={text[feature].title} wide={state === 'downloading'}>
       {#if !supported}
-        <p class="analysis-note">
-          Needs a desktop browser on a computer with 8 GB of memory or more.
-        </p>
+        <p class="analysis-note">Needs a desktop browser and 8 GB of memory.</p>
       {:else if state === 'ready'}
         <button
           type="button"
@@ -147,21 +132,15 @@
           <p class="analysis-note" role="alert">
             The download failed: {$analysisDownload$.error}
           </p>
-        {:else if supported && state === 'ready'}
+        {:else if supported && state === 'ready' && text[feature].ready}
           <p class="analysis-note">{text[feature].ready}</p>
         {/if}
       </svelte:fragment>
     </SettingsItemGroup>
   {/each}
-  <SettingsItemGroup
-    title="Manga text"
-    tooltip="Text over the pages of your manga for lookups, made in this browser from a volume's book page (about 10 seconds a page). Models from Hugging Face: a text detector by ogkalu and manga-ocr by kha-white, Apache-2.0."
-    wide={$mangaTextState$ === 'downloading'}
-  >
+  <SettingsItemGroup title="Manga text" wide={$mangaTextState$ === 'downloading'}>
     {#if !supported}
-      <p class="analysis-note">
-        Needs a desktop browser on a computer with 8 GB of memory or more.
-      </p>
+      <p class="analysis-note">Needs a desktop browser and 8 GB of memory.</p>
     {:else if $mangaTextState$ === 'ready'}
       <button
         type="button"
@@ -198,17 +177,11 @@
       {#if $mangaTextDownload$?.error}
         <p class="analysis-note" role="alert">The download failed: {$mangaTextDownload$.error}</p>
       {:else if supported && $mangaTextState$ === 'ready'}
-        <p class="analysis-note">
-          Downloaded. Make a volume's text from its book page; it stays in this browser.
-        </p>
+        <p class="analysis-note">Make a volume's text from its book page.</p>
       {/if}
     </svelte:fragment>
   </SettingsItemGroup>
-  <SettingsItemGroup
-    title="Audiobook subtitles"
-    tooltip="Subtitles for an audiobook made with Whisper in this browser, from the audiobook setup or the Audiobookshelf bar; a GPU with WebGPU makes it much faster. Models from Hugging Face (OpenAI's Whisper, MIT). The subtitles made stay in this browser."
-    wide={$whisperState$ === 'downloading'}
-  >
+  <SettingsItemGroup title="Audiobook subtitles" wide={$whisperState$ === 'downloading'}>
     {#if $whisperState$ === 'downloading'}
       {@const progress = $whisperDownload$?.progress ?? 0}
       <div class="analysis-progress">
@@ -253,8 +226,6 @@
     <svelte:fragment slot="after">
       {#if $whisperDownload$?.error}
         <p class="analysis-note" role="alert">The download failed: {$whisperDownload$.error}</p>
-      {:else if $whisperState$ === 'ready'}
-        <p class="analysis-note">Downloaded. The audiobook players offer Make subtitles.</p>
       {/if}
     </svelte:fragment>
   </SettingsItemGroup>

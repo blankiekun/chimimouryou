@@ -126,7 +126,7 @@
 </script>
 
 <SettingsSection id="anki-dictionary">
-  <SettingsItemGroup title={$t$('anki.dict.route')} tooltip={$t$('anki.dict.routeHint')}>
+  <SettingsItemGroup title={$t$('anki.dict.route')}>
     <ButtonToggleGroup options={routes} bind:selectedOptionId={$dictionaryAnkiRoute$} />
   </SettingsItemGroup>
   <SettingsItemGroup title={$t$('anki.dict.import')} tooltip={$t$('anki.dict.importHint')}>
@@ -150,7 +150,7 @@
       {#each decks as deck}<option value={deck}></option>{/each}
     </datalist>
   </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('anki.dict.model')} tooltip={$t$('anki.dict.modelHint')}>
+  <SettingsItemGroup title={$t$('anki.dict.model')}>
     <input
       aria-label={$t$('anki.dict.model')}
       autocomplete="off"
@@ -203,7 +203,7 @@
       </div>
     </div>
   </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('anki.dict.tags')} tooltip={$t$('anki.dict.tagsHint')}>
+  <SettingsItemGroup title={$t$('anki.dict.tags')}>
     <input
       aria-label={$t$('anki.dict.tags')}
       autocomplete="off"
@@ -212,7 +212,7 @@
       onchange={(event) => set({ tags: event.currentTarget.value.split(/\s+/).filter(Boolean) })}
     />
   </SettingsItemGroup>
-  <SettingsItemGroup title={$t$('anki.dict.duplicates')} tooltip={$t$('anki.dict.duplicatesHint')}>
+  <SettingsItemGroup title={$t$('anki.dict.duplicates')}>
     <select
       class="app-input"
       aria-label={$t$('anki.dict.duplicates')}
@@ -225,7 +225,7 @@
     </select>
   </SettingsItemGroup>
   {#if settings.fieldTemplates !== null}
-    <SettingsItemGroup title={$t$('anki.dict.templates')} tooltip={$t$('anki.dict.templatesHint')}>
+    <SettingsItemGroup title={$t$('anki.dict.templates')}>
       <button type="button" class="app-button" onclick={() => set({ fieldTemplates: null })}>
         {$t$('anki.dict.templatesReset')}
       </button>

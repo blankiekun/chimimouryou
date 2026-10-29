@@ -80,7 +80,6 @@
   wide
   count={connectionCount || undefined}
   title={firstRun ? $t$('ai.getStarted') : ''}
-  description={firstRun ? $t$('ai.getStartedText') : ''}
 >
   <div data-settings-item data-settings-search="{$t$('ai.connection')} api key openrouter gemini">
     {#if firstRun}
@@ -109,7 +108,7 @@
 </SettingsSection>
 
 <SettingsSection id="ai-presets" wide>
-  <SettingsItemGroup title={$t$('ai.aboutYou')} tooltip={$t$('ai.aboutYouHint')} wide>
+  <SettingsItemGroup title={$t$('ai.aboutYou')} wide>
     <textarea
       id="ask-ai-reader-note"
       class="app-input w-full"
@@ -119,7 +118,7 @@
       bind:value={$askAiReaderNote$}
     />
   </SettingsItemGroup>
-  <div data-settings-item data-settings-search="{$t$('ai.presets')} {$t$('ai.presetsHint')}">
+  <div data-settings-item data-settings-search={$t$('ai.presets')}>
     <table class="app-table presets">
       <thead>
         <tr>
@@ -250,14 +249,6 @@
       </ol>
     </section>
   </div>
-  <aside
-    class="keys-note"
-    data-settings-item
-    data-settings-search="{$t$('ai.keysWhere')} {$t$('ai.keysWhereHint')}"
-  >
-    <h3>{$t$('ai.keysWhere')}</h3>
-    <p>{$t$('ai.keysWhereHint')}</p>
-  </aside>
 </SettingsSection>
 
 <SettingsAiPrompts />
@@ -325,28 +316,9 @@
     text-underline-offset: 0.2em;
   }
 
-  .guide-steps :global(code),
-  .keys-note :global(code) {
+  .guide-steps :global(code) {
     font-family: ui-monospace, monospace;
     font-size: 0.9em;
-  }
-
-  .keys-note {
-    padding: 0.85rem 1rem;
-    border-radius: 2px;
-    background: var(--surface-color);
-  }
-
-  .keys-note h3 {
-    font-size: var(--type-small);
-    font-weight: 700;
-  }
-
-  .keys-note p {
-    margin-top: 0.3rem;
-    color: var(--app-muted-fg);
-    font-size: var(--type-small);
-    line-height: 1.55;
   }
 
   .presets {

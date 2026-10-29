@@ -356,7 +356,6 @@
         <h3 id="theme-editor-title">
           {$t$('prefs.themes.editingName', { name: editing.name || '…' })}
         </h3>
-        <p>{$t$('prefs.themes.editing')}</p>
       </div>
       <div class="theme-editor-actions">
         <button
@@ -715,11 +714,6 @@
   .theme-editor-head h3 {
     font-size: var(--type-h2);
     font-weight: 400;
-  }
-
-  .theme-editor-head p {
-    color: var(--app-muted-fg);
-    font-size: var(--type-small);
   }
 
   .theme-editor-actions {

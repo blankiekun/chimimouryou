@@ -43,12 +43,6 @@
     vn: 'discord.kind.vn',
     idle: 'discord.kind.idle'
   };
-  const kindHints: Record<DiscordKind, MessageKey> = {
-    book: 'discord.kindHint.book',
-    manga: 'discord.kindHint.manga',
-    vn: 'discord.kindHint.vn',
-    idle: 'discord.kindHint.idle'
-  };
   const presetLabels: Record<DiscordPreset, MessageKey> = {
     minimal: 'discord.preset.minimal',
     progress: 'discord.preset.progress',
@@ -132,7 +126,8 @@
   <header class="editor-head">
     <div>
       <h2>{$t$(kindLabels[kind])}</h2>
-      <p>{$t$(kindHints[kind])}</p>
+      <!-- Only Idle needs saying: book variables stay empty there. -->
+      {#if kind === 'idle'}<p>{$t$('discord.kindHint.idle')}</p>{/if}
       <p class="editor-phone">{$t$('discord.phoneNote')}</p>
     </div>
     <button
@@ -204,7 +199,6 @@
         <DiscordTemplateField
           id="discord-name"
           label={$t$('discord.name')}
-          hint={$t$('discord.nameHint')}
           {values}
           bind:value={template.name}
         />
@@ -339,7 +333,6 @@
             <div class="editor-row">
               <div>
                 <span id="discord-party-label">{$t$('discord.party')}</span>
-                <p class="editor-hint">{$t$('discord.partyHint')}</p>
               </div>
               <button
                 type="button"
@@ -443,13 +436,11 @@
               maxlength={discordLimits.text}
               bind:value={template.privacyText}
             />
-            <p class="editor-hint">{$t$('discord.privacyHint')}</p>
           </div>
           <div class="editor-rule"></div>
           <div class="editor-field editor-row">
             <div>
               <span id="discord-hide-titles">{$t$('discord.hideTitles')}</span>
-              <p class="editor-hint">{$t$('discord.hideTitlesHint')}</p>
             </div>
             <button
               type="button"
@@ -469,7 +460,6 @@
         <button type="button" class="app-button app-button-danger" onclick={reset}>
           {$t$('discord.reset')}
         </button>
-        <span class="editor-hint">{$t$('discord.resetHint')}</span>
       </div>
     </div>
   </div>
