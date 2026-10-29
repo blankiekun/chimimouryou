@@ -20,9 +20,10 @@ const prerendered = prerenderedPaths.map(pathOf);
 const BUILD_CACHE_NAME = `${swCachePrefix}build:${version}`;
 const OTHER_CACHE_NAME = `${swCachePrefix}other:${version}`;
 // The visual novel engine can be replaced on the server without a new build (admin panel),
-// so it is fetched network-first and kept across builds for offline play.
+// so it is fetched network-first and kept across builds for offline play. Its 4 MB default font
+// too, so readers who never open a visual novel (phones) don't download it.
 const ENGINE_CACHE_NAME = `${swCachePrefix}vn-engine`;
-const engineFile = /\/vn\/conscripter(\.js|\.wasm|-version\.txt)$/;
+const engineFile = /\/vn\/(conscripter(\.js|\.wasm|-version\.txt)|default\.ttf)$/;
 // VNBox (Windows games, ~125 MB with its root fs zips) is never precached: it keeps the zips in OPFS.
 const vnboxFile = /\/vn\/vnbox\//;
 // The UI font is split into unicode-range chunks (4 MB in all); a page loads only the ones it

@@ -22,7 +22,7 @@
 </script>
 
 <div
-  class="reader-panel writing-horizontal-tb fixed left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-sm px-2 py-1.5 text-sm {raised
+  class="reader-panel writing-horizontal-tb fixed left-1/2 z-20 flex max-w-[calc(100vw-1rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 rounded-sm px-2 py-1.5 text-sm {raised
     ? 'top-12'
     : 'bottom-10'}"
   role="toolbar"
@@ -68,11 +68,12 @@
       type="button"
       class="flex h-8 items-center gap-1.5 rounded-sm px-2.5"
       title={$t$(action.title)}
+      aria-label={$t$(action.label)}
       on:mousedown|preventDefault
       on:click={() => dispatch('action', action)}
     >
       <Fa icon={action.icon} />
-      {$t$(action.label)}
+      <span class="hidden sm:inline">{$t$(action.label)}</span>
     </button>
   {/each}
 </div>
