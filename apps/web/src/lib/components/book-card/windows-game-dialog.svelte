@@ -540,8 +540,7 @@
   <div class="wg-step">
     <SectionHead {number} title="Text hook" level="h3" count="Optional" />
     <p class="wg-note">
-      A dc00 script for this game sends its text to the reader: lookups over the game, statistics
-      and Anki cards. Without one the game plays, but no text arrives.
+      Without a dc00 script the game plays, but no text reaches lookups, statistics or Anki.
       <a
         class="app-button-quiet wg-link"
         href="https://github.com/0xDC00/scripts"
@@ -614,9 +613,7 @@
         />
         {hook ? 'Choose another file' : 'Choose file…'}
       </label>
-      <span class="wg-dim"
-        >A chosen file must be self-contained: require() only works for listed scripts.</span
-      >
+      <span class="wg-dim">Your own file can't use require()</span>
     </div>
   </div>
 {/snippet}
@@ -639,10 +636,7 @@
 
 <section class="wg" class:wg-wide={phase === 'installing'} aria-labelledby="wg-title">
   <h2 id="wg-title" class="wg-title">Add a Windows game</h2>
-  <p class="wg-lead">
-    The game folder, or a disc image to install from, is copied into this browser and runs here,
-    offline. Nothing is uploaded.
-  </p>
+  <p class="wg-lead">Copied into this browser and run here, offline. Nothing is uploaded.</p>
 
   {#if blocker}
     <p class="wg-note" role="status">{windowsGameBlockerText[blocker]}</p>
@@ -815,10 +809,6 @@
         </label>
       {/if}
       {#if record}
-        <p class="wg-note">
-          Its files are copied for the game in your library, which keeps its program, text hook and
-          cover. Saves synced from another device load when it starts.
-        </p>
         {#if wrongFolder}
           <p class="wg-error" role="alert" lang="ja">
             This folder has no {record.info.exe}, the program this game runs. Choose the folder it
@@ -872,11 +862,6 @@
             <input type="checkbox" bind:checked={silent} disabled={busy} />
             <span>Install without the installer's windows ({installerNames[kind]})</span>
           </label>
-        {:else if installer}
-          <p class="wg-note">
-            The installer runs in a player here; you click through it. The program and text hook are
-            picked once it closes.
-          </p>
         {/if}
       </div>
     {:else if programs.length && !record}

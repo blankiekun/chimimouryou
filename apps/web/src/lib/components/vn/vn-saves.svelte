@@ -190,10 +190,7 @@
 </script>
 
 <div class="saves">
-  <p class="saves-muted">
-    The game is stopped while this is open and starts again when you close it. Close it in other
-    tabs first, or it writes its old saves back.
-  </p>
+  <p class="saves-muted">Close the game in other tabs first, or it writes its old saves back.</p>
 
   {#if areas.length > 1}
     <ButtonToggleGroup
@@ -202,8 +199,8 @@
     />
     <p class="saves-muted">
       {area.label === 'Game folder'
-        ? 'Files the game wrote into its own folder. They win over the copy you imported.'
-        : 'Everything else Wine wrote: drive_c is C:, user.reg the registry.'}
+        ? 'These win over the copy you imported.'
+        : 'drive_c is C:, user.reg the registry.'}
     </p>
   {/if}
 

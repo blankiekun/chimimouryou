@@ -40,8 +40,7 @@ export const ja: Record<MessageKey, string> = {
   'dashboard.finished': '読了した本',
   'dashboard.started': '読書中 {count}冊',
   'dashboard.words': '出会った語彙',
-  'dashboard.wordsHint':
-    '読んだ Calibre の本に登場した語彙数（各本の単語リストと進捗から推定。助詞やスキップした箇所は除く）',
+  'dashboard.wordsHint': '読んだ本の異なり語数（単語リストと進捗から推定）',
   'dashboard.wordsKnown': '既知の語彙',
   'dashboard.wordsKnownHint': '{count}回以上出会った語彙＋Ankiの定着済みカード',
   'dashboard.wordsKnownHintPlaced':
@@ -120,9 +119,8 @@ export const ja: Record<MessageKey, string> = {
   'statistics.next': '次へ',
   'statistics.page': '{page} / {pages}ページ',
   'statistics.noData': '{range}の読書記録はありません。',
-  'dashboard.trackerOff':
-    '文字数・読書時間・連続日数を記録するには、「設定 → 統計」で読書トラッカーを有効にしてください。',
-  'dashboard.guide': '学習ガイド：Yomitan・Ankiの連携と本の選び方',
+  'dashboard.trackerOff': '「設定 → 統計」で読書トラッカーを有効にしてください。',
+  'dashboard.guide': '学習ガイド',
   'dashboard.unit': '字',
   'dashboard.week': '日別の読書文字数（過去7日間）',
 
@@ -135,28 +133,21 @@ export const ja: Record<MessageKey, string> = {
   'home.add': 'ホームに追加',
   'home.addSelected': '選択した本をホームに追加',
   'home.startReading': '読み始める',
-  'home.startText':
-    'まだ読んだ本がありません。ストアで本を開くと今日の読書がここに表示され、1冊読み終えるとあなたのレベルに合う本が表示されます。',
   'home.importBook': '本を取り込む',
-  'home.myBooksEmpty':
-    'ストアで「ホームに追加」した本は、サインインしたすべての端末でここに表示されます。',
+  'home.myBooksEmpty': 'ストアから本をここに追加できます。',
   'home.openStore': 'ストアを開く',
-  'home.startTextLibrary':
-    'まだ読んだ本がありません。ライブラリで本を開くと今日の読書がここに表示されます。',
-  'home.myBooksEmptyLibrary': 'ライブラリで「ホームに追加」した本はここに表示されます。',
+  'home.myBooksEmptyLibrary': 'ライブラリから本をここに追加できます。',
   'home.openLibrary': 'ライブラリを開く',
-  'home.offline':
-    'サーバーに接続できません。ブラウザに保存済みの本を表示しています。進捗はオンライン復帰後に同期されます。',
+  'home.offline': 'サーバーに接続できません。保存済みの本を表示しています。',
   'home.analysing': '分析中 {current} / {total}… {percent}%',
   'home.retry': '再試行',
   'home.atYourLevel': 'あなたのレベル',
   'home.difficultyScore': '{score} {tier}',
   'home.wordsKnownForYou': '既知語 {percent}%・あなたには {level}',
-  'home.readNextReason': '最近読み終えた本に近いレベルで、既知語98%に近い順です（{range}）。',
-  'home.readNextReasonSeries':
-    '読んでいるシリーズの次の巻と、最近読み終えた本に近いレベルの本です（{range}）。',
+  'home.readNextReason': 'あなたのレベルに近い順（{range}）',
+  'home.readNextReasonSeries': 'シリーズの次の巻、次にレベルの近い本（{range}）',
   'home.nextInSeries': 'シリーズの次の巻',
-  'home.readNextReasonNext': '読んでいるシリーズの次の巻です。',
+  'home.readNextReasonNext': 'シリーズの次の巻',
   'home.readBook': '「{title}」を読む',
 
   'store.view': '表示切替',
@@ -233,11 +224,9 @@ export const ja: Record<MessageKey, string> = {
   'book.gameFolder': 'ゲームフォルダ',
   'book.fileAdded': '{format}・{date} 追加',
   'book.fileSizeAdded': '{format}・{size} MB・{date} 追加',
-  'book.wordCoverage': '異なり語数 {count}語・既知率 {percent}%（未知の語彙 {new}語）',
-  'book.wordCoverageTop':
-    '頻出上位{count}語のうち、本文の{percent}%が既知の語彙です（未知の語彙 {new}語）。',
-  'book.wordCoverageTail':
-    '異なり語数 {count}語・既知率 {percent}%以上（リスト内の未知語 {new}語＋リスト外の低頻度語 {rare}語を未知として算出）',
+  'book.wordCoverage': '{count}語・既知 {percent}%・未知 {new}語',
+  'book.wordCoverageTop': '上位{count}語・既知 {percent}%・未知 {new}語',
+  'book.wordCoverageTail': '{count}語・既知 {percent}%以上・未知 {new}語＋低頻度 {rare}語',
   'book.newWords': '新出語彙',
   'book.newWordsNote':
     '一般的な頻出上位{count}語を除く、この本に登場する未知の語彙です（作中での出現頻度が高く、一般的には珍しい順）。',
@@ -281,7 +270,7 @@ export const ja: Record<MessageKey, string> = {
   'difficulty.sentLong': '文が長め',
   'difficulty.forYou': 'あなたには {level}/5・既知語 {percent}%',
   'difficulty.scaleNote':
-    'レベルは1〜10で、本文の98%を読むのに必要な語数（V98）をこのライブラリの固定の尺度で表します（5.5が標準的な本）。「あなたには」は0（すべて既知）〜5で、既知語98%で2です。',
+    'レベル1〜10：本文の98%に必要な語数（V98）、5.5が標準。「あなたには」：0（すべて既知）〜5、既知98%で2。',
   'difficulty.levels1': 'レベル1〜2',
   'difficulty.levels2': 'レベル3〜4',
   'difficulty.levels3': 'レベル5〜6',
@@ -756,7 +745,6 @@ export const ja: Record<MessageKey, string> = {
   'words.marksBrowser': '指定はこのブラウザだけに保存されます。',
   'bookWords.crumb': '語彙',
   'bookWords.title': '{title}の語彙',
-  'bookWords.subtitle': '頻出上位{count}語。役に立つ語から順に。',
   'bookWords.coverage': 'カバー率',
   'bookWords.coverageText': 'の語をすでに知っています',
   'bookWords.counts': '既知 {known} · 未知 {new} · 除外 {ignored}',
@@ -1054,11 +1042,9 @@ export const ja: Record<MessageKey, string> = {
   'library.descending': '降順',
   'library.notSorted': '未指定',
   'library.calibreBuilding': 'ライブラリを準備しています',
-  'library.calibreBuildingText':
-    'サーバーが Calibre ライブラリを初めて読み込んでいます。通常は1分ほどで、表紙はもう少しかかります。このページは自動で更新されます。',
+  'library.calibreBuildingText': '通常1分ほどです。このページは自動で更新されます。',
   'library.calibreEmpty': 'Calibre にはまだ本がありません',
-  'library.calibreEmptyImport':
-    'インポートで追加できます。EPUB・HTMLZ・TXT・CBZ ファイルをここにドロップするか、クリックして選んでください。',
+  'library.calibreEmptyImport': 'EPUB・HTMLZ・TXT・CBZ ファイルをドロップするか、クリックして選択',
   'library.calibreEmptyNoImport':
     'Calibre で本を追加するか、管理者にインポートサービスを有効にしてもらってください。',
   'library.calibreProfiles': 'サーバーのプロファイル',
@@ -1067,8 +1053,7 @@ export const ja: Record<MessageKey, string> = {
   'library.sortSeries': 'シリーズ',
   'library.sortDifficulty': '難易度',
   'library.sortCoverage': '既知語率',
-  'library.sortCoverageHint':
-    '本に含まれる既知の語彙（頻出語やAnkiの定着済みカード）の割合順で並べます。書籍ページを開いたことがある本とホームの本が対象で、未算出の本は末尾になります。',
+  'library.sortCoverageHint': '既知語の割合順。未算出の本は末尾',
   'library.sortProgress': '進捗',
   'library.sortCharacters': '文字数',
   'library.sortLastRead': '最終閲覧日',
@@ -1124,11 +1109,10 @@ export const ja: Record<MessageKey, string> = {
   'library.deleteBook': '本を削除',
   'library.deleteTitle': '「{title}」を削除',
   'library.selectTitle': '「{title}」を選択',
-  'library.wordsNote': '既知の語彙：読書中に{count}回以上出会った語、またはAnkiの定着済みカード',
+  'library.wordsNote': '既知：{count}回以上出会った語、またはAnkiの定着済み',
   'library.reload': 'ライブラリを再読み込み',
   'library.close': '閉じる',
-  'library.difficultyIntro':
-    'ライブラリ内の本のレベルを、本文の98%を読むのに必要な語数から 1（{first}）〜 10（{last}）で算出します。',
+  'library.difficultyIntro': 'レベル1（{first}）〜10（{last}）：本文の98%に必要な語数から算出。',
   'library.difficultyUnavailable': '難易度算出サービスを利用できません（HTTP {status}）',
   'library.loadingStatus': 'ステータスを読み込み中…',
   'library.dictionaryNeeded':
@@ -2440,8 +2424,7 @@ export const ja: Record<MessageKey, string> = {
   'placement.rough': '{count}語からのおおまかな推定です。',
   'placement.done': '完了',
   'placement.offerTitle': 'レベルを設定',
-  'placement.offerText':
-    'まだ既知語がないため、カバー率や次に読む本があなたに合うか判断できません。2分のレベルチェックで設定できます。',
+  'placement.offerText': '2分のレベルチェックで、あなたに合う本がわかります。',
   'bookWords.becausePlaced': 'レベルチェックの頻出語{count}語以内',
   'wordTest.title': '日本語の単語をいくつ知っていますか？',
   'wordTest.lede':
@@ -2459,8 +2442,7 @@ export const ja: Record<MessageKey, string> = {
   'wordTest.ogDescription':
     'よく使う語から珍しい語まで、2分のはい/いいえテストで一つの数字が分かります。無料、登録不要。',
   'placement.fromWordTest': '単語テストの結果：約{count}語',
-  'placement.fromWordTestText':
-    '頻出語の上位{count}語を既知とします。カバー率と次に読む本があなたのレベルから始まります。',
+  'placement.fromWordTestText': '頻出語の上位{count}語を既知とします。',
   'hardTest.title': 'レベルチェック：ハードモード',
   'hardTest.publicTitle': '日本語の語を、読めて意味も言えるのはいくつ？',
   'hardTest.lede':
@@ -2674,19 +2656,16 @@ export const ja: Record<MessageKey, string> = {
     'ここの Google Drive 同期は専用の {folder} フォルダを使うため、ッツ Reader が同期した本は自動では表示されません。バックアップをインポートしてください。',
   'migrate.close': 'わかりました',
   'hook.title': 'テキストフッカー',
-  'hook.subtitle':
-    'このパソコンのTextractor、LunaTranslator、agentから届くゲームのテキスト、またはCtrl+Vで貼り付けたテキスト。行はこのブラウザーだけに残り、文字数と時間だけがイマージョン記録に入ります。',
+  'hook.subtitle': '行はこのブラウザーだけに残り、記録されるのは文字数と時間だけです。',
   'hook.session': 'このセッション',
   'hook.underMinute': '1分未満',
   'hook.toLog': 'イマージョン記録',
   'hook.statisticsOff': '統計がオフなので記録されません。',
   'hook.game': 'ゲーム',
   'hook.address': 'WebSocketのアドレス',
-  'hook.addressHint':
-    '既定値: {presets}。httpsのページからは、ws://はこのパソコン(localhost)にしか接続できません。Chromeはローカルネットワーク上のデバイスへのアクセス許可を求めることがあります。',
   'hook.status.connecting': '接続中…',
   'hook.status.connected': '接続済み',
-  'hook.status.closed': '未接続。再試行中です。ツールは起動していますか?',
+  'hook.status.closed': '未接続。再試行中',
   'hook.status.blocked':
     'ブラウザーにブロックされています。このサイトにローカルネットワークへのアクセスを許可してください。',
   'hook.status.invalid': 'ws://またはwss://のアドレスではありません',

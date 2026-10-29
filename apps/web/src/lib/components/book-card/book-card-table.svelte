@@ -243,7 +243,7 @@
   .library-list-sort-icon {
     display: inline-flex;
     color: var(--accent-strong-color);
-    font-size: 0.66rem;
+    font-size: var(--type-label);
     transition: transform 0.16s ease;
   }
 

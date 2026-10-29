@@ -206,11 +206,9 @@
         {searching ? 'Stop searching' : 'Search for text'}
       </button>
     </div>
-    <p class="hooks-muted">
-      {searching
-        ? 'Click through a few lines in the game, then pick the thread with the text and stop.'
-        : 'Hooks the text functions Windows games draw with and lists what each sends.'}
-    </p>
+    {#if searching}
+      <p class="hooks-muted">Click through a few lines, then pick the thread with the text.</p>
+    {/if}
     {#if threads.length}
       <ul class="hooks-threads" aria-label="Text threads">
         {#each ranked as { thread } (thread.id)}
@@ -239,10 +237,6 @@
   {/if}
 
   <SectionHead number={live ? 3 : 2} title="Text cleanup" level="h3" />
-  <p class="hooks-muted">
-    Fixes the hooked text before the overlay, statistics, Anki and the backlog get it. Saved for
-    this game.
-  </p>
   <table class="hooks-preview">
     <tbody>
       <tr>

@@ -834,7 +834,7 @@
                     <button
                       type="button"
                       class="app-button details-row-button"
-                      title="Made before generated furigana was installed. Redoing it reads each word in context; the difficulty stays the same."
+                      title="Reads each word in context; the difficulty stays the same"
                       on:click={redoList}
                     >
                       Redo with readings

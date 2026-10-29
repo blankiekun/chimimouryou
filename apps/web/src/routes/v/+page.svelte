@@ -989,9 +989,8 @@
       {#if newerEngine}
         <div class="vn-notice">
           <p>
-            Some saves were made with a newer engine (CONscripter {newerEngine}) than this server's
-            ({engineVersion}). They will most likely still load; if one doesn't, ask an admin to
-            update the engine.
+            Some saves come from a newer engine ({newerEngine}, here {engineVersion}). If one
+            doesn't load, ask an admin to update it.
           </p>
           <button class="app-button app-button-quiet" on:click={() => (newerEngine = undefined)}>
             Dismiss

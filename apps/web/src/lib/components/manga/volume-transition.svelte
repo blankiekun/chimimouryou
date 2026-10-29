@@ -64,8 +64,7 @@
         </div>
         {#if keys && !opening}
           <p class="volume-hint">
-            Turn the page again to open it, or {direction > 0 ? 'back' : 'forward'} to return to page
-            {returnPage}.
+            Turn again to open it, or {direction > 0 ? 'back' : 'forward'} to return to page {returnPage}
           </p>
         {/if}
       </div>

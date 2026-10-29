@@ -40,7 +40,14 @@ const config = {
         small: 'var(--type-small)',
         label: 'var(--type-label)',
         number: 'var(--type-number)',
-        figure: 'var(--type-figure)'
+        figure: 'var(--type-figure)',
+        // Tailwind's own sizes follow --type-scale too: same sizes at 1, unitless line heights so they grow with it.
+        xs: ['calc(0.75rem * var(--type-scale))', { lineHeight: '1.3333' }],
+        sm: ['calc(0.875rem * var(--type-scale))', { lineHeight: '1.4286' }],
+        base: ['calc(1rem * var(--type-scale))', { lineHeight: '1.5' }],
+        lg: ['calc(1.125rem * var(--type-scale))', { lineHeight: '1.5556' }],
+        xl: ['calc(1.25rem * var(--type-scale))', { lineHeight: '1.4' }],
+        '2xl': ['calc(1.5rem * var(--type-scale))', { lineHeight: '1.3333' }]
       },
       spacing: {
         21: '5.25rem'

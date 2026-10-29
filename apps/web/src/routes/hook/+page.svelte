@@ -212,11 +212,6 @@
             {/each}
           </datalist>
         </label>
-        <p class="hook-hint">
-          {$t$('hook.addressHint', {
-            presets: hookPresets.map((preset) => `${preset.label} ${preset.url}`).join(', ')
-          })}
-        </p>
         <div class="hook-actions">
           <span class="hook-status" class:hook-status-on={status === 'connected'} role="status">
             {$t$(statusLabels[status])}

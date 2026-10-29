@@ -46,13 +46,8 @@
 <DialogTemplate>
   <svelte:fragment slot="header">Add to series</svelte:fragment>
   <div slot="content" class="flex w-[min(80vw,48rem)] flex-col">
-    <p class="pb-2 text-sm opacity-70">
-      These imported books look like part of a series already in the library.
-    </p>
     {#if suggestions.length > 1}
-      <label
-        class="flex cursor-pointer items-center gap-3 border-b border-line py-2 font-medium"
-      >
+      <label class="flex cursor-pointer items-center gap-3 border-b border-line py-2 font-medium">
         <input
           type="checkbox"
           checked={allChecked}
@@ -75,7 +70,7 @@
             />
             <span class="min-w-0 flex-1">
               <span class="block truncate font-medium">{suggestion.title}</span>
-              <span class="block truncate text-xs opacity-70">→ {suggestion.series}</span>
+              <span class="block truncate text-small opacity-70">→ {suggestion.series}</span>
             </span>
           </label>
         </li>
