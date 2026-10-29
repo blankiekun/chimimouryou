@@ -5,6 +5,7 @@
  */
 
 import 'fake-indexeddb/auto';
+import { configure } from '@zip.js/zip.js';
 import { describe, expect, it, vi } from 'vitest';
 import { StorageSourceDefault } from '$lib/data/storage/storage-types';
 import { libraryBuilding$, libraryOffline$, librarySignInNeeded } from '$lib/data/store';
@@ -343,6 +344,82 @@ describe('CalibreStorageHandler while an expired account still owns the data', (
     expect(urls.filter((url) => !url.startsWith('GET'))).toEqual([]);
 
     window.localStorage.removeItem('readerDataOwner');
+    vi.unstubAllGlobals();
+  });
+});
+
+const { windowsGameBook } = await import('$lib/data/windows-game');
+
+describe('a Windows game record', () => {
+  configure({ useWebWorkers: false });
+
+  const record = () => windowsGameBook('信天翁', 'game.exe', undefined, undefined);
+
+  function recording(listing: (url: string) => unknown = () => []) {
+    const writes: string[] = [];
+
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      if (init?.method) {
+        writes.push(`${init.method} ${url}`);
+        return new Response('', { status: 201 });
+      }
+      return new Response(JSON.stringify(listing(url)));
+    });
+
+    const handler = new CalibreStorageHandler(window);
+
+    // Uploads go through XMLHttpRequest.
+    handler['request'] = async (url: string, options: RequestInit = {}) => {
+      writes.push(`${options.method} ${url}`);
+    };
+    handler.startContext({ title: '信天翁' } as never);
+    return { handler, writes };
+  }
+
+  it("goes to the account's folder, never the shared one", async () => {
+    account.user = { id: 'a', username: 'a' };
+    const { handler, writes } = recording();
+
+    await handler.saveBook(record());
+
+    expect(writes.length).toBe(1);
+    expect(writes[0]).toMatch(
+      /^PUT \/account\/sync\/ttu-reader-data\/%E4%BF%A1%E5%A4%A9%E7%BF%81\/bookdata_/
+    );
+    expect(writes.join('\n')).not.toContain('/calibre/sync/ttu-reader-data/%E4');
+    vi.unstubAllGlobals();
+  });
+
+  it('is not sent while signed out', async () => {
+    account.user = null;
+    const { handler, writes } = recording();
+
+    await handler.saveBook(record());
+
+    expect(writes.filter((write) => !write.endsWith('/ttu-reader-data/'))).toEqual([]);
+    vi.unstubAllGlobals();
+  });
+
+  it("lists the reader's own game from the account folder", async () => {
+    account.user = { id: 'a', username: 'a' };
+    vi.stubGlobal('fetch', async (url: string) => {
+      const json = (body: unknown) => new Response(JSON.stringify(body));
+
+      if (url === '/calibre/catalog.json') return json({ books: [] });
+      if (url === '/calibre/difficulty.json') return json({ books: {} });
+      if (url === '/calibre/sync/ttu-reader-data/') return json([]);
+      if (url === '/account/sync/ttu-reader-data/') {
+        return json([{ name: '信天翁', type: 'directory' }]);
+      }
+      if (url.startsWith('/account/sync/ttu-reader-data/%E4')) {
+        return json([{ name: 'bookdata_1_6_0_100_0.zip', type: 'file' }]);
+      }
+      return new Response('', { status: 404 });
+    });
+
+    const cards = await new CalibreStorageHandler(window).getBookList();
+
+    expect(cards.map((card) => card.title)).toEqual(['信天翁']);
     vi.unstubAllGlobals();
   });
 });

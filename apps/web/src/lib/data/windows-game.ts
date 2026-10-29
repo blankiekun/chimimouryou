@@ -16,6 +16,7 @@ import { hookCleaner, type HookCleanup } from '$lib/data/hook-cleanup';
 import { pagePath } from '$lib/data/env';
 import { hashPage, vnElementHtml, type VnInfo } from '$lib/data/vn';
 import type { LoadData } from '$lib/functions/file-loaders/types';
+import { BlobReader, WritableStreamWriter, ZipReader, type Entry } from '@zip.js/zip.js';
 
 const opfsRoot = 'vnbox';
 
@@ -161,6 +162,78 @@ export async function copyWindowsGame(
 
   if (failed) throw failed.reason;
   onProgress(done, total);
+}
+
+/**
+ * A ZIP of a game folder as the picked folder's files (path → file), for browsers that can't
+ * pick folders (phones). Nothing is unpacked here: each file streams out of the ZIP when
+ * copied (`stream()`), so a game of a few GB never sits in memory. A folder every file is in
+ * (the zipped folder itself) is left out of the paths and named the game; `__MACOSX` and
+ * hidden files are skipped. Names not marked UTF-8 are read as Shift JIS (Japanese Windows).
+ */
+export async function zipGameFiles(zip: File) {
+  const entries = (
+    await new ZipReader(new BlobReader(zip), { filenameEncoding: 'shift_jis' }).getEntries()
+  ).filter(
+    (entry) =>
+      !entry.directory &&
+      !entry.filename.split('/').some((part) => part.startsWith('.') || part === '__MACOSX')
+  );
+  const top = entries[0]?.filename.split('/')[0];
+  const nested = !!top && entries.every((entry) => entry.filename.startsWith(`${top}/`));
+  const files: Record<string, File> = {};
+
+  for (const entry of entries) {
+    files[nested ? entry.filename.slice(top.length + 1) : entry.filename] = zipEntryFile(entry);
+  }
+
+  return { name: nested ? top : zip.name.replace(/\.zip$/i, ''), files };
+}
+
+/** As much of a File as copying and reading programs need: name, size and stream(). */
+function zipEntryFile(entry: Entry) {
+  const stream = () => {
+    const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+    const writer = new WritableStreamWriter(writable);
+
+    // A broken entry errors the stream, or its reader would wait for good.
+    entry.getData!(writer)
+      .catch((error) =>
+        (writer as unknown as { writer: WritableStreamDefaultWriter }).writer.abort(error)
+      )
+      .catch(() => {});
+    return readable;
+  };
+
+  return {
+    name: entry.filename.slice(entry.filename.lastIndexOf('/') + 1),
+    size: entry.uncompressedSize,
+    stream
+  } as unknown as File;
+}
+
+/** A file's first `length` bytes, read from its stream (zipGameFiles' files have no slice). */
+export async function readHead(file: File, length: number) {
+  const reader = file.stream().getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+
+  while (size < length) {
+    const { done, value } = await reader.read();
+
+    if (done) break;
+    chunks.push(value);
+    size += value.length;
+  }
+  reader.cancel().catch(() => {});
+
+  const head = new Uint8Array(Math.min(size, length));
+
+  chunks.reduce((at, chunk) => {
+    head.set(chunk.subarray(0, head.length - at), at);
+    return at + chunk.length;
+  }, 0);
+  return head;
 }
 
 /** Whether the game's files are in this browser (another device, or cleared site data: not). */

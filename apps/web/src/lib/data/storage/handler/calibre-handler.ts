@@ -200,6 +200,9 @@ export class CalibreStorageHandler extends ApiStorageHandler {
 
   private titleToCalibreBook = new Map<string, CalibreBook>();
 
+  /** saveBook is writing a Windows game's record: its bookdata_ goes to the account folder. */
+  private personalRecord = false;
+
   private nextCardId = Date.now();
 
   constructor(window: Window) {
@@ -234,12 +237,16 @@ export class CalibreStorageHandler extends ApiStorageHandler {
           ...personalTitles.filter((title) => catalogTitles.has(title))
         ]);
 
+        // The others are listed only when they hold this reader's Windows game record.
         await Promise.all(
-          [...titles].map((title) =>
+          [...new Set([...titles, ...personalTitles])].map((title) =>
             listLimiter(async () => {
               const titleId = this.titleToId.get(title) || this.sharedTitleId(title);
+              const files = await this.listTitleFiles(titleId);
 
-              this.setTitleFiles(title, await this.listTitleFiles(titleId));
+              if (titles.has(title) || files.some((file) => file.name.startsWith('bookdata_'))) {
+                this.setTitleFiles(title, files);
+              }
             })
           )
         );
@@ -346,6 +353,30 @@ export class CalibreStorageHandler extends ApiStorageHandler {
         manga: isManga(book),
         vn: isVn(book)
       }));
+  }
+
+  /**
+   * A Windows game's record (program, hook; no game files) is this reader's own: it goes to
+   * the account folder, never the shared one every account reads, and not at all signed out.
+   */
+  async saveBook(data: Omit<BooksDbBookData, 'id'> | File, skipTimestampFallback = true) {
+    if (data instanceof File || !isVn(data) || vnInfo(data).engine !== 'vnbox') {
+      return super.saveBook(data, skipTimestampFallback);
+    }
+
+    await this.ensureTitle();
+    if (!this.useAccountFolder || this.holdPersonal) return 0;
+
+    const { title } = this.currentContext;
+
+    // Without a shared folder made for it (ensureTitle's MKCOL): even the title stays private.
+    if (!this.titleToId.has(title)) this.titleToId.set(title, this.sharedTitleId(title));
+    this.personalRecord = true;
+    try {
+      return await super.saveBook(data, skipTimestampFallback);
+    } finally {
+      this.personalRecord = false;
+    }
   }
 
   async prepareBookForReading() {
@@ -475,11 +506,17 @@ export class CalibreStorageHandler extends ApiStorageHandler {
     rootFilePrefix?: string,
     progressBase = 0.8
   ): Promise<ExternalFile> {
-    if (this.holdPersonal && CalibreStorageHandler.isPersonalFile(name)) {
+    // A file already in the account folder stays there (a Windows game record's new name).
+    const id = externalFile?.id.startsWith(accountSyncUrl)
+      ? this.toPersonal(`${folderId}${encodeURIComponent(name)}`)
+      : this.fileId(folderId, name);
+
+    if (
+      this.holdPersonal &&
+      (CalibreStorageHandler.isPersonalFile(name) || id.startsWith(accountSyncUrl))
+    ) {
       throw unauthorizedError(true);
     }
-
-    const id = this.fileId(folderId, name);
 
     // Metadata lives in the filename, so an update usually means a new name.
     if (data !== undefined) {
@@ -681,8 +718,10 @@ export class CalibreStorageHandler extends ApiStorageHandler {
       ...filesIn(titleId, shared).filter(
         (file) => !CalibreStorageHandler.isPersonalFile(file.name)
       ),
-      ...filesIn(personalId, personal).filter((file) =>
-        CalibreStorageHandler.isPersonalFile(file.name)
+      // bookdata_ there is a Windows game record (saveBook).
+      ...filesIn(personalId, personal).filter(
+        (file) =>
+          CalibreStorageHandler.isPersonalFile(file.name) || file.name.startsWith('bookdata_')
       )
     ];
   }
@@ -693,7 +732,9 @@ export class CalibreStorageHandler extends ApiStorageHandler {
 
   private belongsInAccount(name: string) {
     return (
-      (this.useAccountFolder || this.holdPersonal) && CalibreStorageHandler.isPersonalFile(name)
+      (this.useAccountFolder || this.holdPersonal) &&
+      (CalibreStorageHandler.isPersonalFile(name) ||
+        (this.personalRecord && name.startsWith('bookdata_')))
     );
   }
 

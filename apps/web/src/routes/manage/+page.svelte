@@ -1080,7 +1080,7 @@
 
     initializeReplicationProgressData();
 
-    if (!file.name.endsWith('.zip')) {
+    if (!/\.zip$/i.test(file.name)) {
       resetProgress();
 
       showError(errorTitle, 'Invalid file - expected zip archive', '');

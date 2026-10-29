@@ -4,6 +4,8 @@
  * All rights reserved.
  */
 
+import { File as NodeFile } from 'node:buffer';
+import { Uint8ArrayReader, Uint8ArrayWriter, ZipWriter, configure } from '@zip.js/zip.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isVn, vnInfo } from '$lib/data/vn';
 import {
@@ -12,6 +14,7 @@ import {
   copyWindowsGame,
   fittedTuning,
   hookSuggestion,
+  readHead,
   rankThreads,
   savedHookName,
   searchHookScripts,
@@ -21,6 +24,7 @@ import {
   windowsGameBook,
   windowsGameFolder,
   windowsPrograms,
+  zipGameFiles,
   type HookThread,
   type VnboxCompat
 } from '$lib/data/windows-game';
@@ -482,5 +486,40 @@ describe('windowsGameBlocker', () => {
     expect(vnboxErrorText('Unable to load x.zip: 404')).toBe(
       "The player couldn't load its files: Unable to load x.zip: 404"
     );
+  });
+});
+
+describe('zipGameFiles', () => {
+  configure({ useWebWorkers: false });
+
+  async function zip(names: string[], name = 'game.zip') {
+    const writer = new ZipWriter(new Uint8ArrayWriter());
+
+    for (const entry of names) {
+      await writer.add(entry, new Uint8ArrayReader(new TextEncoder().encode(`data of ${entry}`)));
+    }
+
+    return new NodeFile([await writer.close()], name) as unknown as File;
+  }
+
+  it('drops the zipped folder from the paths and names the game after it', async () => {
+    const { name, files } = await zipGameFiles(
+      await zip(['信天翁/game.exe', '信天翁/data/a.dat', '信天翁/.DS_Store', '__MACOSX/x'])
+    );
+
+    expect(name).toBe('信天翁');
+    expect(Object.keys(files).sort()).toEqual(['data/a.dat', 'game.exe']);
+    expect(files['game.exe'].size).toBe(new TextEncoder().encode('data of 信天翁/game.exe').length);
+    expect(new TextDecoder().decode(await readHead(files['data/a.dat'], 1 << 20))).toBe(
+      'data of 信天翁/data/a.dat'
+    );
+    expect(new TextDecoder().decode(await readHead(files['game.exe'], 4))).toBe('data');
+  });
+
+  it('keeps the paths of a ZIP made inside the folder, named after the file', async () => {
+    const { name, files } = await zipGameFiles(await zip(['game.exe', 'data/a.dat'], 'Kanon.ZIP'));
+
+    expect(name).toBe('Kanon');
+    expect(Object.keys(files).sort()).toEqual(['data/a.dat', 'game.exe']);
   });
 });
