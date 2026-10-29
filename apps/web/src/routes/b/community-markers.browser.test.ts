@@ -48,10 +48,11 @@ afterEach(async () => {
 });
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 400));
+const key = (code: string) => dispatchEvent(new KeyboardEvent('keydown', { code, key: code }));
 
-/** A thread on a line inside paragraph `index` of chapter 2 */
-function mark(index: number, posts: number, from = 2, to = 20, hash = `h${index}`) {
-  const { start } = paragraphCounts(2, index);
+/** A thread on a line inside paragraph `index` of chapter 2 (or `chapter`) */
+function mark(index: number, posts: number, from = 2, to = 20, hash = `h${index}`, chapter = 2) {
+  const { start } = paragraphCounts(chapter, index);
   return {
     hash,
     prefix: hash,
@@ -180,3 +181,26 @@ for (const view of [ViewMode.Paginated, ViewMode.Continuous]) {
     });
   }
 }
+
+describe('community bubbles, paginated, across chapters', () => {
+  for (const writing of ['horizontal-tb', 'vertical-rl'] as const) {
+    // Paginated mode swaps the section's HTML: the marks of the chapter turned to are drawn, and
+    // those of the one turned back to again.
+    it(`come back after turning into the previous chapter and back, ${writing}`, async () => {
+      const id = await addBook(2, 1);
+      component = await mountReader(id, ViewMode.Paginated, writing);
+      await waitOnScreen('p-2-1');
+      const { title } = (await database.getData(id))!;
+      communityMarks$.next({ title, marks: [mark(40, 1, 2, 20, 'a', 1), mark(1, 2, 2, 20, 'b')] });
+      await vi.waitFor(() => expect(bubble('b')).toBeTruthy(), { timeout: 5000 });
+
+      key('PageUp');
+      await waitOnScreen('p-1-40');
+      await vi.waitFor(() => expect(bubble('a')).toBeTruthy(), { timeout: 3000 });
+      key('PageDown');
+      await waitOnScreen('p-2-1');
+      await vi.waitFor(() => expect(bubble('b')).toBeTruthy(), { timeout: 3000 });
+      expect(bubble('a')).toBeNull();
+    });
+  }
+});
