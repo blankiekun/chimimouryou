@@ -55,7 +55,7 @@ export function windowsGameFolder(title: string) {
   return `g${hashPage(title)}`;
 }
 
-const notGames =
+export const notGames =
   /(?:^|[\\/])(?:setup|install|uninst|unins\d*|config|vcredist|dxsetup|dotnet)[^\\/]*$/i;
 
 /**
