@@ -21,7 +21,11 @@
     <h3>{$t$('statistics.charactersPerDay')}</h3>
     <span>{$t$('statistics.max', { count: number(max) })}</span>
   </figcaption>
-  <div class="chars-chart-plot" on:pointerleave={() => (hovered = undefined)}>
+  <!-- Touch fires pointerleave as the finger lifts: keep the tapped bar's tip until the next tap. -->
+  <div
+    class="chars-chart-plot"
+    on:pointerleave={(event) => event.pointerType !== 'touch' && (hovered = undefined)}
+  >
     {#each bars as bar, index (bar.key)}
       {@const today = todayKey >= bar.key && todayKey <= bar.end}
       <button
@@ -29,6 +33,7 @@
         class="chars-chart-slot"
         aria-label="{label(bar)}: {$t$('dashboard.charsValue', { count: number(bar.characters) })}"
         on:pointerenter={() => (hovered = index)}
+        on:click={() => (hovered = index)}
         on:focus={() => (hovered = index)}
         on:blur={() => (hovered = undefined)}
       >
