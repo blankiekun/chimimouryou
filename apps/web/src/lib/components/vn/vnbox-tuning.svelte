@@ -277,9 +277,7 @@
 
   <SectionHead number={3} title="Compatibility" level="h3" />
   <p class="tuning-muted">
-    Wine fixes for a game that won't start, shows nothing or stops at a movie. The Japanese locale
-    and fonts are always on. Renderer, Windows version and registry values stay in this game's Wine
-    setup when you set them back to Default: pick the other value to undo them.
+    Default doesn't undo Renderer, Windows version or registry values: pick the other value.
   </p>
   <SettingsItemGroup
     title="Renderer"
@@ -296,13 +294,13 @@
   </SettingsItemGroup>
   <SettingsItemGroup
     title="Movies"
-    tooltip="Off turns DirectShow (quartz) off, so a game that hangs on its opening movie can skip it. Some games stop instead. Older VNBox builds ignore it."
+    tooltip="Off turns DirectShow (quartz) off, so a game that hangs on its opening movie can skip it. Some games stop instead."
   >
     <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={compat.movies} />
   </SettingsItemGroup>
   <SettingsItemGroup
     title="Virtual desktop"
-    tooltip="Runs the game inside a Wine desktop of this size (WIDTHxHEIGHT), for games that change the screen mode. Empty: off. Older VNBox builds ignore it."
+    tooltip="Runs the game inside a Wine desktop of this size (WIDTHxHEIGHT), for games that change the screen mode. Empty: off."
   >
     <input
       class="app-input"
@@ -317,7 +315,7 @@
 
   <SettingsItemGroup
     title="DLL overrides"
-    tooltip="Which copy of a DLL Wine loads: Native (one the game ships), Built-in (Wine's) or Off. Name without .dll, e.g. d3d9. Older VNBox builds ignore it."
+    tooltip="Which copy of a DLL Wine loads: Native (one the game ships), Built-in (Wine's) or Off. Name without .dll, e.g. d3d9."
     wide
   >
     {#each compat.dlls as dll, i}
@@ -350,7 +348,7 @@
 
   <SettingsItemGroup
     title="Registry values"
-    tooltip="Set with reg add before the game starts. Keys under HKCU\Software or HKLM\Software only; no quotes, &, |, <, >, ^ or %. An empty name sets the key's default value. Older VNBox builds ignore it."
+    tooltip="Set with reg add before the game starts. Keys under HKCU\Software or HKLM\Software only; no quotes, &, |, <, >, ^ or %. An empty name sets the key's default value."
     wide
   >
     {#each compat.registry as row, i}
@@ -398,7 +396,7 @@
 
   <SettingsItemGroup
     title="Environment variables"
-    tooltip="Passed to Wine, e.g. WINEDEBUG=-all. DLL overrides go above, not as WINEDLLOVERRIDES. Older VNBox builds ignore it."
+    tooltip="Passed to Wine, e.g. WINEDEBUG=-all. DLL overrides go above, not as WINEDLLOVERRIDES."
     wide
   >
     {#each compat.env as row, i}
@@ -439,10 +437,7 @@
     <button class="app-button app-button-primary" onclick={apply}>Apply and restart</button>
     <button class="app-button" onclick={() => onapply('')}>Reset</button>
   </div>
-  <p class="tuning-muted tuning-note">
-    Restarting starts the game over, so save in the game first. Settings stay in this browser, for
-    this game.
-  </p>
+  <p class="tuning-muted tuning-note">Restarting starts the game over: save in the game first.</p>
 </div>
 
 <style>

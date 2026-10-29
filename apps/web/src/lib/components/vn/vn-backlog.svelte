@@ -104,8 +104,7 @@
 <div class="backlog">
   {#if !keeping}
     <p class="backlog-muted backlog-empty">
-      The backlog keeps the lines you read for Anki mining. Turn on Anki mining in Settings → Anki,
-      then open the game again.
+      Turn on Anki mining in Settings → Anki, then open the game again.
     </p>
   {:else}
     <SectionHead number={1} title="Lines" count={lines.length} level="h3" />

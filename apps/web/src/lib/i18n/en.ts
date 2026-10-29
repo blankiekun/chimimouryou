@@ -43,7 +43,7 @@ export const en = {
   'dashboard.started': '{count} started',
   'dashboard.words': 'Words met',
   'dashboard.wordsHint':
-    "Different words in the Calibre books you have read, estimated from each book's word list and how far you got; particles and skipped text don't count",
+    "Different words in the books you've read, from each book's word list and your progress",
   'dashboard.wordsKnown': 'Words known',
   'dashboard.wordsKnownHint': 'Words met at least {count} times, plus mature words from Anki',
   'dashboard.wordsKnownHintPlaced':
@@ -123,9 +123,8 @@ export const en = {
   'statistics.next': 'Next',
   'statistics.page': 'Page {page} of {pages}',
   'statistics.noData': 'Nothing read in {range}.',
-  'dashboard.trackerOff':
-    'Turn on the reading tracker (Settings → Statistics) to count characters, time and streaks.',
-  'dashboard.guide': 'Learning guide: Yomitan, Anki and choosing books',
+  'dashboard.trackerOff': 'Turn on the reading tracker in Settings → Statistics.',
+  'dashboard.guide': 'Learning guide',
   'dashboard.unit': 'characters',
   'dashboard.week': 'Characters read per day, past 7 days',
 
@@ -138,29 +137,21 @@ export const en = {
   'home.add': 'Add to Home',
   'home.addSelected': 'Add selected books to Home',
   'home.startReading': 'Start reading',
-  'home.startText':
-    "Nothing read yet. Open a book from the Store and today's reading shows here; books at your level appear once you finish one.",
   'home.importBook': 'Import a book',
-  'home.myBooksEmpty':
-    'Books you add with Add to Home in the Store stay here, on every device you sign in on.',
+  'home.myBooksEmpty': 'Add books here from the Store.',
   'home.openStore': 'Open the Store',
-  'home.startTextLibrary':
-    "Nothing read yet. Open a book from the Library and today's reading shows here.",
-  'home.myBooksEmptyLibrary': 'Books you add with Add to Home in the Library stay here.',
+  'home.myBooksEmptyLibrary': 'Add books here from the Library.',
   'home.openLibrary': 'Open the Library',
-  'home.offline':
-    "The server can't be reached: showing the books downloaded to this browser. Progress syncs once it's back",
+  'home.offline': "Can't reach the server: showing books downloaded here",
   'home.analysing': 'Analysing {current} of {total}… {percent}%',
   'home.retry': 'Retry',
   'home.atYourLevel': 'at your level',
   'home.difficultyScore': '{score} {tier}',
   'home.wordsKnownForYou': '{percent}% known · {level} for you',
-  'home.readNextReason':
-    'Near the level of the last books you finished ({range}), closest to 98% known first.',
-  'home.readNextReasonSeries':
-    'The next volumes of series you are reading, then books near the level of the last ones you finished ({range}).',
+  'home.readNextReason': 'Near your level ({range}), best fit first',
+  'home.readNextReasonSeries': 'Next volumes first, then near your level ({range})',
   'home.nextInSeries': 'next in series',
-  'home.readNextReasonNext': 'The next volumes of series you are reading.',
+  'home.readNextReasonNext': 'Next volumes of series you are reading',
   'home.readBook': 'Read {title}',
 
   'store.view': 'Store view',
@@ -237,12 +228,9 @@ export const en = {
   'book.gameFolder': 'Game folder',
   'book.fileAdded': '{format} · added {date}',
   'book.fileSizeAdded': '{format} · {size} MB · added {date}',
-  'book.wordCoverage':
-    '{count} different words, {percent}% of its words already known ({new} new).',
-  'book.wordCoverageTop':
-    'Counting its {count} most frequent words, {percent}% of its words already known ({new} new).',
-  'book.wordCoverageTail':
-    '{count} different words, at least {percent}% of its words already known ({new} new in its word list, plus {rare} rarely used ones past it, counted as unknown).',
+  'book.wordCoverage': '{count} words · {percent}% known · {new} new',
+  'book.wordCoverageTop': 'Top {count} words · {percent}% known · {new} new',
+  'book.wordCoverageTail': '{count} words · {percent}%+ known · {new} new, {rare} rare',
   'book.newWords': 'New words',
   'book.newWordsNote':
     'Used in this book, outside the {count} most common words and not known yet: frequent here and rare in general first.',
@@ -286,7 +274,7 @@ export const en = {
   'difficulty.sentLong': 'Long sentences',
   'difficulty.forYou': 'For you {level} / 5 · {percent}% known',
   'difficulty.scaleNote':
-    'Levels run from 1 to 10 and name the words a reader needs for 98% of the book (V98), on a fixed scale over this library: 5.5 is a typical book. For you runs from 0 (all known) to 5, with 2 at 98% known.',
+    'Level 1–10: words needed for 98% of the book (V98); 5.5 is typical. For you: 0 (all known) to 5, 2 at 98% known.',
   'difficulty.levels1': 'Levels 1–2',
   'difficulty.levels2': 'Levels 3–4',
   'difficulty.levels3': 'Levels 5–6',
@@ -754,7 +742,6 @@ export const en = {
   'words.marksBrowser': 'Marks stay in this browser.',
   'bookWords.crumb': 'Words',
   'bookWords.title': 'Words in {title}',
-  'bookWords.subtitle': 'Its {count} most frequent words, most useful first.',
   'bookWords.coverage': 'Coverage',
   'bookWords.coverageText': 'of the words you will read are known',
   'bookWords.counts': '{known} known · {new} new · {ignored} ignored',
@@ -1051,11 +1038,9 @@ export const en = {
   'library.descending': 'Descending',
   'library.notSorted': 'Not sorted',
   'library.calibreBuilding': 'The library is being built',
-  'library.calibreBuildingText':
-    'The server is reading the Calibre library for the first time, usually a minute; covers take longer. This page updates on its own.',
+  'library.calibreBuildingText': 'Usually a minute; this page updates on its own.',
   'library.calibreEmpty': 'No books in Calibre yet',
-  'library.calibreEmptyImport':
-    'Import adds them: drop EPUB, HTMLZ, TXT or CBZ files here, or click to choose them.',
+  'library.calibreEmptyImport': 'Drop EPUB, HTMLZ, TXT or CBZ files here, or click to choose',
   'library.calibreEmptyNoImport':
     'Add books in Calibre, or ask an admin to turn on the import service.',
   'library.calibreProfiles': 'Server profiles',
@@ -1064,8 +1049,7 @@ export const en = {
   'library.sortSeries': 'Series',
   'library.sortDifficulty': 'Difficulty',
   'library.sortCoverage': 'Known words',
-  'library.sortCoverageHint':
-    "By the share of a book's words you already know (met often or mature in Anki). Only books whose page you opened, and Home's books, have one; the rest come last.",
+  'library.sortCoverageHint': 'Share of its words you know; books without one come last',
   'library.sortProgress': 'Progress',
   'library.sortCharacters': 'Characters',
   'library.sortLastRead': 'Last read',
@@ -1121,11 +1105,11 @@ export const en = {
   'library.deleteBook': 'Delete book',
   'library.deleteTitle': 'Delete {title}',
   'library.selectTitle': 'Select {title}',
-  'library.wordsNote': 'Known words: met {count} times in what you have read, or mature in Anki.',
+  'library.wordsNote': 'Known: met {count}+ times, or mature in Anki',
   'library.reload': 'Reload library',
   'library.close': 'Close',
   'library.difficultyIntro':
-    'Estimates the level of books in the library on a scale from 1 {first} to 10 {last}, from the words a reader needs for 98% of each book.',
+    'Levels 1 ({first}) to 10 ({last}): words needed for 98% of each book.',
   'library.difficultyUnavailable': 'Difficulty service unavailable (HTTP {status})',
   'library.loadingStatus': 'Loading status...',
   'library.dictionaryNeeded':
@@ -2423,8 +2407,7 @@ export const en = {
   'placement.rough': 'It is a rough estimate from {count} words.',
   'placement.done': 'Done',
   'placement.offerTitle': 'Set your level',
-  'placement.offerText':
-    'You have no known words yet, so coverage and Read next can’t tell what fits you. A 2-minute level check fixes that.',
+  'placement.offerText': 'A 2-minute word test matches books to your level.',
   'bookWords.becausePlaced': 'Within the level check’s {count} common words',
   'wordTest.title': 'How many Japanese words do you know?',
   'wordTest.lede':
@@ -2442,8 +2425,7 @@ export const en = {
   'wordTest.ogDescription':
     'A 2-minute yes/no test across common and rare words gives you one number. Free, nothing to sign up for.',
   'placement.fromWordTest': 'From your word test: about {count} words',
-  'placement.fromWordTestText':
-    'The {count} most common words count as known, so coverage and Read next start from your level.',
+  'placement.fromWordTestText': 'The {count} most common words count as known.',
   'hardTest.title': 'Level check: hard mode',
   'hardTest.publicTitle': 'How many Japanese words can you read and explain?',
   'hardTest.lede':
@@ -2663,19 +2645,16 @@ export const en = {
     'Google Drive sync here uses its own {folder} folder, so books ッツ Reader synced don’t show up by themselves: import the backup instead.',
   'migrate.close': 'Got it',
   'hook.title': 'Texthooker',
-  'hook.subtitle':
-    'Game text from Textractor, LunaTranslator or agent on this computer, or pasted with Ctrl+V. The lines stay in this browser; only characters and time go to your immersion log.',
+  'hook.subtitle': 'Lines stay in this browser; only characters and time are logged.',
   'hook.session': 'This session',
   'hook.underMinute': 'Under a minute',
   'hook.toLog': 'Immersion log',
   'hook.statisticsOff': 'Statistics are off, so nothing is logged.',
   'hook.game': 'Game',
   'hook.address': 'WebSocket address',
-  'hook.addressHint':
-    'Defaults: {presets}. From an https page, browsers only allow ws:// to this computer (localhost); Chrome may ask to allow access to devices on your local network.',
   'hook.status.connecting': 'Connecting…',
   'hook.status.connected': 'Connected',
-  'hook.status.closed': 'Not connected. Retrying; is the tool running?',
+  'hook.status.closed': 'Not connected, retrying',
   'hook.status.blocked': 'Blocked by the browser: allow local network access for this site.',
   'hook.status.invalid': 'Not a ws:// or wss:// address',
   'hook.status.off': 'Disconnected',

@@ -143,9 +143,6 @@
       <h1 id="book-words-title" class="words-title">
         {$t$('bookWords.title', { title: book.displayTitle || book.title })}
       </h1>
-      {#if list}
-        <p class="words-subtitle">{$t$('bookWords.subtitle', { count: number(list.length) })}</p>
-      {/if}
     </header>
 
     {#if list === null}
