@@ -386,19 +386,33 @@ function areaPath(target: string, folder: string, areas: SaveArea[]) {
   return undefined;
 }
 
+/** The prefix layer's files before an install (key → modified), for installedPrograms */
+export async function prefixSnapshot(title: string, folder: string) {
+  const [, prefix] = vnSaveAreas(title, { encoding: 'sjis', files: [], engine: 'vnbox', folder });
+
+  return new Map((await listSaves(prefix)).map((entry) => [entry.key, entry.modified]));
+}
+
 /**
  * The programs an install left: .exe files written into the game folder, or into the prefix's
- * drive_c since `since` (ms), shortcut targets first. Uninstallers and setup tools come last
- * (windowsPrograms).
+ * drive_c since `before` (prefixSnapshot), shortcut targets first. Uninstallers and setup tools
+ * come last (windowsPrograms).
  */
-export async function installedPrograms(title: string, folder: string, since: number) {
+export async function installedPrograms(
+  title: string,
+  folder: string,
+  before: Map<string, number>
+) {
   const areas = vnSaveAreas(title, { encoding: 'sjis', files: [], engine: 'vnbox', folder });
   const [game, prefix] = await Promise.all(areas.map(listSaves));
-  const fresh = prefix.filter((entry) => !entry.dir && entry.modified >= since - 60_000);
+  // New or rewritten files, not new timestamps: msiexec gives the files it unpacks the cabinet's
+  // dates (years old), so a time filter misses the whole game.
+  const fresh = prefix.filter((entry) => !entry.dir && before.get(entry.key) !== entry.modified);
   const found = new Map<string, InstalledProgram>();
   const key = (area: SaveArea, path: string) => `${area.db}|${path.toLowerCase()}`;
   const add = (area: SaveArea, entry: SaveEntry, shortcut: boolean) =>
     found.set(key(area, entry.path), { area, path: entry.path, size: entry.size, shortcut });
+  const prefixFiles = new Map(prefix.map((entry) => [key(areas[1], entry.path), entry]));
 
   for (const entry of game)
     if (!entry.dir && /\.exe$/i.test(entry.path)) add(areas[0], entry, false);
@@ -406,11 +420,17 @@ export async function installedPrograms(title: string, folder: string, since: nu
     if (/^drive_c\/.*\.exe$/i.test(entry.path) && !/^drive_c\/windows\//i.test(entry.path))
       add(areas[1], entry, false);
   }
+  // A new shortcut's target counts even when the install left it unchanged (installed before).
   for (const entry of fresh.filter((entry) => /\.lnk$/i.test(entry.path))) {
     const bytes = await readSaveFile(areas[1], entry.key);
     const target = bytes && lnkTarget(bytes);
     const place = target && areaPath(target, folder, areas);
-    const program = place && found.get(key(place.area, place.path));
+    const placeKey = place ? key(place.area, place.path) : '';
+    const file = prefixFiles.get(placeKey);
+
+    if (!found.has(placeKey) && file && /\.exe$/i.test(file.path)) add(areas[1], file, false);
+
+    const program = found.get(placeKey);
 
     if (program) program.shortcut = true;
   }

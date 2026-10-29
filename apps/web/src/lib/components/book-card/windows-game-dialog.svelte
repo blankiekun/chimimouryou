@@ -39,6 +39,7 @@
     discsOf,
     installDir,
     installedPrograms,
+    prefixSnapshot,
     installerKind,
     installerNames,
     installUrl,
@@ -103,7 +104,7 @@
   let phase = $state<'pick' | 'installing' | 'finding' | 'installed'>('pick');
   let frameUrl = $state<string>();
   let frame: HTMLIFrameElement | undefined = $state();
-  let installStart = 0;
+  let installBefore = new Map<string, number>();
   // A new game's install, freed on Cancel: its OPFS folder (discs, installer copy) and, when it
   // held nothing before, the files the installer wrote into VNBox's game-folder layer.
   let discard: { folder: string; layer: boolean } | undefined;
@@ -361,14 +362,14 @@
         abort.signal
       );
       copied = undefined;
-      runInstaller();
+      await runInstaller();
     } catch (installError: any) {
       if (installError?.name !== 'AbortError') error = installError.message;
       copied = undefined;
     }
   }
 
-  function runInstaller() {
+  async function runInstaller() {
     const folder = windowsGameFolder(title.trim());
     const dir = installDir(folder);
     const windows = installer.replaceAll('/', '\\');
@@ -392,7 +393,7 @@
           )
         : undefined;
 
-    installStart = Date.now();
+    installBefore = await prefixSnapshot(title.trim(), folder);
     finishEarly = false;
     phase = 'installing';
     frameUrl = installUrl(
@@ -416,7 +417,7 @@
     try {
       const folder = windowsGameFolder(title.trim());
 
-      found = await installedPrograms(title.trim(), folder, installStart);
+      found = await installedPrograms(title.trim(), folder, installBefore);
       foundPick = 0;
       phase = 'installed';
     } catch (findError: any) {
@@ -725,7 +726,7 @@
             class="app-button"
             onclick={() => {
               silent = false;
-              runInstaller();
+              runInstaller().catch((runError: Error) => (error = runError.message));
             }}
           >
             Run the installer again

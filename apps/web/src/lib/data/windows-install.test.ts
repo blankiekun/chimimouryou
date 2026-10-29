@@ -4,16 +4,20 @@
  * All rights reserved.
  */
 
+import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import {
   autorunProgram,
   copyProtection,
   discsOf,
+  installedPrograms,
   installerKind,
   listDisc,
   lnkTarget,
+  prefixSnapshot,
   silentArgs
 } from './windows-install';
+import { vnSaveAreas } from './vn-save-store';
 
 // jsdom's Blob has no arrayBuffer().
 Blob.prototype.arrayBuffer ??= function (this: Blob) {
@@ -24,6 +28,22 @@ Blob.prototype.arrayBuffer ??= function (this: Blob) {
     reader.readAsArrayBuffer(this);
   });
 };
+
+/** A shortcut (.lnk) to path, with its LinkInfo's Unicode path */
+function shortcut(path: string) {
+  const lnk = new Uint8Array(0x4c + 0x24 + path.length * 2 + 2);
+  const view = new DataView(lnk.buffer);
+
+  view.setUint32(0, 0x4c, true);
+  view.setUint32(0x14, 2, true); // HasLinkInfo
+  view.setUint32(0x4c + 4, 0x24, true);
+  view.setUint32(0x4c + 8, 1, true);
+  view.setUint32(0x4c + 0x10, 0x24 + path.length * 2, true); // ANSI path: the terminator
+  view.setUint32(0x4c + 0x1c, 0x24, true);
+  [...path].forEach((char, i) => view.setUint16(0x4c + 0x24 + i * 2, char.charCodeAt(0), true));
+
+  return lnk;
+}
 
 describe('windows-install', () => {
   it('reads autorun.inf', () => {
@@ -59,17 +79,52 @@ describe('windows-install', () => {
 
   it('reads a shortcut target', () => {
     const path = 'C:\\files\\g1\\game.exe';
-    const lnk = new Uint8Array(0x4c + 0x24 + path.length * 2 + 2);
-    const view = new DataView(lnk.buffer);
 
-    view.setUint32(0, 0x4c, true);
-    view.setUint32(0x14, 2, true); // HasLinkInfo
-    view.setUint32(0x4c + 4, 0x24, true);
-    view.setUint32(0x4c + 8, 1, true);
-    view.setUint32(0x4c + 0x10, 0x24 + path.length * 2, true); // ANSI path: the terminator
-    view.setUint32(0x4c + 0x1c, 0x24, true);
-    [...path].forEach((char, i) => view.setUint16(0x4c + 0x24 + i * 2, char.charCodeAt(0), true));
-    expect(lnkTarget(lnk)).toBe(path);
+    expect(lnkTarget(shortcut(path))).toBe(path);
+  });
+
+  it('finds what an install left, whatever its file dates', async () => {
+    const [, prefix] = vnSaveAreas('Game', {
+      encoding: 'sjis',
+      files: [],
+      engine: 'vnbox',
+      folder: 'g9'
+    });
+    const write = (path: string, contents: Uint8Array, timestamp: Date) =>
+      new Promise((resolve) => {
+        const open = indexedDB.open(prefix.db, 21);
+
+        open.onupgradeneeded = () =>
+          open.result.createObjectStore('FILE_DATA').createIndex('timestamp', 'timestamp');
+        open.onsuccess = () => {
+          const transaction = open.result.transaction('FILE_DATA', 'readwrite');
+
+          transaction
+            .objectStore('FILE_DATA')
+            .put({ timestamp, mode: 0o100666, contents }, `${prefix.root}/drive_c/${path}`);
+          transaction.oncomplete = () => resolve(open.result.close());
+        };
+      });
+    const old = new Date('2010-07-23T05:00:00Z');
+
+    await write('Program Files/Old/old.exe', new Uint8Array(4), old);
+
+    const before = await prefixSnapshot('Game', 'g9');
+
+    // msiexec dates the files it unpacks from the cabinet's: years before the install.
+    await write('Program Files/raiL/Game/play.exe', new Uint8Array(8), old);
+    await write('Program Files/raiL/Game/data.xfl', new Uint8Array(8), old);
+    await write(
+      'users/username/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/raiL/Game.lnk',
+      shortcut('C:\\Program Files\\raiL\\Game\\play.exe'),
+      new Date()
+    );
+
+    const found = await installedPrograms('Game', 'g9', before);
+
+    expect(found.map((program) => [program.path, program.shortcut])).toEqual([
+      ['drive_c/Program Files/raiL/Game/play.exe', true]
+    ]);
   });
 
   it('groups images into discs and lists an ISO', async () => {
