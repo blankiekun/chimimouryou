@@ -250,7 +250,7 @@ export function vnboxPlayerUrl(info: VnInfo, hookUrl?: string, tuning = '') {
       : [`p=${encodeURIComponent(info.exe ?? '')}`]),
     // VNBox's own syntax: a quoted key:value, the quotes as %22.
     'env=%22LC_ALL:ja_JP.UTF-8%22',
-    'wine-override=[nomono]',
+    `wine-override=${encodeURIComponent(`[${wineOverrides}]`)}`,
     // The MS Japanese font names (ＭＳ ゴシック…) as jp.zip's IPA fonts: without them titles
     // show tofu, and games that check the font they got (最果てのイマ) stop.
     'registry=jpfonts',
@@ -325,6 +325,12 @@ export interface VnboxCompat {
   env: { name: string; value: string }[];
 }
 
+/**
+ * vnboxPlayerUrl's wine-override: no Mono/Gecko installs, and no crash debugger (a launcher that
+ * faults as it hands over to its game would start winedbg, which is slow here and takes the screen).
+ */
+export const wineOverrides = ['nomono', 'winedbg.exe='];
+
 export const compatKeys = new Set(['registry', 'wine-override', 'wine-env', 'reg', 'desktop']);
 const versions = ['win95', 'win98', 'winme', 'win2k', 'winxp', 'win7', 'win10'];
 
@@ -360,7 +366,9 @@ export function compatFromTuning(pairs: string[]): VnboxCompat {
       .replace(/^\[|\]$/g, '')
       .split(',');
   const presets = list('registry');
-  const overrides = list('wine-override').filter((item) => item.includes('='));
+  const overrides = list('wine-override').filter(
+    (item) => item.includes('=') && !wineOverrides.includes(item)
+  );
 
   return {
     renderer: presets.find((name) => name === 'gl' || name === 'gdi') ?? '',
@@ -389,7 +397,7 @@ export function compatFromTuning(pairs: string[]): VnboxCompat {
 /**
  * The Compatibility settings as VNBox address settings (encoded: no `&`, `=` or `#` inside a
  * value), invalid rows left out. They replace vnboxPlayerUrl's `registry=jpfonts` and
- * `wine-override=[nomono]`, so both stay in.
+ * `wineOverrides`, so both stay in.
  */
 export function compatParams(compat: VnboxCompat): string[] {
   const presets = [compat.renderer, compat.version].filter(Boolean);
@@ -406,7 +414,7 @@ export function compatParams(compat: VnboxCompat): string[] {
 
   return [
     ...param('registry', presets.length ? ['jpfonts', ...presets] : [], ','),
-    ...param('wine-override', overrides.length ? ['nomono', ...overrides] : [], ','),
+    ...param('wine-override', overrides.length ? [...wineOverrides, ...overrides] : [], ','),
     ...param('wine-env', env.slice(0, 32), '\n'),
     ...param('reg', reg.slice(0, 64), '\n'),
     ...(validDesktop(compat.desktop) ? [`desktop=${compat.desktop}`] : [])
