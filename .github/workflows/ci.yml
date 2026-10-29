@@ -83,6 +83,9 @@ jobs:
           VITE_EDITION: standalone
           VITE_STORAGE_ROOT_NAME: chimi-reader-data
 
+      - name: Standalone build holds no server files
+        run: python3 scripts/check-standalone-artifact.py apps/web/build
+
   # The front end's tests run beside it in their own jobs, so the slowest decides the wait.
   unit:
     name: Front end unit tests
