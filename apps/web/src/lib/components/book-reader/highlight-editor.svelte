@@ -75,7 +75,7 @@
     <span class="flex-1" />
     <button
       type="button"
-      class="reader-panel-chip flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-xs"
+      class="reader-panel-chip flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-small"
       on:click={() => dispatch('delete')}
     >
       <Fa icon={faTrash} />
@@ -83,7 +83,7 @@
     </button>
     <button
       type="button"
-      class="reader-panel-chip rounded-sm px-3 py-1.5 text-xs font-semibold"
+      class="reader-panel-chip rounded-sm px-3 py-1.5 text-small font-semibold"
       on:click={close}
     >
       {$t$('reader.done')}

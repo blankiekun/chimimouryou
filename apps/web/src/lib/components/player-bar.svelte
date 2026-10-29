@@ -14,7 +14,7 @@
 </script>
 
 <header class="player-bar">
-  <button class="bar-icon" title="Back to the library" on:click={() => dispatch('back')}>
+  <button class="bar-icon" title="Back" on:click={() => dispatch('back')}>
     <Fa icon={faChevronLeft} />
   </button>
   <div class="bar-title">

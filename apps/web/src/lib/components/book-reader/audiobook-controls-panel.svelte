@@ -99,7 +99,6 @@
         </button>
         <span class="abc-rate">{$playback.rate.toFixed(2)}×</span>
       </div>
-      <p class="abc-hint">{$t$('reader.abSpeedHint')}</p>
     {:else}
       <label class="abc-field">
         <span>{$t$('reader.abSeekStep')}</span>
@@ -303,7 +302,7 @@
   }
 
   .abc-hint {
-    font-size: 0.7rem;
+    font-size: var(--type-small);
     opacity: 0.7;
   }
 
@@ -329,6 +328,6 @@
     border: 1px solid color-mix(in srgb, var(--reader-panel-fg) 25%, transparent);
     border-radius: 2px;
     font-family: inherit;
-    font-size: 0.7rem;
+    font-size: var(--type-label);
   }
 </style>
