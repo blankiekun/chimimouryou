@@ -23,7 +23,7 @@ import { NeedsAppError, pacing } from './transport';
  * - The app fetches for the extension what it shouldn't: an undeclared host, http, POST, more than
  *   100 requests in a call, an image from a host no result named, a non-image as an image.
  * - A result of the wrong shape reaches the app; a refused Referer isn't "needs the app".
- * - An endless loop or memory bomb stalls the app longer than a slice, or kills the runtime; a
+ * - An endless loop stalls the app longer than a slice; a loop or memory bomb kills the runtime; a
  *   frame that stops answering stays, or takes other extension frames' calls with it unnoticed.
  * - As if QuickJS broke (extension-probes/frame-probes.js runs in the real frame): any request to
  *   another origin, UDP (WebRTC), a self-navigation to another site, the app's storage, cookies or
@@ -232,8 +232,9 @@ describe('a hostile extension inside QuickJS', () => {
     // 500 ms slices: where the frame shares the app's thread (Firefox) the app stalls that long.
     expect(loops.spin.appMaxTimerGapMs).toBeLessThan(900);
     expect(loops.spinLater.appMaxTimerGapMs).toBeLessThan(900);
-    // Not bounded by the slice: QuickJS doesn't check for interrupts while it collects garbage at
-    // its memory limit (2.3 s here in Firefox, 13 s with 1 MB strings). Recorded, not asserted.
+    // Not bounded by the slice: QuickJS checks for interrupts only every ~10k bytecode steps, so a
+    // loop of costly built-ins overruns it (about 2 s for this bomb; see setInterruptHandler in
+    // extension-sandbox.ts). Recorded, not asserted.
     expect(await probe('ok')).toBe('still here');
   }, 60_000);
 });

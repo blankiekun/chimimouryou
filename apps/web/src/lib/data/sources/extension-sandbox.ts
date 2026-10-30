@@ -14,7 +14,7 @@
  * go to the app over the MessageChannel the app hands over at init (extension-runtime.ts checks
  * and makes them); HTML is parsed by this frame's DOMParser and reached through numbered nodes.
  * Every slice of extension code is interrupted after SLICE_MS, so an endless loop stalls the app
- * at most that long, even where the frame shares the app's thread (Firefox, Android WebView).
+ * about that long (costly built-ins in a loop overrun it: see setInterruptHandler), even where the frame shares the app's thread (Firefox, Android WebView).
  * The frame itself (sandbox without allow-same-origin, no-network CSP, inside the app's
  * source-jail.html) is the second wall, for a bug in QuickJS or in this bridge.
  */
@@ -136,6 +136,10 @@ async function start(channel: MessagePort) {
   runtime.setMaxStackSize(1024 * 1024);
   let deadline = Infinity;
   let budget = CALL_MS;
+  // shortcut: QuickJS checks this only every ~10k bytecode steps, and big strings sit outside
+  // setMemoryLimit, so a loop of costly built-ins ('x'.repeat(1e6), Array.fill) overruns the slice:
+  // measured in Node, an array bomb ~2 s, 1 MB strings ~13 s (until WASM memory runs out). Upgrade:
+  // run QuickJS in a Worker in the frame and terminate it at the deadline.
   runtime.setInterruptHandler(() => Date.now() > deadline);
   const vm = runtime.newContext();
   const parser = new DOMParser();
