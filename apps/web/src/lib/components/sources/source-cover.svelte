@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { coverUrl } from '$lib/data/sources/server-sources';
+  import { coverSrc } from '$lib/data/sources/server-sources';
 
   /**
-   * A work's cover from the import service (covers/{id}, fetched once on the server), else the
+   * A work's cover (covers/{id}, fetched once on the server; standalone: a blob from the site), else the
    * paper title card. Web novels rarely have covers; Kakuyomu's published works do.
    */
   interface Props {
@@ -16,11 +16,19 @@
   let failed = $state(false);
 </script>
 
+{#snippet card()}
+  <span lang="ja">{size === 'small' ? [...title].slice(0, 2).join('') : title}</span>
+{/snippet}
+
 <div class="source-cover source-cover-{size}" aria-hidden="true">
   {#if workId !== undefined && !failed}
-    <img src={coverUrl(workId)} alt="" loading="lazy" onerror={() => (failed = true)} />
+    {#await coverSrc(workId) then src}
+      <img {src} alt="" loading="lazy" onerror={() => (failed = true)} />
+    {:catch}
+      {@render card()}
+    {/await}
   {:else}
-    <span lang="ja">{size === 'small' ? [...title].slice(0, 2).join('') : title}</span>
+    {@render card()}
   {/if}
 </div>
 

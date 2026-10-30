@@ -2,6 +2,7 @@
   import { browser } from '$app/env';
   import { goto } from '$app/navigation';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
+  import NeedsApp from '$lib/components/sources/needs-app.svelte';
   import { account$, hasPermission } from '$lib/data/account/account';
   import { pagePath, standalone } from '$lib/data/env';
   import { libraryTab$ } from '$lib/data/library/library-home';
@@ -11,9 +12,10 @@
     listServers,
     removeServer,
     searchSites,
-    serverImageUrl
+    serverImageSrc
   } from '$lib/data/sources/server-sources';
   import type { SourceServer, SourceServerEntry, SourceServerFeed } from '$lib/data/sources/types';
+  import { needsAppMessage } from '$lib/data/sources/transport';
   import { onMount } from 'svelte';
 
   /**
@@ -31,7 +33,7 @@
   let failedCovers = $state<Set<string>>(new Set());
   let request = 0;
 
-  const allowed = $derived(!standalone && hasPermission($account$, 'import'));
+  const allowed = $derived(standalone || hasPermission($account$, 'import'));
   const params = $derived(browser ? $page.url.searchParams : new URLSearchParams());
   const serverId = $derived(Number(params.get('server')) || servers?.[0]?.id || 0);
   const section = $derived(params.get('section') ?? '');
@@ -129,9 +131,7 @@
 
     {#if !allowed}
       <p class="browse-note">
-        {standalone
-          ? 'Sources run on a server: the standalone app cannot browse them yet.'
-          : 'Browsing sources needs an account with the "Add books" permission. Ask an admin.'}
+        {'Browsing sources needs an account with the "Add books" permission. Ask an admin.'}
       </p>
     {:else}
       <div class="browse-layout">
@@ -205,7 +205,9 @@
             {/if}
 
             <p class="browse-meta browse-status" role="status">
-              {#if error}
+              {#if error === needsAppMessage}
+                <NeedsApp />
+              {:else if error}
                 <span class="browse-error">{error}</span>
               {:else if loading && !entries.length}
                 Asking {server.name}…
@@ -221,13 +223,17 @@
                     <a class="browse-card" href={entryLink(entry)}>
                       <span class="browse-cover" aria-hidden="true">
                         {#if entry.cover && !failedCovers.has(entry.cover)}
-                          <img
-                            src={serverImageUrl(serverId, entry.cover)}
-                            alt=""
-                            loading="lazy"
-                            onerror={() =>
-                              (failedCovers = new Set([...failedCovers, entry.cover ?? '']))}
-                          />
+                          {#await serverImageSrc(serverId, entry.cover) then src}
+                            <img
+                              {src}
+                              alt=""
+                              loading="lazy"
+                              onerror={() =>
+                                (failedCovers = new Set([...failedCovers, entry.cover ?? '']))}
+                            />
+                          {:catch}
+                            <span class="browse-cover-title" lang="ja">{entry.title}</span>
+                          {/await}
                         {:else}
                           <span class="browse-cover-title" lang="ja">{entry.title}</span>
                         {/if}
@@ -237,7 +243,9 @@
                       {#if entry.following}
                         <span class="browse-tag browse-tag-following">Following</span>
                       {:else if entry.inLibrary}
-                        <span class="browse-tag">In library</span>
+                        <span class="browse-tag"
+                          >{standalone ? 'On this device' : 'In library'}</span
+                        >
                       {/if}
                     </a>
                   </li>

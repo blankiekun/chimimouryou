@@ -505,6 +505,7 @@ export const en = {
   'settings.section.sync-backup.text': 'Books are not included.',
   'settings.section.sync-server': 'Server',
   'settings.section.sync-selfhost': 'Self-hosting',
+  'settings.section.sync-web-sources': 'Sources',
   'settings.section.data-storage': 'Local storage',
   'settings.section.data-import': 'Import',
   'settings.section.data-sync': 'Sync',

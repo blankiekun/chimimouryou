@@ -12,6 +12,8 @@ export const standalone = import.meta.env.VITE_EDITION === 'standalone';
 /** Where the standalone points readers who want a server (Settings → Sync, book pages). */
 export const selfHostingGuideUrl =
   'https://github.com/blankiekun/chimimouryou/blob/main/docs/INSTALL.md';
+/** The desktop app's downloads (Sources: sites a plain browser can't read). */
+export const desktopAppUrl = 'https://github.com/blankiekun/chimimouryou/releases/latest';
 /**
  * Absolute address of the site for canonical links and preview images; '' uses the current
  * origin (in the browser only, so crawlers see no preview image). Docker builds have only

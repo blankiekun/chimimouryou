@@ -130,7 +130,8 @@ export interface SourceFollow {
   volumes: number;
   paused: boolean;
   /** '' until the first check; detail says what the last check added or why it failed */
-  state: '' | 'checking' | 'current' | 'new' | 'failed' | 'removed';
+  /** Standalone: wifi = waiting for Wi-Fi, app = the site needs the desktop app */
+  state: '' | 'checking' | 'current' | 'new' | 'failed' | 'removed' | 'wifi' | 'app';
   detail: string;
   lastCheck: number | null;
   nextCheck: number | null;
@@ -158,4 +159,14 @@ export interface SourceJob {
   failedAt: number | null;
   created: number;
   updated: number;
+}
+
+/** An error of Sources; `field` names the form field it concerns (Add a source). */
+export class SourceError extends Error {
+  constructor(
+    message: string,
+    public field = ''
+  ) {
+    super(message);
+  }
 }

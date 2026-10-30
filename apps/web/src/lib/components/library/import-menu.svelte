@@ -28,7 +28,7 @@
     windowsGame: void;
   }>();
   const windowsGameEntry = { label: 'Windows game', icon: faDesktop };
-  // Sources (routes/sources): fetched on the server, so the server edition with import only.
+  // Sources (routes/sources): on the server with the import permission; standalone: on this device.
   const sourcesEntry = { label: 'Sources', icon: faGlobe };
 
   let fileImportElm: HTMLElement;
@@ -49,7 +49,7 @@
     mergeEntries.FILE_IMPORT,
     ...($isMobile$ ? [] : [mergeEntries.FOLDER_IMPORT]),
     ...(windowsGames ? [windowsGameEntry] : []),
-    ...(!standalone && hasPermission($account$, 'import') ? [sourcesEntry] : []),
+    ...(standalone || hasPermission($account$, 'import') ? [sourcesEntry] : []),
     mergeEntries.BACKUP_IMPORT
   ];
 

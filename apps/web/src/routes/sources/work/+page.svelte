@@ -4,6 +4,7 @@
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import PointBox from '$lib/components/point-box.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
+  import NeedsApp from '$lib/components/sources/needs-app.svelte';
   import SourceCover from '$lib/components/sources/source-cover.svelte';
   import Switch from '$lib/components/switch.svelte';
   import { account$, hasPermission } from '$lib/data/account/account';
@@ -17,6 +18,8 @@
     timeLeft,
     unfollowWork
   } from '$lib/data/sources/server-sources';
+  import { sourcesWifiOnly$ } from '$lib/data/sources/sources-settings';
+  import { needsAppMessage } from '$lib/data/sources/transport';
   import type { SourceWork } from '$lib/data/sources/types';
 
   /**
@@ -36,7 +39,10 @@
   const id = $derived(browser ? Number($page.url.searchParams.get('id')) : 0);
   const site = $derived(browser ? $page.url.searchParams.get('site') : null);
   const key = $derived(browser ? $page.url.searchParams.get('key') : null);
-  const allowed = $derived(!standalone && hasPermission($account$, 'import'));
+  const allowed = $derived(standalone || hasPermission($account$, 'import'));
+  // Standalone: what the picked volumes take and the free space (navigator.storage.estimate()).
+  let space = $state<{ bytes: number; free: number | null; fits: boolean }>();
+  const here = standalone ? 'On this device' : 'In library';
   // Manga from a server as pages: one CBZ per volume or per chapter, while nothing of it is added.
   let per = $state<'volume' | 'chapter'>();
   const pages = $derived(!!work?.server && !work.files);
@@ -81,6 +87,17 @@
       ? `${unit} ${first}–${last}`
       : `${picked.length} volumes`;
   });
+  $effect(() => {
+    if (!standalone || !work) return;
+    const numbers = picked.map((volume) => volume.number);
+    import('$lib/data/sources/local-sources').then(async ({ spaceFor }) => {
+      if (work) space = await spaceFor(work, numbers);
+    });
+  });
+
+  const gb = (bytes: number) =>
+    bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1e6))} MB`;
+
   // Following a work with nothing in the library adds the picked volumes first, so its checks start there.
   const empty = $derived(!work?.volumes.some((volume) => volume.inLibrary || volume.pending));
 
@@ -170,6 +187,8 @@
 
     {#if !allowed}
       <p class="work-note">Adding web novels needs an account with the "Add books" permission.</p>
+    {:else if loadError === needsAppMessage}
+      <NeedsApp />
     {:else if loadError}
       <p class="work-error" role="alert">{loadError}</p>
     {:else if !work}
@@ -218,8 +237,8 @@
                       >{#if !work.files && volume.last > volume.first}ch {volume.first}–{volume.last}{/if}</td
                     >
                     <td class="work-state" class:work-state-open={volume.number === openVolume}>
-                      {#if volume.number === openVolume}Updates in place{:else if volume.inLibrary}In
-                        library{:else if volume.pending}On its way{/if}
+                      {#if volume.number === openVolume}Updates in place{:else if volume.inLibrary}{here}{:else if volume.pending}On
+                        its way{/if}
                     </td>
                   </tr>
                 {/each}
@@ -282,7 +301,9 @@
               <p class="work-hint work-follow-hint">
                 {work.paused
                   ? 'Paused: change it in Sources → Following.'
-                  : `The server checks every ${work.checkHours} h, also when no device is open.`}
+                  : standalone
+                    ? `Checks while the app is open${$sourcesWifiOnly$ ? ', on Wi-Fi only' : ''} (Settings → Sources).`
+                    : `The server checks every ${work.checkHours} h, also when no device is open.`}
                 {#if !work.following && empty && pickedText}Turning it on adds {pickedText} first.{/if}
               </p>
             </div>
@@ -300,11 +321,22 @@
             <button
               type="button"
               class="app-button app-button-primary work-add"
-              disabled={adding}
-              onclick={add}>{adding ? 'Adding…' : `Add ${pickedText} to library`}</button
+              disabled={adding || (space && !space.fits)}
+              onclick={add}
+              >{adding
+                ? 'Adding…'
+                : `Add ${pickedText} to ${standalone ? 'this device' : 'library'}`}</button
             >
             <p class="work-hint">
-              {#if work.server}
+              {#if standalone}
+                {#if space && !space.fits && space.free !== null}
+                  Not enough space: free up {gb(space.bytes - space.free)}.
+                {:else}
+                  Saved in this browser's library, not on a server{space?.free
+                    ? `: about ${gb(space.bytes)} of the ${gb(space.free)} free`
+                    : ''}. Keep the app open while it fetches.
+                {/if}
+              {:else if work.server}
                 Into the Calibre library on the server, from {work.siteName}. You can close this
                 tab.
               {:else}
@@ -315,12 +347,19 @@
                 can close this tab.
               {/if}
             </p>
-            {#if addError}<p class="work-error" role="alert">{addError}</p>{/if}
+            {#if addError === needsAppMessage}<NeedsApp />{:else if addError}<p
+                class="work-error"
+                role="alert"
+              >
+                {addError}
+              </p>{/if}
           {:else if volumes.length}
             <p class="work-hint work-all">
               {volumes.some((volume) => volume.pending)
                 ? 'The missing volumes are on their way: see the queue in Sources.'
-                : 'Every volume is in the library.'}
+                : standalone
+                  ? 'Every volume is on this device.'
+                  : 'Every volume is in the library.'}
             </p>
           {/if}
         </div>
