@@ -70,11 +70,11 @@ CREATE TABLE IF NOT EXISTS progress (
     PRIMARY KEY (account, book));
 CREATE TABLE IF NOT EXISTS statistics (
     account TEXT NOT NULL, book INTEGER NOT NULL REFERENCES books(id), date_key TEXT NOT NULL, data TEXT NOT NULL,
-    modified INTEGER NOT NULL, rev INTEGER NOT NULL,
+    deleted INTEGER NOT NULL DEFAULT 0, modified INTEGER NOT NULL, rev INTEGER NOT NULL,
     PRIMARY KEY (account, book, date_key));
 CREATE TABLE IF NOT EXISTS goals (
     account TEXT NOT NULL, goal_start TEXT NOT NULL, data TEXT NOT NULL,
-    modified INTEGER NOT NULL, rev INTEGER NOT NULL,
+    deleted INTEGER NOT NULL DEFAULT 0, modified INTEGER NOT NULL, rev INTEGER NOT NULL,
     PRIMARY KEY (account, goal_start));
 CREATE TABLE IF NOT EXISTS highlights (
     account TEXT NOT NULL, book INTEGER NOT NULL REFERENCES books(id), hid TEXT NOT NULL, data TEXT NOT NULL,
@@ -149,6 +149,11 @@ class Database:
         self.connection.execute('PRAGMA journal_mode = WAL')
         self.connection.execute('PRAGMA foreign_keys = ON')
         self.connection.executescript(SCHEMA)
+        # Databases from before statistics and goal deletes.
+        for table in ('statistics', 'goals'):
+            columns = [row['name'] for row in self.connection.execute(f'PRAGMA table_info({table})')]
+            if 'deleted' not in columns:
+                self.connection.execute(f'ALTER TABLE {table} ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0')
         self.lock = threading.Lock()
 
     def query(self, sql: str, params=()) -> list[sqlite3.Row]:

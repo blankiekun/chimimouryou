@@ -31,6 +31,28 @@ class ApiDbTest(unittest.TestCase):
         self.assertEqual(again.query('PRAGMA journal_mode')[0][0], 'wal')
         again.connection.close()
 
+    def test_adds_deleted_to_old_schema(self):
+        path = os.path.join(self.tmp.name, 'old', 'library.db')
+        os.makedirs(os.path.dirname(path))
+        import sqlite3
+        old = sqlite3.connect(path)
+        old.executescript('''
+            CREATE TABLE statistics (account TEXT NOT NULL, book INTEGER NOT NULL, date_key TEXT NOT NULL,
+                data TEXT NOT NULL, modified INTEGER NOT NULL, rev INTEGER NOT NULL,
+                PRIMARY KEY (account, book, date_key));
+            CREATE TABLE goals (account TEXT NOT NULL, goal_start TEXT NOT NULL, data TEXT NOT NULL,
+                modified INTEGER NOT NULL, rev INTEGER NOT NULL, PRIMARY KEY (account, goal_start));
+            INSERT INTO statistics VALUES ('', 1, '2026-10-01', '{"x":1}', 5, 1);
+            INSERT INTO goals VALUES ('', '2026-10-01', '{}', 5, 1);''')
+        old.commit()
+        old.close()
+        upgraded = apidb.Database(path)
+        self.addCleanup(upgraded.connection.close)
+        for table in ('statistics', 'goals'):
+            [row] = upgraded.query(f'SELECT data, deleted FROM {table}')
+            self.assertEqual(row['deleted'], 0)
+        self.assertEqual(upgraded.query('SELECT data FROM statistics')[0][0], '{"x":1}')
+
     def test_fts5_trigram(self):
         book = self.db.transaction(lambda c: add_book(c, apidb.Rev(c)))
         match = "SELECT rowid FROM books_fts WHERE books_fts MATCH '\"猫であ\"'"
