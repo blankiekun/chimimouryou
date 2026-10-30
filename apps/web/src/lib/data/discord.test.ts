@@ -10,8 +10,16 @@ import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 import { discordActivities$, discordOptions$ } from './discord-settings';
 import { discordActivity, formatDuration, readingValues, resetSender } from './discord';
 import { socialSession$ } from './social-account';
+import { fakeApi } from './test-utils/fake-api';
 
 const fetchMock = vi.fn();
+// One API for the file: server-api.ts keeps the catalog and the mirror per page load.
+const api = fakeApi();
+
+api.addBook({ id: 1, calibreId: 101, title: 'A' });
+// fetchMock stands for the hub, AniList and the status relay; /api/v1/ goes to the fake server.
+const dispatch = (url: string, init?: RequestInit) =>
+  String(url).startsWith('/api/v1/') ? api.fetch(url, init) : fetchMock(url, init);
 // Real ticks for the dynamic imports and promises; only timers and the clock are fake.
 const settle = async () => {
   for (let i = 0; i < 10; i += 1) await new Promise((resolve) => setImmediate(resolve));
@@ -151,7 +159,7 @@ describe('discord automatic covers', () => {
 
   beforeEach(async () => {
     await import('$lib/data/social');
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('fetch', dispatch);
     fetchMock.mockImplementation(async () => new Response(null, { status: 404 }));
     resetSender();
     discordOptions$.next({ hideTitles: false });
@@ -219,19 +227,6 @@ describe('discord automatic covers', () => {
         if (url.includes('/v1/cover?key=')) {
           return new Response(JSON.stringify({ cover: '0123456789abcdef' }), { status: 200 });
         }
-        if (url.includes('metadata.json') && picked) {
-          return new Response(
-            JSON.stringify({
-              A: {
-                source: 'anilist',
-                url: 'https://anilist.co/manga/1',
-                cover: picked,
-                modified: 1
-              }
-            }),
-            { status: 200 }
-          );
-        }
         return new Response(null, { status: url.endsWith('/v1/activity') ? 204 : 404 });
       });
       (await import('./book-metadata')).loadBookMetadata(true).catch(() => {});
@@ -258,6 +253,11 @@ describe('discord automatic covers', () => {
 
       resetSender();
       picked = 'https://s4.anilist.co/file/picked.jpg';
+      api.setRow('metadata', {
+        book: api.bookId('A'),
+        modified: 1,
+        data: { source: 'anilist', url: 'https://anilist.co/manga/1', cover: picked }
+      });
       (await import('./book-metadata')).loadBookMetadata(true).catch(() => {});
       enabledPlugins$.next(['discord', 'social']);
       fetchMock.mockClear();

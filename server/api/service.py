@@ -479,7 +479,7 @@ class Handler(BaseHTTPRequestHandler):
         ('DELETE', re.compile(r'/api/v1/books/(\d+)/statistics/([^/]+)'), delete_statistics),
         ('PUT', re.compile(r'/api/v1/books/(\d+)/highlights/([^/]+)'), put_highlight),
         ('DELETE', re.compile(r'/api/v1/books/(\d+)/highlights/([^/]+)'), delete_highlight),
-        ('PUT', re.compile(r'/api/v1/books/(\d+)/docs/(recaps|lorebook|vnsaves)'), put_book_doc),
+        ('PUT', re.compile(r'/api/v1/books/(\d+)/docs/(recaps|lorebook|vnsaves|audiobook|subtitles)'), put_book_doc),
         ('PUT', re.compile(r'/api/v1/docs/(settings|kanji|words|immersion)'), put_account_doc),
         ('PUT', re.compile(r'/api/v1/goals/([^/]+)'), put_goals),
         ('DELETE', re.compile(r'/api/v1/goals/([^/]+)'), delete_goals),

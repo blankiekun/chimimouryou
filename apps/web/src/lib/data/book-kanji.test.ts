@@ -7,7 +7,7 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/data/storage/handler/calibre-handler', () => ({ CalibreStorageHandler: {} }));
+vi.mock('$lib/data/storage/handler/server-handler', () => ({ ServerStorageHandler: {} }));
 vi.mock('$lib/data/store', () => ({
   database: { getData: vi.fn(async () => ({ elementHtml: '<p>猫と犬</p>' })) }
 }));

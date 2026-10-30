@@ -19,7 +19,7 @@ vi.mock('$lib/data/extras-sync', () => ({
   pullWordMarks: async () => {},
   wordMarksChanged: () => {}
 }));
-vi.mock('$lib/data/storage/handler/calibre-handler', () => ({ CalibreStorageHandler: {} }));
+vi.mock('$lib/data/storage/handler/server-handler', () => ({ ServerStorageHandler: {} }));
 
 const words: BookWord[] = [
   ['猫', 'ねこ', 20, 100],

@@ -13,7 +13,7 @@ vi.mock('$lib/data/background-analysis', () => ({ analyseInBackground: vi.fn() }
 await import('$lib/data/storage/storage-handler-factory');
 const { database } = await import('$lib/data/store');
 const { storageSource$ } = await import('$lib/data/storage/storage-view');
-const { calibreReceivedBooks$ } = await import('$lib/data/storage/handler/calibre-handler');
+const { calibreReceivedBooks$ } = await import('$lib/data/storage/handler/server-handler');
 const { importReceived } = await import('$lib/data/book-transfer');
 
 afterEach(() => vi.unstubAllGlobals());

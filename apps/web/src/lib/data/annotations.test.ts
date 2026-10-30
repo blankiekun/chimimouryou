@@ -15,6 +15,7 @@ vi.mock('$lib/data/account', () => ({
   currentAccount: () => account.user
 }));
 
+import { fakeApi } from '$lib/data/test-utils/fake-api';
 import { readerDb } from '$lib/data/reader-db';
 import {
   AnnotationsController,
@@ -76,21 +77,31 @@ describe('highlightsToMarkdown', () => {
   });
 });
 
+// One API for the file: server-api.ts keeps the catalog and the mirror per page load.
+const api = fakeApi({ account: () => account.user?.id ?? '' });
+
+['Book A', 'Book B', 'Book C'].forEach((title, index) =>
+  api.addBook({ id: index + 1, calibreId: 101 + index, title })
+);
+
 describe('AnnotationsController account scoping', () => {
   const uploads: { url: string; body: string }[] = [];
 
   function mockServer(remote: Highlight[]) {
     uploads.length = 0;
+    remote.forEach((item) =>
+      api.setRow('highlights', {
+        book: api.bookId('Book A'),
+        hid: item.id,
+        modified: item.modified,
+        data: item
+      })
+    );
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (url: string, init?: RequestInit) => {
-        if (init?.method === 'PUT') {
-          uploads.push({ url, body: String(init.body) });
-          return new Response('', { status: 201 });
-        }
-        return remote.length
-          ? new Response(JSON.stringify({ highlights: remote }))
-          : new Response('', { status: 404 });
+      vi.fn((url: string, init?: RequestInit) => {
+        if (init?.method === 'PUT') uploads.push({ url, body: String(init.body) });
+        return api.fetch(url, init);
       })
     );
   }

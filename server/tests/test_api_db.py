@@ -115,6 +115,21 @@ class ApiDbTest(unittest.TestCase):
         self.assertEqual(row['modified'], 20)
         self.assertGreater(row['rev'], rev)
 
+    # Bug: on equal modified the live row was kept as 'same', so a delete made in the same millisecond
+    # as the stored edit never reached the server and the highlight came back on every device.
+    def test_tombstone_wins_a_tie(self):
+        book = self.db.transaction(lambda c: add_book(c, apidb.Rev(c)))
+        key = {'account': 'a' * 32, 'book': book, 'hid': 'h1'}
+
+        def put(deleted):
+            return self.db.transaction(lambda c: apidb.put_row(
+                c, apidb.Rev(c), 'highlights', key, 10, {'data': '{}', 'deleted': deleted}))
+
+        self.assertEqual(put(0)[0], 'written')
+        self.assertEqual(put(1)[0], 'written')
+        self.assertEqual(put(0)[0], 'same')
+        self.assertEqual(self.db.query('SELECT deleted FROM highlights')[0][0], 1)
+
     def test_unknown_table(self):
         with self.assertRaises(ValueError):
             self.db.transaction(lambda c: apidb.put_row(c, apidb.Rev(c), 'users', {'id': 1}, 1, {}))

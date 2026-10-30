@@ -15,6 +15,7 @@ vi.mock('$lib/data/account', () => ({
   currentAccount: () => account.user
 }));
 
+import { fakeApi } from '$lib/data/test-utils/fake-api';
 import { readerDb } from '$lib/data/reader-db';
 import { getLorebook, saveLoreEntries, type LoreEntry } from '$lib/data/lorebook';
 import { deleteSavedRecap, getSavedRecaps } from '$lib/data/recap';
@@ -39,27 +40,33 @@ const entry = (name: string): LoreEntry => ({
   updated: 0
 });
 
-/** A WebDAV folder in memory; returns the files and the fetch calls. */
-function server(files: Record<string, unknown> = {}) {
+// One API for the file: server-api.ts keeps the catalog and the mirror per page load.
+const api = fakeApi({ account: () => account.user?.id ?? '' });
+
+['Lore', 'Race', 'Recaps', 'Private', 'Broken'].forEach((title, index) =>
+  api.addBook({ id: index + 1, calibreId: 101 + index, title })
+);
+
+/** Docs another device stored; returns this test's fetch calls. */
+function server(seed: { kind: string; title?: string; who?: string; data: unknown }[] = []) {
   const calls: string[] = [];
 
+  seed.forEach(({ kind, title, who = '', data }) =>
+    api.setRow(
+      title === undefined ? 'accountDocs' : 'bookDocs',
+      { kind, ...(title === undefined ? {} : { book: api.bookId(title) }), modified: 1, data },
+      who
+    )
+  );
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (url: string, init?: RequestInit) => {
+    vi.fn((url: string, init?: RequestInit) => {
       calls.push(`${init?.method ?? 'GET'} ${url}`);
-
-      if (init?.method === 'PUT') {
-        files[url] = JSON.parse(init.body as string);
-        return new Response('', { status: 201 });
-      }
-
-      return url in files
-        ? new Response(JSON.stringify(files[url]))
-        : new Response('', { status: 404 });
+      return api.fetch(url, init);
     })
   );
 
-  return { files, calls };
+  return { calls };
 }
 
 describe('extras sync', () => {
@@ -77,24 +84,26 @@ describe('extras sync', () => {
   });
 
   it('uploads a newer local lorebook and adopts a newer remote one', async () => {
-    const { files } = server();
+    server();
 
     enableExtrasSync('Lore', 'ttu-calibre-default');
     await saveLoreEntries('Lore', [entry('葵')]);
     await syncExtras('lorebook', 'Lore');
 
-    expect(
-      (files['/calibre/sync/ttu-reader-data/Lore/lorebook.json'] as { entries: LoreEntry[] })
-        .entries
-    ).toHaveLength(1);
-    expect(files['/calibre/sync/ttu-reader-data/Lore/lorebook.json']).not.toHaveProperty('account');
+    expect((api.doc('lorebook', 'Lore') as { entries: LoreEntry[] }).entries).toHaveLength(1);
+    expect(api.doc('lorebook', 'Lore')).not.toHaveProperty('account');
 
-    files['/calibre/sync/ttu-reader-data/Lore/lorebook.json'] = {
-      title: 'Lore',
-      entries: [entry('葵'), entry('東京')],
-      processedUpTo: 900,
-      modified: Date.now() + 60_000
-    };
+    api.setRow('bookDocs', {
+      book: api.bookId('Lore'),
+      kind: 'lorebook',
+      modified: Date.now() + 60_000,
+      data: {
+        title: 'Lore',
+        entries: [entry('葵'), entry('東京')],
+        processedUpTo: 900,
+        modified: Date.now() + 60_000
+      }
+    });
     await syncExtras('lorebook', 'Lore');
 
     const lorebook = await getLorebook('Lore');
@@ -104,7 +113,7 @@ describe('extras sync', () => {
   });
 
   it('keeps a local save made while the remote copy was being fetched', async () => {
-    const { files } = server();
+    server();
 
     enableExtrasSync('Race', 'ttu-calibre-default');
     await saveLoreEntries('Race', [entry('葵')]);
@@ -119,10 +128,7 @@ describe('extras sync', () => {
     await syncExtras('lorebook', 'Race');
 
     expect((await getLorebook('Race')).entries.map((e) => e.name)).toEqual(['葵', '東京']);
-    expect(
-      (files['/calibre/sync/ttu-reader-data/Race/lorebook.json'] as { entries: LoreEntry[] })
-        .entries
-    ).toHaveLength(2);
+    expect((api.doc('lorebook', 'Race') as { entries: LoreEntry[] }).entries).toHaveLength(2);
   });
 
   it('combines saved recaps from both sides and keeps deletions', async () => {
@@ -132,13 +138,17 @@ describe('extras sync', () => {
       created,
       model: 'm'
     });
-    const { files } = server({
-      '/calibre/sync/ttu-reader-data/Recaps/recaps.json': {
+    server([
+      {
+        kind: 'recaps',
         title: 'Recaps',
-        chapters: { c2: { summary: 'two', characters: 1, model: 'm' } },
-        saved: [recap(2), recap(3)]
+        data: {
+          title: 'Recaps',
+          chapters: { c2: { summary: 'two', characters: 1, model: 'm' } },
+          saved: [recap(2), recap(3)]
+        }
       }
-    });
+    ]);
 
     enableExtrasSync('Recaps', 'ttu-calibre-default');
     await (
@@ -155,7 +165,7 @@ describe('extras sync', () => {
     await deleteSavedRecap('Recaps', 3);
     await syncExtras('recaps', 'Recaps');
 
-    const uploaded = files['/calibre/sync/ttu-reader-data/Recaps/recaps.json'] as {
+    const uploaded = api.doc('recaps', 'Recaps') as {
       chapters: object;
       saved: { created: number }[];
       deletedSaved: number[];
@@ -168,8 +178,8 @@ describe('extras sync', () => {
 
   // Bug: a server error or a cut-off remote file clears the local lorebook or recaps.
   it('keeps the local copies when the remote file fails to load or is malformed', async () => {
-    const lorebookUrl = '/calibre/sync/ttu-reader-data/Broken/lorebook.json';
-    const recapsUrl = '/calibre/sync/ttu-reader-data/Broken/recaps.json';
+    const lorebookUrl = `/api/v1/books/${api.bookId('Broken')}/docs/lorebook`;
+    const recapsUrl = `/api/v1/books/${api.bookId('Broken')}/docs/recaps`;
     const recaps = {
       title: 'Broken',
       chapters: { c1: { summary: 'one', characters: 1, model: 'm' } },
@@ -181,14 +191,20 @@ describe('extras sync', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string, init?: RequestInit) => {
-        if (init?.method === 'PUT') {
-          puts[url] = JSON.parse(init.body as string);
-          return new Response('', { status: 201 });
-        }
+        if (init?.method === 'PUT') puts[url] = JSON.parse(init.body as string).data;
 
-        return failWith500
+        return failWith500 && url.startsWith('/api/v1/sync')
           ? new Response('', { status: 503 })
-          : new Response('{"title":"Broken","entr', { status: 200 });
+          : api.fetch(url, init);
+      })
+    );
+    // What another device left: cut off, so not an object.
+    ['lorebook', 'recaps'].forEach((kind) =>
+      api.setRow('bookDocs', {
+        book: api.bookId('Broken'),
+        kind,
+        modified: 1,
+        data: '{"title":"Broken","entr'
       })
     );
     enableExtrasSync('Broken', 'ttu-calibre-default');
@@ -213,7 +229,7 @@ describe('extras sync', () => {
   });
 
   it("doesn't upload another account's cached lorebook", async () => {
-    const { files } = server();
+    server();
 
     enableExtrasSync('Private', 'ttu-calibre-default');
     await (
@@ -228,7 +244,9 @@ describe('extras sync', () => {
     account.user = { id: 'bob', username: 'bob' };
     await syncExtras('lorebook', 'Private');
 
-    expect(JSON.stringify(files)).not.toContain('秘密');
+    expect(
+      JSON.stringify(['', 'bob', 'alice'].map((who) => api.rowsOf('bookDocs', who)))
+    ).not.toContain('秘密');
     expect((await getLorebook('Private')).entries).toEqual([]);
   });
 });
@@ -266,9 +284,13 @@ describe('word marks sync', () => {
   });
 
   it('merges words.json in the account folder for the signed-in reader', async () => {
-    const { files } = server({
-      '/account/sync/words.json': { words: { '猫\t': mark(null, 9), bad: { status: 'x' } } }
-    });
+    server([
+      {
+        kind: 'words',
+        who: 'bob',
+        data: { words: { '猫\t': mark(null, 9), bad: { status: 'x' } } }
+      }
+    ]);
     const db = await readerDb();
 
     await db.put('known', { '猫\t': mark('known', 5), '犬\t': mark('ignored', 6) }, 'marks');
@@ -279,7 +301,7 @@ describe('word marks sync', () => {
     const merged = { '猫\t': mark(null, 9), '犬\t': mark('ignored', 6) };
 
     expect(await db.get('known', 'marks')).toEqual(merged);
-    expect(files['/account/sync/words.json']).toEqual({ words: merged });
+    expect(api.doc('words', undefined, 'bob')).toEqual({ words: merged });
   });
 
   it("doesn't sync signed out", async () => {
@@ -326,9 +348,9 @@ describe('kanji sync', () => {
   });
 
   it('downloads newer records and uploads the merged file for the signed-in reader', async () => {
-    const { files } = server({
-      '/account/sync/kanji.json': { books: [book('A', 99, 1, '山'), book('B', 20, 5)] }
-    });
+    server([
+      { kind: 'kanji', who: 'bob', data: { books: [book('A', 99, 1, '山'), book('B', 20, 5)] } }
+    ]);
     const db = await readerDb();
 
     await db.put('kanji', book('A', 10, 2));
@@ -337,7 +359,7 @@ describe('kanji sync', () => {
     await syncKanji();
 
     expect(await db.getAll('kanji')).toEqual([book('A', 10, 2), book('B', 20, 5)]);
-    expect(files['/account/sync/kanji.json']).toEqual({
+    expect(api.doc('kanji', undefined, 'bob')).toEqual({
       books: [book('A', 10, 2), book('B', 20, 5)]
     });
   });
@@ -375,16 +397,20 @@ describe('immersion sync', () => {
   });
 
   it('merges immersion.json in the account folder, dropping malformed entries', async () => {
-    const { files } = server({
-      '/account/sync/immersion.json': {
-        entries: {
-          a: logged('a', 1, 999),
-          b: logged('b', 4),
-          bad: { id: 'bad' },
-          c: logged('x', 1)
+    server([
+      {
+        kind: 'immersion',
+        who: 'bob',
+        data: {
+          entries: {
+            a: logged('a', 1, 999),
+            b: logged('b', 4),
+            bad: { id: 'bad' },
+            c: logged('x', 1)
+          }
         }
       }
-    });
+    ]);
     const db = await readerDb();
 
     await db.put('known', { a: logged('a', 2) } as any, 'immersion');
@@ -395,7 +421,7 @@ describe('immersion sync', () => {
     const merged = { a: logged('a', 2), b: logged('b', 4) };
 
     expect(await db.get('known', 'immersion')).toEqual(merged);
-    expect(files['/account/sync/immersion.json']).toEqual({ entries: merged });
+    expect(api.doc('immersion', undefined, 'bob')).toEqual({ entries: merged });
   });
 
   it("doesn't sync signed out without a library source", async () => {

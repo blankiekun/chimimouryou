@@ -82,7 +82,8 @@ CREATE TABLE IF NOT EXISTS highlights (
     PRIMARY KEY (account, book, hid));
 CREATE TABLE IF NOT EXISTS book_docs (
     account TEXT NOT NULL, book INTEGER NOT NULL REFERENCES books(id),
-    kind TEXT NOT NULL CHECK (kind IN ('recaps', 'lorebook', 'vnsaves')), data TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('recaps', 'lorebook', 'vnsaves', 'audiobook', 'subtitles')),
+    data TEXT NOT NULL,
     modified INTEGER NOT NULL, rev INTEGER NOT NULL,
     PRIMARY KEY (account, book, kind));
 CREATE TABLE IF NOT EXISTS account_docs (
@@ -194,7 +195,8 @@ def current_rev(connection: sqlite3.Connection) -> int:
 def put_row(connection: sqlite3.Connection, rev: Rev, table: str, key: dict, modified: int,
             values: dict) -> tuple[str, sqlite3.Row | None]:
     """Writes a row unless the stored one is as new or newer: 'written', 'same' (equal modified, nothing
-    written, so clients don't loop on a bumped rev) or 'conflict' (stored newer). Returns the stored row after."""
+    written, so clients don't loop on a bumped rev) or 'conflict' (stored newer). On equal modified a tombstone
+    still replaces a live row, so a delete is never lost to a tie. Returns the stored row after."""
     if table not in TABLE_KEYS:
         raise ValueError(f'unknown table {table}')
     key_columns = TABLE_KEYS[table]
@@ -203,7 +205,7 @@ def put_row(connection: sqlite3.Connection, rev: Rev, table: str, key: dict, mod
     where = ' AND '.join(f'{column} = ?' for column in key_columns)
     key_values = tuple(key[column] for column in key_columns)
     stored = connection.execute(f'SELECT * FROM {table} WHERE {where}', key_values).fetchone()
-    if stored is not None and stored['modified'] == modified:
+    if stored is not None and stored['modified'] == modified and not (values.get('deleted') and not stored['deleted']):
         return 'same', stored
     if stored is not None and stored['modified'] > modified:
         return 'conflict', stored

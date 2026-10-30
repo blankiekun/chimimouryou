@@ -113,6 +113,7 @@
   import { logger } from '$lib/data/logger';
   import type { SortOption } from '$lib/data/sort-types';
   import { ApiStorageHandler } from '$lib/data/storage/handler/api-handler';
+  import { ServerStorageHandler } from '$lib/data/storage/handler/server-handler';
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
   import { asksBeforeVnUpload, StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
   import {
@@ -675,7 +676,7 @@
   async function saveWindowsGame(book: LoadData) {
     const handler = getStorageHandler(window, $storageSource$, '');
 
-    if (handler instanceof ApiStorageHandler) {
+    if (handler instanceof ApiStorageHandler || handler instanceof ServerStorageHandler) {
       await handler.keepOnDevice(book);
     } else {
       await getStorageHandler(

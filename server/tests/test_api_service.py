@@ -281,6 +281,14 @@ class WriteTest(ServiceTestCase):
         self.assertEqual(self.call('PUT', f'/api/v1/books/{self.book}/docs/recaps', {'modified': 1, 'data': {}})[0],
                          200)
 
+    # Bug: the client writes audiobook positions and subtitles as book docs; a route or CHECK
+    # without these kinds would refuse every write (404/500) and the data would never sync.
+    def test_audiobook_and_subtitles_docs(self):
+        for kind in ('audiobook', 'subtitles'):
+            self.assertEqual(self.call('PUT', f'/api/v1/books/{self.book}/docs/{kind}',
+                                       {'modified': 1, 'data': {'title': kind}})[0], 200)
+        self.assertEqual(sorted(row['kind'] for row in self.sync()['bookDocs']), ['audiobook', 'subtitles'])
+
     def test_validation(self):
         body = {'modified': 1, 'data': {}}
         self.assertEqual(self.call('PUT', f'/api/v1/books/{self.book}/statistics/2026-1-1', body)[0], 400)

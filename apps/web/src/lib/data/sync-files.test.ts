@@ -13,7 +13,8 @@ vi.mock('$lib/data/account', () => ({
   currentAccount: () => null
 }));
 
-import { AnnotationsController, type Highlight } from '$lib/data/annotations';
+import { AnnotationsController, mergeHighlights, type Highlight } from '$lib/data/annotations';
+import { fakeApi } from '$lib/data/test-utils/fake-api';
 import { readerDb } from '$lib/data/reader-db';
 import { SyncConflictError } from '$lib/data/storage/handler/base-handler';
 import { GDriveStorageHandler } from '$lib/data/storage/handler/gdrive-handler';
@@ -239,5 +240,131 @@ describe('reader files for a browser library', () => {
     expect(readerSyncSource()).toBe('');
     autoReplication$.next(AutoReplicationType.Off);
     syncTarget$.next('');
+  });
+});
+
+describe('extra files on the server', () => {
+  // One API for the block: server-api.ts keeps the catalog and the mirror per page load.
+  const api = fakeApi();
+  const title = 'On the server';
+  const saved = (id: string, modified: number, text = id): Highlight => ({
+    ...highlight(id),
+    text,
+    id,
+    created: 1,
+    modified
+  });
+  const puts = (start: number) =>
+    api.requests.slice(start).filter((request) => !request.startsWith('GET'));
+
+  api.addBook({ id: 7, calibreId: 107, title });
+
+  beforeEach(() => vi.stubGlobal('fetch', api.fetch));
+  afterEach(() => vi.unstubAllGlobals());
+
+  // Bug: annotations.json written back whole would PUT every highlight on each sync (and a
+  // tombstone left out of the read would bring a deleted highlight back on another device).
+  it('reads highlights with their tombstones and PUTs only the changed one', async () => {
+    const store = (await syncFileStore(StorageSourceDefault.CALIBRE_DEFAULT))!;
+
+    api.setRow('highlights', { book: 7, hid: 'a', modified: 5, data: saved('a', 5) });
+    api.setRow('highlights', {
+      book: 7,
+      hid: 'b',
+      modified: 6,
+      deleted: true,
+      data: { ...saved('b', 6, ''), deleted: true }
+    });
+
+    const remote = (await store.readSyncFile('annotations.json', title))!;
+    const { highlights } = JSON.parse(remote.text) as { highlights: Highlight[] };
+
+    expect(highlights.map((h) => [h.id, !!h.deleted])).toEqual([
+      ['a', false],
+      ['b', true]
+    ]);
+    expect(remote.version).toBe('6');
+
+    const start = api.requests.length;
+
+    await store.writeSyncFile(
+      'annotations.json',
+      JSON.stringify({ title, highlights: [saved('a', 9, 'edited'), highlights[1]] }),
+      { title, version: remote.version }
+    );
+
+    expect(puts(start)).toEqual(['PUT /api/v1/books/7/highlights/a']);
+    expect(api.rowsOf('highlights').find((row) => row.hid === 'a')?.data.text).toBe('edited');
+  });
+
+  // Bug: a 409 swallowed (or retried forever) would overwrite or drop the other device's newer
+  // edit of the same highlight instead of merging it once.
+  it('merges the newer highlight another device saved in between, once', async () => {
+    const store = (await syncFileStore(StorageSourceDefault.CALIBRE_DEFAULT))!;
+    const remotes: string[][] = [];
+    let other = true;
+
+    await syncJsonFile<{ highlights?: Highlight[] }>(
+      store,
+      'annotations.json',
+      title,
+      async (remote) => {
+        remotes.push((remote?.highlights || []).map((h) => `${h.id}:${h.text}`));
+        if (other) {
+          other = false;
+          api.setRow('highlights', {
+            book: 7,
+            hid: 'c',
+            modified: 20,
+            data: saved('c', 20, 'theirs')
+          });
+        }
+        return { highlights: mergeHighlights([saved('c', 10, 'mine')], remote?.highlights || []) };
+      }
+    );
+
+    expect(remotes).toHaveLength(2);
+    expect(remotes[1]).toContain('c:theirs');
+    expect(api.rowsOf('highlights').find((row) => row.hid === 'c')?.data.text).toBe('theirs');
+  });
+
+  // Bug: a doc written with this device's Date.now() is refused (409) forever when the row came
+  // from a device whose clock is ahead; it must be newer than the version it merged with.
+  it('writes a doc newer than the version it merged with, even with the clock behind', async () => {
+    const store = (await syncFileStore(StorageSourceDefault.CALIBRE_DEFAULT))!;
+    const ahead = Date.now() + 3_600_000;
+
+    api.setRow('bookDocs', { book: 7, kind: 'lorebook', modified: ahead, data: { entries: [] } });
+
+    const remote = (await store.readSyncFile('lorebook.json', title))!;
+
+    await store.writeSyncFile('lorebook.json', JSON.stringify({ entries: ['merged'] }), {
+      title,
+      version: remote.version
+    });
+
+    expect(remote.version).toBe(String(ahead));
+    expect(api.rowsOf('bookDocs').find((row) => row.kind === 'lorebook')).toMatchObject({
+      modified: ahead + 1,
+      data: { entries: ['merged'] }
+    });
+  });
+
+  // Bug: a title missing from the catalog (a book a friend sent) would be written to
+  // `books/undefined/...` instead of staying in this browser.
+  it('writes nothing for a book the server does not have', async () => {
+    const store = (await syncFileStore(StorageSourceDefault.CALIBRE_DEFAULT))!;
+    const start = api.requests.length;
+    const options = { title: 'Sent by a friend', version: '' };
+
+    await store.writeSyncFile(
+      'annotations.json',
+      JSON.stringify({ highlights: [saved('d', 1)] }),
+      options
+    );
+    await store.writeSyncFile('recaps.json', JSON.stringify({ saved: [] }), options);
+
+    expect(puts(start)).toEqual([]);
+    expect(await store.readSyncFile('annotations.json', 'Sent by a friend')).toBeUndefined();
   });
 });

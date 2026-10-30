@@ -17,6 +17,8 @@ import { theme$ } from '$lib/data/store';
 import { customAppThemes$, darkTheme$ } from '$lib/data/theme/theme-store';
 import { socialSession$ } from '$lib/data/social-account';
 import { homeBookTitles$, homeRemovedTitles$ } from '$lib/data/library-home';
+import { dropSyncMirrors } from '$lib/data/server-api';
+import { fakeApi } from '$lib/data/test-utils/fake-api';
 import { mergeEntries, startSettingsSync, syncAccountSettings } from './account-settings-sync';
 
 /** The library's Drive/OneDrive/folder while signed out (undefined: none) */
@@ -59,21 +61,33 @@ vi.hoisted(() => {
 const alice = { id: 'alice', username: 'alice' };
 const bob = { id: 'bob', username: 'bob' };
 
-let remote: { values: Record<string, unknown>; modified: Record<string, number> } | undefined;
+type SettingsDoc = { values: Record<string, any>; modified: Record<string, number> } & Record<
+  string,
+  any
+>;
+
+// One API for the file: server-api.ts keeps the mirror per page load. The session check finds no
+// account here, so the settings live in the shared '' account's docs.
+const api = fakeApi();
 let uploads: string[] = [];
 
-function mockServer(initial?: typeof remote) {
-  remote = initial;
+const remote = () => api.doc('settings') as SettingsDoc | undefined;
+let later = 0;
+
+/** The settings doc as another device left it (always newer than what this browser uploaded). */
+function setRemote(data: unknown) {
+  later += 100_000;
+  api.setRow('accountDocs', { kind: 'settings', modified: Date.now() + later, data });
+}
+
+function mockServer(initial?: Omit<SettingsDoc, 'version'>) {
   uploads = [];
+  if (initial) api.setRow('accountDocs', { kind: 'settings', modified: 1, data: initial });
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (_url: string, init?: RequestInit) => {
-      if (init?.method === 'PUT') {
-        uploads.push(String(init.body));
-        remote = JSON.parse(String(init.body));
-        return new Response('', { status: 201 });
-      }
-      return remote ? new Response(JSON.stringify(remote)) : new Response('', { status: 404 });
+    vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') uploads.push(String(init.body));
+      return api.fetch(url, init);
     })
   );
 }
@@ -113,7 +127,10 @@ async function signInAs(user: typeof alice | null) {
 }
 
 describe('account settings sync', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    // A new server database and no mirror of the old one (a mirror only starts over on a lower rev).
+    api.reset();
+    await dropSyncMirrors('none');
     window.localStorage.clear();
     folder.files = undefined;
     // jsdom has no matchMedia (used to pick the reader profile).
@@ -215,7 +232,7 @@ describe('account settings sync', () => {
     const expected = ['a:mine, newer', 'b:b:deleted', 'c:c'];
 
     expect(names(aiConnections$.getValue())).toEqual(expected);
-    expect(names(remote?.values.aiConnections as never)).toEqual(expected);
+    expect(names(remote()?.values.aiConnections as never)).toEqual(expected);
   });
 
   it("keeps both devices' new connection keys and Home books", async () => {
@@ -251,9 +268,9 @@ describe('account settings sync', () => {
 
     const keys = { x: 'key-x', y: 'key-y' };
     expect(aiConnectionKeys$.getValue()).toEqual(keys);
-    expect(remote?.values.aiConnectionKeys).toEqual(keys);
+    expect(remote()?.values.aiConnectionKeys).toEqual(keys);
     expect(homeBookTitles$.getValue()).toEqual(['mine', 'theirs']);
-    expect(remote?.values.homeBookTitles).toEqual(['mine', 'theirs']);
+    expect(remote()?.values.homeBookTitles).toEqual(['mine', 'theirs']);
   });
 
   it('moves the account from the old default themes to chimi-light, but keeps a later choice', async () => {
@@ -267,8 +284,8 @@ describe('account settings sync', () => {
 
     expect(theme$.getValue()).toBe('chimi-light');
     expect(darkTheme$.getValue()).toBe('washi-dark-theme');
-    expect(remote?.values.theme).toBe('chimi-light');
-    expect(remote?.modified.darkTheme).toBe(later);
+    expect(remote()?.values.theme).toBe('chimi-light');
+    expect(remote()?.modified.darkTheme).toBe(later);
   });
 
   it('syncs the hub sign-in to the account, so its other browsers are signed in', async () => {
@@ -339,25 +356,39 @@ describe('account settings sync', () => {
     askAiPresets$.next([...askAiPresets$.getValue(), preset('mine')]);
     customAppThemes$.next({ keep: theme });
     mangaSeriesModes$.next({ ...mangaSeriesModes$.getValue(), s2: 'ltr' });
-    const values = remote!.values as Record<string, any>;
-    values.askAiPresets = [...values.askAiPresets, preset('other')];
-    values.mangaSeriesModes = { s1: 'vertical' };
-    (remote as any).entryModified = {
-      ...(remote as any).entryModified,
+    const doc = remote()!;
+    const values = {
+      ...doc.values,
+      askAiPresets: [...doc.values.askAiPresets, preset('other')],
+      mangaSeriesModes: { s1: 'vertical' }
+    };
+    const entryModified = {
+      ...doc.entryModified,
       askAiPresets: { other: Date.now() + 1000 },
       mangaSeriesModes: { s1: Date.now() + 1000 }
     };
+    setRemote({ ...doc, values, entryModified });
     await syncAccountSettings();
 
     expect(askAiPresets$.getValue().map(({ id }) => id)).toEqual(['a', 'theirs', 'mine', 'other']);
     expect(customAppThemes$.getValue()).toEqual({ keep: theme });
     expect(mangaSeriesModes$.getValue()).toEqual({ s1: 'vertical', s2: 'ltr' });
-    expect(remote?.values.customAppThemes).toEqual({ keep: theme });
-    expect((remote as any).entryModified.customAppThemes.old).toBeLessThan(0);
+    expect(remote()?.values.customAppThemes).toEqual({ keep: theme });
+    expect(remote()!.entryModified.customAppThemes.old).toBeLessThan(0);
 
     // Another device deletes this browser's preset later: the deletion wins here too.
-    values.askAiPresets = values.askAiPresets.filter(({ id }: { id: string }) => id !== 'mine');
-    (remote as any).entryModified.askAiPresets.mine = -(Date.now() + 2000);
+    const stored = remote()!;
+    setRemote({
+      ...stored,
+      values: {
+        ...stored.values,
+        askAiPresets: stored.values.askAiPresets.filter(({ id }: { id: string }) => id !== 'mine')
+      },
+      entryModified: {
+        ...stored.entryModified,
+        askAiPresets: { ...stored.entryModified.askAiPresets, mine: -(Date.now() + 2000) }
+      }
+    });
     await syncAccountSettings();
     expect(askAiPresets$.getValue().map(({ id }) => id)).toEqual(['a', 'theirs', 'other']);
   });
@@ -380,13 +411,13 @@ describe('account settings sync', () => {
     });
     await syncAccountSettings();
 
-    expect(remote?.values.askAiReaderNote).toBe('old');
+    expect(remote()?.values.askAiReaderNote).toBe('old');
     expect(askAiReaderNote$.getValue()).toBe('edited');
 
     vi.mocked(fetch).mockImplementation(respond);
     await syncAccountSettings();
 
-    expect(remote?.values.askAiReaderNote).toBe('edited');
+    expect(remote()?.values.askAiReaderNote).toBe('edited');
   });
 
   // Bug: a sync started while another one's upload is in flight reads the old file, and the
@@ -412,7 +443,7 @@ describe('account settings sync', () => {
     await syncAccountSettings();
     await second;
 
-    expect(remote?.values.askAiReaderNote).toBe('second');
+    expect(remote()?.values.askAiReaderNote).toBe('second');
     expect(askAiReaderNote$.getValue()).toBe('second');
   });
 
@@ -428,8 +459,8 @@ describe('account settings sync', () => {
       modified: { openRouterApiKey: 4, elevenLabsModel: 4 }
     });
     await signInAs(alice);
-    expect(remote?.values).not.toHaveProperty('openRouterApiKey');
-    expect(remote?.values).not.toHaveProperty('elevenLabsModel');
-    expect(remote?.modified).not.toHaveProperty('openRouterApiKey');
+    expect(remote()?.values).not.toHaveProperty('openRouterApiKey');
+    expect(remote()?.values).not.toHaveProperty('elevenLabsModel');
+    expect(remote()?.modified).not.toHaveProperty('openRouterApiKey');
   });
 });

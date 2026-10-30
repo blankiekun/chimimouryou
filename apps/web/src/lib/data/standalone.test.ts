@@ -258,14 +258,23 @@ describe('standalone edition', () => {
       const view = await import('$lib/data/storage/storage-view');
       const calibre = await import('$lib/data/calibre');
 
+      fetchMock.mockImplementation(async (url: string) =>
+        url.endsWith('/version')
+          ? new Response(JSON.stringify({ api: 1 }))
+          : new Response(JSON.stringify({ rev: 0, books: [] }))
+      );
       expect(view.calibreSourceAvailable).toBe(true);
       await calibre.loadCalibreCatalog();
 
-      const [url, init] = fetchMock.mock.calls[0];
-      expect(url).toBe('https://books.example/calibre/catalog.json');
-      expect(new Headers(init.headers).get('Authorization')).toBe('Bearer secret-token');
-      expect(init.credentials).toBe('omit');
-      expect(url).not.toContain('secret-token');
+      expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+        'https://books.example/api/v1/version',
+        'https://books.example/api/v1/catalog?since=0'
+      ]);
+      for (const [url, init] of fetchMock.mock.calls) {
+        expect(new Headers(init.headers).get('Authorization')).toBe('Bearer secret-token');
+        expect(init.credentials).toBe('omit');
+        expect(url).not.toContain('secret-token');
+      }
     });
 
     it('lists game folders with the token, without cookies', async () => {

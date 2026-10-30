@@ -16,6 +16,7 @@ import {
   resetHubCovers
 } from './discord-covers';
 import type { MetadataCandidate } from './book-metadata';
+import { fakeApi } from './test-utils/fake-api';
 
 const thumbnails = vi.hoisted(() => ({ made: 0 }));
 
@@ -50,6 +51,13 @@ const reZeroMedia = {
   genres: []
 };
 
+// One API for the file: server-api.ts keeps the catalog and the mirror per page load.
+const api = fakeApi();
+
+['Ｒｅ：ゼロから始める異世界生活 1', 'Re：ゼロから始める異世界生活 1', 'A', 'B'].forEach(
+  (title, index) => api.addBook({ id: index + 1, calibreId: 101 + index, title })
+);
+
 describe('discord covers', () => {
   it('ignores width, case, spaces and punctuation when matching', () => {
     expect(matchKey('Ｒｅ：ゼロから始める異世界生活')).toBe(
@@ -77,9 +85,23 @@ describe('discord covers', () => {
   });
 
   describe('findCover', () => {
+    // fetchMock stands for AniList; /api/v1/ goes to the fake server (a metadata PUT may be refused).
     const fetchMock = vi.fn();
+    let puts: { data: Record<string, unknown> }[] = [];
+    let refuseSave = false;
 
-    beforeEach(() => vi.stubGlobal('fetch', fetchMock));
+    beforeEach(() => {
+      puts = [];
+      refuseSave = false;
+      vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+        if (!String(url).startsWith('/api/v1/')) return fetchMock(url, init);
+        if (init?.method === 'PUT' && String(url).startsWith('/api/v1/metadata/')) {
+          puts.push(JSON.parse(String(init.body)));
+          if (refuseSave) return Promise.resolve(new Response(null, { status: 403 }));
+        }
+        return api.fetch(url, init);
+      });
+    });
     afterEach(() => {
       vi.unstubAllGlobals();
       fetchMock.mockReset();
@@ -87,36 +109,22 @@ describe('discord covers', () => {
     });
 
     it('keeps the match in this browser when the server refuses to save it', async () => {
-      fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
-        url.includes('anilist')
-          ? aniList([reZeroMedia])
-          : new Response(null, { status: init?.method === 'PUT' ? 403 : 404 })
-      );
+      refuseSave = true;
+      fetchMock.mockImplementation(async () => aniList([reZeroMedia]));
 
       expect(await findCover('Ｒｅ：ゼロから始める異世界生活 1', 'book')).toBe(true);
       expect(localCover('Ｒｅ：ゼロから始める異世界生活 1')).toBe(reZero.cover);
-      const put = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT');
-      expect(JSON.parse(put![1].body)['Ｒｅ：ゼロから始める異世界生活 1']).not.toHaveProperty(
-        'names'
-      );
+      expect(puts[0].data).not.toHaveProperty('names');
     });
 
     it("saves a match's details without its cover, keeping the cover in this browser", async () => {
-      const puts: Record<string, { cover: string }>[] = [];
-      fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
-        if (url.includes('anilist')) return aniList([reZeroMedia]);
-        if (init?.method === 'PUT') {
-          puts.push(JSON.parse(String(init.body)));
-          return new Response('{}', { status: 200 });
-        }
-        return new Response(JSON.stringify(puts.at(-1) ?? {}), { status: 200 });
-      });
+      fetchMock.mockImplementation(async () => aniList([reZeroMedia]));
       const { loadBookMetadata } = await import('./book-metadata');
 
       await loadBookMetadata(true);
       expect(await findCover('Re：ゼロから始める異世界生活 1', 'book')).toBe(true);
       expect(puts).toHaveLength(1);
-      expect(puts[0]['Re：ゼロから始める異世界生活 1']).toMatchObject({
+      expect(puts[0].data).toMatchObject({
         cover: '',
         url: reZero.url
       });

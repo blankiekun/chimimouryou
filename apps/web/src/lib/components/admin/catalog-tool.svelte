@@ -3,10 +3,24 @@
   import Fa from 'svelte-fa';
   import { rebuildCatalog } from '$lib/data/calibre-import';
   import { loadCalibreCatalog } from '$lib/data/calibre';
+  import { serverFetch } from '$lib/data/server-connect';
+  import SectionHead from '$lib/components/section-head.svelte';
 
   let result: { books: number; visualNovels: number } | undefined;
   let busy = false;
   let error = '';
+
+  /** Old sync folders the migration matched to no book (`GET /api/v1/migration`). */
+  let orphans: { title: string; account: string }[] = [];
+
+  serverFetch('/api/v1/migration', { cache: 'no-store' })
+    .then((response) => (response.ok ? response.json() : {}))
+    .then((report: { sources?: { account: string; orphans: string[] }[] }) => {
+      orphans = (report.sources || []).flatMap(({ account, orphans: titles }) =>
+        titles.map((title) => ({ title, account }))
+      );
+    })
+    .catch(() => {});
 
   async function run() {
     busy = true;
@@ -53,4 +67,25 @@
 
 {#if error}
   <p class="tool-error">{error}</p>
+{/if}
+
+{#if orphans.length}
+  <SectionHead number={1} title="Old sync data" count={orphans.length} level="h3" />
+  <p class="tool-text">
+    These folders matched no book in the library. They stay on the server until the old sync folders
+    are deleted.
+  </p>
+  <table class="app-table tool-table">
+    <thead>
+      <tr><th scope="col">Title</th><th scope="col">Account</th></tr>
+    </thead>
+    <tbody>
+      {#each orphans as orphan}
+        <tr>
+          <td>{orphan.title}</td>
+          <td>{orphan.account ? orphan.account.slice(0, 8) : 'Shared'}</td>
+        </tr>
+      {/each}
+    </tbody>
+  </table>
 {/if}

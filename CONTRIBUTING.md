@@ -38,7 +38,7 @@ How to change this fork. See `ARCHITECTURE.md` for how the pieces fit together,
 - New UI strings go in both `lib/i18n/en.ts` and `lib/i18n/ja.ts` (whole sentences
   with `{param}`s), used as `$t$('key')` in components and `tr('key')` elsewhere.
 - Never put API keys, passwords or other secrets in the repository, in shared
-  sync files (`/calibre/sync/`), in URLs or in log/error messages
+  rows (the signed-out account `''`, series, book details), in URLs or in log/error messages
   (`redactSecret` in `data/ai-settings.ts`).
 
 ## Commands
@@ -132,7 +132,9 @@ git merge upstream/main`, open a PR and merge it with **Create a merge
   - Signed-in state: `vi.mock('$lib/data/account', …)` with a hoisted user.
   - The storage handlers import each other: import
     `$lib/data/storage/storage-handler-factory` before a handler, or mock
-    `calibre-handler` (see `calibre-handler.test.ts`).
+    `server-handler` (see `kanji-seen.test.ts`).
+  - The v1 API: `fakeApi` in `data/test-utils/fake-api.ts` (see
+    `server-handler.test.ts`).
 - `pnpm check` has 13 errors that predate the fork; only new ones matter.
 - Reader changes also need a manual check with a book open (paginated and
   continuous modes): the browser tests cover only reopening at the bookmark.
@@ -156,10 +158,11 @@ and list it in `plugins/index.ts`: companion tabs, selection-toolbar actions,
 Listen modes, `onPositionSettled` work and a settings component. Plugins start
 off; hosts read `activePlugins$`, so nothing runs until a reader turns it on.
 
-**A per-reader file for Calibre books** - either a prefix in
-`CalibreStorageHandler.isPersonalFile` (synced like progress), or a file of its
-own through `CalibreStorageHandler.syncFileUrl(title, name)` (like
-`annotations.json`).
+**A per-reader file for Calibre books** - a sync file (`data/sync-files.ts`)
+maps to a row kind in `server-handler.ts` (`bookDocs` per book, `accountDocs` at
+the root, used by `readSyncFile`/`writeSyncFile`), and the server must allow that
+kind: the `book_docs`/`account_docs` check in `api/apidb.py` and the `docs/(…)`
+route in `api/service.py` (plus `migrate.py`'s map if old folders hold it).
 
 **A server endpoint** - add a route to the service's `ROUTES` (accounts) or
 `do_GET`/`do_POST` (difficulty), proxy it in `nginx-ebook-reader.conf.template` if it

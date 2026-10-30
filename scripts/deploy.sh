@@ -84,19 +84,36 @@ run env LANG=C.UTF-8 VERSION="$VERSION" bash -s <<'EOF'
     docker image tag "$image" "${image%:*}:previous" 2>/dev/null || true
   done
   # On failure the images that ran get their tags back, so the next deploy keeps them as :previous.
-  if ! $compose build --quiet || ! $compose up -d --remove-orphans; then
+  rollback() {
     for image in $images; do
       docker image tag "${image%:*}:previous" "$image" 2>/dev/null || true
     done
     $compose up -d --remove-orphans || true
-    echo "Deploy failed: the previous images run again" >&2
+    echo "$1" >&2
     exit 1
-  fi
-  # Fill library.db's books, then copy the sync folders in (idempotent; the folders stay as they are).
-  {
-    $compose run --rm --no-deps -T catalog build-calibre-catalog /library /data/state/catalog/catalog.json \
+  }
+  $compose build --quiet || rollback "Deploy failed: the previous images run again"
+  # The first start on the v1 API with old sync folders: migrate them while web is stopped, so
+  # no reader writes a fresh position over a row the migration brings. A failure puts the
+  # previous version back. Later deploys bring in what older clients wrote, failures only logged.
+  first=0
+  if ! $compose run --rm --no-deps -T api test -f /data/state/api/migrate-report.json \
+    && $compose run --rm --no-deps -T api sh -c 'find /data/sync /data/accounts -mindepth 1 -maxdepth 1 ! -name .tmp | grep -q .'; then
+    first=1
+    { $compose stop web \
+      && $compose up -d api \
+      && $compose run --rm --no-deps -T catalog build-calibre-catalog /library /data/state/catalog/catalog.json --force \
       && $compose run --rm --no-deps -T api python3 /app/api/migrate.py --apply
-  } || echo "Migration to the API database failed; the old sync folders are untouched" >&2
+    } || rollback "Migration failed: the previous version runs again"
+  fi
+  $compose up -d --remove-orphans || rollback "Deploy failed: the previous images run again"
+  # Fill library.db's books, then copy the sync folders in (idempotent; the folders stay as they are).
+  if [ "$first" = 0 ]; then
+    {
+      $compose run --rm --no-deps -T catalog build-calibre-catalog /library /data/state/catalog/catalog.json \
+        && $compose run --rm --no-deps -T api python3 /app/api/migrate.py --apply
+    } || echo "Migration to the API database failed; the old sync folders are untouched" >&2
+  fi
   docker image prune -f >/dev/null
   if [ -d /run/systemd/system ]; then
     /usr/local/bin/ebook-update install || echo "Updates from the admin panel stay off (see above)"

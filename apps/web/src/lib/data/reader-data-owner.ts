@@ -17,6 +17,7 @@ import { standalone } from '$lib/data/env';
 import { clearKnownWords } from '$lib/data/known-words';
 import { readerDb } from '$lib/data/reader-db';
 import { database } from '$lib/data/store';
+import { dropSyncMirrors } from '$lib/data/server-api';
 
 const ownerKey = 'readerDataOwner';
 
@@ -60,4 +61,6 @@ async function releaseFor(user: AccountUser | null, signingOut: boolean) {
   }
 
   window.localStorage.setItem(ownerKey, id);
+  // The server rows other readers left in this browser's mirror (server-api.ts).
+  await dropSyncMirrors(id);
 }

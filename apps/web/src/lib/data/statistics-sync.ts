@@ -12,7 +12,7 @@
 // The factory first: the handlers import each other in a cycle.
 import '$lib/data/storage/storage-handler-factory';
 import { BrowserStorageHandler } from '$lib/data/storage/handler/browser-handler';
-import { CalibreStorageHandler } from '$lib/data/storage/handler/calibre-handler';
+import { ServerStorageHandler } from '$lib/data/storage/handler/server-handler';
 import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
 import {
   readingGoalsMergeMode$,
@@ -26,8 +26,8 @@ export async function pullAccountStatistics(window: Window) {
   if (serverless) return;
 
   // Own handlers: the shared ones switch context while a book opens or the library syncs.
-  const calibre = new CalibreStorageHandler(window);
-  const titles = await calibre.listAccountTitles();
+  const calibre = new ServerStorageHandler(window);
+  const titles = await calibre.statisticsTitles();
 
   if (!titles.length) {
     return;
