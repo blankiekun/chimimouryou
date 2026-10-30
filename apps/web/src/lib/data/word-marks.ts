@@ -181,3 +181,17 @@ export async function bookWordForms(title: string) {
 
   return new Set(words?.map(([form]) => form));
 }
+
+/** The reader's word list forms of the open book, loaded on its first selection ("Mark known"). */
+export class WordFormsLoader {
+  forms$ = new BehaviorSubject<{ title: string; forms: Set<string> } | undefined>(undefined);
+
+  load(title: string) {
+    this.forms$.next({ title, forms: new Set() });
+    getWordMarks().catch(() => undefined);
+    bookWordForms(title).then(
+      (forms) => this.forms$.getValue()?.title === title && this.forms$.next({ title, forms }),
+      () => {}
+    );
+  }
+}

@@ -21,7 +21,16 @@
  * (analysis-capacity.ts). Not part of upstream.
  */
 
-import { BehaviorSubject, Observable, Subject } from 'rxjs';
+import {
+  BehaviorSubject,
+  combineLatest,
+  distinctUntilChanged,
+  map,
+  Observable,
+  of,
+  Subject,
+  switchMap
+} from 'rxjs';
 import { foldReadings, type BookWord, type WordTotals } from '$lib/data/book-words';
 import type { CalibreDifficulty } from '$lib/data/calibre';
 import { pagePath, standalone } from '$lib/data/env';
@@ -29,8 +38,10 @@ import { StorageSourceDefault } from '$lib/data/storage/storage-types';
 import {
   endFuriganaProgress,
   furiganaProgress$,
+  generatedReadings$,
   type ReadingsFile
 } from '$lib/data/generated-furigana';
+import { chapterPrimer$, generatedFurigana$, unknownWordUnderline$ } from '$lib/data/store';
 import { readerDb } from '$lib/data/reader-db';
 import type {
   AnalysisLoad,
@@ -978,4 +989,45 @@ export function localReadings$(title: string, html: string) {
       endFuriganaProgress(title);
     };
   });
+}
+
+type ReaderBook = { title: string; elementHtml: string; storageSource?: string };
+
+/** The reader opening a book: its analysis worker loads beside the sync and the first render. */
+export function prewarmBook(book: ReaderBook) {
+  if (book.elementHtml && readingsAvailable(book) === 'local') {
+    prewarmAnalysis(
+      book.title,
+      book.elementHtml,
+      generatedFurigana$.getValue() || unknownWordUnderline$.getValue() || chapterPrimer$.getValue()
+    ).catch(() => {});
+  }
+}
+
+/**
+ * Local books with the analysis tools: the difficulty estimate and word list are made on open
+ * (after the furigana, this module's queue).
+ */
+export function startLocalAnalysis(book: ReaderBook) {
+  if (readingsAvailable(book) === 'local') {
+    localEstimate(book.title, book.elementHtml).catch(() => {});
+  }
+}
+
+/** The reader's readings file, while generated furigana, the unknown-word underlines or the chapter primer need it. */
+export function readingsFor$(book: ReaderBook) {
+  const source = readingsAvailable(book);
+
+  return combineLatest([generatedFurigana$, unknownWordUnderline$, chapterPrimer$]).pipe(
+    map((wanted) => wanted.some(Boolean)),
+    distinctUntilChanged(),
+    switchMap((on) => {
+      if (!on || !source) return of(undefined);
+
+      return source === 'server'
+        ? generatedReadings$(book.title, true)
+        : localReadings$(book.title, book.elementHtml);
+    }),
+    map((readings) => ({ title: book.title, readings }))
+  );
 }

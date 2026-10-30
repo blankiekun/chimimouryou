@@ -52,3 +52,65 @@ export function readingActivity(activity?: ReadingActivity) {
 export function bookLeft(title: string, position: number, characters: number) {
   activePlugins().forEach((plugin) => plugin.onBookLeft?.(title, position, characters));
 }
+
+/**
+ * The hooks' state for one reader page: the settle timer and the opened book's run, which a
+ * Community line link's jump waits for (earlier, the reader isn't ready or its restore of the
+ * bookmark moves the book back).
+ */
+export class ReaderHooksSession {
+  private readingWorkTimer: ReturnType<typeof setTimeout> | undefined;
+
+  private openedTitle = '';
+
+  private openedDone = '';
+
+  private pendingReveal: number | undefined;
+
+  constructor(
+    private getIndex: GetIndex,
+    /** The book's length when the timer fires */
+    private characters: () => number,
+    private jumpToCount: (count: number) => void
+  ) {}
+
+  /** The position moved: positionSettled runs after 15 s without another move. */
+  moved(title: string, position: number) {
+    clearTimeout(this.readingWorkTimer);
+    this.readingWorkTimer = setTimeout(
+      (bookTitle: string, at: number) =>
+        positionSettled(bookTitle, this.getIndex, at, this.characters()),
+      15_000,
+      title,
+      position
+    );
+  }
+
+  /** The book rendered: bookOpened once per title. */
+  opened(title: string) {
+    if (this.openedTitle === title) return;
+
+    this.openedTitle = title;
+    bookOpened(title, this.getIndex, () => {
+      this.openedDone = title;
+      if (this.pendingReveal !== undefined) this.jumpToCount(this.pendingReveal);
+      this.pendingReveal = undefined;
+    });
+  }
+
+  /** A Community line link's place: now if the opened book's run is done, else after it. */
+  reveal(count: number, title: string | undefined) {
+    if (this.openedDone && this.openedDone === title) this.jumpToCount(count);
+    else this.pendingReveal = count;
+  }
+
+  /** Leaving the reader. */
+  left(title: string | undefined, position: number, characters: number) {
+    clearTimeout(this.readingWorkTimer);
+    readingActivity();
+
+    if (title && position) {
+      bookLeft(title, position, characters);
+    }
+  }
+}

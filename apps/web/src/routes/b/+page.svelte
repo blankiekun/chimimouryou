@@ -100,23 +100,20 @@
     unknownWordUnderline$,
     chapterPrimer$
   } from '$lib/data/store';
-  import { spansOf, unknownWordFlags$, type CountSpan } from '$lib/data/unknown-words';
+  import { spansOf, unknownWordFlags$ } from '$lib/data/unknown-words';
   import { chapterPrimer, type ChapterPrimer } from '$lib/data/chapter-primer';
+  import { addGeneratedRuby, placeAfterRerender } from '$lib/data/generated-furigana';
   import {
-    addGeneratedRuby,
-    generatedReadings$,
-    placeAfterRerender
-  } from '$lib/data/generated-furigana';
-  import {
-    localEstimate,
-    localReadings$,
-    prewarmAnalysis,
-    readingsAvailable
+    prewarmBook,
+    readingsAvailable,
+    readingsFor$,
+    startLocalAnalysis
   } from '$lib/data/analysis-tools';
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
   import ReaderPanel from '$lib/components/book-reader/reader-panel.svelte';
   import MiniPlayer from '$lib/components/book-reader/mini-player.svelte';
   import {
+    absenceTabFor,
     bookProgressLabel,
     chapterProgressLabel,
     currentChapterLabel,
@@ -124,6 +121,7 @@
     readerTopInset,
     readerWidth,
     resolvePanelTab,
+    tabPausesTracker,
     type PanelTab
   } from '$lib/data/reader-panel';
   import HighlightEditor from '$lib/components/book-reader/highlight-editor.svelte';
@@ -139,31 +137,22 @@
     type Highlight,
     type HighlightColor
   } from '$lib/data/annotations';
-  import {
-    chapterLabelAt,
-    searchIndexCache,
-    type SearchResult
-  } from '$lib/functions/book-text/book-search';
-  import {
-    clearCssHighlights,
-    cssHighlightsSupported
-  } from '$lib/functions/book-text/css-highlights';
-  import { countsForRange, getTextSegments } from '$lib/functions/book-text/text-positions';
+  import { searchIndexCache, type SearchResult } from '$lib/functions/book-text/book-search';
+  import { cssHighlightsSupported } from '$lib/functions/book-text/css-highlights';
   import {
     getTextWithoutFurigana,
-    highlightAt,
-    isOnScreen,
-    paintHighlights,
-    selectionPassage,
-    type HighlightRange
+    HighlightPainter,
+    newHighlight,
+    selectedBookRange,
+    selectionPassage
   } from '$lib/functions/book-text/reader-highlights';
   import BookReaderHeader from '$lib/components/book-reader/book-reader-header.svelte';
   import AnkiWatcher from '$lib/components/anki-watcher.svelte';
   import { bookSentenceAudio, noteSentence } from '$lib/data/anki';
   import { enableExtrasSync } from '$lib/data/extras-sync';
   import { bookSyncSource } from '$lib/data/sync-files';
-  import { bookLeft, bookOpened, positionSettled, readingActivity } from '$lib/data/reader-hooks';
-  import { bookWordForms, getWordMarks, selectionForm } from '$lib/data/word-marks';
+  import { readingActivity, ReaderHooksSession } from '$lib/data/reader-hooks';
+  import { selectionForm, WordFormsLoader } from '$lib/data/word-marks';
   import type { PassageContext } from '$lib/data/ask-ai';
   import { featureParams } from '$lib/data/ai-connections';
   import { activePlugins$, type SelectionActionContribution } from '$lib/plugins';
@@ -269,17 +258,12 @@
   let panelOpen = $state.raw(false);
   let panelMounted = $state.raw(false);
   let panelTab = $state.raw<PanelTab>('contents');
-  let searchMatch: { start: number; end: number } | undefined;
   const searchIndexOf = searchIndexCache();
   let annotations = $state.raw<AnnotationsController>();
   let editingHighlight = $state.raw<Highlight>();
   let editingFocusNote = $state.raw(false);
-  /** Line being read aloud (audiobook or AI voice) */
-  let readingMatch: { start: number; end: number } | undefined;
   /** Days since the book was last opened, if long enough to offer a recap */
   let welcomeBackDays = $state.raw(0);
-  let highlightRanges: HighlightRange[] = [];
-  let highlightsDirty = true;
   let selectedRange = $state.raw<Range>();
   let lookupPopup = $state.raw<LookupPopup>();
   let lookupOpen = $state.raw(false);
@@ -369,13 +353,7 @@
         }
 
         // The analysis worker loads beside the sync and the first render (bookData$ queues the jobs).
-        if (bookData.elementHtml && readingsAvailable(bookData) === 'local') {
-          prewarmAnalysis(
-            bookData.title,
-            bookData.elementHtml,
-            $generatedFurigana$ || $unknownWordUnderline$ || $chapterPrimer$
-          ).catch(() => {});
-        }
+        prewarmBook(bookData);
 
         const currentContext = {
           id: bookData.id,
@@ -504,28 +482,10 @@
 
   // The readings file, while generated furigana, the unknown-word underlines or the chapter primer need it.
   const bookReadings$ = rawBookData$.pipe(
-    switchMap((rawBookData) => {
-      if (!rawBookData) return EMPTY;
-
-      const source = readingsAvailable(rawBookData);
-
-      return combineLatest([generatedFurigana$, unknownWordUnderline$, chapterPrimer$]).pipe(
-        map((wanted) => wanted.some(Boolean)),
-        distinctUntilChanged(),
-        switchMap((on) => {
-          if (!on || !source) return of(undefined);
-
-          return source === 'server'
-            ? generatedReadings$(rawBookData.title, true)
-            : localReadings$(rawBookData.title, rawBookData.elementHtml);
-        }),
-        map((readings) => ({ title: rawBookData.title, readings }))
-      );
-    }),
+    switchMap((rawBookData) => (rawBookData ? readingsFor$(rawBookData) : EMPTY)),
     shareReplay({ refCount: true, bufferSize: 1 })
   );
 
-  let unknownSpans: CountSpan[] = [];
   let primer = $state.raw<ChapterPrimer>();
 
   const unknownWords$ = combineLatest([
@@ -547,10 +507,7 @@
       primer = state?.primerOn
         ? chapterPrimer(state.readings, state.flags, state.sections)
         : undefined;
-      if (spans.length || unknownSpans.length) {
-        unknownSpans = spans;
-        scheduleHighlights(true);
-      }
+      painter.setUnknownSpans(spans);
     }),
     reduceToEmptyString()
   );
@@ -563,11 +520,8 @@
 
       let rendered = false;
 
-      // Local books with the analysis tools: the difficulty estimate and word list are made on open
-      // (after the furigana, analysis-tools.ts's queue).
-      if (readingsAvailable(rawBookData) === 'local') {
-        localEstimate(rawBookData.title, rawBookData.elementHtml).catch(() => {});
-      }
+      // Local books with the analysis tools: the difficulty estimate and word list are made on open.
+      startLocalAnalysis(rawBookData);
 
       return combineLatest([bookReadings$, generatedFurigana$]).pipe(
         filter(([book]) => book.title === rawBookData.title),
@@ -882,9 +836,7 @@
     // pausing also saves the session's statistics.
     isTrackerPaused$.next(true);
     readerImageGalleryPictures$.next([]);
-    clearTimeout(highlightTimer);
-    contentObserver?.disconnect();
-    clearCssHighlights('ttu-');
+    painter.destroy();
     annotations?.flush();
 
     if (dismissDialogs) {
@@ -955,36 +907,23 @@
   }
 
   function onSelectionChange() {
-    const selection = document.getSelection();
-    const range = selection?.rangeCount ? selection.getRangeAt(0) : undefined;
-    const content = document.querySelector('.book-content');
-
-    selectedRange =
-      range && !range.collapsed && content?.contains(range.commonAncestorContainer)
-        ? range.cloneRange()
-        : undefined;
+    selectedRange = selectedBookRange();
   }
 
   /** The book's word list forms, loaded on the first selection ("Mark known") */
-  let wordForms = $state.raw<{ title: string; forms: Set<string> }>();
+  const wordFormsLoader = new WordFormsLoader();
+  const wordForms$ = wordFormsLoader.forms$;
 
   $effect.pre(() => {
-    if (selectedRange && $rawBookData$ && wordForms?.title !== $rawBookData$.title) {
+    if (selectedRange && $rawBookData$ && $wordForms$?.title !== $rawBookData$.title) {
       const title = $rawBookData$.title;
 
-      untrack(() => {
-        wordForms = { title, forms: new Set() };
-        getWordMarks().catch(() => undefined);
-        bookWordForms(title).then(
-          (forms) => wordForms?.title === title && (wordForms = { title, forms }),
-          () => {}
-        );
-      });
+      untrack(() => wordFormsLoader.load(title));
     }
   });
 
   const selectedWord = $derived(
-    selectedRange && wordForms?.forms.size ? getTextWithoutFurigana(selectedRange) : ''
+    selectedRange && $wordForms$?.forms.size ? getTextWithoutFurigana(selectedRange) : ''
   );
 
   function openSelectionAction(action: SelectionActionContribution) {
@@ -1026,118 +965,33 @@
   const absenceTab = $derived.by(() => {
     if (!welcomeBackDays) return undefined;
 
-    const tabs = $activePlugins$.flatMap((plugin) => plugin.companionTabs ?? []);
+    const plugins = $activePlugins$;
 
-    return untrack(() => tabs.find((tab) => tab.absenceOffer?.ready()));
+    return untrack(() => absenceTabFor(plugins));
   });
 
   const highlights$ = $derived(annotations?.highlights$);
   const highlightSyncError$ = $derived(annotations?.syncError$);
+  const painter = new HighlightPainter(
+    () => bookmarkManager,
+    () => $highlights$
+  );
 
   $effect.pre(() => {
     if (bookmarkManager && $highlights$) {
-      untrack(() => scheduleHighlights(true));
+      untrack(() => painter.scheduleHighlights(true));
     }
   });
 
-  let highlightTimer: ReturnType<typeof setTimeout> | undefined;
-  let observedContent: Element | null = null;
-
-  // Paginated mode swaps the section's DOM, which invalidates the ranges.
-  const contentObserver = browser
-    ? new MutationObserver(() => scheduleHighlights(true))
-    : undefined;
-
-  function scheduleHighlights(force = false) {
-    if (force) {
-      highlightsDirty = true;
-    }
-
-    if (!highlightsDirty || !cssHighlightsSupported) {
-      return;
-    }
-
-    clearTimeout(highlightTimer);
-    highlightTimer = setTimeout(() => {
-      const content = document.querySelector('.book-content');
-
-      if (content && content !== observedContent) {
-        contentObserver?.disconnect();
-        contentObserver?.observe(content, { childList: true, subtree: true });
-        observedContent = content;
-      }
-
-      applyHighlights();
-    }, 200);
-  }
-
-  /** Colours highlights and the current search match in the rendered text. */
-  function applyHighlights() {
-    const content = document.querySelector('.book-content');
-
-    if (!content || !bookmarkManager) {
-      return;
-    }
-
-    const painted = paintHighlights(
-      content,
-      bookmarkManager.getRenderedStartCount(),
-      $highlights$ || [],
-      searchMatch,
-      readingMatch,
-      unknownSpans
-    );
-
-    highlightRanges = painted.highlightRanges;
-    highlightsDirty = false;
-
-    return painted.readingRange;
-  }
-
-  /** Highlights the line being read and turns the page or scrolls when it isn't visible. */
-  function showReading(match: { start: number; end: number; follow?: boolean } | undefined) {
-    readingMatch = match;
-    highlightsDirty = true;
-
-    if (!cssHighlightsSupported) {
-      // Without highlights, at least keep the page with the voice.
-      if (match) {
-        followTts(match.start);
-      }
-      return;
-    }
-
-    const range = applyHighlights();
-
-    if (!match) {
-      return;
-    }
-
-    if (
-      match.follow !== false &&
-      !isOnScreen(range?.getBoundingClientRect(), bookWidth, window.innerHeight)
-    ) {
-      scrollToCount(match.start);
-      scheduleHighlights(true);
-    }
-  }
+  const hooks = new ReaderHooksSession(getSearchIndex, () => bookCharCount, jumpToCount);
 
   // Background work that follows the reading position: kanji seen (Home tab)
   // and the plugins' (e.g. the automatic lorebook update).
-  let readingWorkTimer: ReturnType<typeof setTimeout> | undefined;
-
   $effect.pre(() => {
     if (exploredCharCount && $rawBookData$ && $bookData$) {
       // Read now so a change of the book's length restarts the wait, as before.
       void bookCharCount;
-      clearTimeout(readingWorkTimer);
-      readingWorkTimer = setTimeout(
-        (title: string, position: number) =>
-          positionSettled(title, getSearchIndex, position, bookCharCount),
-        15_000,
-        $rawBookData$.title,
-        exploredCharCount
-      );
+      hooks.moved($rawBookData$.title, exploredCharCount);
     }
   });
 
@@ -1157,35 +1011,15 @@
   });
 
   // The plugins' work on an opened book (Community markers), once it rendered and the browser idles.
-  let openedTitle = '';
-  // A Community line link's jump waits for that run: earlier, the reader isn't ready or its
-  // restore of the bookmark moves the book back.
-  let openedDone = '';
-  let pendingReveal: number | undefined;
-
   $effect.pre(() => {
-    if (bookmarkManager && $bookData$ && $rawBookData$ && openedTitle !== $rawBookData$.title) {
-      const title = (openedTitle = $rawBookData$.title);
+    if (bookmarkManager && $bookData$ && $rawBookData$) {
+      const title = $rawBookData$.title;
 
-      untrack(() =>
-        bookOpened(title, getSearchIndex, () => {
-          openedDone = title;
-          if (pendingReveal !== undefined) jumpToCount(pendingReveal);
-          pendingReveal = undefined;
-        })
-      );
+      untrack(() => hooks.opened(title));
     }
   });
 
-  onDestroy(() => {
-    clearTimeout(readingWorkTimer);
-    readingActivity();
-    const title = $rawBookData$?.title;
-
-    if (title && exploredCharCount) {
-      bookLeft(title, exploredCharCount, bookCharCount);
-    }
-  });
+  onDestroy(() => hooks.left($rawBookData$?.title, exploredCharCount, bookCharCount));
 
   function createHighlight(color: HighlightColor, withNote = false) {
     const content = document.querySelector('.book-content');
@@ -1198,25 +1032,19 @@
       return;
     }
 
-    const { start, end } = countsForRange(
-      getTextSegments(content),
+    const highlight = newHighlight(
+      content,
       range,
-      bookmarkManager.getRenderedStartCount()
+      bookmarkManager.getRenderedStartCount(),
+      color,
+      sectionList$.getValue()
     );
-    const text = getTextWithoutFurigana(range);
 
-    if (end <= start || !text) {
+    if (!highlight) {
       return;
     }
 
-    const created = annotations.add({
-      start,
-      end,
-      text,
-      note: '',
-      color,
-      chapter: chapterLabelAt(sectionList$.getValue(), start)
-    });
+    const created = annotations.add(highlight);
 
     if (withNote) {
       editingHighlight = created;
@@ -1236,7 +1064,7 @@
       return;
     }
 
-    const hit = highlightAt(highlightRanges, event.clientX, event.clientY);
+    const hit = painter.highlightAt(event.clientX, event.clientY);
 
     if (hit) {
       editingHighlight = hit;
@@ -1254,20 +1082,20 @@
 
     pauseTracker(true);
     scrollToCount(count);
-    scheduleHighlights(true);
+    painter.scheduleHighlights(true);
   }
 
   function jumpToSearchResult(result: SearchResult) {
-    searchMatch = { start: result.start, end: result.end };
+    painter.searchMatch = { start: result.start, end: result.end };
     jumpToCount(result.start);
   }
 
   function closePanel() {
     panelOpen = false;
     selectionPanel = undefined;
-    if (searchMatch) {
-      searchMatch = undefined;
-      scheduleHighlights(true);
+    if (painter.searchMatch) {
+      painter.searchMatch = undefined;
+      painter.scheduleHighlights(true);
     }
   }
 
@@ -1295,11 +1123,7 @@
     panelMounted = true;
     welcomeBackDays = 0;
 
-    if (
-      $activePlugins$.some((plugin) =>
-        plugin.companionTabs?.some((tab) => tab.key === panel && tab.pausesTracker)
-      )
-    ) {
+    if (tabPausesTracker($activePlugins$, panel)) {
       pauseTracker();
     }
   }
@@ -2331,7 +2155,7 @@
 
 {#if selectedRange && !selectionPanel && !editingHighlight}
   <SelectionToolbar
-    word={selectionForm(selectedWord, wordForms?.forms)}
+    word={selectionForm(selectedWord, $wordForms$?.forms)}
     on:highlight={({ detail }) => createHighlight(detail)}
     on:note={() => createHighlight('yellow', true)}
     on:action={({ detail }) => openSelectionAction(detail)}
@@ -2378,10 +2202,7 @@
       jumpToCount(detail);
       closeSheetAfterJump();
     }}
-    on:reveal={({ detail }) => {
-      if (openedDone && openedDone === $rawBookData$?.title) jumpToCount(detail);
-      else pendingReveal = detail;
-    }}
+    on:reveal={({ detail }) => hooks.reveal(detail, $rawBookData$?.title)}
     on:searchJump={({ detail }) => {
       jumpToSearchResult(detail);
       closeSheetAfterJump();
@@ -2395,7 +2216,7 @@
         followTts(ev.detail);
       }
     }}
-    on:reading={(ev) => showReading(ev.detail)}
+    on:reading={(ev) => painter.showReading(ev.detail, () => bookWidth, scrollToCount, followTts)}
   />
 {/if}
 
