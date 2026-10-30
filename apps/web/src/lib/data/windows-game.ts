@@ -14,7 +14,8 @@
 
 import { hookCleaner, type HookCleanup } from '$lib/data/hook-cleanup';
 import { pagePath } from '$lib/data/env';
-import { hashPage, vnElementHtml, type VnInfo } from '$lib/data/vn';
+import { hashPage, isVn, vnElementHtml, vnInfo, type VnInfo } from '$lib/data/vn';
+import { formatBytes } from '$lib/data/vn-upload';
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import { BlobReader, WritableStreamWriter, ZipReader, type Entry } from '@zip.js/zip.js';
 
@@ -234,6 +235,71 @@ export async function readHead(file: File, length: number) {
     return at + chunk.length;
   }, 0);
   return head;
+}
+
+const hidden = (path: string) => path.split('/').some((part) => part.startsWith('.'));
+
+/** A picked folder's files (path → file) from its handle (showDirectoryPicker), hidden ones skipped. */
+export async function readHandle(dir: FileSystemDirectoryHandle, prefix = '') {
+  const found: Record<string, File> = {};
+  const reads: Promise<void>[] = [];
+
+  for await (const [name, handle] of (dir as any).entries()) {
+    const path = `${prefix}${name}`;
+
+    if (hidden(path)) continue;
+    if (handle.kind === 'directory') Object.assign(found, await readHandle(handle, `${path}/`));
+    else reads.push(handle.getFile().then((file: File) => void (found[path] = file)));
+  }
+
+  await Promise.all(reads);
+  return found;
+}
+
+/**
+ * A webkitdirectory input's files (path → file, hidden ones skipped) and the picked folder's
+ * name, undefined when the browser handed back loose files instead.
+ */
+export function folderInputFiles(list: FileList | null) {
+  const files: Record<string, File> = {};
+
+  for (const file of Array.from(list ?? [])) {
+    // webkitRelativePath starts with the picked folder's own name.
+    const path = file.webkitRelativePath.split('/').slice(1).join('/');
+
+    if (path && !hidden(path)) files[path] = file;
+  }
+
+  return { name: list?.[0]?.webkitRelativePath.split('/')[0], files };
+}
+
+/**
+ * Asks to store data persistently first (big games must not be evicted, and Firefox keeps a
+ * site to 10% of the disk until then), then checks the quota has room for `needed` bytes.
+ */
+export async function roomFor(needed: number) {
+  const persisted = (await navigator.storage.persist?.()) ?? false;
+  const { quota = 0, usage = 0 } = (await navigator.storage.estimate?.()) ?? {};
+
+  if (quota && quota - usage < needed) {
+    throw new Error(
+      `Not enough room in this browser's storage: this needs about ${formatBytes(needed)}, ${formatBytes(quota - usage)} is free.${persisted ? '' : ' Allowing the site to store data persistently (the browser asks, or see its site settings) gives it more room.'}`
+    );
+  }
+}
+
+/** The library's VNBox games whose files aren't in this browser, by title. */
+export async function missingWindowsGames(books: { title: string; elementHtml: string }[]) {
+  const found: { title: string; info: VnInfo }[] = [];
+
+  for (const book of books) {
+    const info = isVn(book) ? vnInfo(book) : undefined;
+
+    if (info?.engine === 'vnbox' && info.folder && !(await hasWindowsGame(info.folder))) {
+      found.push({ title: book.title, info });
+    }
+  }
+  return found.sort((a, b) => a.title.localeCompare(b.title));
 }
 
 /** Whether the game's files are in this browser (another device, or cleared site data: not). */
