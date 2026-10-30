@@ -44,6 +44,34 @@ export interface SourceWork {
   /** This account follows the work */
   following: boolean;
   paused: boolean;
+  /** The server has a cover for it (covers/{id}) */
+  cover: boolean;
+}
+
+/** A work in a site's search, popular or latest list (GET sites/{site}/…). */
+export interface SourceSearchWork {
+  workKey: string;
+  url: string;
+  title: string;
+  authors: string;
+  status: 'ongoing' | 'finished';
+  chapters: number;
+  /** The site's last update (ms) */
+  updated: number;
+  inLibrary: boolean;
+  following: boolean;
+}
+
+export interface SourceSearch {
+  site: string;
+  siteName: string;
+  domain: string;
+  /** How the site orders search results, e.g. "most bookmarked" */
+  order: string;
+  total: number;
+  page: number;
+  more: boolean;
+  works: SourceSearchWork[];
 }
 
 /** A work this account follows (GET following). */
@@ -64,6 +92,7 @@ export interface SourceFollow {
   nextCheck: number | null;
   /** When the follow was made, paused or resumed (ms) */
   modified: number;
+  cover: boolean;
 }
 
 export interface SourceJob {

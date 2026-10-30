@@ -29,7 +29,9 @@ _next: dict[str, float] = {}
 
 
 class FetchError(Exception):
-    pass
+    def __init__(self, message: str, status: int | None = None):
+        super().__init__(message)
+        self.status = status  # the site's HTTP status, when it answered with an error
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -102,7 +104,7 @@ def fetch(url: str, hosts: set[str], headers: dict | None = None) -> tuple[bytes
                     break
                 wait = _retry_after(error.headers.get('Retry-After')) if error.code in (429, 503) else None
                 if wait is None or wait > MAX_RETRY_AFTER or attempt == RETRIES - 1:
-                    raise FetchError(f"{host} didn't answer ({error.code})") from error
+                    raise FetchError(f"{host} didn't answer ({error.code})", error.code) from error
                 with _lock:
                     _next[host] = max(_next.get(host, 0.0), time.monotonic() + wait)
             except (urllib.error.URLError, OSError) as error:

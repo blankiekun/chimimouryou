@@ -5,3 +5,5 @@ build/
 apps/web/src/lib/vendor/yomitan/
 # Hook scripts run inside the game by VNBox (dc00 style, PORTING.md)
 scripts/vnbox/engines/
+# Saved site pages: kept as the sites send them (Sources adapters parse them)
+server/tests/fixtures/
