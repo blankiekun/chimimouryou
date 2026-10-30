@@ -7,7 +7,8 @@
 /**
  * Server connect (standalone edition): a chimimouryou server at another origin that lists this
  * app in its CORS_ORIGINS. The app signs in for a token (`POST /account/api/token`) and sends it
- * as `Authorization: Bearer` on every request to the server's `/calibre/` and `/account/` paths,
+ * as `Authorization: Bearer` on every request to the server's `/calibre/`, `/account/` and `/api/`
+ * paths,
  * never in a URL and never with cookies. Images and other elements can't send headers, so they
  * load server files as blobs (`serverImage`). The self-hosted build never connects: its paths
  * stay relative and use the session cookie. Not part of upstream.
@@ -21,7 +22,7 @@ import { standalone } from '$lib/data/env';
 
 const baseKey = 'serverBase';
 const tokenKey = 'serverToken';
-const serverPath = /^\/(calibre|account)\//;
+const serverPath = /^\/(calibre|account|api)\//;
 
 function read(key: string) {
   try {
@@ -45,7 +46,7 @@ export function rememberedServer() {
   return read(baseKey);
 }
 
-/** A server path ('/calibre/…', '/account/…') as the URL to request; other URLs as they are. */
+/** A server path ('/calibre/…', '/account/…', '/api/…') as the URL to request; other URLs as they are. */
 export function serverUrl(path: string) {
   return serverBase && serverPath.test(path) ? `${serverBase}${path}` : path;
 }

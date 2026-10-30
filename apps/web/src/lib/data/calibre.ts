@@ -11,9 +11,13 @@
 
 import type { CoreNumbers } from '$lib/functions/analysis/core';
 import { serverFetch, serverless } from '$lib/data/server-connect';
+import { apiVersion, catalog } from '$lib/data/server-api';
 
 export interface CalibreBook {
+  /** The Calibre id (game folders: the catalog's); estimates, mokuro and readings key by it */
   id: number;
+  /** The server's book id (books.id) for /api/v1 paths */
+  bookId?: number;
   title: string;
   authors: string;
   series: string;
@@ -64,7 +68,6 @@ export interface CalibreDifficulty {
   core?: CoreNumbers;
 }
 
-const catalogUrl = '/calibre/catalog.json';
 const difficultyUrl = '/calibre/difficulty.json';
 export const difficultyApiUrl = '/calibre/difficulty/api/';
 const libraryUrl = '/calibre/library/';
@@ -73,8 +76,8 @@ const vnUrl = '/calibre/vn/';
 let catalogCache: Promise<CalibreBook[]> | undefined;
 
 /**
- * The catalog, fetched once per session (it is several MB for a large library);
- * `refresh` refetches it, e.g. when the library list is reloaded. Failures are not cached.
+ * The catalog, read once per session (`catalog`: cached in IndexedDB, then only the changes);
+ * `refresh` reads it again, e.g. when the library list is reloaded. Failures are not cached.
  */
 export function loadCalibreCatalog(refresh = false) {
   if (refresh) {
@@ -84,17 +87,8 @@ export function loadCalibreCatalog(refresh = false) {
   // The standalone without a server: an empty catalog, never a request.
   if (serverless) return Promise.resolve([] as CalibreBook[]);
 
-  catalogCache ??= serverFetch(catalogUrl, { cache: 'no-cache' })
-    .then((response) => {
-      if (!response.ok) {
-        throw Object.assign(new Error(`Calibre catalog unavailable (HTTP ${response.status})`), {
-          status: response.status
-        });
-      }
-
-      return response.json();
-    })
-    .then((catalog: { books: CalibreBook[] }) => catalog.books)
+  catalogCache ??= apiVersion()
+    .then(catalog)
     .catch((error) => {
       catalogCache = undefined;
       throw error;
