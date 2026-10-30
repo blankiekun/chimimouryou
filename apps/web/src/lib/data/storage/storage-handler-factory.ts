@@ -148,8 +148,7 @@ export function getStorageHandler(
         statisticsMergeMode,
         readingGoalsMergeMode,
         cacheStorageData,
-        askForStorageUnlock,
-        storageSourceName
+        askForStorageUnlock
       );
 
       return serverStorageHandler;

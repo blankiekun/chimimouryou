@@ -77,8 +77,7 @@ async function downloadBook(window: Window, title: string) {
     MergeMode.MERGE,
     MergeMode.MERGE,
     true,
-    false,
-    ''
+    false
   );
   handler.startContext({ id: 0, title, imagePath: '' });
   // Processes the book from Calibre if it never was, else stores a placeholder ...
