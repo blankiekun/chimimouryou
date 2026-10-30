@@ -172,6 +172,78 @@ export function rangeForCounts(
   return range;
 }
 
+/**
+ * DOM range of `length` string characters starting `skip` characters after the counted character
+ * `count` (absolute), so it can cover text counts skip, like punctuation. `<rp>` text is left out,
+ * as in the search index.
+ */
+export function rangeForText(
+  document: Document,
+  segments: TextSegment[],
+  count: number,
+  skip: number,
+  length: number,
+  baseCount = 0
+): Range | undefined {
+  const local = count - baseCount;
+
+  // shortcut: before the first counted character of a section (paginated), `skip` includes the
+  // previous section's text, so nothing is painted; it would need a distance from the next one.
+  if (local < 0 || (local === 0 && baseCount > 0)) {
+    return undefined;
+  }
+
+  const first = local > 0 ? segmentIndexForCount(segments, local, true) : 0;
+
+  if (first < 0) {
+    return undefined;
+  }
+
+  const anchor =
+    local > 0 ? offsetForCount(segments[first].text, local - segments[first].startCount, true) : 0;
+  const pointAt = (chars: number, isEnd: boolean) => {
+    for (let index = first, from = anchor; index < segments.length; index += 1, from = 0) {
+      const segment = segments[index];
+
+      if (segment.node.parentElement?.closest('rp')) {
+        continue;
+      }
+
+      const room = segment.text.length - from;
+
+      if (chars < room || (isEnd && chars === room)) {
+        return { node: segment.node, offset: from + chars };
+      }
+
+      chars -= room;
+    }
+
+    return undefined;
+  };
+  const start = pointAt(skip, false);
+  const end = pointAt(skip + length, true);
+
+  if (!start || !end) {
+    return undefined;
+  }
+
+  const range = document.createRange();
+
+  if (isNodeGaiji(start.node)) {
+    range.setStartBefore(start.node);
+  } else {
+    range.setStart(start.node, start.offset);
+  }
+
+  if (isNodeGaiji(end.node)) {
+    range.setEndAfter(end.node);
+  } else {
+    range.setEnd(end.node, end.offset);
+  }
+
+  return range;
+}
+
 /** Absolute character counts at the start and end of a range. */
 export function countsForRange(segments: TextSegment[], range: Range, baseCount = 0) {
   const countAt = (container: Node, offset: number) => {

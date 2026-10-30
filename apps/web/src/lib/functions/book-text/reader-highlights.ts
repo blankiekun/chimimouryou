@@ -23,12 +23,19 @@ import {
 import {
   countsForRange,
   getTextSegments,
-  rangeForCounts
+  rangeForCounts,
+  rangeForText
 } from '$lib/functions/book-text/text-positions';
 
 export interface CountMatch {
   start: number;
   end: number;
+}
+
+/** A search match: `skip` and `length` are string lengths (see `SearchResult.skip`). */
+export interface SearchMatch extends CountMatch {
+  skip: number;
+  length: number;
 }
 
 export interface HighlightRange {
@@ -52,7 +59,7 @@ export function paintHighlights(
   content: Element,
   base: number,
   highlights: Highlight[],
-  searchMatch: CountMatch | undefined,
+  searchMatch: SearchMatch | undefined,
   readingMatch: CountMatch | undefined,
   unknownSpans: CountSpan[]
 ) {
@@ -93,8 +100,15 @@ export function paintHighlights(
   setCssHighlight('ttu-hl-note', withNotes);
 
   const searchRange =
-    searchMatch && searchMatch.end > base && searchMatch.start < end
-      ? rangeForCounts(document, segments, searchMatch.start, searchMatch.end, base)
+    searchMatch && searchMatch.start >= base && searchMatch.start <= end
+      ? rangeForText(
+          document,
+          segments,
+          searchMatch.start,
+          searchMatch.skip,
+          searchMatch.length,
+          base
+        )
       : undefined;
 
   setCssHighlight('ttu-search', searchRange ? [searchRange] : []);
@@ -220,7 +234,7 @@ export function newHighlight(
  * 200 ms after a change and whenever the rendered text changes (paginated mode swaps sections).
  */
 export class HighlightPainter {
-  searchMatch: CountMatch | undefined;
+  searchMatch: SearchMatch | undefined;
 
   /** Line being read aloud (audiobook or AI voice) */
   readingMatch: CountMatch | undefined;

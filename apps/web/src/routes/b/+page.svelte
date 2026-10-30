@@ -1103,7 +1103,12 @@
   onDestroy(() => jumpBack.destroy());
 
   function jumpToSearchResult(result: SearchResult) {
-    painter.searchMatch = { start: result.start, end: result.end };
+    painter.searchMatch = {
+      start: result.start,
+      end: result.end,
+      skip: result.skip,
+      length: result.match.length
+    };
     jumpToCount(result.start);
   }
 
