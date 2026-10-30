@@ -161,7 +161,7 @@ section in paginated mode. `annotations.json` is merged per highlight (newest
 - **Import** (`import/service.py`): a queue that adds uploaded files to Calibre
   with `calibredb add`, one at a time, then rebuilds the catalog; the only writer
   of `metadata.db`.
-- **Difficulty** (`jiten/service.py`): on demand only; worker pools run Sudachi
+- **Difficulty** (`jiten/service.py`, with `settings`, `readerpack`, `workers`, `jobs`, `queues` and `install` beside it): on demand only; worker pools run Sudachi
   and the fast core (`core.py`: V98, shown on a 1-10 scale, and a log-rank histogram);
   results in `state/difficulty/difficulty.json`,
   each book's kanji counts in `state/difficulty/kanji/` (`GET kanji/ID`, for each

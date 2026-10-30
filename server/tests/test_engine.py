@@ -49,21 +49,21 @@ class EngineFingerprintTest(unittest.TestCase):
     def test_service_with_the_bundled_list_is_canonical(self):
         service = load_service()
         with tempfile.TemporaryDirectory() as tmp:
-            service.FREQUENCY_DICTIONARY = os.path.join(tmp, 'frequency-dictionary.zip')
-            service.TERM_DICTIONARY_DIR = os.path.join(tmp, 'terms')
-            service.READING_MODEL_TABLES = [os.path.join(tmp, 'reading-model.json.gz')]
-            shutil.copy(engine.BUNDLED_FREQUENCY_LIST, service.FREQUENCY_DICTIONARY)
-            if (service.YURIGANA_VERSION, 'core-' + _installed('SudachiDict-core')) != engine.pinned_versions():
+            service.settings.FREQUENCY_DICTIONARY = os.path.join(tmp, 'frequency-dictionary.zip')
+            service.settings.TERM_DICTIONARY_DIR = os.path.join(tmp, 'terms')
+            service.settings.READING_MODEL_TABLES = [os.path.join(tmp, 'reading-model.json.gz')]
+            shutil.copy(engine.BUNDLED_FREQUENCY_LIST, service.settings.FREQUENCY_DICTIONARY)
+            if (service.readerpack.YURIGANA_VERSION, 'core-' + _installed('SudachiDict-core')) != engine.pinned_versions():
                 self.skipTest('installed yurigana or SudachiDict-core differ from requirements.txt')
-            self.assertEqual(service.current_engine(), engine.canonical_fingerprint())
+            self.assertEqual(service.readerpack.current_engine(), engine.canonical_fingerprint())
             # Term dictionaries change readings only: still canonical
-            os.makedirs(service.TERM_DICTIONARY_DIR)
-            open(os.path.join(service.TERM_DICTIONARY_DIR, 'terms.zip'), 'wb').close()
-            self.assertEqual(service.current_engine(), engine.canonical_fingerprint())
+            os.makedirs(service.settings.TERM_DICTIONARY_DIR)
+            open(os.path.join(service.settings.TERM_DICTIONARY_DIR, 'terms.zip'), 'wb').close()
+            self.assertEqual(service.readerpack.current_engine(), engine.canonical_fingerprint())
             # An admin's own list
-            with open(service.FREQUENCY_DICTIONARY, 'ab') as f:
+            with open(service.settings.FREQUENCY_DICTIONARY, 'ab') as f:
                 f.write(b'x')
-            self.assertNotEqual(service.current_engine(), engine.canonical_fingerprint())
+            self.assertNotEqual(service.readerpack.current_engine(), engine.canonical_fingerprint())
 
 
 def _installed(name):

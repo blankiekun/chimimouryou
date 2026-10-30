@@ -11,6 +11,7 @@ from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'engine'))
 from frequency import TOP_SHARE, FrequencyTable, load_yomitan_ranks, reading_agreement  # noqa: E402
+from test_readings_file import load_service  # noqa: E402
 
 ENTRIES = [
     ['ある', 'freq', {'value': 18, 'displayValue': '18㋕'}],
@@ -82,21 +83,17 @@ class YomitanRanksTest(unittest.TestCase):
 
 class InstallDictionaryTest(unittest.TestCase):
     def setUp(self):
-        import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            'jiten_service', os.path.join(os.path.dirname(__file__), '..', 'jiten', 'service.py'))
-        self.service = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(self.service)
-        self.service.FREQUENCY_DICTIONARY = os.path.join(tempfile.mkdtemp(), 'frequency-dictionary.zip')
-        self.service.MIN_DICTIONARY_TERMS = 5
+        self.service = load_service()
+        self.service.settings.FREQUENCY_DICTIONARY = os.path.join(tempfile.mkdtemp(), 'frequency-dictionary.zip')
+        self.service.settings.MIN_DICTIONARY_TERMS = 5
 
     def install(self, data: bytes, force=False):
         import io
         # Bytes past Content-Length stand in for a socket that stays open: they must not be read.
-        return self.service.install_dictionary(io.BytesIO(data + b'next request'), len(data), force)
+        return self.service.install.install_dictionary(io.BytesIO(data + b'next request'), len(data), force)
 
     def test_no_job_starts_during_an_install(self):
-        runner = self.service.runner
+        runner = self.service.jobs.runner
         # A job asked for while the upload is checked is refused.
         with mock.patch('frequency.load_yomitan_ranks', side_effect=lambda _: runner.start('x', print)):
             with self.assertRaisesRegex(RuntimeError, 'being installed'):
@@ -105,28 +102,28 @@ class InstallDictionaryTest(unittest.TestCase):
         self.assertFalse(runner.installing)
 
     def test_refuses_small_lists(self):
-        self.service.MIN_DICTIONARY_TERMS = 6
+        self.service.settings.MIN_DICTIONARY_TERMS = 6
         with open(dictionary(), 'rb') as f, self.assertRaises(ValueError):
             self.install(f.read())
-        self.assertFalse(os.path.exists(self.service.FREQUENCY_DICTIONARY))
+        self.assertFalse(os.path.exists(self.service.settings.FREQUENCY_DICTIONARY))
 
     def test_replacement_must_agree_unless_forced(self):
         with open(dictionary(), 'rb') as f:
             self.assertEqual(self.install(f.read()), 5)
-        self.assertTrue(os.path.exists(self.service.FREQUENCY_DICTIONARY))
+        self.assertTrue(os.path.exists(self.service.settings.FREQUENCY_DICTIONARY))
         # A list that agrees (a new version of the same one) needs no force.
         with open(dictionary(entries=ENTRIES[:-1]), 'rb') as f:
             installed = f.read()
         self.assertEqual(self.install(installed), 5)
         with open(dictionary(entries=with_reading('魔法', 'まじっく')), 'rb') as f:
             other = f.read()
-        with self.assertRaises(self.service.DictionaryMismatch) as error:
+        with self.assertRaises(self.service.install.DictionaryMismatch) as error:
             self.install(other)
         self.assertEqual(error.exception.agreement, 0.8)
-        with open(self.service.FREQUENCY_DICTIONARY, 'rb') as f:
+        with open(self.service.settings.FREQUENCY_DICTIONARY, 'rb') as f:
             self.assertEqual(f.read(), installed)
         self.assertEqual(self.install(other, force=True), 5)
-        with open(self.service.FREQUENCY_DICTIONARY, 'rb') as f:
+        with open(self.service.settings.FREQUENCY_DICTIONARY, 'rb') as f:
             self.assertEqual(f.read(), other)
 
     def test_rejects_oversized_members(self):
@@ -140,23 +137,23 @@ class InstallDictionaryTest(unittest.TestCase):
             frequency.MAX_MEMBER_BYTES = limit
 
     def test_bundled_list_is_installed_only_when_none_is(self):
-        bundled_path = self.service.BUNDLED_FREQUENCY_DICTIONARY = dictionary()
-        self.service.install_bundled_dictionary()
-        with open(self.service.FREQUENCY_DICTIONARY, 'rb') as f, open(bundled_path, 'rb') as bundled:
+        bundled_path = self.service.settings.BUNDLED_FREQUENCY_DICTIONARY = dictionary()
+        self.service.install.install_bundled_dictionary()
+        with open(self.service.settings.FREQUENCY_DICTIONARY, 'rb') as f, open(bundled_path, 'rb') as bundled:
             self.assertEqual(f.read(), bundled.read())
         with open(dictionary(entries=ENTRIES[:-1]), 'rb') as f:
             uploaded = f.read()
         self.install(uploaded)
-        self.service.install_bundled_dictionary()
-        with open(self.service.FREQUENCY_DICTIONARY, 'rb') as f:
+        self.service.install.install_bundled_dictionary()
+        with open(self.service.settings.FREQUENCY_DICTIONARY, 'rb') as f:
             self.assertEqual(f.read(), uploaded)
 
     def test_rejects_other_files_and_keeps_the_current_one(self):
         for data in (b'not a zip', open(dictionary('occurrence-based'), 'rb').read()):
             with self.assertRaises(ValueError):
                 self.install(data)
-        self.assertFalse(os.path.exists(self.service.FREQUENCY_DICTIONARY))
-        self.assertEqual(os.listdir(os.path.dirname(self.service.FREQUENCY_DICTIONARY)), [])
+        self.assertFalse(os.path.exists(self.service.settings.FREQUENCY_DICTIONARY))
+        self.assertEqual(os.listdir(os.path.dirname(self.service.settings.FREQUENCY_DICTIONARY)), [])
 
 
 def _has_term_dictionaries():
@@ -170,13 +167,9 @@ def _has_term_dictionaries():
 @unittest.skipUnless(_has_term_dictionaries(), 'needs a yurigana with term dictionaries')
 class InstallTermDictionaryTest(unittest.TestCase):
     def setUp(self):
-        import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            'jiten_service', os.path.join(os.path.dirname(__file__), '..', 'jiten', 'service.py'))
-        self.service = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(self.service)
-        self.service.TERM_DICTIONARY_DIR = os.path.join(tempfile.mkdtemp(), 'term-dictionaries')
-        self.service.MIN_TERM_DICTIONARY_TERMS = 2
+        self.service = load_service()
+        self.service.settings.TERM_DICTIONARY_DIR = os.path.join(tempfile.mkdtemp(), 'term-dictionaries')
+        self.service.settings.MIN_TERM_DICTIONARY_TERMS = 2
 
     def zip(self, rows):
         path = os.path.join(tempfile.mkdtemp(), 'terms.zip')
@@ -188,18 +181,18 @@ class InstallTermDictionaryTest(unittest.TestCase):
 
     def install(self, data: bytes, name='My terms.zip'):
         import io
-        return self.service.install_term_dictionary(io.BytesIO(data + b'next request'), len(data), name)
+        return self.service.install.install_term_dictionary(io.BytesIO(data + b'next request'), len(data), name)
 
     def test_installs_lists_and_removes(self):
-        self.assertEqual(self.service.term_options(), {})
-        version = self.service.reader_version()
+        self.assertEqual(self.service.readerpack.term_options(), {})
+        version = self.service.readerpack.reader_version()
         self.assertEqual(self.install(self.zip([('星喰竜', 'ほしくいりゅう'), ('女剣豪', 'おんなけんごう')])), 2)
-        self.assertEqual(self.service.runner.status()['termDictionaries'], ['My terms.zip'])
-        self.assertEqual(len(self.service.term_options()['terms']), 1)
-        self.assertNotEqual(self.service.reader_version(), version)  # readings files made before are stale
-        self.service.remove_term_dictionary('My terms')
-        self.assertEqual(self.service.term_dictionaries(), [])
-        self.assertEqual(self.service.reader_version(), version)
+        self.assertEqual(self.service.jobs.runner.status()['termDictionaries'], ['My terms.zip'])
+        self.assertEqual(len(self.service.readerpack.term_options()['terms']), 1)
+        self.assertNotEqual(self.service.readerpack.reader_version(), version)  # readings files made before are stale
+        self.service.install.remove_term_dictionary('My terms')
+        self.assertEqual(self.service.readerpack.term_dictionaries(), [])
+        self.assertEqual(self.service.readerpack.reader_version(), version)
 
     def test_jmnedict_is_a_name_dictionary(self):
         from yurigana.yomitan import name_readings  # noqa: F401 (yurigana 0.5.1+)
@@ -211,7 +204,7 @@ class InstallTermDictionaryTest(unittest.TestCase):
         with open(path, 'rb') as f:
             self.assertEqual(self.install(f.read(), 'JMnedict.zip'), 2)  # as terms, no row would count
         self.install(self.zip([('星喰竜', 'ほしくいりゅう'), ('女剣豪', 'おんなけんごう')]))
-        options = self.service.term_options()
+        options = self.service.readerpack.term_options()
         self.assertEqual([os.path.basename(p) for p in options['names']], ['JMnedict.zip'])
         self.assertEqual([os.path.basename(p) for p in options['terms']], ['My terms.zip'])
 
@@ -222,26 +215,22 @@ class InstallTermDictionaryTest(unittest.TestCase):
         for name in ('../x.zip', 'a/b.zip', '.zip', ''):
             with self.assertRaises(ValueError):
                 self.install(self.zip([('星喰竜', 'ほしくいりゅう'), ('女剣豪', 'おんなけんごう')]), name)
-        self.assertEqual(self.service.term_dictionaries(), [])
-        self.assertEqual([n for n in os.listdir(self.service.TERM_DICTIONARY_DIR)], [])
+        self.assertEqual(self.service.readerpack.term_dictionaries(), [])
+        self.assertEqual([n for n in os.listdir(self.service.settings.TERM_DICTIONARY_DIR)], [])
 
 
 class KanjiEndpointTest(unittest.TestCase):
     def test_saved_counts_are_served(self):
-        import importlib.util
         import threading
         import urllib.error
         import urllib.request
         from http.server import ThreadingHTTPServer
-        spec = importlib.util.spec_from_file_location(
-            'jiten_service_kanji', os.path.join(os.path.dirname(__file__), '..', 'jiten', 'service.py'))
-        service = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(service)
-        service.KANJI_DIR = tempfile.mkdtemp()
-        service.INTERNAL_TOKEN_FILE = os.path.join(service.KANJI_DIR, 'token')
-        with open(service.INTERNAL_TOKEN_FILE, 'w') as f:
+        service = load_service()
+        service.settings.KANJI_DIR = tempfile.mkdtemp()
+        service.settings.INTERNAL_TOKEN_FILE = os.path.join(service.settings.KANJI_DIR, 'token')
+        with open(service.settings.INTERNAL_TOKEN_FILE, 'w') as f:
             f.write('c0ffee')
-        service.save_kanji(7, '魔法の魔女')
+        service.workers.save_kanji(7, '魔法の魔女')
         def get(url, token='c0ffee'):
             return urllib.request.urlopen(urllib.request.Request(url, headers={'X-Internal-Token': token}))
         server = ThreadingHTTPServer(('127.0.0.1', 0), service.Handler)
@@ -282,7 +271,7 @@ class KanjiEndpointTest(unittest.TestCase):
                     return urllib.request.urlopen(request).status
                 except urllib.error.HTTPError as error:
                     return error.code
-            service.FREQUENCY_DICTIONARY = os.path.join(service.KANJI_DIR, 'freq.zip')
+            service.settings.FREQUENCY_DICTIONARY = os.path.join(service.settings.KANJI_DIR, 'freq.zip')
             # Only admins (nginx's account check) get past to the file checks.
             self.assertEqual(upload('0'), 403)
             self.assertEqual(upload(''), 403)
@@ -294,19 +283,15 @@ class KanjiEndpointTest(unittest.TestCase):
 
 class RanksEndpointTest(unittest.TestCase):
     def test_ranks_of_listed_forms(self):
-        import importlib.util
         import threading
         import urllib.error
         import urllib.request
         from http.server import ThreadingHTTPServer
-        spec = importlib.util.spec_from_file_location(
-            'jiten_service_ranks', os.path.join(os.path.dirname(__file__), '..', 'jiten', 'service.py'))
-        service = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(service)
-        service.FREQUENCY_DICTIONARY = dictionary()
-        service.READER_PACK = os.path.join(tempfile.mkdtemp(), 'missing.ygp')
-        service.INTERNAL_TOKEN_FILE = os.path.join(tempfile.mkdtemp(), 'token')
-        with open(service.INTERNAL_TOKEN_FILE, 'w') as f:
+        service = load_service()
+        service.settings.FREQUENCY_DICTIONARY = dictionary()
+        service.settings.READER_PACK = os.path.join(tempfile.mkdtemp(), 'missing.ygp')
+        service.settings.INTERNAL_TOKEN_FILE = os.path.join(tempfile.mkdtemp(), 'token')
+        with open(service.settings.INTERNAL_TOKEN_FILE, 'w') as f:
             f.write('c0ffee')
         server = ThreadingHTTPServer(('127.0.0.1', 0), service.Handler)
         threading.Thread(target=server.serve_forever, kwargs={'poll_interval': 0.01}, daemon=True).start()
@@ -328,9 +313,9 @@ class RanksEndpointTest(unittest.TestCase):
             self.assertEqual((status, body), (200, {'ranks': {'事': 30, '魔法': 1986}}))
             self.assertEqual(post(b'{"forms": "x"}')[0], 400)
             self.assertEqual(post(b'not json')[0], 400)
-            self.assertEqual(post(json.dumps({'forms': ['x'] * (service.MAX_RANK_FORMS + 1)}).encode())[0], 400)
+            self.assertEqual(post(json.dumps({'forms': ['x'] * (service.settings.MAX_RANK_FORMS + 1)}).encode())[0], 400)
             # Only the header is too large: a real 1 MB body races the early 413 into a broken pipe.
-            self.assertEqual(post(b'{}', length=service.MAX_RANKS_BYTES + 1)[0], 413)
+            self.assertEqual(post(b'{}', length=service.settings.MAX_RANKS_BYTES + 1)[0], 413)
             self.assertEqual(post(b'{"forms": []}', origin='https://evil.example')[0], 403)
         finally:
             server.shutdown()
@@ -363,14 +348,10 @@ class NginxTest(unittest.TestCase):
 class SaveWordsTest(unittest.TestCase):
     def test_most_frequent_words_with_ranks_names_left_out(self):
         import gzip
-        import importlib.util
         from features import Analysis, Word
-        spec = importlib.util.spec_from_file_location(
-            'jiten_service', os.path.join(os.path.dirname(__file__), '..', 'jiten', 'service.py'))
-        service = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(service)
-        service.WORDS_DIR = tempfile.mkdtemp()
-        service.WORDS_PER_BOOK = 2
+        service = load_service()
+        service.settings.WORDS_DIR = tempfile.mkdtemp()
+        service.settings.WORDS_PER_BOOK = 2
 
         def word(key, form, pos, reading=None):
             return Word(key=f'{key}\t{pos}', form=form, pos=pos, origin='wago', conjugations=(), surface=form,
@@ -380,36 +361,28 @@ class SaveWordsTest(unittest.TestCase):
                          (word('走る', '走る', 'verb'), 5), (word('稀', '稀', 'noun'), 1), (word('今', '今', 'fix', 'こん'), 7)):
             analysis.words[w.key, w.form] = [w, count]
         # The totals count the rows past the cap (稀) too.
-        self.assertEqual(service.save_words(7, analysis, FrequencyTable({'猫': 1200})), (3, 9))
-        with gzip.open(service.words_path(7), 'rt', encoding='utf-8') as f:
+        self.assertEqual(service.workers.save_words(7, analysis, FrequencyTable({'猫': 1200})), (3, 9))
+        with gzip.open(service.workers.words_path(7), 'rt', encoding='utf-8') as f:
             self.assertEqual(json.load(f), {'words': [['走る', None, 5, None, '走る'], ['猫', 'ねこ', 3, 1200, '猫']],
                                             'uniqueWords': 3, 'tokens': 9})
 
     def test_totals_leave_noise_out(self):
-        import importlib.util
         from features import Analysis, Word
-        spec = importlib.util.spec_from_file_location(
-            'jiten_service', os.path.join(os.path.dirname(__file__), '..', 'jiten', 'service.py'))
-        service = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(service)
-        service.WORDS_DIR = tempfile.mkdtemp()
+        service = load_service()
+        service.settings.WORDS_DIR = tempfile.mkdtemp()
         analysis = Analysis(text='')
         # Particles, numbers, lone kana and unranked kana-only words aren't vocabulary.
         for form, count in (('猫', 3), ('から', 9), ('三', 4), ('ッ', 5), ('ふむ', 2), ('すごい', 6)):
             w = Word(f'{form}\tnoun', form, 'noun', 'wago', (), form)
             analysis.words[w.key, form] = [w, count]
-        self.assertEqual(service.save_words(9, analysis, FrequencyTable({'から': 30, 'すごい': 900})), (2, 9))
+        self.assertEqual(service.workers.save_words(9, analysis, FrequencyTable({'から': 30, 'すごい': 900})), (2, 9))
 
     def test_one_row_per_reading(self):
         import gzip
-        import importlib.util
         from collections import Counter
         from features import Analysis, Word
-        spec = importlib.util.spec_from_file_location(
-            'jiten_service', os.path.join(os.path.dirname(__file__), '..', 'jiten', 'service.py'))
-        service = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(service)
-        service.WORDS_DIR = tempfile.mkdtemp()
+        service = load_service()
+        service.settings.WORDS_DIR = tempfile.mkdtemp()
         other = Word('他\tnoun', '他', 'noun', 'kango', (), '他', 'ほか')
         run = Word('走る\tverb', '走る', 'verb', 'wago', (), '走る', 'はしる')
         box = Word('箱\tnoun', '箱', 'noun', 'wago', (), '箱', 'はこ')
@@ -421,24 +394,20 @@ class SaveWordsTest(unittest.TestCase):
                              (run.key, '走る'): Counter({None: 3, 'はしる': 1}),
                              (box.key, '箱'): Counter({'ばこ': 2, 'はこ': 1}),  # この箱 ばこ: the list has only はこ
                              (face.key, '顔'): Counter({'がお': 1})}  # a split tail: がお ranks, かお better
-        service.save_words(8, analysis, FrequencyTable({'他': 145038, '箱': 2000, '顔': 113},
+        service.workers.save_words(8, analysis, FrequencyTable({'他': 145038, '箱': 2000, '顔': 113},
                                                        {('他', 'ほか'): 382, ('他', 'た'): 145038, ('箱', 'はこ'): 2000,
                                                         ('顔', 'かお'): 113, ('顔', 'がお'): 75124}))
-        with gzip.open(service.words_path(8), 'rt', encoding='utf-8') as f:
+        with gzip.open(service.workers.words_path(8), 'rt', encoding='utf-8') as f:
             self.assertEqual(json.load(f)['words'], [['他', 'ほか', 5, 382, '他'], ['走る', 'はしる', 4, None, '走る'],
                                             ['箱', 'はこ', 3, 2000, '箱'], ['他', 'た', 2, 145038, '他'],
                                             ['顔', 'がお', 1, 113, '顔']])
 
     def test_merges_fills_and_drops(self):
         import gzip
-        import importlib.util
         from collections import Counter
         from features import Analysis, Word
-        spec = importlib.util.spec_from_file_location(
-            'jiten_service', os.path.join(os.path.dirname(__file__), '..', 'jiten', 'service.py'))
-        service = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(service)
-        service.WORDS_DIR = tempfile.mkdtemp()
+        service = load_service()
+        service.settings.WORDS_DIR = tempfile.mkdtemp()
         have = Word('有る\tverb', 'ある', 'verb', 'wago', (), 'ある', 'ある')
         some = Word('或る\tadj', 'ある', 'adj', 'wago', (), 'ある', 'ある')
         mutter = Word('呟く\tverb', '呟く', 'verb', 'wago', (), '呟いた')
@@ -453,8 +422,8 @@ class SaveWordsTest(unittest.TestCase):
                              (know2.key, 'わかる'): Counter({'わかる': 1})}
         # Sudachi's reading of the form, for words met only conjugated.
         analysis.form_readings = {(mutter.key, '呟く'): 'つぶやく', (know.key, 'わかる'): 'わからない'}
-        service.save_words(5, analysis, FrequencyTable({'有る': 900, '或る': 300}))
-        with gzip.open(service.words_path(5), 'rt', encoding='utf-8') as f:
+        service.workers.save_words(5, analysis, FrequencyTable({'有る': 900, '或る': 300}))
+        with gzip.open(service.workers.words_path(5), 'rt', encoding='utf-8') as f:
             # わかる takes the form's reading in the book, not Sudachi's.
             self.assertEqual(json.load(f)['words'], [['ある', 'ある', 8, 300, '有る'], ['わかる', 'わかる', 5, None, '分かる'],
                                             ['呟く', 'つぶやく', 3, None, '呟く']])

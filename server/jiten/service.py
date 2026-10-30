@@ -27,1009 +27,27 @@ estimate job.
 
 CLI: service.py serve | compute ID...
 """
-import functools
-import gzip
-import hashlib
 import json
 import os
 import re
-import shutil
 import sys
-import zipfile
 import threading
-import time
 import urllib.parse
-from collections import Counter
-from concurrent.futures import ProcessPoolExecutor
-from concurrent.futures.process import BrokenProcessPool
+import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-
-from yurigana import __version__ as YURIGANA_VERSION
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 # httpbase.py (shared request checks) is in the parent folder: /app in the image, server/ here.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+# The service's modules import each other as modules and read their names at call time (settings.X),
+# so a test or a caller sees one copy; none of them imports this file, which runs as __main__.
 import httpbase  # noqa: E402
-import core  # noqa: E402
-import readings_file  # noqa: E402
-from engine import engine_fingerprint, file_sha256  # noqa: E402
-from word_list import KANJI, NUMBER, PARTICLES, SINGLE_KANA, is_noise_word, word_rows  # noqa: E402,F401
-
-LIBRARY = os.environ.get('CALIBRE_LIBRARY', '/library')
-# Unpacked visual novels (catalog format 'VN'; their 'file' is relative to it).
-VN_DIR = os.environ.get('VN_DIR', '/vn')
-CATALOG_PATH = os.environ.get('CALIBRE_CATALOG', '/data/state/catalog/catalog.json')
-STATE_DIR = os.environ.get('JITEN_STATE_DIR', '/data/state/difficulty')
-# Rank-based Yomitan frequency dictionary: Jiten's list (jiten.moe/frequency-dictionaries).
-FREQUENCY_DICTIONARY = os.environ.get('JITEN_FREQUENCY_DICTIONARY',
-                                      os.path.join(STATE_DIR, 'frequency-dictionary.zip'))
-# The same list shipped with the code (data/README.md): installed on start when none is.
-BUNDLED_FREQUENCY_DICTIONARY = os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                                            'data', 'jiten_freq_global.zip')
-RESULTS_PATH = os.path.join(STATE_DIR, 'difficulty.json')
-MAX_DICTIONARY_BYTES = 64 * 1024 * 1024
-# Sanity gate for uploads: Jiten's list has about 500,000 terms, and a new version keeps the readings
-# of its most frequent forms; a list that doesn't is refused unless forced.
-MIN_DICTIONARY_TERMS = 50_000
-AGREEMENT_FORMS = 5000
-MIN_AGREEMENT = 0.95
-# Yomitan term dictionaries admins upload (bring your own: none is bundled): yurigana's Reader(terms=...) reads
-# them for words the frequency list and JMdict lack, in word lists and readings files; JMnedict is read as a
-# name dictionary (Reader(names=...), is_name_dictionary). Large dictionaries are
-# 50-200 MB zips; a sanity gate refuses files with few usable terms (not a term dictionary).
-TERM_DICTIONARY_DIR = os.path.join(STATE_DIR, 'term-dictionaries')
-MAX_TERM_DICTIONARY_BYTES = 256 * 1024 * 1024
-MIN_TERM_DICTIONARY_TERMS = 1_000
-# Readings in context for word lists and readings files (a yurigana Reader): the server's own
-# reading-model table, built from its library by `python -m yurigana.reading_context build`; the
-# Reader adds yurigana's public one (Aozora Bunko and Tatoeba) for other forms.
-READING_MODEL_TABLES = [os.path.join(STATE_DIR, 'reading-model.json.gz')]
-# Per-book kanji counts, gzipped JSON, for the reader's own coverage.
-KANJI_DIR = os.path.join(STATE_DIR, 'kanji')
-# Per-book word lists, gzipped JSON, for "words to study": made on first request, in a folder per
-# WORDS_VERSION (words_path), capped to bound their size.
-WORDS_DIR = os.path.join(STATE_DIR, 'words')
-WORDS_PER_BOOK = 2000
-# A request for a missing list waits this long for it (most books take 1-3 s), else gets a 503.
-WORDS_WAIT = 20
-# The word lists' version (words_path); a list of another is made again when asked for.
-# 2: one row per (form, reading). 3: the book's own ruby gives readings (yurigana's ruby_reading).
-# 4: context rules for ambiguous forms (yurigana's context_reading).
-# 5: more of the ruby: per-kanji spans, kanji stems of inflected words, large kana; 人気がない
-#    reads ひとけ only with a cue.
-# 6: a reading model learned from ruby reads ambiguous forms no rule covers (yurigana's ReadingModel).
-# Moving the readings to yurigana 0.1.1 changed no reading.
-# 7: readings for words met only conjugated, rows of one form and reading merged, particles and
-#    auxiliaries dropped by part of speech, a 5th column: the lemma; yurigana 0.2.0's context rules
-#    and models; a voiced reading the list lacks counts for the unvoiced one (箱 ばこ: はこ).
-# 8: readings from yurigana's whole Reader, as readings files have them: defaults, the list's only
-#    reading, counters (本 in 三本: ほん), rendaku, readings of conjugated occurrences.
-# 9: SudachiDict-core instead of -full (compounds split differently, 3-10% of rows), and
-#    yurigana 0.3.0 (context rules for hard nouns and verbs, compound joins, native つ counts,
-#    hand-checked extra readings).
-# 10: yurigana 0.5.0 (ateji, shown idioms, bare-evidence dominant readings such as 私 わたし).
-# 11: yurigana 0.5.1 (行っ on a going cue reads いっ; an uploaded JMnedict is a name dictionary).
-# 12: yurigana 0.5.3 (top readings of 118 forms, voiced tails after a noun, 血肉 ちにく).
-# 17: the book's ruby over a name carried to its bare occurrences (carry={}), as in readings files
-#    (蝎 さそり, 叮寧 ていねい), so the browser reads a book once for both.
-# 18: SudachiDict-core 20261015 (normalized forms of ずる verbs: 封ずる 封じる; a few readings and
-#    compounds such as 気に入る).
-# 19: JMdict compounds Sudachi splits joined again when commoner than their rarest part
-#    (compound_merge: 心配顔, not 顔 がお), and a voiced reading the list ranks takes the unvoiced
-#    one's rank when better (顔 がお: かお's).
-# 20: source line breaks folded in book_text (features.fold_source_breaks): pretty-printed ruby no
-#    longer splits words (呟 いた).
-WORDS_VERSION = 20
-# Lists made with their estimate, before lists were made on request: WORDS_DIR/<id>.json.gz, a bare
-# list of rows, version 19 (its totals were the estimate's: migrate_word_lists keeps them).
-LEGACY_WORDS_VERSION = 19
-# Readings files (#17), made from the reader's text copy of the book (PUT /api/v1/books/{id}/text):
-# <TEXT_DIR>/<bookId>.json.gz, found by the catalog entry's bookId (library.db's books.id).
-TEXT_DIR = os.environ.get('TEXT_DIR', '/data/state/api/text')
-# Manga text from the mokuro service (<id>.json, mokuro/service.py), read-only here: a manga volume is
-# estimated from it, and again whenever the file changes (watch_manga_text, every MANGA_TEXT_CHECK_SECONDS).
-MOKURO_DIR = os.environ.get('MOKURO_STATE_DIR', '/data/state/mokuro')
-MANGA_TEXT_CHECK_SECONDS = 60
-READINGS_DIR = os.path.join(STATE_DIR, 'readings')
-READINGS_QUEUE_MAX = 100
-MAX_STATICDATA_BYTES = 30 * 1024 * 1024
-# Building a file takes ~3 s: keep the readings worker this long after its last file so the next
-# book opened doesn't start a process again (its Reader loads from READER_PACK at once).
-READINGS_KEEP_ALIVE = 120
-# A POST holds the request this long for a file that gets ready, so most books are answered at once
-# rather than at the client's first poll (3 s). The client gives up after 5 s.
-READINGS_WAIT = 3.5
-# The Reader's tables (known list, JMdict, term dictionaries): built once (~20 s, ~620 MB) by
-# Reader.save, then every worker maps the file (Reader.load: no parse, ~100 MB, pages shared).
-# The .key file names the inputs it was built from.
-READER_PACK = os.path.join(STATE_DIR, 'reader.ygp')
-# The frequency list the same way (FrequencyTable.save/load_packed, ~450 MB as dicts), built with it.
-FREQUENCY_PACK = os.path.join(STATE_DIR, 'frequency.ygp')
-WORKERS = int(os.environ.get('JITEN_WORKERS', os.cpu_count() or 1))
-PORT = int(os.environ.get('JITEN_PORT', '8765'))
-HOST = os.environ.get('JITEN_HOST', '127.0.0.1')
-# Made by the web container; nginx sends it as X-Internal-Token, so only nginx can call this service.
-INTERNAL_TOKEN_FILE = os.environ.get('INTERNAL_TOKEN_FILE', '/data/state/internal-token')
-ALLOW_HTTP = os.environ.get('ALLOW_HTTP_ACCOUNTS') == '1'
-# Server connect: the standalone app's origins; nginx's auth check took its bearer token.
-CORS_ORIGINS = httpbase.parse_cors_origins(os.environ.get('CORS_ORIGINS', ''))
-# The JSON bodies of compute, cancel and terms/remove (nginx's default limit for them).
-MAX_JSON_BYTES = 1024 * 1024
-# Worker processes are replaced after this many books to bound their memory.
-BOOKS_PER_POOL = 300
-
-
-# ---------------------------------------------------------------------------
-# Worker processes (one Sudachi tokenizer each)
-
-# Estimate workers: Sudachi and the frequency list (core.py), no Reader or models.
-_tokenizer = None
-_frequency = None
-# The word-list worker: the Analyzer (Sudachi, deconjugation) and a yurigana Reader for the rows' readings.
-_analyzer = None
-# A yurigana Reader: word-list readings in the word-list worker, readings files in the readings worker.
-_reader = None
-
-
-def _load_frequency():
-    from frequency import FrequencyTable
-    return (FrequencyTable.load_packed(FREQUENCY_PACK) if reader_pack_current()
-            else FrequencyTable.load(FREQUENCY_DICTIONARY))
-
-
-def _init_worker():
-    global _tokenizer, _frequency
-    from yurigana.tokens import SudachiTokenizer
-    _tokenizer = SudachiTokenizer()
-    _frequency = _load_frequency()
-
-
-def _init_words_worker():
-    global _analyzer, _frequency, _reader
-    from yurigana.yomitan import with_extra_readings
-    from features import Analyzer
-    _analyzer = Analyzer()
-    _frequency = _load_frequency()
-    # Sharing the Analyzer's tokens and the list's readings: no second Sudachi or copy of the list.
-    # The extra readings (描く かく…) as Reader(known=path) adds them.
-    _reader = _load_reader(_analyzer, lambda: with_extra_readings(_frequency.reading_ranks))
-
-
-def save_kanji(book_id: int, text: str):
-    os.makedirs(KANJI_DIR, exist_ok=True)
-    path = os.path.join(KANJI_DIR, f'{book_id}.json.gz')
-    counts = Counter(core.KANJI.findall(text))  # features.is_kanji's characters, in C
-    with gzip.open(path + '.tmp', 'wt', encoding='utf-8') as f:
-        json.dump(dict(counts), f, ensure_ascii=False, separators=(',', ':'))
-    os.replace(path + '.tmp', path)
-    return len(counts)
-
-
-def words_path(book_id: int) -> str:
-    return os.path.join(WORDS_DIR, f'v{WORDS_VERSION}', f'{book_id}.json.gz')
-
-
-def legacy_words_path(book_id: int) -> str:
-    return os.path.join(WORDS_DIR, f'{book_id}.json.gz')
-
-
-def write_words(book_id: int, data: dict):
-    path = words_path(book_id)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with gzip.open(path + '.tmp', 'wt', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, separators=(',', ':'))
-    os.replace(path + '.tmp', path)
-
-
-def save_words(book_id: int, analysis, frequency):
-    """The book's WORDS_PER_BOOK most frequent words (word_list.word_rows) at words_path, with the
-    number of rows and their occurrences before the cap, without noise (is_noise_word), so the
-    reader can count the words past the cap as unknown. Returns those two."""
-    rows, unique_words, tokens = word_rows(analysis, frequency)
-    write_words(book_id, {'words': rows[:WORDS_PER_BOOK], 'uniqueWords': unique_words, 'tokens': tokens})
-    return unique_words, tokens
-
-
-def remove_words(book_id: int):
-    """Drops a book's word list (its text changed): the next request makes it again."""
-    for path in (words_path(book_id), legacy_words_path(book_id)):
-        try:
-            os.remove(path)
-        except OSError:
-            pass
-
-
-def manga_path(book_id: int) -> str:
-    return os.path.join(MOKURO_DIR, f'{book_id}.json')
-
-
-def manga_text_stamp(book_id: int):
-    """The mokuro file's time (ms), None without one: an estimate made from older text is redone."""
-    try:
-        return int(os.path.getmtime(manga_path(book_id)) * 1000)
-    except OSError:
-        return None
-
-
-def manga_text(book_id: int) -> str:
-    """A manga volume's text, one speech bubble a line (mokuro splits a bubble into the lines it
-    drew; they are one text). Empty without a mokuro file. mokuroPlainText in mokuro.ts reads alike."""
-    try:
-        with open(manga_path(book_id), encoding='utf-8') as f:
-            pages = json.load(f)['pages']
-    except (OSError, ValueError, KeyError, TypeError):
-        return ''
-    return '\n'.join(text for page in pages for block in page.get('blocks', [])
-                     if (text := ''.join(block.get('lines', [])).strip()))
-
-
-def _book_text(book: dict):
-    """The book's text, its ruby counts and hints (features.book_text), and its character count."""
-    from features import TOKEN_CLEAN, book_text, vn_text
-    ruby, hints = {}, []
-    if book.get('manga'):
-        text = manga_text(book['id'])
-    elif book.get('vn'):
-        text = vn_text(os.path.join(VN_DIR if book['format'] == 'VN' else LIBRARY, book['file']), ruby, hints)
-    else:
-        text = book_text(os.path.join(LIBRARY, book['file']), book['format'], ruby, hints)
-    return text, ruby, hints, len(TOKEN_CLEAN.sub('', text))
-
-
-def _estimate(book: dict):
-    """(id, estimate) of a book (None: too little text): the core's numbers (core.py), the character
-    and kanji counts. No Reader, features or model: ~0.4 s a book."""
-    text, ruby, _, characters = _book_text(book)
-    if characters < 1000:
-        return book['id'], None
-    return book['id'], {
-        'characters': characters,
-        'uniqueKanji': save_kanji(book['id'], text),
-        # V98, names, the log-rank histogram and the facets; the app puts V98 on the 1-10 scale (core-scale.json).
-        'core': core.book_core(_tokenizer.tokens(text), _frequency, text, ruby.get('kanji', 0)),
-        'engine': current_engine(),
-        'computedAt': int(time.time() * 1000),
-        # Manga: the mokuro text it was made from (manga_text_stamp).
-        **({'text': book['text']} if book.get('manga') else {}),
-    }
-
-
-def _make_words(book_id: int, book: dict):
-    """The book's word list (save_words), with yurigana's readings in context."""
-    text, _, hints, characters = _book_text(book)
-    if characters < 1000:
-        raise ValueError('too little text')
-    save_words(book_id, _analyzer.analyse(text, hints, _reader, _frequency), _frequency)
-
-
-# ---------------------------------------------------------------------------
-# Readings files
-
-def _init_readings_worker():
-    global _reader
-    from features import Analyzer
-    # The known list and the server's reading model the estimates use (yurigana adds its public table).
-    # The Analyzer keeps the last text's tokens: readings_file.build and Reader.read tokenize the book once.
-    _reader = _load_reader(Analyzer())
-
-
-def _load_reader(tokenizer=None, known=lambda: FREQUENCY_DICTIONARY):
-    """READER_PACK's Reader, or one built here when the file is missing or another yurigana saved it.
-    `known` gives the list to build from: the same pairs as the file's (Reader(known=path) reads them
-    as FrequencyTable does and adds with_extra_readings')."""
-    from yurigana import Reader
-    try:
-        if reader_pack_current():
-            return Reader.load(READER_PACK, tables=READING_MODEL_TABLES, tokenizer=tokenizer)
-    except (OSError, ValueError) as error:
-        print(f'reader pack: {error}', file=sys.stderr, flush=True)
-    return Reader(known=known(), tables=READING_MODEL_TABLES, tokenizer=tokenizer, **term_options())
-
-
-# 2: FREQUENCY_PACK has the JMdict compound table (compound_merge), so older packs are rebuilt.
-PACK_FORMAT = 2
-
-
-# POST ranks: a reader's Anki deck and marks, sent once and cached by the reader.
-MAX_RANKS_BYTES = 1024 * 1024
-MAX_RANK_FORMS = 50_000
-_form_ranks = (None, {})
-_form_ranks_lock = threading.Lock()
-
-
-def form_ranks(forms) -> dict:
-    """form -> its best rank in the installed frequency list, for the forms it lists. The packed table when
-    current (shared pages, nothing parsed), else the list itself, kept until the list changes."""
-    global _form_ranks
-    from frequency import FrequencyTable, load_yomitan_ranks
-    try:
-        stat = os.stat(FREQUENCY_DICTIONARY)
-    except OSError:
-        return {}
-    key = (stat.st_mtime_ns, stat.st_size)
-    with _form_ranks_lock:
-        if _form_ranks[0] != key:
-            ranks = (FrequencyTable.load_packed(FREQUENCY_PACK).ranks if reader_pack_current()
-                     else load_yomitan_ranks(FREQUENCY_DICTIONARY))
-            _form_ranks = (key, ranks)
-        ranks = _form_ranks[1]
-    return {form: ranks[form] for form in forms if isinstance(form, str) and form in ranks}
-
-
-def reader_pack_key() -> str:
-    paths = [FREQUENCY_DICTIONARY, *term_dictionaries()]
-    return f'{reader_version()} pack{PACK_FORMAT} ' + ','.join(f'{os.path.basename(p)}:{os.path.getsize(p)}:{os.path.getmtime(p)}'
-                                             for p in paths if os.path.exists(p))
-
-
-def reader_pack_current() -> bool:
-    try:
-        with open(READER_PACK + '.key', encoding='utf-8') as f:
-            return f.read() == reader_pack_key() and os.path.exists(READER_PACK) and os.path.exists(FREQUENCY_PACK)
-    except OSError:
-        return False
-
-
-def _save_reader_pack(key: str):
-    from yurigana import Reader
-    from frequency import FrequencyTable
-    FrequencyTable.load(FREQUENCY_DICTIONARY).save(FREQUENCY_PACK)
-    Reader(known=FREQUENCY_DICTIONARY, **term_options()).save(READER_PACK + '.tmp')
-    os.replace(READER_PACK + '.tmp', READER_PACK)
-    with open(READER_PACK + '.key.tmp', 'w', encoding='utf-8') as f:
-        f.write(key)
-    os.replace(READER_PACK + '.key.tmp', READER_PACK + '.key')
-
-
-_reader_pack_lock = threading.Lock()
-
-
-def ensure_reader_pack():
-    """Builds READER_PACK, in a process of its own (its memory goes back when it exits), when it is
-    missing or its inputs changed. Workers that start meanwhile build their own Reader."""
-    with _reader_pack_lock:
-        if reader_pack_current() or not os.path.exists(FREQUENCY_DICTIONARY):
-            return
-        try:
-            with ProcessPoolExecutor(1) as pool:
-                pool.submit(_save_reader_pack, reader_pack_key()).result()
-        except Exception as error:
-            print(f'reader pack: {error}', file=sys.stderr, flush=True)
-
-
-def term_dictionaries() -> list:
-    """The installed term dictionaries' paths, by name."""
-    try:
-        return sorted(os.path.join(TERM_DICTIONARY_DIR, n) for n in os.listdir(TERM_DICTIONARY_DIR) if n.endswith('.zip'))
-    except OSError:
-        return []
-
-
-def is_name_dictionary(path: str) -> bool:
-    """JMnedict (by its index title): a name dictionary, Reader(names=...): it shows names it reads one way
-    (姫路 ひめじ) and changes no reading. Its rows aren't terms (the readings are glosses)."""
-    try:
-        with zipfile.ZipFile(path) as archive:
-            return str(json.loads(archive.read('index.json')).get('title', '')).lower().startswith('jmnedict')
-    except (OSError, zipfile.BadZipFile, KeyError, ValueError, AttributeError):
-        return False
-
-
-def term_options() -> dict:
-    """Reader's terms and names arguments, none without dictionaries (and with a yurigana that has none)."""
-    paths = term_dictionaries()
-    names = [p for p in paths if is_name_dictionary(p)]
-    terms = [p for p in paths if p not in names]
-    return ({'terms': terms} if terms else {}) | ({'names': names} if names else {})
-
-
-def current_engine() -> str:
-    """This server's engine fingerprint (engine.py): its frequency list, yurigana, Sudachi dictionary
-    and reading-model table. Term dictionaries are left out: they change word lists' readings only, not
-    the estimate (the core uses Sudachi's tokens), so a server with them still makes canonical estimates."""
-    from importlib.metadata import PackageNotFoundError, version
-    try:
-        sudachi = 'core-' + version('SudachiDict-core')
-    except PackageNotFoundError:
-        sudachi = 'core-unknown'
-    extras = [p for p in READING_MODEL_TABLES if os.path.exists(p)]
-    return engine_fingerprint(FREQUENCY_DICTIONARY, YURIGANA_VERSION, sudachi, extras)
-
-
-def reader_version() -> str:
-    """yurigana's version, plus the term dictionaries (name, size) when there are any: readings files made
-    with others are stale."""
-    paths = term_dictionaries()
-    if not paths:
-        return YURIGANA_VERSION
-    names = ','.join(f'{os.path.basename(p)}:{os.path.getsize(p)}' for p in paths)
-    return f'{YURIGANA_VERSION}+terms.{hashlib.sha256(names.encode()).hexdigest()[:12]}'
-
-
-def readings_path(book_id: int) -> str:
-    return os.path.join(READINGS_DIR, f'{book_id}.json.gz')
-
-
-def text_html(path: str) -> str:
-    """The elementHtml of a text copy (gzipped JSON), unpacked up to MAX_STATICDATA_BYTES."""
-    with gzip.open(path, 'rb') as f:
-        data = f.read(MAX_STATICDATA_BYTES + 1)
-    if len(data) > MAX_STATICDATA_BYTES:
-        raise ValueError('the text copy is too large')
-    html = json.loads(data)['elementHtml']
-    if not isinstance(html, str):
-        raise ValueError('the text copy has no elementHtml')
-    return html
-
-
-def html_digest(html: str) -> str:
-    return hashlib.sha256(html.encode()).hexdigest()
-
-
-def _make_readings(book_id: int, job: tuple[str, str]):
-    path, name = job
-    html = text_html(path)
-    data = readings_file.build(html, _reader, name, reader_version())
-    readings_file.write(readings_path(book_id), {**data, 'html': html_digest(html)})
-
-
-def find_text(book: dict) -> tuple[str, str] | None:
-    """(path, name) of the book's text copy, named by its mtime so a new upload is a new name; or None."""
-    book_id = book.get('bookId')
-    if type(book_id) is not int:
-        return None
-    path = os.path.join(TEXT_DIR, f'{book_id}.json.gz')
-    try:
-        return path, f'text_{int(os.path.getmtime(path) * 1000)}'
-    except OSError:
-        return None
-
-
-class ReadingsQueue:
-    """Readings files to make, in request order, by one worker process that lives while there
-    is work. WordsQueue makes word lists the same way."""
-    # Run in the worker as task(book_id, job): here the job is the text copy's (path, name).
-    task = staticmethod(_make_readings)
-    initializer = staticmethod(_init_readings_worker)
-
-    def __init__(self):
-        self.lock = threading.Lock()
-        self.queue = {}  # book id -> job
-        self.running = None
-        self.failed = {}  # book id -> text copy name it failed on: not retried until that changes
-        self.thread = None
-        self.added = threading.Event()  # wakes an idle worker thread at once
-        self.finished = threading.Condition(self.lock)  # notified after each file
-
-    def request(self, book_id: int, wait: float = 0) -> str:
-        """The file's status; with `wait`, waits up to that many seconds for a queued one."""
-        status = self._request(book_id)
-        if status != 'queued' or wait <= 0:
-            return status
-        deadline = time.monotonic() + wait
-        with self.lock:
-            while (book_id in self.queue or self.running == book_id) and \
-                    self.finished.wait(max(0, deadline - time.monotonic())):
-                pass
-        return self._request(book_id)
-
-    def _request(self, book_id: int) -> str:
-        if not os.path.exists(FREQUENCY_DICTIONARY):
-            return 'unavailable'
-        book = next((b for b in load_catalog() if b['id'] == book_id and not b.get('vn') and not b.get('manga')),
-                    None)
-        job = book and find_text(book)
-        if not job:
-            return 'unavailable'
-        path_in, name = job
-        path = readings_path(book_id)
-        head = readings_file.header(path)
-        current = (readings_file.READINGS_VERSION, reader_version())
-        if head and head[:2] == current and head[2] != name and head[3]:
-            # Uploaded again (another device, or deleted and reopened): same text, same file.
-            try:
-                same = html_digest(text_html(path_in)) == head[3]
-            except (OSError, EOFError, ValueError, KeyError, TypeError):
-                same = False
-            if same:
-                with self.lock:
-                    readings_file.retarget(path, name)
-                head = (*current, name, head[3])
-        if head and head[:3] == (*current, name):
-            return 'ready'
-        with self.lock:
-            if book_id in self.queue or self.running == book_id:
-                return 'queued'
-            if self.failed.get(book_id) == name or len(self.queue) >= READINGS_QUEUE_MAX:
-                return 'unavailable'
-            self.queue[book_id] = job
-            self.added.set()
-            if not self.thread:
-                self.thread = self._start()
-        return 'queued'
-
-    @staticmethod
-    def failure(job):
-        """What a failure is remembered by: not retried until the job's input changes."""
-        return job[1]
-
-    def _start(self):
-        thread = threading.Thread(target=self._run, daemon=True)
-        thread.start()
-        return thread
-
-    def _run(self):
-        pool = None
-        idle_since = time.monotonic()
-        try:
-            while True:
-                self.added.clear()
-                with self.lock:
-                    job = next(iter(self.queue.items()), None)
-                    if job:
-                        del self.queue[job[0]]
-                        self.running = job[0]
-                    elif not pool or time.monotonic() - idle_since >= READINGS_KEEP_ALIVE:
-                        self.thread = None
-                        return
-                if not job:
-                    self.added.wait(1)
-                    continue
-                book_id, work = job
-                if not pool:
-                    ensure_reader_pack()
-                    pool = ProcessPoolExecutor(1, initializer=self.initializer)
-                try:
-                    pool.submit(self.task, book_id, work).result()
-                except Exception as error:
-                    print(f'{type(self).__name__} {book_id}: {error}', file=sys.stderr, flush=True)
-                    self.failed[book_id] = self.failure(work)
-                    if isinstance(error, BrokenProcessPool):
-                        pool = None
-                finally:
-                    with self.lock:
-                        self.running = None
-                        self.finished.notify_all()
-                    idle_since = time.monotonic()
-        finally:
-            if pool:
-                pool.shutdown(cancel_futures=True)
-
-
-readings = ReadingsQueue()
-
-
-class WordsQueue(ReadingsQueue):
-    """Word lists to make on request (GET words/ID), one at a time in a worker process of their own
-    with the Analyzer and a yurigana Reader (~1-3 s a book). The job is the catalog's book."""
-    task = staticmethod(_make_words)
-    initializer = staticmethod(_init_words_worker)
-
-    @staticmethod
-    def failure(book):
-        return book.get('size'), book.get('added'), book.get('text')
-
-    def _request(self, book_id: int) -> str:
-        if os.path.exists(words_path(book_id)) or migrate_legacy_words(book_id):
-            return 'ready'
-        if not os.path.exists(FREQUENCY_DICTIONARY):
-            return 'unavailable'
-        book = next((b for b in load_catalog() if b['id'] == book_id), None)
-        if not book or (book.get('manga') and not book.get('text')):
-            return 'unavailable'
-        with self.lock:
-            if book_id in self.queue or self.running == book_id:
-                return 'queued'
-            if self.failed.get(book_id) == self.failure(book) or len(self.queue) >= READINGS_QUEUE_MAX:
-                return 'unavailable'
-            self.queue[book_id] = book
-            self.added.set()
-            if not self.thread:
-                self.thread = self._start()
-        return 'queued'
-
-
-word_lists = WordsQueue()
-# Legacy lists' totals ([uniqueWords, tokens]) by book id, from the estimates they were made with
-# (legacy-totals.json, written once by migrate_word_lists before a new estimate replaces them).
-_legacy_totals = None
-
-
-def legacy_totals_path() -> str:
-    return os.path.join(WORDS_DIR, 'legacy-totals.json')
-
-
-def migrate_word_lists():
-    """On start, before any job: records the totals of the lists made with their estimate (version
-    LEGACY_WORDS_VERSION; only the estimate has their totals), so they stay usable once a new
-    estimate replaces it. Lists of an older version are made again when asked for."""
-    path = legacy_totals_path()
-    if LEGACY_WORDS_VERSION != WORDS_VERSION or os.path.exists(path):
-        return
-    try:
-        legacy = {name[:-len('.json.gz')] for name in os.listdir(WORDS_DIR) if name.endswith('.json.gz')}
-    except OSError:
-        return
-    totals = {key: [estimate['uniqueWords'], estimate['tokens']]
-              for key, estimate in load_results().get('books', {}).items()
-              if key in legacy and estimate.get('words') == LEGACY_WORDS_VERSION
-              and estimate.get('uniqueWords') is not None and estimate.get('tokens') is not None}
-    with open(path + '.tmp', 'w', encoding='utf-8') as f:
-        json.dump(totals, f, separators=(',', ':'))
-    os.replace(path + '.tmp', path)
-
-
-def migrate_legacy_words(book_id: int) -> bool:
-    """A legacy list moved to words_path with its totals (True); one without them is removed."""
-    global _legacy_totals
-    legacy = legacy_words_path(book_id)
-    if LEGACY_WORDS_VERSION != WORDS_VERSION or not os.path.exists(legacy):
-        return False
-    if _legacy_totals is None:
-        try:
-            with open(legacy_totals_path(), encoding='utf-8') as f:
-                _legacy_totals = json.load(f)
-        except (OSError, ValueError):
-            _legacy_totals = {}
-    totals = _legacy_totals.get(str(book_id))
-    try:
-        if totals:
-            with gzip.open(legacy, 'rt', encoding='utf-8') as f:
-                rows = json.load(f)
-            write_words(book_id, {'words': rows, 'uniqueWords': totals[0], 'tokens': totals[1]})
-        os.remove(legacy)
-    except (OSError, ValueError):
-        return False
-    return bool(totals)
-
-
-# ---------------------------------------------------------------------------
-# Jobs
-
-def run_in_pools(books, task, cancel: threading.Event, initializer=None):
-    """Yields (book, result or exception), using fresh worker pools per chunk.
-    Books lost when a worker process dies (e.g. out of memory) are retried one at a
-    time, so only a book that kills a worker on its own is reported as failed."""
-    ensure_reader_pack()
-    for start in range(0, len(books), BOOKS_PER_POOL):
-        lost = []
-        yield from _run_pool(books[start:start + BOOKS_PER_POOL], task, cancel, WORKERS, lost, initializer)
-        for book in lost:
-            if cancel.is_set():
-                return
-            lost_again = []
-            yield from _run_pool([book], task, cancel, 1, lost_again, initializer)
-            if lost_again:
-                yield book, RuntimeError('the worker process died on this book (out of memory?)')
-        if cancel.is_set():
-            return
-
-
-def _run_pool(books, task, cancel: threading.Event, workers: int, lost: list, initializer=None):
-    """Yields results of one pool; books whose worker died are added to `lost`."""
-    with ProcessPoolExecutor(workers, initializer=initializer or _init_worker) as pool:
-        futures = [pool.submit(task, book) for book in books]
-        for book, future in zip(books, futures):
-            while not future.done() and not cancel.wait(0.5):
-                pass
-            if cancel.is_set():
-                # A book can take minutes: stop the workers rather than wait for theirs (results are
-                # written to .tmp files and renamed, so nothing is left half-written).
-                for process in list(pool._processes.values()):
-                    process.terminate()
-                pool.shutdown(wait=False, cancel_futures=True)
-                return
-            try:
-                yield book, future.result()
-            except BrokenProcessPool:
-                lost.append(book)
-            except Exception as error:
-                yield book, error
-
-
-def load_catalog():
-    """The books with text: EPUB, HTMLZ, TXT, visual novels (their scripts) and manga (CBZ/ZIP, their mokuro
-    text: 'manga', and 'text', its manga_text_stamp, None while they have none)."""
-    with open(CATALOG_PATH, encoding='utf-8') as f:
-        books = json.load(f)['books']
-    for book in books:
-        if book['format'] in ('CBZ', 'ZIP') and not book.get('vn'):
-            book.update(manga=True, text=manga_text_stamp(book['id']))
-    return [b for b in books if b['format'] in ('EPUB', 'HTMLZ', 'TXT') or b.get('vn') or b.get('manga')]
-
-
-def load_results():
-    try:
-        with open(RESULTS_PATH, encoding='utf-8') as f:
-            return json.load(f)
-    except (OSError, ValueError):
-        return {'books': {}}
-
-
-def save_results(results):
-    tmp = RESULTS_PATH + '.tmp'
-    with open(tmp, 'w', encoding='utf-8') as f:
-        json.dump(results, f, separators=(',', ':'))
-    os.replace(tmp, RESULTS_PATH)
-
-
-
-def unchanged_since_failure(failure, book) -> bool:
-    """A failed book is retried once its file changed: by size, for game folders (size 0) by
-    their folder's time (`added`), for manga also by their text."""
-    if not failure or failure.get('text') != book.get('text'):
-        return False
-    return failure.get('added') == book['added'] if book.get('format') == 'VN' else failure.get('size') == book['size']
-
-
-def needs_estimate(book, results, engine) -> bool:
-    """Whether a whole-library run estimates the book: never tried, estimated by another engine or
-    an older CORE_VERSION (the estimate is the core: ~0.4 s a book), or (manga) from other text;
-    not a book without text or whose file is unchanged since it failed.
-    Manga without text are tried once some appears. Word lists aren't made here (WordsQueue)."""
-    key = str(book['id'])
-    if book.get('manga') and not book.get('text'):
-        return False
-    if book['id'] in results.get('noText', []) and results.get('noTextStamps', {}).get(key) == book.get('text'):
-        return False
-    estimate = results['books'].get(key, {})
-    return (estimate.get('engine') != engine or estimate.get('text') != book.get('text')
-            or (estimate.get('core') or {}).get('v') != core.CORE_VERSION) \
-        and not unchanged_since_failure(results.get('failed', {}).get(key), book)
-
-
-class JobRunner:
-    def __init__(self):
-        self.lock = threading.Lock()
-        self.job = None  # {'type', 'done', 'total', 'started', 'error'}
-        self.cancel = threading.Event()
-        self.installing = False  # a dictionary is being replaced (holds_off_jobs)
-
-    def status(self):
-        with self.lock:
-            job = dict(self.job) if self.job else None
-            if job and not job.get('finished') and self.cancel.is_set():
-                job['cancelling'] = True
-        results = load_results()
-        dictionary = os.path.exists(FREQUENCY_DICTIONARY)
-        return {
-            'job': job,
-            'dictionary': dictionary,
-            # The app compares it with its release's (isCanonicalEstimate): another list, term
-            # dictionaries or reading model make estimates that don't count for reading rank.
-            'engine': current_engine() if dictionary else None,
-            'customFrequencyList': dictionary and os.path.exists(BUNDLED_FREQUENCY_DICTIONARY)
-                                   and file_sha256(FREQUENCY_DICTIONARY) != file_sha256(BUNDLED_FREQUENCY_DICTIONARY),
-            'termDictionaries': [os.path.basename(p) for p in term_dictionaries()],
-            'results': len(results.get('books', {})),
-            'noText': len(results.get('noText', [])),
-            'failed': len(results.get('failed', {})),
-            'workers': WORKERS,
-        }
-
-    def start(self, job_type: str, target, *args):
-        with self.lock:
-            if self.job and not self.job.get('finished'):
-                raise RuntimeError('Another job is running')
-            if self.installing:
-                raise RuntimeError('A dictionary is being installed')
-            self.cancel.clear()
-            self.job = {'type': job_type, 'done': 0, 'total': 0, 'started': int(time.time() * 1000)}
-        threading.Thread(target=self._run, args=(target, args), daemon=True).start()
-
-    def _run(self, target, args):
-        try:
-            target(*args)
-        except Exception as error:  # reported through status
-            with self.lock:
-                self.job['error'] = str(error)
-        with self.lock:
-            self.job['finished'] = int(time.time() * 1000)
-            self.job['cancelled'] = self.cancel.is_set()
-
-    def _progress(self, done=None, total=None):
-        with self.lock:
-            if done is not None:
-                self.job['done'] = done
-            if total is not None:
-                self.job['total'] = total
-
-    def compute(self, ids):
-        if not os.path.exists(FREQUENCY_DICTIONARY):
-            raise RuntimeError(f'Frequency dictionary missing: {FREQUENCY_DICTIONARY}')
-        catalog = load_catalog()
-        results = load_results()
-        wanted = set(ids or ())
-        # Books with too little text (scans, manga without mokuro text) can't be estimated, and
-        # failed ones are broken files (not a zip, no container.xml), retried once the file changes.
-        no_text = set(results.get('noText', []))
-        # Manga in noText: the text they had then (none: None), so new text is tried.
-        no_text_stamps = results.setdefault('noTextStamps', {})
-        failed = results.setdefault('failed', {})
-        # All books: needs_estimate. Selected books are always recomputed.
-        engine = current_engine()
-        books = [b for b in catalog if needs_estimate(b, results, engine)] \
-            if ids is None else [b for b in catalog if b['id'] in wanted]
-        self._progress(0, len(books))
-        last_save = time.monotonic()
-        done = 0
-        for book, result in run_in_pools(books, _estimate, self.cancel):
-            if isinstance(result, Exception):
-                print(f"compute: {book['file']}: {result}", file=sys.stderr)
-                failed[str(book['id'])] = {'error': str(result)[:200], 'size': book['size'], 'added': book['added'],
-                                           **({'text': book['text']} if book.get('manga') else {})}
-            elif result[1]:
-                before = results['books'].get(str(result[0]), {})
-                # Its text changed (another file or mokuro text): the word list is made again on request.
-                if before and (before.get('characters'), before.get('text')) != \
-                        (result[1]['characters'], result[1].get('text')):
-                    remove_words(result[0])
-                results['books'][str(result[0])] = result[1]
-                no_text.discard(result[0])
-                no_text_stamps.pop(str(result[0]), None)
-                failed.pop(str(result[0]), None)
-            else:
-                no_text.add(result[0])
-                if book.get('manga'):
-                    no_text_stamps[str(result[0])] = book['text']
-                failed.pop(str(result[0]), None)
-            results['noText'] = sorted(no_text)
-            done += 1
-            self._progress(done)
-            if time.monotonic() - last_save > 10:
-                save_results(results)
-                last_save = time.monotonic()
-        save_results(results)
-
-
-runner = JobRunner()
-
-
-def stale_manga() -> list:
-    """Manga whose mokuro text appeared or changed since their estimate (needs_estimate)."""
-    if not os.path.exists(FREQUENCY_DICTIONARY):
-        return []
-    results = load_results()
-    engine = current_engine()
-    return [b['id'] for b in load_catalog() if b.get('manga') and needs_estimate(b, results, engine)]
-
-
-def watch_manga_text():
-    """Estimates manga as their text is made or uploaded (mokuro service), when no other job runs."""
-    while True:
-        time.sleep(MANGA_TEXT_CHECK_SECONDS)
-        try:
-            ids = stale_manga()
-            if ids:
-                runner.start('compute', runner.compute, ids)
-        except RuntimeError:
-            pass  # another job or a dictionary install: next time
-        except Exception as error:
-            print(f'manga text: {error}', file=sys.stderr, flush=True)
-
-
-def holds_off_jobs(install):
-    """No job may start while a dictionary is replaced: its pools would mix the old list and the new."""
-    @functools.wraps(install)
-    def wrapper(*args, **kwargs):
-        with runner.lock:
-            if runner.installing or (runner.job and not runner.job.get('finished')):
-                raise RuntimeError('Wait until the running job has finished')
-            runner.installing = True
-        try:
-            return install(*args, **kwargs)
-        finally:
-            runner.installing = False
-    return wrapper
-
-
-class DictionaryMismatch(ValueError):
-    """A replacement list whose readings disagree with the installed one."""
-    def __init__(self, agreement: float):
-        super().__init__(f'The readings of its {AGREEMENT_FORMS:,} most frequent words agree with the installed '
-                         f'list on only {agreement:.1%}')
-        self.agreement = agreement
-
-
-def install_bundled_dictionary():
-    """Copies the bundled list to FREQUENCY_DICTIONARY when none is installed; an installed (uploaded)
-    one is kept. copy2 keeps the mtime, so reader_pack_key is the same on every install of one file."""
-    if os.path.exists(FREQUENCY_DICTIONARY) or not os.path.exists(BUNDLED_FREQUENCY_DICTIONARY):
-        return
-    shutil.copy2(BUNDLED_FREQUENCY_DICTIONARY, FREQUENCY_DICTIONARY + '.tmp')
-    os.replace(FREQUENCY_DICTIONARY + '.tmp', FREQUENCY_DICTIONARY)
-
-
-@holds_off_jobs
-def install_dictionary(source, length: int, force: bool = False) -> int:
-    """Checks an uploaded rank-based Yomitan frequency list and makes it the one in use
-    (from the next job on); returns its number of terms."""
-    from frequency import load_yomitan_ranks, reading_agreement
-
-    if not 0 < length <= MAX_DICTIONARY_BYTES:
-        raise ValueError('The file is empty or too large')
-    upload = FREQUENCY_DICTIONARY + '.upload'
-    try:
-        with open(upload, 'wb') as f:
-            # Read exactly length: nginx keeps the connection open, so there is no EOF to wait for.
-            remaining = length
-            while remaining and (chunk := source.read(min(remaining, 1 << 20))):
-                f.write(chunk)
-                remaining -= len(chunk)
-        if os.path.getsize(upload) != length:
-            raise ValueError('Upload incomplete')
-        try:
-            terms = len(load_yomitan_ranks(upload))
-        except (zipfile.BadZipFile, KeyError, ValueError, TypeError, AttributeError) as error:
-            raise ValueError("Not Jiten's frequency list (a rank-based Yomitan dictionary zip)") from error
-        if terms < MIN_DICTIONARY_TERMS:
-            raise ValueError(f'The frequency list has only {terms:,} words; Jiten\'s has about 500,000')
-        if not force and os.path.exists(FREQUENCY_DICTIONARY):
-            try:
-                agreement = reading_agreement(FREQUENCY_DICTIONARY, upload, AGREEMENT_FORMS)
-            except (zipfile.BadZipFile, KeyError, ValueError, TypeError, AttributeError):
-                agreement = 1.0  # the installed list is unreadable: nothing to compare with
-            if agreement < MIN_AGREEMENT:
-                raise DictionaryMismatch(agreement)
-        os.replace(upload, FREQUENCY_DICTIONARY)
-        return terms
-    finally:
-        if os.path.exists(upload):
-            os.remove(upload)
-
-
-# A file name: no folders, control characters or leading dot
-_TERM_NAME = re.compile(r'[^./\\\x00-\x1f\x7f][^/\\\x00-\x1f\x7f]{0,99}')
-
-
-def term_dictionary_path(name: str) -> str:
-    """TERM_DICTIONARY_DIR/<name>.zip for a plain file name (the uploaded file's), else ValueError."""
-    name = name[:-4] if name.lower().endswith('.zip') else name
-    if not _TERM_NAME.fullmatch(name):
-        raise ValueError('Not a plain file name')
-    return os.path.join(TERM_DICTIONARY_DIR, name + '.zip')
-
-
-@holds_off_jobs
-def install_term_dictionary(source, length: int, name: str) -> int:
-    """Checks an uploaded Yomitan term dictionary and installs it as `name` (replacing one of that name),
-    from the next job on; returns its number of usable terms (yurigana.yomitan.term_readings)."""
-    try:
-        from yurigana.yomitan import name_readings, term_readings
-    except ImportError as error:
-        raise RuntimeError('This yurigana has no term dictionary support') from error
-    path = term_dictionary_path(name)
-    if not 0 < length <= MAX_TERM_DICTIONARY_BYTES:
-        raise ValueError('The file is empty or too large')
-    os.makedirs(TERM_DICTIONARY_DIR, exist_ok=True)
-    upload = path + '.upload'
-    try:
-        with open(upload, 'wb') as f:
-            remaining = length  # exactly length: nginx keeps the connection open (install_dictionary)
-            while remaining and (chunk := source.read(min(remaining, 1 << 20))):
-                f.write(chunk)
-                remaining -= len(chunk)
-        if os.path.getsize(upload) != length:
-            raise ValueError('Upload incomplete')
-        try:
-            terms = len((name_readings if is_name_dictionary(upload) else term_readings)(upload))
-        except (zipfile.BadZipFile, KeyError, ValueError, TypeError, AttributeError, IndexError) as error:
-            raise ValueError('Not a Yomitan term dictionary (a zip with index.json and term_bank_*.json)') from error
-        if terms < MIN_TERM_DICTIONARY_TERMS:
-            raise ValueError(f'The dictionary has only {terms:,} usable terms with kanji')
-        os.replace(upload, path)
-        return terms
-    finally:
-        if os.path.exists(upload):
-            os.remove(upload)
-
-
-@holds_off_jobs
-def remove_term_dictionary(name: str):
-    try:
-        os.remove(term_dictionary_path(name))
-    except FileNotFoundError:
-        pass
+import install  # noqa: E402
+import jobs  # noqa: E402
+import queues  # noqa: E402
+import readerpack  # noqa: E402
+import settings  # noqa: E402
+import workers  # noqa: E402
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1046,20 +64,20 @@ class Handler(BaseHTTPRequestHandler):
         httpbase.guard(self, self._post)
 
     def _get(self):
-        if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
+        if not httpbase.from_nginx(self.headers, settings.INTERNAL_TOKEN_FILE):
             return self._send(403, {'error': 'Only nginx may call this service'})
         parts = self.path.split('?')[0].strip('/').split('/')
         if parts == ['status']:
-            self._send(200, runner.status())
+            self._send(200, jobs.runner.status())
         elif len(parts) == 2 and parts[0] in ('kanji', 'words', 'readings') and re.fullmatch(r'-?[0-9]+', parts[1]):
             book_id = int(parts[1])
             if parts[0] == 'words':
-                path = words_path(book_id)
-                status = 'ready' if os.path.exists(path) else word_lists.request(book_id, WORDS_WAIT)
+                path = workers.words_path(book_id)
+                status = 'ready' if os.path.exists(path) else queues.word_lists.request(book_id, settings.WORDS_WAIT)
                 if status == 'queued':
                     return self._send(503, {'status': 'queued'})
             else:
-                path = os.path.join(KANJI_DIR if parts[0] == 'kanji' else READINGS_DIR, f'{book_id}.json.gz')
+                path = os.path.join(settings.KANJI_DIR if parts[0] == 'kanji' else settings.READINGS_DIR, f'{book_id}.json.gz')
             try:
                 with open(path, 'rb') as f:
                     stat = os.fstat(f.fileno())
@@ -1083,25 +101,25 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, {'error': 'not found'})
 
     def _post(self):
-        if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
+        if not httpbase.from_nginx(self.headers, settings.INTERNAL_TOKEN_FILE):
             return self._send(403, {'error': 'Only nginx may call this service'})
-        if not httpbase.same_site(self.headers, CORS_ORIGINS, ALLOW_HTTP):
+        if not httpbase.same_site(self.headers, settings.CORS_ORIGINS, settings.ALLOW_HTTP):
             return self._send(403, {'error': 'Request from another site'})
         parts = self.path.split('?')[0].strip('/').split('/')
         if len(parts) == 2 and parts[0] == 'readings' and re.fullmatch(r'-?[0-9]+', parts[1]):
-            return self._send(200, {'status': readings.request(int(parts[1]), READINGS_WAIT)})
+            return self._send(200, {'status': queues.readings.request(int(parts[1]), settings.READINGS_WAIT)})
         if parts == ['ranks']:
-            data = httpbase.read_body(self, MAX_RANKS_BYTES)
+            data = httpbase.read_body(self, settings.MAX_RANKS_BYTES)
             if not data:
                 return self._send(400, {'error': 'Empty request'})
             try:
                 forms = json.loads(data).get('forms')
             except (ValueError, AttributeError):
                 return self._send(400, {'error': 'invalid JSON'})
-            if not isinstance(forms, list) or len(forms) > MAX_RANK_FORMS:
+            if not isinstance(forms, list) or len(forms) > settings.MAX_RANK_FORMS:
                 return self._send(400, {'error': 'invalid request'})
             try:
-                return self._send(200, {'ranks': form_ranks(forms)})
+                return self._send(200, {'ranks': readerpack.form_ranks(forms)})
             except (OSError, ValueError, KeyError, zipfile.BadZipFile) as error:
                 return self._send(503, {'error': str(error)})
         if parts == ['dictionary']:
@@ -1110,15 +128,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(403, {'error': 'Only admins can install the frequency list'})
             query = self.path.split('?', 1)[1] if '?' in self.path else ''
             try:
-                terms = install_dictionary(self.rfile, int(self.headers.get('Content-Length') or 0),
+                terms = install.install_dictionary(self.rfile, int(self.headers.get('Content-Length') or 0),
                                            force='force=1' in query.split('&'))
-            except DictionaryMismatch as error:
+            except install.DictionaryMismatch as error:
                 return self._send(409, {'error': str(error), 'agreement': error.agreement})
             except RuntimeError as error:
                 return self._send(409, {'error': str(error)})
             except ValueError as error:
                 return self._send(400, {'error': str(error)})
-            return self._send(200, {**runner.status(), 'terms': terms})
+            return self._send(200, {**jobs.runner.status(), 'terms': terms})
         if parts in (['terms'], ['terms', 'remove']):
             # nginx sends it from the account check of every location that reaches this path.
             if self.headers.get('X-Account-Admin') != '1':
@@ -1126,18 +144,18 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 if parts == ['terms']:
                     query = urllib.parse.parse_qs(self.path.split('?', 1)[1] if '?' in self.path else '')
-                    terms = install_term_dictionary(self.rfile, int(self.headers.get('Content-Length') or 0),
+                    terms = install.install_term_dictionary(self.rfile, int(self.headers.get('Content-Length') or 0),
                                                     (query.get('name') or [''])[0])
-                    return self._send(200, {**runner.status(), 'terms': terms})
-                body = json.loads(httpbase.read_body(self, MAX_JSON_BYTES) or b'{}')
-                remove_term_dictionary(str(body.get('name', '')) if isinstance(body, dict) else '')
-                return self._send(200, runner.status())
+                    return self._send(200, {**jobs.runner.status(), 'terms': terms})
+                body = json.loads(httpbase.read_body(self, settings.MAX_JSON_BYTES) or b'{}')
+                install.remove_term_dictionary(str(body.get('name', '')) if isinstance(body, dict) else '')
+                return self._send(200, jobs.runner.status())
             except RuntimeError as error:
                 return self._send(409, {'error': str(error)})
             except ValueError as error:
                 return self._send(400, {'error': str(error)})
         try:
-            body = json.loads(httpbase.read_body(self, MAX_JSON_BYTES) or b'{}')
+            body = json.loads(httpbase.read_body(self, settings.MAX_JSON_BYTES) or b'{}')
         except ValueError:
             return self._send(400, {'error': 'invalid JSON'})
         action = self._action()
@@ -1146,32 +164,32 @@ class Handler(BaseHTTPRequestHandler):
                 ids = None if body.get('all') else [int(i) for i in body.get('ids', [])]
                 if ids is not None and not ids:
                     return self._send(400, {'error': 'no books given'})
-                runner.start('compute', runner.compute, ids)
+                jobs.runner.start('compute', jobs.runner.compute, ids)
             elif action == 'cancel':
-                runner.cancel.set()
+                jobs.runner.cancel.set()
             else:
                 return self._send(404, {'error': 'not found'})
         except RuntimeError as error:
             return self._send(409, {'error': str(error)})
         except (AttributeError, TypeError, ValueError):
             return self._send(400, {'error': 'invalid request'})
-        self._send(202, runner.status())
+        self._send(202, jobs.runner.status())
 
     def log_message(self, *args):
         pass
 
 
 def main(argv):
-    os.makedirs(STATE_DIR, exist_ok=True)
-    install_bundled_dictionary()
+    os.makedirs(settings.STATE_DIR, exist_ok=True)
+    install.install_bundled_dictionary()
     command = argv[1] if len(argv) > 1 else 'serve'
     if command == 'serve':
-        migrate_word_lists()
-        threading.Thread(target=watch_manga_text, daemon=True).start()
-        ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
+        queues.migrate_word_lists()
+        threading.Thread(target=jobs.watch_manga_text, daemon=True).start()
+        ThreadingHTTPServer((settings.HOST, settings.PORT), Handler).serve_forever()
     elif command == 'compute':
-        runner.job = {'type': 'compute'}
-        runner.compute([int(i) for i in argv[2:]] or None)
+        jobs.runner.job = {'type': 'compute'}
+        jobs.runner.compute([int(i) for i in argv[2:]] or None)
     else:
         sys.exit(__doc__)
 
