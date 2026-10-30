@@ -70,7 +70,11 @@ root install stays light for the web app and its Docker image; `fetch` downloads
   the code to the popup (`location.replace('/auth?code=…')`, same origin, so `window.opener` and its
   PKCE verifier stay), which exchanges it like the web build. The browser tab only gets a "signed in"
   page. `preload.cjs` exposes `window.chimiDesktop` to the app's windows: `/auth` then says to
-  continue in the browser and the sign-in waits 10 minutes instead of 45 seconds.
+  continue in the browser and the sign-in waits 10 minutes instead of 45 seconds. It also exposes
+  `chimiDesktop.fetch` for Sources (`transport.ts`): `main.js` `sourcesFetch` (`ipcMain.handle`,
+  app pages only) fetches with Electron's `net.fetch`, http(s) only, a browser user agent (Electron's
+  without `Electron/…`), redirects followed one by one (net.fetch's `url` is wrong; headers dropped
+  on another origin), a size cap; per-host pacing stays in the page. Sites without CORS work here.
 - Help → About lists the licences (Yomitan is GPL-3.0, a separate program; its source is the
   release tag named there).
 

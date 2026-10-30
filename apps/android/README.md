@@ -48,7 +48,9 @@ cd android && ./gradlew assembleDebug    # android/app/build/outputs/apk/debug/a
   phone tab bar sit between them.
 - `<input type=file>` opens Android's file picker (Capacitor's `BridgeWebChromeClient`); links to
   other sites, `window.open` included, open in the browser (`Bridge.launchIntent`).
-- CapacitorHttp's global `fetch` patch is off (the default): it breaks streaming and abort.
+- CapacitorHttp's global `fetch` patch is off (the default): it breaks streaming and abort. Sources
+  call `CapacitorHttp.request` directly (`transport.ts`), following redirects themselves, so sites
+  without CORS work in the app.
 - Downloads (Export → Zip File, CSVs, reports): the WebView drops `<a download>` saves, so
   `apps/web/src/lib/data/standalone/native-save.ts` (`catchDownloads`, from the root layout, in the app only)
   takes every `<a download>` of a blob/data URL (clicked, or a detached link's `click()`) and hands

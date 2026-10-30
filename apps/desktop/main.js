@@ -7,7 +7,7 @@
 // chimimouryou's desktop shell: the standalone build served from a fixed loopback origin, with an
 // unmodified Yomitan loaded as a Chrome extension (it is a separate GPL-3.0 program, see About).
 
-import { app, BrowserWindow, dialog, Menu, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, net, session, shell } from 'electron';
 import { cpSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -172,6 +172,43 @@ ${link(`https://github.com/yomidevs/yomitan/tree/${yomitanVersion}`, `yomidevs/y
 (${link(file(join(electronDir, 'LICENSES.chromium.html')), 'Chromium licences')}).</p>`;
 }
 
+/**
+ * Sources' fetch for the app's pages (transport.ts): http(s) only, a browser user agent, redirects
+ * followed here so the page sees the final address (net.fetch's `url` is wrong), the size capped.
+ * Pacing per host stays in transport.ts, as in a browser.
+ */
+async function sourcesFetch(event, url, { headers = {}, maxBytes = 20 * 1024 * 1024 } = {}) {
+  if (!event.senderFrame?.url.startsWith(`${origin}/`)) throw new Error('Not the app');
+  const agent = session.defaultSession.getUserAgent().replace(/ (Electron|chimimouryou)\/\S+/g, '');
+  for (let hop = 0; hop < 10; hop += 1) {
+    if (!/^https?:\/\//.test(url)) throw new Error('Only http and https');
+    const response = await net.fetch(url, {
+      headers: { 'User-Agent': agent, ...headers },
+      redirect: 'manual',
+      cache: 'no-store'
+    });
+    const location = response.headers.get('Location');
+    if (response.status >= 300 && response.status < 400 && location) {
+      const next = new URL(location, url);
+      // A cookie or password never goes on to another origin.
+      if (next.origin !== new URL(url).origin) headers = {};
+      url = next.href;
+      continue;
+    }
+    const answer = {
+      status: response.status,
+      url,
+      type: response.headers.get('Content-Type') || '',
+      retryAfter: response.headers.get('Retry-After') || ''
+    };
+    if (Number(response.headers.get('Content-Length') || 0) > maxBytes)
+      return { ...answer, tooBig: true };
+    const body = await response.arrayBuffer();
+    return body.byteLength > maxBytes ? { ...answer, tooBig: true } : { ...answer, body };
+  }
+  throw new Error('Too many redirects');
+}
+
 function setMenu(yomitan) {
   const extensionPage = (page, title) => () =>
     openWindow(`${yomitan.url}${page}`, { title, parent: mainWindow });
@@ -237,6 +274,7 @@ if (!app.requestSingleInstanceLock()) {
       app.quit();
       return;
     }
+    ipcMain.handle('sources-fetch', sourcesFetch);
     const yomitan = await loadYomitan();
     setMenu(yomitan);
     mainWindow = openWindow(
