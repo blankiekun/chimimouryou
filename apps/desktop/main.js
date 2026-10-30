@@ -7,7 +7,17 @@
 // chimimouryou's desktop shell: the standalone build served from a fixed loopback origin, with an
 // unmodified Yomitan loaded as a Chrome extension (it is a separate GPL-3.0 program, see About).
 
-import { app, BrowserWindow, dialog, ipcMain, Menu, net, session, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  desktopCapturer,
+  dialog,
+  ipcMain,
+  Menu,
+  net,
+  session,
+  shell
+} from 'electron';
 import { cpSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -309,6 +319,7 @@ if (!app.requestSingleInstanceLock()) {
       dialog,
       ipcMain,
       BrowserWindow,
+      desktopCapturer,
       hookDir,
       isApp: (event) => !!event.senderFrame?.url.startsWith(`${origin}/`)
     });

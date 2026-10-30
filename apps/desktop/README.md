@@ -109,7 +109,11 @@ root install stays light for the web app and its Docker image; `fetch` downloads
   the page's names: `isSafeSaveName` (games.js) refuses, on both writing and reading, anything
   outside VNBox's save folders, temp/cache folders, a `Microsoft` folder under AppData or
   ProgramData, runnable or loadable files (`.exe`, `.dll`, `.bat`…, `game/` included), 8.3 short
-  names and parts ending in a dot or space. `e2e/native-vn.e2e.mjs` runs the whole flow
+  names and parts ending in a dot or space. Anki: `game-media.js` keeps the game's sound (Linux: its own
+  PulseAudio/PipeWire null sink looped back to the speakers, recorded with `parec`; Windows:
+  `chimihook --audio`, the game's process tree into a named pipe) and screenshots of its window
+  (`desktopCapturer`) in memory, and `/hook` fills a mined note's empty picture/audio fields with
+  its line's (`games-mark`, `games-media`). `e2e/native-vn.e2e.mjs` runs the whole flow
   under Wine with a test VN (`xvfb-run -a node e2e/native-vn.e2e.mjs`; not in CI).
 - Help → About lists the licences (Yomitan is GPL-3.0, a separate program; its source is the
   release tag named there).

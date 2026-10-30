@@ -6,10 +6,13 @@
 
 // End-to-end check of games played natively (games.js, /hook?native=), Linux with Wine: the real
 // app, the real helper and LunaHook, a tiny test VN (testvn.c, 32-bit) drawing a line every 1.5 s.
-// Only the OS folder dialog is answered by the test. Not in CI (needs Wine, mingw, a display).
+// Only the OS folder dialog is answered by the test. Not in CI (needs Wine, mingw, a display, and
+// PulseAudio's pulseaudio, pactl and parec: the test runs its own PulseAudio with a null sink;
+// x11-utils' xwininfo and xprop stand in for a window manager).
 //
 //   cd apps/desktop && pnpm run fetch && pnpm run build:web
-//   xvfb-run -a node e2e/native-vn.e2e.mjs        (E2E_DIR=<dir> keeps the run's files there)
+//   xvfb-run -a node e2e/native-vn.e2e.mjs        (E2E_DIR=<dir> keeps the run's files there;
+//                                                 PULSE_MODULES=<dir> for a PulseAudio not installed)
 //
 // It fails when: the record isn't written by Import → Installed game; the folder dialog's program
 // list misses the game or puts setup tools first; the helper, Wine prefix or LunaHook injection
@@ -21,11 +24,13 @@
 // the prefix's Documents still leads into the home folder; a newer save in vnsaves.json (as VNBox
 // writes it) isn't where the game reads it at the next start, or its time isn't kept; a synced
 // Startup .bat or game/*.dll is written; saves over the 20 MB cap are pushed or the page doesn't
-// say so.
+// say so. Anki (a fake AnkiConnect): a note mined from a line after the game closed gets no picture,
+// or one of another line (each step has its own background colour), or no sound, or another line's
+// (each step its own tone), or other programs' sound (a tone playing on the speakers throughout).
 
 /* global indexedDB, localStorage, navigator -- used inside page.evaluate */
 import { Buffer } from 'node:buffer';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import {
   copyFileSync,
   existsSync,
@@ -38,6 +43,7 @@ import {
   statSync,
   writeFileSync
 } from 'node:fs';
+import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { homedir, tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
@@ -73,10 +79,67 @@ execFileSync('i686-w64-mingw32-gcc', [
   join(gameDir, 'testvn.exe'),
   join(import.meta.dirname, 'testvn.c'),
   '-lole32',
-  '-luuid'
+  '-luuid',
+  '-lwinmm'
 ]);
 // A setup tool beside it: listed after the game.
 copyFileSync(join(gameDir, 'testvn.exe'), join(gameDir, 'setup.exe'));
+
+// Our own PulseAudio: one null sink as the speakers.
+const pulseDir = join(root, 'pulse');
+mkdirSync(pulseDir);
+writeFileSync(
+  join(pulseDir, 'default.pa'),
+  `load-module module-native-protocol-unix socket=${pulseDir}/native auth-anonymous=1
+load-module module-null-sink sink_name=speakers
+set-default-sink speakers
+`
+);
+const pulseEnv = {
+  ...process.env,
+  HOME: home,
+  PULSE_RUNTIME_PATH: pulseDir,
+  PULSE_STATE_PATH: pulseDir,
+  PULSE_SERVER: `unix:${pulseDir}/native`
+};
+const pulse = spawn(
+  'pulseaudio',
+  [
+    '-n',
+    '--daemonize=no',
+    '--exit-idle-time=-1',
+    ...(process.env.PULSE_MODULES ? [`--dl-search-path=${process.env.PULSE_MODULES}`] : []),
+    '-F',
+    join(pulseDir, 'default.pa')
+  ],
+  { env: pulseEnv, stdio: 'ignore' }
+);
+for (let tries = 0; !existsSync(join(pulseDir, 'native')); tries += 1) {
+  if (tries > 50) fail('PulseAudio didn’t start (pulseaudio and pulseaudio-utils needed)');
+  await new Promise((resolve) => setTimeout(resolve, 100));
+}
+// A fake AnkiConnect: notes the test adds, and what the app writes into them.
+const anki = { notes: [], updates: [] };
+const otherHz = 3000;
+let otherSound;
+const ankiServer = createServer((request, response) => {
+  let body = '';
+  request.on('data', (chunk) => (body += chunk));
+  request.on('end', () => {
+    const { action, params } = body ? JSON.parse(body) : {};
+    let result = null;
+    if (action === 'findNotes') result = anki.notes.map((note) => note.noteId);
+    else if (action === 'notesInfo')
+      result = anki.notes.filter((note) => params.notes.includes(note.noteId));
+    else if (action === 'updateNoteFields') anki.updates.push(params.note);
+    response.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*'
+    });
+    response.end(JSON.stringify({ result, error: null }));
+  });
+});
+await new Promise((resolve) => ankiServer.listen(0, '127.0.0.1', resolve));
 
 const app = await _electron.launch({
   executablePath: join(desktop, 'node_modules/electron/dist/electron'),
@@ -87,6 +150,7 @@ const app = await _electron.launch({
     ...process.env,
     XDG_CONFIG_HOME: config,
     HOME: home,
+    PULSE_SERVER: pulseEnv.PULSE_SERVER,
     XDG_CACHE_HOME: process.env.XDG_CACHE_HOME ?? join(homedir(), '.cache')
   }
 });
@@ -94,6 +158,25 @@ const pickFolder = (dir) =>
   app.evaluate(({ dialog }, picked) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [picked] });
   }, dir);
+
+/**
+ * Xvfb has no window manager, and screen capture (desktopCapturer) lists only windows one manages:
+ * the game's windows get the WM_STATE a window manager would set.
+ */
+const manageGameWindows = () => {
+  for (const line of execFileSync('xwininfo', ['-root', '-tree']).toString().split('\n'))
+    if (line.includes('("testvn.exe"'))
+      execFileSync('xprop', [
+        '-id',
+        line.trim().split(' ')[0],
+        '-f',
+        'WM_STATE',
+        '32c',
+        '-set',
+        'WM_STATE',
+        '1'
+      ]);
+};
 
 /** The game's record from the books database. */
 const record = (page) =>
@@ -194,7 +277,11 @@ const page = await app.firstWindow();
 try {
   page.setDefaultTimeout(timeout);
   await page.waitForLoadState('load');
-  await page.evaluate(() => localStorage.setItem('storageChosen', '1'));
+  await page.evaluate((port) => {
+    localStorage.setItem('storageChosen', '1');
+    localStorage.setItem('ankiEnabled', '1');
+    localStorage.setItem('ankiConnectUrl', `http://127.0.0.1:${port}`);
+  }, ankiServer.address().port);
   await page.goto('http://127.0.0.1:41917/manage');
 
   step('Import → Installed game');
@@ -308,11 +395,105 @@ try {
   await page.getByText('The game has closed.').waitFor();
   await page.getByText(/over the .* that sync\. They stay on this computer\./).waitFor();
   if ((await vnsaves(page)) !== before) fail('saves over the cap were pushed');
+
+  step('Anki: a note mined from a line gets that line’s screenshot and sound');
+  // Another program's tone on the speakers while the game plays: never in the clips.
+  const other = Buffer.alloc(24000 * 2 * 60);
+  for (let i = 0; i < other.length / 2; i += 1)
+    other.writeInt16LE(Math.round(8000 * Math.sin((2 * Math.PI * otherHz * i) / 24000)), i * 2);
+  writeFileSync(join(pulseDir, 'other.raw'), other);
+  otherSound = spawn(
+    'pacat',
+    ['--raw', '--format=s16le', '--rate=24000', '--channels=1', join(pulseDir, 'other.raw')],
+    { env: pulseEnv, stdio: 'ignore' }
+  );
+  await page.getByRole('button', { name: 'Start the game' }).click();
+  await page.locator('.nt-row', { hasText: 'DrawTextExW' }).click();
+  manageGameWindows();
+  // testvn.c: step 8's caption, background and tone.
+  const mined = '第8場面の台詞です。';
+  const colors = [
+    [255, 255, 255],
+    [255, 80, 80],
+    [80, 200, 80],
+    [80, 80, 255],
+    [240, 200, 40],
+    [200, 60, 200],
+    [40, 200, 220],
+    [250, 140, 30],
+    [140, 90, 40],
+    [120, 120, 120],
+    [30, 30, 30],
+    [255, 180, 200]
+  ];
+  const stepHz = (step) => 400 + 80 * step;
+  await page.locator('.hook-text li', { hasText: mined }).waitFor();
+  await page.getByText('The game has closed.').waitFor();
+  await page.getByText('Anki clips record this game’s sound.').waitFor();
+  anki.notes.push({
+    noteId: Date.now(),
+    modelName: 'Basic',
+    fields: {
+      Sentence: { value: mined, order: 0 },
+      SentenceAudio: { value: '', order: 1 },
+      Picture: { value: '', order: 2 }
+    }
+  });
+  for (let tries = 0; !anki.updates.length; tries += 1) {
+    if (tries > 40) fail('the note got no media');
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  const update = anki.updates[0];
+  if (
+    !update.picture?.[0]?.filename.endsWith('.jpg') ||
+    !update.audio?.[0]?.filename.endsWith('.wav')
+  )
+    fail(`media: ${JSON.stringify(update, (key, value) => (key === 'data' ? '…' : value))}`);
+  // The picture's background, near the bottom right corner (away from the text).
+  const pixel = await app.evaluate(({ nativeImage }, data) => {
+    const image = nativeImage.createFromBuffer(Buffer.from(data, 'base64'));
+    const { width, height } = image.getSize();
+    const bitmap = image.toBitmap(); // BGRA
+    const at = ((height - 15) * width + (width - 15)) * 4;
+    return [bitmap[at + 2], bitmap[at + 1], bitmap[at]];
+  }, update.picture[0].data);
+  const distance = (color) => color.reduce((sum, value, i) => sum + (value - pixel[i]) ** 2, 0);
+  const shown = colors.indexOf(colors.toSorted((a, b) => distance(a) - distance(b))[0]);
+  if (shown !== 8) fail(`the picture shows step ${shown} (pixel ${pixel}), not 8`);
+  // The sound: step 8's tone, louder than its neighbours' and the other program's.
+  const wav = Buffer.from(update.audio[0].data, 'base64');
+  const rate = wav.readUInt32LE(24);
+  const samples = new Int16Array(
+    wav.buffer.slice(wav.byteOffset + 44, wav.byteOffset + wav.length)
+  );
+  const power = (hz) => {
+    const k = 2 * Math.cos((2 * Math.PI * hz) / rate);
+    let [s1, s2] = [0, 0];
+    for (const value of samples) [s1, s2] = [value + k * s1 - s2, s1];
+    return (s1 * s1 + s2 * s2 - k * s1 * s2) / samples.length ** 2;
+  };
+  const powers = Object.fromEntries(
+    [stepHz(7), stepHz(8), stepHz(9), otherHz].map((hz) => [hz, Math.round(power(hz))])
+  );
+  const loudest = Object.entries(powers).toSorted((a, b) => b[1] - a[1])[0][0];
+  if (+loudest !== stepHz(8) || powers[otherHz] * 50 > powers[stepHz(8)])
+    fail(
+      `the clip (${(samples.length / rate).toFixed(2)} s) isn’t step 8’s tone alone: ${JSON.stringify(powers)}`
+    );
+  writeFileSync(join(root, 'anki.jpeg'), Buffer.from(update.picture[0].data, 'base64'));
+  writeFileSync(join(root, 'anki.wav'), wav);
+  console.log(
+    `  clip ${(samples.length / rate).toFixed(2)} s, tone powers ${JSON.stringify(powers)}`
+  );
+
   await page.screenshot({ path: join(root, 'hook.png') });
-  console.log(`OK (screenshot ${join(root, 'hook.png')})`);
+  console.log(`OK (screenshot ${join(root, 'hook.png')}, Anki media anki.jpeg and anki.wav)`);
 } catch (error) {
   await page.screenshot({ path: join(root, 'failed.png') });
   throw error;
 } finally {
   await app.close();
+  ankiServer.close();
+  otherSound?.kill();
+  pulse.kill();
 }

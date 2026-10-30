@@ -2,10 +2,13 @@
 // Tiny test "VN": each click (or every 1.5 s) shows the next line, drawn the way VN engines do:
 // TextOutW, ExtTextOutW, DrawTextW, GetGlyphOutlineW (one char at a time) and TextOutA (Shift-JIS).
 // It also writes a save file to %APPDATA%\TestVN\save1.dat, Documents\TestVN\, Saved Games\TestVN\
-// and savedata\ in its own folder.
+// and savedata\ in its own folder. For Anki media, each step also has its own background colour, its
+// own tone (stepHz) and a caption naming it, drawn with DrawTextExW (a thread with every step's line).
 #include <windows.h>
 #include <shlobj.h>
 #include <stdio.h>
+#include <math.h>
+#include <mmsystem.h>
 
 static const wchar_t *linesW[] = {
   L"「吾輩は猫である。名前はまだ無い。」",   // TextOutW
@@ -16,6 +19,25 @@ static const wchar_t *linesW[] = {
 // "シフトJISの行です。" in Shift-JIS (TextOutA)
 static const char lineA[] = "\x83\x56\x83\x74\x83\x67\x82\x69\x82\x68\x82\x72\x82\xcc\x8d\x73\x82\xc5\x82\xb7\x81\x42";
 static int step = 0;
+// Background per step (the E2E reads it back from the screenshot), and the step's tone.
+static const COLORREF stepColors[] = {
+  RGB(255, 255, 255), RGB(255, 80, 80), RGB(80, 200, 80), RGB(80, 80, 255), RGB(240, 200, 40), RGB(200, 60, 200),
+  RGB(40, 200, 220), RGB(250, 140, 30), RGB(140, 90, 40), RGB(120, 120, 120), RGB(30, 30, 30), RGB(255, 180, 200)
+};
+#define stepHz(s) (400 + 80 * (s))
+
+// A 1 s sine at the step's tone, as a WAV in memory for PlaySound.
+static void playTone(int s) {
+  static BYTE wav[44 + 48000];
+  const DWORD rate = 24000, n = 24000;
+  DWORD *d = (DWORD *)wav;
+  memcpy(wav, "RIFF", 4); d[1] = 36 + n * 2; memcpy(wav + 8, "WAVEfmt ", 8); d[4] = 16;
+  WAVEFORMATEX fmt = {WAVE_FORMAT_PCM, 1, rate, rate * 2, 2, 16, 0}; memcpy(wav + 20, &fmt, 16);
+  memcpy(wav + 36, "data", 4); d[10] = n * 2;
+  short *samples = (short *)(wav + 44);
+  for (DWORD i = 0; i < n; i++) samples[i] = (short)(10000 * sin(6.283185307 * stepHz(s) * i / rate));
+  PlaySoundW((LPCWSTR)wav, NULL, SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
+}
 
 static void writeSaveIn(const wchar_t *base, const wchar_t *sub) {
   wchar_t dir[MAX_PATH], file[MAX_PATH];
@@ -37,6 +59,8 @@ static void writeSave(REFKNOWNFOLDERID id, const wchar_t *sub) {
 
 static void paint(HWND hwnd) {
   PAINTSTRUCT ps; HDC dc = BeginPaint(hwnd, &ps);
+  RECT all; GetClientRect(hwnd, &all);
+  HBRUSH bg = CreateSolidBrush(stepColors[step % 12]); FillRect(dc, &all, bg); DeleteObject(bg);
   HFONT font = CreateFontW(28, 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, ANTIALIASED_QUALITY, 0, L"MS Gothic");
   SelectObject(dc, font);
   SetBkMode(dc, TRANSPARENT);
@@ -62,6 +86,8 @@ static void paint(HWND hwnd) {
       x += gm.gmCellIncX;
     }
   } else TextOutA(dc, 20, 40, lineA, lstrlenA(lineA));
+  wchar_t caption[64]; swprintf(caption, 64, L"第%d場面の台詞です。", step);
+  RECT capRect = {20, 120, 500, 160}; DrawTextExW(dc, caption, -1, &capRect, DT_LEFT, NULL);
   DeleteObject(font);
   EndPaint(hwnd, &ps);
 }
@@ -71,6 +97,7 @@ static LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
   case WM_PAINT: paint(hwnd); return 0;
   case WM_TIMER: case WM_LBUTTONDOWN:
     step++;
+    playTone(step);
     if (step % 5 == 0) {
       writeSave(&FOLDERID_RoamingAppData, L"TestVN");
       writeSave(&FOLDERID_Documents, L"TestVN");

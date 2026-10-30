@@ -34,7 +34,10 @@ export interface NativeThreadInfo {
 }
 
 export type NativeMessage =
-  | { type: 'text'; thread: NativeThreadInfo; sentence: string }
+  /** `seq`: the line's number for its Anki media (`media`), `at` its arrival time */
+  | { type: 'text'; thread: NativeThreadInfo; sentence: string; seq?: number; at?: number }
+  /** Where Anki clips' sound comes from: the game alone, the whole system, or nowhere */
+  | { type: 'audio'; mode: 'game' | 'process' | 'system' | 'none' }
   | { type: 'thread'; thread: NativeThreadInfo }
   | { type: 'status'; text: string }
   | { type: 'error'; message: string }
@@ -104,6 +107,13 @@ export interface DesktopGames {
   list(): Promise<NativeGamesList>;
   session(): Promise<{ folder: string; running: boolean; messages: NativeMessage[] } | undefined>;
   onHook(callback: (message: NativeMessage) => void): () => void;
+  /** /hook shows the line: its screenshot is taken once drawn */
+  mark(seq: number): Promise<void>;
+  /** A mined line's screenshot (JPEG) and sound (WAV), each when kept */
+  media(
+    seq: number,
+    want: { picture: boolean; audio: boolean }
+  ): Promise<{ picture?: Uint8Array<ArrayBuffer>; audio?: Uint8Array<ArrayBuffer> }>;
 }
 
 /** The desktop app's games API, undefined everywhere else (web, Android, server builds). */
