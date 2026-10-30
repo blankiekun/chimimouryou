@@ -182,15 +182,14 @@ describe('importing an upstream ッツ Reader backup', () => {
       new AbortController().signal
     );
 
-  // Bug: a newer backup with a broken staticdata.json replaces the good local book with an empty one.
-  // shortcut: the missing-staticdata.json case fails today (extractBookData in base-handler.ts
-  // returns a blank book); add it here with the fix once the storage handler rewrite lands.
-  it('keeps the local book when a newer backup has a broken staticdata.json', async () => {
+  // Bug: a newer backup with a broken or missing staticdata.json replaces the good local book with an empty one.
+  it('keeps the local book when a newer backup has a broken or missing staticdata.json', async () => {
     const before = await database.getDataByTitle(title);
 
     expect(
       await importIt(await upstreamBackup({ staticData: '{"title":', bookModified: 1700000005000 }))
     ).not.toBe('');
+    await importIt(await upstreamBackup({ staticData: null, bookModified: 1700000006000 }));
 
     const db = await database.db;
 
