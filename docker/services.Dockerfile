@@ -9,7 +9,7 @@ FROM debian:trixie-slim AS base
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 python3-pil ca-certificates \
   && rm -rf /var/lib/apt/lists/*
-COPY server/build-catalog.py server/assign-series.py /app/
+COPY server/build-catalog.py server/assign-series.py server/httpbase.py /app/
 COPY server/account /app/account
 COPY server/import /app/import
 COPY server/api /app/api

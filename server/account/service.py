@@ -82,6 +82,10 @@ import urllib.parse
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+# httpbase.py (shared request checks) is in the parent folder: /app in the images, server/ here.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+import httpbase  # noqa: E402
+
 STATE_DIR = os.environ.get('ACCOUNT_STATE_DIR', '/data/state/account')
 # Keep it off disks that other containers mount: whoever can read it can read
 # the settings (API keys).
@@ -108,15 +112,8 @@ COOKIE = '__Host-ttu_session'
 # browsers drop on HTTP pages.
 HTTP_COOKIE = 'ttu_session'
 ALLOW_HTTP = os.environ.get('ALLOW_HTTP_ACCOUNTS') == '1'
-# Origins of the standalone app allowed to sign in with tokens: exact https origins, or http on
-# loopback with a port (the desktop app, http://127.0.0.1:41917); others are ignored. Empty = off.
-CORS_ORIGIN_RE = r'https://[A-Za-z0-9.-]+(:[0-9]{1,5})?|http://(127\.0\.0\.1|localhost):[0-9]{1,5}'
-
-
-def parse_cors_origins(value: str) -> set[str]:
-    return {origin for origin in value.split() if re.fullmatch(CORS_ORIGIN_RE, origin)}
-
-
+# Origins of the standalone app allowed to sign in with tokens (httpbase.CORS_ORIGIN_RE). Empty = off.
+parse_cors_origins = httpbase.parse_cors_origins
 CORS_ORIGINS = parse_cors_origins(os.environ.get('CORS_ORIGINS', ''))
 CLIENT_MAX_LENGTH = 64
 SESSION_IDLE_SECONDS = 30 * 86400
@@ -141,11 +138,8 @@ THROTTLE_MAX_SECONDS = 3600
 THROTTLE_FORGET_SECONDS = 86400
 
 
-class ApiError(Exception):
-    def __init__(self, status: int, message: str, headers: dict | None = None):
-        super().__init__(message)
-        self.status = status
-        self.headers = headers or {}
+# ApiError(status, message, headers)
+ApiError = httpbase.HttpError
 
 
 # ---------------------------------------------------------------------------
@@ -529,16 +523,6 @@ def session_cookie_name(proto: str | None) -> str | None:
     return HTTP_COOKIE if request_scheme(proto) == 'http' else None
 
 
-def from_nginx(headers) -> bool:
-    """Whether the request carries the internal token (none configured: refuse everything)."""
-    try:
-        with open(INTERNAL_TOKEN_FILE, encoding='ascii') as f:
-            token = f.read().strip()
-    except OSError:
-        return False
-    return bool(token) and hmac.compare_digest(token, headers.get('X-Internal-Token', ''))
-
-
 # ---------------------------------------------------------------------------
 # Sign-in throttling
 
@@ -747,15 +731,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def read_json(self) -> dict:
         try:
-            length = int(self.headers.get('Content-Length') or 0)
-        except ValueError as error:
-            raise ApiError(400, 'Invalid request') from error
-        if length < 0:
-            raise ApiError(400, 'Invalid request')
-        if length > MAX_BODY_BYTES:
-            raise ApiError(413, 'Request too large')
-        try:
-            body = json.loads(self.rfile.read(length) or b'{}')
+            body = json.loads(httpbase.read_body(self, MAX_BODY_BYTES) or b'{}')
         except (json.JSONDecodeError, UnicodeDecodeError) as error:
             raise ApiError(400, 'Invalid JSON') from error
         if not isinstance(body, dict):
@@ -768,16 +744,7 @@ class Handler(BaseHTTPRequestHandler):
         return f'{COOKIE}={token}; Path=/; Max-Age={max_age}; Secure; HttpOnly; SameSite=Strict'
 
     def send(self, status: int, body: dict | None = None, headers: dict | None = None):
-        data = json.dumps(body).encode() if body is not None else b''
-        self.send_response(status)
-        if body is not None:
-            self.send_header('Content-Type', 'application/json')
-        self.send_header('Content-Length', str(len(data)))
-        self.send_header('Cache-Control', 'no-store')
-        for name, value in (headers or {}).items():
-            self.send_header(name, value)
-        self.end_headers()
-        self.wfile.write(data)
+        httpbase.send_json(self, status, body, headers)
 
     # -- routes
 
@@ -998,7 +965,7 @@ class Handler(BaseHTTPRequestHandler):
         route = self.ROUTES.get((method, self.path.split('?')[0].lstrip('/')))
 
         try:
-            if not from_nginx(self.headers):
+            if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
                 raise ApiError(403, 'Only nginx may call this service')
             if not route:
                 raise ApiError(404, 'Not found')

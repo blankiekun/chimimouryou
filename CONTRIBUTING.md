@@ -169,7 +169,9 @@ route in `api/service.py` (plus `migrate.py`'s map if old folders hold it).
 `do_GET`/`do_POST` (difficulty), proxy it in `nginx-ebook-reader.conf.template` if it
 needs a new location (with an `auth_request` check; new `${…}` placeholders go in
 `render-nginx.sh`'s list), add a test in `server/tests/`, and rebuild the
-stack. Account POST routes get the HTTPS and Origin checks automatically.
+stack. Account POST routes get the HTTPS and Origin checks automatically; in the other
+services use `server/httpbase.py` (`same_site`, `read_body`, `guard`) rather than new
+copies, and diff `scripts/check-service-requests.py`'s matrix before and after.
 
 **A configuration option** - read it from the environment in the service (or
 `render-nginx.sh` for nginx), pass it through `docker-compose.yml`, document it in
