@@ -34,7 +34,7 @@
   } from '$lib/data/discord-relay';
   import { buildActivity, type DiscordKind } from '$lib/data/discord-template';
   import { pagePath } from '$lib/data/env';
-  import { relativeTime } from '$lib/data/social';
+  import { relativeTime } from '$lib/functions/format-time';
   import {
     HubError,
     hubErrorKey,

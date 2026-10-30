@@ -14,7 +14,12 @@
 import { browser } from '$app/env';
 import { BehaviorSubject } from 'rxjs';
 import { standalone } from '$lib/data/env';
-import { forgetServerToken, serverConnected, serverFetch } from '$lib/data/server-connect';
+import {
+  forgetServerToken,
+  responseJson,
+  serverConnected,
+  serverFetch
+} from '$lib/data/server-connect';
 
 export interface AccountUser {
   id: string;
@@ -131,13 +136,7 @@ async function post<T>(action: string, body: object = {}): Promise<T> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(data.error || `HTTP ${response.status}`);
-  }
-
-  return data as T;
+  return responseJson<T>(response);
 }
 
 /**
@@ -172,13 +171,7 @@ export async function changePassword(current: string, next: string) {
 /** Accounts on this server, for the admin panel. */
 export async function listAccounts(): Promise<AdminAccount[]> {
   const response = await fetch(`${accountApiUrl}admin/users`, { cache: 'no-store' });
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(data.error || `HTTP ${response.status}`);
-  }
-
-  return data.users;
+  return (await responseJson(response)).users;
 }
 
 export function addAccount(username: string, password: string, admin: boolean) {
@@ -270,13 +263,7 @@ export interface UpdateState {
 
 export async function getUpdateState(): Promise<UpdateState> {
   const response = await fetch(`${accountApiUrl}admin/update`, { cache: 'no-store' });
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(data.error || `HTTP ${response.status}`);
-  }
-
-  return data;
+  return responseJson<UpdateState>(response);
 }
 
 /** Asks the server's updater to deploy this commit. */

@@ -15,7 +15,6 @@ import { account$, accountReady } from '$lib/data/account';
 // not under test here.
 vi.mock('$lib/data/reader-data-owner', () => ({ releaseReaderData: async () => {} }));
 vi.mock('$lib/data/account-settings-sync', () => ({
-  readerProfile: () => 'desktop',
   settingsSyncState$: new BehaviorSubject({ state: 'idle' }),
   syncAccountSettings: vi.fn()
 }));

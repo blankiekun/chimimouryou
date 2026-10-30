@@ -13,7 +13,8 @@
     type CommunityPost
   } from '$lib/data/community';
   import { communityErrorKey } from '$lib/data/community-book';
-  import { blockFriend, relativeTime } from '$lib/data/social';
+  import { relativeTime } from '$lib/functions/format-time';
+  import { blockFriend } from '$lib/data/social';
   import { socialSession$ } from '$lib/data/social-account';
   import { removePost, removeUserPosts } from '$lib/data/social-moderation';
   import { t$, uiLanguage$ } from '$lib/i18n';

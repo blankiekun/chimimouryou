@@ -66,6 +66,25 @@ export function serverFetch(path: string, init: RequestInit = {}) {
   return fetch(`${serverBase}${path}`, { ...init, headers, credentials: 'omit' });
 }
 
+/**
+ * A response's JSON body ({} without one). When it isn't OK, throws the server's `error` text
+ * (else `fallback`) as an Error with the HTTP `status`.
+ */
+export async function responseJson<T = any>(
+  response: Response,
+  fallback = `HTTP ${response.status}`
+): Promise<T> {
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const error = typeof data?.error === 'string' && data.error ? data.error : fallback;
+
+    throw Object.assign(new Error(error), { status: response.status });
+  }
+
+  return data;
+}
+
 const blobUrls = new Map<string, Promise<string>>();
 
 /** A server file as a blob: URL for <img>; cached for the page's lifetime. */

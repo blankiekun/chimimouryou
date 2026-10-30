@@ -2,7 +2,7 @@
   import { goto } from '$app/navigation';
   import CommunityWork from '$lib/components/community/community-work.svelte';
   import { markNotesSeen, notePath, type NoteGroup } from '$lib/data/community-book';
-  import { relativeTime } from '$lib/data/social';
+  import { relativeTime } from '$lib/functions/format-time';
   import { t$, uiLanguage$ } from '$lib/i18n';
 
   /** "3 replies to your post" (board 7): opens the post (a line comment: its line) and marks the replies seen */

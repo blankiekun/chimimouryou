@@ -13,7 +13,6 @@
   import {
     blockFriend,
     monthName,
-    relativeTime,
     removeFriend,
     reportCover,
     reportProfile,
@@ -28,6 +27,7 @@
     type ShareKey
   } from '$lib/data/social-account';
   import { t$, uiLanguage$, type MessageKey } from '$lib/i18n';
+  import { formatDuration, relativeTime } from '$lib/functions/format-time';
   import { createEventDispatcher } from 'svelte';
 
   /**
@@ -84,7 +84,7 @@
             label: $t$('social.streak')
           },
           { value: stats.weekChars.toLocaleString('en-US'), label: $t$('social.charsWeek') },
-          { value: duration(stats.weekMinutes), label: $t$('social.timeWeek') },
+          { value: formatDuration(stats.weekMinutes * 60, $t$), label: $t$('social.timeWeek') },
           { value: String(stats.finishedYear), label: $t$('social.finishedIn', { year }) },
           ...(stats.wordsKnown !== undefined && show('wordsKnown')
             ? [{ value: stats.wordsKnown.toLocaleString('en-US'), label: $t$('social.wordsKnown') }]
@@ -102,14 +102,6 @@
     profile.relation !== 'visitor' && show('activity') && 'activity'
   ].filter(Boolean);
   $: numberOf = (section: string) => sections.indexOf(section) + 1;
-
-  function duration(minutes: number) {
-    const hours = Math.floor(minutes / 60);
-
-    return hours
-      ? $t$('dashboard.hours', { hours, minutes: minutes % 60 })
-      : $t$('dashboard.minutes', { minutes });
-  }
 
   function card(book: Profile['books'][number]): BookCardProps {
     return {

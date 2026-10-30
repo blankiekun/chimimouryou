@@ -1,5 +1,6 @@
 <script lang="ts">
   import { faPen, faTrash } from '@fortawesome/free-solid-svg-icons';
+  import Switch from '$lib/components/switch.svelte';
   import type { ToggleOption } from '$lib/components/button-toggle-group/toggle-option';
   import { builtInThemeIds } from '$lib/data/theme/themes';
   import { createEventDispatcher, getContext } from 'svelte';
@@ -44,17 +45,11 @@
 </script>
 
 {#if isSwitch}
-  <button
-    type="button"
-    role="switch"
-    class="app-switch"
-    aria-checked={!!selectedOptionId}
+  <Switch
+    checked={!!selectedOptionId}
     aria-label={label}
-    on:click={() => (selectedOptionId = !selectedOptionId)}
+    onchange={(next) => (selectedOptionId = next)}>{options[selectedOptionId ? 1 : 0].text}</Switch
   >
-    <span class="app-switch-thumb" />
-    <span class="app-switch-text">{options[selectedOptionId ? 1 : 0].text}</span>
-  </button>
 {:else}
   <div class="app-segmented" role="radiogroup" aria-label={label}>
     {#each options as option, index}

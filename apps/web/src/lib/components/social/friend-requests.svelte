@@ -2,7 +2,8 @@
   import SectionHead from '$lib/components/section-head.svelte';
   import RoleBadge from '$lib/components/social/role-badge.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
-  import { acceptFriend, relativeTime, removeFriend, type FriendsList } from '$lib/data/social';
+  import { relativeTime } from '$lib/functions/format-time';
+  import { acceptFriend, removeFriend, type FriendsList } from '$lib/data/social';
   import { formatCode, hubErrorKey } from '$lib/data/social-account';
   import { t$, uiLanguage$ } from '$lib/i18n';
 

@@ -297,8 +297,6 @@ const readerSettings: Record<string, Store> = {
   confirmClose: confirmClose$
 };
 
-export { readerProfile, type ReaderProfile } from '$lib/data/store';
-
 interface SyncEntry {
   /** Key in settings.json (and in the change times) */
   key: string;

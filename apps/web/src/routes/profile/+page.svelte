@@ -17,6 +17,7 @@
   import { getWordsSummary, type WordsSummary } from '$lib/data/words-met';
   import { getDateKey } from '$lib/functions/statistic-util';
   import { t$ } from '$lib/i18n';
+  import { formatDuration } from '$lib/functions/format-time';
   import { activePlugins$ } from '$lib/plugins';
   import { onMount } from 'svelte';
 
@@ -36,13 +37,6 @@
   $: link = me ? `${location.origin}${pagePath}/u?name=${encodeURIComponent(me.username)}` : '';
 
   const number = (value: number) => value.toLocaleString('en-US');
-
-  function hours(seconds: number) {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.round((seconds % 3600) / 60);
-
-    return h ? `${h}h ${m}m` : `${m}m`;
-  }
 
   async function load() {
     const statistics = await database
@@ -80,7 +74,7 @@
   $: rows = stats
     ? [
         [$t$('profile.charactersRead'), number(stats.totalCharacters)],
-        [$t$('dashboard.time'), hours(stats.totalTime)],
+        [$t$('dashboard.time'), formatDuration(stats.totalTime, $t$, 'short')],
         [$t$('dashboard.finished'), number(stats.booksCompleted)],
         [$t$('profile.readingDays'), number(stats.daysRead)],
         [$t$('dashboard.wordsKnown'), words ? number(words.known) : '–']
