@@ -363,6 +363,7 @@ export class HighlightPainter {
    * Highlights a search match the reader is jumping to. Counts skip punctuation, so a jump to
    * `start` lands on the next counted character, which can leave a match like 。 at the end of
    * the page or column before: then it goes back one character, once the jump has painted.
+   * (`skip` is 0 for a 。 right after a counted character, so it can't tell when to check.)
    */
   showSearch(
     match: SearchMatch | undefined,
@@ -371,7 +372,7 @@ export class HighlightPainter {
   ) {
     this.searchMatch = match;
     this.searchCheck =
-      match?.skip && match.start > 0
+      match && match.start > 0
         ? (range) => {
             if (range && !isOnScreen(range.getBoundingClientRect(), bookWidth(), innerHeight)) {
               scrollToCount(match.start - 1);
