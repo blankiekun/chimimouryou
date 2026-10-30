@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Switch from '$lib/components/switch.svelte';
   import RankBadge from '$lib/components/reading-rank/rank-badge.svelte';
   import { lightNovels } from '$lib/data/reading-rank';
   import CoverCard from '$lib/components/book-card/cover-card.svelte';
@@ -204,21 +205,15 @@
         {#each showsRows as key (key)}
           <div class="profile-shows-row">
             <span>{$t$(showsLabel(key))}</span>
-            <button
-              type="button"
-              role="switch"
-              class="app-switch"
-              aria-checked={shared(key)}
+            <Switch
+              checked={shared(key)}
               aria-label={$t$(showsLabel(key))}
-              on:click={() =>
+              onchange={() =>
                 queueProfileChange(
                   { share: { [key]: !shared(key) } },
                   (e) => (error = $t$(hubErrorKey(e)))
                 )}
-            >
-              <span class="app-switch-thumb" />
-              <span class="app-switch-text">{switchLabel(shared(key))}</span>
-            </button>
+            />
           </div>
         {/each}
         {#if !shared('wordsKnown')}

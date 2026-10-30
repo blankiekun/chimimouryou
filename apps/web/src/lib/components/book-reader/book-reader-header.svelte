@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Switch from '$lib/components/switch.svelte';
   import { browser } from '$app/env';
   import { faChevronLeft, faEllipsis, faMinus, faPlus } from '@fortawesome/free-solid-svg-icons';
   import { readerImageGalleryPictures$ } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';
@@ -290,17 +291,12 @@
     {#if canUnderlineUnknown}
       <div class="qs-row">
         <span>{$t$('reader.unknownWords')}</span>
-        <button
-          type="button"
-          role="switch"
-          class="app-switch"
-          aria-checked={$unknownWordUnderline$}
+        <Switch
+          checked={$unknownWordUnderline$}
           aria-label={$t$('reader.unknownWords')}
-          on:click={() => unknownWordUnderline$.next(!$unknownWordUnderline$)}
+          onchange={() => unknownWordUnderline$.next(!$unknownWordUnderline$)}
+          >{$t$('reader.underline')}</Switch
         >
-          <span class="app-switch-thumb" />
-          <span class="app-switch-text">{$t$('reader.underline')}</span>
-        </button>
       </div>
     {/if}
     <div class="qs-row qs-themes">

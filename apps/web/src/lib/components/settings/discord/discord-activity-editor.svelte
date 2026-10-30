@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Switch from '$lib/components/switch.svelte';
   import { faArrowLeft } from '@fortawesome/free-solid-svg-icons';
   import Fa from 'svelte-fa';
   import SectionHead from '$lib/components/section-head.svelte';
@@ -157,16 +158,12 @@
           {/if}
         </p>
       </div>
-      <button
-        type="button"
-        role="switch"
-        class="app-switch"
-        aria-checked={options.relay}
+      <Switch
+        checked={options.relay}
+        stateText={false}
         aria-label={$t$('discord.relayPhone')}
-        onclick={() => setDiscordOption('relay', !options.relay)}
-      >
-        <span class="app-switch-thumb"></span>
-      </button>
+        onchange={() => setDiscordOption('relay', !options.relay)}
+      />
     </div>
   {/if}
 
@@ -334,16 +331,12 @@
               <div>
                 <span id="discord-party-label">{$t$('discord.party')}</span>
               </div>
-              <button
-                type="button"
-                role="switch"
-                class="app-switch"
-                aria-checked={template.party}
+              <Switch
+                checked={template.party}
+                stateText={false}
                 aria-labelledby="discord-party-label"
-                onclick={() => (template.party = !template.party)}
-              >
-                <span class="app-switch-thumb"></span>
-              </button>
+                onchange={() => (template.party = !template.party)}
+              />
             </div>
             {#if template.party}
               <div class="editor-party">
@@ -442,16 +435,12 @@
             <div>
               <span id="discord-hide-titles">{$t$('discord.hideTitles')}</span>
             </div>
-            <button
-              type="button"
-              role="switch"
-              class="app-switch"
-              aria-checked={hideTitles}
+            <Switch
+              checked={hideTitles}
+              stateText={false}
               aria-labelledby="discord-hide-titles"
-              onclick={() => setDiscordOption('hideTitles', !hideTitles)}
-            >
-              <span class="app-switch-thumb"></span>
-            </button>
+              onchange={() => setDiscordOption('hideTitles', !hideTitles)}
+            />
           </div>
         </section>
       {/if}

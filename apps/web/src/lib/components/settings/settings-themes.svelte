@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Switch from '$lib/components/switch.svelte';
   import SettingsThemeColor from '$lib/components/settings/settings-theme-color.svelte';
   import { theme$ } from '$lib/data/store';
   import {
@@ -522,16 +523,12 @@
             <span class="block">{$t$('prefs.themes.previewRow')}</span>
             <span class="theme-live-muted">{$t$('prefs.themes.previewDescription')}</span>
           </span>
-          <button
-            type="button"
-            role="switch"
-            class="app-switch"
-            aria-checked={previewOn}
+          <Switch
+            checked={previewOn}
+            stateText={false}
             aria-label={$t$('prefs.themes.previewSwitch')}
-            on:click={() => (previewOn = !previewOn)}
-          >
-            <span class="app-switch-thumb" />
-          </button>
+            onchange={() => (previewOn = !previewOn)}
+          />
         </div>
         <div class="theme-live-buttons">
           <button type="button" class="app-button app-button-primary"
