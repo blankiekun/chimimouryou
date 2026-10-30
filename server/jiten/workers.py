@@ -60,10 +60,6 @@ def words_path(book_id: int) -> str:
     return os.path.join(settings.WORDS_DIR, f'v{settings.WORDS_VERSION}', f'{book_id}.json.gz')
 
 
-def legacy_words_path(book_id: int) -> str:
-    return os.path.join(settings.WORDS_DIR, f'{book_id}.json.gz')
-
-
 def write_words(book_id: int, data: dict):
     path = words_path(book_id)
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -83,11 +79,10 @@ def save_words(book_id: int, analysis, frequency):
 
 def remove_words(book_id: int):
     """Drops a book's word list (its text changed): the next request makes it again."""
-    for path in (words_path(book_id), legacy_words_path(book_id)):
-        try:
-            os.remove(path)
-        except OSError:
-            pass
+    try:
+        os.remove(words_path(book_id))
+    except OSError:
+        pass
 
 
 def manga_path(book_id: int) -> str:
