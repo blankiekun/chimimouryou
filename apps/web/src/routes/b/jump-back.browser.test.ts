@@ -8,13 +8,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // @ts-expect-error tsconfig's moduleResolution "node" doesn't read package exports; Vitest does.
 import { page as browserPage } from 'vitest/browser';
 import { ViewMode } from '$lib/data/view-mode';
+import { autoBookmarkTime$, database } from '$lib/data/store';
 import { nextChapter$ } from '$lib/components/book-reader/book-toc/book-toc';
 import { addBook, mountReader, visibleParagraphs, waitOnScreen } from './reader-fixture';
 
 /*
  * Back after a jump, in the whole /b page with real layout. Catches: the place before the jump
  * read after the reader already moved (Contents and in-book links go through nextChapter$, which
- * the readers also listen to), or Back landing a page or a section off the old place.
+ * the readers also listen to), or Back landing a page or a section off the old place. Paginated:
+ * the jump saving the auto bookmark like a page turn, so reopening lands on the jump, not the read.
  */
 
 vi.mock('$app/navigation', () => ({
@@ -34,6 +36,7 @@ afterEach(async () => {
   component = undefined;
   document.body.innerHTML = '';
   scrollTo(0, 0);
+  autoBookmarkTime$.next(3);
   await browserPage.viewport(1000, 700);
 });
 
@@ -45,15 +48,23 @@ describe('/b Back after a Contents jump returns to the page before it', () => {
   for (const view of [ViewMode.Paginated, ViewMode.Continuous]) {
     for (const writing of ['horizontal-tb', 'vertical-rl'] as const) {
       it(`${view}, ${writing}`, async () => {
-        component = await mountReader(await addBook(2, 25, true), view, writing);
+        autoBookmarkTime$.next(0.3);
+        const id = await addBook(2, 25, true);
+        const saved = async () => (await database.getBookmark(id))!.exploredCharCount;
+        component = await mountReader(id, view, writing);
         await waitOnScreen('p-2-25');
         await settle();
         const start = visibleParagraphs();
+        const bookmark = await saved();
         expect(backButton()).toBeNull();
 
         nextChapter$.next('ttu-ch3');
         await waitOnScreen('p-3-1');
         await vi.waitFor(() => expect(backButton()).toBeTruthy());
+        if (view === ViewMode.Paginated) {
+          await settle(); // over autoBookmarkTime
+          expect(await saved()).toBe(bookmark);
+        }
 
         backButton()!.click();
         await waitOnScreen('p-2-25');

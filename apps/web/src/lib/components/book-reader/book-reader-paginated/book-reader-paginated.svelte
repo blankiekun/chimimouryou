@@ -492,7 +492,7 @@
       previousIntendedCount = exploredCharCount;
       undoLayout = undefined;
       restoreLayout = undefined;
-      // The reader moved (a page turn, a Contents jump) before a pending re-layout kept the old page.
+      // The reader turned the page before a pending re-layout kept the old page.
       pageAnchor = undefined;
 
       if ($selectionToBookmarkEnabled$) {
@@ -768,7 +768,12 @@
 
     if (nextSectionIndex > -1) {
       sectionIndex$.next(nextSectionIndex);
-      concretePageManager?.scrollTo(0, true);
+      // A jump like search's (the auto bookmark doesn't save it), but the place a re-layout keeps.
+      concretePageManager?.scrollTo(0, false);
+      previousIntendedCount = exploredCharCount;
+      pageAnchor = undefined;
+      undoLayout = undefined;
+      restoreLayout = undefined;
     }
   });
 </script>
