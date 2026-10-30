@@ -15,7 +15,7 @@
 
 // The factory first: the handlers import each other in a cycle.
 import '$lib/data/storage/storage-handler-factory';
-import { CalibreStorageHandler } from '$lib/data/storage/handler/calibre-handler';
+import { ServerStorageHandler } from '$lib/data/storage/handler/server-handler';
 import { FilesystemStorageHandler } from '$lib/data/storage/handler/filesystem-handler';
 import { GDriveStorageHandler } from '$lib/data/storage/handler/gdrive-handler';
 import { OneDriveStorageHandler } from '$lib/data/storage/handler/onedrive-handler';
@@ -68,7 +68,7 @@ async function sourceType(name: string) {
  */
 export async function syncFileStore(name: string): Promise<SyncFileStore | undefined> {
   if (!name) return undefined;
-  if (name === StorageSourceDefault.CALIBRE_DEFAULT) return CalibreStorageHandler;
+  if (name === StorageSourceDefault.CALIBRE_DEFAULT) return ServerStorageHandler;
 
   const type = await sourceType(name);
 
@@ -129,7 +129,7 @@ export function readerSyncSource() {
 /** The store for the reader's own files: the account's folder while signed in. */
 export function readerSyncStore(signedIn: boolean) {
   return signedIn
-    ? Promise.resolve<SyncFileStore>(CalibreStorageHandler)
+    ? Promise.resolve<SyncFileStore>(ServerStorageHandler)
     : syncFileStore(readerSyncSource());
 }
 

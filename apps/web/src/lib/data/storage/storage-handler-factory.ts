@@ -9,7 +9,7 @@ import { InternalStorageSources, StorageKey } from '$lib/data/storage/storage-ty
 import { BackupStorageHandler } from '$lib/data/storage/handler/backup-handler';
 import type { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
 import { BrowserStorageHandler } from '$lib/data/storage/handler/browser-handler';
-import { CalibreStorageHandler } from '$lib/data/storage/handler/calibre-handler';
+import { ServerStorageHandler } from '$lib/data/storage/handler/server-handler';
 import { FilesystemStorageHandler } from '$lib/data/storage/handler/filesystem-handler';
 import { GDriveStorageHandler } from '$lib/data/storage/handler/gdrive-handler';
 import { MergeMode } from '$lib/data/merge-mode';
@@ -19,7 +19,7 @@ import { serverless } from '$lib/data/server-connect';
 
 let backupStorageHandler: BackupStorageHandler;
 let browserStorageHandler: BrowserStorageHandler;
-let calibreStorageHandler: CalibreStorageHandler;
+let serverStorageHandler: ServerStorageHandler;
 let gDriveStorageHandler: GDriveStorageHandler;
 let oneDriveStorageHandler: OneDriveStorageHandler;
 let fsStorageHandler: FilesystemStorageHandler;
@@ -56,7 +56,7 @@ export function getStorageHandler(
   statisticsMergeMode?: MergeMode,
   readingGoalsMergeMode?: MergeMode,
   askForStorageUnlock?: boolean
-): CalibreStorageHandler;
+): ServerStorageHandler;
 export function getStorageHandler(
   window: Window,
   storageType: StorageKey.GDRIVE,
@@ -140,8 +140,8 @@ export function getStorageHandler(
     case StorageKey.CALIBRE:
       // No server: Calibre data (e.g. from a backup) goes to the browser instead.
       if (serverless) return getStorageHandler(window, StorageKey.BROWSER);
-      calibreStorageHandler = calibreStorageHandler || new CalibreStorageHandler(window);
-      calibreStorageHandler.updateSettings(
+      serverStorageHandler = serverStorageHandler || new ServerStorageHandler(window);
+      serverStorageHandler.updateSettings(
         window,
         isForBrowser,
         saveBehavior,
@@ -152,7 +152,7 @@ export function getStorageHandler(
         storageSourceName
       );
 
-      return calibreStorageHandler;
+      return serverStorageHandler;
     case StorageKey.GDRIVE:
       gDriveStorageHandler = gDriveStorageHandler || new GDriveStorageHandler(window);
       gDriveStorageHandler.updateSettings(

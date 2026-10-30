@@ -118,6 +118,9 @@ let version: Promise<void> | undefined;
 export function apiVersion() {
   version ??= apiFetch('version')
     .then(async (response) => {
+      // Signed out outside the trusted networks: sign-in is the answer, not an update.
+      if (response.status === 401) throw await httpError(response);
+
       const api = response.ok ? (await response.json().catch(() => ({})))?.api : undefined;
 
       if (api === 1) return;

@@ -38,6 +38,15 @@ const tables: Record<string, string> = {
   metadata: 'metadata'
 };
 
+function bytes(blob: Blob) {
+  return new Promise<ArrayBuffer>((resolve) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
+    reader.readAsArrayBuffer(blob);
+  });
+}
+
 export function fakeApi(options: { api?: number | null; account?: () => string } = {}) {
   let rev = 0;
   const rows: Row[] = [];
@@ -176,7 +185,8 @@ export function fakeApi(options: { api?: number | null; account?: () => string }
 
     if (isGame && method === 'GET') {
       const blob = files.get(`games/${fields.name}`);
-      return blob ? new Response(blob) : json(404, { error: 'No such game' });
+      // jsdom's Blob isn't one undici's Response can read, nor has arrayBuffer(): its bytes.
+      return blob ? new Response(await bytes(blob)) : json(404, { error: 'No such game' });
     }
 
     const body = isGame ? {} : JSON.parse(String(init.body));

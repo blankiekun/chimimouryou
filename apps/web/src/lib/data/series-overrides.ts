@@ -6,14 +6,16 @@
 
 /**
  * Series set by readers (the series generator in the library), shared by
- * everyone through /calibre/sync/series.json. They override the catalog's
- * series by title; an empty series takes a book out of its catalog series.
+ * everyone as the server's series rows (one per book, /api/v1/series). They override
+ * the catalog's series by title; an empty series takes a book out of its catalog series.
  * Not part of upstream.
  */
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 import { titleVolume } from '$lib/components/book-card/library-sort';
-import { serverFetch, serverless } from '$lib/data/server-connect';
+import { loadCalibreCatalog } from '$lib/data/calibre';
+import { serverless } from '$lib/data/server-connect';
+import { apiVersion, putRow, syncMirror } from '$lib/data/server-api';
 
 export interface SeriesOverride {
   series: string;
@@ -22,7 +24,6 @@ export interface SeriesOverride {
 
 export type SeriesOverrides = Record<string, SeriesOverride>;
 
-const overridesUrl = '/calibre/sync/series.json';
 const maxSeriesLength = 200;
 
 let cache: Promise<SeriesOverrides> | undefined;
@@ -49,19 +50,22 @@ export function parseSeriesOverrides(data: unknown): SeriesOverrides {
   return result;
 }
 
-async function fetchSeriesOverrides() {
+/** The mirror's series rows by title (rows of books no longer in the catalog are left out). */
+async function fetchSeriesOverrides(refresh = true) {
   if (serverless) return {};
 
-  const response = await serverFetch(overridesUrl, { cache: 'no-store' });
+  await apiVersion();
 
-  if (response.status === 404) {
-    return {};
-  }
-  if (!response.ok) {
-    throw new Error(`Series list unavailable (HTTP ${response.status})`);
-  }
+  const [mirror, books] = await Promise.all([syncMirror(refresh), loadCalibreCatalog()]);
+  const titles = new Map(books.map((book) => [book.bookId, book.title]));
 
-  return parseSeriesOverrides(await response.json());
+  return parseSeriesOverrides(
+    Object.fromEntries(
+      mirror.series
+        .filter((row) => titles.has(row.book))
+        .map((row) => [titles.get(row.book), { series: row.series, modified: row.modified }])
+    )
+  );
 }
 
 /** Fetched once per session like the catalog; `refresh` refetches. Failures are not cached. */
@@ -97,22 +101,25 @@ export async function saveSeriesOverrides(changes: Record<string, string>, local
     return overrides;
   }
 
-  // shortcut: read-merge-write without locking, so two readers saving in the same second can lose one change; add ETag checks if that happens.
-  const overrides = { ...(await fetchSeriesOverrides()) };
+  const ids = new Map((await loadCalibreCatalog()).map((book) => [book.title, book.bookId]));
 
-  Object.entries(changes).forEach(([title, series]) => {
-    overrides[title] = { series: series.trim().slice(0, maxSeriesLength), modified };
-  });
+  // One row per book: a newer save of the same book elsewhere (409) wins and is kept.
+  await Promise.all(
+    Object.entries(changes).map(([title, series]) => {
+      const id = ids.get(title);
 
-  const response = await serverFetch(overridesUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(overrides)
-  });
+      return id === undefined
+        ? undefined
+        : putRow(`series/${id}`, {
+            modified,
+            series: series.trim().slice(0, maxSeriesLength)
+          }).catch((error) => {
+            throw new Error(`Saving the series failed (HTTP ${error.status})`);
+          });
+    })
+  );
 
-  if (!response.ok) {
-    throw new Error(`Saving the series failed (HTTP ${response.status})`);
-  }
+  const overrides = await fetchSeriesOverrides(false);
 
   cache = Promise.resolve(overrides);
 

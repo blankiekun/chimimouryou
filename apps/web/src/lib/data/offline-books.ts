@@ -11,7 +11,7 @@
  */
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-import { CalibreStorageHandler } from '$lib/data/storage/handler/calibre-handler';
+import { ServerStorageHandler } from '$lib/data/storage/handler/server-handler';
 import { isContinueReading } from '$lib/data/library-home';
 import { logger } from '$lib/data/logger';
 import { database } from '$lib/data/store';
@@ -68,7 +68,7 @@ async function downloadBook(window: Window, title: string) {
   if ((await database.getDataByTitle(title))?.elementHtml) return;
 
   // Own instance: the shared one switches context while a book opens.
-  const handler = new CalibreStorageHandler(window);
+  const handler = new ServerStorageHandler(window);
 
   handler.updateSettings(
     window,

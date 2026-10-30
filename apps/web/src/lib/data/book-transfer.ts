@@ -318,7 +318,7 @@ export async function importReceived(book: Awaited<ReturnType<typeof unpackBook>
     // Never into the server's shared sync folder (every reader there would get a friend's copy):
     // this browser keeps it, listed under the Calibre source (calibreReceivedBooks$).
     const [{ calibreReceivedBooks$ }, { ReplicationSaveBehavior }] = await Promise.all([
-      import('$lib/data/storage/handler/calibre-handler'),
+      import('$lib/data/storage/handler/server-handler'),
       import('$lib/functions/replication/replication-options')
     ]);
     const browser = getStorageHandler(

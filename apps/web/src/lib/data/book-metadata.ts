@@ -7,14 +7,16 @@
 /**
  * Book details fetched from AniList (books, manga), VNDB (visual novels) or
  * Jiten (all three, through nginx's or the VPS's /jiten/ proxy: its API only allows
- * jiten.moe) on a book's page, shared by everyone through
- * /calibre/sync/metadata.json and keyed by title like series.json. A saved
+ * jiten.moe) on a book's page, shared by everyone as the server's metadata rows (one per
+ * book, /api/v1/metadata; `{}` is a removed entry) and keyed by title like the series. A saved
  * cover replaces the card's, a VNDB title the card's title.
  * Not part of upstream.
  */
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-import { serverFetch, serverless } from '$lib/data/server-connect';
+import { loadCalibreCatalog } from '$lib/data/calibre';
+import { serverless } from '$lib/data/server-connect';
+import { apiVersion, putRow, syncMirror } from '$lib/data/server-api';
 
 export type MetadataKind = 'book' | 'manga' | 'vn';
 
@@ -45,7 +47,6 @@ export type MetadataCandidate = Omit<BookMetadata, 'modified'> & {
 
 export type BookMetadataMap = Record<string, BookMetadata>;
 
-const metadataUrl = '/calibre/sync/metadata.json';
 const sources: MetadataSource[] = ['anilist', 'vndb', 'jiten'];
 const pagePrefixes = ['https://anilist.co/', 'https://vndb.org/', 'https://jiten.moe/'];
 const coverPrefixes = ['https://s4.anilist.co/', 'https://t.vndb.org/', 'https://cdn.jiten.moe/'];
@@ -97,19 +98,22 @@ export function parseBookMetadata(data: unknown): BookMetadataMap {
   return result;
 }
 
-async function fetchBookMetadata() {
+/** The mirror's metadata rows by title, as `{...data, modified}`; `{}` (removed) left out. */
+async function fetchBookMetadata(refresh = true) {
   if (serverless) return {};
 
-  const response = await serverFetch(metadataUrl, { cache: 'no-store' });
+  await apiVersion();
 
-  if (response.status === 404) {
-    return {};
-  }
-  if (!response.ok) {
-    throw new Error(`Book details unavailable (HTTP ${response.status})`);
-  }
+  const [mirror, books] = await Promise.all([syncMirror(refresh), loadCalibreCatalog()]);
+  const titles = new Map(books.map((book) => [book.bookId, book.title]));
 
-  return parseBookMetadata(await response.json());
+  return parseBookMetadata(
+    Object.fromEntries(
+      mirror.metadata
+        .filter((row) => titles.has(row.book) && Object.keys(row.data || {}).length)
+        .map((row) => [titles.get(row.book), { ...row.data, modified: row.modified }])
+    )
+  );
 }
 
 /** Fetched once per session; `refresh` refetches. Failures are not cached. */
@@ -128,26 +132,23 @@ export function loadBookMetadata(refresh = false) {
 
 /** Saves (or with `undefined` removes) a title's details on top of the latest server copy. */
 export async function saveBookMetadata(title: string, entry: MetadataCandidate | undefined) {
-  // shortcut: read-merge-write without locking like series.json; add ETag checks if two editors collide.
-  const map = { ...(await fetchBookMetadata()) };
+  const id = (await loadCalibreCatalog()).find((book) => book.title === title)?.bookId;
+  let data = {};
 
   if (entry) {
     const { names: _names, characters: _characters, ...saved } = entry;
 
-    map[title] = { ...saved, modified: Date.now() };
-  } else {
-    delete map[title];
+    data = saved;
   }
 
-  const response = await serverFetch(metadataUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(map)
-  });
-
-  if (!response.ok) {
-    throw new Error(`Saving the details failed (HTTP ${response.status})`);
+  if (id !== undefined) {
+    // 409: a newer save of this book elsewhere wins and is kept.
+    await putRow(`metadata/${id}`, { modified: Date.now(), data }).catch((error) => {
+      throw new Error(`Saving the details failed (HTTP ${error.status})`);
+    });
   }
+
+  const map = await fetchBookMetadata(false);
 
   cache = Promise.resolve(map);
   metadataSaves += 1;
