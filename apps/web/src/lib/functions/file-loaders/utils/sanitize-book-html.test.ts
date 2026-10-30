@@ -79,4 +79,38 @@ describe('parseBookHtml', () => {
     expect(reparsed.querySelector('[onerror]')).toBeNull();
     expect(result).not.toContain('noscript');
   });
+
+  // Bug: data:image/ passed on links too, so a link to an SVG data: document (which can carry
+  // script) kept its href. Inline pictures (img src, SVG image href) must keep theirs.
+  it('drops data: URLs on links but keeps data: images', () => {
+    const result = parseBookHtml(
+      '<a id="a" href="data:image/svg+xml,<svg onload=alert(1)></svg>">a</a>' +
+        '<map><area id="b" href="data:image/svg+xml,x"></map>' +
+        '<svg><a id="c" xlink:href="data:image/svg+xml,x"><text>c</text></a>' +
+        '<image id="d" href="data:image/gif;ttu:c.jpg;base64,R0"></image></svg>' +
+        '<img id="e" src="data:image/svg+xml,x">'
+    );
+
+    for (const id of 'abc') {
+      const link = result.querySelector(`#${id}`)!;
+      expect(link.getAttribute('href') ?? link.getAttribute('xlink:href'), id).toBeNull();
+    }
+    expect(result.querySelector('#d')?.getAttribute('href')).toContain('ttu:c.jpg');
+    expect(result.querySelector('#e')?.getAttribute('src')).toBe('data:image/svg+xml,x');
+  });
+
+  // Bug (mXSS): MathML and table parsing quirks hoist <style> text out as markup when the cleaned
+  // HTML is parsed again (as the reader does with stored books), giving a live <img onerror>.
+  it('leaves no handler after the cleaned HTML is parsed again', () => {
+    const result = clean('<math><mtext><table><mglyph><style><img src=x onerror=alert(1)>');
+    const reparsed = document.createElement('div');
+
+    reparsed.innerHTML = result;
+
+    expect(
+      [...reparsed.querySelectorAll('*')].flatMap((el) =>
+        el.getAttributeNames().filter((name) => name.toLowerCase().startsWith('on'))
+      )
+    ).toEqual([]);
+  });
 });

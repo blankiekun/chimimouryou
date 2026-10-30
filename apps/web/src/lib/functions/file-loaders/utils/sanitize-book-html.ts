@@ -59,6 +59,9 @@ const urlAttributes = new Set([
 const ignoredUrlCharacters = /[\u0000- \u007f-\u009f]/g;
 // file: would let the desktop app hand a local or UNC path to the system to open.
 const unsafeUrl = /^(?:javascript:|vbscript:|file:|data:(?!image\/))/i;
+// data: images stay where they are drawn (books inline pictures); a link to one could open a
+// scripted SVG document.
+const imageUrlAttributes = new Set(['src', 'poster', 'background', 'lowsrc', 'dynsrc']);
 
 /** A document without a browsing context: parsing into it loads nothing and runs nothing. */
 export function createInertDocument() {
@@ -67,6 +70,24 @@ export function createInertDocument() {
 
 /** Removes everything under `root` that could run script, in place. */
 export function sanitizeBookElement(root: Element) {
+  removeUnsafeMarkup(root);
+
+  // Book HTML is stored as text and parsed again, and serialized HTML can parse into a
+  // different tree (MathML or SVG inside tables: mXSS), so clean until a round trip changes nothing.
+  for (let pass = 0; pass < 3; pass++) {
+    const html = root.innerHTML;
+
+    root.innerHTML = html;
+    removeUnsafeMarkup(root);
+
+    if (root.innerHTML === html) return;
+  }
+
+  // Still changing: markup built to keep mutating, not a book.
+  root.replaceChildren();
+}
+
+function removeUnsafeMarkup(root: Element) {
   for (const element of [...root.querySelectorAll('*')]) {
     if (blockedElements.has(element.localName.toLowerCase())) {
       element.remove();
@@ -79,12 +100,23 @@ export function sanitizeBookElement(root: Element) {
       if (
         lowerName.startsWith('on') ||
         lowerName === 'srcdoc' ||
-        (urlAttributes.has(lowerName) && unsafeUrl.test(value.replace(ignoredUrlCharacters, '')))
+        (urlAttributes.has(lowerName) && isUnsafeUrl(element, lowerName, value))
       ) {
         element.removeAttribute(name);
       }
     }
   }
+}
+
+function isUnsafeUrl(element: Element, lowerName: string, value: string) {
+  const url = value.replace(ignoredUrlCharacters, '');
+
+  return (
+    unsafeUrl.test(url) ||
+    (/^data:/i.test(url) &&
+      !imageUrlAttributes.has(lowerName) &&
+      element.localName.toLowerCase() !== 'image')
+  );
 }
 
 /** Book HTML as a cleaned element of an inert document. */
