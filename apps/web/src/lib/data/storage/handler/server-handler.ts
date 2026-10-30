@@ -307,7 +307,13 @@ export class ServerStorageHandler extends BaseStorageHandler {
 
   /** The account state, then this book's rows: fetched once per book (every call with the cache off). */
   private async mirror() {
-    await this.state();
+    try {
+      await this.state();
+    } catch (error) {
+      // Server out of reach: the stored copy, so books cached in this browser still open.
+      if (error instanceof TypeError) return syncMirror(false);
+      throw error;
+    }
 
     const { title } = this.currentContext;
     const fresh = this.freshTitles.has(title) || (this.cacheStorageData && this.dataListFetched);

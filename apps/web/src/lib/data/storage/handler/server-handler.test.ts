@@ -464,6 +464,22 @@ describe('while an expired session still owns the data', () => {
   });
 });
 
+describe('opening a book offline', () => {
+  // Bug: opening a book asked the server for the sync state first, so a book cached in this
+  // browser failed with "Failed to fetch" when the server was out of reach.
+  it('opens the copy cached in this browser', async () => {
+    const id = await localBook('こころ');
+
+    vi.stubGlobal('fetch', async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    const server = handler();
+
+    server.startContext({ title: 'こころ' });
+    expect(await server.prepareBookForReading()).toBe(id);
+  });
+});
+
 describe('processing a just-imported book', () => {
   // Bug: a device clock behind the server's dated the copy before `added`, so every open took it
   // for the old version and processed the book again.
