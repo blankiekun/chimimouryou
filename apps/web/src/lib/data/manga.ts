@@ -17,6 +17,7 @@ import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 import type { SeriesOverrides } from '$lib/data/series-overrides';
 import { orderSeries } from '$lib/components/book-card/library-sort';
+import { record } from '$lib/data/setting-parsers';
 
 const marker = '<!--ttu-manga-->';
 
@@ -31,7 +32,7 @@ export const mangaReadingMode$ = writableStringLocalStorageSubject<MangaReadingM
 /** Reading modes chosen per series (by name), synced with the account like Mihon's per-series setting. */
 export const mangaSeriesModes$ = writableObjectLocalStorageSubject<
   Record<string, MangaReadingMode>
->()('mangaSeriesModes', {});
+>()('mangaSeriesModes', {}, record);
 
 /**
  * A store of the series' reading mode, else the last one chosen. Setting it keeps it for the

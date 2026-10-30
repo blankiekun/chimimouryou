@@ -18,6 +18,7 @@ import type { BooksDbStatistic } from '$lib/data/database/books-db/versions/book
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import { placementAt, type PlacementRecord } from '$lib/data/placement';
 import type { WordMarks } from '$lib/data/word-marks';
+import { record } from '$lib/data/setting-parsers';
 
 export interface RankTier {
   ja: string;
@@ -288,5 +289,6 @@ export function readingRank(
 
 export const readingRank$ = writableObjectLocalStorageSubject<Partial<RankState>>()(
   'readingRank',
-  {}
+  {},
+  record
 );

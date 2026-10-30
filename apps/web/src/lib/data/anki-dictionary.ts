@@ -28,6 +28,7 @@ import type {
   Options,
   ProfileOptions
 } from '$lib/vendor/yomitan/types/settings';
+import { record } from '$lib/data/setting-parsers';
 
 /** Yomitan's term card format and the Anki options the note builder reads. */
 export interface DictionaryAnki {
@@ -56,7 +57,8 @@ export const defaultDictionaryAnki: DictionaryAnki = {
 
 export const dictionaryAnki$ = writableObjectLocalStorageSubject<Partial<DictionaryAnki>>()(
   'dictionaryAnki',
-  {}
+  {},
+  record
 );
 
 export type DictionaryAnkiRoute = 'ankiconnect' | 'ankimobile';

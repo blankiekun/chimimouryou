@@ -12,7 +12,7 @@ import {
   defaultAiFeatures,
   ttsVoiceId$
 } from '$lib/data/ai-settings';
-import { setFeature } from '$lib/data/ai-connections';
+import { saveConnection, setFeature } from '$lib/data/ai-connections';
 import {
   elevenLabsVoice,
   readingTimeline,
@@ -30,8 +30,8 @@ const elevenLabs = {
 };
 
 function connectElevenLabs(key: string, model = 'eleven_v4') {
-  aiConnections$.next([elevenLabs]);
-  aiConnectionKeys$.next({ elevenlabs: key });
+  aiConnections$.next([]);
+  saveConnection(elevenLabs, key);
   aiFeatures$.next({
     ...defaultAiFeatures,
     voice: { connection: 'elevenlabs', model, params: {} }

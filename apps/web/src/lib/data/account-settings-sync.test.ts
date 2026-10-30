@@ -13,14 +13,20 @@ import {
   askAiReaderNote$
 } from '$lib/data/ai-settings';
 import { mangaSeriesModes$ } from '$lib/data/manga';
-import { theme$ } from '$lib/data/store';
+import { fontSize$, theme$, viewMode$ } from '$lib/data/store';
+import { ViewMode } from '$lib/data/view-mode';
 import { customAppThemes$, darkTheme$ } from '$lib/data/theme/theme-store';
 import { audiobookshelfToken$ } from '$lib/data/audiobookshelf';
 import { socialSession$ } from '$lib/data/social-account';
 import { homeBookTitles$, homeRemovedTitles$ } from '$lib/data/library-home';
 import { dropSyncMirrors } from '$lib/data/server-api';
 import { fakeApi } from '$lib/data/test-utils/fake-api';
-import { mergeEntries, startSettingsSync, syncAccountSettings } from './account-settings-sync';
+import {
+  mergeEntries,
+  settingsSyncState$,
+  startSettingsSync,
+  syncAccountSettings
+} from './account-settings-sync';
 
 /** The library's Drive/OneDrive/folder while signed out (undefined: none) */
 const folder = vi.hoisted(() => ({ files: undefined as Record<string, string> | undefined }));
@@ -433,5 +439,94 @@ describe('account settings sync', () => {
     expect(remote()?.values).not.toHaveProperty('openRouterApiKey');
     expect(remote()?.values).not.toHaveProperty('elevenLabsModel');
     expect(remote()?.modified).not.toHaveProperty('openRouterApiKey');
+  });
+
+  /*
+   * How a malformed synced value could still do harm:
+   * - a newer null/unknown value is applied (font-size: nullpx, an unknown view mode);
+   * - it is "healed" by uploading the local value over it, which would also overwrite a value a
+   *   newer client understands and this one doesn't;
+   * - a non-array entry setting (Ask AI presets) throws in the merge, so settings sync fails forever,
+   *   or is read as empty and deletes the local entries whose newer times sit in the file;
+   * - a connection the merge can't use (no id) breaks the merge, or one of an unknown provider is
+   *   dropped and then deleted from the file for every device.
+   */
+  it('ignores malformed newer values, keeps local ones and leaves the file alone', async () => {
+    const preset = (id: string) => ({ id, label: id, prompt: id });
+    const later = Date.now() + 100_000;
+
+    window.localStorage.setItem('accountSettingsOwner', 'alice');
+    askAiPresets$.next([preset('mine')]);
+    fontSize$.next(24);
+    viewMode$.next(ViewMode.Continuous);
+    mockServer({ values: {}, modified: {} });
+    await signInAs(alice);
+
+    setRemote({
+      ...remote(),
+      values: {
+        ...remote()!.values,
+        askAiPresets: { x: 1 },
+        'reader.desktop.fontSize': null,
+        'reader.desktop.viewMode': 'sideways'
+      },
+      modified: {
+        ...remote()!.modified,
+        askAiPresets: later,
+        'reader.desktop.fontSize': later,
+        'reader.desktop.viewMode': later
+      },
+      entryModified: { askAiPresets: { mine: later } }
+    });
+    await syncAccountSettings();
+
+    expect(settingsSyncState$.getValue().state).toBe('synced');
+    expect(askAiPresets$.getValue().map(({ id }) => id)).toEqual(['mine']);
+    expect(fontSize$.getValue()).toBe(24);
+    expect(viewMode$.getValue()).toBe(ViewMode.Continuous);
+    expect(remote()?.values['reader.desktop.viewMode']).toBe('sideways');
+    expect(remote()?.values['reader.desktop.fontSize']).toBeNull();
+  });
+
+  it('merges the usable connections of a malformed list and keeps unknown providers', async () => {
+    const connection = { id: 'x', name: 'x', provider: 'groq', kind: 'text', modified: 1 } as const;
+    const unknown = {
+      id: 'new',
+      name: 'new',
+      provider: 'from-a-newer-client',
+      kind: 'text',
+      modified: 2
+    };
+
+    window.localStorage.setItem('accountSettingsOwner', 'alice');
+    aiConnections$.next([connection]);
+    window.localStorage.setItem('accountSettingsModified', JSON.stringify({ aiConnections: 1 }));
+    mockServer({
+      values: { aiConnections: [unknown, { name: 'no id' }, 'junk'] },
+      modified: { aiConnections: 5 }
+    });
+
+    await signInAs(alice);
+
+    expect(settingsSyncState$.getValue().state).toBe('synced');
+    expect(aiConnections$.getValue().map(({ id }) => id)).toEqual(['new', 'x']);
+    expect((remote()?.values.aiConnections as { id: string }[]).map(({ id }) => id)).toEqual([
+      'new',
+      'x'
+    ]);
+  });
+
+  it('keeps settings sync running when the whole connection list is malformed', async () => {
+    window.localStorage.setItem('accountSettingsOwner', 'alice');
+    mockServer({
+      values: { aiConnections: { y: 1 }, askAiReaderNote: 'theirs' },
+      modified: { aiConnections: 5, askAiReaderNote: 5 }
+    });
+
+    await signInAs(alice);
+
+    expect(settingsSyncState$.getValue().state).toBe('synced');
+    expect(askAiReaderNote$.getValue()).toBe('theirs');
+    expect(remote()?.values.aiConnections).toEqual({ y: 1 });
   });
 });

@@ -11,12 +11,7 @@
  * per-character timestamps let the reader highlight what is being said. Not part of upstream.
  */
 
-import {
-  aiConnectionKeys$,
-  defaultElevenLabsModel,
-  redactSecret,
-  ttsVoiceId$
-} from '$lib/data/ai-settings';
+import { defaultElevenLabsModel, redactSecret, ttsVoiceId$ } from '$lib/data/ai-settings';
 import { resolveFeature } from '$lib/data/ai-connections';
 import { authHeaders, connectionBaseUrl } from '$lib/data/ai-providers';
 import { speechText, type ReadingParagraph } from '$lib/functions/tts/extract-reading-text';
@@ -46,8 +41,8 @@ function base64ToBlob(base64: string, type: string) {
 
 /** The AI voice's ElevenLabs connection with its key; undefined reads with this device's voices. */
 export function elevenLabsVoice() {
-  const { connection, provider, model } = resolveFeature('voice');
-  const key = connection ? (aiConnectionKeys$.getValue()[connection.id] ?? '').trim() : '';
+  const { connection, provider, model, key: connectionKey } = resolveFeature('voice');
+  const key = connectionKey.trim();
 
   if (!connection || provider?.id !== 'elevenlabs' || !key) {
     return undefined;

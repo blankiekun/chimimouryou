@@ -24,10 +24,11 @@ import {
   resolveTheme,
   type ThemeDefinition
 } from '$lib/data/theme/themes';
+import { bool, record, string } from '$lib/data/setting-parsers';
 
 export const customAppThemes$ = writableObjectLocalStorageSubject<
   Record<string, ThemeDefinition>
->()('customAppThemes', {});
+>()('customAppThemes', {}, record);
 
 /** Theme being edited in settings, shown live instead of the selected one. */
 export const previewTheme$ = new BehaviorSubject<ThemeDefinition | undefined>(undefined);
@@ -50,8 +51,16 @@ if (Object.keys(legacyThemes).length && !Object.keys(customAppThemes$.getValue()
 }
 
 /** Switch between `theme$` (light) and `darkTheme$` with the system setting. */
-export const followSystemTheme$ = writableBooleanLocalStorageSubject()('followSystemTheme', true);
-export const darkTheme$ = writableStringLocalStorageSubject()('darkTheme', defaultDarkThemeId);
+export const followSystemTheme$ = writableBooleanLocalStorageSubject()(
+  'followSystemTheme',
+  true,
+  bool
+);
+export const darkTheme$ = writableStringLocalStorageSubject()(
+  'darkTheme',
+  defaultDarkThemeId,
+  string
+);
 
 /**
  * Washi and Sumi were the defaults until Study Book. A setting that still holds one of them and

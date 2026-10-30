@@ -6,6 +6,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { aiConnectionKeys$, aiConnections$, askAiReaderNote$ } from '$lib/data/ai-settings';
+import { saveConnection } from '$lib/data/ai-connections';
 import { askAi } from './ask-ai';
 
 function stream(lines: string[]) {
@@ -14,10 +15,10 @@ function stream(lines: string[]) {
 
 /** An OpenRouter connection with this key; an empty key removes every connection. */
 function setOpenRouterKey(key: string) {
-  aiConnections$.next(
-    key ? [{ id: 'openrouter', name: 'OR', provider: 'openrouter', kind: 'text', modified: 1 }] : []
-  );
-  aiConnectionKeys$.next(key ? { openrouter: key } : {});
+  aiConnections$.next([]);
+  aiConnectionKeys$.next({});
+  if (key)
+    saveConnection({ id: 'openrouter', name: 'OR', provider: 'openrouter', kind: 'text' }, key);
 }
 
 describe('askAi', () => {

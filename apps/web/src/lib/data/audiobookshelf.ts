@@ -19,6 +19,7 @@ import { titleVolume } from '$lib/components/book-card/library-sort';
 import { standalone } from '$lib/data/env';
 import { tr } from '$lib/i18n';
 import type { MatchedCue } from '$lib/functions/audiobook/subtitles';
+import { string } from '$lib/data/setting-parsers';
 
 /** Standalone only: the Audiobookshelf address (no server proxy there). */
 export const audiobookshelfServer$ = writableStringLocalStorageSubject()(
@@ -34,7 +35,11 @@ export function absBaseUrl() {
 }
 
 /** The Audiobookshelf user's token or API key; belongs to the account like the AI keys. */
-export const audiobookshelfToken$ = writableStringLocalStorageSubject()('audiobookshelfToken', '');
+export const audiobookshelfToken$ = writableStringLocalStorageSubject()(
+  'audiobookshelfToken',
+  '',
+  string
+);
 
 export interface AbsTrack {
   ino: string;

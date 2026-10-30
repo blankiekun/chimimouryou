@@ -145,7 +145,9 @@ git merge upstream/main`, open a PR and merge it with **Create a merge
 `data/store.ts`, or `data/ai-settings.ts` for AI), a control in the relevant
 `components/settings/` component inside a `SettingsItemGroup` (so search finds
 it), and, to sync it with accounts, the store in `sharedSettings` or
-`readerSettings` in `data/account-settings-sync.ts`. A secret also goes in
+`readerSettings` in `data/account-settings-sync.ts`. A synced store needs a
+parser from `data/setting-parsers.ts` as its third argument (the type requires
+it): type and closed sets only, never ranges. A secret also goes in
 `secretSettings`, so it is removed when the account changes.
 
 **A reader feature** - put the logic in `lib/data/` or `lib/functions/` as plain

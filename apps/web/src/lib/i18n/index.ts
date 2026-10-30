@@ -14,6 +14,7 @@ import { map } from 'rxjs';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 import { en, type MessageKey } from './en';
 import { ja } from './ja';
+import { oneOf } from '$lib/data/setting-parsers';
 
 export type { MessageKey };
 export type UiLanguage = 'en' | 'ja';
@@ -21,7 +22,11 @@ export type MessageParams = Record<string, string | number>;
 
 const messages: Record<UiLanguage, Record<MessageKey, string>> = { en, ja };
 
-export const uiLanguage$ = writableStringLocalStorageSubject<UiLanguage>()('uiLanguage', 'en');
+export const uiLanguage$ = writableStringLocalStorageSubject<UiLanguage>()(
+  'uiLanguage',
+  'en',
+  oneOf<UiLanguage>(['en', 'ja'])
+);
 
 /** The text for `key` in `lang` (English when missing), with its {param}s filled in. */
 export function translate(lang: string, key: MessageKey, params: MessageParams = {}) {
