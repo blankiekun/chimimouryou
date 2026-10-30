@@ -71,7 +71,8 @@ export const syncKinds = {
     'kanji.json': 'kanji',
     'words.json': 'words',
     'immersion.json': 'immersion',
-    'settings.json': 'settings'
+    'settings.json': 'settings',
+    'sources.json': 'sources'
   },
   gameDocs: ['progress', 'statistics', 'vnsaves']
 } as const;

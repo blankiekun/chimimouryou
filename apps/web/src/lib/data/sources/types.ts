@@ -55,6 +55,8 @@ export interface SourceWork {
   server: number | null;
   /** A server's work whose volumes are whole files, queued as they come */
   files: boolean;
+  /** Standalone: the device that checks its follow when that isn't this one (sources.json) */
+  elsewhere?: string;
 }
 
 /** An OPDS catalog or Suwayomi server this account added (GET servers); the password never comes back. */
@@ -138,6 +140,8 @@ export interface SourceFollow {
   /** When the follow was made, paused or resumed (ms) */
   modified: number;
   cover: boolean;
+  /** Standalone: the device that checks it when that isn't this one (sources.json) */
+  elsewhere?: string;
 }
 
 export interface SourceJob {

@@ -12,10 +12,12 @@
  * titled `<work> <n>` in the work's series; the open volume is re-imported under the same title, so
  * it keeps its id and with it the reader's place (database.upsertData). Jobs run one at a time
  * while the app is open; followed works are checked every `Check every` hours (Settings → Sources),
- * on Wi-Fi only when that is on and the browser can tell.
+ * on Wi-Fi only when that is on and the browser can tell. Follows are shared as sources.json in the
+ * reader's sync folder, each run by the device that made it (Sync, below).
  */
 
 import { browser } from '$app/env';
+import { Capacitor } from '@capacitor/core';
 import { openDB, type IDBPDatabase } from 'idb';
 import { StorageKey } from '$lib/data/storage/storage-types';
 import { database } from '$lib/data/store';
@@ -24,6 +26,10 @@ import loadEpub from '$lib/functions/file-loaders/epub/load-epub';
 import loadCbz from '$lib/functions/file-loaders/cbz/load-cbz';
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
+import type { SyncFileStore } from '$lib/data/storage/handler/base-handler';
+import { readerStore } from '$lib/data/sync/extras-sync';
+import { syncJsonFile } from '$lib/data/sync/sync-files';
+import { logger } from '$lib/data/logger';
 import { epub, plan, VOLUME_SIZE } from './sites/build';
 import * as kakuyomu from './sites/kakuyomu';
 import * as opds from './sites/opds';
@@ -98,6 +104,25 @@ interface FollowRow {
   lastCheck: number | null;
   nextCheck: number | null;
   modified: number;
+  /** Another device runs it (sources.json); missing = this one */
+  device?: string;
+  deviceName?: string;
+}
+
+/** A follow in sources.json; unfollows stay as `deleted`, so another device's copy can't revive it. */
+interface SharedFollow {
+  key: string;
+  site: string;
+  siteName: string;
+  workKey: string;
+  url: string;
+  title: string;
+  /** The device that checks it */
+  device: string;
+  deviceName: string;
+  paused: boolean;
+  modified: number;
+  deleted?: boolean;
 }
 
 type ServerRow = opds.ServerRow & { deleted?: boolean };
@@ -114,13 +139,18 @@ interface Stores {
   follows: FollowRow;
   servers: ServerRow;
   chapters: Chapter & { work: number; n: number };
+  shared: SharedFollow;
 }
 
 let opened: Promise<IDBPDatabase> | undefined;
 
 function db() {
-  opened ??= openDB('chimi-sources', 1, {
-    upgrade(base) {
+  opened ??= openDB('chimi-sources', 2, {
+    upgrade(base, version) {
+      if (version >= 1) {
+        base.createObjectStore('shared', { keyPath: 'key' });
+        return;
+      }
       base
         .createObjectStore('works', { keyPath: 'id', autoIncrement: true })
         .createIndex('key', ['site', 'workKey'], { unique: true });
@@ -129,6 +159,7 @@ function db() {
       base.createObjectStore('follows', { keyPath: 'work' });
       base.createObjectStore('servers', { keyPath: 'id', autoIncrement: true });
       base.createObjectStore('chapters', { keyPath: ['work', 'n'] });
+      base.createObjectStore('shared', { keyPath: 'key' });
     }
   });
   return opened;
@@ -306,7 +337,8 @@ async function workJson(work: WorkRow, found?: SiteDetails): Promise<SourceWork>
     per: work.per,
     perChoice: isPages(work) && !volumes.length && !jobs.length ? MANGA_VOLUME_SIZE : null,
     server: site.server ? site.server.row.id : null,
-    files: !!site.server && !isPages(work)
+    files: !!site.server && !isPages(work),
+    elsewhere: follow && !runsHere(follow) ? follow.deviceName || 'another device' : ''
   };
 }
 
@@ -591,11 +623,13 @@ async function followJson(follow: FollowRow): Promise<SourceFollow> {
     lastCheck: follow.lastCheck,
     nextCheck: follow.nextCheck,
     modified: follow.modified,
-    cover: !!work.cover
+    cover: !!work.cover,
+    elsewhere: runsHere(follow) ? '' : follow.deviceName || 'another device'
   };
 }
 
 export async function getFollowing() {
+  pullSources();
   const follows = await Promise.all((await all('follows')).map(followJson));
   return {
     follows: follows.sort((a, b) => a.title.localeCompare(b.title)),
@@ -617,20 +651,23 @@ export async function followWork(workId: number, paused = false) {
     paused,
     modified: Date.now()
   });
+  await share(workId);
   if (!paused) await queueDueChecks(Date.now(), true);
   return { follow: await followJson((await one('follows', workId))!) };
 }
 
 export async function unfollowWork(workId: number) {
-  if (!(await one('follows', workId))) throw new SourceError('Not following that work');
+  const follow = await one('follows', workId);
+  if (!follow) throw new SourceError('Not following that work');
   await remove('follows', workId);
+  await share(workId, follow);
   return {};
 }
 
 /** Check now: every unpaused follow (or the one work) at once, on mobile data too. */
 export async function checkNow(workId?: number) {
   const follows = (await all('follows')).filter(
-    (f) => !f.paused && (workId === undefined || f.work === workId)
+    (f) => !f.paused && runsHere(f) && (workId === undefined || f.work === workId)
   );
   if (workId !== undefined && !follows.length) {
     throw new SourceError('Not following that work, or it is paused');
@@ -652,6 +689,7 @@ export async function queueDueChecks(now: number, asked = false) {
   for (const follow of await all('follows')) {
     if (
       follow.paused ||
+      !runsHere(follow) ||
       (follow.nextCheck !== null && follow.nextCheck > now) ||
       busy.has(follow.work)
     ) {
@@ -788,8 +826,11 @@ export async function removeServer(id: number) {
   const works = new Set(
     (await all('works')).filter((w) => w.site === `opds:${id}`).map((w) => w.id)
   );
-  for (const follow of await all('follows'))
-    if (works.has(follow.work)) await remove('follows', follow.work);
+  for (const follow of await all('follows')) {
+    if (!works.has(follow.work)) continue;
+    await remove('follows', follow.work);
+    await share(follow.work, follow);
+  }
   for (const job of await all('jobs')) {
     if (works.has(job.work) && job.state === 'queued') await remove('jobs', job.id);
   }
@@ -1117,6 +1158,7 @@ let timer: ReturnType<typeof setInterval> | undefined;
 export function startLocalSources() {
   if (timer || !browser) return;
   const tick = () => {
+    pullSources(SHARED_FRESH_MS * 15);
     if (sourcesAutoUpdate$.getValue()) queueDueChecks(Date.now()).catch(() => undefined);
     wake();
   };
@@ -1131,4 +1173,159 @@ export function startLocalSources() {
     )
     .then(tick, () => undefined);
   timer = setInterval(tick, 60 * 1000);
+}
+
+// Sync (sources.json) -----------------------------------------------------------------------------
+
+const SHARED_FRESH_MS = 60 * 1000;
+let sharedSyncedAt = 0;
+let sharedTimer: ReturnType<typeof setTimeout> | undefined;
+let sharedQueue = Promise.resolve();
+
+/** Random per browser or app install (like immersion-log's). */
+function deviceId() {
+  try {
+    let id = localStorage.getItem('sourcesDevice');
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem('sourcesDevice', id);
+    }
+    return id;
+  } catch {
+    return 'device';
+  }
+}
+
+/** How other devices name this one: "Followed in the desktop app; updates there" (board 5s). */
+function deviceName() {
+  if ('chimiDesktop' in globalThis) return 'the desktop app';
+  if (Capacitor.isNativePlatform()) return 'the Android app';
+  return 'a browser';
+}
+
+const runsHere = (follow: FollowRow) => !follow.device || follow.device === deviceId();
+
+/** A server's number is this device's own, so its works are keyed by the device too. */
+const sharedKey = (device: string, site: string, workKey: string) =>
+  site.startsWith('opds:') ? `${device} ${site} ${workKey}` : `${site} ${workKey}`;
+
+/** The newer entry; on a tie the unfollow, so both devices end the same. */
+const newer = (a: SharedFollow, b?: SharedFollow) =>
+  !b || a.modified > b.modified || (a.modified === b.modified && !!a.deleted && !b.deleted);
+
+const sameShared = (a?: SharedFollow, b?: SharedFollow) =>
+  !!a && !!b && a.modified === b.modified && !!a.deleted === !!b.deleted && a.device === b.device;
+
+async function sharedEntry(work: WorkRow, follow: FollowRow, deleted = false) {
+  const device = follow.device || deviceId();
+  return {
+    key: sharedKey(device, work.site, work.workKey),
+    site: work.site,
+    siteName: (await source(work.site).catch(() => ({ name: work.site }))).name,
+    workKey: work.workKey,
+    url: work.url,
+    title: work.title,
+    device,
+    deviceName: follow.deviceName || deviceName(),
+    paused: follow.paused,
+    modified: deleted ? Date.now() : follow.modified,
+    ...(deleted && { deleted })
+  };
+}
+
+/** Records a follow, pause or unfollow (`removed`: the follow that went) for sources.json. */
+async function share(workId: number, removed?: FollowRow) {
+  const work = await one('works', workId);
+  const follow = removed ?? (await one('follows', workId));
+  if (!work || !follow) return;
+  await put('shared', await sharedEntry(work, follow, !!removed));
+  clearTimeout(sharedTimer);
+  sharedTimer = setTimeout(syncSources, 2000);
+}
+
+/** sources.json: malformed follows are dropped; undefined when `follows` isn't a list. */
+export function parseSourcesFile(raw: any): { follows: SharedFollow[] } | undefined {
+  if (!Array.isArray(raw?.follows)) return undefined;
+  return {
+    follows: raw.follows.filter(
+      (f: any) =>
+        ['key', 'site', 'workKey', 'url', 'title', 'device', 'deviceName'].every(
+          (field) => typeof f?.[field] === 'string'
+        ) && typeof f.modified === 'number'
+    )
+  };
+}
+
+/** Downloads unless synced within `fresh` ms. */
+function pullSources(fresh = SHARED_FRESH_MS) {
+  if (browser && Date.now() - sharedSyncedAt >= fresh) syncSources();
+}
+
+export function syncSources(): Promise<void> {
+  sharedQueue = sharedQueue.then(async () => {
+    try {
+      const store = await readerStore();
+      if (store) await syncSourcesWith(store);
+    } catch (error: any) {
+      logger.warn(`Sources sync failed: ${error.message}`);
+    }
+  });
+  return sharedQueue;
+}
+
+/**
+ * Merges sources.json with this device's follows (the newer entry per work wins) and applies it:
+ * another device's follows of the built-in sites are listed here and never checked here; its
+ * server follows stay in the file only.
+ */
+export async function syncSourcesWith(store: SyncFileStore) {
+  const me = deviceId();
+  // Follows from before sources.json, or never shared.
+  for (const follow of await all('follows')) {
+    const work = await one('works', follow.work);
+    if (work && !(await one('shared', sharedKey(follow.device || me, work.site, work.workKey)))) {
+      await put('shared', await sharedEntry(work, follow));
+    }
+  }
+  await syncJsonFile(store, 'sources.json', undefined, parseSourcesFile, async (file) => {
+    const remote = new Map((file?.follows ?? []).map((f) => [f.key, f]));
+    const merged = new Map((await all('shared')).map((f) => [f.key, f]));
+    for (const entry of remote.values()) {
+      if (newer(entry, merged.get(entry.key))) {
+        merged.set(entry.key, entry);
+        await put('shared', entry);
+      }
+    }
+    for (const entry of merged.values()) {
+      if (entry.site.startsWith('opds:') && entry.device !== me) continue;
+      const work =
+        entry.site in SITES && !entry.deleted
+          ? await workFor(entry.site, entry.workKey, entry.url)
+          : ((await (await db()).getFromIndex('works', 'key', [entry.site, entry.workKey])) as
+              | WorkRow
+              | undefined);
+      if (!work) continue;
+      if (!work.title) await put('works', { ...work, title: entry.title });
+      const follow = await one('follows', work.id);
+      if (entry.deleted) {
+        if (follow && follow.modified <= entry.modified) await remove('follows', work.id);
+      } else if (!follow || follow.modified < entry.modified) {
+        await put('follows', {
+          state: '',
+          detail: '',
+          lastCheck: null,
+          nextCheck: null,
+          ...follow,
+          work: work.id,
+          paused: entry.paused,
+          modified: entry.modified,
+          device: entry.device === me ? undefined : entry.device,
+          deviceName: entry.device === me ? undefined : entry.deviceName
+        });
+      }
+    }
+    const changed = [...merged.values()].some((f) => !sameShared(f, remote.get(f.key)));
+    return changed ? { follows: [...merged.values()] } : undefined;
+  });
+  sharedSyncedAt = Date.now();
 }

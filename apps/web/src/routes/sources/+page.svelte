@@ -269,7 +269,8 @@
               <button
                 type="button"
                 class="app-button-quiet"
-                disabled={busy === 'check' || !follows.some((follow) => !follow.paused)}
+                disabled={busy === 'check' ||
+                  !follows.some((follow) => !follow.paused && !follow.elsewhere)}
                 onclick={() => followAction(() => checkNow(), 'check')}>Check now</button
               >
             </div>
@@ -301,7 +302,11 @@
                     <p class="sources-row-meta">{follow.siteName}</p>
                   </div>
                   <div class="sources-follow-state">
-                    {#if follow.state === 'app' && !follow.paused}
+                    {#if follow.elsewhere && !follow.paused}
+                      <p class="sources-row-meta">
+                        Followed in {follow.elsewhere}; updates there
+                      </p>
+                    {:else if follow.state === 'app' && !follow.paused}
                       <NeedsApp />
                     {:else}
                       <p
