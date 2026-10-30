@@ -42,11 +42,15 @@ def kakuyomu(rest: str, query: dict) -> tuple[int, str, bytes | str]:
     return 404, 'text/html', b'<html>404</html>'
 
 
-def answer(path: str, query: dict, cookie: str) -> tuple[int, str, bytes | str]:
+def answer(path: str, query: dict, cookie: str, referer: str = '') -> tuple[int, str, bytes | str]:
     """(status, content type or Location, body) for a request to the fake site."""
     host, _, rest = path.lstrip('/').partition('/')
     if host == 'kakuyomu.jp':
         return kakuyomu(rest, query)
+    if host == 'cdn.kdkw.jp' and rest.startswith('referer/'):  # like manga CDNs: images only with the site's Referer
+        if not referer.startswith('https://kakuyomu.jp'):
+            return 403, 'text/plain', b'forbidden'
+        rest = rest.replace('referer/', 'page/', 1)
     if host == 'cdn.kdkw.jp':
         return (200, 'image/png', read('cover.png', KAKUYOMU)) if rest.endswith('.png') else \
             (200, 'text/html', b'<html><script>alert(1)</script></html>')
@@ -97,7 +101,8 @@ class Handler(BaseHTTPRequestHandler):
         elif first == 'suwayomi':
             status, kind, body = servers.suwayomi(rest, parse_qs(url.query))
         else:
-            status, kind, body = answer(url.path, parse_qs(url.query), self.headers.get('Cookie', ''))
+            status, kind, body = answer(url.path, parse_qs(url.query), self.headers.get('Cookie', ''),
+                                        self.headers.get('Referer', ''))
         self.send_response(status)
         self.send_header('Location' if status == 302 else 'Content-Type', kind)
         if CORS['on']:

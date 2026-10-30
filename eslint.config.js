@@ -38,7 +38,9 @@ module.exports = (async () => {
         // Build-time Node scripts outside the web app's tsconfig.
         'scripts/**/*.mjs',
         // Hook scripts run inside the game by VNBox's frida-compat (its globals, dc00's style).
-        'scripts/vnbox/engines/**'
+        'scripts/vnbox/engines/**',
+        // Source extensions in Mangayomi's format (their globals and style), test fixtures.
+        'server/tests/fixtures/sources/extensions/**'
       ]
     },
     {
