@@ -8,7 +8,7 @@
   "type": "module",
   "main": "main.js",
   "scripts": {
-    "fetch": "node node_modules/electron/install.js && bash scripts/fetch-yomitan.sh",
+    "fetch": "node node_modules/electron/install.js && bash scripts/fetch-yomitan.sh && bash scripts/fetch-lunahook.sh",
     "build:web": "cd ../web && VITE_EDITION=standalone VITE_STORAGE_ROOT_NAME=chimi-reader-data pnpm build",
     "start": "electron .",
     "test": "node --test serve.test.js oauth.test.js version.test.js",
@@ -22,6 +22,7 @@
     "appId": "io.github.blankiekun.chimimouryou",
     "files": [
       "main.js",
+      "games.js",
       "oauth.js",
       "preload.cjs",
       "serve.js",
@@ -51,10 +52,22 @@
     "linux": {
       "target": "AppImage",
       "category": "Education",
-      "executableName": "chimimouryou"
+      "executableName": "chimimouryou",
+      "extraResources": [
+        {
+          "from": "lunahook",
+          "to": "lunahook"
+        }
+      ]
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "extraResources": [
+        {
+          "from": "lunahook",
+          "to": "lunahook"
+        }
+      ]
     },
     "nsis": {
       "artifactName": "${productName}-Setup-${version}.${ext}"

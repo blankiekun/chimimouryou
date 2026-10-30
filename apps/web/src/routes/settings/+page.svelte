@@ -12,6 +12,8 @@
   import SettingsAccount from '$lib/components/settings/settings-account.svelte';
   import InstallHint from '$lib/components/standalone/install-hint.svelte';
   import SettingsAnalysisTools from '$lib/components/analysis/settings-analysis-tools.svelte';
+  import SettingsDesktopGames from '$lib/components/settings/settings-desktop-games.svelte';
+  import { desktopGames } from '$lib/data/vn/native-games';
   import SettingsSync from '$lib/components/standalone/settings-sync.svelte';
   import SettingsSources from '$lib/components/sources/settings-sources.svelte';
   import SettingsLanguage from '$lib/components/settings/settings-language.svelte';
@@ -463,6 +465,9 @@
               <InstallHint settings />
             </SettingsSection>
             <SettingsAnalysisTools />
+            {#if desktopGames()}
+              <SettingsDesktopGames />
+            {/if}
             <SettingsSync />
             <SettingsSources />
           {:else}

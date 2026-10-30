@@ -9,6 +9,7 @@
   import { goto } from '$app/navigation';
   import { account$, hasPermission } from '$lib/data/account/account';
   import { pagePath, standalone } from '$lib/data/env';
+  import { desktopGames } from '$lib/data/vn/native-games';
   import {
     faChevronDown,
     faDesktop,
@@ -26,8 +27,11 @@
     filesChange: FileList;
     importBackup: File;
     windowsGame: void;
+    installedGame: void;
   }>();
   const windowsGameEntry = { label: 'Windows game', icon: faDesktop };
+  // The desktop app: a game installed on this computer, played natively (native-games.ts).
+  const installedGameEntry = { label: 'Installed game', icon: faDesktop };
   // Sources (routes/sources): on the server with the import permission; standalone: on this device.
   const sourcesEntry = { label: 'Sources', icon: faGlobe };
 
@@ -42,6 +46,7 @@
     [mergeEntries.FOLDER_IMPORT.label]: 'library.importFolders',
     [mergeEntries.BACKUP_IMPORT.label]: 'library.importBackup',
     [windowsGameEntry.label]: 'library.importWindowsGame',
+    [installedGameEntry.label]: 'library.importInstalledGame',
     [sourcesEntry.label]: 'library.importSources'
   };
 
@@ -49,6 +54,7 @@
     mergeEntries.FILE_IMPORT,
     ...($isMobile$ ? [] : [mergeEntries.FOLDER_IMPORT]),
     ...(windowsGames ? [windowsGameEntry] : []),
+    ...(windowsGames && desktopGames() ? [installedGameEntry] : []),
     ...(standalone || hasPermission($account$, 'import') ? [sourcesEntry] : []),
     mergeEntries.BACKUP_IMPORT
   ];
@@ -65,6 +71,10 @@
 
       case windowsGameEntry.label:
         dispatch('windowsGame');
+        break;
+
+      case installedGameEntry.label:
+        dispatch('installedGame');
         break;
 
       case sourcesEntry.label:

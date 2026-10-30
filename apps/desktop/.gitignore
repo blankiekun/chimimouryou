@@ -1,3 +1,5 @@
 # Fetched by scripts/fetch-yomitan.sh, never committed (GPL-3.0, see NOTICE).
 yomitan/
 dist/
+# Fetched and built by scripts/fetch-lunahook.sh, never committed (GPL-3.0, see NOTICE).
+lunahook/

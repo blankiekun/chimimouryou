@@ -105,10 +105,15 @@ module.exports = (async () => {
     },
     {
       // The desktop shell: plain Node/Electron modules outside the web app's tsconfig.
-      files: ['apps/desktop/**/*.{js,cjs}'],
+      files: ['apps/desktop/**/*.{js,cjs,mjs}'],
       languageOptions: {
         parserOptions: { project: null },
-        globals: { process: 'readonly', console: 'readonly', URL: 'readonly' }
+        globals: {
+          process: 'readonly',
+          console: 'readonly',
+          URL: 'readonly',
+          setTimeout: 'readonly'
+        }
       }
     },
     {

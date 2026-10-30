@@ -20,6 +20,23 @@
     saveLines,
     type HookLine
   } from '$lib/data/vn/texthooker';
+  import NativeGameDialog from '$lib/components/vn/native-game-dialog.svelte';
+  import NativeThreads from '$lib/components/vn/native-threads.svelte';
+  import { dialogManager } from '$lib/data/dialog-manager';
+  import { page } from '$lib/data/page-store';
+  import { database } from '$lib/data/store';
+  import { hookCleaner } from '$lib/data/vn/hook-cleanup';
+  import {
+    desktopGames,
+    isSavedThread,
+    NativeThreads as Threads,
+    type NativeHook,
+    type NativeMessage,
+    type NativeThread
+  } from '$lib/data/vn/native-games';
+  import { vnElementHtml, vnInfo } from '$lib/data/vn/vn';
+  import { rankThreads } from '$lib/data/vn/windows-game';
+  import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { t$, type MessageKey } from '$lib/i18n';
   import { onDestroy, onMount, tick } from 'svelte';
@@ -28,6 +45,8 @@
    * The texthooker: game text from Textractor, LunaTranslator or agent over a WebSocket on this
    * computer, or pasted, as a list for Yomitan and the built-in lookups. Characters and time go
    * to the immersion log; the lines stay in this browser.
+   * `?native=<book id>` (desktop app): the library's Windows game played natively, its lines from
+   * the app's built-in hook (native-games.ts) on the thread picked here instead of a WebSocket.
    */
 
   type Status = 'connecting' | 'connected' | 'closed' | 'blocked' | 'invalid' | 'off';
@@ -55,6 +74,111 @@
   let retryDelay = 2000;
 
   const gameTitle = () => title.trim() || 'Texthooker';
+
+  // Set on mount: the address can't be read while prerendering.
+  let nativeId = $state<number>();
+  const games = desktopGames();
+  let nativeHook = $state<NativeHook>();
+  let nativeStatus = $state('Starting the game…');
+  let nativeRunning = $state(false);
+  let ranked = $state<{ thread: NativeThread; score: number }[]>([]);
+  let threads = new Threads();
+  let cleanup = {};
+  let clean = hookCleaner({});
+  let stopListening: (() => void) | undefined;
+
+  /** Starts the game (or rejoins the one running), asking for its folder when it isn't linked. */
+  async function startNative() {
+    const book = await database.getData(nativeId!);
+
+    if (!book || !games) {
+      nativeStatus = 'This game isn’t in this library.';
+      return;
+    }
+    const info = vnInfo(book);
+
+    title = book.title;
+    nativeHook = info.nativeHook;
+    cleanup = info.hookCleanup ?? {};
+    clean = hookCleaner(cleanup);
+    stopListening ??= games.onHook(onNative);
+
+    const session = await games.session();
+
+    if (session && session.folder === info.folder && session.running) {
+      nativeRunning = true;
+      nativeStatus = 'Playing.';
+      session.messages.forEach((message) => onNative(message, true));
+      return;
+    }
+    threads = new Threads();
+    ranked = [];
+    nativeStatus = 'Starting the game…';
+
+    const result = await games.launch(info.folder!);
+
+    if (result.status === 'started') {
+      nativeRunning = true;
+      nativeStatus = 'Starting the game…';
+    } else if (result.status === 'missing' || result.status === 'gone') {
+      nativeStatus = 'Waiting for the game’s folder.';
+      dialogManager.dialogs$.next([
+        {
+          component: NativeGameDialog as any,
+          props: {
+            title: book.title,
+            folder: info.folder,
+            exe: info.exe,
+            gone: result.status === 'gone' ? result.path : undefined,
+            done: startNative
+          },
+          disableCloseOnClick: true
+        }
+      ]);
+    } else {
+      nativeStatus =
+        result.status === 'running'
+          ? `${result.title} is running: close it first.`
+          : result.status === 'error'
+            ? result.message
+            : 'This build of the app can’t play games natively.';
+    }
+  }
+
+  /** A message from the built-in hook; `replayed` ones (from before this page) add no stats. */
+  function onNative(message: NativeMessage, replayed = false) {
+    if (message.type === 'status') nativeStatus = message.text;
+    else if (message.type === 'error') nativeStatus = message.message;
+    else if (message.type === 'inject')
+      nativeStatus = message.ok ? 'Playing.' : 'The text hook couldn’t attach to the game.';
+    else if (message.type === 'exit') {
+      nativeRunning = false;
+      nativeStatus = 'The game has closed.';
+    } else if (message.type === 'text') {
+      const thread = threads.add(message.thread, message.sentence, Date.now());
+
+      ranked = rankThreads([...threads.threads.values()], cleanup) as typeof ranked;
+      if (!replayed && isSavedThread(thread, nativeHook)) {
+        addLine(clean(message.sentence, thread.hookcode).trim());
+      }
+    }
+  }
+
+  /** Lines come from this thread's hook from now on; saved on the record for every device. */
+  async function pickThread(thread: NativeThread) {
+    const hook = { hookcode: thread.hookcode, name: thread.label ?? thread.hookcode };
+
+    nativeHook = hook;
+    const stored = await database.getData(nativeId!);
+
+    if (!stored) return;
+    await database.upsertData(
+      { ...stored, elementHtml: vnElementHtml({ ...vnInfo(stored), nativeHook: hook }) },
+      ReplicationSaveBehavior.Overwrite,
+      false,
+      false
+    );
+  }
 
   function connect() {
     disconnect();
@@ -150,11 +274,14 @@
   }
 
   onMount(() => {
-    connect();
+    nativeId = (games && Number($page.url.searchParams.get('native'))) || undefined;
+    if (nativeId) startNative().catch((error) => (nativeStatus = error.message));
+    else connect();
     if (list) list.scrollTop = list.scrollHeight;
   });
 
   onDestroy(() => {
+    stopListening?.();
     disconnect();
     readingActivity();
   });
@@ -186,44 +313,61 @@
         {/if}
       </PointBox>
 
-      <form
-        class="hook-settings"
-        onsubmit={(event) => {
-          event.preventDefault();
-          connect();
-        }}
-      >
-        <label class="hook-field">
-          <span>{$t$('hook.game')}</span>
-          <input
-            class="app-input"
-            bind:value={title}
-            placeholder="Texthooker"
-            onchange={saveTitle}
-            lang="ja"
-          />
-        </label>
-        <label class="hook-field">
-          <span>{$t$('hook.address')}</span>
-          <input class="app-input" bind:value={url} spellcheck="false" list="hook-presets" />
-          <datalist id="hook-presets">
-            {#each hookPresets as preset (preset.url)}
-              <option value={preset.url}>{preset.label}</option>
-            {/each}
-          </datalist>
-        </label>
-        <div class="hook-actions">
-          <span class="hook-status" class:hook-status-on={status === 'connected'} role="status">
-            {$t$(statusLabels[status])}
-          </span>
-          {#if status !== 'off' && status !== 'invalid'}
-            <button type="button" class="app-button app-button-quiet" onclick={disconnect}>
-              {$t$('hook.disconnect')}
-            </button>
-          {/if}
-          <button type="submit" class="app-button">{$t$('hook.connect')}</button>
+      {#if nativeId}
+        <div class="hook-settings">
+          <p class="hook-game" lang="ja">{title}</p>
+          <div class="hook-actions">
+            <span class="hook-status" class:hook-status-on={nativeRunning} role="status">
+              {nativeStatus}
+            </span>
+            {#if !nativeRunning}
+              <button type="button" class="app-button" onclick={() => startNative()}>
+                Start the game
+              </button>
+            {/if}
+          </div>
+          <NativeThreads {ranked} hook={nativeHook} onpick={pickThread} />
         </div>
-      </form>
+      {:else}
+        <form
+          class="hook-settings"
+          onsubmit={(event) => {
+            event.preventDefault();
+            connect();
+          }}
+        >
+          <label class="hook-field">
+            <span>{$t$('hook.game')}</span>
+            <input
+              class="app-input"
+              bind:value={title}
+              placeholder="Texthooker"
+              onchange={saveTitle}
+              lang="ja"
+            />
+          </label>
+          <label class="hook-field">
+            <span>{$t$('hook.address')}</span>
+            <input class="app-input" bind:value={url} spellcheck="false" list="hook-presets" />
+            <datalist id="hook-presets">
+              {#each hookPresets as preset (preset.url)}
+                <option value={preset.url}>{preset.label}</option>
+              {/each}
+            </datalist>
+          </label>
+          <div class="hook-actions">
+            <span class="hook-status" class:hook-status-on={status === 'connected'} role="status">
+              {$t$(statusLabels[status])}
+            </span>
+            {#if status !== 'off' && status !== 'invalid'}
+              <button type="button" class="app-button app-button-quiet" onclick={disconnect}>
+                {$t$('hook.disconnect')}
+              </button>
+            {/if}
+            <button type="submit" class="app-button">{$t$('hook.connect')}</button>
+          </div>
+        </form>
+      {/if}
     </div>
 
     <div class="hook-bar">
@@ -311,6 +455,12 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+  }
+
+  .hook-game {
+    font-size: var(--type-h2);
+    font-weight: 700;
+    overflow-wrap: anywhere;
   }
 
   .hook-field {

@@ -57,6 +57,7 @@
   import BookExportDialog from '$lib/components/book-export/book-export-dialog.svelte';
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
   import WindowsGameDialog from '$lib/components/vn/windows-game-dialog.svelte';
+  import NativeGameDialog from '$lib/components/vn/native-game-dialog.svelte';
   import { deleteWindowsGame, windowsGameFolder } from '$lib/data/vn/windows-game';
   import type { LoadData } from '$lib/functions/file-loaders/types';
   import ExternalReadDialog from '$lib/components/external-read-dialog.svelte';
@@ -608,6 +609,17 @@
     dialogManager.dialogs$.next([
       {
         component: WindowsGameDialog as any,
+        props: { save: saveWindowsGame },
+        disableCloseOnClick: true
+      }
+    ]);
+  }
+
+  /** Import → Installed game (desktop app): a game installed here, played natively. */
+  function openInstalledGame() {
+    dialogManager.dialogs$.next([
+      {
+        component: NativeGameDialog as any,
         props: { save: saveWindowsGame },
         disableCloseOnClick: true
       }
@@ -1379,6 +1391,7 @@
       on:importBackup={(ev) => onImportBackup(ev.detail)}
       windowsGames
       on:windowsGame={openWindowsGame}
+      on:installedGame={openInstalledGame}
     />
   </AppHeader>
 
