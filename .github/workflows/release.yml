@@ -262,10 +262,14 @@ jobs:
           VITE_GDRIVE_CLIENT_ID: ${{ secrets.VITE_GDRIVE_CLIENT_ID }}
           VITE_GDRIVE_CLIENT_SECRET: ${{ secrets.VITE_GDRIVE_CLIENT_SECRET }}
 
-      - name: Add the theme guide and Yomitan
+      - name: Install mingw-w64
+        run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 gcc-mingw-w64-i686
+
+      - name: Add the theme guide, Yomitan and the native-games hook
         run: |
           cp themes.md apps/web/build/themes.md
           bash apps/desktop/scripts/fetch-yomitan.sh
+          bash apps/desktop/scripts/fetch-lunahook.sh
 
       - name: Upload
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -274,6 +278,7 @@ jobs:
           path: |
             apps/web/build
             apps/desktop/yomitan
+            apps/desktop/lunahook
           if-no-files-found: error
 
   # Packages the desktop app on each OS it ships for (dmg needs macOS, nsis Windows). The timeout

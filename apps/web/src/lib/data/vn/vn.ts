@@ -12,6 +12,7 @@
  */
 
 import type { HookCleanup } from '$lib/data/vn/hook-cleanup';
+import type { NativeHook } from '$lib/data/vn/native-games';
 import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
 import { readerDb } from '$lib/data/reader-db';
 import { countTextCharacters } from '$lib/functions/get-character-count';
@@ -52,6 +53,9 @@ export interface VnInfo {
   hookFile?: string;
   /** The hooked lines' text cleanup (hook-cleanup.ts), set in the Hooks sheet */
   hookCleanup?: HookCleanup;
+  /** Played natively in the desktop app: the built-in hook's thread picked on /hook
+   * (native-games.ts), the same on every computer */
+  nativeHook?: NativeHook;
 }
 
 export interface VnRead {

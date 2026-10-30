@@ -34,7 +34,8 @@ Server connect needs the server to list the app's origin: add `http://127.0.0.1:
 From this folder, after `pnpm install` at the repository root:
 
 ```sh
-pnpm run fetch      # Electron's binary and Yomitan's Chrome build (pinned, sha256-checked)
+pnpm run fetch      # Electron's binary, Yomitan's Chrome build and LunaHook (pinned, sha256-checked;
+                    # LunaHook's helper needs mingw-w64: gcc-mingw-w64-x86-64 and -i686)
 pnpm run build:web  # the standalone web build in ../web/build
 pnpm start
 pnpm run dist       # optional: an installer for this platform in dist/
@@ -75,6 +76,29 @@ root install stays light for the web app and its Docker image; `fetch` downloads
   app pages only) fetches with Electron's `net.fetch`, http(s) only, a browser user agent (Electron's
   without `Electron/…`), redirects followed one by one (net.fetch's `url` is wrong; headers dropped
   on another origin), a size cap; per-host pacing stays in the page. Sites without CORS work here.
+- Windows games play natively (Linux and Windows builds; `games.js`). A library VN record with
+  `engine: 'vnbox'` (or one added with Import → Installed game, no browser files) gets More → Play
+  natively on `/v`, which opens `/hook?native=<book id>`. `main.js` keeps where each game is
+  installed in `<userData>/native-games.json` (`{folder → title, installDir, exe, linkedAt}`, by the
+  record's `folder`, never synced), written only after its own `dialog.showOpenDialog`: a page names
+  a game by its record and can't hand main a path to run. A game not linked here, or whose folder or
+  program is gone, gets the folder picker again (Cancel keeps the old entry); the page shows the
+  folder's programs (`listPrograms`: the record's program first, setup tools last) and links the one
+  picked by its index. Settings → Desktop games lists the entries (Change folder, Forget) and Wine's
+  status. One game at a time: `chimihook.exe <game>` (`native/chimihook.c`, GPL-3.0-or-later) loads
+  LunaHost64.dll, starts the game, injects LunaHook (32-bit games through `inject32.exe`) and prints
+  JSON lines; main forwards `text`/`thread`/`inject`/`error`/`exit` to the page that started it
+  (`native-hook` IPC, `chimiDesktop.games.onHook`) and keeps them for `/hook` to replay
+  (`games-session`). Windows starts the game through Locale Remulator (`--locale`: `LRProc.exe`
+  with LRConfig.xml's "Run in Japanese" profile; the helper then finds the game's process by its
+  path), so Shift JIS games work on any system locale. Linux uses the Wine on `PATH` with
+  `LANG/LC_ALL=ja_JP.UTF-8`, `TZ=Asia/Tokyo`, one prefix per game in `<userData>/wine-prefixes/<folder>`
+  (made on first start: `wineboot`, the home-folder links replaced with folders so saves stay in the
+  prefix, `winetricks -q fakejapanese` when winetricks is there, its font files moved to
+  `<userData>/wine-fonts/` and linked). `scripts/fetch-lunahook.sh` fetches LunaHook, Locale
+  Remulator and the MSVC runtime from LunaTranslator's pinned release zip (sha256) and builds the
+  helper with mingw-w64 into `lunahook/` (not on macOS). `e2e/native-vn.e2e.mjs` runs the whole flow
+  under Wine with a test VN (`xvfb-run -a node e2e/native-vn.e2e.mjs`; not in CI).
 - Help → About lists the licences (Yomitan is GPL-3.0, a separate program; its source is the
   release tag named there).
 
@@ -93,6 +117,12 @@ the Pages build; the release workflow reads them from this repository's secrets 
 `http://127.0.0.1:41917/auth` to its Authorized redirect URIs: Google exempts loopback addresses from
 its https and no-IP rules, and keeping one client lets the app see the Drive files the web build made
 (the `drive.file` scope only shows files made by the app itself).
+
+## Updating LunaHook
+
+Set the new LunaTranslator tag and the sha256 of its `LunaTranslator_x64.zip` in
+`scripts/fetch-lunahook.sh` (the helper uses LunaHost's C API, `Luna_Start` and friends), run it,
+and run `e2e/native-vn.e2e.mjs`.
 
 ## Updating Yomitan
 

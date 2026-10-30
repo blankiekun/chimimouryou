@@ -27,6 +27,7 @@
   } from '$lib/data/store';
   import { context, externalHandler, handler } from '$lib/data/sync/media-sync';
   import { pagePath } from '$lib/data/env';
+  import { desktopGames } from '$lib/data/vn/native-games';
   import { logger } from '$lib/data/logger';
   import { MergeMode } from '$lib/data/merge-mode';
   import {
@@ -114,6 +115,9 @@
   $: info = book && vnInfo(book);
   $: source = info && vnTextSource(info, onText);
   $: windows = info?.engine === 'vnbox';
+  /** The desktop app plays Windows games natively too (native-games.ts, /hook?native=) */
+  const native = !!desktopGames();
+  const playNatively = () => goto(`${pagePath}/hook?native=${book!.id}`);
   /** Why a Windows game can't start here: a phone, an older browser, or no game files */
   let blocked: string | undefined;
   /** A Windows game's text hook script, as a URL VNBox can fetch */
@@ -205,6 +209,7 @@
         showBacklog = true;
       }
     },
+    windows && native && { label: 'Play natively', onclick: playNatively },
     { label: 'Saves', onclick: openSaves },
     { label: 'Statistics', onclick: openStatistics }
   ].filter(Boolean) as { label: string; onclick: () => void }[];
@@ -313,11 +318,13 @@
       blocked = blocker
         ? windowsGameBlockerText[blocker]
         : missingFiles
-          ? "This game's files aren't in this browser: it was added on another device. Add its folder, or a ZIP of it on a phone, to play it here; its saves come along when they sync."
+          ? native
+            ? "This game's files aren't in this browser. Play it natively from where it is installed on this computer, or add its folder to play it here in the browser."
+            : "This game's files aren't in this browser: it was added on another device. Add its folder, or a ZIP of it on a phone, to play it here; its saves come along when they sync."
           : undefined;
       // Its record (program, hook; no files) goes up with each start, so other devices list
       // the game and open it here to ask for the files instead of failing.
-      if (!missingFiles && external) {
+      if ((!missingFiles || native) && external) {
         external
           .saveBook(data, false)
           .catch((error) => logger.warn(`Visual novel sync failed: ${error.message}`));
@@ -744,8 +751,16 @@
           <p class="vn-blocked-title">This game can't start here</p>
           <p>{blocked}</p>
           <div class="flex flex-wrap gap-2">
+            {#if missingFiles && native}
+              <button class="app-button app-button-primary" on:click={playNatively}>
+                Play natively
+              </button>
+            {/if}
             {#if missingFiles}
-              <button class="app-button app-button-primary" on:click={addGameFolder}>
+              <button
+                class="app-button {native ? '' : 'app-button-primary'}"
+                on:click={addGameFolder}
+              >
                 Add the game files
               </button>
             {/if}

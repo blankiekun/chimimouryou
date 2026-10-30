@@ -77,6 +77,20 @@ GNU General Public License version 3, unmodified: the Chrome build of the
 release named in apps/desktop/scripts/fetch-yomitan.sh, fetched at build time
 with its licence text. That release's tag is its complete corresponding source.
 
+For Windows games played natively, the desktop app's Linux and Windows builds
+bundle, as separate programs fetched at build time by
+apps/desktop/scripts/fetch-lunahook.sh (not in the repository): LunaHook
+(LunaHost64.dll, LunaHook32.dll, LunaHook64.dll) from LunaTranslator
+(https://github.com/HIllya51/LunaTranslator), Copyright (c) HIllya51 and
+contributors, which includes Textractor, licensed under the GNU General Public
+License version 3, unmodified, from the release named in that script (its tag is
+the complete corresponding source); Locale Remulator 1.6.0
+(https://github.com/InWILL/Locale_Remulator), Copyright (c) InWILL and
+contributors, licensed under the GNU Lesser General Public License version 3,
+unmodified; and Microsoft's Visual C++ runtime DLLs, redistributed as Microsoft
+allows. The program that runs LunaHook, chimihook (apps/desktop/native/), is
+GPL-3.0-or-later.
+
 The ち icon (apps/web/static/ icons, favicons and the header logo) is drawn
 from the glyph in Noto Sans CJK JP Bold, Copyright 2014-2021 Adobe
 (http://www.adobe.com/), licensed under the SIL Open Font License 1.1.

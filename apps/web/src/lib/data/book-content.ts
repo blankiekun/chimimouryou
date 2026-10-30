@@ -50,7 +50,9 @@ function isVnInfo(value: any): value is VnInfo {
     optional(value.hook, 'string') &&
     optional(value.hookFile, 'string') &&
     (value.hookCleanup === undefined ||
-      (typeof value.hookCleanup === 'object' && value.hookCleanup !== null))
+      (typeof value.hookCleanup === 'object' && value.hookCleanup !== null)) &&
+    (value.nativeHook === undefined ||
+      (typeof value.nativeHook?.hookcode === 'string' && typeof value.nativeHook.name === 'string'))
   );
 }
 

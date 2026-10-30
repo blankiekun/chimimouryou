@@ -204,11 +204,16 @@ jobs:
           node-version: 24.21.0
           cache: pnpm
 
+      # Also catches a native-games helper (apps/desktop/native) that no longer builds with mingw.
+      - name: Install mingw-w64
+        run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 gcc-mingw-w64-i686
+
       - name: Package
         working-directory: apps/desktop
         run: |
           pnpm install --frozen-lockfile --filter desktop
           bash scripts/fetch-yomitan.sh
+          bash scripts/fetch-lunahook.sh
           mkdir -p ../web/build && echo '<!doctype html>' > ../web/build/index.html
           pnpm exec electron-builder --linux dir --publish never
 

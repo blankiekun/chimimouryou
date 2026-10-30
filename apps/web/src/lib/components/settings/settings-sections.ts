@@ -15,6 +15,7 @@ import { getContext, setContext } from 'svelte';
 import type { Writable } from 'svelte/store';
 import type { MessageKey } from '$lib/i18n';
 import { standalone } from '$lib/data/env';
+import { desktopGames } from '$lib/data/vn/native-games';
 
 export interface SettingsSectionInfo {
   id: string;
@@ -63,6 +64,15 @@ export const settingsAreas: SettingsArea[] = [
             {
               id: 'general-analysis',
               label: 'settings.section.general-analysis' as const
+            }
+          ]
+        : []),
+      // The desktop app plays Windows games natively (native-games.ts).
+      ...(desktopGames()
+        ? [
+            {
+              id: 'general-desktop-games',
+              label: 'settings.section.general-desktop-games' as const
             }
           ]
         : []),

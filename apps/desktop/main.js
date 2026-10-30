@@ -17,6 +17,7 @@ import {
   isSignInUrl,
   startBrowserSignIn
 } from './oauth.js';
+import { registerGames } from './games.js';
 import { serve } from './serve.js';
 import { checkForUpdates } from './updater.js';
 
@@ -30,6 +31,7 @@ const resource = (name, devPath) =>
   app.isPackaged ? join(process.resourcesPath, name) : join(import.meta.dirname, devPath);
 const webDir = resource('web', '../web/build');
 const yomitanDir = resource('yomitan', 'yomitan');
+const hookDir = resource('lunahook', 'lunahook');
 const electronDir = app.isPackaged
   ? join(process.resourcesPath, '..')
   : join(import.meta.dirname, 'node_modules/electron/dist');
@@ -147,6 +149,27 @@ function openWindow(url, options = {}, webPreferences = {}) {
   return window;
 }
 
+/** Games played natively: chimihook, LunaHook and Locale Remulator, when bundled (not on macOS). */
+function lunahookAbout(link, file) {
+  let tag;
+  try {
+    tag = readFileSync(join(hookDir, 'lunahook-version.txt'), 'utf8').trim();
+  } catch {
+    return '';
+  }
+  const licence = (name) => link(file(join(hookDir, 'licenses', name)), 'licence text');
+  return `<p><b>LunaHook</b> (from LunaTranslator ${tag}, which includes Textractor), the text hook for
+games played natively, is bundled unmodified as a separate program under the GNU General Public License
+version 3 (${licence('LICENSE.LunaTranslator')}; Textractor: ${licence('LICENSE.Artikash.Textractor')};
+MinHook: ${licence('LICENSE.TsudaKageyu.minhook')}). Its complete corresponding source is the release tag
+${link(`https://github.com/HIllya51/LunaTranslator/tree/${tag}`, `HIllya51/LunaTranslator ${tag}`)}.
+The program that runs it, chimihook, is GPL-3.0-or-later; its source is apps/desktop/native in this
+app's repository. On Windows games start through <b>Locale Remulator</b> 1.6.0, unmodified, under the GNU
+Lesser General Public License version 3 (${licence('LICENSE.InWILL.Locale_Remulator')}; source:
+${link('https://github.com/InWILL/Locale_Remulator/tree/v1.6.0', 'InWILL/Locale_Remulator v1.6.0')}),
+with Microsoft's Visual C++ runtime DLLs.</p>`;
+}
+
 function aboutHtml(yomitan) {
   const file = (path) => {
     const url = pathToFileURL(path).href;
@@ -166,6 +189,7 @@ source: ${link('https://github.com/blankiekun/chimimouryou', 'github.com/blankie
 General Public License version 3 (${yomitan ? link(file(join(yomitanDir, 'LICENSE')), 'licence text') : 'GPL-3.0'}).
 Its complete corresponding source is the release tag
 ${link(`https://github.com/yomidevs/yomitan/tree/${yomitanVersion}`, `yomidevs/yomitan ${yomitanVersion}`)}.</p>
+${lunahookAbout(link, file)}
 <p>The visual novel player is CONscripter, GPL-2.0
 (${link('https://github.com/blankiekun/CONscripter', 'github.com/blankiekun/CONscripter')}; see NOTICE).</p>
 <p>Electron ${process.versions.electron} (MIT) with Chromium ${process.versions.chrome}
@@ -275,6 +299,14 @@ if (!app.requestSingleInstanceLock()) {
       return;
     }
     ipcMain.handle('sources-fetch', sourcesFetch);
+    registerGames({
+      app,
+      dialog,
+      ipcMain,
+      BrowserWindow,
+      hookDir,
+      isApp: (event) => !!event.senderFrame?.url.startsWith(`${origin}/`)
+    });
     const yomitan = await loadYomitan();
     setMenu(yomitan);
     mainWindow = openWindow(
