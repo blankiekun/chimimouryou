@@ -98,6 +98,9 @@ services:
     environment:
       ALLOW_HTTP_ACCOUNTS: ${ALLOW_HTTP_ACCOUNTS:-0}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
+      # Sources: seconds between requests to one site; the fake site for tests (docs/CONFIGURATION.md).
+      SOURCES_HOST_INTERVAL: ${SOURCES_HOST_INTERVAL:-2}
+      SOURCES_FIXTURE_URL: ${SOURCES_FIXTURE_URL:-}
     volumes:
       - ${DATA_PATH:-./data}:/data
       - ${LIBRARY_PATH:?set LIBRARY_PATH in .env}:/library
