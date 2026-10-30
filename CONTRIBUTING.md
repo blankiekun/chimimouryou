@@ -39,7 +39,7 @@ How to change this fork. See `ARCHITECTURE.md` for how the pieces fit together,
   with `{param}`s), used as `$t$('key')` in components and `tr('key')` elsewhere.
 - Never put API keys, passwords or other secrets in the repository, in shared
   rows (the signed-out account `''`, series, book details), in URLs or in log/error messages
-  (`redactSecret` in `data/ai-settings.ts`).
+  (`redactSecret` in `data/ai/ai-settings.ts`).
 
 ## Commands
 
@@ -129,7 +129,7 @@ git merge upstream/main`, open a PR and merge it with **Create a merge
   - IndexedDB: `import 'fake-indexeddb/auto'` (see `annotations.test.ts`).
   - Network: `vi.stubGlobal('fetch', vi.fn(...))` and assert on what was sent
     (see `account-settings-sync.test.ts`, `tts.test.ts`).
-  - Signed-in state: `vi.mock('$lib/data/account', …)` with a hoisted user.
+  - Signed-in state: `vi.mock('$lib/data/account/account', …)` with a hoisted user.
   - Storage handlers import directly, in any order: handlers reach
     `storage-handler-factory` only through `await import(…)`.
   - The v1 API: `fakeApi` in `data/test-utils/fake-api.ts` (see
@@ -141,13 +141,15 @@ git merge upstream/main`, open a PR and merge it with **Create a merge
 ## Adding things
 
 **A setting** - add a store with `writable*LocalStorageSubject` (in
-`data/store.ts`, or `data/ai-settings.ts` for AI), a control in the relevant
+`data/store.ts`, or `data/ai/ai-settings.ts` for AI), a control in the relevant
 `components/settings/` component inside a `SettingsItemGroup` (so search finds
 it), and, to sync it with accounts, the store in `sharedSettings` or
-`readerSettings` in `data/account-settings-sync.ts`. A synced store needs a
+`readerSettings` in `data/account/account-settings-sync.ts`. A synced store needs a
 parser from `data/setting-parsers.ts` as its third argument (the type requires
 it): type and closed sets only, never ranges. A secret also goes in
 `secretSettings`, so it is removed when the account changes.
+
+New fork modules go in the feature's folder under `lib/data/` (no barrels).
 
 **A reader feature** - put the logic in `lib/data/` or `lib/functions/` as plain
 TypeScript with tests, the UI in `components/book-reader/`, and keep the glue in
@@ -159,7 +161,7 @@ and list it in `plugins/index.ts`: companion tabs, selection-toolbar actions,
 Listen modes, `onPositionSettled` work and a settings component. Plugins start
 off; hosts read `activePlugins$`, so nothing runs until a reader turns it on.
 
-**A per-reader file for Calibre books** - a sync file (`data/sync-files.ts`)
+**A per-reader file for Calibre books** - a sync file (`data/sync/sync-files.ts`)
 maps to a row kind: add it to `syncKinds` in `server-rows.ts` (`bookDocs` per
 book, `accountDocs` at the root) and to `server/api/sync-kinds.json`, which the
 server's table check, routes and migration read (`sync-kinds.test.ts` fails
@@ -186,7 +188,7 @@ Adding a "Copy" button to the Ask AI answer:
 1. `git switch -c feat/copy-button origin/main && git status` - a branch, starting clean.
 2. If the logic is more than a line, add it to a module in `lib/data/` or
    `lib/functions/` with a test.
-3. Add the button in `components/book-reader/ask-ai-panel.svelte`, styled with
+3. Add the button in `components/ai/ask-ai-panel.svelte`, styled with
    theme variables.
 4. Run `pnpm test`, `pnpm check` (still 13 errors) and `npx eslint .` (clean).
 5. Rebuild and restart the stack, then open a book on the HTTPS address, select

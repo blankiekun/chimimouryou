@@ -130,11 +130,11 @@ ruby (と over 取 of 取り扱い) doesn't count as flavour.
 
 With "Hide furigana style" set to Known (reader settings, `FuriganaStyle.Known`), the reader
 hides ruby the reader probably no longer needs
-([`apps/web/src/lib/data/known-furigana.ts`](../apps/web/src/lib/data/known-furigana.ts)).
+([`apps/web/src/lib/data/words/known-furigana.ts`](../apps/web/src/lib/data/known-furigana.ts)).
 `reactiveElements` (`components/book-reader/reactive-elements.ts`) marks each rendered
 section's `<ruby>` with `ttu-known-ruby` (hidden; a click shows it again) when yurigana's
 `hideKnownRuby` holds: the ruby is hiragana, every kanji of the base was met at least
-`knownKanjiMinCount` (10) times over all books (`data/kanji-seen.ts`, read once per opened
+`knownKanjiMinCount` (10) times over all books (`data/words/kanji-seen.ts`, read once per opened
 book), and the reading is spelled by the kanji's readings (`isPlainReading`,
 `yurigana/kanji-readings.json` from KANJIDIC2). Katakana ruby, ruby with kanji, gikun and
 jukujikun stay.

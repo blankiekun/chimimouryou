@@ -201,7 +201,7 @@ The scale lives in `src/app.scss` as `--type-*` and in Tailwind as `text-display
 - **Controls:** 40px tall, 44px on coarse pointers (`--app-control-height`).
 - **Settings:** sidebar areas with collapsible section groups; each row is `SettingsItemGroup`: label left, control right (`wide` stacks them). On phones the sidebar becomes a list that drills into one area.
 - **Shelves:** covers share one size and one baseline on every shelf and in the Store grid.
-- **Reader:** a slim bar (back, title + chapter + %, Aa quick settings, More •••, panel toggle) and ONE side panel, 26.75rem wide from 768px up (`panelWidthRem` in `src/lib/data/reader-panel.ts`); the book narrows beside it. Below that the panel is a bottom sheet with its tabs in a row.
+- **Reader:** a slim bar (back, title + chapter + %, Aa quick settings, More •••, panel toggle) and ONE side panel, 26.75rem wide from 768px up (`panelWidthRem` in `src/lib/data/reader/reader-panel.ts`); the book narrows beside it. Below that the panel is a bottom sheet with its tabs in a row.
 
 ## Elevation & Depth
 
@@ -253,7 +253,7 @@ Plain and printed. All share 40px height, 0 16px padding, Button type, 2px corne
 
 ### Cover Card
 
-`book-card/cover-card.svelte`, used by every shelf and the Store: one fixed cover size, a 3px progress track under the cover (rule track, spot fill), then the title and one line of meta.
+`library/cover-card.svelte`, used by every shelf and the Store: one fixed cover size, a 3px progress track under the cover (rule track, spot fill), then the title and one line of meta.
 
 ### Navigation (app-header)
 

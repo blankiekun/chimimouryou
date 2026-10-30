@@ -50,7 +50,7 @@ cd android && ./gradlew assembleDebug    # android/app/build/outputs/apk/debug/a
   other sites, `window.open` included, open in the browser (`Bridge.launchIntent`).
 - CapacitorHttp's global `fetch` patch is off (the default): it breaks streaming and abort.
 - Downloads (Export → Zip File, CSVs, reports): the WebView drops `<a download>` saves, so
-  `apps/web/src/lib/data/native-save.ts` (`catchDownloads`, from the root layout, in the app only)
+  `apps/web/src/lib/data/standalone/native-save.ts` (`catchDownloads`, from the root layout, in the app only)
   takes every `<a download>` of a blob/data URL (clicked, or a detached link's `click()`) and hands
   it to `FileSavePlugin.java` in 3 MB chunks; Android's "Save to" screen asks where (Downloads by
   default), so no storage permission is needed.
@@ -64,7 +64,7 @@ cd android && ./gradlew assembleDebug    # android/app/build/outputs/apk/debug/a
 
 Google refuses its web sign-in inside a WebView, so the app asks Play services' Authorization API
 for a `drive.file` token instead (`DriveAuthPlugin.java`, used by
-`apps/web/src/lib/data/android-drive.ts` from the storage OAuth manager when
+`apps/web/src/lib/data/standalone/android-drive.ts` from the storage OAuth manager when
 `Capacitor.isNativePlatform()`; the web and desktop builds are unchanged). There is no refresh
 token: when a token expires the app asks again, silently once the reader has consented. Without
 Google Play services, signing in says "Google Drive needs Google Play services". OneDrive isn't
