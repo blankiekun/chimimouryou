@@ -103,9 +103,13 @@ root install stays light for the web app and its Docker image; `fetch` downloads
   closes `/hook` reads the save files with `games-saves` and merges them in (20 MB cap). VNBox's
   prefix user `username` maps to the game's prefix user on Linux and to the user's AppData,
   Documents, Saved Games and ProgramData on Windows, where only the game's save folders are used:
-  those its synced saves name, or those its first run made (confirmed on `/hook`). Files in the
-  install folder count as saves when new or changed since it was linked (a size and time manifest
-  in `native-games.json`) or already synced. `e2e/native-vn.e2e.mjs` runs the whole flow
+  those its synced saves name or its first run made, both confirmed on `/hook` before anything is
+  written or read there. Files in the install folder count as saves when new or changed since it
+  was linked (a size and time manifest in `native-games.json`) or already synced. Main never trusts
+  the page's names: `isSafeSaveName` (games.js) refuses, on both writing and reading, anything
+  outside VNBox's save folders, temp/cache folders, a `Microsoft` folder under AppData or
+  ProgramData, runnable or loadable files (`.exe`, `.dll`, `.bat`…, `game/` included), 8.3 short
+  names and parts ending in a dot or space. `e2e/native-vn.e2e.mjs` runs the whole flow
   under Wine with a test VN (`xvfb-run -a node e2e/native-vn.e2e.mjs`; not in CI).
 - Help → About lists the licences (Yomitan is GPL-3.0, a separate program; its source is the
   release tag named there).

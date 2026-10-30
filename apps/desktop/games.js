@@ -122,6 +122,37 @@ const keyParts = (rest) => {
     : undefined;
 };
 
+/** vn-save-store.ts isWindowsSaveKey's save folders, ported: main can't trust the page's check. */
+const userFolders =
+  /^wine\/drive_c\/(?:users\/[^/]+\/(?:AppData|Documents|Saved Games)|ProgramData(?=\/(?!Microsoft\/)))\/(.+)$/i;
+const notSaves = /^(?:temp|tmp)$|cache/i;
+/** Windows' own folders: Startup and Start Menu are in AppData/Roaming/Microsoft. */
+const systemFolders = /^wine\/drive_c\/(?:users\/[^/]+\/AppData\/[^/]+|ProgramData)\/microsoft\//i;
+/** Files Windows or a game runs or loads (Windows drops trailing dots and spaces). */
+const runnable =
+  /\.(?:exe|dll|asi|ocx|sys|cpl|scr|com|bat|cmd|ps1|vbs|js|jse|wsf|msi|lnk|url|reg|hta|inf|pif)[. ]*$/i;
+
+/**
+ * Whether main may write or read a synced name: isWindowsSaveKey's rules plus no Microsoft
+ * folder, no runnable file, no 8.3 short name (`MICROS~1` reaches Microsoft) and no part ending
+ * in a dot or space (Windows drops them: `Microsoft.`, `.. `).
+ */
+export function isSafeSaveName(name) {
+  const parts = typeof name === 'string' ? keyParts(name) : undefined;
+  if (
+    !parts ||
+    parts.length < 2 ||
+    runnable.test(name) ||
+    parts.some((part) => /~\d|[. ]$/.test(part))
+  )
+    return false;
+  if (parts[0] === 'game') return true;
+  const inUser = userFolders.exec(name)?.[1];
+  return (
+    !!inUser && !systemFolders.test(name) && !inUser.split('/').some((part) => notSaves.test(part))
+  );
+}
+
 /**
  * The files under `dir` as `{ path (relative, '/'), modified (ms), size }`. Links are never
  * followed: a prefix folder linked into the real home isn't the game's.
@@ -254,15 +285,20 @@ export function registerGames({ app, dialog, ipcMain, BrowserWindow, hookDir, is
    */
   function writeSaves(folder, game, saves) {
     const saveFolders = new Set(game.saveFolders);
+    const pending = new Set(game.pending);
     const saveNames = new Set(game.saveNames);
     for (const [name, file] of Object.entries(saves ?? {})) {
-      const at = locate(folder, game, name);
+      const at = isSafeSaveName(name) && locate(folder, game, name);
       if (!at || typeof file?.data !== 'string' || !Number.isFinite(file.modified)) continue;
       if (name.startsWith('game/')) saveNames.add(name);
       else if (platform === 'win32') {
-        // Only into a folder of this game's: the user's own folders hold everything else.
-        if (!topFolder(name)) continue;
-        saveFolders.add(topFolder(name));
+        // Only into a folder of this game's, confirmed on /hook: a synced name never adds one.
+        const top = topFolder(name);
+        if (!top || game.refused?.includes(top)) continue;
+        if (!saveFolders.has(top)) {
+          pending.add(top);
+          continue;
+        }
       }
       const target = join(at.dir, ...at.parts);
       const blocked = at.parts.some((_, index) => {
@@ -280,7 +316,7 @@ export function registerGames({ app, dialog, ipcMain, BrowserWindow, hookDir, is
       writeFileSync(target, Buffer.from(file.data, 'base64'));
       utimesSync(target, new Date(), new Date(file.modified));
     }
-    update(folder, { saveFolders: [...saveFolders], saveNames: [...saveNames] });
+    update(folder, { pending: pending.size ? [...pending] : undefined, saveNames: [...saveNames] });
   }
 
   /**
@@ -298,6 +334,7 @@ export function registerGames({ app, dialog, ipcMain, BrowserWindow, hookDir, is
         : saveRoots(folder, game).filter(([prefix]) => prefix !== 'game/');
     const known = new Set(game.saveNames);
     const manifest = game.manifest ?? {};
+    // Named as synced, so a folder outside the save rules (browser profiles, Microsoft's) never goes up.
     return [
       ...roots.flatMap(([prefix, dir]) =>
         walkFiles(dir).map((file) => ({
@@ -315,7 +352,7 @@ export function registerGames({ app, dialog, ipcMain, BrowserWindow, hookDir, is
         .filter(
           (file) => known.has(file.name) || manifest[file.path] !== `${file.size}:${file.modified}`
         )
-    ];
+    ].filter((file) => isSafeSaveName(file.name));
   }
 
   /**
@@ -404,7 +441,7 @@ export function registerGames({ app, dialog, ipcMain, BrowserWindow, hookDir, is
         // shortcut: a folder's time changes when entries are added, not when a file in it is
         // rewritten, so a game whose save folder exists before its first run here is missed;
         // upgrade to watching file times if games turn up like that.
-        if (!store.games[folder].saveFolders.length && !game.watched) current.watch = topFolders();
+        if (!store.games[folder].saveFolders?.length && !game.watched) current.watch = topFolders();
       }
       child =
         platform === 'win32'
@@ -455,9 +492,15 @@ export function registerGames({ app, dialog, ipcMain, BrowserWindow, hookDir, is
       if (current.watch) {
         const before = current.watch;
         const pending = Object.entries(topFolders())
-          .filter(([name, time]) => !(time <= before[name]))
+          .filter(
+            ([name, time]) =>
+              !(time <= before[name]) &&
+              isSafeSaveName(`${name}/x`) &&
+              !store.games[folder].refused?.includes(name)
+          )
           .map(([name]) => name);
-        update(folder, { pending });
+        const all = [...new Set([...(store.games[folder].pending ?? []), ...pending])];
+        update(folder, { pending: all.length ? all : undefined });
       }
       // The last lines may still be in the pipe.
       setTimeout(() => !exited && send({ type: 'exit' }, current), 1000);
@@ -548,6 +591,7 @@ export function registerGames({ app, dialog, ipcMain, BrowserWindow, hookDir, is
       saveFolders: [
         ...new Set([...(game.saveFolders ?? []), ...(keep ? (game.pending ?? []) : [])])
       ],
+      refused: keep ? game.refused : [...(game.refused ?? []), ...(game.pending ?? [])],
       pending: undefined,
       watched: true
     });

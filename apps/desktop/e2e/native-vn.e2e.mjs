@@ -19,8 +19,9 @@
 // don't reach vnsaves.json under VNBox's names (`wine/drive_c/users/username/…`, `game/…`) or carry
 // the wrong contents; files outside isWindowsSaveKey's folders (temp, cache, windows/) are pushed;
 // the prefix's Documents still leads into the home folder; a newer save in vnsaves.json (as VNBox
-// writes it) isn't where the game reads it at the next start, or its time isn't kept; saves over
-// the 20 MB cap are pushed or the page doesn't say so.
+// writes it) isn't where the game reads it at the next start, or its time isn't kept; a synced
+// Startup .bat or game/*.dll is written; saves over the 20 MB cap are pushed or the page doesn't
+// say so.
 
 /* global indexedDB, localStorage, navigator -- used inside page.evaluate */
 import { Buffer } from 'node:buffer';
@@ -249,12 +250,20 @@ try {
   step('A newer save from VNBox is where the game reads it at the next start');
   const fromVnbox = Date.now();
   const gameSave = 'game/savedata/save1.dat';
+  // Runnable names a synced file (or a bad page) could plant: main must never write them.
+  const startup = 'AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup/x.bat';
+  const planted = Buffer.from('planted').toString('base64');
   await vnsaves(
     page,
     JSON.stringify({
       ...synced,
       [appData]: { modified: fromVnbox, data: Buffer.from('from VNBox\n').toString('base64') },
-      [gameSave]: { modified: fromVnbox, data: Buffer.from('from VNBox game\n').toString('base64') }
+      [gameSave]: {
+        modified: fromVnbox,
+        data: Buffer.from('from VNBox game\n').toString('base64')
+      },
+      [`wine/drive_c/users/username/${startup}`]: { modified: fromVnbox, data: planted },
+      'game/d3d9.dll': { modified: fromVnbox, data: planted }
     })
   );
 
@@ -279,6 +288,8 @@ try {
     if (readFileSync(file, 'utf8') !== text) fail(`${file} wasn’t pulled: ${readFileSync(file)}`);
     if (Math.floor(statSync(file).mtimeMs) !== fromVnbox) fail(`${file} lost the synced time`);
   }
+  for (const file of [join(user, startup), join(moved, 'd3d9.dll')])
+    if (existsSync(file)) fail(`a blocked name was written: ${file}`);
   await page.locator('.nt-row.nt-current', { hasText: 'DrawTextW' }).waitFor();
   await page
     .locator('.hook-text li', { hasText: '何でも薄暗いじめじめした所で泣いていた。' })
