@@ -9,10 +9,14 @@
  * fetcher.py: one request per `interval` seconds per host, Retry-After on 429/503, a size cap,
  * and the final address checked against the hosts the caller allows (sites) or its origin (a
  * reader's own server). A plain browser can only read sites that allow CORS; any other answers
- * NeedsAppError ("Fetching from this site needs the desktop app"), never a failure.
+ * NeedsAppError ("Fetching from this site needs the desktop app"), never a failure. The desktop
+ * app fetches through its main process (chimiDesktop.fetch, apps/desktop/main.js) and the APK
+ * through CapacitorHttp, so every site works there.
  * VITE_SOURCES_FIXTURE_URL (test builds only) sends https://<host>/<path> of sites to
  * <fixture>/<host>/<path> (server/tests/fixtures/sources/serve.py), as SOURCES_FIXTURE_URL does.
  */
+
+import { Capacitor, CapacitorHttp, type HttpResponse } from '@capacitor/core';
 
 /** Seconds between two requests to one site, or to a reader's own server (tests set 0). */
 export const pacing = { site: 2, server: 0.2 };
@@ -77,6 +81,77 @@ async function pace(key: string, interval: number) {
   if (at > now) await sleep(at - now);
 }
 
+interface NativeAnswer {
+  status: number;
+  url: string;
+  type: string;
+  retryAfter: string;
+  body?: ArrayBuffer;
+  tooBig?: boolean;
+}
+
+type DesktopFetch = (
+  url: string,
+  options: { headers?: Record<string, string>; maxBytes: number }
+) => Promise<NativeAnswer>;
+
+const desktopFetch = () =>
+  (globalThis as { chimiDesktop?: { fetch?: DesktopFetch } }).chimiDesktop?.fetch;
+
+/** The desktop app or the APK: fetched outside the page, so CORS doesn't apply. */
+export const nativeFetch = () => !!desktopFetch() || Capacitor.isNativePlatform();
+
+async function viaApp(
+  url: string,
+  headers: Record<string, string> = {},
+  maxBytes: number
+): Promise<NativeAnswer> {
+  const desktop = desktopFetch();
+  if (desktop) return desktop(url, { headers, maxBytes });
+  // Called directly: CapacitorHttp's patching of fetch stays off (capacitor.config.json).
+  // Redirects are followed here, so a cookie or password never goes on to another origin.
+  for (let hop = 0; hop < 10; hop += 1) {
+    if (!/^https?:\/\//.test(url)) throw new Error('Only http and https');
+    const answer = await CapacitorHttp.request({
+      url,
+      headers,
+      responseType: 'arraybuffer',
+      disableRedirects: true
+    });
+    const header = (name: string) =>
+      Object.entries(answer.headers).find(([key]) => key.toLowerCase() === name)?.[1] ?? '';
+    const location = header('location');
+    if (answer.status >= 300 && answer.status < 400 && location) {
+      const to = new URL(location, url).href;
+      if (originOf(to) !== originOf(url)) headers = {};
+      url = to;
+      continue;
+    }
+    return capacitorAnswer(answer, url, header, maxBytes);
+  }
+  throw new Error('Too many redirects');
+}
+
+function capacitorAnswer(
+  answer: HttpResponse,
+  url: string,
+  header: (name: string) => string,
+  maxBytes: number
+): NativeAnswer {
+  // Binary answers come base64-encoded.
+  const body =
+    typeof answer.data === 'string'
+      ? Uint8Array.from(atob(answer.data), (c) => c.charCodeAt(0)).buffer
+      : new TextEncoder().encode(JSON.stringify(answer.data)).buffer;
+  return {
+    status: answer.status,
+    url,
+    type: header('content-type'),
+    retryAfter: header('retry-after'),
+    ...(body.byteLength > maxBytes ? { tooBig: true } : { body })
+  };
+}
+
 /** A plain fetch failed: a site without CORS (needs the app) or one that can't be reached. */
 async function blocked(url: string, host: string) {
   try {
@@ -99,26 +174,44 @@ export async function sourceFetch(url: string, options: FetchOptions = {}) {
 
   for (let attempt = 0; ; attempt += 1) {
     await pace(options.origin || host, options.origin ? pacing.server : pacing.site);
-    let response: Response;
-    try {
-      response = await fetch(target, {
-        headers: options.headers,
-        credentials: 'omit',
-        cache: 'no-store',
-        redirect: 'follow'
-      });
-    } catch {
-      throw await blocked(target, host);
+    let response: NativeAnswer;
+    if (nativeFetch()) {
+      try {
+        response = await viaApp(target, options.headers, maxBytes);
+      } catch {
+        throw new FetchError(`Can't reach ${host}`);
+      }
+    } else {
+      try {
+        const answer = await fetch(target, {
+          headers: options.headers,
+          credentials: 'omit',
+          cache: 'no-store',
+          redirect: 'follow'
+        });
+        const tooBig = Number(answer.headers.get('Content-Length') || 0) > maxBytes;
+        response = {
+          status: answer.status,
+          url: answer.url,
+          type: answer.headers.get('Content-Type') || '',
+          retryAfter: answer.headers.get('Retry-After') || '',
+          ...(answer.ok && !tooBig ? { body: await answer.arrayBuffer() } : { tooBig })
+        };
+      } catch {
+        throw await blocked(target, host);
+      }
     }
 
     if ((response.status === 429 || response.status === 503) && attempt < RETRIES) {
-      const wait = Number(response.headers.get('Retry-After') || 5);
+      const wait = Number(response.retryAfter || 5);
       if (Number.isFinite(wait) && wait <= MAX_RETRY_AFTER) {
         await sleep(Math.max(1, wait) * 1000);
         continue;
       }
     }
-    if (!response.ok) throw new FetchError(`${host} answered ${response.status}`, response.status);
+    if (response.status < 200 || response.status > 299) {
+      throw new FetchError(`${host} answered ${response.status}`, response.status);
+    }
 
     // Redirects stay within the site's hosts or the server's origin.
     const final = response.url || target;
@@ -129,18 +222,11 @@ export async function sourceFetch(url: string, options: FetchOptions = {}) {
         : options.hosts?.has(new URL(final).hostname.toLowerCase());
     if (!allowed) throw new FetchError(`${host} sent this app to another site`);
 
-    if (Number(response.headers.get('Content-Length') || 0) > maxBytes) {
+    const body = response.body;
+    if (!body || response.tooBig || body.byteLength > maxBytes) {
       throw new FetchError(`${host} sent more than ${Math.round(maxBytes / 1048576)} MB`);
     }
-    const body = await response.arrayBuffer();
-    if (body.byteLength > maxBytes) {
-      throw new FetchError(`${host} sent more than ${Math.round(maxBytes / 1048576)} MB`);
-    }
-    return {
-      body,
-      url: target === url ? final : url,
-      type: response.headers.get('Content-Type') || ''
-    };
+    return { body, url: target === url ? final : url, type: response.type };
   }
 }
 
