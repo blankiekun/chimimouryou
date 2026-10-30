@@ -94,6 +94,13 @@ CREATE TABLE IF NOT EXISTS games (
     account TEXT NOT NULL, name TEXT NOT NULL, size INTEGER NOT NULL DEFAULT 0,
     deleted INTEGER NOT NULL DEFAULT 0, modified INTEGER NOT NULL, rev INTEGER NOT NULL,
     PRIMARY KEY (account, name));
+-- A Windows game's progress, statistics and saves: the whole file its sync folder held (no book id).
+CREATE TABLE IF NOT EXISTS game_docs (
+    account TEXT NOT NULL, name TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('progress', 'statistics', 'vnsaves')),
+    data TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0,
+    modified INTEGER NOT NULL, rev INTEGER NOT NULL,
+    PRIMARY KEY (account, name, kind));
 CREATE TABLE IF NOT EXISTS series_overrides (
     book INTEGER PRIMARY KEY REFERENCES books(id), series TEXT NOT NULL,
     modified INTEGER NOT NULL, rev INTEGER NOT NULL);
@@ -108,6 +115,7 @@ CREATE INDEX IF NOT EXISTS highlights_rev ON highlights(account, rev);
 CREATE INDEX IF NOT EXISTS book_docs_rev ON book_docs(account, rev);
 CREATE INDEX IF NOT EXISTS account_docs_rev ON account_docs(account, rev);
 CREATE INDEX IF NOT EXISTS games_rev ON games(account, rev);
+CREATE INDEX IF NOT EXISTS game_docs_rev ON game_docs(account, rev);
 CREATE INDEX IF NOT EXISTS series_overrides_rev ON series_overrides(rev);
 CREATE INDEX IF NOT EXISTS book_metadata_rev ON book_metadata(rev);
 '''
@@ -120,6 +128,7 @@ TABLE_KEYS: dict[str, tuple[str, ...]] = {
     'book_docs': ('account', 'book', 'kind'),
     'account_docs': ('account', 'kind'),
     'games': ('account', 'name'),
+    'game_docs': ('account', 'name', 'kind'),
     'series_overrides': ('book',),
     'book_metadata': ('book',),
 }

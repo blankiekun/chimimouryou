@@ -27,7 +27,8 @@ MEDIA_DOCS = {'audioBook_': 'audiobook', 'subtitles_': 'subtitles'}
 ACCOUNT_DOCS = {'settings.json': 'settings', 'kanji.json': 'kanji', 'words.json': 'words',
                 'immersion.json': 'immersion'}
 TEXT_KEYS = {'elementHtml': str, 'sections': list, 'styleSheet': str}
-COUNTS = ('progress', 'statistics', 'goals', 'highlights', 'docs', 'text', 'textThere', 'games', 'skipped', 'errors')
+COUNTS = ('progress', 'statistics', 'goals', 'highlights', 'docs', 'text', 'textThere', 'games', 'gameDocs', 'skipped',
+          'errors')
 
 
 def as_ms(value) -> int:
@@ -64,8 +65,11 @@ class Migration:
             status = apidb.put_row(self.connection, rev, table, key, modified, values)[0]
         else:
             where = ' AND '.join(f'{column} = ?' for column in key)
-            stored = self.connection.execute(f'SELECT modified FROM {table} WHERE {where}',
-                                             tuple(key.values())).fetchone()
+            try:
+                stored = self.connection.execute(f'SELECT modified FROM {table} WHERE {where}',
+                                                 tuple(key.values())).fetchone()
+            except sqlite3.OperationalError:  # a database from before the table (--apply creates it)
+                stored = None
             status = 'written' if stored is None or stored['modified'] < modified else 'kept'
         if status == 'written':
             self.written += 1
@@ -101,10 +105,16 @@ class Migration:
             book = self.titles.get(title)
             if book is None:
                 report['orphans'].append(title)
-                game = syncnames.find_file(names, 'bookdata_')
-                if account and game:  # a Windows game record: not a catalog book
+                if not account:
+                    continue
+                # A Windows game (not a catalog book): its record and its files, kept by name.
+                if game := syncnames.find_file(names, 'bookdata_'):
                     guarded(f'{folder}/{game}', lambda: self.game(rev, account, title, os.path.join(path, game),
                                                                  counts))
+                for prefix in ('progress_', 'statistics_', 'vnsaves.json'):
+                    if name := syncnames.find_file(names, prefix):
+                        guarded(f'{folder}/{name}', lambda: self.game_doc(rev, account, title, os.path.join(path, name),
+                                                                         counts))
                 continue
             report['matched'] += 1
             used = set()
@@ -205,6 +215,10 @@ class Migration:
                  {'data': apidb.to_json(data)})
 
     def text(self, book, file, counts):
+        book_format, vn = self.connection.execute('SELECT format, vn FROM books WHERE id = ?', (book,)).fetchone()
+        if vn or book_format in ('CBZ', 'ZIP'):  # manga and VN folders get no text copy (the client sends none)
+            counts['skipped'] += 1
+            return
         counts['text'] += 1
         path = apidb.text_path(self.state, book)
         if os.path.exists(path):
@@ -224,6 +238,22 @@ class Migration:
                     {'size': os.path.getsize(file), 'deleted': 0}) and self.apply:
             with open(file, 'rb') as f:
                 apidb.write_atomic(apidb.game_path(self.accounts, account, name), f.read())
+
+    def game_doc(self, rev, account, name, file, counts):
+        """A game's progress_, statistics_ or vnsaves.json as one row, the whole file as its data."""
+        base = os.path.basename(file)
+        data = read_json(file)
+        if base.startswith('progress_'):
+            kind, modified = 'progress', syncnames.progress_metadata(base)['lastBookmarkModified']
+        elif base.startswith('statistics_'):
+            if not isinstance(data, list):
+                raise ValueError('not a list')
+            kind, modified = 'statistics', syncnames.statistics_metadata(base)['lastStatisticModified']
+        else:
+            kind, modified = 'vnsaves', mtime_ms(file)
+        counts['gameDocs'] += 1
+        self.row(rev, 'game_docs', {'account': account, 'name': name, 'kind': kind}, as_ms(modified),
+                 {'data': apidb.to_json(data), 'deleted': 0})
 
     def shared(self, sync: str, report: dict):
         rev = apidb.Rev(self.connection)
@@ -316,8 +346,8 @@ def print_report(report: dict):
         print(f"{name}: {source['folders']} folders, {source['matched']} matched, {len(source['orphans'])} orphans")
         print(f"  progress {counts['progress']}, statistics {counts['statistics']}, goals {counts['goals']}, "
               f"highlights {counts['highlights']}, docs {counts['docs']}, "
-              f"text {counts['text']} ({counts['textThere']} already there), games {counts['games']}, "
-              f"skipped {counts['skipped']}, errors {counts['errors']}")
+              f"text {counts['text']} ({counts['textThere']} already there), games {counts['games']} "
+              f"({counts['gameDocs']} game files), skipped {counts['skipped']}, errors {counts['errors']}")
         if source['orphans']:
             print(f"  orphans: {', '.join(source['orphans'])}")
         for error in source['errors']:
