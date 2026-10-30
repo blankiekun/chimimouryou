@@ -34,14 +34,10 @@
     fromBase64,
     hashPage,
     loadVnRead,
-    mergeVnSaves,
     newerSaveEngine,
     vnCacheName,
     parseVnPage,
-    parseVnSaves,
-    sameVnSaves,
     saveVnRead,
-    toBase64,
     vnBookmark,
     vnInfo,
     type VnLine,
@@ -58,7 +54,6 @@
     windowsGameBlocker,
     windowsGameBlockerText
   } from '$lib/data/windows-game';
-  import { bookSyncSource, syncFileStore, syncJsonFile } from '$lib/data/sync-files';
   import { recordKanjiText } from '$lib/data/kanji-seen';
   import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
   import type { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
@@ -79,18 +74,7 @@
   import VnBar from '$lib/components/vn/vn-bar.svelte';
   import VnRail from '$lib/components/vn/vn-rail.svelte';
   import VnSide from '$lib/components/vn/vn-side.svelte';
-  import {
-    isWindowsSaveKey,
-    readWindowsSaves,
-    vnSaveAreas,
-    windowsSaveFiles,
-    windowsSaveKey,
-    windowsSavesCap,
-    windowsSavesStamp,
-    writeWindowsSaves,
-    type SaveArea
-  } from '$lib/data/vn-save-store';
-  import { formatBytes } from '$lib/data/vn-upload';
+  import { VnSaveSync, vnSaveAreas } from '$lib/data/vn-save-store';
   import { dialogManager } from '$lib/data/dialog-manager';
   import WindowsGameDialog from '$lib/components/book-card/windows-game-dialog.svelte';
   import VnboxHooks from '$lib/components/vn/vnbox-hooks.svelte';
@@ -108,7 +92,7 @@
   } from '$lib/data/anki';
   import { serverConnected, serverFetch } from '$lib/data/server-connect';
   import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
-  import { watchGamepads, type PadAction } from '$lib/data/vn-gamepad';
+  import { padStep, watchGamepads, type PadAction } from '$lib/data/vn-gamepad';
 
   /** The text panel below the game; hovering the game's own text works without it. */
   const showText$ = writableBooleanLocalStorageSubject()('vnTextPanel', false);
@@ -160,10 +144,9 @@
   let local: BrowserStorageHandler;
   let external: BaseStorageHandler | undefined;
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
-  let savesQueue = Promise.resolve();
   let started = false;
-  /** A Windows game's save files as last pushed (windowsSavesStamp) */
-  let windowsStamp: string | undefined;
+  /** vnsaves.json sync of this game's saves (vn-save-store.ts), from load() */
+  let saveSync: VnSaveSync | undefined;
   /** Why a Windows game's saves don't sync */
   let savesNote: string | undefined;
   /** This game's files are missing here: the import dialog can add them to this record. */
@@ -267,6 +250,12 @@
     }
 
     book = data;
+    saveSync = new VnSaveSync(
+      data.title,
+      vnInfo(data),
+      data.storageSource,
+      (note) => (savesNote = note)
+    );
     hookCleanup = vnInfo(data).hookCleanup ?? {};
     local.startContext(context(book!));
     data.lastBookOpen = Date.now();
@@ -347,91 +336,6 @@
     todayCharacters = reading.today($startDayHoursForTracker$);
   }
 
-  function savesStore() {
-    return syncFileStore(bookSyncSource(book?.storageSource));
-  }
-
-  async function fetchSaves(): Promise<VnSaves> {
-    const store = book && (await savesStore());
-    const file = store ? await store.readSyncFile('vnsaves.json', book!.title) : undefined;
-
-    return (file && parseVnSaves(JSON.parse(file.text))) || {};
-  }
-
-  /** After the engine saved: merges this browser's saves into the synced ones. */
-  function uploadSaves(files: Record<string, { modified: number; bytes: Uint8Array }>) {
-    const title = book?.title;
-
-    if (!title) return;
-
-    const local: VnSaves = Object.fromEntries(
-      Object.entries(files).map(([name, file]) => [
-        name,
-        { modified: file.modified, data: toBase64(file.bytes), engine: engineVersion }
-      ])
-    );
-
-    savesQueue = savesQueue
-      .then(async () => {
-        const store = await savesStore();
-
-        if (!store) return;
-
-        await syncJsonFile(store, 'vnsaves.json', title, parseVnSaves, async (remote = {}) => {
-          const merged = mergeVnSaves(local, remote);
-
-          return sameVnSaves(merged, remote) ? undefined : merged;
-        });
-      })
-      .catch((error) => logger.warn(`Visual novel save sync failed: ${error.message}`));
-  }
-
-  /** Before a Windows game starts: synced save files newer than this browser's are written in. */
-  async function pullWindowsSaves() {
-    await savesQueue;
-    try {
-      await writeWindowsSaves(vnSaveAreas(book!.title, info!), await fetchSaves());
-    } catch (error: any) {
-      // Offline: play with this browser's saves.
-      logger.warn(`Visual novel save sync failed: ${error.message}`);
-    }
-  }
-
-  /** A Windows game's save files (vn-save-store.ts) merged into vnsaves.json, when they changed. */
-  function pushWindowsSaves() {
-    const title = book?.title;
-    const game = info;
-
-    if (!windows || !title || !game) return;
-
-    savesQueue = savesQueue
-      .then(async () => {
-        const store = await savesStore();
-
-        if (!store) return;
-
-        const files = await windowsSaveFiles(vnSaveAreas(title, game));
-        const stamp = windowsSavesStamp(files);
-
-        if (stamp === windowsStamp) return;
-
-        const { size, saves } = await readWindowsSaves(files);
-
-        if (!saves) {
-          savesNote = `This game's saves are ${formatBytes(size)}, over the ${formatBytes(windowsSavesCap)} that sync. They stay in this browser.`;
-          return;
-        }
-        savesNote = undefined;
-        await syncJsonFile(store, 'vnsaves.json', title, parseVnSaves, async (remote = {}) => {
-          const merged = mergeVnSaves(saves, remote, isWindowsSaveKey);
-
-          return sameVnSaves(merged, remote) ? undefined : merged;
-        });
-        windowsStamp = stamp;
-      })
-      .catch((error) => logger.warn(`Visual novel save sync failed: ${error.message}`));
-  }
-
   /** /v with a Windows game's files missing: the import dialog copies them in for this record. */
   function addGameFolder() {
     dialogManager.dialogs$.next([
@@ -485,7 +389,7 @@
     const player = frame.contentWindow as any;
 
     if (windows) {
-      await pullWindowsSaves();
+      await saveSync!.pullWindows();
       // A new frame holds no Ctrl.
       skipping = false;
       reading.lastTextTime = Date.now();
@@ -502,8 +406,8 @@
     }
 
     // A delete from the Saves sheet reaches vnsaves.json first, or the game would bring it back.
-    await savesQueue;
-    const saves = await fetchSaves().catch((error): VnSaves => {
+    await saveSync!.queue;
+    const saves = await saveSync!.fetch().catch((error): VnSaves => {
       // Offline: play with this browser's saves.
       logger.warn(`Visual novel save sync failed: ${error.message}`);
       return {};
@@ -541,7 +445,8 @@
       ),
       onText: source.onText,
       textLines: source.textLines,
-      onSave: uploadSaves,
+      onSave: (files: Parameters<VnSaveSync['upload']>[0]) =>
+        saveSync!.upload(files, engineVersion),
       onMode: (auto: boolean, skip: boolean) => (skipping = skip),
       onExit: () => (ended = true)
     });
@@ -647,7 +552,7 @@
   /** Stops the game for the Saves sheet; closing the sheet starts it again. */
   async function openSaves() {
     showMore = false;
-    pushWindowsSaves();
+    saveSync?.pushWindows();
     await save().catch((error) => logger.warn(error.message));
     frameLoaded = false;
     started = false;
@@ -657,30 +562,6 @@
   function closeSaves() {
     showSaves = false;
     restarts += 1;
-  }
-
-  /** Saves deleted in the sheet leave vnsaves.json too (merges never delete). */
-  function savesDeleted(area: SaveArea, paths: string[]) {
-    const title = book?.title;
-    const names = new Set(
-      windows
-        ? paths.map((path) => windowsSaveKey(area, path))
-        : paths.filter((path) => !path.includes('/'))
-    );
-
-    if (!title || !names.size) return;
-    savesQueue = savesQueue
-      .then(async () => {
-        const store = await savesStore();
-
-        if (!store) return;
-        await syncJsonFile(store, 'vnsaves.json', title, parseVnSaves, async (remote = {}) =>
-          Object.keys(remote).some((name) => names.has(name))
-            ? Object.fromEntries(Object.entries(remote).filter(([name]) => !names.has(name)))
-            : undefined
-        );
-      })
-      .catch((error) => logger.warn(`Visual novel save sync failed: ${error.message}`));
   }
 
   /** A Windows game's screen took a new size: a game Wine cut off restarts once to keep its own. */
@@ -739,27 +620,25 @@
   /** Gamepad buttons (vn-gamepad.ts): the page's own actions here, the game's in the frame. */
   function padChange(pressed: PadAction[], released: PadAction[]) {
     const player = frame?.contentWindow as any;
+    const { sheets, effects } = padStep(
+      {
+        more: showMore,
+        backlog: showBacklog,
+        tuning: showTuning,
+        hooks: showHooks,
+        saves: showSaves
+      },
+      pressed,
+      released,
+      { started, blocked: !!blocked }
+    );
 
-    released.forEach((action) => player?.padButton?.(action, false));
-    for (const action of pressed) {
-      if (action === 'skip') {
-        if (started) toggleSkip();
-      } else if (action === 'backlog') {
-        showMore = false;
-        showBacklog = !showBacklog && !blocked;
-      } else if (action === 'more') {
-        showBacklog = false;
-        showMore = !showMore;
-      } else if (action === 'fullscreen') {
-        toggleFullscreen();
-      } else if (action === 'menu' && (showMore || showBacklog || showTuning || showHooks)) {
-        // B closes a sheet before it reaches the game.
-        showMore = showBacklog = showTuning = showHooks = false;
-      } else if (action === 'menu' && showSaves) {
-        closeSaves();
-      } else {
-        player?.padButton?.(action, true);
-      }
+    ({ more: showMore, backlog: showBacklog, tuning: showTuning, hooks: showHooks } = sheets);
+    for (const effect of effects) {
+      if (effect === 'skip') toggleSkip();
+      else if (effect === 'fullscreen') toggleFullscreen();
+      else if (effect === 'closeSaves') closeSaves();
+      else player?.padButton?.(effect.button, effect.down);
     }
   }
 
@@ -771,7 +650,7 @@
   function onVisibilityChange() {
     if (document.visibilityState === 'hidden') {
       save();
-      if (started) pushWindowsSaves();
+      if (started) saveSync?.pushWindows();
     }
   }
 
@@ -803,7 +682,7 @@
 
   onDestroy(() => {
     save();
-    if (started) pushWindowsSaves();
+    if (started) saveSync?.pushWindows();
     readingActivity();
     if (book && reading && isPluginEnabled('social')) {
       noteReading(book.title, reading.read.characters, book.characters, true, 'vn');
@@ -942,7 +821,7 @@
     <VnSavesSheet
       areas={vnSaveAreas(book.title, info)}
       title={book.title}
-      ondelete={savesDeleted}
+      ondelete={(area, paths) => saveSync?.deleted(area, paths)}
     />
   </ReaderSheet>
 {/if}

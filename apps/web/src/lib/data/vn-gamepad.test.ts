@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { cursorSpeed, heldActions, padChanges } from './vn-gamepad';
+import { cursorSpeed, heldActions, padChanges, padStep, type PadSheets } from './vn-gamepad';
 
 function pad(pressed: number[], axes = [0, 0, 0, 0]) {
   return {
@@ -51,5 +51,49 @@ describe('vn gamepad', () => {
     expect(cursorSpeed(pad([], [1, -1]))).toEqual([1, -1]);
     expect(cursorSpeed(pad([], [0.6, 0]))[0]).toBeCloseTo(0.25);
     expect(cursorSpeed(pad([14, 13]))).toEqual([-1, 1]);
+  });
+
+  // padStep's failure modes: B reaching the game while a sheet is open (or Saves not
+  // restarting it); Y opening the Backlog of a blocked game; X toggling skip before the game
+  // started; a release not reaching the game (a button stuck down in it).
+  const none: PadSheets = {
+    more: false,
+    backlog: false,
+    tuning: false,
+    hooks: false,
+    saves: false
+  };
+  const game = { started: true, blocked: false };
+
+  it('closes a sheet with B before B reaches the game', () => {
+    expect(padStep({ ...none, hooks: true, more: true }, ['menu'], [], game)).toEqual({
+      sheets: none,
+      effects: []
+    });
+    expect(padStep({ ...none, saves: true }, ['menu'], [], game)).toEqual({
+      sheets: none,
+      effects: ['closeSaves']
+    });
+    expect(padStep(none, ['menu'], [], game).effects).toEqual([{ button: 'menu', down: true }]);
+  });
+
+  it('toggles the Backlog and More sheets, never the Backlog of a blocked game', () => {
+    expect(padStep({ ...none, more: true }, ['backlog'], [], game).sheets).toEqual({
+      ...none,
+      backlog: true
+    });
+    expect(padStep(none, ['backlog'], [], { ...game, blocked: true }).sheets).toEqual(none);
+    expect(padStep({ ...none, backlog: true }, ['more'], [], game).sheets).toEqual({
+      ...none,
+      more: true
+    });
+  });
+
+  it('skips only once the game started, and always passes releases on', () => {
+    expect(padStep(none, ['skip'], [], { ...game, started: false }).effects).toEqual([]);
+    expect(padStep({ ...none, more: true }, ['skip'], ['menu'], game).effects).toEqual([
+      { button: 'menu', down: false },
+      'skip'
+    ]);
   });
 });
