@@ -24,7 +24,7 @@ PSE_STREAM = 'http://vaemendis.net/opds-pse/stream'
 FILE_TYPES = {'application/epub+zip': 'epub', 'application/vnd.comicbook+zip': 'cbz', 'application/x-cbz': 'cbz',
               'application/zip': 'cbz'}
 IMAGE_EXTENSIONS = {'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp'}
-# The same cap as an upload (service.py MAX_BYTES).
+# The same cap as an upload (service.py MAX_BYTES); streamed to a file under state/import.
 FILE_BYTES = 300 * 1024 * 1024
 MAX_FEED_PAGES = 100
 SUWAYOMI_OPDS = '/api/opds/v1.2'
@@ -88,6 +88,11 @@ def parse(data: bytes, url: str) -> dict:
             'entries': [_entry(e, url) for e in root.findall(A + 'entry')]}
 
 
+def item_key(entry: dict) -> str:
+    """The entry's own id (Atom id), else its first link: what stays the same when the feed is reordered."""
+    return entry['id'] or (entry['file'] or {}).get('href') or entry['meta'] or (entry['pages'] or {}).get('href', '')
+
+
 def is_item(entry: dict) -> bool:
     """A publication: a file the app can open, pages, or (Suwayomi) a metadata entry with the pages."""
     return bool(entry['file'] or entry['pages'] or entry['meta'])
@@ -116,12 +121,11 @@ def _ms(stamp: str) -> int:
         return 0
 
 
-def _check_file(data: bytes, ext: str) -> str:
+def _check_file(path: str, ext: str) -> str:
     """Why a downloaded book isn't usable, or ''."""
-    import io
     import zipfile
     try:
-        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        with zipfile.ZipFile(path) as archive:
             names = archive.namelist()
     except zipfile.BadZipFile:
         return f'not a valid {ext.upper()} file'
@@ -156,14 +160,14 @@ class Server:
             raise ValueError('Not a link on this server')
         return url
 
-    def get(self, url: str, max_bytes: int | None = None) -> tuple[bytes, str]:
+    def get(self, url: str, max_bytes: int | None = None, to_path: str = '') -> tuple[bytes, str]:
         if self.deleted:
             raise LookupError('The source was removed')
         headers = {}
         if self.user or self.secret:
             password = decrypt(self.secret) if self.secret else ''
             headers['Authorization'] = 'Basic ' + base64.b64encode(f'{self.user}:{password}'.encode()).decode()
-        return fetcher.fetch(url, set(), headers, server=self.origin, max_bytes=max_bytes)
+        return fetcher.fetch(url, set(), headers, server=self.origin, max_bytes=max_bytes, to_path=to_path)
 
     def feed(self, url: str) -> dict:
         data, final = self.get(url)
@@ -218,18 +222,24 @@ class Server:
 
     def chapter(self, url: str, n: int, details: dict, folder: str) -> dict:
         """Item n into folder: {title, file} (a whole file) or {title, pages} (page images in order)."""
-        if not 1 <= n <= len(details['items']):
-            raise LookupError(f'Item {n} is no longer on the server')
-        item = details['items'][n - 1]
+        item = details['items'][n - 1] if 1 <= n <= len(details['items']) else None
+        if not item:
+            raise LookupError(f'No. {n} is no longer on the server')
         os.makedirs(folder, exist_ok=True)
         if details['mode'] == 'files':
             ext = item['file']['ext']
-            data = self.get(self.url(item['file']['href']), FILE_BYTES)[0]
-            if problem := _check_file(data, ext):
-                raise ValueError(f'The server sent {problem}')
-            with open(os.path.join(folder, f'book.{ext}'), 'wb') as f:
-                f.write(data)
-            return {'title': item['title'], 'file': f'book.{ext}'}
+            # Streamed to disk (state/import), never held in memory: volumes run to hundreds of MB.
+            part = os.path.join(folder, f'book.{ext}.part')
+            try:
+                self.get(self.url(item['file']['href']), FILE_BYTES, to_path=part)
+                if problem := _check_file(part, ext):
+                    raise ValueError(f'The server sent {problem}')
+                os.replace(part, os.path.join(folder, f'book.{ext}'))
+            except BaseException:
+                if os.path.exists(part):
+                    os.remove(part)
+                raise
+            return {'title': item['title'], 'file': f'book.{ext}', 'item': item_key(item)}
         pages = item['pages']
         if not pages and item['meta']:
             pages = next((e['pages'] for e in self.feed(self.url(item['meta']))['entries'] if e['pages']), None)
@@ -245,4 +255,4 @@ class Server:
             names.append(f'{page + 1:04d}.{IMAGE_EXTENSIONS[kind]}')
             with open(os.path.join(folder, names[-1]), 'wb') as f:
                 f.write(data)
-        return {'title': item['title'], 'pages': names}
+        return {'title': item['title'], 'pages': names, 'item': item_key(item)}

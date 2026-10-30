@@ -175,12 +175,44 @@ def _pages(work: dict) -> bool:
         work['per'] == 'chapter' or (work['volume_size'] or 1) > 1)
 
 
+def _number_files(work_id: int, details: dict) -> dict:
+    """A server's whole files by their lasting numbers: an entry keeps the number it got first (by its id), new
+    ones get the next numbers in feed order, so an entry inserted mid-feed never renumbers files in the library.
+    Numbers whose entry left the feed stay empty."""
+    def assign(c):
+        known = {row['item']: row['number'] for row in c.execute(
+            'SELECT item, number FROM work_items WHERE work = ?', (work_id,))}
+        top = max(known.values(), default=0)
+        for item in details['items']:
+            if (key := opds.item_key(item)) not in known:
+                top += 1
+                known[key] = top
+                c.execute('INSERT INTO work_items (work, number, item) VALUES (?, ?, ?)', (work_id, top, key))
+        return known
+    known = database().transaction(assign)
+    by_number = {known[opds.item_key(item)]: item for item in details['items']}
+    top = max(known.values(), default=0)
+    return {**details, 'items': [by_number.get(n) for n in range(1, top + 1)], 'chapters': top}
+
+
+def _check_chapters(work: dict, details: dict):
+    """Page manga are numbered by feed order: if a chapter fetched before now sits under another number (one was
+    inserted or removed on the server), fail rather than replace a volume with other chapters."""
+    items = details['items']
+    for row in database().query('SELECT number, item FROM work_items WHERE work = ? ORDER BY number', (work['id'],)):
+        if row['number'] > len(items) or opds.item_key(items[row['number'] - 1]) != row['item']:
+            raise ValueError(f"The server's chapter list changed at Ch. {row['number']}, so nothing was replaced; "
+                             'the volumes in the library stay as they are')
+
+
 def _fetch_details(work: dict) -> dict:
     """The site's details (cached 10 min), saved into the works row."""
     cached = _details.get(work['id'])
     if cached and time.monotonic() - cached[0] < DETAILS_SECONDS:
         return cached[1]
     details = _adapter(work['site']).details(work['url'])
+    if details.get('mode') == 'files':
+        details = _number_files(work['id'], details)
     _details[work['id']] = (time.monotonic(), details)
     size = work['volume_size'] or planner.VOLUME_SIZE
     if details.get('mode') == 'files':
@@ -855,13 +887,19 @@ def _chapter(work: dict, details: dict, n: int) -> dict:
         chapter = adapter.chapter(work['url'], n, details, os.path.join(cache_dir(work['id']), str(n)))
     else:
         chapter = adapter.chapter(work['url'], n, details)
+    if chapter.get('item'):
+        database().transaction(lambda c: c.execute(
+            'INSERT OR IGNORE INTO work_items (work, number, item) VALUES (?, ?, ?)', (work['id'], n, chapter['item'])))
     apidb.write_atomic(path, json.dumps(chapter, ensure_ascii=False).encode())
     return chapter
 
 
-def _identifier(work: dict, number: int) -> str:
-    # A server's work key is a path: its id stands in for it.
-    return f"chimi:{work['site']}:{work['id'] if work['site'].startswith('opds:') else work['work_key']}:{number}"
+def _identifier(work: dict, number: int, chapters: list[dict] = ()) -> str:
+    # A server's work key is a path: its id stands in for it. A whole file adds a hash of its entry id.
+    base = f"chimi:{work['site']}:{work['id'] if work['site'].startswith('opds:') else work['work_key']}:{number}"
+    if chapters and chapters[0].get('file'):
+        base += ':' + hashlib.sha256(chapters[0]['item'].encode()).hexdigest()[:12]
+    return base
 
 
 def _queue_volume(job, work: dict, volume: dict, chapters: list[dict], last: bool):
@@ -894,7 +932,7 @@ def _queue_volume(job, work: dict, volume: dict, chapters: list[dict], last: boo
         'ON CONFLICT (work, number) DO NOTHING', (work['id'], number, volume['first'], volume['last'], complete)))
     _enqueue(job['account'], f'{title}.{ext}', write, {
         'title': title, 'authors': work['authors'], 'series': work['title'], 'seriesIndex': number,
-        'identifier': _identifier(work, number), 'tags': getattr(adapter, 'TAG', adapter.NAME),
+        'identifier': _identifier(work, number, chapters), 'tags': getattr(adapter, 'TAG', adapter.NAME),
         'sourceJob': job['id'], 'sourceWork': work['id'], 'sourceVolume': number, 'sourceLast': last,
         'sourceChapters': [volume['first'], volume['last'], complete],
         # The open volume in the library is replaced in place: same Calibre id, so its reading data stays.
@@ -907,6 +945,8 @@ def run_job(job):
     _details.pop(work['id'], None)  # the chapter list as it is now
     details = _fetch_details(work)
     work = _work_row(work['id'])
+    if details.get('mode') == 'pages':
+        _check_chapters(work, details)
     size = work['volume_size'] or planner.VOLUME_SIZE
     plan = {v['number']: v for v in planner.plan(work['chapters'], size)}
     if job['kind'] == 'update':

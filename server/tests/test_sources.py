@@ -84,6 +84,12 @@ OPDS preset (its OPDS feed carries chapter pages, OPDS-PSE), so it has no module
   M2 per chapter: a book holds more than one chapter or its series index isn't the chapter number; per volume:
      chapters lost or doubled at the boundary                                                             -> test_manga_pages
   M3 switching per volume/chapter after a volume is in the library renumbers the work                      -> test_manga_pages
+Review of phase 4 (written before the fix):
+  I1 an entry inserted mid-feed of a whole-file series renumbers the later files: the new file is taken as "in
+     library" and never added, or a follow re-adds or replaces a file already in Calibre                      -> test_feed_reordered
+  I2 page manga: after the server's chapter list changed, a follow silently replaces the open volume in place
+     with other chapters (or fetches the full volumes again) instead of failing with a clear detail            -> test_feed_reordered
+  D1 a failed or oversized whole-file download leaves a partial file behind (or the file is held in memory)  -> test_file_streamed
 """
 import gzip
 import importlib.util
@@ -1079,7 +1085,7 @@ class ServerSourcesTest(ServiceCase):
 
         # Followed: a fourth volume on the server becomes a new book; the first three stay as they are.
         replaced = calls()
-        with mock.patch.dict(fake_servers.VOLUMES, s1=4):
+        with mock.patch.dict(fake_servers.VOLUMES, s1=[1, 2, 3, 4]):
             self.request('PUT', f'/sources/follows/{work["id"]}', {}, 'srvW')
             for _ in range(400):
                 _, following = self.request('GET', '/sources/following', account='srvW')
@@ -1105,6 +1111,82 @@ class ServerSourcesTest(ServiceCase):
         self.assertEqual(job['state'], 'failed', job)
         self.assertIn('EPUB', job['error'])
         self.assertEqual(len(self.adds()), before + 4)
+
+    def wait_follow(self, account):
+        for _ in range(400):
+            _, following = self.request('GET', '/sources/following', account=account)
+            follow = following['follows'][0]
+            if follow['state'] in ('new', 'failed', 'current'):
+                return follow
+            time.sleep(0.05)
+        self.fail(f'no check: {follow}')
+
+    def test_feed_reordered(self):
+        # Whole files: a volume inserted mid-feed is a new volume; the three in the library stay as they are.
+        _, body = self.add_server('srvR')
+        site = f'opds:{body["server"]["id"]}'
+        _, work = self.request('POST', '/sources/works/resolve', {'site': site, 'workKey': '/opds/series/s1'}, 'srvR')
+        _, job = self.request('POST', f'/sources/works/{work["id"]}/add', {'volumes': [1, 2, 3]}, 'srvR')
+        self.assertEqual(self.wait_job(job['job']['id'], 'srvR')['state'], 'done')
+        before, replaced = len(self.adds()), calls()
+        kept = {row['number']: row['calibre_id'] for row in service.sources.database().query(
+            'SELECT number, calibre_id FROM work_volumes WHERE work = ?', (work['id'],))}
+        with mock.patch.dict(fake_servers.VOLUMES, s1=[1, 4, 2, 3]):
+            self.request('PUT', f'/sources/follows/{work["id"]}', {}, 'srvR')
+            self.assertEqual(self.wait_follow('srvR')['state'], 'new')
+            for _ in range(400):
+                if len(self.adds()) > before:
+                    break
+                time.sleep(0.05)
+            time.sleep(0.3)
+            new = self.adds()[before:]
+            self.assertEqual([(a[a.index('--series-index') + 1]) for a in new], ['4'])
+            with open(os.path.join(STATE, f'added-{100 + before}.epub'), 'rb') as f:
+                self.assertEqual(f.read(), fake_servers.epub('星降る町の配達人 第4巻'))
+            self.assertEqual(calls(), replaced)
+            ids = {row['number']: row['calibre_id'] for row in service.sources.database().query(
+                'SELECT number, calibre_id FROM work_volumes WHERE work = ?', (work['id'],))}
+            self.assertEqual(ids, {**kept, 4: 100 + before})  # Vol. 1-3 keep their books
+            self.request('DELETE', f'/sources/follows/{work["id"]}', account='srvR')
+
+        # Pages: a chapter inserted before the open volume moves the chapters; the follow fails instead of
+        # replacing Vol. 2 (ch 11-12) with other chapters.
+        _, body = self.add_server('srvR2', kind='suwayomi', password='')
+        _, work = self.request('POST', '/sources/works/resolve', {
+            'site': f'opds:{body["server"]["id"]}', 'workKey': '/suwayomi/api/opds/v1.2/series/7/chapters'}, 'srvR2')
+        _, job = self.request('POST', f'/sources/works/{work["id"]}/add', {'volumes': [1, 2]}, 'srvR2')
+        self.assertEqual(self.wait_job(job['job']['id'], 'srvR2')['state'], 'done')
+        before, replaced = len(self.adds()), calls()
+        with mock.patch.dict(fake_servers.CHAPTERS, order=[1, 2, 3, 4, 13, *range(5, 13)]):
+            self.request('PUT', f'/sources/follows/{work["id"]}', {}, 'srvR2')
+            follow = self.wait_follow('srvR2')
+        self.assertEqual(follow['state'], 'failed', follow)
+        self.assertIn('chapter list changed', follow['detail'])
+        time.sleep(0.3)
+        self.assertEqual((len(self.adds()), calls()), (before, replaced))
+
+    def test_file_streamed(self):
+        _, body = self.add_server('srvD')
+        _, work = self.request('POST', '/sources/works/resolve', {
+            'site': f'opds:{body["server"]["id"]}', 'workKey': '/opds/series/s1'}, 'srvD')
+        before = len(self.adds())
+        files = []
+        real = fetcher.fetch
+
+        def spy(url, *args, **kwargs):
+            if '/opds/files/' in url:
+                files.append(kwargs.get('to_path'))
+            return real(url, *args, **kwargs)
+        with mock.patch.object(opds, 'FILE_BYTES', 500), mock.patch.object(fetcher, 'fetch', spy):
+            _, job = self.request('POST', f'/sources/works/{work["id"]}/add', {'volumes': [1]}, 'srvD')
+            job = self.wait_job(job['job']['id'], 'srvD')
+        self.assertTrue(files and all(files), files)  # streamed to a file, not read into memory
+        self.assertEqual(job['state'], 'failed', job)
+        self.assertIn('too large', job['error'])
+        self.assertEqual(len(self.adds()), before)
+        folder = os.path.join(service.STATE_DIR, 'sources', str(work['id']))
+        left = [f for _, _, files in os.walk(folder) for f in files]
+        self.assertEqual(left, [])
 
     def read_cbz(self, calibre_id):
         with zipfile.ZipFile(os.path.join(STATE, f'added-{calibre_id}.epub')) as archive:
