@@ -38,6 +38,8 @@ export interface HookLine {
   text: string;
   /** Epoch ms */
   at: number;
+  /** A natively played game's line: its number for its Anki media (native-games.ts) */
+  seq?: number;
 }
 
 export function isSocketUrl(url: string) {

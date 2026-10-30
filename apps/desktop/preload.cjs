@@ -24,6 +24,8 @@ contextBridge.exposeInMainWorld('chimiDesktop', {
     forget: (folder) => ipcRenderer.invoke('games-forget', folder),
     list: () => ipcRenderer.invoke('games-list'),
     session: () => ipcRenderer.invoke('games-session'),
+    mark: (seq) => ipcRenderer.invoke('games-mark', seq),
+    media: (seq, want) => ipcRenderer.invoke('games-media', seq, want),
     onHook: (callback) => {
       const listener = (_event, message) => callback(message);
       ipcRenderer.on('native-hook', listener);

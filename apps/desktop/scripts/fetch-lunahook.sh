@@ -39,7 +39,7 @@ cp "$work/$root"/files/LunaHook/*.dll "$work/$root"/files/Locale/Locale_Remulato
 cp "$work/$root"/LICENSES/* "$out/licenses/"
 
 flags=(-municode -O2 -s -static)
-x86_64-w64-mingw32-gcc "${flags[@]}" -o "$out/chimihook.exe" "$here/native/chimihook.c"
+x86_64-w64-mingw32-gcc "${flags[@]}" -o "$out/chimihook.exe" "$here/native/chimihook.c" -lole32
 i686-w64-mingw32-gcc "${flags[@]}" -o "$out/inject32.exe" "$here/native/inject32.c"
 echo "$tag" > "$out/lunahook-version.txt"
 echo "LunaHook $tag and chimihook in $out"

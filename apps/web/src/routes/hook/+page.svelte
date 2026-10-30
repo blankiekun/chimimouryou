@@ -1,7 +1,17 @@
 <script lang="ts">
   import AppHeader from '$lib/components/app-header/app-header.svelte';
+  import AnkiWatcher from '$lib/components/dictionary/anki-watcher.svelte';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
   import PointBox from '$lib/components/point-box.svelte';
+  import {
+    ankiSentenceField$,
+    ankiVnAudio$,
+    ankiVnScreenshot$,
+    noteSentence,
+    vnLineFor,
+    type AnkiMedia,
+    type AnkiNote
+  } from '$lib/data/dictionary/anki';
   import { formatDuration, localNetworkDenied } from '$lib/data/discord/discord';
   import { pagePath } from '$lib/data/env';
   import { addImmersionTime } from '$lib/data/stats/immersion-log';
@@ -95,6 +105,14 @@
   let saveNote = $state<string>();
   /** Windows: folders the game's first run wrote, to confirm as its saves */
   let pendingFolders = $state<string[]>();
+  /** Where Anki clips' sound comes from, said under the status */
+  let audioNote = $state<string>();
+  const audioNotes = {
+    game: 'Anki clips record this game’s sound.',
+    process: 'Anki clips record this game’s sound.',
+    system: 'Anki clips record the whole computer’s sound: this game’s alone isn’t available here.',
+    none: 'Anki clips have no sound: on Linux they need PulseAudio or PipeWire (pactl and parec).'
+  };
 
   /** Starts the game (or rejoins the one running), asking for its folder when it isn't linked. */
   async function startNative() {
@@ -159,6 +177,7 @@
   function onNative(message: NativeMessage, replayed = false) {
     if (message.type === 'status') nativeStatus = message.text;
     else if (message.type === 'error') nativeStatus = message.message;
+    else if (message.type === 'audio') audioNote = audioNotes[message.mode];
     else if (message.type === 'inject')
       nativeStatus = message.ok ? 'Playing.' : 'The text hook couldn’t attach to the game.';
     else if (message.type === 'exit') {
@@ -170,9 +189,34 @@
 
       ranked = rankThreads([...threads.threads.values()], cleanup) as typeof ranked;
       if (!replayed && isSavedThread(thread, nativeHook)) {
-        addLine(clean(message.sentence, thread.hookcode).trim());
+        addLine(clean(message.sentence, thread.hookcode).trim(), message.seq);
       }
     }
+  }
+
+  /**
+   * For a note added to Anki while playing natively: the screenshot and sound of the line its
+   * sentence was mined from, kept by the app since the game started. Notes from elsewhere are left
+   * alone.
+   */
+  async function ankiMedia(note: AnkiNote): Promise<AnkiMedia> {
+    const index = vnLineFor(
+      noteSentence(note),
+      lines.map((line) => line.text)
+    );
+    const seq = lines[index]?.seq;
+
+    if (seq === undefined || !games) {
+      throw new Error(
+        `card left alone, its ${$ankiSentenceField$.trim()} field isn't a line of this game's recent text`
+      );
+    }
+    const found = await games.media(seq, { picture: $ankiVnScreenshot$, audio: $ankiVnAudio$ });
+
+    return {
+      picture: found.picture && new Blob([found.picture], { type: 'image/jpeg' }),
+      audio: found.audio && new Blob([found.audio], { type: 'audio/wav' })
+    };
   }
 
   async function pushSaves() {
@@ -252,7 +296,7 @@
     status = 'off';
   }
 
-  function addLine(text: string) {
+  function addLine(text: string, seq?: number) {
     if (!text) return;
 
     const now = Date.now();
@@ -262,7 +306,8 @@
 
     const atBottom = !list || list.scrollHeight - list.scrollTop - list.clientHeight < 80;
 
-    lines = [...lines, { id: `${now}-${lines.length}`, text, at: now }].slice(-maxLines);
+    lines = [...lines, { id: `${now}-${lines.length}`, text, at: now, seq }].slice(-maxLines);
+    if (seq !== undefined) games?.mark(seq);
     saveLines(lines);
     sessionCharacters += count.characters;
     sessionSeconds += count.seconds;
@@ -356,6 +401,9 @@
               </button>
             {/if}
           </div>
+          {#if audioNote}
+            <p class="hook-hint">{audioNote}</p>
+          {/if}
           {#if saveNote}
             <p class="hook-hint" role="status">{saveNote}</p>
           {/if}
@@ -377,6 +425,7 @@
           {/if}
           <NativeThreads {ranked} hook={nativeHook} onpick={pickThread} />
         </div>
+        <AnkiWatcher media={ankiMedia} />
       {:else}
         <form
           class="hook-settings"

@@ -29,6 +29,7 @@ import {
 } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 import { homedir, userInfo } from 'node:os';
+import { gameMedia } from './game-media.js';
 
 /** Programs listed last when a folder is picked: setup and settings tools, not the game. */
 const toolPattern =
@@ -184,7 +185,15 @@ const winePath = (path) => `Z:${path.replaceAll('/', '\\')}`;
  * Registers the games IPC. `hookDir` holds chimihook and LunaHook; `isApp(event)` says whether
  * the sender is one of the app's own pages.
  */
-export function registerGames({ app, dialog, ipcMain, BrowserWindow, hookDir, isApp }) {
+export function registerGames({
+  app,
+  dialog,
+  ipcMain,
+  BrowserWindow,
+  desktopCapturer,
+  hookDir,
+  isApp
+}) {
   const storeFile = join(app.getPath('userData'), 'native-games.json');
   const prefixes = join(app.getPath('userData'), 'wine-prefixes');
   const fontDir = join(app.getPath('userData'), 'wine-fonts');
@@ -194,6 +203,9 @@ export function registerGames({ app, dialog, ipcMain, BrowserWindow, hookDir, is
   const picks = new Map();
   /** The game running now: one at a time. Its messages are kept for /hook to replay. */
   let session;
+  /** Its sound and screenshots, for Anki (game-media.js). */
+  const media = gameMedia({ desktopCapturer, platform });
+  app.on('will-quit', () => media.stop());
 
   const save = () => {
     writeFileSync(storeFile, JSON.stringify(store, null, 2));
@@ -413,9 +425,11 @@ export function registerGames({ app, dialog, ipcMain, BrowserWindow, hookDir, is
     };
     if (!existsSync(join(prefix, '.chimi-ready'))) await makePrefix(prefix, env);
     writeSaves(folder, game, saves);
+    const audio = await media.start(env);
+    send({ type: 'audio', mode: audio.mode });
     return spawn('wine', [winePath(join(hookDir, 'chimihook.exe')), winePath(gameExe)], {
       cwd: game.installDir,
-      env
+      env: { ...env, ...audio.env }
     });
   }
 
@@ -445,10 +459,14 @@ export function registerGames({ app, dialog, ipcMain, BrowserWindow, hookDir, is
       }
       child =
         platform === 'win32'
-          ? spawn(join(hookDir, 'chimihook.exe'), ['--locale', gameExe], {
-              cwd: game.installDir,
-              windowsHide: true
-            })
+          ? spawn(
+              join(hookDir, 'chimihook.exe'),
+              ['--locale', ...(await media.start()).args, gameExe],
+              {
+                cwd: game.installDir,
+                windowsHide: true
+              }
+            )
           : await startLinux(folder, store.games[folder], gameExe, saves);
     } catch (error) {
       current.running = false;
@@ -473,10 +491,20 @@ export function registerGames({ app, dialog, ipcMain, BrowserWindow, hookDir, is
             exited = true;
             current.running = false;
           }
-          if (
-            ['text', 'thread', 'inject', 'connect', 'disconnect', 'error', 'exit'].includes(
-              message.type
-            )
+          // Text lines get the number and arrival time /hook asks for their Anki media by.
+          if (message.type === 'text') Object.assign(message, media.stamp());
+          if (message.type === 'window') media.window(message);
+          else if (
+            [
+              'text',
+              'thread',
+              'inject',
+              'connect',
+              'disconnect',
+              'error',
+              'audio',
+              'exit'
+            ].includes(message.type)
           )
             send(message, current);
         } catch {
@@ -489,6 +517,8 @@ export function registerGames({ app, dialog, ipcMain, BrowserWindow, hookDir, is
     // 'exit', not 'close': Wine's own processes (wineserver, services) can keep stdout open.
     child.on('exit', () => {
       current.running = false;
+      // Not a later game's recording.
+      if (session === current) media.stop();
       if (current.watch) {
         const before = current.watch;
         const pending = Object.entries(topFolders())
@@ -596,6 +626,13 @@ export function registerGames({ app, dialog, ipcMain, BrowserWindow, hookDir, is
       watched: true
     });
   });
+  // /hook shows a line (its screenshot is taken), and a note mined from one wants its media.
+  handle('games-mark', (event, seq) => Number.isInteger(seq) && media.mark(seq));
+  handle('games-media', (event, seq, want) =>
+    Number.isInteger(seq)
+      ? media.media(seq, { picture: !!want?.picture, audio: !!want?.audio })
+      : { mode: media.mode }
+  );
   handle('games-pick', pick);
   handle('games-link', link);
   handle('games-forget', (event, folder) => {

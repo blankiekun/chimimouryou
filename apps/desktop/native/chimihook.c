@@ -3,14 +3,21 @@
 // text line as one JSON object per line on stdout (UTF-8). A separate program from the desktop app
 // (it loads the GPL-3.0 LunaHost64.dll in-process), like the bundled Yomitan.
 //
-// Usage: chimihook.exe [--locale] <game.exe>
+// Usage: chimihook.exe [--locale] [--audio <pipe>] <game.exe>
 //   --locale  start the game through Locale Remulator (LRProc.exe, LGPL-3.0, beside this exe) with
 //             its "Run in Japanese" profile (Windows: Shift JIS games on any system locale).
+//   --audio   Windows: record the game's sound (its process tree; Windows 10 2004+, else the whole
+//             system) as PCM s16le mono 24 kHz into the named pipe <pipe>, for Anki clips.
 // Lines: {"type":"text","thread":{pid,addr,ctx,ctx2,hookcode,name},"sentence":"…"}; also "thread"
-// (a new thread), "inject", "connect", "disconnect", "error" {message} and "exit" last.
+// (a new thread), "inject", "connect", "disconnect", "error" {message}, "window" {hwnd, xid, title,
+// width, height} (the game's main window, on change; xid: Wine's X11 window, else 0), "audio" {mode:
+// "process" | "system" | "none"} (with --audio) and "exit" last.
 // LunaHost64.dll, LunaHook32/64.dll and inject32.exe sit next to it. Same under Wine and Windows.
+#include <initguid.h>
 #include <windows.h>
 #include <tlhelp32.h>
+#include <mmdeviceapi.h>
+#include <audioclient.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -125,11 +132,148 @@ static HANDLE findGame(const wchar_t *game, ULONGLONG since, DWORD *pid) {
   return NULL;
 }
 
+static DWORD gamePid;
+
+// The game's main window: its largest visible unowned top-level window.
+typedef struct { HWND hwnd; LONG area; } Found;
+static BOOL CALLBACK findWindow(HWND hwnd, LPARAM data) {
+  DWORD pid; GetWindowThreadProcessId(hwnd, &pid);
+  RECT r;
+  if (pid != gamePid || !IsWindowVisible(hwnd) || GetWindow(hwnd, GW_OWNER) || !GetWindowRect(hwnd, &r)) return TRUE;
+  Found *f = (Found *)data;
+  LONG area = (r.right - r.left) * (r.bottom - r.top);
+  if (area > f->area) { f->hwnd = hwnd; f->area = area; }
+  return TRUE;
+}
+
+// Says where the game's window is whenever it changes (screenshots for Anki), every 0.5 s.
+static DWORD WINAPI watchWindow(LPVOID unused) {
+  HWND lastHwnd = NULL; wchar_t lastTitle[256] = L""; LONG lastW = 0, lastH = 0;
+  for (;; Sleep(500)) {
+    Found f = {NULL, 0};
+    EnumWindows(findWindow, (LPARAM)&f);
+    if (!f.hwnd) continue;
+    wchar_t title[256] = L""; GetWindowTextW(f.hwnd, title, 256);
+    RECT r; GetWindowRect(f.hwnd, &r);
+    LONG w = r.right - r.left, h = r.bottom - r.top;
+    if (f.hwnd == lastHwnd && w == lastW && h == lastH && !wcscmp(title, lastTitle)) continue;
+    lastHwnd = f.hwnd; lastW = w; lastH = h; wcscpy(lastTitle, title);
+    // winex11's X window for this HWND (absent on Windows).
+    ULONGLONG xid = (ULONGLONG)(UINT_PTR)GetPropA(f.hwnd, "__wine_x11_whole_window");
+    EnterCriticalSection(&out);
+    printf("{\"type\":\"window\",\"hwnd\":%llu,\"xid\":%llu,\"title\":", (ULONGLONG)(UINT_PTR)f.hwnd, xid);
+    jstr(title); printf(",\"width\":%ld,\"height\":%ld}\n", w, h); fflush(stdout);
+    LeaveCriticalSection(&out);
+  }
+  return 0;
+}
+
+// Process loopback (audioclientactivationparams.h, Windows 10 2004+), declared here: older
+// mingw-w64 headers lack it.
+typedef struct { DWORD ActivationType; DWORD TargetProcessId; DWORD ProcessLoopbackMode; } LoopbackParams;
+typedef HRESULT (WINAPI *ActivateFn)(LPCWSTR, REFIID, PROPVARIANT *, IActivateAudioInterfaceCompletionHandler *, IActivateAudioInterfaceAsyncOperation **);
+static const GUID agileObject = {0x94ea2b94, 0xe9cc, 0x49e0, {0xc0, 0xff, 0xee, 0x64, 0xca, 0x8f, 0x5b, 0x90}};
+
+typedef struct { IActivateAudioInterfaceCompletionHandler iface; HANDLE done; } Handler;
+static HRESULT STDMETHODCALLTYPE hQuery(IActivateAudioInterfaceCompletionHandler *self, REFIID riid, void **obj) {
+  if (IsEqualIID(riid, &IID_IUnknown) || IsEqualIID(riid, &IID_IActivateAudioInterfaceCompletionHandler) || IsEqualIID(riid, &agileObject)) {
+    *obj = self; return S_OK;
+  }
+  *obj = NULL; return E_NOINTERFACE;
+}
+static ULONG STDMETHODCALLTYPE hRef(IActivateAudioInterfaceCompletionHandler *self) { return 1; } // static lifetime
+static HRESULT STDMETHODCALLTYPE hDone(IActivateAudioInterfaceCompletionHandler *self, IActivateAudioInterfaceAsyncOperation *op) {
+  SetEvent(((Handler *)self)->done); return S_OK;
+}
+static IActivateAudioInterfaceCompletionHandlerVtbl handlerVtbl = {hQuery, hRef, hRef, hDone};
+
+// The game's process tree's sound, or NULL (before Windows 10 2004).
+static IAudioClient *processClient(void) {
+  HMODULE mm = LoadLibraryW(L"Mmdevapi.dll");
+  ActivateFn activate = mm ? (ActivateFn)GetProcAddress(mm, "ActivateAudioInterfaceAsync") : NULL;
+  if (!activate) return NULL;
+  LoopbackParams params = {1 /* PROCESS_LOOPBACK */, gamePid, 0 /* INCLUDE_TARGET_PROCESS_TREE */};
+  PROPVARIANT pv; PropVariantInit(&pv);
+  pv.vt = VT_BLOB; pv.blob.cbSize = sizeof params; pv.blob.pBlobData = (BYTE *)&params;
+  static Handler handler = {{&handlerVtbl}, NULL};
+  handler.done = CreateEventW(NULL, FALSE, FALSE, NULL);
+  IActivateAudioInterfaceAsyncOperation *op = NULL;
+  IAudioClient *client = NULL;
+  if (SUCCEEDED(activate(L"VAD\\Process_Loopback", &IID_IAudioClient, &pv, &handler.iface, &op)) &&
+      WaitForSingleObject(handler.done, 5000) == WAIT_OBJECT_0) {
+    HRESULT hr; IUnknown *unk = NULL;
+    if (SUCCEEDED(op->lpVtbl->GetActivateResult(op, &hr, &unk)) && SUCCEEDED(hr) && unk) {
+      unk->lpVtbl->QueryInterface(unk, &IID_IAudioClient, (void **)&client);
+      unk->lpVtbl->Release(unk);
+    }
+  }
+  if (op) op->lpVtbl->Release(op);
+  return client;
+}
+
+// The whole system's sound: the default output's loopback.
+static IAudioClient *systemClient(void) {
+  IMMDeviceEnumerator *en = NULL; IMMDevice *dev = NULL; IAudioClient *client = NULL;
+  if (SUCCEEDED(CoCreateInstance(&CLSID_MMDeviceEnumerator, NULL, CLSCTX_ALL, &IID_IMMDeviceEnumerator, (void **)&en)) &&
+      SUCCEEDED(en->lpVtbl->GetDefaultAudioEndpoint(en, eRender, eConsole, &dev)))
+    dev->lpVtbl->Activate(dev, &IID_IAudioClient, CLSCTX_ALL, NULL, (void **)&client);
+  if (dev) dev->lpVtbl->Release(dev);
+  if (en) en->lpVtbl->Release(en);
+  return client;
+}
+
+static void audioMode(const char *mode) {
+  EnterCriticalSection(&out); printf("{\"type\":\"audio\",\"mode\":\"%s\"}\n", mode); fflush(stdout); LeaveCriticalSection(&out);
+}
+
+// Records the game's sound into the pipe (main's rolling buffer) until the pipe closes.
+static DWORD WINAPI recordAudio(LPVOID pipeName) {
+  CoInitializeEx(NULL, COINIT_MULTITHREADED);
+  WAVEFORMATEX fmt = {WAVE_FORMAT_PCM, 1, 24000, 48000, 2, 16, 0};
+  DWORD flags = AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY;
+  const char *mode = "process";
+  IAudioClient *client = processClient();
+  if (!client || FAILED(client->lpVtbl->Initialize(client, AUDCLNT_SHAREMODE_SHARED, flags, 2000000, 0, &fmt, NULL))) {
+    if (client) client->lpVtbl->Release(client);
+    mode = "system";
+    client = systemClient();
+    if (client && FAILED(client->lpVtbl->Initialize(client, AUDCLNT_SHAREMODE_SHARED, flags, 2000000, 0, &fmt, NULL))) {
+      client->lpVtbl->Release(client); client = NULL;
+    }
+  }
+  IAudioCaptureClient *capture = NULL;
+  HANDLE pipe = INVALID_HANDLE_VALUE;
+  if (client && SUCCEEDED(client->lpVtbl->GetService(client, &IID_IAudioCaptureClient, (void **)&capture)))
+    pipe = CreateFileW((wchar_t *)pipeName, GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+  if (pipe == INVALID_HANDLE_VALUE || FAILED(client->lpVtbl->Start(client))) { audioMode("none"); return 0; }
+  audioMode(mode);
+  static short silence[24000];
+  for (BOOL ok = TRUE; ok; Sleep(20)) {
+    UINT32 frames;
+    while (ok && SUCCEEDED(capture->lpVtbl->GetNextPacketSize(capture, &frames)) && frames) {
+      BYTE *data; DWORD bufFlags, written;
+      if (FAILED(capture->lpVtbl->GetBuffer(capture, &data, &frames, &bufFlags, NULL, NULL))) break;
+      // Packets are at most the 0.2 s buffer (4800 frames).
+      ok = WriteFile(pipe, bufFlags & AUDCLNT_BUFFERFLAGS_SILENT ? (BYTE *)silence : data, frames * 2, &written, NULL);
+      capture->lpVtbl->ReleaseBuffer(capture, frames);
+    }
+  }
+  client->lpVtbl->Stop(client);
+  CloseHandle(pipe);
+  return 0;
+}
+
 int wmain(int argc, wchar_t **argv) {
-  BOOL locale = argc > 2 && !wcscmp(argv[1], L"--locale");
-  if (argc < 2 + locale) { fprintf(stderr, "usage: chimihook [--locale] game.exe\n"); return 2; }
+  int arg = 1;
+  BOOL locale = FALSE; wchar_t *audioPipe = NULL;
+  for (; arg < argc - 1; arg++) {
+    if (!wcscmp(argv[arg], L"--locale")) locale = TRUE;
+    else if (!wcscmp(argv[arg], L"--audio") && arg + 2 < argc) audioPipe = argv[++arg];
+    else break;
+  }
+  if (arg != argc - 1) { fprintf(stderr, "usage: chimihook [--locale] [--audio pipe] game.exe\n"); return 2; }
   InitializeCriticalSection(&out);
-  wchar_t game[MAX_PATH]; GetFullPathNameW(argv[1 + locale], MAX_PATH, game, NULL);
+  wchar_t game[MAX_PATH]; GetFullPathNameW(argv[arg], MAX_PATH, game, NULL);
   wchar_t dir[MAX_PATH]; GetModuleFileNameW(NULL, dir, MAX_PATH); *wcsrchr(dir, L'\\') = 0;
   wchar_t path[MAX_PATH]; swprintf(path, MAX_PATH, L"%ls\\LunaHost64.dll", dir);
   HMODULE host = LoadLibraryW(path);
@@ -156,6 +300,10 @@ int wmain(int argc, wchar_t **argv) {
     if (!run(cmd, gameDir, &pi)) { fail("The game didn't start", GetLastError()); return 1; }
     CloseHandle(pi.hThread); proc = pi.hProcess; pid = pi.dwProcessId;
   }
+  gamePid = pid;
+  // Started at once: the sound from the game's first moments is kept too.
+  if (audioPipe) CloseHandle(CreateThread(NULL, 0, recordAudio, audioPipe, 0, NULL));
+  CloseHandle(CreateThread(NULL, 0, watchWindow, NULL, 0, NULL));
   WaitForInputIdle(proc, 5000);
   Sleep(300);
 
