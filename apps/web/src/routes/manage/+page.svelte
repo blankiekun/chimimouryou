@@ -1932,6 +1932,10 @@
     on:read={(ev) => onBookClick(ev.detail.id)}
     on:showBook={(ev) => pushState('', { bookDetails: ev.detail.id })}
     on:showSeries={(ev) => showSeriesFromDetails(ev.detail)}
+    on:delete={(ev) => {
+      history.back();
+      removeBooks([ev.detail.id]);
+    }}
     on:changed={() =>
       database.dataListChanged$.next(getStorageHandler(window, $storageSource$, ''))}
   />

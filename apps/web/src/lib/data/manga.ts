@@ -18,8 +18,7 @@ import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-s
 import type { SeriesOverrides } from '$lib/data/series-overrides';
 import { orderSeries } from '$lib/components/book-card/library-sort';
 import { record } from '$lib/data/setting-parsers';
-
-const marker = '<!--ttu-manga-->';
+import { bookContent, mangaMarker as marker } from '$lib/data/book-content';
 
 export type MangaReadingMode = 'rtl' | 'ltr' | 'vertical';
 
@@ -180,8 +179,11 @@ export function isManga(book: { elementHtml: string }) {
   return book.elementHtml.startsWith(marker);
 }
 
+/** The page order; none for damaged data (bookContent's `invalid`) or other books. */
 export function mangaPages(book: { elementHtml: string }): string[] {
-  return isManga(book) ? JSON.parse(book.elementHtml.slice(marker.length)) : [];
+  const content = bookContent(book);
+
+  return content.kind === 'manga' ? content.pages : [];
 }
 
 export function mangaBookmark(

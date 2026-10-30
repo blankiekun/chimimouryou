@@ -78,6 +78,7 @@ import loadCbz from '$lib/functions/file-loaders/cbz/load-cbz';
 import { loadVnFolder } from '$lib/functions/file-loaders/vn/load-vn';
 import { deleteOrphanVnCaches, isVn, vnInfo } from '$lib/data/vn';
 import { isManga } from '$lib/data/manga';
+import { bookContent } from '$lib/data/book-content';
 import { levelOf } from '$lib/data/difficulty-core';
 import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
 import { throwIfAborted } from '$lib/functions/replication/replication-error';
@@ -355,8 +356,12 @@ export class ServerStorageHandler extends BaseStorageHandler {
             });
         }
 
-        // Windows games live in this browser only (windows-game.ts), never in the catalog.
-        await this.addDeviceVns((book) => isVn(book) && vnInfo(book).engine === 'vnbox');
+        // Windows games live in this browser only (windows-game.ts), never in the catalog;
+        // a damaged record stays listed so its page can offer to delete it.
+        await this.addDeviceVns(
+          (book) =>
+            isVn(book) && (bookContent(book).kind === 'invalid' || vnInfo(book).engine === 'vnbox')
+        );
         this.dataListFetched = true;
         libraryOffline$.next(false);
         libraryBuilding$.next(false);

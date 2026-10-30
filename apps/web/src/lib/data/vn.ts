@@ -15,8 +15,7 @@ import type { HookCleanup } from '$lib/data/hook-cleanup';
 import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
 import { readerDb } from '$lib/data/reader-db';
 import { countTextCharacters } from '$lib/functions/get-character-count';
-
-const marker = '<!--ttu-vn-->';
+import { bookContent, vnMarker as marker } from '$lib/data/book-content';
 
 /** Script files in the order the engine looks for them (ScriptHandler::readScriptSub). */
 const scriptNames = [
@@ -109,8 +108,12 @@ export function isVn(book: { elementHtml: string }) {
   return book.elementHtml.startsWith(marker);
 }
 
+/** The game's info; an empty one (no files, no engine) for damaged data (bookContent's
+ * `invalid`), which the /v page and book details refuse to open. */
 export function vnInfo(book: { elementHtml: string }): VnInfo {
-  return JSON.parse(book.elementHtml.slice(marker.length));
+  const content = bookContent(book);
+
+  return content.kind === 'vn' ? content.info : { encoding: 'sjis', files: [] };
 }
 
 /** The script as plain bytes: numbered .txt files as they are, nscript.dat XORed with 0x84. */
