@@ -1,67 +1,31 @@
 <script lang="ts">
-  import { faMagnifyingGlass, faSpinner } from '@fortawesome/free-solid-svg-icons';
-  import PointBox from '$lib/components/point-box.svelte';
-  import SectionHead from '$lib/components/section-head.svelte';
   import BookCard from '$lib/components/book-card/book-card.svelte';
   import BookFriends from '$lib/components/social/book-friends.svelte';
   import SendBook from '$lib/components/social/send-book.svelte';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
   import ContinueReadingShelf from '$lib/components/book-card/continue-reading-shelf.svelte';
-  import DifficultyDialog from '$lib/components/book-card/difficulty-dialog.svelte';
   import MokuroText from '$lib/components/book-card/mokuro-text.svelte';
   import LocalMokuroText from '$lib/components/book-card/local-mokuro-text.svelte';
-  import { localMokuro, mokuroHtml, type MokuroText as MokuroFile } from '$lib/data/mokuro';
+  import DetailsDifficulty from '$lib/components/library/details-difficulty.svelte';
+  import DetailsMetadataSearch from '$lib/components/library/details-metadata-search.svelte';
+  import DetailsWords from '$lib/components/library/details-words.svelte';
+  import type { MokuroText as MokuroFile } from '$lib/data/mokuro';
   import { isFinished, isReading } from '$lib/components/book-card/library-filters';
   import { orderSeries } from '$lib/components/book-card/library-sort';
   import { account$, hasPermission } from '$lib/data/account';
   import { pagePath, selfHostingGuideUrl, standalone } from '$lib/data/env';
-  import {
-    loadBookMetadata,
-    defaultSource,
-    jitenCharacters,
-    saveBookMetadata,
-    searchMetadata,
-    sourceNames,
-    type BookMetadata,
-    type MetadataCandidate,
-    type MetadataKind,
-    type MetadataSource
-  } from '$lib/data/book-metadata';
-  import { vnBookmark } from '$lib/data/vn';
-  import { bookContent, damagedBookText } from '$lib/data/book-content';
-  import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
-  import {
-    loadCalibreCatalog,
-    loadCalibreDifficulty,
-    type CalibreBook,
-    type CalibreDifficulty
-  } from '$lib/data/calibre';
-  import { bookFacets, bookLevel, forYou, relativeLevel } from '$lib/data/difficulty-core';
+  import { sourceNames, type MetadataKind } from '$lib/data/book-metadata';
+  import { loadBookDetails, noBookDetails, type BookDetails } from '$lib/data/book-details';
+  import { damagedBookText } from '$lib/data/book-content';
   import type { CoreNumbers } from '$lib/functions/analysis/core';
-  import { bookKanjiCount } from '$lib/data/book-kanji';
   import {
     analysisToolsState$,
     analysisToolsSupported,
     checkAnalysisTools,
-    keptEstimate,
-    keptReadings,
-    localEstimate,
-    localEstimateSaved$,
-    localWordList,
-    makeReadings,
-    redoWordList,
-    type LocalEstimate
+    localEstimateSaved$
   } from '$lib/data/analysis-tools';
-  import { wordCoverage, type BookWord, type WordCoverage } from '$lib/data/book-words';
   import { dialogManager } from '$lib/data/dialog-manager';
   import SeriesDialog from '$lib/components/book-card/series-dialog.svelte';
-  import {
-    bookCoverage,
-    bookWordGroups,
-    getKnownSet,
-    refreshKnownWordsIfStale,
-    type KnownSet
-  } from '$lib/data/known-words';
   import { learnerStats } from '$lib/data/learner-stats';
   import {
     addToHome,
@@ -71,20 +35,17 @@
     libraryTab$,
     removeFromHome
   } from '$lib/data/library-home';
-  import { guessSeriesName } from '$lib/data/series-overrides';
   import { generatedReadings$ } from '$lib/data/generated-furigana';
   import { database, generatedFurigana$, startDayHoursForTracker$ } from '$lib/data/store';
-  import { wordMarks$ } from '$lib/data/word-marks';
-  import { wordList } from '$lib/data/words-met';
   import { getDateKey } from '$lib/functions/statistic-util';
-  import { t$, tr, uiLanguage$ } from '$lib/i18n';
+  import { t$ } from '$lib/i18n';
   import { createEventDispatcher, onMount } from 'svelte';
-  import Fa from 'svelte-fa';
 
   /**
    * A book's page in the library (Store clicks, Home covers): length,
    * difficulty, Calibre metadata and details fetched from AniList or VNDB.
-   * Not part of upstream.
+   * The data comes from one `loadBookDetails` (book-details.ts); the difficulty, words and
+   * Find details parts are `components/library/details-*.svelte`. Not part of upstream.
    */
 
   export let book: BookCardProps;
@@ -110,70 +71,25 @@
   }>();
 
   let layer: HTMLDivElement;
-  let calibreBook: CalibreBook | undefined;
-  let estimate: CalibreDifficulty | undefined;
-  /** Standalone: the analysis tools' estimate of a stored book, and its progress while made */
-  let localScored: LocalEstimate | undefined;
-  let estimating: number | undefined;
+  let details: BookDetails = noBookDetails();
+  /** Each load starts the parts' own state (search, errors, progress) afresh */
+  let loads = 0;
   /** Standalone: the fast core's numbers, shown while the rest of the estimate is made */
   let coreFirst: CoreNumbers | undefined;
-  let estimateError = '';
-  /** Standalone, generated furigana: no readings file kept yet; one being made, and its error */
-  let readingsMissing = false;
-  let generating: number | undefined;
-  let readingsError = '';
-  /** Standalone: the word list was made without yurigana's Reader (redoWordList), and its redo */
-  let listWithoutReader = false;
-  let redoing: number | undefined;
-  /** The book's word list and the words known, for the Words row */
-  let listWords: BookWord[] = [];
-  let knownSet: KnownSet | undefined;
-  let wordStats: WordCoverage | undefined;
+  /** Standalone: the estimate's progress while it is made */
+  let estimating: number | undefined;
   /** A manga's mokuro text: undefined while loading, null when it has none */
   let mokuro: MokuroFile | null | undefined;
-  /** Standalone: different kanji counted from the stored book */
-  let browserKanji: number | undefined;
   let speed = 0;
-  let metadata: BookMetadata | undefined;
-  let searching = false;
   let searchOpen = false;
   let searchTerm = '';
-  let searchRequest = 0;
-  let searchError = '';
-  let saving = false;
-  let candidates: MetadataCandidate[] | undefined;
-  let source: MetadataSource | undefined;
-  /** A Windows game in this browser: a pick sets its length from Jiten (it has no count of its own) */
-  let windowsGame = false;
-  /** The stored manga or VN data can't be read (bookContent's `invalid`) */
-  let damaged = false;
-  let lengthNote = '';
 
   const number = (value: number) => value.toLocaleString('en-US');
 
+  $: ({ calibreBook, estimate, metadata, browserKanji, windowsGame, damaged } = details);
   $: kind = (book.vn ? 'vn' : book.manga ? 'manga' : 'book') as MetadataKind;
-  $: source ??= defaultSource(kind);
   $: characters = book.characters || estimate?.characters || 0;
   $: remaining = isReading(book) ? characters * (1 - book.progress) : characters;
-  $: hasDifficulty = (isCalibre && book.calibreId !== undefined) || !!localScored || !!coreFirst;
-  /** The objective 1-10 level (fast core), and this reader's numbers from the word list */
-  $: level = bookLevel(estimate?.core ?? coreFirst);
-  /** Full furigana and sentence length beside the level (core version 2) */
-  $: facets = bookFacets(estimate?.core ?? coreFirst);
-  $: you = listWords.length && knownSet ? forYou(listWords, knownSet.isKnown, estimate) : undefined;
-  $: youLine = you && forYouLine(you.share, you.learn, you.atLeast);
-  $: unknownEvery =
-    you?.unknownTokens && characters
-      ? $t$('book.unknownEvery', { count: number(Math.round(characters / you.unknownTokens)) })
-      : '';
-  /** Manga are estimated from their mokuro text, so one without has nothing to estimate yet. */
-  $: mangaWithoutText = kind === 'manga' && mokuro === null && !level;
-  $: canEstimate =
-    standalone &&
-    (kind === 'book' || (kind === 'manga' && !!mokuro)) &&
-    !localScored &&
-    $analysisToolsState$.difficulty === 'ready';
-  $: furiganaReady = standalone && kind === 'book' && $analysisToolsState$.furigana === 'ready';
   $: canEdit = isCalibre && hasPermission($account$, 'series');
   $: canEditSeries = canEdit || localSeries;
   /** Without `canEdit` (Browser source, standalone) a pick only sets a Windows game's length. */
@@ -187,52 +103,6 @@
     ? new Date(calibreBook.published).getFullYear().toString()
     : metadata?.released.slice(0, 4);
   $: (book.title, load());
-  $: wordGroups =
-    listWords.length && knownSet
-      ? bookWordGroups(listWords, estimate?.words95, knownSet, $wordMarks$)
-      : undefined;
-  /** The difficulty note: a few whole sentences, each only when its numbers exist */
-  $: difficultyNote = !level
-    ? ''
-    : [
-        $t$('book.levelNote', { score: level.score.toFixed(1), tier: level.tier }),
-        wordStats ? coverageSentence(wordStats, $t$) : '',
-        estimate?.uniqueKanji ? $t$('book.kanji', { count: number(estimate.uniqueKanji) }) : ''
-      ]
-        .filter(Boolean)
-        .join($uiLanguage$ === 'ja' ? '' : ' ');
-
-  const sentLenKeys = {
-    short: 'book.sentLenShort',
-    average: 'book.sentLenAverage',
-    long: 'book.sentLenLong'
-  } as const;
-
-  /** One decimal, rounded down: 97.96% is not 98.0% */
-  const percent1 = (share: number) => (Math.floor(share * 1000) / 10).toFixed(1);
-
-  function forYouLine(share: number, learn: number, atLeast: boolean) {
-    return $t$(
-      !learn ? 'book.forYouReached' : atLeast ? 'book.forYouLineMore' : 'book.forYouLine',
-      { percent: percent1(share), learn: number(learn) }
-    );
-  }
-
-  function coverageSentence(stats: WordCoverage, t: typeof $t$) {
-    return t(
-      stats.unlisted
-        ? 'book.wordCoverageTail'
-        : stats.complete
-          ? 'book.wordCoverage'
-          : 'book.wordCoverageTop',
-      {
-        count: number(stats.words),
-        percent: Math.floor(stats.share * 100),
-        new: number(stats.newWords),
-        rare: number(stats.unlisted)
-      }
-    );
-  }
 
   onMount(() => {
     // The layer rather than the back link, whose focus ring would show on every open.
@@ -276,281 +146,20 @@
   async function load() {
     const title = book.title;
 
-    calibreBook = undefined;
-    estimate = undefined;
-    listWords = [];
-    knownSet = undefined;
-    wordStats = undefined;
-    metadata = undefined;
-    candidates = undefined;
-    source = undefined;
+    details = noBookDetails();
+    loads += 1;
     searchOpen = false;
-    searchError = '';
-    browserKanji = undefined;
-    localScored = undefined;
-    coreFirst = undefined;
-    estimating = undefined;
-    estimateError = '';
-    readingsMissing = listWithoutReader = false;
-    generating = redoing = undefined;
-    readingsError = '';
-    windowsGame = damaged = false;
-    lengthNote = '';
+    coreFirst = estimating = undefined;
+    if (standalone && kind === 'manga') mokuro = undefined;
 
-    if (kind !== 'book') {
-      database
-        .getDataByTitle(title)
-        .then((data) => {
-          const content = data && bookContent(data);
-
-          if (title !== book.title) return;
-          damaged = content?.kind === 'invalid';
-          windowsGame = content?.kind === 'vn' && content.info.engine === 'vnbox';
-        })
-        .catch(() => {});
-    }
-
-    if (standalone && kind === 'book') {
-      bookKanjiCount(book.id, title, book.characters)
-        .then((count) => {
-          if (title === book.title) browserKanji = count;
-        })
-        .catch(() => {});
-    }
-
-    if (standalone && kind === 'manga') {
-      mokuro = undefined;
-      const text = await localMokuro(title).catch(() => undefined);
-
-      if (title === book.title) mokuro = text ?? null;
-    }
-
-    if (standalone && kind !== 'vn') {
-      // The estimate and word list the analysis tools made (analysis-tools.ts).
-      const [scores, local, known, readings] = await Promise.all([
-        keptEstimate(title),
-        localWordList(title).catch(() => undefined),
-        refreshKnownWordsIfStale()
-          .then(getKnownSet)
-          .catch(() => undefined),
-        keptReadings(title)
-      ]);
-
-      if (title === book.title) {
-        estimate = localScored = scores;
-        readingsMissing = !readings;
-        listWithoutReader = !!local?.withoutReader;
-      }
-      if (title === book.title && local && known) {
-        listWords = local.words;
-        knownSet = known;
-        wordStats = wordCoverage(local.words, known.isKnown, local.totals);
-      }
-    }
-
-    if (!isCalibre) {
-      return;
-    }
-
-    const [catalog, difficulty, details] = await Promise.all([
-      loadCalibreCatalog().catch(() => []),
-      book.calibreId === undefined ? undefined : loadCalibreDifficulty().catch(() => undefined),
-      loadBookMetadata().catch(() => ({}) as Record<string, BookMetadata>)
-    ]);
+    const loaded = await loadBookDetails(book, kind, isCalibre);
 
     if (title !== book.title) {
       return;
     }
 
-    calibreBook = catalog.find((entry) => entry.title === title);
-    estimate = book.calibreId === undefined ? undefined : difficulty?.[book.calibreId];
-    metadata = details[title];
-
-    if (estimate && book.calibreId !== undefined) {
-      const id = book.calibreId;
-      const bookEstimate = estimate;
-      const [list, known] = await Promise.all([
-        wordList(id, bookEstimate.computedAt).catch(() => null),
-        refreshKnownWordsIfStale()
-          .then(getKnownSet)
-          .catch(() => undefined)
-      ]);
-      const coverage =
-        list && known
-          ? await bookCoverage(id, list, bookEstimate, known).catch(() => undefined)
-          : undefined;
-
-      if (title !== book.title) {
-        return;
-      }
-
-      wordStats = coverage;
-      listWords = list ?? [];
-      knownSet = known;
-    }
-  }
-
-  function openSearch() {
-    searchOpen = true;
-    searchTerm ||= guessSeriesName(book.title);
-    search();
-  }
-
-  async function search() {
-    if (!searchTerm.trim()) {
-      return;
-    }
-
-    const request = (searchRequest += 1);
-
-    searching = true;
-    searchError = '';
-    try {
-      const results = await searchMetadata(kind, searchTerm.trim(), source);
-
-      // An older search answering late must not replace a newer one's results.
-      if (request === searchRequest) {
-        candidates = results;
-      }
-    } catch (error: any) {
-      if (request === searchRequest) {
-        searchError = tr('book.searchFailed', {
-          source: sourceNames[source ?? defaultSource(kind)],
-          error: error.message
-        });
-      }
-    } finally {
-      if (request === searchRequest) {
-        searching = false;
-      }
-    }
-  }
-
-  async function save(entry: MetadataCandidate | undefined) {
-    saving = true;
-    searchError = '';
-    lengthNote = '';
-    try {
-      if (canEdit) metadata = (await saveBookMetadata(book.title, entry))[book.title];
-      if (entry && windowsGame) await useJitenLength(entry);
-      searchOpen = false;
-      dispatch('changed');
-    } catch (error: any) {
-      searchError = error.message;
-    } finally {
-      saving = false;
-    }
-  }
-
-  /**
-   * A Windows game's length from the pick's Jiten deck replaces the record's (and the 0 it was
-   * saved with): a newer lastBookModified syncs it like any book record change.
-   */
-  async function useJitenLength(entry: MetadataCandidate) {
-    const characters = await jitenCharacters(entry);
-    const stored = characters && (await database.getDataByTitle(book.title));
-
-    if (!characters) {
-      lengthNote = $t$('book.noJitenLength');
-      return;
-    }
-    if (!stored) return;
-    await database.upsertData(
-      { ...stored, characters, lastBookModified: Date.now() },
-      ReplicationSaveBehavior.Overwrite,
-      false,
-      false
-    );
-
-    const bookmark = await database.getBookmark(stored.id);
-
-    if (bookmark) {
-      await database.putBookmark(
-        vnBookmark(stored.id, bookmark.exploredCharCount ?? 0, characters)
-      );
-    }
-  }
-
-  /** Standalone: estimates the stored book with the analysis tools (analysis-tools.ts). */
-  async function estimateLocally() {
-    const title = book.title;
-    // By title: cards from other sources carry a dummy id, not the stored record's.
-    const html =
-      kind === 'manga'
-        ? mokuro && mokuroHtml(mokuro)
-        : (await database.getDataByTitle(title).catch(() => undefined))?.elementHtml;
-
-    estimateError = '';
-    if (!html) {
-      estimateError = $t$(kind === 'manga' ? 'book.mangaNoText' : 'book.estimateNoText');
-      return;
-    }
-    estimating = 0;
-    try {
-      await localEstimate(
-        title,
-        html,
-        (share) => {
-          if (title === book.title) estimating = share;
-        },
-        undefined,
-        false,
-        (result) => {
-          if (title === book.title) coreFirst = result.core;
-        }
-      );
-      if (title === book.title) load();
-    } catch (error) {
-      if (title !== book.title) return;
-      estimating = undefined;
-      estimateError = $t$('book.estimateFailed', {
-        message: error instanceof Error ? error.message : String(error)
-      });
-    }
-  }
-
-  /** Standalone: makes the book's readings file now, ahead of the background (analysis-tools.ts). */
-  async function generateReadings() {
-    const title = book.title;
-    const data = await database.getDataByTitle(title).catch(() => undefined);
-
-    readingsError = '';
-    if (!data?.elementHtml) {
-      readingsError = 'This book has no text stored in this browser.';
-      return;
-    }
-    generating = 0;
-    try {
-      await makeReadings(title, data.elementHtml, (share) => {
-        if (title === book.title) generating = share;
-      });
-      if (title === book.title) readingsMissing = false;
-    } catch (error) {
-      if (title === book.title) {
-        readingsError = `Generating readings failed: ${error instanceof Error ? error.message : String(error)}`;
-      }
-    } finally {
-      if (title === book.title) generating = undefined;
-    }
-  }
-
-  /** Standalone: makes the word list again with yurigana's readings; the score stays. */
-  async function redoList() {
-    const title = book.title;
-    const data = await database.getDataByTitle(title).catch(() => undefined);
-
-    if (!data?.elementHtml) return;
-    redoing = 0;
-    try {
-      await redoWordList(title, data.elementHtml, (share) => {
-        if (title === book.title) redoing = share;
-      });
-    } catch (error) {
-      console.warn(`Word list for “${title}”:`, error);
-    } finally {
-      if (title === book.title) redoing = undefined;
-    }
-    if (title === book.title) load();
+    details = loaded;
+    if (standalone && kind === 'manga') mokuro = loaded.mokuro;
   }
 
   /** The library's Make series dialog for this book; Browser books save in this browser. */
@@ -565,10 +174,6 @@
     });
 
     if (saved) dispatch('changed');
-  }
-
-  function showDifficulty() {
-    dialogManager.dialogs$.next([{ component: DifficultyDialog, props: { books: [book] } }]);
   }
 
   function toggleHome() {
@@ -686,127 +291,32 @@
           </div>
         {/if}
 
-        {#if hasDifficulty && level}
-          <PointBox
-            label={$t$('book.difficulty')}
-            figure={level.score.toFixed(1)}
-            unit={$t$('book.levelOutOf', { tier: level.tier })}
-          >
-            <div class="details-difficulty" title={difficultyNote}>
-              <div class="details-difficulty-score">
-                <span class="details-meter details-meter-ten" aria-hidden="true">
-                  {#each [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as i (i)}
-                    <span
-                      ><span
-                        style:width="{Math.min(Math.max(level.score - i + 1, 0), 1) * 100}%"
-                      /></span
-                    >
-                  {/each}
-                </span>
-              </div>
-              <dl class="details-figures">
-                {#if wordStats && !you}
-                  <div>
-                    <dt>{Math.floor(wordStats.share * 100)}%</dt>
-                    <dd>{$t$('book.knownFigure')}</dd>
-                  </div>
-                {/if}
-                <div>
-                  <dt>{level.v98 === null ? $t$('book.v98Beyond') : number(level.v98)}</dt>
-                  <dd>{$t$(level.v98 === null ? 'book.v98BeyondFigure' : 'book.v98Figure')}</dd>
-                </div>
-                {#if estimate?.uniqueKanji}
-                  <div>
-                    <dt>{number(estimate.uniqueKanji)}</dt>
-                    <dd>{$t$('book.kanjiFigureOnly')}</dd>
-                  </div>
-                {/if}
-                {#if facets?.fullFurigana}
-                  <div>
-                    <dt>{Math.round(facets.rubyKanji * 100)}%</dt>
-                    <dd>{$t$('book.fullFuriganaFigure')}</dd>
-                  </div>
-                {/if}
-                {#if facets?.withFurigana !== undefined}
-                  <div>
-                    <dt>{facets.withFurigana.toFixed(1)}</dt>
-                    <dd>{$t$('book.withFuriganaFigure')}</dd>
-                  </div>
-                {/if}
-                {#if facets}
-                  <div>
-                    <dt>{Math.round(facets.sentLen)}</dt>
-                    <dd>{$t$(sentLenKeys[facets.sentBand])}</dd>
-                  </div>
-                {/if}
-              </dl>
-            </div>
-            {#if you}
-              <div class="details-for-you">
-                <p class="details-for-you-head">
-                  <span class="details-for-you-label">{$t$('book.forYou')}</span>
-                  <span class="details-for-you-level">
-                    {$t$('book.forYouLevel', { level: relativeLevel(you.share).toFixed(1) })}
-                  </span>
-                </p>
-                <p>{youLine}</p>
-                {#if unknownEvery}
-                  <p class="details-small">{unknownEvery}</p>
-                {/if}
-              </div>
-            {/if}
-            {#if book.calibreId !== undefined}
-              <button type="button" class="app-button app-button-quiet" on:click={showDifficulty}>
-                {$t$('book.difficultyDetails')}
-              </button>
-            {/if}
-          </PointBox>
-        {/if}
+        <DetailsDifficulty
+          part="box"
+          {book}
+          {kind}
+          {isCalibre}
+          {details}
+          {mokuro}
+          {characters}
+          {coreFirst}
+        />
 
         <dl class="details-facts">
-          {#if mangaWithoutText}
-            <div>
-              <dt>{$t$('book.difficulty')}</dt>
-              <dd>{$t$('book.mangaNoText')}</dd>
-            </div>
-          {:else if hasDifficulty && !level}
-            <div>
-              <dt>{$t$('book.difficulty')}</dt>
-              <dd>
-                {$t$('book.noEstimate')}
-                <button
-                  type="button"
-                  class="app-button details-row-button"
-                  on:click={showDifficulty}
-                >
-                  {$t$('book.difficultyDetails')}
-                </button>
-              </dd>
-            </div>
-          {:else if canEstimate}
-            <div>
-              <dt>{$t$('book.difficulty')}</dt>
-              <dd>
-                {#if estimating === undefined}
-                  {$t$('book.noEstimate')}
-                  <button
-                    type="button"
-                    class="app-button details-row-button"
-                    on:click={estimateLocally}
-                  >
-                    {$t$('book.estimate')}
-                  </button>
-                  {#if estimateError}
-                    <span class="details-note" role="alert">{estimateError}</span>
-                  {/if}
-                {:else}
-                  <span role="status">
-                    {$t$('book.estimating', { percent: Math.round(estimating * 100) })}
-                  </span>
-                {/if}
-              </dd>
-            </div>
-          {/if}
+          {#key loads}
+            <DetailsDifficulty
+              part="row"
+              {book}
+              {kind}
+              {isCalibre}
+              {details}
+              {mokuro}
+              {characters}
+              bind:coreFirst
+              bind:estimating
+              onsaved={load}
+            />
+          {/key}
           <div>
             <dt>{$t$('book.length')}</dt>
             <dd>
@@ -833,63 +343,16 @@
               <dd>{$t$('book.kanjiCount', { count: number(browserKanji) })}</dd>
             </div>
           {/if}
-          {#if wordGroups}
-            <div>
-              <dt>{$t$('book.words')}</dt>
-              <dd>
-                {$t$('book.wordsValue', {
-                  new: number(wordGroups.new.length),
-                  known: number(wordGroups.known.length),
-                  ignored: number(wordGroups.ignored.length)
-                })}
-                <button
-                  type="button"
-                  class="app-button app-button-quiet"
-                  on:click={() => dispatch('words')}
-                >
-                  {$t$('book.wordList')}
-                </button>
-                {#if furiganaReady && listWithoutReader}
-                  {#if redoing === undefined}
-                    <button
-                      type="button"
-                      class="app-button details-row-button"
-                      title="Reads each word in context; the difficulty stays the same"
-                      on:click={redoList}
-                    >
-                      Redo with readings
-                    </button>
-                  {:else}
-                    <span class="details-note" role="status">
-                      Redoing the word list… {Math.round(redoing * 100)}%
-                    </span>
-                  {/if}
-                {/if}
-              </dd>
-            </div>
-          {/if}
-          {#if furiganaReady && $generatedFurigana$ && readingsMissing}
-            <div>
-              <dt>Furigana</dt>
-              <dd>
-                {#if generating === undefined}
-                  No readings yet
-                  <button
-                    type="button"
-                    class="app-button details-row-button"
-                    on:click={generateReadings}
-                  >
-                    Generate readings
-                  </button>
-                  {#if readingsError}
-                    <span class="details-note" role="alert">{readingsError}</span>
-                  {/if}
-                {:else}
-                  <span role="status">Generating readings… {Math.round(generating * 100)}%</span>
-                {/if}
-              </dd>
-            </div>
-          {/if}
+          {#key loads}
+            <DetailsWords
+              {book}
+              {kind}
+              {details}
+              onwords={() => dispatch('words')}
+              onreadings={() => (details = { ...details, readingsMissing: false })}
+              onsaved={load}
+            />
+          {/key}
           <div>
             <dt>{$t$('book.progress')}</dt>
             <dd>
@@ -982,121 +445,19 @@
         {/if}
 
         {#if canFind}
-          <section class="details-fetch" aria-labelledby="book-details-fetch">
-            {#if !searchOpen}
-              <button type="button" class="app-button" on:click={openSearch}>
-                <Fa icon={faMagnifyingGlass} />
-                {canEdit && metadata
-                  ? $t$('book.changeDetails')
-                  : $t$(canEdit ? 'book.findDetailsOn' : 'book.findLengthOn', {
-                      source: sourceNames[defaultSource(kind)]
-                    })}
-              </button>
-              {#if canEdit && metadata}
-                <button
-                  type="button"
-                  class="app-button app-button-quiet"
-                  disabled={saving}
-                  on:click={() => save(undefined)}
-                >
-                  {metadata.cover ? $t$('book.removeDetailsCover') : $t$('book.removeDetails')}
-                </button>
-              {/if}
-            {:else}
-              <h2 id="book-details-fetch" class="details-fetch-heading">
-                {$t$('book.findDetails')}
-              </h2>
-              <form class="details-search" on:submit|preventDefault={search}>
-                <select
-                  class="app-input"
-                  aria-label={$t$('book.source')}
-                  bind:value={source}
-                  on:change={() => ((candidates = undefined), search())}
-                >
-                  <option value={defaultSource(kind)}>{sourceNames[defaultSource(kind)]}</option>
-                  <option value="jiten">Jiten</option>
-                </select>
-                <input
-                  class="app-input"
-                  type="search"
-                  lang="ja"
-                  aria-label={$t$('book.searchSource', {
-                    source: sourceNames[source ?? defaultSource(kind)]
-                  })}
-                  bind:value={searchTerm}
-                  on:keydown={(ev) => ev.key === 'Escape' && (searchOpen = false)}
-                />
-                <button type="submit" class="app-button">
-                  <Fa icon={searching ? faSpinner : faMagnifyingGlass} spin={searching} />
-                  {$t$('book.search')}
-                </button>
-                <button
-                  type="button"
-                  class="app-button app-button-quiet"
-                  on:click={() => (searchOpen = false)}
-                >
-                  {$t$('book.cancel')}
-                </button>
-              </form>
-              {#if candidates && !candidates.length && !searching}
-                <p class="details-note">{$t$('book.nothingFound')}</p>
-              {/if}
-              {#if candidates?.length}
-                <ul class="details-candidates">
-                  {#each candidates as candidate (candidate.url)}
-                    <li>
-                      {#if candidate.cover}
-                        <img
-                          src={candidate.cover}
-                          alt=""
-                          loading="lazy"
-                          referrerpolicy="no-referrer"
-                        />
-                      {:else}
-                        <span class="details-candidate-blank" />
-                      {/if}
-                      <span class="details-candidate-text">
-                        <a href={candidate.url} target="_blank" rel="noreferrer" lang="ja">
-                          {candidate.title}
-                        </a>
-                        <span class="details-note">
-                          {candidate.released.slice(0, 4) ||
-                            $t$('book.undated')}{#if candidate.genres.length},
-                            {candidate.genres.slice(0, 3).join(', ')}{/if}
-                        </span>
-                        <span class="details-candidate-buttons">
-                          <button
-                            type="button"
-                            class="app-button"
-                            disabled={saving}
-                            on:click={() => save({ ...candidate, cover: '' })}
-                          >
-                            {$t$(canEdit ? 'book.useDetails' : 'book.useLength')}
-                          </button>
-                          {#if canEdit && candidate.cover}
-                            <button
-                              type="button"
-                              class="app-button"
-                              disabled={saving}
-                              on:click={() => save(candidate)}
-                            >
-                              {$t$('book.useDetailsCover')}
-                            </button>
-                          {/if}
-                        </span>
-                      </span>
-                    </li>
-                  {/each}
-                </ul>
-              {/if}
-            {/if}
-            {#if searchError}
-              <p class="text-danger" role="alert">{searchError}</p>
-            {/if}
-            {#if lengthNote}
-              <p class="details-note" role="status">{lengthNote}</p>
-            {/if}
-          </section>
+          {#key loads}
+            <DetailsMetadataSearch
+              {book}
+              {kind}
+              {canEdit}
+              {windowsGame}
+              {metadata}
+              bind:searchOpen
+              bind:searchTerm
+              onmetadata={(saved) => (details = { ...details, metadata: saved })}
+              onchanged={() => dispatch('changed')}
+            />
+          {/key}
         {/if}
       </div>
     </div>
@@ -1300,97 +661,11 @@
     text-underline-offset: 0.2em;
   }
 
-  .details-difficulty {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem 3rem;
-    margin-top: 0.5rem;
-  }
-
-  .details-difficulty-score {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .details-meter {
-    display: flex;
-    gap: 3px;
-  }
-
-  .details-meter > span {
-    display: block;
-    width: 1.75rem;
-    height: 4px;
-    background: var(--app-progress-track);
-  }
-
-  .details-meter > span > span {
-    display: block;
-    height: 100%;
-    background: var(--accent-color);
-  }
-
-  .details-meter-ten > span {
-    width: 0.875rem;
-  }
-
-  .details-for-you {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    margin: 1.25rem 0 0.75rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--border-color);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .details-for-you-head {
-    display: flex;
-    align-items: baseline;
-    gap: 0.75rem;
-  }
-
-  .details-for-you-label {
-    color: var(--app-muted-fg);
-    font-size: var(--type-label);
-    font-weight: 700;
-  }
-
-  .details-for-you-level {
-    font-size: var(--type-number);
-    font-weight: 700;
-  }
-
-  .details-figures {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    align-items: baseline;
-    gap: 0.3rem 0.6rem;
-  }
-
-  .details-figures > div {
-    display: contents;
-  }
-
-  .details-figures dt {
-    font-size: var(--type-number);
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    text-align: right;
-  }
-
-  .details-figures dd,
-  .details-small {
-    color: var(--app-muted-fg);
-    font-size: var(--type-small);
-  }
-
   .details-facts {
     border-top: 2px solid var(--font-color);
   }
 
-  .details-facts > div {
+  .details-facts > :global(div) {
     display: grid;
     grid-template-columns: 8.5rem minmax(0, 1fr);
     gap: 1rem;
@@ -1399,28 +674,23 @@
   }
 
   @media (max-width: 639px) {
-    .details-facts > div {
+    .details-facts > :global(div) {
       grid-template-columns: 6rem minmax(0, 1fr);
     }
   }
 
-  .details-facts dt {
+  .details-facts :global(dt) {
     padding-top: 0.1rem;
     color: var(--app-muted-fg);
     font-size: var(--type-small);
   }
 
-  .details-facts dd {
+  .details-facts :global(dd) {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.25rem 0.75rem;
     font-variant-numeric: tabular-nums;
-  }
-
-  .details-row-button {
-    --app-control-height: 2rem;
-    padding: 0 0.6rem;
   }
 
   .details-server-note {
@@ -1445,72 +715,5 @@
     width: 100%;
     color: var(--app-muted-fg);
     font-size: var(--type-small);
-  }
-
-  .details-fetch {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-
-  .details-fetch-heading {
-    width: 100%;
-    font-size: var(--type-h2);
-    font-weight: 700;
-  }
-
-  .details-search {
-    display: flex;
-    width: 100%;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-
-  .details-search input {
-    min-width: 12rem;
-    flex: 1;
-  }
-
-  .details-candidates {
-    display: flex;
-    width: 100%;
-    flex-direction: column;
-    border-top: 2px solid var(--font-color);
-  }
-
-  .details-candidates li {
-    display: flex;
-    gap: 0.9rem;
-    padding: 0.8rem 0;
-    border-bottom: 1px solid var(--border-color);
-  }
-
-  .details-candidates img,
-  .details-candidate-blank {
-    width: 4rem;
-    flex: 0 0 auto;
-    aspect-ratio: 375 / 529;
-    object-fit: cover;
-    background: var(--surface-color);
-  }
-
-  .details-candidate-text {
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-    gap: 0.2rem;
-  }
-
-  .details-candidate-text a {
-    font-weight: 700;
-    text-decoration: underline;
-    text-underline-offset: 0.2em;
-  }
-
-  .details-candidate-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    margin-top: 0.3rem;
   }
 </style>
