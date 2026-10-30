@@ -14,7 +14,7 @@
  * imported. Not upstream.
  */
 
-import { hashPage } from '$lib/data/vn';
+import { hashPage } from '$lib/data/vn/vn';
 import {
   deleteSaves,
   listSaves,
@@ -23,7 +23,7 @@ import {
   writeSaves,
   type SaveArea,
   type SaveEntry
-} from '$lib/data/vn-save-store';
+} from '$lib/data/vn/vn-save-store';
 import {
   copyWindowsGame,
   deleteWindowsGame,
@@ -31,7 +31,7 @@ import {
   readHead,
   vnboxPlayerUrl,
   windowsPrograms
-} from '$lib/data/windows-game';
+} from '$lib/data/vn/windows-game';
 
 /** VNBox's CD-ROM drive (DEFAULT_CDROM_DRIVE in boxedwine-shell.js) */
 export const discDrive = 'e';

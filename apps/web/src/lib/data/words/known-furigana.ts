@@ -11,7 +11,7 @@
  */
 
 import { hideKnownRuby } from 'yurigana';
-import { getKanjiSeen } from '$lib/data/kanji-seen';
+import { getKanjiSeen } from '$lib/data/words/kanji-seen';
 
 export { hideKnownRuby, isPlainReading, knownKanjiMinCount } from 'yurigana';
 

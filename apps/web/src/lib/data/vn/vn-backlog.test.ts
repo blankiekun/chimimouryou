@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { backlogLines } from '$lib/data/vn-backlog';
+import { backlogLines } from '$lib/data/vn/vn-backlog';
 
 const line = (text: string, picture = true, sound = false) => ({ text, picture, sound });
 

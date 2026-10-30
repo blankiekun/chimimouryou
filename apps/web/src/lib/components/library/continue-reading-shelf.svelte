@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-  import CoverCard from '$lib/components/book-card/cover-card.svelte';
-  import { isReading } from '$lib/components/book-card/library-filters';
+  import CoverCard from '$lib/components/library/cover-card.svelte';
+  import { isReading } from '$lib/data/library/library-filters';
   import SectionHead from '$lib/components/section-head.svelte';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher } from 'svelte';

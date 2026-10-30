@@ -14,8 +14,8 @@
  * (`account-settings-sync.ts`); the route is per browser. Not part of upstream.
  */
 
-import { ankiInvoke } from '$lib/data/anki';
-import { jpod101Url } from '$lib/data/dictionary-audio';
+import { ankiInvoke } from '$lib/data/dictionary/anki';
+import { jpod101Url } from '$lib/data/dictionary/dictionary-audio';
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import { writableStorageSubject } from '$lib/data/internal/writable-storage-subject';
 import { localStorage } from '$lib/data/window/local-storage';

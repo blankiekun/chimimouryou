@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds the hard word test's items (apps/web/src/lib/data/placement-hard-items.json).
+"""Builds the hard word test's items (apps/web/src/lib/data/difficulty/placement-hard-items.json).
 
 Each item has a word's readings (typed in the test) and four meanings, the right one
 first (the test shuffles them). Words are sampled like build-items.py's, in the
@@ -40,7 +40,7 @@ spec = importlib.util.spec_from_file_location('build_items', Path(__file__).with
 base = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(base)
 
-OUT = ROOT / 'apps/web/src/lib/data/placement-hard-items.json'
+OUT = ROOT / 'apps/web/src/lib/data/difficulty/placement-hard-items.json'
 MAX_GLOSS = 60
 
 HIRAGANA = re.compile(r'^[ぁ-ゖー]+$')

@@ -11,8 +11,8 @@ import {
   aiFeatures$,
   defaultAiFeatures,
   ttsVoiceId$
-} from '$lib/data/ai-settings';
-import { saveConnection, setFeature } from '$lib/data/ai-connections';
+} from '$lib/data/ai/ai-settings';
+import { saveConnection, setFeature } from '$lib/data/ai/ai-connections';
 import {
   elevenLabsVoice,
   readingTimeline,

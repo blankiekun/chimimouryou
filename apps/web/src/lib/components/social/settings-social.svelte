@@ -26,7 +26,7 @@
     refreshMe,
     type ShareKey,
     type SocialMe
-  } from '$lib/data/social-account';
+  } from '$lib/data/social/social-account';
   import { t$, uiLanguage$, type MessageKey } from '$lib/i18n';
   import { setPluginEnabled } from '$lib/plugins';
   import { onDestroy, onMount } from 'svelte';

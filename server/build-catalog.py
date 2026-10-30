@@ -37,7 +37,7 @@ FORMATS = ['EPUB', 'HTMLZ', 'TXT', 'CBZ', 'ZIP']
 # Image archives, read as manga. Many ZIPs in the library hold EPUBs instead; those are skipped.
 MANGA_FORMATS = ('CBZ', 'ZIP')
 PAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')
-# ONScripter scripts: a CBZ/ZIP holding one is a visual novel (lib/data/vn.ts in the app).
+# ONScripter scripts: a CBZ/ZIP holding one is a visual novel (lib/data/vn/vn.ts in the app).
 VN_SCRIPTS = ('0.txt', '00.txt', 'nscr_sec.dat', 'nscript.___', 'nscript.dat', 'onscript.nt2', 'onscript.nt3')
 
 

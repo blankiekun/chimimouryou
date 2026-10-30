@@ -5,11 +5,11 @@
  */
 
 import { BehaviorSubject } from 'rxjs';
-import { calibreCoverUrl, loadCalibreCatalog } from '$lib/data/calibre';
+import { calibreCoverUrl, loadCalibreCatalog } from '$lib/data/remote/calibre';
 import { standalone } from '$lib/data/env';
-import { isMangaFileName } from '$lib/data/manga';
-import { bookKey, bookThumbnail, isHidden } from '$lib/data/social';
-import { HubError, hubFetch } from '$lib/data/social-account';
+import { isMangaFileName } from '$lib/data/manga/manga';
+import { bookKey, bookThumbnail, isHidden } from '$lib/data/social/social';
+import { HubError, hubFetch } from '$lib/data/social/social-account';
 
 /**
  * Upload library covers (/moderation, role 'dev', server builds): a thumbnail of every Calibre

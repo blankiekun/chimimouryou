@@ -12,21 +12,21 @@
  * Requests go out only while signed in to the hub. Not part of upstream.
  */
 
-import { absCleanTitle, absMatchKey } from '$lib/data/audiobookshelf';
+import { absCleanTitle, absMatchKey } from '$lib/data/audio/audiobookshelf';
 import type { BooksDbStatistic } from '$lib/data/database/books-db/versions/books-db';
-import type { DiscordActivity } from '$lib/data/discord-template';
+import type { DiscordActivity } from '$lib/data/discord/discord-template';
 import {
   writableArrayLocalStorageSubject,
   writableObjectLocalStorageSubject
 } from '$lib/data/internal/writable-object-local-storage-subject';
-import { activityWeeks, learnerStats } from '$lib/data/learner-stats';
+import { activityWeeks, learnerStats } from '$lib/data/stats/learner-stats';
 import {
   HubError,
   hubFetch,
   shareDefaults,
   socialSession$,
   type ShareKey
-} from '$lib/data/social-account';
+} from '$lib/data/social/social-account';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 
 export type BookKind = 'book' | 'manga' | 'vn';
@@ -287,13 +287,13 @@ async function collectStats() {
   ]);
   const statistics = await database.getStatisticsForTimeWindow('0000-00-00', '9999-99-99');
   const known = shareOn('wordsKnown')
-    ? await import('$lib/data/words-met')
+    ? await import('$lib/data/words/words-met')
         .then(({ getWordsSummary }) => getWordsSummary())
         .then((summary) => summary.known)
         .catch(() => undefined)
     : undefined;
 
-  const rank = await import('$lib/data/reading-rank-data')
+  const rank = await import('$lib/data/stats/reading-rank-data')
     .then(({ loadReadingRank }) => loadReadingRank(statistics))
     .catch(() => undefined);
 
@@ -395,7 +395,7 @@ export const blockFriend = (id: string) =>
 export async function localCovers() {
   const [{ database }, calibre] = await Promise.all([
     import('$lib/data/store'),
-    import('$lib/data/calibre')
+    import('$lib/data/remote/calibre')
   ]);
   const db = await database.db;
   const covers = new Map<string, { title: string; imagePath: string | Blob }>();
@@ -477,9 +477,9 @@ export async function uploadCovers(keys: string[]) {
 /** The hub's 160 px WebP of a cover from `localCovers` (a Calibre cover URL or a stored image) */
 export async function bookThumbnail(cover: string | Blob) {
   const [{ coverThumbnail }, { serverFetch }, { coverThumbUrl }] = await Promise.all([
-    import('$lib/data/social-images'),
-    import('$lib/data/server-connect'),
-    import('$lib/data/calibre')
+    import('$lib/data/social/social-images'),
+    import('$lib/data/remote/server-connect'),
+    import('$lib/data/remote/calibre')
   ]);
   const image =
     typeof cover === 'string'

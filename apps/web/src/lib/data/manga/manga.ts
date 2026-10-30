@@ -15,8 +15,8 @@ import { combineLatest, map } from 'rxjs';
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
-import type { SeriesOverrides } from '$lib/data/series-overrides';
-import { orderSeries } from '$lib/components/book-card/library-sort';
+import type { SeriesOverrides } from '$lib/data/library/series-overrides';
+import { orderSeries } from '$lib/data/library/library-sort';
 import { record } from '$lib/data/setting-parsers';
 import { bookContent, mangaMarker as marker } from '$lib/data/book-content';
 

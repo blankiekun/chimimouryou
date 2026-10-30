@@ -11,9 +11,9 @@
  * per-character timestamps let the reader highlight what is being said. Not part of upstream.
  */
 
-import { defaultElevenLabsModel, redactSecret, ttsVoiceId$ } from '$lib/data/ai-settings';
-import { resolveFeature } from '$lib/data/ai-connections';
-import { authHeaders, connectionBaseUrl } from '$lib/data/ai-providers';
+import { defaultElevenLabsModel, redactSecret, ttsVoiceId$ } from '$lib/data/ai/ai-settings';
+import { resolveFeature } from '$lib/data/ai/ai-connections';
+import { authHeaders, connectionBaseUrl } from '$lib/data/ai/ai-providers';
 import { speechText, type ReadingParagraph } from '$lib/functions/tts/extract-reading-text';
 import { countTextCharacters } from '$lib/functions/get-character-count';
 

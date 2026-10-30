@@ -16,7 +16,7 @@ import {
   defaultAskAiPresets,
   type AiPromptKey,
   type AskAiPreset
-} from '$lib/data/ai-settings';
+} from '$lib/data/ai/ai-settings';
 
 export type AiLanguage = 'en' | 'ja';
 

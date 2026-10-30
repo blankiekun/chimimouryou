@@ -4,8 +4,8 @@
  * All rights reserved.
  */
 
-import { hubFetch } from '$lib/data/social-account';
-import type { Person, SocialEvent } from '$lib/data/social';
+import { hubFetch } from '$lib/data/social/social-account';
+import type { Person, SocialEvent } from '$lib/data/social/social';
 
 /** The hub's moderation API (`/v1/admin/*`, role 'dev' only; /moderation). Not part of upstream. */
 

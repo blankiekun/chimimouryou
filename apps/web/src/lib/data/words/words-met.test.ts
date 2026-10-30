@@ -7,8 +7,8 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fakeApi } from '$lib/data/test-utils/fake-api';
-import type { BookWord } from '$lib/data/book-words';
-import { loadCalibreCatalog } from '$lib/data/calibre';
+import type { BookWord } from '$lib/data/words/book-words';
+import { loadCalibreCatalog } from '$lib/data/remote/calibre';
 import { readerDb } from '$lib/data/reader-db';
 import {
   addWordsMet,
@@ -19,9 +19,9 @@ import {
   readFraction,
   saveReadProgress,
   summarizeWords
-} from '$lib/data/words-met';
+} from '$lib/data/words/words-met';
 
-vi.mock('$lib/data/extras-sync', () => ({
+vi.mock('$lib/data/sync/extras-sync', () => ({
   pullKanji: async () => {},
   kanjiChanged: () => {},
   pullWordMarks: async () => {},

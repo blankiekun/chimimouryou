@@ -14,7 +14,12 @@
  */
 
 import { BehaviorSubject } from 'rxjs';
-import { ankiInvoke, ankiKnownDeck$, ankiKnownField$, ankiKnownWords$ } from '$lib/data/anki';
+import {
+  ankiInvoke,
+  ankiKnownDeck$,
+  ankiKnownField$,
+  ankiKnownWords$
+} from '$lib/data/dictionary/anki';
 import {
   isNoiseWord,
   newWords,
@@ -22,9 +27,9 @@ import {
   wordsToStudy,
   type BookWord,
   type WordTotals
-} from '$lib/data/book-words';
-import { loadCalibreDifficulty, type CalibreDifficulty } from '$lib/data/calibre';
-import { histogramShare } from '$lib/data/difficulty-core';
+} from '$lib/data/words/book-words';
+import { loadCalibreDifficulty, type CalibreDifficulty } from '$lib/data/remote/calibre';
+import { histogramShare } from '$lib/data/difficulty/difficulty-core';
 import type { CoreNumbers } from '$lib/functions/analysis/core';
 import { readerDb } from '$lib/data/reader-db';
 import {
@@ -33,9 +38,9 @@ import {
   wordMark,
   wordMarks$,
   type WordMarks
-} from '$lib/data/word-marks';
-import { placementCutoff } from '$lib/data/placement';
-import { getWordsMet, knownMinCount, metCounter, wordList } from '$lib/data/words-met';
+} from '$lib/data/words/word-marks';
+import { placementCutoff } from '$lib/data/difficulty/placement';
+import { getWordsMet, knownMinCount, metCounter, wordList } from '$lib/data/words/words-met';
 
 export interface KnownWords {
   words: string[];

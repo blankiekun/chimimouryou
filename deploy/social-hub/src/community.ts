@@ -11,7 +11,7 @@
  * copy n, 32 hex; the client hashes the same way, test/line-hashes.json). A post is anything about the line (a question, a comment, a
  * quote worth sharing), optionally marked as a spoiler; replies answer it. Works carry a title,
  * volume and one cover thumbnail. Everything here needs a session. The client is
- * apps/web/src/lib/data/community.ts.
+ * apps/web/src/lib/data/social/community.ts.
  *
  * Book text the hub keeps: each line's first post stores the line (<= 300 characters, shown in
  * the feed) and, for the first CONTEXTS_PER_WORK lines of a work, its page (<= 600 characters,

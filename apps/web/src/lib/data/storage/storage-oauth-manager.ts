@@ -5,7 +5,7 @@
  */
 
 import StorageUnlock from '$lib/components/storage-unlock.svelte';
-import { nativeDrive, nativeDriveToken, nativeGrant } from '$lib/data/android-drive';
+import { nativeDrive, nativeDriveToken, nativeGrant } from '$lib/data/standalone/android-drive';
 import type { BooksDbStorageSource } from '$lib/data/database/books-db/versions/books-db';
 import { dialogManager } from '$lib/data/dialog-manager';
 import {

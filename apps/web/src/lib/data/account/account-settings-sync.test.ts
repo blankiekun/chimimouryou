@@ -11,15 +11,15 @@ import {
   aiConnections$,
   askAiPresets$,
   askAiReaderNote$
-} from '$lib/data/ai-settings';
-import { mangaSeriesModes$ } from '$lib/data/manga';
+} from '$lib/data/ai/ai-settings';
+import { mangaSeriesModes$ } from '$lib/data/manga/manga';
 import { fontSize$, theme$, viewMode$ } from '$lib/data/store';
 import { ViewMode } from '$lib/data/view-mode';
 import { customAppThemes$, darkTheme$ } from '$lib/data/theme/theme-store';
-import { audiobookshelfToken$ } from '$lib/data/audiobookshelf';
-import { socialSession$ } from '$lib/data/social-account';
-import { homeBookTitles$, homeRemovedTitles$ } from '$lib/data/library-home';
-import { dropSyncMirrors } from '$lib/data/server-api';
+import { audiobookshelfToken$ } from '$lib/data/audio/audiobookshelf';
+import { socialSession$ } from '$lib/data/social/social-account';
+import { homeBookTitles$, homeRemovedTitles$ } from '$lib/data/library/library-home';
+import { dropSyncMirrors } from '$lib/data/remote/server-api';
 import { fakeApi } from '$lib/data/test-utils/fake-api';
 import {
   mergeEntries,
@@ -31,8 +31,8 @@ import {
 /** The library's Drive/OneDrive/folder while signed out (undefined: none) */
 const folder = vi.hoisted(() => ({ files: undefined as Record<string, string> | undefined }));
 
-vi.mock('$lib/data/sync-files', async (importOriginal) => {
-  const original = await importOriginal<typeof import('$lib/data/sync-files')>();
+vi.mock('$lib/data/sync/sync-files', async (importOriginal) => {
+  const original = await importOriginal<typeof import('$lib/data/sync/sync-files')>();
 
   return {
     ...original,

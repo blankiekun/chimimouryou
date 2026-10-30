@@ -6,7 +6,7 @@
 
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Highlight } from '$lib/data/annotations';
+import type { Highlight } from '$lib/data/reader/annotations';
 import {
   getTextWithoutFurigana,
   highlightAt,

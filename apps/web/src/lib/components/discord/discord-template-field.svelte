@@ -7,7 +7,7 @@
     suggestVariable,
     type DiscordValues,
     type VariableName
-  } from '$lib/data/discord-template';
+  } from '$lib/data/discord/discord-template';
   import { t$ } from '$lib/i18n';
 
   /**

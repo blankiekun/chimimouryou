@@ -1,9 +1,9 @@
 <script lang="ts">
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
-  import AiLanguageToggle from '$lib/components/ai-language-toggle.svelte';
-  import { aiLanguage$, aiPromptOverrides$, type AiPromptKey } from '$lib/data/ai-settings';
-  import { builtInPrompt } from '$lib/data/ai-prompts';
+  import AiLanguageToggle from '$lib/components/ai/ai-language-toggle.svelte';
+  import { aiLanguage$, aiPromptOverrides$, type AiPromptKey } from '$lib/data/ai/ai-settings';
+  import { builtInPrompt } from '$lib/data/ai/ai-prompts';
   import { t$ } from '$lib/i18n';
 
   /** System prompts per AI language: the built-in one, or the reader's copy (SPEC item 8). */

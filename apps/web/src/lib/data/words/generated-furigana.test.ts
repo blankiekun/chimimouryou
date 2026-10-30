@@ -15,10 +15,10 @@ import {
   prefetchReadings,
   type ReadingsFile
 } from './generated-furigana';
-import { generatedFurigana$ } from './store';
-import { readerDb } from './reader-db';
+import { generatedFurigana$ } from '../store';
+import { readerDb } from '../reader-db';
 
-vi.mock('$lib/data/calibre', () => ({
+vi.mock('$lib/data/remote/calibre', () => ({
   difficultyApiUrl: '/api/',
   loadCalibreCatalog: () =>
     Promise.resolve([

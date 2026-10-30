@@ -2,7 +2,7 @@
   import DialogTemplate from '$lib/components/dialog-template.svelte';
   import Ripple from '$lib/components/ripple.svelte';
   import { buttonClasses } from '$lib/css-classes';
-  import { defaultUpdateRepo } from '$lib/data/app-update';
+  import { defaultUpdateRepo } from '$lib/data/standalone/app-update';
   import { logger } from '$lib/data/logger';
   import { StorageSourceDefault } from '$lib/data/storage/storage-types';
   import {

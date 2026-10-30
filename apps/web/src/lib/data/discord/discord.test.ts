@@ -9,8 +9,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 import { discordActivities$, discordOptions$ } from './discord-settings';
 import { discordActivity, formatDuration, readingValues, resetSender } from './discord';
-import { socialSession$ } from './social-account';
-import { fakeApi } from './test-utils/fake-api';
+import { socialSession$ } from '../social/social-account';
+import { fakeApi } from '../test-utils/fake-api';
 
 const fetchMock = vi.fn();
 // One API for the file: server-api.ts keeps the catalog and the mirror per page load.
@@ -31,7 +31,7 @@ const calls = () =>
 
 describe('discord sender', () => {
   beforeAll(async () => {
-    await import('$lib/data/social');
+    await import('$lib/data/social/social');
   });
 
   beforeEach(() => {
@@ -158,7 +158,7 @@ describe('discord automatic covers', () => {
   };
 
   beforeEach(async () => {
-    await import('$lib/data/social');
+    await import('$lib/data/social/social');
     vi.stubGlobal('fetch', dispatch);
     fetchMock.mockImplementation(async () => new Response(null, { status: 404 }));
     resetSender();
@@ -175,7 +175,7 @@ describe('discord automatic covers', () => {
     vi.unstubAllGlobals();
     fetchMock.mockReset();
     window.localStorage.clear();
-    (await import('$lib/data/social')).hiddenBooks$.next([]);
+    (await import('$lib/data/social/social')).hiddenBooks$.next([]);
   });
 
   it('searches for a book without details, and remembers the miss', async () => {
@@ -189,7 +189,7 @@ describe('discord automatic covers', () => {
   });
 
   it('never searches with a logo, Hide titles, a hidden book or the plugin off', async () => {
-    const { bookKey, hiddenBooks$ } = await import('$lib/data/social');
+    const { bookKey, hiddenBooks$ } = await import('$lib/data/social/social');
 
     discordActivities$.next({
       book: { name: 'Reading {title}', details: '', state: '', largeImage: 'logo' }
@@ -229,7 +229,7 @@ describe('discord automatic covers', () => {
         }
         return new Response(null, { status: url.endsWith('/v1/activity') ? 204 : 404 });
       });
-      (await import('./book-metadata')).loadBookMetadata(true).catch(() => {});
+      (await import('../library/book-metadata')).loadBookMetadata(true).catch(() => {});
       socialSession$.next({ token: 't', me: { id: 'a', share: {} } as never });
       enabledPlugins$.next(['discord', 'social']);
     });
@@ -258,7 +258,7 @@ describe('discord automatic covers', () => {
         modified: 1,
         data: { source: 'anilist', url: 'https://anilist.co/manga/1', cover: picked }
       });
-      (await import('./book-metadata')).loadBookMetadata(true).catch(() => {});
+      (await import('../library/book-metadata')).loadBookMetadata(true).catch(() => {});
       enabledPlugins$.next(['discord', 'social']);
       fetchMock.mockClear();
       await read('A');
@@ -268,7 +268,7 @@ describe('discord automatic covers', () => {
     });
 
     it("asks the hub only signed in, with social on and for a book that isn't private", async () => {
-      const { bookKey, hiddenBooks$ } = await import('$lib/data/social');
+      const { bookKey, hiddenBooks$ } = await import('$lib/data/social/social');
 
       socialSession$.next(null);
       await read('A');

@@ -4,14 +4,14 @@
    * rather than at the next start, and offers to redo word lists made before the furigana tools
    * were installed (background-analysis.ts). Both opt-in.
    */
-  import { analysisToolsState$ } from '$lib/data/analysis-tools';
+  import { analysisToolsState$ } from '$lib/data/analysis/analysis-tools';
   import {
     analyseInBackground,
     backgroundAnalysis$,
     booksWithoutReadings,
     redoWordLists,
     wordListsWithoutReader
-  } from '$lib/data/background-analysis';
+  } from '$lib/data/analysis/background-analysis';
   import { generatedFurigana$ } from '$lib/data/store';
 
   let readings: string[] = [];

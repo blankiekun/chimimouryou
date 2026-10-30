@@ -12,10 +12,10 @@
  */
 
 import { BehaviorSubject } from 'rxjs';
-import { getAudiobookRate, saveAudiobookRate } from '$lib/data/audiobook';
-import { audiobookControls, setAudiobookControl } from '$lib/data/audiobook-controls';
+import { getAudiobookRate, saveAudiobookRate } from '$lib/data/audio/audiobook';
+import { audiobookControls, setAudiobookControl } from '$lib/data/audio/audiobook-controls';
 import { skipKeyDownListener$ } from '$lib/data/store';
-import { watchLookups } from '$lib/data/yomitan';
+import { watchLookups } from '$lib/data/dictionary/yomitan';
 import {
   clampRate,
   cueEndCrossed,

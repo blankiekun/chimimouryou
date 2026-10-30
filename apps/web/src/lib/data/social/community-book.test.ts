@@ -8,8 +8,8 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // The match toast's AniList search
-vi.mock('$lib/data/book-metadata', async (original) => ({
-  ...(await original<typeof import('$lib/data/book-metadata')>()),
+vi.mock('$lib/data/library/book-metadata', async (original) => ({
+  ...(await original<typeof import('$lib/data/library/book-metadata')>()),
   searchMetadata: async () => [
     { title: 'Wagahai wa Neko de Aru', url: 'https://anilist.co/manga/7', cover: 'c.jpg' }
   ]
@@ -23,7 +23,7 @@ import {
   visibleThreads,
   type CommunityNote,
   type CommunityPost
-} from '$lib/data/community';
+} from '$lib/data/social/community';
 import {
   bookLines,
   communityMarks$,
@@ -42,8 +42,8 @@ import {
   notePath,
   splitThread,
   unseenNotes
-} from '$lib/data/community-book';
-import { socialSession$ } from '$lib/data/social-account';
+} from '$lib/data/social/community-book';
+import { socialSession$ } from '$lib/data/social/social-account';
 import type { SearchIndex } from '$lib/functions/book-text/book-search';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 import { fakeApi } from '$lib/data/test-utils/fake-api';

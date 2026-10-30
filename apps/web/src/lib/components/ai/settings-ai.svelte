@@ -1,13 +1,13 @@
 <script lang="ts">
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
-  import SettingsAiVoice from '$lib/components/settings/settings-ai-voice.svelte';
-  import SettingsAiPrompts from '$lib/components/settings/settings-ai-prompts.svelte';
-  import AiConnections from '$lib/components/settings/ai/ai-connections.svelte';
-  import AiFeatures from '$lib/components/settings/ai/ai-features.svelte';
-  import AiGetStarted from '$lib/components/settings/ai/ai-get-started.svelte';
-  import { testConnection } from '$lib/data/ai-client';
-  import { aiFeatureState$, connectProvider } from '$lib/data/ai-connections';
+  import SettingsAiVoice from '$lib/components/ai/settings-ai-voice.svelte';
+  import SettingsAiPrompts from '$lib/components/ai/settings-ai-prompts.svelte';
+  import AiConnections from '$lib/components/ai/ai-connections.svelte';
+  import AiFeatures from '$lib/components/ai/ai-features.svelte';
+  import AiGetStarted from '$lib/components/ai/ai-get-started.svelte';
+  import { testConnection } from '$lib/data/ai/ai-client';
+  import { aiFeatureState$, connectProvider } from '$lib/data/ai/ai-connections';
   import {
     aiConnections$,
     askAiDefaultPreset$,
@@ -15,8 +15,8 @@
     askAiReaderNote$,
     defaultAskAiPresets,
     lorebookAutoInterval$
-  } from '$lib/data/ai-settings';
-  import { exchangeOpenRouterCode, openRouterCallback } from '$lib/data/openrouter-oauth';
+  } from '$lib/data/ai/ai-settings';
+  import { exchangeOpenRouterCode, openRouterCallback } from '$lib/data/ai/openrouter-oauth';
   import { t$ } from '$lib/i18n';
   import { onMount } from 'svelte';
 

@@ -19,8 +19,8 @@ import {
   statisticsDeleted,
   type Friend,
   type FriendBook
-} from '$lib/data/social';
-import { socialSession$, type SocialMe } from '$lib/data/social-account';
+} from '$lib/data/social/social';
+import { socialSession$, type SocialMe } from '$lib/data/social/social-account';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 
 vi.mock('$lib/data/store', () => ({
@@ -42,13 +42,13 @@ vi.mock('$lib/data/store', () => ({
   startDayHoursForTracker$: { getValue: () => 0 }
 }));
 
-vi.mock('$lib/data/social-images', () => ({
+vi.mock('$lib/data/social/social-images', () => ({
   coverThumbnail: async (cover: Blob) =>
     cover.size ? new Blob(['RIFFthumb'], { type: 'image/webp' }) : null
 }));
 
 // Its import chain is slow on a cold CI worker and outlasts vi.waitFor; rank has its own tests.
-vi.mock('$lib/data/reading-rank-data', () => ({ loadReadingRank: async () => undefined }));
+vi.mock('$lib/data/stats/reading-rank-data', () => ({ loadReadingRank: async () => undefined }));
 
 const me: SocialMe = {
   id: '0123456789abcdef',

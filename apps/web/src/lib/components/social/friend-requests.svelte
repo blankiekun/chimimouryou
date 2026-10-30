@@ -3,8 +3,8 @@
   import RoleBadge from '$lib/components/social/role-badge.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import { relativeTime } from '$lib/functions/format-time';
-  import { acceptFriend, removeFriend, type FriendsList } from '$lib/data/social';
-  import { formatCode, hubErrorKey } from '$lib/data/social-account';
+  import { acceptFriend, removeFriend, type FriendsList } from '$lib/data/social/social';
+  import { formatCode, hubErrorKey } from '$lib/data/social/social-account';
   import { t$, uiLanguage$ } from '$lib/i18n';
 
   /** Incoming requests (Accept / Decline) and sent ones (Cancel) */

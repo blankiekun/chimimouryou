@@ -16,7 +16,7 @@ describe('Whisper subtitles', () => {
   });
 
   it('keeps the SRT made per book, for the same audio only', async () => {
-    const whisper = await import('$lib/data/whisper');
+    const whisper = await import('$lib/data/audio/whisper');
 
     await whisper.saveWhisperSubtitles({ title: '本', audio: 'a.m4b:10', model: 'm', srt: '1' });
     expect(await whisper.keptWhisperSubtitles('本', 'a.m4b:10')).toMatchObject({
@@ -38,7 +38,7 @@ describe('Whisper subtitles', () => {
       })
     });
 
-    const whisper = await import('$lib/data/whisper');
+    const whisper = await import('$lib/data/audio/whisper');
     const model = whisper.whisperModel$.getValue();
 
     await whisper.checkWhisper();
@@ -50,7 +50,7 @@ describe('Whisper subtitles', () => {
     window.localStorage.setItem('whisperReady', model);
     vi.resetModules();
 
-    const again = await import('$lib/data/whisper');
+    const again = await import('$lib/data/audio/whisper');
 
     await again.checkWhisper();
     expect(again.whisperState$.getValue()).toBe('ready');

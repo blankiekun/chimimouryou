@@ -1,16 +1,16 @@
 <script lang="ts">
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-  import ContinueReadingShelf from '$lib/components/book-card/continue-reading-shelf.svelte';
-  import LearnerDashboard from '$lib/components/book-card/learner-dashboard.svelte';
-  import { isReading } from '$lib/components/book-card/library-filters';
-  import PlacementOffer from '$lib/components/book-card/placement-offer.svelte';
-  import ReadNextShelf from '$lib/components/book-card/read-next-shelf.svelte';
+  import ContinueReadingShelf from '$lib/components/library/continue-reading-shelf.svelte';
+  import LearnerDashboard from '$lib/components/words/learner-dashboard.svelte';
+  import { isReading } from '$lib/data/library/library-filters';
+  import PlacementOffer from '$lib/components/placement/placement-offer.svelte';
+  import ReadNextShelf from '$lib/components/library/read-next-shelf.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import HomeSocial from '$lib/components/social/home-social.svelte';
-  import AnalysisToolsOffer from '$lib/components/standalone/analysis-tools-offer.svelte';
+  import AnalysisToolsOffer from '$lib/components/analysis/analysis-tools-offer.svelte';
   import InstallHint from '$lib/components/standalone/install-hint.svelte';
   import { standalone } from '$lib/data/env';
-  import { knownCoverage$ } from '$lib/data/known-words';
+  import { knownCoverage$ } from '$lib/data/words/known-words';
   import {
     continueReading,
     homeBookTitles$,
@@ -20,7 +20,7 @@
     readNextPool,
     recentLevels,
     removeFromHome
-  } from '$lib/data/library-home';
+  } from '$lib/data/library/library-home';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import { storageSource$ } from '$lib/data/storage/storage-view';
   import { inputFile } from '$lib/functions/file-dom/input-file';

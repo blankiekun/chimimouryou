@@ -9,8 +9,8 @@
   import { faCheck, faCopy, faVolumeHigh } from '@fortawesome/free-solid-svg-icons';
   import Fa from 'svelte-fa';
   import { createEventDispatcher } from 'svelte';
-  import type { DictionarySummary } from '$lib/data/dictionary';
-  import { formMarked, wordMarks$ } from '$lib/data/word-marks';
+  import type { DictionarySummary } from '$lib/data/dictionary/dictionary';
+  import { formMarked, wordMarks$ } from '$lib/data/words/word-marks';
   import { t$ } from '$lib/i18n';
   import {
     getDisambiguations,

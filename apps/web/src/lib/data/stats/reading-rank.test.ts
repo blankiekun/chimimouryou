@@ -22,8 +22,8 @@ import {
   testGap,
   type RankBook,
   type RankInput
-} from '$lib/data/reading-rank';
-import { difficultyScale } from '$lib/data/difficulty-core';
+} from '$lib/data/stats/reading-rank';
+import { difficultyScale } from '$lib/data/difficulty/difficulty-core';
 import { coreScore, type CoreNumbers } from '$lib/functions/analysis/core';
 
 const core = (types: number, tokens: number, v98: number | null = 40_000): CoreNumbers => ({

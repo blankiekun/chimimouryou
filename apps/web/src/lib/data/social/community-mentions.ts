@@ -12,7 +12,7 @@
  * the reader typed `@` and 2 characters. Not part of upstream.
  */
 
-import { searchMetadata, type MetadataCandidate } from '$lib/data/book-metadata';
+import { searchMetadata, type MetadataCandidate } from '$lib/data/library/book-metadata';
 
 export type MentionPart = { text: string } | { title: string; href: string };
 

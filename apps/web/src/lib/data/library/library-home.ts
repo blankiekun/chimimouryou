@@ -11,15 +11,15 @@
  */
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-import { isFinished, isReading } from '$lib/components/book-card/library-filters';
-import { orderSeries } from '$lib/components/book-card/library-sort';
+import { isFinished, isReading } from '$lib/data/library/library-filters';
+import { orderSeries } from '$lib/data/library/library-sort';
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
-import { deleteCachedReadings } from '$lib/data/generated-furigana';
-import { deleteVnCache } from '$lib/data/vn';
+import { deleteCachedReadings } from '$lib/data/words/generated-furigana';
+import { deleteVnCache } from '$lib/data/vn/vn';
 import { standalone } from '$lib/data/env';
 import { splitVolume } from '$lib/functions/split-volume';
-import { coverageTarget } from '$lib/data/difficulty-core';
+import { coverageTarget } from '$lib/data/difficulty/difficulty-core';
 import { record, strings } from '$lib/data/setting-parsers';
 
 export type LibraryTab = 'home' | 'store';

@@ -5,7 +5,7 @@
  */
 
 /**
- * Makes a manga volume's text in the browser (lib/data/manga-ocr.ts): an RT-DETR-v2 text detector
+ * Makes a manga volume's text in the browser (lib/data/manga/manga-ocr.ts): an RT-DETR-v2 text detector
  * (ogkalu/comic-text-and-bubble-detector) finds the text boxes of each page, manga-ocr
  * (kha-white, onnx-community's ONNX export) reads each box, and the text is split over the box's
  * columns (manga-ocr-text.ts). int8 models on onnxruntime-web's wasm, read from the cache the
@@ -15,7 +15,7 @@
 import * as ort from 'onnxruntime-web/webgpu';
 import ortMjs from 'onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs?url';
 import ortWasm from 'onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm?url';
-import type { MokuroPage } from '$lib/data/mokuro';
+import type { MokuroPage } from '$lib/data/manga/mokuro';
 import {
   decodeText,
   detectorInput,

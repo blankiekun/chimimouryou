@@ -4,7 +4,7 @@
     audiobookControlDefaults,
     audiobookControls$,
     setAudiobookControl
-  } from '$lib/data/audiobook-controls';
+  } from '$lib/data/audio/audiobook-controls';
   import {
     rateMax,
     rateMin,

@@ -11,9 +11,9 @@ import {
   aiLanguage$,
   aiPromptOverrides$,
   defaultAskAiPresets
-} from '$lib/data/ai-settings';
-import { saveConnection } from '$lib/data/ai-connections';
-import { askAi, buildPassagePrompt } from '$lib/data/ask-ai';
+} from '$lib/data/ai/ai-settings';
+import { saveConnection } from '$lib/data/ai/ai-connections';
+import { askAi, buildPassagePrompt } from '$lib/data/ai/ask-ai';
 import { aiPrompts, builtInPrompt, defaultAskAiPresetsJa, presetsForLanguage } from './ai-prompts';
 
 /** An OpenRouter connection with this key; an empty key removes every connection. */

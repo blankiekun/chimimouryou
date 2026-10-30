@@ -11,7 +11,7 @@ import {
   aiFeatures$,
   defaultAiFeatures,
   type AiConnection
-} from '$lib/data/ai-settings';
+} from '$lib/data/ai/ai-settings';
 import {
   deleteConnection,
   featureParams,
@@ -88,7 +88,7 @@ describe('settings from before connections', () => {
     window.localStorage.setItem('openRouterApiKey', 'sk-or-old');
     window.localStorage.setItem('elevenLabsApiKey', 'sk_old');
     vi.resetModules();
-    await import('$lib/data/ai-settings');
+    await import('$lib/data/ai/ai-settings');
 
     expect(window.localStorage.getItem('openRouterApiKey')).toBeNull();
     expect(window.localStorage.getItem('elevenLabsApiKey')).toBeNull();
@@ -139,7 +139,7 @@ describe('keys bound to where they go', () => {
     window.localStorage.setItem('aiConnections', JSON.stringify([conn('openrouter', 1)]));
     window.localStorage.setItem('aiConnectionKeys', JSON.stringify({ openrouter: 'sk-or-old' }));
     vi.resetModules();
-    const settings = await import('$lib/data/ai-settings');
+    const settings = await import('$lib/data/ai/ai-settings');
     const connections = await import('./ai-connections');
 
     expect(connections.resolveFeature('ask').key).toBe('sk-or-old');

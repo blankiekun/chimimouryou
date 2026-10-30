@@ -3,7 +3,7 @@
   import type { ToggleOption } from '$lib/components/button-toggle-group/toggle-option';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
-  import { ankiInvoke } from '$lib/data/anki';
+  import { ankiInvoke } from '$lib/data/dictionary/anki';
   import {
     defaultFieldValue,
     dictionaryAnki$,
@@ -12,7 +12,7 @@
     importDictionaryAnki,
     type DictionaryAnki,
     type DictionaryAnkiRoute
-  } from '$lib/data/anki-dictionary';
+  } from '$lib/data/dictionary/anki-dictionary';
   import { inputFile } from '$lib/functions/file-dom/input-file';
   import { t$, type MessageKey } from '$lib/i18n';
   import { getStandardFieldMarkers } from '$lib/vendor/yomitan/data/anki-template-util';
@@ -20,7 +20,7 @@
 
   /**
    * Settings → Anki → Dictionary cards: the card format of the built-in dictionary's Add to
-   * Anki (lib/data/anki-dictionary.ts), as Yomitan's Anki settings: deck, note type, fields with
+   * Anki (lib/data/dictionary/anki-dictionary.ts), as Yomitan's Anki settings: deck, note type, fields with
    * its {markers}, tags and the duplicate check, or imported from a Yomitan settings file.
    */
 

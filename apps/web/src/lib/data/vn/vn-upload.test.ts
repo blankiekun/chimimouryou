@@ -7,8 +7,8 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it, vi } from 'vitest';
 import { StorageKey } from '$lib/data/storage/storage-types';
-import { isVn, vnElementHtml, vnInfo } from '$lib/data/vn';
-import { vnFolders, vnsKeptOnDevice } from '$lib/data/vn-upload';
+import { isVn, vnElementHtml, vnInfo } from '$lib/data/vn/vn';
+import { vnFolders, vnsKeptOnDevice } from '$lib/data/vn/vn-upload';
 
 vi.mock('$lib/functions/file-loaders/cbz/load-cbz', () => ({
   default: async (file: File) => ({

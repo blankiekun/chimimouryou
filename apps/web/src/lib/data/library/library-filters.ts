@@ -5,7 +5,7 @@
  */
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-import { levelGroup, levelGroupKey } from '$lib/data/difficulty';
+import { levelGroup, levelGroupKey } from '$lib/data/difficulty/difficulty';
 import type { MessageKey } from '$lib/i18n';
 
 export interface LibraryFilter {

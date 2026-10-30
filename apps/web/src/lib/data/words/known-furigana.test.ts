@@ -13,7 +13,7 @@ import {
   knownRubyClass,
   markKnownRuby,
   totalKanjiCounts
-} from '$lib/data/known-furigana';
+} from '$lib/data/words/known-furigana';
 
 const met = Object.fromEntries([...'本気異能宇宙人間茶学校今日一'].map((kanji) => [kanji, 10]));
 const hide = (base: string, reading: string, totals = met) =>

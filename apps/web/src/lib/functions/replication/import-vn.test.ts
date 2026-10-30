@@ -12,14 +12,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { StorageKey } from '$lib/data/storage/storage-types';
 import type { BytesProgress } from '$lib/functions/replication/replication-progress';
 
-vi.mock('$lib/data/background-analysis', () => ({ analyseInBackground: vi.fn() }));
+vi.mock('$lib/data/analysis/background-analysis', () => ({ analyseInBackground: vi.fn() }));
 
 const { getStorageHandler } = await import('$lib/data/storage/storage-handler-factory');
 const { database } = await import('$lib/data/store');
 const { importData } = await import('$lib/functions/replication/replicator');
 const { default: loadCbz } = await import('$lib/functions/file-loaders/cbz/load-cbz');
 const { replicationProgress$ } = await import('$lib/functions/replication/replication-progress');
-const { vnBatch, dropOrphanVnFiles, putVnFiles } = await import('$lib/data/database/vn-files');
+const { vnBatch, dropOrphanVnFiles, putVnFiles } = await import('$lib/data/vn/vn-files');
 
 const MB = 64 * 1024;
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   import LibraryEmpty from '$lib/components/standalone/library-empty.svelte';
-  import { account$ } from '$lib/data/account';
+  import { account$ } from '$lib/data/account/account';
   import { pagePath, selfHostingGuideUrl, standalone } from '$lib/data/env';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import { storageSource$ } from '$lib/data/storage/storage-view';

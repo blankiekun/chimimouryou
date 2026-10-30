@@ -6,7 +6,7 @@
 
 /**
  * The built-in dictionary's worker (dictionary-engine.ts): imports and lookups run here so a
- * 100 MB dictionary doesn't stall the page. One request at a time per id; lib/data/dictionary.ts
+ * 100 MB dictionary doesn't stall the page. One request at a time per id; lib/data/dictionary/dictionary.ts
  * is the only caller. Not part of upstream.
  */
 

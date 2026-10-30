@@ -31,7 +31,7 @@ import {
   type ReplicationDeleteResult
 } from '$lib/functions/replication/replication-progress';
 import pLimit from 'p-limit';
-import { isVn } from '$lib/data/vn';
+import { isVn } from '$lib/data/vn/vn';
 import {
   BlobReader,
   BlobWriter,

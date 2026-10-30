@@ -4,8 +4,12 @@
   import { faChevronLeft, faEllipsis, faMinus, faPlus } from '@fortawesome/free-solid-svg-icons';
   import { readerImageGalleryPictures$ } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';
   import ReaderSheet from '$lib/components/book-reader/reader-sheet.svelte';
-  import { furiganaProgress$ } from '$lib/data/generated-furigana';
-  import { furiganaChoice, furiganaSettings, type FuriganaChoice } from '$lib/data/reader-panel';
+  import { furiganaProgress$ } from '$lib/data/words/generated-furigana';
+  import {
+    furiganaChoice,
+    furiganaSettings,
+    type FuriganaChoice
+  } from '$lib/data/reader/reader-panel';
   import {
     fontSize$,
     furiganaStyle$,

@@ -11,8 +11,8 @@
  */
 
 import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v3';
-import type { ReadingsFile } from '$lib/data/generated-furigana';
-import { occurrences } from '$lib/data/unknown-words';
+import type { ReadingsFile } from '$lib/data/words/generated-furigana';
+import { occurrences } from '$lib/data/words/unknown-words';
 
 export const primerMinCount = 3;
 

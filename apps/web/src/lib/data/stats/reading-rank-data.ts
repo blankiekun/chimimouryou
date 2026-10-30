@@ -10,11 +10,11 @@
  * marks only for words met, the word test only per `rankPlacement`. Not part of upstream.
  */
 
-import { ankiKnownWords$ } from '$lib/data/anki';
-import { wordCoverage, type BookWord } from '$lib/data/book-words';
+import { ankiKnownWords$ } from '$lib/data/dictionary/anki';
+import { wordCoverage, type BookWord } from '$lib/data/words/book-words';
 import type { BooksDbStatistic } from '$lib/data/database/books-db/versions/books-db';
-import { getKnownWords } from '$lib/data/known-words';
-import { placementResults$ } from '$lib/data/placement';
+import { getKnownWords } from '$lib/data/words/known-words';
+import { placementResults$ } from '$lib/data/difficulty/placement';
 import {
   countedReading,
   rankMarks,
@@ -25,9 +25,9 @@ import {
   realBook,
   type CanonicalCheck,
   type RankBook
-} from '$lib/data/reading-rank';
-import { isCanonicalEstimate } from '$lib/data/difficulty-engine';
-import { getWordMarks, wordMark, type WordMarks } from '$lib/data/word-marks';
+} from '$lib/data/stats/reading-rank';
+import { isCanonicalEstimate } from '$lib/data/difficulty/difficulty-engine';
+import { getWordMarks, wordMark, type WordMarks } from '$lib/data/words/word-marks';
 import {
   addWordsMet,
   estimatedWordList,
@@ -37,7 +37,7 @@ import {
   metCounter,
   readBooks,
   summarizeWords
-} from '$lib/data/words-met';
+} from '$lib/data/words/words-met';
 
 /** Only this release's difficulty engine's estimates count for the hard-book gate. */
 export const canonicalEstimate: CanonicalCheck = isCanonicalEstimate;

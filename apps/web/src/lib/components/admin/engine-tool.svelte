@@ -2,8 +2,8 @@
   import { faSpinner } from '@fortawesome/free-solid-svg-icons';
   import { onDestroy, onMount } from 'svelte';
   import Fa from 'svelte-fa';
-  import { getUpdateState, requestEngineUpdate, type UpdateState } from '$lib/data/account';
-  import { checkEngineRelease, engineRepo } from '$lib/data/app-update';
+  import { getUpdateState, requestEngineUpdate, type UpdateState } from '$lib/data/account/account';
+  import { checkEngineRelease, engineRepo } from '$lib/data/standalone/app-update';
   import { pagePath } from '$lib/data/env';
 
   const pollMs = 3000;

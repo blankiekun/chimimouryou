@@ -8,7 +8,7 @@ import 'fake-indexeddb/auto';
 import { describe, expect, it, vi } from 'vitest';
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 
-vi.mock('$lib/data/account', () => ({
+vi.mock('$lib/data/account/account', () => ({
   accountReady: async () => null,
   accountSyncUrl: '/account/sync/',
   currentAccount: () => null

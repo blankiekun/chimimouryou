@@ -6,7 +6,7 @@
   import DiscordPreview from './discord-preview.svelte';
   import DiscordTemplateField from './discord-template-field.svelte';
   import { sampleValues } from './discord-sample';
-  import { discordValues$ } from '$lib/data/discord';
+  import { discordValues$ } from '$lib/data/discord/discord';
   import {
     activityTemplate,
     defaultTemplate,
@@ -18,7 +18,7 @@
     saveActivityTemplate,
     setDiscordOption,
     type DiscordPreset
-  } from '$lib/data/discord-settings';
+  } from '$lib/data/discord/discord-settings';
   import {
     activityProblems,
     buildActivity,
@@ -28,10 +28,10 @@
     type LargeImage,
     type SmallImage,
     type TimestampMode
-  } from '$lib/data/discord-template';
-  import { relayLastSent$ } from '$lib/data/discord-relay';
+  } from '$lib/data/discord/discord-template';
+  import { relayLastSent$ } from '$lib/data/discord/discord-relay';
   import { relativeTime } from '$lib/functions/format-time';
-  import { socialSession$ } from '$lib/data/social-account';
+  import { socialSession$ } from '$lib/data/social/social-account';
   import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
   import { t$, uiLanguage$, type MessageKey } from '$lib/i18n';
 

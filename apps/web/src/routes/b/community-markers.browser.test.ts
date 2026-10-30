@@ -7,7 +7,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 // @ts-expect-error tsconfig's moduleResolution "node" doesn't read package exports; Vitest does.
 import { page as browserPage } from 'vitest/browser';
-import { communityMarks$ } from '$lib/data/community-book';
+import { communityMarks$ } from '$lib/data/social/community-book';
 import { database } from '$lib/data/store';
 import { ViewMode } from '$lib/data/view-mode';
 import {

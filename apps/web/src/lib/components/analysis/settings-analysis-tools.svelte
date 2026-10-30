@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * Settings → Analysis tools (standalone): download or remove each feature's tools
-   * (lib/data/analysis-tools.ts). Files both features use are downloaded once.
+   * (lib/data/analysis/analysis-tools.ts). Files both features use are downloaded once.
    */
   import { browser } from '$app/env';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
@@ -17,7 +17,7 @@
     downloadAnalysisTools,
     removeAnalysisTools,
     type AnalysisFeature
-  } from '$lib/data/analysis-tools';
+  } from '$lib/data/analysis/analysis-tools';
   import {
     cancelMangaTextDownload,
     checkMangaText,
@@ -26,7 +26,7 @@
     mangaTextDownload$,
     mangaTextState$,
     removeMangaText
-  } from '$lib/data/manga-ocr';
+  } from '$lib/data/manga/manga-ocr';
   import {
     cancelWhisperDownload,
     checkWhisper,
@@ -36,7 +36,7 @@
     whisperModel$,
     whisperModels,
     whisperState$
-  } from '$lib/data/whisper';
+  } from '$lib/data/audio/whisper';
   import { onMount } from 'svelte';
 
   const supported = browser && analysisToolsSupported();

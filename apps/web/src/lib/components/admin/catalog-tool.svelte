@@ -1,9 +1,9 @@
 <script lang="ts">
   import { faSpinner } from '@fortawesome/free-solid-svg-icons';
   import Fa from 'svelte-fa';
-  import { rebuildCatalog } from '$lib/data/calibre-import';
-  import { loadCalibreCatalog } from '$lib/data/calibre';
-  import { serverFetch } from '$lib/data/server-connect';
+  import { rebuildCatalog } from '$lib/data/remote/calibre-import';
+  import { loadCalibreCatalog } from '$lib/data/remote/calibre';
+  import { serverFetch } from '$lib/data/remote/server-connect';
   import SectionHead from '$lib/components/section-head.svelte';
 
   let result: { books: number; visualNovels: number } | undefined;

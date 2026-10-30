@@ -12,7 +12,7 @@ const { plugin, recordKanjiSeen } = vi.hoisted(() => ({
 }));
 
 vi.mock('$lib/plugins', () => ({ activePlugins: () => [plugin, {}] }));
-vi.mock('$lib/data/kanji-seen', () => ({ recordKanjiSeen }));
+vi.mock('$lib/data/words/kanji-seen', () => ({ recordKanjiSeen }));
 
 const { bookOpened, positionSettled } = await import('./reader-hooks');
 

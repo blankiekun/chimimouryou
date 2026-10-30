@@ -10,7 +10,7 @@
  * Not part of upstream.
  */
 
-import { difficultyScale } from '$lib/data/difficulty-core';
+import { difficultyScale } from '$lib/data/difficulty/difficulty-core';
 import type { MessageKey } from '$lib/i18n/en';
 
 /** The book tier of a level's whole step */

@@ -1,11 +1,11 @@
 <script lang="ts">
   import { faSpinner } from '@fortawesome/free-solid-svg-icons';
   import { buttonClasses } from '$lib/css-classes';
-  import { account$ } from '$lib/data/account';
-  import { difficultyApiUrl } from '$lib/data/calibre';
-  import { levelTier } from '$lib/data/difficulty';
-  import { isCanonicalEstimate } from '$lib/data/difficulty-engine';
-  import { responseJson, serverFetch } from '$lib/data/server-connect';
+  import { account$ } from '$lib/data/account/account';
+  import { difficultyApiUrl } from '$lib/data/remote/calibre';
+  import { levelTier } from '$lib/data/difficulty/difficulty';
+  import { isCanonicalEstimate } from '$lib/data/difficulty/difficulty-engine';
+  import { responseJson, serverFetch } from '$lib/data/remote/server-connect';
   import { t$, tr } from '$lib/i18n';
   import { onDestroy, onMount } from 'svelte';
   import Fa from 'svelte-fa';

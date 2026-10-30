@@ -11,9 +11,9 @@
  */
 
 import type { BookmarkManager } from '$lib/components/book-reader/types';
-import { highlightColors, type Highlight, type HighlightColor } from '$lib/data/annotations';
+import { highlightColors, type Highlight, type HighlightColor } from '$lib/data/reader/annotations';
 import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v3';
-import { spansWithin, type CountSpan } from '$lib/data/unknown-words';
+import { spansWithin, type CountSpan } from '$lib/data/words/unknown-words';
 import { chapterLabelAt } from '$lib/functions/book-text/book-search';
 import {
   clearCssHighlights,

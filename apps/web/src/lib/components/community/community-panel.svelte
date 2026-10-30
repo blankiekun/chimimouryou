@@ -3,7 +3,7 @@
   import CommunityMatch from '$lib/components/community/community-match.svelte';
   import CommunitySignup from '$lib/components/community/community-signup.svelte';
   import CommunityThread from '$lib/components/community/community-thread.svelte';
-  import { listThreads, visibleThreads, type ThreadSummary } from '$lib/data/community';
+  import { listThreads, visibleThreads, type ThreadSummary } from '$lib/data/social/community';
   import {
     bookMarks,
     communityErrorKey,
@@ -13,10 +13,10 @@
     loadBookCommunity,
     type BookCommunity,
     type BookLine
-  } from '$lib/data/community-book';
+  } from '$lib/data/social/community-book';
   import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v3';
   import { page } from '$lib/data/page-store';
-  import { socialSession$ } from '$lib/data/social-account';
+  import { socialSession$ } from '$lib/data/social/social-account';
   import { chapterLabelAt, type SearchIndex } from '$lib/functions/book-text/book-search';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher, onDestroy, onMount } from 'svelte';

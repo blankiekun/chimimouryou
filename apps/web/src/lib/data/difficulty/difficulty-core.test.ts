@@ -5,14 +5,14 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { BookWord } from '$lib/data/book-words';
+import type { BookWord } from '$lib/data/words/book-words';
 import {
   bookFacets,
   bookLevel,
   forYou,
   histogramShare,
   relativeLevel
-} from '$lib/data/difficulty-core';
+} from '$lib/data/difficulty/difficulty-core';
 import { RANKED_BUCKETS, type CoreNumbers } from '$lib/functions/analysis/core';
 
 const core = (hist: Record<number, number>, v98: number | null = 37068): CoreNumbers => {

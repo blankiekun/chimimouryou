@@ -16,7 +16,7 @@ import {
   scorePlacement,
   type PlacementAnswer,
   type PlacementItem
-} from '$lib/data/placement';
+} from '$lib/data/difficulty/placement';
 
 /** A seeded random, so runs repeat. */
 function seeded(seed: number) {

@@ -6,16 +6,19 @@
 
 import 'fake-indexeddb/auto';
 import { describe, expect, it, vi } from 'vitest';
-import type { BookWord } from '$lib/data/book-words';
-import { summarizeWords } from '$lib/data/words-met';
+import type { BookWord } from '$lib/data/words/book-words';
+import { summarizeWords } from '$lib/data/words/words-met';
 import {
   cutoffChanges,
   gainedThisMonth,
   knownHistory,
   type HistoryBook
-} from '$lib/data/words-history';
+} from '$lib/data/words/words-history';
 
-vi.mock('$lib/data/extras-sync', () => ({ pullKanji: async () => {}, kanjiChanged: () => {} }));
+vi.mock('$lib/data/sync/extras-sync', () => ({
+  pullKanji: async () => {},
+  kanjiChanged: () => {}
+}));
 
 const book = (words: BookWord[], cap = 1): HistoryBook => ({ words, characters: 1000, cap });
 

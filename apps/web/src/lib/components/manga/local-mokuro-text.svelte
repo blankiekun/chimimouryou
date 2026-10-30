@@ -12,7 +12,7 @@
     mangaTextJob$,
     mangaTextState$,
     mangaTextSupported
-  } from '$lib/data/manga-ocr';
+  } from '$lib/data/manga/manga-ocr';
   import {
     keptMokuro,
     localMokuroChanged$,
@@ -20,7 +20,7 @@
     removeLocalMokuro,
     saveLocalMokuro,
     type MokuroText
-  } from '$lib/data/mokuro';
+  } from '$lib/data/manga/mokuro';
   import { t$ } from '$lib/i18n';
 
   interface Props {

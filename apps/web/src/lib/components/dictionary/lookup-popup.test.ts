@@ -17,7 +17,7 @@ vi.mock('$lib/functions/dictionary/scan', () => ({
   scannedRange: vi.fn()
 }));
 
-vi.mock('$lib/data/dictionary', async () => {
+vi.mock('$lib/data/dictionary/dictionary', async () => {
   const { writableSubject } = await import('$lib/functions/svelte/store');
   const profile = () => ({
     dictionaries: state.enabled.map((enabled, index) => ({ name: `d${index}`, enabled })),
@@ -38,7 +38,7 @@ vi.mock('$lib/data/dictionary', async () => {
   };
 });
 
-vi.mock('$lib/data/jmdict', () => ({
+vi.mock('$lib/data/dictionary/jmdict', () => ({
   bundledJmdictSize: async () => undefined,
   hasJmdict: () => false,
   installJmdict: vi.fn(),
@@ -46,7 +46,7 @@ vi.mock('$lib/data/jmdict', () => ({
 }));
 
 const { default: LookupPopup } = await import('./lookup-popup.svelte');
-const { noDictionaryNoteSeen$ } = await import('$lib/data/dictionary');
+const { noDictionaryNoteSeen$ } = await import('$lib/data/dictionary/dictionary');
 
 async function mount() {
   const target = document.createElement('div');

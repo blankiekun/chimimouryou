@@ -1,8 +1,8 @@
 <script lang="ts">
   /** Mihon-style card between volumes: the one just finished (or left) and the one to open. */
   import { createEventDispatcher } from 'svelte';
-  import { calibreCoverUrl, type CalibreBook } from '$lib/data/calibre';
-  import { needsServerImage, serverImage } from '$lib/data/server-connect';
+  import { calibreCoverUrl, type CalibreBook } from '$lib/data/remote/calibre';
+  import { needsServerImage, serverImage } from '$lib/data/remote/server-connect';
 
   /** 1: the end of the book, -1: its start. */
   export let direction: number;

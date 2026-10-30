@@ -12,12 +12,12 @@
  * Pure functions plus the stored rank; the loader is reading-rank-data.ts. Not part of upstream.
  */
 
-import type { CalibreDifficulty } from '$lib/data/calibre';
-import { levelOf } from '$lib/data/difficulty-core';
+import type { CalibreDifficulty } from '$lib/data/remote/calibre';
+import { levelOf } from '$lib/data/difficulty/difficulty-core';
 import type { BooksDbStatistic } from '$lib/data/database/books-db/versions/books-db';
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
-import { placementAt, type PlacementRecord } from '$lib/data/placement';
-import type { WordMarks } from '$lib/data/word-marks';
+import { placementAt, type PlacementRecord } from '$lib/data/difficulty/placement';
+import type { WordMarks } from '$lib/data/words/word-marks';
 import { record } from '$lib/data/setting-parsers';
 
 export interface RankTier {

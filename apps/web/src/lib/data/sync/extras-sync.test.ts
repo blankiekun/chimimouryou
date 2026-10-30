@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const account = vi.hoisted(() => ({ user: null as { id: string; username: string } | null }));
 
-vi.mock('$lib/data/account', () => ({
+vi.mock('$lib/data/account/account', () => ({
   accountReady: async () => account.user,
   accountSyncUrl: '/account/sync/',
   currentAccount: () => account.user
@@ -17,8 +17,8 @@ vi.mock('$lib/data/account', () => ({
 
 import { fakeApi } from '$lib/data/test-utils/fake-api';
 import { readerDb } from '$lib/data/reader-db';
-import { getLorebook, saveLoreEntries, type LoreEntry } from '$lib/data/lorebook';
-import { deleteSavedRecap, getSavedRecaps } from '$lib/data/recap';
+import { getLorebook, saveLoreEntries, type LoreEntry } from '$lib/data/ai/lorebook';
+import { deleteSavedRecap, getSavedRecaps } from '$lib/data/ai/recap';
 import {
   enableExtrasSync,
   extrasSyncError$,

@@ -15,13 +15,13 @@ import {
   matchKey,
   resetHubCovers
 } from './discord-covers';
-import type { MetadataCandidate } from './book-metadata';
-import { fakeApi } from './test-utils/fake-api';
+import type { MetadataCandidate } from '../library/book-metadata';
+import { fakeApi } from '../test-utils/fake-api';
 
 const thumbnails = vi.hoisted(() => ({ made: 0 }));
 
-vi.mock('$lib/data/social', async (original) => ({
-  ...(await original<typeof import('$lib/data/social')>()),
+vi.mock('$lib/data/social/social', async (original) => ({
+  ...(await original<typeof import('$lib/data/social/social')>()),
   localCovers: async () => new Map([['own', { title: 'own', imagePath: new Blob(['jpeg']) }]]),
   bookKey: (title: string) => title,
   bookThumbnail: async () => {
@@ -119,7 +119,7 @@ describe('discord covers', () => {
 
     it("saves a match's details without its cover, keeping the cover in this browser", async () => {
       fetchMock.mockImplementation(async () => aniList([reZeroMedia]));
-      const { loadBookMetadata } = await import('./book-metadata');
+      const { loadBookMetadata } = await import('../library/book-metadata');
 
       await loadBookMetadata(true);
       expect(await findCover('Re：ゼロから始める異世界生活 1', 'book')).toBe(true);

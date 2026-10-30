@@ -10,8 +10,8 @@
  */
 
 import type { CoreNumbers } from '$lib/functions/analysis/core';
-import { serverFetch, serverless } from '$lib/data/server-connect';
-import { apiVersion, catalog } from '$lib/data/server-api';
+import { serverFetch, serverless } from '$lib/data/remote/server-connect';
+import { apiVersion, catalog } from '$lib/data/remote/server-api';
 
 export interface CalibreBook {
   /** The Calibre id (game folders: the catalog's); estimates, mokuro and readings key by it */

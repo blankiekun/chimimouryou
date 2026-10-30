@@ -34,14 +34,14 @@ import {
   toBase64,
   type VnInfo,
   type VnSaves
-} from '$lib/data/vn';
+} from '$lib/data/vn/vn';
 import {
   bookSyncSource,
   syncFileStore,
   syncJsonFile,
   type SyncFileStore
-} from '$lib/data/sync-files';
-import { formatBytes } from '$lib/data/vn-upload';
+} from '$lib/data/sync/sync-files';
+import { formatBytes } from '$lib/data/vn/vn-upload';
 import { logger } from '$lib/data/logger';
 
 export interface SaveArea {

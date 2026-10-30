@@ -18,10 +18,10 @@
  * Not part of upstream.
  */
 
-import { ankiKnownWords$ } from '$lib/data/anki';
-import { isNoiseWord, type BookWord } from '$lib/data/book-words';
-import { getKanjiSeen } from '$lib/data/kanji-seen';
-import { getKnownWords } from '$lib/data/known-words';
+import { ankiKnownWords$ } from '$lib/data/dictionary/anki';
+import { isNoiseWord, type BookWord } from '$lib/data/words/book-words';
+import { getKanjiSeen } from '$lib/data/words/kanji-seen';
+import { getKnownWords } from '$lib/data/words/known-words';
 import {
   knownChance,
   placementAt,
@@ -29,9 +29,9 @@ import {
   placementWords,
   type PlacementEstimate,
   type PlacementRecord
-} from '$lib/data/placement';
+} from '$lib/data/difficulty/placement';
 import { readerDb } from '$lib/data/reader-db';
-import { getWordMarks, type WordMarks } from '$lib/data/word-marks';
+import { getWordMarks, type WordMarks } from '$lib/data/words/word-marks';
 import { getDateString } from '$lib/functions/statistic-util';
 import {
   estimatedBooks,
@@ -41,7 +41,7 @@ import {
   knownMinCount,
   readFraction,
   wordKey
-} from '$lib/data/words-met';
+} from '$lib/data/words/words-met';
 
 export interface DayRead {
   title: string;

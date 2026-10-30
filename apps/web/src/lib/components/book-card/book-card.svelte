@@ -2,8 +2,8 @@
   import { faImage } from '@fortawesome/free-regular-svg-icons';
   import { onDestroy } from 'svelte';
   import Fa from 'svelte-fa';
-  import { coverThumbUrl } from '$lib/data/calibre';
-  import { needsServerImage, serverImage } from '$lib/data/server-connect';
+  import { coverThumbUrl } from '$lib/data/remote/calibre';
+  import { needsServerImage, serverImage } from '$lib/data/remote/server-connect';
 
   export let imagePath: string | Blob;
   export let title: string;

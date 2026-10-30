@@ -12,13 +12,13 @@
  * Not part of upstream.
  */
 
-import { featureParams, featureReady } from '$lib/data/ai-connections';
-import { lorebookAutoInterval$ } from '$lib/data/ai-settings';
-import { aiPrompts } from '$lib/data/ai-prompts';
-import { askAi } from '$lib/data/ask-ai';
+import { featureParams, featureReady } from '$lib/data/ai/ai-connections';
+import { lorebookAutoInterval$ } from '$lib/data/ai/ai-settings';
+import { aiPrompts } from '$lib/data/ai/ai-prompts';
+import { askAi } from '$lib/data/ai/ask-ai';
 import { readerDb } from '$lib/data/reader-db';
-import { ownsRecord, textBetween } from '$lib/data/recap';
-import { orderSeries, seriesVolumes } from '$lib/components/book-card/library-sort';
+import { ownsRecord, textBetween } from '$lib/data/ai/recap';
+import { orderSeries, seriesVolumes } from '$lib/data/library/library-sort';
 import type { SearchIndex } from '$lib/functions/book-text/book-search';
 import { BehaviorSubject, Subject } from 'rxjs';
 

@@ -1,12 +1,17 @@
 <script lang="ts">
   /**
-   * One tap to download and import the bundled JMdict (lib/data/jmdict.ts), with its progress and
+   * One tap to download and import the bundled JMdict (lib/data/dictionary/jmdict.ts), with its progress and
    * credit; the releases link where this build has no copy (dev builds). Never starts on its own:
    * the download is about 16 MB. Not part of upstream.
    */
   import { onMount } from 'svelte';
-  import { dictionaries$ } from '$lib/data/dictionary';
-  import { bundledJmdictSize, hasJmdict, installJmdict, jmdictReleases } from '$lib/data/jmdict';
+  import { dictionaries$ } from '$lib/data/dictionary/dictionary';
+  import {
+    bundledJmdictSize,
+    hasJmdict,
+    installJmdict,
+    jmdictReleases
+  } from '$lib/data/dictionary/jmdict';
   import { t$ } from '$lib/i18n';
 
   interface Props {

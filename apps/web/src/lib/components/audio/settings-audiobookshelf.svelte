@@ -1,7 +1,11 @@
 <script lang="ts">
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
-  import { absLogin, audiobookshelfServer$, audiobookshelfToken$ } from '$lib/data/audiobookshelf';
+  import {
+    absLogin,
+    audiobookshelfServer$,
+    audiobookshelfToken$
+  } from '$lib/data/audio/audiobookshelf';
   import { standalone } from '$lib/data/env';
   import { onMount } from 'svelte';
   import { t$ } from '$lib/i18n';

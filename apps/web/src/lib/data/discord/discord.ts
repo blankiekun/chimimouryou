@@ -17,7 +17,7 @@ import {
   getChapterData,
   type SectionWithProgress
 } from '$lib/components/book-reader/book-toc/book-toc';
-import { titleVolume } from '$lib/components/book-card/library-sort';
+import { titleVolume } from '$lib/data/library/library-sort';
 import {
   activityKey,
   activityProblems,
@@ -30,22 +30,22 @@ import {
   type DiscordTimes,
   type DiscordValues,
   type VariableName
-} from '$lib/data/discord-template';
+} from '$lib/data/discord/discord-template';
 import {
   activityTemplate,
   discordActivities$,
   discordOptions,
   discordOptions$
-} from '$lib/data/discord-settings';
+} from '$lib/data/discord/discord-settings';
 import {
   relayActivity,
   relayAllowed,
   relayClear,
   relayPageTurn,
   resetRelay
-} from '$lib/data/discord-relay';
-import { socialSession$ } from '$lib/data/social-account';
-import { resetHubCovers } from '$lib/data/discord-covers';
+} from '$lib/data/discord/discord-relay';
+import { socialSession$ } from '$lib/data/social/social-account';
+import { resetHubCovers } from '$lib/data/discord/discord-covers';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 
 export const addonUrl = 'http://127.0.0.1:41918';
@@ -222,7 +222,7 @@ async function loadStats(): Promise<ReadingStats | undefined> {
     await Promise.all([
       import('$lib/data/store'),
       import('$lib/functions/statistic-util'),
-      import('$lib/data/learner-stats')
+      import('$lib/data/stats/learner-stats')
     ]);
   const statistics = await database.getStatisticsForTimeWindow('0000-00-00', '9999-99-99');
   const today = getDateKey(startDayHoursForTracker$.getValue());
@@ -242,7 +242,7 @@ const fresh = <T>(cache: { at: number; value: T } | undefined, age: number) =>
   cache && Date.now() - cache.at < age ? cache : undefined;
 
 async function catalogBook(title: string) {
-  catalogCache ??= import('$lib/data/calibre')
+  catalogCache ??= import('$lib/data/remote/calibre')
     .then(({ loadCalibreCatalog }) => loadCalibreCatalog())
     .then(
       (books) =>
@@ -271,7 +271,7 @@ async function extrasFor(title: string, used: Set<VariableName>): Promise<ValueE
   if (needs('wordsKnown')) {
     wordsCache = fresh(wordsCache, 600_000) ?? {
       at: Date.now(),
-      value: import('$lib/data/words-met')
+      value: import('$lib/data/words/words-met')
         .then(({ getWordsSummary }) => getWordsSummary())
         .then((summary) => summary.known)
         .catch(() => undefined)
@@ -280,15 +280,15 @@ async function extrasFor(title: string, used: Set<VariableName>): Promise<ValueE
   }
   if (title && needs('author', 'series')) {
     const book = await catalogBook(title);
-    const { guessSeriesName } = await import('$lib/data/series-overrides');
+    const { guessSeriesName } = await import('$lib/data/library/series-overrides');
 
     extras.author = book?.author;
     extras.series = book?.series || guessSeriesName(title);
   }
   if (title && needs('difficulty')) {
     difficultyCache ??= Promise.all([
-      import('$lib/data/calibre'),
-      import('$lib/data/difficulty-core')
+      import('$lib/data/remote/calibre'),
+      import('$lib/data/difficulty/difficulty-core')
     ])
       .then(async ([{ loadCalibreDifficulty }, { levelOf }]) =>
         Object.fromEntries(
@@ -314,7 +314,7 @@ async function extrasFor(title: string, used: Set<VariableName>): Promise<ValueE
  * browser matched (discord-covers.ts), else none. Find details are reloaded after any save.
  */
 async function coverFor(title: string, hidden: boolean) {
-  const metadata = await import('$lib/data/book-metadata');
+  const metadata = await import('$lib/data/library/book-metadata');
 
   if (coverCache?.saves !== metadata.metadataSaves) {
     coverCache = {
@@ -324,7 +324,7 @@ async function coverFor(title: string, hidden: boolean) {
   }
 
   const picked = (await coverCache.value)[title]?.cover;
-  const covers = await import('$lib/data/discord-covers');
+  const covers = await import('$lib/data/discord/discord-covers');
   const hub =
     !picked &&
     !hidden &&
@@ -340,7 +340,7 @@ async function coverFor(title: string, hidden: boolean) {
 /** No cover yet: search for one in the background; the next update shows it. */
 async function discoverCover(activity: ReadingActivity) {
   const { kind, title } = activity;
-  const { canSearch, findCover } = await import('$lib/data/discord-covers');
+  const { canSearch, findCover } = await import('$lib/data/discord/discord-covers');
 
   if (kind === 'idle' || !title || !canSearch(title)) return;
   const series = (await catalogBook(title))?.series;
@@ -352,7 +352,7 @@ const isPrivate = async (activity: ReadingActivity) => {
   if (activity.kind === 'idle' || !activity.title) return false;
   if (discordOptions().hideTitles) return true;
 
-  const { bookKey, isHidden } = await import('$lib/data/social');
+  const { bookKey, isHidden } = await import('$lib/data/social/social');
 
   return isHidden({ key: bookKey(activity.title), kind: activity.kind });
 };

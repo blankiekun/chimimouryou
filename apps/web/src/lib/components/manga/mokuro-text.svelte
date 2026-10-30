@@ -4,7 +4,7 @@
    * the import permission, making it on the server or uploading a .mokuro file made elsewhere.
    */
   import { onDestroy } from 'svelte';
-  import { account$, hasPermission } from '$lib/data/account';
+  import { account$, hasPermission } from '$lib/data/account/account';
   import {
     cancelMokuro,
     generateMokuro,
@@ -14,7 +14,7 @@
     uploadMokuro,
     type MokuroStatus,
     type MokuroText
-  } from '$lib/data/mokuro';
+  } from '$lib/data/manga/mokuro';
   import { t$ } from '$lib/i18n';
 
   export let calibreId: number;

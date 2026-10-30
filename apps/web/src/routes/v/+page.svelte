@@ -9,8 +9,8 @@
    * (sync-files.ts); so do Windows games' save files (vn-save-store.ts: pulled before the game
    * starts, pushed when the tab is hidden or the game closes).
    */
-  import { noteReading } from '$lib/data/social';
-  import { readingActivity } from '$lib/data/reader-hooks';
+  import { noteReading } from '$lib/data/social/social';
+  import { readingActivity } from '$lib/data/reader/reader-hooks';
   import { isPluginEnabled } from '$lib/plugins';
   import { onDestroy, onMount } from 'svelte';
   import { bookContent, damagedBookText } from '$lib/data/book-content';
@@ -25,7 +25,7 @@
     startDayHoursForTracker$,
     statisticsEnabled$
   } from '$lib/data/store';
-  import { context, externalHandler, handler } from '$lib/data/media-sync';
+  import { context, externalHandler, handler } from '$lib/data/sync/media-sync';
   import { pagePath } from '$lib/data/env';
   import { logger } from '$lib/data/logger';
   import { MergeMode } from '$lib/data/merge-mode';
@@ -42,8 +42,8 @@
     vnInfo,
     type VnLine,
     type VnSaves
-  } from '$lib/data/vn';
-  import { VnReading, vnTextSource } from '$lib/data/vn-text';
+  } from '$lib/data/vn/vn';
+  import { VnReading, vnTextSource } from '$lib/data/vn/vn-text';
   import {
     fittedTuning,
     hasWindowsGame,
@@ -53,8 +53,8 @@
     vnboxErrorText,
     windowsGameBlocker,
     windowsGameBlockerText
-  } from '$lib/data/windows-game';
-  import { recordKanjiText } from '$lib/data/kanji-seen';
+  } from '$lib/data/vn/windows-game';
+  import { recordKanjiText } from '$lib/data/words/kanji-seen';
   import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
   import type { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
   import type { BrowserStorageHandler } from '$lib/data/storage/handler/browser-handler';
@@ -66,7 +66,7 @@
   import { replicateData } from '$lib/functions/replication/replicator';
   import { vnFolderSize } from '$lib/functions/file-loaders/vn/load-vn';
   import { formatPageTitle } from '$lib/functions/format-page-title';
-  import AnkiWatcher from '$lib/components/anki-watcher.svelte';
+  import AnkiWatcher from '$lib/components/dictionary/anki-watcher.svelte';
   import VnboxTuning from '$lib/components/vn/vnbox-tuning.svelte';
   import VnboxDiscs from '$lib/components/vn/vnbox-discs.svelte';
   import VnBacklog from '$lib/components/vn/vn-backlog.svelte';
@@ -74,13 +74,13 @@
   import VnBar from '$lib/components/vn/vn-bar.svelte';
   import VnRail from '$lib/components/vn/vn-rail.svelte';
   import VnSide from '$lib/components/vn/vn-side.svelte';
-  import { VnSaveSync, vnSaveAreas } from '$lib/data/vn-save-store';
+  import { VnSaveSync, vnSaveAreas } from '$lib/data/vn/vn-save-store';
   import { dialogManager } from '$lib/data/dialog-manager';
-  import WindowsGameDialog from '$lib/components/book-card/windows-game-dialog.svelte';
+  import WindowsGameDialog from '$lib/components/vn/windows-game-dialog.svelte';
   import VnboxHooks from '$lib/components/vn/vnbox-hooks.svelte';
-  import { hookCleaner, type HookCleanup } from '$lib/data/hook-cleanup';
+  import { hookCleaner, type HookCleanup } from '$lib/data/vn/hook-cleanup';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
-  import { builtInLookups$ } from '$lib/data/dictionary';
+  import { builtInLookups$ } from '$lib/data/dictionary/dictionary';
   import {
     ankiEnabled$,
     ankiSentenceField$,
@@ -89,10 +89,10 @@
     noteSentence,
     vnLineFor,
     type AnkiNote
-  } from '$lib/data/anki';
-  import { serverConnected, serverFetch } from '$lib/data/server-connect';
+  } from '$lib/data/dictionary/anki';
+  import { serverConnected, serverFetch } from '$lib/data/remote/server-connect';
   import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
-  import { padStep, watchGamepads, type PadAction } from '$lib/data/vn-gamepad';
+  import { padStep, watchGamepads, type PadAction } from '$lib/data/vn/vn-gamepad';
 
   /** The text panel below the game; hovering the game's own text works without it. */
   const showText$ = writableBooleanLocalStorageSubject()('vnTextPanel', false);

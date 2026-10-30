@@ -24,13 +24,13 @@ import {
   localEstimate,
   makeReadings,
   redoWordList
-} from '$lib/data/analysis-tools';
-import { analysisWorkers } from '$lib/data/analysis-capacity';
-import { isManga } from '$lib/data/manga';
+} from '$lib/data/analysis/analysis-tools';
+import { analysisWorkers } from '$lib/data/analysis/analysis-capacity';
+import { isManga } from '$lib/data/manga/manga';
 import { database, generatedFurigana$ } from '$lib/data/store';
 import { StorageKey } from '$lib/data/storage/storage-types';
 import { storageSource$ } from '$lib/data/storage/storage-view';
-import { isVn } from '$lib/data/vn';
+import { isVn } from '$lib/data/vn/vn';
 
 /**
  * The first unfinished book (1-based), how many are queued with it and the percent of the books

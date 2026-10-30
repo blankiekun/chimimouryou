@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { AiConnectionTest } from '$lib/data/ai-connections';
+  import type { AiConnectionTest } from '$lib/data/ai/ai-connections';
   import { testTone, whenTested } from './ai-format';
 
   export let test: AiConnectionTest;

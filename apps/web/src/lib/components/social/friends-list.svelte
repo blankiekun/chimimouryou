@@ -5,8 +5,8 @@
   import { pushState } from '$app/navigation';
   import FriendCover from '$lib/components/social/friend-cover.svelte';
   import { relativeTime } from '$lib/functions/format-time';
-  import { blockFriend, byLastRead, removeFriend, type Friend } from '$lib/data/social';
-  import { hubErrorKey } from '$lib/data/social-account';
+  import { blockFriend, byLastRead, removeFriend, type Friend } from '$lib/data/social/social';
+  import { hubErrorKey } from '$lib/data/social/social-account';
   import { t$, uiLanguage$ } from '$lib/i18n';
 
   /** Friends, the one they read last first: avatar, name, when, and the book they are on */

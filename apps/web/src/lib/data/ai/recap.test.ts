@@ -11,8 +11,8 @@ import {
   aiConnections$,
   aiFeatures$,
   defaultAiFeatures
-} from '$lib/data/ai-settings';
-import { saveConnection } from '$lib/data/ai-connections';
+} from '$lib/data/ai/ai-settings';
+import { saveConnection } from '$lib/data/ai/ai-connections';
 import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v3';
 import { buildSearchIndex } from '$lib/functions/book-text/book-search';
 import { readerDb } from '$lib/data/reader-db';
@@ -20,7 +20,7 @@ import { deleteSavedRecap, getSavedRecaps, planRecap, textBetween, writeRecap } 
 
 const account = vi.hoisted(() => ({ user: null as { id: string; username: string } | null }));
 
-vi.mock('$lib/data/account', () => ({ accountReady: async () => account.user }));
+vi.mock('$lib/data/account/account', () => ({ accountReady: async () => account.user }));
 
 const sections = [
   { reference: 'c1', label: 'One', startCharacter: 0 },

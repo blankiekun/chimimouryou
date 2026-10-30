@@ -6,8 +6,8 @@
 
 import { goto } from '$app/navigation';
 import { pagePath } from '$lib/data/env';
-import { isManga } from '$lib/data/manga';
-import { isVn } from '$lib/data/vn';
+import { isManga } from '$lib/data/manga/manga';
+import { isVn } from '$lib/data/vn/vn';
 
 /** The page that opens an item: v for visual novels, m for manga, b (the reader) for books. */
 export type ReaderRoute = 'b' | 'm' | 'v';

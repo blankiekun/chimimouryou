@@ -11,7 +11,7 @@
  */
 
 import { bookContent } from '$lib/data/book-content';
-import { countKanji } from '$lib/data/kanji-seen';
+import { countKanji } from '$lib/data/words/kanji-seen';
 import { readerDb } from '$lib/data/reader-db';
 import { database } from '$lib/data/store';
 

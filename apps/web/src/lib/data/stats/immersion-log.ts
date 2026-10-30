@@ -13,7 +13,7 @@
  */
 
 import { BehaviorSubject } from 'rxjs';
-import { immersionChanged, pullImmersion } from '$lib/data/extras-sync';
+import { immersionChanged, pullImmersion } from '$lib/data/sync/extras-sync';
 import { readerDb } from '$lib/data/reader-db';
 import { startDayHoursForTracker$, statisticsEnabled$ } from '$lib/data/store';
 import { getDateKey } from '$lib/functions/statistic-util';

@@ -20,7 +20,7 @@ class EngineFingerprintTest(unittest.TestCase):
             committed = json.load(f)['engine']
         self.assertEqual(committed, engine.canonical_fingerprint(),
                          'The engine changed: python3 engine/engine.py > '
-                         'apps/web/src/lib/data/difficulty-engine.json')
+                         'apps/web/src/lib/data/difficulty/difficulty-engine.json')
 
     def test_code_record_is_current(self):
         with open(engine.CODE_RECORD, encoding='utf-8') as f:
@@ -29,7 +29,7 @@ class EngineFingerprintTest(unittest.TestCase):
                          'The scoring Python changed. If any estimate, word list or readings file changes, '
                          'bump ENGINE_VERSION in engine/engine.py; if every output stays the same, '
                          'only re-record the hash. Either way: python3 engine/engine.py --record '
-                         '&& python3 engine/engine.py > apps/web/src/lib/data/difficulty-engine.json')
+                         '&& python3 engine/engine.py > apps/web/src/lib/data/difficulty/difficulty-engine.json')
 
     def test_inputs_change_it(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -13,7 +13,7 @@
 
 import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
-import { getAudiobook } from '$lib/data/audiobook';
+import { getAudiobook } from '$lib/data/audio/audiobook';
 import { matchableText, type MatchedCue } from '$lib/functions/audiobook/subtitles';
 import type { SearchIndex } from '$lib/functions/book-text/book-search';
 

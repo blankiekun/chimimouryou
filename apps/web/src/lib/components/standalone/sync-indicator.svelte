@@ -2,12 +2,12 @@
   /** The standalone header's sync status (plan S3); empty while books stay on this device. */
   import { goto } from '$app/navigation';
   import { pagePath } from '$lib/data/env';
-  import { driveSignedIn, signInToDrive } from '$lib/data/standalone-storage';
-  import { serverBase, serverConnected } from '$lib/data/server-connect';
+  import { driveSignedIn, signInToDrive } from '$lib/data/standalone/standalone-storage';
+  import { serverBase, serverConnected } from '$lib/data/remote/server-connect';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import { storageSource$ } from '$lib/data/storage/storage-view';
   import { isOnline$ } from '$lib/data/store';
-  import { syncState$, syncView } from '$lib/data/sync-status';
+  import { syncState$, syncView } from '$lib/data/sync/sync-status';
   import { onMount } from 'svelte';
 
   let now = Date.now();

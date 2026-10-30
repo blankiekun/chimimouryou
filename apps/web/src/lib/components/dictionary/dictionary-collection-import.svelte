@@ -1,14 +1,14 @@
 <script lang="ts">
   /**
    * Settings → Dictionary lookups → Backup: imports a Yomitan dictionary collection export
-   * (lib/data/dictionary.ts importDictionaryCollection), with its progress and Cancel. Not part
+   * (lib/data/dictionary/dictionary.ts importDictionaryCollection), with its progress and Cancel. Not part
    * of upstream.
    */
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import {
     cancelDictionaryCollectionImport,
     importDictionaryCollection
-  } from '$lib/data/dictionary';
+  } from '$lib/data/dictionary/dictionary';
   import { inputFile } from '$lib/functions/file-dom/input-file';
 
   let progress: { read: number; total: number } | undefined;

@@ -14,12 +14,12 @@ vi.mock('$lib/data/env', async (importOriginal) => ({
   ...(await importOriginal<typeof import('$lib/data/env')>()),
   standalone: true
 }));
-vi.mock('$lib/data/analysis-tools', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('$lib/data/analysis-tools')>()),
+vi.mock('$lib/data/analysis/analysis-tools', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('$lib/data/analysis/analysis-tools')>()),
   analysisToolsSupported: () => false
 }));
 // Settings sync pulls in the whole store; not under test here (settings-account.test.ts).
-vi.mock('$lib/data/account-settings-sync', () => ({
+vi.mock('$lib/data/account/account-settings-sync', () => ({
   settingsSyncState$: new BehaviorSubject({ state: 'idle' }),
   syncAccountSettings: vi.fn()
 }));

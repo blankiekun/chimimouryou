@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { listening } from '$lib/data/immersion-log';
+  import { listening } from '$lib/data/stats/immersion-log';
   import {
     faBackward,
     faBackwardStep,
@@ -20,7 +20,7 @@
     putAudiobook,
     saveAudiobookPosition,
     type BookAudiobook
-  } from '$lib/data/audiobook';
+  } from '$lib/data/audio/audiobook';
   import type { SearchIndex } from '$lib/functions/book-text/book-search';
   import {
     cueAt,
@@ -30,13 +30,13 @@
     type MatchedCue
   } from '$lib/functions/audiobook/subtitles';
   import { toTimeString } from '$lib/functions/statistic-util';
-  import WhisperSubtitles from '$lib/components/book-reader/whisper-subtitles.svelte';
-  import AudiobookControls from '$lib/components/book-reader/audiobook-controls.svelte';
-  import AudiobookControlsPanel from '$lib/components/book-reader/audiobook-controls-panel.svelte';
-  import { audiobookControls } from '$lib/data/audiobook-controls';
+  import WhisperSubtitles from '$lib/components/audio/whisper-subtitles.svelte';
+  import AudiobookControls from '$lib/components/audio/audiobook-controls.svelte';
+  import AudiobookControlsPanel from '$lib/components/audio/audiobook-controls-panel.svelte';
+  import { audiobookControls } from '$lib/data/audio/audiobook-controls';
   import { PlaybackController } from '$lib/functions/audiobook/playback-controller';
   import { ratePresets } from '$lib/functions/audiobook/playback';
-  import { nowPlayingPublisher } from '$lib/data/now-playing';
+  import { nowPlayingPublisher } from '$lib/data/audio/now-playing';
   import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
   import { t$, tr } from '$lib/i18n';
   import Fa from 'svelte-fa';

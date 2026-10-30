@@ -15,7 +15,7 @@ import type {
 } from '$lib/data/database/books-db/versions/books-db';
 import { Observable, Subject, from } from 'rxjs';
 import { StorageDataType } from '$lib/data/storage/storage-types';
-import type { ReaderRoute } from '$lib/data/reader-route';
+import type { ReaderRoute } from '$lib/data/reader/reader-route';
 import {
   advanceDateDays,
   getDate,
@@ -49,13 +49,8 @@ import { replicationProgress$ } from '$lib/functions/replication/replication-pro
 import { setStorageSourceDefault } from '$lib/data/storage/storage-source-manager';
 import { fallbackStorageSource, storageSource$ } from '$lib/data/storage/storage-view';
 import { throwIfAborted } from '$lib/functions/replication/replication-error';
-import { isVn } from '$lib/data/vn';
-import {
-  deleteVnFiles,
-  dropOrphanVnFiles,
-  getVnFiles,
-  putVnFiles
-} from '$lib/data/database/vn-files';
+import { isVn } from '$lib/data/vn/vn';
+import { deleteVnFiles, dropOrphanVnFiles, getVnFiles, putVnFiles } from '$lib/data/vn/vn-files';
 
 const LAST_ITEM_KEY = 0;
 

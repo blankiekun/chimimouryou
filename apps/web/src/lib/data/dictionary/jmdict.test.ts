@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const importDictionary = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/data/dictionary', () => ({ importDictionary }));
+vi.mock('$lib/data/dictionary/dictionary', () => ({ importDictionary }));
 
 const response = (body: BodyInit | null, init: ResponseInit) => new Response(body, init);
 

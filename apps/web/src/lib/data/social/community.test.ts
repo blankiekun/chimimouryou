@@ -24,8 +24,8 @@ import {
   visibleThreads,
   volumeOf,
   workFromUrl
-} from '$lib/data/community';
-import { socialSession$, type SocialMe } from '$lib/data/social-account';
+} from '$lib/data/social/community';
+import { socialSession$, type SocialMe } from '$lib/data/social/social-account';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 
 // The hub's own fixture: both sides must hash a line the same way.

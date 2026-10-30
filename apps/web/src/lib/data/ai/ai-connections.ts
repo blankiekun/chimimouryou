@@ -20,8 +20,8 @@ import {
   type AiFeature,
   type AiFeatureSetting,
   type AiSamplers
-} from '$lib/data/ai-settings';
-import { connectionBaseUrl, findProvider, type AiProvider } from '$lib/data/ai-providers';
+} from '$lib/data/ai/ai-settings';
+import { connectionBaseUrl, findProvider, type AiProvider } from '$lib/data/ai/ai-providers';
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 
 /** A model from a provider's list. */

@@ -1,7 +1,7 @@
 <script lang="ts">
   import BookCard from '$lib/components/book-card/book-card.svelte';
   import TitleCard from '$lib/components/social/title-card.svelte';
-  import { hubImageUrl } from '$lib/data/social-account';
+  import { hubImageUrl } from '$lib/data/social/social-account';
   import { t$ } from '$lib/i18n';
 
   /**

@@ -10,7 +10,7 @@
  * source). Not part of upstream.
  */
 
-import { nativeDrive, nativeGrant } from '$lib/data/android-drive';
+import { nativeDrive, nativeGrant } from '$lib/data/standalone/android-drive';
 import { gDriveRefreshEndpoint, gDriveRevokeEndpoint, pagePath } from '$lib/data/env';
 import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';

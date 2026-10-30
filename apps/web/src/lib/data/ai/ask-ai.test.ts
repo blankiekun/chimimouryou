@@ -5,8 +5,8 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { aiConnectionKeys$, aiConnections$, askAiReaderNote$ } from '$lib/data/ai-settings';
-import { saveConnection } from '$lib/data/ai-connections';
+import { aiConnectionKeys$, aiConnections$, askAiReaderNote$ } from '$lib/data/ai/ai-settings';
+import { saveConnection } from '$lib/data/ai/ai-connections';
 import { askAi } from './ask-ai';
 
 function stream(lines: string[]) {

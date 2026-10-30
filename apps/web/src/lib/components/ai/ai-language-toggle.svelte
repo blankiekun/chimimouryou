@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { aiLanguage$ } from '$lib/data/ai-settings';
+  import { aiLanguage$ } from '$lib/data/ai/ai-settings';
 
   /** One-click switch of the AI prompt and answer language. Not part of upstream. */
 

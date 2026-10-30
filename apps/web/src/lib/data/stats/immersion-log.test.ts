@@ -7,7 +7,7 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/data/account', () => ({
+vi.mock('$lib/data/account/account', () => ({
   accountReady: async () => null,
   accountSyncUrl: '/account/sync/',
   currentAccount: () => null

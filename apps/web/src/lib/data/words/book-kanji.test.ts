@@ -11,7 +11,7 @@ vi.mock('$lib/data/store', () => ({
   database: { getData: vi.fn(async () => ({ elementHtml: '<p>猫と犬</p>' })) }
 }));
 
-import { bookKanjiCount, deleteBookKanji, uniqueKanjiInHtml } from '$lib/data/book-kanji';
+import { bookKanjiCount, deleteBookKanji, uniqueKanjiInHtml } from '$lib/data/words/book-kanji';
 import { database } from '$lib/data/store';
 
 describe('uniqueKanjiInHtml', () => {

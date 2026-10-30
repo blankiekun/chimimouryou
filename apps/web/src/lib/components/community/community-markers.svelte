@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { communityMarks$, communityMarkTap$, restoreBookMarks } from '$lib/data/community-book';
+  import {
+    communityMarks$,
+    communityMarkTap$,
+    restoreBookMarks
+  } from '$lib/data/social/community-book';
   import { PAGE_CHANGE } from '$lib/data/events';
   import { setCssHighlight } from '$lib/functions/book-text/css-highlights';
   import { getTextSegments, rangeForCounts } from '$lib/functions/book-text/text-positions';

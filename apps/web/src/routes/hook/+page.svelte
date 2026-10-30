@@ -2,11 +2,11 @@
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
   import PointBox from '$lib/components/point-box.svelte';
-  import { formatDuration, localNetworkDenied } from '$lib/data/discord';
+  import { formatDuration, localNetworkDenied } from '$lib/data/discord/discord';
   import { pagePath } from '$lib/data/env';
-  import { addImmersionTime } from '$lib/data/immersion-log';
+  import { addImmersionTime } from '$lib/data/stats/immersion-log';
   import { logger } from '$lib/data/logger';
-  import { readingActivity } from '$lib/data/reader-hooks';
+  import { readingActivity } from '$lib/data/reader/reader-hooks';
   import { statisticsEnabled$, trackerIdleTime$ } from '$lib/data/store';
   import {
     hookPresets,
@@ -19,7 +19,7 @@
     parseHookMessage,
     saveLines,
     type HookLine
-  } from '$lib/data/texthooker';
+  } from '$lib/data/vn/texthooker';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { t$, type MessageKey } from '$lib/i18n';
   import { onDestroy, onMount, tick } from 'svelte';

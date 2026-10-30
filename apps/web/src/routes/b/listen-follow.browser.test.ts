@@ -9,8 +9,8 @@ import { ViewMode } from '$lib/data/view-mode';
 // @ts-expect-error tsconfig's moduleResolution "node" doesn't read package exports; Vitest does.
 import { page as browserPage, userEvent } from 'vitest/browser';
 import { autoBookmarkTime$, database } from '$lib/data/store';
-import { connectProvider, deleteConnection } from '$lib/data/ai-connections';
-import { ttsVoiceId$ } from '$lib/data/ai-settings';
+import { connectProvider, deleteConnection } from '$lib/data/ai/ai-connections';
+import { ttsVoiceId$ } from '$lib/data/ai/ai-settings';
 import {
   addBook,
   mountReader,

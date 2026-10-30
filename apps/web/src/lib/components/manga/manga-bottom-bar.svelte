@@ -1,7 +1,7 @@
 <script lang="ts">
   /** The manga reader's (/m) bottom bar: page slider, percent, the phone's mode/text row. Not upstream. */
   import { fly } from 'svelte/transition';
-  import type { MangaReadingMode } from '$lib/data/manga';
+  import type { MangaReadingMode } from '$lib/data/manga/manga';
 
   interface Props {
     mode: MangaReadingMode;

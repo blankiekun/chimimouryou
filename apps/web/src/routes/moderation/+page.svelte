@@ -7,8 +7,13 @@
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import { pagePath } from '$lib/data/env';
   import { relativeTime } from '$lib/functions/format-time';
-  import { monthName } from '$lib/data/social';
-  import { hubErrorKey, hubImageUrl, refreshMe, socialSession$ } from '$lib/data/social-account';
+  import { monthName } from '$lib/data/social/social';
+  import {
+    hubErrorKey,
+    hubImageUrl,
+    refreshMe,
+    socialSession$
+  } from '$lib/data/social/social-account';
   import {
     deleteUserRow,
     dismissReports,
@@ -20,8 +25,8 @@
     type LookedUp,
     type OpenReport,
     type UserRows
-  } from '$lib/data/social-moderation';
-  import { libraryCoversAvailable } from '$lib/data/library-covers';
+  } from '$lib/data/social/social-moderation';
+  import { libraryCoversAvailable } from '$lib/data/library/library-covers';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { t$, uiLanguage$, type MessageKey } from '$lib/i18n';
   import { onMount } from 'svelte';

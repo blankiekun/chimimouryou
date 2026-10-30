@@ -28,7 +28,7 @@
 import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
 import { writableArrayLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import { writableNumberLocalStorageSubject } from '$lib/data/internal/writable-number-local-storage-subject';
-import placementItems from '$lib/data/placement-items.json';
+import placementItems from '$lib/data/difficulty/placement-items.json';
 import { convertToHiragana } from '$lib/vendor/yomitan/language/ja/japanese-wanakana';
 import { convertKatakanaToHiragana } from '$lib/vendor/yomitan/language/ja/japanese';
 import { arrayOf, isRecord } from '$lib/data/setting-parsers';
@@ -275,7 +275,9 @@ export const readingMatches = (item: HardItem, typed: string) =>
 
 /** Hard mode's items, loaded when it starts (bigger than the yes/no ones). */
 export const loadHardItems = () =>
-  import('$lib/data/placement-hard-items.json').then((m) => m.default.items as HardItem[]);
+  import('$lib/data/difficulty/placement-hard-items.json').then(
+    (m) => m.default.items as HardItem[]
+  );
 
 /** A copy of `list` in random order. */
 export function shuffle<T>(list: T[], random = Math.random) {

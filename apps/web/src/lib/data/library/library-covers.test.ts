@@ -5,8 +5,8 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { hiddenBooks$ } from './social';
-import { socialSession$ } from './social-account';
+import { hiddenBooks$ } from '../social/social';
+import { socialSession$ } from '../social/social-account';
 import {
   libraryCovers$,
   pauseLibraryCovers,
@@ -16,12 +16,12 @@ import {
 
 const catalog = vi.hoisted(() => ({ books: [] as object[] }));
 
-vi.mock('$lib/data/calibre', async (original) => ({
-  ...(await original<typeof import('$lib/data/calibre')>()),
+vi.mock('$lib/data/remote/calibre', async (original) => ({
+  ...(await original<typeof import('$lib/data/remote/calibre')>()),
   loadCalibreCatalog: async () => catalog.books
 }));
-vi.mock('$lib/data/social', async (original) => ({
-  ...(await original<typeof import('$lib/data/social')>()),
+vi.mock('$lib/data/social/social', async (original) => ({
+  ...(await original<typeof import('$lib/data/social/social')>()),
   bookKey: (title: string) => title,
   bookThumbnail: async (cover: string) =>
     cover.includes('broken') ? null : new Blob(['webp'], { type: 'image/webp' })

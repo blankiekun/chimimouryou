@@ -13,11 +13,11 @@
  */
 
 import { from, map, switchMap, type Observable } from 'rxjs';
-import { isNoiseWord, type BookWord } from '$lib/data/book-words';
-import type { ReadingsFile } from '$lib/data/generated-furigana';
-import { getKnownSet, type KnownSet } from '$lib/data/known-words';
-import { wordMark, wordMarks$, type WordMarks } from '$lib/data/word-marks';
-import { estimatedBooks, estimatedWordList } from '$lib/data/words-met';
+import { isNoiseWord, type BookWord } from '$lib/data/words/book-words';
+import type { ReadingsFile } from '$lib/data/words/generated-furigana';
+import { getKnownSet, type KnownSet } from '$lib/data/words/known-words';
+import { wordMark, wordMarks$, type WordMarks } from '$lib/data/words/word-marks';
+import { estimatedBooks, estimatedWordList } from '$lib/data/words/words-met';
 
 /** [start, end) in the book's character counts */
 export type CountSpan = [number, number];

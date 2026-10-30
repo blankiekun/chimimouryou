@@ -20,14 +20,14 @@
  */
 
 import { BehaviorSubject, type Subject } from 'rxjs';
-import { accountReady, currentAccount } from '$lib/data/account';
+import { accountReady, currentAccount } from '$lib/data/account/account';
 import {
   isImmersionEntry,
   mergeImmersion,
   sameImmersion,
   type ImmersionLog
-} from '$lib/data/immersion-log';
-import type { KanjiSeen } from '$lib/data/kanji-seen';
+} from '$lib/data/stats/immersion-log';
+import type { KanjiSeen } from '$lib/data/words/kanji-seen';
 import { logger } from '$lib/data/logger';
 import {
   lorebookChanged$,
@@ -35,19 +35,19 @@ import {
   parseLorebook,
   sameLorebooks,
   type Lorebook
-} from '$lib/data/lorebook';
+} from '$lib/data/ai/lorebook';
 import {
   mergeRecaps,
   parseRecaps,
   recapsChanged$,
   sameRecaps,
   type BookRecaps
-} from '$lib/data/recap';
-import { readerDataOwner } from '$lib/data/reader-data-owner';
+} from '$lib/data/ai/recap';
+import { readerDataOwner } from '$lib/data/account/reader-data-owner';
 import { readerDb } from '$lib/data/reader-db';
-import type { WordMarks } from '$lib/data/word-marks';
-import type { SyncFileName } from '$lib/data/server-rows';
-import { readerSyncStore, syncFileStore, syncJsonFile } from '$lib/data/sync-files';
+import type { WordMarks } from '$lib/data/words/word-marks';
+import type { SyncFileName } from '$lib/data/remote/server-rows';
+import { readerSyncStore, syncFileStore, syncJsonFile } from '$lib/data/sync/sync-files';
 
 export type ExtrasKind = 'recaps' | 'lorebook';
 

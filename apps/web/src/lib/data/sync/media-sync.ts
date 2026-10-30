@@ -19,7 +19,7 @@ import {
 } from '$lib/data/store';
 import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
 import { StorageKey, StorageSourceDefault } from '$lib/data/storage/storage-types';
-import { bookSyncSource } from '$lib/data/sync-files';
+import { bookSyncSource } from '$lib/data/sync/sync-files';
 
 const defaultSources: Record<string, StorageKey> = {
   [StorageSourceDefault.CALIBRE_DEFAULT]: StorageKey.CALIBRE,

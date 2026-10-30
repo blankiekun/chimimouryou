@@ -21,7 +21,7 @@ import {
   type AiConnectionTest,
   type AiModel,
   type ResolvedFeature
-} from '$lib/data/ai-connections';
+} from '$lib/data/ai/ai-connections';
 import {
   authHeaders,
   connectionBaseUrl,
@@ -29,13 +29,13 @@ import {
   isLocalProvider,
   type AiProvider,
   type SamplerName
-} from '$lib/data/ai-providers';
+} from '$lib/data/ai/ai-providers';
 import {
   redactSecret,
   type AiConnection,
   type AiSamplers,
   type AiTextFeature
-} from '$lib/data/ai-settings';
+} from '$lib/data/ai/ai-settings';
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';

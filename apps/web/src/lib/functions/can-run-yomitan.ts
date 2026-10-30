@@ -6,7 +6,7 @@
 
 /**
  * Whether this browser can run the Yomitan extension, so the built-in dictionary starts off there
- * (lib/data/dictionary.ts). Yes: the desktop app (it loads Yomitan), desktop Chromium browsers and
+ * (lib/data/dictionary/dictionary.ts). Yes: the desktop app (it loads Yomitan), desktop Chromium browsers and
  * Firefox (desktop and Android). No: iOS/iPadOS (WebKit only; iPadOS reports a Mac with touch),
  * desktop Safari and the other Android browsers. Not part of upstream.
  */

@@ -6,8 +6,8 @@
 
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ankiKnownDeck$, ankiKnownField$, ankiKnownWords$ } from '$lib/data/anki';
-import type { BookWord } from '$lib/data/book-words';
+import { ankiKnownDeck$, ankiKnownField$, ankiKnownWords$ } from '$lib/data/dictionary/anki';
+import type { BookWord } from '$lib/data/words/book-words';
 import {
   bookCoverage,
   bookWordGroups,
@@ -20,21 +20,21 @@ import {
   loadCoverageCache,
   refreshKnownWords,
   refreshKnownWordsIfStale
-} from '$lib/data/known-words';
-import { placementCutoff$ } from '$lib/data/placement';
+} from '$lib/data/words/known-words';
+import { placementCutoff$ } from '$lib/data/difficulty/placement';
 import { readerDb } from '$lib/data/reader-db';
-import { setWordMarks } from '$lib/data/word-marks';
+import { setWordMarks } from '$lib/data/words/word-marks';
 
 const met = vi.hoisted(() => ({ signature: 'read 1', words: {} as Record<string, number> }));
 
-vi.mock('$lib/data/extras-sync', () => ({
+vi.mock('$lib/data/sync/extras-sync', () => ({
   pullKanji: async () => {},
   kanjiChanged: () => {},
   pullWordMarks: async () => {},
   wordMarksChanged: () => {}
 }));
-vi.mock('$lib/data/words-met', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('$lib/data/words-met')>()),
+vi.mock('$lib/data/words/words-met', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('$lib/data/words/words-met')>()),
   getWordsMet: async () => ({ ...met })
 }));
 

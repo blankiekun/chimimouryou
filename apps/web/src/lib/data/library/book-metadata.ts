@@ -14,9 +14,9 @@
  */
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-import { loadCalibreCatalog } from '$lib/data/calibre';
-import { serverFetch, serverless } from '$lib/data/server-connect';
-import { apiVersion, putRow, syncMirror } from '$lib/data/server-api';
+import { loadCalibreCatalog } from '$lib/data/remote/calibre';
+import { serverFetch, serverless } from '$lib/data/remote/server-connect';
+import { apiVersion, putRow, syncMirror } from '$lib/data/remote/server-api';
 
 export type MetadataKind = 'book' | 'manga' | 'vn';
 

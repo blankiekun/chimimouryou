@@ -13,9 +13,9 @@
  */
 
 import { openDB } from 'idb';
-import { accountReady } from '$lib/data/account';
-import type { CalibreBook } from '$lib/data/calibre';
-import { serverBase, serverFetch } from '$lib/data/server-connect';
+import { accountReady } from '$lib/data/account/account';
+import type { CalibreBook } from '$lib/data/remote/calibre';
+import { serverBase, serverFetch } from '$lib/data/remote/server-connect';
 
 /** A row of `GET /api/v1/sync` (server/api/service.py `row_json`). */
 export interface SyncRow {

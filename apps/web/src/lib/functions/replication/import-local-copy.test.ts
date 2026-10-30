@@ -16,7 +16,7 @@ vi.mock('$lib/data/env', async (importOriginal) => ({
 
 const analyseInBackground = vi.fn();
 
-vi.mock('$lib/data/background-analysis', () => ({ analyseInBackground }));
+vi.mock('$lib/data/analysis/background-analysis', () => ({ analyseInBackground }));
 
 const { database } = await import('$lib/data/store');
 const { importData, replicateData, LOCAL_COPY_LIMIT } = await import(

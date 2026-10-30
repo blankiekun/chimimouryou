@@ -1,9 +1,9 @@
 <script lang="ts">
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-  import CoverCard from '$lib/components/book-card/cover-card.svelte';
+  import CoverCard from '$lib/components/library/cover-card.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
-  import { levelTier } from '$lib/data/difficulty';
-  import { relativeLevel } from '$lib/data/difficulty-core';
+  import { levelTier } from '$lib/data/difficulty/difficulty';
+  import { relativeLevel } from '$lib/data/difficulty/difficulty-core';
   import { standalone } from '$lib/data/env';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher } from 'svelte';

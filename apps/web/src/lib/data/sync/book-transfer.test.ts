@@ -8,12 +8,12 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { StorageKey, StorageSourceDefault } from '$lib/data/storage/storage-types';
 
-vi.mock('$lib/data/background-analysis', () => ({ analyseInBackground: vi.fn() }));
+vi.mock('$lib/data/analysis/background-analysis', () => ({ analyseInBackground: vi.fn() }));
 
 const { database } = await import('$lib/data/store');
 const { storageSource$ } = await import('$lib/data/storage/storage-view');
 const { calibreReceivedBooks$ } = await import('$lib/data/storage/handler/server-handler');
-const { importReceived } = await import('$lib/data/book-transfer');
+const { importReceived } = await import('$lib/data/sync/book-transfer');
 
 afterEach(() => vi.unstubAllGlobals());
 

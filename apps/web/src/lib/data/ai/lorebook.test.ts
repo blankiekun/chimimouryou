@@ -6,8 +6,8 @@
 
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { aiConnectionKeys$, aiConnections$ } from '$lib/data/ai-settings';
-import { saveConnection } from '$lib/data/ai-connections';
+import { aiConnectionKeys$, aiConnections$ } from '$lib/data/ai/ai-settings';
+import { saveConnection } from '$lib/data/ai/ai-connections';
 import { buildSearchIndex } from '$lib/functions/book-text/book-search';
 import {
   copyLorebookTo,
@@ -23,7 +23,7 @@ import {
 } from './lorebook';
 
 // Signed out: no session check (fetch is stubbed for the AI calls).
-vi.mock('$lib/data/account', () => ({ accountReady: async () => null }));
+vi.mock('$lib/data/account/account', () => ({ accountReady: async () => null }));
 
 function answer(json: unknown) {
   const content = '```json\n' + JSON.stringify(json) + '\n```';

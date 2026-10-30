@@ -1,11 +1,11 @@
 <script lang="ts">
   import CommunityNoteRow from '$lib/components/community/community-note-row.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
-  import type { NoteGroup } from '$lib/data/community-book';
+  import type { NoteGroup } from '$lib/data/social/community-book';
   import RoleBadge from '$lib/components/social/role-badge.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import { relativeTime } from '$lib/functions/format-time';
-  import { type Person, type SocialEvent } from '$lib/data/social';
+  import { type Person, type SocialEvent } from '$lib/data/social/social';
   import { t$, uiLanguage$ } from '$lib/i18n';
 
   /**

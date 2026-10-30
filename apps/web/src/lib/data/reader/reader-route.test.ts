@@ -6,15 +6,15 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { goto } from '$app/navigation';
-import { mangaElementHtml } from '$lib/data/manga';
+import { mangaElementHtml } from '$lib/data/manga/manga';
 import {
   bookRoute,
   needsFullLoad,
   readerPath,
   readerRoute,
   replacePage
-} from '$lib/data/reader-route';
-import { vnElementHtml } from '$lib/data/vn';
+} from '$lib/data/reader/reader-route';
+import { vnElementHtml } from '$lib/data/vn/vn';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 

@@ -16,12 +16,12 @@
   import AppHeaderLogo from '$lib/components/app-header/app-header-logo.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import SyncIndicator from '$lib/components/standalone/sync-indicator.svelte';
-  import { account$ } from '$lib/data/account';
+  import { account$ } from '$lib/data/account/account';
   import { pagePath, standalone } from '$lib/data/env';
-  import { libraryTab$, type LibraryTab } from '$lib/data/library-home';
-  import { readerPath } from '$lib/data/reader-route';
+  import { libraryTab$, type LibraryTab } from '$lib/data/library/library-home';
+  import { readerPath } from '$lib/data/reader/reader-route';
   import { database } from '$lib/data/store';
-  import { socialSession$ } from '$lib/data/social-account';
+  import { socialSession$ } from '$lib/data/social/social-account';
   import { t$ } from '$lib/i18n';
   import { activePlugins$ } from '$lib/plugins';
   import Fa from 'svelte-fa';

@@ -4,7 +4,7 @@
  * All rights reserved.
  */
 
-import type { Speech, SpeechAlignment } from '$lib/data/tts';
+import type { Speech, SpeechAlignment } from '$lib/data/audio/tts';
 
 export interface CachedSpeech {
   url: string;

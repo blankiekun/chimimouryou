@@ -43,8 +43,8 @@
   } from '$lib/data/database/books-db/versions/books-db';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { logger } from '$lib/data/logger';
-  import { pullAccountStatistics } from '$lib/data/statistics-sync';
-  import { statisticsDeleted } from '$lib/data/social';
+  import { pullAccountStatistics } from '$lib/data/stats/statistics-sync';
+  import { statisticsDeleted } from '$lib/data/social/social';
   import { getDateRangeLabel } from '$lib/data/reading-goal';
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
   import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';

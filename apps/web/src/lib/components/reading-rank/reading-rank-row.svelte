@@ -1,8 +1,8 @@
 <script lang="ts">
   import { faCheck } from '@fortawesome/free-solid-svg-icons';
   import RankBadge from '$lib/components/reading-rank/rank-badge.svelte';
-  import { rankTiers, type ReadingRank, type Requirement } from '$lib/data/reading-rank';
-  import { loadReadingRank } from '$lib/data/reading-rank-data';
+  import { rankTiers, type ReadingRank, type Requirement } from '$lib/data/stats/reading-rank';
+  import { loadReadingRank } from '$lib/data/stats/reading-rank-data';
   import { database } from '$lib/data/store';
   import { t$, uiLanguage$, type MessageKey } from '$lib/i18n';
   import { onMount } from 'svelte';

@@ -6,8 +6,8 @@
 
 /** Small formatters for Settings → AI. Not part of upstream. */
 
-import type { AiConnectionTest, AiModel } from '$lib/data/ai-connections';
-import type { AiProvider } from '$lib/data/ai-providers';
+import type { AiConnectionTest, AiModel } from '$lib/data/ai/ai-connections';
+import type { AiProvider } from '$lib/data/ai/ai-providers';
 import { tr } from '$lib/i18n';
 
 /** `sk-or-v1-····3f9a`: enough to tell keys apart, never the whole key. */

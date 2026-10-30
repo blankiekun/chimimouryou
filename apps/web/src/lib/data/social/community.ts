@@ -26,12 +26,16 @@
  * included, and a thread's page of context for any line they know.
  */
 
-import { titleVolume } from '$lib/components/book-card/library-sort';
-import { absBaseTitle, absCleanTitle, absMatchKey } from '$lib/data/audiobookshelf';
-import { searchMetadata, type MetadataCandidate, type MetadataKind } from '$lib/data/book-metadata';
+import { titleVolume } from '$lib/data/library/library-sort';
+import { absBaseTitle, absCleanTitle, absMatchKey } from '$lib/data/audio/audiobookshelf';
+import {
+  searchMetadata,
+  type MetadataCandidate,
+  type MetadataKind
+} from '$lib/data/library/book-metadata';
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
-import { HubError, hubFetch, hubImageUrl, socialSession$ } from '$lib/data/social-account';
-import type { Person } from '$lib/data/social';
+import { HubError, hubFetch, hubImageUrl, socialSession$ } from '$lib/data/social/social-account';
+import type { Person } from '$lib/data/social/social';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 import { record } from '$lib/data/setting-parsers';
 
@@ -416,7 +420,7 @@ export function postOnLine(
  * The hub takes only one per work and none from accounts in their first days.
  */
 export async function uploadWorkCover(work: string, cover: Blob) {
-  const { coverThumbnail } = await import('$lib/data/social-images');
+  const { coverThumbnail } = await import('$lib/data/social/social-images');
   const thumbnail = await coverThumbnail(cover);
 
   if (!thumbnail) return null;

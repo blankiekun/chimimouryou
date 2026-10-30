@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import CommunityWork from '$lib/components/community/community-work.svelte';
-  import { markNotesSeen, notePath, type NoteGroup } from '$lib/data/community-book';
+  import { markNotesSeen, notePath, type NoteGroup } from '$lib/data/social/community-book';
   import { relativeTime } from '$lib/functions/format-time';
   import { t$, uiLanguage$ } from '$lib/i18n';
 

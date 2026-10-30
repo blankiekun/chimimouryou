@@ -18,7 +18,7 @@
  */
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-import { accountReady, currentAccount } from '$lib/data/account';
+import { accountReady, currentAccount } from '$lib/data/account/account';
 import {
   calibreCoverUrl,
   calibreVnUrl,
@@ -26,7 +26,7 @@ import {
   loadCalibreCatalog,
   loadCalibreDifficulty,
   type CalibreBook
-} from '$lib/data/calibre';
+} from '$lib/data/remote/calibre';
 import {
   apiVersion,
   bookIdOf,
@@ -36,7 +36,7 @@ import {
   syncMirror,
   type Mirror,
   type SyncRow
-} from '$lib/data/server-api';
+} from '$lib/data/remote/server-api';
 import {
   holdsAccountData,
   live,
@@ -45,7 +45,7 @@ import {
   unauthorizedError,
   writeRows,
   type MediaKind
-} from '$lib/data/server-rows';
+} from '$lib/data/remote/server-rows';
 import { BaseStorageHandler, exporterVersion } from '$lib/data/storage/handler/base-handler';
 import { BrowserStorageHandler } from '$lib/data/storage/handler/browser-handler';
 import type {
@@ -58,8 +58,8 @@ import type {
 } from '$lib/data/database/books-db/versions/books-db';
 import { currentDbVersion } from '$lib/data/database/books-db/versions/books-db';
 import { StorageDataType, StorageKey, StorageSourceDefault } from '$lib/data/storage/storage-types';
-import { applySeriesOverride, loadSeriesOverrides } from '$lib/data/series-overrides';
-import { applyMetadata, loadBookMetadata } from '$lib/data/book-metadata';
+import { applySeriesOverride, loadSeriesOverrides } from '$lib/data/library/series-overrides';
+import { applyMetadata, loadBookMetadata } from '$lib/data/library/book-metadata';
 import {
   database,
   libraryBuilding$,
@@ -76,10 +76,10 @@ import loadHtmlz from '$lib/functions/file-loaders/htmlz/load-htmlz';
 import loadTxt from '$lib/functions/file-loaders/txt/load-txt';
 import loadCbz from '$lib/functions/file-loaders/cbz/load-cbz';
 import { loadVnFolder } from '$lib/functions/file-loaders/vn/load-vn';
-import { deleteOrphanVnCaches, isVn, vnInfo } from '$lib/data/vn';
-import { isManga } from '$lib/data/manga';
+import { deleteOrphanVnCaches, isVn, vnInfo } from '$lib/data/vn/vn';
+import { isManga } from '$lib/data/manga/manga';
 import { bookContent } from '$lib/data/book-content';
-import { levelOf } from '$lib/data/difficulty-core';
+import { levelOf } from '$lib/data/difficulty/difficulty-core';
 import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
 import { throwIfAborted } from '$lib/functions/replication/replication-error';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';

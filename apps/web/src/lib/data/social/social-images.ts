@@ -62,9 +62,12 @@ export async function encodeWebp(
 }
 
 function wasmWebp(image: ImageData, maxBytes: number) {
-  const worker = new Worker(new URL('../functions/webp/webp-encode.worker.ts', import.meta.url), {
-    type: 'module'
-  });
+  const worker = new Worker(
+    new URL('../../functions/webp/webp-encode.worker.ts', import.meta.url),
+    {
+      type: 'module'
+    }
+  );
 
   return new Promise<Blob | null>((resolve) => {
     worker.onmessage = ({ data }: MessageEvent<ArrayBuffer | null>) =>

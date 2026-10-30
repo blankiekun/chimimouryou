@@ -43,8 +43,10 @@ const furigana = vi.hoisted(() => ({ on: undefined as unknown as BehaviorSubject
 
 const capacity = vi.hoisted(() => ({ workers: 1 }));
 
-vi.mock('$lib/data/analysis-tools', () => tools);
-vi.mock('$lib/data/analysis-capacity', () => ({ analysisWorkers: () => capacity.workers }));
+vi.mock('$lib/data/analysis/analysis-tools', () => tools);
+vi.mock('$lib/data/analysis/analysis-capacity', () => ({
+  analysisWorkers: () => capacity.workers
+}));
 vi.mock('$lib/data/store', async () => {
   const { BehaviorSubject } = await import('rxjs');
 

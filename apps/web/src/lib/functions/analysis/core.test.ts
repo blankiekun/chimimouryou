@@ -16,7 +16,7 @@ import {
   tokensOf,
   type CoreScale
 } from './core';
-import scale from '$lib/data/difficulty-scale.json';
+import scale from '$lib/data/difficulty/difficulty-scale.json';
 // Shared with the difficulty service (engine/core.py, test_core.py): both must give these.
 import fixtureJson from '../../../../../../engine/tests/fixtures/difficulty-core.json?raw';
 import serverScale from '../../../../../../engine/core-scale.json?raw';

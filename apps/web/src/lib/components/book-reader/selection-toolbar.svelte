@@ -1,7 +1,7 @@
 <script lang="ts">
   import { faCheck, faNoteSticky } from '@fortawesome/free-solid-svg-icons';
-  import { highlightColors, type HighlightColor } from '$lib/data/annotations';
-  import { formMarked, setWordMarks, wordMarks$ } from '$lib/data/word-marks';
+  import { highlightColors, type HighlightColor } from '$lib/data/reader/annotations';
+  import { formMarked, setWordMarks, wordMarks$ } from '$lib/data/words/word-marks';
   import { activePlugins$, type SelectionActionContribution } from '$lib/plugins';
   import { createEventDispatcher } from 'svelte';
   import { t$ } from '$lib/i18n';

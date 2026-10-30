@@ -13,7 +13,7 @@ import {
   placementResults$,
   recordPlacement,
   type PlacementRecord
-} from '$lib/data/placement';
+} from '$lib/data/difficulty/placement';
 
 const result = (date: number, cutoff: number, mode: PlacementRecord['mode'] = 'yesno') => ({
   mode,

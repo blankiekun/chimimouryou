@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-  import { orderSeries } from '$lib/components/book-card/library-sort';
+  import { orderSeries } from '$lib/data/library/library-sort';
   import DialogTemplate from '$lib/components/dialog-template.svelte';
   import Ripple from '$lib/components/ripple.svelte';
   import { buttonClasses, inputClasses } from '$lib/css-classes';
@@ -8,7 +8,7 @@
     findSeriesBooks,
     guessSeriesName,
     saveSeriesOverrides
-  } from '$lib/data/series-overrides';
+  } from '$lib/data/library/series-overrides';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher } from 'svelte';
 

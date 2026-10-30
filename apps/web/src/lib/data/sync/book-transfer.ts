@@ -12,12 +12,12 @@ import {
   sendBlob,
   unpackBook,
   type TransferChannel
-} from '$lib/data/book-transfer-channel';
-import { isVn } from '$lib/data/vn';
-import { isManga } from '$lib/data/manga';
-import { addImportsToHome } from '$lib/data/library-home';
-import { HubError, hubFetch, socialSession$ } from '$lib/data/social-account';
-import type { Person } from '$lib/data/social';
+} from '$lib/data/sync/book-transfer-channel';
+import { isVn } from '$lib/data/vn/vn';
+import { isManga } from '$lib/data/manga/manga';
+import { addImportsToHome } from '$lib/data/library/library-home';
+import { HubError, hubFetch, socialSession$ } from '$lib/data/social/social-account';
+import type { Person } from '$lib/data/social/social';
 import { storageSource$ } from '$lib/data/storage/storage-view';
 import { StorageKey, StorageSourceDefault } from '$lib/data/storage/storage-types';
 import {

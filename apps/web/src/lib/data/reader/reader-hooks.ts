@@ -10,8 +10,8 @@
  * Moved out of routes/b/+page.svelte unchanged.
  */
 
-import type { ReadingActivity } from '$lib/data/discord';
-import { recordKanjiSeen } from '$lib/data/kanji-seen';
+import type { ReadingActivity } from '$lib/data/discord/discord';
+import { recordKanjiSeen } from '$lib/data/words/kanji-seen';
 import type { SearchIndex } from '$lib/functions/book-text/book-search';
 import { activePlugins } from '$lib/plugins';
 

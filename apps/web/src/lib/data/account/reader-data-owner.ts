@@ -11,13 +11,13 @@
  * on the server, so they come back when their reader signs in again. Not part of upstream.
  */
 
-import type { AccountUser } from '$lib/data/account';
-import { loadCalibreCatalog } from '$lib/data/calibre';
+import type { AccountUser } from '$lib/data/account/account';
+import { loadCalibreCatalog } from '$lib/data/remote/calibre';
 import { standalone } from '$lib/data/env';
-import { clearKnownWords } from '$lib/data/known-words';
+import { clearKnownWords } from '$lib/data/words/known-words';
 import { readerDb } from '$lib/data/reader-db';
 import { database } from '$lib/data/store';
-import { dropSyncMirrors } from '$lib/data/server-api';
+import { dropSyncMirrors } from '$lib/data/remote/server-api';
 
 const ownerKey = 'readerDataOwner';
 

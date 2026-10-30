@@ -4,7 +4,7 @@
    * (or always shown), so Yomitan can look the words up. Placed in percent of the page and
    * sized from its rendered height, so it follows zoom and resizing.
    */
-  import { blockStyle, type MangaText, type MokuroPage } from '$lib/data/mokuro';
+  import { blockStyle, type MangaText, type MokuroPage } from '$lib/data/manga/mokuro';
 
   export let page: MokuroPage;
   export let mode: MangaText;

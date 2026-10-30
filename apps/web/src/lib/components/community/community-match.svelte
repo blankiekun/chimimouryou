@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { confirmWork, searchWorks, volumeOf } from '$lib/data/community';
-  import { communityErrorKey, workTitles } from '$lib/data/community-book';
-  import type { MetadataCandidate, MetadataKind } from '$lib/data/book-metadata';
+  import { confirmWork, searchWorks, volumeOf } from '$lib/data/social/community';
+  import { communityErrorKey, workTitles } from '$lib/data/social/community-book';
+  import type { MetadataCandidate, MetadataKind } from '$lib/data/library/book-metadata';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher, onMount } from 'svelte';
 

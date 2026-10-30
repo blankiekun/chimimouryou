@@ -1,21 +1,21 @@
 <script lang="ts">
   import { faPaperPlane, faSpinner, faXmark } from '@fortawesome/free-solid-svg-icons';
-  import AiLanguageToggle from '$lib/components/ai-language-toggle.svelte';
-  import { presetsForLanguage } from '$lib/data/ai-prompts';
+  import AiLanguageToggle from '$lib/components/ai/ai-language-toggle.svelte';
+  import { presetsForLanguage } from '$lib/data/ai/ai-prompts';
   import {
     aiLanguage$,
     askAiDefaultPreset$,
     askAiPresets$,
     modelShortName,
     type AskAiPreset
-  } from '$lib/data/ai-settings';
-  import { aiFeatureState$, isReady } from '$lib/data/ai-connections';
+  } from '$lib/data/ai/ai-settings';
+  import { aiFeatureState$, isReady } from '$lib/data/ai/ai-connections';
   import {
     askAi,
     buildPassagePrompt,
     type ChatMessage,
     type PassageContext
-  } from '$lib/data/ask-ai';
+  } from '$lib/data/ai/ask-ai';
   import { pagePath } from '$lib/data/env';
   import { createEventDispatcher, onDestroy, onMount } from 'svelte';
   import { t$ } from '$lib/i18n';

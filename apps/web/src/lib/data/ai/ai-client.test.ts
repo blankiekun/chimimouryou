@@ -5,9 +5,9 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { aiConnectionCache$ } from '$lib/data/ai-connections';
-import { findProvider } from '$lib/data/ai-providers';
-import { aiFeatureDefaults, type AiConnection } from '$lib/data/ai-settings';
+import { aiConnectionCache$ } from '$lib/data/ai/ai-connections';
+import { findProvider } from '$lib/data/ai/ai-providers';
+import { aiFeatureDefaults, type AiConnection } from '$lib/data/ai/ai-settings';
 import { AiError, chatBody, loadModels, requestChat } from './ai-client';
 
 const provider = (id: string) => findProvider(id)!;

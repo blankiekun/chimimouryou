@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * The lookup popup's Add to Anki for one entry (lib/data/anki-dictionary.ts): with
+   * The lookup popup's Add to Anki for one entry (lib/data/dictionary/anki-dictionary.ts): with
    * AnkiConnect, Yomitan's duplicate check first ("In Anki" opens the note) and the note added
    * in place; with AnkiMobile, its add-note link. Hidden until Settings → Anki has a deck, note
    * type and fields. Not part of upstream.
@@ -17,8 +17,8 @@
     dictionaryAnkiRoute$,
     dictionaryAnkiSettings,
     findDuplicates
-  } from '$lib/data/anki-dictionary';
-  import type { DictionarySummary } from '$lib/data/dictionary';
+  } from '$lib/data/dictionary/anki-dictionary';
+  import type { DictionarySummary } from '$lib/data/dictionary/dictionary';
   import { t$ } from '$lib/i18n';
   import type { AnkiNoteContext } from '$lib/vendor/yomitan/data/anki-note-builder';
   import type { TermDictionaryEntry } from '$lib/vendor/yomitan/types/dictionary';

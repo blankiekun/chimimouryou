@@ -1,7 +1,7 @@
 <script lang="ts">
   import { faSpinner } from '@fortawesome/free-solid-svg-icons';
   import SectionHead from '$lib/components/section-head.svelte';
-  import { lorebookAutoInterval$, modelShortName } from '$lib/data/ai-settings';
+  import { lorebookAutoInterval$, modelShortName } from '$lib/data/ai/ai-settings';
   import {
     clearLorebook,
     copyLorebookTo,
@@ -17,16 +17,16 @@
     updateLorebook,
     type LoreCategory,
     type Lorebook
-  } from '$lib/data/lorebook';
-  import { loadCalibreCatalog, type CalibreBook } from '$lib/data/calibre';
+  } from '$lib/data/ai/lorebook';
+  import { loadCalibreCatalog, type CalibreBook } from '$lib/data/remote/calibre';
   import {
     enableExtrasSync,
     extrasSyncError$,
     extrasSyncSource,
     syncExtras
-  } from '$lib/data/extras-sync';
-  import { homeBookTitles$ } from '$lib/data/library-home';
-  import { recapModel } from '$lib/data/recap';
+  } from '$lib/data/sync/extras-sync';
+  import { homeBookTitles$ } from '$lib/data/library/library-home';
+  import { recapModel } from '$lib/data/ai/recap';
   import type { SearchIndex } from '$lib/functions/book-text/book-search';
   import { onDestroy, onMount } from 'svelte';
   import { t$, tr } from '$lib/i18n';

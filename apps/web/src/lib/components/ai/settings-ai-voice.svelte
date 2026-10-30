@@ -1,27 +1,27 @@
 <script lang="ts">
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
-  import { loadModels } from '$lib/data/ai-client';
+  import { loadModels } from '$lib/data/ai/ai-client';
   import {
     aiConnectionCache$,
     aiFeatureState$,
     deviceVoice,
     setFeature
-  } from '$lib/data/ai-connections';
+  } from '$lib/data/ai/ai-connections';
   import {
     aiConnections$,
     deviceVoiceName$,
     ttsPlaybackRate$,
     ttsRates,
     ttsVoiceId$
-  } from '$lib/data/ai-settings';
+  } from '$lib/data/ai/ai-settings';
   import {
     deviceUtterance,
     deviceVoices,
     elevenLabsVoice,
     pickDeviceVoice,
     synthesizeSpeech
-  } from '$lib/data/tts';
+  } from '$lib/data/audio/tts';
   import { t$ } from '$lib/i18n';
   import { onDestroy, onMount } from 'svelte';
 

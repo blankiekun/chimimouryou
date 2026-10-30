@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { sheetSnap } from './sheet-drag';
-import { nextRate } from '$lib/data/now-playing';
+import { nextRate } from '$lib/data/audio/now-playing';
 
 describe('sheetSnap', () => {
   const half = 500;

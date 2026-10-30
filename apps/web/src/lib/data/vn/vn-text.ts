@@ -28,7 +28,7 @@ import {
   type VnInfo,
   type VnOverlayLine,
   type VnRead
-} from '$lib/data/vn';
+} from '$lib/data/vn/vn';
 
 /** Text shown by the game: skipped text counts nothing; readBefore = the engine had it as read */
 export type OnVnText = (text: string, skipped: boolean, readBefore: boolean) => void;

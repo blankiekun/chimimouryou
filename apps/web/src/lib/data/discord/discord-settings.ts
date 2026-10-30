@@ -11,7 +11,7 @@
  */
 
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
-import type { DiscordActivityTemplate, DiscordKind } from '$lib/data/discord-template';
+import type { DiscordActivityTemplate, DiscordKind } from '$lib/data/discord/discord-template';
 import { record } from '$lib/data/setting-parsers';
 
 export interface DiscordOptions {

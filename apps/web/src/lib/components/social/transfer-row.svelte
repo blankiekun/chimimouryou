@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { cancelTransfer, dismissTransfer, type Transfer } from '$lib/data/book-transfer';
+  import { cancelTransfer, dismissTransfer, type Transfer } from '$lib/data/sync/book-transfer';
   import { t$ } from '$lib/i18n';
 
   /** One book transfer, either way: what is happening, a 3px track, Cancel or Dismiss. */

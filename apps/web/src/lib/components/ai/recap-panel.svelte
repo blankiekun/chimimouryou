@@ -9,12 +9,12 @@
     writeRecap,
     type RecapPlan,
     type SavedRecap
-  } from '$lib/data/recap';
-  import { extrasSyncError$, syncExtras } from '$lib/data/extras-sync';
+  } from '$lib/data/ai/recap';
+  import { extrasSyncError$, syncExtras } from '$lib/data/sync/extras-sync';
   import { chapterLabelAt, type SearchIndex } from '$lib/functions/book-text/book-search';
   import { onDestroy, onMount } from 'svelte';
   import SectionHead from '$lib/components/section-head.svelte';
-  import { modelShortName } from '$lib/data/ai-settings';
+  import { modelShortName } from '$lib/data/ai/ai-settings';
   import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';
   import { renderBasicMarkdown } from '$lib/functions/basic-markdown';

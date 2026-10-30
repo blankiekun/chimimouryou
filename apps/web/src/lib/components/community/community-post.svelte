@@ -11,12 +11,12 @@
     markHelpful,
     reportPost,
     type CommunityPost
-  } from '$lib/data/community';
-  import { communityErrorKey } from '$lib/data/community-book';
+  } from '$lib/data/social/community';
+  import { communityErrorKey } from '$lib/data/social/community-book';
   import { relativeTime } from '$lib/functions/format-time';
-  import { blockFriend } from '$lib/data/social';
-  import { socialSession$ } from '$lib/data/social-account';
-  import { removePost, removeUserPosts } from '$lib/data/social-moderation';
+  import { blockFriend } from '$lib/data/social/social';
+  import { socialSession$ } from '$lib/data/social/social-account';
+  import { removePost, removeUserPosts } from '$lib/data/social/social-moderation';
   import { t$, uiLanguage$ } from '$lib/i18n';
   import { createEventDispatcher } from 'svelte';
 

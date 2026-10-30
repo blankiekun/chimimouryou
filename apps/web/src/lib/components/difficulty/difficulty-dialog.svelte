@@ -1,15 +1,15 @@
 <script lang="ts">
   import DialogTemplate from '$lib/components/dialog-template.svelte';
-  import DifficultyBadge from '$lib/components/book-card/difficulty-badge.svelte';
-  import DifficultyPanel from '$lib/components/book-card/difficulty-panel.svelte';
+  import DifficultyBadge from '$lib/components/difficulty/difficulty-badge.svelte';
+  import DifficultyPanel from '$lib/components/difficulty/difficulty-panel.svelte';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
   import { buttonClasses } from '$lib/css-classes';
-  import { account$, hasPermission } from '$lib/data/account';
-  import type { WordCoverage } from '$lib/data/book-words';
-  import { loadCalibreDifficulty, type CalibreDifficulty } from '$lib/data/calibre';
-  import { bookFacets, bookLevel, relativeLevel } from '$lib/data/difficulty-core';
-  import { bookCoverage, getKnownSet } from '$lib/data/known-words';
-  import { knownMinCount, wordList } from '$lib/data/words-met';
+  import { account$, hasPermission } from '$lib/data/account/account';
+  import type { WordCoverage } from '$lib/data/words/book-words';
+  import { loadCalibreDifficulty, type CalibreDifficulty } from '$lib/data/remote/calibre';
+  import { bookFacets, bookLevel, relativeLevel } from '$lib/data/difficulty/difficulty-core';
+  import { bookCoverage, getKnownSet } from '$lib/data/words/known-words';
+  import { knownMinCount, wordList } from '$lib/data/words/words-met';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher, onMount } from 'svelte';
 

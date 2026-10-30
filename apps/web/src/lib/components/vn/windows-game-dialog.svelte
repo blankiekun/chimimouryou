@@ -12,11 +12,11 @@
    */
   import { database } from '$lib/data/store';
   import { isMobile$ } from '$lib/functions/utils';
-  import type { VnInfo } from '$lib/data/vn';
+  import type { VnInfo } from '$lib/data/vn/vn';
   import SectionHead from '$lib/components/section-head.svelte';
   import { dialogManager } from '$lib/data/dialog-manager';
-  import { formatBytes } from '$lib/data/vn-upload';
-  import { deleteSaves, listSaves, vnSaveAreas } from '$lib/data/vn-save-store';
+  import { formatBytes } from '$lib/data/vn/vn-upload';
+  import { deleteSaves, listSaves, vnSaveAreas } from '$lib/data/vn/vn-save-store';
   import {
     copyWindowsGame,
     deleteWindowsGame,
@@ -36,8 +36,8 @@
     windowsPrograms,
     vnboxZipsSize,
     zipGameFiles
-  } from '$lib/data/windows-game';
-  import type { HookScript } from '$lib/data/windows-game';
+  } from '$lib/data/vn/windows-game';
+  import type { HookScript } from '$lib/data/vn/windows-game';
   import {
     besideMsi,
     copyDiscs,
@@ -65,7 +65,7 @@
     type Disc,
     type InstalledProgram,
     type InstallerKind
-  } from '$lib/data/windows-install';
+  } from '$lib/data/vn/windows-install';
   import type { LoadData } from '$lib/functions/file-loaders/types';
 
   interface Props {

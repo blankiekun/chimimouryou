@@ -6,7 +6,7 @@
     faRotateLeft,
     faSliders
   } from '@fortawesome/free-solid-svg-icons';
-  import { audiobookControls$ } from '$lib/data/audiobook-controls';
+  import { audiobookControls$ } from '$lib/data/audio/audiobook-controls';
   import type { PlaybackController } from '$lib/functions/audiobook/playback-controller';
   import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';

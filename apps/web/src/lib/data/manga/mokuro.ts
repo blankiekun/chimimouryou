@@ -15,7 +15,7 @@
 
 import { Subject } from 'rxjs';
 import { readerDb } from '$lib/data/reader-db';
-import { responseJson, serverFetch } from '$lib/data/server-connect';
+import { responseJson, serverFetch } from '$lib/data/remote/server-connect';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 
 export interface MokuroBlock {

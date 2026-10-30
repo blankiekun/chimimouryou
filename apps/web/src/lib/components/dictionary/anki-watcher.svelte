@@ -9,7 +9,7 @@
     watchAddedNotes,
     type AnkiMedia,
     type AnkiNote
-  } from '$lib/data/anki';
+  } from '$lib/data/dictionary/anki';
   import { onDestroy } from 'svelte';
 
   export let media: (note: AnkiNote) => Promise<AnkiMedia>;

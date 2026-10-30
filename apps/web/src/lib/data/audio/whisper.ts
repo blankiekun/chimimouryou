@@ -14,7 +14,7 @@
  */
 
 import { BehaviorSubject } from 'rxjs';
-import type { AnalysisToolsState } from '$lib/data/analysis-tools';
+import type { AnalysisToolsState } from '$lib/data/analysis/analysis-tools';
 import { standalone } from '$lib/data/env';
 import { readerDb } from '$lib/data/reader-db';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
@@ -62,7 +62,7 @@ export function transcribeAudio(
 ) {
   return new Promise<string>((resolve, reject) => {
     const worker = new Worker(
-      new URL('../functions/audiobook/whisper.worker.ts', import.meta.url),
+      new URL('../../functions/audiobook/whisper.worker.ts', import.meta.url),
       { type: 'module' }
     );
     const cues: SubtitleCue[] = [];

@@ -23,8 +23,8 @@ import {
   type CoreNumbers,
   type CoreScale
 } from '$lib/functions/analysis/core';
-import { isNoiseWord, totalsOf, type BookWord, type WordTotals } from '$lib/data/book-words';
-import scaleJson from '$lib/data/difficulty-scale.json';
+import { isNoiseWord, totalsOf, type BookWord, type WordTotals } from '$lib/data/words/book-words';
+import scaleJson from '$lib/data/difficulty/difficulty-scale.json';
 
 export const difficultyScale = scaleJson as unknown as CoreScale;
 

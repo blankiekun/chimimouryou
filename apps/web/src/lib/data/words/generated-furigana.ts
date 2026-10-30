@@ -11,9 +11,9 @@
  * counted, so character counts (bookmarks, highlights) don't change.
  */
 
-import { serverFetch } from '$lib/data/server-connect';
+import { serverFetch } from '$lib/data/remote/server-connect';
 import { BehaviorSubject, lastValueFrom, Observable } from 'rxjs';
-import { difficultyApiUrl, loadCalibreCatalog } from '$lib/data/calibre';
+import { difficultyApiUrl, loadCalibreCatalog } from '$lib/data/remote/calibre';
 import { readerDb } from '$lib/data/reader-db';
 import { generatedFurigana$ } from '$lib/data/store';
 import {

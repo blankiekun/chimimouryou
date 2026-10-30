@@ -6,7 +6,7 @@
 
 import { BlobReader, BlobWriter, ZipReader, ZipWriter } from '@zip.js/zip.js';
 import { asksBeforeVnUpload, StorageKey } from '$lib/data/storage/storage-types';
-import { findVnRoot } from '$lib/data/vn';
+import { findVnRoot } from '$lib/data/vn/vn';
 
 /** A visual novel about to go to a cloud provider: its name (file name or title) and bytes */
 export interface VnUpload {

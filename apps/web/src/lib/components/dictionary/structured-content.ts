@@ -12,7 +12,7 @@
  * database as blob URLs, revoked when the item goes. Not part of upstream.
  */
 
-import { getDictionaryMedia } from '$lib/data/dictionary';
+import { getDictionaryMedia } from '$lib/data/dictionary/dictionary';
 import { PronunciationGenerator } from '$lib/vendor/yomitan/display/pronunciation-generator';
 import {
   StructuredContentGenerator,

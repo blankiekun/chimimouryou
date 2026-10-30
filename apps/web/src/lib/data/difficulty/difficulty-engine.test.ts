@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { canonicalEngine, isCanonicalEstimate } from '$lib/data/difficulty-engine';
+import { canonicalEngine, isCanonicalEstimate } from '$lib/data/difficulty/difficulty-engine';
 
 describe('isCanonicalEstimate', () => {
   it("accepts only this release's engine", () => {

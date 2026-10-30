@@ -6,7 +6,7 @@
 
 /** Values for the Discord editor's preview and picker before anything was opened in this tab. */
 
-import type { DiscordKind, DiscordValues } from '$lib/data/discord-template';
+import type { DiscordKind, DiscordValues } from '$lib/data/discord/discord-template';
 
 const today: DiscordValues = {
   charsToday: '4,820',

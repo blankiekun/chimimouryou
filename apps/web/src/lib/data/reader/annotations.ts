@@ -12,10 +12,10 @@
  */
 
 import { BehaviorSubject } from 'rxjs';
-import { accountReady, currentAccount } from '$lib/data/account';
+import { accountReady, currentAccount } from '$lib/data/account/account';
 import { logger } from '$lib/data/logger';
 import { readerDb as db } from '$lib/data/reader-db';
-import { syncFileStore, syncJsonFile } from '$lib/data/sync-files';
+import { syncFileStore, syncJsonFile } from '$lib/data/sync/sync-files';
 
 export const highlightColors = ['yellow', 'green', 'blue', 'pink'] as const;
 

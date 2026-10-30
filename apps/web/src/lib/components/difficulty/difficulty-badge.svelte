@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { levelColor, levelTier } from '$lib/data/difficulty';
+  import { levelColor, levelTier } from '$lib/data/difficulty/difficulty';
   import { t$ } from '$lib/i18n';
 
   /** The 1-10 level (`levelOf`) */

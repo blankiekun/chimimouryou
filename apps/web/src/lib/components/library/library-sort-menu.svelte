@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { nextSortOption } from '$lib/components/book-card/library-sort';
+  import { nextSortOption } from '$lib/data/library/library-sort';
   import Popover from '$lib/components/popover/popover.svelte';
-  import { ankiKnownWords$ } from '$lib/data/anki';
+  import { ankiKnownWords$ } from '$lib/data/dictionary/anki';
   import { SortDirection, type SortOption } from '$lib/data/sort-types';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import { storageSource$ } from '$lib/data/storage/storage-view';

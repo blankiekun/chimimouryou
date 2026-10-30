@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import type { BooksDbStatistic } from '$lib/data/database/books-db/versions/books-db';
 import { buildSearchIndex } from '$lib/functions/book-text/book-search';
 import { readerDb } from '$lib/data/reader-db';
-import { countKanji, recordKanjiSeen } from './kanji-seen';
+import { countKanji, recordKanjiSeen } from '../words/kanji-seen';
 import { activityWeeks, learnerStats } from './learner-stats';
 
 const stat = (title: string, dateKey: string, charactersRead: number, extra = {}) =>

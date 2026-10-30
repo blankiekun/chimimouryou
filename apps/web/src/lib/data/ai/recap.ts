@@ -10,10 +10,10 @@
  * before the reading position. Nothing past the position is sent. Not part of upstream.
  */
 
-import { accountReady } from '$lib/data/account';
-import { resolveFeature } from '$lib/data/ai-connections';
-import { aiPrompts } from '$lib/data/ai-prompts';
-import { askAi } from '$lib/data/ask-ai';
+import { accountReady } from '$lib/data/account/account';
+import { resolveFeature } from '$lib/data/ai/ai-connections';
+import { aiPrompts } from '$lib/data/ai/ai-prompts';
+import { askAi } from '$lib/data/ai/ask-ai';
 import { readerDb } from '$lib/data/reader-db';
 import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v3';
 import { displayText, type SearchIndex } from '$lib/functions/book-text/book-search';

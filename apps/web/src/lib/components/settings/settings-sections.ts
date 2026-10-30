@@ -102,7 +102,7 @@ export const settingsAreas: SettingsArea[] = [
       }
     ]
   },
-  // The built-in dictionary (lib/data/dictionary.ts), in Yomitan's own sections.
+  // The built-in dictionary (lib/data/dictionary/dictionary.ts), in Yomitan's own sections.
   {
     id: 'dictionary',
     label: 'settings.area.dictionary',

@@ -4,7 +4,7 @@ import { version } from '$app/env';
 import { assets, immutable, prerendered as prerenderedPaths } from '$app/manifest';
 
 import { pagePath } from '$lib/data/env';
-import { shareCacheName, sharePath, stashSharedFiles } from '$lib/data/launch-files';
+import { shareCacheName, sharePath, stashSharedFiles } from '$lib/data/standalone/launch-files';
 import { toSearchParams } from '$lib/functions/to-search-params';
 import { staleServiceWorkerCaches, swCachePrefix } from '$lib/functions/service-worker-caches';
 

@@ -13,7 +13,7 @@
  * where estimates must be comparable (reading rank). Not part of upstream.
  */
 
-import release from '$lib/data/difficulty-engine.json';
+import release from '$lib/data/difficulty/difficulty-engine.json';
 
 export const canonicalEngine: string = release.engine;
 

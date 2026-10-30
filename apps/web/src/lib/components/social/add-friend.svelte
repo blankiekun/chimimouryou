@@ -2,14 +2,14 @@
   import PointBox from '$lib/components/point-box.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import { pagePath } from '$lib/data/env';
-  import { sendFriendRequest } from '$lib/data/social';
+  import { sendFriendRequest } from '$lib/data/social/social';
   import {
     formatCode,
     hubErrorKey,
     newFriendCode,
     normalizeCode,
     socialSession$
-  } from '$lib/data/social-account';
+  } from '$lib/data/social/social-account';
   import { t$ } from '$lib/i18n';
   import qrcode from 'qrcode-generator';
   import { onMount } from 'svelte';

@@ -26,7 +26,7 @@
     type PlacementAnswer,
     type PlacementItem,
     type PlacementResult
-  } from '$lib/data/placement';
+  } from '$lib/data/difficulty/placement';
   import { t$, type MessageKey } from '$lib/i18n';
   import { convertToKanaIME } from '$lib/vendor/yomitan/language/ja/japanese-wanakana';
   import { onMount, tick } from 'svelte';

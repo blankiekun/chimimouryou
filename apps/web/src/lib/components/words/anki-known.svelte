@@ -2,9 +2,14 @@
   import ButtonToggleGroup from '$lib/components/button-toggle-group/button-toggle-group.svelte';
   import type { ToggleOption } from '$lib/components/button-toggle-group/toggle-option';
   import SectionHead from '$lib/components/section-head.svelte';
-  import { ankiInvoke, ankiKnownDeck$, ankiKnownField$, ankiKnownWords$ } from '$lib/data/anki';
+  import {
+    ankiInvoke,
+    ankiKnownDeck$,
+    ankiKnownField$,
+    ankiKnownWords$
+  } from '$lib/data/dictionary/anki';
   import { pagePath } from '$lib/data/env';
-  import { knownWords$, refreshKnownWords } from '$lib/data/known-words';
+  import { knownWords$, refreshKnownWords } from '$lib/data/words/known-words';
   import { t$ } from '$lib/i18n';
 
   /** The Words page's Anki section: the deck and field whose mature cards count as known. */

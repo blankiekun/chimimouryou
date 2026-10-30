@@ -7,14 +7,14 @@
 /** The AI tools (Ask AI, the Story tab with Story so far and the lore, AI voice) as a plugin. Not part of upstream. */
 
 import { faBookOpen, faRobot, faWandMagicSparkles } from '@fortawesome/free-solid-svg-icons';
-import AskAiPanel from '$lib/components/book-reader/ask-ai-panel.svelte';
-import StoryPanel from '$lib/components/book-reader/story-panel.svelte';
-import TtsPlayer from '$lib/components/book-reader/tts-player.svelte';
-import SettingsAi from '$lib/components/settings/settings-ai.svelte';
-import { featureReady } from '$lib/data/ai-connections';
-import { syncExtras } from '$lib/data/extras-sync';
-import { autoUpdateLorebook } from '$lib/data/lorebook';
-import { synthesizeSpeech } from '$lib/data/tts';
+import AskAiPanel from '$lib/components/ai/ask-ai-panel.svelte';
+import StoryPanel from '$lib/components/ai/story-panel.svelte';
+import TtsPlayer from '$lib/components/audio/tts-player.svelte';
+import SettingsAi from '$lib/components/ai/settings-ai.svelte';
+import { featureReady } from '$lib/data/ai/ai-connections';
+import { syncExtras } from '$lib/data/sync/extras-sync';
+import { autoUpdateLorebook } from '$lib/data/ai/lorebook';
+import { synthesizeSpeech } from '$lib/data/audio/tts';
 import type { Plugin } from '$lib/plugins';
 
 export const aiPlugin: Plugin = {

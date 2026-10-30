@@ -9,8 +9,8 @@
     hiddenBooks$,
     monthName,
     setBookHidden
-  } from '$lib/data/social';
-  import { socialSession$ } from '$lib/data/social-account';
+  } from '$lib/data/social/social';
+  import { socialSession$ } from '$lib/data/social/social-account';
   import { t$, uiLanguage$ } from '$lib/i18n';
   import { activePlugins$ } from '$lib/plugins';
 

@@ -2,7 +2,7 @@
   import { faCheck, faXmark } from '@fortawesome/free-solid-svg-icons';
   import BookCard from '$lib/components/book-card/book-card.svelte';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-  import { isFinished } from '$lib/components/book-card/library-filters';
+  import { isFinished } from '$lib/data/library/library-filters';
   import { longPress } from '$lib/functions/use-long-press';
   import { createEventDispatcher } from 'svelte';
   import Fa from 'svelte-fa';

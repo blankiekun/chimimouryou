@@ -3,7 +3,7 @@
   import type { ToggleOption } from '$lib/components/button-toggle-group/toggle-option';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
-  import SettingsAnkiDictionary from '$lib/components/settings/settings-anki-dictionary.svelte';
+  import SettingsAnkiDictionary from '$lib/components/dictionary/settings-anki-dictionary.svelte';
   import {
     ankiAudioField$,
     ankiConnectUrl$,
@@ -15,8 +15,8 @@
     ankiSentenceField$,
     ankiVnAudio$,
     ankiVnScreenshot$
-  } from '$lib/data/anki';
-  import { learningGuideUrl } from '$lib/data/app-update';
+  } from '$lib/data/dictionary/anki';
+  import { learningGuideUrl } from '$lib/data/standalone/app-update';
   import { t$ } from '$lib/i18n';
   import { activePlugins$ } from '$lib/plugins';
 

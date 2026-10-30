@@ -6,8 +6,8 @@
 
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
-import { chapterPrimer } from '$lib/data/chapter-primer';
-import type { ReadingsFile } from '$lib/data/generated-furigana';
+import { chapterPrimer } from '$lib/data/words/chapter-primer';
+import type { ReadingsFile } from '$lib/data/words/generated-furigana';
 
 // Words 0 (先生), 1 (本), 2 (電報); one occurrence every 2 characters.
 const words: [string, string | null][] = [

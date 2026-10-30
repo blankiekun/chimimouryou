@@ -9,7 +9,7 @@ core.py or core.ts) are left out: they give the same numbers (checked on 20 Aozo
 books when this was added).
 
 `python3 engine.py` prints this release's canonical fingerprint (the bundled list, the pinned
-yurigana and dictionary, nothing added) as apps/web/src/lib/data/difficulty-engine.json, which the
+yurigana and dictionary, nothing added) as apps/web/src/lib/data/difficulty/difficulty-engine.json, which the
 app compares estimates with (isCanonicalEstimate); test_engine.py checks the committed file.
 `python3 engine.py --record` writes engine-code.json (ENGINE_VERSION and the scoring Python's
 hash), which test_engine.py checks too, so no code change goes by without deciding on a bump.

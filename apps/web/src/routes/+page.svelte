@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { readerPath } from '$lib/data/reader-route';
+  import { readerPath } from '$lib/data/reader/reader-route';
   import { database } from '$lib/data/store';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { observe } from '$lib/functions/rxjs/use-observable';

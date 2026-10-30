@@ -2,7 +2,7 @@
   import Switch from '$lib/components/switch.svelte';
   /**
    * Settings → Dictionary lookups: the built-in dictionary's settings in Yomitan's own sections
-   * and options shape (lib/data/dictionary.ts). Popup, Scanning, Audio and Shortcuts are in
+   * and options shape (lib/data/dictionary/dictionary.ts). Popup, Scanning, Audio and Shortcuts are in
    * settings-dictionary-popup.svelte. Not part of upstream.
    */
   import { faArrowDown, faArrowUp } from '@fortawesome/free-solid-svg-icons';
@@ -13,7 +13,7 @@
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
   import InstallDictionary from '$lib/components/dictionary/install-dictionary.svelte';
-  import DictionaryCollectionImport from '$lib/components/settings/dictionary-collection-import.svelte';
+  import DictionaryCollectionImport from '$lib/components/dictionary/dictionary-collection-import.svelte';
   import {
     builtInLookups$,
     builtInLookupsChoice$,
@@ -31,8 +31,8 @@
     setDictionaryOptions,
     updateProfileOptions,
     yomitanOptions$
-  } from '$lib/data/dictionary';
-  import { yomitanSeen$ } from '$lib/data/yomitan';
+  } from '$lib/data/dictionary/dictionary';
+  import { yomitanSeen$ } from '$lib/data/dictionary/yomitan';
   import { downloadBlob } from '$lib/functions/file-dom/download-blob';
   import { inputFile } from '$lib/functions/file-dom/input-file';
   import { t$ } from '$lib/i18n';

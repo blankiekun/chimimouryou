@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const catalog = vi.hoisted(() => ({ fails: false }));
 
-vi.mock('$lib/data/calibre', () => ({
+vi.mock('$lib/data/remote/calibre', () => ({
   loadCalibreCatalog: async () => {
     if (catalog.fails) throw new Error('HTTP 401');
     return [{ title: 'Calibre' }];
@@ -18,7 +18,7 @@ vi.mock('$lib/data/calibre', () => ({
 
 const { database } = await import('$lib/data/store');
 const { readerDb } = await import('$lib/data/reader-db');
-const { releaseReaderData } = await import('$lib/data/reader-data-owner');
+const { releaseReaderData } = await import('$lib/data/account/reader-data-owner');
 
 async function seed() {
   const db = await database.db;

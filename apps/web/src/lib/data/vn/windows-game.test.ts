@@ -7,7 +7,7 @@
 import { File as NodeFile } from 'node:buffer';
 import { Uint8ArrayReader, Uint8ArrayWriter, ZipWriter, configure } from '@zip.js/zip.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { isVn, vnInfo } from '$lib/data/vn';
+import { isVn, vnInfo } from '$lib/data/vn/vn';
 import {
   compatFromTuning,
   compatParams,
@@ -27,7 +27,7 @@ import {
   zipGameFiles,
   type HookThread,
   type VnboxCompat
-} from '$lib/data/windows-game';
+} from '$lib/data/vn/windows-game';
 
 describe('windowsPrograms', () => {
   it('puts the likeliest game first: no setup or config tools, shallow, large', () => {

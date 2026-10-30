@@ -7,7 +7,7 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 
-import { recordKanjiText } from '$lib/data/kanji-seen';
+import { recordKanjiText } from '$lib/data/words/kanji-seen';
 import { readerDb } from '$lib/data/reader-db';
 
 describe('recordKanjiText', () => {

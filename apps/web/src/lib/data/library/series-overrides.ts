@@ -12,10 +12,10 @@
  */
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-import { loadCalibreCatalog } from '$lib/data/calibre';
-import { serverless } from '$lib/data/server-connect';
+import { loadCalibreCatalog } from '$lib/data/remote/calibre';
+import { serverless } from '$lib/data/remote/server-connect';
 import { isSeriesName, splitVolume } from '$lib/functions/split-volume';
-import { apiVersion, putRow, syncMirror } from '$lib/data/server-api';
+import { apiVersion, putRow, syncMirror } from '$lib/data/remote/server-api';
 
 export interface SeriesOverride {
   series: string;
@@ -221,7 +221,9 @@ function sameOverrides(a: SeriesOverrides, b: SeriesOverrides) {
  * browser's copy changed. Nothing is sent without such a source.
  */
 export async function syncBrowserSeries() {
-  const { readerSyncSource, syncFileStore, syncJsonFile } = await import('$lib/data/sync-files');
+  const { readerSyncSource, syncFileStore, syncJsonFile } = await import(
+    '$lib/data/sync/sync-files'
+  );
   // Never the Calibre source: it has its own shared series.json (`saveSeriesOverrides`).
   const store = await syncFileStore(readerSyncSource());
   let changed = false;

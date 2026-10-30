@@ -1,9 +1,9 @@
 <script lang="ts">
   import { createEventDispatcher, tick } from 'svelte';
-  import { loadModels } from '$lib/data/ai-client';
-  import { aiConnectionCache$, type AiModel } from '$lib/data/ai-connections';
-  import type { AiProvider } from '$lib/data/ai-providers';
-  import { modelShortName, type AiConnection } from '$lib/data/ai-settings';
+  import { loadModels } from '$lib/data/ai/ai-client';
+  import { aiConnectionCache$, type AiModel } from '$lib/data/ai/ai-connections';
+  import type { AiProvider } from '$lib/data/ai/ai-providers';
+  import { modelShortName, type AiConnection } from '$lib/data/ai/ai-settings';
   import { t$, type MessageKey } from '$lib/i18n';
   import { formatContext, formatPrice, freeTag } from './ai-format';
 

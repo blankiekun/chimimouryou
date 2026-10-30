@@ -10,7 +10,7 @@
  * Not part of upstream.
  */
 
-import { learningGuideUrl } from '$lib/data/app-update';
+import { learningGuideUrl } from '$lib/data/standalone/app-update';
 import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
 import { storage } from '$lib/data/window/navigator/storage';
 import { writableSubject } from '$lib/functions/svelte/store';

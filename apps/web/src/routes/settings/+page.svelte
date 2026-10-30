@@ -7,19 +7,19 @@
   import { map, share, tap } from 'rxjs';
   import Fa from 'svelte-fa';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
-  import ImportMenu from '$lib/components/book-card/import-menu.svelte';
-  import { setPendingImport, type PendingImport } from '$lib/data/library-home';
+  import ImportMenu from '$lib/components/library/import-menu.svelte';
+  import { setPendingImport, type PendingImport } from '$lib/data/library/library-home';
   import SettingsAccount from '$lib/components/settings/settings-account.svelte';
   import InstallHint from '$lib/components/standalone/install-hint.svelte';
-  import SettingsAnalysisTools from '$lib/components/standalone/settings-analysis-tools.svelte';
+  import SettingsAnalysisTools from '$lib/components/analysis/settings-analysis-tools.svelte';
   import SettingsSync from '$lib/components/standalone/settings-sync.svelte';
   import SettingsLanguage from '$lib/components/settings/settings-language.svelte';
   import SettingsPlugins from '$lib/components/settings/settings-plugins.svelte';
   import { activePlugins$, plugins } from '$lib/plugins';
-  import { aiFeatureState$ } from '$lib/data/ai-connections';
-  import SettingsAnki from '$lib/components/settings/settings-anki.svelte';
-  import SettingsDictionary from '$lib/components/settings/settings-dictionary.svelte';
-  import SettingsDictionaryPopup from '$lib/components/settings/settings-dictionary-popup.svelte';
+  import { aiFeatureState$ } from '$lib/data/ai/ai-connections';
+  import SettingsAnki from '$lib/components/dictionary/settings-anki.svelte';
+  import SettingsDictionary from '$lib/components/dictionary/settings-dictionary.svelte';
+  import SettingsDictionaryPopup from '$lib/components/dictionary/settings-dictionary-popup.svelte';
   import SettingsContent from '$lib/components/settings/settings-content.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
   import {
@@ -31,8 +31,8 @@
     settingsAreas,
     type SettingsView
   } from '$lib/components/settings/settings-sections';
-  import SettingsThemeMode from '$lib/components/settings/settings-theme-mode.svelte';
-  import SettingsThemes from '$lib/components/settings/settings-themes.svelte';
+  import SettingsThemeMode from '$lib/components/theme/settings-theme-mode.svelte';
+  import SettingsThemes from '$lib/components/theme/settings-themes.svelte';
   import { pagePath, standalone } from '$lib/data/env';
   import {
     addCharactersOnCompletion$,

@@ -12,10 +12,10 @@
  * uploaded anywhere. Not upstream.
  */
 
-import { hookCleaner, type HookCleanup } from '$lib/data/hook-cleanup';
+import { hookCleaner, type HookCleanup } from '$lib/data/vn/hook-cleanup';
 import { pagePath } from '$lib/data/env';
-import { hashPage, isVn, vnElementHtml, vnInfo, type VnInfo } from '$lib/data/vn';
-import { formatBytes } from '$lib/data/vn-upload';
+import { hashPage, isVn, vnElementHtml, vnInfo, type VnInfo } from '$lib/data/vn/vn';
+import { formatBytes } from '$lib/data/vn/vn-upload';
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import { BlobReader, WritableStreamWriter, ZipReader, type Entry } from '@zip.js/zip.js';
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ankiKnownWords$ } from '$lib/data/anki';
+  import { ankiKnownWords$ } from '$lib/data/dictionary/anki';
   import { pagePath } from '$lib/data/env';
   import {
     placementAt,
@@ -8,8 +8,8 @@
     placementOffered$,
     placementResults$,
     placementWords
-  } from '$lib/data/placement';
-  import { getWordsSummary } from '$lib/data/words-met';
+  } from '$lib/data/difficulty/placement';
+  import { getWordsSummary } from '$lib/data/words/words-met';
   import { t$ } from '$lib/i18n';
   import { onMount } from 'svelte';
 

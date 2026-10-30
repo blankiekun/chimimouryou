@@ -2,18 +2,18 @@
   import { faChevronLeft, faXmark } from '@fortawesome/free-solid-svg-icons';
   import AnnotationsPanel from '$lib/components/book-reader/annotations-panel.svelte';
   import BookSearchPanel from '$lib/components/book-reader/book-search-panel.svelte';
-  import ListenPanel from '$lib/components/book-reader/listen-panel.svelte';
+  import ListenPanel from '$lib/components/audio/listen-panel.svelte';
   import {
     nextChapter$,
     type SectionWithProgress
   } from '$lib/components/book-reader/book-toc/book-toc';
-  import type { Highlight } from '$lib/data/annotations';
-  import type { ChapterPrimer } from '$lib/data/chapter-primer';
+  import type { Highlight } from '$lib/data/reader/annotations';
+  import type { ChapterPrimer } from '$lib/data/words/chapter-primer';
   import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v3';
-  import { contentsRows, readerPanelTabs, type PanelTab } from '$lib/data/reader-panel';
+  import { contentsRows, readerPanelTabs, type PanelTab } from '$lib/data/reader/reader-panel';
   import type { SearchIndex, SearchResult } from '$lib/functions/book-text/book-search';
   import { activePlugins$, type SelectionActionContribution } from '$lib/plugins';
-  import type { PassageContext } from '$lib/data/ask-ai';
+  import type { PassageContext } from '$lib/data/ai/ask-ai';
   import { sheetDrag } from '$lib/functions/sheet-drag';
   import { createEventDispatcher } from 'svelte';
   import { t$ } from '$lib/i18n';

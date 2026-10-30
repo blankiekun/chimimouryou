@@ -6,7 +6,7 @@
 
 import 'fake-indexeddb/auto';
 import { describe, expect, it, vi } from 'vitest';
-import type { BookWord } from '$lib/data/book-words';
+import type { BookWord } from '$lib/data/words/book-words';
 import {
   formMarked,
   markEntry,
@@ -14,9 +14,9 @@ import {
   markedWordsCsv,
   marksOf,
   selectionForm
-} from '$lib/data/word-marks';
+} from '$lib/data/words/word-marks';
 
-vi.mock('$lib/data/extras-sync', () => ({
+vi.mock('$lib/data/sync/extras-sync', () => ({
   pullKanji: async () => {},
   kanjiChanged: () => {},
   pullWordMarks: async () => {},

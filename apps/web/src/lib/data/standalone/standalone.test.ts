@@ -35,10 +35,10 @@ describe('standalone edition', () => {
   });
 
   it('never asks the server for the catalog, estimates or the session', async () => {
-    const calibre = await import('$lib/data/calibre');
-    const account = await import('$lib/data/account');
-    const { loadSeriesOverrides } = await import('$lib/data/series-overrides');
-    const { loadBookMetadata } = await import('$lib/data/book-metadata');
+    const calibre = await import('$lib/data/remote/calibre');
+    const account = await import('$lib/data/account/account');
+    const { loadSeriesOverrides } = await import('$lib/data/library/series-overrides');
+    const { loadBookMetadata } = await import('$lib/data/library/book-metadata');
 
     expect(await calibre.loadCalibreCatalog()).toEqual([]);
     expect(await calibre.loadCalibreDifficulty()).toEqual({});
@@ -50,7 +50,7 @@ describe('standalone edition', () => {
 
   it('logs texthooker and manual immersion without a request', async () => {
     await import('fake-indexeddb/auto');
-    const log = await import('$lib/data/immersion-log');
+    const log = await import('$lib/data/stats/immersion-log');
 
     await log.addImmersionTime('hook', 'vn', 'ゲーム', 30, 12);
     await log.getImmersionLog();
@@ -59,7 +59,7 @@ describe('standalone edition', () => {
   });
 
   it('sends nothing to the social hub before signing up, or while social is off', async () => {
-    const social = await import('$lib/data/social');
+    const social = await import('$lib/data/social/social');
     const { activePlugins } = await import('$lib/plugins');
 
     await social.loadFriends();
@@ -86,9 +86,9 @@ describe('standalone edition', () => {
   it('never syncs settings with the hub, even signed in with social on', async () => {
     // jsdom has no matchMedia; the theme store reads it on import.
     vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {} }));
-    const sync = await import('$lib/data/account-settings-sync');
+    const sync = await import('$lib/data/account/account-settings-sync');
     const { enabledPlugins$ } = await import('$lib/plugins/plugin-settings');
-    const { socialSession$ } = await import('$lib/data/social-account');
+    const { socialSession$ } = await import('$lib/data/social/social-account');
 
     sync.startSettingsSync(null);
     await sync.syncAccountSettings();
@@ -102,7 +102,7 @@ describe('standalone edition', () => {
   it('reads Community anonymously only when asked, never with social off, and writes nothing signed out', async () => {
     fetchMock.mockImplementation(async () => new Response('{"posts":[],"next":null}'));
 
-    const community = await import('$lib/data/community');
+    const community = await import('$lib/data/social/community');
     const plugins = await import('$lib/plugins');
 
     // Loading the module (as the app does) asks nothing.
@@ -122,7 +122,7 @@ describe('standalone edition', () => {
   });
 
   it('asks the hub nothing for Community replies or line links signed out, or with social off', async () => {
-    const book = await import('$lib/data/community-book');
+    const book = await import('$lib/data/social/community-book');
     const plugins = await import('$lib/plugins');
 
     // Home's replies need a hub account; a line link with social off goes nowhere.
@@ -136,7 +136,7 @@ describe('standalone edition', () => {
       JSON.stringify({ token: 't', me: { id: 'a', share: {} } })
     );
     vi.resetModules();
-    await (await import('$lib/data/community-book')).refreshNotes();
+    await (await import('$lib/data/social/community-book')).refreshNotes();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -147,7 +147,7 @@ describe('standalone edition', () => {
     );
 
     const plugins = await import('$lib/plugins');
-    const { markBookOnOpen } = await import('$lib/data/community-book');
+    const { markBookOnOpen } = await import('$lib/data/social/community-book');
     const getIndex = async () => ({ paragraphs: [{ text: '本文の一行目です。', startCount: 0 }] });
 
     plugins.setPluginEnabled('social', false);
@@ -168,7 +168,7 @@ describe('standalone edition', () => {
     const { default: PlacementTest } = await import(
       '$lib/components/placement/placement-test.svelte'
     );
-    const placement = await import('$lib/data/placement');
+    const placement = await import('$lib/data/difficulty/placement');
     const target = document.createElement('div');
     const test = new PlacementTest({ target, props: { shared: true } });
     const click = async (text: string) => {
@@ -195,7 +195,7 @@ describe('standalone edition', () => {
     const { default: PlacementTest } = await import(
       '$lib/components/placement/placement-test.svelte'
     );
-    const placement = await import('$lib/data/placement');
+    const placement = await import('$lib/data/difficulty/placement');
     const items = await placement.loadHardItems();
     const target = document.createElement('div');
     // Connected, so its form submits.
@@ -256,7 +256,7 @@ describe('standalone edition', () => {
 
     it('offers the Calibre source and reads the catalog with the token, without cookies', async () => {
       const view = await import('$lib/data/storage/storage-view');
-      const calibre = await import('$lib/data/calibre');
+      const calibre = await import('$lib/data/remote/calibre');
 
       fetchMock.mockImplementation(async (url: string) =>
         url.endsWith('/version')
@@ -290,7 +290,7 @@ describe('standalone edition', () => {
     });
 
     it('leaves other URLs alone', async () => {
-      const { serverUrl } = await import('$lib/data/server-connect');
+      const { serverUrl } = await import('$lib/data/remote/server-connect');
 
       expect(serverUrl('/calibre/sync/a')).toBe('https://books.example/calibre/sync/a');
       expect(serverUrl('/jiten/search')).toBe('/jiten/search');
@@ -299,7 +299,7 @@ describe('standalone edition', () => {
 
     it('is ignored by the self-hosted build', async () => {
       vi.stubEnv('VITE_EDITION', '');
-      const { serverConnected, serverUrl } = await import('$lib/data/server-connect');
+      const { serverConnected, serverUrl } = await import('$lib/data/remote/server-connect');
 
       expect(serverConnected).toBe(false);
       expect(serverUrl('/calibre/catalog.json')).toBe('/calibre/catalog.json');
@@ -307,7 +307,7 @@ describe('standalone edition', () => {
   });
 
   it('accepts only https server addresses', async () => {
-    const { serverOrigin } = await import('$lib/data/server-connect');
+    const { serverOrigin } = await import('$lib/data/remote/server-connect');
 
     expect(serverOrigin('books.example/')).toBe('https://books.example');
     expect(serverOrigin(' https://books.example:8443/x ')).toBe('https://books.example:8443');
@@ -322,9 +322,9 @@ describe('standalone edition', () => {
     );
 
     const plugins = await import('$lib/plugins');
-    const hooks = await import('$lib/data/reader-hooks');
-    const discord = await import('$lib/data/discord');
-    const { discordOptions$ } = await import('$lib/data/discord-settings');
+    const hooks = await import('$lib/data/reader/reader-hooks');
+    const discord = await import('$lib/data/discord/discord');
+    const { discordOptions$ } = await import('$lib/data/discord/discord-settings');
     const hubCalls = () =>
       fetchMock.mock.calls.filter(([url]) => String(url).includes('/v1/presence'));
     // Fake timers drive the hub sends and fake-indexeddb (setImmediate) too: the waits below
@@ -357,9 +357,11 @@ describe('standalone edition', () => {
     fetchMock.mockImplementation(async () => new Response(null, { status: 404 }));
 
     const plugins = await import('$lib/plugins');
-    const hooks = await import('$lib/data/reader-hooks');
-    const discord = await import('$lib/data/discord');
-    const { discordActivities$, discordOptions$ } = await import('$lib/data/discord-settings');
+    const hooks = await import('$lib/data/reader/reader-hooks');
+    const discord = await import('$lib/data/discord/discord');
+    const { discordActivities$, discordOptions$ } = await import(
+      '$lib/data/discord/discord-settings'
+    );
     // Fake timers, as above.
     vi.useFakeTimers();
     const searches = () =>
@@ -389,10 +391,12 @@ describe('standalone edition', () => {
     fetchMock.mockImplementation(async () => new Response(null, { status: 404 }));
 
     const plugins = await import('$lib/plugins');
-    const hooks = await import('$lib/data/reader-hooks');
-    const discord = await import('$lib/data/discord');
-    const { socialSession$ } = await import('$lib/data/social-account');
-    const { discordActivities$, discordOptions$ } = await import('$lib/data/discord-settings');
+    const hooks = await import('$lib/data/reader/reader-hooks');
+    const discord = await import('$lib/data/discord/discord');
+    const { socialSession$ } = await import('$lib/data/social/social-account');
+    const { discordActivities$, discordOptions$ } = await import(
+      '$lib/data/discord/discord-settings'
+    );
     // Fake timers, as above.
     vi.useFakeTimers();
     const coverCalls = () =>
@@ -426,8 +430,8 @@ describe('standalone edition', () => {
   });
 
   it('offers no library cover upload and sends nothing, even signed in as a dev', async () => {
-    const covers = await import('$lib/data/library-covers');
-    const { socialSession$ } = await import('$lib/data/social-account');
+    const covers = await import('$lib/data/library/library-covers');
+    const { socialSession$ } = await import('$lib/data/social/social-account');
 
     socialSession$.next({ token: 't', me: { id: 'a', role: 'dev', share: {} } as never });
     expect(covers.libraryCoversAvailable).toBe(false);
@@ -440,8 +444,8 @@ describe('standalone edition', () => {
     fetchMock.mockImplementation(async () => new Response(null, { status: 204 }));
 
     const plugins = await import('$lib/plugins');
-    const hooks = await import('$lib/data/reader-hooks');
-    const discord = await import('$lib/data/discord');
+    const hooks = await import('$lib/data/reader/reader-hooks');
+    const discord = await import('$lib/data/discord/discord');
     // Fake timers, as above.
     vi.useFakeTimers();
     const addonCalls = () =>

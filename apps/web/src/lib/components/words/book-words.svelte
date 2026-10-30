@@ -3,23 +3,29 @@
   import SectionHead from '$lib/components/section-head.svelte';
   import KnownBecause from '$lib/components/words/known-because.svelte';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-  import { localWordList } from '$lib/data/analysis-tools';
+  import { localWordList } from '$lib/data/analysis/analysis-tools';
   import {
     downloadWordsCsv,
     wordCoverage,
     type BookWord,
     type WordTotals
-  } from '$lib/data/book-words';
-  import { loadCalibreDifficulty, type CalibreDifficulty } from '$lib/data/calibre';
+  } from '$lib/data/words/book-words';
+  import { loadCalibreDifficulty, type CalibreDifficulty } from '$lib/data/remote/calibre';
   import {
     bookWordGroups,
     getKnownSet,
     refreshKnownWordsIfStale,
     type KnownSet
-  } from '$lib/data/known-words';
-  import { markEntry, marksOf, setWordMarks, wordMark, wordMarks$ } from '$lib/data/word-marks';
-  import { knownMinCount, wordList } from '$lib/data/words-met';
-  import { placementCutoff$ } from '$lib/data/placement';
+  } from '$lib/data/words/known-words';
+  import {
+    markEntry,
+    marksOf,
+    setWordMarks,
+    wordMark,
+    wordMarks$
+  } from '$lib/data/words/word-marks';
+  import { knownMinCount, wordList } from '$lib/data/words/words-met';
+  import { placementCutoff$ } from '$lib/data/difficulty/placement';
   import { t$, tr } from '$lib/i18n';
   import { createEventDispatcher, onMount } from 'svelte';
 

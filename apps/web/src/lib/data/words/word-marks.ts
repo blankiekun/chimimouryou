@@ -13,10 +13,10 @@
  */
 
 import { BehaviorSubject } from 'rxjs';
-import { csvField, type BookWord } from '$lib/data/book-words';
-import { pullWordMarks, wordMarksChanged } from '$lib/data/extras-sync';
+import { csvField, type BookWord } from '$lib/data/words/book-words';
+import { pullWordMarks, wordMarksChanged } from '$lib/data/sync/extras-sync';
 import { readerDb } from '$lib/data/reader-db';
-import { estimatedBooks, estimatedWordList } from '$lib/data/words-met';
+import { estimatedBooks, estimatedWordList } from '$lib/data/words/words-met';
 
 export type WordStatus = 'known' | 'ignored';
 

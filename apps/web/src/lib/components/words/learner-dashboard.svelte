@@ -1,23 +1,23 @@
 <script lang="ts">
   import PointBox from '$lib/components/point-box.svelte';
   import ReadingRankRow from '$lib/components/reading-rank/reading-rank-row.svelte';
-  import { learningGuideUrl } from '$lib/data/app-update';
+  import { learningGuideUrl } from '$lib/data/standalone/app-update';
   import {
     activityWeeks,
     learnerStats,
     type ActivityDay,
     type LearnerStats
-  } from '$lib/data/learner-stats';
-  import { placementCutoff$ } from '$lib/data/placement';
-  import { pullAccountStatistics } from '$lib/data/statistics-sync';
+  } from '$lib/data/stats/learner-stats';
+  import { placementCutoff$ } from '$lib/data/difficulty/placement';
+  import { pullAccountStatistics } from '$lib/data/stats/statistics-sync';
   import { database, startDayHoursForTracker$, statisticsEnabled$ } from '$lib/data/store';
   import {
     getWordsSummary,
     knownMinCount,
     saveReadProgress,
     type WordsSummary
-  } from '$lib/data/words-met';
-  import { gainedThisMonth, getKnownHistory } from '$lib/data/words-history';
+  } from '$lib/data/words/words-met';
+  import { gainedThisMonth, getKnownHistory } from '$lib/data/words/words-history';
   import { getDateKey } from '$lib/functions/statistic-util';
   import { t$, uiLanguage$ } from '$lib/i18n';
   import { formatDuration } from '$lib/functions/format-time';

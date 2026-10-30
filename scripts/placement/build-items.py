@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds the placement check's items (apps/web/src/lib/data/placement-items.json).
+"""Builds the placement check's items (apps/web/src/lib/data/difficulty/placement-items.json).
 
 Real words are sampled from Jiten's frequency list (engine/data/,
 CC BY-SA 4.0), a few per rank band: kanji words in dictionary form whose
@@ -36,7 +36,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 FREQ = ROOT / 'engine/data/jiten_freq_global.zip'
-OUT = ROOT / 'apps/web/src/lib/data/placement-items.json'
+OUT = ROOT / 'apps/web/src/lib/data/difficulty/placement-items.json'
 
 # Upper rank of each band (the first starts at 1), log-spaced: the test (placement.ts) walks
 # up and down these bands one at a time, so each needs enough words for several visits.

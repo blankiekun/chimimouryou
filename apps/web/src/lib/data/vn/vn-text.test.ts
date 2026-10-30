@@ -5,8 +5,8 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import { VnReading, vnTextSource } from '$lib/data/vn-text';
-import { vnboxLines } from '$lib/data/vn';
+import { VnReading, vnTextSource } from '$lib/data/vn/vn-text';
+import { vnboxLines } from '$lib/data/vn/vn';
 
 const options = { statistics: true, startDayHours: 0 };
 const sjis = (text: string) => new Uint8Array(new TextEncoder().encode(text));

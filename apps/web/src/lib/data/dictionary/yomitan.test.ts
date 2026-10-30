@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { isYomitanPopup, watchYomitan, yomitanSeen$ } from '$lib/data/yomitan';
+import { isYomitanPopup, watchYomitan, yomitanSeen$ } from '$lib/data/dictionary/yomitan';
 
 describe('isYomitanPopup', () => {
   it('knows the popup frame, not other elements', () => {

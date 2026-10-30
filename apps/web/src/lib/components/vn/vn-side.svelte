@@ -3,7 +3,7 @@
    * The VN player's (/v) column under the game (beside it on phones held sideways): notices,
    * the text panel or "ended", and the progress line. Not upstream.
    */
-  import type { VnLine } from '$lib/data/vn';
+  import type { VnLine } from '$lib/data/vn/vn';
 
   interface Props {
     /** Set when synced saves were written by a newer engine; Dismiss clears it. */

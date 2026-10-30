@@ -31,7 +31,7 @@ import { writableSubject } from '$lib/functions/svelte/store';
 import { writableStorageSubject } from '$lib/data/internal/writable-storage-subject';
 import { localStorage } from '$lib/data/window/local-storage';
 import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
-import { yomitanSeen$ } from '$lib/data/yomitan';
+import { yomitanSeen$ } from '$lib/data/dictionary/yomitan';
 
 export type { DictionarySummary, LookupResult, Options as YomitanOptions };
 
@@ -90,9 +90,12 @@ type Request = DictionaryRequest extends infer R
 
 function call<T>(request: Request, onProgress?: Progress) {
   if (!worker) {
-    worker = new Worker(new URL('../functions/dictionary/dictionary.worker.ts', import.meta.url), {
-      type: 'module'
-    });
+    worker = new Worker(
+      new URL('../../functions/dictionary/dictionary.worker.ts', import.meta.url),
+      {
+        type: 'module'
+      }
+    );
     worker.onmessage = ({ data }: MessageEvent<DictionaryResponse>) => {
       const waiting = pending.get(data.id);
       if (!waiting) return;
@@ -341,7 +344,9 @@ export async function importYomitanSettings(json: string) {
   const installed = await call<DictionarySummary[]>({ type: 'list' });
   saveYomitanOptions(ensureDictionarySettings(options, installed, false));
   // Its Anki card format too, for the popup's Add to Anki (kept apart: it follows the account).
-  const { dictionaryAnki$, dictionaryAnkiFromYomitan } = await import('$lib/data/anki-dictionary');
+  const { dictionaryAnki$, dictionaryAnkiFromYomitan } = await import(
+    '$lib/data/dictionary/anki-dictionary'
+  );
   const anki = dictionaryAnkiFromYomitan(options);
   if (anki) dictionaryAnki$.next(anki);
 }

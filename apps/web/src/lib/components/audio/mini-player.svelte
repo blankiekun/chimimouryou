@@ -5,7 +5,7 @@
     faPause,
     faPlay
   } from '@fortawesome/free-solid-svg-icons';
-  import { nextRate, nowPlaying$ } from '$lib/data/now-playing';
+  import { nextRate, nowPlaying$ } from '$lib/data/audio/now-playing';
   import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';
 

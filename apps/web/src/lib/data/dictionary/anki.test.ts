@@ -12,7 +12,7 @@ import {
   vnLineFor,
   watchAddedNotes,
   type AnkiNote
-} from '$lib/data/anki';
+} from '$lib/data/dictionary/anki';
 
 describe('vnLineFor', () => {
   // A page growing click by click, then the next page.

@@ -6,7 +6,7 @@
     countBookCards,
     libraryFilterLabel,
     libraryFilterSections
-  } from '$lib/components/book-card/library-filters';
+  } from '$lib/data/library/library-filters';
   import { libraryCollapsedFilterSections$ } from '$lib/data/store';
   import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';

@@ -1,7 +1,11 @@
 <script lang="ts">
   import SectionHead from '$lib/components/section-head.svelte';
   import { pagePath } from '$lib/data/env';
-  import { latestPlacement, placementResults$, placementWords } from '$lib/data/placement';
+  import {
+    latestPlacement,
+    placementResults$,
+    placementWords
+  } from '$lib/data/difficulty/placement';
   import { t$ } from '$lib/i18n';
 
   /** The Words page's placement check: the current results and links to (re)take them. */

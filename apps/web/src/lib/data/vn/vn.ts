@@ -11,7 +11,7 @@
  * the player for the text panel (Yomitan), statistics and progress. Not upstream.
  */
 
-import type { HookCleanup } from '$lib/data/hook-cleanup';
+import type { HookCleanup } from '$lib/data/vn/hook-cleanup';
 import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
 import { readerDb } from '$lib/data/reader-db';
 import { countTextCharacters } from '$lib/functions/get-character-count';

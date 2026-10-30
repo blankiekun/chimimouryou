@@ -1,20 +1,20 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
-  import { AiError, loadModels, testConnection } from '$lib/data/ai-client';
+  import { AiError, loadModels, testConnection } from '$lib/data/ai/ai-client';
   import {
     aiConnectionCache$,
     connectionKey,
     deleteConnection,
     saveConnection,
     type AiConnectionTest
-  } from '$lib/data/ai-connections';
+  } from '$lib/data/ai/ai-connections';
   import {
     aiProviders,
     findProvider,
     type AiProvider,
     type AiProviderGroup
-  } from '$lib/data/ai-providers';
-  import type { AiConnection } from '$lib/data/ai-settings';
+  } from '$lib/data/ai/ai-providers';
+  import type { AiConnection } from '$lib/data/ai/ai-settings';
   import { t$, type MessageKey } from '$lib/i18n';
   import AiTestResult from './ai-test-result.svelte';
   import { whenTested } from './ai-format';

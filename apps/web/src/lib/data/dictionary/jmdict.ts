@@ -5,7 +5,7 @@
  */
 
 import { pagePath } from '$lib/data/env';
-import { importDictionary } from '$lib/data/dictionary';
+import { importDictionary } from '$lib/data/dictionary/dictionary';
 
 /**
  * JMdict (EDRDG, CC BY-SA 4.0) as jmdict-yomitan's English zip, served same-origin: the Pages

@@ -31,8 +31,8 @@ import {
   Subject,
   switchMap
 } from 'rxjs';
-import { foldReadings, type BookWord, type WordTotals } from '$lib/data/book-words';
-import type { CalibreDifficulty } from '$lib/data/calibre';
+import { foldReadings, type BookWord, type WordTotals } from '$lib/data/words/book-words';
+import type { CalibreDifficulty } from '$lib/data/remote/calibre';
 import { pagePath, standalone } from '$lib/data/env';
 import { StorageSourceDefault } from '$lib/data/storage/storage-types';
 import {
@@ -40,7 +40,7 @@ import {
   furiganaProgress$,
   generatedReadings$,
   type ReadingsFile
-} from '$lib/data/generated-furigana';
+} from '$lib/data/words/generated-furigana';
 import { chapterPrimer$, generatedFurigana$, unknownWordUnderline$ } from '$lib/data/store';
 import { readerDb } from '$lib/data/reader-db';
 import type {
@@ -55,7 +55,7 @@ import {
   toolsFile,
   type AnalysisToolsManifest
 } from '$lib/functions/analysis/tools-files';
-import { analysisKeepAlive, analysisWorkers } from '$lib/data/analysis-capacity';
+import { analysisKeepAlive, analysisWorkers } from '$lib/data/analysis/analysis-capacity';
 import { CORE_VERSION, type CoreNumbers } from '$lib/functions/analysis/core';
 
 const base = () => new URL(`${pagePath}/analysis-tools/`, location.href).href;
@@ -277,7 +277,7 @@ export async function downloadAnalysisTools(wanted: AnalysisFeature[]) {
     );
     analysisDownload$.next(undefined);
     // The books already stored get what the new tools make.
-    import('$lib/data/background-analysis')
+    import('$lib/data/analysis/background-analysis')
       .then(({ analyseStoredBooks }) => analyseStoredBooks())
       .catch((error) => console.warn('Background analysis:', error));
   } catch (error) {
@@ -489,7 +489,7 @@ export function nextJob<S extends { html: string; busy: boolean }>(
 }
 
 const newSession = (html: string): Session => ({
-  worker: new Worker(new URL('../functions/analysis/analysis.worker.ts', import.meta.url), {
+  worker: new Worker(new URL('../../functions/analysis/analysis.worker.ts', import.meta.url), {
     type: 'module'
   }),
   html,

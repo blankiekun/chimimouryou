@@ -1,6 +1,6 @@
 <script lang="ts">
-  import AudiobookPlayer from '$lib/components/book-reader/audiobook-player.svelte';
-  import { getAudiobook, type BookAudiobook } from '$lib/data/audiobook';
+  import AudiobookPlayer from '$lib/components/audio/audiobook-player.svelte';
+  import { getAudiobook, type BookAudiobook } from '$lib/data/audio/audiobook';
   import { activePlugins$ } from '$lib/plugins';
   import type { SearchIndex } from '$lib/functions/book-text/book-search';
   import { createEventDispatcher, onMount } from 'svelte';

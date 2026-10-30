@@ -6,10 +6,10 @@
 
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
-import { installWay } from '$lib/data/install-app';
-import { showsExternalReadHint } from '$lib/data/standalone-storage';
+import { installWay } from '$lib/data/standalone/install-app';
+import { showsExternalReadHint } from '$lib/data/standalone/standalone-storage';
 import { StorageKey } from '$lib/data/storage/storage-types';
-import { syncEnded, syncState$, syncView, type SyncState } from '$lib/data/sync-status';
+import { syncEnded, syncState$, syncView, type SyncState } from '$lib/data/sync/sync-status';
 
 const idle: SyncState = {
   running: undefined,

@@ -4,9 +4,9 @@
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import ProfileView from '$lib/components/social/profile-view.svelte';
   import { pagePath } from '$lib/data/env';
-  import { libraryTab$ } from '$lib/data/library-home';
-  import { localCovers, loadProfile, type Profile } from '$lib/data/social';
-  import { hubErrorKey, socialSession$ } from '$lib/data/social-account';
+  import { libraryTab$ } from '$lib/data/library/library-home';
+  import { localCovers, loadProfile, type Profile } from '$lib/data/social/social';
+  import { hubErrorKey, socialSession$ } from '$lib/data/social/social-account';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { t$ } from '$lib/i18n';
   import { activePlugins$ } from '$lib/plugins';

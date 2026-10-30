@@ -14,7 +14,7 @@ import {
   mangaTextState$,
   makeMangaText,
   removeMangaText
-} from '$lib/data/manga-ocr';
+} from '$lib/data/manga/manga-ocr';
 
 describe('manga text', () => {
   afterEach(() => vi.unstubAllGlobals());

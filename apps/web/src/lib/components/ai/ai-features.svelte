@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { aiFeatureState$, setFeature } from '$lib/data/ai-connections';
+  import { aiFeatureState$, setFeature } from '$lib/data/ai/ai-connections';
   import {
     aiConnections$,
     aiFeatures$,
     modelShortName,
     type AiFeature,
     type AiTextFeature
-  } from '$lib/data/ai-settings';
+  } from '$lib/data/ai/ai-settings';
   import { t$, type MessageKey } from '$lib/i18n';
   import AiAdvanced from './ai-advanced.svelte';
   import AiModelPicker from './ai-model-picker.svelte';

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { mentionQuery, searchMentions } from '$lib/data/community-mentions';
+  import { mentionQuery, searchMentions } from '$lib/data/social/community-mentions';
   import { t$ } from '$lib/i18n';
 
   /**

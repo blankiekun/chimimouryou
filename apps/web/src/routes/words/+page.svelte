@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
-  import ImportMenu from '$lib/components/book-card/import-menu.svelte';
+  import ImportMenu from '$lib/components/library/import-menu.svelte';
   import PointBox from '$lib/components/point-box.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import AnkiKnown from '$lib/components/words/anki-known.svelte';
@@ -12,19 +12,19 @@
     analysisToolsState$,
     analysisToolsSupported,
     checkAnalysisTools
-  } from '$lib/data/analysis-tools';
-  import { ankiKnownWords$ } from '$lib/data/anki';
+  } from '$lib/data/analysis/analysis-tools';
+  import { ankiKnownWords$ } from '$lib/data/dictionary/anki';
   import { pagePath, selfHostingGuideUrl } from '$lib/data/env';
-  import { placementCutoff$ } from '$lib/data/placement';
-  import { serverless } from '$lib/data/server-connect';
-  import { readerSyncSource } from '$lib/data/sync-files';
-  import { knownWords$ } from '$lib/data/known-words';
-  import { setPendingImport, type PendingImport } from '$lib/data/library-home';
-  import { pullAccountStatistics } from '$lib/data/statistics-sync';
+  import { placementCutoff$ } from '$lib/data/difficulty/placement';
+  import { serverless } from '$lib/data/remote/server-connect';
+  import { readerSyncSource } from '$lib/data/sync/sync-files';
+  import { knownWords$ } from '$lib/data/words/known-words';
+  import { setPendingImport, type PendingImport } from '$lib/data/library/library-home';
+  import { pullAccountStatistics } from '$lib/data/stats/statistics-sync';
   import { database, startDayHoursForTracker$ } from '$lib/data/store';
-  import { markedWords, marksSignature, wordMarks$ } from '$lib/data/word-marks';
-  import { gainedThisMonth, getKnownHistory } from '$lib/data/words-history';
-  import { getWordsSummary, knownMinCount, type WordsSummary } from '$lib/data/words-met';
+  import { markedWords, marksSignature, wordMarks$ } from '$lib/data/words/word-marks';
+  import { gainedThisMonth, getKnownHistory } from '$lib/data/words/words-history';
+  import { getWordsSummary, knownMinCount, type WordsSummary } from '$lib/data/words/words-met';
   import { getDateKey } from '$lib/functions/statistic-util';
   import { t$ } from '$lib/i18n';
   import { map, share } from 'rxjs';

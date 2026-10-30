@@ -17,12 +17,12 @@
 import { BehaviorSubject, map, merge, skip, type Subscription } from 'rxjs';
 import type { ParsedStore } from '$lib/data/internal/writable-storage-subject';
 import { isRecord } from '$lib/data/setting-parsers';
-import { mangaSeriesModes$ } from '$lib/data/manga';
-import { mergePlacementResults, placementResults$ } from '$lib/data/placement';
-import { mergeRankState, readingRank$ } from '$lib/data/reading-rank';
+import { mangaSeriesModes$ } from '$lib/data/manga/manga';
+import { mergePlacementResults, placementResults$ } from '$lib/data/difficulty/placement';
+import { mergeRankState, readingRank$ } from '$lib/data/stats/reading-rank';
 import { uiLanguage$ } from '$lib/i18n';
-import type { AccountUser } from '$lib/data/account';
-import { readerSyncStore, syncJsonFile } from '$lib/data/sync-files';
+import type { AccountUser } from '$lib/data/account/account';
+import { readerSyncStore, syncJsonFile } from '$lib/data/sync/sync-files';
 import {
   aiConnections$,
   aiFeatures$,
@@ -34,22 +34,22 @@ import {
   lorebookAutoInterval$,
   ttsPlaybackRate$,
   ttsVoiceId$
-} from '$lib/data/ai-settings';
-import { dictionaryAnki$ } from '$lib/data/anki-dictionary';
-import { mergeConnections } from '$lib/data/ai-connections';
+} from '$lib/data/ai/ai-settings';
+import { dictionaryAnki$ } from '$lib/data/dictionary/anki-dictionary';
+import { mergeConnections } from '$lib/data/ai/ai-connections';
 import {
   homeBookTitles$,
   homeRemovedTitles$,
   mergeHomeRemovals,
   mergeHomeTitles
-} from '$lib/data/library-home';
+} from '$lib/data/library/library-home';
 import { logger } from '$lib/data/logger';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
-import { audiobookshelfToken$ } from '$lib/data/audiobookshelf';
-import { audiobookControls$ } from '$lib/data/audiobook-controls';
-import { socialSession$ } from '$lib/data/social-account';
-import { communityMatchAsked$, communityWorks$ } from '$lib/data/community';
-import { discordActivities$, discordOptions$ } from '$lib/data/discord-settings';
+import { audiobookshelfToken$ } from '$lib/data/audio/audiobookshelf';
+import { audiobookControls$ } from '$lib/data/audio/audiobook-controls';
+import { socialSession$ } from '$lib/data/social/social-account';
+import { communityMatchAsked$, communityWorks$ } from '$lib/data/social/community';
+import { discordActivities$, discordOptions$ } from '$lib/data/discord/discord-settings';
 import {
   autoBookmark$,
   autoBookmarkTime$,

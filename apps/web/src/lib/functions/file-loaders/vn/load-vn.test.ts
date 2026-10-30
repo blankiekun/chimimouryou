@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BlobReader, Uint8ArrayWriter, ZipWriter, configure } from '@zip.js/zip.js';
 import loadCbz from '../cbz/load-cbz';
 import { loadVnFolder, vnFolderSize } from './load-vn';
-import { isVn, vnInfo } from '$lib/data/vn';
+import { isVn, vnInfo } from '$lib/data/vn/vn';
 
 // jsdom has no Worker.
 configure({ useWebWorkers: false });

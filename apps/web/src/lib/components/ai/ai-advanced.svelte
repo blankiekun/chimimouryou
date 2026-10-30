@@ -1,19 +1,19 @@
 <script lang="ts">
   import Switch from '$lib/components/switch.svelte';
-  import { acceptedParams } from '$lib/data/ai-client';
+  import { acceptedParams } from '$lib/data/ai/ai-client';
   import {
     aiConnectionCache$,
     aiFeatureState$,
     featureSetting,
     setFeature
-  } from '$lib/data/ai-connections';
-  import type { AiProvider } from '$lib/data/ai-providers';
+  } from '$lib/data/ai/ai-connections';
+  import type { AiProvider } from '$lib/data/ai/ai-providers';
   import {
     aiFeatureDefaults,
     type AiSamplers,
     type AiTextFeature,
     type ReasoningEffort
-  } from '$lib/data/ai-settings';
+  } from '$lib/data/ai/ai-settings';
   import { t$, type MessageKey } from '$lib/i18n';
 
   export let feature: AiTextFeature;

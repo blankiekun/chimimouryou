@@ -13,7 +13,7 @@
     analysisToolsSupported,
     checkAnalysisTools,
     downloadAnalysisTools
-  } from '$lib/data/analysis-tools';
+  } from '$lib/data/analysis/analysis-tools';
   import { pagePath } from '$lib/data/env';
   import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
   import { t$ } from '$lib/i18n';

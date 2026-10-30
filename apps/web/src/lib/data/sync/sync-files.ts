@@ -13,7 +13,7 @@
  * Not part of upstream.
  */
 
-import { serverSyncFiles, type SyncFileName } from '$lib/data/server-rows';
+import { serverSyncFiles, type SyncFileName } from '$lib/data/remote/server-rows';
 import { FilesystemStorageHandler } from '$lib/data/storage/handler/filesystem-handler';
 import { GDriveStorageHandler } from '$lib/data/storage/handler/gdrive-handler';
 import { OneDriveStorageHandler } from '$lib/data/storage/handler/onedrive-handler';
@@ -34,7 +34,7 @@ import {
   syncTarget$
 } from '$lib/data/store';
 import { MergeMode } from '$lib/data/merge-mode';
-import { recordSyncError } from '$lib/data/sync-status';
+import { recordSyncError } from '$lib/data/sync/sync-status';
 import {
   AutoReplicationType,
   ReplicationSaveBehavior

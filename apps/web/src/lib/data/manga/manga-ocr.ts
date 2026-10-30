@@ -17,9 +17,9 @@ import {
   analysisToolsSupported,
   runWorker,
   type AnalysisToolsState
-} from '$lib/data/analysis-tools';
-import { mangaPages } from '$lib/data/manga';
-import { saveLocalMokuro, type MokuroPage } from '$lib/data/mokuro';
+} from '$lib/data/analysis/analysis-tools';
+import { mangaPages } from '$lib/data/manga/manga';
+import { saveLocalMokuro, type MokuroPage } from '$lib/data/manga/mokuro';
 import { database } from '$lib/data/store';
 import type { MangaOcrMessage, MangaOcrRequest } from '$lib/functions/manga-ocr/manga-ocr.worker';
 
@@ -177,7 +177,7 @@ export async function makeMangaText(title: string) {
 
   try {
     await runWorker<MangaOcrMessage>(
-      new Worker(new URL('../functions/manga-ocr/manga-ocr.worker.ts', import.meta.url), {
+      new Worker(new URL('../../functions/manga-ocr/manga-ocr.worker.ts', import.meta.url), {
         type: 'module'
       }),
       {

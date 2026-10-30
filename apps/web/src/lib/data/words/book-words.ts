@@ -10,8 +10,8 @@
  * list, and their CSV export for Anki. Not part of upstream.
  */
 
-import { serverFetch } from '$lib/data/server-connect';
-import { difficultyApiUrl } from '$lib/data/calibre';
+import { serverFetch } from '$lib/data/remote/server-connect';
+import { difficultyApiUrl } from '$lib/data/remote/calibre';
 
 /**
  * Form, reading (null when the analyser has none), count in the book, Jiten frequency rank

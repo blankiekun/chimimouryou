@@ -7,7 +7,7 @@
 /**
  * Transcribes an audiobook with Whisper (transformers.js, WebGPU when available)
  * in a worker: decodes the audio with Mediabunny a few minutes at a time and
- * posts the cues of each block. Started by lib/data/whisper.ts. Not part of upstream.
+ * posts the cues of each block. Started by lib/data/audio/whisper.ts. Not part of upstream.
  */
 
 import { env, pipeline } from '@huggingface/transformers';
@@ -20,7 +20,7 @@ import {
   whisperRate,
   type WhisperChunk
 } from '$lib/functions/audiobook/whisper-audio';
-import type { WhisperMessage, WhisperRequest } from '$lib/data/whisper';
+import type { WhisperMessage, WhisperRequest } from '$lib/data/audio/whisper';
 
 // The runtime from this site rather than a CDN.
 env.backends.onnx.wasm!.wasmPaths = { mjs: ortMjs, wasm: ortWasm };

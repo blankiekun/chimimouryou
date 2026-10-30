@@ -6,9 +6,14 @@
     faPlay,
     faSpinner
   } from '@fortawesome/free-solid-svg-icons';
-  import { deviceVoiceName$, ttsPlaybackRate$, ttsRates, ttsVoiceId$ } from '$lib/data/ai-settings';
-  import { nowPlayingPublisher } from '$lib/data/now-playing';
-  import { aiFeatureState$ } from '$lib/data/ai-connections';
+  import {
+    deviceVoiceName$,
+    ttsPlaybackRate$,
+    ttsRates,
+    ttsVoiceId$
+  } from '$lib/data/ai/ai-settings';
+  import { nowPlayingPublisher } from '$lib/data/audio/now-playing';
+  import { aiFeatureState$ } from '$lib/data/ai/ai-connections';
   import {
     deviceSpeechAvailable,
     deviceUtterance,
@@ -20,8 +25,8 @@
     synthesizeSpeech,
     timelineEntryAt,
     type TimelineEntry
-  } from '$lib/data/tts';
-  import { TtsAudioCache } from '$lib/data/tts-audio-cache';
+  } from '$lib/data/audio/tts';
+  import { TtsAudioCache } from '$lib/data/audio/tts-audio-cache';
   import {
     buildReadingChunks,
     displayReadingText,

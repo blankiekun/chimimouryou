@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import hardItems from '$lib/data/placement-hard-items.json';
+import hardItems from '$lib/data/difficulty/placement-hard-items.json';
 import {
   hardGuess,
   nextItem,
@@ -15,7 +15,7 @@ import {
   scorePlacement,
   type HardItem,
   type PlacementAnswer
-} from '$lib/data/placement';
+} from '$lib/data/difficulty/placement';
 
 const items = hardItems.items as HardItem[];
 

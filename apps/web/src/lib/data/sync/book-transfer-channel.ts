@@ -5,9 +5,9 @@
  */
 
 import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
-import { isManga } from '$lib/data/manga';
+import { isManga } from '$lib/data/manga/manga';
 import { bookContent } from '$lib/data/book-content';
-import { isVn } from '$lib/data/vn';
+import { isVn } from '$lib/data/vn/vn';
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import { parseBookHtml } from '$lib/functions/file-loaders/utils/sanitize-book-html';
 import { sha256 } from '@noble/hashes/sha2';

@@ -12,11 +12,11 @@ import type { ProfileOptions } from '$lib/vendor/yomitan/types/settings';
 import { getPosition } from '$lib/vendor/yomitan/app/popup-position';
 import { hotkeyAction } from '$lib/functions/dictionary/hotkeys';
 import { matchingInput } from '$lib/functions/dictionary/scan';
-import { customUrl, jpod101Url } from '$lib/data/dictionary-audio';
+import { customUrl, jpod101Url } from '$lib/data/dictionary/dictionary-audio';
 import { internalQuery, safeExternalUrl } from './structured-content';
 import TermEntry from './term-entry.svelte';
 
-vi.mock('$lib/data/dictionary', () => ({ getDictionaryMedia: async () => null }));
+vi.mock('$lib/data/dictionary/dictionary', () => ({ getDictionaryMedia: async () => null }));
 
 let options: ProfileOptions;
 
@@ -99,7 +99,9 @@ describe('TermEntry', () => {
   });
 
   it('shows Add to Anki once a card format is set', async () => {
-    const { dictionaryAnki$, dictionaryAnkiRoute$ } = await import('$lib/data/anki-dictionary');
+    const { dictionaryAnki$, dictionaryAnkiRoute$ } = await import(
+      '$lib/data/dictionary/anki-dictionary'
+    );
     const ankiContext = {
       url: '',
       documentTitle: '',

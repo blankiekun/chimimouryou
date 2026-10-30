@@ -1,6 +1,10 @@
 <script lang="ts">
   import { faTrash, faXmark } from '@fortawesome/free-solid-svg-icons';
-  import { highlightColors, type Highlight, type HighlightColor } from '$lib/data/annotations';
+  import {
+    highlightColors,
+    type Highlight,
+    type HighlightColor
+  } from '$lib/data/reader/annotations';
   import { createEventDispatcher, onMount } from 'svelte';
   import { t$ } from '$lib/i18n';
   import Fa from 'svelte-fa';

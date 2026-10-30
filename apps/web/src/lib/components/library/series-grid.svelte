@@ -1,7 +1,7 @@
 <script lang="ts">
   import { faCheck, faPlus } from '@fortawesome/free-solid-svg-icons';
   import BookCard from '$lib/components/book-card/book-card.svelte';
-  import { addToHome, homeBookTitles$, type SeriesGroup } from '$lib/data/library-home';
+  import { addToHome, homeBookTitles$, type SeriesGroup } from '$lib/data/library/library-home';
   import { createEventDispatcher } from 'svelte';
   import Fa from 'svelte-fa';
 

@@ -18,8 +18,8 @@
  * when the reader changes. Not part of upstream.
  */
 
-import { coreFormRanks, localEstimates, localWordList } from '$lib/data/analysis-tools';
-import { ankiKnownWords$ } from '$lib/data/anki';
+import { coreFormRanks, localEstimates, localWordList } from '$lib/data/analysis/analysis-tools';
+import { ankiKnownWords$ } from '$lib/data/dictionary/anki';
 import {
   foldReadings,
   isNoiseWord,
@@ -29,15 +29,15 @@ import {
   withTotals,
   type BookWord,
   type WordTotals
-} from '$lib/data/book-words';
+} from '$lib/data/words/book-words';
 import {
   difficultyApiUrl,
   loadCalibreCatalog,
   loadCalibreDifficulty,
   type CalibreDifficulty
-} from '$lib/data/calibre';
-import { getKanjiSeen, type KanjiSeen } from '$lib/data/kanji-seen';
-import { getKnownWords } from '$lib/data/known-words';
+} from '$lib/data/remote/calibre';
+import { getKanjiSeen, type KanjiSeen } from '$lib/data/words/kanji-seen';
+import { getKnownWords } from '$lib/data/words/known-words';
 import {
   knownChance,
   placementAt,
@@ -45,10 +45,10 @@ import {
   placementResults$,
   placementWords,
   type PlacementEstimate
-} from '$lib/data/placement';
+} from '$lib/data/difficulty/placement';
 import { readerDb } from '$lib/data/reader-db';
-import { serverFetch, serverless } from '$lib/data/server-connect';
-import { getWordMarks, wordMark, type WordMarks } from '$lib/data/word-marks';
+import { serverFetch, serverless } from '$lib/data/remote/server-connect';
+import { getWordMarks, wordMark, type WordMarks } from '$lib/data/words/word-marks';
 
 /** Times a word must be met to count as known. */
 export const knownMinCount = 8;

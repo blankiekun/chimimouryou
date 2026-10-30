@@ -19,7 +19,7 @@ import {
   seriesGroups,
   standaloneReadNext
 } from './library-home';
-import { filterBookCards, seriesFilterKey } from '$lib/components/book-card/library-filters';
+import { filterBookCards, seriesFilterKey } from '$lib/data/library/library-filters';
 
 const card = (title: string, series?: string, seriesIndex?: number, authors = '') =>
   ({ id: title.length, title, series, seriesIndex, authors }) as BookCardProps;

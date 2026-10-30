@@ -12,12 +12,12 @@
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 import { ServerStorageHandler } from '$lib/data/storage/handler/server-handler';
-import { isContinueReading } from '$lib/data/library-home';
+import { isContinueReading } from '$lib/data/library/library-home';
 import { logger } from '$lib/data/logger';
 import { database } from '$lib/data/store';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
 import { MergeMode } from '$lib/data/merge-mode';
-import { serverless } from '$lib/data/server-connect';
+import { serverless } from '$lib/data/remote/server-connect';
 
 let pending: string[] | undefined;
 let running: Promise<void> | undefined;

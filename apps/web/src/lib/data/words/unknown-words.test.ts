@@ -6,9 +6,9 @@
 
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
-import type { BookWord } from '$lib/data/book-words';
-import type { ReadingsFile } from '$lib/data/generated-furigana';
-import { spansWithin, unknownSpans } from '$lib/data/unknown-words';
+import type { BookWord } from '$lib/data/words/book-words';
+import type { ReadingsFile } from '$lib/data/words/generated-furigana';
+import { spansWithin, unknownSpans } from '$lib/data/words/unknown-words';
 
 // 先生が本を食べた。三本 一
 const readings: ReadingsFile = {

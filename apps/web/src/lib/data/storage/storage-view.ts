@@ -5,7 +5,7 @@
  */
 
 import { StorageKey, StorageSourceDefault } from '$lib/data/storage/storage-types';
-import { nativeDrive } from '$lib/data/android-drive';
+import { nativeDrive } from '$lib/data/standalone/android-drive';
 import {
   gDriveAuthEndpoint,
   gDriveClientId,
@@ -16,7 +16,7 @@ import {
   standalone
 } from '$lib/data/env';
 
-import { serverless } from '$lib/data/server-connect';
+import { serverless } from '$lib/data/remote/server-connect';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 import { writableSubject } from '$lib/functions/svelte/store';
 import { faBookOpen } from '@fortawesome/free-solid-svg-icons';

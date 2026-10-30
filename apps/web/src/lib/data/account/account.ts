@@ -19,7 +19,7 @@ import {
   responseJson,
   serverConnected,
   serverFetch
-} from '$lib/data/server-connect';
+} from '$lib/data/remote/server-connect';
 
 export interface AccountUser {
   id: string;

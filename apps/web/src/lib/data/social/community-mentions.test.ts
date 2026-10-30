@@ -6,7 +6,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/data/book-metadata', () => ({
+vi.mock('$lib/data/library/book-metadata', () => ({
   searchMetadata: vi.fn(async (kind: string) =>
     kind === 'vn'
       ? [{ title: 'Ever17', url: 'https://vndb.org/v17' }]

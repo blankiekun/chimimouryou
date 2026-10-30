@@ -13,23 +13,23 @@
  */
 
 import { openDB, type DBSchema } from 'idb';
-import type { BookAnnotations } from '$lib/data/annotations';
-import type { BookAudiobook } from '$lib/data/audiobook';
-import type { LocalEstimate, LocalWordList } from '$lib/data/analysis-tools';
-import type { LocalMokuro } from '$lib/data/mokuro';
-import type { WhisperSubtitles } from '$lib/data/whisper';
-import type { CachedReadings } from '$lib/data/generated-furigana';
-import type { ImmersionLog } from '$lib/data/immersion-log';
-import type { AbsSubtitles } from '$lib/data/audiobookshelf';
-import type { BookKanji } from '$lib/data/book-kanji';
-import type { KanjiSeen } from '$lib/data/kanji-seen';
-import type { CoverageCache, KnownWords } from '$lib/data/known-words';
-import type { Lorebook } from '$lib/data/lorebook';
-import type { BookRecaps } from '$lib/data/recap';
-import type { VnRead } from '$lib/data/vn';
-import type { WordMarks } from '$lib/data/word-marks';
-import type { HistoryCache } from '$lib/data/words-history';
-import type { WordList, WordsMetCache } from '$lib/data/words-met';
+import type { BookAnnotations } from '$lib/data/reader/annotations';
+import type { BookAudiobook } from '$lib/data/audio/audiobook';
+import type { LocalEstimate, LocalWordList } from '$lib/data/analysis/analysis-tools';
+import type { LocalMokuro } from '$lib/data/manga/mokuro';
+import type { WhisperSubtitles } from '$lib/data/audio/whisper';
+import type { CachedReadings } from '$lib/data/words/generated-furigana';
+import type { ImmersionLog } from '$lib/data/stats/immersion-log';
+import type { AbsSubtitles } from '$lib/data/audio/audiobookshelf';
+import type { BookKanji } from '$lib/data/words/book-kanji';
+import type { KanjiSeen } from '$lib/data/words/kanji-seen';
+import type { CoverageCache, KnownWords } from '$lib/data/words/known-words';
+import type { Lorebook } from '$lib/data/ai/lorebook';
+import type { BookRecaps } from '$lib/data/ai/recap';
+import type { VnRead } from '$lib/data/vn/vn';
+import type { WordMarks } from '$lib/data/words/word-marks';
+import type { HistoryCache } from '$lib/data/words/words-history';
+import type { WordList, WordsMetCache } from '$lib/data/words/words-met';
 
 interface ReaderDb extends DBSchema {
   annotations: { key: string; value: BookAnnotations };

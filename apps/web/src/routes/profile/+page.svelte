@@ -1,20 +1,20 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
-  import ImportMenu from '$lib/components/book-card/import-menu.svelte';
+  import ImportMenu from '$lib/components/library/import-menu.svelte';
   import PointBox from '$lib/components/point-box.svelte';
   import ReadingRankRow from '$lib/components/reading-rank/reading-rank-row.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import RoleBadge from '$lib/components/social/role-badge.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
-  import { account$ } from '$lib/data/account';
+  import { account$ } from '$lib/data/account/account';
   import { pagePath, standalone } from '$lib/data/env';
-  import { learnerStats, type LearnerStats } from '$lib/data/learner-stats';
-  import { setPendingImport, type PendingImport } from '$lib/data/library-home';
-  import { socialSession$ } from '$lib/data/social-account';
-  import { pullAccountStatistics } from '$lib/data/statistics-sync';
+  import { learnerStats, type LearnerStats } from '$lib/data/stats/learner-stats';
+  import { setPendingImport, type PendingImport } from '$lib/data/library/library-home';
+  import { socialSession$ } from '$lib/data/social/social-account';
+  import { pullAccountStatistics } from '$lib/data/stats/statistics-sync';
   import { database, startDayHoursForTracker$, statisticsEnabled$ } from '$lib/data/store';
-  import { getWordsSummary, type WordsSummary } from '$lib/data/words-met';
+  import { getWordsSummary, type WordsSummary } from '$lib/data/words/words-met';
   import { getDateKey } from '$lib/functions/statistic-util';
   import { t$ } from '$lib/i18n';
   import { formatDuration } from '$lib/functions/format-time';

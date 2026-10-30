@@ -11,13 +11,13 @@ import { fakeApi, type FakeApi } from '$lib/data/test-utils/fake-api';
 
 let user: { id: string } | null = null;
 
-vi.mock('$lib/data/account', () => ({ accountReady: async () => user }));
+vi.mock('$lib/data/account/account', () => ({ accountReady: async () => user }));
 
 let api: FakeApi;
 
 async function load() {
   vi.resetModules();
-  return import('$lib/data/server-api');
+  return import('$lib/data/remote/server-api');
 }
 
 beforeEach(() => {

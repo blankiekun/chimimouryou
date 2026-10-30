@@ -8,7 +8,7 @@
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
   import ServerConnect from '$lib/components/standalone/server-connect.svelte';
   import SettingsStorageSourceList from '$lib/components/settings/settings-storage-source-list.svelte';
-  import { exportBackup, libraryHandler, restoreBackup } from '$lib/data/backup';
+  import { exportBackup, libraryHandler, restoreBackup } from '$lib/data/sync/backup';
   import { selfHostingGuideUrl, storageRootName } from '$lib/data/env';
   import {
     chooseStorage,
@@ -20,13 +20,13 @@
     pickFolder,
     signInToDrive,
     signOutOfDrive
-  } from '$lib/data/standalone-storage';
-  import { serverConnected } from '$lib/data/server-connect';
+  } from '$lib/data/standalone/standalone-storage';
+  import { serverConnected } from '$lib/data/remote/server-connect';
   import { isAppDefault } from '$lib/data/storage/storage-source-manager';
   import { defaultStorageSources, StorageKey } from '$lib/data/storage/storage-types';
   import { isStorageSourceAvailable, storageSource$ } from '$lib/data/storage/storage-view';
   import { autoReplication$, database, isOnline$ } from '$lib/data/store';
-  import { formatAgo, syncEnded, syncStarted, syncState$ } from '$lib/data/sync-status';
+  import { formatAgo, syncEnded, syncStarted, syncState$ } from '$lib/data/sync/sync-status';
   import { inputFile } from '$lib/functions/file-dom/input-file';
   import { AutoReplicationType } from '$lib/functions/replication/replication-options';
   import { map } from 'rxjs';

@@ -13,7 +13,7 @@
     whisperState$,
     type WhisperSource,
     type WhisperSubtitles
-  } from '$lib/data/whisper';
+  } from '$lib/data/audio/whisper';
   import { createEventDispatcher, onDestroy } from 'svelte';
   import { t$, tr } from '$lib/i18n';
   import Fa from 'svelte-fa';

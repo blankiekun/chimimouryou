@@ -12,7 +12,7 @@
     loadYomitanOptions,
     noDictionaryNoteSeen$,
     refreshDictionaries
-  } from '$lib/data/dictionary';
+  } from '$lib/data/dictionary/dictionary';
   import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
   import { t$ } from '$lib/i18n';
 

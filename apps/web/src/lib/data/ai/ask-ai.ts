@@ -9,9 +9,9 @@
  * (ai-client.ts). Not part of upstream.
  */
 
-import { aiPrompts } from '$lib/data/ai-prompts';
-import { chat } from '$lib/data/ai-client';
-import { askAiReaderNote$, type AiTextFeature } from '$lib/data/ai-settings';
+import { aiPrompts } from '$lib/data/ai/ai-prompts';
+import { chat } from '$lib/data/ai/ai-client';
+import { askAiReaderNote$, type AiTextFeature } from '$lib/data/ai/ai-settings';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';

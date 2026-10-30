@@ -5,7 +5,7 @@
  */
 
 /**
- * Community on the app's side (the UI's helpers around lib/data/community.ts): a book's lines with
+ * Community on the app's side (the UI's helpers around lib/data/social/community.ts): a book's lines with
  * their character counts (the spoiler guard, markers, Post to community), the line deep link,
  * which local book a work is, whether the reader passed a line there (the feed's spoiler blur),
  * the markers the reader shows, and replies to the reader's posts for Home. Not part of upstream.
@@ -13,7 +13,7 @@
 
 import { BehaviorSubject } from 'rxjs';
 import { pagePath } from '$lib/data/env';
-import { loadBookMetadata } from '$lib/data/book-metadata';
+import { loadBookMetadata } from '$lib/data/library/book-metadata';
 import {
   communityMatchAsked$,
   communityOn,
@@ -33,9 +33,9 @@ import {
   type CommunityPost,
   type ThreadSummary,
   type VisibleThread
-} from '$lib/data/community';
+} from '$lib/data/social/community';
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
-import { HubError, socialSession$ } from '$lib/data/social-account';
+import { HubError, socialSession$ } from '$lib/data/social/social-account';
 import type { MessageKey } from '$lib/i18n';
 import type { SearchIndex } from '$lib/functions/book-text/book-search';
 import { countCharacters } from '$lib/functions/book-text/text-positions';

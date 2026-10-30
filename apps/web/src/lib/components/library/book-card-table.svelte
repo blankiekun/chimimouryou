@@ -1,8 +1,8 @@
 <script lang="ts">
   import { faArrowDown, faCheck, faTrash } from '@fortawesome/free-solid-svg-icons';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-  import DifficultyBadge from '$lib/components/book-card/difficulty-badge.svelte';
-  import { formatSeries } from '$lib/components/book-card/library-sort';
+  import DifficultyBadge from '$lib/components/difficulty/difficulty-badge.svelte';
+  import { formatSeries } from '$lib/data/library/library-sort';
   import { SortDirection, type SortOption } from '$lib/data/sort-types';
   import { longPress } from '$lib/functions/use-long-press';
   import { relativeTime } from '$lib/functions/format-time';

@@ -1,10 +1,10 @@
 <script lang="ts">
-  import AiLanguageToggle from '$lib/components/ai-language-toggle.svelte';
-  import LorebookPanel from '$lib/components/book-reader/lorebook-panel.svelte';
-  import RecapPanel from '$lib/components/book-reader/recap-panel.svelte';
-  import { modelShortName } from '$lib/data/ai-settings';
+  import AiLanguageToggle from '$lib/components/ai/ai-language-toggle.svelte';
+  import LorebookPanel from '$lib/components/ai/lorebook-panel.svelte';
+  import RecapPanel from '$lib/components/ai/recap-panel.svelte';
+  import { modelShortName } from '$lib/data/ai/ai-settings';
   import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v3';
-  import { recapModel } from '$lib/data/recap';
+  import { recapModel } from '$lib/data/ai/recap';
   import type { SearchIndex } from '$lib/functions/book-text/book-search';
 
   /**

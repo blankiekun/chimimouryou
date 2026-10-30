@@ -14,8 +14,8 @@ import {
   sendBlob,
   unpackBook,
   type TransferChannel
-} from '$lib/data/book-transfer-channel';
-import { mangaElementHtml } from '$lib/data/manga';
+} from '$lib/data/sync/book-transfer-channel';
+import { mangaElementHtml } from '$lib/data/manga/manga';
 
 // jsdom's Blob has no arrayBuffer() or text(); browsers do.
 function read<T>(blob: Blob, how: 'readAsArrayBuffer' | 'readAsText') {

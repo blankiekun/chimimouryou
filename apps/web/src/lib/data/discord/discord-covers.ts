@@ -14,8 +14,8 @@
  * a search is allowed. Not part of upstream.
  */
 
-import { guessSeriesName } from '$lib/data/series-overrides';
-import type { MetadataCandidate, MetadataKind } from '$lib/data/book-metadata';
+import { guessSeriesName } from '$lib/data/library/series-overrides';
+import type { MetadataCandidate, MetadataKind } from '$lib/data/library/book-metadata';
 
 const matchesKey = 'discordCoverMatches';
 const missesKey = 'discordCoverMisses';
@@ -94,7 +94,7 @@ export async function findCover(title: string, kind: MetadataKind, series = '') 
   if (!canSearch(title)) return false;
   searching = true;
   try {
-    const metadata = await import('$lib/data/book-metadata');
+    const metadata = await import('$lib/data/library/book-metadata');
     const query = coverQuery(title, series);
     const match = query ? exactMatch(query, await metadata.searchMetadata(kind, query)) : undefined;
 
@@ -105,7 +105,7 @@ export async function findCover(title: string, kind: MetadataKind, series = '') 
 
     writeEntry(matchesKey, title, { cover: match.cover });
 
-    const { serverless } = await import('$lib/data/server-connect');
+    const { serverless } = await import('$lib/data/remote/server-connect');
 
     // Details only, and never over details the book already has (picked in the dialog).
     const saved = serverless ? undefined : await metadata.loadBookMetadata().catch(() => undefined);
@@ -158,7 +158,10 @@ export function hubCover(title: string) {
 
 async function loadHubCover(title: string, refused: () => void) {
   const [{ bookKey, bookThumbnail, localCovers }, { HubError, hubFetch, hubImageUrl }] =
-    await Promise.all([import('$lib/data/social'), import('$lib/data/social-account')]);
+    await Promise.all([
+      import('$lib/data/social/social'),
+      import('$lib/data/social/social-account')
+    ]);
   const key = encodeURIComponent(bookKey(title));
   const url = (file: unknown) => {
     const address =

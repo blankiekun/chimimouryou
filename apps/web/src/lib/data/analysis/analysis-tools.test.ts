@@ -12,7 +12,7 @@ import {
   nextJob,
   prewarmAnalysis,
   usesReader
-} from '$lib/data/analysis-tools';
+} from '$lib/data/analysis/analysis-tools';
 import { readerDb } from '$lib/data/reader-db';
 
 describe('analysis tools', () => {

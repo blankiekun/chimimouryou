@@ -1,14 +1,14 @@
 <script lang="ts">
-  import { testConnection } from '$lib/data/ai-client';
+  import { testConnection } from '$lib/data/ai/ai-client';
   import {
     aiConnectionCache$,
     aiFeatureState$,
     connectionKey,
     newConnectionId,
     type AiConnectionTest
-  } from '$lib/data/ai-connections';
-  import { connectionBaseUrl, findProvider } from '$lib/data/ai-providers';
-  import { aiConnections$, type AiConnection } from '$lib/data/ai-settings';
+  } from '$lib/data/ai/ai-connections';
+  import { connectionBaseUrl, findProvider } from '$lib/data/ai/ai-providers';
+  import { aiConnections$, type AiConnection } from '$lib/data/ai/ai-settings';
   import { t$ } from '$lib/i18n';
   import AiConnectionEditor from './ai-connection-editor.svelte';
   import AiTestResult from './ai-test-result.svelte';

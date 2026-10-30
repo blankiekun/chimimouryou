@@ -10,27 +10,31 @@ import {
   keptReadings,
   localWordList,
   type LocalEstimate
-} from '$lib/data/analysis-tools';
+} from '$lib/data/analysis/analysis-tools';
 import { bookContent } from '$lib/data/book-content';
-import { bookKanjiCount } from '$lib/data/book-kanji';
-import { loadBookMetadata, type BookMetadata, type MetadataKind } from '$lib/data/book-metadata';
-import { wordCoverage, type BookWord, type WordCoverage } from '$lib/data/book-words';
+import { bookKanjiCount } from '$lib/data/words/book-kanji';
+import {
+  loadBookMetadata,
+  type BookMetadata,
+  type MetadataKind
+} from '$lib/data/library/book-metadata';
+import { wordCoverage, type BookWord, type WordCoverage } from '$lib/data/words/book-words';
 import {
   loadCalibreCatalog,
   loadCalibreDifficulty,
   type CalibreBook,
   type CalibreDifficulty
-} from '$lib/data/calibre';
+} from '$lib/data/remote/calibre';
 import { standalone } from '$lib/data/env';
 import {
   bookCoverage,
   getKnownSet,
   refreshKnownWordsIfStale,
   type KnownSet
-} from '$lib/data/known-words';
-import { localMokuro, type MokuroText } from '$lib/data/mokuro';
+} from '$lib/data/words/known-words';
+import { localMokuro, type MokuroText } from '$lib/data/manga/mokuro';
 import { database } from '$lib/data/store';
-import { wordList } from '$lib/data/words-met';
+import { wordList } from '$lib/data/words/words-met';
 
 /** What a book's page (book-details.svelte) shows besides the card: one load of it. */
 export interface BookDetails {

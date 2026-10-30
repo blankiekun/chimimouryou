@@ -10,7 +10,7 @@
     immersionTypes,
     totalsByType,
     type ImmersionSource
-  } from '$lib/data/immersion-log';
+  } from '$lib/data/stats/immersion-log';
   import { logger } from '$lib/data/logger';
   import { t$, type MessageKey } from '$lib/i18n';
   import { formatDuration } from '$lib/functions/format-time';

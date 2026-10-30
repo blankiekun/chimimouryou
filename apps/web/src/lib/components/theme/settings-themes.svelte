@@ -1,6 +1,6 @@
 <script lang="ts">
   import Switch from '$lib/components/switch.svelte';
-  import SettingsThemeColor from '$lib/components/settings/settings-theme-color.svelte';
+  import SettingsThemeColor from '$lib/components/theme/settings-theme-color.svelte';
   import { theme$ } from '$lib/data/store';
   import {
     customAppThemes$,

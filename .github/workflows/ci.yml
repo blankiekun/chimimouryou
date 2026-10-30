@@ -45,7 +45,7 @@ jobs:
           if grep -qE '^(apps/desktop/|pnpm-lock\.yaml|\.github/workflows/)' changed.txt; then
             echo desktop=true >> "$GITHUB_OUTPUT"
           fi
-          if grep -qE '^(apps/android/|apps/web/src/lib/data/(android-drive|native-save)\.ts|pnpm-lock\.yaml|\.github/workflows/)' changed.txt; then
+          if grep -qE '^(apps/android/|apps/web/src/lib/data/standalone/(android-drive|native-save)\.ts|pnpm-lock\.yaml|\.github/workflows/)' changed.txt; then
             echo android=true >> "$GITHUB_OUTPUT"
           fi
 

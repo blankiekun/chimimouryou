@@ -1,13 +1,13 @@
 <script lang="ts">
   import SectionHead from '$lib/components/section-head.svelte';
-  import { downloadCsv } from '$lib/data/book-words';
+  import { downloadCsv } from '$lib/data/words/book-words';
   import {
     markedWords,
     markedWordsCsv,
     setWordMarks,
     wordMarks$,
     type WordStatus
-  } from '$lib/data/word-marks';
+  } from '$lib/data/words/word-marks';
   import { t$ } from '$lib/i18n';
 
   /** Words marked known or ignored by hand (word-marks.ts), with search and unmark. Not part of upstream. */

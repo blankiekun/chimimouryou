@@ -16,9 +16,13 @@
  */
 
 import { BehaviorSubject } from 'rxjs';
-import { activityKey, type DiscordActivity, type DiscordKind } from '$lib/data/discord-template';
-import { discordOptions } from '$lib/data/discord-settings';
-import { hubFetch, hubOrigin, socialSession$ } from '$lib/data/social-account';
+import {
+  activityKey,
+  type DiscordActivity,
+  type DiscordKind
+} from '$lib/data/discord/discord-template';
+import { discordOptions } from '$lib/data/discord/discord-settings';
+import { hubFetch, hubOrigin, socialSession$ } from '$lib/data/social/social-account';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 
 const addonUrl = 'http://127.0.0.1:41918';

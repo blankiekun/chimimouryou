@@ -74,7 +74,7 @@ canvas {
 }
 
 /* The hooked line, invisible, over the bottom of the game where text boxes usually are
-   (vnboxLines in lib/data/vn.ts): Yomitan reads it on hover. Same rules as player.css. */
+   (vnboxLines in lib/data/vn/vn.ts): Yomitan reads it on hover. Same rules as player.css. */
 #overlay {
   position: absolute;
   inset: 0;

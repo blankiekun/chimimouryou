@@ -3,19 +3,19 @@
   import BookFriends from '$lib/components/social/book-friends.svelte';
   import SendBook from '$lib/components/social/send-book.svelte';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-  import ContinueReadingShelf from '$lib/components/book-card/continue-reading-shelf.svelte';
-  import MokuroText from '$lib/components/book-card/mokuro-text.svelte';
-  import LocalMokuroText from '$lib/components/book-card/local-mokuro-text.svelte';
+  import ContinueReadingShelf from '$lib/components/library/continue-reading-shelf.svelte';
+  import MokuroText from '$lib/components/manga/mokuro-text.svelte';
+  import LocalMokuroText from '$lib/components/manga/local-mokuro-text.svelte';
   import DetailsDifficulty from '$lib/components/library/details-difficulty.svelte';
   import DetailsMetadataSearch from '$lib/components/library/details-metadata-search.svelte';
   import DetailsWords from '$lib/components/library/details-words.svelte';
-  import type { MokuroText as MokuroFile } from '$lib/data/mokuro';
-  import { isFinished, isReading } from '$lib/components/book-card/library-filters';
-  import { orderSeries } from '$lib/components/book-card/library-sort';
-  import { account$, hasPermission } from '$lib/data/account';
+  import type { MokuroText as MokuroFile } from '$lib/data/manga/mokuro';
+  import { isFinished, isReading } from '$lib/data/library/library-filters';
+  import { orderSeries } from '$lib/data/library/library-sort';
+  import { account$, hasPermission } from '$lib/data/account/account';
   import { pagePath, selfHostingGuideUrl, standalone } from '$lib/data/env';
-  import { sourceNames, type MetadataKind } from '$lib/data/book-metadata';
-  import { loadBookDetails, noBookDetails, type BookDetails } from '$lib/data/book-details';
+  import { sourceNames, type MetadataKind } from '$lib/data/library/book-metadata';
+  import { loadBookDetails, noBookDetails, type BookDetails } from '$lib/data/library/book-details';
   import { damagedBookText } from '$lib/data/book-content';
   import type { CoreNumbers } from '$lib/functions/analysis/core';
   import {
@@ -23,10 +23,10 @@
     analysisToolsSupported,
     checkAnalysisTools,
     localEstimateSaved$
-  } from '$lib/data/analysis-tools';
+  } from '$lib/data/analysis/analysis-tools';
   import { dialogManager } from '$lib/data/dialog-manager';
-  import SeriesDialog from '$lib/components/book-card/series-dialog.svelte';
-  import { learnerStats } from '$lib/data/learner-stats';
+  import SeriesDialog from '$lib/components/library/series-dialog.svelte';
+  import { learnerStats } from '$lib/data/stats/learner-stats';
   import {
     addToHome,
     homeBookTitles$,
@@ -34,8 +34,8 @@
     isContinueReading,
     libraryTab$,
     removeFromHome
-  } from '$lib/data/library-home';
-  import { generatedReadings$ } from '$lib/data/generated-furigana';
+  } from '$lib/data/library/library-home';
+  import { generatedReadings$ } from '$lib/data/words/generated-furigana';
   import { database, generatedFurigana$, startDayHoursForTracker$ } from '$lib/data/store';
   import { getDateKey } from '$lib/functions/statistic-util';
   import { t$ } from '$lib/i18n';

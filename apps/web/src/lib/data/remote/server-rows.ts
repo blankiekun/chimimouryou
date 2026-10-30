@@ -10,8 +10,8 @@
  * imports no handler, so neither of them imports the other. Not part of upstream.
  */
 
-import { accountReady, currentAccount } from '$lib/data/account';
-import { readerDataOwner } from '$lib/data/reader-data-owner';
+import { accountReady, currentAccount } from '$lib/data/account/account';
+import { readerDataOwner } from '$lib/data/account/reader-data-owner';
 import {
   apiVersion,
   bookIdOf,
@@ -19,8 +19,8 @@ import {
   syncMirror,
   type Mirror,
   type SyncRow
-} from '$lib/data/server-api';
-import { serverConnected } from '$lib/data/server-connect';
+} from '$lib/data/remote/server-api';
+import { serverConnected } from '$lib/data/remote/server-connect';
 import {
   SyncConflictError,
   type SyncFileOptions,

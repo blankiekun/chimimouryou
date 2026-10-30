@@ -22,7 +22,7 @@ import {
 } from '$lib/data/storage/handler/base-handler';
 import { StorageOAuthManager } from '$lib/data/storage/storage-oauth-manager';
 import { StorageKey } from '$lib/data/storage/storage-types';
-import { isVn } from '$lib/data/vn';
+import { isVn } from '$lib/data/vn/vn';
 import { database } from '$lib/data/store';
 import {
   convertAuthErrorResponse,

@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const account = vi.hoisted(() => ({ user: null as { id: string; username: string } | null }));
 
-vi.mock('$lib/data/account', () => ({
+vi.mock('$lib/data/account/account', () => ({
   accountReady: async () => account.user,
   accountSyncUrl: '/account/sync/',
   currentAccount: () => account.user

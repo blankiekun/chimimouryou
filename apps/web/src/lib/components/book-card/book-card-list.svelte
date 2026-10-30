@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-  import CoverCard from '$lib/components/book-card/cover-card.svelte';
-  import { levelTier } from '$lib/data/difficulty';
+  import CoverCard from '$lib/components/library/cover-card.svelte';
+  import { levelTier } from '$lib/data/difficulty/difficulty';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher } from 'svelte';
 

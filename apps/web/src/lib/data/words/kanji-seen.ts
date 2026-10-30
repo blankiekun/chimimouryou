@@ -10,9 +10,9 @@
  * while signed in (extras-sync.ts). Not part of upstream.
  */
 
-import { kanjiChanged, pullKanji } from '$lib/data/extras-sync';
+import { kanjiChanged, pullKanji } from '$lib/data/sync/extras-sync';
 import { readerDb } from '$lib/data/reader-db';
-import { textBetween } from '$lib/data/recap';
+import { textBetween } from '$lib/data/ai/recap';
 import type { SearchIndex } from '$lib/functions/book-text/book-search';
 
 export interface KanjiSeen {

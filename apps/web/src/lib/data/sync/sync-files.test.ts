@@ -7,7 +7,7 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/data/account', () => ({
+vi.mock('$lib/data/account/account', () => ({
   accountReady: async () => null,
   accountSyncUrl: '/account/sync/',
   currentAccount: () => null
@@ -18,7 +18,7 @@ import {
   mergeHighlights,
   parseAnnotations,
   type Highlight
-} from '$lib/data/annotations';
+} from '$lib/data/reader/annotations';
 import { fakeApi } from '$lib/data/test-utils/fake-api';
 import { readerDb } from '$lib/data/reader-db';
 import { SyncConflictError } from '$lib/data/storage/handler/base-handler';
@@ -27,7 +27,7 @@ import { storageOAuthTokens } from '$lib/data/storage/storage-oauth-manager';
 import { StorageKey, StorageSourceDefault } from '$lib/data/storage/storage-types';
 import { storageSource$ } from '$lib/data/storage/storage-view';
 import { autoReplication$, syncTarget$ } from '$lib/data/store';
-import { syncState$ } from '$lib/data/sync-status';
+import { syncState$ } from '$lib/data/sync/sync-status';
 import { AutoReplicationType } from '$lib/functions/replication/replication-options';
 import { readerSyncSource, syncFileStore, syncJsonFile } from './sync-files';
 

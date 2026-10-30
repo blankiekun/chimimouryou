@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { highlightsToMarkdown, type Highlight } from '$lib/data/annotations';
+  import { highlightsToMarkdown, type Highlight } from '$lib/data/reader/annotations';
   import { downloadBlob } from '$lib/functions/file-dom/download-blob';
   import { createEventDispatcher } from 'svelte';
   import { t$ } from '$lib/i18n';

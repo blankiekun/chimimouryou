@@ -10,8 +10,12 @@
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
   import Switch from '$lib/components/switch.svelte';
-  import { profileOptions, updateProfileOptions, yomitanOptions$ } from '$lib/data/dictionary';
-  import { audioSourceTypes, playTermAudio } from '$lib/data/dictionary-audio';
+  import {
+    profileOptions,
+    updateProfileOptions,
+    yomitanOptions$
+  } from '$lib/data/dictionary/dictionary';
+  import { audioSourceTypes, playTermAudio } from '$lib/data/dictionary/dictionary-audio';
   import {
     eventModifiers,
     hotkeyLabel,

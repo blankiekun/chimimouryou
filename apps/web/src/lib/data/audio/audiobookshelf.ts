@@ -13,9 +13,9 @@
 
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
-import { redactSecret } from '$lib/data/ai-settings';
+import { redactSecret } from '$lib/data/ai/ai-settings';
 import { readerDb } from '$lib/data/reader-db';
-import { titleVolume } from '$lib/components/book-card/library-sort';
+import { titleVolume } from '$lib/data/library/library-sort';
 import { standalone } from '$lib/data/env';
 import { tr } from '$lib/i18n';
 import type { MatchedCue } from '$lib/functions/audiobook/subtitles';

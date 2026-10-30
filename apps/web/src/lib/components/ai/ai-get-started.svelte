@@ -1,9 +1,9 @@
 <script lang="ts">
   import PointBox from '$lib/components/point-box.svelte';
-  import { testConnection } from '$lib/data/ai-client';
-  import { connectProvider } from '$lib/data/ai-connections';
-  import { aiProviders, findProvider, type AiProvider } from '$lib/data/ai-providers';
-  import { openRouterSignInAvailable, openRouterSignInUrl } from '$lib/data/openrouter-oauth';
+  import { testConnection } from '$lib/data/ai/ai-client';
+  import { connectProvider } from '$lib/data/ai/ai-connections';
+  import { aiProviders, findProvider, type AiProvider } from '$lib/data/ai/ai-providers';
+  import { openRouterSignInAvailable, openRouterSignInUrl } from '$lib/data/ai/openrouter-oauth';
   import { t$ } from '$lib/i18n';
   import { onMount } from 'svelte';
 

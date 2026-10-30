@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { listening } from '$lib/data/immersion-log';
+  import { listening } from '$lib/data/stats/immersion-log';
   import {
     faClosedCaptioning,
     faCrosshairs,
@@ -7,13 +7,13 @@
     faSpinner,
     faWandMagicSparkles
   } from '@fortawesome/free-solid-svg-icons';
-  import WhisperSubtitles from '$lib/components/book-reader/whisper-subtitles.svelte';
-  import AudiobookControls from '$lib/components/book-reader/audiobook-controls.svelte';
-  import AudiobookControlsPanel from '$lib/components/book-reader/audiobook-controls-panel.svelte';
-  import { audiobookControls } from '$lib/data/audiobook-controls';
+  import WhisperSubtitles from '$lib/components/audio/whisper-subtitles.svelte';
+  import AudiobookControls from '$lib/components/audio/audiobook-controls.svelte';
+  import AudiobookControlsPanel from '$lib/components/audio/audiobook-controls-panel.svelte';
+  import { audiobookControls } from '$lib/data/audio/audiobook-controls';
   import { PlaybackController } from '$lib/functions/audiobook/playback-controller';
   import { ratePresets } from '$lib/functions/audiobook/playback';
-  import { nowPlayingPublisher } from '$lib/data/now-playing';
+  import { nowPlayingPublisher } from '$lib/data/audio/now-playing';
   import { toTimeString } from '$lib/functions/statistic-util';
   import {
     absCandidateKey,
@@ -27,7 +27,7 @@
     putAbsSubtitles,
     saveAbsProgress,
     type AbsCandidate
-  } from '$lib/data/audiobookshelf';
+  } from '$lib/data/audio/audiobookshelf';
   import type { SearchIndex } from '$lib/functions/book-text/book-search';
   import {
     cueAt,

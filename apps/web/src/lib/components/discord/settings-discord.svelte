@@ -14,7 +14,7 @@
     discordValues$,
     sendTest,
     type ConnectionState
-  } from '$lib/data/discord';
+  } from '$lib/data/discord/discord';
   import {
     activityTemplate,
     discordActivities$,
@@ -23,7 +23,7 @@
     discordOptions$,
     saveActivityTemplate,
     setDiscordOption
-  } from '$lib/data/discord-settings';
+  } from '$lib/data/discord/discord-settings';
   import {
     allowAutoPair,
     autoPairAllowed,
@@ -32,8 +32,8 @@
     pairedAddons,
     unpairAddon,
     type PairedAddon
-  } from '$lib/data/discord-relay';
-  import { buildActivity, type DiscordKind } from '$lib/data/discord-template';
+  } from '$lib/data/discord/discord-relay';
+  import { buildActivity, type DiscordKind } from '$lib/data/discord/discord-template';
   import { pagePath } from '$lib/data/env';
   import { relativeTime } from '$lib/functions/format-time';
   import {
@@ -41,7 +41,7 @@
     hubErrorKey,
     queueProfileChange,
     socialSession$
-  } from '$lib/data/social-account';
+  } from '$lib/data/social/social-account';
   import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
   import { t$, uiLanguage$, type MessageKey } from '$lib/i18n';
   import { untrack } from 'svelte';

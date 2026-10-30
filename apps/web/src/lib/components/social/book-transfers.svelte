@@ -11,8 +11,8 @@
     titleTaken,
     transfers$,
     type IncomingTransfer
-  } from '$lib/data/book-transfer';
-  import { socialSession$ } from '$lib/data/social-account';
+  } from '$lib/data/sync/book-transfer';
+  import { socialSession$ } from '$lib/data/social/social-account';
   import { storageSource$ } from '$lib/data/storage/storage-view';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import { t$ } from '$lib/i18n';
