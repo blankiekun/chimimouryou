@@ -32,6 +32,11 @@ Endpoints (under /calibre/import/api/sources/, `import` permission via nginx; jo
                                             book, title, authors, href, workKey, cover, inLibrary, following}]}: a
                                             feed of the catalog (its root, a section's path, or a search)
   GET  servers/{id}/image?href=          -> an image on that server (browse covers; service.py sends it)
+  POST fetch {url, repo, source, headers?}
+                                         -> the page's bytes (service.py sends them as application/octet-stream
+                                            with X-Source-Type and X-Source-Url): an extension's GET in a plain
+                                            browser (proxy() says what passes); 502 {error, status} when the site
+                                            answered an error, 403 refused, 429 {retryAfter} busy
 
 Job states: queued, fetching, adding (volumes in the import queue), done, failed (error, failed_at), cancelled.
 Job kinds: add (volumes chosen by the reader) and update (a followed work's check). Chapters are cached in
@@ -93,10 +98,11 @@ SERVERS = 'servers'
 
 
 class ApiError(Exception):
-    def __init__(self, status: int, message: str, field: str = ''):
+    def __init__(self, status: int, message: str, field: str = '', body: dict | None = None):
         super().__init__(message)
         self.status = status
         self.field = field  # the form field it concerns (Add a source)
+        self.body = body or {}  # more fields of the error answer
 
 
 _db: apidb.Database | None = None
@@ -848,6 +854,91 @@ def server_image(account: str, server_id: int, href: str) -> tuple[bytes, str]:
     if not (kind := build.image_type(data)):
         raise ApiError(404, 'No image')
     return data, kind
+
+
+# The extensions' fetch proxy.
+INDEX_SECONDS = 600
+INDEX_BYTES = 2 * 1024 * 1024
+INDEXES_CACHED = 32
+PROXY_BYTES = 10 * 1024 * 1024
+PROXY_IN_FLIGHT = 4
+PROXY_HEADERS = ('accept', 'accept-language', 'referer', 'x-requested-with')
+_indexes: dict[str, tuple[float, list]] = {}
+_in_flight: dict[str, int] = {}
+_proxy_lock = threading.Lock()
+
+
+def _https_host(url) -> str:
+    parts = urlparse(url if isinstance(url, str) else '')
+    return (parts.hostname or '').lower() if parts.scheme == 'https' else ''
+
+
+def _index(repo: str) -> list:
+    """The repository's index.json entries, fetched by the server itself and cached INDEX_SECONDS."""
+    with _proxy_lock:
+        cached = _indexes.get(repo)
+    if cached and time.monotonic() - cached[0] < INDEX_SECONDS:
+        return cached[1]
+    host = _https_host(repo)
+    if not host:
+        raise ApiError(400, 'The repository must be an https address')
+    try:
+        entries = json.loads(fetcher.fetch_public(repo, {host}, max_bytes=INDEX_BYTES)[0])
+    except fetcher.Busy:
+        raise
+    except fetcher.FetchError as error:
+        raise ApiError(403, f"Couldn't read the repository: {error}") from error
+    except ValueError as error:
+        raise ApiError(403, "The repository's index isn't JSON") from error
+    if not isinstance(entries, list):
+        raise ApiError(403, "The repository's index isn't a list of extensions")
+    with _proxy_lock:
+        _indexes.pop(repo, None)
+        _indexes[repo] = (time.monotonic(), entries)
+        while len(_indexes) > INDEXES_CACHED:
+            _indexes.pop(next(iter(_indexes)))
+    return entries
+
+
+def proxy(account: str, body: dict) -> tuple[bytes, str, str]:
+    """(body, content type, final url) of an extension's GET. The hosts come from the repository's index entry,
+    which the server fetches itself; the client's word is never taken for them. Anyone with the import permission
+    can publish an index naming any public host, so the real limits are fetcher.fetch_public's (public addresses
+    only, https, pacing shared with the built-in sites) and PROXY_IN_FLIGHT. Only PROXY_HEADERS are passed on;
+    the reader's cookies never reach the site and the site's never come back."""
+    url, repo, source = body.get('url'), body.get('repo'), body.get('source')
+    if not isinstance(url, str) or not isinstance(repo, str) or type(source) is not int:
+        raise ApiError(400, 'Invalid request')
+    sent = body.get('headers') if isinstance(body.get('headers'), dict) else {}
+    headers = {name: value for name, value in sent.items()
+               if isinstance(name, str) and name.lower() in PROXY_HEADERS and isinstance(value, str)}
+    with _proxy_lock:
+        if _in_flight.get(account, 0) >= PROXY_IN_FLIGHT:
+            raise ApiError(429, 'Too many requests at once', body={'retryAfter': 1})
+        _in_flight[account] = _in_flight.get(account, 0) + 1
+    try:
+        try:
+            entries = _index(repo)
+        except fetcher.Busy as error:
+            raise ApiError(429, str(error), body={'retryAfter': int(error.wait) + 1}) from error
+        entry = next((e for e in entries if isinstance(e, dict) and e.get('id') == source), None)
+        if entry is None:
+            raise ApiError(403, 'No such extension in this repository')
+        hosts = {host for host in (_https_host(entry.get('baseUrl')), _https_host(entry.get('apiUrl'))) if host}
+        try:
+            data, final, kind = fetcher.fetch_public(url, hosts, headers, PROXY_BYTES)
+            return data, kind, final
+        except fetcher.Busy as error:
+            raise ApiError(429, str(error), body={'retryAfter': int(error.wait) + 1}) from error
+        except fetcher.FetchError as error:
+            if error.status:
+                raise ApiError(502, str(error), body={'status': error.status}) from error
+            raise ApiError(403 if str(error).startswith('Refused') else 502, str(error)) from error
+    finally:
+        with _proxy_lock:
+            _in_flight[account] -= 1
+            if not _in_flight[account]:
+                del _in_flight[account]
 
 
 def route(method: str, path: str, account: str, body: dict) -> dict:

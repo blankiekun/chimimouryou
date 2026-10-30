@@ -44,7 +44,7 @@ import uuid
 import zipfile
 import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 # httpbase.py (shared request checks) is in the parent folder: /app in the images, server/ here.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
@@ -657,6 +657,35 @@ class Handler(BaseHTTPRequestHandler):
         except sources.ApiError as error:
             raise ApiError(error.status, str(error), body={'field': error.field} if error.field else None) from error
 
+    def source_fetch(self):
+        """An extension's GET through the server (sources.proxy). The site's bytes are sent as a download that
+        can't render or run on this origin; JSON only, so a form on another site can't send it."""
+        account = self.account()
+        self.same_origin()
+        try:
+            body = json.loads(httpbase.read_body(self, 1 << 14, ('application/json',)) or b'{}')
+            if not isinstance(body, dict):
+                raise ValueError
+        except ValueError as error:
+            raise ApiError(400, 'Invalid request') from error
+        try:
+            data, kind, final = sources.proxy(account, body)
+        except sources.ApiError as error:
+            wait = error.body.get('retryAfter')
+            raise ApiError(error.status, str(error), headers={'Retry-After': str(wait)} if wait else None,
+                           body=error.body) from error
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/octet-stream')
+        self.send_header('Content-Length', str(len(data)))
+        self.send_header('Content-Disposition', 'attachment')
+        self.send_header('Content-Security-Policy', 'sandbox; default-src \'none\'')
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('X-Source-Type', kind)
+        self.send_header('X-Source-Url', quote(final, safe=":/?#[]@!$&'()*+,;=%~"))
+        self.end_headers()
+        self.wfile.write(data)
+
     def send_image(self, image):
         """Sends image(account) -> (bytes, content type): a work's cover or a server's image."""
         try:
@@ -722,6 +751,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.handle_api(self.catalog)
         if path == '/remove':
             return self.handle_api(self.remove)
+        if path == '/sources/fetch':
+            return self.source_fetch()
         if path.startswith('/sources/'):
             return self.handle_api(lambda: self.sources_api('POST'))
         return self.send(404, {'error': 'not found'})

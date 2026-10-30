@@ -13,6 +13,8 @@
  *   headers from an allow list (never cookies or credentials).
  * - Images (`image`): also from the hosts of the image URLs getDetail and getPageList returned
  *   (`imageHosts`, "Loads images from: …"), image/* answers only.
+ * - On the server edition in a plain browser, pages go through the server's fetch proxy
+ *   (transport.ts, with `repo`), which sends Referer; images still load directly.
  * - Referer: a plain browser can't send it; a request that drops it and is refused (401/403), or
  *   a site without CORS, is NeedsAppError ("needs the desktop app"), as for the built-in sites.
  * - Results are rebuilt from the fields the app uses, with their types checked.
@@ -22,7 +24,14 @@
  */
 
 import { pagePath } from '$lib/data/env';
-import { FetchError, NeedsAppError, nativeFetch, sourceFetch } from './transport';
+import {
+  FetchError,
+  NeedsAppError,
+  nativeFetch,
+  sourceFetch,
+  viaProxy,
+  type FetchOptions
+} from './transport';
 
 /** An entry of a Mangayomi repository's index.json (the fields an extension may read). */
 export interface ExtensionSource {
@@ -184,10 +193,15 @@ function decode(body: ArrayBuffer, type: string) {
 }
 
 /** One GET for the extension or the app, Referer and NeedsAppError as described above. */
-async function get(url: string, hosts: Set<string>, sent: Record<string, string>) {
+async function get(
+  url: string,
+  hosts: Set<string>,
+  sent: Record<string, string>,
+  proxy?: FetchOptions['proxy']
+) {
   const headers = { ...sent };
   let dropped = false;
-  if (!nativeFetch()) {
+  if (!nativeFetch() && !viaProxy(proxy)) {
     for (const key of Object.keys(headers)) {
       if (APP_ONLY_HEADERS.has(key.toLowerCase())) {
         dropped ||= key.toLowerCase() === 'referer';
@@ -196,7 +210,7 @@ async function get(url: string, hosts: Set<string>, sent: Record<string, string>
     }
   }
   try {
-    return await sourceFetch(url, { hosts, headers });
+    return await sourceFetch(url, { hosts, headers, proxy });
   } catch (error) {
     if (dropped && error instanceof FetchError && (error.status === 401 || error.status === 403)) {
       throw new NeedsAppError(new URL(url).hostname);
@@ -247,11 +261,16 @@ export interface ExtensionRuntime {
   close(): void;
 }
 
-/** Starts `code` (the extension's JS) for `source`; ExtensionError if it doesn't load. */
+/**
+ * Starts `code` (the extension's JS) for `source`; ExtensionError if it doesn't load. `repo` (the
+ * repository's index.json URL) lets the server edition's fetch proxy check the source's hosts.
+ */
 export async function openExtension(
   code: string,
-  source: ExtensionSource
+  source: ExtensionSource,
+  repo?: string
 ): Promise<ExtensionRuntime> {
+  const proxy = repo && typeof source.id === 'number' ? { repo, source: source.id } : undefined;
   const hosts = new Set(
     [httpsHost(source.baseUrl), httpsHost(text(source.apiUrl))].filter(Boolean)
   );
@@ -321,7 +340,7 @@ export async function openExtension(
         throw new Error(`${text(message.method)} requests aren't supported yet`);
       if (!hosts.has(httpsHost(url)))
         throw new Error(`Not a host this extension may fetch (${url})`);
-      const fetched = await get(url, hosts, headerMap(message.headers));
+      const fetched = await get(url, hosts, headerMap(message.headers), proxy);
       answer({
         op: 'fetched',
         response: {

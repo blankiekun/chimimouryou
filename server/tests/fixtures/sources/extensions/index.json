@@ -1,0 +1,12 @@
+[
+  {"name": "Fixture manga", "id": 101, "lang": "ja", "baseUrl": "https://kakuyomu.jp", "apiUrl": "",
+   "sourceCodeLanguage": 1, "itemType": 0, "version": "0.0.1", "sourceCodeUrl": "https://repo.example/manga.js"},
+  {"name": "Fixture novel", "id": 102, "lang": "ja", "baseUrl": "https://ncode.syosetu.com",
+   "apiUrl": "https://api.syosetu.com", "sourceCodeLanguage": 1, "itemType": 2, "version": "0.0.1",
+   "sourceCodeUrl": "https://repo.example/novel.js"},
+  {"name": "Fixture echo", "id": 103, "lang": "ja", "baseUrl": "https://repo.example",
+   "apiUrl": "https://internal.repo.example",
+   "sourceCodeLanguage": 1, "itemType": 2, "version": "0.0.1"},
+  {"name": "Fixture plain http", "id": 104, "lang": "ja", "baseUrl": "http://plain.example", "apiUrl": "",
+   "sourceCodeLanguage": 1, "itemType": 2, "version": "0.0.1"}
+]

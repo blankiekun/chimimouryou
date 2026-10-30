@@ -11,12 +11,15 @@
  * reader's own server). A plain browser can only read sites that allow CORS; any other answers
  * NeedsAppError ("Fetching from this site needs the desktop app"), never a failure. The desktop
  * app fetches through its main process (chimiDesktop.fetch, apps/desktop/main.js) and the APK
- * through CapacitorHttp, so every site works there.
+ * through CapacitorHttp, so every site works there. On the server edition in a plain browser, an
+ * extension's pages go through the import service (POST /calibre/import/api/sources/fetch, which
+ * checks the hosts against the repository itself); images still load directly.
  * VITE_SOURCES_FIXTURE_URL (test builds only) sends https://<host>/<path> of sites to
  * <fixture>/<host>/<path> (server/tests/fixtures/sources/serve.py), as SOURCES_FIXTURE_URL does.
  */
 
 import { Capacitor, CapacitorHttp, type HttpResponse } from '@capacitor/core';
+import { standalone } from '$lib/data/env';
 
 /** Seconds between two requests to one site, or to a reader's own server (tests set 0). */
 export const pacing = { site: 2, server: 0.2 };
@@ -50,6 +53,8 @@ export interface FetchOptions {
   origin?: string;
   headers?: Record<string, string>;
   maxBytes?: number;
+  /** An extension's page: its repository's index.json and the entry's id, for the server's proxy */
+  proxy?: { repo: string; source: number };
 }
 
 const next = new Map<string, number>();
@@ -100,6 +105,54 @@ const desktopFetch = () =>
 
 /** The desktop app or the APK: fetched outside the page, so CORS doesn't apply. */
 export const nativeFetch = () => !!desktopFetch() || Capacitor.isNativePlatform();
+
+/** This request goes through the server's fetch proxy (which sends Referer too). */
+export const viaProxy = (proxy?: FetchOptions['proxy']) => !standalone && !!proxy && !nativeFetch();
+
+/** The server's proxy: refusals throw, a site's error comes back as its status. */
+async function viaServer(
+  url: string,
+  proxy: NonNullable<FetchOptions['proxy']>,
+  headers: Record<string, string> = {},
+  maxBytes: number
+): Promise<NativeAnswer> {
+  const host = new URL(url).hostname;
+  let answer: Response;
+  try {
+    answer = await fetch('/calibre/import/api/sources/fetch', {
+      method: 'POST',
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, repo: proxy.repo, source: proxy.source, headers })
+    });
+  } catch {
+    throw new FetchError(`Can't reach ${host}`);
+  }
+  if (answer.ok) {
+    const body = await answer.arrayBuffer();
+    return {
+      status: 200,
+      url: answer.headers.get('X-Source-Url') || url,
+      type: answer.headers.get('X-Source-Type') || '',
+      retryAfter: '',
+      ...(body.byteLength > maxBytes ? { tooBig: true } : { body })
+    };
+  }
+  const error = (await answer.json().catch(() => ({}))) as {
+    error?: string;
+    status?: number;
+    retryAfter?: number;
+  };
+  if (answer.status === 429 || (answer.status === 502 && error.status)) {
+    return {
+      status: answer.status === 429 ? 429 : Number(error.status),
+      url,
+      type: '',
+      retryAfter: String(error.retryAfter ?? '')
+    };
+  }
+  throw new FetchError(error.error || `Can't reach ${host}`);
+}
 
 async function viaApp(
   url: string,
@@ -169,13 +222,17 @@ export async function sourceFetch(url: string, options: FetchOptions = {}) {
   if (options.origin ? originOf(url) !== options.origin : !options.hosts?.has(host)) {
     throw new FetchError(`Not a link this source may fetch (${host})`);
   }
-  const target = options.origin ? url : fixture(url);
+  const proxied = viaProxy(options.proxy);
+  // The server rewrites to its own fixture (SOURCES_FIXTURE_URL) for proxied requests.
+  const target = options.origin || proxied ? url : fixture(url);
   const maxBytes = options.maxBytes ?? MAX_BYTES;
 
   for (let attempt = 0; ; attempt += 1) {
     await pace(options.origin || host, options.origin ? pacing.server : pacing.site);
     let response: NativeAnswer;
-    if (nativeFetch()) {
+    if (proxied && options.proxy) {
+      response = await viaServer(url, options.proxy, options.headers, maxBytes);
+    } else if (nativeFetch()) {
       try {
         response = await viaApp(target, options.headers, maxBytes);
       } catch {

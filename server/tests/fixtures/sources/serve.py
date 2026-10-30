@@ -5,6 +5,8 @@ a fake OPDS catalog and Suwayomi (servers.py) at /opds/ and /suwayomi/.
 The import service sends every source request here when SOURCES_FIXTURE_URL is set (fetcher.py): the original
 host becomes the first path part, e.g. http://127.0.0.1:8799/ncode.syosetu.com/n0001aa/5/.
   python3 serve.py [port]       (default 8799, 127.0.0.1 only)
+https://repo.example/ is an extension repository (extensions/index.json, the extensions) with test pages for the
+fetch proxy (headers, slow, to/<host>).
 /fake-set changes it while it runs: s1, chapters (servers.py), work + chapters (a copy of n0001aa with that many
 chapters), cors=1|0.
 """
@@ -12,6 +14,7 @@ import json
 import os
 import re
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -20,6 +23,8 @@ import servers
 HERE = os.path.dirname(os.path.abspath(__file__))
 # Copies of work n0001aa with a chapter count the app's tests and E2E change (/fake-set?work=n0003cc&chapters=62).
 WORKS: dict[str, int] = {}
+# Requests for the extension repository's index.json (the fetch proxy's index cache).
+INDEX_HITS = {'count': 0}
 # CORS headers on every answer (/fake-set?cors=1): the standalone app in a plain browser can read the fake sites.
 CORS = {'on': False}
 ROOT = os.path.join(HERE, 'syosetu')
@@ -100,6 +105,8 @@ class Handler(BaseHTTPRequestHandler):
             status, kind, body = servers.opds(rest, parse_qs(url.query), self.headers.get('Authorization', ''))
         elif first == 'suwayomi':
             status, kind, body = servers.suwayomi(rest, parse_qs(url.query))
+        elif first == 'repo.example':  # an extension repository: index.json, the extensions, and test pages
+            status, kind, body = self.repo(rest)
         else:
             status, kind, body = answer(url.path, parse_qs(url.query), self.headers.get('Cookie', ''),
                                         self.headers.get('Referer', ''))
@@ -109,9 +116,27 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
         if status == 401:
             self.send_header('WWW-Authenticate', 'Basic realm="fake"')
+        for name, value in getattr(self, 'extra', {}).items():
+            self.send_header(name, value)
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def repo(self, rest: str) -> tuple[int, str, bytes]:
+        if rest == 'index.json':
+            INDEX_HITS['count'] += 1
+        if rest == 'headers':  # what the fetch proxy sent, and a cookie it must not pass on
+            self.extra = {'Set-Cookie': 'session=site'}
+            return 200, 'text/html', json.dumps(dict(self.headers)).encode()
+        if rest == 'slow':
+            time.sleep(0.5)
+            return 200, 'text/plain', b'slow'
+        if rest.startswith('to/'):  # a redirect to https://<rest>
+            return 302, f'https://{rest[3:]}', b''
+        path = os.path.join(HERE, 'extensions', os.path.basename(rest))
+        if os.path.isfile(path):
+            return 200, 'application/json' if rest.endswith('.json') else 'text/javascript', read(path, HERE)
+        return 404, 'text/plain', b'not found'
 
     def do_OPTIONS(self):  # noqa: N802 - CORS preflight (a server's Basic credentials)
         self.send_response(204 if CORS['on'] else 405)
