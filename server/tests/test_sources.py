@@ -94,6 +94,22 @@ Audit of phases 1-4 (written after the fix, for the gaps the tests above left):
   A6 a volume Calibre refused is dropped from its job, so Retry fetches nothing and the job stays "adding"
      forever                                                                                            -> test_calibre_refused
   U6 a chapter deleted on the site leaves the open volume as it was instead of rebuilding it            -> test_update_in_place
+
+Phase 6, the extensions' fetch proxy (POST sources/fetch; written before the code). The ways it could fail:
+  X1 a host the repository's index entry doesn't name is fetched: a host list or entry sent by the client is
+     trusted, an unknown source id or repository passes, an http baseUrl counts                          -> test_proxy_hosts
+  X2 a host resolving to a private, loopback, link-local, CGNAT (Tailscale), IPv4-mapped or multicast address
+     is fetched, or one public address among private ones lets it through; http, another port or userinfo
+     in the URL passes                                                                                    -> test_proxy_ssrf
+  X3 a redirect to an undeclared host, or to a host that resolves to a private address, is followed      -> test_proxy_redirects
+  X4 DNS rebinding: the connection goes to an address resolved after the check, not the checked one     -> test_proxy_pinned
+  X5 the reader's cookies, Authorization or other headers reach the site; the site's Set-Cookie comes back;
+     the site's page is answered as HTML on the app's origin (it would run there)                         -> test_proxy_answer
+  X6 a site's error loses its status (the runtime's "needs the desktop app" on 401/403 relies on it)    -> test_proxy_answer
+  X7 the index is fetched again for every request (every page waits on the repository host)             -> test_proxy_answer
+  X8 a cross-site form (text/plain body) reaches it                                                       -> test_proxy_answer
+  X9 the proxy keeps a thread waiting for a host's far slot instead of answering 429, or its pacing isn't the
+     one the built-in sites use (the site sees both); a reader runs more than 4 requests at once         -> test_proxy_busy
 """
 import gzip
 import importlib.util
@@ -101,6 +117,7 @@ import io
 import json
 import os
 import shutil
+import socket
 import sys
 import tempfile
 import threading
@@ -1260,6 +1277,162 @@ class ServerSourcesTest(ServiceCase):
                          ('12', '月影の工房 12'))
         info, pages = self.read_cbz(100 + before)
         self.assertEqual((info.findtext('Number'), pages), ('12', [fake_servers.png(120), fake_servers.png(121)]))
+
+
+PUBLIC = '93.184.216.34'
+
+
+def resolver(answers: dict | None = None):
+    """getaddrinfo (the DNS boundary) answering `answers` per host, a public address for any other name (the
+    tests' own loopback servers resolve as usual)."""
+    real = socket.getaddrinfo
+
+    def getaddrinfo(host, port, *args, **kwargs):
+        if host in ('127.0.0.1', 'localhost'):
+            return real(host, port, *args, **kwargs)
+        return [(2 if ':' not in a else 10, 1, 6, '', (a, port)) for a in (answers or {}).get(host, [PUBLIC])]
+    return mock.patch.object(fetcher.socket, 'getaddrinfo', side_effect=getaddrinfo)
+
+
+REPO = 'https://repo.example/index.json'
+
+
+class ProxyTest(ServiceCase):
+    def setUp(self):
+        dns = resolver()
+        dns.start()
+        self.addCleanup(dns.stop)
+
+    def proxy(self, body, account='acc1', content_type='application/json'):
+        headers = {'Host': 'reader.example', 'X-Forwarded-Proto': 'https', 'X-Internal-Token': 'c0ffee',
+                   'X-Account-Id': account, 'Origin': 'https://reader.example', 'Content-Type': content_type,
+                   'Cookie': 'ttu_session=secret', 'Authorization': 'Bearer secret'}
+        req = urllib.request.Request(self.base + '/sources/fetch', data=json.dumps(body).encode(), headers=headers,
+                                     method='POST')
+        try:
+            with urllib.request.urlopen(req) as response:
+                return response.status, response.headers, response.read()
+        except urllib.error.HTTPError as error:
+            return error.code, error.headers, error.read()
+
+    def refused(self, body):
+        status, _, data = self.proxy(body)
+        return status, json.loads(data)
+
+    def test_proxy_hosts(self):
+        page = 'https://kakuyomu.jp/works/1177354054000000001'
+        status, headers, data = self.proxy({'url': page, 'repo': REPO, 'source': 101})
+        self.assertEqual(status, 200, data[:200])
+        self.assertIn(b'__NEXT_DATA__', data)
+        # The novel's apiUrl is its host, the manga's isn't; client-sent hosts and entries are ignored.
+        self.assertEqual(self.proxy({'url': 'https://api.syosetu.com/novelapi/api/?out=json', 'repo': REPO,
+                                     'source': 102})[0], 200)
+        for body in ({'url': 'https://api.syosetu.com/novelapi/api/', 'repo': REPO, 'source': 101,
+                      'hosts': ['api.syosetu.com'], 'baseUrl': 'https://api.syosetu.com'},
+                     {'url': page, 'repo': REPO, 'source': 999},
+                     {'url': page, 'repo': REPO, 'source': '101x'},
+                     {'url': page, 'repo': 'https://repo.example/missing.json', 'source': 101},
+                     {'url': page, 'repo': 'http://repo.example/index.json', 'source': 101},
+                     {'url': 'https://plain.example/', 'repo': REPO, 'source': 104},
+                     {'url': page, 'source': 101}):
+            status, answer = self.refused(body)
+            self.assertIn(status, (400, 403), body)
+            self.assertTrue(answer['error'])
+
+    def test_proxy_ssrf(self):
+        page = 'https://repo.example/headers'
+        for addresses in (['10.0.0.5'], ['127.0.0.1'], ['169.254.169.254'], ['100.100.1.2'], ['192.168.0.9'],
+                          ['::1'], ['fe80::1'], ['fd00::1'], ['::ffff:127.0.0.1'], ['0.0.0.0'], ['224.0.0.1'],
+                          [PUBLIC, '10.0.0.5']):
+            with resolver({'repo.example': [PUBLIC], 'kakuyomu.jp': addresses}):
+                status, answer = self.refused({'url': 'https://kakuyomu.jp/', 'repo': REPO, 'source': 101})
+            self.assertEqual(status, 403, addresses)
+            self.assertIn('public', answer['error'])
+        for url in ('http://repo.example/headers', 'https://repo.example:8443/headers',
+                    'https://user:pw@repo.example/headers', 'ftp://repo.example/headers'):
+            self.assertEqual(self.refused({'url': url, 'repo': REPO, 'source': 103})[0], 403, url)
+        self.assertEqual(self.proxy({'url': page, 'repo': REPO, 'source': 103})[0], 200)
+        # The repository's own host is checked too.
+        with resolver({'repo.example': ['127.0.0.1']}):
+            fetcher_index = mock.patch.dict(service.sources._indexes, clear=True)
+            with fetcher_index:
+                self.assertEqual(self.refused({'url': page, 'repo': REPO, 'source': 103})[0], 403)
+
+    def test_proxy_redirects(self):
+        status, answer = self.refused({'url': 'https://repo.example/to/evil.example/x', 'repo': REPO,
+                                       'source': 103})
+        self.assertEqual(status, 403)
+        self.assertIn('evil.example', answer['error'])
+        # internal.repo.example is the entry's apiUrl, but it resolves to a LAN address.
+        with resolver({'internal.repo.example': ['10.1.2.3']}):
+            status, answer = self.refused({'url': 'https://repo.example/to/internal.repo.example/', 'repo': REPO,
+                                           'source': 103})
+        self.assertEqual(status, 403)
+        self.assertIn('public', answer['error'])
+
+    def test_proxy_answer(self):
+        serve.INDEX_HITS['count'] = 0
+        service.sources._indexes.clear()
+        status, headers, data = self.proxy({'url': 'https://repo.example/headers', 'repo': REPO, 'source': 103,
+                                            'headers': {'Referer': 'https://repo.example/', 'Accept': 'text/html',
+                                                        'Cookie': 'a=b', 'Authorization': 'Basic x',
+                                                        'X-Forwarded-For': '10.0.0.1', 'Host': 'evil.example'}})
+        self.assertEqual(status, 200)
+        sent = {name.lower(): value for name, value in json.loads(data).items()}
+        self.assertEqual(sent.get('referer'), 'https://repo.example/')
+        self.assertEqual(sent.get('accept'), 'text/html')
+        for name in ('cookie', 'authorization', 'x-forwarded-for', 'x-account-id', 'x-internal-token'):
+            self.assertNotIn(name, sent)
+        self.assertIn('Chrome/', sent['user-agent'])
+        self.assertIsNone(headers.get('Set-Cookie'))
+        self.assertEqual(headers['Content-Type'], 'application/octet-stream')
+        self.assertEqual(headers['X-Source-Type'], 'text/html')
+        self.assertEqual(headers['X-Source-Url'], 'https://repo.example/headers')
+        self.assertEqual(headers['X-Content-Type-Options'], 'nosniff')
+        self.assertIn('sandbox', headers['Content-Security-Policy'])
+        # An error answer keeps the site's status.
+        status, _, data = self.proxy({'url': 'https://repo.example/nothing', 'repo': REPO, 'source': 103})
+        self.assertEqual((status, json.loads(data)['status']), (502, 404))
+        self.assertEqual(serve.INDEX_HITS['count'], 1)
+        # A cross-site form can only send text/plain.
+        self.assertEqual(self.proxy({'url': 'https://repo.example/headers', 'repo': REPO, 'source': 103},
+                                    content_type='text/plain')[0], 415)
+
+    def test_proxy_busy(self):
+        with mock.patch.object(fetcher, 'INTERVAL', 30):
+            fetcher.fetch('https://kakuyomu.jp/works/1177354054000000001', kakuyomu.HOSTS)
+            start = time.monotonic()
+            status, headers, data = self.proxy({'url': 'https://kakuyomu.jp/works/1177354054000000001',
+                                                'repo': REPO, 'source': 101})
+            self.assertEqual(status, 429)
+            self.assertLess(time.monotonic() - start, 2)
+            self.assertGreater(int(headers['Retry-After']), 20)
+            fetcher._next.pop('kakuyomu.jp', None)
+        answers = []
+        threads = [threading.Thread(target=lambda: answers.append(self.proxy(
+            {'url': 'https://repo.example/slow', 'repo': REPO, 'source': 103})[0])) for _ in range(5)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(sorted(answers), [200, 200, 200, 200, 429])
+
+
+class PinnedTest(unittest.TestCase):
+    def test_proxy_pinned(self):
+        answers = iter([[PUBLIC], ['127.0.0.1']])
+        connected = []
+
+        def connect(address, *args, **kwargs):
+            connected.append(address)
+            raise ConnectionRefusedError('test')
+
+        with mock.patch.object(fetcher, 'FIXTURE_URL', ''), \
+                resolver() as dns, mock.patch.object(fetcher.socket, 'create_connection', side_effect=connect):
+            dns.side_effect = lambda host, port, *a, **k: [(2, 1, 6, '', (a, port)) for a in next(answers)]
+            with self.assertRaises(fetcher.FetchError):
+                fetcher.fetch_public('https://site.example/', {'site.example'})
+        self.assertEqual(connected, [(PUBLIC, 443)])
 
 
 if __name__ == '__main__':

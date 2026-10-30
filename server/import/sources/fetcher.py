@@ -7,8 +7,16 @@ SOURCES_FIXTURE_URL (tests and the test stack only) sends https://<host>/<path> 
 Servers a reader added (origin=...) have their own rule: they may be on the LAN, so instead of a list of hosts only
 that server's own scheme, host and port pass, redirects included (its credentials go nowhere else), with a shorter
 interval (the reader's own server, not a public site) and no fixture rewriting.
+
+fetch_public() is the extensions' fetch proxy rule (anyone with the import permission can name any host there, see
+api.proxy): https on port 443 only, no userinfo, every address the host resolves to must be public (no LAN, loopback,
+link-local, CGNAT or multicast), checked on every redirect, and the connection goes to the checked address (no DNS
+rebinding). It never waits long for the host's slot (Busy instead) and leaves 429/503 to the caller.
 """
+import http.client
+import ipaddress
 import os
+import socket
 import threading
 import time
 import urllib.error
@@ -40,12 +48,51 @@ class FetchError(Exception):
         self.reason = reason  # why it couldn't be reached
 
 
+class Busy(FetchError):
+    """The host's next free slot is more than max_wait seconds away."""
+
+    def __init__(self, host: str, wait: float):
+        super().__init__(f'{host} is busy; try again in {int(wait) + 1} s', 429)
+        self.wait = wait
+
+
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):
         return None
 
 
 _opener = urllib.request.build_opener(_NoRedirect)
+
+
+def _public_address(host: str) -> str:
+    """The address to connect to: host's first, once every address it resolves to is public."""
+    try:
+        answers = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+    except OSError as error:
+        raise FetchError(f"{host} didn't answer ({error})", reason=str(error)) from error
+    for answer in answers:
+        address = ipaddress.ip_address(answer[4][0].split('%')[0])
+        address = getattr(address, 'ipv4_mapped', None) or address
+        if not address.is_global or address.is_multicast:
+            raise FetchError(f'Refused to fetch {host}: not a public address')
+    if not answers:
+        raise FetchError(f"{host} didn't answer (no address)")
+    return answers[0][4][0]
+
+
+def _pinned_opener(address: str):
+    """An opener whose https connections go to `address`, TLS checked against the URL's host name."""
+    class Connection(http.client.HTTPSConnection):
+        def connect(self):
+            sock = socket.create_connection((address, self.port), self.timeout)
+            self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+
+    class Handler(urllib.request.HTTPSHandler):
+        def https_open(self, req):
+            return self.do_open(Connection, req, context=self._context)
+
+    # No ProxyHandler from the environment: a proxy would connect to the host by name again.
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect, Handler)
 
 
 def origin(url: str) -> str:
@@ -60,11 +107,13 @@ def origin(url: str) -> str:
     return f'{parts.scheme}://{parts.hostname.lower()}:{port}'
 
 
-def _wait_turn(host: str, interval: float):
-    """Takes the host's next slot (one per interval), then sleeps until it comes."""
+def _wait_turn(host: str, interval: float, max_wait: float | None = None):
+    """Takes the host's next slot (one per interval), then sleeps until it comes; Busy if it's past max_wait."""
     with _lock:
         now = time.monotonic()
         slot = max(now, _next.get(host, 0.0))
+        if max_wait is not None and slot - now > max_wait:
+            raise Busy(host, slot - now)
         _next[host] = slot + interval
     time.sleep(max(0.0, slot - now))
 
@@ -113,40 +162,64 @@ def fetch(url: str, hosts: set[str], headers: dict | None = None, server: str = 
     """GETs url (http(s), a host in `hosts`, or with `server` (an origin()) only on that server); returns (body,
     final url). With to_path the body is streamed into that file instead (uncompressed; b'' is returned; the caller
     removes the file on failure). Raises FetchError with a reader-facing message."""
+    return _fetch(url, hosts, headers, server, max_bytes, to_path)[:2]
+
+
+def fetch_public(url: str, hosts: set[str], headers: dict | None = None, max_bytes: int | None = None,
+                 max_wait: float = 20) -> tuple[bytes, str, str]:
+    """GETs url under the public rule (module docstring); returns (body, final url, content type)."""
+    return _fetch(url, hosts, headers, max_bytes=max_bytes, public=True, max_wait=max_wait)
+
+
+def _fetch(url: str, hosts: set[str], headers: dict | None = None, server: str = '', max_bytes: int | None = None,
+           to_path: str = '', public: bool = False, max_wait: float | None = None) -> tuple[bytes, str, str]:
     max_bytes = max_bytes or MAX_BYTES
     for _ in range(MAX_REDIRECTS + 1):
         parts = urlparse(url)
         host = (parts.hostname or '').lower()
+        opener = _opener
         if server:
             if origin(url) != server:
                 raise FetchError(f'Refused to fetch {host or url}: not on this server')
         elif parts.scheme not in ('http', 'https') or host not in hosts:
             raise FetchError(f'Refused to fetch {host or url}: not a page of this site')
+        if public:
+            try:
+                port = parts.port
+            except ValueError:
+                port = -1
+            if parts.scheme != 'https' or port not in (None, 443) or '@' in parts.netloc:
+                raise FetchError(f'Refused to fetch {host}: only https on the usual port')
+            address = _public_address(host)
+            if not FIXTURE_URL:
+                opener = _pinned_opener(address)
         target = f'{FIXTURE_URL}/{host}{parts.path or "/"}' + (f'?{parts.query}' if parts.query else '') \
             if FIXTURE_URL and not server else url
         request = urllib.request.Request(target, headers={
             'User-Agent': USER_AGENT, 'Accept-Encoding': 'identity' if to_path else 'gzip',
             'Accept-Language': 'ja,en;q=0.8', **(headers or {})})
-        for attempt in range(RETRIES):
-            _wait_turn(server or host, SERVER_INTERVAL if server else INTERVAL)
+        for attempt in range(1 if public else RETRIES):
+            _wait_turn(server or host, SERVER_INTERVAL if server else INTERVAL, max_wait)
             try:
-                with _opener.open(request, timeout=TIMEOUT) as response:
+                with opener.open(request, timeout=TIMEOUT) as response:
+                    kind = response.headers.get('Content-Type', '')
                     if to_path:
                         _stream(response, to_path, max_bytes)
-                        return b'', url
+                        return b'', url, kind
                     raw = response.read(max_bytes + 1)
                     if len(raw) > max_bytes:
                         raise FetchError('The page is too large')
-                    return _decode(response, raw, max_bytes), url
+                    return _decode(response, raw, max_bytes), url, kind
             except urllib.error.HTTPError as error:
                 if error.code in (301, 302, 303, 307, 308) and error.headers.get('Location'):
                     url = urljoin(url, error.headers['Location'])
                     break
                 wait = _retry_after(error.headers.get('Retry-After')) if error.code in (429, 503) else None
-                if wait is None or wait > MAX_RETRY_AFTER or attempt == RETRIES - 1:
+                if wait is not None and wait <= MAX_RETRY_AFTER:
+                    with _lock:
+                        _next[server or host] = max(_next.get(server or host, 0.0), time.monotonic() + wait)
+                if wait is None or wait > MAX_RETRY_AFTER or attempt == (0 if public else RETRIES - 1):
                     raise FetchError(f"{host} didn't answer ({error.code})", error.code) from error
-                with _lock:
-                    _next[server or host] = max(_next.get(server or host, 0.0), time.monotonic() + wait)
             except (urllib.error.URLError, OSError) as error:
                 reason = str(getattr(error, 'reason', error))
                 raise FetchError(f"{host} didn't answer ({reason})", reason=reason) from error
