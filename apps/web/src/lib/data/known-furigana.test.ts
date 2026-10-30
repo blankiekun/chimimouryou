@@ -5,10 +5,7 @@
  */
 
 import 'fake-indexeddb/auto';
-import { describe, expect, it, vi } from 'vitest';
-
-// known-furigana loads kanji met, which sync through extras-sync and its storage handler.
-vi.mock('$lib/data/storage/handler/server-handler', () => ({ ServerStorageHandler: {} }));
+import { describe, expect, it } from 'vitest';
 
 import readings from 'yurigana/kanji-readings.json';
 import {

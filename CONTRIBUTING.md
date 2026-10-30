@@ -130,9 +130,8 @@ git merge upstream/main`, open a PR and merge it with **Create a merge
   - Network: `vi.stubGlobal('fetch', vi.fn(...))` and assert on what was sent
     (see `account-settings-sync.test.ts`, `tts.test.ts`).
   - Signed-in state: `vi.mock('$lib/data/account', …)` with a hoisted user.
-  - The storage handlers import each other: import
-    `$lib/data/storage/storage-handler-factory` before a handler, or mock
-    `server-handler` (see `kanji-seen.test.ts`).
+  - Storage handlers import directly, in any order: handlers reach
+    `storage-handler-factory` only through `await import(…)`.
   - The v1 API: `fakeApi` in `data/test-utils/fake-api.ts` (see
     `server-handler.test.ts`).
 - `pnpm check` has 13 errors that predate the fork; only new ones matter.
@@ -159,7 +158,7 @@ Listen modes, `onPositionSettled` work and a settings component. Plugins start
 off; hosts read `activePlugins$`, so nothing runs until a reader turns it on.
 
 **A per-reader file for Calibre books** - a sync file (`data/sync-files.ts`)
-maps to a row kind in `server-handler.ts` (`bookDocs` per book, `accountDocs` at
+maps to a row kind in `server-rows.ts` (`bookDocs` per book, `accountDocs` at
 the root, used by `readSyncFile`/`writeSyncFile`), and the server must allow that
 kind: the `book_docs`/`account_docs` check in `api/apidb.py` and the `docs/(…)`
 route in `api/service.py` (plus `migrate.py`'s map if old folders hold it).

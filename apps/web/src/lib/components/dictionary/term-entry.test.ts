@@ -5,7 +5,6 @@
  */
 
 import 'fake-indexeddb/auto';
-import '$lib/data/storage/storage-handler-factory';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { OptionsUtil } from '$lib/vendor/yomitan/data/options-util';
 import type { TermDictionaryEntry } from '$lib/vendor/yomitan/types/dictionary';

@@ -22,8 +22,6 @@ vi.mock('$lib/components/book-reader/book-reading-tracker/book-reading-tracker',
   getDefaultStatistic: (title: string, dateKey: string) => ({ title, dateKey })
 }));
 
-// The storage handlers import each other in a cycle: the factory first.
-await import('$lib/data/storage/storage-handler-factory');
 const { storeBookCompletion } = await import('./book-completion');
 const { getDateKey } = await import('$lib/functions/statistic-util');
 

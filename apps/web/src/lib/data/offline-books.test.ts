@@ -14,8 +14,6 @@ vi.mock('$lib/data/account', () => ({
   currentAccount: () => null
 }));
 
-// Same order as the app: the factory first, because the handlers import each other.
-await import('$lib/data/storage/storage-handler-factory');
 const { homeOfflineTitles, keepBooksOffline } = await import('./offline-books');
 const { database } = await import('$lib/data/store');
 

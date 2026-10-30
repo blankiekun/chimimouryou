@@ -13,9 +13,7 @@
  * Not part of upstream.
  */
 
-// The factory first: the handlers import each other in a cycle.
-import '$lib/data/storage/storage-handler-factory';
-import { ServerStorageHandler } from '$lib/data/storage/handler/server-handler';
+import { serverSyncFiles } from '$lib/data/server-rows';
 import { FilesystemStorageHandler } from '$lib/data/storage/handler/filesystem-handler';
 import { GDriveStorageHandler } from '$lib/data/storage/handler/gdrive-handler';
 import { OneDriveStorageHandler } from '$lib/data/storage/handler/onedrive-handler';
@@ -68,7 +66,7 @@ async function sourceType(name: string) {
  */
 export async function syncFileStore(name: string): Promise<SyncFileStore | undefined> {
   if (!name) return undefined;
-  if (name === StorageSourceDefault.CALIBRE_DEFAULT) return ServerStorageHandler;
+  if (name === StorageSourceDefault.CALIBRE_DEFAULT) return serverSyncFiles;
 
   const type = await sourceType(name);
 
@@ -128,9 +126,7 @@ export function readerSyncSource() {
 
 /** The store for the reader's own files: the account's folder while signed in. */
 export function readerSyncStore(signedIn: boolean) {
-  return signedIn
-    ? Promise.resolve<SyncFileStore>(ServerStorageHandler)
-    : syncFileStore(readerSyncSource());
+  return signedIn ? Promise.resolve(serverSyncFiles) : syncFileStore(readerSyncSource());
 }
 
 /** A corrupt remote file (a cut-off upload) counts as missing, so the local copy replaces it. */

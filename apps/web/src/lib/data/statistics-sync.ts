@@ -9,8 +9,6 @@
  * not only the ones opened in this browser. Not part of upstream.
  */
 
-// The factory first: the handlers import each other in a cycle.
-import '$lib/data/storage/storage-handler-factory';
 import { BrowserStorageHandler } from '$lib/data/storage/handler/browser-handler';
 import { ServerStorageHandler } from '$lib/data/storage/handler/server-handler';
 import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';

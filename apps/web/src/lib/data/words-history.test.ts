@@ -16,7 +16,6 @@ import {
 } from '$lib/data/words-history';
 
 vi.mock('$lib/data/extras-sync', () => ({ pullKanji: async () => {}, kanjiChanged: () => {} }));
-vi.mock('$lib/data/storage/handler/server-handler', () => ({ ServerStorageHandler: {} }));
 
 const book = (words: BookWord[], cap = 1): HistoryBook => ({ words, characters: 1000, cap });
 

@@ -6,7 +6,6 @@
 
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
-import '$lib/data/storage/storage-handler-factory';
 import { installWay } from '$lib/data/install-app';
 import { showsExternalReadHint } from '$lib/data/standalone-storage';
 import { StorageKey } from '$lib/data/storage/storage-types';

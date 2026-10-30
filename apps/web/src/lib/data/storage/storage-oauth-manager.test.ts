@@ -18,7 +18,6 @@ vi.mock('$lib/data/android-drive', () => ({
 vi.stubEnv('VITE_GDRIVE_CLIENT_ID', 'client-id');
 vi.stubEnv('VITE_GDRIVE_CLIENT_SECRET', 'client-secret');
 
-await import('$lib/data/storage/storage-handler-factory');
 const { StorageOAuthManager, storageOAuthTokens, storedRefreshToken, storeRefreshToken } =
   await import('./storage-oauth-manager');
 const { StorageKey, StorageSourceDefault } = await import('./storage-types');

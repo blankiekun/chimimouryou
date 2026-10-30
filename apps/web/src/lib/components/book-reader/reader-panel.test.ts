@@ -5,7 +5,6 @@
  */
 
 import 'fake-indexeddb/auto';
-import '$lib/data/storage/storage-handler-factory';
 import { tick } from 'svelte';
 import { describe, expect, it } from 'vitest';
 import { buildSearchIndex } from '$lib/functions/book-text/book-search';
