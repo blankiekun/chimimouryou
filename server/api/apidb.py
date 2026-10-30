@@ -118,6 +118,28 @@ CREATE TABLE IF NOT EXISTS book_metadata (
     book INTEGER PRIMARY KEY REFERENCES books(id), data TEXT NOT NULL,
     modified INTEGER NOT NULL, rev INTEGER NOT NULL);
 
+-- Sources (the import service, server/import/sources/): works fetched from sites, their volumes in Calibre and
+-- the fetch jobs. Not synced (no rev): the Sources pages ask the import service.
+CREATE TABLE IF NOT EXISTS works (
+    id INTEGER PRIMARY KEY, site TEXT NOT NULL, work_key TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT '', authors TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL DEFAULT 'novel' CHECK (kind IN ('novel', 'manga')), url TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ongoing', chapters INTEGER NOT NULL DEFAULT 0,
+    per TEXT NOT NULL DEFAULT 'volume', volume_size INTEGER, cover TEXT NOT NULL DEFAULT '',
+    updated INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (site, work_key));
+CREATE TABLE IF NOT EXISTS work_volumes (
+    work INTEGER NOT NULL REFERENCES works(id), number INTEGER NOT NULL,
+    first_ch INTEGER NOT NULL, last_ch INTEGER NOT NULL, calibre_id INTEGER,
+    complete INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (work, number));
+-- volumes: the volume numbers still to fetch (JSON); done/total count units (chapters) of the whole job.
+CREATE TABLE IF NOT EXISTS source_jobs (
+    id TEXT PRIMARY KEY, account TEXT NOT NULL, work INTEGER NOT NULL REFERENCES works(id),
+    kind TEXT NOT NULL, volumes TEXT NOT NULL, unit TEXT NOT NULL DEFAULT 'chapters',
+    done INTEGER NOT NULL DEFAULT 0, total INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL,
+    error TEXT NOT NULL DEFAULT '', failed_at INTEGER, created INTEGER NOT NULL, updated INTEGER NOT NULL);
+
 CREATE INDEX IF NOT EXISTS progress_rev ON progress(account, rev);
 CREATE INDEX IF NOT EXISTS statistics_rev ON statistics(account, rev);
 CREATE INDEX IF NOT EXISTS goals_rev ON goals(account, rev);

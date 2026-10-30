@@ -26,6 +26,9 @@ added to Calibre: the worker unpacks its game folder into VN_DIR, named after th
 uploaded file, where the catalog lists it as a visual novel.
 
 Job states: queued, adding, added (calibreId, title), duplicate, failed (error).
+
+Sources (sources/api.py, endpoints under /sources/): works fetched from sites go into this queue as EPUBs, one
+job per volume, with their Calibre title, series, index, identifier and tag.
 Standard library only. Not part of upstream.
 """
 import fcntl
@@ -45,7 +48,10 @@ from urllib.parse import parse_qs, urlparse
 
 # httpbase.py (shared request checks) is in the parent folder: /app in the images, server/ here.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'api'))
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 import httpbase  # noqa: E402
+from sources import api as sources  # noqa: E402
 
 LIBRARY = os.environ.get('CALIBRE_LIBRARY', '/library')
 STATE_DIR = os.environ.get('IMPORT_STATE_DIR', '/data/state/import')
@@ -313,7 +319,11 @@ def add_book(job: dict) -> dict:
     """Runs calibredb add for one queued file; returns the fields to update."""
     path = os.path.join(queue_dir(), job['file'])
     command = [CALIBREDB, '--library-path', LIBRARY, 'add', path]
-    if path.endswith('.cbz'):  # Comics rarely carry metadata; the queued name is a job id.
+    if job.get('series'):  # a Sources volume
+        command += ['--title', job['title'], '--authors', job['authors'], '--series', job['series'],
+                    '--series-index', str(job['seriesIndex']), '--identifier', job['identifier'],
+                    '--tags', job['tags']]
+    elif path.endswith('.cbz'):  # Comics rarely carry metadata; the queued name is a job id.
         title = job['name'].rsplit('.', 1)[0]
         # 第01巻.cbz in two series' folders would be duplicates: the folder names the series.
         if job.get('folder') and GENERIC_NAME.fullmatch(title):
@@ -446,8 +456,37 @@ def run_queue():
             batch_done = not any(j['state'] == 'queued' for j in jobs.values()) and \
                 any(j['state'] == 'unlisted' for j in jobs.values())
             save_jobs()
+        if job.get('sourceJob'):
+            try:
+                sources.volume_added(job)
+            except Exception as error:  # noqa: BLE001 - the queue goes on
+                print(f"sources: volume of {job['sourceJob']}: {error!r}", file=sys.stderr)
         if batch_done:
             finish_batch()
+
+
+def enqueue_file(account: str, name: str, write, extra: dict) -> dict:
+    """Queues a file made on the server (Sources): write(path) makes it in the queue folder."""
+    job_id = uuid.uuid4().hex
+    file = f"{job_id}.{name.rsplit('.', 1)[-1]}"
+    try:
+        write(os.path.join(queue_dir(), file))
+        now = time.time()
+        job = {'id': job_id, 'account': account, 'name': name, 'file': file, 'state': 'queued',
+               'created': now, 'updated': now, **extra}
+        write_job_file(job)
+    except BaseException:
+        remove_queued(file)
+        raise
+    with work:
+        jobs[job_id] = job
+        save_jobs()
+        work.notify()
+    return job
+
+
+def start_sources():
+    sources.start(STATE_DIR, enqueue_file)
 
 
 def vn_folder_id(name: str) -> int:
@@ -570,10 +609,39 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):  # noqa: N802
         httpbase.guard(self, self.post)
 
+    def do_DELETE(self):  # noqa: N802
+        httpbase.guard(self, self.delete)
+
+    def sources_api(self, method: str):
+        account = self.account()
+        body = {}
+        if method != 'GET':
+            self.same_origin()
+        if method == 'POST':
+            try:
+                body = json.loads(httpbase.read_body(self, 1 << 16) or b'{}')
+                if not isinstance(body, dict):
+                    raise ValueError
+            except ValueError as error:
+                raise ApiError(400, 'Invalid request') from error
+        try:
+            return sources.route(method, self.path.split('?', 1)[0][len('/sources'):], account, body)
+        except sources.ApiError as error:
+            raise ApiError(error.status, str(error)) from error
+
+    def delete(self):
+        if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
+            return self.send(403, {'error': 'Only nginx may call this service'})
+        if self.path.startswith('/sources/'):
+            return self.handle_api(lambda: self.sources_api('DELETE'))
+        return self.send(404, {'error': 'not found'})
+
     def get(self):
         url = urlparse(self.path)
         if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
             return self.send(403, {'error': 'Only nginx may call this service'})
+        if url.path.startswith('/sources/'):
+            return self.handle_api(lambda: self.sources_api('GET'))
         if url.path != '/jobs':
             return self.send(404, {'error': 'not found'})
 
@@ -599,6 +667,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.handle_api(self.catalog)
         if path == '/remove':
             return self.handle_api(self.remove)
+        if path.startswith('/sources/'):
+            return self.handle_api(lambda: self.sources_api('POST'))
         return self.send(404, {'error': 'not found'})
 
     def same_origin(self):
@@ -732,6 +802,7 @@ def main():
                 shutil.rmtree(entry.path, ignore_errors=True)
     threading.Thread(target=worker, daemon=True).start()
     threading.Thread(target=expire_trash, daemon=True).start()
+    start_sources()
     ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
 
 
