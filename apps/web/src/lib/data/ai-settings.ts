@@ -101,7 +101,7 @@ export const aiFeatureDefaults: Record<AiTextFeature, AiSamplers> = {
     top_p: 1,
     frequency_penalty: 0,
     presence_penalty: 0,
-    max_tokens: 2048,
+    max_tokens: 8192,
     reasoning: 'off',
     stream: true
   },
@@ -110,7 +110,7 @@ export const aiFeatureDefaults: Record<AiTextFeature, AiSamplers> = {
     top_p: 1,
     frequency_penalty: 0,
     presence_penalty: 0,
-    max_tokens: 4096,
+    max_tokens: 16_384,
     context: 20_000,
     reasoning: 'off',
     // The answer is JSON.
