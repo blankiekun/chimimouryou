@@ -126,7 +126,7 @@ export function paintHighlights(
     )
   );
 
-  return { highlightRanges, readingRange };
+  return { highlightRanges, readingRange, searchRange };
 }
 
 function caretAt(x: number, y: number) {
@@ -241,6 +241,9 @@ export class HighlightPainter {
 
   private highlightRanges: HighlightRange[] = [];
 
+  /** Runs once after the next paint, with the search match's range */
+  private searchCheck: ((range: Range | undefined) => void) | undefined;
+
   private highlightsDirty = true;
 
   private unknownSpans: CountSpan[] = [];
@@ -304,6 +307,11 @@ export class HighlightPainter {
     this.highlightRanges = painted.highlightRanges;
     this.highlightsDirty = false;
 
+    const { searchCheck } = this;
+
+    this.searchCheck = undefined;
+    searchCheck?.(painted.searchRange);
+
     return painted.readingRange;
   }
 
@@ -349,6 +357,28 @@ export class HighlightPainter {
       scrollToCount(match.start);
       this.scheduleHighlights(true);
     }
+  }
+
+  /**
+   * Highlights a search match the reader is jumping to. Counts skip punctuation, so a jump to
+   * `start` lands on the next counted character, which can leave a match like 。 at the end of
+   * the page or column before: then it goes back one character, once the jump has painted.
+   */
+  showSearch(
+    match: SearchMatch | undefined,
+    bookWidth: () => number,
+    scrollToCount: (count: number) => void
+  ) {
+    this.searchMatch = match;
+    this.searchCheck =
+      match?.skip && match.start > 0
+        ? (range) => {
+            if (range && !isOnScreen(range.getBoundingClientRect(), bookWidth(), innerHeight)) {
+              scrollToCount(match.start - 1);
+              this.scheduleHighlights(true);
+            }
+          }
+        : undefined;
   }
 
   /** The highlight under the point (x, y), if any. */
