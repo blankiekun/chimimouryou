@@ -102,19 +102,18 @@ describe('saveSeriesOverrides', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('merges changes into the latest server copy', async () => {
-    api.setRow('series', { book: api.bookId('other'), series: 'X', modified: 1 });
-
     const fetchMock = vi.fn((url: string, init?: RequestInit) => api.fetch(url, init));
 
     vi.stubGlobal('fetch', fetchMock);
-    // The page loads the series before a save, as the app does.
+    // The page loads the series before a save, as the app does; another device saves after that.
     await loadSeriesOverrides(true);
+    api.setRow('series', { book: api.bookId('other'), series: 'X', modified: 1 });
 
     const result = await saveSeriesOverrides({ mine: 'Y' });
     const put = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT')!;
 
     expect(put[0]).toBe(`/api/v1/series/${api.bookId('mine')}`);
-    expect(Object.keys(result)).toEqual(['other', 'mine']);
+    expect(result.other.series).toBe('X');
     expect(result.mine.series).toBe('Y');
   });
 });

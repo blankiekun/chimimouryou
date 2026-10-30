@@ -416,7 +416,7 @@ export class ServerStorageHandler extends BaseStorageHandler {
 
       try {
         const [books, mirror, difficulty, local] = await Promise.all([
-          loadCalibreCatalog(true),
+          signedInOr401(loadCalibreCatalog(true)),
           this.state().then(() => signedInOr401(syncMirror())),
           loadCalibreDifficulty().catch(
             () => ({}) as Awaited<ReturnType<typeof loadCalibreDifficulty>>

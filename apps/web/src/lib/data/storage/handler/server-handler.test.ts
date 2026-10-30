@@ -172,11 +172,21 @@ describe('getBookList', () => {
 
   // Bugs: a 401 for a signed-out reader shown as a failure (the source switches to the
   // browser), or the first build's 404 shown as an empty library forever.
+  // Also: a signed-in 401 (expired session) listing nothing instead of saying so, and the
+  // library staying on "building" after the first build is done.
   it('asks to sign in on 401 and waits for the first build on 404', async () => {
     account.user = null;
+    libraryOffline$.next(true);
     vi.stubGlobal('fetch', async () => new Response('{}', { status: 401 }));
     expect(await handler().getBookList()).toEqual([]);
+    expect(libraryOffline$.getValue()).toBe(false);
     expect(librarySignInNeeded(account.user, libraryOffline$.getValue())).toBe(true);
+
+    account.user = { id: 'a', username: 'a' };
+    vi.stubGlobal('fetch', async (url: string) =>
+      /\/catalog|\/sync/.test(url) ? new Response('{}', { status: 401 }) : api.fetch(url)
+    );
+    await expect(handler().getBookList()).rejects.toThrow('Your sign-in has expired');
 
     account.user = { id: 'a', username: 'a' };
     vi.stubGlobal('fetch', async (url: string) =>
@@ -184,6 +194,10 @@ describe('getBookList', () => {
     );
     expect(await handler().getBookList()).toEqual([]);
     expect(libraryBuilding$.getValue()).toBe(true);
+
+    vi.stubGlobal('fetch', (url: string) => api.fetch(url));
+    await handler().getBookList();
+    expect(libraryBuilding$.getValue()).toBe(false);
   });
 
   // Bug: a book a friend sent (not in the catalog) vanished from the library after a reload.
