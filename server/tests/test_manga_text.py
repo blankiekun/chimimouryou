@@ -126,7 +126,7 @@ class MangaTextTest(unittest.TestCase):
         self.assertTrue(self.service.unchanged_since_failure({'size': 10}, {'size': 10}))
 
     def test_readings_files_skip_manga(self):
-        self.service.find_bookdata = lambda title: self.fail('looked up ' + title)
+        self.service.find_text = lambda book: self.fail('looked up ' + book['title'])
         self.assertEqual(self.service.ReadingsQueue()._request(2), 'unavailable')
 
 

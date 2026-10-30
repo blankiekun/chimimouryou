@@ -150,7 +150,7 @@ class Migration:
                 raise ValueError('entry without dateKey')
             counts['statistics'] += 1
             self.row(rev, 'statistics', {'account': account, 'book': book, 'date_key': entry['dateKey']},
-                     as_ms(entry['lastStatisticModified']), {'data': apidb.to_json(entry)})
+                     as_ms(entry['lastStatisticModified']), {'data': apidb.to_json(entry), 'deleted': 0})
 
     def goals(self, rev, account, file, counts):
         entries = read_json(file)
@@ -161,7 +161,7 @@ class Migration:
                 raise ValueError('entry without goalStartDate')
             counts['goals'] += 1
             self.row(rev, 'goals', {'account': account, 'goal_start': entry['goalStartDate']},
-                     as_ms(entry['lastGoalModified']), {'data': apidb.to_json(entry)})
+                     as_ms(entry['lastGoalModified']), {'data': apidb.to_json(entry), 'deleted': 0})
 
     def highlights(self, rev, account, book, file, counts):
         highlights = read_json(file).get('highlights')

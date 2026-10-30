@@ -26,6 +26,7 @@ API_DB = os.environ.get('API_DB', os.path.join(API_STATE_DIR, 'library.db'))
 HOST = os.environ.get('API_HOST', '127.0.0.1')
 PORT = int(os.environ.get('API_PORT', '8769'))
 ACCOUNT_DATA_DIR = os.environ.get('ACCOUNT_DATA_DIR', '/data/accounts')
+CALIBRE_CATALOG = os.environ.get('CALIBRE_CATALOG', '/data/state/catalog/catalog.json')
 INTERNAL_TOKEN_FILE = os.environ.get('INTERNAL_TOKEN_FILE', '/data/state/internal-token')
 MIN_FREE_BYTES = int(os.environ.get('MIN_FREE_MB', '1024')) * 1024 * 1024
 VERSION = os.environ.get('VERSION', 'docker')
@@ -170,6 +171,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def get_catalog(self, match):
         since = int_param(self.query, 'since', 0, 0)
+        if not os.path.exists(CALIBRE_CATALOG):
+            # The client shows "the library is being built" for this 404.
+            raise ApiError(404, 'The library is being built')
 
         def read(connection):
             if since == 0:
@@ -219,6 +223,13 @@ class Handler(BaseHTTPRequestHandler):
                 result[name] = [row_json(table, row) for row in rows]
             return result
         return 200, db.transaction(read)
+
+    def get_migration(self, match):
+        try:
+            with open(os.path.join(API_STATE_DIR, 'migrate-report.json'), encoding='utf-8') as f:
+                return 200, json.load(f)
+        except FileNotFoundError:
+            return 200, {}
 
     # -- writes
 
@@ -283,12 +294,19 @@ class Handler(BaseHTTPRequestHandler):
         return self.put('progress', {'account': self.account, 'book': book}, body['modified'],
                         {'data': self.data_of(body), 'progress': progress or 0})
 
-    def put_statistics(self, match):
-        book, body = self.book_of(match), self.read_json()
+    def statistics_key(self, match) -> dict:
+        book = self.book_of(match)
         if not apidb.DATE_RE.fullmatch(match[2]):
             raise ApiError(400, 'Bad date')
-        return self.put('statistics', {'account': self.account, 'book': book, 'date_key': match[2]},
-                        body['modified'], {'data': self.data_of(body)})
+        return {'account': self.account, 'book': book, 'date_key': match[2]}
+
+    def put_statistics(self, match):
+        key, body = self.statistics_key(match), self.read_json()
+        return self.put('statistics', key, body['modified'], {'data': self.data_of(body), 'deleted': 0})
+
+    def delete_statistics(self, match):
+        key, body = self.statistics_key(match), self.read_json()
+        return self.put('statistics', key, body['modified'], {'data': '{}', 'deleted': 1})
 
     def highlight_key(self, match) -> dict:
         book = self.book_of(match)
@@ -298,7 +316,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def put_highlight(self, match):
         key, body = self.highlight_key(match), self.read_json()
-        return self.put('highlights', key, body['modified'], {'data': self.data_of(body), 'deleted': 0})
+        # Clients PUT their tombstones whole (start and created kept for sorting), like the migration stores them.
+        deleted = int(isinstance(body.get('data'), dict) and body['data'].get('deleted') is True)
+        return self.put('highlights', key, body['modified'], {'data': self.data_of(body), 'deleted': deleted})
 
     def delete_highlight(self, match):
         key, body = self.highlight_key(match), self.read_json()
@@ -315,12 +335,18 @@ class Handler(BaseHTTPRequestHandler):
         return self.put('account_docs', {'account': self.account, 'kind': match[1]}, body['modified'],
                         {'data': self.data_of(body)})
 
-    def put_goals(self, match):
+    def goal_key(self, match) -> dict:
         if not apidb.DATE_RE.fullmatch(match[1]):
             raise ApiError(400, 'Bad date')
-        body = self.read_json()
-        return self.put('goals', {'account': self.account, 'goal_start': match[1]}, body['modified'],
-                        {'data': self.data_of(body)})
+        return {'account': self.account, 'goal_start': match[1]}
+
+    def put_goals(self, match):
+        key, body = self.goal_key(match), self.read_json()
+        return self.put('goals', key, body['modified'], {'data': self.data_of(body), 'deleted': 0})
+
+    def delete_goals(self, match):
+        key, body = self.goal_key(match), self.read_json()
+        return self.put('goals', key, body['modified'], {'data': '{}', 'deleted': 1})
 
     def put_series(self, match):
         book, body = self.book_of(match), self.read_json()
@@ -447,13 +473,16 @@ class Handler(BaseHTTPRequestHandler):
         ('GET', re.compile(r'/api/v1/catalog'), get_catalog),
         ('GET', re.compile(r'/api/v1/books'), get_books),
         ('GET', re.compile(r'/api/v1/sync'), get_sync),
+        ('GET', re.compile(r'/api/v1/migration'), get_migration),
         ('PUT', re.compile(r'/api/v1/books/(\d+)/progress'), put_progress),
         ('PUT', re.compile(r'/api/v1/books/(\d+)/statistics/([^/]+)'), put_statistics),
+        ('DELETE', re.compile(r'/api/v1/books/(\d+)/statistics/([^/]+)'), delete_statistics),
         ('PUT', re.compile(r'/api/v1/books/(\d+)/highlights/([^/]+)'), put_highlight),
         ('DELETE', re.compile(r'/api/v1/books/(\d+)/highlights/([^/]+)'), delete_highlight),
         ('PUT', re.compile(r'/api/v1/books/(\d+)/docs/(recaps|lorebook|vnsaves)'), put_book_doc),
         ('PUT', re.compile(r'/api/v1/docs/(settings|kanji|words|immersion)'), put_account_doc),
         ('PUT', re.compile(r'/api/v1/goals/([^/]+)'), put_goals),
+        ('DELETE', re.compile(r'/api/v1/goals/([^/]+)'), delete_goals),
         ('PUT', re.compile(r'/api/v1/series/(\d+)'), put_series),
         ('PUT', re.compile(r'/api/v1/metadata/(\d+)'), put_metadata),
         ('PUT', re.compile(r'/api/v1/books/(\d+)/text'), put_text),

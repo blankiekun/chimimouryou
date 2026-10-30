@@ -43,10 +43,14 @@ class ServiceTestCase(unittest.TestCase):
         token_file = os.path.join(root, 'internal-token')
         with open(token_file, 'w') as f:
             f.write(TOKEN)
+        catalog_file = os.path.join(root, 'catalog.json')
+        with open(catalog_file, 'w') as f:
+            f.write('{"books": []}')
         values = {
             'API_STATE_DIR': os.path.join(root, 'state', 'api'),
             'ACCOUNT_DATA_DIR': os.path.join(root, 'accounts'),
             'INTERNAL_TOKEN_FILE': token_file,
+            'CALIBRE_CATALOG': catalog_file,
             'VERSION': 'test',
             'MIN_FREE_BYTES': 0,
         }
@@ -119,6 +123,22 @@ class ReadTest(ServiceTestCase):
         self.assertEqual(self.call('GET', '/api/v1/catalog?since=-1')[0], 400)
         self.assertEqual(self.call('GET', '/api/v1/catalog?since=x')[0], 400)
 
+    # Bug caught: before the first build the client must see 'being built' (404), not an empty library;
+    # an empty library after it must not stay 'being built'.
+    def test_catalog_before_first_build(self):
+        os.unlink(service.CALIBRE_CATALOG)
+        self.assertEqual(self.call('GET', '/api/v1/catalog?since=0'), (404, {'error': 'The library is being built'}))
+        with open(service.CALIBRE_CATALOG, 'w') as f:
+            f.write('{"books": []}')
+        self.assertEqual(self.call('GET', '/api/v1/catalog?since=0'), (200, {'rev': 0, 'books': []}))
+
+    # Bug caught: no report yet (a fresh install) would be a 500 on the admin page.
+    def test_migration_report(self):
+        self.assertEqual(self.call('GET', '/api/v1/migration'), (200, {}))
+        report = {'applied': True, 'sources': [{'account': '', 'orphans': ['猫']}]}
+        apidb.write_atomic(os.path.join(service.API_STATE_DIR, 'migrate-report.json'), json.dumps(report).encode())
+        self.assertEqual(self.call('GET', '/api/v1/migration'), (200, report))
+
     def test_books_search_and_paging(self):
         self.books([catalog_book(1, '吾輩は猫である', series='S', added=1), catalog_book(2, '猫町', added=2),
                     catalog_book(3, '坊っちゃん', series='S', added=3), catalog_book(4, 'こころ', added=4),
@@ -187,6 +207,30 @@ class WriteTest(ServiceTestCase):
         self.assertEqual(self.call('DELETE', path, {'modified': 1})[0], 409)
         self.assertEqual(self.call('PUT', f'/api/v1/books/{self.book}/highlights/a%20b', {'modified': 1, 'data': {}})[0],
                          400)
+
+    # Bug caught: a tombstone PUT whole would be stored live, so a deleted highlight comes back elsewhere.
+    def test_highlight_put_tombstone(self):
+        path = f'/api/v1/books/{self.book}/highlights/h-2'
+        tombstone = {'id': 'h-2', 'deleted': True, 'start': 5, 'created': 1}
+        self.assertEqual(self.call('PUT', path, {'modified': 3, 'data': tombstone})[0], 200)
+        [row] = self.sync()['highlights']
+        self.assertEqual((row['deleted'], row['data']), (True, tombstone))
+        self.assertEqual(self.call('PUT', path, {'modified': 4, 'data': {'id': 'h-2', 'deleted': False}})[0], 200)
+        self.assertFalse(self.sync()['highlights'][0]['deleted'])
+
+    # Bug caught: an older delete overwriting a newer day/goal, or a delete the /sync feed doesn't report.
+    def test_statistics_and_goal_tombstones(self):
+        for path in (f'/api/v1/books/{self.book}/statistics/2026-10-01', '/api/v1/goals/2026-10-01'):
+            self.assertEqual(self.call('PUT', path, {'modified': 10, 'data': {'a': 1}}, account=ACCOUNT_A)[0], 200)
+            self.assertEqual(self.call('DELETE', path, {'modified': 20}, account=ACCOUNT_A)[0], 200)
+            self.assertEqual(self.call('DELETE', path, {'modified': 5}, account=ACCOUNT_A)[0], 409)
+        body = self.sync(ACCOUNT_A)
+        for table in ('statistics', 'goals'):
+            [row] = body[table]
+            self.assertEqual((row['deleted'], row['data'], row['modified']), (True, {}, 20))
+        path = '/api/v1/goals/2026-10-01'
+        self.assertEqual(self.call('PUT', path, {'modified': 30, 'data': {'b': 2}}, account=ACCOUNT_A)[0], 200)
+        self.assertFalse(self.sync(ACCOUNT_A)['goals'][0]['deleted'])
 
     def test_accounts_are_isolated(self):
         self.call('PUT', f'/api/v1/books/{self.book}/progress', {'modified': 1, 'progress': 0, 'data': {}},

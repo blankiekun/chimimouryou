@@ -121,9 +121,9 @@ WORDS_VERSION = 20
 # Lists made with their estimate, before lists were made on request: WORDS_DIR/<id>.json.gz, a bare
 # list of rows, version 19 (its totals were the estimate's: migrate_word_lists keeps them).
 LEGACY_WORDS_VERSION = 19
-# Readings files (#17), made from the reader's processed book in the shared sync folder
-# (mounted read-only): <SYNC_DIR>/ttu-reader-data/<title>/bookdata_*.zip.
-SYNC_DIR = os.environ.get('SYNC_DIR', '/data/sync')
+# Readings files (#17), made from the reader's text copy of the book (PUT /api/v1/books/{id}/text):
+# <TEXT_DIR>/<bookId>.json.gz, found by the catalog entry's bookId (library.db's books.id).
+TEXT_DIR = os.environ.get('TEXT_DIR', '/data/state/api/text')
 # Manga text from the mokuro service (<id>.json, mokuro/service.py), read-only here: a manga volume is
 # estimated from it, and again whenever the file changes (watch_manga_text, every MANGA_TEXT_CHECK_SECONDS).
 MOKURO_DIR = os.environ.get('MOKURO_STATE_DIR', '/data/state/mokuro')
@@ -446,13 +446,15 @@ def readings_path(book_id: int) -> str:
     return os.path.join(READINGS_DIR, f'{book_id}.json.gz')
 
 
-def staticdata_html(bookdata: str) -> str:
-    with zipfile.ZipFile(bookdata) as archive:
-        if archive.getinfo('staticdata.json').file_size > MAX_STATICDATA_BYTES:
-            raise ValueError('staticdata.json is too large')
-        html = json.loads(archive.read('staticdata.json'))['elementHtml']
+def text_html(path: str) -> str:
+    """The elementHtml of a text copy (gzipped JSON), unpacked up to MAX_STATICDATA_BYTES."""
+    with gzip.open(path, 'rb') as f:
+        data = f.read(MAX_STATICDATA_BYTES + 1)
+    if len(data) > MAX_STATICDATA_BYTES:
+        raise ValueError('the text copy is too large')
+    html = json.loads(data)['elementHtml']
     if not isinstance(html, str):
-        raise ValueError('staticdata.json has no elementHtml')
+        raise ValueError('the text copy has no elementHtml')
     return html
 
 
@@ -460,35 +462,37 @@ def html_digest(html: str) -> str:
     return hashlib.sha256(html.encode()).hexdigest()
 
 
-def _make_readings(book_id: int, bookdata: str):
-    html = staticdata_html(bookdata)
-    data = readings_file.build(html, _reader, os.path.basename(bookdata), reader_version())
+def _make_readings(book_id: int, job: tuple[str, str]):
+    path, name = job
+    html = text_html(path)
+    data = readings_file.build(html, _reader, name, reader_version())
     readings_file.write(readings_path(book_id), {**data, 'html': html_digest(html)})
 
 
-def find_bookdata(title: str):
-    """The newest bookdata_*.zip in a title's shared sync folder, or None."""
-    folder = os.path.join(SYNC_DIR, 'ttu-reader-data', readings_file.sanitize_for_filename(title))
+def find_text(book: dict) -> tuple[str, str] | None:
+    """(path, name) of the book's text copy, named by its mtime so a new upload is a new name; or None."""
+    book_id = book.get('bookId')
+    if type(book_id) is not int:
+        return None
+    path = os.path.join(TEXT_DIR, f'{book_id}.json.gz')
     try:
-        paths = [os.path.join(folder, name) for name in os.listdir(folder)
-                 if name.startswith('bookdata_') and name.endswith('.zip')]
+        return path, f'text_{int(os.path.getmtime(path) * 1000)}'
     except OSError:
         return None
-    return max(paths, key=os.path.getmtime, default=None)
 
 
 class ReadingsQueue:
     """Readings files to make, in request order, by one worker process that lives while there
     is work. WordsQueue makes word lists the same way."""
-    # Run in the worker as task(book_id, job): here the job is the bookdata's path.
+    # Run in the worker as task(book_id, job): here the job is the text copy's (path, name).
     task = staticmethod(_make_readings)
     initializer = staticmethod(_init_readings_worker)
 
     def __init__(self):
         self.lock = threading.Lock()
-        self.queue = {}  # book id -> bookdata path
+        self.queue = {}  # book id -> job
         self.running = None
-        self.failed = {}  # book id -> bookdata name it failed on: not retried until that changes
+        self.failed = {}  # book id -> text copy name it failed on: not retried until that changes
         self.thread = None
         self.added = threading.Event()  # wakes an idle worker thread at once
         self.finished = threading.Condition(self.lock)  # notified after each file
@@ -510,18 +514,18 @@ class ReadingsQueue:
             return 'unavailable'
         book = next((b for b in load_catalog() if b['id'] == book_id and not b.get('vn') and not b.get('manga')),
                     None)
-        bookdata = book and find_bookdata(book['title'])
-        if not bookdata:
+        job = book and find_text(book)
+        if not job:
             return 'unavailable'
-        name = os.path.basename(bookdata)
+        path_in, name = job
         path = readings_path(book_id)
         head = readings_file.header(path)
         current = (readings_file.READINGS_VERSION, reader_version())
         if head and head[:2] == current and head[2] != name and head[3]:
-            # Processed again (another device, or deleted and reopened): same text, same file.
+            # Uploaded again (another device, or deleted and reopened): same text, same file.
             try:
-                same = html_digest(staticdata_html(bookdata)) == head[3]
-            except (OSError, ValueError, KeyError, zipfile.BadZipFile):
+                same = html_digest(text_html(path_in)) == head[3]
+            except (OSError, EOFError, ValueError, KeyError, TypeError):
                 same = False
             if same:
                 with self.lock:
@@ -534,7 +538,7 @@ class ReadingsQueue:
                 return 'queued'
             if self.failed.get(book_id) == name or len(self.queue) >= READINGS_QUEUE_MAX:
                 return 'unavailable'
-            self.queue[book_id] = bookdata
+            self.queue[book_id] = job
             self.added.set()
             if not self.thread:
                 self.thread = self._start()
@@ -543,7 +547,7 @@ class ReadingsQueue:
     @staticmethod
     def failure(job):
         """What a failure is remembered by: not retried until the job's input changes."""
-        return os.path.basename(job)
+        return job[1]
 
     def _start(self):
         thread = threading.Thread(target=self._run, daemon=True)
@@ -567,15 +571,15 @@ class ReadingsQueue:
                 if not job:
                     self.added.wait(1)
                     continue
-                book_id, bookdata = job
+                book_id, work = job
                 if not pool:
                     ensure_reader_pack()
                     pool = ProcessPoolExecutor(1, initializer=self.initializer)
                 try:
-                    pool.submit(self.task, book_id, bookdata).result()
+                    pool.submit(self.task, book_id, work).result()
                 except Exception as error:
                     print(f'{type(self).__name__} {book_id}: {error}', file=sys.stderr, flush=True)
-                    self.failed[book_id] = self.failure(bookdata)
+                    self.failed[book_id] = self.failure(work)
                     if isinstance(error, BrokenProcessPool):
                         pool = None
                 finally:

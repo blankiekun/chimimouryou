@@ -171,12 +171,12 @@ class ReadingsQueueTest(unittest.TestCase):
         open(service.FREQUENCY_DICTIONARY, 'w').close()
         service.CATALOG_PATH = os.path.join(tmp, 'catalog.json')
         with open(service.CATALOG_PATH, 'w') as f:
-            json.dump({'books': [{'id': 1, 'title': '本?', 'format': 'EPUB'}, {'id': 2, 'title': '無し', 'format': 'EPUB'},
-                                 {'id': 3, 'title': 'ゲーム', 'format': 'VN', 'vn': True}]}, f)
-        service.SYNC_DIR = os.path.join(tmp, 'sync')
+            json.dump({'books': [{'id': 1, 'bookId': 11, 'title': '本?', 'format': 'EPUB'},
+                                 {'id': 2, 'bookId': 12, 'title': '無し', 'format': 'EPUB'},
+                                 {'id': 3, 'bookId': 13, 'title': 'ゲーム', 'format': 'VN', 'vn': True}]}, f)
+        service.TEXT_DIR = os.path.join(tmp, 'text')
         service.READINGS_DIR = os.path.join(tmp, 'readings')
-        self.folder = os.path.join(service.SYNC_DIR, 'ttu-reader-data', '本%3F')
-        self.bookdata = self.add_bookdata('bookdata_1_6_10_1_1.zip')
+        self.job = self.add_text(1e9)
         service.ensure_reader_pack = lambda: None
         self.queue = service.ReadingsQueue()
         self.queue._start = lambda: 'thread'
@@ -184,37 +184,37 @@ class ReadingsQueueTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def add_bookdata(self, name, html='<p>行った</p>'):
-        os.makedirs(self.folder, exist_ok=True)
-        path = os.path.join(self.folder, name)
-        with zipfile.ZipFile(path, 'w') as archive:
-            archive.writestr('staticdata.json', json.dumps({'elementHtml': html}))
-        return path
+    def add_text(self, mtime, html='<p>行った</p>'):
+        """Uploads book 11's text copy (as PUT /api/v1/books/11/text does) and returns its job."""
+        os.makedirs(self.service.TEXT_DIR, exist_ok=True)
+        path = os.path.join(self.service.TEXT_DIR, '11.json.gz')
+        with gzip.open(path, 'wt', encoding='utf-8') as f:
+            json.dump({'elementHtml': html, 'sections': [], 'styleSheet': ''}, f)
+        os.utime(path, (mtime, mtime))
+        return path, f'text_{int(mtime * 1000)}'
 
     def test_queued_once_then_ready_until_stale(self):
         service, queue = self.service, self.queue
         self.assertEqual([queue.request(i) for i in (1, 1, 2, 3, 99)], ['queued', 'queued', 'unavailable', 'unavailable', 'unavailable'])
-        self.assertEqual(queue.queue, {1: self.bookdata})
+        self.assertEqual(queue.queue, {1: self.job})
         # The worker makes it.
         queue.queue.clear()
         service._reader = FakeReader(('行っ', '行く', 'いく', 'only'))
-        service._make_readings(1, self.bookdata)
+        service._make_readings(1, self.job)
         self.assertEqual(queue.request(1), 'ready')
         with gzip.open(service.readings_path(1), 'rt', encoding='utf-8') as f:
             self.assertEqual(json.load(f)['occ'], [0, 0, 0])
-        # A new bookdata (the book was processed again) or another yurigana make it stale.
-        newer = self.add_bookdata('bookdata_1_6_10_2_2.zip', html='<p>行ったよ</p>')
-        os.utime(newer, (2e9, 2e9))
+        # A new text copy (the book was processed again) or another yurigana make it stale.
+        newer = self.add_text(2e9, html='<p>行ったよ</p>')
         self.assertEqual(queue.request(1), 'queued')
         self.assertEqual(queue.queue, {1: newer})
         queue.queue.clear()
         service._make_readings(1, newer)
         self.assertEqual(queue.request(1), 'ready')
-        # Processed again with the same text: the file is kept and points at the newest bookdata.
-        again = self.add_bookdata('bookdata_1_6_10_4_4.zip', html='<p>行ったよ</p>')
-        os.utime(again, (4e9, 4e9))
+        # Uploaded again with the same text: the file is kept and points at the newest upload.
+        self.add_text(4e9, html='<p>行ったよ</p>')
         self.assertEqual(queue.request(1), 'ready')
-        self.assertEqual(readings_file.header(service.readings_path(1))[2], 'bookdata_1_6_10_4_4.zip')
+        self.assertEqual(readings_file.header(service.readings_path(1))[2], 'text_4000000000000')
         service.YURIGANA_VERSION = '9.9.9'
         self.assertEqual(queue.request(1), 'queued')
 
@@ -223,9 +223,9 @@ class ReadingsQueueTest(unittest.TestCase):
         queue.queue = {-i: 'x' for i in range(self.service.READINGS_QUEUE_MAX)}
         self.assertEqual(queue.request(1), 'unavailable')
         queue.queue = {}
-        queue.failed[1] = os.path.basename(self.bookdata)
+        queue.failed[1] = self.job[1]
         self.assertEqual(queue.request(1), 'unavailable')
-        queue.failed[1] = 'bookdata_older.zip'
+        queue.failed[1] = 'text_1'
         self.assertEqual(queue.request(1), 'queued')
         queue.queue = {}
         os.remove(self.service.FREQUENCY_DICTIONARY)
@@ -240,15 +240,13 @@ class ReadingsQueueTest(unittest.TestCase):
         self.assertEqual(queue.request(1), 'queued')
         queue.thread.join(10)
         self.assertEqual((queue.request(1), queue.thread), ('ready', None))
-        broken = self.add_bookdata('bookdata_1_6_10_3_3.zip', html=None)
-        os.utime(broken, (3e9, 3e9))
+        self.add_text(3e9, html=None)
         self.assertEqual(queue.request(1), 'queued')
         queue.thread.join(10)
-        self.assertEqual((queue.failed, queue.request(1)), ({1: 'bookdata_1_6_10_3_3.zip'}, 'unavailable'))
-        # A request can wait for its file: answered when it is made.
+        self.assertEqual((queue.failed, queue.request(1)), ({1: 'text_3000000000000'}, 'unavailable'))
+        # A new upload is tried again; a request can wait for its file: answered when it is made.
         os.remove(service.readings_path(1))
-        queue.failed.clear()
-        os.remove(broken)
+        self.add_text(5e9)
         self.assertEqual(queue.request(1, wait=10), 'ready')
         self.assertEqual(queue.request(1, wait=10), 'ready')
 
@@ -280,7 +278,7 @@ class ReadingsQueueTest(unittest.TestCase):
     def test_oversized_staticdata_is_refused(self):
         self.service.MAX_STATICDATA_BYTES = 10
         with self.assertRaises(ValueError):
-            self.service._make_readings(1, self.bookdata)
+            self.service._make_readings(1, self.job)
 
 
 class WordsQueueTest(unittest.TestCase):
