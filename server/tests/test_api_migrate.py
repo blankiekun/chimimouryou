@@ -181,6 +181,34 @@ class MigrateTest(unittest.TestCase):
         self.assertEqual((row['modified'], row['progress'], json.loads(row['data'])['newest']),
                          (1700000000005, 0.5, True))
 
+    # Catches one broken sync file aborting the one-time migration of real data (an exception type the
+    # per-file guard misses, e.g. from a truncated zip), or a half-read file leaving partial rows.
+    def test_broken_files_are_reported_and_the_rest_migrates(self):
+        shared = os.path.join(self.sync, 'ttu-reader-data')
+        data = os.path.join(self.accounts, ACCOUNT, 'account', 'sync', 'ttu-reader-data')
+        with open(os.path.join(shared, 'a%2Fb%3F', BOOKDATA), 'rb') as f:
+            bookdata = f.read()
+        self.write(data, '猫', PROGRESS, b'{"progress": 0.4')
+        self.write(data, '猫', STATISTICS, b'not json')
+        self.write(self.sync, '', 'series.json', b'{')
+        for broken in (bookdata[:len(bookdata) // 2], bookdata[:-30], b'not a zip'):
+            with self.subTest(bookdata=broken[:8]):
+                self.write(shared, 'a%2Fb%3F', BOOKDATA, broken)
+                report = self.run_migrate(True)
+                shared_report, account_report = report['sources']
+                self.assertEqual([e.split(':')[0] for e in shared_report['errors']],
+                                 [f'a%2Fb%3F/{BOOKDATA}', '猫/annotations.json'])
+                self.assertEqual(sorted(e.split(':')[0] for e in account_report['errors']),
+                                 [f'猫/{PROGRESS}', f'猫/{STATISTICS}'])
+                self.assertEqual([e.split(':')[0] for e in report['errors']], ['series.json'])
+                self.assertFalse(os.path.exists(apidb.text_path(self.state, self.ids['a/b?'])))
+                db = self.db()
+                self.assertEqual([r['account'] for r in db.query('SELECT account FROM progress')], [''])
+                self.assertEqual(db.query('SELECT * FROM statistics'), [])
+                self.assertEqual(db.query('SELECT * FROM series_overrides'), [])
+                self.assertEqual(len(db.query('SELECT * FROM highlights')), 2)
+                self.assertEqual(len(db.query('SELECT * FROM book_metadata')), 1)
+
     def test_refuses_without_books(self):
         os.remove(self.db_path)
         for suffix in ('-wal', '-shm'):

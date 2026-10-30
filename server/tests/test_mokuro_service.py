@@ -7,6 +7,7 @@ import os
 import sys
 import tempfile
 import unittest
+import unittest.mock
 import zipfile
 
 STATE = tempfile.mkdtemp()
@@ -42,12 +43,13 @@ with open(CATALOG, 'w') as f:
         {'id': 3, 'title': '本', 'format': 'EPUB', 'file': 'a/book.epub'},
     ]}, f)
 
-os.environ.update(CALIBRE_LIBRARY=LIBRARY, CALIBRE_CATALOG=CATALOG, MOKURO_BIN=FAKE_MOKURO,
-                  MOKURO_STATE_DIR=os.path.join(STATE, 'mokuro-state'))
 spec = importlib.util.spec_from_file_location(
     'mokuro_service', os.path.join(os.path.dirname(__file__), '..', 'mokuro', 'service.py'))
 service = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(service)
+# The service reads its settings at import; patch.dict keeps them out of the test files loaded after this one.
+with unittest.mock.patch.dict(os.environ, CALIBRE_LIBRARY=LIBRARY, CALIBRE_CATALOG=CATALOG, MOKURO_BIN=FAKE_MOKURO,
+                              MOKURO_STATE_DIR=os.path.join(STATE, 'mokuro-state')):
+    spec.loader.exec_module(service)
 
 
 class ConvertTest(unittest.TestCase):

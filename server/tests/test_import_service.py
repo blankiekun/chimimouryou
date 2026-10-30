@@ -58,15 +58,15 @@ print(json.dumps({{'assigned': 2, 'merged': 1, 'written': '--apply' in sys.argv}
 os.chmod(FAKE_CALIBRE_DEBUG, 0o755)
 os.chmod(FAKE_CALIBREDB, 0o755)
 os.chmod(FAKE_BUILDER, 0o755)
-os.environ.update(IMPORT_STATE_DIR=os.path.join(STATE, 'state'), CALIBREDB=FAKE_CALIBREDB,
-                  CATALOG_BUILDER=FAKE_BUILDER, CALIBRE_LIBRARY=STATE,
-                  CALIBRE_DEBUG=FAKE_CALIBRE_DEBUG, CATALOG_OUTPUT=CATALOG, VN_DIR=VN_DIR,
-                  MIN_FREE_MB='0', INTERNAL_TOKEN_FILE=TOKEN_FILE)
-
 spec = importlib.util.spec_from_file_location(
     'import_service', os.path.join(os.path.dirname(__file__), '..', 'import', 'service.py'))
 service = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(service)
+# The service reads its settings at import; patch.dict keeps them out of the test files loaded after this one.
+with mock.patch.dict(os.environ, IMPORT_STATE_DIR=os.path.join(STATE, 'state'), CALIBREDB=FAKE_CALIBREDB,
+                     CATALOG_BUILDER=FAKE_BUILDER, CALIBRE_LIBRARY=STATE,
+                     CALIBRE_DEBUG=FAKE_CALIBRE_DEBUG, CATALOG_OUTPUT=CATALOG, VN_DIR=VN_DIR,
+                     MIN_FREE_MB='0', INTERNAL_TOKEN_FILE=TOKEN_FILE):
+    spec.loader.exec_module(service)
 
 
 def epub(marker: str = '') -> bytes:
@@ -84,7 +84,7 @@ class ImportServiceTest(unittest.TestCase):
         os.makedirs(service.queue_dir(), exist_ok=True)
         cls.server = ThreadingHTTPServer(('127.0.0.1', 0), service.Handler)
         cls.base = f'http://127.0.0.1:{cls.server.server_port}'
-        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        threading.Thread(target=cls.server.serve_forever, kwargs={'poll_interval': 0.01}, daemon=True).start()
         threading.Thread(target=service.worker, daemon=True).start()
 
     @classmethod

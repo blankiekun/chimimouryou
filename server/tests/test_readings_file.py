@@ -84,10 +84,14 @@ class CountingTest(unittest.TestCase):
         self.assertEqual(''.join(c for i, c in enumerate(text) if counts[i + 1] > counts[i]), fixture['counted'])
         self.assertEqual([list(h) for h in hints], fixture['hints'])
 
+    # Catches this copy of sanitize drifting from the reader's (and server/api/syncnames.py's): a title would
+    # get another folder name, so its readings file would never be found.
     def test_sanitize_for_filename_matches_the_reader(self):
-        for title, folder in (('普通', '普通'), ('a?b*c. ', 'a%3Fb~ttu-star~c.~ttu-spc~'), ('終わり.', '終わり~ttu-dend~'),
-                              ('50%: "x" <y>|z\\/', '50%25%3A %22x%22 %3Cy%3E%7Cz%5C%2F'), ('改行\n.', '改行\n~ttu-dend~')):
-            self.assertEqual(readings_file.sanitize_for_filename(title), folder)
+        with open(os.path.join(HERE, 'fixtures', 'sync-file-names.json'), encoding='utf-8') as f:
+            cases = [(case['title'], case['sanitized']) for case in json.load(f)['titles']]
+        for title, folder in cases + [('改行\n.', '改行\n~ttu-dend~')]:
+            with self.subTest(title=title):
+                self.assertEqual(readings_file.sanitize_for_filename(title), folder)
 
 
 class GlossTest(unittest.TestCase):

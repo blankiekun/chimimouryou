@@ -29,17 +29,12 @@ class SplitVolumeTest(unittest.TestCase):
             'Some Title Vol. 4': ('Some Title', 4.0),
             '物語 2 【電子特別版】': ('物語', 2.0),
             '[作者] 物語 十二': ('物語', 12.0),
+            '無職転生 ～異世界行ったら本気だす～ 2 (MFブックス)': ('無職転生 ~異世界行ったら本気だす~', 2.0),
+            '吾輩は猫である': ('吾輩は猫である', None),
         }
         for title, expected in cases.items():
             with self.subTest(title=title):
                 self.assertEqual(catalog.split_volume(title), expected)
-
-    def test_publisher_label(self):
-        self.assertEqual(catalog.split_volume('無職転生 ～異世界行ったら本気だす～ 2 (MFブックス)'),
-                         ('無職転生 ~異世界行ったら本気だす~', 2.0))
-
-    def test_no_volume(self):
-        self.assertEqual(catalog.split_volume('吾輩は猫である'), ('吾輩は猫である', None))
 
     def test_kanji_number(self):
         self.assertEqual(catalog.kanji_number('二十三'), 23.0)
@@ -105,10 +100,6 @@ class CoverTest(unittest.TestCase):
                 <item id="i" href="img/front.jpg" media-type="image/jpeg"/>
                 <item id="z" href="img/zzz.jpg" media-type="image/jpeg"/>'''))
         self.assertEqual(catalog.epub_cover_name(epub), 'OEBPS/img/front.jpg')
-
-    def test_jpeg_unchanged(self):
-        data = catalog.JPEG_MAGIC + b'rest'
-        self.assertIs(catalog.as_jpeg(data), data)
 
 
 class MangaTest(unittest.TestCase):

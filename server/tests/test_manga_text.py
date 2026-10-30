@@ -124,6 +124,13 @@ class MangaTextTest(unittest.TestCase):
         self.assertFalse(self.service.unchanged_since_failure(failure, {**book, 'text': 200_000}))
         # Books keep their old rule (no 'text' on either side).
         self.assertTrue(self.service.unchanged_since_failure({'size': 10}, {'size': 10}))
+        # A failed game is retried once its folder changes.
+        unchanged = self.service.unchanged_since_failure
+        failure = {'size': 0, 'added': 1}
+        self.assertTrue(unchanged(failure, {'format': 'VN', 'size': 0, 'added': 1}))
+        self.assertFalse(unchanged(failure, {'format': 'VN', 'size': 0, 'added': 2}))
+        self.assertTrue(unchanged({'size': 5}, {'format': 'EPUB', 'size': 5, 'added': 9}))
+        self.assertFalse(unchanged(None, {'format': 'EPUB', 'size': 5, 'added': 9}))
 
     def test_readings_files_skip_manga(self):
         self.service.find_text = lambda book: self.fail('looked up ' + book['title'])

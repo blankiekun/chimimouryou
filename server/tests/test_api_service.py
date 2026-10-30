@@ -64,7 +64,7 @@ class ServiceTestCase(unittest.TestCase):
         service.db = apidb.Database(os.path.join(values['API_STATE_DIR'], 'library.db'))
         self.addCleanup(service.db.connection.close)
         self.server = ThreadingHTTPServer(('127.0.0.1', 0), service.Handler)
-        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        threading.Thread(target=self.server.serve_forever, kwargs={'poll_interval': 0.01}, daemon=True).start()
         self.addCleanup(self.server.server_close)
         self.addCleanup(self.server.shutdown)
 
@@ -100,12 +100,10 @@ class ReadTest(ServiceTestCase):
     def test_needs_internal_token(self):
         self.assertEqual(self.call('GET', '/api/v1/version', headers={'X-Internal-Token': None})[0], 403)
         self.assertEqual(self.call('GET', '/api/v1/version', headers={'X-Internal-Token': 'wrong'})[0], 403)
+        self.assertEqual(self.call('GET', '/api/v1/version'), (200, {'api': 1, 'server': 'test'}))
 
     def test_bad_account_header(self):
         self.assertEqual(self.call('GET', '/api/v1/version', account='../x')[0], 400)
-
-    def test_version(self):
-        self.assertEqual(self.call('GET', '/api/v1/version'), (200, {'api': 1, 'server': 'test'}))
 
     def test_catalog_delta(self):
         books = [catalog_book(1, '猫', added=1), catalog_book(2, '犬', added=2)]
@@ -197,6 +195,35 @@ class WriteTest(ServiceTestCase):
                          ('Newer on the server', 20, 0.2))
         self.assertEqual(self.call('PUT', path, {'modified': 20, 'progress': 0.3, 'data': {}}), (200, {'rev': rev}))
         self.assertEqual(self.sync()['rev'], rev)
+
+    # Catches the newer-wins check and the write not being one transaction: with devices writing the same
+    # row at once, an older position could overwrite a newer one, or two writes could share a rev.
+    def test_racing_writes_to_one_row_keep_the_newest(self):
+        path = f'/api/v1/books/{self.book}/progress'
+        writers = 12
+        barrier = threading.Barrier(writers)
+        results = {}
+
+        def put(modified):
+            barrier.wait()
+            results[modified] = self.call('PUT', path, {'modified': modified, 'progress': modified / 100, 'data': {}},
+                                          account=ACCOUNT_A)
+
+        threads = [threading.Thread(target=put, args=(modified,)) for modified in range(1, writers + 1)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(results[writers][0], 200)  # the newest always wins
+        won = sorted((modified, body['rev']) for modified, (status, body) in results.items() if status == 200)
+        revs = [rev for _, rev in won]
+        self.assertEqual(revs, sorted(set(revs)))  # unique, and increasing with modified
+        for modified, (status, body) in results.items():
+            if status != 200:
+                self.assertEqual(status, 409)
+                self.assertGreater(body['row']['modified'], modified)
+        [row] = self.sync(ACCOUNT_A)['progress']
+        self.assertEqual((row['modified'], row['progress'], row['rev']), (writers, writers / 100, revs[-1]))
 
     def test_highlight_tombstone(self):
         path = f'/api/v1/books/{self.book}/highlights/h-1'

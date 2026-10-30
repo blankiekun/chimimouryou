@@ -8,7 +8,7 @@ import unittest
 import zipfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from features import _origin, aozora_text, book_text, to_hiragana, vn_text  # noqa: E402
+from features import _origin, aozora_text, book_text, vn_text  # noqa: E402
 
 try:
     import sudachipy  # noqa: F401  (only in the difficulty image)
@@ -137,9 +137,6 @@ class FeatureTest(unittest.TestCase):
         self.assertEqual(_origin('場所', 'noun'), 'unknown')  # mixed (ば + しょ)
         self.assertEqual(_origin('テレビ', 'noun'), 'gairaigo')
         self.assertEqual(_origin('東京', 'name'), 'unknown')
-
-    def test_to_hiragana(self):
-        self.assertEqual(to_hiragana('コト'), 'こと')
 
 
 if __name__ == '__main__':
