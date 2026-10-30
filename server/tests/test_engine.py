@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.join(HERE, '..', '..', 'engine'))
 import engine  # noqa: E402
 from test_readings_file import load_service  # noqa: E402
 
-COMMITTED = os.path.join(HERE, '..', '..', 'apps', 'web', 'src', 'lib', 'data', 'difficulty-engine.json')
+COMMITTED = os.path.join(HERE, '..', '..', 'apps', 'web', 'src', 'lib', 'data', 'difficulty', 'difficulty-engine.json')
 
 
 class EngineFingerprintTest(unittest.TestCase):
