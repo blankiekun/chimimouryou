@@ -5,8 +5,10 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+// @ts-expect-error tsconfig's moduleResolution "node" doesn't read package exports; Vitest does.
+import { page as browserPage } from 'vitest/browser';
 import { ViewMode } from '$lib/data/view-mode';
-import { openReader } from './reader-fixture';
+import { onScreen, openReader, visibleParagraphs } from './reader-fixture';
 
 /*
  * Paginated: a page turn drops the reading point, even after a window `resize` that left the
@@ -26,11 +28,12 @@ vi.mock('$lib/data/page-store', async () => {
 
 let component: { $destroy(): void } | undefined;
 
-afterEach(() => {
+afterEach(async () => {
   component?.$destroy();
   component = undefined;
   document.body.innerHTML = '';
   scrollTo(0, 0);
+  await browserPage.viewport(1000, 700);
 });
 
 const settle = (ms = 300) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -76,4 +79,29 @@ describe('/b paginated: a page turn drops the reading point', () => {
       expect(item(await moreItems(), 'Reset reading point')).toBeUndefined();
     });
   }
+});
+
+/*
+ * Continuous: a scroll after a window `resize` that left the reader's size as it was still moves
+ * the intended place, so a later real resize keeps the page scrolled to, not the one before it.
+ */
+describe('/b continuous: a scroll after a same-size resize moves the intended place', () => {
+  it('a real resize after it keeps the scrolled-to paragraph', async () => {
+    component = await openReader(ViewMode.Continuous, 'horizontal-tb');
+    await settle();
+
+    dispatchEvent(new Event('resize'));
+    await settle();
+    // One scroll event: a smooth scroll's later events would hide the bug.
+    scrollBy({ top: innerHeight, behavior: 'instant' });
+    await settle();
+    // The first one that starts on screen: one cut at the top isn't the place the reader keeps.
+    const first = visibleParagraphs().find(
+      (id) => document.getElementById(id)!.getBoundingClientRect().top >= 0
+    )!;
+
+    await browserPage.viewport(390, 700);
+    await settle();
+    expect(onScreen(document.getElementById(first)), `${first}: ${visibleParagraphs()}`).toBe(true);
+  });
 });
