@@ -5,6 +5,7 @@
   import { difficultyApiUrl } from '$lib/data/calibre';
   import { levelTier } from '$lib/data/difficulty';
   import { isCanonicalEstimate } from '$lib/data/difficulty-engine';
+  import { serverFetch } from '$lib/data/server-connect';
   import { t$, tr } from '$lib/i18n';
   import { onDestroy, onMount } from 'svelte';
   import Fa from 'svelte-fa';
@@ -59,7 +60,7 @@
     clearTimeout(pollTimer);
 
     try {
-      const response = await fetch(`${difficultyApiUrl}status`, { cache: 'no-store' });
+      const response = await serverFetch(`${difficultyApiUrl}status`, { cache: 'no-store' });
 
       if (!response.ok) {
         throw new Error(tr('library.difficultyUnavailable', { status: response.status }));
@@ -97,7 +98,7 @@
     importing = true;
     try {
       const upload = (force: boolean) =>
-        fetch(`${difficultyApiUrl}dictionary${force ? '?force=1' : ''}`, {
+        serverFetch(`${difficultyApiUrl}dictionary${force ? '?force=1' : ''}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/zip' },
           body: file
@@ -159,7 +160,7 @@
 
   async function post(action: string, body: object | File = {}) {
     try {
-      const response = await fetch(`${difficultyApiUrl}${action}`, {
+      const response = await serverFetch(`${difficultyApiUrl}${action}`, {
         method: 'POST',
         headers: { 'Content-Type': body instanceof File ? 'application/zip' : 'application/json' },
         body: body instanceof File ? body : JSON.stringify(body)
