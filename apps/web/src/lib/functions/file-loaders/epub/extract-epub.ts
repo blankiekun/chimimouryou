@@ -30,7 +30,9 @@ export default async function extractEpub(blob: Blob) {
 
     const containerXml = await fileMap['META-INF/container.xml'].getData!(new TextWriter());
     const parser = new XMLParser({
-      ignoreAttributes: false
+      ignoreAttributes: false,
+      // A manifest with one item parses to an object, not a list; the loaders map over it.
+      isArray: (name) => name === 'item' || name === 'opf:item'
     });
     const container = parser.parse(containerXml);
     const rootFiles = container.container.rootfiles.rootfile;
