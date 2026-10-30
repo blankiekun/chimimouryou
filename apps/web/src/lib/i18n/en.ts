@@ -846,6 +846,7 @@ export const en = {
   'library.importFiles': 'Import File(s)',
   'library.importFolders': 'Import Folder(s)',
   'library.importWindowsGame': 'Windows game…',
+  'library.importSources': 'Sources…',
   'library.importBackup': 'Import Backup',
   'library.storageSource': 'Storage source',
   'library.sourceBrowser': 'Browser',
