@@ -95,7 +95,10 @@ describe('/b continuous: a scroll after a same-size resize moves the intended pl
     // One scroll event: a smooth scroll's later events would hide the bug.
     scrollBy({ top: innerHeight, behavior: 'instant' });
     await settle();
-    const [first] = visibleParagraphs();
+    // The first one that starts on screen: one cut at the top isn't the place the reader keeps.
+    const first = visibleParagraphs().find(
+      (id) => document.getElementById(id)!.getBoundingClientRect().top >= 0
+    )!;
 
     await browserPage.viewport(390, 700);
     await settle();
