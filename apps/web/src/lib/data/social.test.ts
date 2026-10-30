@@ -5,6 +5,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fakeApi } from '$lib/data/test-utils/fake-api';
 import type { BooksDbStatistic } from '$lib/data/database/books-db/versions/books-db';
 import {
   bookKey,
@@ -66,6 +67,9 @@ function book(title: string, kind: FriendBook['kind'] = 'book', pct = 0.5): Frie
 function day(dateKey: string, charactersRead: number, extra: Partial<BooksDbStatistic> = {}) {
   return { title: 'A', dateKey, charactersRead, readingTime: 600, ...extra } as BooksDbStatistic;
 }
+
+// The library's server: an empty catalog (the hub is another host, stubbed per test).
+const api = fakeApi();
 
 describe('social', () => {
   beforeEach(() => {
@@ -178,7 +182,7 @@ describe('social', () => {
       vi.fn(async (url: string, init: RequestInit = {}) => {
         const { pathname, search } = new URL(url, 'http://app.example');
 
-        if (pathname.startsWith('/calibre/')) return new Response('', { status: 404 });
+        if (pathname.startsWith('/api/v1/')) return api.fetch(url, init);
         calls.push({
           path: `${init.method} ${pathname}${search}`,
           type: new Headers(init.headers).get('Content-Type'),

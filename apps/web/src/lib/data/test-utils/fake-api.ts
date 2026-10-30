@@ -214,6 +214,19 @@ export function fakeApi(options: { api?: number | null; account?: () => string }
     return json(200, { rev: setRow(table, { ...fields, ...values, modified, deleted }).rev });
   }
 
+  /** books.id of a title added with addBook. */
+  function bookId(title: string) {
+    return books.find((book) => book.title === title && !book.deleted)?.id;
+  }
+
+  /** A doc's stored data: the book's with a title, else the account's. */
+  function doc(kind: string, title?: string, who = account()) {
+    return title === undefined
+      ? rowsOf('accountDocs', who).find((row) => row.kind === kind)?.data
+      : rowsOf('bookDocs', who).find((row) => row.book === bookId(title) && row.kind === kind)
+          ?.data;
+  }
+
   return {
     fetch: (url: string | URL | Request, init?: RequestInit) => handle(String(url), init),
     requests,
@@ -221,6 +234,8 @@ export function fakeApi(options: { api?: number | null; account?: () => string }
     addBook,
     setRow,
     rowsOf,
+    bookId,
+    doc,
     /** Like the server's database made again: rows and rev start over. */
     reset() {
       rev = 0;

@@ -4,14 +4,17 @@
  * All rights reserved.
  */
 
+import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fakeApi } from '$lib/data/test-utils/fake-api';
 import {
   applyMetadata,
   cleanDescription,
   jitenCharacters,
   jitenVnCharacters,
   parseBookMetadata,
-  parseJitenDecks
+  parseJitenDecks,
+  saveBookMetadata
 } from './book-metadata';
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 
@@ -188,5 +191,38 @@ describe('Jiten lengths', () => {
     expect(fetch).not.toHaveBeenCalled();
     expect(await jitenCharacters(vndb)).toBeUndefined();
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('saveBookMetadata', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  // Bugs: removed details coming back (a `{}` row listed as an entry) or a save touching other
+  // books' rows (the old whole-file write); a save must not drop another device's book either.
+  it('writes only its book, and a removal is no longer listed', async () => {
+    const api = fakeApi();
+
+    vi.useFakeTimers({ toFake: ['Date'] });
+    api.addBook({ id: 1, calibreId: 11, title: 'Mine' });
+    api.addBook({ id: 2, calibreId: 12, title: 'Other' });
+    api.setRow('metadata', { book: 2, modified: 1, data: entry });
+    vi.stubGlobal('fetch', api.fetch);
+
+    const saved = await saveBookMetadata('Mine', entry as never);
+
+    expect(Object.keys(saved).sort()).toEqual(['Mine', 'Other']);
+
+    // A later click: an equal `modified` is kept as it is on the server.
+    vi.setSystemTime(Date.now() + 1000);
+    const removed = await saveBookMetadata('Mine', undefined);
+
+    expect(Object.keys(removed)).toEqual(['Other']);
+    expect(api.requests.filter((request) => request.startsWith('PUT'))).toEqual([
+      'PUT /api/v1/metadata/1',
+      'PUT /api/v1/metadata/1'
+    ]);
   });
 });

@@ -119,7 +119,8 @@ export async function saveSeriesOverrides(changes: Record<string, string>, local
     })
   );
 
-  const overrides = await fetchSeriesOverrides(false);
+  // The latest rows: other devices' saves come down with this one's.
+  const overrides = await fetchSeriesOverrides();
 
   cache = Promise.resolve(overrides);
 

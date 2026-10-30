@@ -6,6 +6,7 @@
 
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fakeApi } from '$lib/data/test-utils/fake-api';
 import type { BookWord } from '$lib/data/book-words';
 import { loadCalibreCatalog } from '$lib/data/calibre';
 import { readerDb } from '$lib/data/reader-db';
@@ -32,6 +33,11 @@ const words: BookWord[] = [
   ['は', null, 50, 1],
   ['宦官', 'かんがん', 1, 68872]
 ];
+
+// One API for the file (the catalog is cached per page load); the difficulty service stays a stub.
+const api = fakeApi();
+
+api.addBook({ id: 1, calibreId: 7, title: '猫の本' });
 
 describe('words met', () => {
   it('reads the share of the book not skipped', () => {
@@ -193,9 +199,7 @@ describe('getWordsMet', () => {
     await db.put('kanji', { title: '猫の本', upTo: 500, counts: {} });
     await db.put('kanji', { title: 'Browser only', upTo: 500, counts: {} });
     const fetchMock = vi.fn(async (url: string) => {
-      if (url.endsWith('catalog.json')) {
-        return new Response(JSON.stringify({ books: [{ id: 7, title: '猫の本' }] }));
-      }
+      if (url.startsWith('/api/v1/')) return api.fetch(url);
       if (url.endsWith('difficulty.json')) {
         return new Response(JSON.stringify({ books: { 7: { characters: 1000, computedAt: 1 } } }));
       }
@@ -220,12 +224,11 @@ describe('getWordsMet', () => {
 
     await db.clear('kanji');
     await db.clear('known');
+    api.addBook({ id: 2, calibreId: 8, title: '犬の本' });
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) => {
-        if (url.endsWith('catalog.json')) {
-          return new Response(JSON.stringify({ books: [{ id: 8, title: '犬の本' }] }));
-        }
+        if (url.startsWith('/api/v1/')) return api.fetch(url);
         if (url.endsWith('difficulty.json')) {
           return new Response(
             JSON.stringify({ books: { 8: { characters: 1000, computedAt: 1 } } })
@@ -247,13 +250,12 @@ describe('getWordsMet', () => {
     const db = await readerDb();
 
     await db.clear('known');
+    api.addBook({ id: 2, calibreId: 9, title: '犬の本' });
     await saveReadProgress([{ title: '犬の本', progress: 0.5 }]);
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) => {
-        if (url.endsWith('catalog.json')) {
-          return new Response(JSON.stringify({ books: [{ id: 9, title: '犬の本' }] }));
-        }
+        if (url.startsWith('/api/v1/')) return api.fetch(url);
         if (url.endsWith('difficulty.json')) {
           return new Response(
             JSON.stringify({ books: { 9: { characters: 1000, computedAt: 1 } } })

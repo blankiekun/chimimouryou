@@ -46,6 +46,13 @@ import {
 import { socialSession$ } from '$lib/data/social-account';
 import type { SearchIndex } from '$lib/functions/book-text/book-search';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
+import { fakeApi } from '$lib/data/test-utils/fake-api';
+
+// The fetch mocks below stand for the hub; /api/v1/ goes to the fake server (nothing is stored).
+const api = fakeApi();
+const withApi = (mock: (url: string, init?: RequestInit) => unknown) =>
+  ((url: string, init?: RequestInit) =>
+    String(url).startsWith('/api/v1/') ? api.fetch(url, init) : mock(url, init)) as typeof fetch;
 
 const paragraphs = [
   { text: '一章', startCount: 0 },
@@ -146,7 +153,7 @@ describe('community in the book', () => {
   it('sends line links nowhere with social off or a malformed line', async () => {
     const fetchMock = vi.fn();
 
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('fetch', withApi(fetchMock));
     expect(await lineLinkTarget(new URLSearchParams({ line: 'x', work: 'w' }))).toBeNull();
     enabledPlugins$.next([]);
     expect(
@@ -177,7 +184,7 @@ describe('community in the book', () => {
     const hubCalls = () => fetchMock.mock.calls.filter(([url]) => String(url).includes('/v1/'));
     const getIndex = async () => ({ paragraphs }) as unknown as SearchIndex;
 
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('fetch', withApi(fetchMock));
     communityWorks$.next({ 本: 'anilist:1' });
     // Signed out: a matched book's threads alone (no suggestion asked).
     await markBookOnOpen('本', async () => ({ paragraphs }) as unknown as SearchIndex);
@@ -298,7 +305,7 @@ describe('community in the book', () => {
     });
     const getIndex = async () => ({ paragraphs }) as unknown as SearchIndex;
 
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('fetch', withApi(fetchMock));
     socialSession$.next({ token: 't', me: { id: 'a', share: {} } } as never);
     await markBookOnOpen(title, getIndex);
 

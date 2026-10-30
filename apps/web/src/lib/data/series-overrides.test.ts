@@ -5,18 +5,27 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fakeApi } from '$lib/data/test-utils/fake-api';
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 import {
   applySeriesOverride,
   findSeriesBooks,
   guessSeriesName,
   inferSeries,
+  loadSeriesOverrides,
   mergeSeriesOverrides,
   parseSeriesOverrides,
   saveSeriesOverrides,
   seriesForTitle,
   withBrowserSeries
 } from './series-overrides';
+
+// One API for the file: server-api.ts keeps the catalog and the mirror per page load.
+const api = fakeApi();
+
+['other', 'mine'].forEach((title, index) =>
+  api.addBook({ id: index + 1, calibreId: 101 + index, title })
+);
 
 function card(title: string, series?: string): BookCardProps {
   return {
@@ -93,19 +102,19 @@ describe('saveSeriesOverrides', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('merges changes into the latest server copy', async () => {
-    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
-      init?.method === 'PUT'
-        ? new Response(null, { status: 201 })
-        : new Response(JSON.stringify({ other: { series: 'X', modified: 1 } }))
-    );
+    api.setRow('series', { book: api.bookId('other'), series: 'X', modified: 1 });
+
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => api.fetch(url, init));
 
     vi.stubGlobal('fetch', fetchMock);
+    // The page loads the series before a save, as the app does.
+    await loadSeriesOverrides(true);
 
     const result = await saveSeriesOverrides({ mine: 'Y' });
-    const put = fetchMock.mock.calls[1];
+    const put = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT')!;
 
-    expect(put[0]).toBe('/calibre/sync/series.json');
-    expect(Object.keys(JSON.parse(put[1]!.body as string))).toEqual(['other', 'mine']);
+    expect(put[0]).toBe(`/api/v1/series/${api.bookId('mine')}`);
+    expect(Object.keys(result)).toEqual(['other', 'mine']);
     expect(result.mine.series).toBe('Y');
   });
 });

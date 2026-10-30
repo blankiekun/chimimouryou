@@ -46,10 +46,12 @@ import {
 } from '$lib/data/storage/handler/base-handler';
 import { BrowserStorageHandler } from '$lib/data/storage/handler/browser-handler';
 import type {
+  BooksDbAudioBook,
   BooksDbBookData,
   BooksDbBookmarkData,
   BooksDbReadingGoal,
-  BooksDbStatistic
+  BooksDbStatistic,
+  BooksDbSubtitleData
 } from '$lib/data/database/books-db/versions/books-db';
 import { currentDbVersion } from '$lib/data/database/books-db/versions/books-db';
 import { StorageDataType, StorageKey, StorageSourceDefault } from '$lib/data/storage/storage-types';
@@ -155,27 +157,30 @@ export class ServerStorageHandler extends BaseStorageHandler {
    */
   static async readSyncFile(name: string, title?: string) {
     const { mirror, book } = await ServerStorageHandler.syncFileRows(title);
-    let rows: SyncRow[];
+    const rows = ServerStorageHandler.syncFileOf(mirror, name, title, book);
 
+    if (!rows?.length) return undefined;
+
+    return {
+      text: JSON.stringify(
+        name === annotationsName ? { title, highlights: rows.map((row) => row.data) } : rows[0].data
+      ),
+      version: String(newest(rows))
+    };
+  }
+
+  /** A sync file's rows (undefined: not one the server keeps, or a book it doesn't have). */
+  private static syncFileOf(mirror: Mirror, name: string, title?: string, book?: number) {
     if (name === annotationsName && book !== undefined) {
-      rows = mirror.highlights.filter((row) => row.book === book);
-      if (!rows.length) return undefined;
-
-      return {
-        text: JSON.stringify({ title, highlights: rows.map((row) => row.data) }),
-        version: String(newest(rows))
-      };
+      return mirror.highlights.filter((row) => row.book === book);
     }
-
     if (title === undefined && accountDocs[name]) {
-      rows = mirror.accountDocs.filter((row) => row.kind === accountDocs[name]);
-    } else if (book !== undefined && bookDocs[name]) {
-      rows = mirror.bookDocs.filter((row) => row.book === book && row.kind === bookDocs[name]);
-    } else {
-      return undefined;
+      return mirror.accountDocs.filter((row) => row.kind === accountDocs[name]);
     }
-
-    return rows[0] && { text: JSON.stringify(rows[0].data), version: String(rows[0].modified) };
+    if (book !== undefined && bookDocs[name]) {
+      return mirror.bookDocs.filter((row) => row.book === book && row.kind === bookDocs[name]);
+    }
+    return undefined;
   }
 
   static async writeSyncFile(
@@ -184,15 +189,18 @@ export class ServerStorageHandler extends BaseStorageHandler {
     { title, version, keepalive }: SyncFileOptions = {}
   ) {
     const { mirror, book } = await ServerStorageHandler.syncFileRows(title);
+    const rows = ServerStorageHandler.syncFileOf(mirror, name, title, book);
     const data = JSON.parse(text);
 
-    if (name === annotationsName) {
-      // A book the server doesn't know (one a friend sent) keeps its highlights in this browser.
-      if (book === undefined) return;
+    // A book the server doesn't know (one a friend sent) keeps its files in this browser.
+    if (!rows) return;
+    // Another device wrote since `version` was read: merge with its rows first.
+    if (version !== undefined && String(newest(rows) ?? '') !== version) {
+      throw new SyncConflictError();
+    }
 
-      const stored = new Map(
-        mirror.highlights.filter((row) => row.book === book).map((row) => [row.hid, row])
-      );
+    if (name === annotationsName) {
+      const stored = new Map(rows.map((row) => [row.hid, row]));
       const changed = (data.highlights || []).filter(
         (highlight: { id: string; modified: number }) =>
           (stored.get(highlight.id)?.modified ?? -1) < highlight.modified
@@ -214,11 +222,8 @@ export class ServerStorageHandler extends BaseStorageHandler {
       return;
     }
 
-    let path: string;
-
-    if (title === undefined && accountDocs[name]) path = `docs/${accountDocs[name]}`;
-    else if (bookDocs[name] && book !== undefined) path = `books/${book}/docs/${bookDocs[name]}`;
-    else return;
+    const path =
+      title === undefined ? `docs/${accountDocs[name]}` : `books/${book}/docs/${bookDocs[name]}`;
 
     // Newer than what was merged with, even when this device's clock is behind.
     const modified = Math.max(Date.now(), Number(version || 0) + 1);
@@ -319,13 +324,20 @@ export class ServerStorageHandler extends BaseStorageHandler {
     this.holdPersonal = await ServerStorageHandler.holdsAccountData();
   }
 
-  private async bookRows(table: 'progress' | 'statistics') {
+  private async bookRows(table: 'progress' | 'statistics' | 'bookDocs') {
     const mirror = await this.mirror();
     const book = await bookIdOf(this.currentContext.title);
 
     if (this.holdPersonal || book === undefined) return { book, rows: [] as SyncRow[] };
 
     return { book, rows: mirror[table].filter((row) => row.book === book) };
+  }
+
+  /** This book's audiobook position or subtitles (book docs, like recaps). */
+  private async mediaRow(kind: 'audiobook' | 'subtitles') {
+    const { book, rows } = await this.bookRows('bookDocs');
+
+    return { book, row: rows.find((row) => row.kind === kind) };
   }
 
   private async goalRows() {
@@ -352,8 +364,11 @@ export class ServerStorageHandler extends BaseStorageHandler {
         return newest((await this.bookRows('statistics')).rows);
       case StorageDataType.READING_GOALS:
         return newest(await this.goalRows());
+      case StorageDataType.AUDIOBOOK:
+        return (await this.mediaRow('audiobook')).row?.modified;
+      case StorageDataType.SUBTITLE:
+        return (await this.mediaRow('subtitles')).row?.modified;
       default:
-        // Audiobook positions and subtitles have no rows on the server (v1).
         return undefined;
     }
   }
@@ -718,14 +733,30 @@ export class ServerStorageHandler extends BaseStorageHandler {
     return Promise.resolve(imagePath instanceof Blob ? imagePath : undefined);
   }
 
-  getAudioBook() {
+  async getAudioBook() {
+    const { row } = await this.mediaRow('audiobook');
+    const data = row?.data as BooksDbAudioBook | undefined;
+
     BaseStorageHandler.reportProgress();
-    return Promise.resolve(undefined);
+
+    if (!data || this.isForBrowser) return data;
+
+    return new File([JSON.stringify(data)], BaseStorageHandler.getAudioBookFileName(data), {
+      type: 'application/json'
+    });
   }
 
-  getSubtitleData() {
+  async getSubtitleData() {
+    const { row } = await this.mediaRow('subtitles');
+    const data = row?.data as BooksDbSubtitleData | undefined;
+
     BaseStorageHandler.reportProgress();
-    return Promise.resolve(undefined);
+
+    if (!data || this.isForBrowser) return data;
+
+    return new File([JSON.stringify(data)], BaseStorageHandler.getSubtitleDataFileName(data), {
+      type: 'application/json'
+    });
   }
 
   /**
@@ -936,14 +967,29 @@ export class ServerStorageHandler extends BaseStorageHandler {
     return Promise.resolve();
   }
 
-  saveAudioBook() {
-    BaseStorageHandler.reportProgress();
-    return Promise.resolve();
+  async saveAudioBook(data: BooksDbAudioBook | File) {
+    const audioBook: BooksDbAudioBook = data instanceof File ? JSON.parse(await data.text()) : data;
+
+    await this.saveMedia('audiobook', audioBook.lastAudioBookModified, audioBook);
   }
 
-  saveSubtitleData() {
+  async saveSubtitleData(data: BooksDbSubtitleData | File) {
+    const subtitles: BooksDbSubtitleData =
+      data instanceof File ? JSON.parse(await data.text()) : data;
+
+    await this.saveMedia('subtitles', subtitles.lastSubtitleDataModified, subtitles);
+  }
+
+  private async saveMedia(kind: 'audiobook' | 'subtitles', modified: number, data: unknown) {
+    const { book } = await this.mediaRow(kind);
+
     BaseStorageHandler.reportProgress();
-    return Promise.resolve();
+    this.personalWrite();
+    // A book the server doesn't know (one a friend sent): it stays in this browser.
+    if (book === undefined) return;
+
+    // 409: the server's row is newer and is now in the mirror; the next sync brings it down.
+    await signedInOr401(putRow(`books/${book}/docs/${kind}`, { modified: modified || 0, data }));
   }
 
   updateLastRead() {

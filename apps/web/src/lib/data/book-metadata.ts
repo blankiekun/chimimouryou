@@ -15,7 +15,7 @@
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 import { loadCalibreCatalog } from '$lib/data/calibre';
-import { serverless } from '$lib/data/server-connect';
+import { serverFetch, serverless } from '$lib/data/server-connect';
 import { apiVersion, putRow, syncMirror } from '$lib/data/server-api';
 
 export type MetadataKind = 'book' | 'manga' | 'vn';
@@ -148,7 +148,7 @@ export async function saveBookMetadata(title: string, entry: MetadataCandidate |
     });
   }
 
-  const map = await fetchBookMetadata(false);
+  const map = await fetchBookMetadata();
 
   cache = Promise.resolve(map);
   metadataSaves += 1;
