@@ -63,6 +63,33 @@ Phase 3, Kakuyomu, search and covers (written before the code). The ways it coul
   C2 a cover URL on a host the adapter doesn't name is fetched (the server as a proxy)                  -> test_covers
   C3 a page the site sends instead of an image is served as an image                                    -> test_covers
 Hameln (syosetu.org) isn't here: it answers with a Cloudflare challenge (stopped, architect rule).
+
+Phase 4, OPDS and Suwayomi servers (written before the code). Fixture: fixtures/sources/servers.py. Suwayomi is an
+OPDS preset (its OPDS feed carries chapter pages, OPDS-PSE), so it has no module of its own. The ways it could fail:
+  O1 a feed is misread: navigation vs acquisition links, relative links resolved against the wrong base, author,
+     summary or cover lost, a PDF offered as a volume, a chapter's page stream (template, count) missed      -> test_opds_feed
+  O2 malformed XML or an HTML page reads as an empty catalog instead of "not an OPDS catalog"            -> test_opds_feed
+  O3 a series' second feed page is never read (volumes missing)                                         -> test_whole_files
+  O4 a wrong password reads as "unreachable" or as an empty catalog; an unreachable server as a wrong password; a
+     bad address or a server added twice isn't caught; the error isn't under the field it concerns         -> test_add_server_errors
+  E1 a password is stored in plain text, comes back from GET servers, or a server with a password is added while
+     SOURCES_SECRET_KEY is unset                                                                            -> test_credentials
+  E2 decrypting with another key returns garbage instead of failing                                      -> test_credentials
+  H1 a feed, image or page on another host (or another port of the same host) is fetched, a redirect off the
+     server is followed, or the credentials go anywhere but the server                                     -> test_host_rule
+  H2 another account lists, browses, edits or deletes my server, or opens or adds its works               -> test_servers_are_per_account
+  W1 a whole file is rebuilt instead of queued as it came; a file that isn't an EPUB reaches calibredb; a followed
+     server work's new entry isn't added                                                                  -> test_whole_files
+  M1 a CBZ without ComicInfo series/number, or its pages out of order (Suwayomi lists newest first)        -> test_manga_pages
+  M2 per chapter: a book holds more than one chapter or its series index isn't the chapter number; per volume:
+     chapters lost or doubled at the boundary                                                             -> test_manga_pages
+  M3 switching per volume/chapter after a volume is in the library renumbers the work                      -> test_manga_pages
+Review of phase 4 (written before the fix):
+  I1 an entry inserted mid-feed of a whole-file series renumbers the later files: the new file is taken as "in
+     library" and never added, or a follow re-adds or replaces a file already in Calibre                      -> test_feed_reordered
+  I2 page manga: after the server's chapter list changed, a follow silently replaces the open volume in place
+     with other chapters (or fetches the full volumes again) instead of failing with a clear detail            -> test_feed_reordered
+  D1 a failed or oversized whole-file download leaves a partial file behind (or the file is held in memory)  -> test_file_streamed
 """
 import gzip
 import importlib.util
@@ -87,7 +114,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', 'import'))
 sys.path.insert(0, os.path.join(HERE, 'fixtures', 'sources'))
 import serve  # noqa: E402
+import servers as fake_servers  # noqa: E402
 from sources import build, fetcher, planner  # noqa: E402
+from sources import servers  # noqa: E402
+from sources.servers import opds  # noqa: E402
 from sources.adapters import kakuyomu, syosetu  # noqa: E402
 
 STATE = tempfile.mkdtemp()
@@ -383,22 +413,29 @@ class FetcherTest(unittest.TestCase):
             fetcher.fetch('https://d.example/gzip-bomb', {'d.example'})
 
 
-class ServiceTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.site = fake_site()
-        cls.site.start()
+_service = {}
+
+
+def start_service() -> str:
+    """The import service with its worker and runners, started once for every service test class."""
+    if not _service:
+        site = fake_site()
+        site.start()
+        unittest.addModuleCleanup(site.stop)
         os.makedirs(service.queue_dir(), exist_ok=True)
-        cls.server = ThreadingHTTPServer(('127.0.0.1', 0), service.Handler)
-        cls.base = f'http://127.0.0.1:{cls.server.server_port}'
-        threading.Thread(target=cls.server.serve_forever, kwargs={'poll_interval': 0.01}, daemon=True).start()
+        server = ThreadingHTTPServer(('127.0.0.1', 0), service.Handler)
+        unittest.addModuleCleanup(server.shutdown)
+        threading.Thread(target=server.serve_forever, kwargs={'poll_interval': 0.01}, daemon=True).start()
         threading.Thread(target=service.worker, daemon=True).start()
         service.start_sources()
+        _service['base'] = f'http://127.0.0.1:{server.server_port}'
+    return _service['base']
 
+
+class ServiceCase(unittest.TestCase):
     @classmethod
-    def tearDownClass(cls):
-        cls.server.shutdown()
-        cls.site.stop()
+    def setUpClass(cls):
+        cls.base = start_service()
 
     def request(self, method, path, body=None, account='acc1'):
         headers = {'Host': 'reader.example', 'X-Forwarded-Proto': 'https', 'X-Internal-Token': 'c0ffee',
@@ -420,6 +457,8 @@ class ServiceTest(unittest.TestCase):
             time.sleep(0.05)
         self.fail(f'job did not finish: {job}')
 
+
+class ServiceTest(ServiceCase):
     def test_add_work(self):
         status, work = self.request('POST', '/sources/lookup', {'url': 'https://ncode.syosetu.com/n0001aa/5/'})
         self.assertEqual(status, 200, work)
@@ -841,6 +880,358 @@ class ServiceTest(unittest.TestCase):
             _, syosetu_work = self.request('POST', '/sources/lookup', {'url': 'https://ncode.syosetu.com/n0001aa/'})
             self.assertFalse(syosetu_work['cover'])
             self.assertEqual(self.get_cover(syosetu_work['id'])[0], 404)
+
+
+
+class OpdsTest(unittest.TestCase):
+    def test_opds_feed(self):
+        auth = 'Basic ' + __import__('base64').b64encode(b'reader:kagi-1234').decode()
+        base = 'http://komga.example:25600'
+        root = opds.parse(fake_servers.opds('catalog', {}, auth)[2], f'{base}/opds/catalog')
+        self.assertEqual(root['title'], '試験カタログ')
+        self.assertEqual(root['search'], (f'{base}/opds/search.xml', 'application/opensearchdescription+xml'))
+        self.assertEqual([(e['title'], e['nav'], e['navKind']) for e in root['entries']],
+                         [('All series', f'{base}/opds/series', 'navigation'),
+                          ('Broken', f'{base}/opds/broken', 'navigation')])
+        listing = opds.parse(fake_servers.opds('series', {}, auth)[2], f'{base}/opds/series')
+        self.assertEqual(listing['next'], f'{base}/opds/series?page=2')
+        self.assertEqual((listing['entries'][0]['navKind'], listing['entries'][0]['cover']),
+                         ('acquisition', f'{base}/opds/covers/s1.png'))
+        page2 = opds.parse(fake_servers.opds('series/s1', {'page': ['2']}, auth)[2], f'{base}/opds/series/s1?page=2')
+        volume, pdf = page2['entries']
+        self.assertEqual((volume['title'], volume['authors'], volume['summary'], volume['file']),
+                         ('星降る町の配達人 第3巻', '架空 作者', '星降る町の配達人の第3巻。',
+                          {'href': f'{base}/opds/files/s1-3.epub', 'ext': 'epub'}))
+        self.assertTrue(opds.is_item(volume))
+        self.assertFalse(opds.is_item(pdf))
+        comic = opds.parse(fake_servers.opds('series/s2', {}, auth)[2], f'{base}/opds/series/s2')['entries'][0]
+        self.assertEqual(comic['file']['ext'], 'cbz')
+        self.assertEqual(comic['pages'], {'href': f'{base}/opds/pages/s2-1/{{pageNumber}}', 'count': 3})
+        # Suwayomi: a chapter's pages are behind its metadata entry.
+        api = '/suwayomi/api/opds/v1.2'
+        chapters = opds.parse(fake_servers.suwayomi('api/opds/v1.2/series/7/chapters', {})[2],
+                              f'{base}{api}/series/7/chapters')['entries']
+        self.assertEqual((chapters[0]['title'], chapters[0]['meta'], chapters[0]['pages']),
+                         ('Ch. 12', f'{base}{api}/series/7/chapter/12/metadata', None))
+        meta = opds.parse(fake_servers.suwayomi('api/opds/v1.2/series/7/chapter/3/metadata', {})[2],
+                          f'{base}{api}/series/7/chapter/3/metadata')['entries'][0]
+        self.assertEqual(meta['pages'], {
+            'href': f'{base}/suwayomi/api/v1/manga/7/chapter/3/page/{{pageNumber}}?updateProgress=false', 'count': 2})
+        self.assertEqual(opds.parse(b'<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>A &amp; B'
+                                    b'</title></feed>', base)['title'], 'A & B')
+        for broken in (fake_servers.opds('broken', {}, auth)[2], b'<feed><unclosed>', b'', b'{"json": true}'):
+            with self.assertRaises(opds.NotCatalog, msg=broken):
+                opds.parse(broken, base)
+
+    def test_credentials(self):
+        with mock.patch.object(servers, 'SECRET_KEY', 'first key'):
+            token = servers.encrypt('kagi-1234')
+            self.assertNotIn('kagi-1234', token)
+            self.assertEqual(servers.decrypt(token), 'kagi-1234')
+        with mock.patch.object(servers, 'SECRET_KEY', 'another key'), self.assertRaises(servers.SecretError):
+            servers.decrypt(token)
+        with mock.patch.object(servers, 'SECRET_KEY', ''), self.assertRaises(servers.SecretError):
+            servers.encrypt('kagi-1234')
+
+
+def calls() -> int:
+    """add_format/set_metadata calls so far."""
+    if not os.path.exists(CALLS):
+        return 0
+    with open(CALLS) as log:
+        return len(log.readlines())
+
+
+class ServerSourcesTest(ServiceCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.key = mock.patch.object(servers, 'SECRET_KEY', 'test key')
+        cls.key.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.key.stop()
+
+    def add_server(self, account, kind='opds', password='kagi-1234', **extra):
+        url = f'{FIXTURE_URL}/opds/catalog' if kind == 'opds' else f'{FIXTURE_URL}/suwayomi'
+        body = {'type': kind, 'url': url, 'name': 'Test server', 'user': 'reader' if password else '',
+                'password': password, **extra}
+        with mock.patch.object(servers, 'SECRET_KEY', 'test key'):
+            return self.request('POST', '/sources/servers', body, account)
+
+    def browse(self, account, server_id, section=''):
+        query = f'?section={urllib.parse.quote(section)}' if section else ''
+        with mock.patch.object(servers, 'SECRET_KEY', 'test key'):
+            return self.request('GET', f'/sources/servers/{server_id}/browse{query}', account=account)
+
+    def adds(self):
+        if not os.path.exists(ADDS):
+            return []
+        with open(ADDS) as log:
+            return [eval(line) for line in log]  # noqa: S307 - the fake calibredb's own repr()
+
+    def test_credentials_in_service(self):
+        with mock.patch.object(servers, 'SECRET_KEY', ''):
+            status, body = self.request('POST', '/sources/servers', {
+                'type': 'opds', 'url': f'{FIXTURE_URL}/opds/catalog', 'name': 'K', 'user': 'reader',
+                'password': 'kagi-1234'}, 'srvK')
+        self.assertEqual((status, body.get('field')), (400, 'password'), body)
+        self.assertIn('SOURCES_SECRET_KEY', body['error'])
+        status, body = self.add_server('srvK')
+        self.assertEqual(status, 200, body)
+        _, listed = self.request('GET', '/sources/servers', account='srvK')
+        self.assertNotIn('kagi-1234', json.dumps(listed))
+        self.assertEqual({k for k in listed['servers'][0]} & {'secret', 'password'}, set())
+        self.assertTrue(listed['servers'][0]['hasPassword'])
+        row = service.sources.database().query('SELECT secret FROM source_servers WHERE id = ?', (body['server']['id'],))
+        self.assertNotIn('kagi-1234', row[0]['secret'])
+
+    def test_add_server_errors(self):
+        cases = [({'url': 'ftp://komga.example/opds'}, 'url', 'http://'),
+                 ({'url': 'http://127.0.0.1:1/opds/catalog'}, 'url', "Couldn't reach 127.0.0.1:1"),
+                 ({'password': 'wrong'}, 'password', '401'),
+                 ({'url': f'{FIXTURE_URL}/opds/broken'}, 'url', 'not with an OPDS catalog')]
+        for extra, field, message in cases:
+            status, body = self.add_server('srvE', **extra)
+            self.assertEqual((status, body.get('field')), (400, field), body)
+            self.assertIn(message, body['error'])
+            self.assertNotIn('kagi-1234', body['error'])
+        status, body = self.add_server('srvE')
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body['tested']['title'], '試験カタログ')
+        status, again = self.add_server('srvE')
+        self.assertEqual((status, again.get('field')), (400, 'url'), again)
+        self.assertIn('already in your sources as Test server', again['error'])
+        self.assertEqual(self.add_server('srvE', kind='suwayomi', password='')[0], 200)
+
+    def test_host_rule(self):
+        _, body = self.add_server('srvH')
+        server_id = body['server']['id']
+        origin = FIXTURE_URL
+        requested = []
+        real = fetcher._opener.open
+
+        def spy(request, *args, **kwargs):
+            requested.append((request.full_url, request.get_header('Authorization')))
+            return real(request, *args, **kwargs)
+        with mock.patch.object(fetcher._opener, 'open', spy):
+            self.assertEqual(self.browse('srvH', server_id)[0], 200)
+            status, listing = self.browse('srvH', server_id, '/opds/series?page=2')
+            self.assertEqual(status, 200, listing)
+            s2 = next(e for e in listing['entries'] if e['title'] == '灯台守と七つの鍵')
+            self.assertEqual(s2['cover'], None)  # its cover is on another host
+            for section in ('/opds/redirect', 'http://images.example/opds/catalog', 'http://127.0.0.1:1/opds/catalog',
+                            '//images.example/x'):
+                self.assertNotEqual(self.browse('srvH', server_id, section)[0], 200, section)
+            for href in ('http://images.example/s2.png', '//images.example/s2.png', '/opds/covers/s1.png'):
+                with mock.patch.object(servers, 'SECRET_KEY', 'test key'):
+                    req = urllib.request.Request(
+                        f'{self.base}/sources/servers/{server_id}/image?href={urllib.parse.quote(href)}',
+                        headers={'X-Internal-Token': 'c0ffee', 'X-Account-Id': 'srvH'})
+                    try:
+                        with urllib.request.urlopen(req) as response:
+                            result = (response.status, response.headers['Content-Type'])
+                    except urllib.error.HTTPError as error:
+                        result = (error.code, '')
+                self.assertEqual(result, (200, 'image/png') if href.startswith('/opds') else (404, ''), href)
+        self.assertTrue(requested)
+        for url, auth in requested:
+            self.assertTrue(url.startswith(origin + '/'), url)
+            self.assertTrue(auth, url)
+
+    def test_servers_are_per_account(self):
+        _, body = self.add_server('srvA')
+        server_id = body['server']['id']
+        _, listing = self.browse('srvA', server_id, '/opds/series')
+        _, work = self.request('POST', '/sources/works/resolve',
+                               {'site': f'opds:{server_id}', 'workKey': listing['entries'][0]['workKey']}, 'srvA')
+        self.assertEqual(work['title'], '星降る町の配達人', work)
+        self.assertEqual(self.request('GET', '/sources/servers', account='srvB')[1]['servers'], [])
+        for method, path, body in (('GET', f'/sources/servers/{server_id}/browse', None),
+                                   ('PUT', f'/sources/servers/{server_id}', {'name': 'Mine'}),
+                                   ('DELETE', f'/sources/servers/{server_id}', None),
+                                   ('GET', f'/sources/works/{work["id"]}', None),
+                                   ('POST', f'/sources/works/{work["id"]}/add', {'volumes': [1]}),
+                                   ('PUT', f'/sources/follows/{work["id"]}', {}),
+                                   ('POST', '/sources/works/resolve', {'site': f'opds:{server_id}',
+                                                                       'workKey': '/opds/series/s1'})):
+            self.assertEqual(self.request(method, path, body, 'srvB')[0], 404, path)
+        self.assertEqual(self.request('GET', '/sources/servers', account='srvA')[1]['servers'][0]['name'], 'Test server')
+
+    def test_whole_files(self):
+        _, body = self.add_server('srvW')
+        site = f'opds:{body["server"]["id"]}'
+        status, root = self.browse('srvW', body['server']['id'])
+        self.assertEqual((status, [e['kind'] for e in root['entries']]), (200, ['section', 'section']), root)
+        _, listing = self.browse('srvW', body['server']['id'], root['entries'][0]['href'])
+        self.assertEqual([e['kind'] for e in listing['entries']], ['work'])
+        _, work = self.request('POST', '/sources/works/resolve',
+                               {'site': site, 'workKey': listing['entries'][0]['workKey']}, 'srvW')
+        self.assertEqual((work['kind'], work['chapters'], len(work['volumes']), work['perChoice']),
+                         ('novel', 3, 3, None), work)
+        before = len(self.adds())
+        with mock.patch.object(servers, 'SECRET_KEY', 'test key'):
+            _, job = self.request('POST', f'/sources/works/{work["id"]}/add', {'volumes': [1, 2, 3]}, 'srvW')
+            job = self.wait_job(job['job']['id'], 'srvW')
+        self.assertEqual(job['state'], 'done', job)
+        adds = self.adds()[before:]
+        self.assertEqual([a[a.index('--series-index') + 1] for a in adds], ['1', '2', '3'])
+        args = adds[2]
+        self.assertEqual((args[args.index('--title') + 1], args[args.index('--series') + 1]),
+                         ('星降る町の配達人 3', '星降る町の配達人'))
+        with open(os.path.join(STATE, f'added-{100 + len(self.adds()) - 1}.epub'), 'rb') as f:
+            self.assertEqual(f.read(), fake_servers.epub('星降る町の配達人 第3巻'))  # as it came
+
+        # Followed: a fourth volume on the server becomes a new book; the first three stay as they are.
+        replaced = calls()
+        with mock.patch.dict(fake_servers.VOLUMES, s1=[1, 2, 3, 4]):
+            self.request('PUT', f'/sources/follows/{work["id"]}', {}, 'srvW')
+            for _ in range(400):
+                _, following = self.request('GET', '/sources/following', account='srvW')
+                follow = following['follows'][0]
+                if follow['state'] in ('new', 'failed'):
+                    break
+                time.sleep(0.05)
+            self.assertEqual(follow['state'], 'new', follow)
+            for _ in range(400):
+                if len(self.adds()) > before + 3:
+                    break
+                time.sleep(0.05)
+        new = self.adds()[before + 3:]
+        self.assertEqual([a[a.index('--series-index') + 1] for a in new], ['4'])
+        self.assertEqual(calls(), replaced)
+
+        _, listing = self.browse('srvW', body['server']['id'], '/opds/series?page=2')
+        broken = next(e for e in listing['entries'] if e['title'] == '壊れた本')
+        _, work = self.request('POST', '/sources/works/resolve', {'site': site, 'workKey': broken['workKey']}, 'srvW')
+        with mock.patch.object(servers, 'SECRET_KEY', 'test key'):
+            _, job = self.request('POST', f'/sources/works/{work["id"]}/add', {'volumes': [1]}, 'srvW')
+            job = self.wait_job(job['job']['id'], 'srvW')
+        self.assertEqual(job['state'], 'failed', job)
+        self.assertIn('EPUB', job['error'])
+        self.assertEqual(len(self.adds()), before + 4)
+
+    def wait_follow(self, account):
+        for _ in range(400):
+            _, following = self.request('GET', '/sources/following', account=account)
+            follow = following['follows'][0]
+            if follow['state'] in ('new', 'failed', 'current'):
+                return follow
+            time.sleep(0.05)
+        self.fail(f'no check: {follow}')
+
+    def test_feed_reordered(self):
+        # Whole files: a volume inserted mid-feed is a new volume; the three in the library stay as they are.
+        _, body = self.add_server('srvR')
+        site = f'opds:{body["server"]["id"]}'
+        _, work = self.request('POST', '/sources/works/resolve', {'site': site, 'workKey': '/opds/series/s1'}, 'srvR')
+        _, job = self.request('POST', f'/sources/works/{work["id"]}/add', {'volumes': [1, 2, 3]}, 'srvR')
+        self.assertEqual(self.wait_job(job['job']['id'], 'srvR')['state'], 'done')
+        before, replaced = len(self.adds()), calls()
+        kept = {row['number']: row['calibre_id'] for row in service.sources.database().query(
+            'SELECT number, calibre_id FROM work_volumes WHERE work = ?', (work['id'],))}
+        with mock.patch.dict(fake_servers.VOLUMES, s1=[1, 4, 2, 3]):
+            self.request('PUT', f'/sources/follows/{work["id"]}', {}, 'srvR')
+            self.assertEqual(self.wait_follow('srvR')['state'], 'new')
+            for _ in range(400):
+                if len(self.adds()) > before:
+                    break
+                time.sleep(0.05)
+            time.sleep(0.3)
+            new = self.adds()[before:]
+            self.assertEqual([(a[a.index('--series-index') + 1]) for a in new], ['4'])
+            with open(os.path.join(STATE, f'added-{100 + before}.epub'), 'rb') as f:
+                self.assertEqual(f.read(), fake_servers.epub('星降る町の配達人 第4巻'))
+            self.assertEqual(calls(), replaced)
+            ids = {row['number']: row['calibre_id'] for row in service.sources.database().query(
+                'SELECT number, calibre_id FROM work_volumes WHERE work = ?', (work['id'],))}
+            self.assertEqual(ids, {**kept, 4: 100 + before})  # Vol. 1-3 keep their books
+            self.request('DELETE', f'/sources/follows/{work["id"]}', account='srvR')
+
+        # Pages: a chapter inserted before the open volume moves the chapters; the follow fails instead of
+        # replacing Vol. 2 (ch 11-12) with other chapters.
+        _, body = self.add_server('srvR2', kind='suwayomi', password='')
+        _, work = self.request('POST', '/sources/works/resolve', {
+            'site': f'opds:{body["server"]["id"]}', 'workKey': '/suwayomi/api/opds/v1.2/series/7/chapters'}, 'srvR2')
+        _, job = self.request('POST', f'/sources/works/{work["id"]}/add', {'volumes': [1, 2]}, 'srvR2')
+        self.assertEqual(self.wait_job(job['job']['id'], 'srvR2')['state'], 'done')
+        before, replaced = len(self.adds()), calls()
+        with mock.patch.dict(fake_servers.CHAPTERS, order=[1, 2, 3, 4, 13, *range(5, 13)]):
+            self.request('PUT', f'/sources/follows/{work["id"]}', {}, 'srvR2')
+            follow = self.wait_follow('srvR2')
+        self.assertEqual(follow['state'], 'failed', follow)
+        self.assertIn('chapter list changed', follow['detail'])
+        time.sleep(0.3)
+        self.assertEqual((len(self.adds()), calls()), (before, replaced))
+
+    def test_file_streamed(self):
+        _, body = self.add_server('srvD')
+        _, work = self.request('POST', '/sources/works/resolve', {
+            'site': f'opds:{body["server"]["id"]}', 'workKey': '/opds/series/s1'}, 'srvD')
+        before = len(self.adds())
+        files = []
+        real = fetcher.fetch
+
+        def spy(url, *args, **kwargs):
+            if '/opds/files/' in url:
+                files.append(kwargs.get('to_path'))
+            return real(url, *args, **kwargs)
+        with mock.patch.object(opds, 'FILE_BYTES', 500), mock.patch.object(fetcher, 'fetch', spy):
+            _, job = self.request('POST', f'/sources/works/{work["id"]}/add', {'volumes': [1]}, 'srvD')
+            job = self.wait_job(job['job']['id'], 'srvD')
+        self.assertTrue(files and all(files), files)  # streamed to a file, not read into memory
+        self.assertEqual(job['state'], 'failed', job)
+        self.assertIn('too large', job['error'])
+        self.assertEqual(len(self.adds()), before)
+        folder = os.path.join(service.STATE_DIR, 'sources', str(work['id']))
+        left = [f for _, _, files in os.walk(folder) for f in files]
+        self.assertEqual(left, [])
+
+    def read_cbz(self, calibre_id):
+        with zipfile.ZipFile(os.path.join(STATE, f'added-{calibre_id}.epub')) as archive:
+            info = ET.fromstring(archive.read('ComicInfo.xml'))
+            pages = sorted(n for n in archive.namelist() if n != 'ComicInfo.xml')
+            return info, [archive.read(n) for n in pages]
+
+    def test_manga_pages(self):
+        _, body = self.add_server('srvM', kind='suwayomi', password='')
+        site = f'opds:{body["server"]["id"]}'
+        _, root = self.browse('srvM', body['server']['id'])
+        _, library = self.browse('srvM', body['server']['id'], root['entries'][0]['href'])
+        manga = library['entries'][0]
+        self.assertEqual((manga['kind'], manga['title']), ('work', '月影の工房'))
+        _, work = self.request('POST', '/sources/works/resolve', {'site': site, 'workKey': manga['workKey']}, 'srvM')
+        self.assertEqual((work['kind'], work['chapters'], work['per'], work['perChoice']), ('manga', 12, 'volume', 10))
+        self.assertEqual([(v['first'], v['last']) for v in work['volumes']], [(1, 10), (11, 12)])
+        before = len(self.adds())
+        _, job = self.request('POST', f'/sources/works/{work["id"]}/add', {'volumes': [1, 2], 'per': 'volume'}, 'srvM')
+        self.assertEqual(self.wait_job(job['job']['id'], 'srvM')['state'], 'done')
+        adds = self.adds()[before:]
+        self.assertEqual([a[a.index('--series-index') + 1] for a in adds], ['1', '2'])
+        info, pages = self.read_cbz(100 + before)
+        self.assertEqual((info.findtext('Series'), info.findtext('Number')), ('月影の工房', '1'))
+        self.assertEqual(pages, [fake_servers.png(n * 10 + p) for n in range(1, 11) for p in range(2)])
+        info, pages = self.read_cbz(100 + before + 1)
+        self.assertEqual(pages, [fake_servers.png(n * 10 + p) for n in (11, 12) for p in range(2)])
+        status, refused = self.request('POST', f'/sources/works/{work["id"]}/add', {'volumes': [1], 'per': 'chapter'},
+                                       'srvM')
+        self.assertEqual(status, 409, refused)
+        _, work = self.request('GET', f'/sources/works/{work["id"]}', account='srvM')
+        self.assertEqual((work['per'], work['perChoice'], len(work['volumes'])), ('volume', None, 2))
+
+        # Per chapter (another reader's server): one book per chapter, series index = chapter number.
+        _, body = self.add_server('srvM2', kind='suwayomi', password='')
+        _, work = self.request('POST', '/sources/works/resolve', {'site': f'opds:{body["server"]["id"]}',
+                                                                  'workKey': manga['workKey']}, 'srvM2')
+        before = len(self.adds())
+        _, job = self.request('POST', f'/sources/works/{work["id"]}/add', {'volumes': [12], 'per': 'chapter'}, 'srvM2')
+        self.assertEqual(self.wait_job(job['job']['id'], 'srvM2')['state'], 'done')
+        args = self.adds()[before]
+        self.assertEqual((args[args.index('--series-index') + 1], args[args.index('--title') + 1]),
+                         ('12', '月影の工房 12'))
+        info, pages = self.read_cbz(100 + before)
+        self.assertEqual((info.findtext('Number'), pages), ('12', [fake_servers.png(120), fake_servers.png(121)]))
 
 
 if __name__ == '__main__':

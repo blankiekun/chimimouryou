@@ -75,6 +75,9 @@ set `ALLOW_HTTP_ACCOUNTS=1` (see [Accounts](#accounts-and-permissions)).
   highlights and settings, including AI API keys, catalog, import queue,
   difficulty results) and `accounts/` (Windows game records).
   Back up `DATA_PATH`. Keep it off shares other machines can read.
+- With the import profile, set `SOURCES_SECRET_KEY` (`openssl rand -base64 32`)
+  so readers can add OPDS catalogs and Suwayomi servers that need a password as
+  sources; it encrypts those passwords. Keep it in `.env`, not in `DATA_PATH`.
 - Open `http://<server>:HTTP_PORT/`. The library shows the Calibre catalog
   after the first catalog run (a minute or so; large libraries take longer
   the first time because of cover extraction).

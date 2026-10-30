@@ -1,4 +1,5 @@
-"""EPUB 3 from fetched chapters: vertical right-to-left, a nav, one XHTML per chapter.
+"""EPUB 3 from fetched chapters: vertical right-to-left, a nav, one XHTML per chapter. CBZ from page images, with
+a ComicInfo.xml naming the series and number.
 
 clean() keeps a whitelist of tags without attributes, so a site's scripts, styles, links and images never reach
 the book (the app sanitizes again when it opens it). Standard library only.
@@ -127,3 +128,25 @@ def epub(path: str, title: str, authors: str, series: str, series_index: int, id
         for name, chapter in zip(names, chapters):
             heading = f'<h2>{escape(chapter["title"])}</h2>' if chapter['title'] else ''
             archive.writestr(f'OEBPS/{name}', _xhtml(chapter['title'] or title, heading + chapter['xhtml']))
+
+
+IMAGE_TYPES = ((b'\xff\xd8\xff', 'image/jpeg'), (b'\x89PNG\r\n\x1a\n', 'image/png'), (b'GIF8', 'image/gif'))
+
+
+def image_type(data: bytes) -> str | None:
+    """JPEG, PNG, GIF or WebP by their first bytes, else None."""
+    if data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+        return 'image/webp'
+    return next((kind for magic, kind in IMAGE_TYPES if data.startswith(magic)), None)
+
+
+def cbz(path: str, title: str, authors: str, series: str, number: int, pages: list[str]):
+    """Writes a CBZ of the page image files (in this order) to path."""
+    info = (f'<?xml version="1.0" encoding="utf-8"?>\n<ComicInfo xmlns:xsd="http://www.w3.org/2001/XMLSchema">'
+            f'<Title>{escape(title)}</Title><Series>{escape(series)}</Series><Number>{number}</Number>'
+            f'<Writer>{escape(authors)}</Writer><PageCount>{len(pages)}</PageCount><LanguageISO>ja</LanguageISO>'
+            '<Manga>YesAndRightToLeft</Manga></ComicInfo>\n')
+    with zipfile.ZipFile(path, 'w', zipfile.ZIP_STORED) as archive:
+        for n, page in enumerate(pages, 1):
+            archive.write(page, f'{n:04d}{page[page.rfind("."):]}')
+        archive.writestr('ComicInfo.xml', info, compress_type=zipfile.ZIP_DEFLATED)

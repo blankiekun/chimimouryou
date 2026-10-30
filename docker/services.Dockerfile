@@ -1,6 +1,6 @@
 # The Python services (server/). One file, three targets:
 #   base        accounts, the v1 API (library.db) and the catalog builder (Python standard library + Pillow)
-#   import      + Calibre, for adding books to the library (large)
+#   import      + Calibre, for adding books to the library (large), and python3-cryptography (Sources passwords)
 #   difficulty  + Sudachi and yurigana, for difficulty estimates and word lists
 #   mokuro      + mokuro and CPU PyTorch, for manga OCR (about 2 GB)
 # Built by docker-compose.yml from the repository root. Runs as PUID (compose `user:`).
@@ -38,7 +38,7 @@ CMD ["python3", "/app/account/service.py", "serve"]
 
 FROM base AS import
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends calibre \
+  && apt-get install -y --no-install-recommends calibre python3-cryptography \
   && rm -rf /var/lib/apt/lists/*
 ENV HOME=/data/state/import QT_QPA_PLATFORM=offscreen
 CMD ["python3", "/app/import/service.py"]

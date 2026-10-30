@@ -139,6 +139,20 @@ CREATE TABLE IF NOT EXISTS source_jobs (
     kind TEXT NOT NULL, volumes TEXT NOT NULL, unit TEXT NOT NULL DEFAULT 'chapters',
     done INTEGER NOT NULL DEFAULT 0, total INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL,
     error TEXT NOT NULL DEFAULT '', failed_at INTEGER, created INTEGER NOT NULL, updated INTEGER NOT NULL);
+-- Servers a reader added as sources (OPDS catalogs, Suwayomi), private to that account. secret: the password,
+-- encrypted with SOURCES_SECRET_KEY (sources/servers/__init__.py), never sent back. Removed ones stay (deleted = 1,
+-- no secret) so adding the same address again finds its works.
+CREATE TABLE IF NOT EXISTS source_servers (
+    id INTEGER PRIMARY KEY, account TEXT NOT NULL, type TEXT NOT NULL CHECK (type IN ('opds', 'suwayomi')),
+    name TEXT NOT NULL, url TEXT NOT NULL, user TEXT NOT NULL DEFAULT '', secret TEXT NOT NULL DEFAULT '',
+    deleted INTEGER NOT NULL DEFAULT 0, modified INTEGER NOT NULL,
+    UNIQUE (account, url));
+-- A server work's items (OPDS entry ids) by number. Whole files keep their volume number when the feed gains or
+-- reorders entries (new ones get the next numbers); for page manga, the chapter ids fetched under each number, which
+-- the import service checks before replacing a volume.
+CREATE TABLE IF NOT EXISTS work_items (
+    work INTEGER NOT NULL REFERENCES works(id), number INTEGER NOT NULL, item TEXT NOT NULL,
+    PRIMARY KEY (work, number), UNIQUE (work, item));
 -- A reader following a work (per account): the import service checks it every SOURCES_CHECK_HOURS. state: '' (not
 -- checked yet), current, new (detail: what the last check added), failed, removed. device '' = the server timer.
 CREATE TABLE IF NOT EXISTS follows (

@@ -166,9 +166,10 @@ jobs:
       - name: Install yurigana and Sudachi
         run: pip install -r engine/requirements.txt
 
-      - name: Install Pillow
-        # The services image has Debian's python3-pil (covers and thumbnails).
-        run: pip install pillow
+      - name: Install Pillow and cryptography
+        # The services image has Debian's python3-pil (covers and thumbnails); the import image
+        # python3-cryptography (Sources server passwords).
+        run: pip install pillow cryptography
 
       - name: Unit tests
         run: |

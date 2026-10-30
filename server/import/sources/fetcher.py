@@ -3,6 +3,10 @@
 Browser-like User-Agent, at most one request per SOURCES_HOST_INTERVAL seconds per host (default 2), Retry-After
 honoured on 429/503, a size cap on the decoded body, and redirects followed only within the caller's hosts.
 SOURCES_FIXTURE_URL (tests and the test stack only) sends https://<host>/<path> to <fixture>/<host>/<path>.
+
+Servers a reader added (origin=...) have their own rule: they may be on the LAN, so instead of a list of hosts only
+that server's own scheme, host and port pass, redirects included (its credentials go nowhere else), with a shorter
+interval (the reader's own server, not a public site) and no fixture rewriting.
 """
 import os
 import threading
@@ -20,6 +24,7 @@ FIXTURE_URL = os.environ.get('SOURCES_FIXTURE_URL', '').rstrip('/')
 MAX_BYTES = 20 * 1024 * 1024
 TIMEOUT = 30
 MAX_REDIRECTS = 5
+SERVER_INTERVAL = 0.2
 # A longer Retry-After fails the request; the job can be retried later.
 MAX_RETRY_AFTER = 600
 RETRIES = 3
@@ -29,9 +34,10 @@ _next: dict[str, float] = {}
 
 
 class FetchError(Exception):
-    def __init__(self, message: str, status: int | None = None):
+    def __init__(self, message: str, status: int | None = None, reason: str = ''):
         super().__init__(message)
         self.status = status  # the site's HTTP status, when it answered with an error
+        self.reason = reason  # why it couldn't be reached
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -42,12 +48,24 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 _opener = urllib.request.build_opener(_NoRedirect)
 
 
-def _wait_turn(host: str):
-    """Takes the host's next slot (one per INTERVAL), then sleeps until it comes."""
+def origin(url: str) -> str:
+    """scheme://host:port of url ('' when it has no usable host), default ports filled in."""
+    parts = urlparse(url)
+    try:
+        port = parts.port or {'http': 80, 'https': 443}.get(parts.scheme)
+    except ValueError:
+        return ''
+    if parts.scheme not in ('http', 'https') or not parts.hostname:
+        return ''
+    return f'{parts.scheme}://{parts.hostname.lower()}:{port}'
+
+
+def _wait_turn(host: str, interval: float):
+    """Takes the host's next slot (one per interval), then sleeps until it comes."""
     with _lock:
         now = time.monotonic()
         slot = max(now, _next.get(host, 0.0))
-        _next[host] = slot + INTERVAL
+        _next[host] = slot + interval
     time.sleep(max(0.0, slot - now))
 
 
@@ -64,40 +82,62 @@ def _retry_after(value: str | None) -> float | None:
         return None
 
 
-def _decode(response, raw: bytes) -> bytes:
+def _decode(response, raw: bytes, max_bytes: int) -> bytes:
     encoding = (response.headers.get('Content-Encoding') or '').lower()
     if encoding not in ('gzip', 'deflate'):
         return raw
     inflater = zlib.decompressobj(zlib.MAX_WBITS | 32 if encoding == 'gzip' else zlib.MAX_WBITS)
     try:
-        body = inflater.decompress(raw, MAX_BYTES + 1)
+        body = inflater.decompress(raw, max_bytes + 1)
     except zlib.error as error:
         raise FetchError('The site sent a broken page') from error
-    if len(body) > MAX_BYTES:
+    if len(body) > max_bytes:
         raise FetchError('The page is too large')
     return body
 
 
-def fetch(url: str, hosts: set[str], headers: dict | None = None) -> tuple[bytes, str]:
-    """GETs url (http(s), a host in `hosts`); returns (body, final url). Raises FetchError with a reader-facing
-    message."""
+def _stream(response, path: str, max_bytes: int):
+    if (response.headers.get('Content-Encoding') or 'identity').lower() != 'identity':
+        raise FetchError('The server sent the file compressed')
+    size = 0
+    with open(path, 'wb') as f:
+        while chunk := response.read(1 << 20):
+            size += len(chunk)
+            if size > max_bytes:
+                raise FetchError('The file is too large')
+            f.write(chunk)
+
+
+def fetch(url: str, hosts: set[str], headers: dict | None = None, server: str = '',
+          max_bytes: int | None = None, to_path: str = '') -> tuple[bytes, str]:
+    """GETs url (http(s), a host in `hosts`, or with `server` (an origin()) only on that server); returns (body,
+    final url). With to_path the body is streamed into that file instead (uncompressed; b'' is returned; the caller
+    removes the file on failure). Raises FetchError with a reader-facing message."""
+    max_bytes = max_bytes or MAX_BYTES
     for _ in range(MAX_REDIRECTS + 1):
         parts = urlparse(url)
         host = (parts.hostname or '').lower()
-        if parts.scheme not in ('http', 'https') or host not in hosts:
+        if server:
+            if origin(url) != server:
+                raise FetchError(f'Refused to fetch {host or url}: not on this server')
+        elif parts.scheme not in ('http', 'https') or host not in hosts:
             raise FetchError(f'Refused to fetch {host or url}: not a page of this site')
         target = f'{FIXTURE_URL}/{host}{parts.path or "/"}' + (f'?{parts.query}' if parts.query else '') \
-            if FIXTURE_URL else url
+            if FIXTURE_URL and not server else url
         request = urllib.request.Request(target, headers={
-            'User-Agent': USER_AGENT, 'Accept-Encoding': 'gzip', 'Accept-Language': 'ja,en;q=0.8', **(headers or {})})
+            'User-Agent': USER_AGENT, 'Accept-Encoding': 'identity' if to_path else 'gzip',
+            'Accept-Language': 'ja,en;q=0.8', **(headers or {})})
         for attempt in range(RETRIES):
-            _wait_turn(host)
+            _wait_turn(server or host, SERVER_INTERVAL if server else INTERVAL)
             try:
                 with _opener.open(request, timeout=TIMEOUT) as response:
-                    raw = response.read(MAX_BYTES + 1)
-                    if len(raw) > MAX_BYTES:
+                    if to_path:
+                        _stream(response, to_path, max_bytes)
+                        return b'', url
+                    raw = response.read(max_bytes + 1)
+                    if len(raw) > max_bytes:
                         raise FetchError('The page is too large')
-                    return _decode(response, raw), url
+                    return _decode(response, raw, max_bytes), url
             except urllib.error.HTTPError as error:
                 if error.code in (301, 302, 303, 307, 308) and error.headers.get('Location'):
                     url = urljoin(url, error.headers['Location'])
@@ -106,8 +146,8 @@ def fetch(url: str, hosts: set[str], headers: dict | None = None) -> tuple[bytes
                 if wait is None or wait > MAX_RETRY_AFTER or attempt == RETRIES - 1:
                     raise FetchError(f"{host} didn't answer ({error.code})", error.code) from error
                 with _lock:
-                    _next[host] = max(_next.get(host, 0.0), time.monotonic() + wait)
+                    _next[server or host] = max(_next.get(server or host, 0.0), time.monotonic() + wait)
             except (urllib.error.URLError, OSError) as error:
-                raise FetchError(f"{host} didn't answer ({getattr(error, 'reason', error)})") from error
+                reason = str(getattr(error, 'reason', error))
+                raise FetchError(f"{host} didn't answer ({reason})", reason=reason) from error
     raise FetchError('Too many redirects')
-

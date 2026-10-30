@@ -27,9 +27,9 @@ uploaded file, where the catalog lists it as a visual novel.
 
 Job states: queued, adding, added (calibreId, title), duplicate, failed (error).
 
-Sources (sources/api.py, endpoints under /sources/): works fetched from sites go into this queue as EPUBs, one
-job per volume, with their Calibre title, series, index, identifier and tag.
-Standard library only. Not part of upstream.
+Sources (sources/api.py, endpoints under /sources/): works fetched from sites and added servers go into this queue
+as EPUBs or CBZs, one job per volume, with their Calibre title, series, index, identifier and tag.
+Standard library only, plus python3-cryptography for the passwords of added servers. Not part of upstream.
 """
 import fcntl
 import json
@@ -655,12 +655,12 @@ class Handler(BaseHTTPRequestHandler):
         try:
             return sources.route(method, self.path.split('?', 1)[0][len('/sources'):], account, body)
         except sources.ApiError as error:
-            raise ApiError(error.status, str(error)) from error
+            raise ApiError(error.status, str(error), body={'field': error.field} if error.field else None) from error
 
-    def send_cover(self, work_id: int):
-        self.account()
+    def send_image(self, image):
+        """Sends image(account) -> (bytes, content type): a work's cover or a server's image."""
         try:
-            data, kind = sources.cover(work_id)
+            data, kind = image(self.account())
         except sources.ApiError as error:
             raise ApiError(error.status, str(error)) from error
         self.send_response(200)
@@ -690,7 +690,11 @@ class Handler(BaseHTTPRequestHandler):
         if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
             return self.send(403, {'error': 'Only nginx may call this service'})
         if re.fullmatch(r'/sources/covers/\d+', url.path):
-            return self.send_cover(int(url.path.rsplit('/', 1)[1]))
+            work = int(url.path.rsplit('/', 1)[1])
+            return self.send_image(lambda account: sources.cover(work, account))
+        if match := re.fullmatch(r'/sources/servers/(\d+)/image', url.path):
+            href = parse_qs(url.query).get('href', [''])[0]
+            return self.send_image(lambda account: sources.server_image(account, int(match[1]), href))
         if url.path.startswith('/sources/'):
             return self.handle_api(lambda: self.sources_api('GET'))
         if url.path != '/jobs':
