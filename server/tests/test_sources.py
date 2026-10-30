@@ -30,12 +30,27 @@ Service (sources/api.py + service.py)
   S2 "In library" ignores what's in Calibre, so Add offers volumes again                               -> test_add_work
   S3 a failed job's retry fetches its chapters again instead of resuming at the failed one             -> test_retry_resumes
   S4 another account sees, cancels or deletes my jobs                                                  -> test_jobs_are_per_account
+
+Phase 2, follows (written before the code). The ways it could fail:
+  T1 the timer checks a paused follow, misses a due one, or checks a work again before its interval (the
+     site sees a request every minute)                                                                 -> test_timer
+  U1 new chapters of the open volume reach Calibre as a new book (a duplicate, reading data split) instead
+     of add_format on its Calibre id; the timestamp isn't bumped, so devices keep their old copy        -> test_update_in_place
+  U2 the 51st chapter is lost, goes into the full volume, or starts a new volume before the open one is
+     filled to 50                                                                                       -> test_update_in_place
+  U3 a full volume is rewritten (highlights there move); the replaced volume's Calibre id changes      -> test_update_in_place
+  U4 a check with nothing new rewrites the open volume anyway (every device downloads it again)       -> test_update_in_place
+  U5 the follow says "up to date" or "new chapters" after a failed check                              -> test_update_retry
+  R1 Check now after a failed update starts over (fetches every chapter again) instead of resuming at the
+     failed chapter, or leaves a second job beside the failed one                                      -> test_update_retry
+  P1 another account (an admin too) pauses or unfollows my follow                                      -> test_follows_are_per_account
 """
 import gzip
 import importlib.util
 import io
 import json
 import os
+import shutil
 import sys
 import tempfile
 import threading
@@ -58,6 +73,8 @@ from sources.adapters import syosetu  # noqa: E402
 STATE = tempfile.mkdtemp()
 FAKE_CALIBREDB = os.path.join(STATE, 'calibredb')
 ADDS = os.path.join(STATE, 'adds.log')
+# add_format and set_metadata calls (updates in place).
+CALLS = os.path.join(STATE, 'calls.log')
 TOKEN_FILE = os.path.join(STATE, 'internal-token')
 with open(TOKEN_FILE, 'w') as f:
     f.write('c0ffee\n')
@@ -73,6 +90,14 @@ if 'add' in args:
     log.write(repr(args[3:]) + '\\n')
     shutil.copy(args[3], {STATE!r} + f'/added-{{n}}.epub')
     print(f'Added book ids: {{n}}')
+elif 'add_format' in args:
+    i = args.index('add_format')
+    with open({CALLS!r}, 'a') as log:
+        log.write(repr(args[i:]) + '\\n')
+    shutil.copy(args[i + 2], {STATE!r} + f'/replaced-{{args[i + 1]}}.epub')
+elif 'set_metadata' in args:
+    with open({CALLS!r}, 'a') as log:
+        log.write(repr(args[args.index('set_metadata'):]) + '\\n')
 elif 'list' in args:
     print('[{{"id": 100, "title": "x"}}]')
 """)
@@ -384,6 +409,178 @@ class ServiceTest(unittest.TestCase):
         self.assertEqual(self.request('DELETE', f'/sources/jobs/{job_id}', None, 'acc3')[0], 200)
         _, queue = self.request('GET', '/sources/queue', account='acc3')
         self.assertNotIn(job_id, [j['id'] for j in queue['jobs']])
+
+    def fixture_work(self, ncode, chapters):
+        """A copy of the n0001aa fixtures as work `ncode` whose chapter count the test changes (set_chapters)."""
+        root = tempfile.mkdtemp(dir=STATE)
+        for name in os.listdir(serve.ROOT):
+            shutil.copy(os.path.join(serve.ROOT, name), os.path.join(root, name.replace('n0001aa', ncode)))
+        patch = mock.patch.object(serve, 'ROOT', root)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.set_chapters(ncode, chapters)
+        return f'https://ncode.syosetu.com/{ncode}/'
+
+    def set_chapters(self, ncode, chapters):
+        path = os.path.join(serve.ROOT, f'api-{ncode}.json')
+        with open(path, encoding='utf-8') as f:
+            answer = json.load(f)
+        answer[1]['general_all_no'] = chapters
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(answer, f)
+
+    def follow_state(self, work_id, account, until=lambda follow: follow['state'] not in ('', 'checking')):
+        for _ in range(400):
+            _, body = self.request('GET', '/sources/following', account=account)
+            follow = next((f for f in body['follows'] if f['workId'] == work_id), None)
+            if follow and until(follow):
+                return follow
+            time.sleep(0.05)
+        self.fail(f'follow did not settle: {follow}')
+
+    def calls(self):
+        try:
+            with open(CALLS) as log:
+                return [eval(line) for line in log]  # noqa: S307 - the fake calibredb's own repr()
+        except FileNotFoundError:
+            return []
+
+    def adds_of(self, ncode):
+        with open(ADDS) as log:
+            return [eval(line) for line in log if f':{ncode}:' in line]  # noqa: S307
+
+    def chapters_in(self, epub):
+        with zipfile.ZipFile(epub) as archive:
+            return len([n for n in archive.namelist() if n.endswith('.xhtml') and 'nav' not in n])
+
+    def test_update_in_place(self):
+        url = self.fixture_work('n0003cc', 60)
+        _, work = self.request('POST', '/sources/lookup', {'url': url}, 'acc5')
+        wid = work['id']
+        # Following a work not in the library fetches all of it: Vol. 1 full, Vol. 2 open.
+        self.assertEqual(self.request('PUT', f'/sources/follows/{wid}', {}, 'acc5')[0], 200)
+        follow = self.follow_state(wid, 'acc5')
+        self.assertEqual(follow['state'], 'new', follow)
+        self.assertIn('60 new chapters', follow['detail'])
+        self.wait_volumes(wid, 2)
+        adds = self.adds_of('n0003cc')
+        self.assertEqual(len(adds), 2)
+        vol1, vol2 = (self.calibre_id(a) for a in adds)
+
+        def check(chapters):
+            before = len(self.calls())
+            self.set_chapters('n0003cc', chapters)
+            self.assertEqual(self.request('POST', '/sources/check', {'work': wid}, 'acc5')[0], 200)
+            self.follow_state(wid, 'acc5')
+            self.wait_volumes(wid, (chapters + 49) // 50, chapters)
+            return self.calls()[before:]
+
+        # Two new chapters: Vol. 2 is replaced on its own Calibre id and its timestamp moves.
+        calls = check(62)
+        self.assertEqual([c[:2] for c in calls], [['add_format', str(vol2)], ['set_metadata', str(vol2)]], calls)
+        self.assertTrue(calls[1][3].startswith('timestamp:'), calls)
+        self.assertEqual(self.chapters_in(os.path.join(STATE, f'replaced-{vol2}.epub')), 12)
+        self.assertEqual(len(self.adds_of('n0003cc')), 2)
+        self.assertIn('2 new chapters, added to Vol. 2', self.follow_state(wid, 'acc5')['detail'])
+        # Nothing new: nothing is rewritten.
+        self.assertEqual(check(62), [])
+        self.assertEqual(self.follow_state(wid, 'acc5')['state'], 'current')
+        # Past 100: Vol. 2 filled to 50, chapter 101 starts Vol. 3; Vol. 1 never touched.
+        calls = check(101)
+        self.assertEqual([c[:2] for c in calls], [['add_format', str(vol2)], ['set_metadata', str(vol2)]], calls)
+        self.assertEqual(self.chapters_in(os.path.join(STATE, f'replaced-{vol2}.epub')), 50)
+        adds = self.adds_of('n0003cc')
+        self.assertEqual([a[a.index('--series-index') + 1] for a in adds], ['1', '2', '3'])
+        # Then only Vol. 3 changes: full Vol. 2 stays as it is.
+        calls = check(102)
+        self.assertEqual({c[1] for c in calls}, {str(self.calibre_id(adds[2]))}, calls)
+        _, work = self.request('GET', f'/sources/works/{wid}', account='acc5')
+        self.assertEqual([(v['number'], v['first'], v['last']) for v in work['volumes']],
+                         [(1, 1, 50), (2, 51, 100), (3, 101, 102)])
+        self.assertTrue(work['following'])
+        self.assertNotIn(str(vol1), {c[1] for c in self.calls()})
+
+    def calibre_id(self, args):
+        """The fake calibredb's id for an add: 100 + its line in the log."""
+        with open(ADDS) as log:
+            return 100 + [eval(line) for line in log].index(args)  # noqa: S307
+
+    def wait_volumes(self, work_id, count, last=None):
+        """Until the work's volumes all have Calibre ids (and the last ends at chapter `last`)."""
+        for _ in range(400):
+            rows = service.sources.database().query(
+                'SELECT number, last_ch, calibre_id FROM work_volumes WHERE work = ? ORDER BY number', (work_id,))
+            if (len(rows) == count and all(r['calibre_id'] for r in rows)
+                    and (last is None or rows[-1]['last_ch'] == last)):
+                return rows
+            time.sleep(0.05)
+        self.fail(f'volumes: {[dict(r) for r in rows]}')
+
+    def test_update_retry(self):
+        url = self.fixture_work('n0004dd', 55)
+        _, work = self.request('POST', '/sources/lookup', {'url': url}, 'acc6')
+        wid = work['id']
+        fetched = []
+        real = fetcher.fetch
+
+        def failing(address, *args, **kwargs):
+            failed = address.endswith('/n0004dd/53/') and address not in fetched
+            fetched.append(address)
+            if failed:
+                raise fetcher.FetchError("ncode.syosetu.com didn't answer (503)")
+            return real(address, *args, **kwargs)
+        with mock.patch.object(fetcher, 'fetch', failing):
+            self.request('PUT', f'/sources/follows/{wid}', {}, 'acc6')
+            follow = self.follow_state(wid, 'acc6')
+            self.assertEqual(follow['state'], 'failed', follow)
+            self.assertIn('503', follow['detail'])
+            self.request('POST', '/sources/check', {'work': wid}, 'acc6')
+            follow = self.follow_state(wid, 'acc6', lambda f: f['state'] == 'new')
+        self.wait_volumes(wid, 2)
+        chapters = [a for a in fetched if '/n0004dd/' in a and '?' not in a and not a.endswith('/n0004dd/')]
+        self.assertEqual(chapters.count('https://ncode.syosetu.com/n0004dd/52/'), 1)
+        self.assertEqual(chapters.count('https://ncode.syosetu.com/n0004dd/53/'), 2)
+        self.assertEqual(len(chapters), 56)
+        _, queue = self.request('GET', '/sources/queue', account='acc6')
+        self.assertEqual([j['state'] for j in queue['jobs'] if j['workId'] == wid], ['done'])
+
+    def test_timer(self):
+        url = self.fixture_work('n0005ee', 3)
+        _, work = self.request('POST', '/sources/lookup', {'url': url}, 'acc7')
+        wid = work['id']
+        sources = service.sources
+
+        def jobs():
+            return sources.database().query("SELECT id FROM source_jobs WHERE work = ? AND kind = 'update'", (wid,))
+        self.request('PUT', f'/sources/follows/{wid}', {'paused': True}, 'acc7')
+        sources.queue_due_checks(sources.now_ms())
+        self.assertEqual(jobs(), [])
+        self.request('PUT', f'/sources/follows/{wid}', {'paused': False}, 'acc7')
+        self.follow_state(wid, 'acc7')
+        self.assertEqual(len(jobs()), 1)
+        now = sources.now_ms()
+        sources.queue_due_checks(now + 3600 * 1000)
+        self.assertEqual(len(jobs()), 1)
+        self.set_chapters('n0005ee', 4)
+        sources.queue_due_checks(now + sources.CHECK_MS + 60 * 1000)
+        follow = self.follow_state(wid, 'acc7', lambda f: f['detail'].startswith('1 new chapter'))
+        self.assertEqual(follow['state'], 'new')
+
+    def test_follows_are_per_account(self):
+        url = self.fixture_work('n0006ff', 2)
+        _, work = self.request('POST', '/sources/lookup', {'url': url}, 'acc8')
+        wid = work['id']
+        self.request('PUT', f'/sources/follows/{wid}', {}, 'acc8')
+        self.follow_state(wid, 'acc8')
+        # Another reader's pause is their own follow; their unfollow finds nothing of mine.
+        self.assertEqual(self.request('PUT', f'/sources/follows/{wid}', {'paused': True}, 'acc9')[0], 200)
+        self.assertEqual(self.request('DELETE', f'/sources/follows/{wid}', None, 'acc9')[0], 200)
+        self.assertEqual(self.request('DELETE', f'/sources/follows/{wid}', None, 'acc9')[0], 404)
+        follow = self.follow_state(wid, 'acc8')
+        self.assertFalse(follow['paused'])
+        self.assertEqual(self.request('DELETE', f'/sources/follows/{wid}', None, 'acc8')[0], 200)
+        _, body = self.request('GET', '/sources/following', account='acc8')
+        self.assertEqual(body['follows'], [])
 
 
 if __name__ == '__main__':

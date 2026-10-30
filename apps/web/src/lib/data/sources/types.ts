@@ -39,6 +39,31 @@ export interface SourceWork {
   latest: { n: number; title: string; date: string }[];
   volumeSize: number;
   volumes: SourceVolume[];
+  /** Hours between two checks of a followed work */
+  checkHours: number;
+  /** This account follows the work */
+  following: boolean;
+  paused: boolean;
+}
+
+/** A work this account follows (GET following). */
+export interface SourceFollow {
+  workId: number;
+  title: string;
+  site: string;
+  siteName: string;
+  domain: string;
+  chapters: number;
+  /** Volumes of it in the library */
+  volumes: number;
+  paused: boolean;
+  /** '' until the first check; detail says what the last check added or why it failed */
+  state: '' | 'checking' | 'current' | 'new' | 'failed' | 'removed';
+  detail: string;
+  lastCheck: number | null;
+  nextCheck: number | null;
+  /** When the follow was made, paused or resumed (ms) */
+  modified: number;
 }
 
 export interface SourceJob {

@@ -11,11 +11,11 @@
 
 import { standalone } from '$lib/data/env';
 import { errorMessage } from '$lib/data/remote/calibre-import';
-import type { SourceJob, SourceWork } from './types';
+import type { SourceFollow, SourceJob, SourceWork } from './types';
 
 const apiUrl = '/calibre/import/api/sources/';
 
-async function call<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown) {
+async function call<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown) {
   if (standalone) {
     throw new Error('Sources need the server edition');
   }
@@ -63,6 +63,28 @@ export function cancelJob(id: string) {
 
 export function removeJob(id: string) {
   return call<object>('DELETE', `jobs/${id}`);
+}
+
+/** Follows the work, or pauses/resumes it; a new follow is checked at once. */
+export function followWork(workId: number, paused = false) {
+  return call<{ follow: SourceFollow }>('PUT', `follows/${workId}`, { paused });
+}
+
+/** Stops checking the work; its volumes stay in the library. */
+export function unfollowWork(workId: number) {
+  return call<object>('DELETE', `follows/${workId}`);
+}
+
+type Following = { follows: SourceFollow[]; checkHours: number };
+
+/** This account's follows and the hours between two checks. */
+export function getFollowing() {
+  return call<Following>('GET', 'following');
+}
+
+/** Check now: every unpaused follow, or the one work. */
+export function checkNow(workId?: number) {
+  return call<Following>('POST', 'check', workId === undefined ? {} : { work: workId });
 }
 
 /** "about 4 min" for this many requests at one per `interval` seconds. */

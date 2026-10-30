@@ -8,24 +8,31 @@
   import { libraryTab$ } from '$lib/data/library/library-home';
   import {
     cancelJob,
+    checkNow,
+    followWork,
+    getFollowing,
     getQueue,
     lookUpWork,
     removeJob,
     retryJob,
-    timeLeft
+    timeLeft,
+    unfollowWork
   } from '$lib/data/sources/server-sources';
-  import type { SourceJob } from '$lib/data/sources/types';
+  import type { SourceFollow, SourceJob } from '$lib/data/sources/types';
   import { onMount } from 'svelte';
 
   /**
-   * Sources (Import → Sources, server edition, import permission): paste a link to a work, and
-   * the queue of this account's fetch jobs, polled every 5 s while the page is open.
+   * Sources (Import → Sources, server edition, import permission): the works this account
+   * follows, the queue of its fetch jobs (both polled every 5 s while the page is open), and
+   * paste a link to a work.
    */
 
   let jobs = $state<SourceJob[]>();
+  let follows = $state<SourceFollow[]>([]);
+  let checkHours = $state(6);
   let interval = $state(2);
   let queueError = $state('');
-  let tab = $state<'queue' | 'add'>();
+  let tab = $state<'following' | 'queue' | 'add'>();
   let link = $state('');
   let lookupError = $state('');
   let looking = $state(false);
@@ -41,12 +48,21 @@
     jobs?.filter((job) => job.state === 'failed' || job.state === 'cancelled') ?? []
   );
   const done = $derived(jobs?.filter((job) => job.state === 'done') ?? []);
-  // The switch appears once there is a queue; until then the page is the Add view.
-  const shownTab = $derived(tab ?? (jobs?.length ? 'queue' : 'add'));
+  // The switch appears once there is a follow or a queue; until then the page is the Add view.
+  const shownTab = $derived(tab ?? (follows.length ? 'following' : jobs?.length ? 'queue' : 'add'));
+  const nextCheck = $derived(
+    Math.min(
+      ...follows
+        .filter((follow) => !follow.paused && follow.nextCheck)
+        .map((follow) => follow.nextCheck as number)
+    )
+  );
 
   async function refresh() {
     try {
-      ({ jobs, interval } = await getQueue());
+      const [queue, following] = await Promise.all([getQueue(), getFollowing()]);
+      ({ jobs, interval } = queue);
+      ({ follows, checkHours } = following);
       queueError = '';
     } catch (error: any) {
       queueError = error.message;
@@ -88,6 +104,70 @@
     } finally {
       busy = undefined;
     }
+  }
+
+  async function followAction(action: () => Promise<unknown>, id: string) {
+    busy = id;
+    try {
+      await action();
+      await refresh();
+    } catch (error: any) {
+      queueError = error.message;
+    } finally {
+      busy = undefined;
+    }
+  }
+
+  function unfollow(follow: SourceFollow) {
+    if (!window.confirm('Stop checking for new chapters? Your volumes stay.')) return;
+    followAction(() => unfollowWork(follow.workId), `follow-${follow.workId}`);
+  }
+
+  /** 18:00 today, else Oct 31 18:00 */
+  function clock(ms: number) {
+    const date = new Date(ms);
+    const time = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    return date.toDateString() === new Date().toDateString()
+      ? time
+      : `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${time}`;
+  }
+
+  function ago(ms: number) {
+    const minutes = Math.round((Date.now() - ms) / 60000);
+    if (minutes < 1) return 'just now';
+    if (minutes < 60) return `${minutes} min ago`;
+    return minutes < 24 * 60 ? `${Math.round(minutes / 60)} h ago` : `on ${clock(ms)}`;
+  }
+
+  function followStatus(follow: SourceFollow) {
+    if (follow.paused) return 'Paused';
+    if (follow.state === 'checking') return 'Checking now';
+    if (follow.state === 'current') return 'Up to date';
+    if (follow.state === '') return 'Waiting for the first check';
+    return follow.detail;
+  }
+
+  function followWhen(follow: SourceFollow) {
+    if (follow.paused) {
+      return `Paused by you on ${new Date(follow.modified).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric'
+      })}`;
+    }
+    if (follow.state === 'removed') {
+      return follow.volumes === 1
+        ? 'Your volume stays in the library'
+        : `Your ${follow.volumes} volumes stay in the library`;
+    }
+    if (follow.state === 'failed') {
+      return `Retrying every hour${follow.lastCheck ? ` · last ${clock(follow.lastCheck)}` : ''}`;
+    }
+    return [
+      follow.lastCheck && `Checked ${ago(follow.lastCheck)}`,
+      follow.state !== 'checking' && follow.nextCheck && `next ${clock(follow.nextCheck)}`
+    ]
+      .filter(Boolean)
+      .join(' · ');
   }
 
   function volumesText(job: SourceJob) {
@@ -134,25 +214,53 @@
           : 'Adding web novels needs an account with the "Add books" permission. Ask an admin.'}
       </p>
     {:else}
-      {#if jobs?.length}
-        <div class="app-segmented sources-switch" role="radiogroup" aria-label="Sources view">
-          <button
-            type="button"
-            role="radio"
-            class="app-segment"
-            class:app-segment-selected={shownTab === 'queue'}
-            aria-checked={shownTab === 'queue'}
-            onclick={() => (tab = 'queue')}
-            >Queue{jobs.length > done.length ? ` ${jobs.length - done.length}` : ''}</button
-          >
-          <button
-            type="button"
-            role="radio"
-            class="app-segment"
-            class:app-segment-selected={shownTab === 'add'}
-            aria-checked={shownTab === 'add'}
-            onclick={() => (tab = 'add')}>Add a work</button
-          >
+      {#if jobs?.length || follows.length}
+        <div class="sources-bar">
+          <div class="app-segmented sources-switch" role="radiogroup" aria-label="Sources view">
+            <button
+              type="button"
+              role="radio"
+              class="app-segment"
+              class:app-segment-selected={shownTab === 'following'}
+              aria-checked={shownTab === 'following'}
+              onclick={() => (tab = 'following')}
+              >Following{follows.length ? ` ${follows.length}` : ''}</button
+            >
+            <button
+              type="button"
+              role="radio"
+              class="app-segment"
+              class:app-segment-selected={shownTab === 'queue'}
+              aria-checked={shownTab === 'queue'}
+              onclick={() => (tab = 'queue')}
+              >Queue{(jobs?.length ?? 0) > done.length
+                ? ` ${(jobs?.length ?? 0) - done.length}`
+                : ''}</button
+            >
+            <button
+              type="button"
+              role="radio"
+              class="app-segment"
+              class:app-segment-selected={shownTab === 'add'}
+              aria-checked={shownTab === 'add'}
+              onclick={() => (tab = 'add')}>Add a work</button
+            >
+          </div>
+          {#if shownTab === 'following'}
+            <div class="sources-check">
+              <p class="sources-row-meta">
+                Server checks every {checkHours} h{Number.isFinite(nextCheck)
+                  ? ` · next ${clock(nextCheck)}`
+                  : ''}
+              </p>
+              <button
+                type="button"
+                class="app-button-quiet"
+                disabled={busy === 'check' || !follows.some((follow) => !follow.paused)}
+                onclick={() => followAction(() => checkNow(), 'check')}>Check now</button
+              >
+            </div>
+          {/if}
         </div>
       {/if}
 
@@ -160,7 +268,69 @@
         <p class="sources-error" role="alert">{queueError}</p>
       {/if}
 
-      {#if shownTab === 'add'}
+      {#if shownTab === 'following'}
+        {#if follows.length}
+          <ul class="sources-rows">
+            {#each follows as follow (follow.workId)}
+              {@const id = `follow-${follow.workId}`}
+              <li class="sources-row sources-follow">
+                <div class="sources-follow-work">
+                  <a
+                    class="sources-row-title"
+                    lang="ja"
+                    href="{pagePath}/sources/work?id={follow.workId}">{follow.title}</a
+                  >
+                  <p class="sources-row-meta">{follow.siteName}</p>
+                </div>
+                <div class="sources-follow-state">
+                  <p
+                    class="sources-status sources-status-{follow.paused ? 'paused' : follow.state}"
+                  >
+                    <span class="sources-swatch" aria-hidden="true"></span>{followStatus(follow)}
+                  </p>
+                  <p class="sources-row-meta">{followWhen(follow)}</p>
+                </div>
+                <div class="sources-actions">
+                  {#if follow.paused}
+                    <button
+                      type="button"
+                      class="app-button-quiet"
+                      disabled={busy === id}
+                      onclick={() => followAction(() => followWork(follow.workId, false), id)}
+                      >Resume</button
+                    >
+                  {:else if follow.state === 'failed'}
+                    <button
+                      type="button"
+                      class="app-button-quiet"
+                      disabled={busy === id}
+                      onclick={() => followAction(() => checkNow(follow.workId), id)}>Retry</button
+                    >
+                  {:else if follow.state !== 'removed'}
+                    <button
+                      type="button"
+                      class="app-button-quiet"
+                      disabled={busy === id}
+                      onclick={() => followAction(() => followWork(follow.workId, true), id)}
+                      >Pause</button
+                    >
+                  {/if}
+                  <button
+                    type="button"
+                    class="app-button-quiet"
+                    disabled={busy === id}
+                    onclick={() => unfollow(follow)}>Unfollow</button
+                  >
+                </div>
+              </li>
+            {/each}
+          </ul>
+        {:else}
+          <p class="sources-note">
+            No followed works yet. Turn on Follow on a work's page to get its new chapters.
+          </p>
+        {/if}
+      {:else if shownTab === 'add'}
         <div class="sources-add">
           <PointBox label="Start here">
             <form class="sources-form" onsubmit={lookUp}>
@@ -433,8 +603,35 @@
     background: currentColor;
   }
 
-  .sources-status-failed {
+  .sources-status-failed,
+  .sources-status-removed {
     color: var(--app-danger-color);
+  }
+
+  .sources-status-new {
+    color: var(--app-success-color);
+  }
+
+  .sources-check {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 0.75rem;
+  }
+
+  .sources-check .app-button-quiet {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .sources-follow {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .sources-follow-state .sources-status {
+    margin-top: 0.4rem;
   }
 
   .sources-actions {
@@ -501,6 +698,38 @@
 
     .sources-form-row {
       flex-direction: row;
+    }
+
+    .sources-bar {
+      display: flex;
+      gap: 2rem;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+    }
+
+    .sources-bar .sources-switch {
+      margin-bottom: 0;
+    }
+
+    .sources-check {
+      padding-bottom: 0;
+    }
+
+    .sources-follow {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 12rem;
+      gap: 2rem;
+      align-items: start;
+    }
+
+    .sources-follow-state .sources-status {
+      margin-top: 0;
+    }
+
+    .sources-follow .sources-actions {
+      justify-content: flex-end;
+      margin-top: 0;
     }
   }
 </style>
