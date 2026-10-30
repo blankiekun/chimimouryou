@@ -12,9 +12,9 @@
  */
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-import { titleVolume } from '$lib/components/book-card/library-sort';
 import { loadCalibreCatalog } from '$lib/data/calibre';
 import { serverless } from '$lib/data/server-connect';
+import { isSeriesName, splitVolume } from '$lib/functions/split-volume';
 import { apiVersion, putRow, syncMirror } from '$lib/data/server-api';
 
 export interface SeriesOverride {
@@ -148,30 +148,9 @@ function normalize(text: string) {
   return text.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g, '');
 }
 
-const editionLabel =
-  /[\s]*[【[(（〔][^】\])）〕]*(?:版|文庫|ノベル|BOOKS|Books|特典|限定|特装|コミック)[^】\])）〕]*[】\])）〕]$/;
-// build-catalog.py's VOLUME_SUFFIXES word pattern, tried before numbers like there: 上=1, 中=2, 下=3.
-const partMark = /[\s]*[(（[【]?\s*(?:上巻|中巻|下巻|前編|後編|上|中|下)\s*[)）\]】]?$/;
-const volumeMark =
-  /[\s]*[(（[【〈《]?\s*(?:vol(?:ume)?\.?\s*|[#＃]|第\s*)?(?:\d+(?:\.\d+)?|[〇一二三四五六七八九十百]+(?=\s*[巻部集冊]))\s*[巻部章話集冊]?\s*[)）\]】〉》]?/gi;
-
-/**
- * Likely series name of a title: the text before its last volume number
- * (like `split_volume` in build-catalog.py), without author prefixes and
- * edition labels. Titles without a number are returned whole.
- */
+/** Likely series name of a title: `split_volume`'s base, or the cleaned title without a volume. */
 export function guessSeriesName(title: string) {
-  const text = title
-    .normalize('NFKC')
-    .replace(/^\[[^\]]+\]\s*/, '')
-    .replace(editionLabel, '')
-    .trim();
-  const part = text.match(partMark);
-  const marks = [...text.matchAll(volumeMark)];
-  const last = part ?? marks[marks.length - 1];
-  const base = last?.index ? text.slice(0, last.index) : text;
-
-  return base.replace(/[\s\-‐－:：・,、～~―]+$/, '').trim() || text;
+  return splitVolume(title)[0];
 }
 
 /** Books whose title contains the series name (width, case and spaces ignored). */
@@ -265,11 +244,6 @@ export async function syncBrowserSeries() {
   return changed;
 }
 
-/** Product codes like 'b522apdm' and very short leftovers are no series (`is_series_name`). */
-function isSeriesName(name: string) {
-  return name.length >= 2 && !/^[0-9a-z_-]+$/i.test(name);
-}
-
 /**
  * Series from volume numbers in titles for books without one, like `split_volume` in
  * build-catalog.py: two or more volumes with the same name form a series, and a single one joins
@@ -281,12 +255,14 @@ export function inferSeries(cards: BookCardProps[]) {
     cards.filter((card) => card.series).map((card) => [key(card.series!), card.series!])
   );
   const groups = new Map<string, BookCardProps[]>();
+  const volumes = new Map<BookCardProps, number>();
 
   cards.forEach((card) => {
-    const name = card.series ? '' : guessSeriesName(card.title);
+    const [name, volume] = card.series ? ['', null] : splitVolume(card.title);
 
-    if (isSeriesName(name) && titleVolume(card.title) !== undefined) {
+    if (volume !== null && isSeriesName(name)) {
       groups.set(name, [...(groups.get(name) ?? []), card]);
+      volumes.set(card, volume);
     }
   });
 
@@ -305,7 +281,7 @@ export function inferSeries(cards: BookCardProps[]) {
       ? {
           ...card,
           series: inferred.get(card),
-          seriesIndex: titleVolume(card.title),
+          seriesIndex: volumes.get(card),
           seriesInferred: true
         }
       : card

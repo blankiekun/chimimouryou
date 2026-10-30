@@ -12,13 +12,13 @@
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 import { isFinished, isReading } from '$lib/components/book-card/library-filters';
-import { orderSeries, titleVolume } from '$lib/components/book-card/library-sort';
+import { orderSeries } from '$lib/components/book-card/library-sort';
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 import { deleteCachedReadings } from '$lib/data/generated-furigana';
 import { deleteVnCache } from '$lib/data/vn';
 import { standalone } from '$lib/data/env';
-import { guessSeriesName } from '$lib/data/series-overrides';
+import { splitVolume } from '$lib/functions/split-volume';
 import { coverageTarget } from '$lib/data/difficulty-core';
 
 export type LibraryTab = 'home' | 'store';
@@ -235,11 +235,11 @@ function nextVolumes(groups: SeriesGroup[]) {
  */
 export function standaloneReadNext(cards: BookCardProps[], limit = 12) {
   const byId = new Map(cards.map((card) => [card.id, card]));
-  const withSeries = cards.map((card) =>
-    card.series || titleVolume(card.title) === undefined
-      ? card
-      : { ...card, series: guessSeriesName(card.title) }
-  );
+  const withSeries = cards.map((card) => {
+    const [series, volume] = splitVolume(card.title);
+
+    return card.series || volume === null ? card : { ...card, series };
+  });
 
   return [...nextVolumes(seriesGroups(withSeries)), ...readNextPool(withSeries).pool]
     .slice(0, limit)

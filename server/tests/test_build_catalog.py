@@ -19,22 +19,21 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'api'))
 import apidb  # noqa: E402
 
 
+# Shared with the app's split-volume.test.ts: rows are this module's output, so the TS port
+# can't drift from it (trailing ～, ブックス labels, 上/下 vs numbers all differed before).
+FIXTURE = os.path.join(os.path.dirname(__file__), '..', '..', 'apps', 'web', 'src', 'lib', 'functions',
+                       'split-volume.json')
+
+
 class SplitVolumeTest(unittest.TestCase):
+    def setUp(self):
+        with open(FIXTURE, encoding='utf-8') as file:
+            self.fixture = json.load(file)
+
     def test_volume_numbers(self):
-        cases = {
-            'ダンタリアンの書架１': ('ダンタリアンの書架', 1.0),
-            '魔法科高校の劣等生 (12)': ('魔法科高校の劣等生', 12.0),
-            '物語 第三巻': ('物語', 3.0),
-            '物語 下巻': ('物語', 3),
-            'Some Title Vol. 4': ('Some Title', 4.0),
-            '物語 2 【電子特別版】': ('物語', 2.0),
-            '[作者] 物語 十二': ('物語', 12.0),
-            '無職転生 ～異世界行ったら本気だす～ 2 (MFブックス)': ('無職転生 ~異世界行ったら本気だす~', 2.0),
-            '吾輩は猫である': ('吾輩は猫である', None),
-        }
-        for title, expected in cases.items():
+        for title, expected in self.fixture['splitVolume'].items():
             with self.subTest(title=title):
-                self.assertEqual(catalog.split_volume(title), expected)
+                self.assertEqual(list(catalog.split_volume(title)), expected)
 
     def test_kanji_number(self):
         self.assertEqual(catalog.kanji_number('二十三'), 23.0)
@@ -43,9 +42,9 @@ class SplitVolumeTest(unittest.TestCase):
         self.assertIsNone(catalog.kanji_number('上'))
 
     def test_series_name(self):
-        self.assertTrue(catalog.is_series_name('物語'))
-        self.assertFalse(catalog.is_series_name('b522apdm'))
-        self.assertFalse(catalog.is_series_name('物'))
+        for name, expected in self.fixture['isSeriesName'].items():
+            with self.subTest(name=name):
+                self.assertEqual(catalog.is_series_name(name), expected)
 
 
 def make_epub(files: dict, opf: str) -> zipfile.ZipFile:

@@ -6,6 +6,7 @@
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 import { SortDirection, type SortOption } from '$lib/data/sort-types';
+import { kanjiNumber } from '$lib/functions/split-volume';
 
 const ascendingByDefault = new Set<SortOption['property']>(['title', 'series', 'difficulty']);
 const titleCollator = new Intl.Collator('ja-JP', { numeric: true });
@@ -72,38 +73,6 @@ export function compareBookCards(card1: BookCardProps, card2: BookCardProps, sor
   }
 
   return diff || titleCollator.compare(card1.title, card2.title);
-}
-
-const kanjiDigits: Record<string, number> = {
-  〇: 0,
-  一: 1,
-  二: 2,
-  三: 3,
-  四: 4,
-  五: 5,
-  六: 6,
-  七: 7,
-  八: 8,
-  九: 9
-};
-
-function kanjiNumber(text: string) {
-  let total = 0;
-  let current = 0;
-
-  for (const char of text) {
-    if (char === '百') {
-      total += (current || 1) * 100;
-      current = 0;
-    } else if (char === '十') {
-      total += (current || 1) * 10;
-      current = 0;
-    } else {
-      current = current * 10 + kanjiDigits[char];
-    }
-  }
-
-  return total + current;
 }
 
 const partWords: Record<string, number> = { 上: 1, 前: 1, 中: 2, 下: 3, 後: 2 };
