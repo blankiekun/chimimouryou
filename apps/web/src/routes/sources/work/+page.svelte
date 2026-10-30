@@ -30,6 +30,8 @@
   let addError = $state('');
   let followBusy = $state(false);
   let followError = $state('');
+  // "From Vol. N": the first volume to add; the missing volumes from it on are added.
+  let from = $state(1);
 
   const id = $derived(browser ? Number($page.url.searchParams.get('id')) : 0);
   const site = $derived(browser ? $page.url.searchParams.get('site') : null);
@@ -45,19 +47,25 @@
       ? last.number
       : undefined;
   });
-  const missingChapters = $derived(
-    missing.reduce((sum, volume) => sum + volume.last - volume.first + 1, 0)
+  // The picked volume once it is in the library or on its way: the first one still missing.
+  const start = $derived(
+    missing.some((volume) => volume.number === from) ? from : (missing[0]?.number ?? 1)
   );
-  const addLabel = $derived.by(() => {
-    if (!missing.length) return '';
-    const numbers = missing.map((volume) => volume.number);
-    const first = numbers[0];
-    const last = numbers[numbers.length - 1];
-    if (first === last) return `Add Vol. ${first} to library`;
-    return last - first + 1 === numbers.length
-      ? `Add Vol. ${first}–${last} to library`
-      : `Add ${numbers.length} volumes to library`;
+  const picked = $derived(missing.filter((volume) => volume.number >= start));
+  const pickedChapters = $derived(
+    picked.reduce((sum, volume) => sum + volume.last - volume.first + 1, 0)
+  );
+  const pickedText = $derived.by(() => {
+    if (!picked.length) return '';
+    const first = picked[0].number;
+    const last = picked[picked.length - 1].number;
+    if (first === last) return `Vol. ${first}`;
+    return last - first + 1 === picked.length
+      ? `Vol. ${first}–${last}`
+      : `${picked.length} volumes`;
   });
+  // Following a work with nothing in the library adds the picked volumes first, so its checks start there.
+  const empty = $derived(!work?.volumes.some((volume) => volume.inLibrary || volume.pending));
 
   $effect(() => {
     if (!allowed || !(id || (site && key))) return;
@@ -74,7 +82,7 @@
     try {
       await addVolumes(
         work.id,
-        missing.map((volume) => volume.number)
+        picked.map((volume) => volume.number)
       );
       await goto(`${pagePath}/sources`);
     } catch (error: any) {
@@ -90,9 +98,18 @@
     followBusy = true;
     followError = '';
     try {
-      if (next) await followWork(work.id);
-      else await unfollowWork(work.id);
-      work = { ...work, following: next, paused: false };
+      if (next && empty && picked.length) {
+        await addVolumes(
+          work.id,
+          picked.map((volume) => volume.number)
+        );
+        await followWork(work.id);
+        work = await getWork(work.id);
+      } else {
+        if (next) await followWork(work.id);
+        else await unfollowWork(work.id);
+        work = { ...work, following: next, paused: false };
+      }
     } catch (error: any) {
       followError = error.message;
     } finally {
@@ -185,6 +202,16 @@
             </p>
           </PointBox>
 
+          {#if missing.length > 1}
+            <label class="work-from">
+              <span class="work-follow-label">From</span>
+              <select class="app-input" bind:value={from}>
+                {#each missing as volume (volume.number)}
+                  <option value={volume.number}>Vol. {volume.number}</option>
+                {/each}
+              </select>
+            </label>
+          {/if}
           <div class="work-follow">
             <div>
               <p class="work-follow-label" id="work-follow-label">Follow</p>
@@ -192,6 +219,7 @@
                 {work.paused
                   ? 'Paused: change it in Sources → Following.'
                   : `The server checks every ${work.checkHours} h, also when no device is open.`}
+                {#if !work.following && empty && pickedText}Turning it on adds {pickedText} first.{/if}
               </p>
             </div>
             <Switch
@@ -204,16 +232,16 @@
           </div>
           {#if followError}<p class="work-error" role="alert">{followError}</p>{/if}
 
-          {#if addLabel}
+          {#if pickedText}
             <button
               type="button"
               class="app-button app-button-primary work-add"
               disabled={adding}
-              onclick={add}>{adding ? 'Adding…' : addLabel}</button
+              onclick={add}>{adding ? 'Adding…' : `Add ${pickedText} to library`}</button
             >
             <p class="work-hint">
               Into the Calibre library on the server. {timeLeft(
-                missingChapters,
+                pickedChapters,
                 work.interval
               ).replace('about', 'About')}: {work.domain} allows 1 page every {work.interval} s. You
               can close this tab.
@@ -370,6 +398,19 @@
     margin-top: 0.75rem;
     color: var(--app-muted-fg);
     font-size: var(--type-small);
+  }
+
+  .work-from {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 1.5rem;
+  }
+
+  .work-from select {
+    width: auto;
+    padding-right: 2.5rem; /* room for the chevron .app-input's padding would cover */
   }
 
   .work-add {

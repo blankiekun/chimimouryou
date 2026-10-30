@@ -30,7 +30,8 @@ Runners: one per site, so a long job on one site doesn't hold up another (the fe
 
 Follows: the runner queues an update job for every work with a due unpaused follow (SOURCES_CHECK_HOURS, an hour
 after a failed check), one job per work whoever follows it; a failed update job is queued again rather than a new
-one. An update fetches the open (not full) volume in the library and every volume after it: the open one is
+one. An update fetches the open (not full) volume in the library and every volume after it (with nothing in the
+library, from the reader's failed or cancelled pick, else from Vol. 1): the open one is
 replaced in place (calibredb add_format on its Calibre id, timestamp bumped so devices download it again), new
 ones are added. Full volumes are never touched.
 """
@@ -405,7 +406,16 @@ def _update_plan(work: dict, plan: dict, size: int) -> tuple[list[int], int]:
     kept = _kept_volumes(work['id'])
     last = kept[max(kept)] if kept else None
     if last is None:
-        start, have = 1, 0
+        # Nothing in the library yet: start where the reader's picked add began ("Vol. 3 onward") when it failed
+        # before any volume reached Calibre (volumes it queued have rows, ones it didn't stay in the job), not at 1.
+        db = database()
+        picked = [row['number'] for row in db.query('SELECT number FROM work_volumes WHERE work = ?', (work['id'],))]
+        picked += [n for row in db.query(
+            "SELECT volumes FROM source_jobs WHERE work = ? AND kind = 'add' AND state IN ('failed', 'cancelled')",
+            (work['id'],)) for n in json.loads(row['volumes'])]
+        picked = [n for n in picked if n in plan]
+        start = min(picked, default=1)
+        have = plan[start]['first'] - 1 if start in plan else 0
     else:
         full = last['last_ch'] - last['first_ch'] + 1 >= size
         start, have = last['number'] + int(full), last['last_ch']
@@ -703,6 +713,7 @@ def volume_added(import_job: dict):
             return c.execute("SELECT kind, error FROM source_jobs WHERE id = ? AND kind = 'update'",
                              (import_job['sourceJob'],)).fetchone()
     failed_update = database().transaction(record)
+    _wake.set()  # a follow waiting on this job is checked now, not at the runner's next minute
     if failed_update:
         _follow_result(import_job['sourceWork'], 'failed', failed_update['error'])
 
