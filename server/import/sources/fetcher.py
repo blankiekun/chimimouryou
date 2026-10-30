@@ -96,10 +96,23 @@ def _decode(response, raw: bytes, max_bytes: int) -> bytes:
     return body
 
 
+def _stream(response, path: str, max_bytes: int):
+    if (response.headers.get('Content-Encoding') or 'identity').lower() != 'identity':
+        raise FetchError('The server sent the file compressed')
+    size = 0
+    with open(path, 'wb') as f:
+        while chunk := response.read(1 << 20):
+            size += len(chunk)
+            if size > max_bytes:
+                raise FetchError('The file is too large')
+            f.write(chunk)
+
+
 def fetch(url: str, hosts: set[str], headers: dict | None = None, server: str = '',
-          max_bytes: int | None = None) -> tuple[bytes, str]:
+          max_bytes: int | None = None, to_path: str = '') -> tuple[bytes, str]:
     """GETs url (http(s), a host in `hosts`, or with `server` (an origin()) only on that server); returns (body,
-    final url). Raises FetchError with a reader-facing message."""
+    final url). With to_path the body is streamed into that file instead (uncompressed; b'' is returned; the caller
+    removes the file on failure). Raises FetchError with a reader-facing message."""
     max_bytes = max_bytes or MAX_BYTES
     for _ in range(MAX_REDIRECTS + 1):
         parts = urlparse(url)
@@ -112,11 +125,15 @@ def fetch(url: str, hosts: set[str], headers: dict | None = None, server: str = 
         target = f'{FIXTURE_URL}/{host}{parts.path or "/"}' + (f'?{parts.query}' if parts.query else '') \
             if FIXTURE_URL and not server else url
         request = urllib.request.Request(target, headers={
-            'User-Agent': USER_AGENT, 'Accept-Encoding': 'gzip', 'Accept-Language': 'ja,en;q=0.8', **(headers or {})})
+            'User-Agent': USER_AGENT, 'Accept-Encoding': 'identity' if to_path else 'gzip',
+            'Accept-Language': 'ja,en;q=0.8', **(headers or {})})
         for attempt in range(RETRIES):
             _wait_turn(server or host, SERVER_INTERVAL if server else INTERVAL)
             try:
                 with _opener.open(request, timeout=TIMEOUT) as response:
+                    if to_path:
+                        _stream(response, to_path, max_bytes)
+                        return b'', url
                     raw = response.read(max_bytes + 1)
                     if len(raw) > max_bytes:
                         raise FetchError('The page is too large')

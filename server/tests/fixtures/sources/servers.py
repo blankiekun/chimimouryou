@@ -13,7 +13,8 @@ Invented titles; every book file and page image is generated here (tiny PNGs), n
   /opds/redirect                     a redirect to another host
   /suwayomi/api/opds/v1.2/...        Suwayomi's OPDS: chapters newest first unless sort=number_asc, five per page
                                      (pageNumber=), pages behind each chapter's metadata entry (OPDS-PSE)
-VOLUMES and CHAPTERS can be changed by tests (a followed work gets a new entry).
+VOLUMES (each series' volume numbers in feed order) and CHAPTERS (Suwayomi's chapter numbers in reading order) can be
+changed by tests: a followed work gets a new entry, or one inserted mid-feed.
 """
 import base64
 import io
@@ -25,8 +26,8 @@ from xml.sax.saxutils import escape, quoteattr
 USER, PASSWORD = 'reader', 'kagi-1234'
 SERIES = {'s1': ('星降る町の配達人', '架空 作者', 'epub'), 's2': ('灯台守と七つの鍵', '試験 画家', 'cbz'),
           's3': ('壊れた本', '架空 作者', 'epub')}
-VOLUMES = {'s1': 3, 's2': 2, 's3': 1}
-CHAPTERS = {'n': 12}
+VOLUMES = {'s1': [1, 2, 3], 's2': [1, 2], 's3': [1]}
+CHAPTERS = {'order': list(range(1, 13))}
 PAGES = 2
 MANGA = '月影の工房'
 ACQ = 'application/atom+xml;profile=opds-catalog;kind=acquisition'
@@ -44,9 +45,15 @@ def png(seed: int) -> bytes:
             + chunk(b'IDAT', zlib.compress(raw)) + chunk(b'IEND', b''))
 
 
+class _Zip(zipfile.ZipFile):
+    """Fixed timestamps, so the same file is the same bytes (tests compare what Calibre got)."""
+    def writestr(self, name, data, *args, **kwargs):
+        super().writestr(zipfile.ZipInfo(name, (2026, 1, 1, 0, 0, 0)), data, *args, **kwargs)
+
+
 def epub(title: str) -> bytes:
     out = io.BytesIO()
-    with zipfile.ZipFile(out, 'w') as z:
+    with _Zip(out, 'w') as z:
         z.writestr('mimetype', 'application/epub+zip')
         z.writestr('META-INF/container.xml', '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:'
                    'tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="c.opf" media-type="application/'
@@ -68,7 +75,7 @@ def epub(title: str) -> bytes:
 
 def cbz(seed: int) -> bytes:
     out = io.BytesIO()
-    with zipfile.ZipFile(out, 'w') as z:
+    with _Zip(out, 'w') as z:
         for n in range(3):
             z.writestr(f'{n + 1:03d}.png', png(seed * 10 + n))
     return out.getvalue()
@@ -123,7 +130,7 @@ def opds(rest: str, query: dict, auth: str) -> tuple[int, str, bytes]:
         return 200, ATOM, feed('urn:fake:series', 'All series', [series_entry('s2'), series_entry('s3')])
     if rest.startswith('series/') and (key := rest[7:]) in SERIES:
         title, author, kind = SERIES[key]
-        numbers = list(range(1, VOLUMES[key] + 1))
+        numbers = VOLUMES[key]
         shown = numbers[:2] if page == '1' else numbers[2:]
         entries = []
         for n in shown:
@@ -167,7 +174,7 @@ def suwayomi(rest: str, query: dict) -> tuple[int, str, bytes]:
             link('subsection', f'{api}/series/7/chapters', ACQ),
             link('http://opds-spec.org/image', '/suwayomi/api/v1/manga/7/thumbnail', 'image/png')], '試験 画家')])
     if rest == 'api/opds/v1.2/series/7/chapters':
-        numbers = list(range(1, CHAPTERS['n'] + 1))
+        numbers = list(CHAPTERS['order'])
         if query.get('sort', [''])[0] != 'number_asc':  # Suwayomi's default: newest first
             numbers.reverse()
         page = int(query.get('pageNumber', ['1'])[0])

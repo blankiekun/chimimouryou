@@ -147,6 +147,12 @@ CREATE TABLE IF NOT EXISTS source_servers (
     name TEXT NOT NULL, url TEXT NOT NULL, user TEXT NOT NULL DEFAULT '', secret TEXT NOT NULL DEFAULT '',
     deleted INTEGER NOT NULL DEFAULT 0, modified INTEGER NOT NULL,
     UNIQUE (account, url));
+-- A server work's items (OPDS entry ids) by number. Whole files keep their volume number when the feed gains or
+-- reorders entries (new ones get the next numbers); for page manga, the chapter ids fetched under each number, which
+-- the import service checks before replacing a volume.
+CREATE TABLE IF NOT EXISTS work_items (
+    work INTEGER NOT NULL REFERENCES works(id), number INTEGER NOT NULL, item TEXT NOT NULL,
+    PRIMARY KEY (work, number), UNIQUE (work, item));
 -- A reader following a work (per account): the import service checks it every SOURCES_CHECK_HOURS. state: '' (not
 -- checked yet), current, new (detail: what the last check added), failed, removed. device '' = the server timer.
 CREATE TABLE IF NOT EXISTS follows (
