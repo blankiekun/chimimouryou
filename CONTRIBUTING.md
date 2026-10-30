@@ -160,10 +160,12 @@ Listen modes, `onPositionSettled` work and a settings component. Plugins start
 off; hosts read `activePlugins$`, so nothing runs until a reader turns it on.
 
 **A per-reader file for Calibre books** - a sync file (`data/sync-files.ts`)
-maps to a row kind in `server-rows.ts` (`bookDocs` per book, `accountDocs` at
-the root, used by `readSyncFile`/`writeSyncFile`), and the server must allow that
-kind: the `book_docs`/`account_docs` check in `api/apidb.py` and the `docs/(…)`
-route in `api/service.py` (plus `migrate.py`'s map if old folders hold it).
+maps to a row kind: add it to `syncKinds` in `server-rows.ts` (`bookDocs` per
+book, `accountDocs` at the root) and to `server/api/sync-kinds.json`, which the
+server's table check, routes and migration read (`sync-kinds.test.ts` fails
+when the two differ). Give `syncJsonFile` a parser beside the file's type that
+drops entries a merge can't use and returns undefined for a document of another
+shape, which is then never written over.
 
 **A server endpoint** - add a route to the service's `ROUTES` (accounts) or
 `do_GET`/`do_POST` (difficulty), proxy it in `nginx-ebook-reader.conf.template` if it

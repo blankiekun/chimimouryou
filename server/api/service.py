@@ -65,6 +65,11 @@ SYNC_TABLES = {'progress': 'progress', 'statistics': 'statistics', 'goals': 'goa
                'gameDocs': 'game_docs', 'series': 'series_overrides', 'metadata': 'book_metadata'}
 
 
+def kinds(table: str) -> str:
+    """A route's alternation of the doc kinds a table holds (sync-kinds.json)."""
+    return '|'.join(map(re.escape, sorted(apidb.DOC_KINDS[table])))
+
+
 def row_json(table: str, row) -> dict:
     result = {}
     for column in row.keys():
@@ -464,8 +469,8 @@ class Handler(BaseHTTPRequestHandler):
         ('DELETE', re.compile(r'/api/v1/books/(\d+)/statistics/([^/]+)'), delete_statistics),
         ('PUT', re.compile(r'/api/v1/books/(\d+)/highlights/([^/]+)'), put_highlight),
         ('DELETE', re.compile(r'/api/v1/books/(\d+)/highlights/([^/]+)'), delete_highlight),
-        ('PUT', re.compile(r'/api/v1/books/(\d+)/docs/(recaps|lorebook|vnsaves|audiobook|subtitles)'), put_book_doc),
-        ('PUT', re.compile(r'/api/v1/docs/(settings|kanji|words|immersion)'), put_account_doc),
+        ('PUT', re.compile(rf'/api/v1/books/(\d+)/docs/({kinds("book_docs")})'), put_book_doc),
+        ('PUT', re.compile(rf'/api/v1/docs/({kinds("account_docs")})'), put_account_doc),
         ('PUT', re.compile(r'/api/v1/goals/([^/]+)'), put_goals),
         ('DELETE', re.compile(r'/api/v1/goals/([^/]+)'), delete_goals),
         ('PUT', re.compile(r'/api/v1/series/(\d+)'), put_series),
@@ -475,7 +480,7 @@ class Handler(BaseHTTPRequestHandler):
         ('PUT', re.compile(r'/api/v1/books/(\d+)/cover'), put_cover),
         ('GET', re.compile(r'/api/v1/books/(\d+)/cover'), get_cover),
         ('GET', re.compile(r'/api/v1/games'), get_games),
-        ('PUT', re.compile(r'/api/v1/games/([^/]+)/docs/(progress|statistics|vnsaves)'), put_game_doc),
+        ('PUT', re.compile(rf'/api/v1/games/([^/]+)/docs/({kinds("game_docs")})'), put_game_doc),
         ('PUT', re.compile(r'/api/v1/games/([^/]+)'), put_game),
         ('GET', re.compile(r'/api/v1/games/([^/]+)'), get_game),
         ('DELETE', re.compile(r'/api/v1/games/([^/]+)'), delete_game),

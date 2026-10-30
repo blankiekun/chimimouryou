@@ -21,11 +21,10 @@ import apidb
 import syncnames
 
 DATA_FOLDER = 'ttu-reader-data'
-BOOK_DOCS = {'recaps.json': 'recaps', 'lorebook.json': 'lorebook', 'vnsaves.json': 'vnsaves'}
+BOOK_DOCS = apidb.SYNC_KINDS['bookDocs']
 # Audiobook position and subtitles: the time is in the name (`audioBook_<exporter>_<db>_<modified>_…`).
-MEDIA_DOCS = {'audioBook_': 'audiobook', 'subtitles_': 'subtitles'}
-ACCOUNT_DOCS = {'settings.json': 'settings', 'kanji.json': 'kanji', 'words.json': 'words',
-                'immersion.json': 'immersion'}
+MEDIA_DOCS = apidb.SYNC_KINDS['mediaDocs']
+ACCOUNT_DOCS = apidb.SYNC_KINDS['accountDocs']
 TEXT_KEYS = {'elementHtml': str, 'sections': list, 'styleSheet': str}
 COUNTS = ('progress', 'statistics', 'goals', 'highlights', 'docs', 'text', 'textThere', 'games', 'gameDocs', 'skipped',
           'errors')
@@ -132,7 +131,7 @@ class Migration:
                 file = os.path.join(path, name)
                 if name in used:
                     continue
-                if name == 'annotations.json':
+                if name == apidb.SYNC_KINDS['highlights']:
                     guarded(f'{folder}/{name}', lambda: self.highlights(rev, account, book, file, counts))
                 elif name in BOOK_DOCS:
                     guarded(f'{folder}/{name}', lambda: self.book_doc(rev, account, book, BOOK_DOCS[name], file,

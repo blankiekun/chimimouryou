@@ -13,7 +13,7 @@
  * Not part of upstream.
  */
 
-import { serverSyncFiles } from '$lib/data/server-rows';
+import { serverSyncFiles, type SyncFileName } from '$lib/data/server-rows';
 import { FilesystemStorageHandler } from '$lib/data/storage/handler/filesystem-handler';
 import { GDriveStorageHandler } from '$lib/data/storage/handler/gdrive-handler';
 import { OneDriveStorageHandler } from '$lib/data/storage/handler/onedrive-handler';
@@ -184,7 +184,7 @@ export function syncJsonFile<T>(
 ): Promise<void>;
 export function syncJsonFile<T>(
   store: SyncFileStore,
-  name: string,
+  name: SyncFileName,
   title: string | undefined,
   parse: (raw: unknown) => T | undefined,
   merge: Merge<T>,
@@ -192,7 +192,7 @@ export function syncJsonFile<T>(
 ): Promise<void>;
 export async function syncJsonFile<T>(
   store: SyncFileStore,
-  name: string,
+  name: SyncFileName,
   title: string | undefined,
   ...rest: [Merge<T>, boolean?] | [(raw: unknown) => T | undefined, Merge<T>, boolean?]
 ) {

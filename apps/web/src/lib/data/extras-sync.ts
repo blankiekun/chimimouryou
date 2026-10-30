@@ -46,13 +46,14 @@ import {
 import { readerDataOwner } from '$lib/data/reader-data-owner';
 import { readerDb } from '$lib/data/reader-db';
 import type { WordMarks } from '$lib/data/word-marks';
+import type { SyncFileName } from '$lib/data/server-rows';
 import { readerSyncStore, syncFileStore, syncJsonFile } from '$lib/data/sync-files';
 
 export type ExtrasKind = 'recaps' | 'lorebook';
 
 interface Spec<T extends { title: string; account?: string }> {
   store: 'recaps' | 'lorebooks';
-  file: string;
+  file: SyncFileName;
   changed$: Subject<T>;
   parse: (raw: unknown) => T | undefined;
   merge: (title: string, local?: T, remote?: T) => T;

@@ -281,13 +281,23 @@ class WriteTest(ServiceTestCase):
         self.assertEqual(self.call('PUT', f'/api/v1/books/{self.book}/docs/recaps', {'modified': 1, 'data': {}})[0],
                          200)
 
-    # Bug: the client writes audiobook positions and subtitles as book docs; a route or CHECK
-    # without these kinds would refuse every write (404/500) and the data would never sync.
-    def test_audiobook_and_subtitles_docs(self):
-        for kind in ('audiobook', 'subtitles'):
-            self.assertEqual(self.call('PUT', f'/api/v1/books/{self.book}/docs/{kind}',
-                                       {'modified': 1, 'data': {'title': kind}})[0], 200)
-        self.assertEqual(sorted(row['kind'] for row in self.sync()['bookDocs']), ['audiobook', 'subtitles'])
+    # Bug: a kind in sync-kinds.json (the client's list, sync-kinds.test.ts) that a route or the table refuses
+    # (404/500): that file never syncs to the server while Drive and folders sync it.
+    def test_every_sync_kind_is_written(self):
+        with open(os.path.join(os.path.dirname(__file__), '..', 'api', 'sync-kinds.json'), encoding='utf-8') as f:
+            kinds = json.load(f)
+        book_kinds = [*kinds['bookDocs'].values(), *kinds['mediaDocs'].values()]
+        paths = [*(f'books/{self.book}/docs/{kind}' for kind in book_kinds),
+                 *(f'docs/{kind}' for kind in kinds['accountDocs'].values()),
+                 *(f'games/g/docs/{kind}' for kind in kinds['gameDocs'])]
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertEqual(self.call('PUT', f'/api/v1/{path}', {'modified': 1, 'data': {'p': path}},
+                                           account=ACCOUNT_A)[0], 200)
+        sync = self.sync(ACCOUNT_A)
+        self.assertEqual(sorted(row['kind'] for row in sync['bookDocs']), sorted(book_kinds))
+        self.assertEqual(sorted(row['kind'] for row in sync['accountDocs']), sorted(kinds['accountDocs'].values()))
+        self.assertEqual(sorted(row['kind'] for row in sync['gameDocs']), sorted(kinds['gameDocs']))
 
     def test_validation(self):
         body = {'modified': 1, 'data': {}}

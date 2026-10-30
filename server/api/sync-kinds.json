@@ -1,0 +1,12 @@
+{
+  "highlights": "annotations.json",
+  "bookDocs": { "recaps.json": "recaps", "lorebook.json": "lorebook", "vnsaves.json": "vnsaves" },
+  "mediaDocs": { "audioBook_": "audiobook", "subtitles_": "subtitles" },
+  "accountDocs": {
+    "kanji.json": "kanji",
+    "words.json": "words",
+    "immersion.json": "immersion",
+    "settings.json": "settings"
+  },
+  "gameDocs": ["progress", "statistics", "vnsaves"]
+}
