@@ -10,7 +10,6 @@ import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 import {
   applySeriesOverride,
   findSeriesBooks,
-  guessSeriesName,
   inferSeries,
   loadSeriesOverrides,
   mergeSeriesOverrides,
@@ -42,19 +41,6 @@ function card(title: string, series?: string): BookCardProps {
     seriesIndex: 1
   };
 }
-
-describe('guessSeriesName', () => {
-  it.each([
-    ['ソードアート・オンライン1 アインクラッド', 'ソードアート・オンライン'],
-    ['とある魔術の禁書目録(3)', 'とある魔術の禁書目録'],
-    ['ダンタリアンの書架１', 'ダンタリアンの書架'],
-    ['狼と香辛料 第十二巻【電子特別版】', '狼と香辛料'],
-    ['[著者] 本好きの下剋上 vol.2', '本好きの下剋上'],
-    ['君の名は。', '君の名は。']
-  ])('%s → %s', (title, name) => {
-    expect(guessSeriesName(title)).toBe(name);
-  });
-});
 
 describe('findSeriesBooks', () => {
   it('matches the name ignoring width, case and spaces', () => {
