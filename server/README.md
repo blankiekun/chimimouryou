@@ -26,9 +26,10 @@ nginx asks the account service before serving anything but the app itself:
 
 - **Read** the library and catalog: an account, a trusted network
   (`TRUSTED_NETWORKS`), or anyone with `PUBLIC_READS=1`.
-- **Write** reading data and text copies (`/api/v1/`): an account, or a
-  signed-out reader from a trusted network (whose rows are the shared account
-  `''`'s).
+- **Write** reading data (`/api/v1/`): an account, or a signed-out reader
+  from a trusted network (whose rows are the shared account `''`'s). Text
+  copies (`/api/v1/books/{id}/text`, the source of everyone's generated
+  furigana) need an account.
 - **Add books to Calibre, change series for everyone, start difficulty jobs**:
   admins, or accounts with the `import`, `series` or `difficulty` permission
   (Settings → Account → User permissions, or `ebook-account permissions NAME …`).
