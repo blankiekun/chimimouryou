@@ -370,6 +370,9 @@
             <a class="app-button-quiet sources-search-link" href="{pagePath}/sources/search"
               >Search Syosetu and Kakuyomu →</a
             >
+            <a class="app-button-quiet sources-search-link" href="{pagePath}/sources/browse"
+              >Browse your servers →</a
+            >
           </PointBox>
 
           <section aria-labelledby="sources-sites">
@@ -390,6 +393,16 @@
                   <p class="sources-row-meta">
                     Web novels from Kakuyomu, 50 episodes per volume. Works published as books show
                     their cover.
+                  </p>
+                </div>
+              </li>
+              <li class="sources-row">
+                <div>
+                  <p class="sources-row-title">Your servers</p>
+                  <p class="sources-row-meta">
+                    A Suwayomi server or an OPDS catalog (Komga, Kavita, Calibre-web): their books
+                    come as they are, manga as CBZs per volume or per chapter.
+                    <a class="app-button-quiet" href="{pagePath}/sources/add">Add a source</a>
                   </p>
                 </div>
               </li>

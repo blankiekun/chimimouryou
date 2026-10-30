@@ -11,7 +11,14 @@
 
 import { standalone } from '$lib/data/env';
 import { errorMessage } from '$lib/data/remote/calibre-import';
-import type { SourceFollow, SourceJob, SourceSearch, SourceWork } from './types';
+import type {
+  SourceFollow,
+  SourceJob,
+  SourceSearch,
+  SourceServer,
+  SourceServerFeed,
+  SourceWork
+} from './types';
 
 const apiUrl = '/calibre/import/api/sources/';
 
@@ -28,10 +35,25 @@ async function call<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, 
   });
 
   if (!response.ok) {
-    throw new Error(await errorMessage(response));
+    const field = await response
+      .clone()
+      .json()
+      .then((body) => (typeof body?.field === 'string' ? body.field : ''))
+      .catch(() => '');
+    throw new SourceError(await errorMessage(response), field);
   }
 
   return (await response.json()) as T;
+}
+
+/** An error of the import service; `field` names the form field it concerns (Add a source). */
+export class SourceError extends Error {
+  constructor(
+    message: string,
+    public field = ''
+  ) {
+    super(message);
+  }
 }
 
 /** A link to a work on a supported site → the work, with its volume plan. */
@@ -71,9 +93,50 @@ export function coverUrl(workId: number) {
   return `${apiUrl}covers/${workId}`;
 }
 
-/** Queues the volumes for fetching; the server skips ones in the library or on their way. */
-export function addVolumes(workId: number, volumes: number[]) {
-  return call<{ job: SourceJob }>('POST', `works/${workId}/add`, { volumes });
+/**
+ * Queues the volumes for fetching; the server skips ones in the library or on their way. `per`
+ * (manga from a server as pages) is the CBZ size the volume numbers are counted in.
+ */
+export function addVolumes(workId: number, volumes: number[], per?: 'volume' | 'chapter') {
+  return call<{ job: SourceJob }>('POST', `works/${workId}/add`, { volumes, ...(per && { per }) });
+}
+
+export function listServers() {
+  return call<{ servers: SourceServer[] }>('GET', 'servers');
+}
+
+export interface NewServer {
+  type: 'opds' | 'suwayomi';
+  url: string;
+  name: string;
+  user: string;
+  password: string;
+}
+
+/** Tests the server with these credentials, then adds it; a SourceError names the field to fix. */
+export function addServer(server: NewServer) {
+  return call<{ server: SourceServer; tested: { title: string; entries: number } }>(
+    'POST',
+    'servers',
+    server
+  );
+}
+
+/** Removes the server; its follows and waiting jobs go, its volumes stay in the library. */
+export function removeServer(id: number) {
+  return call<object>('DELETE', `servers/${id}`);
+}
+
+/** A feed of the server's catalog: its root, a section (a path from an earlier answer) or a search. */
+export function browseServer(id: number, section = '', q = '') {
+  const query = new URLSearchParams({ ...(section && { section }), ...(q && { q }) });
+
+  return call<SourceServerFeed>('GET', `servers/${id}/browse?${query}`);
+}
+
+/** An image on the server (a browse cover), through the import service. */
+export function serverImageUrl(id: number, href: string) {
+  return `${apiUrl}servers/${id}/image?href=${encodeURIComponent(href)}`;
 }
 
 /** This account's jobs, newest first, and the seconds between two requests to one site. */
