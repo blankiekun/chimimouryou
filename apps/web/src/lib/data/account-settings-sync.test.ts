@@ -529,4 +529,35 @@ describe('account settings sync', () => {
     expect(askAiReaderNote$.getValue()).toBe('theirs');
     expect(remote()?.values.aiConnections).toEqual({ y: 1 });
   });
+
+  /*
+   * How settings.json's document check could fail:
+   * - a file of the wrong shape (a newer version's format, a hand edit) is read as empty and the
+   *   local settings are written over it ("no heal" is broken), or its values are applied;
+   * - a valid file is refused (covered: every other test here syncs one, some without
+   *   entryModified or version);
+   * - a syntax error loses the file (shared path, covered in sync-files.test.ts).
+   */
+  it('leaves a settings.json of the wrong shape alone and reports a sync error', async () => {
+    const files = [
+      '[]',
+      JSON.stringify({ version: 2, values: { askAiReaderNote: 'v2' }, modified: {} }),
+      JSON.stringify({ version: 1, values: 'x', modified: {} })
+    ];
+
+    for (const text of files) {
+      folder.files = { 'settings.json': text };
+      askAiReaderNote$.next('mine');
+      mockServer();
+
+      await signInAs(null);
+
+      expect(folder.files['settings.json']).toBe(text);
+      expect(askAiReaderNote$.getValue()).toBe('mine');
+      expect(settingsSyncState$.getValue()).toMatchObject({
+        state: 'error',
+        message: expect.stringContaining('settings.json')
+      });
+    }
+  });
 });
