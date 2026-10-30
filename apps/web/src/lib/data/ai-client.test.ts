@@ -75,6 +75,18 @@ describe('chatBody', () => {
       'reasoning_effort'
     );
   });
+
+  // Catches: OpenRouter models that think by default spending max_tokens on it, and sending
+  // enabled:false to a mandatory model (or one whose cached list predates the flag), which rejects it.
+  it('turns OpenRouter reasoning off only for models known to allow it', () => {
+    const openRouter = provider('openrouter');
+    const off = (mandatory?: boolean) =>
+      chatBody(openRouter, 'm', { reasoning: 'off' }, openRouter.params, [], mandatory);
+
+    expect(off(false)).toMatchObject({ reasoning: { enabled: false } });
+    expect(off(true)).not.toHaveProperty('reasoning');
+    expect(off(undefined)).not.toHaveProperty('reasoning');
+  });
 });
 
 describe('requestChat', () => {
@@ -203,6 +215,41 @@ describe('requestChat', () => {
     ).toBe("Ollama isn't answering");
   });
 
+  // Catches: a cut-off answer passed on as half a JSON list (Lorebook) or an "empty answer"
+  // (Story so far), whether finish_reason comes in a non-stream answer or the last stream chunk.
+  it('says the answer hit the length limit instead of returning it cut off', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              choices: [{ message: { content: '[{"a"' }, finish_reason: 'length' }]
+            })
+          )
+      )
+    );
+    expect(await requestChat(target('openrouter'), []).catch((e: AiError) => e.title)).toBe(
+      'Answer cut off'
+    );
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            'data: {"choices":[{"delta":{"content":"[{"}}]}\n' +
+              'data: {"choices":[{"delta":{},"finish_reason":"length"}]}\ndata: [DONE]'
+          )
+      )
+    );
+    expect(
+      await requestChat(target('openrouter', 'k', { stream: true }), []).catch(
+        (e: AiError) => e.title
+      )
+    ).toBe('Answer cut off');
+  });
+
   it('needs a key unless the provider runs locally', async () => {
     await expect(requestChat(target('openai', ''), [])).rejects.toThrow(
       /Needs a key on this device/
@@ -258,7 +305,8 @@ describe('loadModels', () => {
                   id: 'google/gemma:free',
                   context_length: 96000,
                   pricing: { prompt: '0', completion: '0' },
-                  supported_parameters: ['temperature']
+                  supported_parameters: ['temperature'],
+                  reasoning: { mandatory: true }
                 },
                 { id: 'a/b', pricing: { prompt: '0.0000003', completion: '0.000001' } },
                 { id: 'a/b:batch' }
@@ -271,7 +319,13 @@ describe('loadModels', () => {
     const models = await loadModels(connection('openrouter'), '');
 
     expect(models).toHaveLength(2);
-    expect(models[0]).toMatchObject({ free: true, context: 96000, params: ['temperature'] });
+    expect(models[0]).toMatchObject({
+      free: true,
+      context: 96000,
+      params: ['temperature'],
+      mandatory: true
+    });
+    expect(models[1].mandatory).toBe(false);
     expect(models[1].price).toBeCloseTo(0.3);
     expect(models[1].free).toBe(false);
     expect(aiConnectionCache$.getValue().openrouter.models).toEqual(models);

@@ -67,11 +67,13 @@ const samplerNames: SamplerName[] = [
 
 /** Settings a model accepts: its own list from the provider (OpenRouter), else the provider's. */
 export function acceptedParams(provider: AiProvider, connectionId: string, model: string) {
-  const listed = aiConnectionCache$
-    .getValue()
-    [connectionId]?.models?.find((m) => m.id === model)?.params;
+  const listed = cachedModel(connectionId, model)?.params;
 
   return (listed ?? provider.params) as string[];
+}
+
+function cachedModel(connectionId: string, model: string) {
+  return aiConnectionCache$.getValue()[connectionId]?.models?.find((m) => m.id === model);
 }
 
 /** The request body: model, messages, stream and the settings the model accepts. */
@@ -80,7 +82,9 @@ export function chatBody(
   model: string,
   params: AiSamplers,
   accepted: string[],
-  messages: ChatMessage[]
+  messages: ChatMessage[],
+  /** OpenRouter's reasoning.mandatory for this model; undefined when not known */
+  reasoningMandatory?: boolean
 ) {
   const body: Record<string, unknown> = { model, messages, stream: !!params.stream };
 
@@ -96,6 +100,14 @@ export function chatBody(
     } else {
       body.reasoning_effort = params.reasoning;
     }
+  } else if (
+    provider.id === 'openrouter' &&
+    accepted.includes('reasoning') &&
+    reasoningMandatory === false
+  ) {
+    // Models that think by default spend max_tokens on it. A model list cached before the flag
+    // existed leaves it undefined: send nothing, since mandatory models reject this.
+    body.reasoning = { enabled: false };
   }
 
   return body;
@@ -295,7 +307,14 @@ async function sendChat(
       method: 'POST',
       headers: requestHeaders(provider, key),
       body: JSON.stringify(
-        chatBody(provider, model, params, acceptedParams(provider, connectionId, model), messages)
+        chatBody(
+          provider,
+          model,
+          params,
+          acceptedParams(provider, connectionId, model),
+          messages,
+          cachedModel(connectionId, model)?.mandatory
+        )
       ),
       signal
     });
@@ -326,12 +345,24 @@ function streamError(error: { message?: string }) {
   return new AiError('The model stopped', error.message || 'Stream error.');
 }
 
+/** A cut-off answer would only fail later (half a JSON list) or look empty (all reasoning). */
+function checkFinish(choice: { finish_reason?: string } | undefined) {
+  if (choice?.finish_reason === 'length') {
+    throw new AiError(
+      'Answer cut off',
+      'The answer hit the Max answer length limit. Raise it in Settings → AI, or set Reasoning effort to Off.'
+    );
+  }
+}
+
 async function readAnswer(response: Response, onText: (text: string) => void) {
   const body = await response.json();
 
   if (body.error) {
     throw streamError(body.error);
   }
+
+  checkFinish(body.choices?.[0]);
 
   const text = String(body.choices?.[0]?.message?.content ?? '');
 
@@ -363,6 +394,8 @@ async function readStream(response: Response, onText: (text: string) => void) {
     if (chunk.error) {
       throw streamError(chunk.error);
     }
+
+    checkFinish(chunk.choices?.[0]);
 
     const delta = chunk.choices?.[0]?.delta?.content;
 
@@ -420,7 +453,8 @@ function toModel(provider: AiProvider, raw: any): AiModel {
       provider.id === 'openrouter'
         ? id.endsWith(':free') || (prompt === '0' && raw.pricing?.completion === '0')
         : !!provider.free || isLocalProvider(provider),
-    params: Array.isArray(raw.supported_parameters) ? raw.supported_parameters : undefined
+    params: Array.isArray(raw.supported_parameters) ? raw.supported_parameters : undefined,
+    mandatory: provider.id === 'openrouter' ? raw.reasoning?.mandatory === true : undefined
   };
 }
 
