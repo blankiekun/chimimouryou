@@ -109,7 +109,9 @@ and account (`''` signed out on a trusted network) in IndexedDB `chimi-server`.
 Progress, statistics per day, reading goals, highlights, book docs (recaps,
 lorebook, VN saves, audiobook position, subtitles), account docs (settings, kanji,
 words, immersion), series, book details and Windows game records are rows keyed by
-account and the server's book id (`bookId`). Each write is one row with its
+account and the server's book id (`bookId`). Windows games have no book id: their
+progress, statistics and VN saves are game docs keyed by account and game name, each
+the whole file their sync folder held. Each write is one row with its
 `modified` time; the server refuses an older one with 409 and the stored row, which
 goes into the mirror. Extra sync files (`data/sync-files.ts`) keep their names and
 map to rows in `ServerStorageHandler.readSyncFile`/`writeSyncFile`; a write over

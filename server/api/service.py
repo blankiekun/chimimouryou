@@ -72,7 +72,7 @@ ROW_KEYS = {'book': 'book', 'date_key': 'dateKey', 'goal_start': 'goalStart', 'h
 
 SYNC_TABLES = {'progress': 'progress', 'statistics': 'statistics', 'goals': 'goals', 'highlights': 'highlights',
                'bookDocs': 'book_docs', 'accountDocs': 'account_docs', 'games': 'games',
-               'series': 'series_overrides', 'metadata': 'book_metadata'}
+               'gameDocs': 'game_docs', 'series': 'series_overrides', 'metadata': 'book_metadata'}
 
 
 def row_json(table: str, row) -> dict:
@@ -457,6 +457,11 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError(409, 'Newer on the server', {'row': row_json('games', row)})
         return 200, {'rev': row['rev']}
 
+    def put_game_doc(self, match):
+        name, body = self.game_name(match), self.read_json()
+        return self.put('game_docs', {'account': self.account, 'name': name, 'kind': match[2]}, body['modified'],
+                        {'data': self.data_of(body), 'deleted': 0})
+
     def get_game(self, match):
         name = self.game_name(match)
         rows = db.query('SELECT 1 FROM games WHERE account = ? AND name = ? AND deleted = 0', (self.account, name))
@@ -490,6 +495,7 @@ class Handler(BaseHTTPRequestHandler):
         ('PUT', re.compile(r'/api/v1/books/(\d+)/cover'), put_cover),
         ('GET', re.compile(r'/api/v1/books/(\d+)/cover'), get_cover),
         ('GET', re.compile(r'/api/v1/games'), get_games),
+        ('PUT', re.compile(r'/api/v1/games/([^/]+)/docs/(progress|statistics|vnsaves)'), put_game_doc),
         ('PUT', re.compile(r'/api/v1/games/([^/]+)'), put_game),
         ('GET', re.compile(r'/api/v1/games/([^/]+)'), get_game),
         ('DELETE', re.compile(r'/api/v1/games/([^/]+)'), delete_game),

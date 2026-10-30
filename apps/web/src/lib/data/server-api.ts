@@ -42,6 +42,7 @@ const tables = [
   'bookDocs',
   'accountDocs',
   'games',
+  'gameDocs',
   'series',
   'metadata'
 ] as const;
@@ -68,6 +69,7 @@ const keyOf: Record<SyncTable, (row: Partial<SyncRow>) => string> = {
   bookDocs: (row) => `${row.book}/${row.kind}`,
   accountDocs: (row) => `${row.kind}`,
   games: (row) => `${row.name}`,
+  gameDocs: (row) => `${row.name}/${row.kind}`,
   series: (row) => `${row.book}`,
   metadata: (row) => `${row.book}`
 };
@@ -86,6 +88,11 @@ const writePaths: [RegExp, SyncTable, (match: RegExpMatchArray) => Partial<SyncR
   [/^goals\/([^/]+)$/, 'goals', (m) => ({ goalStart: m[1] })],
   [/^series\/(\d+)$/, 'series', (m) => ({ book: +m[1] })],
   [/^metadata\/(\d+)$/, 'metadata', (m) => ({ book: +m[1] })],
+  [
+    /^games\/([^/?]+)\/docs\/(\w+)$/,
+    'gameDocs',
+    (m) => ({ name: decodeURIComponent(m[1]), kind: m[2] })
+  ],
   [
     /^games\/([^/?]+)\?modified=(\d+)$/,
     'games',
@@ -267,7 +274,10 @@ async function storedMirror(key: string) {
   let mirror = mirrors.get(key);
 
   if (!mirror) {
-    mirror = (await cacheGet<Mirror>(key)) || emptyMirror();
+    const cached = await cacheGet<Mirror>(key);
+
+    // A mirror from before a table was added would never get that table's older rows: pull all.
+    mirror = cached && tables.every((table) => cached[table]) ? cached : emptyMirror();
     mirrors.set(key, mirror);
   }
 

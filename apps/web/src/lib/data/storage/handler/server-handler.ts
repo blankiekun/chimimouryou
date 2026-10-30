@@ -14,7 +14,7 @@
  * (server-api.ts) and written row by row; a 409 means the server's row is newer. A book is
  * processed from its Calibre file on each device that opens it; only a text copy goes to the
  * server (readings files, difficulty). A Windows game's record (program, hook) is the account's
- * own file (`/api/v1/games`).
+ * own file (`/api/v1/games`), its progress, statistics and VN saves whole-file game docs.
  */
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
@@ -180,6 +180,10 @@ export class ServerStorageHandler extends BaseStorageHandler {
     if (book !== undefined && bookDocs[name]) {
       return mirror.bookDocs.filter((row) => row.book === book && row.kind === bookDocs[name]);
     }
+    // A Windows game (an account's, not in the catalog): its VN saves are a game doc.
+    if (name === 'vnsaves.json' && live(mirror.games).some((row) => row.name === title)) {
+      return mirror.gameDocs.filter((row) => row.name === title && row.kind === 'vnsaves');
+    }
     return undefined;
   }
 
@@ -223,7 +227,11 @@ export class ServerStorageHandler extends BaseStorageHandler {
     }
 
     const path =
-      title === undefined ? `docs/${accountDocs[name]}` : `books/${book}/docs/${bookDocs[name]}`;
+      title === undefined
+        ? `docs/${accountDocs[name]}`
+        : book === undefined
+          ? `games/${encodeURIComponent(title)}/docs/vnsaves`
+          : `books/${book}/docs/${bookDocs[name]}`;
 
     // Newer than what was merged with, even when this device's clock is behind.
     const modified = Math.max(Date.now(), Number(version || 0) + 1);
@@ -359,15 +367,34 @@ export class ServerStorageHandler extends BaseStorageHandler {
       : undefined;
   }
 
+  /**
+   * A Windows game's progress or statistics row ({ row: undefined } before the first); undefined for a title
+   * that isn't one (a catalog book keeps its own rows).
+   */
+  private async gameDoc(kind: 'progress' | 'statistics') {
+    const { title } = this.currentContext;
+    const mirror = await this.mirror();
+
+    if (!this.gameRow(mirror) || (await bookIdOf(title)) !== undefined) return undefined;
+
+    return { row: mirror.gameDocs.find((row) => row.name === title && row.kind === kind) };
+  }
+
   private async recentModified(kind: StorageDataType) {
     switch (kind) {
       case StorageDataType.DATA:
         return this.gameRow(await this.mirror())?.modified;
       case StorageDataType.PROGRESS:
-        return newest((await this.bookRows('progress')).rows);
+        return (
+          (await this.gameDoc('progress'))?.row?.modified ??
+          newest((await this.bookRows('progress')).rows)
+        );
       case StorageDataType.STATISTICS:
         // Deleted days count: deleting one is a change the other devices must take.
-        return newest((await this.bookRows('statistics')).rows);
+        return (
+          (await this.gameDoc('statistics'))?.row?.modified ??
+          newest((await this.bookRows('statistics')).rows)
+        );
       case StorageDataType.READING_GOALS:
         return newest(await this.goalRows());
       case StorageDataType.AUDIOBOOK:
@@ -554,8 +581,16 @@ export class ServerStorageHandler extends BaseStorageHandler {
 
     const [mirror, books] = await Promise.all([signedInOr401(syncMirror()), loadCalibreCatalog()]);
     const ids = new Set(mirror.statistics.map((row) => row.book));
+    const titles = new Set(books.map((book) => book.title));
 
-    return books.filter((book) => ids.has(book.bookId)).map((book) => book.title);
+    return [
+      ...books.filter((book) => ids.has(book.bookId)).map((book) => book.title),
+      // Windows games' statistics (game docs), unless a catalog book took the name.
+      ...mirror.gameDocs
+        .filter((row) => row.kind === 'statistics' && !titles.has(row.name!))
+        .filter((row) => live(mirror.games).some((game) => game.name === row.name))
+        .map((row) => row.name!)
+    ];
   }
 
   /** This source's books processed in this browser, by title. */
@@ -694,7 +729,8 @@ export class ServerStorageHandler extends BaseStorageHandler {
   }
 
   async getProgress() {
-    const row = (await this.bookRows('progress')).rows[0];
+    const game = await this.gameDoc('progress');
+    const row = game ? game.row : (await this.bookRows('progress')).rows[0];
 
     if (!row) return undefined;
 
@@ -708,8 +744,20 @@ export class ServerStorageHandler extends BaseStorageHandler {
   }
 
   async getStatistics() {
-    const { rows } = await this.bookRows('statistics');
+    const game = await this.gameDoc('statistics');
     const { title } = this.currentContext;
+
+    if (game) {
+      return {
+        statistics: (game.row?.data as BooksDbStatistic[] | undefined)?.map((entry) => ({
+          ...entry,
+          title
+        })),
+        lastStatisticModified: game.row?.modified || 0
+      };
+    }
+
+    const { rows } = await this.bookRows('statistics');
 
     return {
       // All days deleted is still an answer: REPLACE takes the deletions.
@@ -845,18 +893,24 @@ export class ServerStorageHandler extends BaseStorageHandler {
     const progress: BooksDbBookmarkData =
       data instanceof File ? JSON.parse(await data.text()) : data;
     const { book } = await this.bookRows('progress');
+    const game = await this.gameDoc('progress');
 
     this.personalWrite();
     // A book the server doesn't know (one a friend sent): its progress stays in this browser.
-    if (book === undefined) return;
+    if (book === undefined && !game) return;
 
     // 409: the server's row is newer and is now in the mirror; the next sync brings it down.
     await signedInOr401(
-      putRow(`books/${book}/progress`, {
-        modified: progress.lastBookmarkModified || 0,
-        progress: bookmarkFraction(progress.progress),
-        data: progress
-      })
+      putRow(
+        game
+          ? `games/${encodeURIComponent(this.currentContext.title)}/docs/progress`
+          : `books/${book}/progress`,
+        {
+          modified: progress.lastBookmarkModified || 0,
+          progress: bookmarkFraction(progress.progress),
+          data: progress
+        }
+      )
     );
 
     this.addBookCard(this.currentContext.title, {
@@ -871,21 +925,34 @@ export class ServerStorageHandler extends BaseStorageHandler {
    */
   async saveStatistics(statistics: BooksDbStatistic[], lastStatisticModified: number) {
     const { book, rows } = await this.bookRows('statistics');
+    const game = await this.gameDoc('statistics');
 
     this.personalWrite();
-    if (book === undefined) return;
+    if (book === undefined && !game) return;
 
     const isMerge = this.statisticsMergeMode === MergeMode.MERGE;
-    const { statisticsToStore } = updateStatisticToStore(
+    const { statisticsToStore, newStatisticModified } = updateStatisticToStore(
       isMerge
         ? mergeStatistics(
             statistics,
-            live(rows).map((row) => row.data),
+            game ? game.row?.data || [] : live(rows).map((row) => row.data),
             this.saveBehavior === ReplicationSaveBehavior.NewOnly
           )
         : statistics,
       lastStatisticModified
     );
+
+    if (game) {
+      // The whole file as one row, as the game's sync folder held it.
+      await signedInOr401(
+        putRow(`games/${encodeURIComponent(this.currentContext.title)}/docs/statistics`, {
+          modified: newStatisticModified,
+          data: statisticsToStore
+        })
+      );
+      this.addBookCard(this.currentContext.title, {});
+      return;
+    }
 
     await this.writeRows(
       rows,
