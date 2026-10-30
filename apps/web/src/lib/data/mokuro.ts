@@ -129,7 +129,7 @@ export function uploadMokuro(id: number, file: File): Promise<{ pages: number }>
   });
 }
 
-/** A volume's text for word lists: one speech bubble a line, as manga_text in jiten/service.py. */
+/** A volume's text for word lists: one speech bubble a line, as manga_text in jiten/workers.py. */
 export function mokuroPlainText(text: MokuroText) {
   return text.pages
     .flatMap((page) => (page.blocks ?? []).map((block) => block.lines.join('').trim()))

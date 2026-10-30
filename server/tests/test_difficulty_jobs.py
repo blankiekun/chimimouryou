@@ -1,4 +1,4 @@
-"""Tests for the difficulty service's job pools (server/jiten/service.py)."""
+"""Tests for the difficulty service's job pools (server/jiten/jobs.py)."""
 import threading
 import time
 import unittest

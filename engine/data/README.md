@@ -13,7 +13,7 @@ frequency dictionary built from all media on jiten.moe.
   under CC BY-SA 4.0 too. The rest of this repository keeps its own licence
   (see `LICENSE` and `NOTICE` at its root).
 
-The difficulty service (`../service.py`) copies it to
+The difficulty service (`install_bundled_dictionary` in `server/jiten/install.py`) copies it to
 `state/difficulty/frequency-dictionary.zip` on start when no list is installed
 there. A list an admin installed or uploaded is never overwritten; to use a
 newer one, upload it in the admin panel (Tools → Estimate difficulty →

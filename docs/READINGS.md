@@ -60,7 +60,7 @@ unvoiced one it gives (この箱 read ばこ: はこ), so it gets the word's ran
 list has stays (造り in 石造り: づくり) but takes the unvoiced one's rank when that is better
 (a split compound's tail, 顔 がお, ranks as かお).
 
-**Tables** (`READING_MODEL_TABLES` in `service.py`): `state/difficulty/reading-model.json.gz`
+**Tables** (`READING_MODEL_TABLES` in `server/jiten/settings.py`): `state/difficulty/reading-model.json.gz`
 is the server's own table, when one has been built from its library (optional: none exists
 until you build it; [docs/CONFIGURATION.md](CONFIGURATION.md#python-services) has the
 command); yurigana's public table fills in the forms it lacks, or answers alone without it. A form
@@ -70,7 +70,7 @@ entries for those forms are dropped.
 
 ### Versions
 
-- **`WORDS_VERSION`** (`service.py`) is stored with each estimate. Bump it, with a comment,
+- **`WORDS_VERSION`** (`server/jiten/settings.py`) is stored with each estimate. Bump it, with a comment,
   whenever a new yurigana release (or anything above) changes which reading a word gets;
   "Books without an estimate" then redoes those word lists. Before moving the pin, compare
   `python -m yurigana.evaluate SET.jsonl --known frequency-dictionary.zip` (gold sets from
