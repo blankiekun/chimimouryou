@@ -5,7 +5,7 @@
  */
 
 import { BackupStorageHandler } from '$lib/data/storage/handler/backup-handler';
-import { BaseStorageHandler, FilePrefix } from '$lib/data/storage/handler/base-handler';
+import { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
 import { storage } from '$lib/data/window/navigator/storage';
 import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
 import { database, requestPersistentStorage$ } from '$lib/data/store';
@@ -298,8 +298,9 @@ export async function replicateData(
               checkCancelAndProgress(cancelSignal, true, true);
               checkCancelAndProgress(cancelSignal, true, true);
             } else if (
-              await targetHandler.isBookPresentAndUpToDate(
-                await sourceHandler.getFilenameForRecentCheck('bookdata_')
+              await targetHandler.isUpToDate(
+                StorageDataType.DATA,
+                await sourceHandler.getRecentModified(StorageDataType.DATA)
               )
             ) {
               checkCancelAndProgress(cancelSignal, true, true);
@@ -320,8 +321,9 @@ export async function replicateData(
 
           if (processProgressData) {
             if (
-              await targetHandler.isProgressPresentAndUpToDate(
-                await sourceHandler.getFilenameForRecentCheck('progress_')
+              await targetHandler.isUpToDate(
+                StorageDataType.PROGRESS,
+                await sourceHandler.getRecentModified(StorageDataType.PROGRESS)
               )
             ) {
               checkCancelAndProgress(cancelSignal, !dataProcessed, true);
@@ -343,8 +345,9 @@ export async function replicateData(
 
           if (processStatistics) {
             if (
-              await targetHandler.areStatisticsPresentAndUpToDate(
-                await sourceHandler.getFilenameForRecentCheck('statistics_')
+              await targetHandler.isUpToDate(
+                StorageDataType.STATISTICS,
+                await sourceHandler.getRecentModified(StorageDataType.STATISTICS)
               )
             ) {
               checkCancelAndProgress(cancelSignal, !dataProcessed, true);
@@ -366,8 +369,9 @@ export async function replicateData(
 
           if (processAudioBook) {
             if (
-              await targetHandler.isAudioBookPresentAndUpToDate(
-                await sourceHandler.getFilenameForRecentCheck(FilePrefix.AUDIO_BOOK)
+              await targetHandler.isUpToDate(
+                StorageDataType.AUDIOBOOK,
+                await sourceHandler.getRecentModified(StorageDataType.AUDIOBOOK)
               )
             ) {
               checkCancelAndProgress(cancelSignal, !dataProcessed, true);
@@ -389,8 +393,9 @@ export async function replicateData(
 
           if (processSubtitleData) {
             if (
-              await targetHandler.isSubtitleDataPresentAndUpToDate(
-                await sourceHandler.getFilenameForRecentCheck(FilePrefix.SUBTITLE)
+              await targetHandler.isUpToDate(
+                StorageDataType.SUBTITLE,
+                await sourceHandler.getRecentModified(StorageDataType.SUBTITLE)
               )
             ) {
               checkCancelAndProgress(cancelSignal, !dataProcessed, true);
@@ -450,10 +455,9 @@ export async function replicateData(
       replicationLimiter(async () => {
         try {
           if (
-            await targetHandler.areReadingGoalsPresentAndUpToDate(
-              await sourceHandler.getFilenameForRecentCheck(
-                BaseStorageHandler.readingGoalsFilePrefix
-              )
+            await targetHandler.isUpToDate(
+              StorageDataType.READING_GOALS,
+              await sourceHandler.getRecentModified(StorageDataType.READING_GOALS)
             )
           ) {
             checkCancelAndProgress(cancelSignal, true, true);

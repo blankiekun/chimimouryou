@@ -17,7 +17,11 @@ import {
 import type { Section } from '$lib/data/database/books-db/versions/v4/books-db-v4';
 import { storageRootName } from '$lib/data/env';
 import { MergeMode } from '$lib/data/merge-mode';
-import { InternalStorageSources, type StorageKey } from '$lib/data/storage/storage-types';
+import {
+  InternalStorageSources,
+  StorageDataType,
+  type StorageKey
+} from '$lib/data/storage/storage-types';
 import { exporterVersion } from '$lib/functions/replication/replicator';
 import { throwIfAborted } from '$lib/functions/replication/replication-error';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
@@ -96,23 +100,79 @@ export abstract class BaseStorageHandler {
 
   abstract updateLastRead(book: BooksDbBookData): Promise<void>;
 
-  abstract getFilenameForRecentCheck(fileIdentifier: string): Promise<string | undefined>;
+  /**
+   * The newest modified time of one kind of data for the current book (or of the reading goals),
+   * undefined when there is none or the save behaviour overwrites anyway. The replicator compares
+   * it with isUpToDate of the target. For book data it is lastBookModified.
+   */
+  async getRecentModified(kind: StorageDataType): Promise<number | undefined> {
+    const prefix = BaseStorageHandler.recentCheckPrefix[kind];
+    const name = await this.getFilenameForRecentCheck(prefix);
 
-  abstract isBookPresentAndUpToDate(referenceFilename: string | undefined): Promise<boolean>;
+    if (!name) return undefined;
 
-  abstract isProgressPresentAndUpToDate(referenceFilename: string | undefined): Promise<boolean>;
+    return kind === StorageDataType.DATA
+      ? BaseStorageHandler.getBookMetadata(name).lastBookModified
+      : +name.split('_')[3].replace(/\.json$/, '');
+  }
 
-  abstract areStatisticsPresentAndUpToDate(referenceFilename: string | undefined): Promise<boolean>;
+  /** Whether this handler already holds data of the kind at least as new as `modified`. */
+  isUpToDate(kind: StorageDataType, modified: number | undefined): Promise<boolean> {
+    // A name in today's format carrying `modified`, for the file-name checks below.
+    const name =
+      modified === undefined
+        ? undefined
+        : kind === StorageDataType.DATA
+          ? `bookdata_${exporterVersion}_${currentDbVersion}_0_${modified}_0.zip`
+          : `${BaseStorageHandler.recentCheckPrefix[kind]}${exporterVersion}_${currentDbVersion}_${modified}_0.json`;
 
-  abstract areReadingGoalsPresentAndUpToDate(
-    referenceFilename: string | undefined
-  ): Promise<boolean>;
+    switch (kind) {
+      case StorageDataType.DATA:
+        return this.isBookPresentAndUpToDate(name);
+      case StorageDataType.PROGRESS:
+        return this.isProgressPresentAndUpToDate(name);
+      case StorageDataType.STATISTICS:
+        return this.areStatisticsPresentAndUpToDate(name);
+      case StorageDataType.READING_GOALS:
+        return this.areReadingGoalsPresentAndUpToDate(name);
+      case StorageDataType.AUDIOBOOK:
+        return this.isAudioBookPresentAndUpToDate(name);
+      default:
+        return this.isSubtitleDataPresentAndUpToDate(name);
+    }
+  }
 
-  abstract isAudioBookPresentAndUpToDate(referenceFilename: string | undefined): Promise<boolean>;
+  /**
+   * Today's file-name checks behind the defaults of getRecentModified and isUpToDate; a handler
+   * that overrides both (ServerStorageHandler) needs none of them.
+   */
+  protected getFilenameForRecentCheck(_fileIdentifier: string): Promise<string | undefined> {
+    return Promise.resolve(undefined);
+  }
 
-  abstract isSubtitleDataPresentAndUpToDate(
-    referenceFilename: string | undefined
-  ): Promise<boolean>;
+  protected isBookPresentAndUpToDate(_referenceFilename: string | undefined) {
+    return Promise.resolve(false);
+  }
+
+  protected isProgressPresentAndUpToDate(_referenceFilename: string | undefined) {
+    return Promise.resolve(false);
+  }
+
+  protected areStatisticsPresentAndUpToDate(_referenceFilename: string | undefined) {
+    return Promise.resolve(false);
+  }
+
+  protected areReadingGoalsPresentAndUpToDate(_referenceFilename: string | undefined) {
+    return Promise.resolve(false);
+  }
+
+  protected isAudioBookPresentAndUpToDate(_referenceFilename: string | undefined) {
+    return Promise.resolve(false);
+  }
+
+  protected isSubtitleDataPresentAndUpToDate(_referenceFilename: string | undefined) {
+    return Promise.resolve(false);
+  }
 
   abstract getBook(): Promise<Omit<BooksDbBookData, 'id'> | File | undefined>;
 
@@ -162,6 +222,15 @@ export abstract class BaseStorageHandler {
   static rootName = storageRootName;
 
   static readingGoalsFilePrefix = 'ttu-user-goals_';
+
+  private static recentCheckPrefix: Record<StorageDataType, string> = {
+    [StorageDataType.DATA]: 'bookdata_',
+    [StorageDataType.PROGRESS]: 'progress_',
+    [StorageDataType.STATISTICS]: 'statistics_',
+    [StorageDataType.READING_GOALS]: BaseStorageHandler.readingGoalsFilePrefix,
+    [StorageDataType.AUDIOBOOK]: FilePrefix.AUDIO_BOOK,
+    [StorageDataType.SUBTITLE]: FilePrefix.SUBTITLE
+  };
 
   storageType: StorageKey;
 

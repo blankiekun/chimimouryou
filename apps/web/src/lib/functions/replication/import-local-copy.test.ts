@@ -34,7 +34,7 @@ function drive() {
     startContext: vi.fn(),
     saveCover: vi.fn(),
     getCurrentStorageSource: () => 'My Drive',
-    isBookPresentAndUpToDate: async () => false,
+    isUpToDate: async () => false,
     saveBook: vi.fn(async (_book: unknown) => 0)
   };
 }
