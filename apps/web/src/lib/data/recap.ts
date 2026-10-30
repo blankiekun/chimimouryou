@@ -47,6 +47,35 @@ export interface BookRecaps {
 /** Emits after every local change (extras-sync.ts uploads it). */
 export const recapsChanged$ = new Subject<BookRecaps>();
 
+const isRecord = (value: unknown): value is Record<string, any> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * recaps.json from another device: summaries that aren't objects, saved recaps without a
+ * `created` and deletions that aren't numbers are dropped; undefined when a list or map isn't one.
+ */
+export function parseRecaps(raw: unknown): BookRecaps | undefined {
+  if (
+    !isRecord(raw) ||
+    (raw.chapters !== undefined && !isRecord(raw.chapters)) ||
+    (raw.saved !== undefined && !Array.isArray(raw.saved)) ||
+    (raw.deletedSaved !== undefined && !Array.isArray(raw.deletedSaved))
+  ) {
+    return undefined;
+  }
+
+  return {
+    ...(raw as BookRecaps),
+    chapters: Object.fromEntries(
+      Object.entries((raw.chapters ?? {}) as BookRecaps['chapters']).filter(([, chapter]) =>
+        isRecord(chapter)
+      )
+    ),
+    saved: raw.saved?.filter((recap: any) => Number.isFinite(recap?.created)),
+    deletedSaved: raw.deletedSaved?.filter(Number.isFinite)
+  };
+}
+
 /**
  * Two copies of a book's recaps: chapter summaries and saved recaps from both
  * (local wins for the same chapter), minus deleted recaps.

@@ -99,12 +99,19 @@ export function syncEnded(keys: string[], error: string, what: string, now = Dat
     return;
   }
 
-  const errors = [{ at: now, what, detail: error.slice(0, 300) }, ...state.errors].slice(
-    0,
-    maxErrors
-  );
+  recordSyncError(what, error, now);
+  update({ running: undefined, failed: true, waiting: [...others, ...keys] });
+}
+
+/** Lists an error in Settings → Sync → Status (also an unreadable synced file, sync-files.ts). */
+export function recordSyncError(what: string, detail: string, now = Date.now()) {
+  const errors = [
+    { at: now, what, detail: detail.slice(0, 300) },
+    ...syncState$.getValue().errors
+  ].slice(0, maxErrors);
+
   write(errorsKey, errors);
-  update({ running: undefined, failed: true, waiting: [...others, ...keys], errors });
+  update({ errors });
 }
 
 export function formatAgo(ms: number) {

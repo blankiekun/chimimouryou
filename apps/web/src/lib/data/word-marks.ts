@@ -142,10 +142,18 @@ export function marksSignature(marks: WordMarks) {
   return `${values.length}:${active}:${values.reduce((sum, mark) => sum + mark.modified, 0)}`;
 }
 
+/** A status from a newer version (words.json) stays stored and synced, but marks nothing here. */
+const knownMarks = (marks: WordMarks): WordMarks =>
+  Object.fromEntries(
+    Object.entries(marks).filter(
+      ([, mark]) => mark.status === null || mark.status === 'known' || mark.status === 'ignored'
+    )
+  );
+
 export async function getWordMarks() {
   await pullWordMarks();
 
-  const marks = ((await (await readerDb()).get('known', 'marks')) ?? {}) as WordMarks;
+  const marks = knownMarks(((await (await readerDb()).get('known', 'marks')) ?? {}) as WordMarks);
 
   wordMarks$.next(marks);
 
@@ -167,7 +175,7 @@ export async function setWordMarks(
 
   await tx.store.put(marks, 'marks');
   await tx.done;
-  wordMarks$.next(marks);
+  wordMarks$.next(knownMarks(marks));
   wordMarksChanged();
 }
 

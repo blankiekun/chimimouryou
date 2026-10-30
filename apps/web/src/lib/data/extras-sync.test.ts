@@ -21,6 +21,7 @@ import { getLorebook, saveLoreEntries, type LoreEntry } from '$lib/data/lorebook
 import { deleteSavedRecap, getSavedRecaps } from '$lib/data/recap';
 import {
   enableExtrasSync,
+  extrasSyncError$,
   mergeKanji,
   mergeWordMarks,
   syncExtras,
@@ -176,10 +177,10 @@ describe('extras sync', () => {
     expect(Object.keys(uploaded.chapters).sort()).toEqual(['c1', 'c2']);
   });
 
-  // Bug: a server error or a cut-off remote file clears the local lorebook or recaps.
+  // Bug: a server error or a cut-off remote file clears the local lorebook or recaps. And (owner
+  // 2026-10-29, item F) a remote value of the wrong shape is never written over: it may be a newer
+  // version's format.
   it('keeps the local copies when the remote file fails to load or is malformed', async () => {
-    const lorebookUrl = `/api/v1/books/${api.bookId('Broken')}/docs/lorebook`;
-    const recapsUrl = `/api/v1/books/${api.bookId('Broken')}/docs/recaps`;
     const recaps = {
       title: 'Broken',
       chapters: { c1: { summary: 'one', characters: 1, model: 'm' } },
@@ -224,8 +225,9 @@ describe('extras sync', () => {
 
     expect((await getLorebook('Broken')).entries.map((e) => e.name)).toEqual(['葵']);
     expect((await getSavedRecaps('Broken')).map((r) => r.created)).toEqual([1]);
-    expect(puts[lorebookUrl].entries.map((e: LoreEntry) => e.name)).toEqual(['葵']);
-    expect(puts[recapsUrl].saved.map((r: { created: number }) => r.created)).toEqual([1]);
+    expect(puts).toEqual({});
+    expect(extrasSyncError$.getValue().lorebook).toContain('lorebook.json');
+    expect(extrasSyncError$.getValue().recaps).toContain('recaps.json');
   });
 
   it("doesn't upload another account's cached lorebook", async () => {

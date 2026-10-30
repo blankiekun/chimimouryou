@@ -265,6 +265,20 @@ export function vnBookmark(dataId: number, read: number, total: number): BooksDb
 /** The engine's save files (save1.dat, gloval.sav…) as synced in vnsaves.json, with the CONscripter version that wrote them. */
 export type VnSaves = Record<string, { modified: number; data: string; engine?: string }>;
 
+/**
+ * vnsaves.json from another device: saves without a `modified` or string `data` are dropped;
+ * undefined when it isn't a map of saves.
+ */
+export function parseVnSaves(raw: unknown): VnSaves | undefined {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return undefined;
+
+  return Object.fromEntries(
+    Object.entries(raw).filter(
+      ([, file]) => Number.isFinite(file?.modified) && typeof file.data === 'string'
+    )
+  );
+}
+
 /** The newest engine version among the saves if it is newer than `installed` (v1.2.3 tags). */
 export function newerSaveEngine(saves: VnSaves, installed: string) {
   const parts = (version: string) => version.replace(/^v/, '').split('.').map(Number);

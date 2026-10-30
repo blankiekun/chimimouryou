@@ -16,6 +16,16 @@ ACCOUNT_RE = re.compile(r'[0-9a-f]{32}')
 DATE_RE = re.compile(r'\d{4}-\d{2}-\d{2}')
 HID_RE = re.compile(r'[A-Za-z0-9-]{1,100}')
 
+# The doc kinds each table holds, shared with the app (apps/web/src/lib/data/server-rows.ts, checked by
+# sync-kinds.test.ts); service.py's routes and migrate.py's file maps read it too.
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sync-kinds.json'), encoding='utf-8') as f:
+    SYNC_KINDS = json.load(f)
+DOC_KINDS = {
+    'book_docs': {*SYNC_KINDS['bookDocs'].values(), *SYNC_KINDS['mediaDocs'].values()},
+    'account_docs': set(SYNC_KINDS['accountDocs'].values()),
+    'game_docs': set(SYNC_KINDS['gameDocs']),
+}
+
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS sync_counter (id INTEGER PRIMARY KEY CHECK (id = 1), rev INTEGER NOT NULL);
 INSERT OR IGNORE INTO sync_counter VALUES (1, 0);
@@ -82,12 +92,12 @@ CREATE TABLE IF NOT EXISTS highlights (
     PRIMARY KEY (account, book, hid));
 CREATE TABLE IF NOT EXISTS book_docs (
     account TEXT NOT NULL, book INTEGER NOT NULL REFERENCES books(id),
-    kind TEXT NOT NULL CHECK (kind IN ('recaps', 'lorebook', 'vnsaves', 'audiobook', 'subtitles')),
+    kind TEXT NOT NULL,
     data TEXT NOT NULL,
     modified INTEGER NOT NULL, rev INTEGER NOT NULL,
     PRIMARY KEY (account, book, kind));
 CREATE TABLE IF NOT EXISTS account_docs (
-    account TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('settings', 'kanji', 'words', 'immersion')),
+    account TEXT NOT NULL, kind TEXT NOT NULL,
     data TEXT NOT NULL, modified INTEGER NOT NULL, rev INTEGER NOT NULL,
     PRIMARY KEY (account, kind));
 CREATE TABLE IF NOT EXISTS games (
@@ -97,7 +107,7 @@ CREATE TABLE IF NOT EXISTS games (
 -- A Windows game's progress, statistics and saves: the whole file its sync folder held (no book id).
 CREATE TABLE IF NOT EXISTS game_docs (
     account TEXT NOT NULL, name TEXT NOT NULL,
-    kind TEXT NOT NULL CHECK (kind IN ('progress', 'statistics', 'vnsaves')),
+    kind TEXT NOT NULL,
     data TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0,
     modified INTEGER NOT NULL, rev INTEGER NOT NULL,
     PRIMARY KEY (account, name, kind));
@@ -134,6 +144,39 @@ TABLE_KEYS: dict[str, tuple[str, ...]] = {
 }
 
 
+def drop_kind_checks(connection: sqlite3.Connection):
+    """Databases from before sync-kinds.json: their doc tables CHECK the kinds of then, which would refuse a new
+    one. Each is made again without (create, copy, drop, rename in one transaction); put_row checks kinds now.
+    shortcut: drop this once every install has opened its database with it (owner's call)."""
+    for table in DOC_KINDS:
+        sql = connection.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+                                 (table,)).fetchone()[0]
+        if 'CHECK (kind IN' not in sql:
+            continue
+        # foreign_keys can't change inside a transaction; nothing references these tables.
+        connection.execute('PRAGMA foreign_keys = OFF')
+        try:
+            connection.execute('BEGIN IMMEDIATE')
+            try:
+                # Another process may have rebuilt it meanwhile.
+                sql = connection.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+                                         (table,)).fetchone()[0]
+                if 'CHECK (kind IN' in sql:
+                    new_sql = re.sub(r' CHECK \(kind IN \([^)]*\)\)', '', sql)
+                    new_sql = re.sub(rf'^CREATE TABLE {table}\b', f'CREATE TABLE {table}_new', new_sql)
+                    connection.execute(new_sql)
+                    connection.execute(f'INSERT INTO {table}_new SELECT * FROM {table}')
+                    connection.execute(f'DROP TABLE {table}')
+                    connection.execute(f'ALTER TABLE {table}_new RENAME TO {table}')
+                    connection.execute(f'CREATE INDEX IF NOT EXISTS {table}_rev ON {table}(account, rev)')
+                connection.execute('COMMIT')
+            except BaseException:
+                connection.execute('ROLLBACK')
+                raise
+        finally:
+            connection.execute('PRAGMA foreign_keys = ON')
+
+
 def check_fts5_trigram(connection: sqlite3.Connection):
     try:
         connection.execute("CREATE VIRTUAL TABLE temp.fts5_check USING fts5(a, tokenize='trigram')")
@@ -164,6 +207,7 @@ class Database:
             columns = [row['name'] for row in self.connection.execute(f'PRAGMA table_info({table})')]
             if 'deleted' not in columns:
                 self.connection.execute(f'ALTER TABLE {table} ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0')
+        drop_kind_checks(self.connection)
         self.lock = threading.Lock()
 
     def query(self, sql: str, params=()) -> list[sqlite3.Row]:
@@ -211,6 +255,8 @@ def put_row(connection: sqlite3.Connection, rev: Rev, table: str, key: dict, mod
     key_columns = TABLE_KEYS[table]
     if set(key) != set(key_columns):
         raise ValueError(f'{table} is keyed by {key_columns}')
+    if table in DOC_KINDS and key['kind'] not in DOC_KINDS[table]:
+        raise ValueError(f'unknown {table} kind {key["kind"]}')
     where = ' AND '.join(f'{column} = ?' for column in key_columns)
     key_values = tuple(key[column] for column in key_columns)
     stored = connection.execute(f'SELECT * FROM {table} WHERE {where}', key_values).fetchone()

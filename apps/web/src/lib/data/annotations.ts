@@ -48,6 +48,24 @@ export interface BookAnnotations {
 
 const annotationsFileName = 'annotations.json';
 
+/**
+ * annotations.json from another device: highlights without an id, positions or `modified` are
+ * dropped (they could never merge); undefined when `highlights` isn't a list.
+ */
+export function parseAnnotations(raw: any): { highlights: Highlight[] } | undefined {
+  if (!Array.isArray(raw?.highlights)) return undefined;
+
+  return {
+    highlights: raw.highlights.filter(
+      (highlight: any) =>
+        typeof highlight?.id === 'string' &&
+        Number.isFinite(highlight.start) &&
+        Number.isFinite(highlight.end) &&
+        Number.isFinite(highlight.modified)
+    )
+  };
+}
+
 /** Newer edit wins per highlight; tombstones win over older edits. */
 export function mergeHighlights(local: Highlight[], remote: Highlight[]) {
   const merged = new Map<string, Highlight>();
@@ -202,24 +220,19 @@ export class AnnotationsController {
 
       if (!store) return;
 
-      await syncJsonFile<{ highlights?: Highlight[] }>(
-        store,
-        annotationsFileName,
-        this.title,
-        async (file) => {
-          const remote = file?.highlights || [];
-          const merged = mergeHighlights(this.all, remote);
+      await syncJsonFile(store, annotationsFileName, this.title, parseAnnotations, async (file) => {
+        const remote = file?.highlights || [];
+        const merged = mergeHighlights(this.all, remote);
 
-          if (!sameHighlights(merged, this.all)) {
-            this.setAll(merged);
-            await this.save(merged);
-          }
-
-          return sameHighlights(merged, remote)
-            ? undefined
-            : { title: this.title, highlights: merged };
+        if (!sameHighlights(merged, this.all)) {
+          this.setAll(merged);
+          await this.save(merged);
         }
-      );
+
+        return sameHighlights(merged, remote)
+          ? undefined
+          : { title: this.title, highlights: merged };
+      });
 
       this.syncError$.next('');
     } catch (error: any) {

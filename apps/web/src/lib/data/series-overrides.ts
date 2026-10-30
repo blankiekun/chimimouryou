@@ -228,8 +228,8 @@ export async function syncBrowserSeries() {
 
   if (!store) return changed;
 
-  await syncJsonFile<unknown>(store, 'series.json', undefined, async (file) => {
-    const remote = parseSeriesOverrides(file);
+  await syncJsonFile(store, 'series.json', undefined, parseSeriesOverrides, async (file) => {
+    const remote = file ?? {};
     const local = readBrowserSeries();
     const merged = mergeSeriesOverrides(local, remote);
 

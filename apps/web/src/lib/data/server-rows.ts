@@ -58,19 +58,36 @@ export const newest = (rows: SyncRow[]) =>
 
 export const live = (rows: SyncRow[]) => rows.filter((row) => !row.deleted);
 
-/** Extra sync files (`sync-files.ts`) per book and their rows; the rest are account docs. */
-const bookDocs: Record<string, string> = {
-  'recaps.json': 'recaps',
-  'lorebook.json': 'lorebook',
-  'vnsaves.json': 'vnsaves'
-};
-const accountDocs: Record<string, string> = {
-  'kanji.json': 'kanji',
-  'words.json': 'words',
-  'immersion.json': 'immersion',
-  'settings.json': 'settings'
-};
-const annotationsName = 'annotations.json';
+/**
+ * The server's rows of the extra sync files (`sync-files.ts`): a book's highlights, book docs
+ * (and the audiobook position and subtitles, by upstream's file prefix), account docs and a
+ * Windows game's docs. The same as server/api/sync-kinds.json (sync-kinds.test.ts).
+ */
+export const syncKinds = {
+  highlights: 'annotations.json',
+  bookDocs: { 'recaps.json': 'recaps', 'lorebook.json': 'lorebook', 'vnsaves.json': 'vnsaves' },
+  mediaDocs: { audioBook_: 'audiobook', subtitles_: 'subtitles' },
+  accountDocs: {
+    'kanji.json': 'kanji',
+    'words.json': 'words',
+    'immersion.json': 'immersion',
+    'settings.json': 'settings'
+  },
+  gameDocs: ['progress', 'statistics', 'vnsaves']
+} as const;
+
+/** An extra sync file; series.json syncs only on Drive, OneDrive and folders (browser libraries). */
+export type SyncFileName =
+  | typeof syncKinds.highlights
+  | keyof typeof syncKinds.bookDocs
+  | keyof typeof syncKinds.accountDocs
+  | 'series.json';
+
+export type MediaKind = (typeof syncKinds.mediaDocs)[keyof typeof syncKinds.mediaDocs];
+
+const bookDocs: Record<string, string> = syncKinds.bookDocs;
+const accountDocs: Record<string, string> = syncKinds.accountDocs;
+const annotationsName = syncKinds.highlights;
 
 /**
  * Extra sync files (`sync-files.ts`) as rows: a book's annotations.json as its highlights,
@@ -78,7 +95,7 @@ const annotationsName = 'annotations.json';
  * account docs, which callers only sync while signed in (`readerSyncStore`). The version is the
  * row's `modified` (annotations: the newest highlight's).
  */
-export async function readSyncFile(name: string, title?: string) {
+export async function readSyncFile(name: SyncFileName, title?: string) {
   const { mirror, book } = await syncFileRows(title);
   const rows = syncFileOf(mirror, name, title, book);
 
@@ -93,7 +110,7 @@ export async function readSyncFile(name: string, title?: string) {
 }
 
 /** A sync file's rows (undefined: not one the server keeps, or a book it doesn't have). */
-function syncFileOf(mirror: Mirror, name: string, title?: string, book?: number) {
+function syncFileOf(mirror: Mirror, name: SyncFileName, title?: string, book?: number) {
   if (name === annotationsName && book !== undefined) {
     return mirror.highlights.filter((row) => row.book === book);
   }
@@ -111,7 +128,7 @@ function syncFileOf(mirror: Mirror, name: string, title?: string, book?: number)
 }
 
 export async function writeSyncFile(
-  name: string,
+  name: SyncFileName,
   text: string,
   { title, version, keepalive }: SyncFileOptions = {}
 ) {

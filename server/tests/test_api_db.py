@@ -4,6 +4,7 @@ import os
 import sys
 import tempfile
 import unittest
+import unittest.mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'api'))
 import apidb  # noqa: E402
@@ -129,6 +130,65 @@ class ApiDbTest(unittest.TestCase):
         self.assertEqual(put(1)[0], 'written')
         self.assertEqual(put(0)[0], 'same')
         self.assertEqual(self.db.query('SELECT deleted FROM highlights')[0][0], 1)
+
+    # Bugs caught: a library.db made before sync-kinds.json keeps its kind CHECKs (CREATE TABLE IF NOT EXISTS never
+    # changes a table), so a kind added to the JSON is refused with a 500 there while fresh test DBs pass; the
+    # rebuild losing or changing rows, dropping the rev index the sync reads by, or failing on the second open.
+    def test_drops_old_kind_checks(self):
+        path = os.path.join(self.tmp.name, 'checks', 'library.db')
+        apidb.Database(path).connection.close()
+        import sqlite3
+        old = sqlite3.connect(path)
+        # The doc tables as they were made before sync-kinds.json.
+        old.executescript('''
+            DROP TABLE book_docs; DROP TABLE account_docs; DROP TABLE game_docs;
+            CREATE TABLE IF NOT EXISTS book_docs (
+                account TEXT NOT NULL, book INTEGER NOT NULL REFERENCES books(id),
+                kind TEXT NOT NULL CHECK (kind IN ('recaps', 'lorebook', 'vnsaves', 'audiobook', 'subtitles')),
+                data TEXT NOT NULL,
+                modified INTEGER NOT NULL, rev INTEGER NOT NULL,
+                PRIMARY KEY (account, book, kind));
+            CREATE TABLE IF NOT EXISTS account_docs (
+                account TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('settings', 'kanji', 'words', 'immersion')),
+                data TEXT NOT NULL, modified INTEGER NOT NULL, rev INTEGER NOT NULL,
+                PRIMARY KEY (account, kind));
+            CREATE TABLE IF NOT EXISTS game_docs (
+                account TEXT NOT NULL, name TEXT NOT NULL,
+                kind TEXT NOT NULL CHECK (kind IN ('progress', 'statistics', 'vnsaves')),
+                data TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0,
+                modified INTEGER NOT NULL, rev INTEGER NOT NULL,
+                PRIMARY KEY (account, name, kind));
+            CREATE INDEX book_docs_rev ON book_docs(account, rev);
+            CREATE INDEX account_docs_rev ON account_docs(account, rev);
+            CREATE INDEX game_docs_rev ON game_docs(account, rev);
+            INSERT INTO books (id, key, calibre_id, title, unique_title, format, file, updated, rev)
+                VALUES (1, 'k', 1, 't', 't', 'epub', 'a.epub', 0, 1);
+            INSERT INTO book_docs VALUES ('a', 1, 'recaps', '{"r":1}', 5, 2);
+            INSERT INTO account_docs VALUES ('a', 'words', '{"w":1}', 6, 3);
+            INSERT INTO game_docs VALUES ('a', 'g', 'vnsaves', '{"g":1}', 0, 7, 4);''')
+        old.commit()
+        before = {table: old.execute(f'SELECT * FROM {table}').fetchall()
+                  for table in ('book_docs', 'account_docs', 'game_docs')}
+        old.close()
+        for _ in range(2):
+            upgraded = apidb.Database(path)
+            for table, rows in before.items():
+                self.assertEqual([tuple(row) for row in upgraded.query(f'SELECT * FROM {table}')], rows)
+                self.assertTrue(upgraded.query("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?",
+                                               (f'{table}_rev',)))
+            upgraded.connection.close()
+        upgraded = apidb.Database(path)
+        self.addCleanup(upgraded.connection.close)
+        with unittest.mock.patch.dict(apidb.DOC_KINDS, {'account_docs': {*apidb.DOC_KINDS['account_docs'], 'new'}}):
+            self.assertEqual(upgraded.transaction(lambda c: apidb.put_row(
+                c, apidb.Rev(c), 'account_docs', {'account': 'a', 'kind': 'new'}, 1, {'data': '{}'}))[0], 'written')
+
+    # Bug caught: with the CHECKs gone, a writer (migration, a route regex changed by hand) storing a kind no
+    # client reads; put_row refuses kinds outside sync-kinds.json.
+    def test_refuses_unknown_kinds(self):
+        with self.assertRaises(ValueError):
+            self.db.transaction(lambda c: apidb.put_row(
+                c, apidb.Rev(c), 'account_docs', {'account': 'a', 'kind': 'other'}, 1, {'data': '{}'}))
 
     def test_unknown_table(self):
         with self.assertRaises(ValueError):

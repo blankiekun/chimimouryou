@@ -43,7 +43,8 @@ import {
   newest,
   signedInOr401,
   unauthorizedError,
-  writeRows
+  writeRows,
+  type MediaKind
 } from '$lib/data/server-rows';
 import { BaseStorageHandler, exporterVersion } from '$lib/data/storage/handler/base-handler';
 import { BrowserStorageHandler } from '$lib/data/storage/handler/browser-handler';
@@ -184,7 +185,7 @@ export class ServerStorageHandler extends BaseStorageHandler {
   }
 
   /** This book's audiobook position or subtitles (book docs, like recaps). */
-  private async mediaRow(kind: 'audiobook' | 'subtitles') {
+  private async mediaRow(kind: MediaKind) {
     const { book, rows } = await this.bookRows('bookDocs');
 
     return { book, row: rows.find((row) => row.kind === kind) };
@@ -853,7 +854,7 @@ export class ServerStorageHandler extends BaseStorageHandler {
     await this.saveMedia('subtitles', subtitles.lastSubtitleDataModified, subtitles);
   }
 
-  private async saveMedia(kind: 'audiobook' | 'subtitles', modified: number, data: unknown) {
+  private async saveMedia(kind: MediaKind, modified: number, data: unknown) {
     const { book } = await this.mediaRow(kind);
 
     BaseStorageHandler.reportProgress();
