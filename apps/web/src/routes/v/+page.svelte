@@ -43,6 +43,7 @@
     newerSaveEngine,
     vnCacheName,
     parseVnPage,
+    parseVnSaves,
     sameVnSaves,
     saveVnRead,
     toBase64,
@@ -358,7 +359,7 @@
     const store = book && (await savesStore());
     const file = store ? await store.readSyncFile('vnsaves.json', book!.title) : undefined;
 
-    return file ? JSON.parse(file.text) : {};
+    return (file && parseVnSaves(JSON.parse(file.text))) || {};
   }
 
   /** After the engine saved: merges this browser's saves into the synced ones. */
@@ -380,7 +381,7 @@
 
         if (!store) return;
 
-        await syncJsonFile<VnSaves>(store, 'vnsaves.json', title, async (remote = {}) => {
+        await syncJsonFile(store, 'vnsaves.json', title, parseVnSaves, async (remote = {}) => {
           const merged = mergeVnSaves(local, remote);
 
           return sameVnSaves(merged, remote) ? undefined : merged;
@@ -425,7 +426,7 @@
           return;
         }
         savesNote = undefined;
-        await syncJsonFile<VnSaves>(store, 'vnsaves.json', title, async (remote = {}) => {
+        await syncJsonFile(store, 'vnsaves.json', title, parseVnSaves, async (remote = {}) => {
           const merged = mergeVnSaves(saves, remote, isWindowsSaveKey);
 
           return sameVnSaves(merged, remote) ? undefined : merged;
@@ -677,7 +678,7 @@
         const store = await savesStore();
 
         if (!store) return;
-        await syncJsonFile<VnSaves>(store, 'vnsaves.json', title, async (remote = {}) =>
+        await syncJsonFile(store, 'vnsaves.json', title, parseVnSaves, async (remote = {}) =>
           Object.keys(remote).some((name) => names.has(name))
             ? Object.fromEntries(Object.entries(remote).filter(([name]) => !names.has(name)))
             : undefined

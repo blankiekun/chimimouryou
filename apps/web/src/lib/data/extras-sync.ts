@@ -29,8 +29,20 @@ import {
 } from '$lib/data/immersion-log';
 import type { KanjiSeen } from '$lib/data/kanji-seen';
 import { logger } from '$lib/data/logger';
-import { lorebookChanged$, mergeLorebooks, sameLorebooks, type Lorebook } from '$lib/data/lorebook';
-import { mergeRecaps, recapsChanged$, sameRecaps, type BookRecaps } from '$lib/data/recap';
+import {
+  lorebookChanged$,
+  mergeLorebooks,
+  parseLorebook,
+  sameLorebooks,
+  type Lorebook
+} from '$lib/data/lorebook';
+import {
+  mergeRecaps,
+  parseRecaps,
+  recapsChanged$,
+  sameRecaps,
+  type BookRecaps
+} from '$lib/data/recap';
 import { readerDataOwner } from '$lib/data/reader-data-owner';
 import { readerDb } from '$lib/data/reader-db';
 import type { WordMarks } from '$lib/data/word-marks';
@@ -42,6 +54,7 @@ interface Spec<T extends { title: string; account?: string }> {
   store: 'recaps' | 'lorebooks';
   file: string;
   changed$: Subject<T>;
+  parse: (raw: unknown) => T | undefined;
   merge: (title: string, local?: T, remote?: T) => T;
   same: (a?: T, b?: T) => boolean;
 }
@@ -51,6 +64,7 @@ const specs: { recaps: Spec<BookRecaps>; lorebook: Spec<Lorebook> } = {
     store: 'recaps',
     file: 'recaps.json',
     changed$: recapsChanged$,
+    parse: parseRecaps,
     merge: mergeRecaps,
     same: sameRecaps
   },
@@ -58,6 +72,7 @@ const specs: { recaps: Spec<BookRecaps>; lorebook: Spec<Lorebook> } = {
     store: 'lorebooks',
     file: 'lorebook.json',
     changed$: lorebookChanged$,
+    parse: parseLorebook,
     merge: mergeLorebooks,
     same: sameLorebooks
   }
@@ -142,7 +157,7 @@ async function syncOnce<T extends { title: string; account?: string }>(
 
     if (!store) return;
 
-    await syncJsonFile<T>(store, spec.file, title, async (remote) => {
+    await syncJsonFile<T>(store, spec.file, title, spec.parse, async (remote) => {
       // Read, merge and write in one transaction, so a save made during the fetch isn't lost.
       const tx = (await readerDb()).transaction(spec.store, 'readwrite');
       const stored = (await tx.store.get(title)) as T | undefined;
@@ -224,6 +239,21 @@ export function mergeKanji(local: KanjiSeen[], remote: KanjiSeen[]) {
   return [...merged.values()];
 }
 
+const isRecord = (value: unknown): value is Record<string, any> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** kanji.json: malformed books are dropped; undefined when `books` isn't a list. */
+export function parseKanjiFile(raw: any): { books: KanjiSeen[] } | undefined {
+  if (!Array.isArray(raw?.books)) return undefined;
+
+  return {
+    books: raw.books.filter(
+      (book: any) =>
+        typeof book?.title === 'string' && typeof book.upTo === 'number' && isRecord(book.counts)
+    )
+  };
+}
+
 /** Uploads a while after the reader records kanji. */
 export function kanjiChanged() {
   clearTimeout(kanjiTimer);
@@ -247,15 +277,8 @@ async function syncKanjiOnce() {
 
     if (!store) return;
 
-    await syncJsonFile<{ books?: unknown }>(store, 'kanji.json', undefined, async (file) => {
-      const books = file?.books;
-      const remote = (Array.isArray(books) ? books : []).filter(
-        (book) =>
-          typeof book?.title === 'string' &&
-          typeof book.upTo === 'number' &&
-          typeof book.counts === 'object' &&
-          book.counts !== null
-      ) as KanjiSeen[];
+    await syncJsonFile(store, 'kanji.json', undefined, parseKanjiFile, async (file) => {
+      const remote = file?.books ?? [];
       const tx = (await readerDb()).transaction('kanji', 'readwrite');
       const local = await tx.store.getAll();
       const merged = mergeKanji(local, remote);
@@ -307,6 +330,25 @@ const sameMarks = (a: WordMarks, b: WordMarks) =>
     ([key, mark]) => b[key]?.modified === mark.modified && b[key]?.status === mark.status
   );
 
+/**
+ * words.json: marks without a `modified` are dropped; a status this version doesn't know (a newer
+ * one's) is kept, so it survives the next upload (getWordMarks leaves it out). Undefined when
+ * `words` isn't a map.
+ */
+export function parseWordMarksFile(raw: any): { words: WordMarks } | undefined {
+  if (!isRecord(raw?.words)) return undefined;
+
+  return {
+    words: Object.fromEntries(
+      Object.entries(raw.words as WordMarks).filter(
+        ([, mark]: [string, any]) =>
+          typeof mark?.modified === 'number' &&
+          (mark.status === null || typeof mark.status === 'string')
+      )
+    )
+  };
+}
+
 /** Uploads a moment after the reader marks words. */
 export function wordMarksChanged() {
   clearTimeout(wordsTimer);
@@ -330,15 +372,8 @@ async function syncWordMarksOnce() {
 
     if (!store) return;
 
-    await syncJsonFile<{ words?: unknown }>(store, 'words.json', undefined, async (file) => {
-      const words = file?.words;
-      const remote = Object.fromEntries(
-        Object.entries(typeof words === 'object' && words ? words : {}).filter(
-          ([, mark]: [string, any]) =>
-            typeof mark?.modified === 'number' &&
-            (mark.status === null || mark.status === 'known' || mark.status === 'ignored')
-        )
-      ) as WordMarks;
+    await syncJsonFile(store, 'words.json', undefined, parseWordMarksFile, async (file) => {
+      const remote = file?.words ?? {};
       const tx = (await readerDb()).transaction('known', 'readwrite');
       const local = ((await tx.store.get('marks')) ?? {}) as WordMarks;
       const merged = mergeWordMarks(local, remote);
@@ -360,6 +395,19 @@ async function syncWordMarksOnce() {
 let immersionTimer: ReturnType<typeof setTimeout> | undefined;
 let immersionQueue = Promise.resolve();
 let immersionSyncedAt = 0;
+
+/** immersion.json: malformed entries are dropped; undefined when `entries` isn't a map. */
+export function parseImmersionFile(raw: any): { entries: ImmersionLog } | undefined {
+  if (!isRecord(raw?.entries)) return undefined;
+
+  return {
+    entries: Object.fromEntries(
+      Object.entries(raw.entries as ImmersionLog).filter(
+        ([id, entry]) => isImmersionEntry(entry) && entry.id === id
+      )
+    )
+  };
+}
 
 /**
  * Uploads a while after the first unsynced change: not reset by later ones, since the texthooker
@@ -389,13 +437,8 @@ async function syncImmersionOnce() {
 
     if (!store) return;
 
-    await syncJsonFile<{ entries?: unknown }>(store, 'immersion.json', undefined, async (file) => {
-      const entries = file?.entries;
-      const remote = Object.fromEntries(
-        Object.entries(typeof entries === 'object' && entries ? entries : {}).filter(
-          ([id, entry]) => isImmersionEntry(entry) && entry.id === id
-        )
-      ) as ImmersionLog;
+    await syncJsonFile(store, 'immersion.json', undefined, parseImmersionFile, async (file) => {
+      const remote = file?.entries ?? {};
       const tx = (await readerDb()).transaction('known', 'readwrite');
       const local = ((await tx.store.get('immersion')) ?? {}) as ImmersionLog;
       const merged = mergeImmersion(local, remote);

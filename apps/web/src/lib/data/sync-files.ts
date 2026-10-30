@@ -34,6 +34,7 @@ import {
   syncTarget$
 } from '$lib/data/store';
 import { MergeMode } from '$lib/data/merge-mode';
+import { recordSyncError } from '$lib/data/sync-status';
 import {
   AutoReplicationType,
   ReplicationSaveBehavior
@@ -129,30 +130,81 @@ export function readerSyncStore(signedIn: boolean) {
   return signedIn ? Promise.resolve(serverSyncFiles) : syncFileStore(readerSyncSource());
 }
 
-/** A corrupt remote file (a cut-off upload) counts as missing, so the local copy replaces it. */
-function parseOrUndefined<T>(text: string) {
+type Merge<T> = (remote: T | undefined) => Promise<T | undefined>;
+
+/**
+ * A synced file's document: undefined when it is missing or empty. A syntax error (a cut-off
+ * write, a hand edit) is copied to `<name>.bad-<ms>` beside it and listed in the sync errors,
+ * then counts as missing, so the local copy replaces it; if the copy fails, nothing is written.
+ * A document `parse` refuses (another app version's format) is never written over.
+ */
+async function parseSyncFile<T>(
+  store: SyncFileStore,
+  name: string,
+  title: string | undefined,
+  remote: SyncedFile | undefined,
+  parse: (raw: unknown) => T | undefined
+) {
+  if (!remote?.text.trim()) return undefined;
+
+  let raw: unknown;
+
   try {
-    return JSON.parse(text) as T;
+    raw = JSON.parse(remote.text);
   } catch {
+    const copy = `${name}.bad-${Date.now()}`;
+
+    await store.writeSyncFile(copy, remote.text, { title, version: '' });
+    recordSyncError(title ?? name, `${name} could not be read: kept as ${copy}, then replaced`);
     return undefined;
   }
+
+  const document = parse(raw);
+
+  // Heals when any device writes a file this version reads.
+  if (document === undefined) {
+    throw new Error(`${name} is in a format this app version can't read; it is left unchanged`);
+  }
+
+  return document;
 }
 
 /**
- * Reads a JSON file, lets `merge` combine it with the local copy and writes what it returns
- * (undefined: the file is up to date). Another device writing in between is caught by the
- * version check where the source has one, and the sync runs once more.
+ * Reads a JSON file, checks it with `parse` (undefined: refused), lets `merge` combine it with
+ * the local copy and writes what it returns (undefined: the file is up to date). Another device
+ * writing in between is caught by the version check where the source has one, and the sync runs
+ * once more.
  */
+export function syncJsonFile<T>(
+  store: SyncFileStore,
+  name: 'settings.json',
+  title: undefined,
+  merge: Merge<T>,
+  keepalive?: boolean
+): Promise<void>;
+export function syncJsonFile<T>(
+  store: SyncFileStore,
+  name: string,
+  title: string | undefined,
+  parse: (raw: unknown) => T | undefined,
+  merge: Merge<T>,
+  keepalive?: boolean
+): Promise<void>;
 export async function syncJsonFile<T>(
   store: SyncFileStore,
   name: string,
   title: string | undefined,
-  merge: (remote: T | undefined) => Promise<T | undefined>,
-  keepalive = false
+  ...rest: [Merge<T>, boolean?] | [(raw: unknown) => T | undefined, Merge<T>, boolean?]
 ) {
+  // shortcut: settings.json passes no parser until its typed document lands (item G); drop this then.
+  const [parse, merge, keepalive = false] =
+    typeof rest[1] === 'function'
+      ? (rest as [(raw: unknown) => T | undefined, Merge<T>, boolean?])
+      : [(raw: unknown) => raw as T, rest[0] as Merge<T>, rest[1] as boolean | undefined];
+
   for (let attempt = 0; ; attempt += 1) {
     const remote = await store.readSyncFile(name, title);
-    const upload = await merge(remote ? parseOrUndefined<T>(remote.text) : undefined);
+    const upload = await merge(await parseSyncFile(store, name, title, remote, parse));
 
     if (upload === undefined) return;
 

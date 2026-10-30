@@ -13,7 +13,12 @@ vi.mock('$lib/data/account', () => ({
   currentAccount: () => null
 }));
 
-import { AnnotationsController, mergeHighlights, type Highlight } from '$lib/data/annotations';
+import {
+  AnnotationsController,
+  mergeHighlights,
+  parseAnnotations,
+  type Highlight
+} from '$lib/data/annotations';
 import { fakeApi } from '$lib/data/test-utils/fake-api';
 import { readerDb } from '$lib/data/reader-db';
 import { SyncConflictError } from '$lib/data/storage/handler/base-handler';
@@ -22,6 +27,7 @@ import { storageOAuthTokens } from '$lib/data/storage/storage-oauth-manager';
 import { StorageKey, StorageSourceDefault } from '$lib/data/storage/storage-types';
 import { storageSource$ } from '$lib/data/storage/storage-view';
 import { autoReplication$, syncTarget$ } from '$lib/data/store';
+import { syncState$ } from '$lib/data/sync-status';
 import { AutoReplicationType } from '$lib/functions/replication/replication-options';
 import { readerSyncSource, syncFileStore, syncJsonFile } from './sync-files';
 
@@ -116,6 +122,12 @@ const highlight = (id: string): Omit<Highlight, 'id' | 'created' | 'modified'> =
 
 const drive = StorageSourceDefault.GDRIVE_DEFAULT;
 
+/** The tests' own document: `{ words: string[] }`, anything else refused. */
+const wordsList = (raw: unknown) =>
+  Array.isArray((raw as { words?: unknown } | null)?.words)
+    ? (raw as { words: string[] })
+    : undefined;
+
 describe('extra files on Google Drive', () => {
   beforeEach(() => {
     storageOAuthTokens.set(drive, {
@@ -157,13 +169,19 @@ describe('extra files on Google Drive', () => {
     let other = true;
 
     await store.writeSyncFile('words.json', JSON.stringify({ words: ['a'] }), { version: '' });
-    await syncJsonFile<{ words: string[] }>(store, 'words.json', undefined, async (remote) => {
-      if (other) {
-        other = false;
-        await store.writeSyncFile('words.json', JSON.stringify({ words: ['a', 'b'] }));
+    await syncJsonFile<{ words: string[] }>(
+      store,
+      'words.json',
+      undefined,
+      wordsList,
+      async (remote) => {
+        if (other) {
+          other = false;
+          await store.writeSyncFile('words.json', JSON.stringify({ words: ['a', 'b'] }));
+        }
+        return { words: [...new Set([...(remote?.words ?? []), 'c'])] };
       }
-      return { words: [...new Set([...(remote?.words ?? []), 'c'])] };
-    });
+    );
 
     const words = files.filter((file) => file.name === 'words.json');
 
@@ -172,20 +190,89 @@ describe('extra files on Google Drive', () => {
   });
 
   // Bug: a truncated or corrupt upload made JSON.parse throw before merge, so that file never
-  // synced again on any device.
-  it('replaces a malformed remote file with the local copy', async () => {
+  // synced again on any device. Then: replaced with no copy kept and nothing shown, so a folder
+  // edited by hand or another sync tool lost its content without a trace.
+  it('keeps a copy of a malformed remote file and lists the error before replacing it', async () => {
     const { files } = fakeDrive();
     const store = (await syncFileStore(drive))!;
 
     await store.writeSyncFile('words.json', '{"words": ["a"', { version: '' });
-    await syncJsonFile<{ words: string[] }>(store, 'words.json', undefined, async (remote) => ({
-      words: [...(remote?.words ?? []), 'local']
-    }));
+    await syncJsonFile<{ words: string[] }>(
+      store,
+      'words.json',
+      undefined,
+      wordsList,
+      async (remote) => ({ words: [...(remote?.words ?? []), 'local'] })
+    );
 
     const words = files.filter((file) => file.name === 'words.json');
+    const copies = files.filter((file) => /^words\.json\.bad-\d+$/.test(file.name));
 
     expect(words).toHaveLength(1);
     expect(JSON.parse(words[0].content)).toEqual({ words: ['local'] });
+    expect(copies.map((file) => file.content)).toEqual(['{"words": ["a"']);
+    expect(syncState$.getValue().errors[0].detail).toContain(copies[0].name);
+  });
+
+  // Bug: the copy's upload fails (quota, offline mid-sync) and the original is replaced anyway,
+  // so its content is gone after all.
+  it('leaves a malformed file alone when its copy cannot be written', async () => {
+    const { files } = fakeDrive();
+    const drive$ = (await syncFileStore(drive))!;
+    const store = {
+      readSyncFile: drive$.readSyncFile.bind(drive$),
+      writeSyncFile: (name: string, text: string, options?: object) =>
+        name.includes('.bad-')
+          ? Promise.reject(new Error('quota'))
+          : drive$.writeSyncFile(name, text, options)
+    };
+
+    await store.writeSyncFile('words.json', '{"words": ["a"', { version: '' });
+    await expect(
+      syncJsonFile<{ words: string[] }>(store, 'words.json', undefined, wordsList, async () => ({
+        words: ['local']
+      }))
+    ).rejects.toThrow('quota');
+
+    expect(
+      files.filter((file) => file.name.startsWith('words.json')).map((f) => f.content)
+    ).toEqual(['{"words": ["a"']);
+  });
+
+  // Bug: a file in a newer client's format (it parses, its shape is unknown here) is merged as
+  // "missing" and overwritten with the local copy: version-skew data loss on every device.
+  it('never writes over a file whose shape the parser refuses, and names it', async () => {
+    const { files } = fakeDrive();
+    const store = (await syncFileStore(drive))!;
+    const merge = vi.fn(async () => ({ words: ['local'] }));
+
+    await store.writeSyncFile('words.json', '{"words": {"newer": true}}', { version: '' });
+    await expect(
+      syncJsonFile<{ words: string[] }>(store, 'words.json', undefined, wordsList, merge)
+    ).rejects.toThrow('words.json');
+
+    expect(merge).not.toHaveBeenCalled();
+    expect(
+      files.filter((file) => file.name.startsWith('words.json')).map((f) => f.content)
+    ).toEqual(['{"words": {"newer": true}}']);
+  });
+
+  // Bug: a file that isn't there yet counts as invalid, so the first upload never happens; or an
+  // empty file (a write cut off at zero bytes) gets a copy and an error for nothing.
+  it('uploads over a missing or empty file without a copy', async () => {
+    const { files } = fakeDrive();
+    const store = (await syncFileStore(drive))!;
+    const merge = async (remote?: { words: string[] }) =>
+      remote ? undefined : { words: ['local'] };
+
+    await syncJsonFile(store, 'words.json', undefined, wordsList, merge);
+    await store.writeSyncFile('kanji.json', '', { version: '' });
+    await syncJsonFile(store, 'kanji.json', undefined, wordsList, merge);
+
+    expect(files.filter((file) => !file.folder).map((file) => [file.name, file.content])).toEqual([
+      ['words.json', '{"words":["local"]}'],
+      ['kanji.json', '{"words":["local"]}']
+    ]);
   });
 
   // Bug: a retry loop that never gives up, or one that swallows the second conflict, so the
@@ -202,10 +289,16 @@ describe('extra files on Google Drive', () => {
     const seen: number[] = [];
 
     await expect(
-      syncJsonFile<{ n: number }>(store, 'words.json', undefined, async (remote) => {
-        seen.push(remote!.n);
-        return { n: -1 };
-      })
+      syncJsonFile<{ n: number }>(
+        store,
+        'words.json',
+        undefined,
+        (raw) => raw as { n: number },
+        async (remote) => {
+          seen.push(remote!.n);
+          return { n: -1 };
+        }
+      )
     ).rejects.toBeInstanceOf(SyncConflictError);
     expect(seen).toEqual([0, 1]);
   });
@@ -308,6 +401,7 @@ describe('extra files on the server', () => {
       store,
       'annotations.json',
       title,
+      parseAnnotations,
       async (remote) => {
         remotes.push((remote?.highlights || []).map((h) => `${h.id}:${h.text}`));
         if (other) {

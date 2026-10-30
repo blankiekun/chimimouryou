@@ -59,6 +59,31 @@ export interface Lorebook {
   account?: string;
 }
 
+/**
+ * lorebook.json from another device: entries without an id, name or keys are dropped; undefined
+ * when `entries` isn't a list or a count isn't a number.
+ */
+export function parseLorebook(raw: any): Lorebook | undefined {
+  if (
+    !Array.isArray(raw?.entries) ||
+    !Number.isFinite(raw.processedUpTo ?? 0) ||
+    !Number.isFinite(raw.modified ?? 0)
+  ) {
+    return undefined;
+  }
+
+  return {
+    ...raw,
+    entries: raw.entries.filter(
+      (entry: any) =>
+        typeof entry?.id === 'string' &&
+        typeof entry.name === 'string' &&
+        Array.isArray(entry.keys) &&
+        entry.keys.every((key: unknown) => typeof key === 'string')
+    )
+  };
+}
+
 /** Newer copy wins (lorebooks are rebuilt in order, so mixing two would be inconsistent). */
 export function mergeLorebooks(title: string, local?: Lorebook, remote?: Lorebook): Lorebook {
   const newer = (remote?.modified ?? 0) > (local?.modified ?? 0) ? remote : (local ?? remote);
