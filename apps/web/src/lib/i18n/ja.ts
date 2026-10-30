@@ -843,6 +843,7 @@ export const ja: Record<MessageKey, string> = {
   'library.importFiles': 'ファイルをインポート',
   'library.importFolders': 'フォルダをインポート',
   'library.importWindowsGame': 'Windows のゲーム…',
+  'library.importSources': 'ソース…',
   'library.importBackup': 'バックアップをインポート',
   'library.storageSource': '保存先',
   'library.sourceBrowser': 'ブラウザ',

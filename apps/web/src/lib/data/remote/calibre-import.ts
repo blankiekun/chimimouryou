@@ -26,7 +26,7 @@ export interface CalibreImportJob {
 
 const apiUrl = '/calibre/import/api/';
 
-async function errorMessage(response: Response) {
+export async function errorMessage(response: Response) {
   if (response.status === 401) {
     return 'Sign in (Settings → Account, on the HTTPS address) to add books to Calibre';
   }

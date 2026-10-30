@@ -6,7 +6,15 @@
   import { inputFile } from '$lib/functions/file-dom/input-file';
   import { isMobile$ } from '$lib/functions/utils';
   import { t$, type MessageKey } from '$lib/i18n';
-  import { faChevronDown, faDesktop, faFileImport } from '@fortawesome/free-solid-svg-icons';
+  import { goto } from '$app/navigation';
+  import { account$, hasPermission } from '$lib/data/account/account';
+  import { pagePath, standalone } from '$lib/data/env';
+  import {
+    faChevronDown,
+    faDesktop,
+    faFileImport,
+    faGlobe
+  } from '@fortawesome/free-solid-svg-icons';
   import { createEventDispatcher } from 'svelte';
   import Fa from 'svelte-fa';
 
@@ -20,6 +28,8 @@
     windowsGame: void;
   }>();
   const windowsGameEntry = { label: 'Windows game', icon: faDesktop };
+  // Sources (routes/sources): fetched on the server, so the server edition with import only.
+  const sourcesEntry = { label: 'Sources', icon: faGlobe };
 
   let fileImportElm: HTMLElement;
   let folderImportElm: HTMLElement;
@@ -31,13 +41,15 @@
     [mergeEntries.FILE_IMPORT.label]: 'library.importFiles',
     [mergeEntries.FOLDER_IMPORT.label]: 'library.importFolders',
     [mergeEntries.BACKUP_IMPORT.label]: 'library.importBackup',
-    [windowsGameEntry.label]: 'library.importWindowsGame'
+    [windowsGameEntry.label]: 'library.importWindowsGame',
+    [sourcesEntry.label]: 'library.importSources'
   };
 
   $: importMenuItems = [
     mergeEntries.FILE_IMPORT,
     ...($isMobile$ ? [] : [mergeEntries.FOLDER_IMPORT]),
     ...(windowsGames ? [windowsGameEntry] : []),
+    ...(!standalone && hasPermission($account$, 'import') ? [sourcesEntry] : []),
     mergeEntries.BACKUP_IMPORT
   ];
 
@@ -53,6 +65,10 @@
 
       case windowsGameEntry.label:
         dispatch('windowsGame');
+        break;
+
+      case sourcesEntry.label:
+        goto(`${pagePath}/sources`);
         break;
 
       default:
