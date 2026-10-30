@@ -33,7 +33,6 @@ import {
   type StorageUnlockAction
 } from '$lib/data/storage/storage-source-manager';
 import { dialogManager } from '$lib/data/dialog-manager';
-import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
 import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
 import pLimit from 'p-limit';
 import { replicationProgress$ } from '$lib/functions/replication/replication-progress';
@@ -140,6 +139,7 @@ export class FilesystemStorageHandler extends BaseStorageHandler implements Sync
     if (data.storageSource !== this.storageSourceName) {
       data.storageSource = this.storageSourceName;
 
+      const { getStorageHandler } = await import('$lib/data/storage/storage-handler-factory');
       idToReturn = await getStorageHandler(
         this.window,
         StorageKey.BROWSER,

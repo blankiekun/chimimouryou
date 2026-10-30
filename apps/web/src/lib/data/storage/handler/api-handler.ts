@@ -20,7 +20,6 @@ import {
   FilePrefix,
   type ExternalFile
 } from '$lib/data/storage/handler/base-handler';
-import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
 import { StorageOAuthManager } from '$lib/data/storage/storage-oauth-manager';
 import { StorageKey } from '$lib/data/storage/storage-types';
 import { isVn } from '$lib/data/vn';
@@ -170,6 +169,7 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
     if (bookData.storageSource !== this.storageSourceName) {
       bookData.storageSource = this.storageSourceName;
 
+      const { getStorageHandler } = await import('$lib/data/storage/storage-handler-factory');
       idToReturn = await getStorageHandler(
         this.window,
         StorageKey.BROWSER,
@@ -483,6 +483,7 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
    * from here, never uploaded (the reader chose "Keep on this device").
    */
   async keepOnDevice(data: Omit<BooksDbBookData, 'id'>) {
+    const { getStorageHandler } = await import('$lib/data/storage/storage-handler-factory');
     const id = await getStorageHandler(
       this.window,
       StorageKey.BROWSER,

@@ -41,6 +41,7 @@ import {
 import { serverConnected } from '$lib/data/server-connect';
 import {
   BaseStorageHandler,
+  exporterVersion,
   SyncConflictError,
   type SyncFileOptions
 } from '$lib/data/storage/handler/base-handler';
@@ -76,14 +77,12 @@ import { loadVnFolder } from '$lib/functions/file-loaders/vn/load-vn';
 import { deleteOrphanVnCaches, isVn, vnInfo } from '$lib/data/vn';
 import { isManga } from '$lib/data/manga';
 import { levelOf } from '$lib/data/difficulty-core';
-import { exporterVersion } from '$lib/functions/replication/replicator';
 import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
 import { throwIfAborted } from '$lib/functions/replication/replication-error';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
 import { replicationProgress$ } from '$lib/functions/replication/replication-progress';
 import { mergeStatistics, updateStatisticToStore } from '$lib/functions/statistic-util';
 import { writableArrayLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
-import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
 import pLimit from 'p-limit';
 
 /**
@@ -652,6 +651,7 @@ export class ServerStorageHandler extends BaseStorageHandler {
     if (!bookData) throw new Error('No local or external book data found');
 
     if (bookData.storageSource !== this.storageSourceName) {
+      const { getStorageHandler } = await import('$lib/data/storage/storage-handler-factory');
       return getStorageHandler(
         this.window,
         StorageKey.BROWSER,
@@ -871,6 +871,7 @@ export class ServerStorageHandler extends BaseStorageHandler {
    * from here (a Windows game, manage page).
    */
   async keepOnDevice(data: Omit<BooksDbBookData, 'id'>) {
+    const { getStorageHandler } = await import('$lib/data/storage/storage-handler-factory');
     const id = await getStorageHandler(
       this.window,
       StorageKey.BROWSER,

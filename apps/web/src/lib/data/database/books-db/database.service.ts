@@ -41,7 +41,6 @@ import MessageDialog from '$lib/components/message-dialog.svelte';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
 import { dialogManager } from '$lib/data/dialog-manager';
 import { getDefaultStatistic } from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker';
-import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
 import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
 import { iffBrowser } from '$lib/functions/rxjs/iff-browser';
 import { logger } from '$lib/data/logger';
@@ -97,13 +96,16 @@ export class DatabaseService {
       switchMap(() => storageSource$),
       switchMap((storageSource) =>
         from(
-          Promise.resolve(this.lastHandler || getStorageHandler(window, storageSource, '')).then(
-            (handler) => {
-              logger.clearHistory();
+          Promise.resolve(
+            this.lastHandler ||
+              import('$lib/data/storage/storage-handler-factory').then(({ getStorageHandler }) =>
+                getStorageHandler(window, storageSource, '')
+              )
+          ).then((handler) => {
+            logger.clearHistory();
 
-              return handler.getBookList();
-            }
-          )
+            return handler.getBookList();
+          })
         ).pipe(
           catchError((error: unknown) => {
             if (error instanceof Error) {
