@@ -203,7 +203,7 @@ def api_db_empty(db_path: str) -> bool:
 
 
 def store_books(db_path: str, books: list[dict]) -> None:
-    """Upserts the books into the API database (library.db) and gives each its sticky unique title.
+    """Upserts the books into the API database (library.db) and gives each its sticky unique title and bookId.
     The first build on an empty table takes today's unique_titles(), so catalog.json titles don't change."""
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), 'api'))
     import apidb
@@ -216,12 +216,16 @@ def store_books(db_path: str, books: list[dict]) -> None:
                 copies = [dict(book) for book in books]
                 unique_titles(copies)
                 seed = {book['key']: book['title'] for book in copies}
-            return apidb.upsert_books(connection, books, seed, int(time.time() * 1000))
-        titles = db.transaction(work)
+            titles = apidb.upsert_books(connection, books, seed, int(time.time() * 1000))
+            ids = dict(connection.execute('SELECT key, id FROM books WHERE deleted = 0').fetchall())
+            return titles, ids
+        titles, ids = db.transaction(work)
     finally:
         db.connection.close()
     for book in books:
         book['title'] = titles[book['key']]
+        # The difficulty service finds the reader's text copy (state/api/text/<bookId>.json.gz) by it.
+        book['bookId'] = ids[book['key']]
 
 
 def vn_mtime(vn_dir: str) -> float:

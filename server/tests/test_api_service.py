@@ -123,6 +123,8 @@ class ReadTest(ServiceTestCase):
         self.assertEqual(self.call('GET', '/api/v1/catalog?since=-1')[0], 400)
         self.assertEqual(self.call('GET', '/api/v1/catalog?since=x')[0], 400)
 
+    # Bug caught: before the first build the client must see 'being built' (404), not an empty library;
+    # an empty library after it must not stay 'being built'.
     def test_catalog_before_first_build(self):
         os.unlink(service.CALIBRE_CATALOG)
         self.assertEqual(self.call('GET', '/api/v1/catalog?since=0'), (404, {'error': 'The library is being built'}))
@@ -130,6 +132,7 @@ class ReadTest(ServiceTestCase):
             f.write('{"books": []}')
         self.assertEqual(self.call('GET', '/api/v1/catalog?since=0'), (200, {'rev': 0, 'books': []}))
 
+    # Bug caught: no report yet (a fresh install) would be a 500 on the admin page.
     def test_migration_report(self):
         self.assertEqual(self.call('GET', '/api/v1/migration'), (200, {}))
         report = {'applied': True, 'sources': [{'account': '', 'orphans': ['猫']}]}
@@ -205,6 +208,7 @@ class WriteTest(ServiceTestCase):
         self.assertEqual(self.call('PUT', f'/api/v1/books/{self.book}/highlights/a%20b', {'modified': 1, 'data': {}})[0],
                          400)
 
+    # Bug caught: a tombstone PUT whole would be stored live, so a deleted highlight comes back elsewhere.
     def test_highlight_put_tombstone(self):
         path = f'/api/v1/books/{self.book}/highlights/h-2'
         tombstone = {'id': 'h-2', 'deleted': True, 'start': 5, 'created': 1}
@@ -214,6 +218,7 @@ class WriteTest(ServiceTestCase):
         self.assertEqual(self.call('PUT', path, {'modified': 4, 'data': {'id': 'h-2', 'deleted': False}})[0], 200)
         self.assertFalse(self.sync()['highlights'][0]['deleted'])
 
+    # Bug caught: an older delete overwriting a newer day/goal, or a delete the /sync feed doesn't report.
     def test_statistics_and_goal_tombstones(self):
         for path in (f'/api/v1/books/{self.book}/statistics/2026-10-01', '/api/v1/goals/2026-10-01'):
             self.assertEqual(self.call('PUT', path, {'modified': 10, 'data': {'a': 1}}, account=ACCOUNT_A)[0], 200)

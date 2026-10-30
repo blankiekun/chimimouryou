@@ -294,6 +294,19 @@ class CatalogDbTest(unittest.TestCase):
         self.assertEqual(self.build(books), today)
         self.assertEqual({i: row['unique_title'] for i, row in self.rows().items()}, today)
 
+    # Bug caught: catalog.json without bookId (or with the Calibre id) sends the difficulty service to
+    # the wrong text copy or none.
+    def test_catalog_has_book_id(self):
+        books = [self.book(1, '猫', 'A', 1), self.book(2, '犬', 'B', 2)]
+        self.build(books)
+        with open(self.output, encoding='utf-8') as f:
+            listed = {b['id']: b.get('bookId') for b in json.load(f)['books']}
+        self.assertEqual(listed, {i: row['id'] for i, row in self.rows().items()})
+        with mock.patch.dict(os.environ, {'API_DB': ''}):
+            self.build(books)
+        with open(self.output, encoding='utf-8') as f:
+            self.assertFalse(any('bookId' in b for b in json.load(f)['books']))
+
     def test_new_same_title_gets_suffix(self):
         self.assertEqual(self.build([self.book(1, '猫', 'A', 1)]), {1: '猫'})
         self.assertEqual(self.build([self.book(1, '猫', 'A', 1), self.book(2, '猫', 'B', 2)]),

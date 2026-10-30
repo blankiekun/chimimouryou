@@ -31,6 +31,7 @@ class ApiDbTest(unittest.TestCase):
         self.assertEqual(again.query('PRAGMA journal_mode')[0][0], 'wal')
         again.connection.close()
 
+    # Bug caught: a library.db made by PR2 (no deleted column) would fail every statistics/goal write.
     def test_adds_deleted_to_old_schema(self):
         path = os.path.join(self.tmp.name, 'old', 'library.db')
         os.makedirs(os.path.dirname(path))
