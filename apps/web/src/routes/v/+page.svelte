@@ -15,9 +15,6 @@
   import { onDestroy, onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$lib/data/page-store';
-  import Fa from 'svelte-fa';
-  import { faEllipsis, faExpand } from '@fortawesome/free-solid-svg-icons';
-  import PlayerBar from '$lib/components/player-bar.svelte';
   import ReaderSheet from '$lib/components/book-reader/reader-sheet.svelte';
   import ReaderMoreList from '$lib/components/book-reader/reader-more-list.svelte';
   import { fullscreenManager } from '$lib/data/fullscreen-manager';
@@ -78,6 +75,9 @@
   import VnboxDiscs from '$lib/components/vn/vnbox-discs.svelte';
   import VnBacklog from '$lib/components/vn/vn-backlog.svelte';
   import VnSavesSheet from '$lib/components/vn/vn-saves.svelte';
+  import VnBar from '$lib/components/vn/vn-bar.svelte';
+  import VnRail from '$lib/components/vn/vn-rail.svelte';
+  import VnSide from '$lib/components/vn/vn-side.svelte';
   import {
     isWindowsSaveKey,
     readWindowsSaves,
@@ -816,80 +816,17 @@
 <svelte:document on:visibilitychange={onVisibilityChange} />
 
 <div class="vn-page fixed inset-0 flex flex-col">
-  <PlayerBar
+  <VnBar
     title={book?.title ?? ''}
     place="Visual novel{book?.characters ? ` · ${Math.floor(percent)}%` : ''}"
-    on:back={leave}
-  >
-    {#each chips as chip}
-      <button
-        class="bar-text bar-chip vn-bar-chip"
-        class:vn-phone-chip={chip.phone}
-        class:bar-icon-active={chip.on}
-        title={chip.title}
-        aria-pressed={chip.on}
-        on:click={chip.click}
-      >
-        {chip.label}
-      </button>
-    {/each}
-    <span class="bar-divider vn-bar-chip" aria-hidden="true" />
-    <button
-      class="bar-icon"
-      class:bar-icon-active={$showText$}
-      title="Show the text beside the game"
-      aria-pressed={$showText$}
-      on:click={() => showText$.next(!$showText$)}
-    >
-      <!-- A screen with a text panel under it -->
-      <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
-        <rect
-          x="2.75"
-          y="3.75"
-          width="14.5"
-          height="12.5"
-          rx="1"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-        />
-        <path d="M3 12h14" stroke="currentColor" stroke-width="1.5" />
-      </svg>
-    </button>
-    {#if fullscreenManager.fullscreenEnabled}
-      <button class="bar-icon vn-bar-chip" title="Full screen" on:click={toggleFullscreen}>
-        <Fa icon={faExpand} />
-      </button>
-    {/if}
-    <button
-      class="bar-icon"
-      class:bar-icon-active={showMore}
-      title="More"
-      aria-expanded={showMore}
-      on:click={() => (showMore = !showMore)}
-    >
-      <Fa icon={faEllipsis} />
-    </button>
-  </PlayerBar>
-
-  <div class="vn-chip-row">
-    {#each chips as chip}
-      <button
-        class="vn-chip"
-        class:vn-chip-on={chip.on}
-        title={chip.title}
-        aria-pressed={chip.on}
-        on:click={chip.click}
-      >
-        {chip.label}
-      </button>
-    {/each}
-    {#if fullscreenManager.fullscreenEnabled}
-      <button class="vn-chip vn-chip-icon" title="Full screen" on:click={toggleFullscreen}>
-        <Fa icon={faExpand} />
-      </button>
-    {/if}
-  </div>
+    {chips}
+    showText={$showText$}
+    {showMore}
+    onback={leave}
+    ontext={() => showText$.next(!$showText$)}
+    onfullscreen={toggleFullscreen}
+    onmore={() => (showMore = !showMore)}
+  />
 
   {#if keepAsk}
     <div class="vn-keep">
@@ -907,43 +844,14 @@
 
   <div class="vn-main" class:vn-main-text={$showText$ && !ended}>
     {#if playerUrl && !showSaves}
-      <div class="vn-rail" class:vn-rail-open={$railOpen$}>
-        <button
-          class="vn-rail-handle"
-          title={$railOpen$ ? 'Hide the buttons' : 'Show the buttons'}
-          aria-expanded={$railOpen$}
-          on:click={() => railOpen$.next(!$railOpen$)}
-        >
-          <svg viewBox="0 0 12 20" width="12" height="20" aria-hidden="true">
-            <path
-              d={$railOpen$ ? 'M8 4 2 10l6 6' : 'M4 4l6 6-6 6'}
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            />
-          </svg>
-        </button>
-        {#if $railOpen$}
-          <button class="vn-rail-button" title="The game's menu (right-click)" on:click={openMenu}>
-            Menu
-          </button>
-          <button
-            class="vn-rail-button"
-            class:vn-rail-on={skipping}
-            title={skipTitle}
-            aria-pressed={skipping}
-            on:click={toggleSkip}
-          >
-            Skip
-          </button>
-          {#if fullscreenManager.fullscreenEnabled}
-            <button class="vn-rail-button" on:click={toggleFullscreen}>
-              <Fa icon={faExpand} />
-              <span>Full screen</span>
-            </button>
-          {/if}
-        {/if}
-      </div>
+      <VnRail
+        railOpen={railOpen$}
+        {skipping}
+        {skipTitle}
+        onmenu={openMenu}
+        onskip={toggleSkip}
+        onfullscreen={toggleFullscreen}
+      />
     {/if}
     <!-- The game's own dark ground: part of the content, not the theme -->
     <div class="vn-game" class:vn-game-blocked={blocked || showSaves}>
@@ -985,62 +893,19 @@
       {/if}
     </div>
 
-    <div class="vn-side">
-      {#if newerEngine}
-        <div class="vn-notice">
-          <p>
-            Some saves come from a newer engine ({newerEngine}, here {engineVersion}). If one
-            doesn't load, ask an admin to update it.
-          </p>
-          <button class="app-button app-button-quiet" on:click={() => (newerEngine = undefined)}>
-            Dismiss
-          </button>
-        </div>
-      {/if}
-
-      {#if savesNote}
-        <div class="vn-notice">
-          <p>{savesNote}</p>
-          <button class="app-button app-button-quiet" on:click={() => (savesNote = undefined)}>
-            Dismiss
-          </button>
-        </div>
-      {/if}
-
-      {#if ended}
-        <p class="vn-text">The game has ended.</p>
-      {:else if $showText$}
-        <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-        <div
-          class="vn-text"
-          class:vn-text-ruled={lines.length}
-          lang="ja"
-          on:click={(event) => lookupPopup?.tapAt(event.clientX, event.clientY)}
-        >
-          {#each lines as line}
-            <p>
-              {#each line as part}{#if part.ruby}<ruby>{part.text}<rt>{part.ruby}</rt></ruby
-                  >{:else}{part.text}{/if}{/each}
-            </p>
-          {/each}
-        </div>
-      {/if}
-
-      {#if book?.characters}
-        <div class="vn-progress">
-          <span class="vn-progress-track">
-            <span class="vn-progress-fill" style:width="{percent}%" />
-          </span>
-          <span class="vn-progress-label">
-            {readCharacters.toLocaleString('en')} / {book.characters.toLocaleString('en')} chars ·
-            {Math.floor(percent)}%
-            {#if todayCharacters}
-              <span class="vn-today">+{todayCharacters.toLocaleString('en')} today</span>
-            {/if}
-          </span>
-        </div>
-      {/if}
-    </div>
+    <VnSide
+      bind:newerEngine
+      {engineVersion}
+      bind:savesNote
+      {ended}
+      showText={$showText$}
+      {lines}
+      characters={book?.characters}
+      {readCharacters}
+      {todayCharacters}
+      {percent}
+      ontap={(x, y) => lookupPopup?.tapAt(x, y)}
+    />
   </div>
 </div>
 
@@ -1095,156 +960,28 @@
     font-family: var(--app-font-ui);
   }
 
-  /* Menu and Skip are for touch screens, where right-click and the game's own buttons are hard
-     to reach: in the bar (portrait tablets), the row (portrait phones) or the rail (landscape). */
-  .vn-page .vn-phone-chip,
-  .vn-chip-row,
-  .vn-rail {
-    display: none;
-  }
-
-  @media (pointer: coarse) and (orientation: portrait) {
-    .vn-page .vn-phone-chip {
-      display: inline-flex;
-    }
-  }
-
-  .vn-chip-row {
-    gap: 0.25rem;
-    overflow-x: auto;
-    padding: 0 0.5rem;
-    border-bottom: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
-  }
-
-  .vn-chip {
-    display: inline-flex;
-    height: 2.75rem;
-    flex: 1 0 auto;
-    align-items: center;
-    justify-content: center;
-    padding: 0 0.5rem;
-    border-radius: 2px;
-    color: color-mix(in srgb, var(--reader-panel-fg) 68%, transparent);
-    font-size: var(--type-small);
-    font-weight: 700;
-  }
-
-  .vn-chip-icon {
-    width: 2.75rem;
-    flex: none;
-    padding: 0;
-  }
-
-  .vn-chip-on {
-    background: var(--app-spot-tint);
-    color: var(--accent-strong-color);
-  }
-
   @media (orientation: portrait) and (max-width: 767px) {
-    .vn-page .vn-bar-chip {
-      display: none;
-    }
-
-    .vn-chip-row {
-      display: flex;
-    }
-
     /* The game at its width (most are 4:3), the text panel in the rest of the height */
     .vn-main-text .vn-game {
       height: 75vw;
       flex: none;
       padding: 0;
     }
-
-    .vn-main-text .vn-side {
-      display: flex;
-      min-height: 0;
-      flex: 1;
-      flex-direction: column;
-    }
-
-    /* The text at body size, as tall as it is; the progress stays at the bottom */
-    .vn-main-text .vn-text {
-      max-height: none;
-      font-size: var(--type-body);
-      font-weight: 400;
-      line-height: 1.8;
-    }
-
-    .vn-main-text .vn-progress {
-      margin-top: auto;
-    }
   }
 
-  @media (orientation: landscape) and (max-height: 500px) {
-    .vn-page .bar-chip {
-      height: 2.75rem;
-    }
-  }
-
-  /* The rail: big buttons down the game's left edge, beside the game; the handle folds it to a
-     strip. A Steam Deck's primary pointer is fine, so it gets no rail. */
+  /* The rail (vn-rail.svelte) beside the game. */
   @media (pointer: coarse) and (orientation: landscape) {
     .vn-main {
       position: relative;
     }
 
-    .vn-rail {
-      position: absolute;
-      z-index: 1;
-      top: 0;
-      bottom: 0;
-      left: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-      padding: 0.25rem;
-      border-right: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
-      background: var(--reader-panel-bg);
-    }
-
-    .vn-rail-open ~ .vn-game {
+    .vn-main :global(.vn-rail-open ~ .vn-game) {
       margin-left: 5rem;
     }
 
-    .vn-rail:not(.vn-rail-open) ~ .vn-game {
+    .vn-main :global(.vn-rail:not(.vn-rail-open) ~ .vn-game) {
       margin-left: 2.25rem;
     }
-  }
-
-  .vn-rail-handle {
-    display: flex;
-    height: 2.75rem;
-    align-items: center;
-    justify-content: center;
-    border-radius: 2px;
-    color: color-mix(in srgb, var(--reader-panel-fg) 68%, transparent);
-  }
-
-  .vn-rail-button {
-    display: flex;
-    width: 4.5rem;
-    min-height: 4.5rem;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.35rem;
-    border: 1px solid color-mix(in srgb, var(--reader-panel-fg) 24%, transparent);
-    border-radius: 2px;
-    font-size: var(--type-small);
-    font-weight: 700;
-    line-height: 1.2;
-    text-align: center;
-  }
-
-  .vn-rail-button:active {
-    background: var(--app-spot-tint);
-  }
-
-  .vn-rail-on {
-    border-color: var(--accent-color);
-    background: var(--app-spot-tint);
-    color: var(--accent-strong-color);
   }
 
   .vn-keep {
@@ -1299,73 +1036,7 @@
     line-height: 1.3;
   }
 
-  .vn-notice {
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
-    padding: 0.6rem 1.25rem;
-    background: var(--surface-color);
-    font-size: var(--type-small);
-  }
-
-  .vn-notice p {
-    flex: 1;
-  }
-
-  .vn-text {
-    width: min(50rem, calc(100% - 2.5rem));
-    max-height: 30vh;
-    margin: 1.75rem auto 0;
-    overflow-y: auto;
-    padding-top: 0.75rem;
-    font-size: 1.25rem;
-    font-weight: 700;
-    line-height: 2;
-  }
-
-  .vn-text-ruled {
-    border-top: 2px solid var(--reader-panel-fg);
-  }
-
-  .vn-text p {
-    margin: 0;
-    min-height: 1em;
-  }
-
-  .vn-progress {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 1rem 1.25rem;
-  }
-
-  .vn-progress-track {
-    position: relative;
-    height: 3px;
-    flex: 1;
-    background: var(--app-progress-track);
-  }
-
-  .vn-progress-fill {
-    position: absolute;
-    inset: 0 auto 0 0;
-    background: var(--accent-color);
-  }
-
-  .vn-progress-label {
-    color: color-mix(in srgb, var(--reader-panel-fg) 68%, transparent);
-    font-size: var(--type-small);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-
-  .vn-today {
-    margin-left: 0.5rem;
-    color: var(--accent-strong-color);
-    font-weight: 700;
-  }
-
-  /* Phones held sideways: the text beside the game, the progress under it */
+  /* Phones held sideways: the text beside the game, the progress under it (vn-side.svelte) */
   @media (orientation: landscape) and (max-height: 500px) {
     .vn-game {
       padding: 0;
@@ -1373,32 +1044,6 @@
 
     .vn-main-text {
       flex-direction: row;
-    }
-
-    .vn-main-text .vn-side {
-      display: flex;
-      width: 40%;
-      flex-direction: column;
-      border-left: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
-    }
-
-    .vn-main-text .vn-text {
-      max-height: none;
-      flex: 1;
-      margin-top: 1rem;
-    }
-
-    .vn-main-text .vn-progress {
-      flex-wrap: wrap;
-      padding: 0.75rem 1rem;
-    }
-
-    .vn-main-text .vn-progress-track {
-      flex-basis: 100%;
-    }
-
-    .vn-progress {
-      padding: 0.4rem 1rem;
     }
   }
 </style>
