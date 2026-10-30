@@ -301,9 +301,11 @@
               <p class="work-hint work-follow-hint">
                 {work.paused
                   ? 'Paused: change it in Sources → Following.'
-                  : standalone
-                    ? `Checks while the app is open${$sourcesWifiOnly$ ? ', on Wi-Fi only' : ''} (Settings → Sources).`
-                    : `The server checks every ${work.checkHours} h, also when no device is open.`}
+                  : work.elsewhere
+                    ? `Followed in ${work.elsewhere}; updates there.`
+                    : standalone
+                      ? `Checks while the app is open${$sourcesWifiOnly$ ? ', on Wi-Fi only' : ''} (Settings → Sources).`
+                      : `The server checks every ${work.checkHours} h, also when no device is open.`}
                 {#if !work.following && empty && pickedText}Turning it on adds {pickedText} first.{/if}
               </p>
             </div>

@@ -38,12 +38,17 @@ const ALLOWED = new Set([
   'sup'
 ]);
 
+/** Text for XHTML/XML; C0 control characters (not allowed in XML) are dropped. */
 export function escapeXml(text: string) {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  return (
+    text
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+  );
 }
 
 function cleanNode(node: Node): string {

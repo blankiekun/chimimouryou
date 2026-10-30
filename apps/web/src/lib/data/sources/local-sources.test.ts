@@ -160,3 +160,144 @@ describe('local sources', () => {
     await expect(local.addVolumes(work.id, [1, 2, 3])).rejects.toThrow(/space/);
   });
 });
+
+/**
+ * sources.json: follows shared through the reader's sync folder, each run by one device. The
+ * other device is the file (written here as it would write it). Ways it could fail:
+ * - a follow made on another device doesn't show here, or this device checks it too (two
+ *   devices fetching the same work)
+ * - an unfollow made here comes back at the next sync, or the running device never hears of it
+ * - a pause made on another device isn't applied by the device that runs the follow
+ * - the same work followed on both devices before a sync keeps two runners
+ * - another device's OPDS follow lands on this device's server with the same number
+ * - a sync without changes writes the file again
+ */
+describe('sources.json', () => {
+  const me = 'dev-here';
+  let file: { text: string; version: string } | undefined;
+  let writes = 0;
+  const store = {
+    readSyncFile: async () => file,
+    writeSyncFile: async (_: string, text: string) => {
+      writes += 1;
+      file = { text, version: String(writes) };
+    }
+  };
+  const entries = () => JSON.parse(file!.text).follows as any[];
+  const remote = (follows: object[]) => {
+    file = { text: JSON.stringify({ follows }), version: 'r' };
+  };
+  const other = {
+    device: 'dev-desktop',
+    deviceName: 'the desktop app',
+    siteName: 'Syosetu',
+    paused: false
+  };
+
+  beforeEach(() => {
+    localStorage.setItem('sourcesDevice', me);
+  });
+
+  it('lists a follow of another device without checking it, and shares its own', async () => {
+    await set('work=n0007gg&chapters=3');
+    const mine = await local.lookUpWork('https://ncode.syosetu.com/n0007gg/');
+    await local.followWork(mine.id);
+    await settle();
+    remote([
+      {
+        ...other,
+        key: 'syosetu n0008hh',
+        site: 'syosetu',
+        workKey: 'n0008hh',
+        url: 'https://ncode.syosetu.com/n0008hh/',
+        title: 'Remote work',
+        modified: Date.now()
+      }
+    ]);
+    await local.syncSourcesWith(store);
+
+    expect(entries().map((e) => [e.workKey, e.device])).toEqual(
+      expect.arrayContaining([
+        ['n0007gg', me],
+        ['n0008hh', 'dev-desktop']
+      ])
+    );
+    const listed = (await local.getFollowing()).follows.find((f) => f.title === 'Remote work');
+    expect(listed?.elsewhere).toBe('the desktop app');
+
+    const asked: string[] = [];
+    const real = globalThis.fetch;
+    vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+      asked.push(String(url));
+      return real(url, init);
+    });
+    await local.checkNow();
+    await settle();
+    expect(asked.some((u) => u.includes('n0008hh'))).toBe(false);
+
+    // Nothing changed since: the file isn't written again.
+    const before = writes;
+    await local.syncSourcesWith(store);
+    expect(writes).toBe(before);
+  });
+
+  it('keeps an unfollow, and applies a pause from another device', async () => {
+    await set('work=n0009ii&chapters=3');
+    const work = await local.lookUpWork('https://ncode.syosetu.com/n0009ii/');
+    await local.followWork(work.id);
+    await local.syncSourcesWith(store);
+    // Paused on the other device a moment later.
+    remote(
+      entries().map((e) =>
+        e.workKey === 'n0009ii' ? { ...e, paused: true, modified: e.modified + 1 } : e
+      )
+    );
+    await local.syncSourcesWith(store);
+    expect((await local.getWork(work.id)).paused).toBe(true);
+
+    await local.unfollowWork(work.id);
+    await local.syncSourcesWith(store);
+    expect(entries().find((e) => e.workKey === 'n0009ii')?.deleted).toBe(true);
+    await local.syncSourcesWith(store);
+    expect((await local.getWork(work.id)).following).toBe(false);
+  });
+
+  it('hands a work followed on both devices to the newer follow', async () => {
+    await set('work=n0010jj&chapters=3');
+    const work = await local.lookUpWork('https://ncode.syosetu.com/n0010jj/');
+    await local.followWork(work.id);
+    remote([
+      {
+        ...other,
+        key: 'syosetu n0010jj',
+        site: 'syosetu',
+        workKey: 'n0010jj',
+        url: work.url,
+        title: work.title,
+        modified: Date.now() + 1000
+      }
+    ]);
+    await local.syncSourcesWith(store);
+    const follow = (await local.getFollowing()).follows.find((f) => f.workId === work.id);
+    expect(follow?.elsewhere).toBe('the desktop app');
+  });
+
+  it("leaves another device's OPDS follows off this device's servers", async () => {
+    remote([
+      {
+        ...other,
+        key: 'dev-desktop opds:1 /series/1',
+        site: 'opds:1',
+        siteName: 'Komga',
+        workKey: '/series/1',
+        url: 'http://komga.invalid/series/1',
+        title: 'Server work',
+        modified: Date.now()
+      }
+    ]);
+    await local.syncSourcesWith(store);
+    expect((await local.getFollowing()).follows.some((f) => f.title === 'Server work')).toBe(false);
+    // Kept in the file for the device that runs it.
+    expect(entries().some((e) => e.title === 'Server work')).toBe(true);
+  });
+});

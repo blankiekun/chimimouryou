@@ -199,7 +199,7 @@ async function syncOnce<T extends { title: string; account?: string }>(
 }
 
 /** The store for kanji.json and words.json, once this browser's data belongs to the reader syncing. */
-async function readerStore() {
+export async function readerStore() {
   const user = await accountReady();
 
   // This browser still holds another reader's data (signed out: '' once released).
