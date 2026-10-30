@@ -411,13 +411,13 @@ describe('account settings sync', () => {
     });
     await syncAccountSettings();
 
-    expect(remote?.values.askAiReaderNote).toBe('old');
+    expect(remote()?.values.askAiReaderNote).toBe('old');
     expect(askAiReaderNote$.getValue()).toBe('edited');
 
     vi.mocked(fetch).mockImplementation(respond);
     await syncAccountSettings();
 
-    expect(remote?.values.askAiReaderNote).toBe('edited');
+    expect(remote()?.values.askAiReaderNote).toBe('edited');
   });
 
   // Bug: a sync started while another one's upload is in flight reads the old file, and the
@@ -443,7 +443,7 @@ describe('account settings sync', () => {
     await syncAccountSettings();
     await second;
 
-    expect(remote?.values.askAiReaderNote).toBe('second');
+    expect(remote()?.values.askAiReaderNote).toBe('second');
     expect(askAiReaderNote$.getValue()).toBe('second');
   });
 

@@ -43,7 +43,7 @@ const entry = (name: string): LoreEntry => ({
 // One API for the file: server-api.ts keeps the catalog and the mirror per page load.
 const api = fakeApi({ account: () => account.user?.id ?? '' });
 
-['Lore', 'Race', 'Recaps', 'Private'].forEach((title, index) =>
+['Lore', 'Race', 'Recaps', 'Private', 'Broken'].forEach((title, index) =>
   api.addBook({ id: index + 1, calibreId: 101 + index, title })
 );
 
@@ -178,8 +178,8 @@ describe('extras sync', () => {
 
   // Bug: a server error or a cut-off remote file clears the local lorebook or recaps.
   it('keeps the local copies when the remote file fails to load or is malformed', async () => {
-    const lorebookUrl = '/calibre/sync/ttu-reader-data/Broken/lorebook.json';
-    const recapsUrl = '/calibre/sync/ttu-reader-data/Broken/recaps.json';
+    const lorebookUrl = `/api/v1/books/${api.bookId('Broken')}/docs/lorebook`;
+    const recapsUrl = `/api/v1/books/${api.bookId('Broken')}/docs/recaps`;
     const recaps = {
       title: 'Broken',
       chapters: { c1: { summary: 'one', characters: 1, model: 'm' } },
@@ -191,14 +191,20 @@ describe('extras sync', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string, init?: RequestInit) => {
-        if (init?.method === 'PUT') {
-          puts[url] = JSON.parse(init.body as string);
-          return new Response('', { status: 201 });
-        }
+        if (init?.method === 'PUT') puts[url] = JSON.parse(init.body as string).data;
 
-        return failWith500
+        return failWith500 && url.startsWith('/api/v1/sync')
           ? new Response('', { status: 503 })
-          : new Response('{"title":"Broken","entr', { status: 200 });
+          : api.fetch(url, init);
+      })
+    );
+    // What another device left: cut off, so not an object.
+    ['lorebook', 'recaps'].forEach((kind) =>
+      api.setRow('bookDocs', {
+        book: api.bookId('Broken'),
+        kind,
+        modified: 1,
+        data: '{"title":"Broken","entr'
       })
     );
     enableExtrasSync('Broken', 'ttu-calibre-default');
