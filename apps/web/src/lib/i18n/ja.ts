@@ -1012,6 +1012,8 @@ export const ja: Record<MessageKey, string> = {
   'reader.copyProgress': '進捗をコピー',
   'reader.welcomeBack': '{days}日ぶりの読書です',
   'reader.dismiss': '閉じる',
+  'reader.jumpBack': '戻る',
+  'reader.jumpBackLabel': 'ジャンプ前の位置に戻る',
   'reader.close': '閉じる',
   'reader.panel': 'リーダーパネル',
   'reader.panelToggle': 'サイドパネル',

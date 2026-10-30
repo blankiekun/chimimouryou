@@ -24,9 +24,11 @@ export interface BookmarkManager {
     customReadingPointRange: Range | undefined
   ) => BooksDbBookmarkData;
 
+  /** `asReader`: the move counts as the reader's own page turn (the Listen follow), paginated only. */
   scrollToBookmark: (
     bookmarkData: BooksDbBookmarkData,
-    customReadingPointScrollOffset?: number
+    customReadingPointScrollOffset?: number,
+    asReader?: boolean
   ) => void;
 
   /** Character count where the rendered content starts (the current section when paginated) */
