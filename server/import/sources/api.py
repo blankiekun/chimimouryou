@@ -195,6 +195,13 @@ def _number_files(work_id: int, details: dict) -> dict:
     return {**details, 'items': [by_number.get(n) for n in range(1, top + 1)], 'chapters': top}
 
 
+def _gone(details: dict | None) -> set[int]:
+    """A server's whole-file numbers whose entry left the feed: nothing to fetch there."""
+    if not details or details.get('mode') != 'files':
+        return set()
+    return {n for n, item in enumerate(details['items'], 1) if item is None}
+
+
 def _check_chapters(work: dict, details: dict):
     """Page manga are numbered by feed order: if a chapter fetched before now sits under another number (one was
     inserted or removed on the server), fail rather than replace a volume with other chapters."""
@@ -252,10 +259,14 @@ def _work_json(work: dict, details: dict | None, account: str = '') -> dict:
                     (work['id'], *ACTIVE, 'adding'))
     fetching = {n for job in jobs if job['state'] in ACTIVE for n in json.loads(job['volumes'])}
     adding = any(job['state'] == 'adding' for job in jobs)
+    # add() has no details: the last ones read do (run_job checks again).
+    gone = _gone(details or _details.get(work['id'], (0, None))[1])
     plan = []
     for volume in planner.plan(work['chapters'], work['volume_size'] or planner.VOLUME_SIZE):
         row = volumes.get(volume['number'])
         in_library = bool(row and row['live'])
+        if volume['number'] in gone and not in_library:
+            continue
         plan.append({**volume, 'inLibrary': in_library,
                      'pending': not in_library and (volume['number'] in fetching or (bool(row) and adding))})
     adapter = _adapter(work['site'])
@@ -557,9 +568,32 @@ def _update_plan(work: dict, plan: dict, size: int) -> tuple[list[int], int]:
     else:
         full = last['last_ch'] - last['first_ch'] + 1 >= size
         start, have = last['number'] + int(full), last['last_ch']
+        if last['last_ch'] > work['chapters']:
+            # A chapter was deleted on the site: the open volume's cached chapters are numbered the old way.
+            _drop_cache(work['id'], last['first_ch'], last['last_ch'])
+    # A volume in the library with other chapters than the plan's (fewer, or more after a deletion) is fetched.
     numbers = [n for n, volume in sorted(plan.items())
-               if n >= start and not (n in kept and kept[n]['last_ch'] >= volume['last'])]
+               if n >= start and not (n in kept and kept[n]['last_ch'] == volume['last'])]
     return numbers, max(0, work['chapters'] - have)
+
+
+def _drop_cache(work_id: int, first: int, last: int):
+    """Chapters first..last out of the work's cache."""
+    for n in range(first, last + 1):
+        try:
+            os.remove(os.path.join(cache_dir(work_id), f'{n}.json'))
+        except OSError:
+            pass
+        shutil.rmtree(os.path.join(cache_dir(work_id), str(n)), ignore_errors=True)
+
+
+def _change_volumes(c, job_id: str, change):
+    """A job's volume list through change(list) in the caller's transaction: the runner takes a volume off as it
+    queues it while the import worker may put a failed one back."""
+    row = c.execute('SELECT volumes FROM source_jobs WHERE id = ?', (job_id,)).fetchone()
+    if row:
+        c.execute('UPDATE source_jobs SET volumes = ?, updated = ? WHERE id = ?',
+                  (json.dumps(change(json.loads(row['volumes']))), now_ms(), job_id))
 
 
 def _volumes_text(numbers: list[int]) -> str:
@@ -567,6 +601,16 @@ def _volumes_text(numbers: list[int]) -> str:
 
 
 # Search and covers -------------------------------------------------------------------------------------
+
+def _marks(account: str, site: str, keys: list[str]) -> dict:
+    """{work key: row (in_library, following)} for the site's works this account has."""
+    return {row['work_key']: row for row in database().query(
+        'SELECT w.work_key, EXISTS (SELECT 1 FROM work_volumes v JOIN books b ON b.calibre_id = v.calibre_id '
+        'WHERE v.work = w.id AND b.deleted = 0) AS in_library, '
+        'EXISTS (SELECT 1 FROM follows f WHERE f.work = w.id AND f.account = ?) AS following '
+        f'FROM works w WHERE w.site = ? AND w.work_key IN ({", ".join("?" * len(keys))})',
+        (account, site, *keys))} if keys else {}
+
 
 def browse(account: str, site: str, kind: str, query: dict) -> dict:
     """A page of the site's search, popular or latest works, with what this account has of each."""
@@ -593,20 +637,12 @@ def browse(account: str, site: str, kind: str, query: dict) -> dict:
             _searches.pop(next(iter(_searches)), None)
         _searches[key] = (now, found)
     keys = [w['workKey'] for w in found['works']]
-    marks = {row['work_key']: row for row in database().query(
-        'SELECT w.work_key, EXISTS (SELECT 1 FROM work_volumes v JOIN books b ON b.calibre_id = v.calibre_id '
-        'WHERE v.work = w.id AND b.deleted = 0) AS in_library, '
-        'EXISTS (SELECT 1 FROM follows f WHERE f.work = w.id AND f.account = ?) AS following '
-        f'FROM works w WHERE w.site = ? AND w.work_key IN ({", ".join("?" * len(keys))})',
-        (account, site, *keys))} if keys else {}
+    marks = _marks(account, site, keys)
     return {'site': site, 'siteName': adapter.NAME, 'domain': adapter.DOMAIN, 'order': adapter.SEARCH_ORDER,
             'total': found['total'], 'more': found['more'], 'page': int(page),
             'works': [{**w, 'inLibrary': bool(w['workKey'] in marks and marks[w['workKey']]['in_library']),
                        'following': bool(w['workKey'] in marks and marks[w['workKey']]['following'])}
                       for w in found['works']]}
-
-
-_image_type = build.image_type
 
 
 def cover(work_id: int, account: str) -> tuple[bytes, str]:
@@ -623,7 +659,7 @@ def cover(work_id: int, account: str) -> tuple[bytes, str]:
     try:
         with open(path, 'rb') as f:
             data = f.read()
-        return data, _image_type(data) or 'application/octet-stream'
+        return data, build.image_type(data) or 'application/octet-stream'
     except OSError:
         pass
     if time.monotonic() - _cover_failed.get(work_id, -COVER_RETRY_SECONDS) < COVER_RETRY_SECONDS:
@@ -632,7 +668,7 @@ def cover(work_id: int, account: str) -> tuple[bytes, str]:
         adapter = _adapter(work['site'])
         data = (adapter.get(adapter.url(url), COVER_BYTES) if isinstance(adapter, opds.Server)
                 else fetcher.fetch(url, adapter.COVER_HOSTS))[0]
-        kind = _image_type(data)
+        kind = build.image_type(data)
         if not kind or len(data) > COVER_BYTES:
             raise ValueError('not an image')
     except (fetcher.FetchError, LookupError, ValueError) as error:
@@ -793,12 +829,7 @@ def browse_server(account: str, server_id: int, query: dict) -> dict:
         entries.append({'kind': kind, 'title': entry['title'], 'authors': entry['authors'], 'href': href,
                         'workKey': key if kind != 'section' else None, 'cover': _path(server, entry['cover'])})
     keys = list({e['workKey'] for e in entries if e['workKey']})
-    marks = {row['work_key']: row for row in database().query(
-        'SELECT w.work_key, EXISTS (SELECT 1 FROM work_volumes v JOIN books b ON b.calibre_id = v.calibre_id '
-        'WHERE v.work = w.id AND b.deleted = 0) AS in_library, '
-        'EXISTS (SELECT 1 FROM follows f WHERE f.work = w.id AND f.account = ?) AS following '
-        f'FROM works w WHERE w.site = ? AND w.work_key IN ({", ".join("?" * len(keys))})',
-        (account, server.SITE, *keys))} if keys else {}
+    marks = _marks(account, server.SITE, keys)
     for entry in entries:
         mark = marks.get(entry['workKey'])
         entry.update(inLibrary=bool(mark and mark['in_library']), following=bool(mark and mark['following']))
@@ -814,7 +845,7 @@ def server_image(account: str, server_id: int, href: str) -> tuple[bytes, str]:
         data = server.get(server.url(href), COVER_BYTES)[0]
     except (fetcher.FetchError, LookupError, ValueError) as error:
         raise ApiError(404, 'No image') from error
-    if not (kind := _image_type(data)):
+    if not (kind := build.image_type(data)):
         raise ApiError(404, 'No image')
     return data, kind
 
@@ -949,6 +980,8 @@ def run_job(job):
         _check_chapters(work, details)
     size = work['volume_size'] or planner.VOLUME_SIZE
     plan = {v['number']: v for v in planner.plan(work['chapters'], size)}
+    for n in _gone(details):
+        plan.pop(n, None)
     if job['kind'] == 'update':
         remaining, new = _update_plan(work, plan, size)
         if resumed := [n for n in json.loads(job['volumes']) if n in plan]:
@@ -972,6 +1005,9 @@ def run_job(job):
         left = sum(plan[n]['last'] - plan[n]['first'] + 1 for n in remaining)
         database().transaction(lambda c: c.execute(
             'UPDATE source_jobs SET done = MAX(0, total - ?) WHERE id = ?', (left, job['id'])))
+        if not remaining:  # every volume was queued before: nothing is left to wait for
+            _set_state(job['id'], ('fetching',), 'done')
+            return
     for number in list(remaining):
         volume = plan[number]
         chapters = []
@@ -986,15 +1022,12 @@ def run_job(job):
                 'UPDATE source_jobs SET done = MIN(total, done + 1), updated = ? WHERE id = ?', (now_ms(), job['id'])))
         remaining.remove(number)
         if _queue_volume(job, work, volume, chapters, last=not remaining):
-            for n in range(volume['first'], volume['last'] + 1):
-                try:
-                    os.remove(os.path.join(cache_dir(work['id']), f'{n}.json'))
-                except OSError:
-                    pass
-                shutil.rmtree(os.path.join(cache_dir(work['id']), str(n)), ignore_errors=True)
-        database().transaction(lambda c: c.execute(
-            'UPDATE source_jobs SET volumes = ?, updated = ? WHERE id = ?', (json.dumps(remaining), now_ms(), job['id'])))
-    _set_state(job['id'], ('fetching',), 'adding')
+            _drop_cache(work['id'], volume['first'], volume['last'])
+        database().transaction(lambda c: _change_volumes(c, job['id'], lambda v: [n for n in v if n != number]))
+    # The import worker may have ended the job already (volume_added): done stands, so does its failure's result.
+    if not _set_state(job['id'], ('fetching',), 'adding') and [row['state'] for row in database().query(
+            'SELECT state FROM source_jobs WHERE id = ?', (job['id'],))] != ['done']:
+        return
     if job['kind'] == 'update':
         _follow_result(work['id'], 'new', f"{new} new chapter{'' if new == 1 else 's'}, added to "
                                           f'{_volumes_text(updated)}')
@@ -1012,35 +1045,39 @@ def runner(site: str):
     where, params = ("w.site LIKE 'opds:%'", ()) if site == SERVERS else ('w.site = ?', (site,))
     while True:
         try:
-            queue_due_checks(now_ms())
-        except Exception as error:  # noqa: BLE001 - the runner goes on
-            print(f'sources timer: {error!r}', file=sys.stderr)
-        rows = database().query(f"{JOB_QUERY} WHERE j.state = 'queued' AND {where} ORDER BY j.created LIMIT 1",
-                                params)
-        if not rows:
-            wake.wait(60)
-            wake.clear()
-            continue
-        job = rows[0]
-        if not _set_state(job['id'], ('queued',), 'fetching'):
-            continue
-        failure = None
-        try:
-            run_job(job)
-        except ChapterError as error:
-            failure = error
-            _set_state(job['id'], ('fetching',), 'failed', error=str(error), failed_at=error.chapter)
-        except (fetcher.FetchError, LookupError, ValueError) as error:
-            failure = error
-            _set_state(job['id'], ('fetching',), 'failed', error=str(error))
-        except Exception as error:  # noqa: BLE001 - one bad job must not end the runner
-            print(f"sources job {job['id']}: {error!r}", file=sys.stderr)
-            failure = RuntimeError('Something went wrong; see the import service log')
-            _set_state(job['id'], ('fetching',), 'failed', error=str(failure))
-        if failure is not None and job['kind'] == 'update':
-            # The details call says the work is gone; a chapter that isn't there is a failed check.
-            removed = isinstance(failure, LookupError) and not isinstance(failure, ChapterError)
-            _follow_result(job['work'], 'removed' if removed else 'failed', str(failure))
+            try:
+                queue_due_checks(now_ms())
+            except Exception as error:  # noqa: BLE001 - the runner goes on
+                print(f'sources timer: {error!r}', file=sys.stderr)
+            rows = database().query(f"{JOB_QUERY} WHERE j.state = 'queued' AND {where} ORDER BY j.created LIMIT 1",
+                                    params)
+            if not rows:
+                wake.wait(60)
+                wake.clear()
+                continue
+            job = rows[0]
+            if not _set_state(job['id'], ('queued',), 'fetching'):
+                continue
+            failure = None
+            try:
+                run_job(job)
+            except ChapterError as error:
+                failure = error
+                _set_state(job['id'], ('fetching',), 'failed', error=str(error), failed_at=error.chapter)
+            except (fetcher.FetchError, LookupError, ValueError) as error:
+                failure = error
+                _set_state(job['id'], ('fetching',), 'failed', error=str(error))
+            except Exception as error:  # noqa: BLE001 - one bad job must not end the runner
+                print(f"sources job {job['id']}: {error!r}", file=sys.stderr)
+                failure = RuntimeError('Something went wrong; see the import service log')
+                _set_state(job['id'], ('fetching',), 'failed', error=str(failure))
+            if failure is not None and job['kind'] == 'update':
+                # The details call says the work is gone; a chapter that isn't there is a failed check.
+                removed = isinstance(failure, LookupError) and not isinstance(failure, ChapterError)
+                _follow_result(job['work'], 'removed' if removed else 'failed', str(failure))
+        except Exception as error:  # noqa: BLE001 - say a locked database: the runner goes on after a pause
+            print(f'sources runner {site}: {error!r}', file=sys.stderr)
+            time.sleep(5)
 
 
 def volume_added(import_job: dict):
@@ -1056,14 +1093,17 @@ def volume_added(import_job: dict):
                 c.execute('UPDATE work_volumes SET first_ch = ?, last_ch = ?, complete = ? WHERE work = ? AND '
                           'number = ?', (*chapters, import_job['sourceWork'], number))
             if import_job.get('sourceLast'):
-                c.execute("UPDATE source_jobs SET state = 'done', updated = ? WHERE id = ? AND state = 'adding'",
+                c.execute("UPDATE source_jobs SET state = 'done', updated = ? WHERE id = ? AND state IN "
+                          "('adding', 'fetching')",
                           (now_ms(), import_job['sourceJob']))
         else:
             c.execute("UPDATE source_jobs SET state = 'failed', error = ?, updated = ? WHERE id = ? AND state IN "
                       "('adding', 'fetching')",
                       (f"Vol. {number}: {import_job.get('error') or 'Calibre could not add it'}", now_ms(),
                        import_job['sourceJob']))
-            return c.execute("SELECT kind, error FROM source_jobs WHERE id = ? AND kind = 'update'",
+            # A retry fetches it again.
+            _change_volumes(c, import_job['sourceJob'], lambda v: sorted({*v, number}))
+            return c.execute("SELECT error FROM source_jobs WHERE id = ? AND kind = 'update'",
                              (import_job['sourceJob'],)).fetchone()
     failed_update = database().transaction(record)
     _wake.set()  # a follow waiting on this job is checked now, not at the runner's next minute
