@@ -8,9 +8,10 @@ features) use `docker compose -f docker-compose.static.yml up -d` instead.
 
 | Service      | Image target | What it does                                                  |
 | ------------ | ------------ | ------------------------------------------------------------- |
-| `web`        | web          | nginx: the app, book files, WebDAV sync, access checks        |
+| `web`        | web          | nginx: the app, book files, access checks                     |
+| `api`        | base         | the v1 API: catalog, reading data (`state/api/library.db`)    |
 | `account`    | base         | accounts, sign-in, permissions (Python standard library)      |
-| `catalog`    | base         | rebuilds `catalog.json` from `metadata.db`, extracts covers   |
+| `catalog`    | base         | rebuilds the catalog from `metadata.db`, extracts covers      |
 | `import`     | import       | optional (`--profile import`): adds uploaded books to Calibre |
 | `difficulty` | difficulty   | optional (`--profile difficulty`): difficulty estimates       |
 | `mokuro`     | mokuro       | optional (`--profile mokuro`): manga text (OCR) for Yomitan   |
@@ -21,7 +22,7 @@ PyTorch (about 2 GB), so these images are large; leave them out unless you want 
 ## Server size
 
 What the machine (or VM/container) running the stack needs, by the profiles in use.
-The library and sync folder are extra and can live on other storage. Disk is for the
+The library is extra and can live on other storage. Disk is for the
 system, the images twice over (each update keeps the previous ones as `:previous`),
 Docker's build cache (capped at 6 GB, see [Disk space for builds](#disk-space-for-builds))
 and `DATA_PATH`.
@@ -70,9 +71,9 @@ set `ALLOW_HTTP_ACCOUNTS=1` (see [Accounts](#accounts-and-permissions)).
   `PUID`/`PGID` must be able to read it; the catalog also writes `cover.jpg`
   into book folders that have no cover, and the import profile adds books.
 - Everything the server stores is in `DATA_PATH` (default `./data`):
-  `sync/` (shared processed books and signed-out progress), `accounts/`
-  (each account's progress, highlights and settings, including AI API keys),
-  `state/` (account database, catalog, import queue, difficulty results).
+  `state/` (account database, `api/library.db` with each account's progress,
+  highlights and settings, including AI API keys, catalog, import queue,
+  difficulty results) and `accounts/` (Windows game records).
   Back up `DATA_PATH`. Keep it off shares other machines can read.
 - Open `http://<server>:HTTP_PORT/`. The library shows the Calibre catalog
   after the first catalog run (a minute or so; large libraries take longer
@@ -106,8 +107,8 @@ Then set in `.env`:
   weakens sign-in throttling (Docker's range isn't in the default
   `TRUSTED_NETWORKS`). **For a proxy on another machine in your LAN it is a
   hole** if you list your LAN in `TRUSTED_NETWORKS`: every visitor from the
-  internet counts as trusted and can read the library and change or delete the
-  shared sync folder. Set `REAL_IP_FROM` to that machine's address, or keep
+  internet counts as trusted and can read the library and change the shared
+  signed-out reading data. Set `REAL_IP_FROM` to that machine's address, or keep
   `TRUSTED_NETWORKS` empty. The same applies to Docker Desktop and rootless
   Docker, where all connections arrive from a private address: keep
   `TRUSTED_NETWORKS` empty there.
@@ -130,7 +131,7 @@ panel), or with `docker compose exec account ebook-account ...`
 | Who                                           | May                                                                 |
 | --------------------------------------------- | ------------------------------------------------------------------- |
 | anyone who can reach the server               | load the app; with `PUBLIC_READS=1` also browse and download books  |
-| signed out, from `TRUSTED_NETWORKS`           | read the library, open books, save progress in the shared folder    |
+| signed out, from `TRUSTED_NETWORKS`           | read the library, open books, save progress shared by all of them   |
 | any account                                   | the above from anywhere, plus its own synced progress and settings  |
 | permission `import` / `series` / `difficulty` | add books to Calibre / change series for everyone / start estimates |
 | admin                                         | everything, and manage accounts and permissions                     |
@@ -147,7 +148,6 @@ Give `import` only to people you trust: it runs Calibre on their uploads.
 
 ### Built-in protections
 
-- Files in the sync folders are served as downloads, never as pages.
 - Book HTML is parsed without running anything and cleaned of scripts and
   event handlers; a Content-Security-Policy only allows the app's own scripts.
 - Sign-in throttling counts per username and address, so strangers can't lock
@@ -196,6 +196,22 @@ Otherwise:
 ```sh
 git pull && docker compose up -d --build
 ```
+
+Coming from a version before the v1 API (reading data in the `sync/` and
+`accounts/<id>/ttu-reader-data/` folders), `deploy.sh` and `ebook-update` copy
+those folders into `library.db` once, with `web` stopped. Updating by hand, do the same
+before starting the new version:
+
+```sh
+docker compose build && docker compose stop web && docker compose up -d api
+docker compose run --rm --no-deps catalog build-calibre-catalog /library /data/state/catalog/catalog.json --force
+docker compose run --rm --no-deps api python3 /app/api/migrate.py --apply
+docker compose up -d
+```
+
+The old folders are then no longer used and can be deleted once everything looks
+right (the next release deletes them); `SYNC_PATH` is only needed until then. Folders that
+matched no book are listed in the admin panel (Tools → Catalog, "Old sync data").
 
 Or use published images instead of building (no Node or Calibre download on the
 server, amd64 and arm64): set `IMAGE_PREFIX=ghcr.io/<owner>/<repository>` and

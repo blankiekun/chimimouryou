@@ -84,11 +84,11 @@ entries for those forms are dropped.
 
 `engine/readings_file.py`, made on request by the difficulty service
 (`POST /calibre/difficulty/api/readings/<id>`, docs/CONFIGURATION.md) into
-`state/difficulty/readings/<id>.json.gz`. The reader does not use them yet.
+`state/difficulty/readings/<id>.json.gz`. The reader uses them for generated furigana.
 
-**Input**: the reader's own processed book, `staticdata.json`'s `elementHtml` in the newest
-`bookdata_*.zip` of the title's shared sync folder (`sync/ttu-reader-data/<title>/`, the title
-as `sanitizeForFilename` writes it). It is counted exactly like the reader counts bookmarks
+**Input**: the `elementHtml` of the book's text copy, which the reader's browser uploads after
+processing the book (`PUT /api/v1/books/<bookId>/text`, kept as `state/api/text/<bookId>.json.gz`,
+found by the catalog entry's `bookId`). It is counted exactly like the reader counts bookmarks
 (`get-paragraph-nodes.ts`, `get-character-count.ts`): `<rt>` and `[hidden]`/`[aria-hidden]`
 subtrees left out, a gaiji image is one character, the same set of counted characters, code
 points. `engine/tests/fixtures/character-count.json` is checked by both sides
@@ -101,8 +101,8 @@ later bare occurrences (`source` 'book', also earlier ones for names of 2+ chara
 
 **Format** (gzipped JSON):
 
-- `v` (`READINGS_VERSION`), `yurigana` (its version), `bookdata` (the file it was made from) and
-  `characters` (the book's count): a file whose `v`, `yurigana` or `bookdata` differ is stale
+- `v` (`READINGS_VERSION`), `yurigana` (its version), `bookdata` (the text copy it was made from,
+  `text_<mtime>`) and `characters` (the book's count): a file whose `v`, `yurigana` or `bookdata` differ is stale
   and made again on the next request.
 - `words`: `[form, reading or null]`, dictionary forms (行った: 行く).
 - `glosses`: `[[offset, length, base, ruby], ...]`, the surface's reading (yurigana's
