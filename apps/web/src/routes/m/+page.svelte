@@ -16,15 +16,12 @@
   import { page } from '$lib/data/page-store';
   import Fa from 'svelte-fa';
   import { faBookOpen, faEllipsis, faExpand, faSliders } from '@fortawesome/free-solid-svg-icons';
-  import ButtonToggleGroup from '$lib/components/button-toggle-group/button-toggle-group.svelte';
-  import {
-    optionsForToggle,
-    type ToggleOption
-  } from '$lib/components/button-toggle-group/toggle-option';
-  import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
-  import SectionHead from '$lib/components/section-head.svelte';
+  import type { ToggleOption } from '$lib/components/button-toggle-group/toggle-option';
   import PlayerBar from '$lib/components/player-bar.svelte';
   import ReaderSheet from '$lib/components/book-reader/reader-sheet.svelte';
+  import ReaderMoreList from '$lib/components/book-reader/reader-more-list.svelte';
+  import MangaBottomBar from '$lib/components/manga/manga-bottom-bar.svelte';
+  import MangaSettings from '$lib/components/manga/manga-settings.svelte';
   import VolumeTransition from '$lib/components/manga/volume-transition.svelte';
   import MokuroOverlay from '$lib/components/manga/mokuro-overlay.svelte';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
@@ -39,15 +36,8 @@
     type MangaText,
     type MokuroPage
   } from '$lib/data/mokuro';
-  import {
-    autoReplication$,
-    cacheStorageData$,
-    database,
-    readingGoalsMergeMode$,
-    replicationSaveBehavior$,
-    statisticsMergeMode$,
-    syncTarget$
-  } from '$lib/data/store';
+  import { autoReplication$, database } from '$lib/data/store';
+  import { context, externalHandler, handler } from '$lib/data/media-sync';
   import { pagePath } from '$lib/data/env';
   import { fullscreenManager } from '$lib/data/fullscreen-manager';
   import { logger } from '$lib/data/logger';
@@ -69,23 +59,14 @@
     mangaTapLayout$,
     pageSpreads,
     tapDirection,
-    type MangaBackground,
-    type MangaDualPage,
     type MangaReadingMode,
     type MangaScale,
-    type MangaTapInvert,
-    type MangaTapLayout,
     type PageSize
   } from '$lib/data/manga';
   import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
-  import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
   import type { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
   import type { BrowserStorageHandler } from '$lib/data/storage/handler/browser-handler';
-  import {
-    StorageDataType,
-    StorageKey,
-    StorageSourceDefault
-  } from '$lib/data/storage/storage-types';
+  import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
   import { AutoReplicationType } from '$lib/functions/replication/replication-options';
   import { replicateData } from '$lib/functions/replication/replicator';
   import { formatPageTitle } from '$lib/functions/format-page-title';
@@ -95,50 +76,13 @@
     { id: 'ltr', text: 'Left to right' },
     { id: 'vertical', text: 'Vertical' }
   ];
-  const tapLayouts: ToggleOption<MangaTapLayout>[] = [
-    { id: 'default', text: 'Default' },
-    { id: 'l', text: 'L shape' },
-    { id: 'kindle', text: 'Kindle' },
-    { id: 'edge', text: 'Edge' },
-    { id: 'sides', text: 'Sides' },
-    { id: 'off', text: 'Off' }
-  ];
-  const tapInverts: ToggleOption<MangaTapInvert>[] = [
-    { id: 'none', text: 'None' },
-    { id: 'horizontal', text: 'Horizontal' },
-    { id: 'vertical', text: 'Vertical' },
-    { id: 'both', text: 'Both' }
-  ];
-  const scales: ToggleOption<MangaScale>[] = [
-    { id: 'screen', text: 'Screen' },
-    { id: 'width', text: 'Width' },
-    { id: 'height', text: 'Height' },
-    { id: 'original', text: 'Original' },
-    { id: 'smart', text: 'Smart' }
-  ];
-  const dualPages: ToggleOption<MangaDualPage>[] = [
-    { id: 'auto', text: 'Auto' },
-    { id: 'on', text: 'On' },
-    { id: 'off', text: 'Off' }
-  ];
   const textModes: ToggleOption<MangaText>[] = [
     { id: 'hover', text: 'Hover' },
     { id: 'always', text: 'Always' },
     { id: 'off', text: 'Off' }
   ];
-  const backgrounds: ToggleOption<MangaBackground>[] = [
-    { id: 'black', text: 'Black' },
-    { id: 'gray', text: 'Gray' },
-    { id: 'white', text: 'White' },
-    { id: 'auto', text: 'Auto' }
-  ];
   // The reader's backdrop is part of the page, not the theme.
   const backgroundColors = { black: '#000', gray: '#262626', white: '#fff' };
-  const defaultSources: Record<string, StorageKey> = {
-    [StorageSourceDefault.CALIBRE_DEFAULT]: StorageKey.CALIBRE,
-    [StorageSourceDefault.GDRIVE_DEFAULT]: StorageKey.GDRIVE,
-    [StorageSourceDefault.ONEDRIVE_DEFAULT]: StorageKey.ONEDRIVE
-  };
   /** Until a page's size is known it is laid out as a typical portrait page. */
   const unknownSize = { width: 7, height: 10 };
   const turnMs = 200;
@@ -255,36 +199,28 @@
     },
     volumes.next && { label: `Next volume: ${volumes.next.title}`, volume: volumes.next }
   ].filter(Boolean) as { label: string; volume: CalibreBook }[];
-
-  function handler(type: StorageKey, name?: string, isForBrowser = true) {
-    return getStorageHandler(
-      window,
-      type,
-      name,
-      isForBrowser,
-      $cacheStorageData$,
-      $replicationSaveBehavior$,
-      $statisticsMergeMode$,
-      $readingGoalsMergeMode$
-    );
-  }
-
-  /** Where this book's progress syncs, as in the book reader (Calibre always syncs). */
-  async function externalHandler(data: BooksDbBookData) {
-    const name =
-      data.storageSource || ($autoReplication$ !== AutoReplicationType.Off ? $syncTarget$ : '');
-
-    if (!name) return undefined;
-
-    const type =
-      defaultSources[name] ?? (await (await database.db).get('storageSource', name))?.type;
-
-    return type ? handler(type, name) : undefined;
-  }
-
-  function context() {
-    return { id: book!.id, title: book!.title, imagePath: book!.coverImage };
-  }
+  $: moreList = [
+    ...moreItems.map((item) => ({
+      label: item.label,
+      lang: 'ja',
+      disabled: opening,
+      onclick: () => {
+        showMore = false;
+        openVolume(item.volume);
+      }
+    })),
+    ...(fullscreenManager.fullscreenEnabled
+      ? [
+          {
+            label: 'Full screen',
+            onclick: () => {
+              showMore = false;
+              toggleFullscreen();
+            }
+          }
+        ]
+      : [])
+  ];
 
   /** Reads every page's size (for spreads and fitting) without keeping the images. */
   function measurePages() {
@@ -322,7 +258,7 @@
     }
 
     book = data;
-    local.startContext(context());
+    local.startContext(context(book!));
     urls = mangaPages(data).map((name) => URL.createObjectURL(data.blobs[name]));
     sizes = new Array(urls.length);
     measurePages();
@@ -333,7 +269,7 @@
       external = await externalHandler(data);
 
       if (external) {
-        external.startContext(context());
+        external.startContext(context(book!));
 
         if (
           external.storageType === StorageKey.CALIBRE ||
@@ -344,7 +280,7 @@
             external,
             local,
             false,
-            [context()],
+            [context(book!)],
             [StorageDataType.PROGRESS]
           );
 
@@ -426,7 +362,7 @@
       await goto(`${pagePath}/b?id=${id}`);
     } catch (error: any) {
       // The handler is shared: progress saved from here must still go to this book.
-      external?.startContext(context());
+      external?.startContext(context(book!));
       openError = `Could not open ${target.title}: ${error.message}`;
       logger.warn(openError);
     } finally {
@@ -460,7 +396,7 @@
         local,
         external!,
         false,
-        [context()],
+        [context(book!)],
         [StorageDataType.PROGRESS]
       ).catch((err: any) => err.message);
 
@@ -1157,317 +1093,41 @@
 {/if}
 
 {#if showMenu && !transition && !showSettings}
-  <div class="manga-bottom" transition:fly={{ y: 40, duration: 150 }}>
-    <div class="manga-slider-row">
-      <div class="manga-slider-track" dir={mode === 'rtl' ? 'rtl' : 'ltr'}>
-        <span class="manga-end">1</span>
-        <div class="manga-slider">
-          <!-- Over the thumb's centre: the thumb (1rem) travels the track less its width. -->
-          <span
-            class="manga-bubble"
-            dir="ltr"
-            style="{mode === 'rtl' ? 'right' : 'left'}: calc({sliderAt}% + {(50 - sliderAt) *
-              0.01}rem)"
-          >
-            {pagesLabel}
-          </span>
-          <input
-            type="range"
-            min="0"
-            max={Math.max(pageCount - 1, 0)}
-            value={pageIndex}
-            aria-label="Page"
-            style:background="linear-gradient(to {mode === 'rtl' ? 'left' : 'right'},
-            var(--accent-color) {sliderAt}%, var(--app-progress-track) {sliderAt}%)"
-            on:input={(event) => goToPage(Number(event.currentTarget.value))}
-          />
-        </div>
-        <span class="manga-end">{pageCount}</span>
-      </div>
-      <span class="manga-percent">{[volumeLabel, `${percent}%`].filter(Boolean).join(' · ')}</span>
-    </div>
-    <div class="manga-phone-row">
-      <button on:click={() => ($readingMode = next(modes, mode))}>{modeLabel}</button>
-      {#if hasText}
-        <button on:click={() => ($mangaText$ = next(textModes, $mangaText$))}>
-          Text: {textLabel}
-        </button>
-      {/if}
-    </div>
-    {#if openError}
-      <div class="pt-2 text-center text-danger">{openError}</div>
-    {/if}
-  </div>
+  <MangaBottomBar
+    {mode}
+    {pageIndex}
+    {pageCount}
+    {pagesLabel}
+    {sliderAt}
+    {volumeLabel}
+    {percent}
+    {modeLabel}
+    {hasText}
+    {textLabel}
+    {openError}
+    onpage={goToPage}
+    onmode={() => ($readingMode = next(modes, mode))}
+    ontext={() => ($mangaText$ = next(textModes, $mangaText$))}
+  />
 {/if}
 
 {#if showSettings}
-  <div class="manga-scrim" aria-hidden="true" on:click={() => (showSettings = false)} />
-  <aside class="manga-settings" aria-label="Manga settings">
-    <h2 class="manga-settings-title">Manga</h2>
-    <SectionHead number={1} title="Reading" level="h3" />
-    <SettingsItemGroup
-      title="Reading mode"
-      wide
-      tooltip={volumes.series
-        ? `Kept for this series: ${volumes.series}`
-        : 'Kept for manga outside a series.'}
-    >
-      <ButtonToggleGroup options={modes} bind:selectedOptionId={$readingMode} />
-    </SettingsItemGroup>
-    {#if mode !== 'vertical'}
-      <SettingsItemGroup
-        title="Two-page spreads"
-        tooltip="Auto shows spreads on screens wider than tall. Cover, wide and last pages stay single; Shift pairs the cover too."
-      >
-        <div class="flex items-center gap-2">
-          <ButtonToggleGroup options={dualPages} bind:selectedOptionId={$mangaDualPage$} />
-          {#if dual}
-            <button class="app-button" aria-pressed={shift} on:click={() => (shift = !shift)}>
-              Shift
-            </button>
-          {/if}
-        </div>
-      </SettingsItemGroup>
-      <SettingsItemGroup title="Scale">
-        <ButtonToggleGroup options={scales} bind:selectedOptionId={$mangaScale$} />
-      </SettingsItemGroup>
-    {/if}
-    <div class="manga-section"><SectionHead number={2} title="Taps" level="h3" /></div>
-    <SettingsItemGroup
-      title="Tap zones"
-      wide
-      tooltip="Where a tap turns the page. Default is the sides for pages and an L shape for the vertical strip (top and left back, bottom and right forward)."
-    >
-      <ButtonToggleGroup options={tapLayouts} bind:selectedOptionId={$mangaTapLayout$} />
-    </SettingsItemGroup>
-    {#if $mangaTapLayout$ !== 'off'}
-      <SettingsItemGroup title="Invert">
-        <ButtonToggleGroup options={tapInverts} bind:selectedOptionId={$mangaTapInvert$} />
-      </SettingsItemGroup>
-    {/if}
-    {#if mode !== 'vertical'}
-      <SettingsItemGroup title="Double tap to zoom" tooltip="Single taps then wait a moment.">
-        <ButtonToggleGroup
-          options={optionsForToggle}
-          bind:selectedOptionId={$mangaDoubleTapZoom$}
-        />
-      </SettingsItemGroup>
-    {/if}
-    <div class="manga-section"><SectionHead number={3} title="Display" level="h3" /></div>
-    <SettingsItemGroup title="Background">
-      <ButtonToggleGroup options={backgrounds} bind:selectedOptionId={$mangaBackground$} />
-    </SettingsItemGroup>
-    <SettingsItemGroup title="Page number">
-      <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={$mangaPageNumber$} />
-    </SettingsItemGroup>
-    {#if wakeLockSupported}
-      <SettingsItemGroup title="Keep screen on" tooltip="Wake lock while the reader is open.">
-        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={$mangaKeepScreenOn$} />
-      </SettingsItemGroup>
-    {/if}
-    {#if hasText}
-      <SettingsItemGroup title="Text overlay" tooltip="Text recognised by mokuro, for Yomitan.">
-        <ButtonToggleGroup options={textModes} bind:selectedOptionId={$mangaText$} />
-      </SettingsItemGroup>
-    {/if}
-  </aside>
+  <MangaSettings
+    series={volumes.series}
+    {readingMode}
+    {modes}
+    {textModes}
+    {mode}
+    {dual}
+    bind:shift
+    {hasText}
+    {wakeLockSupported}
+    onclose={() => (showSettings = false)}
+  />
 {/if}
 
 {#if showMore}
   <ReaderSheet title="More" on:close={() => (showMore = false)}>
-    <ul class="manga-more">
-      {#each moreItems as item (item.label)}
-        <li>
-          <button
-            disabled={opening}
-            lang="ja"
-            on:click={() => {
-              showMore = false;
-              openVolume(item.volume);
-            }}
-          >
-            {item.label}
-          </button>
-        </li>
-      {/each}
-      {#if fullscreenManager.fullscreenEnabled}
-        <li>
-          <button
-            on:click={() => {
-              showMore = false;
-              toggleFullscreen();
-            }}
-          >
-            Full screen
-          </button>
-        </li>
-      {/if}
-    </ul>
+    <ReaderMoreList items={moreList} />
   </ReaderSheet>
 {/if}
-
-<style>
-  .manga-bottom {
-    position: fixed;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    z-index: 10;
-    padding: 1.75rem 1.25rem 0.75rem;
-    border-top: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
-    background:
-      linear-gradient(var(--reader-panel-bg), var(--reader-panel-bg)), var(--background-color);
-    color: var(--reader-panel-fg);
-    font-family: var(--app-font-ui);
-    font-size: var(--type-small);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .manga-slider-row,
-  .manga-slider-track {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-  }
-
-  .manga-slider-track {
-    flex: 1;
-  }
-
-  .manga-end,
-  .manga-percent {
-    color: color-mix(in srgb, var(--reader-panel-fg) 68%, transparent);
-    white-space: nowrap;
-  }
-
-  .manga-percent {
-    margin-left: 0.5rem;
-  }
-
-  .manga-slider {
-    position: relative;
-    display: flex;
-    flex: 1;
-    align-items: center;
-  }
-
-  .manga-bubble {
-    position: absolute;
-    bottom: 1rem;
-    padding: 0.05rem 0.4rem;
-    border-radius: 2px;
-    background: var(--accent-color);
-    color: var(--app-accent-fg);
-    font-size: var(--type-label);
-    font-weight: 700;
-    white-space: nowrap;
-    transform: translateX(-50%);
-    pointer-events: none;
-  }
-
-  [dir='rtl'] .manga-bubble {
-    transform: translateX(50%);
-  }
-
-  /* Square thumb on a 3px track; the read part is filled (inline background) */
-  .manga-slider input {
-    width: 100%;
-    height: 3px;
-    appearance: none;
-    border-radius: 0;
-    cursor: pointer;
-  }
-
-  .manga-slider input::-webkit-slider-thumb {
-    width: 1rem;
-    height: 1rem;
-    appearance: none;
-    border-radius: 2px;
-    background: var(--accent-color);
-  }
-
-  .manga-slider input::-moz-range-thumb {
-    width: 1rem;
-    height: 1rem;
-    border: 0;
-    border-radius: 2px;
-    background: var(--accent-color);
-  }
-
-  .manga-phone-row {
-    display: none;
-  }
-
-  @media (max-width: 767px) {
-    .manga-percent {
-      display: none;
-    }
-
-    .manga-phone-row {
-      display: flex;
-      justify-content: space-between;
-      padding-top: 0.5rem;
-      color: color-mix(in srgb, var(--reader-panel-fg) 68%, transparent);
-      font-size: var(--type-body);
-    }
-
-    .manga-phone-row button {
-      min-height: 2.75rem;
-    }
-  }
-
-  .manga-scrim {
-    position: fixed;
-    inset: 3.5rem 0 0;
-    z-index: 9;
-    background: var(--app-overlay-color);
-  }
-
-  .manga-settings {
-    position: fixed;
-    top: 3.5rem;
-    right: 0;
-    bottom: 0;
-    z-index: 11;
-    width: min(32.5rem, 100vw);
-    overflow-y: auto;
-    padding: 1.25rem 1.75rem 2rem;
-    border-left: 1px solid var(--border-color);
-    background: var(--background-color);
-    color: var(--font-color);
-    font-family: var(--app-font-ui);
-  }
-
-  .manga-settings-title {
-    margin: 0 0 1.25rem;
-    font-size: var(--type-h2);
-    font-weight: 400;
-  }
-
-  .manga-section {
-    margin-top: 1.75rem;
-  }
-
-  .manga-more {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .manga-more button {
-    display: flex;
-    width: 100%;
-    min-height: 3.25rem;
-    align-items: center;
-    border-bottom: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
-    text-align: left;
-  }
-
-  .manga-more button:hover:not(:disabled) {
-    color: var(--accent-strong-color);
-  }
-
-  .manga-more button:disabled {
-    opacity: 0.5;
-  }
-</style>
