@@ -404,6 +404,18 @@ describe('saveBook', () => {
     });
     expect(api.requests.filter((request) => request.startsWith('PUT'))).toHaveLength(1);
   });
+
+  // Bug: a signed-out reader sending the text PUT, which gets a 401 and uses up the address's
+  // readings rate limit (nginx limits before auth).
+  it('sends no text copy when signed out', async () => {
+    account.user = null;
+    const server = handler();
+
+    server.startContext({ title: 'こころ' });
+    await server.saveBook(book({}) as never);
+
+    expect(api.requests.filter((request) => request.startsWith('PUT'))).toEqual([]);
+  });
 });
 
 describe('a Windows game record', () => {

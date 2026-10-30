@@ -676,7 +676,8 @@ export class ServerStorageHandler extends BaseStorageHandler {
           'application/zip'
         )
       );
-    } else if (!isVn(data) && !isManga(data)) {
+    } else if (this.signedIn && !isVn(data) && !isManga(data)) {
+      // The text PUT needs sign-in and shares the readings rate limit, so signed out it only burns that budget.
       const book = await bookIdOf(title);
       const text = JSON.stringify({
         elementHtml: data.elementHtml,
