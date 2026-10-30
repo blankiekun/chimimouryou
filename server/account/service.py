@@ -82,6 +82,10 @@ import urllib.parse
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+# httpbase.py (shared request checks) is in the parent folder: /app in the images, server/ here.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+import httpbase  # noqa: E402
+
 STATE_DIR = os.environ.get('ACCOUNT_STATE_DIR', '/data/state/account')
 # Keep it off disks that other containers mount: whoever can read it can read
 # the settings (API keys).
@@ -527,16 +531,6 @@ def session_cookie_name(proto: str | None) -> str | None:
     if proto == 'https':
         return COOKIE
     return HTTP_COOKIE if request_scheme(proto) == 'http' else None
-
-
-def from_nginx(headers) -> bool:
-    """Whether the request carries the internal token (none configured: refuse everything)."""
-    try:
-        with open(INTERNAL_TOKEN_FILE, encoding='ascii') as f:
-            token = f.read().strip()
-    except OSError:
-        return False
-    return bool(token) and hmac.compare_digest(token, headers.get('X-Internal-Token', ''))
 
 
 # ---------------------------------------------------------------------------
@@ -998,7 +992,7 @@ class Handler(BaseHTTPRequestHandler):
         route = self.ROUTES.get((method, self.path.split('?')[0].lstrip('/')))
 
         try:
-            if not from_nginx(self.headers):
+            if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
                 raise ApiError(403, 'Only nginx may call this service')
             if not route:
                 raise ApiError(404, 'Not found')

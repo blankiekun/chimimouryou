@@ -17,7 +17,6 @@ HTTP API (behind nginx at /calibre/mokuro/api/, accounts with the import permiss
 CLI: service.py serve | generate ID...
 Standard library only (mokuro runs as a separate program). Not part of upstream.
 """
-import hmac
 import json
 import os
 import re
@@ -29,6 +28,10 @@ import time
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
+
+# httpbase.py (shared request checks) is in the parent folder: /app in the images, server/ here.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+import httpbase  # noqa: E402
 
 LIBRARY = os.environ.get('CALIBRE_LIBRARY', '/library')
 CATALOG_PATH = os.environ.get('CALIBRE_CATALOG', '/data/state/catalog/catalog.json')
@@ -230,16 +233,6 @@ def read_body(source, length: int) -> bytes:
     return data
 
 
-def from_nginx(headers) -> bool:
-    """Whether the request carries nginx's internal token (none configured: refuse everything)."""
-    try:
-        with open(INTERNAL_TOKEN_FILE, encoding='ascii') as f:
-            token = f.read().strip()
-    except OSError:
-        return False
-    return bool(token) and hmac.compare_digest(token, headers.get('X-Internal-Token', ''))
-
-
 class Handler(BaseHTTPRequestHandler):
     def _send(self, status, body):
         data = json.dumps(body).encode()
@@ -251,21 +244,16 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
-        if not from_nginx(self.headers):
+        if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
             return self._send(403, {'error': 'Only nginx may call this service'})
         if urlparse(self.path).path.strip('/') == 'status':
             return self._send(200, runner.status())
         self._send(404, {'error': 'not found'})
 
     def do_POST(self):
-        if not from_nginx(self.headers):
+        if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
             return self._send(403, {'error': 'Only nginx may call this service'})
-        # nginx checks the account; this stops other sites from posting with its cookie.
-        scheme = 'http' if ALLOW_HTTP and self.headers.get('X-Forwarded-Proto') == 'http' else 'https'
-        token_request = CORS_ORIGINS and self.headers.get('X-Forwarded-Proto') == 'https' and \
-            self.headers.get('Authorization', '').lower().startswith('bearer ') and \
-            self.headers.get('Origin') in CORS_ORIGINS
-        if not token_request and self.headers.get('Origin') != f"{scheme}://{self.headers.get('Host', '')}":
+        if not httpbase.same_site(self.headers, CORS_ORIGINS, ALLOW_HTTP):
             return self._send(403, {'error': 'Request from another site'})
         url = urlparse(self.path)
         action = url.path.strip('/')

@@ -30,7 +30,6 @@ CLI: service.py serve | compute ID...
 import functools
 import gzip
 import hashlib
-import hmac
 import json
 import os
 import re
@@ -48,6 +47,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from yurigana import __version__ as YURIGANA_VERSION
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+# httpbase.py (shared request checks) is in the parent folder: /app in the image, server/ here.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+import httpbase  # noqa: E402
 import core  # noqa: E402
 import readings_file  # noqa: E402
 from engine import engine_fingerprint, file_sha256  # noqa: E402
@@ -1028,16 +1030,6 @@ def remove_term_dictionary(name: str):
         pass
 
 
-def from_nginx(headers) -> bool:
-    """Whether the request carries nginx's internal token (none configured: refuse everything)."""
-    try:
-        with open(INTERNAL_TOKEN_FILE, encoding='ascii') as f:
-            token = f.read().strip()
-    except OSError:
-        return False
-    return bool(token) and hmac.compare_digest(token, headers.get('X-Internal-Token', ''))
-
-
 class Handler(BaseHTTPRequestHandler):
     def _send(self, status, body):
         data = json.dumps(body).encode()
@@ -1052,7 +1044,7 @@ class Handler(BaseHTTPRequestHandler):
         return self.path.rstrip('/').rsplit('/', 1)[-1]
 
     def do_GET(self):
-        if not from_nginx(self.headers):
+        if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
             return self._send(403, {'error': 'Only nginx may call this service'})
         parts = self.path.split('?')[0].strip('/').split('/')
         if parts == ['status']:
@@ -1089,14 +1081,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, {'error': 'not found'})
 
     def do_POST(self):
-        if not from_nginx(self.headers):
+        if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
             return self._send(403, {'error': 'Only nginx may call this service'})
-        # nginx checks the account; this stops other sites from posting with its cookie.
-        scheme = 'http' if ALLOW_HTTP and self.headers.get('X-Forwarded-Proto') == 'http' else 'https'
-        token_request = CORS_ORIGINS and self.headers.get('X-Forwarded-Proto') == 'https' and \
-            self.headers.get('Authorization', '').lower().startswith('bearer ') and \
-            self.headers.get('Origin') in CORS_ORIGINS
-        if not token_request and self.headers.get('Origin') != f"{scheme}://{self.headers.get('Host', '')}":
+        if not httpbase.same_site(self.headers, CORS_ORIGINS, ALLOW_HTTP):
             return self._send(403, {'error': 'Request from another site'})
         parts = self.path.split('?')[0].strip('/').split('/')
         if len(parts) == 2 and parts[0] == 'readings' and re.fullmatch(r'-?[0-9]+', parts[1]):

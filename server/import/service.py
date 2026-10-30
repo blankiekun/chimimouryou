@@ -29,7 +29,6 @@ Job states: queued, adding, added (calibreId, title), duplicate, failed (error).
 Standard library only. Not part of upstream.
 """
 import fcntl
-import hmac
 import json
 import os
 import re
@@ -43,6 +42,10 @@ import zipfile
 import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
+
+# httpbase.py (shared request checks) is in the parent folder: /app in the images, server/ here.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+import httpbase  # noqa: E402
 
 LIBRARY = os.environ.get('CALIBRE_LIBRARY', '/library')
 STATE_DIR = os.environ.get('IMPORT_STATE_DIR', '/data/state/import')
@@ -89,16 +92,6 @@ work = threading.Condition(lock)
 jobs: dict[str, dict] = {}
 # Uploads still being received (under lock): bytes per account, so checks count them too.
 uploading: dict[str, list[int]] = {}
-
-
-def from_nginx(headers) -> bool:
-    """Whether the request carries nginx's internal token (none configured: refuse everything)."""
-    try:
-        with open(INTERNAL_TOKEN_FILE, encoding='ascii') as f:
-            token = f.read().strip()
-    except OSError:
-        return False
-    return bool(token) and hmac.compare_digest(token, headers.get('X-Internal-Token', ''))
 
 
 def queue_dir():
@@ -585,7 +578,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):  # noqa: N802
         url = urlparse(self.path)
-        if not from_nginx(self.headers):
+        if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
             return self.send(403, {'error': 'Only nginx may call this service'})
         if url.path != '/jobs':
             return self.send(404, {'error': 'not found'})
@@ -602,7 +595,7 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         # Not url.path: urlparse drops ';params', so '/series;x' would count as '/series'.
         path = self.path.split('?', 1)[0]
-        if not from_nginx(self.headers):
+        if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
             return self.send(403, {'error': 'Only nginx may call this service'})
         if path == '/add':
             return self.handle_api(lambda: self.add(url))
@@ -615,11 +608,7 @@ class Handler(BaseHTTPRequestHandler):
         return self.send(404, {'error': 'not found'})
 
     def same_origin(self):
-        scheme = 'http' if ALLOW_HTTP and self.headers.get('X-Forwarded-Proto') == 'http' else 'https'
-        token_request = CORS_ORIGINS and self.headers.get('X-Forwarded-Proto') == 'https' and \
-            self.headers.get('Authorization', '').lower().startswith('bearer ') and \
-            self.headers.get('Origin') in CORS_ORIGINS
-        if not token_request and self.headers.get('Origin') != f"{scheme}://{self.headers.get('Host', '')}":
+        if not httpbase.same_site(self.headers, CORS_ORIGINS, ALLOW_HTTP):
             raise ApiError(403, 'Request from another site')
 
     def series(self):

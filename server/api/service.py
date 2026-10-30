@@ -8,7 +8,6 @@ Usage: service.py [serve]
 
 import glob
 import gzip
-import hmac
 import io
 import json
 import os
@@ -20,6 +19,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlsplit
 
 import apidb
+# httpbase.py (shared request checks) is in the parent folder: /app in the images, server/ here.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+import httpbase  # noqa: E402
 
 API_STATE_DIR = os.environ.get('API_STATE_DIR', '/data/state/api')
 API_DB = os.environ.get('API_DB', os.path.join(API_STATE_DIR, 'library.db'))
@@ -46,16 +48,6 @@ class ApiError(Exception):
         super().__init__(message)
         self.status = status
         self.body = body or {}
-
-
-def from_nginx(headers) -> bool:
-    """Whether the request carries the internal token (none configured: refuse everything)."""
-    try:
-        with open(INTERNAL_TOKEN_FILE, encoding='ascii') as f:
-            token = f.read().strip()
-    except OSError:
-        return False
-    return bool(token) and hmac.compare_digest(token, headers.get('X-Internal-Token', ''))
 
 
 def disk_full(path: str) -> bool:
@@ -504,7 +496,7 @@ class Handler(BaseHTTPRequestHandler):
     def dispatch(self, method: str):
         url = urlsplit(self.path)
         try:
-            if not from_nginx(self.headers):
+            if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
                 raise ApiError(403, 'Only nginx may call this service')
             self.account = self.headers.get('X-Account-Id', '')
             if self.account and not apidb.ACCOUNT_RE.fullmatch(self.account):
