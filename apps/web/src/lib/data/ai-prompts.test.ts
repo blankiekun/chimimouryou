@@ -12,15 +12,16 @@ import {
   aiPromptOverrides$,
   defaultAskAiPresets
 } from '$lib/data/ai-settings';
+import { saveConnection } from '$lib/data/ai-connections';
 import { askAi, buildPassagePrompt } from '$lib/data/ask-ai';
 import { aiPrompts, builtInPrompt, defaultAskAiPresetsJa, presetsForLanguage } from './ai-prompts';
 
 /** An OpenRouter connection with this key; an empty key removes every connection. */
 function setOpenRouterKey(key: string) {
-  aiConnections$.next(
-    key ? [{ id: 'openrouter', name: 'OR', provider: 'openrouter', kind: 'text', modified: 1 }] : []
-  );
-  aiConnectionKeys$.next(key ? { openrouter: key } : {});
+  aiConnections$.next([]);
+  aiConnectionKeys$.next({});
+  if (key)
+    saveConnection({ id: 'openrouter', name: 'OR', provider: 'openrouter', kind: 'text' }, key);
 }
 
 describe('AI language', () => {

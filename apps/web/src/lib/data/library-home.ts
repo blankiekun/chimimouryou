@@ -20,6 +20,7 @@ import { deleteVnCache } from '$lib/data/vn';
 import { standalone } from '$lib/data/env';
 import { splitVolume } from '$lib/functions/split-volume';
 import { coverageTarget } from '$lib/data/difficulty-core';
+import { record, strings } from '$lib/data/setting-parsers';
 
 export type LibraryTab = 'home' | 'store';
 
@@ -44,12 +45,17 @@ export function takePendingImport() {
 export const storeView$ = writableStringLocalStorageSubject()('libraryStoreView', 'books');
 
 /** Titles added to Home from the Store (titles are how books are identified across devices). */
-export const homeBookTitles$ = writableObjectLocalStorageSubject<string[]>()('homeBookTitles', []);
+export const homeBookTitles$ = writableObjectLocalStorageSubject<string[]>()(
+  'homeBookTitles',
+  [],
+  strings
+);
 
 /** Titles removed from Home and when: Continue reading skips them until they are read again. */
 export const homeRemovedTitles$ = writableObjectLocalStorageSubject<Record<string, number>>()(
   'homeRemovedTitles',
-  {}
+  {},
+  record
 );
 
 // lastBookOpen is stored with the shared book file; the bookmark time is per account.

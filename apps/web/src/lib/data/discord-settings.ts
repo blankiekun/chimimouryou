@@ -12,6 +12,7 @@
 
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import type { DiscordActivityTemplate, DiscordKind } from '$lib/data/discord-template';
+import { record } from '$lib/data/setting-parsers';
 
 export interface DiscordOptions {
   /** Show my status: off clears it and sends nothing */
@@ -36,12 +37,13 @@ export const discordOptionDefaults: DiscordOptions = {
 
 export const discordOptions$ = writableObjectLocalStorageSubject<Partial<DiscordOptions>>()(
   'discordOptions',
-  {}
+  {},
+  record
 );
 
 export const discordActivities$ = writableObjectLocalStorageSubject<
   Partial<Record<DiscordKind, Partial<DiscordActivityTemplate>>>
->()('discordActivities', {});
+>()('discordActivities', {}, record);
 
 export const discordKinds: DiscordKind[] = ['book', 'manga', 'vn', 'idle'];
 

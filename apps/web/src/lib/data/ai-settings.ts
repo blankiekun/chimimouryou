@@ -12,6 +12,7 @@ import { localStorage } from '$lib/data/window/local-storage';
 import { writableNumberLocalStorageSubject } from '$lib/data/internal/writable-number-local-storage-subject';
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
+import { arrayOf, finite, isRecord, oneOf, record, string } from '$lib/data/setting-parsers';
 
 export const defaultElevenLabsModel = 'eleven_v4';
 
@@ -20,11 +21,11 @@ export function redactSecret(text: string, secret: string) {
   return secret ? text.split(secret).join('[API key]') : text;
 }
 
-export const ttsVoiceId$ = writableStringLocalStorageSubject()('ttsVoiceId', '');
+export const ttsVoiceId$ = writableStringLocalStorageSubject()('ttsVoiceId', '', string);
 /** This device's Web Speech voice (by name) used without an ElevenLabs key; empty picks a Japanese one. Not synced: voices differ per device. */
 export const deviceVoiceName$ = writableStringLocalStorageSubject()('deviceVoiceName', '');
 /** Playback speed of the AI voice (the highlight follows the audio clock). */
-export const ttsPlaybackRate$ = writableNumberLocalStorageSubject()('ttsPlaybackRate', 1);
+export const ttsPlaybackRate$ = writableNumberLocalStorageSubject()('ttsPlaybackRate', 1, finite);
 /** The AI voice's speeds (Settings → AI → Voice, the mini player) */
 export const ttsRates = [0.75, 0.9, 1, 1.1, 1.25, 1.5];
 
@@ -124,28 +125,62 @@ export const defaultAiFeatures: Record<AiFeature, AiFeatureSetting> = {
   voice: { connection: '', model: '', params: {} }
 };
 
+/** What the merge needs; other fields, an unknown provider included, are kept for newer clients. */
+const isConnection = (item: unknown) =>
+  isRecord(item) &&
+  typeof item.id === 'string' &&
+  typeof item.provider === 'string' &&
+  Number.isFinite(item.modified) &&
+  (item.endpoint === undefined || typeof item.endpoint === 'string');
+
+/** Connections the merge can't use (from a malformed synced list) are dropped, the rest kept. */
+function parseConnections(value: unknown) {
+  if (!Array.isArray(value)) return undefined;
+  return (value.every(isConnection) ? value : value.filter(isConnection)) as AiConnection[];
+}
+
 export const aiConnections$ = writableObjectLocalStorageSubject<AiConnection[]>()(
   'aiConnections',
-  []
+  [],
+  parseConnections
 );
-/** Connection id → API key. A secret setting: only in the account's settings.json. */
-export const aiConnectionKeys$ = writableObjectLocalStorageSubject<Record<string, string>>()(
-  'aiConnectionKeys',
-  {}
-);
+
+/** A key and where it may go: its connection's provider and base URL when it was saved. */
+export interface AiConnectionKey {
+  key: string;
+  provider: string;
+  base: string;
+}
+
+/**
+ * Connection id → key, kept in this browser only (never synced). A plain string is a key saved before
+ * keys were bound (ai-connections.ts binds those on load) and is never sent.
+ */
+export const aiConnectionKeys$ = writableObjectLocalStorageSubject<
+  Record<string, AiConnectionKey | string>
+>()('aiConnectionKeys', {});
 export const aiFeatures$ = writableObjectLocalStorageSubject<Record<AiFeature, AiFeatureSetting>>()(
   'aiFeatures',
-  defaultAiFeatures
+  defaultAiFeatures,
+  record
 );
 
 /** Added to Ask AI's instructions, e.g. the reader's level; empty adds nothing. */
-export const askAiReaderNote$ = writableStringLocalStorageSubject()('askAiReaderNote', '');
+export const askAiReaderNote$ = writableStringLocalStorageSubject()('askAiReaderNote', '', string);
 
 /** Language of the AI prompts and answers (Ask AI, recaps, lorebook): 'en' or 'ja'. */
-export const aiLanguage$ = writableStringLocalStorageSubject()('aiLanguage', 'en');
+export const aiLanguage$ = writableStringLocalStorageSubject()(
+  'aiLanguage',
+  'en',
+  oneOf(['en', 'ja'])
+);
 
 /** Update the lorebook in the background every this many characters read; 0 is off. */
-export const lorebookAutoInterval$ = writableNumberLocalStorageSubject()('lorebookAutoInterval', 0);
+export const lorebookAutoInterval$ = writableNumberLocalStorageSubject()(
+  'lorebookAutoInterval',
+  0,
+  finite
+);
 
 export interface AskAiPreset {
   id: string;
@@ -179,15 +214,19 @@ export const defaultAskAiPresets: AskAiPreset[] = [
   }
 ];
 
+const isPreset = (item: unknown) => isRecord(item) && typeof item.id === 'string';
+
 export const askAiPresets$ = writableObjectLocalStorageSubject<AskAiPreset[]>()(
   'askAiPresets',
-  defaultAskAiPresets
+  defaultAskAiPresets,
+  arrayOf<AskAiPreset>(isPreset)
 );
 
 /** Preset run as soon as the panel opens; empty waits for a choice. */
 export const askAiDefaultPreset$ = writableStringLocalStorageSubject()(
   'askAiDefaultPreset',
-  'explain'
+  'explain',
+  string
 );
 
 /** An OpenRouter model id as the panels show it: `~vendor/model` → `model`. */
@@ -201,4 +240,4 @@ export type AiPromptKey = 'ask' | 'chapter' | 'recap' | 'lore';
 /** The reader's own system prompts per AI language (`en`/`ja`); a missing one uses the built-in. */
 export const aiPromptOverrides$ = writableObjectLocalStorageSubject<
   Partial<Record<string, Partial<Record<AiPromptKey, string>>>>
->()('aiPromptOverrides', {});
+>()('aiPromptOverrides', {}, record);

@@ -10,6 +10,7 @@
  */
 
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
+import { record } from '$lib/data/setting-parsers';
 
 export interface AudiobookControls {
   /** Seek step, in seconds */
@@ -37,7 +38,8 @@ export const audiobookControlDefaults: AudiobookControls = {
 
 export const audiobookControls$ = writableObjectLocalStorageSubject<Partial<AudiobookControls>>()(
   'audiobookControls',
-  {}
+  {},
+  record
 );
 
 export function audiobookControls(): AudiobookControls {

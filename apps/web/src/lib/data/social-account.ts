@@ -18,6 +18,7 @@ import { standalone } from '$lib/data/env';
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 import type { MessageKey } from '$lib/i18n';
+import { recordOrNull } from '$lib/data/setting-parsers';
 
 /** Our hub. shortcut: a placeholder until the Worker is deployed; set it then (deploy/social-hub/README.md). */
 export const socialHubDefault = 'https://chimi-hub.blankiekun.workers.dev';
@@ -73,7 +74,8 @@ export interface SocialSession {
 
 export const socialSession$ = writableObjectLocalStorageSubject<SocialSession | null>()(
   'socialSession',
-  null
+  null,
+  recordOrNull
 );
 
 /** The hub failed without its own answer (unreachable, or over Cloudflare's daily limit): social parts hide. */

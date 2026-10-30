@@ -33,6 +33,7 @@ import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-o
 import { HubError, hubFetch, hubImageUrl, socialSession$ } from '$lib/data/social-account';
 import type { Person } from '$lib/data/social';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
+import { record } from '$lib/data/setting-parsers';
 
 /** Lines shorter than this once normalised repeat all over a book: no threads on them */
 export const minLine = 6;
@@ -274,13 +275,15 @@ export function titleWork(title: string) {
 /** Work keys the reader confirmed, by title, kept in this browser */
 export const communityWorks$ = writableObjectLocalStorageSubject<Record<string, string>>()(
   'communityWorks',
-  {}
+  {},
+  record
 );
 
 /** Books whose match toast the reader answered, by title (when): the toast never asks again */
 export const communityMatchAsked$ = writableObjectLocalStorageSubject<Record<string, number>>()(
   'communityMatchAsked',
-  {}
+  {},
+  record
 );
 
 function remember(title: string, work: string) {

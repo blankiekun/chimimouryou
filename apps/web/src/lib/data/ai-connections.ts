@@ -21,7 +21,7 @@ import {
   type AiFeatureSetting,
   type AiSamplers
 } from '$lib/data/ai-settings';
-import { findProvider, type AiProvider } from '$lib/data/ai-providers';
+import { connectionBaseUrl, findProvider, type AiProvider } from '$lib/data/ai-providers';
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 
 /** A model from a provider's list. */
@@ -86,8 +86,45 @@ export function mergeConnections(local: AiConnection[], remote: AiConnection[]) 
   return [...merged.values()].sort((a, b) => a.id.localeCompare(b.id));
 }
 
+/** Where a connection's key goes: a synced edit of either drops the key in this browser. */
+function keyTarget(connection: AiConnection) {
+  const provider = findProvider(connection.provider);
+
+  return {
+    provider: connection.provider,
+    base: provider ? connectionBaseUrl(provider, connection.endpoint) : (connection.endpoint ?? '')
+  };
+}
+
+/** The connection's key, if it was saved for the provider and address the connection has now. */
 export function connectionKey(connection: AiConnection) {
-  return aiConnectionKeys$.getValue()[connection.id] ?? '';
+  const stored = aiConnectionKeys$.getValue()[connection.id];
+  const target = keyTarget(connection);
+
+  return typeof stored === 'object' &&
+    stored !== null &&
+    stored.provider === target.provider &&
+    stored.base === target.base
+    ? stored.key
+    : '';
+}
+
+// Keys saved before they were bound go with their connection as this browser has it, before any
+// settings sync can change it.
+const legacyKeys = Object.entries(aiConnectionKeys$.getValue()).filter(
+  ([id, key]) => typeof key === 'string' && aiConnections$.getValue().some((c) => c.id === id)
+);
+
+if (legacyKeys.length) {
+  aiConnectionKeys$.next({
+    ...aiConnectionKeys$.getValue(),
+    ...Object.fromEntries(
+      legacyKeys.map(([id, key]) => [
+        id,
+        { key: key as string, ...keyTarget(aiConnections$.getValue().find((c) => c.id === id)!) }
+      ])
+    )
+  });
 }
 
 export function featureSetting(feature: AiFeature): AiFeatureSetting {
@@ -196,7 +233,7 @@ export const aiFeatureState$ = combineLatest([
   )
 );
 
-/** Adds or changes a connection; an empty key removes it from this browser and the account. */
+/** Adds or changes a connection; an empty key removes it from this browser. */
 export function saveConnection(connection: Omit<AiConnection, 'modified'>, key: string) {
   const saved: AiConnection = { ...connection, modified: Date.now() };
   const keys = { ...aiConnectionKeys$.getValue() };
@@ -204,7 +241,7 @@ export function saveConnection(connection: Omit<AiConnection, 'modified'>, key: 
   aiConnections$.next([...aiConnections$.getValue().filter((c) => c.id !== saved.id), saved]);
 
   if (key.trim()) {
-    keys[saved.id] = key.trim();
+    keys[saved.id] = { key: key.trim(), ...keyTarget(saved) };
   } else {
     delete keys[saved.id];
   }

@@ -7,6 +7,7 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { aiConnectionKeys$, aiConnections$ } from '$lib/data/ai-settings';
+import { saveConnection } from '$lib/data/ai-connections';
 import { buildSearchIndex } from '$lib/functions/book-text/book-search';
 import {
   copyLorebookTo,
@@ -44,10 +45,10 @@ const aoi: LoreEntry = {
 
 /** An OpenRouter connection with this key; an empty key removes every connection. */
 function setOpenRouterKey(key: string) {
-  aiConnections$.next(
-    key ? [{ id: 'openrouter', name: 'OR', provider: 'openrouter', kind: 'text', modified: 1 }] : []
-  );
-  aiConnectionKeys$.next(key ? { openrouter: key } : {});
+  aiConnections$.next([]);
+  aiConnectionKeys$.next({});
+  if (key)
+    saveConnection({ id: 'openrouter', name: 'OR', provider: 'openrouter', kind: 'text' }, key);
 }
 
 describe('mergeLoreEntries', () => {

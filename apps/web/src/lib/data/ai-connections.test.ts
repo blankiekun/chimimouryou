@@ -94,3 +94,59 @@ describe('settings from before connections', () => {
     expect(window.localStorage.getItem('elevenLabsApiKey')).toBeNull();
   });
 });
+
+/*
+ * How binding a key to its connection could fail:
+ * - a synced edit of the endpoint (or provider) still sends this browser's key to the new address;
+ * - an endpoint left empty and one equal to the provider's URL count as different, so keys get lost;
+ * - re-entering the key after a change doesn't bind it to the new address (locked out);
+ * - keys saved before binding aren't bound on load, so every reader must re-enter them.
+ */
+describe('keys bound to where they go', () => {
+  it('drop out when a synced edit moves the connection, and work again once re-entered', () => {
+    const saved = saveConnection(
+      { id: 'c', name: 'C', provider: 'custom', kind: 'text', endpoint: 'http://127.0.0.1:9/v1' },
+      'sk-c'
+    );
+    expect(resolveFeature('ask').key).toBe('sk-c');
+
+    const moved = {
+      ...saved,
+      endpoint: 'https://elsewhere.example/v1',
+      modified: saved.modified + 1
+    };
+    aiConnections$.next(mergeConnections(aiConnections$.getValue(), [moved]));
+    expect(resolveFeature('ask').key).toBe('');
+
+    aiConnections$.next(
+      mergeConnections(aiConnections$.getValue(), [{ ...moved, provider: 'openai' }])
+    );
+    expect(resolveFeature('ask').key).toBe('');
+
+    saveConnection(moved, 'sk-c');
+    expect(resolveFeature('ask').key).toBe('sk-c');
+  });
+
+  it("don't drop out when the endpoint is written out as the provider's own URL", () => {
+    const saved = saveConnection({ id: 'g', name: 'G', provider: 'groq', kind: 'text' }, 'gsk');
+
+    aiConnections$.next([{ ...saved, endpoint: 'https://api.groq.com/openai/v1/' }]);
+
+    expect(resolveFeature('ask').key).toBe('gsk');
+  });
+
+  it('saved before binding are bound to the connection as this browser had it on load', async () => {
+    window.localStorage.setItem('aiConnections', JSON.stringify([conn('openrouter', 1)]));
+    window.localStorage.setItem('aiConnectionKeys', JSON.stringify({ openrouter: 'sk-or-old' }));
+    vi.resetModules();
+    const settings = await import('$lib/data/ai-settings');
+    const connections = await import('./ai-connections');
+
+    expect(connections.resolveFeature('ask').key).toBe('sk-or-old');
+
+    settings.aiConnections$.next([
+      conn('openrouter', 2, { endpoint: 'https://elsewhere.example' })
+    ]);
+    expect(connections.resolveFeature('ask').key).toBe('');
+  });
+});

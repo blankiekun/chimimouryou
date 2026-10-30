@@ -7,14 +7,15 @@
 /**
  * Syncs AI settings, themes and reader settings to the signed-in account
  * (settings.json in the account's WebDAV folder), or while signed out to the
- * root of the library's Google Drive, OneDrive or folder source, without the
- * API keys (sync-files.ts). Reader settings are kept
+ * root of the library's Google Drive, OneDrive or folder source (sync-files.ts).
+ * AI keys never sync; tokens only go to the account. Reader settings are kept
  * separately for phones and larger screens, e.g. one column on the phone and
  * two on the desktop. Each setting keeps the time it was last changed in this
  * browser, and the newer value wins per setting. Not part of upstream.
  */
 
 import { BehaviorSubject, map, merge, skip, type Subscription } from 'rxjs';
+import type { ParsedStore } from '$lib/data/internal/writable-storage-subject';
 import { mangaSeriesModes$ } from '$lib/data/manga';
 import { mergePlacementResults, placementResults$ } from '$lib/data/placement';
 import { mergeRankState, readingRank$ } from '$lib/data/reading-rank';
@@ -113,7 +114,8 @@ interface SettingsDocument {
 
 type EntryTimes = Record<string, number>;
 
-type Store = BehaviorSubject<any>;
+/** Synced stores parse every value: a malformed remote one is ignored (`mergeSettings`). */
+type Store = ParsedStore<any>;
 
 /** localStorage key → store, shared by all devices. Add a store here to sync it. */
 const sharedSettings: Record<string, Store> = {
@@ -326,7 +328,7 @@ export const settingsSyncState$ = new BehaviorSubject<SettingsSyncState>({ state
 
 const changeTimesKey = 'accountSettingsModified';
 const entryTimesKey = 'accountSettingsEntryModified';
-/** Account whose settings this browser holds (its change times and API keys). */
+/** Account whose settings this browser holds (its change times and tokens). */
 const ownerKey = 'accountSettingsOwner';
 const uploadDelayMs = 1500;
 const refreshOnFocusAfterMs = 60_000;
@@ -415,7 +417,6 @@ async function syncOnce() {
   settingsSyncState$.next({ state: 'synced', at: lastSynced });
 }
 
-/** Applies the newer remote settings; resolves the file to upload when this browser has newer ones. */
 // AI keys stay in the browser that holds them (owner 2026-10-29): the account's old copy goes too.
 const oldAiSettings = [
   'aiConnectionKeys',
@@ -426,6 +427,7 @@ const oldAiSettings = [
   'elevenLabsModel'
 ];
 
+/** Applies the newer remote settings; resolves the file to upload when this browser has newer ones. */
 async function mergeSettings(file: Partial<SettingsDocument> | undefined) {
   const remote: SettingsDocument = {
     version: 1,
@@ -437,7 +439,14 @@ async function mergeSettings(file: Partial<SettingsDocument> | undefined) {
   const localEntryTimes = readEntryTimes();
   const remoteEntryTimes = { ...remote.entryModified };
   const localValues = Object.fromEntries(entries.map(({ key, store }) => [key, store.getValue()]));
-  const remoteValues = { ...remote.values };
+  // A malformed value (an old client's null, an unknown view mode, a hand-edited file) is ignored and
+  // left in the file: a newer client may understand it, and the next change here replaces it.
+  const remoteValues = Object.fromEntries(
+    entries
+      .filter(({ key }) => key in remote.values)
+      .map(({ key, store }) => [key, store.parse(remote.values[key])])
+      .filter(([, value]) => value !== undefined)
+  );
   let changedRemote = false;
 
   // Settings from before AI connections (#129) and synced AI keys: no API key stays in the account's copy.
@@ -450,6 +459,8 @@ async function mergeSettings(file: Partial<SettingsDocument> | undefined) {
   });
 
   entries.forEach(({ key, storageKey, store }) => {
+    if (key in remote.values && !(key in remoteValues)) return;
+
     const remoteTime = remote.modified[key] || 0;
     const localTime = localTimes[key] || 0;
     const newDefault = replacedOldDefaultTheme(key, remote.values[key], remoteTime);
@@ -466,7 +477,7 @@ async function mergeSettings(file: Partial<SettingsDocument> | undefined) {
     if (entrySetting && key in remote.values) {
       const { merged, times } = mergeEntries(
         entrySetting.toMap(store.getValue()),
-        entrySetting.toMap(remote.values[key]),
+        entrySetting.toMap(remoteValues[key]),
         localEntryTimes[key],
         remoteEntryTimes[key]
       );
@@ -487,7 +498,7 @@ async function mergeSettings(file: Partial<SettingsDocument> | undefined) {
       localEntryTimes[key] = times;
       localTimes[key] = remote.modified[key];
     } else if (merge && key in remote.values) {
-      const merged = merge(store.getValue(), remote.values[key], localValues, remoteValues);
+      const merged = merge(store.getValue(), remoteValues[key], localValues, remoteValues);
 
       applyRemoteValue(store, merged);
 
@@ -499,7 +510,7 @@ async function mergeSettings(file: Partial<SettingsDocument> | undefined) {
 
       localTimes[key] = remote.modified[key];
     } else if (key in remote.values && (newDefault || remoteTime >= localTime)) {
-      applyRemoteValue(store, remote.values[key]);
+      applyRemoteValue(store, newDefault || remoteValues[key]);
       localTimes[key] = remote.modified[key];
     } else if (localTime > remoteTime || window.localStorage.getItem(storageKey) !== null) {
       remote.values[key] = store.getValue();
@@ -554,8 +565,8 @@ function onVisibilityChange() {
 }
 
 /**
- * Forgets the previous account's API keys and change times when the browser is
- * signed out or another account signs in. Keys typed while signed out belong to
+ * Forgets the previous account's tokens and change times when the browser is
+ * signed out or another account signs in. Tokens set while signed out belong to
  * nobody, so the account that signs in next doesn't adopt them either.
  */
 function releasePreviousOwner(user: AccountUser | null) {
@@ -581,7 +592,7 @@ function releasePreviousOwner(user: AccountUser | null) {
 
 /**
  * Called once per page load with the session state. With null (signed out or
- * expired) it releases the previous account's API keys and syncs with the
+ * expired) it releases the previous account's tokens and syncs with the
  * library's cloud or folder, if it has one.
  */
 export function startSettingsSync(user: AccountUser | null) {
@@ -589,7 +600,7 @@ export function startSettingsSync(user: AccountUser | null) {
   releasePreviousOwner(user);
 
   signedIn = !!user;
-  // API keys only go to the account: a cloud or folder may be shared or read by other apps.
+  // Tokens only go to the account: a cloud or folder may be shared or read by other apps.
   entries = syncEntries(readerProfile()).filter(
     ({ key }) => signedIn || !secretSettings.includes(key)
   );

@@ -60,11 +60,12 @@ import type { TextMarginMode } from './text-margin-mode';
 import type { ThemeOption } from './theme-option';
 import type { VerticalTextOrientation } from './vertical-text-orientation';
 import { ViewMode } from './view-mode';
+import { bool, finite, finiteOrNull, oneOf, string } from './setting-parsers';
 import type { WritingMode } from './writing-mode';
 import { writableSetLocalStorageSubject } from './internal/writable-set-local-storage-subject';
 import { writableStringLocalStorageSubject } from './internal/writable-string-local-storage-subject';
 
-export const theme$ = writableStringLocalStorageSubject()('theme', defaultLightThemeId);
+export const theme$ = writableStringLocalStorageSubject()('theme', defaultLightThemeId, string);
 export const customThemes$ = writableObjectLocalStorageSubject<Record<string, ThemeOption>>()(
   'customThemes',
   {}
@@ -72,67 +73,91 @@ export const customThemes$ = writableObjectLocalStorageSubject<Record<string, Th
 export const multiplier$ = writableNumberLocalStorageSubject()('autoScrollMultiplier', 20);
 export const fontFamilyGroupOne$ = writableStringLocalStorageSubject()(
   'fontFamilyGroupOne',
-  'Noto Serif JP'
+  'Noto Serif JP',
+  string
 );
 export const fontFamilyGroupTwo$ = writableStringLocalStorageSubject()(
   'fontFamilyGroupTwo',
-  'Noto Sans JP'
+  'Noto Sans JP',
+  string
 );
-export const fontWeight$ = writableNumberOrNullLocalStorageSubject()('fontWeight', null);
-export const fontSize$ = writableNumberLocalStorageSubject()('fontSize', 20);
-export const lineHeight$ = writableNumberLocalStorageSubject()('lineHeight', 1.65);
-export const textIndentation$ = writableNumberLocalStorageSubject()('textIndentation', 0);
-export const textMarginValue$ = writableNumberLocalStorageSubject()('textMarginValue', 0);
-export const hideSpoilerImage$ = writableBooleanLocalStorageSubject()('hideSpoilerImage', true);
+export const fontWeight$ = writableNumberOrNullLocalStorageSubject()(
+  'fontWeight',
+  null,
+  finiteOrNull
+);
+export const fontSize$ = writableNumberLocalStorageSubject()('fontSize', 20, finite);
+export const lineHeight$ = writableNumberLocalStorageSubject()('lineHeight', 1.65, finite);
+export const textIndentation$ = writableNumberLocalStorageSubject()('textIndentation', 0, finite);
+export const textMarginValue$ = writableNumberLocalStorageSubject()('textMarginValue', 0, finite);
+export const hideSpoilerImage$ = writableBooleanLocalStorageSubject()(
+  'hideSpoilerImage',
+  true,
+  bool
+);
 export const hideSpoilerImageMode$ = writableStringLocalStorageSubject<BlurMode>()(
   'hideSpoilerImageMode',
-  BlurMode.AFTER_TOC
+  BlurMode.AFTER_TOC,
+  oneOf(Object.values(BlurMode))
 );
-export const hideFurigana$ = writableBooleanLocalStorageSubject()('hideFurigana', false);
+export const hideFurigana$ = writableBooleanLocalStorageSubject()('hideFurigana', false, bool);
 // Furigana from the server's readings files (generated-furigana.ts) on words the book gives none.
 // On by default only in the standalone edition: on a server every open would ask the optional
 // difficulty service for a readings file.
 export const generatedFurigana$ = writableBooleanLocalStorageSubject()(
   'generatedFurigana',
-  standalone
+  standalone,
+  bool
 );
 // Underlines unknown words in the reader (unknown-words.ts); needs a readings file too.
 export const unknownWordUnderline$ = writableBooleanLocalStorageSubject()(
   'unknownWordUnderline',
-  false
+  false,
+  bool
 );
 // Counts the new words of each chapter in the reader's Contents (chapter-primer.ts); needs a readings file.
-export const chapterPrimer$ = writableBooleanLocalStorageSubject()('chapterPrimer', true);
+export const chapterPrimer$ = writableBooleanLocalStorageSubject()('chapterPrimer', true, bool);
 export const furiganaStyle$ = writableStringLocalStorageSubject<FuriganaStyle>()(
   'furiganaStyle',
-  FuriganaStyle.Partial
+  FuriganaStyle.Partial,
+  oneOf(Object.values(FuriganaStyle))
 );
 export const writingMode$ = writableStringLocalStorageSubject<WritingMode>()(
   'writingMode',
-  'vertical-rl'
+  'vertical-rl',
+  oneOf<WritingMode>(['horizontal-tb', 'vertical-rl'])
 );
 export const enableVerticalFontKerning$ = writableBooleanLocalStorageSubject()(
   'enableVerticalFontKerning',
-  false
+  false,
+  bool
 );
-export const enableFontVPAL$ = writableBooleanLocalStorageSubject()('enableFontVPAL', false);
+export const enableFontVPAL$ = writableBooleanLocalStorageSubject()('enableFontVPAL', false, bool);
 export const verticalTextOrientation$ =
-  writableStringLocalStorageSubject<VerticalTextOrientation>()('verticalTextOrientation', 'mixed');
+  writableStringLocalStorageSubject<VerticalTextOrientation>()(
+    'verticalTextOrientation',
+    'mixed',
+    oneOf<VerticalTextOrientation>(['mixed', 'upright'])
+  );
 export const prioritizeReaderStyles$ = writableBooleanLocalStorageSubject()(
   'prioritizeReaderStyles',
-  false
+  false,
+  bool
 );
 export const enableTextJustification$ = writableBooleanLocalStorageSubject()(
   'enableTextJustification',
-  false
+  false,
+  bool
 );
 export const enableTextWrapPretty$ = writableBooleanLocalStorageSubject()(
   'enableTextWrapPretty',
-  false
+  false,
+  bool
 );
 export const textMarginMode$ = writableStringLocalStorageSubject<TextMarginMode>()(
   'textMarginMode',
-  'auto'
+  'auto',
+  oneOf<TextMarginMode>(['auto', 'manual'])
 );
 export type ReaderProfile = 'phone' | 'desktop';
 
@@ -147,46 +172,58 @@ export function readerProfile(): ReaderProfile {
 // On for phones only: they dim within a page's reading time; desktops would never sleep.
 export const enableReaderWakeLock$ = writableBooleanLocalStorageSubject()(
   'enableReaderWakeLock',
-  browser && readerProfile() === 'phone'
+  browser && readerProfile() === 'phone',
+  bool
 );
 export const verticalMode$ = writingMode$.pipe(map((writingMode) => writingMode === 'vertical-rl'));
 export const showCharacterCounter$ = writableBooleanLocalStorageSubject()(
   'showCharacterCounter',
-  true
+  true,
+  bool
 );
-export const showPercentage$ = writableBooleanLocalStorageSubject()('showPercentage', true);
+export const showPercentage$ = writableBooleanLocalStorageSubject()('showPercentage', true, bool);
 export const showFooterChapterCharacterCounter$ = writableBooleanLocalStorageSubject()(
   'showFooterChapterCharacterCounter',
-  false
+  false,
+  bool
 );
 export const showFooterChapterPercentage$ = writableBooleanLocalStorageSubject()(
   'showFooterChapterPercentage',
-  false
+  false,
+  bool
 );
 export const viewMode$ = writableStringLocalStorageSubject<ViewMode>()(
   'viewMode',
-  ViewMode.Paginated
+  ViewMode.Paginated,
+  oneOf(Object.values(ViewMode))
 );
 
 export const secondDimensionMaxValue$ = writableNumberLocalStorageSubject()(
   'secondDimensionMaxValue',
-  0
+  0,
+  finite
 );
-export const firstDimensionMargin$ = writableNumberLocalStorageSubject()('firstDimensionMargin', 0);
+export const firstDimensionMargin$ = writableNumberLocalStorageSubject()(
+  'firstDimensionMargin',
+  0,
+  finite
+);
 
-export const swipeThreshold$ = writableNumberLocalStorageSubject()('swipeThreshold', 10);
+export const swipeThreshold$ = writableNumberLocalStorageSubject()('swipeThreshold', 10, finite);
 
 export const disableWheelNavigation$ = writableBooleanLocalStorageSubject()(
   'disableWheelNavigation',
-  false
+  false,
+  bool
 );
 
 export const autoPositionOnResize$ = writableBooleanLocalStorageSubject()(
   'autoPositionOnResize',
-  true
+  true,
+  bool
 );
 
-export const avoidPageBreak$ = writableBooleanLocalStorageSubject()('avoidPageBreak', false);
+export const avoidPageBreak$ = writableBooleanLocalStorageSubject()('avoidPageBreak', false, bool);
 
 export const pauseTrackerOnCustomPointChange$ = writableBooleanLocalStorageSubject()(
   'pauseTrackerOnCustomPointChange',
@@ -195,28 +232,31 @@ export const pauseTrackerOnCustomPointChange$ = writableBooleanLocalStorageSubje
 
 export const customReadingPointEnabled$ = writableBooleanLocalStorageSubject()(
   'customReadingPointEnabled',
-  false
+  false,
+  bool
 );
 
 export const selectionToBookmarkEnabled$ = writableBooleanLocalStorageSubject()(
   'selectionToBookmarkEnabled',
-  true
+  true,
+  bool
 );
 
 export const enableTapEdgeToFlip$ = writableBooleanLocalStorageSubject()(
   'enableTapEdgeToFlip',
-  false
+  false,
+  bool
 );
 
-export const confirmClose$ = writableBooleanLocalStorageSubject()('confirmClose', false);
+export const confirmClose$ = writableBooleanLocalStorageSubject()('confirmClose', false, bool);
 
-export const manualBookmark$ = writableBooleanLocalStorageSubject()('manualBookmark', false);
+export const manualBookmark$ = writableBooleanLocalStorageSubject()('manualBookmark', false, bool);
 
-export const autoBookmark$ = writableBooleanLocalStorageSubject()('autoBookmark', true);
+export const autoBookmark$ = writableBooleanLocalStorageSubject()('autoBookmark', true, bool);
 
-export const autoBookmarkTime$ = writableNumberLocalStorageSubject()('autoBookmarkTime', 3);
+export const autoBookmarkTime$ = writableNumberLocalStorageSubject()('autoBookmarkTime', 3, finite);
 
-export const pageColumns$ = writableNumberLocalStorageSubject()('pageColumns', 0);
+export const pageColumns$ = writableNumberLocalStorageSubject()('pageColumns', 0, finite);
 
 export const requestPersistentStorage$ = writableBooleanLocalStorageSubject()(
   'requestPersistentStorage',

@@ -12,6 +12,7 @@ import {
   aiFeatures$,
   defaultAiFeatures
 } from '$lib/data/ai-settings';
+import { saveConnection } from '$lib/data/ai-connections';
 import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v3';
 import { buildSearchIndex } from '$lib/functions/book-text/book-search';
 import { readerDb } from '$lib/data/reader-db';
@@ -36,10 +37,10 @@ async function cacheSummary(title: string, key: string, model: string) {
 
 /** An OpenRouter connection with this key; an empty key removes every connection. */
 function setOpenRouterKey(key: string) {
-  aiConnections$.next(
-    key ? [{ id: 'openrouter', name: 'OR', provider: 'openrouter', kind: 'text', modified: 1 }] : []
-  );
-  aiConnectionKeys$.next(key ? { openrouter: key } : {});
+  aiConnections$.next([]);
+  aiConnectionKeys$.next({});
+  if (key)
+    saveConnection({ id: 'openrouter', name: 'OR', provider: 'openrouter', kind: 'text' }, key);
 }
 
 describe('planRecap', () => {

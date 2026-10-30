@@ -31,6 +31,7 @@ import { writableNumberLocalStorageSubject } from '$lib/data/internal/writable-n
 import placementItems from '$lib/data/placement-items.json';
 import { convertToHiragana } from '$lib/vendor/yomitan/language/ja/japanese-wanakana';
 import { convertKatakanaToHiragana } from '$lib/vendor/yomitan/language/ja/japanese';
+import { arrayOf, isRecord } from '$lib/data/setting-parsers';
 
 export interface PlacementItem {
   /** The word shown */
@@ -133,7 +134,8 @@ export type PlacementEstimate = Pick<PlacementRecord, 'cutoff' | 'words' | 'curv
 /** Every result, oldest first. */
 export const placementResults$ = writableArrayLocalStorageSubject<PlacementRecord>()(
   'placementResults',
-  []
+  [],
+  arrayOf<PlacementRecord>(isRecord)
 );
 /** The cutoff in force now, from `placementResults$` (0: not taken, or nothing known). */
 export const placementCutoff$ = writableNumberLocalStorageSubject()('placementCutoff', 0);
