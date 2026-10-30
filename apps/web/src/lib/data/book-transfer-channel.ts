@@ -5,7 +5,8 @@
  */
 
 import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
-import { isManga, mangaPages } from '$lib/data/manga';
+import { isManga } from '$lib/data/manga';
+import { bookContent } from '$lib/data/book-content';
 import { isVn } from '$lib/data/vn';
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import { parseBookHtml } from '$lib/functions/file-loaders/utils/sanitize-book-html';
@@ -137,21 +138,11 @@ export async function unpackBook(blob: Blob, lastBookModified = Date.now()): Pro
 
   at += header.cover?.[0] ?? 0;
   if (at !== blob.size || isVn(header)) throw new TransferError('format');
-  if (isManga(header)) {
-    try {
-      const pages: unknown = mangaPages(header);
-
-      if (!Array.isArray(pages) || pages.some((page) => typeof page !== 'string')) {
-        throw new TransferError('format');
-      }
-    } catch (_) {
-      throw new TransferError('format');
-    }
-  }
+  if (isManga(header) && bookContent(header).kind !== 'manga') throw new TransferError('format');
 
   // A manga's elementHtml is a marker and JSON page names, never rendered as HTML.
   const clean = (html: string) =>
-    isManga({ elementHtml: html }) ? html : parseBookHtml(html).innerHTML;
+    bookContent({ elementHtml: html }).kind === 'manga' ? html : parseBookHtml(html).innerHTML;
 
   return {
     title: header.title,

@@ -6,6 +6,7 @@
    * pinch, double tap and Ctrl+wheel zoom, and a zoomed page pans.
    * Book-only extras (highlights, recap, listen, search, statistics) are left out.
    */
+  import { bookContent, damagedBookText } from '$lib/data/book-content';
   import { noteReading } from '$lib/data/social';
   import { readingActivity } from '$lib/data/reader-hooks';
   import { isPluginEnabled } from '$lib/plugins';
@@ -123,6 +124,8 @@
   let transition = 0;
   let opening = false;
   let openError = '';
+  /** The stored data can't be read (bookContent's `invalid`) */
+  let damaged = false;
   let wantWakeLock = false;
   let requestingWakeLock = false;
   /** Each page's mokuro text, if the server has some for this volume. */
@@ -254,6 +257,10 @@
 
     if (!data) {
       goto(`${pagePath}/manage`);
+      return;
+    }
+    if (bookContent(data).kind !== 'manga') {
+      damaged = true;
       return;
     }
 
@@ -1008,6 +1015,15 @@
     {/each}
   {/if}
 </div>
+
+{#if damaged}
+  <div
+    class="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background-color p-4 text-fg"
+  >
+    <p role="alert">{damagedBookText}</p>
+    <button type="button" class="app-button" on:click={leave}>Back to the library</button>
+  </div>
+{/if}
 
 {#if transition && mode !== 'vertical'}
   <!-- Outside the gesture layer, so its buttons get clicks; the sides still turn. -->

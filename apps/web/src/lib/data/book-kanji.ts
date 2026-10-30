@@ -10,6 +10,7 @@
  * in reader-db `known` as `kanji:<title>`. Not part of upstream.
  */
 
+import { bookContent } from '$lib/data/book-content';
 import { countKanji } from '$lib/data/kanji-seen';
 import { readerDb } from '$lib/data/reader-db';
 import { database } from '$lib/data/store';
@@ -40,9 +41,12 @@ export async function bookKanjiCount(id: number, title: string, characters: numb
 
   const data = await database.getData(id);
 
-  if (!data?.elementHtml) return undefined;
+  const content = data && bookContent(data);
 
-  const uniqueKanji = uniqueKanjiInHtml(data.elementHtml);
+  // Manga page names and VN file lists are no text to count.
+  if (content?.kind !== 'book') return undefined;
+
+  const uniqueKanji = uniqueKanjiInHtml(content.html);
 
   await db.put('known', { characters, uniqueKanji }, key(title));
 

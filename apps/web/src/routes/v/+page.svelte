@@ -13,6 +13,7 @@
   import { readingActivity } from '$lib/data/reader-hooks';
   import { isPluginEnabled } from '$lib/plugins';
   import { onDestroy, onMount } from 'svelte';
+  import { bookContent, damagedBookText } from '$lib/data/book-content';
   import { goto } from '$app/navigation';
   import { page } from '$lib/data/page-store';
   import ReaderSheet from '$lib/components/book-reader/reader-sheet.svelte';
@@ -258,6 +259,10 @@
 
     if (!data) {
       goto(`${pagePath}/manage`);
+      return;
+    }
+    if (bookContent(data).kind !== 'vn') {
+      blocked = damagedBookText;
       return;
     }
 

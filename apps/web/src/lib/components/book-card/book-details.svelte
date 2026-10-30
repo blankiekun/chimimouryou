@@ -27,7 +27,8 @@
     type MetadataKind,
     type MetadataSource
   } from '$lib/data/book-metadata';
-  import { vnBookmark, vnInfo } from '$lib/data/vn';
+  import { vnBookmark } from '$lib/data/vn';
+  import { bookContent, damagedBookText } from '$lib/data/book-content';
   import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
   import {
     loadCalibreCatalog,
@@ -104,6 +105,8 @@
     words: void;
     /** Saved details changed the library (a cover) */
     changed: void;
+    /** Delete a book whose stored data is damaged */
+    delete: { id: number };
   }>();
 
   let layer: HTMLDivElement;
@@ -142,6 +145,8 @@
   let source: MetadataSource | undefined;
   /** A Windows game in this browser: a pick sets its length from Jiten (it has no count of its own) */
   let windowsGame = false;
+  /** The stored manga or VN data can't be read (bookContent's `invalid`) */
+  let damaged = false;
   let lengthNote = '';
 
   const number = (value: number) => value.toLocaleString('en-US');
@@ -289,14 +294,18 @@
     readingsMissing = listWithoutReader = false;
     generating = redoing = undefined;
     readingsError = '';
-    windowsGame = false;
+    windowsGame = damaged = false;
     lengthNote = '';
 
-    if (kind === 'vn') {
+    if (kind !== 'book') {
       database
         .getDataByTitle(title)
         .then((data) => {
-          if (title === book.title) windowsGame = !!data && vnInfo(data).engine === 'vnbox';
+          const content = data && bookContent(data);
+
+          if (title !== book.title) return;
+          damaged = content?.kind === 'invalid';
+          windowsGame = content?.kind === 'vn' && content.info.engine === 'vnbox';
         })
         .catch(() => {});
     }
@@ -606,15 +615,26 @@
       <BookFriends title={book.title} part="friends" />
 
       <div class="details-actions">
-        <button
-          type="button"
-          class="app-button app-button-primary"
-          on:click={() => dispatch('read', { id: book.id })}
-        >
-          {#if isReading(book)}{$t$('book.resumeAt', {
-              percent: Math.round(book.progress * 100)
-            })}{:else if isFinished(book)}{$t$('book.readAgain')}{:else}{$t$('book.read')}{/if}
-        </button>
+        {#if damaged}
+          <p role="alert">{damagedBookText}</p>
+          <button
+            type="button"
+            class="app-button app-button-danger"
+            on:click={() => dispatch('delete', { id: book.id })}
+          >
+            Delete
+          </button>
+        {:else}
+          <button
+            type="button"
+            class="app-button app-button-primary"
+            on:click={() => dispatch('read', { id: book.id })}
+          >
+            {#if isReading(book)}{$t$('book.resumeAt', {
+                percent: Math.round(book.progress * 100)
+              })}{:else if isFinished(book)}{$t$('book.readAgain')}{:else}{$t$('book.read')}{/if}
+          </button>
+        {/if}
         <button type="button" class="app-button" aria-pressed={onHome} on:click={toggleHome}>
           {onHome ? $t$('home.remove') : $t$('home.add')}
         </button>
