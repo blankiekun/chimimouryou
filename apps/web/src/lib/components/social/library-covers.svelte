@@ -4,8 +4,8 @@
     libraryCovers$,
     pauseLibraryCovers,
     uploadLibraryCovers
-  } from '$lib/data/library-covers';
-  import { HubError, hubErrorKey } from '$lib/data/social-account';
+  } from '$lib/data/library/library-covers';
+  import { HubError, hubErrorKey } from '$lib/data/social/social-account';
   import { t$ } from '$lib/i18n';
 
   /** /moderation, devs on server builds: the library's covers to the hub for Discord statuses */

@@ -102,18 +102,18 @@
     unknownWordUnderline$,
     chapterPrimer$
   } from '$lib/data/store';
-  import { spansOf, unknownWordFlags$ } from '$lib/data/unknown-words';
-  import { chapterPrimer, type ChapterPrimer } from '$lib/data/chapter-primer';
-  import { addGeneratedRuby, placeAfterRerender } from '$lib/data/generated-furigana';
+  import { spansOf, unknownWordFlags$ } from '$lib/data/words/unknown-words';
+  import { chapterPrimer, type ChapterPrimer } from '$lib/data/words/chapter-primer';
+  import { addGeneratedRuby, placeAfterRerender } from '$lib/data/words/generated-furigana';
   import {
     prewarmBook,
     readingsAvailable,
     readingsFor$,
     startLocalAnalysis
-  } from '$lib/data/analysis-tools';
+  } from '$lib/data/analysis/analysis-tools';
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
   import ReaderPanel from '$lib/components/book-reader/reader-panel.svelte';
-  import MiniPlayer from '$lib/components/book-reader/mini-player.svelte';
+  import MiniPlayer from '$lib/components/audio/mini-player.svelte';
   import {
     absenceTabFor,
     bookProgressLabel,
@@ -125,20 +125,20 @@
     resolvePanelTab,
     tabPausesTracker,
     type PanelTab
-  } from '$lib/data/reader-panel';
+  } from '$lib/data/reader/reader-panel';
   import HighlightEditor from '$lib/components/book-reader/highlight-editor.svelte';
   import SelectionToolbar from '$lib/components/book-reader/selection-toolbar.svelte';
   import CommunityMarkers from '$lib/components/community/community-markers.svelte';
   import CommunityMatchToast from '$lib/components/community/community-match-toast.svelte';
-  import { communityWorks$ } from '$lib/data/community';
-  import { lineLinkTarget, matchOffer$ } from '$lib/data/community-book';
+  import { communityWorks$ } from '$lib/data/social/community';
+  import { lineLinkTarget, matchOffer$ } from '$lib/data/social/community-book';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
-  import LookupHint from '$lib/components/book-reader/lookup-hint.svelte';
+  import LookupHint from '$lib/components/dictionary/lookup-hint.svelte';
   import {
     AnnotationsController,
     type Highlight,
     type HighlightColor
-  } from '$lib/data/annotations';
+  } from '$lib/data/reader/annotations';
   import { searchIndexCache, type SearchResult } from '$lib/functions/book-text/book-search';
   import { cssHighlightsSupported } from '$lib/functions/book-text/css-highlights';
   import {
@@ -149,14 +149,14 @@
     selectionPassage
   } from '$lib/functions/book-text/reader-highlights';
   import BookReaderHeader from '$lib/components/book-reader/book-reader-header.svelte';
-  import AnkiWatcher from '$lib/components/anki-watcher.svelte';
-  import { bookSentenceAudio, noteSentence } from '$lib/data/anki';
-  import { enableExtrasSync } from '$lib/data/extras-sync';
-  import { bookSyncSource } from '$lib/data/sync-files';
-  import { readingActivity, ReaderHooksSession } from '$lib/data/reader-hooks';
-  import { selectionForm, WordFormsLoader } from '$lib/data/word-marks';
-  import type { PassageContext } from '$lib/data/ask-ai';
-  import { featureParams } from '$lib/data/ai-connections';
+  import AnkiWatcher from '$lib/components/dictionary/anki-watcher.svelte';
+  import { bookSentenceAudio, noteSentence } from '$lib/data/dictionary/anki';
+  import { enableExtrasSync } from '$lib/data/sync/extras-sync';
+  import { bookSyncSource } from '$lib/data/sync/sync-files';
+  import { readingActivity, ReaderHooksSession } from '$lib/data/reader/reader-hooks';
+  import { selectionForm, WordFormsLoader } from '$lib/data/words/word-marks';
+  import type { PassageContext } from '$lib/data/ai/ask-ai';
+  import { featureParams } from '$lib/data/ai/ai-connections';
   import { activePlugins$, type SelectionActionContribution } from '$lib/plugins';
   import {
     imageGallerySpoilerSync,
@@ -190,7 +190,7 @@
   import { fullscreenManager } from '$lib/data/fullscreen-manager';
   import { logger } from '$lib/data/logger';
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
-  import { storeBookCompletion } from '$lib/data/book-completion';
+  import { storeBookCompletion } from '$lib/data/stats/book-completion';
   import { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
   import type { BrowserStorageHandler } from '$lib/data/storage/handler/browser-handler';
   import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
@@ -219,9 +219,9 @@
   import { isIgnoredReaderKey, isSearchShortcut, onKeydownReader } from './on-keydown-reader';
   import { shouldBookmarkOnLeave } from '$lib/functions/bookmark-on-leave';
   import { onDestroy, onMount, tick, untrack } from 'svelte';
-  import { isManga } from '$lib/data/manga';
-  import { isVn } from '$lib/data/vn';
-  import { bookRoute, readerPath, replacePage } from '$lib/data/reader-route';
+  import { isManga } from '$lib/data/manga/manga';
+  import { isVn } from '$lib/data/vn/vn';
+  import { bookRoute, readerPath, replacePage } from '$lib/data/reader/reader-route';
   import { t$, tr } from '$lib/i18n';
   import Fa from 'svelte-fa';
   import {

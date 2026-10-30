@@ -1,9 +1,9 @@
 <script lang="ts">
   import TransferRow from '$lib/components/social/transfer-row.svelte';
-  import { TransferError } from '$lib/data/book-transfer-channel';
-  import { bookToSend, sendBook, transfers$ } from '$lib/data/book-transfer';
-  import { friends$, loadFriends } from '$lib/data/social';
-  import { HubError, socialSession$ } from '$lib/data/social-account';
+  import { TransferError } from '$lib/data/sync/book-transfer-channel';
+  import { bookToSend, sendBook, transfers$ } from '$lib/data/sync/book-transfer';
+  import { friends$, loadFriends } from '$lib/data/social/social';
+  import { HubError, socialSession$ } from '$lib/data/social/social-account';
   import { t$ } from '$lib/i18n';
   import { activePlugins$ } from '$lib/plugins';
 

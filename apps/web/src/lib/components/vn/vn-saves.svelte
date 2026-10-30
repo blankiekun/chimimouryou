@@ -18,7 +18,7 @@
     zipSaves,
     type SaveArea,
     type SaveEntry
-  } from '$lib/data/vn-save-store';
+  } from '$lib/data/vn/vn-save-store';
 
   interface Props {
     areas: SaveArea[];

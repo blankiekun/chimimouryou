@@ -35,7 +35,7 @@ chimireader.blankie.moe {
 	# Cross-origin isolation for the visual novel player only (owner-approved for it alone): VNBox
 	# plays sound through an AudioWorklet fed from a SharedArrayBuffer there, so a busy page can't
 	# starve it. /v and its frames (/vn/vnbox.html with /vn/vnbox/*, /vn/player.html) need the
-	# headers; the app reaches /v by a full page load (needsFullLoad in lib/data/reader-route.ts).
+	# headers; the app reaches /v by a full page load (needsFullLoad in lib/data/reader/reader-route.ts).
 	# credentialless rather than require-corp, so cross-origin images (covers) keep loading.
 	@isolated path /v /v.html /vn/*
 	header @isolated {

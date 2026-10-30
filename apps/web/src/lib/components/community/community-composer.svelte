@@ -3,8 +3,8 @@
   import CommunityMatch from '$lib/components/community/community-match.svelte';
   import CommunitySignup from '$lib/components/community/community-signup.svelte';
   import CommunityWork from '$lib/components/community/community-work.svelte';
-  import type { PassageContext } from '$lib/data/ask-ai';
-  import { absBaseTitle } from '$lib/data/audiobookshelf';
+  import type { PassageContext } from '$lib/data/ai/ask-ai';
+  import { absBaseTitle } from '$lib/data/audio/audiobookshelf';
   import {
     bodyLength,
     clipContext,
@@ -17,7 +17,7 @@
     uploadWorkCover,
     volumeOf,
     type CommunityThread
-  } from '$lib/data/community';
+  } from '$lib/data/social/community';
   import {
     bookLines,
     bookWork,
@@ -27,8 +27,8 @@
     refreshBookMarks,
     splitContext,
     workTitles
-  } from '$lib/data/community-book';
-  import { socialSession$ } from '$lib/data/social-account';
+  } from '$lib/data/social/community-book';
+  import { socialSession$ } from '$lib/data/social/social-account';
   import type { SearchIndex } from '$lib/functions/book-text/book-search';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher, onMount } from 'svelte';

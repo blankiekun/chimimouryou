@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * The built-in dictionary's lookup popup (lib/data/dictionary.ts) for a reader page, Yomitan's
+   * The built-in dictionary's lookup popup (lib/data/dictionary/dictionary.ts) for a reader page, Yomitan's
    * behaviour with the app's look:
    * - Scanning: the host calls `tapAt` for taps (touch and pen inputs with "scan on tap"), and
    *   the mouse scans on its own with Yomitan's scanning inputs (default Shift + hover, or the
@@ -27,10 +27,10 @@
     refreshDictionaries,
     yomitanOptions$,
     type LookupResult
-  } from '$lib/data/dictionary';
-  import { playTermAudio, stopTermAudio } from '$lib/data/dictionary-audio';
-  import { builtInPopupOpen$ } from '$lib/data/yomitan';
-  import { setWordMarks } from '$lib/data/word-marks';
+  } from '$lib/data/dictionary/dictionary';
+  import { playTermAudio, stopTermAudio } from '$lib/data/dictionary/dictionary-audio';
+  import { builtInPopupOpen$ } from '$lib/data/dictionary/yomitan';
+  import { setWordMarks } from '$lib/data/words/word-marks';
   import { setCssHighlight } from '$lib/functions/book-text/css-highlights';
   import {
     matchingInput,

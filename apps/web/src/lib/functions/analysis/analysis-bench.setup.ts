@@ -57,7 +57,7 @@ export default async function setup() {
   if (!process.env.ANALYSIS_TOOLS_DIR) {
     const manifest = await (await fetch(`${published}manifest.json`)).json();
     const engine = JSON.parse(
-      readFileSync(join(web, 'src/lib/data/difficulty-engine.json'), 'utf8')
+      readFileSync(join(web, 'src/lib/data/difficulty/difficulty-engine.json'), 'utf8')
     ).engine;
 
     if (manifest.engine !== engine) {

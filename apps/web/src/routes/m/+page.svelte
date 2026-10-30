@@ -7,8 +7,8 @@
    * Book-only extras (highlights, recap, listen, search, statistics) are left out.
    */
   import { bookContent, damagedBookText } from '$lib/data/book-content';
-  import { noteReading } from '$lib/data/social';
-  import { readingActivity } from '$lib/data/reader-hooks';
+  import { noteReading } from '$lib/data/social/social';
+  import { readingActivity } from '$lib/data/reader/reader-hooks';
   import { isPluginEnabled } from '$lib/plugins';
   import { onDestroy, onMount, tick } from 'svelte';
   import { fly } from 'svelte/transition';
@@ -18,7 +18,7 @@
   import Fa from 'svelte-fa';
   import { faBookOpen, faEllipsis, faExpand, faSliders } from '@fortawesome/free-solid-svg-icons';
   import type { ToggleOption } from '$lib/components/button-toggle-group/toggle-option';
-  import PlayerBar from '$lib/components/player-bar.svelte';
+  import PlayerBar from '$lib/components/audio/player-bar.svelte';
   import ReaderSheet from '$lib/components/book-reader/reader-sheet.svelte';
   import ReaderMoreList from '$lib/components/book-reader/reader-more-list.svelte';
   import MangaBottomBar from '$lib/components/manga/manga-bottom-bar.svelte';
@@ -26,8 +26,8 @@
   import VolumeTransition from '$lib/components/manga/volume-transition.svelte';
   import MokuroOverlay from '$lib/components/manga/mokuro-overlay.svelte';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
-  import { calibreCoverUrl, loadCalibreCatalog, type CalibreBook } from '$lib/data/calibre';
-  import { loadSeriesOverrides } from '$lib/data/series-overrides';
+  import { calibreCoverUrl, loadCalibreCatalog, type CalibreBook } from '$lib/data/remote/calibre';
+  import { loadSeriesOverrides } from '$lib/data/library/series-overrides';
   import {
     keptMokuro,
     loadMokuro,
@@ -36,9 +36,9 @@
     pagesText,
     type MangaText,
     type MokuroPage
-  } from '$lib/data/mokuro';
+  } from '$lib/data/manga/mokuro';
   import { autoReplication$, database } from '$lib/data/store';
-  import { context, externalHandler, handler } from '$lib/data/media-sync';
+  import { context, externalHandler, handler } from '$lib/data/sync/media-sync';
   import { pagePath } from '$lib/data/env';
   import { fullscreenManager } from '$lib/data/fullscreen-manager';
   import { logger } from '$lib/data/logger';
@@ -63,7 +63,7 @@
     type MangaReadingMode,
     type MangaScale,
     type PageSize
-  } from '$lib/data/manga';
+  } from '$lib/data/manga/manga';
   import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
   import type { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
   import type { BrowserStorageHandler } from '$lib/data/storage/handler/browser-handler';

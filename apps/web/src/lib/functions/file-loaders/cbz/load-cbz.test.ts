@@ -10,7 +10,7 @@ import loadCbz from './load-cbz';
 
 // jsdom has no Worker.
 configure({ useWebWorkers: false });
-import { mangaPages } from '$lib/data/manga';
+import { mangaPages } from '$lib/data/manga/manga';
 
 async function cbz(names: string[]) {
   const writer = new ZipWriter(new BlobWriter('application/zip'));

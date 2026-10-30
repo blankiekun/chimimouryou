@@ -5,7 +5,7 @@
    */
   import Fa from 'svelte-fa';
   import { faEllipsis, faExpand } from '@fortawesome/free-solid-svg-icons';
-  import PlayerBar from '$lib/components/player-bar.svelte';
+  import PlayerBar from '$lib/components/audio/player-bar.svelte';
   import { fullscreenManager } from '$lib/data/fullscreen-manager';
 
   interface Chip {

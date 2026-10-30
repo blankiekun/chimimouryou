@@ -1,8 +1,8 @@
 <script lang="ts">
   import Switch from '$lib/components/switch.svelte';
   import RankBadge from '$lib/components/reading-rank/rank-badge.svelte';
-  import { lightNovels } from '$lib/data/reading-rank';
-  import CoverCard from '$lib/components/book-card/cover-card.svelte';
+  import { lightNovels } from '$lib/data/stats/reading-rank';
+  import CoverCard from '$lib/components/library/cover-card.svelte';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
   import SectionHead from '$lib/components/section-head.svelte';
   import ActivityFeed from '$lib/components/social/activity-feed.svelte';
@@ -19,14 +19,14 @@
     reportProfile,
     requestByUsername,
     type Profile
-  } from '$lib/data/social';
+  } from '$lib/data/social/social';
   import {
     hubErrorKey,
     queueProfileChange,
     shareDefaults,
     socialSession$,
     type ShareKey
-  } from '$lib/data/social-account';
+  } from '$lib/data/social/social-account';
   import { t$, uiLanguage$, type MessageKey } from '$lib/i18n';
   import { formatDuration, relativeTime } from '$lib/functions/format-time';
   import { createEventDispatcher } from 'svelte';

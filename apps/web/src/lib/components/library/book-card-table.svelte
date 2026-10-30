@@ -1,0 +1,372 @@
+<script lang="ts">
+  import { faArrowDown, faCheck, faTrash } from '@fortawesome/free-solid-svg-icons';
+  import type { BookCardProps } from '$lib/components/book-card/book-card-props';
+  import DifficultyBadge from '$lib/components/difficulty/difficulty-badge.svelte';
+  import { formatSeries } from '$lib/data/library/library-sort';
+  import { SortDirection, type SortOption } from '$lib/data/sort-types';
+  import { longPress } from '$lib/functions/use-long-press';
+  import { relativeTime } from '$lib/functions/format-time';
+  import { t$, uiLanguage$, type MessageKey } from '$lib/i18n';
+  import { createEventDispatcher } from 'svelte';
+  import Fa from 'svelte-fa';
+
+  export let bookCards: BookCardProps[] = [];
+  export let currentBookId: number | undefined;
+  export let selectedBookIds: ReadonlySet<number>;
+  export let selectMode = false;
+  export let sortOption: SortOption;
+
+  const dispatch = createEventDispatcher<{
+    bookClick: { id: number };
+    /** Long press: select the book */
+    bookSelect: { id: number };
+    removeBookClick: { id: number };
+    sort: SortOption['property'];
+  }>();
+
+  const columns: { property: SortOption['property']; label: MessageKey }[] = [
+    { property: 'title', label: 'library.sortTitle' },
+    { property: 'series', label: 'library.sortSeries' },
+    { property: 'difficulty', label: 'library.sortDifficulty' },
+    { property: 'progress', label: 'library.sortProgress' },
+    { property: 'characters', label: 'library.sortCharacters' },
+    { property: 'lastBookOpen', label: 'library.sortLastRead' },
+    { property: 'lastBookmarkModified', label: 'library.sortBookmarked' }
+  ];
+
+  function formatRelative(timestamp: number) {
+    return timestamp ? relativeTime(timestamp / 1000, $uiLanguage$) : '—';
+  }
+
+  function formatDate(timestamp: number) {
+    return timestamp ? new Date(timestamp).toLocaleString() : $t$('library.noData');
+  }
+
+  function sortLabel(property: SortOption['property']) {
+    if (sortOption.property !== property) {
+      return $t$('library.notSorted');
+    }
+
+    return $t$(
+      sortOption.direction === SortDirection.ASC ? 'library.ascending' : 'library.descending'
+    );
+  }
+</script>
+
+<div class="library-list">
+  <div class="library-list-header" class:library-list-select-mode={selectMode}>
+    {#if selectMode}
+      <span />
+    {/if}
+    <div class="library-list-cells">
+      {#each columns as column (column.property)}
+        <span>
+          <button
+            type="button"
+            class="library-list-header-button"
+            aria-label={$t$('library.sortByColumn', {
+              label: $t$(column.label),
+              state: sortLabel(column.property)
+            })}
+            on:click={() => dispatch('sort', column.property)}
+          >
+            {$t$(column.label)}
+            {#if sortOption.property === column.property}
+              <span
+                class="library-list-sort-icon"
+                class:library-list-sort-icon-ascending={sortOption.direction === SortDirection.ASC}
+              >
+                <Fa icon={faArrowDown} />
+              </span>
+            {/if}
+          </button>
+        </span>
+      {/each}
+    </div>
+    <span />
+  </div>
+
+  {#each bookCards as bookCard (bookCard.id)}
+    {@const selected = selectedBookIds.has(bookCard.id)}
+    {@const percent = Math.round((bookCard.progress || 0) * 100)}
+    <div
+      class="library-list-row"
+      class:library-list-select-mode={selectMode}
+      class:library-list-row-current={bookCard.id === currentBookId}
+      class:library-list-row-selected={selected}
+      class:opacity-60={bookCard.isPlaceholder}
+    >
+      {#if selectMode}
+        <span class="flex items-center justify-center">
+          <button
+            type="button"
+            class="library-list-select-button"
+            aria-pressed={selected}
+            aria-label={$t$('library.selectTitle', { title: bookCard.title })}
+            on:click={() => dispatch('bookClick', { id: bookCard.id })}
+          >
+            {#if selected}<Fa icon={faCheck} />{/if}
+          </button>
+        </span>
+      {/if}
+      <button
+        type="button"
+        class="library-list-cells library-list-row-main"
+        on:click={() => dispatch('bookClick', { id: bookCard.id })}
+        use:longPress={() => dispatch('bookSelect', { id: bookCard.id })}
+      >
+        <span class="library-list-title" title={bookCard.title}>{bookCard.title}</span>
+        <span class="library-list-secondary truncate" title={formatSeries(bookCard)}>
+          {formatSeries(bookCard) || '—'}
+        </span>
+        <span class="library-list-secondary">
+          {#if bookCard.difficulty !== undefined}
+            <DifficultyBadge difficulty={bookCard.difficulty} />
+          {:else}
+            —
+          {/if}
+        </span>
+        <span class="library-list-progress-cell">
+          <span class="library-list-progress">
+            <span class="library-list-progress-value" style:width="{percent}%" />
+          </span>
+          <span class="library-list-secondary font-extrabold">{percent}%</span>
+        </span>
+        <span class="library-list-secondary">
+          {bookCard.characters ? bookCard.characters.toLocaleString() : '—'}
+        </span>
+        <span class="library-list-secondary" title={formatDate(bookCard.lastBookOpen)}>
+          {formatRelative(bookCard.lastBookOpen)}
+        </span>
+        <span class="library-list-secondary" title={formatDate(bookCard.lastBookmarkModified)}>
+          {formatRelative(bookCard.lastBookmarkModified)}
+        </span>
+      </button>
+      <span class="library-list-action-cell">
+        {#if !selectMode}
+          <button
+            type="button"
+            class="library-list-action-button"
+            title={$t$('library.deleteBook')}
+            aria-label={$t$('library.deleteTitle', { title: bookCard.title })}
+            on:click={() => dispatch('removeBookClick', { id: bookCard.id })}
+          >
+            <Fa icon={faTrash} />
+          </button>
+        {/if}
+      </span>
+    </div>
+  {/each}
+</div>
+
+<style>
+  .library-list {
+    --library-list-columns: minmax(14rem, 3.6fr) minmax(8rem, 1.2fr) minmax(10rem, 0.8fr)
+      minmax(8.5rem, 0.82fr) minmax(6.5rem, 0.55fr) minmax(7rem, 0.62fr) minmax(7rem, 0.62fr);
+
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    max-width: 100%;
+    padding-bottom: 1rem;
+    overflow-x: auto;
+  }
+
+  .library-list-header,
+  .library-list-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 2.75rem;
+    gap: 0.5rem;
+    min-width: 68rem;
+  }
+
+  .library-list-select-mode {
+    grid-template-columns: 2.65rem minmax(0, 1fr) 2.75rem;
+  }
+
+  .library-list-header {
+    align-items: center;
+    padding: 0.5rem 0.35rem;
+    border-top: 2px solid var(--font-color);
+    border-bottom: 1px solid var(--border-color);
+    color: var(--app-muted-fg);
+    font-size: var(--type-label);
+    font-weight: 700;
+  }
+
+  .library-list-cells {
+    display: grid;
+    grid-template-columns: var(--library-list-columns);
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+
+  .library-list-header .library-list-cells {
+    padding-left: 0.75rem;
+  }
+
+  .library-list-header-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.15rem 0;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    transition: color 0.16s ease;
+  }
+
+  .library-list-header-button:hover,
+  .library-list-header-button:focus-visible {
+    color: var(--font-color);
+    outline: none;
+  }
+
+  .library-list-sort-icon {
+    display: inline-flex;
+    color: var(--accent-strong-color);
+    font-size: var(--type-label);
+    transition: transform 0.16s ease;
+  }
+
+  .library-list-sort-icon-ascending {
+    transform: rotate(180deg);
+  }
+
+  .library-list-row {
+    position: relative;
+    align-items: stretch;
+    box-sizing: border-box;
+    min-height: 3.35rem;
+    padding: 0.35rem;
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.15s ease;
+  }
+
+  .library-list-row:hover,
+  .library-list-row:focus-within {
+    background: var(--surface-color);
+  }
+
+  .library-list-row-current .library-list-title {
+    color: var(--accent-strong-color);
+  }
+
+  .library-list-row-selected {
+    background: var(--app-spot-tint);
+  }
+
+  .library-list-row-main {
+    padding: 0 0 0 0.4rem;
+    color: var(--font-color);
+    text-align: left;
+  }
+
+  .library-list-row-main:focus-visible {
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 2px;
+  }
+
+  .library-list-title {
+    overflow: hidden;
+    font-size: 0.9rem;
+    font-weight: 700;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .library-list-secondary {
+    overflow: hidden;
+    color: color-mix(in srgb, var(--font-color) 66%, var(--surface-color));
+    font-size: 0.8rem;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .library-list-progress-cell {
+    display: grid;
+    grid-template-columns: minmax(2.8rem, 1fr) auto;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+  }
+
+  .library-list-progress {
+    position: relative;
+    height: 3px;
+    overflow: hidden;
+    background: var(--app-progress-track);
+  }
+
+  .library-list-progress-value {
+    display: block;
+    height: 100%;
+    background: var(--app-progress-fill);
+  }
+
+  .library-list-select-button,
+  .library-list-action-button {
+    display: inline-flex;
+    width: 2.2rem;
+    height: 2.2rem;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--app-control-border);
+    border-radius: 2px;
+    background: transparent;
+    color: var(--font-color);
+    font-size: 0.85rem;
+    transition:
+      background-color 0.18s ease,
+      border-color 0.18s ease,
+      color 0.18s ease;
+  }
+
+  .library-list-select-button[aria-pressed='true'] {
+    border-color: color-mix(in srgb, var(--accent-color) 72%, var(--border-color));
+    background: var(--accent-color);
+    color: var(--app-accent-fg);
+  }
+
+  .library-list-action-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-left: 0.35rem;
+  }
+
+  .library-list-action-button {
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .library-list-row:hover .library-list-action-button,
+  .library-list-action-button:focus-visible {
+    border-color: var(--app-danger-color);
+    color: var(--app-danger-color);
+  }
+
+  /* Phones: title and progress only, so the row fits without sideways scrolling; sort the rest from the menu. */
+  @media (max-width: 639px) {
+    .library-list {
+      --library-list-columns: minmax(0, 1fr) 5.5rem;
+    }
+
+    .library-list-header,
+    .library-list-row {
+      min-width: 0;
+    }
+
+    .library-list-cells > :not(:nth-child(1), :nth-child(4)) {
+      display: none;
+    }
+
+    .library-list-select-button,
+    .library-list-action-button {
+      width: 2.75rem;
+      height: 2.75rem;
+    }
+  }
+</style>

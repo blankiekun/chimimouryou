@@ -3,7 +3,7 @@
 The one hub every chimimouryou build uses for friends: a Cloudflare Worker over D1 (free tier).
 Accounts are a username and a password (stretched with scrypt in the browser, stored as a salted
 SHA-256), friend codes, requests, blocks and up to three current books per reader, and in R2 the
-readers' pictures and small cover thumbnails of the books they share. No email, IP log or books. The app's client is `apps/web/src/lib/data/social*.ts`.
+readers' pictures and small cover thumbnails of the books they share. No email, IP log or books. The app's client is `apps/web/src/lib/data/social/social*.ts`.
 
 ## Deploy
 
@@ -17,7 +17,7 @@ With a Cloudflare account, from this folder:
 4. `npx wrangler@4.147.0 deploy`. It prints the address, e.g. `https://chimi-hub.<you>.workers.dev`
    (or add a custom domain in the dashboard). The daily cron (retention) and the edge rate limit
    are set by `wrangler.toml`.
-5. Set `socialHubDefault` in `apps/web/src/lib/data/social-account.ts` to that address and release.
+5. Set `socialHubDefault` in `apps/web/src/lib/data/social/social-account.ts` to that address and release.
 
 Edge limit: a workers.dev address can't have dashboard WAF rules, so the Worker checks the
 Workers Rate Limiting binding `EDGE_LIMIT` (`[[ratelimits]]` in `wrangler.toml`: 5 requests per
@@ -179,7 +179,7 @@ account (or a year unused) deletes them like the rest of its covers.
 
 ## Community
 
-Posts on a line of a book (`src/community.ts`; the app's client is `apps/web/src/lib/data/community.ts`).
+Posts on a line of a book (`src/community.ts`; the app's client is `apps/web/src/lib/data/social/community.ts`).
 A work key is `anilist:<id>[/<volume>]`, `vndb:v<id>` or `title:<book key>`; a line is the first
 32 hex of sha256 of the normalised line (`normalizeLine`; `test/line-hashes.json` keeps the app's
 copy in step). Bodies, titles and quotes are plain text: NFC, no control, direction-override or

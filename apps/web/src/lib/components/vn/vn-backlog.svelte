@@ -12,8 +12,8 @@
     ankiVnAudio$,
     ankiVnScreenshot$,
     useForLastNote
-  } from '$lib/data/anki';
-  import { backlogLines, type BacklogLine, type KeptLine } from '$lib/data/vn-backlog';
+  } from '$lib/data/dictionary/anki';
+  import { backlogLines, type BacklogLine, type KeptLine } from '$lib/data/vn/vn-backlog';
 
   interface Props {
     /** The player frame, whose overlay.js keeps the lines */

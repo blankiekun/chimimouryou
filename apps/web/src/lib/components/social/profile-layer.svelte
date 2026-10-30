@@ -1,7 +1,7 @@
 <script lang="ts">
   import ProfileView from '$lib/components/social/profile-view.svelte';
-  import { loadProfile, type Profile } from '$lib/data/social';
-  import { hubErrorKey } from '$lib/data/social-account';
+  import { loadProfile, type Profile } from '$lib/data/social/social';
+  import { hubErrorKey } from '$lib/data/social/social-account';
   import { pagePath, standalone } from '$lib/data/env';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher, onMount } from 'svelte';

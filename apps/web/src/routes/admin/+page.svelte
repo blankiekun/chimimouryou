@@ -5,21 +5,21 @@
   import { map, share } from 'rxjs';
   import Fa from 'svelte-fa';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
-  import ImportMenu from '$lib/components/book-card/import-menu.svelte';
-  import { setPendingImport, type PendingImport } from '$lib/data/library-home';
+  import ImportMenu from '$lib/components/library/import-menu.svelte';
+  import { setPendingImport, type PendingImport } from '$lib/data/library/library-home';
   import AdminSection from '$lib/components/admin/admin-section.svelte';
   import EngineTool from '$lib/components/admin/engine-tool.svelte';
   import CatalogTool from '$lib/components/admin/catalog-tool.svelte';
   import SeriesTool from '$lib/components/admin/series-tool.svelte';
   import UpdateTool from '$lib/components/admin/update-tool.svelte';
-  import DifficultyPanel from '$lib/components/book-card/difficulty-panel.svelte';
+  import DifficultyPanel from '$lib/components/difficulty/difficulty-panel.svelte';
   import SettingsAdmin from '$lib/components/settings/settings-admin.svelte';
   import {
     account$,
     accountUnreachable$,
     canOpenAdminPanel,
     hasPermission
-  } from '$lib/data/account';
+  } from '$lib/data/account/account';
   import { pagePath } from '$lib/data/env';
   import { database } from '$lib/data/store';
   import { formatPageTitle } from '$lib/functions/format-page-title';

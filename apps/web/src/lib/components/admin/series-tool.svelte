@@ -1,7 +1,7 @@
 <script lang="ts">
   import { faSpinner } from '@fortawesome/free-solid-svg-icons';
   import Fa from 'svelte-fa';
-  import { checkSeries, type SeriesReport } from '$lib/data/calibre-import';
+  import { checkSeries, type SeriesReport } from '$lib/data/remote/calibre-import';
 
   let report: SeriesReport | undefined;
   let busy = '';

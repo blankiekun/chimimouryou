@@ -71,7 +71,7 @@ MAX_BYTES = 300 * 1024 * 1024
 # Games are much larger than books; ZIP uploads may be this large if they hold one.
 MAX_VN_BYTES = 8 * 1024 * 1024 * 1024
 VN_DIR = os.environ.get('VN_DIR', '/vn')
-# ONScripter scripts, as in build-catalog.py and lib/data/vn.ts.
+# ONScripter scripts, as in build-catalog.py and lib/data/vn/vn.ts.
 VN_SCRIPTS = ('0.txt', '00.txt', 'nscr_sec.dat', 'nscript.___', 'nscript.dat', 'onscript.nt2', 'onscript.nt3')
 # Kept free when unpacking a game.
 MIN_FREE_BYTES = int(os.environ.get('MIN_FREE_MB', '1024')) * 1024 * 1024

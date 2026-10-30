@@ -5,7 +5,7 @@
  */
 
 /**
- * A book's analysis (lib/data/analysis-tools.ts): Pyodide runs yurigana and the difficulty service's
+ * A book's analysis (lib/data/analysis/analysis-tools.ts): Pyodide runs yurigana and the difficulty service's
  * own Python (engine/browser.py), which asks Sudachi (wasm, SudachiDict-core read
  * into its memory, split mode C) for each text's tokens as it reads, giving the book's word list
  * (with the difficulty model's input) or its readings file in one pass. Both are loaded on the first

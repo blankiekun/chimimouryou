@@ -1,12 +1,16 @@
 <script lang="ts">
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-  import { analysisToolsState$, makeReadings, redoWordList } from '$lib/data/analysis-tools';
-  import type { BookDetails } from '$lib/data/book-details';
-  import type { MetadataKind } from '$lib/data/book-metadata';
+  import {
+    analysisToolsState$,
+    makeReadings,
+    redoWordList
+  } from '$lib/data/analysis/analysis-tools';
+  import type { BookDetails } from '$lib/data/library/book-details';
+  import type { MetadataKind } from '$lib/data/library/book-metadata';
   import { standalone } from '$lib/data/env';
-  import { bookWordGroups } from '$lib/data/known-words';
+  import { bookWordGroups } from '$lib/data/words/known-words';
   import { database, generatedFurigana$ } from '$lib/data/store';
-  import { wordMarks$ } from '$lib/data/word-marks';
+  import { wordMarks$ } from '$lib/data/words/word-marks';
   import { t$ } from '$lib/i18n';
 
   /**

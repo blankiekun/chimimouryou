@@ -17,7 +17,7 @@
     validDll,
     validEnv,
     validReg
-  } from '$lib/data/windows-game';
+  } from '$lib/data/vn/windows-game';
 
   interface Props {
     /** The game's saved tuning, `a=b&c=d` */

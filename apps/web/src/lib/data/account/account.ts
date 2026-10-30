@@ -1,0 +1,277 @@
+/**
+ * @license BSD-3-Clause
+ * Copyright (c) 2026, ッツ Reader Authors
+ * All rights reserved.
+ */
+
+/**
+ * Accounts on this server (server/account/). While signed in, reading
+ * progress, statistics and highlights of Calibre books, and the settings in
+ * account-settings-sync.ts, are stored in the account's own WebDAV folder at
+ * /account/sync/ instead of the shared /calibre/sync/. Not part of upstream.
+ */
+
+import { browser } from '$app/env';
+import { BehaviorSubject } from 'rxjs';
+import { standalone } from '$lib/data/env';
+import {
+  forgetServerToken,
+  responseJson,
+  serverConnected,
+  serverFetch
+} from '$lib/data/remote/server-connect';
+
+export interface AccountUser {
+  id: string;
+  username: string;
+  /** Admins manage accounts and have every permission; the server enforces both. */
+  admin?: boolean;
+  permissions?: AccountPermission[];
+  /** Signed in with the first admin's generated password, not changed yet. */
+  temporaryPassword?: boolean;
+}
+
+/** What admins can grant (account/service.py PERMISSIONS). */
+export const accountPermissions = [
+  { id: 'import', label: 'Add books', description: 'Add books to the Calibre library' },
+  {
+    id: 'series',
+    label: 'Edit series and details',
+    description: 'Change series, book details and covers for everyone'
+  },
+  { id: 'difficulty', label: 'Difficulty', description: 'Start difficulty estimates' }
+] as const;
+
+export type AccountPermission = (typeof accountPermissions)[number]['id'];
+
+export interface AdminAccount extends AccountUser {
+  created: number;
+}
+
+export const accountSyncUrl = '/account/sync/';
+
+const accountApiUrl = '/account/api/';
+const cachedUserKey = 'accountUser';
+
+/** undefined until the session has been checked, null when signed out. */
+export const account$ = new BehaviorSubject<AccountUser | null | undefined>(undefined);
+
+/**
+ * The session check couldn't reach the account service. Then a null account$ only means no
+ * user is cached in this browser, not signed out: show "can't reach the server", never sign-in prompts.
+ */
+export const accountUnreachable$ = new BehaviorSubject(false);
+
+let sessionChecked: Promise<AccountUser | null> | undefined;
+
+function setUser(user: AccountUser | null) {
+  if (user) {
+    window.localStorage.setItem(cachedUserKey, JSON.stringify(user));
+  } else {
+    window.localStorage.removeItem(cachedUserKey);
+  }
+
+  account$.next(user);
+  sessionChecked = Promise.resolve(user);
+}
+
+function cachedUser(): AccountUser | null {
+  try {
+    return JSON.parse(window.localStorage.getItem(cachedUserKey) || 'null');
+  } catch {
+    return null;
+  }
+}
+
+async function checkSession(): Promise<AccountUser | null> {
+  // No server, so never signed in: every account-only sync bails out on null.
+  if (standalone && !serverConnected) return null;
+
+  try {
+    const response = await serverFetch(`${accountApiUrl}me`, { cache: 'no-store' });
+
+    if (response.ok) {
+      return (await response.json()).user;
+    }
+
+    if (response.status === 401 || response.status === 404) {
+      // A connected server signed this device out: the next page load has no server.
+      if (serverConnected && response.status === 401) forgetServerToken();
+      return null;
+    }
+  } catch {
+    // Fall through to the cached state.
+  }
+
+  // Service unreachable: keep the last known state so personal data isn't
+  // written to the shared folder by mistake; account requests will fail visibly.
+  accountUnreachable$.next(true);
+  return cachedUser();
+}
+
+/** Resolves once it is known whether this browser is signed in. */
+export function accountReady(): Promise<AccountUser | null> {
+  if (!browser) {
+    return Promise.resolve(null);
+  }
+
+  if (!sessionChecked) {
+    sessionChecked = checkSession().then((user) => {
+      setUser(user);
+      return user;
+    });
+  }
+
+  return sessionChecked;
+}
+
+/** Synchronous view for code that runs after accountReady(). */
+export function currentAccount() {
+  return account$.getValue() ?? null;
+}
+
+async function post<T>(action: string, body: object = {}): Promise<T> {
+  const response = await fetch(`${accountApiUrl}${action}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  return responseJson<T>(response);
+}
+
+/**
+ * Callers reload the page afterwards: storage handlers, caches and settings sync
+ * assume one account per page load (see account-settings-sync.ts).
+ */
+export async function signIn(username: string, password: string) {
+  const { user } = await post<{ user: AccountUser }>('login', { username, password });
+
+  setUser(user);
+
+  return user;
+}
+
+/** Callers reload the page afterwards, like signIn. */
+export async function signOut() {
+  await post('logout');
+  setUser(null);
+}
+
+/** Also signs out the account's other sessions. */
+export async function changePassword(current: string, next: string) {
+  await post('password', { current, new: next });
+
+  const user = account$.getValue();
+
+  if (user?.temporaryPassword) {
+    setUser({ ...user, temporaryPassword: false });
+  }
+}
+
+/** Accounts on this server, for the admin panel. */
+export async function listAccounts(): Promise<AdminAccount[]> {
+  const response = await fetch(`${accountApiUrl}admin/users`, { cache: 'no-store' });
+  return (await responseJson(response)).users;
+}
+
+export function addAccount(username: string, password: string, admin: boolean) {
+  return post('admin/add', { username, password, admin });
+}
+
+/** Also signs out every session of that account. */
+export function resetAccountPassword(username: string, password: string) {
+  return post('admin/passwd', { username, password });
+}
+
+export function setAccountAdmin(username: string, admin: boolean) {
+  return post('admin/set-admin', { username, admin });
+}
+
+export function setAccountPermissions(username: string, permissions: AccountPermission[]) {
+  return post('admin/permissions', { username, permissions });
+}
+
+/** Whether a (signed-in) account may do this; admins may do everything. */
+export function hasPermission(user: AccountUser | null | undefined, permission: AccountPermission) {
+  return !!user && (!!user.admin || !!user.permissions?.includes(permission));
+}
+
+/** Admins manage accounts there; the difficulty permission gives its Tools tab. */
+export function canOpenAdminPanel(user: AccountUser | null | undefined) {
+  return !!user?.admin || hasPermission(user, 'difficulty');
+}
+
+/** The account's data stays on the server. */
+export function removeAccount(username: string) {
+  return post('admin/remove', { username });
+}
+
+/**
+ * Where to sign in when this page is plain HTTP: VITE_HTTPS_URL when the HTTPS
+ * name differs from this one (e.g. a Tailscale name), otherwise this host over HTTPS.
+ */
+export function httpsAppUrl() {
+  // Empty while prerendering; the page computes it again in the browser.
+  return import.meta.env.VITE_HTTPS_URL || (browser ? `https://${window.location.host}` : '');
+}
+
+/** The session cookie is HTTPS-only, so signing in needs the secure address. */
+export function signInAvailableHere() {
+  return browser && window.location.protocol === 'https:';
+}
+
+/** A plain-HTTP page: passwords and sessions would cross the network unencrypted. */
+export function isInsecurePage() {
+  return browser && window.location.protocol === 'http:';
+}
+
+/** Opened on this machine (localhost): plain HTTP never leaves it, so there's nothing to warn about. */
+export function isLoopbackPage() {
+  return browser && /^(localhost|127\.|\[::1\]$)/.test(window.location.hostname);
+}
+
+/** Whether this server allows accounts on plain-HTTP pages (ALLOW_HTTP_ACCOUNTS, off by default). */
+/** httpAccounts: sign-in works over plain HTTP; initialAdmin: the first admin hasn't signed in yet. */
+export async function accountConfig(): Promise<{ httpAccounts: boolean; initialAdmin: boolean }> {
+  try {
+    const response = await fetch(`${accountApiUrl}config`, { cache: 'no-store' });
+    const config = response.ok ? await response.json() : {};
+
+    return { httpAccounts: !!config.httpAccounts, initialAdmin: !!config.initialAdmin };
+  } catch {
+    return { httpAccounts: false, initialAdmin: false };
+  }
+}
+
+export interface UpdateStatus {
+  state: 'running' | 'done' | 'failed';
+  ref: string;
+  at: number;
+  message: string;
+}
+
+export interface UpdateState {
+  /** Written by ebook-update on the server: the last app update (ref = a commit). */
+  status: UpdateStatus | null;
+  /** The last visual novel engine install (ref = a release tag); absent from older servers. */
+  engineStatus?: UpdateStatus | null;
+  /** The GitHub repository it updates from; empty when it isn't installed. */
+  updater: string;
+  /** A request is waiting for the updater to pick it up. */
+  requested: boolean;
+}
+
+export async function getUpdateState(): Promise<UpdateState> {
+  const response = await fetch(`${accountApiUrl}admin/update`, { cache: 'no-store' });
+  return responseJson<UpdateState>(response);
+}
+
+/** Asks the server's updater to deploy this commit. */
+export function requestUpdate(ref: string) {
+  return post<UpdateState>('admin/update', { ref });
+}
+
+/** Asks the server's updater to install this CONscripter release (rebuilds web only). */
+export function requestEngineUpdate(engine: string) {
+  return post<UpdateState>('admin/update', { engine });
+}

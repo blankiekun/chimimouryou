@@ -11,7 +11,7 @@
  * is `invalid`. The stored string stays as it is. Not upstream.
  */
 
-import type { VnInfo } from '$lib/data/vn';
+import type { VnInfo } from '$lib/data/vn/vn';
 
 export const mangaMarker = '<!--ttu-manga-->';
 export const vnMarker = '<!--ttu-vn-->';

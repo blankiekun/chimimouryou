@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { avatarKanji, pictureUrl } from '$lib/data/social-account';
+  import { avatarKanji, pictureUrl } from '$lib/data/social/social-account';
 
   /** A preset avatar (its kanji in white on its colour), or the person's picture, as a circle */
   export let avatar: number;

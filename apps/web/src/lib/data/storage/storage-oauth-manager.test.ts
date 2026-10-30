@@ -8,7 +8,7 @@ import 'fake-indexeddb/auto';
 import { describe, expect, it, vi } from 'vitest';
 
 const android = vi.hoisted(() => ({ native: false, token: vi.fn() }));
-vi.mock('$lib/data/android-drive', () => ({
+vi.mock('$lib/data/standalone/android-drive', () => ({
   nativeDrive: () => android.native,
   nativeDriveToken: android.token,
   nativeGrant: 'android-authorization'

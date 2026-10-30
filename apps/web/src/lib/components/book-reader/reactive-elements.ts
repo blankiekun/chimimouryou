@@ -20,7 +20,7 @@ import {
 } from 'rxjs';
 
 import { FuriganaStyle } from '../../data/furigana-style';
-import { loadKnownRubyCheck, markKnownRuby } from '$lib/data/known-furigana';
+import { loadKnownRubyCheck, markKnownRuby } from '$lib/data/words/known-furigana';
 import { nextChapter$ } from '$lib/components/book-reader/book-toc/book-toc';
 import { pulseElement } from '$lib/functions/range-util';
 import { toggleImageGalleryPictureSpoiler$ } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';

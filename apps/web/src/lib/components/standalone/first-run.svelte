@@ -16,7 +16,7 @@
     placementFromWordTest$,
     placementResults$,
     placementWords
-  } from '$lib/data/placement';
+  } from '$lib/data/difficulty/placement';
   import { t$ } from '$lib/i18n';
   import { pagePath, storageRootName } from '$lib/data/env';
   import {
@@ -28,10 +28,10 @@
     pickFolder,
     signInToDrive,
     storageChosen$
-  } from '$lib/data/standalone-storage';
+  } from '$lib/data/standalone/standalone-storage';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import { isOnline$ } from '$lib/data/store';
-  import { yomitanSeen$ } from '$lib/data/yomitan';
+  import { yomitanSeen$ } from '$lib/data/dictionary/yomitan';
   import { dialogManager } from '$lib/data/dialog-manager';
   import TtsuMigrationDialog from '$lib/components/standalone/ttsu-migration-dialog.svelte';
   import { isMobile } from '$lib/functions/utils';

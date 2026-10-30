@@ -13,9 +13,9 @@
 import { faComments } from '@fortawesome/free-solid-svg-icons';
 import CommunityComposer from '$lib/components/community/community-composer.svelte';
 import CommunityPanel from '$lib/components/community/community-panel.svelte';
-import SettingsSocial from '$lib/components/settings/settings-social.svelte';
-import { markBookOnOpen } from '$lib/data/community-book';
-import { noteReading } from '$lib/data/social';
+import SettingsSocial from '$lib/components/social/settings-social.svelte';
+import { markBookOnOpen } from '$lib/data/social/community-book';
+import { noteReading } from '$lib/data/social/social';
 import type { Plugin } from '$lib/plugins';
 
 export const socialPlugin: Plugin = {

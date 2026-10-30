@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-  import { addToHome, homeBookTitles$ } from '$lib/data/library-home';
+  import { addToHome, homeBookTitles$ } from '$lib/data/library/library-home';
   import { t$ } from '$lib/i18n';
 
   /**

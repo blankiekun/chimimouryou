@@ -1,15 +1,20 @@
 <script lang="ts">
   import PointBox from '$lib/components/point-box.svelte';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-  import DifficultyDialog from '$lib/components/book-card/difficulty-dialog.svelte';
-  import { analysisToolsState$, localEstimate } from '$lib/data/analysis-tools';
-  import type { BookDetails } from '$lib/data/book-details';
-  import type { MetadataKind } from '$lib/data/book-metadata';
-  import type { WordCoverage } from '$lib/data/book-words';
-  import { bookFacets, bookLevel, forYou, relativeLevel } from '$lib/data/difficulty-core';
+  import DifficultyDialog from '$lib/components/difficulty/difficulty-dialog.svelte';
+  import { analysisToolsState$, localEstimate } from '$lib/data/analysis/analysis-tools';
+  import type { BookDetails } from '$lib/data/library/book-details';
+  import type { MetadataKind } from '$lib/data/library/book-metadata';
+  import type { WordCoverage } from '$lib/data/words/book-words';
+  import {
+    bookFacets,
+    bookLevel,
+    forYou,
+    relativeLevel
+  } from '$lib/data/difficulty/difficulty-core';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { standalone } from '$lib/data/env';
-  import { mokuroHtml, type MokuroText as MokuroFile } from '$lib/data/mokuro';
+  import { mokuroHtml, type MokuroText as MokuroFile } from '$lib/data/manga/mokuro';
   import { database } from '$lib/data/store';
   import type { CoreNumbers } from '$lib/functions/analysis/core';
   import { t$, uiLanguage$ } from '$lib/i18n';

@@ -2,7 +2,7 @@
   import CommunityWork from '$lib/components/community/community-work.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import { relativeTime } from '$lib/functions/format-time';
-  import { hubErrorKey } from '$lib/data/social-account';
+  import { hubErrorKey } from '$lib/data/social/social-account';
   import {
     clearMatch,
     dismissReports,
@@ -10,7 +10,7 @@
     removePost,
     resetWorkInfo,
     type CommunityReports
-  } from '$lib/data/social-moderation';
+  } from '$lib/data/social/social-moderation';
   import { t$, uiLanguage$ } from '$lib/i18n';
   import { onMount } from 'svelte';
 

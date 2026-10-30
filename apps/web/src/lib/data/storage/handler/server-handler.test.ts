@@ -14,7 +14,7 @@ import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-
 
 const account = vi.hoisted(() => ({ user: null as { id: string; username: string } | null }));
 
-vi.mock('$lib/data/account', () => ({
+vi.mock('$lib/data/account/account', () => ({
   accountReady: async () => account.user,
   currentAccount: () => account.user
 }));
@@ -23,8 +23,8 @@ type Imports = typeof import('./server-handler') &
   typeof import('./browser-handler') &
   typeof import('$lib/data/store') &
   typeof import('$lib/functions/replication/replicator') &
-  typeof import('$lib/data/windows-game') &
-  typeof import('$lib/data/server-rows');
+  typeof import('$lib/data/vn/windows-game') &
+  typeof import('$lib/data/remote/server-rows');
 
 let ServerStorageHandler: Imports['ServerStorageHandler'];
 let BrowserStorageHandler: Imports['BrowserStorageHandler'];
@@ -47,8 +47,8 @@ async function loadModules() {
     '$lib/data/store'
   ));
   ({ replicateData } = await import('$lib/functions/replication/replicator'));
-  ({ windowsGameBook } = await import('$lib/data/windows-game'));
-  ({ writeSyncFile } = await import('$lib/data/server-rows'));
+  ({ windowsGameBook } = await import('$lib/data/vn/windows-game'));
+  ({ writeSyncFile } = await import('$lib/data/remote/server-rows'));
   (await import('@zip.js/zip.js')).configure({ useWebWorkers: false });
 }
 

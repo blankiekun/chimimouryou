@@ -6,7 +6,7 @@
 
 import { tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AdminAccount } from '$lib/data/account';
+import type { AdminAccount } from '$lib/data/account/account';
 
 const api = vi.hoisted(() => ({
   listAccounts: vi.fn(),
@@ -14,8 +14,8 @@ const api = vi.hoisted(() => ({
   setAccountAdmin: vi.fn()
 }));
 
-vi.mock('$lib/data/account', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('$lib/data/account')>()),
+vi.mock('$lib/data/account/account', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('$lib/data/account/account')>()),
   ...api
 }));
 

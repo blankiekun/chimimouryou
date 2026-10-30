@@ -14,7 +14,7 @@ import {
   localEstimate,
   makeReadings,
   prewarmAnalysis
-} from '$lib/data/analysis-tools';
+} from '$lib/data/analysis/analysis-tools';
 import { parseBookHtml } from '$lib/functions/file-loaders/utils/sanitize-book-html';
 import { readerDb } from '$lib/data/reader-db';
 import type { AnalysisMessage } from './analysis.worker';
@@ -27,7 +27,7 @@ import type { AnalysisMessage } from './analysis.worker';
  */
 
 // No background run of the stored books after the download.
-vi.mock('$lib/data/background-analysis', () => ({ analyseStoredBooks: async () => {} }));
+vi.mock('$lib/data/analysis/background-analysis', () => ({ analyseStoredBooks: async () => {} }));
 
 const RUNS = 3;
 const base = new URL('/analysis-tools/', location.href).href;

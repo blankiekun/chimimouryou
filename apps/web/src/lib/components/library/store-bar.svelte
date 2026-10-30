@@ -1,5 +1,5 @@
 <script lang="ts">
-  import LibrarySortMenu from '$lib/components/book-card/library-sort-menu.svelte';
+  import LibrarySortMenu from '$lib/components/library/library-sort-menu.svelte';
   import { t$ } from '$lib/i18n';
 
   /**

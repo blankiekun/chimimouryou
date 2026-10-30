@@ -48,7 +48,7 @@ const config = {
           'object-src': ['none'],
           'base-uri': ['self'],
           // Book CSS is applied as is: no outside images, fonts or stylesheets to beacon to.
-          // The image hosts are the covers "Find details" may save (lib/data/book-metadata.ts)
+          // The image hosts are the covers "Find details" may save (lib/data/library/book-metadata.ts)
           // and Google Drive's and OneDrive's cover thumbnails (thumbnailLink, gdrive-handler.ts;
           // Graph thumbnails, onedrive-handler.ts: hosts from Microsoft's thumbnail docs).
           'img-src': [

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { activityClock, type DiscordActivity } from '$lib/data/discord-template';
+  import { activityClock, type DiscordActivity } from '$lib/data/discord/discord-template';
   import { t$ } from '$lib/i18n';
 
   /**

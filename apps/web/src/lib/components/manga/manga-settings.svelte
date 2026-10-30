@@ -7,8 +7,8 @@
   } from '$lib/components/button-toggle-group/toggle-option';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
-  import type { MangaText } from '$lib/data/mokuro';
-  import { mangaText$ } from '$lib/data/mokuro';
+  import type { MangaText } from '$lib/data/manga/mokuro';
+  import { mangaText$ } from '$lib/data/manga/mokuro';
   import {
     mangaBackground$,
     mangaDoubleTapZoom$,
@@ -25,7 +25,7 @@
     type MangaScale,
     type MangaTapInvert,
     type MangaTapLayout
-  } from '$lib/data/manga';
+  } from '$lib/data/manga/manga';
 
   interface Props {
     /** The series the reading mode is kept for */

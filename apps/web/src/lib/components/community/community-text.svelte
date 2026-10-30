@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { mentionParts } from '$lib/data/community-mentions';
+  import { mentionParts } from '$lib/data/social/community-mentions';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher } from 'svelte';
 

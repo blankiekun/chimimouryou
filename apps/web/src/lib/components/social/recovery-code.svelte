@@ -1,7 +1,7 @@
 <script lang="ts">
   import PointBox from '$lib/components/point-box.svelte';
   import { downloadBlob } from '$lib/functions/file-dom/download-blob';
-  import { formatCode } from '$lib/data/social-account';
+  import { formatCode } from '$lib/data/social/social-account';
   import { t$ } from '$lib/i18n';
 
   /** A recovery code shown once (sign-up, a reset, Settings → New recovery code): 5-5 on two lines. */

@@ -5,7 +5,7 @@
  */
 
 /**
- * The built-in dictionary (lib/data/dictionary.ts): Yomitan's database, importer and translator
+ * The built-in dictionary (lib/data/dictionary/dictionary.ts): Yomitan's database, importer and translator
  * (lib/vendor/yomitan, GPL-3.0-or-later) wired together without the extension's backend. Runs in
  * dictionary.worker.ts; the tests call it directly. Not part of upstream.
  */

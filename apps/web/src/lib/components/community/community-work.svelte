@@ -1,6 +1,6 @@
 <script lang="ts">
   import TitleCard from '$lib/components/social/title-card.svelte';
-  import { workCoverUrl } from '$lib/data/community';
+  import { workCoverUrl } from '$lib/data/social/community';
   import { t$ } from '$lib/i18n';
 
   /** A work's cover thumbnail (the hub's, else a title card), title and volume */

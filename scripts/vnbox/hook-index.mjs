@@ -1,5 +1,5 @@
 // node hook-index.mjs <hooks dir>: writes <dir>/index.json, the scripts the Windows game dialog
-// suggests from (hookSuggestion in apps/web/src/lib/data/windows-game.ts):
+// suggests from (hookSuggestion in apps/web/src/lib/data/vn/windows-game.ts):
 // [{ file, name (the script's @name, else its file name), exes (programs the script names),
 //    luna? (LunaHook engine ports in engines/: [{ order, all?, any? }], the file checks the page can run) }].
 import fs from 'node:fs';

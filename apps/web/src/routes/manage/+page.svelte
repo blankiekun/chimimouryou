@@ -4,17 +4,17 @@
   import { page } from '$lib/data/page-store';
   import { faCircleXmark } from '@fortawesome/free-solid-svg-icons';
   import BookCardList from '$lib/components/book-card/book-card-list.svelte';
-  import BookCardTable from '$lib/components/book-card/book-card-table.svelte';
-  import BookDetails from '$lib/components/book-card/book-details.svelte';
-  import BookWords from '$lib/components/book-card/book-words.svelte';
+  import BookCardTable from '$lib/components/library/book-card-table.svelte';
+  import BookDetails from '$lib/components/library/book-details.svelte';
+  import BookWords from '$lib/components/words/book-words.svelte';
   import HomeView from '$lib/components/library/home-view.svelte';
   import LibraryEmptyStates from '$lib/components/library/library-empty-states.svelte';
   import LibrarySelectBar from '$lib/components/library/library-select-bar.svelte';
   import SeriesHeader from '$lib/components/library/series-header.svelte';
   import StoreBar from '$lib/components/library/store-bar.svelte';
-  import { readingActivity } from '$lib/data/reader-hooks';
-  import SeriesGrid from '$lib/components/book-card/series-grid.svelte';
-  import SeriesResults from '$lib/components/book-card/series-results.svelte';
+  import { readingActivity } from '$lib/data/reader/reader-hooks';
+  import SeriesGrid from '$lib/components/library/series-grid.svelte';
+  import SeriesResults from '$lib/components/library/series-results.svelte';
   import {
     addImportsToHome,
     addToHome,
@@ -26,42 +26,38 @@
     seriesGroups,
     storeView$,
     takePendingImport
-  } from '$lib/data/library-home';
-  import { homeOfflineTitles, keepBooksOffline } from '$lib/data/offline-books';
-  import { onLaunchFiles, takeSharedFiles } from '$lib/data/launch-files';
+  } from '$lib/data/library/library-home';
+  import { homeOfflineTitles, keepBooksOffline } from '$lib/data/library/offline-books';
+  import { onLaunchFiles, takeSharedFiles } from '$lib/data/standalone/launch-files';
   import { t$, tr, type MessageKey } from '$lib/i18n';
   import {
     cacheCoverage,
     knownCoverage$,
     loadCoverageCache,
     refreshKnownWordsIfStale
-  } from '$lib/data/known-words';
-  import { prefetchReadings } from '$lib/data/generated-furigana';
+  } from '$lib/data/words/known-words';
+  import { prefetchReadings } from '$lib/data/words/generated-furigana';
   import { deleteBookExtras } from '$lib/data/reader-db';
-  import { deleteBookKanji } from '$lib/data/book-kanji';
-  import { deleteVnCache } from '$lib/data/vn';
-  import DifficultyDialog from '$lib/components/book-card/difficulty-dialog.svelte';
+  import { deleteBookKanji } from '$lib/data/words/book-kanji';
+  import { deleteVnCache } from '$lib/data/vn/vn';
+  import DifficultyDialog from '$lib/components/difficulty/difficulty-dialog.svelte';
   import {
     allBooksFilter,
     filterBookCards,
     seriesFilterKey
-  } from '$lib/components/book-card/library-filters';
-  import LibrarySidebar from '$lib/components/book-card/library-sidebar.svelte';
-  import LibrarySkeleton from '$lib/components/book-card/library-skeleton.svelte';
-  import {
-    compareBookCards,
-    nextSortOption,
-    orderSeries
-  } from '$lib/components/book-card/library-sort';
+  } from '$lib/data/library/library-filters';
+  import LibrarySidebar from '$lib/components/library/library-sidebar.svelte';
+  import LibrarySkeleton from '$lib/components/library/library-skeleton.svelte';
+  import { compareBookCards, nextSortOption, orderSeries } from '$lib/data/library/library-sort';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
-  import ImportMenu from '$lib/components/book-card/import-menu.svelte';
-  import SeriesDialog from '$lib/components/book-card/series-dialog.svelte';
-  import SeriesSuggestionsDialog from '$lib/components/book-card/series-suggestions-dialog.svelte';
+  import ImportMenu from '$lib/components/library/import-menu.svelte';
+  import SeriesDialog from '$lib/components/library/series-dialog.svelte';
+  import SeriesSuggestionsDialog from '$lib/components/library/series-suggestions-dialog.svelte';
   import BookExportDialog from '$lib/components/book-export/book-export-dialog.svelte';
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
-  import WindowsGameDialog from '$lib/components/book-card/windows-game-dialog.svelte';
-  import { deleteWindowsGame, windowsGameFolder } from '$lib/data/windows-game';
+  import WindowsGameDialog from '$lib/components/vn/windows-game-dialog.svelte';
+  import { deleteWindowsGame, windowsGameFolder } from '$lib/data/vn/windows-game';
   import type { LoadData } from '$lib/functions/file-loaders/types';
   import ExternalReadDialog from '$lib/components/external-read-dialog.svelte';
   import LogReportDialog from '$lib/components/log-report-dialog.svelte';
@@ -69,8 +65,8 @@
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import { preFilteredTitlesForStatistics$ } from '$lib/components/statistics/statistics-types';
   import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
-  import { saveSeriesOverrides, seriesForTitle } from '$lib/data/series-overrides';
-  import { account$, currentAccount, hasPermission } from '$lib/data/account';
+  import { saveSeriesOverrides, seriesForTitle } from '$lib/data/library/series-overrides';
+  import { account$, currentAccount, hasPermission } from '$lib/data/account/account';
   import {
     importServiceRunning,
     isFinished,
@@ -78,18 +74,23 @@
     uploadToCalibre,
     waitForImportJobs,
     type CalibreImportJob
-  } from '$lib/data/calibre-import';
+  } from '$lib/data/remote/calibre-import';
   import { clearReadingProgress } from '$lib/functions/clear-reading-progress';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { pagePath, standalone } from '$lib/data/env';
-  import { bookRoute, readerPath, readerRoute, type ReaderRoute } from '$lib/data/reader-route';
+  import {
+    bookRoute,
+    readerPath,
+    readerRoute,
+    type ReaderRoute
+  } from '$lib/data/reader/reader-route';
   import FirstRun from '$lib/components/standalone/first-run.svelte';
-  import { backgroundAnalysis$, catchUpAnalysis } from '$lib/data/background-analysis';
+  import { backgroundAnalysis$, catchUpAnalysis } from '$lib/data/analysis/background-analysis';
   import {
     needsFirstRun,
     showsExternalReadHint,
     storageChosen$
-  } from '$lib/data/standalone-storage';
+  } from '$lib/data/standalone/standalone-storage';
   import { logger } from '$lib/data/logger';
   import type { SortOption } from '$lib/data/sort-types';
   import { ApiStorageHandler } from '$lib/data/storage/handler/api-handler';
@@ -104,8 +105,8 @@
     zipVnFolder,
     formatBytes,
     type VnUpload
-  } from '$lib/data/vn-upload';
-  import { importMokuroFiles } from '$lib/data/mokuro';
+  } from '$lib/data/vn/vn-upload';
+  import { importMokuroFiles } from '$lib/data/manga/mokuro';
   import { storageSource$ } from '$lib/data/storage/storage-view';
   import {
     booklistSortOptions$,
@@ -674,7 +675,7 @@
 
   /**
    * Not part of upstream: under the Calibre source, imported files are added to the Calibre
-   * library by the server's import queue (data/calibre-import.ts), which skips books
+   * library by the server's import queue (data/remote/calibre-import.ts), which skips books
    * already there. The library is refreshed once they are in the catalog.
    */
   async function addFilesToCalibre(files: File[]) {

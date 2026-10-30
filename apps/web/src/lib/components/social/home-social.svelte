@@ -6,7 +6,7 @@
   import FriendCover from '$lib/components/social/friend-cover.svelte';
   import ProfileLayer from '$lib/components/social/profile-layer.svelte';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-  import CoverCard from '$lib/components/book-card/cover-card.svelte';
+  import CoverCard from '$lib/components/library/cover-card.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import AddFriend from '$lib/components/social/add-friend.svelte';
   import BookTransfers from '$lib/components/social/book-transfers.svelte';
@@ -18,10 +18,17 @@
     communityNotesSeen$,
     refreshNotes,
     unseenNotes
-  } from '$lib/data/community-book';
+  } from '$lib/data/social/community-book';
   import { pagePath } from '$lib/data/env';
-  import { bookKey, byLastRead, feed$, friends$, loadFeed, loadFriends } from '$lib/data/social';
-  import { hubDown$, socialSession$ } from '$lib/data/social-account';
+  import {
+    bookKey,
+    byLastRead,
+    feed$,
+    friends$,
+    loadFeed,
+    loadFriends
+  } from '$lib/data/social/social';
+  import { hubDown$, socialSession$ } from '$lib/data/social/social-account';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher, onDestroy, onMount } from 'svelte';
 

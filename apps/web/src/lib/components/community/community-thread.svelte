@@ -12,15 +12,15 @@
     replyTo,
     type CommunityPost as Post,
     type CommunityThread
-  } from '$lib/data/community';
+  } from '$lib/data/social/community';
   import {
     communityErrorKey,
     lineLink,
     markNotesSeen,
     splitContext,
     splitThread
-  } from '$lib/data/community-book';
-  import { socialSession$ } from '$lib/data/social-account';
+  } from '$lib/data/social/community-book';
+  import { socialSession$ } from '$lib/data/social/social-account';
   import type { SearchIndex } from '$lib/functions/book-text/book-search';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher, onMount } from 'svelte';

@@ -3,7 +3,7 @@
 Part of [Yomitan](https://github.com/yomidevs/yomitan) (GPL-3.0-or-later, `LICENSE` here),
 tag **26.10.12.0** (commit `e7334a96106a6c74e6fa75bd33a5ea1219d92712`), the same release the
 desktop app loads (`apps/desktop/scripts/fetch-yomitan.sh`). It powers the built-in dictionary
-(`lib/data/dictionary.ts`, worker `lib/functions/dictionary/`). Paths mirror Yomitan's `ext/js/`
+(`lib/data/dictionary/dictionary.ts`, worker `lib/functions/dictionary/`). Paths mirror Yomitan's `ext/js/`
 (`types/` is its `types/ext/`, `data/schemas/` its `ext/data/schemas/`), so a newer release can be
 diffed file by file.
 
@@ -71,15 +71,15 @@ site's CSP holds) at the commit Yomitan pins (`12aff5e3550954d7d3a98a5917ff7d579
 The popup itself is the app's (`components/dictionary/lookup-popup.svelte`, `term-entry.svelte`):
 the entry layout follows `display/display-generator.js` with Yomitan's class names, so custom popup
 CSS and dictionary styles (scoped with `addScopeToCssLegacy`, as `display.js` does) still apply.
-Word audio follows `media/audio-downloader.js` and `audio-system.js` in `lib/data/dictionary-audio.ts`
+Word audio follows `media/audio-downloader.js` and `audio-system.js` in `lib/data/dictionary/dictionary-audio.ts`
 for the sources a web page can reach.
 
-Anki notes (`lib/data/anki-dictionary.ts`) are built by `data/anki-note-builder.js` with the
+Anki notes (`lib/data/dictionary/anki-dictionary.ts`) are built by `data/anki-note-builder.js` with the
 `AnkiTemplateRenderer` called directly, as Yomitan's own tests do, instead of through its
 sandboxed template-renderer frame; media injection (`injectAnkiNoteMedia`: dictionary images,
 screenshots, clipboard, Yomitan's audio download) is not used.
 
 Left out: the extension (backend, messaging, `chrome.*`), the display's templates and its text
 scanner (`language/text-scanner.js`; the app's `functions/dictionary/scan.ts` uses the scanner pieces
-above), the settings pages, AnkiConnect (`comm/anki-connect.js`; the app's `lib/data/anki.ts`
+above), the settings pages, AnkiConnect (`comm/anki-connect.js`; the app's `lib/data/dictionary/anki.ts`
 talks to it), the kanji lookup path's UI, and every language but Japanese.

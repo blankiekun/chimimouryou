@@ -4,7 +4,7 @@
  * player defines g_screen_width/g_screen_height (the screen the overlay lines are laid out
  * in), lineVoice (the voice of the line being read), voiceFile(file) and shownPages() (backlog
  * text on screen), and may redefine screenCanvas() and set hookedLines; the page's text source
- * (lib/data/vn-text.ts) gives it the lines to show.
+ * (lib/data/vn/vn-text.ts) gives it the lines to show.
  */
 function overlayLine(line) {
   var div = document.createElement('div');
@@ -19,7 +19,7 @@ function overlayLine(line) {
   return div;
 }
 
-/** lines: [{ text, x, y, size, pitch, vertical? }] in screen pixels (overlayLines in lib/data/vn.ts). */
+/** lines: [{ text, x, y, size, pitch, vertical? }] in screen pixels (overlayLines in lib/data/vn/vn.ts). */
 function showText(lines) {
   document
     .getElementById('page-text')
@@ -79,7 +79,7 @@ function passToGame(event) {
   }
 }
 
-// Gamepads (lib/data/vn-gamepad.ts): the page reads them and sends the game mouse and keys, so the
+// Gamepads (lib/data/vn/vn-gamepad.ts): the page reads them and sends the game mouse and keys, so the
 // engines' own SDL never sees one (it would act twice); framePads() keeps them for the page.
 var framePads = navigator.getGamepads ? navigator.getGamepads.bind(navigator) : null;
 
@@ -146,7 +146,7 @@ document.addEventListener('contextmenu', function (event) {
   event.preventDefault();
 });
 
-// Anki mining (lib/data/anki.ts): the recent lines with their voice files, and for the newest
+// Anki mining (lib/data/dictionary/anki.ts): the recent lines with their voice files, and for the newest
 // their screenshot and sound, so a note gets those of the line it was mined from (vnLineFor),
 // however late it is noticed or from however far back in a backlog.
 var KEPT_LINES = 500;

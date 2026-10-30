@@ -6,8 +6,8 @@
     communityNotesSeen$,
     refreshNotes,
     unseenNotes
-  } from '$lib/data/community-book';
-  import { socialSession$ } from '$lib/data/social-account';
+  } from '$lib/data/social/community-book';
+  import { socialSession$ } from '$lib/data/social/social-account';
   import { t$ } from '$lib/i18n';
   import { onMount } from 'svelte';
 

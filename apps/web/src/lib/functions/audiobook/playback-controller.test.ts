@@ -6,9 +6,9 @@
 
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { audiobookControls$ } from '$lib/data/audiobook-controls';
-import { getAudiobookRate } from '$lib/data/audiobook';
-import { builtInPopupOpen$ } from '$lib/data/yomitan';
+import { audiobookControls$ } from '$lib/data/audio/audiobook-controls';
+import { getAudiobookRate } from '$lib/data/audio/audiobook';
+import { builtInPopupOpen$ } from '$lib/data/dictionary/yomitan';
 import { PlaybackController } from './playback-controller';
 
 const cues = [

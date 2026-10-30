@@ -6,11 +6,11 @@
 
 /**
  * Discord status (off by default): Settings → Discord, and what the readers and the library
- * report, sent to the chimimouryou add-on in Anki (lib/data/discord.ts). Not part of upstream.
+ * report, sent to the chimimouryou add-on in Anki (lib/data/discord/discord.ts). Not part of upstream.
  */
 
-import SettingsDiscord from '$lib/components/settings/discord/settings-discord.svelte';
-import { discordActivity } from '$lib/data/discord';
+import SettingsDiscord from '$lib/components/discord/settings-discord.svelte';
+import { discordActivity } from '$lib/data/discord/discord';
 import type { Plugin } from '$lib/plugins';
 
 export const discordPlugin: Plugin = {

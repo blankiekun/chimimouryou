@@ -1,7 +1,7 @@
 <script lang="ts">
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
-  import { hubErrorKey, uploadPicture } from '$lib/data/social-account';
-  import { encodePicture, squareCrop } from '$lib/data/social-images';
+  import { hubErrorKey, uploadPicture } from '$lib/data/social/social-account';
+  import { encodePicture, squareCrop } from '$lib/data/social/social-images';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher, onDestroy } from 'svelte';
 

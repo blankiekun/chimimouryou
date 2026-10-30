@@ -177,7 +177,7 @@ function openMenu() {
   canvas.dispatchEvent(new MouseEvent('mouseup', at));
 }
 
-// Gamepad actions (lib/data/vn-gamepad.ts) as the keys ONScripter knows: A Enter, the d-pad the
+// Gamepad actions (lib/data/vn/vn-gamepad.ts) as the keys ONScripter knows: A Enter, the d-pad the
 // arrow keys (choices and menus), the shoulders the wheel (up opens the backlog).
 var padKeys = {
   advance: ['Enter', 'Enter', 13],

@@ -2,7 +2,7 @@
   import { browser } from '$app/env';
   import { goto } from '$app/navigation';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
-  import ImportMenu from '$lib/components/book-card/import-menu.svelte';
+  import ImportMenu from '$lib/components/library/import-menu.svelte';
   import CommunityPlainComposer from '$lib/components/community/community-plain-composer.svelte';
   import CommunityNotes from '$lib/components/community/community-notes.svelte';
   import CommunitySignup from '$lib/components/community/community-signup.svelte';
@@ -11,14 +11,14 @@
   import CommunityWork from '$lib/components/community/community-work.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import RoleBadge from '$lib/components/social/role-badge.svelte';
-  import { isPlain, loadFeed, loadThread, type FeedPost } from '$lib/data/community';
-  import { communityErrorKey, splitContext, threadPath } from '$lib/data/community-book';
+  import { isPlain, loadFeed, loadThread, type FeedPost } from '$lib/data/social/community';
+  import { communityErrorKey, splitContext, threadPath } from '$lib/data/social/community-book';
   import { pagePath } from '$lib/data/env';
-  import { setPendingImport, type PendingImport } from '$lib/data/library-home';
+  import { setPendingImport, type PendingImport } from '$lib/data/library/library-home';
   import { page } from '$lib/data/page-store';
   import { relativeTime } from '$lib/functions/format-time';
-  import { socialSession$ } from '$lib/data/social-account';
-  import { removePost } from '$lib/data/social-moderation';
+  import { socialSession$ } from '$lib/data/social/social-account';
+  import { removePost } from '$lib/data/social/social-moderation';
   import { t$, uiLanguage$ } from '$lib/i18n';
   import { activePlugins$ } from '$lib/plugins';
   import { onMount } from 'svelte';

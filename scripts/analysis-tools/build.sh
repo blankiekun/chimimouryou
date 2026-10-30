@@ -1,6 +1,6 @@
 #!/bin/bash
 # Builds the standalone edition's analysis tools (Settings → Analysis tools: word lists and generated
-# furigana in the browser, apps/web/src/lib/data/analysis-tools.ts) into apps/web/build/analysis-tools/
+# furigana in the browser, apps/web/src/lib/data/analysis/analysis-tools.ts) into apps/web/build/analysis-tools/
 # (ANALYSIS_TOOLS_OUT picks another folder). Run after `pnpm build`; nothing here is committed:
 #   sudachi.js, sudachi_bg.wasm  sudachi.rs for wasm (Benjas333/sudachi-wasm333 at SUDACHI_COMMIT, Apache-2.0)
 #                                with sudachi-wasm.patch: wasm32 build fixes and dict_alloc/initialize_from_ptr,
@@ -113,9 +113,9 @@ gzip -9 -n -c "$work/core-frequency.tsv" > "$out/core-frequency.tsv.gz"
 # books' analyses. Files only difficulty estimates need: the frequency pack and the core's list; only generated
 # furigana: the reader pack (word lists take Sudachi's readings without it).
 # `engine`: the difficulty engine's fingerprint (engine/engine.py), which the browser's
-# estimates carry; it must be the release's (apps/web/src/lib/data/difficulty-engine.json).
+# estimates carry; it must be the release's (apps/web/src/lib/data/difficulty/difficulty-engine.json).
 python3 - "$out" "$work" "$SUDACHI_DICT" "$PYODIDE" "$(basename "$yurigana" .tar.gz)" "$jiten" \
-  "$root/apps/web/src/lib/data/difficulty-engine.json" <<'EOF'
+  "$root/apps/web/src/lib/data/difficulty/difficulty-engine.json" <<'EOF'
 import hashlib, json, os, sys
 out, work, dic, pyodide, yurigana, jiten, committed = sys.argv[1:]
 sys.path.insert(0, jiten)

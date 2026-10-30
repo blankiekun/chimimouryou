@@ -7,9 +7,11 @@ import { createServer } from 'vite';
 const server = await createServer({ server: { middlewareMode: true }, logLevel: 'error' });
 
 try {
-  const { hardGuess, nextItem, placementLength, scorePlacement } =
-    await server.ssrLoadModule('$lib/data/placement');
-  const { items } = (await server.ssrLoadModule('$lib/data/placement-hard-items.json')).default;
+  const { hardGuess, nextItem, placementLength, scorePlacement } = await server.ssrLoadModule(
+    '$lib/data/difficulty/placement'
+  );
+  const { items } = (await server.ssrLoadModule('$lib/data/difficulty/placement-hard-items.json'))
+    .default;
 
   const seeded = (seed) => () => {
     seed = (seed * 1103515245 + 12345) % 2 ** 31;

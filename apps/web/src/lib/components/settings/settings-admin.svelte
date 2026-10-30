@@ -12,7 +12,7 @@
     type AccountPermission,
     type AccountUser,
     type AdminAccount
-  } from '$lib/data/account';
+  } from '$lib/data/account/account';
   import { onMount } from 'svelte';
   import Fa from 'svelte-fa';
 

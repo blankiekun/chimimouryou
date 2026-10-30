@@ -1,7 +1,7 @@
 <script lang="ts">
   import CommunityMentions from '$lib/components/community/community-mentions.svelte';
-  import { bodyLength, postPlain } from '$lib/data/community';
-  import { communityErrorKey } from '$lib/data/community-book';
+  import { bodyLength, postPlain } from '$lib/data/social/community';
+  import { communityErrorKey } from '$lib/data/social/community-book';
   import { t$ } from '$lib/i18n';
 
   /**

@@ -1,6 +1,12 @@
 <script lang="ts">
   import RecoveryCode from '$lib/components/social/recovery-code.svelte';
-  import { hubErrorKey, hubOrigin, logIn, recoverAccount, signUp } from '$lib/data/social-account';
+  import {
+    hubErrorKey,
+    hubOrigin,
+    logIn,
+    recoverAccount,
+    signUp
+  } from '$lib/data/social/social-account';
   import { t$ } from '$lib/i18n';
   import { createEventDispatcher } from 'svelte';
 

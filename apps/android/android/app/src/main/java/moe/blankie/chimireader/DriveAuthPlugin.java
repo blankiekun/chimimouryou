@@ -23,7 +23,7 @@ import java.util.Collections;
  * Google Drive access tokens from Play services' Authorization API (Google refuses its web sign-in
  * in a WebView). The Android OAuth client is matched by package name and signing key, so nothing
  * here holds a client id. No refresh token: an expired token is asked for again, silently once
- * the reader has consented. Used by apps/web's lib/data/android-drive.ts.
+ * the reader has consented. Used by apps/web's lib/data/standalone/android-drive.ts.
  */
 @CapacitorPlugin(name = "DriveAuth")
 public class DriveAuthPlugin extends Plugin {

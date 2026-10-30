@@ -10,7 +10,7 @@
     faRotateLeft,
     faTrash
   } from '@fortawesome/free-solid-svg-icons';
-  import { account$, hasPermission } from '$lib/data/account';
+  import { account$, hasPermission } from '$lib/data/account/account';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import { storageSource$ } from '$lib/data/storage/storage-view';
   import { t$ } from '$lib/i18n';

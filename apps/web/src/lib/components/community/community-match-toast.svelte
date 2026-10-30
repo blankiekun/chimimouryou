@@ -1,6 +1,6 @@
 <script lang="ts">
   import Toast from '$lib/components/toast.svelte';
-  import { answerMatch, type MatchOffer } from '$lib/data/community-book';
+  import { answerMatch, type MatchOffer } from '$lib/data/social/community-book';
   import { t$ } from '$lib/i18n';
 
   /**

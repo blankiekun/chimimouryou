@@ -16,7 +16,7 @@ import {
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { StorageKey } from '$lib/data/storage/storage-types';
 
-vi.mock('$lib/data/background-analysis', () => ({ analyseInBackground: vi.fn() }));
+vi.mock('$lib/data/analysis/background-analysis', () => ({ analyseInBackground: vi.fn() }));
 
 const { getStorageHandler } = await import('$lib/data/storage/storage-handler-factory');
 const { database } = await import('$lib/data/store');

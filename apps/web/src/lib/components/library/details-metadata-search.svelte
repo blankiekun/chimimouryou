@@ -11,10 +11,10 @@
     type MetadataCandidate,
     type MetadataKind,
     type MetadataSource
-  } from '$lib/data/book-metadata';
-  import { guessSeriesName } from '$lib/data/series-overrides';
+  } from '$lib/data/library/book-metadata';
+  import { guessSeriesName } from '$lib/data/library/series-overrides';
   import { database } from '$lib/data/store';
-  import { vnBookmark } from '$lib/data/vn';
+  import { vnBookmark } from '$lib/data/vn/vn';
   import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
   import { t$, tr } from '$lib/i18n';
   import Fa from 'svelte-fa';

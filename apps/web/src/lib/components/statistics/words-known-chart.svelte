@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { DayRead, KnownPoint } from '$lib/data/words-history';
-  import { getKnownHistory } from '$lib/data/words-history';
-  import { knownMinCount } from '$lib/data/words-met';
+  import type { DayRead, KnownPoint } from '$lib/data/words/words-history';
+  import { getKnownHistory } from '$lib/data/words/words-history';
+  import { knownMinCount } from '$lib/data/words/words-met';
   import { t$ } from '$lib/i18n';
 
   /** "Words known" over time (an estimate, see words-history.ts). Not part of upstream. */

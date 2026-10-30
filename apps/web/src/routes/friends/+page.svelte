@@ -11,7 +11,7 @@
   import SocialAccountForm from '$lib/components/social/social-account-form.svelte';
   import { pushState } from '$app/navigation';
   import { pagePath } from '$lib/data/env';
-  import { libraryTab$ } from '$lib/data/library-home';
+  import { libraryTab$ } from '$lib/data/library/library-home';
   import {
     feed$,
     friends$,
@@ -19,8 +19,8 @@
     loadFriends,
     localCovers,
     requestByUsername
-  } from '$lib/data/social';
-  import { hubDown$, hubErrorKey, socialSession$ } from '$lib/data/social-account';
+  } from '$lib/data/social/social';
+  import { hubDown$, hubErrorKey, socialSession$ } from '$lib/data/social/social-account';
   import { t$ } from '$lib/i18n';
   import { activePlugins$ } from '$lib/plugins';
   import { onMount } from 'svelte';

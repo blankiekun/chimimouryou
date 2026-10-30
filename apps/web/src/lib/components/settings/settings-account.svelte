@@ -13,10 +13,10 @@
     signIn,
     signInAvailableHere,
     signOut
-  } from '$lib/data/account';
-  import { settingsSyncState$, syncAccountSettings } from '$lib/data/account-settings-sync';
+  } from '$lib/data/account/account';
+  import { settingsSyncState$, syncAccountSettings } from '$lib/data/account/account-settings-sync';
   import { pagePath } from '$lib/data/env';
-  import { releaseReaderData } from '$lib/data/reader-data-owner';
+  import { releaseReaderData } from '$lib/data/account/reader-data-owner';
   import { t$ } from '$lib/i18n';
   import { onMount } from 'svelte';
 

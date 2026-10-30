@@ -12,7 +12,7 @@
     installTexts,
     installWay,
     promptInstall
-  } from '$lib/data/install-app';
+  } from '$lib/data/standalone/install-app';
 
   export let settings = false;
 

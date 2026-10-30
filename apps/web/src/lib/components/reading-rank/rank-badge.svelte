@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { rankTiers } from '$lib/data/reading-rank';
+  import { rankTiers } from '$lib/data/stats/reading-rank';
 
   /**
    * A reading rank's name in its own colour (`--rank-N`, the only place it is used besides the

@@ -16,7 +16,7 @@ ACCOUNT_RE = re.compile(r'[0-9a-f]{32}')
 DATE_RE = re.compile(r'\d{4}-\d{2}-\d{2}')
 HID_RE = re.compile(r'[A-Za-z0-9-]{1,100}')
 
-# The doc kinds each table holds, shared with the app (apps/web/src/lib/data/server-rows.ts, checked by
+# The doc kinds each table holds, shared with the app (apps/web/src/lib/data/remote/server-rows.ts, checked by
 # sync-kinds.test.ts); service.py's routes and migrate.py's file maps read it too.
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sync-kinds.json'), encoding='utf-8') as f:
     SYNC_KINDS = json.load(f)

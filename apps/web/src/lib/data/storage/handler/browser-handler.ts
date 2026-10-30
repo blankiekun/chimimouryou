@@ -14,11 +14,11 @@ import type {
   BooksDbSubtitleData
 } from '$lib/data/database/books-db/versions/books-db';
 import { database, lastReadingGoalsModified$ } from '$lib/data/store';
-import { isManga } from '$lib/data/manga';
-import { levelOf } from '$lib/data/difficulty-core';
-import { isVn } from '$lib/data/vn';
+import { isManga } from '$lib/data/manga/manga';
+import { levelOf } from '$lib/data/difficulty/difficulty-core';
+import { isVn } from '$lib/data/vn/vn';
 import { standalone } from '$lib/data/env';
-import { syncBrowserSeries, withBrowserSeries } from '$lib/data/series-overrides';
+import { syncBrowserSeries, withBrowserSeries } from '$lib/data/library/series-overrides';
 
 import type { MergeMode } from '$lib/data/merge-mode';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
@@ -48,7 +48,7 @@ export class BrowserStorageHandler extends BaseStorageHandler {
         const data = await db.getAll('data');
         // Standalone: the analysis tools' estimates of stored books (analysis-tools.ts).
         const estimates = standalone
-          ? await import('$lib/data/analysis-tools')
+          ? await import('$lib/data/analysis/analysis-tools')
               .then(({ localEstimates }) => localEstimates())
               .catch(() => undefined)
           : undefined;
@@ -393,7 +393,7 @@ export class BrowserStorageHandler extends BaseStorageHandler {
         !isVn(storedBookData) &&
         !isManga(storedBookData)
       ) {
-        import('$lib/data/background-analysis')
+        import('$lib/data/analysis/background-analysis')
           .then(({ analyseInBackground }) => analyseInBackground([data.title]))
           .catch(() => undefined);
       }

@@ -11,7 +11,7 @@
  * gives. Not part of upstream.
  */
 
-import type { MokuroBlock } from '$lib/data/mokuro';
+import type { MokuroBlock } from '$lib/data/manga/mokuro';
 
 export type Box = [number, number, number, number];
 

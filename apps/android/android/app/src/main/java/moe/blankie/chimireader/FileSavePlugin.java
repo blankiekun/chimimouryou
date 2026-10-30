@@ -18,7 +18,7 @@ import java.io.OutputStream;
  * Saves the page's downloads (backups, CSVs), which the WebView drops: pick() asks where with
  * Android's "Save to" screen (no storage permission), write() appends base64 chunks, close() ends
  * it (and deletes the file when the page failed). One file at a time. Used by apps/web's
- * lib/data/native-save.ts.
+ * lib/data/standalone/native-save.ts.
  */
 @CapacitorPlugin(name = "FileSave")
 public class FileSavePlugin extends Plugin {

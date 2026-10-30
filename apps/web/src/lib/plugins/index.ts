@@ -16,7 +16,7 @@ import { map } from 'rxjs';
 import type { SearchIndex } from '$lib/functions/book-text/book-search';
 import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v3';
 import type { MessageKey } from '$lib/i18n';
-import type { ReadingActivity } from '$lib/data/discord';
+import type { ReadingActivity } from '$lib/data/discord/discord';
 import { aiPlugin } from '$lib/plugins/ai';
 import { audiobookshelfPlugin } from '$lib/plugins/audiobookshelf';
 import { discordPlugin } from '$lib/plugins/discord';
@@ -54,7 +54,7 @@ export interface SelectionActionContribution {
   label: MessageKey;
   title: MessageKey;
   icon: IconDefinition;
-  /** Shown with `passage` (PassageContext from data/ask-ai: the selection and text around it, without furigana); dispatches `close` */
+  /** Shown with `passage` (PassageContext from data/ai/ask-ai: the selection and text around it, without furigana); dispatches `close` */
   panel: Component<any>;
 }
 

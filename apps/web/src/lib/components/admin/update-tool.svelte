@@ -3,13 +3,13 @@
   import { onDestroy, onMount } from 'svelte';
   import Fa from 'svelte-fa';
   import ButtonToggleGroup from '$lib/components/button-toggle-group/button-toggle-group.svelte';
-  import { getUpdateState, requestUpdate, type UpdateState } from '$lib/data/account';
+  import { getUpdateState, requestUpdate, type UpdateState } from '$lib/data/account/account';
   import {
     checkForUpdate,
     defaultUpdateRepo,
     updateChannel$,
     type UpdateCheck
-  } from '$lib/data/app-update';
+  } from '$lib/data/standalone/app-update';
 
   const pollMs = 3000;
   const shownCommits = 30;

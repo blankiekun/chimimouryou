@@ -6,7 +6,7 @@
 
 /**
  * chimimouryou's social hub: accounts, friend codes and what friends are reading. A Cloudflare
- * Worker over D1 (schema.sql); the entry is index.ts; the app's client is apps/web/src/lib/data/social*.ts. JSON in and
+ * Worker over D1 (schema.sql); the entry is index.ts; the app's client is apps/web/src/lib/data/social/social*.ts. JSON in and
  * out under /v1, bearer tokens (the hub is another origin than every reader), limits in D1.
  */
 

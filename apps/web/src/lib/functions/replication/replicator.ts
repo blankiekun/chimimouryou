@@ -14,9 +14,9 @@ import loadHtmlz from '$lib/functions/file-loaders/htmlz/load-htmlz';
 import loadTxt from '$lib/functions/file-loaders/txt/load-txt';
 import loadCbz from '$lib/functions/file-loaders/cbz/load-cbz';
 import { loadVnFiles } from '$lib/functions/file-loaders/vn/load-vn';
-import type { VnFolder } from '$lib/data/vn-upload';
-import { isMangaFileName } from '$lib/data/manga';
-import { isVn } from '$lib/data/vn';
+import type { VnFolder } from '$lib/data/vn/vn-upload';
+import { isMangaFileName } from '$lib/data/manga/manga';
+import { isVn } from '$lib/data/vn/vn';
 import type { ApiStorageHandler } from '$lib/data/storage/handler/api-handler';
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
@@ -26,7 +26,7 @@ import {
   replicationProgress$,
   type ReplicationContext
 } from '$lib/functions/replication/replication-progress';
-import { isSyncBetween, syncEnded, syncStarted, syncStep } from '$lib/data/sync-status';
+import { isSyncBetween, syncEnded, syncStarted, syncStep } from '$lib/data/sync/sync-status';
 import { standalone } from '$lib/data/env';
 import pLimit from 'p-limit';
 
