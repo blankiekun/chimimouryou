@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Switch from '$lib/components/switch.svelte';
   import { goto } from '$app/navigation';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
@@ -157,23 +158,15 @@
       error = $t$(hubErrorKey(e));
     }
   }
-
-  const switchLabel = (on: boolean) => $t$(on ? 'settings.on' : 'settings.off');
 </script>
 
 <SettingsSection id="social-features" keywords="friends social hub">
   <SettingsItemGroup title={$t$('social.features')}>
-    <button
-      type="button"
-      role="switch"
-      class="app-switch"
-      aria-checked="true"
+    <Switch
+      checked={true}
       aria-label={$t$('social.features')}
-      on:click={() => setPluginEnabled('social', false)}
-    >
-      <span class="app-switch-thumb" />
-      <span class="app-switch-text">{switchLabel(true)}</span>
-    </button>
+      onchange={() => setPluginEnabled('social', false)}
+    />
   </SettingsItemGroup>
 </SettingsSection>
 
@@ -370,34 +363,22 @@
       title={$t$('social.publicProfile')}
       tooltip={$t$('social.publicProfileHint', { username: me.username })}
     >
-      <button
-        type="button"
-        role="switch"
-        class="app-switch"
-        aria-checked={shared('public')}
+      <Switch
+        checked={shared('public')}
         aria-label={$t$('social.publicProfile')}
-        on:click={() => save({ share: { public: !shared('public') } })}
-      >
-        <span class="app-switch-thumb" />
-        <span class="app-switch-text">{switchLabel(shared('public'))}</span>
-      </button>
+        onchange={() => save({ share: { public: !shared('public') } })}
+      />
     </SettingsItemGroup>
   </SettingsSection>
 
   <SettingsSection id="social-shows" keywords="share current finished activity stats words manga">
     {#each shareKeys as key (key)}
       <SettingsItemGroup title={$t$(showsLabel(key))}>
-        <button
-          type="button"
-          role="switch"
-          class="app-switch"
-          aria-checked={shared(key)}
+        <Switch
+          checked={shared(key)}
           aria-label={$t$(showsLabel(key))}
-          on:click={() => save({ share: { [key]: !shared(key) } })}
-        >
-          <span class="app-switch-thumb" />
-          <span class="app-switch-text">{switchLabel(shared(key))}</span>
-        </button>
+          onchange={() => save({ share: { [key]: !shared(key) } })}
+        />
       </SettingsItemGroup>
     {/each}
   </SettingsSection>

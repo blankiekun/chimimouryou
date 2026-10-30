@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Switch from '$lib/components/switch.svelte';
   /**
    * Settings → Dictionary lookups: the built-in dictionary's settings in Yomitan's own sections
    * and options shape (lib/data/dictionary.ts). Popup, Scanning, Audio and Shortcuts are in
@@ -230,17 +231,11 @@
 
 <SettingsSection id="dictionary-general" keywords="yomitan popup lookup dictionary 辞書">
   <SettingsItemGroup title={$t$('dict.builtIn')}>
-    <button
-      type="button"
-      role="switch"
-      class="app-switch"
-      aria-checked={$builtInLookups$}
+    <Switch
+      checked={$builtInLookups$}
       aria-label={$t$('dict.builtIn')}
-      on:click={() => setLookups(!$builtInLookups$)}
-    >
-      <span class="app-switch-thumb" />
-      <span class="app-switch-text">{$t$($builtInLookups$ ? 'settings.on' : 'settings.off')}</span>
-    </button>
+      onchange={() => setLookups(!$builtInLookups$)}
+    />
     <svelte:fragment slot="after">
       {#if $yomitanSeen$ && $builtInLookups$}
         <p class="dict-note" role="status">{$t$('dict.yomitanSeenOn')}</p>
@@ -392,19 +387,11 @@
                   <Fa icon={faArrowDown} />
                 </button>
               </span>
-              <button
-                type="button"
-                role="switch"
-                class="app-switch"
-                aria-checked={dictionary.enabled}
+              <Switch
+                checked={dictionary.enabled}
                 aria-label={$t$('dict.enable', { name: dictionary.alias })}
-                on:click={() => setDictionary(dictionary.name, { enabled: !dictionary.enabled })}
-              >
-                <span class="app-switch-thumb" />
-                <span class="app-switch-text">
-                  {$t$(dictionary.enabled ? 'settings.on' : 'settings.off')}
-                </span>
-              </button>
+                onchange={() => setDictionary(dictionary.name, { enabled: !dictionary.enabled })}
+              />
             </div>
             <details class="dict-details">
               <summary>{$t$('dict.options')}</summary>
@@ -423,16 +410,12 @@
                 {#each dictionaryToggles as [key, label]}
                   <div class="dict-option">
                     <span class="dict-option-text">{$t$(label)}</span>
-                    <button
-                      type="button"
-                      role="switch"
-                      class="app-switch"
-                      aria-checked={dictionary[key]}
+                    <Switch
+                      checked={dictionary[key]}
+                      stateText={false}
                       aria-label={$t$(label)}
-                      on:click={() => setDictionary(dictionary.name, { [key]: !dictionary[key] })}
-                    >
-                      <span class="app-switch-thumb" />
-                    </button>
+                      onchange={() => setDictionary(dictionary.name, { [key]: !dictionary[key] })}
+                    />
                   </div>
                 {/each}
                 <label class="dict-field">
@@ -531,38 +514,26 @@
       <ButtonToggleGroup options={resolutions} bind:selectedOptionId={resolution} />
     </SettingsItemGroup>
     <SettingsItemGroup title={$t$('dict.alphanumeric')}>
-      <button
-        type="button"
-        role="switch"
-        class="app-switch"
-        aria-checked={profile.scanning.alphanumeric}
+      <Switch
+        checked={profile.scanning.alphanumeric}
         aria-label={$t$('dict.alphanumeric')}
-        on:click={() => set((p) => (p.scanning.alphanumeric = !p.scanning.alphanumeric))}
-      >
-        <span class="app-switch-thumb" />
-        <span class="app-switch-text">
-          {$t$(profile.scanning.alphanumeric ? 'settings.on' : 'settings.off')}
-        </span>
-      </button>
+        onchange={() => set((p) => (p.scanning.alphanumeric = !p.scanning.alphanumeric))}
+      />
     </SettingsItemGroup>
     <SettingsItemGroup title={$t$('dict.replacements')} wide>
       <div class="dict-option">
         <span class="dict-option-text"><span>{$t$('dict.searchOriginal')}</span></span>
-        <button
-          type="button"
-          role="switch"
-          class="app-switch"
-          aria-checked={profile.translation.textReplacements.searchOriginal}
+        <Switch
+          checked={profile.translation.textReplacements.searchOriginal}
+          stateText={false}
           aria-label={$t$('dict.searchOriginal')}
-          on:click={() =>
+          onchange={() =>
             set(
               (p) =>
                 (p.translation.textReplacements.searchOriginal =
                   !p.translation.textReplacements.searchOriginal)
             )}
-        >
-          <span class="app-switch-thumb" />
-        </button>
+        />
       </div>
       {#each profile.translation.textReplacements.groups[0] ?? [] as replacement, index}
         <div class="dict-replacement">

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Switch from '$lib/components/switch.svelte';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
   import { findSettingsSection, getSettingsView } from '$lib/components/settings/settings-sections';
@@ -385,17 +386,11 @@
     {/if}
 
     <SettingsItemGroup title={$t$('discord.showStatus')}>
-      <button
-        type="button"
-        role="switch"
-        class="app-switch"
-        aria-checked={options.show}
+      <Switch
+        checked={options.show}
         aria-label={$t$('discord.showStatus')}
-        onclick={() => setDiscordOption('show', !options.show)}
-      >
-        <span class="app-switch-thumb"></span>
-        <span class="app-switch-text">{$t$(options.show ? 'settings.on' : 'settings.off')}</span>
-      </button>
+        onchange={() => setDiscordOption('show', !options.show)}
+      />
     </SettingsItemGroup>
 
     {#if hubReady}
@@ -464,20 +459,14 @@
 
     <SettingsItemGroup title={$t$('discord.relay')} tooltip={$t$('discord.relayHint')}>
       {#if hubReady}
-        <button
-          type="button"
-          role="switch"
-          class="app-switch"
-          aria-checked={options.relay}
+        <Switch
+          checked={options.relay}
           aria-label={$t$('discord.relay')}
-          onclick={() => {
+          onchange={() => {
             if (!options.relay) allowAutoPair();
             setDiscordOption('relay', !options.relay);
           }}
-        >
-          <span class="app-switch-thumb"></span>
-          <span class="app-switch-text">{$t$(options.relay ? 'settings.on' : 'settings.off')}</span>
-        </button>
+        />
       {:else}
         <a
           class="app-button app-button-quiet"
@@ -492,19 +481,11 @@
 
     {#if hubReady}
       <SettingsItemGroup title={$t$('discord.profile')} tooltip={$t$('discord.profileHint')}>
-        <button
-          type="button"
-          role="switch"
-          class="app-switch"
-          aria-checked={presenceProfile}
+        <Switch
+          checked={presenceProfile}
           aria-label={$t$('discord.profile')}
-          onclick={() => queueProfileChange({ presenceProfile: !presenceProfile }, showError)}
-        >
-          <span class="app-switch-thumb"></span>
-          <span class="app-switch-text"
-            >{$t$(presenceProfile ? 'settings.on' : 'settings.off')}</span
-          >
-        </button>
+          onchange={() => queueProfileChange({ presenceProfile: !presenceProfile }, showError)}
+        />
       </SettingsItemGroup>
     {/if}
     {#if hubError}<p class="hub-error" role="alert">{hubError}</p>{/if}
@@ -528,16 +509,12 @@
             <th scope="row">{$t$(kindLabels[kind])}</th>
             <td class="activities-name">{template.name}</td>
             <td>
-              <button
-                type="button"
-                role="switch"
-                class="app-switch"
-                aria-checked={template.show}
+              <Switch
+                checked={template.show}
+                stateText={false}
                 aria-label="{$t$('discord.show')}: {$t$(kindLabels[kind])}"
-                onclick={() => saveActivityTemplate(kind, { ...template, show: !template.show })}
-              >
-                <span class="app-switch-thumb"></span>
-              </button>
+                onchange={() => saveActivityTemplate(kind, { ...template, show: !template.show })}
+              />
             </td>
             <td class="activities-edit">
               <button type="button" class="app-button app-button-quiet" onclick={() => edit(kind)}>

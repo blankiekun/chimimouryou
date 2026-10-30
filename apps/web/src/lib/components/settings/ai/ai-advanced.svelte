@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Switch from '$lib/components/switch.svelte';
   import { acceptedParams } from '$lib/data/ai-client';
   import {
     aiConnectionCache$,
@@ -223,16 +224,12 @@
                 {/each}
               </div>
             {:else if row.kind === 'switch'}
-              <button
+              <Switch
                 id="ai-{feature}-{row.name}"
-                type="button"
-                role="switch"
-                class="app-switch"
-                aria-checked={!!params.stream}
-                on:click={() => set('stream', !params.stream)}
-              >
-                <span class="app-switch-thumb" />
-              </button>
+                checked={!!params.stream}
+                stateText={false}
+                onchange={() => set('stream', !params.stream)}
+              />
             {:else}
               <input
                 id="ai-{feature}-{row.name}"

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Switch from '$lib/components/switch.svelte';
   import RoleBadge from '$lib/components/social/role-badge.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import {
@@ -50,17 +51,11 @@
       <span id="book-hide-label">{$t$('social.hideFromFriends')}</span>
       <small>{$t$('social.hideFromFriendsHint')}</small>
     </span>
-    <button
-      type="button"
-      role="switch"
-      class="app-switch"
-      aria-checked={hidden}
+    <Switch
+      checked={hidden}
       aria-labelledby="book-hide-label"
-      on:click={() => setBookHidden(title, !hidden)}
-    >
-      <span class="app-switch-thumb" />
-      <span class="app-switch-text">{$t$(hidden ? 'settings.on' : 'settings.off')}</span>
-    </button>
+      onchange={() => setBookHidden(title, !hidden)}
+    />
   </div>
 {/if}
 
