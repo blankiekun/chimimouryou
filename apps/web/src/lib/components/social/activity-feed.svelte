@@ -4,7 +4,8 @@
   import type { NoteGroup } from '$lib/data/community-book';
   import RoleBadge from '$lib/components/social/role-badge.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
-  import { relativeTime, type Person, type SocialEvent } from '$lib/data/social';
+  import { relativeTime } from '$lib/functions/format-time';
+  import { type Person, type SocialEvent } from '$lib/data/social';
   import { t$, uiLanguage$ } from '$lib/i18n';
 
   /**

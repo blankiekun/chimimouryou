@@ -15,7 +15,7 @@
 
 import { Subject } from 'rxjs';
 import { readerDb } from '$lib/data/reader-db';
-import { serverFetch } from '$lib/data/server-connect';
+import { responseJson, serverFetch } from '$lib/data/server-connect';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 
 export interface MokuroBlock {
@@ -102,13 +102,7 @@ export function blockStyle(block: MokuroBlock, page: MokuroPage, scale: number) 
 
 async function api(action: string, init: RequestInit) {
   const response = await serverFetch(`${mokuroApiUrl}${action}`, { cache: 'no-store', ...init });
-  const body = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(body.error || `mokuro service unavailable (HTTP ${response.status})`);
-  }
-
-  return body;
+  return responseJson(response, `mokuro service unavailable (HTTP ${response.status})`);
 }
 
 export function mokuroStatus(): Promise<MokuroStatus> {

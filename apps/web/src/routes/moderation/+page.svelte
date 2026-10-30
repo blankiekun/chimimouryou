@@ -6,7 +6,8 @@
   import RoleBadge from '$lib/components/social/role-badge.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import { pagePath } from '$lib/data/env';
-  import { monthName, relativeTime } from '$lib/data/social';
+  import { relativeTime } from '$lib/functions/format-time';
+  import { monthName } from '$lib/data/social';
   import { hubErrorKey, hubImageUrl, refreshMe, socialSession$ } from '$lib/data/social-account';
   import {
     deleteUserRow,

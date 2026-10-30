@@ -5,7 +5,8 @@
   import { formatSeries } from '$lib/components/book-card/library-sort';
   import { SortDirection, type SortOption } from '$lib/data/sort-types';
   import { longPress } from '$lib/functions/use-long-press';
-  import { t$, type MessageKey } from '$lib/i18n';
+  import { relativeTime } from '$lib/functions/format-time';
+  import { t$, uiLanguage$, type MessageKey } from '$lib/i18n';
   import { createEventDispatcher } from 'svelte';
   import Fa from 'svelte-fa';
 
@@ -33,27 +34,8 @@
     { property: 'lastBookmarkModified', label: 'library.sortBookmarked' }
   ];
 
-  const relativeTimeFormat = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
-  const relativeTimeUnits: [Intl.RelativeTimeFormatUnit, number][] = [
-    ['year', 365 * 24 * 60 * 60 * 1000],
-    ['month', 30 * 24 * 60 * 60 * 1000],
-    ['week', 7 * 24 * 60 * 60 * 1000],
-    ['day', 24 * 60 * 60 * 1000],
-    ['hour', 60 * 60 * 1000],
-    ['minute', 60 * 1000]
-  ];
-
   function formatRelative(timestamp: number) {
-    if (!timestamp) {
-      return '—';
-    }
-
-    const diff = timestamp - Date.now();
-    const unit = relativeTimeUnits.find(([, ms]) => Math.abs(diff) >= ms);
-
-    return unit
-      ? relativeTimeFormat.format(Math.round(diff / unit[1]), unit[0])
-      : relativeTimeFormat.format(0, 'minute');
+    return timestamp ? relativeTime(timestamp / 1000, $uiLanguage$) : '—';
   }
 
   function formatDate(timestamp: number) {

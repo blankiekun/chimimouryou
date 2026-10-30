@@ -9,7 +9,7 @@
   import { onMount } from 'svelte';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
-  import DictSwitch from '$lib/components/settings/dictionary-switch.svelte';
+  import Switch from '$lib/components/switch.svelte';
   import { profileOptions, updateProfileOptions, yomitanOptions$ } from '$lib/data/dictionary';
   import { audioSourceTypes, playTermAudio } from '$lib/data/dictionary-audio';
   import {
@@ -298,10 +298,10 @@
       </select>
     </SettingsItemGroup>
     <SettingsItemGroup title={$t$('dict.compactTags')}>
-      <DictSwitch
+      <Switch
         checked={general.compactTags}
-        label={$t$('dict.compactTags')}
-        on:change={({ detail }) => setGeneral('compactTags', detail)}
+        aria-label={$t$('dict.compactTags')}
+        onchange={(next) => setGeneral('compactTags', next)}
       />
     </SettingsItemGroup>
     <SettingsItemGroup title={$t$('dict.frequencyDisplay')}>
@@ -319,18 +319,18 @@
       </select>
     </SettingsItemGroup>
     <SettingsItemGroup title={$t$('dict.averageFrequency')}>
-      <DictSwitch
+      <Switch
         checked={general.averageFrequency}
-        label={$t$('dict.averageFrequency')}
-        on:change={({ detail }) => setGeneral('averageFrequency', detail)}
+        aria-label={$t$('dict.averageFrequency')}
+        onchange={(next) => setGeneral('averageFrequency', next)}
       />
     </SettingsItemGroup>
     {#each pitchToggles as [key, label]}
       <SettingsItemGroup title={$t$(label)}>
-        <DictSwitch
+        <Switch
           checked={general[key]}
-          label={$t$(label)}
-          on:change={({ detail }) => setGeneral(key, detail)}
+          aria-label={$t$(label)}
+          onchange={(next) => setGeneral(key, next)}
         />
       </SettingsItemGroup>
     {/each}
@@ -348,10 +348,10 @@
 
   <SettingsSection id="dictionary-scanning" keywords="scan shift hover tap modifier delay length">
     <SettingsItemGroup title={$t$('dict.scanTap')}>
-      <DictSwitch
+      <Switch
         checked={!!scanning.inputs[touchIndex]?.options.scanOnTouchTap}
-        label={$t$('dict.scanTap')}
-        on:change={({ detail }) => setTouchTap(detail)}
+        aria-label={$t$('dict.scanTap')}
+        onchange={(next) => setTouchTap(next)}
       />
     </SettingsItemGroup>
     {#if mouseIndex >= 0}
@@ -375,10 +375,10 @@
       </SettingsItemGroup>
     {/if}
     <SettingsItemGroup title={$t$('dict.scanWithoutMove')}>
-      <DictSwitch
+      <Switch
         checked={scanning.scanWithoutMousemove}
-        label={$t$('dict.scanWithoutMove')}
-        on:change={({ detail }) => setScanning('scanWithoutMousemove', detail)}
+        aria-label={$t$('dict.scanWithoutMove')}
+        onchange={(next) => setScanning('scanWithoutMousemove', next)}
       />
     </SettingsItemGroup>
     <SettingsItemGroup title={$t$('dict.scanDelay')}>
@@ -403,17 +403,17 @@
       />
     </SettingsItemGroup>
     <SettingsItemGroup title={$t$('dict.layoutAware')}>
-      <DictSwitch
+      <Switch
         checked={scanning.layoutAwareScan}
-        label={$t$('dict.layoutAware')}
-        on:change={({ detail }) => setScanning('layoutAwareScan', detail)}
+        aria-label={$t$('dict.layoutAware')}
+        onchange={(next) => setScanning('layoutAwareScan', next)}
       />
     </SettingsItemGroup>
     <SettingsItemGroup title={$t$('dict.autoHide')}>
-      <DictSwitch
+      <Switch
         checked={scanning.autoHideResults}
-        label={$t$('dict.autoHide')}
-        on:change={({ detail }) => setScanning('autoHideResults', detail)}
+        aria-label={$t$('dict.autoHide')}
+        onchange={(next) => setScanning('autoHideResults', next)}
       />
     </SettingsItemGroup>
     <SettingsItemGroup title={$t$('dict.nesting')}>
@@ -431,18 +431,18 @@
 
   <SettingsSection id="dictionary-audio" keywords="audio pronunciation jpod101 wiktionary voice">
     <SettingsItemGroup title={$t$('dict.audioEnabled')}>
-      <DictSwitch
+      <Switch
         checked={profile.audio.enabled}
-        label={$t$('dict.audioEnabled')}
-        on:change={({ detail }) => set((p) => (p.audio.enabled = detail))}
+        aria-label={$t$('dict.audioEnabled')}
+        onchange={(next) => set((p) => (p.audio.enabled = next))}
       />
     </SettingsItemGroup>
     {#if profile.audio.enabled}
       <SettingsItemGroup title={$t$('dict.autoPlay')}>
-        <DictSwitch
+        <Switch
           checked={profile.audio.autoPlay}
-          label={$t$('dict.autoPlay')}
-          on:change={({ detail }) => set((p) => (p.audio.autoPlay = detail))}
+          aria-label={$t$('dict.autoPlay')}
+          onchange={(next) => set((p) => (p.audio.autoPlay = next))}
         />
       </SettingsItemGroup>
       <SettingsItemGroup title={$t$('dict.volume')}>
@@ -456,10 +456,10 @@
         />
       </SettingsItemGroup>
       <SettingsItemGroup title={$t$('dict.defaultSources')}>
-        <DictSwitch
+        <Switch
           checked={profile.audio.enableDefaultAudioSources}
-          label={$t$('dict.defaultSources')}
-          on:change={({ detail }) => set((p) => (p.audio.enableDefaultAudioSources = detail))}
+          aria-label={$t$('dict.defaultSources')}
+          onchange={(next) => set((p) => (p.audio.enableDefaultAudioSources = next))}
         />
       </SettingsItemGroup>
       <SettingsItemGroup title={$t$('dict.audioSources')} wide>
@@ -543,10 +543,10 @@
                 ? $t$('dict.pressKey')
                 : hotkeyLabel(hotkey) || $t$('dict.noKey')}
             </button>
-            <DictSwitch
+            <Switch
               checked={hotkey.enabled}
-              label={$t$(actionLabel(hotkey.action))}
-              on:change={({ detail }) => setHotkeyEnabled(index, detail)}
+              aria-label={$t$(actionLabel(hotkey.action))}
+              onchange={(next) => setHotkeyEnabled(index, next)}
             />
           </li>
         {/if}

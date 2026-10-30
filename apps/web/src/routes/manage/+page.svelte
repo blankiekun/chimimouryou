@@ -73,7 +73,8 @@
     orderSeries
   } from '$lib/components/book-card/library-sort';
   import type { BookCardProps } from '$lib/components/book-card/book-card-props';
-  import BookManagerHeader from '$lib/components/book-card/book-manager-header.svelte';
+  import AppHeader from '$lib/components/app-header/app-header.svelte';
+  import ImportMenu from '$lib/components/book-card/import-menu.svelte';
   import SeriesDialog from '$lib/components/book-card/series-dialog.svelte';
   import SeriesSuggestionsDialog from '$lib/components/book-card/series-suggestions-dialog.svelte';
   import BookExportDialog from '$lib/components/book-export/book-export-dialog.svelte';
@@ -1428,13 +1429,15 @@
 {/if}
 
 <div class="app-page-shell">
-  <BookManagerHeader
-    currentBookId={$currentBookId$}
-    disabled={!!replicationToProgress}
-    on:filesChange={(ev) => onFilesChange(ev.detail)}
-    on:importBackup={(ev) => onImportBackup(ev.detail)}
-    on:windowsGame={openWindowsGame}
-  />
+  <AppHeader active="library" currentBookId={$currentBookId$}>
+    <ImportMenu
+      disabled={!!replicationToProgress}
+      on:filesChange={(ev) => onFilesChange(ev.detail)}
+      on:importBackup={(ev) => onImportBackup(ev.detail)}
+      windowsGames
+      on:windowsGame={openWindowsGame}
+    />
+  </AppHeader>
 
   <div class="library-layout" class:library-layout-home={isHome}>
     {#if !isHome}

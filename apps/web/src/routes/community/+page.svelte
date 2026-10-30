@@ -16,7 +16,7 @@
   import { pagePath } from '$lib/data/env';
   import { setPendingImport, type PendingImport } from '$lib/data/library-home';
   import { page } from '$lib/data/page-store';
-  import { relativeTime } from '$lib/data/social';
+  import { relativeTime } from '$lib/functions/format-time';
   import { socialSession$ } from '$lib/data/social-account';
   import { removePost } from '$lib/data/social-moderation';
   import { t$, uiLanguage$ } from '$lib/i18n';

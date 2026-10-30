@@ -19,7 +19,8 @@
   } from '$lib/data/words-met';
   import { gainedThisMonth, getKnownHistory } from '$lib/data/words-history';
   import { getDateKey } from '$lib/functions/statistic-util';
-  import { t$, uiLanguage$, type MessageKey, type MessageParams } from '$lib/i18n';
+  import { t$, uiLanguage$ } from '$lib/i18n';
+  import { formatDuration } from '$lib/functions/format-time';
   import { onMount } from 'svelte';
 
   /**
@@ -39,15 +40,6 @@
   let pulledAt = 0;
 
   const number = (value: number) => value.toLocaleString('en-US');
-
-  function hours(seconds: number, t: (key: MessageKey, params?: MessageParams) => string) {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.round((seconds % 3600) / 60);
-
-    return h
-      ? t('dashboard.hours', { hours: h, minutes: m })
-      : t('dashboard.minutes', { minutes: m });
-  }
 
   async function loadStats() {
     const statistics = await database
@@ -112,7 +104,7 @@
           label: $t$('dashboard.pastWeek'),
           value: $t$('dashboard.charsValue', { count: number(stats.weekCharacters) })
         },
-        { label: $t$('dashboard.time'), value: hours(stats.totalTime, $t$) },
+        { label: $t$('dashboard.time'), value: formatDuration(stats.totalTime, $t$) },
         {
           label: $t$('dashboard.speed'),
           value: stats.speed ? $t$('dashboard.speedValue', { speed: number(stats.speed) }) : '–'

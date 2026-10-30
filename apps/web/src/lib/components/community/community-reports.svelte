@@ -1,7 +1,7 @@
 <script lang="ts">
   import CommunityWork from '$lib/components/community/community-work.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
-  import { relativeTime } from '$lib/data/social';
+  import { relativeTime } from '$lib/functions/format-time';
   import { hubErrorKey } from '$lib/data/social-account';
   import {
     clearMatch,

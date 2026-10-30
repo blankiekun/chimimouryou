@@ -4,13 +4,8 @@
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import { pushState } from '$app/navigation';
   import FriendCover from '$lib/components/social/friend-cover.svelte';
-  import {
-    blockFriend,
-    byLastRead,
-    relativeTime,
-    removeFriend,
-    type Friend
-  } from '$lib/data/social';
+  import { relativeTime } from '$lib/functions/format-time';
+  import { blockFriend, byLastRead, removeFriend, type Friend } from '$lib/data/social';
   import { hubErrorKey } from '$lib/data/social-account';
   import { t$, uiLanguage$ } from '$lib/i18n';
 

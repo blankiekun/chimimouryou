@@ -13,6 +13,7 @@
   } from '$lib/data/immersion-log';
   import { logger } from '$lib/data/logger';
   import { t$, type MessageKey } from '$lib/i18n';
+  import { formatDuration } from '$lib/functions/format-time';
   import { onMount } from 'svelte';
 
   /**
@@ -62,13 +63,6 @@
   const typeLabel = (value: string) => (typeLabels[value] ? $t$(typeLabels[value]) : value);
   const count = (value: number) => value.toLocaleString('en-US');
 
-  function duration(seconds: number) {
-    const hours = Math.floor(seconds / 3600);
-    const rest = Math.floor((seconds % 3600) / 60);
-
-    return hours ? `${hours} h ${rest} min` : `${rest} min`;
-  }
-
   async function add(event: SubmitEvent) {
     event.preventDefault();
     if (!canAdd) return;
@@ -100,7 +94,7 @@
     <div>
       <dt>{$t$('immersion.books')}</dt>
       <dd>
-        {duration(readingSeconds)}
+        {formatDuration(readingSeconds, $t$)}
         <span class="immersion-chars">{count(readingCharacters)} {$t$('dashboard.unit')}</span>
       </dd>
     </div>
@@ -108,7 +102,7 @@
       <div>
         <dt>{typeLabel(total.type)}</dt>
         <dd>
-          {duration(total.seconds)}
+          {formatDuration(total.seconds, $t$)}
           {#if total.characters}
             <span class="immersion-chars">{count(total.characters)} {$t$('dashboard.unit')}</span>
           {/if}
@@ -117,7 +111,7 @@
     {/each}
     <div class="immersion-sum">
       <dt>{$t$('immersion.total')}</dt>
-      <dd>{duration(readingSeconds + loggedSeconds)}</dd>
+      <dd>{formatDuration(readingSeconds + loggedSeconds, $t$)}</dd>
     </div>
   </dl>
 
@@ -184,7 +178,7 @@
             </span>
           </span>
           <span class="immersion-figures">
-            {duration(entry.seconds)}
+            {formatDuration(entry.seconds, $t$)}
             {#if entry.characters}
               <span class="immersion-chars">{count(entry.characters)} {$t$('dashboard.unit')}</span>
             {/if}

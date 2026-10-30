@@ -19,6 +19,7 @@
   import PointBox from '$lib/components/point-box.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import { t$, type MessageKey } from '$lib/i18n';
+  import { formatDuration } from '$lib/functions/format-time';
   import StatisticsTitleFilter from '$lib/components/statistics/statistics-title-filter.svelte';
   import {
     type BookStatistic,
@@ -293,13 +294,6 @@
     StatisticsReadingDataAggregationMode.NONE
   ];
   const number = (value: number) => value.toLocaleString('en-US');
-
-  function duration(seconds: number) {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-
-    return hours ? `${hours} h ${minutes} min` : `${minutes} min`;
-  }
 
   $: statisticsDateRangeLabel = getDateRangeLabel(
     $lastStatisticsStartDate$,
@@ -871,7 +865,7 @@
       </div>
       <div>
         <dt>{$t$('statistics.time')}</dt>
-        <dd>{duration(totals.time)}</dd>
+        <dd>{formatDuration(totals.time, $t$)}</dd>
       </div>
       <div>
         <dt>{$t$('statistics.speed')}</dt>

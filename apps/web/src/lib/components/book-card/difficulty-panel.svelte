@@ -5,7 +5,7 @@
   import { difficultyApiUrl } from '$lib/data/calibre';
   import { levelTier } from '$lib/data/difficulty';
   import { isCanonicalEstimate } from '$lib/data/difficulty-engine';
-  import { serverFetch } from '$lib/data/server-connect';
+  import { responseJson, serverFetch } from '$lib/data/server-connect';
   import { t$, tr } from '$lib/i18n';
   import { onDestroy, onMount } from 'svelte';
   import Fa from 'svelte-fa';
@@ -130,13 +130,7 @@
         response = await upload(true);
       }
 
-      if (!response.ok) {
-        throw new Error(
-          (await response.json().catch(() => ({}))).error || `HTTP ${response.status}`
-        );
-      }
-
-      status = await response.json();
+      status = await responseJson(response);
       error = '';
     } catch (e: any) {
       error = e.message;
@@ -166,14 +160,8 @@
         body: body instanceof File ? body : JSON.stringify(body)
       });
 
-      if (!response.ok) {
-        throw new Error(
-          (await response.json().catch(() => ({}))).error || `HTTP ${response.status}`
-        );
-      }
-
+      status = await responseJson(response);
       finishedCompute = false;
-      status = await response.json();
       error = '';
       poll();
     } catch (e: any) {

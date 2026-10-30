@@ -210,22 +210,6 @@ export function byLastRead(friends: Friend[]) {
   return [...friends].sort((a, b) => last(b) - last(a));
 }
 
-/** "2 hours ago" for a Unix time, in the UI language */
-export function relativeTime(seconds: number, lang: string, now = Date.now()) {
-  const diff = Math.round(seconds - now / 1000);
-  const format = new Intl.RelativeTimeFormat(lang, { numeric: 'auto' });
-  const units = [
-    ['day', 86400],
-    ['hour', 3600],
-    ['minute', 60]
-  ] as const;
-
-  for (const [unit, size] of units) {
-    if (Math.abs(diff) >= size) return format.format(Math.round(diff / size), unit);
-  }
-  return format.format(0, 'minute');
-}
-
 /** "March" this year, else "March 2025" */
 export function monthName(month: string, lang: string, now = new Date()) {
   const [year, number] = month.split('-').map(Number);

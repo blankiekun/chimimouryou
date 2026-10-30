@@ -20,7 +20,6 @@ vi.mock('$lib/data/analysis-tools', async (importOriginal) => ({
 }));
 // Settings sync pulls in the whole store; not under test here (settings-account.test.ts).
 vi.mock('$lib/data/account-settings-sync', () => ({
-  readerProfile: () => 'desktop',
   settingsSyncState$: new BehaviorSubject({ state: 'idle' }),
   syncAccountSettings: vi.fn()
 }));
