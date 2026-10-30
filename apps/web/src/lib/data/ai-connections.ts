@@ -35,6 +35,8 @@ export interface AiModel {
   free?: boolean;
   /** OpenRouter's supported_parameters */
   params?: string[];
+  /** OpenRouter's reasoning.mandatory: the model rejects reasoning turned off */
+  mandatory?: boolean;
 }
 
 export interface AiConnectionTest {
