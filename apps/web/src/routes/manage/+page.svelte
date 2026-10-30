@@ -2,45 +2,27 @@
   import { browser } from '$app/env';
   import { goto, pushState } from '$app/navigation';
   import { page } from '$lib/data/page-store';
-  import {
-    faCalendarXmark,
-    faChartLine,
-    faCircleXmark,
-    faCloudArrowUp,
-    faBookOpen,
-    faGaugeHigh,
-    faLayerGroup,
-    faPlus,
-    faRotateLeft,
-    faTrash
-  } from '@fortawesome/free-solid-svg-icons';
+  import { faCircleXmark } from '@fortawesome/free-solid-svg-icons';
   import BookCardList from '$lib/components/book-card/book-card-list.svelte';
   import BookCardTable from '$lib/components/book-card/book-card-table.svelte';
   import BookDetails from '$lib/components/book-card/book-details.svelte';
   import BookWords from '$lib/components/book-card/book-words.svelte';
-  import ContinueReadingShelf from '$lib/components/book-card/continue-reading-shelf.svelte';
-  import LearnerDashboard from '$lib/components/book-card/learner-dashboard.svelte';
-  import PlacementOffer from '$lib/components/book-card/placement-offer.svelte';
-  import SectionHead from '$lib/components/section-head.svelte';
-  import ReadNextShelf from '$lib/components/book-card/read-next-shelf.svelte';
-  import HomeSocial from '$lib/components/social/home-social.svelte';
-  import { activePlugins$ } from '$lib/plugins';
+  import HomeView from '$lib/components/library/home-view.svelte';
+  import LibraryEmptyStates from '$lib/components/library/library-empty-states.svelte';
+  import LibrarySelectBar from '$lib/components/library/library-select-bar.svelte';
+  import SeriesHeader from '$lib/components/library/series-header.svelte';
+  import StoreBar from '$lib/components/library/store-bar.svelte';
   import { readingActivity } from '$lib/data/reader-hooks';
-  import LibrarySortMenu from '$lib/components/book-card/library-sort-menu.svelte';
   import SeriesGrid from '$lib/components/book-card/series-grid.svelte';
   import SeriesResults from '$lib/components/book-card/series-results.svelte';
   import {
     addImportsToHome,
     addToHome,
-    continueReading,
     homeBookTitles$,
     homeRemovedTitles$,
     libraryTab$,
     matchingSeries,
-    readNext,
     readNextPool,
-    recentLevels,
-    removeFromHome,
     seriesGroups,
     storeView$,
     takePendingImport
@@ -62,7 +44,6 @@
   import {
     allBooksFilter,
     filterBookCards,
-    isReading,
     seriesFilterKey
   } from '$lib/components/book-card/library-filters';
   import LibrarySidebar from '$lib/components/book-card/library-sidebar.svelte';
@@ -100,13 +81,10 @@
   } from '$lib/data/calibre-import';
   import { clearReadingProgress } from '$lib/functions/clear-reading-progress';
   import { dialogManager } from '$lib/data/dialog-manager';
-  import { pagePath, selfHostingGuideUrl, standalone } from '$lib/data/env';
+  import { pagePath, standalone } from '$lib/data/env';
   import { bookRoute, readerPath, readerRoute, type ReaderRoute } from '$lib/data/reader-route';
   import FirstRun from '$lib/components/standalone/first-run.svelte';
   import { backgroundAnalysis$, catchUpAnalysis } from '$lib/data/background-analysis';
-  import InstallHint from '$lib/components/standalone/install-hint.svelte';
-  import LibraryEmpty from '$lib/components/standalone/library-empty.svelte';
-  import AnalysisToolsOffer from '$lib/components/standalone/analysis-tools-offer.svelte';
   import {
     needsFirstRun,
     showsExternalReadHint,
@@ -140,7 +118,6 @@
     keepLocalStatisticsOnDeletion$,
     libraryBuilding$,
     libraryOffline$,
-    librarySignInNeeded,
     libraryDisplayMode$,
     lastExportedTarget$,
     lastExportedTypes$,
@@ -151,7 +128,6 @@
   } from '$lib/data/store';
   import { cloneMutateSet } from '$lib/functions/clone-mutate-set';
   import { getDropEventFiles } from '$lib/functions/file-dom/get-drop-event-files';
-  import { inputFile } from '$lib/functions/file-dom/input-file';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { keyBy } from '$lib/functions/key-by';
   import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
@@ -254,9 +230,6 @@
   $: renderedBookCards = visibleBookCards.slice(0, renderLimit);
   $: isLoading = !$bookCards$ || $booksAreLoading$;
   $: activeSeries = activeFilter.startsWith('series:') ? activeFilter.slice('series:'.length) : '';
-  $: seriesMissing = activeSeries
-    ? visibleBookCards.filter((card) => !$homeBookTitles$.includes(card.title))
-    : [];
   $: hasActiveFilter = activeFilter !== allBooksFilter.key || !!searchTerm.trim();
   $: isHome = $libraryTab$ !== 'store';
   $: showSeriesGrid = !isHome && $storeView$ === 'series' && activeFilter !== 'vn';
@@ -301,37 +274,6 @@
         .map((card) => card.calibreId!)
     );
   }
-  $: readNextCards = isHome && $bookCards$ ? readNext($bookCards$, $knownCoverage$, 3) : [];
-  $: readNextReason = (() => {
-    if (!readNextCards.length) return '';
-    if (standalone) return $t$('home.readNextReasonNext');
-    const levels = recentLevels($bookCards$);
-    const low = levels[0].toFixed(1);
-    const high = levels[levels.length - 1].toFixed(1);
-    const next = new Set(readNextPool($bookCards$).next.map((card) => card.id));
-
-    return $t$(
-      readNextCards.some((card) => next.has(card.id))
-        ? 'home.readNextReasonSeries'
-        : 'home.readNextReason',
-      { range: low === high ? low : `${low}–${high}` }
-    );
-  })();
-  $: firstRun = !continueCards.length && !readNextCards.length && !homeCards.length;
-  $: socialNumber =
-    1 + Number(firstRun) + Number(!!continueCards.length) + Number(!!readNextCards.length);
-  $: socialOn = $activePlugins$.some((plugin) => plugin.id === 'social');
-  let socialSections = 0;
-  $: myBooksNumber = socialNumber + (socialOn ? socialSections : 0);
-  $: continueCards = isHome && $bookCards$ ? continueReading($bookCards$, $homeRemovedTitles$) : [];
-  $: homeCards = (() => {
-    const byTitle = new Map(($bookCards$ ?? []).map((card) => [card.title, card]));
-
-    return $homeBookTitles$
-      .map((title) => byTitle.get(title))
-      .filter((card): card is BookCardProps => !!card && !isReading(card));
-  })();
-
   function addSelectedToHome() {
     addToHome(
       ($bookCards$ ?? []).filter((card) => selectedBookIds.has(card.id)).map((card) => card.title)
@@ -1460,81 +1402,18 @@
     >
       <!-- Visual novels aren't grouped in series -->
       {#if !isHome && activeSeries && !showSeriesGrid && visibleBookCards.length}
-        <div class="series-header">
-          <div class="min-w-0">
-            <h1 class="series-header-title" lang="ja">{activeSeries}</h1>
-            <p class="series-header-meta" lang="ja">
-              {[
-                visibleBookCards[0].authors !== 'Unknown' ? visibleBookCards[0].authors : '',
-                $t$('store.seriesMeta', {
-                  count: visibleBookCards.length,
-                  started: visibleBookCards.filter((card) => card.progress > 0).length,
-                  missing: seriesMissing.length
-                })
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </p>
-          </div>
-          <button
-            type="button"
-            class="app-button app-button-primary"
-            disabled={!seriesMissing.length}
-            on:click={() => addToHome(seriesMissing.map((card) => card.title))}
-          >
-            {seriesMissing.length
-              ? $t$('store.addAll', { count: seriesMissing.length })
-              : $t$('store.allOnHome')}
-          </button>
-        </div>
+        <SeriesHeader series={activeSeries} cards={visibleBookCards} />
       {/if}
       {#if !isHome}
-        <div class="store-bar">
-          {#if activeFilter !== 'vn'}
-            <div class="app-segmented" role="radiogroup" aria-label={$t$('store.view')}>
-              <button
-                type="button"
-                role="radio"
-                class="app-segment"
-                class:app-segment-selected={!showSeriesGrid}
-                aria-checked={!showSeriesGrid}
-                on:click={() => setStoreView('books')}
-              >
-                {$t$('store.books')}
-              </button>
-              <button
-                type="button"
-                role="radio"
-                class="app-segment"
-                class:app-segment-selected={showSeriesGrid}
-                aria-checked={showSeriesGrid}
-                on:click={() => setStoreView('series')}
-              >
-                {$t$('store.series')}
-              </button>
-            </div>
-          {/if}
-          {#if !isLoading && $bookCards$?.length}
-            <span class="store-count">
-              {$t$(visibleBookCards.length === 1 ? 'store.titlesOne' : 'store.titles', {
-                count: visibleBookCards.length.toLocaleString('en-US')
-              })}
-            </span>
-          {/if}
-          {#if !showSeriesGrid}
-            <span class="store-sort">
-              <button
-                type="button"
-                class="app-button app-button-quiet"
-                disabled={!$bookCards$?.length}
-                on:click={() => (selectMode = true)}
-              >
-                {$t$('library.select')}
-              </button>
-              <LibrarySortMenu />
-            </span>
-          {/if}
-        </div>
+        <StoreBar
+          {activeFilter}
+          {showSeriesGrid}
+          loading={isLoading}
+          bookCount={$bookCards$?.length ?? 0}
+          visibleCount={visibleBookCards.length}
+          onview={setStoreView}
+          onselect={() => (selectMode = true)}
+        />
       {/if}
       {#if replicationToProgress}
         <div class="library-toolbar" role="status">
@@ -1562,130 +1441,21 @@
           </span>
         </div>
       {:else if selectMode}
-        <div class="library-select-bar" role="toolbar" aria-label={$t$('library.selectBooks')}>
-          <span class="library-select-count">
-            {$t$('library.selected', { count: selectedBookIds.size })}
-          </span>
-          <!-- Home's shelves aren't the list Select all works on -->
-          {#if !isHome}
-            <button
-              type="button"
-              class="app-button app-button-quiet"
-              title={$t$('library.selectAllHint')}
-              on:click={onSelectAllBooks}
-            >
-              {$t$('library.selectAll')}
-            </button>
-          {/if}
-          <button
-            type="button"
-            class="app-button app-button-quiet"
-            title={$t$('library.stopSelecting')}
-            on:click={() => (selectMode = false)}
-          >
-            {$t$('library.cancel')}
-          </button>
-          <span class="library-select-actions">
-            <button
-              type="button"
-              class="library-toolbar-button library-toolbar-button-primary"
-              title={$t$('home.addSelected')}
-              disabled={!selectedBookIds.size}
-              on:click={addSelectedToHome}
-            >
-              <Fa icon={faPlus} />
-              <span class="library-toolbar-label">{$t$('home.add')}</span>
-            </button>
-            <button
-              type="button"
-              class="library-toolbar-button"
-              title={$t$('library.readSelected')}
-              disabled={selectedBookIds.size !== 1}
-              on:click={readSelected}
-            >
-              <Fa icon={faBookOpen} />
-              <span class="library-toolbar-label">{$t$('book.read')}</span>
-            </button>
-            {#if $storageSource$ === StorageKey.BROWSER || ($storageSource$ === StorageKey.CALIBRE && hasPermission($account$, 'series'))}
-              <button
-                type="button"
-                class="library-toolbar-button"
-                title={$t$('library.makeSeriesHint')}
-                disabled={selectedBookIds.size !== 1}
-                on:click={onMakeSeries}
-              >
-                <Fa icon={faLayerGroup} />
-                <span class="library-toolbar-label">{$t$('library.makeSeries')}</span>
-              </button>
-            {/if}
-            {#if $storageSource$ !== StorageKey.FS}
-              <button
-                type="button"
-                class="library-toolbar-button"
-                title={$t$('library.clearProgressHint')}
-                disabled={!selectedBookIds.size}
-                on:click={onClearProgress}
-              >
-                <Fa icon={faRotateLeft} />
-                <span class="library-toolbar-label">{$t$('library.clearProgress')}</span>
-              </button>
-            {/if}
-            <button
-              type="button"
-              class="library-toolbar-button"
-              title={$t$('library.exportHint')}
-              disabled={!selectedBookIds.size}
-              on:click={onReplicateData}
-            >
-              <Fa icon={faCloudArrowUp} />
-              <span class="library-toolbar-label">{$t$('library.export')}</span>
-            </button>
-            {#if $storageSource$ === StorageKey.BROWSER}
-              <button
-                type="button"
-                class="library-toolbar-button"
-                title={$t$('library.statisticsHint')}
-                aria-label={$t$('library.statisticsHint')}
-                disabled={!selectedBookIds.size}
-                on:click={onSelectionToStatistics}
-              >
-                <Fa icon={faChartLine} />
-              </button>
-              <button
-                type="button"
-                class="library-toolbar-button"
-                title={$t$('library.deleteStatisticsHint')}
-                aria-label={$t$('library.deleteStatisticsHint')}
-                disabled={!selectedBookIds.size}
-                on:click={onDeleteStatistics}
-              >
-                <Fa icon={faCalendarXmark} />
-              </button>
-            {/if}
-            {#if $storageSource$ === StorageKey.CALIBRE}
-              <button
-                type="button"
-                class="library-toolbar-button"
-                title={$t$('library.difficultyHint')}
-                disabled={!selectedBookIds.size}
-                on:click={onDifficultyClick}
-              >
-                <Fa icon={faGaugeHigh} />
-                <span class="library-toolbar-label">{$t$('library.sortDifficulty')}</span>
-              </button>
-            {/if}
-            <button
-              type="button"
-              class="library-toolbar-button library-toolbar-button-danger"
-              title={$t$('library.deleteSelected')}
-              disabled={!selectedBookIds.size}
-              on:click={() => removeBooks(Array.from(selectedBookIds))}
-            >
-              <Fa icon={faTrash} />
-              <span class="library-toolbar-label">{$t$('library.delete')}</span>
-            </button>
-          </span>
-        </div>
+        <LibrarySelectBar
+          count={selectedBookIds.size}
+          {isHome}
+          onselectall={onSelectAllBooks}
+          oncancel={() => (selectMode = false)}
+          onaddtohome={addSelectedToHome}
+          onread={readSelected}
+          onmakeseries={onMakeSeries}
+          onclearprogress={onClearProgress}
+          onexport={onReplicateData}
+          onstatistics={onSelectionToStatistics}
+          ondeletestatistics={onDeleteStatistics}
+          ondifficulty={onDifficultyClick}
+          ondelete={() => removeBooks(Array.from(selectedBookIds))}
+        />
       {/if}
 
       {#if $libraryOffline$ && $storageSource$ === StorageKey.CALIBRE && !isLoading}
@@ -1704,93 +1474,15 @@
       {#if isLoading}
         <LibrarySkeleton mode={$libraryDisplayMode$} />
       {:else if $bookCards$.length && isHome}
-        <div class="home">
-          <LearnerDashboard
-            books={standalone || $storageSource$ === StorageKey.CALIBRE ? $bookCards$ : undefined}
-          />
-          <PlacementOffer />
-          {#if firstRun}
-            <section class="home-start" aria-label={$t$('home.startReading')}>
-              <SectionHead number={1} title={$t$('home.startReading')} />
-              <span class="home-start-actions">
-                <button
-                  type="button"
-                  class="app-button app-button-primary"
-                  on:click={() => ($libraryTab$ = 'store')}
-                >
-                  {$t$(standalone ? 'home.openLibrary' : 'home.openStore')}
-                </button>
-                <label class="app-button">
-                  <input
-                    type="file"
-                    accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,.cbz,.zip,.mokuro"
-                    multiple
-                    hidden
-                    use:inputFile={onFilesChange}
-                  />
-                  {$t$('home.importBook')}
-                </label>
-              </span>
-            </section>
-          {/if}
-          <div class="home-pair">
-            <ContinueReadingShelf
-              books={continueCards}
-              number={1}
-              heading={$t$('home.continueReading')}
-              currentBookId={$currentBookId$}
-              selectedBookIds={selectMode ? selectedBookIds : undefined}
-              on:bookClick={(ev) => onCoverClick(ev.detail.id)}
-              on:bookRead={(ev) => onBookClick(ev.detail.id)}
-              on:bookSelect={(ev) => selectBook(ev.detail.id)}
-              removeTitle={$t$('home.remove')}
-              on:remove={(ev) => removeFromHome(ev.detail.title)}
-            />
-            <ReadNextShelf
-              books={readNextCards}
-              number={continueCards.length ? 2 : 1}
-              coverage={$knownCoverage$}
-              reason={readNextReason}
-              currentBookId={$currentBookId$}
-              selectedBookIds={selectMode ? selectedBookIds : undefined}
-              on:bookClick={(ev) => onCoverClick(ev.detail.id)}
-              on:bookRead={(ev) => onBookClick(ev.detail.id)}
-              on:bookSelect={(ev) => selectBook(ev.detail.id)}
-            />
-          </div>
-          {#if socialOn}
-            <HomeSocial
-              books={$bookCards$}
-              number={socialNumber}
-              bind:sections={socialSections}
-              on:bookClick={(ev) => onCoverClick(ev.detail.id)}
-            />
-          {/if}
-          {#if homeCards.length}
-            <ContinueReadingShelf
-              books={homeCards}
-              number={myBooksNumber}
-              heading={$t$('home.myBooks')}
-              removeTitle={$t$('home.remove')}
-              currentBookId={$currentBookId$}
-              selectedBookIds={selectMode ? selectedBookIds : undefined}
-              on:bookClick={(ev) => onCoverClick(ev.detail.id)}
-              on:bookSelect={(ev) => selectBook(ev.detail.id)}
-              on:remove={(ev) => removeFromHome(ev.detail.title)}
-            />
-          {:else}
-            <section class="home-start" aria-label={$t$('home.myBooks')}>
-              <SectionHead number={myBooksNumber} title={$t$('home.myBooks')} count={0} />
-              <p class="library-empty-text">
-                {$t$(standalone ? 'home.myBooksEmptyLibrary' : 'home.myBooksEmpty')}
-              </p>
-            </section>
-          {/if}
-          {#if standalone}
-            <AnalysisToolsOffer />
-            <InstallHint />
-          {/if}
-        </div>
+        <HomeView
+          bookCards={$bookCards$}
+          currentBookId={$currentBookId$}
+          selectedBookIds={selectMode ? selectedBookIds : undefined}
+          oncoverclick={onCoverClick}
+          onbookread={onBookClick}
+          onbookselect={selectBook}
+          onfiles={onFilesChange}
+        />
       {:else if $bookCards$.length && showSeriesGrid}
         <SeriesGrid
           groups={seriesGroups(visibleBookCards)}
@@ -1848,73 +1540,12 @@
             <button type="button" class="underline" on:click={clearFilters}>show all</button>
           </p>
         {/if}
-      {:else if $storageSource$ === StorageKey.CALIBRE && librarySignInNeeded($account$, $libraryOffline$)}
-        <div class="library-signed-out">
-          <h1 class="library-signed-out-title">Sign in to see the library</h1>
-          <p class="library-empty-text">Ask the server's admin for an account.</p>
-          <a
-            class="app-button app-button-primary"
-            href="{pagePath}/settings?section={standalone
-              ? 'sync#sync-server'
-              : 'general#general-account'}">Sign in</a
-          >
-        </div>
-      {:else if $storageSource$ === StorageKey.CALIBRE && $libraryOffline$}
-        <div class="library-signed-out">
-          <h1 class="library-signed-out-title">The server can't be reached</h1>
-          <p class="library-empty-text">No books downloaded to this browser yet.</p>
-          <button type="button" class="app-button" on:click={retryLibrary}
-            >{$t$('home.retry')}</button
-          >
-        </div>
-      {:else if standalone}
-        <LibraryEmpty onFiles={onFilesChange} />
-      {:else if $storageSource$ === StorageKey.CALIBRE && $libraryBuilding$}
-        <div class="library-empty" role="status">
-          <span class="library-empty-title">{$t$('library.calibreBuilding')}</span>
-          <span class="library-empty-text">{$t$('library.calibreBuildingText')}</span>
-        </div>
-      {:else if $storageSource$ === StorageKey.CALIBRE}
-        {#await calibreImportReady then importReady}
-          {#if importReady}
-            <label class="library-empty library-empty-import">
-              <input
-                type="file"
-                accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,.cbz,.zip"
-                multiple
-                hidden
-                use:inputFile={onFilesChange}
-              />
-              <span class="library-empty-title">{$t$('library.calibreEmpty')}</span>
-              <span class="library-empty-text">{$t$('library.calibreEmptyImport')}</span>
-            </label>
-          {:else}
-            <div class="library-empty">
-              <span class="library-empty-title">{$t$('library.calibreEmpty')}</span>
-              <span class="library-empty-text">
-                {$t$('library.calibreEmptyNoImport')}
-                <a
-                  class="underline"
-                  href="{selfHostingGuideUrl}#what-runs"
-                  target="_blank"
-                  rel="noreferrer">{$t$('library.calibreProfiles')}</a
-                >
-              </span>
-            </div>
-          {/if}
-        {/await}
       {:else}
-        <label class="library-empty library-empty-import">
-          <input
-            type="file"
-            accept="application/epub+zip,.epub,.htmlz,plain/text,.txt,.cbz,.zip,.mokuro"
-            multiple
-            hidden
-            use:inputFile={onFilesChange}
-          />
-          <span class="library-empty-title">Your library is empty</span>
-          <span class="library-empty-text">Drop EPUB, HTMLZ or TXT files, or click to import</span>
-        </label>
+        <LibraryEmptyStates
+          importReady={calibreImportReady}
+          onfiles={onFilesChange}
+          onretry={retryLibrary}
+        />
       {/if}
     </main>
   </div>
@@ -1994,109 +1625,6 @@
     }
   }
 
-  .home {
-    display: flex;
-    max-width: 75rem;
-    flex-direction: column;
-    gap: 3.5rem;
-    margin: 0 auto;
-    padding-top: 1.25rem;
-  }
-
-  /* Continue reading and Read next side by side while both fit */
-  .home-pair {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 3.5rem 4rem;
-  }
-
-  /* Grown, so every section head's rule runs to the column's right edge */
-  .home-pair > :global(*) {
-    flex: 1 1 auto;
-    max-width: 100%;
-  }
-
-  .home-pair:not(:has(> *)) {
-    display: none;
-  }
-
-  @media (max-width: 639px) {
-    .home {
-      gap: 2.5rem;
-      padding-top: 0.5rem;
-    }
-
-    .home-pair {
-      gap: 2.5rem;
-    }
-
-    .home-pair > :global(*) {
-      flex-basis: 100%;
-    }
-  }
-
-  .home-start {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
-  }
-
-  .home-start :global(.section-head) {
-    align-self: stretch;
-  }
-
-  .home-start > p {
-    max-width: 40rem;
-  }
-
-  .home-start-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-  }
-
-  .series-header {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 1rem 2rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .series-header-title {
-    font-size: var(--type-h1);
-    font-weight: 700;
-    line-height: 1.3;
-  }
-
-  .series-header-meta {
-    margin-top: 0.25rem;
-    color: var(--app-muted-fg);
-    font-size: var(--type-small);
-  }
-
-  .store-bar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.75rem 1.25rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .store-sort {
-    display: flex;
-    gap: 0.5rem;
-    margin-left: auto;
-  }
-
-  .store-count {
-    color: var(--app-muted-fg);
-    font-size: var(--type-small);
-    font-variant-numeric: tabular-nums;
-  }
-
   /* Select mode and progress: a ruled bar that sticks under the top bar */
   .library-toolbar {
     position: sticky;
@@ -2114,57 +1642,26 @@
     color: var(--font-color);
   }
 
-  /* Select mode: a ruled action bar fixed to the bottom (above the phone tab bar) */
-  .library-select-bar {
-    position: fixed;
-    inset: auto 0 0;
-    z-index: 30;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.5rem 1.25rem;
-    padding: 0.75rem clamp(1rem, 3.125vw, 2.5rem) calc(0.75rem + env(safe-area-inset-bottom));
-    border-top: 2px solid var(--font-color);
-    background: var(--background-color);
-  }
-
+  /* The toolbar buttons and .library-empty* below also style library-select-bar.svelte,
+     library-empty-states.svelte and home-view.svelte, inside .library-main */
   @media (max-width: 639px) {
-    .library-select-bar {
-      bottom: calc(3.5rem + env(safe-area-inset-bottom));
-      gap: 0.5rem 1rem;
-      padding-bottom: 0.75rem;
-    }
-
-    .library-toolbar-label {
+    .library-main :global(.library-toolbar-label) {
       display: none;
     }
   }
 
   @media (min-width: 640px) {
-    .library-toolbar-button:has(.library-toolbar-label) :global(svg) {
+    .library-main :global(.library-toolbar-button:has(.library-toolbar-label) svg) {
       display: none;
     }
   }
 
-  .library-select-count {
-    font-size: var(--type-body);
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .library-select-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-left: auto;
-  }
-
   /* Room under the last row for the bar */
-  .library-main:has(.library-select-bar) {
+  .library-main:has(:global(.library-select-bar)) {
     padding-bottom: 6rem;
   }
 
-  .library-toolbar-button {
+  .library-main :global(.library-toolbar-button) {
     display: inline-flex;
     min-height: var(--app-control-height);
     min-width: var(--app-control-height);
@@ -2180,29 +1677,29 @@
     transition: background-color 0.15s ease;
   }
 
-  .library-toolbar-button:hover:not(:disabled) {
+  .library-main :global(.library-toolbar-button:hover:not(:disabled)) {
     background: var(--surface-color);
   }
 
-  .library-toolbar-button-primary {
+  .library-main :global(.library-toolbar-button-primary) {
     border-color: var(--accent-color);
     background: var(--accent-color);
     color: var(--app-accent-fg);
   }
 
-  .library-toolbar-button-primary:hover:not(:disabled) {
+  .library-main :global(.library-toolbar-button-primary:hover:not(:disabled)) {
     border-color: var(--app-accent-hover);
     background: var(--app-accent-hover);
   }
 
-  .library-toolbar-button:disabled {
+  .library-main :global(.library-toolbar-button:disabled) {
     cursor: not-allowed;
     border-color: var(--border-color);
     background: transparent;
     color: var(--app-muted-fg);
   }
 
-  .library-toolbar-button-danger:not(:disabled) {
+  .library-main :global(.library-toolbar-button-danger:not(:disabled)) {
     border-color: var(--app-danger-color);
     color: var(--app-danger-color);
   }
@@ -2262,7 +1759,7 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .library-empty {
+  .library-main :global(.library-empty) {
     display: flex;
     max-width: 32rem;
     flex-direction: column;
@@ -2274,42 +1771,14 @@
     border-bottom: 1px solid var(--border-color);
   }
 
-  .library-empty-title {
+  .library-main :global(.library-empty-title) {
     font-size: var(--type-h2);
     font-weight: 700;
   }
 
-  .library-empty-text {
+  .library-main :global(.library-empty-text) {
     color: var(--app-muted-fg);
     font-size: var(--type-body);
     line-height: 1.6;
-  }
-
-  .library-empty-import {
-    cursor: pointer;
-  }
-
-  .library-signed-out {
-    display: flex;
-    max-width: 75rem;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
-    margin: 0 auto;
-    padding-top: 1.5rem;
-  }
-
-  .library-signed-out p {
-    max-width: 34rem;
-  }
-
-  .library-signed-out-title {
-    font-size: var(--type-h1);
-    font-weight: 700;
-  }
-
-  .library-empty-import:focus-visible {
-    outline: 2px solid var(--app-focus-ring);
-    outline-offset: 2px;
   }
 </style>
