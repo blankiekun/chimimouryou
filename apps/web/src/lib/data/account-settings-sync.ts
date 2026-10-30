@@ -16,6 +16,7 @@
 
 import { BehaviorSubject, map, merge, skip, type Subscription } from 'rxjs';
 import type { ParsedStore } from '$lib/data/internal/writable-storage-subject';
+import { isRecord } from '$lib/data/setting-parsers';
 import { mangaSeriesModes$ } from '$lib/data/manga';
 import { mergePlacementResults, placementResults$ } from '$lib/data/placement';
 import { mergeRankState, readingRank$ } from '$lib/data/reading-rank';
@@ -113,6 +114,20 @@ interface SettingsDocument {
 }
 
 type EntryTimes = Record<string, number>;
+
+/**
+ * settings.json's overall shape (undefined: refused, e.g. a newer version's format); values are
+ * each store's own parse (`mergeSettings`). Every part may be missing: older files lack some.
+ */
+function parseSettingsDocument(raw: unknown): Partial<SettingsDocument> | undefined {
+  if (!isRecord(raw) || (raw.version !== undefined && raw.version !== 1)) return undefined;
+
+  const parts = [raw.values, raw.modified, raw.entryModified];
+
+  return parts.every((part) => part === undefined || isRecord(part))
+    ? (raw as Partial<SettingsDocument>)
+    : undefined;
+}
 
 /** Synced stores parse every value: a malformed remote one is ignored (`mergeSettings`). */
 type Store = ParsedStore<any>;
@@ -403,13 +418,7 @@ async function syncOnce() {
   settingsSyncState$.next({ state: 'syncing' });
 
   // keepalive: finishes even if the tab is closed right after a change.
-  await syncJsonFile<Partial<SettingsDocument>>(
-    store,
-    'settings.json',
-    undefined,
-    mergeSettings,
-    true
-  );
+  await syncJsonFile(store, 'settings.json', undefined, parseSettingsDocument, mergeSettings, true);
 
   lastSynced = Date.now();
   settingsSyncState$.next({ state: 'synced', at: lastSynced });

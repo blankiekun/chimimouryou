@@ -175,33 +175,14 @@ async function parseSyncFile<T>(
  * writing in between is caught by the version check where the source has one, and the sync runs
  * once more.
  */
-export function syncJsonFile<T>(
-  store: SyncFileStore,
-  name: 'settings.json',
-  title: undefined,
-  merge: Merge<T>,
-  keepalive?: boolean
-): Promise<void>;
-export function syncJsonFile<T>(
+export async function syncJsonFile<T>(
   store: SyncFileStore,
   name: SyncFileName,
   title: string | undefined,
   parse: (raw: unknown) => T | undefined,
   merge: Merge<T>,
-  keepalive?: boolean
-): Promise<void>;
-export async function syncJsonFile<T>(
-  store: SyncFileStore,
-  name: SyncFileName,
-  title: string | undefined,
-  ...rest: [Merge<T>, boolean?] | [(raw: unknown) => T | undefined, Merge<T>, boolean?]
+  keepalive = false
 ) {
-  // shortcut: settings.json passes no parser until its typed document lands (item G); drop this then.
-  const [parse, merge, keepalive = false] =
-    typeof rest[1] === 'function'
-      ? (rest as [(raw: unknown) => T | undefined, Merge<T>, boolean?])
-      : [(raw: unknown) => raw as T, rest[0] as Merge<T>, rest[1] as boolean | undefined];
-
   for (let attempt = 0; ; attempt += 1) {
     const remote = await store.readSyncFile(name, title);
     const upload = await merge(await parseSyncFile(store, name, title, remote, parse));
