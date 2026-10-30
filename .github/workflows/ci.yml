@@ -9,6 +9,8 @@ permissions:
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+# Renaming Front end, Front end unit tests, Front end browser tests, Server scripts or an Image job
+# breaks the tag gate (release.yml's ci job looks them up by name) and the branch ruleset.
 jobs:
   # Catches nothing itself: decides which jobs a change needs, so the others skip without starting a
   # runner (a skipped job counts as passed for required checks). Main always runs the test and image jobs.

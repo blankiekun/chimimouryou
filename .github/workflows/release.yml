@@ -13,7 +13,8 @@ permissions:
 
 jobs:
   # Catches a tag on a commit whose CI on main failed, is missing or doesn't finish within 15 minutes.
-  # Main's push already ran CI on this commit, so it isn't run again; the job names are ci.yml's.
+  # Main's push already ran CI on this commit, so it isn't run again. The names are ci.yml's job
+  # names: renaming a required CI job there breaks this gate.
   ci:
     name: CI passed on main
     runs-on: ubuntu-latest
@@ -195,8 +196,10 @@ jobs:
 
   # Publishes the tag on the standalone site (deploy/pages/pages.yml in PAGES_REPO). Needs the
   # secret PAGES_DISPATCH_TOKEN: a fine-grained token for that repository only, Actions: write.
+  # Tags with a '-' (v1.2.3-rc1) are test releases: no site deploys, and the release is a prerelease.
   pages:
     needs: [ci, on-main]
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     steps:
       - name: Run the site's Pages workflow
@@ -210,6 +213,7 @@ jobs:
   # Publishes the tag on the VPS site (vps-site.yml) once its secrets are set (deploy/vps/README.md).
   vps:
     needs: [ci, on-main]
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -353,15 +357,17 @@ jobs:
           path: dist
           merge-multiple: true
 
-      # Uploads to the tag's release, or makes one (edit its notes afterwards). The android job may
-      # make it at the same moment, hence the second view.
+      # Uploads to the tag's release, or makes one (edit its notes afterwards); '-' tags make a
+      # prerelease, which electron-updater skips. The android job may make it at the same moment,
+      # hence the second view.
       - name: Create the release if missing
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
+          pre=(); [[ "$GITHUB_REF_NAME" == *-* ]] && pre=(--prerelease)
           gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 ||
-            gh release create "$GITHUB_REF_NAME" --verify-tag --title "chimimouryou ${GITHUB_REF_NAME#v}" --notes "" ||
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "chimimouryou ${GITHUB_REF_NAME#v}" --notes "" "${pre[@]}" ||
             gh release view "$GITHUB_REF_NAME" > /dev/null
 
       - name: Attach to the release
@@ -461,8 +467,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
+          pre=(); [[ "$GITHUB_REF_NAME" == *-* ]] && pre=(--prerelease)
           gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 ||
-            gh release create "$GITHUB_REF_NAME" --verify-tag --title "chimimouryou ${GITHUB_REF_NAME#v}" --notes "" ||
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "chimimouryou ${GITHUB_REF_NAME#v}" --notes "" "${pre[@]}" ||
             gh release view "$GITHUB_REF_NAME" > /dev/null
 
       - name: Attach to the release
