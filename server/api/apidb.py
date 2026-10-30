@@ -82,7 +82,8 @@ CREATE TABLE IF NOT EXISTS highlights (
     PRIMARY KEY (account, book, hid));
 CREATE TABLE IF NOT EXISTS book_docs (
     account TEXT NOT NULL, book INTEGER NOT NULL REFERENCES books(id),
-    kind TEXT NOT NULL CHECK (kind IN ('recaps', 'lorebook', 'vnsaves')), data TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('recaps', 'lorebook', 'vnsaves', 'audiobook', 'subtitles')),
+    data TEXT NOT NULL,
     modified INTEGER NOT NULL, rev INTEGER NOT NULL,
     PRIMARY KEY (account, book, kind));
 CREATE TABLE IF NOT EXISTS account_docs (

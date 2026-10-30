@@ -156,6 +156,18 @@ class MigrateTest(unittest.TestCase):
         self.assertGreater(report['written'], 0)
         self.assertIn('applied:', self.output)
 
+    # Bug: audiobook positions and subtitles synced through the old folders would be lost, or
+    # stamped with the file's mtime instead of the time in the name (an older device's row would win).
+    def test_audiobook_and_subtitles_become_book_docs(self):
+        data = os.path.join(self.accounts, ACCOUNT, 'account', 'sync', 'ttu-reader-data')
+        self.write(data, '猫', 'audioBook_1_6_1700000000005_42.json', {'title': '猫', 'playbackPosition': 42})
+        self.write(data, '猫', 'subtitles_1_6_1700000000006_1.json', {'title': '猫', 'subtitleData': {}})
+        self.run_migrate(True)
+        rows = self.db().query('SELECT * FROM book_docs WHERE account = ? ORDER BY kind', (ACCOUNT,))
+        self.assertEqual([(r['book'], r['kind'], r['modified'], json.loads(r['data'])['title']) for r in rows],
+                         [(self.ids['猫'], 'audiobook', 1700000000005, '猫'),
+                          (self.ids['猫'], 'subtitles', 1700000000006, '猫')])
+
     def test_apply_twice_is_idempotent(self):
         self.run_migrate(True)
         rev = apidb.current_rev(self.db().connection)

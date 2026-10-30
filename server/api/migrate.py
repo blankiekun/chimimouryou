@@ -22,6 +22,8 @@ import syncnames
 
 DATA_FOLDER = 'ttu-reader-data'
 BOOK_DOCS = {'recaps.json': 'recaps', 'lorebook.json': 'lorebook', 'vnsaves.json': 'vnsaves'}
+# Audiobook position and subtitles: the time is in the name (`audioBook_<exporter>_<db>_<modified>_…`).
+MEDIA_DOCS = {'audioBook_': 'audiobook', 'subtitles_': 'subtitles'}
 ACCOUNT_DOCS = {'settings.json': 'settings', 'kanji.json': 'kanji', 'words.json': 'words',
                 'immersion.json': 'immersion'}
 TEXT_KEYS = {'elementHtml': str, 'sections': list, 'styleSheet': str}
@@ -111,6 +113,11 @@ class Migration:
                     used.add(name)
                     guarded(f'{folder}/{name}', lambda: getattr(self, prefix.rstrip('_'))(
                         rev, account, book, os.path.join(path, name), counts))
+            for prefix, kind in MEDIA_DOCS.items():
+                if name := syncnames.find_file(names, prefix):
+                    used.add(name)
+                    guarded(f'{folder}/{name}', lambda: self.media_doc(rev, account, book, kind,
+                                                                       os.path.join(path, name), counts))
             for name in names:
                 file = os.path.join(path, name)
                 if name in used:
@@ -182,6 +189,13 @@ class Migration:
         data = read_json(file)
         counts['docs'] += 1
         self.row(rev, 'book_docs', {'account': account, 'book': book, 'kind': kind}, mtime_ms(file),
+                 {'data': apidb.to_json(data)})
+
+    def media_doc(self, rev, account, book, kind, file, counts):
+        modified = as_ms(syncnames.number(syncnames.part(syncnames.parts(os.path.basename(file), '.json'), 3)))
+        data = read_json(file)
+        counts['docs'] += 1
+        self.row(rev, 'book_docs', {'account': account, 'book': book, 'kind': kind}, modified,
                  {'data': apidb.to_json(data)})
 
     def account_doc(self, rev, account, kind, file, counts):

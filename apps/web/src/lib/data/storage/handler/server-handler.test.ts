@@ -240,6 +240,40 @@ describe('progress', () => {
   });
 });
 
+describe('audiobook position', () => {
+  // Bug: positions saved but not read back (wrong doc kind, or no modified time for the
+  // replicator) never reached the other device, or were re-sent on every sync.
+  it('goes up as a book doc and comes down when newer on the server', async () => {
+    await localBook('こころ');
+    await database.putAudioBook({
+      title: 'こころ',
+      playbackPosition: 42,
+      lastAudioBookModified: 100
+    });
+    const context = [{ title: 'こころ' }];
+
+    await replicateData(browser(), handler(), false, context, [StorageDataType.AUDIOBOOK]);
+    expect(api.rowsOf('bookDocs')).toMatchObject([
+      { book: 7, kind: 'audiobook', modified: 100, data: { playbackPosition: 42 } }
+    ]);
+
+    const writes = api.requests.filter((request) => request.startsWith('PUT')).length;
+
+    await replicateData(browser(), handler(), false, context, [StorageDataType.AUDIOBOOK]);
+    expect(api.requests.filter((request) => request.startsWith('PUT'))).toHaveLength(writes);
+
+    api.setRow('bookDocs', {
+      book: 7,
+      kind: 'audiobook',
+      modified: 200,
+      data: { title: 'こころ', playbackPosition: 90, lastAudioBookModified: 200 }
+    });
+    await replicateData(handler(), browser(), false, context, [StorageDataType.AUDIOBOOK]);
+
+    expect(await database.getAudioBook('こころ')).toMatchObject({ playbackPosition: 90 });
+  });
+});
+
 describe('statistics', () => {
   async function upload(mode: MergeMode, days: ReturnType<typeof day>[]) {
     const server = handler(mode);
