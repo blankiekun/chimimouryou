@@ -289,7 +289,11 @@ export function mergeWordMarks(local: WordMarks, remote: WordMarks) {
   const merged = { ...local };
 
   for (const [key, mark] of Object.entries(remote)) {
-    if (!merged[key] || mark.modified > merged[key].modified) {
+    const known = merged[key];
+    // On a tie the removal wins, so both devices end with the same marks.
+    const tieRemoved = mark.modified === known?.modified && mark.status === null;
+
+    if (!known || mark.modified > known.modified || tieRemoved) {
       merged[key] = mark;
     }
   }
@@ -299,7 +303,9 @@ export function mergeWordMarks(local: WordMarks, remote: WordMarks) {
 
 const sameMarks = (a: WordMarks, b: WordMarks) =>
   Object.keys(a).length === Object.keys(b).length &&
-  Object.entries(a).every(([key, mark]) => b[key]?.modified === mark.modified);
+  Object.entries(a).every(
+    ([key, mark]) => b[key]?.modified === mark.modified && b[key]?.status === mark.status
+  );
 
 /** Uploads a moment after the reader marks words. */
 export function wordMarksChanged() {

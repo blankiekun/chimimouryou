@@ -362,6 +362,60 @@ describe('account settings sync', () => {
     expect(askAiPresets$.getValue().map(({ id }) => id)).toEqual(['a', 'theirs', 'other']);
   });
 
+  // Bug: a failed upload after the merge marks the edit as synced, so it is never uploaded.
+  it('uploads an edit on the next sync after a failed or unreachable PUT', async () => {
+    window.localStorage.setItem('accountSettingsOwner', 'alice');
+    mockServer({ values: { askAiReaderNote: 'old' }, modified: { askAiReaderNote: 1 } });
+    await signInAs(alice);
+
+    const respond = vi.mocked(fetch).getMockImplementation()!;
+    askAiReaderNote$.next('edited');
+    vi.mocked(fetch).mockImplementation(async (url, init) =>
+      init?.method === 'PUT' ? new Response('', { status: 503 }) : respond(url as string, init)
+    );
+    await syncAccountSettings();
+    vi.mocked(fetch).mockImplementation(async (url, init) => {
+      if (init?.method === 'PUT') throw new TypeError('Failed to fetch');
+      return respond(url as string, init);
+    });
+    await syncAccountSettings();
+
+    expect(remote?.values.askAiReaderNote).toBe('old');
+    expect(askAiReaderNote$.getValue()).toBe('edited');
+
+    vi.mocked(fetch).mockImplementation(respond);
+    await syncAccountSettings();
+
+    expect(remote?.values.askAiReaderNote).toBe('edited');
+  });
+
+  // Bug: a sync started while another one's upload is in flight reads the old file, and the
+  // slower upload then overwrites the edit the second one carried.
+  it('keeps an edit made while an upload is in flight when a second sync starts', async () => {
+    window.localStorage.setItem('accountSettingsOwner', 'alice');
+    mockServer({ values: { askAiReaderNote: 'old' }, modified: { askAiReaderNote: 1 } });
+    await signInAs(alice);
+
+    const respond = vi.mocked(fetch).getMockImplementation()!;
+    let second: Promise<void> | undefined;
+
+    vi.mocked(fetch).mockImplementation(async (url, init) => {
+      if (init?.method === 'PUT' && !second) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        askAiReaderNote$.next('second');
+        second = syncAccountSettings();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      return respond(url as string, init);
+    });
+    askAiReaderNote$.next('first');
+    await syncAccountSettings();
+    await second;
+
+    expect(remote?.values.askAiReaderNote).toBe('second');
+    expect(askAiReaderNote$.getValue()).toBe('second');
+  });
+
   it('gives a same-time tie to the deletion', () => {
     expect(mergeEntries({ a: 1 }, {}, { a: 5 }, { a: -5 }).merged).toEqual({});
     expect(mergeEntries({}, { a: 1 }, { a: -5 }, { a: 5 }).merged).toEqual({});

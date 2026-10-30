@@ -166,6 +166,52 @@ describe('extras sync', () => {
     expect(Object.keys(uploaded.chapters).sort()).toEqual(['c1', 'c2']);
   });
 
+  // Bug: a server error or a cut-off remote file clears the local lorebook or recaps.
+  it('keeps the local copies when the remote file fails to load or is malformed', async () => {
+    const lorebookUrl = '/calibre/sync/ttu-reader-data/Broken/lorebook.json';
+    const recapsUrl = '/calibre/sync/ttu-reader-data/Broken/recaps.json';
+    const recaps = {
+      title: 'Broken',
+      chapters: { c1: { summary: 'one', characters: 1, model: 'm' } },
+      saved: [{ position: 1, text: 'r1', created: 1, model: 'm' }]
+    };
+    const puts: Record<string, any> = {};
+    let failWith500 = true;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.method === 'PUT') {
+          puts[url] = JSON.parse(init.body as string);
+          return new Response('', { status: 201 });
+        }
+
+        return failWith500
+          ? new Response('', { status: 503 })
+          : new Response('{"title":"Broken","entr', { status: 200 });
+      })
+    );
+    enableExtrasSync('Broken', 'ttu-calibre-default');
+    await saveLoreEntries('Broken', [entry('葵')]);
+    await (await readerDb()).put('recaps', recaps);
+
+    await syncExtras('lorebook', 'Broken');
+    await syncExtras('recaps', 'Broken');
+
+    expect(puts).toEqual({});
+    expect((await getLorebook('Broken')).entries.map((e) => e.name)).toEqual(['葵']);
+    expect((await getSavedRecaps('Broken')).map((r) => r.created)).toEqual([1]);
+
+    failWith500 = false;
+    await syncExtras('lorebook', 'Broken');
+    await syncExtras('recaps', 'Broken');
+
+    expect((await getLorebook('Broken')).entries.map((e) => e.name)).toEqual(['葵']);
+    expect((await getSavedRecaps('Broken')).map((r) => r.created)).toEqual([1]);
+    expect(puts[lorebookUrl].entries.map((e: LoreEntry) => e.name)).toEqual(['葵']);
+    expect(puts[recapsUrl].saved.map((r: { created: number }) => r.created)).toEqual([1]);
+  });
+
   it("doesn't upload another account's cached lorebook", async () => {
     const { files } = server();
 
@@ -209,6 +255,14 @@ describe('word marks sync', () => {
       '鳥\t': mark(null, 3),
       '魚\t': mark('known', 1)
     });
+  });
+
+  // Bug: on a tie in `modified` each device keeps its own mark, so they never agree.
+  it('settles a tie in modified the same way on both devices', () => {
+    const a = { '猫\t': mark('known', 5) };
+    const b = { '猫\t': mark(null, 5) };
+
+    expect(mergeWordMarks(a, b)).toEqual(mergeWordMarks(b, a));
   });
 
   it('merges words.json in the account folder for the signed-in reader', async () => {
@@ -258,6 +312,17 @@ describe('kanji sync', () => {
         [book('A', 99, 1), book('B', 60), book('D', 7, 3)]
       )
     ).toEqual([book('A', 10, 2), book('B', 60), book('C', 5, 1), book('D', 7, 3)]);
+  });
+
+  // Bug: records with the same (or no) modified time keep whichever side is local, so devices never agree.
+  it('settles ties in modified the same way on both devices', () => {
+    const local = [book('A', 10, 3), book('B', 40)];
+    const remote = [book('A', 20, 3), book('B', 30)];
+    const byTitle = (books: ReturnType<typeof mergeKanji>) =>
+      [...books].sort((x, y) => x.title.localeCompare(y.title));
+
+    expect(byTitle(mergeKanji(local, remote))).toEqual(byTitle(mergeKanji(remote, local)));
+    expect(byTitle(mergeKanji(local, remote))).toEqual([book('A', 20, 3), book('B', 40)]);
   });
 
   it('downloads newer records and uploads the merged file for the signed-in reader', async () => {

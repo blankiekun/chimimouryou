@@ -14,10 +14,13 @@ vi.mock('$lib/data/android-drive', () => ({
   nativeGrant: 'android-authorization'
 }));
 
+// The built-in Drive client only renews with a client id and secret, read when env.ts loads.
+vi.stubEnv('VITE_GDRIVE_CLIENT_ID', 'client-id');
+vi.stubEnv('VITE_GDRIVE_CLIENT_SECRET', 'client-secret');
+
 await import('$lib/data/storage/storage-handler-factory');
-const { StorageOAuthManager, storageOAuthTokens, storedRefreshToken } = await import(
-  './storage-oauth-manager'
-);
+const { StorageOAuthManager, storageOAuthTokens, storedRefreshToken, storeRefreshToken } =
+  await import('./storage-oauth-manager');
 const { StorageKey, StorageSourceDefault } = await import('./storage-types');
 
 describe('StorageOAuthManager.getToken', () => {
@@ -76,5 +79,47 @@ describe('StorageOAuthManager.getToken', () => {
 
     open.mockRestore();
     android.native = false;
+  });
+
+  // Bug: an expired Drive token makes a background sync ask for sign-in although the stored refresh token still works.
+  it('renews an expired token from the stored refresh token without a click', async () => {
+    Object.defineProperty(window.navigator, 'userActivation', {
+      value: { isActive: false },
+      configurable: true
+    });
+    const open = vi.spyOn(window, 'open');
+    const fetch = vi.fn(
+      async (_url: string, _init: RequestInit) =>
+        new Response(
+          JSON.stringify({ access_token: 'renewed', expires_in: 3600, scope: 'drive.file' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    storageOAuthTokens.set(StorageSourceDefault.GDRIVE_DEFAULT, {
+      accessToken: 'expired',
+      scope: 'drive.file',
+      expiration: Date.now() - 1000
+    });
+    storeRefreshToken(StorageSourceDefault.GDRIVE_DEFAULT, 'refresh-1');
+
+    await expect(
+      new StorageOAuthManager(StorageKey.GDRIVE, 'https://oauth.test/token').getToken(
+        window,
+        StorageSourceDefault.GDRIVE_DEFAULT,
+        false
+      )
+    ).resolves.toBe('renewed');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect((fetch.mock.calls[0][1].body as FormData).get('refresh_token')).toBe('refresh-1');
+    expect(open).not.toHaveBeenCalled();
+    expect(storageOAuthTokens.get(StorageSourceDefault.GDRIVE_DEFAULT)?.accessToken).toBe(
+      'renewed'
+    );
+
+    open.mockRestore();
+    vi.unstubAllGlobals();
+    delete (window.navigator as any).userActivation;
   });
 });

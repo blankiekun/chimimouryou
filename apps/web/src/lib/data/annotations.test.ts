@@ -54,6 +54,16 @@ describe('mergeHighlights', () => {
 
     expect(merged.deleted).toBe(true);
   });
+
+  // Bug: a deletion and an edit with the same modified time: the local side wins, so one device
+  // keeps the highlight for good, or the deleted highlight comes back.
+  it('lets a tombstone win a tie, whichever side it is on', () => {
+    const edit = highlight('a', 5, { note: 'edited' });
+    const tombstone = highlight('a', 5, { deleted: true });
+
+    expect(mergeHighlights([edit], [tombstone])[0].deleted).toBe(true);
+    expect(mergeHighlights([tombstone], [edit])[0].deleted).toBe(true);
+  });
 });
 
 describe('highlightsToMarkdown', () => {
