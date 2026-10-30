@@ -90,6 +90,10 @@ Review of phase 4 (written before the fix):
   I2 page manga: after the server's chapter list changed, a follow silently replaces the open volume in place
      with other chapters (or fetches the full volumes again) instead of failing with a clear detail            -> test_feed_reordered
   D1 a failed or oversized whole-file download leaves a partial file behind (or the file is held in memory)  -> test_file_streamed
+Audit of phases 1-4 (written after the fix, for the gaps the tests above left):
+  A6 a volume Calibre refused is dropped from its job, so Retry fetches nothing and the job stays "adding"
+     forever                                                                                            -> test_calibre_refused
+  U6 a chapter deleted on the site leaves the open volume as it was instead of rebuilding it            -> test_update_in_place
 """
 import gzip
 import importlib.util
@@ -125,15 +129,19 @@ FAKE_CALIBREDB = os.path.join(STATE, 'calibredb')
 ADDS = os.path.join(STATE, 'adds.log')
 # add_format and set_metadata calls (updates in place).
 CALLS = os.path.join(STATE, 'calls.log')
+# While this file exists, the fake calibredb refuses every add.
+CALIBRE_FAILS = os.path.join(STATE, 'calibre-fails')
 TOKEN_FILE = os.path.join(STATE, 'internal-token')
 with open(TOKEN_FILE, 'w') as f:
     f.write('c0ffee\n')
 # Each added volume gets the next Calibre id; the EPUB itself is kept for the checks.
 with open(FAKE_CALIBREDB, 'w') as f:
     f.write(f"""#!{sys.executable}
-import shutil, sys
+import os, shutil, sys
 args = sys.argv[1:]
 if 'add' in args:
+    if os.path.exists({CALIBRE_FAILS!r}):
+        sys.exit('calibredb: refused')
     log = open({ADDS!r}, 'a+')
     log.seek(0)
     n = 100 + len(log.readlines())
@@ -605,6 +613,10 @@ class ServiceTest(ServiceCase):
         # Nothing new: nothing is rewritten.
         self.assertEqual(check(62), [])
         self.assertEqual(self.follow_state(wid, 'acc5')['state'], 'current')
+        # A chapter deleted on the site: Vol. 2 is rebuilt with one fewer (it used to stay as it was).
+        calls = check(61)
+        self.assertEqual([c[:2] for c in calls], [['add_format', str(vol2)], ['set_metadata', str(vol2)]], calls)
+        self.assertEqual(self.chapters_in(os.path.join(STATE, f'replaced-{vol2}.epub')), 11)
         # Past 100: Vol. 2 filled to 50, chapter 101 starts Vol. 3; Vol. 1 never touched.
         calls = check(101)
         self.assertEqual([c[:2] for c in calls], [['add_format', str(vol2)], ['set_metadata', str(vol2)]], calls)
@@ -663,6 +675,22 @@ class ServiceTest(ServiceCase):
         self.assertEqual(len(chapters), 56)
         _, queue = self.request('GET', '/sources/queue', account='acc6')
         self.assertEqual([j['state'] for j in queue['jobs'] if j['workId'] == wid], ['done'])
+
+    def test_calibre_refused(self):
+        # A volume Calibre refused used to leave its job: Retry then had nothing to fetch and the job sat in
+        # 'adding' ("On its way") forever instead of adding the volume.
+        url = self.fixture_work('n0009ii', 10)
+        _, work = self.request('POST', '/sources/lookup', {'url': url}, 'acc16')
+        open(CALIBRE_FAILS, 'w').close()
+        try:
+            _, body = self.request('POST', f'/sources/works/{work["id"]}/add', {'volumes': [1]}, 'acc16')
+            job = self.wait_job(body['job']['id'], 'acc16')
+        finally:
+            os.remove(CALIBRE_FAILS)
+        self.assertEqual((job['state'], job['volumes']), ('failed', [1]), job)
+        self.assertEqual(self.request('POST', f'/sources/jobs/{job["id"]}/retry', {}, 'acc16')[0], 200)
+        self.assertEqual(self.wait_job(job['id'], 'acc16')['state'], 'done')
+        self.assertEqual(len(self.adds_of('n0009ii')), 1)
 
     def test_timer(self):
         url = self.fixture_work('n0005ee', 3)

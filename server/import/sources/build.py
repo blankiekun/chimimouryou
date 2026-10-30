@@ -4,6 +4,7 @@ a ComicInfo.xml naming the series and number.
 clean() keeps a whitelist of tags without attributes, so a site's scripts, styles, links and images never reach
 the book (the app sanitizes again when it opens it). Standard library only.
 """
+import re
 import time
 import uuid
 import zipfile
@@ -12,6 +13,8 @@ from xml.sax.saxutils import escape, quoteattr
 
 ALLOWED = {'p', 'br', 'ruby', 'rb', 'rt', 'rp', 'em', 'strong', 'b', 'i', 'sub', 'sup'}
 VOID = {'br'}
+# Control characters XML 1.0 doesn't allow (a site's text may carry them).
+CONTROL = re.compile('[\x00-\x08\x0b\x0c\x0e-\x1f]')
 # Their text is dropped with them.
 SKIPPED = {'script', 'style', 'noscript', 'template', 'iframe', 'object', 'svg', 'math'}
 
@@ -63,7 +66,7 @@ class _Cleaner(HTMLParser):
 
     def handle_data(self, data):
         if not self.skip:
-            self.out.append(escape(data))
+            self.out.append(escape(CONTROL.sub('', data)))
 
 
 def clean(html: str) -> str:

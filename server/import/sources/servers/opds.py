@@ -139,10 +139,6 @@ def _check_file(path: str, ext: str) -> str:
 
 class Server:
     """A source_servers row as a site adapter (api.py): details, chapter, and fetching from it alone."""
-    FILES = True  # chapters are files in a folder, not text
-    SEARCH_ORDER = ''
-    COVER_HOSTS: set[str] = set()
-
     def __init__(self, row: dict):
         self.id, self.type, self.user, self.secret = row['id'], row['type'], row['user'], row['secret']
         self.deleted = bool(row['deleted'])
