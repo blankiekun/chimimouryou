@@ -12,6 +12,7 @@
 // Install paths live only in <userData>/native-games.json, written only after main's own folder
 // dialog: a page names a game by its record's folder and never hands main a path to run.
 
+import { Buffer } from 'node:buffer';
 import { execFile, spawn } from 'node:child_process';
 import {
   existsSync,
@@ -23,10 +24,11 @@ import {
   rmSync,
   statSync,
   symlinkSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
-import { userInfo } from 'node:os';
+import { homedir, userInfo } from 'node:os';
 
 /** Programs listed last when a folder is picked: setup and settings tools, not the game. */
 const toolPattern =
@@ -109,6 +111,72 @@ async function wineStatus() {
   };
 }
 
+/** VNBox's prefix user (vn-save-store.ts vnSaveAreas: `home/username/.wine`): saves sync under it. */
+const userKey = 'wine/drive_c/users/username/';
+
+/** A synced name's path parts below its root, or undefined when it could leave it. */
+const keyParts = (rest) => {
+  const parts = rest.split('/');
+  return parts.every((part) => part && part !== '.' && part !== '..' && !/[\\:\0]/.test(part))
+    ? parts
+    : undefined;
+};
+
+/** vn-save-store.ts isWindowsSaveKey's save folders, ported: main can't trust the page's check. */
+const userFolders =
+  /^wine\/drive_c\/(?:users\/[^/]+\/(?:AppData|Documents|Saved Games)|ProgramData(?=\/(?!Microsoft\/)))\/(.+)$/i;
+const notSaves = /^(?:temp|tmp)$|cache/i;
+/** Windows' own folders: Startup and Start Menu are in AppData/Roaming/Microsoft. */
+const systemFolders = /^wine\/drive_c\/(?:users\/[^/]+\/AppData\/[^/]+|ProgramData)\/microsoft\//i;
+/** Files Windows or a game runs or loads (Windows drops trailing dots and spaces). */
+const runnable =
+  /\.(?:exe|dll|asi|ocx|sys|cpl|scr|com|bat|cmd|ps1|vbs|js|jse|wsf|msi|lnk|url|reg|hta|inf|pif)[. ]*$/i;
+
+/**
+ * Whether main may write or read a synced name: isWindowsSaveKey's rules plus no Microsoft
+ * folder, no runnable file, no 8.3 short name (`MICROS~1` reaches Microsoft) and no part ending
+ * in a dot or space (Windows drops them: `Microsoft.`, `.. `).
+ */
+export function isSafeSaveName(name) {
+  const parts = typeof name === 'string' ? keyParts(name) : undefined;
+  if (
+    !parts ||
+    parts.length < 2 ||
+    runnable.test(name) ||
+    parts.some((part) => /~\d|[. ]$/.test(part))
+  )
+    return false;
+  if (parts[0] === 'game') return true;
+  const inUser = userFolders.exec(name)?.[1];
+  return (
+    !!inUser && !systemFolders.test(name) && !inUser.split('/').some((part) => notSaves.test(part))
+  );
+}
+
+/**
+ * The files under `dir` as `{ path (relative, '/'), modified (ms), size }`. Links are never
+ * followed: a prefix folder linked into the real home isn't the game's.
+ */
+function walkFiles(dir, prefix = '') {
+  let entries;
+  try {
+    entries = readdirSync(join(dir, prefix), { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return entries.flatMap((entry) => {
+    const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) return walkFiles(dir, path);
+    if (!entry.isFile()) return [];
+    const stat = statSync(join(dir, path));
+    return [{ path, modified: Math.floor(stat.mtimeMs), size: stat.size }];
+  });
+}
+
+/** The install folder's files when it was linked: files new or changed since are the game's saves. */
+const manifestOf = (dir) =>
+  Object.fromEntries(walkFiles(dir).map((file) => [file.path, `${file.size}:${file.modified}`]));
+
 /** `Z:\…` for a Linux path, as Wine's Z: drive maps the root. */
 const winePath = (path) => `Z:${path.replaceAll('/', '\\')}`;
 
@@ -147,6 +215,146 @@ export function registerGames({ app, dialog, ipcMain, BrowserWindow, hookDir, is
 
   const status = (text) => send({ type: 'status', text });
 
+  const update = (folder, changes) => {
+    store = { games: { ...store.games, [folder]: { ...store.games[folder], ...changes } } };
+    save();
+  };
+
+  /**
+   * Where synced save names live on this computer, as [name prefix, folder]: on Linux the game's
+   * own prefix (its user folders and ProgramData), on Windows the user's own folders, of which
+   * only the game's save folders (`saveFolders`) are read or written.
+   */
+  const saveRoots = (folder, game) =>
+    platform === 'win32'
+      ? [
+          [`${userKey}AppData/`, join(homedir(), 'AppData')],
+          [`${userKey}Documents/`, app.getPath('documents')],
+          [`${userKey}Saved Games/`, join(homedir(), 'Saved Games')],
+          ['wine/drive_c/ProgramData/', process.env.ProgramData ?? 'C:\\ProgramData'],
+          ['game/', game.installDir]
+        ]
+      : [
+          [userKey, join(prefixes, folder, 'drive_c/users', userInfo().username)],
+          ['wine/drive_c/ProgramData/', join(prefixes, folder, 'drive_c/ProgramData')],
+          ['game/', game.installDir]
+        ];
+
+  /** A synced name's root folder and path parts below it, or undefined. */
+  const locate = (folder, game, name) => {
+    const [prefix, dir] = saveRoots(folder, game).find(([start]) => name.startsWith(start)) ?? [];
+    const parts = prefix && keyParts(name.slice(prefix.length));
+    return parts && { dir, parts };
+  };
+
+  /** A Windows save folder, as a name: `…/AppData/<Roaming|Local|LocalLow>/<name>`, `…/Documents/<name>`… */
+  const topFolder = (name) =>
+    /^(wine\/drive_c\/(?:users\/username\/(?:AppData\/[^/]+|Documents|Saved Games)|ProgramData)\/[^/]+)\//.exec(
+      name
+    )?.[1];
+
+  /** The folders a game may make its save folder in on Windows, watched on its first run. */
+  const watchedParents = () =>
+    [
+      ['AppData/Roaming', join(homedir(), 'AppData/Roaming')],
+      ['AppData/Local', join(homedir(), 'AppData/Local')],
+      ['AppData/LocalLow', join(homedir(), 'AppData/LocalLow')],
+      ['Documents', app.getPath('documents')],
+      ['Saved Games', join(homedir(), 'Saved Games')]
+    ]
+      .map(([name, dir]) => [`${userKey}${name}/`, dir])
+      .concat([['wine/drive_c/ProgramData/', process.env.ProgramData ?? 'C:\\ProgramData']]);
+
+  /** The folders in watchedParents with their modified times. */
+  const topFolders = () =>
+    Object.fromEntries(
+      watchedParents().flatMap(([prefix, dir]) => {
+        try {
+          return readdirSync(dir, { withFileTypes: true })
+            .filter((entry) => entry.isDirectory())
+            .map((entry) => [prefix + entry.name, statSync(join(dir, entry.name)).mtimeMs]);
+        } catch {
+          return [];
+        }
+      })
+    );
+
+  /**
+   * Writes synced save files newer than this computer's (the game not running), as VNBox's
+   * writeWindowsSaves: the synced time kept, never over a folder or link, never through a link.
+   */
+  function writeSaves(folder, game, saves) {
+    const saveFolders = new Set(game.saveFolders);
+    const pending = new Set(game.pending);
+    const saveNames = new Set(game.saveNames);
+    for (const [name, file] of Object.entries(saves ?? {})) {
+      const at = isSafeSaveName(name) && locate(folder, game, name);
+      if (!at || typeof file?.data !== 'string' || !Number.isFinite(file.modified)) continue;
+      if (name.startsWith('game/')) saveNames.add(name);
+      else if (platform === 'win32') {
+        // Only into a folder of this game's, confirmed on /hook: a synced name never adds one.
+        const top = topFolder(name);
+        if (!top || game.refused?.includes(top)) continue;
+        if (!saveFolders.has(top)) {
+          pending.add(top);
+          continue;
+        }
+      }
+      const target = join(at.dir, ...at.parts);
+      const blocked = at.parts.some((_, index) => {
+        try {
+          const stat = lstatSync(join(at.dir, ...at.parts.slice(0, index + 1)));
+          return index < at.parts.length - 1
+            ? !stat.isDirectory()
+            : !stat.isFile() || Math.floor(stat.mtimeMs) >= file.modified;
+        } catch {
+          return false;
+        }
+      });
+      if (blocked) continue;
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, Buffer.from(file.data, 'base64'));
+      utimesSync(target, new Date(), new Date(file.modified));
+    }
+    update(folder, { pending: pending.size ? [...pending] : undefined, saveNames: [...saveNames] });
+  }
+
+  /**
+   * This computer's save files of a game as synced names: on Linux everything in its prefix's user
+   * folders and ProgramData (the page keeps isWindowsSaveKey's), on Windows its save folders;
+   * from the install folder, files new or changed since it was linked and those already synced.
+   */
+  function listSaves(folder, game) {
+    const roots =
+      platform === 'win32'
+        ? (game.saveFolders ?? []).flatMap((top) => {
+            const at = locate(folder, game, top);
+            return at ? [[`${top}/`, join(at.dir, ...at.parts)]] : [];
+          })
+        : saveRoots(folder, game).filter(([prefix]) => prefix !== 'game/');
+    const known = new Set(game.saveNames);
+    const manifest = game.manifest ?? {};
+    // Named as synced, so a folder outside the save rules (browser profiles, Microsoft's) never goes up.
+    return [
+      ...roots.flatMap(([prefix, dir]) =>
+        walkFiles(dir).map((file) => ({
+          ...file,
+          name: prefix + file.path,
+          full: join(dir, file.path)
+        }))
+      ),
+      ...walkFiles(game.installDir)
+        .map((file) => ({
+          ...file,
+          name: `game/${file.path}`,
+          full: join(game.installDir, file.path)
+        }))
+        .filter(
+          (file) => known.has(file.name) || manifest[file.path] !== `${file.size}:${file.modified}`
+        )
+    ].filter((file) => isSafeSaveName(file.name));
+  }
+
   /**
    * A new prefix for a game: Wine's first start without the Mono/Gecko prompts, the user folders
    * Wine links into the real home made plain folders (saves stay in the prefix), and the Japanese
@@ -184,7 +392,7 @@ export function registerGames({ app, dialog, ipcMain, BrowserWindow, hookDir, is
     writeFileSync(join(prefix, '.chimi-ready'), '');
   }
 
-  async function startLinux(folder, game, gameExe) {
+  async function startLinux(folder, game, gameExe, saves) {
     const wine = await wineStatus();
     if (!wine.version) {
       return {
@@ -204,13 +412,15 @@ export function registerGames({ app, dialog, ipcMain, BrowserWindow, hookDir, is
       TZ: 'Asia/Tokyo'
     };
     if (!existsSync(join(prefix, '.chimi-ready'))) await makePrefix(prefix, env);
+    writeSaves(folder, game, saves);
     return spawn('wine', [winePath(join(hookDir, 'chimihook.exe')), winePath(gameExe)], {
       cwd: game.installDir,
       env
     });
   }
 
-  async function launch(event, folder) {
+  /** Starts a game; `saves`: the synced vnsaves.json entries, written in before it starts. */
+  async function launch(event, folder, saves) {
     if (platform !== 'win32' && platform !== 'linux') return { status: 'unsupported' };
     if (!existsSync(join(hookDir, 'chimihook.exe'))) return { status: 'unsupported' };
     if (session?.running) return { status: 'running', title: session.title };
@@ -219,17 +429,27 @@ export function registerGames({ app, dialog, ipcMain, BrowserWindow, hookDir, is
     const gameExe = join(game.installDir, game.exe);
     if (!existsSync(gameExe)) return { status: 'gone', path: game.installDir };
 
+    // Links from before save sync: saves made until now count as the game's own files.
+    if (!game.manifest) update(folder, { manifest: manifestOf(game.installDir) });
+
     session = { folder, title: game.title, sender: event.sender, messages: [], running: true };
     const current = session;
     let child;
     try {
+      if (platform === 'win32') {
+        writeSaves(folder, store.games[folder], saves);
+        // shortcut: a folder's time changes when entries are added, not when a file in it is
+        // rewritten, so a game whose save folder exists before its first run here is missed;
+        // upgrade to watching file times if games turn up like that.
+        if (!store.games[folder].saveFolders?.length && !game.watched) current.watch = topFolders();
+      }
       child =
         platform === 'win32'
           ? spawn(join(hookDir, 'chimihook.exe'), ['--locale', gameExe], {
               cwd: game.installDir,
               windowsHide: true
             })
-          : await startLinux(folder, game, gameExe);
+          : await startLinux(folder, store.games[folder], gameExe, saves);
     } catch (error) {
       current.running = false;
       return { status: 'error', message: error.message };
@@ -269,6 +489,19 @@ export function registerGames({ app, dialog, ipcMain, BrowserWindow, hookDir, is
     // 'exit', not 'close': Wine's own processes (wineserver, services) can keep stdout open.
     child.on('exit', () => {
       current.running = false;
+      if (current.watch) {
+        const before = current.watch;
+        const pending = Object.entries(topFolders())
+          .filter(
+            ([name, time]) =>
+              !(time <= before[name]) &&
+              isSafeSaveName(`${name}/x`) &&
+              !store.games[folder].refused?.includes(name)
+          )
+          .map(([name]) => name);
+        const all = [...new Set([...(store.games[folder].pending ?? []), ...pending])];
+        update(folder, { pending: all.length ? all : undefined });
+      }
       // The last lines may still be in the pipe.
       setTimeout(() => !exited && send({ type: 'exit' }, current), 1000);
     });
@@ -313,10 +546,13 @@ export function registerGames({ app, dialog, ipcMain, BrowserWindow, hookDir, is
       games: {
         ...store.games,
         [folder]: {
+          // Save folders and synced names stay with the game when it moves.
+          ...store.games[folder],
           title: String(title).slice(0, 200),
           installDir: picked.dir,
           exe,
-          linkedAt: Date.now()
+          linkedAt: Date.now(),
+          manifest: manifestOf(picked.dir)
         }
       }
     };
@@ -325,6 +561,41 @@ export function registerGames({ app, dialog, ipcMain, BrowserWindow, hookDir, is
   }
 
   handle('games-launch', launch);
+  // The page merges these into vnsaves.json: first names, times and sizes (and, on Windows, the
+  // folders the game's first run wrote, to confirm), then the contents of the names it keeps.
+  handle('games-saves', (event, folder, names) => {
+    const game = Object.hasOwn(store.games, folder) ? store.games[folder] : undefined;
+    if (!game || (session?.running && session.folder === folder)) return undefined;
+    const files = listSaves(folder, game);
+    if (!Array.isArray(names)) {
+      return {
+        files: files.map(({ name, modified, size }) => ({ name, modified, size })),
+        pending: game.pending?.length ? game.pending : undefined
+      };
+    }
+    const wanted = new Set(names);
+    return Object.fromEntries(
+      files
+        .filter((file) => wanted.has(file.name))
+        .map((file) => [
+          file.name,
+          { modified: file.modified, data: readFileSync(file.full).toString('base64') }
+        ])
+    );
+  });
+  // Windows: the folders the first run wrote are (keep) or aren't this game's saves; asked once.
+  handle('games-save-folders', (event, folder, keep) => {
+    const game = Object.hasOwn(store.games, folder) ? store.games[folder] : undefined;
+    if (!game) return;
+    update(folder, {
+      saveFolders: [
+        ...new Set([...(game.saveFolders ?? []), ...(keep ? (game.pending ?? []) : [])])
+      ],
+      refused: keep ? game.refused : [...(game.refused ?? []), ...(game.pending ?? [])],
+      pending: undefined,
+      watched: true
+    });
+  });
   handle('games-pick', pick);
   handle('games-link', link);
   handle('games-forget', (event, folder) => {
@@ -345,7 +616,8 @@ export function registerGames({ app, dialog, ipcMain, BrowserWindow, hookDir, is
       } catch {
         // Gone: drive unplugged, moved or uninstalled
       }
-      return { folder, ...game, present };
+      const { title, installDir, exe, linkedAt } = game;
+      return { folder, title, installDir, exe, linkedAt, present };
     })
   }));
   handle('games-session', (event) => {
