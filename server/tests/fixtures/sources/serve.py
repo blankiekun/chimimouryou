@@ -68,7 +68,14 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):  # noqa: N802
         url = urlparse(self.path)
         first, _, rest = url.path.lstrip('/').partition('/')
-        if first == 'opds':
+        if first == 'fake-set':  # the test stack's E2E reorders feeds: /fake-set?s1=1,4,2,3&chapters=1,2,13,3
+            query = parse_qs(url.query)
+            if 's1' in query:
+                servers.VOLUMES['s1'] = [int(n) for n in query['s1'][0].split(',')]
+            if 'chapters' in query:
+                servers.CHAPTERS['order'] = [int(n) for n in query['chapters'][0].split(',')]
+            status, kind, body = 200, 'text/plain', b'ok'
+        elif first == 'opds':
             status, kind, body = servers.opds(rest, parse_qs(url.query), self.headers.get('Authorization', ''))
         elif first == 'suwayomi':
             status, kind, body = servers.suwayomi(rest, parse_qs(url.query))
