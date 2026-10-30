@@ -12,7 +12,7 @@
    */
   import { database } from '$lib/data/store';
   import { isMobile$ } from '$lib/functions/utils';
-  import { isVn, vnInfo, type VnInfo } from '$lib/data/vn';
+  import type { VnInfo } from '$lib/data/vn';
   import SectionHead from '$lib/components/section-head.svelte';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { formatBytes } from '$lib/data/vn-upload';
@@ -20,10 +20,14 @@
   import {
     copyWindowsGame,
     deleteWindowsGame,
+    folderInputFiles,
     hasWindowsGame,
     hookScripts,
     hookSuggestion,
+    missingWindowsGames,
+    readHandle,
     readHead,
+    roomFor,
     searchHookScripts,
     windowsGameBlocker,
     windowsGameBlockerText,
@@ -35,13 +39,13 @@
   } from '$lib/data/windows-game';
   import type { HookScript } from '$lib/data/windows-game';
   import {
-    autorunProgram,
     besideMsi,
     copyDiscs,
     copyProtection,
     discDrive,
     discFilePattern,
     discPath,
+    discSetup,
     discsOf,
     folderDiscs,
     folderSetup,
@@ -181,16 +185,7 @@
   hookScripts().then((found) => (scripts = found));
 
   async function findMissing() {
-    const found: typeof missing = [];
-
-    for (const book of await (await database.db).getAll('data')) {
-      const info = isVn(book) ? vnInfo(book) : undefined;
-
-      if (info?.engine === 'vnbox' && info.folder && !(await hasWindowsGame(info.folder))) {
-        found.push({ title: book.title, info });
-      }
-    }
-    missing = found.sort((a, b) => a.title.localeCompare(b.title));
+    missing = await missingWindowsGames(await (await database.db).getAll('data'));
     target = existing ?? '';
   }
 
@@ -276,22 +271,8 @@
       }
       if (listing.label) title = listing.label;
 
-      const paths = listing.files.map((file) => file.path);
-      const inf = listing.files.find((file) => /^autorun\.inf$/i.test(file.path));
-
-      protection = copyProtection(paths);
-      autorun = inf && autorunProgram(new TextDecoder('shift_jis').decode(await listing.read(inf)));
-      discPrograms = listing.files
-        .filter((file) => /\.exe$/i.test(file.path))
-        .map((file) => ({ path: file.path, size: file.size }))
-        .sort(
-          (a, b) =>
-            Number(b.path.toLowerCase() === autorun?.program.toLowerCase()) -
-              Number(a.path.toLowerCase() === autorun?.program.toLowerCase()) ||
-            Number(/setup|install/i.test(b.path)) - Number(/setup|install/i.test(a.path)) ||
-            a.path.split('/').length - b.path.split('/').length ||
-            a.path.localeCompare(b.path)
-        );
+      protection = copyProtection(listing.files.map((file) => file.path));
+      ({ autorun, programs: discPrograms } = await discSetup(listing));
       if (!discPrograms.length) error = 'This disc has no Windows program (.exe) to install from.';
       else await chooseInstaller(discPrograms[0].path, listing);
     } catch (readError: any) {
@@ -325,24 +306,6 @@
     if (bytes && installer === path) kind = msi ? 'msi' : found;
   }
 
-  const hidden = (path: string) => path.split('/').some((part) => part.startsWith('.'));
-
-  async function readHandle(dir: FileSystemDirectoryHandle, prefix = '') {
-    const found: Record<string, File> = {};
-    const reads: Promise<void>[] = [];
-
-    for await (const [name, handle] of (dir as any).entries()) {
-      const path = `${prefix}${name}`;
-
-      if (hidden(path)) continue;
-      if (handle.kind === 'directory') Object.assign(found, await readHandle(handle, `${path}/`));
-      else reads.push(handle.getFile().then((file: File) => void (found[path] = file)));
-    }
-
-    await Promise.all(reads);
-    return found;
-  }
-
   async function chooseFolder() {
     const picker = (window as any).showDirectoryPicker;
 
@@ -363,18 +326,9 @@
   }
 
   function folderPicked(list: FileList | null) {
-    const picked: Record<string, File> = {};
+    const { name, files: picked } = folderInputFiles(list);
 
-    for (const file of Array.from(list ?? [])) {
-      // webkitRelativePath starts with the picked folder's own name.
-      const path = file.webkitRelativePath.split('/').slice(1).join('/');
-
-      if (path && !hidden(path)) picked[path] = file;
-    }
-
-    const first = list?.[0]?.webkitRelativePath.split('/')[0];
-
-    if (first) useFolder(first, picked);
+    if (name) useFolder(name, picked);
     // Browsers that ignore webkitdirectory (some on phones) hand back loose files.
     else if (list?.length)
       error = 'This browser picked files, not a folder. Choose a ZIP of the game folder instead.';
@@ -402,21 +356,6 @@
 
     hook = { name: file.name, text: await file.text() };
     picked = CHOSEN;
-  }
-
-  /**
-   * Asks to store data persistently first (big games must not be evicted, and Firefox keeps a
-   * site to 10% of the disk until then), then checks the quota has room for `needed` bytes.
-   */
-  async function roomFor(needed: number) {
-    const persisted = (await navigator.storage.persist?.()) ?? false;
-    const { quota = 0, usage = 0 } = (await navigator.storage.estimate?.()) ?? {};
-
-    if (quota && quota - usage < needed) {
-      throw new Error(
-        `Not enough room in this browser's storage: this needs about ${formatBytes(needed)}, ${formatBytes(quota - usage)} is free.${persisted ? '' : ' Allowing the site to store data persistently (the browser asks, or see its site settings) gives it more room.'}`
-      );
-    }
   }
 
   async function startInstall() {

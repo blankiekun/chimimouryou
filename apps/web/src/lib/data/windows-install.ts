@@ -391,6 +391,29 @@ export function copyProtection(paths: string[]) {
   ];
 }
 
+/**
+ * What a disc offers to install from: autorun.inf's program and the disc's programs, autorun's
+ * first, then setup/install ones, shallow ones, by name.
+ */
+export async function discSetup(listing: DiscListing) {
+  const inf = listing.files.find((file) => /^autorun\.inf$/i.test(file.path));
+  const autorun =
+    inf && autorunProgram(new TextDecoder('shift_jis').decode(await listing.read(inf)));
+  const programs = listing.files
+    .filter((file) => /\.exe$/i.test(file.path))
+    .map((file) => ({ path: file.path, size: file.size }))
+    .sort(
+      (a, b) =>
+        Number(b.path.toLowerCase() === autorun?.program.toLowerCase()) -
+          Number(a.path.toLowerCase() === autorun?.program.toLowerCase()) ||
+        Number(/setup|install/i.test(b.path)) - Number(/setup|install/i.test(a.path)) ||
+        a.path.split('/').length - b.path.split('/').length ||
+        a.path.localeCompare(b.path)
+    );
+
+  return { autorun, programs };
+}
+
 /** 'msi': a setup.exe beside its Windows Installer package (besideMsi), run through msiexec */
 export type InstallerKind = 'inno' | 'nsis' | 'installshield' | 'msi';
 
