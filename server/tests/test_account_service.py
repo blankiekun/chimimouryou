@@ -7,21 +7,25 @@ import sys
 import tempfile
 import threading
 import unittest
+import unittest.mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'account'))
 import service  # noqa: E402
+
+TEMPLATE = os.path.join(os.path.dirname(__file__), '..', 'nginx-ebook-reader.conf.template')
 
 
 class AccountServiceTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        # Tests point these at the temp folder; put them back so later test files see the real defaults.
+        for name in ('DATA_DIR', 'STATE_DIR', 'SHARED_SYNC_DIR', 'UPDATE_DIR', 'INTERNAL_TOKEN_FILE', 'db'):
+            self.addCleanup(setattr, service, name, getattr(service, name, None))
         service.DATA_DIR = os.path.join(self.tmp.name, 'data')
         service.STATE_DIR = self.tmp.name
         service.db = service.Database(os.path.join(self.tmp.name, 'accounts.db'))
-
-    def tearDown(self):
-        service.db.connection.close()
-        self.tmp.cleanup()
+        self.addCleanup(service.db.connection.close)
 
     def test_password_round_trip(self):
         stored = service.hash_password('correct horse')
@@ -139,13 +143,6 @@ class AccountServiceTest(unittest.TestCase):
         with open(request_path) as f:
             self.assertNotIn('engine', json.load(f))
 
-    def test_sessions(self):
-        user_id = service.create_user('alice', 'long enough')
-        token = service.create_session(user_id)
-        self.assertEqual(service.session_user(token)['username'], 'alice')
-        service.delete_session(token)
-        self.assertIsNone(service.session_user(token))
-
     def test_auth_status(self):
         reader = {'is_admin': 0, 'permissions': ''}
         importer = {'is_admin': 0, 'permissions': 'import'}
@@ -212,15 +209,13 @@ class AccountServiceTest(unittest.TestCase):
         self.assertFalse(allowed('MOVE', '/calibre/sync/x.json', 'https://h/calibre/sync/series.json, https://h/calibre/sync/y.json'))
         self.assertFalse(allowed('MOVE', '/calibre/sync/x.json', 'https://h/calibre/sync/y,z.json'))
 
-    def test_plain_http_is_off_by_default(self):
+    def test_plain_http_is_off_by_default_and_when_allowed(self):
         self.assertFalse(service.ALLOW_HTTP)
         self.assertEqual(service.request_scheme('https'), 'https')
         self.assertIsNone(service.request_scheme('http'))
         self.assertIsNone(service.request_scheme(None))
         self.assertEqual(service.session_cookie_name('https'), service.COOKIE)
         self.assertIsNone(service.session_cookie_name('http'))
-
-    def test_plain_http_when_allowed(self):
         service.ALLOW_HTTP = True
         try:
             self.assertEqual(service.request_scheme('http'), 'http')
@@ -233,14 +228,22 @@ class AccountServiceTest(unittest.TestCase):
         finally:
             service.ALLOW_HTTP = False
 
-    def test_disk_full(self):
-        self.assertFalse(service.disk_full(self.tmp.name))
-        original = service.MIN_FREE_BYTES
-        service.MIN_FREE_BYTES = 1 << 62
-        try:
-            self.assertTrue(service.disk_full(self.tmp.name))
-        finally:
-            service.MIN_FREE_BYTES = original
+    # Catches nginx's write check letting uploads through on a full disk (the service has no quotas),
+    # or refusing reads there too.
+    def test_disk_full_refuses_writes_not_reads(self):
+        service.SHARED_SYNC_DIR = self.tmp.name
+        call = self.serve()
+        service.create_user('alice', 'long enough')
+        cookie = f'{service.COOKIE}={service.create_session(service.find_user("alice")["id"])}'
+
+        def check(path, method):
+            return call('GET', path, Cookie=cookie, X_Original_Method=method,
+                        X_Original_URI='/calibre/sync/x/progress_1.json')[0]
+
+        self.assertEqual((check('auth/shared/writes', 'PUT'), check('auth', 'PUT')), (200, 200))
+        with unittest.mock.patch.object(service, 'MIN_FREE_BYTES', 1 << 62):
+            self.assertEqual((check('auth/shared/writes', 'PUT'), check('auth', 'PUT')), (403, 403))
+            self.assertEqual((check('auth/shared/writes', 'GET'), check('auth', 'GET')), (200, 200))
 
     def test_permissions(self):
         user_id = service.create_user('carol', 'long enough')
@@ -256,12 +259,17 @@ class AccountServiceTest(unittest.TestCase):
         service.set_permissions(user_id, [])
         self.assertEqual(service.public_user(service.find_user('carol'))['permissions'], [])
 
-    def test_auth_routes(self):
-        routes = service.Handler.ROUTES
-        for path in ('auth', 'auth/admin', 'auth/import', 'auth/shared/writes', 'auth/series/writes',
-                     'auth/difficulty/writes'):
-            self.assertIn(('GET', path), routes)
-        self.assertNotIn(('GET', 'auth/anything'), routes)
+    # Catches nginx and the service drifting apart: an auth_request location proxying to a path the
+    # service has no route for answers 404, which nginx turns into a 500 on every protected request.
+    def test_every_nginx_auth_check_has_a_route(self):
+        import re
+        with open(TEMPLATE) as f:
+            template = f.read()
+        paths = re.findall(r'location = /_account_\w+ \{[^}]*?proxy_pass http://\$account_upstream/(\S+);', template)
+        self.assertGreaterEqual(len(paths), 7)
+        for path in paths:
+            self.assertIn(('GET', path), service.Handler.ROUTES)
+        self.assertNotIn(('GET', 'auth/anything'), service.Handler.ROUTES)
 
     def test_create_user_and_admin_rules(self):
         service.create_user('Root', 'long enough', admin=True)
@@ -291,13 +299,69 @@ class AccountServiceTest(unittest.TestCase):
         self.assertIsNone(service.session_user(token))
         self.assertTrue(service.verify_password('new password', service.find_user('bob')['password_hash'])[0])
 
+    # Catches a flipped comparison or an idle timer that never refreshes: active readers signed out
+    # after 30 days, idle tokens (a lost phone) never expiring, or the 180-day cap not holding.
+    def test_sessions_expire_when_idle_and_at_the_maximum_age(self):
+        day = 86400
+        t0 = 1_800_000_000
+        user_id = service.create_user('alice', 'long enough')
+
+        def at(seconds, call, *args):
+            with unittest.mock.patch.object(service.time, 'time', return_value=t0 + seconds):
+                return call(*args)
+
+        def last_seen(token):
+            return service.db.query('SELECT last_seen FROM sessions WHERE token_hash = ?',
+                                    (service.token_hash(token),))[0]['last_seen']
+
+        cookie = at(0, service.create_session, user_id)
+        token = at(0, service.create_session, user_id, 'token', 'https://app.example')
+        # last_seen is written at most every LAST_SEEN_WRITE_INTERVAL, not on every request.
+        self.assertIsNotNone(at(service.LAST_SEEN_WRITE_INTERVAL, service.session_user, cookie))
+        self.assertEqual(last_seen(cookie), t0)
+        self.assertIsNotNone(at(service.LAST_SEEN_WRITE_INTERVAL + 1, service.session_user, cookie))
+        self.assertEqual(last_seen(cookie), t0 + service.LAST_SEEN_WRITE_INTERVAL + 1)
+        # Idle for just over 30 days: the token is gone; the cookie, used meanwhile, is not.
+        idle = service.SESSION_IDLE_SECONDS
+        self.assertIsNotNone(at(idle - day, service.session_user, cookie))
+        self.assertIsNone(at(idle + 1, service.session_user, token))
+        self.assertEqual(service.db.query('SELECT count(*) AS n FROM sessions WHERE kind = ?', ('token',))[0]['n'], 0)
+        # Used every 20 days, the cookie still ends at 180 days.
+        for when in range(idle - day + 20 * day, service.SESSION_MAX_SECONDS, 20 * day):
+            self.assertIsNotNone(at(when, service.session_user, cookie), when // day)
+        self.assertIsNotNone(at(service.SESSION_MAX_SECONDS, service.session_user, cookie))
+        self.assertIsNone(at(service.SESSION_MAX_SECONDS + 1, service.session_user, cookie))
+        self.assertIsNone(at(1, service.session_user, cookie))  # deleted, not just refused
+
+    # Catches a removed account whose cookie or app token keeps working (sessions not cascaded with the
+    # user, e.g. foreign_keys off), and an admin removing their own account.
+    def test_removing_an_account_ends_its_sessions_and_tokens(self):
+        call = self.serve()
+        service.create_user('boss', 'long enough', admin=True)
+        service.create_user('alice', 'long enough')
+        own_site = 'https://books.example'
+        boss = f'{service.COOKIE}={service.create_session(service.find_user("boss")["id"])}'
+        alice_cookie = f'{service.COOKIE}={service.create_session(service.find_user("alice")["id"])}'
+        alice_bearer = f"Bearer {call('POST', 'token', self.ALICE, Origin=self.APP)[1]['token']}"
+        self.assertEqual(call('GET', 'me', Cookie=alice_cookie)[0], 200)
+        self.assertEqual(call('GET', 'me', Origin=self.APP, Authorization=alice_bearer)[0], 200)
+        self.assertEqual(call('POST', 'admin/remove', {'username': 'boss'}, Cookie=boss, Origin=own_site)[0], 409)
+        self.assertEqual(call('POST', 'admin/remove', {'username': 'alice'}, Cookie=boss, Origin=own_site)[0], 200)
+        self.assertEqual(call('GET', 'me', Cookie=alice_cookie)[0], 401)
+        self.assertEqual(call('GET', 'me', Origin=self.APP, Authorization=alice_bearer)[0], 401)
+        self.assertEqual(call('GET', 'auth/shared/writes', Authorization=alice_bearer, X_Original_Method='PUT',
+                              X_Original_URI='/calibre/sync/x/progress_1.json')[0], 401)
+        self.assertEqual([row['username'] for row in service.db.query(
+            'SELECT users.username FROM sessions JOIN users ON users.id = sessions.user_id')], ['boss'])
+        self.assertEqual(service.db.query('SELECT count(*) AS n FROM sessions')[0]['n'], 1)
+
     def test_only_nginx_may_call(self):
         import urllib.error
         import urllib.request
         from http.server import ThreadingHTTPServer
         service.INTERNAL_TOKEN_FILE = os.path.join(self.tmp.name, 'internal-token')
         server = ThreadingHTTPServer(('127.0.0.1', 0), service.Handler)
-        threading.Thread(target=server.serve_forever, daemon=True).start()
+        threading.Thread(target=server.serve_forever, kwargs={'poll_interval': 0.01}, daemon=True).start()
 
         def status(token, path='/config'):
             request = urllib.request.Request(f'http://127.0.0.1:{server.server_port}{path}',
@@ -349,7 +413,7 @@ class AccountServiceTest(unittest.TestCase):
         original = service.CORS_ORIGINS
         service.CORS_ORIGINS = set(cors_origins)
         server = ThreadingHTTPServer(('127.0.0.1', 0), service.Handler)
-        threading.Thread(target=server.serve_forever, daemon=True).start()
+        threading.Thread(target=server.serve_forever, kwargs={'poll_interval': 0.01}, daemon=True).start()
 
         def stop():
             server.shutdown()
@@ -511,8 +575,11 @@ class AccountServiceTest(unittest.TestCase):
         status, _, headers = call('POST', 'login', self.ALICE, Origin='https://books.example')
         self.assertEqual(status, 200)
         cookie = headers['Set-Cookie'].split(';')[0]
+        token = cookie.split('=', 1)[1]
         self.assertIn('Secure; HttpOnly; SameSite=Strict', headers['Set-Cookie'])
-        self.assertEqual(call('GET', 'me', Cookie=cookie)[0], 200)
+        self.assertEqual(service.session_user(token)['username'], 'alice')
+        status, body, _ = call('GET', 'me', Cookie=cookie)
+        self.assertEqual((status, body['user']['username']), (200, 'alice'))
         self.assertEqual(call('GET', 'tokens', Cookie=cookie)[1], {'tokens': []})
         # Another bearer (the Audiobookshelf plugin's, proxied by nginx) leaves the cookie in charge.
         self.assertEqual(call('GET', 'auth', Cookie=cookie, Authorization='Bearer abs-token')[0], 200)
@@ -520,6 +587,7 @@ class AccountServiceTest(unittest.TestCase):
         self.assertEqual(call('GET', 'me', Cookie=cookie, Origin=self.APP)[0], 401)
         self.assertEqual(call('POST', 'logout', Cookie=cookie, Origin='https://books.example')[0], 200)
         self.assertEqual(call('GET', 'me', Cookie=cookie)[0], 401)
+        self.assertIsNone(service.session_user(token))
 
     def test_trusted_network_pass_is_same_origin_only(self):
         status = service.auth_status

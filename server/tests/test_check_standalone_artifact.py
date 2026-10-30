@@ -40,6 +40,10 @@ class FindServerFilesTest(unittest.TestCase):
             features = f.read()
         with zipfile.ZipFile(os.path.join(self.artifact, 'analysis.zip'), 'w') as z:
             z.writestr('py/features.py', features)
+        # Tiny files (an empty __init__.py) and __pycache__ bytes match by chance, not by copying.
+        write(os.path.join(self.server, 'x', '__init__.py'), b'# package\n')
+        write(os.path.join(self.artifact, '__init__.py'), b'# package\n')
+        write(os.path.join(self.artifact, 'service.pyc'), b'p' * 200)
         self.assertEqual(self.find(), [])
 
     def test_copied_server_file(self):
@@ -50,15 +54,6 @@ class FindServerFilesTest(unittest.TestCase):
         with zipfile.ZipFile(os.path.join(self.artifact, 'analysis.zip'), 'w') as z:
             z.writestr('py/service.py', SERVICE)
         self.assertEqual(self.find(), [('analysis.zip!py/service.py', 'x/service.py')])
-
-    def test_tiny_files_ignored(self):
-        write(os.path.join(self.server, 'x', '__init__.py'), b'# package\n')
-        write(os.path.join(self.artifact, '__init__.py'), b'# package\n')
-        self.assertEqual(self.find(), [])
-
-    def test_pycache_ignored(self):
-        write(os.path.join(self.artifact, 'service.pyc'), b'p' * 200)
-        self.assertEqual(self.find(), [])
 
 
 if __name__ == '__main__':

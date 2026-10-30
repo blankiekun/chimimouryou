@@ -86,10 +86,6 @@ class PlanTest(unittest.TestCase):
         self.assertEqual(assign.written_name('［作者］ 魔法 ～副題～ ３', '魔法 ~副題~'), '魔法 ～副題～')
 
 
-if __name__ == '__main__':
-    unittest.main()
-
-
 class MergeTest(unittest.TestCase):
     def test_merges_series_written_differently_into_the_biggest(self):
         books = [
@@ -193,3 +189,7 @@ class MergeTest(unittest.TestCase):
             book(5, '神は遊戯に飢えている。5', '神は遊戯に飢えている'),
         ])
         self.assertEqual(renames, {3: '神は遊戯に飢えている。', 4: '神は遊戯に飢えている。', 5: '神は遊戯に飢えている。'})
+
+
+if __name__ == '__main__':
+    unittest.main()

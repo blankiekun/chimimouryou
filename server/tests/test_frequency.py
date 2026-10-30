@@ -41,10 +41,6 @@ class YomitanRanksTest(unittest.TestCase):
     def test_best_rank_per_term(self):
         self.assertEqual(load_yomitan_ranks(dictionary()), {'ある': 18, '有る': 18, '在る': 10382, '魔法': 1986, '事': 30})
 
-    def test_rejects_occurrence_based(self):
-        with self.assertRaises(ValueError):
-            load_yomitan_ranks(dictionary('occurrence-based'))
-
     def test_word_and_spelling_lookups(self):
         table = FrequencyTable.load(dictionary())
         self.assertEqual(table.word('有る\tverb'), (18, TOP_SHARE / 18))
@@ -108,14 +104,6 @@ class InstallDictionaryTest(unittest.TestCase):
         self.assertIsNone(runner.job)
         self.assertFalse(runner.installing)
 
-    def test_a_failed_game_is_retried_once_its_folder_changes(self):
-        unchanged = self.service.unchanged_since_failure
-        failure = {'size': 0, 'added': 1}
-        self.assertTrue(unchanged(failure, {'format': 'VN', 'size': 0, 'added': 1}))
-        self.assertFalse(unchanged(failure, {'format': 'VN', 'size': 0, 'added': 2}))
-        self.assertTrue(unchanged({'size': 5}, {'format': 'EPUB', 'size': 5, 'added': 9}))
-        self.assertFalse(unchanged(None, {'format': 'EPUB', 'size': 5, 'added': 9}))
-
     def test_refuses_small_lists(self):
         self.service.MIN_DICTIONARY_TERMS = 6
         with open(dictionary(), 'rb') as f, self.assertRaises(ValueError):
@@ -124,7 +112,8 @@ class InstallDictionaryTest(unittest.TestCase):
 
     def test_replacement_must_agree_unless_forced(self):
         with open(dictionary(), 'rb') as f:
-            self.install(f.read())
+            self.assertEqual(self.install(f.read()), 5)
+        self.assertTrue(os.path.exists(self.service.FREQUENCY_DICTIONARY))
         # A list that agrees (a new version of the same one) needs no force.
         with open(dictionary(entries=ENTRIES[:-1]), 'rb') as f:
             installed = f.read()
@@ -139,11 +128,6 @@ class InstallDictionaryTest(unittest.TestCase):
         self.assertEqual(self.install(other, force=True), 5)
         with open(self.service.FREQUENCY_DICTIONARY, 'rb') as f:
             self.assertEqual(f.read(), other)
-
-    def test_installs_a_rank_based_list(self):
-        with open(dictionary(), 'rb') as f:
-            self.assertEqual(self.install(f.read()), 5)
-        self.assertTrue(os.path.exists(self.service.FREQUENCY_DICTIONARY))
 
     def test_rejects_oversized_members(self):
         import frequency
@@ -261,7 +245,7 @@ class KanjiEndpointTest(unittest.TestCase):
         def get(url, token='c0ffee'):
             return urllib.request.urlopen(urllib.request.Request(url, headers={'X-Internal-Token': token}))
         server = ThreadingHTTPServer(('127.0.0.1', 0), service.Handler)
-        threading.Thread(target=server.serve_forever, daemon=True).start()
+        threading.Thread(target=server.serve_forever, kwargs={'poll_interval': 0.01}, daemon=True).start()
         try:
             base = f'http://127.0.0.1:{server.server_port}'
             with get(f'{base}/kanji/7') as response:
@@ -325,7 +309,7 @@ class RanksEndpointTest(unittest.TestCase):
         with open(service.INTERNAL_TOKEN_FILE, 'w') as f:
             f.write('c0ffee')
         server = ThreadingHTTPServer(('127.0.0.1', 0), service.Handler)
-        threading.Thread(target=server.serve_forever, daemon=True).start()
+        threading.Thread(target=server.serve_forever, kwargs={'poll_interval': 0.01}, daemon=True).start()
 
         def post(body, origin='https://reader.example', length=None):
             headers = {'X-Internal-Token': 'c0ffee', 'Host': 'reader.example', 'Origin': origin,

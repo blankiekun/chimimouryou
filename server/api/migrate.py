@@ -15,6 +15,7 @@ import sqlite3
 import sys
 import urllib.request
 import zipfile
+import zlib
 
 import apidb
 import syncnames
@@ -79,7 +80,9 @@ class Migration:
         def guarded(where: str, work):
             try:
                 work()
-            except (OSError, ValueError, KeyError, TypeError, AttributeError, zipfile.BadZipFile) as error:
+            # Corrupt zips also raise zlib.error, NotImplementedError (unknown compression), RuntimeError (encrypted).
+            except (OSError, ValueError, KeyError, TypeError, AttributeError, zipfile.BadZipFile, zlib.error,
+                    NotImplementedError, RuntimeError) as error:
                 counts['errors'] += 1
                 report['errors'].append(f'{where}: {type(error).__name__}: {error}')
 

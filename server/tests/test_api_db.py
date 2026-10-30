@@ -54,6 +54,24 @@ class ApiDbTest(unittest.TestCase):
             self.assertEqual(row['deleted'], 0)
         self.assertEqual(upgraded.query('SELECT data FROM statistics')[0][0], '{"x":1}')
 
+    # Catches a transaction that raises halfway leaving partial rows, a used-up rev, or a stuck BEGIN or
+    # lock: one connection serves every request thread, so that would block all writes until a restart.
+    def test_a_failed_transaction_rolls_back_and_frees_the_lock(self):
+        rev = apidb.current_rev(self.db.connection)
+
+        def work(connection):
+            add_book(connection, apidb.Rev(connection))
+            raise ValueError('halfway')
+
+        with self.assertRaises(ValueError):
+            self.db.transaction(work)
+        self.assertEqual(self.db.query('SELECT count(*) FROM books')[0][0], 0)
+        self.assertEqual(apidb.current_rev(self.db.connection), rev)
+        self.assertFalse(self.db.lock.locked())
+        self.assertFalse(self.db.connection.in_transaction)
+        self.db.transaction(lambda c: add_book(c, apidb.Rev(c)))
+        self.assertEqual(apidb.current_rev(self.db.connection), rev + 1)
+
     def test_fts5_trigram(self):
         book = self.db.transaction(lambda c: add_book(c, apidb.Rev(c)))
         match = "SELECT rowid FROM books_fts WHERE books_fts MATCH '\"猫であ\"'"
