@@ -12,6 +12,8 @@ cd "$(dirname "$0")/.."
 : "${VITE_BASE_PATH:?Set VITE_BASE_PATH to the site address}"
 
 VITE_EDITION=standalone VITE_STORAGE_ROOT_NAME=chimi-reader-data pnpm build
+# /version.txt names the commit, as in the server edition (scripts/deploy.sh, the web image).
+git describe --tags --always --long --dirty > apps/web/build/version.txt
 
 # Settings → Analysis tools: Sudachi (wasm), Pyodide and yurigana, built from source (~10 min).
 rustup target add wasm32-unknown-unknown
