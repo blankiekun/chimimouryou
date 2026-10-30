@@ -315,8 +315,31 @@ def book_title(book_id: int) -> str:
         return ''
 
 
+def replace_book(job: dict) -> dict | None:
+    """A followed work's open volume: its EPUB replaced on the same Calibre book (same id and uuid, so reading data
+    stays) and its timestamp (the catalog's `added`) moved to now, so devices fetch it again. None when Calibre
+    no longer has the book: it is then added as a new one."""
+    book_id = str(job['replaceCalibreId'])
+    library = [CALIBREDB, '--library-path', LIBRARY]
+    with open(WRITE_LOCK, 'a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        result = subprocess.run(library + ['add_format', book_id, os.path.join(queue_dir(), job['file'])],
+                                capture_output=True, text=True, timeout=ADD_TIMEOUT_SECONDS, check=False)
+        if result.returncode:
+            print(f"calibredb add_format {book_id}: {(result.stdout + result.stderr).strip()[-500:]}", file=sys.stderr)
+            return None
+        now = time.strftime('%Y-%m-%dT%H:%M:%S+00:00', time.gmtime())
+        result = subprocess.run(library + ['set_metadata', book_id, '--field', f'timestamp:{now}'],
+                                capture_output=True, text=True, timeout=ADD_TIMEOUT_SECONDS, check=False)
+    if result.returncode:
+        print(f"calibredb set_metadata {book_id}: {result.stderr.strip()[-500:]}", file=sys.stderr)
+    return {'state': 'added', 'calibreId': int(book_id), 'title': book_title(int(book_id))}
+
+
 def add_book(job: dict) -> dict:
     """Runs calibredb add for one queued file; returns the fields to update."""
+    if job.get('replaceCalibreId') and (replaced := replace_book(job)):
+        return replaced
     path = os.path.join(queue_dir(), job['file'])
     command = [CALIBREDB, '--library-path', LIBRARY, 'add', path]
     if job.get('series'):  # a Sources volume
@@ -612,12 +635,15 @@ class Handler(BaseHTTPRequestHandler):
     def do_DELETE(self):  # noqa: N802
         httpbase.guard(self, self.delete)
 
+    def do_PUT(self):  # noqa: N802
+        httpbase.guard(self, self.put)
+
     def sources_api(self, method: str):
         account = self.account()
         body = {}
         if method != 'GET':
             self.same_origin()
-        if method == 'POST':
+        if method in ('POST', 'PUT'):
             try:
                 body = json.loads(httpbase.read_body(self, 1 << 16) or b'{}')
                 if not isinstance(body, dict):
@@ -634,6 +660,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(403, {'error': 'Only nginx may call this service'})
         if self.path.startswith('/sources/'):
             return self.handle_api(lambda: self.sources_api('DELETE'))
+        return self.send(404, {'error': 'not found'})
+
+    def put(self):
+        if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
+            return self.send(403, {'error': 'Only nginx may call this service'})
+        if self.path.startswith('/sources/'):
+            return self.handle_api(lambda: self.sources_api('PUT'))
         return self.send(404, {'error': 'not found'})
 
     def get(self):

@@ -4,10 +4,17 @@
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import PointBox from '$lib/components/point-box.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
+  import Switch from '$lib/components/switch.svelte';
   import { account$, hasPermission } from '$lib/data/account/account';
   import { pagePath, standalone } from '$lib/data/env';
   import { page } from '$lib/data/page-store';
-  import { addVolumes, getWork, timeLeft } from '$lib/data/sources/server-sources';
+  import {
+    addVolumes,
+    followWork,
+    getWork,
+    timeLeft,
+    unfollowWork
+  } from '$lib/data/sources/server-sources';
   import type { SourceWork } from '$lib/data/sources/types';
 
   /**
@@ -19,12 +26,21 @@
   let loadError = $state('');
   let adding = $state(false);
   let addError = $state('');
+  let followBusy = $state(false);
+  let followError = $state('');
 
   const id = $derived(browser ? Number($page.url.searchParams.get('id')) : 0);
   const allowed = $derived(!standalone && hasPermission($account$, 'import'));
   const missing = $derived(
     work?.volumes.filter((volume) => !volume.inLibrary && !volume.pending) ?? []
   );
+  // Followed, the last volume takes new chapters until it is full.
+  const openVolume = $derived.by(() => {
+    const last = work?.volumes[work.volumes.length - 1];
+    return work?.following && last && last.last - last.first + 1 < work.volumeSize
+      ? last.number
+      : undefined;
+  });
   const missingChapters = $derived(
     missing.reduce((sum, volume) => sum + volume.last - volume.first + 1, 0)
   );
@@ -61,6 +77,22 @@
       addError = error.message;
     } finally {
       adding = false;
+    }
+  }
+
+  async function setFollow(next: boolean) {
+    if (!work || followBusy) return;
+    if (!next && !window.confirm('Stop checking for new chapters? Your volumes stay.')) return;
+    followBusy = true;
+    followError = '';
+    try {
+      if (next) await followWork(work.id);
+      else await unfollowWork(work.id);
+      work = { ...work, following: next, paused: false };
+    } catch (error: any) {
+      followError = error.message;
+    } finally {
+      followBusy = false;
     }
   }
 
@@ -123,17 +155,42 @@
                   <tr>
                     <th scope="row">Vol. {volume.number}</th>
                     <td class="work-range">ch {volume.first}–{volume.last}</td>
-                    <td class="work-state">
-                      {#if volume.inLibrary}In library{:else if volume.pending}On its way{/if}
+                    <td class="work-state" class:work-state-open={volume.number === openVolume}>
+                      {#if volume.number === openVolume}Updates in place{:else if volume.inLibrary}In
+                        library{:else if volume.pending}On its way{/if}
                     </td>
                   </tr>
                 {/each}
               </tbody>
             </table>
             <p class="work-hint">
-              {work.volumeSize} chapters each, one book per volume in the series “{work.title}”.
+              {#if openVolume}
+                {work.volumeSize} chapters each. New chapters go into Vol. {openVolume}, replacing
+                it in place, until it is full; then Vol. {openVolume + 1} starts.
+              {:else}
+                {work.volumeSize} chapters each, one book per volume in the series “{work.title}”.
+              {/if}
             </p>
           </PointBox>
+
+          <div class="work-follow">
+            <div>
+              <p class="work-follow-label" id="work-follow-label">Follow</p>
+              <p class="work-hint work-follow-hint">
+                {work.paused
+                  ? 'Paused: change it in Sources → Following.'
+                  : `The server checks every ${work.checkHours} h, also when no device is open.`}
+              </p>
+            </div>
+            <Switch
+              checked={work.following}
+              stateText={false}
+              disabled={followBusy}
+              aria-labelledby="work-follow-label"
+              onchange={setFollow}
+            />
+          </div>
+          {#if followError}<p class="work-error" role="alert">{followError}</p>{/if}
 
           {#if addLabel}
             <button
@@ -299,6 +356,27 @@
 
   .work-date {
     text-align: right;
+  }
+
+  .work-state-open {
+    color: var(--app-success-color);
+    white-space: nowrap;
+  }
+
+  .work-follow {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-top: 1.5rem;
+  }
+
+  .work-follow-label {
+    font-weight: 700;
+  }
+
+  .work-follow-hint {
+    margin-top: 0.15rem;
   }
 
   .work-hint {

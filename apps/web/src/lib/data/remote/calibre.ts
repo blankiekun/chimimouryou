@@ -139,7 +139,8 @@ export function calibreBookFileName(book: CalibreBook) {
 }
 
 export async function downloadCalibreBook(book: CalibreBook) {
-  const response = await serverFetch(calibreBookUrl(book));
+  // Revalidated: a followed work's open volume is replaced in place at the same URL (Sources).
+  const response = await serverFetch(calibreBookUrl(book), { cache: 'no-cache' });
 
   if (!response.ok) {
     throw new Error(`${book.title}: download failed (HTTP ${response.status})`);

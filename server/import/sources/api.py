@@ -11,9 +11,21 @@ Endpoints (under /calibre/import/api/sources/, `import` permission via nginx; jo
   POST jobs/{id}/retry                   -> {job}: a failed or cancelled job goes on from the chapter it stopped at
   POST jobs/{id}/cancel                  -> {job}
   DELETE jobs/{id}                       -> {}: a job that isn't running
+  PUT  follows/{work} {paused?}          -> {follow}: follows the work (or pauses/resumes it); own follows only
+  DELETE follows/{work}                  -> {}: unfollows; the volumes stay in the library
+  GET  following                         -> {follows, checkHours}: own follows
+  POST check {work?}                     -> {follows, checkHours}: Check now, for every unpaused follow or one work
 
 Job states: queued, fetching, adding (volumes in the import queue), done, failed (error, failed_at), cancelled.
-Chapters are cached in <state>/sources/<work id>/<n>.json until their volume is queued, so a retry resumes.
+Job kinds: add (volumes chosen by the reader) and update (a followed work's check). Chapters are cached in
+<state>/sources/<work id>/<n>.json until their volume is full, so a retry resumes and the open volume is rebuilt
+without fetching it again.
+
+Follows: the runner queues an update job for every work with a due unpaused follow (SOURCES_CHECK_HOURS, an hour
+after a failed check), one job per work whoever follows it; a failed update job is queued again rather than a new
+one. An update fetches the open (not full) volume in the library and every volume after it: the open one is
+replaced in place (calibredb add_format on its Calibre id, timestamp bumped so devices download it again), new
+ones are added. Full volumes are never touched.
 """
 import json
 import os
@@ -34,6 +46,10 @@ DETAILS_SECONDS = 600
 KEEP_DONE_MS = 7 * 24 * 3600 * 1000
 MAX_ACTIVE_PER_ACCOUNT = 20
 ACTIVE = ('queued', 'fetching')
+CHECKING = (*ACTIVE, 'adding')
+CHECK_HOURS = float(os.environ.get('SOURCES_CHECK_HOURS') or 6)
+CHECK_MS = int(CHECK_HOURS * 3600 * 1000)
+RETRY_MS = min(3600 * 1000, CHECK_MS)
 
 
 class ApiError(Exception):
@@ -98,8 +114,9 @@ def _work_for(site: str, key: str, url: str) -> dict:
     return database().transaction(upsert)
 
 
-def _work_json(work: dict, details: dict | None) -> dict:
+def _work_json(work: dict, details: dict | None, account: str = '') -> dict:
     db = database()
+    followed = db.query('SELECT paused FROM follows WHERE account = ? AND work = ?', (account, work['id']))
     volumes = {row['number']: row for row in db.query(
         'SELECT v.*, EXISTS (SELECT 1 FROM books b WHERE b.calibre_id = v.calibre_id AND b.deleted = 0) AS live '
         'FROM work_volumes v WHERE v.work = ?', (work['id'],))}
@@ -119,20 +136,21 @@ def _work_json(work: dict, details: dict | None) -> dict:
             'chapters': work['chapters'], 'updated': work['updated'],
             'summary': (details or {}).get('summary', ''), 'latest': (details or {}).get('latest', []),
             'volumeSize': work['volume_size'] or planner.VOLUME_SIZE, 'volumes': plan,
-            'domain': adapter.DOMAIN, 'interval': fetcher.INTERVAL}
+            'domain': adapter.DOMAIN, 'interval': fetcher.INTERVAL, 'checkHours': CHECK_HOURS,
+            'following': bool(followed), 'paused': bool(followed and followed[0]['paused'])}
 
 
-def _show(work: dict) -> dict:
+def _show(work: dict, account: str) -> dict:
     try:
         details = _fetch_details(work)
     except (fetcher.FetchError, LookupError, ValueError) as error:
         if not work['title']:  # never fetched: nothing to show (not 502: the app reads that as "service off")
             raise ApiError(404 if isinstance(error, LookupError) else 503, str(error)) from error
         details = None
-    return _work_json(_work_row(work['id']), details)
+    return _work_json(_work_row(work['id']), details, account)
 
 
-def lookup(body: dict) -> dict:
+def lookup(body: dict, account: str) -> dict:
     url = body.get('url')
     if not isinstance(url, str) or len(url) > 2000:
         raise ApiError(400, 'Paste a link to a work')
@@ -140,7 +158,7 @@ def lookup(body: dict) -> dict:
         if found := adapter.parse_url(url):
             work = _work_for(site, *found)
             try:
-                return _show(work)
+                return _show(work, account)
             except ApiError:
                 # A work the site doesn't have shouldn't stay as an empty row.
                 if not work['title']:
@@ -151,14 +169,14 @@ def lookup(body: dict) -> dict:
     raise ApiError(400, 'Not a link to a work on a supported site (Syosetu)')
 
 
-def resolve(body: dict) -> dict:
+def resolve(body: dict, account: str) -> dict:
     site, key = body.get('site'), body.get('workKey')
     if site not in ADAPTERS or not isinstance(key, str):
         raise ApiError(400, 'Invalid request')
     rows = database().query('SELECT * FROM works WHERE site = ? AND work_key = ?', (site, key))
     if rows:
-        return _show(dict(rows[0]))
-    return lookup({'url': f'https://ncode.syosetu.com/{key}/'})
+        return _show(dict(rows[0]), account)
+    return lookup({'url': f'https://ncode.syosetu.com/{key}/'}, account)
 
 
 # Jobs ----------------------------------------------------------------------------------------------------
@@ -253,20 +271,147 @@ def delete(account: str, job_id: str) -> dict:
     return {}
 
 
+# Follows -------------------------------------------------------------------------------------------------
+
+FOLLOW_QUERY = ('SELECT f.*, w.title, w.site, w.chapters, '
+                '(SELECT COUNT(*) FROM work_volumes v WHERE v.work = w.id AND v.calibre_id IS NOT NULL) AS volumes, '
+                'EXISTS (SELECT 1 FROM source_jobs j WHERE j.work = w.id AND j.state IN (?, ?, ?)) AS checking '
+                'FROM follows f JOIN works w ON w.id = f.work WHERE f.account = ?')
+
+
+def _follow_json(row) -> dict:
+    adapter = ADAPTERS[row['site']]
+    return {'workId': row['work'], 'title': row['title'], 'site': row['site'], 'siteName': adapter.NAME,
+            'domain': adapter.DOMAIN, 'chapters': row['chapters'], 'volumes': row['volumes'],
+            'paused': bool(row['paused']), 'state': 'checking' if row['checking'] else row['state'],
+            'detail': row['detail'], 'lastCheck': row['last_check'], 'nextCheck': row['next_check'],
+            'modified': row['modified']}
+
+
+def following(account: str) -> dict:
+    rows = database().query(f'{FOLLOW_QUERY} ORDER BY w.title', (*CHECKING, account))
+    return {'follows': [_follow_json(row) for row in rows], 'checkHours': CHECK_HOURS}
+
+
+def follow(account: str, work_id: int, body: dict) -> dict:
+    """Follows the work, or pauses/resumes the follow. A new follow is checked at once."""
+    _work_row(work_id)
+    paused = body.get('paused', False)
+    if not isinstance(paused, bool):
+        raise ApiError(400, 'Invalid request')
+    database().transaction(lambda c: c.execute(
+        'INSERT INTO follows (account, work, paused, modified) VALUES (?, ?, ?, ?) ON CONFLICT (account, work) '
+        'DO UPDATE SET paused = excluded.paused, modified = excluded.modified',
+        (account, work_id, int(paused), now_ms())))
+    _wake.set()
+    rows = database().query(f'{FOLLOW_QUERY} AND f.work = ?', (*CHECKING, account, work_id))
+    return {'follow': _follow_json(rows[0])}
+
+
+def unfollow(account: str, work_id: int) -> dict:
+    if not database().transaction(lambda c: c.execute(
+            'DELETE FROM follows WHERE account = ? AND work = ?', (account, work_id)).rowcount):
+        raise ApiError(404, 'Not following that work')
+    return {}
+
+
+def check(account: str, body: dict) -> dict:
+    """Check now: the account's unpaused follows (or the one work) are due at once."""
+    work = body.get('work')
+    if work is not None and type(work) is not int:
+        raise ApiError(400, 'Invalid request')
+    due = database().transaction(lambda c: c.execute(
+        "UPDATE follows SET next_check = NULL WHERE account = ? AND paused = 0 AND device = ''"
+        + (' AND work = ?' if work is not None else ''), (account, *([work] if work is not None else []))).rowcount)
+    if work is not None and not due:
+        raise ApiError(404, 'Not following that work, or it is paused')
+    queue_due_checks(now_ms())
+    return following(account)
+
+
+def queue_due_checks(now: int):
+    """One update job per work with a due, unpaused follow and no job under way."""
+    def run(c):
+        due = c.execute(
+            "SELECT work, MIN(account) AS account FROM follows WHERE paused = 0 AND device = '' AND "
+            '(next_check IS NULL OR next_check <= ?) AND work NOT IN '
+            '(SELECT work FROM source_jobs WHERE state IN (?, ?, ?)) GROUP BY work', (now, *CHECKING)).fetchall()
+        for row in due:
+            # A failed check goes on from the chapter it stopped at.
+            old = c.execute("SELECT id FROM source_jobs WHERE work = ? AND kind = 'update' AND state IN "
+                            "('failed', 'cancelled') ORDER BY created DESC LIMIT 1", (row['work'],)).fetchone()
+            if old:
+                c.execute("UPDATE source_jobs SET state = 'queued', error = '', updated = ? WHERE id = ?",
+                          (now_ms(), old['id']))
+            else:
+                c.execute('INSERT INTO source_jobs (id, account, work, kind, volumes, unit, total, state, created, '
+                          "updated) VALUES (?, ?, ?, 'update', '[]', 'chapters', 0, 'queued', ?, ?)",
+                          (uuid.uuid4().hex, row['account'], row['work'], now_ms(), now_ms()))
+            c.execute("UPDATE follows SET next_check = ? WHERE work = ? AND paused = 0 AND device = ''",
+                      (now + CHECK_MS, row['work']))
+        return len(due)
+    if database().transaction(run):
+        _wake.set()
+
+
+def _follow_result(work_id: int, state: str, detail: str):
+    """A check's outcome, for everyone following the work."""
+    now = now_ms()
+    database().transaction(lambda c: c.execute(
+        "UPDATE follows SET state = ?, detail = ?, last_check = ?, next_check = ? WHERE work = ? AND device = ''",
+        (state, detail, now, now + (RETRY_MS if state == 'failed' else CHECK_MS), work_id)))
+
+
+def _kept_volumes(work_id: int) -> dict:
+    """The work's volumes in Calibre: a Calibre id the catalog lists, or hasn't listed yet (just added)."""
+    return {row['number']: row for row in database().query(
+        'SELECT v.* FROM work_volumes v WHERE v.work = ? AND v.calibre_id IS NOT NULL AND (EXISTS '
+        '(SELECT 1 FROM books b WHERE b.calibre_id = v.calibre_id AND b.deleted = 0) OR NOT EXISTS '
+        '(SELECT 1 FROM books b WHERE b.calibre_id = v.calibre_id))', (work_id,))}
+
+
+def _update_plan(work: dict, plan: dict, size: int) -> tuple[list[int], int]:
+    """(volumes an update fetches, new chapters): the last volume in the library if it isn't full, and every
+    volume after it (all of them when none is there yet). Full volumes are never fetched again."""
+    kept = _kept_volumes(work['id'])
+    last = kept[max(kept)] if kept else None
+    if last is None:
+        start, have = 1, 0
+    else:
+        full = last['last_ch'] - last['first_ch'] + 1 >= size
+        start, have = last['number'] + int(full), last['last_ch']
+    numbers = [n for n, volume in sorted(plan.items())
+               if n >= start and not (n in kept and kept[n]['last_ch'] >= volume['last'])]
+    return numbers, max(0, work['chapters'] - have)
+
+
+def _volumes_text(numbers: list[int]) -> str:
+    return f'Vol. {numbers[0]}' if len(numbers) == 1 else f'Vol. {numbers[0]}–{numbers[-1]}'
+
+
 def route(method: str, path: str, account: str, body: dict) -> dict:
     """path is relative to /sources (e.g. '/works/3/add')."""
     parts = path.strip('/').split('/')
     if method == 'POST' and parts == ['lookup']:
-        return lookup(body)
+        return lookup(body, account)
     if method == 'POST' and parts == ['works', 'resolve']:
-        return resolve(body)
+        return resolve(body, account)
     if parts[0] == 'works' and len(parts) >= 2 and parts[1].isdigit():
         if method == 'GET' and len(parts) == 2:
-            return _show(_work_row(int(parts[1])))
+            return _show(_work_row(int(parts[1])), account)
         if method == 'POST' and parts[2:] == ['add']:
             return add(account, int(parts[1]), body)
     if method == 'GET' and parts == ['queue']:
         return queue(account)
+    if method == 'GET' and parts == ['following']:
+        return following(account)
+    if method == 'POST' and parts == ['check']:
+        return check(account, body)
+    if parts[0] == 'follows' and len(parts) == 2 and parts[1].isdigit():
+        if method == 'PUT':
+            return follow(account, int(parts[1]), body)
+        if method == 'DELETE':
+            return unfollow(account, int(parts[1]))
     if parts[0] == 'jobs' and len(parts) >= 2:
         if method == 'POST' and parts[2:] == ['retry']:
             return retry(account, parts[1])
@@ -301,21 +446,25 @@ def _queue_volume(job, work: dict, volume: dict, chapters: list[dict], last: boo
     adapter = ADAPTERS[work['site']]
     number = volume['number']
     title = f"{work['title']} {number}"
+    kept = _kept_volumes(work['id']).get(number)
 
     def write(path):
         build.epub(path, title=title, authors=work['authors'], series=work['title'], series_index=number,
                    identifier=f"chimi:{work['site']}:{work['work_key']}:{number}",
                    chapters=[{'title': c['title'], 'xhtml': c['html']} for c in chapters])
+    complete = int(volume['last'] - volume['first'] + 1 >= (work['volume_size'] or planner.VOLUME_SIZE))
+    # The row's chapters and Calibre id change only once Calibre has the file (volume_added).
     database().transaction(lambda c: c.execute(
         'INSERT INTO work_volumes (work, number, first_ch, last_ch, complete) VALUES (?, ?, ?, ?, ?) '
-        'ON CONFLICT (work, number) DO UPDATE SET first_ch = excluded.first_ch, last_ch = excluded.last_ch, '
-        'calibre_id = NULL, complete = excluded.complete',
-        (work['id'], number, volume['first'], volume['last'],
-         int(volume['last'] - volume['first'] + 1 == (work['volume_size'] or planner.VOLUME_SIZE)))))
+        'ON CONFLICT (work, number) DO NOTHING', (work['id'], number, volume['first'], volume['last'], complete)))
     _enqueue(job['account'], f'{title}.epub', write, {
         'title': title, 'authors': work['authors'], 'series': work['title'], 'seriesIndex': number,
         'identifier': f"chimi:{work['site']}:{work['work_key']}:{number}", 'tags': adapter.NAME,
-        'sourceJob': job['id'], 'sourceWork': work['id'], 'sourceVolume': number, 'sourceLast': last})
+        'sourceJob': job['id'], 'sourceWork': work['id'], 'sourceVolume': number, 'sourceLast': last,
+        'sourceChapters': [volume['first'], volume['last'], complete],
+        # The open volume in the library is replaced in place: same Calibre id, so its reading data stays.
+        'replaceCalibreId': kept['calibre_id'] if kept else None})
+    return complete
 
 
 def run_job(job):
@@ -323,14 +472,31 @@ def run_job(job):
     _details.pop(work['id'], None)  # the chapter list as it is now
     details = _fetch_details(work)
     work = _work_row(work['id'])
-    plan = {v['number']: v for v in planner.plan(work['chapters'], work['volume_size'] or planner.VOLUME_SIZE)}
-    remaining = json.loads(job['volumes'])
-    if any(n not in plan for n in remaining):
-        raise LookupError(f'Vol. {max(remaining)} is no longer on the site')
-    # A retry counts again from the volumes already queued; cached chapters count as they are read.
-    left = sum(plan[n]['last'] - plan[n]['first'] + 1 for n in remaining)
-    database().transaction(lambda c: c.execute(
-        'UPDATE source_jobs SET done = MAX(0, total - ?) WHERE id = ?', (left, job['id'])))
+    size = work['volume_size'] or planner.VOLUME_SIZE
+    plan = {v['number']: v for v in planner.plan(work['chapters'], size)}
+    if job['kind'] == 'update':
+        remaining, new = _update_plan(work, plan, size)
+        if resumed := [n for n in json.loads(job['volumes']) if n in plan]:
+            # A failed check goes on with the volumes it hadn't queued (the ones it had may still be on their way
+            # into Calibre), and any volume begun since.
+            remaining = sorted(set(resumed) | {n for n in remaining if n > max(resumed)})
+        if not remaining:  # nothing new: no job left in the queue for it
+            database().transaction(lambda c: c.execute('DELETE FROM source_jobs WHERE id = ?', (job['id'],)))
+            _follow_result(work['id'], 'current', '')
+            return
+        updated = list(remaining)
+        total = sum(plan[n]['last'] - plan[n]['first'] + 1 for n in remaining)
+        database().transaction(lambda c: c.execute(
+            'UPDATE source_jobs SET volumes = ?, total = ?, done = 0 WHERE id = ?',
+            (json.dumps(remaining), total, job['id'])))
+    else:
+        remaining = json.loads(job['volumes'])
+        if any(n not in plan for n in remaining):
+            raise LookupError(f'Vol. {max(remaining)} is no longer on the site')
+        # A retry counts again from the volumes already queued; cached chapters count as they are read.
+        left = sum(plan[n]['last'] - plan[n]['first'] + 1 for n in remaining)
+        database().transaction(lambda c: c.execute(
+            'UPDATE source_jobs SET done = MAX(0, total - ?) WHERE id = ?', (left, job['id'])))
     for number in list(remaining):
         volume = plan[number]
         chapters = []
@@ -344,15 +510,18 @@ def run_job(job):
             database().transaction(lambda c: c.execute(
                 'UPDATE source_jobs SET done = MIN(total, done + 1), updated = ? WHERE id = ?', (now_ms(), job['id'])))
         remaining.remove(number)
-        _queue_volume(job, work, volume, chapters, last=not remaining)
-        for n in range(volume['first'], volume['last'] + 1):
-            try:
-                os.remove(os.path.join(cache_dir(work['id']), f'{n}.json'))
-            except OSError:
-                pass
+        if _queue_volume(job, work, volume, chapters, last=not remaining):
+            for n in range(volume['first'], volume['last'] + 1):
+                try:
+                    os.remove(os.path.join(cache_dir(work['id']), f'{n}.json'))
+                except OSError:
+                    pass
         database().transaction(lambda c: c.execute(
             'UPDATE source_jobs SET volumes = ?, updated = ? WHERE id = ?', (json.dumps(remaining), now_ms(), job['id'])))
     _set_state(job['id'], ('fetching',), 'adding')
+    if job['kind'] == 'update':
+        _follow_result(work['id'], 'new', f"{new} new chapter{'' if new == 1 else 's'}, added to "
+                                          f'{_volumes_text(updated)}')
 
 
 class ChapterError(Exception):
@@ -364,6 +533,10 @@ class ChapterError(Exception):
 def runner():
     """Fetches queued jobs one at a time (phase 1 has one site, so one host)."""
     while True:
+        try:
+            queue_due_checks(now_ms())
+        except Exception as error:  # noqa: BLE001 - the runner goes on
+            print(f'sources timer: {error!r}', file=sys.stderr)
         rows = database().query(f"{JOB_QUERY} WHERE j.state = 'queued' ORDER BY j.created LIMIT 1")
         if not rows:
             _wake.wait(60)
@@ -372,15 +545,23 @@ def runner():
         job = rows[0]
         if not _set_state(job['id'], ('queued',), 'fetching'):
             continue
+        failure = None
         try:
             run_job(job)
         except ChapterError as error:
+            failure = error
             _set_state(job['id'], ('fetching',), 'failed', error=str(error), failed_at=error.chapter)
         except (fetcher.FetchError, LookupError, ValueError) as error:
+            failure = error
             _set_state(job['id'], ('fetching',), 'failed', error=str(error))
         except Exception as error:  # noqa: BLE001 - one bad job must not end the runner
             print(f"sources job {job['id']}: {error!r}", file=sys.stderr)
-            _set_state(job['id'], ('fetching',), 'failed', error='Something went wrong; see the import service log')
+            failure = RuntimeError('Something went wrong; see the import service log')
+            _set_state(job['id'], ('fetching',), 'failed', error=str(failure))
+        if failure is not None and job['kind'] == 'update':
+            # The details call says the work is gone; a chapter that isn't there is a failed check.
+            removed = isinstance(failure, LookupError) and not isinstance(failure, ChapterError)
+            _follow_result(job['work'], 'removed' if removed else 'failed', str(failure))
 
 
 def volume_added(import_job: dict):
@@ -392,6 +573,9 @@ def volume_added(import_job: dict):
         if calibre_id:
             c.execute('UPDATE work_volumes SET calibre_id = ? WHERE work = ? AND number = ?',
                       (calibre_id, import_job['sourceWork'], number))
+            if chapters := import_job.get('sourceChapters'):
+                c.execute('UPDATE work_volumes SET first_ch = ?, last_ch = ?, complete = ? WHERE work = ? AND '
+                          'number = ?', (*chapters, import_job['sourceWork'], number))
             if import_job.get('sourceLast'):
                 c.execute("UPDATE source_jobs SET state = 'done', updated = ? WHERE id = ? AND state = 'adding'",
                           (now_ms(), import_job['sourceJob']))
@@ -400,7 +584,11 @@ def volume_added(import_job: dict):
                       "('adding', 'fetching')",
                       (f"Vol. {number}: {import_job.get('error') or 'Calibre could not add it'}", now_ms(),
                        import_job['sourceJob']))
-    database().transaction(record)
+            return c.execute("SELECT kind, error FROM source_jobs WHERE id = ? AND kind = 'update'",
+                             (import_job['sourceJob'],)).fetchone()
+    failed_update = database().transaction(record)
+    if failed_update:
+        _follow_result(import_job['sourceWork'], 'failed', failed_update['error'])
 
 
 def start(state_dir: str, enqueue):

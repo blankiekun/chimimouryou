@@ -139,6 +139,13 @@ CREATE TABLE IF NOT EXISTS source_jobs (
     kind TEXT NOT NULL, volumes TEXT NOT NULL, unit TEXT NOT NULL DEFAULT 'chapters',
     done INTEGER NOT NULL DEFAULT 0, total INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL,
     error TEXT NOT NULL DEFAULT '', failed_at INTEGER, created INTEGER NOT NULL, updated INTEGER NOT NULL);
+-- A reader following a work (per account): the import service checks it every SOURCES_CHECK_HOURS. state: '' (not
+-- checked yet), current, new (detail: what the last check added), failed, removed. device '' = the server timer.
+CREATE TABLE IF NOT EXISTS follows (
+    account TEXT NOT NULL, work INTEGER NOT NULL REFERENCES works(id), device TEXT NOT NULL DEFAULT '',
+    paused INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL DEFAULT '', detail TEXT NOT NULL DEFAULT '',
+    last_check INTEGER, next_check INTEGER, modified INTEGER NOT NULL,
+    PRIMARY KEY (account, work));
 
 CREATE INDEX IF NOT EXISTS progress_rev ON progress(account, rev);
 CREATE INDEX IF NOT EXISTS statistics_rev ON statistics(account, rev);
