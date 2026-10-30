@@ -665,6 +665,88 @@ class ServiceTest(unittest.TestCase):
         self.assertEqual(body['follows'], [])
 
 
+    # Picking volumes ("Vol. 3 onward"), and how a follow starts from the pick. Ways it could fail:
+    # - Follow turned on right after adding Vol. 3-4 to an empty work: its first check runs before they reach
+    #   Calibre and fetches Vol. 1-2 (with nothing in the library the update planner starts at Vol. 1).
+    # - The picked add failed before anything reached Calibre: the follow's check fetches from Vol. 1 anyway.
+    # - Following after the pick: a check with no new chapters rewrites Vol. 4 or fetches earlier volumes; a new
+    #   chapter starts a new book instead of replacing the open Vol. 4 in place.
+    # - Adding Vol. 1-2 later: refused as "in the library", replaces Vol. 3's Calibre id, lands outside the series;
+    #   or a later check takes Vol. 2 for the open volume and rewrites it.
+    def chapter_fetches(self, fetched, ncode):
+        return [int(u.rstrip('/').rsplit('/', 1)[1]) for u in fetched
+                if f'/{ncode}/' in u and '?' not in u and not u.endswith(f'/{ncode}/')]
+
+    def spy_fetches(self):
+        fetched = []
+        real = fetcher.fetch
+
+        def spy(url, *args, **kwargs):
+            fetched.append(url)
+            return real(url, *args, **kwargs)
+        patch = mock.patch.object(fetcher, 'fetch', spy)
+        patch.start()
+        self.addCleanup(patch.stop)
+        return fetched
+
+    def test_pick_then_follow(self):
+        url = self.fixture_work('n0007gg', 151)
+        _, work = self.request('POST', '/sources/lookup', {'url': url}, 'acc14')
+        wid = work['id']
+        fetched = self.spy_fetches()
+        _, body = self.request('POST', f'/sources/works/{wid}/add', {'volumes': [3, 4]}, 'acc14')
+        self.assertEqual(self.request('PUT', f'/sources/follows/{wid}', {}, 'acc14')[0], 200)
+        self.assertEqual(self.wait_job(body['job']['id'], 'acc14')['state'], 'done')
+        self.assertEqual(self.follow_state(wid, 'acc14')['state'], 'current')
+        self.assertEqual(min(self.chapter_fetches(fetched, 'n0007gg')), 101)
+        adds = self.adds_of('n0007gg')
+        self.assertEqual([a[a.index('--series-index') + 1] for a in adds], ['3', '4'])
+        vol3, vol4 = (self.calibre_id(a) for a in adds)
+
+        # A new chapter replaces the open Vol. 4 in place; Vol. 3 and earlier are not fetched.
+        before, start = len(self.calls()), len(fetched)
+        self.set_chapters('n0007gg', 152)
+        self.request('POST', '/sources/check', {'work': wid}, 'acc14')
+        self.follow_state(wid, 'acc14', lambda f: f['state'] == 'new')
+        self.wait_volumes(wid, 2, 152)
+        self.assertEqual({c[1] for c in self.calls()[before:]}, {str(vol4)})
+        self.assertEqual(self.chapter_fetches(fetched[start:], 'n0007gg'), [152])
+
+        # Vol. 1-2 later: new books in the same series; Vol. 3-4 untouched, and a check still finds nothing.
+        before = len(self.calls())
+        _, body = self.request('POST', f'/sources/works/{wid}/add', {'volumes': [1, 2]}, 'acc14')
+        self.assertEqual(self.wait_job(body['job']['id'], 'acc14')['state'], 'done')
+        self.wait_volumes(wid, 4)
+        adds = self.adds_of('n0007gg')
+        self.assertEqual([(a[a.index('--series') + 1], a[a.index('--series-index') + 1]) for a in adds[2:]],
+                         [(adds[0][adds[0].index('--series') + 1], '1'), (adds[0][adds[0].index('--series') + 1], '2')])
+        self.request('POST', '/sources/check', {'work': wid}, 'acc14')
+        self.assertEqual(self.follow_state(wid, 'acc14', lambda f: f['state'] == 'current')['state'], 'current')
+        self.assertNotIn(str(vol3), {c[1] for c in self.calls()[before:]})
+        self.assertEqual(self.calls()[before:], [])
+
+    def test_follow_after_failed_pick(self):
+        url = self.fixture_work('n0008hh', 151)
+        _, work = self.request('POST', '/sources/lookup', {'url': url}, 'acc15')
+        wid = work['id']
+        fetched = []
+        real = fetcher.fetch
+
+        def failing(address, *args, **kwargs):
+            failed = address.endswith('/n0008hh/101/') and address not in fetched
+            fetched.append(address)
+            if failed:
+                raise fetcher.FetchError("ncode.syosetu.com didn't answer (503)")
+            return real(address, *args, **kwargs)
+        with mock.patch.object(fetcher, 'fetch', failing):
+            _, body = self.request('POST', f'/sources/works/{wid}/add', {'volumes': [3, 4]}, 'acc15')
+            self.assertEqual(self.wait_job(body['job']['id'], 'acc15')['state'], 'failed')
+            self.request('PUT', f'/sources/follows/{wid}', {}, 'acc15')
+            self.assertEqual(self.follow_state(wid, 'acc15')['state'], 'new')
+        self.wait_volumes(wid, 2)
+        self.assertEqual(min(self.chapter_fetches(fetched, 'n0008hh')), 101)
+        self.assertEqual([a[a.index('--series-index') + 1] for a in self.adds_of('n0008hh')], ['3', '4'])
+
     def test_kakuyomu_add(self):
         _, work = self.request('POST', '/sources/lookup', {'url': KAKU + '/episodes/1177354054000200002'}, 'acc10')
         self.assertEqual((work['site'], work['chapters'], work['cover'], len(work['volumes'])), ('kakuyomu', 53, True, 2))
