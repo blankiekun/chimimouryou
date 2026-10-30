@@ -1,7 +1,7 @@
 # Publishes the Docker images to GitHub's container registry when a version tag
-# is pushed (git tag -a v1.2.3 -m v1.2.3 && git push origin v1.2.3), once CI passes:
+# is pushed (git tag -a v1.2.3 -m v1.2.3 && git push origin v1.2.3), once main's CI has passed on the commit:
 #   ghcr.io/<owner>/<repository>-{web,services,import,difficulty,mokuro}:{1.2.3,1.2,latest}
-# for linux/amd64 and linux/arm64. docker-compose.yml uses them with
+# for linux/amd64 and linux/arm64, each built natively. docker-compose.yml uses them with
 # IMAGE_PREFIX=ghcr.io/<owner>/<repository> (see docs/INSTALL.md).
 name: Release
 on:
@@ -12,10 +12,39 @@ permissions:
   contents: read
 
 jobs:
+  # Catches a tag on a commit whose CI on main failed, is missing or doesn't finish within 15 minutes.
+  # Main's push already ran CI on this commit, so it isn't run again; the job names are ci.yml's.
   ci:
-    uses: ./.github/workflows/ci.yml
+    name: CI passed on main
+    runs-on: ubuntu-latest
+    permissions:
+      checks: read
+    steps:
+      - name: Main's CI passed for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          checks=("Front end" "Front end unit tests" "Front end browser tests" "Server scripts"
+            "Image web" "Image services" "Image import" "Image difficulty" "Image mokuro")
+          for _ in $(seq 45); do
+            runs=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?per_page=100&filter=latest" \
+              --jq '[.check_runs[] | select(.app.slug == "github-actions") | {name, status, conclusion}]')
+            pending=0 failed=0
+            for name in "${checks[@]}"; do
+              run=$(jq -c --arg n "$name" 'map(select(.name == $n)) | first // empty' <<< "$runs")
+              if [ -z "$run" ] || [ "$(jq -r .status <<< "$run")" != completed ]; then
+                pending=1
+              elif [ "$(jq -r .conclusion <<< "$run")" != success ]; then
+                echo "::error::$name: $(jq -r .conclusion <<< "$run")"; failed=1
+              fi
+            done
+            [ "$failed" = 1 ] && exit 1
+            [ "$pending" = 0 ] && { echo "CI passed on $GITHUB_SHA"; exit 0; }
+            sleep 20
+          done
+          echo "::error::CI on main hasn't finished for $GITHUB_SHA"; exit 1
 
-  # Only tags on main publish anything.
+  # Catches a tag pushed on a commit that isn't on main: only tags on main publish anything.
   on-main:
     runs-on: ubuntu-latest
     steps:
@@ -28,17 +57,25 @@ jobs:
       - name: The tag is on main
         run: git merge-base --is-ancestor HEAD origin/main
 
-  image:
+  # Catches an image that no longer builds for one architecture; each one builds natively on its own
+  # runner and is pushed by digest, and the image job below tags both as one multi-arch image.
+  image-build:
     needs: [ci, on-main]
-    name: Image ${{ matrix.image }}
-    runs-on: ubuntu-latest
+    name: Build image ${{ matrix.image }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
     strategy:
       fail-fast: false
       matrix:
+        image: [web, services, import, difficulty, mokuro]
+        arch: [amd64, arm64]
         include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
           - image: web
             file: docker/web.Dockerfile
           - image: services
@@ -60,45 +97,101 @@ jobs:
           persist-credentials: false
 
       # Registry names must be lower case.
-      - name: Image name
+      - &image-name
+        name: Image name
         id: name
-        run: echo "prefix=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}-${{ matrix.image }}" >> "$GITHUB_OUTPUT"
 
-      - name: Tags and labels
+      - &meta
+        name: Tags and labels
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ${{ steps.name.outputs.prefix }}-${{ matrix.image }}
+          images: ${{ steps.name.outputs.name }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
-      - name: Set up QEMU (arm64)
-        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
-
-      - name: Set up Docker Buildx
+      - &buildx
+        name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      - name: Log in to GitHub's registry
+      - &login
+        name: Log in to GitHub's registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
+      # amd64 reads the cache main's CI keeps warm (same scope). Nothing is written: a cache saved on a
+      # tag can only be read by that tag.
+      - name: Build and push by digest
+        id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: ${{ matrix.file }}
           target: ${{ matrix.target }}
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          platforms: linux/${{ matrix.arch }}
           labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ steps.name.outputs.name }},push-by-digest=true,name-canonical=true,push=true
           build-args: VERSION=${{ github.ref_name }}
-          cache-from: type=gha,scope=release-${{ matrix.image }}
-          cache-to: type=gha,mode=max,scope=release-${{ matrix.image }}
+          cache-from: ${{ matrix.arch == 'amd64' && format('type=gha,scope={0}', matrix.image) || '' }}
+
+      - name: Save the digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: mkdir -p "$RUNNER_TEMP/digests" && touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+
+      - name: Upload the digest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: digests-${{ matrix.image }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Catches an image missing an architecture; publishes amd64+arm64 under the version tags on GHCR.
+  # Names differ from ci.yml's, which the ci job looks up on the same commit. Runs when some builds
+  # failed, so the other images still publish.
+  image:
+    needs: image-build
+    if: ${{ !cancelled() && needs.image-build.result != 'skipped' }}
+    name: Publish image ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [web, services, import, difficulty, mokuro]
+    steps:
+      - name: Download the digests
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: digests-${{ matrix.image }}-*
+          path: ${{ runner.temp }}/digests
+          merge-multiple: true
+
+      - *image-name
+      - *meta
+      - *buildx
+      - *login
+
+      - name: Tag the multi-arch image
+        working-directory: ${{ runner.temp }}/digests
+        env:
+          NAME: ${{ steps.name.outputs.name }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          digests=(*)
+          [ ${#digests[@]} = 2 ] || { echo "::error::Expected amd64 and arm64 digests, found: ${digests[*]}"; exit 1; }
+          tags=()
+          while read -r tag; do tags+=(-t "$tag"); done <<< "$TAGS"
+          docker buildx imagetools create "${tags[@]}" "${digests[@]/#/$NAME@sha256:}"
+          docker buildx imagetools inspect "${TAGS%%$'\n'*}"
 
   # Publishes the tag on the standalone site (deploy/pages/pages.yml in PAGES_REPO). Needs the
   # secret PAGES_DISPATCH_TOKEN: a fine-grained token for that repository only, Actions: write.
@@ -129,7 +222,8 @@ jobs:
           if [ -z "$VPS_HOST" ]; then echo "No VPS_HOST: skipping"; exit 0; fi
           gh workflow run vps-site.yml -R "$GITHUB_REPOSITORY" -f ref="$GITHUB_REF_NAME"
 
-  # The desktop app (apps/desktop) with the standalone build inside, attached to the tag's GitHub
+  # Catches a standalone build that fails with the release's secrets; builds it once for the desktop
+  # and Android packages. The desktop app (apps/desktop) with the standalone build inside, attached to the tag's GitHub
   # release with the latest*.yml files electron-updater reads. Unsigned. The Google Drive client comes
   # from this repository's secrets VITE_GDRIVE_CLIENT_ID and VITE_GDRIVE_CLIENT_SECRET (the same
   # client as the Pages build); without them the app has no Drive sign-in.
@@ -178,10 +272,14 @@ jobs:
             apps/desktop/yomitan
           if-no-files-found: error
 
+  # Packages the desktop app on each OS it ships for (dmg needs macOS, nsis Windows). The timeout
+  # ends a hung build; a runner that never arrives is cancelled by GitHub, and desktop-release still
+  # attaches the other OSs' packages.
   desktop:
     needs: desktop-inputs
     name: Desktop ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -240,8 +338,10 @@ jobs:
             apps/desktop/dist/latest*.yml
           if-no-files-found: error
 
+  # Attaches the desktop packages that were built to the tag's release, even if an OS failed.
   desktop-release:
-    needs: desktop
+    needs: [desktop-inputs, desktop]
+    if: ${{ !cancelled() && needs.desktop-inputs.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -253,23 +353,35 @@ jobs:
           path: dist
           merge-multiple: true
 
-      # Uploads to the tag's release, or makes one (edit its notes afterwards).
+      # Uploads to the tag's release, or makes one (edit its notes afterwards). The android job may
+      # make it at the same moment, hence the second view.
+      - name: Create the release if missing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 ||
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "chimimouryou ${GITHUB_REF_NAME#v}" --notes "" ||
+            gh release view "$GITHUB_REF_NAME" > /dev/null
+
       - name: Attach to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
-          ls -l dist
-          gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 ||
-            gh release create "$GITHUB_REF_NAME" --verify-tag --title "chimimouryou ${GITHUB_REF_NAME#v}" --notes ""
-          gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          shopt -s nullglob
+          files=(dist/*)
+          ls -l "${files[@]}"
+          if [ ${#files[@]} = 0 ]; then echo "::warning::No desktop package was built"; exit 0; fi
+          gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
 
-  # The Android app (apps/android) with the same standalone build, signed with the release key and
-  # attached to the release (after the desktop builds, which make it). Needs the secrets
+  # Catches an Android app that no longer builds or signs. The Android app (apps/android) with the
+  # same standalone build, signed with the release key and attached to the release (made here if the
+  # desktop job hasn't yet). Needs the secrets
   # ANDROID_KEYSTORE (the keystore, base64), ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and
   # ANDROID_KEY_PASSWORD (apps/android/README.md); without them it skips.
   android:
-    needs: desktop-release
+    needs: desktop-inputs
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -310,6 +422,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+          cache: gradle
 
       - name: Install dependencies
         if: steps.key.outputs.build
@@ -340,6 +453,17 @@ jobs:
           (cd android && ./gradlew --no-daemon assembleRelease -PversionName="$version" -PversionCode="$code")
           rm "$ANDROID_KEYSTORE_FILE"
           mv android/app/build/outputs/apk/release/app-release.apk "chimimouryou-$version.apk"
+
+      # As in desktop-release, which may make the release at the same moment.
+      - name: Create the release if missing
+        if: steps.key.outputs.build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 ||
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "chimimouryou ${GITHUB_REF_NAME#v}" --notes "" ||
+            gh release view "$GITHUB_REF_NAME" > /dev/null
 
       - name: Attach to the release
         if: steps.key.outputs.build

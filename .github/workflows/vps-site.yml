@@ -25,6 +25,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Refuses refs other than main or a tag; skips without the secrets.
   check:
     runs-on: ubuntu-latest
     outputs:
@@ -50,6 +51,7 @@ jobs:
             echo "::notice::VPS_HOST, VPS_USER, VPS_SSH_KEY and VPS_KNOWN_HOSTS aren't all set: skipping (deploy/vps/README.md)"
           fi
 
+  # Publishes main or a tag to the VPS site without a half-updated window.
   deploy:
     needs: check
     if: needs.check.outputs.ready == 'true'

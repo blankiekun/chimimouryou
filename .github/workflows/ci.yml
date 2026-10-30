@@ -4,33 +4,51 @@ on:
   push:
     branches: [main]
   pull_request:
-  workflow_call:
 permissions:
   contents: read
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
-  # A pull request that only changes Markdown or docs/ skips the test jobs (a skipped job counts as
-  # passed for required checks); main and tags always run them.
+  # Catches nothing itself: decides which jobs a change needs, so the others skip without starting a
+  # runner (a skipped job counts as passed for required checks). Main always runs the test and image jobs.
   changes:
     name: Changed files
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.files.outputs.code }}
+      images: ${{ steps.files.outputs.images }}
+      desktop: ${{ steps.files.outputs.desktop }}
+      android: ${{ steps.files.outputs.android }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 2
 
-      - name: Code changed?
+      # Pull requests skip the tests when only Markdown or docs/ change, and the images unless image
+      # inputs change (Front end already test-builds the app). Desktop and Android build on any event,
+      # but only when their inputs change.
+      - name: What changed?
         id: files
         run: |
-          if [ "${{ github.event_name }}" != pull_request ] || git diff --name-only HEAD^1 HEAD | grep -qvE '(\.md$|^docs/)'; then
+          git diff --name-only HEAD^1 HEAD > changed.txt
+          pr() { [ "${{ github.event_name }}" = pull_request ]; }
+          if ! pr || grep -qvE '(\.md$|^docs/)' changed.txt; then
             echo code=true >> "$GITHUB_OUTPUT"
           fi
+          if ! pr || grep -qE '^(docker/|docker-compose|\.dockerignore|server/|engine/|package\.json|pnpm-|apps/web/package\.json|themes\.md|\.github/workflows/)' changed.txt; then
+            echo images=true >> "$GITHUB_OUTPUT"
+          fi
+          if grep -qE '^(apps/desktop/|pnpm-lock\.yaml|\.github/workflows/)' changed.txt; then
+            echo desktop=true >> "$GITHUB_OUTPUT"
+          fi
+          if grep -qE '^(apps/android/|apps/web/src/lib/data/(android-drive|native-save)\.ts|pnpm-lock\.yaml|\.github/workflows/)' changed.txt; then
+            echo android=true >> "$GITHUB_OUTPUT"
+          fi
 
+  # Catches lint errors, failing social-hub and desktop-shell tests, broken server/standalone builds and
+  # server code leaking into the standalone build.
   test:
     name: Front end
     needs: changes
@@ -87,6 +105,7 @@ jobs:
         run: python3 scripts/check-standalone-artifact.py apps/web/build
 
   # The front end's tests run beside it in their own jobs, so the slowest decides the wait.
+  # Catches failing Vitest unit tests (jsdom).
   unit:
     name: Front end unit tests
     needs: changes
@@ -103,6 +122,7 @@ jobs:
         run: pnpm test
         working-directory: apps/web
 
+  # Catches layout/position bugs only real Chrome shows (*.browser.test.ts).
   browser:
     name: Front end browser tests
     needs: changes
@@ -121,6 +141,7 @@ jobs:
         run: pnpm test:browser
         working-directory: apps/web
 
+  # Catches failing Python tests (engine, server, Anki add-on) and an nginx template that won't render.
   python:
     name: Server scripts
     needs: changes
@@ -135,10 +156,13 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.13'
+          cache: pip
+          cache-dependency-path: engine/requirements.txt
 
-      - name: Install yurigana
-        # The difficulty scripts import it; its Sudachi dependencies are only needed in the image.
-        run: pip install --no-deps "$(grep '^yurigana' engine/requirements.txt)"
+      # The difficulty scripts import yurigana; with Sudachi and its dictionary (the image's pins) the
+      # ruby-reading and engine-fingerprint tests run too.
+      - name: Install yurigana and Sudachi
+        run: pip install -r engine/requirements.txt
 
       - name: Install Pillow
         # The services image has Debian's python3-pil (covers and thumbnails).
@@ -155,39 +179,29 @@ jobs:
       - name: Render the nginx config
         run: server/render-nginx.sh > /dev/null
 
-  # Packages the desktop app (Linux, unpacked) when apps/desktop changes; Front end already lints and
-  # tests it. A stub page stands in for the web build, which Front end builds anyway.
+  # Catches a desktop app that no longer packages (Linux, unpacked; only when its inputs change). Front
+  # end already lints and tests it. A stub page stands in for the web build, which Front end builds anyway.
   desktop:
     name: Desktop package
+    needs: changes
+    if: needs.changes.outputs.desktop
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 2
-
-      - name: Desktop inputs changed?
-        id: inputs
-        run: |
-          if git diff --name-only HEAD^1 HEAD | grep -qE '^(apps/desktop/|pnpm-lock\.yaml|\.github/workflows/)'; then
-            echo build=true >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Install pnpm
-        if: steps.inputs.outputs.build
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           run_install: false
 
       - name: Install Node.js
-        if: steps.inputs.outputs.build
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24.21.0
           cache: pnpm
 
       - name: Package
-        if: steps.inputs.outputs.build
         working-directory: apps/desktop
         run: |
           pnpm install --frozen-lockfile --filter desktop
@@ -195,47 +209,37 @@ jobs:
           mkdir -p ../web/build && echo '<!doctype html>' > ../web/build/index.html
           pnpm exec electron-builder --linux dir --publish never
 
-  # Builds a debug APK of the Android app (apps/android) when it or its inputs change, for installing
-  # on a phone from the run's artifacts. Debug-signed, without the release's Drive client
+  # Catches an Android app that no longer builds (only when its inputs change). The debug APK can be
+  # installed on a phone from the run's artifacts. Debug-signed, without the release's Drive client
   # (apps/android/README.md).
   android:
     name: Android debug APK
+    needs: changes
+    if: needs.changes.outputs.android
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 2
-
-      - name: Android inputs changed?
-        id: inputs
-        run: |
-          if git diff --name-only HEAD^1 HEAD | grep -qE '^(apps/android/|apps/web/src/lib/data/(android-drive|native-save)\.ts|pnpm-lock\.yaml|\.github/workflows/)'; then
-            echo build=true >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Install pnpm
-        if: steps.inputs.outputs.build
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           run_install: false
 
       - name: Install Node.js
-        if: steps.inputs.outputs.build
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24.21.0
           cache: pnpm
 
       - name: Install Java
-        if: steps.inputs.outputs.build
         uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: 21
+          cache: gradle
 
       - name: Build the standalone edition
-        if: steps.inputs.outputs.build
         run: |
           pnpm install --frozen-lockfile
           pnpm build
@@ -247,7 +251,6 @@ jobs:
       # ANDROID_DEBUG_KEYSTORE (a debug.keystore, base64) every build has the same key, which the
       # Google Cloud project can then know (Drive sign-in); else Gradle makes a new one.
       - name: Build the APK
-        if: steps.inputs.outputs.build
         working-directory: apps/android
         env:
           ANDROID_DEBUG_KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
@@ -259,66 +262,89 @@ jobs:
           cd android && ./gradlew --no-daemon assembleDebug
 
       - name: Upload
-        if: steps.inputs.outputs.build
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: chimimouryou-debug-apk
           path: apps/android/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-  docker:
-    name: Image ${{ matrix.image }}
+  # Catches Dockerfiles that no longer build and, in Image services, compose files that no longer
+  # parse. Pull requests build only when image inputs change; main always builds, which keeps the cache
+  # warm for pull requests and releases. Five plain jobs, not a matrix: a skipped matrix job reports
+  # its name unexpanded, which would leave the required "Image <name>" checks waiting.
+  docker-web:
+    name: Image web
+    needs: changes
+    if: needs.changes.outputs.images
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - image: web
-            file: docker/web.Dockerfile
-          - image: services
-            file: docker/services.Dockerfile
-            target: base
-          - image: import
-            file: docker/services.Dockerfile
-            target: import
-          - image: difficulty
-            file: docker/services.Dockerfile
-            target: difficulty
-          - image: mokuro
-            file: docker/services.Dockerfile
-            target: mokuro
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 2
-
-      # Pull requests build images only when image inputs change (Front end already test-builds the app);
-      # main and release tags always build. The job itself always runs: its checks are required.
-      - name: Image inputs changed?
-        id: inputs
-        run: |
-          if [ "${{ github.event_name }}" != pull_request ] ||
-            git diff --name-only HEAD^1 HEAD | grep -qE '^(docker/|docker-compose|\.dockerignore|server/|engine/|package\.json|pnpm-|apps/web/package\.json|themes\.md|\.github/workflows/)'; then
-            echo build=true >> "$GITHUB_OUTPUT"
-          fi
+    env:
+      IMAGE: web
+      FILE: docker/web.Dockerfile
+      TARGET: ''
+    steps: &image-steps
+      - *checkout
 
       - name: Check the compose files
+        if: env.IMAGE == 'services'
         run: |
           LIBRARY_PATH=/tmp docker compose --profile import --profile difficulty --profile mokuro config --quiet
           docker compose -f docker-compose.static.yml config --quiet
 
       - name: Set up Docker Buildx
-        if: steps.inputs.outputs.build
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
+      # Only main writes the cache: pull request scopes can't be read by other refs and would evict
+      # main's, which pull requests and releases read.
       - name: Build
-        if: steps.inputs.outputs.build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          file: ${{ matrix.file }}
-          target: ${{ matrix.target }}
+          file: ${{ env.FILE }}
+          target: ${{ env.TARGET }}
           push: false
-          cache-from: type=gha,scope=${{ matrix.image }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          cache-from: type=gha,scope=${{ env.IMAGE }}
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=gha,mode=max,scope={0}', env.IMAGE) || '' }}
+
+  docker-services:
+    name: Image services
+    needs: changes
+    if: needs.changes.outputs.images
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: services
+      FILE: docker/services.Dockerfile
+      TARGET: base
+    steps: *image-steps
+
+  docker-import:
+    name: Image import
+    needs: changes
+    if: needs.changes.outputs.images
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: import
+      FILE: docker/services.Dockerfile
+      TARGET: import
+    steps: *image-steps
+
+  docker-difficulty:
+    name: Image difficulty
+    needs: changes
+    if: needs.changes.outputs.images
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: difficulty
+      FILE: docker/services.Dockerfile
+      TARGET: difficulty
+    steps: *image-steps
+
+  docker-mokuro:
+    name: Image mokuro
+    needs: changes
+    if: needs.changes.outputs.images
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: mokuro
+      FILE: docker/services.Dockerfile
+      TARGET: mokuro
+    steps: *image-steps
