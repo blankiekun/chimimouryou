@@ -120,8 +120,9 @@ policy applies:
 
 Links to sites such as Jiten only open them in your browser.
 
-API keys and tokens are stored in your browser, and on a server build in your server account's
-settings; they are never sent to the project.
+AI API keys are stored only in the browser you enter them in and are never synced. Other tokens
+(Audiobookshelf, the Community sign-in) are stored in your browser, and on a server build in your
+server account's settings. None of them are ever sent to the project.
 
 ## Changes and contact
 

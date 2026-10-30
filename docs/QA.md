@@ -356,7 +356,7 @@ On a spare machine or VM, following [INSTALL.md](INSTALL.md):
   audiobooks and lorebook auto-update state are per browser.
 - Reader settings outside Settings → Reader (e.g. custom reading point
   positions) are not synced.
-- AI API keys are stored in plain text in the account's folder on the server.
+- AI API keys stay in the browser that holds them (not synced); a shared browser's next account can use them.
 - Signed-out readers on a trusted network can change shared book data.
 - A deploy restarts the stack: a few seconds without service.
 

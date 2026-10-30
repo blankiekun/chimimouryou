@@ -120,7 +120,7 @@ Then set in `.env`:
 Signing in needs HTTPS. On a home network without it you can set
 `ALLOW_HTTP_ACCOUNTS=1`: sign-in, the admin panel and adding books then also
 work on the plain-HTTP address, with a warning in the app, but passwords,
-sessions and synced settings (including AI API keys) cross the network
+sessions and synced settings cross the network
 unencrypted. Leave it off if anyone else can see the network.
 
 There is no sign-up. Admins add accounts in the admin panel (Settings → Account → Open admin
