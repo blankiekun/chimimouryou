@@ -734,7 +734,8 @@
         {#if phase === 'finding'}
           Looking for the installed game…
         {:else if silent && kind}
-          {installerNames[kind]} installs without its windows. This step ends when it closes.
+          {installerNames[kind]} installs without its windows, but a setup it starts (such as DirectX)
+          may still open one below: click through it. This step ends when the installer closes.
         {:else}
           Click through the installer below. When it asks where to install, choose
           <code>{installDir(windowsGameFolder(title.trim()))}</code>. This step ends when it closes.
