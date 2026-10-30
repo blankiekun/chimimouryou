@@ -12,6 +12,11 @@
  * record as `VnInfo.nativeHook`. Nothing here exists outside the desktop app.
  */
 
+import { logger } from '$lib/data/logger';
+import { syncJsonFile } from '$lib/data/sync/sync-files';
+import { mergeVnSaves, parseVnSaves, sameVnSaves, type VnSaves } from './vn';
+import { formatBytes } from './vn-upload';
+import { isWindowsSaveKey, windowsSavesCap, type VnSaveSync } from './vn-save-store';
 import type { HookThread } from './windows-game';
 
 /** The thread a game's text comes from, kept across starts and devices. */
@@ -76,8 +81,19 @@ export interface NativeGamesList {
   games: NativeGameEntry[];
 }
 
+export interface NativeSaveList {
+  files: { name: string; modified: number; size: number }[];
+  /** Windows: folders the game's first run here wrote, to confirm as its save folders */
+  pending?: string[];
+}
+
 export interface DesktopGames {
-  launch(folder: string): Promise<LaunchResult>;
+  /** `saves`: the synced vnsaves.json, written in before the game starts where newer */
+  launch(folder: string, saves?: VnSaves): Promise<LaunchResult>;
+  /** The game's save files on this computer (undefined while it runs), or the named ones' contents */
+  saves(folder: string): Promise<NativeSaveList | undefined>;
+  saves(folder: string, names: string[]): Promise<VnSaves>;
+  saveFolders(folder: string, keep: boolean): Promise<void>;
   pick(game: { title: string; exe?: string; gone?: string }): Promise<PickResult>;
   link(
     id: string,
@@ -145,4 +161,64 @@ export class NativeThreads {
 /** The saved hook's threads: same hook code (its address and context change between starts). */
 export function isSavedThread(thread: { hookcode: string }, hook: NativeHook | undefined) {
   return !!hook && thread.hookcode === hook.hookcode;
+}
+
+/** Before a native start: the synced saves VNBox's rules allow, or none when offline. */
+export async function nativeSavesToPull(sync: VnSaveSync): Promise<VnSaves> {
+  try {
+    const saves = await sync.fetch();
+
+    return Object.fromEntries(Object.entries(saves).filter(([name]) => isWindowsSaveKey(name)));
+  } catch (error: any) {
+    logger.warn(`Visual novel save sync failed: ${error.message}`);
+    return {};
+  }
+}
+
+/**
+ * After the game closed: its save files on this computer merged into vnsaves.json as VNBox's
+ * pushWindows does (same names and merge, the cap, skipped while `windowsSavesStamp`'s form is
+ * unchanged). Returns the new stamp, a note when they don't sync and Windows folders to confirm.
+ */
+export async function pushNativeSaves(
+  games: DesktopGames,
+  folder: string,
+  sync: VnSaveSync,
+  lastStamp?: string
+): Promise<{ stamp?: string; note?: string; pending?: string[] }> {
+  const list = await games.saves(folder);
+
+  if (!list) return { stamp: lastStamp };
+
+  const files = list.files.filter((file) => isWindowsSaveKey(file.name));
+  const stamp = files
+    .map((file) => `${file.name}\0${file.modified}`)
+    .sort()
+    .join('\n');
+  const size = files.reduce((sum, file) => sum + file.size, 0);
+
+  if (size > windowsSavesCap) {
+    return {
+      stamp: lastStamp,
+      pending: list.pending,
+      note: `This game's saves are ${formatBytes(size)}, over the ${formatBytes(windowsSavesCap)} that sync. They stay on this computer.`
+    };
+  }
+
+  const store = await sync.store();
+
+  if (stamp === lastStamp || !store) return { stamp: lastStamp, pending: list.pending };
+
+  const saves = await games.saves(
+    folder,
+    files.map((file) => file.name)
+  );
+
+  await syncJsonFile(store, 'vnsaves.json', sync.title, parseVnSaves, async (remote = {}) => {
+    const merged = mergeVnSaves(saves, remote, isWindowsSaveKey);
+
+    return sameVnSaves(merged, remote) ? undefined : merged;
+  });
+
+  return { stamp, pending: list.pending };
 }

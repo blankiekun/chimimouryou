@@ -29,12 +29,15 @@
   import {
     desktopGames,
     isSavedThread,
+    nativeSavesToPull,
     NativeThreads as Threads,
+    pushNativeSaves,
     type NativeHook,
     type NativeMessage,
     type NativeThread
   } from '$lib/data/vn/native-games';
   import { vnElementHtml, vnInfo } from '$lib/data/vn/vn';
+  import { VnSaveSync } from '$lib/data/vn/vn-save-store';
   import { rankThreads } from '$lib/data/vn/windows-game';
   import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
   import { formatPageTitle } from '$lib/functions/format-page-title';
@@ -86,6 +89,12 @@
   let cleanup = {};
   let clean = hookCleaner({});
   let stopListening: (() => void) | undefined;
+  /** vnsaves.json, shared with VNBox: pulled before the game starts, pushed when it closes. */
+  let saveSync: VnSaveSync | undefined;
+  let saveStamp: string | undefined;
+  let saveNote = $state<string>();
+  /** Windows: folders the game's first run wrote, to confirm as its saves */
+  let pendingFolders = $state<string[]>();
 
   /** Starts the game (or rejoins the one running), asking for its folder when it isn't linked. */
   async function startNative() {
@@ -98,6 +107,7 @@
     const info = vnInfo(book);
 
     title = book.title;
+    saveSync = new VnSaveSync(book.title, info, book.storageSource, () => {});
     nativeHook = info.nativeHook;
     cleanup = info.hookCleanup ?? {};
     clean = hookCleaner(cleanup);
@@ -115,7 +125,7 @@
     ranked = [];
     nativeStatus = 'Starting the game…';
 
-    const result = await games.launch(info.folder!);
+    const result = await games.launch(info.folder!, await nativeSavesToPull(saveSync));
 
     if (result.status === 'started') {
       nativeRunning = true;
@@ -154,6 +164,7 @@
     else if (message.type === 'exit') {
       nativeRunning = false;
       nativeStatus = 'The game has closed.';
+      if (!replayed) pushSaves();
     } else if (message.type === 'text') {
       const thread = threads.add(message.thread, message.sentence, Date.now());
 
@@ -162,6 +173,25 @@
         addLine(clean(message.sentence, thread.hookcode).trim());
       }
     }
+  }
+
+  async function pushSaves() {
+    if (!games || !saveSync?.info.folder) return;
+    try {
+      const pushed = await pushNativeSaves(games, saveSync.info.folder, saveSync, saveStamp);
+
+      saveStamp = pushed.stamp;
+      saveNote = pushed.note;
+      pendingFolders = pushed.pending;
+    } catch (error: any) {
+      logger.warn(`Visual novel save sync failed: ${error.message}`);
+    }
+  }
+
+  async function confirmFolders(keep: boolean) {
+    pendingFolders = undefined;
+    await games?.saveFolders(saveSync!.info.folder!, keep);
+    if (keep) await pushSaves();
   }
 
   /** Lines come from this thread's hook from now on; saved on the record for every device. */
@@ -326,6 +356,25 @@
               </button>
             {/if}
           </div>
+          {#if saveNote}
+            <p class="hook-hint" role="status">{saveNote}</p>
+          {/if}
+          {#if pendingFolders?.length}
+            <div class="hook-hint" role="group" aria-label="Save folders">
+              <p>The game wrote into these folders. Sync them as its saves?</p>
+              <ul>
+                {#each pendingFolders as folder (folder)}
+                  <li>{folder.replace(/^wine\/drive_c\/(users\/username\/)?/, '')}</li>
+                {/each}
+              </ul>
+              <button type="button" class="app-button" onclick={() => confirmFolders(true)}>
+                Sync these
+              </button>
+              <button type="button" class="app-button" onclick={() => confirmFolders(false)}>
+                They aren’t saves
+              </button>
+            </div>
+          {/if}
           <NativeThreads {ranked} hook={nativeHook} onpick={pickThread} />
         </div>
       {:else}

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Tiny test "VN": each click (or every 1.5 s) shows the next line, drawn the way VN engines do:
 // TextOutW, ExtTextOutW, DrawTextW, GetGlyphOutlineW (one char at a time) and TextOutA (Shift-JIS).
-// It also writes a save file to %APPDATA%\TestVN\save1.dat, Documents\TestVN\ and Saved Games\TestVN\.
+// It also writes a save file to %APPDATA%\TestVN\save1.dat, Documents\TestVN\, Saved Games\TestVN\
+// and savedata\ in its own folder.
 #include <windows.h>
 #include <shlobj.h>
 #include <stdio.h>
@@ -16,9 +17,7 @@ static const wchar_t *linesW[] = {
 static const char lineA[] = "\x83\x56\x83\x74\x83\x67\x82\x69\x82\x68\x82\x72\x82\xcc\x8d\x73\x82\xc5\x82\xb7\x81\x42";
 static int step = 0;
 
-static void writeSave(REFKNOWNFOLDERID id, const wchar_t *sub) {
-  PWSTR base;
-  if (SHGetKnownFolderPath(id, KF_FLAG_CREATE, NULL, &base) != S_OK) return;
+static void writeSaveIn(const wchar_t *base, const wchar_t *sub) {
   wchar_t dir[MAX_PATH], file[MAX_PATH];
   swprintf(dir, MAX_PATH, L"%ls\\%ls", base, sub);
   CreateDirectoryW(dir, NULL);
@@ -27,6 +26,12 @@ static void writeSave(REFKNOWNFOLDERID id, const wchar_t *sub) {
   char data[64]; int n = sprintf(data, "step=%d\n", step);
   DWORD w; WriteFile(h, data, n, &w, NULL); CloseHandle(h);
   wprintf(L"save: %ls\n", file); fflush(stdout);
+}
+
+static void writeSave(REFKNOWNFOLDERID id, const wchar_t *sub) {
+  PWSTR base;
+  if (SHGetKnownFolderPath(id, KF_FLAG_CREATE, NULL, &base) != S_OK) return;
+  writeSaveIn(base, sub);
   CoTaskMemFree(base);
 }
 
@@ -70,6 +75,10 @@ static LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
       writeSave(&FOLDERID_RoamingAppData, L"TestVN");
       writeSave(&FOLDERID_Documents, L"TestVN");
       writeSave(&FOLDERID_SavedGames, L"TestVN");
+      wchar_t self[MAX_PATH];
+      GetModuleFileNameW(NULL, self, MAX_PATH);
+      *wcsrchr(self, L'\\') = 0;
+      writeSaveIn(self, L"savedata");
     }
     if (step >= 11) PostQuitMessage(0);
     InvalidateRect(hwnd, NULL, TRUE); return 0;

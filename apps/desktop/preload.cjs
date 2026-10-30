@@ -16,7 +16,9 @@ contextBridge.exposeInMainWorld('chimiDesktop', {
   browserSignIn: true,
   fetch: (url, options) => ipcRenderer.invoke('sources-fetch', url, options),
   games: {
-    launch: (folder) => ipcRenderer.invoke('games-launch', folder),
+    launch: (folder, saves) => ipcRenderer.invoke('games-launch', folder, saves),
+    saves: (folder, names) => ipcRenderer.invoke('games-saves', folder, names),
+    saveFolders: (folder, keep) => ipcRenderer.invoke('games-save-folders', folder, keep),
     pick: (game) => ipcRenderer.invoke('games-pick', game),
     link: (id, index, folder, title) => ipcRenderer.invoke('games-link', id, index, folder, title),
     forget: (folder) => ipcRenderer.invoke('games-forget', folder),

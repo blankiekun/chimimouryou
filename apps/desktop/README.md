@@ -97,7 +97,15 @@ root install stays light for the web app and its Docker image; `fetch` downloads
   prefix, `winetricks -q fakejapanese` when winetricks is there, its font files moved to
   `<userData>/wine-fonts/` and linked). `scripts/fetch-lunahook.sh` fetches LunaHook, Locale
   Remulator and the MSVC runtime from LunaTranslator's pinned release zip (sha256) and builds the
-  helper with mingw-w64 into `lunahook/` (not on macOS). `e2e/native-vn.e2e.mjs` runs the whole flow
+  helper with mingw-w64 into `lunahook/` (not on macOS). Saves sync with VNBox through the record's
+  `vnsaves.json` (same names and merge): `/hook` fetches it and passes it to `games-launch`, which
+  writes the newer files before the game starts (never over or through a link); when the game
+  closes `/hook` reads the save files with `games-saves` and merges them in (20 MB cap). VNBox's
+  prefix user `username` maps to the game's prefix user on Linux and to the user's AppData,
+  Documents, Saved Games and ProgramData on Windows, where only the game's save folders are used:
+  those its synced saves name, or those its first run made (confirmed on `/hook`). Files in the
+  install folder count as saves when new or changed since it was linked (a size and time manifest
+  in `native-games.json`) or already synced. `e2e/native-vn.e2e.mjs` runs the whole flow
   under Wine with a test VN (`xvfb-run -a node e2e/native-vn.e2e.mjs`; not in CI).
 - Help → About lists the licences (Yomitan is GPL-3.0, a separate program; its source is the
   release tag named there).
