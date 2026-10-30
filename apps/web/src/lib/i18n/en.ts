@@ -1015,6 +1015,8 @@ export const en = {
   'reader.copyProgress': 'Copy progress',
   'reader.welcomeBack': '{days} days since you last read',
   'reader.dismiss': 'Dismiss',
+  'reader.jumpBack': 'Back',
+  'reader.jumpBackLabel': 'Back to where you were',
   'reader.close': 'Close',
   'reader.panel': 'Reader panel',
   'reader.panelToggle': 'Side panel',

@@ -507,14 +507,11 @@
   });
 
   if (autoBookmark) {
-    // Turns that aren't the reader's (the Listen voice, jumps) count too, but not a resize's
-    // re-layout: it must not cancel a turn's save, or reopening goes back to the old page.
+    // Only the reader's own moves count (the Listen voice's turns are sent as such): jumps (search,
+    // Return to bookmark) don't, and a re-layout right after a page turn (the side panel, a resize)
+    // must not cancel the turn's save, or reopening goes back to the old page.
     pageChange$
-      .pipe(
-        filter((isUser) => isUser || !isResizing),
-        debounceTime(autoBookmarkTime * 1000),
-        takeUntil(destroy$)
-      )
+      .pipe(filter(Boolean), debounceTime(autoBookmarkTime * 1000), takeUntil(destroy$))
       .subscribe(() => {
         // A bookmark on this page may point mid-page (selection or reading point);
         // saving the page start would move it back.

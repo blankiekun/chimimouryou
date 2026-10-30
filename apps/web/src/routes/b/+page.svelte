@@ -30,6 +30,8 @@
   import { faCloudBolt, faPause, faPlay, faSpinner } from '@fortawesome/free-solid-svg-icons';
   import BookReader from '$lib/components/book-reader/book-reader.svelte';
   import WelcomeBackToast from '$lib/components/book-reader/welcome-back-toast.svelte';
+  import JumpBackButton from '$lib/components/book-reader/jump-back-button.svelte';
+  import { JumpBack } from '$lib/components/book-reader/jump-back';
   import type {
     AutoScroller,
     BookmarkManager,
@@ -883,11 +885,12 @@
   /** Keep the page in step with what is being read aloud. */
   function followTts(charCount: number) {
     if (charCount > exploredCharCount) {
-      scrollToCount(charCount);
+      scrollToCount(charCount, true);
     }
   }
 
-  function scrollToCount(count: number) {
+  /** `listen`: the Listen follow, a page turn like the reader's own (paginated auto-bookmark). */
+  function scrollToCount(count: number, listen = false) {
     const dataId = getBookIdSync();
 
     if (!bookmarkManager || !dataId) {
@@ -902,7 +905,8 @@
         lastBookmarkModified: new Date().getTime(),
         progress: 0
       },
-      readingOffset
+      readingOffset,
+      listen
     );
   }
 
@@ -1075,15 +1079,28 @@
     }
   }
 
-  function jumpToCount(count: number) {
+  function jumpToCount(count: number, back = false) {
     if (!bookmarkManager || !getBookIdSync()) {
       return;
     }
 
+    if (!back) jumpBack.jumped();
     pauseTracker(true);
     scrollToCount(count);
     painter.scheduleHighlights(true);
   }
+
+  const jumpBack = new JumpBack(
+    () => {
+      const id = getBookIdSync();
+      return bookmarkManager && id
+        ? bookmarkManager.formatBookmarkData(id, readingOffset).exploredCharCount
+        : undefined;
+    },
+    (count) => jumpToCount(count, true)
+  );
+  const jumpBackOrigin$ = jumpBack.origin$;
+  onDestroy(() => jumpBack.destroy());
 
   function jumpToSearchResult(result: SearchResult) {
     painter.searchMatch = { start: result.start, end: result.end };
@@ -1161,6 +1178,7 @@
 
     restartTrackerAfterCharacterChangeOrTime(1000);
 
+    jumpBack.jumped();
     bookmarkManager.scrollToBookmark(
       {
         dataId: dataId,
@@ -1403,6 +1421,7 @@
       pauseTracker(true);
     }
 
+    jumpBack.jumped();
     bookmarkManager.scrollToBookmark(data, readingOffset);
   }
 
@@ -2216,12 +2235,26 @@
         followTts(ev.detail);
       }
     }}
-    on:reading={(ev) => painter.showReading(ev.detail, () => bookWidth, scrollToCount, followTts)}
+    on:reading={(ev) =>
+      painter.showReading(
+        ev.detail,
+        () => bookWidth,
+        (count) => scrollToCount(count, true),
+        followTts
+      )}
   />
 {/if}
 
 {#if !(panelOpen && panelTab === 'listen')}
   <MiniPlayer {panelOpen} onopen={() => openPanel('listen')} bind:room={miniPlayerRoom} />
+{/if}
+
+{#if $jumpBackOrigin$ !== undefined}
+  <JumpBackButton
+    room={miniPlayerRoom && !(panelOpen && panelTab === 'listen') ? miniPlayerRoom : 0}
+    onback={() => jumpBack.back()}
+    ondismiss={() => jumpBack.dismiss()}
+  />
 {/if}
 
 {#if welcomeBackDays && storedExploredCharacter > 0 && absenceTab && !(panelOpen && panelTab === absenceTab.key)}

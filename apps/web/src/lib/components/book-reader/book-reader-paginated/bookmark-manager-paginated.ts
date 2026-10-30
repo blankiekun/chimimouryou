@@ -20,7 +20,7 @@ export class BookmarkManagerPaginated implements BookmarkManager {
     private setIntendedCharCount: (count: number) => void
   ) {}
 
-  scrollToBookmark(bookmarkData: BooksDbBookmarkData) {
+  scrollToBookmark(bookmarkData: BooksDbBookmarkData, _offset?: number, asReader = false) {
     const charCount = bookmarkData.exploredCharCount;
     if (!charCount) return;
 
@@ -28,7 +28,7 @@ export class BookmarkManagerPaginated implements BookmarkManager {
 
     const scroll = (calc: SectionCharacterStatsCalculator) => {
       const scrollPos = calc.getScrollPosByCharCount(charCount);
-      this.pageManager.scrollTo(scrollPos, false);
+      this.pageManager.scrollTo(scrollPos, asReader);
       this.setIntendedCharCount(charCount);
     };
 
