@@ -19,10 +19,10 @@ class ServiceTest(unittest.TestCase):
                 json.dump({'version': 1, 'forms': {'一目': 'server'}}, f)
             with open(broken, 'w') as f:
                 f.write('not gzip')
-            service.READING_MODEL_TABLES = [server, broken, os.path.join(tmp, 'missing')]
-            service.READER_PACK = os.path.join(tmp, 'reader.ygp')
-            service.TERM_DICTIONARY_DIR = os.path.join(tmp, 'term-dictionaries')
-            forms = service._load_reader(object(), known=set).model.forms
+            service.settings.READING_MODEL_TABLES = [server, broken, os.path.join(tmp, 'missing')]
+            service.settings.READER_PACK = os.path.join(tmp, 'reader.ygp')
+            service.settings.TERM_DICTIONARY_DIR = os.path.join(tmp, 'term-dictionaries')
+            forms = service.readerpack._load_reader(object(), known=set).model.forms
             self.assertEqual(forms['一目'], 'server')  # also in yurigana's public table
             self.assertIsInstance(forms['件'], list)  # the public table still fills in the rest
 

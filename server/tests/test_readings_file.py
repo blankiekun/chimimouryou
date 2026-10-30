@@ -159,7 +159,14 @@ class ShowTest(unittest.TestCase):
                                     *[('本気', '本気', 'ほんき', s) for s in ('dictionary', 'only')]), [-1, -1])
 
 
+# service.py's own modules (server/jiten): dropped before each load so every test gets fresh singletons and
+# caches (the runner, the queues, form_ranks'), as when each test executed its own copy of service.py.
+JITEN_MODULES = ('settings', 'readerpack', 'workers', 'jobs', 'queues', 'install')
+
+
 def load_service():
+    for name in JITEN_MODULES:
+        sys.modules.pop(name, None)
     spec = importlib.util.spec_from_file_location('jiten_service', os.path.join(HERE, '..', 'jiten', 'service.py'))
     service = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(service)
@@ -171,18 +178,18 @@ class ReadingsQueueTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         tmp = self.tmp.name
         self.service = service = load_service()
-        service.FREQUENCY_DICTIONARY = os.path.join(tmp, 'frequency-dictionary.zip')
-        open(service.FREQUENCY_DICTIONARY, 'w').close()
-        service.CATALOG_PATH = os.path.join(tmp, 'catalog.json')
-        with open(service.CATALOG_PATH, 'w') as f:
+        service.settings.FREQUENCY_DICTIONARY = os.path.join(tmp, 'frequency-dictionary.zip')
+        open(service.settings.FREQUENCY_DICTIONARY, 'w').close()
+        service.settings.CATALOG_PATH = os.path.join(tmp, 'catalog.json')
+        with open(service.settings.CATALOG_PATH, 'w') as f:
             json.dump({'books': [{'id': 1, 'bookId': 11, 'title': '本?', 'format': 'EPUB'},
                                  {'id': 2, 'bookId': 12, 'title': '無し', 'format': 'EPUB'},
                                  {'id': 3, 'bookId': 13, 'title': 'ゲーム', 'format': 'VN', 'vn': True}]}, f)
-        service.TEXT_DIR = os.path.join(tmp, 'text')
-        service.READINGS_DIR = os.path.join(tmp, 'readings')
+        service.settings.TEXT_DIR = os.path.join(tmp, 'text')
+        service.settings.READINGS_DIR = os.path.join(tmp, 'readings')
         self.job = self.add_text(1e9)
-        service.ensure_reader_pack = lambda: None
-        self.queue = service.ReadingsQueue()
+        service.readerpack.ensure_reader_pack = lambda: None
+        self.queue = service.queues.ReadingsQueue()
         self.queue._start = lambda: 'thread'
 
     def tearDown(self):
@@ -190,8 +197,8 @@ class ReadingsQueueTest(unittest.TestCase):
 
     def add_text(self, mtime, html='<p>行った</p>'):
         """Uploads book 11's text copy (as PUT /api/v1/books/11/text does) and returns its job."""
-        os.makedirs(self.service.TEXT_DIR, exist_ok=True)
-        path = os.path.join(self.service.TEXT_DIR, '11.json.gz')
+        os.makedirs(self.service.settings.TEXT_DIR, exist_ok=True)
+        path = os.path.join(self.service.settings.TEXT_DIR, '11.json.gz')
         with gzip.open(path, 'wt', encoding='utf-8') as f:
             json.dump({'elementHtml': html, 'sections': [], 'styleSheet': ''}, f)
         os.utime(path, (mtime, mtime))
@@ -203,28 +210,28 @@ class ReadingsQueueTest(unittest.TestCase):
         self.assertEqual(queue.queue, {1: self.job})
         # The worker makes it.
         queue.queue.clear()
-        service._reader = FakeReader(('行っ', '行く', 'いく', 'only'))
-        service._make_readings(1, self.job)
+        service.workers._reader = FakeReader(('行っ', '行く', 'いく', 'only'))
+        service.workers._make_readings(1, self.job)
         self.assertEqual(queue.request(1), 'ready')
-        with gzip.open(service.readings_path(1), 'rt', encoding='utf-8') as f:
+        with gzip.open(service.workers.readings_path(1), 'rt', encoding='utf-8') as f:
             self.assertEqual(json.load(f)['occ'], [0, 0, 0])
         # A new text copy (the book was processed again) or another yurigana make it stale.
         newer = self.add_text(2e9, html='<p>行ったよ</p>')
         self.assertEqual(queue.request(1), 'queued')
         self.assertEqual(queue.queue, {1: newer})
         queue.queue.clear()
-        service._make_readings(1, newer)
+        service.workers._make_readings(1, newer)
         self.assertEqual(queue.request(1), 'ready')
         # Uploaded again with the same text: the file is kept and points at the newest upload.
         self.add_text(4e9, html='<p>行ったよ</p>')
         self.assertEqual(queue.request(1), 'ready')
-        self.assertEqual(readings_file.header(service.readings_path(1))[2], 'text_4000000000000')
-        service.YURIGANA_VERSION = '9.9.9'
+        self.assertEqual(readings_file.header(service.workers.readings_path(1))[2], 'text_4000000000000')
+        service.readerpack.YURIGANA_VERSION = '9.9.9'
         self.assertEqual(queue.request(1), 'queued')
 
     def test_full_queue_failures_and_no_dictionary(self):
         queue = self.queue
-        queue.queue = {-i: 'x' for i in range(self.service.READINGS_QUEUE_MAX)}
+        queue.queue = {-i: 'x' for i in range(self.service.settings.READINGS_QUEUE_MAX)}
         self.assertEqual(queue.request(1), 'unavailable')
         queue.queue = {}
         queue.failed[1] = self.job[1]
@@ -232,15 +239,15 @@ class ReadingsQueueTest(unittest.TestCase):
         queue.failed[1] = 'text_1'
         self.assertEqual(queue.request(1), 'queued')
         queue.queue = {}
-        os.remove(self.service.FREQUENCY_DICTIONARY)
+        os.remove(self.service.settings.FREQUENCY_DICTIONARY)
         self.assertEqual(queue.request(1), 'unavailable')
 
     def test_the_worker_makes_queued_files_and_remembers_failures(self):
         from concurrent.futures import ThreadPoolExecutor
-        service, queue = self.service, self.service.ReadingsQueue()
-        service.ProcessPoolExecutor = lambda workers, initializer: ThreadPoolExecutor(workers)
-        service.READINGS_KEEP_ALIVE = 0
-        service._reader = FakeReader(('行っ', '行く', 'いく', 'only'))
+        service, queue = self.service, self.service.queues.ReadingsQueue()
+        service.queues.ProcessPoolExecutor = lambda workers, initializer: ThreadPoolExecutor(workers)
+        service.settings.READINGS_KEEP_ALIVE = 0
+        service.workers._reader = FakeReader(('行っ', '行く', 'いく', 'only'))
         self.assertEqual(queue.request(1), 'queued')
         queue.thread.join(10)
         self.assertEqual((queue.request(1), queue.thread), ('ready', None))
@@ -249,18 +256,18 @@ class ReadingsQueueTest(unittest.TestCase):
         queue.thread.join(10)
         self.assertEqual((queue.failed, queue.request(1)), ({1: 'text_3000000000000'}, 'unavailable'))
         # A new upload is tried again; a request can wait for its file: answered when it is made.
-        os.remove(service.readings_path(1))
+        os.remove(service.workers.readings_path(1))
         self.add_text(5e9)
         self.assertEqual(queue.request(1, wait=10), 'ready')
         self.assertEqual(queue.request(1, wait=10), 'ready')
 
     def test_the_worker_stays_loaded_for_the_next_book(self):
         from concurrent.futures import ThreadPoolExecutor
-        service, queue = self.service, self.service.ReadingsQueue()
+        service, queue = self.service, self.service.queues.ReadingsQueue()
         pools = []
-        service.ProcessPoolExecutor = lambda workers, initializer: pools.append(1) or ThreadPoolExecutor(workers)
-        service._reader = FakeReader(('行っ', '行く', 'いく', 'only'))
-        service.READINGS_KEEP_ALIVE = 30
+        service.queues.ProcessPoolExecutor = lambda workers, initializer: pools.append(1) or ThreadPoolExecutor(workers)
+        service.workers._reader = FakeReader(('行っ', '行く', 'いく', 'only'))
+        service.settings.READINGS_KEEP_ALIVE = 30
         self.assertEqual(queue.request(1), 'queued')
         for _ in range(100):
             if queue.request(1) == 'ready':
@@ -268,21 +275,21 @@ class ReadingsQueueTest(unittest.TestCase):
             time.sleep(0.05)
         thread = queue.thread
         self.assertTrue(thread.is_alive())
-        os.remove(service.readings_path(1))
+        os.remove(service.workers.readings_path(1))
         self.assertEqual(queue.request(1), 'queued')
         for _ in range(100):
             if queue.request(1) == 'ready':
                 break
             time.sleep(0.05)
         self.assertEqual((queue.request(1), queue.thread, len(pools)), ('ready', thread, 1))
-        service.READINGS_KEEP_ALIVE = 0
+        service.settings.READINGS_KEEP_ALIVE = 0
         thread.join(10)
         self.assertIsNone(queue.thread)
 
     def test_oversized_staticdata_is_refused(self):
-        self.service.MAX_STATICDATA_BYTES = 10
+        self.service.settings.MAX_STATICDATA_BYTES = 10
         with self.assertRaises(ValueError):
-            self.service._make_readings(1, self.job)
+            self.service.workers._make_readings(1, self.job)
 
 
 class WordsQueueTest(unittest.TestCase):
@@ -292,25 +299,25 @@ class WordsQueueTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         tmp = self.tmp.name
         self.service = service = load_service()
-        service.FREQUENCY_DICTIONARY = os.path.join(tmp, 'frequency-dictionary.zip')
-        open(service.FREQUENCY_DICTIONARY, 'w').close()
-        service.CATALOG_PATH = os.path.join(tmp, 'catalog.json')
-        with open(service.CATALOG_PATH, 'w') as f:
+        service.settings.FREQUENCY_DICTIONARY = os.path.join(tmp, 'frequency-dictionary.zip')
+        open(service.settings.FREQUENCY_DICTIONARY, 'w').close()
+        service.settings.CATALOG_PATH = os.path.join(tmp, 'catalog.json')
+        with open(service.settings.CATALOG_PATH, 'w') as f:
             json.dump({'books': [{'id': i, 'title': f'本{i}', 'format': 'EPUB', 'size': 10, 'added': 0}
                                  for i in (1, 5, 6)]}, f)
-        service.WORDS_DIR = os.path.join(tmp, 'words')
-        service.RESULTS_PATH = os.path.join(tmp, 'difficulty.json')
-        service.ensure_reader_pack = lambda: None
+        service.settings.WORDS_DIR = os.path.join(tmp, 'words')
+        service.settings.RESULTS_PATH = os.path.join(tmp, 'difficulty.json')
+        service.readerpack.ensure_reader_pack = lambda: None
 
     def tearDown(self):
         self.tmp.cleanup()
 
     def test_queued_once_then_ready(self):
-        queue = self.service.WordsQueue()
+        queue = self.service.queues.WordsQueue()
         queue._start = lambda: 'thread'
         self.assertEqual([queue.request(i) for i in (1, 1, 99)], ['queued', 'queued', 'unavailable'])
         queue.queue.clear()
-        self.service.write_words(1, {'words': [], 'uniqueWords': 0, 'tokens': 0})
+        self.service.workers.write_words(1, {'words': [], 'uniqueWords': 0, 'tokens': 0})
         self.assertEqual(queue.request(1), 'ready')
         queue.failed[5] = queue.failure({'size': 10, 'added': 0})
         self.assertEqual(queue.request(5), 'unavailable')
@@ -318,38 +325,38 @@ class WordsQueueTest(unittest.TestCase):
     def test_the_worker_makes_it_while_the_request_waits(self):
         from concurrent.futures import ThreadPoolExecutor
         service = self.service
-        service.ProcessPoolExecutor = lambda workers, initializer: ThreadPoolExecutor(workers)
-        service.READINGS_KEEP_ALIVE = 0
-        queue = service.WordsQueue()
-        queue.task = lambda book_id, book: service.write_words(book_id, {'words': [book['title']]})
+        service.queues.ProcessPoolExecutor = lambda workers, initializer: ThreadPoolExecutor(workers)
+        service.settings.READINGS_KEEP_ALIVE = 0
+        queue = service.queues.WordsQueue()
+        queue.task = lambda book_id, book: service.workers.write_words(book_id, {'words': [book['title']]})
         self.assertEqual(queue.request(6, wait=10), 'ready')
-        with gzip.open(service.words_path(6), 'rt', encoding='utf-8') as f:
+        with gzip.open(service.workers.words_path(6), 'rt', encoding='utf-8') as f:
             self.assertEqual(json.load(f), {'words': ['本6']})
 
     def test_legacy_lists_keep_their_estimates_totals(self):
         service = self.service
         # Migration runs only while WORDS_VERSION is the legacy lists' version.
-        version = service.WORDS_VERSION
-        service.WORDS_VERSION = service.LEGACY_WORDS_VERSION
+        version = service.settings.WORDS_VERSION
+        service.settings.WORDS_VERSION = service.settings.LEGACY_WORDS_VERSION
         self.addCleanup(setattr, service, 'WORDS_VERSION', version)
-        os.makedirs(service.WORDS_DIR)
+        os.makedirs(service.settings.WORDS_DIR)
         for book_id in (1, 5):
-            with gzip.open(service.legacy_words_path(book_id), 'wt', encoding='utf-8') as f:
+            with gzip.open(service.workers.legacy_words_path(book_id), 'wt', encoding='utf-8') as f:
                 json.dump([['猫', 'ねこ', 3, 1200, '猫']], f)
-        service.save_results({'books': {'1': {'words': 19, 'uniqueWords': 7, 'tokens': 30},
+        service.jobs.save_results({'books': {'1': {'words': 19, 'uniqueWords': 7, 'tokens': 30},
                                         '5': {'words': 18, 'uniqueWords': 7, 'tokens': 30}}})
-        service.migrate_word_lists()
+        service.queues.migrate_word_lists()
         # A new estimate replaces the old one: the totals were kept.
-        service.save_results({'books': {'1': {'core': {}}, '5': {'core': {}}}})
-        service.migrate_word_lists()
-        queue = service.WordsQueue()
+        service.jobs.save_results({'books': {'1': {'core': {}}, '5': {'core': {}}}})
+        service.queues.migrate_word_lists()
+        queue = service.queues.WordsQueue()
         queue._start = lambda: 'thread'
         self.assertEqual(queue.request(1), 'ready')
-        with gzip.open(service.words_path(1), 'rt', encoding='utf-8') as f:
+        with gzip.open(service.workers.words_path(1), 'rt', encoding='utf-8') as f:
             self.assertEqual(json.load(f), {'words': [['猫', 'ねこ', 3, 1200, '猫']], 'uniqueWords': 7, 'tokens': 30})
         # An older list has no totals to keep: it is made again.
         self.assertEqual(queue.request(5), 'queued')
-        self.assertFalse(os.path.exists(service.legacy_words_path(1)) or os.path.exists(service.legacy_words_path(5)))
+        self.assertFalse(os.path.exists(service.workers.legacy_words_path(1)) or os.path.exists(service.workers.legacy_words_path(5)))
 
 
 class NginxTest(unittest.TestCase):
@@ -394,24 +401,24 @@ class ReaderPackTest(unittest.TestCase):
         service = load_service()
         fakes = {'yurigana': mock.Mock(Reader=Reader), 'frequency': mock.Mock(FrequencyTable=FrequencyTable)}
         with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(sys.modules, fakes):
-            service.ProcessPoolExecutor = ThreadPoolExecutor
-            service.FREQUENCY_DICTIONARY = os.path.join(tmp, 'frequency-dictionary.zip')
-            service.TERM_DICTIONARY_DIR = os.path.join(tmp, 'term-dictionaries')
-            service.READER_PACK = os.path.join(tmp, 'reader.ygp')
-            service.FREQUENCY_PACK = os.path.join(tmp, 'frequency.ygp')
-            with open(service.FREQUENCY_DICTIONARY, 'w') as f:
+            service.readerpack.ProcessPoolExecutor = ThreadPoolExecutor
+            service.settings.FREQUENCY_DICTIONARY = os.path.join(tmp, 'frequency-dictionary.zip')
+            service.settings.TERM_DICTIONARY_DIR = os.path.join(tmp, 'term-dictionaries')
+            service.settings.READER_PACK = os.path.join(tmp, 'reader.ygp')
+            service.settings.FREQUENCY_PACK = os.path.join(tmp, 'frequency.ygp')
+            with open(service.settings.FREQUENCY_DICTIONARY, 'w') as f:
                 f.write('a')
-            self.assertIsInstance(service._load_reader(), Reader)  # no pack yet: built in the worker
-            service.ensure_reader_pack()
-            service.ensure_reader_pack()
+            self.assertIsInstance(service.readerpack._load_reader(), Reader)  # no pack yet: built in the worker
+            service.readerpack.ensure_reader_pack()
+            service.readerpack.ensure_reader_pack()
             self.assertEqual(len(made), 2)
-            self.assertEqual(made[1], {'known': service.FREQUENCY_DICTIONARY})
-            self.assertEqual(service._load_reader('tokenizer'), ('loaded', service.READER_PACK, 'tokenizer'))
-            with open(service.FREQUENCY_DICTIONARY, 'w') as f:
+            self.assertEqual(made[1], {'known': service.settings.FREQUENCY_DICTIONARY})
+            self.assertEqual(service.readerpack._load_reader('tokenizer'), ('loaded', service.settings.READER_PACK, 'tokenizer'))
+            with open(service.settings.FREQUENCY_DICTIONARY, 'w') as f:
                 f.write('a newer list')
-            self.assertFalse(service.reader_pack_current())
-            service.ensure_reader_pack()
-            self.assertEqual((len(made), service.reader_pack_current()), (3, True))
+            self.assertFalse(service.readerpack.reader_pack_current())
+            service.readerpack.ensure_reader_pack()
+            self.assertEqual((len(made), service.readerpack.reader_pack_current()), (3, True))
 
 
 if __name__ == '__main__':
