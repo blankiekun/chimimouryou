@@ -172,6 +172,13 @@ section in paginated mode. `annotations.json` is merged per highlight (newest
   [docs/READINGS.md](docs/READINGS.md); the engine is the
   [yurigana](https://github.com/blankiekun/yurigana) package (pinned tag, in the difficulty
   image's requirements and `apps/web/package.json`).
+- **Shared request layer** (`httpbase.py`, copied to `/app` in the base image): each
+  service keeps its own handler; the internal-token check, the Origin rule for POSTs
+  (same site, or a server-connect token from a listed origin or none), bounded body
+  reads (411/413/415), JSON answers and the catch-all (a logged 500 JSON, never a
+  dropped connection) are shared. The account service keeps its stricter sign-in
+  Origin rules. `scripts/check-service-requests.py` is the request matrix to diff
+  before and after changing any of it.
 
 ## Key design decisions
 

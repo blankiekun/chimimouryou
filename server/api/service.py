@@ -43,11 +43,9 @@ COVER_TYPES = {'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'i
 db: apidb.Database
 
 
-class ApiError(Exception):
+class ApiError(httpbase.HttpError):
     def __init__(self, status: int, message: str, body: dict | None = None):
-        super().__init__(message)
-        self.status = status
-        self.body = body or {}
+        super().__init__(status, message, body=body)
 
 
 def disk_full(path: str) -> bool:
@@ -143,9 +141,7 @@ class Handler(BaseHTTPRequestHandler):
         sys.stderr.write('%s %s\n' % (self.headers.get('X-Real-IP') or self.client_address[0], fmt % args))
 
     def send(self, status: int, body: dict | None = None, headers: dict | None = None):
-        data = json.dumps(body, ensure_ascii=False).encode() if body is not None else b''
-        self.send_raw(status, data, {'Content-Type': 'application/json', **(headers or {})} if body is not None
-                      else headers)
+        httpbase.send_json(self, status, body, headers)
 
     def send_raw(self, status: int, data: bytes, headers: dict | None = None):
         self.send_response(status)
@@ -227,16 +223,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def read_body(self, types: tuple[str, ...], limit: int, disk: str = '') -> bytes:
         """The request body, checked before it is read; disk: refuse while that disk is nearly full."""
-        content_type = self.headers.get('Content-Type', '').split(';')[0].strip().lower()
-        if content_type not in types:
-            # application/json forces a CORS preflight: other sites can't post as a trusted-network reader.
-            raise ApiError(415, 'Unsupported content type')
-        length = self.headers.get('Content-Length', '')
-        if not length.isdigit():
-            raise ApiError(411, 'Content-Length required')
-        if int(length) > limit:
-            raise ApiError(413, 'Too large')
-        data = self.rfile.read(int(length))
+        # application/json forces a CORS preflight: other sites can't post as a trusted-network reader.
+        data = httpbase.read_body(self, limit, types)
         if disk_full(disk or API_STATE_DIR) or (disk and disk_full(API_STATE_DIR)):
             raise ApiError(507, "The server's disk is full")
         return data
@@ -514,7 +502,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_raw(status, body, headers[0] if headers else None)
             else:
                 self.send(status, body, headers[0] if headers else None)
-        except ApiError as error:
+        except httpbase.HttpError as error:
             self.send(error.status, {'error': str(error), **error.body})
         except Exception as error:  # noqa: BLE001 - log it, don't leak details
             self.log_message('error: %s: %s', type(error).__name__, error)

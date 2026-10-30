@@ -59,7 +59,7 @@ HOST = os.environ.get('IMPORT_HOST', '127.0.0.1')
 # Same switch as the account service: uploads from plain-HTTP pages too.
 ALLOW_HTTP = os.environ.get('ALLOW_HTTP_ACCOUNTS') == '1'
 # Server connect: the standalone app's origins; nginx's auth check took its bearer token.
-CORS_ORIGINS = set(os.environ.get('CORS_ORIGINS', '').split())
+CORS_ORIGINS = httpbase.parse_cors_origins(os.environ.get('CORS_ORIGINS', ''))
 # Made by the web container; nginx sends it as X-Internal-Token, so only nginx can call this service.
 INTERNAL_TOKEN_FILE = os.environ.get('INTERNAL_TOKEN_FILE', '/data/state/internal-token')
 
@@ -540,10 +540,7 @@ def public_job(job: dict) -> dict:
     return {key: job[key] for key in ('id', 'name', 'calibreId', 'title', 'error') if key in job} | {'state': state}
 
 
-class ApiError(Exception):
-    def __init__(self, status: int, message: str):
-        super().__init__(message)
-        self.status = status
+ApiError = httpbase.HttpError
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -562,21 +559,18 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError(403, 'Only admins can do this')
 
     def send(self, status: int, body: dict):
-        data = json.dumps(body, ensure_ascii=False).encode()
-        self.send_response(status)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Content-Length', str(len(data)))
-        self.send_header('Cache-Control', 'no-store')
-        self.end_headers()
-        self.wfile.write(data)
+        httpbase.send_json(self, status, body)
 
     def handle_api(self, handler):
-        try:
-            self.send(200, handler())
-        except ApiError as error:
-            self.send(error.status, {'error': str(error)})
+        self.send(200, handler())
 
     def do_GET(self):  # noqa: N802
+        httpbase.guard(self, self.get)
+
+    def do_POST(self):  # noqa: N802
+        httpbase.guard(self, self.post)
+
+    def get(self):
         url = urlparse(self.path)
         if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
             return self.send(403, {'error': 'Only nginx may call this service'})
@@ -591,7 +585,7 @@ class Handler(BaseHTTPRequestHandler):
 
         self.handle_api(list_jobs)
 
-    def do_POST(self):  # noqa: N802
+    def post(self):
         url = urlparse(self.path)
         # Not url.path: urlparse drops ';params', so '/series;x' would count as '/series'.
         path = self.path.split('?', 1)[0]
@@ -615,7 +609,9 @@ class Handler(BaseHTTPRequestHandler):
         self.require_admin()
         self.same_origin()
         try:
-            body = json.loads(self.rfile.read(min(int(self.headers.get('Content-Length') or 0), 1024)) or b'{}')
+            body = json.loads(httpbase.read_body(self, 1024) or b'{}')
+            if not isinstance(body, dict):
+                raise ValueError
         except ValueError as error:
             raise ApiError(400, 'Invalid request') from error
         return run_series(bool(body.get('apply')))
@@ -629,7 +625,7 @@ class Handler(BaseHTTPRequestHandler):
         self.require_admin()
         self.same_origin()
         try:
-            ids = json.loads(self.rfile.read(min(int(self.headers.get('Content-Length') or 0), 1 << 16)))['ids']
+            ids = json.loads(httpbase.read_body(self, 1 << 16))['ids']
             if not isinstance(ids, list) or not all(type(i) is int and i for i in ids):
                 raise ValueError
         except (ValueError, KeyError, TypeError) as error:

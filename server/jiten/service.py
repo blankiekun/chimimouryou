@@ -152,7 +152,9 @@ HOST = os.environ.get('JITEN_HOST', '127.0.0.1')
 INTERNAL_TOKEN_FILE = os.environ.get('INTERNAL_TOKEN_FILE', '/data/state/internal-token')
 ALLOW_HTTP = os.environ.get('ALLOW_HTTP_ACCOUNTS') == '1'
 # Server connect: the standalone app's origins; nginx's auth check took its bearer token.
-CORS_ORIGINS = set(os.environ.get('CORS_ORIGINS', '').split())
+CORS_ORIGINS = httpbase.parse_cors_origins(os.environ.get('CORS_ORIGINS', ''))
+# The JSON bodies of compute, cancel and terms/remove (nginx's default limit for them).
+MAX_JSON_BYTES = 1024 * 1024
 # Worker processes are replaced after this many books to bound their memory.
 BOOKS_PER_POOL = 300
 
@@ -1032,18 +1034,18 @@ def remove_term_dictionary(name: str):
 
 class Handler(BaseHTTPRequestHandler):
     def _send(self, status, body):
-        data = json.dumps(body).encode()
-        self.send_response(status)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Content-Length', str(len(data)))
-        self.send_header('Cache-Control', 'no-store')
-        self.end_headers()
-        self.wfile.write(data)
+        httpbase.send_json(self, status, body)
 
     def _action(self):
         return self.path.rstrip('/').rsplit('/', 1)[-1]
 
     def do_GET(self):
+        httpbase.guard(self, self._get)
+
+    def do_POST(self):
+        httpbase.guard(self, self._post)
+
+    def _get(self):
         if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
             return self._send(403, {'error': 'Only nginx may call this service'})
         parts = self.path.split('?')[0].strip('/').split('/')
@@ -1080,7 +1082,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._send(404, {'error': 'not found'})
 
-    def do_POST(self):
+    def _post(self):
         if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
             return self._send(403, {'error': 'Only nginx may call this service'})
         if not httpbase.same_site(self.headers, CORS_ORIGINS, ALLOW_HTTP):
@@ -1089,11 +1091,11 @@ class Handler(BaseHTTPRequestHandler):
         if len(parts) == 2 and parts[0] == 'readings' and re.fullmatch(r'-?[0-9]+', parts[1]):
             return self._send(200, {'status': readings.request(int(parts[1]), READINGS_WAIT)})
         if parts == ['ranks']:
-            length = int(self.headers.get('Content-Length') or 0)
-            if not 0 < length <= MAX_RANKS_BYTES:
-                return self._send(413 if length > 0 else 400, {'error': 'Empty or too large'})
+            data = httpbase.read_body(self, MAX_RANKS_BYTES)
+            if not data:
+                return self._send(400, {'error': 'Empty request'})
             try:
-                forms = json.loads(self.rfile.read(length)).get('forms')
+                forms = json.loads(data).get('forms')
             except (ValueError, AttributeError):
                 return self._send(400, {'error': 'invalid JSON'})
             if not isinstance(forms, list) or len(forms) > MAX_RANK_FORMS:
@@ -1127,8 +1129,7 @@ class Handler(BaseHTTPRequestHandler):
                     terms = install_term_dictionary(self.rfile, int(self.headers.get('Content-Length') or 0),
                                                     (query.get('name') or [''])[0])
                     return self._send(200, {**runner.status(), 'terms': terms})
-                length = max(int(self.headers.get('Content-Length') or 0), 0)
-                body = json.loads(self.rfile.read(length) or b'{}')
+                body = json.loads(httpbase.read_body(self, MAX_JSON_BYTES) or b'{}')
                 remove_term_dictionary(str(body.get('name', '')) if isinstance(body, dict) else '')
                 return self._send(200, runner.status())
             except RuntimeError as error:
@@ -1136,8 +1137,7 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError as error:
                 return self._send(400, {'error': str(error)})
         try:
-            length = max(int(self.headers.get('Content-Length') or 0), 0)
-            body = json.loads(self.rfile.read(length) or b'{}')
+            body = json.loads(httpbase.read_body(self, MAX_JSON_BYTES) or b'{}')
         except ValueError:
             return self._send(400, {'error': 'invalid JSON'})
         action = self._action()

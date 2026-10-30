@@ -42,11 +42,13 @@ PORT = int(os.environ.get('MOKURO_PORT', '8768'))
 HOST = os.environ.get('MOKURO_HOST', '127.0.0.1')
 ALLOW_HTTP = os.environ.get('ALLOW_HTTP_ACCOUNTS') == '1'
 # Server connect: the standalone app's origins; nginx's auth check took its bearer token.
-CORS_ORIGINS = set(os.environ.get('CORS_ORIGINS', '').split())
+CORS_ORIGINS = httpbase.parse_cors_origins(os.environ.get('CORS_ORIGINS', ''))
 INTERNAL_TOKEN_FILE = os.environ.get('INTERNAL_TOKEN_FILE', '/data/state/internal-token')
 # As in load-cbz.ts (getMimeTypeFromName): the files the reader shows as pages.
 PAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.avif', '.svg')
 MAX_UPLOAD_BYTES = 64 * 1024 * 1024
+# generate, cancel and remove: a list of ids at most.
+MAX_JSON_BYTES = 1024 * 1024
 MAX_PAGES = 5000
 MAX_BLOCKS = 1000
 MAX_LINES = 100
@@ -224,33 +226,24 @@ class Runner:
 runner = Runner()
 
 
-def read_body(source, length: int) -> bytes:
-    if not 0 < length <= MAX_UPLOAD_BYTES:
-        raise ValueError('The file is empty or too large')
-    data = source.read(length)
-    if len(data) != length:
-        raise ValueError('Upload incomplete')
-    return data
-
-
 class Handler(BaseHTTPRequestHandler):
     def _send(self, status, body):
-        data = json.dumps(body).encode()
-        self.send_response(status)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Content-Length', str(len(data)))
-        self.send_header('Cache-Control', 'no-store')
-        self.end_headers()
-        self.wfile.write(data)
+        httpbase.send_json(self, status, body)
 
     def do_GET(self):
+        httpbase.guard(self, self._get)
+
+    def do_POST(self):
+        httpbase.guard(self, self._post)
+
+    def _get(self):
         if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
             return self._send(403, {'error': 'Only nginx may call this service'})
         if urlparse(self.path).path.strip('/') == 'status':
             return self._send(200, runner.status())
         self._send(404, {'error': 'not found'})
 
-    def do_POST(self):
+    def _post(self):
         if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
             return self._send(403, {'error': 'Only nginx may call this service'})
         if not httpbase.same_site(self.headers, CORS_ORIGINS, ALLOW_HTTP):
@@ -258,7 +251,7 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         action = url.path.strip('/')
         try:
-            body = read_body(self.rfile, int(self.headers.get('Content-Length') or 0))
+            body = httpbase.read_body(self, MAX_UPLOAD_BYTES if action == 'upload' else MAX_JSON_BYTES)
             if action == 'upload':
                 book_id = int(parse_qs(url.query).get('id', [''])[0])
                 if book_id not in load_manga():
