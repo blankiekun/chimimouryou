@@ -3,6 +3,7 @@
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import PointBox from '$lib/components/point-box.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
+  import NeedsApp from '$lib/components/sources/needs-app.svelte';
   import SourceCover from '$lib/components/sources/source-cover.svelte';
   import { account$, hasPermission } from '$lib/data/account/account';
   import { pagePath, standalone } from '$lib/data/env';
@@ -19,13 +20,15 @@
     timeLeft,
     unfollowWork
   } from '$lib/data/sources/server-sources';
+  import { sourcesWifiOnly$ } from '$lib/data/sources/sources-settings';
+  import { needsAppMessage } from '$lib/data/sources/transport';
   import type { SourceFollow, SourceJob } from '$lib/data/sources/types';
   import { onMount } from 'svelte';
 
   /**
-   * Sources (Import → Sources, server edition, import permission): the works this account
+   * Sources (Import → Sources; server edition: import permission): the works this account
    * follows, the queue of its fetch jobs (both polled every 5 s while the page is open), and
-   * paste a link to a work.
+   * paste a link to a work. Standalone: all of it runs on this device (local-sources.ts).
    */
 
   let jobs = $state<SourceJob[]>();
@@ -40,7 +43,7 @@
   let showDone = $state(false);
   let busy = $state<string>();
 
-  const allowed = $derived(!standalone && hasPermission($account$, 'import'));
+  const allowed = $derived(standalone || hasPermission($account$, 'import'));
   const running = $derived(jobs?.find((job) => job.state === 'fetching'));
   const waiting = $derived(
     jobs?.filter((job) => job.state === 'queued' || job.state === 'adding').reverse() ?? []
@@ -72,7 +75,7 @@
 
   onMount(() => {
     $libraryTab$ = 'store';
-    if (standalone) return;
+    if (!allowed) return;
     refresh();
     const timer = setInterval(() => {
       if (document.visibilityState === 'visible') refresh();
@@ -145,6 +148,7 @@
     if (follow.state === 'checking') return 'Checking now';
     if (follow.state === 'current') return 'Up to date';
     if (follow.state === '') return 'Waiting for the first check';
+    if (follow.state === 'wifi') return 'Waiting for Wi-Fi: on mobile data now';
     return follow.detail;
   }
 
@@ -160,6 +164,7 @@
         ? 'Your volume stays in the library'
         : `Your ${follow.volumes} volumes stay in the library`;
     }
+    if (follow.state === 'app') return '';
     if (follow.state === 'failed') {
       return `Retrying every hour${follow.lastCheck ? ` · last ${clock(follow.lastCheck)}` : ''}`;
     }
@@ -184,6 +189,7 @@
 
   function status(job: SourceJob) {
     if (job.state === 'adding') return 'Adding to the Calibre library';
+    if (job.error === needsAppMessage) return job.error;
     if (job.state === 'cancelled') return 'Cancelled. Chapters fetched so far are kept.';
     if (job.state === 'failed') {
       return job.failedAt && job.failedAt > 1
@@ -206,13 +212,15 @@
   <main class="sources-page">
     <a class="app-button-quiet sources-back" href="{pagePath}/manage">← Store</a>
     <h1 class="sources-title">Sources</h1>
-    <p class="sources-lead">Fetched on the server into your Calibre library.</p>
+    <p class="sources-lead">
+      {standalone
+        ? 'On this device. Updates run while the app is open.'
+        : 'Fetched on the server into your Calibre library.'}
+    </p>
 
     {#if !allowed}
       <p class="sources-note">
-        {standalone
-          ? 'Sources run on a server: the standalone app cannot fetch them yet.'
-          : 'Adding web novels needs an account with the "Add books" permission. Ask an admin.'}
+        Adding web novels needs an account with the "Add books" permission. Ask an admin.
       </p>
     {:else}
       {#if jobs?.length || follows.length}
@@ -250,9 +258,13 @@
           {#if shownTab === 'following'}
             <div class="sources-check">
               <p class="sources-row-meta">
-                Server checks every {checkHours} h{Number.isFinite(nextCheck)
-                  ? ` · next ${clock(nextCheck)}`
-                  : ''}
+                {#if standalone}
+                  Every {checkHours} h while open{$sourcesWifiOnly$ ? ' · Wi-Fi only' : ''}
+                {:else}
+                  Server checks every {checkHours} h{Number.isFinite(nextCheck)
+                    ? ` · next ${clock(nextCheck)}`
+                    : ''}
+                {/if}
               </p>
               <button
                 type="button"
@@ -289,14 +301,20 @@
                     <p class="sources-row-meta">{follow.siteName}</p>
                   </div>
                   <div class="sources-follow-state">
-                    <p
-                      class="sources-status sources-status-{follow.paused
-                        ? 'paused'
-                        : follow.state}"
-                    >
-                      <span class="sources-swatch" aria-hidden="true"></span>{followStatus(follow)}
-                    </p>
-                    <p class="sources-row-meta">{followWhen(follow)}</p>
+                    {#if follow.state === 'app' && !follow.paused}
+                      <NeedsApp />
+                    {:else}
+                      <p
+                        class="sources-status sources-status-{follow.paused
+                          ? 'paused'
+                          : follow.state}"
+                      >
+                        <span class="sources-swatch" aria-hidden="true"></span>{followStatus(
+                          follow
+                        )}
+                      </p>
+                      <p class="sources-row-meta">{followWhen(follow)}</p>
+                    {/if}
                   </div>
                   <div class="sources-actions">
                     {#if follow.paused}
@@ -363,7 +381,9 @@
                   disabled={looking || !link.trim()}>{looking ? 'Looking up…' : 'Look up'}</button
                 >
               </div>
-              {#if lookupError}
+              {#if lookupError === needsAppMessage}
+                <NeedsApp />
+              {:else if lookupError}
                 <p class="sources-error" role="alert">{lookupError}</p>
               {/if}
             </form>
@@ -412,7 +432,7 @@
       {:else}
         {#if running}
           <PointBox
-            label="Fetching on the server"
+            label={standalone ? 'Fetching on this device' : 'Fetching on the server'}
             figure={running.done}
             unit="of {running.total} {running.unit}"
           >
@@ -433,7 +453,9 @@
               {[running.siteName, volumesText(running)].filter(Boolean).join(' · ')} · {timeLeft(
                 running.total - running.done,
                 interval
-              )} left. {running.domain} allows 1 page every {interval} s. You can close this tab.
+              )} left. {running.domain} allows 1 page every {interval} s. {standalone
+                ? 'Keep the app open.'
+                : 'You can close this tab.'}
             </p>
             <button
               type="button"
@@ -503,7 +525,9 @@
                     <a class="sources-row-title" href="{pagePath}/sources/work?id={job.workId}"
                       >{job.title}</a
                     >
-                    <p class="sources-row-meta">{meta(job)} · in the library</p>
+                    <p class="sources-row-meta">
+                      {meta(job)} · {standalone ? 'on this device' : 'in the library'}
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -645,6 +669,10 @@
 
   .sources-status-new {
     color: var(--app-success-color);
+  }
+
+  .sources-status-wifi {
+    color: var(--app-warning-color);
   }
 
   .sources-check {

@@ -296,6 +296,10 @@ export const settingsAreas: SettingsArea[] = [
             description: 'settings.section.sync-backup.text'
           },
           {
+            id: 'sync-web-sources',
+            label: 'settings.section.sync-web-sources'
+          },
+          {
             id: 'sync-server',
             label: 'settings.section.sync-server'
           },

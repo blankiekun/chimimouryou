@@ -238,6 +238,54 @@ describe('standalone edition', () => {
     target.remove();
   });
 
+  it('runs Sources on this device: nothing goes to the server', async () => {
+    // Catches a Sources call that forgot the standalone branch and asks /calibre/import/api/.
+    fetchMock.mockRejectedValue(new TypeError('offline'));
+    const { pacing } = await import('$lib/data/sources/transport');
+    pacing.site = 0;
+    pacing.server = 0;
+    const sources = await import('$lib/data/sources/server-sources');
+    const calls = [
+      sources.lookUpWork('https://ncode.syosetu.com/n0001aa/'),
+      sources.getWork(1),
+      sources.resolveWork('kakuyomu', '1'),
+      sources.browseSite('syosetu', 'popular', 1),
+      sources.addVolumes(1, [1]),
+      sources.listServers(),
+      sources.addServer({
+        type: 'opds',
+        url: 'http://komga.example/opds',
+        name: '',
+        user: '',
+        password: ''
+      }),
+      sources.removeServer(1),
+      sources.browseServer(1),
+      sources.getQueue(),
+      sources.retryJob('x'),
+      sources.cancelJob('x'),
+      sources.removeJob('x'),
+      sources.followWork(1),
+      sources.unfollowWork(1),
+      sources.getFollowing(),
+      sources.checkNow(),
+      sources.coverSrc(1),
+      sources.serverImageSrc(1, '/c.png')
+    ];
+    await Promise.allSettled(calls);
+    const urls = fetchMock.mock.calls.map(([url]) => String(url));
+    expect(
+      urls.filter((url) => /^\/(calibre|account)\//.test(new URL(url, 'http://app').pathname))
+    ).toEqual([]);
+    expect(
+      urls.every((url) =>
+        /^https?:\/\/(ncode\.syosetu\.com|api\.syosetu\.com|kakuyomu\.jp|komga\.example)\//.test(
+          url
+        )
+      )
+    ).toBe(true);
+  });
+
   it('hands out the browser handler for Calibre', async () => {
     const { getStorageHandler } = await import('$lib/data/storage/storage-handler-factory');
     const { StorageKey } = await import('$lib/data/storage/storage-types');

@@ -35,7 +35,7 @@
   let failed = $state(false);
   let errors = $state<Record<string, string>>({});
 
-  const allowed = $derived(!standalone && hasPermission($account$, 'import'));
+  const allowed = $derived(standalone || hasPermission($account$, 'import'));
   const label = $derived(kind === 'suwayomi' ? 'Suwayomi' : 'the catalog');
 
   onMount(() => {
@@ -89,9 +89,7 @@
 
     {#if !allowed}
       <p class="add-note">
-        {standalone
-          ? 'Sources run on a server: the standalone app cannot add them yet.'
-          : 'Adding sources needs an account with the "Add books" permission. Ask an admin.'}
+        {'Adding sources needs an account with the "Add books" permission. Ask an admin.'}
       </p>
     {:else}
       <form class="add-layout" onsubmit={submit} novalidate>
@@ -189,7 +187,9 @@
             </div>
             <p id="add-password-help" class={errors.password ? 'add-error' : 'add-hint'}>
               {errors.password ??
-                `Only if ${label} asks for one. Kept on the server, encrypted, and never sent back to a browser.`}
+                (standalone
+                  ? `Only if ${label} asks for one. Kept in this browser only, never synced.`
+                  : `Only if ${label} asks for one. Kept on the server, encrypted, and never sent back to a browser.`)}
             </p>
 
             {#if errors.form}<p class="add-error" role="alert">{errors.form}</p>{/if}

@@ -14,6 +14,11 @@
  * browser, and the newer value wins per setting. Not part of upstream.
  */
 
+import {
+  sourcesAutoUpdate$,
+  sourcesCheckHours$,
+  sourcesWifiOnly$
+} from '$lib/data/sources/sources-settings';
 import { BehaviorSubject, map, merge, skip, type Subscription } from 'rxjs';
 import type { ParsedStore } from '$lib/data/internal/writable-storage-subject';
 import { isRecord } from '$lib/data/setting-parsers';
@@ -168,7 +173,11 @@ const sharedSettings: Record<string, Store> = {
   discordActivities: discordActivities$,
   discordOptions: discordOptions$,
   // The popup's Add to Anki card format (deck, note type, fields); how notes go is per browser.
-  dictionaryAnki: dictionaryAnki$
+  dictionaryAnki: dictionaryAnki$,
+  // Standalone Sources: how followed works update on every device of the account (owner s58).
+  sourcesAutoUpdate: sourcesAutoUpdate$,
+  sourcesCheckHours: sourcesCheckHours$,
+  sourcesWifiOnly: sourcesWifiOnly$
 };
 
 /**

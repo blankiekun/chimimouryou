@@ -13,6 +13,7 @@
   import InstallHint from '$lib/components/standalone/install-hint.svelte';
   import SettingsAnalysisTools from '$lib/components/analysis/settings-analysis-tools.svelte';
   import SettingsSync from '$lib/components/standalone/settings-sync.svelte';
+  import SettingsSources from '$lib/components/sources/settings-sources.svelte';
   import SettingsLanguage from '$lib/components/settings/settings-language.svelte';
   import SettingsPlugins from '$lib/components/settings/settings-plugins.svelte';
   import { activePlugins$, plugins } from '$lib/plugins';
@@ -463,6 +464,7 @@
             </SettingsSection>
             <SettingsAnalysisTools />
             <SettingsSync />
+            <SettingsSources />
           {:else}
             <SettingsSection id="general-account">
               <SettingsAccount />

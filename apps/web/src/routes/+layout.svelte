@@ -36,6 +36,8 @@
     if (standalone) {
       watchInstall(window);
       watchYomitan(window);
+      // Sources: followed works update and fetches run while the app is open (local-sources.ts).
+      import('$lib/data/sources/local-sources').then((sources) => sources.startLocalSources());
     }
     if (!wordTest) {
       accountReady().then(async (user) => {

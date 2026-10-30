@@ -502,6 +502,7 @@ export const ja: Record<MessageKey, string> = {
   'settings.section.sync-backup.text': '書籍は含まれません。',
   'settings.section.sync-server': 'サーバー',
   'settings.section.sync-selfhost': 'セルフホスト',
+  'settings.section.sync-web-sources': '取り込み元（ウェブ）',
   'settings.section.data-storage': 'ローカルストレージ',
   'settings.section.data-import': 'インポート',
   'settings.section.data-sync': 'データ同期',

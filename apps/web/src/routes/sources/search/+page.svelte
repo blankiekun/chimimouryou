@@ -1,12 +1,14 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
+  import NeedsApp from '$lib/components/sources/needs-app.svelte';
   import SourceCover from '$lib/components/sources/source-cover.svelte';
   import { account$, hasPermission } from '$lib/data/account/account';
   import { pagePath, standalone } from '$lib/data/env';
   import { libraryTab$ } from '$lib/data/library/library-home';
   import { browseSite, lookUpWork, searchSites } from '$lib/data/sources/server-sources';
   import type { SourceSearch, SourceSearchWork } from '$lib/data/sources/types';
+  import { needsAppMessage } from '$lib/data/sources/transport';
   import { onMount } from 'svelte';
 
   /**
@@ -28,7 +30,7 @@
   // Answers that arrive after the reader moved on are dropped.
   let request = 0;
 
-  const allowed = $derived(!standalone && hasPermission($account$, 'import'));
+  const allowed = $derived(standalone || hasPermission($account$, 'import'));
   const kind = $derived<Kind>(query ? 'search' : list);
   const siteName = $derived(searchSites.find((entry) => entry.site === site)?.name ?? site);
   const domain = $derived(result?.domain ?? (site === 'kakuyomu' ? 'kakuyomu.jp' : 'syosetu.com'));
@@ -120,9 +122,7 @@
 
     {#if !allowed}
       <p class="search-note">
-        {standalone
-          ? 'Sources run on a server: the standalone app cannot fetch them yet.'
-          : 'Adding web novels needs an account with the "Add books" permission. Ask an admin.'}
+        {'Adding web novels needs an account with the "Add books" permission. Ask an admin.'}
       </p>
     {:else}
       <div class="app-segmented search-sites" role="radiogroup" aria-label="Site">
@@ -173,8 +173,11 @@
         </div>
       {/if}
 
+      {#if error === needsAppMessage}<NeedsApp />{/if}
       <p class="search-meta" role="status">
-        {#if error}
+        {#if error === needsAppMessage}
+          {''}
+        {:else if error}
           <span class="search-error">{error}</span>
         {:else if loading}
           Waiting for {domain}…
@@ -199,7 +202,7 @@
                   {#if work.following}
                     <span class="search-tag search-tag-following">Following</span>
                   {:else if work.inLibrary}
-                    <span class="search-tag">In library</span>
+                    <span class="search-tag">{standalone ? 'On this device' : 'In library'}</span>
                   {/if}
                 </div>
               </a>
