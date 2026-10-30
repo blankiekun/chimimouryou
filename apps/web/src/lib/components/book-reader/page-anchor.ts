@@ -95,9 +95,18 @@ export function firstTextAfterIn(
   };
   let lo = 0;
   let hi = nodes.length;
+  // A node without a box (ruby's <rp>) takes the place of the nearest laid-out one before it;
+  // everything before `lo` is before.
+  const laidOut = (i: number) => {
+    for (let j = i; j >= lo; j -= 1) {
+      const rect = lastRect(nodes[j]);
+      if (rect) return rect;
+    }
+    return undefined;
+  };
   while (lo < hi) {
     const mid = (lo + hi) >> 1;
-    const rect = lastRect(nodes[mid]);
+    const rect = laidOut(mid);
     if (!rect || before(rect)) lo = mid + 1;
     else hi = mid;
   }

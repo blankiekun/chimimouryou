@@ -724,6 +724,11 @@ export abstract class BaseStorageHandler {
 
     await Promise.all(bookObjectTransforms);
 
+    // A zip without staticdata.json would otherwise replace the local book with a blank one
+    if (!bookObject.elementHtml) {
+      throw new Error(`Invalid bookdata - missing static data`);
+    }
+
     return bookObject;
   }
 
