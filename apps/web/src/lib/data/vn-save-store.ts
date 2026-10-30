@@ -25,7 +25,24 @@ import {
   ZipReader,
   ZipWriter
 } from '@zip.js/zip.js';
-import { fromBase64, hashPage, toBase64, type VnInfo, type VnSaves } from '$lib/data/vn';
+import {
+  fromBase64,
+  hashPage,
+  mergeVnSaves,
+  parseVnSaves,
+  sameVnSaves,
+  toBase64,
+  type VnInfo,
+  type VnSaves
+} from '$lib/data/vn';
+import {
+  bookSyncSource,
+  syncFileStore,
+  syncJsonFile,
+  type SyncFileStore
+} from '$lib/data/sync-files';
+import { formatBytes } from '$lib/data/vn-upload';
+import { logger } from '$lib/data/logger';
 
 export interface SaveArea {
   label: string;
@@ -496,4 +513,119 @@ export async function writeWindowsSaves(areas: SaveArea[], synced: VnSaves) {
   }
 
   return written;
+}
+
+/**
+ * A game's saves synced through vnsaves.json while it is played on /v: CONscripter's after each
+ * save, a Windows game's pulled before it starts and pushed when they changed, and deletes from
+ * the Saves sheet. Writes run one after another (`queue`).
+ */
+export class VnSaveSync {
+  queue = Promise.resolve();
+  /** A Windows game's save files as last pushed (windowsSavesStamp) */
+  stamp: string | undefined;
+
+  constructor(
+    public title: string,
+    public info: VnInfo,
+    public storageSource: string | undefined,
+    /** Why a Windows game's saves don't sync, or undefined once they do */
+    public onNote: (note: string | undefined) => void
+  ) {}
+
+  store() {
+    return syncFileStore(bookSyncSource(this.storageSource));
+  }
+
+  async fetch(): Promise<VnSaves> {
+    const store = await this.store();
+    const file = store ? await store.readSyncFile('vnsaves.json', this.title) : undefined;
+
+    return (file && parseVnSaves(JSON.parse(file.text))) || {};
+  }
+
+  private enqueue(write: (store: SyncFileStore) => Promise<unknown>) {
+    this.queue = this.queue
+      .then(async () => {
+        const store = await this.store();
+
+        if (store) await write(store);
+      })
+      .catch((error) => logger.warn(`Visual novel save sync failed: ${error.message}`));
+  }
+
+  /** After the engine saved: merges this browser's saves into the synced ones. */
+  upload(files: Record<string, { modified: number; bytes: Uint8Array }>, engine?: string) {
+    const local: VnSaves = Object.fromEntries(
+      Object.entries(files).map(([name, file]) => [
+        name,
+        { modified: file.modified, data: toBase64(file.bytes), engine }
+      ])
+    );
+
+    this.enqueue((store) =>
+      syncJsonFile(store, 'vnsaves.json', this.title, parseVnSaves, async (remote = {}) => {
+        const merged = mergeVnSaves(local, remote);
+
+        return sameVnSaves(merged, remote) ? undefined : merged;
+      })
+    );
+  }
+
+  /** Before a Windows game starts: synced save files newer than this browser's are written in. */
+  async pullWindows() {
+    await this.queue;
+    try {
+      await writeWindowsSaves(vnSaveAreas(this.title, this.info), await this.fetch());
+    } catch (error: any) {
+      // Offline: play with this browser's saves.
+      logger.warn(`Visual novel save sync failed: ${error.message}`);
+    }
+  }
+
+  /** A Windows game's save files merged into vnsaves.json, when they changed. */
+  pushWindows() {
+    if (this.info.engine !== 'vnbox') return;
+
+    this.enqueue(async (store) => {
+      const files = await windowsSaveFiles(vnSaveAreas(this.title, this.info));
+      const stamp = windowsSavesStamp(files);
+
+      if (stamp === this.stamp) return;
+
+      const { size, saves } = await readWindowsSaves(files);
+
+      if (!saves) {
+        this.onNote(
+          `This game's saves are ${formatBytes(size)}, over the ${formatBytes(windowsSavesCap)} that sync. They stay in this browser.`
+        );
+        return;
+      }
+      this.onNote(undefined);
+      await syncJsonFile(store, 'vnsaves.json', this.title, parseVnSaves, async (remote = {}) => {
+        const merged = mergeVnSaves(saves, remote, isWindowsSaveKey);
+
+        return sameVnSaves(merged, remote) ? undefined : merged;
+      });
+      this.stamp = stamp;
+    });
+  }
+
+  /** Saves deleted in the sheet leave vnsaves.json too (merges never delete). */
+  deleted(area: SaveArea, paths: string[]) {
+    const names = new Set(
+      this.info.engine === 'vnbox'
+        ? paths.map((path) => windowsSaveKey(area, path))
+        : paths.filter((path) => !path.includes('/'))
+    );
+
+    if (!names.size) return;
+    this.enqueue((store) =>
+      syncJsonFile(store, 'vnsaves.json', this.title, parseVnSaves, async (remote = {}) =>
+        Object.keys(remote).some((name) => names.has(name))
+          ? Object.fromEntries(Object.entries(remote).filter(([name]) => !names.has(name)))
+          : undefined
+      )
+    );
+  }
 }

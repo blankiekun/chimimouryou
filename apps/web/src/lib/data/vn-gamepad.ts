@@ -80,6 +80,57 @@ export function cursorSpeed(pad: Pad): [number, number] {
   ];
 }
 
+/** The /v sheets a pad button opens or closes. */
+export interface PadSheets {
+  more: boolean;
+  backlog: boolean;
+  tuning: boolean;
+  hooks: boolean;
+  saves: boolean;
+}
+
+/** What the page does for a poll's changes, in order: its own actions, or a button in the game. */
+export type PadEffect = 'skip' | 'fullscreen' | 'closeSaves' | { button: PadAction; down: boolean };
+
+/**
+ * A poll's presses and releases on /v: the sheets after them and the effects to run. The page's
+ * own buttons (skip, Backlog, More, full screen; B closing a sheet) act here, the rest go to the
+ * game; releases always do.
+ */
+export function padStep(
+  sheets: PadSheets,
+  pressed: PadAction[],
+  released: PadAction[],
+  game: { started: boolean; blocked: boolean }
+) {
+  const next = { ...sheets };
+  const effects: PadEffect[] = released.map((button) => ({ button, down: false }));
+
+  for (const action of pressed) {
+    if (action === 'skip') {
+      if (game.started) effects.push('skip');
+    } else if (action === 'backlog') {
+      next.more = false;
+      next.backlog = !next.backlog && !game.blocked;
+    } else if (action === 'more') {
+      next.backlog = false;
+      next.more = !next.more;
+    } else if (action === 'fullscreen') {
+      effects.push('fullscreen');
+    } else if (action === 'menu' && (next.more || next.backlog || next.tuning || next.hooks)) {
+      // B closes a sheet before it reaches the game.
+      next.more = next.backlog = next.tuning = next.hooks = false;
+    } else if (action === 'menu' && next.saves) {
+      next.saves = false;
+      effects.push('closeSaves');
+    } else {
+      effects.push({ button: action, down: true });
+    }
+  }
+
+  return { sheets: next, effects };
+}
+
 /**
  * Polls the first connected pad each animation frame while one is connected and the tab is
  * visible; `pads()` gives the pads (the page's, else the frame's). Returns the stop function.
