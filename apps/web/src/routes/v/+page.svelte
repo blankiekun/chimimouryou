@@ -19,18 +19,15 @@
   import { faEllipsis, faExpand } from '@fortawesome/free-solid-svg-icons';
   import PlayerBar from '$lib/components/player-bar.svelte';
   import ReaderSheet from '$lib/components/book-reader/reader-sheet.svelte';
+  import ReaderMoreList from '$lib/components/book-reader/reader-more-list.svelte';
   import { fullscreenManager } from '$lib/data/fullscreen-manager';
   import {
     autoReplication$,
-    cacheStorageData$,
     database,
-    readingGoalsMergeMode$,
-    replicationSaveBehavior$,
     startDayHoursForTracker$,
-    statisticsEnabled$,
-    statisticsMergeMode$,
-    syncTarget$
+    statisticsEnabled$
   } from '$lib/data/store';
+  import { context, externalHandler, handler } from '$lib/data/media-sync';
   import { pagePath } from '$lib/data/env';
   import { logger } from '$lib/data/logger';
   import { MergeMode } from '$lib/data/merge-mode';
@@ -66,14 +63,9 @@
   import { bookSyncSource, syncFileStore, syncJsonFile } from '$lib/data/sync-files';
   import { recordKanjiText } from '$lib/data/kanji-seen';
   import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
-  import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
   import type { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
   import type { BrowserStorageHandler } from '$lib/data/storage/handler/browser-handler';
-  import {
-    StorageDataType,
-    StorageKey,
-    StorageSourceDefault
-  } from '$lib/data/storage/storage-types';
+  import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
   import {
     AutoReplicationType,
     ReplicationSaveBehavior
@@ -125,11 +117,6 @@
   const instantText$ = writableBooleanLocalStorageSubject()('vnInstantText', false);
   /** The touch rail's big Menu, Skip and Full screen buttons (landscape); folded, its handle. */
   const railOpen$ = writableBooleanLocalStorageSubject()('vnRailOpen', true);
-  const defaultSources: Record<string, StorageKey> = {
-    [StorageSourceDefault.CALIBRE_DEFAULT]: StorageKey.CALIBRE,
-    [StorageSourceDefault.GDRIVE_DEFAULT]: StorageKey.GDRIVE,
-    [StorageSourceDefault.ONEDRIVE_DEFAULT]: StorageKey.ONEDRIVE
-  };
 
   let book: BooksDbBookData | undefined;
   let frame: HTMLIFrameElement | undefined;
@@ -203,6 +190,40 @@
   let todayCharacters = 0;
 
   $: percent = book?.characters ? Math.min(100, (readCharacters / book.characters) * 100) : 0;
+  $: moreList = [
+    fullscreenManager.fullscreenEnabled && {
+      label: 'Full screen',
+      onclick: () => {
+        showMore = false;
+        toggleFullscreen();
+      }
+    },
+    windows &&
+      !blocked && {
+        label: 'Tuning',
+        onclick: () => {
+          showMore = false;
+          showTuning = true;
+        }
+      },
+    windows &&
+      !blocked && {
+        label: 'Hooks',
+        onclick: () => {
+          showMore = false;
+          showHooks = true;
+        }
+      },
+    !blocked && {
+      label: 'Backlog',
+      onclick: () => {
+        showMore = false;
+        showBacklog = true;
+      }
+    },
+    { label: 'Saves', onclick: openSaves },
+    { label: 'Statistics', onclick: openStatistics }
+  ].filter(Boolean) as { label: string; onclick: () => void }[];
   // What is open, for the plugins (Discord status).
   $: if (book && readCharacters >= 0) {
     readingActivity({
@@ -218,36 +239,6 @@
 
   function engineSet(name: string, value: number) {
     (frame?.contentWindow as any)?.engineSet(name, value);
-  }
-
-  function handler(type: StorageKey, name?: string) {
-    return getStorageHandler(
-      window,
-      type,
-      name,
-      true,
-      $cacheStorageData$,
-      $replicationSaveBehavior$,
-      $statisticsMergeMode$,
-      $readingGoalsMergeMode$
-    );
-  }
-
-  /** Where this game's progress syncs, as in the book reader (Calibre always syncs). */
-  async function externalHandler(data: BooksDbBookData) {
-    const name =
-      data.storageSource || ($autoReplication$ !== AutoReplicationType.Off ? $syncTarget$ : '');
-
-    if (!name) return undefined;
-
-    const type =
-      defaultSources[name] ?? (await (await database.db).get('storageSource', name))?.type;
-
-    return type ? handler(type, name) : undefined;
-  }
-
-  function context() {
-    return { id: book!.id, title: book!.title, imagePath: book!.coverImage };
   }
 
   function syncs(direction: AutoReplicationType) {
@@ -272,7 +263,7 @@
 
     book = data;
     hookCleanup = vnInfo(data).hookCleanup ?? {};
-    local.startContext(context());
+    local.startContext(context(book!));
     data.lastBookOpen = Date.now();
     await local.updateLastRead(data);
 
@@ -280,14 +271,14 @@
       external = await externalHandler(data);
 
       if (external) {
-        external.startContext(context());
+        external.startContext(context(book!));
 
         if (syncs(AutoReplicationType.Down)) {
           const error = await replicateData(
             external,
             local,
             false,
-            [context()],
+            [context(book!)],
             [StorageDataType.PROGRESS, StorageDataType.STATISTICS]
           );
 
@@ -618,7 +609,7 @@
     }
 
     if (syncs(AutoReplicationType.Up)) {
-      const error = await replicateData(local, external!, false, [context()], types).catch(
+      const error = await replicateData(local, external!, false, [context(book!)], types).catch(
         (err: any) => err.message
       );
 
@@ -1060,56 +1051,7 @@
     {#if windows && !blocked && (info?.discs?.length ?? 0) > 1}
       <VnboxDiscs count={info?.discs?.length ?? 0} {frame} />
     {/if}
-    <ul class="vn-more">
-      {#if fullscreenManager.fullscreenEnabled}
-        <li>
-          <button
-            on:click={() => {
-              showMore = false;
-              toggleFullscreen();
-            }}
-          >
-            Full screen
-          </button>
-        </li>
-      {/if}
-      {#if windows && !blocked}
-        <li>
-          <button
-            on:click={() => {
-              showMore = false;
-              showTuning = true;
-            }}
-          >
-            Tuning
-          </button>
-        </li>
-        <li>
-          <button
-            on:click={() => {
-              showMore = false;
-              showHooks = true;
-            }}
-          >
-            Hooks
-          </button>
-        </li>
-      {/if}
-      {#if !blocked}
-        <li>
-          <button
-            on:click={() => {
-              showMore = false;
-              showBacklog = true;
-            }}
-          >
-            Backlog
-          </button>
-        </li>
-      {/if}
-      <li><button on:click={openSaves}>Saves</button></li>
-      <li><button on:click={openStatistics}>Statistics</button></li>
-    </ul>
+    <ReaderMoreList items={moreList} />
   </ReaderSheet>
 {/if}
 
@@ -1458,24 +1400,5 @@
     .vn-progress {
       padding: 0.4rem 1rem;
     }
-  }
-
-  .vn-more {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .vn-more button {
-    display: flex;
-    width: 100%;
-    min-height: 3.25rem;
-    align-items: center;
-    border-bottom: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
-    text-align: left;
-  }
-
-  .vn-more button:hover {
-    color: var(--accent-strong-color);
   }
 </style>
