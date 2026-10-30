@@ -6,6 +6,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { buildSearchIndex, chapterLabelAt, searchBook, searchIndexCache } from './book-search';
+import { getTextSegments, rangeForText } from './text-positions';
 import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v3';
 
 const html =
@@ -52,6 +53,25 @@ describe('searchBook', () => {
     expect(() => searchBook(index, '(', { ignoreKana: false, regex: true }, sections)).toThrow(
       SyntaxError
     );
+  });
+});
+
+describe('search highlight range', () => {
+  it('covers matches that counts skip, like punctuation', () => {
+    const div = document.createElement('div');
+
+    div.innerHTML = html;
+    document.body.replaceChildren(div);
+
+    const segments = getTextSegments(div);
+    const rangeOf = (query: string) =>
+      searchBook(buildSearchIndex(html), query, { ignoreKana: false, regex: false }, sections).map(
+        (r) => rangeForText(document, segments, r.start, r.skip, r.match.length)?.toString()
+      );
+
+    expect(rangeOf('。')).toEqual(['。', '。']);
+    expect(rangeOf('猫が')).toEqual(['猫(ねこ)が']); // the range spans the ruby
+    expect(rangeOf('。ＡＢ')).toEqual(['。ＡＢ']);
   });
 });
 

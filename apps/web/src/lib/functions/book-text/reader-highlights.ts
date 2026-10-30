@@ -23,12 +23,19 @@ import {
 import {
   countsForRange,
   getTextSegments,
-  rangeForCounts
+  rangeForCounts,
+  rangeForText
 } from '$lib/functions/book-text/text-positions';
 
 export interface CountMatch {
   start: number;
   end: number;
+}
+
+/** A search match: `skip` and `length` are string lengths (see `SearchResult.skip`). */
+export interface SearchMatch extends CountMatch {
+  skip: number;
+  length: number;
 }
 
 export interface HighlightRange {
@@ -52,7 +59,7 @@ export function paintHighlights(
   content: Element,
   base: number,
   highlights: Highlight[],
-  searchMatch: CountMatch | undefined,
+  searchMatch: SearchMatch | undefined,
   readingMatch: CountMatch | undefined,
   unknownSpans: CountSpan[]
 ) {
@@ -93,8 +100,15 @@ export function paintHighlights(
   setCssHighlight('ttu-hl-note', withNotes);
 
   const searchRange =
-    searchMatch && searchMatch.end > base && searchMatch.start < end
-      ? rangeForCounts(document, segments, searchMatch.start, searchMatch.end, base)
+    searchMatch && searchMatch.start >= base && searchMatch.start <= end
+      ? rangeForText(
+          document,
+          segments,
+          searchMatch.start,
+          searchMatch.skip,
+          searchMatch.length,
+          base
+        )
       : undefined;
 
   setCssHighlight('ttu-search', searchRange ? [searchRange] : []);
@@ -112,7 +126,7 @@ export function paintHighlights(
     )
   );
 
-  return { highlightRanges, readingRange };
+  return { highlightRanges, readingRange, searchRange };
 }
 
 function caretAt(x: number, y: number) {
@@ -220,12 +234,15 @@ export function newHighlight(
  * 200 ms after a change and whenever the rendered text changes (paginated mode swaps sections).
  */
 export class HighlightPainter {
-  searchMatch: CountMatch | undefined;
+  searchMatch: SearchMatch | undefined;
 
   /** Line being read aloud (audiobook or AI voice) */
   readingMatch: CountMatch | undefined;
 
   private highlightRanges: HighlightRange[] = [];
+
+  /** Runs once after the next paint, with the search match's range */
+  private searchCheck: ((range: Range | undefined) => void) | undefined;
 
   private highlightsDirty = true;
 
@@ -290,6 +307,11 @@ export class HighlightPainter {
     this.highlightRanges = painted.highlightRanges;
     this.highlightsDirty = false;
 
+    const { searchCheck } = this;
+
+    this.searchCheck = undefined;
+    searchCheck?.(painted.searchRange);
+
     return painted.readingRange;
   }
 
@@ -335,6 +357,29 @@ export class HighlightPainter {
       scrollToCount(match.start);
       this.scheduleHighlights(true);
     }
+  }
+
+  /**
+   * Highlights a search match the reader is jumping to. Counts skip punctuation, so a jump to
+   * `start` lands on the next counted character, which can leave a match like 。 at the end of
+   * the page or column before: then it goes back one character, once the jump has painted.
+   * (`skip` is 0 for a 。 right after a counted character, so it can't tell when to check.)
+   */
+  showSearch(
+    match: SearchMatch | undefined,
+    bookWidth: () => number,
+    scrollToCount: (count: number) => void
+  ) {
+    this.searchMatch = match;
+    this.searchCheck =
+      match && match.start > 0
+        ? (range) => {
+            if (range && !isOnScreen(range.getBoundingClientRect(), bookWidth(), innerHeight)) {
+              scrollToCount(match.start - 1);
+              this.scheduleHighlights(true);
+            }
+          }
+        : undefined;
   }
 
   /** The highlight under the point (x, y), if any. */

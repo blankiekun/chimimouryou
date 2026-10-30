@@ -16,7 +16,8 @@ import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v
 import {
   countCharacters,
   gaijiPlaceholder,
-  getTextSegments
+  getTextSegments,
+  offsetForCount
 } from '$lib/functions/book-text/text-positions';
 
 const blockSelector = 'p, div, li, h1, h2, h3, h4, h5, h6, blockquote, dd, dt, td, th';
@@ -43,6 +44,11 @@ export interface SearchResult {
   /** Character counts before and at the end of the match */
   start: number;
   end: number;
+  /**
+   * Text (string length) between the counted character `start` and the match: punctuation and
+   * other characters counts skip, which the highlight must still cover (`rangeForText`)
+   */
+  skip: number;
   before: string;
   match: string;
   after: string;
@@ -155,6 +161,24 @@ export function chapterLabelAt(sections: Section[], count: number) {
   return label;
 }
 
+/** String length of the uncounted text just before `from` in paragraph `p`, back through earlier paragraphs. */
+function uncountedBefore(paragraphs: Paragraph[], p: number, from: number) {
+  let skip = 0;
+
+  for (let q = p; q >= 0; q -= 1) {
+    const text = q === p ? paragraphs[q].text.slice(0, from) : paragraphs[q].text;
+    const counted = countCharacters(text);
+
+    if (counted) {
+      return skip + text.length - offsetForCount(text, counted, true);
+    }
+
+    skip += text.length;
+  }
+
+  return skip;
+}
+
 /** Throws a SyntaxError for an invalid regular expression. */
 export function searchBook(
   index: SearchIndex,
@@ -190,6 +214,7 @@ export function searchBook(
         results.push({
           start,
           end: start + countCharacters(paragraph.text.slice(from, to)),
+          skip: uncountedBefore(index.paragraphs, p, from),
           before: displayText(paragraph.text.slice(Math.max(0, from - 24), from)),
           match: displayText(paragraph.text.slice(from, to)),
           after: displayText(paragraph.text.slice(to, to + 24)),

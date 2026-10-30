@@ -1103,7 +1103,11 @@
   onDestroy(() => jumpBack.destroy());
 
   function jumpToSearchResult(result: SearchResult) {
-    painter.searchMatch = { start: result.start, end: result.end };
+    painter.showSearch(
+      { start: result.start, end: result.end, skip: result.skip, length: result.match.length },
+      () => bookWidth,
+      scrollToCount
+    );
     jumpToCount(result.start);
   }
 
