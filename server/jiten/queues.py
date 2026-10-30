@@ -1,6 +1,4 @@
 """Readings files and word lists made on request, one at a time in a worker process of their own."""
-import gzip
-import json
 import os
 import sys
 import threading
@@ -140,7 +138,7 @@ class WordsQueue(ReadingsQueue):
         return book.get('size'), book.get('added'), book.get('text')
 
     def _request(self, book_id: int) -> str:
-        if os.path.exists(workers.words_path(book_id)) or migrate_legacy_words(book_id):
+        if os.path.exists(workers.words_path(book_id)):
             return 'ready'
         if not os.path.exists(settings.FREQUENCY_DICTIONARY):
             return 'unavailable'
@@ -160,54 +158,3 @@ class WordsQueue(ReadingsQueue):
 
 
 word_lists = WordsQueue()
-# Legacy lists' totals ([uniqueWords, tokens]) by book id, from the estimates they were made with
-# (legacy-totals.json, written once by migrate_word_lists before a new estimate replaces them).
-_legacy_totals = None
-
-
-def legacy_totals_path() -> str:
-    return os.path.join(settings.WORDS_DIR, 'legacy-totals.json')
-
-
-def migrate_word_lists():
-    """On start, before any job: records the totals of the lists made with their estimate (version
-    LEGACY_WORDS_VERSION; only the estimate has their totals), so they stay usable once a new
-    estimate replaces it. Lists of an older version are made again when asked for."""
-    path = legacy_totals_path()
-    if settings.LEGACY_WORDS_VERSION != settings.WORDS_VERSION or os.path.exists(path):
-        return
-    try:
-        legacy = {name[:-len('.json.gz')] for name in os.listdir(settings.WORDS_DIR) if name.endswith('.json.gz')}
-    except OSError:
-        return
-    totals = {key: [estimate['uniqueWords'], estimate['tokens']]
-              for key, estimate in jobs.load_results().get('books', {}).items()
-              if key in legacy and estimate.get('words') == settings.LEGACY_WORDS_VERSION
-              and estimate.get('uniqueWords') is not None and estimate.get('tokens') is not None}
-    with open(path + '.tmp', 'w', encoding='utf-8') as f:
-        json.dump(totals, f, separators=(',', ':'))
-    os.replace(path + '.tmp', path)
-
-
-def migrate_legacy_words(book_id: int) -> bool:
-    """A legacy list moved to words_path with its totals (True); one without them is removed."""
-    global _legacy_totals
-    legacy = workers.legacy_words_path(book_id)
-    if settings.LEGACY_WORDS_VERSION != settings.WORDS_VERSION or not os.path.exists(legacy):
-        return False
-    if _legacy_totals is None:
-        try:
-            with open(legacy_totals_path(), encoding='utf-8') as f:
-                _legacy_totals = json.load(f)
-        except (OSError, ValueError):
-            _legacy_totals = {}
-    totals = _legacy_totals.get(str(book_id))
-    try:
-        if totals:
-            with gzip.open(legacy, 'rt', encoding='utf-8') as f:
-                rows = json.load(f)
-            workers.write_words(book_id, {'words': rows, 'uniqueWords': totals[0], 'tokens': totals[1]})
-        os.remove(legacy)
-    except (OSError, ValueError):
-        return False
-    return bool(totals)

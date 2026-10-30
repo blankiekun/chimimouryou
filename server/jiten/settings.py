@@ -69,9 +69,6 @@ WORDS_WAIT = 20
 # 20: source line breaks folded in book_text (features.fold_source_breaks): pretty-printed ruby no
 #    longer splits words (呟 いた).
 WORDS_VERSION = 20
-# Lists made with their estimate, before lists were made on request: WORDS_DIR/<id>.json.gz, a bare
-# list of rows, version 19 (its totals were the estimate's: migrate_word_lists keeps them).
-LEGACY_WORDS_VERSION = 19
 # Readings files (#17), made from the reader's text copy of the book (PUT /api/v1/books/{id}/text):
 # <TEXT_DIR>/<bookId>.json.gz, found by the catalog entry's bookId (library.db's books.id).
 TEXT_DIR = os.environ.get('TEXT_DIR', '/data/state/api/text')

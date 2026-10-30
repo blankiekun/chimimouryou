@@ -333,31 +333,6 @@ class WordsQueueTest(unittest.TestCase):
         with gzip.open(service.workers.words_path(6), 'rt', encoding='utf-8') as f:
             self.assertEqual(json.load(f), {'words': ['本6']})
 
-    def test_legacy_lists_keep_their_estimates_totals(self):
-        service = self.service
-        # Migration runs only while WORDS_VERSION is the legacy lists' version.
-        version = service.settings.WORDS_VERSION
-        service.settings.WORDS_VERSION = service.settings.LEGACY_WORDS_VERSION
-        self.addCleanup(setattr, service, 'WORDS_VERSION', version)
-        os.makedirs(service.settings.WORDS_DIR)
-        for book_id in (1, 5):
-            with gzip.open(service.workers.legacy_words_path(book_id), 'wt', encoding='utf-8') as f:
-                json.dump([['猫', 'ねこ', 3, 1200, '猫']], f)
-        service.jobs.save_results({'books': {'1': {'words': 19, 'uniqueWords': 7, 'tokens': 30},
-                                        '5': {'words': 18, 'uniqueWords': 7, 'tokens': 30}}})
-        service.queues.migrate_word_lists()
-        # A new estimate replaces the old one: the totals were kept.
-        service.jobs.save_results({'books': {'1': {'core': {}}, '5': {'core': {}}}})
-        service.queues.migrate_word_lists()
-        queue = service.queues.WordsQueue()
-        queue._start = lambda: 'thread'
-        self.assertEqual(queue.request(1), 'ready')
-        with gzip.open(service.workers.words_path(1), 'rt', encoding='utf-8') as f:
-            self.assertEqual(json.load(f), {'words': [['猫', 'ねこ', 3, 1200, '猫']], 'uniqueWords': 7, 'tokens': 30})
-        # An older list has no totals to keep: it is made again.
-        self.assertEqual(queue.request(5), 'queued')
-        self.assertFalse(os.path.exists(service.workers.legacy_words_path(1)) or os.path.exists(service.workers.legacy_words_path(5)))
-
 
 class NginxTest(unittest.TestCase):
     def test_readers_reach_readings_files_without_the_difficulty_permission(self):
