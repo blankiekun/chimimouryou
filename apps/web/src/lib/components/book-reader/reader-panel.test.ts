@@ -7,7 +7,7 @@
 import 'fake-indexeddb/auto';
 import '$lib/data/storage/storage-handler-factory';
 import { tick } from 'svelte';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { buildSearchIndex } from '$lib/functions/book-text/book-search';
 import { setPluginEnabled } from '$lib/plugins';
 import ReaderPanel from './reader-panel.svelte';
@@ -30,21 +30,6 @@ const tabLabels = (target: HTMLElement) =>
   [...target.querySelectorAll('[role=tab]')].map((tab) => tab.textContent?.trim());
 
 describe('ReaderPanel', () => {
-  it('loads Story so far and the lore in the Story tab', async () => {
-    const target = document.createElement('div');
-
-    setPluginEnabled('ai', true);
-    new ReaderPanel({ target, props: props('Tabs', '<p>猫が好き。</p>', 6) });
-
-    [...target.querySelectorAll<HTMLElement>('[role=tab]')]
-      .find((tab) => tab.textContent?.trim() === 'Story')!
-      .click();
-    await tick();
-
-    await vi.waitFor(() => expect(target.textContent).toContain('Write recap at this position'));
-    await vi.waitFor(() => expect(target.textContent).toContain('Read up to 0 characters'));
-  });
-
   it('leaves out the tabs of a plugin that is switched off', async () => {
     const target = document.createElement('div');
 

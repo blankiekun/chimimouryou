@@ -169,6 +169,23 @@ describe('extra files on Google Drive', () => {
     expect(JSON.parse(words[0].content).words).toEqual(['a', 'b', 'c']);
   });
 
+  // Bug: a truncated or corrupt upload made JSON.parse throw before merge, so that file never
+  // synced again on any device.
+  it('replaces a malformed remote file with the local copy', async () => {
+    const { files } = fakeDrive();
+    const store = (await syncFileStore(drive))!;
+
+    await store.writeSyncFile('words.json', '{"words": ["a"', { version: '' });
+    await syncJsonFile<{ words: string[] }>(store, 'words.json', undefined, async (remote) => ({
+      words: [...(remote?.words ?? []), 'local']
+    }));
+
+    const words = files.filter((file) => file.name === 'words.json');
+
+    expect(words).toHaveLength(1);
+    expect(JSON.parse(words[0].content)).toEqual({ words: ['local'] });
+  });
+
   it("doesn't create folders for books that aren't on Drive", async () => {
     const { files } = fakeDrive();
     const store = (await syncFileStore(drive))!;

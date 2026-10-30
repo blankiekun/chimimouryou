@@ -19,6 +19,7 @@ describe('standalone edition', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     fetchMock.mockReset();
@@ -317,9 +318,12 @@ describe('standalone edition', () => {
     const { discordOptions$ } = await import('$lib/data/discord-settings');
     const hubCalls = () =>
       fetchMock.mock.calls.filter(([url]) => String(url).includes('/v1/presence'));
+    // Fake timers drive the hub sends and fake-indexeddb (setImmediate) too: the waits below
+    // let every send land, however slow the machine, so the zero counts can't pass early.
+    vi.useFakeTimers();
     const read = async (position: number) => {
       hooks.readingActivity({ kind: 'book', title: '本', position, characters: 100 });
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await vi.advanceTimersByTimeAsync(20);
     };
 
     // Signed in with the plugin on, but the switch is off by default.
@@ -347,11 +351,13 @@ describe('standalone edition', () => {
     const hooks = await import('$lib/data/reader-hooks');
     const discord = await import('$lib/data/discord');
     const { discordActivities$, discordOptions$ } = await import('$lib/data/discord-settings');
+    // Fake timers, as above.
+    vi.useFakeTimers();
     const searches = () =>
       fetchMock.mock.calls.filter(([url]) => /anilist|vndb/.test(String(url))).length;
     const read = async (title: string) => {
       hooks.readingActivity({ kind: 'book', title, position: 10, characters: 100 });
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await vi.advanceTimersByTimeAsync(20);
     };
 
     discordActivities$.next({ book: { details: '', state: '', largeImage: 'cover' } });
@@ -378,11 +384,13 @@ describe('standalone edition', () => {
     const discord = await import('$lib/data/discord');
     const { socialSession$ } = await import('$lib/data/social-account');
     const { discordActivities$, discordOptions$ } = await import('$lib/data/discord-settings');
+    // Fake timers, as above.
+    vi.useFakeTimers();
     const coverCalls = () =>
       fetchMock.mock.calls.filter(([url]) => String(url).includes('/v1/cover')).length;
     const read = async (title: string) => {
       hooks.readingActivity({ kind: 'book', title, position: 10, characters: 100 });
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await vi.advanceTimersByTimeAsync(20);
     };
 
     discordActivities$.next({ book: { details: '', state: '', largeImage: 'cover' } });
@@ -398,7 +406,8 @@ describe('standalone edition', () => {
 
     discordOptions$.next({ hideTitles: false });
     await read('本 4');
-    expect(coverCalls()).toBeGreaterThan(0);
+    // One lookup for 本 3, re-rendered when titles show again, and one for 本 4.
+    expect(coverCalls()).toBe(2);
     expect(fetchMock.mock.calls.some(([url]) => /\/calibre\/|\/account\//.test(String(url)))).toBe(
       false
     );
@@ -424,6 +433,8 @@ describe('standalone edition', () => {
     const plugins = await import('$lib/plugins');
     const hooks = await import('$lib/data/reader-hooks');
     const discord = await import('$lib/data/discord');
+    // Fake timers, as above.
+    vi.useFakeTimers();
     const addonCalls = () =>
       fetchMock.mock.calls.filter(([url]) => String(url).startsWith(discord.addonUrl));
 
@@ -431,7 +442,7 @@ describe('standalone edition', () => {
     hooks.readingActivity({ kind: 'book', title: '本', position: 10, characters: 100 });
     hooks.readingActivity({ kind: 'idle' });
     await discord.checkConnection();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await vi.advanceTimersByTimeAsync(20);
     expect(fetchMock).not.toHaveBeenCalled();
 
     plugins.setPluginEnabled('discord', true);
@@ -440,13 +451,13 @@ describe('standalone edition', () => {
 
     // Switched off again: one clear for what it sent, then nothing.
     hooks.readingActivity({ kind: 'book', title: '本', position: 10, characters: 100 });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await vi.advanceTimersByTimeAsync(20);
     plugins.setPluginEnabled('discord', false);
     const sent = addonCalls().length;
 
     hooks.readingActivity({ kind: 'book', title: '本', position: 20, characters: 100 });
     await discord.checkConnection();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await vi.advanceTimersByTimeAsync(20);
     expect(addonCalls()).toHaveLength(sent);
     expect(addonCalls().at(-1)?.[1]?.method).toBe('DELETE');
     discord.resetSender();

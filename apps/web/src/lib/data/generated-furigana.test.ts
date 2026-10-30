@@ -81,12 +81,13 @@ describe('generatedReadings$', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     expect(await firstValueFrom(generatedReadings$('Book').pipe(toArray()))).toEqual([file(1)]);
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(await (await readerDb()).get('readings', 'Book')).toEqual({
-      title: 'Book',
-      etag: '"a"',
-      file: file(1)
-    });
+    await vi.waitFor(async () =>
+      expect(await (await readerDb()).get('readings', 'Book')).toEqual({
+        title: 'Book',
+        etag: '"a"',
+        file: file(1)
+      })
+    );
 
     const unchanged = serve(() => new Response(null, { status: 304 }));
     vi.stubGlobal('fetch', unchanged);
@@ -120,7 +121,10 @@ describe('generatedReadings$', () => {
       { ...file(1), bookdata: 'bookdata_2.zip' },
       file(2)
     ]);
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    // The new file is kept before it is deleted, so the delete isn't overtaken by that write.
+    await vi.waitFor(async () =>
+      expect((await (await readerDb()).get('readings', 'Book'))?.etag).toBe('"b"')
+    );
     await deleteCachedReadings('Book');
     expect(await (await readerDb()).get('readings', 'Book')).toBeUndefined();
     vi.unstubAllGlobals();
@@ -152,12 +156,11 @@ describe('prefetchReadings', () => {
 
     generatedFurigana$.next(true);
     await prefetchReadings(['Book', 'Other'], 0);
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await vi.waitFor(async () => expect((await db.get('readings', 'Other'))?.etag).toBe('"o"'));
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       '/api/readings/8',
       '/api/readings/8'
     ]);
-    expect((await db.get('readings', 'Other'))?.etag).toBe('"o"');
     generatedFurigana$.next(false);
     vi.unstubAllGlobals();
   });

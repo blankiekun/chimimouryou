@@ -48,18 +48,12 @@ describe('buildReadingChunks', () => {
     ).toEqual([{ text: 'あ。\nい。', startCharCount: 0 }]);
   });
 
-  it('splits long paragraphs at sentence ends', () => {
-    const sentence = `${'あ'.repeat(499)}。`;
-    const chunks = buildReadingChunks([{ text: sentence.repeat(3), startCharCount: 100 }]);
-
-    expect(chunks.map((c) => c.text)).toEqual([sentence, sentence, sentence]);
-  });
-
-  it('gives chunks split from a paragraph their own start position', () => {
+  it('splits long paragraphs at sentence ends, each chunk with its own start position', () => {
     // 499 counted characters per sentence; 。 is not counted.
     const sentence = `${'あ'.repeat(499)}。`;
     const chunks = buildReadingChunks([{ text: sentence.repeat(3), startCharCount: 100 }]);
 
+    expect(chunks.map((c) => c.text)).toEqual([sentence, sentence, sentence]);
     expect(chunks.map((c) => c.startCharCount)).toEqual([100, 599, 1098]);
   });
 });

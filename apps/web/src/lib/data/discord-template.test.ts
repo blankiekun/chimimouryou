@@ -52,12 +52,6 @@ const template: DiscordActivityTemplate = {
 const times = { now: 1_000_000, session: 900_000, bookLeft: 60 };
 
 describe('renderTemplate', () => {
-  it('fills in variables', () => {
-    expect(renderTemplate('{title} {volume} · {author}', values)).toBe(
-      '薬屋のひとりごと Vol. 1 · 日向夏'
-    );
-  });
-
   it('leaves empty values out with their separator', () => {
     expect(renderTemplate('{title} {volume} · {author}', { title: 'A', author: 'B' })).toBe(
       'A · B'

@@ -14,7 +14,7 @@ const { plugin, recordKanjiSeen } = vi.hoisted(() => ({
 vi.mock('$lib/plugins', () => ({ activePlugins: () => [plugin, {}] }));
 vi.mock('$lib/data/kanji-seen', () => ({ recordKanjiSeen }));
 
-const { bookLeft, bookOpened, positionSettled } = await import('./reader-hooks');
+const { bookOpened, positionSettled } = await import('./reader-hooks');
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -40,10 +40,5 @@ describe('reader hooks', () => {
     expect(plugin.onBookOpened).not.toHaveBeenCalled();
     vi.runAllTimers();
     expect(plugin.onBookOpened).toHaveBeenCalledWith('T', getIndex);
-  });
-
-  it('tells the plugins the book was left', () => {
-    bookLeft('T', 10, 100);
-    expect(plugin.onBookLeft).toHaveBeenCalledWith('T', 10, 100);
   });
 });

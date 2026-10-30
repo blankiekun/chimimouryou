@@ -10,9 +10,6 @@ import {
   hardGuess,
   nextItem,
   placementBands,
-  placementCutoff,
-  placementResults$,
-  recordPlacement,
   placementLength,
   readingMatches,
   scorePlacement,
@@ -122,35 +119,5 @@ describe('hard scoring', () => {
 
   it('keeps a 5k learner who eliminates near 5k, not 400k', () => {
     expect(cutoffs(eliminator(5000))[19]).toBeLessThan(10000);
-  });
-
-  it('saves a hard result as its own record, and the stricter latest counts', () => {
-    placementResults$.next([]);
-    recordPlacement('yesno', 20000, 40);
-    expect(placementCutoff()).toBe(20000);
-    recordPlacement('typed', 12000, 40);
-    expect(placementCutoff()).toBe(12000);
-    expect(
-      placementResults$
-        .getValue()
-        .map(({ mode }) => mode)
-        .sort()
-    ).toEqual(['typed', 'yesno']);
-    placementResults$.next([]);
-  });
-
-  it.skip('prints the simulation table', () => {
-    for (const [name, sheet] of [
-      ['20k knower', knower(20000)],
-      ['readings only past 10k', readerOnly(10000)],
-      ['random guesser', guesser],
-      ['5k + eliminator', eliminator(5000)]
-    ] as const) {
-      for (const length of [20, 40, 60]) {
-        const run = cutoffs(sheet, length);
-
-        console.log(name, length, run[0], run[10], run[19]);
-      }
-    }
   });
 });

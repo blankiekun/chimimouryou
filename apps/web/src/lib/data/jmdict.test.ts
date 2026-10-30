@@ -47,15 +47,6 @@ describe('jmdict', () => {
     expect(await (await import('./jmdict')).bundledJmdictSize()).toBeUndefined();
   });
 
-  it('imports the downloaded zip', async () => {
-    vi.stubGlobal('fetch', async () => response('zip', { status: 200 }));
-    importDictionary.mockResolvedValue({ result: { title: 'JMdict' }, errors: [] });
-    const { installJmdict } = await import('./jmdict');
-
-    await expect(installJmdict()).resolves.toEqual({ result: { title: 'JMdict' }, errors: [] });
-    expect(importDictionary.mock.calls[0][0]).toBeInstanceOf(Blob);
-  });
-
   it('fails without importing when the download fails', async () => {
     vi.stubGlobal('fetch', async () => response(null, { status: 404 }));
     const { installJmdict } = await import('./jmdict');

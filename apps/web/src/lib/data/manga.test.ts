@@ -25,15 +25,12 @@ import {
 } from './manga';
 
 describe('manga', () => {
-  it('stores the page order in elementHtml', () => {
+  it('sorts pages naturally and stores the order in elementHtml', () => {
     const book = { elementHtml: mangaElementHtml(sortPages(['10.jpg', 'a/2.png', '1.jpg'])) };
 
     expect(isManga(book)).toBe(true);
     expect(mangaPages(book)).toEqual(['1.jpg', '10.jpg', 'a/2.png']);
     expect(isManga({ elementHtml: '<p>本</p>' })).toBe(false);
-  });
-
-  it('sorts page numbers naturally', () => {
     expect(sortPages(['p10.jpg', 'p2.jpg', 'p1.jpg'])).toEqual(['p1.jpg', 'p2.jpg', 'p10.jpg']);
   });
 

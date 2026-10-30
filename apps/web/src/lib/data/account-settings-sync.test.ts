@@ -143,6 +143,7 @@ describe('account settings sync', () => {
     await signInAs(null);
 
     expect(aiConnectionKeys$.getValue()).toEqual({});
+    expect(window.localStorage.getItem('aiConnectionKeys')).toBeNull();
     // Non-secret settings stay.
     expect(aiConnections$.getValue()).toHaveLength(2);
     expect(askAiReaderNote$.getValue()).toBe('note/alice');
@@ -188,21 +189,6 @@ describe('account settings sync', () => {
     await signInAs(bob);
 
     expect(aiConnectionKeys$.getValue()).toEqual({ or: 'sk-or-bob' });
-  });
-
-  it('removes connection keys on sign-out but keeps the connections', async () => {
-    aiConnections$.next([
-      { id: 'g', name: 'Gemini', provider: 'gemini', kind: 'text', modified: 1 }
-    ]);
-    aiConnectionKeys$.next({ g: 'AIza-alice' });
-    window.localStorage.setItem('accountSettingsOwner', 'alice');
-    mockServer();
-
-    await signInAs(null);
-
-    expect(aiConnectionKeys$.getValue()).toEqual({});
-    expect(window.localStorage.getItem('aiConnectionKeys')).toBeNull();
-    expect(aiConnections$.getValue()).toHaveLength(1);
   });
 
   it('merges connections per id with the account', async () => {

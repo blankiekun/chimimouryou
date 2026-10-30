@@ -57,24 +57,31 @@ describe('/b paginated: a page turn drops the reading point', () => {
   for (const resize of [false, true]) {
     it(resize ? 'after a same-size resize' : 'without a resize', async () => {
       component = await openReader(ViewMode.Paginated, 'horizontal-tb');
-      await settle();
 
       item(await moreItems(), 'Set reading point')!.click();
-      await settle();
+      // The point is read from what is under it, so the sheet must be gone first.
+      await vi.waitFor(() => {
+        expect(document.body.classList).toContain('cursor-crosshair');
+        expect(document.querySelector('.more-item')).toBeNull();
+      });
       document.dispatchEvent(
         new PointerEvent('pointerup', { clientX: innerWidth / 2, clientY: innerHeight / 2 })
       );
-      await settle();
+      await vi.waitFor(() => expect(document.body.classList).not.toContain('cursor-crosshair'));
       expect(item(await moreItems(), 'Reset reading point')).toBeTruthy();
       (document.querySelector('.more-item') as HTMLElement).dispatchEvent(
         new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
       );
-      await settle();
+      await vi.waitFor(() => expect(document.querySelector('.more-item')).toBeNull());
 
-      if (resize) dispatchEvent(new Event('resize'));
-      await settle();
+      if (resize) {
+        dispatchEvent(new Event('resize'));
+        // A same-size resize changes nothing to wait for; the bug is what it leaves behind.
+        await settle();
+      }
+      const before = visibleParagraphs().join();
       dispatchEvent(new KeyboardEvent('keydown', { code: 'PageDown', key: 'PageDown' }));
-      await settle();
+      await vi.waitFor(() => expect(visibleParagraphs().join()).not.toBe(before));
 
       expect(item(await moreItems(), 'Reset reading point')).toBeUndefined();
     });
@@ -88,19 +95,25 @@ describe('/b paginated: a page turn drops the reading point', () => {
 describe('/b continuous: a scroll after a same-size resize moves the intended place', () => {
   it('a real resize after it keeps the scrolled-to paragraph', async () => {
     component = await openReader(ViewMode.Continuous, 'horizontal-tb');
-    await settle();
 
     dispatchEvent(new Event('resize'));
+    // A same-size resize changes nothing to wait for; the bug is what it leaves behind.
     await settle();
+    // The reader reads the scroll in a frame after the event; this frame comes after it.
+    const scrolled = new Promise((resolve) =>
+      addEventListener('scroll', () => requestAnimationFrame(resolve), { once: true })
+    );
     // One scroll event: a smooth scroll's later events would hide the bug.
     scrollBy({ top: innerHeight, behavior: 'instant' });
-    await settle();
+    await scrolled;
     // The first one that starts on screen: one cut at the top isn't the place the reader keeps.
     const first = visibleParagraphs().find(
       (id) => document.getElementById(id)!.getBoundingClientRect().top >= 0
     )!;
 
     await browserPage.viewport(390, 700);
+    await vi.waitFor(() => expect(innerWidth).toBe(390));
+    // Backs "the re-layout doesn't move the page away later": it runs after a debounce and a frame.
     await settle();
     expect(onScreen(document.getElementById(first)), `${first}: ${visibleParagraphs()}`).toBe(true);
   });

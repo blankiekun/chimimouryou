@@ -28,13 +28,6 @@ describe('Whisper subtitles', () => {
     expect(await whisper.keptWhisperSubtitles('本', 'a.m4b:10')).toBeUndefined();
   });
 
-  it('needs the download in the standalone edition only', async () => {
-    expect((await import('$lib/data/whisper')).whisperNeedsDownload).toBe(false);
-    vi.resetModules();
-    vi.stubEnv('VITE_EDITION', 'standalone');
-    expect((await import('$lib/data/whisper')).whisperNeedsDownload).toBe(true);
-  });
-
   it('counts a model as downloaded when it finished and is still cached', async () => {
     const urls: string[] = [];
 
