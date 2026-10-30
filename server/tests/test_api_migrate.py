@@ -191,7 +191,17 @@ class MigrateTest(unittest.TestCase):
         self.write(data, '猫', PROGRESS, b'{"progress": 0.4')
         self.write(data, '猫', STATISTICS, b'not json')
         self.write(self.sync, '', 'series.json', b'{')
-        for broken in (bookdata[:len(bookdata) // 2], bookdata[:-30], b'not a zip'):
+        # A whole zip whose first deflated member holds garbage (0xFF is a reserved block type): zlib.error.
+        deflated = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(bookdata)) as z, zipfile.ZipFile(deflated, 'w', zipfile.ZIP_DEFLATED) as out:
+            for name in z.namelist():
+                out.writestr(name, z.read(name))
+        deflated = deflated.getvalue()
+        with zipfile.ZipFile(io.BytesIO(deflated)) as z:
+            info = z.infolist()[0]
+        start = info.header_offset + 30 + len(info.orig_filename.encode()) + len(info.extra)
+        corrupt = deflated[:start] + b'\xff' * 8 + deflated[start + 8:]
+        for broken in (bookdata[:len(bookdata) // 2], bookdata[:-30], b'not a zip', corrupt):
             with self.subTest(bookdata=broken[:8]):
                 self.write(shared, 'a%2Fb%3F', BOOKDATA, broken)
                 report = self.run_migrate(True)
