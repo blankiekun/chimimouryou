@@ -16,6 +16,7 @@ import {
 import { FuriganaStyle } from '$lib/data/furigana-style';
 import { getWeightedAverage } from '$lib/functions/utils';
 import type { MessageKey } from '$lib/i18n';
+import type { Plugin } from '$lib/plugins';
 
 /** 'contents' | 'search' | 'highlights' | 'listen' | a plugin tab's key */
 export type PanelTab = string;
@@ -28,6 +29,20 @@ export interface PanelTabEntry {
 /** Story so far and the lore were tabs of their own (`recap`, `lorebook`); both are the Story tab now. */
 export function resolvePanelTab(key: PanelTab): PanelTab {
   return key === 'recap' || key === 'lorebook' ? 'story' : key;
+}
+
+/** A plugin tab offered after days away (Story so far), if one is ready */
+export function absenceTabFor(plugins: Plugin[]) {
+  return plugins
+    .flatMap((plugin) => plugin.companionTabs ?? [])
+    .find((tab) => tab.absenceOffer?.ready());
+}
+
+/** Whether opening the tab pauses the reading tracker (a plugin's tab says so) */
+export function tabPausesTracker(plugins: Plugin[], tab: PanelTab) {
+  return plugins.some((plugin) =>
+    plugin.companionTabs?.some((entry) => entry.key === tab && entry.pausesTracker)
+  );
 }
 
 /** Index tabs in their order on the panel's edge: Community after Highlights, other plugin tabs (Story) last. */

@@ -10,9 +10,16 @@
  * Moved out of routes/b/+page.svelte unchanged.
  */
 
+import type { BookmarkManager } from '$lib/components/book-reader/types';
 import { highlightColors, type Highlight, type HighlightColor } from '$lib/data/annotations';
+import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v3';
 import { spansWithin, type CountSpan } from '$lib/data/unknown-words';
-import { setCssHighlight } from '$lib/functions/book-text/css-highlights';
+import { chapterLabelAt } from '$lib/functions/book-text/book-search';
+import {
+  clearCssHighlights,
+  cssHighlightsSupported,
+  setCssHighlight
+} from '$lib/functions/book-text/css-highlights';
 import {
   countsForRange,
   getTextSegments,
@@ -177,4 +184,167 @@ export function selectionPassage(
         ? undefined
         : countsForRange(getTextSegments(content), selectedRange, renderedStart).start
   };
+}
+
+/** The selection inside the book's text (a copy), or undefined. */
+export function selectedBookRange() {
+  const selection = document.getSelection();
+  const range = selection?.rangeCount ? selection.getRangeAt(0) : undefined;
+  const content = document.querySelector('.book-content');
+
+  return range && !range.collapsed && content?.contains(range.commonAncestorContainer)
+    ? range.cloneRange()
+    : undefined;
+}
+
+/** A new highlight over `range` in `content` (text starting at `base`), or undefined if it is empty. */
+export function newHighlight(
+  content: Element,
+  range: Range,
+  base: number,
+  color: HighlightColor,
+  sections: Section[]
+) {
+  const { start, end } = countsForRange(getTextSegments(content), range, base);
+  const text = getTextWithoutFurigana(range);
+
+  if (end <= start || !text) {
+    return undefined;
+  }
+
+  return { start, end, text, note: '', color, chapter: chapterLabelAt(sections, start) };
+}
+
+/**
+ * Keeps the reader's highlights, search match, line read aloud and unknown words painted: repaints
+ * 200 ms after a change and whenever the rendered text changes (paginated mode swaps sections).
+ */
+export class HighlightPainter {
+  searchMatch: CountMatch | undefined;
+
+  /** Line being read aloud (audiobook or AI voice) */
+  readingMatch: CountMatch | undefined;
+
+  private highlightRanges: HighlightRange[] = [];
+
+  private highlightsDirty = true;
+
+  private unknownSpans: CountSpan[] = [];
+
+  private highlightTimer: ReturnType<typeof setTimeout> | undefined;
+
+  private observedContent: Element | null = null;
+
+  // Paginated mode swaps the section's DOM, which invalidates the ranges.
+  private contentObserver =
+    typeof MutationObserver === 'undefined'
+      ? undefined
+      : new MutationObserver(() => this.scheduleHighlights(true));
+
+  constructor(
+    private getBookmarkManager: () => BookmarkManager | undefined,
+    private getHighlights: () => Highlight[] | undefined
+  ) {}
+
+  scheduleHighlights(force = false) {
+    if (force) {
+      this.highlightsDirty = true;
+    }
+
+    if (!this.highlightsDirty || !cssHighlightsSupported) {
+      return;
+    }
+
+    clearTimeout(this.highlightTimer);
+    this.highlightTimer = setTimeout(() => {
+      const content = document.querySelector('.book-content');
+
+      if (content && content !== this.observedContent) {
+        this.contentObserver?.disconnect();
+        this.contentObserver?.observe(content, { childList: true, subtree: true });
+        this.observedContent = content;
+      }
+
+      this.applyHighlights();
+    }, 200);
+  }
+
+  /** Colours highlights and the current search match in the rendered text. */
+  applyHighlights() {
+    const content = document.querySelector('.book-content');
+    const bookmarkManager = this.getBookmarkManager();
+
+    if (!content || !bookmarkManager) {
+      return;
+    }
+
+    const painted = paintHighlights(
+      content,
+      bookmarkManager.getRenderedStartCount(),
+      this.getHighlights() || [],
+      this.searchMatch,
+      this.readingMatch,
+      this.unknownSpans
+    );
+
+    this.highlightRanges = painted.highlightRanges;
+    this.highlightsDirty = false;
+
+    return painted.readingRange;
+  }
+
+  /** New unknown-word spans; repaints when there are or were some. */
+  setUnknownSpans(spans: CountSpan[]) {
+    if (spans.length || this.unknownSpans.length) {
+      this.unknownSpans = spans;
+      this.scheduleHighlights(true);
+    }
+  }
+
+  /**
+   * Highlights the line being read and turns the page or scrolls when it isn't visible.
+   * Without CSS highlights `follow` keeps the page with the voice.
+   */
+  showReading(
+    match: { start: number; end: number; follow?: boolean } | undefined,
+    bookWidth: () => number,
+    scrollToCount: (count: number) => void,
+    follow: (count: number) => void
+  ) {
+    this.readingMatch = match;
+    this.highlightsDirty = true;
+
+    if (!cssHighlightsSupported) {
+      // Without highlights, at least keep the page with the voice.
+      if (match) {
+        follow(match.start);
+      }
+      return;
+    }
+
+    const range = this.applyHighlights();
+
+    if (!match) {
+      return;
+    }
+
+    if (
+      match.follow !== false &&
+      !isOnScreen(range?.getBoundingClientRect(), bookWidth(), window.innerHeight)
+    ) {
+      scrollToCount(match.start);
+      this.scheduleHighlights(true);
+    }
+  }
+
+  /** The highlight under the point (x, y), if any. */
+  highlightAt(x: number, y: number) {
+    return highlightAt(this.highlightRanges, x, y);
+  }
+
+  destroy() {
+    clearTimeout(this.highlightTimer);
+    this.contentObserver?.disconnect();
+    clearCssHighlights('ttu-');
+  }
 }

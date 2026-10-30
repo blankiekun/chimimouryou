@@ -197,8 +197,11 @@ section in paginated mode. `annotations.json` is merged per highlight (newest
 - **No quotas.** Any account can fill the disk up to `MIN_FREE_MB`.
 - **Book CSS is applied as-is.** It can restyle the page, though not run script.
 - **No built-in backups.** Back up `DATA_PATH` (and the Calibre library).
-- **`routes/b/+page.svelte`** holds the glue for highlights, search, selection,
-  listening and the plugins inline; it is the most fragile file to change.
+- **`routes/b/+page.svelte`** is still the most fragile file to change. The fork's
+  glue lives in `lib/` (highlights, search match and the line read aloud in
+  `HighlightPainter`, readings in `analysis-tools.ts`, plugin hooks in
+  `ReaderHooksSession`, panel helpers in `reader-panel.ts`); upstream's replication,
+  open/down-sync, tracker and dialogs are still inline.
 - **Ask AI context** clones the book DOM up to the selection to get the text
   before it, which is slow on very long books in continuous mode.
 - **svelte-check** reports 13 errors that predate the fork (Svelte 4/5 types,
