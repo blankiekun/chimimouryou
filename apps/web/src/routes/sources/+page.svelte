@@ -3,6 +3,7 @@
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import PointBox from '$lib/components/point-box.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
+  import SourceCover from '$lib/components/sources/source-cover.svelte';
   import { account$, hasPermission } from '$lib/data/account/account';
   import { pagePath, standalone } from '$lib/data/env';
   import { libraryTab$ } from '$lib/data/library/library-home';
@@ -274,53 +275,62 @@
             {#each follows as follow (follow.workId)}
               {@const id = `follow-${follow.workId}`}
               <li class="sources-row sources-follow">
-                <div class="sources-follow-work">
-                  <a
-                    class="sources-row-title"
-                    lang="ja"
-                    href="{pagePath}/sources/work?id={follow.workId}">{follow.title}</a
-                  >
-                  <p class="sources-row-meta">{follow.siteName}</p>
-                </div>
-                <div class="sources-follow-state">
-                  <p
-                    class="sources-status sources-status-{follow.paused ? 'paused' : follow.state}"
-                  >
-                    <span class="sources-swatch" aria-hidden="true"></span>{followStatus(follow)}
-                  </p>
-                  <p class="sources-row-meta">{followWhen(follow)}</p>
-                </div>
-                <div class="sources-actions">
-                  {#if follow.paused}
+                <SourceCover
+                  title={follow.title}
+                  workId={follow.cover ? follow.workId : undefined}
+                />
+                <div class="sources-follow-body">
+                  <div class="sources-follow-work">
+                    <a
+                      class="sources-row-title"
+                      lang="ja"
+                      href="{pagePath}/sources/work?id={follow.workId}">{follow.title}</a
+                    >
+                    <p class="sources-row-meta">{follow.siteName}</p>
+                  </div>
+                  <div class="sources-follow-state">
+                    <p
+                      class="sources-status sources-status-{follow.paused
+                        ? 'paused'
+                        : follow.state}"
+                    >
+                      <span class="sources-swatch" aria-hidden="true"></span>{followStatus(follow)}
+                    </p>
+                    <p class="sources-row-meta">{followWhen(follow)}</p>
+                  </div>
+                  <div class="sources-actions">
+                    {#if follow.paused}
+                      <button
+                        type="button"
+                        class="app-button-quiet"
+                        disabled={busy === id}
+                        onclick={() => followAction(() => followWork(follow.workId, false), id)}
+                        >Resume</button
+                      >
+                    {:else if follow.state === 'failed'}
+                      <button
+                        type="button"
+                        class="app-button-quiet"
+                        disabled={busy === id}
+                        onclick={() => followAction(() => checkNow(follow.workId), id)}
+                        >Retry</button
+                      >
+                    {:else if follow.state !== 'removed'}
+                      <button
+                        type="button"
+                        class="app-button-quiet"
+                        disabled={busy === id}
+                        onclick={() => followAction(() => followWork(follow.workId, true), id)}
+                        >Pause</button
+                      >
+                    {/if}
                     <button
                       type="button"
                       class="app-button-quiet"
                       disabled={busy === id}
-                      onclick={() => followAction(() => followWork(follow.workId, false), id)}
-                      >Resume</button
+                      onclick={() => unfollow(follow)}>Unfollow</button
                     >
-                  {:else if follow.state === 'failed'}
-                    <button
-                      type="button"
-                      class="app-button-quiet"
-                      disabled={busy === id}
-                      onclick={() => followAction(() => checkNow(follow.workId), id)}>Retry</button
-                    >
-                  {:else if follow.state !== 'removed'}
-                    <button
-                      type="button"
-                      class="app-button-quiet"
-                      disabled={busy === id}
-                      onclick={() => followAction(() => followWork(follow.workId, true), id)}
-                      >Pause</button
-                    >
-                  {/if}
-                  <button
-                    type="button"
-                    class="app-button-quiet"
-                    disabled={busy === id}
-                    onclick={() => unfollow(follow)}>Unfollow</button
-                  >
+                  </div>
                 </div>
               </li>
             {/each}
@@ -344,7 +354,7 @@
                   type="url"
                   inputmode="url"
                   autocomplete="off"
-                  placeholder="https://ncode.syosetu.com/…"
+                  placeholder="https://kakuyomu.jp/works/…"
                   bind:value={link}
                 />
                 <button
@@ -357,6 +367,9 @@
                 <p class="sources-error" role="alert">{lookupError}</p>
               {/if}
             </form>
+            <a class="app-button-quiet sources-search-link" href="{pagePath}/sources/search"
+              >Search Syosetu and Kakuyomu →</a
+            >
           </PointBox>
 
           <section aria-labelledby="sources-sites">
@@ -368,6 +381,15 @@
                   <p class="sources-row-meta">
                     Web novels from Syosetu and its R18 site. Each 50 chapters become one volume in
                     a series named after the work.
+                  </p>
+                </div>
+              </li>
+              <li class="sources-row">
+                <div>
+                  <p class="sources-row-title">Kakuyomu</p>
+                  <p class="sources-row-meta">
+                    Web novels from Kakuyomu, 50 episodes per volume. Works published as books show
+                    their cover.
                   </p>
                 </div>
               </li>
@@ -625,13 +647,20 @@
     white-space: nowrap;
   }
 
-  .sources-follow {
+  .sources-follow-body {
+    display: flex;
+    min-width: 0;
+    flex: 1;
     flex-direction: column;
-    gap: 0;
   }
 
   .sources-follow-state .sources-status {
     margin-top: 0.4rem;
+  }
+
+  .sources-search-link {
+    display: inline-block;
+    margin-top: 1rem;
   }
 
   .sources-actions {
@@ -716,7 +745,7 @@
       padding-bottom: 0;
     }
 
-    .sources-follow {
+    .sources-follow-body {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 12rem;
       gap: 2rem;
@@ -727,7 +756,7 @@
       margin-top: 0;
     }
 
-    .sources-follow .sources-actions {
+    .sources-follow-body .sources-actions {
       justify-content: flex-end;
       margin-top: 0;
     }

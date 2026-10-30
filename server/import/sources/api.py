@@ -2,7 +2,7 @@
 the import queue as an EPUB with its Calibre series, index, identifier and tag.
 
 Endpoints (under /calibre/import/api/sources/, `import` permission via nginx; jobs are per account):
-  POST lookup {url}                      -> work: a site's work link (Syosetu in phase 1)
+  POST lookup {url}                      -> work: a site's work link (Syosetu, Kakuyomu)
   GET  works/{id}                        -> work: details, volume plan, per-volume inLibrary/pending
   POST works/resolve {site, workKey}     -> work
   POST works/{id}/add {volumes: [n]}     -> {job}: fetches those volumes (ones in the library or on their way
@@ -15,11 +15,18 @@ Endpoints (under /calibre/import/api/sources/, `import` permission via nginx; jo
   DELETE follows/{work}                  -> {}: unfollows; the volumes stay in the library
   GET  following                         -> {follows, checkHours}: own follows
   POST check {work?}                     -> {follows, checkHours}: Check now, for every unpaused follow or one work
+  GET  sites/{site}/search?q=&page=      -> {site, siteName, domain, order, total, more, works: [{workKey, url, title,
+       sites/{site}/popular?page=            authors, status, chapters, updated, inLibrary, following}]}: 20 per page,
+       sites/{site}/latest?page=             the site's answer cached 10 min; inLibrary/following by site + work key
+  GET  covers/{work}                     -> the work's cover image (service.py sends it), fetched once from the
+                                            adapter's COVER_HOSTS and kept in <state>/sources/covers/
 
 Job states: queued, fetching, adding (volumes in the import queue), done, failed (error, failed_at), cancelled.
 Job kinds: add (volumes chosen by the reader) and update (a followed work's check). Chapters are cached in
 <state>/sources/<work id>/<n>.json until their volume is full, so a retry resumes and the open volume is rebuilt
 without fetching it again.
+
+Runners: one per site, so a long job on one site doesn't hold up another (the fetcher keeps the per-host limit).
 
 Follows: the runner queues an update job for every work with a due unpaused follow (SOURCES_CHECK_HOURS, an hour
 after a failed check), one job per work whoever follows it; a failed update job is queued again rather than a new
@@ -27,6 +34,7 @@ one. An update fetches the open (not full) volume in the library and every volum
 replaced in place (calibredb add_format on its Calibre id, timestamp bumped so devices download it again), new
 ones are added. Full volumes are never touched.
 """
+import hashlib
 import json
 import os
 import shutil
@@ -38,11 +46,17 @@ import uuid
 import apidb  # server/api, put on sys.path by service.py
 
 from . import build, fetcher, planner
-from .adapters import syosetu
+from .adapters import kakuyomu, syosetu
 
-ADAPTERS = {syosetu.SITE: syosetu}
+ADAPTERS = {adapter.SITE: adapter for adapter in (syosetu, kakuyomu)}
 API_DB = os.environ.get('API_DB', '/data/state/api/library.db')
 DETAILS_SECONDS = 600
+SEARCH_SECONDS = 600
+SEARCH_CACHED = 200
+MAX_PAGE = 100
+COVER_BYTES = 5 * 1024 * 1024
+# A cover the site wouldn't give is asked for again after this long.
+COVER_RETRY_SECONDS = 600
 KEEP_DONE_MS = 7 * 24 * 3600 * 1000
 MAX_ACTIVE_PER_ACCOUNT = 20
 ACTIVE = ('queued', 'fetching')
@@ -61,7 +75,21 @@ class ApiError(Exception):
 _db: apidb.Database | None = None
 _db_lock = threading.Lock()
 _details: dict[int, tuple[float, dict]] = {}
-_wake = threading.Event()
+_searches: dict[tuple, tuple[float, dict]] = {}
+_cover_failed: dict[int, float] = {}
+
+
+class _Wake:
+    """Wakes every site's runner."""
+    def __init__(self):
+        self.events = {site: threading.Event() for site in ADAPTERS}
+
+    def set(self):
+        for event in self.events.values():
+            event.set()
+
+
+_wake = _Wake()
 # Set by start(): the import service's state folder and its enqueue(account, name, write, extra) -> job.
 _state_dir = ''
 _enqueue = None
@@ -93,9 +121,9 @@ def _fetch_details(work: dict) -> dict:
     details = ADAPTERS[work['site']].details(work['url'])
     _details[work['id']] = (time.monotonic(), details)
     database().transaction(lambda c: c.execute(
-        'UPDATE works SET title = ?, authors = ?, status = ?, chapters = ?, updated = ? WHERE id = ?',
+        'UPDATE works SET title = ?, authors = ?, status = ?, chapters = ?, updated = ?, cover = ? WHERE id = ?',
         (details['title'], details['authors'], details['status'], details['chapters'], details['updated'],
-         work['id'])))
+         details.get('cover', ''), work['id'])))
     return details
 
 
@@ -137,7 +165,8 @@ def _work_json(work: dict, details: dict | None, account: str = '') -> dict:
             'summary': (details or {}).get('summary', ''), 'latest': (details or {}).get('latest', []),
             'volumeSize': work['volume_size'] or planner.VOLUME_SIZE, 'volumes': plan,
             'domain': adapter.DOMAIN, 'interval': fetcher.INTERVAL, 'checkHours': CHECK_HOURS,
-            'following': bool(followed), 'paused': bool(followed and followed[0]['paused'])}
+            'following': bool(followed), 'paused': bool(followed and followed[0]['paused']),
+            'cover': bool(work['cover'])}
 
 
 def _show(work: dict, account: str) -> dict:
@@ -166,7 +195,7 @@ def lookup(body: dict, account: str) -> dict:
                         'DELETE FROM works WHERE id = ? AND title = \'\' AND NOT EXISTS '
                         '(SELECT 1 FROM source_jobs WHERE work = ?)', (work['id'], work['id'])))
                 raise
-    raise ApiError(400, 'Not a link to a work on a supported site (Syosetu)')
+    raise ApiError(400, f"Not a link to a work on a supported site ({', '.join(a.NAME for a in ADAPTERS.values())})")
 
 
 def resolve(body: dict, account: str) -> dict:
@@ -176,7 +205,7 @@ def resolve(body: dict, account: str) -> dict:
     rows = database().query('SELECT * FROM works WHERE site = ? AND work_key = ?', (site, key))
     if rows:
         return _show(dict(rows[0]), account)
-    return lookup({'url': f'https://ncode.syosetu.com/{key}/'}, account)
+    return lookup({'url': ADAPTERS[site].work_url(key)}, account)
 
 
 # Jobs ----------------------------------------------------------------------------------------------------
@@ -273,7 +302,7 @@ def delete(account: str, job_id: str) -> dict:
 
 # Follows -------------------------------------------------------------------------------------------------
 
-FOLLOW_QUERY = ('SELECT f.*, w.title, w.site, w.chapters, '
+FOLLOW_QUERY = ('SELECT f.*, w.title, w.site, w.chapters, w.cover, '
                 '(SELECT COUNT(*) FROM work_volumes v WHERE v.work = w.id AND v.calibre_id IS NOT NULL) AS volumes, '
                 'EXISTS (SELECT 1 FROM source_jobs j WHERE j.work = w.id AND j.state IN (?, ?, ?)) AS checking '
                 'FROM follows f JOIN works w ON w.id = f.work WHERE f.account = ?')
@@ -285,7 +314,7 @@ def _follow_json(row) -> dict:
             'domain': adapter.DOMAIN, 'chapters': row['chapters'], 'volumes': row['volumes'],
             'paused': bool(row['paused']), 'state': 'checking' if row['checking'] else row['state'],
             'detail': row['detail'], 'lastCheck': row['last_check'], 'nextCheck': row['next_check'],
-            'modified': row['modified']}
+            'modified': row['modified'], 'cover': bool(row['cover'])}
 
 
 def following(account: str) -> dict:
@@ -389,9 +418,94 @@ def _volumes_text(numbers: list[int]) -> str:
     return f'Vol. {numbers[0]}' if len(numbers) == 1 else f'Vol. {numbers[0]}–{numbers[-1]}'
 
 
+# Search and covers -------------------------------------------------------------------------------------
+
+def browse(account: str, site: str, kind: str, query: dict) -> dict:
+    """A page of the site's search, popular or latest works, with what this account has of each."""
+    adapter = ADAPTERS.get(site)
+    if not adapter:
+        raise ApiError(404, 'No such site')
+    q = (query.get('q') or '').strip()
+    page = query.get('page') or '1'
+    if not page.isdigit() or not 1 <= int(page) <= MAX_PAGE or len(q) > 200 or (kind == 'search' and not q):
+        raise ApiError(400, 'Invalid request')
+    key = (site, kind, q, int(page))
+    cached = _searches.get(key)
+    if cached and time.monotonic() - cached[0] < SEARCH_SECONDS:
+        found = cached[1]
+    else:
+        try:
+            found = adapter.search(q, int(page)) if kind == 'search' else getattr(adapter, kind)(int(page))
+        except (fetcher.FetchError, LookupError, ValueError) as error:
+            raise ApiError(503, str(error)) from error
+        now = time.monotonic()
+        for old in [k for k, (at, _) in _searches.items() if now - at >= SEARCH_SECONDS]:
+            _searches.pop(old, None)
+        if len(_searches) >= SEARCH_CACHED:
+            _searches.pop(next(iter(_searches)), None)
+        _searches[key] = (now, found)
+    keys = [w['workKey'] for w in found['works']]
+    marks = {row['work_key']: row for row in database().query(
+        'SELECT w.work_key, EXISTS (SELECT 1 FROM work_volumes v JOIN books b ON b.calibre_id = v.calibre_id '
+        'WHERE v.work = w.id AND b.deleted = 0) AS in_library, '
+        'EXISTS (SELECT 1 FROM follows f WHERE f.work = w.id AND f.account = ?) AS following '
+        f'FROM works w WHERE w.site = ? AND w.work_key IN ({", ".join("?" * len(keys))})',
+        (account, site, *keys))} if keys else {}
+    return {'site': site, 'siteName': adapter.NAME, 'domain': adapter.DOMAIN, 'order': adapter.SEARCH_ORDER,
+            'total': found['total'], 'more': found['more'], 'page': int(page),
+            'works': [{**w, 'inLibrary': bool(w['workKey'] in marks and marks[w['workKey']]['in_library']),
+                       'following': bool(w['workKey'] in marks and marks[w['workKey']]['following'])}
+                      for w in found['works']]}
+
+
+IMAGE_TYPES = ((b'\xff\xd8\xff', 'image/jpeg'), (b'\x89PNG\r\n\x1a\n', 'image/png'), (b'GIF8', 'image/gif'))
+
+
+def _image_type(data: bytes) -> str | None:
+    if data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+        return 'image/webp'
+    return next((kind for magic, kind in IMAGE_TYPES if data.startswith(magic)), None)
+
+
+def cover(work_id: int) -> tuple[bytes, str]:
+    """(image, content type) of the work's cover: fetched once from a host its adapter names, then kept on disk.
+    Only JPEG, PNG, GIF and WebP pass, so a page the site sends instead is never served as an image."""
+    work = _work_row(work_id)
+    url = work['cover']
+    if not url:
+        raise ApiError(404, 'No cover')
+    folder = os.path.join(_state_dir, 'sources', 'covers')
+    prefix = f'{work_id}-'
+    path = os.path.join(folder, prefix + hashlib.sha256(url.encode()).hexdigest()[:16])
+    try:
+        with open(path, 'rb') as f:
+            data = f.read()
+        return data, _image_type(data) or 'application/octet-stream'
+    except OSError:
+        pass
+    if time.monotonic() - _cover_failed.get(work_id, -COVER_RETRY_SECONDS) < COVER_RETRY_SECONDS:
+        raise ApiError(404, 'No cover')
+    try:
+        data = fetcher.fetch(url, ADAPTERS[work['site']].COVER_HOSTS)[0]
+        kind = _image_type(data)
+        if not kind or len(data) > COVER_BYTES:
+            raise ValueError('not an image')
+    except (fetcher.FetchError, ValueError) as error:
+        _cover_failed[work_id] = time.monotonic()
+        raise ApiError(404, 'No cover') from error
+    os.makedirs(folder, exist_ok=True)
+    for old in os.listdir(folder):  # an earlier cover of the work
+        if old.startswith(prefix):
+            os.remove(os.path.join(folder, old))
+    apidb.write_atomic(path, data)
+    return data, kind
+
+
 def route(method: str, path: str, account: str, body: dict) -> dict:
-    """path is relative to /sources (e.g. '/works/3/add')."""
+    """path is relative to /sources (e.g. '/works/3/add'); body is the query of a GET."""
     parts = path.strip('/').split('/')
+    if method == 'GET' and len(parts) == 3 and parts[0] == 'sites' and parts[2] in ('search', 'popular', 'latest'):
+        return browse(account, parts[1], parts[2], body)
     if method == 'POST' and parts == ['lookup']:
         return lookup(body, account)
     if method == 'POST' and parts == ['works', 'resolve']:
@@ -437,7 +551,7 @@ def _chapter(work: dict, details: dict, n: int) -> dict:
             return json.load(f)
     except (OSError, ValueError):
         pass
-    chapter = ADAPTERS[work['site']].chapter(work['url'], n, details['short'])
+    chapter = ADAPTERS[work['site']].chapter(work['url'], n, details)
     apidb.write_atomic(path, json.dumps(chapter, ensure_ascii=False).encode())
     return chapter
 
@@ -530,17 +644,19 @@ class ChapterError(Exception):
         self.chapter = chapter
 
 
-def runner():
-    """Fetches queued jobs one at a time (phase 1 has one site, so one host)."""
+def runner(site: str):
+    """Fetches the site's queued jobs one at a time."""
+    wake = _wake.events[site]
     while True:
         try:
             queue_due_checks(now_ms())
         except Exception as error:  # noqa: BLE001 - the runner goes on
             print(f'sources timer: {error!r}', file=sys.stderr)
-        rows = database().query(f"{JOB_QUERY} WHERE j.state = 'queued' ORDER BY j.created LIMIT 1")
+        rows = database().query(f"{JOB_QUERY} WHERE j.state = 'queued' AND w.site = ? ORDER BY j.created LIMIT 1",
+                                (site,))
         if not rows:
-            _wake.wait(60)
-            _wake.clear()
+            wake.wait(60)
+            wake.clear()
             continue
         job = rows[0]
         if not _set_state(job['id'], ('queued',), 'fetching'):
@@ -597,4 +713,5 @@ def start(state_dir: str, enqueue):
     _state_dir, _enqueue = state_dir, enqueue
     # Jobs interrupted by a restart go on from their cached chapters.
     database().transaction(lambda c: c.execute("UPDATE source_jobs SET state = 'queued' WHERE state = 'fetching'"))
-    threading.Thread(target=runner, daemon=True).start()
+    for site in ADAPTERS:
+        threading.Thread(target=runner, args=(site,), daemon=True).start()

@@ -11,7 +11,7 @@
 
 import { standalone } from '$lib/data/env';
 import { errorMessage } from '$lib/data/remote/calibre-import';
-import type { SourceFollow, SourceJob, SourceWork } from './types';
+import type { SourceFollow, SourceJob, SourceSearch, SourceWork } from './types';
 
 const apiUrl = '/calibre/import/api/sources/';
 
@@ -41,6 +41,34 @@ export function lookUpWork(url: string) {
 
 export function getWork(id: number) {
   return call<SourceWork>('GET', `works/${id}`);
+}
+
+/** A site's work by its key (a search result) → the work, with its volume plan. */
+export function resolveWork(site: string, workKey: string) {
+  return call<SourceWork>('POST', 'works/resolve', { site, workKey });
+}
+
+/** The built-in sites, in the order the search page lists them. */
+export const searchSites = [
+  { site: 'syosetu', name: 'Syosetu' },
+  { site: 'kakuyomu', name: 'Kakuyomu' }
+];
+
+/** A page (20 works) of a site's search results, or its popular or latest works. */
+export function browseSite(
+  site: string,
+  kind: 'search' | 'popular' | 'latest',
+  page: number,
+  q = ''
+) {
+  const query = new URLSearchParams({ page: String(page), ...(kind === 'search' ? { q } : {}) });
+
+  return call<SourceSearch>('GET', `sites/${site}/${kind}?${query}`);
+}
+
+/** The work's cover image, fetched once by the server (an image URL, so the CSP stays as it is). */
+export function coverUrl(workId: number) {
+  return `${apiUrl}covers/${workId}`;
 }
 
 /** Queues the volumes for fetching; the server skips ones in the library or on their way. */

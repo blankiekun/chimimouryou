@@ -4,6 +4,7 @@
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import PointBox from '$lib/components/point-box.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
+  import SourceCover from '$lib/components/sources/source-cover.svelte';
   import Switch from '$lib/components/switch.svelte';
   import { account$, hasPermission } from '$lib/data/account/account';
   import { pagePath, standalone } from '$lib/data/env';
@@ -12,13 +13,14 @@
     addVolumes,
     followWork,
     getWork,
+    resolveWork,
     timeLeft,
     unfollowWork
   } from '$lib/data/sources/server-sources';
   import type { SourceWork } from '$lib/data/sources/types';
 
   /**
-   * A work from a site (/sources/work?id=N): its details, the volume plan with what is in the
+   * A work from a site (/sources/work?id=N, or ?site=…&key=… from a search): its details, the volume plan with what is in the
    * library already, and Add for the volumes still missing.
    */
 
@@ -30,6 +32,8 @@
   let followError = $state('');
 
   const id = $derived(browser ? Number($page.url.searchParams.get('id')) : 0);
+  const site = $derived(browser ? $page.url.searchParams.get('site') : null);
+  const key = $derived(browser ? $page.url.searchParams.get('key') : null);
   const allowed = $derived(!standalone && hasPermission($account$, 'import'));
   const missing = $derived(
     work?.volumes.filter((volume) => !volume.inLibrary && !volume.pending) ?? []
@@ -56,8 +60,8 @@
   });
 
   $effect(() => {
-    if (!id || !allowed) return;
-    getWork(id).then(
+    if (!allowed || !(id || (site && key))) return;
+    (id ? getWork(id) : resolveWork(site as string, key as string)).then(
       (found) => (work = found),
       (error) => (loadError = error.message)
     );
@@ -115,7 +119,11 @@
 
 <div class="app-page-shell">
   <main class="work-page">
-    <a class="app-button-quiet work-back" href="{pagePath}/sources">← Sources</a>
+    {#if site}
+      <a class="app-button-quiet work-back" href="{pagePath}/sources/search">← Search</a>
+    {:else}
+      <a class="app-button-quiet work-back" href="{pagePath}/sources">← Sources</a>
+    {/if}
 
     {#if !allowed}
       <p class="work-note">Adding web novels needs an account with the "Add books" permission.</p>
@@ -127,7 +135,11 @@
       <div class="work-layout">
         <div>
           <header class="work-header">
-            <div class="work-cover" aria-hidden="true"><span>{work.title}</span></div>
+            <SourceCover
+              title={work.title}
+              workId={work.cover ? work.id : undefined}
+              size="large"
+            />
             <div class="work-heading">
               <h1 class="work-title">{work.title}</h1>
               <p class="work-meta">{work.authors}</p>
@@ -275,31 +287,6 @@
     align-items: flex-start;
   }
 
-  /* No cover yet: the title set on a paper card, one fixed size like the shelves. */
-  .work-cover {
-    flex: none;
-    width: 5.5rem;
-    height: 8rem;
-    padding: 0.5rem;
-    overflow: hidden;
-    border: 1px solid var(--border-color);
-    border-radius: 2px;
-    background: var(--surface-color);
-    color: var(--font-color);
-    font-size: var(--type-small);
-    line-height: 1.5;
-  }
-
-  .work-cover span {
-    display: -webkit-box;
-    -webkit-line-clamp: 4;
-    line-clamp: 4;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    padding-bottom: 0.4rem;
-    border-bottom: 2px solid var(--font-color);
-  }
-
   .work-heading {
     min-width: 0;
   }
@@ -412,11 +399,6 @@
 
     .work-latest {
       grid-column: 1;
-    }
-
-    .work-cover {
-      width: 7rem;
-      height: 10rem;
     }
   }
 </style>

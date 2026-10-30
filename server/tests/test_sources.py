@@ -44,6 +44,25 @@ Phase 2, follows (written before the code). The ways it could fail:
   R1 Check now after a failed update starts over (fetches every chapter again) instead of resuming at the
      failed chapter, or leaves a second job beside the failed one                                      -> test_update_retry
   P1 another account (an admin too) pauses or unfollows my follow                                      -> test_follows_are_per_account
+
+Phase 3, Kakuyomu, search and covers (written before the code). The ways it could fail:
+  K1 a work link in another form (episode link, trailing slash, query) isn't recognised, or a look-alike host,
+     a user page or a non-numeric id is                                                                -> test_kakuyomu_links
+  K2 details lose episodes across the table of contents' sections, mix up ongoing/finished, miss the author or
+     the cover, or give the latest chapters in the wrong order or UTC dates                            -> test_kakuyomu_details
+  K3 a removed work (404) reads as "site down" (a failed check retried hourly) instead of removed      -> test_kakuyomu_details
+  K4 markup drift: no __NEXT_DATA__, no Work in it, or a table of contents shorter than the episode count
+     gives an empty or short work (volumes silently missing chapters) instead of a clear error          -> test_kakuyomu_drift
+  K5 chapter n fetches the wrong episode, loses ruby or emphasis, or keeps the page's chrome or scripts  -> test_kakuyomu_chapter
+  K6 a Kakuyomu work added through the service gets the wrong identifier, tag or chapter text          -> test_kakuyomu_add
+  Q1 search asks the site for the wrong order or page, or keeps an upper-case ncode (never matches what's in
+     the library)                                                                                       -> test_search
+  Q2 "In library"/"Following" come from another account's follows or another site's work of the same key -> test_search
+  Q3 the same search within 10 min reaches the site again; another page or query is served from the cache -> test_search
+  C1 a cover is fetched from the site on every view instead of once                                     -> test_covers
+  C2 a cover URL on a host the adapter doesn't name is fetched (the server as a proxy)                  -> test_covers
+  C3 a page the site sends instead of an image is served as an image                                    -> test_covers
+Hameln (syosetu.org) isn't here: it answers with a Cloudflare challenge (stopped, architect rule).
 """
 import gzip
 import importlib.util
@@ -57,6 +76,7 @@ import threading
 import time
 import unittest
 import urllib.error
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
@@ -68,7 +88,7 @@ sys.path.insert(0, os.path.join(HERE, '..', 'import'))
 sys.path.insert(0, os.path.join(HERE, 'fixtures', 'sources'))
 import serve  # noqa: E402
 from sources import build, fetcher, planner  # noqa: E402
-from sources.adapters import syosetu  # noqa: E402
+from sources.adapters import kakuyomu, syosetu  # noqa: E402
 
 STATE = tempfile.mkdtemp()
 FAKE_CALIBREDB = os.path.join(STATE, 'calibredb')
@@ -164,7 +184,7 @@ class AdapterTest(unittest.TestCase):
             work = syosetu.details('https://novel18.syosetu.com/n0002bb/')
             self.assertEqual((work['title'], work['chapters'], work['short'], work['status']),
                              ('夜の短編', 1, True, 'finished'))
-            chapter = syosetu.chapter('https://novel18.syosetu.com/n0002bb/', 1, short=True)
+            chapter = syosetu.chapter('https://novel18.syosetu.com/n0002bb/', 1, {'short': True})
             self.assertIn('<ruby>長<rt>なが</rt></ruby>', chapter['html'])
             # Without the cookie the fake site sends us to nl.syosetu.com, which must not be followed.
             with self.assertRaises(fetcher.FetchError):
@@ -172,7 +192,7 @@ class AdapterTest(unittest.TestCase):
 
     def test_chapter(self):
         with fake_site():
-            chapter = syosetu.chapter('https://ncode.syosetu.com/n0001aa/', 7, short=False)
+            chapter = syosetu.chapter('https://ncode.syosetu.com/n0001aa/', 7, {'short': False})
         self.assertEqual(chapter['title'], '第7話「手紙」')
         html = chapter['html']
         self.assertLess(html.index('前書き'), html.index('7通目'))
@@ -180,6 +200,67 @@ class AdapterTest(unittest.TestCase):
         self.assertIn('<rt>しょうじょ</rt>', html)
         self.assertNotIn('gnshbrequest', html)
         self.assertNotIn('ブックマーク', html)
+
+
+KAKU = 'https://kakuyomu.jp/works/1177354054000000001'
+
+
+class KakuyomuTest(unittest.TestCase):
+    def test_kakuyomu_links(self):
+        for link in (KAKU, KAKU + '/', 'http://kakuyomu.jp/works/1177354054000000001',
+                     KAKU + '/episodes/1177354054000200007', KAKU + '?utm=x', f' {KAKU}/episodes/1177354054000200007/ '):
+            self.assertEqual(kakuyomu.parse_url(link), ('1177354054000000001', KAKU), link)
+        for link in ('https://kakuyomu.jp.evil.example/works/1', 'https://evil.example/kakuyomu.jp/works/1',
+                     'https://kakuyomu.jp/users/shiken', 'https://kakuyomu.jp/works/abc', 'https://kakuyomu.jp/',
+                     'https://ncode.syosetu.com/n0001aa/', ''):
+            self.assertIsNone(kakuyomu.parse_url(link), link)
+
+    def test_kakuyomu_details(self):
+        with fake_site():
+            work = kakuyomu.details(KAKU + '/episodes/1177354054000200003')
+            with self.assertRaises(LookupError):
+                kakuyomu.details('https://kakuyomu.jp/works/1177354054000000404')
+        self.assertEqual((work['title'], work['authors'], work['status'], work['chapters'], work['short']),
+                         ('風の便り　～試験の旅～', '試験書き手', 'ongoing', 53, False))
+        self.assertEqual(work['episodes'][0], '1177354054000200001')
+        self.assertEqual(work['episodes'][30], '1177354054000200031')  # the first of the second section
+        self.assertEqual(len(work['episodes']), 53)
+        self.assertEqual([c['n'] for c in work['latest']], [53, 52, 51])
+        # 2026-10-26T15:30Z is Oct 27 in Japan.
+        self.assertEqual(work['latest'][0]['date'], '2026-10-27')
+        self.assertEqual(work['cover'], 'https://cdn.kdkw.jp/cover_1000/0000/0001.png')
+
+    def test_kakuyomu_drift(self):
+        with open(os.path.join(HERE, 'fixtures', 'sources', 'kakuyomu', 'work-1177354054000000001.html')) as f:
+            page = f.read()
+        short = page.replace('"publicEpisodeCount": 53', '"publicEpisodeCount": 54')
+        self.assertNotEqual(short, page)
+        for broken in ('<html><body>maintenance</body></html>', page.replace('__NEXT_DATA__', '__DATA__'),
+                       page.replace('Work:1177354054000000001', 'Work:9'), short):
+            with mock.patch.object(kakuyomu, '_get', return_value=broken), self.assertRaises(ValueError):
+                kakuyomu.details(KAKU)
+        with self.assertRaises(ValueError):
+            kakuyomu.parse_chapter('<html><div class="episodeBody">x</div></html>')
+
+    def test_kakuyomu_chapter(self):
+        requested = []
+        real = fetcher.fetch
+
+        def spy(url, *args, **kwargs):
+            requested.append(url)
+            return real(url, *args, **kwargs)
+        with fake_site(), mock.patch.object(fetcher, 'fetch', spy):
+            details = kakuyomu.details(KAKU)
+            chapter = kakuyomu.chapter(KAKU, 31, details)
+            with self.assertRaises(LookupError):
+                kakuyomu.chapter(KAKU, 54, details)
+        self.assertEqual(requested[-1], KAKU + '/episodes/1177354054000200031')
+        self.assertEqual(chapter['title'], '第1177354054000200031話　風の&便り')
+        html = chapter['html']
+        self.assertIn('<ruby><rb>少年</rb><rp>（</rp><rt>しょうねん</rt><rp>）</rp></ruby>', html)
+        self.assertIn('<em>手紙</em>', html)
+        for chrome in ('次のエピソード', '応援する', 'alert', '出会い'):
+            self.assertNotIn(chrome, html)
 
 
 class PlannerTest(unittest.TestCase):
@@ -582,6 +663,102 @@ class ServiceTest(unittest.TestCase):
         self.assertEqual(self.request('DELETE', f'/sources/follows/{wid}', None, 'acc8')[0], 200)
         _, body = self.request('GET', '/sources/following', account='acc8')
         self.assertEqual(body['follows'], [])
+
+
+    def test_kakuyomu_add(self):
+        _, work = self.request('POST', '/sources/lookup', {'url': KAKU + '/episodes/1177354054000200002'}, 'acc10')
+        self.assertEqual((work['site'], work['chapters'], work['cover'], len(work['volumes'])), ('kakuyomu', 53, True, 2))
+        _, body = self.request('POST', f'/sources/works/{work["id"]}/add', {'volumes': [2]}, 'acc10')
+        job = self.wait_job(body['job']['id'], 'acc10')
+        self.assertEqual((job['state'], job['done'], job['total']), ('done', 3, 3), job)
+        args = self.adds_of('1177354054000000001')[-1]
+        for flag, value in (('--title', '風の便り　～試験の旅～ 2'), ('--tags', 'Kakuyomu'),
+                            ('--identifier', 'chimi:kakuyomu:1177354054000000001:2')):
+            self.assertEqual(args[args.index(flag) + 1], value)
+        with zipfile.ZipFile(os.path.join(STATE, f'added-{self.calibre_id(args)}.epub')) as archive:
+            text = ''.join(archive.read(n).decode() for n in archive.namelist() if n.endswith('.xhtml'))
+        self.assertIn('エピソード1177354054000200051の本文', text)
+        self.assertIn('エピソード1177354054000200053の本文', text)
+        self.assertNotIn('エピソード1177354054000200050の', text)
+
+    def test_search(self):
+        requested = []
+        real = fetcher.fetch
+
+        def spy(url, *args, **kwargs):
+            requested.append(url)
+            return real(url, *args, **kwargs)
+        with mock.patch.object(fetcher, 'fetch', spy):
+            status, found = self.request('GET', '/sources/sites/syosetu/search?q=%E6%89%8B%E7%B4%99&page=2', account='acc11')
+            self.assertEqual(status, 200, found)
+            self.assertEqual(len(requested), 1)
+            self.assertIn('order=favnovelcnt', requested[0])
+            self.assertIn('st=21', requested[0])
+            self.assertEqual(([w['workKey'] for w in found['works']], found['total'], found['more']),
+                             (['n0001aa', 'n0003cc'], 57, True))
+            self.assertEqual(found['works'][1]['title'], '秋の&日記')
+            # Cached: the same search again doesn't reach the site; another page does.
+            self.request('GET', '/sources/sites/syosetu/search?q=%E6%89%8B%E7%B4%99&page=2', account='acc12')
+            self.assertEqual(len(requested), 1)
+            self.request('GET', '/sources/sites/syosetu/search?q=%E6%89%8B%E7%B4%99&page=3', account='acc11')
+            self.assertEqual(len(requested), 2)
+            self.assertIn('st=41', requested[1])
+            _, latest = self.request('GET', '/sources/sites/kakuyomu/latest?page=1', account='acc11')
+            self.assertIn('order=last_episode_published_at', requested[2])
+            self.assertEqual([w['status'] for w in latest['works']], ['ongoing', 'finished'])
+            self.assertEqual(latest['works'][1]['authors'], '灯台守')
+
+        # n0001aa followed by acc11 and in the library; Kakuyomu's work of another key isn't.
+        _, work = self.request('POST', '/sources/lookup', {'url': 'https://ncode.syosetu.com/n0001aa/'}, 'acc11')
+        self.request('PUT', f'/sources/follows/{work["id"]}', {'paused': True}, 'acc11')
+        db = service.sources.database()
+        db.transaction(lambda c: c.execute(
+            'INSERT INTO work_volumes (work, number, first_ch, last_ch, calibre_id) VALUES (?, 9, 1, 1, 900) '
+            'ON CONFLICT DO NOTHING', (work['id'],)))
+        db.transaction(lambda c: c.execute(
+            "INSERT INTO books (key, calibre_id, title, unique_title, format, file, updated, rev) "
+            "VALUES ('u900', 900, 't', 't900', 'EPUB', 'f', 0, 0)"))
+        marks = {a: [(w['workKey'], w['inLibrary'], w['following']) for w in self.request(
+            'GET', '/sources/sites/syosetu/search?q=%E6%89%8B%E7%B4%99&page=2', account=a)[1]['works']]
+            for a in ('acc11', 'acc12')}
+        self.assertEqual(marks['acc11'], [('n0001aa', True, True), ('n0003cc', False, False)])
+        self.assertEqual(marks['acc12'], [('n0001aa', True, False), ('n0003cc', False, False)])
+        for bad in ('/sources/sites/hameln/search?q=a', '/sources/sites/syosetu/search?q=',
+                    '/sources/sites/syosetu/popular?page=0', '/sources/sites/syosetu/popular?page=x'):
+            self.assertIn(self.request('GET', bad, account='acc11')[0], (400, 404), bad)
+
+    def get_cover(self, work_id):
+        req = urllib.request.Request(f'{self.base}/sources/covers/{work_id}', headers={
+            'X-Internal-Token': 'c0ffee', 'X-Account-Id': 'acc13'})
+        try:
+            with urllib.request.urlopen(req) as response:
+                return response.status, response.headers['Content-Type'], response.read()
+        except urllib.error.HTTPError as error:
+            return error.code, '', b''
+
+    def test_covers(self):
+        _, work = self.request('POST', '/sources/lookup', {'url': KAKU}, 'acc13')
+        requested = []
+        real = fetcher.fetch
+
+        def spy(url, hosts, *args, **kwargs):
+            if urllib.parse.urlparse(url).hostname in hosts:  # the fetcher refuses the others
+                requested.append(url)
+            return real(url, hosts, *args, **kwargs)
+        with mock.patch.object(fetcher, 'fetch', spy):
+            for _ in range(2):
+                status, kind, data = self.get_cover(work['id'])
+                self.assertEqual((status, kind, data[:4]), (200, 'image/png', b'\x89PNG'))
+            self.assertEqual(requested, ['https://cdn.kdkw.jp/cover_1000/0000/0001.png'])
+            db = service.sources.database()
+            for url in ('https://evil.example/cover.png', 'https://cdn.kdkw.jp/cover/page.html'):
+                db.transaction(lambda c: c.execute('UPDATE works SET cover = ? WHERE id = ?', (url, work['id'])))
+                service.sources._cover_failed.pop(work['id'], None)
+                self.assertEqual(self.get_cover(work['id'])[0], 404, url)
+            self.assertNotIn('https://evil.example/cover.png', requested)
+            _, syosetu_work = self.request('POST', '/sources/lookup', {'url': 'https://ncode.syosetu.com/n0001aa/'})
+            self.assertFalse(syosetu_work['cover'])
+            self.assertEqual(self.get_cover(syosetu_work['id'])[0], 404)
 
 
 if __name__ == '__main__':

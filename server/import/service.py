@@ -641,7 +641,9 @@ class Handler(BaseHTTPRequestHandler):
     def sources_api(self, method: str):
         account = self.account()
         body = {}
-        if method != 'GET':
+        if method == 'GET':
+            body = {name: values[0] for name, values in parse_qs(urlparse(self.path).query).items()}
+        else:
             self.same_origin()
         if method in ('POST', 'PUT'):
             try:
@@ -654,6 +656,20 @@ class Handler(BaseHTTPRequestHandler):
             return sources.route(method, self.path.split('?', 1)[0][len('/sources'):], account, body)
         except sources.ApiError as error:
             raise ApiError(error.status, str(error)) from error
+
+    def send_cover(self, work_id: int):
+        self.account()
+        try:
+            data, kind = sources.cover(work_id)
+        except sources.ApiError as error:
+            raise ApiError(error.status, str(error)) from error
+        self.send_response(200)
+        self.send_header('Content-Type', kind)
+        self.send_header('Content-Length', str(len(data)))
+        self.send_header('Cache-Control', 'private, max-age=86400')
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.end_headers()
+        self.wfile.write(data)
 
     def delete(self):
         if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
@@ -673,6 +689,8 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
             return self.send(403, {'error': 'Only nginx may call this service'})
+        if re.fullmatch(r'/sources/covers/\d+', url.path):
+            return self.send_cover(int(url.path.rsplit('/', 1)[1]))
         if url.path.startswith('/sources/'):
             return self.handle_api(lambda: self.sources_api('GET'))
         if url.path != '/jobs':
