@@ -37,13 +37,28 @@
   const site = $derived(browser ? $page.url.searchParams.get('site') : null);
   const key = $derived(browser ? $page.url.searchParams.get('key') : null);
   const allowed = $derived(!standalone && hasPermission($account$, 'import'));
-  const missing = $derived(
-    work?.volumes.filter((volume) => !volume.inLibrary && !volume.pending) ?? []
+  // Manga from a server as pages: one CBZ per volume or per chapter, while nothing of it is added.
+  let per = $state<'volume' | 'chapter'>();
+  const pages = $derived(!!work?.server && !work.files);
+  const volumes = $derived.by(() => {
+    if (!work || !work.perChoice || !per || per === work.per) return work?.volumes ?? [];
+    const size = per === 'chapter' ? 1 : work.perChoice;
+    return Array.from({ length: Math.ceil(work.chapters / size) }, (_, n) => ({
+      number: n + 1,
+      first: n * size + 1,
+      last: Math.min((n + 1) * size, work?.chapters ?? 0),
+      inLibrary: false,
+      pending: false
+    }));
+  });
+  const volumeSize = $derived(
+    per && per !== work?.per ? (per === 'chapter' ? 1 : (work?.perChoice ?? 1)) : work?.volumeSize
   );
+  const missing = $derived(volumes.filter((volume) => !volume.inLibrary && !volume.pending));
   // Followed, the last volume takes new chapters until it is full.
   const openVolume = $derived.by(() => {
-    const last = work?.volumes[work.volumes.length - 1];
-    return work?.following && last && last.last - last.first + 1 < work.volumeSize
+    const last = volumes[volumes.length - 1];
+    return work?.following && last && last.last - last.first + 1 < (volumeSize ?? 0)
       ? last.number
       : undefined;
   });
@@ -55,13 +70,15 @@
   const pickedChapters = $derived(
     picked.reduce((sum, volume) => sum + volume.last - volume.first + 1, 0)
   );
+  // One CBZ per chapter counts chapters, not volumes.
+  const unit = $derived(pages && volumeSize === 1 ? 'Ch.' : 'Vol.');
   const pickedText = $derived.by(() => {
     if (!picked.length) return '';
     const first = picked[0].number;
     const last = picked[picked.length - 1].number;
-    if (first === last) return `Vol. ${first}`;
+    if (first === last) return `${unit} ${first}`;
     return last - first + 1 === picked.length
-      ? `Vol. ${first}–${last}`
+      ? `${unit} ${first}–${last}`
       : `${picked.length} volumes`;
   });
   // Following a work with nothing in the library adds the picked volumes first, so its checks start there.
@@ -70,7 +87,10 @@
   $effect(() => {
     if (!allowed || !(id || (site && key))) return;
     (id ? getWork(id) : resolveWork(site as string, key as string)).then(
-      (found) => (work = found),
+      (found) => {
+        work = found;
+        per = found.per;
+      },
       (error) => (loadError = error.message)
     );
   });
@@ -82,7 +102,8 @@
     try {
       await addVolumes(
         work.id,
-        picked.map((volume) => volume.number)
+        picked.map((volume) => volume.number),
+        pages ? per : undefined
       );
       await goto(`${pagePath}/sources`);
     } catch (error: any) {
@@ -101,7 +122,8 @@
       if (next && empty && picked.length) {
         await addVolumes(
           work.id,
-          picked.map((volume) => volume.number)
+          picked.map((volume) => volume.number),
+          pages ? per : undefined
         );
         await followWork(work.id);
         work = await getWork(work.id);
@@ -136,7 +158,11 @@
 
 <div class="app-page-shell">
   <main class="work-page">
-    {#if site}
+    {#if site?.startsWith('opds:')}
+      <a class="app-button-quiet work-back" href="{pagePath}/sources/browse?server={site.slice(5)}"
+        >← Browse</a
+      >
+    {:else if site}
       <a class="app-button-quiet work-back" href="{pagePath}/sources/search">← Search</a>
     {:else}
       <a class="app-button-quiet work-back" href="{pagePath}/sources">← Sources</a>
@@ -162,9 +188,14 @@
               <p class="work-meta">{work.authors}</p>
               <p class="work-meta">{work.siteName} · {work.status}</p>
               {#if work.updated}<p class="work-meta">Updated {day(work.updated)}</p>{/if}
-              <a class="app-button-quiet work-link" href={work.url} target="_blank" rel="noreferrer"
-                >Open on {work.domain}</a
-              >
+              {#if !work.server}
+                <a
+                  class="app-button-quiet work-link"
+                  href={work.url}
+                  target="_blank"
+                  rel="noreferrer">Open on {work.domain}</a
+                >
+              {/if}
             </div>
           </header>
           {#if work.summary}
@@ -175,15 +206,17 @@
         <div class="work-side">
           <PointBox
             label="Volumes"
-            figure={work.volumes.length}
-            unit="volumes · {work.chapters} chapters"
+            figure={volumes.length}
+            unit={work.files ? 'volumes' : `volumes · ${work.chapters} chapters`}
           >
             <table class="app-table work-volumes">
               <tbody>
-                {#each work.volumes as volume (volume.number)}
+                {#each volumes as volume (volume.number)}
                   <tr>
-                    <th scope="row">Vol. {volume.number}</th>
-                    <td class="work-range">ch {volume.first}–{volume.last}</td>
+                    <th scope="row">{unit} {volume.number}</th>
+                    <td class="work-range"
+                      >{#if !work.files && volume.last > volume.first}ch {volume.first}–{volume.last}{/if}</td
+                    >
                     <td class="work-state" class:work-state-open={volume.number === openVolume}>
                       {#if volume.number === openVolume}Updates in place{:else if volume.inLibrary}In
                         library{:else if volume.pending}On its way{/if}
@@ -193,21 +226,52 @@
               </tbody>
             </table>
             <p class="work-hint">
-              {#if openVolume}
-                {work.volumeSize} chapters each. New chapters go into Vol. {openVolume}, replacing
-                it in place, until it is full; then Vol. {openVolume + 1} starts.
+              {#if work.files}
+                One book per file, as {work.siteName} serves it, in the series “{work.title}”.
+              {:else if pages && volumeSize === 1}
+                One CBZ per chapter, its number the series index, in the series “{work.title}”.
+              {:else if openVolume}
+                {volumeSize} chapters each. New chapters go into Vol. {openVolume}, replacing it in
+                place, until it is full; then Vol. {openVolume + 1} starts.
               {:else}
-                {work.volumeSize} chapters each, one book per volume in the series “{work.title}”.
+                {volumeSize} chapters each, one book per volume in the series “{work.title}”.
               {/if}
             </p>
           </PointBox>
+
+          {#if pages}
+            <div class="work-follow">
+              <div>
+                <p class="work-follow-label" id="work-per-label">One CBZ per</p>
+                <p class="work-hint work-follow-hint">
+                  {work.perChoice
+                    ? 'Chapter keeps each chapter as its own book.'
+                    : 'Set when the first volume was added.'}
+                </p>
+              </div>
+              <div class="app-segmented" role="radiogroup" aria-labelledby="work-per-label">
+                {#each ['volume', 'chapter'] as const as option (option)}
+                  <button
+                    type="button"
+                    role="radio"
+                    class="app-segment"
+                    class:app-segment-selected={per === option}
+                    aria-checked={per === option}
+                    disabled={!work.perChoice}
+                    onclick={() => (per = option)}
+                    >{option === 'volume' ? 'Volume' : 'Chapter'}</button
+                  >
+                {/each}
+              </div>
+            </div>
+          {/if}
 
           {#if missing.length > 1}
             <label class="work-from">
               <span class="work-follow-label">From</span>
               <select class="app-input" bind:value={from}>
                 {#each missing as volume (volume.number)}
-                  <option value={volume.number}>Vol. {volume.number}</option>
+                  <option value={volume.number}>{unit} {volume.number}</option>
                 {/each}
               </select>
             </label>
@@ -240,16 +304,21 @@
               onclick={add}>{adding ? 'Adding…' : `Add ${pickedText} to library`}</button
             >
             <p class="work-hint">
-              Into the Calibre library on the server. {timeLeft(
-                pickedChapters,
-                work.interval
-              ).replace('about', 'About')}: {work.domain} allows 1 page every {work.interval} s. You
-              can close this tab.
+              {#if work.server}
+                Into the Calibre library on the server, from {work.siteName}. You can close this
+                tab.
+              {:else}
+                Into the Calibre library on the server. {timeLeft(
+                  pickedChapters,
+                  work.interval
+                ).replace('about', 'About')}: {work.domain} allows 1 page every {work.interval} s. You
+                can close this tab.
+              {/if}
             </p>
             {#if addError}<p class="work-error" role="alert">{addError}</p>{/if}
-          {:else if work.volumes.length}
+          {:else if volumes.length}
             <p class="work-hint work-all">
-              {work.volumes.some((volume) => volume.pending)
+              {volumes.some((volume) => volume.pending)
                 ? 'The missing volumes are on their way: see the queue in Sources.'
                 : 'Every volume is in the library.'}
             </p>

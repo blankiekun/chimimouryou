@@ -46,6 +46,50 @@ export interface SourceWork {
   paused: boolean;
   /** The server has a cover for it (covers/{id}) */
   cover: boolean;
+  kind: 'novel' | 'manga';
+  /** Manga as pages: one CBZ per chapter or per volume */
+  per: 'volume' | 'chapter';
+  /** Chapters per volume when the reader may still choose per volume or per chapter, else null */
+  perChoice: number | null;
+  /** The added server it comes from (an OPDS catalog or Suwayomi), else null */
+  server: number | null;
+  /** A server's work whose volumes are whole files, queued as they come */
+  files: boolean;
+}
+
+/** An OPDS catalog or Suwayomi server this account added (GET servers); the password never comes back. */
+export interface SourceServer {
+  id: number;
+  type: 'opds' | 'suwayomi';
+  name: string;
+  url: string;
+  user: string;
+  hasPassword: boolean;
+}
+
+/** An entry of a server's feed: a section to open, a series (a work) or a single book of the feed. */
+export interface SourceServerEntry {
+  kind: 'section' | 'work' | 'book';
+  title: string;
+  authors: string;
+  /** The section's path on the server (sections and works) */
+  href: string | null;
+  workKey: string | null;
+  /** The cover's path on the server (servers/{id}/image) */
+  cover: string | null;
+  inLibrary: boolean;
+  following: boolean;
+}
+
+export interface SourceServerFeed {
+  server: { id: number; name: string; type: 'opds' | 'suwayomi' };
+  title: string;
+  section: string;
+  /** The next page's path */
+  next: string | null;
+  /** The catalog can be searched */
+  search: boolean;
+  entries: SourceServerEntry[];
 }
 
 /** A work in a site's search, popular or latest list (GET sites/{site}/…). */
@@ -105,7 +149,7 @@ export interface SourceJob {
   kind: 'add' | 'update';
   /** Volumes still to fetch */
   volumes: number[];
-  unit: 'chapters' | 'pages';
+  unit: 'chapters' | 'pages' | 'volumes';
   done: number;
   total: number;
   state: 'queued' | 'fetching' | 'adding' | 'done' | 'failed' | 'cancelled';
