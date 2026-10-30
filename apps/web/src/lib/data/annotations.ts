@@ -55,7 +55,11 @@ export function mergeHighlights(local: Highlight[], remote: Highlight[]) {
   [...local, ...remote].forEach((highlight) => {
     const existing = merged.get(highlight.id);
 
-    if (!existing || highlight.modified > existing.modified) {
+    // On a tie the deletion wins, so both devices end with the same list.
+    const tieDeleted =
+      highlight.modified === existing?.modified && highlight.deleted && !existing.deleted;
+
+    if (!existing || highlight.modified > existing.modified || tieDeleted) {
       merged.set(highlight.id, highlight);
     }
   });
@@ -68,9 +72,11 @@ function sameHighlights(a: Highlight[], b: Highlight[]) {
     return false;
   }
 
-  const modified = new Map(a.map((h) => [h.id, h.modified]));
+  const byId = new Map(a.map((h) => [h.id, h]));
 
-  return b.every((h) => modified.get(h.id) === h.modified);
+  return b.every(
+    (h) => byId.get(h.id)?.modified === h.modified && !byId.get(h.id)?.deleted === !h.deleted
+  );
 }
 
 function newId() {

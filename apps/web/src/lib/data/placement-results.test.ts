@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   mergePlacementResults,
   placementAt,
+  placementCutoff,
   placementCutoff$,
   placementResults$,
   recordPlacement,
@@ -54,6 +55,23 @@ describe('placement results', () => {
 
     expect(placementAt(results)?.cutoff).toBe(4000);
     expect(placementAt(results, 2)?.cutoff).toBe(1000);
+
+    // recordPlacement keeps a typed result as its own record beside the yes/no one.
+    vi.useFakeTimers();
+    placementResults$.next([]);
+    recordPlacement('yesno', 20000, 40);
+    expect(placementCutoff()).toBe(20000);
+    vi.advanceTimersByTime(1000);
+    recordPlacement('typed', 12000, 40);
+    expect(placementCutoff()).toBe(12000);
+    expect(
+      placementResults$
+        .getValue()
+        .map(({ mode }) => mode)
+        .sort()
+    ).toEqual(['typed', 'yesno']);
+    placementResults$.next([]);
+    vi.useRealTimers();
   });
 
   it('ignores the retired multiple-choice hard mode', () => {

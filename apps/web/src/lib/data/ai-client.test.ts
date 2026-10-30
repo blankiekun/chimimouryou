@@ -155,7 +155,7 @@ describe('requestChat', () => {
     );
 
     await expect(requestChat(target('openai'), [])).rejects.toThrow(
-      /^(?!.*secret-key).*\[API key\]/
+      /^(?!.*secret-key).*bad \[API key\] here/
     );
 
     vi.stubGlobal(

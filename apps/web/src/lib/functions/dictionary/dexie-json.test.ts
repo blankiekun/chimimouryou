@@ -130,7 +130,8 @@ describe('DexieJsonReader', () => {
   it('refuses text that is not a whole export', () => {
     const text = dexieExport();
     expect(() => read(text.slice(0, text.length - 5), 2)).toThrow(/ends before/);
-    expect(() => read('[1,2]', 1)).not.toThrow();
+    // Other JSON parses to nothing: no header, no rows (the importer's checkHeader never runs).
+    expect(read('[1,2]', 1)).toEqual({ header: undefined, rows: [] });
     expect(() => read('{"a" 1}', 1)).toThrow(/Not a Dexie export/);
   });
 });

@@ -41,7 +41,7 @@ describe('themes', () => {
 
     expect(colors.accent).toBe('#ff00aa');
     expect(colors.toggleOn).toBe('var(--accent-color)');
-    expect(colors.difficulty3).toBeTruthy();
+    expect(colors.difficulty3).toBe(resolveTheme('dark', {}).colors.difficulty3);
   });
 
   it('accepts the new tokens in imported themes', () => {

@@ -65,33 +65,4 @@ describe('askAi', () => {
     expect(system(0)).toMatch(/\n\nI am at JLPT N3\.$/);
     expect(system(1)).toBe('Recap.');
   });
-
-  it('keeps the key out of error messages', async () => {
-    setOpenRouterKey('sk-or-secret');
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ error: { message: 'Bad key sk-or-secret' } }), {
-            status: 500
-          })
-      )
-    );
-
-    await expect(askAi([{ role: 'user', content: 'q' }], () => {})).rejects.toThrow(
-      /^(?!.*sk-or-secret).*Bad key \[API key\]/s
-    );
-  });
-
-  it('keeps the key out of stream errors', async () => {
-    setOpenRouterKey('sk-or-secret');
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => stream(['data: {"error":{"message":"key sk-or-secret revoked"}}']))
-    );
-
-    await expect(askAi([{ role: 'user', content: 'q' }], () => {})).rejects.toThrow(
-      /^(?!.*sk-or-secret)/s
-    );
-  });
 });

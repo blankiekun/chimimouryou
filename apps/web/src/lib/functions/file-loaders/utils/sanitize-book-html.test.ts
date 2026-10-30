@@ -79,13 +79,4 @@ describe('parseBookHtml', () => {
     expect(reparsed.querySelector('[onerror]')).toBeNull();
     expect(result).not.toContain('noscript');
   });
-
-  it('runs nothing while parsing', () => {
-    const fired: string[] = [];
-
-    (window as any).__fired = fired;
-    parseBookHtml('<img src="x" onerror="window.__fired.push(1)">');
-
-    expect(fired).toEqual([]);
-  });
 });

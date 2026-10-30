@@ -54,6 +54,16 @@ afterEach(async () => {
 
 const key = (code: string) => dispatchEvent(new KeyboardEvent('keydown', { code, key: code }));
 const settle = (ms = 250) => new Promise((resolve) => setTimeout(resolve, ms));
+const savedCount = async (id: number) => (await database.getBookmark(id))!.exploredCharCount;
+
+/** PageDown, then wait for the page to move: paginated turns at once, continuous scrolls smoothly. */
+async function pageDown(view: ViewMode) {
+  const before = visibleParagraphs().join();
+  const ended = new Promise((resolve) => addEventListener('scrollend', resolve, { once: true }));
+  key('PageDown');
+  if (view === ViewMode.Continuous) await ended;
+  else await vi.waitFor(() => expect(visibleParagraphs().join()).not.toBe(before));
+}
 
 describe('/b reopens a book at its bookmark', () => {
   for (const view of [ViewMode.Paginated, ViewMode.Continuous]) {
@@ -83,28 +93,25 @@ describe('/b reopens where reading stopped (page turns, the auto bookmark; a nov
           component = await mountReader(id, view, writing);
           await waitOnScreen('p-2-25');
           await settle();
-          const opened = (await database.getBookmark(id))!.exploredCharCount;
+          let last: number | undefined;
 
           for (let turn = 0; turn < 3; turn++) {
-            key('PageDown');
-            await settle(300);
+            last = await savedCount(id);
+            await pageDown(view);
           }
           const read = visibleParagraphs();
           if (panel) {
             await togglePanel();
             await vi.waitFor(() => expect(panelOpen()).toBe(true));
+            // The re-layout the panel starts may not scroll: nothing to wait for.
             await settle(300);
             await togglePanel();
             await vi.waitFor(() => expect(panelOpen()).toBe(false));
           }
-          await vi
-            .waitFor(
-              async () =>
-                expect((await database.getBookmark(id))!.exploredCharCount).not.toBe(opened),
-              { timeout: 5000 }
-            )
-            .catch(() => {}); // Checked below, with what was on screen.
-          await settle(1500);
+          // The save after the last turn.
+          await vi.waitFor(async () => expect(await savedCount(id)).not.toBe(last), {
+            timeout: 5000
+          });
           const shown = visibleParagraphs();
           const saved = (await database.getBookmark(id))!.exploredCharCount ?? 0;
           const marked = paragraphAt(saved, true);
@@ -115,12 +122,14 @@ describe('/b reopens where reading stopped (page turns, the auto bookmark; a nov
 
           await browserPage.viewport(width, 700);
           component = await mountReader(id, view, writing);
-          await waitOnScreen(marked).catch(() => {});
-          await settle(800);
-          expect(
-            onScreen(document.getElementById(marked)),
-            `${what}, reopened at ${visibleParagraphs()}`
-          ).toBe(true);
+          await vi.waitFor(
+            () =>
+              expect(
+                onScreen(document.getElementById(marked)),
+                `${what}, reopened at ${visibleParagraphs()}`
+              ).toBe(true),
+            { timeout: 10_000 }
+          );
         });
       }
     }
@@ -157,9 +166,12 @@ describe('/b paginated: the auto bookmark follows pages inside a paragraph (phon
 
       const saved: number[] = [];
       for (let turn = 0; turn < 4; turn++) {
+        const last = saved.at(-1) ?? (await savedCount(id)) ?? 0;
         key('PageDown');
-        await settle(800);
-        saved.push((await database.getBookmark(id))!.exploredCharCount ?? 0);
+        await vi.waitFor(async () => expect((await savedCount(id)) ?? 0).not.toBe(last), {
+          timeout: 5000
+        });
+        saved.push((await savedCount(id)) ?? 0);
       }
       const left = firstOnScreen();
       // Each page saves its own place, not the start of the paragraph it is in.

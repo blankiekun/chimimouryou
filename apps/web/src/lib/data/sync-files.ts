@@ -133,6 +133,15 @@ export function readerSyncStore(signedIn: boolean) {
     : syncFileStore(readerSyncSource());
 }
 
+/** A corrupt remote file (a cut-off upload) counts as missing, so the local copy replaces it. */
+function parseOrUndefined<T>(text: string) {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Reads a JSON file, lets `merge` combine it with the local copy and writes what it returns
  * (undefined: the file is up to date). Another device writing in between is caught by the
@@ -147,7 +156,7 @@ export async function syncJsonFile<T>(
 ) {
   for (let attempt = 0; ; attempt += 1) {
     const remote = await store.readSyncFile(name, title);
-    const upload = await merge(remote ? (JSON.parse(remote.text) as T) : undefined);
+    const upload = await merge(remote ? parseOrUndefined<T>(remote.text) : undefined);
 
     if (upload === undefined) return;
 

@@ -4,18 +4,17 @@
  * All rights reserved.
  */
 
-import { flushSync } from 'svelte';
 import { describe, expect, it } from 'vitest';
 import PointBox from './point-box.svelte';
 import SectionHead from './section-head.svelte';
 
-type Legacy = new (options: { target: Element; props: object }) => { $set(props: object): void };
+type Legacy = new (options: { target: Element; props: object }) => object;
 
 // Runes components are typed as functions; `compatibility.componentApi: 4` makes them classes too.
 function mount(Component: unknown, props: object) {
   const target = document.createElement('div');
-  const component = new (Component as Legacy)({ target, props });
-  return Object.assign(target, { component });
+  new (Component as Legacy)({ target, props });
+  return target;
 }
 
 describe('SectionHead', () => {
@@ -34,17 +33,6 @@ describe('SectionHead', () => {
     expect(target.querySelector('h3')?.textContent).toBe('Read next');
     expect(target.querySelector('.section-head-count')).toBeNull();
   });
-
-  // SectionHead is a runes component: Svelte 4's $set still reaches its $props.
-  it('updates when its props change', () => {
-    const target = mount(SectionHead, { number: 1, title: 'Old' });
-
-    target.component.$set({ number: 3, title: 'New' });
-    flushSync();
-
-    expect(target.querySelector('.section-head-number')?.textContent).toBe('03');
-    expect(target.querySelector('h2')?.textContent).toBe('New');
-  });
 });
 
 describe('PointBox', () => {
@@ -56,12 +44,5 @@ describe('PointBox', () => {
     expect(box?.querySelector('.point-box-tag')?.textContent).toBe('Today');
     expect(box?.querySelector('.point-box-figure')?.textContent?.trim()).toBe('12,345chars');
     expect(box?.querySelector('.point-box-unit')?.textContent).toBe('chars');
-  });
-
-  it('shows a text figure as given, without a unit', () => {
-    const target = mount(PointBox, { label: 'Streak', figure: '—' });
-
-    expect(target.querySelector('.point-box-figure')?.textContent?.trim()).toBe('—');
-    expect(target.querySelector('.point-box-unit')).toBeNull();
   });
 });

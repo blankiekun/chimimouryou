@@ -15,6 +15,7 @@ vi.mock('$lib/data/account', () => ({
 
 import { AnnotationsController, type Highlight } from '$lib/data/annotations';
 import { readerDb } from '$lib/data/reader-db';
+import { SyncConflictError } from '$lib/data/storage/handler/base-handler';
 import { GDriveStorageHandler } from '$lib/data/storage/handler/gdrive-handler';
 import { storageOAuthTokens } from '$lib/data/storage/storage-oauth-manager';
 import { StorageKey, StorageSourceDefault } from '$lib/data/storage/storage-types';
@@ -167,6 +168,45 @@ describe('extra files on Google Drive', () => {
 
     expect(words).toHaveLength(1);
     expect(JSON.parse(words[0].content).words).toEqual(['a', 'b', 'c']);
+  });
+
+  // Bug: a truncated or corrupt upload made JSON.parse throw before merge, so that file never
+  // synced again on any device.
+  it('replaces a malformed remote file with the local copy', async () => {
+    const { files } = fakeDrive();
+    const store = (await syncFileStore(drive))!;
+
+    await store.writeSyncFile('words.json', '{"words": ["a"', { version: '' });
+    await syncJsonFile<{ words: string[] }>(store, 'words.json', undefined, async (remote) => ({
+      words: [...(remote?.words ?? []), 'local']
+    }));
+
+    const words = files.filter((file) => file.name === 'words.json');
+
+    expect(words).toHaveLength(1);
+    expect(JSON.parse(words[0].content)).toEqual({ words: ['local'] });
+  });
+
+  // Bug: a retry loop that never gives up, or one that swallows the second conflict, so the
+  // caller marks its local changes as synced when nothing was written.
+  it('gives up with the conflict after one retry, merging the newest file each time', async () => {
+    let writes = 0;
+    const store = {
+      readSyncFile: async () => ({ text: JSON.stringify({ n: writes }), version: `${writes}` }),
+      writeSyncFile: async () => {
+        writes += 1;
+        throw new SyncConflictError();
+      }
+    };
+    const seen: number[] = [];
+
+    await expect(
+      syncJsonFile<{ n: number }>(store, 'words.json', undefined, async (remote) => {
+        seen.push(remote!.n);
+        return { n: -1 };
+      })
+    ).rejects.toBeInstanceOf(SyncConflictError);
+    expect(seen).toEqual([0, 1]);
   });
 
   it("doesn't create folders for books that aren't on Drive", async () => {

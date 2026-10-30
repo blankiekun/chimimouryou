@@ -68,8 +68,8 @@ describe('releaseReaderData', () => {
     expect(await counts()).toEqual([2, 1, 1, 1, 0]);
     expect(await kanjiCount()).toBe(0);
     const db = await database.db;
-    expect(await db.get('bookmark', 2)).toBeTruthy();
-    expect(await db.get('statistic', ['Local', '2026-10-12'])).toBeTruthy();
+    expect(await db.get('bookmark', 2)).toMatchObject({ dataId: 2 });
+    expect(await db.get('statistic', ['Local', '2026-10-12'])).toMatchObject({ title: 'Local' });
   });
 
   it('forgets the known words read from Anki for another reader', async () => {

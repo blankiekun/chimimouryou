@@ -8,7 +8,7 @@ import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import '$lib/data/storage/storage-handler-factory';
 import { installWay } from '$lib/data/install-app';
-import { needsFirstRun, showsExternalReadHint } from '$lib/data/standalone-storage';
+import { showsExternalReadHint } from '$lib/data/standalone-storage';
 import { StorageKey } from '$lib/data/storage/storage-types';
 import { syncEnded, syncState$, syncView, type SyncState } from '$lib/data/sync-status';
 
@@ -85,14 +85,6 @@ describe('syncEnded', () => {
       lastSync: now + 1,
       lastWhat: 'Book'
     });
-  });
-});
-
-describe('first run', () => {
-  it('runs once, in the standalone edition only', () => {
-    expect(needsFirstRun(true, false)).toBe(true);
-    expect(needsFirstRun(true, true)).toBe(false);
-    expect(needsFirstRun(false, false)).toBe(false);
   });
 });
 

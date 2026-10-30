@@ -105,6 +105,29 @@ describe('importing into Drive in the standalone', () => {
     ]);
   });
 
+  // Bug: a book whose upload failed keeps a Drive-tagged local copy, so it looks synced but is on no other device.
+  it('keeps Drive-tagged copies only of the books that reached Drive when one upload fails', async () => {
+    const handler = drive();
+
+    handler.saveBook.mockImplementation(async (book: any) => {
+      if (book.title === 'two') throw new Error('Drive upload failed');
+      return 0;
+    });
+
+    const error = await importData(
+      document,
+      handler as any,
+      [txt('one'), txt('two'), txt('three')],
+      new AbortController().signal
+    );
+
+    expect(error).toContain('two');
+    expect(await localTitles()).toEqual([
+      ['one', 'My Drive'],
+      ['three', 'My Drive']
+    ]);
+  });
+
   it('never takes over a browser-library book with the same title', async () => {
     await database.upsertData(
       { title: 'one', elementHtml: '<p>mine</p>', storageSource: undefined } as any,

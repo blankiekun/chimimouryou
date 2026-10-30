@@ -354,6 +354,8 @@ describe('community in the book', () => {
     }
     expect(Object.keys(communityMarksCache$.getValue())).toHaveLength(30);
     expect(communityMarksCache$.getValue()['b30']).toBeDefined();
+    // The oldest goes: a cap that dropped the newest would keep it.
+    expect(communityMarksCache$.getValue()['b0']).toBeUndefined();
     communityMarksCache$.next({});
   });
 });

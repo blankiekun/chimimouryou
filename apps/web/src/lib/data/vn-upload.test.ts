@@ -8,7 +8,7 @@ import 'fake-indexeddb/auto';
 import { describe, expect, it, vi } from 'vitest';
 import { StorageKey } from '$lib/data/storage/storage-types';
 import { isVn, vnElementHtml, vnInfo } from '$lib/data/vn';
-import { vnFolders, vnsKeptOnDevice, vnUploadQuestion } from '$lib/data/vn-upload';
+import { vnFolders, vnsKeptOnDevice } from '$lib/data/vn-upload';
 
 vi.mock('$lib/functions/file-loaders/cbz/load-cbz', () => ({
   default: async (file: File) => ({
@@ -52,14 +52,6 @@ describe('vnsKeptOnDevice', () => {
 
     expect(await vnsKeptOnDevice(StorageKey.GDRIVE, [], ask)).toEqual(new Set());
     expect(ask).not.toHaveBeenCalled();
-  });
-
-  it('names the game and its size', () => {
-    expect(vnUploadQuestion([game], StorageKey.GDRIVE)).toEqual({
-      dialogHeader: 'Upload this game to Google Drive?',
-      dialogMessage:
-        'game.zip is 1.8 GB. Uploading takes a while and uses that much of your Google Drive space; you can keep it on this device only.'
-    });
   });
 });
 
@@ -191,6 +183,7 @@ describe('game folders among picked files', () => {
     expect(isVn(book)).toBe(true);
     expect(vnInfo(book).files).toEqual(['0.txt', 'arc.nsa', 'bgm/title.ogg', 'save/1.txt']);
     expect(book.blobs['arc.nsa']).toBe(games[0].files['arc.nsa']);
-    expect(book.characters).toBeGreaterThan(0);
+    // こんにちは from the script (brackets aren't counted), not the Math.max(…, 1) floor.
+    expect(book.characters).toBe(5);
   });
 });

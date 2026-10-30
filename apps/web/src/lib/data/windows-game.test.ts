@@ -356,12 +356,13 @@ describe('copyWindowsGame', () => {
     return { root, lookups };
   }
 
-  const file = (text: string, gate?: Promise<void>) =>
+  const file = (text: string, gate?: Promise<void>, pulled?: () => void) =>
     ({
       size: text.length,
       stream: () =>
         new ReadableStream({
           async pull(controller) {
+            pulled?.();
             await gate;
             controller.enqueue(new TextEncoder().encode(text));
             controller.close();
@@ -399,14 +400,17 @@ describe('copyWindowsGame', () => {
     const abort = new AbortController();
     let release!: () => void;
     const gate = new Promise<void>((resolve) => (release = resolve));
+    let reached!: () => void;
+    const copyingSlow = new Promise<void>((resolve) => (reached = resolve));
     const files = {
       'a.txt': file('aaa'),
-      'slow.bin': file('slow', gate),
+      'slow.bin': file('slow', gate, reached),
       'z.txt': file('zzz')
     };
     const copying = copyWindowsGame('g1', files, () => {}, abort.signal);
 
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    // Abort while slow.bin is being read, not before the copy got there.
+    await copyingSlow;
     abort.abort();
     release();
     await expect(copying).rejects.toThrow();

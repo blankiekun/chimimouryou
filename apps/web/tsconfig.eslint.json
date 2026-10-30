@@ -5,6 +5,7 @@
     "src/**/*.ts",
     "src/**/*.svelte",
     "tests/**/*.ts",
+    "scripts/**/*.mjs",
     "playwright.config.js",
     "vite.config.js",
     "tailwind.config.cjs"
