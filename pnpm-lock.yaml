@@ -125,6 +125,9 @@ importers:
       '@huggingface/transformers':
         specifier: 4.3.1
         version: 4.3.1(@types/node@26.6.5)
+      '@jitl/quickjs-singlefile-browser-release-sync':
+        specifier: 0.32.0
+        version: 0.32.0
       '@jsquash/webp':
         specifier: 1.5.0
         version: 1.5.0
@@ -167,6 +170,9 @@ importers:
       qrcode-generator:
         specifier: 2.0.4
         version: 2.0.4
+      quickjs-emscripten-core:
+        specifier: 0.32.0
+        version: 0.32.0
       rxjs:
         specifier: 7.8.2
         version: 7.8.2
@@ -974,6 +980,12 @@ packages:
   '@isaacs/fs-minipass@4.0.1':
     resolution: {integrity: sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w==}
     engines: {node: '>=18.0.0'}
+
+  '@jitl/quickjs-ffi-types@0.32.0':
+    resolution: {integrity: sha512-v9T+GQpmk43VDJ7d72sf0Nexhk+ArvtUihW27dy7lqAl0zBObFKtSBBIm5RBjwIhE8VwsPPm9PNuvPvNqLWUEg==}
+
+  '@jitl/quickjs-singlefile-browser-release-sync@0.32.0':
+    resolution: {integrity: sha512-Hfdl7rh8dzxNWFRiYAYNbhn0RMF1/tO6SMH2mUW0aTibqwaAtqPRbi4WkwaIDlhNz8Z4dksJi1Zjl1R54Jsc/Q==}
 
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
@@ -3691,6 +3703,9 @@ packages:
     resolution: {integrity: sha512-WuyALRjWPDGtt/wzJiadO5AXY+8hZ80hVpe6MyivgraREW751X3SbhRvG3eLKOYN+8VEvqLcf3wdnt44Z4S4SA==}
     engines: {node: '>=10'}
 
+  quickjs-emscripten-core@0.32.0:
+    resolution: {integrity: sha512-QFnPfjFey8EqknSrSxe1hZrf1/8z7/6s1QzGOmKo6++02r7QRRX7ZoyNaZh7JuVjWsVW87KnQrbZqnHkOAzUyg==}
+
   read-binary-file-arch@1.0.6:
     resolution: {integrity: sha512-BNg9EN3DD3GsDXX7Aa8O4p92sryjkmzYYgmgTAc6CA4uGLEDzFfxOxugu21akOxpcXHiEgsYkC6nPsQvLLLmEg==}
     hasBin: true
@@ -4627,7 +4642,7 @@ packages:
     engines: {node: '>=12.20'}
 
   yurigana@https://codeload.github.com/blankiekun/yurigana/tar.gz/5b4f9f56b544db8f0c902d416f6e3c296f2bbace:
-    resolution: {gitHosted: true, integrity: sha512-eIrsC3596Gdqn2WLlb/eLGvpqqtBsicIFAXDGUnmvPMjLlfURIdV5YseoyBxRkMTd/Tp7uOm7b0PAhGc5lvhrg==, tarball: https://codeload.github.com/blankiekun/yurigana/tar.gz/5b4f9f56b544db8f0c902d416f6e3c296f2bbace}
+    resolution: {gitHosted: true, tarball: https://codeload.github.com/blankiekun/yurigana/tar.gz/5b4f9f56b544db8f0c902d416f6e3c296f2bbace}
     version: 0.5.11
 
   zimmerframe@1.1.2:
@@ -5370,6 +5385,12 @@ snapshots:
   '@isaacs/fs-minipass@4.0.1':
     dependencies:
       minipass: 7.1.2
+
+  '@jitl/quickjs-ffi-types@0.32.0': {}
+
+  '@jitl/quickjs-singlefile-browser-release-sync@0.32.0':
+    dependencies:
+      '@jitl/quickjs-ffi-types': 0.32.0
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
@@ -7933,6 +7954,10 @@ snapshots:
   queue-microtask@1.2.3: {}
 
   quick-lru@5.1.1: {}
+
+  quickjs-emscripten-core@0.32.0:
+    dependencies:
+      '@jitl/quickjs-ffi-types': 0.32.0
 
   read-binary-file-arch@1.0.6:
     dependencies:

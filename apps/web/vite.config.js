@@ -2,6 +2,8 @@ import dns from 'dns';
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 import preprocess from 'svelte-preprocess';
+import { fileURLToPath } from 'node:url';
+import { build } from 'vite';
 
 const nodeVersion = Number.parseInt(process.versions.node.match(/^(\d+)\./)?.[1] || '17', 10);
 
@@ -9,9 +11,53 @@ if (nodeVersion < 17) {
   dns.setDefaultResultOrder('verbatim');
 }
 
+/**
+ * source-sandbox.js, the runtime of static/source-sandbox.html (lib/data/sources/extension-sandbox.ts
+ * with QuickJS), as one classic script: the frame's opaque origin can't load module chunks
+ * without CORS. Served by the dev server, emitted beside the static files by a build.
+ * @returns {import('vite').Plugin}
+ */
+function sourceSandbox() {
+  const entry = fileURLToPath(
+    new URL('./src/lib/data/sources/extension-sandbox.ts', import.meta.url)
+  );
+  const bundle = async () => {
+    const [result] = /** @type {import('vite').Rollup.RollupOutput[]} */ (
+      await build({
+        configFile: false,
+        // QuickJS's emscripten module mentions import.meta (unused in the browser build): iife drops it.
+        logLevel: 'error',
+        build: {
+          write: false,
+          lib: { entry, formats: ['iife'], name: 'chimiSourceSandbox' }
+        }
+      })
+    );
+    return result.output[0].code;
+  };
+  return {
+    name: 'source-sandbox',
+    configureServer(server) {
+      /** @type {Promise<string> | undefined} */
+      let built;
+      server.watcher.on('change', (file) => file === entry && (built = undefined));
+      server.middlewares.use(async (request, response, next) => {
+        if (!request.url?.split('?')[0].endsWith('/source-sandbox.js')) return next();
+        response.setHeader('Content-Type', 'text/javascript');
+        response.end(await (built ??= bundle()));
+      });
+    },
+    async generateBundle() {
+      if (this.environment.name !== 'client') return;
+      this.emitFile({ type: 'asset', fileName: 'source-sandbox.js', source: await bundle() });
+    }
+  };
+}
+
 /** @type {import('vite').UserConfig} */
 const config = {
   plugins: [
+    sourceSandbox(),
     sveltekit({
       compilerOptions: {
         // Svelte 5 still honours this in legacy (non-runes) mode: === checks, as with Svelte 4.

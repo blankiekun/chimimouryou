@@ -202,7 +202,12 @@ ${lunahookAbout(link, file)}
  * Pacing per host stays in transport.ts, as in a browser.
  */
 async function sourcesFetch(event, url, { headers = {}, maxBytes = 20 * 1024 * 1024 } = {}) {
-  if (!event.senderFrame?.url.startsWith(`${origin}/`)) throw new Error('Not the app');
+  // The main frame only: a source extension's sandboxed frame has an app URL too.
+  if (
+    event.senderFrame !== event.sender.mainFrame ||
+    !event.senderFrame.url.startsWith(`${origin}/`)
+  )
+    throw new Error('Not the app');
   const agent = session.defaultSession.getUserAgent().replace(/ (Electron|chimimouryou)\/\S+/g, '');
   for (let hop = 0; hop < 10; hop += 1) {
     if (!/^https?:\/\//.test(url)) throw new Error('Only http and https');

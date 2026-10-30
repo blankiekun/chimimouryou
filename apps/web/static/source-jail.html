@@ -1,0 +1,7 @@
+<!doctype html>
+<!-- The app's wrapper around a source extension's frame (lib/data/sources/extension-runtime.ts):
+     the CSP of the document holding an iframe decides where that iframe may navigate, so the
+     extension's frame can't send itself (and data in the URL) to another site. -->
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src 'self'" />
+<title>Source extension</title>

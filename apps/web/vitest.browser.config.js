@@ -1,12 +1,15 @@
 import { playwright } from '@vitest/browser-playwright';
 import { defineConfig, mergeConfig } from 'vitest/config';
 import viteConfig from './vite.config.js';
+import { extensionProbes } from './src/lib/data/sources/extension-probes/servers.ts';
 
 // Tests in headless Chromium (`pnpm test:browser`): real layout, vertical text, CSS highlights.
 // Apart from vitest.config.js so `pnpm test` stays on jsdom and never loads Playwright.
 export default mergeConfig(
   viteConfig,
   defineConfig({
+    // The fake sites, sinks and probe page of extension-runtime.browser.test.ts.
+    plugins: [extensionProbes()],
     test: {
       include: ['src/**/*.browser.test.ts'],
       browser: {
