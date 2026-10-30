@@ -102,6 +102,8 @@ services:
       SOURCES_HOST_INTERVAL: ${SOURCES_HOST_INTERVAL:-2}
       SOURCES_CHECK_HOURS: ${SOURCES_CHECK_HOURS:-6}
       SOURCES_FIXTURE_URL: ${SOURCES_FIXTURE_URL:-}
+      # Encrypts the passwords of OPDS/Suwayomi servers added as sources; keep it out of DATA_PATH.
+      SOURCES_SECRET_KEY: ${SOURCES_SECRET_KEY:-}
     volumes:
       - ${DATA_PATH:-./data}:/data
       - ${LIBRARY_PATH:?set LIBRARY_PATH in .env}:/library

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""A fake Syosetu and Kakuyomu over the saved fixtures, so tests and the test stack never reach the real site.
+"""A fake Syosetu and Kakuyomu over the saved fixtures, so tests and the test stack never reach the real site, and
+a fake OPDS catalog and Suwayomi (servers.py) at /opds/ and /suwayomi/.
 
 The import service sends every source request here when SOURCES_FIXTURE_URL is set (fetcher.py): the original
 host becomes the first path part, e.g. http://127.0.0.1:8799/ncode.syosetu.com/n0001aa/5/.
@@ -10,6 +11,8 @@ import re
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
+
+import servers
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, 'syosetu')
@@ -64,9 +67,17 @@ def answer(path: str, query: dict, cookie: str) -> tuple[int, str, bytes | str]:
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):  # noqa: N802
         url = urlparse(self.path)
-        status, kind, body = answer(url.path, parse_qs(url.query), self.headers.get('Cookie', ''))
+        first, _, rest = url.path.lstrip('/').partition('/')
+        if first == 'opds':
+            status, kind, body = servers.opds(rest, parse_qs(url.query), self.headers.get('Authorization', ''))
+        elif first == 'suwayomi':
+            status, kind, body = servers.suwayomi(rest, parse_qs(url.query))
+        else:
+            status, kind, body = answer(url.path, parse_qs(url.query), self.headers.get('Cookie', ''))
         self.send_response(status)
         self.send_header('Location' if status == 302 else 'Content-Type', kind)
+        if status == 401:
+            self.send_header('WWW-Authenticate', 'Basic realm="fake"')
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         self.wfile.write(body)
