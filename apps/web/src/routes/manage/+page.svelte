@@ -54,7 +54,8 @@
     loadCoverageCache,
     refreshKnownWordsIfStale
   } from '$lib/data/known-words';
-  import { deleteCachedReadings, prefetchReadings } from '$lib/data/generated-furigana';
+  import { prefetchReadings } from '$lib/data/generated-furigana';
+  import { deleteBookExtras } from '$lib/data/reader-db';
   import { deleteBookKanji } from '$lib/data/book-kanji';
   import { deleteVnCache } from '$lib/data/vn';
   import DifficultyDialog from '$lib/components/book-card/difficulty-dialog.svelte';
@@ -1030,7 +1031,7 @@
       .forEach((card) => {
         deleteVnCache(card.title).catch(() => {});
         deleteWindowsGame(windowsGameFolder(card.title)).catch(() => {});
-        deleteCachedReadings(card.title).catch(() => {});
+        deleteBookExtras(card.title).catch(() => {});
         deleteBookKanji(card.title).catch(() => {});
       });
 

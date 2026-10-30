@@ -126,3 +126,26 @@ export function readerDb() {
 
   return dbPromise;
 }
+
+/** Every store keyed by a book's title (not `known`, whose keys are its own). */
+const bookStores = [
+  'annotations',
+  'recaps',
+  'lorebooks',
+  'audiobooks',
+  'kanji',
+  'vnRead',
+  'absSubtitles',
+  'readings',
+  'estimates',
+  'wordLists',
+  'mokuro',
+  'whisperSubtitles'
+] as const;
+
+/** Removes everything this browser kept for a deleted book. */
+export async function deleteBookExtras(title: string) {
+  const tx = (await readerDb()).transaction(bookStores, 'readwrite');
+
+  await Promise.all([...bookStores.map((store) => tx.objectStore(store).delete(title)), tx.done]);
+}
