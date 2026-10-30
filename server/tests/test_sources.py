@@ -563,7 +563,8 @@ class ServiceTest(unittest.TestCase):
         self.assertEqual(len(jobs()), 1)
         self.set_chapters('n0005ee', 4)
         sources.queue_due_checks(now + sources.CHECK_MS + 60 * 1000)
-        follow = self.follow_state(wid, 'acc7', lambda f: f['detail'].startswith('1 new chapter'))
+        # The follow reads 'checking' until the volume's import job ends, after the detail is written.
+        follow = self.follow_state(wid, 'acc7', lambda f: f['state'] != 'checking' and f['detail'].startswith('1 new chapter'))
         self.assertEqual(follow['state'], 'new')
 
     def test_follows_are_per_account(self):
