@@ -690,10 +690,9 @@ export const en = {
   'ai.syncs.setting': 'Setting',
   'ai.syncs.where': 'Where it is kept',
   'ai.syncs.keys': 'API keys',
-  'ai.syncs.keysWhere':
-    'This browser, and your account on this server while signed in, so your other devices get them.',
+  'ai.syncs.keysWhere': 'This browser only. Enter a key on each device that uses it.',
   'ai.syncs.keysNote':
-    'Never in Drive, OneDrive, a sync folder or any shared file. Removed when you sign out.',
+    'Never synced: not to your account, Drive, OneDrive, a sync folder or any shared file. Kept when you sign out.',
   'ai.syncs.connections': 'Connections',
   'ai.syncs.connectionsWhere':
     'Provider, name, endpoint and model lists to choose from, without the key.',
@@ -732,8 +731,10 @@ export const en = {
   'ai.provider': 'Provider',
   'ai.connectionName': 'Name',
   'ai.apiKey': 'API key',
-  'ai.apiKeyHint': '→ create a key there. Sent only to this provider.',
-  'ai.apiKeyOptional': 'Only if the server asks. Sent only to this server.',
+  'ai.apiKeyHint':
+    '→ create a key there. Kept in this browser only and sent only to this provider.',
+  'ai.apiKeyOptional':
+    'Only if the server asks. Kept in this browser only and sent only to this server.',
   'ai.endpoint': 'Endpoint',
   'ai.endpointCustomHint': 'The URL before /chat/completions. Servers on your network need https.',
   'ai.loadingModels': 'Loading models…',

@@ -686,10 +686,9 @@ export const ja: Record<MessageKey, string> = {
   'ai.syncs.setting': '設定',
   'ai.syncs.where': '保存先',
   'ai.syncs.keys': 'APIキー',
-  'ai.syncs.keysWhere':
-    'このブラウザと、ログイン中はこのサーバーのアカウント（他の端末でも使えるように）。',
+  'ai.syncs.keysWhere': 'このブラウザのみ。使う端末ごとにキーを入力してください。',
   'ai.syncs.keysNote':
-    'Drive、OneDrive、同期フォルダや共有ファイルには保存しません。ログアウトすると削除されます。',
+    '同期しません（アカウント、Drive、OneDrive、同期フォルダ、共有ファイルのどれにも保存しません）。ログアウトしても残ります。',
   'ai.syncs.connections': '接続',
   'ai.syncs.connectionsWhere': 'プロバイダー、名前、エンドポイント。キーは含みません。',
   'ai.syncs.rest': '機能、詳細設定、プロンプト',
@@ -727,8 +726,10 @@ export const ja: Record<MessageKey, string> = {
   'ai.provider': 'プロバイダー',
   'ai.connectionName': '名前',
   'ai.apiKey': 'API キー',
-  'ai.apiKeyHint': '→ でキーを作成します。このプロバイダーにのみ送信されます。',
-  'ai.apiKeyOptional': 'サーバーが求める場合のみ。このサーバーにのみ送信されます。',
+  'ai.apiKeyHint':
+    '→ でキーを作成します。このブラウザにのみ保存され、このプロバイダーにだけ送信されます。',
+  'ai.apiKeyOptional':
+    'サーバーが求める場合のみ。このブラウザにのみ保存され、このサーバーにだけ送信されます。',
   'ai.endpoint': 'エンドポイント',
   'ai.endpointCustomHint':
     '/chat/completions の前までの URL。ネットワーク上のサーバーには https が必要です。',

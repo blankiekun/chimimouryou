@@ -86,35 +86,6 @@ export function mergeConnections(local: AiConnection[], remote: AiConnection[]) 
   return [...merged.values()].sort((a, b) => a.id.localeCompare(b.id));
 }
 
-/**
- * Keys of the live connections, each from the side with that connection's newest edit (saving
- * one with an empty key removes it, and bumps `modified`); a tie keeps whichever side has a key,
- * since a browser drops its keys on sign-out.
- */
-export function mergeConnectionKeys(
-  localKeys: Record<string, string> = {},
-  remoteKeys: Record<string, string> = {},
-  localConnections: AiConnection[] = [],
-  remoteConnections: AiConnection[] = []
-) {
-  const modified = (connections: AiConnection[], id: string) =>
-    connections.find((c) => c.id === id)?.modified ?? -1;
-
-  return Object.fromEntries(
-    mergeConnections(localConnections, remoteConnections)
-      .filter((connection) => !connection.deleted)
-      .map(({ id }) => {
-        const local = modified(localConnections, id);
-        const remote = modified(remoteConnections, id);
-
-        if (local === remote) return [id, localKeys[id] || remoteKeys[id]];
-
-        return [id, (local > remote ? localKeys : remoteKeys)[id]];
-      })
-      .filter(([, key]) => key)
-  );
-}
-
 export function connectionKey(connection: AiConnection) {
   return aiConnectionKeys$.getValue()[connection.id] ?? '';
 }

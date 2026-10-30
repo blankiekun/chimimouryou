@@ -15,6 +15,7 @@ import {
 import { mangaSeriesModes$ } from '$lib/data/manga';
 import { theme$ } from '$lib/data/store';
 import { customAppThemes$, darkTheme$ } from '$lib/data/theme/theme-store';
+import { audiobookshelfToken$ } from '$lib/data/audiobookshelf';
 import { socialSession$ } from '$lib/data/social-account';
 import { homeBookTitles$, homeRemovedTitles$ } from '$lib/data/library-home';
 import { dropSyncMirrors } from '$lib/data/server-api';
@@ -111,10 +112,11 @@ const elevenLabs = {
 function leaveSettingsFrom(owner: string | undefined) {
   aiConnections$.next([openRouter, elevenLabs]);
   aiConnectionKeys$.next({ or: 'sk-or-alice', el: 'sk_eleven_alice' });
+  audiobookshelfToken$.next('abs-alice');
   askAiReaderNote$.next('note/alice');
   window.localStorage.setItem(
     'accountSettingsModified',
-    JSON.stringify({ aiConnections: 2000, aiConnectionKeys: 2000, askAiReaderNote: 2000 })
+    JSON.stringify({ aiConnections: 2000, audiobookshelfToken: 2000, askAiReaderNote: 2000 })
   );
   if (owner) {
     window.localStorage.setItem('accountSettingsOwner', owner);
@@ -142,61 +144,33 @@ describe('account settings sync', () => {
     vi.unstubAllGlobals();
   });
 
-  it("doesn't upload or keep another account's API keys after switching accounts", async () => {
+  it("doesn't upload or keep another account's tokens after switching accounts", async () => {
     leaveSettingsFrom('alice');
     mockServer({ values: {}, modified: {} });
 
     await signInAs(bob);
 
-    expect(uploads.join()).not.toContain('sk-');
-    expect(aiConnectionKeys$.getValue()).toEqual({});
-    expect(window.localStorage.getItem('aiConnectionKeys')).toBeNull();
+    expect(uploads.join()).not.toContain('abs-alice');
+    expect(audiobookshelfToken$.getValue()).toBe('');
+    expect(window.localStorage.getItem('audiobookshelfToken')).toBeNull();
   });
 
-  it('removes API keys from the browser when the account is signed out or expired', async () => {
+  it('removes tokens from the browser when the account is signed out or expired', async () => {
     leaveSettingsFrom('alice');
     mockServer();
 
     await signInAs(null);
 
-    expect(aiConnectionKeys$.getValue()).toEqual({});
-    expect(window.localStorage.getItem('aiConnectionKeys')).toBeNull();
-    // Non-secret settings stay.
+    expect(audiobookshelfToken$.getValue()).toBe('');
+    expect(window.localStorage.getItem('audiobookshelfToken')).toBeNull();
+    // Non-secret settings stay, and AI keys belong to the browser, not the account.
+    expect(aiConnectionKeys$.getValue().or).toBe('sk-or-alice');
     expect(aiConnections$.getValue()).toHaveLength(2);
     expect(askAiReaderNote$.getValue()).toBe('note/alice');
   });
 
-  it('still syncs the same account', async () => {
-    leaveSettingsFrom('alice');
-    mockServer({ values: {}, modified: {} });
-
-    await signInAs(alice);
-
-    expect(uploads.join()).toContain('sk-or-alice');
-    expect(aiConnectionKeys$.getValue().or).toBe('sk-or-alice');
-  });
-
-  it("doesn't adopt API keys typed while signed out", async () => {
-    leaveSettingsFrom(undefined);
-    mockServer({ values: {}, modified: {} });
-
-    await signInAs(alice);
-
-    expect(uploads.join()).not.toContain('sk-');
-    expect(aiConnectionKeys$.getValue()).toEqual({});
-    expect(askAiReaderNote$.getValue()).toBe('note/alice');
-  });
-
-  it('keeps API keys typed while signed out until someone signs in', async () => {
-    leaveSettingsFrom(undefined);
-    mockServer();
-
-    await signInAs(null);
-
-    expect(aiConnectionKeys$.getValue().or).toBe('sk-or-alice');
-  });
-
-  it("applies the new account's own keys", async () => {
+  // Catches an AI key reaching the server, or another account's sign-in taking this browser's keys.
+  it('never uploads AI keys, keeps them across accounts and drops the account copy', async () => {
     leaveSettingsFrom('alice');
     mockServer({
       values: { aiConnections: [openRouter], aiConnectionKeys: { or: 'sk-or-bob' } },
@@ -205,7 +179,9 @@ describe('account settings sync', () => {
 
     await signInAs(bob);
 
-    expect(aiConnectionKeys$.getValue()).toEqual({ or: 'sk-or-bob' });
+    expect(aiConnectionKeys$.getValue()).toEqual({ or: 'sk-or-alice', el: 'sk_eleven_alice' });
+    expect(uploads.join()).not.toContain('sk-');
+    expect(remote()?.values).not.toHaveProperty('aiConnectionKeys');
   });
 
   it('merges connections per id with the account', async () => {
@@ -235,7 +211,7 @@ describe('account settings sync', () => {
     expect(names(remote()?.values.aiConnections as never)).toEqual(expected);
   });
 
-  it("keeps both devices' new connection keys and Home books", async () => {
+  it("keeps both devices' new Home books", async () => {
     const connection = (id: string, modified: number) => ({
       id,
       name: id,
@@ -244,31 +220,26 @@ describe('account settings sync', () => {
       modified
     });
 
-    // This browser added key y; the account has key x from another device, and its Home lost 'gone'.
+    // The account's Home lost 'gone' on another device.
     aiConnections$.next([connection('y', 5)]);
-    aiConnectionKeys$.next({ y: 'key-y' });
     homeBookTitles$.next(['mine', 'gone']);
     homeRemovedTitles$.next({ mine: -5 });
     window.localStorage.setItem('accountSettingsOwner', 'alice');
     window.localStorage.setItem(
       'accountSettingsModified',
-      JSON.stringify({ aiConnections: 5, aiConnectionKeys: 5, homeBookTitles: 5 })
+      JSON.stringify({ aiConnections: 5, homeBookTitles: 5 })
     );
     mockServer({
       values: {
         aiConnections: [connection('x', 3), { ...connection('z', 4), deleted: true }],
-        aiConnectionKeys: { x: 'key-x', z: 'key-z' },
         homeBookTitles: ['theirs'],
         homeRemovedTitles: { gone: 4 }
       },
-      modified: { aiConnections: 4, aiConnectionKeys: 4, homeBookTitles: 4, homeRemovedTitles: 4 }
+      modified: { aiConnections: 4, homeBookTitles: 4, homeRemovedTitles: 4 }
     });
 
     await signInAs(alice);
 
-    const keys = { x: 'key-x', y: 'key-y' };
-    expect(aiConnectionKeys$.getValue()).toEqual(keys);
-    expect(remote()?.values.aiConnectionKeys).toEqual(keys);
     expect(homeBookTitles$.getValue()).toEqual(['mine', 'theirs']);
     expect(remote()?.values.homeBookTitles).toEqual(['mine', 'theirs']);
   });

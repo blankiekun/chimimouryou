@@ -22,7 +22,6 @@ import { uiLanguage$ } from '$lib/i18n';
 import type { AccountUser } from '$lib/data/account';
 import { readerSyncStore, syncJsonFile } from '$lib/data/sync-files';
 import {
-  aiConnectionKeys$,
   aiConnections$,
   aiFeatures$,
   aiLanguage$,
@@ -35,7 +34,7 @@ import {
   ttsVoiceId$
 } from '$lib/data/ai-settings';
 import { dictionaryAnki$ } from '$lib/data/anki-dictionary';
-import { mergeConnectionKeys, mergeConnections } from '$lib/data/ai-connections';
+import { mergeConnections } from '$lib/data/ai-connections';
 import {
   homeBookTitles$,
   homeRemovedTitles$,
@@ -123,7 +122,6 @@ const sharedSettings: Record<string, Store> = {
   followSystemTheme: followSystemTheme$,
   customAppThemes: customAppThemes$,
   aiConnections: aiConnections$,
-  aiConnectionKeys: aiConnectionKeys$,
   aiFeatures: aiFeatures$,
   lorebookAutoInterval: lorebookAutoInterval$,
   aiLanguage: aiLanguage$,
@@ -157,12 +155,11 @@ const sharedSettings: Record<string, Store> = {
 };
 
 /**
- * API keys among sharedSettings. They belong to the account: they are removed
+ * Tokens among sharedSettings (AI keys aren't synced at all). They belong to the account: they are removed
  * from the browser when it signs out (or the session expires) or another account
  * signs in, so they are never used by, shown to or uploaded for someone else.
  */
 const secretSettings = [
-  'aiConnectionKeys',
   'audiobookshelfToken',
   // The hub sign-in: other browsers of the server account are signed in to the hub too.
   'socialSession'
@@ -182,8 +179,6 @@ const mergedSettings: Record<
   ) => unknown
 > = {
   aiConnections: mergeConnections,
-  aiConnectionKeys: (local, remote, localValues, remoteValues) =>
-    mergeConnectionKeys(local, remote, localValues.aiConnections, remoteValues.aiConnections),
   homeBookTitles: (local, remote, localValues, remoteValues) =>
     mergeHomeTitles(local, remote, localValues.homeRemovedTitles, remoteValues.homeRemovedTitles),
   homeRemovedTitles: mergeHomeRemovals,
@@ -421,7 +416,9 @@ async function syncOnce() {
 }
 
 /** Applies the newer remote settings; resolves the file to upload when this browser has newer ones. */
+// AI keys stay in the browser that holds them (owner 2026-10-29): the account's old copy goes too.
 const oldAiSettings = [
+  'aiConnectionKeys',
   'openRouterApiKey',
   'openRouterModel',
   'openRouterRecapModel',
@@ -443,7 +440,7 @@ async function mergeSettings(file: Partial<SettingsDocument> | undefined) {
   const remoteValues = { ...remote.values };
   let changedRemote = false;
 
-  // Settings from before AI connections (#129): an old API key must not stay in the account's copy.
+  // Settings from before AI connections (#129) and synced AI keys: no API key stays in the account's copy.
   oldAiSettings.forEach((key) => {
     if (key in remote.values || key in remote.modified) {
       delete remote.values[key];
