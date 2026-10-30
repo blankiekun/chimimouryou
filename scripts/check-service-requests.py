@@ -84,6 +84,7 @@ def padded(obj: dict, size: int) -> bytes:
 
 
 MALFORMED = b'{"ids": ['
+MOKURO = b'{"pages": [{"img_width": 10, "img_height": 10, "img_path": "1.jpg", "blocks": []}]}'
 NON_OBJECT = b'[]'
 
 
@@ -254,6 +255,8 @@ def start_services(server_dir, state):
            'JITEN_HOST': '127.0.0.1', 'MOKURO_HOST': '127.0.0.1'}
     for name in ('api', 'import', 'difficulty', 'mokuro', 'sync', 'accounts', 'account'):
         os.makedirs(os.path.join(state, name), exist_ok=True)
+    # Saving book 7's text fails (as on a full disk): an unexpected error in the service.
+    os.makedirs(os.path.join(state, 'mokuro', '7.json.tmp'))
     processes = []
     for name, (script, port_env, port, extra) in SERVICES.items():
         log = open(os.path.join(state, f'{name}.log'), 'wb')
@@ -351,7 +354,7 @@ def direct_rows(token):
                                           ('over-64m', padded({'ids': []}, 64 * 2**20 + 1))],
         ('mokuro', 'POST', '/remove'): [('ok', b'{"id": 999999}')],
         ('mokuro', 'POST', '/upload?id=999999'): [('not-manga', b'{}')],
-        ('mokuro', 'POST', '/upload?id=7'): [('not-mokuro', b'{"pages": 1}')],
+        ('mokuro', 'POST', '/upload?id=7'): [('not-mokuro', b'{"pages": 1}'), ('write-fails', MOKURO)],
     }
     for (service, method, path), extra in bodies.items():
         common = [('malformed', MALFORMED), ('non-object', NON_OBJECT), ('empty', b'')]
