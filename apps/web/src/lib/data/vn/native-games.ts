@@ -13,10 +13,9 @@
  */
 
 import { logger } from '$lib/data/logger';
-import { syncJsonFile } from '$lib/data/sync/sync-files';
-import { mergeVnSaves, parseVnSaves, sameVnSaves, type VnSaves } from './vn';
-import { formatBytes } from './vn-upload';
-import { isWindowsSaveKey, windowsSavesCap, type VnSaveSync } from './vn-save-store';
+// Types only: settings-sections imports this file, and the save code opens IndexedDB on load.
+import type { VnSaves } from './vn';
+import type { VnSaveSync } from './vn-save-store';
 import type { HookThread } from './windows-game';
 
 /** The thread a game's text comes from, kept across starts and devices. */
@@ -165,6 +164,8 @@ export function isSavedThread(thread: { hookcode: string }, hook: NativeHook | u
 
 /** Before a native start: the synced saves VNBox's rules allow, or none when offline. */
 export async function nativeSavesToPull(sync: VnSaveSync): Promise<VnSaves> {
+  const { isWindowsSaveKey } = await import('./vn-save-store');
+
   try {
     const saves = await sync.fetch();
 
@@ -186,6 +187,18 @@ export async function pushNativeSaves(
   sync: VnSaveSync,
   lastStamp?: string
 ): Promise<{ stamp?: string; note?: string; pending?: string[] }> {
+  const [
+    { syncJsonFile },
+    { mergeVnSaves, parseVnSaves, sameVnSaves },
+    { formatBytes },
+    saveStore
+  ] = await Promise.all([
+    import('$lib/data/sync/sync-files'),
+    import('./vn'),
+    import('./vn-upload'),
+    import('./vn-save-store')
+  ]);
+  const { isWindowsSaveKey, windowsSavesCap } = saveStore;
   const list = await games.saves(folder);
 
   if (!list) return { stamp: lastStamp };
