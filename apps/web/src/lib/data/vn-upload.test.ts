@@ -26,7 +26,6 @@ vi.mock('$lib/functions/file-loaders/cbz/load-cbz', () => ({
   })
 }));
 
-await import('$lib/data/storage/storage-handler-factory');
 const { importData } = await import('$lib/functions/replication/replicator');
 
 const game = { name: 'game.zip', size: 1.8 * 1024 ** 3 };

@@ -23,7 +23,8 @@ type Imports = typeof import('./server-handler') &
   typeof import('./browser-handler') &
   typeof import('$lib/data/store') &
   typeof import('$lib/functions/replication/replicator') &
-  typeof import('$lib/data/windows-game');
+  typeof import('$lib/data/windows-game') &
+  typeof import('$lib/data/server-rows');
 
 let ServerStorageHandler: Imports['ServerStorageHandler'];
 let BrowserStorageHandler: Imports['BrowserStorageHandler'];
@@ -34,13 +35,12 @@ let libraryOffline$: Imports['libraryOffline$'];
 let librarySignInNeeded: Imports['librarySignInNeeded'];
 let replicateData: Imports['replicateData'];
 let windowsGameBook: Imports['windowsGameBook'];
+let writeSyncFile: Imports['writeSyncFile'];
 
 /** Fresh modules and IndexedDB per test: the catalog cache and the mirror live in both. */
 async function loadModules() {
   vi.resetModules();
   vi.stubGlobal('indexedDB', new IDBFactory());
-  // Same order as the app: the factory first, because the handlers import each other.
-  await import('$lib/data/storage/storage-handler-factory');
   ({ ServerStorageHandler, calibreReceivedBooks$ } = await import('./server-handler'));
   ({ BrowserStorageHandler } = await import('./browser-handler'));
   ({ database, libraryBuilding$, libraryOffline$, librarySignInNeeded } = await import(
@@ -48,6 +48,7 @@ async function loadModules() {
   ));
   ({ replicateData } = await import('$lib/functions/replication/replicator'));
   ({ windowsGameBook } = await import('$lib/data/windows-game'));
+  ({ writeSyncFile } = await import('$lib/data/server-rows'));
   (await import('@zip.js/zip.js')).configure({ useWebWorkers: false });
 }
 
@@ -456,7 +457,7 @@ describe('while an expired session still owns the data', () => {
       server.saveProgress({ progress: 0.1, lastBookmarkModified: 10 } as never)
     ).rejects.toMatchObject({ status: 401 });
     await expect(
-      ServerStorageHandler.writeSyncFile('annotations.json', '{"highlights":[]}', {
+      writeSyncFile('annotations.json', '{"highlights":[]}', {
         title: 'こころ'
       })
     ).rejects.toMatchObject({ status: 401 });

@@ -18,7 +18,6 @@ const analyseInBackground = vi.fn();
 
 vi.mock('$lib/data/background-analysis', () => ({ analyseInBackground }));
 
-await import('$lib/data/storage/storage-handler-factory');
 const { database } = await import('$lib/data/store');
 const { importData, replicateData, LOCAL_COPY_LIMIT } = await import(
   '$lib/functions/replication/replicator'

@@ -30,7 +30,7 @@ import { isSyncBetween, syncEnded, syncStarted, syncStep } from '$lib/data/sync-
 import { standalone } from '$lib/data/env';
 import pLimit from 'p-limit';
 
-export const exporterVersion = 1;
+export { exporterVersion } from '$lib/data/storage/handler/base-handler';
 
 /**
  * Standalone: books of one import into Drive/OneDrive/a folder that are also kept in this browser,

@@ -10,7 +10,6 @@ import { describe, expect, it } from 'vitest';
 // sync file names the same way.
 import fixtureJson from '../../../../../../../server/tests/fixtures/sync-file-names.json?raw';
 
-await import('$lib/data/storage/storage-handler-factory');
 const { BaseStorageHandler } = await import('./base-handler');
 
 const fixture = JSON.parse(fixtureJson) as {

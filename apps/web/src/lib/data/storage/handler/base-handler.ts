@@ -22,7 +22,6 @@ import {
   StorageDataType,
   type StorageKey
 } from '$lib/data/storage/storage-types';
-import { exporterVersion } from '$lib/functions/replication/replicator';
 import { throwIfAborted } from '$lib/functions/replication/replication-error';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
 import {
@@ -42,6 +41,8 @@ import {
   ZipWriter,
   type Entry
 } from '@zip.js/zip.js';
+
+export const exporterVersion = 1;
 
 export enum FilePrefix {
   AUDIO_BOOK = 'audioBook_',

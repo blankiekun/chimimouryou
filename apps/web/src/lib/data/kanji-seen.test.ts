@@ -5,10 +5,7 @@
  */
 
 import 'fake-indexeddb/auto';
-import { describe, expect, it, vi } from 'vitest';
-
-// Recording pulls through extras-sync; its handler pulls in every storage source.
-vi.mock('$lib/data/storage/handler/server-handler', () => ({ ServerStorageHandler: {} }));
+import { describe, expect, it } from 'vitest';
 
 import { recordKanjiText } from '$lib/data/kanji-seen';
 import { readerDb } from '$lib/data/reader-db';

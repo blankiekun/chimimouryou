@@ -7,7 +7,6 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it, vi } from 'vitest';
 
-await import('$lib/data/storage/storage-handler-factory');
 const { GDriveStorageHandler } = await import('./gdrive-handler');
 
 const MiB = 1024 * 1024;

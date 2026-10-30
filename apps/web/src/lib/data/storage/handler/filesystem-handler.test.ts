@@ -8,7 +8,6 @@ import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { StorageKey } from '$lib/data/storage/storage-types';
 
-await import('$lib/data/storage/storage-handler-factory');
 const { FilesystemStorageHandler } = await import('./filesystem-handler');
 const { SyncConflictError } = await import('./base-handler');
 
