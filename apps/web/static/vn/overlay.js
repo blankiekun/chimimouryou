@@ -152,27 +152,82 @@ document.addEventListener('contextmenu', function (event) {
 // however far back in a backlog.
 var KEPT_LINES = 500;
 var KEPT_MEDIA = 30;
-var keptLines = []; // [{ text, voice, picture?: Promise<Blob>, audio?: Promise<Blob> }], oldest first
+var keptLines = []; // [{ text, voice, picture?: Promise<Blob>, at, start, end?, recorded? }], oldest first
 var keepLines = false; // mining: keep screenshots and sound too
 // Set by players whose lines come from a text hook (vnbox.js), which fires before the text is
 // fully drawn and again when the game's own backlog screen shows a line.
 var hookedLines = false;
 // A hooked line whose screenshot is retaken at the next click or key (keepLine).
 var retakeLine = null;
-var soundTap;
-var lineRecorder;
 var recordLines = false;
 var nativeConnect = AudioNode.prototype.connect;
 var nativeGetContext = HTMLCanvasElement.prototype.getContext;
 
+// The sound: one continuous recording of what the engine sends to the speakers (soundTap), the
+// last 3 minutes kept as mono s16 at about 24 kHz in a ring placed by the sound's own clock, so a
+// line's sound is cut from it by time (lineSound), whatever came between. A ScriptProcessorNode,
+// not an AudioWorklet: worklets need a secure context, and the players also run over plain HTTP.
+var RING_SECONDS = 180;
+// A line starts at the first click or key after the line before it, if within this before it.
+var CLICK_WITHIN = 3;
+// Sound kept around a line's window for the page's voice finder (lib/data/vn/line-audio.ts).
+var PRE_ROLL = 0.4;
+var TAIL = 6;
+var soundTap; // { node, context, rate, samples, end: frames written, in context time × rate }
+var clickTimes = [];
+
+function soundNow() {
+  return soundTap ? soundTap.context.currentTime : performance.now() / 1000;
+}
+
+function startSoundTap(context) {
+  var size = 2048;
+  var step = context.sampleRate >= 44100 ? 2 : 1;
+  var rate = context.sampleRate / step;
+  var node = context.createScriptProcessor(size, 2, 1);
+  var tap = {
+    node: node,
+    context: context,
+    rate: rate,
+    samples: new Int16Array(Math.round(rate * RING_SECONDS)),
+    end: 0
+  };
+  var ring = tap.samples;
+
+  node.onaudioprocess = function (event) {
+    var input = event.inputBuffer;
+    var left = input.getChannelData(0);
+    var right = input.numberOfChannels > 1 ? input.getChannelData(1) : left;
+    var count = Math.floor(input.length / step);
+    // The input block is two blocks before the one played at playbackTime (measured in Chromium).
+    var at = Math.round((event.playbackTime - 2 * input.duration) * rate);
+    var i;
+
+    event.outputBuffer.getChannelData(0).fill(0);
+    // Time the engine sent nothing for (a missed block): silence.
+    for (i = Math.max(tap.end, at - ring.length); i < at; i += 1) ring[i % ring.length] = 0;
+    for (i = 0; i < count; i += 1) {
+      var sum = 0;
+
+      for (var k = 0; k < step; k += 1) sum += left[i * step + k] + right[i * step + k];
+      var value = Math.round((sum / (2 * step)) * 32767);
+      if (at + i >= 0)
+        ring[(at + i) % ring.length] = value > 32767 ? 32767 : value < -32768 ? -32768 : value;
+    }
+    tap.end = Math.max(tap.end, at + count);
+  };
+  nativeConnect.call(node, context.destination);
+  // Clicks so far were timed by another clock.
+  clickTimes = [];
+  return tap;
+}
+
 // Whatever the engine sends to the speakers is also sent to soundTap.
 AudioNode.prototype.connect = function (target) {
-  if (recordLines && target instanceof AudioDestinationNode) {
-    if (!soundTap) {
-      soundTap = this.context.createMediaStreamDestination();
-      restartLineRecorder();
-    }
-    if (soundTap.context === this.context) nativeConnect.call(this, soundTap);
+  if (recordLines && target instanceof AudioDestinationNode && this.context.createScriptProcessor) {
+    if (!soundTap) soundTap = startSoundTap(this.context);
+    if (soundTap.context === this.context && this !== soundTap.node)
+      nativeConnect.call(this, soundTap.node);
   }
   return nativeConnect.apply(this, arguments);
 };
@@ -186,13 +241,33 @@ HTMLCanvasElement.prototype.getContext = function (type, attributes) {
   return nativeGetContext.call(this, type, attributes);
 };
 
-/** At each click wait: the page so far and its voice; while mining also its screen and (being recorded) sound. */
+/**
+ * When a line shown now was brought up: a click within CLICK_WITHIN before it, else now. A hooked
+ * line comes as its text starts, right after the click that brought it: the last one. A player's
+ * click wait comes once the text is drawn, after any click that sped it up: the first one after
+ * the line before.
+ */
+function lineStart(now) {
+  var last = keptLines[keptLines.length - 1];
+  var after = last && last.recorded ? last.at : -Infinity;
+  var clicks = clickTimes.filter(function (time) {
+    return time > after && time <= now && time >= now - CLICK_WITHIN;
+  });
+  var click = hookedLines ? clicks[clicks.length - 1] : clicks[0];
+
+  return click === undefined ? now : click;
+}
+
+/** At each click wait: the page so far and its voice; while mining also its screen and the sound's times. */
 function keepLine(lines) {
   var text = lines
     .map(function (l) {
       return l.text;
     })
     .join('');
+  var now = soundNow();
+  var start = lineStart(now);
+  var last = keptLines[keptLines.length - 1];
   // A hooked line shown again (the game's backlog screen) keeps the media it had the first time.
   var earlier = hookedLines
     ? keptLines
@@ -203,48 +278,66 @@ function keepLine(lines) {
         })
     : null;
   var line = earlier
-    ? { text: text, voice: earlier.voice, picture: earlier.picture, audio: earlier.audio }
-    : { text: text, voice: lineVoice, picture: keepLines ? screenshot() : undefined };
+    ? {
+        text: text,
+        voice: earlier.voice,
+        picture: earlier.picture,
+        at: earlier.at,
+        start: earlier.start,
+        end: earlier.end,
+        recorded: earlier.recorded
+      }
+    : {
+        text: text,
+        voice: lineVoice,
+        picture: keepLines ? screenshot() : undefined,
+        at: now,
+        start: start,
+        recorded: !!soundTap
+      };
 
+  // The line before ends where this one starts.
+  if (last && last.end === undefined) last.end = start;
   // A hook fires before its text is drawn: the screen at the next click or key is the line's,
   // if one comes before the next line.
   retakeLine = keepLines && hookedLines && !earlier ? line : null;
-  // The sound recorded since the click that brought this line is its sound.
-  if (!earlier && lineRecorder && lineRecorder.state !== 'inactive') lineRecorder.line = line;
   keptLines.push(line);
   if (keptLines.length > KEPT_LINES) keptLines.shift();
 
   var old = keptLines[keptLines.length - 1 - KEPT_MEDIA];
 
-  if (old) old.picture = old.audio = undefined;
+  if (old) {
+    old.picture = undefined;
+    old.recorded = false;
+  }
 }
 
-function stopLineRecorder() {
-  if (!lineRecorder || lineRecorder.state === 'inactive') return;
-  lineRecorder.stop();
-  if (lineRecorder.line) lineRecorder.line.audio = lineRecorder.stopped;
+/**
+ * The line's recorded sound for the page's voice finder: { samples (mono s16), rate, start, end },
+ * its window in seconds into samples, or null when not recorded or no longer in the ring.
+ */
+function lineSound(line) {
+  if (!soundTap || !line.recorded) return null;
+  var rate = soundTap.rate;
+  var ring = soundTap.samples;
+  var end = line.end === undefined ? soundNow() : line.end;
+  var from = Math.round((line.start - PRE_ROLL) * rate);
+  var to = Math.min(Math.round((end + TAIL) * rate), soundTap.end);
+
+  if (from < soundTap.end - ring.length) from = soundTap.end - ring.length;
+  if (from < 0) from = 0;
+  if (to <= from || line.start * rate < from) return null;
+  var samples = new Int16Array(to - from);
+
+  for (var i = 0; i < samples.length; i += 1) samples[i] = ring[(from + i) % ring.length];
+  return { samples: samples, rate: rate, start: line.start - from / rate, end: end - from / rate };
 }
 
-function restartLineRecorder(event) {
-  // Modifier keys are Yomitan's scan keys, not the game's.
-  // Held keys repeat: the line's sound goes on.
-  if (event && (event.repeat || /^(Shift|Control|Alt|Meta)$/.test(event.key))) return;
-  stopLineRecorder();
-  if (!soundTap) return;
-
-  var chunks = [];
-  var recorder = new MediaRecorder(soundTap.stream);
-
-  recorder.ondataavailable = function (e) {
-    chunks.push(e.data);
-  };
-  recorder.stopped = new Promise(function (resolve) {
-    recorder.onstop = function () {
-      resolve(new Blob(chunks, { type: recorder.mimeType }));
-    };
-  });
-  recorder.start();
-  lineRecorder = recorder;
+function noteClick(event) {
+  // Modifier keys are Yomitan's scan keys, not the game's. Held keys repeat.
+  if (!recordLines || event.repeat || /^(Shift|Control|Alt|Meta)$/.test(event.key)) return;
+  clickTimes.push(soundNow());
+  if (clickTimes.length > 50) clickTimes.shift();
 }
 
 function retakeScreenshot(event) {
@@ -257,7 +350,7 @@ function retakeScreenshot(event) {
 ['mousedown', 'touchstart', 'keydown'].forEach(function (type) {
   // First: the screen as it is before the game takes the click.
   window.addEventListener(type, retakeScreenshot, true);
-  window.addEventListener(type, restartLineRecorder, true);
+  window.addEventListener(type, noteClick, true);
 });
 
 /** The kept lines' text, oldest first, for vnLineFor. */
@@ -277,10 +370,7 @@ function keptLineList() {
     return {
       text: line.text,
       picture: !!line.picture,
-      sound:
-        line.hasVoice ||
-        !!line.audio ||
-        (!!lineRecorder && lineRecorder.line === line && lineRecorder.state !== 'inactive')
+      sound: line.hasVoice || !!line.recorded
     };
   });
 }
@@ -295,19 +385,17 @@ function ankiShownTexts() {
  * Media for a mined line: kept line ankiTexts()[kept] and/or backlog page
  * ankiShownTexts()[shown] (-1 for none). The picture is the screen when the line was shown,
  * if still kept, else the screen as it is now (the backlog). The sound is the line's voice
- * file, else the sound recorded from the click that brought it to the next, else the backlog
+ * file, else its recorded sound (lineSound: the page trims it to the voice), else the backlog
  * page's voice file (null without sound).
  */
 async function ankiMedia(kept, shown, want) {
   var line = keptLines[kept] || {};
   var page = shownPages()[shown] || {};
 
-  // Still being recorded: stop here, so its sound ends now.
-  if (lineRecorder && lineRecorder.line === line) stopLineRecorder();
   return {
     picture: want.picture ? (await line.picture) || (await screenshot()) : null,
     audio: want.audio
-      ? voiceFile(line.voice) || (await line.audio) || voiceFile(page.voice) || null
+      ? voiceFile(line.voice) || lineSound(line) || voiceFile(page.voice) || null
       : null
   };
 }

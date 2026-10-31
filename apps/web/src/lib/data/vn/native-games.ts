@@ -109,11 +109,24 @@ export interface DesktopGames {
   onHook(callback: (message: NativeMessage) => void): () => void;
   /** /hook shows the line: its screenshot is taken once drawn */
   mark(seq: number): Promise<void>;
-  /** A mined line's screenshot (JPEG) and sound (WAV), each when kept */
+  /**
+   * A mined line's screenshot (JPEG) and sound, each when kept: s16le mono `pcm` with the line's
+   * window `start`-`end` in seconds into it, `earliest`/`endClick` (lib/data/vn/line-audio.ts)
+   */
   media(
     seq: number,
     want: { picture: boolean; audio: boolean }
-  ): Promise<{ picture?: Uint8Array<ArrayBuffer>; audio?: Uint8Array<ArrayBuffer> }>;
+  ): Promise<{
+    picture?: Uint8Array<ArrayBuffer>;
+    audio?: {
+      pcm: Uint8Array<ArrayBuffer>;
+      rate: number;
+      start: number;
+      end: number;
+      earliest: number;
+      endClick: boolean;
+    };
+  }>;
 }
 
 /** The desktop app's games API, undefined everywhere else (web, Android, server builds). */

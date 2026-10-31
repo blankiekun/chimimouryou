@@ -30,9 +30,14 @@ const keepMs = 180_000;
  * line was shown this much before it arrived.
  */
 const flushMs = 500;
-/** A clip starts this much before its line was shown (the voice starts with the text). */
-const leadMs = 50;
-const maxClipMs = 30_000;
+/** A line starts at the first click or key after the previous line, if within this before it. */
+const clickWithinMs = 3000;
+/** Sound around a line's window (lib/data/vn/line-audio.ts preRollMs and tailMs). */
+const preRollMs = 400;
+const tailMs = 6000;
+/** A line that came without a click is looked at this far back for its voice (typewriter text). */
+const maxTypeMs = 6000;
+const maxClipMs = 40_000;
 /** Screenshots kept: the newest 30 lines, 16 MB at most. */
 const keepShots = 30;
 const maxShotBytes = 16 * 1024 * 1024;
@@ -47,28 +52,10 @@ const run = (command, args, env) =>
     )
   );
 
-/** A WAV file of mono s16le samples. */
-function wav(samples) {
-  const data = Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength);
-  const header = Buffer.alloc(44);
-  header.write('RIFF', 0);
-  header.writeUInt32LE(36 + data.length, 4);
-  header.write('WAVEfmt ', 8);
-  header.writeUInt32LE(16, 16);
-  header.writeUInt16LE(1, 20); // PCM
-  header.writeUInt16LE(1, 22); // mono
-  header.writeUInt32LE(rate, 24);
-  header.writeUInt32LE(rate * 2, 28);
-  header.writeUInt16LE(2, 32);
-  header.writeUInt16LE(16, 34);
-  header.write('data', 36);
-  header.writeUInt32LE(data.length, 40);
-  return Buffer.concat([header, data]);
-}
-
 /**
  * The rolling sound buffer: chunks with the time their first sample played (main's clock).
- * `clip(from, to)` lays them on a silent buffer, so time with no chunk (an idle sink) is silence.
+ * `clip(from, to)` lays them on a silent buffer, so time with no chunk (an idle sink) is silence:
+ * its samples, or undefined when nothing played.
  */
 export function soundRing(now = Date.now) {
   let chunks = [];
@@ -100,7 +87,7 @@ export function soundRing(now = Date.now) {
         );
         heard = true;
       }
-      return heard ? wav(out) : undefined;
+      return heard ? out : undefined;
     },
     clear() {
       chunks = [];
@@ -122,6 +109,8 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
   let arrivals = new Map();
   /** Lines /hook showed, oldest first: { seq, at, shot?, timers } */
   let marks = [];
+  /** When the player clicked or pressed a key in the game (the helper's `input`), oldest first. */
+  let inputs = [];
   let source; // { id, name, width, height } of the game's window
   let recorder; // parec, or the Windows pipe server
   let mode = 'none';
@@ -199,6 +188,21 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
     return shooting;
   };
 
+  /**
+   * When line marks[index] was brought up: { at, click }. The first click or key after the previous
+   * line was fully drawn (a click that finishes a typewriter comes just before), if one came
+   * shortly before this one was shown, else when it was shown (no clicks: auto mode, or the
+   * helper's input hooks don't fire; typewriter text then counts from its end, see `media`).
+   */
+  function lineStart(index) {
+    const shown = marks[index].at - flushMs;
+    const after = (marks[index - 1]?.at ?? -Infinity) - flushMs + 100;
+    const click = inputs.find(
+      (time) => time > after && time <= marks[index].at && time >= shown - clickWithinMs
+    );
+    return { at: click ?? shown, click: click !== undefined };
+  }
+
   return {
     /**
      * A game starts: what came before is dropped. Linux: returns Wine's env additions (its own
@@ -209,6 +213,7 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
       sound.clear();
       marks.forEach((mark) => mark.timers.forEach(clearTimeout));
       marks = [];
+      inputs = [];
       arrivals = new Map();
       source = undefined;
       env = baseEnv;
@@ -267,6 +272,13 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
       return { seq, at };
     },
 
+    /** The helper's `input` message: a click or key in the game's window. */
+    input() {
+      const at = Date.now();
+      inputs.push(at);
+      if (inputs[0] < at - keepMs) inputs = inputs.filter((time) => time >= at - keepMs);
+    },
+
     /** The helper's `window` message: the game's main window, for screenshots. */
     window({ hwnd, xid, title, width, height }) {
       const id = platform === 'win32' ? hwnd : xid;
@@ -287,7 +299,7 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
       if (marks.length > keepShots) marks.shift().timers.forEach(clearTimeout);
     },
 
-    /** A mined line's media: { picture (JPEG), audio (WAV), mode }; either may be missing. */
+    /** A mined line's media: { picture (JPEG), audio (sound, above), mode }; either may be missing. */
     async media(lineSeq, want = {}) {
       const index = marks.findIndex((mark) => mark.seq === lineSeq);
       const mark = marks[index];
@@ -298,11 +310,31 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
         if (!mark.shot && newest) await queueShot(mark);
         result.picture = mark.shot;
       }
-      if (want.audio)
-        result.audio = sound.clip(
-          mark.at - flushMs - leadMs,
-          (marks[index + 1]?.at ?? Date.now() + flushMs) - flushMs
-        );
+      if (want.audio) {
+        // From the click that brought the line to the next line's (lineStart), with the sound
+        // around it for the voice finder (line-audio.ts): { pcm, rate, start, end, earliest,
+        // endClick }, seconds in.
+        const { at: start, click } = lineStart(index);
+        const next = index < marks.length - 1 ? lineStart(index + 1) : undefined;
+        const end = next?.at ?? Date.now();
+        // No click (auto mode): a typewriter line was only seen once drawn, but it may have begun
+        // as early as the previous line's drawing ended, so its voice is looked for from there.
+        const earliest = click
+          ? start
+          : Math.max(start - maxTypeMs, (marks[index - 1]?.at ?? start + flushMs) - flushMs);
+        const from = earliest - preRollMs;
+        const pcm = sound.clip(from, Math.min(end + tailMs, Date.now()));
+        if (pcm)
+          result.audio = {
+            pcm: new Uint8Array(pcm.buffer),
+            rate,
+            start: (start - from) / 1000,
+            end: (end - from) / 1000,
+            earliest: (earliest - from) / 1000,
+            // The next line came without a click: it too may have begun before `end`.
+            endClick: next?.click ?? true
+          };
+      }
       return result;
     },
 

@@ -659,7 +659,7 @@ async function startGame(options) {
     // Skipped text goes by too fast to mine.
     if (!skipped) keepLine(lines);
   };
-  recordLines = !!options.recordLines && typeof MediaRecorder !== 'undefined';
+  recordLines = !!options.recordLines;
   if (options.fetchFile) fetchFile = options.fetchFile;
   if (options.cacheName) fileCache = await caches.open(options.cacheName);
   onSave = options.onSave || onSave;

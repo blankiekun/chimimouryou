@@ -320,7 +320,7 @@ var vnboxHooks = {
 async function startGame(options) {
   onScreen = options.onScreen || onScreen;
   keepLines = !!options.keepLines;
-  recordLines = !!options.recordLines && typeof MediaRecorder !== 'undefined';
+  recordLines = !!options.recordLines;
   window.boxedwineText = function (line, thread) {
     // VNBox before the hooks contract sends no thread: its lines are the boot hook script's.
     thread = thread || { id: 'script', kind: 'script' };

@@ -1,6 +1,7 @@
 <script lang="ts">
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import AnkiWatcher from '$lib/components/dictionary/anki-watcher.svelte';
+  import { lineAudio } from '$lib/data/vn/line-audio';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
   import PointBox from '$lib/components/point-box.svelte';
   import {
@@ -271,6 +272,7 @@
       lines.map((line) => line.text)
     );
     const seq = lines[index]?.seq;
+    const text = lines[index]?.text ?? '';
 
     if (seq === undefined || !games) {
       throw new Error(
@@ -278,10 +280,14 @@
       );
     }
     const found = await games.media(seq, { picture: $ankiVnScreenshot$, audio: $ankiVnAudio$ });
+    const sound = found.audio && {
+      ...found.audio,
+      samples: new Int16Array(found.audio.pcm.slice().buffer)
+    };
 
     return {
       picture: found.picture && new Blob([found.picture], { type: 'image/jpeg' }),
-      audio: found.audio && new Blob([found.audio], { type: 'audio/wav' })
+      audio: await lineAudio(sound, text)
     };
   }
 

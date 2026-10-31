@@ -287,6 +287,8 @@ try {
     localStorage.setItem('storageChosen', '1');
     localStorage.setItem('ankiEnabled', '1');
     localStorage.setItem('ankiConnectUrl', `http://127.0.0.1:${port}`);
+    // Its steps' sound is tones, not voices: the whole window (line-audio.e2e.mjs checks Voice only).
+    localStorage.setItem('ankiVnVoiceOnly', '0');
   }, ankiServer.address().port);
   await page.goto('http://127.0.0.1:41917/manage');
 

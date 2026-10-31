@@ -543,6 +543,8 @@ export const en = {
   'anki.aiFallbackHint': 'Each card uses ElevenLabs credits.',
   'anki.vnScreenshot': 'Visual novel screenshot',
   'anki.vnAudio': 'Visual novel audio',
+  'anki.vnVoiceOnly': 'Voice only',
+  'anki.vnVoiceOnlyHint': 'Trims to the voice; no audio for lines with no voice',
   'anki.known': 'Known words from Anki',
   'anki.knownHint':
     "Reads the words of the deck's mature cards (interval of 21 days or more) at most once a day, kept in this browser only. They count as known in each book's word coverage and new words.",

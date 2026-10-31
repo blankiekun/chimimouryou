@@ -15,6 +15,7 @@
     useForLastNote
   } from '$lib/data/dictionary/anki';
   import { backlogLines, type BacklogLine, type KeptLine } from '$lib/data/vn/vn-backlog';
+  import { lineAudio } from '$lib/data/vn/line-audio';
 
   interface Props {
     /** The player frame, whose overlay.js keeps the lines */
@@ -95,10 +96,12 @@
   }
 
   async function play(line: BacklogLine) {
-    const { audio } = await player().ankiMedia(line.index, -1, { picture: false, audio: true });
+    const media = await player().ankiMedia(line.index, -1, { picture: false, audio: true });
+    const audio = await lineAudio(media.audio, line.text);
 
     if (!audio) {
-      show('Its sound is no longer kept.', true);
+      // Voice only (Settings → Anki) finds no voice in a line with none.
+      show(media.audio ? 'No voice found in its sound.' : 'Its sound is no longer kept.', true);
       return;
     }
 
@@ -114,13 +117,15 @@
     busy = true;
     show('Adding the line to the last Anki card…');
     try {
-      const filled = await useForLastNote(line.text, () =>
-        player().ankiMedia(line.index, -1, {
+      const filled = await useForLastNote(line.text, async () => {
+        const media = await player().ankiMedia(line.index, -1, {
           // Not the screen as it is now when the line's own is gone.
           picture: $ankiVnScreenshot$ && line.picture,
           audio: $ankiVnAudio$
-        })
-      );
+        });
+
+        return { picture: media.picture, audio: await lineAudio(media.audio, line.text) };
+      });
 
       show(
         filled.length

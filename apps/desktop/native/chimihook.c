@@ -12,7 +12,9 @@
 // (a new thread), "inject", "connect", "disconnect", "error" {message}, "window" {hwnd, xid, title,
 // x, y, width, height, active, minimized} (the game's main window, on change; xid: Wine's X11
 // window, else 0; x/y/size: its client area in screen pixels, which is what a window manager's
-// frame holds under Wine; active: it is the foreground window), "audio" {mode:
+// frame holds under Wine; active: it is the foreground window), "input" (a click on the game's
+// window or a key pressed while it is in front, not modifiers or key repeats: where Anki clips
+// start; low-level hooks, which may not fire under every Wine), "audio" {mode:
 // "process" | "system" | "none"} (with --audio) and "exit" last.
 // LunaHost64.dll, LunaHook32/64.dll and inject32.exe sit next to it. Same under Wine and Windows.
 #include <initguid.h>
@@ -176,6 +178,46 @@ static DWORD WINAPI watchWindow(LPVOID unused) {
   return 0;
 }
 
+// Clicks and keys in the game, for where each line's sound starts (game-media.js).
+static void inputEvent(void) {
+  EnterCriticalSection(&out); printf("{\"type\":\"input\"}\n"); fflush(stdout); LeaveCriticalSection(&out);
+}
+
+static BOOL ofGame(HWND hwnd) {
+  DWORD pid = 0;
+  if (hwnd) GetWindowThreadProcessId(GetAncestor(hwnd, GA_ROOT), &pid);
+  return pid && pid == gamePid;
+}
+
+static LRESULT CALLBACK mouseHook(int code, WPARAM w, LPARAM l) {
+  // The window under the pointer: a click on the overlay above the game isn't the game's.
+  if (code == HC_ACTION && w == WM_LBUTTONDOWN && ofGame(WindowFromPoint(((MSLLHOOKSTRUCT *)l)->pt))) inputEvent();
+  return CallNextHookEx(NULL, code, w, l);
+}
+
+static BOOL keyHeld[256];
+static LRESULT CALLBACK keyHook(int code, WPARAM w, LPARAM l) {
+  if (code == HC_ACTION) {
+    DWORD vk = ((KBDLLHOOKSTRUCT *)l)->vkCode & 0xff;
+    BOOL down = w == WM_KEYDOWN || w == WM_SYSKEYDOWN;
+    // Modifiers are Yomitan's scan keys (and Ctrl a game's skip), held keys repeat.
+    BOOL modifier = vk == VK_SHIFT || vk == VK_LSHIFT || vk == VK_RSHIFT || vk == VK_CONTROL || vk == VK_LCONTROL ||
+                    vk == VK_RCONTROL || vk == VK_MENU || vk == VK_LMENU || vk == VK_RMENU || vk == VK_LWIN || vk == VK_RWIN;
+    if (down && !keyHeld[vk] && !modifier && ofGame(GetForegroundWindow())) inputEvent();
+    keyHeld[vk] = down;
+  }
+  return CallNextHookEx(NULL, code, w, l);
+}
+
+// Low-level hooks run on the thread that set them, which needs a message loop.
+static DWORD WINAPI watchInput(LPVOID unused) {
+  SetWindowsHookExW(WH_MOUSE_LL, mouseHook, GetModuleHandleW(NULL), 0);
+  SetWindowsHookExW(WH_KEYBOARD_LL, keyHook, GetModuleHandleW(NULL), 0);
+  MSG msg;
+  while (GetMessageW(&msg, NULL, 0, 0) > 0) DispatchMessageW(&msg);
+  return 0;
+}
+
 // Process loopback (audioclientactivationparams.h, Windows 10 2004+), declared here: older
 // mingw-w64 headers lack it.
 typedef struct { DWORD ActivationType; DWORD TargetProcessId; DWORD ProcessLoopbackMode; } LoopbackParams;
@@ -312,6 +354,7 @@ int wmain(int argc, wchar_t **argv) {
   // Started at once: the sound from the game's first moments is kept too.
   if (audioPipe) CloseHandle(CreateThread(NULL, 0, recordAudio, audioPipe, 0, NULL));
   CloseHandle(CreateThread(NULL, 0, watchWindow, NULL, 0, NULL));
+  CloseHandle(CreateThread(NULL, 0, watchInput, NULL, 0, NULL));
   WaitForInputIdle(proc, 5000);
   Sleep(300);
 
