@@ -139,14 +139,13 @@ export function gameOverlay({ BrowserWindow, screen, url, preload, prepare, plat
 
     /** The helper's `window` message: the overlay takes the game window's place. */
     window({ x, y, width, height, active, minimized }) {
-      if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return;
-      game = {
-        ...toDip({ x, y, width, height }),
-        active: active !== false,
-        minimized: !!minimized
-      };
+      // Minimized windows sit at -32000 with a 0×0 client area (Windows and Wine): the overlay
+      // just hides and keeps the last place.
+      if (minimized) game = { ...game, active: active !== false, minimized: true };
+      else if ([x, y, width, height].every(Number.isFinite) && width > 0 && height > 0)
+        game = { ...toDip({ x, y, width, height }), active: active !== false, minimized: false };
+      else return;
       if (!alive()) return;
-      // Minimized windows sit at -32000 on Windows: the overlay just hides.
       if (!game.minimized) {
         const { x: gx, y: gy, width: gw, height: gh } = game;
         const now = win.getBounds();
