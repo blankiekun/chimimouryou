@@ -166,14 +166,22 @@ export function desktopOverlay(): DesktopOverlay | undefined {
   return (globalThis as { chimiDesktop?: { overlay?: DesktopOverlay } }).chimiDesktop?.overlay;
 }
 
-/** /hook's shown lines go to the overlay page (same origin) on this channel. */
+/** /hook's shown lines go to the overlay page (same origin) on this channel. A newly opened
+ * overlay page posts `{ ask: true }` and gets the line shown now. */
 export const overlayChannel = 'chimi-overlay';
 let overlayLines: BroadcastChannel | undefined;
+let overlayText = '';
 
 /** A line /hook shows, for the overlay (desktop app only). */
 export function postOverlayLine(text: string) {
   if (!desktopOverlay()) return;
-  overlayLines ??= new BroadcastChannel(overlayChannel);
+  overlayText = text;
+  if (!overlayLines) {
+    overlayLines = new BroadcastChannel(overlayChannel);
+    overlayLines.onmessage = (event) => {
+      if (event.data?.ask) overlayLines?.postMessage({ text: overlayText });
+    };
+  }
   overlayLines.postMessage({ text });
 }
 

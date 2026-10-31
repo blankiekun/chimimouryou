@@ -123,6 +123,8 @@
       popup?.close();
       text = event.data.text;
     };
+    // The line /hook shows now; otherwise this page stays empty until the next one.
+    channel.postMessage({ ask: true });
     const off = overlay?.onState((state) => {
       view = state;
       area = state.area;

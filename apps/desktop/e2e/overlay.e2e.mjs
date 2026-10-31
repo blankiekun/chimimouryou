@@ -15,10 +15,11 @@
 //   the app's profile and Wine prefix there are deleted at the end, the screenshots kept)
 //
 // It fails when: the overlay doesn't open over the running game or doesn't sit on the game's
-// window (Wine's coordinates vs X's); it doesn't follow a moved window; it doesn't show /hook's
-// newest line; hovering its text with Shift doesn't open the lookup popup (the shape lets no
-// pointer through); a click on the game off the text doesn't reach the game or lands in the
-// overlay; it stays up while the game is minimized. Artifact: overlay.png (the popup over the game).
+// window (Wine's coordinates vs X's); it doesn't follow a moved window; it doesn't show the line
+// /hook shows when it opens; hovering its text with Shift doesn't open the lookup popup (the shape
+// lets no pointer through); a click on the game off the text doesn't reach the game or lands in
+// the overlay; it stays up while the game is minimized or doesn't come back once it's restored.
+// Artifact: overlay.png (the popup over the game).
 
 /* global document, window, localStorage -- used inside page.evaluate */
 import { execFileSync, spawn } from 'node:child_process';
@@ -26,6 +27,7 @@ import {
   createWriteStream,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync
@@ -227,15 +229,13 @@ try {
   await caption.first().click();
   const lineCount = () => page.locator('.hook-text li').count();
 
-  step('Overlay on: it sits on the game’s window and shows the newest line');
-  await page.getByLabel('Text overlay over the game').check();
-  console.log('  checked');
-  xdo('windowactivate', '--sync', xid);
-  console.log('  activated');
+  step('Overlay on: it sits on the game’s window and shows the line shown now');
   clickGame(0.5, 0.3);
   const newest = await until('a line on /hook', async () =>
     (await lineCount()) ? page.locator('.hook-text li').last().textContent() : undefined
   );
+  await page.getByLabel('Text overlay over the game').check();
+  xdo('windowactivate', '--sync', xid);
   overlay = await until('the overlay page', () =>
     app.windows().find((w) => w.url().includes('/hook/overlay'))
   );
@@ -298,8 +298,16 @@ try {
   step('Hidden while the game is minimized');
   xdo('windowminimize', '--sync', xid);
   await until('the overlay hidden', async () => !(await overlayWindow())?.visible);
-  // shortcut: not restored here: xdotool's windowmap under openbox maps the client while the frame
-  // stays iconic (Wine then says shown); check restoring by hand from a taskbar.
+
+  step('Back over the game once it is restored');
+  // _NET_ACTIVE_WINDOW: openbox de-iconifies the frame, as a taskbar click does.
+  xdo('windowactivate', xid);
+  await until('the overlay over the restored game', async () => {
+    const win = await overlayWindow();
+    const at = geometry(xid);
+    seen = JSON.stringify({ overlay: win, game: at });
+    return win?.visible && same(win.bounds, at);
+  });
   console.log(`OK (screenshot ${join(root, 'overlay.png')})`);
 } catch (error) {
   execFileSync('import', ['-window', 'root', join(root, 'failed.png')]);
@@ -309,6 +317,14 @@ try {
   await Promise.race([app.close().catch(() => {}), wait(10_000)]);
   wm.kill();
   compositor.kill();
+  // The game outlives the app (as it should); its Wine processes would keep this script alive.
+  const prefixes = execFileSync('find', [config, '-maxdepth', '3', '-name', 'wine-prefixes'])
+    .toString()
+    .split('\n')
+    .filter(Boolean)
+    .flatMap((dir) => readdirSync(dir).map((name) => join(dir, name)));
+  for (const prefix of prefixes)
+    execFileSync('wineserver', ['-k'], { env: { ...process.env, WINEPREFIX: prefix } });
   // The Wine prefix (~1.5 GB) and the app's profile.
   await wait(2000);
   rmSync(config, { recursive: true, force: true });
