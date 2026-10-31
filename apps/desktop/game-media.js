@@ -35,6 +35,8 @@ const clickWithinMs = 3000;
 /** Sound around a line's window (lib/data/vn/line-audio.ts preRollMs and tailMs). */
 const preRollMs = 400;
 const tailMs = 6000;
+/** A line that came without a click is looked at this far back for its voice (typewriter text). */
+const maxTypeMs = 6000;
 const maxClipMs = 40_000;
 /** Screenshots kept: the newest 30 lines, 16 MB at most. */
 const keepShots = 30;
@@ -187,10 +189,10 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
   };
 
   /**
-   * When line marks[index] was brought up: the first click or key after the previous line was
-   * fully drawn (a click that finishes a typewriter comes just before), if one came shortly before
-   * this one was shown, else when it was shown (no clicks: auto mode, or the helper's input hooks
-   * don't fire; typewriter text then counts from its end).
+   * When line marks[index] was brought up: { at, click }. The first click or key after the previous
+   * line was fully drawn (a click that finishes a typewriter comes just before), if one came
+   * shortly before this one was shown, else when it was shown (no clicks: auto mode, or the
+   * helper's input hooks don't fire; typewriter text then counts from its end, see `media`).
    */
   function lineStart(index) {
     const shown = marks[index].at - flushMs;
@@ -198,7 +200,7 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
     const click = inputs.find(
       (time) => time > after && time <= marks[index].at && time >= shown - clickWithinMs
     );
-    return click ?? shown;
+    return { at: click ?? shown, click: click !== undefined };
   }
 
   return {
@@ -310,17 +312,27 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
       }
       if (want.audio) {
         // From the click that brought the line to the next line's (lineStart), with the sound
-        // around it for the voice finder (line-audio.ts): { pcm, rate, start, end }, seconds in.
-        const start = lineStart(index);
-        const end = index < marks.length - 1 ? lineStart(index + 1) : Date.now();
-        const from = start - preRollMs;
+        // around it for the voice finder (line-audio.ts): { pcm, rate, start, end, earliest,
+        // endClick }, seconds in.
+        const { at: start, click } = lineStart(index);
+        const next = index < marks.length - 1 ? lineStart(index + 1) : undefined;
+        const end = next?.at ?? Date.now();
+        // No click (auto mode): a typewriter line was only seen once drawn, but it may have begun
+        // as early as the previous line's drawing ended, so its voice is looked for from there.
+        const earliest = click
+          ? start
+          : Math.max(start - maxTypeMs, (marks[index - 1]?.at ?? start + flushMs) - flushMs);
+        const from = earliest - preRollMs;
         const pcm = sound.clip(from, Math.min(end + tailMs, Date.now()));
         if (pcm)
           result.audio = {
             pcm: new Uint8Array(pcm.buffer),
             rate,
-            start: preRollMs / 1000,
-            end: (end - from) / 1000
+            start: (start - from) / 1000,
+            end: (end - from) / 1000,
+            earliest: (earliest - from) / 1000,
+            // The next line came without a click: it too may have begun before `end`.
+            endClick: next?.click ?? true
           };
       }
       return result;

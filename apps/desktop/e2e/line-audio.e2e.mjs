@@ -15,7 +15,8 @@
 //            gives, referenceSpan) and no other line's; a voiceless line gets no sound
 //   wrong  = another line's voice (or its tail) in the clip, or any sound on a voiceless line
 //   missed = a voiced line with no sound or only part of its voice
-// Prints the table and the score, and fails below 95 % right or above 2 % wrong
+// LINE_AUDIO_BANK=heldout runs the held-out bank instead (below). Prints the table and the score,
+// and fails below 95 % right or above 2 % wrong
 // (LINE_AUDIO_SCORE_ONLY=1 only prints, for a baseline run of an older build).
 //
 // Needs what native-vn.e2e.mjs needs (Wine, mingw, xdotool, PulseAudio with pactl/parec, a
@@ -45,11 +46,15 @@ const root = process.env.E2E_DIR ?? mkdtempSync(join(tmpdir(), 'chimi-line-audio
 const gameDir = join(root, 'games', 'Line VN');
 const home = join(root, 'home');
 const title = 'ラインVN';
-const voiceSeconds = [2.0, 2.3, 2.06, 2.82, 4.16];
+// Each voice file's length (16 kHz mono s16 after a 44-byte header).
+const voiceSeconds = Array.from(
+  { length: 10 },
+  (_, i) => (readFileSync(join(import.meta.dirname, 'voices', `voice${i}.wav`)).length - 44) / 32000
+);
 
 // voice (-1: none), cut (1: stopped at the next line), draw, advance, ms (until the click or the
 // game's own advance), text. Scene 0 waits for the thread to be picked; the last one ends the game.
-const scenes = [
+const tuned = [
   [-1, 1, 'once', 'click', 0, '準備ができたらクリックしてください。'],
   [0, 1, 'once', 'click', 3000, '春の朝は空気が澄んでいる。'],
   [-1, 1, 'once', 'click', 2500, '窓の外で鳥が鳴いた。'],
@@ -74,6 +79,36 @@ const scenes = [
   [3, 1, 'once', 'click', 3200, '明日もきっと晴れるだろう。'],
   [-1, 1, 'once', 'auto', 1500, 'おしまい。']
 ];
+// LINE_AUDIO_BANK=heldout: the held-out bank, never tuned on (line-audio.ts rules are tuned on
+// the scenes above only): the same kinds of lines with other voices (voice5-9, two with a pause
+// inside), the other music and other timings.
+const heldout = [
+  [-1, 1, 'once', 'click', 0, '準備ができたらクリックしてください。'],
+  [5, 1, 'once', 'click', 2800, '山の上に古い寺がある。'],
+  [6, 1, 'type', 'click', 3300, '彼は黙って頷いた。'],
+  [-1, 1, 'once', 'auto', 2200, '夕日が沈みかけていた。'],
+  [7, 1, 'type', 'auto', 3600, '遠い町から手紙が届いた。'],
+  [8, 0, 'once', 'click', 2200, '話の続きはまた明日だ。'],
+  [-1, 1, 'once', 'click', 3000, '誰も答えなかった。'],
+  [9, 0, 'once', 'click', 1500, 'その日は朝から雨だった。'],
+  [-1, 1, 'type', 'click', 3200, '窓を閉めて灯りを消した。'],
+  [5, 1, 'once', 'auto', 3000, '鐘の音が三度鳴った。'],
+  [-1, 1, 'once', 'auto', 2400, 'しばらく沈黙が続いた。'],
+  [6, 1, 'type', 'auto', 3400, '道の先に人影が見えた。'],
+  [7, 1, 'once', 'click', 3400, '約束を忘れたわけではない。'],
+  [9, 0, 'once', 'click', 2300, 'それは誰にも言えない秘密だった。'],
+  [-1, 1, 'once', 'click', 2800, '返事を待った。'],
+  [8, 1, 'type', 'click', 4800, '長い坂道をゆっくりと登っていく。'],
+  [-1, 1, 'type', 'auto', 2500, '時間だけが過ぎていった。'],
+  [5, 1, 'type', 'auto', 2800, '扉が静かに開いた。'],
+  [6, 1, 'once', 'click', 2600, '名前を呼ぶ声がした。'],
+  [8, 0, 'once', 'click', 2000, 'その先の話は聞きたくない。'],
+  [7, 1, 'once', 'click', 3300, '彼女は小さく笑った。'],
+  [-1, 1, 'once', 'click', 2400, '外はもう暗い。'],
+  [-1, 1, 'once', 'auto', 1500, 'おしまい。']
+];
+const bank = process.env.LINE_AUDIO_BANK === 'heldout' ? 'heldout' : 'tuned';
+const scenes = bank === 'heldout' ? heldout : tuned;
 const scored = scenes.slice(1, -1).map((scene, i) => {
   const index = i + 1;
   const [voice, cut, , , ms] = scene;
@@ -109,7 +144,7 @@ execFileSync('i686-w64-mingw32-gcc', [
 cpSync(join(import.meta.dirname, 'voices'), join(gameDir, 'voices'), { recursive: true });
 writeFileSync(
   join(gameDir, 'scenes.txt'),
-  scenes.map((scene) => scene.join(' ')).join('\n') + '\n'
+  (bank === 'heldout' ? 'music 1\n' : '') + scenes.map((scene) => scene.join(' ')).join('\n') + '\n'
 );
 
 // Our own PulseAudio: one null sink as the speakers.
@@ -321,12 +356,7 @@ try {
       writeFileSync(join(root, `raw${scored[i].index}.pcm`), Buffer.from(audio.pcm));
       writeFileSync(
         join(root, `raw${scored[i].index}.json`),
-        JSON.stringify({
-          rate: audio.rate,
-          start: audio.start,
-          end: audio.end,
-          text: scored[i].text
-        })
+        JSON.stringify({ ...audio, pcm: undefined, text: scored[i].text })
       );
     });
   }
@@ -344,9 +374,12 @@ try {
         Picture: { value: '', order: 2 }
       }
     });
+    // The app's notice for the note (why a line got nothing, when it says).
+    let notice = '';
     for (let tries = 0; !anki.updates.has(noteId); tries += 1) {
       // A note with neither picture nor sound gets no update.
       if (tries > 60) break;
+      notice = (await page.locator('.anki-notice').allTextContents()).join(' ').trim() || notice;
       await wait(250);
     }
     const audio = anki.updates.get(noteId)?.audio?.[0]?.data;
@@ -367,7 +400,8 @@ try {
       clip: clip ? `${(clip.samples.length / clip.rate).toFixed(2)} s` : 'none',
       own: own.toFixed(2),
       others: others.map(([scene, seconds]) => `${scene}:${seconds.toFixed(2)}`).join(' '),
-      result
+      result,
+      ...(clip ? {} : { notice })
     });
     if (clip) writeFileSync(join(root, `line${line.index}.wav`), Buffer.from(audio, 'base64'));
   }
@@ -377,7 +411,7 @@ try {
   const wrong = count('wrong') / rows.length;
   const voiceless = rows.filter((row) => row.voice === '-');
   console.log(
-    `score: ${(100 * right).toFixed(1)} % right, ${(100 * wrong).toFixed(1)} % wrong, ` +
+    `score (${bank}): ${(100 * right).toFixed(1)} % right, ${(100 * wrong).toFixed(1)} % wrong, ` +
       `${count('missed')} missed of ${rows.length}; voiceless right ` +
       `${voiceless.filter((row) => row.result === 'right').length}/${voiceless.length}`
   );

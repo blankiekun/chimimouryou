@@ -111,7 +111,7 @@ export interface DesktopGames {
   mark(seq: number): Promise<void>;
   /**
    * A mined line's screenshot (JPEG) and sound, each when kept: s16le mono `pcm` with the line's
-   * window `start`-`end` in seconds into it (lib/data/vn/line-audio.ts)
+   * window `start`-`end` in seconds into it, `earliest`/`endClick` (lib/data/vn/line-audio.ts)
    */
   media(
     seq: number,
@@ -123,6 +123,8 @@ export interface DesktopGames {
       rate: number;
       start: number;
       end: number;
+      earliest: number;
+      endClick: boolean;
     };
   }>;
 }

@@ -17,12 +17,18 @@
 import { ankiVnVoiceOnly$ } from '$lib/data/dictionary/anki';
 import type { LineVadMessage } from '$lib/functions/vn/line-vad.worker';
 
-/** A line's recorded sound: mono s16 samples; `start`/`end` its window, seconds into them. */
+/**
+ * A line's recorded sound: mono s16 samples; `start`/`end` its window, seconds into them.
+ * `earliest` (before `start`): the line came without a click, so it may have begun from there
+ * (typewriter text seen only once drawn); `endClick` false: so did the next line.
+ */
 export interface LinePcm {
   samples: Int16Array;
   rate: number;
   start: number;
   end: number;
+  earliest?: number;
+  endClick?: boolean;
 }
 
 /** Recorded before the window's start, so speech crossing it is seen as already going. */
@@ -37,6 +43,10 @@ const minSilence = 0.1;
 const minSpeech = 0.25;
 /** Speech starting this little before the click still counts as the line's (timing jitter). */
 const startGrace = 0.15;
+/** A line's voice starts with it: by this long after its click (testvn: 0.3 s at most). */
+const voiceWithin = 0.5;
+/** Speech paused for less than this is one voice going on (a pause inside a line). */
+const maxPause = 0.8;
 const padBefore = 0.15;
 const padAfter = 0.2;
 const fade = 0.05;
@@ -111,19 +121,65 @@ export function speechSegments(probs: ArrayLike<number>): Segment[] {
 }
 
 /**
- * The line's speech: segments that began in [start, end). One already going at the start is the
- * previous line's voice (a voice the game doesn't cut at the click). One going on past the end runs
- * on only while it doesn't pause: after a pause, or right where the next line's voice starts, it is
- * the next line's.
+ * The line's speech, from its first segment on while it doesn't pause for maxPause, up to where
+ * the next line's voice begins.
  */
-export function lineSpeech(probs: ArrayLike<number>, start: number, end: number): Segment[] {
-  return speechSegments(probs)
-    .filter(([from]) => from >= start - startGrace && from < end)
-    .map(([from, to]) => {
-      for (let i = Math.ceil(end / frameSeconds); i * frameSeconds < to; i += 1)
-        if (probs[i] < threshold) return [from, i * frameSeconds, true];
-      return [from, to];
-    });
+export function lineSpeech(probs: ArrayLike<number>, line: Omit<LinePcm, 'samples' | 'rate'>) {
+  const { start, end, earliest = start, endClick = true } = line;
+  const segments = speechSegments(probs);
+  const pausedBefore = (i: number) => i > 0 && segments[i][0] - segments[i - 1][1] < maxPause;
+  // Case: speech already going at the click is the previous line's (a voice the game doesn't
+  // cut), and so is speech resuming later than voiceWithin: the voice begins with the line,
+  // clicked or drawn at once.
+  let first = segments.findIndex(
+    ([from]) => from >= start - startGrace && from <= start + voiceWithin
+  );
+
+  if (first < 0 && earliest < start) {
+    // Case: typewriter text in auto mode (no click, seen only once drawn): the voice began after
+    // the previous line was drawn (whose voice begins by earliest + voiceWithin) and by this
+    // line's start; the last such that doesn't go on from speech before that.
+    const from = earliest + voiceWithin;
+    const chainStart = (i: number) => {
+      while (pausedBefore(i)) i -= 1;
+      return segments[i][0];
+    };
+
+    first = segments.findLastIndex(
+      ([at], i) => at >= from && at <= start + voiceWithin && chainStart(i) >= from
+    );
+    while (first > 0 && pausedBefore(first) && segments[first - 1][0] >= from) first -= 1;
+  }
+  if (first < 0) return [];
+
+  const speech: Segment[] = [];
+
+  for (const [from, to] of segments.slice(first)) {
+    // Case: a voice with a pause running past the click (kept while it pauses less than maxPause).
+    if (speech.length && from - speech.at(-1)![1] >= maxPause) break;
+    // The next line's voice at its click; with no click (auto mode), anything after its start.
+    if (
+      speech.length &&
+      (endClick ? from >= end - startGrace && from <= end + voiceWithin : from >= end)
+    )
+      break;
+    if (from < end && to > end) {
+      // A dip just past the end with speech right after: the next line's voice at the click.
+      let dip = -1;
+
+      for (
+        let i = Math.ceil(end / frameSeconds);
+        i * frameSeconds < Math.min(to, end + voiceWithin);
+        i += 1
+      ) {
+        if (probs[i] < threshold && dip < 0) dip = i;
+        else if (probs[i] >= threshold && dip >= 0)
+          return [...speech, [from, dip * frameSeconds, true]] as Segment[];
+      }
+    }
+    speech.push([from, to]);
+  }
+  return speech;
 }
 
 /** A WAV file of mono s16 samples. */
@@ -179,7 +235,7 @@ export async function lineAudio(
   if (!isPcm(audio)) return audio;
   if (!ankiVnVoiceOnly$.getValue()) return clip(audio, audio.start, audio.end);
 
-  const speech = lineSpeech(await vad(to16k(audio)), audio.start, audio.end);
+  const speech = lineSpeech(await vad(to16k(audio)), audio);
   const length = (speech.at(-1)?.[1] ?? 0) - (speech[0]?.[0] ?? 0);
   // GameSentenceMiner's rule: 0.05 s per character, half a second at least.
   const chars = text.replace(/\s/g, '').length;

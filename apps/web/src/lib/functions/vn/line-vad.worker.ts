@@ -30,6 +30,8 @@ ort.env.wasm.numThreads = 1;
 const frame = 512;
 /** v5 takes the previous frame's last 64 samples in front of each frame. */
 const context = 64;
+/** Frames heard once before the real pass (0.38 s, inside the pre-roll). */
+const warmFrames = 12;
 
 let session: Promise<ort.InferenceSession> | undefined;
 
@@ -44,8 +46,7 @@ async function probabilities(samples: Float32Array) {
   const sr = new ort.Tensor('int64', BigInt64Array.from([16000n]), []);
   let state: ort.Tensor = new ort.Tensor('float32', new Float32Array(2 * 128), [2, 1, 128]);
   const input = new Float32Array(context + frame);
-
-  for (let i = 0; i < probs.length; i += 1) {
+  const step = async (i: number) => {
     input.copyWithin(0, frame, frame + context);
     input.set(samples.subarray(i * frame, (i + 1) * frame), context);
     const out = await model.run({
@@ -54,9 +55,15 @@ async function probabilities(samples: Float32Array) {
       sr
     });
 
-    probs[i] = (out.output.data as Float32Array)[0];
     state = out.stateN as ort.Tensor;
-  }
+    return (out.output.data as Float32Array)[0];
+  };
+
+  // From a blank state the first frames read music as speech, which then looked like a voice
+  // already going at the click: the model first hears the pre-roll once (line-audio.ts preRollMs).
+  for (let i = 0; i < Math.min(warmFrames, probs.length); i += 1) await step(i);
+  input.fill(0);
+  for (let i = 0; i < probs.length; i += 1) probs[i] = await step(i);
   return probs;
 }
 

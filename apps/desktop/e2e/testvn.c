@@ -100,10 +100,11 @@ static void paint(HWND hwnd) {
 // Scene mode. scenes.txt: one line per scene, "voice cut draw advance ms text": voice = index of
 // voices/voiceN.wav or -1; cut = 1 stops the voice at the next scene (0 lets it run, until the
 // next voice); draw = once | type (one character every 1.5 s / length); advance = click | auto
-// (after ms). Every scene's text goes through drawLine (one TextOutW thread).
+// (after ms). Every scene's text goes through drawLine (one TextOutW thread). A line "music 1"
+// picks the other music (the held-out bank's).
 typedef struct { int voice, cut, type, autoMs; wchar_t text[128]; } Scene;
 static Scene scenes[64];
-static int sceneCount = 0, typed = 0;
+static int sceneCount = 0, typed = 0, musicKind = 0;
 static HWAVEOUT bgmOut, voiceOut;
 static WAVEHDR bgmHdr, voiceHdr;
 static short *voiceBuf;
@@ -117,6 +118,7 @@ static int loadScenes(void) {
   while (sceneCount < 64 && fgets(line, sizeof line, f)) {
     Scene *sc = &scenes[sceneCount];
     char draw[16], adv[16]; int used = 0;
+    if (sscanf(line, "music %d", &musicKind) == 1) continue;
     if (sscanf(line, "%d %d %15s %15s %d %n", &sc->voice, &sc->cut, draw, adv, &sc->autoMs, &used) < 5) continue;
     line[strcspn(line, "\r\n")] = 0;
     MultiByteToWideChar(CP_UTF8, 0, line + used, -1, sc->text, 128);
@@ -135,12 +137,26 @@ static HWAVEOUT openOut(void) {
   return out;
 }
 
-// 8 s of music, looped: an arpeggio, a bass line and a soft kick, all under 2 kHz.
+// 8 s of music, looped: an arpeggio, a bass line and a soft kick, all under 2 kHz. Music 1: a
+// sustained string-like pad in minor with a slower plucked melody, under 3 kHz.
 static void startMusic(void) {
   static short music[RATE * 8];
   static const double chords[4][3] = {{261.6, 329.6, 392.0}, {220.0, 261.6, 329.6}, {174.6, 220.0, 261.6}, {196.0, 246.9, 293.7}};
+  static const double minor[4][3] = {{220.0, 261.6, 329.6}, {174.6, 220.0, 261.6}, {196.0, 233.1, 293.7}, {164.8, 207.7, 246.9}};
   for (int i = 0; i < RATE * 8; i++) {
     double t = (double)i / RATE, v = 0;
+    if (musicKind == 1) {
+      int bar = i / (RATE * 2), note = (i / (RATE / 3)) % 6;
+      double bt = fmod(t, 2.0), swell = 0.6 + 0.4 * sin(3.1416 * bt / 2.0);
+      for (int k = 0; k < 3; k++) {
+        double f = minor[bar][k];
+        v += 900 * swell * (sin(6.2832 * f * t + 0.3 * sin(6.2832 * 5 * t)) + 0.5 * sin(6.2832 * 2 * f * t) + 0.25 * sin(6.2832 * 3 * f * t));
+      }
+      double nt = fmod(t, 1.0 / 3), f = minor[bar][note % 3] * 4;
+      v += 1500 * exp(-nt * 9) * sin(6.2832 * f * t);
+      music[i] = (short)v;
+      continue;
+    }
     int bar = i / (RATE * 2), note = (i / (RATE / 4)) % 8;
     double nt = fmod(t, 0.25), f = chords[bar][note % 3] * (note >= 3 ? 2 : 1);
     v += 2200 * exp(-nt * 6) * (sin(6.2832 * f * t) + 0.3 * sin(6.2832 * 2 * f * t) + 0.1 * sin(6.2832 * 3 * f * t));
