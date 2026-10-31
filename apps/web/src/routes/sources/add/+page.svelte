@@ -661,14 +661,14 @@
     font-size: var(--type-small);
   }
 
-  /* A small square mark, as the study book marks a caution. */
+  /* A small square mark, as the study book marks a note (ink: warning is for errors only). */
   .add-caution::before {
     position: absolute;
     top: 0.35em;
     left: 0;
     width: 0.5rem;
     height: 0.5rem;
-    background: var(--app-warning-color);
+    background: var(--font-color);
     content: '';
   }
 
