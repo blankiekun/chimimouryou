@@ -4,6 +4,7 @@
  * All rights reserved.
  */
 
+// apps/web/src/lib/data/standalone/app-update.ts has a copy of isNewerVersion: change both together.
 const parts = (version) => version.replace(/^v/, '').split(/[.-]/).slice(0, 3).map(Number);
 
 /** Whether release `tag` (v1.2.3) is a higher version than `current` (1.2.3); anything unparsable is not. */

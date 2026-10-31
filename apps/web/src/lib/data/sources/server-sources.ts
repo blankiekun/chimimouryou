@@ -25,6 +25,7 @@ import {
 const apiUrl = '/calibre/import/api/sources/';
 // The standalone build's Sources, and in both editions the works of extensions (they run here).
 const local = () => import('./local-sources');
+const localServers = () => import('./local-servers');
 const extensions = () => import('./extensions');
 
 /*
@@ -124,7 +125,7 @@ export function addVolumes(workId: number, volumes: number[], per?: 'volume' | '
 }
 
 export function listServers() {
-  if (standalone) return local().then((l) => l.listServers());
+  if (standalone) return localServers().then((l) => l.listServers());
   return call<{ servers: SourceServer[] }>('GET', 'servers');
 }
 
@@ -138,7 +139,7 @@ export interface NewServer {
 
 /** Tests the server with these credentials, then adds it; a SourceError names the field to fix. */
 export function addServer(server: NewServer) {
-  if (standalone) return local().then((l) => l.addServer(server));
+  if (standalone) return localServers().then((l) => l.addServer(server));
   return call<{ server: SourceServer; tested: { title: string; entries: number } }>(
     'POST',
     'servers',
@@ -148,13 +149,13 @@ export function addServer(server: NewServer) {
 
 /** Removes the server; its follows and waiting jobs go, its volumes stay in the library. */
 export function removeServer(id: number) {
-  if (standalone) return local().then((l) => l.removeServer(id));
+  if (standalone) return localServers().then((l) => l.removeServer(id));
   return call<object>('DELETE', `servers/${id}`);
 }
 
 /** A feed of the server's catalog: its root, a section (a path from an earlier answer) or a search. */
 export function browseServer(id: number, section = '', q = '') {
-  if (standalone) return local().then((l) => l.browseServer(id, section, q));
+  if (standalone) return localServers().then((l) => l.browseServer(id, section, q));
   const query = new URLSearchParams({ ...(section && { section }), ...(q && { q }) });
 
   return call<SourceServerFeed>('GET', `servers/${id}/browse?${query}`);
