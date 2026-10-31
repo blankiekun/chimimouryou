@@ -125,3 +125,15 @@ export function matchingInput(
   }
   return fallback;
 }
+
+/**
+ * The keys (KeyboardEvent.key) the mouse scanning inputs hold, for the VN player's key gate
+ * (static/vn/vnbox.js scanKeys). Ctrl is left out: it stays the game's Skip.
+ */
+export function scanModifierKeys(inputs: ScanningInput[]) {
+  const keys: Record<string, string> = { shift: 'Shift', alt: 'Alt', meta: 'Meta' };
+  const held = inputs
+    .filter((input) => input.types.mouse)
+    .flatMap((input) => inputArray(input.include));
+  return [...new Set(held.map((name) => keys[name]).filter(Boolean))];
+}

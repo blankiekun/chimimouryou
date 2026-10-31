@@ -187,16 +187,20 @@ var hookListeners = [];
 var hookTimer = 0;
 var clicks = 0;
 
-// Touches reach the game as mousedowns (touchMouse), so they aren't counted twice.
+// Touches reach the game as mousedowns (touchMouse), so they aren't counted twice. Modifiers are
+// Yomitan's scan keys, not clicks.
 ['mousedown', 'keydown'].forEach(function (type) {
   window.addEventListener(
     type,
-    function () {
-      clicks += 1;
+    function (event) {
+      if (!/^(Shift|Control|Alt|Meta)$/.test(event.key)) clicks += 1;
     },
     true
   );
 });
+
+// Set by the page: the scan modifier keys (KeyboardEvent.key) the key gate keeps from the game.
+var scanKeys = ['Shift'];
 
 function hookChanged() {
   // Search hooks can fire per character: tell the sheet at most 4 times a second.
@@ -347,21 +351,65 @@ async function startGame(options) {
     options.onText(line);
     keepLine(lines);
   };
-  // VNBox takes mouse events on window (capture, stopImmediatePropagation) anywhere over the game,
-  // so Yomitan never saw a mousemove over the lines. Events on the overlay's text skip the page's
-  // window mouse listeners (VNBox's, added once it runs; Yomitan's world has its own) and go
-  // overlay.js's way: hover stays with the page, the rest reaches VNBox as passToGame's copy.
+  // VNBox takes mouse and key events on window (capture, stopImmediatePropagation) anywhere over
+  // the game, so Yomitan never saw a mousemove over the lines. Events on the overlay's text skip
+  // the page's window mouse listeners (VNBox's, added once it runs; Yomitan's world has its own)
+  // and go overlay.js's way: hover stays with the page, the rest reaches VNBox as passToGame's copy.
   var overlay = document.getElementById('overlay');
+  // Key gate: many engines hide the text box or skip on Shift, so a scan modifier (scanKeys)
+  // pressed with the pointer on the overlay's text is held back from VNBox (and VNBox's
+  // stopImmediatePropagation doesn't keep it from Yomitan). It reaches the game late, just before
+  // the next key or click it goes with; released alone, the game never sees it. Untrusted events
+  // (the pad's gameKey, the late copy itself) always pass.
+  var overText = false;
+  var gated = new WeakSet();
+  var heldKey = null;
+  var sendHeld = function () {
+    if (!heldKey || heldKey.sent) return;
+    heldKey.sent = true;
+    gameKey(true, heldKey.code, heldKey.key, heldKey.keyCode);
+  };
+  window.addEventListener(
+    'pointermove',
+    function (event) {
+      overText = overlay.contains(event.target);
+    },
+    true
+  );
+  window.addEventListener('mousedown', sendHeld, true);
+  window.addEventListener('blur', function () {
+    heldKey = null;
+  });
+  ['keydown', 'keyup'].forEach(function (type) {
+    window.addEventListener(
+      type,
+      function (event) {
+        if (!event.isTrusted) return;
+        var held = heldKey && heldKey.code === event.code;
+
+        if (type === 'keydown' && !held && overText && scanKeys.indexOf(event.key) >= 0) {
+          heldKey = { code: event.code, key: event.key, keyCode: event.keyCode, sent: false };
+          held = true;
+        } else if (type === 'keydown' && !held) {
+          sendHeld();
+        }
+        if (held && !heldKey.sent) gated.add(event);
+        if (held && type === 'keyup') heldKey = null;
+      },
+      true
+    );
+  });
   var addWindowListener = window.addEventListener;
   var removeWindowListener = window.removeEventListener;
   // listener → its wrapper, so removeEventListener(type, listener) removes the wrapper.
   var wrappers = new WeakMap();
   var wrapped = function (target, type, listener) {
-    if (target !== window || !/^mouse/.test(type) || typeof listener !== 'function')
+    if (target !== window || !/^(mouse|key)/.test(type) || typeof listener !== 'function')
       return listener;
     if (!wrappers.has(listener)) {
       wrappers.set(listener, function (event) {
-        if (!overlay.contains(event.target)) return listener.call(this, event);
+        var skip = /^mouse/.test(type) ? overlay.contains(event.target) : gated.has(event);
+        if (!skip) return listener.call(this, event);
       });
     }
     return wrappers.get(listener);

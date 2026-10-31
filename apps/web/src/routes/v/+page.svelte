@@ -81,7 +81,12 @@
   import VnboxHooks from '$lib/components/vn/vnbox-hooks.svelte';
   import { hookCleaner, type HookCleanup } from '$lib/data/vn/hook-cleanup';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
-  import { builtInLookups$ } from '$lib/data/dictionary/dictionary';
+  import {
+    builtInLookups$,
+    profileOptions,
+    yomitanOptions$
+  } from '$lib/data/dictionary/dictionary';
+  import { scanModifierKeys } from '$lib/functions/dictionary/scan';
   import {
     ankiEnabled$,
     ankiSentenceField$,
@@ -156,9 +161,15 @@
   /** This game's files are missing here: the import dialog can add them to this record. */
   let missingFiles = false;
 
-  // The player holds taps on its text for the built-in dictionary only while it is on.
+  // The player holds taps on its text for the built-in dictionary only while it is on, and keeps
+  // the scan modifier over its text from the game (vnbox.js): the built-in one's, else Yomitan's
+  // default Shift (the extension's settings can't be read).
   $: if (frameLoaded && frame?.contentWindow) {
     (frame.contentWindow as any).textTap = $builtInLookups$ ? textTap : null;
+    (frame.contentWindow as any).scanKeys =
+      $builtInLookups$ && $yomitanOptions$
+        ? scanModifierKeys(profileOptions($yomitanOptions$).scanning.inputs)
+        : ['Shift'];
   }
 
   /** A tap on the game's text (frame coordinates): true when it found a word. */
