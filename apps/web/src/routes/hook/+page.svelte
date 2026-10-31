@@ -104,6 +104,13 @@
   let since = $state(Date.now());
   let now = $state(Date.now());
   let stats = $state<HTMLElement>();
+  let strip = $state<HTMLElement>();
+  /** Connected, the address form folds to one line; Change opens it again. */
+  let changing = $state(false);
+  let connectedUrl = $state('');
+  const toolName = $derived(
+    hookPresets.find((preset) => preset.url === connectedUrl)?.label ?? connectedUrl
+  );
   let undo = $state<HookUndo[]>([]);
   let flashId = $state<string>();
   let showSettings = $state(false);
@@ -114,7 +121,10 @@
 
   const socket = new HookSocket(
     (data) => fromSocket(data, 'ws1'),
-    (next) => (status = next),
+    (next) => {
+      status = next;
+      if (next === 'connected') changing = false;
+    },
     localNetworkDenied
   );
   const socket2 = new HookSocket(
@@ -330,6 +340,7 @@
 
   function connect() {
     hookSocketUrl$.next(url);
+    connectedUrl = url;
     socket.connect(url);
     if (hookSocketUrl2$.getValue()) socket2.connect(hookSocketUrl2$.getValue());
     else socket2.disconnect();
@@ -356,12 +367,15 @@
   function flashPaused() {
     const tint = stats && getComputedStyle(stats).getPropertyValue('--app-spot-tint').trim();
 
-    stats?.animate(
-      [{ backgroundColor: tint || 'transparent' }, { backgroundColor: 'transparent' }],
-      {
-        duration: 700,
-        easing: 'cubic-bezier(0.16, 1, 0.3, 1)'
-      }
+    // The phone strip or the session box: whichever is shown.
+    [stats, strip].forEach((element) =>
+      element?.animate(
+        [{ backgroundColor: tint || 'transparent' }, { backgroundColor: 'transparent' }],
+        {
+          duration: 700,
+          easing: 'cubic-bezier(0.16, 1, 0.3, 1)'
+        }
+      )
     );
   }
 
@@ -505,44 +519,82 @@
       </div>
     </header>
 
-    <div class="hook-top">
-      <PointBox label={$t$('hook.session')} figure={sessionCharacters} unit={$t$('dashboard.unit')}>
-        <div class="hook-stats" bind:this={stats}>
-          <dl class="hook-figures">
-            <div>
-              <dt>Time</dt>
-              <dd>{clock(timer)}</dd>
-            </div>
-            <div>
-              <dt>Speed</dt>
-              <dd>{charsPerHour(sessionCharacters, sessionSeconds).toLocaleString('en-US')}/h</dd>
-            </div>
-            <div>
-              <dt>Lines</dt>
-              <dd>{lines.length.toLocaleString('en-US')}</dd>
-            </div>
-          </dl>
-          <button
-            type="button"
-            class="app-button"
-            class:app-button-primary={paused}
-            aria-pressed={paused}
-            onclick={togglePause}
-          >
-            {paused ? 'Resume' : 'Pause'}
-          </button>
+    <!-- Phones: the session in one row, so the lines start in the first screen. -->
+    <div class="hook-strip" bind:this={strip}>
+      <dl class="hook-figures">
+        <div>
+          <dt>Chars</dt>
+          <dd>{sessionCharacters.toLocaleString('en-US')}</dd>
         </div>
-        {#if paused}
-          <p class="hook-hint" role="status">Paused: new lines show, but aren’t logged or timed.</p>
-        {/if}
-        <p class="hook-session">
-          {formatDuration(sessionSeconds) || $t$('hook.underMinute')} ·
-          <a href="{pagePath}/statistics">{$t$('hook.toLog')}</a>
-        </p>
-        {#if !$statisticsEnabled$}
-          <p class="hook-hint">{$t$('hook.statisticsOff')}</p>
-        {/if}
-      </PointBox>
+        <div>
+          <dt>Time</dt>
+          <dd>{clock(timer)}</dd>
+        </div>
+        <div>
+          <dt>Speed</dt>
+          <dd>{charsPerHour(sessionCharacters, sessionSeconds).toLocaleString('en-US')}/h</dd>
+        </div>
+      </dl>
+      <button
+        type="button"
+        class="app-button"
+        class:app-button-primary={paused}
+        aria-pressed={paused}
+        onclick={togglePause}
+      >
+        {paused ? 'Resume' : 'Pause'}
+      </button>
+    </div>
+    {#if paused}
+      <p class="hook-hint hook-phone-only" role="status">
+        Paused: new lines show, but aren’t logged or timed.
+      </p>
+    {/if}
+
+    <div class="hook-top">
+      <div class="hook-session-box">
+        <PointBox
+          label={$t$('hook.session')}
+          figure={sessionCharacters}
+          unit={$t$('dashboard.unit')}
+        >
+          <div class="hook-stats" bind:this={stats}>
+            <dl class="hook-figures">
+              <div>
+                <dt>Time</dt>
+                <dd>{clock(timer)}</dd>
+              </div>
+              <div>
+                <dt>Speed</dt>
+                <dd>{charsPerHour(sessionCharacters, sessionSeconds).toLocaleString('en-US')}/h</dd>
+              </div>
+              <div>
+                <dt>Lines</dt>
+                <dd>{lines.length.toLocaleString('en-US')}</dd>
+              </div>
+            </dl>
+            <button
+              type="button"
+              class="app-button"
+              class:app-button-primary={paused}
+              aria-pressed={paused}
+              onclick={togglePause}
+            >
+              {paused ? 'Resume' : 'Pause'}
+            </button>
+          </div>
+          {#if paused}
+            <p class="hook-hint">Paused: new lines show, but aren’t logged or timed.</p>
+          {/if}
+          <p class="hook-session">
+            {formatDuration(sessionSeconds) || $t$('hook.underMinute')} ·
+            <a href="{pagePath}/statistics">{$t$('hook.toLog')}</a>
+          </p>
+          {#if !$statisticsEnabled$}
+            <p class="hook-hint">{$t$('hook.statisticsOff')}</p>
+          {/if}
+        </PointBox>
+      </div>
 
       {#if nativeId}
         <div class="hook-settings">
@@ -582,6 +634,25 @@
           <NativeThreads {ranked} hook={nativeHook} onpick={pickThread} />
         </div>
         <AnkiWatcher media={ankiMedia} />
+      {:else if status === 'connected' && !changing}
+        <div class="hook-actions hook-connected">
+          <span class="hook-status-line">
+            <span class="hook-status hook-status-on" role="status">
+              {$t$(statusLabels[status])}
+            </span>
+            <span class="hook-tool">{toolName}</span>
+          </span>
+          <button
+            type="button"
+            class="app-button app-button-quiet"
+            onclick={() => (changing = true)}
+          >
+            Change
+          </button>
+          <button type="button" class="app-button app-button-quiet" onclick={disconnect}>
+            {$t$('hook.disconnect')}
+          </button>
+        </div>
       {:else}
         <form
           class="hook-settings"
@@ -613,12 +684,26 @@
             <span class="hook-status" class:hook-status-on={status === 'connected'} role="status">
               {$t$(statusLabels[status])}
             </span>
-            {#if status !== 'off' && status !== 'invalid'}
+            {#if changing}
+              <button
+                type="button"
+                class="app-button app-button-quiet"
+                onclick={() => {
+                  changing = false;
+                  url = connectedUrl;
+                }}
+              >
+                Cancel
+              </button>
+            {:else if status !== 'off' && status !== 'invalid'}
+              <!-- Retrying: stops it -->
               <button type="button" class="app-button app-button-quiet" onclick={disconnect}>
                 {$t$('hook.disconnect')}
               </button>
             {/if}
-            <button type="submit" class="app-button">{$t$('hook.connect')}</button>
+            {#if changing || status === 'off' || status === 'invalid' || url !== connectedUrl}
+              <button type="submit" class="app-button">{$t$('hook.connect')}</button>
+            {/if}
           </div>
         </form>
       {/if}
@@ -777,6 +862,72 @@
   .hook-status-on {
     color: var(--accent-color);
     font-weight: 700;
+  }
+
+  .hook-strip {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0 -0.5rem;
+    padding: 0.5rem;
+    border-top: 2px solid var(--accent-color);
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .hook-strip .hook-figures {
+    gap: 1rem;
+  }
+
+  .hook-strip dd {
+    font-size: var(--type-body);
+    font-weight: 700;
+  }
+
+  .hook-status-line {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.5rem;
+    margin-right: auto;
+  }
+
+  .hook-status-line .hook-status {
+    margin-right: 0;
+  }
+
+  .hook-tool {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  @media (min-width: 640px) {
+    .hook-strip,
+    .hook-phone-only {
+      display: none;
+    }
+  }
+
+  @media (max-width: 639px) {
+    .hook-session-box,
+    .hook-subtitle {
+      display: none;
+    }
+
+    .hook {
+      gap: 1rem;
+      padding-top: 1rem;
+    }
+
+    .hook-title {
+      font-size: var(--type-h1);
+    }
+
+    .hook-top {
+      gap: 1rem;
+    }
   }
 
   .hook-stats {

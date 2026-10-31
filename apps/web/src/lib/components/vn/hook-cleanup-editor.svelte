@@ -124,9 +124,9 @@
       {:else if filter.key === 'replace' && cleanup.replace}
         <div class="hc-sub hc-rules">
           {#each rules as rule, index}
-            <div class="hc-row">
+            <div class="hc-rule">
               <input
-                class="app-input hc-field"
+                class="app-input hc-field hc-pattern"
                 aria-label="Pattern {index + 1}"
                 aria-invalid={!!ruleError(rule.pattern)}
                 placeholder="Pattern, e.g. ^【.+?】"
@@ -186,11 +186,21 @@
     font-size: var(--type-small);
   }
 
-  .hc-actions,
-  .hc-row {
+  .hc-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
+  }
+
+  /* The pattern on its own row, so both fields keep their placeholders in a narrow sheet. */
+  .hc-rule {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.5rem;
+  }
+
+  .hc-pattern {
+    grid-column: 1 / -1;
   }
 
   .hc-field {

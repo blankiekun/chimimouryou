@@ -16,7 +16,7 @@
 // Select → Delete, Edit or Copy acts on the wrong lines, or Undo doesn't put them back in order;
 // a replace rule doesn't clean a tool's line; the second address isn't listened to; Newest first
 // doesn't put the newest on top; a preset doesn't bring its settings back; notes don't survive
-// a reload; /v's Hooks sheet doesn't show the cleanup or doesn't save a filter on the game.
+// a reload; Connect shows while connected; /v's Hooks sheet doesn't show the cleanup or doesn't save a filter on the game.
 
 /* global console, indexedDB, navigator, process, setTimeout -- Node, and the page inside page.evaluate */
 import { mkdirSync } from 'node:fs';
@@ -97,6 +97,10 @@ async function run(name, options) {
       .getByRole('status')
       .filter({ hasText: /^Connected$/ })
       .waitFor();
+    expect(
+      !(await page.getByRole('button', { name: 'Connect', exact: true }).count()),
+      `${name}: Connect shown while connected`
+    );
     await send(tool1, '吾輩は猫である。');
     await send(tool1, '{"sentence":"名前はまだ無い。"}');
     await send(tool1, '名前はまだ無い。');
