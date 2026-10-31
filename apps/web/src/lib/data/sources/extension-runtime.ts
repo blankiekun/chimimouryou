@@ -226,11 +226,16 @@ async function openFrame() {
   jail.tabIndex = -1;
   jail.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden';
   await new Promise((resolve, reject) => {
-    jail.onload = resolve;
-    setTimeout(() => {
+    // Cleared on load: left running, it removed every frame IDLE_MS after it opened.
+    const late = setTimeout(() => {
       jail.remove();
       reject(new ExtensionError("The extension's frame didn't open"));
     }, IDLE_MS);
+    jail.onload = () => {
+      clearTimeout(late);
+      jail.onload = null;
+      resolve(undefined);
+    };
     document.body.append(jail);
   });
   const jailDocument = jail.contentDocument;
