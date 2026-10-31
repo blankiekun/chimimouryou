@@ -19,11 +19,13 @@
     removeJob,
     retryJob,
     timeLeft,
+    unfollowShared,
     unfollowWork
   } from '$lib/data/sources/server-sources';
   import { sourcesWifiOnly$ } from '$lib/data/sources/sources-settings';
   import { needsAppMessage } from '$lib/data/sources/transport';
   import type { SourceFollow, SourceJob, SourceRepo } from '$lib/data/sources/types';
+  import { t$ } from '$lib/i18n';
   import { onMount } from 'svelte';
 
   /**
@@ -136,7 +138,10 @@
 
   function unfollow(follow: SourceFollow) {
     if (!window.confirm('Stop checking for new chapters? Your volumes stay.')) return;
-    followAction(() => unfollowWork(follow.workId), `follow-${follow.workId}`);
+    followAction(
+      () => (follow.shared ? unfollowShared(follow.shared) : unfollowWork(follow.workId)),
+      `follow-${follow.shared ?? follow.workId}`
+    );
   }
 
   /** 18:00 today, else Oct 31 18:00 */
@@ -222,7 +227,9 @@
 
 <div class="app-page-shell">
   <main class="sources-page">
-    <a class="app-button-quiet sources-back" href="{pagePath}/manage">← Store</a>
+    <a class="app-button-quiet sources-back" href="{pagePath}/manage"
+      >← {$t$(standalone ? 'nav.library' : 'nav.store')}</a
+    >
     <h1 class="sources-title">Sources</h1>
     <p class="sources-lead">
       {standalone
@@ -297,8 +304,8 @@
       {#if shownTab === 'following'}
         {#if follows.length}
           <ul class="sources-rows">
-            {#each follows as follow (follow.workId)}
-              {@const id = `follow-${follow.workId}`}
+            {#each follows as follow (follow.shared ?? follow.workId)}
+              {@const id = `follow-${follow.shared ?? follow.workId}`}
               <li class="sources-row sources-follow">
                 <SourceCover
                   title={follow.title}
@@ -306,11 +313,16 @@
                 />
                 <div class="sources-follow-body">
                   <div class="sources-follow-work">
-                    <a
-                      class="sources-row-title"
-                      lang="ja"
-                      href="{pagePath}/sources/work?id={follow.workId}">{follow.title}</a
-                    >
+                    {#if follow.shared}
+                      <!-- Another device's server: no work page here. -->
+                      <span class="sources-row-title" lang="ja">{follow.title}</span>
+                    {:else}
+                      <a
+                        class="sources-row-title"
+                        lang="ja"
+                        href="{pagePath}/sources/work?id={follow.workId}">{follow.title}</a
+                      >
+                    {/if}
                     <p class="sources-row-meta">
                       {follow.siteName}{follow.site.startsWith('ext:')
                         ? ' · extension'
@@ -320,12 +332,13 @@
                     </p>
                   </div>
                   <div class="sources-follow-state">
-                    {#if follow.elsewhere && !follow.paused}
+                    {#if follow.state === 'app' && !follow.paused}
+                      <!-- Released to the desktop or Android app (local-sources.ts release). -->
+                      <NeedsApp />
+                    {:else if follow.elsewhere && !follow.paused}
                       <p class="sources-row-meta">
                         Followed in {follow.elsewhere}; updates there
                       </p>
-                    {:else if follow.state === 'app' && !follow.paused}
-                      <NeedsApp />
                     {:else}
                       <p
                         class="sources-status sources-status-{follow.paused
@@ -340,7 +353,9 @@
                     {/if}
                   </div>
                   <div class="sources-actions">
-                    {#if follow.paused}
+                    {#if follow.shared}
+                      <!-- Only Unfollow: pausing runs on the device that has the server. -->
+                    {:else if follow.paused}
                       <button
                         type="button"
                         class="app-button-quiet"

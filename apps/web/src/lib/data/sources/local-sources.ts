@@ -44,7 +44,7 @@ import {
   sourcesCheckHours$,
   sourcesWifiOnly$
 } from './sources-settings';
-import { FetchError, NeedsAppError, pacing, sourceFetch } from './transport';
+import { FetchError, NeedsAppError, nativeFetch, pacing, sourceFetch } from './transport';
 import {
   SourceError,
   type SourceFollow,
@@ -110,7 +110,7 @@ interface FollowRow {
   lastCheck: number | null;
   nextCheck: number | null;
   modified: number;
-  /** Another device runs it (sources.json); missing = this one */
+  /** Another device runs it (sources.json); missing = this one; '' = the next desktop or Android app */
   device?: string;
   deviceName?: string;
   /** The site's name from sources.json, for an extension this device doesn't have */
@@ -519,15 +519,26 @@ export async function browseSite(
 }
 
 const images = new Map<string, Promise<string>>();
+const MAX_IMAGES = 200;
 
-/** An image as a blob: URL (the CSP allows no other hosts); kept while the app is open. */
+/** An image as a blob: URL (the CSP allows no other hosts); the last MAX_IMAGES are kept. */
 function imageUrl(key: string, get: () => Promise<{ body: ArrayBuffer }>) {
-  if (!images.has(key)) {
-    const loading = get().then(({ body }) => URL.createObjectURL(new Blob([body])));
-    loading.catch(() => images.delete(key));
-    images.set(key, loading);
+  const cached = images.get(key);
+  if (cached) {
+    // Most recently used last, so the oldest goes first.
+    images.delete(key);
+    images.set(key, cached);
+    return cached;
   }
-  return images.get(key)!;
+  const loading = get().then(({ body }) => URL.createObjectURL(new Blob([body])));
+  loading.catch(() => images.delete(key));
+  images.set(key, loading);
+  if (images.size > MAX_IMAGES) {
+    const [oldest, url] = images.entries().next().value!;
+    images.delete(oldest);
+    url.then(URL.revokeObjectURL, () => undefined);
+  }
+  return loading;
 }
 
 /** The work's cover (from a host its site names, or its server). */
@@ -754,9 +765,37 @@ async function followJson(follow: FollowRow): Promise<SourceFollow> {
   };
 }
 
+/** Another device's follows of its servers: listed with Unfollow only (server ids are per device). */
+async function sharedServerFollows(): Promise<SourceFollow[]> {
+  const me = deviceId();
+  return (await all('shared'))
+    .filter((e) => e.site.startsWith('opds:') && e.device !== me && !e.deleted)
+    .map((e) => ({
+      workId: 0,
+      shared: e.key,
+      title: e.title,
+      site: e.site,
+      siteName: e.siteName,
+      domain: '',
+      chapters: 0,
+      volumes: 0,
+      paused: e.paused,
+      state: '',
+      detail: '',
+      lastCheck: null,
+      nextCheck: null,
+      modified: e.modified,
+      cover: false,
+      elsewhere: e.deviceName || 'another device'
+    }));
+}
+
 export async function getFollowing() {
   pullSources();
-  const follows = await Promise.all((await all('follows')).map(followJson));
+  const follows = [
+    ...(await Promise.all((await all('follows')).map(followJson))),
+    ...(await sharedServerFollows())
+  ];
   return {
     follows: follows.sort((a, b) => a.title.localeCompare(b.title)),
     checkHours: sourcesCheckHours$.getValue()
@@ -789,6 +828,16 @@ export async function unfollowWork(workId: number) {
   await remove('follows', workId);
   await share(workId, follow);
   await markDeviceFollows();
+  return {};
+}
+
+/** Unfollows another device's server follow: a `deleted` entry in sources.json, applied there. */
+export async function unfollowShared(key: string) {
+  const entry = await one('shared', key);
+  if (!entry || entry.deleted) throw new SourceError('Not following that work');
+  await put('shared', { ...entry, deleted: true, modified: Date.now() });
+  clearTimeout(sharedTimer);
+  sharedTimer = setTimeout(syncSources, 2000);
   return {};
 }
 
@@ -1047,8 +1096,13 @@ async function chapter(work: WorkRow, found: SiteDetails, n: number): Promise<Ch
 }
 
 /** The volume's book: an EPUB of the chapters, a server's file as it came, or its pages. */
-async function volumeBook(work: WorkRow, number: number, chapters: Chapter[]): Promise<LoadData> {
-  const title = `${work.title} ${number}`;
+async function volumeBook(
+  work: WorkRow,
+  number: number,
+  chapters: Chapter[],
+  series: string
+): Promise<LoadData> {
+  const title = `${series} ${number}`;
   const now = Date.now();
   const [first] = chapters;
   let data: LoadData;
@@ -1083,14 +1137,30 @@ async function volumeBook(work: WorkRow, number: number, chapters: Chapter[]): P
     const file = await epub({
       title,
       authors: work.authors,
-      series: work.title,
+      series,
       seriesIndex: number,
       identifier: `chimi:${work.site}:${work.workKey}:${number}`,
       chapters: chapters.map((c) => ({ title: c.title, xhtml: 'html' in c ? c.html : '' }))
     });
     data = await loadEpub(file, document, now);
   }
-  return { ...data, title, series: work.title, seriesIndex: number };
+  return { ...data, title, series, seriesIndex: number };
+}
+
+/**
+ * The series a volume is saved under: `<work>`, or `<work> (<site name>)` when a book that isn't
+ * this work's already has the title (another work of that name, or the reader's own import).
+ * Titles are identities: a saved volume keeps its title (VolumeRow), and a work keeps the form its
+ * first saved volume got.
+ */
+async function volumeSeries(work: WorkRow, number: number) {
+  const mine = (await all('volumes')).filter((v) => v.work === work.id && !v.uploaded);
+  const saved = mine.find((v) => v.number === number);
+  if (saved) return saved.title.slice(0, saved.title.lastIndexOf(' '));
+  const suffixed = `${work.title} (${(await source(work.site)).name})`;
+  if (mine.some((v) => v.title.startsWith(`${suffixed} `))) return suffixed;
+  if (mine.some((v) => v.title.startsWith(`${work.title} `))) return work.title;
+  return (await database.getDataByTitle(`${work.title} ${number}`)) ? suffixed : work.title;
 }
 
 /** Into this device's library; the same title replaces the book in place (same id, same place). */
@@ -1199,6 +1269,7 @@ async function cancelled(id: string) {
 async function runJob(job: JobRow) {
   details.delete(job.work);
   const found = await fetchDetails(await workRow(job.work));
+  if (job.kind === 'update') await claim(job.work);
   const work = await workRow(job.work);
   if ('mode' in found && found.mode === 'pages') {
     checkChapters(
@@ -1273,7 +1344,7 @@ async function runJob(job: JobRow) {
     if (uploaded) {
       title = await uploadVolume(work, number, chapters);
     } else {
-      const book = await volumeBook(work, number, chapters);
+      const book = await volumeBook(work, number, chapters, await volumeSeries(work, number));
       await saveVolume(book);
       title = book.title;
     }
@@ -1332,6 +1403,7 @@ export function runQueued() {
                   ? 'removed'
                   : 'failed';
             await followResult(job.work, state, message);
+            if (state === 'app') await release(job.work);
           }
         }
       }
@@ -1403,7 +1475,43 @@ function deviceName() {
   return 'a browser';
 }
 
-const runsHere = (follow: FollowRow) => !follow.device || follow.device === deviceId();
+/** A follow no device here can fetch for: released to the next desktop or Android app. */
+const RELEASED = '';
+const RELEASED_NAME = 'the desktop or Android app';
+
+const runsHere = (follow: FollowRow) =>
+  follow.device === undefined ||
+  follow.device === deviceId() ||
+  (follow.device === RELEASED && nativeFetch());
+
+/** A plain browser that needs the app hands the follow on (a server's numbers stay per device). */
+async function release(workId: number) {
+  const follow = await one('follows', workId);
+  const work = await one('works', workId);
+  if (!follow || !work || nativeFetch() || work.site.startsWith('opds:')) return;
+  await put('follows', {
+    ...follow,
+    device: RELEASED,
+    deviceName: RELEASED_NAME,
+    modified: Date.now()
+  });
+  await share(workId);
+  await markDeviceFollows();
+}
+
+/** The desktop or Android app takes a released follow once it could fetch the work. */
+async function claim(workId: number) {
+  const follow = await one('follows', workId);
+  if (follow?.device !== RELEASED) return;
+  await put('follows', {
+    ...follow,
+    device: undefined,
+    deviceName: undefined,
+    modified: Date.now()
+  });
+  await share(workId);
+  await markDeviceFollows();
+}
 
 /** A server's number is this device's own, so its works are keyed by the device too. */
 const sharedKey = (device: string, site: string, workKey: string) =>
@@ -1417,7 +1525,7 @@ const sameShared = (a?: SharedFollow, b?: SharedFollow) =>
   !!a && !!b && a.modified === b.modified && !!a.deleted === !!b.deleted && a.device === b.device;
 
 async function sharedEntry(work: WorkRow, follow: FollowRow, deleted = false) {
-  const device = follow.device || deviceId();
+  const device = follow.device ?? deviceId();
   return {
     key: sharedKey(device, work.site, work.workKey),
     site: work.site,
@@ -1426,7 +1534,7 @@ async function sharedEntry(work: WorkRow, follow: FollowRow, deleted = false) {
     url: work.url,
     title: work.title,
     device,
-    deviceName: follow.deviceName || deviceName(),
+    deviceName: follow.deviceName ?? deviceName(),
     paused: follow.paused,
     modified: deleted ? Date.now() : follow.modified,
     ...(deleted && { deleted })
@@ -1483,7 +1591,7 @@ export async function syncSourcesWith(store: SyncFileStore) {
   // Follows from before sources.json, or never shared.
   for (const follow of await all('follows')) {
     const work = await one('works', follow.work);
-    if (work && !(await one('shared', sharedKey(follow.device || me, work.site, work.workKey)))) {
+    if (work && !(await one('shared', sharedKey(follow.device ?? me, work.site, work.workKey)))) {
       await put('shared', await sharedEntry(work, follow));
     }
   }
@@ -1511,16 +1619,19 @@ export async function syncSourcesWith(store: SyncFileStore) {
       if (entry.deleted) {
         if (follow && follow.modified <= entry.modified) await remove('follows', work.id);
       } else if (!follow || follow.modified < entry.modified) {
+        const device = entry.device === me ? undefined : entry.device;
         await put('follows', {
           state: '',
           detail: '',
           lastCheck: null,
           nextCheck: null,
           ...follow,
+          // Taken over by another device (or released): this device's last result no longer applies.
+          ...(follow && follow.device !== device && { state: '', detail: '' }),
           work: work.id,
           paused: entry.paused,
           modified: entry.modified,
-          device: entry.device === me ? undefined : entry.device,
+          device,
           deviceName: entry.device === me ? undefined : entry.deviceName,
           siteName: entry.siteName
         });

@@ -3,6 +3,7 @@
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
   import Switch from '$lib/components/switch.svelte';
+  import { standalone } from '$lib/data/env';
   import {
     connection,
     sourcesAutoUpdate$,
@@ -13,8 +14,12 @@
 
   /**
    * Settings → Sync → Sources (standalone, board 7s): how followed works update on this device,
-   * and where fetched volumes go. The three settings follow the account (sharedSettings).
+   * and where fetched volumes go. The three settings follow the account (sharedSettings). The
+   * server edition shows it (Data) while this device follows extension works, the only follows
+   * it checks itself.
    */
+
+  let { id = 'sync-web-sources' }: { id?: string } = $props();
 
   const hours = [1, 3, 6, 12, 24];
   const network = browser ? connection() : 'unknown';
@@ -31,12 +36,14 @@
 </script>
 
 <SettingsSection
-  id="sync-web-sources"
+  {id}
   keywords="sources web novels syosetu kakuyomu opds suwayomi follow updates wifi"
 >
   <SettingsItemGroup
     title="Update followed works"
-    tooltip="While the app is open. There is no server to check when it is closed."
+    tooltip={standalone
+      ? 'While the app is open. There is no server to check when it is closed.'
+      : 'Extension works followed on this device, while the app is open. The server checks its own follows.'}
   >
     <Switch
       checked={$sourcesAutoUpdate$}
@@ -73,8 +80,12 @@
     />
   </SettingsItemGroup>
   <p class="sources-where">
-    Fetched volumes go into this device’s library{used ? ` (${used})` : ''} and sync like imported books
-    if sync is set up.
+    {#if standalone}
+      Fetched volumes go into this device’s library{used ? ` (${used})` : ''} and sync like imported
+      books if sync is set up.
+    {:else}
+      Volumes of extension works are fetched on this device and sent to the server’s library.
+    {/if}
   </p>
 </SettingsSection>
 

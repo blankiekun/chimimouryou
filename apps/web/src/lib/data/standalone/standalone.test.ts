@@ -56,7 +56,8 @@ describe('standalone edition', () => {
     await log.getImmersionLog();
     expect(Object.values(log.immersionLog$.getValue())).toHaveLength(1);
     expect(fetchMock).not.toHaveBeenCalled();
-  });
+    // A cold import of the immersion log pulls in the sync code: over 5 s under a full parallel run.
+  }, 15_000);
 
   it('sends nothing to the social hub before signing up, or while social is off', async () => {
     const social = await import('$lib/data/social/social');
