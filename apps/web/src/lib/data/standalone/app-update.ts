@@ -139,6 +139,7 @@ export async function checkEngineRelease(installed: string) {
   };
 }
 
+// A copy of apps/desktop/version.js's isNewerVersion (the web image has no apps/desktop): change both together.
 const parts = (version: string) => version.replace(/^v/, '').split(/[.-]/).slice(0, 3).map(Number);
 
 /** Whether release `tag` (v1.2.3) is a higher version than `current` (1.2.3); anything unparsable is not (as apps/desktop/version.js). */

@@ -13,7 +13,7 @@
  * it keeps its id and with it the reader's place (database.upsertData). Jobs run one at a time
  * while the app is open; followed works are checked every `Check every` hours (Settings → Sources),
  * on Wi-Fi only when that is on and the browser can tell. Follows are shared as sources.json in the
- * reader's sync folder, each run by the device that made it (sources-sync.ts).
+ * reader's sync folder, each run by the device that made it (Sync, below).
  */
 
 import { browser } from '$app/env';
@@ -27,6 +27,10 @@ import loadEpub from '$lib/functions/file-loaders/epub/load-epub';
 import loadCbz from '$lib/functions/file-loaders/cbz/load-cbz';
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
+import type { SyncFileStore } from '$lib/data/storage/handler/base-handler';
+import { readerStore } from '$lib/data/sync/extras-sync';
+import { syncJsonFile } from '$lib/data/sync/sync-files';
+import { logger } from '$lib/data/logger';
 import { cbz, epub, plan, VOLUME_SIZE } from './sites/build';
 import * as kakuyomu from './sites/kakuyomu';
 import * as opds from './sites/opds';
@@ -40,7 +44,6 @@ import {
   sourcesCheckHours$,
   sourcesWifiOnly$
 } from './sources-settings';
-import { pullSources, SHARED_FRESH_MS, syncSources } from './sources-sync';
 import { NeedsAppError, nativeFetch, pacing, sourceFetch } from './transport';
 import {
   SourceError,
@@ -51,7 +54,7 @@ import {
   type SourceWork
 } from './types';
 
-export const SITES = { syosetu, kakuyomu };
+const SITES = { syosetu, kakuyomu };
 const MANGA_VOLUME_SIZE = 10;
 const DETAILS_MS = 10 * 60 * 1000;
 const RETRY_MS = 3600 * 1000;
@@ -63,7 +66,7 @@ const CHAPTER_BYTES = 30_000;
 const PAGE_BYTES = 400_000;
 const FILE_BYTES = 60_000_000;
 
-export interface WorkRow {
+interface WorkRow {
   id: number;
   site: string;
   workKey: string;
@@ -113,7 +116,7 @@ interface FollowRow {
 }
 
 /** A follow in sources.json; unfollows stay as `deleted`, so another device's copy can't revive it. */
-export interface SharedFollow {
+interface SharedFollow {
   key: string;
   site: string;
   siteName: string;
@@ -149,7 +152,7 @@ interface Stores {
 
 let opened: Promise<IDBPDatabase> | undefined;
 
-export function db() {
+function db() {
   opened ??= openDB('chimi-sources', 3, {
     upgrade(base, version) {
       if (version < 1) {
@@ -234,7 +237,7 @@ export const remove = async (store: keyof Stores, key: IDBValidKey) =>
 export const extensionStore = { all, one, put, remove };
 
 const extensions = () => import('./extensions');
-export const isExtension = (site: string) => site.startsWith('ext:');
+const isExtension = (site: string) => site.startsWith('ext:');
 
 // Sites ---------------------------------------------------------------------------------------
 
@@ -353,7 +356,7 @@ async function workRow(id: number) {
   return work;
 }
 
-export async function workFor(site: string, workKey: string, url: string) {
+async function workFor(site: string, workKey: string, url: string) {
   const found = (await (await db()).getFromIndex('works', 'key', [site, workKey])) as
     | WorkRow
     | undefined;
@@ -840,7 +843,7 @@ export async function unfollowShared(key: string) {
 }
 
 /** Server edition: whether the root layout starts the timer (only extension works follow here). */
-export async function markDeviceFollows() {
+async function markDeviceFollows() {
   const any = (await all('follows')).some(runsHere);
   try {
     if (any) localStorage.setItem(DEVICE_FOLLOWS, '1');
@@ -1306,12 +1309,15 @@ export function startLocalSources() {
   timer = setInterval(tick, 60 * 1000);
 }
 
-// Sync (sources.json, sources-sync.ts) ---------------------------------------------------------
+// Sync (sources.json) -----------------------------------------------------------------------------
 
+const SHARED_FRESH_MS = 60 * 1000;
+let sharedSyncedAt = 0;
 let sharedTimer: ReturnType<typeof setTimeout> | undefined;
+let sharedQueue = Promise.resolve();
 
 /** Random per browser or app install (like immersion-log's). */
-export function deviceId() {
+function deviceId() {
   try {
     let id = localStorage.getItem('sourcesDevice');
     if (!id) {
@@ -1370,10 +1376,17 @@ async function claim(workId: number) {
 }
 
 /** A server's number is this device's own, so its works are keyed by the device too. */
-export const sharedKey = (device: string, site: string, workKey: string) =>
+const sharedKey = (device: string, site: string, workKey: string) =>
   site.startsWith('opds:') ? `${device} ${site} ${workKey}` : `${site} ${workKey}`;
 
-export async function sharedEntry(work: WorkRow, follow: FollowRow, deleted = false) {
+/** The newer entry; on a tie the unfollow, so both devices end the same. */
+const newer = (a: SharedFollow, b?: SharedFollow) =>
+  !b || a.modified > b.modified || (a.modified === b.modified && !!a.deleted && !b.deleted);
+
+const sameShared = (a?: SharedFollow, b?: SharedFollow) =>
+  !!a && !!b && a.modified === b.modified && !!a.deleted === !!b.deleted && a.device === b.device;
+
+async function sharedEntry(work: WorkRow, follow: FollowRow, deleted = false) {
   const device = follow.device ?? deviceId();
   return {
     key: sharedKey(device, work.site, work.workKey),
@@ -1398,4 +1411,97 @@ export async function share(workId: number, removed?: FollowRow) {
   await put('shared', await sharedEntry(work, follow, !!removed));
   clearTimeout(sharedTimer);
   sharedTimer = setTimeout(syncSources, 2000);
+}
+
+/** sources.json: malformed follows are dropped; undefined when `follows` isn't a list. */
+export function parseSourcesFile(raw: any): { follows: SharedFollow[] } | undefined {
+  if (!Array.isArray(raw?.follows)) return undefined;
+  return {
+    follows: raw.follows.filter(
+      (f: any) =>
+        ['key', 'site', 'workKey', 'url', 'title', 'device', 'deviceName'].every(
+          (field) => typeof f?.[field] === 'string'
+        ) && typeof f.modified === 'number'
+    )
+  };
+}
+
+/** Downloads unless synced within `fresh` ms. */
+function pullSources(fresh = SHARED_FRESH_MS) {
+  if (browser && Date.now() - sharedSyncedAt >= fresh) syncSources();
+}
+
+export function syncSources(): Promise<void> {
+  sharedQueue = sharedQueue.then(async () => {
+    try {
+      const store = await readerStore();
+      if (store) await syncSourcesWith(store);
+    } catch (error: any) {
+      logger.warn(`Sources sync failed: ${error.message}`);
+    }
+  });
+  return sharedQueue;
+}
+
+/**
+ * Merges sources.json with this device's follows (the newer entry per work wins) and applies it:
+ * another device's follows of the built-in sites are listed here and never checked here; its
+ * server follows stay in the file only.
+ */
+export async function syncSourcesWith(store: SyncFileStore) {
+  const me = deviceId();
+  // Follows from before sources.json, or never shared.
+  for (const follow of await all('follows')) {
+    const work = await one('works', follow.work);
+    if (work && !(await one('shared', sharedKey(follow.device ?? me, work.site, work.workKey)))) {
+      await put('shared', await sharedEntry(work, follow));
+    }
+  }
+  await syncJsonFile(store, 'sources.json', undefined, parseSourcesFile, async (file) => {
+    const remote = new Map((file?.follows ?? []).map((f) => [f.key, f]));
+    const merged = new Map((await all('shared')).map((f) => [f.key, f]));
+    for (const entry of remote.values()) {
+      if (newer(entry, merged.get(entry.key))) {
+        merged.set(entry.key, entry);
+        await put('shared', entry);
+      }
+    }
+    for (const entry of merged.values()) {
+      if (entry.site.startsWith('opds:') && entry.device !== me) continue;
+      // Built-in sites and extensions name a work alike on every device (a server's numbers don't).
+      const work =
+        (entry.site in SITES || isExtension(entry.site)) && !entry.deleted
+          ? await workFor(entry.site, entry.workKey, entry.url)
+          : ((await (await db()).getFromIndex('works', 'key', [entry.site, entry.workKey])) as
+              | WorkRow
+              | undefined);
+      if (!work) continue;
+      if (!work.title) await put('works', { ...work, title: entry.title });
+      const follow = await one('follows', work.id);
+      if (entry.deleted) {
+        if (follow && follow.modified <= entry.modified) await remove('follows', work.id);
+      } else if (!follow || follow.modified < entry.modified) {
+        const device = entry.device === me ? undefined : entry.device;
+        await put('follows', {
+          state: '',
+          detail: '',
+          lastCheck: null,
+          nextCheck: null,
+          ...follow,
+          // Taken over by another device (or released): this device's last result no longer applies.
+          ...(follow && follow.device !== device && { state: '', detail: '' }),
+          work: work.id,
+          paused: entry.paused,
+          modified: entry.modified,
+          device,
+          deviceName: entry.device === me ? undefined : entry.deviceName,
+          siteName: entry.siteName
+        });
+      }
+    }
+    await markDeviceFollows();
+    const changed = [...merged.values()].some((f) => !sameShared(f, remote.get(f.key)));
+    return changed ? { follows: [...merged.values()] } : undefined;
+  });
+  sharedSyncedAt = Date.now();
 }

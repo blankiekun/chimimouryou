@@ -23,7 +23,6 @@ import { configure } from '@zip.js/zip.js';
 import { database } from '$lib/data/store';
 import { startFakeSites } from './fake-sites';
 import * as local from './local-sources';
-import { syncSourcesWith } from './sources-sync';
 import { sourcesWifiOnly$ } from './sources-settings';
 
 configure({ useWebWorkers: false });
@@ -215,7 +214,7 @@ describe('sources.json', () => {
         modified: Date.now()
       }
     ]);
-    await syncSourcesWith(store);
+    await local.syncSourcesWith(store);
 
     expect(entries().map((e) => [e.workKey, e.device])).toEqual(
       expect.arrayContaining([
@@ -238,7 +237,7 @@ describe('sources.json', () => {
 
     // Nothing changed since: the file isn't written again.
     const before = writes;
-    await syncSourcesWith(store);
+    await local.syncSourcesWith(store);
     expect(writes).toBe(before);
   });
 
@@ -246,20 +245,20 @@ describe('sources.json', () => {
     await set('work=n0009ii&chapters=3');
     const work = await local.lookUpWork('https://ncode.syosetu.com/n0009ii/');
     await local.followWork(work.id);
-    await syncSourcesWith(store);
+    await local.syncSourcesWith(store);
     // Paused on the other device a moment later.
     remote(
       entries().map((e) =>
         e.workKey === 'n0009ii' ? { ...e, paused: true, modified: e.modified + 1 } : e
       )
     );
-    await syncSourcesWith(store);
+    await local.syncSourcesWith(store);
     expect((await local.getWork(work.id)).paused).toBe(true);
 
     await local.unfollowWork(work.id);
-    await syncSourcesWith(store);
+    await local.syncSourcesWith(store);
     expect(entries().find((e) => e.workKey === 'n0009ii')?.deleted).toBe(true);
-    await syncSourcesWith(store);
+    await local.syncSourcesWith(store);
     expect((await local.getWork(work.id)).following).toBe(false);
   });
 
@@ -278,7 +277,7 @@ describe('sources.json', () => {
         modified: Date.now() + 1000
       }
     ]);
-    await syncSourcesWith(store);
+    await local.syncSourcesWith(store);
     const follow = (await local.getFollowing()).follows.find((f) => f.workId === work.id);
     expect(follow?.elsewhere).toBe('the desktop app');
   });
@@ -296,7 +295,7 @@ describe('sources.json', () => {
         modified: Date.now()
       }
     ]);
-    await syncSourcesWith(store);
+    await local.syncSourcesWith(store);
     // Listed for Unfollow only (owner s64), never bound to this device's server 1.
     expect(
       (await local.getFollowing()).follows.find((f) => f.title === 'Server work')
