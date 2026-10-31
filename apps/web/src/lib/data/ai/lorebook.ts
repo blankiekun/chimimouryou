@@ -19,6 +19,7 @@ import { askAi } from '$lib/data/ai/ask-ai';
 import { readerDb } from '$lib/data/reader-db';
 import { ownsRecord, textBetween } from '$lib/data/ai/recap';
 import { orderSeries, seriesVolumes } from '$lib/data/library/library-sort';
+import { countCharacters } from '$lib/functions/book-text/text-positions';
 import type { SearchIndex } from '$lib/functions/book-text/book-search';
 import { BehaviorSubject, Subject } from 'rxjs';
 
@@ -184,6 +185,26 @@ function sameName(a: string, b: string) {
   return nameKey(a) === nameKey(b);
 }
 
+/** Pronouns and common words that would point to anyone (先生 stays when it is the name, as in こころ). */
+const genericWords = new Set(
+  '彼 彼女 彼ら 私 わたし あたし 僕 ぼく 俺 おれ 自分 あなた 君 きみ お前 おまえ あいつ こいつ そいつ 奴 やつ 少女 少年 男 女 子供 老人 先生 he she him her they i me you'.split(
+    ' '
+  )
+);
+
+/**
+ * A key that names this entry only: not a pronoun or common word, nor a single character, unless
+ * the entry's name is that word too (清, Ｋ, 先生).
+ */
+function specificKey(key: string, name: string) {
+  const word = key.trim().toLowerCase();
+
+  return sameName(word, name) || (!genericWords.has(word) && [...word].length > 1);
+}
+
+/** A name or key as the model copied it from the passage, without the furigana (又《また》やん). */
+const withoutRuby = (text: string) => text.replace(/《[^》]*》|｜/g, '').trim();
+
 /** Parses the model's JSON answer, tolerating code fences and stray text around it. */
 export function parseLoreAnswer(answer: string): Partial<LoreEntry>[] {
   const start = answer.indexOf('{');
@@ -215,7 +236,7 @@ export function mergeLoreEntries(
   const updated = new Set<LoreEntry>();
 
   updates.forEach((update) => {
-    const name = typeof update.name === 'string' ? update.name.trim() : '';
+    const name = typeof update.name === 'string' ? withoutRuby(update.name) : '';
     const content = typeof update.content === 'string' ? update.content.trim() : '';
 
     if (!name || !content) {
@@ -223,7 +244,10 @@ export function mergeLoreEntries(
     }
 
     const keys = Array.isArray(update.keys)
-      ? update.keys.filter((key): key is string => typeof key === 'string' && !!key.trim())
+      ? update.keys
+          .filter((key): key is string => typeof key === 'string')
+          .map(withoutRuby)
+          .filter((key) => key && specificKey(key, name))
       : [];
     const category = loreCategories.includes(update.category as LoreCategory)
       ? (update.category as LoreCategory)
@@ -235,7 +259,11 @@ export function mergeLoreEntries(
       ? undefined
       : result.find((entry) => keys.some((key) => sameName(key, entry.name)));
     const existing =
-      byName ?? renamed ?? result.find((entry) => entry.keys.some((key) => sameName(key, name)));
+      byName ??
+      renamed ??
+      result.find((entry) =>
+        entry.keys.some((key) => specificKey(key, entry.name) && sameName(key, name))
+      );
 
     if (existing) {
       const replace = !updated.has(existing) && (!sentInFull || sentInFull.has(existing.id));
@@ -247,6 +275,17 @@ export function mergeLoreEntries(
       if (renamed) {
         existing.name = name;
       }
+      // A nickname found to be someone listed under their name (うらなり = 古賀): one entry.
+      result
+        .filter((other) => other !== existing && keys.some((key) => sameName(key, other.name)))
+        .forEach((other) => {
+          existing.keys = [...new Set([...existing.keys, other.name, ...other.keys])];
+          existing.content = existing.content.includes(other.content)
+            ? existing.content
+            : `${other.content}\n${existing.content}`;
+          existing.firstSeen = Math.min(existing.firstSeen, other.firstSeen);
+          result.splice(result.indexOf(other), 1);
+        });
       updated.add(existing);
       existing.category = category ?? existing.category;
       existing.reading = (typeof update.reading === 'string' && update.reading) || existing.reading;
@@ -268,9 +307,11 @@ export function mergeLoreEntries(
   return result;
 }
 
-/** Existing entries for the prompt: in full if the passage mentions them, otherwise by name. */
+/** Existing entries for the prompt: in full if the passage mentions them, otherwise by name and first sentence. */
 function entriesForPrompt(entries: LoreEntry[], passage: string) {
-  const mentioned = entries.filter((entry) => entry.keys.some((key) => passage.includes(key)));
+  const mentioned = entries.filter((entry) =>
+    entry.keys.some((key) => specificKey(key, entry.name) && passage.includes(key))
+  );
   const others = entries.filter((entry) => !mentioned.includes(entry));
   const text = JSON.stringify({
     relevant: mentioned.map(({ name, reading, category, keys, content }) => ({
@@ -280,7 +321,11 @@ function entriesForPrompt(entries: LoreEntry[], passage: string) {
       keys,
       content
     })),
-    other_names: others.map((entry) => entry.name)
+    // A line each, so a nickname can be matched to someone met under their name (うらなり = 古賀).
+    other_names: others.map(({ name, content }) => ({
+      name,
+      about: content.split(/(?<=[.!?。！？])\s*/)[0].slice(0, 80)
+    }))
   });
 
   return { text, sentInFull: new Set(mentioned.map((entry) => entry.id)) };
@@ -356,6 +401,13 @@ function loreChunkCharacters() {
   return Math.max(1000, featureParams('lore').context ?? defaultChunkCharacters);
 }
 
+/** Counted characters before the first of `terms` in `text` (0 when none is in it). */
+function firstMention(text: string, terms: string[]) {
+  const found = terms.map((term) => text.indexOf(term)).filter((at) => at >= 0);
+
+  return found.length ? countCharacters(text.slice(0, Math.min(...found))) : 0;
+}
+
 async function readUntil(
   title: string,
   index: SearchIndex,
@@ -366,12 +418,14 @@ async function readUntil(
   let lorebook = await getLorebook(title);
   const chunkCharacters = loreChunkCharacters();
   const total = Math.ceil((position - lorebook.processedUpTo) / chunkCharacters);
+  /** Set to half a chunk for one retry after an answer that wasn't valid JSON */
+  let retrySize = 0;
 
   for (let part = 1; lorebook.processedUpTo < position; part += 1) {
     signal.throwIfAborted();
 
     const start = lorebook.processedUpTo;
-    const end = Math.min(start + chunkCharacters, position);
+    const end = Math.min(start + (retrySize || chunkCharacters), position);
     const passage = textBetween(index, start, end);
 
     onProgress(
@@ -392,10 +446,30 @@ async function readUntil(
           { feature: 'lore', system: aiPrompts().lore }
         )
       : [];
-    const updates = answer.length ? parseLoreAnswer(answer[answer.length - 1].content) : [];
+    let updates: Partial<LoreEntry>[];
+
+    try {
+      updates = answer.length ? parseLoreAnswer(answer[answer.length - 1].content) : [];
+    } catch (e) {
+      // Often an answer cut off by the token limit: a shorter passage gets a shorter one.
+      if (retrySize) {
+        throw e;
+      }
+      retrySize = Math.ceil((end - start) / 2);
+      part -= 1;
+      continue;
+    }
+    retrySize = 0;
 
     const entries = mergeLoreEntries(lorebook.entries, updates, start, end, existing.sentInFull);
+    const plain = textBetween(index, start, end, false);
 
+    // New entries start where the passage first names them, not at its start.
+    entries
+      .filter((entry) => !lorebook.entries.some(({ id }) => id === entry.id))
+      .forEach((entry) => {
+        entry.firstSeen = start + firstMention(plain, [entry.name, ...entry.keys]);
+      });
     keepEarlierVersions(title, lorebook.entries, entries);
     lorebook = { ...lorebook, entries, processedUpTo: end };
     await putLorebook(lorebook);

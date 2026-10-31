@@ -7,8 +7,8 @@
 /**
  * Full-text search inside a book. Not part of upstream.
  *
- * The book HTML is indexed once into one string per paragraph (furigana left
- * out), so matches never span paragraphs. Each match records the character
+ * The book HTML is indexed once into one string per paragraph (furigana kept
+ * apart, in `ruby`), so matches never span paragraphs. Each match records the character
  * count where it starts, which the reader can jump to like a bookmark.
  */
 
@@ -27,6 +27,8 @@ export interface Paragraph {
   text: string;
   /** Character count at the start of the paragraph */
   startCount: number;
+  /** The book's own furigana: [offsets in `text` of the base's start and end, reading] */
+  ruby?: [number, number, string][];
 }
 
 export interface SearchIndex {
@@ -67,6 +69,8 @@ export function getParagraphs(htmlContent: string): Paragraph[] {
 
   let currentBlock: Element | null = null;
   let current: Paragraph | undefined;
+  /** Where each ruby's base starts and ends in its paragraph */
+  const bases = new Map<Element, [Paragraph, number, number]>();
 
   getTextSegments(doc.body).forEach((segment) => {
     const block = segment.node.parentElement?.closest(blockSelector) || null;
@@ -78,6 +82,25 @@ export function getParagraphs(htmlContent: string): Paragraph[] {
     }
 
     current.text += segment.text;
+
+    const ruby = segment.node.parentElement?.closest('ruby');
+
+    if (ruby) {
+      const start = bases.get(ruby)?.[1] ?? current.text.length - segment.text.length;
+
+      bases.set(ruby, [current, start, current.text.length]);
+    }
+  });
+
+  bases.forEach(([paragraph, start, end], ruby) => {
+    const reading = [...ruby.querySelectorAll('rt')]
+      .map((rt) => rt.textContent ?? '')
+      .join('')
+      .trim();
+
+    if (reading) {
+      paragraph.ruby = [...(paragraph.ruby ?? []), [start, end, reading]];
+    }
   });
 
   return paragraphs;

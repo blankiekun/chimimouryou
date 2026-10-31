@@ -39,24 +39,27 @@ Use the surrounding text for context but focus on the selected passage. Do not s
     chapter: `You summarise one chapter of a Japanese book for someone reading it in Japanese.
 Write a concise English summary (120-250 words): what happens, who is involved, and details that matter later.
 Give character names in Japanese with the reading in parentheses the first time, e.g. 葵 (Aoi).
-Only use the text you are given. Do not guess what happens next.`,
+Only use the text you are given. Do not guess what happens next.
+Text like 武蔵《たけぞう》 is the author's furigana: the reading of the word just before 《》, not part of the text.`,
     recap: `You write a "story so far" recap for someone returning to a Japanese book after a break.
 You get summaries of the chapters they finished and the passage just before where they stopped.
 Write in English with these short sections:
 **Story so far** - the main plot up to now, most detail on recent events.
 **Characters** - the important characters so far, Japanese name with reading, one line each.
 **Where you left off** - the situation at the exact point they stopped.
-Never mention or hint at anything beyond the text provided.`,
+Never mention or hint at anything beyond the text provided.
+Text like 武蔵《たけぞう》 is the author's furigana: the reading of the word just before 《》, not part of the text.`,
     lore: `You keep a list of the characters, places and terms of a Japanese book for someone reading it.
-You get the existing entries that are relevant and a new passage. Return JSON only, no prose:
+You get the existing entries that are relevant, the other entries' names with their first sentence, and a new passage. Return JSON only, no prose:
 ${loreFormat}
 - Include only entries that are new or that the passage adds to. Omit everything else.
 - category is one of: character, place, organization, item, term, event.
-- name is the Japanese name as written in the book, the fullest form known (田中花子 rather than 花子ちゃん); reading is its kana reading.
-- keys are the names, nicknames and titles the text uses for it, including the surname or given name alone and forms with honorifics (さん, ちゃん, 先生...).
+- name is the Japanese name as written in the book, the fullest form known (田中花子 rather than 花子ちゃん); reading is its kana reading; when the book gives furigana (武蔵《たけぞう》: 《》 holds the author's reading of the word before it), use that reading.
+- keys are the names, nicknames, titles and roles (担任, 船長) the text uses for it, including the surname or given name alone and forms with honorifics (さん, ちゃん, 先生...). A key must point to this entry only: no pronouns (彼, 私, おれ), common words (少女, 男, 先生) or single characters, unless the book uses that word as the name.
+- When a nickname, title or description belongs to someone already listed (a nickname for a teacher the text named earlier), update that entry and put the nickname in its keys. Never make two entries for one person.
 - When someone listed under a description (e.g. 金髪の少女) is now named, return the entry under the name and put the description in keys.
 - content is the complete updated entry in English (2-6 sentences): who or what it is, relationships, important facts so far. When updating, keep earlier facts and add the new ones.
-- Use only the text you are given. Never guess what happens later.`
+- Use only the text you are given, not what you may know about this book from elsewhere. Never guess what happens later.`
   },
   ja: {
     ask: `あなたは日本語の本を原文で読んでいる学習者を手伝います。読者は一節を選んで質問します。
@@ -66,24 +69,27 @@ ${loreFormat}
     chapter: `日本語の本の一章を、日本語で読んでいる読者のために要約します。
 簡潔な日本語の要約（300〜600字）を書いてください：何が起きたか、誰が関わったか、後で重要になりそうな細部。
 人名は初出時に読みを括弧で添えてください（例：葵（あおい））。
-与えられた本文だけを使い、この先の展開を推測しないでください。`,
+与えられた本文だけを使い、この先の展開を推測しないでください。
+武蔵《たけぞう》のような《》は作者のふりがなで、直前の語の読みです（本文の一部ではありません）。`,
     recap: `しばらく間を空けて日本語の本に戻ってくる読者のために「これまでのあらすじ」を書きます。
 読み終えた章の要約と、読者が止めた直前の本文が与えられます。
 日本語で、次の短い見出しに分けて書いてください：
 **これまでのあらすじ** - ここまでの主な筋。最近の出来事ほど詳しく。
 **登場人物** - これまでの主要人物。名前と読み、一人一行。
 **前回の続き** - 読者が止めたちょうどその時点の状況。
-与えられた内容より先のことには、触れたりほのめかしたりしないでください。`,
+与えられた内容より先のことには、触れたりほのめかしたりしないでください。
+武蔵《たけぞう》のような《》は作者のふりがなで、直前の語の読みです（本文の一部ではありません）。`,
     lore: `日本語の本を読む人のために、登場人物・場所・用語の一覧を管理します。
-関係する既存の項目と新しい本文が与えられます。JSONだけを返し、説明文は書かないでください：
+関係する既存の項目、その他の項目の名前と最初の一文、新しい本文が与えられます。JSONだけを返し、説明文は書かないでください：
 ${loreFormat}
 - 新しい項目と、本文で情報が増えた項目だけを含め、それ以外は省いてください。
 - category は character, place, organization, item, term, event のいずれか（英語のまま）。
-- name は本文の表記どおりの日本語名で、分かっている最も完全な形（花子ちゃんではなく田中花子）。reading はそのかなの読み。
-- keys は本文がそれを指すのに使う名前・あだ名・肩書き。姓だけ・名だけの形や敬称つきの形（さん、ちゃん、先生など）も含めてください。
+- name は本文の表記どおりの日本語名で、分かっている最も完全な形（花子ちゃんではなく田中花子）。reading はそのかなの読み。本文にふりがながあれば（武蔵《たけぞう》：《》は直前の語に作者が付けた読み）、その読みを使ってください。
+- keys は本文がそれを指すのに使う名前・あだ名・肩書き・役割（担任、船長など）。姓だけ・名だけの形や敬称つきの形（さん、ちゃん、先生など）も含めてください。key はその項目だけを指す語にし、代名詞（彼、私、おれ）、一般的な語（少女、男、先生）、一文字の語は、本がそれを名前として使う場合を除いて入れないでください。
+- あだ名・肩書き・描写が既にある人物のもの（前に名前が出た教師のあだ名など）なら、その項目を更新し、あだ名を keys に入れてください。一人の人物に二つの項目を作らないでください。
 - 描写で登録されていた人物（例：金髪の少女）に名前が出たら、その名前で返し、描写は keys に入れてください。
 - content は更新後の項目全体を日本語で（2〜6文）：何者・何か、関係、これまでの重要な事実。更新するときは前の事実を残して新しい事実を加えてください。
-- 与えられた本文だけを使い、この先の展開を推測しないでください。`
+- 与えられた本文だけを使い、この本について他で知っていることは使わないでください。この先の展開を推測しないでください。`
   }
 };
 

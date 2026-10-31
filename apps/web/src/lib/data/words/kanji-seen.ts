@@ -55,7 +55,7 @@ export async function recordKanjiSeen(title: string, index: SearchIndex, positio
   let skipped = seen.skipped;
 
   if (!seen.upTo || position - seen.upTo <= maxStep) {
-    countKanji(textBetween(index, seen.upTo, position), seen.counts);
+    countKanji(textBetween(index, seen.upTo, position, false), seen.counts);
   } else {
     skipped = (skipped ?? 0) + position - seen.upTo;
   }

@@ -29,6 +29,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { aiConnectionKeys$, aiConnections$, aiFeatures$ } from '$lib/data/ai/ai-settings';
 import { saveConnection } from '$lib/data/ai/ai-connections';
 import { aiPrompts } from '$lib/data/ai/ai-prompts';
+import { textBetween } from '$lib/data/ai/recap';
 import { buildSearchIndex } from '$lib/functions/book-text/book-search';
 import { countCharacters } from '$lib/functions/book-text/text-positions';
 import * as lore from './lorebook';
@@ -142,9 +143,14 @@ function score(title: string, bankCase: Case, entries: LoreEntry[], back: number
 }
 
 function bookOf(bankCase: Case) {
-  const index = buildSearchIndex(
-    bankCase.paragraphs.map((text) => `<p>${text.replace(/</g, '&lt;')}</p>`).join('')
-  );
+  // The bank writes the book's ruby as ｜base《reading》.
+  const html = bankCase.paragraphs
+    .map((text) =>
+      text.replace(/</g, '&lt;').replace(/｜([^《]*)《([^》]*)》/g, '<ruby>$1<rt>$2</rt></ruby>')
+    )
+    .map((text) => `<p>${text}</p>`)
+    .join('');
+  const index = buildSearchIndex(html);
   const last = index.paragraphs[index.paragraphs.length - 1];
   const total = last.startCount + countCharacters(last.text);
   const back = bankCase.back === undefined ? total : index.paragraphs[bankCase.back].startCount;
@@ -176,14 +182,9 @@ function useConnection(key: string) {
   aiConnections$.next([]);
   aiConnectionKeys$.next({});
   saveConnection({ id: 'anthropic', name: 'Anthropic', provider: 'anthropic', kind: 'text' }, key);
-  // Haiku 5.5 takes no sampling settings.
   aiFeatures$.next({
     ...aiFeatures$.getValue(),
-    lore: {
-      connection: 'anthropic',
-      model,
-      params: { context: chunk, temperature: null, top_p: null } as never
-    }
+    lore: { connection: 'anthropic', model, params: { context: chunk } }
   });
 }
 
@@ -204,8 +205,19 @@ if (live) {
       const output = requests * 2000;
       const cost = (input * inPrice + output * outPrice) / 1e6;
 
+      const sent = (ruby: boolean) =>
+        cases.reduce((sum, c) => {
+          const { index, total } = bookOf(c);
+
+          for (let start = 0; start < total; start += chunk) {
+            sum += textBetween(index, start, Math.min(start + chunk, total), ruby).length;
+          }
+
+          return sum;
+        }, 0);
+
       console.log(
-        `${requests} requests, ~${input} tokens in, ~${output} out: about $${cost.toFixed(2)}`
+        `${requests} requests, ~${input} tokens in, ~${output} out: about $${cost.toFixed(2)}; passages ${sent(false)} characters, ${sent(true)} with ruby`
       );
       if (cost > 3) {
         throw new Error('Over $3: not sent');

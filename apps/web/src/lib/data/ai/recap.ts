@@ -167,21 +167,35 @@ export function recapModel() {
 /**
  * Text from `start` to `end`. Paragraphs containing either are cut there, so
  * nothing later is sent and an update that stopped mid-paragraph resumes there.
+ * With `ruby`, the book's furigana follows its word Aozora-style, the first time each word and
+ * reading comes: 武蔵《たけぞう》.
  */
-export function textBetween(index: SearchIndex, start: number, end: number) {
+export function textBetween(index: SearchIndex, start: number, end: number, ruby = true) {
   const { paragraphs } = index;
+  /** Readings already given: repeating them costs tokens and tells the model nothing */
+  const given = new Set<string>();
 
   return paragraphs
     .filter((p, i) => p.startCount < end && (paragraphs[i + 1]?.startCount ?? Infinity) > start)
-    .map((p) =>
-      displayText(
-        p.text.slice(
-          // Keeps leading punctuation (「…) of paragraphs that start inside the range.
-          start > p.startCount ? offsetForCount(p.text, start - p.startCount) : 0,
-          offsetForCount(p.text, end - p.startCount)
-        )
-      )
-    )
+    .map((p) => {
+      // Keeps leading punctuation (「…) of paragraphs that start inside the range.
+      const from = start > p.startCount ? offsetForCount(p.text, start - p.startCount) : 0;
+      const to = offsetForCount(p.text, end - p.startCount);
+      let text = '';
+      let at = from;
+
+      (ruby ? (p.ruby ?? []) : []).forEach(([baseStart, baseEnd, reading]) => {
+        const word = `${p.text.slice(baseStart, baseEnd)}《${reading}》`;
+
+        if (baseStart >= from && baseEnd <= to && !given.has(word)) {
+          given.add(word);
+          text += `${p.text.slice(at, baseEnd)}《${reading}》`;
+          at = baseEnd;
+        }
+      });
+
+      return displayText(text + p.text.slice(at, to));
+    })
     .join('\n');
 }
 
