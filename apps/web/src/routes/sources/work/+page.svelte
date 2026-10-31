@@ -246,7 +246,7 @@
                   <tr>
                     <th scope="row">{unit} {volume.number}</th>
                     <td class="work-range"
-                      >{#if !work.files && volume.last > volume.first}ch {volume.first}–{volume.last}{/if}</td
+                      >{#if !work.files && volume.last > volume.first}Ch. {volume.first}–{volume.last}{/if}</td
                     >
                     <td class="work-state" class:work-state-open={volume.number === openVolume}>
                       {#if volume.number === openVolume}Updates in place{:else if volume.inLibrary}{here}{:else if volume.pending}On
