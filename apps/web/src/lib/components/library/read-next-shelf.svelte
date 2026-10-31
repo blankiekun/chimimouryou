@@ -114,7 +114,6 @@
     color: var(--app-muted-fg);
     font-size: var(--type-label);
     font-variant-numeric: tabular-nums;
-    white-space: nowrap;
   }
 
   .read-next-meter {
