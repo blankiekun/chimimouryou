@@ -26,7 +26,7 @@
   import { needsAppMessage } from '$lib/data/sources/transport';
   import type { SourceFollow, SourceJob, SourceRepo } from '$lib/data/sources/types';
   import { t$ } from '$lib/i18n';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
 
   /**
    * Sources (Import → Sources; server edition: import permission): the works this account
@@ -89,8 +89,12 @@
 
   onMount(() => {
     $libraryTab$ = 'store';
+  });
+
+  // Not onMount: on a full page load the account (and so `allowed`) arrives after mount.
+  $effect(() => {
     if (!allowed) return;
-    refresh();
+    untrack(refresh);
     const timer = setInterval(() => {
       if (document.visibilityState === 'visible') refresh();
     }, 5000);
