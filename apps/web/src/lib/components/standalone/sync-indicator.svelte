@@ -32,7 +32,9 @@
 
 {#if serverConnected && $storageSource$ === StorageKey.CALIBRE}
   <!-- The Calibre source syncs as you read, without the replicator: name the server instead. -->
-  <a href="{settingsHref}#sync-server" class="sync-indicator">{serverHost}</a>
+  <a href="{settingsHref}#sync-server" class="sync-indicator sync-host" title={serverHost}
+    >{serverHost}</a
+  >
 {:else if view.kind === 'syncing'}
   <span class="sync-indicator" role="status">
     {view.text}
@@ -60,6 +62,15 @@
     color: var(--app-muted-fg);
     font-size: var(--type-small);
     white-space: nowrap;
+  }
+
+  /* Shrinks with an ellipsis, so a long host never pushes the avatar off a phone's bar */
+  .sync-host {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    line-height: var(--app-control-height);
+    text-overflow: ellipsis;
   }
 
   a.sync-indicator:hover {

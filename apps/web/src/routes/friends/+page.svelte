@@ -11,7 +11,6 @@
   import SocialAccountForm from '$lib/components/social/social-account-form.svelte';
   import { pushState } from '$app/navigation';
   import { pagePath } from '$lib/data/env';
-  import { libraryTab$ } from '$lib/data/library/library-home';
   import {
     feed$,
     friends$,
@@ -26,7 +25,7 @@
   import { onMount } from 'svelte';
 
   /**
-   * Friends, a drill-in from Home's Social section (Home stays the lit tab): sign up or log in
+   * Friends, a drill-in from Community's friends part (Community stays the lit tab): sign up or log in
    * on first open, then friends, activity, requests and Add a friend. /friends?add=CODE fills
    * in the code; /friends?user=NAME (Add friend on a public profile) offers that request.
    */
@@ -55,7 +54,6 @@
   $: sideNumber = empty ? 1 : 2 + Number(!!events.length);
 
   onMount(() => {
-    $libraryTab$ = 'home';
     localCovers().then(
       (found) => (covers = found),
       () => {}
@@ -73,11 +71,12 @@
   }
 </script>
 
-<AppHeader active="library" />
+<AppHeader active="community" />
 
 <div class="app-page-shell">
   <main class="friends-page">
-    <a class="app-button-quiet friends-back" href="{pagePath}/manage">← {$t$('nav.home')}</a>
+    <a class="app-button-quiet friends-back" href="{pagePath}/community">← {$t$('nav.community')}</a
+    >
 
     {#if !socialOn}
       <h1 class="friends-title">{$t$('social.friends')}</h1>

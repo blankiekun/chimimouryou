@@ -17,9 +17,6 @@ import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-o
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 import { deleteCachedReadings } from '$lib/data/words/generated-furigana';
 import { deleteVnCache } from '$lib/data/vn/vn';
-import { standalone } from '$lib/data/env';
-import { splitVolume } from '$lib/functions/split-volume';
-import { coverageTarget } from '$lib/data/difficulty/difficulty-core';
 import { record, strings } from '$lib/data/setting-parsers';
 
 export type LibraryTab = 'home' | 'store';
@@ -235,25 +232,8 @@ function nextVolumes(groups: SeriesGroup[]) {
 }
 
 /**
- * Read next without a server (no catalog series): the next volumes, books without a series
- * grouped by the name before their title's volume number, then the books near the reader's level
- * by the analysis tools' estimates (readNextPool; no coverage), closest first.
- */
-export function standaloneReadNext(cards: BookCardProps[], limit = 12) {
-  const byId = new Map(cards.map((card) => [card.id, card]));
-  const withSeries = cards.map((card) => {
-    const [series, volume] = splitVolume(card.title);
-
-    return card.series || volume === null ? card : { ...card, series };
-  });
-
-  return [...nextVolumes(seriesGroups(withSeries)), ...readNextPool(withSeries).pool]
-    .slice(0, limit)
-    .map((card) => byId.get(card.id)!);
-}
-
-/**
- * Home's Read next candidates: the next unread volume of each series the reader has
+ * The books worth a known-word coverage (routes/manage caches theirs for the Store, once Home's
+ * Read next shelf): the next unread volume of each series the reader has
  * started, and the unread books within ±1 of the median 1-10 level of the last 3
  * finished books (closest first, at most `readNextPoolSize`). Nothing when no finished
  * book has a difficulty estimate.
@@ -285,22 +265,4 @@ export function readNextPool(cards: BookCardProps[]) {
     .slice(0, readNextPoolSize);
 
   return { next, pool };
-}
-
-/**
- * Home's Read next shelf: next volumes first, then the pool by known-word coverage
- * (`known-words.ts`, Calibre id → share), closest to the 98% target first; books without one
- * after, closest difficulty first.
- */
-export function readNext(cards: BookCardProps[], coverage: Record<number, number>, limit = 12) {
-  if (standalone) return standaloneReadNext(cards, limit);
-
-  const { next, pool } = readNextPool(cards);
-  const distance = (card: BookCardProps) => {
-    const share = card.calibreId === undefined ? undefined : coverage[card.calibreId];
-
-    return share === undefined ? 2 : Math.abs(share - coverageTarget);
-  };
-
-  return [...next, ...pool.sort((a, b) => distance(a) - distance(b))].slice(0, limit);
 }
