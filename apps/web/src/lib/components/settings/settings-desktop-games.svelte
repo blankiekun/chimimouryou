@@ -2,7 +2,8 @@
   /**
    * Settings → Desktop games (desktop app only): where this computer's Windows games are
    * installed (the app's native-games.json, native-games.ts), with Change folder and Forget, and
-   * on Linux whether Wine is ready to run them.
+   * on Linux whether Wine is ready to run them, and the game overlay's text size and opacity (on/off
+   * and its place are on /hook).
    */
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
@@ -10,6 +11,8 @@
   import { dialogManager } from '$lib/data/dialog-manager';
   import {
     desktopGames,
+    desktopOverlay,
+    type OverlaySettings,
     type NativeGameEntry,
     type NativeGamesList
   } from '$lib/data/vn/native-games';
@@ -18,9 +21,18 @@
   const games = desktopGames()!;
   let list = $state<NativeGamesList>();
 
+  const overlay = desktopOverlay();
+  let overlaySettings = $state<OverlaySettings>();
   const refresh = async () => (list = await games.list());
 
-  onMount(refresh);
+  onMount(async () => {
+    overlaySettings = await overlay?.settings();
+    await refresh();
+  });
+
+  async function setOverlay(changes: Partial<OverlaySettings>) {
+    overlaySettings = await overlay?.settings(changes);
+  }
 
   function changeFolder(game: NativeGameEntry) {
     dialogManager.dialogs$.next([
@@ -70,6 +82,38 @@
       </ul>
     </SettingsItemGroup>
   {/if}
+  {#if overlaySettings && list?.hook}
+    <SettingsItemGroup
+      title="Game overlay"
+      tooltip="The current line over the game's text box, for lookups. Turn it on and adjust its place on the texthooker page while a game runs."
+    >
+      <div class="dg-actions">
+        <label class="dg-field">
+          Text size
+          <input
+            class="app-input"
+            type="number"
+            min="12"
+            max="96"
+            value={overlaySettings.fontSize}
+            onchange={(event) => setOverlay({ fontSize: event.currentTarget.valueAsNumber })}
+          />
+        </label>
+        <label class="dg-field">
+          Background opacity (%)
+          <input
+            class="app-input"
+            type="number"
+            min="0"
+            max="100"
+            step="5"
+            value={Math.round(overlaySettings.opacity * 100)}
+            onchange={(event) => setOverlay({ opacity: event.currentTarget.valueAsNumber / 100 })}
+          />
+        </label>
+      </div>
+    </SettingsItemGroup>
+  {/if}
   {#if list && !list.hook}
     <p class="dg-note">This build of the app has no built-in text hook, so games can’t start.</p>
   {/if}
@@ -113,6 +157,16 @@
   .dg-note {
     color: var(--app-muted-fg);
     font-size: var(--type-small);
+  }
+
+  .dg-field {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .dg-field input {
+    width: 5rem;
   }
 
   .dg-actions {

@@ -23,6 +23,8 @@
     "files": [
       "main.js",
       "games.js",
+      "game-media.js",
+      "overlay.js",
       "oauth.js",
       "preload.cjs",
       "serve.js",

@@ -10,7 +10,9 @@
 //             system) as PCM s16le mono 24 kHz into the named pipe <pipe>, for Anki clips.
 // Lines: {"type":"text","thread":{pid,addr,ctx,ctx2,hookcode,name},"sentence":"…"}; also "thread"
 // (a new thread), "inject", "connect", "disconnect", "error" {message}, "window" {hwnd, xid, title,
-// width, height} (the game's main window, on change; xid: Wine's X11 window, else 0), "audio" {mode:
+// x, y, width, height, active, minimized} (the game's main window, on change; xid: Wine's X11
+// window, else 0; x/y/size: its client area in screen pixels, which is what a window manager's
+// frame holds under Wine; active: it is the foreground window), "audio" {mode:
 // "process" | "system" | "none"} (with --audio) and "exit" last.
 // LunaHost64.dll, LunaHook32/64.dll and inject32.exe sit next to it. Same under Wine and Windows.
 #include <initguid.h>
@@ -146,23 +148,29 @@ static BOOL CALLBACK findWindow(HWND hwnd, LPARAM data) {
   return TRUE;
 }
 
-// Says where the game's window is whenever it changes (screenshots for Anki), every 0.5 s.
+// Says where the game's window is whenever it changes (screenshots for Anki, the overlay), every
+// 0.1 s so the overlay follows a moved window.
 static DWORD WINAPI watchWindow(LPVOID unused) {
-  HWND lastHwnd = NULL; wchar_t lastTitle[256] = L""; LONG lastW = 0, lastH = 0;
-  for (;; Sleep(500)) {
+  HWND lastHwnd = NULL; wchar_t lastTitle[256] = L""; RECT last = {0}; BOOL lastActive = -1, lastMin = -1;
+  for (;; Sleep(100)) {
     Found f = {NULL, 0};
     EnumWindows(findWindow, (LPARAM)&f);
     if (!f.hwnd) continue;
     wchar_t title[256] = L""; GetWindowTextW(f.hwnd, title, 256);
-    RECT r; GetWindowRect(f.hwnd, &r);
-    LONG w = r.right - r.left, h = r.bottom - r.top;
-    if (f.hwnd == lastHwnd && w == lastW && h == lastH && !wcscmp(title, lastTitle)) continue;
-    lastHwnd = f.hwnd; lastW = w; lastH = h; wcscpy(lastTitle, title);
+    RECT r; GetClientRect(f.hwnd, &r);
+    MapWindowPoints(f.hwnd, NULL, (POINT *)&r, 2);
+    BOOL active = GetForegroundWindow() == f.hwnd, minimized = IsIconic(f.hwnd);
+    if (f.hwnd == lastHwnd && EqualRect(&r, &last) && active == lastActive && minimized == lastMin &&
+        !wcscmp(title, lastTitle)) continue;
+    lastHwnd = f.hwnd; last = r; lastActive = active; lastMin = minimized; wcscpy(lastTitle, title);
     // winex11's X window for this HWND (absent on Windows).
     ULONGLONG xid = (ULONGLONG)(UINT_PTR)GetPropA(f.hwnd, "__wine_x11_whole_window");
     EnterCriticalSection(&out);
     printf("{\"type\":\"window\",\"hwnd\":%llu,\"xid\":%llu,\"title\":", (ULONGLONG)(UINT_PTR)f.hwnd, xid);
-    jstr(title); printf(",\"width\":%ld,\"height\":%ld}\n", w, h); fflush(stdout);
+    jstr(title);
+    printf(",\"x\":%ld,\"y\":%ld,\"width\":%ld,\"height\":%ld,\"active\":%s,\"minimized\":%s}\n", r.left, r.top,
+           r.right - r.left, r.bottom - r.top, active ? "true" : "false", minimized ? "true" : "false");
+    fflush(stdout);
     LeaveCriticalSection(&out);
   }
   return 0;

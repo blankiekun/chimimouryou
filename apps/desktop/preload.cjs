@@ -6,7 +6,8 @@
 
 // Preload for the app's own windows: tells the web build it runs in the desktop app, where cloud
 // sign-in continues in the system browser (oauth.js), and lets Sources fetch sites without CORS
-// (main.js sourcesFetch), and plays Windows games natively (games.js). Nothing else is exposed.
+// (main.js sourcesFetch), and plays Windows games natively (games.js) with an overlay over them
+// (overlay.js). Nothing else is exposed.
 
 /* global require */
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- sandboxed preloads are CommonJS
@@ -30,6 +31,17 @@ contextBridge.exposeInMainWorld('chimiDesktop', {
       const listener = (_event, message) => callback(message);
       ipcRenderer.on('native-hook', listener);
       return () => ipcRenderer.removeListener('native-hook', listener);
+    }
+  },
+  overlay: {
+    settings: (changes) => ipcRenderer.invoke('overlay-settings', changes),
+    edit: (on) => ipcRenderer.invoke('overlay-edit', on),
+    setRects: (rects, solid) => ipcRenderer.invoke('overlay-rects', rects, solid),
+    setArea: (area) => ipcRenderer.invoke('overlay-area', area),
+    onState: (callback) => {
+      const listener = (_event, state) => callback(state);
+      ipcRenderer.on('overlay-state', listener);
+      return () => ipcRenderer.removeListener('overlay-state', listener);
     }
   }
 });

@@ -5,6 +5,7 @@
    * texthooker-ui). The page keeps the lines and the undo history. Not upstream.
    */
   import type { HookLine } from '$lib/data/vn/texthooker';
+  import { postOverlayLine } from '$lib/data/vn/native-games';
   import { tick, type Snippet } from 'svelte';
 
   interface Props {
@@ -47,6 +48,9 @@
   let editor = $state<HTMLTextAreaElement>();
 
   const shown = $derived(reverse ? [...lines].reverse() : lines);
+
+  // The game overlay (desktop app) shows the newest line, edits and Clear included.
+  $effect(() => postOverlayLine(lines.at(-1)?.text ?? ''));
 
   // Lines gone (cleared, past the 500 kept) drop out of the selection.
   $effect(() => {
