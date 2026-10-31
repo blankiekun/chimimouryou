@@ -386,6 +386,34 @@ jobs:
           if [ ${#files[@]} = 0 ]; then echo "::warning::No desktop package was built"; exit 0; fi
           gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
 
+  # Catches a release without the KOReader plugin. apps/koreader/chimimouryou.koplugin zipped and
+  # attached to the tag's release (made here if no other job has yet), a few seconds of work.
+  koreader:
+    needs: [ci, on-main]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Zip the plugin
+        working-directory: apps/koreader
+        run: zip -qr ../../chimimouryou.koplugin.zip chimimouryou.koplugin
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          pre=(); [[ "$GITHUB_REF_NAME" == *-* ]] && pre=(--prerelease)
+          gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 ||
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "chimimouryou ${GITHUB_REF_NAME#v}" --notes "" "${pre[@]}" ||
+            gh release view "$GITHUB_REF_NAME" > /dev/null
+          gh release upload "$GITHUB_REF_NAME" chimimouryou.koplugin.zip --clobber
+
   # Catches an Android app that no longer builds or signs. The Android app (apps/android) with the
   # same standalone build, signed with the release key and attached to the release (made here if the
   # desktop job hasn't yet). Needs the secrets
