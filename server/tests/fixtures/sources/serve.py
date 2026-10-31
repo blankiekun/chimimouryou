@@ -11,7 +11,8 @@ fetch proxy (headers, slow, to/<host>).
 chapters), cors=1|0, ext=<version> (every extension's version in index.json). example.com, example.org and
 example.net serve the Kakuyomu, Syosetu and Syosetu API pages (extensions on sites that aren't built in).
 https://repo.example/manatan/manga.min.json is a Manatan repository and mokuro.moe an invented Mokuro catalog
-(manatan.py).
+(manatan.py). https://repo.example/mihon/index.pb is a Mihon repository and rawkuma.net an invented site its jar
+reads (mihon.py, which is also the desktop E2E's https proxy).
 """
 import json
 import os
@@ -22,6 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 import manatan
+import mihon
 import servers
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -116,6 +118,10 @@ class Handler(BaseHTTPRequestHandler):
             status, kind, body = servers.opds(rest, parse_qs(url.query), self.headers.get('Authorization', ''))
         elif first == 'suwayomi':
             status, kind, body = servers.suwayomi(rest, parse_qs(url.query))
+        elif first == 'repo.example' and rest.startswith('mihon/'):  # a Mihon repository (mihon.py)
+            status, kind, body = mihon.repo(rest[len('mihon/'):])
+        elif first == 'rawkuma.net':  # the site its jar reads (mihon.py)
+            status, kind, body = mihon.rawkuma(rest, parse_qs(url.query), getattr(self, 'body', b''))
         elif first == 'repo.example' and rest.startswith('manatan/'):  # a Manatan repository (manatan.py)
             status, kind, body = manatan.repo(rest[len('manatan/'):])
         elif first == 'repo.example':  # an extension repository: index.json, the extensions, and test pages
@@ -158,6 +164,10 @@ class Handler(BaseHTTPRequestHandler):
         if os.path.isfile(path):
             return 200, 'application/json' if rest.endswith('.json') else 'text/javascript', read(path, HERE)
         return 404, 'text/plain', b'not found'
+
+    def do_POST(self):  # noqa: N802 - rawkuma.net's search form (mihon.py)
+        self.body = self.rfile.read(int(self.headers.get('Content-Length') or 0))
+        self.do_GET()
 
     def do_OPTIONS(self):  # noqa: N802 - CORS preflight (a server's Basic credentials)
         self.send_response(204 if CORS['on'] else 405)

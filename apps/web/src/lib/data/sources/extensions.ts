@@ -20,6 +20,9 @@
  * sources and `permissions`). A Manatan package is pinned by the index's SHA-256 like JS code and
  * runs with the manifest inside the pinned zip; one package can hold several sources, each its own
  * site. Manatan extensions run only with native fetch (desktop and Android apps).
+ * A Mihon/Tachiyomi repository is its index.pb (mihon-index.ts): each extension is a jar the
+ * desktop app downloads and pins (mihon.js), its sources run in the app's JVM host
+ * (mihon-runtime.ts); source ids are 64-bit decimal strings, as on Android later.
  */
 
 import { standalone } from '$lib/data/env';
@@ -32,6 +35,8 @@ import {
   type ExtensionSource,
   type ManatanSource
 } from './extension-runtime';
+import { readMihonIndex, type MihonEntry } from './mihon-index';
+import { mihonHost, openMihon } from './mihon-runtime';
 import { clean } from './sites/build';
 import * as kakuyomu from './sites/kakuyomu';
 import type { SiteDetails } from './sites/site';
@@ -45,6 +50,9 @@ export interface RepoRow {
   key: string;
   url: string;
   entries: ExtensionSource[];
+  /** A Mihon index.pb (else a JSON index) and its signing key (the Android host checks apks against it) */
+  format?: 'mihon';
+  signingKey?: string;
   /** When the index was last read (ms) */
   fetched: number;
 }
@@ -54,7 +62,7 @@ export interface ExtensionRow {
   /** The Mangayomi source id, or the Manatan package id */
   id: number | string;
   on: boolean;
-  /** The pinned code (JS, or a Manatan package's zip) and its SHA-256 (hex), from the index's version `version` */
+  /** The pinned code (JS, or a Manatan package's zip; '' for a Mihon jar, kept by the desktop app) and its SHA-256 (hex), from the index's version `version` */
   code: string | ArrayBuffer;
   sha256: string;
   version: string;
@@ -92,16 +100,25 @@ async function sha256(code: string | ArrayBuffer) {
 }
 
 /** The repository's entries; a SourceError on field `url` when it isn't one. */
-async function readIndex(url: string) {
+async function readIndex(url: string): Promise<Pick<RepoRow, 'entries' | 'format' | 'signingKey'>> {
   const host = httpsHost(url);
   if (!host) throw new SourceError('Use an address starting with https://.', 'url');
   let raw: unknown;
   try {
     const { body } = await sourceFetch(url, { hosts: new Set([host]) });
     const start = new Uint8Array(body.slice(0, 2));
-    // keiyoushi/Mihon publish index.min.json beside index.pb (gzip protobuf of APKs).
     if (/\.pb$/i.test(new URL(url).pathname) || (start[0] === 0x1f && start[1] === 0x8b)) {
-      throw new SourceError(mihonMessage, 'url');
+      const store = await readMihonIndex(body);
+      if (!store.entries.length) {
+        // shortcut: a store that keeps its list at another address (field 102) isn't followed.
+        throw new SourceError('No extensions in this index.pb.', 'url');
+      }
+      // A Mihon entry's sites live in its `sources`, not baseUrl (isMihon tells them apart).
+      return {
+        entries: store.entries as unknown as ExtensionSource[],
+        format: 'mihon',
+        signingKey: store.signingKey
+      };
     }
     raw = JSON.parse(new TextDecoder().decode(body));
   } catch (error) {
@@ -141,7 +158,7 @@ async function readIndex(url: string) {
     }
     throw new SourceError('Not an extension index (no entries with name, id and baseUrl).', 'url');
   }
-  return entries;
+  return { entries };
 }
 
 /** A repository's name in site ids and identifiers: 12 hex of the SHA-256 of its index address. */
@@ -149,8 +166,7 @@ export async function repoKey(url: string) {
   return (await sha256(new URL(url).href)).slice(0, 12);
 }
 
-const mihonMessage =
-  'These are Mihon/Tachiyomi extensions (Android apps): they run on a Suwayomi server. Add the repository there, then add that server under Add a source → Suwayomi.';
+const mihonMessage = 'This is an old Mihon/Tachiyomi index: add index.pb from the same folder.';
 
 /** `ext:<repo key>:<source id>` → its parts; the id stays a string (Manatan ids are names). */
 function siteParts(site: string) {
@@ -161,6 +177,10 @@ function siteParts(site: string) {
 const extSite = (repo: RepoRow, sourceId: number | string) => `ext:${repo.key}:${sourceId}`;
 
 const isManatan = (entry: Record<string, unknown>) => entry.extensionType === 'manatan2';
+const isMihon = (entry: Record<string, unknown>): entry is MihonEntry =>
+  entry.extensionType === 'mihon';
+/** The extensions-lib versions the host runs (Mihon's ExtensionLoader takes 1.4-1.6 too). */
+const MIHON_LIBS = new Set(['1.4', '1.5', '1.6']);
 /** The server's identifier check takes source ids of this shape (service.py EXT_IDENTIFIER). */
 const MANATAN_ID = /^[a-z0-9-]{1,40}$/;
 
@@ -188,8 +208,21 @@ const entryFor = (repo: RepoRow, sourceId: string) =>
   repo.entries.find((e) =>
     isManatan(e)
       ? manatanSources(e).some((source) => source.id === sourceId)
-      : String(e.id) === sourceId
+      : isMihon(e)
+        ? e.sources.some((source) => source.id === sourceId)
+        : String(e.id) === sourceId
   );
+
+function mihonVerdict(entry: MihonEntry): Pick<SourceRepoExtension, 'off' | 'tag'> {
+  const tag = entry.contentWarning === 3 ? '18+' : '';
+  if (!MIHON_LIBS.has(entry.lib)) return { off: 'Made for another Mihon version.', tag };
+  if (entry.sources.length && entry.sources.every((s) => BUILT_IN.has(httpsHost(s.baseUrl)))) {
+    return { off: 'The built-in source is used instead.', tag: 'Built in' };
+  }
+  if (!entry.sources.length) return { off: 'No source this app can run.', tag };
+  if (!httpsHost(entry.jarUrl)) return { off: 'The index gives no desktop (jar) build.', tag };
+  return { off: '', tag };
+}
 
 function manatanVerdict(entry: ExtensionSource): Pick<SourceRepoExtension, 'off' | 'tag'> {
   const manifest = manifestOf(entry);
@@ -215,6 +248,7 @@ function manatanVerdict(entry: ExtensionSource): Pick<SourceRepoExtension, 'off'
 /** Why the app won't run the entry ('' = it can), and its tag. */
 function verdict(entry: ExtensionSource): Pick<SourceRepoExtension, 'off' | 'tag'> {
   if (isManatan(entry)) return manatanVerdict(entry);
+  if (isMihon(entry)) return mihonVerdict(entry);
   if (entry.sourceCodeLanguage !== 1) {
     return { off: 'Dart extension: can’t run in a browser.', tag: 'Dart' };
   }
@@ -229,26 +263,34 @@ function verdict(entry: ExtensionSource): Pick<SourceRepoExtension, 'off' | 'tag
 
 /** Manga and novels only: anime (itemType 1) and video aren't listed. */
 const listed = (entry: ExtensionSource) =>
-  isManatan(entry)
+  isMihon(entry) ||
+  (isManatan(entry)
     ? entry.contentType === 'manga' || entry.contentType === 'novel'
-    : entry.itemType === 0 || entry.itemType === 2;
+    : entry.itemType === 0 || entry.itemType === 2);
 
+/** Mihon extensions are manga (keiyoushi has no novels). */
 const kindOf = (entry: ExtensionSource) =>
-  (isManatan(entry) ? entry.contentType === 'manga' : entry.itemType === 0) ? 'manga' : 'novel';
+  isMihon(entry) || (isManatan(entry) ? entry.contentType === 'manga' : entry.itemType === 0)
+    ? 'manga'
+    : 'novel';
 
 function view(repo: RepoRow | undefined, entry: ExtensionSource, row?: ExtensionRow) {
   const id = entry.id as number | string;
-  const first = isManatan(entry) ? manatanSources(entry)[0]?.id : id;
+  const first = isManatan(entry)
+    ? manatanSources(entry)[0]?.id
+    : isMihon(entry)
+      ? entry.sources[0]?.id
+      : id;
   return {
     id,
     site: repo && first !== undefined ? extSite(repo, first) : '',
     name: entry.name,
     lang: text(entry.lang),
     kind: kindOf(entry),
-    appOnly: isManatan(entry),
+    appOnly: isManatan(entry) || isMihon(entry),
     version: row?.version || text(entry.version),
     available: text(entry.version),
-    installed: !!row?.code,
+    installed: !!row?.sha256,
     on: !!row?.on,
     ...verdict(entry)
   } satisfies SourceRepoExtension;
@@ -274,13 +316,20 @@ function repoJson(repo: RepoRow, rows: ExtensionRow[], error = ''): SourceRepo {
 
 /** The repository's extensions as Add a source lists them, without saving anything. */
 export async function lookUpRepo(url: string) {
-  const entries = await readIndex(url.trim());
+  const { entries } = await readIndex(url.trim());
   return { url: url.trim(), extensions: entries.filter(listed).map((e) => view(undefined, e)) };
 }
 
 /** Fetches the entry's code and pins it (a Manatan package: only if it matches the index). */
 async function install(repo: RepoRow, entry: ExtensionSource, on: boolean): Promise<ExtensionRow> {
   if (verdict(entry).off) throw new SourceError(`${entry.name}: ${verdict(entry).off}`);
+  if (isMihon(entry)) {
+    const host = mihonHost();
+    if (!host) throw new NeedsAppError(httpsHost(repo.url));
+    // The desktop app downloads the jar and keeps it under its SHA-256 (the pin); trust on first use.
+    const { sha256: pin } = await host.install(entry.jarUrl);
+    return { repo: repo.id, id: entry.id, on, code: '', sha256: pin, version: entry.version };
+  }
   if (isManatan(entry) && !nativeFetch()) throw new NeedsAppError(httpsHost(repo.url));
   const url = isManatan(entry)
     ? new URL(text(entry.packageUrl), repo.url).href
@@ -313,9 +362,10 @@ export async function addRepo(url: string, on: (number | string)[]) {
   if ((await db.all<RepoRow>('repos')).some((r) => r.url === url)) {
     throw new SourceError('This repository is already added.', 'url');
   }
-  const entries = await readIndex(url);
+  const index = await readIndex(url);
+  const { entries } = index;
   // Code first, so a failed install leaves nothing half-saved.
-  const draft: RepoRow = { id: 0, key: await repoKey(url), url, entries, fetched: Date.now() };
+  const draft: RepoRow = { id: 0, key: await repoKey(url), url, ...index, fetched: Date.now() };
   const picked = entries.filter((e) => on.includes(e.id as number | string) && listed(e));
   const rows = [];
   for (const entry of picked) rows.push(await install(draft, entry, true));
@@ -346,13 +396,15 @@ async function siteRepo(site: string) {
 const sitesOf = (repo: RepoRow, entry: ExtensionSource) =>
   isManatan(entry)
     ? manatanSources(entry).map((source) => extSite(repo, source.id))
-    : [extSite(repo, entry.id as number)];
+    : isMihon(entry)
+      ? entry.sources.map((source) => extSite(repo, source.id))
+      : [extSite(repo, entry.id as number)];
 
 /** The index again when it is older than 10 min; a failure keeps the last one. */
 async function fresh(repo: RepoRow, force = false): Promise<[RepoRow, string]> {
   if (!force && Date.now() - repo.fetched < INDEX_MS) return [repo, ''];
   try {
-    const updated = { ...repo, entries: await readIndex(repo.url), fetched: Date.now() };
+    const updated = { ...repo, ...(await readIndex(repo.url)), fetched: Date.now() };
     await (await store()).put('repos', updated);
     return [updated, ''];
   } catch (error) {
@@ -383,7 +435,7 @@ export async function setExtension(repoId: number, id: number | string, on: bool
   const row = await db.one<ExtensionRow>('extensions', [repoId, id]);
   const entry = repo.entries.find((e) => e.id === id);
   if (!entry) throw new SourceError('The repository no longer lists this extension');
-  if (row?.code) await db.put('extensions', { ...row, on });
+  if (row?.sha256) await db.put('extensions', { ...row, on });
   else if (on) await db.put('extensions', await install(repo, entry, true));
   if (!on) sitesOf(repo, entry).forEach(closeSite);
   return getRepo(repoId);
@@ -433,6 +485,16 @@ export async function extensionSites() {
         for (const source of manatanSources(entry)) {
           const kind = source.contentType as 'manga' | 'novel';
           sites.push({ site: extSite(repo, source.id), name: source.name, kind, repo: repo.url });
+        }
+      } else if (isMihon(entry)) {
+        for (const source of entry.sources) {
+          const name = entry.sources.length > 1 ? `${source.name} (${source.lang})` : source.name;
+          sites.push({
+            site: extSite(repo, source.id),
+            name,
+            kind: 'manga' as const,
+            repo: repo.url
+          });
         }
       } else {
         sites.push({ site: shown.site, name: shown.name, kind: shown.kind, repo: repo.url });
@@ -488,9 +550,14 @@ async function unpack(zip: ArrayBuffer, entry: ExtensionSource, sourceId: string
 async function start(site: string) {
   const { repo, sourceId, entry } = await siteRepo(site);
   const db = await store();
-  const row = entry && (await db.one<ExtensionRow>('extensions', [repo.id, entry.id as number]));
-  if (!row?.code || !entry) throw new SourceError(notInstalledMessage);
+  const row = entry && (await db.one<ExtensionRow>('extensions', [repo.id, entry.id as string]));
+  if (!row?.sha256 || !entry) throw new SourceError(notInstalledMessage);
   if (!row.on) throw new SourceError('This extension is switched off (Sources → Repositories)');
+  if (isMihon(entry)) {
+    // The desktop app re-hashes the jar against the pin before it loads it.
+    if (!mihonHost()) throw new NeedsAppError(httpsHost(repo.url));
+    return openMihon(row.sha256, sourceId);
+  }
   if ((await sha256(row.code)) !== row.sha256) {
     throw new SourceError('This extension’s stored code is damaged: tap Update in its repository');
   }
@@ -535,6 +602,10 @@ export async function siteName(site: string) {
     const source = manatanSources(entry).find((s) => s.id === sourceId)!;
     const kind = source.contentType as 'manga' | 'novel';
     return { name: source.name, domain: httpsHost((source as { baseUrl?: string }).baseUrl), kind };
+  }
+  if (isMihon(entry)) {
+    const source = entry.sources.find((s) => s.id === sourceId)!;
+    return { name: source.name, domain: httpsHost(source.baseUrl), kind: 'manga' as const };
   }
   return { name: entry.name, domain: httpsHost(entry.baseUrl), kind: view(repo, entry).kind };
 }

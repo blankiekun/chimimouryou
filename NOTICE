@@ -100,3 +100,17 @@ GPL-3.0-or-later.
 The ち icon (apps/web/static/ icons, favicons and the header logo) is drawn
 from the glyph in Noto Sans CJK JP Bold, Copyright 2014-2021 Adobe
 (http://www.adobe.com/), licensed under the SIL Open Font License 1.1.
+
+The Mihon extension host (apps/mihon-host/) includes code from Mihon
+(https://github.com/mihonapp/mihon), Copyright (c) 2015 Javier Tomás and the
+Mihon contributors, licensed under the Apache License 2.0 (see
+apps/mihon-host/core/LICENSE-mihon): the source-api and network classes in
+core/src/main/kotlin/eu/kanade/tachiyomi/, modified (RxJava removed). Its
+android-compat module includes code from Suwayomi's AndroidCompat
+(https://github.com/Suwayomi/Suwayomi-Server), Copyright (C) Contributors to the
+Suwayomi project, licensed under the Mozilla Public License 2.0 (see
+apps/mihon-host/android-compat/LICENSE-MPL-2.0): android/graphics/Bitmap.java,
+BitmapFactory.java, Canvas.java, Rect.java and androidx/preference/*.java, which
+stay under the MPL 2.0 file by file (modifications included); their source is
+this repository. android/util/Base64.java and android/content/SharedPreferences.java
+are from the Android Open Source Project, licensed under the Apache License 2.0.
