@@ -29,6 +29,16 @@ def parse_cors_origins(value: str) -> set[str]:
     return {origin for origin in value.split() if re.fullmatch(CORS_ORIGIN_RE, origin)}
 
 
+# Our own apps may always connect (the Android app's WebView, the desktop app's local server); same list
+# in render-nginx.sh. CORS_ORIGINS adds sites (a standalone build at its own address).
+APP_ORIGINS = frozenset({'https://chimimouryou.localhost', 'http://127.0.0.1:41917'})
+
+
+def cors_origins(value: str) -> set[str]:
+    """CORS_ORIGINS plus our own apps' origins."""
+    return parse_cors_origins(value) | APP_ORIGINS
+
+
 def from_nginx(headers, token_file: str) -> bool:
     """Whether the request carries nginx's internal token (none configured: refuse everything)."""
     try:

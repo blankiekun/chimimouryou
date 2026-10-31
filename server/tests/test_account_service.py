@@ -597,8 +597,9 @@ class AccountServiceTest(unittest.TestCase):
         self.assertEqual(status(None, 'series', True, 'GET', True, cross_origin=True), 401)
         self.assertEqual(status({'is_admin': 1, 'permissions': ''}, 'admin', False, 'GET', False,
                                 cross_origin=True), 403)
-        # Off without CORS_ORIGINS: nothing changes for servers that don't opt in.
-        self.assertFalse(service.is_cross_origin({'Origin': self.APP, 'Host': 'books.example', 'X-Forwarded-Proto': 'https'}))
+        # Never off: our own apps are always listed (httpbase.APP_ORIGINS), so another origin is always
+        # cross-origin and never gets the trusted-network pass.
+        self.assertTrue(service.is_cross_origin({'Origin': self.APP, 'Host': 'books.example', 'X-Forwarded-Proto': 'https'}))
         call = self.serve()
         headers = {'X_Original_Method': 'PUT', 'X_Trusted_Network': '1',
                    'X_Original_URI': '/calibre/sync/x/progress_1.json'}
