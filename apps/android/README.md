@@ -14,7 +14,7 @@ APK installs over the old one and keeps its books, as long as it is signed with 
 
 There is no self-updater: install the next release's APK the same way.
 
-CI builds a debug APK when `apps/android` (or the lockfile, the workflows, `android-drive.ts`, `native-save.ts`)
+CI builds a debug APK when `apps/android` (or the lockfile, the workflows, `android-drive.ts`, `android-bars.ts`, `native-save.ts`)
 changes: the run's Summary → Artifacts → `chimimouryou-debug-apk` (a zip holding `app-debug.apk`).
 It is signed with a debug key, so it can't update a release install (uninstall first, which
 deletes the app's books), and Drive sign-in works only once that key is registered (step 4 below).
@@ -46,6 +46,13 @@ cd android && ./gradlew assembleDebug    # android/app/build/outputs/apk/debug/a
 - Safe areas: on targetSdk 36 the app is drawn edge to edge. The page has no `viewport-fit=cover`,
   so Capacitor's SystemBars pads the WebView by the status and navigation bars: the top bar and the
   phone tab bar sit between them.
+- Immersive readers: `/b`, `/m` and `/v` hide the status and navigation bars
+  (`apps/web/src/lib/data/standalone/android-bars.ts`, from the root layout on every route change,
+  through Capacitor's built-in SystemBars `hide`/`show`; again when the app comes back from the
+  background). `MainActivity.java` sets `BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`, so a swipe from
+  the edge shows them for a moment over the page. Hidden bars have no insets, so SystemBars' padding
+  drops to the display cutout alone: nothing under a notch, no gap where the bars were. Other pages
+  (`/hook` too: it is a desktop texthooker page with its own header) keep the bars.
 - `<input type=file>` opens Android's file picker (Capacitor's `BridgeWebChromeClient`); links to
   other sites, `window.open` included, open in the browser (`Bridge.launchIntent`).
 - CapacitorHttp's global `fetch` patch is off (the default): it breaks streaming and abort. Sources

@@ -9,6 +9,7 @@
   import { basePath, clearConsoleOnReload, pagePath, standalone } from '$lib/data/env';
   import { watchInstall } from '$lib/data/standalone/install-app';
   import { catchDownloads } from '$lib/data/standalone/native-save';
+  import { barsForRoute } from '$lib/data/standalone/android-bars';
   import { watchYomitan } from '$lib/data/dictionary/yomitan';
   import { hasDeviceFollows } from '$lib/data/sources/sources-settings';
   import { dialogManager, type Dialog } from '$lib/data/dialog-manager';
@@ -63,6 +64,8 @@
     cancel();
     window.location.assign(to.url.href);
   });
+
+  $: if (browser) barsForRoute($page.route.id);
 
   $: if (browser) {
     isMobile$.next(isMobile(window));
