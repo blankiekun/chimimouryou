@@ -60,6 +60,9 @@ describe('/b Back after a Contents jump returns to the page before it', () => {
 
         nextChapter$.next('ttu-ch3');
         await waitOnScreen('p-3-1');
+        // Back comes with the reader bar (owner s63): hidden until the top strip shows the bar.
+        expect(backButton()).toBeNull();
+        document.querySelector<HTMLElement>('button.fixed.inset-x-0.top-0')!.click();
         await vi.waitFor(() => expect(backButton()).toBeTruthy());
         if (view === ViewMode.Paginated) {
           await settle(); // over autoBookmarkTime

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { faRotateLeft, faXmark } from '@fortawesome/free-solid-svg-icons';
   import Fa from 'svelte-fa';
+  import { fade } from 'svelte/transition';
   import { t$ } from '$lib/i18n';
 
   /** Shown after a jump: returns to the place before it. */
@@ -14,7 +15,11 @@
   let { room, onback, ondismiss }: Props = $props();
 </script>
 
-<div class="jump-back writing-horizontal-tb" style:bottom={room ? `${room + 8}px` : undefined}>
+<div
+  class="jump-back writing-horizontal-tb"
+  transition:fade|global={{ duration: 150 }}
+  style:bottom={room ? `${room + 8}px` : undefined}
+>
   <button class="jump-back-go" aria-label={$t$('reader.jumpBackLabel')} onclick={onback}>
     <Fa icon={faRotateLeft} />
     {$t$('reader.jumpBack')}

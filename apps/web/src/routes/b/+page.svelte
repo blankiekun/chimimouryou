@@ -2253,7 +2253,8 @@
   <MiniPlayer {panelOpen} onopen={() => openPanel('listen')} bind:room={miniPlayerRoom} />
 {/if}
 
-{#if $jumpBackOrigin$ !== undefined}
+<!-- Back comes and goes with the reader bar, like the rest of the chrome. -->
+{#if $jumpBackOrigin$ !== undefined && (showHeader || panelOpen)}
   <JumpBackButton
     room={miniPlayerRoom && !(panelOpen && panelTab === 'listen') ? miniPlayerRoom : 0}
     onback={() => jumpBack.back()}
