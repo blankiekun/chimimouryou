@@ -13,7 +13,7 @@
  * it keeps its id and with it the reader's place (database.upsertData). Jobs run one at a time
  * while the app is open; followed works are checked every `Check every` hours (Settings → Sources),
  * on Wi-Fi only when that is on and the browser can tell. Follows are shared as sources.json in the
- * reader's sync folder, each run by the device that made it (Sync, below).
+ * reader's sync folder, each run by the device that made it (sources-sync.ts).
  */
 
 import { browser } from '$app/env';
@@ -27,10 +27,6 @@ import loadEpub from '$lib/functions/file-loaders/epub/load-epub';
 import loadCbz from '$lib/functions/file-loaders/cbz/load-cbz';
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
-import type { SyncFileStore } from '$lib/data/storage/handler/base-handler';
-import { readerStore } from '$lib/data/sync/extras-sync';
-import { syncJsonFile } from '$lib/data/sync/sync-files';
-import { logger } from '$lib/data/logger';
 import { cbz, epub, plan, VOLUME_SIZE } from './sites/build';
 import * as kakuyomu from './sites/kakuyomu';
 import * as opds from './sites/opds';
@@ -44,19 +40,18 @@ import {
   sourcesCheckHours$,
   sourcesWifiOnly$
 } from './sources-settings';
-import { FetchError, NeedsAppError, nativeFetch, pacing, sourceFetch } from './transport';
+import { pullSources, SHARED_FRESH_MS, syncSources } from './sources-sync';
+import { NeedsAppError, nativeFetch, pacing, sourceFetch } from './transport';
 import {
   SourceError,
   type SourceFollow,
   type SourceJob,
   type SourceExtensionFeed,
   type SourceSearch,
-  type SourceServer,
-  type SourceServerFeed,
   type SourceWork
 } from './types';
 
-const SITES = { syosetu, kakuyomu };
+export const SITES = { syosetu, kakuyomu };
 const MANGA_VOLUME_SIZE = 10;
 const DETAILS_MS = 10 * 60 * 1000;
 const RETRY_MS = 3600 * 1000;
@@ -68,7 +63,7 @@ const CHAPTER_BYTES = 30_000;
 const PAGE_BYTES = 400_000;
 const FILE_BYTES = 60_000_000;
 
-interface WorkRow {
+export interface WorkRow {
   id: number;
   site: string;
   workKey: string;
@@ -118,7 +113,7 @@ interface FollowRow {
 }
 
 /** A follow in sources.json; unfollows stay as `deleted`, so another device's copy can't revive it. */
-interface SharedFollow {
+export interface SharedFollow {
   key: string;
   site: string;
   siteName: string;
@@ -133,7 +128,7 @@ interface SharedFollow {
   deleted?: boolean;
 }
 
-type ServerRow = opds.ServerRow & { deleted?: boolean };
+export type ServerRow = opds.ServerRow & { deleted?: boolean };
 
 type Chapter =
   | { title: string; html: string; item?: string }
@@ -154,7 +149,7 @@ interface Stores {
 
 let opened: Promise<IDBPDatabase> | undefined;
 
-function db() {
+export function db() {
   opened ??= openDB('chimi-sources', 3, {
     upgrade(base, version) {
       if (version < 1) {
@@ -224,19 +219,22 @@ async function keyRepos(base: IDBPDatabase) {
   }
 }
 
-const all = async <K extends keyof Stores>(store: K) =>
+export const all = async <K extends keyof Stores>(store: K) =>
   (await (await db()).getAll(store)) as Stores[K][];
-const one = async <K extends keyof Stores>(store: K, key: IDBValidKey) =>
+export const one = async <K extends keyof Stores>(store: K, key: IDBValidKey) =>
   (await (await db()).get(store, key)) as Stores[K] | undefined;
-const put = async <K extends keyof Stores>(store: K, value: Omit<Stores[K], 'id'> | Stores[K]) =>
-  (await db()).put(store, value);
-const remove = async (store: keyof Stores, key: IDBValidKey) => (await db()).delete(store, key);
+export const put = async <K extends keyof Stores>(
+  store: K,
+  value: Omit<Stores[K], 'id'> | Stores[K]
+) => (await db()).put(store, value);
+export const remove = async (store: keyof Stores, key: IDBValidKey) =>
+  (await db()).delete(store, key);
 
 /** extensions.ts reads and writes its two stores through these. */
 export const extensionStore = { all, one, put, remove };
 
 const extensions = () => import('./extensions');
-const isExtension = (site: string) => site.startsWith('ext:');
+export const isExtension = (site: string) => site.startsWith('ext:');
 
 // Sites ---------------------------------------------------------------------------------------
 
@@ -251,7 +249,7 @@ interface Source {
   chapter(url: string, n: number, details: SiteDetails): Promise<Chapter>;
 }
 
-async function source(site: string): Promise<Source> {
+export async function source(site: string): Promise<Source> {
   if (site in SITES) {
     const adapter = SITES[site as keyof typeof SITES];
     return {
@@ -355,7 +353,7 @@ async function workRow(id: number) {
   return work;
 }
 
-async function workFor(site: string, workKey: string, url: string) {
+export async function workFor(site: string, workKey: string, url: string) {
   const found = (await (await db()).getFromIndex('works', 'key', [site, workKey])) as
     | WorkRow
     | undefined;
@@ -474,7 +472,7 @@ export async function resolveWork(site: string, workKey: string) {
 
 // Search and covers ---------------------------------------------------------------------------
 
-async function marks(site: string, keys: string[]) {
+export async function marks(site: string, keys: string[]) {
   const works = (await all('works')).filter((w) => w.site === site && keys.includes(w.workKey));
   const follows = new Set((await all('follows')).map((f) => f.work));
   const volumes = await all('volumes');
@@ -842,7 +840,7 @@ export async function unfollowShared(key: string) {
 }
 
 /** Server edition: whether the root layout starts the timer (only extension works follow here). */
-async function markDeviceFollows() {
+export async function markDeviceFollows() {
   const any = (await all('follows')).some(runsHere);
   try {
     if (any) localStorage.setItem(DEVICE_FOLLOWS, '1');
@@ -939,145 +937,6 @@ async function followResult(workId: number, state: SourceFollow['state'], detail
     lastCheck: now,
     nextCheck: now + (state === 'failed' ? RETRY_MS : sourcesCheckHours$.getValue() * 3600 * 1000)
   });
-}
-
-// Servers -------------------------------------------------------------------------------------
-
-const serverJson = (row: ServerRow): SourceServer => ({
-  id: row.id,
-  type: row.type,
-  name: row.name,
-  url: row.url,
-  user: row.user,
-  hasPassword: !!row.password
-});
-
-export async function listServers() {
-  return {
-    servers: (await all('servers')).filter((s) => !s.deleted).map(serverJson)
-  };
-}
-
-export async function addServer(input: {
-  type: 'opds' | 'suwayomi';
-  url: string;
-  name: string;
-  user: string;
-  password: string;
-}) {
-  if (!['opds', 'suwayomi'].includes(input.type)) throw new SourceError('Choose a type', 'type');
-  const url = input.url.trim();
-  if (!/^https?:\/\/[^/]+/.test(url)) {
-    throw new SourceError('Enter the address with http:// or https://', 'url');
-  }
-  const existing = (await all('servers')).find((s) => s.url === url);
-  if (existing && !existing.deleted) throw new SourceError('This source is already added', 'url');
-  const row = {
-    ...(existing && { id: existing.id }),
-    type: input.type,
-    url,
-    name: input.name.trim() || new URL(url).host,
-    user: input.user,
-    password: input.password
-  };
-  const server = new opds.Server({ id: 0, ...row });
-  let feed: opds.Feed;
-  try {
-    feed = await server.feed(server.root);
-  } catch (error) {
-    if (error instanceof NeedsAppError) {
-      throw new SourceError(
-        "This server doesn't let a browser read it (no CORS). The desktop app can.",
-        'url'
-      );
-    }
-    if (error instanceof FetchError && (error.status === 401 || error.status === 403)) {
-      throw new SourceError('The server refused this user name or password', 'password');
-    }
-    if (error instanceof opds.NotCatalog) {
-      throw new SourceError('The server answered, but not with an OPDS feed', 'url');
-    }
-    throw new SourceError(error instanceof Error ? error.message : String(error), 'url');
-  }
-  const id = (await put('servers', row)) as number;
-  return {
-    server: serverJson((await one('servers', id))!),
-    tested: { title: feed.title, entries: feed.entries.length }
-  };
-}
-
-/** Removes the server; its follows and waiting jobs go, its volumes stay. */
-export async function removeServer(id: number) {
-  const row = await one('servers', id);
-  if (!row) throw new SourceError('No such source');
-  await put('servers', { ...row, password: '', deleted: true });
-  const works = new Set(
-    (await all('works')).filter((w) => w.site === `opds:${id}`).map((w) => w.id)
-  );
-  for (const follow of await all('follows')) {
-    if (!works.has(follow.work)) continue;
-    await remove('follows', follow.work);
-    await share(follow.work, follow);
-  }
-  for (const job of await all('jobs')) {
-    if (works.has(job.work) && job.state === 'queued') await remove('jobs', job.id);
-  }
-  return {};
-}
-
-/** href as a path on the server (what the page sends back as a section), or null. */
-function path(server: opds.Server, href: string | null) {
-  try {
-    return href ? opds.workKey('opds', server.url(href)) : null;
-  } catch {
-    return null;
-  }
-}
-
-export async function browseServer(id: number, section = '', q = ''): Promise<SourceServerFeed> {
-  const { server } = await source(`opds:${id}`);
-  if (!server) throw new SourceError('No such source');
-  const url = q ? await server.searchUrl(q) : section ? server.url(section) : server.root;
-  const feed = await server.feed(url);
-  const entries: SourceServerFeed['entries'] = [];
-  for (const entry of feed.entries) {
-    let kind: 'section' | 'work' | 'book';
-    let href: string | null = null;
-    if (opds.isItem(entry)) {
-      kind = 'book';
-    } else if (entry.nav && (href = path(server, entry.nav))) {
-      kind = entry.navKind === 'acquisition' ? 'work' : 'section';
-    } else {
-      continue;
-    }
-    const key = opds.workKey(server.row.type, server.url(href || url));
-    entries.push({
-      kind,
-      title: entry.title,
-      authors: entry.authors,
-      href,
-      workKey: kind === 'section' ? null : key,
-      cover: path(server, entry.cover),
-      inLibrary: false,
-      following: false
-    });
-  }
-  const marked = await marks(
-    `opds:${id}`,
-    entries.flatMap((e) => (e.workKey ? [e.workKey] : []))
-  );
-  return {
-    server: { id, name: server.row.name, type: server.row.type },
-    title: feed.title,
-    section: path(server, url) ?? '',
-    next: path(server, feed.next),
-    search: !!feed.search,
-    entries: entries.map((e) => ({
-      ...e,
-      inLibrary: !!(e.workKey && marked.get(e.workKey)?.inLibrary),
-      following: !!(e.workKey && marked.get(e.workKey)?.following)
-    }))
-  };
 }
 
 // The runner ----------------------------------------------------------------------------------
@@ -1447,15 +1306,12 @@ export function startLocalSources() {
   timer = setInterval(tick, 60 * 1000);
 }
 
-// Sync (sources.json) -----------------------------------------------------------------------------
+// Sync (sources.json, sources-sync.ts) ---------------------------------------------------------
 
-const SHARED_FRESH_MS = 60 * 1000;
-let sharedSyncedAt = 0;
 let sharedTimer: ReturnType<typeof setTimeout> | undefined;
-let sharedQueue = Promise.resolve();
 
 /** Random per browser or app install (like immersion-log's). */
-function deviceId() {
+export function deviceId() {
   try {
     let id = localStorage.getItem('sourcesDevice');
     if (!id) {
@@ -1514,17 +1370,10 @@ async function claim(workId: number) {
 }
 
 /** A server's number is this device's own, so its works are keyed by the device too. */
-const sharedKey = (device: string, site: string, workKey: string) =>
+export const sharedKey = (device: string, site: string, workKey: string) =>
   site.startsWith('opds:') ? `${device} ${site} ${workKey}` : `${site} ${workKey}`;
 
-/** The newer entry; on a tie the unfollow, so both devices end the same. */
-const newer = (a: SharedFollow, b?: SharedFollow) =>
-  !b || a.modified > b.modified || (a.modified === b.modified && !!a.deleted && !b.deleted);
-
-const sameShared = (a?: SharedFollow, b?: SharedFollow) =>
-  !!a && !!b && a.modified === b.modified && !!a.deleted === !!b.deleted && a.device === b.device;
-
-async function sharedEntry(work: WorkRow, follow: FollowRow, deleted = false) {
+export async function sharedEntry(work: WorkRow, follow: FollowRow, deleted = false) {
   const device = follow.device ?? deviceId();
   return {
     key: sharedKey(device, work.site, work.workKey),
@@ -1542,104 +1391,11 @@ async function sharedEntry(work: WorkRow, follow: FollowRow, deleted = false) {
 }
 
 /** Records a follow, pause or unfollow (`removed`: the follow that went) for sources.json. */
-async function share(workId: number, removed?: FollowRow) {
+export async function share(workId: number, removed?: FollowRow) {
   const work = await one('works', workId);
   const follow = removed ?? (await one('follows', workId));
   if (!work || !follow) return;
   await put('shared', await sharedEntry(work, follow, !!removed));
   clearTimeout(sharedTimer);
   sharedTimer = setTimeout(syncSources, 2000);
-}
-
-/** sources.json: malformed follows are dropped; undefined when `follows` isn't a list. */
-export function parseSourcesFile(raw: any): { follows: SharedFollow[] } | undefined {
-  if (!Array.isArray(raw?.follows)) return undefined;
-  return {
-    follows: raw.follows.filter(
-      (f: any) =>
-        ['key', 'site', 'workKey', 'url', 'title', 'device', 'deviceName'].every(
-          (field) => typeof f?.[field] === 'string'
-        ) && typeof f.modified === 'number'
-    )
-  };
-}
-
-/** Downloads unless synced within `fresh` ms. */
-function pullSources(fresh = SHARED_FRESH_MS) {
-  if (browser && Date.now() - sharedSyncedAt >= fresh) syncSources();
-}
-
-export function syncSources(): Promise<void> {
-  sharedQueue = sharedQueue.then(async () => {
-    try {
-      const store = await readerStore();
-      if (store) await syncSourcesWith(store);
-    } catch (error: any) {
-      logger.warn(`Sources sync failed: ${error.message}`);
-    }
-  });
-  return sharedQueue;
-}
-
-/**
- * Merges sources.json with this device's follows (the newer entry per work wins) and applies it:
- * another device's follows of the built-in sites are listed here and never checked here; its
- * server follows stay in the file only.
- */
-export async function syncSourcesWith(store: SyncFileStore) {
-  const me = deviceId();
-  // Follows from before sources.json, or never shared.
-  for (const follow of await all('follows')) {
-    const work = await one('works', follow.work);
-    if (work && !(await one('shared', sharedKey(follow.device ?? me, work.site, work.workKey)))) {
-      await put('shared', await sharedEntry(work, follow));
-    }
-  }
-  await syncJsonFile(store, 'sources.json', undefined, parseSourcesFile, async (file) => {
-    const remote = new Map((file?.follows ?? []).map((f) => [f.key, f]));
-    const merged = new Map((await all('shared')).map((f) => [f.key, f]));
-    for (const entry of remote.values()) {
-      if (newer(entry, merged.get(entry.key))) {
-        merged.set(entry.key, entry);
-        await put('shared', entry);
-      }
-    }
-    for (const entry of merged.values()) {
-      if (entry.site.startsWith('opds:') && entry.device !== me) continue;
-      // Built-in sites and extensions name a work alike on every device (a server's numbers don't).
-      const work =
-        (entry.site in SITES || isExtension(entry.site)) && !entry.deleted
-          ? await workFor(entry.site, entry.workKey, entry.url)
-          : ((await (await db()).getFromIndex('works', 'key', [entry.site, entry.workKey])) as
-              | WorkRow
-              | undefined);
-      if (!work) continue;
-      if (!work.title) await put('works', { ...work, title: entry.title });
-      const follow = await one('follows', work.id);
-      if (entry.deleted) {
-        if (follow && follow.modified <= entry.modified) await remove('follows', work.id);
-      } else if (!follow || follow.modified < entry.modified) {
-        const device = entry.device === me ? undefined : entry.device;
-        await put('follows', {
-          state: '',
-          detail: '',
-          lastCheck: null,
-          nextCheck: null,
-          ...follow,
-          // Taken over by another device (or released): this device's last result no longer applies.
-          ...(follow && follow.device !== device && { state: '', detail: '' }),
-          work: work.id,
-          paused: entry.paused,
-          modified: entry.modified,
-          device,
-          deviceName: entry.device === me ? undefined : entry.deviceName,
-          siteName: entry.siteName
-        });
-      }
-    }
-    await markDeviceFollows();
-    const changed = [...merged.values()].some((f) => !sameShared(f, remote.get(f.key)));
-    return changed ? { follows: [...merged.values()] } : undefined;
-  });
-  sharedSyncedAt = Date.now();
 }

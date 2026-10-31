@@ -16,7 +16,6 @@
   import SeriesGrid from '$lib/components/library/series-grid.svelte';
   import SeriesResults from '$lib/components/library/series-results.svelte';
   import {
-    addImportsToHome,
     addToHome,
     homeBookTitles$,
     homeRemovedTitles$,
@@ -53,29 +52,17 @@
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import ImportMenu from '$lib/components/library/import-menu.svelte';
   import SeriesDialog from '$lib/components/library/series-dialog.svelte';
-  import SeriesSuggestionsDialog from '$lib/components/library/series-suggestions-dialog.svelte';
   import BookExportDialog from '$lib/components/book-export/book-export-dialog.svelte';
   import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
-  import WindowsGameDialog from '$lib/components/vn/windows-game-dialog.svelte';
-  import NativeGameDialog from '$lib/components/vn/native-game-dialog.svelte';
   import { deleteWindowsGame, windowsGameFolder } from '$lib/data/vn/windows-game';
-  import type { LoadData } from '$lib/functions/file-loaders/types';
   import ExternalReadDialog from '$lib/components/external-read-dialog.svelte';
   import LogReportDialog from '$lib/components/log-report-dialog.svelte';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import { preFilteredTitlesForStatistics$ } from '$lib/components/statistics/statistics-types';
   import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
-  import { saveSeriesOverrides, seriesForTitle } from '$lib/data/library/series-overrides';
   import { account$, currentAccount, hasPermission } from '$lib/data/account/account';
-  import {
-    importServiceRunning,
-    isFinished,
-    removeFromCalibre,
-    uploadToCalibre,
-    waitForImportJobs,
-    type CalibreImportJob
-  } from '$lib/data/remote/calibre-import';
+  import { importServiceRunning, removeFromCalibre } from '$lib/data/remote/calibre-import';
   import { clearReadingProgress } from '$lib/functions/clear-reading-progress';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { pagePath, standalone } from '$lib/data/env';
@@ -95,26 +82,23 @@
   import { logger } from '$lib/data/logger';
   import type { SortOption } from '$lib/data/sort-types';
   import { ApiStorageHandler } from '$lib/data/storage/handler/api-handler';
-  import { ServerStorageHandler } from '$lib/data/storage/handler/server-handler';
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
-  import { asksBeforeVnUpload, StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
+  import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
+  import { vnsKeptOnDevice, formatBytes } from '$lib/data/vn/vn-upload';
   import {
-    vnsKeptOnDevice,
-    vnUploadQuestion,
-    vnFolders,
-    vnZipFiles,
-    zipVnFolder,
-    formatBytes,
-    type VnUpload
-  } from '$lib/data/vn/vn-upload';
-  import { importMokuroFiles } from '$lib/data/manga/mokuro';
+    askVnUpload,
+    onFilesChange as importFiles,
+    openInstalledGame,
+    openWindowsGame,
+    vnSizes,
+    type ImportPage
+  } from '$lib/data/library/import-files';
   import { storageSource$ } from '$lib/data/storage/storage-view';
   import {
     booklistSortOptions$,
     cacheStorageData$,
     confirmStatisticsDeletion$,
     database,
-    fileCountData$,
     hideExternalReadHint$,
     isOnline$,
     keepLocalStatisticsOnDeletion$,
@@ -133,7 +117,7 @@
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { keyBy } from '$lib/functions/key-by';
   import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
-  import { importBackup, importData, replicateData } from '$lib/functions/replication/replicator';
+  import { importBackup, replicateData } from '$lib/functions/replication/replicator';
   import { throwIfAborted } from '$lib/functions/replication/replication-error';
   import {
     replicationProgress$,
@@ -539,303 +523,19 @@
     goto(readerPath(bookId, route));
   }
 
-  async function onFilesChange(fileList: FileList | File[]) {
-    if (!operationAllowed()) {
-      return;
-    }
+  // The import flow (lib/data/library/import-files.ts) runs under this page's progress bar.
+  const importPage: ImportPage = {
+    operationAllowed,
+    initializeReplicationProgressData,
+    resetProgress,
+    showError,
+    setCancelTooltip: (tooltip) => (cancelTooltip = tooltip),
+    cancelSignal: () => cancelSignal,
+    bookCards: () => $bookCards$
+  };
 
-    cancelTooltip = `Cancels the current Import\nAlready imported data will not be deleted`;
-
-    initializeReplicationProgressData();
-
-    const supportedExtRegex = /\.(?:htmlz|epub|txt|cbz|zip)$/;
-    // Unpacked game folders become one visual novel each, like a ZIP of them.
-    const { games, rest } = vnFolders(Array.from(fileList));
-    const files = rest.filter((f) => supportedExtRegex.test(f.name));
-    // A .mokuro beside its CBZ is that manga's text (mokuro.ts).
-    const mokuroFiles = rest.filter((f) => /\.mokuro$/i.test(f.name));
-    const errorTitle = 'Bookimport failed';
-
-    if (!files.length && !games.length) {
-      resetProgress();
-
-      showError(errorTitle, 'File(s) must be HTMLZ, TXT, EPUB, CBZ or ZIP', '');
-      return;
-    }
-
-    if ($storageSource$ === StorageKey.CALIBRE) {
-      await addFilesToCalibre([...files, ...(await Promise.all(games.map(zipVnFolder)))]);
-      return;
-    }
-
-    const importedTitles: string[] = [];
-    const keepOnDevice = asksBeforeVnUpload($storageSource$)
-      ? await vnsKeptOnDevice(
-          $storageSource$,
-          [...(await vnZipFiles(files)), ...games].map(({ name, size }) => ({ name, size })),
-          askVnUpload
-        )
-      : undefined;
-
-    const error = await importData(
-      document,
-      getStorageHandler(
-        window,
-        $storageSource$,
-        '',
-        $storageSource$ === StorageKey.BROWSER,
-        $cacheStorageData$,
-        $replicationSaveBehavior$,
-        $statisticsMergeMode$,
-        $readingGoalsMergeMode$
-      ),
-      [...files, ...games],
-      cancelSignal,
-      $fileCountData$,
-      importedTitles,
-      keepOnDevice
-    ).catch((catchedError) => catchedError.message);
-    const textError = mokuroFiles.length
-      ? await importMokuroFiles(mokuroFiles, importedTitles)
-      : '';
-
-    addImportsToHome(importedTitles);
-    resetProgress();
-
-    if (textError && !error) showError(errorTitle, textError, textError);
-    if (error) {
-      showError(errorTitle, error, 'Error(s) occurred during bookimport');
-    }
-  }
-
-  /** Import → Windows game: the dialog copies the folder, this adds the game to the library. */
-  function openWindowsGame() {
-    dialogManager.dialogs$.next([
-      {
-        component: WindowsGameDialog as any,
-        props: { save: saveWindowsGame },
-        disableCloseOnClick: true
-      }
-    ]);
-  }
-
-  /** Import → Installed game (desktop app): a game installed here, played natively. */
-  function openInstalledGame() {
-    dialogManager.dialogs$.next([
-      {
-        component: NativeGameDialog as any,
-        props: { save: saveWindowsGame },
-        disableCloseOnClick: true
-      }
-    ]);
-  }
-
-  /**
-   * A Windows game is only ever in this browser: under a cloud or Calibre source it is kept on
-   * this device like a visual novel kept off the cloud (ApiStorageHandler.keepOnDevice).
-   */
-  async function saveWindowsGame(book: LoadData) {
-    const handler = getStorageHandler(window, $storageSource$, '');
-
-    if (handler instanceof ApiStorageHandler || handler instanceof ServerStorageHandler) {
-      await handler.keepOnDevice(book);
-    } else {
-      await getStorageHandler(
-        window,
-        StorageKey.BROWSER,
-        undefined,
-        true,
-        $cacheStorageData$,
-        $replicationSaveBehavior$
-      ).saveBook(book, false, false);
-    }
-
-    addImportsToHome([book.title]);
-    database.dataListChanged$.next(handler);
-  }
-
-  /** Asks whether visual novels go up to a cloud provider; true = upload (vn-upload.ts). */
-  function askVnUpload(games: VnUpload[], target: StorageKey) {
-    return new Promise<boolean>((resolve) => {
-      dialogManager.dialogs$.next([
-        {
-          component: ConfirmDialog,
-          props: {
-            ...vnUploadQuestion(games, target),
-            confirmLabel: 'Upload',
-            cancelLabel: 'Keep on this device',
-            resolver: (wasCanceled: boolean) => resolve(!wasCanceled)
-          },
-          disableCloseOnClick: true
-        }
-      ]);
-    });
-  }
-
-  /** The selected visual novels' sizes, from this browser's copies */
-  async function vnSizes(titles: string[]) {
-    return Promise.all(
-      titles.map(async (name) => {
-        const data = await database.getDataByTitle(name);
-
-        return {
-          name,
-          size: Object.values(data ? await database.getBlobs(data) : {}).reduce(
-            (sum, blob) => sum + blob.size,
-            0
-          )
-        };
-      })
-    );
-  }
-
-  /**
-   * Not part of upstream: under the Calibre source, imported files are added to the Calibre
-   * library by the server's import queue (data/remote/calibre-import.ts), which skips books
-   * already there. The library is refreshed once they are in the catalog.
-   */
-  async function addFilesToCalibre(files: File[]) {
-    if (!hasPermission(currentAccount(), 'import')) {
-      resetProgress();
-      showError(
-        'Adding to Calibre failed',
-        currentAccount()
-          ? 'This account may not add books to Calibre. Ask an admin for the "Add books" permission.'
-          : 'Sign in (Settings → Account, on the HTTPS address) to add books to Calibre',
-        ''
-      );
-      return;
-    }
-
-    cancelTooltip = 'Stops uploading\nBooks already uploaded are still added to Calibre';
-    replicationProgress$.next({ progressBase: 1, maxProgress: files.length * 2 });
-
-    const ids: string[] = [];
-    const failures: string[] = [];
-    let jobs: CalibreImportJob[] = [];
-
-    for (const file of files) {
-      if (cancelSignal.aborted) {
-        break;
-      }
-
-      try {
-        ids.push((await uploadToCalibre(file, cancelSignal)).id);
-      } catch (error: any) {
-        if (error.name === 'AbortError') {
-          break;
-        }
-        failures.push(error.message);
-        // The import service isn't running: the other files would only repeat it.
-        if (error.status === 502) {
-          break;
-        }
-      }
-
-      replicationProgress$.next({ progressToAdd: 1 });
-    }
-
-    if (ids.length) {
-      let finished = 0;
-
-      try {
-        jobs = await waitForImportJobs(ids, (current) => {
-          const now = current.filter(isFinished).length;
-
-          replicationProgress$.next({ progressToAdd: now - finished });
-          finished = now;
-        });
-      } catch (error: any) {
-        failures.push(error.message);
-      }
-    }
-
-    resetProgress();
-
-    const added = jobs.filter((job) => job.state === 'added');
-    const duplicates = jobs.filter((job) => job.state === 'duplicate');
-
-    jobs
-      .filter((job) => job.state === 'failed')
-      .forEach((job) => failures.push(`${job.name}: ${job.error}`));
-
-    let books = $bookCards$ ?? [];
-
-    if (added.length) {
-      const handler = getStorageHandler(window, $storageSource$, '');
-
-      handler.clearData();
-
-      try {
-        books = await handler.getBookList();
-      } catch (error: any) {
-        failures.push(error.message);
-      }
-      database.dataListChanged$.next(handler);
-    }
-
-    const addedCards = added.flatMap((job) => {
-      // Games unpacked into the visual novel folder have no Calibre id.
-      const card =
-        job.calibreId !== undefined && books.find((book) => book.calibreId === job.calibreId);
-
-      return card ? [card] : [];
-    });
-    const newTitles = addedCards.filter((card) => !card.series).map((card) => card.title);
-
-    addImportsToHome(addedCards.map((card) => card.title));
-
-    await offerSeriesForImports(books, newTitles);
-
-    if (failures.length || duplicates.length) {
-      const summary = [
-        added.length ? `Added ${pluralize(added.length, 'book')}.` : '',
-        duplicates.length
-          ? `Already in Calibre: ${duplicates.map((job) => job.name).join(', ')}.`
-          : '',
-        failures.length ? `Failed: ${failures.join(', ')}` : ''
-      ]
-        .filter(Boolean)
-        .join(' ');
-
-      logger.warn(summary);
-      dialogManager.dialogs$.next([
-        { component: MessageDialog, props: { title: 'Adding to Calibre', message: summary } }
-      ]);
-    }
-  }
-
-  /** Asks to add each imported book to the existing series its title names, if any. */
-  async function offerSeriesForImports(libraryBooks: BookCardProps[], titles: string[]) {
-    const suggestions = titles
-      .map((title) => ({ title, series: seriesForTitle(libraryBooks, title) }))
-      .filter((suggestion) => suggestion.series);
-
-    if (!suggestions.length) {
-      return;
-    }
-
-    // One dialog for the whole import, not one per book.
-    const changes = await new Promise<Record<string, string>>((resolver) => {
-      dialogManager.dialogs$.next([
-        {
-          component: SeriesSuggestionsDialog,
-          props: { suggestions, resolver },
-          disableCloseOnClick: true
-        }
-      ]);
-    });
-
-    if (!Object.keys(changes).length) {
-      return;
-    }
-
-    try {
-      await saveSeriesOverrides(changes);
-      database.dataListChanged$.next(getStorageHandler(window, $storageSource$, ''));
-    } catch (error: any) {
-      showError('Adding to series failed', error.message, '');
-    }
+  function onFilesChange(fileList: FileList | File[]) {
+    return importFiles(importPage, fileList);
   }
 
   async function onMakeSeries() {
