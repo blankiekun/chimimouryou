@@ -250,7 +250,8 @@ async function sourcesFetch(event, url, { headers = {}, maxBytes = 20 * 1024 * 1
       status: response.status,
       url,
       type: response.headers.get('Content-Type') || '',
-      retryAfter: response.headers.get('Retry-After') || ''
+      retryAfter: response.headers.get('Retry-After') || '',
+      range: response.headers.get('Content-Range') || ''
     };
     if (Number(response.headers.get('Content-Length') || 0) > maxBytes)
       return { ...answer, tooBig: true };

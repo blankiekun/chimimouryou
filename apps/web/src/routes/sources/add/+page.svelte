@@ -65,11 +65,11 @@
   const repoId = $derived(browser ? Number($page.url.searchParams.get('repo')) || 0 : 0);
   let repo = $state<SourceRepo>();
   let found = $state<SourceRepoExtension[]>();
-  let picked = $state<Set<number>>(new Set());
+  let picked = $state<Set<number | string>>(new Set());
   let filter = $state<'all' | 'manga' | 'novel'>('all');
   let japanese = $state(true);
   let showAll = $state(false);
-  let rowBusy = $state(0);
+  let rowBusy = $state<number | string>(0);
   const list = $derived(repo?.extensions ?? found ?? []);
   const filtered = $derived(
     list.filter(
@@ -110,7 +110,9 @@
       const looked = await lookUpRepo(url);
       found = looked.extensions;
       // Japanese JS sources start on; the reader switches off what they don't want.
-      picked = new Set(looked.extensions.filter((e) => !e.off && e.lang === 'ja').map((e) => e.id));
+      picked = new Set(
+        looked.extensions.filter((e) => !e.off && !e.appOnly && e.lang === 'ja').map((e) => e.id)
+      );
     } catch (error: any) {
       failed = true;
       errors = {

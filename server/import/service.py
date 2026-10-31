@@ -87,7 +87,8 @@ MIN_FREE_BYTES = int(os.environ.get('MIN_FREE_MB', '1024')) * 1024 * 1024
 MAX_PENDING_PER_ACCOUNT = 100
 # A manga file name that is only a volume number (第01巻, Vol.2, 03).
 # An extension's volume uploaded by a device: repo key, source id, hash of the work's link, volume.
-EXT_IDENTIFIER = re.compile(r'chimi:ext:[0-9a-f]{12}:-?\d{1,20}:[0-9a-f]{12}:\d{1,5}')
+# The source: a Mangayomi id (a number) or a Manatan source id (a name).
+EXT_IDENTIFIER = re.compile(r'chimi:ext:[0-9a-f]{12}:(?:-?\d{1,20}|[a-z0-9-]{1,40}):[0-9a-f]{12}:\d{1,5}')
 GENERIC_NAME = re.compile(r'(?:[\W\d_]|[第巻話一二三四五六七八九十]|vol(?:ume)?|v|ch(?:apter)?)*', re.I)
 # Finished jobs are kept this long so the uploader can read the outcome.
 KEEP_FINISHED_SECONDS = 7 * 24 * 3600

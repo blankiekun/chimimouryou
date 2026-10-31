@@ -7,11 +7,14 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import manga from '../../../../../../server/tests/fixtures/sources/extensions/manga.js?raw';
 import novel from '../../../../../../server/tests/fixtures/sources/extensions/novel.js?raw';
+import { BlobReader, Uint8ArrayWriter, ZipReader } from '@zip.js/zip.js';
 import {
   ExtensionError,
   openExtension,
+  openManatan,
   sandboxPage,
-  type ExtensionRuntime
+  type ManatanSource,
+  type MangayomiRuntime
 } from './extension-runtime';
 import { NeedsAppError, pacing } from './transport';
 
@@ -28,6 +31,11 @@ import { NeedsAppError, pacing } from './transport';
  * - As if QuickJS broke (extension-probes/frame-probes.js runs in the real frame): any request to
  *   another origin, UDP (WebRTC), a self-navigation to another site, the app's storage, cookies or
  *   window within reach, or a same-origin request carrying the app's cookies.
+ * - Manatan v2 (a WebAssembly component in a Worker in the same frame): the loader misreads the
+ *   component (lists, details or pages wrong; the released Mokuro package against serve.py's
+ *   invented mokuro.moe, ranged CBZ pages that only the guest's processing turns into images), or
+ *   the hostile component (serve.py manatan.py) gets a request past its allow list, keeps the app
+ *   waiting with an endless loop, or grows memory without a cap.
  * Each run's probe results and sink log go to node_modules/.vitest/source-sandbox-probes-<browser>.json
  * (servers.ts) as its record; the assertions are what must hold.
  */
@@ -158,7 +166,7 @@ class DefaultExtension extends MProvider {
 }`;
 
 describe('a hostile extension inside QuickJS', () => {
-  let runtime: ExtensionRuntime;
+  let runtime: MangayomiRuntime;
   const probe = async (name: string, arg: unknown = null) =>
     JSON.parse(await runtime.html(name, arg as string));
   beforeAll(async () => {
@@ -312,4 +320,62 @@ describe('if extension code broke out of QuickJS', () => {
 afterAll(async () => {
   record.allHits = await hits();
   await fetch('/__probes/record', { method: 'POST', body: JSON.stringify(record, null, 2) });
+});
+
+/** A package of the fixture Manatan repository: its wasm and its manifest's first source. */
+async function manatanPackage(name: string) {
+  const zip = await (
+    await fetch(`${config.fixture}/repo.example/manatan/packages/${name}.manatan2`)
+  ).blob();
+  const reader = new ZipReader(new BlobReader(zip));
+  const files = await reader.getEntries();
+  const read = (file: string) =>
+    files.find((f) => f.filename === file)!.getData!(new Uint8ArrayWriter());
+  const manifest = JSON.parse(new TextDecoder().decode(await read('manifest.json')));
+  const wasm = (await read(manifest.wasm)).buffer as ArrayBuffer;
+  await reader.close();
+  return {
+    wasm,
+    source: manifest.sources[0] as ManatanSource,
+    allow: manifest.permissions.network.allow
+  };
+}
+
+describe('a Manatan v2 extension (WebAssembly component)', () => {
+  it('Mokuro: lists, details and a volume as page images from byte ranges of its CBZ', async () => {
+    const { wasm, source, allow } = await manatanPackage('mokuro');
+    const runtime = await openManatan(wasm, source, allow);
+    const popular = await runtime.popular(1);
+    expect(popular.list).toEqual([
+      { name: 'フィクスチャ漫画', link: 'Fixture Manga', imageUrl: expect.any(String) }
+    ]);
+    const detail = await runtime.detail('Fixture Manga');
+    // Newest first, as Mangayomi lists them; extensions.ts turns them round.
+    expect(detail.chapters.map((c) => c.url)).toEqual(['Fixture Manga 02', 'Fixture Manga 01']);
+    const pages = await runtime.chapterPages('Fixture Manga 01', 'Fixture Manga');
+    expect(pages.map((page) => page.type)).toEqual(['image/png', 'image/png', 'image/png']);
+    expect(new Uint8Array(await pages[0].arrayBuffer()).slice(1, 4)).toEqual(
+      new TextEncoder().encode('PNG')
+    );
+    record.manatan = { volume: pages.map((page) => page.size) };
+    runtime.close();
+  }, 30_000);
+
+  it('the hostile component: no request past its allow list, a loop stopped, memory capped', async () => {
+    const { wasm, source, allow } = await manatanPackage('hostile');
+    const before = (await hits()).length;
+    let runtime = await openManatan(wasm, source, allow);
+    for (const url of [`${config.sink}/manatan`, 'https://evil.example/x', 'http://kakuyomu.jp/']) {
+      await expect(runtime.detail(url)).rejects.toThrow(/Not a host/);
+    }
+    expect(leaks((await hits()).slice(before))).toEqual([]);
+    const started = Date.now();
+    await expect(runtime.popular(1)).rejects.toThrow(/ran too long/);
+    expect(Date.now() - started).toBeLessThan(9_500);
+    expect(runtime.stopped).toBe(true);
+    runtime = await openManatan(wasm, source, allow);
+    // memory.grow until the 256 MB cap refuses, then a trap: an error, and the runtime ends.
+    await expect(runtime.search('x', 1)).rejects.toThrow(ExtensionError);
+    expect(runtime.stopped).toBe(true);
+  }, 30_000);
 });
