@@ -68,6 +68,7 @@
   import { vnFolderSize } from '$lib/functions/file-loaders/vn/load-vn';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import AnkiWatcher from '$lib/components/dictionary/anki-watcher.svelte';
+  import { lineAudio } from '$lib/data/vn/line-audio';
   import VnboxTuning from '$lib/components/vn/vnbox-tuning.svelte';
   import VnboxDiscs from '$lib/components/vn/vnbox-discs.svelte';
   import VnBacklog from '$lib/components/vn/vn-backlog.svelte';
@@ -504,7 +505,15 @@
       );
     }
 
-    return player.ankiMedia(kept, shown, { picture: $ankiVnScreenshot$, audio: $ankiVnAudio$ });
+    const media = await player.ankiMedia(kept, shown, {
+      picture: $ankiVnScreenshot$,
+      audio: $ankiVnAudio$
+    });
+
+    return {
+      picture: media.picture,
+      audio: await lineAudio(media.audio, kept >= 0 ? player.ankiTexts()[kept] : sentence)
+    };
   }
 
   function onText(text: string, skipped: boolean, readBefore: boolean) {

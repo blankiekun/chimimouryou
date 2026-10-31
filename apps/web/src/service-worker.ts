@@ -35,12 +35,13 @@ const uiFontFiles = new Set(build.filter((file) => uiFontFile.test(file)));
 
 const prerenderedSet = new Set(prerendered);
 
-// Whisper's and manga text's workers and runtime (tens of MB) load only when used. The .woff font
+// Whisper's, manga text's and the line voice detector's workers, models and runtime (tens of MB)
+// load only when used. The .woff font
 // fallbacks (86 MB) are never fetched by browsers that run service workers: they take the woff2.
 const assetsToCache = build
   .filter(
     (file) =>
-      !/ort-wasm|webp_enc|webp-encode\.worker|whisper\.worker|manga-ocr\.worker|analysis-\w+\.worker|\.woff$/.test(
+      !/ort-wasm|silero_vad|line-vad\.worker|webp_enc|webp-encode\.worker|whisper\.worker|manga-ocr\.worker|analysis-\w+\.worker|\.woff$/.test(
         file
       ) && !uiFontFile.test(file)
   )

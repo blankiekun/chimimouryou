@@ -540,6 +540,8 @@ export const ja: Record<MessageKey, string> = {
   'anki.aiFallbackHint': 'カードごとに ElevenLabs のクレジットを消費します。',
   'anki.vnScreenshot': 'ビジュアルノベルのスクリーンショット',
   'anki.vnAudio': 'ビジュアルノベルの音声',
+  'anki.vnVoiceOnly': '声だけ',
+  'anki.vnVoiceOnlyHint': '声の部分だけを切り出し、声のない行には音声を付けません',
   'anki.known': 'Anki の既知語彙',
   'anki.knownHint':
     '指定デッキの定着済みカード（復習間隔21日以上）を1日1回まで読み込み、各本の語彙カバー率や新出語彙の判定で「既知」として扱います（データはこのブラウザにのみ保存されます）。',

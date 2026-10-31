@@ -533,6 +533,8 @@ export function registerGames({
           }
           // Text lines get the number and arrival time /hook asks for their Anki media by.
           if (message.type === 'text') Object.assign(message, media.stamp());
+          // Clicks and keys in the game: where each line's sound starts.
+          if (message.type === 'input') media.input();
           if (message.type === 'window') {
             current.window = message;
             media.window(message);

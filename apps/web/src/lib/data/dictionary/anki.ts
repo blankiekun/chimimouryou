@@ -40,6 +40,8 @@ export const ankiBookAiFallback$ = writableBooleanLocalStorageSubject()(
 );
 export const ankiVnScreenshot$ = writableBooleanLocalStorageSubject()('ankiVnScreenshot', true);
 export const ankiVnAudio$ = writableBooleanLocalStorageSubject()('ankiVnAudio', true);
+/** VN sound trimmed to the line's voice, none for lines without one (lib/data/vn/line-audio.ts). */
+export const ankiVnVoiceOnly$ = writableBooleanLocalStorageSubject()('ankiVnVoiceOnly', true);
 /** Read mature cards from a deck as known words, for word coverage (`known-words.ts`). */
 export const ankiKnownWords$ = writableBooleanLocalStorageSubject()('ankiKnownWords', false);
 export const ankiKnownDeck$ = writableStringLocalStorageSubject()('ankiKnownDeck', '');

@@ -97,6 +97,19 @@ unmodified; and Microsoft's Visual C++ runtime DLLs, redistributed as Microsoft
 allows. The program that runs LunaHook, chimihook (apps/desktop/native/), is
 GPL-3.0-or-later.
 
+The voice finder for visual novel lines mined to Anki
+(apps/web/src/lib/functions/vn/silero_vad.onnx) is Silero VAD v5.1.2
+(https://github.com/snakers4/silero-vad), Copyright (c) 2020-present Silero
+Team, licensed under the MIT License, redistributed unmodified. It runs on
+onnxruntime-web (https://github.com/microsoft/onnxruntime), Copyright (c)
+Microsoft Corporation, licensed under the MIT License, the npm package the web
+app already uses.
+
+The line audio E2E's voices (apps/desktop/e2e/voices/) are cut from the
+LibriVox recording of 杜子春 by Akutagawa Ryūnosuke
+(https://archive.org/details/toshisyun_um_librivox), dedicated to the public
+domain (CC0 1.0).
+
 The ち icon (apps/web/static/ icons, favicons and the header logo) is drawn
 from the glyph in Noto Sans CJK JP Bold, Copyright 2014-2021 Adobe
 (http://www.adobe.com/), licensed under the SIL Open Font License 1.1.
