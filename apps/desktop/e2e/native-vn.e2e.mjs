@@ -12,9 +12,15 @@
 //
 //   cd apps/desktop && pnpm run fetch && pnpm run build:web
 //   xvfb-run -a node e2e/native-vn.e2e.mjs        (E2E_DIR=<dir> keeps the run's files there;
-//                                                 PULSE_MODULES=<dir> for a PulseAudio not installed)
+//                                                 PULSE_MODULES=<dir> for a PulseAudio not installed;
+//                                                 E2E_APP=<squashfs-root>/chimimouryou runs a packaged
+//                                                 build: `pnpm run dist`, then --appimage-extract)
 //
-// It fails when: the record isn't written by Import → Installed game; the folder dialog's program
+// It fails when: Import offers Windows game (VNBox, which the app doesn't ship: its player waits on
+// "Downloading…" for good); a game opened from the library doesn't go to /hook and start in Wine
+// (/v starts VNBox, or waits on a click), or, not linked here, doesn't ask for its folder and then
+// start; the record isn't
+// written by Import → Installed game; the folder dialog's program
 // list misses the game or puts setup tools first; the helper, Wine prefix or LunaHook injection
 // doesn't start; lines don't reach /hook's thread list; a picked thread's lines don't reach the
 // text list or the pick isn't saved on the record; a moved game isn't asked for again.
@@ -142,8 +148,8 @@ const ankiServer = createServer((request, response) => {
 await new Promise((resolve) => ankiServer.listen(0, '127.0.0.1', resolve));
 
 const app = await _electron.launch({
-  executablePath: join(desktop, 'node_modules/electron/dist/electron'),
-  args: ['--no-sandbox', desktop],
+  executablePath: process.env.E2E_APP ?? join(desktop, 'node_modules/electron/dist/electron'),
+  args: ['--no-sandbox', ...(process.env.E2E_APP ? [] : [desktop])],
   // Electron's userData follows XDG_CONFIG_HOME on Linux: a fresh profile, Wine prefixes included.
   // winetricks' downloads stay in the real cache.
   env: {
@@ -287,6 +293,8 @@ try {
   step('Import → Installed game');
   await pickFolder(gameDir);
   await page.getByTitle('Import books').click();
+  if (await page.getByRole('button', { name: 'Windows game…' }).count())
+    fail('Import offers Windows game, which needs VNBox');
   await page.getByRole('button', { name: 'Installed game…' }).click();
   await page.getByRole('button', { name: 'Choose folder…' }).click();
   const programs = await page.locator('.ng-program span:first-of-type').allTextContents();
@@ -297,14 +305,26 @@ try {
   await page.locator('.ng').waitFor({ state: 'detached' });
   const book = await record(page);
   if (!book?.elementHtml.includes('"exe":"testvn.exe"')) fail('no record with the program');
-  await useSyncFolder(page);
 
-  step('/v → Play natively → /hook, first start makes the Wine prefix');
-  await page.goto(`http://127.0.0.1:41917/v?id=${book.id}`);
-  await page.getByRole('button', { name: 'Play natively' }).click();
+  step('Not linked on this computer (Settings → Forget), opened from the library: folder dialog');
+  await page.goto('http://127.0.0.1:41917/settings');
+  await page.getByRole('button', { name: 'Forget' }).click();
+  await page.getByText('No games linked yet.').waitFor();
+  await page.goto('http://127.0.0.1:41917/manage');
+  await page.locator(`.cover-card-main[title="${title}"]`).click();
+  await page.getByText('Read', { exact: true }).click();
   await page.waitForURL(/\/hook\?native=/);
+  if (page.frames().some((frame) => frame.url().includes('vnbox.html'))) fail('/v started VNBox');
+  if (await page.getByRole('button', { name: 'Add the game files' }).count())
+    fail('offers copying the game into the browser');
+
+  step('Folder picked: /hook, the game starts in Wine, first start makes the prefix');
+  await page.getByRole('button', { name: 'Choose folder…' }).click();
+  await page.getByRole('button', { name: 'Link and play' }).click();
   const drawText = page.locator('.nt-row', { hasText: 'DrawTextW' });
   await drawText.waitFor();
+  // Wine runs the game: pgrep exits non-zero (throws) without a testvn.exe process.
+  execFileSync('pgrep', ['-f', 'testvn.exe']);
   await drawText.click();
   await page
     .locator('.hook-text li', { hasText: '何でも薄暗いじめじめした所で泣いていた。' })
@@ -316,6 +336,11 @@ try {
   const saved = JSON.parse((await record(page)).elementHtml.replace('<!--ttu-vn-->', ''));
   if (!saved.nativeHook?.hookcode.includes('DrawTextW'))
     fail(`hook not saved: ${saved.nativeHook}`);
+  // The library's open rewrites the record (prepareBookForReading): its sync folder from here on.
+  await useSyncFolder(page);
+  await page.getByRole('button', { name: 'Start the game' }).click();
+  await page.locator('.nt-row').first().waitFor();
+  await page.getByText('The game has closed.').waitFor();
 
   step('Closed: its saves are in vnsaves.json under VNBox’s names');
   let synced = await syncedSave(page, appData);

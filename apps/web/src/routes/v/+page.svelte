@@ -332,16 +332,17 @@
     if (game.engine === 'vnbox') {
       // The OPFS game copy and VNBox's saves must not be evicted.
       navigator.storage?.persist?.();
-      const blocker = windowsGameBlocker();
+      // The desktop app ships no VNBox (its player would wait on "Downloading…" for good): native only.
+      const blocker = native ? undefined : windowsGameBlocker();
 
-      missingFiles = !blocker && !(await hasWindowsGame(game.folder!));
-      blocked = blocker
-        ? windowsGameBlockerText[blocker]
-        : missingFiles
-          ? native
-            ? "This game's files aren't in this browser. Play it natively from where it is installed on this computer, or add its folder to play it here in the browser."
-            : "This game's files aren't in this browser: it was added on another device. Add its folder, or a ZIP of it on a phone, to play it here; its saves come along when they sync."
-          : undefined;
+      missingFiles = !native && !blocker && !(await hasWindowsGame(game.folder!));
+      blocked = native
+        ? 'The desktop app plays Windows games natively, from where they are installed on this computer.'
+        : blocker
+          ? windowsGameBlockerText[blocker]
+          : missingFiles
+            ? "This game's files aren't in this browser: it was added on another device. Add its folder, or a ZIP of it on a phone, to play it here; its saves come along when they sync."
+            : undefined;
       // Its record (program, hook; no files) goes up with each start, so other devices list
       // the game and open it here to ask for the files instead of failing.
       if ((!missingFiles || native) && external) {
@@ -355,6 +356,12 @@
       }
     }
     loaded = true;
+    // Opening it plays it: /hook starts it in Wine, its error shows beside its Start the game button.
+    if (native && game.engine === 'vnbox') {
+      await goto(`${pagePath}/hook?native=${data.id}`, { replaceState: true }).catch((error) => {
+        blocked = `The game couldn't start natively: ${error.message}`;
+      });
+    }
   }
 
   function updateProgress() {
@@ -681,11 +688,14 @@
     }
   }
 
-  // VNBox's lazyfs posts its load errors (a full storage quota above all): without them the
-  // player just stays black.
+  // VNBox's lazyfs posts its load errors (a full storage quota above all), vnbox.js a VNBox that
+  // isn't there (a build without scripts/vnbox/build.sh): without them the player stays black.
   function frameMessage(event: MessageEvent) {
     if (event.origin !== location.origin || event.source !== frame?.contentWindow) return;
-    if (event.data?.type === 'vnbox-error' && event.data.source === 'lazyfs') {
+    if (
+      event.data?.type === 'vnbox-error' &&
+      (event.data.source === 'lazyfs' || event.data.source === 'player')
+    ) {
       blocked = vnboxErrorText(String(event.data.message ?? ''));
     }
   }
@@ -800,16 +810,13 @@
           <p class="vn-blocked-title">This game can't start here</p>
           <p>{blocked}</p>
           <div class="flex flex-wrap gap-2">
-            {#if missingFiles && native}
+            {#if windows && native}
               <button class="app-button app-button-primary" on:click={playNatively}>
                 Play natively
               </button>
             {/if}
             {#if missingFiles}
-              <button
-                class="app-button {native ? '' : 'app-button-primary'}"
-                on:click={addGameFolder}
-              >
+              <button class="app-button app-button-primary" on:click={addGameFolder}>
                 Add the game files
               </button>
             {/if}
