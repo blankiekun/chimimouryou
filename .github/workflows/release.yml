@@ -259,6 +259,8 @@ jobs:
         env:
           VITE_EDITION: standalone
           VITE_STORAGE_ROOT_NAME: chimi-reader-data
+          # The Android app offers newer releases than this (app-update.ts offerApkUpdate).
+          VITE_APP_VERSION: ${{ github.ref_name }}
           VITE_GDRIVE_CLIENT_ID: ${{ secrets.VITE_GDRIVE_CLIENT_ID }}
           VITE_GDRIVE_CLIENT_SECRET: ${{ secrets.VITE_GDRIVE_CLIENT_SECRET }}
 

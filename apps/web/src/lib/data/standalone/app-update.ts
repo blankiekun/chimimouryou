@@ -7,9 +7,12 @@
 /**
  * Compares the deployed version (/version.txt) with GitHub, for the admin panel's
  * Updates tool: the latest release (stable) or the main branch (bleeding edge). The update itself is done by the server's
- * ebook-update (account.ts requestUpdate). Not part of upstream.
+ * ebook-update (account.ts requestUpdate). Also the Android app's update offer (offerApkUpdate). Not part of upstream.
  */
 
+import { Capacitor } from '@capacitor/core';
+import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
+import { dialogManager } from '$lib/data/dialog-manager';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 
 export const defaultUpdateRepo = 'blankiekun/chimimouryou';
@@ -134,4 +137,86 @@ export async function checkEngineRelease(installed: string) {
       asset.name.endsWith('_web.7z')
     )
   };
+}
+
+const parts = (version: string) => version.replace(/^v/, '').split(/[.-]/).slice(0, 3).map(Number);
+
+/** Whether release `tag` (v1.2.3) is a higher version than `current` (1.2.3); anything unparsable is not (as apps/desktop/version.js). */
+export function isNewerVersion(tag: string, current: string) {
+  const [a, b] = [parts(tag), parts(current)];
+
+  if ([...a, ...b].some(Number.isNaN) || a.length < 3 || b.length < 3) return false;
+  const index = a.findIndex((part, i) => part !== b[i]);
+
+  return index >= 0 && a[index] > b[index];
+}
+
+/** The release's tag (release.yml sets it for the build the apps package); empty in other builds. */
+const appVersion: string = import.meta.env.VITE_APP_VERSION || '';
+const apkCheckKey = 'apkUpdateCheck';
+const day = 86_400_000;
+
+interface ApkCheck {
+  checked: number;
+  tag: string;
+  url: string;
+}
+
+/**
+ * A release newer than this Android app, with its APK. Only the `github` build (the one with the
+ * MihonHost plugin; Play updates the `play` one) asks GitHub, at most once a day; the answer is
+ * kept, so a release turned down with Later is offered again on the next start.
+ */
+export async function newerApk(current = appVersion, now = Date.now()) {
+  if (!current || !Capacitor.isPluginAvailable('MihonHost')) return undefined;
+  let check: ApkCheck | undefined;
+  try {
+    check = JSON.parse(localStorage.getItem(apkCheckKey) || 'null') ?? undefined;
+  } catch {
+    // No storage or a broken entry: ask GitHub.
+  }
+  if (!check || !(now >= check.checked && now - check.checked < day)) {
+    let release;
+    try {
+      release = (await github(defaultUpdateRepo, 'releases/latest')) ?? {};
+    } catch {
+      return undefined; // Offline or rate limited: asked again on the next start.
+    }
+    const apk = (release.assets ?? []).find((asset: { name: string }) =>
+      asset.name.endsWith('.apk')
+    );
+    check = { checked: now, tag: release.tag_name ?? '', url: apk?.browser_download_url ?? '' };
+    try {
+      localStorage.setItem(apkCheckKey, JSON.stringify(check));
+    } catch {
+      // Not kept: asked again on the next start.
+    }
+  }
+
+  return check.url && isNewerVersion(check.tag, current)
+    ? { version: check.tag.replace(/^v/, ''), url: check.url }
+    : undefined;
+}
+
+/** On app start (root layout): "chimimouryou X.Y.Z is out", Download opens the APK in the system browser. */
+export async function offerApkUpdate(window: Window) {
+  const apk = await newerApk();
+  if (!apk) return;
+  const later = await new Promise<boolean>((resolver) =>
+    dialogManager.dialogs$.next([
+      {
+        component: ConfirmDialog,
+        props: {
+          dialogHeader: `chimimouryou ${apk.version} is out`,
+          dialogMessage:
+            'Download the new APK and open it to install it over this one. Your books stay.',
+          confirmLabel: 'Download',
+          cancelLabel: 'Later',
+          resolver
+        }
+      }
+    ])
+  );
+  // Another site's address leaves the WebView for the system browser (Capacitor's Bridge.launchIntent).
+  if (!later) window.open(apk.url, '_blank');
 }
