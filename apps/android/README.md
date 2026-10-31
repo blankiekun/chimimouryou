@@ -12,7 +12,10 @@ Every release (`v*` tag) attaches `chimimouryou-<version>.apk` to its GitHub rel
 browser's downloads and allow "Install unknown apps" for that browser when Android asks. A newer
 APK installs over the old one and keeps its books, as long as it is signed with the same key.
 
-There is no self-updater: install the next release's APK the same way.
+Updates: on start, at most once a day, the app (the `github` flavor) asks GitHub for the latest
+release; when it is newer, "chimimouryou X.Y.Z is out" offers Download (the APK, in the system
+browser; install it the same way) or Later (asked again next start). Builds without a release
+version (CI's debug APK, local builds) and the `play` flavor never ask.
 
 CI builds a debug APK (the `github` flavor) when `apps/android` (or the Mihon host's `core`, the lockfile, the
 workflows, `android-drive.ts`, `android-bars.ts`, `native-save.ts`) changes: the run's Summary → Artifacts →
@@ -160,7 +163,7 @@ Then add the repository secrets `ANDROID_KEYSTORE` (`base64 -w0 chimimouryou-rel
 
 Not built yet (the `play` flavor exists, without Mihon extensions); a Play build would need:
 
-- no self-updater and no sideloaded updates (Play updates it);
+- no sideloaded updates (Play updates it; the update offer runs only in the `github` flavor);
 - no Mihon extensions (Play's policy on downloading code: the `play` flavor);
 - an Android App Bundle (`bundleRelease`) and Play App Signing: the Android OAuth client then needs
   Play's app signing key's SHA-1 as well (Play Console → App integrity).

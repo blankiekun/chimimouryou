@@ -10,6 +10,7 @@
   import { watchInstall } from '$lib/data/standalone/install-app';
   import { catchDownloads } from '$lib/data/standalone/native-save';
   import { barsForRoute } from '$lib/data/standalone/android-bars';
+  import { offerApkUpdate } from '$lib/data/standalone/app-update';
   import { watchYomitan } from '$lib/data/dictionary/yomitan';
   import { hasDeviceFollows } from '$lib/data/sources/sources-settings';
   import { dialogManager, type Dialog } from '$lib/data/dialog-manager';
@@ -38,6 +39,7 @@
     if (standalone) {
       watchInstall(window);
       watchYomitan(window);
+      offerApkUpdate(window);
       // Sources: followed works update and fetches run while the app is open (local-sources.ts).
       import('$lib/data/sources/local-sources').then((sources) => sources.startLocalSources());
     } else if (hasDeviceFollows()) {
