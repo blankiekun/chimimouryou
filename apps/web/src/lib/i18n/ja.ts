@@ -127,7 +127,6 @@ export const ja: Record<MessageKey, string> = {
   'home.continueReading': '続きを読む',
   'home.resume': '再開',
   'home.resumeBook': '「{title}」を再開',
-  'home.readNext': '次に読む',
   'home.myBooks': 'マイブック',
   'home.remove': 'ホームから削除',
   'home.add': 'ホームに追加',
@@ -143,12 +142,7 @@ export const ja: Record<MessageKey, string> = {
   'home.retry': '再試行',
   'home.atYourLevel': 'あなたのレベル',
   'home.difficultyScore': '{score} {tier}',
-  'home.wordsKnownForYou': '既知語 {percent}%・あなたには {level}',
-  'home.readNextReason': 'あなたのレベルに近い順（{range}）',
-  'home.readNextReasonSeries': 'シリーズの次の巻、次にレベルの近い本（{range}）',
   'home.nextInSeries': 'シリーズの次の巻',
-  'home.readNextReasonNext': 'シリーズの次の巻',
-  'home.readBook': '「{title}」を読む',
 
   'store.view': '表示切替',
   'store.books': '本',
@@ -1796,7 +1790,6 @@ export const ja: Record<MessageKey, string> = {
   'social.blockConfirm':
     '{name} をブロックしますか?フレンドから外れ、リクエストを送れなくなります。',
   'social.nowReading': '読書中',
-  'social.homeSignUp': '登録するまで何も送信しません。',
   'social.signUpOrLogIn': '登録・ログイン',
   'social.requestCount': 'リクエスト {count} 件',
   'social.requestCountOne': 'リクエスト 1 件',

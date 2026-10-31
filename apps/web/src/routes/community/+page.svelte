@@ -9,6 +9,7 @@
   import CommunityText from '$lib/components/community/community-text.svelte';
   import CommunityThread from '$lib/components/community/community-thread.svelte';
   import CommunityWork from '$lib/components/community/community-work.svelte';
+  import HomeSocial from '$lib/components/social/home-social.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import RoleBadge from '$lib/components/social/role-badge.svelte';
   import { isPlain, loadFeed, loadThread, type FeedPost } from '$lib/data/social/community';
@@ -29,7 +30,8 @@
    * from here); a spoiler-marked post's line and text stay blurred until the reader taps Show
    * spoiler, its work's cover, title and volume shown. Signed in, a post box on top makes plain
    * posts (no book line: shown with the poster only). `?work=&line=` shows that line's thread (deep
-   * links), `&post=` that feed post's discussion (the feed, Home's replies).
+   * links), `&post=` that feed post's discussion (the feed, Home's replies). The side column
+   * holds new replies and, signed in, the friends part (home-social.svelte).
    */
 
   let posts: FeedPost[] = [];
@@ -246,7 +248,10 @@
         {/if}
       </div>
       <aside class="community-side">
-        {#if $socialSession$}<CommunityNotes number={1} />{/if}
+        {#if $socialSession$}
+          <CommunityNotes number={1} />
+          <HomeSocial number={2} />
+        {/if}
         <p class="community-quiet">{$t$('community.howToPost')}</p>
       </aside>
     {/if}
@@ -302,7 +307,7 @@
   .community-side {
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 2.5rem;
   }
 
   .feed {

@@ -5,6 +5,7 @@
   import PointBox from '$lib/components/point-box.svelte';
   import ReadingRankRow from '$lib/components/reading-rank/reading-rank-row.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
+  import StatisticsHeatmap from '$lib/components/statistics/statistics-heatmap/statistics-heatmap.svelte';
   import RoleBadge from '$lib/components/social/role-badge.svelte';
   import SocialAvatar from '$lib/components/social/social-avatar.svelte';
   import { account$ } from '$lib/data/account/account';
@@ -13,9 +14,15 @@
   import { setPendingImport, type PendingImport } from '$lib/data/library/library-home';
   import { socialSession$ } from '$lib/data/social/social-account';
   import { pullAccountStatistics } from '$lib/data/stats/statistics-sync';
-  import { database, startDayHoursForTracker$, statisticsEnabled$ } from '$lib/data/store';
+  import type { BooksDbStatistic } from '$lib/data/database/books-db/versions/books-db';
+  import {
+    database,
+    lastReadingDataHeatmapAggregationMode$,
+    startDayHoursForTracker$,
+    statisticsEnabled$
+  } from '$lib/data/store';
   import { getWordsSummary, type WordsSummary } from '$lib/data/words/words-met';
-  import { getDateKey } from '$lib/functions/statistic-util';
+  import { getDateString, getStartHoursDate } from '$lib/functions/statistic-util';
   import { t$ } from '$lib/i18n';
   import { formatDuration } from '$lib/functions/format-time';
   import { activePlugins$ } from '$lib/plugins';
@@ -28,6 +35,11 @@
    */
 
   let stats: LearnerStats | undefined;
+  let statistics: BooksDbStatistic[] = [];
+  let today = new Date();
+  let todayKey = '';
+  /** Every title shown: the heatmap counts only titles set true here */
+  let titles = new Map<string, boolean>();
   let words: WordsSummary | undefined;
   let note = '';
   let pulledAt = 0;
@@ -39,11 +51,13 @@
   const number = (value: number) => value.toLocaleString('en-US');
 
   async function load() {
-    const statistics = await database
+    statistics = await database
       .getStatisticsForTimeWindow('0000-00-00', '9999-99-99')
       .catch(() => []);
-
-    stats = learnerStats(statistics, getDateKey($startDayHoursForTracker$));
+    titles = new Map(statistics.map((statistic) => [statistic.title, true]));
+    today = getStartHoursDate($startDayHoursForTracker$);
+    todayKey = getDateString(today);
+    stats = learnerStats(statistics, todayKey);
   }
 
   onMount(async () => {
@@ -159,6 +173,15 @@
           {/each}
         </dl>
         <ReadingRankRow refresh={pulledAt} />
+        <!-- The Statistics page's calendar (no reading goals here) -->
+        <StatisticsHeatmap
+          statisticsData={statistics}
+          readingGoals={[]}
+          statisticsTitleFilters={titles}
+          {today}
+          {todayKey}
+          bind:heatmapAggregration={$lastReadingDataHeatmapAggregationMode$}
+        />
       {:else if stats}
         <p class="profile-meta">
           {$t$($statisticsEnabled$ ? 'profile.empty' : 'dashboard.trackerOff')}

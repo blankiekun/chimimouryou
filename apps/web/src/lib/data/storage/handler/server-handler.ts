@@ -345,13 +345,21 @@ export class ServerStorageHandler extends BaseStorageHandler {
             .filter((row) => !catalogTitles.has(row.name!))
             .forEach((row) => {
               const copy = local.get(row.name!);
+              // Its progress is a game doc, not a book row: without it the game left Continue reading.
+              const saved = live(mirror.gameDocs).find(
+                (doc) => doc.name === row.name && doc.kind === 'progress'
+              )?.data as BooksDbBookmarkData | undefined;
 
               this.addBookCard(row.name!, {
                 ...(this.titleToBookCard.get(row.name!) || this.createBookCard(row.name!)),
                 lastBookModified: row.modified,
                 lastBookOpen: copy?.lastBookOpen || 0,
                 imagePath: copy?.coverImage || '',
-                vn: true
+                vn: true,
+                ...(saved && {
+                  progress: bookmarkFraction(saved.progress),
+                  lastBookmarkModified: saved.lastBookmarkModified || 0
+                })
               });
             });
         }
@@ -932,11 +940,29 @@ export class ServerStorageHandler extends BaseStorageHandler {
 
   /** Lists the visual novels this browser keeps for this source (`keepOnDevice`). */
   private async addDeviceVns(only = isVn) {
-    const books = await (await database.db).getAll('data');
+    const db = await database.db;
+    const [books, bookmarks] = await Promise.all([db.getAll('data'), db.getAll('bookmark')]);
+    const marks = new Map(bookmarks.map((bookmark) => [bookmark.dataId, bookmark]));
 
     books
       .filter((book) => book.storageSource === this.storageSourceName && only(book))
-      .forEach((book) => this.addDeviceVnCard(book));
+      .forEach((book) => {
+        this.addDeviceVnCard(book);
+
+        // This browser's position when newer than the server's (not uploaded yet, or never: signed out).
+        const mark = marks.get(book.id);
+
+        if (
+          mark &&
+          (mark.lastBookmarkModified || 0) >
+            (this.titleToBookCard.get(book.title)?.lastBookmarkModified || 0)
+        ) {
+          this.addBookCard(book.title, {
+            progress: bookmarkFraction(mark.progress),
+            lastBookmarkModified: mark.lastBookmarkModified || 0
+          });
+        }
+      });
   }
 
   /** Deletes the browser copies of visual novels kept on this device, or they would be listed again. */

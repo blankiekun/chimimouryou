@@ -13,11 +13,9 @@ import {
   homeRemovedTitles$,
   isContinueReading,
   matchingSeries,
-  readNext,
   recentLevels,
   removeFromHome,
-  seriesGroups,
-  standaloneReadNext
+  seriesGroups
 } from './library-home';
 import { filterBookCards, seriesFilterKey } from '$lib/data/library/library-filters';
 
@@ -100,80 +98,12 @@ describe('seriesGroups', () => {
   });
 });
 
-describe('readNext', () => {
+describe('recentLevels', () => {
   let id = 0;
   const book = (title: string, props: Partial<BookCardProps> = {}) =>
     ({ id: ++id, title, progress: 0, ...props }) as BookCardProps;
   const done = (title: string, difficulty: number, lastBookOpen: number) =>
     book(title, { progress: 1, difficulty, lastBookOpen });
-
-  it('is empty without a finished book with a difficulty', () => {
-    expect(readNext([book('a', { difficulty: 6.67 }), book('b', { progress: 1 })], {})).toEqual([]);
-  });
-
-  it('puts next volumes first, then books near the median of the last 3 finished, closest to 98% known first', () => {
-    const titles = readNext(
-      [
-        done('old', 16.67, 1),
-        done('f1', 6.67, 10),
-        done('f2', 10, 11),
-        done('f3', 8.67, 12),
-        book('S 1', { series: 'S', seriesIndex: 1, progress: 1, lastBookOpen: 5 }),
-        book('S 2', { series: 'S', seriesIndex: 2, difficulty: 15 }),
-        book('S 3', { series: 'S', seriesIndex: 3 }),
-        book('near', { difficulty: 8.33, calibreId: 1 }),
-        book('known', { difficulty: 9.33, calibreId: 2 }),
-        book('easy', { difficulty: 9, calibreId: 3 }),
-        book('far', { difficulty: 10.67 }),
-        book('started', { difficulty: 8.67, progress: 0.2 })
-      ],
-      { 1: 0.5, 2: 0.975, 3: 1 }
-    ).map((card) => card.title);
-
-    expect(titles).toEqual(['S 2', 'known', 'easy', 'near']);
-  });
-
-  it('takes an unstarted series only by its first unread volume', () => {
-    const titles = readNext(
-      [
-        done('f', 6.67, 10),
-        book('T 1', { series: 'T', seriesIndex: 1, difficulty: 6.33 }),
-        book('T 2', { series: 'T', seriesIndex: 2, difficulty: 6.67 }),
-        book('U 1', { series: 'U', seriesIndex: 1, difficulty: 10 }),
-        book('U 2', { series: 'U', seriesIndex: 2, difficulty: 6.67 })
-      ],
-      {}
-    ).map((card) => card.title);
-
-    expect(titles).toEqual(['T 1']);
-  });
-
-  it('without a server, gives the next volumes of started series from their titles', () => {
-    const titles = standaloneReadNext([
-      book('魔女の旅々 1', { progress: 1, lastBookOpen: 5 }),
-      book('魔女の旅々 3'),
-      book('魔女の旅々 2'),
-      book('86―エイティシックス― 1', { progress: 0.4, lastBookOpen: 9 }),
-      book('86―エイティシックス― 2'),
-      book('Unread 1'),
-      book('Unread 2'),
-      book('No volume', { progress: 1 })
-    ]).map((card) => card.title);
-
-    expect(titles).toEqual(['86―エイティシックス― 2', '魔女の旅々 2']);
-  });
-
-  it('without a server, adds the books near the level of the local estimates after them', () => {
-    const titles = standaloneReadNext([
-      book('魔女の旅々 1', { progress: 1, lastBookOpen: 5, difficulty: 10 }),
-      book('魔女の旅々 2', { difficulty: 10 }),
-      book('Far', { difficulty: 13.33 }),
-      book('Near', { difficulty: 10.67 }),
-      book('Nearer', { difficulty: 9.67 })
-    ]).map((card) => card.title);
-
-    expect(titles).toEqual(['魔女の旅々 2', 'Nearer', 'Near']);
-  });
 
   it("gives Read next's level: the last 3 finished books, lowest first", () => {
     expect(
