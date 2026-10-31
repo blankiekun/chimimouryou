@@ -26,8 +26,8 @@ page. Runs from source (`pnpm start`) never check.
 
 ## Connecting to a server
 
-Server connect needs the server to list the app's origin: add `http://127.0.0.1:41917` to its
-`CORS_ORIGINS` (docs/CONFIGURATION.md → Server connect). The server must use HTTPS.
+Servers always allow the app's origin (`http://127.0.0.1:41917`; older servers need it in
+`CORS_ORIGINS`, docs/CONFIGURATION.md → Server connect). The server must use HTTPS.
 
 ## Run it
 

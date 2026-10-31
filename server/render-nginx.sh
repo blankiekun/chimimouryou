@@ -77,8 +77,10 @@ fi
 
 # Server connect: exact https origins of the standalone app that may call the reader's
 # locations with a token (CORS), or http on loopback with a port (the desktop app).
-# Empty (the default) = no CORS headers at all. Same rule as CORS_ORIGIN_RE in account/service.py.
+# Our own apps (the Android app, the desktop app) are always listed: APP_ORIGINS in httpbase.py.
+# Same rule as CORS_ORIGIN_RE in httpbase.py.
 : "${CORS_ORIGINS:=}"
+CORS_ORIGINS=$(printf '%s\n' https://chimimouryou.localhost http://127.0.0.1:41917 $CORS_ORIGINS | awk '!seen[$0]++' | tr '\n' ' ')
 CORS_ORIGIN_MAP=''
 CORS=''
 CORS_WITH_SECURITY_HEADERS=''

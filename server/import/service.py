@@ -68,7 +68,7 @@ HOST = os.environ.get('IMPORT_HOST', '127.0.0.1')
 # Same switch as the account service: uploads from plain-HTTP pages too.
 ALLOW_HTTP = os.environ.get('ALLOW_HTTP_ACCOUNTS') == '1'
 # Server connect: the standalone app's origins; nginx's auth check took its bearer token.
-CORS_ORIGINS = httpbase.parse_cors_origins(os.environ.get('CORS_ORIGINS', ''))
+CORS_ORIGINS = httpbase.cors_origins(os.environ.get('CORS_ORIGINS', ''))
 # Made by the web container; nginx sends it as X-Internal-Token, so only nginx can call this service.
 INTERNAL_TOKEN_FILE = os.environ.get('INTERNAL_TOKEN_FILE', '/data/state/internal-token')
 

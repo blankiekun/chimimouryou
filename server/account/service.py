@@ -114,7 +114,7 @@ HTTP_COOKIE = 'ttu_session'
 ALLOW_HTTP = os.environ.get('ALLOW_HTTP_ACCOUNTS') == '1'
 # Origins of the standalone app allowed to sign in with tokens (httpbase.CORS_ORIGIN_RE). Empty = off.
 parse_cors_origins = httpbase.parse_cors_origins
-CORS_ORIGINS = parse_cors_origins(os.environ.get('CORS_ORIGINS', ''))
+CORS_ORIGINS = httpbase.cors_origins(os.environ.get('CORS_ORIGINS', ''))
 CLIENT_MAX_LENGTH = 64
 SESSION_IDLE_SECONDS = 30 * 86400
 SESSION_MAX_SECONDS = 180 * 86400
