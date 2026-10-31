@@ -39,6 +39,7 @@ import * as syosetu from './sites/syosetu';
 import type { ExtensionRow, RepoRow } from './extensions';
 import {
   connection,
+  DEVICE_FOLLOWS,
   sourcesAutoUpdate$,
   sourcesCheckHours$,
   sourcesWifiOnly$
@@ -112,6 +113,8 @@ interface FollowRow {
   /** Another device runs it (sources.json); missing = this one */
   device?: string;
   deviceName?: string;
+  /** The site's name from sources.json, for an extension this device doesn't have */
+  siteName?: string;
 }
 
 /** A follow in sources.json; unfollows stay as `deleted`, so another device's copy can't revive it. */
@@ -171,8 +174,54 @@ function db() {
         base.createObjectStore('extensions', { keyPath: ['repo', 'id'] });
       }
     }
+  }).then(async (base) => {
+    await keyRepos(base);
+    return base;
   });
   return opened;
+}
+
+const REPO_KEYS_DONE = 'sourcesRepoKeys';
+
+/**
+ * One-time pass: extension sites were `ext:<this device's repo number>:<source>`, now
+ * `ext:<repo key>:<source>` (extensions.ts repoKey), so devices name the same work alike. Every
+ * step skips what is already done, so a pass cut off midway runs again safely; the flag only
+ * saves the reads. (SHA-256 is async, so it can't run inside the upgrade transaction.)
+ */
+async function keyRepos(base: IDBPDatabase) {
+  try {
+    if (localStorage.getItem(REPO_KEYS_DONE)) return;
+  } catch {
+    // No storage: the pass runs on every open, finding nothing to do after the first.
+  }
+  const keys = new Map<number, string>();
+  for (const repo of (await base.getAll('repos')) as RepoRow[]) {
+    const key = repo.key || (await (await extensions()).repoKey(repo.url));
+    if (!repo.key) await base.put('repos', { ...repo, key });
+    keys.set(repo.id, key);
+  }
+  const rename = (site: string) => {
+    const [, old, ...rest] = site.split(':');
+    // A key is always 12 hex; a repo number never that long.
+    const key = isExtension(site) && old.length !== 12 ? keys.get(Number(old)) : undefined;
+    return key ? ['ext', key, ...rest].join(':') : site;
+  };
+  for (const work of (await base.getAll('works')) as WorkRow[]) {
+    if (rename(work.site) !== work.site)
+      await base.put('works', { ...work, site: rename(work.site) });
+  }
+  for (const entry of (await base.getAll('shared')) as SharedFollow[]) {
+    const site = rename(entry.site);
+    if (site === entry.site) continue;
+    await base.put('shared', { ...entry, site, key: sharedKey(entry.device, site, entry.workKey) });
+    await base.delete('shared', entry.key);
+  }
+  try {
+    localStorage.setItem(REPO_KEYS_DONE, '1');
+  } catch {
+    // See above.
+  }
 }
 
 const all = async <K extends keyof Stores>(store: K) =>
@@ -677,7 +726,10 @@ export async function removeJob(id: string) {
 
 async function followJson(follow: FollowRow): Promise<SourceFollow> {
   const work = await workRow(follow.work);
-  const site = await source(work.site).catch(() => ({ name: work.site, domain: '' }));
+  const site = await source(work.site).catch(() => ({
+    name: follow.siteName || work.site,
+    domain: ''
+  }));
   const jobs = (await all('jobs')).filter((j) => j.work === work.id && ACTIVE.includes(j.state));
   let volumes = 0;
   for (const volume of (await all('volumes')).filter((v) => v.work === work.id)) {
@@ -726,6 +778,7 @@ export async function followWork(workId: number, paused = false) {
     modified: Date.now()
   });
   await share(workId);
+  await markDeviceFollows();
   if (!paused) await queueDueChecks(Date.now(), true);
   return { follow: await followJson((await one('follows', workId))!) };
 }
@@ -735,7 +788,19 @@ export async function unfollowWork(workId: number) {
   if (!follow) throw new SourceError('Not following that work');
   await remove('follows', workId);
   await share(workId, follow);
+  await markDeviceFollows();
   return {};
+}
+
+/** Server edition: whether the root layout starts the timer (only extension works follow here). */
+async function markDeviceFollows() {
+  const any = (await all('follows')).some(runsHere);
+  try {
+    if (any) localStorage.setItem(DEVICE_FOLLOWS, '1');
+    else localStorage.removeItem(DEVICE_FOLLOWS);
+  } catch {
+    // Without storage the server edition checks only while a Sources page is open.
+  }
 }
 
 /** Check now: every unpaused follow (or the one work) at once, on mobile data too. */
@@ -1051,6 +1116,12 @@ async function saveVolume(book: LoadData) {
  */
 async function uploadVolume(work: WorkRow, number: number, chapters: Chapter[]) {
   const title = `${work.title} ${number}`;
+  // chimi:ext:<repo key>:<source>:<work>:<n>: the import service replaces the book carrying it.
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(work.workKey));
+  const workHash = [...new Uint8Array(digest).slice(0, 6)]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  const identifier = `chimi:${work.site}:${workHash}:${number}`;
   const file = chapters.some((c) => 'pages' in c)
     ? await cbz({
         title,
@@ -1064,11 +1135,17 @@ async function uploadVolume(work: WorkRow, number: number, chapters: Chapter[]) 
         authors: work.authors,
         series: work.title,
         seriesIndex: number,
-        identifier: `chimi:${work.site}:${work.workKey}:${number}`,
+        identifier,
         chapters: chapters.map((c) => ({ title: c.title, xhtml: 'html' in c ? c.html : '' }))
       });
   const { uploadToCalibre } = await import('$lib/data/remote/calibre-import');
-  await uploadToCalibre(file);
+  await uploadToCalibre(file, undefined, {
+    identifier,
+    title,
+    authors: work.authors,
+    series: work.title,
+    seriesIndex: String(number)
+  });
   return title;
 }
 
@@ -1344,7 +1421,7 @@ async function sharedEntry(work: WorkRow, follow: FollowRow, deleted = false) {
   return {
     key: sharedKey(device, work.site, work.workKey),
     site: work.site,
-    siteName: (await source(work.site).catch(() => ({ name: work.site }))).name,
+    siteName: (await source(work.site).catch(() => ({ name: follow.siteName || work.site }))).name,
     workKey: work.workKey,
     url: work.url,
     title: work.title,
@@ -1421,8 +1498,9 @@ export async function syncSourcesWith(store: SyncFileStore) {
     }
     for (const entry of merged.values()) {
       if (entry.site.startsWith('opds:') && entry.device !== me) continue;
+      // Built-in sites and extensions name a work alike on every device (a server's numbers don't).
       const work =
-        entry.site in SITES && !entry.deleted
+        (entry.site in SITES || isExtension(entry.site)) && !entry.deleted
           ? await workFor(entry.site, entry.workKey, entry.url)
           : ((await (await db()).getFromIndex('works', 'key', [entry.site, entry.workKey])) as
               | WorkRow
@@ -1443,10 +1521,12 @@ export async function syncSourcesWith(store: SyncFileStore) {
           paused: entry.paused,
           modified: entry.modified,
           device: entry.device === me ? undefined : entry.device,
-          deviceName: entry.device === me ? undefined : entry.deviceName
+          deviceName: entry.device === me ? undefined : entry.deviceName,
+          siteName: entry.siteName
         });
       }
     }
+    await markDeviceFollows();
     const changed = [...merged.values()].some((f) => !sameShared(f, remote.get(f.key)));
     return changed ? { follows: [...merged.values()] } : undefined;
   });

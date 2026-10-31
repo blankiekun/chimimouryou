@@ -37,6 +37,7 @@ const deviceWork = (work: SourceWork) => (standalone ? work : { ...work, id: -wo
 const deviceJob = (job: SourceJob) =>
   standalone ? job : { ...job, id: `${DEVICE_JOB}${job.id}`, workId: -job.workId };
 const deviceJobId = (id: string) => !standalone && id.startsWith(DEVICE_JOB);
+const deviceFollow = (follow: SourceFollow) => ({ ...follow, workId: -follow.workId });
 
 async function call<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown) {
   if (standalone) throw new Error('No server in the standalone edition');
@@ -210,12 +211,18 @@ export function removeJob(id: string) {
 /** Follows the work, or pauses/resumes it; a new follow is checked at once. */
 export function followWork(workId: number, paused = false) {
   if (standalone) return local().then((l) => l.followWork(workId, paused));
+  if (onDevice(workId)) {
+    return local().then(async (l) => ({
+      follow: deviceFollow((await l.followWork(-workId, paused)).follow)
+    }));
+  }
   return call<{ follow: SourceFollow }>('PUT', `follows/${workId}`, { paused });
 }
 
 /** Stops checking the work; its volumes stay in the library. */
 export function unfollowWork(workId: number) {
   if (standalone) return local().then((l) => l.unfollowWork(workId));
+  if (onDevice(workId)) return local().then((l) => l.unfollowWork(-workId));
   return call<object>('DELETE', `follows/${workId}`);
 }
 
@@ -224,13 +231,33 @@ type Following = { follows: SourceFollow[]; checkHours: number };
 /** This account's follows and the hours between two checks. */
 export function getFollowing() {
   if (standalone) return local().then((l) => l.getFollowing());
-  return call<Following>('GET', 'following');
+  return withDevice(call<Following>('GET', 'following'), (l) => l.getFollowing());
 }
 
 /** Check now: every unpaused follow, or the one work. */
 export function checkNow(workId?: number) {
   if (standalone) return local().then((l) => l.checkNow(workId));
-  return call<Following>('POST', 'check', workId === undefined ? {} : { work: workId });
+  if (workId !== undefined && onDevice(workId)) {
+    return withDevice(call<Following>('GET', 'following'), (l) => l.checkNow(-workId));
+  }
+  return withDevice(
+    call<Following>('POST', 'check', workId === undefined ? {} : { work: workId }),
+    (l) => (workId === undefined ? l.checkNow() : l.getFollowing())
+  );
+}
+
+/** Server edition: the server's follows with this device's (extension works) after them. */
+async function withDevice(
+  server: Promise<Following>,
+  device: (l: Awaited<ReturnType<typeof local>>) => Promise<Following>
+): Promise<Following> {
+  const [own, here] = await Promise.all([server, local().then(device)]);
+  return {
+    ...own,
+    follows: [...own.follows, ...here.follows.map(deviceFollow)].sort((a, b) =>
+      a.title.localeCompare(b.title)
+    )
+  };
 }
 
 /** "about 4 min" for this many requests at one per `interval` seconds. */

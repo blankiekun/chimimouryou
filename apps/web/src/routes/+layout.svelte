@@ -10,6 +10,7 @@
   import { watchInstall } from '$lib/data/standalone/install-app';
   import { catchDownloads } from '$lib/data/standalone/native-save';
   import { watchYomitan } from '$lib/data/dictionary/yomitan';
+  import { hasDeviceFollows } from '$lib/data/sources/sources-settings';
   import { dialogManager, type Dialog } from '$lib/data/dialog-manager';
   import { userFontsCacheName, type UserFont } from '$lib/data/fonts';
   import { fontFamilyGroupOne$, isOnline$, userFonts$ } from '$lib/data/store';
@@ -37,6 +38,9 @@
       watchInstall(window);
       watchYomitan(window);
       // Sources: followed works update and fetches run while the app is open (local-sources.ts).
+      import('$lib/data/sources/local-sources').then((sources) => sources.startLocalSources());
+    } else if (hasDeviceFollows()) {
+      // Server edition: this device follows extension works, checked here while the app is open.
       import('$lib/data/sources/local-sources').then((sources) => sources.startLocalSources());
     }
     if (!wordTest) {

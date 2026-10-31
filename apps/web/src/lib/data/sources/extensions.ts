@@ -9,7 +9,8 @@
  * switched on or off, each installed extension's code pinned by SHA-256. Kept in `chimi-sources`
  * (repos, extensions) in both editions, never synced. Code is fetched only at install and when the
  * reader taps Update; the runtime only ever gets the stored code, checked against its pin.
- * local-sources.ts runs an extension's works as site `ext:<repo id>:<source id>`.
+ * local-sources.ts runs an extension's works as site `ext:<repo key>:<source id>`, the key being
+ * `repoKey` of the index address, so every device that adds the same index names them alike.
  *
  * The one index format supported: a JSON list of entries with name, id, baseUrl, apiUrl, lang,
  * itemType (0 manga, 1 anime, 2 novel), sourceCodeLanguage (0 Dart, 1 JS), version and
@@ -27,6 +28,8 @@ import { SourceError, type SourceRepo, type SourceRepoExtension } from './types'
 
 export interface RepoRow {
   id: number;
+  /** repoKey(url); missing on rows from before keys until local-sources' one-time pass */
+  key: string;
   url: string;
   entries: ExtensionSource[];
   /** When the index was last read (ms) */
@@ -103,6 +106,19 @@ async function readIndex(url: string) {
   return entries;
 }
 
+/** A repository's name in site ids and identifiers: 12 hex of the SHA-256 of its index address. */
+export async function repoKey(url: string) {
+  return (await sha256(new URL(url).href)).slice(0, 12);
+}
+
+/** `ext:<repo key>:<source id>` → its parts. */
+function siteParts(site: string) {
+  const [, key, sourceId] = site.split(':');
+  return { key, sourceId: Number(sourceId) };
+}
+
+const extSite = (repo: RepoRow, sourceId: number) => `ext:${repo.key}:${sourceId}`;
+
 /** Why the app won't run the entry ('' = it can), and its tag. */
 function verdict(entry: ExtensionSource): Pick<SourceRepoExtension, 'off' | 'tag'> {
   if (entry.sourceCodeLanguage !== 1) {
@@ -123,7 +139,7 @@ const listed = (entry: ExtensionSource) => entry.itemType === 0 || entry.itemTyp
 function view(repo: RepoRow | undefined, entry: ExtensionSource, row?: ExtensionRow) {
   return {
     id: entry.id as number,
-    site: repo ? `ext:${repo.id}:${entry.id}` : '',
+    site: repo ? extSite(repo, entry.id as number) : '',
     name: entry.name,
     lang: text(entry.lang),
     kind: entry.itemType === 0 ? 'manga' : 'novel',
@@ -183,7 +199,7 @@ export async function addRepo(url: string, on: number[]) {
   }
   const entries = await readIndex(url);
   // Code first, so a failed install leaves nothing half-saved.
-  const draft: RepoRow = { id: 0, url, entries, fetched: Date.now() };
+  const draft: RepoRow = { id: 0, key: await repoKey(url), url, entries, fetched: Date.now() };
   const picked = entries.filter((e) => on.includes(e.id as number) && listed(e));
   const rows = [];
   for (const entry of picked) rows.push(await install(draft, entry, true));
@@ -200,6 +216,14 @@ async function repoRow(id: number) {
   const repo = await (await store()).one<RepoRow>('repos', id);
   if (!repo) throw new SourceError('No such repository');
   return repo;
+}
+
+/** The repository a site names; on another device's follow it may not be added here. */
+async function siteRepo(site: string) {
+  const { key, sourceId } = siteParts(site);
+  const repo = (await (await store()).all<RepoRow>('repos')).find((r) => r.key === key);
+  if (!repo) throw new SourceError('This extension’s repository isn’t added on this device');
+  return { repo, sourceId };
 }
 
 /** The index again when it is older than 10 min; a failure keeps the last one. */
@@ -239,7 +263,7 @@ export async function setExtension(repoId: number, id: number, on: boolean) {
   if (!entry) throw new SourceError('The repository no longer lists this extension');
   if (row?.code) await db.put('extensions', { ...row, on });
   else if (on) await db.put('extensions', await install(repo, entry, true));
-  if (!on) closeSite(`ext:${repoId}:${id}`);
+  if (!on) closeSite(extSite(repo, id));
   return getRepo(repoId);
 }
 
@@ -251,17 +275,18 @@ export async function updateExtension(repoId: number, id: number) {
   const entry = repo.entries.find((e) => e.id === id);
   if (!entry || !row) throw new SourceError('The repository no longer lists this extension');
   await db.put('extensions', await install(repo, entry, row.on));
-  closeSite(`ext:${repoId}:${id}`);
+  closeSite(extSite(repo, id));
   return getRepo(repoId);
 }
 
 /** Removes the repository and its extensions; works fetched through them stay in the library. */
 export async function removeRepo(id: number) {
   const db = await store();
+  const repo = await repoRow(id);
   for (const row of await db.all<ExtensionRow>('extensions')) {
     if (row.repo === id) {
       await db.remove('extensions', [row.repo, row.id]);
-      closeSite(`ext:${row.repo}:${row.id}`);
+      closeSite(extSite(repo, row.id));
     }
   }
   await db.remove('repos', id);
@@ -304,10 +329,9 @@ function closeSite(site: string) {
 }
 
 async function start(site: string) {
-  const [, repoId, sourceId] = site.split(':').map(Number);
+  const { repo, sourceId } = await siteRepo(site);
   const db = await store();
-  const repo = await repoRow(repoId);
-  const row = await db.one<ExtensionRow>('extensions', [repoId, sourceId]);
+  const row = await db.one<ExtensionRow>('extensions', [repo.id, sourceId]);
   const entry = repo.entries.find((e) => e.id === sourceId);
   if (!row?.code || !entry) throw new SourceError('This extension isn’t installed');
   if (!row.on) throw new SourceError('This extension is switched off (Sources → Repositories)');
@@ -340,8 +364,7 @@ async function use<T>(site: string, fn: (runtime: ExtensionRuntime) => Promise<T
 }
 
 export async function siteName(site: string) {
-  const [, repoId, sourceId] = site.split(':').map(Number);
-  const repo = await repoRow(repoId);
+  const { repo, sourceId } = await siteRepo(site);
   const entry = repo.entries.find((e) => e.id === sourceId);
   if (!entry) throw new SourceError('No such source');
   return { name: entry.name, domain: httpsHost(entry.baseUrl), kind: view(repo, entry).kind };

@@ -311,7 +311,12 @@
                       lang="ja"
                       href="{pagePath}/sources/work?id={follow.workId}">{follow.title}</a
                     >
-                    <p class="sources-row-meta">{follow.siteName}</p>
+                    <p class="sources-row-meta">
+                      {follow.siteName}{#if follow.site.startsWith('ext:')}
+                        · extension{#if !follow.elsewhere}<span class="sources-tag"
+                            >This device</span
+                          >{/if}{/if}
+                    </p>
                   </div>
                   <div class="sources-follow-state">
                     {#if follow.elsewhere && !follow.paused}
@@ -714,6 +719,16 @@
     margin-top: 0.15rem;
     color: var(--app-muted-fg);
     font-size: var(--type-small);
+  }
+
+  /* As the work page's tag (board 5) */
+  .sources-tag {
+    margin-left: 0.5rem;
+    padding: 0 0.35rem;
+    border: 1px solid var(--font-color);
+    border-radius: 2px;
+    color: var(--font-color);
+    font-size: var(--type-label);
   }
 
   .sources-status {

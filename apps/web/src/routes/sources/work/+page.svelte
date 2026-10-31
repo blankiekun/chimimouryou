@@ -45,7 +45,7 @@
   const here = standalone ? 'On this device' : 'In library';
   // Manga from a server as pages: one CBZ per volume or per chapter, while nothing of it is added.
   let per = $state<'volume' | 'chapter'>();
-  // An extension's work (ext:<repo>:<source>): fetched in this tab, no follows yet.
+  // An extension's work (ext:<repo key>:<source>): fetched and followed on this device only.
   const ext = $derived(!!work?.site.startsWith('ext:'));
   const pages = $derived((!!work?.server && !work.files) || (ext && work?.kind === 'manga'));
   const volumes = $derived.by(() => {
@@ -307,28 +307,30 @@
               </select>
             </label>
           {/if}
-          {#if !ext}<div class="work-follow">
-              <div>
-                <p class="work-follow-label" id="work-follow-label">Follow</p>
-                <p class="work-hint work-follow-hint">
-                  {work.paused
-                    ? 'Paused: change it in Sources → Following.'
-                    : work.elsewhere
-                      ? `Followed in ${work.elsewhere}; updates there.`
+          <div class="work-follow">
+            <div>
+              <p class="work-follow-label" id="work-follow-label">Follow</p>
+              <p class="work-hint work-follow-hint">
+                {work.paused
+                  ? 'Paused: change it in Sources → Following.'
+                  : work.elsewhere
+                    ? `Followed in ${work.elsewhere}; updates there.`
+                    : ext
+                      ? 'Checks while the app is open on this device.'
                       : standalone
                         ? `Checks while the app is open${$sourcesWifiOnly$ ? ', on Wi-Fi only' : ''} (Settings → Sources).`
                         : `The server checks every ${work.checkHours} h, also when no device is open.`}
-                  {#if !work.following && empty && pickedText}Turning it on adds {pickedText} first.{/if}
-                </p>
-              </div>
-              <Switch
-                checked={work.following}
-                stateText={false}
-                disabled={followBusy}
-                aria-labelledby="work-follow-label"
-                onchange={setFollow}
-              />
-            </div>{/if}
+                {#if !work.following && empty && pickedText}Turning it on adds {pickedText} first.{/if}
+              </p>
+            </div>
+            <Switch
+              checked={work.following}
+              stateText={false}
+              disabled={followBusy}
+              aria-labelledby="work-follow-label"
+              onchange={setFollow}
+            />
+          </div>
           {#if followError}<p class="work-error" role="alert">{followError}</p>{/if}
 
           {#if pickedText}
