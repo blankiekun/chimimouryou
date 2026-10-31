@@ -23,7 +23,7 @@ import { clean } from './sites/build';
 import * as kakuyomu from './sites/kakuyomu';
 import type { SiteDetails } from './sites/site';
 import * as syosetu from './sites/syosetu';
-import { sourceText } from './transport';
+import { notInstalledMessage, sourceText } from './transport';
 import { SourceError, type SourceRepo, type SourceRepoExtension } from './types';
 
 export interface RepoRow {
@@ -222,7 +222,7 @@ async function repoRow(id: number) {
 async function siteRepo(site: string) {
   const { key, sourceId } = siteParts(site);
   const repo = (await (await store()).all<RepoRow>('repos')).find((r) => r.key === key);
-  if (!repo) throw new SourceError('This extension’s repository isn’t added on this device');
+  if (!repo) throw new SourceError(notInstalledMessage);
   return { repo, sourceId };
 }
 
@@ -333,7 +333,7 @@ async function start(site: string) {
   const db = await store();
   const row = await db.one<ExtensionRow>('extensions', [repo.id, sourceId]);
   const entry = repo.entries.find((e) => e.id === sourceId);
-  if (!row?.code || !entry) throw new SourceError('This extension isn’t installed');
+  if (!row?.code || !entry) throw new SourceError(notInstalledMessage);
   if (!row.on) throw new SourceError('This extension is switched off (Sources → Repositories)');
   if ((await sha256(row.code)) !== row.sha256) {
     throw new SourceError('This extension’s stored code is damaged: tap Update in its repository');

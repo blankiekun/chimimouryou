@@ -729,6 +729,7 @@
     border-radius: 2px;
     color: var(--font-color);
     font-size: var(--type-label);
+    white-space: nowrap;
   }
 
   .sources-status {

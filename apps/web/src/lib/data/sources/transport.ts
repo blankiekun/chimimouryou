@@ -38,6 +38,8 @@ export class FetchError extends Error {
 }
 
 export const needsAppMessage = 'Fetching from this site needs the desktop app';
+/** Another device's extension work whose repository or extension isn't here. */
+export const notInstalledMessage = 'This source isn’t installed on this device';
 
 /** This site doesn't let a browser read it (no CORS): the desktop app or the APK can. */
 export class NeedsAppError extends Error {

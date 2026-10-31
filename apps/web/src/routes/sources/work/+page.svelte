@@ -19,7 +19,7 @@
     unfollowWork
   } from '$lib/data/sources/server-sources';
   import { sourcesWifiOnly$ } from '$lib/data/sources/sources-settings';
-  import { needsAppMessage } from '$lib/data/sources/transport';
+  import { needsAppMessage, notInstalledMessage } from '$lib/data/sources/transport';
   import type { SourceWork } from '$lib/data/sources/types';
 
   /**
@@ -197,6 +197,8 @@
       <p class="work-note">Adding web novels needs an account with the "Add books" permission.</p>
     {:else if loadError === needsAppMessage}
       <NeedsApp />
+    {:else if loadError === notInstalledMessage}
+      <p class="work-note">{notInstalledMessage}.</p>
     {:else if loadError}
       <p class="work-error" role="alert">{loadError}</p>
     {:else if !work}
@@ -315,7 +317,7 @@
                   ? 'Paused: change it in Sources → Following.'
                   : work.elsewhere
                     ? `Followed in ${work.elsewhere}; updates there.`
-                    : ext
+                    : ext && !standalone
                       ? 'Checks while the app is open on this device.'
                       : standalone
                         ? `Checks while the app is open${$sourcesWifiOnly$ ? ', on Wi-Fi only' : ''} (Settings → Sources).`
