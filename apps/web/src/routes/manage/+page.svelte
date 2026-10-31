@@ -484,9 +484,13 @@
   }
 
   $: detailsBook =
-    $page.state.bookDetails === undefined
+    $page.state.bookDetails === undefined && $page.state.bookTitle === undefined
       ? undefined
-      : $bookCards$?.find((card) => card.id === $page.state.bookDetails);
+      : $bookCards$?.find((card) =>
+          $page.state.bookDetails === undefined
+            ? card.title === $page.state.bookTitle
+            : card.id === $page.state.bookDetails
+        );
 
   /** Selects a book without toggling (long press can fire twice). */
   function selectBook(bookId: number) {

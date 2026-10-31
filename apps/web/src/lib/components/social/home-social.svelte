@@ -1,6 +1,6 @@
 <script lang="ts">
   import { browser } from '$app/env';
-  import { pushState } from '$app/navigation';
+  import { goto, pushState } from '$app/navigation';
   import { page } from '$lib/data/page-store';
   import ActivityFeed from '$lib/components/social/activity-feed.svelte';
   import FriendCover from '$lib/components/social/friend-cover.svelte';
@@ -72,6 +72,17 @@
       } as BookCardProps,
       meta: `${friend.name} · ${Math.round(book.pct * 100)}%`
     }));
+  /**
+   * My copy's page when I have the book, else the friend's profile.
+   * shortcut: "have" is localCovers (books with a cover); list the library there if coverless ones matter.
+   */
+  function openReading(username: string, book: { key: string; kind: string }) {
+    const mine = book.kind === 'hidden' ? undefined : covers?.get(book.key);
+
+    if (mine) goto(`${pagePath}/manage`, { state: { bookTitle: mine.title } });
+    else pushState('', { profile: username });
+  }
+
   $: hidden = $hubDown$ && !list;
   $: requestCount = list ? list.incoming.length : 0;
   $: requestsShown = !!list && list.incoming.length + list.outgoing.length > 0;
@@ -89,7 +100,7 @@
       <SectionHead id="home-social-reading" {number} title={$t$('social.nowReading')} />
       <div class="home-social-shelf">
         {#each reading as { friend, book, card, meta } (card.id + friend.id)}
-          <CoverCard book={card} {meta} on:open={() => pushState('', { profile: friend.username })}>
+          <CoverCard book={card} {meta} on:open={() => openReading(friend.username, book)}>
             <svelte:fragment slot="cover">
               <FriendCover {book} {covers} avatar={friend.avatar} />
             </svelte:fragment>

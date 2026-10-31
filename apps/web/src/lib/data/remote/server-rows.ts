@@ -74,7 +74,7 @@ export const syncKinds = {
     'settings.json': 'settings',
     'sources.json': 'sources'
   },
-  gameDocs: ['progress', 'statistics', 'vnsaves']
+  gameDocs: ['progress', 'statistics', 'vnsaves', 'metadata']
 } as const;
 
 /** An extra sync file; series.json syncs only on Drive, OneDrive and folders (browser libraries). */

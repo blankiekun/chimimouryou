@@ -9,5 +9,5 @@
     "settings.json": "settings",
     "sources.json": "sources"
   },
-  "gameDocs": ["progress", "statistics", "vnsaves"]
+  "gameDocs": ["progress", "statistics", "vnsaves", "metadata"]
 }

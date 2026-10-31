@@ -111,7 +111,7 @@ export async function findCover(title: string, kind: MetadataKind, series = '') 
     const saved = serverless ? undefined : await metadata.loadBookMetadata().catch(() => undefined);
 
     if (saved && !saved[title]) {
-      await metadata.saveBookMetadata(title, { ...match, cover: '' }).catch(() => {});
+      await metadata.saveBookMetadata(title, { ...match, cover: '' }, false).catch(() => {});
     }
     return true;
   } catch {

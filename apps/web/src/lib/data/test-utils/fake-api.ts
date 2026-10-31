@@ -126,6 +126,9 @@ export function fakeApi(options: { api?: number | null; account?: () => string }
     if (first === 'goals') return ['goals', { goalStart: second }];
     if (first === 'series') return ['series', { book: +second }];
     if (first === 'metadata') return ['metadata', { book: +second }];
+    if (first === 'games' && third === 'docs') {
+      return ['gameDocs', { name: decodeURIComponent(second), kind: fourth }];
+    }
     if (first === 'games' && second) return ['games', { name: decodeURIComponent(second) }];
     return undefined;
   }
@@ -163,7 +166,7 @@ export function fakeApi(options: { api?: number | null; account?: () => string }
       const result: Record<string, any> = { rev };
 
       Object.values(tables)
-        .concat('accountDocs')
+        .concat('accountDocs', 'gameDocs')
         .forEach((table) => {
           result[table] = rowsOf(table).filter((row) => row.rev > since);
         });

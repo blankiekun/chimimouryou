@@ -16,7 +16,8 @@ import type {
 import { database, lastReadingGoalsModified$ } from '$lib/data/store';
 import { isManga } from '$lib/data/manga/manga';
 import { levelOf } from '$lib/data/difficulty/difficulty-core';
-import { isVn } from '$lib/data/vn/vn';
+import { isVn, vnInfo } from '$lib/data/vn/vn';
+import { applyMetadata, recordMetadata } from '$lib/data/library/book-metadata';
 import { standalone } from '$lib/data/env';
 import { syncBrowserSeries, withBrowserSeries } from '$lib/data/library/series-overrides';
 
@@ -56,6 +57,8 @@ export class BrowserStorageHandler extends BaseStorageHandler {
         for (let index = 0, { length } = data; index < length; index += 1) {
           const book = data[index];
           const estimate = estimates?.get(book.title);
+          // A Windows game's own details (book-metadata.ts): their cover and VNDB title.
+          const details = isVn(book) ? recordMetadata(vnInfo(book).metadata) : undefined;
 
           this.addBookCard(book.title, {
             id: book.id,
@@ -73,6 +76,12 @@ export class BrowserStorageHandler extends BaseStorageHandler {
             seriesIndex: book.seriesIndex,
             difficulty: levelOf(estimate)
           });
+          if (details) {
+            this.titleToBookCard.set(
+              book.title,
+              applyMetadata(this.titleToBookCard.get(book.title)!, { [book.title]: details })
+            );
+          }
         }
 
         this.dataListFetched = true;
