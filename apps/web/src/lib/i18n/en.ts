@@ -1234,6 +1234,7 @@ export const en = {
   'reader.loreFrom': 'From {title}',
   'reader.loreSince': 'since {count}',
   'reader.loreLater': 'Has details from later',
+  'reader.loreUpdatedLater': 'Updated later in the book. Open to read it.',
   'reader.loreDeleteEntry': 'Delete entry',
   'reader.chapterProgress': 'Chapter Progress: {count} ({percent}%)',
   'reader.closeToc': 'Close Table of Contents',

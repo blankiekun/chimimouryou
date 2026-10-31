@@ -9,6 +9,7 @@
     laterInSeries,
     isLorebookUpdating,
     loreCategories,
+    loreEntryAt,
     lorebookChanged$,
     lorebookProgress$,
     minUpdateCharacters,
@@ -83,14 +84,17 @@
   onDestroy(() => subscriptions.forEach((subscription) => subscription.unsubscribe()));
 
   $: pending = lorebook ? Math.max(0, position - lorebook.processedUpTo) : 0;
-  // Entries first met after the position would be spoilers when reading an earlier part again.
-  $: visible = (lorebook?.entries ?? []).filter(
-    (entry) =>
-      (!!entry.fromBook || entry.firstSeen < position) &&
+  // Entries first met after the position would be spoilers when reading an earlier part again,
+  // and so would what later updates added: the list shows the entry as it was at the position.
+  $: shown = (lorebook?.entries ?? [])
+    .filter((entry) => !!entry.fromBook || entry.firstSeen < position)
+    .map((entry) => ({ entry, then: loreEntryAt(title, entry, position) }));
+  $: visible = shown.filter(
+    ({ entry, then }) =>
       (!category || entry.category === category) &&
       (!filter ||
-        [entry.name, entry.reading, entry.content, ...entry.keys].some((text) =>
-          text.toLowerCase().includes(filter.toLowerCase())
+        [then?.name ?? entry.name, entry.reading, then?.content ?? '', ...(then?.keys ?? [])].some(
+          (text) => text.toLowerCase().includes(filter.toLowerCase())
         ))
   );
   $: counts = (lorebook?.entries ?? []).reduce<Record<string, number>>((acc, entry) => {
@@ -292,20 +296,24 @@
       </p>
     {:else if visible.length}
       <ul class="lore-list">
-        {#each visible as entry (entry.id)}
+        {#each visible as { entry, then } (entry.id)}
           <li>
             <button
               class="lore-entry"
               aria-expanded={openEntry === entry.id}
               on:click={() => (openEntry = openEntry === entry.id ? '' : entry.id)}
             >
-              <span class="font-bold" lang="ja">{entry.name}</span>
+              <span class="font-bold" lang="ja">{then?.name ?? entry.name}</span>
               {#if entry.reading && entry.reading !== entry.name}
                 <span class="panel-note" lang="ja">{entry.reading}</span>
               {/if}
               <span class="panel-note ml-1">{categoryLabels(entry.category)}</span>
               {#if openEntry !== entry.id}
-                <span class="lore-preview" lang="ja">{entry.content}</span>
+                {#if then}
+                  <span class="lore-preview" lang="ja">{then.content}</span>
+                {:else}
+                  <span class="lore-preview">{$t$('reader.loreUpdatedLater')}</span>
+                {/if}
               {/if}
             </button>
             {#if openEntry === entry.id}

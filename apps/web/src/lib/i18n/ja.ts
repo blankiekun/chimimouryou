@@ -1235,6 +1235,7 @@ export const ja: Record<MessageKey, string> = {
   'reader.loreFrom': '「{title}」より引き継ぎ',
   'reader.loreSince': '{count}文字目〜',
   'reader.loreLater': '現在地より先の情報を含む',
+  'reader.loreUpdatedLater': 'この先で更新されています。開くと表示します。',
   'reader.loreDeleteEntry': '項目を削除',
   'reader.chapterProgress': '章の進捗: {count}（{percent}%）',
   'reader.closeToc': '目次を閉じる',
