@@ -15,6 +15,7 @@ import {
   ipcMain,
   Menu,
   net,
+  screen,
   session,
   shell
 } from 'electron';
@@ -27,7 +28,7 @@ import {
   isSignInUrl,
   startBrowserSignIn
 } from './oauth.js';
-import { registerGames } from './games.js';
+import { loadStore, registerGames } from './games.js';
 import { serve } from './serve.js';
 import { checkForUpdates } from './updater.js';
 
@@ -47,6 +48,15 @@ const electronDir = app.isPackaged
   : join(import.meta.dirname, 'node_modules/electron/dist');
 
 let mainWindow;
+
+// The game overlay needs window positions, which Wayland doesn't give: while it's on, the app runs
+// on X11 (XWayland, where Wine's games are too). Read before `ready`, so a change takes a restart.
+if (
+  process.platform === 'linux' &&
+  (process.env.XDG_SESSION_TYPE === 'wayland' || process.env.WAYLAND_DISPLAY) &&
+  loadStore(join(app.getPath('userData'), 'native-games.json')).overlay?.on === true
+)
+  app.commandLine.appendSwitch('ozone-platform', 'x11');
 
 /** The file: URLs the About window links to (licences): the only local files a window may open. */
 const aboutFiles = new Set();
@@ -320,7 +330,11 @@ if (!app.requestSingleInstanceLock()) {
       ipcMain,
       BrowserWindow,
       desktopCapturer,
+      screen,
       hookDir,
+      overlayUrl: `${origin}/hook/overlay`,
+      preload: appPreferences.preload,
+      prepare: keepExternalLinksOut,
       isApp: (event) => !!event.senderFrame?.url.startsWith(`${origin}/`)
     });
     const yomitan = await loadYomitan();

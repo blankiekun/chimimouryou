@@ -50,6 +50,7 @@
   import HookSettings from '$lib/components/vn/hook-settings.svelte';
   import NativeGameDialog from '$lib/components/vn/native-game-dialog.svelte';
   import NativeThreads from '$lib/components/vn/native-threads.svelte';
+  import NativeOverlayControls from '$lib/components/vn/native-overlay-controls.svelte';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { page } from '$lib/data/page-store';
   import { database } from '$lib/data/store';
@@ -631,6 +632,7 @@
               </button>
             </div>
           {/if}
+          <NativeOverlayControls />
           <NativeThreads {ranked} hook={nativeHook} onpick={pickThread} />
         </div>
         <AnkiWatcher media={ankiMedia} />

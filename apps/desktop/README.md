@@ -115,6 +115,21 @@ root install stays light for the web app and its Docker image; `fetch` downloads
   (`desktopCapturer`) in memory, and `/hook` fills a mined note's empty picture/audio fields with
   its line's (`games-mark`, `games-media`). `e2e/native-vn.e2e.mjs` runs the whole flow
   under Wine with a test VN (`xvfb-run -a node e2e/native-vn.e2e.mjs`; not in CI).
+  Overlay (`overlay.js`, Windows and X11): with "Text overlay over the game" on (`/hook`), a
+  transparent, frameless, unfocusable, always-on-top window on `/hook/overlay` takes the game
+  window's place (the helper's `window` message: rect, foreground, minimized, every 0.1 s) and
+  shows `/hook`'s newest line (a `BroadcastChannel`) in the text box area: a bottom band by
+  default, moved and resized with Adjust overlay, kept per game in `native-games.json`
+  (`overlay` there holds on, text size and opacity; Settings → Desktop games). Windows: clicks go
+  through with mouse moves forwarded, so hover looks up and clicks still reach the game. X11:
+  `forward` is Windows/macOS only, so the window's shape is the text's line boxes and an open
+  popup (the whole window while the pointer is over a popup, or over the text while Yomitan is
+  loaded, since its popup can't be measured): clicks off the text reach the game, a click on the
+  text doesn't. Without a compositor the shape shows an opaque strip, and Yomitan's popup turns the
+  window black; the built-in popup works. Hidden while the game is minimized or not in front. On
+  a Wayland session the app starts on X11 (`--ozone-platform=x11`) while the overlay is on (a
+  change takes a restart). `e2e/overlay.e2e.mjs` checks it under Xvfb with openbox and xcompmgr
+  (`apt install openbox xcompmgr xdotool`); Windows is compile-only.
 - Help → About lists the licences (Yomitan is GPL-3.0, a separate program; its source is the
   release tag named there).
 

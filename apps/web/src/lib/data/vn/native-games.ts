@@ -121,6 +121,62 @@ export function desktopGames(): DesktopGames | undefined {
   return (globalThis as { chimiDesktop?: { games?: DesktopGames } }).chimiDesktop?.games;
 }
 
+/** The game overlay's text box area: fractions of the game window. */
+export interface OverlayArea {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface OverlaySettings {
+  on: boolean;
+  /** Text size in px */
+  fontSize: number;
+  /** Background opacity, 0-1 */
+  opacity: number;
+}
+
+/** What the overlay page is told (apps/desktop/overlay.js). */
+export interface OverlayState {
+  platform: string;
+  area: OverlayArea;
+  editing: boolean;
+  fontSize: number;
+  opacity: number;
+}
+
+/** The text overlay over a game played natively (apps/desktop/overlay.js). */
+export interface DesktopOverlay {
+  /** Reads, or changes, its settings; `restart`: on Wayland it starts with the app's next start */
+  settings(changes?: Partial<OverlaySettings>): Promise<OverlaySettings & { restart: boolean }>;
+  /** Adjust mode: the text box area can be moved and resized; false when no overlay is open */
+  edit(on: boolean): Promise<boolean>;
+  /** Overlay page: the parts that take the mouse (window coordinates), or all of it (`solid`) */
+  setRects(
+    rects: { x: number; y: number; width: number; height: number }[],
+    solid: boolean
+  ): Promise<void>;
+  /** Overlay page: the adjusted area, saved for this game on this computer */
+  setArea(area: OverlayArea): Promise<void>;
+  onState(callback: (state: OverlayState) => void): () => void;
+}
+
+export function desktopOverlay(): DesktopOverlay | undefined {
+  return (globalThis as { chimiDesktop?: { overlay?: DesktopOverlay } }).chimiDesktop?.overlay;
+}
+
+/** /hook's shown lines go to the overlay page (same origin) on this channel. */
+export const overlayChannel = 'chimi-overlay';
+let overlayLines: BroadcastChannel | undefined;
+
+/** A line /hook shows, for the overlay (desktop app only). */
+export function postOverlayLine(text: string) {
+  if (!desktopOverlay()) return;
+  overlayLines ??= new BroadcastChannel(overlayChannel);
+  overlayLines.postMessage({ text });
+}
+
 export interface NativeThread extends HookThread {
   hookcode: string;
 }

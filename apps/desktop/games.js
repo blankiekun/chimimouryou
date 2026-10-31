@@ -30,6 +30,7 @@ import {
 import { basename, dirname, join, relative } from 'node:path';
 import { homedir, userInfo } from 'node:os';
 import { gameMedia } from './game-media.js';
+import { gameOverlay, overlaySettings } from './overlay.js';
 
 /** Programs listed last when a folder is picked: setup and settings tools, not the game. */
 const toolPattern =
@@ -84,7 +85,7 @@ export function nameDiffers(folderName, title) {
 }
 
 /** The stored install path of each game, by its record's folder. */
-function loadStore(file) {
+export function loadStore(file) {
   try {
     const value = JSON.parse(readFileSync(file, 'utf8'));
     return value && typeof value.games === 'object' ? value : { games: {} };
@@ -191,7 +192,11 @@ export function registerGames({
   ipcMain,
   BrowserWindow,
   desktopCapturer,
+  screen,
   hookDir,
+  overlayUrl,
+  preload,
+  prepare,
   isApp
 }) {
   const storeFile = join(app.getPath('userData'), 'native-games.json');
@@ -206,6 +211,36 @@ export function registerGames({
   /** Its sound and screenshots, for Anki (game-media.js). */
   const media = gameMedia({ desktopCapturer, platform });
   app.on('will-quit', () => media.stop());
+  /** The text overlay over the game (overlay.js), while it runs, /hook is open and it's on. */
+  const overlay = gameOverlay({
+    BrowserWindow,
+    screen,
+    url: overlayUrl,
+    preload,
+    prepare,
+    platform
+  });
+  // Wayland gives no window positions: main.js starts the app on X11 (XWayland) while it's on.
+  const noX11 =
+    platform === 'linux' &&
+    (process.env.XDG_SESSION_TYPE === 'wayland' || !!process.env.WAYLAND_DISPLAY) &&
+    app.commandLine.getSwitchValue('ozone-platform') !== 'x11';
+  const overlayOn = () =>
+    overlaySettings(store.overlay).on && (platform === 'win32' || platform === 'linux') && !noX11;
+  /** Opens or closes the overlay to match the game, /hook and the setting. */
+  const syncOverlay = () => {
+    const wanted = session?.running && !session.sender.isDestroyed() && overlayOn();
+    if (!wanted) overlay.close();
+    else if (!overlay.webContents) {
+      const { folder } = session;
+      overlay.open(store.games[folder]?.overlay, overlaySettings(store.overlay), (area) =>
+        update(folder, { overlay: area })
+      );
+      if (session.window) overlay.window(session.window);
+    }
+  };
+  /** /hook's page closing takes the overlay with it (its lines come from there). */
+  const watchSender = (sender) => sender.once('destroyed', () => setTimeout(syncOverlay));
 
   const save = () => {
     writeFileSync(storeFile, JSON.stringify(store, null, 2));
@@ -228,7 +263,10 @@ export function registerGames({
   const status = (text) => send({ type: 'status', text });
 
   const update = (folder, changes) => {
-    store = { games: { ...store.games, [folder]: { ...store.games[folder], ...changes } } };
+    store = {
+      ...store,
+      games: { ...store.games, [folder]: { ...store.games[folder], ...changes } }
+    };
     save();
   };
 
@@ -448,6 +486,8 @@ export function registerGames({
 
     session = { folder, title: game.title, sender: event.sender, messages: [], running: true };
     const current = session;
+    watchSender(event.sender);
+    syncOverlay();
     let child;
     try {
       if (platform === 'win32') {
@@ -493,8 +533,11 @@ export function registerGames({
           }
           // Text lines get the number and arrival time /hook asks for their Anki media by.
           if (message.type === 'text') Object.assign(message, media.stamp());
-          if (message.type === 'window') media.window(message);
-          else if (
+          if (message.type === 'window') {
+            current.window = message;
+            media.window(message);
+            if (session === current) overlay.window(message);
+          } else if (
             [
               'text',
               'thread',
@@ -518,7 +561,10 @@ export function registerGames({
     child.on('exit', () => {
       current.running = false;
       // Not a later game's recording.
-      if (session === current) media.stop();
+      if (session === current) {
+        media.stop();
+        overlay.close();
+      }
       if (current.watch) {
         const before = current.watch;
         const pending = Object.entries(topFolders())
@@ -573,6 +619,7 @@ export function registerGames({
       return { status: 'error', message: 'That folder pick has expired: choose it again.' };
     picks.delete(id);
     store = {
+      ...store,
       games: {
         ...store.games,
         [folder]: {
@@ -638,7 +685,7 @@ export function registerGames({
   handle('games-forget', (event, folder) => {
     const games = { ...store.games };
     delete games[folder];
-    store = { games };
+    store = { ...store, games };
     save();
   });
   handle('games-list', async () => ({
@@ -661,6 +708,32 @@ export function registerGames({
     if (!session) return undefined;
     // /hook (re)opened: lines go to it from now on.
     session.sender = event.sender;
+    watchSender(event.sender);
+    syncOverlay();
     return { folder: session.folder, running: session.running, messages: session.messages };
   });
+
+  // The overlay: its settings (/hook, Settings → Desktop games), Adjust mode (/hook), and from the
+  // overlay page itself its rects and adjusted area.
+  handle('overlay-settings', (event, changes) => {
+    if (changes && typeof changes === 'object') {
+      const { on, fontSize, opacity } = { ...overlaySettings(store.overlay), ...changes };
+      store = { ...store, overlay: overlaySettings({ on, fontSize, opacity }) };
+      save();
+      overlay.settings(store.overlay);
+      syncOverlay();
+    }
+    // On Wayland it starts with the next start of the app.
+    return {
+      ...overlaySettings(store.overlay),
+      restart: noX11 && overlaySettings(store.overlay).on
+    };
+  });
+  handle('overlay-edit', (event, on) => overlay.edit(on));
+  const fromOverlay = (event) => event.sender === overlay.webContents;
+  handle(
+    'overlay-rects',
+    (event, rects, solid) => fromOverlay(event) && overlay.rects(rects, solid)
+  );
+  handle('overlay-area', (event, area) => fromOverlay(event) && overlay.area(area));
 }

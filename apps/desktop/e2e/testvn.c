@@ -118,8 +118,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show) {
   WNDCLASSW wc = {0}; wc.lpfnWndProc = proc; wc.hInstance = inst; wc.lpszClassName = L"TestVN";
   wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH); wc.hCursor = LoadCursor(NULL, IDC_ARROW);
   RegisterClassW(&wc);
-  HWND hwnd = CreateWindowW(L"TestVN", L"テストVN", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 0, 0, 820, 200, NULL, NULL, inst, NULL);
-  int ms = cmd && *cmd ? _wtoi(cmd) : 1500;
+  // TESTVN_MS: the step time when no argument gives it; TESTVN_HEIGHT: the window's (overlay E2E).
+  wchar_t env[16];
+  int height = GetEnvironmentVariableW(L"TESTVN_HEIGHT", env, 16) ? _wtoi(env) : 200;
+  HWND hwnd = CreateWindowW(L"TestVN", L"テストVN", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 0, 0, 820, height, NULL, NULL, inst, NULL);
+  int ms = cmd && *cmd ? _wtoi(cmd) : GetEnvironmentVariableW(L"TESTVN_MS", env, 16) ? _wtoi(env) : 1500;
   SetTimer(hwnd, 1, ms, NULL);
   MSG msg; while (GetMessageW(&msg, NULL, 0, 0)) { TranslateMessage(&msg); DispatchMessageW(&msg); }
   return 0;
