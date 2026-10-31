@@ -114,3 +114,6 @@ BitmapFactory.java, Canvas.java, Rect.java and androidx/preference/*.java, which
 stay under the MPL 2.0 file by file (modifications included); their source is
 this repository. android/util/Base64.java and android/content/SharedPreferences.java
 are from the Android Open Source Project, licensed under the Apache License 2.0.
+The Android app's Mihon host (apps/android/android/app/src/github/kotlin/) adapts Mihon's
+ExtensionLoader, DelegateLastClassLoaderCompat and AndroidCookieJar (same copyright and
+licence, Apache License 2.0).

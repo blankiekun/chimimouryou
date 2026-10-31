@@ -106,8 +106,8 @@ module.exports = (async () => {
       }
     },
     {
-      // The desktop shell: plain Node/Electron modules outside the web app's tsconfig.
-      files: ['apps/desktop/**/*.{js,cjs,mjs}'],
+      // The desktop shell and the Android E2E: plain Node/Electron modules outside the web app's tsconfig.
+      files: ['apps/desktop/**/*.{js,cjs,mjs}', 'apps/android/e2e/*.mjs'],
       languageOptions: {
         parserOptions: { project: null },
         globals: {

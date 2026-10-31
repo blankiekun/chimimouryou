@@ -1,4 +1,14 @@
 include ':app'
+// The Mihon host's shared core (apps/mihon-host, README there), only in the `github` flavor; it
+// compiles against the host's Android stand-ins, which are never packaged (compileOnly).
+dependencyResolutionManagement {
+    versionCatalogs {
+        libs { from(files('../../mihon-host/gradle/libs.versions.toml')) }
+    }
+}
+include ':mihon-core', ':android-compat'
+project(':mihon-core').projectDir = new File('../../mihon-host/core')
+project(':android-compat').projectDir = new File('../../mihon-host/android-compat')
 include ':capacitor-cordova-android-plugins'
 project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
 

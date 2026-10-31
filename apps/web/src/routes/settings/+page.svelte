@@ -15,7 +15,7 @@
   import SettingsDesktopGames from '$lib/components/settings/settings-desktop-games.svelte';
   import SettingsMihon from '$lib/components/settings/settings-mihon.svelte';
   import { desktopGames } from '$lib/data/vn/native-games';
-  import { mihonHost } from '$lib/data/sources/mihon-runtime';
+  import { mihonDesktop } from '$lib/data/sources/mihon-runtime';
   import SettingsSync from '$lib/components/standalone/settings-sync.svelte';
   import SettingsSources from '$lib/components/sources/settings-sources.svelte';
   import { hasDeviceFollows } from '$lib/data/sources/sources-settings';
@@ -471,7 +471,7 @@
             {#if desktopGames()}
               <SettingsDesktopGames />
             {/if}
-            {#if mihonHost()}
+            {#if mihonDesktop()}
               <SettingsMihon />
             {/if}
             <SettingsSync />

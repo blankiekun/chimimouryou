@@ -409,7 +409,7 @@
                 {errors.url ??
                   (found
                     ? `Found ${found.length} extensions, ${found.filter((e) => e.lang === 'ja').length} in Japanese; ${runnable.length} can run here.`
-                    : 'A Mangayomi index.json (manga or novels), or a Mihon index.pb (manga, desktop app).')}
+                    : 'A Mangayomi index.json (manga or novels), or a Mihon index.pb (manga, desktop and Android apps).')}
               </p>
             {/if}
             {@render caution()}

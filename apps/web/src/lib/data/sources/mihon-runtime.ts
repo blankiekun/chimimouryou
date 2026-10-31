@@ -5,12 +5,15 @@
  */
 
 /**
- * A Mihon extension's source as an ExtensionRuntime: every call goes to the desktop app's JVM host
- * (apps/desktop/mihon.js through `chimiDesktop.mihon`), which loads the jar pinned by `pin`. Phase
- * 1 is desktop only; elsewhere `mihonHost()` is undefined and callers say it needs the desktop app.
+ * A Mihon extension's source as an ExtensionRuntime: every call goes to the app's host, which
+ * loads the extension pinned by `pin`. The desktop app runs jars in its JVM host
+ * (apps/desktop/mihon.js through `chimiDesktop.mihon`); the Android app's `github` build runs apks
+ * in-process (Capacitor plugin `MihonHost`, MihonHostPlugin.kt, same protocol). Elsewhere (plain
+ * browsers, the `play` build) `mihonHost()` is undefined and callers say it needs the app.
  * Filters aren't offered (an empty filter list), and keiyoushi has no novels, so `html` throws.
  */
 
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import {
   ExtensionError,
   type ExtensionDetail,
@@ -19,6 +22,14 @@ import {
 } from './extension-runtime';
 
 interface MihonHost {
+  /** Downloads the extension (Android: checks its signer against `signingKey`) and pins it: its SHA-256 */
+  install(url: string, signingKey: string): Promise<{ sha256: string }>;
+  load(pin: string): Promise<{ sources: { id: string; name: string; lang: string }[] }>;
+  call(pin: string, op: string, params: Record<string, unknown>): Promise<any>;
+}
+
+/** The desktop app's host, which also runs on a Java runtime downloaded from Settings. */
+interface MihonDesktop extends MihonHost {
   status(): Promise<{
     supported: boolean;
     host: boolean;
@@ -27,14 +38,53 @@ interface MihonHost {
   }>;
   installJava(): Promise<unknown>;
   removeJava(): Promise<unknown>;
-  install(url: string): Promise<{ sha256: string }>;
-  load(pin: string): Promise<{ sources: { id: string; name: string; lang: string }[] }>;
-  call(pin: string, op: string, params: Record<string, unknown>): Promise<any>;
   onProgress(callback: (progress: { received: number; total: number }) => void): () => void;
 }
 
-export const mihonHost = () =>
-  (globalThis as { chimiDesktop?: { mihon?: MihonHost } }).chimiDesktop?.mihon;
+interface MihonPlugin {
+  install(options: { url: string; signingKey: string }): Promise<{ sha256: string }>;
+  call(options: Record<string, unknown>): Promise<any>;
+  drop(options: { paths: string[] }): Promise<void>;
+}
+
+const plugin = registerPlugin<MihonPlugin>('MihonHost');
+
+/** Image files the Android host wrote, read through the WebView's file URLs, then deleted. */
+async function files(found: { path: string; type: string }[]) {
+  try {
+    return await Promise.all(
+      found.map(async (file) => {
+        const response = await fetch(Capacitor.convertFileSrc(file.path));
+        if (!response.ok) throw new ExtensionError('The extension’s image could not be read');
+        return { type: file.type, body: new Uint8Array(await response.arrayBuffer()) };
+      })
+    );
+  } finally {
+    await plugin.drop({ paths: found.map((file) => file.path) }).catch(() => undefined);
+  }
+}
+
+const android: MihonHost = {
+  install: (url, signingKey) => plugin.install({ url, signingKey }),
+  load: (pin) => plugin.call({ pin, op: 'load' }),
+  async call(pin, op, params) {
+    const result = await plugin.call({ ...params, pin, op });
+    if (op === 'pages') return { files: await files(result.files) };
+    if (op === 'image') return (await files([result]))[0];
+    return result;
+  }
+};
+
+/** The Android app's host (the `github` build only; `play` has no MihonHost plugin). */
+const androidHost = () => (Capacitor.isPluginAvailable('MihonHost') ? android : undefined);
+
+export const mihonDesktop = () =>
+  (globalThis as { chimiDesktop?: { mihon?: MihonDesktop } }).chimiDesktop?.mihon;
+
+/** The host runs apks (Android), else jars (the desktop app; also what a browser lists by). */
+export const mihonRunsApks = () => !mihonDesktop() && !!androidHost();
+
+export const mihonHost = (): MihonHost | undefined => mihonDesktop() ?? androidHost();
 
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
 
@@ -56,7 +106,7 @@ const blob = (file: { type: string; body: Uint8Array | ArrayBuffer }) =>
 
 export async function openMihon(pin: string, sourceId: string): Promise<ExtensionRuntime> {
   const host = mihonHost();
-  if (!host) throw new ExtensionError('Mihon extensions run in the desktop app');
+  if (!host) throw new ExtensionError('Mihon extensions run in the desktop and Android apps');
   const { sources } = await host.load(pin);
   if (!sources.some((s) => s.id === sourceId)) {
     throw new ExtensionError(

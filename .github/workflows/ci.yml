@@ -45,7 +45,7 @@ jobs:
           if grep -qE '^(apps/desktop/|pnpm-lock\.yaml|\.github/workflows/)' changed.txt; then
             echo desktop=true >> "$GITHUB_OUTPUT"
           fi
-          if grep -qE '^(apps/android/|apps/web/src/lib/data/standalone/(android-drive|android-bars|native-save)\.ts|pnpm-lock\.yaml|\.github/workflows/)' changed.txt; then
+          if grep -qE '^(apps/android/|apps/mihon-host/(core|android-compat|gradle)/|apps/web/src/lib/data/standalone/(android-drive|android-bars|native-save)\.ts|pnpm-lock\.yaml|\.github/workflows/)' changed.txt; then
             echo android=true >> "$GITHUB_OUTPUT"
           fi
 
@@ -217,9 +217,9 @@ jobs:
           mkdir -p ../web/build && echo '<!doctype html>' > ../web/build/index.html
           pnpm exec electron-builder --linux dir --publish never
 
-  # Catches an Android app that no longer builds (only when its inputs change). The debug APK can be
-  # installed on a phone from the run's artifacts. Debug-signed, without the release's Drive client
-  # (apps/android/README.md).
+  # Catches an Android app that no longer builds (only when its inputs change, the Mihon host's core
+  # among them). The `github` flavor's debug APK can be installed on a phone from the run's
+  # artifacts. Debug-signed, without the release's Drive client (apps/android/README.md).
   android:
     name: Android debug APK
     needs: changes
@@ -266,14 +266,16 @@ jobs:
           if [ -n "$ANDROID_DEBUG_KEYSTORE" ]; then
             mkdir -p ~/.android && base64 -d <<< "$ANDROID_DEBUG_KEYSTORE" > ~/.android/debug.keystore
           fi
+          # compileSdk 37 (variables.gradle): Gradle's own download of it fails that run, so fetch it first.
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install 'platforms;android-37.0' > /dev/null
           pnpm exec cap sync android
-          cd android && ./gradlew --no-daemon assembleDebug
+          cd android && ./gradlew --no-daemon assembleGithubDebug
 
       - name: Upload
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: chimimouryou-debug-apk
-          path: apps/android/android/app/build/outputs/apk/debug/app-debug.apk
+          path: apps/android/android/app/build/outputs/apk/github/debug/app-github-debug.apk
           if-no-files-found: error
 
   # Catches Dockerfiles that no longer build and, in Image services, compose files that no longer

@@ -23,3 +23,5 @@ runtime = ["coroutines", "serialization-json", "serialization-json-okio", "seria
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+# The Android app (apps/android) reads this catalog too, for its Mihon host.
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }

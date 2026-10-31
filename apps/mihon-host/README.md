@@ -2,12 +2,14 @@
 
 Runs Mihon/Tachiyomi extensions (keiyoushi's `.jar` builds) for the desktop app: one JVM process,
 spoken to over stdin/stdout in JSON lines by `apps/desktop/mihon.js`. The protocol is in
-`core/src/main/kotlin/moe/chimimouryou/mihon/Host.kt`.
+`core/src/main/kotlin/moe/chimimouryou/mihon/Host.kt`. The Android app (`github` flavor) runs the
+same `core` in-process on apks (apps/android/README.md, Mihon extensions).
 
 - `core`: Mihon's source-api and network classes (Apache-2.0, RxJava removed), `Host` (the
   protocol), `Guard` (https only, public addresses only, on `network.client`) and `Remembered`
-  (what Mihon's database keeps per work and chapter, such as `memo`). Android (phase 2) will build
-  it against the real SDK.
+  (what Mihon's database keeps per work and chapter, such as `memo`). apps/android includes it as
+  `:mihon-core` (with this catalog); it compiles against `android-compat` there too, compileOnly,
+  so on Android the real classes answer.
 - `android-compat`: the Android classes extensions call, on plain Java and `java.awt` (some from
   Suwayomi's AndroidCompat, MPL-2.0; see the repository's NOTICE).
 - `desktop`: the jar loader (plain-text or binary `AndroidManifest.xml`, a child-first class loader

@@ -13,6 +13,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(DriveAuthPlugin.class);
         registerPlugin(FileSavePlugin.class);
+        FlavorPlugins.register(this);
         super.onCreate(savedInstanceState);
 
         // The readers hide the bars (Capacitor's SystemBars, android-bars.ts); a swipe from the

@@ -20,9 +20,10 @@
  * sources and `permissions`). A Manatan package is pinned by the index's SHA-256 like JS code and
  * runs with the manifest inside the pinned zip; one package can hold several sources, each its own
  * site. Manatan extensions run only with native fetch (desktop and Android apps).
- * A Mihon/Tachiyomi repository is its index.pb (mihon-index.ts): each extension is a jar the
- * desktop app downloads and pins (mihon.js), its sources run in the app's JVM host
- * (mihon-runtime.ts); source ids are 64-bit decimal strings, as on Android later.
+ * A Mihon/Tachiyomi repository is its index.pb (mihon-index.ts): each extension is code the
+ * desktop app (mihon.js, the jar) or the Android app (MihonHostPlugin.kt, the apk) downloads and
+ * pins, its sources run in the app's host (mihon-runtime.ts); source ids are 64-bit decimal
+ * strings, the same on both.
  */
 
 import { standalone } from '$lib/data/env';
@@ -36,7 +37,7 @@ import {
   type ManatanSource
 } from './extension-runtime';
 import { readMihonIndex, type MihonEntry } from './mihon-index';
-import { mihonHost, openMihon } from './mihon-runtime';
+import { mihonHost, mihonRunsApks, openMihon } from './mihon-runtime';
 import { clean } from './sites/build';
 import * as kakuyomu from './sites/kakuyomu';
 import type { SiteDetails } from './sites/site';
@@ -62,7 +63,7 @@ export interface ExtensionRow {
   /** The Mangayomi source id, or the Manatan package id */
   id: number | string;
   on: boolean;
-  /** The pinned code (JS, or a Manatan package's zip; '' for a Mihon jar, kept by the desktop app) and its SHA-256 (hex), from the index's version `version` */
+  /** The pinned code (JS, or a Manatan package's zip; '' for a Mihon jar or apk, kept by the app) and its SHA-256 (hex), from the index's version `version` */
   code: string | ArrayBuffer;
   sha256: string;
   version: string;
@@ -220,7 +221,10 @@ function mihonVerdict(entry: MihonEntry): Pick<SourceRepoExtension, 'off' | 'tag
     return { off: 'The built-in source is used instead.', tag: 'Built in' };
   }
   if (!entry.sources.length) return { off: 'No source this app can run.', tag };
-  if (!httpsHost(entry.jarUrl)) return { off: 'The index gives no desktop (jar) build.', tag };
+  const apk = mihonRunsApks();
+  if (!httpsHost(apk ? entry.apkUrl : entry.jarUrl)) {
+    return { off: `The index gives no ${apk ? 'Android (apk)' : 'desktop (jar)'} build.`, tag };
+  }
   return { off: '', tag };
 }
 
@@ -326,8 +330,10 @@ async function install(repo: RepoRow, entry: ExtensionSource, on: boolean): Prom
   if (isMihon(entry)) {
     const host = mihonHost();
     if (!host) throw new NeedsAppError(httpsHost(repo.url));
-    // The desktop app downloads the jar and keeps it under its SHA-256 (the pin); trust on first use.
-    const { sha256: pin } = await host.install(entry.jarUrl);
+    // The app downloads the jar (desktop) or apk (Android) and keeps it under its SHA-256 (the pin):
+    // trust on first use for jars; Android also refuses an apk not signed with the repository's key.
+    const url = mihonRunsApks() ? entry.apkUrl : entry.jarUrl;
+    const { sha256: pin } = await host.install(url, repo.signingKey ?? '');
     return { repo: repo.id, id: entry.id, on, code: '', sha256: pin, version: entry.version };
   }
   if (isManatan(entry) && !nativeFetch()) throw new NeedsAppError(httpsHost(repo.url));
@@ -554,7 +560,7 @@ async function start(site: string) {
   if (!row?.sha256 || !entry) throw new SourceError(notInstalledMessage);
   if (!row.on) throw new SourceError('This extension is switched off (Sources → Repositories)');
   if (isMihon(entry)) {
-    // The desktop app re-hashes the jar against the pin before it loads it.
+    // The app re-hashes the jar or apk against the pin before it loads it.
     if (!mihonHost()) throw new NeedsAppError(httpsHost(repo.url));
     return openMihon(row.sha256, sourceId);
   }

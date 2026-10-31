@@ -508,10 +508,13 @@ jobs:
           ((code <= 2100000000)) || { echo "::error::versionCode $code is past Android's limit"; exit 1; }
           export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/release.jks"
           base64 -d <<< "$ANDROID_KEYSTORE" > "$ANDROID_KEYSTORE_FILE"
+          # compileSdk 37 (variables.gradle): Gradle's own download of it fails that run, so fetch it first.
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install 'platforms;android-37.0' > /dev/null
           pnpm exec cap sync android
-          (cd android && ./gradlew --no-daemon assembleRelease -PversionName="$version" -PversionCode="$code")
+          # The `github` flavor (with Mihon extensions); a `play` build is for later (apps/android/README.md).
+          (cd android && ./gradlew --no-daemon assembleGithubRelease -PversionName="$version" -PversionCode="$code")
           rm "$ANDROID_KEYSTORE_FILE"
-          mv android/app/build/outputs/apk/release/app-release.apk "chimimouryou-$version.apk"
+          mv android/app/build/outputs/apk/github/release/app-github-release.apk "chimimouryou-$version.apk"
 
       # As in desktop-release, which may make the release at the same moment.
       - name: Create the release if missing

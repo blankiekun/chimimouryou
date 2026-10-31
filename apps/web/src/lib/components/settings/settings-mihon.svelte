@@ -7,10 +7,10 @@
    */
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
-  import { mihonHost } from '$lib/data/sources/mihon-runtime';
+  import { mihonDesktop } from '$lib/data/sources/mihon-runtime';
   import { onMount } from 'svelte';
 
-  const host = mihonHost()!;
+  const host = mihonDesktop()!;
   let status = $state<Awaited<ReturnType<typeof host.status>>>();
   let progress = $state<{ received: number; total: number } | null>(null);
   let error = $state('');
