@@ -131,16 +131,9 @@
       {#if kind === 'idle'}<p>{$t$('discord.kindHint.idle')}</p>{/if}
       <p class="editor-phone">{$t$('discord.phoneNote')}</p>
     </div>
-    <button
-      type="button"
-      role="switch"
-      class="app-switch"
-      aria-checked={template.show}
-      onclick={() => (template.show = !template.show)}
+    <Switch checked={template.show} onchange={(next) => (template.show = next)}
+      >{$t$('discord.show')}</Switch
     >
-      <span>{$t$('discord.show')}</span>
-      <span class="app-switch-thumb"></span>
-    </button>
   </header>
 
   {#if hubReady}

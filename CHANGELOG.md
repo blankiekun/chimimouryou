@@ -4,6 +4,102 @@ chimimouryou is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook
 upstream's own changes are not listed here. Each version's section is written when it is released,
 from the pull requests merged since the previous tag (pull requests don't edit this file).
 
+## v3.11.0 (2026-10-30)
+
+### Added
+
+- Sources: add web novels from Syosetu and Kakuyomu as library volumes (50 chapters each, with
+  series and cover). Paste a link or search, browse Popular and Latest, pick which volumes to add,
+  and follow a work: new chapters update its open volume in place and a full volume starts the
+  next one. A queue shows fetches with Retry, Cancel and Check now. Server edition: Import →
+  Sources… for readers with the import permission, run by the `import` profile.
+- Sources: OPDS catalogs (Komga, Kavita, Calibre-web) and Suwayomi servers as sources, private to
+  the account: whole EPUB/CBZ files become volumes, page-only manga become one CBZ per chapter or
+  per volume.
+- Sources: Mangayomi JS extension repositories. Extensions are installed with their code pinned,
+  updated only on tap, and run in a sandboxed frame that may only reach the hosts they declare;
+  in the server edition's browser their requests go through the server. Extension works can be
+  followed on the device that added them.
+- Sources in the standalone edition: the same sites, catalogs and follows run on the device and
+  save into its library. Follows sync between devices as `sources.json` and each one is checked
+  by a single device; sites that block browser requests work in the desktop app and the Android
+  app, and a follow a plain browser can't check is taken over by the first of those that can.
+- Android: an APK of the standalone edition with native Google Drive sign-in, attached to each
+  release.
+- Desktop app: play Windows games natively (Wine on Linux, Locale Remulator on Windows) with the
+  built-in LunaHook text hook on /hook. Saves sync with VNBox's, mined Anki cards get the line's
+  screenshot and audio, and a text overlay over the game (Windows, X11) shows the current line
+  with lookups; size, opacity and area are set per device.
+- Texthooker (/hook): select mode to copy, edit or delete lines with undo, notes, setting
+  presets, a stats strip (time, characters per hour, lines), Pause, newest first, text size and
+  a second WebSocket (ported from texthooker-ui, MIT).
+- Visual novels: Windows games can be added on phones from a ZIP of the game folder, and backups
+  imported there. Installs take ZIPs and folders holding an installer or disc images, find
+  installers by their contents, and run a setup's MSI silently.
+- Visual novels: More → Disc swaps discs of multi-disc games, and Find details on a Windows game
+  sets its length from Jiten.
+- Reader: after a jump (search, Contents, a link, Return to bookmark, highlights, Jump to
+  position) a Back pill returns to the place before it; it shows with the reader bar.
+
+### Changed
+
+- Server: a new `api` service (the v1 API) keeps the catalog and all reading data in
+  `state/api/library.db`; the WebDAV sync routes (`/calibre/sync/`, `/account/sync/`,
+  `/calibre/catalog.json`) are gone. `deploy.sh` and `ebook-update` copy the old `sync/` and
+  `accounts/<id>/ttu-reader-data/` folders into it once, with `web` stopped; updating by hand,
+  run the catalog build and `migrate.py --apply` before starting (docs/INSTALL.md). Back up
+  `DATA_PATH` first; the old folders can be deleted once everything looks right.
+- Server: Sources settings `SOURCES_HOST_INTERVAL` (default 2 s per site), `SOURCES_CHECK_HOURS`
+  (default 6) and `SOURCES_SECRET_KEY`, which encrypts the passwords of added OPDS and Suwayomi
+  servers. Set it (`openssl rand -base64 32`) to allow servers with a password; changing it
+  makes saved passwords unreadable.
+- Server: writing a book's text copy needs a signed-in account and is rate-limited; the Python
+  services answer every error with JSON (411 or 413 for missing or oversized bodies).
+- AI keys stay in the browser they were typed in and are never synced; the account's old copy is
+  removed on the next settings sync. A key is bound to its connection's provider and address.
+- Story so far and Lorebook allow longer answers by default (8,192 and 16,384 tokens), and an
+  answer cut off at Max tokens says so. Reasoning Off turns reasoning off on OpenRouter.
+- Paginated Contents and in-book link jumps no longer move the auto bookmark; page turns made by
+  Listen do.
+- Visual novels: the hook cleanup's New text only is on by default, and the VN player alone is
+  cross-origin isolated.
+- VNBox v0.2.6: Direct3D 10/11 games such as Muramasa EN render with text, and disc swaps work.
+- Shorter UI text: helper lines and subtext cut across the app.
+
+### Fixed
+
+- Reader: search highlights matches that start or end with punctuation and keeps them on screen;
+  a search jump in continuous horizontal text is kept after the panel closes; a same-size window
+  resize no longer freezes the paginated reading point or skips the next continuous scroll; book
+  text stays clear of the mini player; Community line marks come back after a paginated chapter
+  turn; books cached in the browser open while the server is out of reach.
+- EPUBs whose manifest has a single item open.
+- Deleting a book removes all its reader extras (highlights, recaps, word lists, OCR text…) from
+  the browser.
+- Sync: a synced file of the wrong shape is never written over and its error names the file; a
+  malformed setting from another device is ignored instead of stopping settings sync; deleted
+  highlights and word marks win ties; a backup without `staticdata.json` no longer replaces a
+  book with a blank one; Windows game progress, statistics and saves sync through the server.
+- Damaged manga or VN records show a notice instead of failing.
+- The empty "server can't be reached" library has a Retry button; the difficulty panel of a
+  standalone app connected to a server asks that server.
+- Phones: the library list, the characters chart tip and the selection toolbar fit.
+- Visual novels: New text only no longer repeats a line a game sends twice or a page redrawn in
+  pieces; installs find games whose files keep their packed dates; a launcher's crash no longer
+  opens Wine's debugger; a full storage quota is shown instead of a black player; holding
+  Yomitan's scan key over the game's text no longer reaches the game; Windows games show in
+  Continue reading.
+- Standalone builds write `/version.txt` with the commit.
+
+### Security
+
+- Book HTML: `data:` links are dropped, and book HTML is cleaned again after a parse round trip.
+- Sources: the server's fetch proxy for extensions takes only the hosts the repository's index
+  declares, reaches public addresses only (checked on every redirect, connection pinned to the
+  checked address) and paces each host; the desktop app's fetch sends no cookies to sites.
+- Desktop app: save names synced from VNBox are checked before natively played games' saves are
+  written or read.
+
 ## v3.10.1 (2026-10-28)
 
 ### Fixed
