@@ -77,8 +77,9 @@ root install stays light for the web app and its Docker image; `fetch` downloads
   without `Electron/…`), redirects followed one by one (net.fetch's `url` is wrong; headers dropped
   on another origin), a size cap; per-host pacing stays in the page. Sites without CORS work here.
 - Windows games play natively (Linux and Windows builds; `games.js`). A library VN record with
-  `engine: 'vnbox'` (or one added with Import → Installed game, no browser files) opens `/v` on a
-  Play natively button, which opens `/hook?native=<book id>`. The app ships no VNBox, so `/v` never
+  `engine: 'vnbox'` (or one added with Import → Installed game, no browser files) starts natively
+  as soon as it is opened: `/v` goes straight to `/hook?native=<book id>` (More → Play natively
+  does the same), which asks for its folder when it isn't linked here. The app ships no VNBox, so `/v` never
   starts it here and Import has no Windows game entry (its player would wait on "Downloading…"). `main.js` keeps where each game is
   installed in `<userData>/native-games.json` (`{folder → title, installDir, exe, linkedAt}`, by the
   record's `folder`, never synced), written only after its own `dialog.showOpenDialog`: a page names

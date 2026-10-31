@@ -356,6 +356,12 @@
       }
     }
     loaded = true;
+    // Opening it plays it: /hook starts it in Wine, its error shows beside its Start the game button.
+    if (native && game.engine === 'vnbox') {
+      await goto(`${pagePath}/hook?native=${data.id}`, { replaceState: true }).catch((error) => {
+        blocked = `The game couldn't start natively: ${error.message}`;
+      });
+    }
   }
 
   function updateProgress() {
