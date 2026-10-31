@@ -61,6 +61,9 @@ from the pull requests merged since the previous tag (pull requests don't edit t
   answer cut off at Max tokens says so. Reasoning Off turns reasoning off on OpenRouter.
 - Paginated Contents and in-book link jumps no longer move the auto bookmark; page turns made by
   Listen do.
+- Visual novels: the text panel under the game, which resized it with every page, is now a Backlog
+  sidebar on the right (phones held upright keep the Backlog sheet): the line history with lookups,
+  kept even with Anki off. Progress moved into the bar.
 - Visual novels: the hook cleanup's New text only is on by default, and the VN player alone is
   cross-origin isolated.
 - VNBox v0.2.6: Direct3D 10/11 games such as Muramasa EN render with text, and disc swaps work.
