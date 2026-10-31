@@ -49,7 +49,7 @@ and one for every added server.
 Servers (servers/opds.py; Suwayomi is an OPDS preset): private to the account that added them; their works are
 works of site 'opds:<server id>' keyed by the series feed's path. "files" works are one volume per file, queued as
 it came; "pages" works (manga) are CBZs of `per` chapter (one each) or volume (MANGA_VOLUME_SIZE chapters), a
-choice that stays once a volume is in the library or on its way.
+choice that stays once a volume is in the library or on its way (or in a failed or cancelled job).
 
 Follows: the runner queues an update job for every work with a due unpaused follow (SOURCES_CHECK_HOURS, an hour
 after a failed check), one job per work whoever follows it; a failed update job is queued again rather than a new
@@ -261,8 +261,9 @@ def _work_json(work: dict, details: dict | None, account: str = '') -> dict:
     volumes = {row['number']: row for row in db.query(
         'SELECT v.*, EXISTS (SELECT 1 FROM books b WHERE b.calibre_id = v.calibre_id AND b.deleted = 0) AS live '
         'FROM work_volumes v WHERE v.work = ?', (work['id'],))}
-    jobs = db.query('SELECT state, volumes FROM source_jobs WHERE work = ? AND state IN (?, ?, ?)',
-                    (work['id'], *ACTIVE, 'adding'))
+    # Failed and cancelled jobs count for the per choice: their volume numbers are in the current one.
+    jobs = db.query('SELECT state, volumes FROM source_jobs WHERE work = ? AND state IN (?, ?, ?, ?, ?)',
+                    (work['id'], *ACTIVE, 'adding', 'failed', 'cancelled'))
     fetching = {n for job in jobs if job['state'] in ACTIVE for n in json.loads(job['volumes'])}
     adding = any(job['state'] == 'adding' for job in jobs)
     # add() has no details: the last ones read do (run_job checks again).
@@ -374,7 +375,7 @@ def _set_per(work: dict, per) -> dict:
     if not _pages(work):
         raise ApiError(400, 'This work comes as whole files')
     if not _work_json(work, None)['perChoice']:
-        raise ApiError(409, f"Some of it is already in the library: it stays one CBZ per {work['per']}")
+        raise ApiError(409, f"Some of it is already in the library or the queue: it stays one CBZ per {work['per']}")
     database().transaction(lambda c: c.execute('UPDATE works SET per = ?, volume_size = ? WHERE id = ?', (
         per, 1 if per == 'chapter' else MANGA_VOLUME_SIZE, work['id'])))
     return _work_row(work['id'])
@@ -392,6 +393,10 @@ def add(account: str, work_id: int, body: dict) -> dict:
     wanted = sorted({n for n in numbers if n in plan and not plan[n]['inLibrary'] and not plan[n]['pending']})
     if not wanted:
         raise ApiError(400, 'Those volumes are already in the library or on their way')
+    # A queued check hasn't listed its volumes yet: it fetches every volume after the last one in the library.
+    if max(wanted) > max(_kept_volumes(work_id), default=0) and database().query(
+            "SELECT 1 FROM source_jobs WHERE work = ? AND kind = 'update' AND state IN (?, ?)", (work_id, *ACTIVE)):
+        raise ApiError(409, 'A check of this work is fetching its new volumes; try again when it is done')
     now = now_ms()
     job_id = uuid.uuid4().hex
 
@@ -449,10 +454,23 @@ def delete(account: str, job_id: str) -> dict:
         'DELETE FROM source_jobs WHERE id = ? AND state NOT IN (?, ?)', (job_id, *ACTIVE)).rowcount)
     if not removed:
         raise ApiError(409, 'Cancel the job first')
-    # Chapters cached for it go too, unless another job of the work still needs them.
+    # Chapters cached for it go too, unless another job of the work still needs them; the open volume's stay (a
+    # check rebuilds it from them).
     if not database().query('SELECT 1 FROM source_jobs WHERE work = ? AND state IN (?, ?, ?, ?)',
                             (job['work'], 'failed', 'cancelled', *ACTIVE)):
-        shutil.rmtree(cache_dir(job['work']), ignore_errors=True)
+        keep = {str(n) for row in _kept_volumes(job['work']).values() if not row['complete']
+                for n in range(row['first_ch'], row['last_ch'] + 1)}
+        folder = cache_dir(job['work'])
+        for name in os.listdir(folder) if keep and os.path.isdir(folder) else []:
+            path = os.path.join(folder, name)
+            if name.removesuffix('.json') in keep:
+                continue
+            if os.path.isdir(path):
+                shutil.rmtree(path, ignore_errors=True)
+            else:
+                os.remove(path)
+        if not keep:
+            shutil.rmtree(folder, ignore_errors=True)
     return {}
 
 
@@ -555,11 +573,12 @@ def _kept_volumes(work_id: int) -> dict:
         '(SELECT 1 FROM books b WHERE b.calibre_id = v.calibre_id))', (work_id,))}
 
 
-def _update_plan(work: dict, plan: dict, size: int) -> tuple[list[int], int]:
+def _update_plan(work: dict, plan: dict, size: int, details: dict) -> tuple[list[int], int]:
     """(volumes an update fetches, new chapters): the last volume in the library if it isn't full, and every
     volume after it (all of them when none is there yet). Full volumes are never fetched again."""
     kept = _kept_volumes(work['id'])
     last = kept[max(kept)] if kept else None
+    changed = None
     if last is None:
         # Nothing in the library yet: start where the reader's picked add began ("Vol. 3 onward") when it failed
         # before any volume reached Calibre (volumes it queued have rows, ones it didn't stay in the job), not at 1.
@@ -574,13 +593,28 @@ def _update_plan(work: dict, plan: dict, size: int) -> tuple[list[int], int]:
     else:
         full = last['last_ch'] - last['first_ch'] + 1 >= size
         start, have = last['number'] + int(full), last['last_ch']
-        if last['last_ch'] > work['chapters']:
+        if last['last_ch'] > work['chapters'] or _renumbered(work, details, last['last_ch']):
             # A chapter was deleted on the site: the open volume's cached chapters are numbered the old way.
             _drop_cache(work['id'], last['first_ch'], last['last_ch'])
+            changed = last['number']
     # A volume in the library with other chapters than the plan's (fewer, or more after a deletion) is fetched.
     numbers = [n for n, volume in sorted(plan.items())
-               if n >= start and not (n in kept and kept[n]['last_ch'] == volume['last'])]
+               if n >= start and not (n in kept and kept[n]['last_ch'] == volume['last'] and n != changed)]
     return numbers, max(0, work['chapters'] - have)
+
+
+def _renumbered(work: dict, details: dict, n: int) -> bool:
+    """A chapter deleted and another added (the count stays): the site's chapter n (when it is among the latest)
+    has another title than the cached chapter n."""
+    if work['site'] not in ADAPTERS:
+        return False
+    site = next((c['title'] for c in details.get('latest', []) if c['n'] == n), '')
+    try:
+        with open(os.path.join(cache_dir(work['id']), f'{n}.json'), encoding='utf-8') as f:
+            cached = json.load(f).get('title') or ''
+    except (OSError, ValueError):
+        return False
+    return bool(site and cached) and ''.join(site.split()) != ''.join(cached.split())
 
 
 def _drop_cache(work_id: int, first: int, last: int):
@@ -1074,7 +1108,7 @@ def run_job(job):
     for n in _gone(details):
         plan.pop(n, None)
     if job['kind'] == 'update':
-        remaining, new = _update_plan(work, plan, size)
+        remaining, new = _update_plan(work, plan, size, details)
         if resumed := [n for n in json.loads(job['volumes']) if n in plan]:
             # A failed check goes on with the volumes it hadn't queued (the ones it had may still be on their way
             # into Calibre), and any volume begun since.
@@ -1133,6 +1167,7 @@ class ChapterError(Exception):
 def runner(site: str):
     """Fetches the site's (or, for SERVERS, every added server's) queued jobs one at a time."""
     wake = _wake.events[site]
+    fetcher.patient()
     where, params = ("w.site LIKE 'opds:%'", ()) if site == SERVERS else ('w.site = ?', (site,))
     while True:
         try:

@@ -35,10 +35,19 @@ MAX_REDIRECTS = 5
 SERVER_INTERVAL = 0.2
 # A longer Retry-After fails the request; the job can be retried later.
 MAX_RETRY_AFTER = 600
+# A request someone is waiting on (an API call: search, lookup, covers) waits at most this long for the host (its
+# Retry-After or its slot), well under nginx's 300 s; the runners' threads (patient()) keep MAX_RETRY_AFTER.
+API_MAX_WAIT = 30
 RETRIES = 3
 
 _lock = threading.Lock()
 _next: dict[str, float] = {}
+_thread = threading.local()
+
+
+def patient():
+    """This thread's requests may wait out a long Retry-After: no one is waiting on its answer (a runner)."""
+    _thread.patient = True
 
 
 class FetchError(Exception):
@@ -174,6 +183,10 @@ def fetch_public(url: str, hosts: set[str], headers: dict | None = None, max_byt
 def _fetch(url: str, hosts: set[str], headers: dict | None = None, server: str = '', max_bytes: int | None = None,
            to_path: str = '', public: bool = False, max_wait: float | None = None) -> tuple[bytes, str, str]:
     max_bytes = max_bytes or MAX_BYTES
+    patient = getattr(_thread, 'patient', False)
+    longest = MAX_RETRY_AFTER if patient else API_MAX_WAIT
+    if max_wait is None and not patient:
+        max_wait = API_MAX_WAIT
     for _ in range(MAX_REDIRECTS + 1):
         parts = urlparse(url)
         host = (parts.hostname or '').lower()
@@ -215,10 +228,10 @@ def _fetch(url: str, hosts: set[str], headers: dict | None = None, server: str =
                     url = urljoin(url, error.headers['Location'])
                     break
                 wait = _retry_after(error.headers.get('Retry-After')) if error.code in (429, 503) else None
-                if wait is not None and wait <= MAX_RETRY_AFTER:
+                if wait is not None and wait <= MAX_RETRY_AFTER:  # the runners keep to it too
                     with _lock:
                         _next[server or host] = max(_next.get(server or host, 0.0), time.monotonic() + wait)
-                if wait is None or wait > MAX_RETRY_AFTER or attempt == (0 if public else RETRIES - 1):
+                if wait is None or wait > longest or attempt == (0 if public else RETRIES - 1):
                     raise FetchError(f"{host} didn't answer ({error.code})", error.code) from error
             except (urllib.error.URLError, OSError) as error:
                 reason = str(getattr(error, 'reason', error))
