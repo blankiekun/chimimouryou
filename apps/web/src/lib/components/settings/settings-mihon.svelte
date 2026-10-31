@@ -23,7 +23,10 @@
       status = next;
       progress = next.downloading;
     });
-    return host.onProgress((next) => (progress = next));
+    // A block, not `=> (progress = next)`: the bridge clones a callback's answer, and a state proxy can't be.
+    return host.onProgress((next) => {
+      progress = next;
+    });
   });
 
   async function run(action: () => Promise<unknown>) {
@@ -55,18 +58,19 @@
       <p class="mh-note">This build of the app has no Mihon host.</p>
     {:else if status?.jre}
       <div class="mh-actions">
-        <span class="mh-state">On</span>
+        <span class="app-tag">On</span>
         <button
           type="button"
           class="app-button app-button-quiet"
           disabled={busy}
-          onclick={() => run(host.removeJava)}>Remove</button
+          onclick={() => run(host.removeJava)}>{busy ? 'Removing…' : 'Remove'}</button
         >
       </div>
     {:else if status}
       <p class="mh-warning">
-        An extension is code from its repository, and it runs with this computer’s rights. Add only
-        repositories you trust.
+        An extension is code from its repository, and it runs with this computer’s rights. <strong
+          >Add only repositories you trust.</strong
+        >
       </p>
       <div class="mh-actions">
         <button
@@ -74,13 +78,22 @@
           class="app-button app-button-primary"
           disabled={busy}
           onclick={() => run(host.installJava)}
-          >{progress
-            ? `Downloading… ${mb(progress.received)}${progress.total ? ` of ${mb(progress.total)}` : ''}`
-            : 'Turn on'}</button
+          >{progress && progress.total && progress.received >= progress.total
+            ? 'Checking…'
+            : progress
+              ? `Downloading… ${mb(progress.received)}${progress.total ? ` of ${mb(progress.total)}` : ''}`
+              : busy
+                ? 'Starting…'
+                : 'Turn on'}</button
         >
       </div>
       {#if progress?.total}
-        <progress class="w-full" max={progress.total} value={progress.received}></progress>
+        <progress
+          class="mh-progress"
+          aria-label="Java runtime download"
+          max={progress.total}
+          value={progress.received}
+        ></progress>
       {/if}
     {/if}
     {#if error}
@@ -90,13 +103,47 @@
 </SettingsSection>
 
 <style>
-  .mh-note,
-  .mh-warning {
+  .mh-note {
     color: var(--app-muted-fg);
     font-size: var(--type-small);
   }
 
+  /* The trust warning is read before Turn on: ink, not muted, with its rule in bold. */
+  .mh-warning {
+    max-width: 65ch;
+    margin-bottom: 0.75rem;
+    font-size: var(--type-small);
+  }
+
+  .mh-warning strong {
+    font-weight: 700;
+  }
+
+  /* Study Book's 3px progress track, square, no native bevel */
+  .mh-progress {
+    display: block;
+    width: 100%;
+    height: 3px;
+    margin-top: 0.75rem;
+    border: 0;
+    appearance: none;
+    background: var(--app-progress-track);
+  }
+
+  .mh-progress::-webkit-progress-bar {
+    background: var(--app-progress-track);
+  }
+
+  .mh-progress::-webkit-progress-value {
+    background: var(--app-progress-fill);
+  }
+
+  .mh-progress::-moz-progress-bar {
+    background: var(--app-progress-fill);
+  }
+
   .mh-error {
+    margin-top: 0.5rem;
     color: var(--app-danger-color);
     font-size: var(--type-small);
   }

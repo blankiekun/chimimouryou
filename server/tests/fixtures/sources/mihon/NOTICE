@@ -1,0 +1,5 @@
+tachiyomi-ja.rawkuma-v1.6.43.jar is the Rawkuma extension (version 1.6.43) as released by Keiyoushi, unchanged:
+https://github.com/keiyoushi/extensions (release b2f4318), built from https://github.com/keiyoushi/extensions-source
+(src/ja/rawkuma, lib-multisrc/natsuid), licensed under the Apache License, Version 2.0
+(https://www.apache.org/licenses/LICENSE-2.0). Copyright The Mihon Open Source Project, Keiyoushi and contributors.
+It is used here only as a test fixture, against the invented site in ../mihon.py.
