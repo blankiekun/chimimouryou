@@ -71,6 +71,12 @@ built site) are ported from LunaHook in LunaTranslator
 HIllya51 and contributors, licensed under the GNU General Public License v3.0; the
 ports are GPL-3.0-or-later (see LICENSE).
 
+The texthooker page (/hook) takes its line editing, undo, notes, setting presets,
+stats, Pause and layout settings from texthooker-ui
+(https://github.com/Renji-XD/texthooker-ui), Copyright (c) Renji-XD, licensed
+under the MIT License. They are written anew for this app; no texthooker-ui code
+is included.
+
 The desktop app (apps/desktop) bundles Yomitan
 (https://github.com/yomidevs/yomitan), a separate program licensed under the
 GNU General Public License version 3, unmodified: the Chrome build of the

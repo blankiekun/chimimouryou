@@ -19,23 +19,41 @@
   import { readingActivity } from '$lib/data/reader/reader-hooks';
   import { statisticsEnabled$, trackerIdleTime$ } from '$lib/data/store';
   import {
+    charsPerHour,
+    clock,
+    editLine,
+    hookCleanup$,
+    hookFlash$,
+    hookFontSize$,
+    hookNotes$,
     hookPresets,
+    HookSocket,
+    hookReverse$,
     hookSocketUrl$,
+    hookSocketUrl2$,
     hookTitle$,
-    isSocketUrl,
     lineCount,
     loadLines,
     maxLines,
+    maxNotes,
+    maxUndo,
     parseHookMessage,
+    removeLines,
     saveLines,
-    type HookLine
+    undoLines,
+    type HookLine,
+    type HookStatus,
+    type HookUndo
   } from '$lib/data/vn/texthooker';
+  import ReaderSheet from '$lib/components/book-reader/reader-sheet.svelte';
+  import HookLines from '$lib/components/vn/hook-lines.svelte';
+  import HookSettings from '$lib/components/vn/hook-settings.svelte';
   import NativeGameDialog from '$lib/components/vn/native-game-dialog.svelte';
   import NativeThreads from '$lib/components/vn/native-threads.svelte';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { page } from '$lib/data/page-store';
   import { database } from '$lib/data/store';
-  import { hookCleaner } from '$lib/data/vn/hook-cleanup';
+  import { hookCleaner, type HookCleanup } from '$lib/data/vn/hook-cleanup';
   import {
     desktopGames,
     isSavedThread,
@@ -60,11 +78,10 @@
    * to the immersion log; the lines stay in this browser.
    * `?native=<book id>` (desktop app): the library's Windows game played natively, its lines from
    * the app's built-in hook (native-games.ts) on the thread picked here instead of a WebSocket.
+   * Select mode, undo, notes, presets, Pause and the stats strip follow texthooker-ui (MIT).
    */
 
-  type Status = 'connecting' | 'connected' | 'closed' | 'blocked' | 'invalid' | 'off';
-
-  const statusLabels: Record<Status, MessageKey> = {
+  const statusLabels: Record<HookStatus, MessageKey> = {
     connecting: 'hook.status.connecting',
     connected: 'hook.status.connected',
     closed: 'hook.status.closed',
@@ -74,17 +91,63 @@
   };
   let url = $state(hookSocketUrl$.getValue());
   let title = $state(hookTitle$.getValue());
-  let status = $state<Status>('off');
+  let status = $state<HookStatus>('off');
+  let status2 = $state<HookStatus>('off');
   let lines = $state<HookLine[]>(loadLines());
-  const opened = Date.now();
   let sessionCharacters = $state(0);
   let sessionSeconds = $state(0);
   let list = $state<HTMLOListElement>();
   let lookupPopup = $state<LookupPopup>();
+  /** Paused: lines still show, but add nothing to the log or the session */
+  let paused = $state(false);
+  /** Lines from before this (the page opened, Pause ended) add no time: nobody was reading. */
+  let since = $state(Date.now());
+  let now = $state(Date.now());
+  let stats = $state<HTMLElement>();
+  let strip = $state<HTMLElement>();
+  /** Connected, the address form folds to one line; Change opens it again. */
+  let changing = $state(false);
+  let connectedUrl = $state('');
+  const toolName = $derived(
+    hookPresets.find((preset) => preset.url === connectedUrl)?.label ?? connectedUrl
+  );
+  let undo = $state<HookUndo[]>([]);
+  let flashId = $state<string>();
+  let showSettings = $state(false);
+  let showNotes = $state(false);
+  /** The last lines as sent, before cleanup: the cleanup's preview and suggestion */
+  let raw = $state<string[]>([]);
+  let lineSeq = 0;
 
-  let socket: WebSocket | undefined;
-  let retryTimer: ReturnType<typeof setTimeout> | undefined;
-  let retryDelay = 2000;
+  const socket = new HookSocket(
+    (data) => fromSocket(data, 'ws1'),
+    (next) => {
+      status = next;
+      if (next === 'connected') changing = false;
+    },
+    localNetworkDenied
+  );
+  const socket2 = new HookSocket(
+    (data) => fromSocket(data, 'ws2'),
+    (next) => (status2 = next),
+    localNetworkDenied
+  );
+  let socketCleanup = $state<HookCleanup>(hookCleanup$.getValue());
+  let socketClean = hookCleaner(hookCleanup$.getValue());
+  const cleanupSubscription = hookCleanup$.subscribe((next) => {
+    socketCleanup = next;
+    socketClean = hookCleaner(next);
+  });
+
+  const lastLine = $derived(lines.at(-1));
+  /** The running gap since the last line, capped like lineCount: shown, logged with the next line */
+  const timer = $derived.by(() => {
+    const idle = $trackerIdleTime$ > 0 ? $trackerIdleTime$ : 120;
+    const gap =
+      !paused && lastLine && lastLine.at >= since ? Math.min(idle, (now - lastLine.at) / 1000) : 0;
+
+    return sessionSeconds + Math.max(0, gap);
+  });
 
   const gameTitle = () => title.trim() || 'Texthooker';
 
@@ -96,8 +159,9 @@
   let nativeRunning = $state(false);
   let ranked = $state<{ thread: NativeThread; score: number }[]>([]);
   let threads = new Threads();
-  let cleanup = {};
+  let cleanup = $state<HookCleanup>({});
   let clean = hookCleaner({});
+  let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
   let stopListening: (() => void) | undefined;
   /** vnsaves.json, shared with VNBox: pulled before the game starts, pushed when it closes. */
   let saveSync: VnSaveSync | undefined;
@@ -189,6 +253,7 @@
 
       ranked = rankThreads([...threads.threads.values()], cleanup) as typeof ranked;
       if (!replayed && isSavedThread(thread, nativeHook)) {
+        keepRaw(message.sentence);
         addLine(clean(message.sentence, thread.hookcode).trim(), message.seq);
       }
     }
@@ -254,61 +319,97 @@
     );
   }
 
+  /** A natively played game's cleanup: applied at once, saved on its record half a second later. */
+  function setNativeCleanup(next: HookCleanup) {
+    cleanup = next;
+    clean = hookCleaner(next);
+    ranked = rankThreads([...threads.threads.values()], next) as typeof ranked;
+    clearTimeout(cleanupTimer);
+    cleanupTimer = setTimeout(async () => {
+      const stored = await database.getData(nativeId!);
+
+      if (!stored) return;
+      await database.upsertData(
+        { ...stored, elementHtml: vnElementHtml({ ...vnInfo(stored), hookCleanup: next }) },
+        ReplicationSaveBehavior.Overwrite,
+        false,
+        false
+      );
+    }, 500);
+  }
+
   function connect() {
-    disconnect();
     hookSocketUrl$.next(url);
-    if (!isSocketUrl(url)) {
-      status = 'invalid';
-      return;
-    }
-
-    let ws: WebSocket;
-
-    status = 'connecting';
-    try {
-      ws = new WebSocket(url);
-    } catch {
-      status = 'invalid';
-      return;
-    }
-    socket = ws;
-    ws.onopen = () => {
-      status = 'connected';
-      retryDelay = 2000;
-    };
-    ws.onmessage = (event) => addLine(parseHookMessage(event.data));
-    ws.onclose = async () => {
-      if (socket !== ws) return;
-      socket = undefined;
-      status = (await localNetworkDenied()) ? 'blocked' : 'closed';
-      // The tool may start later: keep trying quietly.
-      retryTimer = setTimeout(connect, retryDelay);
-      retryDelay = Math.min(retryDelay * 2, 30_000);
-    };
+    connectedUrl = url;
+    socket.connect(url);
+    if (hookSocketUrl2$.getValue()) socket2.connect(hookSocketUrl2$.getValue());
+    else socket2.disconnect();
   }
 
   function disconnect() {
-    clearTimeout(retryTimer);
-    const ws = socket;
+    socket.disconnect();
+    socket2.disconnect();
+  }
 
-    socket = undefined;
-    ws?.close();
-    status = 'off';
+  function keepRaw(text: string) {
+    raw = [...raw, text].slice(-20);
+  }
+
+  function fromSocket(data: unknown, thread: string) {
+    const text = parseHookMessage(data);
+
+    if (!text) return;
+    keepRaw(text);
+    addLine(socketClean(text, thread).trim());
+  }
+
+  /** The stats strip lights up: a line came in while paused and wasn't counted. */
+  function flashPaused() {
+    const tint = stats && getComputedStyle(stats).getPropertyValue('--app-spot-tint').trim();
+
+    // The phone strip or the session box: whichever is shown.
+    [stats, strip].forEach((element) =>
+      element?.animate(
+        [{ backgroundColor: tint || 'transparent' }, { backgroundColor: 'transparent' }],
+        {
+          duration: 700,
+          easing: 'cubic-bezier(0.16, 1, 0.3, 1)'
+        }
+      )
+    );
+  }
+
+  function togglePause() {
+    paused = !paused;
+    if (!paused) since = Date.now();
   }
 
   function addLine(text: string, seq?: number) {
     if (!text) return;
 
-    const now = Date.now();
-    const count = lineCount(text, lines.at(-1), now, $trackerIdleTime$, opened);
+    const at = Date.now();
+    const count = lineCount(text, lines.at(-1), at, $trackerIdleTime$, since);
 
     if (count.repeat) return;
 
-    const atBottom = !list || list.scrollHeight - list.scrollTop - list.clientHeight < 80;
+    const reverse = $hookReverse$;
+    const atEdge =
+      !list ||
+      (reverse ? list.scrollTop < 80 : list.scrollHeight - list.scrollTop - list.clientHeight < 80);
+    const line = { id: `${at}-${lineSeq++}`, text, at, seq };
 
-    lines = [...lines, { id: `${now}-${lines.length}`, text, at: now, seq }].slice(-maxLines);
+    lines = [...lines, line].slice(-maxLines);
     if (seq !== undefined) games?.mark(seq);
     saveLines(lines);
+    flashId = $hookFlash$ ? line.id : undefined;
+    if (atEdge) {
+      tick().then(() => list && (list.scrollTop = reverse ? 0 : list.scrollHeight));
+    }
+    if (paused) {
+      flashPaused();
+      return;
+    }
+
     sessionCharacters += count.characters;
     sessionSeconds += count.seconds;
     // Each line at once: a closed tab loses nothing.
@@ -318,10 +419,37 @@
       );
     }
     readingActivity({ kind: 'vn', title: gameTitle(), position: sessionCharacters });
+  }
 
-    if (atBottom) {
-      tick().then(() => list && (list.scrollTop = list.scrollHeight));
-    }
+  function pushUndo(entry: HookUndo) {
+    undo = [...undo, entry].slice(-maxUndo);
+  }
+
+  // Edits, deletes and undo change only the list: what a line logged stays logged.
+  function removeSelected(ids: Set<string>) {
+    const result = removeLines(lines, ids);
+
+    lines = result.lines;
+    saveLines(lines);
+    pushUndo(result.undo);
+  }
+
+  function editSelected(id: string, text: string) {
+    const result = editLine(lines, id, text);
+
+    if (!result) return;
+    lines = result.lines;
+    saveLines(lines);
+    pushUndo(result.undo);
+  }
+
+  function undoLast() {
+    const entry = undo.at(-1);
+
+    if (!entry) return;
+    undo = undo.slice(0, -1);
+    lines = undoLines(lines, entry);
+    saveLines(lines);
   }
 
   function onPaste(event: ClipboardEvent) {
@@ -341,6 +469,7 @@
 
   function clearLines() {
     lines = [];
+    undo = [];
     saveLines([]);
   }
 
@@ -352,11 +481,16 @@
     nativeId = (games && Number($page.url.searchParams.get('native'))) || undefined;
     if (nativeId) startNative().catch((error) => (nativeStatus = error.message));
     else connect();
-    if (list) list.scrollTop = list.scrollHeight;
+    if (list) list.scrollTop = $hookReverse$ ? 0 : list.scrollHeight;
+
+    const ticker = setInterval(() => (now = Date.now()), 1000);
+
+    return () => clearInterval(ticker);
   });
 
   onDestroy(() => {
     stopListening?.();
+    cleanupSubscription.unsubscribe();
     disconnect();
     readingActivity();
   });
@@ -373,20 +507,94 @@
 <div class="app-page-shell">
   <main class="hook">
     <header class="hook-head">
-      <h1 class="hook-title">{$t$('hook.title')}</h1>
-      <p class="hook-subtitle">{$t$('hook.subtitle')}</p>
+      <div>
+        <h1 class="hook-title">{$t$('hook.title')}</h1>
+        <p class="hook-subtitle">{$t$('hook.subtitle')}</p>
+      </div>
+      <div class="hook-head-actions">
+        <button type="button" class="app-button" onclick={() => (showNotes = true)}>Notes</button>
+        <button type="button" class="app-button" onclick={() => (showSettings = true)}>
+          Settings
+        </button>
+      </div>
     </header>
 
+    <!-- Phones: the session in one row, so the lines start in the first screen. -->
+    <div class="hook-strip" bind:this={strip}>
+      <dl class="hook-figures">
+        <div>
+          <dt>Chars</dt>
+          <dd>{sessionCharacters.toLocaleString('en-US')}</dd>
+        </div>
+        <div>
+          <dt>Time</dt>
+          <dd>{clock(timer)}</dd>
+        </div>
+        <div>
+          <dt>Speed</dt>
+          <dd>{charsPerHour(sessionCharacters, sessionSeconds).toLocaleString('en-US')}/h</dd>
+        </div>
+      </dl>
+      <button
+        type="button"
+        class="app-button"
+        class:app-button-primary={paused}
+        aria-pressed={paused}
+        onclick={togglePause}
+      >
+        {paused ? 'Resume' : 'Pause'}
+      </button>
+    </div>
+    {#if paused}
+      <p class="hook-hint hook-phone-only" role="status">
+        Paused: new lines show, but aren’t logged or timed.
+      </p>
+    {/if}
+
     <div class="hook-top">
-      <PointBox label={$t$('hook.session')} figure={sessionCharacters} unit={$t$('dashboard.unit')}>
-        <p class="hook-session">
-          {formatDuration(sessionSeconds) || $t$('hook.underMinute')} ·
-          <a href="{pagePath}/statistics">{$t$('hook.toLog')}</a>
-        </p>
-        {#if !$statisticsEnabled$}
-          <p class="hook-hint">{$t$('hook.statisticsOff')}</p>
-        {/if}
-      </PointBox>
+      <div class="hook-session-box">
+        <PointBox
+          label={$t$('hook.session')}
+          figure={sessionCharacters}
+          unit={$t$('dashboard.unit')}
+        >
+          <div class="hook-stats" bind:this={stats}>
+            <dl class="hook-figures">
+              <div>
+                <dt>Time</dt>
+                <dd>{clock(timer)}</dd>
+              </div>
+              <div>
+                <dt>Speed</dt>
+                <dd>{charsPerHour(sessionCharacters, sessionSeconds).toLocaleString('en-US')}/h</dd>
+              </div>
+              <div>
+                <dt>Lines</dt>
+                <dd>{lines.length.toLocaleString('en-US')}</dd>
+              </div>
+            </dl>
+            <button
+              type="button"
+              class="app-button"
+              class:app-button-primary={paused}
+              aria-pressed={paused}
+              onclick={togglePause}
+            >
+              {paused ? 'Resume' : 'Pause'}
+            </button>
+          </div>
+          {#if paused}
+            <p class="hook-hint">Paused: new lines show, but aren’t logged or timed.</p>
+          {/if}
+          <p class="hook-session">
+            {formatDuration(sessionSeconds) || $t$('hook.underMinute')} ·
+            <a href="{pagePath}/statistics">{$t$('hook.toLog')}</a>
+          </p>
+          {#if !$statisticsEnabled$}
+            <p class="hook-hint">{$t$('hook.statisticsOff')}</p>
+          {/if}
+        </PointBox>
+      </div>
 
       {#if nativeId}
         <div class="hook-settings">
@@ -426,6 +634,25 @@
           <NativeThreads {ranked} hook={nativeHook} onpick={pickThread} />
         </div>
         <AnkiWatcher media={ankiMedia} />
+      {:else if status === 'connected' && !changing}
+        <div class="hook-actions hook-connected">
+          <span class="hook-status-line">
+            <span class="hook-status hook-status-on" role="status">
+              {$t$(statusLabels[status])}
+            </span>
+            <span class="hook-tool">{toolName}</span>
+          </span>
+          <button
+            type="button"
+            class="app-button app-button-quiet"
+            onclick={() => (changing = true)}
+          >
+            Change
+          </button>
+          <button type="button" class="app-button app-button-quiet" onclick={disconnect}>
+            {$t$('hook.disconnect')}
+          </button>
+        </div>
       {:else}
         <form
           class="hook-settings"
@@ -457,51 +684,90 @@
             <span class="hook-status" class:hook-status-on={status === 'connected'} role="status">
               {$t$(statusLabels[status])}
             </span>
-            {#if status !== 'off' && status !== 'invalid'}
+            {#if changing}
+              <button
+                type="button"
+                class="app-button app-button-quiet"
+                onclick={() => {
+                  changing = false;
+                  url = connectedUrl;
+                }}
+              >
+                Cancel
+              </button>
+            {:else if status !== 'off' && status !== 'invalid'}
+              <!-- Retrying: stops it -->
               <button type="button" class="app-button app-button-quiet" onclick={disconnect}>
                 {$t$('hook.disconnect')}
               </button>
             {/if}
-            <button type="submit" class="app-button">{$t$('hook.connect')}</button>
+            {#if changing || status === 'off' || status === 'invalid' || url !== connectedUrl}
+              <button type="submit" class="app-button">{$t$('hook.connect')}</button>
+            {/if}
           </div>
         </form>
       {/if}
     </div>
 
-    <div class="hook-bar">
-      <span class="hook-count">{$t$('hook.lines', { count: lines.length })}</span>
-      <button type="button" class="app-button app-button-quiet" onclick={pasteButton}>
-        {$t$('hook.paste')}
-      </button>
-      <button
-        type="button"
-        class="app-button app-button-quiet"
-        onclick={clearLines}
-        disabled={!lines.length}
-      >
-        {$t$('hook.clear')}
-      </button>
-    </div>
-
-    {#if lines.length}
-      <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-      <ol
-        class="hook-text"
-        lang="ja"
-        bind:this={list}
-        onclick={(event) => lookupPopup?.tapAt(event.clientX, event.clientY)}
-      >
-        {#each lines as line (line.id)}
-          <li>{line.text}</li>
-        {/each}
-      </ol>
-    {:else}
-      <p class="hook-empty">{$t$('hook.empty')}</p>
-    {/if}
+    <HookLines
+      {lines}
+      fontSize={$hookFontSize$}
+      reverse={$hookReverse$}
+      {flashId}
+      canUndo={undo.length > 0}
+      empty={$t$('hook.empty')}
+      bind:list
+      ontap={(event) => lookupPopup?.tapAt(event.clientX, event.clientY)}
+      onremove={removeSelected}
+      onedit={editSelected}
+      onundo={undoLast}
+    >
+      {#snippet tools()}
+        <button type="button" class="app-button app-button-quiet" onclick={pasteButton}>
+          {$t$('hook.paste')}
+        </button>
+        <button
+          type="button"
+          class="app-button app-button-quiet"
+          onclick={clearLines}
+          disabled={!lines.length}
+        >
+          {$t$('hook.clear')}
+        </button>
+      {/snippet}
+    </HookLines>
   </main>
 </div>
 
 <LookupPopup bind:this={lookupPopup} scope=".hook-text" />
+
+{#if showSettings}
+  <ReaderSheet title="Settings" on:close={() => (showSettings = false)}>
+    <HookSettings
+      native={!!nativeId}
+      cleanup={nativeId ? cleanup : socketCleanup}
+      {raw}
+      {status2}
+      oncleanup={(next) => (nativeId ? setNativeCleanup(next) : hookCleanup$.next(next))}
+      onreconnect={() => {
+        url = hookSocketUrl$.getValue();
+        if (status !== 'off') connect();
+      }}
+    />
+  </ReaderSheet>
+{/if}
+
+{#if showNotes}
+  <ReaderSheet title="Notes" on:close={() => (showNotes = false)}>
+    <textarea
+      class="app-input hook-notes"
+      aria-label="Notes"
+      maxlength={maxNotes}
+      value={$hookNotes$}
+      oninput={(event) => hookNotes$.next(event.currentTarget.value)}></textarea>
+    <p class="hook-hint">Kept in this browser.</p>
+  </ReaderSheet>
+{/if}
 
 <style>
   .hook {
@@ -513,6 +779,19 @@
     padding: 1.5rem 1rem 4rem;
   }
 
+  .hook-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.75rem 1.5rem;
+  }
+
+  .hook-head-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+
   .hook-title {
     font-size: var(--type-display);
     font-weight: 400;
@@ -520,8 +799,7 @@
   }
 
   .hook-subtitle,
-  .hook-hint,
-  .hook-empty {
+  .hook-hint {
     color: var(--app-muted-fg);
     font-size: var(--type-small);
   }
@@ -568,16 +846,14 @@
     font-size: var(--type-small);
   }
 
-  .hook-actions,
-  .hook-bar {
+  .hook-actions {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
   }
 
-  .hook-status,
-  .hook-count {
+  .hook-status {
     margin-right: auto;
     color: var(--app-muted-fg);
     font-size: var(--type-small);
@@ -588,22 +864,108 @@
     font-weight: 700;
   }
 
-  .hook-bar {
-    padding-bottom: 0.5rem;
-    border-bottom: 2px solid var(--font-color);
-  }
-
-  .hook-text {
-    max-height: 70vh;
-    overflow-y: auto;
-    font-size: 1.25rem;
-    line-height: 2;
-  }
-
-  .hook-text li {
-    padding: 0.5rem 0;
+  .hook-strip {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0 -0.5rem;
+    padding: 0.5rem;
+    border-top: 2px solid var(--accent-color);
     border-bottom: 1px solid var(--border-color);
-    white-space: pre-wrap;
+  }
+
+  .hook-strip .hook-figures {
+    gap: 1rem;
+  }
+
+  .hook-strip dd {
+    font-size: var(--type-body);
+    font-weight: 700;
+  }
+
+  .hook-status-line {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.5rem;
+    margin-right: auto;
+  }
+
+  .hook-status-line .hook-status {
+    margin-right: 0;
+  }
+
+  .hook-tool {
+    min-width: 0;
     overflow-wrap: anywhere;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+  }
+
+  @media (min-width: 640px) {
+    .hook-strip,
+    .hook-phone-only {
+      display: none;
+    }
+  }
+
+  @media (max-width: 639px) {
+    .hook-session-box,
+    .hook-subtitle {
+      display: none;
+    }
+
+    .hook {
+      gap: 1rem;
+      padding-top: 1rem;
+    }
+
+    .hook-title {
+      font-size: var(--type-h1);
+    }
+
+    .hook-top {
+      gap: 1rem;
+    }
+  }
+
+  .hook-stats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    margin: 0.75rem -0.5rem 0;
+    padding: 0.5rem;
+    border-top: 1px solid var(--border-color);
+  }
+
+  .hook-figures {
+    display: flex;
+    flex: 1;
+    gap: 1.25rem;
+    margin: 0;
+  }
+
+  .hook-figures dt {
+    color: var(--app-muted-fg);
+    font-size: var(--type-label);
+    font-weight: 700;
+  }
+
+  .hook-figures dd {
+    margin: 0;
+    font-size: var(--type-h2);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .hook-notes {
+    display: block;
+    width: 100%;
+    height: 50vh;
+    margin: 1rem 0 0.5rem;
+    line-height: 1.6;
+    resize: vertical;
   }
 </style>

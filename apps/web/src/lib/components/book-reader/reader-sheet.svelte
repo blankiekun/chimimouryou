@@ -86,9 +86,15 @@
     touch-action: none;
   }
 
+  /* Stays at the top while the sheet scrolls, so its title and close button stay in reach. */
   .sheet-head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
     display: flex;
     align-items: center;
+    background:
+      linear-gradient(var(--reader-panel-bg), var(--reader-panel-bg)), var(--background-color);
     padding: 0.75rem 0 0.6rem;
     border-bottom: 2px solid var(--reader-panel-fg);
   }
