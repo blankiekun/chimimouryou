@@ -454,6 +454,97 @@ describe('a Windows game record', () => {
   });
 });
 
+describe("a Windows game's details", () => {
+  const title = '信天翁';
+  const vndb = {
+    source: 'vndb',
+    url: 'https://vndb.org/v1',
+    title: 'アルバトロス',
+    description: 'Text',
+    cover: 'https://t.vndb.org/cv/01/1.jpg',
+    genres: [],
+    released: '2001',
+    score: 80
+  } as const;
+  const gameCard = (cards: { title: string }[]) => cards.find((card) => card.title === title)!;
+
+  async function localGame() {
+    await database.upsertData(
+      {
+        ...windowsGameBook(title, 'game.exe', undefined, undefined),
+        lastBookModified: 40,
+        storageSource: StorageSourceDefault.CALIBRE_DEFAULT
+      } as never,
+      ReplicationSaveBehavior.Overwrite,
+      false,
+      false
+    );
+    return (await database.getDataByTitle(title))!;
+  }
+
+  async function pick() {
+    const { saveBookMetadata } = await import('$lib/data/library/book-metadata');
+
+    await saveBookMetadata(title, vndb as never);
+  }
+
+  async function shownOn(cards: Promise<{ title: string }[]>, isCalibre: boolean) {
+    const { loadBookDetails } = await import('$lib/data/library/book-details');
+    const card = gameCard(await cards);
+
+    expect(card).toMatchObject({ imagePath: vndb.cover, displayTitle: vndb.title });
+    expect((await loadBookDetails(card as never, 'vn', isCalibre)).metadata).toMatchObject({
+      url: vndb.url,
+      description: vndb.description
+    });
+  }
+
+  // Bugs: a game has no Calibre id, so a pick was thrown away and its card and page lost it after a
+  // reload; one device's pick missing on the next; a pick re-uploading the whole game record.
+  it('on the server: a game doc, listed and shown on every device', async () => {
+    const server = handler();
+
+    server.startContext({ title });
+    await server.saveBook(await localGame());
+    await pick();
+    expect(api.rowsOf('gameDocs')).toMatchObject([
+      { name: title, kind: 'metadata', data: { url: vndb.url } }
+    ]);
+    expect(api.rowsOf('games')).toMatchObject([{ modified: 40 }]);
+
+    // Another device (fresh modules and IndexedDB): only the server has them.
+    await loadModules();
+    await shownOn(handler().getBookList(), true);
+  });
+
+  // Bugs: details kept only where they were picked (no newer lastBookModified, or lost in the
+  // record's zip), or a damaged entry in a synced record shown.
+  it('without the server: on the record, which syncs with it', async () => {
+    await localGame();
+    await pick();
+
+    const stored = (await database.getDataByTitle(title))!;
+
+    expect(stored.lastBookModified).toBeGreaterThan(40);
+    expect(api.rowsOf('gameDocs')).toEqual([]);
+    await shownOn(browser().getBookList(), false);
+
+    // The record's round trip as its zip (as Drive, OneDrive and folders keep it): up, then down on
+    // a fresh device.
+    const server = handler();
+
+    server.startContext({ title });
+    await server.saveBook(stored);
+    await loadModules();
+
+    const reader = handler();
+
+    reader.startContext({ title });
+    await reader.getBook();
+    await shownOn(browser().getBookList(), false);
+  });
+});
+
 describe('while an expired session still owns the data', () => {
   // Bug: a signed-out browser holding account A's data writing it into (or showing) the shared
   // '' rows every signed-out reader sees.

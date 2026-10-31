@@ -9,7 +9,9 @@
  * Jiten (all three, through nginx's or the VPS's /jiten/ proxy: its API only allows
  * jiten.moe) on a book's page, shared by everyone as the server's metadata rows (one per
  * book, /api/v1/metadata; `{}` is a removed entry) and keyed by title like the series. A saved
- * cover replaces the card's, a VNDB title the card's title.
+ * cover replaces the card's, a VNDB title the card's title. A Windows game (no Calibre id) keeps
+ * its own: a `metadata` game doc when its record is on the server, and on its VN record
+ * (`VnInfo.metadata`, synced with the record elsewhere; the local copy with a server).
  * Not part of upstream.
  */
 
@@ -17,6 +19,7 @@ import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 import { loadCalibreCatalog } from '$lib/data/remote/calibre';
 import { serverFetch, serverless } from '$lib/data/remote/server-connect';
 import { apiVersion, putRow, syncMirror } from '$lib/data/remote/server-api';
+import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
 
 export type MetadataKind = 'book' | 'manga' | 'vn';
 
@@ -98,6 +101,10 @@ export function parseBookMetadata(data: unknown): BookMetadataMap {
   return result;
 }
 
+/** A Windows game's details on its VN record, checked like the server's (the record syncs). */
+export const recordMetadata = (entry: unknown): BookMetadata | undefined =>
+  parseBookMetadata({ entry }).entry;
+
 /** The mirror's metadata rows by title, as `{...data, modified}`; `{}` (removed) left out. */
 async function fetchBookMetadata(refresh = true) {
   if (serverless) return {};
@@ -106,12 +113,22 @@ async function fetchBookMetadata(refresh = true) {
 
   const [mirror, books] = await Promise.all([syncMirror(refresh), loadCalibreCatalog()]);
   const titles = new Map(books.map((book) => [book.bookId, book.title]));
+  const catalogTitles = new Set(titles.values());
+  const rows = [
+    // Windows games' own (game docs); a catalog book of the same name keeps its row.
+    ...mirror.gameDocs
+      .filter((row) => !row.deleted && row.kind === 'metadata' && !catalogTitles.has(row.name!))
+      .map((row) => [row.name, row] as const),
+    ...mirror.metadata
+      .filter((row) => titles.has(row.book))
+      .map((row) => [titles.get(row.book), row] as const)
+  ];
 
   return parseBookMetadata(
     Object.fromEntries(
-      mirror.metadata
-        .filter((row) => titles.has(row.book) && Object.keys(row.data || {}).length)
-        .map((row) => [titles.get(row.book), { ...row.data, modified: row.modified }])
+      rows
+        .filter(([, row]) => Object.keys(row.data || {}).length)
+        .map(([title, row]) => [title, { ...row.data, modified: row.modified }])
     )
   );
 }
@@ -130,9 +147,19 @@ export function loadBookMetadata(refresh = false) {
   return cache;
 }
 
-/** Saves (or with `undefined` removes) a title's details on top of the latest server copy. */
-export async function saveBookMetadata(title: string, entry: MetadataCandidate | undefined) {
+/**
+ * Saves (or with `undefined` removes) a title's details on top of the latest server copy: a
+ * catalog book's metadata row, a server Windows game's game doc. A Windows game in this browser
+ * also keeps them on its record, synced with it (a newer lastBookModified) when not on the server.
+ * `games: false` (Discord's automatic matches) leaves a Windows game's own as they are.
+ */
+export async function saveBookMetadata(
+  title: string,
+  entry: MetadataCandidate | undefined,
+  games = true
+) {
   const id = (await loadCalibreCatalog()).find((book) => book.title === title)?.bookId;
+  const modified = Date.now();
   let data = {};
 
   if (entry) {
@@ -141,14 +168,50 @@ export async function saveBookMetadata(title: string, entry: MetadataCandidate |
     data = saved;
   }
 
+  const failed = (error: { status?: number }) => {
+    throw new Error(`Saving the details failed (HTTP ${error.status})`);
+  };
+  let local: BookMetadata | undefined;
+
   if (id !== undefined) {
     // 409: a newer save of this book elsewhere wins and is kept.
-    await putRow(`metadata/${id}`, { modified: Date.now(), data }).catch((error) => {
-      throw new Error(`Saving the details failed (HTTP ${error.status})`);
-    });
+    await putRow(`metadata/${id}`, { modified, data }).catch(failed);
+  } else if (games) {
+    // Imported here: the store and vn.ts open IndexedDB, which this module's other users never need.
+    const [{ database }, { isVn, vnElementHtml, vnInfo }] = await Promise.all([
+      import('$lib/data/store'),
+      import('$lib/data/vn/vn')
+    ]);
+    const game = await database.getDataByTitle(title);
+    // Signed out or unreachable: a game in this browser still keeps them on its record.
+    const mirror = serverless ? undefined : await syncMirror(false).catch(() => undefined);
+    const onServer = !!mirror?.games.some((row) => !row.deleted && row.name === title);
+
+    if (onServer) {
+      await putRow(`games/${encodeURIComponent(title)}/docs/metadata`, { modified, data }).catch(
+        failed
+      );
+    }
+    if (game && isVn(game) && vnInfo(game).engine === 'vnbox') {
+      local = recordMetadata(entry && { ...data, modified });
+      await database.upsertData(
+        {
+          ...game,
+          elementHtml: vnElementHtml({ ...vnInfo(game), metadata: local }),
+          ...(!onServer && { lastBookModified: modified })
+        },
+        ReplicationSaveBehavior.Overwrite,
+        false,
+        false
+      );
+    }
   }
 
-  const map = await fetchBookMetadata();
+  const remote = await fetchBookMetadata().catch((error) => {
+    if (id !== undefined) throw error;
+    return {};
+  });
+  const map = { ...(local && { [title]: local }), ...remote };
 
   cache = Promise.resolve(map);
   metadataSaves += 1;

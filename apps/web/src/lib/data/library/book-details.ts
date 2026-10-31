@@ -15,6 +15,7 @@ import { bookContent } from '$lib/data/book-content';
 import { bookKanjiCount } from '$lib/data/words/book-kanji';
 import {
   loadBookMetadata,
+  recordMetadata,
   type BookMetadata,
   type MetadataKind
 } from '$lib/data/library/book-metadata';
@@ -143,6 +144,8 @@ export async function loadBookDetails(book: BookCardProps, kind: MetadataKind, i
 
   details.damaged = stored?.kind === 'invalid';
   details.windowsGame = stored?.kind === 'vn' && stored.info.engine === 'vnbox';
+  // A Windows game's own details: the server's game doc when it has one, else its record's.
+  if (stored?.kind === 'vn') details.metadata ??= recordMetadata(stored.info.metadata);
   details.browserKanji = await browserKanji;
 
   return details;

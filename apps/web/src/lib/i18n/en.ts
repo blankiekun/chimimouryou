@@ -254,8 +254,6 @@ export const en = {
   'book.undated': 'Undated',
   'book.useDetails': 'Use details',
   'book.useDetailsCover': 'Use details and cover',
-  'book.findLengthOn': 'Find its length on {source} or Jiten',
-  'book.useLength': 'Use its length',
   'book.noJitenLength': 'Jiten has no deck for this game, so its length is still unknown.',
 
   'difficulty.summary': 'Level {score} of 10 ({tier})',

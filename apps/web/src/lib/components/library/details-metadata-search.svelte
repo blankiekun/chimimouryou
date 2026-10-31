@@ -21,14 +21,13 @@
 
   /**
    * The book page's Find details (book-details.svelte): searches AniList, VNDB or Jiten and saves
-   * a pick as the book's shared details, or sets a Windows game's length from Jiten.
+   * a pick as the book's shared details, or a Windows game's own (book-metadata.ts), whose length
+   * it also sets from Jiten.
    */
 
   interface Props {
     book: BookCardProps;
     kind: MetadataKind;
-    /** Calibre source with the `series` permission: a pick saves the shared details */
-    canEdit: boolean;
     /** A Windows game in this browser: a pick sets its length from Jiten (it has no count of its own) */
     windowsGame: boolean;
     metadata: BookMetadata | undefined;
@@ -43,7 +42,6 @@
   let {
     book,
     kind,
-    canEdit,
     windowsGame,
     metadata,
     searchOpen = $bindable(),
@@ -105,7 +103,7 @@
     searchError = '';
     lengthNote = '';
     try {
-      if (canEdit) onmetadata((await saveBookMetadata(book.title, entry))[book.title]);
+      onmetadata((await saveBookMetadata(book.title, entry))[book.title]);
       if (entry && windowsGame) await useJitenLength(entry);
       searchOpen = false;
       onchanged();
@@ -150,13 +148,11 @@
   {#if !searchOpen}
     <button type="button" class="app-button" onclick={openSearch}>
       <Fa icon={faMagnifyingGlass} />
-      {canEdit && metadata
+      {metadata
         ? $t$('book.changeDetails')
-        : $t$(canEdit ? 'book.findDetailsOn' : 'book.findLengthOn', {
-            source: sourceNames[defaultSource(kind)]
-          })}
+        : $t$('book.findDetailsOn', { source: sourceNames[defaultSource(kind)] })}
     </button>
-    {#if canEdit && metadata}
+    {#if metadata}
       <button
         type="button"
         class="app-button app-button-quiet"
@@ -236,9 +232,9 @@
                   disabled={saving}
                   onclick={() => save({ ...candidate, cover: '' })}
                 >
-                  {$t$(canEdit ? 'book.useDetails' : 'book.useLength')}
+                  {$t$('book.useDetails')}
                 </button>
-                {#if canEdit && candidate.cover}
+                {#if candidate.cover}
                   <button
                     type="button"
                     class="app-button"

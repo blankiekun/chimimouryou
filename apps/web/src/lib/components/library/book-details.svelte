@@ -92,7 +92,7 @@
   $: remaining = isReading(book) ? characters * (1 - book.progress) : characters;
   $: canEdit = isCalibre && hasPermission($account$, 'series');
   $: canEditSeries = canEdit || localSeries;
-  /** Without `canEdit` (Browser source, standalone) a pick only sets a Windows game's length. */
+  /** Without `canEdit` (Browser source, standalone) a Windows game's pick is its own details. */
   $: canFind = canEdit || windowsGame;
   $: onHome = $homeBookTitles$.includes(book.title) || isContinueReading(book, $homeRemovedTitles$);
   $: seriesBooks = book.series
@@ -449,7 +449,6 @@
             <DetailsMetadataSearch
               {book}
               {kind}
-              {canEdit}
               {windowsGame}
               {metadata}
               bind:searchOpen

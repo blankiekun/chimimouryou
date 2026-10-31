@@ -11,6 +11,7 @@
  * the player for the text panel (Yomitan), statistics and progress. Not upstream.
  */
 
+import type { BookMetadata } from '$lib/data/library/book-metadata';
 import type { HookCleanup } from '$lib/data/vn/hook-cleanup';
 import type { NativeHook } from '$lib/data/vn/native-games';
 import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
@@ -56,6 +57,8 @@ export interface VnInfo {
   /** Played natively in the desktop app: the built-in hook's thread picked on /hook
    * (native-games.ts), the same on every computer */
   nativeHook?: NativeHook;
+  /** Windows games: details picked on the book's page (book-metadata.ts `recordMetadata`) */
+  metadata?: BookMetadata;
 }
 
 export interface VnRead {

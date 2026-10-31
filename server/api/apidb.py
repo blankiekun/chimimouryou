@@ -104,7 +104,7 @@ CREATE TABLE IF NOT EXISTS games (
     account TEXT NOT NULL, name TEXT NOT NULL, size INTEGER NOT NULL DEFAULT 0,
     deleted INTEGER NOT NULL DEFAULT 0, modified INTEGER NOT NULL, rev INTEGER NOT NULL,
     PRIMARY KEY (account, name));
--- A Windows game's progress, statistics and saves: the whole file its sync folder held (no book id).
+-- A Windows game's progress, statistics and saves (the whole file its sync folder held) and details (no book id).
 CREATE TABLE IF NOT EXISTS game_docs (
     account TEXT NOT NULL, name TEXT NOT NULL,
     kind TEXT NOT NULL,
