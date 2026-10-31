@@ -53,7 +53,8 @@
   $: importMenuItems = [
     mergeEntries.FILE_IMPORT,
     ...($isMobile$ ? [] : [mergeEntries.FOLDER_IMPORT]),
-    ...(windowsGames ? [windowsGameEntry] : []),
+    // The desktop app has no VNBox to play a game copied into it: it plays installed ones.
+    ...(windowsGames && !desktopGames() ? [windowsGameEntry] : []),
     ...(windowsGames && desktopGames() ? [installedGameEntry] : []),
     ...(standalone || hasPermission($account$, 'import') ? [sourcesEntry] : []),
     mergeEntries.BACKUP_IMPORT

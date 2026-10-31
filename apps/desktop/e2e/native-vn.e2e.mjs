@@ -12,9 +12,13 @@
 //
 //   cd apps/desktop && pnpm run fetch && pnpm run build:web
 //   xvfb-run -a node e2e/native-vn.e2e.mjs        (E2E_DIR=<dir> keeps the run's files there;
-//                                                 PULSE_MODULES=<dir> for a PulseAudio not installed)
+//                                                 PULSE_MODULES=<dir> for a PulseAudio not installed;
+//                                                 E2E_APP=<squashfs-root>/chimimouryou runs a packaged
+//                                                 build: `pnpm run dist`, then --appimage-extract)
 //
-// It fails when: the record isn't written by Import → Installed game; the folder dialog's program
+// It fails when: Import offers Windows game (VNBox, which the app doesn't ship: its player waits on
+// "Downloading…" for good); /v starts VNBox instead of offering Play natively; the record isn't
+// written by Import → Installed game; the folder dialog's program
 // list misses the game or puts setup tools first; the helper, Wine prefix or LunaHook injection
 // doesn't start; lines don't reach /hook's thread list; a picked thread's lines don't reach the
 // text list or the pick isn't saved on the record; a moved game isn't asked for again.
@@ -142,8 +146,8 @@ const ankiServer = createServer((request, response) => {
 await new Promise((resolve) => ankiServer.listen(0, '127.0.0.1', resolve));
 
 const app = await _electron.launch({
-  executablePath: join(desktop, 'node_modules/electron/dist/electron'),
-  args: ['--no-sandbox', desktop],
+  executablePath: process.env.E2E_APP ?? join(desktop, 'node_modules/electron/dist/electron'),
+  args: ['--no-sandbox', ...(process.env.E2E_APP ? [] : [desktop])],
   // Electron's userData follows XDG_CONFIG_HOME on Linux: a fresh profile, Wine prefixes included.
   // winetricks' downloads stay in the real cache.
   env: {
@@ -287,6 +291,8 @@ try {
   step('Import → Installed game');
   await pickFolder(gameDir);
   await page.getByTitle('Import books').click();
+  if (await page.getByRole('button', { name: 'Windows game…' }).count())
+    fail('Import offers Windows game, which needs VNBox');
   await page.getByRole('button', { name: 'Installed game…' }).click();
   await page.getByRole('button', { name: 'Choose folder…' }).click();
   const programs = await page.locator('.ng-program span:first-of-type').allTextContents();
@@ -301,6 +307,8 @@ try {
 
   step('/v → Play natively → /hook, first start makes the Wine prefix');
   await page.goto(`http://127.0.0.1:41917/v?id=${book.id}`);
+  await page.getByRole('button', { name: 'Play natively' }).waitFor();
+  if (page.frames().some((frame) => frame.url().includes('vnbox.html'))) fail('/v started VNBox');
   await page.getByRole('button', { name: 'Play natively' }).click();
   await page.waitForURL(/\/hook\?native=/);
   const drawText = page.locator('.nt-row', { hasText: 'DrawTextW' });

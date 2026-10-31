@@ -426,7 +426,16 @@ async function startGame(options) {
 
   await Promise.all(
     scripts.map(function (name) {
-      return loadScript('vnbox/' + name);
+      return loadScript('vnbox/' + name).catch(function () {
+        var message = 'vnbox/' + name + ' is missing from this site';
+
+        // Without it the loading readout says "Downloading…" for good.
+        parent.postMessage(
+          { type: 'vnbox-error', source: 'player', message: message },
+          location.origin
+        );
+        throw new Error(message);
+      });
     })
   );
   document.getElementById('canvas').focus();
