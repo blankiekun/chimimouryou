@@ -204,8 +204,8 @@ export interface SourceRepoExtension {
   on: boolean;
   /** Why the app doesn't run it ('' = it can) */
   off: string;
-  tag: '' | 'Dart' | 'Built in' | 'Web view';
-  /** A Manatan extension: runs only in the desktop and Android apps */
+  tag: '' | 'Dart' | 'Built in' | 'Web view' | '18+';
+  /** A Manatan extension (desktop and Android apps) or a Mihon one (desktop app) */
   appOnly: boolean;
 }
 

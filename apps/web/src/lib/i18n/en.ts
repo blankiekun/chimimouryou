@@ -470,6 +470,7 @@ export const en = {
   'settings.section.general-install': 'Install app',
   'settings.section.general-analysis': 'Analysis tools',
   'settings.section.general-desktop-games': 'Desktop games',
+  'settings.section.general-mihon': 'Mihon extensions',
   'settings.section.general-plugins': 'Plugins',
   'settings.section.reader-text': 'Text style',
   'settings.section.reader-writing': 'Writing',

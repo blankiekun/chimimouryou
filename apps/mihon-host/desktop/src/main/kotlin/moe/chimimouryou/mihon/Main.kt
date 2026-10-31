@@ -58,8 +58,10 @@ fun main() {
     val testHosts = System.getProperty("mihon.testHosts", "").split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
     val guard = Guard(testHosts)
     val app = Application(dir)
-    val network = NetworkHelper(app.cacheDir, MemoryCookieJar(), guard, guard, System.getProperty("mihon.userAgent", USER_AGENT))
-    val host = Host(app, network, File(dir, "tmp"), ::loadJar)
+    val cookies = MemoryCookieJar()
+    android.webkit.CookieManager.jar = cookies
+    val network = NetworkHelper(app.cacheDir, cookies, guard, guard, System.getProperty("mihon.userAgent", USER_AGENT))
+    val host = Host(app, network, File(dir, "tmp"), Remembered(File(dir, "remembered")), ::loadJar)
     fun send(answer: JsonObject) = synchronized(protocol) {
         protocol.println(answer.toString())
         protocol.flush()

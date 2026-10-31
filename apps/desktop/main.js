@@ -29,6 +29,7 @@ import {
   startBrowserSignIn
 } from './oauth.js';
 import { loadStore, registerGames } from './games.js';
+import { registerMihon } from './mihon.js';
 import { serve } from './serve.js';
 import { checkForUpdates } from './updater.js';
 
@@ -43,6 +44,7 @@ const resource = (name, devPath) =>
 const webDir = resource('web', '../web/build');
 const yomitanDir = resource('yomitan', 'yomitan');
 const hookDir = resource('lunahook', 'lunahook');
+const mihonDir = resource('mihon-host', '../mihon-host/desktop/build/install/desktop/lib');
 const electronDir = app.isPackaged
   ? join(process.resourcesPath, '..')
   : join(import.meta.dirname, 'node_modules/electron/dist');
@@ -327,6 +329,17 @@ if (!app.requestSingleInstanceLock()) {
       return;
     }
     ipcMain.handle('sources-fetch', sourcesFetch);
+    registerMihon({
+      app,
+      ipcMain,
+      net,
+      hostDir: mihonDir,
+      // The E2E's hosts file and trust store (e2e/mihon.e2e.mjs); unset in normal use.
+      jvmArgs: (process.env.CHIMI_MIHON_JVM_ARGS || '').split(' ').filter(Boolean),
+      isApp: (event) =>
+        event.senderFrame === event.sender.mainFrame &&
+        !!event.senderFrame?.url.startsWith(`${origin}/`)
+    });
     registerGames({
       app,
       dialog,

@@ -6,4 +6,6 @@ plugins {
 
 dependencies {
     implementation(libs.serialization.json)
+    // The host puts OkHttp on the class path; CookieManager writes into its cookie jar.
+    compileOnly(libs.okhttp)
 }

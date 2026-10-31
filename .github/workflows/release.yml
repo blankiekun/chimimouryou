@@ -271,6 +271,18 @@ jobs:
           bash apps/desktop/scripts/fetch-yomitan.sh
           bash apps/desktop/scripts/fetch-lunahook.sh
 
+      # The Mihon extension host's jars (OS-independent, built once here; PR and main CI don't).
+      - name: Install Java
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Build the Mihon host
+        working-directory: apps/mihon-host
+        run: ./gradlew --no-daemon :desktop:installDist
+
       - name: Upload
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -279,6 +291,7 @@ jobs:
             apps/web/build
             apps/desktop/yomitan
             apps/desktop/lunahook
+            apps/mihon-host/desktop/build/install/desktop/lib
           if-no-files-found: error
 
   # Packages the desktop app on each OS it ships for (dmg needs macOS, nsis Windows). The timeout

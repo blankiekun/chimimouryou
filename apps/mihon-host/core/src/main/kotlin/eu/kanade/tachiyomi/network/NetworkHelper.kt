@@ -6,6 +6,7 @@
 
 package eu.kanade.tachiyomi.network
 
+import eu.kanade.tachiyomi.network.interceptor.CloudflareInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UncaughtExceptionInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UserAgentInterceptor
 import okhttp3.Cache
@@ -38,6 +39,7 @@ class NetworkHelper(
         .cache(Cache(directory = File(cacheDir, "network_cache"), maxSize = 5L * 1024 * 1024))
         .addInterceptor(UncaughtExceptionInterceptor())
         .addInterceptor(UserAgentInterceptor(::defaultUserAgentProvider))
+        .addInterceptor(CloudflareInterceptor())
         // Every hop, redirects included, passes the guard.
         .addNetworkInterceptor(guard)
         .build()

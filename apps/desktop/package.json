@@ -25,6 +25,7 @@
       "games.js",
       "game-media.js",
       "overlay.js",
+      "mihon.js",
       "oauth.js",
       "preload.cjs",
       "serve.js",
@@ -41,6 +42,10 @@
       {
         "from": "yomitan",
         "to": "yomitan"
+      },
+      {
+        "from": "../mihon-host/desktop/build/install/desktop/lib",
+        "to": "mihon-host"
       },
       {
         "from": "../../LICENSE",

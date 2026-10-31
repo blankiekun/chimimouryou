@@ -14,7 +14,6 @@ import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
-import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.json.Json
@@ -47,6 +46,7 @@ class Host(
     app: Application,
     private val network: NetworkHelper,
     private val tmp: File,
+    private val remembered: Remembered,
     private val loadJar: (path: String) -> List<Source>,
 ) {
     private val sources = ConcurrentHashMap<String, Source>()
@@ -65,14 +65,16 @@ class Host(
         return sources[id] as? CatalogueSource ?: throw HostError("Source $id isn't loaded")
     }
 
+    private fun list(source: CatalogueSource, page: MangasPage) = list(page).also { remembered.works(source.id.toString(), page.mangas) }
+
     suspend fun handle(op: String, params: JsonObject): JsonElement = when (op) {
         "ping" -> buildJsonObject { put("ok", true) }
         "load" -> load(params.text("jar"))
-        "popular" -> list(source(params).getPopularManga(params.page()))
-        "latest" -> list(source(params).getLatestUpdates(params.page()))
+        "popular" -> source(params).let { list(it, it.getPopularManga(params.page())) }
+        "latest" -> source(params).let { list(it, it.getLatestUpdates(params.page())) }
         "search" -> {
             val source = source(params)
-            list(source.getSearchManga(params.page(), params.text("query"), source.getFilterList()))
+            list(source, source.getSearchManga(params.page(), params.text("query"), source.getFilterList()))
         }
         "detail" -> detail(source(params), params.text("url"))
         "pages" -> pages(source(params), params.text("url"))
@@ -122,9 +124,17 @@ class Host(
     }
 
     private suspend fun detail(source: CatalogueSource, url: String): JsonElement {
-        val asked = SManga.create().apply { this.url = url }
+        val key = source.id.toString()
+        val asked = remembered.work(key, url)
         val update = source.getMangaUpdate(asked, emptyList(), fetchDetails = true, fetchChapters = true)
-        val manga = update.manga
+        // Mihon merges the details into the work it has: they may leave url, title or cover unset.
+        val manga = update.manga.apply {
+            if (runCatching { this.url }.isFailure) this.url = url
+            if (runCatching { title }.getOrNull().isNullOrEmpty()) title = asked.title
+            if (thumbnail_url.isNullOrEmpty()) thumbnail_url = asked.thumbnail_url
+        }
+        remembered.works(key, listOf(manga))
+        remembered.chapters(key, update.chapters)
         return buildJsonObject {
             put("name", manga.title.ifEmpty { url })
             put("imageUrl", manga.thumbnail_url ?: "")
@@ -153,7 +163,7 @@ class Host(
 
     private suspend fun pages(source: CatalogueSource, url: String): JsonElement {
         val http = source as? HttpSource ?: throw HostError("${source.name} has no pages to fetch")
-        val pages = http.getPageList(SChapter.create().apply { this.url = url })
+        val pages = http.getPageList(remembered.chapter(source.id.toString(), url))
         // shortcut: one page at a time; extensions pace themselves with their rate limiters.
         return buildJsonObject {
             put(

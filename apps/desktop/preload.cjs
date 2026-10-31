@@ -6,7 +6,7 @@
 
 // Preload for the app's own windows: tells the web build it runs in the desktop app, where cloud
 // sign-in continues in the system browser (oauth.js), and lets Sources fetch sites without CORS
-// (main.js sourcesFetch), and plays Windows games natively (games.js) with an overlay over them
+// (main.js sourcesFetch), runs Mihon extensions (mihon.js), and plays Windows games natively (games.js) with an overlay over them
 // (overlay.js). Nothing else is exposed.
 
 /* global require */
@@ -16,6 +16,19 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('chimiDesktop', {
   browserSignIn: true,
   fetch: (url, options) => ipcRenderer.invoke('sources-fetch', url, options),
+  mihon: {
+    status: () => ipcRenderer.invoke('mihon-status'),
+    installJava: () => ipcRenderer.invoke('mihon-install-jre'),
+    removeJava: () => ipcRenderer.invoke('mihon-remove-jre'),
+    install: (url) => ipcRenderer.invoke('mihon-install', url),
+    load: (pin) => ipcRenderer.invoke('mihon-load', pin),
+    call: (pin, op, params) => ipcRenderer.invoke('mihon-call', pin, op, params),
+    onProgress: (callback) => {
+      const listener = (_event, progress) => callback(progress);
+      ipcRenderer.on('mihon-progress', listener);
+      return () => ipcRenderer.removeListener('mihon-progress', listener);
+    }
+  },
   games: {
     launch: (folder, saves) => ipcRenderer.invoke('games-launch', folder, saves),
     saves: (folder, names) => ipcRenderer.invoke('games-saves', folder, names),

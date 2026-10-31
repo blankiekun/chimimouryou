@@ -467,6 +467,7 @@ export const ja: Record<MessageKey, string> = {
   'settings.section.general-install': 'アプリとしてインストール',
   'settings.section.general-analysis': '解析ツール',
   'settings.section.general-desktop-games': 'デスクトップのゲーム',
+  'settings.section.general-mihon': 'Mihon 拡張機能',
   'settings.section.general-plugins': '拡張機能',
   'settings.section.reader-text': 'テキストスタイル',
   'settings.section.reader-writing': '組版・ふりがな',
