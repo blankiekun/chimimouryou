@@ -1,4 +1,5 @@
 apply plugin: 'com.android.application'
+apply plugin: 'org.jetbrains.kotlin.android'
 
 android {
     namespace = "moe.blankie.chimireader"
@@ -28,6 +29,13 @@ android {
             }
         }
     }
+    // `github` (the APK on GitHub releases) runs Mihon extensions: it downloads and loads their code,
+    // which Play's policy forbids, so `play` is the same app without the Mihon host.
+    flavorDimensions = ['store']
+    productFlavors {
+        github { dimension 'store' }
+        play { dimension 'store' }
+    }
     buildTypes {
         release {
             if (keystore) signingConfig signingConfigs.release
@@ -51,6 +59,7 @@ dependencies {
     implementation project(':capacitor-android')
     implementation "com.google.android.gms:play-services-auth:$playServicesAuthVersion"
     implementation project(':capacitor-cordova-android-plugins')
+    githubImplementation project(':mihon-core')
 }
 
 apply from: 'capacitor.build.gradle'

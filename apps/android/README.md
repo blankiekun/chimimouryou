@@ -14,23 +14,26 @@ APK installs over the old one and keeps its books, as long as it is signed with 
 
 There is no self-updater: install the next release's APK the same way.
 
-CI builds a debug APK when `apps/android` (or the lockfile, the workflows, `android-drive.ts`, `android-bars.ts`, `native-save.ts`)
-changes: the run's Summary → Artifacts → `chimimouryou-debug-apk` (a zip holding `app-debug.apk`).
+CI builds a debug APK (the `github` flavor) when `apps/android` (or the Mihon host's `core`, the lockfile, the
+workflows, `android-drive.ts`, `android-bars.ts`, `native-save.ts`) changes: the run's Summary → Artifacts →
+`chimimouryou-debug-apk` (a zip holding `app-github-debug.apk`).
 It is signed with a debug key, so it can't update a release install (uninstall first, which
 deletes the app's books), and Drive sign-in works only once that key is registered (step 4 below).
 
 ## Build it
 
-Needs JDK 21 and the Android SDK (`ANDROID_HOME`; Gradle installs missing platforms). From this
-folder, after `pnpm install` at the repository root:
+Needs JDK 21 and the Android SDK (`ANDROID_HOME`) with platform 37 (`sdkmanager 'platforms;android-37.0'`;
+Gradle's own download of it fails the run it happens in). From this folder, after `pnpm install` at the
+repository root:
 
 ```sh
-pnpm run build:web                       # the standalone web build in ../web/build
-pnpm run sync                            # copies it into android/ (cap sync android)
-cd android && ./gradlew assembleDebug    # android/app/build/outputs/apk/debug/app-debug.apk
+pnpm run build:web                             # the standalone web build in ../web/build
+pnpm run sync                                  # copies it into android/ (cap sync android)
+cd android && ./gradlew assembleGithubDebug    # android/app/build/outputs/apk/github/debug/app-github-debug.apk
 ```
 
-`assembleRelease` signs with the key named by `ANDROID_KEYSTORE_FILE`, `ANDROID_KEYSTORE_PASSWORD`,
+Two product flavors: `github` (the APK releases attach) and `play`, the same app without Mihon
+extensions (below), for a Play Store build later. `assembleGithubRelease` signs with the key named by `ANDROID_KEYSTORE_FILE`, `ANDROID_KEYSTORE_PASSWORD`,
 `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` (unsigned without them); `-PversionName=3.11.0
 -PversionCode=3011000` sets the version. Install over USB with `adb install -r <apk>`.
 
@@ -68,6 +71,31 @@ cd android && ./gradlew assembleDebug    # android/app/build/outputs/apk/debug/a
 - Icon: the ち logo as an adaptive icon (`res/drawable/ic_launcher_foreground.xml`, a vector: the
   green circle with ち cut out on paper; also the themed-icon layer and the splash icon), a plain
   vector on Android 7. The launch screen is that icon on paper.
+
+## Mihon extensions (`github` flavor)
+
+The app runs Mihon/Tachiyomi extensions (keiyoushi's apks) in-process, with the desktop host's
+`core` (`apps/mihon-host`, `implementation project(':mihon-core')`, built against the host's Android
+stand-ins as compileOnly, so they never reach the APK). `src/github/kotlin`:
+`MihonHostPlugin.kt` is the Capacitor plugin `MihonHost` (`install`, `call` with the host's op set,
+`drop`), which `apps/web/src/lib/data/sources/mihon-runtime.ts` uses when the plugin exists;
+`MihonApks.kt` downloads an apk through the host's guarded client, accepts it only when a signing
+certificate's SHA-256 is the repository's `signingKey`, keeps it read-only as
+`filesDir/exts/<sha256>.ext`, re-hashes it before loading, reads it with PackageManager and loads it
+child-first (Mihon's DelegateLastClassLoader backport). Cookies go to the WebView's CookieManager,
+preferences are the real SharedPreferences. Images come back as files under the cache that the
+page reads through `Capacitor.convertFileSrc` and then drops. The host's libraries (OkHttp 5.5.1,
+jsoup, kotlinx, Injekt) need compileSdk 37 (`variables.gradle`, `android.suppressUnsupportedCompileSdk`).
+
+`play` has none of it (`src/play` registers no plugin): the web side then says extensions need the
+app, as in a plain browser. Check with `dexdump` that its APK has no `eu/kanade`, `moe/chimimouryou`,
+`okhttp3`, `org/jsoup` or `uy/kohesive` classes.
+
+Phone E2E (not in CI; a phone with USB debugging, `adb`, python3, openssl): `node e2e/mihon.e2e.mjs`
+from this folder builds the github debug APK, installs it and runs keiyoushi's real Rawkuma apk
+against the fixture site of `server/tests/fixtures/sources/mihon.py` (its header says how: the
+phone's proxy setting is pointed at the fixture through `adb reverse` and restored after, and the
+debug build trusts a user-installed test CA, `src/debug`).
 
 ## Google Drive
 
@@ -130,9 +158,9 @@ Then add the repository secrets `ANDROID_KEYSTORE` (`base64 -w0 chimimouryou-rel
 
 ## Later: a Play Store build
 
-Not built yet; a Play build would need:
+Not built yet (the `play` flavor exists, without Mihon extensions); a Play build would need:
 
 - no self-updater and no sideloaded updates (Play updates it);
-- no extension repositories (Play's policy on downloading code);
+- no Mihon extensions (Play's policy on downloading code: the `play` flavor);
 - an Android App Bundle (`bundleRelease`) and Play App Signing: the Android OAuth client then needs
   Play's app signing key's SHA-1 as well (Play Console → App integrity).

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debuggable builds also trust CAs the phone's owner installed (the phone E2E's test CA,
+     apps/android/e2e/mihon.e2e.mjs); release builds keep Android's default (system CAs only). -->
+<network-security-config>
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>

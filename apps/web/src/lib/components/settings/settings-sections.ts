@@ -15,7 +15,7 @@ import { getContext, setContext } from 'svelte';
 import type { Writable } from 'svelte/store';
 import type { MessageKey } from '$lib/i18n';
 import { standalone } from '$lib/data/env';
-import { mihonHost } from '$lib/data/sources/mihon-runtime';
+import { mihonDesktop } from '$lib/data/sources/mihon-runtime';
 import { desktopGames } from '$lib/data/vn/native-games';
 import { hasDeviceFollows } from '$lib/data/sources/sources-settings';
 
@@ -78,8 +78,8 @@ export const settingsAreas: SettingsArea[] = [
             }
           ]
         : []),
-      // The desktop app runs Mihon extensions (mihon-runtime.ts).
-      ...(mihonHost()
+      // The desktop app runs Mihon extensions on a Java runtime set up here (mihon-runtime.ts).
+      ...(mihonDesktop()
         ? [
             {
               id: 'general-mihon',

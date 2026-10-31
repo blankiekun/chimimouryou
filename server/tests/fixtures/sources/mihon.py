@@ -1,12 +1,14 @@
 """Mihon extensions for serve.py and the desktop app's E2E (apps/desktop/e2e/mihon.e2e.mjs).
 
 - https://repo.example/mihon/index.pb: a Mihon repository (gzip protobuf, the fields mihon-index.ts reads) listing
-  keiyoushi's Rawkuma jar, which is served beside it unchanged (mihon/, Apache-2.0, see NOTICE).
+  keiyoushi's Rawkuma jar and apk, which are served beside it unchanged (mihon/, Apache-2.0, see NOTICE), with
+  keiyoushi's real signing key; `untrusted/index.pb` is the same with another key (the Android app refuses the apk).
 - rawkuma.net: an invented NatsuId (WordPress) site in the shape the jar reads: one series, "Fixture Manga", two
   chapters of three pages (the nonce form, advanced_search, wp-json/wp/v2/manga, chapter_list, chapter pages).
-- `python3 mihon.py <dir>`: an https proxy for the E2E. CONNECT to rawkuma.net or repo.example ends here, in TLS with
-  a certificate from a test CA it makes in <dir> (ca.pem, and ca.p12 as the JVM's trust store); serve.py's
-  handler answers. Any other host is tunnelled unchanged (the app's Java download). Prints "proxy <port>".
+- `python3 mihon.py <dir>`: an https proxy for the E2Es (desktop, and Android's apps/android/e2e). CONNECT
+  to rawkuma.net or repo.example ends here, in TLS with a certificate from a test CA in <dir> (ca.pem, and ca.p12
+  as the JVM's trust store; made when <dir> has none, so a phone that installed it keeps it); serve.py's handler
+  answers. Any other host is tunnelled unchanged (the app's Java download). Prints "proxy <port>".
 """
 import gzip
 import json
@@ -20,6 +22,9 @@ import threading
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 JAR = 'tachiyomi-ja.rawkuma-v1.6.43.jar'
+APK = 'tachiyomi-ja.rawkuma-v1.6.43.apk'
+# keiyoushi's index.pb field 3: the SHA-256 of the certificate its apks are signed with.
+SIGNING_KEY = '9add655a78e96c4ec7a53ef89dccb557cb5d767489fac5e785d671a5a75d4da2'
 PAGE = os.path.join(HERE, 'kakuyomu', 'cover.png')
 BASE = 'https://rawkuma.net'
 HOSTS = {'rawkuma.net', 'repo.example'}
@@ -49,21 +54,24 @@ def field(number: int, value: bytes | str | int) -> bytes:
     return varint(number << 3 | 2) + varint(len(data)) + data
 
 
-def index_pb() -> bytes:
+def index_pb(signing_key: str = SIGNING_KEY) -> bytes:
     source = field(1, SOURCE_ID) + field(2, 'Rawkuma') + field(3, 'ja') + field(4, BASE)
+    files = field(1, f'https://repo.example/mihon/{APK}') + field(501, f'https://repo.example/mihon/{JAR}')
     extension = (field(1, 'Rawkuma') + field(2, 'eu.kanade.tachiyomi.extension.ja.rawkuma')
-                 + field(3, field(501, f'https://repo.example/mihon/{JAR}')) + field(4, '1.6')
-                 + field(6, '1.6.43') + field(7, 1) + field(8, source))
-    store = field(1, 'Fixture Mihon') + field(3, 'fixture-signing-key') + field(101, field(1, extension))
+                 + field(3, files) + field(4, '1.6') + field(6, '1.6.43') + field(7, 1) + field(8, source))
+    store = field(1, 'Fixture Mihon') + field(3, signing_key) + field(101, field(1, extension))
     return gzip.compress(store)
 
 
 def repo(rest: str) -> tuple[int, str, bytes]:
     if rest == 'index.pb':
         return 200, 'application/octet-stream', index_pb()
-    if rest == JAR:
-        with open(os.path.join(HERE, 'mihon', JAR), 'rb') as f:
-            return 200, 'application/java-archive', f.read()
+    if rest == 'untrusted/index.pb':
+        return 200, 'application/octet-stream', index_pb('0' * 64)
+    for name, kind in ((JAR, 'application/java-archive'), (APK, 'application/vnd.android.package-archive')):
+        if rest == name:
+            with open(os.path.join(HERE, 'mihon', name), 'rb') as f:
+                return 200, kind, f.read()
     return 404, 'text/plain', b'not found'
 
 
@@ -109,14 +117,16 @@ def rawkuma(rest: str, query: dict, body: bytes = b'') -> tuple[int, str, bytes]
 
 
 def make_ca(folder: str) -> ssl.SSLContext:
-    """A test CA and a certificate for HOSTS from it (openssl), and the CA as a PKCS12 trust store for the JVM."""
+    """A test CA (kept when <folder> has one) and a certificate for HOSTS from it (openssl), and the CA as a PKCS12
+    trust store for the JVM."""
     os.makedirs(folder, exist_ok=True)
     path = lambda name: os.path.join(folder, name)  # noqa: E731
     run = lambda *args: subprocess.run(['openssl', *args], check=True, capture_output=True)  # noqa: E731
     ec = ['-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:P-256', '-nodes']
-    run('req', '-x509', *ec, '-keyout', path('ca.key'), '-out', path('ca.pem'), '-days', '2',
-        '-subj', '/CN=chimimouryou E2E CA', '-addext', 'basicConstraints=critical,CA:TRUE',
-        '-addext', 'keyUsage=critical,keyCertSign')
+    if not os.path.exists(path('ca.key')):
+        run('req', '-x509', *ec, '-keyout', path('ca.key'), '-out', path('ca.pem'), '-days', '7',
+            '-subj', '/CN=chimimouryou E2E CA', '-addext', 'basicConstraints=critical,CA:TRUE',
+            '-addext', 'keyUsage=critical,keyCertSign')
     run('req', '-x509', *ec, '-keyout', path('site.key'), '-out', path('site.pem'), '-days', '2',
         '-CA', path('ca.pem'), '-CAkey', path('ca.key'), '-subj', '/CN=rawkuma.net',
         '-addext', 'subjectAltName=' + ','.join(f'DNS:{host}' for host in sorted(HOSTS)))
