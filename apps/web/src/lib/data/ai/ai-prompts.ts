@@ -52,8 +52,9 @@ You get the existing entries that are relevant and a new passage. Return JSON on
 ${loreFormat}
 - Include only entries that are new or that the passage adds to. Omit everything else.
 - category is one of: character, place, organization, item, term, event.
-- name is the Japanese name as written in the book; reading is its kana reading.
-- keys are the names, nicknames and titles the text uses for it.
+- name is the Japanese name as written in the book, the fullest form known (田中花子 rather than 花子ちゃん); reading is its kana reading.
+- keys are the names, nicknames and titles the text uses for it, including the surname or given name alone and forms with honorifics (さん, ちゃん, 先生...).
+- When someone listed under a description (e.g. 金髪の少女) is now named, return the entry under the name and put the description in keys.
 - content is the complete updated entry in English (2-6 sentences): who or what it is, relationships, important facts so far. When updating, keep earlier facts and add the new ones.
 - Use only the text you are given. Never guess what happens later.`
   },
@@ -78,8 +79,9 @@ ${loreFormat}
 ${loreFormat}
 - 新しい項目と、本文で情報が増えた項目だけを含め、それ以外は省いてください。
 - category は character, place, organization, item, term, event のいずれか（英語のまま）。
-- name は本文の表記どおりの日本語名、reading はそのかなの読み。
-- keys は本文がそれを指すのに使う名前・あだ名・肩書き。
+- name は本文の表記どおりの日本語名で、分かっている最も完全な形（花子ちゃんではなく田中花子）。reading はそのかなの読み。
+- keys は本文がそれを指すのに使う名前・あだ名・肩書き。姓だけ・名だけの形や敬称つきの形（さん、ちゃん、先生など）も含めてください。
+- 描写で登録されていた人物（例：金髪の少女）に名前が出たら、その名前で返し、描写は keys に入れてください。
 - content は更新後の項目全体を日本語で（2〜6文）：何者・何か、関係、これまでの重要な事実。更新するときは前の事実を残して新しい事実を加えてください。
 - 与えられた本文だけを使い、この先の展開を推測しないでください。`
   }

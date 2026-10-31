@@ -156,6 +156,9 @@ async function putLorebook(lorebook: Lorebook) {
 }
 
 export async function clearLorebook(title: string) {
+  [...earlier.keys()]
+    .filter((key) => key.startsWith(`${title}\n`))
+    .forEach((key) => earlier.delete(key));
   await putLorebook({ title, entries: [], processedUpTo: 0 });
 }
 
@@ -163,8 +166,22 @@ export async function saveLoreEntries(title: string, entries: LoreEntry[]) {
   await putLorebook({ ...(await getStored(title)), entries });
 }
 
+const honorific = /(さん|ちゃん|くん|君|様|さま|殿|先生|氏)$/;
+
+/**
+ * A name as compared: lower case, without an honorific (unless that leaves nothing, as for 先生),
+ * its parts in a fixed order when spaces or ・ separate them (ジョン・スミス = スミス・ジョン).
+ */
+function nameKey(name: string) {
+  const trimmed = name.trim().toLowerCase();
+  const plain = trimmed.replace(honorific, '') || trimmed;
+  const parts = plain.split(/[\s・･=＝]+/).filter(Boolean);
+
+  return parts.length > 1 ? parts.sort().join(' ') : plain;
+}
+
 function sameName(a: string, b: string) {
-  return a.trim().toLowerCase() === b.trim().toLowerCase();
+  return nameKey(a) === nameKey(b);
 }
 
 /** Parses the model's JSON answer, tolerating code fences and stray text around it. */
@@ -181,14 +198,21 @@ export function parseLoreAnswer(answer: string): Partial<LoreEntry>[] {
   return Array.isArray(parsed?.entries) ? parsed.entries : [];
 }
 
-/** Adds new entries and updates existing ones (matched by name or key) from a model answer. */
+/**
+ * Adds new entries and updates existing ones (matched by name or key) from a model answer.
+ * `sentInFull`: ids of the entries the model was given with their content (all when left out);
+ * the others only by name, so an update adds to their content instead of replacing it.
+ */
 export function mergeLoreEntries(
   entries: LoreEntry[],
   updates: Partial<LoreEntry>[],
   start: number,
-  end: number
+  end: number,
+  sentInFull?: Set<string>
 ): LoreEntry[] {
   const result = entries.map((entry) => ({ ...entry }));
+  /** Entries this answer changed already: a second update for one adds to it */
+  const updated = new Set<LoreEntry>();
 
   updates.forEach((update) => {
     const name = typeof update.name === 'string' ? update.name.trim() : '';
@@ -204,16 +228,26 @@ export function mergeLoreEntries(
     const category = loreCategories.includes(update.category as LoreCategory)
       ? (update.category as LoreCategory)
       : undefined;
-    const existing = result.find(
-      (entry) =>
-        sameName(entry.name, name) ||
-        entry.keys.some((key) => sameName(key, name)) ||
-        keys.some((key) => sameName(key, entry.name))
-    );
+    // Same name first, so a key shared with another entry doesn't take the update.
+    const byName = result.find((entry) => sameName(entry.name, name));
+    // The model lists the old name as another name of this one: named after being described.
+    const renamed = byName
+      ? undefined
+      : result.find((entry) => keys.some((key) => sameName(key, entry.name)));
+    const existing =
+      byName ?? renamed ?? result.find((entry) => entry.keys.some((key) => sameName(key, name)));
 
     if (existing) {
-      existing.content = content;
-      existing.keys = [...new Set([...existing.keys, ...keys])];
+      const replace = !updated.has(existing) && (!sentInFull || sentInFull.has(existing.id));
+
+      // Content the model didn't see (or a reader's edit of it) is kept; the new facts follow it.
+      existing.content =
+        replace || existing.content.includes(content) ? content : `${existing.content}\n${content}`;
+      existing.keys = [...new Set([...existing.keys, existing.name, name, ...keys])];
+      if (renamed) {
+        existing.name = name;
+      }
+      updated.add(existing);
       existing.category = category ?? existing.category;
       existing.reading = (typeof update.reading === 'string' && update.reading) || existing.reading;
       existing.updated = end;
@@ -238,8 +272,7 @@ export function mergeLoreEntries(
 function entriesForPrompt(entries: LoreEntry[], passage: string) {
   const mentioned = entries.filter((entry) => entry.keys.some((key) => passage.includes(key)));
   const others = entries.filter((entry) => !mentioned.includes(entry));
-
-  return JSON.stringify({
+  const text = JSON.stringify({
     relevant: mentioned.map(({ name, reading, category, keys, content }) => ({
       name,
       reading,
@@ -248,6 +281,37 @@ function entriesForPrompt(entries: LoreEntry[], passage: string) {
       content
     })),
     other_names: others.map((entry) => entry.name)
+  });
+
+  return { text, sentInFull: new Set(mentioned.map((entry) => entry.id)) };
+}
+
+/** Earlier versions of entries that updates in this session changed, by title and id. Not saved: lorebook.json holds the latest version only. */
+const earlier = new Map<string, Pick<LoreEntry, 'name' | 'keys' | 'content' | 'updated'>[]>();
+const versionKey = (title: string, id: string) => `${title}\n${id}`;
+
+/**
+ * The entry as it was at `position`, for going back to an earlier part: the entry itself when it
+ * wasn't updated past it, else its last version before (from updates in this session);
+ * undefined when that isn't known.
+ */
+export function loreEntryAt(title: string, entry: LoreEntry, position: number) {
+  if (entry.fromBook || entry.updated <= position) {
+    return entry;
+  }
+
+  return earlier
+    .get(versionKey(title, entry.id))
+    ?.findLast((version) => version.updated <= position);
+}
+
+function keepEarlierVersions(title: string, before: LoreEntry[], after: LoreEntry[]) {
+  before.forEach(({ id, name, keys, content, updated }) => {
+    if (after.find((entry) => entry.id === id)?.updated !== updated) {
+      const key = versionKey(title, id);
+
+      earlier.set(key, [...(earlier.get(key) ?? []), { name, keys, content, updated }]);
+    }
   });
 }
 
@@ -288,6 +352,10 @@ export async function updateLorebook(title: string, index: SearchIndex, position
   }
 }
 
+function loreChunkCharacters() {
+  return Math.max(1000, featureParams('lore').context ?? defaultChunkCharacters);
+}
+
 async function readUntil(
   title: string,
   index: SearchIndex,
@@ -296,7 +364,7 @@ async function readUntil(
   signal: AbortSignal
 ) {
   let lorebook = await getLorebook(title);
-  const chunkCharacters = Math.max(1000, featureParams('lore').context ?? defaultChunkCharacters);
+  const chunkCharacters = loreChunkCharacters();
   const total = Math.ceil((position - lorebook.processedUpTo) / chunkCharacters);
 
   for (let part = 1; lorebook.processedUpTo < position; part += 1) {
@@ -310,15 +378,13 @@ async function readUntil(
       `Reading characters ${start.toLocaleString()}–${end.toLocaleString()} (${part} of ${total})`
     );
 
+    const existing = entriesForPrompt(lorebook.entries, passage);
     const answer = passage.trim()
       ? await askAi(
           [
             {
               role: 'user',
-              content: `Book: ${title}\n\n<existing_entries>\n${entriesForPrompt(
-                lorebook.entries,
-                passage
-              )}\n</existing_entries>\n\n<passage>\n${passage}\n</passage>`
+              content: `Book: ${title}\n\n<existing_entries>\n${existing.text}\n</existing_entries>\n\n<passage>\n${passage}\n</passage>`
             }
           ],
           () => {},
@@ -328,11 +394,10 @@ async function readUntil(
       : [];
     const updates = answer.length ? parseLoreAnswer(answer[answer.length - 1].content) : [];
 
-    lorebook = {
-      ...lorebook,
-      entries: mergeLoreEntries(lorebook.entries, updates, start, end),
-      processedUpTo: end
-    };
+    const entries = mergeLoreEntries(lorebook.entries, updates, start, end, existing.sentInFull);
+
+    keepEarlierVersions(title, lorebook.entries, entries);
+    lorebook = { ...lorebook, entries, processedUpTo: end };
     await putLorebook(lorebook);
   }
 
@@ -343,7 +408,8 @@ const failedAt = new Map<string, number>();
 const retryDelay = 10 * 60 * 1000;
 
 /**
- * Background update every `lorebookAutoInterval$` characters (Settings → AI).
+ * Background update every `lorebookAutoInterval$` characters (Settings → AI), skipped when the
+ * position is more than three requests' worth past that (a jump, not reading).
  * After an error it waits 10 minutes; the panel shows the error.
  */
 export async function autoUpdateLorebook(
@@ -359,7 +425,12 @@ export async function autoUpdateLorebook(
 
   const processed = processedCache.get(title) ?? (await getLorebook(title)).processedUpTo;
 
-  if (position - processed < Math.max(interval, minUpdateCharacters)) {
+  const pending = position - processed;
+  const due = Math.max(interval, minUpdateCharacters);
+
+  // More than three requests past the interval is a jump (to the end, the afterword…), not
+  // reading: it would read ahead and spoil the entries, so it waits for the Update button.
+  if (pending < due || pending > due + 3 * loreChunkCharacters()) {
     return;
   }
 
