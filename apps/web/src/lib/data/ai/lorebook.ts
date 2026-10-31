@@ -193,13 +193,23 @@ const genericWords = new Set(
 );
 
 /**
+ * An entry still known by a description (髭のある男, 団扇の女): its name ends with a common word.
+ * Its generic keys stay until it is named, since they are how the passage refers to it.
+ */
+function unnamed(name: string) {
+  const plain = nameKey(name);
+
+  return [...genericWords].some((word) => plain.endsWith(word));
+}
+
+/**
  * A key that names this entry only: not a pronoun or common word, nor a single character, unless
- * the entry's name is that word too (清, Ｋ, 先生).
+ * the entry's name is that word too (清, Ｋ, 先生) or the entry has no real name yet.
  */
 function specificKey(key: string, name: string) {
   const word = key.trim().toLowerCase();
 
-  return sameName(word, name) || (!genericWords.has(word) && [...word].length > 1);
+  return sameName(word, name) || unnamed(name) || (!genericWords.has(word) && [...word].length > 1);
 }
 
 /** A name or key as the model copied it from the passage, without the furigana (又《また》やん). */
@@ -286,6 +296,8 @@ export function mergeLoreEntries(
           existing.firstSeen = Math.min(existing.firstSeen, other.firstSeen);
           result.splice(result.indexOf(other), 1);
         });
+      // Named now (or named all along): generic words go, the old description stays a key.
+      existing.keys = existing.keys.filter((key) => specificKey(key, existing.name));
       updated.add(existing);
       existing.category = category ?? existing.category;
       existing.reading = (typeof update.reading === 'string' && update.reading) || existing.reading;
