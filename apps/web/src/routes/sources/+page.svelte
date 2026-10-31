@@ -312,10 +312,11 @@
                       href="{pagePath}/sources/work?id={follow.workId}">{follow.title}</a
                     >
                     <p class="sources-row-meta">
-                      {follow.siteName}{#if follow.site.startsWith('ext:')}
-                        · extension{#if !follow.elsewhere}<span class="sources-tag"
-                            >This device</span
-                          >{/if}{/if}
+                      {follow.siteName}{follow.site.startsWith('ext:')
+                        ? ' · extension'
+                        : ''}{#if follow.site.startsWith('ext:') && !follow.elsewhere}<span
+                          class="sources-tag">This device</span
+                        >{/if}
                     </p>
                   </div>
                   <div class="sources-follow-state">
@@ -723,8 +724,10 @@
 
   /* As the work page's tag (board 5) */
   .sources-tag {
+    display: inline-block;
     margin-left: 0.5rem;
-    padding: 0 0.35rem;
+    padding: 0.05rem 0.35rem;
+    line-height: 1.3;
     border: 1px solid var(--font-color);
     border-radius: 2px;
     color: var(--font-color);

@@ -459,8 +459,10 @@
   }
 
   .work-tag {
+    display: inline-block;
     margin-left: 0.5rem;
-    padding: 0 0.35rem;
+    padding: 0.05rem 0.35rem;
+    line-height: 1.3;
     border: 1px solid var(--font-color);
     border-radius: 2px;
     color: var(--font-color);
