@@ -143,7 +143,7 @@
   />
 </AppHeader>
 
-<div class="app-page-shell">
+<div class="app-page-shell statistics-shell">
   <main class="statistics" aria-label="Statistics">
     <div>
       <!-- Edit statistics on Profile opens these tools (the header's avatar stays lit) -->
@@ -174,6 +174,11 @@
 {/if}
 
 <style>
+  /* The title filter panel (z-60, in StatisticsContent) must sit above the layout's dialog backdrop (z-50) */
+  .statistics-shell {
+    isolation: auto;
+  }
+
   .statistics {
     display: flex;
     max-width: 75rem;
