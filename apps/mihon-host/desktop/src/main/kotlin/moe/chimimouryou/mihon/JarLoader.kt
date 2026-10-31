@@ -14,17 +14,42 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.ZipFile
+import javax.xml.parsers.DocumentBuilderFactory
+import org.w3c.dom.Element
 
 /** The manifest fields Mihon's ExtensionLoader reads: package, versionName and meta-data. */
 data class Manifest(val packageName: String, val versionName: String, val meta: Map<String, String>)
+
+/** keiyoushi's .jar builds carry a plain-text manifest; apks carry the binary (AXML) one. */
+fun parseManifest(bytes: ByteArray): Manifest =
+    if (bytes.size >= 2 && bytes[0].toInt() == 0x03 && bytes[1].toInt() == 0x00) parseBinaryManifest(bytes) else parseTextManifest(bytes)
+
+private fun parseTextManifest(bytes: ByteArray): Manifest {
+    val factory = DocumentBuilderFactory.newInstance().apply {
+        // No DTDs or external entities: the jar is downloaded.
+        setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+        isExpandEntityReferences = false
+    }
+    val root = try {
+        factory.newDocumentBuilder().parse(bytes.inputStream()).documentElement
+    } catch (e: Exception) {
+        throw HostError("Damaged manifest")
+    }
+    if (root.tagName != "manifest") throw HostError("Damaged manifest")
+    val metaTags = root.getElementsByTagName("meta-data")
+    val meta = (0 until metaTags.length).associate {
+        val tag = metaTags.item(it) as Element
+        tag.getAttribute("android:name") to tag.getAttribute("android:value")
+    }
+    return Manifest(root.getAttribute("package"), root.getAttribute("android:versionName"), meta)
+}
 
 /**
  * Reads a binary AndroidManifest.xml (AXML): the string pool, then each start tag's attributes.
  * Only what the loader needs; attribute names come from the pool ("name", "value", "package").
  */
-fun parseManifest(bytes: ByteArray): Manifest {
+private fun parseBinaryManifest(bytes: ByteArray): Manifest {
     val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
-    require(buf.getShort(0).toInt() == 0x0003) { "Not a binary manifest" }
     var strings = emptyList<String>()
     var pkg = ""
     var versionName = ""
