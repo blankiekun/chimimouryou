@@ -38,6 +38,7 @@
     zipGameFiles
   } from '$lib/data/vn/windows-game';
   import type { HookScript } from '$lib/data/vn/windows-game';
+  import { installed$, installWay } from '$lib/data/standalone/install-app';
   import {
     besideMsi,
     copyDiscs,
@@ -80,6 +81,10 @@
   let { save, existing, added }: Props = $props();
 
   const blocker = windowsGameBlocker();
+  /** Safari on iPhone/iPad in a tab: its 7-day cleanup would delete the copied game. */
+  const iosTab =
+    installWay(navigator.userAgent, navigator.maxTouchPoints, false, installed$.getValue()) ===
+    'ios';
   /** Programs listed before "More": most folders have one game and a few tools */
   const shownPrograms = 6;
 
@@ -661,6 +666,13 @@
   <h2 id="wg-title" class="wg-title">Add a Windows game</h2>
   <p class="wg-lead">Copied into this browser and run here, offline. Nothing is uploaded.</p>
 
+  {#if !blocker && iosTab}
+    <p class="wg-note">
+      Add chimimouryou to your Home Screen first (Share, then Add to Home Screen): Safari deletes a
+      site's data after 7 days without a visit, games included. The Home Screen app keeps them and
+      plays without the browser bars.
+    </p>
+  {/if}
   {#if blocker}
     <p class="wg-note" role="status">{windowsGameBlockerText[blocker]}</p>
     <footer class="wg-actions">
