@@ -275,14 +275,15 @@ export function timeLeft(requests: number, interval: number) {
 // Extension repositories: on this device in both editions (extensions.ts).
 
 export const lookUpRepo = (url: string) => extensions().then((e) => e.lookUpRepo(url));
-export const addRepo = (url: string, on: number[]) => extensions().then((e) => e.addRepo(url, on));
+export const addRepo = (url: string, on: (number | string)[]) =>
+  extensions().then((e) => e.addRepo(url, on));
 export const listRepos = () => extensions().then((e) => e.listRepos());
 export const getRepo = (id: number) => extensions().then((e) => e.getRepo(id));
 export const removeRepo = (id: number) => extensions().then((e) => e.removeRepo(id));
 export const extensionSites = () => extensions().then((e) => e.extensionSites());
-export const setExtension = (repo: number, id: number, on: boolean) =>
+export const setExtension = (repo: number, id: number | string, on: boolean) =>
   extensions().then((e) => e.setExtension(repo, id, on));
-export const updateExtension = (repo: number, id: number) =>
+export const updateExtension = (repo: number, id: number | string) =>
   extensions().then((e) => e.updateExtension(repo, id));
 
 /** A page of an extension's popular or latest works, or a search. */

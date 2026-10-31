@@ -189,7 +189,8 @@ export interface SourceExtensionFeed {
 
 /** An extension of a repository on this device (extensions.ts). */
 export interface SourceRepoExtension {
-  id: number;
+  /** A Mangayomi source id, or a Manatan package id */
+  id: number | string;
   /** ext:<repo key>:<source id>, '' before the repository is saved */
   site: string;
   name: string;
@@ -203,7 +204,9 @@ export interface SourceRepoExtension {
   on: boolean;
   /** Why the app doesn't run it ('' = it can) */
   off: string;
-  tag: '' | 'Dart' | 'Built in';
+  tag: '' | 'Dart' | 'Built in' | 'Web view';
+  /** A Manatan extension: runs only in the desktop and Android apps */
+  appOnly: boolean;
 }
 
 /** A Mangayomi repository (index.json) added on this device. */

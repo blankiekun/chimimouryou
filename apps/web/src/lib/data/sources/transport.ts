@@ -93,6 +93,8 @@ interface NativeAnswer {
   url: string;
   type: string;
   retryAfter: string;
+  /** Content-Range (a Manatan extension's ranged request) */
+  range?: string;
   body?: ArrayBuffer;
   tooBig?: boolean;
 }
@@ -203,6 +205,7 @@ function capacitorAnswer(
     url,
     type: header('content-type'),
     retryAfter: header('retry-after'),
+    range: header('content-range'),
     ...(body.byteLength > maxBytes ? { tooBig: true } : { body })
   };
 }
@@ -254,6 +257,7 @@ export async function sourceFetch(url: string, options: FetchOptions = {}) {
           url: answer.url,
           type: answer.headers.get('Content-Type') || '',
           retryAfter: answer.headers.get('Retry-After') || '',
+          range: answer.headers.get('Content-Range') || '',
           ...(answer.ok && !tooBig ? { body: await answer.arrayBuffer() } : { tooBig })
         };
       } catch {
@@ -285,7 +289,13 @@ export async function sourceFetch(url: string, options: FetchOptions = {}) {
     if (!body || response.tooBig || body.byteLength > maxBytes) {
       throw new FetchError(`${host} sent more than ${Math.round(maxBytes / 1048576)} MB`);
     }
-    return { body, url: target === url ? final : url, type: response.type };
+    return {
+      body,
+      url: target === url ? final : url,
+      type: response.type,
+      status: response.status,
+      range: response.range || ''
+    };
   }
 }
 

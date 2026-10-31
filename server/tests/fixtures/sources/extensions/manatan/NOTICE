@@ -1,0 +1,4 @@
+mokuro.manatan2 is the Mokuro Catalog extension (version 1.1.0) as released by Manatan Community, unchanged:
+https://github.com/Manatan-Community/extensions-source (manga/ja/mokuro), licensed under the Apache License,
+Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0). Copyright Manatan Community and contributors.
+It is used here only as a test fixture, against the invented catalog in ../../manatan.py.

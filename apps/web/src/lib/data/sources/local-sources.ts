@@ -273,7 +273,7 @@ async function source(site: string): Promise<Source> {
       coverHosts: new Set(),
       image: (url) => ext.image(site, url),
       details: (url) => ext.details(site, url),
-      chapter: (_, n, found) => ext.chapter(site, n, found)
+      chapter: (url, n, found) => ext.chapter(site, n, found, url)
     };
   }
   const row = site.startsWith('opds:') ? await one('servers', Number(site.slice(5))) : undefined;

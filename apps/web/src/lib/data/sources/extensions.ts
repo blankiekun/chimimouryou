@@ -12,18 +12,31 @@
  * local-sources.ts runs an extension's works as site `ext:<repo key>:<source id>`, the key being
  * `repoKey` of the index address, so every device that adds the same index names them alike.
  *
- * The one index format supported: a JSON list of entries with name, id, baseUrl, apiUrl, lang,
- * itemType (0 manga, 1 anime, 2 novel), sourceCodeLanguage (0 Dart, 1 JS), version and
- * sourceCodeUrl (Mangayomi's index.json, novel_index.json and anime_index.json all look so).
+ * Index formats: a JSON list of Mangayomi entries with name, id, baseUrl, apiUrl, lang, itemType
+ * (0 manga, 1 anime, 2 novel), sourceCodeLanguage (0 Dart, 1 JS), version and sourceCodeUrl
+ * (Mangayomi's index.json, novel_index.json and anime_index.json all look so), or a JSON list of
+ * Manatan v2 packages (manga.min.json, novel.min.json: `extensionType: "manatan2"`, a string id,
+ * packageUrl relative to the index, sha256 and size of the `.manatan2` zip, the manifest with its
+ * sources and `permissions`). A Manatan package is pinned by the index's SHA-256 like JS code and
+ * runs with the manifest inside the pinned zip; one package can hold several sources, each its own
+ * site. Manatan extensions run only with native fetch (desktop and Android apps).
  */
 
 import { standalone } from '$lib/data/env';
-import { openExtension, type ExtensionRuntime, type ExtensionSource } from './extension-runtime';
+import { BlobReader, Uint8ArrayWriter, ZipReader } from '@zip.js/zip.js';
+import {
+  allowedHosts,
+  openExtension,
+  openManatan,
+  type ExtensionRuntime,
+  type ExtensionSource,
+  type ManatanSource
+} from './extension-runtime';
 import { clean } from './sites/build';
 import * as kakuyomu from './sites/kakuyomu';
 import type { SiteDetails } from './sites/site';
 import * as syosetu from './sites/syosetu';
-import { notInstalledMessage, sourceText } from './transport';
+import { NeedsAppError, nativeFetch, notInstalledMessage, sourceFetch } from './transport';
 import { SourceError, type SourceRepo, type SourceRepoExtension } from './types';
 
 export interface RepoRow {
@@ -38,10 +51,11 @@ export interface RepoRow {
 
 export interface ExtensionRow {
   repo: number;
-  id: number;
+  /** The Mangayomi source id, or the Manatan package id */
+  id: number | string;
   on: boolean;
-  /** The pinned code and its SHA-256 (hex), from the index's version `version` */
-  code: string;
+  /** The pinned code (JS, or a Manatan package's zip) and its SHA-256 (hex), from the index's version `version` */
+  code: string | ArrayBuffer;
   sha256: string;
   version: string;
 }
@@ -71,8 +85,9 @@ function httpsHost(url: unknown) {
   }
 }
 
-async function sha256(code: string) {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(code));
+async function sha256(code: string | ArrayBuffer) {
+  const data = typeof code === 'string' ? new TextEncoder().encode(code) : code;
+  const digest = await crypto.subtle.digest('SHA-256', data);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
@@ -82,26 +97,49 @@ async function readIndex(url: string) {
   if (!host) throw new SourceError('Use an address starting with https://.', 'url');
   let raw: unknown;
   try {
-    raw = JSON.parse(await sourceText(url, { hosts: new Set([host]) }));
+    const { body } = await sourceFetch(url, { hosts: new Set([host]) });
+    const start = new Uint8Array(body.slice(0, 2));
+    // keiyoushi/Mihon publish index.min.json beside index.pb (gzip protobuf of APKs).
+    if (/\.pb$/i.test(new URL(url).pathname) || (start[0] === 0x1f && start[1] === 0x8b)) {
+      throw new SourceError(mihonMessage, 'url');
+    }
+    raw = JSON.parse(new TextDecoder().decode(body));
   } catch (error) {
+    if (error instanceof SourceError) throw error;
     if (error instanceof SyntaxError) {
-      throw new SourceError('Not a Mangayomi index (expected a JSON list).', 'url');
+      throw new SourceError('Not an extension index (expected a JSON list).', 'url');
     }
     throw new SourceError((error as Error).message, 'url');
   }
+  if (
+    raw &&
+    typeof raw === 'object' &&
+    (raw as { extensionType?: unknown }).extensionType === 'manatan2'
+  ) {
+    throw new SourceError(
+      'This is the list of Manatan indexes: add manga.min.json or novel.min.json from the same folder.',
+      'url'
+    );
+  }
   if (!Array.isArray(raw)) {
-    throw new SourceError('Not a Mangayomi index (expected a JSON list).', 'url');
+    throw new SourceError('Not an extension index (expected a JSON list).', 'url');
   }
   const entries = raw.filter(
     (entry): entry is ExtensionSource =>
       !!entry &&
       typeof entry === 'object' &&
       typeof entry.name === 'string' &&
-      typeof entry.id === 'number' &&
-      typeof entry.baseUrl === 'string'
+      (isManatan(entry)
+        ? typeof entry.id === 'string'
+        : typeof entry.id === 'number' && typeof entry.baseUrl === 'string')
   );
   if (!entries.length) {
-    throw new SourceError('Not a Mangayomi index (no entries with name, id and baseUrl).', 'url');
+    if (
+      raw.some((entry) => entry && typeof entry === 'object' && 'apk' in entry && 'pkg' in entry)
+    ) {
+      throw new SourceError(mihonMessage, 'url');
+    }
+    throw new SourceError('Not an extension index (no entries with name, id and baseUrl).', 'url');
   }
   return entries;
 }
@@ -111,16 +149,72 @@ export async function repoKey(url: string) {
   return (await sha256(new URL(url).href)).slice(0, 12);
 }
 
-/** `ext:<repo key>:<source id>` → its parts. */
+const mihonMessage =
+  'These are Mihon/Tachiyomi extensions (Android apps): they run on a Suwayomi server. Add the repository there, then add that server under Add a source → Suwayomi.';
+
+/** `ext:<repo key>:<source id>` → its parts; the id stays a string (Manatan ids are names). */
 function siteParts(site: string) {
   const [, key, sourceId] = site.split(':');
-  return { key, sourceId: Number(sourceId) };
+  return { key, sourceId };
 }
 
-const extSite = (repo: RepoRow, sourceId: number) => `ext:${repo.key}:${sourceId}`;
+const extSite = (repo: RepoRow, sourceId: number | string) => `ext:${repo.key}:${sourceId}`;
+
+const isManatan = (entry: Record<string, unknown>) => entry.extensionType === 'manatan2';
+/** The server's identifier check takes source ids of this shape (service.py EXT_IDENTIFIER). */
+const MANATAN_ID = /^[a-z0-9-]{1,40}$/;
+
+/** A Manatan package's manga and novel sources, from its index entry or its manifest. */
+function manatanSources(entry: Record<string, unknown>) {
+  const manifest = (entry.manifest ?? entry) as Record<string, unknown>;
+  return (Array.isArray(manifest.sources) ? manifest.sources : []).filter(
+    (source): source is ManatanSource =>
+      !!source &&
+      typeof source.id === 'string' &&
+      MANATAN_ID.test(source.id) &&
+      typeof source.name === 'string' &&
+      (source.contentType === 'manga' || source.contentType === 'novel')
+  );
+}
+
+const manifestOf = (entry: ExtensionSource) =>
+  (entry.manifest && typeof entry.manifest === 'object' ? entry.manifest : {}) as Record<
+    string,
+    any
+  >;
+
+/** The entry (Mangayomi source or Manatan package) that holds the site's source. */
+const entryFor = (repo: RepoRow, sourceId: string) =>
+  repo.entries.find((e) =>
+    isManatan(e)
+      ? manatanSources(e).some((source) => source.id === sourceId)
+      : String(e.id) === sourceId
+  );
+
+function manatanVerdict(entry: ExtensionSource): Pick<SourceRepoExtension, 'off' | 'tag'> {
+  const manifest = manifestOf(entry);
+  const permissions = (manifest.permissions ?? {}) as Record<string, any>;
+  if (manifest.apiVersion !== 2) return { off: 'Made for another Manatan version.', tag: '' };
+  if (permissions.webview) {
+    return { off: 'Needs a web view (Cloudflare): can’t run in this app.', tag: 'Web view' };
+  }
+  if (Array.isArray(permissions.services) && permissions.services.length) {
+    return { off: 'Needs host services this app doesn’t offer.', tag: '' };
+  }
+  const allow = allowedHosts(permissions.network?.allow);
+  if ([...BUILT_IN].some((host) => allow.has(host))) {
+    return { off: 'The built-in source is used instead.', tag: 'Built in' };
+  }
+  if (!manatanSources(entry).length) return { off: 'No source this app can run.', tag: '' };
+  if (typeof entry.packageUrl !== 'string' || typeof entry.sha256 !== 'string') {
+    return { off: 'The index gives no package address.', tag: '' };
+  }
+  return { off: '', tag: '' };
+}
 
 /** Why the app won't run the entry ('' = it can), and its tag. */
 function verdict(entry: ExtensionSource): Pick<SourceRepoExtension, 'off' | 'tag'> {
+  if (isManatan(entry)) return manatanVerdict(entry);
   if (entry.sourceCodeLanguage !== 1) {
     return { off: 'Dart extension: can’t run in a browser.', tag: 'Dart' };
   }
@@ -133,16 +227,25 @@ function verdict(entry: ExtensionSource): Pick<SourceRepoExtension, 'off' | 'tag
   return { off: '', tag: '' };
 }
 
-/** Manga and novels only: anime (itemType 1) isn't listed. */
-const listed = (entry: ExtensionSource) => entry.itemType === 0 || entry.itemType === 2;
+/** Manga and novels only: anime (itemType 1) and video aren't listed. */
+const listed = (entry: ExtensionSource) =>
+  isManatan(entry)
+    ? entry.contentType === 'manga' || entry.contentType === 'novel'
+    : entry.itemType === 0 || entry.itemType === 2;
+
+const kindOf = (entry: ExtensionSource) =>
+  (isManatan(entry) ? entry.contentType === 'manga' : entry.itemType === 0) ? 'manga' : 'novel';
 
 function view(repo: RepoRow | undefined, entry: ExtensionSource, row?: ExtensionRow) {
+  const id = entry.id as number | string;
+  const first = isManatan(entry) ? manatanSources(entry)[0]?.id : id;
   return {
-    id: entry.id as number,
-    site: repo ? extSite(repo, entry.id as number) : '',
+    id,
+    site: repo && first !== undefined ? extSite(repo, first) : '',
     name: entry.name,
     lang: text(entry.lang),
-    kind: entry.itemType === 0 ? 'manga' : 'novel',
+    kind: kindOf(entry),
+    appOnly: isManatan(entry),
     version: row?.version || text(entry.version),
     available: text(entry.version),
     installed: !!row?.code,
@@ -175,23 +278,36 @@ export async function lookUpRepo(url: string) {
   return { url: url.trim(), extensions: entries.filter(listed).map((e) => view(undefined, e)) };
 }
 
-/** Fetches the entry's code and pins it. */
+/** Fetches the entry's code and pins it (a Manatan package: only if it matches the index). */
 async function install(repo: RepoRow, entry: ExtensionSource, on: boolean): Promise<ExtensionRow> {
   if (verdict(entry).off) throw new SourceError(`${entry.name}: ${verdict(entry).off}`);
-  const url = text(entry.sourceCodeUrl);
-  const code = await sourceText(url, { hosts: new Set([httpsHost(url)]) });
+  if (isManatan(entry) && !nativeFetch()) throw new NeedsAppError(httpsHost(repo.url));
+  const url = isManatan(entry)
+    ? new URL(text(entry.packageUrl), repo.url).href
+    : text(entry.sourceCodeUrl);
+  if (!httpsHost(url)) throw new SourceError(`${entry.name}: the index gives no https address`);
+  const { body } = await sourceFetch(url, { hosts: new Set([httpsHost(url)]) });
+  const code = isManatan(entry) ? body : new TextDecoder().decode(body);
+  const pin = await sha256(code);
+  if (
+    isManatan(entry) &&
+    (pin !== text(entry.sha256).toLowerCase() ||
+      (typeof entry.size === 'number' && entry.size !== body.byteLength))
+  ) {
+    throw new SourceError(`${entry.name}: the package doesn’t match its index (SHA-256)`);
+  }
   return {
     repo: repo.id,
-    id: entry.id as number,
+    id: entry.id as number | string,
     on,
     code,
-    sha256: await sha256(code),
+    sha256: pin,
     version: text(entry.version)
   };
 }
 
 /** Saves the repository and installs the extensions `on` names. */
-export async function addRepo(url: string, on: number[]) {
+export async function addRepo(url: string, on: (number | string)[]) {
   const db = await store();
   url = url.trim();
   if ((await db.all<RepoRow>('repos')).some((r) => r.url === url)) {
@@ -200,7 +316,7 @@ export async function addRepo(url: string, on: number[]) {
   const entries = await readIndex(url);
   // Code first, so a failed install leaves nothing half-saved.
   const draft: RepoRow = { id: 0, key: await repoKey(url), url, entries, fetched: Date.now() };
-  const picked = entries.filter((e) => on.includes(e.id as number) && listed(e));
+  const picked = entries.filter((e) => on.includes(e.id as number | string) && listed(e));
   const rows = [];
   for (const entry of picked) rows.push(await install(draft, entry, true));
   const { id: _, ...unsaved } = draft;
@@ -223,8 +339,14 @@ async function siteRepo(site: string) {
   const { key, sourceId } = siteParts(site);
   const repo = (await (await store()).all<RepoRow>('repos')).find((r) => r.key === key);
   if (!repo) throw new SourceError(notInstalledMessage);
-  return { repo, sourceId };
+  return { repo, sourceId, entry: entryFor(repo, sourceId) };
 }
+
+/** Every site of the entry: a Mangayomi source, or each source of a Manatan package. */
+const sitesOf = (repo: RepoRow, entry: ExtensionSource) =>
+  isManatan(entry)
+    ? manatanSources(entry).map((source) => extSite(repo, source.id))
+    : [extSite(repo, entry.id as number)];
 
 /** The index again when it is older than 10 min; a failure keeps the last one. */
 async function fresh(repo: RepoRow, force = false): Promise<[RepoRow, string]> {
@@ -255,7 +377,7 @@ export async function getRepo(id: number) {
 }
 
 /** Switches an extension on (installing it the first time) or off (its code stays). */
-export async function setExtension(repoId: number, id: number, on: boolean) {
+export async function setExtension(repoId: number, id: number | string, on: boolean) {
   const db = await store();
   const repo = await repoRow(repoId);
   const row = await db.one<ExtensionRow>('extensions', [repoId, id]);
@@ -263,19 +385,19 @@ export async function setExtension(repoId: number, id: number, on: boolean) {
   if (!entry) throw new SourceError('The repository no longer lists this extension');
   if (row?.code) await db.put('extensions', { ...row, on });
   else if (on) await db.put('extensions', await install(repo, entry, true));
-  if (!on) closeSite(extSite(repo, id));
+  if (!on) sitesOf(repo, entry).forEach(closeSite);
   return getRepo(repoId);
 }
 
 /** Replaces the pinned code with the index's current version (the reader tapped Update). */
-export async function updateExtension(repoId: number, id: number) {
+export async function updateExtension(repoId: number, id: number | string) {
   const db = await store();
   const [repo] = await fresh(await repoRow(repoId), true);
   const row = await db.one<ExtensionRow>('extensions', [repoId, id]);
   const entry = repo.entries.find((e) => e.id === id);
   if (!entry || !row) throw new SourceError('The repository no longer lists this extension');
   await db.put('extensions', await install(repo, entry, row.on));
-  closeSite(extSite(repo, id));
+  sitesOf(repo, entry).forEach(closeSite);
   return getRepo(repoId);
 }
 
@@ -286,7 +408,8 @@ export async function removeRepo(id: number) {
   for (const row of await db.all<ExtensionRow>('extensions')) {
     if (row.repo === id) {
       await db.remove('extensions', [row.repo, row.id]);
-      closeSite(extSite(repo, row.id));
+      const entry = repo.entries.find((e) => e.id === row.id);
+      (entry ? sitesOf(repo, entry) : [extSite(repo, row.id)]).forEach(closeSite);
     }
   }
   await db.remove('repos', id);
@@ -305,7 +428,13 @@ export async function extensionSites() {
         entry,
         rows.find((r) => r.repo === repo.id && r.id === entry.id)
       );
-      if (shown.on && shown.installed && !shown.off) {
+      if (!shown.on || !shown.installed || shown.off) continue;
+      if (isManatan(entry)) {
+        for (const source of manatanSources(entry)) {
+          const kind = source.contentType as 'manga' | 'novel';
+          sites.push({ site: extSite(repo, source.id), name: source.name, kind, repo: repo.url });
+        }
+      } else {
         sites.push({ site: shown.site, name: shown.name, kind: shown.kind, repo: repo.url });
       }
     }
@@ -328,15 +457,47 @@ function closeSite(site: string) {
   open.runtime.then((r) => r.close()).catch(() => undefined);
 }
 
+/** The pinned package's wasm and the source as its own manifest.json describes it. */
+async function unpack(zip: ArrayBuffer, entry: ExtensionSource, sourceId: string) {
+  const reader = new ZipReader(new BlobReader(new Blob([zip])));
+  try {
+    const files = await reader.getEntries();
+    const read = async (name: string) => {
+      const file = files.find((f) => f.filename === name);
+      if (!file || file.directory || !file.getData) {
+        throw new SourceError(`${entry.name}: the package has no ${name}`);
+      }
+      return file.getData(new Uint8ArrayWriter());
+    };
+    const manifest = JSON.parse(new TextDecoder().decode(await read('manifest.json')));
+    const source = manatanSources(manifest).find((s) => s.id === sourceId);
+    if (manifest.id !== entry.id || !source || typeof manifest.wasm !== 'string') {
+      throw new SourceError(`${entry.name}: the package doesn’t match its index`);
+    }
+    const wasm = await read(manifest.wasm);
+    return {
+      wasm: wasm.buffer as ArrayBuffer,
+      source,
+      allow: manifest.permissions?.network?.allow
+    };
+  } finally {
+    await reader.close();
+  }
+}
+
 async function start(site: string) {
-  const { repo, sourceId } = await siteRepo(site);
+  const { repo, sourceId, entry } = await siteRepo(site);
   const db = await store();
-  const row = await db.one<ExtensionRow>('extensions', [repo.id, sourceId]);
-  const entry = repo.entries.find((e) => e.id === sourceId);
+  const row = entry && (await db.one<ExtensionRow>('extensions', [repo.id, entry.id as number]));
   if (!row?.code || !entry) throw new SourceError(notInstalledMessage);
   if (!row.on) throw new SourceError('This extension is switched off (Sources → Repositories)');
   if ((await sha256(row.code)) !== row.sha256) {
     throw new SourceError('This extension’s stored code is damaged: tap Update in its repository');
+  }
+  if (typeof row.code !== 'string') {
+    if (!nativeFetch()) throw new NeedsAppError(httpsHost(repo.url));
+    const { wasm, source, allow } = await unpack(row.code, entry, sourceId);
+    return openManatan(wasm, source, allow);
   }
   // The server edition's proxy checks the hosts against the repository itself.
   return openExtension(row.code, entry, standalone ? undefined : repo.url);
@@ -356,6 +517,10 @@ async function use<T>(site: string, fn: (runtime: ExtensionRuntime) => Promise<T
   current.users += 1;
   try {
     return await fn(await current.runtime);
+  } catch (error) {
+    // A crashed or stopped runtime opens afresh next time.
+    if ((await current.runtime.catch(() => null))?.stopped) closeSite(site);
+    throw error;
   } finally {
     current.users -= 1;
     // Calls overlap (a cover beside the details): only the last one out arms the timer.
@@ -364,9 +529,13 @@ async function use<T>(site: string, fn: (runtime: ExtensionRuntime) => Promise<T
 }
 
 export async function siteName(site: string) {
-  const { repo, sourceId } = await siteRepo(site);
-  const entry = repo.entries.find((e) => e.id === sourceId);
+  const { repo, sourceId, entry } = await siteRepo(site);
   if (!entry) throw new SourceError('No such source');
+  if (isManatan(entry)) {
+    const source = manatanSources(entry).find((s) => s.id === sourceId)!;
+    const kind = source.contentType as 'manga' | 'novel';
+    return { name: source.name, domain: httpsHost((source as { baseUrl?: string }).baseUrl), kind };
+  }
   return { name: entry.name, domain: httpsHost(entry.baseUrl), kind: view(repo, entry).kind };
 }
 
@@ -420,22 +589,18 @@ export async function details(site: string, url: string): Promise<SiteDetails> {
 }
 
 /** Chapter n: its text (novels) or its page images (manga), with its address as the item. */
-export async function chapter(site: string, n: number, found: SiteDetails) {
+export async function chapter(site: string, n: number, found: SiteDetails, work: string) {
   const url = found.episodes?.[n - 1];
   const title = found.titles?.[n - 1] ?? '';
   if (!url) throw new SourceError(`Chapter ${n} is no longer listed`);
   if (found.kind === 'manga') {
     return use(site, async (runtime) => {
-      const pages: Blob[] = [];
-      for (const page of await runtime.pages(url)) {
-        const image = await runtime.image(page.url, page.headers);
-        pages.push(new Blob([image.body], { type: image.type }));
-      }
+      const pages = await runtime.chapterPages(url, work);
       if (!pages.length) throw new SourceError('The chapter has no pages');
       return { title, item: url, pages };
     });
   }
-  const html = await use(site, (runtime) => runtime.html(title, url));
+  const html = await use(site, (runtime) => runtime.html(title, url, work));
   return { title, item: url, html: clean(html) };
 }
 

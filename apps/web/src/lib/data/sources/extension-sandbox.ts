@@ -21,9 +21,11 @@
 
 import { newQuickJSWASMModuleFromVariant, type QuickJSHandle } from 'quickjs-emscripten-core';
 import variant from '@jitl/quickjs-singlefile-browser-release-sync';
+// manatan-worker.ts built into one script (vite.config.js)
+import manatanWorker from 'virtual:manatan-worker';
 
 /** Bumped when the messages change; the app refuses a frame of another version (cached app). */
-const PROTOCOL = 1;
+const PROTOCOL = 2;
 const SLICE_MS = 500;
 /** CPU time one call may use across all its slices */
 const CALL_MS = 10_000;
@@ -308,6 +310,88 @@ async function start(channel: MessagePort) {
   channel.postMessage({ op: 'ready', v: PROTOCOL });
 }
 
+/** CPU time (no request out) one call or the load of a Manatan extension may use */
+const MANATAN_CALL_MS = 8_000;
+
+/**
+ * A Manatan v2 extension (WebAssembly component): runs in a Worker made from a blob, which
+ * inherits this frame's no-network CSP. This frame only relays messages and ends the worker when a
+ * call uses more than MANATAN_CALL_MS without a request out (wasm can't be interrupted).
+ */
+function startManatan(channel: MessagePort) {
+  if (typeof (WebAssembly as any).Suspending !== 'function') {
+    throw new Error('This browser engine is too old for Manatan extensions');
+  }
+  const url = URL.createObjectURL(new Blob([manatanWorker], { type: 'text/javascript' }));
+  const worker = new Worker(url);
+  URL.revokeObjectURL(url);
+  let running = 0;
+  let out = 0;
+  let used = 0;
+  let since = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let dead = '';
+  // Counts the call's time while it runs with no request out.
+  const clock = () => {
+    clearTimeout(timer);
+    if (since) used += Date.now() - since;
+    since = 0;
+    if (!running || out || dead) return;
+    since = Date.now();
+    timer = setTimeout(
+      () => end('The extension ran too long and was stopped'),
+      MANATAN_CALL_MS - used
+    );
+  };
+  const end = (why: string) => {
+    if (dead) return;
+    dead = why;
+    worker.terminate();
+    running = 0;
+    // The app stops the runtime with this, which fails the running call with the same reason.
+    channel.postMessage({ op: 'dead', message: why });
+  };
+  worker.onerror = (event) => {
+    event.preventDefault();
+    end('The extension crashed');
+  };
+  worker.onmessage = ({ data }: MessageEvent<Message>) => {
+    if (dead) return;
+    if (data.op === 'fetch') {
+      out += 1;
+      clock();
+      return channel.postMessage(data);
+    }
+    if (data.id !== running) return;
+    if (data.dead) return end(String(data.message));
+    running = 0;
+    clock();
+    channel.postMessage({ op: data.op, id: data.id, value: data.value, message: data.message });
+  };
+  channel.onmessage = ({ data }: MessageEvent<Message>) => {
+    if (dead) {
+      if (data.op === 'load' || data.op === 'call')
+        channel.postMessage({ op: 'error', id: data.id, message: dead });
+      return;
+    }
+    if (data.op === 'fetched' || data.op === 'failed') {
+      out = Math.max(0, out - 1);
+      clock();
+      const body = (data.response as { body?: ArrayBuffer } | undefined)?.body;
+      return worker.postMessage(data, body ? [body] : []);
+    }
+    if (data.op !== 'load' && data.op !== 'call') return;
+    running = data.id;
+    used = 0;
+    out = 0;
+    clock();
+    const code = data.code instanceof ArrayBuffer ? data.code : undefined;
+    worker.postMessage(data, code ? [code] : []);
+  };
+  addEventListener('pagehide', () => channel.postMessage({ op: 'gone' }));
+  channel.postMessage({ op: 'ready', v: PROTOCOL });
+}
+
 // Only ever inside the app's sandboxed frame: opened as a page, it would run with the app's origin.
 if (self.origin === 'null') {
   addEventListener('message', function first(event) {
@@ -315,7 +399,9 @@ if (self.origin === 'null') {
     if (port || event.source !== parent.parent || !event.ports[0]) return;
     removeEventListener('message', first);
     port = event.ports[0];
-    start(port).catch((error) =>
+    const begin = async (channel: MessagePort) =>
+      event.data?.format === 'manatan2' ? startManatan(channel) : start(channel);
+    begin(port).catch((error) =>
       port?.postMessage({ op: 'fatal', message: String(error?.message ?? error) })
     );
   });

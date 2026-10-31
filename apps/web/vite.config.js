@@ -21,26 +21,46 @@ function sourceSandbox() {
   const entry = fileURLToPath(
     new URL('./src/lib/data/sources/extension-sandbox.ts', import.meta.url)
   );
-  const bundle = async () => {
+  const workerEntry = fileURLToPath(
+    new URL('./src/lib/data/sources/manatan-worker.ts', import.meta.url)
+  );
+  /** @param {string} file @param {string} name @param {import('vite').PluginOption[]} plugins */
+  const iife = async (file, name, plugins = []) => {
     const [result] = /** @type {import('vite').Rollup.RollupOutput[]} */ (
       await build({
         configFile: false,
         // QuickJS's emscripten module mentions import.meta (unused in the browser build): iife drops it.
         logLevel: 'error',
+        plugins,
         build: {
           write: false,
-          lib: { entry, formats: ['iife'], name: 'chimiSourceSandbox' }
+          lib: { entry: file, formats: ['iife'], name }
         }
       })
     );
     return result.output[0].code;
   };
+  // The frame starts Manatan extensions in a Worker from a blob: their script is a string in it.
+  const bundle = () =>
+    iife(entry, 'chimiSourceSandbox', [
+      {
+        name: 'manatan-worker',
+        resolveId: (id) => (id === 'virtual:manatan-worker' ? '\0manatan-worker' : null),
+        load: async (id) =>
+          id === '\0manatan-worker'
+            ? `export default ${JSON.stringify(await iife(workerEntry, 'chimiManatanWorker'))}`
+            : null
+      }
+    ]);
   return {
     name: 'source-sandbox',
     configureServer(server) {
       /** @type {Promise<string> | undefined} */
       let built;
-      server.watcher.on('change', (file) => file === entry && (built = undefined));
+      server.watcher.on(
+        'change',
+        (file) => (file === entry || file === workerEntry) && (built = undefined)
+      );
       server.middlewares.use(async (request, response, next) => {
         if (!request.url?.split('?')[0].endsWith('/source-sandbox.js')) return next();
         response.setHeader('Content-Type', 'text/javascript');
