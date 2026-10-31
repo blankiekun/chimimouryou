@@ -8,7 +8,8 @@ host becomes the first path part, e.g. http://127.0.0.1:8799/ncode.syosetu.com/n
 https://repo.example/ is an extension repository (extensions/index.json, the extensions) with test pages for the
 fetch proxy (headers, slow, to/<host>).
 /fake-set changes it while it runs: s1, chapters (servers.py), work + chapters (a copy of n0001aa with that many
-chapters), cors=1|0.
+chapters), cors=1|0, ext=<version> (every extension's version in index.json). example.com, example.org and
+example.net serve the Kakuyomu, Syosetu and Syosetu API pages (extensions on sites that aren't built in).
 """
 import json
 import os
@@ -27,6 +28,10 @@ WORKS: dict[str, int] = {}
 INDEX_HITS = {'count': 0}
 # CORS headers on every answer (/fake-set?cors=1): the standalone app in a plain browser can read the fake sites.
 CORS = {'on': False}
+# /fake-set?ext=<version>: index.json lists that version for every extension (the app's Update).
+EXT_VERSION = {'v': ''}
+# Extension fixtures on hosts that aren't built-in sites (the app runs only those): the same pages.
+ALIASES = {'example.com': 'kakuyomu.jp', 'example.org': 'ncode.syosetu.com', 'example.net': 'api.syosetu.com'}
 ROOT = os.path.join(HERE, 'syosetu')
 KAKUYOMU = os.path.join(HERE, 'kakuyomu')
 
@@ -50,6 +55,7 @@ def kakuyomu(rest: str, query: dict) -> tuple[int, str, bytes | str]:
 def answer(path: str, query: dict, cookie: str, referer: str = '') -> tuple[int, str, bytes | str]:
     """(status, content type or Location, body) for a request to the fake site."""
     host, _, rest = path.lstrip('/').partition('/')
+    host = ALIASES.get(host, host)
     if host == 'kakuyomu.jp':
         return kakuyomu(rest, query)
     if host == 'cdn.kdkw.jp' and rest.startswith('referer/'):  # like manga CDNs: images only with the site's Referer
@@ -100,6 +106,8 @@ class Handler(BaseHTTPRequestHandler):
                 servers.CHAPTERS['order'] = [int(n) for n in query['chapters'][0].split(',')]
             if 'cors' in query:
                 CORS['on'] = query['cors'][0] == '1'
+            if 'ext' in query:
+                EXT_VERSION['v'] = query['ext'][0]
             status, kind, body = 200, 'text/plain', b'ok'
         elif first == 'opds':
             status, kind, body = servers.opds(rest, parse_qs(url.query), self.headers.get('Authorization', ''))
@@ -134,6 +142,11 @@ class Handler(BaseHTTPRequestHandler):
         if rest.startswith('to/'):  # a redirect to https://<rest>
             return 302, f'https://{rest[3:]}', b''
         path = os.path.join(HERE, 'extensions', os.path.basename(rest))
+        if rest == 'index.json' and EXT_VERSION['v']:
+            entries = json.loads(read(path, HERE))
+            for entry in entries:
+                entry['version'] = EXT_VERSION['v']
+            return 200, 'application/json', json.dumps(entries).encode()
         if os.path.isfile(path):
             return 200, 'application/json' if rest.endswith('.json') else 'text/javascript', read(path, HERE)
         return 404, 'text/plain', b'not found'

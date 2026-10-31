@@ -45,7 +45,9 @@
   const here = standalone ? 'On this device' : 'In library';
   // Manga from a server as pages: one CBZ per volume or per chapter, while nothing of it is added.
   let per = $state<'volume' | 'chapter'>();
-  const pages = $derived(!!work?.server && !work.files);
+  // An extension's work (ext:<repo>:<source>): fetched in this tab, no follows yet.
+  const ext = $derived(!!work?.site.startsWith('ext:'));
+  const pages = $derived((!!work?.server && !work.files) || (ext && work?.kind === 'manga'));
   const volumes = $derived.by(() => {
     if (!work || !work.perChoice || !per || per === work.per) return work?.volumes ?? [];
     const size = per === 'chapter' ? 1 : work.perChoice;
@@ -179,6 +181,12 @@
       <a class="app-button-quiet work-back" href="{pagePath}/sources/browse?server={site.slice(5)}"
         >← Browse</a
       >
+    {:else if (site ?? work?.site)?.startsWith('ext:')}
+      <a
+        class="app-button-quiet work-back"
+        href="{pagePath}/sources/browse?ext={encodeURIComponent(site ?? work?.site ?? '')}"
+        >← Browse</a
+      >
     {:else if site}
       <a class="app-button-quiet work-back" href="{pagePath}/sources/search">← Search</a>
     {:else}
@@ -205,9 +213,13 @@
             <div class="work-heading">
               <h1 class="work-title">{work.title}</h1>
               <p class="work-meta">{work.authors}</p>
-              <p class="work-meta">{work.siteName} · {work.status}</p>
+              <p class="work-meta">
+                {work.siteName}{ext ? ' · extension' : ''} · {work.status}{#if ext}<span
+                    class="work-tag">This device</span
+                  >{/if}
+              </p>
               {#if work.updated}<p class="work-meta">Updated {day(work.updated)}</p>{/if}
-              {#if !work.server}
+              {#if !work.server && !ext}
                 <a
                   class="app-button-quiet work-link"
                   href={work.url}
@@ -295,28 +307,28 @@
               </select>
             </label>
           {/if}
-          <div class="work-follow">
-            <div>
-              <p class="work-follow-label" id="work-follow-label">Follow</p>
-              <p class="work-hint work-follow-hint">
-                {work.paused
-                  ? 'Paused: change it in Sources → Following.'
-                  : work.elsewhere
-                    ? `Followed in ${work.elsewhere}; updates there.`
-                    : standalone
-                      ? `Checks while the app is open${$sourcesWifiOnly$ ? ', on Wi-Fi only' : ''} (Settings → Sources).`
-                      : `The server checks every ${work.checkHours} h, also when no device is open.`}
-                {#if !work.following && empty && pickedText}Turning it on adds {pickedText} first.{/if}
-              </p>
-            </div>
-            <Switch
-              checked={work.following}
-              stateText={false}
-              disabled={followBusy}
-              aria-labelledby="work-follow-label"
-              onchange={setFollow}
-            />
-          </div>
+          {#if !ext}<div class="work-follow">
+              <div>
+                <p class="work-follow-label" id="work-follow-label">Follow</p>
+                <p class="work-hint work-follow-hint">
+                  {work.paused
+                    ? 'Paused: change it in Sources → Following.'
+                    : work.elsewhere
+                      ? `Followed in ${work.elsewhere}; updates there.`
+                      : standalone
+                        ? `Checks while the app is open${$sourcesWifiOnly$ ? ', on Wi-Fi only' : ''} (Settings → Sources).`
+                        : `The server checks every ${work.checkHours} h, also when no device is open.`}
+                  {#if !work.following && empty && pickedText}Turning it on adds {pickedText} first.{/if}
+                </p>
+              </div>
+              <Switch
+                checked={work.following}
+                stateText={false}
+                disabled={followBusy}
+                aria-labelledby="work-follow-label"
+                onchange={setFollow}
+              />
+            </div>{/if}
           {#if followError}<p class="work-error" role="alert">{followError}</p>{/if}
 
           {#if pickedText}
@@ -338,6 +350,12 @@
                     ? `: about ${gb(space.bytes)} of the ${gb(space.free)} free`
                     : ''}. Keep the app open while it fetches.
                 {/if}
+              {:else if ext}
+                This browser fetches through the server’s relay, then the files go into Calibre. {timeLeft(
+                  pickedChapters,
+                  work.interval
+                ).replace('about', 'About')}; keep this tab open. “In library” counts what this
+                device sent, and a volume isn’t refreshed in Calibre when new chapters come.
               {:else if work.server}
                 Into the Calibre library on the server, from {work.siteName}. You can close this
                 tab.
@@ -434,6 +452,15 @@
     font-weight: 700;
     line-height: 1.4;
     text-wrap: balance;
+  }
+
+  .work-tag {
+    margin-left: 0.5rem;
+    padding: 0 0.35rem;
+    border: 1px solid var(--font-color);
+    border-radius: 2px;
+    color: var(--font-color);
+    font-size: var(--type-label);
   }
 
   .work-meta {

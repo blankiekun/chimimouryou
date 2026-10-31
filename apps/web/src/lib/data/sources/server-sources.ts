@@ -23,8 +23,20 @@ import {
 } from './types';
 
 const apiUrl = '/calibre/import/api/sources/';
-// Loaded only in the standalone build.
+// The standalone build's Sources, and in both editions the works of extensions (they run here).
 const local = () => import('./local-sources');
+const extensions = () => import('./extensions');
+
+/*
+ * Server edition: extension works and their jobs live on this device (local-sources.ts) beside
+ * the server's, so their ids are told apart: works negative, jobs prefixed.
+ */
+const onDevice = (id: number) => !standalone && id < 0;
+const DEVICE_JOB = 'device:';
+const deviceWork = (work: SourceWork) => (standalone ? work : { ...work, id: -work.id });
+const deviceJob = (job: SourceJob) =>
+  standalone ? job : { ...job, id: `${DEVICE_JOB}${job.id}`, workId: -job.workId };
+const deviceJobId = (id: string) => !standalone && id.startsWith(DEVICE_JOB);
 
 async function call<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown) {
   if (standalone) throw new Error('No server in the standalone edition');
@@ -57,12 +69,15 @@ export function lookUpWork(url: string) {
 
 export function getWork(id: number) {
   if (standalone) return local().then((l) => l.getWork(id));
+  if (onDevice(id)) return local().then(async (l) => deviceWork(await l.getWork(-id)));
   return call<SourceWork>('GET', `works/${id}`);
 }
 
 /** A site's work by its key (a search result) → the work, with its volume plan. */
 export function resolveWork(site: string, workKey: string) {
-  if (standalone) return local().then((l) => l.resolveWork(site, workKey));
+  if (standalone || site.startsWith('ext:')) {
+    return local().then(async (l) => deviceWork(await l.resolveWork(site, workKey)));
+  }
   return call<SourceWork>('POST', 'works/resolve', { site, workKey });
 }
 
@@ -88,6 +103,7 @@ export function browseSite(
 /** The work's cover image, fetched once by the server (an image URL, so the CSP stays as it is). */
 export function coverSrc(workId: number) {
   if (standalone) return local().then((l) => l.coverSrc(workId));
+  if (onDevice(workId)) return local().then((l) => l.coverSrc(-workId));
   return Promise.resolve(`${apiUrl}covers/${workId}`);
 }
 
@@ -97,6 +113,12 @@ export function coverSrc(workId: number) {
  */
 export function addVolumes(workId: number, volumes: number[], per?: 'volume' | 'chapter') {
   if (standalone) return local().then((l) => l.addVolumes(workId, volumes, per));
+  if (onDevice(workId)) {
+    return local().then(async (l) => {
+      const { job } = await l.addVolumes(-workId, volumes, per);
+      return { job: deviceJob(job) };
+    });
+  }
   return call<{ job: SourceJob }>('POST', `works/${workId}/add`, { volumes, ...(per && { per }) });
 }
 
@@ -144,23 +166,44 @@ export function serverImageSrc(id: number, href: string) {
 }
 
 /** This account's jobs, newest first, and the seconds between two requests to one site. */
-export function getQueue() {
+export async function getQueue() {
   if (standalone) return local().then((l) => l.getQueue());
-  return call<{ jobs: SourceJob[]; interval: number }>('GET', 'queue');
+  const [server, device] = await Promise.all([
+    call<{ jobs: SourceJob[]; interval: number }>('GET', 'queue'),
+    local().then(async (l) => {
+      await l.resumeDeviceJobs();
+      return (await l.getQueue()).jobs.map(deviceJob);
+    })
+  ]);
+  return {
+    ...server,
+    jobs: [...server.jobs, ...device].sort((a, b) => b.created - a.created)
+  };
 }
 
 export function retryJob(id: string) {
   if (standalone) return local().then((l) => l.retryJob(id));
+  if (deviceJobId(id)) {
+    return local().then(async (l) => ({
+      job: deviceJob((await l.retryJob(id.slice(DEVICE_JOB.length))).job)
+    }));
+  }
   return call<{ job: SourceJob }>('POST', `jobs/${id}/retry`, {});
 }
 
 export function cancelJob(id: string) {
   if (standalone) return local().then((l) => l.cancelJob(id));
+  if (deviceJobId(id)) {
+    return local().then(async (l) => ({
+      job: deviceJob((await l.cancelJob(id.slice(DEVICE_JOB.length))).job)
+    }));
+  }
   return call<{ job: SourceJob }>('POST', `jobs/${id}/cancel`, {});
 }
 
 export function removeJob(id: string) {
   if (standalone) return local().then((l) => l.removeJob(id));
+  if (deviceJobId(id)) return local().then((l) => l.removeJob(id.slice(DEVICE_JOB.length)));
   return call<object>('DELETE', `jobs/${id}`);
 }
 
@@ -196,3 +239,27 @@ export function timeLeft(requests: number, interval: number) {
 
   return minutes <= 1 ? 'about 1 min' : `about ${minutes} min`;
 }
+
+// Extension repositories: on this device in both editions (extensions.ts).
+
+export const lookUpRepo = (url: string) => extensions().then((e) => e.lookUpRepo(url));
+export const addRepo = (url: string, on: number[]) => extensions().then((e) => e.addRepo(url, on));
+export const listRepos = () => extensions().then((e) => e.listRepos());
+export const getRepo = (id: number) => extensions().then((e) => e.getRepo(id));
+export const removeRepo = (id: number) => extensions().then((e) => e.removeRepo(id));
+export const extensionSites = () => extensions().then((e) => e.extensionSites());
+export const setExtension = (repo: number, id: number, on: boolean) =>
+  extensions().then((e) => e.setExtension(repo, id, on));
+export const updateExtension = (repo: number, id: number) =>
+  extensions().then((e) => e.updateExtension(repo, id));
+
+/** A page of an extension's popular or latest works, or a search. */
+export const browseExtension = (
+  site: string,
+  mode: 'popular' | 'latest' | 'search',
+  page: number,
+  q = ''
+) => local().then((l) => l.browseExtension(site, mode, page, q));
+
+export const extensionImageSrc = (site: string, url: string) =>
+  local().then((l) => l.extensionImageSrc(site, url));

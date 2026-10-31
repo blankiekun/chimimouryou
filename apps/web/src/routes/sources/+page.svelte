@@ -14,6 +14,7 @@
     followWork,
     getFollowing,
     getQueue,
+    listRepos,
     lookUpWork,
     removeJob,
     retryJob,
@@ -22,7 +23,7 @@
   } from '$lib/data/sources/server-sources';
   import { sourcesWifiOnly$ } from '$lib/data/sources/sources-settings';
   import { needsAppMessage } from '$lib/data/sources/transport';
-  import type { SourceFollow, SourceJob } from '$lib/data/sources/types';
+  import type { SourceFollow, SourceJob, SourceRepo } from '$lib/data/sources/types';
   import { onMount } from 'svelte';
 
   /**
@@ -42,9 +43,20 @@
   let looking = $state(false);
   let showDone = $state(false);
   let busy = $state<string>();
+  let repos = $state<SourceRepo[]>();
 
   const allowed = $derived(standalone || hasPermission($account$, 'import'));
   const running = $derived(jobs?.find((job) => job.state === 'fetching'));
+  // An extension's job runs in this tab (server-sources.ts prefixes them in the server edition).
+  const onDevice = $derived(standalone || !!running?.id.startsWith('device:'));
+
+  $effect(() => {
+    if (!allowed || shownTab !== 'add' || repos) return;
+    listRepos().then(
+      (found) => (repos = found.repos),
+      () => (repos = [])
+    );
+  });
   const waiting = $derived(
     jobs?.filter((job) => job.state === 'queued' || job.state === 'adding').reverse() ?? []
   );
@@ -433,11 +445,52 @@
               </li>
             </ul>
           </section>
+
+          <section aria-labelledby="sources-repos">
+            <SectionHead
+              number={2}
+              title="Extension repositories"
+              count={repos?.length || undefined}
+              id="sources-repos"
+            />
+            <ul class="sources-rows">
+              {#each repos ?? [] as repo (repo.id)}
+                <li class="sources-row">
+                  <div>
+                    <a class="sources-row-title" href="{pagePath}/sources/add?repo={repo.id}"
+                      >{repo.name}</a
+                    >
+                    <p class="sources-row-meta">
+                      {repo.extensions.filter((e) => e.on && !e.off).length} on · this device{#if repo.updates}{' · '}<span
+                          class="sources-updates"
+                          >{repo.updates} update{repo.updates === 1 ? '' : 's'}</span
+                        >{/if}{#if repo.error}{' · '}<span class="sources-error"
+                          >couldn’t read its index</span
+                        >{/if}
+                    </p>
+                  </div>
+                  <a
+                    class="app-button-quiet sources-manage"
+                    href="{pagePath}/sources/add?repo={repo.id}">Manage</a
+                  >
+                </li>
+              {:else}
+                <li class="sources-row">
+                  <p class="sources-row-meta">
+                    A Mangayomi repository’s manga and novel extensions, run on this device.
+                    <a class="app-button-quiet" href="{pagePath}/sources/add?type=repo"
+                      >Add a repository</a
+                    >
+                  </p>
+                </li>
+              {/each}
+            </ul>
+          </section>
         </div>
       {:else}
         {#if running}
           <PointBox
-            label={standalone ? 'Fetching on this device' : 'Fetching on the server'}
+            label={onDevice ? 'Fetching on this device' : 'Fetching on the server'}
             figure={running.done}
             unit="of {running.total} {running.unit}"
           >
@@ -460,7 +513,9 @@
                 interval
               )} left. {running.domain} allows 1 page every {interval} s. {standalone
                 ? 'Keep the app open.'
-                : 'You can close this tab.'}
+                : onDevice
+                  ? 'An extension fetches in this tab: keep it open.'
+                  : 'You can close this tab.'}
             </p>
             <button
               type="button"
@@ -615,6 +670,16 @@
 
   .sources-rows {
     border-top: 2px solid var(--font-color);
+  }
+
+  .sources-updates {
+    color: var(--accent-strong-color);
+    font-weight: 700;
+  }
+
+  .sources-manage {
+    flex: none;
+    margin-left: auto;
   }
 
   .sources-row {

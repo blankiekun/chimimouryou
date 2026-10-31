@@ -165,6 +165,55 @@ export interface SourceJob {
   updated: number;
 }
 
+/** A page of an extension's popular or latest works, or a search (browseExtension). */
+export interface SourceExtensionFeed {
+  site: string;
+  name: string;
+  kind: 'manga' | 'novel';
+  page: number;
+  more: boolean;
+  works: {
+    title: string;
+    /** The extension's link to the work */
+    workKey: string;
+    cover: string;
+    inLibrary: boolean;
+    following: boolean;
+  }[];
+}
+
+/** An extension of a repository on this device (extensions.ts). */
+export interface SourceRepoExtension {
+  id: number;
+  /** ext:<repo id>:<source id>, '' before the repository is saved */
+  site: string;
+  name: string;
+  lang: string;
+  kind: 'manga' | 'novel';
+  /** The installed version, else the index's */
+  version: string;
+  /** The index's version (an update when it differs from an installed one) */
+  available: string;
+  installed: boolean;
+  on: boolean;
+  /** Why the app doesn't run it ('' = it can) */
+  off: string;
+  tag: '' | 'Dart' | 'Built in';
+}
+
+/** A Mangayomi repository (index.json) added on this device. */
+export interface SourceRepo {
+  id: number;
+  url: string;
+  /** Its host */
+  name: string;
+  extensions: SourceRepoExtension[];
+  /** Installed extensions with a newer version in the index */
+  updates: number;
+  /** The index couldn't be read again: the last one is shown */
+  error: string;
+}
+
 /** An error of Sources; `field` names the form field it concerns (Add a source). */
 export class SourceError extends Error {
   constructor(

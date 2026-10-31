@@ -8,13 +8,21 @@
   import { libraryTab$ } from '$lib/data/library/library-home';
   import { page } from '$lib/data/page-store';
   import {
+    browseExtension,
     browseServer,
+    extensionImageSrc,
+    extensionSites,
     listServers,
     removeServer,
     searchSites,
     serverImageSrc
   } from '$lib/data/sources/server-sources';
-  import type { SourceServer, SourceServerEntry, SourceServerFeed } from '$lib/data/sources/types';
+  import type {
+    SourceExtensionFeed,
+    SourceServer,
+    SourceServerEntry,
+    SourceServerFeed
+  } from '$lib/data/sources/types';
   import { needsAppMessage } from '$lib/data/sources/transport';
   import { onMount } from 'svelte';
 
@@ -22,6 +30,8 @@
    * Browse (board 3): the reader's servers (OPDS catalogs, Suwayomi) beside the web novel sites.
    * A server shows its feed's own sections in place of Popular/Latest; a series opens its work
    * page. /sources/browse?server=N&section=<path>&q=<search>, so Back walks up the catalog.
+   * An extension (board 3b, ?ext=<site>&mode=popular|latest|search&q=) runs on this device: its
+   * Popular, Latest and Search, cover cards to its work pages.
    */
 
   let servers = $state<SourceServer[]>();
@@ -32,10 +42,23 @@
   let input = $state('');
   let failedCovers = $state<Set<string>>(new Set());
   let request = 0;
+  let exts = $state<{ site: string; name: string; kind: 'manga' | 'novel' }[]>();
+  let extFeed = $state<SourceExtensionFeed>();
+  let extWorks = $state<SourceExtensionFeed['works']>([]);
 
   const allowed = $derived(standalone || hasPermission($account$, 'import'));
   const params = $derived(browser ? $page.url.searchParams : new URLSearchParams());
-  const serverId = $derived(Number(params.get('server')) || servers?.[0]?.id || 0);
+  // No server picked and none added: the first extension, if any.
+  const extSite = $derived(
+    params.get('ext') ||
+      (!params.get('server') && servers && !servers.length ? (exts?.[0]?.site ?? '') : '')
+  );
+  const ext = $derived(exts?.find((entry) => entry.site === extSite));
+  const mode = $derived.by(() => {
+    const value = params.get('mode');
+    return value === 'latest' || value === 'search' ? value : 'popular';
+  });
+  const serverId = $derived(extSite ? 0 : Number(params.get('server')) || servers?.[0]?.id || 0);
   const section = $derived(params.get('section') ?? '');
   const query = $derived(params.get('q') ?? '');
   const server = $derived(servers?.find((entry) => entry.id === serverId));
@@ -50,7 +73,52 @@
       (found) => (servers = found.servers),
       (problem) => (error = problem.message)
     );
+    extensionSites().then(
+      (found) => (exts = found),
+      () => (exts = [])
+    );
   });
+
+  $effect(() => {
+    if (!ext) return;
+    input = query;
+    if (mode === 'search' && !query) {
+      extFeed = undefined;
+      extWorks = [];
+      error = '';
+      return;
+    }
+    loadExt(ext.site, mode, 1, query);
+  });
+
+  async function loadExt(site: string, kind: typeof mode, pageNumber: number, q: string) {
+    const mine = ++request;
+    loading = true;
+    error = '';
+    if (pageNumber === 1) {
+      extFeed = undefined;
+      extWorks = [];
+    }
+    try {
+      const found = await browseExtension(site, kind, pageNumber, q);
+      if (mine !== request) return;
+      extFeed = found;
+      extWorks = pageNumber === 1 ? found.works : [...extWorks, ...found.works];
+    } catch (problem: any) {
+      if (mine === request) error = problem.message;
+    } finally {
+      if (mine === request) loading = false;
+    }
+  }
+
+  function extLink(site: string, extra: Record<string, string> = {}) {
+    return `${pagePath}/sources/browse?${new URLSearchParams({ ext: site, ...extra })}`;
+  }
+
+  function extSearch(event: SubmitEvent) {
+    event.preventDefault();
+    if (ext) goto(extLink(ext.site, { mode: 'search', ...(input.trim() && { q: input.trim() }) }));
+  }
 
   $effect(() => {
     if (!server) return;
@@ -160,14 +228,133 @@
               </li>
             {/each}
           </ul>
+          {#if exts?.length}
+            <p class="browse-group">Extensions · this device</p>
+            <ul>
+              {#each exts as entry (entry.site)}
+                <li>
+                  <a
+                    class="browse-source"
+                    class:browse-source-selected={entry.site === extSite}
+                    aria-current={entry.site === extSite ? 'page' : undefined}
+                    href={extLink(entry.site)}
+                  >
+                    <span lang="ja">{entry.name}</span>
+                    <span class="browse-source-type"
+                      >{entry.kind === 'manga' ? 'Manga' : 'Novels'}</span
+                    >
+                  </a>
+                </li>
+              {/each}
+            </ul>
+          {/if}
           <a class="app-button-quiet browse-add" href="{pagePath}/sources/add">Add a source</a>
         </nav>
 
         <section class="browse-main" aria-labelledby="browse-feed">
-          {#if servers && !servers.length}
+          {#if ext}
+            <div class="browse-head">
+              <div>
+                <h2 id="browse-feed" class="browse-feed-title" lang="ja">
+                  {query ? `“${query}”` : ext.name}
+                </h2>
+                <p class="browse-meta">
+                  {ext.kind === 'manga' ? 'Manga' : 'Novels'} · extension, this device
+                </p>
+              </div>
+            </div>
+            <div class="app-segmented browse-modes" role="tablist" aria-label="List">
+              {#each [['popular', 'Popular'], ['latest', 'Latest'], ['search', 'Search']] as const as [value, text] (value)}
+                <a
+                  role="tab"
+                  class="app-segment"
+                  class:app-segment-selected={mode === value}
+                  aria-selected={mode === value}
+                  href={extLink(ext.site, value === 'popular' ? {} : { mode: value })}>{text}</a
+                >
+              {/each}
+            </div>
+            {#if mode === 'search'}
+              <form class="browse-search" role="search" onsubmit={extSearch}>
+                <input
+                  class="app-input"
+                  type="search"
+                  enterkeyhint="search"
+                  autocomplete="off"
+                  aria-label="Search {ext.name}"
+                  placeholder="Search {ext.name}"
+                  bind:value={input}
+                />
+              </form>
+            {/if}
+            <p class="browse-meta browse-status" role="status">
+              {#if error === needsAppMessage}
+                <NeedsApp />
+              {:else if error}
+                <span class="browse-error">{error}</span>
+              {:else if loading && !extWorks.length}
+                Asking {ext.name}…
+              {:else if extFeed && !extWorks.length}
+                {query ? `Nothing on ${ext.name} for “${query}”.` : 'Nothing here.'}
+              {/if}
+            </p>
+            {#if extWorks.length}
+              <ul class="browse-grid">
+                {#each extWorks as work, index (`${index}-${work.workKey}`)}
+                  <li>
+                    <a
+                      class="browse-card"
+                      href="{pagePath}/sources/work?{new URLSearchParams({
+                        site: ext.site,
+                        key: work.workKey
+                      })}"
+                    >
+                      <span class="browse-cover" aria-hidden="true">
+                        {#if work.cover && !failedCovers.has(work.cover)}
+                          {#await extensionImageSrc(ext.site, work.cover) then src}
+                            <img
+                              {src}
+                              alt=""
+                              loading="lazy"
+                              onerror={() =>
+                                (failedCovers = new Set([...failedCovers, work.cover]))}
+                            />
+                          {:catch}
+                            <span class="browse-cover-title" lang="ja">{work.title}</span>
+                          {/await}
+                        {:else}
+                          <span class="browse-cover-title" lang="ja">{work.title}</span>
+                        {/if}
+                      </span>
+                      <span class="browse-card-title" lang="ja">{work.title}</span>
+                      <span class="browse-meta">{ext.kind === 'manga' ? 'Manga' : 'Novel'}</span>
+                      {#if work.following}
+                        <span class="browse-tag browse-tag-following">Following</span>
+                      {:else if work.inLibrary}
+                        <span class="browse-tag"
+                          >{standalone ? 'On this device' : 'In library'}</span
+                        >
+                      {/if}
+                    </a>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+            {#if extFeed?.more && extWorks.length}
+              <div class="browse-more">
+                <button
+                  type="button"
+                  class="app-button app-button-secondary"
+                  disabled={loading}
+                  onclick={() => ext && extFeed && loadExt(ext.site, mode, extFeed.page + 1, query)}
+                  >{loading ? 'Loading…' : 'Load more'}</button
+                >
+              </div>
+            {/if}
+          {:else if servers && !servers.length && exts}
             <p class="browse-note">
-              No servers yet. Add a Suwayomi server or an OPDS catalog (Komga, Kavita, Calibre-web)
-              to browse it here.
+              Nothing to browse yet. Add a Suwayomi server, an OPDS catalog (Komga, Kavita,
+              Calibre-web) or an extension repository to browse it here.
             </p>
             <a class="app-button app-button-primary browse-first" href="{pagePath}/sources/add"
               >Add a source</a
@@ -387,6 +574,26 @@
 
   .browse-search {
     margin-top: 1rem;
+  }
+
+  .browse-modes {
+    display: flex;
+    margin-top: 1rem;
+  }
+
+  .browse-modes .app-segment {
+    flex: 1;
+    text-align: center;
+  }
+
+  @media (min-width: 768px) {
+    .browse-modes {
+      display: inline-flex;
+    }
+
+    .browse-modes .app-segment {
+      min-width: 7rem;
+    }
   }
 
   .browse-search .app-input {

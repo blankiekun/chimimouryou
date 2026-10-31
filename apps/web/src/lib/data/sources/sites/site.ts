@@ -19,6 +19,9 @@ export interface SiteDetails {
   cover: string;
   /** Kakuyomu: episode ids in reading order (chapter n = episodes[n - 1]) */
   episodes?: string[];
+  /** An extension's work: chapter titles in reading order, and manga or novel */
+  titles?: string[];
+  kind?: 'novel' | 'manga';
 }
 
 export interface SiteList {

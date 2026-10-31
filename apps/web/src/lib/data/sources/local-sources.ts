@@ -17,6 +17,7 @@
  */
 
 import { browser } from '$app/env';
+import { standalone } from '$lib/data/env';
 import { Capacitor } from '@capacitor/core';
 import { openDB, type IDBPDatabase } from 'idb';
 import { StorageKey } from '$lib/data/storage/storage-types';
@@ -30,11 +31,12 @@ import type { SyncFileStore } from '$lib/data/storage/handler/base-handler';
 import { readerStore } from '$lib/data/sync/extras-sync';
 import { syncJsonFile } from '$lib/data/sync/sync-files';
 import { logger } from '$lib/data/logger';
-import { epub, plan, VOLUME_SIZE } from './sites/build';
+import { cbz, epub, plan, VOLUME_SIZE } from './sites/build';
 import * as kakuyomu from './sites/kakuyomu';
 import * as opds from './sites/opds';
 import { SiteMissing, type SiteDetails } from './sites/site';
 import * as syosetu from './sites/syosetu';
+import type { ExtensionRow, RepoRow } from './extensions';
 import {
   connection,
   sourcesAutoUpdate$,
@@ -46,6 +48,7 @@ import {
   SourceError,
   type SourceFollow,
   type SourceJob,
+  type SourceExtensionFeed,
   type SourceSearch,
   type SourceServer,
   type SourceServerFeed,
@@ -90,6 +93,8 @@ interface VolumeRow {
   complete: boolean;
   /** The book's title in the library */
   title: string;
+  /** Server edition (an extension's work): sent to the server's import queue */
+  uploaded?: boolean;
 }
 
 interface JobRow extends Omit<SourceJob, 'title' | 'site' | 'siteName' | 'domain' | 'workId'> {
@@ -140,26 +145,31 @@ interface Stores {
   servers: ServerRow;
   chapters: Chapter & { work: number; n: number };
   shared: SharedFollow;
+  repos: RepoRow;
+  extensions: ExtensionRow;
 }
 
 let opened: Promise<IDBPDatabase> | undefined;
 
 function db() {
-  opened ??= openDB('chimi-sources', 2, {
+  opened ??= openDB('chimi-sources', 3, {
     upgrade(base, version) {
-      if (version >= 1) {
-        base.createObjectStore('shared', { keyPath: 'key' });
-        return;
+      if (version < 1) {
+        base
+          .createObjectStore('works', { keyPath: 'id', autoIncrement: true })
+          .createIndex('key', ['site', 'workKey'], { unique: true });
+        base.createObjectStore('volumes', { keyPath: ['work', 'number'] });
+        base.createObjectStore('jobs', { keyPath: 'id' });
+        base.createObjectStore('follows', { keyPath: 'work' });
+        base.createObjectStore('servers', { keyPath: 'id', autoIncrement: true });
+        base.createObjectStore('chapters', { keyPath: ['work', 'n'] });
       }
-      base
-        .createObjectStore('works', { keyPath: 'id', autoIncrement: true })
-        .createIndex('key', ['site', 'workKey'], { unique: true });
-      base.createObjectStore('volumes', { keyPath: ['work', 'number'] });
-      base.createObjectStore('jobs', { keyPath: 'id' });
-      base.createObjectStore('follows', { keyPath: 'work' });
-      base.createObjectStore('servers', { keyPath: 'id', autoIncrement: true });
-      base.createObjectStore('chapters', { keyPath: ['work', 'n'] });
-      base.createObjectStore('shared', { keyPath: 'key' });
+      if (version < 2) base.createObjectStore('shared', { keyPath: 'key' });
+      // Extension repositories (extensions.ts), this device only.
+      if (version < 3) {
+        base.createObjectStore('repos', { keyPath: 'id', autoIncrement: true });
+        base.createObjectStore('extensions', { keyPath: ['repo', 'id'] });
+      }
     }
   });
   return opened;
@@ -173,6 +183,12 @@ const put = async <K extends keyof Stores>(store: K, value: Omit<Stores[K], 'id'
   (await db()).put(store, value);
 const remove = async (store: keyof Stores, key: IDBValidKey) => (await db()).delete(store, key);
 
+/** extensions.ts reads and writes its two stores through these. */
+export const extensionStore = { all, one, put, remove };
+
+const extensions = () => import('./extensions');
+const isExtension = (site: string) => site.startsWith('ext:');
+
 // Sites ---------------------------------------------------------------------------------------
 
 interface Source {
@@ -180,6 +196,8 @@ interface Source {
   domain: string;
   server: opds.Server | null;
   coverHosts: Set<string>;
+  /** An extension's images (covers) go through it */
+  image?(url: string): Promise<{ body: ArrayBuffer }>;
   details(url: string): Promise<SiteDetails | opds.ServerDetails>;
   chapter(url: string, n: number, details: SiteDetails): Promise<Chapter>;
 }
@@ -194,6 +212,19 @@ async function source(site: string): Promise<Source> {
       coverHosts: adapter.COVER_HOSTS,
       details: adapter.details,
       chapter: adapter.chapter
+    };
+  }
+  if (isExtension(site)) {
+    const ext = await extensions();
+    const { name, domain } = await ext.siteName(site);
+    return {
+      name,
+      domain,
+      server: null,
+      coverHosts: new Set(),
+      image: (url) => ext.image(site, url),
+      details: (url) => ext.details(site, url),
+      chapter: (_, n, found) => ext.chapter(site, n, found)
     };
   }
   const row = site.startsWith('opds:') ? await one('servers', Number(site.slice(5))) : undefined;
@@ -212,7 +243,7 @@ async function source(site: string): Promise<Source> {
 const details = new Map<number, [number, SiteDetails | opds.ServerDetails]>();
 
 const isPages = (work: WorkRow) =>
-  work.site.startsWith('opds:') &&
+  (work.site.startsWith('opds:') || isExtension(work.site)) &&
   work.kind === 'manga' &&
   (work.per === 'chapter' || work.volumeSize > 1);
 
@@ -236,7 +267,7 @@ async function fetchDetails(work: WorkRow) {
       chapters: itemKeys.length
     };
     size = 1;
-  } else if ('mode' in found) {
+  } else if ('mode' in found || (isExtension(work.site) && found.kind === 'manga')) {
     size = work.per === 'chapter' ? 1 : MANGA_VOLUME_SIZE;
   }
   details.set(work.id, [Date.now(), found]);
@@ -248,20 +279,22 @@ async function fetchDetails(work: WorkRow) {
     chapters: found.chapters,
     updated: found.updated,
     cover: found.cover,
-    kind: 'kind' in found ? found.kind : work.kind,
+    kind: ('kind' in found && found.kind) || work.kind,
     volumeSize: size,
     itemKeys
   });
   return found;
 }
 
-/** Page manga are numbered by feed order: a chapter fetched before that moved fails the job. */
-function checkChapters(work: WorkRow, found: opds.ServerDetails) {
+/**
+ * Page manga and extension works are numbered by list order: a chapter fetched before that moved
+ * fails the job. `keys` = the chapters' lasting keys in the site's current order.
+ */
+function checkChapters(work: WorkRow, keys: (string | undefined)[], where = "server's") {
   work.itemKeys.forEach((key, i) => {
-    const item = found.items[i];
-    if (!item || opds.itemKey(item) !== key) {
+    if (key && keys[i] !== key) {
       throw new Error(
-        `The server's chapter list changed at Ch. ${i + 1}, so nothing was replaced; the volumes in the library stay as they are`
+        `The ${where} chapter list changed at Ch. ${i + 1}, so nothing was replaced; the volumes in the library stay as they are`
       );
     }
   });
@@ -297,6 +330,8 @@ async function workFor(site: string, workKey: string, url: string) {
 }
 
 async function inLibrary(volume: VolumeRow | undefined) {
+  // Sent to the server's import queue: this device can't see Calibre's copy.
+  if (volume?.uploaded) return true;
   return !!volume && !!(await database.getDataByTitle(volume.title));
 }
 
@@ -378,6 +413,7 @@ export async function getWork(id: number) {
 }
 
 export async function resolveWork(site: string, workKey: string) {
+  if (isExtension(site)) return showNew(await workFor(site, workKey, workKey));
   if (site.startsWith('opds:')) {
     const { server } = await source(site);
     const key = opds.workKey(server!.row.type, server!.url(workKey));
@@ -453,8 +489,46 @@ export async function coverSrc(workId: number) {
   return imageUrl(`cover:${work.id}:${work.cover}`, () =>
     site.server
       ? site.server.get(site.server.url(work.cover))
-      : sourceFetch(work.cover, { hosts: site.coverHosts })
+      : site.image
+        ? site.image(work.cover)
+        : sourceFetch(work.cover, { hosts: site.coverHosts })
   );
+}
+
+/** A page of an extension's popular or latest works, or a search. */
+export async function browseExtension(
+  site: string,
+  mode: 'popular' | 'latest' | 'search',
+  page: number,
+  q = ''
+): Promise<SourceExtensionFeed> {
+  const ext = await extensions();
+  const { name, kind } = await ext.siteName(site);
+  const found = await ext.browse(site, mode, page, q);
+  const marked = await marks(
+    site,
+    found.list.map((w) => w.link)
+  );
+  return {
+    site,
+    name,
+    kind,
+    page,
+    more: found.hasNextPage,
+    works: found.list.map((w) => ({
+      title: w.name,
+      workKey: w.link,
+      cover: w.imageUrl,
+      inLibrary: !!marked.get(w.link)?.inLibrary,
+      following: !!marked.get(w.link)?.following
+    }))
+  };
+}
+
+/** A browse cover of an extension (a host it may load images from, else it fails). */
+export async function extensionImageSrc(site: string, url: string) {
+  const ext = await extensions();
+  return imageUrl(`ext:${site}:${url}`, () => ext.image(site, url));
 }
 
 /** An image on the server (a browse cover). */
@@ -971,6 +1045,33 @@ async function saveVolume(book: LoadData) {
   database.dataListChanged$.next(handler);
 }
 
+/**
+ * Server edition (extension works): the volume as an EPUB or CBZ into the server's import queue,
+ * like an upload from Import; Calibre adds it with the series from the file.
+ */
+async function uploadVolume(work: WorkRow, number: number, chapters: Chapter[]) {
+  const title = `${work.title} ${number}`;
+  const file = chapters.some((c) => 'pages' in c)
+    ? await cbz({
+        title,
+        authors: work.authors,
+        series: work.title,
+        number,
+        pages: chapters.flatMap((c) => ('pages' in c ? [c.pages] : []))
+      })
+    : await epub({
+        title,
+        authors: work.authors,
+        series: work.title,
+        seriesIndex: number,
+        identifier: `chimi:${work.site}:${work.workKey}:${number}`,
+        chapters: chapters.map((c) => ({ title: c.title, xhtml: 'html' in c ? c.html : '' }))
+      });
+  const { uploadToCalibre } = await import('$lib/data/remote/calibre-import');
+  await uploadToCalibre(file);
+  return title;
+}
+
 /** (volumes an update fetches, new chapters): the open volume here and every one after it. */
 async function updatePlan(work: WorkRow, planned: Map<number, { first: number; last: number }>) {
   const kept = new Map<number, VolumeRow>();
@@ -1022,7 +1123,14 @@ async function runJob(job: JobRow) {
   details.delete(job.work);
   const found = await fetchDetails(await workRow(job.work));
   const work = await workRow(job.work);
-  if ('mode' in found && found.mode === 'pages') checkChapters(work, found);
+  if ('mode' in found && found.mode === 'pages') {
+    checkChapters(
+      work,
+      found.items.map((item) => (item ? opds.itemKey(item) : undefined))
+    );
+  } else if (isExtension(work.site)) {
+    checkChapters(work, (found as SiteDetails).episodes ?? [], "extension's");
+  }
   const size = work.volumeSize || VOLUME_SIZE;
   const planned = new Map(plan(work.chapters, size).map((v) => [v.number, v]));
   let remaining: number[];
@@ -1082,15 +1190,24 @@ async function runJob(job: JobRow) {
       await put('jobs', job);
     }
     const complete = volume.last - volume.first + 1 >= size;
-    const book = await volumeBook(work, number, chapters);
-    await saveVolume(book);
+    // Server edition: only extension works run here, and their volumes go to Calibre.
+    const uploaded = !standalone && isExtension(work.site);
+    let title: string;
+    if (uploaded) {
+      title = await uploadVolume(work, number, chapters);
+    } else {
+      const book = await volumeBook(work, number, chapters);
+      await saveVolume(book);
+      title = book.title;
+    }
     await put('volumes', {
       work: work.id,
       number,
       first: volume.first,
       last: volume.last,
       complete,
-      title: book.title
+      title,
+      ...(uploaded && { uploaded })
     });
     if (complete) {
       for (let n = volume.first; n <= volume.last; n += 1) await remove('chapters', [work.id, n]);
@@ -1154,6 +1271,21 @@ function wake() {
 
 let timer: ReturnType<typeof setInterval> | undefined;
 
+/** Jobs a closed tab left fetching go on from their cached chapters. */
+async function resumeJobs() {
+  for (const job of (await all('jobs')).filter((j) => j.state === 'fetching')) {
+    await put('jobs', { ...job, state: 'queued' });
+  }
+}
+
+let resumed: Promise<void> | undefined;
+
+/** Server edition: extension works' jobs run here while a Sources page is open. */
+export function resumeDeviceJobs() {
+  resumed ??= resumeJobs().then(wake, () => undefined);
+  return resumed;
+}
+
 /** The timer while the app is open (root layout, standalone): due follows, then the queue. */
 export function startLocalSources() {
   if (timer || !browser) return;
@@ -1162,16 +1294,7 @@ export function startLocalSources() {
     if (sourcesAutoUpdate$.getValue()) queueDueChecks(Date.now()).catch(() => undefined);
     wake();
   };
-  // Jobs a closed tab left fetching go on from their cached chapters.
-  all('jobs')
-    .then((jobs) =>
-      Promise.all(
-        jobs
-          .filter((j) => j.state === 'fetching')
-          .map((j) => put('jobs', { ...j, state: 'queued' }))
-      )
-    )
-    .then(tick, () => undefined);
+  resumeJobs().then(tick, () => undefined);
   timer = setInterval(tick, 60 * 1000);
 }
 

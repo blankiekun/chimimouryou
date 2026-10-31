@@ -8,5 +8,16 @@
    "apiUrl": "https://internal.repo.example",
    "sourceCodeLanguage": 1, "itemType": 2, "version": "0.0.1"},
   {"name": "Fixture plain http", "id": 104, "lang": "ja", "baseUrl": "http://plain.example", "apiUrl": "",
-   "sourceCodeLanguage": 1, "itemType": 2, "version": "0.0.1"}
+   "sourceCodeLanguage": 1, "itemType": 2, "version": "0.0.1"},
+  {"name": "Fixture manga elsewhere", "id": 105, "lang": "ja", "baseUrl": "https://example.com", "apiUrl": "",
+   "sourceCodeLanguage": 1, "itemType": 0, "version": "0.0.1", "sourceCodeUrl": "https://repo.example/manga.js"},
+  {"name": "Fixture novel elsewhere", "id": 106, "lang": "ja", "baseUrl": "https://example.org",
+   "apiUrl": "https://example.net", "sourceCodeLanguage": 1, "itemType": 2, "version": "0.0.1",
+   "sourceCodeUrl": "https://repo.example/novel.js"},
+  {"name": "Fixture Dart", "id": 107, "lang": "ja", "baseUrl": "https://example.com", "apiUrl": "",
+   "sourceCodeLanguage": 0, "itemType": 0, "version": "0.0.1", "sourceCodeUrl": "https://repo.example/dart.dart"},
+  {"name": "Fixture anime", "id": 108, "lang": "ja", "baseUrl": "https://example.com", "apiUrl": "",
+   "sourceCodeLanguage": 1, "itemType": 1, "version": "0.0.1", "sourceCodeUrl": "https://repo.example/manga.js"},
+  {"name": "Fixture English", "id": 109, "lang": "en", "baseUrl": "https://example.com", "apiUrl": "",
+   "sourceCodeLanguage": 1, "itemType": 0, "version": "0.0.1", "sourceCodeUrl": "https://repo.example/manga.js"}
 ]

@@ -10,7 +10,7 @@
  * tags without attributes, so a site's scripts, styles, links and images never reach the book.
  */
 
-import { BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js';
+import { BlobReader, BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js';
 
 export const VOLUME_SIZE = 50;
 
@@ -162,6 +162,34 @@ ${names.map((_, n) => `<itemref idref="c${n + 1}"/>`).join('\n')}
   ];
   for (const [name, text] of files) await zip.add(name, new TextReader(text));
   return new File([await zip.close()], `${book.title}.epub`, { type: 'application/epub+zip' });
+}
+
+/** A CBZ File of the chapters' pages in order with a ComicInfo.xml (build.py cbz). */
+export async function cbz(book: {
+  title: string;
+  authors: string;
+  series: string;
+  number: number;
+  pages: Blob[][];
+}) {
+  const pages = book.pages.flat();
+  const zip = new ZipWriter(new BlobWriter('application/vnd.comicbook+zip'));
+  for (const [n, page] of pages.entries()) {
+    const ext = page.type.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
+    await zip.add(`${String(n + 1).padStart(4, '0')}.${ext}`, new BlobReader(page), { level: 0 });
+  }
+  await zip.add(
+    'ComicInfo.xml',
+    new TextReader(
+      `<?xml version="1.0" encoding="utf-8"?>\n<ComicInfo xmlns:xsd="http://www.w3.org/2001/XMLSchema">` +
+        `<Title>${escapeXml(book.title)}</Title><Series>${escapeXml(book.series)}</Series><Number>${book.number}</Number>` +
+        `<Writer>${escapeXml(book.authors)}</Writer><PageCount>${pages.length}</PageCount><LanguageISO>ja</LanguageISO>` +
+        '<Manga>YesAndRightToLeft</Manga></ComicInfo>\n'
+    )
+  );
+  return new File([await zip.close()], `${book.title}.cbz`, {
+    type: 'application/vnd.comicbook+zip'
+  });
 }
 
 const MAGIC: [number[], string][] = [
