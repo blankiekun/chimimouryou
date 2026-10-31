@@ -35,7 +35,7 @@ export function windowsGameBlocker(win: Window = window): 'https' | 'browser' | 
 export const windowsGameBlockerText = {
   https: 'Windows games need this site over HTTPS: browsers keep game files only for secure pages.',
   browser:
-    'Windows games need a browser with WebAssembly JSPI, such as Chrome or Edge 137 or newer, or Firefox 153 or newer.'
+    'Windows games need a browser with WebAssembly JSPI, such as Chrome or Edge 137 or newer, Firefox 153 or newer, or Safari 27 or newer.'
 };
 
 /** About the root fs and jp.zip VNBox copies into OPFS on first start, on top of the game. */
