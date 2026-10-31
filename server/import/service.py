@@ -9,6 +9,9 @@ queued and added by a single worker with `calibredb add`, then the catalog is
 rebuilt so the books show up in the library.
 
   POST add?name=<file name>   body: the file   -> {"job": {...}}
+       An extension's volume (made on a device) adds &identifier=chimi:ext:<repo>:<source>:<work>:<n>&title=
+       &authors=&series=&seriesIndex=: the book with that Calibre identifier, if any, gets the file in place
+       (same id and uuid, so reading data stays); any import account may replace any chimi:ext: book.
   GET  jobs?ids=a,b                            -> {"jobs": [...]} (own jobs only)
   POST series   {"apply": bool}                -> assign-series.py's plan (admins
        only: X-Account-Admin from the auth response): books without a series put into series, duplicate
@@ -83,6 +86,8 @@ VN_SCRIPTS = ('0.txt', '00.txt', 'nscr_sec.dat', 'nscript.___', 'nscript.dat', '
 MIN_FREE_BYTES = int(os.environ.get('MIN_FREE_MB', '1024')) * 1024 * 1024
 MAX_PENDING_PER_ACCOUNT = 100
 # A manga file name that is only a volume number (第01巻, Vol.2, 03).
+# An extension's volume uploaded by a device: repo key, source id, hash of the work's link, volume.
+EXT_IDENTIFIER = re.compile(r'chimi:ext:[0-9a-f]{12}:-?\d{1,20}:[0-9a-f]{12}:\d{1,5}')
 GENERIC_NAME = re.compile(r'(?:[\W\d_]|[第巻話一二三四五六七八九十]|vol(?:ume)?|v|ch(?:apter)?)*', re.I)
 # Finished jobs are kept this long so the uploader can read the outcome.
 KEEP_FINISHED_SECONDS = 7 * 24 * 3600
@@ -336,8 +341,25 @@ def replace_book(job: dict) -> dict | None:
     return {'state': 'added', 'calibreId': int(book_id), 'title': book_title(int(book_id))}
 
 
+def book_with_identifier(identifier: str) -> int | None:
+    """The Calibre book carrying exactly this chimi: identifier (`identifiers:"=chimi:=<value>"`)."""
+    value = identifier.split(':', 1)[1]
+    result = subprocess.run(
+        [CALIBREDB, '--library-path', LIBRARY, 'list', '--search', f'identifiers:"=chimi:={value}"',
+         '--fields', 'title', '--for-machine'],
+        capture_output=True, text=True, timeout=120, check=False)
+    try:
+        return int(json.loads(result.stdout)[0]['id'])
+    except (ValueError, IndexError, KeyError, TypeError):
+        return None
+
+
 def add_book(job: dict) -> dict:
     """Runs calibredb add for one queued file; returns the fields to update."""
+    # An extension's volume from a device: the book it updates, found by identifier (the worker is the only writer).
+    if job.get('identifier', '').startswith('chimi:ext:') and not job.get('replaceCalibreId'):
+        if (found := book_with_identifier(job['identifier'])) is not None:
+            job['replaceCalibreId'] = found
     if job.get('replaceCalibreId') and (replaced := replace_book(job)):
         return replaced
     path = os.path.join(queue_dir(), job['file'])
@@ -795,6 +817,7 @@ class Handler(BaseHTTPRequestHandler):
         ext = name.rsplit('.', 1)[-1].lower() if '.' in name else ''
         if ext not in FORMATS:
             raise ApiError(400, 'Only EPUB, HTMLZ, TXT, CBZ and ZIP files can be added')
+        ext_volume = self.ext_volume(parse_qs(url.query))
         if ext in MANGA_FORMATS:
             ext = 'cbz'
         try:
@@ -858,6 +881,8 @@ class Handler(BaseHTTPRequestHandler):
             job['folder'] = folder
         if vn:
             job['kind'] = 'vn'
+        elif ext_volume:
+            job.update(ext_volume)
 
         try:
             write_job_file(job)
@@ -869,6 +894,19 @@ class Handler(BaseHTTPRequestHandler):
             save_jobs()
             work.notify()
         return {'job': public_job(job)}
+
+    @staticmethod
+    def ext_volume(query: dict) -> dict | None:
+        """An extension's volume: its Calibre fields from the query, or None for an ordinary upload."""
+        identifier = query.get('identifier', [''])[0]
+        if not identifier:
+            return None
+        title, series = (query.get(k, [''])[0].strip()[:500] for k in ('title', 'series'))
+        index = query.get('seriesIndex', [''])[0]
+        if not EXT_IDENTIFIER.fullmatch(identifier) or not title or not series or not index.isdigit():
+            raise ApiError(400, 'Invalid extension volume')
+        return {'identifier': identifier, 'title': title, 'series': series, 'seriesIndex': int(index),
+                'authors': query.get('authors', [''])[0].strip()[:500] or 'Unknown', 'tags': 'Extension'}
 
     def log_message(self, fmt, *args):
         sys.stderr.write('%s\n' % (fmt % args))

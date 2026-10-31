@@ -185,7 +185,7 @@ export interface SourceExtensionFeed {
 /** An extension of a repository on this device (extensions.ts). */
 export interface SourceRepoExtension {
   id: number;
-  /** ext:<repo id>:<source id>, '' before the repository is saved */
+  /** ext:<repo key>:<source id>, '' before the repository is saved */
   site: string;
   name: string;
   lang: string;

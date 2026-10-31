@@ -32,3 +32,14 @@ export function connection(): 'wifi' | 'mobile' | 'unknown' {
   if (!type) return 'unknown';
   return type === 'cellular' ? 'mobile' : 'wifi';
 }
+
+/** Server edition: set while this device follows an extension's work (local-sources.ts). */
+export const DEVICE_FOLLOWS = 'sourcesDeviceFollows';
+
+export function hasDeviceFollows() {
+  try {
+    return !!localStorage.getItem(DEVICE_FOLLOWS);
+  } catch {
+    return false;
+  }
+}

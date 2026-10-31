@@ -49,10 +49,15 @@ export async function errorMessage(response: Response) {
   return `HTTP ${response.status}`;
 }
 
-export async function uploadToCalibre(file: File, signal?: AbortSignal) {
+/** `fields`: an extension's volume (Calibre title, series, identifier; import service `add`). */
+export async function uploadToCalibre(
+  file: File,
+  signal?: AbortSignal,
+  fields?: Record<string, string>
+) {
   // The folder names manga with generic file names (第01巻.cbz), which would otherwise be duplicates.
   const folder = file.webkitRelativePath?.split('/').slice(-2, -1)[0];
-  const query = `name=${encodeURIComponent(file.name)}${folder ? `&folder=${encodeURIComponent(folder)}` : ''}`;
+  const query = `name=${encodeURIComponent(file.name)}${folder ? `&folder=${encodeURIComponent(folder)}` : ''}${fields ? `&${new URLSearchParams(fields)}` : ''}`;
   const response = await fetch(`${apiUrl}add?${query}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/octet-stream' },

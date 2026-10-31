@@ -19,7 +19,7 @@
     unfollowWork
   } from '$lib/data/sources/server-sources';
   import { sourcesWifiOnly$ } from '$lib/data/sources/sources-settings';
-  import { needsAppMessage } from '$lib/data/sources/transport';
+  import { needsAppMessage, notInstalledMessage } from '$lib/data/sources/transport';
   import type { SourceWork } from '$lib/data/sources/types';
 
   /**
@@ -45,7 +45,7 @@
   const here = standalone ? 'On this device' : 'In library';
   // Manga from a server as pages: one CBZ per volume or per chapter, while nothing of it is added.
   let per = $state<'volume' | 'chapter'>();
-  // An extension's work (ext:<repo>:<source>): fetched in this tab, no follows yet.
+  // An extension's work (ext:<repo key>:<source>): fetched and followed on this device only.
   const ext = $derived(!!work?.site.startsWith('ext:'));
   const pages = $derived((!!work?.server && !work.files) || (ext && work?.kind === 'manga'));
   const volumes = $derived.by(() => {
@@ -197,6 +197,8 @@
       <p class="work-note">Adding web novels needs an account with the "Add books" permission.</p>
     {:else if loadError === needsAppMessage}
       <NeedsApp />
+    {:else if loadError === notInstalledMessage}
+      <p class="work-note">{notInstalledMessage}.</p>
     {:else if loadError}
       <p class="work-error" role="alert">{loadError}</p>
     {:else if !work}
@@ -307,28 +309,30 @@
               </select>
             </label>
           {/if}
-          {#if !ext}<div class="work-follow">
-              <div>
-                <p class="work-follow-label" id="work-follow-label">Follow</p>
-                <p class="work-hint work-follow-hint">
-                  {work.paused
-                    ? 'Paused: change it in Sources → Following.'
-                    : work.elsewhere
-                      ? `Followed in ${work.elsewhere}; updates there.`
+          <div class="work-follow">
+            <div>
+              <p class="work-follow-label" id="work-follow-label">Follow</p>
+              <p class="work-hint work-follow-hint">
+                {work.paused
+                  ? 'Paused: change it in Sources → Following.'
+                  : work.elsewhere
+                    ? `Followed in ${work.elsewhere}; updates there.`
+                    : ext && !standalone
+                      ? 'Checks while the app is open on this device.'
                       : standalone
                         ? `Checks while the app is open${$sourcesWifiOnly$ ? ', on Wi-Fi only' : ''} (Settings → Sources).`
                         : `The server checks every ${work.checkHours} h, also when no device is open.`}
-                  {#if !work.following && empty && pickedText}Turning it on adds {pickedText} first.{/if}
-                </p>
-              </div>
-              <Switch
-                checked={work.following}
-                stateText={false}
-                disabled={followBusy}
-                aria-labelledby="work-follow-label"
-                onchange={setFollow}
-              />
-            </div>{/if}
+                {#if !work.following && empty && pickedText}Turning it on adds {pickedText} first.{/if}
+              </p>
+            </div>
+            <Switch
+              checked={work.following}
+              stateText={false}
+              disabled={followBusy}
+              aria-labelledby="work-follow-label"
+              onchange={setFollow}
+            />
+          </div>
           {#if followError}<p class="work-error" role="alert">{followError}</p>{/if}
 
           {#if pickedText}
@@ -455,8 +459,10 @@
   }
 
   .work-tag {
+    display: inline-block;
     margin-left: 0.5rem;
-    padding: 0 0.35rem;
+    padding: 0.05rem 0.35rem;
+    line-height: 1.3;
     border: 1px solid var(--font-color);
     border-radius: 2px;
     color: var(--font-color);

@@ -22,6 +22,7 @@ FAKE_BUILDER = os.path.join(STATE, 'builder')
 FAKE_CALIBRE_DEBUG = os.path.join(STATE, 'calibre-debug')
 BUILDS = os.path.join(STATE, 'builds.log')
 ADDS = os.path.join(STATE, 'adds.log')
+IDENTIFIERS = os.path.join(STATE, 'identifiers.log')
 TOKEN_FILE = os.path.join(STATE, 'internal-token')
 with open(TOKEN_FILE, 'w') as f:
     f.write('c0ffee\n')
@@ -34,10 +35,20 @@ if 'add' in args:
     open({ADDS!r}, 'a').write(repr(args[3:]) + '\\n')
     if 'dup' in open(args[3], 'rb').read().decode('latin-1'):
         print('The following books were not added as they already exist in the database')
+    elif '--identifier' in args:  # an extension's volume: book 43 from now on carries it
+        open({IDENTIFIERS!r}, 'a').write(args[args.index('--identifier') + 1] + '\\n')
+        print('Added book ids: 43')
     else:
         print('Added book ids: 42')
+elif 'add_format' in args:
+    open({ADDS!r}, 'a').write('add_format ' + args[3] + '\\n')
 elif 'remove' in args:
     open({ADDS!r}, 'a').write('remove ' + args[-1] + '\\n')
+elif 'list' in args and args[args.index('--search') + 1].startswith('identifiers:'):
+    wanted = 'chimi:' + args[args.index('--search') + 1].split(':=', 1)[1].rstrip('"')
+    import os
+    known = open({IDENTIFIERS!r}).read().split() if os.path.exists({IDENTIFIERS!r}) else []
+    print('[{{"id": 43, "title": "x"}}]' if wanted in known else '[]')
 elif 'list' in args:
     print('[{{"id": 42, "title": "テスト"}}]')
 """)
@@ -178,6 +189,26 @@ class ImportServiceTest(unittest.TestCase):
             with open(ADDS) as f:
                 self.assertEqual(eval(f.read().splitlines()[-1])[1:], ['--title', title])  # noqa: S307
         self.assertEqual(self.request('/add?name=a.cbz', epub())[0], 400)
+
+    def test_extension_volume_replaces_its_book_in_place(self):
+        # Catches: an update of an extension's open volume added as a new book (or refused as a duplicate), which
+        # would orphan the reader's progress; a malformed or foreign identifier reaching calibredb.
+        identifier = 'chimi:ext:0123456789ab:42:abcdefabcdef:2'
+        query = f'/add?name=w.epub&identifier={identifier}&title=W%202&series=W&seriesIndex=2'
+        for bad in (query.replace(':2&', ':2x&'), query.replace('chimi:ext', 'chimi:syosetu'),
+                    query.replace('&title=W%202', ''), query.replace('seriesIndex=2', 'seriesIndex=-1')):
+            self.assertEqual(self.request(bad, epub())[0], 400)
+        _, body = self.request(query, epub())
+        self.assertEqual(self.wait_for(body['job']['id'])['calibreId'], 43)
+        with open(ADDS) as f:
+            args = eval(f.read().splitlines()[-1])  # noqa: S307
+        self.assertEqual(args[1:], ['--title', 'W 2', '--authors', 'Unknown', '--series', 'W', '--series-index', '2',
+                                    '--identifier', identifier, '--tags', 'Extension'])
+        # The same volume again (new chapters): its file replaced on book 43, nothing added.
+        _, body = self.request(query, epub())
+        self.assertEqual(self.wait_for(body['job']['id'])['calibreId'], 43)
+        with open(ADDS) as f:
+            self.assertEqual(f.read().splitlines()[-1], 'add_format 43')
 
     def test_game_zip_is_unpacked_into_the_vn_folder(self):
         data = io.BytesIO()
