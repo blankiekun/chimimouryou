@@ -45,6 +45,8 @@ jobs:
           done
           echo "::error::CI on main hasn't finished for $GITHUB_SHA"; exit 1
 
+  # Builds start once the tag is known to be on main; everything that publishes (image tags, the
+  # release and its files, the sites) also waits for the ci job, so builds overlap the CI wait.
   # Catches a tag pushed on a commit that isn't on main: only tags on main publish anything.
   on-main:
     runs-on: ubuntu-latest
@@ -61,7 +63,7 @@ jobs:
   # Catches an image that no longer builds for one architecture; each one builds natively on its own
   # runner and is pushed by digest, and the image job below tags both as one multi-arch image.
   image-build:
-    needs: [ci, on-main]
+    needs: on-main
     name: Build image ${{ matrix.image }} (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -157,8 +159,8 @@ jobs:
   # Names differ from ci.yml's, which the ci job looks up on the same commit. Runs when some builds
   # failed, so the other images still publish.
   image:
-    needs: image-build
-    if: ${{ !cancelled() && needs.image-build.result != 'skipped' }}
+    needs: [ci, image-build]
+    if: ${{ !cancelled() && needs.ci.result == 'success' && needs.image-build.result != 'skipped' }}
     name: Publish image ${{ matrix.image }}
     runs-on: ubuntu-latest
     permissions:
@@ -232,7 +234,7 @@ jobs:
   # from this repository's secrets VITE_GDRIVE_CLIENT_ID and VITE_GDRIVE_CLIENT_SECRET (the same
   # client as the Pages build); without them the app has no Drive sign-in.
   desktop-inputs:
-    needs: [ci, on-main]
+    needs: on-main
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -364,8 +366,8 @@ jobs:
 
   # Attaches the desktop packages that were built to the tag's release, even if an OS failed.
   desktop-release:
-    needs: [desktop-inputs, desktop]
-    if: ${{ !cancelled() && needs.desktop-inputs.result == 'success' }}
+    needs: [ci, desktop-inputs, desktop]
+    if: ${{ !cancelled() && needs.ci.result == 'success' && needs.desktop-inputs.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -435,7 +437,7 @@ jobs:
   # ANDROID_KEYSTORE (the keystore, base64), ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and
   # ANDROID_KEY_PASSWORD (apps/android/README.md); without them it skips.
   android:
-    needs: desktop-inputs
+    needs: [ci, desktop-inputs]
     runs-on: ubuntu-latest
     permissions:
       contents: write
