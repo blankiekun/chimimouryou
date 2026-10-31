@@ -4,6 +4,43 @@ chimimouryou is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook
 upstream's own changes are not listed here. Each version's section is written when it is released,
 from the pull requests merged since the previous tag (pull requests don't edit this file).
 
+## v3.12.0 (2026-10-31)
+
+### Added
+
+- Sources: Mihon/Tachiyomi extension repositories (keiyoushi's `index.pb`) in the desktop app and
+  the Android app's GitHub build. The desktop app runs them in its own Java host on a pinned Java
+  runtime downloaded when you turn Mihon on (Settings → Mihon extensions, with a warning: they run
+  as full programs). Extension files are pinned on install; Android also checks each one against
+  the repository's signing key. The Play build and plain browsers say they need the app.
+- Sources: Manatan v2 extension repositories (manga and novels) in the desktop and Android apps,
+  pinned by SHA-256 and run in a sandboxed worker limited to the hosts each package declares.
+- KOReader plugin for a chimimouryou server: browse and download the library, sync progress both
+  ways by exact character count, and add KOReader reading time to your statistics. Attached to
+  each release as `chimimouryou.koplugin.zip`.
+- Android: the readers run in immersive fullscreen.
+- Anki mining from visual novels: a mined line gets its own voice, or no audio when the line has
+  none, instead of the previous line's voice or background music (on-device voice detection;
+  Settings → Anki → Voice only, on by default). Native play times lines from your clicks.
+
+### Changed
+
+- Home: Read next is gone, the friends block moved to Community, and on phones your statistics
+  show only on Profile. Profile now shows the reading calendar.
+- Tapping a friend's book opens your copy when you have it, else the friend's profile.
+- Server: the Android and desktop apps can always connect, without adding their origins to
+  `CORS_ORIGINS`.
+- Visual novels: VNBox v0.2.7.
+
+### Fixed
+
+- Windows games stay in Continue reading instead of jumping back to My books, and details found
+  on VNDB or Jiten are kept and sync with the server.
+- On phones, a long server name no longer pushes the avatar off the top bar.
+- The desktop app plays Windows games natively instead of a VNBox stuck on downloading.
+- Read next's known-words line wraps instead of running into the next card; the statistics title
+  filter opens above its backdrop.
+
 ## v3.11.0 (2026-10-30)
 
 ### Added
