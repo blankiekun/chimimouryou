@@ -146,13 +146,14 @@ document.addEventListener('contextmenu', function (event) {
   event.preventDefault();
 });
 
-// Anki mining (lib/data/dictionary/anki.ts): the recent lines with their voice files, and for the newest
-// their screenshot and sound, so a note gets those of the line it was mined from (vnLineFor),
-// however late it is noticed or from however far back in a backlog.
+// The recent lines with their voice files, for the page's Backlog (always) and Anki mining
+// (lib/data/dictionary/anki.ts): while mining, the newest also keep their screenshot and sound, so a
+// note gets those of the line it was mined from (vnLineFor), however late it is noticed or from
+// however far back in a backlog.
 var KEPT_LINES = 500;
 var KEPT_MEDIA = 30;
 var keptLines = []; // [{ text, voice, picture?: Promise<Blob>, audio?: Promise<Blob> }], oldest first
-var keepLines = false;
+var keepLines = false; // mining: keep screenshots and sound too
 // Set by players whose lines come from a text hook (vnbox.js), which fires before the text is
 // fully drawn and again when the game's own backlog screen shows a line.
 var hookedLines = false;
@@ -185,10 +186,8 @@ HTMLCanvasElement.prototype.getContext = function (type, attributes) {
   return nativeGetContext.call(this, type, attributes);
 };
 
-/** At each click wait while mining: the page so far, its voice, screen and (being recorded) sound. */
+/** At each click wait: the page so far and its voice; while mining also its screen and (being recorded) sound. */
 function keepLine(lines) {
-  if (!keepLines) return;
-
   var text = lines
     .map(function (l) {
       return l.text;
@@ -205,11 +204,11 @@ function keepLine(lines) {
     : null;
   var line = earlier
     ? { text: text, voice: earlier.voice, picture: earlier.picture, audio: earlier.audio }
-    : { text: text, voice: lineVoice, picture: screenshot() };
+    : { text: text, voice: lineVoice, picture: keepLines ? screenshot() : undefined };
 
   // A hook fires before its text is drawn: the screen at the next click or key is the line's,
   // if one comes before the next line.
-  retakeLine = hookedLines && !earlier ? line : null;
+  retakeLine = keepLines && hookedLines && !earlier ? line : null;
   // The sound recorded since the click that brought this line is its sound.
   if (!earlier && lineRecorder && lineRecorder.state !== 'inactive') lineRecorder.line = line;
   keptLines.push(line);

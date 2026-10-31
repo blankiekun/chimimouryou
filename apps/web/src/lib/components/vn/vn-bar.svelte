@@ -47,13 +47,13 @@
   {/each}
   <span class="bar-divider vn-bar-chip" aria-hidden="true"></span>
   <button
-    class="bar-icon"
+    class="bar-icon vn-text-toggle"
     class:bar-icon-active={showText}
-    title="Show the text beside the game"
+    title="Show the backlog beside the game"
     aria-pressed={showText}
     onclick={ontext}
   >
-    <!-- A screen with a text panel under it -->
+    <!-- A screen with a panel on its right -->
     <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
       <rect
         x="2.75"
@@ -65,7 +65,7 @@
         stroke="currentColor"
         stroke-width="1.5"
       />
-      <path d="M3 12h14" stroke="currentColor" stroke-width="1.5" />
+      <path d="M12 4v12" stroke="currentColor" stroke-width="1.5" />
     </svg>
   </button>
   {#if fullscreenManager.fullscreenEnabled}
@@ -149,7 +149,8 @@
   }
 
   @media (orientation: portrait) and (max-width: 767px) {
-    :global(.vn-page) .vn-bar-chip {
+    /* No sidebar here: the Backlog is More → Backlog's sheet */
+    :global(.vn-page) :is(.vn-bar-chip, .vn-text-toggle) {
       display: none;
     }
 
