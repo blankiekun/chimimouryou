@@ -238,8 +238,8 @@ control, the tracker and import/export.
   left, left to right or a vertical strip.
 - **Visual novels** for ONScripter run in the browser on
   [CONscripter](https://github.com/blankiekun/CONscripter), with the text laid
-  over the game for Yomitan (backlogs and choices too), an optional text panel
-  below it, and the text counted in progress, statistics and kanji met. Games
+  over the game for Yomitan (backlogs and choices too), an optional backlog
+  beside it, and the text counted in progress, statistics and kanji met. Games
   are ZIPs or unpacked folders on the server (`VN_PATH`); saves sync across
   devices and big games can be kept offline. Games for other engines can often
   be converted with

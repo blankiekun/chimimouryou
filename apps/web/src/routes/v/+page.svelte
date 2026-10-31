@@ -3,8 +3,8 @@
    * Visual novel player (not part of upstream): the engine runs in a same-origin frame,
    * CONscripter for ONScripter games (static/vn/player.html) or VNBox for Windows games
    * (static/vn/vnbox.html, windows-game.ts); its text hook sends the text the game shows,
-   * which the frame lays invisibly over the game for Yomitan and this page shows in a panel
-   * below it (optional) and counts for progress and statistics (vn-text.ts). Saves of
+   * which the frame lays invisibly over the game for Yomitan and counts for progress and
+   * statistics (vn-text.ts); the lines it keeps fill the Backlog beside the game (optional). Saves of
    * ONScripter games on a synced source sync through vnsaves.json in the game's folder
    * (sync-files.ts); so do Windows games' save files (vn-save-store.ts: pulled before the game
    * starts, pushed when the tab is hidden or the game closes).
@@ -12,7 +12,7 @@
   import { noteReading } from '$lib/data/social/social';
   import { readingActivity } from '$lib/data/reader/reader-hooks';
   import { isPluginEnabled } from '$lib/plugins';
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import { bookContent, damagedBookText } from '$lib/data/book-content';
   import { goto } from '$app/navigation';
   import { page } from '$lib/data/page-store';
@@ -74,7 +74,6 @@
   import VnSavesSheet from '$lib/components/vn/vn-saves.svelte';
   import VnBar from '$lib/components/vn/vn-bar.svelte';
   import VnRail from '$lib/components/vn/vn-rail.svelte';
-  import VnSide from '$lib/components/vn/vn-side.svelte';
   import { VnSaveSync, vnSaveAreas } from '$lib/data/vn/vn-save-store';
   import { dialogManager } from '$lib/data/dialog-manager';
   import WindowsGameDialog from '$lib/components/vn/windows-game-dialog.svelte';
@@ -100,9 +99,9 @@
   import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
   import { padStep, watchGamepads, type PadAction } from '$lib/data/vn/vn-gamepad';
 
-  /** The text panel below the game; hovering the game's own text works without it. */
+  /** The Backlog sidebar beside the game (not on portrait phones); hovering the game's own text works without it. */
   const showText$ = writableBooleanLocalStorageSubject()('vnTextPanel', false);
-  /** Furigana drawn by the game; off, the readings are still in the overlay and text panel. */
+  /** Furigana drawn by the game; off, the readings are still in the overlay. */
   const furigana$ = writableBooleanLocalStorageSubject()('vnFurigana', true);
   /** The whole text at once instead of the game's text speed. */
   const instantText$ = writableBooleanLocalStorageSubject()('vnInstantText', false);
@@ -130,8 +129,9 @@
   /** A Windows game's VNBox settings from the Tuning sheet; a new value restarts the game. */
   let tuning = '';
   let showTuning = false;
-  /** The Backlog sheet: the lines kept for Anki mining */
+  /** The Backlog sheet (portrait phones; elsewhere it opens the sidebar) */
   let showBacklog = false;
+  let backlogSide: HTMLElement | undefined;
   let showHooks = false;
   /** The Saves sheet; the game is stopped while it is open. */
   let showSaves = false;
@@ -189,6 +189,15 @@
   let todayCharacters = 0;
 
   $: percent = book?.characters ? Math.min(100, (readCharacters / book.characters) * 100) : 0;
+  $: place = book?.characters
+    ? `Visual novel · ${readCharacters.toLocaleString('en')} / ${book.characters.toLocaleString('en')} chars · ${Math.floor(percent)}%${todayCharacters ? ` · +${todayCharacters.toLocaleString('en')} today` : ''}`
+    : 'Visual novel';
+  // One reader side panel: the Backlog (More, gamepad Y) is the sidebar wherever it shows.
+  $: if (showBacklog && !matchMedia('(orientation: portrait) and (max-width: 767px)').matches) {
+    showBacklog = false;
+    showText$.next(true);
+    tick().then(() => backlogSide?.focus());
+  }
   $: moreList = [
     fullscreenManager.fullscreenEnabled && {
       label: 'Full screen',
@@ -607,7 +616,7 @@
       : [
           {
             label: 'Furigana',
-            title: 'Furigana in the game (from the next text; readings stay in the text panel)',
+            title: 'Furigana in the game (from the next text)',
             on: $furigana$,
             click: () => furigana$.next(!$furigana$)
           },
@@ -720,7 +729,7 @@
 <div class="vn-page fixed inset-0 flex flex-col">
   <VnBar
     title={book?.title ?? ''}
-    place="Visual novel{book?.characters ? ` · ${Math.floor(percent)}%` : ''}"
+    {place}
     {chips}
     showText={$showText$}
     {showMore}
@@ -744,7 +753,7 @@
     </div>
   {/if}
 
-  <div class="vn-main" class:vn-main-text={$showText$ && !ended}>
+  <div class="vn-main">
     {#if playerUrl && !showSaves}
       <VnRail
         railOpen={railOpen$}
@@ -757,6 +766,35 @@
     {/if}
     <!-- The game's own dark ground: part of the content, not the theme -->
     <div class="vn-game" class:vn-game-blocked={blocked || showSaves}>
+      {#if newerEngine || savesNote || ended}
+        <div class="vn-notices">
+          {#if ended}
+            <div class="vn-notice"><p>The game has ended.</p></div>
+          {/if}
+          {#if newerEngine}
+            <div class="vn-notice">
+              <p>
+                Some saves come from a newer engine ({newerEngine}, here {engineVersion}). If one
+                doesn't load, ask an admin to update it.
+              </p>
+              <button
+                class="app-button app-button-quiet"
+                on:click={() => (newerEngine = undefined)}
+              >
+                Dismiss
+              </button>
+            </div>
+          {/if}
+          {#if savesNote}
+            <div class="vn-notice">
+              <p>{savesNote}</p>
+              <button class="app-button app-button-quiet" on:click={() => (savesNote = undefined)}>
+                Dismiss
+              </button>
+            </div>
+          {/if}
+        </div>
+      {/if}
       {#if blocked}
         <div class="vn-blocked" role="status">
           <p class="vn-blocked-title">This game can't start here</p>
@@ -803,19 +841,16 @@
       {/if}
     </div>
 
-    <VnSide
-      bind:newerEngine
-      {engineVersion}
-      bind:savesNote
-      {ended}
-      showText={$showText$}
-      {lines}
-      characters={book?.characters}
-      {readCharacters}
-      {todayCharacters}
-      {percent}
-      ontap={(x, y) => lookupPopup?.tapAt(x, y)}
-    />
+    {#if $showText$ && playerUrl && !showSaves}
+      <aside class="vn-backlog-side" aria-label="Backlog" tabindex="-1" bind:this={backlogSide}>
+        <VnBacklog
+          {frame}
+          anki={$ankiEnabled$}
+          shown={lines}
+          ontap={(x, y) => lookupPopup?.tapAt(x, y)}
+        />
+      </aside>
+    {/if}
   </div>
 </div>
 
@@ -838,7 +873,12 @@
 
 {#if showBacklog}
   <ReaderSheet title="Backlog" on:close={() => (showBacklog = false)}>
-    <VnBacklog {frame} keeping={$ankiEnabled$} ontap={(x, y) => lookupPopup?.tapAt(x, y)} />
+    <VnBacklog
+      {frame}
+      anki={$ankiEnabled$}
+      shown={lines}
+      ontap={(x, y) => lookupPopup?.tapAt(x, y)}
+    />
   </ReaderSheet>
 {/if}
 
@@ -868,15 +908,6 @@
     background: var(--reader-panel-bg);
     color: var(--reader-panel-fg);
     font-family: var(--app-font-ui);
-  }
-
-  @media (orientation: portrait) and (max-width: 767px) {
-    /* The game at its width (most are 4:3), the text panel in the rest of the height */
-    .vn-main-text .vn-game {
-      height: 75vw;
-      flex: none;
-      padding: 0;
-    }
   }
 
   /* The rail (vn-rail.svelte) beside the game. */
@@ -911,14 +942,55 @@
     display: flex;
     min-height: 0;
     flex: 1;
-    flex-direction: column;
   }
 
   .vn-game {
-    min-height: 0;
+    position: relative;
+    min-width: 0;
     flex: 1;
     padding: 1.5rem 0;
     background: #000;
+  }
+
+  /* Over the game's top edge, so they never change its size */
+  .vn-notices {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    right: 0;
+    left: 0;
+  }
+
+  .vn-notice {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 0.6rem 1.25rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
+    background: var(--reader-panel-bg);
+    color: var(--reader-panel-fg);
+    font-size: var(--type-small);
+  }
+
+  .vn-notice p {
+    flex: 1;
+  }
+
+  /* A fixed width: opening it resizes the game once, reading never does */
+  .vn-backlog-side {
+    width: 22rem;
+    flex: none;
+    overflow-y: auto;
+    padding: 0 1.25rem 1rem;
+    border-left: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
+    outline: none;
+  }
+
+  /* Portrait phones: the game fills the width; the Backlog is More → Backlog's sheet */
+  @media (orientation: portrait) and (max-width: 767px) {
+    .vn-backlog-side {
+      display: none;
+    }
   }
 
   /* No game to show: the page's own paper instead of the game's dark ground. */
@@ -946,14 +1018,15 @@
     line-height: 1.3;
   }
 
-  /* Phones held sideways: the text beside the game, the progress under it (vn-side.svelte) */
+  /* Phones held sideways: the game to the edges, a narrower Backlog */
   @media (orientation: landscape) and (max-height: 500px) {
     .vn-game {
       padding: 0;
     }
 
-    .vn-main-text {
-      flex-direction: row;
+    .vn-backlog-side {
+      width: min(18rem, 40vw);
+      padding: 0 0.75rem 0.75rem;
     }
   }
 </style>
