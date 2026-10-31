@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Builds the Lore check bank (apps/web/src/lib/data/ai/lore-bank/cases.json) from Aozora Bunko texts:
 short excerpts of eight books (public domain) plus one made-up passage, each with the checks
-`lorebook-bank.test.ts` scores lorebook output against. Excerpts are whole paragraphs (ruby bases
-only, as the reader's search index has them), cut where the case needs them; the script stops when
+`lorebook-bank.test.ts` scores lorebook output against. Excerpts are whole paragraphs with the
+book's ruby as ｜base《reading》 (the test turns it back into <ruby>), cut where the case needs them; the script stops when
 a name the checks rely on isn't where the case says it is.
 
     python3 scripts/lore-bank.py <download folder>
@@ -99,8 +99,7 @@ CASES = [
         'checks': [
             {'type': 'one', 'any': ['お通']},
             {'type': 'one', 'any': ['又八']},
-            # The reader sends no ruby (rt is left out of the search index), so this can't pass yet.
-            {'type': 'reading', 'any': ['武蔵'], 'reading': 'たけぞう', 'info': True},
+            {'type': 'reading', 'any': ['武蔵'], 'reading': 'たけぞう'},
         ],
     },
     {
@@ -143,10 +142,13 @@ CASES = [
 
 
 def plain(raw):
-    """Paragraph texts of an Aozora XHTML file: ruby bases only, gaiji by their description."""
+    """Paragraph texts of an Aozora XHTML file: ruby as ｜base《reading》, gaiji by their description."""
     body = raw.split('<div class="main_text">', 1)[1].split('<div class="bibliographical_information">', 1)[0]
     body = re.sub(r'<img[^>]*class="gaiji"[^>]*alt="([^"]*)"[^>]*/?>', r'\1', body)
-    body = re.sub(r'<rp>.*?</rp>|<rt>.*?</rt>', '', body)
+    body = re.sub(r'<rp>.*?</rp>', '', body)
+    body = re.sub(r'<ruby>(.*?)<rt>(.*?)</rt>\s*</ruby>',
+                  lambda m: '｜' + re.sub('<[^>]+>', '', m.group(1)) + '《' + re.sub('<[^>]+>', '', m.group(2)) + '》',
+                  body, flags=re.S)
     body = re.sub(r'<h[3-5][^>]*>(.*?)</h[3-5]>', lambda m: '\n■' + re.sub('<[^>]+>', '', m.group(1)) + '\n',
                   body, flags=re.S)
     body = html.unescape(re.sub(r'<[^>]+>', '', re.sub(r'<br\s*/?>', '\n', body)))
@@ -170,7 +172,7 @@ def build(folder):
         if spec['file']:
             lines = plain(fetch(folder, spec['file']))
             for line, word in spec['expect'].items():
-                if word not in lines[line]:
+                if word not in re.sub('｜|《[^》]*》', '', lines[line]):
                     sys.exit(f"{spec['id']}: {word} is not in line {line}: {lines[line][:60]}")
             picked = [i for a, b in spec['lines'] for i in range(a, b)]
             # Chapter heads (■) stay out: the reader's text has them as headings, not paragraphs.
@@ -186,7 +188,9 @@ def build(folder):
         json.dump(cases, f, ensure_ascii=False, indent=1)
         f.write('\n')
     for case in cases:
-        print(case['id'], len(case['paragraphs']), 'paragraphs', sum(map(len, case['paragraphs'])), 'chars')
+        bare = sum(len(re.sub('｜|《[^》]*》', '', p)) for p in case['paragraphs'])
+        sent = sum(len(re.sub('｜', '', p)) for p in case['paragraphs'])
+        print(case['id'], len(case['paragraphs']), 'paragraphs', bare, 'chars,', sent, 'with ruby')
 
 
 if __name__ == '__main__':

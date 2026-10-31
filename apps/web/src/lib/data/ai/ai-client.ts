@@ -65,11 +65,26 @@ const samplerNames: SamplerName[] = [
   'seed'
 ];
 
+/**
+ * Claude models before 4.7 take temperature (not with top_p: Sonnet 4.5 and Haiku 4.5 refuse
+ * both); later ones (Haiku 5.5, Opus 5…) refuse any sampling setting.
+ */
+function claudeParams(model: string, params: string[]) {
+  const name = model.replace(/^anthropic[./]/, '');
+  const version = /^claude-(?:(?:opus|sonnet|haiku)-)?(\d+)(?:-(\d)(?!\d))?/.exec(name);
+  const older = !!version && Number(version[1]) + Number(version[2] ?? 0) / 10 < 4.7;
+
+  return params.filter((param) => param !== 'top_p' && (older || param !== 'temperature'));
+}
+
 /** Settings a model accepts: its own list from the provider (OpenRouter), else the provider's. */
 export function acceptedParams(provider: AiProvider, connectionId: string, model: string) {
   const listed = cachedModel(connectionId, model)?.params;
 
-  return (listed ?? provider.params) as string[];
+  return (listed ??
+    (provider.id === 'anthropic'
+      ? claudeParams(model, provider.params)
+      : provider.params)) as string[];
 }
 
 function cachedModel(connectionId: string, model: string) {
