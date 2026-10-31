@@ -7,3 +7,5 @@ apps/web/src/lib/vendor/yomitan/
 scripts/vnbox/engines/
 # Saved site pages: kept as the sites send them (Sources adapters parse them)
 server/tests/fixtures/
+# One long line per feature: prettier rewrites inline code in them
+docs/CODEMAP.md

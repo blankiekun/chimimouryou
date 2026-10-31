@@ -4,7 +4,7 @@ chimimouryou: a fork of [ttu-ttu/ebook-reader](https://github.com/ttu-ttu/ebook-
 
 The details of a particular deployment (hosts, addresses, how it is deployed and rolled back) are in `CLAUDE.local.md` when present; it is not in git.
 
-**Code map:** `docs/CODEMAP.md` describes every feature that isn't upstream's: its files, stores, sync files, server endpoints and gotchas. Read the entry for a feature before changing it, before writing a brief about it, or when a file's role is unclear.
+**Code map:** `docs/CODEMAP.md` describes every feature that isn't upstream's: its files, stores, sync files, server endpoints and gotchas. Read the entry for a feature before changing it, before writing a brief about it, or when a file's role is unclear. Add a sub-feature as its own `- ` sub-bullet under its feature, so parallel PRs edit different lines.
 
 ## Repository layout
 
@@ -44,6 +44,7 @@ The details of a particular deployment (hosts, addresses, how it is deployed and
 - When dependencies change, regenerate `pnpm-lock.yaml` with pnpm 10 (`pnpm install --no-frozen-lockfile`; `CI=true` forces frozen mode); image builds use `--frozen-lockfile`.
 - Svelte 5: new components use runes; existing ones stay legacy (Svelte 4 syntax) until converted (`routes/b/+page.svelte` is converted). `runes` isn't forced, so Svelte picks per component. Legacy components compile with `immutable: true` (the `sveltekit({...})` options in `apps/web/vite.config.js`; SvelteKit 3 has no `svelte.config.js`): assign new objects/arrays/Sets, never mutate and reassign the same one, or nothing re-renders. `$lib` stays through the `alias` option; `page` comes from `$lib/data/page-store` (a store over `$app/state`), since `$app/stores` is gone.
 - Test patterns: component tests mount with `new Component({ target, props })` (`compatibility.componentApi: 4` under Vitest only; Vitest uses Svelte's browser build, see `reader-panel.test.ts`), `fake-indexeddb/auto` for IndexedDB, `vi.stubGlobal('fetch', …)`, `vi.mock('$lib/data/account/account', …)` for signed-in state. Handlers, `base-handler` and `database.service` reach `storage-handler-factory` only through `await import(…)`, so tests import any handler directly; a static import of the factory there brings the old import cycle back. Components that pull in `account-settings-sync` need it mocked (`settings-account.test.ts`).
+- Desktop and phone E2Es (`apps/desktop/e2e`, `apps/android/e2e`) run the app on its fixed port 41917: run one at a time.
 - CI (`.github/workflows/ci.yml`): ESLint, `pnpm test`, build, Python tests, compose check and all five image builds (on pull requests only when image inputs change: `docker/`, compose files, `server/`, `engine/`, package manifests, lockfile, workflows; main and tags always). Releases (`release.yml`): tag `v*` → images for amd64/arm64 on GHCR, used via `IMAGE_PREFIX`/`IMAGE_TAG`.
 - Docs: README.md (overview), docs/INSTALL.md and docs/CONFIGURATION.md (running it, every setting), docs/CODEMAP.md (features), ARCHITECTURE.md (design, data flow, tech debt), CONTRIBUTING.md (conventions, how to add things), docs/QA.md (manual test plan), docs/READINGS.md (how word lists read words, Known furigana).
 
