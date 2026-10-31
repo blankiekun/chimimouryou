@@ -30,6 +30,8 @@ difficulty estimates.
 Books, manga and ONScripter visual novels from one library; highlights, search,
 audiobooks, AI helpers and Anki mining in the reader; difficulty estimates and
 reading statistics for learners. See [Features](#features).
+On an e-reader, the [KOReader plugin](apps/koreader/README.md) browses the
+library and keeps your place and reading time in step with the server.
 
 <sub>Screenshots show books from the maintainer's own library; the titles belong to their publishers.</sub>
 

@@ -297,3 +297,4 @@ To serve it from your own VPS behind Cloudflare instead (or as well), see
 Each release also attaches desktop installers ([apps/desktop](../apps/desktop/README.md)) and
 an Android APK ([apps/android](../apps/android/README.md)) of the standalone build. The APK is
 signed with the repository's `ANDROID_KEYSTORE*` secrets and skipped without them.
+It also attaches `chimimouryou.koplugin.zip`, the KOReader plugin ([apps/koreader](../apps/koreader/README.md)).

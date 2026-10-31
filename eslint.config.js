@@ -119,6 +119,11 @@ module.exports = (async () => {
       }
     },
     {
+      // The KOReader plugin's count check (apps/koreader/tools): run by Vitest, outside the web app's tsconfig.
+      files: ['apps/koreader/**/*.mts'],
+      languageOptions: { parserOptions: { project: null } }
+    },
+    {
       // The social hub's Worker: its own package, outside the web app's tsconfig.
       files: ['deploy/social-hub/**/*.ts'],
       languageOptions: { parserOptions: { project: null } }
