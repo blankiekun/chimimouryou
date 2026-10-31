@@ -226,6 +226,11 @@ export function unfollowWork(workId: number) {
   return call<object>('DELETE', `follows/${workId}`);
 }
 
+/** Another device's follow of its server (SourceFollow.shared): sources.json in both editions. */
+export function unfollowShared(key: string) {
+  return local().then((l) => l.unfollowShared(key));
+}
+
 type Following = { follows: SourceFollow[]; checkHours: number };
 
 /** This account's follows and the hours between two checks. */

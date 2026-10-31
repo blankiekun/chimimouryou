@@ -16,6 +16,7 @@
   import { desktopGames } from '$lib/data/vn/native-games';
   import SettingsSync from '$lib/components/standalone/settings-sync.svelte';
   import SettingsSources from '$lib/components/sources/settings-sources.svelte';
+  import { hasDeviceFollows } from '$lib/data/sources/sources-settings';
   import SettingsLanguage from '$lib/components/settings/settings-language.svelte';
   import SettingsPlugins from '$lib/components/settings/settings-plugins.svelte';
   import { activePlugins$, plugins } from '$lib/plugins';
@@ -474,6 +475,9 @@
             <SettingsSection id="general-account">
               <SettingsAccount />
             </SettingsSection>
+            {#if hasDeviceFollows()}
+              <SettingsSources id="data-web-sources" />
+            {/if}
           {/if}
           <SettingsSection id="general-language" keywords="language japanese english 日本語 言語">
             <SettingsLanguage />

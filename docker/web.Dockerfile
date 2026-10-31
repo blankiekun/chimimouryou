@@ -21,6 +21,8 @@ COPY . .
 # The HTTPS address the plain-HTTP page links to for signing in (optional).
 ARG VITE_HTTPS_URL=
 ARG VERSION=docker
+# Test stacks only: the Sources fake sites (transport.ts); empty in every real build.
+ARG VITE_SOURCES_FIXTURE_URL=
 WORKDIR /src/apps/web
 RUN pnpm svelte-kit sync && pnpm build \
   && echo "$VERSION" > build/version.txt \

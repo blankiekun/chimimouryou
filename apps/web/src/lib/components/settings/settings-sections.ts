@@ -16,6 +16,7 @@ import type { Writable } from 'svelte/store';
 import type { MessageKey } from '$lib/i18n';
 import { standalone } from '$lib/data/env';
 import { desktopGames } from '$lib/data/vn/native-games';
+import { hasDeviceFollows } from '$lib/data/sources/sources-settings';
 
 export interface SettingsSectionInfo {
   id: string;
@@ -338,7 +339,16 @@ export const settingsAreas: SettingsArea[] = [
           {
             id: 'data-sources',
             label: 'settings.section.data-sources'
-          }
+          },
+          // Only while this device follows extension works (it checks those itself).
+          ...(hasDeviceFollows()
+            ? [
+                {
+                  id: 'data-web-sources',
+                  label: 'settings.section.data-web-sources' as const
+                }
+              ]
+            : [])
         ]
       }
 ];

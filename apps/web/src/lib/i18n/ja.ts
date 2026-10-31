@@ -508,6 +508,7 @@ export const ja: Record<MessageKey, string> = {
   'settings.section.data-import': 'インポート',
   'settings.section.data-sync': 'データ同期',
   'settings.section.data-sources': '保存先（ソース）',
+  'settings.section.data-web-sources': '拡張機能のフォロー',
 
   'anki.enabled': '作成したカードにメディアを自動追加',
   'anki.guide': 'セットアップガイド',

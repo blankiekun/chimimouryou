@@ -296,7 +296,10 @@ describe('sources.json', () => {
       }
     ]);
     await local.syncSourcesWith(store);
-    expect((await local.getFollowing()).follows.some((f) => f.title === 'Server work')).toBe(false);
+    // Listed for Unfollow only (owner s64), never bound to this device's server 1.
+    expect(
+      (await local.getFollowing()).follows.find((f) => f.title === 'Server work')
+    ).toMatchObject({ workId: 0, shared: 'dev-desktop opds:1 /series/1' });
     // Kept in the file for the device that runs it.
     expect(entries().some((e) => e.title === 'Server work')).toBe(true);
   });

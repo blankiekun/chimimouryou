@@ -511,6 +511,7 @@ export const en = {
   'settings.section.data-import': 'Import',
   'settings.section.data-sync': 'Sync',
   'settings.section.data-sources': 'Sources',
+  'settings.section.data-web-sources': 'Extension follows',
 
   'anki.enabled': 'Add media to mined cards',
   'anki.guide': 'Setup guide',

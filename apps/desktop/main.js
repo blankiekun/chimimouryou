@@ -234,7 +234,9 @@ async function sourcesFetch(event, url, { headers = {}, maxBytes = 20 * 1024 * 1
     const response = await net.fetch(url, {
       headers: { 'User-Agent': agent, ...headers },
       redirect: 'manual',
-      cache: 'no-store'
+      cache: 'no-store',
+      // net.fetch sends the session's cookies by default; a site never gets the app's.
+      credentials: 'omit'
     });
     const location = response.headers.get('Location');
     if (response.status >= 300 && response.status < 400 && location) {

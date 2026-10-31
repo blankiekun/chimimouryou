@@ -142,6 +142,11 @@ export interface SourceFollow {
   cover: boolean;
   /** Standalone: the device that checks it when that isn't this one (sources.json) */
   elsewhere?: string;
+  /**
+   * Another device's follow of one of its servers (no work here, workId 0): its sources.json key,
+   * for Unfollow, the only thing this device can do with it
+   */
+  shared?: string;
 }
 
 export interface SourceJob {
