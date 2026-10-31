@@ -10,3 +10,4 @@ Project guide for agents: [CLAUDE.md](CLAUDE.md). The rules below bind every age
 - Tautological tests considered harmful.
 - Change-detector tests considered harmful.
 - Do not create regression tests for bug fixes without a genuine gap in behavior testing.
+- LLM-backed features: test with a case bank and recorded model answers replayed in Vitest (`lorebook-bank.test.ts`); live runs are opt-in and read the API key only inside the test.
