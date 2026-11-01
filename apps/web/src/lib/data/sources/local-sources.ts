@@ -44,6 +44,7 @@ import {
   sourcesCheckHours$,
   sourcesWifiOnly$
 } from './sources-settings';
+import { blobUrlCache } from '$lib/functions/blob-url-cache';
 import { NeedsAppError, nativeFetch, pacing, sourceFetch } from './transport';
 import {
   SourceError,
@@ -519,28 +520,10 @@ export async function browseSite(
   };
 }
 
-const images = new Map<string, Promise<string>>();
-const MAX_IMAGES = 200;
-
-/** An image as a blob: URL (the CSP allows no other hosts); the last MAX_IMAGES are kept. */
-function imageUrl(key: string, get: () => Promise<{ body: ArrayBuffer }>) {
-  const cached = images.get(key);
-  if (cached) {
-    // Most recently used last, so the oldest goes first.
-    images.delete(key);
-    images.set(key, cached);
-    return cached;
-  }
-  const loading = get().then(({ body }) => URL.createObjectURL(new Blob([body])));
-  loading.catch(() => images.delete(key));
-  images.set(key, loading);
-  if (images.size > MAX_IMAGES) {
-    const [oldest, url] = images.entries().next().value!;
-    images.delete(oldest);
-    url.then(URL.revokeObjectURL, () => undefined);
-  }
-  return loading;
-}
+/** Images as blob: URLs (the CSP allows no other hosts); the last 200 are kept. */
+const cachedImage = blobUrlCache(200);
+const imageUrl = (key: string, get: () => Promise<{ body: ArrayBuffer }>) =>
+  cachedImage(key, async () => new Blob([(await get()).body]));
 
 /** The work's cover (from a host its site names, or its server). */
 export async function coverSrc(workId: number) {

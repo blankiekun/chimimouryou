@@ -26,22 +26,21 @@ const ENGINE_CACHE_NAME = `${swCachePrefix}vn-engine`;
 const engineFile = /\/vn\/(conscripter(\.js|\.wasm|-version\.txt)|default\.ttf)$/;
 // VNBox (Windows games, ~125 MB with its root fs zips) is never precached: it keeps the zips in OPFS.
 const vnboxFile = /\/vn\/vnbox\//;
-// The UI font is split into unicode-range chunks (4 MB in all); a page loads only the ones it
-// shows, so they are cached on first use, across builds, rather than precached. So is KZ UDMincho
-// (17 MB), the old Washi & Sumi display font, now only a reader font choice.
+// Fonts (the UI font's unicode-range chunks and the reader fonts, ~65 MB in all) are cached on
+// first use, across builds, rather than precached: a reader uses one or two of them. Only the
+// build's own hashed files: user fonts (/userfonts/) have their own cache.
 const UI_FONT_CACHE_NAME = `${swCachePrefix}ui-font`;
-const uiFontFile = /\/(BIZUDPGothic-[^/]+\.woff2|KZUDMincho-[^/]+\.woff2?)$/;
+const uiFontFile = /\/_app\/immutable\/assets\/[^/]+\.woff2$/;
 const uiFontFiles = new Set(build.filter((file) => uiFontFile.test(file)));
 
 const prerenderedSet = new Set(prerendered);
 
 // Whisper's, manga text's and the line voice detector's workers, models and runtime (tens of MB)
-// load only when used. The .woff font
-// fallbacks (86 MB) are never fetched by browsers that run service workers: they take the woff2.
+// load only when used.
 const assetsToCache = build
   .filter(
     (file) =>
-      !/ort-wasm|silero_vad|line-vad\.worker|webp_enc|webp-encode\.worker|whisper\.worker|manga-ocr\.worker|analysis-\w+\.worker|\.woff$/.test(
+      !/ort-wasm|silero_vad|line-vad\.worker|webp_enc|webp-encode\.worker|whisper\.worker|manga-ocr\.worker|analysis-\w+\.worker/.test(
         file
       ) && !uiFontFile.test(file)
   )

@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { en } from './en';
 import { ja } from './ja';
-import { translate, tr, uiLanguage$ } from './index';
+import { loadUiLanguage, translate, tr, uiLanguage$ } from './index';
 import { settingsAreas } from '$lib/components/settings/settings-sections';
 
 const params = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
@@ -50,7 +50,8 @@ describe('i18n', () => {
     expect(keys.filter((key) => key && !(key in en))).toEqual([]);
   });
 
-  it('fills in params and falls back to English', () => {
+  it('fills in params and falls back to English', async () => {
+    await loadUiLanguage('ja');
     expect(translate('ja', 'dashboard.streak', { count: 3 })).toBe('3日連続');
     expect(translate('en', 'nav.signedInAs', { name: 'a' })).toBe('Signed in as a');
     expect(translate('xx', 'nav.home')).toBe('Home');

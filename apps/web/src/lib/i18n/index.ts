@@ -10,17 +10,20 @@
  * New strings go in both en.ts and ja.ts. Not part of upstream.
  */
 
-import { map } from 'rxjs';
+import { BehaviorSubject, combineLatest, map } from 'rxjs';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 import { en, type MessageKey } from './en';
-import { ja } from './ja';
 import { oneOf } from '$lib/data/setting-parsers';
 
 export type { MessageKey };
 export type UiLanguage = 'en' | 'ja';
 export type MessageParams = Record<string, string | number>;
 
-const messages: Record<UiLanguage, Record<MessageKey, string>> = { en, ja };
+// Japanese loads only for readers who pick it (~95 KB): the root layout's load waits for it, so
+// the first render is already in Japanese.
+const messages$ = new BehaviorSubject<Partial<Record<UiLanguage, Record<MessageKey, string>>>>({
+  en
+});
 
 export const uiLanguage$ = writableStringLocalStorageSubject<UiLanguage>()(
   'uiLanguage',
@@ -30,13 +33,28 @@ export const uiLanguage$ = writableStringLocalStorageSubject<UiLanguage>()(
 
 /** The text for `key` in `lang` (English when missing), with its {param}s filled in. */
 export function translate(lang: string, key: MessageKey, params: MessageParams = {}) {
-  const text = messages[lang as UiLanguage]?.[key] || en[key];
+  const text = messages$.getValue()[lang as UiLanguage]?.[key] || en[key];
 
   return text.replace(/\{(\w+)\}/g, (match, name) => (name in params ? `${params[name]}` : match));
 }
 
-export const t$ = uiLanguage$.pipe(
-  map((lang) => (key: MessageKey, params?: MessageParams) => translate(lang, key, params))
+/** Loads the strings of `lang` (Japanese) if they aren't yet. */
+export async function loadUiLanguage(lang: string = uiLanguage$.getValue()) {
+  if (lang !== 'ja' || messages$.getValue().ja) return;
+
+  const { ja } = await import('./ja');
+
+  messages$.next({ ...messages$.getValue(), ja });
+}
+
+uiLanguage$.subscribe((lang) => void loadUiLanguage(lang));
+
+export const t$ = combineLatest([uiLanguage$, messages$]).pipe(
+  map(
+    ([lang]) =>
+      (key: MessageKey, params?: MessageParams) =>
+        translate(lang, key, params)
+  )
 );
 
 export function tr(key: MessageKey, params?: MessageParams) {

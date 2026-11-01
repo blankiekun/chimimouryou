@@ -4,9 +4,11 @@
  * All rights reserved.
  */
 
-import { describe, expect, it } from 'vitest';
-import { translate, type MessageKey, type MessageParams } from '$lib/i18n';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { loadUiLanguage, translate, type MessageKey, type MessageParams } from '$lib/i18n';
 import { formatDuration, relativeTime } from './format-time';
+
+beforeAll(() => loadUiLanguage('ja'));
 
 /*
  * How formatDuration could fail (written before the code):

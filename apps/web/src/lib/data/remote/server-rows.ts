@@ -25,7 +25,7 @@ import {
   SyncConflictError,
   type SyncFileOptions,
   type SyncFileStore
-} from '$lib/data/storage/handler/base-handler';
+} from '$lib/data/storage/sync-file-store';
 import pLimit from 'p-limit';
 
 /** Where readers sign in: Settings → Sync in the standalone, Settings → General otherwise. */
