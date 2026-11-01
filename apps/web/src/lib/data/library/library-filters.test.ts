@@ -4,9 +4,11 @@
  * All rights reserved.
  */
 
-import { describe, expect, it } from 'vitest';
-import { translate, type MessageKey } from '$lib/i18n';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { loadUiLanguage, translate, type MessageKey } from '$lib/i18n';
 import { libraryFilterLabel, seriesFilterKey } from './library-filters';
+
+beforeAll(() => loadUiLanguage('ja'));
 
 describe('libraryFilterLabel', () => {
   const ja = (key: MessageKey) => translate('ja', key);

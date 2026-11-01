@@ -4,9 +4,11 @@
  * All rights reserved.
  */
 
-import { describe, expect, it } from 'vitest';
-import { translate } from '$lib/i18n';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { loadUiLanguage, translate } from '$lib/i18n';
 import { levelGroup, levelGroupKey, levelTier } from './difficulty';
+
+beforeAll(() => loadUiLanguage('ja'));
 
 describe('book levels', () => {
   it('names the tier of the whole step and groups two steps, clamped to the scale', () => {
