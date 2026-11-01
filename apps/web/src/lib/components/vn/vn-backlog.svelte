@@ -58,15 +58,10 @@
     }
   }
 
-  // New lines and dropped media while it is open.
+  // Kept lines only change as a line is shown, which the effect below follows.
   $effect(() => {
-    const timer = setInterval(read, 1000);
-
     read();
-    return () => {
-      clearInterval(timer);
-      playing?.pause();
-    };
+    return () => playing?.pause();
   });
 
   // The player keeps a line right after it hands the page its text.

@@ -131,9 +131,14 @@ export function padStep(
   return { sheets: next, effects };
 }
 
+/** A pad untouched this long is polled every `idlePoll` ms rather than each frame. */
+const idleAfter = 1000;
+const idlePoll = 50;
+
 /**
- * Polls the first connected pad each animation frame while one is connected and the tab is
- * visible; `pads()` gives the pads (the page's, else the frame's). Returns the stop function.
+ * Polls the first connected pad while one is connected and the tab is visible: each animation
+ * frame while it is in use, every `idlePoll` ms once idle (a Steam Deck's pad is always
+ * connected). `pads()` gives the pads (the page's, else the frame's). Returns the stop function.
  */
 export function watchGamepads(
   pads: () => (Gamepad | null)[],
@@ -144,10 +149,13 @@ export function watchGamepads(
 ) {
   let held = new Set<PadAction>();
   let frame = 0;
+  let idle = 0;
   let last = 0;
+  let used = 0;
 
   function poll(time: number) {
     frame = 0;
+    idle = 0;
 
     const pad = pads().find((each) => each?.connected);
     const now = pad ? heldActions(pad) : new Set<PadAction>();
@@ -159,14 +167,21 @@ export function watchGamepads(
 
     const [dx, dy] = cursorSpeed(pad);
 
+    if (now.size || dx || dy) used = time;
     if ((dx || dy) && last) handlers.cursor(dx, dy, Math.min(time - last, 50));
-    last = time;
-    frame = requestAnimationFrame(poll);
+    if (time - used < idleAfter) {
+      last = time;
+      frame = requestAnimationFrame(poll);
+    } else {
+      last = 0;
+      idle = window.setTimeout(() => poll(performance.now()), idlePoll);
+    }
   }
 
   function start() {
-    if (!frame && document.visibilityState === 'visible') {
+    if (!frame && !idle && document.visibilityState === 'visible') {
       last = 0;
+      used = performance.now();
       frame = requestAnimationFrame(poll);
     }
   }
@@ -177,6 +192,7 @@ export function watchGamepads(
 
   return () => {
     cancelAnimationFrame(frame);
+    clearTimeout(idle);
     window.removeEventListener('gamepadconnected', start);
     document.removeEventListener('visibilitychange', start);
   };

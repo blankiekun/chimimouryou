@@ -5,6 +5,14 @@
     <title>VNBox</title>
     <link rel="stylesheet" href="vnbox/boxedwine.css" />
     <link rel="stylesheet" href="vnbox.css" />
+    <!-- startGame runs these only after the page pulled the game's saves: fetched meanwhile.
+         The wasm's preload matches boxedwine.js's fetch (same-origin credentials). -->
+    <link rel="preload" href="vnbox/fsfs.js" as="script" />
+    <link rel="preload" href="vnbox/lazyfs.js" as="script" />
+    <link rel="preload" href="vnbox/frida-compat.js" as="script" />
+    <link rel="preload" href="vnbox/boxedwine-shell.js" as="script" />
+    <link rel="preload" href="vnbox/boxedwine.js" as="script" />
+    <link rel="preload" href="vnbox/boxedwine.wasm" as="fetch" crossorigin="anonymous" />
   </head>
   <body>
     <!-- The elements boxedwine-shell.js looks up (VNBox's boxedwine.html, without its controls'

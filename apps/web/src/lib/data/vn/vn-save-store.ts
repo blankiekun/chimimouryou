@@ -193,22 +193,25 @@ export function escapeName(name: string) {
     .join('');
 }
 
-/** Every file and folder in the area, folders implied by a file's path included, sorted by path. */
-export async function listSaves(area: SaveArea): Promise<SaveEntry[]> {
+/**
+ * Every file and folder in the area, folders implied by a file's path included, sorted by path.
+ * With `wanted`, only the entries at shown paths it accepts (and their folders): the others'
+ * values, file contents included, are never read.
+ */
+export async function listSaves(
+  area: SaveArea,
+  wanted?: (path: string) => boolean
+): Promise<SaveEntry[]> {
   const found = new Map<string, SaveEntry>();
+  const shownPath = (key: string) =>
+    key
+      .slice(area.root.length + 1)
+      .split('/')
+      .map((part) => (area.escaped ? unescapeName(part) : part))
+      .join('/');
 
   await withStore(area, 'readonly', (store) => {
-    const request = store.openCursor(
-      IDBKeyRange.bound(`${area.root}/`, `${area.root}0`, false, true)
-    );
-
-    request.onsuccess = () => {
-      const cursor = request.result;
-
-      if (!cursor) return;
-
-      const key = String(cursor.key);
-      const value = cursor.value as IdbEntry;
+    const add = (key: string, value: IdbEntry) => {
       const parts = key.slice(area.root.length + 1).split('/');
       const shown = parts.map((part) => (area.escaped ? unescapeName(part) : part));
 
@@ -234,6 +237,37 @@ export async function listSaves(area: SaveArea): Promise<SaveEntry[]> {
         size: value.contents?.byteLength ?? 0,
         modified: new Date(value.timestamp).getTime()
       });
+    };
+
+    const range = IDBKeyRange.bound(`${area.root}/`, `${area.root}0`, false, true);
+
+    if (wanted) {
+      const keys = store.openKeyCursor(range);
+
+      keys.onsuccess = () => {
+        const cursor = keys.result;
+
+        if (!cursor) return;
+
+        const key = String(cursor.key);
+
+        if (wanted(shownPath(key))) {
+          const value = store.get(key);
+
+          value.onsuccess = () => add(key, value.result as IdbEntry);
+        }
+        cursor.continue();
+      };
+      return;
+    }
+
+    const request = store.openCursor(range);
+
+    request.onsuccess = () => {
+      const cursor = request.result;
+
+      if (!cursor) return;
+      add(String(cursor.key), cursor.value as IdbEntry);
       cursor.continue();
     };
   });
@@ -296,12 +330,16 @@ export async function writeSaves(
   const replaced: SaveEntry[] = [];
   const now = new Date();
   const puts: [string, IdbEntry][] = [];
+  const paths = new Set(files.map((file) => savePathParts(file.path)?.join('/')));
+  // The modes of the files replaced, read without the rest of the area.
   const modes = await withStore(
     area,
     'readonly',
     (store) =>
       new Map(
-        entries.filter((entry) => !entry.dir).map((entry) => [entry.path, store.get(entry.key)])
+        entries
+          .filter((entry) => !entry.dir && paths.has(entry.path))
+          .map((entry) => [entry.path, store.get(entry.key)])
       )
   );
 
@@ -418,13 +456,21 @@ export function windowsSaveKey(area: SaveArea, path: string) {
   return `${areaKey(area)}/${path}`;
 }
 
-/** A Windows game's save files in this browser by sync name, and each area's listing. */
+/**
+ * A Windows game's save files in this browser by sync name, and each area's listing of them and
+ * the folders they go in.
+ */
 export async function windowsSaveFiles(areas: SaveArea[]) {
   const files = new Map<string, { area: SaveArea; entry: SaveEntry }>();
   const listed = new Map<SaveArea, SaveEntry[]>();
 
   for (const area of areas) {
-    const entries = await listSaves(area);
+    // Saves and the folders they go in: never the rest of Wine's files (the registry above all).
+    const entries = await listSaves(area, (path) => {
+      const name = windowsSaveKey(area, path);
+
+      return isWindowsSaveKey(name) || isWindowsSaveKey(`${name}/-`);
+    });
 
     listed.set(area, entries);
     for (const entry of entries) {

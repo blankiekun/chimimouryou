@@ -154,6 +154,9 @@
   let local: BrowserStorageHandler;
   let external: BaseStorageHandler | undefined;
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Saves after each line sync at most once a minute: when it last did, and what is still to send. */
+  let syncedAt = 0;
+  let unsynced = new Set<StorageDataType>();
   let started = false;
   /** vnsaves.json sync of this game's saves (vn-save-store.ts), from load() */
   let saveSync: VnSaveSync | undefined;
@@ -429,7 +432,7 @@
       skipping = false;
       reading.lastTextTime = Date.now();
       await player.startGame({
-        keepLines: $ankiEnabled$,
+        keepLines: $ankiEnabled$ && $ankiVnScreenshot$,
         recordLines: $ankiEnabled$ && $ankiVnAudio$,
         textLines: source.textLines,
         onText: source.onText,
@@ -463,7 +466,7 @@
       cacheName,
       // A connected server's game files need its token, which a URL can't carry.
       fetchFile: serverConnected ? serverFetch : undefined,
-      keepLines: $ankiEnabled$,
+      keepLines: $ankiEnabled$ && $ankiVnScreenshot$,
       recordLines: $ankiEnabled$ && $ankiVnAudio$,
       encoding: info.encoding,
       saveDir: `/save/${hashPage(book.title)}`,
@@ -534,23 +537,50 @@
     }
   }
 
-  async function save() {
+  /** force: leaving, hiding or restarting the game, which always syncs. */
+  async function save(force = false) {
     clearTimeout(saveTimer);
 
     const changes = book && reading?.takeChanges();
 
-    if (!book || !changes) return;
+    if (book && changes) await saveLocally(book, changes);
+    if (!book || !unsynced.size || !syncs(AutoReplicationType.Up)) return;
 
-    const { read, text, days } = changes;
+    const wait = syncedAt + 60_000 - Date.now();
 
+    if (!force && wait > 0) {
+      // A player who stops reading still syncs within the minute.
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(save, wait);
+      return;
+    }
+
+    const types = [...unsynced];
+
+    syncedAt = Date.now();
+    unsynced = new Set();
+
+    const error = await replicateData(local, external!, false, [context(book)], types).catch(
+      (err: any) => err.message
+    );
+
+    if (!error) return;
+    // Sent again with the next sync.
+    types.forEach((type) => unsynced.add(type));
+    logger.warn(`Visual novel progress sync failed: ${error}`);
+  }
+
+  async function saveLocally(
+    book: BooksDbBookData,
+    { read, text, days }: NonNullable<ReturnType<VnReading['takeChanges']>>
+  ) {
     await saveVnRead(read);
     await recordKanjiText(book.title, text, read.characters);
     await database.putBookmark(vnBookmark(book.id, read.characters, book.characters));
     if (isPluginEnabled('social'))
       noteReading(book.title, read.characters, book.characters, false, 'vn');
 
-    const types = [StorageDataType.PROGRESS];
-
+    unsynced.add(StorageDataType.PROGRESS);
     if (days.length) {
       await database.storeStatistics(
         book.title,
@@ -558,20 +588,12 @@
         ReplicationSaveBehavior.Overwrite,
         MergeMode.LOCAL
       );
-      types.push(StorageDataType.STATISTICS);
-    }
-
-    if (syncs(AutoReplicationType.Up)) {
-      const error = await replicateData(local, external!, false, [context(book!)], types).catch(
-        (err: any) => err.message
-      );
-
-      if (error) logger.warn(`Visual novel progress sync failed: ${error}`);
+      unsynced.add(StorageDataType.STATISTICS);
     }
   }
 
   async function leave() {
-    await save().catch((error) => logger.warn(error.message));
+    await save(true).catch((error) => logger.warn(error.message));
     await database.deleteLastItem();
     goto(`${pagePath}/manage`);
   }
@@ -584,7 +606,7 @@
   /** Saves the Tuning sheet's settings and starts the game again with them. */
   async function applyTuning(next: string) {
     showTuning = false;
-    await save().catch((error) => logger.warn(error.message));
+    await save(true).catch((error) => logger.warn(error.message));
     saveVnboxTuning(info!.folder!, next);
     tuning = next;
     frameLoaded = false;
@@ -596,7 +618,7 @@
   async function openSaves() {
     showMore = false;
     saveSync?.pushWindows();
-    await save().catch((error) => logger.warn(error.message));
+    await save(true).catch((error) => logger.warn(error.message));
     frameLoaded = false;
     started = false;
     showSaves = true;
@@ -686,13 +708,13 @@
   }
 
   async function openStatistics() {
-    await save().catch((error) => logger.warn(error.message));
+    await save(true).catch((error) => logger.warn(error.message));
     goto(`${pagePath}/statistics`);
   }
 
   function onVisibilityChange() {
     if (document.visibilityState === 'hidden') {
-      save();
+      save(true);
       if (started) saveSync?.pushWindows();
     }
   }
@@ -727,7 +749,7 @@
   });
 
   onDestroy(() => {
-    save();
+    save(true);
     if (started) saveSync?.pushWindows();
     readingActivity();
     if (book && reading && isPluginEnabled('social')) {
