@@ -474,62 +474,103 @@ describe('social hub', () => {
     expect([rows('status'), rows('stats'), rows('events')]).toEqual([[], [], []]);
   });
 
-  it('caps a shared rank by the characters it has seen and one tier a week', async () => {
+  it('caps a shared rank by the characters it has seen and one step a week', async () => {
     const aki = await signUp('aki');
     const stored = () => JSON.parse(rows('stats')[0].data as string);
 
     // A new account can't claim the top rank: characters grow 300,000 a day from its creation.
-    await push(aki, { stats: { ...stats(1), rank: 7, chars: 10_000_000 } });
+    await push(aki, { stats: { ...stats(1), rank: 7, step: 3, chars: 10_000_000 } });
     expect(stored()).toMatchObject({ rank: 1 });
+    expect(stored()).not.toHaveProperty('step');
     expect(stored().chars).toBeLessThan(1000);
 
-    const claim = () => push(aki, { stats: { ...stats(1), rank: 7, chars: 10_000_000 } });
+    const claim = () => push(aki, { stats: { ...stats(1), rank: 7, step: 3, chars: 10_000_000 } });
 
-    // 300k characters support rank 3, but a rank rises one tier a week.
+    // 300k characters support 冒険者 II, but a rank rises one step a week.
     vi.advanceTimersByTime(86400_000);
     await claim();
     expect(stored()).toMatchObject({ rank: 1 });
     vi.advanceTimersByTime(6 * 86400_000);
     await claim();
-    expect(stored()).toMatchObject({ rank: 2 });
+    expect(stored()).toMatchObject({ rank: 2, step: 1 });
     vi.advanceTimersByTime(86400_000);
     await claim();
-    expect(stored()).toMatchObject({ rank: 2 });
+    expect(stored()).toMatchObject({ rank: 2, step: 1 });
     vi.advanceTimersByTime(6 * 86400_000);
     await claim();
-    expect(stored()).toMatchObject({ rank: 3 });
-    expect((await call('GET', '/v1/profile/aki')).body.stats).toMatchObject({ rank: 3 });
+    expect(stored()).toMatchObject({ rank: 2, step: 2 });
+    expect((await call('GET', '/v1/profile/aki')).body.stats).toMatchObject({ rank: 2, step: 2 });
+  });
+
+  // Catches a step outside 1-3 stored, and a step kept on 見習い (which has none).
+  it('takes a step 1-3 only with ranks past the first', async () => {
+    const aki = await signUp('aki');
+    const put = (step: unknown, rank = 2) => {
+      vi.advanceTimersByTime(STATUS_GAP * 1000);
+      return call(
+        'PUT',
+        '/v1/status',
+        { books: [], stats: { ...stats(1), rank, step, chars: 0 } },
+        aki.token
+      );
+    };
+
+    expect((await put(4)).status).toBe(400);
+    expect((await put(0)).status).toBe(400);
+    expect((await put(1.5)).status).toBe(400);
+    expect((await put(2, 1)).status).toBe(200);
+    expect(JSON.parse(rows('stats')[0].data as string)).not.toHaveProperty('step');
   });
 
   it('caps ranks without a request', () => {
     const day = 86400;
-    const base = { rank: 4, chars: 700_000 };
+    const base = { rank: 4, step: 1, chars: 700_000 };
+    const old = { rank: 3, step: 3, chars: 100_000, rankAt: 0 };
 
-    // Three days since the last push at 100k: 1M allowed, rank 3 + 1 after a week.
-    expect(capRank(base, { rank: 3, chars: 100_000, rankAt: 0 }, 0, 0, 8 * day)).toEqual({
-      ...base,
-      rankAt: 8 * day
-    });
-    expect(capRank(base, { rank: 3, chars: 100_000, rankAt: 0 }, 7 * day, 0, 8 * day)).toEqual({
-      chars: 400_000,
+    // Eight days since the last push at 100k: 700k allowed, one step up after a week.
+    expect(capRank(base, old, 0, 0, 8 * day)).toEqual({ ...base, rankAt: 8 * day });
+    // One day since a push at 0: 300k supports only 冒険者 III, the step already held.
+    expect(capRank(base, { ...old, chars: 0 }, 7 * day, 0, 8 * day)).toEqual({
       rank: 3,
+      step: 3,
+      chars: 300_000,
       rankAt: 0
     });
-    expect(capRank(base, { rank: 2, chars: 1e6, rankAt: day }, day, 0, 2 * day)).toMatchObject({
-      rank: 2,
-      rankAt: day
-    });
-    // A lower claim is taken as it is; stats without a rank pass through.
-    expect(capRank({ rank: 1, chars: 0 }, { rank: 5, chars: 9e6, rankAt: 0 }, 0, 0, day)).toEqual({
-      rank: 1,
-      chars: 0,
-      rankAt: 0
-    });
+    // Catches a step rising two (or one) within the week since the last rise.
+    expect(
+      capRank({ ...base, step: 3, chars: 1e6 }, { ...base, rankAt: day }, day, 0, 2 * day)
+    ).toMatchObject({ rank: 4, step: 1, rankAt: day });
+    // A lower claim from this app is taken as it is; stats without a rank pass through.
+    expect(
+      capRank({ rank: 2, step: 1, chars: 40_000 }, { rank: 5, step: 2, chars: 9e6 }, 0, 0, day)
+    ).toEqual({ rank: 2, step: 1, chars: 40_000, rankAt: 0 });
     expect(capRank({ streak: 1 } as { rank?: number }, null, 0, 0, day)).toEqual({ streak: 1 });
     // A first rank from an old account rises from 1, whatever its characters allow.
     expect(capRank({ rank: 7, chars: 1e7 }, { streak: 1 }, 0, 0, 40 * day)).toMatchObject({
       rank: 2,
+      step: 1,
       rankAt: 40 * day
+    });
+  });
+
+  // Catches an older app's push (rank only, which means III) or a row stored before steps
+  // costing a reader a step they hold.
+  it('reads a rank without a step as III and never lowers a step for it', () => {
+    const day = 86400;
+    const held = { rank: 5, step: 2, chars: 9e6, rankAt: 0 };
+
+    // An old phone still on 熟練者 doesn't pull 英雄 II down.
+    expect(capRank({ rank: 4, chars: 9e6 }, held, 0, 0, day)).toEqual({ ...held });
+    // A row from before steps (英雄 = III) isn't capped below III by a push of III.
+    expect(
+      capRank({ rank: 5, step: 3, chars: 9e6 }, { rank: 5, chars: 9e6, rankAt: 0 }, 0, 0, day)
+    ).toEqual({ rank: 5, step: 3, chars: 9e6, rankAt: 0 });
+    // An old app's rank after a week: III, then one step on.
+    expect(capRank({ rank: 6, chars: 9e6 }, held, 0, 0, 8 * day)).toEqual({
+      rank: 5,
+      step: 3,
+      chars: 9e6,
+      rankAt: 8 * day
     });
   });
 

@@ -424,7 +424,7 @@ describe('hub community', () => {
     ).run(aki.me.id);
     db.prepare(`INSERT INTO stats (user, data, at) VALUES (?, ?, 0)`).run(
       aki.me.id,
-      JSON.stringify({ rank: 3, wordsKnown: 4000, streak: 9 })
+      JSON.stringify({ rank: 3, step: 2, wordsKnown: 4000, streak: 9 })
     );
     await post(aki.token);
 
@@ -433,7 +433,7 @@ describe('hub community', () => {
     expect(Object.keys(first.author).sort()).toEqual(
       ['avatar', 'id', 'level', 'name', 'picture', 'role', 'username'].sort()
     );
-    expect(first.author.level).toEqual({ rank: 3, wordsKnown: 4000 });
+    expect(first.author.level).toEqual({ rank: 3, step: 2, wordsKnown: 4000 });
     expect(JSON.stringify(first)).not.toMatch(/pct|streak|0\.4/);
     db.prepare(`UPDATE users SET share = '{"public":false}' WHERE id = ?`).run(aki.me.id);
     expect((await thread(ren.token)).body.posts[0].author.level).toBeNull();

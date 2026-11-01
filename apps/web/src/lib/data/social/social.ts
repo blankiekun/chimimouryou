@@ -62,8 +62,12 @@ export interface SocialStats {
   /** 84 days, oldest first, a level 0-4 each */
   heat: string;
   wordsKnown?: number;
-  /** Reading rank 1-7 (reading-rank.ts) and the characters it counted; the hub caps both */
+  /**
+   * Reading rank 1-7 (reading-rank.ts), its step 1-3 (none for 見習い; older apps and hubs send
+   * and keep none) and the characters it counted; the hub caps them
+   */
   rank?: number;
+  step?: number;
   chars?: number;
 }
 
@@ -241,7 +245,7 @@ export function socialStats(
   statistics: BooksDbStatistic[],
   today: string,
   wordsKnown?: number,
-  rank?: { tier: number; characters: number }
+  rank?: { rank: number; stepOfRank: number; characters: number }
 ): SocialStats {
   const stats = learnerStats(statistics, today);
   const week = new Set(
@@ -272,7 +276,13 @@ export function socialStats(
       .join('')
       .padStart(84, '0'),
     ...(wordsKnown === undefined ? {} : { wordsKnown }),
-    ...(rank ? { rank: rank.tier, chars: rank.characters } : {})
+    ...(rank
+      ? {
+          rank: rank.rank,
+          ...(rank.stepOfRank ? { step: rank.stepOfRank } : {}),
+          chars: rank.characters
+        }
+      : {})
   };
 }
 

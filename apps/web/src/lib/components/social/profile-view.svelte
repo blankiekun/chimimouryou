@@ -71,7 +71,7 @@
       ? [
           ...(stats.rank
             ? [
-                { value: '', tier: stats.rank, label: $t$('social.rank') },
+                { value: '', tier: stats.rank, step: stats.step, label: $t$('social.rank') },
                 {
                   value: lightNovels(stats.chars ?? 0).toFixed(1),
                   label: $t$('social.novels')
@@ -92,7 +92,7 @@
             : [])
         ]
       : []
-  ) as { value: string; label: string; tier?: number }[];
+  ) as { value: string; label: string; tier?: number; step?: number }[];
   $: books = show('current') ? profile.books : [];
   $: finished = show('finished') ? profile.finished.slice(0, 10) : [];
   $: events = self && !shared('activity') ? [] : profile.events;
@@ -312,7 +312,7 @@
           <div class="profile-stat">
             <dt>{cell.label}</dt>
             <dd>
-              {#if cell.tier}<RankBadge tier={cell.tier} />{:else}{cell.value}{/if}
+              {#if cell.tier}<RankBadge tier={cell.tier} step={cell.step} />{:else}{cell.value}{/if}
             </dd>
           </div>
         {/each}

@@ -48,7 +48,7 @@ export const titleLength = 200;
 
 export interface CommunityAuthor extends Person {
   /** Only from authors with a public profile who share stats */
-  level: { rank: number | null; wordsKnown: number | null } | null;
+  level: { rank: number | null; step?: number | null; wordsKnown: number | null } | null;
 }
 
 export interface CommunityPost {
