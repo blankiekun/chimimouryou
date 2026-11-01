@@ -4,6 +4,35 @@ chimimouryou is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook
 upstream's own changes are not listed here. Each version's section is written when it is released,
 from the pull requests merged since the previous tag (pull requests don't edit this file).
 
+## v3.13.0 (2026-11-01)
+
+### Added
+
+- Reading rank steps: each rank now has steps I, II and III (III is the old rank), 19 in all.
+  The rank row shows a track per requirement with an estimate of when you reach the next step,
+  and says how many more books at your level you need. Friends and Community show the step.
+- Android (GitHub build): the app offers a newer release once a day and opens its APK in the
+  browser.
+- Visual novels: on iPhone and iPad, Safari is told to add the app to the Home Screen before
+  installing a Windows game, so its data isn't deleted after 7 days.
+
+### Changed
+
+- Smaller build (196 → 116 MB) and less JavaScript on every page; reader fonts are cached on
+  first use instead of downloaded with every update, so they work offline once used online.
+- Visual novels: less work beside a running game (no screenshots unless Anki screenshots are on,
+  progress synced at most once a minute, an idle gamepad polled less often) and a faster start.
+- Visual novels: VNBox v0.2.8.
+
+### Fixed
+
+- Lore keeps names, earlier facts and spoilers straight: a character first described and later
+  named stays one entry, earlier facts and your edits survive updates, and honorifics and name
+  order no longer split entries.
+- Lore and Story so far get the book's furigana, so names read correctly; keys are specific and
+  nicknames are kept.
+- The Windows game notice names Safari 27 as supported.
+
 ## v3.12.0 (2026-10-31)
 
 ### Added
