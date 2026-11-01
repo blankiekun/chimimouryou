@@ -19,6 +19,7 @@
 
 import { browser } from '$app/env';
 import { standalone } from '$lib/data/env';
+import { blobUrlCache } from '$lib/functions/blob-url-cache';
 
 const baseKey = 'serverBase';
 const tokenKey = 'serverToken';
@@ -85,22 +86,15 @@ export async function responseJson<T = any>(
   return data;
 }
 
-const blobUrls = new Map<string, Promise<string>>();
+const cachedBlobUrl = blobUrlCache(300);
 
-/** A server file as a blob: URL for <img>; cached for the page's lifetime. */
+/** A server file as a blob: URL for <img>; the last 300 used are kept (a library has thousands). */
 export function serverBlobUrl(path: string) {
-  let url = blobUrls.get(path);
-
-  if (!url) {
-    url = serverFetch(path).then(async (response) => {
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return URL.createObjectURL(await response.blob());
-    });
-    url.catch(() => blobUrls.delete(path));
-    blobUrls.set(path, url);
-  }
-
-  return url;
+  return cachedBlobUrl(path, async () => {
+    const response = await serverFetch(path);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.blob();
+  });
 }
 
 /** Whether an image path must be loaded through `serverImage` (connected and on the server). */

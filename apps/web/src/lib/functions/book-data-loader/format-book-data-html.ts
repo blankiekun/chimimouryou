@@ -45,7 +45,8 @@ function getHtmlWithImageSource(bookData: BooksDbBookData, isPaginated: boolean)
     const objectUrls: string[] = [];
     const urlIndexes = new Map<string, number>();
 
-    let { elementHtml } = bookData;
+    const { elementHtml } = bookData;
+    const urlOf = new Map<string, string>();
 
     Object.entries(blobs).forEach(([key, value]) => {
       const url = URL.createObjectURL(
@@ -57,10 +58,21 @@ function getHtmlWithImageSource(bookData: BooksDbBookData, isPaginated: boolean)
 
       objectUrls.push(url);
       urlIndexes.set(url, elementHtml.indexOf(dummyUrl));
-
-      elementHtml = elementHtml.replaceAll(dummyUrl, url).replaceAll(`ttu:${key}`, url);
+      urlOf.set(dummyUrl, url).set(`ttu:${key}`, url);
     });
-    subscriber.next(elementHtml);
+
+    // One pass, not two copies of the whole book per image. Longest first, as the dummy URL
+    // contains `ttu:key` and one key can be the start of another.
+    const pattern = [...urlOf.keys()]
+      .sort((a, b) => b.length - a.length)
+      .map((text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('|');
+
+    subscriber.next(
+      pattern
+        ? elementHtml.replace(new RegExp(pattern, 'g'), (text) => urlOf.get(text)!)
+        : elementHtml
+    );
 
     const readerImageGalleryPictures: ReaderImageGalleryPicture[] = objectUrls.map((url) => ({
       url,

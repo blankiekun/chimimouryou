@@ -14,14 +14,14 @@
  */
 
 import { serverSyncFiles, type SyncFileName } from '$lib/data/remote/server-rows';
-import { FilesystemStorageHandler } from '$lib/data/storage/handler/filesystem-handler';
-import { GDriveStorageHandler } from '$lib/data/storage/handler/gdrive-handler';
-import { OneDriveStorageHandler } from '$lib/data/storage/handler/onedrive-handler';
+import type { FilesystemStorageHandler } from '$lib/data/storage/handler/filesystem-handler';
+import type { GDriveStorageHandler } from '$lib/data/storage/handler/gdrive-handler';
+import type { OneDriveStorageHandler } from '$lib/data/storage/handler/onedrive-handler';
 import {
   SyncConflictError,
   type SyncFileStore,
   type SyncedFile
-} from '$lib/data/storage/handler/base-handler';
+} from '$lib/data/storage/sync-file-store';
 import { storageOAuthTokens, storedRefreshToken } from '$lib/data/storage/storage-oauth-manager';
 import { StorageKey, StorageSourceDefault } from '$lib/data/storage/storage-types';
 import { storageSource$ } from '$lib/data/storage/storage-view';
@@ -83,10 +83,23 @@ export async function syncFileStore(name: string): Promise<SyncFileStore | undef
 
   if (!handler) {
     // Own instances: the shared ones switch context while a book opens or the library syncs.
-    if (type === StorageKey.GDRIVE) handler = new GDriveStorageHandler(window);
-    else if (type === StorageKey.ONEDRIVE) handler = new OneDriveStorageHandler(window);
-    else if (type === StorageKey.FS) handler = new FilesystemStorageHandler(window, StorageKey.FS);
-    else return undefined;
+    // Imported on first use: the root layout loads this module, and the handlers bring zip.js.
+    if (type === StorageKey.GDRIVE) {
+      const { GDriveStorageHandler } = await import('$lib/data/storage/handler/gdrive-handler');
+      handler = new GDriveStorageHandler(window);
+    } else if (type === StorageKey.ONEDRIVE) {
+      const { OneDriveStorageHandler } = await import('$lib/data/storage/handler/onedrive-handler');
+      handler = new OneDriveStorageHandler(window);
+    } else if (type === StorageKey.FS) {
+      const { FilesystemStorageHandler } = await import(
+        '$lib/data/storage/handler/filesystem-handler'
+      );
+      handler = new FilesystemStorageHandler(window, StorageKey.FS);
+    } else return undefined;
+
+    // Another call may have made one while the module loaded: keep the first.
+    const first = handlers.get(name);
+    if (first) return first;
 
     handler.updateSettings(
       window,
