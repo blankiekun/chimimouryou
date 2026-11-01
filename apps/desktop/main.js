@@ -29,6 +29,7 @@ import {
   startBrowserSignIn
 } from './oauth.js';
 import { loadStore, registerGames } from './games.js';
+import { handleJiten } from './jiten.js';
 import { registerMihon } from './mihon.js';
 import { serve } from './serve.js';
 import { checkForUpdates } from './updater.js';
@@ -322,7 +323,11 @@ if (!app.requestSingleInstanceLock()) {
       return;
     }
     try {
-      await serve(webDir, port, handleSignInRedirect);
+      await serve(
+        webDir,
+        port,
+        (url, res) => handleSignInRedirect(url, res) || handleJiten(url, res)
+      );
     } catch (error) {
       dialog.showErrorBox('chimimouryou', `Port ${port} on 127.0.0.1 is taken: ${error.message}`);
       app.quit();
