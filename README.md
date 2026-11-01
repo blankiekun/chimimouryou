@@ -8,7 +8,7 @@ are upstream's.
 
 ## Try it in your browser
 
-Open **[chimireader.github.io](https://chimireader.github.io)** and add an EPUB.
+Open **[chimireader.blankie.moe](https://chimireader.blankie.moe)** and add an EPUB.
 Nothing to install and no account:
 books stay in your browser, or sync through your Google Drive or a folder.
 Settings → Dictionary installs JMdict in one tap, and desktop browsers can
