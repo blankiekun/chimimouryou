@@ -20,6 +20,7 @@ import { audiobookshelfToken$ } from '$lib/data/audio/audiobookshelf';
 import { socialSession$ } from '$lib/data/social/social-account';
 import { homeBookTitles$, homeRemovedTitles$ } from '$lib/data/library/library-home';
 import { dropSyncMirrors } from '$lib/data/remote/server-api';
+import { readingRank$, readingRankStep$ } from '$lib/data/stats/reading-rank';
 import { fakeApi } from '$lib/data/test-utils/fake-api';
 import {
   mergeEntries,
@@ -248,6 +249,28 @@ describe('account settings sync', () => {
 
     expect(homeBookTitles$.getValue()).toEqual(['mine', 'theirs']);
     expect(remote()?.values.homeBookTitles).toEqual(['mine', 'theirs']);
+  });
+
+  // Catches the newer copy winning over the higher step (a device that rose offline losing it),
+  // and the step replacing the old tier, which older app versions still read.
+  it('keeps the higher reading rank step of two devices, and the old tier beside it', async () => {
+    readingRankStep$.next({ step: 12, at: 50 });
+    readingRank$.next({ tier: 4, at: 10 });
+    window.localStorage.setItem('accountSettingsOwner', 'alice');
+    window.localStorage.setItem(
+      'accountSettingsModified',
+      JSON.stringify({ readingRankStep: 1, readingRank: 1 })
+    );
+    mockServer({
+      values: { readingRankStep: { step: 11, at: 90 }, readingRank: { tier: 4, at: 10 } },
+      modified: { readingRankStep: 9, readingRank: 9 }
+    });
+
+    await signInAs(alice);
+
+    expect(readingRankStep$.getValue()).toEqual({ step: 12, at: 50 });
+    expect(remote()?.values.readingRankStep).toEqual({ step: 12, at: 50 });
+    expect(remote()?.values.readingRank).toEqual({ tier: 4, at: 10 });
   });
 
   it('moves the account from the old default themes to chimi-light, but keeps a later choice', async () => {

@@ -180,7 +180,9 @@ function author(row: Row) {
     avatar: row.avatar,
     picture: row.picture,
     role: row.role,
-    level: stats ? { rank: stats.rank ?? null, wordsKnown: stats.wordsKnown ?? null } : null
+    level: stats
+      ? { rank: stats.rank ?? null, step: stats.step ?? null, wordsKnown: stats.wordsKnown ?? null }
+      : null
   };
 }
 

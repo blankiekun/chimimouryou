@@ -144,8 +144,14 @@ const MAX_FINISHED = 50;
 const MAX_EVENTS = 100;
 /** Streaks that make an event, in days */
 const STREAKS = [7, 30, 100, 365, 1000];
-/** Characters each reading rank needs (the app's reading-rank.ts): a shared rank is capped by them */
-const RANK_CHARS = [0, 100_000, 250_000, 600_000, 1_500_000, 4_000_000, 10_000_000];
+/**
+ * Characters each of the 19 reading rank steps needs (the app's reading-rank.ts `rankSteps`: 見習い,
+ * then I, II, III of ranks 2-7): a shared rank is capped by them
+ */
+const RANK_STEP_CHARS = [
+  0, 33_000, 67_000, 100_000, 140_000, 180_000, 250_000, 330_000, 450_000, 600_000, 810_000,
+  1_100_000, 1_500_000, 2_100_000, 2_900_000, 4_000_000, 5_400_000, 7_400_000, 10_000_000
+];
 /** Characters a day the hub believes at most, from the account's creation or the last push */
 const RANK_DAILY_CAP = 300_000;
 /** A shared rank rises one tier at most this often */
@@ -1197,21 +1203,34 @@ function validStats(value: unknown, wordsKnown: boolean) {
     ...(wordsKnown && stats.wordsKnown !== undefined && stats.wordsKnown !== null
       ? { wordsKnown: count(stats.wordsKnown) }
       : {}),
-    ...(stats.rank !== undefined && stats.rank !== null
-      ? {
-          rank: Math.min(Math.max(count(stats.rank), 1), RANK_CHARS.length),
-          chars: count(stats.chars)
-        }
-      : {})
+    ...(stats.rank !== undefined && stats.rank !== null ? validRank(stats, count) : {})
   };
 }
 
+/** `rank` 1-7 with `chars`, and `step` 1-3 (optional, kept only with rank 2-7; older apps send none). */
+function validRank(stats: Row, count: (field: unknown) => number) {
+  const rank = Math.min(Math.max(count(stats.rank), 1), 7);
+  const step = stats.step === undefined || stats.step === null ? undefined : count(stats.step);
+
+  if (step !== undefined && (step < 1 || step > 3)) throw new HttpError(400, 'stats');
+  return {
+    rank,
+    ...(step !== undefined && rank >= 2 ? { step } : {}),
+    chars: count(stats.chars)
+  };
+}
+
+/** The step (1-19) of a rank and its step 1-3; no step (older apps, stored rows from before) is III. */
+const stepIndex = (rank: number, step = 3) => (rank <= 1 ? 1 : 3 * (rank - 2) + step + 1);
+
 /**
  * Caps a shared reading rank by what the hub saw: characters grow at most RANK_DAILY_CAP a day
- * since the last stats (or the account's creation), the rank is at most what those characters
- * support, and it rises one tier per RANK_RISE (`rankAt`: when it last rose).
+ * since the last stats (or the account's creation), the step is at most what those characters
+ * support, and it rises one step per RANK_RISE (`rankAt`: when it last rose). A push without a
+ * `step` (an older app, whose rank always means III) never lowers a stored step, so a reader's
+ * old phone can't flicker them down.
  */
-export function capRank<T extends { rank?: number; chars?: number }>(
+export function capRank<T extends { rank?: number; step?: number; chars?: number }>(
   stats: T,
   old: Row | null,
   oldAt: number,
@@ -1226,17 +1245,28 @@ export function capRank<T extends { rank?: number; chars?: number }>(
     stats.chars,
     Math.floor((hadChars ? (old!.chars as number) : 0) + ((time - since) / DAY) * RANK_DAILY_CAP)
   );
-  let rank = Math.min(stats.rank, RANK_CHARS.filter((need) => need <= chars).length);
+  let index = Math.min(
+    stepIndex(stats.rank, stats.step),
+    RANK_STEP_CHARS.filter((need) => need <= chars).length
+  );
   let rankAt = time;
 
-  // No rank shared before (older stats, or sharing turned back on): rank 1 since the account began,
+  // No rank shared before (older stats, or sharing turned back on): step 1 since the account began,
   // like the app, so an old account cannot post a top rank in one push.
-  const oldRank = typeof old?.rank === 'number' ? old.rank : 1;
+  const oldIndex =
+    typeof old?.rank === 'number'
+      ? stepIndex(old.rank, typeof old.step === 'number' ? old.step : undefined)
+      : 1;
   const lastRose = Number(old?.rankAt) || created;
 
-  rank = Math.min(rank, time - lastRose >= RANK_RISE ? oldRank + 1 : oldRank);
-  if (rank <= oldRank) rankAt = lastRose;
-  return { ...stats, chars, rank, rankAt };
+  index = Math.min(index, time - lastRose >= RANK_RISE ? oldIndex + 1 : oldIndex);
+  if (stats.step === undefined) index = Math.max(index, oldIndex);
+  if (index <= oldIndex) rankAt = lastRose;
+
+  const { step: _sent, ...rest } = stats;
+  const rank = index <= 1 ? 1 : Math.floor((index - 2) / 3) + 2;
+
+  return { ...rest, chars, rank, ...(rank > 1 ? { step: ((index - 2) % 3) + 1 } : {}), rankAt };
 }
 
 /**

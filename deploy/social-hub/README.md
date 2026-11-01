@@ -80,9 +80,11 @@ and (token optional) `profile/:username`.
 `POST recovery` (`{key}`: a new recovery code, the old one stops working); `GET|PUT|DELETE me` (turning a share off
 in `PUT me` deletes that data at once); `POST code`;
 `PUT status` (current books, `finished`, `stats`; one a minute, plus one when leaving a
-book; writes started, finished and streak events; a reading rank in `stats` (`rank`, `chars`) is capped by
-`capRank`: characters grow at most 300,000 a day since the last stats or the account's creation, the rank is at most
-what they support and rises one tier a week, `rankAt`); `DELETE finished/:key` (the reader's finished
+book; writes started, finished and streak events; a reading rank in `stats` (`rank` 1-7, `step` 1-3 with ranks
+2-7, `chars`) is capped by `capRank` on the 19 steps: characters grow at most 300,000 a day since the last stats or the
+account's creation, the step is at most what they support and rises one step a week, `rankAt`; a rank without
+`step` (older apps, rows from before steps) is III of that rank and never lowers a stored step; no migration, as
+`stats.data` is JSON; deploy this before the app release that sends `step`); `DELETE finished/:key` (the reader's finished
 book and its events, when its statistics are deleted); `GET friends` (with their finished books and
 stats; once a minute); `GET feed?since=` (friends' events, 90 days; once a minute);
 `GET profile/:username` (public profiles to anyone, edge-cached 15 minutes; private ones to

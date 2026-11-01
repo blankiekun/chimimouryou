@@ -24,7 +24,12 @@ import type { ParsedStore } from '$lib/data/internal/writable-storage-subject';
 import { isRecord } from '$lib/data/setting-parsers';
 import { mangaSeriesModes$ } from '$lib/data/manga/manga';
 import { mergePlacementResults, placementResults$ } from '$lib/data/difficulty/placement';
-import { mergeRankState, readingRank$ } from '$lib/data/stats/reading-rank';
+import {
+  mergeRankState,
+  mergeStepState,
+  readingRank$,
+  readingRankStep$
+} from '$lib/data/stats/reading-rank';
 import { uiLanguage$ } from '$lib/i18n';
 import type { AccountUser } from '$lib/data/account/account';
 import { readerSyncStore, syncJsonFile } from '$lib/data/sync/sync-files';
@@ -160,7 +165,9 @@ const sharedSettings: Record<string, Store> = {
   homeRemovedTitles: homeRemovedTitles$,
   // The cutoff and its length follow from the results.
   placementResults: placementResults$,
+  // The old tier stays for older app versions; the step (1-19) is the rank now.
   readingRank: readingRank$,
+  readingRankStep: readingRankStep$,
   mangaSeriesModes: mangaSeriesModes$,
   askAiPresets: askAiPresets$,
   askAiDefaultPreset: askAiDefaultPreset$,
@@ -209,7 +216,8 @@ const mergedSettings: Record<
     mergeHomeTitles(local, remote, localValues.homeRemovedTitles, remoteValues.homeRemovedTitles),
   homeRemovedTitles: mergeHomeRemovals,
   placementResults: mergePlacementResults,
-  readingRank: mergeRankState
+  readingRank: mergeRankState,
+  readingRankStep: mergeStepState
 };
 
 const asRecord = {

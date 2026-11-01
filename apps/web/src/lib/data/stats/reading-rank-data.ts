@@ -21,11 +21,17 @@ import {
   rankPlacement,
   readingRank,
   readingRank$,
+  readingRankStep$,
   readingTimeByTitle,
   realBook,
+  stepState,
+  tierOfStep,
   type CanonicalCheck,
-  type RankBook
+  type RankBook,
+  type RankPace
 } from '$lib/data/stats/reading-rank';
+import { getKnownHistory, type KnownPoint } from '$lib/data/words/words-history';
+import { getDateString } from '$lib/functions/statistic-util';
 import { isCanonicalEstimate } from '$lib/data/difficulty/difficulty-engine';
 import { getWordMarks, wordMark, type WordMarks } from '$lib/data/words/word-marks';
 import {
@@ -42,7 +48,11 @@ import {
 /** Only this release's difficulty engine's estimates count for the hard-book gate. */
 export const canonicalEstimate: CanonicalCheck = isCanonicalEstimate;
 
-export async function loadReadingRank(statistics: BooksDbStatistic[]) {
+/** Days the estimates' pace is taken over */
+const paceDays = 28;
+
+/** The rank; with `today` (the date key) also the pace for the estimates, which costs more. */
+export async function loadReadingRank(statistics: BooksDbStatistic[], today?: string) {
   const [books, anki, marks] = await Promise.all([
     readBooks(),
     ankiKnownWords$.getValue() ? getKnownWords().catch(() => undefined) : undefined,
@@ -95,14 +105,45 @@ export async function loadReadingRank(statistics: BooksDbStatistic[]) {
         ranks,
         await knownFormRanks(forms, counted)
       ).known,
-      books: rankBooks
+      books: rankBooks,
+      ...(today ? { pace: await paceOf(statistics, today) } : {})
     },
-    readingRank$.getValue(),
+    stepState(readingRankStep$.getValue(), readingRank$.getValue()),
     Date.now(),
     canonicalEstimate
   );
-  const stored = readingRank$.getValue();
+  const stored = readingRankStep$.getValue();
+  const tier = tierOfStep(rank.state.step);
 
-  if (stored.tier !== rank.state.tier || stored.at !== rank.state.at) readingRank$.next(rank.state);
+  if (stored.step !== rank.state.step || stored.at !== rank.state.at) {
+    readingRankStep$.next(rank.state);
+  }
+  // Older app versions read the tier as III of that rank: written only once III is reached.
+  if ((readingRank$.getValue().tier ?? 1) < tier) readingRank$.next({ tier, at: rank.state.at });
   return rank;
+}
+
+/**
+ * Gain a day over the 28 days up to `today` (a date key): counted characters, reading days, and
+ * words known by reading (`knownHistory`, word tests left out).
+ */
+async function paceOf(statistics: BooksDbStatistic[], today: string): Promise<RankPace> {
+  const start = new Date(`${today}T00:00:00`);
+
+  start.setDate(start.getDate() - (paceDays - 1));
+
+  const from = getDateString(start);
+  const recent = countedReading(
+    statistics.filter(({ dateKey }) => dateKey >= from && dateKey <= today)
+  );
+  const points = await getKnownHistory(statistics).catch(() => []);
+  const read = (point?: KnownPoint) => (point ? point.known - (point.tests ?? 0) : undefined);
+  const before = read(points.filter((point) => point.dateKey < from).at(-1)) ?? 0;
+  const words = (read(points.at(-1)) ?? before) - before;
+
+  return {
+    characters: recent.characters / paceDays,
+    days: recent.days / paceDays,
+    words: Math.max(0, words) / paceDays
+  };
 }

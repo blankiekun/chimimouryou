@@ -186,7 +186,11 @@
       </header>
       {#if author.level?.rank || words}
         <p class="post-level">
-          {#if author.level?.rank}<RankBadge tier={author.level.rank} small />{/if}
+          {#if author.level?.rank}<RankBadge
+              tier={author.level.rank}
+              step={author.level.step}
+              small
+            />{/if}
           {#if words}<span
               >{$t$('community.wordsKnown', { count: words.toLocaleString('en-US') })}</span
             >{/if}
