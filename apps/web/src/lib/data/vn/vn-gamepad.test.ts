@@ -4,8 +4,15 @@
  * All rights reserved.
  */
 
-import { describe, expect, it } from 'vitest';
-import { cursorSpeed, heldActions, padChanges, padStep, type PadSheets } from './vn-gamepad';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  cursorSpeed,
+  heldActions,
+  padChanges,
+  padStep,
+  watchGamepads,
+  type PadSheets
+} from './vn-gamepad';
 
 function pad(pressed: number[], axes = [0, 0, 0, 0]) {
   return {
@@ -95,5 +102,37 @@ describe('vn gamepad', () => {
       { button: 'menu', down: false },
       'skip'
     ]);
+  });
+
+  it('polls an idle pad on a timer, and each frame again once it is used', () => {
+    vi.useFakeTimers();
+    let frames = 0;
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+      setTimeout(() => {
+        frames += 1;
+        callback(performance.now());
+      }, 16)
+    );
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
+    const connected = { ...pad([]), connected: true } as Gamepad;
+    let current = connected;
+    const change = vi.fn();
+    const stop = watchGamepads(() => [current], { change, cursor: () => {} });
+
+    vi.advanceTimersByTime(2000);
+    const idleFrames = frames;
+    vi.advanceTimersByTime(1000);
+    // Idle: no frame polls, the timer's 50 ms polls instead.
+    expect(frames).toBe(idleFrames);
+
+    current = { ...pad([0]), connected: true } as Gamepad;
+    vi.advanceTimersByTime(100);
+    expect(change).toHaveBeenCalledWith(['advance'], []);
+    vi.advanceTimersByTime(500);
+    expect(frames).toBeGreaterThan(idleFrames + 10);
+
+    stop();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 });

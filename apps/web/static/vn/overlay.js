@@ -232,8 +232,9 @@ AudioNode.prototype.connect = function (target) {
   return nativeConnect.apply(this, arguments);
 };
 
-// Keeps the last frame readable after it is shown, for screenshots. Only while mining: it costs a
-// buffer copy per frame. startGame sets keepLines before it loads the engine, so before any context.
+// Keeps the last frame readable after it is shown, for screenshots. Only while mining with
+// screenshots on: it costs a buffer copy per frame. startGame sets keepLines before it loads the
+// engine, so before any context.
 HTMLCanvasElement.prototype.getContext = function (type, attributes) {
   if (keepLines && (type === 'webgl' || type === 'webgl2')) {
     attributes = Object.assign({}, attributes, { preserveDrawingBuffer: true });
