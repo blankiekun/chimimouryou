@@ -11,13 +11,20 @@
   import { optionsForToggle } from '$lib/components/button-toggle-group/toggle-option';
   import {
     compatFromTuning,
-    compatKeys,
     compatParams,
     validDesktop,
     validDll,
     validEnv,
     validReg
   } from '$lib/data/vn/windows-game';
+  import {
+    knobGroups,
+    knobParams,
+    loadVnboxKnobs,
+    splitTuning,
+    validKnobValue,
+    type Knob
+  } from '$lib/data/vn/vnbox-options';
 
   interface Props {
     /** The game's saved tuning, `a=b&c=d` */
@@ -29,104 +36,9 @@
 
   let { tuning, frame, onapply }: Props = $props();
 
-  interface Knob {
-    key: string;
-    title: string;
-    hint: string;
-    /** The value VNBox runs with when the key isn't set ('' = not in the address) */
-    initial: string;
-    shown: string;
-    /** A segmented control's values */
-    options?: { id: string; text: string }[];
-    /** A switch's values */
-    on?: string;
-    off?: string;
-  }
-
-  // What each does: boxedwine-shell.js, startupArgs.cpp and (fps) mainloop.cpp in VNBox.
-  // skipFrameFPS is left out: VNBox stores it and never reads it.
-  const knobs: Knob[] = [
-    {
-      key: 'fps',
-      title: 'Frame rate',
-      hint: 'Frames shown per second at most. Lower leaves more time for the game; Unlocked shows every frame it draws. VNBox v0.2.0+.',
-      initial: '60',
-      shown: '60',
-      options: [
-        ...['30', '60', '90', '120'].map((id) => ({ id, text: id })),
-        { id: '0', text: 'Unlocked' }
-      ]
-    },
-    {
-      key: 'audioFreq',
-      title: 'Sound rate',
-      hint: 'Sample rate of the game sound in Hz. Lower costs less work per second but sounds duller.',
-      initial: '44100',
-      shown: '44100',
-      options: ['11025', '22050', '44100'].map((id) => ({ id, text: id }))
-    },
-    {
-      key: 'bpp',
-      title: 'Colour depth',
-      hint: "Bits per pixel of Wine's screen. 16 copies half the bytes per frame; a game may look banded or refuse it.",
-      initial: '32',
-      shown: '32',
-      options: ['8', '16', '32'].map((id) => ({ id, text: id }))
-    },
-    {
-      key: 'cpu',
-      title: 'CPU',
-      hint: 'The processor games are told they run on. An older one can steer a game off SSE code paths.',
-      initial: '',
-      shown: 'Pentium 4',
-      options: [
-        { id: '', text: 'Pentium 4' },
-        { id: 'p3', text: 'Pentium III' },
-        { id: 'p2', text: 'Pentium II' }
-      ]
-    },
-    {
-      key: 'resolution',
-      title: 'Screen size',
-      hint: "Wine's screen as WIDTHxHEIGHT (each under 2000). With Fit window on, the game's window sets it.",
-      initial: '',
-      shown: 'automatic'
-    },
-    {
-      key: 'fitWindow',
-      title: 'Fit window',
-      hint: "The game's window fills the screen without a title bar. Off shows Wine's desktop around it.",
-      initial: 'true',
-      shown: 'on',
-      on: 'true',
-      off: 'false'
-    },
-    {
-      key: 'disableWasmJitForWrittenCode',
-      title: 'No JIT for rewritten code',
-      hint: 'Code the game writes over runs in the interpreter instead of being compiled again. Can help games that patch themselves.',
-      initial: '',
-      shown: 'off',
-      on: 'true',
-      off: ''
-    },
-    {
-      key: 'stats',
-      title: 'Stats',
-      hint: 'Every 2 seconds, frame pacing, present and GL timings, shown under Speed now and in the console. VNBox v0.2.0+.',
-      initial: '',
-      shown: 'off',
-      on: '1',
-      off: ''
-    }
-  ];
-
-  const keyOf = (pair: string) => pair.split('=')[0];
   const pairs = untrack(() => tuning)
     .split('&')
     .filter(Boolean);
-  const isKnob = (pair: string) =>
-    knobs.some((knob) => knob.key === keyOf(pair)) || compatKeys.has(keyOf(pair));
 
   let compat = $state(compatFromTuning(pairs));
 
@@ -157,26 +69,37 @@
     { id: 'REG_DWORD', text: 'Number' }
   ];
 
-  let values: Record<string, string> = $state(
-    Object.fromEntries(
-      pairs.filter(isKnob).map((pair) => [keyOf(pair), pair.slice(keyOf(pair).length + 1)])
-    )
-  );
-  let extra = $state(pairs.filter((pair) => !isKnob(pair)).join('&'));
+  // Built from the engine's vnbox-options.json once per opening (hand-written list without it).
+  let knobs: Knob[] | undefined = $state();
+  let values: Record<string, string> = $state({});
+  let extra = $state('');
+
+  $effect(() => {
+    let live = true;
+
+    loadVnboxKnobs().then((loaded) => {
+      if (!live) return;
+      ({ values, extra } = splitTuning(
+        loaded,
+        untrack(() => tuning)
+      ));
+      knobs = loaded;
+    });
+    return () => (live = false);
+  });
 
   const value = (knob: Knob) => values[knob.key] ?? knob.initial;
 
   function set(knob: Knob, next: string) {
-    if (next === knob.initial) delete values[knob.key];
+    // A typed number stays as typed (knobParams leaves out the default and bad ones).
+    if (next === knob.initial && !knob.number) delete values[knob.key];
     else values[knob.key] = next;
   }
 
   function apply() {
     onapply(
       [
-        ...knobs.flatMap((knob) =>
-          values[knob.key] === undefined ? [] : [`${knob.key}=${values[knob.key]}`]
-        ),
+        ...knobParams(knobs!, values),
         ...compatParams(compat),
         extra.trim().replace(/^[?&]+|&+$/g, '')
       ]
@@ -230,36 +153,62 @@
   {/if}
 
   <SectionHead number={2} title="Settings" level="h3" />
-  {#each knobs as knob}
-    <SettingsItemGroup
-      title={knob.title}
-      tooltip="{knob.hint} Default: {knob.shown}."
-      wide={!!knob.options && knob.options.length > 2}
-    >
-      {#if knob.options}
-        <ButtonToggleGroup
-          options={knob.options}
-          bind:selectedOptionId={() => value(knob), (next) => set(knob, next)}
-        />
-      {:else if knob.on !== undefined}
-        <ButtonToggleGroup
-          options={optionsForToggle}
-          bind:selectedOptionId={
-            () => value(knob) === knob.on, (on) => set(knob, on ? knob.on! : knob.off!)
-          }
-        />
-      {:else}
-        <input
-          class="app-input"
-          aria-label={knob.title}
-          placeholder="e.g. 800x600"
-          pattern="\d+x\d+"
-          value={value(knob)}
-          oninput={(event) => set(knob, event.currentTarget.value.trim())}
-        />
+  {#if !knobs}
+    <p class="tuning-muted">Loading VNBox's settings</p>
+  {:else}
+    {#each knobGroups(knobs) as group (group.name)}
+      {#if group.name}
+        <h4 class="tuning-group">{group.name}</h4>
       {/if}
-    </SettingsItemGroup>
-  {/each}
+      {#each group.knobs as knob (knob.key)}
+        <SettingsItemGroup
+          title={knob.title}
+          tooltip="{knob.hint} Default: {knob.shown}."
+          wide={!!knob.options && knob.options.length > 2}
+        >
+          {#if knob.options}
+            <ButtonToggleGroup
+              options={knob.options}
+              bind:selectedOptionId={() => value(knob), (next) => set(knob, next)}
+            />
+          {:else if knob.on !== undefined}
+            <ButtonToggleGroup
+              options={optionsForToggle}
+              bind:selectedOptionId={
+                () => value(knob) === knob.on, (on) => set(knob, on ? knob.on! : knob.off!)
+              }
+            />
+          {:else if knob.number}
+            <input
+              class="app-input"
+              type="number"
+              aria-label={knob.title}
+              min={knob.number.min}
+              max={knob.number.max}
+              step={knob.number.int ? 1 : 'any'}
+              value={value(knob)}
+              oninput={(event) => set(knob, event.currentTarget.value.trim())}
+            />
+            {#if !validKnobValue(knob, value(knob))}
+              <p class="compat-error">
+                Not a {knob.number.int ? 'whole ' : ''}number from {knob.number.min} to {knob.number
+                  .max}: left out.
+              </p>
+            {/if}
+          {:else}
+            <input
+              class="app-input"
+              aria-label={knob.title}
+              placeholder="e.g. 800x600"
+              pattern="\d+x\d+"
+              value={value(knob)}
+              oninput={(event) => set(knob, event.currentTarget.value.trim())}
+            />
+          {/if}
+        </SettingsItemGroup>
+      {/each}
+    {/each}
+  {/if}
   <SettingsItemGroup
     title="Extra settings"
     tooltip="Added to VNBox's address as typed (a=b&c=d), for settings not listed here. The game folder, program and hook stay. Wine fixes go under Compatibility."
@@ -434,7 +383,9 @@
   </SettingsItemGroup>
 
   <div class="tuning-actions">
-    <button class="app-button app-button-primary" onclick={apply}>Apply and restart</button>
+    <button class="app-button app-button-primary" disabled={!knobs} onclick={apply}
+      >Apply and restart</button
+    >
     <button class="app-button" onclick={() => onapply('')}>Reset</button>
   </div>
   <p class="tuning-muted tuning-note">Restarting starts the game over: save in the game first.</p>
@@ -468,6 +419,14 @@
     line-height: 1.5;
     list-style: none;
     overflow-wrap: anywhere;
+  }
+
+  .tuning-group {
+    margin: 1rem 0 0.25rem;
+    color: var(--app-muted-fg);
+    font-size: var(--type-small);
+    font-weight: 600;
+    text-transform: uppercase;
   }
 
   .compat-row {
