@@ -157,8 +157,9 @@ var keepLines = false; // mining: keep screenshots and sound too
 // Set by players whose lines come from a text hook (vnbox.js), which fires before the text is
 // fully drawn and again when the game's own backlog screen shows a line.
 var hookedLines = false;
-// A hooked line whose screenshot is retaken at the next click or key (keepLine).
-var retakeLine = null;
+// Hooked lines waiting for their screenshot (the same line can be hooked twice), taken at the
+// next click or key or as a different line comes, whichever is first (keepLine).
+var waitingLines = [];
 var recordLines = false;
 var nativeConnect = AudioNode.prototype.connect;
 var nativeGetContext = HTMLCanvasElement.prototype.getContext;
@@ -291,7 +292,8 @@ function keepLine(lines) {
     : {
         text: text,
         voice: lineVoice,
-        picture: keepLines ? screenshot() : undefined,
+        // A hooked line comes before its text is drawn: its screenshot waits (waitingLines).
+        picture: keepLines && !hookedLines ? screenshot() : undefined,
         at: now,
         start: start,
         recorded: !!soundTap
@@ -299,9 +301,9 @@ function keepLine(lines) {
 
   // The line before ends where this one starts.
   if (last && last.end === undefined) last.end = start;
-  // A hook fires before its text is drawn: the screen at the next click or key is the line's,
-  // if one comes before the next line.
-  retakeLine = keepLines && hookedLines && !earlier ? line : null;
+  // The screen now still shows the line before, fully drawn.
+  if (waitingLines.length && waitingLines[0].text !== text) shootWaiting();
+  if (keepLines && hookedLines && !earlier) waitingLines.push(line);
   keptLines.push(line);
   if (keptLines.length > KEPT_LINES) keptLines.shift();
 
@@ -341,11 +343,19 @@ function noteClick(event) {
   if (clickTimes.length > 50) clickTimes.shift();
 }
 
+/** One screenshot for the waiting hooked lines. */
+function shootWaiting() {
+  var shot = screenshot();
+
+  waitingLines.forEach(function (line) {
+    line.picture = shot;
+  });
+  waitingLines = [];
+}
+
 function retakeScreenshot(event) {
-  if (!retakeLine || event.repeat || /^(Shift|Control|Alt|Meta)$/.test(event.key)) return;
-  // Not once its media was dropped (older than KEPT_MEDIA).
-  if (retakeLine.picture) retakeLine.picture = screenshot();
-  retakeLine = null;
+  if (!waitingLines.length || event.repeat || /^(Shift|Control|Alt|Meta)$/.test(event.key)) return;
+  shootWaiting();
 }
 
 ['mousedown', 'touchstart', 'keydown'].forEach(function (type) {
@@ -370,7 +380,7 @@ function keptLineList() {
     if (line.hasVoice === undefined) line.hasVoice = !!voiceFile(line.voice);
     return {
       text: line.text,
-      picture: !!line.picture,
+      picture: !!line.picture || waitingLines.indexOf(line) >= 0,
       sound: line.hasVoice || !!line.recorded
     };
   });

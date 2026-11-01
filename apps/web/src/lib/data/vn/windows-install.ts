@@ -583,7 +583,7 @@ export async function installedPrograms(
   before: Map<string, number>
 ) {
   const areas = vnSaveAreas(title, { encoding: 'sjis', files: [], engine: 'vnbox', folder });
-  const [game, prefix] = await Promise.all(areas.map(listSaves));
+  const [game, prefix] = await Promise.all(areas.map((area) => listSaves(area)));
   // New or rewritten files, not new timestamps: msiexec gives the files it unpacks the cabinet's
   // dates (years old), so a time filter misses the whole game.
   const fresh = prefix.filter((entry) => !entry.dir && before.get(entry.key) !== entry.modified);

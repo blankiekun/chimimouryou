@@ -223,6 +223,11 @@ describe('vn save store', () => {
       'wine/drive_c/users/username/AppData/Roaming/セ/s.dat'
     ]);
     expect((await readWindowsSaves(files, 5)).saves).toBeUndefined();
+    // Wine's other files (the registry, DLLs) are never read, not even listed.
+    expect(files.listed.get(prefix)!.map((entry) => entry.path)).not.toEqual(
+      expect.arrayContaining(['user.reg'])
+    );
+    expect(files.listed.get(prefix)!.some((entry) => entry.path.includes('system32'))).toBe(false);
 
     // PC B already has an older copy of the game save and a newer one of nothing else.
     await engineWrite(pcB[0].db, `${pcB[0].root}/save/01.sav`, {
