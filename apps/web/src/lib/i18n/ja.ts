@@ -144,6 +144,8 @@ export const ja: Record<MessageKey, string> = {
   'home.continueReading': '続きを読む',
   'home.resume': '再開',
   'home.resumeBook': '「{title}」を再開',
+  'home.vnStartFailed':
+    '前回ゲームの起動が終わらなかったため、自動では開きませんでした。もう一度試すか、ライブラリへ移動してください。',
   'home.myBooks': 'マイブック',
   'home.remove': 'ホームから削除',
   'home.add': 'ホームに追加',

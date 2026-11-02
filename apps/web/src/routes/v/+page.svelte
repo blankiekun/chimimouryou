@@ -28,6 +28,7 @@
   import { context, externalHandler, handler } from '$lib/data/sync/media-sync';
   import { pagePath } from '$lib/data/env';
   import { desktopGames } from '$lib/data/vn/native-games';
+  import { clearVnStarting, markVnStarting } from '$lib/data/vn/vn-start-guard';
   import { logger } from '$lib/data/logger';
   import { MergeMode } from '$lib/data/merge-mode';
   import {
@@ -431,6 +432,7 @@
       // A new frame holds no Ctrl.
       skipping = false;
       reading.lastTextTime = Date.now();
+      markVnStarting(book.id);
       await player.startGame({
         keepLines: $ankiEnabled$ && $ankiVnScreenshot$,
         recordLines: $ankiEnabled$ && $ankiVnAudio$,
@@ -631,6 +633,8 @@
 
   /** A Windows game's screen took a new size: a game Wine cut off restarts once to keep its own. */
   function fitScreen(width: number, height: number) {
+    // VNBox shows its screen: the game started.
+    clearVnStarting();
     // Until the restarted frame has started: the old one's sizes are stale.
     const fitted = started && fittedTuning(loadVnboxTuning(info!.folder!), width, height);
 
