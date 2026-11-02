@@ -32,16 +32,22 @@ function start() {
   return worker;
 }
 
-/** An OCR'd line as an overlay row: font size = the box's height, pitch = the mean cell width. */
+/**
+ * An OCR'd line as an overlay row: font size = the box's height, pitch = the cell width. The end cells
+ * are clipped to the spotter's box, which can cut the last character, so the pitch comes from the
+ * inner cuts (halfway between character centres) when there are three characters or more.
+ */
 function overlayLine({ text, box, chars }: VnOcrLine): VnOverlayLine {
-  const x0 = chars[0].x0;
+  const n = chars.length;
+  const pitch =
+    n >= 3 ? (chars[n - 1].x0 - chars[0].x1) / (n - 2) : (chars[n - 1].x1 - chars[0].x0) / n;
 
   return {
     text,
-    x: x0,
+    x: n >= 3 ? chars[0].x1 - pitch : chars[0].x0,
     y: box[1],
     size: box[3],
-    pitch: (chars[chars.length - 1].x1 - x0) / chars.length
+    pitch
   };
 }
 
