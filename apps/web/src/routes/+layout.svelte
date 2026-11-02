@@ -1,6 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/env';
   import { beforeNavigate } from '$app/navigation';
+  import { Capacitor } from '@capacitor/core';
   import { page } from '$lib/data/page-store';
   import ThemeStyle from '$lib/components/theme/theme-style.svelte';
   import { accountReady } from '$lib/data/account/account';
@@ -55,8 +56,10 @@
   }
 
   // The VN player's isolation headers only come with a full page load (needsFullLoad).
+  // The Android app's local server sends none and answers /v with index.html (Home, which
+  // reopens the last item: a /b → /v → Home loop), so it stays client-side.
   beforeNavigate(({ from, to, type, cancel }) => {
-    if (!from || !to || type === 'leave') return;
+    if (!from || !to || type === 'leave' || Capacitor.isNativePlatform()) return;
     if (!needsFullLoad(from.url, to.url, window.crossOriginIsolated)) return;
     // Back/forward has already moved the address: load it.
     if (type === 'popstate') {
