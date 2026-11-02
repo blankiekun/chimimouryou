@@ -148,6 +148,8 @@ export const en = {
   'home.continueReading': 'Continue reading',
   'home.resume': 'Resume',
   'home.resumeBook': 'Resume {title}',
+  'home.vnStartFailed':
+    "The game didn't finish starting last time, so it wasn't opened again. Try it again, or go to the library.",
   'home.myBooks': 'My books',
   'home.remove': 'Remove from Home',
   'home.add': 'Add to Home',
