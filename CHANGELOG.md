@@ -4,6 +4,13 @@ chimimouryou is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook
 upstream's own changes are not listed here. Each version's section is written when it is released,
 from the pull requests merged since the previous tag (pull requests don't edit this file).
 
+## v3.13.2 (2026-11-01)
+
+### Fixed
+
+- Android: opening a visual novel no longer flickers forever and locks the app on every launch
+  (the app kept loading pages in a loop); it opens the game, or asks for its files.
+
 ## v3.13.1 (2026-11-01)
 
 ### Fixed
