@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { readerPath } from '$lib/data/reader/reader-route';
   import { database } from '$lib/data/store';
+  import { desktopGames } from '$lib/data/vn/native-games';
   import { vnStartFailed } from '$lib/data/vn/vn-start-guard';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { observe } from '$lib/functions/rxjs/use-observable';
@@ -17,6 +18,11 @@
     tap((lastItem) => {
       if (lastItem?.route === 'v' && vnStartFailed(lastItem.dataId)) {
         failedVn = lastItem.dataId;
+        return;
+      }
+      // The desktop app doesn't start a game by itself at launch: the game stays on the Library page.
+      if (lastItem?.route === 'v' && desktopGames()) {
+        goto('manage');
         return;
       }
       goto(lastItem ? readerPath(lastItem.dataId, lastItem.route) : 'manage');
