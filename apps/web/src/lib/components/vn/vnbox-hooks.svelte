@@ -4,9 +4,11 @@
    * one drives the overlay, statistics and Anki, a hook search, H-codes and scripts loaded while
    * the game runs, and saving the pick as the game's hook (vnbox.js `vnboxHooks`, VNBox's hooks
    * contract), and the game's text cleanup (hook-cleanup.ts), saved with the hook. VNBox
-   * without runtime hooks only shows the saved hook and the cleanup. Not upstream.
+   * without runtime hooks only shows the saved hook and the cleanup. "Text from" reads a game whose
+   * hook gives nothing from its screen (VnInfo.textFrom, lib/data/vn/vn-ocr.ts). Not upstream.
    */
   import SectionHead from '$lib/components/section-head.svelte';
+  import Switch from '$lib/components/switch.svelte';
   import HookCleanupEditor from '$lib/components/vn/hook-cleanup-editor.svelte';
   import { cleanHookLine, type HookCleanup } from '$lib/data/vn/hook-cleanup';
   import { database } from '$lib/data/store';
@@ -38,6 +40,8 @@
     searchStop(): void;
     scriptFor(id: string): string;
     reset(): void;
+    setScreenText(on: boolean): void;
+    setPlaceText(on: boolean): void;
   }
 
   const hooks = $derived((frame?.contentWindow as any)?.vnboxHooks as VnboxHooks | undefined);
@@ -53,10 +57,52 @@
   let hcodeError = $state('');
   let scriptError = $state('');
   let saveState = $state('');
+  let screenText = $state(false);
+  let placeText = $state(true);
 
   $effect(() => {
-    database.getData(bookId).then((stored) => (saved = stored && savedHookName(vnInfo(stored))));
+    database.getData(bookId).then((stored) => {
+      saved = stored && savedHookName(vnInfo(stored));
+      screenText = !!stored && vnInfo(stored).textFrom === 'screen';
+      placeText = !stored || vnInfo(stored).placeText !== false;
+    });
   });
+
+  /** Saved on the book: absent = Hook, and placed over the game's line. */
+  async function saveText(screen: boolean, place: boolean) {
+    const stored = await database.getData(bookId);
+
+    if (!stored) return;
+    const { textFrom: _from, placeText: _place, ...game } = vnInfo(stored);
+
+    await database.upsertData(
+      {
+        ...stored,
+        elementHtml: vnElementHtml({
+          ...game,
+          ...(screen && { textFrom: 'screen' as const }),
+          ...(!place && { placeText: false })
+        })
+      },
+      ReplicationSaveBehavior.Overwrite,
+      false,
+      false
+    );
+  }
+
+  /** Applied to the running game at once. */
+  function setTextFrom(screen: boolean) {
+    screenText = screen;
+    hooks?.setScreenText(screen);
+    saveText(screen, placeText);
+  }
+
+  /** Applied to the running game at once. */
+  function setPlaceText(place: boolean) {
+    placeText = place;
+    hooks?.setPlaceText(place);
+    saveText(screenText, place);
+  }
 
   $effect(() => {
     if (!hooks) return undefined;
@@ -149,6 +195,36 @@
       <span class="hooks-muted">{saved ? 'Saved for this game' : 'No hook script saved'}</span>
     {/if}
   </p>
+  <div class="hooks-row hooks-from">
+    <span id="hooks-from-label">Text from</span>
+    <!-- .app-segmented and .app-segment are in app.scss. -->
+    <div class="app-segmented" role="radiogroup" aria-labelledby="hooks-from-label">
+      {#each [false, true] as screen (screen)}
+        <button
+          type="button"
+          role="radio"
+          aria-checked={screenText === screen}
+          class="app-segment"
+          class:app-segment-selected={screenText === screen}
+          onclick={() => setTextFrom(screen)}
+        >
+          {screen ? 'Screen' : 'Hook'}
+        </button>
+      {/each}
+    </div>
+  </div>
+  {#if screenText}
+    <p class="hooks-muted">
+      Lines are read from the game’s screen after each click, for games whose hook gives nothing.
+    </p>
+  {:else}
+    <Switch checked={placeText} onchange={setPlaceText}>Place text over the game’s line</Switch>
+    <p class="hooks-muted">
+      {placeText
+        ? 'Each hooked line is matched to the screen and laid where the game draws it.'
+        : 'Hooked lines sit in a fixed spot near the bottom of the game.'}
+    </p>
+  {/if}
 
   {#if !live}
     <p class="hooks-muted">
@@ -286,6 +362,11 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
+  }
+
+  .hooks-from {
+    align-items: center;
+    gap: 0.75rem;
   }
 
   .hooks-field {

@@ -81,6 +81,7 @@
   import WindowsGameDialog from '$lib/components/vn/windows-game-dialog.svelte';
   import VnboxHooks from '$lib/components/vn/vnbox-hooks.svelte';
   import { hookCleaner, type HookCleanup } from '$lib/data/vn/hook-cleanup';
+  import { readVnScreen, stopVnOcr } from '$lib/data/vn/vn-ocr';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
   import {
     builtInLookups$,
@@ -439,7 +440,13 @@
         textLines: source.textLines,
         onText: source.onText,
         onScreen: fitScreen,
-        clean: (line: string, thread: string) => cleanLine(line, thread)
+        clean: (line: string, thread: string) => cleanLine(line, thread),
+        readScreen: readVnScreen,
+        // The Hooks sheet may have changed them since the page loaded the book.
+        ...((game) => ({
+          screenText: game.textFrom === 'screen',
+          placeText: game.placeText !== false
+        }))(vnInfo((await database.getData(book.id)) ?? book))
       });
       started = true;
       return;
@@ -760,6 +767,7 @@
       noteReading(book.title, reading.read.characters, book.characters, true, 'vn');
     }
     if (hookUrl) URL.revokeObjectURL(hookUrl);
+    stopVnOcr();
   });
 </script>
 

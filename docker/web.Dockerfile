@@ -17,6 +17,10 @@ RUN apt-get -qq update && apt-get -qq install -y --no-install-recommends curl ca
 COPY scripts/vnbox/ scripts/vnbox/
 RUN VNBOX_OUT=/vnbox scripts/vnbox/build.sh \
   || echo 'VNBox was not downloaded: no Windows game player' >&2
+# vita-vn-ocr's models (screen text for Windows games, scripts/vn-ocr/fetch.sh); optional the same way.
+COPY scripts/vn-ocr/ scripts/vn-ocr/
+RUN VN_OCR_OUT=/vnocr scripts/vn-ocr/fetch.sh \
+  || echo 'The VN OCR models were not downloaded: hooked lines keep the fixed layout' >&2
 COPY . .
 # The HTTPS address the plain-HTTP page links to for signing in (optional).
 ARG VITE_HTTPS_URL=
@@ -27,7 +31,8 @@ WORKDIR /src/apps/web
 RUN pnpm svelte-kit sync && pnpm build \
   && echo "$VERSION" > build/version.txt \
   && cp /src/themes.md build/themes.md \
-  && if [ -d /vnbox ]; then mkdir -p build/vn && cp -r /vnbox build/vn/vnbox; fi
+  && if [ -d /vnbox ]; then mkdir -p build/vn && cp -r /vnbox build/vn/vnbox; fi \
+  && if [ -d /vnocr ]; then mkdir -p build/vn && cp -r /vnocr build/vn/ocr; fi
 # Settings → Dictionary's one-tap JMdict (EDRDG, CC BY-SA 4.0, see NOTICE), served same-origin.
 # Without it (an offline build) the app links to jmdict-yomitan's releases instead.
 ARG JMDICT_URL=https://github.com/yomidevs/jmdict-yomitan/releases/latest/download/JMdict_english.zip

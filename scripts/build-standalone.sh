@@ -1,6 +1,6 @@
 #!/bin/bash
 # Builds the published standalone site into apps/web/build: the app (VITE_EDITION=standalone), the
-# analysis tools, JMdict, VNBox with its hooks and the theme guide. Used by the Pages workflow
+# analysis tools, JMdict, VNBox with its hooks, the VN OCR models and the theme guide. Used by the Pages workflow
 # (deploy/pages/pages.yml) and the VPS workflow (.github/workflows/vps-site.yml).
 # Run after `pnpm install`. Environment:
 #   VITE_BASE_PATH     the site's address, e.g. https://chimireader.github.io (required)
@@ -30,6 +30,8 @@ vnbox=${VNBOX_CACHE:-$(mktemp -d)}
 VNBOX_OUT="$vnbox" scripts/vnbox/build.sh
 mkdir -p apps/web/build/vn
 cp -r "$vnbox" apps/web/build/vn/vnbox
+# vita-vn-ocr's models for the VN overlay (GPL-3.0-or-later, non-commercial), served the same way.
+VN_OCR_OUT=apps/web/build/vn/ocr scripts/vn-ocr/fetch.sh
 
 # Settings → Themes links to the theme guide (the web image copies it the same way).
 cp themes.md apps/web/build/themes.md
