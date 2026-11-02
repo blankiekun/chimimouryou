@@ -4,6 +4,21 @@ chimimouryou is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook
 upstream's own changes are not listed here. Each version's section is written when it is released,
 from the pull requests merged since the previous tag (pull requests don't edit this file).
 
+## v3.13.1 (2026-11-01)
+
+### Fixed
+
+- Android: Windows games play in the app. The APK now ships VNBox; before, opening a game showed
+  its loader forever.
+- Visual novels: a Windows game that didn't finish starting isn't reopened at the next launch;
+  Home offers Try again or the library instead, so the app can't get stuck on it.
+- Desktop: Jiten searches (Find details) go through the app's proxy, as on the server and the site.
+
+### Changed
+
+- Visual novels: the Tuning sheet takes its settings from the list VNBox ships with it (newer
+  VNBox releases), and keeps the old list for builds without one.
+
 ## v3.13.0 (2026-11-01)
 
 ### Added
