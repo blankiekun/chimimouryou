@@ -21,6 +21,9 @@ import { DexieJsonReader, type DexieHeader } from './dexie-json';
 /** Yomitan's dictionary database version (IndexedDB's; Dexie exports it divided by 10). */
 export const yomitanDatabaseVersion = 60;
 
+/** Reads of the file that may fail in a row before the import gives up. */
+const readRetries = 5;
+
 const rowTables = new Set(['terms', 'termMeta', 'kanji', 'kanjiMeta', 'tagMeta', 'media']);
 
 export class ImportCancelled extends Error {
@@ -88,12 +91,29 @@ export async function importCollection(
   });
 
   try {
-    const stream = file.stream().getReader();
     const decoder = new TextDecoder();
     let read = 0;
+    let stream = file.stream().getReader();
+    let retries = 0;
     for (;;) {
       if (isCancelled()) throw new ImportCancelled();
-      const { value, done } = await stream.read();
+      let chunk: ReadableStreamReadResult<Uint8Array>;
+      try {
+        chunk = await stream.read();
+      } catch (error) {
+        // A file on a NAS or USB drive can stall mid-read ("network error"): go on from the same byte.
+        if (retries >= readRetries) {
+          throw new Error(
+            `Reading the file stopped at ${(read / 1e9).toFixed(1)} GB (${error instanceof Error ? error.message : error}). Copy it to this computer's own drive and import it from there.`
+          );
+        }
+        retries++;
+        await new Promise((resolve) => setTimeout(resolve, 2000 * retries));
+        stream = file.slice(read).stream().getReader();
+        continue;
+      }
+      retries = 0;
+      const { value, done } = chunk;
       if (done) break;
       read += value.length;
       reader.push(decoder.decode(value, { stream: true }));
