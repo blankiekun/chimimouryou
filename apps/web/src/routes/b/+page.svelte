@@ -1429,6 +1429,49 @@
     bookmarkManager.scrollToBookmark(data, readingOffset);
   }
 
+  let hiddenAt = 0;
+
+  /**
+   * Leaving the page (app switch, closing the tab, a phone killing the app) sends the place now
+   * instead of after the 60 s batch; coming back after a minute or more pulls what other devices
+   * read meanwhile and goes there (Jump back returns).
+   */
+  async function onVisibilityChange() {
+    const book = $rawBookData$;
+    if (blockDataUpdates || showSpinner || !book) return;
+
+    if (document.visibilityState === 'hidden') {
+      hiddenAt = Date.now();
+      if ($autoBookmark$ && storedExploredCharacter !== exploredCharCount) await bookmarkPage();
+      if (upSyncEnabled) await executeReplication();
+      return;
+    }
+
+    if (!externalStorageHandler || isReplicating || Date.now() - hiddenAt < 60_000) return;
+    const before = await bookmarkData;
+    // Only the place: the running tracker holds today's statistics and writes them itself.
+    try {
+      await syncDownData(
+        localStorageHandler,
+        externalStorageHandler,
+        {
+          id: book.id,
+          title: book.title,
+          imagePath: book.coverImage
+        },
+        [StorageDataType.PROGRESS]
+      );
+    } catch (error: any) {
+      logger.warn(`Sync on return failed: ${error.message}`);
+      return;
+    }
+    const after = await database.getBookmark(book.id);
+    if (after && after.exploredCharCount !== before?.exploredCharCount) {
+      bookmarkData = Promise.resolve(after);
+      await scrollToBookmark();
+    }
+  }
+
   function onFullscreenClick() {
     showHeader = false;
 
@@ -2291,7 +2334,11 @@
 <LookupPopup bind:this={lookupPopup} bind:open={lookupOpen} scope=".book-content" />
 <LookupHint />
 
-<svelte:document onselectionchange={onSelectionChange} onclick={onDocumentClick} />
+<svelte:document
+  onselectionchange={onSelectionChange}
+  onclick={onDocumentClick}
+  onvisibilitychange={onVisibilityChange}
+/>
 
 <svelte:window
   onkeydown={onKeydown}
