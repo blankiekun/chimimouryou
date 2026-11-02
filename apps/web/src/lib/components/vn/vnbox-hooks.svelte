@@ -8,6 +8,7 @@
    * hook gives nothing from its screen (VnInfo.textFrom, lib/data/vn/vn-ocr.ts). Not upstream.
    */
   import SectionHead from '$lib/components/section-head.svelte';
+  import Switch from '$lib/components/switch.svelte';
   import HookCleanupEditor from '$lib/components/vn/hook-cleanup-editor.svelte';
   import { cleanHookLine, type HookCleanup } from '$lib/data/vn/hook-cleanup';
   import { database } from '$lib/data/store';
@@ -40,6 +41,7 @@
     scriptFor(id: string): string;
     reset(): void;
     setScreenText(on: boolean): void;
+    setPlaceText(on: boolean): void;
   }
 
   const hooks = $derived((frame?.contentWindow as any)?.vnboxHooks as VnboxHooks | undefined);
@@ -56,32 +58,50 @@
   let scriptError = $state('');
   let saveState = $state('');
   let screenText = $state(false);
+  let placeText = $state(true);
 
   $effect(() => {
     database.getData(bookId).then((stored) => {
       saved = stored && savedHookName(vnInfo(stored));
       screenText = !!stored && vnInfo(stored).textFrom === 'screen';
+      placeText = !stored || vnInfo(stored).placeText !== false;
     });
   });
 
-  /** Applied to the running game at once and saved on the book. */
-  async function setTextFrom(screen: boolean) {
-    screenText = screen;
-    hooks?.setScreenText(screen);
+  /** Saved on the book: absent = Hook, and placed over the game's line. */
+  async function saveText(screen: boolean, place: boolean) {
     const stored = await database.getData(bookId);
 
     if (!stored) return;
-    const { textFrom: _old, ...game } = vnInfo(stored);
+    const { textFrom: _from, placeText: _place, ...game } = vnInfo(stored);
 
     await database.upsertData(
       {
         ...stored,
-        elementHtml: vnElementHtml(screen ? { ...game, textFrom: 'screen' } : game)
+        elementHtml: vnElementHtml({
+          ...game,
+          ...(screen && { textFrom: 'screen' as const }),
+          ...(!place && { placeText: false })
+        })
       },
       ReplicationSaveBehavior.Overwrite,
       false,
       false
     );
+  }
+
+  /** Applied to the running game at once. */
+  function setTextFrom(screen: boolean) {
+    screenText = screen;
+    hooks?.setScreenText(screen);
+    saveText(screen, placeText);
+  }
+
+  /** Applied to the running game at once. */
+  function setPlaceText(place: boolean) {
+    placeText = place;
+    hooks?.setPlaceText(place);
+    saveText(screenText, place);
   }
 
   $effect(() => {
@@ -193,11 +213,18 @@
       {/each}
     </div>
   </div>
-  <p class="hooks-muted">
-    {screenText
-      ? 'Lines are read from the game’s screen after each click, for games whose hook gives nothing.'
-      : 'Lines come from the hook and are placed where the game draws them.'}
-  </p>
+  {#if screenText}
+    <p class="hooks-muted">
+      Lines are read from the game’s screen after each click, for games whose hook gives nothing.
+    </p>
+  {:else}
+    <Switch checked={placeText} onchange={setPlaceText}>Place text over the game’s line</Switch>
+    <p class="hooks-muted">
+      {placeText
+        ? 'Each hooked line is matched to the screen and laid where the game draws it.'
+        : 'Hooked lines sit in a fixed spot near the bottom of the game.'}
+    </p>
+  {/if}
 
   {#if !live}
     <p class="hooks-muted">

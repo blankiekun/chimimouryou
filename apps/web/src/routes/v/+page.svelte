@@ -442,8 +442,11 @@
         onScreen: fitScreen,
         clean: (line: string, thread: string) => cleanLine(line, thread),
         readScreen: readVnScreen,
-        // The Hooks sheet may have changed it since the page loaded the book.
-        screenText: vnInfo((await database.getData(book.id)) ?? book).textFrom === 'screen'
+        // The Hooks sheet may have changed them since the page loaded the book.
+        ...((game) => ({
+          screenText: game.textFrom === 'screen',
+          placeText: game.placeText !== false
+        }))(vnInfo((await database.getData(book.id)) ?? book))
       });
       started = true;
       return;

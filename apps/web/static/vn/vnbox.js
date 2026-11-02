@@ -211,16 +211,11 @@ var screenRead = 0;
 var lastScreenText = '';
 // The worker's time for the last frame read (E2E timing).
 var lastScreenMs = 0;
+// startGame's placeText: hooked lines laid over the game's line (else the fixed spot, and no read).
+// Frames stay readable without a copy of ours: VNBox's shell asks every WebGL context for
+// preserveDrawingBuffer, and GDI games present through a bitmaprenderer canvas.
+var placeText = false;
 var gameOptions = {};
-
-// The frame must stay readable after it is shown, as for Anki screenshots (overlay.js).
-var vnboxGetContext = HTMLCanvasElement.prototype.getContext;
-HTMLCanvasElement.prototype.getContext = function (type, attributes) {
-  if (readScreen && (type === 'webgl' || type === 'webgl2')) {
-    attributes = Object.assign({}, attributes, { preserveDrawingBuffer: true });
-  }
-  return vnboxGetContext.call(this, type, attributes);
-};
 
 /**
  * The game's frame once it stops changing (a typewriter finished): a quarter-size copy every 200 ms
@@ -394,6 +389,11 @@ var vnboxHooks = {
     screenText = !!(readScreen && on);
     screenRead += 1;
   },
+  /** Hooked lines placed over the game's line or left at the fixed spot, while the game runs. */
+  setPlaceText: function (on) {
+    placeText = !!(readScreen && on);
+    screenRead += 1;
+  },
   /** Back to the boot hook: unloads what was loaded here and stops a search. */
   reset: function () {
     var api = frida();
@@ -413,13 +413,14 @@ var vnboxHooks = {
  * options: textLines(line) (overlay lines), onText(line), onScreen(width, height) (screen size
  * changes), keepLines (keep the recent lines with their screenshots for ankiMedia()), recordLines
  * (and record their sound), clean(line, threadId) (the game's text cleanup: the line to use, ''
- * to drop it), readScreen(frame, hook?) (screen text) and screenText (lines from the screen, not
- * the hook).
+ * to drop it), readScreen(frame, hook?) (screen text), screenText (lines from the screen, not
+ * the hook) and placeText (hooked lines placed over the game's line).
  */
 async function startGame(options) {
   gameOptions = options;
   readScreen = options.readScreen || null;
   screenText = !!(readScreen && options.screenText);
+  placeText = !!(readScreen && options.placeText);
   onScreen = options.onScreen || onScreen;
   keepLines = !!options.keepLines;
   recordLines = !!options.recordLines;
@@ -452,7 +453,7 @@ async function startGame(options) {
     showText(lines);
     options.onText(line);
     keepLine(lines);
-    if (readScreen) placeHooked(line);
+    if (placeText) placeHooked(line);
   };
   // VNBox takes mouse and key events on window (capture, stopImmediatePropagation) anywhere over
   // the game, so Yomitan never saw a mousemove over the lines. Events on the overlay's text skip

@@ -57,6 +57,9 @@ export interface VnInfo {
   /** Windows games whose hook gives nothing: their lines are read from the screen (vn-ocr.ts), set
    * in the Hooks sheet; absent = from the hook */
   textFrom?: 'screen';
+  /** Hooked lines laid over the game's own line (vn-ocr.ts; it keeps WebGL frames readable);
+   * false = the fixed spot (vnboxLines), set in the Hooks sheet; absent = on */
+  placeText?: false;
   /** Played natively in the desktop app: the built-in hook's thread picked on /hook
    * (native-games.ts), the same on every computer */
   nativeHook?: NativeHook;
