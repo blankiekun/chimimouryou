@@ -8,3 +8,5 @@ package
 .analysis-bench
 # VNBox, fetched by scripts/vnbox/build.sh
 static/vn/vnbox
+# vita-vn-ocr's models, fetched by scripts/vn-ocr/fetch.sh
+static/vn/ocr

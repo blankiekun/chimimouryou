@@ -193,11 +193,104 @@ var clicks = 0;
   window.addEventListener(
     type,
     function (event) {
-      if (!/^(Shift|Control|Alt|Meta)$/.test(event.key)) clicks += 1;
+      if (/^(Shift|Control|Alt|Meta)$/.test(event.key)) return;
+      clicks += 1;
+      if (screenText) readScreenText();
     },
     true
   );
 });
+
+// Screen text (lib/data/vn/vn-ocr.ts): startGame's readScreen(frame, hook?) reads the game's frame
+// once it has settled. A hooked line is laid where the game drew it (placeHooked); with screenText
+// (the game's "Text from: Screen") the lines come from the frame after each click instead.
+var readScreen = null;
+var screenText = false;
+// The latest read: an older one still settling or reading is dropped.
+var screenRead = 0;
+var lastScreenText = '';
+// The worker's time for the last frame read (E2E timing).
+var lastScreenMs = 0;
+var gameOptions = {};
+
+// The frame must stay readable after it is shown, as for Anki screenshots (overlay.js).
+var vnboxGetContext = HTMLCanvasElement.prototype.getContext;
+HTMLCanvasElement.prototype.getContext = function (type, attributes) {
+  if (readScreen && (type === 'webgl' || type === 'webgl2')) {
+    attributes = Object.assign({}, attributes, { preserveDrawingBuffer: true });
+  }
+  return vnboxGetContext.call(this, type, attributes);
+};
+
+/**
+ * The game's frame once it stops changing (a typewriter finished): a quarter-size copy every 200 ms
+ * until under 0.1% of it changed (a blinking cursor), at most 3 s; null when a newer read started.
+ */
+async function settledFrame(read) {
+  var thumb = document.createElement('canvas');
+  var context = thumb.getContext('2d', { willReadFrequently: true });
+  var before = null;
+
+  for (var waited = 0; waited < 3000; waited += 200) {
+    await new Promise(function (resolve) {
+      setTimeout(resolve, 200);
+    });
+    if (read !== screenRead) return null;
+    var canvas = screenCanvas();
+
+    thumb.width = Math.max(1, Math.ceil(canvas.width / 4));
+    thumb.height = Math.max(1, Math.ceil(canvas.height / 4));
+    context.drawImage(canvas, 0, 0, thumb.width, thumb.height);
+    var now = context.getImageData(0, 0, thumb.width, thumb.height).data;
+    var changed = 0;
+
+    if (before && before.length === now.length) {
+      for (var i = 0; i < now.length; i += 4) {
+        var diff = now[i] + now[i + 1] + now[i + 2] - before[i] - before[i + 1] - before[i + 2];
+        if (diff > 72 || diff < -72) changed += 1;
+      }
+      if (changed <= now.length / 4000) break;
+    }
+    before = now;
+  }
+  return read === screenRead ? createImageBitmap(screenCanvas()) : null;
+}
+
+/** Reads the settled frame; then(result) only for the latest read. */
+function readSettled(hook, then) {
+  var read = ++screenRead;
+
+  settledFrame(read)
+    .then(function (frame) {
+      return frame && readScreen(frame, hook);
+    })
+    .then(function (result) {
+      if (!result || read !== screenRead) return;
+      lastScreenMs = result.ms;
+      then(result);
+    })
+    .catch(function (error) {
+      console.warn('Screen text: ' + error.message);
+    });
+}
+
+/** A hooked line's rows moved from the fixed guess to where the game drew it. */
+function placeHooked(line) {
+  readSettled(line, function (result) {
+    showText(result.lines);
+  });
+}
+
+/** Screen text: the dialogue on screen after a click, as a hooked line would come. */
+function readScreenText() {
+  readSettled(undefined, function (result) {
+    if (result.text === lastScreenText) return;
+    lastScreenText = result.text;
+    showText(result.lines);
+    gameOptions.onText(result.text);
+    keepLine(result.lines);
+  });
+}
 
 // Set by the page: the scan modifier keys (KeyboardEvent.key) the key gate keeps from the game.
 var scanKeys = ['Shift'];
@@ -296,6 +389,11 @@ var vnboxHooks = {
   scriptFor: function (id) {
     return frida().scriptFor(id);
   },
+  /** Screen text on or off while the game runs (the sheet's "Text from"). */
+  setScreenText: function (on) {
+    screenText = !!(readScreen && on);
+    screenRead += 1;
+  },
   /** Back to the boot hook: unloads what was loaded here and stops a search. */
   reset: function () {
     var api = frida();
@@ -315,9 +413,13 @@ var vnboxHooks = {
  * options: textLines(line) (overlay lines), onText(line), onScreen(width, height) (screen size
  * changes), keepLines (keep the recent lines with their screenshots for ankiMedia()), recordLines
  * (and record their sound), clean(line, threadId) (the game's text cleanup: the line to use, ''
- * to drop it).
+ * to drop it), readScreen(frame, hook?) (screen text) and screenText (lines from the screen, not
+ * the hook).
  */
 async function startGame(options) {
+  gameOptions = options;
+  readScreen = options.readScreen || null;
+  screenText = !!(readScreen && options.screenText);
   onScreen = options.onScreen || onScreen;
   keepLines = !!options.keepLines;
   recordLines = !!options.recordLines;
@@ -340,7 +442,7 @@ async function startGame(options) {
     known.count += 1;
     known.recent = known.recent.slice(-19).concat([{ text: line, click: clicks }]);
     hookChanged();
-    if (!threadDrives(known)) return;
+    if (screenText || !threadDrives(known)) return;
     if (options.clean) line = options.clean(line, thread.id);
     if (!line) return;
     // The screen can change size without the frame's box changing (same aspect).
@@ -350,6 +452,7 @@ async function startGame(options) {
     showText(lines);
     options.onText(line);
     keepLine(lines);
+    if (readScreen) placeHooked(line);
   };
   // VNBox takes mouse and key events on window (capture, stopImmediatePropagation) anywhere over
   // the game, so Yomitan never saw a mousemove over the lines. Events on the overlay's text skip

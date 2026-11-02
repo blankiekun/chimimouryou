@@ -1,0 +1,8 @@
+# sha256 of the vita-vn-ocr release files fetch.sh copies (from the release's SHA256SUMS): <tag> <file> <sha256>.
+v0.5.1-onnx.2 textspot8_exact.onnx d5603e1ff09e0f827353b0b71f543ec0c67b48aa74d9e79e8f665d1d2b0f9429
+v0.5.1-onnx.2 VOCR6.2_L_fast.onnx 3084fb3bd1332832c872009d869d267d5acd1bd69d26c80f742aa2f31a80c938
+v0.5.1-onnx.2 ONNX-ATTRIBUTION.md 40ab9afd28fb9e18d584bc284b7bfb5e6e1fe6879c0cbe60e821dc56d9b69092
+v0.5.1-onnx.2 VOCR6-ATTRIBUTION.md 9a5ff2aee4cb8194f41e54f3a2dac88ce3de6ff4aa7b8ddd123dd5b792c9843b
+v0.5.1-onnx.2 SPOTTER-ATTRIBUTION.md fd44f500114ca2c8373e02bda1134753619e76de869ddf8ec86c14e008be5b84
+v0.5.1-onnx.2 MODEL_CARD_TEXTSPOT8.md bcbdebf0437b86a476d9f2b0f8a7f5986274c790969497f1b2950b73ef72354a
+v0.5.1-onnx.2 MODEL_CARD_VOCR6.2_L.md 66d13ac294a3127e5d033a125beeb3ad7f29299ad92792d5c97eb7fc22ebae54

@@ -54,6 +54,9 @@ export interface VnInfo {
   hookFile?: string;
   /** The hooked lines' text cleanup (hook-cleanup.ts), set in the Hooks sheet */
   hookCleanup?: HookCleanup;
+  /** Windows games whose hook gives nothing: their lines are read from the screen (vn-ocr.ts), set
+   * in the Hooks sheet; absent = from the hook */
+  textFrom?: 'screen';
   /** Played natively in the desktop app: the built-in hook's thread picked on /hook
    * (native-games.ts), the same on every computer */
   nativeHook?: NativeHook;

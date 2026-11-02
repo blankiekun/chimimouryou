@@ -4,7 +4,8 @@
    * one drives the overlay, statistics and Anki, a hook search, H-codes and scripts loaded while
    * the game runs, and saving the pick as the game's hook (vnbox.js `vnboxHooks`, VNBox's hooks
    * contract), and the game's text cleanup (hook-cleanup.ts), saved with the hook. VNBox
-   * without runtime hooks only shows the saved hook and the cleanup. Not upstream.
+   * without runtime hooks only shows the saved hook and the cleanup. "Text from" reads a game whose
+   * hook gives nothing from its screen (VnInfo.textFrom, lib/data/vn/vn-ocr.ts). Not upstream.
    */
   import SectionHead from '$lib/components/section-head.svelte';
   import HookCleanupEditor from '$lib/components/vn/hook-cleanup-editor.svelte';
@@ -38,6 +39,7 @@
     searchStop(): void;
     scriptFor(id: string): string;
     reset(): void;
+    setScreenText(on: boolean): void;
   }
 
   const hooks = $derived((frame?.contentWindow as any)?.vnboxHooks as VnboxHooks | undefined);
@@ -53,10 +55,34 @@
   let hcodeError = $state('');
   let scriptError = $state('');
   let saveState = $state('');
+  let screenText = $state(false);
 
   $effect(() => {
-    database.getData(bookId).then((stored) => (saved = stored && savedHookName(vnInfo(stored))));
+    database.getData(bookId).then((stored) => {
+      saved = stored && savedHookName(vnInfo(stored));
+      screenText = !!stored && vnInfo(stored).textFrom === 'screen';
+    });
   });
+
+  /** Applied to the running game at once and saved on the book. */
+  async function setTextFrom(screen: boolean) {
+    screenText = screen;
+    hooks?.setScreenText(screen);
+    const stored = await database.getData(bookId);
+
+    if (!stored) return;
+    const { textFrom: _old, ...game } = vnInfo(stored);
+
+    await database.upsertData(
+      {
+        ...stored,
+        elementHtml: vnElementHtml(screen ? { ...game, textFrom: 'screen' } : game)
+      },
+      ReplicationSaveBehavior.Overwrite,
+      false,
+      false
+    );
+  }
 
   $effect(() => {
     if (!hooks) return undefined;
@@ -148,6 +174,29 @@
       <strong>{saved ?? 'None'}</strong>
       <span class="hooks-muted">{saved ? 'Saved for this game' : 'No hook script saved'}</span>
     {/if}
+  </p>
+  <div class="hooks-row hooks-from">
+    <span id="hooks-from-label">Text from</span>
+    <!-- .app-segmented and .app-segment are in app.scss. -->
+    <div class="app-segmented" role="radiogroup" aria-labelledby="hooks-from-label">
+      {#each [false, true] as screen (screen)}
+        <button
+          type="button"
+          role="radio"
+          aria-checked={screenText === screen}
+          class="app-segment"
+          class:app-segment-selected={screenText === screen}
+          onclick={() => setTextFrom(screen)}
+        >
+          {screen ? 'Screen' : 'Hook'}
+        </button>
+      {/each}
+    </div>
+  </div>
+  <p class="hooks-muted">
+    {screenText
+      ? 'Lines are read from the game’s screen after each click, for games whose hook gives nothing.'
+      : 'Lines come from the hook and are placed where the game draws them.'}
   </p>
 
   {#if !live}
@@ -286,6 +335,11 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
+  }
+
+  .hooks-from {
+    align-items: center;
+    gap: 0.75rem;
   }
 
   .hooks-field {

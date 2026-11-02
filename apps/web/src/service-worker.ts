@@ -25,7 +25,8 @@ const OTHER_CACHE_NAME = `${swCachePrefix}other:${version}`;
 const ENGINE_CACHE_NAME = `${swCachePrefix}vn-engine`;
 const engineFile = /\/vn\/(conscripter(\.js|\.wasm|-version\.txt)|default\.ttf)$/;
 // VNBox (Windows games, ~125 MB with its root fs zips) is never precached: it keeps the zips in OPFS.
-const vnboxFile = /\/vn\/vnbox\//;
+// Nor are its OCR models (vn-ocr.ts), which load once a Windows game runs.
+const vnboxFile = /\/vn\/(vnbox|ocr)\//;
 // Fonts (the UI font's unicode-range chunks and the reader fonts, ~65 MB in all) are cached on
 // first use, across builds, rather than precached: a reader uses one or two of them. Only the
 // build's own hashed files: user fonts (/userfonts/) have their own cache.
@@ -40,7 +41,7 @@ const prerenderedSet = new Set(prerendered);
 const assetsToCache = build
   .filter(
     (file) =>
-      !/ort-wasm|silero_vad|line-vad\.worker|webp_enc|webp-encode\.worker|whisper\.worker|manga-ocr\.worker|analysis-\w+\.worker/.test(
+      !/ort-wasm|silero_vad|line-vad\.worker|webp_enc|webp-encode\.worker|whisper\.worker|manga-ocr\.worker|vn-ocr\.worker|analysis-\w+\.worker/.test(
         file
       ) && !uiFontFile.test(file)
   )
