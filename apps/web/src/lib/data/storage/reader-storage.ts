@@ -150,7 +150,14 @@ export async function saveExternalLastRead(
 export async function syncDownData(
   localStorageHandler: BrowserStorageHandler | undefined,
   storageHandler: BaseStorageHandler | undefined,
-  context: ReplicationContext
+  context: ReplicationContext,
+  types = [
+    StorageDataType.PROGRESS,
+    StorageDataType.STATISTICS,
+    StorageDataType.READING_GOALS,
+    StorageDataType.AUDIOBOOK,
+    StorageDataType.SUBTITLE
+  ]
 ) {
   if (localStorageHandler && storageHandler) {
     storageHandler.startContext(context);
@@ -165,19 +172,7 @@ export async function syncDownData(
       autoReplication === AutoReplicationType.Down ||
       autoReplication === AutoReplicationType.All)
   ) {
-    const error = await replicateData(
-      storageHandler,
-      localStorageHandler,
-      false,
-      [context],
-      [
-        StorageDataType.PROGRESS,
-        StorageDataType.STATISTICS,
-        StorageDataType.READING_GOALS,
-        StorageDataType.AUDIOBOOK,
-        StorageDataType.SUBTITLE
-      ]
-    );
+    const error = await replicateData(storageHandler, localStorageHandler, false, [context], types);
 
     if (error) {
       throw new Error(error);
