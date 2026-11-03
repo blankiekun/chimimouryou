@@ -26,7 +26,13 @@ import {
   replicationProgress$,
   type ReplicationContext
 } from '$lib/functions/replication/replication-progress';
-import { isSyncBetween, syncEnded, syncStarted, syncStep } from '$lib/data/sync/sync-status';
+import {
+  isSyncBetween,
+  syncEnded,
+  syncStarted,
+  syncStep,
+  waitingEntry
+} from '$lib/data/sync/sync-status';
 import { standalone } from '$lib/data/env';
 import pLimit from 'p-limit';
 
@@ -490,8 +496,17 @@ export async function replicateData(
   await Promise.all(replicationTasks).catch(() => {});
 
   if (isSync) {
+    // Only sends wait for a retry, and never whole books: those are imports the reader can repeat.
     syncEnded(
-      contexts.flatMap((context) => dataToReplicate.map((type) => `${context.title}\t${type}`)),
+      targetHandler.storageType === StorageKey.BROWSER
+        ? []
+        : contexts.flatMap((context) =>
+            dataToReplicate
+              .filter((type) => type !== StorageDataType.DATA)
+              .map((type) =>
+                waitingEntry(targetHandler.getCurrentStorageSource(), type, context.title)
+              )
+          ),
       cancelSignal?.aborted ? '' : errorMessage,
       contexts.length === 1 ? contexts[0].title : `${contexts.length} books`
     );

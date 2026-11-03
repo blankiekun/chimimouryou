@@ -209,6 +209,7 @@
   import { iffBrowser } from '$lib/functions/rxjs/iff-browser';
   import { AutoReplicationType } from '$lib/functions/replication/replication-options';
   import { replicateData } from '$lib/functions/replication/replicator';
+  import { syncLocked, syncQueued, waitingEntry } from '$lib/data/sync/sync-status';
   import { readableToObservable } from '$lib/functions/rxjs/readable-to-observable';
   import { reduceToEmptyString } from '$lib/functions/rxjs/reduce-to-empty-string';
   import { takeWhenBrowser } from '$lib/functions/rxjs/take-when-browser';
@@ -1569,18 +1570,16 @@
       currentHandlerStorageSource
     );
 
-    const error = await replicateData(
-      localStorageHandler,
-      externalStorageHandler,
-      !isSilent && $storageSource$ === externalStorageHandler.storageType,
-      [
-        {
-          id: $rawBookData$.id,
-          title: $rawBookData$.title,
-          imagePath: $rawBookData$.coverImage
-        }
-      ],
-      dataToReplicate
+    const handler = externalStorageHandler;
+    const book = $rawBookData$;
+    const error = await syncLocked(() =>
+      replicateData(
+        localStorageHandler,
+        handler,
+        !isSilent && $storageSource$ === handler.storageType,
+        [{ id: book.id, title: book.title, imagePath: book.coverImage }],
+        dataToReplicate
+      )
     ).catch((err: any) => err.message);
 
     externalStorageHandler.updateSettings(
@@ -1879,6 +1878,16 @@
 
       if (!toReplicate.includes(dataType)) {
         toReplicate.push(dataType);
+      }
+
+      if ($rawBookData$ && externalStorageHandler) {
+        syncQueued(
+          waitingEntry(
+            externalStorageHandler.getCurrentStorageSource(),
+            dataType,
+            $rawBookData$.title
+          )
+        );
       }
 
       if (!isReplicating) {

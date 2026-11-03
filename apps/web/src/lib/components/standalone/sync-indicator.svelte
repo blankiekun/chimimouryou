@@ -1,7 +1,7 @@
 <script lang="ts">
-  /** The standalone header's sync status (plan S3); empty while books stay on this device. */
+  /** The header's sync status (plan S3); empty while books stay on this device. */
   import { goto } from '$app/navigation';
-  import { pagePath } from '$lib/data/env';
+  import { pagePath, standalone } from '$lib/data/env';
   import { driveSignedIn, signInToDrive } from '$lib/data/standalone/standalone-storage';
   import { serverBase, serverConnected } from '$lib/data/remote/server-connect';
   import { StorageKey } from '$lib/data/storage/storage-types';
@@ -16,7 +16,9 @@
     return () => clearInterval(timer);
   });
 
-  const settingsHref = `${pagePath}/settings?section=sync`;
+  // The server edition has no Sync area; there a failure is mostly an expired sign-in.
+  const settingsHref = `${pagePath}/settings?section=${standalone ? 'sync' : 'data-sync'}`;
+  const failedHref = standalone ? settingsHref : `${pagePath}/settings?section=general-account`;
   const serverHost = serverBase.replace(/^https:\/\//, '');
 
   // Tokens aren't observable: checked again on the 15 s tick, after each sync and after signing in here.
@@ -31,7 +33,7 @@
 </script>
 
 {#if serverConnected && $storageSource$ === StorageKey.CALIBRE}
-  <!-- The Calibre source syncs as you read, without the replicator: name the server instead. -->
+  <!-- Connected to a server: name it. -->
   <a href="{settingsHref}#sync-server" class="sync-indicator sync-host" title={serverHost}
     >{serverHost}</a
   >
@@ -45,8 +47,11 @@
 {:else if view.kind === 'signin'}
   <button type="button" class="sync-indicator sync-spot" on:click={signIn}>{view.text}</button>
 {:else if view.kind !== 'none'}
-  <a href={settingsHref} class="sync-indicator" class:sync-danger={view.kind === 'failed'}
-    >{view.text}</a
+  <a
+    href={view.kind === 'failed' ? failedHref : settingsHref}
+    class="sync-indicator"
+    class:sync-danger={view.kind === 'failed'}
+    title={view.kind === 'failed' ? $syncState$.errors[0]?.detail : undefined}>{view.text}</a
   >
 {/if}
 
@@ -62,6 +67,16 @@
     color: var(--app-muted-fg);
     font-size: var(--type-small);
     white-space: nowrap;
+  }
+
+  /* Two short lines on a phone: "Offline · 2 changes waiting" would push the avatar off the bar */
+  @media (max-width: 639px) {
+    .sync-indicator {
+      min-width: 0;
+      line-height: 1.2;
+      text-align: right;
+      white-space: normal;
+    }
   }
 
   /* Shrinks with an ellipsis, so a long host never pushes the avatar off a phone's bar */

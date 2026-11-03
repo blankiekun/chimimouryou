@@ -7,15 +7,38 @@
 import { BehaviorSubject } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getStorageHandler, replicateData, dialogs, stores, sources } = vi.hoisted(() => ({
+const {
+  getStorageHandler,
+  ownStorageHandler,
+  replicateData,
+  dialogs,
+  stores,
+  sources,
+  books,
+  holdsAccountData,
+  connection
+} = vi.hoisted(() => ({
   getStorageHandler: vi.fn((_window: unknown, type: string, name: string) => ({ type, name })),
+  ownStorageHandler: vi.fn((_window: unknown, own: string) => ({ own, updateSettings: () => {} })),
   replicateData: vi.fn(async (..._args: unknown[]) => ''),
   dialogs: { next: vi.fn() },
   stores: {} as Record<string, { getValue: () => unknown }>,
-  sources: new Map<string, { type: string }>()
+  sources: new Map<string, { type: string }>(),
+  books: new Map<string, Record<string, unknown>>(),
+  holdsAccountData: vi.fn(async () => false),
+  connection: { serverless: false }
 }));
 
-vi.mock('$lib/data/storage/storage-handler-factory', () => ({ getStorageHandler }));
+vi.mock('$lib/data/storage/storage-handler-factory', () => ({
+  getStorageHandler,
+  ownStorageHandler
+}));
+vi.mock('$lib/data/remote/server-rows', () => ({ holdsAccountData }));
+vi.mock('$lib/data/remote/server-connect', () => ({
+  get serverless() {
+    return connection.serverless;
+  }
+}));
 vi.mock('$lib/functions/replication/replicator', () => ({ replicateData }));
 vi.mock('$lib/data/dialog-manager', () => ({ dialogManager: { dialogs$: dialogs } }));
 vi.mock('$lib/components/message-dialog.svelte', () => ({ default: {} }));
@@ -25,27 +48,34 @@ vi.mock('$lib/data/store', async () => {
 
   Object.assign(stores, {
     autoReplication: new Subject('off'),
-    isOnline: new Subject(true)
+    isOnline: new Subject(true),
+    syncTarget: new Subject('')
   });
 
   return {
     autoReplication$: stores.autoReplication,
     isOnline$: stores.isOnline,
+    syncTarget$: stores.syncTarget,
     cacheStorageData$: value(false),
     replicationSaveBehavior$: value('newOnly'),
     statisticsMergeMode$: value('merge'),
     readingGoalsMergeMode$: value('merge'),
-    database: { db: Promise.resolve({ get: async (_: string, name: string) => sources.get(name) }) }
+    database: {
+      db: Promise.resolve({ get: async (_: string, name: string) => sources.get(name) }),
+      getDataByTitle: async (title: string) => books.get(title)
+    }
   };
 });
 
-const { getStorageHandlerByName, saveExternalLastRead, syncDownData } = await import(
-  './reader-storage'
-);
+const { getStorageHandlerByName, retryWaitingChanges, saveExternalLastRead, syncDownData } =
+  await import('./reader-storage');
+const { syncState$ } = await import('$lib/data/sync/sync-status');
+const { AutoReplicationType } = await import('$lib/functions/replication/replication-options');
 const { StorageKey, StorageSourceDefault } = await import('./storage-types');
 
 const online = stores.isOnline as BehaviorSubject<boolean>;
 const autoReplication = stores.autoReplication as BehaviorSubject<string>;
+const syncTarget = stores.syncTarget as BehaviorSubject<string>;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -135,5 +165,151 @@ describe('syncDownData', () => {
     await expect(
       syncDownData(local, { storageType: StorageKey.CALIBRE, startContext() {} } as any, context)
     ).rejects.toThrow('broken');
+  });
+});
+
+/*
+ * retryWaitingChanges, written before the code. How it could go wrong:
+ * - it retries a deleted book, a removed source or a source the book no longer uses forever;
+ * - it uses the shared handlers, which the open reader is using for another book;
+ * - it sends for a signed-out browser that holds an account's rows, or asks a server the
+ *   standalone doesn't have;
+ * - offline it shows the "you're offline" dialog on app start;
+ * - a second tab sends what the first already sent.
+ */
+describe('retryWaitingChanges', () => {
+  const calibre = StorageSourceDefault.CALIBRE_DEFAULT;
+  const waiting = (source: string, type: string, title: string) => `${source}\t${type}\t${title}`;
+
+  beforeEach(() => {
+    books.clear();
+    localStorage.clear();
+    syncState$.next({ ...syncState$.getValue(), waiting: [] });
+    holdsAccountData.mockResolvedValue(false);
+    connection.serverless = false;
+    syncTarget.next('');
+    vi.stubGlobal('navigator', { onLine: true });
+  });
+
+  function queue(...keys: string[]) {
+    localStorage.setItem('syncWaiting', JSON.stringify(keys));
+  }
+
+  const list = () => JSON.parse(localStorage.getItem('syncWaiting') || '[]');
+
+  it('sends all of a book through the replicator, with handlers of its own', async () => {
+    books.set('Book', { id: 7, title: 'Book', coverImage: 'c.png', storageSource: calibre });
+    queue(waiting(calibre, 'bookmark', 'Book'), waiting(calibre, 'statistic', 'Book'));
+
+    await retryWaitingChanges(window);
+
+    expect(replicateData).toHaveBeenCalledTimes(1);
+    const [source, target, refresh, contexts, types] = replicateData.mock.calls[0] as any[];
+    expect(source.own).toBe(StorageKey.BROWSER);
+    expect(target.own).toBe(StorageKey.CALIBRE);
+    expect(refresh).toBe(false);
+    expect(contexts).toEqual([{ id: 7, title: 'Book', imagePath: 'c.png' }]);
+    expect(types).toEqual(['bookmark', 'statistic']);
+    expect(getStorageHandler).not.toHaveBeenCalled();
+  });
+
+  it('drops a deleted book', async () => {
+    queue(waiting(calibre, 'bookmark', 'Gone'));
+
+    await retryWaitingChanges(window);
+
+    expect(replicateData).not.toHaveBeenCalled();
+    expect(list()).toEqual([]);
+  });
+
+  it('drops a change for a source the book no longer syncs to', async () => {
+    autoReplication.next(AutoReplicationType.All);
+    syncTarget.next('new folder');
+    sources.set('old folder', { type: StorageKey.FS });
+    sources.set('new folder', { type: StorageKey.FS });
+    books.set('Book', { id: 1, title: 'Book' });
+    queue(waiting('old folder', 'bookmark', 'Book'));
+
+    await retryWaitingChanges(window);
+
+    expect(replicateData).not.toHaveBeenCalled();
+    expect(list()).toEqual([]);
+  });
+
+  it('drops a source that was removed, without a dialog', async () => {
+    autoReplication.next(AutoReplicationType.All);
+    books.set('Book', { id: 1, title: 'Book', storageSource: 'removed' });
+    queue(waiting('removed', 'bookmark', 'Book'));
+
+    await retryWaitingChanges(window);
+
+    expect(replicateData).not.toHaveBeenCalled();
+    expect(list()).toEqual([]);
+    expect(dialogs.next).not.toHaveBeenCalled();
+  });
+
+  it('drops what sync-up, since turned off, would not send', async () => {
+    sources.set('folder', { type: StorageKey.FS });
+    books.set('Book', { id: 1, title: 'Book', storageSource: 'folder' });
+    queue(waiting('folder', 'bookmark', 'Book'));
+
+    await retryWaitingChanges(window);
+
+    expect(replicateData).not.toHaveBeenCalled();
+    expect(list()).toEqual([]);
+  });
+
+  it('keeps an account’s changes quietly until sign-in', async () => {
+    holdsAccountData.mockResolvedValue(true);
+    books.set('Book', { id: 1, title: 'Book', storageSource: calibre });
+    const key = waiting(calibre, 'bookmark', 'Book');
+    queue(key);
+
+    await retryWaitingChanges(window);
+
+    expect(replicateData).not.toHaveBeenCalled();
+    expect(list()).toEqual([key]);
+  });
+
+  it('asks no server in the standalone without one', async () => {
+    connection.serverless = true;
+    books.set('Book', { id: 1, title: 'Book', storageSource: calibre });
+    queue(waiting(calibre, 'bookmark', 'Book'));
+
+    await retryWaitingChanges(window);
+
+    expect(holdsAccountData).not.toHaveBeenCalled();
+    expect(replicateData).not.toHaveBeenCalled();
+    expect(list()).toEqual([]);
+  });
+
+  it('does nothing and shows nothing offline', async () => {
+    vi.stubGlobal('navigator', { onLine: false });
+    const key = waiting(StorageSourceDefault.GDRIVE_DEFAULT, 'bookmark', 'Book');
+    queue(key);
+
+    await retryWaitingChanges(window);
+
+    expect(replicateData).not.toHaveBeenCalled();
+    expect(dialogs.next).not.toHaveBeenCalled();
+    expect(list()).toEqual([key]);
+  });
+
+  it('skips what another tab sent while this one waited for the lock', async () => {
+    books.set('Book', { id: 1, title: 'Book', storageSource: calibre });
+    queue(waiting(calibre, 'bookmark', 'Book'));
+    vi.stubGlobal('navigator', {
+      onLine: true,
+      locks: {
+        request: (_name: string, run: () => Promise<unknown>) => {
+          queue();
+          return run();
+        }
+      }
+    });
+
+    await retryWaitingChanges(window);
+
+    expect(replicateData).not.toHaveBeenCalled();
   });
 });
