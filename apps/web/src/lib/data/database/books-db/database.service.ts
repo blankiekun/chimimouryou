@@ -29,7 +29,12 @@ import {
   mergeReadingGoals,
   readingGoalSortFunction
 } from '$lib/data/reading-goal';
-import { lastReadingGoalsModified$, readingGoal$, syncTarget$ } from '$lib/data/store';
+import {
+  lastReadingGoalsModified$,
+  libraryOffline$,
+  readingGoal$,
+  syncTarget$
+} from '$lib/data/store';
 
 import type { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
 import type { BookStatistic } from '$lib/components/statistics/statistics-types';
@@ -67,6 +72,13 @@ function keepsStored(
     stored.lastBookModified >= data.lastBookModified &&
     (stored.lastBookOpen || 0) >= (data.lastBookOpen || 0)
   );
+}
+
+/** No signal or a server failure: says nothing about the source itself. */
+function isOutOfReach(error: unknown) {
+  const status = (error as { status?: number })?.status;
+
+  return !navigator.onLine || error instanceof TypeError || status === 0 || (status ?? 0) >= 500;
 }
 
 export class DatabaseService {
@@ -121,7 +133,10 @@ export class DatabaseService {
 
             if (storageSource !== fallbackStorageSource) {
               this.lastHandler = undefined;
-              storageSource$.next(fallbackStorageSource);
+
+              // Out of reach for now: the source stays, and `online` lists it again (/manage).
+              if (isOutOfReach(error)) libraryOffline$.next(true);
+              else storageSource$.next(fallbackStorageSource);
             }
 
             return [[]];
@@ -644,7 +659,8 @@ export class DatabaseService {
     statistics: BooksDbStatistic[],
     saveBehavior: ReplicationSaveBehavior,
     statisticsMergeMode: MergeMode,
-    currentLastModified = Date.now()
+    currentLastModified = Date.now(),
+    raiseDaysOnlyHere = false
   ) {
     const db = await this.db;
 
@@ -659,6 +675,20 @@ export class DatabaseService {
         existingStatistics,
         saveBehavior === ReplicationSaveBehavior.NewOnly
       );
+
+      if (raiseDaysOnlyHere) {
+        const incoming = new Set(statistics.map((statistic) => statistic.dateKey));
+        const newest = Math.max(
+          currentLastModified,
+          ...statistics.map((statistic) => statistic.lastStatisticModified)
+        );
+
+        existingStatistics.forEach((statistic) => {
+          if (!incoming.has(statistic.dateKey) && statistic.lastStatisticModified <= newest) {
+            statistic.lastStatisticModified = newest + 1;
+          }
+        });
+      }
     }
 
     ({ newStatisticModified, statisticsToStore } = updateStatisticToStore(
@@ -734,10 +764,14 @@ export class DatabaseService {
 
   async updateStatistic(newStatistic: BookStatistic) {
     const db = await this.db;
+    const tx = db.transaction(['statistic', 'lastModified'], 'readwrite');
+    const statisticsStore = tx.objectStore('statistic');
 
-    let existingStatistic = await db.get('statistic', [newStatistic.title, newStatistic.dateKey]);
+    let existingStatistic = await statisticsStore.get([newStatistic.title, newStatistic.dateKey]);
 
     if (!existingStatistic) {
+      tx.abort();
+      await tx.done.catch(() => {});
       throw new Error('Unable to find record in the database');
     }
 
@@ -752,7 +786,14 @@ export class DatabaseService {
       lastStatisticModified: newStatistic.lastStatisticModified
     };
 
-    await db.put('statistic', existingStatistic);
+    await statisticsStore.put(existingStatistic);
+    // Without this a finished book's edit never looks newer than the synced copy.
+    await tx.objectStore('lastModified').put({
+      title: newStatistic.title,
+      dataType: StorageDataType.STATISTICS,
+      lastModifiedValue: newStatistic.lastStatisticModified
+    });
+    await tx.done;
   }
 
   async clearZombieStatistics() {

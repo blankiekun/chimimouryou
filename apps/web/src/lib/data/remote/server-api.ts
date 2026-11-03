@@ -13,9 +13,9 @@
  */
 
 import { openDB } from 'idb';
-import { accountReady } from '$lib/data/account/account';
+import { accountReady, currentAccount } from '$lib/data/account/account';
 import type { CalibreBook } from '$lib/data/remote/calibre';
-import { serverBase, serverFetch } from '$lib/data/remote/server-connect';
+import { serverBase, serverConnected, serverFetch } from '$lib/data/remote/server-connect';
 
 /** A row of `GET /api/v1/sync` (server/api/service.py `row_json`). */
 export interface SyncRow {
@@ -101,7 +101,15 @@ const writePaths: [RegExp, SyncTable, (match: RegExpMatchArray) => Partial<SyncR
 ];
 
 function apiFetch(path: string, init: RequestInit = {}) {
-  return serverFetch(`/api/v1/${path}`, { cache: 'no-store', ...init });
+  const headers = new Headers(init.headers);
+  // A trusted network takes a dead session as signed out; this makes the API answer 401 instead of
+  // filing this reader's rows under the shared account. A connected server's page never counts as
+  // on that network, so its token gets the 401 anyway (and an older server's CORS would refuse this).
+  const id = serverConnected ? undefined : currentAccount()?.id;
+
+  if (id) headers.set('X-Expected-Account', id);
+
+  return serverFetch(`/api/v1/${path}`, { cache: 'no-store', ...init, headers });
 }
 
 async function httpError(response: Response) {
@@ -125,8 +133,9 @@ let version: Promise<void> | undefined;
 export function apiVersion() {
   version ??= apiFetch('version')
     .then(async (response) => {
-      // Signed out outside the trusted networks: sign-in is the answer, not an update.
-      if (response.status === 401) throw await httpError(response);
+      // Signed out outside the trusted networks: sign-in is the answer, not an update. Nor is one
+      // while the server is failing or restarting.
+      if (response.status === 401 || response.status >= 500) throw await httpError(response);
 
       const api = response.ok ? (await response.json().catch(() => ({})))?.api : undefined;
 
@@ -232,6 +241,13 @@ export async function catalog(): Promise<CalibreBook[]> {
   catalogBooks = books.map(toCalibreBook);
 
   return catalogBooks;
+}
+
+/** The titles of the catalog this browser last cached, asking nobody (the session may be gone). */
+export async function cachedCatalogTitles() {
+  const cached = await cacheGet<{ books: ApiBook[] }>(`catalog:${serverBase}`);
+
+  return cached && new Set(cached.books.map((book) => book.title));
 }
 
 /** books.id of a catalog title (live books only), from the last catalog read or its cache. */

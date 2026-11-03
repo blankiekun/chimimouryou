@@ -25,6 +25,7 @@
     type ReadingGoal,
     type ReadingGoalSaveResult
   } from '$lib/data/reading-goal';
+  import { correctReadingGoals } from '$lib/data/storage/reader-storage';
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
   import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
   import {
@@ -177,7 +178,9 @@
 
       dispatch('spinner', true);
 
-      await database.updateReadingGoals(readingGoalsToDelete, readingGoalsToInsert);
+      await correctReadingGoals(window, () =>
+        database.updateReadingGoals(readingGoalsToDelete, readingGoalsToInsert)
+      );
     } catch (error: any) {
       tick().then(() =>
         dialogManager.dialogs$.next([
@@ -291,9 +294,6 @@
         : 'Your archived Reading Goal will be deleted';
     }
 
-    dialogMessage +=
-      '\n\nExecute an one time Sync with an export behavior of "overwrite" and/or reading goals merge mode of "replace" to apply deletions to other devices';
-
     const wasCanceled = await new Promise((resolver) => {
       dialogManager.dialogs$.next([
         {
@@ -316,7 +316,9 @@
     dispatch('spinner', true);
 
     try {
-      await database.deleteReadingGoal(readingGoalToDelete?.goalStartDate);
+      await correctReadingGoals(window, () =>
+        database.deleteReadingGoal(readingGoalToDelete?.goalStartDate)
+      );
       await updateReadingGoalsData();
     } catch ({ message }: any) {
       dialogManager.dialogs$.next([
@@ -487,7 +489,9 @@
             historyGoal.goalEndDate
           )}
           <div>{dateRangeLabel}</div>
-          <div>{$t$('prefs.goals.minutes', { minutes: secondsToMinutes(historyGoal.timeGoal) })}</div>
+          <div>
+            {$t$('prefs.goals.minutes', { minutes: secondsToMinutes(historyGoal.timeGoal) })}
+          </div>
           <div>{$t$('prefs.goals.chars', { count: historyGoal.characterGoal })}</div>
           <div>{historyGoal.goalFrequency}</div>
           <button

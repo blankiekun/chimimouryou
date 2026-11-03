@@ -35,10 +35,12 @@ describe('bookContent', () => {
     const windows = { encoding: 'sjis', files: [], engine: 'vnbox', folder: 'g', exe: 'g.exe' };
 
     expect(bookContent(vn(windows))).toEqual({ kind: 'vn', info: windows });
-    expect(bookContent(vn({ encoding: 'utf8', files: ['0.txt'], base: '/vn/g/' }))).toEqual({
-      kind: 'vn',
-      info: { encoding: 'utf8', files: ['0.txt'], base: '/vn/g/' }
-    });
+    expect(bookContent(vn({ encoding: 'utf8', files: ['0.txt'], base: '/calibre/vn/g/' }))).toEqual(
+      {
+        kind: 'vn',
+        info: { encoding: 'utf8', files: ['0.txt'], base: '/calibre/vn/g/' }
+      }
+    );
   });
 
   it('keeps book HTML that only mentions a marker as a book', () => {
@@ -74,6 +76,8 @@ describe('bookContent', () => {
       { encoding: 'sjis', files: [1] },
       { encoding: 'sjis', files: 'a.txt' },
       { encoding: 'sjis', files: [], base: 1 },
+      // Would fetch every game file from another host and feed it to the engine.
+      { encoding: 'sjis', files: [], base: 'https://evil.example/calibre/vn/g/' },
       { encoding: 'sjis', files: [], engine: 'onscripter' },
       { encoding: 'sjis', files: [], engine: 'vnbox', exe: 'g.exe' },
       { encoding: 'sjis', files: [], engine: 'vnbox', folder: 'g' },

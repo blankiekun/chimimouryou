@@ -324,6 +324,42 @@ export async function deleteWindowsGame(folder: string) {
   await root.removeEntry(folder, { recursive: true });
 }
 
+const approvedHooksKey = 'vnboxApprovedHooks';
+
+async function hookHash(script: string) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(script));
+
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function approvedHooks(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(approvedHooksKey) ?? '[]');
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * A hook script runs on the app's own origin, and a game's record comes from the sync folder, which
+ * others may be able to write. So only scripts this browser chose or agreed to run start by
+ * themselves (the list stays here: it never syncs).
+ */
+export async function hookApproved(script: string) {
+  return approvedHooks().includes(await hookHash(script));
+}
+
+export async function approveHook(script: string) {
+  try {
+    localStorage.setItem(
+      approvedHooksKey,
+      JSON.stringify([...approvedHooks(), await hookHash(script)])
+    );
+  } catch {
+    // Not stored (no secure context, or storage is off): the player asks again next time.
+  }
+}
+
 /** The game as a book record for this browser's library. */
 export function windowsGameBook(
   title: string,

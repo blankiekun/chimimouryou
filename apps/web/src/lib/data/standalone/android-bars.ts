@@ -7,14 +7,21 @@
 /**
  * Immersive readers in the Android app (apps/android): the book, manga and visual novel readers
  * hide the status and navigation bars through Capacitor's built-in SystemBars plugin; every other
- * page shows them. A no-op outside the app. Not part of upstream.
+ * page shows them. Phones also hold landscape on the visual novel screen (LandscapeLockPlugin.java).
+ * A no-op outside the app. Not part of upstream.
  */
 
-import { Capacitor, SystemBars } from '@capacitor/core';
+import { Capacitor, registerPlugin, SystemBars } from '@capacitor/core';
+import { isPhone } from '$lib/functions/utils';
+
+const LandscapeLock = registerPlugin<{ lock(): Promise<void>; unlock(): Promise<void> }>(
+  'LandscapeLock'
+);
 
 const readers = new Set(['/b', '/m', '/v']);
 let hidden = false;
 let watching = false;
+let landscape = false;
 
 function apply() {
   (hidden ? SystemBars.hide() : SystemBars.show()).catch(() => {});
@@ -29,6 +36,11 @@ export function barsForRoute(routeId: string | null) {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && hidden) apply();
     });
+  }
+  const nextLandscape = routeId === '/v' && isPhone(window);
+  if (nextLandscape !== landscape) {
+    landscape = nextLandscape;
+    (landscape ? LandscapeLock.lock() : LandscapeLock.unlock()).catch(() => {});
   }
   const next = readers.has(routeId ?? '');
   if (next === hidden) return;

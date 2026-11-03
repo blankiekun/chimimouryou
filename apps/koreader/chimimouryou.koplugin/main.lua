@@ -387,10 +387,11 @@ function Chimi:sync(opts)
         return
     end
     if row then self:seen(id, row.modified) end
-    local pushed = false
+    local pushed, refused = false, false
     if here and here ~= self.last_pushed and not (row and row.count == here) then
         local total = self:counts().total
-        local modified = now_ms()
+        -- A clock behind the row's would get a 409 on every save.
+        local modified = math.max(now_ms(), (row and row.modified or 0) + 1)
         local fraction = total > 0 and here / total or 0
         local code, body, put_err = api:put("books/" .. id .. "/progress", modified,
             { exploredCharCount = here, progress = fraction, lastBookmarkModified = modified },
@@ -405,6 +406,7 @@ function Chimi:sync(opts)
         elseif code == 409 and body and body.row then
             -- The server's row is newer (another clock ahead of ours): offer it next time.
             logger.info("chimimouryou: the server has a newer place")
+            refused = true
         elseif opts.interactive then
             notify(T(_("Could not save your place: %1"), put_err or "?"), 4)
             return
@@ -414,7 +416,9 @@ function Chimi:sync(opts)
     end
     self:pushStatistics(api)
     if opts.interactive then
-        notify(pushed and _("Your place was saved on the server.") or _("Already in step with the server."), 3)
+        notify(refused and _("Your place wasn't saved: the server has a newer one. Sync again to see it.")
+            or pushed and _("Your place was saved on the server.")
+            or _("Already in step with the server."), 3)
     end
 end
 

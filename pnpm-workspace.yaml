@@ -4,7 +4,6 @@ packages:
 allowBuilds:
   esbuild: true
   svelte-preprocess: true
-  unrs-resolver: true
 # Security fixes the parents have not picked up yet (Dependabot alerts).
 overrides:
   '@babel/traverse@<7.23.2': ^7.23.2

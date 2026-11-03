@@ -434,13 +434,18 @@ export class BrowserStorageHandler extends BaseStorageHandler {
     }
   }
 
-  async saveStatistics(data: BooksDbStatistic[], lastStatisticModified: number) {
+  async saveStatistics(
+    data: BooksDbStatistic[],
+    lastStatisticModified: number,
+    raiseDaysOnlyHere?: boolean
+  ) {
     await database.storeStatistics(
       this.currentContext.title,
       data,
       this.saveBehavior,
       this.statisticsMergeMode,
-      lastStatisticModified
+      lastStatisticModified,
+      raiseDaysOnlyHere
     );
 
     BaseStorageHandler.reportProgress();

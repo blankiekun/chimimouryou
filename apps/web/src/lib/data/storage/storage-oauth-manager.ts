@@ -372,8 +372,11 @@ export class StorageOAuthManager {
 
     // Only invalid_grant means the refresh token is dead (undefined: the caller asks for sign-in).
     // Anything else, like no network or an outage, throws: the token stays for the next try.
-    const notRenewed = new Error(
-      `Could not renew the ${this.storageType === StorageKey.ONEDRIVE ? 'OneDrive' : 'Drive'} sign-in, try again later`
+    const notRenewed = Object.assign(
+      new Error(
+        `Could not renew the ${this.storageType === StorageKey.ONEDRIVE ? 'OneDrive' : 'Drive'} sign-in, try again later`
+      ),
+      { status: 0 }
     );
     const response = await fetch(this.refreshEndpoint, { method: 'POST', body: form })
       .then(async (httpResponse) => {

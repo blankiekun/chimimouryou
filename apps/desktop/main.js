@@ -19,8 +19,12 @@ import {
   session,
   shell
 } from 'electron';
+import { Blob } from 'node:buffer';
+import { lookup } from 'node:dns/promises';
 import { cpSync, existsSync, readFileSync, rmSync } from 'node:fs';
+import { BlockList } from 'node:net';
 import { join } from 'node:path';
+import { clearTimeout, setTimeout } from 'node:timers';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   cancelBrowserSignIn,
@@ -39,6 +43,7 @@ import { checkForUpdates } from './updater.js';
 // http://127.0.0.1 is a secure context, and Yomitan's content scripts only match http(s) and file.
 const port = 41917;
 const origin = `http://127.0.0.1:${port}`;
+const FETCH_SILENCE_MS = 60 * 1000;
 
 const resource = (name, devPath) =>
   app.isPackaged ? join(process.resourcesPath, name) : join(import.meta.dirname, devPath);
@@ -219,12 +224,50 @@ ${lunahookAbout(link, file)}
 (${link(file(join(electronDir, 'LICENSES.chromium.html')), 'Chromium licences')}).</p>`;
 }
 
+// What an extension's request may not reach, as the server's fetch proxy and Mihon's Guard.kt.
+// A BlockList judges v4-mapped IPv6 addresses by these IPv4 rules too.
+const notPublic = new BlockList();
+for (const [address, prefix] of [
+  ['0.0.0.0', 8],
+  ['10.0.0.0', 8],
+  ['100.64.0.0', 10],
+  ['127.0.0.0', 8],
+  ['169.254.0.0', 16],
+  ['172.16.0.0', 12],
+  ['192.0.0.0', 24],
+  ['192.168.0.0', 16],
+  ['198.18.0.0', 15],
+  ['224.0.0.0', 3]
+])
+  notPublic.addSubnet(address, prefix, 'ipv4');
+for (const [address, prefix] of [
+  ['::', 128],
+  ['::1', 128],
+  ['fc00::', 7],
+  ['fe80::', 10],
+  ['fec0::', 10],
+  ['ff00::', 8]
+])
+  notPublic.addSubnet(address, prefix, 'ipv6');
+
+async function refuseNonPublic(url) {
+  const host = new URL(url).hostname.replace(/^\[|\]$/g, '');
+  for (const { address, family } of await lookup(host, { all: true })) {
+    if (notPublic.check(address, family === 6 ? 'ipv6' : 'ipv4'))
+      throw new Error(`${host} is not a public address`);
+  }
+}
+
 /**
  * Sources' fetch for the app's pages (transport.ts): http(s) only, a browser user agent, redirects
  * followed here so the page sees the final address (net.fetch's `url` is wrong), the size capped.
  * Pacing per host stays in transport.ts, as in a browser.
  */
-async function sourcesFetch(event, url, { headers = {}, maxBytes = 20 * 1024 * 1024 } = {}) {
+async function sourcesFetch(
+  event,
+  url,
+  { headers = {}, maxBytes = 20 * 1024 * 1024, publicOnly = false } = {}
+) {
   // The main frame only: a source extension's sandboxed frame has an app URL too.
   if (
     event.senderFrame !== event.sender.mainFrame ||
@@ -232,9 +275,21 @@ async function sourcesFetch(event, url, { headers = {}, maxBytes = 20 * 1024 * 1
   )
     throw new Error('Not the app');
   const agent = session.defaultSession.getUserAgent().replace(/ (Electron|chimimouryou)\/\S+/g, '');
+  // A silence limit, not a total one: a 300 MB volume on a slow line has to finish. Firing after
+  // the answer is harmless.
+  // eslint-disable-next-line no-undef -- a global only: no node: module exports it
+  const controller = new AbortController();
+  let stall;
+  const alive = () => {
+    clearTimeout(stall);
+    stall = setTimeout(() => controller.abort(), FETCH_SILENCE_MS);
+  };
   for (let hop = 0; hop < 10; hop += 1) {
     if (!/^https?:\/\//.test(url)) throw new Error('Only http and https');
+    if (publicOnly) await refuseNonPublic(url);
+    alive();
     const response = await net.fetch(url, {
+      signal: controller.signal,
       headers: { 'User-Agent': agent, ...headers },
       redirect: 'manual',
       cache: 'no-store',
@@ -256,10 +311,18 @@ async function sourcesFetch(event, url, { headers = {}, maxBytes = 20 * 1024 * 1
       retryAfter: response.headers.get('Retry-After') || '',
       range: response.headers.get('Content-Range') || ''
     };
-    if (Number(response.headers.get('Content-Length') || 0) > maxBytes)
-      return { ...answer, tooBig: true };
-    const body = await response.arrayBuffer();
-    return body.byteLength > maxBytes ? { ...answer, tooBig: true } : { ...answer, body };
+    // Abort: leaving the body unread doesn't close the connection.
+    const tooBig = () => (controller.abort(), { ...answer, tooBig: true });
+    if (Number(response.headers.get('Content-Length') || 0) > maxBytes) return tooBig();
+    const chunks = [];
+    let received = 0;
+    for await (const chunk of response.body ?? []) {
+      alive();
+      received += chunk.byteLength;
+      if (received > maxBytes) return tooBig();
+      chunks.push(chunk);
+    }
+    return { ...answer, body: await new Blob(chunks).arrayBuffer() };
   }
   throw new Error('Too many redirects');
 }

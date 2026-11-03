@@ -6,11 +6,8 @@ retired when the estimate became the fast core (`../core.py`, engine 4).
 
 - `core_scale.py`: freezes the 1-10 book scale (`../core-scale.json`) from a reference set of
   V98s: a bell curve, mean 5.5, SD 2. Only the anchors are written, nothing of a book.
-- `make_tables.py`: builds `../goshu.json.gz` (word origins from UniDic, which the Analyzer
-  still records) and `../kanji-grades.json` (常用 grades from KANJIDIC2, read by the UI font
+- `make_tables.py`: builds `../kanji-grades.json` (常用 grades from KANJIDIC2, read by the UI font
   subsetter).
-- `validate_speed.py`: checks estimates against how fast readers actually read, once
-  statistics cover enough books.
 
 ## Readings in context (word lists)
 

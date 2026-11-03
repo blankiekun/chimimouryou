@@ -16,6 +16,8 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 /**
  * An extension's preferences in one JSON file, values tagged with their type
@@ -63,7 +65,7 @@ class JsonSharedPreferences(private val file: File) : SharedPreferences {
         file.parentFile.mkdirs()
         val tmp = File(file.path + ".tmp")
         tmp.writeText(root.toString())
-        tmp.renameTo(file)
+        Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING) // renameTo can't replace on Windows
     }
 
     private inline fun <reified T> get(key: String, default: T): T = synchronized(this) { values[key] as? T ?: default }

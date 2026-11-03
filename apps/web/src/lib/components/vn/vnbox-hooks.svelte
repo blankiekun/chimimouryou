@@ -14,7 +14,12 @@
   import { screenTextOff$ } from '$lib/data/vn/vn-ocr';
   import { database } from '$lib/data/store';
   import { vnElementHtml, vnInfo } from '$lib/data/vn/vn';
-  import { rankThreads, savedHookName, type HookThread } from '$lib/data/vn/windows-game';
+  import {
+    approveHook,
+    rankThreads,
+    savedHookName,
+    type HookThread
+  } from '$lib/data/vn/windows-game';
   import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
 
   interface Props {
@@ -177,6 +182,7 @@
         false,
         false
       );
+      await approveHook(text);
       saved = savedHookName({ hook: text });
       saveState = 'Saved. The game starts with this hook next time.';
     } catch (error: any) {

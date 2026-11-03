@@ -53,6 +53,8 @@
     loadVnboxTuning,
     saveVnboxTuning,
     vnboxPlayerUrl,
+    approveHook,
+    hookApproved,
     vnboxErrorText,
     windowsGameBlocker,
     windowsGameBlockerText
@@ -102,6 +104,7 @@
   import { serverConnected, serverFetch } from '$lib/data/remote/server-connect';
   import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
   import { padStep, watchGamepads, type PadAction } from '$lib/data/vn/vn-gamepad';
+  import { vnLandscape } from '$lib/data/vn/vn-landscape';
 
   /** The Backlog sidebar beside the game (not on portrait phones); hovering the game's own text works without it. */
   const showText$ = writableBooleanLocalStorageSubject()('vnTextPanel', false);
@@ -130,6 +133,8 @@
   let blocked: string | undefined;
   /** A Windows game's text hook script, as a URL VNBox can fetch */
   let hookUrl: string | undefined;
+  /** A saved hook script this browser hasn't agreed to run: the game waits for the reader's answer. */
+  let unapprovedHook: string | undefined;
   /** A Windows game's VNBox settings from the Tuning sheet; a new value restarts the game. */
   let tuning = '';
   let showTuning = false;
@@ -145,7 +150,7 @@
   /** The frame waits for load(): a Windows game's address depends on it. */
   let loaded = false;
   $: playerUrl =
-    loaded && info && source && !blocked
+    loaded && info && source && !blocked && !unapprovedHook
       ? windows
         ? vnboxPlayerUrl(info, hookUrl, tuning)
         : `${pagePath}/vn/${source.player}`
@@ -169,6 +174,9 @@
   let screenTextOffSeen = false;
   /** This game's files are missing here: the import dialog can add them to this record. */
   let missingFiles = false;
+  /** This browser can't turn the phone: the reader is asked to (vn-landscape.ts). */
+  let turnNote = false;
+  let landscape: ReturnType<typeof vnLandscape> | undefined;
 
   // The player holds taps on its text for the built-in dictionary only while it is on, and keeps
   // the scan modifier over its text from the game (vnbox.js): the built-in one's, else Yomitan's
@@ -360,7 +368,7 @@
           .catch((error) => logger.warn(`Visual novel sync failed: ${error.message}`));
       }
       tuning = loadVnboxTuning(game.folder!);
-      useHook(game);
+      if (!native && !blocker) await useSavedHook(game);
     }
     loaded = true;
     // Opening it plays it: /hook starts it in Wine, its error shows beside its Start the game button.
@@ -369,6 +377,28 @@
         blocked = `The game couldn't start natively: ${error.message}`;
       });
     }
+  }
+
+  function useHook(script?: string) {
+    if (hookUrl) URL.revokeObjectURL(hookUrl);
+    hookUrl = script
+      ? URL.createObjectURL(new Blob([script], { type: 'text/javascript' }))
+      : undefined;
+  }
+
+  /** The game's saved hook, once approved here. A restart calls it too: the Hooks sheet saves to the database only, and a sync can bring a new script. */
+  async function useSavedHook({ hook }: VnInfo) {
+    const approved = !hook || (await hookApproved(hook));
+    useHook(approved ? hook : undefined);
+    unapprovedHook = approved ? undefined : hook;
+  }
+
+  async function runUnapprovedHook() {
+    const script = unapprovedHook!;
+
+    await approveHook(script);
+    useHook(script);
+    unapprovedHook = undefined;
   }
 
   function updateProgress() {
@@ -633,18 +663,12 @@
     engineSet('Skip', skipping ? 1 : 0);
   }
 
-  /** The game's saved hook as hookUrl. A restart calls it too: the Hooks sheet saves to the database only. */
-  function useHook({ hook }: VnInfo) {
-    if (hookUrl) URL.revokeObjectURL(hookUrl);
-    hookUrl = hook ? URL.createObjectURL(new Blob([hook], { type: 'text/javascript' })) : undefined;
-  }
-
   /** Saves the Tuning sheet's settings and starts the game again with them. */
   async function applyTuning(next: string) {
     showTuning = false;
     await save(true).catch((error) => logger.warn(error.message));
     saveVnboxTuning(info!.folder!, next);
-    useHook(vnInfo((await database.getData(book!.id)) ?? book!));
+    await useSavedHook(vnInfo((await database.getData(book!.id)) ?? book!));
     tuning = next;
     frameLoaded = false;
     started = false;
@@ -662,7 +686,7 @@
   }
 
   async function closeSaves() {
-    useHook(vnInfo((await database.getData(book!.id)) ?? book!));
+    await useSavedHook(vnInfo((await database.getData(book!.id)) ?? book!));
     showSaves = false;
     restarts += 1;
   }
@@ -806,6 +830,7 @@
     load(Number($page.url.searchParams.get('id'))).catch((error) =>
       logger.error(`Error loading visual novel: ${error.message}`)
     );
+    landscape = vnLandscape((show) => (turnNote = show));
     const stopWatchingReturn = watchReturn(onReturn);
     // The frame hides the pads from its engine (overlay.js) but can still read them.
     const stopWatchingPads = watchGamepads(
@@ -822,6 +847,7 @@
     return () => {
       stopWatchingReturn();
       stopWatchingPads();
+      landscape?.stop();
     };
   });
 
@@ -880,9 +906,17 @@
       />
     {/if}
     <!-- The game's own dark ground: part of the content, not the theme -->
-    <div class="vn-game" class:vn-game-blocked={blocked || showSaves}>
-      {#if newerEngine || savesNote || ended || ($screenTextOff$ && !screenTextOffSeen)}
+    <div class="vn-game" class:vn-game-blocked={blocked || unapprovedHook || showSaves}>
+      {#if newerEngine || savesNote || ended || turnNote || ($screenTextOff$ && !screenTextOffSeen)}
         <div class="vn-notices">
+          {#if turnNote}
+            <div class="vn-notice">
+              <p>Turn your phone sideways.</p>
+              <button class="app-button app-button-quiet" on:click={() => (turnNote = false)}>
+                Dismiss
+              </button>
+            </div>
+          {/if}
           {#if ended}
             <div class="vn-notice"><p>The game has ended.</p></div>
           {/if}
@@ -939,6 +973,25 @@
             <button class="app-button" on:click={leave}>Back to the library</button>
           </div>
         </div>
+      {:else if unapprovedHook}
+        <div class="vn-blocked" role="status">
+          <p class="vn-blocked-title">Run this game's text hook script?</p>
+          <p>
+            It wasn't chosen in this browser. A script like this can read your account and API keys,
+            so run it only if you or someone you trust saved it for this game.
+          </p>
+          <pre
+            class="max-h-60 w-full overflow-auto whitespace-pre-wrap text-xs">{unapprovedHook}</pre>
+          <div class="flex flex-wrap gap-2">
+            <button class="app-button app-button-primary" on:click={runUnapprovedHook}>
+              Run the script
+            </button>
+            <button class="app-button" on:click={() => (unapprovedHook = undefined)}>
+              Start without it
+            </button>
+            <button class="app-button" on:click={leave}>Back to the library</button>
+          </div>
+        </div>
       {:else if showSaves}
         <div class="vn-blocked" role="status"><p>The game is stopped while Saves is open.</p></div>
       {:else if book && playerUrl}
@@ -952,6 +1005,7 @@
             allow="autoplay; fullscreen"
             on:load={() => {
               if (frame) lookupPopup?.attachFrame(frame);
+              if (frame?.contentWindow) landscape?.watchFrame(frame.contentWindow);
               frame?.contentDocument?.documentElement.style.setProperty(
                 '--accent-color',
                 getComputedStyle(document.documentElement).getPropertyValue('--accent-color')

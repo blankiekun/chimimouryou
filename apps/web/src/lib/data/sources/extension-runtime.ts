@@ -212,7 +212,7 @@ async function get(
     }
   }
   try {
-    return await sourceFetch(url, { hosts, headers, proxy, maxBytes });
+    return await sourceFetch(url, { hosts, headers, proxy, maxBytes, publicOnly: true });
   } catch (error) {
     if (dropped && error instanceof FetchError && (error.status === 401 || error.status === 403)) {
       throw new NeedsAppError(new URL(url).hostname);
@@ -551,7 +551,7 @@ export function allowedHosts(allow: unknown) {
 }
 
 /** The image type of `bytes` by their first bytes, '' if they aren't an image. */
-function sniffImage(bytes: Uint8Array) {
+export function sniffImage(bytes: Uint8Array) {
   const starts = (...values: number[]) => values.every((value, i) => bytes[i] === value);
   if (starts(0xff, 0xd8, 0xff)) return 'image/jpeg';
   if (starts(0x89, 0x50, 0x4e, 0x47)) return 'image/png';

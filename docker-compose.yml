@@ -55,7 +55,8 @@ services:
     command: ['python3', '/app/account/service.py', 'serve']
     # deploy.sh and ebook-update roll back when this never passes (`up --wait`).
     healthcheck:
-      test: ['CMD', 'python3', '-c', "import socket; socket.create_connection(('127.0.0.1', 8766), 3)"]
+      test:
+        ['CMD', 'python3', '-c', "import socket; socket.create_connection(('127.0.0.1', 8766), 3)"]
       interval: 10s
       timeout: 5s
       start_period: 60s
@@ -63,7 +64,6 @@ services:
       - ${DATA_PATH:-./data}:/data
       - ${SYNC_PATH:-${DATA_PATH:-./data}/sync}:/data/sync:ro
     environment:
-      MIN_FREE_MB: ${MIN_FREE_MB:-1024}
       ALLOW_HTTP_ACCOUNTS: ${ALLOW_HTTP_ACCOUNTS:-0}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
 
@@ -72,7 +72,8 @@ services:
     <<: *services
     command: ['python3', '/app/api/service.py', 'serve']
     healthcheck:
-      test: ['CMD', 'python3', '-c', "import socket; socket.create_connection(('127.0.0.1', 8769), 3)"]
+      test:
+        ['CMD', 'python3', '-c', "import socket; socket.create_connection(('127.0.0.1', 8769), 3)"]
       interval: 10s
       timeout: 5s
       start_period: 60s
@@ -93,8 +94,11 @@ services:
         '-c',
         'while :; do build-calibre-catalog /library /data/state/catalog/catalog.json --thumbs; sleep ${CATALOG_INTERVAL:-600}; done'
       ]
+    # It runs Pillow on book files: no writing to accounts or other server data.
     volumes:
-      - ${DATA_PATH:-./data}:/data
+      - ${DATA_PATH:-./data}:/data:ro
+      - ${DATA_PATH:-./data}/state/catalog:/data/state/catalog
+      - ${DATA_PATH:-./data}/state/api:/data/state/api
       - ${LIBRARY_PATH:?set LIBRARY_PATH in .env}:/library
       - ${VN_PATH:-${DATA_PATH:-./data}/vn}:/vn:ro
 
@@ -107,7 +111,6 @@ services:
     image: ${IMAGE_PREFIX:-ebook-reader}-import:${IMAGE_TAG:-local}
     command: ['python3', '/app/import/service.py']
     environment:
-      ALLOW_HTTP_ACCOUNTS: ${ALLOW_HTTP_ACCOUNTS:-0}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       # Sources: seconds between requests to one site; the fake site for tests (docs/CONFIGURATION.md).
       SOURCES_HOST_INTERVAL: ${SOURCES_HOST_INTERVAL:-2}
@@ -115,8 +118,12 @@ services:
       SOURCES_FIXTURE_URL: ${SOURCES_FIXTURE_URL:-}
       # Encrypts the passwords of OPDS/Suwayomi servers added as sources; keep it out of DATA_PATH.
       SOURCES_SECRET_KEY: ${SOURCES_SECRET_KEY:-}
+    # It runs Calibre on uploaded files: no writing to accounts or other server data.
     volumes:
-      - ${DATA_PATH:-./data}:/data
+      - ${DATA_PATH:-./data}:/data:ro
+      - ${DATA_PATH:-./data}/state/import:/data/state/import
+      - ${DATA_PATH:-./data}/state/catalog:/data/state/catalog
+      - ${DATA_PATH:-./data}/state/api:/data/state/api
       - ${LIBRARY_PATH:?set LIBRARY_PATH in .env}:/library
       # Game ZIPs are unpacked here; its catalog rebuilds list the visual novels too.
       - ${VN_PATH:-${DATA_PATH:-./data}/vn}:/vn
@@ -133,11 +140,13 @@ services:
     cpu_shares: 512
     environment:
       JITEN_WORKERS: ${DIFFICULTY_WORKERS:-2}
-      ALLOW_HTTP_ACCOUNTS: ${ALLOW_HTTP_ACCOUNTS:-0}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
-    # Reads the catalog and token; writes only its own state.
+    # Reads the catalog, token, text copies and manga text; writes only its own state. No accounts.
     volumes:
-      - ${DATA_PATH:-./data}:/data:ro
+      - ${DATA_PATH:-./data}/state/catalog:/data/state/catalog:ro
+      - ${DATA_PATH:-./data}/state/internal-token:/data/state/internal-token:ro
+      - ${DATA_PATH:-./data}/state/api/text:/data/state/api/text:ro
+      - ${DATA_PATH:-./data}/state/mokuro:/data/state/mokuro:ro
       - ${DATA_PATH:-./data}/state/difficulty:/data/state/difficulty
       - ${LIBRARY_PATH:?set LIBRARY_PATH in .env}:/library:ro
       - ${VN_PATH:-${DATA_PATH:-./data}/vn}:/vn:ro
@@ -153,9 +162,10 @@ services:
     command: ['python3', '/app/mokuro/service.py', 'serve']
     cpu_shares: 512
     environment:
-      ALLOW_HTTP_ACCOUNTS: ${ALLOW_HTTP_ACCOUNTS:-0}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
+    # Reads the catalog and token; writes only its own state. No accounts.
     volumes:
-      - ${DATA_PATH:-./data}:/data:ro
+      - ${DATA_PATH:-./data}/state/catalog:/data/state/catalog:ro
+      - ${DATA_PATH:-./data}/state/internal-token:/data/state/internal-token:ro
       - ${DATA_PATH:-./data}/state/mokuro:/data/state/mokuro
       - ${LIBRARY_PATH:?set LIBRARY_PATH in .env}:/library:ro

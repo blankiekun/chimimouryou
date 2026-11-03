@@ -23,7 +23,6 @@ HTTP API (bound to localhost, proxied by nginx at /account/api/):
        public reads (X-Public-Reads: 1)
        permissions: admin, import, series, difficulty (admins have all), and
        shared: any account, or a signed-out reader on a trusted network
-  Writes are refused while the disk has less than MIN_FREE_MB free.
   GET  admin/users    all accounts (admins only)
   POST admin/add      {"username", "password", "admin"}
   POST admin/passwd   {"username", "password"}; signs out that account
@@ -58,7 +57,8 @@ Security notes:
   without HTTPS: passwords and sessions then cross the network unencrypted.
   HTTP sessions use their own non-Secure cookie, honoured on HTTP requests
   only, so a cookie planted over HTTP can't take over an HTTPS session.
-- Server connect (CORS_ORIGINS, off when empty): tokens are sessions sent as
+- Server connect (always on for our own apps, httpbase.APP_ORIGINS; CORS_ORIGINS
+  adds sites): tokens are sessions sent as
   `Authorization: Bearer` over HTTPS only. Requests from another origin are
   authenticated by their token alone (never the cookie or a trusted network)
   and never pass admin checks.
@@ -73,13 +73,11 @@ import os
 import posixpath
 import re
 import secrets
-import shutil
 import sqlite3
 import sys
 import threading
 import time
 import urllib.parse
-from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # httpbase.py (shared request checks) is in the parent folder: /app in the images, server/ here.
@@ -90,11 +88,9 @@ STATE_DIR = os.environ.get('ACCOUNT_STATE_DIR', '/data/state/account')
 # Keep it off disks that other containers mount: whoever can read it can read
 # the settings (API keys).
 DATA_DIR = os.environ.get('ACCOUNT_DATA_DIR', '/data/accounts')
-SHARED_SYNC_DIR = os.environ.get('SHARED_SYNC_DIR', '/data/sync')
 PORT = int(os.environ.get('ACCOUNT_PORT', '8766'))
 # 0.0.0.0 in Docker, where nginx runs in another container.
 HOST = os.environ.get('ACCOUNT_HOST', '127.0.0.1')
-MIN_FREE_BYTES = int(os.environ.get('MIN_FREE_MB', '1024')) * 1024 * 1024
 # Shared with ebook-update on the host: request.json in; status.json, and the
 # installed marker `updater` (holding the GitHub repository), out.
 UPDATE_DIR = os.environ.get('UPDATE_STATE_DIR', '/data/state/update')
@@ -502,14 +498,6 @@ def shared_write_allowed(method: str, uri: str, destination: str | None) -> bool
         folder == SHARED_SYNC_URI and posixpath.basename(target) in ('series.json', 'metadata.json'))
 
 
-def disk_full(path: str) -> bool:
-    """Below MIN_FREE_BYTES free: there are no quotas, so this keeps uploads from filling the disk."""
-    try:
-        return shutil.disk_usage(path).free < MIN_FREE_BYTES
-    except OSError:
-        return False
-
-
 def request_scheme(proto: str | None) -> str | None:
     """'https', 'http' when plain-HTTP accounts are allowed, else None (refused)."""
     if proto == 'https' or (ALLOW_HTTP and proto == 'http'):
@@ -519,11 +507,9 @@ def request_scheme(proto: str | None) -> str | None:
 
 def is_cross_origin(headers) -> bool:
     """Whether the request carries an Origin other than this site's (browsers send it on
-    cross-origin requests, and on same-origin ones except GET/HEAD). Only with server connect on:
-    without CORS no other site gets a request through, and a proxy that misreports the scheme
-    keeps working as before."""
+    cross-origin requests, and on same-origin ones except GET/HEAD)."""
     origin = headers.get('Origin')
-    return bool(CORS_ORIGINS) and origin is not None and origin != f"{headers.get('X-Forwarded-Proto')}://{headers.get('Host', '')}"
+    return origin is not None and origin != f"{headers.get('X-Forwarded-Proto')}://{headers.get('Host', '')}"
 
 
 def session_cookie_name(proto: str | None) -> str | None:
@@ -694,14 +680,14 @@ class Handler(BaseHTTPRequestHandler):
         if is_cross_origin(self.headers) or (
                 bearer and db.query('SELECT 1 FROM sessions WHERE token_hash = ?', (token_hash(bearer),))):
             return bearer
-        cookie = SimpleCookie()
-        try:
-            cookie.load(self.headers.get('Cookie', ''))
-        except Exception:  # noqa: BLE001 - malformed cookies count as signed out
-            return None
+        # By hand: SimpleCookie silently stops at another app's cookie it can't parse, dropping ours.
+        cookies = {}
+        for part in self.headers.get('Cookie', '').split(';'):
+            name, _, value = part.partition('=')
+            cookies[name.strip()] = value.strip()
         # Browsers only send the __Host- cookie over HTTPS, so it is always good.
-        name = COOKIE if COOKIE in cookie else session_cookie_name(self.headers.get('X-Forwarded-Proto'))
-        return cookie[name].value if name and name in cookie else None
+        name = COOKIE if COOKIE in cookies else session_cookie_name(self.headers.get('X-Forwarded-Proto'))
+        return cookies.get(name) or None
 
     def require_user(self):
         user = session_user(self.session_token())
@@ -769,11 +755,6 @@ class Handler(BaseHTTPRequestHandler):
                              is_cross_origin(self.headers))
         if status == 200 and permission == 'shared' and not shared_write_allowed(
                 method, self.headers.get('X-Original-URI', ''), self.headers.get('X-Destination')):
-            status = 403
-        if status == 200 and method not in READ_METHODS and permission in ('', 'shared') \
-                and disk_full(DATA_DIR if permission == '' else SHARED_SYNC_DIR):
-            # Not log_message: that skips auth requests.
-            sys.stderr.write(f'write refused: less than {MIN_FREE_BYTES // 1024 // 1024} MB free\n')
             status = 403
         if not (user and status == 200):
             return status, None, {}

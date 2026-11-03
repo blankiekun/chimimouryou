@@ -1032,6 +1032,9 @@ export const en = {
   'reader.copyProgress': 'Copy progress',
   'reader.welcomeBack': '{days} days since you last read',
   'reader.dismiss': 'Dismiss',
+  'reader.placeNotSavedLabel': 'Place not saved',
+  'reader.placeNotSaved':
+    "This browser's storage is full, so your place isn't saved here. Free up some space, or it may be lost when you close this page.",
   'reader.jumpBack': 'Back',
   'reader.jumpBackLabel': 'Back to where you were',
   'reader.close': 'Close',
@@ -1489,6 +1492,10 @@ export const en = {
   'prefs.account.adminPanel': 'Admin panel',
   'prefs.account.open': 'Open',
   'prefs.account.signOut': 'Sign out',
+  'prefs.account.signOutAnyway':
+    "Sign out anyway? Some reading changes on this device haven't reached the server, and they will be lost. If the server can't be reached, you stay signed in and nothing is removed.",
+  'prefs.account.signOutFailed':
+    "You're still signed in and nothing was removed from this device: the server can't be reached, or some reading data hasn't been sent yet. Try again once you're online.",
   'prefs.account.checking': 'Checking sign-in...',
   'prefs.account.unreachable': "Can't reach the server. Reload when it's back.",
   'prefs.account.signInHint': 'Ask an admin for an account.',

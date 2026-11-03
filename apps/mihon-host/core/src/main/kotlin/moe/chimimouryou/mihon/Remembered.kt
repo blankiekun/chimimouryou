@@ -19,6 +19,8 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 /**
  * What Mihon's database keeps per work and chapter (title, memo, chapter number…): extensions
@@ -76,7 +78,10 @@ class Remembered(private val dir: File) {
         dir.mkdirs()
         val next = File(dir, "$source.json.tmp")
         next.writeText(JsonObject(all).toString())
-        next.renameTo(file(source))
+        // renameTo can't replace a file on Windows. Android (minSdk 24, no java.nio.file below 26) never reaches Files.
+        if (!next.renameTo(file(source))) {
+            Files.move(next.toPath(), file(source).toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
     }
 }
 

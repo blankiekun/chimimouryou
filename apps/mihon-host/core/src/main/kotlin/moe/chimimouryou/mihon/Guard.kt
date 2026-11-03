@@ -32,6 +32,11 @@ class Guard(private val testHosts: Set<String> = emptySet()) : Dns, Interceptor 
     override fun intercept(chain: Interceptor.Chain): Response {
         val url = chain.request().url
         if (!url.isHttps) throw IOException("Only https: ${url.host}")
+        // OkHttp doesn't ask the Dns above for an IP address in the URL: check what it connected to.
+        val address = chain.connection()?.route()?.socketAddress?.address
+        if (address != null && url.host.lowercase() !in testHosts && !isPublic(address)) {
+            throw IOException("${url.host} is not a public address")
+        }
         return chain.proceed(chain.request())
     }
 

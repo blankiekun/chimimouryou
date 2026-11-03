@@ -76,7 +76,8 @@ class ServiceTestCase(unittest.TestCase):
 
     def request(self, method, path, body=None, account='', headers=None):
         """(status, response headers, body bytes)."""
-        all_headers = {'X-Internal-Token': TOKEN}
+        # As nginx sends them for a reader on a trusted network.
+        all_headers = {'X-Internal-Token': TOKEN, 'X-Trusted-Network': '1'}
         if account:
             all_headers['X-Account-Id'] = account
         if body is not None and not isinstance(body, bytes):
@@ -175,6 +176,24 @@ class WriteTest(ServiceTestCase):
         status, body = self.call('GET', '/api/v1/sync?since=0', account=account)
         self.assertEqual(status, 200)
         return body
+
+    # Bug caught: PUBLIC_READS lets a stranger read what readers on the trusted network highlighted.
+    def test_sync_hides_shared_rows_outside_the_trusted_network(self):
+        path = f'/api/v1/books/{self.book}/highlights/h-1'
+        self.assertEqual(self.call('PUT', path, {'modified': 1, 'data': {'text': '猫'}})[0], 200)
+        status, outside = self.call('GET', '/api/v1/sync?since=0', headers={'X-Trusted-Network': '0'})
+        self.assertEqual((status, outside['highlights']), (200, []))
+        self.assertEqual(len(self.sync()['highlights']), 1)
+
+    # Bug caught: a tab whose session died writes its reader's rows into the shared account.
+    def test_dead_session_is_refused_not_filed_under_shared(self):
+        path = f'/api/v1/books/{self.book}/highlights/h-1'
+        body = {'modified': 1, 'data': {'text': '猫'}}
+        headers = {'X-Expected-Account': ACCOUNT_A}
+        self.assertEqual(self.call('PUT', path, body, headers=headers)[0], 401)
+        self.assertEqual(self.call('GET', '/api/v1/sync?since=0', headers=headers)[0], 401)
+        self.assertEqual(self.sync()['highlights'], [])
+        self.assertEqual(self.call('PUT', path, body, account=ACCOUNT_A, headers=headers)[0], 200)
 
     def test_progress_round_trip(self):
         status, body = self.call('PUT', f'/api/v1/books/{self.book}/progress',

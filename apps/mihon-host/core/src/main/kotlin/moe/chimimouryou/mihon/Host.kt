@@ -57,6 +57,8 @@ class Host(
         Injekt.addSingleton(network)
         Injekt.addSingleton(Json { ignoreUnknownKeys = true; explicitNulls = false })
         Injekt.addSingleton(ProtoBuf)
+        // Files of pages that failed halfway were never handed over; nothing else reads them now.
+        tmp.deleteRecursively()
         tmp.mkdirs()
     }
 

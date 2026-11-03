@@ -35,6 +35,11 @@ export function isMobile(window: Window) {
   return userAgentRegex.test(UA);
 }
 
+/** A touch screen whose short side is under the 640px breakpoint, whichever way it is held. */
+export function isPhone(window: Window) {
+  return isMobile(window) && Math.min(window.screen.width, window.screen.height) <= 639;
+}
+
 export function isOnOldUrl(window: Window) {
   return window.location.href.startsWith('https://ttu-ebook.web.app');
 }

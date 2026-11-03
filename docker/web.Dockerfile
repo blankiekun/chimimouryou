@@ -39,7 +39,7 @@ ARG JMDICT_URL=https://github.com/yomidevs/jmdict-yomitan/releases/latest/downlo
 RUN mkdir -p build/dictionaries && node -e "fetch(process.argv[1]).then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); }).then((b) => require('fs').writeFileSync('build/dictionaries/JMdict_english.zip', Buffer.from(b)))" "$JMDICT_URL" \
   || echo 'JMdict was not downloaded: Settings → Dictionary links to its releases instead' >&2
 
-FROM nginx:1.29-alpine
+FROM nginx:1.31-alpine
 COPY --from=build /src/apps/web/build /srv/www
 COPY server/nginx-ebook-reader.conf.template server/render-nginx.sh /opt/ebook-reader/
 COPY docker/40-ebook-reader.sh /docker-entrypoint.d/

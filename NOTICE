@@ -26,9 +26,6 @@ engine/kanji-grades.json is derived from KANJIDIC2 by the
 Electronic Dictionary Research and Development Group
 (https://www.edrdg.org/kanjidic/), licensed under CC BY-SA 4.0; it is
 distributed under the same licence.
-engine/goshu.json.gz holds word origins (語種) from UniDic
-(https://clrd.ninjal.ac.jp/unidic/, via unidic-lite), Copyright (c) 2011-2013,
-The UniDic Consortium, used under its BSD licence.
 The readings in context and the "Known" furigana check are yurigana
 (https://github.com/blankiekun/yurigana), BSD 3-Clause, a dependency installed
 from its release; its kanji-readings.json is derived from KANJIDIC2 (CC BY-SA

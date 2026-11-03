@@ -157,6 +157,7 @@ export function registerMihon({ app, ipcMain, net, isApp, hostDir, jvmArgs = [] 
     host = null;
     clearTimeout(old.idle);
     old.child.kill('SIGKILL');
+    old.readyReject(new Error('The Mihon host stopped'));
     for (const { reject, timer } of old.waiting.values()) {
       clearTimeout(timer);
       reject(new Error('The Mihon host stopped'));
@@ -183,10 +184,21 @@ export function registerMihon({ app, ipcMain, net, isApp, hostDir, jvmArgs = [] 
       ],
       { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true }
     );
-    const started = { child, waiting: new Map(), loaded: new Set(), next: 1, idle: null };
+    const started = {
+      child,
+      waiting: new Map(),
+      loaded: new Set(),
+      next: 1,
+      // Until "ready" this limits the start: a damaged Java can run on without ever answering.
+      idle: setTimeout(() => host === started && stop(), CALL_MS)
+    };
     started.ready = new Promise((resolve, reject) => {
       started.readyResolve = resolve;
-      child.once('error', reject);
+      started.readyReject = reject;
+    });
+    child.once('error', (error) => {
+      started.readyReject(error);
+      if (host === started) stop();
     });
     child.stderr.on('data', () => undefined);
     child.on('exit', () => host === started && stop());

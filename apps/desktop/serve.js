@@ -64,7 +64,14 @@ export function serve(root, port, handle = () => false) {
       res.writeHead(405).end();
       return;
     }
-    const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+    let url;
+    try {
+      url = new URL(req.url ?? '/', 'http://127.0.0.1');
+    } catch {
+      // Any website can send "//": unhandled, it raises a main-process error dialog.
+      res.writeHead(400).end();
+      return;
+    }
     if (req.method === 'GET' && handle(url, res)) return;
     const path = url.pathname;
     const found = resolveFile(root, path);

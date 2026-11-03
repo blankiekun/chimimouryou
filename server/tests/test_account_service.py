@@ -21,7 +21,7 @@ class AccountServiceTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         # Tests point these at the temp folder; put them back so later test files see the real defaults.
-        for name in ('DATA_DIR', 'STATE_DIR', 'SHARED_SYNC_DIR', 'UPDATE_DIR', 'INTERNAL_TOKEN_FILE', 'db'):
+        for name in ('DATA_DIR', 'STATE_DIR', 'UPDATE_DIR', 'INTERNAL_TOKEN_FILE', 'db'):
             self.addCleanup(setattr, service, name, getattr(service, name, None))
         service.DATA_DIR = os.path.join(self.tmp.name, 'data')
         service.STATE_DIR = self.tmp.name
@@ -247,23 +247,6 @@ class AccountServiceTest(unittest.TestCase):
             self.assertIsNone(service.session_cookie_name(None))
         finally:
             service.ALLOW_HTTP = False
-
-    # Catches nginx's write check letting uploads through on a full disk (the service has no quotas),
-    # or refusing reads there too.
-    def test_disk_full_refuses_writes_not_reads(self):
-        service.SHARED_SYNC_DIR = self.tmp.name
-        call = self.serve()
-        service.create_user('alice', 'long enough')
-        cookie = f'{service.COOKIE}={service.create_session(service.find_user("alice")["id"])}'
-
-        def check(path, method):
-            return call('GET', path, Cookie=cookie, X_Original_Method=method,
-                        X_Original_URI='/calibre/sync/x/progress_1.json')[0]
-
-        self.assertEqual((check('auth/shared/writes', 'PUT'), check('auth', 'PUT')), (200, 200))
-        with unittest.mock.patch.object(service, 'MIN_FREE_BYTES', 1 << 62):
-            self.assertEqual((check('auth/shared/writes', 'PUT'), check('auth', 'PUT')), (403, 403))
-            self.assertEqual((check('auth/shared/writes', 'GET'), check('auth', 'GET')), (200, 200))
 
     def test_permissions(self):
         user_id = service.create_user('carol', 'long enough')
@@ -588,6 +571,19 @@ class AccountServiceTest(unittest.TestCase):
         self.assertIn('Retry-After', headers)
         # Shared with login: the same account and address are locked there too.
         self.assertEqual(call('POST', 'login', self.ALICE, Origin='https://books.example')[0], 429)
+
+    # Catches SimpleCookie's habit: it silently drops every cookie after one it can't parse, so another
+    # app on the same host signed readers out. Also catches a parser that lets the plain-HTTP cookie
+    # count on HTTPS, or that splits a value at its own '='.
+    def test_another_apps_cookie_keeps_the_session(self):
+        call = self.serve()
+        service.create_user('alice', 'long enough')
+        token = service.create_session(service.find_user('alice')['id'])
+        for other in ('a={"x":1}', 'a=b=c', 'a b', '=', 'a=",'):
+            for header in (f'{other}; {service.COOKIE}={token}', f'{service.COOKIE}={token}; {other}'):
+                self.assertEqual(call('GET', 'me', Cookie=header)[0], 200, header)
+        self.assertEqual(call('GET', 'me', Cookie=f'a={{"x":1}}; {service.HTTP_COOKIE}={token}')[0], 401)
+        self.assertEqual(call('GET', 'me', Cookie='a={"x":1}')[0], 401)
 
     def test_cookie_sign_in_unchanged(self):
         call = self.serve()
