@@ -169,6 +169,20 @@ export async function placeNewerHere(
   );
 }
 
+/** Statistics saved here that never reached the sync target, like `placeNewerHere`. */
+export async function statisticsNewerHere(
+  storageHandler: BaseStorageHandler | undefined,
+  title: string
+) {
+  const modified = await database.getLastModifiedForType(title, StorageDataType.STATISTICS);
+
+  return (
+    !!storageHandler &&
+    !!modified &&
+    !(await storageHandler.isUpToDate(StorageDataType.STATISTICS, modified))
+  );
+}
+
 /** Downloads the book's progress, statistics, goals and audiobook data when down sync is on. */
 export async function syncDownData(
   localStorageHandler: BrowserStorageHandler | undefined,

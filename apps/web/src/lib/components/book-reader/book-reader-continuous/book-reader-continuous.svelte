@@ -157,6 +157,7 @@
   let bookmarkPos: BookmarkPosData | undefined;
 
   let scrollWhenReady: boolean;
+  let placeRestored = false;
 
   let prevIntendedCharCount = 0;
 
@@ -263,6 +264,7 @@
   $: {
     if (htmlContent) {
       scrollWhenReady = true;
+      placeRestored = false;
     }
   }
 
@@ -288,9 +290,11 @@
         browser &&
         calculator &&
         new BookmarkManagerContinuous(calculator, window, firstDimensionMargin || 0, jumped);
-      bookmarkManager = bookmarkManagerConcrete;
     }
   }
+
+  // The page saves and jumps through this: until the saved place is back, a save would be near the start.
+  $: bookmarkManager = placeRestored ? bookmarkManagerConcrete : undefined;
 
   $: {
     if (contentReadyEvent) {
@@ -530,16 +534,21 @@
 
       bookmarkData
         .then((data) => {
-          if (!data || !bookmarkManager) {
+          if (!data || !bookmarkManagerConcrete) {
             return;
           }
 
           prevIntendedCharCount = data.exploredCharCount || 0;
           const was = `${window.scrollX} ${window.scrollY}`;
-          bookmarkManager.scrollToBookmark(data, customReadingPointScrollOffset + edgeOffset);
+          bookmarkManagerConcrete.scrollToBookmark(
+            data,
+            customReadingPointScrollOffset + edgeOffset
+          );
           restoreScrolled = `${window.scrollX} ${window.scrollY}` !== was;
         })
         .finally(() => {
+          placeRestored = true;
+
           if (autoBookmark) {
             // Skip the scroll to the bookmark only: at the book's start there is none, and the
             // first scroll (a jump from Contents) is the reader's.
