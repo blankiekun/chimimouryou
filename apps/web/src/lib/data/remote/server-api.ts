@@ -106,8 +106,8 @@ function apiFetch(path: string, init: RequestInit = {}) {
 
 async function httpError(response: Response) {
   const message = (await response.json().catch(() => ({})))?.error;
-  // Full disk and too large keep the server's words: the reader can act on them.
-  const keep = (response.status === 507 || response.status === 413) && typeof message === 'string';
+  // Full disk, too large and a wrong clock keep the server's words: the reader can act on them.
+  const keep = [507, 413, 422].includes(response.status) && typeof message === 'string';
 
   return Object.assign(
     new Error(keep ? message : `Server request failed (HTTP ${response.status})`),

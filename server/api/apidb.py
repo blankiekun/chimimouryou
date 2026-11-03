@@ -289,10 +289,12 @@ def current_rev(connection: sqlite3.Connection) -> int:
 
 
 def put_row(connection: sqlite3.Connection, rev: Rev, table: str, key: dict, modified: int,
-            values: dict) -> tuple[str, sqlite3.Row | None]:
+            values: dict, not_after: int | None = None) -> tuple[str, sqlite3.Row | None]:
     """Writes a row unless the stored one is as new or newer: 'written', 'same' (equal modified, nothing
     written, so clients don't loop on a bumped rev) or 'conflict' (stored newer). On equal modified a tombstone
-    still replaces a live row, so a delete is never lost to a tie. Returns the stored row after."""
+    still replaces a live row, so a delete is never lost to a tie. With not_after, 'future': dated later than it,
+    and more than one past the stored row (clients step over a row with stored + 1, whatever its date). Returns
+    the stored row after."""
     if table not in TABLE_KEYS:
         raise ValueError(f'unknown table {table}')
     key_columns = TABLE_KEYS[table]
@@ -307,6 +309,8 @@ def put_row(connection: sqlite3.Connection, rev: Rev, table: str, key: dict, mod
         return 'same', stored
     if stored is not None and stored['modified'] > modified:
         return 'conflict', stored
+    if not_after is not None and modified > max(not_after, stored['modified'] + 1 if stored is not None else 0):
+        return 'future', stored
     columns = list(key_columns) + list(values) + ['modified', 'rev']
     params = key_values + tuple(values.values()) + (modified, rev())
     updates = ', '.join(f'{column} = excluded.{column}' for column in list(values) + ['modified', 'rev'])

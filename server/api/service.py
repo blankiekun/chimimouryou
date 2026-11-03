@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import sys
+import time
 import unicodedata
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -37,10 +38,16 @@ MAX_TEXT_BYTES = 32 * 1024 * 1024
 MAX_TEXT_UNPACKED_BYTES = 256 * 1024 * 1024
 MAX_COVER_BYTES = 10 * 1024 * 1024
 MAX_GAME_BYTES = 100 * 1024 * 1024
+# A row's `modified` is the client's clock: this far past the server's is refused, so a wrong clock can't block others.
+MAX_CLOCK_AHEAD_MS = 5 * 60 * 1000
 TEXT_KEYS = {'elementHtml': str, 'sections': list, 'styleSheet': str}
 COVER_TYPES = {'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif'}
 
 db: apidb.Database
+
+
+def now_ms() -> int:
+    return int(time.time() * 1000)
 
 
 class ApiError(httpbase.HttpError):
@@ -265,11 +272,18 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError(403, 'Needs an account')
 
     @staticmethod
-    def put(table: str, key: dict, modified: int, values: dict):
-        status, row = db.transaction(lambda c: apidb.put_row(c, apidb.Rev(c), table, key, modified, values))
+    def write_result(table: str, status: str, row):
+        if status == 'future':
+            raise ApiError(422, "A change here is dated ahead of the server: check this device's clock.")
         if status == 'conflict':
             raise ApiError(409, 'Newer on the server', {'row': row_json(table, row)})
         return 200, {'rev': row['rev']}
+
+    @classmethod
+    def put(cls, table: str, key: dict, modified: int, values: dict):
+        not_after = now_ms() + MAX_CLOCK_AHEAD_MS
+        status, row = db.transaction(lambda c: apidb.put_row(c, apidb.Rev(c), table, key, modified, values, not_after))
+        return cls.write_result(table, status, row)
 
     def put_progress(self, match):
         book, body = self.book_of(match), self.read_json()
@@ -426,21 +440,19 @@ class Handler(BaseHTTPRequestHandler):
 
     def write_game(self, name: str, modified: int, data: bytes | None):
         path = apidb.game_path(ACCOUNT_DATA_DIR, self.account, name)
+        not_after = now_ms() + MAX_CLOCK_AHEAD_MS
 
         def work(connection):
             values = {'size': len(data), 'deleted': 0} if data is not None else {'size': 0, 'deleted': 1}
             status, row = apidb.put_row(connection, apidb.Rev(connection), 'games',
-                                        {'account': self.account, 'name': name}, modified, values)
+                                        {'account': self.account, 'name': name}, modified, values, not_after)
             # In the transaction: a failed file write leaves the row as it was.
             if status == 'written' and data is not None:
                 apidb.write_atomic(path, data)
             elif status == 'written' and os.path.exists(path):
                 os.unlink(path)
             return status, row
-        status, row = db.transaction(work)
-        if status == 'conflict':
-            raise ApiError(409, 'Newer on the server', {'row': row_json('games', row)})
-        return 200, {'rev': row['rev']}
+        return self.write_result('games', *db.transaction(work))
 
     def put_game_doc(self, match):
         name, body = self.game_name(match), self.read_json()

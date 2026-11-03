@@ -346,6 +346,95 @@ class WriteTest(ServiceTestCase):
 PNG = b'\x89PNG\r\n\x1a\n' + b'0' * 16
 
 
+class ClockAheadTest(ServiceTestCase):
+    """Writes dated beyond now + 5 minutes. The ways this can fail, listed before the code was written:
+    1. A fast device overwrites another device's newer row, or bumps the rev, on every sync (a plain cap did both).
+    2. The limit is off by one, refusing a clock within tolerance or letting one past it through.
+    3. A row already stored in the future can't be replaced: max(now, stored + 1) writes (writeSyncFile, the
+       deletes in writeRows) get refused, or a device re-sending the stored row gets an error instead of 'same'.
+    4. A refused game write still changes the zip on disk.
+    """
+
+    NOW = 10 ** 12
+    DAY = 86_400_000
+    LIMIT = 5 * 60 * 1000
+
+    def setUp(self):
+        super().setUp()
+        clock = unittest.mock.patch.object(service, 'now_ms', lambda: self.NOW)
+        clock.start()
+        self.addCleanup(clock.stop)
+        self.books([catalog_book(1, '猫', added=1)])
+        self.book = self.book_id('uuid-1')
+        self.path = f'/api/v1/books/{self.book}/progress'
+
+    def put(self, modified, device, path=None):
+        return self.call('PUT', path or self.path, {'modified': modified, 'progress': 0.5, 'data': {'by': device}})
+
+    def row(self):
+        rows = self.call('GET', '/api/v1/sync?since=0')[1]['progress']
+        return rows[0]['data']['by'], rows[0]['modified'], rows[0]['rev']
+
+    def store_future(self, modified):
+        """A row from before the limit existed (the API can't make one any more)."""
+        service.db.transaction(lambda c: apidb.put_row(c, apidb.Rev(c), 'progress',
+                                                       {'account': '', 'book': self.book}, modified,
+                                                       {'data': '{"by":"old"}', 'progress': 0}))
+
+    # Bug caught: failure 1, a fast clock's re-sends loop on revs and overwrite the correct device's newer write.
+    def test_fast_device_neither_loops_nor_overwrites(self):
+        self.assertEqual(self.put(self.NOW, 'right')[0], 200)
+        before = self.row()
+        for _ in range(3):  # what the client does each sync while its local value stays ahead
+            status, body = self.put(self.NOW + self.DAY, 'fast')
+            self.assertEqual(status, 422)
+            self.assertIn('clock', body['error'])
+            self.assertNotIn('row', body)
+            self.assertEqual(self.row(), before)
+        self.assertEqual(self.put(self.NOW + 1000, 'right')[0], 200)
+        self.assertEqual(self.put(self.NOW + self.DAY, 'fast')[0], 422)
+        self.assertEqual(self.row()[0], 'right')
+
+    # Bug caught: failure 2, the boundary off by one in either direction.
+    def test_limit_boundary(self):
+        day = f'/api/v1/books/{self.book}/statistics'
+        self.assertEqual(self.put(self.NOW + self.LIMIT, 'd', f'{day}/2026-01-01')[0], 200)
+        self.assertEqual(self.put(self.NOW + self.LIMIT + 1, 'd', f'{day}/2026-01-02')[0], 422)
+
+    # Bug caught: failure 3, a stored future row stops being replaceable or re-sendable.
+    def test_stored_future_row_stays_writable(self):
+        far = self.NOW + self.DAY
+        self.store_future(far)
+        rev = self.row()[2]
+        self.assertEqual(self.put(far, 'fast'), (200, {'rev': rev}))  # 'same', no error and no new rev
+        self.assertEqual(self.put(far - 1, 'right')[0], 409)
+        self.assertEqual(self.put(far + 2, 'fast')[0], 422)  # further ahead than the leapfrog
+        self.assertEqual(self.row(), ('old', far, rev))
+        self.assertEqual(self.put(far + 1, 'right')[0], 200)  # max(now, stored + 1)
+        self.assertEqual(self.row()[:2], ('right', far + 1))
+
+    # Bug caught: failure 3 for deletes, a tombstone over a stored future row refused, or a fast one let through.
+    def test_deletes(self):
+        path = f'/api/v1/books/{self.book}/highlights/h'
+        self.assertEqual(self.put(self.NOW, 'h', path)[0], 200)
+        self.assertEqual(self.call('DELETE', path, {'modified': self.NOW + self.DAY})[0], 422)
+        self.assertFalse(self.call('GET', '/api/v1/sync?since=0')[1]['highlights'][0]['deleted'])
+        far = self.NOW + self.DAY
+        service.db.connection.execute('UPDATE highlights SET modified = ?', (far,))
+        self.assertEqual(self.call('DELETE', path, {'modified': far + 1})[0], 200)
+        self.assertTrue(self.call('GET', '/api/v1/sync?since=0')[1]['highlights'][0]['deleted'])
+
+    # Bug caught: failure 4, the zip replaced or deleted by a write the row refused.
+    def test_refused_game_leaves_the_file(self):
+        game, headers = b'PK\x03\x04one', {'Content-Type': 'application/zip'}
+        path = '/api/v1/games/g'
+        self.assertEqual(self.call('PUT', f'{path}?modified={self.NOW}', game, ACCOUNT_A, headers)[0], 200)
+        far = self.NOW + self.DAY
+        self.assertEqual(self.call('PUT', f'{path}?modified={far}', b'PK\x03\x04two', ACCOUNT_A, headers)[0], 422)
+        self.assertEqual(self.call('DELETE', f'{path}?modified={far}', account=ACCOUNT_A)[0], 422)
+        self.assertEqual(self.request('GET', path, account=ACCOUNT_A)[2], game)
+
+
 class FileTest(ServiceTestCase):
     def setUp(self):
         super().setUp()
