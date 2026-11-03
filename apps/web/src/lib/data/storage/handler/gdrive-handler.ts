@@ -5,7 +5,9 @@
  */
 
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
+import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
 import { gDriveRefreshEndpoint } from '$lib/data/env';
+import { logger } from '$lib/data/logger';
 import { ApiStorageHandler, type FullResponse } from '$lib/data/storage/handler/api-handler';
 import { AbortError } from '$lib/functions/replication/replication-error';
 import { reportBytes } from '$lib/functions/replication/replication-progress';
@@ -16,6 +18,7 @@ import {
   type SyncFileOptions,
   type SyncFileStore
 } from '$lib/data/storage/handler/base-handler';
+import { storageOAuthTokens } from '$lib/data/storage/storage-oauth-manager';
 import { StorageKey } from '$lib/data/storage/storage-types';
 import { database, gDriveStorageSource$ } from '$lib/data/store';
 import pLimit from 'p-limit';
@@ -277,6 +280,49 @@ export class GDriveStorageHandler extends ApiStorageHandler implements SyncFileS
     );
 
     return response;
+  }
+
+  /**
+   * The place in one request that outlives the page, only with the file's id and a live token in
+   * hand: a phone may freeze or end a hidden page before a lookup returns. The name carries the
+   * time and fraction other devices read. Anything else is left to the normal sync.
+   */
+  async sendProgressNow(title: string, progress: BooksDbBookmarkData) {
+    const token = storageOAuthTokens.get(this.storageSourceName);
+    const file = BaseStorageHandler.findFile(this.titleToFiles.get(title) || [], 'progress_');
+    const name = BaseStorageHandler.getProgressFileName(progress);
+    const { lastBookmarkModified, progress: fraction } =
+      BaseStorageHandler.getProgressMetadata(name);
+
+    if (
+      !file ||
+      !token ||
+      token.expiration <= Date.now() ||
+      BaseStorageHandler.getProgressMetadata(file.name).lastBookmarkModified >= lastBookmarkModified
+    ) {
+      return;
+    }
+
+    const form = new FormData();
+
+    form.append('resource', new Blob([JSON.stringify({ name })], { type: 'application/json' }));
+    form.append('file', JSON.stringify(progress));
+
+    try {
+      const response = await fetch(`${this.baseUploadApiUrl}/${file.id}?uploadType=multipart`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token.accessToken}` },
+        body: form,
+        keepalive: true
+      });
+
+      if (!response.ok) throw new Error(`Received Status ${response.status}`);
+
+      file.name = name;
+      this.addBookCard(title, { lastBookmarkModified, progress: fraction });
+    } catch (error: any) {
+      logger.warn(`Progress not sent yet: ${error.message}`);
+    }
   }
 
   /** Resumable upload: open a session, then PUT `chunkSize` slices until Google answers 200/201. */

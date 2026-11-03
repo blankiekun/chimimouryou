@@ -287,6 +287,8 @@ To publish it on GitHub Pages, copy [deploy/pages/pages.yml](../deploy/pages/pag
 `VITE_GDRIVE_CLIENT_SECRET` (OAuth redirect URI
 `https://<site>/auth`), set `VITE_BASE_PATH` in the workflow to the site's address and run it
 from the Actions tab with a tag or `main`.
+Publish the OAuth app to Production on Google's consent screen page: while it stays in "Testing",
+Google's refresh tokens expire after 7 days, so everyone has to sign in to Drive again every week.
 To publish every release automatically, give this repository the secret `PAGES_DISPATCH_TOKEN`
 (a fine-grained token for the site repository only, with Actions: read and write) and, if the
 site isn't `chimireader/chimireader.github.io`, the variable `PAGES_REPO`: `release.yml` then runs
