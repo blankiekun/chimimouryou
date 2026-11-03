@@ -812,6 +812,12 @@
     }
 
     if (frozenPosition === -1) {
+      // A render (layout change, section swap) counts from 0 until the place is back: time, no move.
+      if (!exploredCharCount && lastExploredCharCount) {
+        processStatistics(0, elapsed, lastTrackerTick, now - lastTrackerFlushTime > 10000);
+        return;
+      }
+
       const characterDiff = exploredCharCount - lastExploredCharCount;
       let finalCharacterDiff =
         characterDiff < 0 && Math.abs(characterDiff) > sessionStatistics.charactersRead

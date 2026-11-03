@@ -49,6 +49,12 @@ vi.mock('$lib/data/social/social-images', () => ({
 
 // Its import chain is slow on a cold CI worker and outlasts vi.waitFor; rank has its own tests.
 vi.mock('$lib/data/stats/reading-rank-data', () => ({ loadReadingRank: async () => undefined }));
+// What each push imports, loaded here outside any wait: cold, under load, they outlast vi.waitFor
+// (1 run in 25 alone, 1 in 5 with six at once), and the late push lands in the next test.
+await Promise.all([
+  import('$lib/functions/statistic-util'),
+  import('$lib/data/words/words-met').catch(() => {})
+]);
 
 const me: SocialMe = {
   id: '0123456789abcdef',
@@ -163,7 +169,6 @@ describe('social', () => {
 
     noteReading('Book A', 50, 100);
     noteReading('Book A', 99, 100);
-    // The first push imports its stats modules, which can outlast waitFor's 1 s on a cold CI worker.
     await vi.waitFor(() => expect(bodies).toHaveLength(2), { timeout: 5000 });
     expect(bodies.map((body) => body.finished).filter(Boolean)).toEqual([
       { key: bookKey('Book A'), title: 'Book A', kind: 'book' }

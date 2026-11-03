@@ -79,7 +79,9 @@ function parseCss(css: string, options = {}): CssTree {
     }
 
     if (!css[i]) {
-      return error('end of comment is missing');
+      // As browsers read it: to the end of the file.
+      css = '';
+      return;
     }
 
     const str = css.slice(2, i);
@@ -390,6 +392,18 @@ function parseCss(css: string, options = {}): CssTree {
     };
   }
 
+  // Like browsers, a broken rule costs only itself: on to after its closing bracket.
+  function ruleOrSkip() {
+    try {
+      return at_rule() || rule();
+    } catch {
+      const end = css.indexOf('}');
+
+      css = end < 0 ? '' : css.slice(end + 1);
+      return {};
+    }
+  }
+
   function rules(core) {
     if (!core && !open()) {
       return error("missing '{'");
@@ -398,7 +412,7 @@ function parseCss(css: string, options = {}): CssTree {
     let node;
     let rules = comments();
 
-    while (css.length && (core || css[0] !== '}') && (node = at_rule() || rule())) {
+    while (css.length && (core || css[0] !== '}') && (node = ruleOrSkip())) {
       if (node.type) {
         rules.push(node);
       }

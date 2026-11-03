@@ -219,6 +219,8 @@
     threads = new Threads();
     ranked = [];
     nativeStatus = 'Starting the game…';
+    // The last run may have closed with no /hook open to push its saves.
+    await pushSaves();
 
     const result = await games.launch(info.folder!, await nativeSavesToPull(saveSync));
 

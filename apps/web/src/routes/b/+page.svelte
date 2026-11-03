@@ -661,13 +661,14 @@
   );
 
   // Starts the tracker once the opened book has settled on its position (1.5 s
-  // without a page change), so the jump to the bookmark isn't counted as reading.
+  // without a page change after the readers report it restored: bookmarkManager), so the jump to
+  // the bookmark isn't counted as reading.
   // Only while the page is visible and not being left: a tab restored in the
   // background must not count, and auto-pause only reacts to the page becoming hidden.
   const bookLoaded$ = new Subject<void>();
 
   $effect.pre(() => {
-    if (browser && !showSpinner) {
+    if (browser && !showSpinner && bookmarkManager) {
       untrack(() => bookLoaded$.next());
     }
   });
@@ -682,7 +683,13 @@
       : NEVER
   ).pipe(
     debounceTime(1500),
-    filter(() => !showSpinner && !blockDataUpdates && document.visibilityState === 'visible'),
+    filter(
+      () =>
+        !showSpinner &&
+        !!bookmarkManager &&
+        !blockDataUpdates &&
+        document.visibilityState === 'visible'
+    ),
     take(1),
     tap(() => {
       wasTrackerPaused = false;

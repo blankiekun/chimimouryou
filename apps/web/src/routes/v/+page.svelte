@@ -953,7 +953,8 @@
           {/if}
           {#if $screenTextOff$ && !screenTextOffSeen}
             <div class="vn-notice" role="status">
-              <p>Screen text stopped ({$screenTextOff$}). Reload the page to try again.</p>
+              <p>Screen text stopped ({$screenTextOff$}).</p>
+              <button class="app-button app-button-quiet" on:click={stopVnOcr}>Try again</button>
               <button
                 class="app-button app-button-quiet"
                 on:click={() => (screenTextOffSeen = true)}

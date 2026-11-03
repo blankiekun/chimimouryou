@@ -9,6 +9,7 @@ import type { Section } from '../../../data/database/books-db/versions/v3/books-
 import buildDummyBookImage from '../utils/build-dummy-book-image';
 import clearAllBadImageRef from '../utils/clear-all-bad-image-ref';
 import fixXHtmlHref from '../utils/fix-xhtml-href';
+import { sanitizeBookElement } from '../utils/sanitize-book-html';
 import { importHTMLFixMode$, restrictImportFixToAnchor$ } from '$lib/data/store';
 import { ImportHTMLFixMode } from '$lib/data/import-html-fix-mode';
 import { getCharacterCount } from '$lib/functions/get-character-count';
@@ -189,7 +190,13 @@ export default function generateEpubHtml(
     }
 
     const content = data[htmlHref];
-    let contentToParse = typeof content === 'string' ? content : '';
+    // A picture in the spine (an SVG page): shown as one, through the same path as a book's images.
+    let contentToParse =
+      typeof content === 'string'
+        ? content
+        : content
+          ? `<img alt="" src="${path.basename(htmlHref)}">`
+          : '';
 
     for (const tagMatch of selfClosingContentTagsToFix) {
       contentToParse = contentToParse.replace(new RegExp(`<${tagMatch}[^>]+?>`, 'gim'), (match) =>
@@ -255,6 +262,8 @@ export default function generateEpubHtml(
       childBodyDiv.id = bodyId;
     }
     childBodyDiv.innerHTML = innerHtml;
+    // Counted below as the reader counts it: places are counted in the cleaned book (no script text).
+    sanitizeBookElement(childBodyDiv);
 
     const childHtmlDiv = document.createElement('div');
     childHtmlDiv.className = `ttu-book-html-wrapper ${htmlClass}`;

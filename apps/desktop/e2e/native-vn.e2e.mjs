@@ -30,9 +30,11 @@
 // the prefix's Documents still leads into the home folder; a newer save in vnsaves.json (as VNBox
 // writes it) isn't where the game reads it at the next start, or its time isn't kept; a synced
 // Startup .bat or game/*.dll is written; saves over the 20 MB cap are pushed or the page doesn't
-// say so; a game closed after leaving /hook pushes nothing. Anki (a fake AnkiConnect): a note mined from a line after the game closed gets no picture,
+// say so; a game closed after leaving /hook pushes nothing, or with no /hook open (entering /v loads a
+// new page) nothing at its next start. Anki (a fake AnkiConnect): a note mined from a line after the game closed gets no picture,
 // or one of another line (each step has its own background colour), or no sound, or another line's
-// (each step its own tone), or other programs' sound (a tone playing on the speakers throughout).
+// (each step's speech carries its own pilot tone), or other programs' sound (a tone playing on the
+// speakers throughout).
 
 /* global indexedDB, localStorage, navigator -- used inside page.evaluate */
 import { Buffer } from 'node:buffer';
@@ -88,6 +90,9 @@ execFileSync('i686-w64-mingw32-gcc', [
   '-luuid',
   '-lwinmm'
 ]);
+// The speech its steps play (testvn.c): the app's clips keep only voices.
+mkdirSync(join(gameDir, 'voices'));
+copyFileSync(join(import.meta.dirname, 'voices/voice8.wav'), join(gameDir, 'voices/voice8.wav'));
 // A setup tool beside it: listed after the game.
 copyFileSync(join(gameDir, 'testvn.exe'), join(gameDir, 'setup.exe'));
 
@@ -279,6 +284,18 @@ const checkNames = (saves) => {
   if (wrong.length) fail(`synced though not saves: ${wrong}`);
 };
 
+async function waitForNoGame() {
+  for (let tries = 0; tries < 120; tries += 1) {
+    try {
+      execFileSync('pgrep', ['-f', 'testvn.exe'], { stdio: 'ignore' });
+    } catch {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  fail('the game didn’t close');
+}
+
 const page = await app.firstWindow();
 try {
   page.setDefaultTimeout(timeout);
@@ -424,6 +441,19 @@ try {
   await page.locator('.nt-row').first().waitFor();
   await page.getByText('The game has closed.').waitFor();
 
+  step('Closed with no /hook open: its saves go at the next start');
+  const hookUrl = page.url();
+  await page.goto(hookUrl);
+  await page.getByText('Playing.').waitFor();
+  const leftAt = Date.now();
+  await page.goto(new URL('/statistics', hookUrl).href);
+  await waitForNoGame();
+  if (JSON.parse(await vnsaves(page))[appData].modified > leftAt)
+    fail('pushed with no page listening: this step no longer tests anything');
+  await page.goto(hookUrl);
+  await syncedSave(page, appData, leftAt);
+  await page.getByText('The game has closed.').waitFor();
+
   step('Saves over the 20 MB cap: nothing pushed, the page says so');
   writeFileSync(join(user, 'AppData/Roaming/TestVN/big.dat'), Buffer.alloc(21 * 1024 * 1024));
   const before = await vnsaves(page);
@@ -447,7 +477,7 @@ try {
   await page.getByRole('button', { name: 'Start the game' }).click();
   await page.locator('.nt-row', { hasText: 'DrawTextExW' }).click();
   manageGameWindows();
-  // testvn.c: step 8's caption, background and tone.
+  // testvn.c: step 8's caption, background and pilot tone.
   const mined = '第8場面の台詞です。';
   const colors = [
     [255, 255, 255],
@@ -463,7 +493,7 @@ try {
     [30, 30, 30],
     [255, 180, 200]
   ];
-  const stepHz = (step) => 400 + 80 * step;
+  const stepHz = (step) => 4000 + 150 * step;
   await page.locator('.hook-text li', { hasText: mined }).waitFor();
   await page.getByText('The game has closed.').waitFor();
   await page.getByText('Anki clips record this game’s sound.').waitFor();
@@ -497,7 +527,7 @@ try {
   const distance = (color) => color.reduce((sum, value, i) => sum + (value - pixel[i]) ** 2, 0);
   const shown = colors.indexOf(colors.toSorted((a, b) => distance(a) - distance(b))[0]);
   if (shown !== 8) fail(`the picture shows step ${shown} (pixel ${pixel}), not 8`);
-  // The sound: step 8's tone, louder than its neighbours' and the other program's.
+  // The sound: step 8's pilot tone, louder than its neighbours' and the other program's tone.
   const wav = Buffer.from(update.audio[0].data, 'base64');
   const rate = wav.readUInt32LE(24);
   const samples = new Int16Array(
