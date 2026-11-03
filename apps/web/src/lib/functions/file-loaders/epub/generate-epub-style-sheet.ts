@@ -24,7 +24,7 @@ export default function generateEpubStyleSheet(
     const cssPathsUnique = new Set(cssFiles);
 
     const combinedDirtyStyleString = Array.from(cssPathsUnique).reduce(
-      (acc, mainCssFilename) => acc + (data[mainCssFilename] as string),
+      (acc, mainCssFilename) => acc + ((data[mainCssFilename] as string) ?? ''),
       ''
     );
 

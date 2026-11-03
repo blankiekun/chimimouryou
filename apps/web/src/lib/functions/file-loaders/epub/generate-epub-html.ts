@@ -78,6 +78,9 @@ export default function generateEpubHtml(
       if (item['@_properties'] === 'nav') {
         navKey = item['@_href'];
       }
+    } else if (!item['@_fallback']) {
+      // In the spine with nothing to fall back on (an SVG cover page): an empty chapter.
+      acc[item['@_id']] = item['@_href'];
     }
     return acc;
   }, {});
@@ -181,7 +184,12 @@ export default function generateEpubHtml(
       htmlHref = itemIdToHtmlRef[itemIdRef];
     }
 
-    let contentToParse = (data[htmlHref] as string) || '';
+    if (!htmlHref) {
+      throw new Error(`Spine item ${itemIdRef} is not in the EPUB manifest`);
+    }
+
+    const content = data[htmlHref];
+    let contentToParse = typeof content === 'string' ? content : '';
 
     for (const tagMatch of selfClosingContentTagsToFix) {
       const matches = contentToParse.match(new RegExp(`<${tagMatch}[^>]+?>`, 'gim')) || [];
@@ -207,11 +215,13 @@ export default function generateEpubHtml(
     let body = parsedContent.body;
 
     if (!body?.childNodes?.length) {
-      parsedContent = parser.parseFromString(contentToParse, 'text/xml');
-      body = parsedContent.querySelector('body')!;
+      const parsedXml = parser.parseFromString(contentToParse, 'text/xml');
+      const xmlBody = parsedXml.querySelector('body');
 
-      if (!body?.childNodes?.length) {
-        throw new Error('Unable to find valid body content while parsing EPUB');
+      // Nothing either way is an empty chapter. Browsers report bad XML as a page with a body.
+      if (xmlBody?.childNodes?.length && !parsedXml.querySelector('parsererror')) {
+        parsedContent = parsedXml;
+        body = xmlBody as HTMLElement;
       }
     }
 
@@ -304,6 +314,10 @@ export default function generateEpubHtml(
 
     previousCharacterCount = currentCharCount;
   });
+
+  if (!result.textContent?.trim() && !result.querySelector('img, image, svg')) {
+    throw new Error('Unable to find valid body content while parsing EPUB');
+  }
 
   clearAllBadImageRef(result);
   fixXHtmlHref(result);

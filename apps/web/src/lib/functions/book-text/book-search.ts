@@ -184,12 +184,12 @@ export function chapterLabelAt(sections: Section[], count: number) {
   return label;
 }
 
-/** String length of the uncounted text just before `from` in paragraph `p`, back through earlier paragraphs. */
-function uncountedBefore(paragraphs: Paragraph[], p: number, from: number) {
+/** String length of the uncounted text at the end of the paragraphs before `p`. */
+function uncountedBefore(paragraphs: Paragraph[], p: number) {
   let skip = 0;
 
-  for (let q = p; q >= 0; q -= 1) {
-    const text = q === p ? paragraphs[q].text.slice(0, from) : paragraphs[q].text;
+  for (let q = p - 1; q >= 0; q -= 1) {
+    const { text } = paragraphs[q];
     const counted = countCharacters(text);
 
     if (counted) {
@@ -224,6 +224,11 @@ export function searchBook(
 
     pattern.lastIndex = 0;
 
+    // Running from the previous match: recounting from the paragraph's start freezes the tab on
+    // books held in one block.
+    let countedTo = 0;
+    let counted = 0;
+    let skip = -1;
     let match = pattern.exec(haystack);
 
     while (match && results.length < maxSearchResults) {
@@ -232,12 +237,22 @@ export function searchBook(
       } else {
         const from = match.index;
         const to = from + match[0].length;
-        const start = paragraph.startCount + countCharacters(paragraph.text.slice(0, from));
+        const gap = paragraph.text.slice(countedTo, from);
+        const gapCount = countCharacters(gap);
+
+        if (skip < 0) {
+          skip = uncountedBefore(index.paragraphs, p);
+        }
+        skip = gapCount ? gap.length - offsetForCount(gap, gapCount, true) : skip + gap.length;
+        counted += gapCount;
+        countedTo = from;
+
+        const start = paragraph.startCount + counted;
 
         results.push({
           start,
           end: start + countCharacters(paragraph.text.slice(from, to)),
-          skip: uncountedBefore(index.paragraphs, p, from),
+          skip,
           before: displayText(paragraph.text.slice(Math.max(0, from - 24), from)),
           match: displayText(paragraph.text.slice(from, to)),
           after: displayText(paragraph.text.slice(to, to + 24)),
