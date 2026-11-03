@@ -54,10 +54,7 @@
   let storageSourceStoredInManager =
     (passwordManagerAvailable && configuredStoredInManager) || false;
   let storageSourceEncryptionDisabled = configuredEncryptionDisabled || false;
-  let storageSourceTypes = [
-    { key: StorageKey.GDRIVE, label: 'GDrive' },
-    { key: StorageKey.ONEDRIVE, label: 'OneDrive' }
-  ];
+  let storageSourceTypes = [{ key: StorageKey.GDRIVE, label: 'GDrive' }];
 
   $: if (browser && 'showDirectoryPicker' in window) {
     storageSourceTypes = [...storageSourceTypes, { key: StorageKey.FS, label: 'Filesystem' }];

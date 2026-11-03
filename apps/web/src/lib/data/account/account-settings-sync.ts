@@ -7,7 +7,7 @@
 /**
  * Syncs AI settings, themes and reader settings to the signed-in account
  * (the v1 API's account docs), or while signed out to the
- * root of the library's Google Drive, OneDrive or folder source (sync-files.ts).
+ * root of the library's Google Drive or folder source (sync-files.ts).
  * AI keys never sync; tokens only go to the account. Reader settings are kept
  * separately for phones and larger screens, e.g. one column on the phone and
  * two on the desktop. Each setting keeps the time it was last changed in this

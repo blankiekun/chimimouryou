@@ -9,16 +9,15 @@ export enum StorageKey {
   BROWSER = 'browser',
   CALIBRE = 'calibre',
   FS = 'fs',
-  GDRIVE = 'gdrive',
-  ONEDRIVE = 'onedrive'
+  GDRIVE = 'gdrive'
 }
 
 /**
- * Cloud providers, where a visual novel's game files (often gigabytes) take long and use the
+ * Google Drive, where a visual novel's game files (often gigabytes) take long and use the
  * reader's space: ask before uploading one (`vn-upload.ts`). Calibre and folders just store it.
  */
 export function asksBeforeVnUpload(type: StorageKey) {
-  return type === StorageKey.GDRIVE || type === StorageKey.ONEDRIVE;
+  return type === StorageKey.GDRIVE;
 }
 
 export enum StorageDataType {
@@ -32,7 +31,6 @@ export enum StorageDataType {
 
 export enum StorageSourceDefault {
   GDRIVE_DEFAULT = 'ttu-gdrive-default',
-  ONEDRIVE_DEFAULT = 'ttu-onedrive-default',
   CALIBRE_DEFAULT = 'ttu-calibre-default'
 }
 
@@ -49,6 +47,5 @@ export const internalStorageSourceName = new Set<string>([
 ]);
 
 export const defaultStorageSources = [
-  { name: StorageSourceDefault.GDRIVE_DEFAULT, type: StorageKey.GDRIVE },
-  { name: StorageSourceDefault.ONEDRIVE_DEFAULT, type: StorageKey.ONEDRIVE }
+  { name: StorageSourceDefault.GDRIVE_DEFAULT, type: StorageKey.GDRIVE }
 ];

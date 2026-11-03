@@ -17,8 +17,7 @@
     cacheStorageData$,
     fsStorageSource$,
     gDriveStorageSource$,
-    isOnline$,
-    oneDriveStorageSource$
+    isOnline$
   } from '$lib/data/store';
   import { t$ } from '$lib/i18n';
 
@@ -34,9 +33,6 @@
           : []),
         ...(isStorageSourceAvailable(StorageKey.GDRIVE, $gDriveStorageSource$, window)
           ? [{ id: StorageKey.GDRIVE, text: 'GDrive', online: true }]
-          : []),
-        ...(isStorageSourceAvailable(StorageKey.ONEDRIVE, $oneDriveStorageSource$, window)
-          ? [{ id: StorageKey.ONEDRIVE, text: 'OneDrive', online: true }]
           : []),
         ...(isStorageSourceAvailable(StorageKey.FS, $fsStorageSource$, window)
           ? [{ id: StorageKey.FS, text: $t$('library.sourceFilesystem'), online: false }]

@@ -108,8 +108,7 @@ for a `drive.file` token instead (`DriveAuthPlugin.java`, used by
 `apps/web/src/lib/data/standalone/android-drive.ts` from the storage OAuth manager when
 `Capacitor.isNativePlatform()`; the web and desktop builds are unchanged). There is no refresh
 token: when a token expires the app asks again, silently once the reader has consented. Without
-Google Play services, signing in says "Google Drive needs Google Play services". OneDrive isn't
-offered (the standalone edition has none).
+Google Play services, signing in says "Google Drive needs Google Play services".
 
 Google matches the app by package name and signing key, so the APK holds no client id. The owner
 sets it up once, in the **same Google Cloud project as the web client** (`drive.file` only shows

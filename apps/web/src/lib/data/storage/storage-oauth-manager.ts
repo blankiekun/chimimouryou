@@ -14,10 +14,6 @@ import {
   gDriveClientSecret,
   gDriveScope,
   gDriveTokenEndpoint,
-  oneDriveAuthEndpoint,
-  oneDriveClientId,
-  oneDriveScope,
-  oneDriveTokenEndpoint,
   pagePath
 } from '$lib/data/env';
 import { logger } from '$lib/data/logger';
@@ -158,11 +154,6 @@ export class StorageOAuthManager {
       }
 
       storeRefreshToken(storageSourceName, undefined);
-    } else if (storageSourceName === StorageSourceDefault.ONEDRIVE_DEFAULT) {
-      this.remoteData = {
-        clientId: oneDriveClientId,
-        clientSecret: ''
-      };
     } else {
       if (!unlockResult) {
         const db = await database.db;
@@ -208,9 +199,7 @@ export class StorageOAuthManager {
     // Not part of upstream: sign-in only opens from a click. Start-up and background syncs of the
     // built-in clients stop here and leave the "Sign in" action to the sync status instead.
     if (!authWindow && !StorageOAuthManager.fromClick(window) && isAppDefault(storageSourceName)) {
-      throw new Error(
-        `Sign in to ${this.storageType === StorageKey.ONEDRIVE ? 'OneDrive' : 'Drive'} again`
-      );
+      throw new Error('Sign in to Drive again');
     }
 
     this.parentWindow = window;
@@ -286,7 +275,7 @@ export class StorageOAuthManager {
       if (
         this.parentWindow &&
         this.remoteData.clientId &&
-        (this.storageType !== StorageKey.GDRIVE || this.remoteData.clientSecret) &&
+        this.remoteData.clientSecret &&
         token.refreshToken &&
         token.refreshToken !== this.remoteData.refreshToken &&
         (secret || existingStorageSourceData.encryptionDisabled)
@@ -354,7 +343,7 @@ export class StorageOAuthManager {
         this.refreshEndpoint &&
         this.storageSourceName &&
         this.remoteData?.clientId &&
-        (this.storageType !== StorageKey.GDRIVE || this.remoteData.clientSecret) &&
+        this.remoteData.clientSecret &&
         this.remoteData.refreshToken
       )
     ) {
@@ -366,17 +355,13 @@ export class StorageOAuthManager {
     form.append('refresh_token', this.remoteData.refreshToken);
     form.append('grant_type', 'refresh_token');
 
-    if (this.storageType === StorageKey.GDRIVE) {
-      form.append('client_secret', this.remoteData.clientSecret);
-    }
+    form.append('client_secret', this.remoteData.clientSecret);
 
     // These mean the refresh token is dead, or the client that issued it changed (undefined: the
     // caller asks for sign-in).
     // Anything else, like no network or an outage, throws: the token stays for the next try.
     const notRenewed = Object.assign(
-      new Error(
-        `Could not renew the ${this.storageType === StorageKey.ONEDRIVE ? 'OneDrive' : 'Drive'} sign-in, try again later`
-      ),
+      new Error('Could not renew the Drive sign-in, try again later'),
       { status: 0 }
     );
     const response = await fetch(this.refreshEndpoint, { method: 'POST', body: form })
@@ -488,9 +473,7 @@ export class StorageOAuthManager {
             ...StorageOAuthManager.getAuthVariables(this.storageType),
             // The built-in client sends its secret too when the build has one (Google's token
             // endpoint needs it for web clients).
-            sendSecret:
-              this.storageType === StorageKey.GDRIVE &&
-              (!isAppDefault(this.storageSourceName) || !!gDriveClientSecret)
+            sendSecret: !isAppDefault(this.storageSourceName) || !!gDriveClientSecret
           }
         });
         break;
@@ -603,13 +586,6 @@ export class StorageOAuthManager {
           authEndpoint: gDriveAuthEndpoint,
           tokenEndpoint: gDriveTokenEndpoint,
           scope: gDriveScope
-        };
-
-      case StorageKey.ONEDRIVE:
-        return {
-          authEndpoint: oneDriveAuthEndpoint,
-          tokenEndpoint: oneDriveTokenEndpoint,
-          scope: oneDriveScope
         };
 
       default:

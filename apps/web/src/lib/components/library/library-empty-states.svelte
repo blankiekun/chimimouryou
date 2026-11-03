@@ -2,7 +2,7 @@
   import LibraryEmpty from '$lib/components/standalone/library-empty.svelte';
   import { account$ } from '$lib/data/account/account';
   import { pagePath, selfHostingGuideUrl, standalone } from '$lib/data/env';
-  import { cloudSignedIn, signInToCloud } from '$lib/data/standalone/standalone-storage';
+  import { librarySignedIn, signInToDrive } from '$lib/data/standalone/standalone-storage';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import { storageSource$ } from '$lib/data/storage/storage-view';
   import { libraryBuilding$, libraryOffline$, librarySignInNeeded } from '$lib/data/store';
@@ -25,8 +25,8 @@
 
   let { importReady, onfiles, onretry }: Props = $props();
 
-  async function cloudSignIn() {
-    if (!(await signInToCloud(window, $storageSource$))) onretry();
+  async function driveSignIn() {
+    if (!(await signInToDrive(window))) onretry();
   }
 </script>
 
@@ -47,12 +47,11 @@
     <p class="library-empty-text">No books downloaded to this browser yet.</p>
     <button type="button" class="app-button" onclick={onretry}>{$t$('home.retry')}</button>
   </div>
-{:else if $libraryOffline$ && !cloudSignedIn($storageSource$)}
-  {@const place = $storageSource$ === StorageKey.ONEDRIVE ? 'OneDrive' : 'Drive'}
+{:else if $libraryOffline$ && !librarySignedIn($storageSource$)}
   <div class="library-signed-out">
-    <h1 class="library-signed-out-title">Sign in to see your {place} library</h1>
-    <p class="library-empty-text">Your books and reading data stay on {place}.</p>
-    <button type="button" class="app-button app-button-primary" onclick={cloudSignIn}
+    <h1 class="library-signed-out-title">Sign in to see your Drive library</h1>
+    <p class="library-empty-text">Your books and reading data stay on Drive.</p>
+    <button type="button" class="app-button app-button-primary" onclick={driveSignIn}
       >Sign in</button
     >
   </div>

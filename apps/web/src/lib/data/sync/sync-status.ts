@@ -6,7 +6,7 @@
 
 /**
  * Sync status (header slot, and the standalone's Settings → Sync → Status), fed by `replicateData`
- * whenever it copies between this browser and Google Drive, OneDrive or a folder, or sends to the
+ * whenever it copies between this browser and Google Drive or a folder, or sends to the
  * server. Not part of upstream.
  */
 
@@ -67,10 +67,10 @@ export const syncState$ = writableSubject<SyncState>({
   errors: typeof localStorage === 'undefined' ? [] : read<SyncError[]>(errorsKey, [])
 });
 
-const remoteSources = new Set([StorageKey.GDRIVE, StorageKey.ONEDRIVE, StorageKey.FS]);
+const remoteSources = new Set([StorageKey.GDRIVE, StorageKey.FS]);
 
 /**
- * Copies between the browser and a Drive, OneDrive or folder are syncs; backups are not. With the
+ * Copies between the browser and a Drive or folder are syncs; backups are not. With the
  * server only sends count: a download offline reads the stored mirror and would claim "Synced".
  */
 export function isSyncBetween(source: StorageKey, target: StorageKey) {
@@ -215,10 +215,7 @@ export function syncView(
   const count = state.waiting.length;
   const waiting = `${count} ${count === 1 ? 'change' : 'changes'} waiting`;
   if (!online && count) return { kind: 'offline', text: `Offline · ${waiting}` };
-  if (!signedIn) {
-    const place = source === StorageKey.ONEDRIVE ? 'OneDrive' : 'Drive';
-    return { kind: 'signin', text: `Sign in to ${place} again` };
-  }
+  if (!signedIn) return { kind: 'signin', text: 'Sign in to Drive again' };
   if (state.failed) return { kind: 'failed', text: 'Sync failed' };
   if (count) return { kind: 'waiting', text: waiting };
   if (state.lastSync) return { kind: 'synced', text: `Synced ${formatAgo(now - state.lastSync)}` };

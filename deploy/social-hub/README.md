@@ -123,7 +123,7 @@ once a second only while one is being set up. A typical transfer costs 10-20 Wor
 plus one per 3 s while the friend hasn't answered yet (at most ~200 for one left waiting).
 
 The hub holds only public-facing data (status, stats, finished, Community, covers, presence).
-Private data (books, progress, settings, word marks) syncs through Google Drive, OneDrive, a
+Private data (books, progress, settings, word marks) syncs through Google Drive, a
 folder or the self-hosted server, never the hub.
 
 Discord status relay (`src/presence.ts`; times in Unix seconds): the reader's other devices send the

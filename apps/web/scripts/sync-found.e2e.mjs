@@ -1,6 +1,6 @@
 /* global console, document, indexedDB, process, setTimeout, localStorage, Event, navigator -- Node, and the page inside evaluate */
 // Sync status and statistics gaps on Drive: browser contexts on a fake Drive (Playwright routes on Google's API).
-// Builds: VITE_GDRIVE_CLIENT_ID=e2e VITE_GDRIVE_CLIENT_SECRET=e2e VITE_ONEDRIVE_CLIENT_ID=e2e pnpm build, one of them with VITE_EDITION=standalone.
+// Builds: VITE_GDRIVE_CLIENT_ID=e2e VITE_GDRIVE_CLIENT_SECRET=e2e pnpm build, one of them with VITE_EDITION=standalone.
 // node scripts/sync-found.e2e.mjs <apps/web> <standalone build> <server build> <epub titled 猫のテスト> <screenshot dir> [scenario]
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
@@ -106,7 +106,7 @@ function fakeDrive() {
     const id = url.pathname.match(/files\/([^/]+)$/)?.[1];
 
     if (method === 'OPTIONS') return route.fulfill({ status: 204, headers });
-    if (url.hostname === 'oauth2.googleapis.com' || url.hostname === 'login.microsoftonline.com') {
+    if (url.hostname === 'oauth2.googleapis.com') {
       if (state.refreshError) {
         return route.fulfill({
           status: 401,
@@ -205,10 +205,7 @@ async function device(
   { base = STANDALONE, tracker = false, viewport = { width: 1400, height: 900 }, ls = {} } = {}
 ) {
   const context = await browser.newContext({ viewport });
-  await context.route(
-    /^https:\/\/(www\.googleapis|oauth2\.googleapis|login\.microsoftonline)\.com\//,
-    drive.handle
-  );
+  await context.route(/^https:\/\/(www\.googleapis|oauth2\.googleapis)\.com\//, drive.handle);
   await context.addInitScript(
     (seed) => {
       if (localStorage.getItem('__seeded')) return;
@@ -1291,44 +1288,6 @@ async function connectedStatus() {
   await dev.context.close();
 }
 
-// A dead OneDrive sign-in at startup. How this could go wrong:
-// - the source falls back to Browser and the library looks empty;
-// - only an error dialog says why, or nothing offers the sign-in;
-// - the button doesn't open the sign-in window from the click.
-async function deadOneDrive() {
-  const drive = fakeDrive();
-  const dev = await device(drive, {
-    viewport: { width: 390, height: 844 },
-    ls: { lastStorageSource: 'onedrive', syncTarget: 'ttu-onedrive-default' }
-  });
-  const { page, context } = dev;
-
-  await sleep(1500);
-  check(
-    'dead OneDrive: stays the source',
-    (await page.evaluate(() => localStorage.getItem('lastStorageSource'))) === 'onedrive'
-  );
-  check('dead OneDrive: no error dialog', !(await page.getByText('An Error occured').count()));
-  check(
-    'dead OneDrive: the header asks',
-    await page.getByRole('button', { name: 'Sign in to OneDrive again' }).isVisible()
-  );
-  check(
-    'dead OneDrive: the library says why',
-    await page.getByRole('heading', { name: 'Sign in to see your OneDrive library' }).isVisible()
-  );
-  await page.screenshot({ path: join(shots, 'dead-onedrive-phone.png') });
-
-  const popup = context.waitForEvent('page', { timeout: 5000 }).catch(() => undefined);
-
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click({ timeout: 3000 });
-
-  const opened = await popup;
-
-  check('dead OneDrive: the click opens the sign-in window', !!opened, opened?.url());
-  await dev.context.close();
-}
-
 // The folder source with the cache on: the baseline's read must see the other device's new file.
 // How this could go wrong: the cached list answers (their count overwritten by the tab's), or an
 // emptied list answers nothing (the same), or a cached handle of a file they replaced throws.
@@ -1472,7 +1431,6 @@ const scenarios = {
   serverCached,
   failedLink,
   connectedStatus,
-  deadOneDrive,
   failuresOnly,
   deadToken,
   failedReason,

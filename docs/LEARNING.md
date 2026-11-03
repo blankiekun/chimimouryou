@@ -199,8 +199,8 @@ details on selected books shows it for each.
 ## 6. Phones and tablets
 
 The reader works in a phone's browser like on a computer: books, progress and
-highlights live on the device and can sync through your server, Google Drive or
-OneDrive. Lookups are what differ, because a dictionary popup needs Yomitan (or an
+highlights live on the device and can sync through your server or Google
+Drive. Lookups are what differ, because a dictionary popup needs Yomitan (or an
 app that does the same job).
 
 ### Android: Firefox with Yomitan

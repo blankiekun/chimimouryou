@@ -9,7 +9,7 @@ import {
   StorageSourceDefault,
   internalStorageSourceName
 } from '$lib/data/storage/storage-types';
-import { fsStorageSource$, gDriveStorageSource$, oneDriveStorageSource$ } from '$lib/data/store';
+import { fsStorageSource$, gDriveStorageSource$ } from '$lib/data/store';
 
 import type { BooksDbStorageSource } from '$lib/data/database/books-db/versions/books-db';
 import StorageUnlock from '$lib/components/storage-unlock.svelte';
@@ -64,7 +64,6 @@ export interface StorageUnlockAction extends RemoteContext {
 export function isAppDefault(name: string) {
   return (
     name === StorageSourceDefault.GDRIVE_DEFAULT ||
-    name === StorageSourceDefault.ONEDRIVE_DEFAULT ||
     name === StorageSourceDefault.CALIBRE_DEFAULT ||
     internalStorageSourceName.has(name)
   );
@@ -74,9 +73,6 @@ export function setStorageSourceDefault(name: string, type: StorageKey) {
   switch (type) {
     case StorageKey.GDRIVE:
       gDriveStorageSource$.next(name || StorageSourceDefault.GDRIVE_DEFAULT);
-      break;
-    case StorageKey.ONEDRIVE:
-      oneDriveStorageSource$.next(name || StorageSourceDefault.ONEDRIVE_DEFAULT);
       break;
     case StorageKey.FS:
       fsStorageSource$.next(name);

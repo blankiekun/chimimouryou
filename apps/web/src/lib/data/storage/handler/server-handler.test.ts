@@ -721,7 +721,7 @@ describe("a Windows game's details", () => {
     expect(api.rowsOf('gameDocs')).toEqual([]);
     await shownOn(browser().getBookList(), false);
 
-    // The record's round trip as its zip (as Drive, OneDrive and folders keep it): up, then down on
+    // The record's round trip as its zip (as Drive and folders keep it): up, then down on
     // a fresh device.
     const server = handler();
 

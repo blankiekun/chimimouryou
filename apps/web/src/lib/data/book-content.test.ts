@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { bookContent, mangaMarker, vnMarker } from '$lib/data/book-content';
 
-// elementHtml comes from synced files (Drive, OneDrive, sync folders, the server), so the
+// elementHtml comes from synced files (Drive, sync folders, the server), so the
 // decoder is a trust boundary. The ways it can go wrong, written before the decoder:
 // - '' (a placeholder) taken for a damaged or empty book
 // - a marker followed by non-JSON or truncated JSON: JSON.parse throws and the caller breaks

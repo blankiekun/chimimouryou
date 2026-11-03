@@ -35,11 +35,3 @@ export const gDriveScope =
   import.meta.env.VITE_GDRIVE_SCOPE || 'https://www.googleapis.com/auth/drive.file';
 export const gDriveClientId = import.meta.env.VITE_GDRIVE_CLIENT_ID || '';
 export const gDriveClientSecret = import.meta.env.VITE_GDRIVE_CLIENT_SECRET || '';
-export const oneDriveAuthEndpoint =
-  import.meta.env.VITE_ONEDRIVE_AUTH_ENDPOINT ||
-  'https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize';
-export const oneDriveTokenEndpoint =
-  import.meta.env.VITE_ONEDRIVE_TOKEN_ENDPOINT ||
-  'https://login.microsoftonline.com/consumers/oauth2/v2.0/token';
-export const oneDriveScope = import.meta.env.VITE_ONEDRIVE_SCOPE || 'files.readwrite';
-export const oneDriveClientId = import.meta.env.VITE_ONEDRIVE_CLIENT_ID || '';
