@@ -152,6 +152,57 @@ class ImportServiceTest(unittest.TestCase):
         _, body = self.request('/add?name=a.epub', epub('dup'))
         self.assertEqual(self.wait_for(body['job']['id'])['state'], 'duplicate')
 
+    def assert_refused(self, name, data):
+        queued = set(os.listdir(service.queue_dir()))
+        status, body = self.request(f'/add?name={name}', data)
+        self.assertEqual(status, 400, body)
+        self.assertEqual(set(os.listdir(service.queue_dir())), queued)  # nothing left on disk
+        return body
+
+    def test_zip_with_a_broken_file_list_is_refused_and_removed(self):
+        # Catches: is_zipfile passing (it reads only the end record), ZipFile raising, a 500 and the file staying.
+        broken = epub().replace(b'PK\x01\x02', b'XX\x01\x02')
+        for name in ('a.epub', 'a.cbz', 'a.zip'):
+            self.assertIn('Not a valid', self.assert_refused(name, broken)['error'])
+
+    def test_zip_with_too_big_a_file_list_is_refused_before_it_is_parsed(self):
+        # Catches: the file list parsed before the check (the out-of-memory this limit is for), and a count in the
+        # end record that lies, since ZipFile parses by the list's size and ignores the count.
+        data = epub()
+        end = data.rindex(b'PK\x05\x06')
+        lying = data[:end + 8] + (1).to_bytes(2, 'little') * 2 + data[end + 12:]
+        with mock.patch.object(service.zipfile, 'ZipFile', side_effect=AssertionError('parsed')):
+            with mock.patch.object(service, 'MAX_ZIP_ENTRIES', 2):
+                self.assertIn('too many files', self.assert_refused('a.epub', data)['error'])
+                self.assertIn('too many files', self.assert_refused('a.zip', data)['error'])
+            with mock.patch.object(service, 'MAX_ZIP_DIRECTORY_BYTES', 40):
+                self.assertIn('too many files', self.assert_refused('a.epub', lying)['error'])
+
+    def test_zip_at_the_limit_is_accepted(self):
+        # Catches: an off-by-one or a limit counted in the wrong unit refusing real archives.
+        with mock.patch.object(service, 'MAX_ZIP_ENTRIES', 3):
+            _, body = self.request('/add?name=limit.epub', epub())
+        self.assertEqual(self.wait_for(body['job']['id'])['state'], 'added')
+
+    def sources_volume(self, identifier):
+        def write(path):
+            with open(path, 'wb') as f:
+                f.write(epub('dup'))
+        return service.enqueue_file('acc1', 'v.epub', write, {
+            'title': 'v', 'authors': 'a', 'series': 's', 'seriesIndex': 1, 'identifier': identifier, 'tags': 't'})
+
+    def test_volume_calibre_added_before_a_restart_counts_as_added(self):
+        # Catches: the retry after a kill between `calibredb add` and the record getting "duplicate" for ever.
+        with open(IDENTIFIERS, 'a') as f:
+            f.write('chimi:kakuyomu:restarted:1\n')
+        job = self.wait_for(self.sources_volume('chimi:kakuyomu:restarted:1')['id'])
+        self.assertEqual((job['state'], job['calibreId']), ('added', 43))
+
+    def test_volume_duplicating_another_book_stays_a_duplicate(self):
+        # Catches: every same-titled volume being taken for this one, when Calibre has no book with its identifier.
+        job = self.wait_for(self.sources_volume('chimi:kakuyomu:other:1')['id'])
+        self.assertEqual(job['state'], 'duplicate')
+
     def test_only_nginx_may_call(self):
         self.assertEqual(self.request('/jobs?ids=x', token='')[0], 403)
         self.assertEqual(self.request('/catalog', b'', token='wrong')[0], 403)

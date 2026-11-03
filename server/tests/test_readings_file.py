@@ -286,6 +286,47 @@ class ReadingsQueueTest(unittest.TestCase):
         thread.join(10)
         self.assertIsNone(queue.thread)
 
+    def test_a_changed_pack_replaces_the_kept_alive_worker(self):
+        # Catches: a dictionary installed while reading, then files from the old Reader stamped with the new version.
+        from concurrent.futures import ThreadPoolExecutor
+        service, queue = self.service, self.service.queues.ReadingsQueue()
+        pools = []
+
+        class Pool(ThreadPoolExecutor):
+            closed = False
+
+            def shutdown(self, *args, **kwargs):
+                self.closed = True
+                super().shutdown(*args, **kwargs)
+
+        def new_pool(workers, initializer):
+            pools.append(Pool(workers))
+            return pools[-1]
+        service.queues.ProcessPoolExecutor = new_pool
+        service.workers._reader = FakeReader(('行っ', '行く', 'いく', 'only'))
+        service.settings.READINGS_KEEP_ALIVE = 30
+        key = 'a'
+        service.readerpack.reader_pack_key = lambda: key
+
+        def until_ready():
+            for _ in range(100):
+                if queue.request(1) == 'ready':
+                    return
+                time.sleep(0.05)
+            self.fail('no readings file')
+        queue.request(1)
+        until_ready()
+        key = 'b'
+        os.remove(service.workers.readings_path(1))
+        queue.request(1)
+        until_ready()
+        self.assertEqual(len(pools), 2)
+        self.assertTrue(pools[0].closed)
+        self.assertFalse(pools[1].closed)
+        thread = queue.thread
+        service.settings.READINGS_KEEP_ALIVE = 0
+        thread.join(10)
+
     def test_oversized_staticdata_is_refused(self):
         self.service.settings.MAX_STATICDATA_BYTES = 10
         with self.assertRaises(ValueError):

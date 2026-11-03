@@ -88,6 +88,7 @@ KEEP_DONE_MS = 7 * 24 * 3600 * 1000
 MAX_ACTIVE_PER_ACCOUNT = 20
 ACTIVE = ('queued', 'fetching')
 CHECKING = (*ACTIVE, 'adding')
+INTERRUPTED = 'A restart interrupted adding this to the library; try again'
 CHECK_HOURS = float(os.environ.get('SOURCES_CHECK_HOURS') or 6)
 CHECK_MS = int(CHECK_HOURS * 3600 * 1000)
 RETRY_MS = min(3600 * 1000, CHECK_MS)
@@ -1237,11 +1238,38 @@ def volume_added(import_job: dict):
         _follow_result(import_job['sourceWork'], 'failed', failed_update['error'])
 
 
-def start(state_dir: str, enqueue):
-    """Starts the runner; enqueue(account, name, write(path), extra fields) puts a file into the import queue."""
+def recover_adding(import_jobs: list[dict]):
+    """After a restart, jobs left on `adding` with no volume on its way would block their work's checks for ever.
+    Imports that finished without reaching volume_added are recorded now (nothing is fetched or imported again), the
+    latest of a volume deciding, since an update job's id is reused; jobs with a queued import go on waiting."""
+    rows = database().query("SELECT id, work, kind FROM source_jobs WHERE state = 'adding'")
+    adding = {row['id'] for row in rows}
+    latest = {}
+    for job in sorted(import_jobs, key=lambda j: j['updated']):
+        if job['sourceJob'] in adding:
+            latest[job['sourceJob'], job['sourceVolume']] = job
+    waiting = set()
+    for job in latest.values():
+        if job['state'] in ('queued', 'adding'):
+            waiting.add(job['sourceJob'])
+        else:
+            volume_added(job)
+    for row in rows:
+        if row['id'] not in waiting and _set_state(row['id'], ('adding',), 'failed', error=INTERRUPTED) \
+                and row['kind'] == 'update':
+            _follow_result(row['work'], 'failed', INTERRUPTED)
+
+
+def start(state_dir: str, enqueue, import_jobs: list[dict] = ()):
+    """Starts the runner; enqueue(account, name, write(path), extra fields) puts a file into the import queue;
+    import_jobs: the import queue's jobs of Sources volumes (recover_adding)."""
     global _state_dir, _enqueue
     _state_dir, _enqueue = state_dir, enqueue
     # Jobs interrupted by a restart go on from their cached chapters.
     database().transaction(lambda c: c.execute("UPDATE source_jobs SET state = 'queued' WHERE state = 'fetching'"))
+    try:
+        recover_adding(import_jobs)
+    except Exception as error:  # noqa: BLE001 - a bad record must not keep the import service down
+        print(f'sources: recovering jobs: {error!r}', file=sys.stderr)
     for site in (*ADAPTERS, SERVERS):
         threading.Thread(target=runner, args=(site,), daemon=True).start()

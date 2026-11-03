@@ -85,6 +85,11 @@ VN_SCRIPTS = ('0.txt', '00.txt', 'nscr_sec.dat', 'nscript.___', 'nscript.dat', '
 # Kept free when unpacking a game.
 MIN_FREE_BYTES = int(os.environ.get('MIN_FREE_MB', '1024')) * 1024 * 1024
 MAX_PENDING_PER_ACCOUNT = 100
+# A zip's file list is parsed into memory whatever its bytes (300,000 entries took 169 MB), so uploads are refused above
+# these, read from its end record. 200k entries at the largest real ones' 155 bytes each is 31 MB of list; the size is
+# checked too because ZipFile parses by it and ignores the count.
+MAX_ZIP_ENTRIES = 200_000
+MAX_ZIP_DIRECTORY_BYTES = 48 * 1024 * 1024
 # A manga file name that is only a volume number (第01巻, Vol.2, 03).
 # An extension's volume uploaded by a device: repo key, source id, hash of the work's link, volume.
 # The source: a Mangayomi id (a number) or a Manatan source id (a name).
@@ -209,6 +214,15 @@ def clean_name(name: str) -> str:
     return name[-200:]
 
 
+def zip_list_too_big(path: str) -> bool:
+    """Whether the zip's file list is over the limits, without parsing it. _EndRecData is zipfile's own reader of the
+    end record, private but needed here: it handles zip64, and no public call stops short of the list."""
+    with open(path, 'rb') as f:
+        end = zipfile._EndRecData(f)
+    return bool(end) and (end[zipfile._ECD_ENTRIES_TOTAL] > MAX_ZIP_ENTRIES
+                          or end[zipfile._ECD_SIZE] > MAX_ZIP_DIRECTORY_BYTES)
+
+
 def check_book(path: str, ext: str) -> str:
     """Why the file isn't a usable book, or '' if it is."""
     if os.path.getsize(path) == 0:
@@ -216,8 +230,13 @@ def check_book(path: str, ext: str) -> str:
     if ext in ('epub', 'htmlz', 'cbz'):
         if not zipfile.is_zipfile(path):
             return f'Not a valid {ext.upper()} file'
-        with zipfile.ZipFile(path) as archive:
-            names = set(archive.namelist())
+        try:
+            if zip_list_too_big(path):
+                return 'This archive has too many files'
+            with zipfile.ZipFile(path) as archive:
+                names = set(archive.namelist())
+        except zipfile.BadZipFile:
+            return f'Not a valid {ext.upper()} file'
         if ext == 'epub' and 'META-INF/container.xml' not in names:
             return 'Not a valid EPUB file (no META-INF/container.xml)'
         if ext == 'cbz' and not any(n.lower().endswith(PAGE_EXTENSIONS) for n in names):
@@ -253,6 +272,8 @@ def vn_root(names: list[str]) -> str | None:
 
 def is_vn_zip(path: str) -> bool:
     try:
+        if zip_list_too_big(path):
+            return False
         with zipfile.ZipFile(path) as archive:
             return vn_root([zip_name(info) for info in archive.infolist()]) is not None
     except (OSError, zipfile.BadZipFile):
@@ -385,6 +406,9 @@ def add_book(job: dict) -> dict:
     if ids:
         return {'state': 'added', 'calibreId': ids[0], 'title': book_title(ids[0])}
     if 'already exist' in output:
+        # A retry after a restart between Calibre's add and its record: this very volume is in.
+        if job.get('identifier') and (found := book_with_identifier(job['identifier'])) is not None:
+            return {'state': 'added', 'calibreId': found, 'title': book_title(found)}
         return {'state': 'duplicate', 'error': 'Already in the Calibre library'}
     print(f"calibredb add {job['name']}: {output.strip()[-500:]}", file=sys.stderr)
     return {'state': 'failed', 'error': 'Calibre could not add this file'}
@@ -532,7 +556,9 @@ def enqueue_file(account: str, name: str, write, extra: dict) -> dict:
 
 
 def start_sources():
-    sources.start(STATE_DIR, enqueue_file)
+    with lock:
+        import_jobs = [dict(job) for job in jobs.values() if job.get('sourceJob')]
+    sources.start(STATE_DIR, enqueue_file, import_jobs)
 
 
 def vn_folder_id(name: str) -> int:

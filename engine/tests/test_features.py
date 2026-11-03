@@ -6,8 +6,10 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+import features  # noqa: E402
 from features import _origin, aozora_text, book_text, vn_text  # noqa: E402
 
 try:
@@ -24,6 +26,55 @@ class BookTextTest(unittest.TestCase):
         hints = []
         self.assertEqual(book_text(path, 'HTMLZ', {}, hints), 'と男は呟いた。\n次')
         self.assertEqual(hints, [(3, 4, 'つぶや')])
+
+
+class TextSizeCapTest(unittest.TestCase):
+    """Catches: a zip bomb chapter or script expanding in the worker, unbounded, past what a real book needs."""
+
+    def write(self, name, members):
+        path = os.path.join(tempfile.mkdtemp(), name)
+        with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as archive:
+            for member, data in members.items():
+                archive.writestr(member, data)
+        return path
+
+    def epub(self, opf_padding='', chapters=('<p>あ</p>',)):
+        spine = ''.join(f'<itemref idref="c{i}"/>' for i in range(len(chapters)))
+        manifest = ''.join(f'<item id="c{i}" href="c{i}.xhtml" media-type="application/xhtml+xml"/>' for i in range(len(chapters)))
+        return self.write('b.epub', {
+            'META-INF/container.xml': '<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles>'
+                                      '<rootfile full-path="b.opf"/></rootfiles></container>',
+            'b.opf': f'<package xmlns="http://www.idpf.org/2007/opf"><!--{opf_padding}--><manifest>{manifest}</manifest>'
+                     f'<spine>{spine}</spine></package>',
+            **{f'c{i}.xhtml': chapter for i, chapter in enumerate(chapters)}})
+
+    def test_books_over_the_cap_fail_and_those_at_it_are_read(self):
+        chapter = '<p>' + 'あ' * 1000 + '</p>'  # 3,007 bytes
+        with mock.patch.object(features, 'MAX_BOOK_TEXT_BYTES', 3007 * 3 - 1):
+            self.assertIn('あ', book_text(self.epub(chapters=[chapter, chapter]), 'EPUB'))
+            # Each chapter fits: the sum is what fills the worker's memory.
+            with self.assertRaises(ValueError):
+                book_text(self.epub(chapters=[chapter] * 3), 'EPUB')
+            with self.assertRaises(ValueError):
+                book_text(self.epub(opf_padding='x' * 10000), 'EPUB')  # read by yurigana before the chapters
+        htmlz = self.write('b.htmlz', {'index.html': chapter})
+        with mock.patch.object(features, 'MAX_BOOK_TEXT_BYTES', 3007):
+            self.assertIn('あ', book_text(htmlz, 'HTMLZ'))
+        with mock.patch.object(features, 'MAX_BOOK_TEXT_BYTES', 3006), self.assertRaises(ValueError):
+            book_text(htmlz, 'HTMLZ')
+
+    def test_vn_scripts_over_the_cap_fail_in_a_zip_and_a_folder(self):
+        script = 'あ\n' * 40  # 160 bytes
+        path = self.write('g.zip', {'0.txt': script, '1.txt': script})
+        folder = tempfile.mkdtemp()
+        for name in ('0.txt', '1.txt'):
+            with open(os.path.join(folder, name), 'w', encoding='utf-8') as f:
+                f.write(script)
+        for game in (path, folder):
+            with mock.patch.object(features, 'MAX_BOOK_TEXT_BYTES', 320):
+                self.assertIn('あ', vn_text(game))
+            with mock.patch.object(features, 'MAX_BOOK_TEXT_BYTES', 319), self.assertRaises(ValueError):
+                vn_text(game)
 
 
 class VnTextTest(unittest.TestCase):

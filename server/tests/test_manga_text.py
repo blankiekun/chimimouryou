@@ -38,6 +38,7 @@ class MangaTextTest(unittest.TestCase):
                 text = service.workers.manga_text(book['id']) if book.get('manga') else 'x' * self.characters
                 yield book, (book['id'], None if len(text) < 10 else {
                     'engine': 'e1', 'characters': len(text), 'core': {'v': service.jobs.core.CORE_VERSION},
+                    'added': book['added'],
                     **({'text': book['text']} if book.get('manga') else {})})
         service.jobs.run_in_pools = run_in_pools
 
@@ -67,6 +68,40 @@ class MangaTextTest(unittest.TestCase):
         self.characters = 3000
         self.compute([1])
         self.assertFalse(os.path.exists(service.workers.words_path(1)))
+
+    def replace_book_1(self, added):
+        with open(self.service.settings.CATALOG_PATH, encoding='utf-8') as f:
+            catalog = json.load(f)
+        catalog['books'][0]['added'] = added
+        with open(self.service.settings.CATALOG_PATH, 'w', encoding='utf-8') as f:
+            json.dump(catalog, f)
+
+    def test_a_replaced_book_is_estimated_again_and_loses_its_word_list(self):
+        # Catches: a followed volume keeping its first estimate, and (same character count) its old words.
+        service = self.service
+        self.compute()
+        service.workers.write_words(1, {'words': [], 'uniqueWords': 0, 'tokens': 0})
+        self.replace_book_1(5000)
+        self.assertEqual(self.compute(), [1])
+        self.assertFalse(os.path.exists(service.workers.words_path(1)))
+        self.assertEqual(self.compute(), [])
+
+    def test_upgrading_redoes_only_books_replaced_since_their_estimate(self):
+        # Catches: estimates from before `added` was stored all counting as stale, which would redo every library.
+        service = self.service
+        self.compute()
+        results = service.jobs.load_results()
+        for estimate in results['books'].values():
+            del estimate['added']
+            estimate['computedAt'] = 1000
+        service.jobs.save_results(results)
+        service.workers.write_words(1, {'words': [], 'uniqueWords': 0, 'tokens': 0})
+        self.replace_book_1(1000)
+        self.assertEqual(self.compute(), [])
+        self.replace_book_1(1001)
+        self.assertEqual(self.compute(), [1])
+        # The same text recomputed from an old estimate keeps its list: a core bump mustn't drop every list.
+        self.assertTrue(os.path.exists(service.workers.words_path(1)))
 
     def test_a_new_core_version_redoes_estimates(self):
         self.assertEqual(self.compute(), [1, 4])

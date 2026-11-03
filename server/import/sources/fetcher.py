@@ -17,13 +17,14 @@ import http.client
 import ipaddress
 import os
 import socket
+import string
 import threading
 import time
 import urllib.error
 import urllib.request
 import zlib
 from email.utils import parsedate_to_datetime
-from urllib.parse import urljoin, urlparse
+from urllib.parse import quote, urljoin, urlparse, urlsplit
 
 USER_AGENT = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
               'Chrome/141.0.0.0 Safari/537.36')
@@ -48,6 +49,9 @@ _thread = threading.local()
 def patient():
     """This thread's requests may wait out a long Retry-After: no one is waiting on its answer (a runner)."""
     _thread.patient = True
+
+
+URL_SAFE = string.punctuation  # with quote's letters and digits: all of ASCII but spaces and control characters
 
 
 class FetchError(Exception):
@@ -173,6 +177,13 @@ def _stream(response, path: str, max_bytes: int):
     _check_complete(response)
 
 
+def _encoded(url: str) -> str:
+    """url with its path and query percent-encoded, as urllib sends them as they are and refuses non-ASCII or spaces.
+    What is already encoded stays (% is safe); so does the host, which http.client encodes itself."""
+    parts = urlsplit(url)
+    return parts._replace(path=quote(parts.path, safe=URL_SAFE), query=quote(parts.query, safe=URL_SAFE)).geturl()
+
+
 def fetch(url: str, hosts: set[str], headers: dict | None = None, server: str = '',
           max_bytes: int | None = None, to_path: str = '') -> tuple[bytes, str]:
     """GETs url (http(s), a host in `hosts`, or with `server` (an origin()) only on that server); returns (body,
@@ -195,8 +206,13 @@ def _fetch(url: str, hosts: set[str], headers: dict | None = None, server: str =
     if max_wait is None and not patient:
         max_wait = API_MAX_WAIT
     for _ in range(MAX_REDIRECTS + 1):
-        parts = urlparse(url)
-        host = (parts.hostname or '').lower()
+        try:
+            url = _encoded(url)
+            parts = urlparse(url)
+            host = (parts.hostname or '').lower()
+            port = parts.port
+        except ValueError as error:
+            raise FetchError('Refused to fetch this address: it is malformed') from error
         opener = _opener
         if server:
             if origin(url) != server:
@@ -204,10 +220,6 @@ def _fetch(url: str, hosts: set[str], headers: dict | None = None, server: str =
         elif parts.scheme not in ('http', 'https') or host not in hosts:
             raise FetchError(f'Refused to fetch {host or url}: not a page of this site')
         if public:
-            try:
-                port = parts.port
-            except ValueError:
-                port = -1
             if parts.scheme != 'https' or port not in (None, 443) or '@' in parts.netloc:
                 raise FetchError(f'Refused to fetch {host}: only https on the usual port')
             address = _public_address(host)
@@ -233,7 +245,10 @@ def _fetch(url: str, hosts: set[str], headers: dict | None = None, server: str =
                     return _decode(response, raw, max_bytes), url, kind
             except urllib.error.HTTPError as error:
                 if error.code in (301, 302, 303, 307, 308) and error.headers.get('Location'):
-                    url = urljoin(url, error.headers['Location'])
+                    try:
+                        url = urljoin(url, error.headers['Location'])
+                    except ValueError as bad:
+                        raise FetchError(f"{host} redirected to a malformed address") from bad
                     break
                 wait = _retry_after(error.headers.get('Retry-After')) if error.code in (429, 503) else None
                 if wait is not None and wait <= MAX_RETRY_AFTER:  # the runners keep to it too
