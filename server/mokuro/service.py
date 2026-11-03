@@ -41,7 +41,7 @@ MOKURO = os.environ.get('MOKURO_BIN', '/opt/mokuro/bin/mokuro')
 PORT = int(os.environ.get('MOKURO_PORT', '8768'))
 HOST = os.environ.get('MOKURO_HOST', '127.0.0.1')
 # Server connect: the standalone app's origins; nginx's auth check took its bearer token.
-CORS_ORIGINS = httpbase.parse_cors_origins(os.environ.get('CORS_ORIGINS', ''))
+CORS_ORIGINS = httpbase.cors_origins(os.environ.get('CORS_ORIGINS', ''))
 INTERNAL_TOKEN_FILE = os.environ.get('INTERNAL_TOKEN_FILE', '/data/state/internal-token')
 # As in load-cbz.ts (getMimeTypeFromName): the files the reader shows as pages.
 PAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.avif', '.svg')

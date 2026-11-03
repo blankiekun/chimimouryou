@@ -35,6 +35,7 @@ as EPUBs or CBZs, one job per volume, with their Calibre title, series, index, i
 Standard library only, plus python3-cryptography for the passwords of added servers. Not part of upstream.
 """
 import fcntl
+import io
 import json
 import os
 import re
@@ -220,6 +221,22 @@ def zip_list_too_big(path: str) -> bool:
         end = zipfile._EndRecData(f)
     return bool(end) and (end[zipfile._ECD_ENTRIES_TOTAL] > MAX_ZIP_ENTRIES
                           or end[zipfile._ECD_SIZE] > MAX_ZIP_DIRECTORY_BYTES)
+
+
+def check_zip_private_api():
+    """Stops the service at start if a new Python changed those private names' meaning: the limits would
+    pass everything without a word. There is no public way to read the end record."""
+    sample = io.BytesIO()
+    with zipfile.ZipFile(sample, 'w') as archive:
+        archive.writestr('a', '')
+        archive.writestr('b', '')
+    end = zipfile._EndRecData(sample)
+    # A central directory record is 46 bytes plus the name.
+    if not end or end[zipfile._ECD_ENTRIES_TOTAL] != 2 or end[zipfile._ECD_SIZE] != 2 * 47:
+        raise RuntimeError(f'zipfile._EndRecData changed in this Python ({end}): update zip_list_too_big')
+
+
+check_zip_private_api()
 
 
 def check_book(path: str, ext: str) -> str:

@@ -11,8 +11,8 @@
 # /usr/local/bin (ebook-update's systemd units are installed when DATA_PATH is
 # absolute, for updates from the admin panel). Images are built there; the
 # running stack is only replaced if every image builds, and it goes back to the
-# previous source and images (which stay tagged :previous) if the new one doesn't
-# build or doesn't come up healthy.
+# previous source, settings, commands and images (which stay tagged :previous) if
+# the new one doesn't build or doesn't come up healthy.
 set -euo pipefail
 
 REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
@@ -63,6 +63,16 @@ tar -C "$REPO_ROOT" \
   -czf - . \
   | run bash -c 'set -euo pipefail; rm -rf /opt/ebook-reader.new && mkdir -p /opt/ebook-reader.new && tar -C /opt/ebook-reader.new -xzf -'
 
+# The settings and commands that ran, for the rollback below (a root-only folder: env holds secrets).
+run bash -c 'set -euo pipefail
+  saved=/opt/ebook-reader.config.previous
+  rm -rf "$saved"
+  install -d -m 700 "$saved"
+  if [ -d /etc/ebook-reader ]; then cp -a /etc/ebook-reader "$saved/etc"; fi
+  for command in ebook-compose ebook-account ebook-update; do
+    if [ -f "/usr/local/bin/$command" ]; then cp -a "/usr/local/bin/$command" "$saved/"; fi
+  done'
+
 run install -d -m 755 /etc/ebook-reader
 put "$LOCAL/env" /etc/ebook-reader/env 600
 if [ -f "$LOCAL/docker-compose.override.yml" ]; then
@@ -81,9 +91,10 @@ run env LANG=C.UTF-8 VERSION="$VERSION" bash -s <<'EOF'
   set -euo pipefail
   compose=/usr/local/bin/ebook-compose
   app=/opt/ebook-reader
+  saved=$app.config.previous
   images=
-  # On failure the source that ran comes back and its images get their tags back, so the old
-  # commands run on the old images and the next deploy keeps them as :previous.
+  # On failure the source, settings and commands that ran come back and the images get their tags
+  # back, so the old commands run on the old images and the next deploy keeps them as :previous.
   rollback() {
     for image in $images; do
       docker image tag "${image%:*}:previous" "$image" 2>/dev/null || true
@@ -92,6 +103,14 @@ run env LANG=C.UTF-8 VERSION="$VERSION" bash -s <<'EOF'
       rm -rf "$app"
       mv "$app.previous" "$app"
     fi
+    # With env's secrets, $saved stays root-only until the next deploy replaces it. mv, not cp: a full disk can't lose env.
+    if [ -d "$saved/etc" ]; then
+      rm -rf /etc/ebook-reader
+      mv "$saved/etc" /etc/ebook-reader || true
+    fi
+    for command in ebook-compose ebook-account ebook-update; do
+      if [ -f "$saved/$command" ]; then mv "$saved/$command" "/usr/local/bin/$command" || true; fi
+    done
     $compose up -d --remove-orphans || true
     echo "$1" >&2
     exit 1
@@ -129,7 +148,7 @@ run env LANG=C.UTF-8 VERSION="$VERSION" bash -s <<'EOF'
     } || echo "Migration to the API database failed; the old sync folders are untouched" >&2
   fi
   docker image prune -f >/dev/null
-  rm -rf "$app.previous"
+  rm -rf "$app.previous" "$saved"
   if [ -d /run/systemd/system ]; then
     /usr/local/bin/ebook-update install || echo "Updates from the admin panel stay off (see above)"
   fi

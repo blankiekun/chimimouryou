@@ -78,6 +78,8 @@ MOKURO_DIR = os.environ.get('MOKURO_STATE_DIR', '/data/state/mokuro')
 MANGA_TEXT_CHECK_SECONDS = 60
 READINGS_DIR = os.path.join(STATE_DIR, 'readings')
 READINGS_QUEUE_MAX = 100
+# No new readings files with less free space than this (there are no quotas).
+MIN_FREE_BYTES = int(os.environ.get('MIN_FREE_MB', '1024')) * 1024 * 1024
 MAX_STATICDATA_BYTES = 30 * 1024 * 1024
 # Building a file takes ~3 s: keep the readings worker this long after its last file so the next
 # book opened doesn't start a process again (its Reader loads from READER_PACK at once).
@@ -97,7 +99,7 @@ HOST = os.environ.get('JITEN_HOST', '127.0.0.1')
 # Made by the web container; nginx sends it as X-Internal-Token, so only nginx can call this service.
 INTERNAL_TOKEN_FILE = os.environ.get('INTERNAL_TOKEN_FILE', '/data/state/internal-token')
 # Server connect: the standalone app's origins; nginx's auth check took its bearer token.
-CORS_ORIGINS = httpbase.parse_cors_origins(os.environ.get('CORS_ORIGINS', ''))
+CORS_ORIGINS = httpbase.cors_origins(os.environ.get('CORS_ORIGINS', ''))
 # The JSON bodies of compute, cancel and terms/remove (nginx's default limit for them).
 MAX_JSON_BYTES = 1024 * 1024
 # Worker processes are replaced after this many books to bound their memory.

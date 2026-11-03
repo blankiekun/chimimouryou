@@ -178,6 +178,8 @@ On the server the source goes to `/opt/ebook-reader` and the settings to
 password until that account has signed in.
 Roll back with
 `for i in $(ebook-compose config --images); do docker image tag "${i%:*}:previous" "$i"; done; ebook-compose up -d`.
+This puts back only the images: the source, `/etc/ebook-reader` and the commands stay on
+the new version (a failed deploy restores those too). If the new deploy changed them, deploy the old commit instead.
 
 ## Updating
 

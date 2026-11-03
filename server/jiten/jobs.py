@@ -98,6 +98,12 @@ def file_replaced(estimate, book) -> bool:
     return book.get('added', 0) > estimate.get('computedAt', float('inf'))
 
 
+def no_text_stamp(book):
+    """What a book without text is remembered by, in noTextStamps: tried again once it changes. Manga: their
+    text. Others: `added`, which moves when the file is replaced (entries from before this retry once)."""
+    return book.get('text') if book.get('manga') else book.get('added')
+
+
 def needs_estimate(book, results, engine) -> bool:
     """Whether a whole-library run estimates the book: never tried, estimated by another engine or
     an older CORE_VERSION (the estimate is the core: ~0.4 s a book), from a file replaced since,
@@ -106,7 +112,7 @@ def needs_estimate(book, results, engine) -> bool:
     key = str(book['id'])
     if book.get('manga') and not book.get('text'):
         return False
-    if book['id'] in results.get('noText', []) and results.get('noTextStamps', {}).get(key) == book.get('text'):
+    if book['id'] in results.get('noText', []) and results.get('noTextStamps', {}).get(key) == no_text_stamp(book):
         return False
     estimate = results['books'].get(key, {})
     return (estimate.get('engine') != engine or estimate.get('text') != book.get('text')
@@ -179,7 +185,7 @@ class JobRunner:
         # Books with too little text (scans, manga without mokuro text) can't be estimated, and
         # failed ones are broken files (not a zip, no container.xml), retried once the file changes.
         no_text = set(results.get('noText', []))
-        # Manga in noText: the text they had then (none: None), so new text is tried.
+        # What books in noText were then (no_text_stamp), so a change is tried.
         no_text_stamps = results.setdefault('noTextStamps', {})
         failed = results.setdefault('failed', {})
         # All books: needs_estimate. Selected books are always recomputed.
@@ -207,8 +213,7 @@ class JobRunner:
                 failed.pop(str(result[0]), None)
             else:
                 no_text.add(result[0])
-                if book.get('manga'):
-                    no_text_stamps[str(result[0])] = book['text']
+                no_text_stamps[str(result[0])] = no_text_stamp(book)
                 failed.pop(str(result[0]), None)
             results['noText'] = sorted(no_text)
             done += 1
@@ -231,12 +236,29 @@ def stale_manga() -> list:
     return [b['id'] for b in load_catalog() if b.get('manga') and needs_estimate(b, results, engine)]
 
 
+def replaced_books() -> list:
+    """Other books with a new file since their estimate or since they had no text. Books never estimated and
+    other engines stay with the whole-library run; a noText entry from before its stamps too."""
+    if not os.path.exists(settings.FREQUENCY_DICTIONARY):
+        return []
+    results = load_results()
+    engine = readerpack.current_engine()
+    stamps = results.get('noTextStamps', {})
+
+    def replaced(book):
+        key = str(book['id'])
+        if key in stamps:
+            return stamps[key] != no_text_stamp(book)
+        return key in results['books'] and file_replaced(results['books'][key], book)
+    return [b['id'] for b in load_catalog() if not b.get('manga') and replaced(b) and needs_estimate(b, results, engine)]
+
+
 def watch_manga_text():
-    """Estimates manga as their text is made or uploaded (mokuro service), when no other job runs."""
+    """Estimates manga as their text is made or uploaded (mokuro service), and replaced books, when no other job runs."""
     while True:
         time.sleep(settings.MANGA_TEXT_CHECK_SECONDS)
         try:
-            ids = stale_manga()
+            ids = stale_manga() + replaced_books()
             if ids:
                 runner.start('compute', runner.compute, ids)
         except RuntimeError:

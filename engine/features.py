@@ -34,7 +34,7 @@ def fold_source_breaks(markup: str) -> str:
     return _TEXT_NODE.sub(lambda m: _SOURCE_BREAK.sub('', m.group()), markup)
 
 
-# The most text a book's zip may unpack to in a worker, so a zip bomb fails rather than fills its memory. Real books are
+# The most text a book's zip or TXT may bring into a worker, so a zip bomb fails rather than fills its memory. Real books are
 # far under it: at most 18.5 MB of documents in a sample of 4,800, and text copies stop at 30 MB (MAX_STATICDATA_BYTES).
 MAX_BOOK_TEXT_BYTES = 256 * 1024 * 1024
 
@@ -47,6 +47,7 @@ def _check_text_size(sizes):
 def book_text(path: str, fmt: str, ruby: dict | None = None, hints: list | None = None) -> str:
     """yurigana's book_text with fold_source_breaks on each EPUB/HTMLZ document (TXT lines are real)."""
     if fmt == 'TXT':
+        _check_text_size([os.path.getsize(path)])
         return _text.book_text(path, fmt, ruby, hints)
     with zipfile.ZipFile(path) as archive:
         sizes = {info.filename: info.file_size for info in archive.infolist()}
