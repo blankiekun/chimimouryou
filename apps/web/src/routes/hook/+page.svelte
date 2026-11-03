@@ -57,11 +57,13 @@
   import { database } from '$lib/data/store';
   import { hookCleaner, type HookCleanup } from '$lib/data/vn/hook-cleanup';
   import {
+    cancelNativeSavesOnExit,
     desktopGames,
     isSavedThread,
     nativeSavesToPull,
     NativeThreads as Threads,
     pushNativeSaves,
+    pushNativeSavesOnExit,
     type NativeHook,
     type NativeMessage,
     type NativeThread
@@ -168,6 +170,7 @@
   /** vnsaves.json, shared with VNBox: pulled before the game starts, pushed when it closes. */
   let saveSync: VnSaveSync | undefined;
   let saveStamp: string | undefined;
+  let left = false;
   let saveNote = $state<string>();
   /** Windows: folders the game's first run wrote, to confirm as its saves */
   let pendingFolders = $state<string[]>();
@@ -200,6 +203,7 @@
     const session = await games.session();
 
     if (session && session.folder === info.folder && session.running) {
+      cancelNativeSavesOnExit();
       nativeRunning = true;
       nativeStatus = 'Playing.';
       reportActivity();
@@ -214,6 +218,7 @@
 
     if (result.status === 'started') {
       nativeRunning = true;
+      if (left) handOffSaves();
       nativeStatus = 'Starting the game…';
       reportActivity();
     } else if (result.status === 'missing' || result.status === 'gone') {
@@ -292,6 +297,13 @@
       picture: found.picture && new Blob([found.picture], { type: 'image/jpeg' }),
       audio: await lineAudio(sound, text)
     };
+  }
+
+  /** This page is gone (or the game started just after): its listener can't push at the exit. */
+  function handOffSaves() {
+    if (nativeRunning && games && saveSync?.info.folder) {
+      pushNativeSavesOnExit(games, saveSync.info.folder, saveSync, saveStamp);
+    }
   }
 
   async function pushSaves() {
@@ -515,6 +527,8 @@
 
   onDestroy(() => {
     stopListening?.();
+    left = true;
+    handOffSaves();
     cleanupSubscription.unsubscribe();
     disconnect();
     readingActivity();

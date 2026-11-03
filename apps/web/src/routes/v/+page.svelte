@@ -43,6 +43,7 @@
     vnBookmark,
     vnInfo,
     type VnLine,
+    type VnInfo,
     type VnSaves
   } from '$lib/data/vn/vn';
   import { VnReading, vnTextSource } from '$lib/data/vn/vn-text';
@@ -81,7 +82,7 @@
   import WindowsGameDialog from '$lib/components/vn/windows-game-dialog.svelte';
   import VnboxHooks from '$lib/components/vn/vnbox-hooks.svelte';
   import { hookCleaner, type HookCleanup } from '$lib/data/vn/hook-cleanup';
-  import { readVnScreen, stopVnOcr } from '$lib/data/vn/vn-ocr';
+  import { readVnScreen, screenTextOff$, stopVnOcr } from '$lib/data/vn/vn-ocr';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
   import {
     builtInLookups$,
@@ -164,6 +165,8 @@
   let saveSync: VnSaveSync | undefined;
   /** Why a Windows game's saves don't sync */
   let savesNote: string | undefined;
+  /** The "Screen text stopped" notice was dismissed; the Hooks sheet still says it. */
+  let screenTextOffSeen = false;
   /** This game's files are missing here: the import dialog can add them to this record. */
   let missingFiles = false;
 
@@ -357,9 +360,7 @@
           .catch((error) => logger.warn(`Visual novel sync failed: ${error.message}`));
       }
       tuning = loadVnboxTuning(game.folder!);
-      if (game.hook) {
-        hookUrl = URL.createObjectURL(new Blob([game.hook], { type: 'text/javascript' }));
-      }
+      useHook(game);
     }
     loaded = true;
     // Opening it plays it: /hook starts it in Wine, its error shows beside its Start the game button.
@@ -632,11 +633,18 @@
     engineSet('Skip', skipping ? 1 : 0);
   }
 
+  /** The game's saved hook as hookUrl. A restart calls it too: the Hooks sheet saves to the database only. */
+  function useHook({ hook }: VnInfo) {
+    if (hookUrl) URL.revokeObjectURL(hookUrl);
+    hookUrl = hook ? URL.createObjectURL(new Blob([hook], { type: 'text/javascript' })) : undefined;
+  }
+
   /** Saves the Tuning sheet's settings and starts the game again with them. */
   async function applyTuning(next: string) {
     showTuning = false;
     await save(true).catch((error) => logger.warn(error.message));
     saveVnboxTuning(info!.folder!, next);
+    useHook(vnInfo((await database.getData(book!.id)) ?? book!));
     tuning = next;
     frameLoaded = false;
     started = false;
@@ -653,7 +661,8 @@
     showSaves = true;
   }
 
-  function closeSaves() {
+  async function closeSaves() {
+    useHook(vnInfo((await database.getData(book!.id)) ?? book!));
     showSaves = false;
     restarts += 1;
   }
@@ -872,7 +881,7 @@
     {/if}
     <!-- The game's own dark ground: part of the content, not the theme -->
     <div class="vn-game" class:vn-game-blocked={blocked || showSaves}>
-      {#if newerEngine || savesNote || ended}
+      {#if newerEngine || savesNote || ended || ($screenTextOff$ && !screenTextOffSeen)}
         <div class="vn-notices">
           {#if ended}
             <div class="vn-notice"><p>The game has ended.</p></div>
@@ -886,6 +895,17 @@
               <button
                 class="app-button app-button-quiet"
                 on:click={() => (newerEngine = undefined)}
+              >
+                Dismiss
+              </button>
+            </div>
+          {/if}
+          {#if $screenTextOff$ && !screenTextOffSeen}
+            <div class="vn-notice" role="status">
+              <p>Screen text stopped ({$screenTextOff$}). Reload the page to try again.</p>
+              <button
+                class="app-button app-button-quiet"
+                on:click={() => (screenTextOffSeen = true)}
               >
                 Dismiss
               </button>

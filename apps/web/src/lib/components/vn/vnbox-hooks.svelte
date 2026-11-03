@@ -11,6 +11,7 @@
   import Switch from '$lib/components/switch.svelte';
   import HookCleanupEditor from '$lib/components/vn/hook-cleanup-editor.svelte';
   import { cleanHookLine, type HookCleanup } from '$lib/data/vn/hook-cleanup';
+  import { screenTextOff$ } from '$lib/data/vn/vn-ocr';
   import { database } from '$lib/data/store';
   import { vnElementHtml, vnInfo } from '$lib/data/vn/vn';
   import { rankThreads, savedHookName, type HookThread } from '$lib/data/vn/windows-game';
@@ -214,8 +215,10 @@
     </div>
   </div>
   {#if screenText}
-    <p class="hooks-muted">
-      Lines are read from the game’s screen after each click, for games whose hook gives nothing.
+    <p class="hooks-muted" role="status">
+      {$screenTextOff$
+        ? `Screen text stopped (${$screenTextOff$}). Reload the page to try again.`
+        : 'Lines are read from the game’s screen after each click, for games whose hook gives nothing.'}
     </p>
   {:else}
     <Switch checked={placeText} onchange={setPlaceText}>Place text over the game’s line</Switch>

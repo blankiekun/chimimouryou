@@ -407,7 +407,8 @@ function ankiShownTexts() {
 /**
  * Media for a mined line: kept line ankiTexts()[kept] and/or backlog page
  * ankiShownTexts()[shown] (-1 for none). The picture is the screen when the line was shown,
- * if still kept, else the screen as it is now (the backlog). The sound is the line's voice
+ * if still kept; else the screen as it is now, when that shows the line (the backlog, or a hooked
+ * line waiting for its screenshot); else none, not an unrelated screen. The sound is the line's voice
  * file, else its recorded sound (lineSound: the page trims it to the voice), else the backlog
  * page's voice file (null without sound).
  */
@@ -416,7 +417,10 @@ async function ankiMedia(kept, shown, want) {
   var page = shownPages()[shown] || {};
 
   return {
-    picture: want.picture ? (await line.picture) || (await screenshot()) : null,
+    picture: want.picture
+      ? (await line.picture) ||
+        (kept < 0 || shown >= 0 || waitingLines.indexOf(line) >= 0 ? await screenshot() : null)
+      : null,
     audio: want.audio
       ? voiceFile(line.voice) || lineSound(line) || voiceFile(page.voice) || null
       : null
