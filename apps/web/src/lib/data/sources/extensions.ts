@@ -324,8 +324,16 @@ export async function lookUpRepo(url: string) {
   return { url: url.trim(), extensions: entries.filter(listed).map((e) => view(undefined, e)) };
 }
 
-/** Fetches the entry's code and pins it (a Manatan package: only if it matches the index). */
-async function install(repo: RepoRow, entry: ExtensionSource, on: boolean): Promise<ExtensionRow> {
+/**
+ * Fetches the entry's code and pins it (a Manatan package: only if it matches the index).
+ * `replaces`: a Mihon pin to delete from the app once the new code is kept.
+ */
+async function install(
+  repo: RepoRow,
+  entry: ExtensionSource,
+  on: boolean,
+  replaces?: string
+): Promise<ExtensionRow> {
   if (verdict(entry).off) throw new SourceError(`${entry.name}: ${verdict(entry).off}`);
   if (isMihon(entry)) {
     const host = mihonHost();
@@ -333,7 +341,7 @@ async function install(repo: RepoRow, entry: ExtensionSource, on: boolean): Prom
     // The app downloads the jar (desktop) or apk (Android) and keeps it under its SHA-256 (the pin):
     // trust on first use for jars; Android also refuses an apk not signed with the repository's key.
     const url = mihonRunsApks() ? entry.apkUrl : entry.jarUrl;
-    const { sha256: pin } = await host.install(url, repo.signingKey ?? '');
+    const { sha256: pin } = await host.install(url, repo.signingKey ?? '', replaces);
     return { repo: repo.id, id: entry.id, on, code: '', sha256: pin, version: entry.version };
   }
   if (isManatan(entry) && !nativeFetch()) throw new NeedsAppError(httpsHost(repo.url));
@@ -454,7 +462,12 @@ export async function updateExtension(repoId: number, id: number | string) {
   const row = await db.one<ExtensionRow>('extensions', [repoId, id]);
   const entry = repo.entries.find((e) => e.id === id);
   if (!entry || !row) throw new SourceError('The repository no longer lists this extension');
-  await db.put('extensions', await install(repo, entry, row.on));
+  // Another repository can list the same jar, under the same pin.
+  const others = (await db.all<ExtensionRow>('extensions')).filter(
+    (other) => other.repo !== repoId || other.id !== id
+  );
+  const unused = row.sha256 && !others.some((other) => other.sha256 === row.sha256);
+  await db.put('extensions', await install(repo, entry, row.on, unused ? row.sha256 : undefined));
   sitesOf(repo, entry).forEach(closeSite);
   return getRepo(repoId);
 }

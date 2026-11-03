@@ -21,11 +21,14 @@
 // mihon-index.ts' 64-bit strings); Popular doesn't list the fixture's series (the nonce form and
 // advanced_search, then wp-json); the work page doesn't show its chapters (memo / chapter_list);
 // following it doesn't put one CBZ with all 6 pages, in chapter order, into the library; a page
-// crosses into the app (any page error).
+// crosses into the app (any page error); a failed Update (the jar is gone) changes the pin or
+// removes the old jar, or the source stops listing; a good Update leaves anything but the new jar
+// under its own hash, or the running host (which loaded the old jar) stops answering.
 
 /* global indexedDB, localStorage -- used inside page.evaluate */
 import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -139,6 +142,7 @@ try {
 
   step('Browse Rawkuma: the host loads the jar and lists Popular');
   await page.waitForURL(/\/sources\/browse\?ext=/);
+  const browse = page.url();
   await page.getByRole('link', { name: 'Fixture Manga' }).first().click();
 
   step('The work: its chapters, then Follow');
@@ -157,6 +161,56 @@ try {
   const names = found[0].pages.map((name) => name.replace(/\.png$/, ''));
   if (JSON.stringify(names) !== JSON.stringify(expected))
     fail(`${found[0].title} has pages ${found[0].pages}`);
+
+  const ext = join(await app.evaluate(({ app: main }) => main.getPath('userData')), 'mihon/ext');
+  const jars = () => readdirSync(ext);
+  const [first, ...more] = jars();
+  if (more.length) fail(`jars before Update: ${jars()}`);
+  // The index says the row is behind, so Update is offered.
+  const repoId = await page.evaluate(
+    () =>
+      new Promise((resolve, reject) => {
+        const open = indexedDB.open('chimi-sources');
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const rows = open.result.transaction('extensions', 'readwrite').objectStore('extensions');
+          const all = rows.getAll();
+          all.onsuccess = () => {
+            const [row] = all.result;
+            rows.put({ ...row, version: '1.6.42' }).onsuccess = () => resolve(row.repo);
+          };
+        };
+      })
+  );
+  const stillLists = async () => {
+    await page.goto(browse);
+    await page.getByRole('link', { name: 'Fixture Manga' }).first().waitFor();
+  };
+
+  step('Update fails (the jar is gone): the old jar stays and the source still lists');
+  writeFileSync(join(tls, 'jar-missing'), '');
+  await page.goto(`${origin}/sources/add?repo=${repoId}`);
+  const update = page.getByRole('button', { name: 'Update to v1.6.43' });
+  await update.click();
+  await page.getByText('HTTP 404').waitFor();
+  if (jars().join() !== first) fail(`jars after a failed Update: ${jars()}`);
+  await stillLists();
+
+  step('Update: only the new jar is left, and the host that loaded the old one still answers');
+  rmSync(join(tls, 'jar-missing'));
+  writeFileSync(join(tls, 'jar-updated'), '');
+  await page.goto(`${origin}/sources/add?repo=${repoId}`);
+  await update.click();
+  // Named "Updating…" meanwhile.
+  await page.getByRole('button', { name: /^Updat/ }).waitFor({ state: 'detached' });
+  const [jar, ...others] = jars();
+  if (others.length || jar === first) fail(`jars after Update: ${jars()}`);
+  const hash = createHash('sha256')
+    .update(readFileSync(join(ext, jar)))
+    .digest('hex');
+  if (`${hash}.jar` !== jar) fail(`${jar} doesn't match its hash ${hash}`);
+  await stillLists();
+
   if (errors.length) fail(`page errors:\n${[...new Set(errors)].join('\n')}`);
   console.log(`ok: ${found[0].title}, ${names.length} pages`);
 } catch (error) {

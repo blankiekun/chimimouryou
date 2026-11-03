@@ -11,6 +11,7 @@
   answers. Any other host is tunnelled unchanged (the app's Java download). Prints "proxy <port>".
 """
 import gzip
+import io
 import json
 import os
 import socket
@@ -19,6 +20,7 @@ import ssl
 import subprocess
 import sys
 import threading
+import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 JAR = 'tachiyomi-ja.rawkuma-v1.6.43.jar'
@@ -63,6 +65,14 @@ def index_pb(signing_key: str = SIGNING_KEY) -> bytes:
     return gzip.compress(store)
 
 
+def rebuilt(jar: bytes) -> bytes:
+    """The same classes under another SHA-256."""
+    out = io.BytesIO(jar)
+    with zipfile.ZipFile(out, 'a') as archive:
+        archive.comment = b'rebuilt'
+    return out.getvalue()
+
+
 def repo(rest: str) -> tuple[int, str, bytes]:
     if rest == 'index.pb':
         return 200, 'application/octet-stream', index_pb()
@@ -70,8 +80,15 @@ def repo(rest: str) -> tuple[int, str, bytes]:
         return 200, 'application/octet-stream', index_pb('0' * 64)
     for name, kind in ((JAR, 'application/java-archive'), (APK, 'application/vnd.android.package-archive')):
         if rest == name:
+            # The E2E's Update: a file in the state folder makes the jar missing, or a new build.
+            state = os.environ.get('MIHON_STATE', '')
+            if state and os.path.exists(os.path.join(state, 'jar-missing')):
+                return 404, 'text/plain', b'not found'
             with open(os.path.join(HERE, 'mihon', name), 'rb') as f:
-                return 200, kind, f.read()
+                body = f.read()
+            if state and name == JAR and os.path.exists(os.path.join(state, 'jar-updated')):
+                return 200, kind, rebuilt(body)
+            return 200, kind, body
     return 404, 'text/plain', b'not found'
 
 
@@ -193,6 +210,7 @@ class Proxy(socketserver.StreamRequestHandler):
 
 if __name__ == '__main__':
     sys.path.insert(0, HERE)
+    os.environ['MIHON_STATE'] = sys.argv[1]
     Proxy.context = make_ca(sys.argv[1])
     server = socketserver.ThreadingTCPServer(('127.0.0.1', 0), Proxy)
     server.daemon_threads = True

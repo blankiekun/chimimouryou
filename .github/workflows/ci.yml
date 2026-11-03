@@ -91,7 +91,7 @@ jobs:
         run: pnpm --filter chimi-social-hub test
 
       - name: Desktop shell tests
-        run: node --test apps/desktop/serve.test.js apps/desktop/oauth.test.js
+        run: node --test apps/desktop/serve.test.js apps/desktop/oauth.test.js apps/desktop/mihon.test.js
 
       - name: Test build
         run: pnpm build

@@ -20,7 +20,8 @@ contextBridge.exposeInMainWorld('chimiDesktop', {
     status: () => ipcRenderer.invoke('mihon-status'),
     installJava: () => ipcRenderer.invoke('mihon-install-jre'),
     removeJava: () => ipcRenderer.invoke('mihon-remove-jre'),
-    install: (url) => ipcRenderer.invoke('mihon-install', url),
+    // No signing key here: the desktop's jars are trust on first use.
+    install: (url, _signingKey, replaces) => ipcRenderer.invoke('mihon-install', url, replaces),
     load: (pin) => ipcRenderer.invoke('mihon-load', pin),
     call: (pin, op, params) => ipcRenderer.invoke('mihon-call', pin, op, params),
     onProgress: (callback) => {

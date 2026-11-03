@@ -66,8 +66,14 @@ internal object MihonApks {
         return signatures.orEmpty().map { sha256(it.toByteArray()) }
     }
 
-    /** Downloads the apk (https, through the host's guarded client), checks its signer, pins it: its SHA-256. */
-    fun install(context: Context, client: OkHttpClient, url: String, signingKey: String): String {
+    /**
+     * Downloads the apk (https, through the host's guarded client), checks its signer, pins it: its
+     * SHA-256. `replaces` (a pin no other extension holds) goes once the new apk is kept and reads
+     * back whole. Android keeps a deleted file readable for a loader that has it open, and the
+     * loaded sources stay cached, so the running host isn't disturbed.
+     */
+    fun install(context: Context, client: OkHttpClient, url: String, signingKey: String, replaces: String): String {
+        if (replaces.isNotEmpty() && !PIN.matches(replaces)) throw HostError("Not a pin")
         if (!url.startsWith("https://")) throw HostError("Only https addresses")
         if (signingKey.isBlank()) throw HostError("The repository names no signing key, so its extensions can’t be trusted")
         val body = client.newCall(GET(url)).execute().use { response ->
@@ -90,6 +96,8 @@ internal object MihonApks {
         } finally {
             part.delete()
         }
+        open(context, pin)
+        if (replaces.isNotEmpty() && replaces != pin) File(dir, "$replaces.ext").delete()
         return pin
     }
 
