@@ -234,6 +234,13 @@ export async function catalog(): Promise<CalibreBook[]> {
   return catalogBooks;
 }
 
+/** The titles of the catalog this browser last cached, asking nobody (the session may be gone). */
+export async function cachedCatalogTitles() {
+  const cached = await cacheGet<{ books: ApiBook[] }>(`catalog:${serverBase}`);
+
+  return cached && new Set(cached.books.map((book) => book.title));
+}
+
 /** books.id of a catalog title (live books only), from the last catalog read or its cache. */
 export async function bookIdOf(title: string) {
   if (!catalogBooks) {

@@ -16,7 +16,7 @@
   } from '$lib/data/account/account';
   import { settingsSyncState$, syncAccountSettings } from '$lib/data/account/account-settings-sync';
   import { pagePath } from '$lib/data/env';
-  import { signOutAndRelease } from '$lib/data/account/reader-data-owner';
+  import { signOutAndRelease, UnsentChangesError } from '$lib/data/account/reader-data-owner';
   import { t$ } from '$lib/i18n';
   import { onMount } from 'svelte';
 
@@ -77,9 +77,16 @@
 
   async function onSignOut() {
     error = await run(async () => {
-      await signOutAndRelease(signOut).catch(() => {
-        throw new Error($t$('prefs.account.signOutFailed'));
-      });
+      try {
+        await signOutAndRelease(signOut);
+      } catch (e) {
+        const anyway =
+          e instanceof UnsentChangesError && window.confirm($t$('prefs.account.signOutAnyway'));
+
+        await (anyway ? signOutAndRelease(signOut, true) : Promise.reject(e)).catch(() => {
+          throw new Error($t$('prefs.account.signOutFailed'));
+        });
+      }
       window.location.reload();
     });
   }

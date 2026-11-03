@@ -17,8 +17,13 @@ import { standalone } from '$lib/data/env';
 import { clearKnownWords } from '$lib/data/words/known-words';
 import { readerDb } from '$lib/data/reader-db';
 import { database } from '$lib/data/store';
-import { dropSyncMirrors } from '$lib/data/remote/server-api';
-import { parseWaitingEntry, waitingChanges } from '$lib/data/sync/sync-status';
+import { cachedCatalogTitles, dropSyncMirrors } from '$lib/data/remote/server-api';
+import {
+  dropWaiting,
+  parseWaitingEntry,
+  syncLocked,
+  waitingChanges
+} from '$lib/data/sync/sync-status';
 import { StorageSourceDefault } from '$lib/data/storage/storage-types';
 
 const ownerKey = 'readerDataOwner';
@@ -43,29 +48,42 @@ async function catalogTitles() {
   return new Set((await loadCalibreCatalog()).map((book) => book.title));
 }
 
+/** `signOutAndRelease` refused: changes for the server are still unsent, and nothing happened. */
+export class UnsentChangesError extends Error {}
+
+// Other sync targets' changes stay queued, and only what the server holds is cleared.
+function waitingForServer() {
+  return waitingChanges().filter(
+    (entry) => parseWaitingEntry(entry).source === StorageSourceDefault.CALIBRE_DEFAULT
+  );
+}
+
 /**
  * Sends what's unsent, ends the session (`end`), then forgets the reader's data here. Throws with
- * nothing cleared while changes for the server are unsent (`end` isn't called) or when `end` fails
- * (offline): this device may hold the only copy. If the catalog can't be read, the sign-out still
- * happens and the data stays, released when another account signs in.
+ * nothing cleared while changes for the server are unsent (`UnsentChangesError`, `end` isn't called)
+ * or when `end` fails (offline): this device may hold the only copy.
+ *
+ * `discardUnsent` ("Sign out anyway") skips the sending and takes those changes off the waiting list,
+ * but only once `end` has worked: offline it still throws, with the data and the list as they were.
+ *
+ * A dead session can't read the catalog, so this browser's cached one names the titles (books added
+ * since stay). With neither, the sign-out still happens and the data stays, released when another
+ * account signs in.
  */
-export async function signOutAndRelease(end: () => Promise<unknown>) {
-  const { retryWaitingChanges } = await import('$lib/data/storage/reader-storage');
+export async function signOutAndRelease(end: () => Promise<unknown>, discardUnsent = false) {
+  if (!discardUnsent) {
+    const { retryWaitingChanges } = await import('$lib/data/storage/reader-storage');
 
-  await retryWaitingChanges(window);
+    await retryWaitingChanges(window);
 
-  // Other sync targets' changes stay queued, and only what the server holds is cleared.
-  if (
-    waitingChanges().some(
-      (entry) => parseWaitingEntry(entry).source === StorageSourceDefault.CALIBRE_DEFAULT
-    )
-  ) {
-    throw new Error('Changes not sent yet');
+    if (waitingForServer().length) throw new UnsentChangesError('Changes not sent yet');
   }
 
-  const titles = await catalogTitles().catch(() => undefined);
+  const titles = await catalogTitles().catch(cachedCatalogTitles);
 
   await end();
+  // Under the upload lock: a retry in flight would put back what it failed to send.
+  await syncLocked(async () => dropWaiting(waitingForServer()));
   await releaseReaderData(null, true, titles).catch(() => {});
 }
 

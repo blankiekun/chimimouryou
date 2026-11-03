@@ -5,6 +5,7 @@
  */
 
 import 'fake-indexeddb/auto';
+import { openDB } from 'idb';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const catalog = vi.hoisted(() => ({ fails: false }));
@@ -116,6 +117,11 @@ describe('signOutAndRelease', () => {
     catalog.fails = false;
     await seed();
     await releaseReaderData(user('a'));
+    // A cached catalog left by another test would change what "no catalog" means.
+    const cacheDb = await openDB('chimi-server');
+
+    await cacheDb.clear('cache');
+    cacheDb.close();
   });
 
   it('reads the catalog while signed in, then clears only after the sign-out', async () => {
@@ -156,6 +162,53 @@ describe('signOutAndRelease', () => {
     syncQueued('ttu-gdrive-default\tstatistic\tLocal');
     await signOutAndRelease(end);
     expect(end).toHaveBeenCalled();
+  });
+
+  // "Sign out anyway". Catches discarded changes coming back, a discard that clears while still
+  // signed in on the server, and a dead session (catalog answers 401) leaving the data behind.
+  describe('discarding unsent changes', () => {
+    const calibreEntry = 'ttu-calibre-default\tstatistic\tCalibre';
+    const driveEntry = 'ttu-gdrive-default\tstatistic\tLocal';
+
+    beforeEach(() => {
+      syncQueued(calibreEntry);
+      syncQueued(driveEntry);
+    });
+
+    it('signs out, clears, and takes only the server changes off the saved list', async () => {
+      await signOutAndRelease(async () => {}, true);
+      expect(await counts()).toEqual([2, 1, 1, 1, 0]);
+      expect(JSON.parse(window.localStorage.getItem('syncWaiting')!)).toEqual([driveEntry]);
+    });
+
+    it('keeps everything, the list too, when the sign-out fails (offline)', async () => {
+      await expect(
+        signOutAndRelease(async () => {
+          throw new TypeError('Failed to fetch');
+        }, true)
+      ).rejects.toThrow();
+      expect(await counts()).toEqual(untouched);
+      expect(waitingChanges()).toContain(calibreEntry);
+      expect(window.localStorage.getItem('readerDataOwner')).toBe('a');
+    });
+
+    it('works with a dead session, from the catalog this browser cached', async () => {
+      const cacheDb = await openDB('chimi-server');
+
+      await cacheDb.put('cache', { rev: 1, books: [{ id: 1, title: 'Calibre' }] }, 'catalog:');
+      cacheDb.close();
+      catalog.fails = true;
+      await signOutAndRelease(async () => {}, true);
+      expect(await counts()).toEqual([2, 1, 1, 1, 0]);
+      expect(waitingChanges()).toEqual([driveEntry]);
+      expect(window.localStorage.getItem('readerDataOwner')).toBe('');
+    });
+
+    it('still takes them off the list when no catalog is known at all', async () => {
+      catalog.fails = true;
+      await signOutAndRelease(async () => {}, true);
+      expect(waitingChanges()).toEqual([driveEntry]);
+    });
   });
 
   it('signs out but keeps the data when the catalog cannot be read', async () => {
