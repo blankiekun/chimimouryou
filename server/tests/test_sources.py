@@ -370,9 +370,11 @@ class BuildTest(unittest.TestCase):
 
 class Echo(BaseHTTPRequestHandler):
     """Records each request's time; /<host>/429 answers 429 once (Retry-After: 1), /<host>/gzip-bomb inflates
-    to 3 MB."""
+    to 3 MB, /<host>/cut (once with cut-once) and cut-chunked close the connection partway through the body."""
+    protocol_version = 'HTTP/1.1'
     hits: list = []
     seen_429 = False
+    seen_cut = False
 
     def do_GET(self):  # noqa: N802
         Echo.hits.append((self.path, time.monotonic()))
@@ -382,6 +384,21 @@ class Echo(BaseHTTPRequestHandler):
             self.send_header('Retry-After', '1')
             self.send_header('Content-Length', '0')
             self.end_headers()
+            return
+        if self.path.endswith('/cut') or (self.path.endswith('/cut-once') and not Echo.seen_cut):
+            Echo.seen_cut = True
+            self.send_response(200)
+            self.send_header('Content-Length', '100000')
+            self.end_headers()
+            self.wfile.write(b'\xff\xd8\xff' + b'0' * 97)
+            self.close_connection = True
+            return
+        if self.path.endswith('/cut-chunked'):
+            self.send_response(200)
+            self.send_header('Transfer-Encoding', 'chunked')
+            self.end_headers()
+            self.wfile.write(b'64\r\nabc')
+            self.close_connection = True
             return
         bomb = self.path.endswith('/gzip-bomb')
         body = gzip.compress(b'0' * (3 << 20)) if bomb else b'ok'
@@ -436,6 +453,23 @@ class FetcherTest(unittest.TestCase):
     def test_size_cap(self):
         with mock.patch.multiple(fetcher, INTERVAL=0, MAX_BYTES=1 << 20), self.assertRaises(fetcher.FetchError):
             fetcher.fetch('https://d.example/gzip-bomb', {'d.example'})
+
+    # Catches a dropped connection coming back as a complete body: a cached chapter, a CBZ with a broken page.
+    def test_a_cut_off_body_is_an_error_in_memory_and_on_disk(self):
+        path = os.path.join(tempfile.mkdtemp(), 'book.part')
+        with mock.patch.object(fetcher, 'INTERVAL', 0):
+            for name, kwargs in (('cut', {}), ('cut', {'to_path': path}), ('cut-chunked', {}),
+                                 ('cut-chunked', {'to_path': path})):
+                with self.subTest(name=name, **kwargs), self.assertRaises(fetcher.FetchError):
+                    fetcher.fetch(f'https://e.example/{name}', {'e.example'}, **kwargs)
+
+    # Catches the failure sticking, so the next attempt doesn't fetch the page again.
+    def test_the_next_attempt_after_a_cut_off_body_works(self):
+        Echo.seen_cut = False
+        with mock.patch.object(fetcher, 'INTERVAL', 0):
+            with self.assertRaises(fetcher.FetchError):
+                fetcher.fetch('https://f.example/cut-once', {'f.example'})
+            self.assertEqual(fetcher.fetch('https://f.example/cut-once', {'f.example'})[0], b'ok')
 
 
 _service = {}
