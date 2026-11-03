@@ -11,6 +11,7 @@
  * once the frame has settled. Not part of upstream.
  */
 
+import { BehaviorSubject } from 'rxjs';
 import { pagePath } from '$lib/data/env';
 import type { VnOverlayLine } from '$lib/data/vn/vn';
 import type { VnOcrLine, VnOcrMessage, VnOcrRequest } from '$lib/functions/vn-ocr/vn-ocr.worker';
@@ -18,8 +19,34 @@ import type { VnOcrLine, VnOcrMessage, VnOcrRequest } from '$lib/functions/vn-oc
 let worker: Worker | undefined;
 let nextId = 0;
 const waiting = new Map<number, (message: VnOcrMessage) => void>();
-/** The models are missing or won't run here: stop asking. */
-let broken = false;
+/** One read at a time: a frame arriving meanwhile waits here, replaced by any newer one. */
+let reading = false;
+let queued:
+  | {
+      frame: ImageBitmap;
+      hook?: string;
+      resolve: (result: Awaited<ReturnType<typeof readFrame>>) => void;
+      reject: (error: unknown) => void;
+    }
+  | undefined;
+/** A blip passes (a read after it resets the count); this many in a row won't. */
+const maxFailures = 3;
+let failures = 0;
+/** Why reading stopped (models missing or won't run here): stop asking. */
+let off: string | undefined;
+/** First load: about 15 MB (runtime and models) on a slow connection, then a phone compiling it. */
+const readTimeoutMs = 5 * 60_000;
+
+/** Why a game reading its text from the screen has none now; the player and Hooks sheet show it. */
+export const screenTextOff$ = new BehaviorSubject<string | undefined>(undefined);
+
+/** The worker won't answer: what waits on it fails, and the next read starts a new one. */
+function failWorker(error: string) {
+  worker?.terminate();
+  worker = undefined;
+  waiting.forEach((settle, id) => settle({ id, error }));
+  waiting.clear();
+}
 
 function start() {
   worker = new Worker(new URL('../../functions/vn-ocr/vn-ocr.worker.ts', import.meta.url), {
@@ -29,6 +56,7 @@ function start() {
     waiting.get(data.id)?.(data);
     waiting.delete(data.id);
   };
+  worker.onerror = (event) => failWorker(event.message || "its worker file didn't load");
   return worker;
 }
 
@@ -51,22 +79,26 @@ function overlayLine({ text, box, chars }: VnOcrLine): VnOverlayLine {
   };
 }
 
-/**
- * The game's frame read: with a hooked line, that line's rows placed in the game's text box
- * (undefined when no OCR'd line matches it); without, the dialogue lines' text and rows (undefined
- * when there are none). Undefined too when OCR can't run here.
- */
-export async function readVnScreen(
-  frame: ImageBitmap,
-  hook?: string
-): Promise<{ text: string; lines: VnOverlayLine[]; ms: number } | undefined> {
-  if (broken) {
+async function readFrame(frame: ImageBitmap, hook?: string) {
+  if (off) {
     frame.close();
+    if (hook === undefined) screenTextOff$.next(off);
     return undefined;
   }
 
   const id = (nextId += 1);
-  const reply = new Promise<VnOcrMessage>((resolve) => waiting.set(id, resolve));
+  const reply = new Promise<VnOcrMessage>((resolve) => {
+    const timer = setTimeout(() => {
+      // Starting over would only fetch for another 5 minutes.
+      off = 'no answer in 5 minutes';
+      failWorker(off);
+    }, readTimeoutMs);
+
+    waiting.set(id, (message) => {
+      clearTimeout(timer);
+      resolve(message);
+    });
+  });
   const model = (file: string) => new URL(`${pagePath}/vn/ocr/${file}`, location.href).href;
 
   (worker ?? start()).postMessage(
@@ -84,10 +116,13 @@ export async function readVnScreen(
   const message = await reply;
 
   if ('error' in message) {
-    broken = true;
-    console.warn(`Screen text is off: ${message.error}`);
+    console.warn(`Screen text: ${message.error}`);
+    failures += 1;
+    if (failures >= maxFailures) off ??= message.error;
+    if (off && hook === undefined) screenTextOff$.next(off);
     return undefined;
   }
+  failures = 0;
 
   const lines = hook === undefined ? message.lines.filter(({ tag }) => tag === 0) : message.lines;
 
@@ -100,8 +135,37 @@ export async function readVnScreen(
   };
 }
 
+async function readQueued() {
+  reading = true;
+  while (queued) {
+    const { frame, hook, resolve, reject } = queued;
+
+    queued = undefined;
+    await readFrame(frame, hook).then(resolve, reject);
+  }
+  reading = false;
+}
+
+/**
+ * The game's frame read: with a hooked line, that line's rows placed in the game's text box
+ * (undefined when no OCR'd line matches it); without, the dialogue lines' text and rows (undefined
+ * when there are none). Undefined too when OCR can't run here, or a newer frame replaced this one
+ * before its turn (the frame is closed).
+ */
+export function readVnScreen(frame: ImageBitmap, hook?: string) {
+  return new Promise<Awaited<ReturnType<typeof readFrame>>>((resolve, reject) => {
+    queued?.frame.close();
+    queued?.resolve(undefined);
+    queued = { frame, hook, resolve, reject };
+    if (!reading) readQueued();
+  });
+}
+
 /** Frees the worker and its models when the player closes. */
 export function stopVnOcr() {
+  queued?.frame.close();
+  queued?.resolve(undefined);
+  queued = undefined;
   worker?.terminate();
   worker = undefined;
   waiting.forEach((resolve, id) => resolve({ id, lines: [], ms: 0 }));

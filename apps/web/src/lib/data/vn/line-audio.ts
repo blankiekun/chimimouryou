@@ -13,6 +13,7 @@
  * Not part of upstream.
  */
 
+import { logger } from '$lib/data/logger';
 import type { LineVadMessage } from '$lib/functions/vn/line-vad.worker';
 
 /** A line's recorded sound: mono s16 samples; `start`/`end` its window, seconds into them. */
@@ -41,6 +42,16 @@ const fade = 0.05;
 let worker: Worker | undefined;
 let nextId = 0;
 const pending = new Map<number, (message: LineVadMessage) => void>();
+/** A line's window is at most the 3-minute ring: minutes on a slow phone, with the runtime to fetch. */
+const vadTimeoutMs = 5 * 60_000;
+
+/** The worker won't answer: what waits on it fails, and the next line starts a new one. */
+function failVad(error: string) {
+  worker?.terminate();
+  worker = undefined;
+  pending.forEach((settle, id) => settle({ id, error }));
+  pending.clear();
+}
 
 /** Speech probability per 32 ms frame of 16 kHz samples. */
 function vad(samples: Float32Array) {
@@ -52,13 +63,18 @@ function vad(samples: Float32Array) {
       pending.get(data.id)?.(data);
       pending.delete(data.id);
     };
+    worker.onerror = (event) => failVad(event.message || "its worker file didn't load");
   }
   const id = (nextId += 1);
 
   return new Promise<Float32Array>((resolve, reject) => {
-    pending.set(id, (message) =>
-      'probs' in message ? resolve(message.probs) : reject(new Error(message.error))
-    );
+    const timer = setTimeout(() => failVad('no answer in 5 minutes'), vadTimeoutMs);
+
+    pending.set(id, (message) => {
+      clearTimeout(timer);
+      if ('probs' in message) resolve(message.probs);
+      else reject(new Error(message.error));
+    });
     worker!.postMessage({ id, samples }, [samples.buffer]);
   });
 }
@@ -160,7 +176,8 @@ const isPcm = (audio: unknown): audio is LinePcm =>
 
 /**
  * The sound to put on the note of a line with this text: a voice file (Blob) as is, a recorded
- * window (LinePcm) trimmed to its voice; undefined for none (no voice).
+ * window (LinePcm) trimmed to its voice; undefined for none (no voice, or the detector failed: the
+ * card keeps its picture).
  */
 export async function lineAudio(
   audio: Blob | LinePcm | null | undefined,
@@ -169,7 +186,16 @@ export async function lineAudio(
   if (!audio) return undefined;
   if (!isPcm(audio)) return audio;
 
-  const speech = lineSpeech(await vad(to16k(audio)), audio);
+  let probs: Float32Array;
+
+  try {
+    probs = await vad(to16k(audio));
+  } catch (error: any) {
+    logger.warn(`Visual novel line sound skipped: ${error.message}`);
+    return undefined;
+  }
+
+  const speech = lineSpeech(probs, audio);
   const length = (speech.at(-1)?.[1] ?? 0) - (speech[0]?.[0] ?? 0);
   // GameSentenceMiner's rule: 0.05 s per character, half a second at least.
   const chars = text.replace(/\s/g, '').length;

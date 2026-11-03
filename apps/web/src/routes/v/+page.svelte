@@ -43,6 +43,7 @@
     vnBookmark,
     vnInfo,
     type VnLine,
+    type VnInfo,
     type VnSaves
   } from '$lib/data/vn/vn';
   import { VnReading, vnTextSource } from '$lib/data/vn/vn-text';
@@ -84,7 +85,7 @@
   import WindowsGameDialog from '$lib/components/vn/windows-game-dialog.svelte';
   import VnboxHooks from '$lib/components/vn/vnbox-hooks.svelte';
   import { hookCleaner, type HookCleanup } from '$lib/data/vn/hook-cleanup';
-  import { readVnScreen, stopVnOcr } from '$lib/data/vn/vn-ocr';
+  import { readVnScreen, screenTextOff$, stopVnOcr } from '$lib/data/vn/vn-ocr';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
   import {
     builtInLookups$,
@@ -170,6 +171,8 @@
   let saveSync: VnSaveSync | undefined;
   /** Why a Windows game's saves don't sync */
   let savesNote: string | undefined;
+  /** The "Screen text stopped" notice was dismissed; the Hooks sheet still says it. */
+  let screenTextOffSeen = false;
   /** VNBox can't store saves right now; it clears when a retry works */
   let savesFailing: string | undefined;
   /** This game's files are missing here: the import dialog can add them to this record. */
@@ -368,10 +371,7 @@
           .catch((error) => logger.warn(`Visual novel sync failed: ${error.message}`));
       }
       tuning = loadVnboxTuning(game.folder!);
-      if (game.hook && !native && !blocker) {
-        if (await hookApproved(game.hook)) useHook(game.hook);
-        else unapprovedHook = game.hook;
-      }
+      if (!native && !blocker) await useSavedHook(game);
     }
     loaded = true;
     // Opening it plays it: /hook starts it in Wine, its error shows beside its Start the game button.
@@ -382,8 +382,18 @@
     }
   }
 
-  function useHook(script: string) {
-    hookUrl = URL.createObjectURL(new Blob([script], { type: 'text/javascript' }));
+  function useHook(script?: string) {
+    if (hookUrl) URL.revokeObjectURL(hookUrl);
+    hookUrl = script
+      ? URL.createObjectURL(new Blob([script], { type: 'text/javascript' }))
+      : undefined;
+  }
+
+  /** The game's saved hook, once approved here. A restart calls it too: the Hooks sheet saves to the database only, and a sync can bring a new script. */
+  async function useSavedHook({ hook }: VnInfo) {
+    const approved = !hook || (await hookApproved(hook));
+    useHook(approved ? hook : undefined);
+    unapprovedHook = approved ? undefined : hook;
   }
 
   async function runUnapprovedHook() {
@@ -670,6 +680,7 @@
     showTuning = false;
     await save(true).catch((error) => logger.warn(error.message));
     saveVnboxTuning(info!.folder!, next);
+    await useSavedHook(vnInfo((await database.getData(book!.id)) ?? book!));
     tuning = next;
     frameLoaded = false;
     started = false;
@@ -686,7 +697,8 @@
     showSaves = true;
   }
 
-  function closeSaves() {
+  async function closeSaves() {
+    await useSavedHook(vnInfo((await database.getData(book!.id)) ?? book!));
     showSaves = false;
     restarts += 1;
   }
@@ -911,7 +923,7 @@
     {/if}
     <!-- The game's own dark ground: part of the content, not the theme -->
     <div class="vn-game" class:vn-game-blocked={blocked || unapprovedHook || showSaves}>
-      {#if newerEngine || savesNote || savesFailing || ended || turnNote}
+      {#if newerEngine || savesNote || savesFailing || ended || turnNote || ($screenTextOff$ && !screenTextOffSeen)}
         <div class="vn-notices">
           {#if turnNote}
             <div class="vn-notice">
@@ -933,6 +945,17 @@
               <button
                 class="app-button app-button-quiet"
                 on:click={() => (newerEngine = undefined)}
+              >
+                Dismiss
+              </button>
+            </div>
+          {/if}
+          {#if $screenTextOff$ && !screenTextOffSeen}
+            <div class="vn-notice" role="status">
+              <p>Screen text stopped ({$screenTextOff$}). Reload the page to try again.</p>
+              <button
+                class="app-button app-button-quiet"
+                on:click={() => (screenTextOffSeen = true)}
               >
                 Dismiss
               </button>

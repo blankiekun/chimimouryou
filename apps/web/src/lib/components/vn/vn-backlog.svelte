@@ -74,7 +74,7 @@
         if (!line.check || checked.has(`${index}:${line.text}`)) continue;
         checked.add(`${index}:${line.text}`);
         const media = await player()?.ankiMedia(index, -1, { picture: false, audio: true });
-        const voiced = !!(await lineAudio(media?.audio, line.text).catch(() => undefined));
+        const voiced = !!(await lineAudio(media?.audio, line.text));
 
         player()?.setLineVoiced?.(index, line.text, voiced);
       }

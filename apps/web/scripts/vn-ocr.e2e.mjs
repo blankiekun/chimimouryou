@@ -18,12 +18,14 @@
 // text = the hook's), or the pointer a third into each of the game's characters (cells from the
 // line's ink) doesn't find that character in the overlay, which is what Yomitan scans; the Hooks
 // sheet's "Text from: Screen" isn't saved on the game; in Screen mode a click doesn't bring the next
-// line into the backlog with the game's text, or the overlay doesn't sit on it; the page has errors.
+// line into the backlog with the game's text, or the overlay doesn't sit on it; frames faster than
+// reads all get read; a hook saved for the game isn't what the next restart loads; a worker file
+// that won't load hangs reads or stays silent (no notice in /v and the Hooks sheet); the page has errors.
 // With PLACE=off (the game's "Place text over the game's line" off): a hooked line leaves the fixed
 // spot, or a frame is read. Prints the worker's time per frame. Artifact: the shots, the overlay
 // outlined over the game.
 
-/* global console, document, navigator, process, setTimeout, atob, window, createImageBitmap, screenCanvas, screenRead, keptLineList, lastScreenMs, g_screen_width, g_screen_height -- Node, and the page and VNBox frame inside evaluate */
+/* global console, document, fetch, navigator, process, setTimeout, atob, window, createImageBitmap, screenCanvas, screenRead, keptLineList, lastScreenMs, g_screen_width, g_screen_height -- Node, and the page and VNBox frame inside evaluate */
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -349,6 +351,111 @@ try {
     console.log(
       `  backlog: ${backlog.join(' / ')} (click to backlog ${Date.now() - clickedAt} ms)`
     );
+
+    step('frames faster than reads: the middle one is dropped, first and newest are read');
+    const overlapping = await frame().evaluate(async () => {
+      const shot = () => createImageBitmap(screenCanvas());
+      const frames = [await shot(), await shot(), await shot()];
+      const results = await Promise.all(frames.map((each) => window.readScreen(each)));
+
+      return results.map(Boolean);
+    });
+
+    expect(
+      overlapping.join() === 'true,false,true',
+      `overlapping reads gave ${overlapping.join()}`
+    );
+
+    // Written as the Hooks sheet's Save writes it (Save itself needs a hook picked in the game).
+    const saveHook = (marker) =>
+      page.evaluate(
+        async ([bookId, text]) => {
+          const { database } = await import('/src/lib/data/store.ts');
+          const { vnElementHtml, vnInfo } = await import('/src/lib/data/vn/vn.ts');
+          const stored = await database.getData(bookId);
+
+          await database.upsertData(
+            { ...stored, elementHtml: vnElementHtml({ ...vnInfo(stored), hook: text }) },
+            'overwrite',
+            false,
+            false
+          );
+        },
+        [id, `// ${marker}\n`]
+      );
+    /** Through Saves and back, which restarts the game: the frame's hook address, its script. */
+    const restart = async () => {
+      const before = frame();
+
+      await page.getByRole('button', { name: 'More' }).click();
+      await page.getByRole('button', { name: 'Saves' }).click();
+      const sheet = page.getByRole('dialog', { name: 'Saves' });
+
+      await sheet.waitFor();
+      await page.keyboard.press('Escape');
+      await sheet.waitFor({ state: 'hidden' });
+      await waitFor(() => frame() && frame() !== before, 'the game didn’t restart', 30_000);
+      const url = new URL(frame().url()).searchParams.get('frida');
+
+      return { url, text: await page.evaluate((href) => fetch(href).then((r) => r.text()), url) };
+    };
+
+    step('a hook saved for the game is what each restart loads, the old address freed');
+    await saveHook('first saved hook');
+    const first = await restart();
+
+    expect(first.text.includes('first saved hook'), `restart loaded: ${first.text}`);
+    await saveHook('second saved hook');
+    const second = await restart();
+
+    expect(second.text.includes('second saved hook'), `restart loaded: ${second.text}`);
+    expect(
+      await page.evaluate(
+        (href) =>
+          fetch(href).then(
+            () => false,
+            () => true
+          ),
+        first.url
+      ),
+      'the old hook address wasn’t revoked'
+    );
+
+    step('a worker that can’t load: clicks carry on, then a notice says screen text stopped');
+    expect(!errors.length, `page errors: ${errors.join('; ')}`);
+    await page.route(/vn-ocr\.worker/, (route) => route.fulfill({ status: 404, body: 'gone' }));
+    await page.reload();
+    await waitFor(
+      () =>
+        frame()
+          ?.evaluate(() => typeof window.readScreen === 'function' && screenCanvas().width > 0)
+          .catch(() => false),
+      'the game never started again',
+      300_000
+    );
+    await page.waitForTimeout(10_000);
+    const notice = page.getByText('Screen text stopped');
+
+    await waitFor(
+      async () => {
+        const again = await page.locator('iframe').boundingBox();
+
+        await page.mouse.click(again.x + again.width / 2, again.y + again.height / 2, {
+          delay: 80
+        });
+        await page.waitForTimeout(4000);
+        return notice.isVisible();
+      },
+      'no notice after the worker failed to load',
+      60_000
+    );
+    await shot('screen-text-stopped');
+    await page.getByRole('button', { name: 'Dismiss' }).click();
+    await notice.waitFor({ state: 'hidden' });
+    await page.getByRole('button', { name: 'More' }).click();
+    await page.getByRole('button', { name: 'Hooks' }).click();
+    await page.getByRole('dialog', { name: 'Hooks' }).getByText('Screen text stopped').waitFor();
+    await shot('screen-text-stopped-hooks');
 
     expect(!errors.length, `page errors: ${errors.join('; ')}`);
     console.log(`  worker time per frame: ${timings.map((ms) => Math.round(ms)).join(', ')} ms`);

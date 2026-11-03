@@ -30,7 +30,7 @@
 // the prefix's Documents still leads into the home folder; a newer save in vnsaves.json (as VNBox
 // writes it) isn't where the game reads it at the next start, or its time isn't kept; a synced
 // Startup .bat or game/*.dll is written; saves over the 20 MB cap are pushed or the page doesn't
-// say so. Anki (a fake AnkiConnect): a note mined from a line after the game closed gets no picture,
+// say so; a game closed after leaving /hook pushes nothing. Anki (a fake AnkiConnect): a note mined from a line after the game closed gets no picture,
 // or one of another line (each step has its own background colour), or no sound, or another line's
 // (each step its own tone), or other programs' sound (a tone playing on the speakers throughout).
 
@@ -411,6 +411,18 @@ try {
   checkNames(synced);
   if (decode(synced[appData]) !== 'step=10\n') fail(`save contents: ${decode(synced[appData])}`);
   if (decode(synced[gameSave]) !== 'step=10\n') fail(`game save: ${decode(synced[gameSave])}`);
+
+  step('/hook left while the game runs: its saves still go up when it closes');
+  const pushedAt = JSON.parse(await vnsaves(page))[appData].modified;
+  await page.getByRole('button', { name: 'Start the game' }).click();
+  await page.getByText('Playing.').waitFor();
+  // The app's own link: page.goto would load in full, which a real click in the app doesn't.
+  await page.locator('a[href$="/manage"]').first().click();
+  await page.waitForURL(/\/manage/);
+  await syncedSave(page, appData, pushedAt);
+  await page.goBack();
+  await page.locator('.nt-row').first().waitFor();
+  await page.getByText('The game has closed.').waitFor();
 
   step('Saves over the 20 MB cap: nothing pushed, the page says so');
   writeFileSync(join(user, 'AppData/Roaming/TestVN/big.dat'), Buffer.alloc(21 * 1024 * 1024));

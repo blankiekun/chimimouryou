@@ -324,3 +324,28 @@ export async function pushNativeSaves(
 
   return { stamp, pending: list.pending };
 }
+
+let stopPushOnExit: (() => void) | undefined;
+
+/** /hook left while the game runs: its saves still go up when it closes (the app kept open). */
+export function pushNativeSavesOnExit(
+  games: DesktopGames,
+  folder: string,
+  sync: VnSaveSync,
+  lastStamp?: string
+) {
+  stopPushOnExit?.();
+  stopPushOnExit = games.onHook((message) => {
+    if (message.type !== 'exit') return;
+    cancelNativeSavesOnExit();
+    pushNativeSaves(games, folder, sync, lastStamp).catch((error) =>
+      logger.warn(`Visual novel save sync failed: ${error.message}`)
+    );
+  });
+}
+
+/** /hook is back on the running game: its own listener pushes. */
+export function cancelNativeSavesOnExit() {
+  stopPushOnExit?.();
+  stopPushOnExit = undefined;
+}
