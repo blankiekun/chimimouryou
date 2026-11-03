@@ -165,9 +165,12 @@ socialSession$.subscribe((session) => {
 /** Book keys hidden from friends (the book page's switch), kept in this browser only */
 export const hiddenBooks$ = writableArrayLocalStorageSubject<string>()('socialHiddenBooks', []);
 
+/** What the hub takes of a book's key and title; longer ones would refuse the whole status push */
+const hubTextLength = 200;
+
 /** The same book across libraries: the title without store tags, width, case and punctuation */
 export function bookKey(title: string) {
-  return absMatchKey(absCleanTitle(title));
+  return absMatchKey(absCleanTitle(title)).slice(0, hubTextLength);
 }
 
 export function shareOn(key: ShareKey) {
@@ -190,9 +193,21 @@ export function setBookHidden(title: string, hide: boolean) {
   hiddenBooks$.next(hide ? [...others, key] : others);
   if (hide) {
     finishedPending$.next(finishedPending$.getValue().filter((book) => book.key !== key));
-    // Friends see the change with the next push, at most 15 minutes on.
     lastPush = { at: 0, title: '' };
+    takeOffHub(key).catch(() => {});
   }
+}
+
+/**
+ * A book just hidden leaves the hub: its finished entry and events, and its current row with a
+ * push. shortcut: best effort, a failure leaves them until the next push (current row) or a hide
+ * again (finished row); queue the delete if readers hide books offline.
+ */
+async function takeOffHub(key: string) {
+  if (!socialSession$.getValue() || !enabledPlugins$.getValue().includes('social')) return;
+
+  await hubFetch(`/v1/finished/${encodeURIComponent(key)}`, 'DELETE');
+  await pushOutsideCadence();
 }
 
 /** What friends get of the current books: the shown ones, or "Reading something" when all are hidden */
@@ -434,7 +449,7 @@ let lastPush = { at: 0, title: '' };
 let reading = false;
 
 async function pushStatus(leaving: boolean, keepalive = false) {
-  if (!socialSession$.getValue()) return;
+  if (!socialSession$.getValue() || !enabledPlugins$.getValue().includes('social')) return;
 
   const books = sharedBooks(currentBooks$.getValue());
   const finished = finishedPending$.getValue().find((book) => !isHidden(book));
@@ -444,7 +459,13 @@ async function pushStatus(leaving: boolean, keepalive = false) {
   const { needCovers } = await hubFetch<{ needCovers?: string[] }>(
     '/v1/status',
     'PUT',
-    { books, leaving, ...(finished ? { finished } : {}), ...(stats ? { stats } : {}) },
+    {
+      // Stored ones can predate bookKey's clip, and long titles stay whole here (lastPush, the toast).
+      books: books.map(forHub),
+      leaving,
+      ...(finished ? { finished: forHub(finished) } : {}),
+      ...(stats ? { stats } : {})
+    },
     keepalive
   );
   finishedPending$.next(
@@ -452,6 +473,20 @@ async function pushStatus(leaving: boolean, keepalive = false) {
   );
   if (!keepalive && needCovers?.length) uploadCovers(needCovers).catch(() => {});
 }
+
+const forHub = <T extends { key: string; title: string }>(book: T): T => ({
+  ...book,
+  key: book.key.slice(0, hubTextLength),
+  title: book.title.slice(0, hubTextLength)
+});
+
+/** A push now, or once more a minute on when the hub's guard refuses */
+const pushOutsideCadence = () =>
+  pushStatus(false).catch((error) => {
+    if (error instanceof HubError && error.status === 429) {
+      setTimeout(() => pushStatus(false).catch(() => {}), hubGap + 1000);
+    }
+  });
 
 /** Book keys whose cover this page already tried to give the hub */
 const coversTried = new Set<string>();
@@ -583,9 +618,5 @@ export async function statisticsDeleted(titles: string[]) {
     )
   );
   lastPush = { ...lastPush, at: Date.now() };
-  await pushStatus(false).catch((error) => {
-    if (error instanceof HubError && error.status === 429) {
-      setTimeout(() => pushStatus(false).catch(() => {}), hubGap + 1000);
-    }
-  });
+  await pushOutsideCadence();
 }

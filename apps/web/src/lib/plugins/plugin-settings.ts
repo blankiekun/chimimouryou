@@ -15,6 +15,13 @@ export const enabledPlugins$ = writableArrayLocalStorageSubject<string>()(
   strings
 );
 
+// A switch in another tab: a reader open here must stop sending too (its pagehide status push).
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', ({ key, newValue }) => {
+    if (key === 'enabledPlugins' && newValue) enabledPlugins$.next(JSON.parse(newValue));
+  });
+}
+
 function readIntroduced(): string[] {
   try {
     return strings(JSON.parse(localStorage.getItem('pluginsIntroduced') || '[]')) ?? [];

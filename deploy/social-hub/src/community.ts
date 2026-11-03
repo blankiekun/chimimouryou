@@ -400,14 +400,19 @@ async function feed(request: Request, env: Env, user: UserRow | null, query: URL
   };
 }
 
-/** Links in posts from accounts still in their first days (the usual spam), and malformed mentions */
+/** Links from accounts still in their first days (the usual spam) */
+function refuseLinks(user: UserRow, value: string) {
+  if (now() - user.created < NEW_ACCOUNT && /:\/\/|www\.|\.(?:com|net|org|io|gg)\b/i.test(value)) {
+    throw new HttpError(403, 'links');
+  }
+}
+
+/** A post's body: links as above, and malformed mentions */
 function checkLinks(user: UserRow, body: string) {
   for (const [, target] of body.matchAll(MENTION)) {
     if (!MENTION_TARGET.test(target)) throw new HttpError(400, 'mention');
   }
-  if (now() - user.created < NEW_ACCOUNT && /:\/\/|www\.|\.(?:com|net|org|io|gg)\b/i.test(body)) {
-    throw new HttpError(403, 'links');
-  }
+  refuseLinks(user, body);
 }
 
 /** The volume a work key names (AniList), else the one the poster gave (title keys) */
@@ -457,6 +462,8 @@ async function createPost(request: Request, env: Env, user: UserRow) {
     vol = workVolume(work, body.vol);
     quote = plain(body.quote, QUOTE_LENGTH, 'quote', true);
     context = plain(body.context, CONTEXT_LENGTH, 'context');
+    // The feed shows the title and the quote; the thread the context.
+    refuseLinks(user, `${title}\n${quote}\n${context}`);
 
     const normal = normalizeLine(quote);
 

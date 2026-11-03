@@ -91,6 +91,39 @@ describe('social hub', () => {
     ).toBe(409);
   });
 
+  // Bug: every login adds a session row kept 90 days, so one account could exhaust D1's daily writes.
+  it('allows 50 logins a day per account, counting only correct passwords', async () => {
+    await signUp('ren');
+    const login = (n: number) =>
+      call('POST', '/v1/login', { username: 'ren', key: key(n) }).then((r) => r.status);
+
+    expect(await login(9)).toBe(401);
+    for (let i = 0; i < 50; i += 1) expect(await login(1)).toBe(200);
+    expect(await login(1)).toBe(429);
+    expect(rows('sessions')).toHaveLength(51);
+    vi.advanceTimersByTime(86400_000);
+    expect(await login(1)).toBe(200);
+  });
+
+  // Bug: share switches counted toward the name's 10 a day, so turning Public off could get a 429.
+  it('keeps a share switch working past the limit on name and avatar changes', async () => {
+    const aki = await signUp('aki');
+    const put = (patch: object) => call('PUT', '/v1/me', patch, aki.token);
+
+    for (let i = 0; i < 12; i += 1) {
+      expect((await put({ share: { public: i % 2 === 0 } })).status).toBe(200);
+    }
+    for (let i = 0; i < 10; i += 1) expect((await put({ name: `Aki ${i}` })).status).toBe(200);
+    expect((await put({ name: 'Too many' })).status).toBe(429);
+    expect((await put({ avatar: 1 })).status).toBe(429);
+
+    // Queued together by the app (queueProfileChange): the switch applies, the name waits.
+    const both = await put({ name: 'Too many', share: { public: false } });
+
+    expect(both.status).toBe(200);
+    expect(both.body).toMatchObject({ name: 'Aki 9', share: { public: false } });
+  });
+
   it('locks an address after 10 failed logins in an hour, a username only after 50', async () => {
     await signUp('ren');
     const login = (n: number, address = '') =>

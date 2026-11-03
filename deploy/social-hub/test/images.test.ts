@@ -73,7 +73,7 @@ describe('hub images', () => {
     };
   }
 
-  async function signUp(username: string) {
+  async function signUp(username: string, days = 10) {
     const { body } = await call('POST', '/v1/signup', {
       username,
       name: username,
@@ -81,6 +81,7 @@ describe('hub images', () => {
       key: '0'.repeat(64)
     });
 
+    db.prepare('UPDATE users SET created = created - ? WHERE id = ?').run(days * 86400, body.me.id);
     return body as { token: string; me: { id: string; code: string; picture: number } };
   }
 
@@ -151,6 +152,8 @@ describe('hub images', () => {
     expect(image.status).toBe(200);
     expect(image.headers.get('Content-Type')).toBe('image/webp');
     expect(image.headers.get('Cache-Control')).toContain('immutable');
+    // Bug: a removed image kept answering from other data centres for a year.
+    expect(image.headers.get('Cache-Control')).toContain('s-maxage=86400');
     expect(image.body).toEqual(webp(160, 226));
     expect((await call('GET', '/v1/cover/0123456789abcdef')).status).toBe(404);
   });
@@ -178,6 +181,18 @@ describe('hub images', () => {
     for (let i = 5; i < COVER_UPLOADS; i += 1) await put(webp(10, 10));
     expect(await put(webp(160, 226))).toBe(429);
     expect(objects.size).toBe(0);
+  });
+
+  // Bug: 40 new accounts at 50 covers each used up the hub's daily ceiling, stopping all uploads.
+  it('takes 5 covers a day from an account in its first days', async () => {
+    const fresh = await signUp('fresh', 1);
+
+    await call('PUT', '/v1/status', { books: [book('k1')] }, fresh.token);
+    const put = () =>
+      call('PUT', '/v1/cover?key=k1', webp(160, 226, 200, 0x08), fresh.token).then((r) => r.status);
+
+    for (let i = 0; i < 5; i += 1) expect(await put()).toBe(415);
+    expect(await put()).toBe(429);
   });
 
   it('serves an image from the edge cache whatever the query string', async () => {
@@ -323,10 +338,9 @@ describe('hub images', () => {
     await call('PUT', '/v1/status', { books: [book('k1')] }, aki.token);
     const akis = await call('PUT', '/v1/cover?key=k1', webp(160, 226), aki.token);
 
-    // Anyone's while Ren has none, then his own.
-    expect((await call('GET', '/v1/cover?key=k1', undefined, ren.token)).body).toEqual({
-      cover: akis.body.cover
-    });
+    // Bug: a troll's upload for a popular key showed on other readers' Discord status. Never
+    // another reader's: a 404, so the app uploads Ren's own.
+    expect((await call('GET', '/v1/cover?key=k1', undefined, ren.token)).status).toBe(404);
     await call('PUT', '/v1/status', { books: [book('k1')] }, ren.token);
     const rens = await call('PUT', '/v1/cover?key=k1', webp(160, 230), ren.token);
     expect((await call('GET', '/v1/cover?key=k1', undefined, ren.token)).body.cover).toBe(
