@@ -211,11 +211,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def get_sync(self, match):
         since = int_param(self.query, 'since', 0, 0)
+        # PUBLIC_READS opens the library, not what readers on a trusted network read and highlighted.
+        hide_shared = not self.account and self.headers.get('X-Trusted-Network') != '1'
 
         def read(connection):
             result = {'rev': apidb.current_rev(connection)}
             for name, table in SYNC_TABLES.items():
-                if 'account' in apidb.TABLE_KEYS[table]:
+                if hide_shared and 'account' in apidb.TABLE_KEYS[table]:
+                    rows = []
+                elif 'account' in apidb.TABLE_KEYS[table]:
                     rows = connection.execute(f'SELECT * FROM {table} WHERE account = ? AND rev > ? ORDER BY rev',
                                               (self.account, since))
                 else:
@@ -506,6 +510,10 @@ class Handler(BaseHTTPRequestHandler):
             self.account = self.headers.get('X-Account-Id', '')
             if self.account and not apidb.ACCOUNT_RE.fullmatch(self.account):
                 raise ApiError(400, 'Bad account')
+            # A page that believes it is signed in, whose session has died: not the shared account.
+            expected = self.headers.get('X-Expected-Account')
+            if expected is not None and expected != self.account:
+                raise ApiError(401, 'Sign in again')
             self.query = parse_qs(url.query)
             routes = [(route_method, handler, match) for route_method, pattern, handler in self.ROUTES
                       if (match := pattern.fullmatch(url.path))]

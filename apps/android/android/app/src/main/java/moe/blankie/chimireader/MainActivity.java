@@ -13,6 +13,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(DriveAuthPlugin.class);
         registerPlugin(FileSavePlugin.class);
+        registerPlugin(PublicAddressPlugin.class);
         FlavorPlugins.register(this);
         super.onCreate(savedInstanceState);
 

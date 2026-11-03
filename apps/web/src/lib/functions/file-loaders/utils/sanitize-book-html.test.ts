@@ -10,6 +10,15 @@ import { parseBookHtml } from './sanitize-book-html';
 const clean = (html: string) => parseBookHtml(html).innerHTML;
 
 describe('parseBookHtml', () => {
+  // Bug caught: a shared book's media reports the reader's address to another host on every open.
+  it('removes media elements, which load from any host', () => {
+    const result = clean(
+      '<p>本</p><video src="https://evil.example/a" preload="auto"><source src="https://evil.example/b"><track src="https://evil.example/c"></video><audio src="https://evil.example/d"></audio>'
+    );
+
+    expect(result).toBe('<p>本</p>');
+  });
+
   it('keeps ordinary book markup', () => {
     const html =
       '<p class="a" id="p1">本<ruby>漢字<rt>かんじ</rt></ruby></p>' +

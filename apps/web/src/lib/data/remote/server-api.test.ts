@@ -11,7 +11,10 @@ import { fakeApi, type FakeApi } from '$lib/data/test-utils/fake-api';
 
 let user: { id: string } | null = null;
 
-vi.mock('$lib/data/account/account', () => ({ accountReady: async () => user }));
+vi.mock('$lib/data/account/account', () => ({
+  accountReady: async () => user,
+  currentAccount: () => user
+}));
 
 let api: FakeApi;
 
@@ -104,6 +107,23 @@ describe('catalog', () => {
 });
 
 describe('syncMirror', () => {
+  // Bug: without the header, a tab whose session died on a trusted network has its rows filed under
+  // the shared account; signed out, the header would refuse every request.
+  it('tells the API which account it believes it is, only when signed in', async () => {
+    const sent: (string | null)[] = [];
+
+    vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+      sent.push(new Headers(init?.headers).get('X-Expected-Account'));
+      return api.fetch(url, init);
+    });
+
+    await (await load()).syncMirror();
+    user = { id: 'a' };
+    await (await load()).syncMirror();
+
+    expect(sent).toEqual([null, 'a']);
+  });
+
   // Bug: on a shared browser the next reader would see (and sync into) the last one's rows.
   it('keeps each account apart and drops the others', async () => {
     user = { id: 'a' };

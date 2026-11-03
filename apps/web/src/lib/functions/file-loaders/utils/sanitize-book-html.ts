@@ -38,7 +38,13 @@ const blockedElements = new Set([
   'plaintext',
   // SVG animation can set href to a javascript: URL.
   'animate',
-  'set'
+  'set',
+  // Load from any host as the book opens (the CSP covers images, fonts and stylesheets only).
+  // EPUB media never played: the loaders only bring in images.
+  'video',
+  'audio',
+  'source',
+  'track'
 ]);
 
 const urlAttributes = new Set([

@@ -18,7 +18,7 @@
  * <fixture>/<host>/<path> (server/tests/fixtures/sources/serve.py), as SOURCES_FIXTURE_URL does.
  */
 
-import { Capacitor, CapacitorHttp, type HttpResponse } from '@capacitor/core';
+import { Capacitor, CapacitorHttp, registerPlugin, type HttpResponse } from '@capacitor/core';
 import { standalone } from '$lib/data/env';
 
 /** Seconds between two requests to one site, or to a reader's own server (tests set 0). */
@@ -57,7 +57,14 @@ export interface FetchOptions {
   maxBytes?: number;
   /** An extension's page: its repository's index.json and the entry's id, for the server's proxy */
   proxy?: { repo: string; source: number };
+  /** An extension's request in the apps: no LAN or loopback address, on any hop (as the server's proxy) */
+  publicOnly?: boolean;
 }
+
+/** apps/android: PublicAddressPlugin.java */
+const PublicAddress = registerPlugin<{ check(options: { host: string }): Promise<void> }>(
+  'PublicAddress'
+);
 
 const next = new Map<string, number>();
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -101,7 +108,7 @@ interface NativeAnswer {
 
 type DesktopFetch = (
   url: string,
-  options: { headers?: Record<string, string>; maxBytes: number }
+  options: { headers?: Record<string, string>; maxBytes: number; publicOnly?: boolean }
 ) => Promise<NativeAnswer>;
 
 const desktopFetch = () =>
@@ -161,14 +168,18 @@ async function viaServer(
 async function viaApp(
   url: string,
   headers: Record<string, string> = {},
-  maxBytes: number
+  maxBytes: number,
+  publicOnly = false
 ): Promise<NativeAnswer> {
   const desktop = desktopFetch();
-  if (desktop) return desktop(url, { headers, maxBytes });
+  if (desktop) return desktop(url, { headers, maxBytes, publicOnly });
   // Called directly: CapacitorHttp's patching of fetch stays off (capacitor.config.json).
   // Redirects are followed here, so a cookie or password never goes on to another origin.
   for (let hop = 0; hop < 10; hop += 1) {
     if (!/^https?:\/\//.test(url)) throw new Error('Only http and https');
+    if (publicOnly) {
+      await PublicAddress.check({ host: new URL(url).hostname.replace(/^\[|\]$/g, '') });
+    }
     const answer = await CapacitorHttp.request({
       url,
       headers,
@@ -239,7 +250,13 @@ export async function sourceFetch(url: string, options: FetchOptions = {}) {
       response = await viaServer(url, options.proxy, options.headers, maxBytes);
     } else if (nativeFetch()) {
       try {
-        response = await viaApp(target, options.headers, maxBytes);
+        // The test fixture stands in for the site on this machine.
+        response = await viaApp(
+          target,
+          options.headers,
+          maxBytes,
+          options.publicOnly && target === url
+        );
       } catch {
         throw new FetchError(`Can't reach ${host}`);
       }

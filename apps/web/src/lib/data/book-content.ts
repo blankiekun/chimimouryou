@@ -39,7 +39,9 @@ function isVnInfo(value: any): value is VnInfo {
     !Array.isArray(value) &&
     (value.encoding === 'sjis' || value.encoding === 'utf8') &&
     isStrings(value.files) &&
-    optional(value.base, 'string') &&
+    // Only the server's game folder: every game file is fetched from here and fed to the engine.
+    (value.base === undefined ||
+      (typeof value.base === 'string' && /^\/calibre\/vn\//.test(value.base))) &&
     (value.engine === undefined ||
       (value.engine === 'vnbox' &&
         typeof value.folder === 'string' &&
