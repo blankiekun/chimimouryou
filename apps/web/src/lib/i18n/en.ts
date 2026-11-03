@@ -960,6 +960,9 @@ export const en = {
     'The readings of this list agree with the installed one on only {agreement} of its most frequent words. Install it anyway?',
   'library.importDictionary': 'Import frequency list',
   'library.replaceDictionary': 'Replace frequency list',
+  'library.deleteStatistics': 'Delete statistics',
+  'library.deleteStatisticsText':
+    'Delete all statistics of the selected books ({count}), which can include their start and finish dates?\n\nDevices that sync take this at their next sync.',
   'library.customEngineList':
     "Estimates on this server use a custom frequency list; they're shown but don't count for reading rank.",
   'library.customEngine':

@@ -390,6 +390,65 @@ describe('statistics', () => {
     ]);
   });
 
+  // Bug: another device's older day never came down, because the book's one newest time here was
+  // already as new; and a day deleted on the server must not come back the same way.
+  it('MERGE pulls an older day this browser lacks, not a deleted one', async () => {
+    await database.storeStatistics(
+      'こころ',
+      [day('2026-01-05', 50)] as never,
+      ReplicationSaveBehavior.Overwrite,
+      MergeMode.LOCAL,
+      50
+    );
+    for (const [dateKey, modified, deleted] of [
+      ['2026-01-05', 50, false],
+      ['2026-01-01', 30, false],
+      ['2026-01-02', 40, true]
+    ] as const) {
+      api.setRow('statistics', {
+        book: 7,
+        dateKey,
+        data: day(dateKey, modified),
+        modified,
+        deleted
+      });
+    }
+
+    await replicateData(
+      handler(),
+      browser(),
+      false,
+      [{ title: 'こころ' } as never],
+      [StorageDataType.STATISTICS]
+    );
+
+    expect((await database.getStatisticsForBook('こころ')).map((row) => row.dateKey)).toEqual([
+      '2026-01-01',
+      '2026-01-05'
+    ]);
+  });
+
+  // Bug: reading here again after pulling a future-dated row lowered this browser's time below the
+  // sync file's, so the reading looked uploaded.
+  it('a local save stays above a pulled future time', async () => {
+    const future = Date.now() + 864e5;
+    const save = (mode: MergeMode, modified: number) =>
+      database.storeStatistics(
+        'こころ',
+        [day('2026-01-01', modified)] as never,
+        ReplicationSaveBehavior.Overwrite,
+        mode,
+        modified
+      );
+
+    await save(MergeMode.MERGE, future);
+    await save(MergeMode.LOCAL, Date.now());
+
+    expect(
+      await database.getLastModifiedForType('こころ', StorageDataType.STATISTICS)
+    ).toBeGreaterThan(future);
+  });
+
   // Bug: goals keyed by the wrong field, so REPLACE deleted the goal it had just written.
   it('REPLACE of the reading goals deletes only the removed goal', async () => {
     const goal = (goalStartDate: string, lastGoalModified: number) => ({
@@ -546,6 +605,46 @@ describe("a Windows game's details", () => {
 
   // Bugs: a game has no Calibre id, so a pick was thrown away and its card and page lost it after a
   // reload; one device's pick missing on the next; a pick re-uploading the whole game record.
+  // Bug: a game's statistics are one document with one time, so an older day here looked uploaded;
+  // and the server ignores an equal time, so sending it without a new one would never land.
+  it('sends an older day missing from its statistics document', async () => {
+    const server = handler();
+
+    server.startContext({ title });
+    await server.saveBook(await localGame());
+    api.setRow('gameDocs', {
+      name: title,
+      kind: 'statistics',
+      data: [{ ...day('2026-01-05', 50), title }],
+      modified: 50
+    });
+    await database.storeStatistics(
+      title,
+      [
+        { ...day('2026-01-01', 30), title },
+        { ...day('2026-01-05', 50), title }
+      ] as never,
+      ReplicationSaveBehavior.Overwrite,
+      MergeMode.LOCAL,
+      50
+    );
+
+    await replicateData(
+      browser(),
+      handler(),
+      false,
+      [{ title } as never],
+      [StorageDataType.STATISTICS]
+    );
+
+    const [doc] = api.rowsOf('gameDocs').filter((row) => row.kind === 'statistics');
+
+    expect((doc.data as { dateKey: string }[]).map((row) => row.dateKey)).toEqual([
+      '2026-01-01',
+      '2026-01-05'
+    ]);
+  });
+
   it('on the server: a game doc, listed and shown on every device', async () => {
     const server = handler();
 

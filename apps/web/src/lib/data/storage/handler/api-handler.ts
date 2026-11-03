@@ -614,9 +614,11 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
       newStatisticModified
     ));
 
+    // The source's own time too: it can be above every row after reading below a future-dated one
+    // or a deletion, and other devices pull only for a newer name.
     const filename = BaseStorageHandler.getStatisticsFileName(
       statisticsToStore,
-      newStatisticModified
+      Math.max(newStatisticModified, lastStatisticModified)
     );
 
     await this.upload(titleId, filename, files, file, JSON.stringify(statisticsToStore));

@@ -324,8 +324,7 @@
     init();
     // Statistics of books not opened in this browser only exist on the server.
     pullAccountStatistics(window)
-      .then(init)
-      .then(() => (statisticsTitleFilters = new Map(statisticsTitleFilters)))
+      .then(reloadStatistics)
       .catch(({ message }) => logger.warn(`Failed to sync statistics: ${message}`));
   });
 
@@ -504,6 +503,7 @@
       }
 
       updateStatisticsData();
+      await reloadStatistics();
       $statisticsActionInProgress$ = false;
     }
   }
@@ -584,6 +584,7 @@
 
       statisticsData[statisticIndex] = { ...statistic, ...newStatistic };
       updateStatisticsData();
+      await reloadStatistics();
     } catch ({ message }: any) {
       dialogManager.dialogs$.next([
         {
@@ -659,6 +660,12 @@
     }
 
     $lastPrimaryReadingDataAggregationMode$ = statisticsDataAggregrationModes[nextIndex];
+  }
+
+  /** Rows changed under the page: a pull, or a correction's pull of what other devices wrote. */
+  async function reloadStatistics() {
+    await init();
+    statisticsTitleFilters = new Map(statisticsTitleFilters);
   }
 
   async function init() {

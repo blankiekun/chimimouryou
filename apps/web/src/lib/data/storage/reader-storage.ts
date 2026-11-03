@@ -19,7 +19,10 @@ import {
   autoReplication$,
   cacheStorageData$,
   database,
+  fsStorageSource$,
+  gDriveStorageSource$,
   isOnline$,
+  oneDriveStorageSource$,
   readingGoalsMergeMode$,
   replicationSaveBehavior$,
   statisticsMergeMode$,
@@ -41,7 +44,9 @@ import {
   dropWaiting,
   parseWaitingEntry,
   syncLocked,
-  waitingChanges
+  syncQueued,
+  waitingChanges,
+  waitingEntry
 } from '$lib/data/sync/sync-status';
 import { tr } from '$lib/i18n';
 
@@ -309,11 +314,21 @@ async function retryBook(window: Window, entries: string[]) {
   );
 }
 
-const librarySources: Partial<Record<StorageKey, string>> = {
-  [StorageKey.CALIBRE]: StorageSourceDefault.CALIBRE_DEFAULT,
-  [StorageKey.GDRIVE]: StorageSourceDefault.GDRIVE_DEFAULT,
-  [StorageKey.ONEDRIVE]: StorageSourceDefault.ONEDRIVE_DEFAULT
-};
+/** The source the library lists, for what no book record names; a custom one has its own name. */
+function librarySource() {
+  switch (storageSource$.getValue()) {
+    case StorageKey.CALIBRE:
+      return StorageSourceDefault.CALIBRE_DEFAULT;
+    case StorageKey.GDRIVE:
+      return gDriveStorageSource$.getValue();
+    case StorageKey.ONEDRIVE:
+      return oneDriveStorageSource$.getValue();
+    case StorageKey.FS:
+      return fsStorageSource$.getValue();
+    default:
+      return undefined;
+  }
+}
 
 type Copy = (from: BaseStorageHandler, to: BaseStorageHandler) => Promise<void>;
 
@@ -333,11 +348,17 @@ function correct(
   return syncLocked(async () => {
     const pushes: (() => Promise<void>)[] = [];
     let problem = '';
+    // Statistics only: goals have no title, and go with any book's next sync.
+    const unsent = (source: string, title: string | undefined, error: Error) => {
+      problem = error.message;
+      if (title !== undefined) {
+        syncQueued(waitingEntry(source, StorageDataType.STATISTICS, title));
+      }
+    };
 
     for (const title of titles) {
       const book = title === undefined ? undefined : await database.getDataByTitle(title);
-      const source =
-        book?.storageSource || syncTarget$.getValue() || librarySources[storageSource$.getValue()];
+      const source = book?.storageSource || syncTarget$.getValue() || librarySource();
       const type = source && sendsUpTo(source) ? await sourceType(source) : undefined;
 
       if (
@@ -373,18 +394,18 @@ function correct(
 
         const pushing = pair(MergeMode.REPLACE);
 
-        pushes.push(() => copy(pushing.local, pushing.target));
+        pushes.push(() =>
+          copy(pushing.local, pushing.target).catch((error: Error) => unsent(source, title, error))
+        );
       } catch (error: any) {
-        problem = error.message;
+        unsent(source, title, error);
       }
     }
 
     await change();
 
     for (const push of pushes) {
-      await push().catch((error: Error) => {
-        problem = error.message;
-      });
+      await push();
     }
 
     if (problem) {

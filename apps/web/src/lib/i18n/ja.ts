@@ -956,6 +956,9 @@ export const ja: Record<MessageKey, string> = {
     'このリストの読みは、導入済みリストの頻出語と {agreement} しか一致しません。このまま導入しますか？',
   'library.importDictionary': '頻度リストをインポート',
   'library.replaceDictionary': '頻度リストを置き換え',
+  'library.deleteStatistics': '統計を削除',
+  'library.deleteStatisticsText':
+    '選択した本({count}冊)の統計をすべて削除しますか?読み始めと読了の日付も含まれることがあります。\n\n同期している端末には次回の同期で反映されます。',
   'library.customEngineList':
     'このサーバーの推定は独自の頻度リストを使っています。表示されますが、読書ランクには数えられません。',
   'library.customEngine':

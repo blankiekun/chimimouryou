@@ -370,7 +370,8 @@ export class StorageOAuthManager {
       form.append('client_secret', this.remoteData.clientSecret);
     }
 
-    // Only invalid_grant means the refresh token is dead (undefined: the caller asks for sign-in).
+    // These mean the refresh token is dead, or the client that issued it changed (undefined: the
+    // caller asks for sign-in).
     // Anything else, like no network or an outage, throws: the token stays for the next try.
     const notRenewed = Object.assign(
       new Error(
@@ -392,7 +393,7 @@ export class StorageOAuthManager {
 
         logger.error(`Unable to refresh token for ${this.storageSourceName}: ${message}`);
 
-        if (answer?.error === 'invalid_grant') {
+        if (['invalid_grant', 'invalid_client', 'unauthorized_client'].includes(answer?.error)) {
           return undefined;
         }
 

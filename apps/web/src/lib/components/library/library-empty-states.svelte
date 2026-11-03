@@ -2,6 +2,7 @@
   import LibraryEmpty from '$lib/components/standalone/library-empty.svelte';
   import { account$ } from '$lib/data/account/account';
   import { pagePath, selfHostingGuideUrl, standalone } from '$lib/data/env';
+  import { driveSignedIn, signInToDrive } from '$lib/data/standalone/standalone-storage';
   import { StorageKey } from '$lib/data/storage/storage-types';
   import { storageSource$ } from '$lib/data/storage/storage-view';
   import { libraryBuilding$, libraryOffline$, librarySignInNeeded } from '$lib/data/store';
@@ -9,7 +10,7 @@
   import { t$ } from '$lib/i18n';
 
   /**
-   * The library with no books (routes/manage): signed out, server out of reach, standalone's
+   * The library with no books (routes/manage): signed out (server or Drive), server out of reach, standalone's
    * first book, the server's first catalog build, an empty Calibre library (with or without
    * Import) and an empty browser library. .library-empty* styles are the page's (shared with its
    * "No books match" state).
@@ -23,6 +24,10 @@
   }
 
   let { importReady, onfiles, onretry }: Props = $props();
+
+  async function driveSignIn() {
+    if (!(await signInToDrive(window))) onretry();
+  }
 </script>
 
 {#if $storageSource$ === StorageKey.CALIBRE && librarySignInNeeded($account$, $libraryOffline$)}
@@ -41,6 +46,14 @@
     <h1 class="library-signed-out-title">The server can't be reached</h1>
     <p class="library-empty-text">No books downloaded to this browser yet.</p>
     <button type="button" class="app-button" onclick={onretry}>{$t$('home.retry')}</button>
+  </div>
+{:else if $storageSource$ === StorageKey.GDRIVE && $libraryOffline$ && !driveSignedIn()}
+  <div class="library-signed-out">
+    <h1 class="library-signed-out-title">Sign in to see your Drive library</h1>
+    <p class="library-empty-text">Your books and reading data stay on Drive.</p>
+    <button type="button" class="app-button app-button-primary" onclick={driveSignIn}
+      >Sign in</button
+    >
   </div>
 {:else if standalone}
   <LibraryEmpty onFiles={onfiles} />

@@ -508,9 +508,11 @@ export class FilesystemStorageHandler extends BaseStorageHandler implements Sync
       newStatisticModified
     ));
 
+    // The source's own time too: it can be above every row after reading below a future-dated one
+    // or a deletion, and other devices pull only for a newer name.
     const filename = BaseStorageHandler.getStatisticsFileName(
       statisticsToStore,
-      newStatisticModified
+      Math.max(newStatisticModified, lastStatisticModified)
     );
 
     await this.writeFile(

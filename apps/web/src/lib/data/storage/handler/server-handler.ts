@@ -248,18 +248,45 @@ export class ServerStorageHandler extends BaseStorageHandler {
     }
   }
 
+  /** The server's live days and their times; a Windows game keeps them as one document's list. */
+  private async serverDays() {
+    const game = await this.gameDoc('statistics');
+    const days = game
+      ? ((game.row?.data as BooksDbStatistic[] | undefined) ?? [])
+      : live((await this.bookRows('statistics')).rows).map((row) => row.data as BooksDbStatistic);
+
+    return new Map(days.map((day) => [day.dateKey, day.lastStatisticModified]));
+  }
+
+  /**
+   * The reverse of `hasNewerDayHere`: an older day another device uploaded, below this browser's
+   * newest time. Not in REPLACE, where a pull drops what this browser hasn't sent.
+   */
+  private async hasNewerDayThere() {
+    if (this.statisticsMergeMode !== MergeMode.MERGE) return false;
+
+    const here = new Map(
+      (await database.getSyncedStatisticsForBook(this.currentContext.title)).map((day) => [
+        day.dateKey,
+        day.lastStatisticModified
+      ])
+    );
+
+    return [...(await this.serverDays())].some(([day, time]) => time > (here.get(day) ?? 0));
+  }
+
   /**
    * A day in this browser newer than the server's, which the book's one newest time can't show: an
    * offline day pulled over, a partly failed upload. Not in REPLACE, where an upload deletes the
    * server's other days.
    */
   private async hasNewerDayHere() {
-    if (this.statisticsMergeMode !== MergeMode.MERGE || (await this.gameDoc('statistics'))) {
-      return false;
-    }
+    if (this.statisticsMergeMode !== MergeMode.MERGE) return false;
 
-    const { rows } = await this.bookRows('statistics');
-    const modified = new Map(rows.map((row) => [row.dateKey, row.modified]));
+    const game = await this.gameDoc('statistics');
+    const modified = game
+      ? await this.serverDays()
+      : new Map((await this.bookRows('statistics')).rows.map((row) => [row.dateKey, row.modified]));
     const days = await database.getStatisticsForBook(this.currentContext.title);
 
     return days.some((day) => day.lastStatisticModified > (modified.get(day.dateKey) ?? 0));
@@ -271,7 +298,11 @@ export class ServerStorageHandler extends BaseStorageHandler {
       return undefined;
     }
 
-    const modified = await this.recentModified(kind);
+    // No time means "not up to date" to the replicator, as with Overwrite above.
+    const modified =
+      kind === StorageDataType.STATISTICS && (await this.hasNewerDayThere())
+        ? undefined
+        : await this.recentModified(kind);
 
     BaseStorageHandler.reportProgress();
     BaseStorageHandler.completeStep();
@@ -848,7 +879,8 @@ export class ServerStorageHandler extends BaseStorageHandler {
       // The whole file as one row, as the game's sync folder held it.
       await signedInOr401(
         putRow(`games/${encodeURIComponent(this.currentContext.title)}/docs/statistics`, {
-          modified: newStatisticModified,
+          // An older day merged in leaves the newest time, and the server ignores an equal one.
+          modified: Math.max(newStatisticModified, (game.row?.modified ?? 0) + 1),
           data: statisticsToStore
         })
       );
