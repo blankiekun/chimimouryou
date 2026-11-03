@@ -1491,6 +1491,8 @@ export const ja: Record<MessageKey, string> = {
   'prefs.account.adminPanel': '管理パネル',
   'prefs.account.open': '開く',
   'prefs.account.signOut': 'ログアウト',
+  'prefs.account.signOutFailed':
+    'サーバーに接続できないか、未送信の読書データがあるため、ログアウトしていません。この端末のデータは削除していません。オンラインに戻ってから、もう一度お試しください。',
   'prefs.account.checking': 'ログイン状態を確認中…',
   'prefs.account.unreachable': 'サーバーに接続できません。復旧したら再読み込みしてください。',
   'prefs.account.signInHint': 'アカウントは管理者に依頼してください。',

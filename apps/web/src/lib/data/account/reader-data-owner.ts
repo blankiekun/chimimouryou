@@ -18,19 +18,55 @@ import { clearKnownWords } from '$lib/data/words/known-words';
 import { readerDb } from '$lib/data/reader-db';
 import { database } from '$lib/data/store';
 import { dropSyncMirrors } from '$lib/data/remote/server-api';
+import { parseWaitingEntry, waitingChanges } from '$lib/data/sync/sync-status';
+import { StorageSourceDefault } from '$lib/data/storage/storage-types';
 
 const ownerKey = 'readerDataOwner';
 
 let release: Promise<void> | undefined;
 
 /**
- * Called once per page load with the session state, and with `signingOut` just before the reader
- * signs out (while the catalog can still be read).
+ * Called once per page load with the session state, and with `signingOut` once the reader has
+ * signed out (`titles`: the catalog's, read while it still could be).
  */
-export function releaseReaderData(user: AccountUser | null, signingOut = false) {
-  release = releaseFor(user, signingOut);
+export function releaseReaderData(
+  user: AccountUser | null,
+  signingOut = false,
+  titles?: Set<string>
+) {
+  release = releaseFor(user, signingOut, titles);
 
   return release;
+}
+
+async function catalogTitles() {
+  return new Set((await loadCalibreCatalog()).map((book) => book.title));
+}
+
+/**
+ * Sends what's unsent, ends the session (`end`), then forgets the reader's data here. Throws with
+ * nothing cleared while changes for the server are unsent (`end` isn't called) or when `end` fails
+ * (offline): this device may hold the only copy. If the catalog can't be read, the sign-out still
+ * happens and the data stays, released when another account signs in.
+ */
+export async function signOutAndRelease(end: () => Promise<unknown>) {
+  const { retryWaitingChanges } = await import('$lib/data/storage/reader-storage');
+
+  await retryWaitingChanges(window);
+
+  // Other sync targets' changes stay queued, and only what the server holds is cleared.
+  if (
+    waitingChanges().some(
+      (entry) => parseWaitingEntry(entry).source === StorageSourceDefault.CALIBRE_DEFAULT
+    )
+  ) {
+    throw new Error('Changes not sent yet');
+  }
+
+  const titles = await catalogTitles().catch(() => undefined);
+
+  await end();
+  await releaseReaderData(null, true, titles).catch(() => {});
 }
 
 /** The reader ('' signed out) whose data this browser holds, once this page load's release is done. */
@@ -40,7 +76,7 @@ export async function readerDataOwner() {
   return window.localStorage.getItem(ownerKey);
 }
 
-async function releaseFor(user: AccountUser | null, signingOut: boolean) {
+async function releaseFor(user: AccountUser | null, signingOut: boolean, titles?: Set<string>) {
   const owner = window.localStorage.getItem(ownerKey);
   const id = user?.id ?? '';
 
@@ -52,10 +88,10 @@ async function releaseFor(user: AccountUser | null, signingOut: boolean) {
   // (owner '') when it connects to a server: it was this device's reader all along.
   if (owner !== null && owner !== id && !(standalone && owner === '')) {
     // Throws when the catalog can't be read (signed out): nothing is cleared, the next load retries.
-    const titles = new Set((await loadCalibreCatalog()).map((book) => book.title));
+    const forget = titles ?? (await catalogTitles());
 
     await clearKnownWords();
-    await database.clearReaderData(titles);
+    await database.clearReaderData(forget);
     // Kanji met sync for every title, so none stay behind.
     await (await readerDb()).clear('kanji');
   }

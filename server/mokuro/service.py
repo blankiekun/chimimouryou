@@ -40,7 +40,6 @@ WORK_DIR = os.path.join(STATE_DIR, 'work')
 MOKURO = os.environ.get('MOKURO_BIN', '/opt/mokuro/bin/mokuro')
 PORT = int(os.environ.get('MOKURO_PORT', '8768'))
 HOST = os.environ.get('MOKURO_HOST', '127.0.0.1')
-ALLOW_HTTP = os.environ.get('ALLOW_HTTP_ACCOUNTS') == '1'
 # Server connect: the standalone app's origins; nginx's auth check took its bearer token.
 CORS_ORIGINS = httpbase.parse_cors_origins(os.environ.get('CORS_ORIGINS', ''))
 INTERNAL_TOKEN_FILE = os.environ.get('INTERNAL_TOKEN_FILE', '/data/state/internal-token')
@@ -246,7 +245,7 @@ class Handler(BaseHTTPRequestHandler):
     def _post(self):
         if not httpbase.from_nginx(self.headers, INTERNAL_TOKEN_FILE):
             return self._send(403, {'error': 'Only nginx may call this service'})
-        if not httpbase.same_site(self.headers, CORS_ORIGINS, ALLOW_HTTP):
+        if not httpbase.same_site(self.headers, CORS_ORIGINS):
             return self._send(403, {'error': 'Request from another site'})
         url = urlparse(self.path)
         action = url.path.strip('/')

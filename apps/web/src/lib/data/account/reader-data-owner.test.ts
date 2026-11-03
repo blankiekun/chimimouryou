@@ -16,9 +16,15 @@ vi.mock('$lib/data/remote/calibre', () => ({
   }
 }));
 
+// The sync itself isn't under test: it leaves whatever it couldn't send on the waiting list.
+vi.mock('$lib/data/storage/reader-storage', () => ({ retryWaitingChanges: async () => {} }));
+
 const { database } = await import('$lib/data/store');
 const { readerDb } = await import('$lib/data/reader-db');
-const { releaseReaderData } = await import('$lib/data/account/reader-data-owner');
+const { releaseReaderData, signOutAndRelease } = await import(
+  '$lib/data/account/reader-data-owner'
+);
+const { dropWaiting, syncQueued, waitingChanges } = await import('$lib/data/sync/sync-status');
 
 async function seed() {
   const db = await database.db;
@@ -97,5 +103,68 @@ describe('releaseReaderData', () => {
     expect(await counts()).toEqual([2, 2, 2, 2, 1]);
     expect(await (await readerDb()).count('known')).toBe(1);
     expect(await kanjiCount()).toBe(1);
+  });
+});
+
+// Each of these catches a sign-out that loses reading data, or one that keeps it after really signing out.
+describe('signOutAndRelease', () => {
+  const untouched = [2, 2, 2, 2, 1];
+
+  beforeEach(async () => {
+    window.localStorage.clear();
+    dropWaiting(waitingChanges());
+    catalog.fails = false;
+    await seed();
+    await releaseReaderData(user('a'));
+  });
+
+  it('reads the catalog while signed in, then clears only after the sign-out', async () => {
+    let countsAtSignOut: number[] = [];
+
+    await signOutAndRelease(async () => {
+      countsAtSignOut = await counts();
+      // The server stops answering this reader as soon as the session is gone.
+      catalog.fails = true;
+    });
+    expect(countsAtSignOut).toEqual(untouched);
+    expect(await counts()).toEqual([2, 1, 1, 1, 0]);
+    expect(window.localStorage.getItem('readerDataOwner')).toBe('');
+  });
+
+  it('clears nothing when the sign-out fails (offline)', async () => {
+    await expect(
+      signOutAndRelease(async () => {
+        throw new TypeError('Failed to fetch');
+      })
+    ).rejects.toThrow();
+    expect(await counts()).toEqual(untouched);
+    expect(window.localStorage.getItem('readerDataOwner')).toBe('a');
+  });
+
+  it('stays signed in while changes for the server are still unsent', async () => {
+    const end = vi.fn(async () => {});
+
+    syncQueued('ttu-calibre-default\tstatistic\tCalibre');
+    await expect(signOutAndRelease(end)).rejects.toThrow();
+    expect(end).not.toHaveBeenCalled();
+    expect(await counts()).toEqual(untouched);
+  });
+
+  it("isn't held up by another sync target's waiting changes, which it doesn't clear", async () => {
+    const end = vi.fn(async () => {});
+
+    syncQueued('ttu-gdrive-default\tstatistic\tLocal');
+    await signOutAndRelease(end);
+    expect(end).toHaveBeenCalled();
+  });
+
+  it('signs out but keeps the data when the catalog cannot be read', async () => {
+    const end = vi.fn(async () => {});
+
+    catalog.fails = true;
+    await signOutAndRelease(end);
+    expect(end).toHaveBeenCalled();
+    expect(await counts()).toEqual(untouched);
+    expect(window.localStorage.getItem('readerDataOwner')).toBe('a');
   });
 });

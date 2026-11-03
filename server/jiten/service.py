@@ -103,7 +103,7 @@ class Handler(BaseHTTPRequestHandler):
     def _post(self):
         if not httpbase.from_nginx(self.headers, settings.INTERNAL_TOKEN_FILE):
             return self._send(403, {'error': 'Only nginx may call this service'})
-        if not httpbase.same_site(self.headers, settings.CORS_ORIGINS, settings.ALLOW_HTTP):
+        if not httpbase.same_site(self.headers, settings.CORS_ORIGINS):
             return self._send(403, {'error': 'Request from another site'})
         parts = self.path.split('?')[0].strip('/').split('/')
         if len(parts) == 2 and parts[0] == 'readings' and re.fullmatch(r'-?[0-9]+', parts[1]):

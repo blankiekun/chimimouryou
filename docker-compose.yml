@@ -55,7 +55,8 @@ services:
     command: ['python3', '/app/account/service.py', 'serve']
     # deploy.sh and ebook-update roll back when this never passes (`up --wait`).
     healthcheck:
-      test: ['CMD', 'python3', '-c', "import socket; socket.create_connection(('127.0.0.1', 8766), 3)"]
+      test:
+        ['CMD', 'python3', '-c', "import socket; socket.create_connection(('127.0.0.1', 8766), 3)"]
       interval: 10s
       timeout: 5s
       start_period: 60s
@@ -63,7 +64,6 @@ services:
       - ${DATA_PATH:-./data}:/data
       - ${SYNC_PATH:-${DATA_PATH:-./data}/sync}:/data/sync:ro
     environment:
-      MIN_FREE_MB: ${MIN_FREE_MB:-1024}
       ALLOW_HTTP_ACCOUNTS: ${ALLOW_HTTP_ACCOUNTS:-0}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
 
@@ -72,7 +72,8 @@ services:
     <<: *services
     command: ['python3', '/app/api/service.py', 'serve']
     healthcheck:
-      test: ['CMD', 'python3', '-c', "import socket; socket.create_connection(('127.0.0.1', 8769), 3)"]
+      test:
+        ['CMD', 'python3', '-c', "import socket; socket.create_connection(('127.0.0.1', 8769), 3)"]
       interval: 10s
       timeout: 5s
       start_period: 60s
@@ -107,7 +108,6 @@ services:
     image: ${IMAGE_PREFIX:-ebook-reader}-import:${IMAGE_TAG:-local}
     command: ['python3', '/app/import/service.py']
     environment:
-      ALLOW_HTTP_ACCOUNTS: ${ALLOW_HTTP_ACCOUNTS:-0}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       # Sources: seconds between requests to one site; the fake site for tests (docs/CONFIGURATION.md).
       SOURCES_HOST_INTERVAL: ${SOURCES_HOST_INTERVAL:-2}
@@ -133,7 +133,6 @@ services:
     cpu_shares: 512
     environment:
       JITEN_WORKERS: ${DIFFICULTY_WORKERS:-2}
-      ALLOW_HTTP_ACCOUNTS: ${ALLOW_HTTP_ACCOUNTS:-0}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
     # Reads the catalog and token; writes only its own state.
     volumes:
@@ -153,7 +152,6 @@ services:
     command: ['python3', '/app/mokuro/service.py', 'serve']
     cpu_shares: 512
     environment:
-      ALLOW_HTTP_ACCOUNTS: ${ALLOW_HTTP_ACCOUNTS:-0}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
     volumes:
       - ${DATA_PATH:-./data}:/data:ro

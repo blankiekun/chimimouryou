@@ -1,7 +1,7 @@
 """Request handling shared by the services behind nginx (account, api, import, jiten, mokuro).
 
 Each service keeps its own handler and settings and passes them in, so a service's tests can still
-change its INTERNAL_TOKEN_FILE, CORS_ORIGINS or ALLOW_HTTP. Images copy this file to /app beside the
+change its INTERNAL_TOKEN_FILE or CORS_ORIGINS. Images copy this file to /app beside the
 services' folders; each service puts its parent folder on sys.path. Standard library only.
 """
 import hmac
@@ -11,7 +11,7 @@ import sys
 import traceback
 
 # Origins of the standalone app allowed to sign in with tokens: exact https origins, or http on
-# loopback with a port (the desktop app, http://127.0.0.1:41917); others are ignored. Empty = off.
+# loopback with a port (the desktop app, http://127.0.0.1:41917); others are ignored.
 CORS_ORIGIN_RE = r'https://[A-Za-z0-9.-]+(:[0-9]{1,5})?|http://(127\.0\.0\.1|localhost):[0-9]{1,5}'
 
 
@@ -49,7 +49,7 @@ def from_nginx(headers, token_file: str) -> bool:
     return bool(token) and hmac.compare_digest(token, headers.get('X-Internal-Token', ''))
 
 
-def same_site(headers, cors_origins: set[str], allow_http: bool) -> bool:
+def same_site(headers, cors_origins: set[str]) -> bool:
     """Whether a POST may go on: from this site's own pages, or a server-connect token request (HTTPS)
     from a listed origin or, like the account service's, from none (native apps; browsers always send
     Origin on POSTs). nginx has checked the account; this stops other sites from posting with its cookie.
@@ -60,7 +60,8 @@ def same_site(headers, cors_origins: set[str], allow_http: bool) -> bool:
             headers.get('Authorization', '').lower().startswith('bearer ') and \
             (origin is None or origin in cors_origins):
         return True
-    scheme = 'http' if allow_http and headers.get('X-Forwarded-Proto') == 'http' else 'https'
+    # Plain HTTP too: trusted readers post from there, and only nginx sets this header.
+    scheme = 'http' if headers.get('X-Forwarded-Proto') == 'http' else 'https'
     return origin == f"{scheme}://{headers.get('Host', '')}"
 
 

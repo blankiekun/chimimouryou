@@ -208,14 +208,15 @@ class ImportServiceTest(unittest.TestCase):
         self.assertEqual(self.request('/catalog', b'', token='wrong')[0], 403)
         self.assertEqual(self.request('/jobs?ids=x')[0], 200)
 
-    def test_plain_http_only_when_allowed(self):
-        self.assertEqual(self.request('/add?name=a.pdf', b'x', scheme='http')[0], 403)
-        service.ALLOW_HTTP = True
-        try:
-            # Past the origin check: refused for the file type instead.
-            self.assertEqual(self.request('/add?name=a.pdf', b'x', scheme='http')[0], 400)
-        finally:
-            service.ALLOW_HTTP = False
+    def test_plain_http_page_may_post_but_no_other_origin(self):
+        # Past the origin check: refused for the file type instead.
+        self.assertEqual(self.request('/add?name=a.pdf', b'x', scheme='http')[0], 400)
+        for origin, scheme in (('https://evil.example', 'http'), ('http://evil.example', 'http'),
+                               ('http://reader.example', 'https'), (None, 'http')):
+            headers = {'Host': 'reader.example', 'X-Forwarded-Proto': scheme}
+            if origin:
+                headers['Origin'] = origin
+            self.assertFalse(service.httpbase.same_site(headers, set()), (origin, scheme))
 
     def test_rejects_bad_requests(self):
         self.assertEqual(self.request('/add?name=a.pdf', b'x')[0], 400)
