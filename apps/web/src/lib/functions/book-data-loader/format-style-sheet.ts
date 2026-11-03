@@ -20,7 +20,7 @@ export default function formatStyleSheet(bookData: BooksDbBookData, parentSelect
       .stylesheet.rules.filter((r) => r.type === 'rule')
       .filter((r) => !r.selectors.some((s) => pageElementRegex.test(s)));
   } catch (error) {
-    // Parsed on every open: a stylesheet the parser refuses must not keep the book from opening.
+    // Parsed on every open: whatever the parser still refuses must not keep the book from opening.
     console.warn(`book stylesheet ignored: ${error}`);
   }
 

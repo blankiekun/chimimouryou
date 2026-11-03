@@ -9,12 +9,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { filter, firstValueFrom } from 'rxjs';
 import { reactiveElements } from '$lib/components/book-reader/reactive-elements';
 import { FuriganaStyle } from '$lib/data/furigana-style';
-import { database, furiganaStyle$ } from '$lib/data/store';
+import { database, furiganaStyle$, hideFurigana$ } from '$lib/data/store';
 import { ViewMode } from '$lib/data/view-mode';
 import loadEpub from '$lib/functions/file-loaders/epub/load-epub';
 import loadHtmlz from '$lib/functions/file-loaders/htmlz/load-htmlz';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
 import { nextChapter$ } from '$lib/components/book-reader/book-toc/book-toc';
+import { recordKanjiText } from '$lib/data/words/kanji-seen';
+import { knownKanjiMinCount } from '$lib/data/words/known-furigana';
 import { addBook, mountReader, waitOnScreen } from './reader-fixture';
 
 /*
@@ -28,8 +30,12 @@ import { addBook, mountReader, waitOnScreen } from './reader-fixture';
  * - 130,000 rubies overflowing the argument limit;
  * - encoded hrefs, missing resources, empty or SVG chapters failing a whole import, while a missing
  *   chapter or a book with nothing in it must still fail, and scripts must still be removed;
+ * - known furigana, SVG-only chapters and text only the sanitizer removes (see their tests);
  * - numeric titles turning into numbers or the file name, language ids being lost.
  */
+
+// Known furigana loads this big table on opening: cold, it could outlast the test's wait.
+await import('yurigana/kanji-readings.json');
 
 vi.mock('$app/navigation', () => ({
   goto: vi.fn(),
@@ -49,6 +55,7 @@ afterEach(() => {
   document.body.innerHTML = '';
   scrollTo(0, 0);
   furiganaStyle$.next(FuriganaStyle.Partial);
+  hideFurigana$.next(false);
 });
 
 const views = [ViewMode.Paginated, ViewMode.Continuous];
@@ -141,6 +148,19 @@ describe('/b opens a bookmark at the end of the book on its last page', () => {
 });
 
 describe('/b with a stylesheet the CSS parser refuses', () => {
+  // One broken rule, or a comment left open, must cost only itself.
+  it('keeps the rules around a broken one', async () => {
+    await openHtml(
+      section('ttu-a', '<p id="p-1-1" class="a">本文</p><p id="p-1-2" class="b">本文</p>'),
+      '.a{color:rgb(1,2,3)} .x{a:b;c} .b{color:rgb(4,5,6)} /* open',
+      ViewMode.Paginated,
+      'vertical-rl'
+    );
+    await waitOnScreen('p-1-1');
+    expect(getComputedStyle(document.getElementById('p-1-1')!).color).toBe('rgb(1, 2, 3)');
+    expect(getComputedStyle(document.getElementById('p-1-2')!).color).toBe('rgb(4, 5, 6)');
+  });
+
   for (const css of ['p{a:b;c}', 'p{color:red']) {
     it(`opens the book: ${css}`, async () => {
       await openHtml(
@@ -230,6 +250,60 @@ describe('/b links and furigana', () => {
         expect(rubyB.classList.contains('reveal-rt')).toBe(true);
         rubyB.click();
         expect(rubyB.classList.contains('reveal-rt')).toBe(false);
+      }, 20_000);
+    }
+  }
+
+  /*
+   * Known furigana, on the real page with a kanji record. Bugs: all ruby toggling (not just the
+   * known); a tap on other ruby swallowed, so a link around it dies; a known ruby's tap in a link
+   * also jumping; a later section's ruby not marked (the marks run per section).
+   */
+  for (const view of views) {
+    for (const writing of writings) {
+      it(`known furigana: only known ruby toggles, ${view}, ${writing}`, async () => {
+        await recordKanjiText('another book', '人間'.repeat(knownKanjiMinCount), 100);
+        hideFurigana$.next(true);
+        furiganaStyle$.next(FuriganaStyle.Known);
+        await openHtml(
+          section(
+            'ttu-a',
+            `<p id="p-1-1"><a href="#ttu-c"><ruby id="known">人間<rt>にんげん</rt></ruby></a>
+             <a href="#ttu-b"><ruby id="other">学校<rt>がっこう</rt></ruby></a></p>`
+          ) +
+            section('ttu-b', '<p id="p-2-1"><ruby id="known-b">人間<rt>にんげん</rt></ruby></p>') +
+            section('ttu-c', '<p id="p-3-1">本文</p>'),
+          '',
+          view,
+          writing
+        );
+        await waitOnScreen('p-1-1');
+        const shown = (id: string) =>
+          getComputedStyle(document.querySelector(`#${id} rt`)!).visibility === 'visible';
+        const jumps: string[] = [];
+        const jumping = nextChapter$.subscribe((id) => jumps.push(id));
+
+        try {
+          await vi.waitFor(() => expect(shown('known')).toBe(false), 10_000);
+          expect(shown('other')).toBe(true);
+
+          document.getElementById('known')!.click();
+          expect(shown('known')).toBe(true);
+          document.getElementById('known')!.click();
+          expect(shown('known')).toBe(false);
+          expect(jumps.filter(Boolean)).toEqual([]);
+
+          document.getElementById('other')!.click();
+          expect(shown('other')).toBe(true);
+          expect(jumps.filter(Boolean)).toEqual(['ttu-b']);
+
+          await waitOnScreen('p-2-1');
+          await vi.waitFor(() => expect(shown('known-b')).toBe(false), 10_000);
+          document.getElementById('known-b')!.click();
+          expect(shown('known-b')).toBe(true);
+        } finally {
+          jumping.unsubscribe();
+        }
       }, 20_000);
     }
   }
@@ -385,6 +459,45 @@ describe('EPUB import', () => {
     expect(book.sections?.map((s) => s.reference)).toEqual(['ttu-cover', 'ttu-a']);
   });
 
+  // Places are counted in the cleaned book: anything more in `characters` puts the book's end, its
+  // chapters and its percentage off from what the reader shows.
+  it('counts what the reader shows: no script or form text', async () => {
+    const book = await epub({
+      manifest: xhtml('a', 'a.xhtml'),
+      spine: ['a'],
+      files: {
+        'a.xhtml': chapter('<script>var 文字列 = "長い";</script><form>入力欄</form><p>本文</p>')
+      }
+    });
+
+    expect(book.characters).toBe(2);
+  });
+
+  // Blank page where the book's picture belongs: the chapter imported empty.
+  for (const view of views) {
+    it(`shows an SVG-only chapter as its picture, ${view}`, async () => {
+      const book = await epub({
+        manifest: '<item id="cover" href="pics/cover.svg" media-type="image/svg+xml"/>',
+        spine: ['cover'],
+        files: {
+          'pics/cover.svg':
+            '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400"><rect width="300" height="400"/></svg>'
+        }
+      });
+      const { id } = await database.upsertData(
+        { ...book, title: `svg-${Math.random()}` } as any,
+        ReplicationSaveBehavior.Overwrite
+      );
+
+      component = await mountReader(id, view, 'vertical-rl');
+      await vi.waitFor(() => {
+        const image = document.querySelector<HTMLImageElement>('#ttu-cover img');
+
+        expect(image?.complete && image.naturalWidth).toBe(300);
+      }, 10_000);
+    }, 20_000);
+  }
+
   it('keeps numeric titles as text and reads languages with an id', async () => {
     const files = { 'a.xhtml': chapter('<p>本文</p>') };
     const open = (metadata: string) =>
@@ -400,6 +513,45 @@ describe('EPUB import', () => {
 });
 
 describe('HTMLZ import', () => {
+  // Places are counted in the cleaned book: anything more in `characters` puts the book's end, its
+  // chapters and its percentage off from what the reader shows.
+  it('counts what the reader shows: no script or form text', async () => {
+    const book = await epub({
+      manifest: xhtml('a', 'a.xhtml'),
+      spine: ['a'],
+      files: {
+        'a.xhtml': chapter('<script>var 文字列 = "長い";</script><form>入力欄</form><p>本文</p>')
+      }
+    });
+
+    expect(book.characters).toBe(2);
+  });
+
+  // Blank page where the book's picture belongs: the chapter imported empty.
+  for (const view of views) {
+    it(`shows an SVG-only chapter as its picture, ${view}`, async () => {
+      const book = await epub({
+        manifest: '<item id="cover" href="pics/cover.svg" media-type="image/svg+xml"/>',
+        spine: ['cover'],
+        files: {
+          'pics/cover.svg':
+            '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400"><rect width="300" height="400"/></svg>'
+        }
+      });
+      const { id } = await database.upsertData(
+        { ...book, title: `svg-${Math.random()}` } as any,
+        ReplicationSaveBehavior.Overwrite
+      );
+
+      component = await mountReader(id, view, 'vertical-rl');
+      await vi.waitFor(() => {
+        const image = document.querySelector<HTMLImageElement>('#ttu-cover img');
+
+        expect(image?.complete && image.naturalWidth).toBe(300);
+      }, 10_000);
+    }, 20_000);
+  }
+
   it('keeps numeric titles as text, and takes the first of two', async () => {
     const body = '<html><body><p>本文</p></body></html>';
 

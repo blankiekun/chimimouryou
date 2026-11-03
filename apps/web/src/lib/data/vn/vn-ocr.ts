@@ -161,8 +161,11 @@ export function readVnScreen(frame: ImageBitmap, hook?: string) {
   });
 }
 
-/** Frees the worker and its models when the player closes. */
+/** Frees the worker and its models when the player closes; the next read starts over (Try again). */
 export function stopVnOcr() {
+  off = undefined;
+  failures = 0;
+  screenTextOff$.next(undefined);
   queued?.frame.close();
   queued?.resolve(undefined);
   queued = undefined;

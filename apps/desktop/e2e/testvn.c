@@ -3,7 +3,8 @@
 // TextOutW, ExtTextOutW, DrawTextW, GetGlyphOutlineW (one char at a time) and TextOutA (Shift-JIS).
 // It also writes a save file to %APPDATA%\TestVN\save1.dat, Documents\TestVN\, Saved Games\TestVN\
 // and savedata\ in its own folder. For Anki media, each step also has its own background colour, its
-// own tone (stepHz) and a caption naming it, drawn with DrawTextExW (a thread with every step's line).
+// own sound (a second of speech with a pilot tone at stepHz; the app's clips keep only voices) and a
+// caption naming it, drawn with DrawTextExW (a thread with every step's line).
 // With scenes.txt beside it (line-audio.e2e.mjs) it plays those scenes instead: looping music, a
 // voice file per line (voices/, with a quiet pilot tone naming the line) and text drawn at once or
 // a character at a time, advanced by clicks or by its own timer (see loadScenes).
@@ -28,18 +29,28 @@ static const COLORREF stepColors[] = {
   RGB(255, 255, 255), RGB(255, 80, 80), RGB(80, 200, 80), RGB(80, 80, 255), RGB(240, 200, 40), RGB(200, 60, 200),
   RGB(40, 200, 220), RGB(250, 140, 30), RGB(140, 90, 40), RGB(120, 120, 120), RGB(30, 30, 30), RGB(255, 180, 200)
 };
-#define stepHz(s) (400 + 80 * (s))
+#define stepHz(s) (4000 + 150 * (s))
 
-// A 1 s sine at the step's tone, as a WAV in memory for PlaySound.
-static void playTone(int s) {
-  static BYTE wav[44 + 48000];
-  const DWORD rate = 24000, n = 24000;
+// A second of speech (voices/voice8.wav, none without it) with the step's pilot tone, as a WAV in
+// memory for PlaySound.
+static void playStepVoice(int s) {
+  static BYTE wav[44 + 32000];
+  const DWORD rate = 16000, n = 16000;
+  FILE *voice = _wfopen(L"voices\\voice8.wav", L"rb");
+  if (!voice) return;
   DWORD *d = (DWORD *)wav;
   memcpy(wav, "RIFF", 4); d[1] = 36 + n * 2; memcpy(wav + 8, "WAVEfmt ", 8); d[4] = 16;
   WAVEFORMATEX fmt = {WAVE_FORMAT_PCM, 1, rate, rate * 2, 2, 16, 0}; memcpy(wav + 20, &fmt, 16);
   memcpy(wav + 36, "data", 4); d[10] = n * 2;
   short *samples = (short *)(wav + 44);
-  for (DWORD i = 0; i < n; i++) samples[i] = (short)(10000 * sin(6.283185307 * stepHz(s) * i / rate));
+  fseek(voice, 44, SEEK_SET);
+  fread(samples, 2, n, voice);
+  fclose(voice);
+  // Well over the speech at the E2E's other tone (its 50:1 check).
+  for (DWORD i = 0; i < n; i++) {
+    int v = samples[i] + (int)(1500 * sin(6.283185307 * stepHz(s) * i / rate));
+    samples[i] = v > 32767 ? 32767 : v < -32768 ? -32768 : v;
+  }
   PlaySoundW((LPCWSTR)wav, NULL, SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
 }
 
@@ -259,7 +270,7 @@ static LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
   case WM_PAINT: paint(hwnd); return 0;
   case WM_TIMER: case WM_LBUTTONDOWN:
     step++;
-    playTone(step);
+    playStepVoice(step);
     if (step % 5 == 0) {
       writeSave(&FOLDERID_RoamingAppData, L"TestVN");
       writeSave(&FOLDERID_Documents, L"TestVN");
