@@ -195,9 +195,14 @@
     nativeHook = info.nativeHook;
     cleanup = info.hookCleanup ?? {};
     clean = hookCleaner(cleanup);
-    stopListening ??= games.onHook(onNative);
 
-    const session = await games.session();
+    const session = await games.session(info.folder!);
+
+    // Another game is running: this page must not listen, or its lines and exit count here.
+    if (session?.running && session.folder !== info.folder) {
+      stopListening?.();
+      stopListening = undefined;
+    } else stopListening ??= games.onHook(onNative);
 
     if (session && session.folder === info.folder && session.running) {
       nativeRunning = true;
@@ -211,6 +216,9 @@
     nativeStatus = 'Starting the game…';
 
     const result = await games.launch(info.folder!, await nativeSavesToPull(saveSync));
+
+    // It ended while saves were pulled: this launch started, and needs the lines.
+    if (result.status === 'started') stopListening ??= games.onHook(onNative);
 
     if (result.status === 'started') {
       nativeRunning = true;

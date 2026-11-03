@@ -517,9 +517,7 @@ async function launch(ctx, event, folder, saves) {
     }
   });
   child.stderr.on('data', (chunk) => console.warn(`chimihook: ${chunk}`));
-  child.on('error', (error) => send(ctx, { type: 'error', message: error.message }, current));
-  // 'exit', not 'close': Wine's own processes (wineserver, services) can keep stdout open.
-  child.on('exit', () => {
+  const ended = () => {
     current.running = false;
     // Not a later game's recording.
     if (ctx.session === current) {
@@ -539,6 +537,19 @@ async function launch(ctx, event, folder, saves) {
       const all = [...new Set([...(ctx.store.games[folder].pending ?? []), ...pending])];
       update(ctx, folder, { pending: all.length ? all : undefined });
     }
+  };
+  child.on('error', (error) => {
+    // A spawn that failed never fires 'exit'. Its exit goes first, so /hook keeps showing the error.
+    if (!child.pid) {
+      exited = true;
+      ended();
+      send(ctx, { type: 'exit' }, current);
+    }
+    send(ctx, { type: 'error', message: error.message }, current);
+  });
+  // 'exit', not 'close': Wine's own processes (wineserver, services) can keep stdout open.
+  child.on('exit', () => {
+    ended();
     // The last lines may still be in the pipe.
     setTimeout(() => !exited && send(ctx, { type: 'exit' }, current), 1000);
   });
@@ -733,13 +744,15 @@ export function registerGames({
       return { folder, title, installDir, exe, linkedAt, present };
     })
   }));
-  handle('games-session', (event) => {
+  handle('games-session', (event, folder) => {
     const { session } = ctx;
     if (!session) return undefined;
-    // /hook (re)opened: lines go to it from now on.
-    session.sender = event.sender;
-    watchSender(ctx, event.sender);
-    syncOverlay(ctx);
+    // This game's /hook (re)opened: lines go to it from now on. Another game's page gets none.
+    if (session.folder === folder) {
+      session.sender = event.sender;
+      watchSender(ctx, event.sender);
+      syncOverlay(ctx);
+    }
     return { folder: session.folder, running: session.running, messages: session.messages };
   });
 

@@ -16,6 +16,7 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import {
   ExtensionError,
+  sniffImage,
   type ExtensionDetail,
   type ExtensionList,
   type ExtensionRuntime
@@ -101,8 +102,11 @@ function list(value: any): ExtensionList {
   };
 }
 
-const blob = (file: { type: string; body: Uint8Array | ArrayBuffer }) =>
-  new Blob([file.body as BlobPart], { type: file.type });
+function blob(file: { body: Uint8Array }) {
+  const type = sniffImage(file.body);
+  if (!type) throw new ExtensionError("The extension's page isn't an image");
+  return new Blob([file.body as BlobPart], { type });
+}
 
 export async function openMihon(pin: string, sourceId: string): Promise<ExtensionRuntime> {
   const host = mihonHost();

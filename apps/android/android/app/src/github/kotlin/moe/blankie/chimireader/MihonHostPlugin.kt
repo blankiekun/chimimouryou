@@ -47,7 +47,7 @@ class MihonHostPlugin : Plugin() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val loaded = ConcurrentHashMap<String, JsonElement>()
     private val app get() = context.applicationContext as Application
-    private val tmp by lazy { File(app.cacheDir, "mihon-tmp").apply { deleteRecursively() } }
+    private val tmp by lazy { File(app.cacheDir, "mihon-tmp") }
 
     private val network by lazy {
         val debuggable = app.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0

@@ -19,8 +19,10 @@ import {
   session,
   shell
 } from 'electron';
+import { Blob } from 'node:buffer';
 import { cpSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { clearTimeout, setTimeout } from 'node:timers';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   cancelBrowserSignIn,
@@ -39,6 +41,7 @@ import { checkForUpdates } from './updater.js';
 // http://127.0.0.1 is a secure context, and Yomitan's content scripts only match http(s) and file.
 const port = 41917;
 const origin = `http://127.0.0.1:${port}`;
+const FETCH_SILENCE_MS = 60 * 1000;
 
 const resource = (name, devPath) =>
   app.isPackaged ? join(process.resourcesPath, name) : join(import.meta.dirname, devPath);
@@ -232,9 +235,20 @@ async function sourcesFetch(event, url, { headers = {}, maxBytes = 20 * 1024 * 1
   )
     throw new Error('Not the app');
   const agent = session.defaultSession.getUserAgent().replace(/ (Electron|chimimouryou)\/\S+/g, '');
+  // A silence limit, not a total one: a 300 MB volume on a slow line has to finish. Firing after
+  // the answer is harmless.
+  // eslint-disable-next-line no-undef -- a global only: no node: module exports it
+  const controller = new AbortController();
+  let stall;
+  const alive = () => {
+    clearTimeout(stall);
+    stall = setTimeout(() => controller.abort(), FETCH_SILENCE_MS);
+  };
   for (let hop = 0; hop < 10; hop += 1) {
     if (!/^https?:\/\//.test(url)) throw new Error('Only http and https');
+    alive();
     const response = await net.fetch(url, {
+      signal: controller.signal,
       headers: { 'User-Agent': agent, ...headers },
       redirect: 'manual',
       cache: 'no-store',
@@ -256,10 +270,18 @@ async function sourcesFetch(event, url, { headers = {}, maxBytes = 20 * 1024 * 1
       retryAfter: response.headers.get('Retry-After') || '',
       range: response.headers.get('Content-Range') || ''
     };
-    if (Number(response.headers.get('Content-Length') || 0) > maxBytes)
-      return { ...answer, tooBig: true };
-    const body = await response.arrayBuffer();
-    return body.byteLength > maxBytes ? { ...answer, tooBig: true } : { ...answer, body };
+    // Abort: leaving the body unread doesn't close the connection.
+    const tooBig = () => (controller.abort(), { ...answer, tooBig: true });
+    if (Number(response.headers.get('Content-Length') || 0) > maxBytes) return tooBig();
+    const chunks = [];
+    let received = 0;
+    for await (const chunk of response.body ?? []) {
+      alive();
+      received += chunk.byteLength;
+      if (received > maxBytes) return tooBig();
+      chunks.push(chunk);
+    }
+    return { ...answer, body: await new Blob(chunks).arrayBuffer() };
   }
   throw new Error('Too many redirects');
 }
