@@ -48,7 +48,10 @@ def _image(value):
 def _int(value, low=0, high=MAX_TIMESTAMP):
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    value = int(value)
+    try:
+        value = int(value)
+    except (OverflowError, ValueError):  # JSON's Infinity and NaN
+        return None
     return value if low <= value <= high else None
 
 

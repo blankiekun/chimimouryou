@@ -95,6 +95,7 @@
   let sizes: (PageSize | undefined)[] = [];
   let pageIndex = 0;
   let savedIndex = -1;
+  let openedPage = -1;
   /** Set once the saved position is known, so nothing is saved over it before. */
   let ready = false;
   let showMenu = false;
@@ -149,7 +150,12 @@
     mode === 'vertical'
       ? pageIndex
       : (groups[groupIndex]?.at(groupIndex === groups.length - 1 ? -1 : 0) ?? pageIndex);
-  $: if (ready && shownPage !== savedIndex) scheduleSave();
+  // Not moved since opening: another layout shows bookmark 12 as spread [11,12], and it stays 12.
+  $: if (pageIndex !== openedPage) openedPage = -1;
+  $: if (ready && shownPage !== savedIndex) {
+    if (openedPage < 0) scheduleSave();
+    else savedIndex = shownPage;
+  }
   // What is open, for the plugins (Discord status).
   $: if (ready && book && pageCount) {
     readingActivity({ kind: 'manga', title: book.title, page: shownPage + 1, pageCount });
@@ -259,7 +265,10 @@
       goto(`${pagePath}/manage`);
       return;
     }
-    if (bookContent(data).kind !== 'manga') {
+    if (
+      bookContent(data).kind !== 'manga' ||
+      mangaPages(data).some((name) => !(data.blobs[name] instanceof Blob))
+    ) {
       damaged = true;
       return;
     }
@@ -304,6 +313,7 @@
     const bookmark = await database.getBookmark(data.id);
 
     savedIndex = Math.min(bookmark?.exploredCharCount || 0, Math.max(pageCount - 1, 0));
+    openedPage = savedIndex;
     goToPage(savedIndex);
     ready = true;
 
@@ -954,7 +964,7 @@
     // Turned a page during the pull: they're reading, and their next save wins.
     if (!bookmark || pulled === savedIndex || shownPage !== here) return;
 
-    savedIndex = pulled;
+    savedIndex = openedPage = pulled;
     goToPage(pulled);
   }
 

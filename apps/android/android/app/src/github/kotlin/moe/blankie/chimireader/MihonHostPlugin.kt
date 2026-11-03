@@ -14,6 +14,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
@@ -89,11 +90,17 @@ class MihonHostPlugin : Plugin() {
             .also { loaded[pin] = it }
         when (op) {
             "load" -> sources
-            // A call can't be stopped once an extension runs it: the answer stops waiting instead.
-            "popular", "latest", "search", "detail", "pages", "image" ->
-                withTimeout(if (op == "pages") 10.minutes else 60.seconds) {
-                    host.handle(op, Json.parseToJsonElement(call.data.toString()).jsonObject)
+            // A call can't be stopped once an extension blocks in it, and withTimeout only fires
+            // at a suspension: the answer is awaited apart from it, and stops waiting instead.
+            "popular", "latest", "search", "detail", "pages", "image" -> {
+                val params = Json.parseToJsonElement(call.data.toString()).jsonObject
+                val answer = scope.async { host.handle(op, params) }
+                try {
+                    withTimeout(if (op == "pages") 10.minutes else 60.seconds) { answer.await() }
+                } finally {
+                    answer.cancel()
                 }
+            }
             else -> throw HostError("Unknown op $op")
         }
     }

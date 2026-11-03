@@ -114,7 +114,7 @@ The activity is rendered by the page; the add-on has no templates. Fields (all o
 Discord accepts about one update per 15 s. The add-on answers `204` at once and sends the newest
 waiting activity when it may (the first one right away), so the page can PUT whenever something
 changes. While Discord is closed it keeps the newest activity and sends it when Discord starts again.
-Send `DELETE` when reading stops; Discord also clears the status when Anki quits.
+Send `DELETE` when reading stops, and `PUT` again every few minutes while it goes on: the add-on clears a status after 15 minutes without one (a crashed browser sends no `DELETE`). Discord also clears the status when Anki quits.
 
 ## Development
 

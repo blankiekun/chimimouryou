@@ -456,7 +456,7 @@ export function overlayLines(
  */
 export function vnboxLines(text: string, screen = { width: 800, height: 600 }): VnOverlayLine[] {
   const size = 24;
-  const perRow = Math.floor((screen.width * 0.9) / size);
+  const perRow = Math.max(1, Math.floor((screen.width * 0.9) / size));
   const rows = text.split('\n').flatMap((line) => {
     const chars = [...line];
 

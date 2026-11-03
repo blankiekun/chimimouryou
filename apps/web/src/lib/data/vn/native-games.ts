@@ -209,6 +209,8 @@ const threadId = (thread: NativeThreadInfo) =>
 
 /** Lines closer together than this count as one "click" for rankThreads (one game event). */
 const burstMs = 250;
+/** A search-style hook can make a thread per call site: keep the most recently heard ones. */
+const maxThreads = 200;
 
 /**
  * Threads as /hook keeps them, in the shape rankThreads reads. LunaHook gives no clicks, so a
@@ -220,8 +222,8 @@ export class NativeThreads {
   private burst = 0;
   private lastAt = -Infinity;
 
-  /** Adds a text line; returns its thread. */
-  add(info: NativeThreadInfo, text: string, now: number) {
+  /** Adds a text line; returns its thread. `hook`'s threads are the last to be dropped. */
+  add(info: NativeThreadInfo, text: string, now: number, hook?: NativeHook) {
     if (now - this.lastAt > burstMs) this.burst += 1;
     this.lastAt = now;
 
@@ -241,7 +243,14 @@ export class NativeThreads {
       recent: [...thread.recent, { text, click: this.burst }].slice(-20)
     };
 
+    // Last heard last, so the first over the cap is the one heard longest ago.
+    this.threads.delete(id);
     this.threads.set(id, next);
+    if (this.threads.size > maxThreads) {
+      const all = [...this.threads.values()];
+
+      this.threads.delete((all.find((known) => !isSavedThread(known, hook)) ?? all[0]).id);
+    }
     return next;
   }
 }

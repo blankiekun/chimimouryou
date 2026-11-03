@@ -469,8 +469,15 @@ let away = false;
 let sessionStart = 0;
 let renderRun = 0;
 const openedAt = new Map<string, number>();
+let lastActivity: DiscordActivity | undefined;
+/** Which tab sent last: only that one re-sends, or two open tabs would swap the status. */
+const senderId = String(Math.random());
+/** The add-on clears a status after 15 minutes without a PUT (a crashed browser sends no DELETE). */
+const resendMs = 5 * 60_000;
 
 function put(activity: DiscordActivity) {
+  lastActivity = activity;
+  window.localStorage.setItem('discordSender', senderId);
   lastKey = activityKey(activity);
   lastAt = Date.now();
   sent = true;
@@ -619,4 +626,14 @@ if (typeof window !== 'undefined') {
     }
   );
   window.addEventListener('pagehide', () => clear(true));
+  setInterval(() => {
+    if (
+      sent &&
+      lastActivity &&
+      allowed() &&
+      window.localStorage.getItem('discordSender') === senderId
+    ) {
+      put(lastActivity);
+    }
+  }, resendMs);
 }

@@ -226,22 +226,24 @@ export function registerMihon({ app, ipcMain, net, isApp, hostDir, jvmArgs = [] 
     await current.ready;
     clearTimeout(current.idle);
     const id = current.next++;
-    const result = await new Promise((resolve, reject) => {
-      // A thread inside the JVM can't be stopped: a call that hangs restarts the host.
-      const timer = setTimeout(
-        () => {
-          reject(new Error('The extension took too long'));
-          if (host === current) stop();
-        },
-        op === 'pages' ? PAGES_MS : CALL_MS
-      );
-      current.waiting.set(id, { resolve, reject, timer });
-      current.child.stdin.write(JSON.stringify({ id, op, ...params }) + '\n');
-    });
-    if (host === current && !current.waiting.size) {
-      current.idle = setTimeout(() => host === current && stop(), IDLE_MS);
+    try {
+      return await new Promise((resolve, reject) => {
+        // A thread inside the JVM can't be stopped: a call that hangs restarts the host.
+        const timer = setTimeout(
+          () => {
+            reject(new Error('The extension took too long'));
+            if (host === current) stop();
+          },
+          op === 'pages' ? PAGES_MS : CALL_MS
+        );
+        current.waiting.set(id, { resolve, reject, timer });
+        current.child.stdin.write(JSON.stringify({ ...params, id, op }) + '\n');
+      });
+    } finally {
+      if (host === current && !current.waiting.size) {
+        current.idle = setTimeout(() => host === current && stop(), IDLE_MS);
+      }
     }
-    return result;
   }
 
   async function installJar(_event, url) {

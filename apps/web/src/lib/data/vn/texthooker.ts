@@ -208,7 +208,11 @@ export class HookSocket {
     ws.onclose = async () => {
       if (this.#socket !== ws) return;
       this.#socket = undefined;
-      this.#set((await this.denied()) ? 'blocked' : 'closed');
+      const denied = await this.denied();
+
+      // Disconnected or reconnected while asking.
+      if (this.#socket || this.status === 'off') return;
+      this.#set(denied ? 'blocked' : 'closed');
       // The tool may start later: keep trying quietly.
       this.#retry = setTimeout(() => this.connect(), this.#delay);
       this.#delay = Math.min(this.#delay * 2, 30_000);
