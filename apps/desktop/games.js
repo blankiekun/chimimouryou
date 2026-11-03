@@ -618,6 +618,11 @@ export function registerGames({
 }) {
   const storeFile = join(app.getPath('userData'), 'native-games.json');
   const platform = process.platform;
+  // Wayland gives no window positions: main.js starts the app on X11 (XWayland) while it's on.
+  const noX11 =
+    platform === 'linux' &&
+    (process.env.XDG_SESSION_TYPE === 'wayland' || !!process.env.WAYLAND_DISPLAY) &&
+    app.commandLine.getSwitchValue('ozone-platform') !== 'x11';
   /** What the functions above share: this app's folders, the store and the running game. */
   const ctx = {
     app,
@@ -634,7 +639,9 @@ export function registerGames({
     /** The game running now: one at a time. Its messages are kept for /hook to replay. */
     session: undefined,
     /** Its sound and screenshots, for Anki (game-media.js). */
-    media: gameMedia({ desktopCapturer, platform }),
+    // Native Wayland captures only through the portal, which asks to share the screen at every
+    // shot (and can't pick the game's X window): no screenshots there, they work with the overlay on.
+    media: gameMedia({ desktopCapturer: noX11 ? undefined : desktopCapturer, platform }),
     /** The text overlay over the game (overlay.js), while it runs, /hook is open and it's on. */
     overlay: gameOverlay({
       BrowserWindow,
@@ -644,13 +651,9 @@ export function registerGames({
       prepare,
       platform
     }),
-    // Wayland gives no window positions: main.js starts the app on X11 (XWayland) while it's on.
-    noX11:
-      platform === 'linux' &&
-      (process.env.XDG_SESSION_TYPE === 'wayland' || !!process.env.WAYLAND_DISPLAY) &&
-      app.commandLine.getSwitchValue('ozone-platform') !== 'x11'
+    noX11
   };
-  const { media, overlay, noX11 } = ctx;
+  const { media, overlay } = ctx;
   app.on('will-quit', () => media.stop());
 
   const handle = (channel, fn) =>

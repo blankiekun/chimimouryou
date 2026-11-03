@@ -114,7 +114,8 @@ root install stays light for the web app and its Docker image; `fetch` downloads
   names and parts ending in a dot or space. Anki: `game-media.js` keeps the game's sound (Linux: its own
   PulseAudio/PipeWire null sink looped back to the speakers, recorded with `parec`; Windows:
   `chimihook --audio`, the game's process tree into a named pipe) and screenshots of its window
-  (`desktopCapturer`) in memory, and `/hook` fills a mined note's empty picture/audio fields with
+  (`desktopCapturer`; none on native Wayland, where every capture asks to share the screen,
+  so there only with the overlay on) in memory, and `/hook` fills a mined note's empty picture/audio fields with
   its line's (`games-mark`, `games-media`). `e2e/native-vn.e2e.mjs` runs the whole flow
   under Wine with a test VN (`xvfb-run -a node e2e/native-vn.e2e.mjs`; not in CI).
   Overlay (`overlay.js`, Windows and X11): with "Text overlay over the game" on (`/hook`), a

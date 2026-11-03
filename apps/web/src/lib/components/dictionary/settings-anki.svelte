@@ -14,7 +14,6 @@
     ankiPictureField$,
     ankiSentenceField$,
     ankiVnAudio$,
-    ankiVnVoiceOnly$,
     ankiVnScreenshot$
   } from '$lib/data/dictionary/anki';
   import { learningGuideUrl } from '$lib/data/standalone/app-update';
@@ -104,11 +103,6 @@
   <SettingsItemGroup title={$t$('anki.vnAudio')}>
     <ButtonToggleGroup options={toggle} bind:selectedOptionId={$ankiVnAudio$} />
   </SettingsItemGroup>
-  {#if $ankiVnAudio$}
-    <SettingsItemGroup title={$t$('anki.vnVoiceOnly')} tooltip={$t$('anki.vnVoiceOnlyHint')}>
-      <ButtonToggleGroup options={toggle} bind:selectedOptionId={$ankiVnVoiceOnly$} />
-    </SettingsItemGroup>
-  {/if}
 </SettingsSection>
 
 <style>

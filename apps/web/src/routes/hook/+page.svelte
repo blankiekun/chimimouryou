@@ -202,6 +202,7 @@
     if (session && session.folder === info.folder && session.running) {
       nativeRunning = true;
       nativeStatus = 'Playing.';
+      reportActivity();
       session.messages.forEach((message) => onNative(message, true));
       return;
     }
@@ -214,6 +215,7 @@
     if (result.status === 'started') {
       nativeRunning = true;
       nativeStatus = 'Starting the game…';
+      reportActivity();
     } else if (result.status === 'missing' || result.status === 'gone') {
       nativeStatus = 'Waiting for the game’s folder.';
       dialogManager.dialogs$.next([
@@ -249,6 +251,7 @@
     else if (message.type === 'exit') {
       nativeRunning = false;
       nativeStatus = 'The game has closed.';
+      readingActivity();
       if (!replayed) pushSaves();
     } else if (message.type === 'text') {
       const thread = threads.add(message.thread, message.sentence, Date.now());
@@ -425,7 +428,17 @@
         logger.warn(`Couldn't save to the immersion log: ${error.message}`)
       );
     }
-    readingActivity({ kind: 'vn', title: gameTitle(), position: sessionCharacters });
+    reportActivity();
+  }
+
+  /** What is open, for the plugins (Discord status): a running native game stays without lines. */
+  function reportActivity() {
+    readingActivity({
+      kind: 'vn',
+      title: gameTitle(),
+      position: sessionCharacters,
+      playing: nativeRunning || undefined
+    });
   }
 
   function pushUndo(entry: HookUndo) {
@@ -459,10 +472,15 @@
     saveLines(lines);
   }
 
+  /** When the middle button was last pressed (event time). */
+  let middleAt = -Infinity;
+
   function onPaste(event: ClipboardEvent) {
     const target = event.target as HTMLElement | null;
 
     if (target?.closest('input, textarea, [contenteditable="true"]')) return;
+    // A middle click on Linux pastes whatever text is selected (Firefox fires paste anywhere): not a line.
+    if (event.timeStamp - middleAt < 1000) return;
     addLine(event.clipboardData?.getData('text/plain').trim() ?? '');
   }
 
@@ -507,7 +525,10 @@
   <title>{formatPageTitle($t$('hook.title'))}</title>
 </svelte:head>
 
-<svelte:window onpaste={onPaste} />
+<svelte:window
+  onpaste={onPaste}
+  onmousedowncapture={(event) => event.button === 1 && (middleAt = event.timeStamp)}
+/>
 
 <AppHeader active="profile" />
 

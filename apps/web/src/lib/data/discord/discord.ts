@@ -72,6 +72,8 @@ export interface ReadingActivity {
   page?: number;
   pageCount?: number;
   sections?: SectionWithProgress[];
+  /** A natively played game is running: it stays the status without page turns (no Away) */
+  playing?: boolean;
 }
 
 export interface ReadingStats {
@@ -571,6 +573,11 @@ export function discordActivity(activity: ReadingActivity | undefined) {
     if (activity.title && !openedAt.has(activity.title)) openedAt.set(activity.title, now);
     clearTimeout(awayTimer);
     awayTimer = setTimeout(goAway, Math.max(1, discordOptions().awayMinutes) * 60_000);
+  }
+  if (activity.playing) {
+    away = false;
+    sessionStart ||= Date.now();
+    clearTimeout(awayTimer);
   }
   current = activity;
   update();
