@@ -1,5 +1,6 @@
 """Readings files and word lists made on request, one at a time in a worker process of their own."""
 import os
+import shutil
 import sys
 import threading
 import time
@@ -11,6 +12,15 @@ import readerpack
 import readings_file
 import settings
 import workers
+
+
+def disk_full() -> bool:
+    """Below MIN_FREE_BYTES free, as the API's uploads: a file made anyway could end in ENOSPC, and a
+    failed book isn't retried until its text changes."""
+    try:
+        return shutil.disk_usage(settings.STATE_DIR).free < settings.MIN_FREE_BYTES
+    except OSError:
+        return False
 
 
 class ReadingsQueue:
@@ -68,7 +78,7 @@ class ReadingsQueue:
         with self.lock:
             if book_id in self.queue or self.running == book_id:
                 return 'queued'
-            if self.failed.get(book_id) == name or len(self.queue) >= settings.READINGS_QUEUE_MAX:
+            if self.failed.get(book_id) == name or len(self.queue) >= settings.READINGS_QUEUE_MAX or disk_full():
                 return 'unavailable'
             self.queue[book_id] = job
             self.added.set()

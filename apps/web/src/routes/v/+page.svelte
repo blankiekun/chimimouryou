@@ -638,11 +638,20 @@
     }
   }
 
-  /** Before navigating: on isolated servers it's a full page load (needsFullLoad), no onDestroy. */
+  /**
+   * Before navigating: on isolated servers it's a full page load (needsFullLoad), no onDestroy.
+   * A hung server doesn't hold the reader here: after 10 s we go, and the sends go on behind (a full
+   * page load cuts them; what didn't arrive is sent with the next sync or game exit).
+   */
   async function finishBeforeNavigating() {
-    await save(true).catch((error) => logger.warn(error.message));
-    sendLeaving();
-    await saveSync?.queue;
+    const finished = save(true)
+      .catch((error) => logger.warn(error.message))
+      .then(() => {
+        sendLeaving();
+        return saveSync?.queue;
+      });
+
+    await Promise.race([finished, new Promise((resolve) => setTimeout(resolve, 10_000))]);
   }
 
   async function leave() {

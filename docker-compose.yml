@@ -112,6 +112,7 @@ services:
     command: ['python3', '/app/import/service.py']
     environment:
       CORS_ORIGINS: ${CORS_ORIGINS:-}
+      MIN_FREE_MB: ${MIN_FREE_MB:-1024}
       # Sources: seconds between requests to one site; the fake site for tests (docs/CONFIGURATION.md).
       SOURCES_HOST_INTERVAL: ${SOURCES_HOST_INTERVAL:-2}
       SOURCES_CHECK_HOURS: ${SOURCES_CHECK_HOURS:-6}
@@ -141,6 +142,7 @@ services:
     environment:
       JITEN_WORKERS: ${DIFFICULTY_WORKERS:-2}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
+      MIN_FREE_MB: ${MIN_FREE_MB:-1024}
     # Reads the catalog, token, text copies and manga text; writes only its own state. No accounts.
     volumes:
       - ${DATA_PATH:-./data}/state/catalog:/data/state/catalog:ro
