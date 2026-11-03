@@ -86,7 +86,6 @@ function recordBytes() {
 }
 
 beforeEach(async () => {
-  // After load-cbz's initZipSettings
   configure({ useWebWorkers: false });
   await (await database.db).clear('data');
   await dropOrphanVnFiles(new Set(), Date.now() + 2 * 24 * 3600 * 1000);

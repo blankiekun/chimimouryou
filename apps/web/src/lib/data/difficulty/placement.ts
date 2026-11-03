@@ -233,12 +233,11 @@ if (!placementResults$.getValue().length && placementCutoff$.getValue() > 0) {
 }
 placementResults$.subscribe((results) => {
   const current = placementAt(results);
+  const cutoff = current?.cutoff ?? 0;
+  const length = current?.length ?? 0;
 
-  if (!current) return;
-  if (placementCutoff$.getValue() !== current.cutoff) placementCutoff$.next(current.cutoff);
-  if (placementCutoffLength$.getValue() !== current.length) {
-    placementCutoffLength$.next(current.length);
-  }
+  if (placementCutoff$.getValue() !== cutoff) placementCutoff$.next(cutoff);
+  if (placementCutoffLength$.getValue() !== length) placementCutoffLength$.next(length);
 });
 /** Home offered the check once (per browser). */
 export const placementOffered$ = writableBooleanLocalStorageSubject()('placementOffered', false);

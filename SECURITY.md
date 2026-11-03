@@ -5,5 +5,4 @@ Please report vulnerabilities privately through GitHub:
 https://github.com/blankiekun/chimimouryou/security/advisories/new.
 Do not open a public issue.
 
-Only the latest release and `main` receive fixes. The last security audit and its fixes
-are in AUDIT.md.
+Only the latest release and `main` receive fixes.
