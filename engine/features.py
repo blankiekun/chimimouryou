@@ -38,15 +38,30 @@ def fold_source_breaks(markup: str) -> str:
     return _TEXT_NODE.sub(lambda m: _SOURCE_BREAK.sub('', m.group()), markup)
 
 
+# The most text a book's zip may unpack to in a worker, so a zip bomb fails rather than fills its memory. Real books are
+# far under it: at most 18.5 MB of documents in a sample of 4,800, and text copies stop at 30 MB (MAX_STATICDATA_BYTES).
+MAX_BOOK_TEXT_BYTES = 256 * 1024 * 1024
+
+
+def _check_text_size(sizes):
+    if sum(sizes) > MAX_BOOK_TEXT_BYTES:
+        raise ValueError('The text of this book is too large')
+
+
 def book_text(path: str, fmt: str, ruby: dict | None = None, hints: list | None = None) -> str:
     """yurigana's book_text with fold_source_breaks on each EPUB/HTMLZ document (TXT lines are real)."""
     if fmt == 'TXT':
         return _text.book_text(path, fmt, ruby, hints)
     with zipfile.ZipFile(path) as archive:
+        sizes = {info.filename: info.file_size for info in archive.infolist()}
         if fmt == 'HTMLZ':
-            names = sorted(n for n in archive.namelist() if n.lower().endswith(('.html', '.xhtml', '.htm')))
+            names = sorted(n for n in sizes if n.lower().endswith(('.html', '.xhtml', '.htm')))
         else:
+            # What _epub_documents reads to find the documents.
+            _check_text_size(size for name, size in sizes.items()
+                             if name == 'META-INF/container.xml' or name.lower().endswith('.opf'))
             names = list(_text._epub_documents(archive))
+        _check_text_size(sizes.get(name, 0) for name in names)
         parts, offset = [], 0
         for name in names:
             try:
@@ -150,13 +165,16 @@ def vn_text(path: str, ruby: dict | None = None, hints: list | None = None) -> s
     if os.path.isdir(path):
         scripts = {name: os.path.join(path, name) for name in os.listdir(path) if _VN_SCRIPT.match(name)}
         read = lambda name: open(scripts[name], 'rb').read()  # noqa: E731
+        size = lambda name: os.path.getsize(scripts[name])  # noqa: E731
     else:
         archive = zipfile.ZipFile(path)
         names = [n for n in archive.namelist() if _VN_SCRIPT.match(posixpath.basename(n))]
         root = min((posixpath.dirname(n) for n in names), key=lambda d: d.count('/'), default='')
         scripts = {posixpath.basename(n): n for n in names if posixpath.dirname(n) == root}
         read = lambda name: archive.read(scripts[name])  # noqa: E731
+        size = lambda name: archive.getinfo(scripts[name]).file_size  # noqa: E731
     try:
+        _check_text_size(map(size, scripts))
         txt = sorted((n for n in scripts if n.lower().endswith('.txt')), key=lambda n: int(n.split('.')[0]))
         raw = b'\n'.join(read(n) for n in txt) if txt else \
             bytes(b ^ 0x84 for b in read(next(iter(scripts)))) if scripts else b''

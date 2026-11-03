@@ -123,6 +123,7 @@ import tempfile
 import threading
 import time
 import unittest
+import uuid
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -449,6 +450,19 @@ class FetcherTest(unittest.TestCase):
             body, _ = fetcher.fetch('https://c.example/429', {'c.example'})
         self.assertEqual(body, b'ok')
         self.assertGreaterEqual(time.monotonic() - start, 0.9)
+
+    def test_urls_are_encoded_once_and_malformed_ones_refused(self):
+        # Catches: urllib raising UnicodeEncodeError or InvalidURL (a 500) on Japanese search, double-encoding what
+        # an extension already encoded, and a malformed address escaping as ValueError.
+        Echo.hits = []
+        with mock.patch.object(fetcher, 'INTERVAL', 0):
+            self.assertEqual(fetcher.fetch('https://e.example/本?q=漢字 x&r=%E6%BC%A2', {'e.example'})[0], b'ok')
+            for bad in ('https://[x/', 'https://e.example:port/'):
+                with self.assertRaises(fetcher.FetchError):
+                    fetcher.fetch(bad, {'e.example'})
+                with self.assertRaises(fetcher.FetchError):
+                    fetcher.fetch_public(bad, {'e.example'})
+        self.assertEqual([path for path, _ in Echo.hits], ['/e.example/%E6%9C%AC?q=%E6%BC%A2%E5%AD%97%20x&r=%E6%BC%A2'])
 
     def test_size_cap(self):
         with mock.patch.multiple(fetcher, INTERVAL=0, MAX_BYTES=1 << 20), self.assertRaises(fetcher.FetchError):
@@ -1467,6 +1481,65 @@ class PinnedTest(unittest.TestCase):
             with self.assertRaises(fetcher.FetchError):
                 fetcher.fetch_public('https://site.example/', {'site.example'})
         self.assertEqual(connected, [(PUBLIC, 443)])
+
+
+
+class RestartTest(ServiceCase):
+    """A restart between the import queue and the Sources record (sources.recover_adding)."""
+
+    def adding_job(self, kind='add'):
+        job_id = uuid.uuid4().hex
+        db = service.sources.database()
+
+        def create(c):
+            work = c.execute("INSERT INTO works (site, work_key, url) VALUES ('syosetu', ?, 'u')", (job_id,)).lastrowid
+            c.execute("INSERT INTO source_jobs (id, account, work, kind, volumes, state, created, updated) "
+                      "VALUES (?, 'acc1', ?, ?, '[]', 'adding', 0, 0)", (job_id, work, kind))
+            c.execute('INSERT INTO work_volumes (work, number, first_ch, last_ch) VALUES (?, 1, 1, 5)', (work,))
+            return work
+        return job_id, db.transaction(create)
+
+    def state(self, job_id):
+        return service.sources.database().query('SELECT state FROM source_jobs WHERE id = ?', (job_id,))[0]['state']
+
+    def import_job(self, job_id, work, state, **fields):
+        return {'state': state, 'updated': 1, 'sourceJob': job_id, 'sourceWork': work, 'sourceVolume': 1,
+                'sourceLast': True, 'sourceChapters': [1, 8, 0], **fields}
+
+    def test_an_import_finished_but_unrecorded_is_recorded_not_fetched_again(self):
+        # Catches: finished work thrown away (a kill just before volume_added), so a retry would import it again.
+        job_id, work = self.adding_job()
+        service.sources.recover_adding([self.import_job(job_id, work, 'unlisted', calibreId=77)])
+        self.assertEqual(self.state(job_id), 'done')
+        row = service.sources.database().query('SELECT calibre_id, last_ch FROM work_volumes WHERE work = ?', (work,))[0]
+        self.assertEqual((row['calibre_id'], row['last_ch']), (77, 8))
+
+    def test_a_job_with_an_import_still_queued_keeps_waiting(self):
+        # Catches: a reader's queued volume being failed while the import worker is about to add it.
+        job_id, work = self.adding_job()
+        service.sources.recover_adding([self.import_job(job_id, work, 'queued')])
+        self.assertEqual(self.state(job_id), 'adding')
+
+    def test_the_latest_import_of_a_volume_decides(self):
+        # Catches: an old failed import of a reused update job failing a job whose retry went through.
+        job_id, work = self.adding_job('update')
+        service.sources.recover_adding([self.import_job(job_id, work, 'unlisted', calibreId=78, updated=2),
+                                        self.import_job(job_id, work, 'failed', updated=1)])
+        self.assertEqual(self.state(job_id), 'done')
+
+    def test_a_job_whose_import_is_gone_fails_and_its_follow_is_checked_again(self):
+        # Catches: the wedge itself, `adding` for ever: queue_due_checks skips the work, so a follow stops updating.
+        job_id, work = self.adding_job('update')
+        now = service.sources.now_ms()
+        service.sources.database().transaction(lambda c: c.execute(
+            "INSERT INTO follows (account, work, next_check, modified) VALUES ('acc1', ?, 0, 0)", (work,)))
+        service.sources.recover_adding([])
+        self.assertEqual(self.state(job_id), 'failed')
+        service.sources.queue_due_checks(now + 7 * 24 * 3600 * 1000)
+        self.assertEqual(self.state(job_id), 'queued')
+        service.sources.database().transaction(lambda c: (
+            c.execute('DELETE FROM follows WHERE work = ?', (work,)),
+            c.execute('DELETE FROM source_jobs WHERE id = ?', (job_id,))))
 
 
 if __name__ == '__main__':

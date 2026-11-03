@@ -90,10 +90,18 @@ def unchanged_since_failure(failure, book) -> bool:
     return failure.get('added') == book['added'] if book.get('format') == 'VN' else failure.get('size') == book['size']
 
 
+def file_replaced(estimate, book) -> bool:
+    """The book's `added` moved since its estimate (import's replace_book moves it). An estimate from before
+    `added` was stored goes by when it was made, so an upgrade doesn't redo every library."""
+    if 'added' in estimate:
+        return estimate['added'] != book.get('added')
+    return book.get('added', 0) > estimate.get('computedAt', float('inf'))
+
+
 def needs_estimate(book, results, engine) -> bool:
     """Whether a whole-library run estimates the book: never tried, estimated by another engine or
-    an older CORE_VERSION (the estimate is the core: ~0.4 s a book), or (manga) from other text;
-    not a book without text or whose file is unchanged since it failed.
+    an older CORE_VERSION (the estimate is the core: ~0.4 s a book), from a file replaced since,
+    or (manga) from other text; not a book without text or whose file is unchanged since it failed.
     Manga without text are tried once some appears. Word lists aren't made here (WordsQueue)."""
     key = str(book['id'])
     if book.get('manga') and not book.get('text'):
@@ -102,7 +110,7 @@ def needs_estimate(book, results, engine) -> bool:
         return False
     estimate = results['books'].get(key, {})
     return (estimate.get('engine') != engine or estimate.get('text') != book.get('text')
-            or (estimate.get('core') or {}).get('v') != core.CORE_VERSION) \
+            or (estimate.get('core') or {}).get('v') != core.CORE_VERSION or file_replaced(estimate, book)) \
         and not unchanged_since_failure(results.get('failed', {}).get(key), book)
 
 
@@ -189,8 +197,9 @@ class JobRunner:
             elif result[1]:
                 before = results['books'].get(str(result[0]), {})
                 # Its text changed (another file or mokuro text): the word list is made again on request.
-                if before and (before.get('characters'), before.get('text')) != \
-                        (result[1]['characters'], result[1].get('text')):
+                if before and ((before.get('characters'), before.get('text')) !=
+                               (result[1]['characters'], result[1].get('text'))
+                               or before.get('added', book['added']) != book['added']):
                     workers.remove_words(result[0])
                 results['books'][str(result[0])] = result[1]
                 no_text.discard(result[0])

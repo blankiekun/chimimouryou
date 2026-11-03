@@ -88,6 +88,7 @@ class ReadingsQueue:
 
     def _run(self):
         pool = None
+        pool_key = None
         idle_since = time.monotonic()
         try:
             while True:
@@ -104,10 +105,16 @@ class ReadingsQueue:
                     self.added.wait(1)
                     continue
                 book_id, work = job
-                if not pool:
-                    readerpack.ensure_reader_pack()
-                    pool = ProcessPoolExecutor(1, initializer=self.initializer)
                 try:
+                    # A dictionary installed meanwhile: this worker's Reader would stamp old readings with the new version.
+                    key = readerpack.reader_pack_key()
+                    if pool and key != pool_key:
+                        pool.shutdown()
+                        pool = None
+                    if not pool:
+                        readerpack.ensure_reader_pack()
+                        pool = ProcessPoolExecutor(1, initializer=self.initializer)
+                        pool_key = key
                     pool.submit(self.task, book_id, work).result()
                 except Exception as error:
                     print(f'{type(self).__name__} {book_id}: {error}', file=sys.stderr, flush=True)

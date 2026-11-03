@@ -135,6 +135,7 @@ def _estimate(book: dict):
         'core': core.book_core(_tokenizer.tokens(text), _frequency, text, ruby.get('kanji', 0)),
         'engine': readerpack.current_engine(),
         'computedAt': int(time.time() * 1000),
+        'added': book['added'],  # jobs.file_replaced
         # Manga: the mokuro text it was made from (manga_text_stamp).
         **({'text': book['text']} if book.get('manga') else {}),
     }
