@@ -283,7 +283,7 @@
   let dataToReplicate = $state.raw<StorageDataType[]>([]);
   let dataToReplicateQueue: StorageDataType[] = [];
   let externalStorageHandler = $state.raw<BaseStorageHandler>();
-  let externalStorageErrors = $state.raw(0);
+  let signInPrompt = $state.raw('');
   let isReplicating = $state.raw(false);
   let storedExploredCharacter = $state.raw(0);
   let hasBookmarkData = $state.raw(false);
@@ -1574,6 +1574,8 @@
     );
 
     isReplicating = false;
+    // The manager's words for an expired Drive/OneDrive sign-in; only a click can fix that.
+    signInPrompt = error?.match(/Sign in to \w+ again/)?.[0] ?? '';
 
     if (error) {
       if (!isSilent) {
@@ -1591,11 +1593,7 @@
           }
         ]);
       }
-
-      externalStorageErrors += 1;
     } else {
-      externalStorageErrors = 0;
-
       if (!isSilent) {
         dialogManager.dialogs$.next([]);
       }
@@ -2131,13 +2129,14 @@
         <Fa icon={$isTrackerPaused$ ? faPlay : faPause} />
       </div>
     {/if}
-    {#if dataToReplicate.length}
+    {#if signInPrompt}
       <div
         tabindex="0"
         role="button"
-        class="flex h-full w-8 items-center justify-center text-sm sm:text-lg"
-        class:text-danger={externalStorageErrors > 1}
-        class:animate-pulse={externalStorageErrors > 1 || isReplicating}
+        title={signInPrompt}
+        aria-label={signInPrompt}
+        class="flex h-full w-8 items-center justify-center text-sm text-danger sm:text-lg"
+        class:animate-pulse={isReplicating}
         onclick={(event) => {
           event.stopPropagation();
 
