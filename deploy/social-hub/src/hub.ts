@@ -1226,9 +1226,9 @@ const stepIndex = (rank: number, step = 3) => (rank <= 1 ? 1 : 3 * (rank - 2) + 
 /**
  * Caps a shared reading rank by what the hub saw: characters grow at most RANK_DAILY_CAP a day
  * since the last stats (or the account's creation), the step is at most what those characters
- * support, and it rises one step per RANK_RISE (`rankAt`: when it last rose). A push without a
- * `step` (an older app, whose rank always means III) never lowers a stored step, so a reader's
- * old phone can't flicker them down.
+ * support, and it rises one step per RANK_RISE (`rankAt`: when it last rose). Neither ever falls,
+ * as the app's own rank never does: a new browser, an old phone (no `step`: its rank means III) or
+ * a reset device pushes less than the reader has earned. Turning stats sharing off and on clears them.
  */
 export function capRank<T extends { rank?: number; step?: number; chars?: number }>(
   stats: T,
@@ -1241,9 +1241,10 @@ export function capRank<T extends { rank?: number; step?: number; chars?: number
 
   const hadChars = typeof old?.chars === 'number';
   const since = hadChars ? oldAt : created;
-  const chars = Math.min(
-    stats.chars,
-    Math.floor((hadChars ? (old!.chars as number) : 0) + ((time - since) / DAY) * RANK_DAILY_CAP)
+  const oldChars = hadChars ? (old!.chars as number) : 0;
+  const chars = Math.max(
+    oldChars,
+    Math.min(stats.chars, Math.floor(oldChars + ((time - since) / DAY) * RANK_DAILY_CAP))
   );
   let index = Math.min(
     stepIndex(stats.rank, stats.step),
@@ -1259,9 +1260,11 @@ export function capRank<T extends { rank?: number; step?: number; chars?: number
       : 1;
   const lastRose = Number(old?.rankAt) || created;
 
-  index = Math.min(index, time - lastRose >= RANK_RISE ? oldIndex + 1 : oldIndex);
-  if (stats.step === undefined) index = Math.max(index, oldIndex);
-  if (index <= oldIndex) rankAt = lastRose;
+  index = Math.max(
+    oldIndex,
+    Math.min(index, time - lastRose >= RANK_RISE ? oldIndex + 1 : oldIndex)
+  );
+  if (index === oldIndex) rankAt = lastRose;
 
   const { step: _sent, ...rest } = stats;
   const rank = index <= 1 ? 1 : Math.floor((index - 2) / 3) + 2;

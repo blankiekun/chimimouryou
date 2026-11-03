@@ -82,8 +82,9 @@ in `PUT me` deletes that data at once); `POST code`;
 `PUT status` (current books, `finished`, `stats`; one a minute, plus one when leaving a
 book; writes started, finished and streak events; a reading rank in `stats` (`rank` 1-7, `step` 1-3 with ranks
 2-7, `chars`) is capped by `capRank` on the 19 steps: characters grow at most 300,000 a day since the last stats or the
-account's creation, the step is at most what they support and rises one step a week, `rankAt`; a rank without
-`step` (older apps, rows from before steps) is III of that rank and never lowers a stored step; no migration, as
+account's creation, the step is at most what they support and rises one step a week, `rankAt`; neither ever falls (a new browser or a
+reset device pushes less; turning stats sharing off and on clears them); a rank without `step` (older apps, rows from
+before steps) is III of that rank; no migration, as
 `stats.data` is JSON; deploy this before the app release that sends `step`); `DELETE finished/:key` (the reader's finished
 book and its events, when its statistics are deleted); `GET friends` (with their finished books and
 stats; once a minute); `GET feed?since=` (friends' events, 90 days; once a minute);

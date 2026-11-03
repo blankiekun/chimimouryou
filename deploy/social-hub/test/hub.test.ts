@@ -540,10 +540,11 @@ describe('social hub', () => {
     expect(
       capRank({ ...base, step: 3, chars: 1e6 }, { ...base, rankAt: day }, day, 0, 2 * day)
     ).toMatchObject({ rank: 4, step: 1, rankAt: day });
-    // A lower claim from this app is taken as it is; stats without a rank pass through.
+    // Catches a new browser's first push (nothing read there yet) demoting the reader for weeks;
+    // stats without a rank pass through.
     expect(
-      capRank({ rank: 2, step: 1, chars: 40_000 }, { rank: 5, step: 2, chars: 9e6 }, 0, 0, day)
-    ).toEqual({ rank: 2, step: 1, chars: 40_000, rankAt: 0 });
+      capRank({ rank: 1, chars: 0 }, { rank: 5, step: 1, chars: 2e6, rankAt: 0 }, 0, 0, day)
+    ).toEqual({ rank: 5, step: 1, chars: 2e6, rankAt: 0 });
     expect(capRank({ streak: 1 } as { rank?: number }, null, 0, 0, day)).toEqual({ streak: 1 });
     // A first rank from an old account rises from 1, whatever its characters allow.
     expect(capRank({ rank: 7, chars: 1e7 }, { streak: 1 }, 0, 0, 40 * day)).toMatchObject({
