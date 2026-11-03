@@ -39,6 +39,10 @@
   if (browser) {
     reloadOnStaleBuild(window);
     catchDownloads(window);
+    // Desktop app only (its preload sets this): a native game's saves go up when it closes.
+    if ('chimiDesktop' in window && $page.route.id !== '/hook/overlay') {
+      import('$lib/data/vn/native-games').then((games) => games.watchNativeExits());
+    }
     if (standalone) {
       watchInstall(window);
       watchYomitan(window);

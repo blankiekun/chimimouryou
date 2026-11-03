@@ -105,8 +105,9 @@ export interface DesktopGames {
   ): Promise<{ status: 'ok'; exe: string } | { status: 'error'; message: string }>;
   forget(folder: string): Promise<void>;
   list(): Promise<NativeGamesList>;
+  /** `folder`: this game's /hook takes over its lines; without it, only asks what's running. */
   session(
-    folder: string
+    folder?: string
   ): Promise<{ folder: string; running: boolean; messages: NativeMessage[] } | undefined>;
   onHook(callback: (message: NativeMessage) => void): () => void;
   /** /hook shows the line: its screenshot is taken once drawn */
@@ -274,17 +275,30 @@ export async function nativeSavesToPull(sync: VnSaveSync): Promise<VnSaves> {
   }
 }
 
+const stampKey = (folder: string) => `vnNativeSaveStamp:${folder}`;
+const gameKey = (folder: string) => `vnNativeGame:${folder}`;
+
+/** One at a time (a push reads vnsaves.json, merges and writes it): /hook and the watcher overlap. */
+let pushes: Promise<unknown> = Promise.resolve();
+
 /**
  * After the game closed: its save files on this computer merged into vnsaves.json as VNBox's
  * pushWindows does (same names and merge, the cap, skipped while `windowsSavesStamp`'s form is
- * unchanged). Returns the new stamp, a note when they don't sync and Windows folders to confirm.
+ * unchanged since the last push in this window). Returns a note when they don't sync and Windows
+ * folders to confirm.
  */
-export async function pushNativeSaves(
+export function pushNativeSaves(games: DesktopGames, folder: string, sync: VnSaveSync) {
+  const push = pushes.then(() => pushNow(games, folder, sync));
+
+  pushes = push.catch(() => {});
+  return push;
+}
+
+async function pushNow(
   games: DesktopGames,
   folder: string,
-  sync: VnSaveSync,
-  lastStamp?: string
-): Promise<{ stamp?: string; note?: string; pending?: string[] }> {
+  sync: VnSaveSync
+): Promise<{ note?: string; pending?: string[] }> {
   const [
     { syncJsonFile },
     { mergeVnSaves, parseVnSaves, sameVnSaves },
@@ -299,7 +313,7 @@ export async function pushNativeSaves(
   const { isWindowsSaveKey, windowsSavesCap } = saveStore;
   const list = await games.saves(folder);
 
-  if (!list) return { stamp: lastStamp };
+  if (!list) return {};
 
   const files = list.files.filter((file) => isWindowsSaveKey(file.name));
   const stamp = files
@@ -310,7 +324,6 @@ export async function pushNativeSaves(
 
   if (size > windowsSavesCap) {
     return {
-      stamp: lastStamp,
       pending: list.pending,
       note: `This game's saves are ${formatBytes(size)}, over the ${formatBytes(windowsSavesCap)} that sync. They stay on this computer.`
     };
@@ -318,7 +331,9 @@ export async function pushNativeSaves(
 
   const store = await sync.store();
 
-  if (stamp === lastStamp || !store) return { stamp: lastStamp, pending: list.pending };
+  if (stamp === sessionStorage.getItem(stampKey(folder)) || !store) {
+    return { pending: list.pending };
+  }
 
   const saves = await games.saves(
     folder,
@@ -331,30 +346,49 @@ export async function pushNativeSaves(
     return sameVnSaves(merged, remote) ? undefined : merged;
   });
 
-  return { stamp, pending: list.pending };
+  sessionStorage.setItem(stampKey(folder), stamp);
+  return { pending: list.pending };
 }
 
-let stopPushOnExit: (() => void) | undefined;
+/** /hook opened this game: the record the watcher pushes for, as main only knows the folder. */
+export function rememberNativeGame(folder: string, id: number) {
+  sessionStorage.setItem(gameKey(folder), `${id}`);
+}
 
-/** /hook left while the game runs: its saves still go up when it closes (the app kept open). */
-export function pushNativeSavesOnExit(
-  games: DesktopGames,
-  folder: string,
-  sync: VnSaveSync,
-  lastStamp?: string
-) {
-  stopPushOnExit?.();
-  stopPushOnExit = games.onHook((message) => {
-    if (message.type !== 'exit') return;
-    cancelNativeSavesOnExit();
-    pushNativeSaves(games, folder, sync, lastStamp).catch((error) =>
-      logger.warn(`Visual novel save sync failed: ${error.message}`)
-    );
+/**
+ * The root layout, desktop app only: a native game's saves go up when it closes, whichever page is
+ * open. A page loaded after that (Back, reload) asks main, so it also catches an exit no page heard.
+ * /hook pushes too, for its notes: pushNativeSaves runs them in turn, and the stamp skips the second.
+ */
+export function watchNativeExits() {
+  const games = desktopGames();
+
+  if (!games) return;
+
+  const push = async () => {
+    const session = await games.session();
+    const id = session && !session.running && sessionStorage.getItem(gameKey(session.folder));
+
+    if (!id) return;
+
+    const [{ database }, { vnInfo }, { VnSaveSync }] = await Promise.all([
+      import('$lib/data/store'),
+      import('./vn'),
+      import('./vn-save-store')
+    ]);
+    const book = await database.getData(Number(id));
+
+    if (book) {
+      const sync = new VnSaveSync(book.title, vnInfo(book), book.storageSource, () => {});
+
+      await pushNativeSaves(games, session.folder, sync);
+    }
+  };
+  const tryPush = () =>
+    push().catch((error) => logger.warn(`Visual novel save sync failed: ${error.message}`));
+
+  games.onHook((message) => {
+    if (message.type === 'exit') tryPush();
   });
-}
-
-/** /hook is back on the running game: its own listener pushes. */
-export function cancelNativeSavesOnExit() {
-  stopPushOnExit?.();
-  stopPushOnExit = undefined;
+  tryPush();
 }

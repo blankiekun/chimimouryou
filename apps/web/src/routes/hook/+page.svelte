@@ -57,13 +57,12 @@
   import { database } from '$lib/data/store';
   import { hookCleaner, type HookCleanup } from '$lib/data/vn/hook-cleanup';
   import {
-    cancelNativeSavesOnExit,
     desktopGames,
     isSavedThread,
     nativeSavesToPull,
     NativeThreads as Threads,
     pushNativeSaves,
-    pushNativeSavesOnExit,
+    rememberNativeGame,
     type NativeHook,
     type NativeMessage,
     type NativeThread
@@ -170,8 +169,6 @@
   let stopListening: (() => void) | undefined;
   /** vnsaves.json, shared with VNBox: pulled before the game starts, pushed when it closes. */
   let saveSync: VnSaveSync | undefined;
-  let saveStamp: string | undefined;
-  let left = false;
   let saveNote = $state<string>();
   /** Windows: folders the game's first run wrote, to confirm as its saves */
   let pendingFolders = $state<string[]>();
@@ -196,6 +193,7 @@
 
     title = book.title;
     saveSync = new VnSaveSync(book.title, info, book.storageSource, () => {});
+    rememberNativeGame(info.folder!, book.id);
     nativeHook = info.nativeHook;
     cleanup = info.hookCleanup ?? {};
     clean = hookCleaner(cleanup);
@@ -209,7 +207,6 @@
     } else stopListening ??= games.onHook(onNative);
 
     if (session && session.folder === info.folder && session.running) {
-      cancelNativeSavesOnExit();
       nativeRunning = true;
       nativeStatus = 'Playing.';
       reportActivity();
@@ -229,7 +226,6 @@
 
     if (result.status === 'started') {
       nativeRunning = true;
-      if (left) handOffSaves();
       nativeStatus = 'Starting the game…';
       reportActivity();
     } else if (result.status === 'missing' || result.status === 'gone') {
@@ -314,19 +310,11 @@
     };
   }
 
-  /** This page is gone (or the game started just after): its listener can't push at the exit. */
-  function handOffSaves() {
-    if (nativeRunning && games && saveSync?.info.folder) {
-      pushNativeSavesOnExit(games, saveSync.info.folder, saveSync, saveStamp);
-    }
-  }
-
   async function pushSaves() {
     if (!games || !saveSync?.info.folder) return;
     try {
-      const pushed = await pushNativeSaves(games, saveSync.info.folder, saveSync, saveStamp);
+      const pushed = await pushNativeSaves(games, saveSync.info.folder, saveSync);
 
-      saveStamp = pushed.stamp;
       saveNote = pushed.note;
       pendingFolders = pushed.pending;
     } catch (error: any) {
@@ -542,8 +530,6 @@
 
   onDestroy(() => {
     stopListening?.();
-    left = true;
-    handOffSaves();
     cleanupSubscription.unsubscribe();
     disconnect();
     readingActivity();

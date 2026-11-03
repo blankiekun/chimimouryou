@@ -18,7 +18,11 @@
 // throws, leaves full screen on, or shows no note; the note stays in landscape or after Dismiss;
 // leaving /v keeps the lock or full screen; a landscape phone, tablet or desktop is touched; the app
 // uses the browser's way, or doesn't lock on /v and unlock on leaving, or locks a tablet; the game
-// or its overlay doesn't fit the frame after turning; VNBox restarts because of the turn.
+// or its overlay doesn't fit the frame after turning; VNBox restarts because of the turn. Full screen
+// on a touch screen in landscape: the bar stays and the game keeps 334px of a 390px height, or the
+// game doesn't take taps or fit once the bar is gone; the rail's button doesn't leave full screen or
+// isn't reachable once the rail is folded; the bar doesn't come back after; the bar goes in full
+// screen in the app, on a desktop, or with no game to tap (nothing but the bar to get out with).
 
 /* global Buffer, console, document, navigator, process, screen, setTimeout, window, atob, localStorage, Blob */
 import { execFileSync } from 'node:child_process';
@@ -275,6 +279,54 @@ try {
   expect(isolated || (await counted(page, 'unlock')) === 1, 'left /v still locked');
   expect(!(await fullscreen(page)), 'left /v still in full screen');
   await close(page, 'lock works');
+
+  step('full screen in landscape: the bar goes, the rail leaves it and the bar comes back');
+  page = await open({ ...phone, viewport: sideways, screen: sideways }, { lock: 'ok' });
+  await openGame(page);
+  const frameSize = async () => {
+    const box = await page.locator('iframe').boundingBox();
+    return `${box.width}x${box.height}`;
+  };
+  const barShown = () => page.locator('.player-bar').isVisible();
+  const railFullscreen = () => page.locator('.vn-rail-button', { hasText: 'Full screen' });
+  expect((await frameSize()) === '764x334', `in the page: ${await frameSize()}`);
+  await railFullscreen().tap();
+  await waitFor(() => fullscreen(page), 'rail: no full screen');
+  await waitFor(async () => !(await barShown()), 'full screen: the bar stayed');
+  expect((await frameSize()) === '764x390', `full screen: ${await frameSize()}`);
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  expectFits(await fit(page), 'full screen');
+  await tapAdvances(page, 'full screen');
+  await shot(page, '6-fullscreen-no-bar');
+  await page.locator('.vn-rail-handle').tap();
+  await waitFor(async () => (await frameSize()) === '808x390', 'folded rail: frame kept its size');
+  await shot(page, '7-fullscreen-rail-folded');
+  await page.locator('.vn-rail-handle').tap();
+  await railFullscreen().tap();
+  await waitFor(async () => !(await fullscreen(page)), "rail didn't leave full screen");
+  await waitFor(barShown, 'the bar didn’t come back');
+  expect((await frameSize()) === '764x334', `back in the page: ${await frameSize()}`);
+  await page.locator('button[title="More"]').tap();
+  await page.getByRole('button', { name: 'Saves' }).tap();
+  await page.locator('iframe').waitFor({ state: 'detached' });
+  await page.evaluate(() => document.documentElement.requestFullscreen());
+  await waitFor(() => fullscreen(page), 'Saves sheet: no full screen');
+  expect(await barShown(), 'full screen with no game: the bar went');
+  await close(page, 'full screen');
+
+  step('full screen in the app and on a desktop: the bar stays');
+  page = await open({ ...phone, viewport: sideways, screen: sideways }, { native: true });
+  await openGame(page);
+  await page.evaluate(() => document.documentElement.requestFullscreen());
+  await waitFor(() => fullscreen(page), 'app: no full screen');
+  expect(await page.locator('.player-bar').isVisible(), 'app: the bar went');
+  await close(page, 'app full screen');
+  page = await open({ viewport: sideways, screen: sideways });
+  await openGame(page);
+  await page.evaluate(() => document.documentElement.requestFullscreen());
+  await waitFor(() => fullscreen(page), 'desktop: no full screen');
+  expect(await page.locator('.player-bar').isVisible(), 'desktop: the bar went');
+  await close(page, 'desktop full screen');
 
   step('the game restarts before the first tap (Saves sheet): the new frame still turns once');
   page = await open({ ...phone, viewport: portrait, screen: portrait }, { lock: 'ok' });

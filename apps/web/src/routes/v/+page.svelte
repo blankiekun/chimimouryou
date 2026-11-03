@@ -15,6 +15,7 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import { bookContent, damagedBookText } from '$lib/data/book-content';
   import { goto } from '$app/navigation';
+  import { Capacitor } from '@capacitor/core';
   import { page } from '$lib/data/page-store';
   import ReaderSheet from '$lib/components/book-reader/reader-sheet.svelte';
   import ReaderMoreList from '$lib/components/book-reader/reader-more-list.svelte';
@@ -884,7 +885,10 @@
 
 <svelte:document on:visibilitychange={onVisibilityChange} />
 
-<div class="vn-page fixed inset-0 flex flex-col">
+<div
+  class="vn-page fixed inset-0 flex flex-col"
+  class:vn-bar-hides={playerUrl && !showSaves && !Capacitor.isNativePlatform()}
+>
   <VnBar
     title={book?.title ?? ''}
     {place}
@@ -1118,6 +1122,11 @@
 
   /* The rail (vn-rail.svelte) beside the game. */
   @media (pointer: coarse) and (orientation: landscape) {
+    /* Full screen gives the bar's height to the game; the rail's Full screen button leaves it. */
+    :global(:root:fullscreen) .vn-bar-hides :global(.player-bar) {
+      display: none;
+    }
+
     .vn-main {
       position: relative;
     }

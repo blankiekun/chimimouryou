@@ -102,7 +102,8 @@ root install stays light for the web app and its Docker image; `fetch` downloads
   helper with mingw-w64 into `lunahook/` (not on macOS). Saves sync with VNBox through the record's
   `vnsaves.json` (same names and merge): `/hook` fetches it and passes it to `games-launch`, which
   writes the newer files before the game starts (never over or through a link); when the game
-  closes `/hook` reads the save files with `games-saves` and merges them in (20 MB cap). VNBox's
+  closes the page open (the root layout's watcher, and `/hook`) reads the save files with
+  `games-saves` and merges them in (20 MB cap). VNBox's
   prefix user `username` maps to the game's prefix user on Linux and to the user's AppData,
   Documents, Saved Games and ProgramData on Windows, where only the game's save folders are used:
   those its synced saves name or its first run made, both confirmed on `/hook` before anything is
