@@ -81,6 +81,11 @@ export async function synthesizeSpeech(
       body: JSON.stringify({
         text,
         model_id: eleven.model,
+        // Every caller reads Japanese. The normalizer is ElevenLabs' Japanese-only pronunciation pass.
+        ...(eleven.model.startsWith('eleven_v4') && {
+          language_code: 'ja',
+          apply_language_text_normalization: true
+        }),
         ...(context.previousText && { previous_text: context.previousText }),
         ...(context.nextText && { next_text: context.nextText })
       }),
