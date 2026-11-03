@@ -74,11 +74,6 @@ export function lineAt(lines: BookLine[], count: number) {
   return found;
 }
 
-/** Lines the reader has passed: those starting before their position */
-export function passedLine(lines: BookLine[], position: number) {
-  return lineAt(lines, Math.max(0, position - 1));
-}
-
 /** A line's deep link (Copy link; also for pasting elsewhere): opens the book there, or the thread */
 export function lineLink(work: string, line: string, origin = location.origin) {
   return `${origin}${pagePath}/b?${new URLSearchParams({ line, work })}`;

@@ -333,7 +333,3 @@ export async function getAbsSubtitles(title: string) {
 export async function putAbsSubtitles(subtitles: AbsSubtitles) {
   await (await readerDb()).put('absSubtitles', subtitles);
 }
-
-export async function deleteAbsSubtitles(title: string) {
-  await (await readerDb()).delete('absSubtitles', title);
-}

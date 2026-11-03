@@ -47,16 +47,6 @@ export function rememberedServer() {
   return read(baseKey);
 }
 
-/** A server path ('/calibre/…', '/account/…', '/api/…') as the URL to request; other URLs as they are. */
-export function serverUrl(path: string) {
-  return serverBase && serverPath.test(path) ? `${serverBase}${path}` : path;
-}
-
-/** The headers a request to a server path needs besides its own (none in the self-hosted build). */
-export function serverHeaders(path: string): Record<string, string> {
-  return serverBase && serverPath.test(path) ? { Authorization: `Bearer ${token}` } : {};
-}
-
 /** fetch() for server paths: the connected server with its token, else this site as before. */
 export function serverFetch(path: string, init: RequestInit = {}) {
   if (!serverBase || !serverPath.test(path)) return fetch(path, init);

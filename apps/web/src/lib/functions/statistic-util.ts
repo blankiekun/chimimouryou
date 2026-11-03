@@ -110,11 +110,6 @@ export function getDateTimeString(timeInMs: number) {
   )}:${`${date.getMinutes()}`.padStart(2, '0')}:${`${date.getSeconds()}`.padStart(2, '0')}`;
 }
 
-export function getWeekNumber(referenceDate: number, startDate: number) {
-  const days = Math.floor((referenceDate - startDate) / (24 * 60 * 60 * 1000));
-  return Math.ceil(days / 7);
-}
-
 /** How long a deleted day or goal is remembered; a device stale for longer brings its copy back. */
 export const deletionLifetime = 365 * 864e5;
 

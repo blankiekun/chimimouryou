@@ -377,11 +377,6 @@ function keepEarlierVersions(title: string, before: LoreEntry[], after: LoreEntr
   });
 }
 
-/** Characters an update from the stored position to `position` would send. */
-export async function pendingLoreCharacters(title: string, position: number) {
-  return Math.max(0, position - (await getLorebook(title)).processedUpTo);
-}
-
 /**
  * Reads the text from where the lorebook stopped up to `position`, in chunks,
  * saving after each so an interrupted update keeps its progress.

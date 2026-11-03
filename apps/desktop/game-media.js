@@ -32,7 +32,7 @@ const keepMs = 180_000;
 const flushMs = 500;
 /** A line starts at the first click or key after the previous line, if within this before it. */
 const clickWithinMs = 3000;
-/** Sound around a line's window (lib/data/vn/line-audio.ts preRollMs and tailMs). */
+/** Sound around a line's window (preRollMs as in lib/data/vn/line-audio.ts). */
 const preRollMs = 400;
 const tailMs = 6000;
 /** A line that came without a click is looked at this far back for its voice (typewriter text). */

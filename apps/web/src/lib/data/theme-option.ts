@@ -4,8 +4,6 @@
  * All rights reserved.
  */
 
-import { builtInThemes, resolveTheme, toReaderThemeOption } from '$lib/data/theme/themes';
-
 /** Reader colours of a theme. Full app themes live in theme/themes.ts. */
 export interface ThemeOption {
   fontColor: string;
@@ -16,7 +14,3 @@ export interface ThemeOption {
   hintFuriganaFontColor: string;
   tooltipTextFontColor: string;
 }
-
-export const availableThemes = new Map(
-  builtInThemes.map((theme) => [theme.id, toReaderThemeOption(resolveTheme(theme.id, {}))])
-);

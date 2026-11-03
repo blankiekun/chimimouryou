@@ -33,11 +33,6 @@ export interface BookStatistic extends BooksDbStatistic {
   averageWeightedReadingSpeed: number;
 }
 
-export enum StatisticsTab {
-  OVERVIEW = 'Overview',
-  SUMMARY = 'Summary'
-}
-
 export enum StatisticsRangeTemplate {
   TODAY = 'Today',
   WEEK = 'This Week',
