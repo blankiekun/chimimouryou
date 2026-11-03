@@ -22,6 +22,8 @@ export interface LinePcm {
   rate: number;
   start: number;
   end: number;
+  /** Native play's windows: equals `start` when a click brought the line, earlier when none did. */
+  earliest?: number;
 }
 
 /** Recorded before the window's start, so a voice starting with the click isn't clipped. */
@@ -34,9 +36,19 @@ const threshold = 0.5;
 const negThreshold = 0.35;
 const minSilence = 0.1;
 const minSpeech = 0.25;
-/** GameSentenceMiner's defaults: audio.beginning_offset and audio.end_offset. */
+/**
+ * GameSentenceMiner's audio.beginning_offset is 0.5 s before its hook's arrival, which comes after
+ * the voice has begun; from a true click a voice has yet to start, so a small pad is enough.
+ */
+const padBeforeClick = 0.1;
+/** With no click the line's start is only when it was seen. */
 const padBefore = 0.4;
+/** GameSentenceMiner's audio.end_offset. */
 const padAfter = 0.5;
+/** Speech starting this little before a click is the detector's lead on a voice starting with it. */
+const clickGrace = 0.15;
+/** A click's own voice has begun by then; later speech is something else on the sound. */
+const voiceWithin = 1;
 const fade = 0.05;
 
 let worker: Worker | undefined;
@@ -132,14 +144,21 @@ export function speechSegments(probs: ArrayLike<number>): Segment[] {
   return segments;
 }
 
-/** The speech inside the line's window [start, end], cut at its end (GameSentenceMiner's window). */
+/**
+ * The speech inside the line's window [start, end], cut at its end (GameSentenceMiner's window).
+ * From a click, speech already going isn't the line's, and speech that first starts late isn't
+ * either; pauses after its start stay, however long.
+ */
 export function lineSpeech(
   probs: ArrayLike<number>,
-  { start, end }: { start: number; end: number }
+  { start, end, earliest }: { start: number; end: number; earliest?: number }
 ) {
-  return speechSegments(probs)
-    .filter(([from, to]) => to > start && from < end)
+  const clicked = earliest === start;
+  const speech = speechSegments(probs)
+    .filter(([from, to]) => to > start && from < end && !(clicked && from < start - clickGrace))
     .map(([from, to]): Segment => [Math.max(from, start), Math.min(to, end)]);
+
+  return clicked && speech.length && speech[0][0] > start + voiceWithin ? [] : speech;
 }
 
 /** A WAV file of mono s16 samples. */
@@ -210,6 +229,10 @@ export async function lineAudio(
   const chars = text.replace(/\s/g, '').length;
 
   if (!speech.length || length < Math.max(0.5, chars * 0.05)) return undefined;
+  const to = speech.at(-1)![1] + padAfter;
+
   // Like GameSentenceMiner, the start isn't trimmed (the click is the line's start), the end is.
-  return clip(audio, audio.start - padBefore, speech.at(-1)![1] + padAfter, true);
+  return audio.earliest === audio.start
+    ? clip(audio, audio.start - padBeforeClick, Math.min(to, audio.end), true)
+    : clip(audio, audio.start - padBefore, to, true);
 }
