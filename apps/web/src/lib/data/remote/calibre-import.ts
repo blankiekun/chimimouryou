@@ -12,6 +12,8 @@
  * visual novel folder (VN_PATH) instead. Not part of upstream.
  */
 
+import { serverFetch } from '$lib/data/remote/server-connect';
+
 export interface CalibreImportJob {
   id: string;
   /** Uploaded file name */
@@ -58,7 +60,7 @@ export async function uploadToCalibre(
   // The folder names manga with generic file names (第01巻.cbz), which would otherwise be duplicates.
   const folder = file.webkitRelativePath?.split('/').slice(-2, -1)[0];
   const query = `name=${encodeURIComponent(file.name)}${folder ? `&folder=${encodeURIComponent(folder)}` : ''}${fields ? `&${new URLSearchParams(fields)}` : ''}`;
-  const response = await fetch(`${apiUrl}add?${query}`, {
+  const response = await serverFetch(`${apiUrl}add?${query}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/octet-stream' },
     body: file,
@@ -85,9 +87,12 @@ export async function waitForImportJobs(
   intervalMs = 3000
 ) {
   for (;;) {
-    const response = await fetch(`${apiUrl}jobs?ids=${ids.map(encodeURIComponent).join(',')}`, {
-      cache: 'no-store'
-    });
+    const response = await serverFetch(
+      `${apiUrl}jobs?ids=${ids.map(encodeURIComponent).join(',')}`,
+      {
+        cache: 'no-store'
+      }
+    );
 
     if (!response.ok) {
       throw new Error(`Calibre import status unavailable: ${await errorMessage(response)}`);
@@ -121,7 +126,7 @@ export interface SeriesReport {
 
 /** Whether the import service answers for this account (any job list; 502 when it isn't running). */
 export async function importServiceRunning() {
-  return fetch(`${apiUrl}jobs?ids=`).then(
+  return serverFetch(`${apiUrl}jobs?ids=`).then(
     (response) => response.ok,
     () => false
   );
@@ -160,7 +165,7 @@ export async function rebuildCatalog(): Promise<{ books: number; visualNovels: n
 export async function removeFromCalibre(
   ids: number[]
 ): Promise<{ removed: number[]; failed: number[] }> {
-  const response = await fetch(`${apiUrl}remove`, {
+  const response = await serverFetch(`${apiUrl}remove`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ids })

@@ -20,13 +20,15 @@ fi
 sed -i "s/^user .*;/user $user;/" /etc/nginx/nginx.conf
 chown -R "$PUID:$PGID" /var/cache/nginx
 
-# The services run as PUID and can't create these in a root-owned /data.
-for dir in /data /data/sync /data/accounts /data/state \
+# The services run as PUID and can't create these in a root-owned /data. Not recursive, and
+# -h: PUID's services can write here, so a symlink must not hand them its target. /data/vn: with
+# VN_PATH unset, Docker made it as root for the /vn mount, and the import service adds games there.
+for dir in /data /data/sync /data/vn /data/accounts /data/state \
   /data/state/account /data/state/catalog /data/state/import /data/state/difficulty \
   /data/state/update /data/state/engine /data/state/mokuro \
   /data/state/api /data/state/api/text; do
   mkdir -p "$dir"
-  chown "$PUID:$PGID" "$dir"
+  chown -h "$PUID:$PGID" "$dir"
 done
 
 # The secret nginx sends the services, so they answer nobody else (their ports are

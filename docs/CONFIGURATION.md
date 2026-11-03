@@ -93,8 +93,10 @@ origins are accepted only on loopback with a port (`http://127.0.0.1:<port>`,
 computer that listens on that port could then use the server like the app, once a reader signs in
 there.
 
-- Off by default. With `CORS_ORIGINS` empty nothing changes: no CORS headers, and the server
-  issues no tokens and ignores bearer tokens.
+- Tokens are always on, whatever `CORS_ORIGINS` says: the Android and desktop apps and native
+  clients such as KOReader sign in with them (HTTPS only). With `CORS_ORIGINS` empty, only those two
+  apps' origins get CORS headers and no other site can sign in. Settings → Account → Devices lists
+  an account's tokens.
 - The server must have HTTPS, a real certificate included (e.g. Tailscale's, see
   [INSTALL.md](INSTALL.md#https)): tokens are only issued and accepted over HTTPS, and an HTTPS
   app can't call an `http://` server anyway (mixed content).
@@ -122,15 +124,15 @@ code are the same container paths.
 | -------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
 | `CALIBRE_LIBRARY`                | `/library`                                                                                             | import, difficulty                                                                   |
 | `VN_DIR`                         | `/vn` (`VN_PATH`)                                                                                      | catalog, import (unpacks game ZIPs there)                                            |
-| `SHARED_SYNC_DIR`                | `/data/sync`                                                                                           | account (free-space check)                                                           |
+| `SHARED_SYNC_DIR`                | `/data/sync`                                                                                           | api (`migrate.py`)                                                                   |
 | `ACCOUNT_STATE_DIR`              | `/data/state/account` (`accounts.db`)                                                                  | account                                                                              |
 | `ACCOUNT_DATA_DIR`               | `/data/accounts`                                                                                       | account, api (game records), migration                                               |
 | `ACCOUNT_HOST`, `ACCOUNT_PORT`   | `0.0.0.0`, `8766`                                                                                      | account                                                                              |
 | `API_STATE_DIR`, `API_DB`        | `/data/state/api`, `/data/state/api/library.db` (text copies, covers, `migrate-report.json` beside it) | api, catalog and import (the catalog builder keeps `books` there)                    |
 | `API_HOST`, `API_PORT`           | `0.0.0.0`, `8769`                                                                                      | api                                                                                  |
-| `ALLOW_HTTP_ACCOUNTS`            | `0`                                                                                                    | account, import, difficulty, mokuro                                                  |
+| `ALLOW_HTTP_ACCOUNTS`            | `0`                                                                                                    | account                                                                              |
 | `CORS_ORIGINS`                   | as in `.env`                                                                                           | account, import, difficulty, mokuro                                                  |
-| `MIN_FREE_MB`                    | `1024`                                                                                                 | account, api                                                                         |
+| `MIN_FREE_MB`                    | `1024`                                                                                                 | api                                                                                  |
 | `CATALOG_OUTPUT`                 | `/data/state/catalog/catalog.json`                                                                     | import (rebuilds the catalog after adding books)                                     |
 | `CATALOG_BUILDER`                | `/usr/local/bin/build-calibre-catalog`                                                                 | import                                                                               |
 | `CALIBREDB`                      | `calibredb`                                                                                            | import                                                                               |

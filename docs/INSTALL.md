@@ -74,7 +74,7 @@ set `ALLOW_HTTP_ACCOUNTS=1` (see [Accounts](#accounts-and-permissions)).
   `state/` (account database, `api/library.db` with each account's progress,
   highlights and settings, including AI API keys, catalog, import queue,
   difficulty results) and `accounts/` (Windows game records).
-  Back up `DATA_PATH`. Keep it off shares other machines can read.
+  [Back it up](#backups). Keep it off shares other machines can read.
 - With the import profile, set `SOURCES_SECRET_KEY` (`openssl rand -base64 32`)
   so readers can add OPDS catalogs and Suwayomi servers that need a password as
   sources; it encrypts those passwords. Keep it in `.env`, not in `DATA_PATH`.
@@ -241,6 +241,45 @@ adds a few GB, so a small disk fills up after a while. Cap it in
 
 Apply with `systemctl reload docker` for `live-restore` first, then
 `systemctl restart docker`. `docker builder prune` frees the cache right away.
+
+## Backups
+
+Back up:
+
+- `DATA_PATH`: accounts, everyone's reading data, Windows game records.
+- `.env`: `SOURCES_SECRET_KEY` is only there. Without the same key, readers must type their source
+  servers' passwords again.
+- `LIBRARY_PATH` (your Calibre library), and `VN_PATH` if it isn't inside `DATA_PATH`, with whatever
+  you already back those up with.
+
+`state/account/accounts.db` and `state/api/library.db` are SQLite databases in WAL mode: recent writes
+sit in a `-wal` file beside them, even after the stack stops, so keep those files with their databases.
+A `cp -r` of a running server can give you a damaged database, so stop the stack
+first; it takes a few seconds. From the folder with `docker-compose.yml` and the default
+`DATA_PATH` (`./data`; otherwise name yours):
+
+```sh
+docker compose --profile '*' stop
+sudo tar -czf ebook-reader-backup.tar.gz .env data
+docker compose up -d
+```
+
+Add your usual `--profile` options to `up` if you don't use `COMPOSE_PROFILES`. `sudo` because the
+databases are readable only by `PUID`. The archive holds password hashes, sessions and synced AI keys:
+keep it as private as the server.
+
+To restore, move the current folder away rather than unpacking over it, since an old `library.db-wal`
+left beside the restored database would corrupt it:
+
+```sh
+docker compose --profile '*' stop
+sudo mv data data.old
+sudo tar --numeric-owner -xzpf ebook-reader-backup.tar.gz
+docker compose up -d
+```
+
+Keep `PUID` and `PGID` as they were (this restores `.env` too). A browser that synced after the backup
+was made sees that the server went back and reloads its copy from the server.
 
 ## Manga text (mokuro)
 

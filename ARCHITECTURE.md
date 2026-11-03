@@ -203,7 +203,8 @@ section in paginated mode. `annotations.json` is merged per highlight (newest
   migration until the release after deletes them.
 - **No quotas.** Any account can fill the disk up to `MIN_FREE_MB`.
 - **Book CSS is applied as-is.** It can restyle the page, though not run script.
-- **No built-in backups.** Back up `DATA_PATH` (and the Calibre library).
+- **No built-in backups.** Back up `DATA_PATH`, `.env` and the Calibre library
+  ([steps](docs/INSTALL.md#backups)).
 - **`routes/b/+page.svelte`** is still the most fragile file to change. The fork's
   glue lives in `lib/` (highlights, search match and the line read aloud in
   `HighlightPainter`, readings in `analysis-tools.ts`, plugin hooks in
