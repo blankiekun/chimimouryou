@@ -165,10 +165,11 @@ describe('standalone edition', () => {
     expect(JSON.stringify(init?.headers ?? {})).not.toContain('Bearer');
   });
 
+  // Stats off: a push then needs none of their slow imports, so it can't land in the next test.
   const signedIn = () =>
     window.localStorage.setItem(
       'socialSession',
-      JSON.stringify({ token: 't', me: { id: 'a', share: {} } })
+      JSON.stringify({ token: 't', me: { id: 'a', share: { stats: false } } })
     );
   const sent = () =>
     fetchMock.mock.calls.map(([url, init]) => `${init?.method ?? 'GET'} ${new URL(url).pathname}`);

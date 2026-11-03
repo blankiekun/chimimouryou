@@ -181,6 +181,33 @@ describe('social', () => {
     ]);
   }, 15000);
 
+  // Bug: the hub refuses a whole push over one title or key past 200, silently, on every push, while
+  // the long book stays among the current ones.
+  it('clips long titles and keys to what the hub takes, kept ones too', async () => {
+    const long = 'あ'.repeat(300);
+    const bodies: { books: FriendBook[] }[] = [];
+
+    expect(bookKey(long)).toHaveLength(200);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init: RequestInit) => {
+        bodies.push(JSON.parse(init.body as string));
+        return new Response('{"ok":true}');
+      })
+    );
+
+    // A title kept whole in the current books, sent again with the next book's push.
+    noteReading(long, 10, 100);
+    noteReading('短い本', 10, 100);
+    await vi.waitFor(() => expect(bodies).toHaveLength(2), { timeout: 5000 });
+    for (const body of bodies) {
+      const clipped = body.books.find((other) => other.title.startsWith('あ'))!;
+
+      expect(clipped.title).toHaveLength(200);
+      expect(clipped.key).toHaveLength(200);
+    }
+  }, 15000);
+
   it('gives the hub the thumbnails it asks for, once, from covers this reader has', async () => {
     const calls: { path: string; type: string | null; body: unknown }[] = [];
 
