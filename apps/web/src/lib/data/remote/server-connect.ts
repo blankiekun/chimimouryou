@@ -86,20 +86,32 @@ export async function responseJson<T = any>(
   return data;
 }
 
+/** A Drive library's cover path: it needs the reader's token too (`driveCoverBlob`). */
+export const driveCoverPrefix = 'gdrive-cover:';
+
 const cachedBlobUrl = blobUrlCache(300);
 
 /** A server file as a blob: URL for <img>; the last 300 used are kept (a library has thousands). */
 export function serverBlobUrl(path: string) {
   return cachedBlobUrl(path, async () => {
+    if (path.startsWith(driveCoverPrefix)) {
+      const { driveCoverBlob } = await import('$lib/data/storage/handler/gdrive-handler');
+
+      return driveCoverBlob(path);
+    }
+
     const response = await serverFetch(path);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return response.blob();
   });
 }
 
-/** Whether an image path must be loaded through `serverImage` (connected and on the server). */
+/** Whether an image path must be loaded through `serverImage` (connected and on the server, or on Drive). */
 export function needsServerImage(path: unknown): path is string {
-  return !!serverBase && typeof path === 'string' && serverPath.test(path);
+  return (
+    typeof path === 'string' &&
+    (path.startsWith(driveCoverPrefix) || (!!serverBase && serverPath.test(path)))
+  );
 }
 
 /**

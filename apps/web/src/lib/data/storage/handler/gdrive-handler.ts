@@ -8,6 +8,7 @@ import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
 import { gDriveRefreshEndpoint } from '$lib/data/env';
 import { logger } from '$lib/data/logger';
+import { driveCoverPrefix } from '$lib/data/remote/server-connect';
 import { ApiStorageHandler, type FullResponse } from '$lib/data/storage/handler/api-handler';
 import { AbortError } from '$lib/functions/replication/replication-error';
 import { reportBytes } from '$lib/functions/replication/replication-progress';
@@ -24,8 +25,31 @@ import { database, gDriveStorageSource$ } from '$lib/data/store';
 import pLimit from 'p-limit';
 
 interface GDriveFile extends ExternalFile {
-  thumbnailLink?: string;
   parents: string[];
+}
+
+const coverLimiter = pLimit(4);
+
+/**
+ * A book's cover file for `serverImage`. Only with a token still live: a cover never renews one or
+ * opens a sign-in, and fails quietly until the next sync or listing has renewed it.
+ */
+export function driveCoverBlob(path: string) {
+  const [id, ...source] = path.slice(driveCoverPrefix.length).split(':');
+
+  return coverLimiter(async () => {
+    const token = storageOAuthTokens.get(source.join(':'));
+
+    if (!token || token.expiration <= Date.now()) throw new Error('No live Drive token');
+
+    const response = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`, {
+      headers: { Authorization: `Bearer ${token.accessToken}` }
+    });
+
+    if (!response.ok) throw new Error(`Received Status ${response.status}`);
+
+    return response.blob();
+  });
 }
 
 export class GDriveStorageHandler extends ApiStorageHandler implements SyncFileStore {
@@ -93,7 +117,7 @@ export class GDriveStorageHandler extends ApiStorageHandler implements SyncFileS
                   this.groupExternalFiles(
                     await this.list(
                       `trashed=false and ('${titleIdChunk.join(`' in parents or '`)}' in parents)`,
-                      'files(id,name,thumbnailLink,parents),nextPageToken'
+                      'files(id,name,parents),nextPageToken'
                     ),
                     titleIdToName
                   )
@@ -189,7 +213,7 @@ export class GDriveStorageHandler extends ApiStorageHandler implements SyncFileS
     ) {
       const externalFiles = await this.list(
         `trashed=false and '${remoteTitleId}' in parents`,
-        'files(id,name,thumbnailLink,parents)'
+        'files(id,name,parents)'
       );
 
       if (externalFiles.length) {
@@ -554,8 +578,8 @@ export class GDriveStorageHandler extends ApiStorageHandler implements SyncFileS
 
           bookCard.progress = progress;
           bookCard.lastBookmarkModified = lastBookmarkModified;
-        } else if (file.name.startsWith('cover_') && file.thumbnailLink) {
-          bookCard.imagePath = file.thumbnailLink.replace(/=s\d+$/, '=s720');
+        } else if (file.name.startsWith('cover_')) {
+          bookCard.imagePath = `${driveCoverPrefix}${file.id}:${this.storageSourceName}`;
         }
       }
 
