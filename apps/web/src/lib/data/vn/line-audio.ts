@@ -22,7 +22,7 @@ export interface LinePcm {
   rate: number;
   start: number;
   end: number;
-  /** Native play's windows: equals `start` when a click brought the line, earlier when none did. */
+  /** Equals `start` when a click brought the line (native play, overlay.js); earlier or absent when none did. */
   earliest?: number;
 }
 
