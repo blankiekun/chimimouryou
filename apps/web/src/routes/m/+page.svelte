@@ -38,7 +38,7 @@
     type MokuroPage
   } from '$lib/data/manga/mokuro';
   import { autoReplication$, database } from '$lib/data/store';
-  import { context, externalHandler, handler } from '$lib/data/sync/media-sync';
+  import { context, externalHandler, handler, watchReturn } from '$lib/data/sync/media-sync';
   import { pagePath } from '$lib/data/env';
   import { fullscreenManager } from '$lib/data/fullscreen-manager';
   import { logger } from '$lib/data/logger';
@@ -915,10 +915,54 @@
     updateWakeLock($mangaKeepScreenOn$);
   }
 
+  /** Back after a minute or more: the place another device saved meanwhile, opened as at load. */
+  async function onReturn(away: number) {
+    if (
+      away < 60_000 ||
+      !ready ||
+      !external ||
+      (external.storageType !== StorageKey.CALIBRE &&
+        $autoReplication$ !== AutoReplicationType.Down &&
+        $autoReplication$ !== AutoReplicationType.All)
+    ) {
+      return;
+    }
+
+    await save();
+
+    const here = shownPage;
+
+    // The handler's cache would answer with the place it saw when the volume opened.
+    external.clearData(false);
+
+    const error = await replicateData(
+      external,
+      local,
+      false,
+      [context(book!)],
+      [StorageDataType.PROGRESS]
+    ).catch((err: any) => err.message);
+
+    if (error) {
+      logger.warn(`Manga sync on return failed: ${error}`);
+      return;
+    }
+
+    const bookmark = await database.getBookmark(book!.id);
+    const pulled = Math.min(bookmark?.exploredCharCount || 0, Math.max(pageCount - 1, 0));
+
+    // Turned a page during the pull: they're reading, and their next save wins.
+    if (!bookmark || pulled === savedIndex || shownPage !== here) return;
+
+    savedIndex = pulled;
+    goToPage(pulled);
+  }
+
   onMount(() => {
     load(Number($page.url.searchParams.get('id'))).catch((error) =>
       logger.error(`Error loading manga: ${error.message}`)
     );
+    return watchReturn(onReturn, () => shownPage);
   });
 
   onDestroy(() => {

@@ -205,7 +205,7 @@ export class AnnotationsController {
     }
   }
 
-  private sync() {
+  sync() {
     this.syncQueue = this.syncQueue.then(() => this.syncOnce());
 
     return this.syncQueue;

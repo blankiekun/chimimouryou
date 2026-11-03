@@ -25,7 +25,7 @@
     startDayHoursForTracker$,
     statisticsEnabled$
   } from '$lib/data/store';
-  import { context, externalHandler, handler } from '$lib/data/sync/media-sync';
+  import { context, externalHandler, handler, watchReturn } from '$lib/data/sync/media-sync';
   import { pagePath } from '$lib/data/env';
   import { desktopGames } from '$lib/data/vn/native-games';
   import { clearVnStarting, markVnStarting } from '$lib/data/vn/vn-start-guard';
@@ -750,6 +750,37 @@
     }
   }
 
+  /**
+   * Back after a minute or more: raises the read count to another device's, as at load, so the next
+   * save doesn't send a lower one. Only that: a running game's place is the engine's own (its saves
+   * come when it starts), and today's statistics are in `reading`, which writes them itself.
+   */
+  async function onReturn(away: number) {
+    if (away < 60_000 || !book || !reading || !syncs(AutoReplicationType.Down)) return;
+
+    await save(true);
+    // The handler's cache would answer with the place it saw when the game opened.
+    external!.clearData(false);
+
+    const error = await replicateData(
+      external!,
+      local,
+      false,
+      [context(book)],
+      [StorageDataType.PROGRESS]
+    ).catch((err: any) => err.message);
+
+    if (error) {
+      logger.warn(`Visual novel sync on return failed: ${error}`);
+      return;
+    }
+
+    const bookmark = await database.getBookmark(book.id);
+
+    reading.read.characters = Math.max(reading.read.characters, bookmark?.exploredCharCount || 0);
+    updateProgress();
+  }
+
   // VNBox's lazyfs posts its load errors (a full storage quota above all), vnbox.js a VNBox that
   // isn't there (a build without scripts/vnbox/build.sh): without them the player stays black.
   function frameMessage(event: MessageEvent) {
@@ -766,8 +797,9 @@
     load(Number($page.url.searchParams.get('id'))).catch((error) =>
       logger.error(`Error loading visual novel: ${error.message}`)
     );
+    const stopWatchingReturn = watchReturn(onReturn);
     // The frame hides the pads from its engine (overlay.js) but can still read them.
-    return watchGamepads(
+    const stopWatchingPads = watchGamepads(
       () => [
         ...(navigator.getGamepads?.() ?? []),
         ...((frame?.contentWindow as any)?.framePads?.() ?? [])
@@ -777,6 +809,11 @@
         cursor: (dx, dy, ms) => (frame?.contentWindow as any)?.padMove?.(dx, dy, ms)
       }
     );
+
+    return () => {
+      stopWatchingReturn();
+      stopWatchingPads();
+    };
   });
 
   onDestroy(() => {
