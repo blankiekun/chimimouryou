@@ -56,6 +56,33 @@
     while (pageStart > 0 && kept[pageStart].text.startsWith(kept[pageStart - 1].text)) {
       pageStart -= 1;
     }
+    if (kept.some((line, index) => line.check && !checked.has(`${index}:${line.text}`))) {
+      checkVoices(kept);
+    }
+  }
+
+  let checking = false;
+  /** Lines looked at (index and text), so one the player didn't take isn't looked at again */
+  const checked = new Set<string>();
+
+  /** Finished recordings: a voice found keeps the sound (and Play), none drops it in the player. */
+  async function checkVoices(kept: KeptLine[]) {
+    if (checking) return;
+    checking = true;
+    try {
+      for (const [index, line] of kept.entries()) {
+        if (!line.check || checked.has(`${index}:${line.text}`)) continue;
+        checked.add(`${index}:${line.text}`);
+        const media = await player()?.ankiMedia(index, -1, { picture: false, audio: true });
+        const voiced = !!(await lineAudio(media?.audio, line.text).catch(() => undefined));
+
+        player()?.setLineVoiced?.(index, line.text, voiced);
+      }
+    } finally {
+      checking = false;
+    }
+    last = '';
+    read();
   }
 
   // Kept lines only change as a line is shown, which the effect below follows.
@@ -95,7 +122,6 @@
     const audio = await lineAudio(media.audio, line.text);
 
     if (!audio) {
-      // Voice only (Settings → Anki) finds no voice in a line with none.
       show(media.audio ? 'No voice found in its sound.' : 'Its sound is no longer kept.', true);
       return;
     }

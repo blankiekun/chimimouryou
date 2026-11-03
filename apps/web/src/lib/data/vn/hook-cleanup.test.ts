@@ -120,6 +120,19 @@ describe('hook cleanup filters', () => {
     expect(clean('次のページです')).toBe('次のページです');
   });
 
+  it('drops the page resent behind the last line shown, with fires in between', () => {
+    const clean = hookCleaner({ recentLines: true });
+    const before = '「今、体罰に対して叫んでいる人たちはそういうこ　とはまるで考えていない」';
+    const line = '「とにかく最初に目に付いた虐待を撲滅させることに　は熱心だけれど」';
+
+    expect(clean(before)).toBe(before);
+    expect(clean(line)).toBe(line);
+    // The earlier line fired again (the game's backlog), dropped as recent.
+    expect(clean(before)).toBe('');
+    expect(clean(`${before}紅緒紅緒${line}`)).toBe('');
+    expect(clean('そうですね、はい。')).toBe('そうですね、はい。');
+  });
+
   it('drops a line that is the one before it behind the end of an older one', () => {
     const clean = hookCleaner({});
     // Each click: the new line, then the previous line's end with the new line again.

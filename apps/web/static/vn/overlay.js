@@ -372,8 +372,9 @@ function ankiTexts() {
 }
 
 /**
- * The kept lines for the page's Backlog sheet, oldest first: their text and whether their
- * screenshot and sound (voice file, recorded or being recorded) are still kept.
+ * The kept lines for the page's Backlog sheet, oldest first: their text, whether their screenshot
+ * is still kept, whether they have a voice (a voice file, or a recording the page found a voice
+ * in) and `check`: a finished recording the page hasn't looked for a voice in (setLineVoiced).
  */
 function keptLineList() {
   return keptLines.map(function (line) {
@@ -381,9 +382,20 @@ function keptLineList() {
     return {
       text: line.text,
       picture: !!line.picture || waitingLines.indexOf(line) >= 0,
-      sound: line.hasVoice || !!line.recorded
+      sound: line.hasVoice || (!!line.recorded && line.voiced === true),
+      check:
+        !line.hasVoice && !!line.recorded && line.voiced === undefined && line.end !== undefined
     };
   });
+}
+
+/** The page looked for a voice in kept line `index` (still `text`): none drops its sound. */
+function setLineVoiced(index, text, voiced) {
+  var line = keptLines[index];
+
+  if (!line || line.text !== text) return;
+  line.voiced = voiced;
+  if (!voiced) line.recorded = false;
 }
 
 function ankiShownTexts() {

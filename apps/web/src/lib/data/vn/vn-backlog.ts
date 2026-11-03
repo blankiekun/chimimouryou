@@ -10,8 +10,10 @@ export interface KeptLine {
   text: string;
   /** Its screenshot is still kept */
   picture: boolean;
-  /** Its sound (voice file or recording) is still kept */
+  /** It has a voice: a voice file, or a recording with a voice found in it */
   sound: boolean;
+  /** A finished recording not yet looked at for a voice (the Backlog checks it) */
+  check?: boolean;
 }
 
 export interface BacklogLine extends KeptLine {
@@ -36,7 +38,7 @@ export function backlogLines(kept: KeptLine[]) {
     const listed = byText.get(line.text);
 
     if (listed) {
-      Object.assign(listed, { index, picture: line.picture, sound: line.sound });
+      Object.assign(listed, { index, picture: line.picture, sound: line.sound, check: line.check });
     } else if (text) {
       const entry = { ...line, text, index };
 

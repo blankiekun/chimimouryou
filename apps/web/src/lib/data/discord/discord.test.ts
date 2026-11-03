@@ -94,6 +94,15 @@ describe('discord sender', () => {
     expect(calls()).toEqual(['PUT Reading A', 'PUT In the library', 'PUT Reading A']);
   });
 
+  it('keeps a running native game past the away time', async () => {
+    discordOptions$.next({ awayMinutes: 1, awayIdle: false });
+    discordActivity({ kind: 'book', title: 'A', position: 1, characters: 100, playing: true });
+    await settle();
+    vi.advanceTimersByTime(5 * 60_000);
+    await settle();
+    expect(calls()).toEqual(['PUT Reading A']);
+  });
+
   it('clears the status when away with Show nothing', async () => {
     discordOptions$.next({ awayMinutes: 1, awayIdle: false });
     discordActivity({ kind: 'book', title: 'A', position: 1, characters: 100 });

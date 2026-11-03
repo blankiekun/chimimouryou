@@ -302,6 +302,8 @@ export function hookCleaner(cleanup: HookCleanup) {
   // The thread's last finished line (ends at lineEnd): the page text a new line starts with.
   const finished = new Map<string, string>();
   const last = new Map<string, string>();
+  /** The thread's last line that wasn't dropped */
+  const kept = new Map<string, string>();
   const size = cleanup.recentSize || defaultRecentSize;
 
   return (line: string, threadId = '') => {
@@ -316,7 +318,13 @@ export function hookCleaner(cleanup: HookCleanup) {
       last.set(threadId, full);
       // The line just sent again behind the end of the one before it (忍「…」, then
       // 満面の笑顔で言うのだ。忍「…」): nothing new.
-      if (before.length > 1 && full.length > before.length && full.endsWith(before)) return '';
+      // Also behind the last line shown, with other fires in between (「…」紅緒紅緒「…」).
+      const shown = kept.get(threadId) ?? '';
+      const resent = (old: string) =>
+        old.length > 1 && full.length > old.length && full.endsWith(old);
+
+      // Shown lines from 6 characters: a line may end with a short one (…はい。) and be new.
+      if (resent(before) || (shown.length >= 6 && resent(shown))) return '';
 
       // Kept while a game redraws the new line in pieces (あ。い, あ。いう), so each piece is cut too.
       if (lineEnd.test(full)) finished.set(threadId, full);
@@ -325,15 +333,15 @@ export function hookCleaner(cleanup: HookCleanup) {
       // to single characters.
       if (continues && full.length > previous.length) text = full.slice(previous.length).trim();
     }
-    if (!text || !cleanup.recentLines) return text;
+    if (text && cleanup.recentLines) {
+      // Spacing doesn't make a line new: 信天翁航海録 sends a line again without its full-width spaces.
+      const key = text.replace(/\s/gu, '');
+      const seen = recent.get(threadId) ?? [];
 
-    // Spacing doesn't make a line new: 信天翁航海録 sends a line again without its full-width spaces.
-    const key = text.replace(/\s/gu, '');
-    const seen = recent.get(threadId) ?? [];
-
-    if (seen.includes(key)) return '';
-    recent.set(threadId, [...seen, key].slice(-size));
-
+      if (seen.includes(key)) return '';
+      recent.set(threadId, [...seen, key].slice(-size));
+    }
+    if (text) kept.set(threadId, text.trimEnd());
     return text;
   };
 }
