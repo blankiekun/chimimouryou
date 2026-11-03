@@ -569,6 +569,92 @@ describe('hub community', () => {
     expect(db.prepare('SELECT COUNT(*) AS n FROM reports').get()).toEqual({ n: 0 });
   });
 
+  // Bug: a line's quote and context outlived a moderator's removal, on a tombstone or moved to the
+  // next post, so a slur in a quote stayed public with no way to remove it but hand-run SQL.
+  it('clears the line and its context when a moderator removes a post, and shows them in reports', async () => {
+    const dev = await signUp('blank');
+    const aki = await signUp('aki');
+    const ren = await signUp('ren');
+    const sora = await signUp('sora');
+    const { id } = (await post(aki.token)).body;
+
+    db.prepare(`UPDATE users SET role = 'dev' WHERE id = ?`).run(dev.me.id);
+    await call('POST', '/v1/community/posts', { parent: id, body: '返信' }, ren.token);
+    await post(sora.token, { body: '別の投稿' });
+    await call('POST', '/v1/report', { what: 'post', id }, ren.token);
+    // Also for a report on a post that doesn't hold the line itself.
+    const later = (await post(ren.token, { body: '後の投稿' })).body.id;
+
+    await call('POST', '/v1/report', { what: 'post', id: later }, sora.token);
+    const { posts } = (await call('GET', '/v1/admin/community/reports', undefined, dev.token)).body;
+
+    expect(posts.map((row: { context: string }) => row.context)).toEqual([CONTEXT, CONTEXT]);
+
+    expect(
+      (await call('DELETE', `/v1/admin/community/post/${id}`, undefined, dev.token)).status
+    ).toBe(200);
+    const after = (await thread(sora.token)).body;
+
+    expect([after.quote, after.context]).toEqual(['', '']);
+    expect(after.posts.map((row: { body: string }) => row.body)).toEqual(
+      expect.arrayContaining(['別の投稿', '返信'])
+    );
+    expect(db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE quote != ''`).get()).toEqual({ n: 0 });
+  });
+
+  // Same bug through Remove all posts by: only lines the reader's own posts hold are cleared.
+  it('clears the lines a reader kept when a moderator removes all their posts', async () => {
+    const dev = await signUp('blank');
+    const aki = await signUp('aki');
+    const ren = await signUp('ren');
+    const other = 'それは別の一行でございました。';
+
+    db.prepare(`UPDATE users SET role = 'dev' WHERE id = ?`).run(dev.me.id);
+    await post(aki.token);
+    await post(ren.token, { body: '同じ行に' });
+    await post(ren.token, { quote: other, context: other });
+    await post(aki.token, { quote: other, context: other });
+    await call('DELETE', `/v1/admin/community/user/${aki.me.id}/posts`, undefined, dev.token);
+
+    expect(db.prepare(`SELECT quote FROM posts WHERE quote != ''`).all()).toEqual([
+      { quote: other }
+    ]);
+  });
+
+  // Bug: a harasser renames, re-uploads and reposts; only hand-run SQL could stop the account.
+  it("lets only a moderator delete an account, never a moderator's", async () => {
+    const dev = await signUp('blank');
+    const dev2 = await signUp('blank2');
+    const aki = await signUp('aki');
+    const ren = await signUp('ren');
+    const path = `/v1/admin/user/${aki.me.id}`;
+
+    db.prepare(`UPDATE users SET role = 'dev' WHERE id IN (?, ?)`).run(dev.me.id, dev2.me.id);
+    await post(aki.token);
+    await post(ren.token, { body: '他の人の投稿' });
+
+    expect((await call('DELETE', path)).status).toBe(401);
+    expect((await call('DELETE', path, undefined, ren.token)).status).toBe(403);
+    expect((await call('GET', '/v1/me', undefined, aki.token)).status).toBe(200);
+    for (const id of [dev.me.id, dev2.me.id]) {
+      expect((await call('DELETE', `/v1/admin/user/${id}`, undefined, dev.token)).status).toBe(403);
+    }
+    expect(
+      (await call('DELETE', '/v1/admin/user/0123456789abcdef', undefined, dev.token)).status
+    ).toBe(404);
+
+    expect((await call('DELETE', path, undefined, dev.token)).status).toBe(200);
+    expect((await call('GET', '/v1/me', undefined, aki.token)).status).toBe(401);
+    expect(db.prepare('SELECT COUNT(*) AS n FROM users WHERE id = ?').get(aki.me.id)).toEqual({
+      n: 0
+    });
+    // Their abusive line goes with them; Ren's post on it stays.
+    const after = (await thread(ren.token)).body;
+
+    expect(after.quote).toBe('');
+    expect(after.posts.map((row: { body: string }) => row.body)).toEqual(['他の人の投稿']);
+  });
+
   it('feeds top-level posts newest first, with the work, line and spoiler mark; reported ones wait', async () => {
     const aki = await signUp('aki');
     const readers = [await signUp('rrr'), await signUp('sss'), await signUp('ttt')];

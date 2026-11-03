@@ -1973,6 +1973,10 @@ export const ja: Record<MessageKey, string> = {
     'この表紙を削除しますか？フレンドにはタイトルカードが表示され、この本の表紙は今後受け付けません。',
   'moderation.lookUp': '読者を調べる',
   'moderation.lookUpButton': '調べる',
+  'moderation.deleteAccount': 'アカウントを削除',
+  'moderation.deleteAccountConfirm':
+    'アカウント @{username} を完全に削除しますか?プロフィール、フレンド、投稿、画像が消え、元に戻せません。このユーザー名は再び登録できるようになります。',
+  'moderation.accountDeleted': 'アカウント @{username} を削除しました。',
   'moderation.noUser': 'そのユーザー名の人はいません。',
   'moderation.joined': '{when}に登録',
   'moderation.lastSeen': '最終利用 {when}',
@@ -2225,7 +2229,8 @@ export const ja: Record<MessageKey, string> = {
   'moderation.what.work': '本の照合',
   'moderation.what.workinfo': 'タイトルと表紙',
   'moderation.deletePost': '投稿を削除',
-  'moderation.deletePostConfirm': 'この投稿を削除しますか?返信は残ります。',
+  'moderation.deletePostConfirm':
+    'この投稿を削除しますか?返信は残りますが、この行の全投稿に表示される行と前後の文も消えます。',
   'moderation.clearMatch': '照合を取り消す',
   'moderation.clearMatchConfirm': 'この照合を取り消しますか?確認は消え、読者にもう一度尋ねます。',
   'moderation.confirmedBy': '{count}人が確認',
@@ -2234,7 +2239,8 @@ export const ja: Record<MessageKey, string> = {
     'この作品のタイトルと表紙をリセットしますか?次の投稿で名前が付き直します。アップロードした人は別の表紙を出せません。',
   'community.remove': '削除',
   'community.removeAll': '{name}さんの投稿をすべて削除',
-  'community.removeConfirm': 'この投稿を削除しますか?全員から見えなくなります。返信は残ります。',
+  'community.removeConfirm':
+    'この投稿を削除しますか?全員から見えなくなります。返信は残りますが、この行の全投稿に表示される行と前後の文も消えます。',
   'community.removeAllConfirm':
     '{name}さんの投稿をすべて削除しますか?返信のある投稿は「この投稿は削除されました」として残ります。',
   'dict.installJmdict': '辞書をインストール（{size} MB）',

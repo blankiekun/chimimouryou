@@ -255,6 +255,19 @@ export function deletePostsSql(where: string) {
 const deletePosts = (env: Env, where: string, ...values: unknown[]) =>
   env.DB.batch(deletePostsSql(where).map((sql) => env.DB.prepare(sql).bind(...values)));
 
+/**
+ * A moderator's removal also clears the text of these lines (work, line), which would otherwise
+ * stay on a tombstone or move to the line's next post. A later post on the line can give it again.
+ */
+const clearLinesSql = (lines: string) =>
+  `UPDATE posts SET quote = '', context = '' WHERE (work, line) IN (${lines})`;
+
+/** The lines one reader's posts keep the text of (later posters on a line keep none) */
+export const clearLinesOfUser = (env: Env, user: string) =>
+  env.DB.prepare(clearLinesSql(`SELECT work, line FROM posts WHERE user = ?1 AND quote != ''`))
+    .bind(user)
+    .run();
+
 /** Account deletion: their posts (as above), helpful marks and confirmations; covers they gave stay */
 export const deleteUserCommunitySql = (users: string) => [
   `DELETE FROM helpful WHERE user IN (${users})`,
@@ -848,7 +861,7 @@ export async function postsOf(env: Env, user: string) {
 
 /**
  * /v1/admin/community/* (the caller checked the role): reported posts, work keys and work
- * titles/covers; removing a post (or all of one reader's), dropping the confirmations of a wrong
+ * titles/covers; removing a post (or all of one reader's) with its line's text, dropping the confirmations of a wrong
  * work key, and resetting a work's title and cover (the next post names it again; whoever gave
  * the removed cover can't give another for the work).
  */
@@ -865,7 +878,9 @@ export async function communityAdmin(request: Request, env: Env, path: string) {
     const [posts, works, infos] = await Promise.all([
       env.DB.prepare(
         `SELECT r.target, r.n, r.last, p.work, p.line, p.body, p.spoiler, p.at,
-           ${threadQuote('p')} AS quote, ${authorColumns}
+           ${threadQuote('p')} AS quote,
+           COALESCE((SELECT q.context FROM posts q WHERE q.work = p.work AND q.line = p.line
+             AND q.quote != '' LIMIT 1), '') AS context, ${authorColumns}
          FROM (${grouped('post')}) r JOIN posts p ON p.id = r.target ${authorJoins('p.user')}
          ORDER BY r.n DESC, r.last DESC`
       ).all(),
@@ -892,6 +907,7 @@ export async function communityAdmin(request: Request, env: Env, path: string) {
         body: row.body,
         spoiler: !!row.spoiler,
         quote: row.quote,
+        context: row.context,
         at: row.at,
         author: author(row)
       })),
@@ -915,6 +931,9 @@ export async function communityAdmin(request: Request, env: Env, path: string) {
   const post = /^post\/([0-9a-f]{16})$/.exec(path);
 
   if (request.method === 'DELETE' && post) {
+    await env.DB.prepare(clearLinesSql('SELECT work, line FROM posts WHERE id = ?1'))
+      .bind(post[1])
+      .run();
     await deletePosts(env, 'id = ?1', post[1]);
     return json({ ok: true });
   }
@@ -922,6 +941,7 @@ export async function communityAdmin(request: Request, env: Env, path: string) {
   const posts = /^user\/([0-9a-f]{16})\/posts$/.exec(path);
 
   if (request.method === 'DELETE' && posts) {
+    await clearLinesOfUser(env, posts[1]);
     await deletePosts(env, 'user = ?1', posts[1]);
     return json({ ok: true });
   }
