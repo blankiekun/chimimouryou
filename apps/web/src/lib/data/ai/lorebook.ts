@@ -473,17 +473,19 @@ async function readUntil(
     }
     retrySize = 0;
 
-    const entries = mergeLoreEntries(lorebook.entries, updates, start, end, existing.sentInFull);
+    // The stored list, not the one read before the request: the reader may have edited it since.
+    const base = { ...(await getStored(title)), processedUpTo: start };
+    const entries = mergeLoreEntries(base.entries, updates, start, end, existing.sentInFull);
     const plain = textBetween(index, start, end, false);
 
     // New entries start where the passage first names them, not at its start.
     entries
-      .filter((entry) => !lorebook.entries.some(({ id }) => id === entry.id))
+      .filter((entry) => !base.entries.some(({ id }) => id === entry.id))
       .forEach((entry) => {
         entry.firstSeen = start + firstMention(plain, [entry.name, ...entry.keys]);
       });
-    keepEarlierVersions(title, lorebook.entries, entries);
-    lorebook = { ...lorebook, entries, processedUpTo: end };
+    keepEarlierVersions(title, base.entries, entries);
+    lorebook = { ...base, entries, processedUpTo: end };
     await putLorebook(lorebook);
   }
 

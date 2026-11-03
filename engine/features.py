@@ -5,16 +5,12 @@ word grouping in Jiten.Parser/Parser.cs (Apache-2.0), which once fed the retired
 Sudachi tokens are grouped into words as Jiten does (a verb or adjective together with its
 auxiliaries is one conjugated word, suru verbs are merged), words are identified by Sudachi's
 normalised form, and frequencies come from Jiten's Yomitan frequency list (see frequency.py).
-The Analysis still counts the model's other inputs (sentences, origins, conjugations, MATTR);
-nothing reads them now.
 """
-import gzip
-import json
 import os
 import posixpath
 import re
 import zipfile
-from collections import Counter, defaultdict, deque
+from collections import Counter
 from dataclasses import dataclass, field
 from functools import lru_cache
 
@@ -77,61 +73,7 @@ def book_text(path: str, fmt: str, ruby: dict | None = None, hints: list | None 
                 offset += len(part) + 1
     return '\n'.join(parts)
 
-# Moving-average type/token ratio window (Covington & McFall 2010).
-MATTR_WINDOW = 500
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-# 語種 of kanji-spelled words from UniDic (distil/make_tables.py): 和, 漢, 外 or 混.
-with gzip.open(os.path.join(HERE, 'goshu.json.gz'), 'rt', encoding='utf-8') as _f:
-    GOSHU = json.load(_f)
-GOSHU_ORIGIN = {'和': 'wago', '漢': 'kango', '外': 'gairaigo', '混': 'unknown'}
-
-
-CONJUGATION_CATEGORIES = {
-    'negative': ['negative', 'slurred negative', 'adverbial negative', 'without doing so', 'archaic negative',
-                 'formal negative', 'formal negative past', 'negative polite', 'past negative polite'],
-    'polite': ['polite', 'negative polite', 'past polite', 'te polite', 'past negative polite', 'polite volitional',
-               'formal conditional', 'polite request', 'kind request', 'casual kind request'],
-    'conditional': ['conditional', 'formal conditional', 'provisional conditional'],
-    'passive_causative': ['passive', 'passive/potential', 'short causative', 'causative'],
-    'potential': ['potential', 'passive/potential'],
-    'volitional': ['volitional', 'polite volitional'],
-    'imperative': ['imperative', 'kind request', 'casual kind request'],
-    'te_form': ['(te form)', 'teiru', 'teru (teiru)', 'teoru', 'toru (teoru)', 'tearu', 'teiku', 'teku (teiku)',
-                'tekuru'],
-    'past': ['past', 'formal negative past', 'past polite', 'past negative polite', 'tari'],
-    'stem': ["('a' stem)", '(adverbial stem)', '(ka stem)', '(ke stem)', '(stem)', '(izenkei)', '(mizenkei)',
-             '(unstressed infinitive)', '(infinitive)'],
-    'garu': ['garu'],
-    'seemingness': ['seemingness'],
-    'shimau': ['finish/completely/end up'],
-    'contracted': ['contracted', 'slurred'],
-    'other': ['excess', 'noun form', 'do for someone', 'for now', 'toku (for now)', 'topic/condition', 'while',
-              'want', 'too much', '(unstressed infinitive)', '(infinitive)', ''],
-}
-# Later categories win for details listed twice, as in MLConfig's static constructor.
-CONJUGATION_DETAIL_TO_CATEGORY = {d: c for c, details in CONJUGATION_CATEGORIES.items() for d in details}
-POS_CATEGORIES = ['noun', 'verb', 'adj', 'adv', 'conjunc', 'aux', 'inter', 'fix', 'pn', 'exp', 'other']
-
-# MLHelper.cs marker words (JMdict IDs there; matched here by their surface forms).
-LOGICAL_CONNECTORS = ['結局', 'それに', 'そして', '結果', 'そこで', 'けど', 'けれども', 'にも関わらず',
-                      'それにもかかわらず', 'に加えて', 'しかし', 'だが', '一方', 'だから', 'ので', '従って',
-                      'なぜなら', 'さらに', 'しかも', 'なお', 'まず', '次に', 'つまり', 'ところで']
-MODAL_MARKERS = ['だろう', 'でしょう', 'かもしれない', 'かも', 'はず', '違いない', 'らしい', 'ようだ', 'みたい',
-                 'そうだ', 'っぽい', '気がする', '思う', 'かな']
-RELATIVE_CLAUSE_MARKERS = ['という', 'といった', 'による', 'について', 'として', '関する', 'に対する', 'めぐる',
-                           '通じた', 'すなわち']
-METAPHOR_MARKERS = ['のように', 'みたい', 'まるで', 'あたかも', 'ような', 'かのように', 'ようだ']
-
 TOKEN_CLEAN = re.compile(r'[^a-zA-Z0-9぀-ゟ゠-ヿ一-龯Ａ-Ｚａ-ｚ０-９々．]')
-DIALOGUE = re.compile(r'[「『].{0,200}?[」』]', re.S)
-SENTENCE_ENDERS = set('。！？」')
-KATAKANA_WORD = re.compile(r'^[゠-ヿー・]+$')
-KANJI_ONLY = re.compile(r'^[㐀-䶿一-鿿豈-﫿々]+$')
-HAS_KANJI = re.compile(r'[㐀-䶿一-鿿豈-﫿]')
-HIRAGANA = re.compile(r'[ぁ-ゖ]')
-KATAKANA_READING = re.compile(r'^[ァ-ヺー・]+$')
-HAS_CONTENT = re.compile(r'[0-9A-Za-z぀-ヿ㐀-䶿一-鿿豈-﫿０-ｚ々]')
 
 # Auxiliaries that are part of a conjugated word in Jiten (anything the deconjugator handles).
 CONJUGATING_AUX = {'ない', 'ぬ', 'ん', 'ず', 'た', 'ます', 'れる', 'られる', 'せる', 'させる', 'しめる', 'たい',
@@ -142,8 +84,6 @@ TE_AUXILIARY_VERBS = {'いる', 'おる', 'ある', 'いく', 'ゆく', 'くる'
                       'くれる', 'もらう', 'くださる', 'いただく', 'しまる'}
 STEM_AUXILIARY_VERBS = {'すぎる', '過ぎる', 'がる', 'だす', '出す', 'はじめる', '始める', 'つづける', '続ける',
                         'おわる', '終わる'}
-CONJUGATION_TAG_PREFIX = {'五段': 'v5', '上一段': 'v1', '下一段': 'v1', 'カ行変格': 'vk', 'サ行変格': 'vs',
-                          '形容詞': 'adj-i', '助動詞': ''}
 
 
 # ---------------------------------------------------------------------------
@@ -208,10 +148,7 @@ def vn_text(path: str, ruby: dict | None = None, hints: list | None = None) -> s
 class Word:
     key: str  # word identity (Jiten: JMdict WordId)
     form: str  # written form (Jiten: ReadingIndex)
-    pos: str  # coarse part of speech, see POS_CATEGORIES plus 'particle' / 'name'
-    origin: str  # wago / kango / gairaigo / unknown
-    conjugations: tuple[str, ...]
-    surface: str
+    pos: str  # coarse part of speech (_coarse_pos)
     reading: str | None = None  # hiragana reading of an unconjugated word, to tell homographs apart
 
 
@@ -221,33 +158,11 @@ class Analysis:
     # (key, form) -> [Word (first occurrence), occurrences]; Jiten's DeckWords are unique per
     # (WordId, ReadingIndex), so each written form counts as its own word.
     words: dict = field(default_factory=dict)
-    # (key, form) -> Counter of each occurrence's reading (for word lists; the features use the Word's)
+    # (key, form) -> Counter of each occurrence's reading (for word lists)
     readings: dict = field(default_factory=dict)
     # (key, form) -> Sudachi's reading of the form alone, for words met only conjugated
     form_readings: dict = field(default_factory=dict)
     word_count: int = 0
-    sentence_count: int = 0
-    markers: dict = field(default_factory=dict)
-    # Not Jiten's (EXTRA_FEATURES)
-    line_sentence_count: int = 0
-    predicates: int = 0
-    relative_clauses: int = 0
-    mattr: float = 0.0
-
-
-def _origin(text: str, pos: str, normalized: str = '') -> str:
-    if pos == 'name':
-        return 'unknown'
-    goshu = GOSHU.get(text) or GOSHU.get(normalized)
-    if goshu:
-        return GOSHU_ORIGIN[goshu]
-    if KATAKANA_WORD.match(text):
-        return 'gairaigo'
-    if KANJI_ONLY.match(text):
-        return 'kango' if len(text) >= 2 else 'unknown'
-    if HAS_KANJI.search(text):
-        return 'wago' if text[-1] not in 'するスル' else 'kango'
-    return 'wago'
 
 
 def _coarse_pos(pos: tuple) -> str:
@@ -272,33 +187,10 @@ class Analyzer:
         self._tokens = sudachi.tokens
         self.deconjugator = Deconjugator()
         self._text = self._text_tokens = None
-        self.marker_sequences = {
-            name: [self._marker_sequence(w) for w in words]
-            for name, words in (('logical', LOGICAL_CONNECTORS), ('modal', MODAL_MARKERS),
-                                ('relative', RELATIVE_CLAUSE_MARKERS), ('metaphor', METAPHOR_MARKERS))
-        }
-
-    def _marker_sequence(self, word: str):
-        """Surfaces to match; a conjugating last word (思う, 違いない) also matches its other forms."""
-        tokens = list(self.tokenizer.tokenize(word))
-        last = tokens[-1]
-        inflects = last.part_of_speech()[4] != '*' and last.surface() == last.dictionary_form()
-        return tuple(t.surface() for t in tokens), last.dictionary_form() if inflects else None
 
     @lru_cache(maxsize=100_000)
     def _form_reading(self, form: str) -> str | None:
         return to_hiragana(''.join(t.reading_form() for t in self.tokenizer.tokenize(form))) or None
-
-    @lru_cache(maxsize=100_000)
-    def _conjugations(self, surface: str, target: str, conj_type: str) -> tuple[str, ...]:
-        if surface == target:
-            return ()
-        prefix = next((tag for name, tag in CONJUGATION_TAG_PREFIX.items() if conj_type.startswith(name)), None)
-        matches = [f for f in self.deconjugator.deconjugate(surface) if f.text == target]
-        if not matches:
-            return ()
-        compatible = [f for f in matches if prefix and f.tags and f.tags[-1].startswith(prefix)] or matches
-        return min(compatible, key=lambda f: len(f.process)).process
 
     def tokens(self, text: str) -> list:
         """Sudachi tokens of `text`; a Reader made with this Analyzer as its tokenizer gets the
@@ -313,9 +205,8 @@ class Analyzer:
         book's ruby, a context rule, the reading model, a default or the list's only reading,
         else Sudachi's, as in readings files (carry={}: a name's ruby read for its bare occurrences
         too, so the browser reads the book once for both). Tokens it reads as part
-        of a longer word (a compound: 三日月 みかづき) keep Sudachi's. Word.reading, which the
-        model features use, stays Sudachi's. With `frequency` (a FrequencyTable), JMdict compounds
-        Sudachi splits are words again (compound_merge: 心配顔 しんぱいがお, not 顔 がお)."""
+        of a longer word (a compound: 三日月 みかづき) keep Sudachi's. Word.reading stays Sudachi's.
+        With `frequency` (a FrequencyTable), JMdict compounds Sudachi splits are words again (compound_merge: 心配顔 しんぱいがお, not 顔 がお)."""
         result = Analysis(text=text)
         tokens = self.tokens(text)
         # A number + counter span (三本 さんぼん) and compounds are Words over several tokens:
@@ -324,38 +215,21 @@ class Analyzer:
         self._text = self._text_tokens = None  # don't keep a book's tokens past its analysis
         if frequency is not None:
             tokens = merge_compounds(tokens, frequency, {span: w.reading for span, w in read.items() if w.reading})
-        surfaces = [t.surface() for t in tokens]
-        dictionary_forms = [t.dictionary_form() for t in tokens]
 
-        # Relative clauses: Japanese marks them only by position, a verb or auxiliary in its
-        # 連体形 right before a noun (昨日買った本). な after 形状詞 (静かな部屋) is a plain modifier.
-        for i in range(len(tokens) - 1):
-            pos = tokens[i].part_of_speech()
-            if (pos[0] in ('動詞', '助動詞') and pos[5].startswith('連体形') and surfaces[i] != 'な'
-                    and tokens[i + 1].part_of_speech()[0] in ('名詞', '代名詞')):
-                result.relative_clauses += 1
-
-        window, window_counts, distinct, ttr_sum, windows = deque(), Counter(), 0, 0.0, 0
         index = 0
         while index < len(tokens):
             head = tokens[index]
             pos = head.part_of_speech()
-            surface = head.surface()
             end = index + 1
-            target = head.dictionary_form()
-            conj_type = pos[4]
 
             # Suru verb: 勉強 + する is one word.
             suru = False
             if (pos[0] == '名詞' and pos[2] == 'サ変可能' and end < len(tokens)
                     and tokens[end].dictionary_form() in ('する', '為る') and tokens[end].part_of_speech()[0] == '動詞'):
-                target = surface + 'する'
-                conj_type = 'サ行変格'
-                surface += tokens[end].surface()
                 end += 1
                 suru = pos_inflects = True
             else:
-                pos_inflects = pos[0] in ('動詞', '形容詞', '助動詞') or conj_type != '*'
+                pos_inflects = pos[0] in ('動詞', '形容詞', '助動詞') or pos[4] != '*'
 
             if pos_inflects:
                 after_te = False
@@ -370,7 +244,6 @@ class Analyzer:
                     elif tpos[0] == '形状詞' and tpos[1] == '助動詞語幹' and form == 'そう':
                         pass
                     elif tpos[0] == '助詞' and tpos[1] == '接続助詞' and token.surface() in JOINING_PARTICLES:
-                        surface += token.surface()
                         end += 1
                         after_te = token.surface() in ('て', 'で')
                         if not after_te:
@@ -383,38 +256,19 @@ class Analyzer:
                     else:
                         break
                     after_te = False
-                    surface += token.surface()
                     end += 1
 
             coarse = _coarse_pos(pos)
-            # Predicates per sentence (柴崎・原 2010): verbs, adjectives and the copula.
-            if pos[0] in ('動詞', '形容詞') or (pos[0] == '助動詞' and head.dictionary_form() in ('だ', 'です')):
-                result.predicates += 1
-            head_surface, head_form, normalized = surfaces[index], dictionary_forms[index], head.normalized_form()
+            head_surface, head_form, normalized = head.surface(), head.dictionary_form(), head.normalized_form()
             form = head_surface if suru else head_form
             word_key = (f'{normalized}\t{coarse}', form)
             word_reading = to_hiragana(head.reading_form()) if head_surface == head_form else None
-            window.append(word_key)
-            window_counts[word_key] += 1
-            distinct += window_counts[word_key] == 1
-            if len(window) > MATTR_WINDOW:
-                old = window.popleft()
-                window_counts[old] -= 1
-                distinct -= window_counts[old] == 0
-            if len(window) == MATTR_WINDOW:
-                ttr_sum += distinct / MATTR_WINDOW
-                windows += 1
             entry = result.words.get(word_key)
             if entry:
                 entry[1] += 1
                 occurrence_readings = result.readings[word_key]
             else:
-                # Only a word's first occurrence is kept: its origin and conjugations aren't needed again.
-                result.words[word_key] = [Word(
-                    key=word_key[0], form=form, pos=coarse,
-                    origin=_origin(head_surface if pos[0] == '名詞' else head_form, coarse, normalized),
-                    conjugations=self._conjugations(surface, target, conj_type) if pos_inflects else (),
-                    surface=surface, reading=word_reading), 1]
+                result.words[word_key] = [Word(key=word_key[0], form=form, pos=coarse, reading=word_reading), 1]
                 occurrence_readings = result.readings[word_key] = Counter()
             own = read.get((head.begin, head.begin + len(head_surface)))
             reading = own.reading if own and own.form == form else None
@@ -423,45 +277,4 @@ class Analyzer:
                 result.form_readings[word_key] = self._form_reading(form)
             result.word_count += 1
             index = end
-
-        # Marker expressions (single JMdict words in Jiten, often several Sudachi tokens), tried
-        # where their first token's surface (or a lone token's dictionary form) is.
-        at_surface, at_form = defaultdict(list), defaultdict(list)
-        for i, (surface, form) in enumerate(zip(surfaces, dictionary_forms)):
-            at_surface[surface].append(i)
-            at_form[form].append(i)
-        for name, sequences in self.marker_sequences.items():
-            count = 0
-            for sequence, last_form in sequences:
-                n = len(sequence)
-                starts = at_surface.get(sequence[0], [])
-                if n == 1:
-                    starts = set(starts) | set(at_form.get(last_form, []))
-                for i in starts:
-                    if (i + n <= len(tokens) and tuple(surfaces[i:i + n - 1]) == sequence[:-1]
-                            and (surfaces[i + n - 1] == sequence[-1] or dictionary_forms[i + n - 1] == last_form)):
-                        count += 1
-            result.markers[name] = count
-
-        result.sentence_count = count_sentences(text)
-        # Lines without 。 (common in light novels) end a sentence too.
-        result.line_sentence_count = sum(count_sentences(line) for line in text.split('\n') if line)
-        result.mattr = ttr_sum / windows if windows else (len(result.words) / result.word_count if result.word_count else 0)
         return result
-
-
-def count_sentences(text: str) -> int:
-    """MorphologicalAnalyser.SplitIntoSentences: newlines removed, split after runs of 。！？」."""
-    text = text.replace('\r', '').replace('\n', '')
-    count = 0
-    seen_ender = False
-    pending = False
-    for char in text:
-        pending = True
-        if char in SENTENCE_ENDERS:
-            seen_ender = True
-            continue
-        if seen_ender:
-            count += 1
-            seen_ender = False
-    return count + (1 if pending else 0)

@@ -6,13 +6,10 @@
 
 import { BlobReader, BlobWriter, ZipReader } from '@zip.js/zip.js';
 import type { LoadData } from '../types';
-import initZipSettings from '../utils/init-zip-settings';
 import { getMimeTypeFromName } from '../htmlz/extract-htmlz';
 import { mangaElementHtml, sortPages } from '$lib/data/manga/manga';
 import { findVnRoot } from '$lib/data/vn/vn';
 import loadVn from '../vn/load-vn';
-
-initZipSettings();
 
 /**
  * Manga as a book: the pages are its blobs, in reading order in elementHtml. A zip holding

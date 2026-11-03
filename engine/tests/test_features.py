@@ -10,7 +10,7 @@ from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import features  # noqa: E402
-from features import _origin, aozora_text, book_text, vn_text  # noqa: E402
+from features import aozora_text, book_text, vn_text  # noqa: E402
 
 try:
     import sudachipy  # noqa: F401  (only in the difficulty image)
@@ -179,15 +179,6 @@ class RubyReadingAnalysisTest(unittest.TestCase):
         self.assertEqual(dict(plain.readings['一回\tnoun', '一回']), {'いちかい': 1})
         self.assertEqual(read.words, plain.words)
         self.assertIsNone(analyzer._text)  # the book's tokens aren't kept
-
-
-class FeatureTest(unittest.TestCase):
-    def test_origin_uses_unidic(self):
-        self.assertEqual(_origin('手紙', 'noun'), 'wago')  # two kanji, but wago
-        self.assertEqual(_origin('勉強', 'noun'), 'kango')
-        self.assertEqual(_origin('場所', 'noun'), 'unknown')  # mixed (ば + しょ)
-        self.assertEqual(_origin('テレビ', 'noun'), 'gairaigo')
-        self.assertEqual(_origin('東京', 'name'), 'unknown')
 
 
 if __name__ == '__main__':

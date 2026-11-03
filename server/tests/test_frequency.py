@@ -411,8 +411,7 @@ class SaveWordsTest(unittest.TestCase):
         service.settings.WORDS_PER_BOOK = 2
 
         def word(key, form, pos, reading=None):
-            return Word(key=f'{key}\t{pos}', form=form, pos=pos, origin='wago', conjugations=(), surface=form,
-                        reading=reading)
+            return Word(key=f'{key}\t{pos}', form=form, pos=pos, reading=reading)
         analysis = Analysis(text='')
         for w, count in ((word('猫', '猫', 'noun', 'ねこ'), 3), (word('太郎', '太郎', 'name'), 9),
                          (word('走る', '走る', 'verb'), 5), (word('稀', '稀', 'noun'), 1), (word('今', '今', 'fix', 'こん'), 7)):
@@ -430,7 +429,7 @@ class SaveWordsTest(unittest.TestCase):
         analysis = Analysis(text='')
         # Particles, numbers, lone kana and unranked kana-only words aren't vocabulary.
         for form, count in (('猫', 3), ('から', 9), ('三', 4), ('ッ', 5), ('ふむ', 2), ('すごい', 6)):
-            w = Word(f'{form}\tnoun', form, 'noun', 'wago', (), form)
+            w = Word(f'{form}\tnoun', form, 'noun')
             analysis.words[w.key, form] = [w, count]
         self.assertEqual(service.workers.save_words(9, analysis, FrequencyTable({'から': 30, 'すごい': 900})), (2, 9))
 
@@ -440,10 +439,10 @@ class SaveWordsTest(unittest.TestCase):
         from features import Analysis, Word
         service = load_service()
         service.settings.WORDS_DIR = tempfile.mkdtemp()
-        other = Word('他\tnoun', '他', 'noun', 'kango', (), '他', 'ほか')
-        run = Word('走る\tverb', '走る', 'verb', 'wago', (), '走る', 'はしる')
-        box = Word('箱\tnoun', '箱', 'noun', 'wago', (), '箱', 'はこ')
-        face = Word('顔\tnoun', '顔', 'noun', 'wago', (), '顔', 'かお')
+        other = Word('他\tnoun', '他', 'noun', 'ほか')
+        run = Word('走る\tverb', '走る', 'verb', 'はしる')
+        box = Word('箱\tnoun', '箱', 'noun', 'はこ')
+        face = Word('顔\tnoun', '顔', 'noun', 'かお')
         analysis = Analysis(text='', words={(other.key, '他'): [other, 7], (run.key, '走る'): [run, 4],
                                             (box.key, '箱'): [box, 3], (face.key, '顔'): [face, 1]})
         # 走った has no reading: it counts for the word's most common one.
@@ -465,13 +464,13 @@ class SaveWordsTest(unittest.TestCase):
         from features import Analysis, Word
         service = load_service()
         service.settings.WORDS_DIR = tempfile.mkdtemp()
-        have = Word('有る\tverb', 'ある', 'verb', 'wago', (), 'ある', 'ある')
-        some = Word('或る\tadj', 'ある', 'adj', 'wago', (), 'ある', 'ある')
-        mutter = Word('呟く\tverb', '呟く', 'verb', 'wago', (), '呟いた')
-        know = Word('分かる\tverb', 'わかる', 'verb', 'wago', (), 'わかっ')
-        know2 = Word('分かる\tadj', 'わかる', 'adj', 'wago', (), 'わかる', 'わかる')
-        desu = Word('です\taux', 'です', 'aux', 'wago', (), 'です', 'です')
-        nante = Word('なんて\tparticle', 'なんて', 'particle', 'wago', (), 'なんて', 'なんて')
+        have = Word('有る\tverb', 'ある', 'verb', 'ある')
+        some = Word('或る\tadj', 'ある', 'adj', 'ある')
+        mutter = Word('呟く\tverb', '呟く', 'verb')
+        know = Word('分かる\tverb', 'わかる', 'verb')
+        know2 = Word('分かる\tadj', 'わかる', 'adj', 'わかる')
+        desu = Word('です\taux', 'です', 'aux', 'です')
+        nante = Word('なんて\tparticle', 'なんて', 'particle', 'なんて')
         words = (have, 6), (some, 2), (mutter, 3), (know, 4), (know2, 1), (desu, 9), (nante, 5)
         analysis = Analysis(text='', words={(w.key, w.form): [w, n] for w, n in words})
         analysis.readings = {(have.key, 'ある'): Counter({'ある': 6}), (some.key, 'ある'): Counter({'ある': 2}),
