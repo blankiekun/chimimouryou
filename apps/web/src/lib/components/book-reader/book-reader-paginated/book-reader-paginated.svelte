@@ -145,6 +145,7 @@
   let concreteBookmarkManager: BookmarkManagerPaginated | undefined;
 
   let scrollWhenReady: boolean;
+  let placeRestored = false;
 
   let allowDisplay = false;
 
@@ -220,6 +221,7 @@
   $: {
     if (htmlContent) {
       scrollWhenReady = true;
+      placeRestored = false;
     }
   }
 
@@ -278,11 +280,16 @@
         concretePageManager,
         sectionReady$,
         sectionIndex$,
-        (c) => (previousIntendedCount = c)
+        (c) => {
+          previousIntendedCount = c;
+          placeRestored = true;
+        }
       );
-      bookmarkManager = concreteBookmarkManager;
     }
   }
+
+  // The page saves and jumps through this: until the saved place is back, a save would be near the start.
+  $: bookmarkManager = placeRestored ? concreteBookmarkManager : undefined;
 
   $: if (browser) {
     // because Yomitan popup creates overflow on vertical-rl
@@ -648,9 +655,13 @@
     if (scrollWhenReady) {
       scrollWhenReady = false;
       bookmarkData.then((data) => {
-        if (!data || !bookmarkManager) return;
-        exploredCharCount = data.exploredCharCount || 0;
-        bookmarkManager.scrollToBookmark(data);
+        // With a place, the manager reports back once it scrolled there (a later section renders first).
+        if (!data?.exploredCharCount || !concreteBookmarkManager) {
+          placeRestored = true;
+          return;
+        }
+        exploredCharCount = data.exploredCharCount;
+        concreteBookmarkManager.scrollToBookmark(data);
       });
     } else {
       bookmarkData.then(updateBookmarkScreen);

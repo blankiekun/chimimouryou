@@ -644,7 +644,8 @@ export class DatabaseService {
     statistics: BooksDbStatistic[],
     saveBehavior: ReplicationSaveBehavior,
     statisticsMergeMode: MergeMode,
-    currentLastModified = Date.now()
+    currentLastModified = Date.now(),
+    raiseDaysOnlyHere = false
   ) {
     const db = await this.db;
 
@@ -659,6 +660,20 @@ export class DatabaseService {
         existingStatistics,
         saveBehavior === ReplicationSaveBehavior.NewOnly
       );
+
+      if (raiseDaysOnlyHere) {
+        const incoming = new Set(statistics.map((statistic) => statistic.dateKey));
+        const newest = Math.max(
+          currentLastModified,
+          ...statistics.map((statistic) => statistic.lastStatisticModified)
+        );
+
+        existingStatistics.forEach((statistic) => {
+          if (!incoming.has(statistic.dateKey) && statistic.lastStatisticModified <= newest) {
+            statistic.lastStatisticModified = newest + 1;
+          }
+        });
+      }
     }
 
     ({ newStatisticModified, statisticsToStore } = updateStatisticToStore(

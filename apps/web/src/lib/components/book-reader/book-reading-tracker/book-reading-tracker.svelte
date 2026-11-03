@@ -175,7 +175,7 @@
   }
 
   export async function flushUpdates(force = false) {
-    if (!statisticsToStore.size || (blockDataUpdates && !force)) {
+    if (!statisticsToStore.size || ((blockDataUpdates || holdFlush) && !force)) {
       return [false, 0];
     }
 
@@ -186,6 +186,8 @@
     const itemsToStore = toUpdate
       .map((statisticToStore) => statistics.get(statisticToStore))
       .filter(filterNotNullAndNotUndefined);
+    const savingToday = toUpdate.includes(todayKey) ? statistics.get(todayKey) : undefined;
+    const savingNow = savingToday && { ...savingToday };
 
     statisticsToStore.clear();
 
@@ -196,6 +198,8 @@
         ReplicationSaveBehavior.Overwrite,
         MergeMode.LOCAL
       );
+
+      if (savingNow) savedToday = savingNow;
 
       trackingHistory = trackingHistory.map((item) => {
         const oldItem = item;
@@ -235,14 +239,80 @@
         ...statistic,
         ...{ completedBook: 1, completedData: bookCompletionStatistics }
       };
-      statistics.set(completedBookStatistics.dateKey, statistic);
     } else {
-      statistics.set(completedBookStatistics.dateKey, completedBookStatistics);
+      statistic = completedBookStatistics;
     }
+
+    statistics.set(completedBookStatistics.dateKey, statistic);
+
+    if (todaysStatistics.dateKey === statistic.dateKey) todaysStatistics = statistic;
 
     if (oldCompletedBookStatistics) {
       statistics.set(oldCompletedBookStatistics.dateKey, oldCompletedBookStatistics);
     }
+  }
+
+  /**
+   * Runs `pull`, which brings other devices' rows into the database, then takes them. Today keeps
+   * only what this tab hasn't saved: the rest is in the database's row or was replaced by a newer one.
+   */
+  export async function reloadStatistics(pull: () => Promise<unknown>) {
+    // A save during the pull would make this tab's older count the newest row, and win the merge.
+    holdFlush = true;
+
+    try {
+      await pull();
+
+      const rows = await database.getStatisticsForBook(bookTitle);
+
+      todayKey = getDateKey($startDayHoursForTracker$);
+
+      const current = statistics.get(todayKey);
+      const stored = rows.find((row) => row.dateKey === todayKey);
+      const saved = savedToday?.dateKey === todayKey ? savedToday : undefined;
+      const pending = [...statisticsToStore]
+        .filter((dateKey) => dateKey !== todayKey)
+        .map((dateKey) => statistics.get(dateKey))
+        .filter(filterNotNullAndNotUndefined);
+
+      statistics = new Map();
+      allTimeStatistics = getDefaultStatistic(bookTitle, todayKey);
+      bookCompletionStatistics = undefined;
+      loadRows(rows.filter((row) => row.dateKey !== todayKey));
+      pending.forEach((row) => statistics.set(row.dateKey, row));
+
+      let today = current;
+
+      if (stored && (!current || stored.lastStatisticModified !== saved?.lastStatisticModified)) {
+        today = stored;
+        savedToday = { ...stored };
+
+        const timeDiff = (current?.readingTime ?? 0) - (saved?.readingTime ?? 0);
+        const characterDiff = (current?.charactersRead ?? 0) - (saved?.charactersRead ?? 0);
+
+        if (timeDiff || characterDiff) {
+          updateStatistic(
+            today,
+            timeDiff,
+            characterDiff,
+            Math.max(current?.lastStatisticModified ?? 0, stored.lastStatisticModified + 1)
+          );
+          statisticsToStore.add(todayKey);
+        } else {
+          statisticsToStore.delete(todayKey);
+        }
+      }
+
+      if (today) {
+        statistics.set(todayKey, today);
+        loadRows([today]);
+        todaysStatistics = today;
+      }
+    } finally {
+      holdFlush = false;
+    }
+
+    return flushUpdates();
   }
 
   let yomiPopover: HTMLElement | null;
@@ -275,6 +345,9 @@
   let autoScrollerTimer$: Observable<''> | undefined;
   let lastExploredCharCountScroller = exploredCharCount;
   let statisticsToStore = new Set<string>();
+  /** Today's row as this tab last read or saved it: the tab's unsaved difference is measured from it. */
+  let savedToday: BooksDbStatistic | undefined;
+  let holdFlush = false;
   let lastTrackerTick = 0;
   let lastTrackerFlushTime = 0;
   let trackerIdleTime = 0;
@@ -565,20 +638,14 @@
         dispatch('statisticsSaved');
       }
 
-      for (let index = 0, { length } = statisticsForTitle; index < length; index += 1) {
-        const statisticEntry = statisticsForTitle[index];
+      loadRows(statisticsForTitle);
 
-        statistics.set(statisticEntry.dateKey, statisticEntry);
+      const today = statistics.get(todayKey);
 
-        addToStatistic(allTimeStatistics, statisticEntry);
-
-        if (todayKey === statisticEntry.dateKey) {
-          addToStatistic(todaysStatistics, statisticEntry);
-        }
-
-        if (statisticEntry.completedBook && statisticEntry.completedData) {
-          bookCompletionStatistics = statisticEntry.completedData;
-        }
+      if (today) {
+        // The row itself, not a copy: it carries the book's completion, and every tick writes it back.
+        todaysStatistics = today;
+        savedToday = { ...today };
       }
 
       dispatch('trackerAvailable');
@@ -695,6 +762,20 @@
         lastTrackerTick,
         now - lastTrackerFlushTime > 10000
       );
+    }
+  }
+
+  function loadRows(rows: BooksDbStatistic[]) {
+    for (let index = 0, { length } = rows; index < length; index += 1) {
+      const statisticEntry = rows[index];
+
+      statistics.set(statisticEntry.dateKey, statisticEntry);
+
+      addToStatistic(allTimeStatistics, statisticEntry);
+
+      if (statisticEntry.completedBook && statisticEntry.completedData) {
+        bookCompletionStatistics = statisticEntry.completedData;
+      }
     }
   }
 

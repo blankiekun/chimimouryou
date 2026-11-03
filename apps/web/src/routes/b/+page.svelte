@@ -198,6 +198,7 @@
   import {
     getStorageHandlerByName,
     placeNewerHere,
+    statisticsNewerHere,
     saveExternalLastRead,
     syncDownData
   } from '$lib/data/storage/reader-storage';
@@ -385,6 +386,9 @@
           bookData = await saveExternalLastRead(externalStorageHandler, bookData);
           if (await placeNewerHere(externalStorageHandler, bookData.id)) {
             scheduleReplication(StorageDataType.PROGRESS);
+          }
+          if (await statisticsNewerHere(externalStorageHandler, bookData.title)) {
+            scheduleReplication(StorageDataType.STATISTICS);
           }
         } catch (error: any) {
           // Reading works offline from the browser copy; progress syncs on the next save.
@@ -1444,8 +1448,15 @@
     const book = $rawBookData$;
     if (blockDataUpdates || showSpinner || !book || document.visibilityState !== 'hidden') return;
 
+    // Not while loading or at 0: a new section's first frame reads 0 too. A real return to the
+    // start is saved by the auto bookmark.
     const saving =
-      $autoBookmark$ && storedExploredCharacter !== exploredCharCount ? bookmarkPage() : undefined;
+      $autoBookmark$ &&
+      bookmarkManager &&
+      exploredCharCount &&
+      storedExploredCharacter !== exploredCharCount
+        ? bookmarkPage()
+        : undefined;
     if (
       upSyncEnabled &&
       (saving ||
@@ -1476,20 +1487,27 @@
     if (!externalStorageHandler || isReplicating) return;
     const before = await bookmarkData;
     const here = exploredCharCount;
-    // Only the place: the running tracker holds today's statistics and writes them itself.
-    try {
-      // The handler's cache would answer with the place it saw when the book opened.
-      externalStorageHandler.clearData(false);
-      await syncDownData(
+    const handler = externalStorageHandler;
+    const tracker = trackerElm;
+    const pull = () => {
+      // The handler's cache would answer with what it saw when the book opened.
+      handler.clearData(false);
+      return syncDownData(
         localStorageHandler,
-        externalStorageHandler,
+        handler,
         {
           id: book.id,
           title: book.title,
           imagePath: book.coverImage
         },
-        [StorageDataType.PROGRESS]
+        tracker
+          ? [StorageDataType.PROGRESS, StorageDataType.STATISTICS]
+          : [StorageDataType.PROGRESS]
       );
+    };
+    try {
+      // The running tracker would overwrite what other devices read today: it takes their rows.
+      await (tracker ? tracker.reloadStatistics(pull) : pull());
     } catch (error: any) {
       logger.warn(`Sync on return failed: ${error.message}`);
       return;

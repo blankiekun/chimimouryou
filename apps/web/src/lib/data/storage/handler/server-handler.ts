@@ -244,6 +244,23 @@ export class ServerStorageHandler extends BaseStorageHandler {
     }
   }
 
+  /**
+   * A day in this browser newer than the server's, which the book's one newest time can't show: an
+   * offline day pulled over, a partly failed upload. Not in REPLACE, where an upload deletes the
+   * server's other days.
+   */
+  private async hasNewerDayHere() {
+    if (this.statisticsMergeMode !== MergeMode.MERGE || (await this.gameDoc('statistics'))) {
+      return false;
+    }
+
+    const { rows } = await this.bookRows('statistics');
+    const modified = new Map(rows.map((row) => [row.dateKey, row.modified]));
+    const days = await database.getStatisticsForBook(this.currentContext.title);
+
+    return days.some((day) => day.lastStatisticModified > (modified.get(day.dateKey) ?? 0));
+  }
+
   async getRecentModified(kind: StorageDataType) {
     if (this.saveBehavior === ReplicationSaveBehavior.Overwrite) {
       BaseStorageHandler.reportProgress();
@@ -272,7 +289,10 @@ export class ServerStorageHandler extends BaseStorageHandler {
     } else {
       const existing = await this.recentModified(kind);
 
-      upToDate = !!existing && existing >= modified;
+      upToDate =
+        !!existing &&
+        existing >= modified &&
+        !(kind === StorageDataType.STATISTICS && (await this.hasNewerDayHere()));
     }
 
     BaseStorageHandler.reportProgress();

@@ -364,7 +364,13 @@ export async function replicateData(
               checkCancelAndProgress(cancelSignal, !dataProcessed);
 
               if (statistics) {
-                await targetHandler.saveStatistics(statistics, lastStatisticModified);
+                // A sync file has one newest time: days only in the target must go above it, or
+                // they look uploaded. The server compares per day, and its deleted days stay deleted.
+                await targetHandler.saveStatistics(
+                  statistics,
+                  lastStatisticModified,
+                  sourceHandler.storageType !== StorageKey.CALIBRE
+                );
 
                 dataProcessed = true;
               }
