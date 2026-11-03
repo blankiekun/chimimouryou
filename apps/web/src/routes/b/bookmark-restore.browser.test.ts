@@ -285,12 +285,20 @@ describe('/b keeps a manual bookmark through a layout change', () => {
  * - readings that change nothing (no remount): the place never gives way to the bookmark.
  */
 describe('/b keeps a manual bookmark through a re-render', () => {
-  /** One furigana in the chapter being read, so the text really changes; `off` shifts the count. */
-  const readingsFile = async (id: number, off = 0) => ({
-    characters: (await database.getData(id))!.characters! + off,
-    glosses: [[[0, 1, '第', 'だい']]],
-    occ: [paragraphCounts(2, 25, true).start, 0, 0]
-  });
+  /**
+   * A furigana at the start of each chapter, so the text really changes and it shows wherever the
+   * reader got to: paginated renders one chapter, and where three pages end depends on the fonts
+   * (a CI runner has no Japanese ones). `off` shifts the count.
+   */
+  const readingsFile = async (id: number, off = 0) => {
+    const starts = [1, 2, 3].map((chapter) => paragraphCounts(chapter, 1, true).start);
+
+    return {
+      characters: (await database.getData(id))!.characters! + off,
+      glosses: [[[0, 1, '第', 'だい']]],
+      occ: starts.flatMap((start, i) => [start - (starts[i - 1] ?? 0), 0, 0])
+    };
+  };
 
   for (const view of [ViewMode.Paginated, ViewMode.Continuous]) {
     for (const writing of ['horizontal-tb', 'vertical-rl'] as const) {
@@ -311,7 +319,10 @@ describe('/b keeps a manual bookmark through a re-render', () => {
         // The re-render happened and kept the page being read.
         await vi.waitFor(
           () => {
-            expect(document.querySelector('.ttu-gen-ruby')).toBeTruthy();
+            expect(
+              document.querySelector('.ttu-gen-ruby'),
+              `reading ${visibleParagraphs()}`
+            ).toBeTruthy();
             expect(visibleParagraphs().filter((p) => read.includes(p))).not.toHaveLength(0);
           },
           { timeout: 10_000 }
