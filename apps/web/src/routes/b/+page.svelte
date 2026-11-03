@@ -197,6 +197,7 @@
   import { storageSource$ } from '$lib/data/storage/storage-view';
   import {
     getStorageHandlerByName,
+    placeNewerHere,
     saveExternalLastRead,
     syncDownData
   } from '$lib/data/storage/reader-storage';
@@ -380,6 +381,9 @@
         try {
           await syncDownData(localStorageHandler, externalStorageHandler, currentContext);
           bookData = await saveExternalLastRead(externalStorageHandler, bookData);
+          if (await placeNewerHere(externalStorageHandler, bookData.id)) {
+            scheduleReplication(StorageDataType.PROGRESS);
+          }
         } catch (error: any) {
           // Reading works offline from the browser copy; progress syncs on the next save.
           if (!bookData.elementHtml) throw error;
@@ -1410,9 +1414,10 @@
       data = bookmarkManager.formatBookmarkData(bookId, readingOffset);
     }
 
-    await database.putBookmark(data);
-
+    // Set before the write: leaving the page sends this place without waiting for the database.
     bookmarkData = Promise.resolve(data);
+
+    await database.putBookmark(data);
 
     scheduleReplication(StorageDataType.PROGRESS);
   }
@@ -1442,10 +1447,26 @@
 
     if (document.visibilityState === 'hidden') {
       hiddenAt = Date.now();
-      if ($autoBookmark$ && storedExploredCharacter !== exploredCharCount) await bookmarkPage();
+      const saving =
+        $autoBookmark$ && storedExploredCharacter !== exploredCharCount
+          ? bookmarkPage()
+          : undefined;
+      if (
+        upSyncEnabled &&
+        (saving ||
+          dataToReplicate.includes(StorageDataType.PROGRESS) ||
+          dataToReplicateQueue.includes(StorageDataType.PROGRESS))
+      ) {
+        const place = await bookmarkData;
+        if (place) await externalStorageHandler?.sendProgressNow(book.title, place);
+      }
+      await saving;
       if (upSyncEnabled) await executeReplication();
       return;
     }
+
+    // What couldn't be sent when the page was hidden goes now, not at the next page turn.
+    if (upSyncEnabled) await executeReplication();
 
     if (!externalStorageHandler || isReplicating || Date.now() - hiddenAt < 60_000) return;
     const before = await bookmarkData;

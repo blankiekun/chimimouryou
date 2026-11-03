@@ -146,6 +146,20 @@ export async function saveExternalLastRead(
   return dataToReturn;
 }
 
+/** A place saved here that never reached the sync target, say with no signal when the page closed. */
+export async function placeNewerHere(
+  storageHandler: BaseStorageHandler | undefined,
+  bookId: number
+) {
+  const place = await database.getBookmark(bookId);
+
+  return (
+    !!storageHandler &&
+    !!place?.lastBookmarkModified &&
+    !(await storageHandler.isUpToDate(StorageDataType.PROGRESS, place.lastBookmarkModified))
+  );
+}
+
 /** Downloads the book's progress, statistics, goals and audiobook data when down sync is on. */
 export async function syncDownData(
   localStorageHandler: BrowserStorageHandler | undefined,

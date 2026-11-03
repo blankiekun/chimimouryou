@@ -773,6 +773,31 @@ export class ServerStorageHandler extends BaseStorageHandler {
   }
 
   /**
+   * The place in one request that outlives the page, with no lookups first: a phone may freeze or
+   * end a hidden page at any moment. Failures are left to the normal sync, which still has it queued.
+   */
+  async sendProgressNow(title: string, progress: BooksDbBookmarkData) {
+    try {
+      const book = await bookIdOf(title);
+
+      if (this.holdPersonal || book === undefined) return;
+
+      const modified = progress.lastBookmarkModified || 0;
+      const fraction = bookmarkFraction(progress.progress);
+
+      await putRow(
+        `books/${book}/progress`,
+        { modified, progress: fraction, data: progress },
+        'PUT',
+        true
+      );
+      this.addBookCard(title, { lastBookmarkModified: modified, progress: fraction });
+    } catch (error: any) {
+      logger.warn(`Progress not sent yet: ${error.message}`);
+    }
+  }
+
+  /**
    * Days newer than the server's are written; REPLACE also deletes the server's days missing
    * from the list (in MERGE the list holds them all).
    */
