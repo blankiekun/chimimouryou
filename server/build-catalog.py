@@ -56,6 +56,9 @@ EDITION_LABEL = re.compile(
 AUTHOR_PREFIX = re.compile(r'^\[[^\]]+\]\s*')
 KANJI_DIGITS = {'〇': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9}
 VOLUME_WORDS = {'上': 1, '中': 2, '下': 3, '前編': 1, '後編': 2, '前': 1, '後': 2, '上巻': 1, '中巻': 2, '下巻': 3}
+# 上/下 without a 中: 下 is the second volume, not the third (the catalog and assign-series.py).
+PART_MIDDLE = re.compile(r'中(?:巻)?[\s)）】\]]*$')
+PART_LAST = re.compile(r'下(?:巻)?[\s)）】\]]*$')
 VOLUME_SUFFIXES = [
     re.compile(r'^(?P<base>.+?)[\s　]*(?:vol(?:ume)?\.?|#|＃)\s*(?P<num>\d+)\s*$', re.I),
     re.compile(r'^(?P<base>.+?)[\s　]*[(\[【]?\s*(?P<word>上巻|中巻|下巻|前編|後編|上|中|下)\s*[)\]】]?$'),
@@ -593,7 +596,10 @@ def build(library: str, output: str, vn_dir: str | None = None, force: bool = Fa
         series = calibre_series.get(base.casefold())
         if not series and len(members) < 2:
             continue
+        two_parts = not any(PART_MIDDLE.search(book['title']) for book, _ in members)
         for book, number in members:
+            if two_parts and number == 3 and PART_LAST.search(book['title']):
+                number = 2.0
             book.update(series=series or base, seriesIndex=number, seriesInferred=True)
 
     if api_db:

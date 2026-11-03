@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   changeSocialPassword,
   logOutEverywhere,
+  deleteSocialAccount,
   newRecoveryCode,
   socialSession$,
   stretchPassword
@@ -75,5 +76,9 @@ describe('social account', () => {
 
     expect(await newRecoveryCode('new password')).toBe('ABCDE'.repeat(4));
     expect(requests.at(-1)?.body).toEqual({ key: await stretchPassword('new password', salt) });
+
+    await deleteSocialAccount('new password');
+    expect(requests.at(-1)?.body).toEqual({ key: await stretchPassword('new password', salt) });
+    expect(JSON.stringify(requests)).not.toMatch(/new password/);
   });
 });

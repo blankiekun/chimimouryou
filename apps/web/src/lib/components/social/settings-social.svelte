@@ -92,18 +92,7 @@
     await removePicture().catch(showError);
   }
 
-  async function remove() {
-    if (!window.confirm($t$('social.deleteConfirm'))) return;
-    error = '';
-    try {
-      await deleteSocialAccount();
-      name = '';
-    } catch (e) {
-      error = $t$(hubErrorKey(e));
-    }
-  }
-
-  let open: '' | 'password' | 'recovery' = '';
+  let open: '' | 'password' | 'recovery' | 'delete' = '';
   let current = '';
   let next = '';
   let busy = false;
@@ -146,6 +135,14 @@
 
       current = '';
       newCode = code;
+    });
+  }
+
+  function submitDelete() {
+    run(async () => {
+      await deleteSocialAccount(current);
+      toggle('');
+      name = '';
     });
   }
 
@@ -408,9 +405,38 @@
   {/if}
   {#if me}
     <SettingsItemGroup title={$t$('social.deleteAccount')} tooltip={$t$('social.deleteHint')}>
-      <button type="button" class="app-button app-button-danger" on:click={remove}>
-        {$t$('social.deleteButton')}
-      </button>
+      <button
+        type="button"
+        class="app-button app-button-danger"
+        aria-expanded={open === 'delete'}
+        on:click={() => toggle('delete')}>{$t$('social.deleteButton')}</button
+      >
+      <svelte:fragment slot="after">
+        {#if open === 'delete'}
+          <form class="social-settings-form" on:submit|preventDefault={submitDelete}>
+            <p>{$t$('social.deleteConfirm')}</p>
+            <label class="social-settings-field">
+              <span>{$t$('social.currentPassword')}</span>
+              <input
+                class="app-input"
+                type="password"
+                bind:value={current}
+                required
+                autocomplete="current-password"
+              />
+            </label>
+            {#if formError}<p class="social-settings-error" role="alert">{formError}</p>{/if}
+            <span class="social-settings-actions">
+              <button type="submit" class="app-button app-button-danger" disabled={busy}>
+                {$t$('social.deleteButton')}
+              </button>
+              <button type="button" class="app-button app-button-quiet" on:click={() => toggle('')}>
+                {$t$('social.cancel')}
+              </button>
+            </span>
+          </form>
+        {/if}
+      </svelte:fragment>
     </SettingsItemGroup>
   {/if}
   {#if error}<p class="social-settings-error" role="alert">{error}</p>{/if}

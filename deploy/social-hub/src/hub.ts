@@ -2194,6 +2194,10 @@ async function route(request: Request, env: Env, ctx?: Context): Promise<Respons
     case 'PUT /v1/me':
       return json(await updateMe(request, env, user, await readBody(request)));
     case 'DELETE /v1/me': {
+      const { key } = await readBody(request);
+
+      // shortcut: older apps send no key, require it once they have updated (audit 141, step 2).
+      if (key !== undefined) await checkPassword(request, env, user, key);
       const images = await deleteUsers(env, 'id = ?1', user.id);
 
       await closeStreams(env, user.id);

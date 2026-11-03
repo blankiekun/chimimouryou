@@ -382,6 +382,27 @@ describe('social hub', () => {
     expect(rows('users')).toHaveLength(1);
   });
 
+  // Bugs: a leaked token deletes the account despite a wrong key, a wrong key doesn't count toward
+  // the lockout, the right key doesn't delete, or older apps (no body at all) stop being able to.
+  it('checks the password on delete when a key comes, and still takes none', async () => {
+    const aki = await signUp('aki', 1);
+
+    expect((await call('DELETE', '/v1/me', { key: key(9) }, aki.token)).status).toBe(401);
+    expect((await call('DELETE', '/v1/me', { key: 'short' }, aki.token)).status).toBe(400);
+    expect((await call('DELETE', '/v1/me', { key: null }, aki.token)).status).toBe(400);
+    expect(rows('users')).toHaveLength(1);
+    expect(rows('limits').filter((row) => row.action === 'fail')).not.toHaveLength(0);
+    expect((await call('GET', '/v1/me', undefined, aki.token)).status).toBe(200);
+
+    expect((await call('DELETE', '/v1/me', { key: key(1) }, aki.token)).status).toBe(200);
+    expect(rows('users')).toHaveLength(0);
+
+    const ren = await signUp('ren', 2);
+
+    expect((await call('DELETE', '/v1/me', undefined, ren.token)).status).toBe(200);
+    expect(rows('users')).toHaveLength(0);
+  });
+
   it('forgets sessions unused for 90 days and accounts unused for a year', async () => {
     const aki = await signUp('aki');
 

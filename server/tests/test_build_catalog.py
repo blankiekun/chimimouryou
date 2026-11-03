@@ -244,6 +244,18 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(result[3], ('', None))
 
 
+    def test_lower_volume_is_second_without_a_middle_one(self):
+        # 上 and 下 got indexes 1 and 3, unlike assign-series.py; with a 中, 下 stays third.
+        result = self.build([
+            (1, '銃口 上', None),
+            (2, '銃口 下', None),
+            (3, '終物語 上', None),
+            (4, '終物語 中', None),
+            (5, '終物語 下', None),
+        ])
+        self.assertEqual(result[2], ('銃口', 2.0))
+        self.assertEqual(result[5], ('終物語', 3))
+
 class CatalogDbTest(unittest.TestCase):
     """Builds with API_DB set: books are kept in library.db and their unique titles are sticky."""
 

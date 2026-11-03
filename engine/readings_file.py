@@ -21,6 +21,7 @@ import gzip
 import json
 import os
 import re
+import zlib
 from html.parser import HTMLParser
 
 from yurigana.readings import surface_reading
@@ -228,7 +229,7 @@ def header(path: str):
         with gzip.open(path, 'rt', encoding='utf-8') as f:
             data = json.load(f)
         return data['v'], data['yurigana'], data['bookdata'], data.get('html')
-    except (OSError, EOFError, ValueError, KeyError, TypeError):
+    except (OSError, EOFError, ValueError, KeyError, TypeError, zlib.error):
         return None
 
 

@@ -173,9 +173,12 @@ export const hiddenBooks$ = writableArrayLocalStorageSubject<string>()('socialHi
 /** What the hub takes of a book's key and title; longer ones would refuse the whole status push */
 const hubTextLength = 200;
 
+/** Only a split character goes: counting by code points would change keys that already hold data. */
+const forHubLength = (text: string) => text.slice(0, hubTextLength).replace(/[\ud800-\udbff]$/, '');
+
 /** The same book across libraries: the title without store tags, width, case and punctuation */
 export function bookKey(title: string) {
-  return absMatchKey(absCleanTitle(title)).slice(0, hubTextLength);
+  return forHubLength(absMatchKey(absCleanTitle(title)));
 }
 
 export function shareOn(key: ShareKey) {
@@ -513,8 +516,8 @@ async function pushStatus(leaving: boolean, keepalive = false) {
 
 const forHub = <T extends { key: string; title: string }>(book: T): T => ({
   ...book,
-  key: book.key.slice(0, hubTextLength),
-  title: book.title.slice(0, hubTextLength)
+  key: forHubLength(book.key),
+  title: forHubLength(book.title)
 });
 
 /** A push now, or once more a minute on when the hub's guard refuses */
