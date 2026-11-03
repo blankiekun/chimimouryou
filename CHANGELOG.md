@@ -4,6 +4,34 @@ chimimouryou is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook
 upstream's own changes are not listed here. Each version's section is written when it is released,
 from the pull requests merged since the previous tag (pull requests don't edit this file).
 
+## v3.14.0 (2026-11-02)
+
+### Added
+
+- Visual novels: a Windows game's overlay text now lands on the game's own text, placed by OCR.
+  Games whose hook gives nothing can be read from the screen instead (Hooks → Text from).
+
+### Changed
+
+- Anki: a mined visual novel line's sound is always trimmed to its voice, and a line with no voice
+  gets none, so the Voice only setting is gone. The clip now starts with the line and ends 0.5 s
+  after its last speech. The Backlog shows Sound and Play only for lines with a voice.
+- AI voice: `eleven_v4` models are told the text is Japanese.
+- Discord: a running native game stays your status, with no Away, from launch until it closes.
+- Desktop: reopening the app no longer starts the last visual novel; it opens the Library.
+- Desktop: no game screenshots on native Wayland, where each one asked to share the screen; they
+  work with the overlay on.
+- Visual novels: VNBox v0.2.9.
+
+### Fixed
+
+- Reading progress is sent when the page is hidden, and pulled again when you return after a
+  minute or more, so a book left open follows your other devices.
+- Dictionary: a collection import resumes when the file stalls mid-read (NAS, USB).
+- Text cleanup: recent lines ignores spacing, and a page resent behind the last line shown is
+  dropped.
+- Texthooker: a middle click on Linux no longer pastes the selection as a line.
+
 ## v3.13.2 (2026-11-01)
 
 ### Fixed
