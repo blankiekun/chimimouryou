@@ -110,8 +110,10 @@ function Api:books(q, cursor)
     return self:request("GET", "/api/v1/books" .. query{ q = q, cursor = cursor, limit = 50 })
 end
 
+-- Adding a table here needs a new name for the stored `rev` (main.lua): it vouches only for these
+-- tables, so the new table's older rows would never arrive. Older servers send every table.
 function Api:sync(since)
-    return self:request("GET", "/api/v1/sync" .. query{ since = since or 0 })
+    return self:request("GET", "/api/v1/sync" .. query{ since = since or 0, tables = "progress,statistics" })
 end
 
 function Api:put(path, modified, data, extra)

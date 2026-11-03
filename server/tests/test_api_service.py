@@ -208,6 +208,37 @@ class WriteTest(ServiceTestCase):
         self.assertLess(self.call('GET', '/api/v1/sync?since=999999', headers={'X-Trusted-Network': '0'})[1]['rev'],
                         999999)
 
+    # Ways ?tables= could fail, written before the code:
+    # - a table left out comes back in the response, or as an empty list a client takes for "no changes"
+    # - a typo silently returns nothing while `rev` moves on, so the client never gets those rows
+    # - `rev` differs from a full sync's, or a later full pull from 0 misses the rows left out
+    # - a signed-out browser outside the trusted network loses #491's rev behind the hidden rows
+    # - no parameter (every client today) changes what it gets
+    def test_sync_tables_names_the_tables_and_leaves_rows_for_a_later_pull(self):
+        for path, body in ((f'/api/v1/books/{self.book}/highlights/h-1', {'modified': 1, 'data': {'text': '猫'}}),
+                           (f'/api/v1/books/{self.book}/progress', {'modified': 2, 'progress': 0.5, 'data': {}})):
+            self.assertEqual(self.call('PUT', path, body)[0], 200)
+        full = self.sync()
+        status, some = self.call('GET', '/api/v1/sync?since=0&tables=progress,statistics')
+        self.assertEqual(status, 200)
+        self.assertEqual(set(some), {'rev', 'progress', 'statistics'})
+        self.assertEqual((some['rev'], some['progress']), (full['rev'], full['progress']))
+        # rev vouches only for the tables asked: a client adding a table starts it from 0.
+        self.assertEqual(self.call('GET', f"/api/v1/sync?since={some['rev']}&tables=progress")[1]['progress'], [])
+        self.assertEqual(len(self.call('GET', '/api/v1/sync?since=0&tables=highlights')[1]['highlights']), 1)
+
+    def test_sync_refuses_a_table_it_does_not_know(self):
+        for tables in ('progress,nope', 'book_docs', ',', 'progress,'):
+            self.assertEqual(self.call('GET', f'/api/v1/sync?since=0&tables={tables}')[0], 400, tables)
+
+    def test_sync_tables_outside_the_trusted_network_keeps_the_rev_behind_hidden_rows(self):
+        self.assertEqual(self.call('PUT', f'/api/v1/books/{self.book}/progress',
+                                   {'modified': 1, 'progress': 0.5, 'data': {}})[0], 200)
+        outside = self.call('GET', '/api/v1/sync?since=0&tables=progress', headers={'X-Trusted-Network': '0'})[1]
+        self.assertEqual(outside['progress'], [])
+        back = self.call('GET', f"/api/v1/sync?since={outside['rev']}&tables=progress")[1]
+        self.assertEqual(len(back['progress']), 1)
+
     # Bug caught: a tab whose session died writes its reader's rows into the shared account.
     def test_dead_session_is_refused_not_filed_under_shared(self):
         path = f'/api/v1/books/{self.book}/highlights/h-1'
