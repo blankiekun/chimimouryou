@@ -46,9 +46,22 @@ export const vnboxZipsSize = 120 * 1024 ** 2;
  * since Firefox keeps a site to 10% of the disk until the site may store data persistently.
  */
 export function vnboxErrorText(message: string) {
+  if (/another tab/i.test(message)) {
+    return 'This game is already open in another tab. Close it there, then reload this page.';
+  }
   return /quota/i.test(message)
     ? "This browser's storage for the site is full, so the game's files couldn't be copied. Allow the site to store data persistently when the browser asks (Firefox: the permission in the address bar), or free space by removing games you don't play, then open the game again."
     : `The player couldn't load its files: ${message}`;
+}
+
+/**
+ * VNBox's warning that saves aren't reaching browser storage (lazyfs.js source saves). The game
+ * keeps running and VNBox keeps retrying, so unlike vnboxErrorText this doesn't stop the game.
+ */
+export function vnboxSavesText(message: string) {
+  return /quota/i.test(message)
+    ? "This browser's storage for the site is full, so your saves aren't being stored. Keep the game open, then allow the site to store data persistently (Firefox: the permission in the address bar) or free space by removing games you don't play. Closing the game before that loses what you saved since this message."
+    : `Your saves aren't being stored in this browser, and closing the game now loses what you saved since this message. It keeps trying. ${message}`;
 }
 
 /** The game's OPFS folder name: ASCII, from its title (VNBox keys its saves by it). */
