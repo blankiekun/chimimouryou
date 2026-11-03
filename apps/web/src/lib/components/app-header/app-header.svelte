@@ -20,8 +20,6 @@
   import { pagePath, standalone } from '$lib/data/env';
   import { libraryTab$, type LibraryTab } from '$lib/data/library/library-home';
   import { readerPath } from '$lib/data/reader/reader-route';
-  import { StorageKey } from '$lib/data/storage/storage-types';
-  import { storageSource$ } from '$lib/data/storage/storage-view';
   import { database } from '$lib/data/store';
   import { socialSession$ } from '$lib/data/social/social-account';
   import { t$ } from '$lib/i18n';
@@ -161,9 +159,7 @@
             <slot />
           </div>
         {/if}
-        {#if standalone || $storageSource$ === StorageKey.CALIBRE}
-          <SyncIndicator />
-        {/if}
+        <SyncIndicator />
         <a
           href="{pagePath}/profile"
           class="app-profile"

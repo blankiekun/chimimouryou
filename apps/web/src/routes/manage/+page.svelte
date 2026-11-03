@@ -865,12 +865,8 @@
           {
             component: ConfirmDialog,
             props: {
-              dialogHeader: 'Delete Data',
-              dialogMessage: `This will delete all Statistics for the selected ${pluralize(
-                titles.length,
-                'Title',
-                false
-              )} (which may include start and/or completion Data)\n\nExecute a one time Sync with an export behavior of "replace" and/or statistics merge mode of "replace" to apply deletions to other devices`,
+              dialogHeader: $t$('library.deleteStatistics'),
+              dialogMessage: $t$('library.deleteStatisticsText', { count: titles.length }),
               contentStyles: 'white-space: pre-line;',
               resolver
             }

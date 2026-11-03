@@ -14,7 +14,7 @@ import type {
   BooksDbSubtitleData
 } from '$lib/data/database/books-db/versions/books-db';
 import { Observable, Subject, from } from 'rxjs';
-import { StorageDataType } from '$lib/data/storage/storage-types';
+import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
 import type { ReaderRoute } from '$lib/data/reader/reader-route';
 import {
   deletedStatistic,
@@ -117,7 +117,13 @@ export class DatabaseService {
           })
         ).pipe(
           catchError((error: unknown) => {
-            if (error instanceof Error) {
+            // The header and the empty library offer the sign-in, which only a click can open.
+            // Not OneDrive: nothing offers its sign-in but choosing the source again.
+            const signInToDrive =
+              storageSource === StorageKey.GDRIVE &&
+              (error as Error)?.message === 'Sign in to Drive again';
+
+            if (error instanceof Error && !signInToDrive) {
               const showReport = logger.errorCount > 1;
 
               logger.warn(error.message);
@@ -137,7 +143,7 @@ export class DatabaseService {
               this.lastHandler = undefined;
 
               // Out of reach for now: the source stays, and `online` lists it again (/manage).
-              if (isOutOfReach(error)) libraryOffline$.next(true);
+              if (signInToDrive || isOutOfReach(error)) libraryOffline$.next(true);
               else storageSource$.next(fallbackStorageSource);
             }
 
@@ -226,10 +232,11 @@ export class DatabaseService {
       const statisticsStore = tx.objectStore('statistic');
       const lastModifiedStore = tx.objectStore('lastModified');
       const newStatistic = getDefaultStatistic(bookTitle, dateKey);
-      const deleted = await statisticsStore.get([bookTitle, dateKey]);
 
-      if (deleted && newStatistic.lastStatisticModified <= deleted.lastStatisticModified) {
-        newStatistic.lastStatisticModified = deleted.lastStatisticModified + 1;
+      // Today's deletion stands until there's real reading to replace it (`storeStatistics`).
+      if (await statisticsStore.get([bookTitle, dateKey])) {
+        await tx.done;
+        return [dateKey, false];
       }
 
       await statisticsStore.put(newStatistic);
@@ -731,6 +738,14 @@ export class DatabaseService {
       statisticsToStore,
       newStatisticModified
     ));
+
+    if (statisticsMergeMode === MergeMode.LOCAL) {
+      // Reading here after pulling a future-dated row (another device's fast clock): below that
+      // time the sync file would look up to date, and this reading would never be uploaded.
+      const known = await this.getLastModifiedForType(bookTitle, StorageDataType.STATISTICS);
+
+      if (known && known >= newStatisticModified) newStatisticModified = known + 1;
+    }
 
     const tx = db.transaction(['statistic', 'lastModified'], 'readwrite');
 

@@ -1500,14 +1500,18 @@
     // What couldn't be sent when the page was hidden goes now, not at the next page turn.
     if (upSyncEnabled) await executeReplication();
 
-    if (away < 60_000) return;
-    annotations?.sync();
+    const tracker = trackerElm;
+    const long = away >= 60_000;
+
+    // A short return (not a glance at another window) still takes today's count from other devices,
+    // or this tab's next save would replace their row. The place and highlights wait for a long one.
+    if (!long && (!tracker || away < 10_000)) return;
+    if (long) annotations?.sync();
 
     if (!externalStorageHandler || isReplicating) return;
     const before = await bookmarkData;
     const here = exploredCharCount;
     const handler = externalStorageHandler;
-    const tracker = trackerElm;
     const pull = () => {
       // The handler's cache would answer with what it saw when the book opened.
       handler.clearData(false);
@@ -1519,9 +1523,10 @@
           title: book.title,
           imagePath: book.coverImage
         },
-        tracker
-          ? [StorageDataType.PROGRESS, StorageDataType.STATISTICS]
-          : [StorageDataType.PROGRESS]
+        [
+          ...(long ? [StorageDataType.PROGRESS] : []),
+          ...(tracker ? [StorageDataType.STATISTICS] : [])
+        ]
       );
     };
     try {

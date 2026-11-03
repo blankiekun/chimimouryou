@@ -16,6 +16,9 @@ import {
   type SyncFileOptions,
   type SyncFileStore
 } from '$lib/data/storage/handler/base-handler';
+import type { BooksDbBookmarkData } from '$lib/data/database/books-db/versions/books-db';
+import { logger } from '$lib/data/logger';
+import { storageOAuthTokens } from '$lib/data/storage/storage-oauth-manager';
 import { StorageKey } from '$lib/data/storage/storage-types';
 import { database, oneDriveStorageSource$ } from '$lib/data/store';
 import pLimit from 'p-limit';
@@ -291,6 +294,70 @@ export class OneDriveStorageHandler extends ApiStorageHandler implements SyncFil
       }
 
       this.rootFileListFetched = true;
+    }
+  }
+
+  /**
+   * Drive's `sendProgressNow`: the place in one request that outlives the page, only with the file's
+   * id and a live token in hand. OneDrive writes content and name in two calls, so a batch runs them
+   * in order, and a failed write leaves the name. Anything else is left to the normal sync.
+   */
+  async sendProgressNow(title: string, progress: BooksDbBookmarkData) {
+    const token = storageOAuthTokens.get(this.storageSourceName);
+    const file = BaseStorageHandler.findFile(this.titleToFiles.get(title) || [], 'progress_');
+    const name = BaseStorageHandler.getProgressFileName(progress);
+    const { lastBookmarkModified, progress: fraction } =
+      BaseStorageHandler.getProgressMetadata(name);
+
+    if (
+      !file ||
+      !token ||
+      token.expiration <= Date.now() ||
+      BaseStorageHandler.getProgressMetadata(file.name).lastBookmarkModified >= lastBookmarkModified
+    ) {
+      return;
+    }
+
+    const headers = { 'Content-Type': 'application/json' };
+
+    try {
+      const response = await fetch('https://graph.microsoft.com/v1.0/$batch', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token.accessToken}`, ...headers },
+        body: JSON.stringify({
+          requests: [
+            {
+              id: 'content',
+              method: 'PUT',
+              url: `/me/drive/items/${file.id}/content`,
+              headers,
+              body: progress
+            },
+            {
+              id: 'name',
+              dependsOn: ['content'],
+              method: 'PATCH',
+              url: `/me/drive/items/${file.id}`,
+              headers,
+              body: { name }
+            }
+          ]
+        }),
+        keepalive: true
+      });
+      // A batch answers 200 whatever its requests did.
+      const failed = (await response.json()).responses?.find(
+        (answer: BatchResponse) => answer.status < 200 || answer.status > 299
+      );
+
+      if (!response.ok || failed) {
+        throw new Error(`Received Status ${failed?.status ?? response.status}`);
+      }
+
+      file.name = name;
+      this.addBookCard(title, { lastBookmarkModified, progress: fraction });
+    } catch (error: any) {
+      logger.warn(`Progress not sent yet: ${error.message}`);
     }
   }
 
