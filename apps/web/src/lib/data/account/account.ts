@@ -7,8 +7,8 @@
 /**
  * Accounts on this server (server/account/). While signed in, reading
  * progress, statistics and highlights of Calibre books, and the settings in
- * account-settings-sync.ts, are stored in the account's own WebDAV folder at
- * /account/sync/ instead of the shared /calibre/sync/. Not part of upstream.
+ * account-settings-sync.ts, are stored as the account's rows in the v1 API
+ * (server/api/) instead of the signed-out shared rows. Not part of upstream.
  */
 
 import { browser } from '$app/env';
@@ -47,8 +47,6 @@ export type AccountPermission = (typeof accountPermissions)[number]['id'];
 export interface AdminAccount extends AccountUser {
   created: number;
 }
-
-export const accountSyncUrl = '/account/sync/';
 
 const accountApiUrl = '/account/api/';
 const cachedUserKey = 'accountUser';
@@ -198,7 +196,7 @@ export function hasPermission(user: AccountUser | null | undefined, permission: 
 
 /** Admins manage accounts there; the difficulty permission gives its Tools tab. */
 export function canOpenAdminPanel(user: AccountUser | null | undefined) {
-  return !!user?.admin || hasPermission(user, 'difficulty');
+  return hasPermission(user, 'difficulty');
 }
 
 /** The account's data stays on the server. */
@@ -227,7 +225,7 @@ export function isInsecurePage() {
 
 /** Opened on this machine (localhost): plain HTTP never leaves it, so there's nothing to warn about. */
 export function isLoopbackPage() {
-  return browser && /^(localhost|127\.|\[::1\]$)/.test(window.location.hostname);
+  return browser && /^(localhost$|127\.\d+\.\d+\.\d+$|\[::1\]$)/.test(window.location.hostname);
 }
 
 /** Whether this server allows accounts on plain-HTTP pages (ALLOW_HTTP_ACCOUNTS, off by default). */

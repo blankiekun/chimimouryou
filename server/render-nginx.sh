@@ -16,8 +16,8 @@ set -eu
 : "${MOKURO_DIR:=/data/state/mokuro}"
 # A visual novel engine installed from the admin panel (ebook-update).
 : "${ENGINE_DIR:=/data/state/engine}"
-# Signed-out readers from these networks may read the library and write the
-# shared sync folder; empty (the default) = always require an account. Never
+# Signed-out readers from these networks may read the library and write reading
+# data; empty (the default) = always require an account. Never
 # 172.16.0.0/12: that is Docker's own range, where a reverse proxy on the same
 # host connects from, so every internet visitor would count as trusted.
 : "${TRUSTED_NETWORKS:=}"
@@ -44,7 +44,9 @@ case "$INTERNAL_TOKEN" in
 esac
 
 TRUSTED_NETWORKS_GEO=$(for network in $TRUSTED_NETWORKS; do printf '  %s 1;\n' "$network"; done)
-SERVER_NAMES_MAP=$(for name in $SERVER_NAMES; do printf '  %s 1;\n' "$(printf '%s' "$name" | tr A-Z a-z)"; done)
+# nginx refuses a map with a name twice; the template already lists localhost.
+SERVER_NAMES_MAP=$(for name in $SERVER_NAMES; do printf '%s\n' "$name"; done | tr A-Z a-z \
+  | awk '$0 != "localhost" && !seen[$0]++ { print "  " $0 " 1;" }')
 REAL_IP_FROM_GEO=$(for network in $REAL_IP_FROM; do printf '  %s 1;\n' "$network"; done)
 
 # Only its API and sign-in, for signed-in readers: never its web UI, whose scripts
@@ -100,8 +102,8 @@ if [ -n "$CORS_ORIGINS" ]; then
     '    if ($request_method = OPTIONS) { return 204; }' \
     '    add_header Access-Control-Allow-Origin $cors_origin always;' \
     '    add_header Vary Origin always;' \
-    '    add_header Access-Control-Allow-Headers "Authorization, Content-Type, Depth, Destination, Overwrite, If-None-Match, If-Match" always;' \
-    '    add_header Access-Control-Allow-Methods "GET, HEAD, PUT, DELETE, MKCOL, MOVE, PROPFIND, POST, OPTIONS" always;' \
+    '    add_header Access-Control-Allow-Headers "Authorization, Content-Type, If-None-Match, If-Match" always;' \
+    '    add_header Access-Control-Allow-Methods "GET, HEAD, PUT, DELETE, POST, OPTIONS" always;' \
     '    add_header Access-Control-Expose-Headers "ETag, Last-Modified, Content-Length, Content-Range, Retry-After" always;' \
     '    add_header Access-Control-Max-Age 600 always;')
   # For locations that otherwise inherit the server's headers (an add_header here drops them).

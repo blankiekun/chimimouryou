@@ -10,7 +10,6 @@ import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 
 vi.mock('$lib/data/account/account', () => ({
   accountReady: async () => null,
-  accountSyncUrl: '/account/sync/',
   currentAccount: () => null
 }));
 

@@ -9,7 +9,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/data/account/account', () => ({
   accountReady: async () => null,
-  accountSyncUrl: '/account/sync/',
   currentAccount: () => null
 }));
 

@@ -6,7 +6,7 @@
 
 /**
  * Syncs AI settings, themes and reader settings to the signed-in account
- * (settings.json in the account's WebDAV folder), or while signed out to the
+ * (the v1 API's account docs), or while signed out to the
  * root of the library's Google Drive, OneDrive or folder source (sync-files.ts).
  * AI keys never sync; tokens only go to the account. Reader settings are kept
  * separately for phones and larger screens, e.g. one column on the phone and

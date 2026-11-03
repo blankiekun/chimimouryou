@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Accounts for ebook-reader: username/password sign-in and the nginx
-auth_request check that gives each account its own WebDAV folder
-(/account/sync/) for reading progress, statistics, highlights and settings.
+auth_request check that tells the services which account is asking (X-Account-Id).
 Standard library only.
 
 HTTP API (bound to localhost, proxied by nginx at /account/api/):
@@ -70,14 +69,12 @@ import hashlib
 import hmac
 import json
 import os
-import posixpath
 import re
 import secrets
 import sqlite3
 import sys
 import threading
 import time
-import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # httpbase.py (shared request checks) is in the parent folder: /app in the images, server/ here.
@@ -101,16 +98,12 @@ INTERNAL_TOKEN_FILE = os.environ.get('INTERNAL_TOKEN_FILE', '/data/state/interna
 COMMIT_PATTERN = re.compile(r'[0-9a-f]{7,40}')
 TAG_PATTERN = re.compile(r'[A-Za-z0-9._-]{1,64}')
 
-# nginx serves DATA_DIR/<account id> with `root`, so files live under the URI path.
-SYNC_PATH = os.path.join('account', 'sync')
-
 COOKIE = '__Host-ttu_session'
 # Over plain HTTP (ALLOW_HTTP_ACCOUNTS): __Host- cookies must be Secure, which
 # browsers drop on HTTP pages.
 HTTP_COOKIE = 'ttu_session'
 ALLOW_HTTP = os.environ.get('ALLOW_HTTP_ACCOUNTS') == '1'
 # Origins of the standalone app allowed to sign in with tokens (httpbase.CORS_ORIGIN_RE). Empty = off.
-parse_cors_origins = httpbase.parse_cors_origins
 CORS_ORIGINS = httpbase.cors_origins(os.environ.get('CORS_ORIGINS', ''))
 CLIENT_MAX_LENGTH = 64
 SESSION_IDLE_SECONDS = 30 * 86400
@@ -314,7 +307,6 @@ def create_user(username: str, password: str, admin: bool = False) -> str:
     now = int(time.time())
     db.run(('INSERT INTO users (id, username, password_hash, created, password_changed, is_admin) '
             'VALUES (?, ?, ?, ?, ?, ?)', (user_id, username, hash_password(password), now, now, int(admin))))
-    os.makedirs(os.path.join(DATA_DIR, user_id, SYNC_PATH), exist_ok=True)
     return user_id
 
 
@@ -412,14 +404,17 @@ def update_running(status) -> bool:
     return not isinstance(at, (int, float)) or time.time() - at < UPDATE_STALE_SECONDS
 
 
-def set_password(user_id: str, password: str, username: str):
-    """Sets a new password and signs out every session of the account."""
+def set_password(user_id: str, password: str, username: str, keep_token: str | None = None):
+    """Sets a new password, signs out the account's sessions (but keep_token's) and lifts its
+    lockouts: the failures were against the old password. Usernames hold no GLOB wildcards."""
     check_new_password(password, username)
     clear_initial_admin(user_id)
     db.run(
         ('UPDATE users SET password_hash = ?, password_changed = ? WHERE id = ?',
          (hash_password(password), int(time.time()), user_id)),
-        ('DELETE FROM sessions WHERE user_id = ?', (user_id,)),
+        ('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?',
+         (user_id, token_hash(keep_token) if keep_token else '')),
+        ('DELETE FROM login_throttle WHERE key = ? OR key GLOB ?', (f'user:{username}', f'userip:{username}@*')),
     )
 
 
@@ -436,7 +431,7 @@ def keep_an_admin(user, action: str, sql: str):
 
 
 # Methods that only read; nginx sends the original method as X-Original-Method.
-READ_METHODS = {'GET', 'HEAD', 'OPTIONS', 'PROPFIND'}
+READ_METHODS = {'GET', 'HEAD', 'OPTIONS'}
 
 
 def auth_status(user, permission: str, writes_only: bool, method: str, trusted_network: bool,
@@ -456,46 +451,6 @@ def auth_status(user, permission: str, writes_only: bool, method: str, trusted_n
     if permission not in ('', 'shared') and not has_permission(user, permission):
         return 403
     return 200
-
-
-SHARED_SYNC_URI = '/calibre/sync'
-
-
-def uri_path(uri: str) -> str:
-    """The decoded, normalized path of a request URI or Destination URL."""
-    return posixpath.normpath(re.sub('/+', '/', urllib.parse.unquote(raw_path(uri))) or '/')
-
-
-def raw_path(uri: str) -> str:
-    """The undecoded path: a request URI is one already (urlsplit would read '//calibre/…' as a
-    host), a Destination is a full URL."""
-    return uri.split('?')[0] if uri.startswith('/') else urllib.parse.urlsplit(uri).path
-
-
-def shared_write_allowed(method: str, uri: str, destination: str | None) -> bool:
-    """What the shared sync folder's location refuses on top of auth_status: nginx's upload
-    folder (.tmp), writes to the folder itself (a DELETE would remove every book's data), and
-    MOVEs other than renaming a file within its folder (the client's only use). A MOVE must not
-    land on series.json or metadata.json, which need the series permission."""
-    path = uri_path(uri)
-    if not (path + '/').startswith(SHARED_SYNC_URI + '/'):
-        return True
-    if '.tmp' in path.split('/'):
-        return False
-    if method in READ_METHODS:
-        return True
-    if path == SHARED_SYNC_URI:
-        return False
-    if method != 'MOVE':
-        return True
-    # nginx drops a ?query from the destination, so 'series.json?' would land on series.json.
-    # Two Destination headers reach us joined by ', ' (dav uses the first); the client percent-encodes commas.
-    if not destination or any(c in destination for c in '?#,') or raw_path(uri).endswith('/'):
-        return False
-    target = uri_path(destination)
-    folder = posixpath.dirname(target)
-    return folder == posixpath.dirname(path) and not (
-        folder == SHARED_SYNC_URI and posixpath.basename(target) in ('series.json', 'metadata.json'))
 
 
 def request_scheme(proto: str | None) -> str | None:
@@ -695,10 +650,13 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError(401, 'Not signed in')
         return user
 
+    def by_token(self, user) -> bool:
+        """Tokens (other sites, apps) never administer: admins use the server's own page."""
+        return bool(self.bearer_token()) or bool(user) and user['session_kind'] == 'token'
+
     def require_admin(self):
         user = self.require_user()
-        # Admins use the server's own address; tokens (other sites, apps) never administer.
-        if not user['is_admin'] or self.bearer_token() or user['session_kind'] == 'token':
+        if not user['is_admin'] or self.by_token(user):
             raise ApiError(403, 'Only admins can do this')
         return user
 
@@ -745,17 +703,12 @@ class Handler(BaseHTTPRequestHandler):
     # -- routes
 
     def get_auth(self, permission: str = '', writes_only: bool = False):
-        token = self.session_token()
-        user = session_user(token)
-        # Tokens (other sites, apps) never administer: admins use the server's own page.
-        by_token = bool(token) and token == self.bearer_token() or bool(user) and user['session_kind'] == 'token'
+        user = session_user(self.session_token())
+        by_token = self.by_token(user)
         method = self.headers.get('X-Original-Method', '')
         status = 403 if by_token and permission == 'admin' else auth_status(user, permission, writes_only, method,
                              self.headers.get('X-Trusted-Network') == '1', self.headers.get('X-Public-Reads') == '1',
                              is_cross_origin(self.headers))
-        if status == 200 and permission == 'shared' and not shared_write_allowed(
-                method, self.headers.get('X-Original-URI', ''), self.headers.get('X-Destination')):
-            status = 403
         if not (user and status == 200):
             return status, None, {}
         # The import service checks admin itself too (its admin tools share a location prefix).
@@ -830,7 +783,8 @@ class Handler(BaseHTTPRequestHandler):
             self.log_message('sign-in failed for %r', username[:64])
             raise ApiError(401, 'Incorrect username or password')
 
-        clear_failures(keys)
+        # Only this account from this address: the wider counters would let a member guess on.
+        clear_failures(keys[:1])
 
         if rehash:
             db.run(('UPDATE users SET password_hash = ? WHERE id = ?', (hash_password(password), user['id'])))
@@ -845,10 +799,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def post_token(self):
         body = self.read_json()
-        client = self.headers.get('Origin') or str(body.get('client', '')).strip()
+        origin = self.headers.get('Origin')  # already checked against CORS_ORIGINS
+        client = origin or str(body.get('client', '')).strip()
         label = str(body.get('label', '')).strip()
         if not client or not client.isprintable() or not label.isprintable() \
-                or len(client) > CLIENT_MAX_LENGTH or len(label) > CLIENT_MAX_LENGTH:
+                or (not origin and len(client) > CLIENT_MAX_LENGTH) or len(label) > CLIENT_MAX_LENGTH:
             raise ApiError(400, f'Apps name themselves in "client" (and the device in "label"), '
                                 f'up to {CLIENT_MAX_LENGTH} characters')
         user = self.check_sign_in(body)
@@ -864,7 +819,7 @@ class Handler(BaseHTTPRequestHandler):
         """Whose tokens the request may list and revoke: its account's, or everyone's (None) for
         an admin on the server's own page."""
         user = self.require_user()
-        return None if user['is_admin'] and not self.bearer_token() and user['session_kind'] != 'token' else user['id']
+        return None if user['is_admin'] and not self.by_token(user) else user['id']
 
     def get_tokens(self):
         return 200, {'tokens': list_tokens(self.token_owner())}, {}
@@ -890,14 +845,7 @@ class Handler(BaseHTTPRequestHandler):
             record_failure(keys)
             raise ApiError(403, 'The current password is incorrect')
 
-        check_new_password(new, user['username'])
-        clear_initial_admin(user['id'])
-        db.run(
-            ('UPDATE users SET password_hash = ?, password_changed = ? WHERE id = ?',
-             (hash_password(new), int(time.time()), user['id'])),
-            ('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?',
-             (user['id'], token_hash(self.session_token()))),
-        )
+        set_password(user['id'], new, user['username'], self.session_token())
         return 200, {}, {}
 
     def get_admin_update(self):

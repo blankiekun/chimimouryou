@@ -11,7 +11,6 @@ const account = vi.hoisted(() => ({ user: null as { id: string; username: string
 
 vi.mock('$lib/data/account/account', () => ({
   accountReady: async () => account.user,
-  accountSyncUrl: '/account/sync/',
   currentAccount: () => account.user
 }));
 

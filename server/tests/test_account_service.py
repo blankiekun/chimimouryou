@@ -190,45 +190,6 @@ class AccountServiceTest(unittest.TestCase):
         self.assertEqual(status(admin, 'difficulty', True, 'POST', False), 200)
         self.assertEqual(status(admin, 'admin', False, 'GET', False), 200)
 
-    def test_shared_folder_and_upload_folder_are_protected(self):
-        allowed = service.shared_write_allowed
-        for uri in ('/calibre/sync/', '/calibre/sync', '/calibre/sync//', '/calibre/sync/x/..', '/calibre/sync/%2e/'):
-            self.assertFalse(allowed('DELETE', uri, None), uri)
-            self.assertTrue(allowed('PROPFIND', uri, None), uri)
-        self.assertFalse(allowed('MKCOL', '/calibre/sync/', None))
-        for method in ('GET', 'PUT', 'DELETE'):
-            self.assertFalse(allowed(method, '/calibre/sync/.tmp/0000000001', None))
-            self.assertFalse(allowed(method, '/calibre/sync/%2Etmp/', None))
-        # A book's own folder and files stay deletable ("Delete selected books").
-        self.assertTrue(allowed('DELETE', '/calibre/sync/%E6%9C%AC/', None))
-        self.assertTrue(allowed('PUT', '/calibre/sync/%E6%9C%AC/progress_1.json', None))
-        self.assertTrue(allowed('DELETE', '/calibre/catalog.json', None))  # not this location
-        # nginx merges slashes; '//calibre/…' is not a host.
-        for uri in ('//calibre/sync/', '//calibre//sync//', '/calibre//sync/', '//calibre/sync/?x://y'):
-            self.assertFalse(allowed('DELETE', uri, None), uri)
-        self.assertFalse(allowed('PUT', '//calibre/sync/.tmp/0000000001', None))
-        self.assertFalse(allowed('MOVE', '//calibre/sync/x.json', 'https://h/calibre/sync/series.json'))
-        self.assertFalse(allowed('MOVE', '//calibre/sync/x.json', 'https://h//calibre//sync/series.json'))
-
-    def test_shared_moves_only_rename_within_a_folder(self):
-        allowed = service.shared_write_allowed
-        source = '/calibre/sync/%E6%9C%AC/progress_1.json'
-        self.assertTrue(allowed('MOVE', source, 'https://h/calibre/sync/%E6%9C%AC/progress_2.json'))
-        self.assertTrue(allowed('MOVE', '/calibre/sync/goals_1.json', 'https://h/calibre/sync/goals_2.json'))
-        for destination in (None, '',
-                            'https://h/calibre/sync/series.json', 'https://h/calibre/sync/series.json?',
-                            'https://h/calibre/sync/%73eries.json', 'https://h/calibre/sync/metadata.json#',
-                            'https://h/calibre/sync/other/progress_2.json', 'https://h/calibre/sync/x.json',
-                            'https://h/abcdefghijklmseries.json', 'https://h/calibre/sync/%E6%9C%AC/../x.json',
-                            'https://h/calibre/sync/%E6%9C%AC/progress_2.json?'):
-            self.assertFalse(allowed('MOVE', source, destination), destination)
-        self.assertFalse(allowed('MOVE', '/calibre/sync/x.json', 'https://h/calibre/sync/series.json?'))
-        self.assertFalse(allowed('MOVE', '/calibre/sync/x.json', 'https://h/calibre/sync/metadata.json'))
-        self.assertFalse(allowed('MOVE', '/calibre/sync/%E6%9C%AC/', 'https://h/calibre/sync/other/'))
-        # Two Destination headers, joined by nginx: dav moves to the first.
-        self.assertFalse(allowed('MOVE', '/calibre/sync/x.json', 'https://h/calibre/sync/series.json, https://h/calibre/sync/y.json'))
-        self.assertFalse(allowed('MOVE', '/calibre/sync/x.json', 'https://h/calibre/sync/y,z.json'))
-
     def test_plain_http_is_off_by_default_and_when_allowed(self):
         self.assertFalse(service.ALLOW_HTTP)
         self.assertEqual(service.request_scheme('https'), 'https')
@@ -269,7 +230,7 @@ class AccountServiceTest(unittest.TestCase):
         with open(TEMPLATE) as f:
             template = f.read()
         paths = re.findall(r'location = /_account_\w+ \{[^}]*?proxy_pass http://\$account_upstream/(\S+);', template)
-        self.assertGreaterEqual(len(paths), 7)
+        self.assertGreaterEqual(len(paths), 6)
         for path in paths:
             self.assertIn(('GET', path), service.Handler.ROUTES)
         self.assertNotIn(('GET', 'auth/anything'), service.Handler.ROUTES)
@@ -278,7 +239,6 @@ class AccountServiceTest(unittest.TestCase):
         service.create_user('Root', 'long enough', admin=True)
         root = service.find_user('root')
         self.assertTrue(service.public_user(root)['admin'])
-        self.assertTrue(os.path.isdir(os.path.join(service.DATA_DIR, root['id'], service.SYNC_PATH)))
         with self.assertRaises(service.ApiError) as raised:
             service.create_user('root', 'other password')
         self.assertEqual(raised.exception.status, 409)
@@ -399,6 +359,7 @@ class AccountServiceTest(unittest.TestCase):
 
             session_token = service.Handler.session_token
             bearer_token = service.Handler.bearer_token
+            by_token = service.Handler.by_token
 
         for name, admin in (('boss', '1'), ('reader', '0')):
             token = service.create_session(service.find_user(name)['id'])
@@ -536,7 +497,7 @@ class AccountServiceTest(unittest.TestCase):
 
     def test_desktop_loopback_origin(self):
         # https origins, and http only on loopback with a port (the desktop app).
-        self.assertEqual(service.parse_cors_origins(
+        self.assertEqual(service.httpbase.parse_cors_origins(
             'https://app.example http://127.0.0.1:41917 http://localhost:41917 http://app.example '
             'http://127.0.0.1 http://127.0.0.2:41917 http://127.0.0.1.evil.example:41917 '
             'http://127.0.0.1:41917/ https://app.example/path'),

@@ -232,17 +232,20 @@ docker compose pull && docker compose up -d
 Docker keeps build cache forever by default, and every rebuild (updates, deploys)
 adds a few GB, so a small disk fills up after a while. Cap it in
 `/etc/docker/daemon.json` (Docker then trims the oldest cache itself);
-`live-restore` keeps the stack running when Docker restarts:
+`live-restore` keeps the stack running when Docker restarts, and `log-opts` caps the
+containers' logs (nginx logs every manga page and thumbnail, and Docker keeps logs without limit):
 
 ```json
 {
   "builder": { "gc": { "enabled": true, "defaultKeepStorage": "6GB" } },
-  "live-restore": true
+  "live-restore": true,
+  "log-opts": { "max-size": "50m", "max-file": "3" }
 }
 ```
 
 Apply with `systemctl reload docker` for `live-restore` first, then
-`systemctl restart docker`. `docker builder prune` frees the cache right away.
+`systemctl restart docker`. Log limits reach containers created after that
+(`docker compose up -d --force-recreate`). `docker builder prune` frees the cache right away.
 
 ## Backups
 
