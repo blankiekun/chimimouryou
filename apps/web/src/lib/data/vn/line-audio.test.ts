@@ -100,3 +100,95 @@ describe('lineSpeech', () => {
     expect(speech[0][1]).toBeCloseTo(2, 1);
   });
 });
+
+// How the click rules could go wrong, written before them: the clip runs on into the next line's
+// voice; the pad brings in the end of the voice before; a voice still going from the line before
+// passes as this line's on a voiceless line; speech long after the click passes as this line's; a
+// long pause inside the line's only voice loses its second half (the bug #464 fixed); a voice
+// starting with the click is taken for one already going; a line with no click, or a player that
+// doesn't say, changes at all.
+describe('lineAudio window', () => {
+  const seconds = 12;
+  const rate = 16000;
+
+  async function clipLength(
+    window: { start: number; end: number; earliest?: number },
+    spans: [number, number][]
+  ) {
+    const posted: { id: number }[] = [];
+    let onmessage: (event: { data: unknown }) => void;
+
+    vi.stubGlobal(
+      'Worker',
+      class {
+        set onmessage(handler: typeof onmessage) {
+          onmessage = handler;
+        }
+        postMessage(data: { id: number }) {
+          posted.push(data);
+        }
+        terminate() {}
+      }
+    );
+    vi.resetModules();
+    const { lineAudio } = await import('./line-audio');
+    const audio = lineAudio({ samples: new Int16Array(seconds * rate), rate, ...window }, 'あ');
+
+    onmessage!({
+      data: { id: posted[0].id, probs: Float32Array.from(probs(seconds, spans)) }
+    });
+    const blob = await audio;
+
+    vi.unstubAllGlobals();
+    return blob && (blob.size - 44) / 2 / rate;
+  }
+
+  const click = { start: 0.5, end: 5, earliest: 0.5 };
+
+  it('from a click, starts 0.1 s before it and stops at the next line', async () => {
+    expect(await clipLength(click, [[0.6, 7]])).toBeCloseTo(4.6, 1);
+  });
+
+  it('from a click, keeps a voice through a long pause and 0.5 s after it', async () => {
+    const length = await clipLength({ ...click, end: 8 }, [
+      [0.6, 1.6],
+      [3.1, 4.2]
+    ]);
+
+    expect(length).toBeCloseTo(4.3, 1);
+  });
+
+  it('a voice still going at the click is not the line’s', async () => {
+    expect(await clipLength(click, [[0, 2]])).toBeUndefined();
+    expect(
+      await clipLength(click, [
+        [0, 1],
+        [1.2, 3]
+      ])
+    ).toBeCloseTo(3.1, 1);
+  });
+
+  it('a voice starting with the click is the line’s, even if the detector hears it just before', async () => {
+    expect(await clipLength(click, [[0.4, 3]])).toBeCloseTo(3.1, 1);
+  });
+
+  it('speech starting over 1 s after the click gives no sound', async () => {
+    expect(await clipLength(click, [[1.7, 4]])).toBeUndefined();
+    expect(await clipLength(click, [[1.4, 4]])).toBeCloseTo(4.1, 1);
+  });
+
+  it('a line with no click keeps its pad, its tail and any speech in the window', async () => {
+    const noClick = { start: 3, end: 6, earliest: 0 };
+
+    expect(await clipLength(noClick, [[0, 4]])).toBeCloseTo(1.9, 1);
+    expect(await clipLength(noClick, [[3.5, 7]])).toBeCloseTo(3.9, 1);
+    expect(await clipLength(noClick, [[5, 5.8]])).toBeCloseTo(3.7, 1);
+  });
+
+  it('a window that does not say whether a click brought it is treated as no click', async () => {
+    const { earliest: _earliest, ...unknown } = click;
+
+    expect(await clipLength(unknown, [[0, 2]])).toBeCloseTo(2.4, 1);
+    expect(await clipLength(unknown, [[1.7, 4]])).toBeCloseTo(4.4, 1);
+  });
+});
