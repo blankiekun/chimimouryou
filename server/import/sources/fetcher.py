@@ -154,6 +154,12 @@ def _decode(response, raw: bytes, max_bytes: int) -> bytes:
     return body
 
 
+def _check_complete(response):
+    """read(n) returns short data, without an error, when the connection drops before Content-Length."""
+    if response.length:
+        raise FetchError('The connection dropped partway through; try again')
+
+
 def _stream(response, path: str, max_bytes: int):
     if (response.headers.get('Content-Encoding') or 'identity').lower() != 'identity':
         raise FetchError('The server sent the file compressed')
@@ -164,6 +170,7 @@ def _stream(response, path: str, max_bytes: int):
             if size > max_bytes:
                 raise FetchError('The file is too large')
             f.write(chunk)
+    _check_complete(response)
 
 
 def fetch(url: str, hosts: set[str], headers: dict | None = None, server: str = '',
@@ -222,6 +229,7 @@ def _fetch(url: str, hosts: set[str], headers: dict | None = None, server: str =
                     raw = response.read(max_bytes + 1)
                     if len(raw) > max_bytes:
                         raise FetchError('The page is too large')
+                    _check_complete(response)
                     return _decode(response, raw, max_bytes), url, kind
             except urllib.error.HTTPError as error:
                 if error.code in (301, 302, 303, 307, 308) and error.headers.get('Location'):
@@ -233,7 +241,7 @@ def _fetch(url: str, hosts: set[str], headers: dict | None = None, server: str =
                         _next[server or host] = max(_next.get(server or host, 0.0), time.monotonic() + wait)
                 if wait is None or wait > longest or attempt == (0 if public else RETRIES - 1):
                     raise FetchError(f"{host} didn't answer ({error.code})", error.code) from error
-            except (urllib.error.URLError, OSError) as error:
+            except (urllib.error.URLError, OSError, http.client.HTTPException) as error:
                 reason = str(getattr(error, 'reason', error))
                 raise FetchError(f"{host} didn't answer ({reason})", reason=reason) from error
     raise FetchError('Too many redirects')

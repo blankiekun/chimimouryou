@@ -146,13 +146,14 @@ def vn_games(vn_dir: str) -> list[dict]:
     for entry in sorted(os.scandir(vn_dir), key=lambda e: e.name):
         if not entry.is_dir() or entry.name.startswith('.'):
             continue
-        try:
-            entry.name.encode()
-        except UnicodeEncodeError:  # not UTF-8 (e.g. raw Shift JIS): can't be listed or served
-            print(f'skipping game folder with a non-UTF-8 name: {entry.name!r}', file=sys.stderr)
-            continue
         root = vn_root(entry.path)
         if not root:
+            continue
+        file = os.path.relpath(root, vn_dir)  # the game's folder, and the script's if one level down
+        try:
+            file.encode()
+        except UnicodeEncodeError:  # not UTF-8 (e.g. raw Shift JIS): can't be listed or served
+            print(f'skipping game folder with a non-UTF-8 name: {file!r}', file=sys.stderr)
             continue
         cover = next((name for name in os.listdir(entry.path) if name.lower() in VN_COVERS), '')
         games.append({
@@ -171,7 +172,7 @@ def vn_games(vn_dir: str) -> list[dict]:
             'format': 'VN',
             'vn': True,
             'size': 0,
-            'file': os.path.relpath(root, vn_dir),
+            'file': file,
             'cover': f'{entry.name}/{cover}' if cover else '',
         })
     return games

@@ -486,6 +486,8 @@ function Chimi:pushStatistics(api)
                     stats[key] = stats[key] or {}
                     stats[key][day] = { modified = modified, data = stat }
                     book.days[day] = nil
+                    -- At once: an accepted day still pending on disk would be added again next time.
+                    self:set("pending", pending)
                     break
                 elseif code == 409 and body and type(body.row) == "table" then
                     stats[key] = stats[key] or {}
@@ -524,6 +526,7 @@ end
 function Chimi:onSuspend()
     if not self:bookId() then return end
     self:countPageTurn()
+    self.store:flush() -- offline, nothing else writes the pending time to disk
     self.last_turn = nil
     if NetworkMgr:isOnline() then self:sync{ quiet = true } end
 end
@@ -535,6 +538,7 @@ end
 function Chimi:onCloseDocument()
     if not self:bookId() then return end
     self:countPageTurn()
+    self.store:flush() -- offline, nothing else writes the pending time to disk
     if NetworkMgr:isOnline() then self:sync{ quiet = true } end
     self.fragment_counts, self.index_cache, self.last_turn, self.last_count = nil, nil, nil, nil
 end

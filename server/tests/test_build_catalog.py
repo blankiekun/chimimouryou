@@ -147,6 +147,17 @@ class VnFolderTest(unittest.TestCase):
             open(os.path.join(os.fsencode(vn_dir), name, b'0.txt'), 'w').close()
         self.assertEqual([game['title'] for game in catalog.vn_games(vn_dir)], ['ノベル'])
 
+    # Catches a nested non-UTF-8 folder reaching `file`: writing the catalog raises, so no rebuild ever lands.
+    def test_a_game_whose_script_folder_is_not_utf8_is_skipped(self):
+        vn_dir = tempfile.mkdtemp()
+        os.makedirs(os.path.join(os.fsencode(vn_dir), b'Game', b'\x83Q\x81[\x83\x80'))
+        open(os.path.join(os.fsencode(vn_dir), b'Game', b'\x83Q\x81[\x83\x80', b'0.txt'), 'w').close()
+        os.makedirs(os.path.join(vn_dir, 'ノベル'))
+        open(os.path.join(vn_dir, 'ノベル', '0.txt'), 'w').close()
+        games = catalog.vn_games(vn_dir)
+        self.assertEqual([game['title'] for game in games], ['ノベル'])
+        json.dumps(games, ensure_ascii=False).encode()
+
 
 class UniqueTitlesTest(unittest.TestCase):
     @staticmethod

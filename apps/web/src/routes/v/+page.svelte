@@ -601,8 +601,28 @@
     }
   }
 
-  async function leave() {
+  let sentLeaving = false;
+
+  /** What leaving the game sends: its saves, then the "left" status. Once, whichever way out ran. */
+  function sendLeaving() {
+    if (sentLeaving) return;
+    sentLeaving = true;
+    if (started) saveSync?.pushWindows();
+    readingActivity();
+    if (book && reading && isPluginEnabled('social')) {
+      noteReading(book.title, reading.read.characters, book.characters, true, 'vn');
+    }
+  }
+
+  /** Before navigating: on isolated servers it's a full page load (needsFullLoad), no onDestroy. */
+  async function finishBeforeNavigating() {
     await save(true).catch((error) => logger.warn(error.message));
+    sendLeaving();
+    await saveSync?.queue;
+  }
+
+  async function leave() {
+    await finishBeforeNavigating();
     await database.deleteLastItem();
     goto(`${pagePath}/manage`);
   }
@@ -719,7 +739,7 @@
   }
 
   async function openStatistics() {
-    await save(true).catch((error) => logger.warn(error.message));
+    await finishBeforeNavigating();
     goto(`${pagePath}/statistics`);
   }
 
@@ -761,11 +781,7 @@
 
   onDestroy(() => {
     save(true);
-    if (started) saveSync?.pushWindows();
-    readingActivity();
-    if (book && reading && isPluginEnabled('social')) {
-      noteReading(book.title, reading.read.characters, book.characters, true, 'vn');
-    }
+    sendLeaving();
     if (hookUrl) URL.revokeObjectURL(hookUrl);
     stopVnOcr();
   });
