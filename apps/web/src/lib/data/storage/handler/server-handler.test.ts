@@ -255,6 +255,51 @@ describe('progress', () => {
   });
 });
 
+describe('sending the place when the page is hidden', () => {
+  // Bug: a phone ended the hidden page during the lookups before the upload, so other devices
+  // kept the old page.
+  it('sends one request that outlives the page, and the sync then has nothing to send', async () => {
+    const id = await localBook('こころ', { progress: 0.5, modified: 500 });
+    const place = await database.getBookmark(id);
+    const server = handler();
+    const sent = vi.fn(api.fetch);
+
+    await replicateData(
+      server,
+      browser(),
+      false,
+      [{ title: 'こころ' }],
+      [StorageDataType.PROGRESS]
+    );
+    vi.stubGlobal('fetch', sent);
+    await server.sendProgressNow('こころ', place!);
+
+    expect(sent.mock.calls).toHaveLength(1);
+    expect(sent.mock.calls[0][1]).toMatchObject({ method: 'PUT', keepalive: true });
+    expect(api.rowsOf('progress')).toMatchObject([{ book: 7, modified: 500 }]);
+
+    await replicateData(
+      browser(),
+      server,
+      false,
+      [{ title: 'こころ' }],
+      [StorageDataType.PROGRESS]
+    );
+    expect(api.requests.filter((request) => request.startsWith('PUT'))).toHaveLength(1);
+  });
+
+  it('leaves a failed send to the normal sync', async () => {
+    const id = await localBook('こころ', { progress: 0.5, modified: 500 });
+    const place = await database.getBookmark(id);
+    const server = handler();
+
+    await server.getBookList();
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+
+    await expect(server.sendProgressNow('こころ', place!)).resolves.toBeUndefined();
+  });
+});
+
 describe('audiobook position', () => {
   // Bug: positions saved but not read back (wrong doc kind, or no modified time for the
   // replicator) never reached the other device, or were re-sent on every sync.
