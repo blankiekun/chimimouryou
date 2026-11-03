@@ -40,8 +40,6 @@ WRITE_LOCK = os.environ.get('CALIBRE_WRITE_LOCK', '/data/state/import/calibre-wr
 BACKUP_DIR = os.environ.get('CALIBRE_BACKUP_DIR', '/data/state/import/backups')
 KEEP_BACKUPS = 5
 SEPARATORS = ' 　-‐－:：・,、'
-PART_MIDDLE = re.compile(r'中(?:巻)?[\s)）】\]]*$')
-PART_LAST = re.compile(r'下(?:巻)?[\s)）】\]]*$')
 # 【電子版限定特典付き】, [特典ペーパー付き]: shop labels, not part of a series name.
 STORE_TAG = re.compile(r'[【\[［][^】\]］]*(?:特典|電子|限定|付き|版)[^】\]］]*[】\]］]')
 # A name that ends in a volume written with digits (after NFKC): 'X 6', 'X 第7話', 'X 三巻'.
@@ -258,9 +256,9 @@ def plan(books):
         if not series:
             series = Counter(written_name(b['title'], base) for b, base, _ in members).most_common(1)[0][0]
         # 上/下 without a 中: 下 is the second volume, not the third.
-        two_parts = not any(PART_MIDDLE.search(b['title']) for b, _, _ in members)
+        two_parts = not any(catalog.PART_MIDDLE.search(b['title']) for b, _, _ in members)
         for book, _, number in members:
-            if two_parts and number == 3 and PART_LAST.search(book['title']):
+            if two_parts and number == 3 and catalog.PART_LAST.search(book['title']):
                 number = 2.0
             changes[book['id']] = (series, number)
 

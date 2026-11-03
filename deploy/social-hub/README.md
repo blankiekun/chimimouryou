@@ -78,7 +78,7 @@ and (token optional) `profile/:username`.
 `POST salt`, `signup`, `login`, `logout`, `recover`; `POST logout-all` (every session of the account);
 `POST password` (`{key, next}`: the current and new stretched password, same salt; other sessions end);
 `POST recovery` (`{key}`: a new recovery code, the old one stops working); `GET|PUT|DELETE me` (turning a share off
-in `PUT me` deletes that data at once); `POST code`;
+in `PUT me` deletes that data at once; `DELETE me` checks `{key}`, the stretched password, when sent); `POST code`;
 `PUT status` (current books, `finished`, `stats`; one a minute, plus one when leaving a
 book; writes started, finished and streak events; a reading rank in `stats` (`rank` 1-7, `step` 1-3 with ranks
 2-7, `chars`) is capped by `capRank` on the 19 steps: characters grow at most 300,000 a day since the last stats or the

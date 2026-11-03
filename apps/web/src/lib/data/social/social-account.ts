@@ -241,8 +241,11 @@ export async function newRecoveryCode(password: string) {
   return (await hubFetch<{ recovery: string }>('/v1/recovery', 'POST', { key })).recovery;
 }
 
-export async function deleteSocialAccount() {
-  await hubFetch('/v1/me', 'DELETE');
+/** Deletes the hub account, checked against the current password. */
+export async function deleteSocialAccount(password: string) {
+  const key = await stretchPassword(password, await sessionSalt());
+
+  await hubFetch('/v1/me', 'DELETE', { key });
   forget();
 }
 

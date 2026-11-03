@@ -137,6 +137,16 @@ describe('inferSeries', () => {
     ]);
   });
 
+  // Bug: 上 and 下 alone get indexes 1 and 3, a gap the catalog and assign-series.py don't have.
+  it('makes 下 the second volume when the series has no 中, without touching titles', () => {
+    const result = inferSeries([card('銃口 上'), card('銃口（下巻）')]);
+
+    expect(result.map((book) => [book.title, book.series, book.seriesIndex])).toEqual([
+      ['銃口 上', '銃口', 1],
+      ['銃口（下巻）', '銃口', 2]
+    ]);
+  });
+
   it('adds a single volume to an existing series of that name and keeps given series', () => {
     expect(inferSeries([card('狼と香辛料 3')])[0].series).toBeUndefined();
     expect(inferSeries([card('abc物語 3'), card('別の本', 'ＡＢＣ物語')])).toMatchObject([

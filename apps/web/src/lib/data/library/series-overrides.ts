@@ -249,7 +249,8 @@ export async function syncBrowserSeries() {
 /**
  * Series from volume numbers in titles for books without one, like `split_volume` in
  * build-catalog.py: two or more volumes with the same name form a series, and a single one joins
- * an existing series of that name (width and case ignored).
+ * an existing series of that name (width and case ignored). 上/下 without a 中: 下 is the second
+ * volume, not the third.
  */
 export function inferSeries(cards: BookCardProps[]) {
   const key = (name: string) => name.normalize('NFKC').toLocaleLowerCase();
@@ -274,7 +275,14 @@ export function inferSeries(cards: BookCardProps[]) {
     const series = existing.get(key(name));
 
     if (series || members.length > 1) {
-      members.forEach((card) => inferred.set(card, series ?? name));
+      const twoParts = !members.some((card) => /中巻?[\s)）】\]]*$/.test(card.title));
+
+      members.forEach((card) => {
+        inferred.set(card, series ?? name);
+        if (twoParts && volumes.get(card) === 3 && /下巻?[\s)）】\]]*$/.test(card.title)) {
+          volumes.set(card, 2);
+        }
+      });
     }
   });
 
