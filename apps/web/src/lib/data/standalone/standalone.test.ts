@@ -165,6 +165,101 @@ describe('standalone edition', () => {
     expect(JSON.stringify(init?.headers ?? {})).not.toContain('Bearer');
   });
 
+  // Stats off: a push then needs none of their slow imports, so it can't land in the next test.
+  const signedIn = () =>
+    window.localStorage.setItem(
+      'socialSession',
+      JSON.stringify({ token: 't', me: { id: 'a', share: { stats: false } } })
+    );
+  const sent = () =>
+    fetchMock.mock.calls.map(([url, init]) => `${init?.method ?? 'GET'} ${new URL(url).pathname}`);
+
+  // Bug: the pagehide push checked only the session, so closing a reader sent a status after social
+  // went off in another tab (whose switch this tab's store never heard of) or by account sync.
+  it('sends no status on closing the reader once social went off, here or in another tab', async () => {
+    signedIn();
+    fetchMock.mockImplementation(async () => new Response('{}'));
+
+    const { noteReading } = await import('$lib/data/social/social');
+    const { enabledPlugins$ } = await import('$lib/plugins/plugin-settings');
+
+    noteReading('本', 10, 100, false);
+    await vi.waitFor(() => expect(sent()).toEqual(['PUT /v1/status']));
+    fetchMock.mockClear();
+
+    window.localStorage.setItem('enabledPlugins', '[]');
+    window.dispatchEvent(new StorageEvent('storage', { key: 'enabledPlugins', newValue: '[]' }));
+    expect(enabledPlugins$.getValue()).toEqual([]);
+    window.dispatchEvent(new Event('pagehide'));
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // Bug: opening a hidden book with a details link or a match sent its key to the hub, signed in.
+  it('asks the hub nothing about a hidden book on open, and never votes for it', async () => {
+    signedIn();
+    fetchMock.mockImplementation(async () => new Response('{"work":null}'));
+
+    const { setBookHidden, hiddenBooks$, bookKey } = await import('$lib/data/social/social');
+    const { markBookOnOpen } = await import('$lib/data/social/community-book');
+    const { confirmWork, resolveWork, communityWorks$ } = await import(
+      '$lib/data/social/community'
+    );
+    const getIndex = async () => ({ paragraphs: [{ text: '本文の一行目です。', startCount: 0 }] });
+
+    hiddenBooks$.next([bookKey('隠した本'), bookKey('照合済みの本')]);
+    communityWorks$.next({ 照合済みの本: 'anilist:1' });
+
+    await markBookOnOpen('隠した本', getIndex as never);
+    await markBookOnOpen('照合済みの本', getIndex as never);
+    // What the Community tab runs: no suggestion asked, no vote, the choice kept in this browser.
+    expect(await resolveWork('隠した本')).toEqual({ work: null, suggestion: null });
+    expect(await resolveWork('隠した本', 'https://anilist.co/manga/7')).toEqual({
+      work: 'anilist:7',
+      suggestion: null
+    });
+    expect(await confirmWork('隠した本', 'anilist:9')).toBe('anilist:9');
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // The same book once shown again does ask.
+    setBookHidden('隠した本', false);
+    communityWorks$.next({});
+    await resolveWork('隠した本');
+    expect(sent()).toEqual(['GET /v1/community/work']);
+  });
+
+  // Bug: Hide from friends only filtered later pushes: the finished row, events and current row stayed.
+  it('takes a book off the hub when hidden, and tells the hub nothing with social off or signed out', async () => {
+    signedIn();
+    fetchMock.mockImplementation(async () => new Response('{}'));
+
+    const { setBookHidden, bookKey, noteReading } = await import('$lib/data/social/social');
+    const plugins = await import('$lib/plugins');
+
+    noteReading('隠す本', 50, 100);
+    await vi.waitFor(() => expect(sent()).toEqual(['PUT /v1/status']));
+    fetchMock.mockClear();
+    plugins.setPluginEnabled('social', false);
+    setBookHidden('隠す本', true);
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    plugins.setPluginEnabled('social', true);
+    setBookHidden('隠す本', false);
+    setBookHidden('隠す本', true);
+    await vi.waitFor(() => expect(sent()).toHaveLength(2));
+    expect(sent()).toEqual([
+      `DELETE /v1/finished/${encodeURIComponent(bookKey('隠す本'))}`,
+      'PUT /v1/status'
+    ]);
+
+    const status = fetchMock.mock.calls[1][1].body as string;
+
+    expect(status).not.toContain('隠す本');
+    expect(status).not.toContain(bookKey('隠す本'));
+  });
+
   it('takes the public word test without a request, and saves the result for the app', async () => {
     const { default: PlacementTest } = await import(
       '$lib/components/placement/placement-test.svelte'

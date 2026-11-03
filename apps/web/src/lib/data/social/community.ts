@@ -35,7 +35,7 @@ import {
 } from '$lib/data/library/book-metadata';
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import { HubError, hubFetch, hubImageUrl, socialSession$ } from '$lib/data/social/social-account';
-import type { Person } from '$lib/data/social/social';
+import { bookKey, isHidden, type Person } from '$lib/data/social/social';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 import { record } from '$lib/data/setting-parsers';
 
@@ -294,11 +294,14 @@ function remember(title: string, work: string) {
   communityWorks$.next({ ...communityWorks$.getValue(), [title]: work });
 }
 
+/** Hidden from friends (the book's own switch): the hub is told nothing about it unasked */
+export const hiddenBook = (title: string) => isHidden({ key: bookKey(title), kind: 'book' });
+
 /** Tells the hub which work this book is (counts once the account is 7 days old). */
 async function vote(title: string, work: string) {
   const book = workBook(title);
 
-  if (book && !work.startsWith('title:') && socialSession$.getValue()) {
+  if (book && !work.startsWith('title:') && socialSession$.getValue() && !hiddenBook(title)) {
     await write('/v1/community/work', 'PUT', { book, vol: volumeOf(title), work });
   }
 }
@@ -326,7 +329,9 @@ export async function resolveWork(
 
   const book = workBook(title);
 
-  if (!book || !socialSession$.getValue()) return { work: null, suggestion: null };
+  if (!book || !socialSession$.getValue() || hiddenBook(title)) {
+    return { work: null, suggestion: null };
+  }
 
   const query = new URLSearchParams({ book, vol: volumeOf(title) });
   const { work } = await write<{ work: string | null }>(`/v1/community/work?${query}`, 'GET');

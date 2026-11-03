@@ -17,6 +17,7 @@ import {
   communityTarget,
   deleteUserCommunitySql,
   dropUnusedWorks,
+  NEW_ACCOUNT,
   postsOf
 } from './community';
 import {
@@ -159,9 +160,15 @@ const RANK_RISE = 7 * DAY;
 /** A book that shows up at or past this share isn't announced as started */
 const STARTED_BELOW = 0.25;
 const PROFILE_TTL = 15 * MINUTE;
+/** Each login keeps a session row for 90 days, so correct passwords are counted too */
+const LOGINS_PER_DAY = 50;
+/** Share and profile-presence switches a day: far above real use, so going private isn't refused */
+const SHARE_CHANGES = 200;
 /** Cover thumbnails: ~160 px wide WebP, one per book key and uploader */
 export const COVER_BYTES = 20_480;
 export const COVER_UPLOADS = 50;
+/** In an account's first days (NEW_ACCOUNT), so new accounts can't use up UPLOADS_PER_DAY */
+export const NEW_COVER_UPLOADS = 5;
 /**
  * Library covers (a dev's bulk upload for the Discord status) a day per dev: each writes about 5 D1
  * rows (the row, its 3 indexes, the counter), so 10,000 stay at half the free 100,000 a day.
@@ -178,8 +185,11 @@ export const AVATAR_UPLOADS = 5;
  */
 export const UPLOADS_PER_DAY = 2_000;
 export const MEDIA_BYTES = 8 * 1024 ** 3;
-/** Image URLs carry a content hash or a version, so they never change */
-export const IMMUTABLE = 'public, max-age=31536000, immutable';
+/**
+ * Image URLs carry a content hash or a version, so they never change: browsers keep them a year.
+ * The edge only a day: purging reaches one data centre, and a removed image must stop answering.
+ */
+export const IMMUTABLE = 'public, max-age=31536000, s-maxage=86400, immutable';
 
 /** Sending a book: signaling only (the book goes browser to browser over WebRTC) */
 export const TRANSFER_TTL = 10 * MINUTE;
@@ -874,13 +884,14 @@ export async function readImage(
 }
 
 /**
- * GET /v1/cover?key=: a shown thumbnail of the book key, this reader's first, else anyone's (the
- * Discord status uses its public URL; the app uploads only when there is none). 404 when none.
+ * GET /v1/cover?key=: a shown thumbnail of the book key, this reader's first, else a moderator's
+ * library cover, never another reader's (the Discord status uses its public URL; on a 404 the app
+ * uploads this reader's own).
  */
 async function coverByKey(request: Request, env: Env, user: UserRow) {
   const key = text(new URL(request.url).searchParams.get('key'), 200, 'key');
   const row = await env.DB.prepare(
-    `SELECT file FROM covers WHERE book_key = ?1 AND removed = 0
+    `SELECT file FROM covers WHERE book_key = ?1 AND removed = 0 AND (user = ?2 OR library = 1)
      ORDER BY user = ?2 DESC, at LIMIT 1`
   )
     .bind(key, user.id)
@@ -899,7 +910,13 @@ async function coverByKey(request: Request, env: Env, user: UserRow) {
 async function uploadCover(request: Request, env: Env, user: UserRow) {
   const key = text(new URL(request.url).searchParams.get('key'), 200, 'key');
 
-  await limit(env, user.id, 'cover', DAY, COVER_UPLOADS);
+  await limit(
+    env,
+    user.id,
+    'cover',
+    DAY,
+    now() - user.created < NEW_ACCOUNT ? NEW_COVER_UPLOADS : COVER_UPLOADS
+  );
 
   const bytes = await readImage(
     request,
@@ -1398,10 +1415,16 @@ async function pushStatus(env: Env, user: UserRow, body: Row) {
 }
 
 async function updateMe(request: Request, env: Env, user: UserRow, body: Row) {
-  await limit(env, user.id, 'me', DAY, 10);
+  const switches = body.share !== undefined || body.presenceProfile !== undefined;
+  const renames = body.name !== undefined || body.avatar !== undefined;
+  const renamed = renames && !!(await take(env, user.id, 'me', DAY, 10));
 
-  const name = body.name === undefined ? user.name : displayName(body.name);
-  const avatar = body.avatar === undefined ? user.avatar : Number(body.avatar);
+  // A name past its limit must not hold back a switch sent with it (the app queues them together).
+  if (renames && !renamed && !switches) throw new HttpError(429, 'limit');
+  if (switches) await limit(env, user.id, 'share', DAY, SHARE_CHANGES);
+
+  const name = renamed && body.name !== undefined ? displayName(body.name) : user.name;
+  const avatar = renamed && body.avatar !== undefined ? Number(body.avatar) : user.avatar;
   const share = { ...JSON.parse(user.share) };
 
   if (!Number.isInteger(avatar) || avatar < 0 || avatar >= AVATARS) {
@@ -1713,6 +1736,7 @@ async function login(request: Request, env: Env) {
   if (!user || !sameHash(await passHash(user.salt, key), user.pass_hash)) {
     return recordFailure(env, subjects);
   }
+  await limit(env, user.id, 'login', DAY, LOGINS_PER_DAY);
   return json({ token: await newSession(env, user.id), me: me(user) });
 }
 
@@ -2006,14 +2030,17 @@ const privacy = `<!doctype html><meta charset="utf-8"><meta name="viewport" cont
 requests, and up to three books you are reading (title, author, kind and how far along you are),
 plus the share settings you choose. As far as you share them: your last 50 finished books with
 the month, reading stats (streak, this week, books finished this year, an 84-day activity strip,
-words known only if you turn it on) and activity for friends (started, finished, streaks), kept
+your reading rank with the characters behind it and when it last rose, words known only if you turn
+it on; on a public profile anyone can read these) and activity for friends (started, finished, streaks), kept
 90 days. Turning a share off deletes that data at once. Reports of a name, picture or cover are
 kept 90 days. Passwords are stretched in your browser and stored only as a salted hash; the
 recovery code and session tokens are stored only as hashes.</p>
 <p>Images: your picture, if you upload one (a 256 px square, re-encoded in your browser, which
-drops EXIF and location data), and small cover thumbnails (about 160 px) of books readers share
-or show in their Discord status, one per book, uploaded by the first reader who has its cover. Covers are shared by everyone who
-reads the book and stay when an account is deleted; your picture does not.</p>
+drops EXIF and location data), and small cover thumbnails (about 160 px) of books you share or
+show in your Discord status, one per reader and book, shown on your own rows and status. Covers go
+once nothing you share shows them, and with your account. A moderator's library covers can show on
+anyone's Discord status. A removed image can still answer at its address from the network's caches
+for up to a day, and browsers that already loaded it may keep their copy.</p>
 <p>Sending a book to a friend: the book goes directly from one browser to the other. The hub
 only passes the connection details between the two of you (including network addresses), with the
 title, kind and size, and deletes them once connected or after 10 minutes.</p>
@@ -2021,14 +2048,16 @@ title, kind and size, and deletes them once connected or after 10 minutes.</p>
 the page around it), your helpful marks and which AniList or VNDB entry you confirmed a book as. Posts
 are public (readable without an account), with the book's title and cover and your name and, if your profile is public and shares stats, your
 reading rank and words known; never how far you have read. Deleting a post or your account deletes it
-(a post that has replies stays as an empty placeholder).</p>
+(a post that has replies stays as an empty placeholder). The line and page around it stay with that
+line's remaining posts, as do the title and cover a work was given; they carry no name.</p>
 <p>Discord status, if you use it: the status your other devices last sent (the finished text and
 links), kept 5 to 30 minutes after its last update (your Away after setting; when it was sent, an hour); with "Show on my profile" on, your friends see it
 there. Paired computers are kept as a name you choose, when they were added and last seen; their
 keys and pairing codes only as hashes. Signing out everywhere, changing your password or deleting
 your account removes them.</p>
 <p>No email, IP address log or book files. Rate limits keep hashed addresses for two days.</p>
-<p>Deleting your account (Settings, Social) removes every row and your picture at once. Sessions unused for 90 days
+<p>Deleting your account (Settings, Social) removes your rows, picture and covers at once, apart from
+the Community text above. Sessions unused for 90 days
 and accounts unused for 12 months are deleted automatically.</p>`;
 
 /**
@@ -2175,7 +2204,7 @@ async function route(request: Request, env: Env, ctx?: Context): Promise<Respons
   const finished = /^\/v1\/finished\/([^/]+)$/.exec(pathname);
 
   if (request.method === 'DELETE' && finished) {
-    // The reader deleted the book's statistics: its finished entry and its events go too.
+    // The reader deleted the book's statistics or hid it: its finished entry and events go too.
     await limit(env, user.id, 'unfinish', DAY, 100);
     const key = text(decodeURIComponent(finished[1]), 200, 'key');
 

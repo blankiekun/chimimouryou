@@ -274,6 +274,15 @@ describe('hub community', () => {
       status: 403,
       body: { error: 'links' }
     });
+    // Bug: only the body was checked, and the feed shows the quote and the work's title too.
+    for (const field of [
+      { title: 'spam.example.com' },
+      { quote: 'www.spam.example に来て', context: 'www.spam.example に来て' },
+      { context: 'この本の一行目です。https://spam.example' }
+    ]) {
+      expect(await post(fresh.token, field)).toEqual({ status: 403, body: { error: 'links' } });
+    }
+    expect((await post(old.token, { title: 'spam.example.com' })).status).toBe(200);
     expect((await post(old.token, { body: 'see https://example.org' })).status).toBe(200);
     for (let n = 0; n < 3; n++) expect((await post(fresh.token)).status).toBe(200);
     expect(await post(fresh.token)).toEqual({ status: 429, body: { error: 'limit' } });

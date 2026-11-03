@@ -266,7 +266,7 @@ let patchTimer: ReturnType<typeof setTimeout> | undefined;
 
 /**
  * Profile changes from Settings and the profile: shown at once, sent together after a pause
- * (the hub takes 10 a day). A share turned off is deleted on the hub with it.
+ * (the hub takes 10 names or avatars a day). A share turned off is deleted on the hub with it.
  */
 export function queueProfileChange(patch: ProfilePatch, onError: (error: unknown) => void) {
   const session = socialSession$.getValue();

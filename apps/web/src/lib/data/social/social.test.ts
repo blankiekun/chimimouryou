@@ -76,6 +76,11 @@ describe('social', () => {
     window.localStorage.clear();
     socialSession$.next({ token: 't', me });
     hiddenBooks$.next([]);
+    // Never the real hub: its 401 for this token would also sign the next test out.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}'))
+    );
   });
 
   afterEach(() => vi.unstubAllGlobals());
@@ -107,7 +112,7 @@ describe('social', () => {
   it('keeps hidden books in the browser: only "Reading something" with its share', () => {
     const books = [book('薬屋のひとりごと 1', 'book', 0.62), book('魔女の旅々 3', 'manga')];
 
-    setBookHidden('薬屋のひとりごと 1', true);
+    hiddenBooks$.next([bookKey('薬屋のひとりごと 1')]);
     expect(sharedBooks(books)).toEqual([books[1]]);
 
     socialSession$.next({ token: 't', me: { ...me, share: { hideManga: true } } });
@@ -150,7 +155,8 @@ describe('social', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (_url: string, init: RequestInit) => {
-        bodies.push(JSON.parse(init.body as string));
+        // Hiding also sends a DELETE of the book's finished row, with no body.
+        if (init.body) bodies.push(JSON.parse(init.body as string));
         return new Response('{"ok":true}');
       })
     );
@@ -166,12 +172,40 @@ describe('social', () => {
     setBookHidden('Book B', true);
     noteReading('Book B', 10, 100);
     noteReading('Book B', 100, 100);
-    await vi.waitFor(() => expect(bodies).toHaveLength(4), { timeout: 5000 });
+    // The hide's own push (its row leaves at once) and the two of Book B.
+    await vi.waitFor(() => expect(bodies).toHaveLength(5), { timeout: 5000 });
     expect(JSON.stringify(bodies.slice(2))).not.toContain('Book B');
-    // The two pushes may land in either order.
+    // The pushes may land in any order.
     expect(bodies.slice(2).flatMap((body) => body.books as unknown[])).toEqual([
       expect.objectContaining({ kind: 'hidden', key: '', title: '' })
     ]);
+  }, 15000);
+
+  // Bug: the hub refuses a whole push over one title or key past 200, silently, on every push, while
+  // the long book stays among the current ones.
+  it('clips long titles and keys to what the hub takes, kept ones too', async () => {
+    const long = 'あ'.repeat(300);
+    const bodies: { books: FriendBook[] }[] = [];
+
+    expect(bookKey(long)).toHaveLength(200);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init: RequestInit) => {
+        bodies.push(JSON.parse(init.body as string));
+        return new Response('{"ok":true}');
+      })
+    );
+
+    // A title kept whole in the current books, sent again with the next book's push.
+    noteReading(long, 10, 100);
+    noteReading('短い本', 10, 100);
+    await vi.waitFor(() => expect(bodies).toHaveLength(2), { timeout: 5000 });
+    for (const body of bodies) {
+      const clipped = body.books.find((other) => other.title.startsWith('あ'))!;
+
+      expect(clipped.title).toHaveLength(200);
+      expect(clipped.key).toHaveLength(200);
+    }
   }, 15000);
 
   it('gives the hub the thumbnails it asks for, once, from covers this reader has', async () => {

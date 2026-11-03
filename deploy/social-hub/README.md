@@ -101,7 +101,8 @@ first, else anyone's; 404 when none; the Discord status uses it before uploading
 `PUT avatar` (raw `image/webp`, a square of 64-256 px, at most 64 KB; 5 a day; a new version
 each time) and `DELETE avatar` (back to the preset). Books carry `cover` (a content hash) and
 people `picture` (a version, 0 for none); `GET cover/:hash` and `GET avatar/:id/:version` serve
-them from the edge cache, else R2, with `Cache-Control: public, max-age=31536000, immutable`, and
+them from the edge cache, else R2, with `Cache-Control: public, max-age=31536000, s-maxage=86400, immutable` (a removed image stops
+answering from the edge within a day), and
 skip the edge limit (a shelf shows a dozen at once; each device fetches each URL once).
 `POST friends/request` (`{code}`, or `{username}` of a public profile); `POST friends/:id/accept`;
 `DELETE friends/:id` (decline, cancel, remove); `POST block/:id`. `GET /privacy` is the privacy

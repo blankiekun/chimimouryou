@@ -19,6 +19,7 @@ import {
   communityOn,
   communityWorks$,
   confirmWork,
+  hiddenBook,
   lineIndex,
   listThreads,
   loadNotes,
@@ -217,11 +218,12 @@ export const bookMarks = ({ lines, index, threads }: Omit<BookCommunity, 'work' 
 /**
  * On book open (after it rendered): the markers without opening the tab, only signed in with
  * social on and for a book already matched to its work in this browser or by its Find details
- * url. Other books: the match toast when the hub suggests a work (offerMatch).
+ * url. Other books: the match toast when the hub suggests a work (offerMatch). Hidden books:
+ * nothing, they never leave the browser.
  */
 export async function markBookOnOpen(title: string, getIndex: () => Promise<SearchIndex>) {
   // Signed out too (owner 2026-10-25): an anonymous threads GET, only for a matched book.
-  if (!communityOn()) return;
+  if (!communityOn() || hiddenBook(title)) return;
   if (!communityWorks$.getValue()[title] && !workFromUrl(await metadataUrl(title), title)) {
     // No suggestion reachable: the Community tab still offers the match sheet.
     await offerMatch(title, getIndex).catch(() => {});

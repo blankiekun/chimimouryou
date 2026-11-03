@@ -14,6 +14,7 @@
     occurrenceOf,
     postOnLine,
     quoteLength,
+    titleLength,
     uploadWorkCover,
     volumeOf,
     type CommunityThread
@@ -141,7 +142,7 @@
     error = '';
     try {
       const posted = await postOnLine(work, {
-        title: workTitle,
+        title: workTitle.slice(0, titleLength),
         vol,
         quote: line,
         context,
