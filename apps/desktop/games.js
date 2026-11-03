@@ -130,9 +130,12 @@ const userFolders =
 const notSaves = /^(?:temp|tmp)$|cache/i;
 /** Windows' own folders: Startup and Start Menu are in AppData/Roaming/Microsoft. */
 const systemFolders = /^wine\/drive_c\/(?:users\/[^/]+\/AppData\/[^/]+|ProgramData)\/microsoft\//i;
-/** Files Windows or a game runs or loads (Windows drops trailing dots and spaces). */
+/**
+ * Files Windows or a game runs or loads (Windows drops trailing dots and spaces), engines' scripts
+ * too (Ren'Py, Python, Lua, Java, Kirikiri): `game/game/x.rpy` would run on launch.
+ */
 const runnable =
-  /\.(?:exe|dll|asi|ocx|sys|cpl|scr|com|bat|cmd|ps1|vbs|js|jse|wsf|msi|lnk|url|reg|hta|inf|pif)[. ]*$/i;
+  /\.(?:exe|dll|asi|ocx|sys|cpl|scr|com|bat|cmd|ps1|vbs|js|jse|wsf|msi|lnk|url|reg|hta|inf|pif|rpy|rpyc|rpym|rpymc|py|pyc|lua|jar|tjs|ks)[. ]*$/i;
 
 /**
  * Whether main may write or read a synced name: isWindowsSaveKey's rules plus no Microsoft

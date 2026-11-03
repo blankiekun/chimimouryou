@@ -42,6 +42,7 @@ const fade = 0.05;
 let worker: Worker | undefined;
 let nextId = 0;
 const pending = new Map<number, (message: LineVadMessage) => void>();
+let stopWhenIdle = false;
 /** A line's window is at most the 3-minute ring: minutes on a slow phone, with the runtime to fetch. */
 const vadTimeoutMs = 5 * 60_000;
 
@@ -53,8 +54,15 @@ function failVad(error: string) {
   pending.clear();
 }
 
+/** The player left: ends the worker, after the last answer so a card being made keeps its voice. */
+export function stopLineAudio() {
+  stopWhenIdle = true;
+  if (!pending.size) failVad('stopped');
+}
+
 /** Speech probability per 32 ms frame of 16 kHz samples. */
 function vad(samples: Float32Array) {
+  stopWhenIdle = false;
   if (!worker) {
     worker = new Worker(new URL('../../functions/vn/line-vad.worker.ts', import.meta.url), {
       type: 'module'
@@ -62,6 +70,7 @@ function vad(samples: Float32Array) {
     worker.onmessage = ({ data }: MessageEvent<LineVadMessage>) => {
       pending.get(data.id)?.(data);
       pending.delete(data.id);
+      if (stopWhenIdle && !pending.size) failVad('stopped');
     };
     worker.onerror = (event) => failVad(event.message || "its worker file didn't load");
   }

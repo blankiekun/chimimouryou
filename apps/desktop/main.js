@@ -43,6 +43,9 @@ import { checkForUpdates } from './updater.js';
 // http://127.0.0.1 is a secure context, and Yomitan's content scripts only match http(s) and file.
 const port = 41917;
 const origin = `http://127.0.0.1:${port}`;
+/** The main frame only: a source extension's sandboxed frame has an app URL too. */
+const isApp = (event) =>
+  event.senderFrame === event.sender.mainFrame && !!event.senderFrame?.url.startsWith(`${origin}/`);
 const FETCH_SILENCE_MS = 60 * 1000;
 const FETCH_PUBLIC_TOTAL_MS = 2 * 60 * 1000;
 
@@ -269,12 +272,7 @@ async function sourcesFetch(
   url,
   { headers = {}, maxBytes = 20 * 1024 * 1024, publicOnly = false } = {}
 ) {
-  // The main frame only: a source extension's sandboxed frame has an app URL too.
-  if (
-    event.senderFrame !== event.sender.mainFrame ||
-    !event.senderFrame.url.startsWith(`${origin}/`)
-  )
-    throw new Error('Not the app');
+  if (!isApp(event)) throw new Error('Not the app');
   const agent = session.defaultSession.getUserAgent().replace(/ (Electron|chimimouryou)\/\S+/g, '');
   // A silence limit, not a total one: a 300 MB volume on a slow line has to finish. Firing after
   // the answer is harmless.
@@ -393,7 +391,7 @@ if (!app.requestSingleInstanceLock()) {
       await serve(
         webDir,
         port,
-        (url, res) => handleSignInRedirect(url, res) || handleJiten(url, res)
+        (url, res, req) => handleSignInRedirect(url, res) || handleJiten(url, res, req)
       );
     } catch (error) {
       dialog.showErrorBox('chimimouryou', `Port ${port} on 127.0.0.1 is taken: ${error.message}`);
@@ -408,9 +406,7 @@ if (!app.requestSingleInstanceLock()) {
       hostDir: mihonDir,
       // The E2E's hosts file and trust store (e2e/mihon.e2e.mjs); unset in normal use.
       jvmArgs: (process.env.CHIMI_MIHON_JVM_ARGS || '').split(' ').filter(Boolean),
-      isApp: (event) =>
-        event.senderFrame === event.sender.mainFrame &&
-        !!event.senderFrame?.url.startsWith(`${origin}/`)
+      isApp
     });
     registerGames({
       app,
@@ -423,7 +419,7 @@ if (!app.requestSingleInstanceLock()) {
       overlayUrl: `${origin}/hook/overlay`,
       preload: appPreferences.preload,
       prepare: keepExternalLinksOut,
-      isApp: (event) => !!event.senderFrame?.url.startsWith(`${origin}/`)
+      isApp
     });
     const yomitan = await loadYomitan();
     setMenu(yomitan);

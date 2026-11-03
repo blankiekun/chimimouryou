@@ -1,7 +1,7 @@
 <script lang="ts">
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import AnkiWatcher from '$lib/components/dictionary/anki-watcher.svelte';
-  import { lineAudio } from '$lib/data/vn/line-audio';
+  import { lineAudio, stopLineAudio } from '$lib/data/vn/line-audio';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
   import PointBox from '$lib/components/point-box.svelte';
   import {
@@ -163,6 +163,7 @@
   let nativeRunning = $state(false);
   let ranked = $state<{ thread: NativeThread; score: number }[]>([]);
   let threads = new Threads();
+  let rankTimer: ReturnType<typeof setTimeout> | undefined;
   let cleanup = $state<HookCleanup>({});
   let clean = hookCleaner({});
   let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
@@ -267,9 +268,13 @@
       readingActivity();
       if (!replayed) pushSaves();
     } else if (message.type === 'text') {
-      const thread = threads.add(message.thread, message.sentence, Date.now());
+      const thread = threads.add(message.thread, message.sentence, Date.now(), nativeHook);
 
-      ranked = rankThreads([...threads.threads.values()], cleanup) as typeof ranked;
+      // A hook can fire per character: rank at most 4 times a second, as vnbox.js's hookChanged.
+      rankTimer ??= setTimeout(() => {
+        rankTimer = undefined;
+        ranked = rankThreads([...threads.threads.values()], cleanup) as typeof ranked;
+      }, 250);
       if (!replayed && isSavedThread(thread, nativeHook)) {
         keepRaw(message.sentence);
         addLine(clean(message.sentence, thread.hookcode).trim(), message.seq);
@@ -540,6 +545,8 @@
     cleanupSubscription.unsubscribe();
     disconnect();
     readingActivity();
+    stopLineAudio();
+    clearTimeout(rankTimer);
   });
 </script>
 

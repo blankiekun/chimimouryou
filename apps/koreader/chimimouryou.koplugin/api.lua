@@ -126,13 +126,20 @@ end
 
 --- Downloads a catalog book's `file` to `dest`; returns true or false and the error.
 function Api:download(file, dest)
-    local handle, err = io.open(dest, "wb")
+    -- Under its own name until complete: a file at `dest` counts as the book from then on.
+    local part = dest .. ".part"
+    local handle, err = io.open(part, "wb")
     if not handle then return false, err end
     local code, _body, message = self:request("GET", "/calibre/library/" .. encode_path(file), nil,
         socketutil.file_sink(handle), { socketutil.FILE_BLOCK_TIMEOUT, socketutil.FILE_TOTAL_TIMEOUT })
     if code ~= 200 then
-        os.remove(dest)
+        os.remove(part)
         return false, message or ("HTTP " .. tostring(code))
+    end
+    local renamed, rename_err = os.rename(part, dest)
+    if not renamed then
+        os.remove(part)
+        return false, rename_err
     end
     return true
 end

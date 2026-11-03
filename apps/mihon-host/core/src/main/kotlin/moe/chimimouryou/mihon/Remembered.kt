@@ -26,9 +26,12 @@ import java.nio.file.StandardCopyOption
  * What Mihon's database keeps per work and chapter (title, memo, chapter number…): extensions
  * read it back later (GigaViewer's chapter `memo`), while the app only passes urls. One JSON file
  * per source under `dir`, so it outlives a host restart; the newest answer for a url wins.
+ * Only what `detail` learned goes to the file: a browsed list is kept for this run alone, or every
+ * page of it would rewrite a file that only grows.
  */
 class Remembered(private val dir: File) {
     private val bySource = HashMap<String, MutableMap<String, JsonObject>>()
+    private val listedBySource = HashMap<String, MutableMap<String, JsonObject>>()
 
     private fun of(source: String) = bySource.getOrPut(source) {
         runCatching { Json.parseToJsonElement(file(source).readText()).jsonObject.toMutableMap() }
@@ -38,7 +41,15 @@ class Remembered(private val dir: File) {
     private fun file(source: String) = File(dir, "$source.json")
 
     @Synchronized
-    fun works(source: String, works: List<SManga>) = put(source, works.associate { "w:${it.url}" to it.toJson() })
+    fun listed(source: String, works: List<SManga>) {
+        listedBySource.getOrPut(source) { mutableMapOf() }.putAll(works.associate { "w:${it.url}" to it.toJson() })
+    }
+
+    @Synchronized
+    fun work(source: String, work: SManga) {
+        listedBySource[source]?.remove("w:${work.url}")
+        put(source, mapOf("w:${work.url}" to work.toJson()))
+    }
 
     @Synchronized
     fun chapters(source: String, chapters: List<SChapter>) = put(source, chapters.associate { "c:${it.url}" to it.toJson() })
@@ -47,7 +58,7 @@ class Remembered(private val dir: File) {
     fun work(source: String, url: String): SManga = SManga.create().also { manga ->
         manga.url = url
         manga.title = ""
-        val saved = of(source)["w:$url"] ?: return@also
+        val saved = listedBySource[source]?.get("w:$url") ?: of(source)["w:$url"] ?: return@also
         saved.text("title")?.let { manga.title = it }
         manga.thumbnail_url = saved.text("thumbnail_url")
         manga.artist = saved.text("artist")

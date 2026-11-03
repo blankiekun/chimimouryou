@@ -131,7 +131,10 @@
     playing?.pause();
     playing = new Audio(url);
     playing.onended = playing.onpause = () => URL.revokeObjectURL(url);
-    playing.play().catch((error) => show(`Could not play it: ${error.message}`, true));
+    playing.play().catch((error) => {
+      URL.revokeObjectURL(url);
+      show(`Could not play it: ${error.message}`, true);
+    });
   }
 
   async function useForLastCard(line: BacklogLine) {

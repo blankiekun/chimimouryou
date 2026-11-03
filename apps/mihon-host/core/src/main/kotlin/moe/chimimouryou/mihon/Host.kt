@@ -67,7 +67,7 @@ class Host(
         return sources[id] as? CatalogueSource ?: throw HostError("Source $id isn't loaded")
     }
 
-    private fun list(source: CatalogueSource, page: MangasPage) = list(page).also { remembered.works(source.id.toString(), page.mangas) }
+    private fun list(source: CatalogueSource, page: MangasPage) = list(page).also { remembered.listed(source.id.toString(), page.mangas) }
 
     suspend fun handle(op: String, params: JsonObject): JsonElement = when (op) {
         "ping" -> buildJsonObject { put("ok", true) }
@@ -135,7 +135,7 @@ class Host(
             if (runCatching { title }.getOrNull().isNullOrEmpty()) title = asked.title
             if (thumbnail_url.isNullOrEmpty()) thumbnail_url = asked.thumbnail_url
         }
-        remembered.works(key, listOf(manga))
+        remembered.work(key, manga)
         remembered.chapters(key, update.chapters)
         return buildJsonObject {
             put("name", manga.title.ifEmpty { url })

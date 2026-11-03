@@ -33,6 +33,7 @@ MAX_HINT = 3600.0
 DISCORD_CHECK = 30.0  # how often to look (locally) whether Discord came back
 MAX_BACKOFF = 600.0
 LOCAL_WINS = 120.0
+LOCAL_TTL = 15 * 60.0  # no PUT for this long: the page that sent it is gone
 TIMEOUT = 10.0
 MAX_RESPONSE = 64 * 1024
 STREAM_PING = 50.0  # keep-alive: Cloudflare closes a WebSocket idle for 100 s
@@ -185,7 +186,7 @@ class Relay:
     The local API calls set()/clear() in place of Presence's, so it has the same names.
     """
 
-    def __init__(self, presence, store, tiers=TIERS, local_wins=LOCAL_WINS, max_backoff=MAX_BACKOFF,
+    def __init__(self, presence, store, tiers=TIERS, local_wins=LOCAL_WINS, local_ttl=LOCAL_TTL, max_backoff=MAX_BACKOFF,
                  discord_check=DISCORD_CHECK, stream_ping=STREAM_PING, stream_tick=STREAM_TICK,
                  stream_retry=STREAM_RETRY, stream_retry_max=STREAM_RETRY_MAX):
         self.presence = presence
@@ -194,6 +195,8 @@ class Relay:
         self.discord_check = discord_check
         self._seen = time.monotonic()  # when the hub last had a status (pairing counts as one)
         self.local_wins = local_wins
+        self.local_ttl = local_ttl
+        self._expiry = None  # threading.Timer that clears the local activity
         self.max_backoff = max_backoff
         self._lock = threading.Lock()
         self._wake = threading.Event()
@@ -226,11 +229,22 @@ class Relay:
         with self._lock:
             self._local = (activity, time.monotonic())
             self._show("local", activity)
+            # A crashed browser sends no DELETE; live pages PUT again every few minutes.
+            self._cancel_expiry()
+            self._expiry = threading.Timer(self.local_ttl, self.clear)
+            self._expiry.daemon = True
+            self._expiry.start()
 
     def clear(self):
         with self._lock:
+            self._cancel_expiry()
             self._local = None
             self._show("hub", self._hub)
+
+    def _cancel_expiry(self):
+        if self._expiry:
+            self._expiry.cancel()
+            self._expiry = None
 
     def _from_hub(self, activity):
         with self._lock:
@@ -268,6 +282,8 @@ class Relay:
 
     def stop(self):
         self._stopping = True
+        with self._lock:
+            self._cancel_expiry()
         self._wake.set()
 
     def join(self, timeout=None):
