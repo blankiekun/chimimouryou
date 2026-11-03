@@ -49,7 +49,6 @@
     replicationSaveBehavior$,
     showExternalPlaceholder$,
     gDriveStorageSource$,
-    oneDriveStorageSource$,
     fsStorageSource$,
     syncTarget$,
     keepLocalStatisticsOnDeletion$,
@@ -147,8 +146,6 @@
           showExternalPlaceholder: showExternalPlaceholder$.getValue(),
           gDriveStorageSource:
             gDriveStorageSource$.getValue() === StorageSourceDefault.GDRIVE_DEFAULT,
-          oneDriveStorageSource:
-            oneDriveStorageSource$.getValue() === StorageSourceDefault.ONEDRIVE_DEFAULT,
           fsStorageSource: !!fsStorageSource$.getValue(),
           syncTarget: !!syncTarget$.getValue(),
           keepLocalStatisticsOnDeletion: keepLocalStatisticsOnDeletion$.getValue(),

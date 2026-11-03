@@ -601,7 +601,7 @@ export const en = {
   'words.howText':
     'Known: met {count}+ times in your reading, mature in Anki (interval 21+ days), marked by you, or within your level check. Ignored words count too.',
   'words.marksAccount': 'Marks sync to your account.',
-  'words.marksLibrary': 'Marks sync with your Google Drive, OneDrive or folder.',
+  'words.marksLibrary': 'Marks sync with your Google Drive or folder.',
   'words.marksBrowser': 'Marks stay in this browser.',
   'bookWords.crumb': 'Words',
   'bookWords.title': 'Words in {title}',
@@ -687,13 +687,13 @@ export const en = {
   'ai.syncs.keys': 'API keys',
   'ai.syncs.keysWhere': 'This browser only. Enter a key on each device that uses it.',
   'ai.syncs.keysNote':
-    'Never synced: not to your account, Drive, OneDrive, a sync folder or any shared file. Kept when you sign out.',
+    'Never synced: not to your account, Drive, a sync folder or any shared file. Kept when you sign out.',
   'ai.syncs.connections': 'Connections',
   'ai.syncs.connectionsWhere':
     'Provider, name, endpoint and model lists to choose from, without the key.',
   'ai.syncs.rest': 'Features, samplers, prompts',
   'ai.syncs.restWhere':
-    "Your account while signed in, otherwise the library's Drive, OneDrive or folder if it has one.",
+    "Your account while signed in, otherwise the library's Drive or folder if it has one.",
   'ai.private': 'Private',
   'ai.synced': 'Synced',
   'ai.lorebookOff': '0 (off)',
@@ -1441,7 +1441,7 @@ export const en = {
   'prefs.placeholder': 'Show placeholders',
   'prefs.hideSourceHint': 'Hide the source hint',
   'prefs.sources': 'Storage sources',
-  'prefs.sourcesSearch': 'Storage sources Calibre browser Google Drive OneDrive folder',
+  'prefs.sourcesSearch': 'Storage sources Calibre browser Google Drive folder',
   'prefs.sourcesNoTarget': 'Automatic sync is on, but no source is the sync target.',
   'prefs.sourceEdit': 'Edit source',
   'prefs.sourceSyncTarget': 'Toggle source as sync target',

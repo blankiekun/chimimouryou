@@ -187,7 +187,7 @@ export abstract class BaseStorageHandler {
 
   abstract saveProgress(data: BooksDbBookmarkData | File): Promise<void>;
 
-  /** The server, Drive and OneDrive take the place in one request; elsewhere the normal sync sends it. */
+  /** The server and Drive take the place in one request; elsewhere the normal sync sends it. */
   async sendProgressNow(_title: string, _progress: BooksDbBookmarkData): Promise<void> {}
 
   /** The next read of the current book asks the source, not what it answered before. */

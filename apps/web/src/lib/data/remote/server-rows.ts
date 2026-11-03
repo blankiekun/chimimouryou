@@ -77,7 +77,7 @@ export const syncKinds = {
   gameDocs: ['progress', 'statistics', 'vnsaves', 'metadata']
 } as const;
 
-/** An extra sync file; series.json syncs only on Drive, OneDrive and folders (browser libraries). */
+/** An extra sync file; series.json syncs only on Drive and folders (browser libraries). */
 export type SyncFileName =
   | typeof syncKinds.highlights
   | keyof typeof syncKinds.bookDocs

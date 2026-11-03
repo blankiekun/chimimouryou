@@ -8,7 +8,7 @@
  * Where the reader's extra files sync, beside the book data of any storage source: per book
  * (annotations.json, recaps.json, lorebook.json, vnsaves.json) in the book's folder on its own
  * source; per reader (kanji.json, words.json, immersion.json, settings.json, sources.json) in the account's
- * folder while signed in to the server, else at the root of the library's Google Drive, OneDrive
+ * folder while signed in to the server, else at the root of the library's Google Drive
  * or folder source.
  * Not part of upstream.
  */
@@ -16,7 +16,6 @@
 import { serverSyncFiles, type SyncFileName } from '$lib/data/remote/server-rows';
 import type { FilesystemStorageHandler } from '$lib/data/storage/handler/filesystem-handler';
 import type { GDriveStorageHandler } from '$lib/data/storage/handler/gdrive-handler';
-import type { OneDriveStorageHandler } from '$lib/data/storage/handler/onedrive-handler';
 import {
   SyncConflictError,
   type SyncFileStore,
@@ -30,7 +29,6 @@ import {
   database,
   fsStorageSource$,
   gDriveStorageSource$,
-  oneDriveStorageSource$,
   syncTarget$
 } from '$lib/data/store';
 import { MergeMode } from '$lib/data/merge-mode';
@@ -49,21 +47,17 @@ export function bookSyncSource(storageSource: string | undefined) {
   return autoReplication$.getValue() === AutoReplicationType.Off ? '' : syncTarget$.getValue();
 }
 
-const handlers = new Map<
-  string,
-  GDriveStorageHandler | OneDriveStorageHandler | FilesystemStorageHandler
->();
+const handlers = new Map<string, GDriveStorageHandler | FilesystemStorageHandler>();
 
 async function sourceType(name: string) {
   if (name === StorageSourceDefault.GDRIVE_DEFAULT) return StorageKey.GDRIVE;
-  if (name === StorageSourceDefault.ONEDRIVE_DEFAULT) return StorageKey.ONEDRIVE;
 
   return (await (await database.db).get('storageSource', name))?.type;
 }
 
 /**
  * The files of a storage source by name, or undefined when it can't sync without asking: the
- * browser, or Drive/OneDrive before signing in (a sign-in pop-up needs a click).
+ * browser, or Drive before signing in (a sign-in pop-up needs a click).
  */
 export async function syncFileStore(name: string): Promise<SyncFileStore | undefined> {
   if (!name) return undefined;
@@ -71,11 +65,7 @@ export async function syncFileStore(name: string): Promise<SyncFileStore | undef
 
   const type = await sourceType(name);
 
-  if (
-    (type === StorageKey.GDRIVE || type === StorageKey.ONEDRIVE) &&
-    !storageOAuthTokens.has(name) &&
-    !storedRefreshToken(name)
-  ) {
+  if (type === StorageKey.GDRIVE && !storageOAuthTokens.has(name) && !storedRefreshToken(name)) {
     return undefined;
   }
 
@@ -87,9 +77,6 @@ export async function syncFileStore(name: string): Promise<SyncFileStore | undef
     if (type === StorageKey.GDRIVE) {
       const { GDriveStorageHandler } = await import('$lib/data/storage/handler/gdrive-handler');
       handler = new GDriveStorageHandler(window);
-    } else if (type === StorageKey.ONEDRIVE) {
-      const { OneDriveStorageHandler } = await import('$lib/data/storage/handler/onedrive-handler');
-      handler = new OneDriveStorageHandler(window);
     } else if (type === StorageKey.FS) {
       const { FilesystemStorageHandler } = await import(
         '$lib/data/storage/handler/filesystem-handler'
@@ -125,8 +112,6 @@ export function readerSyncSource() {
   switch (storageSource$.getValue()) {
     case StorageKey.GDRIVE:
       return gDriveStorageSource$.getValue();
-    case StorageKey.ONEDRIVE:
-      return oneDriveStorageSource$.getValue();
     case StorageKey.FS:
       return fsStorageSource$.getValue();
     default: {

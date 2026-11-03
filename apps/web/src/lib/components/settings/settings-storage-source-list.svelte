@@ -22,7 +22,6 @@
     fsStorageSource$,
     gDriveStorageSource$,
     isOnline$,
-    oneDriveStorageSource$,
     syncTarget$
   } from '$lib/data/store';
   import { AutoReplicationType } from '$lib/functions/replication/replication-options';
@@ -48,9 +47,6 @@
     switch (type) {
       case StorageKey.GDRIVE:
         configuredIsSourceDefault = name === $gDriveStorageSource$;
-        break;
-      case StorageKey.ONEDRIVE:
-        configuredIsSourceDefault = name === $oneDriveStorageSource$;
         break;
       case StorageKey.FS:
         configuredIsSourceDefault = name === $fsStorageSource$;
@@ -220,7 +216,7 @@
             {@const storageSourceIsSourceDefault = isStorageSourceDefault(
               storageSource.name,
               storageSource.type,
-              [$gDriveStorageSource$, $oneDriveStorageSource$, $fsStorageSource$]
+              [$gDriveStorageSource$, $fsStorageSource$]
             )}
             <tr>
               <th scope="row">{storageSource.name}</th>

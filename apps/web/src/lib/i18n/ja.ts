@@ -598,7 +598,7 @@ export const ja: Record<MessageKey, string> = {
   'words.howText':
     '既知：読書で{count}回以上出会った語、Ankiで成熟した語（間隔21日以上）、指定した語、レベルチェックの範囲内の語。無視した語も含みます。',
   'words.marksAccount': '指定はアカウントに同期されます。',
-  'words.marksLibrary': '指定はGoogle Drive・OneDrive・フォルダと同期されます。',
+  'words.marksLibrary': '指定はGoogle Drive・フォルダと同期されます。',
   'words.marksBrowser': '指定はこのブラウザだけに保存されます。',
   'bookWords.crumb': '語彙',
   'bookWords.title': '{title}の語彙',
@@ -683,12 +683,12 @@ export const ja: Record<MessageKey, string> = {
   'ai.syncs.keys': 'APIキー',
   'ai.syncs.keysWhere': 'このブラウザのみ。使う端末ごとにキーを入力してください。',
   'ai.syncs.keysNote':
-    '同期しません（アカウント、Drive、OneDrive、同期フォルダ、共有ファイルのどれにも保存しません）。ログアウトしても残ります。',
+    '同期しません（アカウント、Drive、同期フォルダ、共有ファイルのどれにも保存しません）。ログアウトしても残ります。',
   'ai.syncs.connections': '接続',
   'ai.syncs.connectionsWhere': 'プロバイダー、名前、エンドポイント。キーは含みません。',
   'ai.syncs.rest': '機能、詳細設定、プロンプト',
   'ai.syncs.restWhere':
-    'ログイン中はアカウント、それ以外はライブラリのDrive、OneDrive、フォルダ（ある場合）。',
+    'ログイン中はアカウント、それ以外はライブラリのDrive、フォルダ（ある場合）。',
   'ai.private': '非公開',
   'ai.synced': '同期',
   'ai.lorebookOff': '0（オフ）',
@@ -1441,7 +1441,7 @@ export const ja: Record<MessageKey, string> = {
   'prefs.placeholder': '外部書籍のプレースホルダー表示',
   'prefs.hideSourceHint': '外部ソースの警告を非表示',
   'prefs.sources': '保存先（ストレージソース）',
-  'prefs.sourcesSearch': '保存先 ストレージ ソース Calibre ブラウザ Google Drive OneDrive フォルダ',
+  'prefs.sourcesSearch': '保存先 ストレージ ソース Calibre ブラウザ Google Drive フォルダ',
   'prefs.sourcesNoTarget': '自動同期がオンですが、同期先のソースがありません。',
   'prefs.sourceEdit': 'ソースを編集',
   'prefs.sourceSyncTarget': '同期先として指定／解除',

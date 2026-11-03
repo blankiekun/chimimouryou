@@ -22,7 +22,6 @@ import {
   fsStorageSource$,
   gDriveStorageSource$,
   isOnline$,
-  oneDriveStorageSource$,
   readingGoalsMergeMode$,
   replicationSaveBehavior$,
   statisticsMergeMode$,
@@ -88,15 +87,6 @@ export async function getStorageHandlerByName(storageSourceName: string, throwIf
     }
 
     return handlerFor(StorageKey.GDRIVE, storageSourceName);
-  }
-  if (storageSourceName === StorageSourceDefault.ONEDRIVE_DEFAULT) {
-    if (!isOnline$.getValue()) {
-      showMessage(tr('reader.loadError'), tr('reader.offline'));
-
-      return undefined;
-    }
-
-    return handlerFor(StorageKey.ONEDRIVE, storageSourceName);
   }
   if (storageSourceName) {
     const db = await database.db;
@@ -231,7 +221,6 @@ export async function syncDownData(
 async function sourceType(source: string) {
   if (source === StorageSourceDefault.CALIBRE_DEFAULT) return StorageKey.CALIBRE;
   if (source === StorageSourceDefault.GDRIVE_DEFAULT) return StorageKey.GDRIVE;
-  if (source === StorageSourceDefault.ONEDRIVE_DEFAULT) return StorageKey.ONEDRIVE;
 
   return (await (await database.db).get('storageSource', source))?.type;
 }
@@ -321,8 +310,6 @@ function librarySource() {
       return StorageSourceDefault.CALIBRE_DEFAULT;
     case StorageKey.GDRIVE:
       return gDriveStorageSource$.getValue();
-    case StorageKey.ONEDRIVE:
-      return oneDriveStorageSource$.getValue();
     case StorageKey.FS:
       return fsStorageSource$.getValue();
     default:

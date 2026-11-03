@@ -40,7 +40,7 @@ import pLimit from 'p-limit';
 export { exporterVersion } from '$lib/data/storage/handler/base-handler';
 
 /**
- * Standalone: books of one import into Drive/OneDrive/a folder that are also kept in this browser,
+ * Standalone: books of one import into Drive/a folder that are also kept in this browser,
  * so their estimate and furigana start without opening them. Past it (someone importing a whole
  * library) the rest is downloaded on first open, as before, instead of filling the browser.
  */

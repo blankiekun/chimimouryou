@@ -326,18 +326,18 @@
 
   /**
    * Back after a minute or more: lists a synced library again, behind the books on screen. The
-   * server answers with a delta; Drive and OneDrive list every folder, so at most every 5 minutes.
+   * server answers with a delta; Drive lists every folder, so at most every 5 minutes.
    * A failure keeps what is shown (the usual listing path would switch to the browser's library).
    */
   async function listOnReturn(away: number) {
     const source = $storageSource$;
-    const cloud = source === StorageKey.GDRIVE || source === StorageKey.ONEDRIVE;
+    const drive = source === StorageKey.GDRIVE;
 
     // Card ids change with a new list, so not under an open book page or a selection.
     if (
       away < 60_000 ||
-      (!cloud && source !== StorageKey.CALIBRE) ||
-      (cloud && (!$isOnline$ || Date.now() - listedAt < 300_000)) ||
+      (!drive && source !== StorageKey.CALIBRE) ||
+      (drive && (!$isOnline$ || Date.now() - listedAt < 300_000)) ||
       isLoading ||
       selectMode ||
       replicationToProgress ||
@@ -549,10 +549,7 @@
   }
 
   function operationAllowed() {
-    const connectivityPass = !(
-      ($storageSource$ === StorageKey.GDRIVE || $storageSource$ === StorageKey.ONEDRIVE) &&
-      !$isOnline$
-    );
+    const connectivityPass = !($storageSource$ === StorageKey.GDRIVE && !$isOnline$);
 
     if (!connectivityPass && !replicationToProgress) {
       const message = 'You have to be online for this operation';

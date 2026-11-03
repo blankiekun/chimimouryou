@@ -6,15 +6,7 @@
 
 import { StorageKey, StorageSourceDefault } from '$lib/data/storage/storage-types';
 import { nativeDrive } from '$lib/data/standalone/android-drive';
-import {
-  gDriveAuthEndpoint,
-  gDriveClientId,
-  gDriveScope,
-  oneDriveAuthEndpoint,
-  oneDriveClientId,
-  oneDriveScope,
-  standalone
-} from '$lib/data/env';
+import { gDriveAuthEndpoint, gDriveClientId, gDriveScope, standalone } from '$lib/data/env';
 
 import { serverless } from '$lib/data/remote/server-connect';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
@@ -53,14 +45,6 @@ export function isStorageSourceAvailable(
         gDriveScope;
       break;
 
-    case StorageKey.ONEDRIVE:
-      hasValidEnvironment =
-        ((storageSourceManager && storageSourceManager !== StorageSourceDefault.ONEDRIVE_DEFAULT) ||
-          oneDriveClientId) &&
-        oneDriveAuthEndpoint &&
-        oneDriveScope;
-      break;
-
     case StorageKey.FS:
       hasValidEnvironment = !!storageSourceManager && 'showDirectoryPicker' in window;
       break;
@@ -88,11 +72,6 @@ export function getStorageIconData(storageSource: StorageKey): StorageIcon {
       return {
         viewBox: '0 0 512 512',
         d: 'M339 314.9L175.4 32h161.2l163.6 282.9H339zm-137.5 23.6L120.9 480h310.5L512 338.5H201.5zM154.1 67.4L0 338.5 80.6 480 237 208.8 154.1 67.4z'
-      };
-    case StorageKey.ONEDRIVE:
-      return {
-        viewBox: '0 0 640 512',
-        d: 'M96.2 200.1C96.07 197.4 96 194.7 96 192C96 103.6 167.6 32 256 32C315.3 32 367 64.25 394.7 112.2C409.9 101.1 428.3 96 448 96C501 96 544 138.1 544 192C544 204.2 541.7 215.8 537.6 226.6C596 238.4 640 290.1 640 352C640 422.7 582.7 480 512 480H144C64.47 480 0 415.5 0 336C0 273.2 40.17 219.8 96.2 200.1z'
       };
     case StorageKey.FS:
       return {

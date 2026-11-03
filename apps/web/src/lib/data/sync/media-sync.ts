@@ -24,8 +24,7 @@ import { bookSyncSource } from '$lib/data/sync/sync-files';
 
 const defaultSources: Record<string, StorageKey> = {
   [StorageSourceDefault.CALIBRE_DEFAULT]: StorageKey.CALIBRE,
-  [StorageSourceDefault.GDRIVE_DEFAULT]: StorageKey.GDRIVE,
-  [StorageSourceDefault.ONEDRIVE_DEFAULT]: StorageKey.ONEDRIVE
+  [StorageSourceDefault.GDRIVE_DEFAULT]: StorageKey.GDRIVE
 };
 
 export function handler(type: StorageKey, name?: string, isForBrowser = true) {

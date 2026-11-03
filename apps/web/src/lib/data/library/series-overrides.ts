@@ -216,7 +216,7 @@ function sameOverrides(a: SeriesOverrides, b: SeriesOverrides) {
 }
 
 /**
- * Merges the browser's series with series.json at the root of the library's Drive, OneDrive or
+ * Merges the browser's series with series.json at the root of the library's Drive or
  * folder (the auto-replication target for a browser library), like kanji.json. True when this
  * browser's copy changed. Nothing is sent without such a source.
  */

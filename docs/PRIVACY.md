@@ -18,9 +18,8 @@ How you run chimimouryou decides who holds your data.
   chimimouryou project never sees them. If someone else runs the server for you, ask them how
   they handle your data.
 - **The web version on GitHub Pages**: everything is stored in your browser (IndexedDB and local
-  storage). There is no chimimouryou server behind it. If you turn on Google Drive or OneDrive
-  sync, your data goes to your own Drive or OneDrive account, under Google's or Microsoft's
-  terms. GitHub serves the pages and may log requests under
+  storage). There is no chimimouryou server behind it. If you turn on Google Drive
+  sync, your data goes to your own Drive account, under Google's terms. GitHub serves the pages and may log requests under
   [GitHub's privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
 - **The desktop app**: the same as the web version, stored on your computer.
 
@@ -116,7 +115,7 @@ policy applies:
 - AniList and VNDB, to look up a book's details or its Discord status cover, match it to a
   Community work or mention a work;
 - dictionary audio sources such as JapanesePod101;
-- Google Drive and OneDrive sync.
+- Google Drive sync.
 
 Links to sites such as Jiten only open them in your browser.
 

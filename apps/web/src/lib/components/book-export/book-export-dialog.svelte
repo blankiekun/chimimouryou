@@ -15,8 +15,7 @@
     fsStorageSource$,
     gDriveStorageSource$,
     lastExportedTarget$,
-    lastExportedTypes$,
-    oneDriveStorageSource$
+    lastExportedTypes$
   } from '$lib/data/store';
   import { executeReplicate$ } from '$lib/functions/replication/replication-progress';
   import { createEventDispatcher } from 'svelte';
@@ -44,15 +43,6 @@
       ...icons,
       ...(isStorageSourceAvailable(StorageKey.GDRIVE, $gDriveStorageSource$, window)
         ? [{ ...getStorageIconData(StorageKey.GDRIVE), source: StorageKey.GDRIVE, label: 'GDrive' }]
-        : []),
-      ...(isStorageSourceAvailable(StorageKey.ONEDRIVE, $oneDriveStorageSource$, window)
-        ? [
-            {
-              ...getStorageIconData(StorageKey.ONEDRIVE),
-              source: StorageKey.ONEDRIVE,
-              label: 'OneDrive'
-            }
-          ]
         : []),
       ...(isStorageSourceAvailable(StorageKey.FS, $fsStorageSource$, window)
         ? [{ ...getStorageIconData(StorageKey.FS), source: StorageKey.FS, label: 'Filesystem' }]

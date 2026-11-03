@@ -180,14 +180,14 @@ async function saveWindowsGame(book: LoadData) {
   database.dataListChanged$.next(handler);
 }
 
-/** Asks whether visual novels go up to a cloud provider; true = upload (vn-upload.ts). */
-export function askVnUpload(games: VnUpload[], target: StorageKey) {
+/** Asks whether visual novels go up to Google Drive; true = upload (vn-upload.ts). */
+export function askVnUpload(games: VnUpload[]) {
   return new Promise<boolean>((resolve) => {
     dialogManager.dialogs$.next([
       {
         component: ConfirmDialog,
         props: {
-          ...vnUploadQuestion(games, target),
+          ...vnUploadQuestion(games),
           confirmLabel: 'Upload',
           cancelLabel: 'Keep on this device',
           resolver: (wasCanceled: boolean) => resolve(!wasCanceled)

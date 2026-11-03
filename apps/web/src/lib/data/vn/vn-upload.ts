@@ -124,8 +124,7 @@ export function formatBytes(size: number) {
     : `${Math.max(1, Math.round(size / 1024 ** 2))} MB`;
 }
 
-export function vnUploadQuestion(games: VnUpload[], target: StorageKey) {
-  const where = target === StorageKey.ONEDRIVE ? 'OneDrive' : 'Google Drive';
+export function vnUploadQuestion(games: VnUpload[]) {
   const total = games.reduce((sum, game) => sum + game.size, 0);
   const what =
     games.length === 1
@@ -134,7 +133,9 @@ export function vnUploadQuestion(games: VnUpload[], target: StorageKey) {
 
   return {
     dialogHeader:
-      games.length === 1 ? `Upload this game to ${where}?` : `Upload these games to ${where}?`,
-    dialogMessage: `${what}. Uploading takes a while and uses that much of your ${where} space; you can keep ${games.length === 1 ? 'it' : 'them'} on this device only.`
+      games.length === 1
+        ? 'Upload this game to Google Drive?'
+        : 'Upload these games to Google Drive?',
+    dialogMessage: `${what}. Uploading takes a while and uses that much of your Google Drive space; you can keep ${games.length === 1 ? 'it' : 'them'} on this device only.`
   };
 }

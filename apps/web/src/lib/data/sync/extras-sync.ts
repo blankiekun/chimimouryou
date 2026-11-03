@@ -13,7 +13,7 @@
  * sign-in state.
  *
  * Kanji met (kanji-seen.ts) sync for every book as one kanji.json in the account's
- * folder while signed in (else at the root of the library's Drive, OneDrive or folder),
+ * folder while signed in (else at the root of the library's Drive or folder),
  * after releaseReaderData has run. Words marked known or ignored (word-marks.ts) sync
  * the same way as words.json, and so does the immersion log (immersion-log.ts) as immersion.json.
  * Not part of upstream.

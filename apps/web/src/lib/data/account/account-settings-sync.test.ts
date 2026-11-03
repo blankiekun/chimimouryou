@@ -29,7 +29,7 @@ import {
   syncAccountSettings
 } from './account-settings-sync';
 
-/** The library's Drive/OneDrive/folder while signed out (undefined: none) */
+/** The library's Drive/folder while signed out (undefined: none) */
 const folder = vi.hoisted(() => ({ files: undefined as Record<string, string> | undefined }));
 
 vi.mock('$lib/data/sync/sync-files', async (importOriginal) => {

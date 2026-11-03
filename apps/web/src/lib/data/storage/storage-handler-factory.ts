@@ -13,7 +13,6 @@ import { ServerStorageHandler } from '$lib/data/storage/handler/server-handler';
 import { FilesystemStorageHandler } from '$lib/data/storage/handler/filesystem-handler';
 import { GDriveStorageHandler } from '$lib/data/storage/handler/gdrive-handler';
 import { MergeMode } from '$lib/data/merge-mode';
-import { OneDriveStorageHandler } from '$lib/data/storage/handler/onedrive-handler';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
 import { serverless } from '$lib/data/remote/server-connect';
 
@@ -21,7 +20,6 @@ let backupStorageHandler: BackupStorageHandler;
 let browserStorageHandler: BrowserStorageHandler;
 let serverStorageHandler: ServerStorageHandler;
 let gDriveStorageHandler: GDriveStorageHandler;
-let oneDriveStorageHandler: OneDriveStorageHandler;
 let fsStorageHandler: FilesystemStorageHandler;
 
 export function getStorageHandler(
@@ -68,17 +66,6 @@ export function getStorageHandler(
   readingGoalsMergeMode?: MergeMode,
   askForStorageUnlock?: boolean
 ): GDriveStorageHandler;
-export function getStorageHandler(
-  window: Window,
-  storageType: StorageKey.ONEDRIVE,
-  storageSourceName?: string,
-  isForBrowser?: boolean,
-  cacheStorageData?: boolean,
-  saveBehavior?: ReplicationSaveBehavior,
-  statisticsMergeMode?: MergeMode,
-  readingGoalsMergeMode?: MergeMode,
-  askForStorageUnlock?: boolean
-): OneDriveStorageHandler;
 export function getStorageHandler(
   window: Window,
   storageType: StorageKey.FS,
@@ -166,20 +153,6 @@ export function getStorageHandler(
       );
 
       return gDriveStorageHandler;
-    case StorageKey.ONEDRIVE:
-      oneDriveStorageHandler = oneDriveStorageHandler || new OneDriveStorageHandler(window);
-      oneDriveStorageHandler.updateSettings(
-        window,
-        isForBrowser,
-        saveBehavior,
-        statisticsMergeMode,
-        readingGoalsMergeMode,
-        cacheStorageData,
-        askForStorageUnlock,
-        storageSourceName
-      );
-
-      return oneDriveStorageHandler;
     case StorageKey.FS:
       fsStorageHandler = fsStorageHandler || new FilesystemStorageHandler(window, StorageKey.FS);
       fsStorageHandler.updateSettings(
@@ -206,8 +179,6 @@ export function ownStorageHandler(window: Window, storageType: StorageKey): Base
       return new ServerStorageHandler(window);
     case StorageKey.GDRIVE:
       return new GDriveStorageHandler(window);
-    case StorageKey.ONEDRIVE:
-      return new OneDriveStorageHandler(window);
     case StorageKey.FS:
       return new FilesystemStorageHandler(window, StorageKey.FS);
     default:

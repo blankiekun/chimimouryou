@@ -2,7 +2,7 @@
 # Copy this file to .github/workflows/pages.yml in the site repository
 # (chimireader/chimireader.github.io, served at https://chimireader.github.io),
 # set Settings → Pages → Source to "GitHub Actions", and add the repository secrets
-# VITE_GDRIVE_CLIENT_ID and VITE_GDRIVE_CLIENT_SECRET (no OneDrive in the standalone)
+# VITE_GDRIVE_CLIENT_ID and VITE_GDRIVE_CLIENT_SECRET
 # (OAuth redirect URI: https://chimireader.github.io/auth). Run it from the Actions tab,
 # with a tag such as v1.2.3 or main (tags up to v3.8.0 have no scripts/build-standalone.sh:
 # publish those with this file's copy from v3.8.0).

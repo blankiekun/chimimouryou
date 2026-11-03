@@ -39,7 +39,7 @@ describe('vnsKeptOnDevice', () => {
   });
 
   it('uploads them when the reader chooses Upload', async () => {
-    expect(await vnsKeptOnDevice(StorageKey.ONEDRIVE, [game], async () => true)).toEqual(new Set());
+    expect(await vnsKeptOnDevice(StorageKey.GDRIVE, [game], async () => true)).toEqual(new Set());
   });
 
   it('never asks for Calibre, folders or without games', async () => {

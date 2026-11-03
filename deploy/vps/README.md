@@ -86,7 +86,7 @@ big files. The social hub stays on Cloudflare Workers; no server data lives here
 
 - Google Drive: add `https://chimireader.blankie.moe` as an authorised JavaScript origin and
   `https://chimireader.blankie.moe/auth` as a redirect URI on the OAuth client in Google Cloud Console.
-  The standalone has no OneDrive. OpenRouter needs nothing: its sign-in sends the page's own
+  OpenRouter needs nothing: its sign-in sends the page's own
   address as the callback.
 - The Discord companion allows this origin from version 0.3.1 on (`DEFAULT_ORIGINS`); older add-ons
   need it in `extraOrigins`.

@@ -118,7 +118,7 @@ export class DatabaseService {
         ).pipe(
           catchError((error: unknown) => {
             // The header and the empty library offer the sign-in, which only a click can open.
-            const signInNeeded = /^Sign in to (One)?Drive again$/.test((error as Error)?.message);
+            const signInNeeded = (error as Error)?.message === 'Sign in to Drive again';
 
             if (error instanceof Error && !signInNeeded) {
               const showReport = logger.errorCount > 1;

@@ -1,5 +1,5 @@
 # Just the reader, with no server features (no Calibre library, accounts or sync
-# beyond the browser and GDrive/OneDrive): upstream's image.
+# beyond the browser and GDrive): upstream's image.
 # docker compose -f docker-compose.static.yml up -d
 services:
   ebook-reader:

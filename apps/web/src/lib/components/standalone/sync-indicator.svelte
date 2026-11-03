@@ -4,7 +4,7 @@
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { pagePath, standalone } from '$lib/data/env';
-  import { cloudSignedIn, signInToCloud } from '$lib/data/standalone/standalone-storage';
+  import { librarySignedIn, signInToDrive } from '$lib/data/standalone/standalone-storage';
   import { serverBase, serverConnected } from '$lib/data/remote/server-connect';
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
   import { StorageKey } from '$lib/data/storage/storage-types';
@@ -23,7 +23,7 @@
   const serverHost = serverBase.replace(/^https:\/\//, '');
 
   // Tokens aren't observable: checked again on the 15 s tick, after each sync and after signing in here.
-  $: signedIn = !!$syncState$ && cloudSignedIn($storageSource$, now);
+  $: signedIn = !!$syncState$ && librarySignedIn($storageSource$, now);
   // The library just found the sign-in dead: say so now, not on the next tick.
   $: if ($libraryOffline$) now = Date.now();
   $: view = syncView($syncState$, $storageSource$, $isOnline$, signedIn, now);
@@ -35,7 +35,7 @@
       : `${pagePath}/settings?section=${standalone ? 'sync#sync-server' : 'general#general-account'}`;
 
   async function signIn() {
-    const error = await signInToCloud(window, $storageSource$);
+    const error = await signInToDrive(window);
     now = Date.now();
     if (error) {
       goto(`${settingsHref}#sync-storage`);

@@ -1702,7 +1702,7 @@
     );
 
     isReplicating = false;
-    // The manager's words for an expired Drive/OneDrive sign-in; only a click can fix that.
+    // The manager's words for an expired Drive sign-in; only a click can fix that.
     signInPrompt = error?.match(/Sign in to \w+ again/)?.[0] ?? '';
 
     if (error) {
