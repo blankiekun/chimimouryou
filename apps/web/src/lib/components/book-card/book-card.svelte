@@ -66,7 +66,8 @@
 
   $: imageLoadComplete = imgEl?.complete && !imageLoading;
   $: alt = `${title}_cover`;
-  // A connected server's covers load as blobs (serverImage): <img> can't send its token.
+  // A connected server's and Drive's covers load as blobs (serverImage): <img> can't send a token.
+  // Until one arrives the <img> stays see-through: if it never does, the card looks coverless.
   $: src = imagePath ? mapImagePath(imagePath) : '';
 </script>
 
@@ -88,6 +89,7 @@
       referrerpolicy="no-referrer"
       class="book-cover relative h-full w-full object-cover transition delay-150 duration-700 ease-out"
       class:blur={!imageLoadComplete}
+      class:opacity-0={needsServerImage(src) && !imageLoadComplete}
       src={needsServerImage(src) ? undefined : src}
       use:serverImage={src}
       {alt}
