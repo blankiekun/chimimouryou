@@ -53,6 +53,12 @@ services:
   account:
     <<: *services
     command: ['python3', '/app/account/service.py', 'serve']
+    # deploy.sh and ebook-update roll back when this never passes (`up --wait`).
+    healthcheck:
+      test: ['CMD', 'python3', '-c', "import socket; socket.create_connection(('127.0.0.1', 8766), 3)"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
     volumes:
       - ${DATA_PATH:-./data}:/data
       - ${SYNC_PATH:-${DATA_PATH:-./data}/sync}:/data/sync:ro
@@ -65,6 +71,11 @@ services:
   api:
     <<: *services
     command: ['python3', '/app/api/service.py', 'serve']
+    healthcheck:
+      test: ['CMD', 'python3', '-c', "import socket; socket.create_connection(('127.0.0.1', 8769), 3)"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
     volumes:
       - ${DATA_PATH:-./data}:/data
       - ${SYNC_PATH:-${DATA_PATH:-./data}/sync}:/data/sync:ro

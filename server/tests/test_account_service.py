@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import threading
+import time
 import unittest
 import unittest.mock
 
@@ -142,6 +143,25 @@ class AccountServiceTest(unittest.TestCase):
         post({'ref': 'abcdef1'})
         with open(request_path) as f:
             self.assertNotIn('engine', json.load(f))
+        os.remove(request_path)
+        # Bug: a reboot during an update leaves `running` behind, which blocked every later update.
+        status_path = os.path.join(self.tmp.name, 'status.json')
+        for name in ('status.json', 'engine-status.json'):
+            path = os.path.join(self.tmp.name, name)
+            ref = 'abcdef1' if name == 'status.json' else 'v0.11.0'
+            with open(path, 'w') as f:
+                json.dump({'state': 'running', 'ref': ref, 'at': int(time.time()) - 60}, f)
+            with self.assertRaises(service.ApiError):
+                post({'ref': 'abcdef1'})
+            with open(path, 'w') as f:
+                json.dump({'state': 'running', 'ref': ref, 'at': int(time.time()) - 7 * 3600}, f)
+            post({'ref': 'abcdef1'})
+            os.remove(request_path)
+        # A status with no usable time can't prove it's old.
+        with open(status_path, 'w') as f:
+            json.dump({'state': 'running', 'ref': 'abcdef1', 'at': 'soon'}, f)
+        with self.assertRaises(service.ApiError):
+            post({'ref': 'abcdef1'})
 
     def test_auth_status(self):
         reader = {'is_admin': 0, 'permissions': ''}

@@ -98,6 +98,7 @@ MIN_FREE_BYTES = int(os.environ.get('MIN_FREE_MB', '1024')) * 1024 * 1024
 # Shared with ebook-update on the host: request.json in; status.json, and the
 # installed marker `updater` (holding the GitHub repository), out.
 UPDATE_DIR = os.environ.get('UPDATE_STATE_DIR', '/data/state/update')
+UPDATE_STALE_SECONDS = 6 * 3600
 # Made by the web container; nginx sends it as X-Internal-Token, so only nginx can call
 # this service (its port is also reachable from the host and the other containers).
 INTERNAL_TOKEN_FILE = os.environ.get('INTERNAL_TOKEN_FILE', '/data/state/internal-token')
@@ -404,6 +405,15 @@ def update_state() -> dict:
         updater = ''
     return {'status': status, 'engineStatus': engine_status, 'updater': updater,
             'requested': os.path.exists(os.path.join(UPDATE_DIR, 'request.json'))}
+
+
+def update_running(status) -> bool:
+    """Whether ebook-update is at work. A reboot during an update leaves `running` behind, and
+    no update takes hours, so an old one doesn't count."""
+    if not status or status.get('state') != 'running':
+        return False
+    at = status.get('at')
+    return not isinstance(at, (int, float)) or time.time() - at < UPDATE_STALE_SECONDS
 
 
 def set_password(user_id: str, password: str, username: str):
@@ -929,8 +939,7 @@ class Handler(BaseHTTPRequestHandler):
         state = update_state()
         if not state['updater']:
             raise ApiError(409, 'The updater is not installed on this server (see docs/INSTALL.md, "Updates")')
-        if state['requested'] or any((state[key] or {}).get('state') == 'running'
-                                     for key in ('status', 'engineStatus')):
+        if state['requested'] or any(update_running(state[key]) for key in ('status', 'engineStatus')):
             raise ApiError(409, 'An update is already under way')
         write_private_json(os.path.join(UPDATE_DIR, 'request.json'), {**request, 'at': int(time.time())})
         return 200, update_state(), {}

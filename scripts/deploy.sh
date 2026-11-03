@@ -10,8 +10,9 @@
 # /etc/ebook-reader, and ebook-compose / ebook-account / ebook-update to
 # /usr/local/bin (ebook-update's systemd units are installed when DATA_PATH is
 # absolute, for updates from the admin panel). Images are built there; the
-# running stack is only replaced if every image builds, and the previous images
-# stay tagged :previous.
+# running stack is only replaced if every image builds, and it goes back to the
+# previous source and images (which stay tagged :previous) if the new one doesn't
+# build or doesn't come up healthy.
 set -euo pipefail
 
 REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
@@ -60,7 +61,7 @@ tar -C "$REPO_ROOT" \
   --exclude=./.env --exclude=./data --exclude=./.claude \
   --exclude=./apps/desktop/yomitan --exclude=./apps/desktop/dist \
   -czf - . \
-  | run bash -c 'set -euo pipefail; rm -rf /opt/ebook-reader && mkdir -p /opt/ebook-reader && tar -C /opt/ebook-reader -xzf -'
+  | run bash -c 'set -euo pipefail; rm -rf /opt/ebook-reader.new && mkdir -p /opt/ebook-reader.new && tar -C /opt/ebook-reader.new -xzf -'
 
 run install -d -m 755 /etc/ebook-reader
 put "$LOCAL/env" /etc/ebook-reader/env 600
@@ -79,20 +80,32 @@ run env LANG=C.UTF-8 VERSION="$VERSION" bash -s <<'EOF'
 {
   set -euo pipefail
   compose=/usr/local/bin/ebook-compose
-  images=$($compose config --images | sort -u)
-  for image in $images; do
-    docker image tag "$image" "${image%:*}:previous" 2>/dev/null || true
-  done
-  # On failure the images that ran get their tags back, so the next deploy keeps them as :previous.
+  app=/opt/ebook-reader
+  images=
+  # On failure the source that ran comes back and its images get their tags back, so the old
+  # commands run on the old images and the next deploy keeps them as :previous.
   rollback() {
     for image in $images; do
       docker image tag "${image%:*}:previous" "$image" 2>/dev/null || true
     done
+    if [ -d "$app.previous" ]; then
+      rm -rf "$app"
+      mv "$app.previous" "$app"
+    fi
     $compose up -d --remove-orphans || true
     echo "$1" >&2
     exit 1
   }
-  $compose build --quiet || rollback "Deploy failed: the previous images run again"
+  if [ -d "$app" ]; then
+    rm -rf "$app.previous"
+    mv "$app" "$app.previous"
+  fi
+  mv "$app.new" "$app"
+  images=$($compose config --images | sort -u) || rollback "Deploy failed: the previous version runs again"
+  for image in $images; do
+    docker image tag "$image" "${image%:*}:previous" 2>/dev/null || true
+  done
+  $compose build --quiet || rollback "Deploy failed: the previous version runs again"
   # The first start on the v1 API with old sync folders: migrate them while web is stopped, so
   # no reader writes a fresh position over a row the migration brings. A failure puts the
   # previous version back. Later deploys bring in what older clients wrote, failures only logged.
@@ -101,12 +114,13 @@ run env LANG=C.UTF-8 VERSION="$VERSION" bash -s <<'EOF'
     && $compose run --rm --no-deps -T api sh -c 'find /data/sync /data/accounts -mindepth 1 -maxdepth 1 ! -name .tmp | grep -q .'; then
     first=1
     { $compose stop web \
-      && $compose up -d api \
+      && $compose up -d --no-deps api \
       && $compose run --rm --no-deps -T catalog build-calibre-catalog /library /data/state/catalog/catalog.json --force \
       && $compose run --rm --no-deps -T api python3 /app/api/migrate.py --apply
     } || rollback "Migration failed: the previous version runs again"
   fi
-  $compose up -d --remove-orphans || rollback "Deploy failed: the previous images run again"
+  # --wait fails on a service that crash-loops or never gets healthy; plain `up -d` returns 0 for both.
+  $compose up -d --wait --wait-timeout 180 --remove-orphans || rollback "Deploy failed: the previous version runs again"
   # Fill library.db's books, then copy the sync folders in (idempotent; the folders stay as they are).
   if [ "$first" = 0 ]; then
     {
@@ -115,6 +129,7 @@ run env LANG=C.UTF-8 VERSION="$VERSION" bash -s <<'EOF'
     } || echo "Migration to the API database failed; the old sync folders are untouched" >&2
   fi
   docker image prune -f >/dev/null
+  rm -rf "$app.previous"
   if [ -d /run/systemd/system ]; then
     /usr/local/bin/ebook-update install || echo "Updates from the admin panel stay off (see above)"
   fi
