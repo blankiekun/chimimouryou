@@ -1,7 +1,7 @@
 #!/bin/sh
 # Runs before nginx starts (official image's /docker-entrypoint.d): creates the
-# data folders for PUID/PGID, runs the nginx workers as that user (they write
-# the WebDAV folders the Python services also use) and renders the site config.
+# data folders for PUID/PGID, runs the nginx workers as that user (they read
+# the files the Python services write) and renders the site config.
 set -eu
 
 PUID=${PUID:-1000}
@@ -34,10 +34,15 @@ done
 # The secret nginx sends the services, so they answer nobody else (their ports are
 # reachable from the host and the other containers). Readable by them, not by others.
 token=/data/state/internal-token
+# PUID's services can write /data/state: a link here would turn the root steps below on its target.
+if [ -L "$token" ]; then
+  echo "$token is a symlink: refusing to start" >&2
+  exit 1
+fi
 if [ ! -s "$token" ]; then
   (umask 077 && head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$token")
 fi
-chown "$PUID:$PGID" "$token"
+chown -h "$PUID:$PGID" "$token"
 chmod 600 "$token"
 
 mkdir -p /etc/nginx/ebook-reader.d

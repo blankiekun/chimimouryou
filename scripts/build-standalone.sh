@@ -21,8 +21,7 @@ scripts/analysis-tools/build.sh
 
 # Settings → Dictionary's one-tap JMdict (EDRDG, CC BY-SA 4.0, see NOTICE), served same-origin.
 mkdir -p apps/web/build/dictionaries
-curl -fsSL --retry 3 -o apps/web/build/dictionaries/JMdict_english.zip \
-  https://github.com/yomidevs/jmdict-yomitan/releases/latest/download/JMdict_english.zip
+scripts/fetch-jmdict.sh apps/web/build/dictionaries/JMdict_english.zip
 
 # VNBox (Windows games) and its root fs, served same-origin (release assets have no CORS).
 # build.sh keeps the zips in VNBOX_CACHE that still pass their sums.

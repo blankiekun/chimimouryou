@@ -4,6 +4,11 @@
 # COMPOSE_PROFILES, and an optional docker-compose.override.yml).
 APP=/opt/ebook-reader
 CONFIG=/etc/ebook-reader
+# Commands run by hand keep the installed version (deploy.sh and ebook-update write the file).
+if [ -z "${VERSION:-}" ] && [ -f "$APP/.version" ]; then
+  VERSION=$(cat "$APP/.version")
+  export VERSION
+fi
 if [ -f "$CONFIG/docker-compose.override.yml" ]; then
   set -- -f "$CONFIG/docker-compose.override.yml" "$@"
 fi

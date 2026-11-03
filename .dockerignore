@@ -11,6 +11,11 @@
 data
 # Agent worktrees and local tool state
 .claude
+# One deployment's private settings (deploy.sh doesn't send them, a build from a checkout would)
+local
+CLAUDE.local.md
+# Written by deploy.sh and ebook-update; a new one mustn't invalidate the build cache
+.version
 # VNBox fetched for pnpm dev; the image fetches its own (scripts/vnbox/build.sh)
 apps/web/static/vn/vnbox
 # The desktop and Android apps are built on their own, never in the images

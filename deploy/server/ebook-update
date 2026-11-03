@@ -19,6 +19,12 @@ APP=/opt/ebook-reader
 CONFIG=/etc/ebook-reader
 COMMANDS="ebook-compose ebook-account ebook-update"
 
+# One at a time with deploy.sh, which holds this lock while it runs `install`.
+if [ "${1:-}" != install ]; then
+  exec 9>/run/ebook-update.lock
+  flock 9
+fi
+
 # A crash or reboot between the two mv calls of an update leaves no source at all.
 if [ ! -e "$APP" ] && [ -d "$APP.previous" ]; then
   mv "$APP.previous" "$APP"
@@ -153,11 +159,14 @@ restore() {
   done
   rm -rf "$APP"
   mv "$APP.previous" "$APP"
+  # ebook-compose reads the restored source's .version.
+  unset VERSION
 }
 rm -rf "$APP.previous"
 mv "$APP" "$APP.previous"
 mv "$work/src" "$APP"
 export VERSION=${version:-docker}
+printf '%s\n' "$VERSION" > "$APP/.version"
 if ! $compose build --quiet; then
   restore
   status failed "The new version did not build; the running one stays"

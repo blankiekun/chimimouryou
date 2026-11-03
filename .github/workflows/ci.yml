@@ -39,7 +39,7 @@ jobs:
           if ! pr || grep -qvE '(\.md$|^docs/)' changed.txt; then
             echo code=true >> "$GITHUB_OUTPUT"
           fi
-          if ! pr || grep -qE '^(docker/|docker-compose|\.dockerignore|server/|engine/|package\.json|pnpm-|apps/web/package\.json|themes\.md|\.github/workflows/)' changed.txt; then
+          if ! pr || grep -qE '^(docker/|docker-compose|\.dockerignore|server/|engine/|package\.json|pnpm-|apps/web/(package\.json|Dockerfile|nginx/)|themes\.md|scripts/(vnbox/|vn-ocr/|fetch-jmdict\.sh)|\.github/workflows/)' changed.txt; then
             echo images=true >> "$GITHUB_OUTPUT"
           fi
           if grep -qE '^(apps/desktop/|pnpm-lock\.yaml|\.github/workflows/)' changed.txt; then
@@ -280,7 +280,7 @@ jobs:
 
   # Catches Dockerfiles that no longer build and, in Image services, compose files that no longer
   # parse. Pull requests build only when image inputs change; main always builds, which keeps the cache
-  # warm for pull requests and releases. Five plain jobs, not a matrix: a skipped matrix job reports
+  # warm for pull requests and releases. Plain jobs, not a matrix: a skipped matrix job reports
   # its name unexpanded, which would leave the required "Image <name>" checks waiting.
   docker-web:
     name: Image web
@@ -314,6 +314,18 @@ jobs:
           push: false
           cache-from: type=gha,scope=${{ env.IMAGE }}
           cache-to: ${{ github.event_name != 'pull_request' && format('type=gha,mode=max,scope={0}', env.IMAGE) || '' }}
+
+  # docker-compose.static.yml's image; not published, so the tag gate doesn't wait for it.
+  docker-static:
+    name: Image static
+    needs: changes
+    if: needs.changes.outputs.images
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: static
+      FILE: apps/web/Dockerfile
+      TARGET: ''
+    steps: *image-steps
 
   docker-services:
     name: Image services

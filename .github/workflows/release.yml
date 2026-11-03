@@ -139,7 +139,9 @@ jobs:
           platforms: linux/${{ matrix.arch }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: type=image,name=${{ steps.name.outputs.name }},push-by-digest=true,name-canonical=true,push=true
-          build-args: VERSION=${{ github.ref_name }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            REQUIRE_ASSETS=1
           cache-from: ${{ matrix.arch == 'amd64' && format('type=gha,scope={0}', matrix.image) || '' }}
 
       - name: Save the digest
@@ -197,7 +199,7 @@ jobs:
           docker buildx imagetools inspect "${TAGS%%$'\n'*}"
 
   # Publishes the tag on the standalone site (deploy/pages/pages.yml in PAGES_REPO). Needs the
-  # secret PAGES_DISPATCH_TOKEN: a fine-grained token for that repository only, Actions: write.
+  # secret PAGES_DISPATCH_TOKEN: a fine-grained token for that repository only, Actions: read and write.
   # Tags with a '-' (v1.2.3-rc1) are test releases: no site deploys, and the release is a prerelease.
   pages:
     needs: [ci, on-main]

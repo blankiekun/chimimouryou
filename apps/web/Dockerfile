@@ -24,5 +24,6 @@ FROM nginx:1.31-alpine
 
 COPY apps/web/nginx /etc/nginx
 COPY --from=builder /workspace/apps/web/build /usr/share/nginx/html
+COPY themes.md /usr/share/nginx/html/themes.md
 
 EXPOSE 80

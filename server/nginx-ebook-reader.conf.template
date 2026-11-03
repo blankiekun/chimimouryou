@@ -4,18 +4,19 @@
 # Server-level extras (TLS, resolver, real_ip) come from /etc/nginx/ebook-reader.d/.
 #
 # Who may do what (checked by the account service through auth_request):
-# - reading the library, catalog and shared sync folder needs an account, a
-#   trusted network, or PUBLIC_READS=1;
-# - signed-out readers on a trusted network write the shared sync folder;
+# - reading the library and catalog needs an account, a trusted network, or PUBLIC_READS=1;
+# - signed-out readers on a trusted network write reading data (/api/v1/, the shared account '');
 #   elsewhere that needs an account;
 # - adding books to Calibre, starting difficulty jobs and editing series or book details need an
-#   admin or that permission (Settings → Account → Manage accounts).
+#   admin or that permission (admin panel → Manage accounts → User permissions).
 # Slows password guessing on top of the account service's own lockouts.
 limit_req_zone $binary_remote_addr zone=account_login:1m rate=10r/m;
 # Keeps book page searches on Jiten small (its API terms: personal, small scale).
 limit_req_zone $binary_remote_addr zone=jiten:1m rate=20r/m;
 # Readings files are asked for on each book open; this bounds what one address can queue.
 limit_req_zone $binary_remote_addr zone=readings:1m rate=6r/m;
+# Word lists are made on request. Queued, not refused, so the library's coverage scan (one at a time) only slows.
+limit_req_zone $binary_remote_addr zone=words:1m rate=2r/s;
 
 # Behind a reverse proxy every client looks like the proxy, so set
 # real_ip_header/set_real_ip_from for it (REAL_IP_FROM in Docker) first.
@@ -196,6 +197,19 @@ ${CORS_WITH_SECURITY_HEADERS}
     proxy_request_buffering off;
     proxy_read_timeout 300s;
     client_max_body_size 256m;
+  }
+
+  location ~ ^/calibre/difficulty/api/words/-?[0-9]+$ {
+${CORS_WITH_SECURITY_HEADERS}
+    auth_request /_account_difficulty_writes;
+    limit_req zone=words burst=20;
+    limit_req_status 429;
+    rewrite ^/calibre/difficulty/api/(.*)$ /$1 break;
+    proxy_pass http://$difficulty_upstream;
+    proxy_set_header X-Internal-Token "${INTERNAL_TOKEN}";
+    proxy_http_version 1.1;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-Proto $forwarded_proto;
   }
 
   # Readings files (furigana in context): requested and fetched by every reader who may use the
@@ -383,17 +397,6 @@ ${CORS_WITH_SECURITY_HEADERS}
     client_max_body_size 0;
   }
 
-  location = /_account_series {
-    internal;
-    proxy_set_header Host $http_host;
-    proxy_pass http://$account_upstream/auth/series;
-    proxy_set_header X-Internal-Token "${INTERNAL_TOKEN}";
-    proxy_set_header X-Forwarded-Proto $forwarded_proto;
-    proxy_pass_request_body off;
-    proxy_set_header Content-Length "";
-    client_max_body_size 0;
-  }
-
   location = /_account_import {
     internal;
     proxy_set_header Host $http_host;
@@ -412,9 +415,6 @@ ${CORS_WITH_SECURITY_HEADERS}
     proxy_set_header Host $http_host;
     proxy_pass http://$account_upstream/auth/shared/writes;
     proxy_set_header X-Internal-Token "${INTERNAL_TOKEN}";
-    # The account service refuses some writes by path (shared_write_allowed).
-    proxy_set_header X-Original-URI $request_uri;
-    proxy_set_header X-Destination $http_destination;
     proxy_set_header X-Forwarded-Proto $forwarded_proto;
     proxy_pass_request_body off;
     proxy_set_header Content-Length "";

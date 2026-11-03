@@ -50,16 +50,21 @@ run() {
 
 # Copies a local file to the server: put <file> <destination> <mode>.
 put() {
-  run sh -c 'cat > "$1" && chmod "$2" "$1"' sh "$2" "$3" < "$1"
+  run sh -c 'umask 077; cat > "$1" && chmod "$2" "$1"' sh "$2" "$3" < "$1"
 }
 
 echo "Deploying ${VERSION} to ${TARGET}..."
+
+# ebook-update holds this lock while it works: its source, settings and commands aren't replaced under it.
+run bash -c 'flock -n /run/ebook-update.lock true || { echo "An update from the admin panel is running: deploy again when it ends" >&2; exit 1; }'
 
 tar -C "$REPO_ROOT" \
   --exclude=.git --exclude=node_modules --exclude=build --exclude=.svelte-kit \
   --exclude=./local --exclude=./CLAUDE.local.md --exclude=apps/web/.env.local \
   --exclude=./.env --exclude=./data --exclude=./.claude \
   --exclude=./apps/desktop/yomitan --exclude=./apps/desktop/dist \
+  --exclude=./.github --exclude=./.impeccable --exclude=./course --exclude=./themes --exclude=./AUDIT.md \
+  --exclude=.DS_Store \
   -czf - . \
   | run bash -c 'set -euo pipefail; rm -rf /opt/ebook-reader.new && mkdir -p /opt/ebook-reader.new && tar -C /opt/ebook-reader.new -xzf -'
 
@@ -93,6 +98,9 @@ run env LANG=C.UTF-8 VERSION="$VERSION" bash -s <<'EOF'
   app=/opt/ebook-reader
   saved=$app.config.previous
   images=
+  # One at a time with ebook-update, which waits for this lock (closed when this script ends).
+  exec 9>/run/ebook-update.lock
+  flock 9
   # On failure the source, settings and commands that ran come back and the images get their tags
   # back, so the old commands run on the old images and the next deploy keeps them as :previous.
   rollback() {
@@ -111,6 +119,8 @@ run env LANG=C.UTF-8 VERSION="$VERSION" bash -s <<'EOF'
     for command in ebook-compose ebook-account ebook-update; do
       if [ -f "$saved/$command" ]; then mv "$saved/$command" "/usr/local/bin/$command" || true; fi
     done
+    # ebook-compose reads the restored source's .version.
+    unset VERSION
     $compose up -d --remove-orphans || true
     echo "$1" >&2
     exit 1
@@ -120,6 +130,7 @@ run env LANG=C.UTF-8 VERSION="$VERSION" bash -s <<'EOF'
     mv "$app" "$app.previous"
   fi
   mv "$app.new" "$app"
+  printf '%s\n' "$VERSION" > "$app/.version"
   images=$($compose config --images | sort -u) || rollback "Deploy failed: the previous version runs again"
   for image in $images; do
     docker image tag "$image" "${image%:*}:previous" 2>/dev/null || true
