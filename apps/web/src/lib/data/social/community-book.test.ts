@@ -34,7 +34,6 @@ import {
   communityMarksCache$,
   markBookOnOpen,
   matchOffer$,
-  passedLine,
   refreshBookMarks,
   restoreBookMarks,
   shouldOfferMatch,
@@ -84,13 +83,11 @@ describe('community in the book', () => {
     expect(lines[3].start).toBe(46);
   });
 
-  it('finds the line at a position and the lines passed', () => {
+  it('finds the line at a position', () => {
     const lines = bookLines(paragraphs);
 
     expect(lineAt(lines, 0)).toBe(0);
     expect(lineAt(lines, 20)).toBe(2);
-    expect(passedLine(lines, 18)).toBe(1);
-    expect(passedLine(lines, 19)).toBe(2);
   });
 
   it('shows threads on lines ahead of the reader too', async () => {

@@ -209,10 +209,6 @@ export function rankPlacement(results: PlacementRecord[]) {
   return placementAt(counted);
 }
 
-/** `rankPlacement`'s cutoff, 0 without one. */
-export const rankPlacementCutoff = (results: PlacementRecord[]) =>
-  rankPlacement(results)?.cutoff ?? 0;
-
 /** Marks of words met in a book (`totals`, folded words-met keys): marking unmet words does nothing. */
 export function rankMarks(marks: WordMarks, totals: Record<string, number>) {
   const forms = new Set(Object.keys(totals).map((key) => key.slice(0, key.indexOf('\t'))));

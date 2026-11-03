@@ -15,7 +15,7 @@ import {
   mergeStepState,
   qualifyingLevels,
   rankMarks,
-  rankPlacementCutoff,
+  rankPlacement,
   rankSteps,
   readingRank,
   realBook,
@@ -220,13 +220,13 @@ describe('word test and marks', () => {
   it('ignores retakes within a week', () => {
     const t = 100 * testGap;
 
-    expect(rankPlacementCutoff([at(t, 5000), at(t + 60_000, 40_000)])).toBe(5000);
-    expect(rankPlacementCutoff([at(t, 5000), at(t + testGap, 40_000)])).toBe(40_000);
+    expect(rankPlacement([at(t, 5000), at(t + 60_000, 40_000)])?.cutoff).toBe(5000);
+    expect(rankPlacement([at(t, 5000), at(t + testGap, 40_000)])?.cutoff).toBe(40_000);
     // Each retake restarts the week.
     expect(
-      rankPlacementCutoff([at(t, 5000), at(t + testGap - 1, 9000), at(t + testGap + 1, 40_000)])
+      rankPlacement([at(t, 5000), at(t + testGap - 1, 9000), at(t + testGap + 1, 40_000)])?.cutoff
     ).toBe(5000);
-    expect(rankPlacementCutoff([])).toBe(0);
+    expect(rankPlacement([])).toBeUndefined();
   });
 
   it('keeps only marks of words met', () => {

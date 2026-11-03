@@ -28,8 +28,6 @@ export interface LinePcm {
 
 /** Recorded before the window's start, so a voice starting with the click isn't clipped. */
 export const preRollMs = 400;
-/** Recorded after the window's end (unused by the trim, which stops at the next line). */
-export const tailMs = 6000;
 
 const frameSeconds = 512 / 16000;
 const threshold = 0.5;

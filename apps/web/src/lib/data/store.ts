@@ -18,7 +18,6 @@ import {
 import { HeatmapDataAggregration } from '$lib/components/statistics/statistics-heatmap/statistics-heatmap';
 import {
   StatisticsRangeTemplate,
-  StatisticsTab,
   type BookStatistic,
   StatisticsReadingDataAggregationMode
 } from '$lib/components/statistics/statistics-types';
@@ -421,11 +420,6 @@ export const lastSyncedSettingsTarget$ = writableStringLocalStorageSubject()(
 export const lastReadingGoalsModified$ = writableNumberLocalStorageSubject()(
   'lastReadingGoalsModified',
   0
-);
-
-export const lastStatisticsTab$ = writableStringLocalStorageSubject<StatisticsTab>()(
-  'lastStatisticsTab',
-  StatisticsTab.OVERVIEW
 );
 
 export const lastStatisticsRangeTemplate$ =

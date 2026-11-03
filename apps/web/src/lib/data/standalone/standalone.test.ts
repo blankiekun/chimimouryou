@@ -463,20 +463,11 @@ describe('standalone edition', () => {
       expect(init.credentials).toBe('omit');
     });
 
-    it('leaves other URLs alone', async () => {
-      const { serverUrl } = await import('$lib/data/remote/server-connect');
-
-      expect(serverUrl('/calibre/sync/a')).toBe('https://books.example/calibre/sync/a');
-      expect(serverUrl('/jiten/search')).toBe('/jiten/search');
-      expect(serverUrl('https://api.example/calibre/x')).toBe('https://api.example/calibre/x');
-    });
-
     it('is ignored by the self-hosted build', async () => {
       vi.stubEnv('VITE_EDITION', '');
-      const { serverConnected, serverUrl } = await import('$lib/data/remote/server-connect');
+      const { serverConnected } = await import('$lib/data/remote/server-connect');
 
       expect(serverConnected).toBe(false);
-      expect(serverUrl('/calibre/catalog.json')).toBe('/calibre/catalog.json');
     });
   });
 

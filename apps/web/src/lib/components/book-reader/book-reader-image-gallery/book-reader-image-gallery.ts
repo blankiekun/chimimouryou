@@ -21,8 +21,6 @@ export interface ReaderImageGalleryPicture {
 
 export type ReaderImageGalleryKeybindMap = Record<string, ReaderImageGalleryAvailableKeybind>;
 
-export function setReaderImageGalleryPictureSpoiler() {}
-
 export const readerImageGalleryPictures$ = writableSubject<ReaderImageGalleryPicture[]>([]);
 
 export const toggleImageGalleryPictureSpoiler$ = new Subject<ReaderImageGalleryPicture>();

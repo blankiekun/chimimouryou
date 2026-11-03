@@ -11,7 +11,6 @@ import type { Section } from '$lib/data/database/books-db/versions/v3/books-db-v
 export const sectionList$ = new BehaviorSubject<Section[]>([]);
 export const sectionProgress$ = new Subject<Map<string, SectionWithProgress>>();
 export const nextChapter$ = new Subject<string>();
-export const tocIsOpen$ = new Subject<boolean>();
 
 export type SectionWithProgress = Section & {
   progress: number;
