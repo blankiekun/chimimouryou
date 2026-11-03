@@ -19,6 +19,7 @@ import {
   savedHookName,
   searchHookScripts,
   vnboxErrorText,
+  vnboxSavesText,
   vnboxPlayerUrl,
   windowsGameBlocker,
   windowsGameBook,
@@ -490,6 +491,16 @@ describe('windowsGameBlocker', () => {
     expect(vnboxErrorText('Unable to load x.zip: 404')).toBe(
       "The player couldn't load its files: Unable to load x.zip: 404"
     );
+    expect(vnboxErrorText('This game is already open in another tab')).toMatch(/Close it there/);
+  });
+
+  it('warns that saves are lost on close, with the storage fix when the quota is full', () => {
+    expect(vnboxSavesText('Saves could not be stored: QuotaExceededError: full')).toMatch(
+      /persistently/
+    );
+    const other = vnboxSavesText('Saves could not be stored: InvalidStateError');
+    expect(other).toMatch(/closing the game now loses/);
+    expect(other).toContain('InvalidStateError');
   });
 });
 

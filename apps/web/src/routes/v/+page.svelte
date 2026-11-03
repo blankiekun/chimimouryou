@@ -55,6 +55,7 @@
     approveHook,
     hookApproved,
     vnboxErrorText,
+    vnboxSavesText,
     windowsGameBlocker,
     windowsGameBlockerText
   } from '$lib/data/vn/windows-game';
@@ -169,6 +170,8 @@
   let saveSync: VnSaveSync | undefined;
   /** Why a Windows game's saves don't sync */
   let savesNote: string | undefined;
+  /** VNBox can't store saves right now; it clears when a retry works */
+  let savesFailing: string | undefined;
   /** This game's files are missing here: the import dialog can add them to this record. */
   let missingFiles = false;
   /** This browser can't turn the phone: the reader is asked to (vn-landscape.ts). */
@@ -811,6 +814,10 @@
       (event.data.source === 'lazyfs' || event.data.source === 'player')
     ) {
       blocked = vnboxErrorText(String(event.data.message ?? ''));
+    } else if (event.data?.type === 'vnbox-error' && event.data.source === 'saves') {
+      savesFailing = vnboxSavesText(String(event.data.message ?? ''));
+    } else if (event.data?.type === 'vnbox-saves-ok') {
+      savesFailing = undefined;
     }
   }
 
@@ -895,7 +902,7 @@
     {/if}
     <!-- The game's own dark ground: part of the content, not the theme -->
     <div class="vn-game" class:vn-game-blocked={blocked || unapprovedHook || showSaves}>
-      {#if newerEngine || savesNote || ended || turnNote}
+      {#if newerEngine || savesNote || savesFailing || ended || turnNote}
         <div class="vn-notices">
           {#if turnNote}
             <div class="vn-notice">
@@ -917,6 +924,17 @@
               <button
                 class="app-button app-button-quiet"
                 on:click={() => (newerEngine = undefined)}
+              >
+                Dismiss
+              </button>
+            </div>
+          {/if}
+          {#if savesFailing}
+            <div class="vn-notice" role="alert">
+              <p>{savesFailing}</p>
+              <button
+                class="app-button app-button-quiet"
+                on:click={() => (savesFailing = undefined)}
               >
                 Dismiss
               </button>
