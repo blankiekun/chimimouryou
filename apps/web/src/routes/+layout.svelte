@@ -19,8 +19,10 @@
   import { fontFamilyGroupOne$, isOnline$, userFonts$ } from '$lib/data/store';
   import { reloadOnStaleBuild } from '$lib/functions/reload-on-stale-build';
   import { needsFullLoad } from '$lib/data/reader/reader-route';
+  import { waitingChanges } from '$lib/data/sync/sync-status';
   import { dummyFn, isMobile, isMobile$ } from '$lib/functions/utils';
   import { MetaTags } from 'svelte-meta-tags';
+  import { distinctUntilChanged, filter } from 'rxjs';
   import '$lib/assets/fonts/biz-udpgothic/biz-udpgothic.css';
   import '../app.scss';
 
@@ -51,6 +53,18 @@
       accountReady().then(async (user) => {
         await releaseReaderData(user).catch(() => {});
         startSettingsSync(user);
+      });
+      // Changes an earlier page left unsent: on app start, back online and on return.
+      const retrySync = () => {
+        if (waitingChanges().length) {
+          import('$lib/data/storage/reader-storage')
+            .then((storage) => storage.retryWaitingChanges(window))
+            .catch(() => {});
+        }
+      };
+      isOnline$.pipe(distinctUntilChanged(), filter(Boolean)).subscribe(retrySync);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') retrySync();
       });
     }
   }

@@ -198,3 +198,19 @@ export function getStorageHandler(
       throw new Error(`No handler implementation for ${storageType}`);
   }
 }
+
+/** A handler for work beside the reader: the shared ones switch context while a book opens. */
+export function ownStorageHandler(window: Window, storageType: StorageKey): BaseStorageHandler {
+  switch (storageType) {
+    case StorageKey.CALIBRE:
+      return new ServerStorageHandler(window);
+    case StorageKey.GDRIVE:
+      return new GDriveStorageHandler(window);
+    case StorageKey.ONEDRIVE:
+      return new OneDriveStorageHandler(window);
+    case StorageKey.FS:
+      return new FilesystemStorageHandler(window, StorageKey.FS);
+    default:
+      return new BrowserStorageHandler(window, StorageKey.BROWSER);
+  }
+}

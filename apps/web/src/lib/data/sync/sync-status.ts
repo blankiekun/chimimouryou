@@ -5,13 +5,13 @@
  */
 
 /**
- * Sync status of the standalone edition (header slot and Settings → Sync → Status), fed by
- * `replicateData` whenever it copies between this browser and Google Drive, OneDrive or a folder.
- * Not part of upstream.
+ * Sync status (header slot, and the standalone's Settings → Sync → Status), fed by `replicateData`
+ * whenever it copies between this browser and Google Drive, OneDrive or a folder, or sends to the
+ * server. Not part of upstream.
  */
 
 import { writableSubject } from '$lib/functions/svelte/store';
-import { StorageKey } from '$lib/data/storage/storage-types';
+import { StorageKey, type StorageDataType } from '$lib/data/storage/storage-types';
 
 export interface SyncError {
   at: number;
@@ -27,7 +27,10 @@ export interface SyncState {
   lastWhat: string;
   /** The last sync failed */
   failed: boolean;
-  /** `title\ttype` of changes whose upload failed and that the reader retries */
+  /**
+   * `waitingEntry`s of changes not sent yet: queued by the reader or failed. Saved, so they outlive
+   * the page; retried at app start, on `online` and on return (`retryWaitingChanges`).
+   */
   waiting: string[];
   errors: SyncError[];
 }
@@ -35,6 +38,7 @@ export interface SyncState {
 const lastSyncKey = 'syncLastSync';
 const lastWhatKey = 'syncLastWhat';
 const errorsKey = 'syncErrors';
+const waitingKey = 'syncWaiting';
 const maxErrors = 5;
 
 function read<T>(key: string, fallback: T): T {
@@ -59,23 +63,68 @@ export const syncState$ = writableSubject<SyncState>({
   lastSync: typeof localStorage === 'undefined' ? 0 : read(lastSyncKey, 0),
   lastWhat: typeof localStorage === 'undefined' ? '' : read(lastWhatKey, ''),
   failed: false,
-  waiting: [],
+  waiting: typeof localStorage === 'undefined' ? [] : read<string[]>(waitingKey, []),
   errors: typeof localStorage === 'undefined' ? [] : read<SyncError[]>(errorsKey, [])
 });
 
 const remoteSources = new Set([StorageKey.GDRIVE, StorageKey.ONEDRIVE, StorageKey.FS]);
 
-/** Copies between the browser and a Drive, OneDrive or folder are syncs; backups are not. */
+/**
+ * Copies between the browser and a Drive, OneDrive or folder are syncs; backups are not. With the
+ * server only sends count: a download offline reads the stored mirror and would claim "Synced".
+ */
 export function isSyncBetween(source: StorageKey, target: StorageKey) {
   return (
     source !== StorageKey.BACKUP &&
     target !== StorageKey.BACKUP &&
-    (remoteSources.has(source) || remoteSources.has(target))
+    (remoteSources.has(source) || remoteSources.has(target) || target === StorageKey.CALIBRE)
   );
+}
+
+export const waitingEntry = (source: string, type: StorageDataType, title: string) =>
+  `${source}\t${type}\t${title}`;
+
+export function parseWaitingEntry(entry: string) {
+  const [source, type, ...title] = entry.split('\t');
+
+  return { source, type: type as StorageDataType, title: title.join('\t') };
 }
 
 function update(change: Partial<SyncState>) {
   syncState$.next({ ...syncState$.getValue(), ...change });
+}
+
+/** The list as saved: another tab may have changed it. */
+export function waitingChanges() {
+  const waiting = read(waitingKey, syncState$.getValue().waiting);
+
+  update({ waiting });
+
+  return waiting;
+}
+
+function setWaiting(waiting: string[]) {
+  write(waitingKey, waiting);
+  update({ waiting });
+}
+
+/** A change the reader will send soon: if the page dies first, the list still has it. */
+export function syncQueued(entry: string) {
+  const waiting = waitingChanges();
+
+  if (!waiting.includes(entry)) setWaiting([...waiting, entry]);
+}
+
+export function dropWaiting(entries: string[]) {
+  setWaiting(waitingChanges().filter((entry) => !entries.includes(entry)));
+}
+
+/**
+ * One upload at a time across tabs and the reader, so a retry never races a send of the same file.
+ * shortcut: plain http has no Web Locks, so tabs can race there; a retry of what's sent is a no-op.
+ */
+export function syncLocked<T>(run: () => Promise<T>) {
+  return navigator.locks ? navigator.locks.request('syncUpload', run) : run();
 }
 
 export function syncStarted(total: number) {
@@ -87,20 +136,21 @@ export function syncStep() {
   if (running) update({ running: { ...running, done: Math.min(running.done + 1, running.total) } });
 }
 
-/** Ends a sync of `keys` (`title\ttype`): an error keeps them waiting and is listed. */
+/** Ends a sync of `keys` (`waitingEntry`s): an error keeps them waiting and is listed. */
 export function syncEnded(keys: string[], error: string, what: string, now = Date.now()) {
-  const state = syncState$.getValue();
-  const others = state.waiting.filter((key) => !keys.includes(key));
+  const others = waitingChanges().filter((key) => !keys.includes(key));
 
   if (!error) {
     write(lastSyncKey, now);
     write(lastWhatKey, what);
-    update({ running: undefined, lastSync: now, lastWhat: what, failed: false, waiting: others });
+    setWaiting(others);
+    update({ running: undefined, lastSync: now, lastWhat: what, failed: false });
     return;
   }
 
   recordSyncError(what, error, now);
-  update({ running: undefined, failed: true, waiting: [...others, ...keys] });
+  setWaiting([...others, ...keys]);
+  update({ running: undefined, failed: true });
 }
 
 /** Lists an error in Settings → Sync → Status (also an unreadable synced file, sync-files.ts). */
@@ -130,6 +180,7 @@ export type SyncView =
   | { kind: 'offline'; text: string }
   | { kind: 'signin'; text: string }
   | { kind: 'failed'; text: string }
+  | { kind: 'waiting'; text: string }
   | { kind: 'synced'; text: string };
 
 /** What the header shows (plan S3): nothing on this device, else the most pressing state. */
@@ -140,7 +191,7 @@ export function syncView(
   signedIn: boolean,
   now = Date.now()
 ): SyncView {
-  if (!remoteSources.has(source)) return { kind: 'none' };
+  if (!remoteSources.has(source) && source !== StorageKey.CALIBRE) return { kind: 'none' };
   if (state.running) {
     const { done, total } = state.running;
     return {
@@ -150,18 +201,15 @@ export function syncView(
       total
     };
   }
-  if (!online && state.waiting.length) {
-    const count = state.waiting.length;
-    return {
-      kind: 'offline',
-      text: `Offline · ${count} ${count === 1 ? 'change' : 'changes'} waiting`
-    };
-  }
+  const count = state.waiting.length;
+  const waiting = `${count} ${count === 1 ? 'change' : 'changes'} waiting`;
+  if (!online && count) return { kind: 'offline', text: `Offline · ${waiting}` };
   if (!signedIn) {
     const place = source === StorageKey.ONEDRIVE ? 'OneDrive' : 'Drive';
     return { kind: 'signin', text: `Sign in to ${place} again` };
   }
   if (state.failed) return { kind: 'failed', text: 'Sync failed' };
+  if (count) return { kind: 'waiting', text: waiting };
   if (state.lastSync) return { kind: 'synced', text: `Synced ${formatAgo(now - state.lastSync)}` };
   return { kind: 'none' };
 }
