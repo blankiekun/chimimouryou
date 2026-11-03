@@ -152,6 +152,15 @@ describe('hook cleanup filters', () => {
     expect(clean('一行目', 'a')).toBe('一行目');
     expect(clean('<br>', 'a')).toBe('');
   });
+
+  it('counts a line resent with other spacing as seen (信天翁航海録)', () => {
+    const clean = hookCleaner({ recentLines: true });
+
+    expect(clean('船乗りが　住んでいて')).toBe('船乗りが　住んでいて');
+    expect(clean('船乗りが　住んでいて')).toBe('');
+    expect(clean('船乗りが住んでいて')).toBe('');
+    expect(clean('次の行。')).toBe('次の行。');
+  });
 });
 
 describe('suggestCleanup', () => {

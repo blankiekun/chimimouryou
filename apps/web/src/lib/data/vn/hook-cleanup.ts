@@ -327,10 +327,12 @@ export function hookCleaner(cleanup: HookCleanup) {
     }
     if (!text || !cleanup.recentLines) return text;
 
+    // Spacing doesn't make a line new: 信天翁航海録 sends a line again without its full-width spaces.
+    const key = text.replace(/\s/gu, '');
     const seen = recent.get(threadId) ?? [];
 
-    if (seen.includes(text)) return '';
-    recent.set(threadId, [...seen, text].slice(-size));
+    if (seen.includes(key)) return '';
+    recent.set(threadId, [...seen, key].slice(-size));
 
     return text;
   };
