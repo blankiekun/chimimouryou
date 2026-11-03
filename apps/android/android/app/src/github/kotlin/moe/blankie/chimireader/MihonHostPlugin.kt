@@ -37,7 +37,7 @@ import kotlin.time.Duration.Companion.seconds
 
 /**
  * Mihon extensions in the app (`github` flavor only): the desktop host's protocol (apps/mihon-host
- * `Host`, the same core) in-process. `install {url, signingKey}` → `{sha256}` (MihonApks);
+ * `Host`, the same core) in-process. `install {url, signingKey, replaces?}` → `{sha256}` (MihonApks);
  * `call {pin, op, …}` loads the pinned apk once, then answers `load` (its sources) or the op;
  * `pages`/`image` answer image files under the cache, which the page reads with
  * `Capacitor.convertFileSrc` (never base64 over the bridge) and hands back to `drop {paths}`.
@@ -78,7 +78,13 @@ class MihonHostPlugin : Plugin() {
 
     @PluginMethod
     fun install(call: PluginCall) = run(call) {
-        val pin = MihonApks.install(app, network.client, call.getString("url").orEmpty(), call.getString("signingKey").orEmpty())
+        val pin = MihonApks.install(
+            app,
+            network.client,
+            call.getString("url").orEmpty(),
+            call.getString("signingKey").orEmpty(),
+            call.getString("replaces").orEmpty(),
+        )
         buildJsonObject { put("sha256", JsonPrimitive(pin)) }
     }
 

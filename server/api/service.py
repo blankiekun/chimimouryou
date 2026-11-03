@@ -211,6 +211,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def get_sync(self, match):
         since = int_param(self.query, 'since', 0, 0)
+        # Only these tables, for a slow client. Its `rev` vouches for them alone: a client that later
+        # adds a table starts that table from since=0. A typo must fail, or `rev` moves past its rows.
+        names = self.query['tables'][0].split(',') if 'tables' in self.query else list(SYNC_TABLES)
+        if not set(names) <= set(SYNC_TABLES):
+            raise ApiError(400, 'Bad tables')
         # PUBLIC_READS opens the library, not what readers on a trusted network read and highlighted.
         hide_shared = not self.account and self.headers.get('X-Trusted-Network') != '1'
 
@@ -219,6 +224,8 @@ class Handler(BaseHTTPRequestHandler):
             # Not past the rows left out: back on the trusted network this browser still needs them.
             result = {'rev': min(since, rev) if hide_shared else rev, 'db': db.file_id()}
             for name, table in SYNC_TABLES.items():
+                if name not in names:
+                    continue
                 if hide_shared and 'account' in apidb.TABLE_KEYS[table]:
                     rows = []
                 elif 'account' in apidb.TABLE_KEYS[table]:

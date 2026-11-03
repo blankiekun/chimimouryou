@@ -136,27 +136,18 @@ run env LANG=C.UTF-8 VERSION="$VERSION" bash -s <<'EOF'
     docker image tag "$image" "${image%:*}:previous" 2>/dev/null || true
   done
   $compose build --quiet || rollback "Deploy failed: the previous version runs again"
-  # The first start on the v1 API with old sync folders: migrate them while web is stopped, so
-  # no reader writes a fresh position over a row the migration brings. A failure puts the
-  # previous version back. Later deploys bring in what older clients wrote, failures only logged.
+  # The first start on the v1 API with old sync folders is migrated before web starts: a failure
+  # puts the previous version back. Later deploys bring in what older clients wrote, after it.
+  migrate="bash $app/deploy/server/migrate-sync-folders"
   first=0
-  if ! $compose run --rm --no-deps -T api test -f /data/state/api/migrate-report.json \
-    && $compose run --rm --no-deps -T api sh -c 'find /data/sync /data/accounts -mindepth 1 -maxdepth 1 ! -name .tmp | grep -q .'; then
+  if $migrate needed; then
     first=1
-    { $compose stop web \
-      && $compose up -d --no-deps api \
-      && $compose run --rm --no-deps -T catalog build-calibre-catalog /library /data/state/catalog/catalog.json --force \
-      && $compose run --rm --no-deps -T api python3 /app/api/migrate.py --apply
-    } || rollback "Migration failed: the previous version runs again"
+    $migrate first || rollback "Migration failed: the previous version runs again"
   fi
   # --wait fails on a service that crash-loops or never gets healthy; plain `up -d` returns 0 for both.
   $compose up -d --wait --wait-timeout 180 --remove-orphans || rollback "Deploy failed: the previous version runs again"
-  # Fill library.db's books, then copy the sync folders in (idempotent; the folders stay as they are).
   if [ "$first" = 0 ]; then
-    {
-      $compose run --rm --no-deps -T catalog build-calibre-catalog /library /data/state/catalog/catalog.json \
-        && $compose run --rm --no-deps -T api python3 /app/api/migrate.py --apply
-    } || echo "Migration to the API database failed; the old sync folders are untouched" >&2
+    $migrate later
   fi
   docker image prune -f >/dev/null
   rm -rf "$app.previous" "$saved"

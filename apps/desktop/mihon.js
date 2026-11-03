@@ -51,6 +51,7 @@ const CALL_MS = 60_000;
 const PAGES_MS = 10 * 60_000;
 const IDLE_MS = 5 * 60_000;
 const MAX_JAR = 20 * 1024 * 1024;
+const PIN = /^[0-9a-f]{64}$/;
 
 const sha256 = (data) => createHash('sha256').update(data).digest('hex');
 
@@ -246,17 +247,29 @@ export function registerMihon({ app, ipcMain, net, isApp, hostDir, jvmArgs = [] 
     }
   }
 
-  async function installJar(_event, url) {
+  /** Keeps the jar under its pin; `replaces` (a pin no other extension holds) goes once it reads back whole. */
+  async function installJar(_event, url, replaces) {
+    if (replaces !== undefined && !(typeof replaces === 'string' && PIN.test(replaces))) {
+      throw new Error('Not a pin');
+    }
     const body = await download(String(url), MAX_JAR);
     const pin = sha256(body);
     mkdirSync(extDir, { recursive: true });
-    await writeFile(join(extDir, `${pin}.jar`), body);
+    const path = join(extDir, `${pin}.jar`);
+    await writeFile(path, body);
+    if (sha256(await readFile(path)) !== pin) throw new Error('The extension could not be kept');
+    if (replaces && replaces !== pin) {
+      // A running host reads on from its open file, and its old pin stays in `loaded`.
+      // shortcut: Windows refuses while a running host has the jar open, and then it stays for
+      // good; delete it at the next host start if that ever adds up.
+      await rm(join(extDir, `${replaces}.jar`), { force: true }).catch(() => undefined);
+    }
     return { sha256: pin };
   }
 
   /** Loads the pinned jar into the host (once per host run): its sources. */
   async function load(pin) {
-    if (!/^[0-9a-f]{64}$/.test(pin)) throw new Error('Not a pin');
+    if (!PIN.test(pin)) throw new Error('Not a pin');
     const path = join(extDir, `${pin}.jar`);
     const body = await readFile(path).catch(() => null);
     if (!body || sha256(body) !== pin) {

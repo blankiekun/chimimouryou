@@ -1,0 +1,41 @@
+#!/bin/bash
+# Brings the old sync folders (sync/, accounts/<id>/ttu-reader-data/) into the API database. Run
+# from the source being installed by scripts/deploy.sh and ebook-update (never installed in
+# /usr/local/bin: an updater from before this file wouldn't install it, and a command there would
+# be the running version's, not the new one's).
+#
+#   migrate-sync-folders needed   exit 0: the first start on the v1 API with old sync folders
+#   migrate-sync-folders first    that migration, with web stopped, so no reader writes a fresh
+#                                 position over a row it brings; non-zero: the caller goes back
+#                                 to the previous version
+#   migrate-sync-folders later    brings in what older clients wrote (idempotent; the folders stay
+#                                 as they are); a failure is only logged
+#
+# COMPOSE is the compose command (docs/INSTALL.md's update by hand sets it).
+set -euo pipefail
+
+compose=${COMPOSE:-/usr/local/bin/ebook-compose}
+
+case "${1:-}" in
+  needed)
+    ! $compose run --rm --no-deps -T api test -f /data/state/api/migrate-report.json \
+      && $compose run --rm --no-deps -T api sh -c 'find /data/sync /data/accounts -mindepth 1 -maxdepth 1 ! -name .tmp | grep -q .'
+    ;;
+  first)
+    $compose stop web \
+      && $compose up -d --no-deps api \
+      && $compose run --rm --no-deps -T catalog build-calibre-catalog /library /data/state/catalog/catalog.json --force \
+      && $compose run --rm --no-deps -T api python3 /app/api/migrate.py --apply
+    ;;
+  later)
+    # Fill library.db's books, then copy the sync folders in.
+    {
+      $compose run --rm --no-deps -T catalog build-calibre-catalog /library /data/state/catalog/catalog.json \
+        && $compose run --rm --no-deps -T api python3 /app/api/migrate.py --apply
+    } || echo "Migration to the API database failed; the old sync folders are untouched" >&2
+    ;;
+  *)
+    echo "usage: migrate-sync-folders needed|first|later" >&2
+    exit 2
+    ;;
+esac

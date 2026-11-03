@@ -174,18 +174,14 @@ if ! $compose build --quiet; then
 fi
 
 status running "Restarting"
-# The first start on the v1 API with old sync folders: migrate them while web is stopped, so
-# no reader writes a fresh position over a row the migration brings. A failure puts the
-# previous version back. Later updates bring in what older clients wrote, failures only logged.
+# The first start on the v1 API with old sync folders is migrated before web starts: a failure
+# puts the previous version back. Later updates bring in what older clients wrote, after it.
+migrate="bash $APP/deploy/server/migrate-sync-folders"
 first=0
-if ! $compose run --rm --no-deps -T api test -f /data/state/api/migrate-report.json \
-  && $compose run --rm --no-deps -T api sh -c 'find /data/sync /data/accounts -mindepth 1 -maxdepth 1 ! -name .tmp | grep -q .'; then
+if $migrate needed; then
   first=1
   status running "Moving the reading data to the new database"
-  if ! { $compose stop web \
-    && $compose up -d --no-deps api \
-    && $compose run --rm --no-deps -T catalog build-calibre-catalog /library /data/state/catalog/catalog.json --force \
-    && $compose run --rm --no-deps -T api python3 /app/api/migrate.py --apply; }; then
+  if ! $migrate first; then
     restore
     $compose up -d --remove-orphans || true
     status failed "Migration failed: the previous version runs again"
@@ -199,12 +195,9 @@ if ! $compose up -d --wait --wait-timeout 180 --remove-orphans; then
   status failed "The new version did not start; the previous one runs again"
   exit 1
 fi
-# Fill library.db's books, then copy the sync folders in (idempotent; the folders stay as they are).
 if [ "$first" = 0 ]; then
-  {
-    $compose run --rm --no-deps -T catalog build-calibre-catalog /library /data/state/catalog/catalog.json \
-      && $compose run --rm --no-deps -T api python3 /app/api/migrate.py --apply
-  } || echo "Migration to the API database failed; the old sync folders are untouched" >&2
+  # || true: a release from before the script has none (`needed` above said no the same way).
+  $migrate later || true
 fi
 docker image prune -f >/dev/null
 rm -rf "$APP.previous"

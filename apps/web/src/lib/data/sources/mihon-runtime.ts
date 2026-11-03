@@ -23,8 +23,12 @@ import {
 } from './extension-runtime';
 
 interface MihonHost {
-  /** Downloads the extension (Android: checks its signer against `signingKey`) and pins it: its SHA-256 */
-  install(url: string, signingKey: string): Promise<{ sha256: string }>;
+  /**
+   * Downloads the extension (Android: checks its signer against `signingKey`) and pins it: its
+   * SHA-256. Once the new code is kept, the code pinned by `replaces` is deleted: the caller checks
+   * that nothing else holds it.
+   */
+  install(url: string, signingKey: string, replaces?: string): Promise<{ sha256: string }>;
   load(pin: string): Promise<{ sources: { id: string; name: string; lang: string }[] }>;
   call(pin: string, op: string, params: Record<string, unknown>): Promise<any>;
 }
@@ -43,7 +47,11 @@ interface MihonDesktop extends MihonHost {
 }
 
 interface MihonPlugin {
-  install(options: { url: string; signingKey: string }): Promise<{ sha256: string }>;
+  install(options: {
+    url: string;
+    signingKey: string;
+    replaces?: string;
+  }): Promise<{ sha256: string }>;
   call(options: Record<string, unknown>): Promise<any>;
   drop(options: { paths: string[] }): Promise<void>;
 }
@@ -66,7 +74,7 @@ async function files(found: { path: string; type: string }[]) {
 }
 
 const android: MihonHost = {
-  install: (url, signingKey) => plugin.install({ url, signingKey }),
+  install: (url, signingKey, replaces) => plugin.install({ url, signingKey, replaces }),
   load: (pin) => plugin.call({ pin, op: 'load' }),
   async call(pin, op, params) {
     const result = await plugin.call({ ...params, pin, op });

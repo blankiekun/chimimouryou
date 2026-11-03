@@ -209,9 +209,8 @@ those folders into `library.db` once, with `web` stopped. Updating by hand, do t
 before starting the new version:
 
 ```sh
-docker compose build && docker compose stop web && docker compose up -d --no-deps api
-docker compose run --rm --no-deps catalog build-calibre-catalog /library /data/state/catalog/catalog.json --force
-docker compose run --rm --no-deps api python3 /app/api/migrate.py --apply
+docker compose build
+COMPOSE='docker compose' deploy/server/migrate-sync-folders first
 docker compose up -d
 ```
 
