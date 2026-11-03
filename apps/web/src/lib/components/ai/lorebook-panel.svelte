@@ -93,9 +93,12 @@
     ({ entry, then }) =>
       (!category || entry.category === category) &&
       (!filter ||
-        [then?.name ?? entry.name, entry.reading, then?.content ?? '', ...(then?.keys ?? [])].some(
-          (text) => text.toLowerCase().includes(filter.toLowerCase())
-        ))
+        [
+          then?.name ?? '',
+          then?.name === entry.name ? entry.reading : '',
+          then?.content ?? '',
+          ...(then?.keys ?? [])
+        ].some((text) => text.toLowerCase().includes(filter.toLowerCase())))
   );
   $: counts = (lorebook?.entries ?? []).reduce<Record<string, number>>((acc, entry) => {
     acc[entry.category] = (acc[entry.category] ?? 0) + 1;
@@ -303,8 +306,9 @@
               aria-expanded={openEntry === entry.id}
               on:click={() => (openEntry = openEntry === entry.id ? '' : entry.id)}
             >
-              <span class="font-bold" lang="ja">{then?.name ?? entry.name}</span>
-              {#if entry.reading && entry.reading !== entry.name}
+              <!-- An unknown or older name: the latest name and its reading would be spoilers. -->
+              {#if then}<span class="font-bold" lang="ja">{then.name}</span>{/if}
+              {#if then?.name === entry.name && entry.reading && entry.reading !== entry.name}
                 <span class="panel-note" lang="ja">{entry.reading}</span>
               {/if}
               <span class="panel-note ml-1">{categoryLabels(entry.category)}</span>

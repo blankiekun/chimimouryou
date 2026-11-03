@@ -83,7 +83,7 @@ export default async function extractEpub(blob: Blob) {
         }
 
         if (entry.getData && !entry.directory) {
-          const mediaType: string = item['@_media-type'];
+          const mediaType: string = item['@_media-type'] ?? '';
           const isImage = mediaType.startsWith('image/');
 
           // Fonts, audio and video are never used: left in the zip, whatever their size.

@@ -227,7 +227,8 @@
   );
 
   const imageLoadingState$ = contentEl$.pipe(
-    mergeMap((contentEl) => imageLoadingState(contentEl)),
+    // A section's images only: an old section finishing says nothing about the new one.
+    switchMap((contentEl) => imageLoadingState(contentEl)),
     share()
   );
 

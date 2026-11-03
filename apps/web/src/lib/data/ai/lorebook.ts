@@ -432,6 +432,8 @@ async function readUntil(
   const total = Math.ceil((position - lorebook.processedUpTo) / chunkCharacters);
   /** Set to half a chunk for one retry after an answer that wasn't valid JSON */
   let retrySize = 0;
+  /** Deleted by the reader since this update began: an answer naming one doesn't bring it back. */
+  const deleted: LoreEntry[] = [];
 
   for (let part = 1; lorebook.processedUpTo < position; part += 1) {
     signal.throwIfAborted();
@@ -475,7 +477,15 @@ async function readUntil(
 
     // The stored list, not the one read before the request: the reader may have edited it since.
     const base = { ...(await getStored(title)), processedUpTo: start };
-    const entries = mergeLoreEntries(base.entries, updates, start, end, existing.sentInFull);
+    deleted.push(...lorebook.entries.filter((a) => !base.entries.some((b) => b.id === a.id)));
+    // Merged with the deleted ones so the same name matching finds them, then dropped.
+    const entries = mergeLoreEntries(
+      [...base.entries, ...deleted],
+      updates,
+      start,
+      end,
+      existing.sentInFull
+    ).filter((a) => !deleted.some((b) => b.id === a.id));
     const plain = textBetween(index, start, end, false);
 
     // New entries start where the passage first names them, not at its start.

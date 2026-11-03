@@ -8,7 +8,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ViewMode } from '$lib/data/view-mode';
 // @ts-expect-error tsconfig's moduleResolution "node" doesn't read package exports; Vitest does.
 import { page as browserPage } from 'vitest/browser';
-import { autoBookmark$, autoBookmarkTime$, database, manualBookmark$ } from '$lib/data/store';
+import {
+  autoBookmark$,
+  autoBookmarkTime$,
+  database,
+  generatedFurigana$,
+  manualBookmark$
+} from '$lib/data/store';
 import {
   addBook,
   mountReader,
@@ -16,6 +22,7 @@ import {
   openReader,
   panelOpen,
   paragraphAt,
+  paragraphCounts,
   togglePanel,
   visibleParagraphs,
   waitOnScreen
@@ -37,6 +44,20 @@ vi.mock('$lib/data/page-store', async () => {
   return { page: writable({ url: new URL(location.href), route: { id: '/b' }, state: {} }) };
 });
 
+// The book's readings file, as it arrives from the server or the local analysis; none by default.
+const readings$ = await vi.hoisted(async () => {
+  const { BehaviorSubject } = await import('rxjs');
+  return new BehaviorSubject<any>(undefined);
+});
+vi.mock('$lib/data/analysis/analysis-tools', async (importOriginal) => {
+  const { map } = await import('rxjs');
+  return {
+    ...(await importOriginal<object>()),
+    readingsFor$: (book: { title: string }) =>
+      readings$.pipe(map((readings) => ({ title: book.title, readings })))
+  };
+});
+
 let component: { $destroy(): void } | undefined;
 const savedAutoBookmark = autoBookmark$.getValue();
 
@@ -52,6 +73,8 @@ afterEach(async () => {
   autoBookmarkTime$.next(3);
   manualBookmark$.next(false);
   autoBookmark$.next(savedAutoBookmark);
+  generatedFurigana$.next(false);
+  readings$.next(undefined);
   await browserPage.viewport(1000, 700);
 });
 
@@ -189,6 +212,23 @@ describe('/b paginated: the auto bookmark follows pages inside a paragraph (phon
   }
 });
 
+const openBar = async (title: string) => {
+  (document.querySelector('button.fixed.inset-x-0.top-0') as HTMLElement).click();
+  await vi.waitFor(() => {
+    const button = document.querySelector<HTMLElement>(`button[title="${title}"]`);
+    expect(button).toBeTruthy();
+    button!.click();
+  });
+};
+const clickText = (selector: string, text: string) =>
+  vi.waitFor(() => {
+    const button = [...document.querySelectorAll<HTMLElement>(selector)].find(
+      (el) => el.textContent?.trim() === text
+    );
+    expect(button, text).toBeTruthy();
+    button!.click();
+  });
+
 /*
  * Manual bookmarks and the Aa sheet's layout buttons. Ways this can go wrong:
  * - the change writes the current place to the database: the bookmark is gone on the next open;
@@ -197,23 +237,6 @@ describe('/b paginated: the auto bookmark follows pages inside a paragraph (phon
  *   the send on hide would upload it over the real one.
  */
 describe('/b keeps a manual bookmark through a layout change', () => {
-  const openBar = async (title: string) => {
-    (document.querySelector('button.fixed.inset-x-0.top-0') as HTMLElement).click();
-    await vi.waitFor(() => {
-      const button = document.querySelector<HTMLElement>(`button[title="${title}"]`);
-      expect(button).toBeTruthy();
-      button!.click();
-    });
-  };
-  const clickText = (selector: string, text: string) =>
-    vi.waitFor(() => {
-      const button = [...document.querySelectorAll<HTMLElement>(selector)].find(
-        (el) => el.textContent?.trim() === text
-      );
-      expect(button, text).toBeTruthy();
-      button!.click();
-    });
-
   for (const view of [ViewMode.Paginated, ViewMode.Continuous]) {
     for (const writing of ['horizontal-tb', 'vertical-rl'] as const) {
       for (const change of ['direction', 'view'] as const) {
@@ -250,5 +273,88 @@ describe('/b keeps a manual bookmark through a layout change', () => {
         }, 40_000);
       }
     }
+  }
+});
+
+/*
+ * Manual bookmarks and the readings file arriving (or generated furigana switched) while reading.
+ * Ways this can go wrong:
+ * - the place the re-render reopens at stays in memory as "the bookmark": Return to bookmark goes
+ *   there, and the send on hide would upload it over the real one;
+ * - the re-render writes that place to the database;
+ * - readings that change nothing (no remount): the place never gives way to the bookmark.
+ */
+describe('/b keeps a manual bookmark through a re-render', () => {
+  /**
+   * A furigana at the start of each chapter, so the text really changes and it shows wherever the
+   * reader got to: paginated renders one chapter, and where three pages end depends on the fonts
+   * (a CI runner has no Japanese ones). `off` shifts the count.
+   */
+  const readingsFile = async (id: number, off = 0) => {
+    const starts = [1, 2, 3].map((chapter) => paragraphCounts(chapter, 1, true).start);
+
+    return {
+      characters: (await database.getData(id))!.characters! + off,
+      glosses: [[[0, 1, '第', 'だい']]],
+      occ: starts.flatMap((start, i) => [start - (starts[i - 1] ?? 0), 0, 0])
+    };
+  };
+
+  for (const view of [ViewMode.Paginated, ViewMode.Continuous]) {
+    for (const writing of ['horizontal-tb', 'vertical-rl'] as const) {
+      it(`${view}, ${writing}`, async () => {
+        manualBookmark$.next(true);
+        autoBookmark$.next(false);
+        generatedFurigana$.next(true);
+        const id = await addBook(2, 25, true);
+        component = await mountReader(id, view, writing);
+        await waitOnScreen('p-2-25');
+        await settle();
+        const bookmark = await savedCount(id);
+
+        for (let turn = 0; turn < 3; turn++) await pageDown(view);
+        const read = visibleParagraphs();
+
+        readings$.next(await readingsFile(id));
+        // The re-render happened and kept the page being read.
+        await vi.waitFor(
+          () => {
+            expect(
+              document.querySelector('.ttu-gen-ruby'),
+              `reading ${visibleParagraphs()}`
+            ).toBeTruthy();
+            expect(visibleParagraphs().filter((p) => read.includes(p))).not.toHaveLength(0);
+          },
+          { timeout: 10_000 }
+        );
+        await settle(500);
+        expect(await savedCount(id)).toBe(bookmark);
+
+        await openBar('More reader actions');
+        await clickText('button', 'Return to bookmark');
+        await waitOnScreen('p-2-25');
+        expect(await savedCount(id)).toBe(bookmark);
+      }, 40_000);
+    }
+
+    it(`${view}, readings that change nothing`, async () => {
+      manualBookmark$.next(true);
+      autoBookmark$.next(false);
+      generatedFurigana$.next(true);
+      const id = await addBook(2, 25, true);
+      component = await mountReader(id, view, 'horizontal-tb');
+      await waitOnScreen('p-2-25');
+      await settle();
+
+      for (let turn = 0; turn < 3; turn++) await pageDown(view);
+
+      // Made from another processing of the book: addGeneratedRuby leaves the text alone.
+      readings$.next(await readingsFile(id, 1));
+      await settle(500);
+
+      await openBar('More reader actions');
+      await clickText('button', 'Return to bookmark');
+      await waitOnScreen('p-2-25');
+    }, 40_000);
   }
 });

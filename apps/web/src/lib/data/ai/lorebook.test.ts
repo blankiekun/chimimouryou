@@ -18,6 +18,7 @@ import {
   stopLorebookUpdate,
   mergeLoreEntries,
   parseLoreAnswer,
+  saveLoreEntries,
   updateLorebook,
   type LoreEntry
 } from './lorebook';
@@ -121,6 +122,37 @@ describe('updateLorebook', () => {
     expect(lorebook.entries).toHaveLength(1);
     expect(lorebook.entries[0]).toMatchObject({ content: 'Student who likes cats.', updated: 10 });
     expect(lorebook.processedUpTo).toBe(10);
+  });
+
+  // Bugs: the answer out when the reader deleted the entry names it, or a later chunk's does, and it
+  // comes back as new; or the answer's other entries are lost with it.
+  it('keeps an entry deleted during the update out of the rest of it', async () => {
+    setOpenRouterKey('sk-or-test');
+    const answers = [
+      [{ name: '葵', content: 'First met.' }],
+      [
+        { name: '葵', content: 'Still here.' },
+        { name: '樹', content: 'Someone else.' }
+      ],
+      [{ name: '葵さん', content: 'Back again.' }]
+    ];
+    let call = 0;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        call += 1;
+        if (call === 2) await saveLoreEntries('Deleted', []);
+        return answer({ entries: answers[call - 1] });
+      })
+    );
+    const text = 'あ'.repeat(50_000);
+    const lorebook = await updateLorebook('Deleted', buildSearchIndex(`<p>${text}</p>`), 50_000);
+
+    expect(call).toBe(3);
+    expect(lorebook.processedUpTo).toBe(50_000);
+    expect(lorebook.entries.map(({ name }) => name)).toEqual(['樹']);
+    expect((await getLorebook('Deleted')).entries.map(({ name }) => name)).toEqual(['樹']);
   });
 });
 

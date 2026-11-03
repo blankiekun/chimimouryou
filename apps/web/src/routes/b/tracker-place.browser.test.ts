@@ -13,6 +13,7 @@ import {
   writingMode$
 } from '$lib/data/store';
 import { ViewMode } from '$lib/data/view-mode';
+import { isTrackerPaused$ } from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker';
 import { addBook, mountReader, waitOnScreen } from './reader-fixture';
 
 /*
@@ -103,5 +104,43 @@ describe('/b tracker and the place', () => {
         expect(await charactersRead(id)).toBe(0);
       }, 40_000);
     }
+  }
+});
+
+/*
+ * The reader pauses the tracker until the next page change (a link's pauseTracker, a jump). Bug: the
+ * reader pauses it by hand while that waits, and the page change starts it again.
+ */
+describe('/b tracker and a pause by hand', () => {
+  for (const view of views) {
+    it(`a page change doesn't undo it: ${view}`, async () => {
+      const id = await addBook(2, 25);
+
+      component = await mountReader(id, view, 'horizontal-tb');
+      await waitOnScreen('p-2-25');
+      await vi.waitFor(() => expect(isTrackerPaused$.getValue()).toBe(false), { timeout: 10_000 });
+
+      const icon = document.querySelector<HTMLElement>('[title^="Reading tracker"]');
+
+      expect(icon).toBeTruthy();
+      document.dispatchEvent(
+        new CustomEvent('ttu-action', {
+          detail: { type: 'pauseTracker', selector: '#p-3-1', scrollMode: 'auto' }
+        })
+      );
+      await vi.waitFor(() => expect(isTrackerPaused$.getValue()).toBe(true));
+
+      // Double click: on, then off by hand, past the handler's 200 ms debounce each.
+      for (const paused of [false, true]) {
+        icon!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+        await vi.waitFor(() => expect(isTrackerPaused$.getValue()).toBe(paused));
+        await settle(300);
+      }
+
+      dispatchEvent(new KeyboardEvent('keydown', { code: 'PageDown', key: 'PageDown' }));
+      await settle(1000);
+
+      expect(isTrackerPaused$.getValue()).toBe(true);
+    }, 30_000);
   }
 });

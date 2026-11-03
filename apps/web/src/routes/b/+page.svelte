@@ -255,7 +255,7 @@
   );
   /** bookmarkData once resolved, for a re-render that must decide at once where to reopen */
   let savedBookmark: BooksDbBookmarkData | undefined;
-  /** Manual bookmarks, during a layout change: the real one while bookmarkData holds where to reopen. */
+  /** Manual bookmarks, during a remount: the real one while bookmarkData holds where to reopen. */
   let heldBookmark:
     | { data: Promise<BooksDbBookmarkData | undefined>; from: BookmarkManager }
     | undefined;
@@ -543,7 +543,7 @@
 
       sectionList$.next(rawBookData.sections || []);
 
-      let rendered = false;
+      let renderedHtml: string | undefined;
 
       // Local books with the analysis tools: the difficulty estimate and word list are made on open.
       startLocalAnalysis(rawBookData);
@@ -553,23 +553,27 @@
         map(([{ readings }, on]) => (on ? readings : undefined)),
         distinctUntilChanged(),
         switchMap((readings) => {
+          const elementHtml = readings
+            ? addGeneratedRuby(rawBookData.elementHtml, readings)
+            : rawBookData.elementHtml;
+
           // Re-rendered while reading (switch, or the readings file got ready): keep the place.
-          if (rendered && bookmarkManager) {
+          // The same text remounts nothing, so there is no place to keep.
+          if (renderedHtml !== undefined && elementHtml !== renderedHtml && bookmarkManager) {
             const saved = savedBookmark?.exploredCharCount;
-            bookmarkData = Promise.resolve(
-              placeAfterRerender(
-                savedBookmark,
-                bookmarkManager.formatBookmarkData(rawBookData.id, readingOffset),
-                !!saved && bookmarkManager.isCharCountOnScreen(saved)
-              )
+            const place = placeAfterRerender(
+              savedBookmark,
+              bookmarkManager.formatBookmarkData(rawBookData.id, readingOffset),
+              !!saved && bookmarkManager.isCharCountOnScreen(saved)
             );
+
+            if ($manualBookmark$) reopenAtKeepingBookmark(place);
+            else bookmarkData = Promise.resolve(place);
           }
-          rendered = true;
+          renderedHtml = elementHtml;
 
           return loadBookData(
-            readings
-              ? { ...rawBookData, elementHtml: addGeneratedRuby(rawBookData.elementHtml, readings) }
-              : rawBookData,
+            { ...rawBookData, elementHtml },
             '.book-content',
             document,
             $viewMode$ === ViewMode.Paginated,
@@ -1161,13 +1165,15 @@
       // Only the remount opens here: the bookmark itself comes back once the place has (below).
       const place = currentPlace();
 
-      if (place) {
-        heldBookmark = { data: bookmarkData, from: bookmarkManager };
-        bookmarkData = Promise.resolve(place);
-      }
+      if (place) reopenAtKeepingBookmark(place);
     }
 
     apply();
+  }
+
+  function reopenAtKeepingBookmark(place: BooksDbBookmarkData) {
+    heldBookmark ??= { data: bookmarkData, from: bookmarkManager! };
+    bookmarkData = Promise.resolve(place);
   }
 
   $effect.pre(() => {
@@ -1969,7 +1975,8 @@
     merge(fromEvent(document, PAGE_CHANGE), timerAmount ? timer(timerAmount) : NEVER)
       .pipe(debounceTime(200), take(1), takeUntil(pageLeft$))
       .subscribe(() => {
-        wasTrackerPaused = false;
+        // Paused by hand (or by idling) while this waited: that stands.
+        if (wasTrackerPaused) return;
         $isTrackerPaused$ = false;
       });
   }

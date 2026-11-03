@@ -373,7 +373,10 @@ export function markedLines(threads: VisibleThread[], lines: BookLine[]) {
 }
 
 /** What to tell the reader when a community request failed */
-export function communityErrorKey(error: unknown): MessageKey {
+export function communityErrorKey(
+  error: unknown,
+  limitKey: MessageKey = 'community.error.limit'
+): MessageKey {
   const code = error instanceof HubError ? error.code : '';
   const status = error instanceof HubError ? error.status : 0;
 
@@ -382,7 +385,7 @@ export function communityErrorKey(error: unknown): MessageKey {
   if (code === 'mention') return 'community.error.mention';
   if (code === 'full') return 'community.error.full';
   // 'busy' is the hub's per-address burst limit, not a posting limit
-  if (status === 429 && code !== 'busy') return 'community.error.limit';
+  if (status === 429 && code !== 'busy') return limitKey;
   if (code === 'network' || code === 'paused' || status >= 500) return 'community.error.down';
   return 'community.error.other';
 }
