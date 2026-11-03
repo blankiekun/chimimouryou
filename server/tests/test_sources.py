@@ -401,6 +401,18 @@ class Echo(BaseHTTPRequestHandler):
             self.wfile.write(b'64\r\nabc')
             self.close_connection = True
             return
+        if self.path.endswith('/drip'):
+            self.send_response(200)
+            self.send_header('Content-Length', '100000')
+            self.end_headers()
+            try:
+                for _ in range(100000):
+                    self.wfile.write(b'0')
+                    self.wfile.flush()
+                    time.sleep(0.02)
+            except OSError:
+                self.close_connection = True
+            return
         bomb = self.path.endswith('/gzip-bomb')
         body = gzip.compress(b'0' * (3 << 20)) if bomb else b'ok'
         self.send_response(200)
@@ -467,6 +479,19 @@ class FetcherTest(unittest.TestCase):
     def test_size_cap(self):
         with mock.patch.multiple(fetcher, INTERVAL=0, MAX_BYTES=1 << 20), self.assertRaises(fetcher.FetchError):
             fetcher.fetch('https://d.example/gzip-bomb', {'d.example'})
+
+    # Catches a site holding a proxy thread with a byte now and then: each byte resets the socket timeout.
+    # Would fail too if the reader cut a whole page short or lost the size cap.
+    def test_a_site_dripping_bytes_is_cut_off(self):
+        with mock.patch.multiple(fetcher, INTERVAL=0, PUBLIC_TOTAL=0.3), \
+                mock.patch.object(fetcher, '_public_address', return_value='203.0.113.1'):
+            started = time.monotonic()
+            with self.assertRaises(fetcher.FetchError):
+                fetcher.fetch_public('https://e.example/drip', {'e.example'})
+            self.assertLess(time.monotonic() - started, 5)
+            self.assertEqual(fetcher.fetch_public('https://e.example/whole', {'e.example'})[0], b'ok')
+            with self.assertRaises(fetcher.FetchError):
+                fetcher.fetch_public('https://e.example/whole', {'e.example'}, max_bytes=1)
 
     # Catches a dropped connection coming back as a complete body: a cached chapter, a CBZ with a broken page.
     def test_a_cut_off_body_is_an_error_in_memory_and_on_disk(self):

@@ -2142,6 +2142,9 @@ export const ja: Record<MessageKey, string> = {
   'community.contextError': '前後の文を読み込めませんでした。もう一度',
   'community.contextNone': '前後の文は保存されていません',
   'community.tryAgain': 'もう一度',
+  'community.hiddenBook':
+    'この本は友達に非表示なので、投稿は読み込んでいません。読み込むと、この本についてハブに問い合わせます。',
+  'community.hiddenLoad': '投稿を読み込む',
   'community.downNote': '本・メモ・進み具合には影響しません。',
   'community.empty': 'この本にはまだ投稿がありません。',
   'community.emptyHint': '行を選んで「コミュニティに投稿」で始められます。',

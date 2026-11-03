@@ -215,7 +215,9 @@ class Handler(BaseHTTPRequestHandler):
         hide_shared = not self.account and self.headers.get('X-Trusted-Network') != '1'
 
         def read(connection):
-            result = {'rev': apidb.current_rev(connection)}
+            rev = apidb.current_rev(connection)
+            # Not past the rows left out: back on the trusted network this browser still needs them.
+            result = {'rev': min(since, rev) if hide_shared else rev}
             for name, table in SYNC_TABLES.items():
                 if hide_shared and 'account' in apidb.TABLE_KEYS[table]:
                     rows = []

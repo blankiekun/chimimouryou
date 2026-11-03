@@ -32,6 +32,8 @@ INTERVAL = float(os.environ.get('SOURCES_HOST_INTERVAL') or 2.0)
 FIXTURE_URL = os.environ.get('SOURCES_FIXTURE_URL', '').rstrip('/')
 MAX_BYTES = 20 * 1024 * 1024
 TIMEOUT = 30
+# An extension's proxied request, whole body included (TIMEOUT only limits silence). As Mihon's callTimeout.
+PUBLIC_TOTAL = 120
 MAX_REDIRECTS = 5
 SERVER_INTERVAL = 0.2
 # A longer Retry-After fails the request; the job can be retried later.
@@ -164,6 +166,19 @@ def _check_complete(response):
         raise FetchError('The connection dropped partway through; try again')
 
 
+def _read_in_time(response, limit: int) -> bytes:
+    """response.read(limit), given up after PUBLIC_TOTAL: a site dripping bytes never trips the socket's timeout."""
+    deadline = time.monotonic() + PUBLIC_TOTAL
+    chunks = []
+    size = 0
+    while size < limit and (chunk := response.read1(min(1 << 16, limit - size))):
+        if time.monotonic() > deadline:
+            raise FetchError('The site is taking too long to answer')
+        chunks.append(chunk)
+        size += len(chunk)
+    return b''.join(chunks)
+
+
 def _stream(response, path: str, max_bytes: int):
     if (response.headers.get('Content-Encoding') or 'identity').lower() != 'identity':
         raise FetchError('The server sent the file compressed')
@@ -238,7 +253,7 @@ def _fetch(url: str, hosts: set[str], headers: dict | None = None, server: str =
                     if to_path:
                         _stream(response, to_path, max_bytes)
                         return b'', url, kind
-                    raw = response.read(max_bytes + 1)
+                    raw = _read_in_time(response, max_bytes + 1) if public else response.read(max_bytes + 1)
                     if len(raw) > max_bytes:
                         raise FetchError('The page is too large')
                     _check_complete(response)

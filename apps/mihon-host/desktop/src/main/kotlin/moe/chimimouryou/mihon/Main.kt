@@ -60,7 +60,7 @@ fun main() {
     val app = Application(dir)
     val cookies = MemoryCookieJar()
     android.webkit.CookieManager.jar = cookies
-    val network = NetworkHelper(app.cacheDir, cookies, guard, guard, System.getProperty("mihon.userAgent", USER_AGENT))
+    val network = NetworkHelper(app.cacheDir, cookies, guard, guard, guard.sockets, System.getProperty("mihon.userAgent", USER_AGENT))
     val host = Host(app, network, File(dir, "tmp"), Remembered(File(dir, "remembered")), ::loadJar)
     fun send(answer: JsonObject) = synchronized(protocol) {
         protocol.println(answer.toString())

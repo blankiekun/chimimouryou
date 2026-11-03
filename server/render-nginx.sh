@@ -59,8 +59,10 @@ if [ -n "$AUDIOBOOKSHELF_URL" ]; then
   abs_path=${abs_url#"$abs_origin"}
   AUDIOBOOKSHELF_LOCATION=$(printf '%s\n' \
     '  location ~ ^/audiobookshelf/(api/|login$) {' \
-    '    # <audio> sends its token in the URL.' \
+    '    # <audio> sends its token in the URL; the error log prints the URL too (Audiobookshelf or' \
+    '    # the account service unreachable, whose subrequest logs here).' \
     '    access_log off;' \
+    '    error_log /dev/null;' \
     '    auth_request /_account_auth;' \
     "    set \$abs_origin $abs_origin;" \
     "    rewrite ^/audiobookshelf/(.*)\$ $abs_path/\$1 break;" \

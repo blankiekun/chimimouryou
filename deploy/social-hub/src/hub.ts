@@ -468,7 +468,7 @@ function parseCoverTarget(target: string) {
   return { user: target.slice(0, 16), key: target.slice(17) };
 }
 
-/** Deletes the R2 objects of these cover files that no shown (removed = 0) cover still uses */
+/** Deletes the R2 objects of these cover files that no shown (removed = 0) cover still uses; returns their keys */
 async function dropCoverFiles(env: Env, files: string[]) {
   const unique = [...new Set(files)];
   const gone: string[] = [];
@@ -488,6 +488,7 @@ async function dropCoverFiles(env: Env, files: string[]) {
   for (let at = 0; at < gone.length; at += 1000) {
     await media(env).delete(gone.slice(at, at + 1000));
   }
+  return gone;
 }
 
 /** The pair's row key: a < b */
@@ -1460,14 +1461,17 @@ async function updateMe(request: Request, env: Env, user: UserRow, body: Row) {
   return me(updated);
 }
 
-/** Every row of these users (accounts, sessions, friend links, status, counters), their pictures and covers */
+/**
+ * Every row of these users (accounts, sessions, friend links, status, counters), their pictures and
+ * covers. Returns the deleted images' keys, for the edge cache.
+ */
 async function deleteUsers(env: Env, where: string, ...values: unknown[]) {
   const users = `SELECT id FROM users WHERE ${where}`;
   const covers = await env.DB.prepare(`DELETE FROM covers WHERE user IN (${users}) RETURNING file`)
     .bind(...values)
     .all<{ file: string }>();
 
-  await dropCoverFiles(
+  const goneCovers = await dropCoverFiles(
     env,
     covers.results.map((row) => row.file)
   );
@@ -1482,7 +1486,7 @@ async function deleteUsers(env: Env, where: string, ...values: unknown[]) {
   for (let at = 0; at < objects.length; at += 1000) {
     await media(env).delete(objects.slice(at, at + 1000));
   }
-  return env.DB.batch(
+  await env.DB.batch(
     [
       ...deleteUserCommunitySql(users),
       `DELETE FROM pictures WHERE user IN (${users})`,
@@ -1499,6 +1503,7 @@ async function deleteUsers(env: Env, where: string, ...values: unknown[]) {
       `DELETE FROM users WHERE ${where}`
     ].map((sql) => env.DB.prepare(sql).bind(...values))
   );
+  return [...goneCovers, ...objects];
 }
 
 /** The daily cron: retention */
@@ -1990,10 +1995,10 @@ async function admin(request: Request, env: Env, viewer: UserRow, path: string) 
     // Roles are granted by hand: one moderator can't remove another, or themselves by mistake.
     if (user.role === 'dev') throw new HttpError(403, 'role');
     await clearLinesOfUser(env, user.id);
-    await deleteUsers(env, 'id = ?1', user.id);
+    const images = await deleteUsers(env, 'id = ?1', user.id);
     await closeStreams(env, user.id);
     await purgeProfile(request, user.username);
-    if (user.picture) await purgeImage(request, `avatar/${user.id}/${user.picture}`);
+    await Promise.all(images.map((image) => purgeImage(request, image)));
     return json({ ok: true });
   }
 
@@ -2192,11 +2197,14 @@ async function route(request: Request, env: Env, ctx?: Context): Promise<Respons
       return json(me(user));
     case 'PUT /v1/me':
       return json(await updateMe(request, env, user, await readBody(request)));
-    case 'DELETE /v1/me':
-      await deleteUsers(env, 'id = ?1', user.id);
+    case 'DELETE /v1/me': {
+      const images = await deleteUsers(env, 'id = ?1', user.id);
+
       await closeStreams(env, user.id);
       await purgeProfile(request, user.username);
+      await Promise.all(images.map((image) => purgeImage(request, image)));
       return json({ ok: true });
+    }
     case 'POST /v1/code':
       await limit(env, user.id, 'code', DAY, 3);
       await env.DB.prepare('UPDATE users SET code = ?1 WHERE id = ?2')

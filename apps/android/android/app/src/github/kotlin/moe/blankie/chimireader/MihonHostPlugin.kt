@@ -56,7 +56,7 @@ class MihonHostPlugin : Plugin() {
         val guard = Guard(testHosts.split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet())
         // The WebView's user agent made Chrome's (no "; wv", no "Version/4.0"): some sites refuse WebViews.
         val userAgent = WebSettings.getDefaultUserAgent(app).replace("; wv", "").replace(Regex("Version/\\S+ "), "")
-        NetworkHelper(File(app.cacheDir, "mihon"), WebViewCookieJar(), guard, guard, userAgent)
+        NetworkHelper(File(app.cacheDir, "mihon"), WebViewCookieJar(), guard, guard, guard.sockets, userAgent)
     }
 
     private val host by lazy {
