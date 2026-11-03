@@ -29,6 +29,7 @@
   import { goto } from '$app/navigation';
   import { faCloudBolt, faPause, faPlay, faSpinner } from '@fortawesome/free-solid-svg-icons';
   import BookReader from '$lib/components/book-reader/book-reader.svelte';
+  import Toast from '$lib/components/toast.svelte';
   import WelcomeBackToast from '$lib/components/book-reader/welcome-back-toast.svelte';
   import JumpBackButton from '$lib/components/book-reader/jump-back-button.svelte';
   import { JumpBack } from '$lib/components/book-reader/jump-back';
@@ -290,6 +291,9 @@
   let signInPrompt = $state.raw('');
   let isReplicating = $state.raw(false);
   let storedExploredCharacter = $state.raw(0);
+  let placeNotSaved = $state.raw(false);
+  /** One message per open book: a phone with full storage would otherwise show it at every save. */
+  let placeNoticeClosed = false;
   let hasBookmarkData = $state.raw(false);
   let blockDataUpdates = $state.raw(false);
   let trackerElm = $state.raw<BookReadingTracker>();
@@ -1287,11 +1291,9 @@
           progress: 1
         };
 
-        await database.putBookmark(data);
-
         bookmarkData = Promise.resolve(data);
 
-        scheduleReplication(StorageDataType.PROGRESS);
+        if (await savePlace(data)) scheduleReplication(StorageDataType.PROGRESS);
       }
 
       if ($statisticsEnabled$ && $openTrackerOnCompletion$) {
@@ -1423,9 +1425,26 @@
     // Set before the write: leaving the page sends this place without waiting for the database.
     bookmarkData = Promise.resolve(data);
 
-    await database.putBookmark(data);
+    if (await savePlace(data)) scheduleReplication(StorageDataType.PROGRESS);
+  }
 
-    scheduleReplication(StorageDataType.PROGRESS);
+  /**
+   * False when the browser refused it, usually full storage. The place stays in memory and goes
+   * straight to the server or Drive: the normal sync would send the old one it finds in the database.
+   */
+  async function savePlace(data: BooksDbBookmarkData) {
+    try {
+      await database.putBookmark(data);
+      placeNotSaved = false;
+      return true;
+    } catch (error: any) {
+      logger.warn(`Saving the place failed: ${error.message}`);
+      if (!placeNoticeClosed) placeNotSaved = true;
+      if (upSyncEnabled && $rawBookData$) {
+        await externalStorageHandler?.sendProgressNow($rawBookData$.title, data);
+      }
+      return false;
+    }
   }
 
   async function scrollToBookmark() {
@@ -2369,6 +2388,18 @@
     onopen={() => absenceTab && openPanel(absenceTab.key)}
     ondismiss={() => (welcomeBackDays = 0)}
   />
+{/if}
+
+{#if placeNotSaved}
+  <Toast
+    label={$t$('reader.placeNotSavedLabel')}
+    onclose={() => {
+      placeNotSaved = false;
+      placeNoticeClosed = true;
+    }}
+  >
+    <p>{$t$('reader.placeNotSaved')}</p>
+  </Toast>
 {/if}
 
 {#if bookCompleted}

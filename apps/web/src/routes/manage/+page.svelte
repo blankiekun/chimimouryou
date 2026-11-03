@@ -82,6 +82,7 @@
   import { logger } from '$lib/data/logger';
   import type { SortOption } from '$lib/data/sort-types';
   import { ApiStorageHandler } from '$lib/data/storage/handler/api-handler';
+  import { correctStatistics } from '$lib/data/storage/reader-storage';
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
   import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
   import { vnsKeptOnDevice, formatBytes } from '$lib/data/vn/vn-upload';
@@ -377,6 +378,8 @@
 
   function retryLibrary() {
     if ($libraryOffline$) {
+      // Only the Calibre handler clears this itself; a failure sets it again.
+      if ($storageSource$ !== StorageKey.CALIBRE) libraryOffline$.next(false);
       database.dataListChanged$.next(getStorageHandler(window, $storageSource$, ''));
     }
   }
@@ -896,7 +899,9 @@
         limiter(async () => {
           try {
             throwIfAborted(cancelSignal);
-            await database.deleteStatisticEntries([title], true);
+            await correctStatistics(window, [title], () =>
+              database.deleteStatisticEntries([title], true)
+            );
 
             replicationProgress$.next({ progressToAdd: 1 });
           } catch (error) {

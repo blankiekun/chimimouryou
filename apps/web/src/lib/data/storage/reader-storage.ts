@@ -29,7 +29,12 @@ import type { BaseStorageHandler } from '$lib/data/storage/handler/base-handler'
 import type { BrowserStorageHandler } from '$lib/data/storage/handler/browser-handler';
 import { getStorageHandler, ownStorageHandler } from '$lib/data/storage/storage-handler-factory';
 import { StorageDataType, StorageKey, StorageSourceDefault } from '$lib/data/storage/storage-types';
-import { AutoReplicationType } from '$lib/functions/replication/replication-options';
+import { MergeMode } from '$lib/data/merge-mode';
+import { storageSource$ } from '$lib/data/storage/storage-view';
+import {
+  AutoReplicationType,
+  ReplicationSaveBehavior
+} from '$lib/functions/replication/replication-options';
 import type { ReplicationContext } from '$lib/functions/replication/replication-progress';
 import { replicateData } from '$lib/functions/replication/replicator';
 import {
@@ -226,39 +231,25 @@ async function sourceType(source: string) {
   return (await (await database.db).get('storageSource', source))?.type;
 }
 
-/** One book's waiting changes for one source; what can no longer be sent leaves the list. */
-async function retryBook(window: Window, entries: string[]) {
-  const saved = waitingChanges();
-  const left = entries.filter((entry) => saved.includes(entry));
-
-  // Another tab sent them while this one waited for the lock.
-  if (!left.length) return;
-
-  const { source, title } = parseWaitingEntry(left[0]);
-  const isCalibre = source === StorageSourceDefault.CALIBRE_DEFAULT;
+function sendsUpTo(source: string) {
   const autoReplication = autoReplication$.getValue();
-  const sendsUp = isCalibre
+
+  return source === StorageSourceDefault.CALIBRE_DEFAULT
     ? !serverless
     : autoReplication === AutoReplicationType.Up || autoReplication === AutoReplicationType.All;
-  const book = await database.getDataByTitle(title);
-  const type =
-    sendsUp && book && (book.storageSource || syncTarget$.getValue()) === source
-      ? await sourceType(source)
-      : undefined;
+}
 
-  if (!book || !type) {
-    dropWaiting(left);
-    return;
-  }
-
-  // Signed out, this browser's rows wait for that account: signing in reloads the app.
-  if (isCalibre && (await holdsAccountData())) return;
-
+/** This browser and a sync source, on handlers of their own (`ownStorageHandler`). */
+function ownSyncPair(
+  window: Window,
+  type: StorageKey,
+  source: string,
+  saveBehavior: string,
+  statisticsMode: MergeMode,
+  goalsMode: MergeMode
+) {
   const local = ownStorageHandler(window, StorageKey.BROWSER);
   const target = ownStorageHandler(window, type);
-  const saveBehavior = replicationSaveBehavior$.getValue();
-  const statisticsMode = statisticsMergeMode$.getValue();
-  const goalsMode = readingGoalsMergeMode$.getValue();
   const cache = cacheStorageData$.getValue();
 
   local.updateSettings(window, true, saveBehavior, statisticsMode, goalsMode, cache, false, '');
@@ -273,6 +264,41 @@ async function retryBook(window: Window, entries: string[]) {
     source
   );
 
+  return { local, target };
+}
+
+/** One book's waiting changes for one source; what can no longer be sent leaves the list. */
+async function retryBook(window: Window, entries: string[]) {
+  const saved = waitingChanges();
+  const left = entries.filter((entry) => saved.includes(entry));
+
+  // Another tab sent them while this one waited for the lock.
+  if (!left.length) return;
+
+  const { source, title } = parseWaitingEntry(left[0]);
+  const book = await database.getDataByTitle(title);
+  const type =
+    sendsUpTo(source) && book && (book.storageSource || syncTarget$.getValue()) === source
+      ? await sourceType(source)
+      : undefined;
+
+  if (!book || !type) {
+    dropWaiting(left);
+    return;
+  }
+
+  // Signed out, this browser's rows wait for that account: signing in reloads the app.
+  if (source === StorageSourceDefault.CALIBRE_DEFAULT && (await holdsAccountData())) return;
+
+  const { local, target } = ownSyncPair(
+    window,
+    type,
+    source,
+    replicationSaveBehavior$.getValue(),
+    statisticsMergeMode$.getValue(),
+    readingGoalsMergeMode$.getValue()
+  );
+
   // A failure keeps them waiting and shows in the status (syncEnded).
   await replicateData(
     local,
@@ -281,6 +307,123 @@ async function retryBook(window: Window, entries: string[]) {
     [{ id: book.id, title, imagePath: book.coverImage }],
     left.map((entry) => parseWaitingEntry(entry).type)
   );
+}
+
+const librarySources: Partial<Record<StorageKey, string>> = {
+  [StorageKey.CALIBRE]: StorageSourceDefault.CALIBRE_DEFAULT,
+  [StorageKey.GDRIVE]: StorageSourceDefault.GDRIVE_DEFAULT,
+  [StorageKey.ONEDRIVE]: StorageSourceDefault.ONEDRIVE_DEFAULT
+};
+
+type Copy = (from: BaseStorageHandler, to: BaseStorageHandler) => Promise<void>;
+
+/**
+ * A deletion or edit of statistics or goals. A merge would bring a deleted entry back, so this pulls
+ * what other devices wrote, makes the change, then replaces the synced copy with the result. The
+ * pull skips the replicator's up-to-date check: a merging upload leaves this browser's time as new
+ * as days it never received, and replacing without them would delete them. For the same reason
+ * nothing is pushed after a failed pull: the change stays here and a message says so.
+ */
+function correct(
+  window: Window,
+  copy: Copy,
+  titles: (string | undefined)[],
+  change: () => Promise<unknown>
+) {
+  return syncLocked(async () => {
+    const pushes: (() => Promise<void>)[] = [];
+    let problem = '';
+
+    for (const title of titles) {
+      const book = title === undefined ? undefined : await database.getDataByTitle(title);
+      const source =
+        book?.storageSource || syncTarget$.getValue() || librarySources[storageSource$.getValue()];
+      const type = source && sendsUpTo(source) ? await sourceType(source) : undefined;
+
+      if (
+        !source ||
+        !type ||
+        (source === StorageSourceDefault.CALIBRE_DEFAULT && (await holdsAccountData()))
+      ) {
+        continue;
+      }
+
+      const pair = (mode: MergeMode) => {
+        const handlers = ownSyncPair(
+          window,
+          type,
+          source,
+          ReplicationSaveBehavior.NewOnly,
+          mode,
+          mode
+        );
+
+        if (title !== undefined) {
+          handlers.local.startContext({ id: book?.id ?? 0, title, imagePath: '' });
+          handlers.target.startContext({ id: book?.id ?? 0, title, imagePath: '' });
+        }
+
+        return handlers;
+      };
+
+      try {
+        const pulling = pair(MergeMode.MERGE);
+
+        await copy(pulling.target, pulling.local);
+
+        const pushing = pair(MergeMode.REPLACE);
+
+        pushes.push(() => copy(pushing.local, pushing.target));
+      } catch (error: any) {
+        problem = error.message;
+      }
+    }
+
+    await change();
+
+    for (const push of pushes) {
+      await push().catch((error: Error) => {
+        problem = error.message;
+      });
+    }
+
+    if (problem) {
+      logger.warn(`Change not synced: ${problem}`);
+      // After the dialog the statistics page closes when a deletion ends.
+      setTimeout(() =>
+        showMessage(
+          'Changed on this device only',
+          `Couldn't sync the change, so it may be undone later: ${problem}`
+        )
+      );
+    }
+  });
+}
+
+const copyStatistics: Copy = async (from, to) => {
+  const { statistics, lastStatisticModified } = await from.getStatistics();
+
+  if (statistics) await to.saveStatistics(statistics, lastStatisticModified);
+};
+
+const copyReadingGoals: Copy = async (from, to) => {
+  const { readingGoals, lastGoalModified } = await from.getReadingGoals();
+
+  if (readingGoals) await to.saveReadingGoals(readingGoals, lastGoalModified);
+};
+
+/** Makes a deletion or edit of these titles' statistics and syncs it. */
+export function correctStatistics(
+  window: Window,
+  titles: string[],
+  change: () => Promise<unknown>
+) {
+  return correct(window, copyStatistics, titles, change);
+}
+
+/** Makes a deletion or edit of the reading goals and syncs it. */
+export function correctReadingGoals(window: Window, change: () => Promise<unknown>) {
+  return correct(window, copyReadingGoals, [undefined], change);
 }
 
 let retrying = false;

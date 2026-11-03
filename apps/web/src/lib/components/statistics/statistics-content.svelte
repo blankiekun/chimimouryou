@@ -46,6 +46,7 @@
   import { pullAccountStatistics } from '$lib/data/stats/statistics-sync';
   import { statisticsDeleted } from '$lib/data/social/social';
   import { getDateRangeLabel } from '$lib/data/reading-goal';
+  import { correctStatistics } from '$lib/data/storage/reader-storage';
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
   import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
   import {
@@ -399,7 +400,7 @@
               dialogHeader: 'Delete Data',
               dialogMessage: `This will delete data ${
                 startDate ? `from ${getDateRangeLabel(startDate, endDate)}` : ''
-              }  for ${titleLabel} (which may include start and/or completion Data)\n\nExecute an one time Sync with an export behavior of "overwrite" and/or statistics merge mode of "replace" to apply deletions to other devices.\n\n${titleLabel}:\n${[
+              }  for ${titleLabel} (which may include start and/or completion Data)\n\n${titleLabel}:\n${[
                 ...titlesToDelete
               ].join('\n\n')}`,
               contentStyles: 'white-space: pre-line;max-height: 20rem;overflow: auto;',
@@ -417,9 +418,9 @@
       return;
     }
 
-    const error = await database
-      .deleteStatisticEntries([...titlesToDelete], false, startDate, endDate)
-      .catch(({ message }) => message);
+    const error = await correctStatistics(window, [...titlesToDelete], () =>
+      database.deleteStatisticEntries([...titlesToDelete], false, startDate, endDate)
+    ).catch(({ message }) => message);
 
     if (error) {
       await new Promise((resolver) => {
@@ -579,7 +580,7 @@
     }
 
     try {
-      await database.updateStatistic(newStatistic);
+      await correctStatistics(window, [title], () => database.updateStatistic(newStatistic));
 
       statisticsData[statisticIndex] = { ...statistic, ...newStatistic };
       updateStatisticsData();
