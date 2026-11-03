@@ -195,6 +195,11 @@ export abstract class BaseStorageHandler {
     this.clearData(false);
   }
 
+  /** The source's rows, a deleted day as its flagged row: what the reading tracker measures from. */
+  async statisticsWithDeleted(): Promise<BooksDbStatistic[] | undefined> {
+    return (await this.getStatistics()).statistics;
+  }
+
   abstract saveStatistics(
     data: BooksDbStatistic[],
     lastStatisticModified: number,

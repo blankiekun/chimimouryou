@@ -1,6 +1,6 @@
-/* global console, document, indexedDB, process, setTimeout, localStorage, Event -- Node, and the page inside evaluate */
+/* global console, document, indexedDB, process, setTimeout, localStorage, Event, navigator -- Node, and the page inside evaluate */
 // Sync status and statistics gaps on Drive: browser contexts on a fake Drive (Playwright routes on Google's API).
-// Builds: VITE_GDRIVE_CLIENT_ID=e2e VITE_GDRIVE_CLIENT_SECRET=e2e pnpm build, one of them with VITE_EDITION=standalone.
+// Builds: VITE_GDRIVE_CLIENT_ID=e2e VITE_GDRIVE_CLIENT_SECRET=e2e VITE_ONEDRIVE_CLIENT_ID=e2e pnpm build, one of them with VITE_EDITION=standalone.
 // node scripts/sync-found.e2e.mjs <apps/web> <standalone build> <server build> <epub titled 猫のテスト> <screenshot dir> [scenario]
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
@@ -95,6 +95,7 @@ function fakeDrive() {
     failUploads: false,
     failAll: false,
     failDownloads: false,
+    failDownloadsOnce: false,
     loseUploadAnswer: false
   };
 
@@ -105,7 +106,7 @@ function fakeDrive() {
     const id = url.pathname.match(/files\/([^/]+)$/)?.[1];
 
     if (method === 'OPTIONS') return route.fulfill({ status: 204, headers });
-    if (url.hostname === 'oauth2.googleapis.com') {
+    if (url.hostname === 'oauth2.googleapis.com' || url.hostname === 'login.microsoftonline.com') {
       if (state.refreshError) {
         return route.fulfill({
           status: 401,
@@ -137,7 +138,12 @@ function fakeDrive() {
       return json(route, { id: add(name, parents[0], '', true).id });
     }
     if (id) {
-      if (state.failDownloads && files.get(id)?.name.startsWith('statistics_')) {
+      const failOnce = state.failDownloadsOnce;
+
+      if (failOnce && files.get(id)?.name.startsWith('statistics_')) {
+        state.failDownloadsOnce = false;
+      }
+      if ((state.failDownloads || failOnce) && files.get(id)?.name.startsWith('statistics_')) {
         return route.fulfill({ status: 500, headers, body: '{"error":{"message":"no"}}' });
       }
       return route.fulfill({ status: 200, headers, body: files.get(id)?.content ?? '' });
@@ -199,7 +205,10 @@ async function device(
   { base = STANDALONE, tracker = false, viewport = { width: 1400, height: 900 }, ls = {} } = {}
 ) {
   const context = await browser.newContext({ viewport });
-  await context.route(/^https:\/\/(www\.googleapis|oauth2\.googleapis)\.com\//, drive.handle);
+  await context.route(
+    /^https:\/\/(www\.googleapis|oauth2\.googleapis|login\.microsoftonline)\.com\//,
+    drive.handle
+  );
   await context.addInitScript(
     (seed) => {
       if (localStorage.getItem('__seeded')) return;
@@ -794,6 +803,631 @@ async function baselineMidnight() {
   await dev.context.close();
 }
 
+/**
+ * Hidden with what the tab read saved but unsent, their row lands meanwhile, and the return's
+ * upload gets nowhere (its read and its send both fail) while the pull that follows works.
+ */
+async function returnWithUnsent(drive, dev, theirs) {
+  drive.state.failAll = true;
+  await setVisible(dev.page, false);
+  await sleep(1500);
+  await theirs?.();
+  drive.state.failAll = false;
+  drive.state.failUploads = true;
+  drive.state.failDownloadsOnce = true;
+  await sleep(10500);
+  await setVisible(dev.page, true);
+  await sleep(4000);
+  drive.state.failUploads = false;
+  drive.state.failDownloadsOnce = false;
+}
+
+// How this could lose or invent a reader's time:
+// - the pull takes their newer row and the tab keeps only what it hadn't saved: saved but unsent seconds go;
+// - the sum adds what Drive already had again.
+async function unsentThenPull() {
+  const drive = fakeDrive();
+  const { dev, today } = await readingTab(drive);
+  const sent = driveRow(drive, today).readingTime;
+
+  drive.state.failAll = true;
+  for (let index = 0; index < 5; index += 1) await upload(dev);
+
+  const unsent = (await localRow(dev.page, today)).readingTime - sent;
+
+  await returnWithUnsent(drive, dev, () => drive.writeDays([stat(today, Date.now(), 5000, 600)]));
+  drive.state.failAll = true;
+
+  const here = (await localRow(dev.page, today)).readingTime;
+
+  check(
+    "unsent then pull: their 600 s plus what wasn't sent",
+    unsent > 12 && here >= 600 + unsent && here <= 600 + unsent + 40,
+    `${here}, unsent ${unsent}`
+  );
+  drive.state.failAll = false;
+  await upload(dev);
+  check(
+    'unsent then pull: it reaches Drive',
+    driveRow(drive, today).readingTime >= here,
+    `${driveRow(drive, today).readingTime}`
+  );
+  await dev.context.close();
+}
+
+// A row from a device with a fast clock: every save here is raised above it, so what the tab kept
+// as "saved" has an older time than the database's row. How this could lose time:
+// - the return reads the tab's own raised row as another device's, and marks everything as sent:
+//   the unsent seconds vanish when the other device's row does come;
+// - fixing only the first bug double counts it, since the row already holds what's unsent.
+async function raisedSave() {
+  const drive = fakeDrive();
+  const dev = await device(drive, { tracker: true });
+
+  await importBook(dev);
+
+  const today = await todayOf(dev.page);
+  const future = Date.now() + DAY;
+
+  drive.writeDays([stat(today, future)]);
+  await openBook(dev);
+  await upload(dev);
+
+  drive.state.failAll = true;
+  // More than the seconds the last upload below adds, or those would hide a loss.
+  for (let index = 0; index < 5; index += 1) await upload(dev);
+  await returnWithUnsent(drive, dev);
+
+  const own = (await localRow(dev.page, today)).readingTime;
+  const sent = driveRow(drive, today).readingTime;
+
+  check('raised save: nothing added to its own row', own - sent <= 40, `${own}, sent ${sent}`);
+  drive.writeDays([stat(today, future + 36e5, 5000, 600)]);
+
+  const started = Date.now();
+
+  await upload(dev);
+
+  const row = driveRow(drive, today).readingTime;
+  const elapsed = (Date.now() - started) / 1000;
+  const unsent = own - sent;
+
+  check(
+    'raised save: the unsent seconds stay, once',
+    unsent > 12 && row >= 600 + unsent && row <= 600 + unsent + elapsed + 5,
+    `${row}, unsent ${unsent}`
+  );
+  await dev.context.close();
+}
+
+/** Opens the book the way a click on the library does: same page load, the handler's list cached. */
+async function openFromLibrary({ page, base }) {
+  const [{ id }] = await idb(page, 'data');
+
+  await page.goto(`${base}/manage`);
+  await sleep(2500);
+  await page.evaluate((href) => {
+    const link = document.createElement('a');
+
+    link.href = href;
+    document.body.append(link);
+    link.click();
+  }, `/b?id=${id}`);
+  await page.waitForSelector('.book-content p', { timeout: 40000 });
+  await sleep(3000);
+}
+
+// The Drive cache on: `clearData(false)` empties the book's cached list and nothing lists it again,
+// so the return's pull reads no statistics file and the other device's count never comes.
+async function returnCached() {
+  const drive = fakeDrive();
+  const dev = await device(drive, {
+    tracker: true,
+    ls: { cacheStorageData: '1', autoReplication: 'down' }
+  });
+
+  await importBook(dev);
+
+  const today = await todayOf(dev.page);
+
+  drive.writeDays([stat(D1, Date.now() - DAY)]);
+  await dev.page.evaluate(() => localStorage.setItem('lastStorageSource', 'gdrive'));
+  await openFromLibrary(dev);
+  await setVisible(dev.page, false);
+  await sleep(500);
+  drive.writeDays([stat(today, Date.now(), 5000, 600)]);
+  await sleep(11000);
+  await setVisible(dev.page, true);
+  await sleep(4000);
+
+  const here = await localRow(dev.page, today);
+
+  check('cached return: the pull took their row', here?.readingTime >= 600, `${here?.readingTime}`);
+  await dev.context.close();
+}
+
+// A day corrected on this device, in another tab, while Drive refuses. How this could go wrong:
+// - the reader's next save writes its full count over the correction;
+// - the next upload then sends that count, and the deletion is gone everywhere;
+// - the reading since the correction is lost with it.
+async function correctionHere() {
+  const drive = fakeDrive();
+  const { dev, today } = await readingTab(drive);
+
+  await upload(dev);
+  await upload(dev);
+
+  const old = (await localRow(dev.page, today)).readingTime;
+  const other = await dev.context.newPage();
+
+  drive.state.failAll = true;
+  await openStatistics({ page: other, base: dev.base });
+  await dayRow(other, today)
+    .first()
+    .getByRole('button', { name: 'Delete' })
+    .click({ timeout: 15000 });
+  await sleep(2000);
+  await other
+    .getByRole('button', { name: 'Close' })
+    .click({ timeout: 3000 })
+    .catch(() => {});
+
+  const started = Date.now();
+
+  check('same device: the correction went in', !(await localRow(other, today))?.readingTime);
+  await other.close();
+  await dev.page.bringToFront();
+  await upload(dev);
+  await upload(dev);
+
+  const elapsed = (Date.now() - started) / 1000;
+  const here = (await localRow(dev.page, today))?.readingTime;
+
+  check(
+    'same device: the old count stays gone',
+    here <= elapsed + 5,
+    `${here}, was ${old}, ${elapsed} s ago`
+  );
+  check('same device: the reading since stays', here > 0, `${here}`);
+  drive.state.failAll = false;
+  await upload(dev);
+
+  const row = driveRow(drive, today).readingTime;
+
+  check(
+    'same device: Drive gets the correction, not the count',
+    row <= (Date.now() - started) / 1000 + 5,
+    `${row}, was ${old}`
+  );
+  await dev.context.close();
+}
+
+/** The part of the server's /api/v1 a reading tab uses, in memory (server/api/service.py's rules). */
+async function fakeServer(context, title) {
+  const headers = {
+    'access-control-allow-origin': '*',
+    'access-control-allow-headers': 'authorization,content-type,x-expected-account',
+    'access-control-allow-methods': '*',
+    'content-type': 'application/json'
+  };
+  const rows = new Map();
+  let rev = 1;
+  const book = { id: 7, calibreId: 107, title, rev: 1, added: 1, format: 'epub' };
+  const setRow = (dateKey, modified, data, deleted = false) => {
+    rev += 1;
+    rows.set(dateKey, { book: 7, dateKey, modified, data, deleted, rev });
+  };
+
+  await context.route(/^https:\/\/books\.example\//, (route) => {
+    const request = route.request();
+    const method = request.method();
+    const url = new URL(request.url());
+    const json = (body, status = 200) =>
+      route.fulfill({ status, headers, body: JSON.stringify(body) });
+
+    if (method === 'OPTIONS') return route.fulfill({ status: 204, headers });
+    if (url.pathname === '/account/api/me') return json({ user: { id: 'a', username: 'a' } });
+    if (url.pathname === '/api/v1/version') return json({ api: 1 });
+    if (url.pathname === '/api/v1/catalog') return json({ rev, books: [book] });
+    if (url.pathname === '/api/v1/sync') {
+      const since = +url.searchParams.get('since') || 0;
+
+      return json({
+        rev,
+        statistics: [...rows.values()].filter((row) => row.rev > since),
+        progress: [],
+        goals: [],
+        highlights: [],
+        bookDocs: [],
+        accountDocs: [],
+        games: [],
+        gameDocs: [],
+        series: [],
+        metadata: []
+      });
+    }
+
+    const day = url.pathname.match(/\/api\/v1\/books\/7\/statistics\/(.+)$/)?.[1];
+
+    if (day && (method === 'PUT' || method === 'DELETE')) {
+      const { modified, data } = JSON.parse(request.postData());
+      const stored = rows.get(day);
+
+      if (stored && stored.modified > modified) return json({ row: stored }, 409);
+      if (!stored || stored.modified < modified) setRow(day, modified, data, method === 'DELETE');
+
+      return json({ rev });
+    }
+
+    rev += 1;
+
+    return json({ rev });
+  });
+
+  return { setRow, row: (day) => rows.get(day) };
+}
+
+// A Calibre book on the server, with the cache on. How the baseline's read could go wrong here:
+// - the cached mirror answers: the other device's count is overwritten by the tab's full one;
+// - the handler hides a day deleted elsewhere: the tab's full count brings it back;
+// - the day comes back as the deleted row, and the reading since is lost with it.
+async function serverCached() {
+  const drive = fakeDrive();
+  const dev = await device(drive, {
+    tracker: true,
+    ls: {
+      cacheStorageData: '1',
+      serverBase: 'https://books.example',
+      serverToken: 'e2e',
+      readerDataOwner: 'a',
+      syncTarget: '',
+      lastStorageSource: 'browser'
+    }
+  });
+  const { page, context, base } = dev;
+  const server = await fakeServer(context, TITLE);
+
+  await importBook(dev);
+
+  const today = await todayOf(page);
+  const [record] = await idb(page, 'data');
+
+  await idbPut(page, 'data', [{ ...record, storageSource: 'ttu-calibre-default' }]);
+  await page.evaluate(() => localStorage.setItem('lastStorageSource', 'calibre'));
+  await page.goto(`${base}/manage`);
+  await sleep(1500);
+  await openFromLibrary(dev);
+  await upload(dev);
+
+  const first = server.row(today);
+
+  check(
+    'server: the first upload landed',
+    first?.data?.readingTime > 0,
+    `${first?.data?.readingTime}`
+  );
+  server.setRow(today, Date.now(), stat(today, Date.now(), 5000, 600));
+  await upload(dev);
+
+  const sum = server.row(today)?.data?.readingTime;
+
+  check('server: their 600 s stay, plus the reading since', sum > 600 && sum <= 640, `${sum}`);
+  server.setRow(today, Date.now(), {}, true);
+
+  const started = Date.now();
+
+  await upload(dev);
+
+  const after = server.row(today);
+  const elapsed = (Date.now() - started) / 1000;
+
+  check(
+    'server: a day deleted elsewhere gets only the reading since',
+    !after.deleted && after.data.readingTime > 0 && after.data.readingTime <= elapsed + 1,
+    `${after.data?.readingTime}, deleted ${after.deleted}, ${elapsed} s`
+  );
+  await dev.context.close();
+}
+
+// Docker: the failed-sync dialog gave the reason with no way to fix it. An expired account is the
+// usual reason: the link must lead to the sign-in, and a Drive failure to its settings.
+async function failedLink() {
+  const openDialog = async (page) => {
+    const button = page.getByRole('button', { name: 'Sync failed' });
+
+    await button.waitFor({ timeout: 20000 });
+    await button.click();
+
+    const link = page.getByRole('link', { name: 'Open settings' });
+
+    await link.waitFor({ timeout: 5000 });
+
+    return link;
+  };
+  /** A book with a day waiting to go to `source`: the send fails when the page loads. */
+  const waitingFor = async (dev, source) => {
+    await dev.page.evaluate(
+      ([title, source]) =>
+        new Promise((resolve, reject) => {
+          const open = indexedDB.open('books');
+
+          open.onerror = () => reject(open.error);
+          open.onsuccess = () => {
+            const tx = open.result.transaction('data', 'readwrite');
+
+            tx.objectStore('data').add({ title, storageSource: source, elementHtml: 'x' });
+            tx.oncomplete = () => {
+              open.result.close();
+              resolve();
+            };
+          };
+        }),
+      [TITLE, source]
+    );
+    await holdDays(dev, [stat(D1, Date.now())]);
+    await dev.page.evaluate((entry) => {
+      localStorage.setItem('syncWaiting', JSON.stringify([entry]));
+    }, `${source}\tstatistic\t${TITLE}`);
+    await dev.page.goto(`${dev.base}/manage`);
+  };
+  const drive = fakeDrive();
+
+  drive.state.failUploads = true;
+
+  const onDrive = await device(drive, {
+    base: SERVER,
+    ls: { lastStorageSource: 'gdrive', syncLastSync: String(Date.now()) }
+  });
+
+  await waitingFor(onDrive, 'ttu-gdrive-default');
+
+  const link = await openDialog(onDrive.page);
+
+  await onDrive.page.screenshot({ path: join(shots, 'failed-link.png') });
+  await link.click();
+  await onDrive.page.waitForURL(/settings\?section=data-sync/, { timeout: 5000 });
+  check('failed link: Drive leads to its settings', true, onDrive.page.url());
+  check(
+    'failed link: the dialog closed',
+    !(await onDrive.page.getByRole('link', { name: 'Open settings' }).count())
+  );
+  await onDrive.context.close();
+
+  const onServer = await device(fakeDrive(), {
+    base: SERVER,
+    ls: { lastStorageSource: 'calibre', readerDataOwner: 'a', syncTarget: '' }
+  });
+  const json = (route, body, status = 200) =>
+    route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+
+  await onServer.context.route(`${SERVER}/account/api/**`, (route) =>
+    json(route, { user: { id: 'a', username: 'a' } })
+  );
+  await onServer.context.route(`${SERVER}/api/v1/**`, (route) => {
+    const { pathname } = new URL(route.request().url());
+
+    if (pathname.endsWith('/version')) return json(route, { api: 1 });
+    if (route.request().method() !== 'GET') return json(route, { error: 'Sign in' }, 401);
+    if (pathname.endsWith('/catalog')) {
+      return json(route, {
+        rev: 1,
+        books: [{ id: 7, calibreId: 107, title: TITLE, rev: 1, added: 1, format: 'epub' }]
+      });
+    }
+
+    return json(route, {
+      rev: 1,
+      statistics: [],
+      progress: [],
+      goals: [],
+      highlights: [],
+      bookDocs: [],
+      accountDocs: [],
+      games: [],
+      gameDocs: [],
+      series: [],
+      metadata: []
+    });
+  });
+  await waitingFor(onServer, 'ttu-calibre-default');
+
+  const account = await openDialog(onServer.page);
+  const href = await account.getAttribute('href');
+
+  check(
+    'failed link: an expired account leads to the sign-in',
+    href.endsWith('section=general#general-account'),
+    href
+  );
+  await onServer.page.screenshot({ path: join(shots, 'failed-link-account.png') });
+  await onServer.context.close();
+}
+
+// A server-connected standalone said only the host, whatever had happened to the sync.
+async function connectedStatus() {
+  const drive = fakeDrive();
+  const dev = await device(drive, {
+    ls: {
+      serverBase: 'https://books.example',
+      serverToken: 'e2e',
+      lastStorageSource: 'calibre',
+      syncTarget: '',
+      syncLastSync: String(Date.now())
+    }
+  });
+  const { page, context, base } = dev;
+
+  await context.route(/^https:\/\/books\.example\//, (route) =>
+    route.fulfill({
+      status: 200,
+      headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' },
+      contentType: 'application/json',
+      body: route.request().url().endsWith('/version')
+        ? '{"api":1}'
+        : '{"rev":0,"books":[],"progress":[],"statistics":[],"goals":[],"highlights":[],"bookDocs":[],"games":[],"gameDocs":[],"series":[],"metadata":[]}'
+    })
+  );
+  await page.goto(`${base}/manage`);
+  await sleep(2500);
+
+  const synced = page.getByRole('link', { name: /^Synced / });
+
+  check('connected: says when it synced', await synced.isVisible());
+  check(
+    'connected: the host stays in its title, and it leads to the server section',
+    (await synced.getAttribute('title', { timeout: 1000 }).catch(() => '')) === 'books.example' &&
+      (await synced.getAttribute('href', { timeout: 1000 }).catch(() => ''))?.endsWith(
+        '#sync-server'
+      )
+  );
+  await page.screenshot({ path: join(shots, 'connected-status.png') });
+  await page.evaluate(() => localStorage.removeItem('syncLastSync'));
+  await page.goto(`${base}/manage`);
+  await sleep(2500);
+  check(
+    'connected: nothing to say names the host',
+    await page.getByRole('link', { name: 'books.example' }).isVisible()
+  );
+  await dev.context.close();
+}
+
+// A dead OneDrive sign-in at startup. How this could go wrong:
+// - the source falls back to Browser and the library looks empty;
+// - only an error dialog says why, or nothing offers the sign-in;
+// - the button doesn't open the sign-in window from the click.
+async function deadOneDrive() {
+  const drive = fakeDrive();
+  const dev = await device(drive, {
+    viewport: { width: 390, height: 844 },
+    ls: { lastStorageSource: 'onedrive', syncTarget: 'ttu-onedrive-default' }
+  });
+  const { page, context } = dev;
+
+  await sleep(1500);
+  check(
+    'dead OneDrive: stays the source',
+    (await page.evaluate(() => localStorage.getItem('lastStorageSource'))) === 'onedrive'
+  );
+  check('dead OneDrive: no error dialog', !(await page.getByText('An Error occured').count()));
+  check(
+    'dead OneDrive: the header asks',
+    await page.getByRole('button', { name: 'Sign in to OneDrive again' }).isVisible()
+  );
+  check(
+    'dead OneDrive: the library says why',
+    await page.getByRole('heading', { name: 'Sign in to see your OneDrive library' }).isVisible()
+  );
+  await page.screenshot({ path: join(shots, 'dead-onedrive-phone.png') });
+
+  const popup = context.waitForEvent('page', { timeout: 5000 }).catch(() => undefined);
+
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click({ timeout: 3000 });
+
+  const opened = await popup;
+
+  check('dead OneDrive: the click opens the sign-in window', !!opened, opened?.url());
+  await dev.context.close();
+}
+
+// The folder source with the cache on: the baseline's read must see the other device's new file.
+// How this could go wrong: the cached list answers (their count overwritten by the tab's), or an
+// emptied list answers nothing (the same), or a cached handle of a file they replaced throws.
+async function folderCached() {
+  const drive = fakeDrive();
+  const dev = await device(drive, {
+    tracker: true,
+    ls: { cacheStorageData: '1', syncTarget: 'Folder', fsStorageSource: 'Folder' }
+  });
+  const { page, base } = dev;
+
+  // OPFS stands in for a picked folder: the same handle type, with no picker to click.
+  await page.evaluate(async () => {
+    const parent = await navigator.storage.getDirectory();
+    const directoryHandle = await parent.getDirectoryHandle('ttu-reader-data', { create: true });
+
+    await new Promise((resolve, reject) => {
+      const open = indexedDB.open('books');
+
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const tx = open.result.transaction('storageSource', 'readwrite');
+
+        tx.objectStore('storageSource').put({
+          name: 'Folder',
+          type: 'fs',
+          storedInManager: false,
+          encryptionDisabled: true,
+          data: { directoryHandle, fsPath: 'opfs/ttu-reader-data' },
+          lastSourceModified: Date.now()
+        });
+        tx.oncomplete = () => {
+          open.result.close();
+          resolve();
+        };
+      };
+    });
+  });
+  await importBook(dev);
+
+  const today = await todayOf(page);
+
+  await page.evaluate(() => localStorage.setItem('lastStorageSource', 'fs'));
+  await page.goto(`${base}/manage`);
+  await sleep(1500);
+  await openFromLibrary(dev);
+  await upload(dev);
+
+  const folderRows = () =>
+    page.evaluate(async (title) => {
+      const root = await navigator.storage.getDirectory();
+      const data = await root.getDirectoryHandle('ttu-reader-data');
+      const book = await data.getDirectoryHandle(title);
+      const names = [];
+
+      for await (const name of book.keys()) names.push(name);
+
+      const name = names.filter((n) => n.startsWith('statistics_')).pop();
+
+      if (!name) return [];
+
+      return JSON.parse(await (await (await book.getFileHandle(name)).getFile()).text());
+    }, TITLE);
+  const before = (await folderRows()).find((row) => row.dateKey === today);
+
+  check('folder: the first upload landed', before?.readingTime > 0, `${before?.readingTime}`);
+  await page.evaluate(
+    async ({ title, row }) => {
+      const root = await navigator.storage.getDirectory();
+      const data = await root.getDirectoryHandle('ttu-reader-data');
+      const book = await data.getDirectoryHandle(title);
+
+      for await (const name of book.keys()) {
+        if (name.startsWith('statistics_')) await book.removeEntry(name);
+      }
+
+      const file = await book.getFileHandle(
+        `statistics_1_6_${row.lastStatisticModified}_0_0_0_0_0_0_0_0_0_0_0_0_na.json`,
+        { create: true }
+      );
+      const writable = await file.createWritable();
+
+      await writable.write(JSON.stringify([row]));
+      await writable.close();
+    },
+    { title: TITLE, row: stat(today, Date.now(), 5000, 600) }
+  );
+  await upload(dev);
+
+  const row = (await folderRows()).find((entry) => entry.dateKey === today);
+
+  check(
+    'folder: their 600 s stay, plus the reading since',
+    row?.readingTime > 600 && row?.readingTime <= 640,
+    `${row?.readingTime}`
+  );
+  await dev.context.close();
+}
+
 // Failures only: a settings write refused (on page load, this browser's settings are new to Drive)
 // shows in the header, with its reason on tap. Highlights and words go through the same call.
 async function failuresOnly() {
@@ -830,6 +1464,15 @@ const scenarios = {
   baselineDeleted,
   baselineCorrection,
   baselineMidnight,
+  unsentThenPull,
+  raisedSave,
+  returnCached,
+  correctionHere,
+  folderCached,
+  serverCached,
+  failedLink,
+  connectedStatus,
+  deadOneDrive,
   failuresOnly,
   deadToken,
   failedReason,

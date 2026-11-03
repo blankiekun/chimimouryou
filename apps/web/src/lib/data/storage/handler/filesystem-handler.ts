@@ -45,6 +45,9 @@ export class FilesystemStorageHandler extends BaseStorageHandler implements Sync
 
   private titleToFiles = new Map<string, FileSystemFileHandle[]>();
 
+  /** Listed even with the cache on (`listFresh`). */
+  private freshTitle = '';
+
   private rootFileHandles = new Map<string, FileSystemFileHandle>();
 
   updateSettings(
@@ -104,6 +107,11 @@ export class FilesystemStorageHandler extends BaseStorageHandler implements Sync
       this.titleToBookCard.clear();
       this.dataListFetched = false;
     }
+  }
+
+  listFresh() {
+    this.titleToFiles.delete(this.currentContext.title);
+    this.freshTitle = this.currentContext.title;
   }
 
   async prepareBookForReading(): Promise<number> {
@@ -910,7 +918,9 @@ export class FilesystemStorageHandler extends BaseStorageHandler implements Sync
     rootHandle: FileSystemDirectoryHandle
   ): Promise<FileSystemFileHandle[]> {
     if (
-      (!this.cacheStorageData || !this.dataListFetched) &&
+      (!this.cacheStorageData ||
+        !this.dataListFetched ||
+        this.freshTitle === this.currentContext.title) &&
       !this.titleToFiles.has(this.currentContext.title)
     ) {
       const directory = await rootHandle

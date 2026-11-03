@@ -14,7 +14,7 @@ import type {
   BooksDbSubtitleData
 } from '$lib/data/database/books-db/versions/books-db';
 import { Observable, Subject, from } from 'rxjs';
-import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
+import { StorageDataType } from '$lib/data/storage/storage-types';
 import type { ReaderRoute } from '$lib/data/reader/reader-route';
 import {
   deletedStatistic,
@@ -118,12 +118,9 @@ export class DatabaseService {
         ).pipe(
           catchError((error: unknown) => {
             // The header and the empty library offer the sign-in, which only a click can open.
-            // Not OneDrive: nothing offers its sign-in but choosing the source again.
-            const signInToDrive =
-              storageSource === StorageKey.GDRIVE &&
-              (error as Error)?.message === 'Sign in to Drive again';
+            const signInNeeded = /^Sign in to (One)?Drive again$/.test((error as Error)?.message);
 
-            if (error instanceof Error && !signInToDrive) {
+            if (error instanceof Error && !signInNeeded) {
               const showReport = logger.errorCount > 1;
 
               logger.warn(error.message);
@@ -143,7 +140,7 @@ export class DatabaseService {
               this.lastHandler = undefined;
 
               // Out of reach for now: the source stays, and `online` lists it again (/manage).
-              if (signInToDrive || isOutOfReach(error)) libraryOffline$.next(true);
+              if (signInNeeded || isOutOfReach(error)) libraryOffline$.next(true);
               else storageSource$.next(fallbackStorageSource);
             }
 

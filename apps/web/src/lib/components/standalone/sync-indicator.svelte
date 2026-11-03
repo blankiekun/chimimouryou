@@ -4,13 +4,12 @@
   import MessageDialog from '$lib/components/message-dialog.svelte';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { pagePath, standalone } from '$lib/data/env';
-  import { driveSignedIn, signInToDrive } from '$lib/data/standalone/standalone-storage';
+  import { cloudSignedIn, signInToCloud } from '$lib/data/standalone/standalone-storage';
   import { serverBase, serverConnected } from '$lib/data/remote/server-connect';
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
-  import { isAppDefault } from '$lib/data/storage/storage-source-manager';
-  import { StorageKey, StorageSourceDefault } from '$lib/data/storage/storage-types';
+  import { StorageKey } from '$lib/data/storage/storage-types';
   import { storageSource$ } from '$lib/data/storage/storage-view';
-  import { database, gDriveStorageSource$, isOnline$, libraryOffline$ } from '$lib/data/store';
+  import { database, isOnline$, libraryOffline$ } from '$lib/data/store';
   import { syncState$, syncView } from '$lib/data/sync/sync-status';
   import { onMount } from 'svelte';
 
@@ -24,18 +23,19 @@
   const serverHost = serverBase.replace(/^https:\/\//, '');
 
   // Tokens aren't observable: checked again on the 15 s tick, after each sync and after signing in here.
-  // A source with the reader's own client asks for its password when it's used.
-  $: signedIn =
-    !!$syncState$ &&
-    ($storageSource$ !== StorageKey.GDRIVE ||
-      !isAppDefault($gDriveStorageSource$ || StorageSourceDefault.GDRIVE_DEFAULT) ||
-      driveSignedIn(now));
+  $: signedIn = !!$syncState$ && cloudSignedIn($storageSource$, now);
   // The library just found the sign-in dead: say so now, not on the next tick.
   $: if ($libraryOffline$) now = Date.now();
   $: view = syncView($syncState$, $storageSource$, $isOnline$, signedIn, now);
+  $: connected = serverConnected && $storageSource$ === StorageKey.CALIBRE;
+  // A failure on the server is mostly an expired sign-in.
+  $: failedHref =
+    $storageSource$ !== StorageKey.CALIBRE
+      ? settingsHref
+      : `${pagePath}/settings?section=${standalone ? 'sync#sync-server' : 'general#general-account'}`;
 
   async function signIn() {
-    const error = await signInToDrive(window);
+    const error = await signInToCloud(window, $storageSource$);
     now = Date.now();
     if (error) {
       goto(`${settingsHref}#sync-storage`);
@@ -51,14 +51,18 @@
     dialogManager.dialogs$.next([
       {
         component: MessageDialog,
-        props: { title: 'Sync failed', message: $syncState$.errors[0]?.detail ?? '' }
+        props: {
+          title: 'Sync failed',
+          message: $syncState$.errors[0]?.detail ?? '',
+          link: { href: failedHref, text: 'Open settings' }
+        }
       }
     ]);
   }
 </script>
 
-{#if serverConnected && $storageSource$ === StorageKey.CALIBRE}
-  <!-- Connected to a server: name it. -->
+{#if connected && view.kind === 'none'}
+  <!-- Connected to a server, and nothing to say yet: name it. -->
   <a href="{settingsHref}#sync-server" class="sync-indicator sync-host" title={serverHost}
     >{serverHost}</a
   >
@@ -79,7 +83,11 @@
     on:click={showFailure}>{view.text}</button
   >
 {:else if view.kind !== 'none'}
-  <a href={settingsHref} class="sync-indicator">{view.text}</a>
+  <a
+    href={connected ? `${settingsHref}#sync-server` : settingsHref}
+    class="sync-indicator"
+    title={connected ? serverHost : undefined}>{view.text}</a
+  >
 {/if}
 
 <style>

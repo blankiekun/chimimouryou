@@ -52,6 +52,9 @@ async function loadModules() {
   (await import('@zip.js/zip.js')).configure({ useWebWorkers: false });
 }
 
+// Up here, outside any hook's timeout: compiling these cold under load can take over 10 s.
+await loadModules();
+
 /** jsdom's Blob has neither arrayBuffer() nor stream(). */
 function bytes(blob: Blob) {
   return new Promise<ArrayBuffer>((resolve) => {
@@ -426,6 +429,51 @@ describe('statistics', () => {
       '2026-01-01',
       '2026-01-05'
     ]);
+  });
+
+  // How the tracker's baseline read could go wrong on this source:
+  // - the cached mirror answers, so the other device's count is overwritten by the tab's;
+  // - a deleted day is left out, so the tab's full count overwrites the deletion;
+  // - other callers start seeing deleted days (see the tests above).
+  it('the baseline read asks the server with the cache on, and shows a deleted day', async () => {
+    const context = { id: 1, title: 'こころ', imagePath: '' };
+    const server = handler(MergeMode.MERGE, true);
+
+    await server.getBookList();
+    server.startContext(context);
+    api.setRow('statistics', {
+      book: 7,
+      dateKey: '2026-01-01',
+      data: day('2026-01-01', 10),
+      modified: 10
+    });
+    server.clearData(false);
+    expect((await server.getStatistics()).statistics).toBeUndefined();
+
+    server.listFresh();
+    expect((await server.statisticsWithDeleted())?.map((row) => row.dateKey)).toEqual([
+      '2026-01-01'
+    ]);
+
+    api.setRow('statistics', {
+      book: 7,
+      dateKey: '2026-01-01',
+      data: null,
+      modified: 20,
+      deleted: true
+    });
+    server.listFresh();
+    expect(await server.statisticsWithDeleted()).toMatchObject([
+      {
+        title: 'こころ',
+        dateKey: '2026-01-01',
+        readingTime: 0,
+        charactersRead: 0,
+        lastStatisticModified: 20,
+        deleted: true
+      }
+    ]);
+    expect((await server.getStatistics()).statistics).toEqual([]);
   });
 
   // Bug: reading here again after pulling a future-dated row lowered this browser's time below the

@@ -85,6 +85,7 @@ import { throwIfAborted } from '$lib/functions/replication/replication-error';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
 import { replicationProgress$ } from '$lib/functions/replication/replication-progress';
 import {
+  deletedStatistic,
   isDeletedStatistic,
   mergeStatistics,
   updateStatisticToStore
@@ -118,6 +119,9 @@ export class ServerStorageHandler extends BaseStorageHandler {
 
   /** Titles whose rows were brought up to date since the last clearData. */
   private freshTitles = new Set<string>();
+
+  /** Fetched even with the cache on (`listFresh`). */
+  private freshTitle = '';
 
   private titleToCalibreBook = new Map<string, CalibreBook>();
 
@@ -155,6 +159,11 @@ export class ServerStorageHandler extends BaseStorageHandler {
     }
   }
 
+  listFresh() {
+    this.clearData(false);
+    this.freshTitle = this.currentContext.title;
+  }
+
   /** The account state, then this book's rows: fetched once per book (every call with the cache off). */
   private async mirror() {
     try {
@@ -166,7 +175,9 @@ export class ServerStorageHandler extends BaseStorageHandler {
     }
 
     const { title } = this.currentContext;
-    const fresh = this.freshTitles.has(title) || (this.cacheStorageData && this.dataListFetched);
+    const fresh =
+      this.freshTitles.has(title) ||
+      (this.cacheStorageData && this.dataListFetched && this.freshTitle !== title);
     const mirror = await signedInOr401(syncMirror(!fresh));
 
     this.freshTitles.add(title);
@@ -672,6 +683,23 @@ export class ServerStorageHandler extends BaseStorageHandler {
         : undefined,
       lastStatisticModified: newest(rows) || 0
     };
+  }
+
+  /** `getStatistics` hides deleted days, or this reader's tab would overwrite one with its full count. */
+  async statisticsWithDeleted() {
+    if (await this.gameDoc('statistics')) return (await this.getStatistics()).statistics;
+
+    const { rows } = await this.bookRows('statistics');
+    const { title } = this.currentContext;
+
+    return rows.map((row) =>
+      row.deleted
+        ? deletedStatistic(
+            { title, dateKey: row.dateKey!, lastStatisticModified: 0 } as BooksDbStatistic,
+            row.modified
+          )
+        : ({ ...row.data, title } as BooksDbStatistic)
+    );
   }
 
   async getReadingGoals() {
