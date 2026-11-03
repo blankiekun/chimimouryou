@@ -11,88 +11,55 @@ import upgradeBooksDbFromV2 from './versions/v2/upgrade';
 export function createBooksDb(name = 'books') {
   return openDB<BooksDb>(name, 6, {
     async upgrade(oldDb, oldVersion, newVersion, transaction) {
-      switch (oldVersion) {
-        case 0: {
-          const dataStore = oldDb.createObjectStore('data', {
-            keyPath: 'id',
-            autoIncrement: true
-          });
-          dataStore.createIndex('title', 'title');
+      if (oldVersion === 0) {
+        const dataStore = oldDb.createObjectStore('data', {
+          keyPath: 'id',
+          autoIncrement: true
+        });
+        dataStore.createIndex('title', 'title');
 
-          oldDb.createObjectStore('bookmark', {
-            keyPath: 'dataId'
-          });
+        oldDb.createObjectStore('bookmark', {
+          keyPath: 'dataId'
+        });
 
-          oldDb.createObjectStore('lastItem');
+        oldDb.createObjectStore('lastItem');
+      }
 
-          oldDb.createObjectStore('storageSource', {
-            keyPath: 'name'
-          });
+      if (oldVersion === 2) {
+        await upgradeBooksDbFromV2(oldDb, oldVersion, newVersion, transaction);
+      }
 
-          const statisticsStore = oldDb.createObjectStore('statistic', {
-            keyPath: ['title', 'dateKey']
-          });
+      if (oldVersion < 4) {
+        oldDb.createObjectStore('storageSource', {
+          keyPath: 'name'
+        });
+      }
 
-          statisticsStore.createIndex('dateKey', 'dateKey');
-          statisticsStore.createIndex('completedBook', ['completedBook', 'title']);
+      if (oldVersion < 5) {
+        const statisticsStore = oldDb.createObjectStore('statistic', {
+          keyPath: ['title', 'dateKey']
+        });
 
-          const readingGoalsStore = oldDb.createObjectStore('readingGoal', {
-            keyPath: 'goalStartDate'
-          });
+        statisticsStore.createIndex('dateKey', 'dateKey');
+        statisticsStore.createIndex('completedBook', ['completedBook', 'title']);
 
-          readingGoalsStore.createIndex('goalEndDate', 'goalEndDate');
+        const readingGoalsStore = oldDb.createObjectStore('readingGoal', {
+          keyPath: 'goalStartDate'
+        });
 
-          oldDb.createObjectStore('lastModified', {
-            keyPath: ['title', 'dataType']
-          });
+        readingGoalsStore.createIndex('goalEndDate', 'goalEndDate');
 
-          oldDb.createObjectStore('audioBook', { keyPath: 'title' });
+        oldDb.createObjectStore('lastModified', {
+          keyPath: ['title', 'dataType']
+        });
+      }
 
-          oldDb.createObjectStore('subtitle', { keyPath: 'title' });
+      if (oldVersion < 6) {
+        oldDb.createObjectStore('audioBook', { keyPath: 'title' });
 
-          oldDb.createObjectStore('handle', { keyPath: ['title', 'dataType'] });
+        oldDb.createObjectStore('subtitle', { keyPath: 'title' });
 
-          break;
-        }
-        case 2: {
-          await upgradeBooksDbFromV2(oldDb, oldVersion, newVersion, transaction);
-          break;
-        }
-        case 3: {
-          oldDb.createObjectStore('storageSource', {
-            keyPath: 'name'
-          });
-          break;
-        }
-        case 4: {
-          const statisticsStore = oldDb.createObjectStore('statistic', {
-            keyPath: ['title', 'dateKey']
-          });
-
-          statisticsStore.createIndex('dateKey', 'dateKey');
-          statisticsStore.createIndex('completedBook', ['completedBook', 'title']);
-
-          const readingGoalsStore = oldDb.createObjectStore('readingGoal', {
-            keyPath: 'goalStartDate'
-          });
-
-          readingGoalsStore.createIndex('goalEndDate', 'goalEndDate');
-
-          oldDb.createObjectStore('lastModified', {
-            keyPath: ['title', 'dataType']
-          });
-
-          break;
-        }
-        case 5: {
-          oldDb.createObjectStore('audioBook', { keyPath: 'title' });
-
-          oldDb.createObjectStore('subtitle', { keyPath: 'title' });
-
-          oldDb.createObjectStore('handle', { keyPath: ['title', 'dataType'] });
-
-          break;
-        }
+        oldDb.createObjectStore('handle', { keyPath: ['title', 'dataType'] });
       }
     }
   });

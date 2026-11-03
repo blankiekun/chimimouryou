@@ -49,7 +49,7 @@ const tables = [
 
 export type SyncTable = (typeof tables)[number];
 
-export type Mirror = { rev: number } & Record<SyncTable, SyncRow[]>;
+export type Mirror = { rev: number; db?: string } & Record<SyncTable, SyncRow[]>;
 
 /** A catalog entry as the API sends it (`book_json`). */
 interface ApiBook extends Omit<CalibreBook, 'id' | 'bookId'> {
@@ -204,6 +204,14 @@ function toCalibreBook(book: ApiBook): CalibreBook {
 
 const newestFirst = (a: ApiBook, b: ApiBook) => b.added - a.added || b.id - a.id;
 
+/** The server's database was made again or restored: its rev went back, or its file isn't the same. */
+function serverDbChanged(
+  stored: { rev: number; db?: string },
+  answer: { rev: number; db?: string }
+) {
+  return answer.rev < stored.rev || (!!stored.db && !!answer.db && stored.db !== answer.db);
+}
+
 let catalogBooks: CalibreBook[] | undefined;
 
 /**
@@ -212,31 +220,34 @@ let catalogBooks: CalibreBook[] | undefined;
  */
 export async function catalog(): Promise<CalibreBook[]> {
   const key = `catalog:${serverBase}`;
-  const cached = await cacheGet<{ rev: number; books: ApiBook[] }>(key);
+  const cached = await cacheGet<{ rev: number; db?: string; books: ApiBook[] }>(key);
   const fetchSince = async (since: number) => {
     const response = await apiFetch(`catalog?since=${since}`);
 
     if (!response.ok) throw await httpError(response);
 
-    return (await response.json()) as { rev: number; books: ApiBook[] };
+    return (await response.json()) as { rev: number; db?: string; books: ApiBook[] };
   };
 
   let result = await fetchSince(cached?.rev || 0);
 
-  // The server's database was made again (its rev went back): start over.
-  if (cached?.rev && result.rev < cached.rev) result = await fetchSince(0);
+  const reset = !!cached?.rev && serverDbChanged(cached, result);
+
+  if (reset) result = await fetchSince(0);
 
   let books = result.books;
 
   // A delta: changed books replace theirs, deleted ones go.
-  if (cached?.rev && result.rev >= cached.rev) {
+  if (cached?.rev && !reset) {
     const byId = new Map(cached.books.map((book) => [book.id, book]));
 
     result.books.forEach((book) => byId.set(book.id, book));
     books = [...byId.values()].filter((book) => !book.deleted).sort(newestFirst);
   }
 
-  if (!cached || result.rev !== cached.rev) await cachePut(key, { rev: result.rev, books });
+  if (!cached || result.rev !== cached.rev || result.db !== cached.db) {
+    await cachePut(key, { rev: result.rev, db: result.db, books });
+  }
 
   catalogBooks = books.map(toCalibreBook);
 
@@ -311,14 +322,13 @@ async function pull(key: string) {
   };
 
   let delta = await fetchSince(stored.rev);
-  // The server's database was made again (its rev went back): start over.
-  const reset = delta.rev < stored.rev;
+  const reset = serverDbChanged(stored, delta);
 
   if (reset) delta = await fetchSince(0);
 
   // The mirror as it is now: rows written meanwhile (`remember`) are kept.
   const current = reset ? emptyMirror() : mirrors.get(key) || stored;
-  const mirror = { ...current, rev: delta.rev } as Mirror;
+  const mirror = { ...current, rev: delta.rev, db: delta.db } as Mirror;
 
   tables.forEach((table) => {
     mirror[table] = mergeRows(current, table, delta[table] || []);

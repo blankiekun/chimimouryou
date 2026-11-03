@@ -270,7 +270,9 @@ export class OneDriveStorageHandler extends ApiStorageHandler implements SyncFil
 
   protected async getExternalFiles(remoteTitleId: string) {
     if (
-      (!this.cacheStorageData || !this.dataListFetched) &&
+      (!this.cacheStorageData ||
+        !this.dataListFetched ||
+        this.freshTitle === this.currentContext.title) &&
       !this.titleToFiles.has(this.currentContext.title)
     ) {
       const externalFiles = await this.list(remoteTitleId, true, true);

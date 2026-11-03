@@ -147,5 +147,10 @@ const bookStores = [
 export async function deleteBookExtras(title: string) {
   const tx = (await readerDb()).transaction(bookStores, 'readwrite');
 
-  await Promise.all([...bookStores.map((store) => tx.objectStore(store).delete(title)), tx.done]);
+  await Promise.all([
+    ...bookStores.map((store) => tx.objectStore(store).delete(title)),
+    // Another account's held highlights (`annotations.ts`).
+    tx.objectStore('annotations').delete(IDBKeyRange.bound(`${title}\0`, `${title}\0\uffff`)),
+    tx.done
+  ]);
 }

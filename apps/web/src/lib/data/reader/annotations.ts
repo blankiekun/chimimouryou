@@ -101,6 +101,11 @@ function isOwnedByOther(stored: { account?: string } | undefined, owner: string 
   return owner !== undefined && stored?.account !== undefined && stored.account !== owner;
 }
 
+/** Where an account's copy waits while another sign-in state holds the book's record. */
+function heldKey(title: string, account: string) {
+  return `${title}\0${account}`;
+}
+
 function newId() {
   return typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
@@ -135,7 +140,22 @@ export class AnnotationsController {
     // they are safe on that account's server. Old records without an owner are kept.
     const owner = this.syncSource ? await this.owner() : undefined;
 
-    this.setAll(isOwnedByOther(stored, owner) ? [] : stored?.highlights || []);
+    const held =
+      owner === undefined
+        ? undefined
+        : await (await db()).get('annotations', heldKey(this.title, owner));
+
+    this.setAll(
+      mergeHighlights(
+        isOwnedByOther(stored, owner) ? [] : stored?.highlights || [],
+        held?.highlights || []
+      )
+    );
+
+    if (held) {
+      await this.save(this.all);
+      await (await db()).delete('annotations', held.title);
+    }
 
     if (this.syncSource) {
       await this.sync();
@@ -192,10 +212,11 @@ export class AnnotationsController {
     const owner = this.syncSource ? await this.owner() : undefined;
     const tx = (await db()).transaction('annotations', 'readwrite');
     const stored = await tx.store.get(this.title);
-    const merged = isOwnedByOther(stored, owner)
-      ? highlights
-      : mergeHighlights(highlights, stored?.highlights || []);
+    const other = isOwnedByOther(stored, owner);
+    const merged = other ? highlights : mergeHighlights(highlights, stored?.highlights || []);
 
+    // Theirs may not have reached the server: it waits for them, never shown to this reader.
+    if (other) await tx.store.put({ ...stored!, title: heldKey(this.title, stored!.account!) });
     await tx.store.put({ title: this.title, highlights: merged, account: owner });
     await tx.done;
 

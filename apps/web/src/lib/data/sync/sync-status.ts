@@ -164,6 +164,17 @@ export function recordSyncError(what: string, detail: string, now = Date.now()) 
   update({ errors });
 }
 
+/**
+ * A write outside `replicateData` (highlights, words, settings) failed: listed, and the header says
+ * so until the next finished sync. They report only failures. Offline isn't one: they retry.
+ */
+export function syncFileFailed(what: string, detail: string) {
+  if (navigator.onLine === false) return;
+
+  recordSyncError(what, detail);
+  update({ failed: true });
+}
+
 export function formatAgo(ms: number) {
   const minutes = Math.floor(ms / 60_000);
   if (minutes < 1) return 'just now';

@@ -71,7 +71,8 @@ export class GDriveStorageHandler extends ApiStorageHandler implements SyncFileS
           const title = titles[index];
           const desanitizedTitle = BaseStorageHandler.desanitizeFilename(title.name);
 
-          this.titleToId.set(desanitizedTitle, title.id);
+          // Two devices can make a book's folder at once: the oldest is the one, as in `ensureTitle`.
+          if (!this.titleToId.has(desanitizedTitle)) this.titleToId.set(desanitizedTitle, title.id);
           titleIdToName.set(title.id, desanitizedTitle);
         }
 
@@ -139,6 +140,7 @@ export class GDriveStorageHandler extends ApiStorageHandler implements SyncFileS
     params.append('corpora', 'user');
     params.append('spaces', 'drive');
     params.append('fields', 'files(id)');
+    params.append('orderBy', 'createdTime');
     params.append(
       'q',
       `trashed=false and '${parent}' in parents and mimeType = 'application/vnd.google-apps.folder' and name = "${sanitizedName}"`
@@ -180,7 +182,9 @@ export class GDriveStorageHandler extends ApiStorageHandler implements SyncFileS
 
   protected async getExternalFiles(remoteTitleId: string) {
     if (
-      (!this.cacheStorageData || !this.dataListFetched) &&
+      (!this.cacheStorageData ||
+        !this.dataListFetched ||
+        this.freshTitle === this.currentContext.title) &&
       !this.titleToFiles.has(this.currentContext.title)
     ) {
       const externalFiles = await this.list(
@@ -471,6 +475,8 @@ export class GDriveStorageHandler extends ApiStorageHandler implements SyncFileS
     params.append('corpora', 'user');
     params.append('spaces', 'drive');
     params.append('fields', fields);
+    // Folders: the oldest first, so every device picks the same one of two.
+    params.append('orderBy', 'createdTime');
     params.append('q', query);
 
     if (pageToken) {
