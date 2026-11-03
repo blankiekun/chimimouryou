@@ -476,14 +476,25 @@ export async function updateExtension(repoId: number, id: number | string) {
 export async function removeRepo(id: number) {
   const db = await store();
   const repo = await repoRow(id);
+  const removed: string[] = [];
   for (const row of await db.all<ExtensionRow>('extensions')) {
     if (row.repo === id) {
       await db.remove('extensions', [row.repo, row.id]);
+      if (repo.format === 'mihon' && row.sha256) removed.push(row.sha256);
       const entry = repo.entries.find((e) => e.id === row.id);
       (entry ? sitesOf(repo, entry) : [extSite(repo, row.id)]).forEach(closeSite);
     }
   }
   await db.remove('repos', id);
+  // Another repository can list the same jar, under the same pin. Its code going is never worth
+  // failing the removal over.
+  const kept = new Set((await db.all<ExtensionRow>('extensions')).map((row) => row.sha256));
+  for (const pin of new Set(removed)) {
+    if (!kept.has(pin))
+      await mihonHost()
+        ?.remove(pin)
+        .catch(() => undefined);
+  }
   return {};
 }
 

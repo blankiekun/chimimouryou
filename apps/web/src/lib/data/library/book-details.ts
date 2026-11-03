@@ -125,7 +125,7 @@ export async function loadBookDetails(book: BookCardProps, kind: MetadataKind, i
       const id = book.calibreId;
       const bookEstimate = details.estimate;
       const [list, known] = await Promise.all([
-        wordList(id, bookEstimate.computedAt).catch(() => null),
+        wordList(id, bookEstimate).catch(() => null),
         refreshKnownWordsIfStale()
           .then(getKnownSet)
           .catch(() => undefined)

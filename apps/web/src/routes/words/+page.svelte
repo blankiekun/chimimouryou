@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import ImportMenu from '$lib/components/library/import-menu.svelte';
   import PointBox from '$lib/components/point-box.svelte';
@@ -19,7 +18,7 @@
   import { serverless } from '$lib/data/remote/server-connect';
   import { readerSyncSource } from '$lib/data/sync/sync-files';
   import { knownWords$ } from '$lib/data/words/known-words';
-  import { setPendingImport, type PendingImport } from '$lib/data/library/library-home';
+  import { importOnManage } from '$lib/data/library/library-home';
   import { pullAccountStatistics } from '$lib/data/stats/statistics-sync';
   import { database, startDayHoursForTracker$ } from '$lib/data/store';
   import { markedWords, marksSignature, wordMarks$ } from '$lib/data/words/word-marks';
@@ -88,11 +87,6 @@
     .join(' · ');
 
   // The import runs (with its progress and errors) in the library.
-  function importOnManage(value: PendingImport) {
-    setPendingImport(value);
-    goto(`${pagePath}/manage`);
-  }
-
   function loadSummary() {
     getWordsSummary().then(
       (value) => (summary = value),

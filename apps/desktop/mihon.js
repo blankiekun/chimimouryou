@@ -267,6 +267,15 @@ export function registerMihon({ app, ipcMain, net, isApp, hostDir, jvmArgs = [] 
     return { sha256: pin };
   }
 
+  /**
+   * Deletes the pinned jar (the caller checks that nothing else holds it). Best effort, as
+   * `replaces`: a running host reads on from its open file, and on Windows the jar then stays.
+   */
+  async function removeJar(_event, pin) {
+    if (!(typeof pin === 'string' && PIN.test(pin))) throw new Error('Not a pin');
+    await rm(join(extDir, `${pin}.jar`), { force: true }).catch(() => undefined);
+  }
+
   /** Loads the pinned jar into the host (once per host run): its sources. */
   async function load(pin) {
     if (!PIN.test(pin)) throw new Error('Not a pin');
@@ -312,6 +321,7 @@ export function registerMihon({ app, ipcMain, net, isApp, hostDir, jvmArgs = [] 
   ipcMain.handle('mihon-install-jre', guarded(installJre));
   ipcMain.handle('mihon-remove-jre', guarded(removeJre));
   ipcMain.handle('mihon-install', guarded(installJar));
+  ipcMain.handle('mihon-remove', guarded(removeJar));
   ipcMain.handle(
     'mihon-load',
     guarded((_event, pin) => load(String(pin)))

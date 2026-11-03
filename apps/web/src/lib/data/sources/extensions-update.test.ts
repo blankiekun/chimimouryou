@@ -11,17 +11,28 @@
  *   and its jar is deleted anyway
  * - a host refusing the install changes the row, so it points at code that was never kept
  * - an install from scratch (switching on) asks for something to be deleted
+ * Removing a repository:
+ * - a jar another repository holds, even switched off, is deleted
+ * - two extensions of one repository sharing a jar delete it twice, or the host's failure to delete
+ *   fails the removal and leaves the repository half gone
+ * - a repository of JavaScript extensions, whose rows pin no file in the host, asks the host to delete
  */
 
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { setExtension, updateExtension, type ExtensionRow, type RepoRow } from './extensions';
+import {
+  removeRepo,
+  setExtension,
+  updateExtension,
+  type ExtensionRow,
+  type RepoRow
+} from './extensions';
 import { extensionStore as db } from './local-sources';
 
-const install = vi.hoisted(() => vi.fn());
+const { install, remove } = vi.hoisted(() => ({ install: vi.fn(), remove: vi.fn() }));
 
 vi.mock('./mihon-runtime', () => ({
-  mihonHost: () => ({ install }),
+  mihonHost: () => ({ install, remove }),
   mihonRunsApks: () => false,
   openMihon: vi.fn()
 }));
@@ -70,6 +81,8 @@ beforeEach(async () => {
   for (const r of (await db.all('repos')) as RepoRow[]) await db.remove('repos', r.id);
   install.mockReset();
   install.mockResolvedValue({ sha256: NEW });
+  remove.mockReset();
+  remove.mockResolvedValue(undefined);
   // The index can't be read again here: the repository's stored entries stay.
   vi.stubGlobal('fetch', () => Promise.reject(new Error('offline')));
 });
@@ -105,5 +118,40 @@ describe('updating a Mihon extension', () => {
     const repo = await addRepo('https://repo.example/index.pb', ['one']);
     await setExtension(repo, 'one', true);
     expect(install).toHaveBeenCalledWith('https://repo.example/one.jar', 'key', undefined);
+  });
+});
+
+describe('removing a Mihon repository', () => {
+  it('deletes its jars once each, and not one another repository holds', async () => {
+    const repo = await addRepo('https://repo.example/index.pb', ['one', 'two', 'three']);
+    const mirror = await addRepo('https://mirror.example/index.pb', ['three']);
+    await db.put('extensions', row(repo, 'one'));
+    await db.put('extensions', row(repo, 'two'));
+    await db.put('extensions', { ...row(repo, 'three'), sha256: NEW });
+    await db.put('extensions', { ...row(mirror, 'three', false), sha256: NEW });
+    await removeRepo(repo);
+    expect(remove.mock.calls).toEqual([[OLD]]);
+    expect(await stored(mirror, 'three')).toBeDefined();
+  });
+
+  it('a jar that could not be deleted still removes the repository', async () => {
+    const repo = await addRepo('https://repo.example/index.pb', ['one']);
+    await db.put('extensions', row(repo, 'one'));
+    remove.mockRejectedValue(new Error('refused'));
+    await removeRepo(repo);
+    expect(await stored(repo, 'one')).toBeUndefined();
+    expect(await db.one('repos', repo)).toBeUndefined();
+  });
+
+  it('asks nothing of the host for a repository of JavaScript extensions', async () => {
+    const repo = (await db.put('repos', {
+      key: 'js',
+      url: 'https://repo.example/index.json',
+      entries: [],
+      fetched: 0
+    } as unknown as RepoRow)) as number;
+    await db.put('extensions', { ...row(repo, 'one'), code: 'code' });
+    await removeRepo(repo);
+    expect(remove).not.toHaveBeenCalled();
   });
 });

@@ -29,6 +29,8 @@ interface MihonHost {
    * that nothing else holds it.
    */
   install(url: string, signingKey: string, replaces?: string): Promise<{ sha256: string }>;
+  /** Deletes the pinned code: the caller checks that nothing else holds it. */
+  remove(pin: string): Promise<unknown>;
   load(pin: string): Promise<{ sources: { id: string; name: string; lang: string }[] }>;
   call(pin: string, op: string, params: Record<string, unknown>): Promise<any>;
 }
@@ -52,6 +54,7 @@ interface MihonPlugin {
     signingKey: string;
     replaces?: string;
   }): Promise<{ sha256: string }>;
+  remove(options: { pin: string }): Promise<void>;
   call(options: Record<string, unknown>): Promise<any>;
   drop(options: { paths: string[] }): Promise<void>;
 }
@@ -75,6 +78,7 @@ async function files(found: { path: string; type: string }[]) {
 
 const android: MihonHost = {
   install: (url, signingKey, replaces) => plugin.install({ url, signingKey, replaces }),
+  remove: (pin) => plugin.remove({ pin }),
   load: (pin) => plugin.call({ pin, op: 'load' }),
   async call(pin, op, params) {
     const result = await plugin.call({ ...params, pin, op });

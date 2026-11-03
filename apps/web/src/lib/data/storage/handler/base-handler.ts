@@ -20,7 +20,7 @@ import { MergeMode } from '$lib/data/merge-mode';
 import {
   InternalStorageSources,
   StorageDataType,
-  type StorageKey
+  StorageKey
 } from '$lib/data/storage/storage-types';
 import { throwIfAborted } from '$lib/functions/replication/replication-error';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
@@ -33,6 +33,7 @@ import {
 } from '$lib/functions/replication/replication-progress';
 import pLimit from 'p-limit';
 import { isVn } from '$lib/data/vn/vn';
+import { database } from '$lib/data/store';
 import {
   BlobReader,
   BlobWriter,
@@ -462,6 +463,59 @@ export abstract class BaseStorageHandler {
     };
 
     this.titleToBookCard.set(title, bookCard);
+  }
+
+  /**
+   * Saves a visual novel in this browser only, for this source: listed with its books, opened
+   * from here, never uploaded (the reader chose "Keep on this device"; a Windows game).
+   */
+  async keepOnDevice(data: Omit<BooksDbBookData, 'id'>) {
+    const { getStorageHandler } = await import('$lib/data/storage/storage-handler-factory');
+    const id = await getStorageHandler(
+      this.window,
+      StorageKey.BROWSER,
+      undefined,
+      true,
+      this.cacheStorageData,
+      this.saveBehavior
+    ).saveBook({ ...data, storageSource: this.storageSourceName }, false, false, this.cancelSignal);
+
+    this.addDeviceVnCard(data);
+
+    return id;
+  }
+
+  /** Deletes the browser copies of visual novels kept on this device, or they would be listed again. */
+  protected async deleteDeviceVns(
+    titles: string[],
+    cancelSignal: AbortSignal,
+    keepStatistics: boolean
+  ) {
+    const idToTitle = new Map<number, string>();
+
+    for (const title of titles) {
+      const book = await database.getDataByTitle(title);
+
+      if (book?.storageSource === this.storageSourceName && isVn(book)) {
+        idToTitle.set(book.id, title);
+      }
+    }
+
+    if (!idToTitle.size) return '';
+
+    return (
+      await database.deleteData([...idToTitle.keys()], idToTitle, cancelSignal, keepStatistics)
+    ).error;
+  }
+
+  protected addDeviceVnCard(book: Omit<BooksDbBookData, 'id'>) {
+    this.addBookCard(book.title, {
+      imagePath: book.coverImage || '',
+      characters: BaseStorageHandler.getBookCharacters(book.characters || 0, book.sections || []),
+      lastBookModified: book.lastBookModified || 0,
+      lastBookOpen: book.lastBookOpen || 0,
+      vn: true
+    });
   }
 
   protected async zipBookData(bookdata: Omit<BooksDbBookData, 'id'>, progressBase = 1) {

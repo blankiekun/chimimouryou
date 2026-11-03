@@ -246,6 +246,49 @@ describe('getWordsMet', () => {
     expect((await getWordsMet()).words).toEqual({ '猫\tねこ': 10, '宦官\tかんがん': 0.5 });
   });
 
+  // Catches: old rows and totals kept after a term dictionary change (computedAt doesn't move); a list
+  // refetched on every call rather than once; a server without a stamp making browsers refetch.
+  it('refetches a cached list once when the words stamp moves, and not without one', async () => {
+    const db = await readerDb();
+
+    await db.clear('known');
+    api.addBook({ id: 3, calibreId: 10, title: '鳥の本' });
+    await saveReadProgress([{ title: '鳥の本', progress: 1 }]);
+    let stamp = '';
+    let rows: BookWord[] = [['猫', 'ねこ', 3, 1]];
+    const lists = vi.fn(async () => new Response(JSON.stringify(rows)));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.startsWith('/api/v1/')) return api.fetch(url);
+        if (url.endsWith('difficulty.json')) {
+          return new Response(
+            JSON.stringify({
+              books: { 10: { characters: 1000, computedAt: 1 } },
+              ...(stamp ? { wordsStamp: stamp } : {})
+            })
+          );
+        }
+        if (url.endsWith('/words/10')) return lists();
+        return new Response('', { status: 404 });
+      })
+    );
+    await loadCalibreCatalog(true);
+
+    await getWordsMet();
+    await getWordsMet();
+    expect(lists).toHaveBeenCalledTimes(1);
+
+    stamp = 'a';
+    rows = [['猫', 'びょう', 3, 1]];
+    expect((await getWordsMet()).words).toEqual({ '猫\tびょう': 3 });
+    expect(lists).toHaveBeenCalledTimes(2);
+    expect(await db.get('known', 'list:10')).toMatchObject({ wordsStamp: 'a' });
+
+    await getWordsMet();
+    expect(lists).toHaveBeenCalledTimes(2);
+  });
+
   it("doesn't cache a list the server failed to send", async () => {
     const db = await readerDb();
 

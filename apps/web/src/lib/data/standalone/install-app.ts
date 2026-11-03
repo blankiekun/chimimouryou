@@ -12,13 +12,8 @@
 
 import { learningGuideUrl } from '$lib/data/standalone/app-update';
 import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
-import { storage } from '$lib/data/window/navigator/storage';
+import { persistStorage } from '$lib/data/window/navigator/storage';
 import { writableSubject } from '$lib/functions/svelte/store';
-
-/** Installed apps keep their data: ask the browser not to evict the books. */
-function persistStorage() {
-  storage.persist().catch(() => {});
-}
 
 export type InstallWay = 'prompt' | 'firefox-android' | 'ios' | 'installed' | 'none';
 

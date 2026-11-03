@@ -84,8 +84,24 @@ def load_results():
 def save_results(results):
     tmp = settings.RESULTS_PATH + '.tmp'
     with open(tmp, 'w', encoding='utf-8') as f:
-        json.dump(results, f, separators=(',', ':'))
+        json.dump({**results, 'wordsStamp': readerpack.words_stamp()}, f, separators=(',', ':'))
     os.replace(tmp, settings.RESULTS_PATH)
+
+
+def refresh_words_stamp():
+    """For a change no job follows (a dictionary installed, a new yurigana at startup). Failing only delays the
+    browsers' refetch until the next results are written. Not load_results: results that can't be read must stay
+    on disk, not be replaced by none."""
+    try:
+        try:
+            with open(settings.RESULTS_PATH, encoding='utf-8') as f:
+                results = json.load(f)
+        except FileNotFoundError:
+            results = {'books': {}}
+        if results.get('wordsStamp') != readerpack.words_stamp():
+            save_results(results)
+    except (OSError, ValueError, AttributeError) as error:
+        print(f'words stamp: {error}', file=sys.stderr, flush=True)
 
 
 

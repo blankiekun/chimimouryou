@@ -171,7 +171,7 @@ try {
     });
   await page.getByText('E2E', { exact: true }).first().waitFor();
 
-  step('Import → Installed game, Play natively');
+  step('Import → Installed game; opening it plays it natively');
   await app.evaluate(({ dialog }, picked) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [picked] });
   }, gameDir);
@@ -196,7 +196,6 @@ try {
     title
   );
   await page.goto(`http://127.0.0.1:41917/v?id=${id}`);
-  await page.getByRole('button', { name: 'Play natively' }).click();
   await page.waitForURL(/\/hook\?native=/);
 
   step('The caption thread (a line per step) picked');

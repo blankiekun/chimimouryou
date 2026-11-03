@@ -1,12 +1,11 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
   import { faSpinner } from '@fortawesome/free-solid-svg-icons';
   import { onMount, type Component } from 'svelte';
   import { map, share } from 'rxjs';
   import Fa from 'svelte-fa';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import ImportMenu from '$lib/components/library/import-menu.svelte';
-  import { setPendingImport, type PendingImport } from '$lib/data/library/library-home';
+  import { importOnManage } from '$lib/data/library/library-home';
   import AdminSection from '$lib/components/admin/admin-section.svelte';
   import EngineTool from '$lib/components/admin/engine-tool.svelte';
   import CatalogTool from '$lib/components/admin/catalog-tool.svelte';
@@ -66,11 +65,6 @@
       tab = requested;
     }
   });
-
-  function importOnManage(value: PendingImport) {
-    setPendingImport(value);
-    goto(`${pagePath}/manage`);
-  }
 </script>
 
 <svelte:head>

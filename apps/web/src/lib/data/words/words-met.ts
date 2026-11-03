@@ -65,6 +65,8 @@ export interface WordsMetCache {
 export interface WordList {
   /** The estimate's `computedAt` the list belongs to */
   computedAt: number;
+  /** The server's `wordsStamp` it was fetched under: a dictionary change moves it, not `computedAt` */
+  wordsStamp?: string;
   /** null: the book has no word list */
   words: BookWord[] | null;
   /** The list's totals (lists made on request; `withTotals`) */
@@ -260,13 +262,16 @@ export function knownBeyond(
 }
 
 /** The book's word list, cached per estimate. */
-export async function wordList(id: number, computedAt: number) {
+export async function wordList(
+  id: number,
+  { computedAt, wordsStamp }: Pick<CalibreDifficulty, 'computedAt' | 'wordsStamp'>
+) {
   const db = await readerDb();
   const key = `list:${id}`;
   const cached = (await db.get('known', key)) as WordList | undefined;
 
   // Lists cached before readings were folded are folded here.
-  if (cached?.computedAt === computedAt) {
+  if (cached?.computedAt === computedAt && cached.wordsStamp === wordsStamp) {
     return cached.words && withTotals(foldReadings(cached.words), cached.totals);
   }
 
@@ -277,7 +282,12 @@ export async function wordList(id: number, computedAt: number) {
 
   await db.put(
     'known',
-    { computedAt, words, ...(totals.tokens !== undefined && { totals }) } satisfies WordList,
+    {
+      computedAt,
+      wordsStamp,
+      words,
+      ...(totals.tokens !== undefined && { totals })
+    } satisfies WordList,
     key
   );
 
@@ -328,9 +338,9 @@ export async function estimatedBooks(): Promise<EstimatedBook[]> {
 }
 
 /** An estimated book's word list (a local one is read from reader-db, never cached again). */
-export async function estimatedWordList({ id, title, computedAt }: EstimatedBook) {
+export async function estimatedWordList({ id, title, estimate }: EstimatedBook) {
   return typeof id === 'number'
-    ? wordList(id, computedAt)
+    ? wordList(id, estimate)
     : ((await localWordList(title))?.words ?? null);
 }
 
@@ -376,7 +386,12 @@ async function computeWordsMet(): Promise<WordsMetCache> {
   const books = await readBooks();
   const signature = JSON.stringify([
     metVersion,
-    books.map(({ id, computedAt, fraction }) => ({ id, computedAt, fraction }))
+    books.map(({ id, computedAt, estimate, fraction }) => ({
+      id,
+      computedAt,
+      wordsStamp: estimate.wordsStamp,
+      fraction
+    }))
   ]);
   const cached = (await db.get('known', 'met')) as WordsMetCache | undefined;
 

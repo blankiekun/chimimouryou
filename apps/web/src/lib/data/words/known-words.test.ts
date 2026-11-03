@@ -142,6 +142,29 @@ describe('known words', () => {
     expect(knownCoverage$.getValue()).toEqual({});
   });
 
+  // Catches: a coverage figure made from the old rows staying after a term dictionary change.
+  it('drops cached coverages when the words stamp moves', async () => {
+    ankiKnownWords$.next(false);
+    met.words = { '猫\tねこ': 8 };
+    let wordsStamp = 'a';
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ books: { 7: { characters: 10, computedAt: 1 } }, wordsStamp })
+          )
+      )
+    );
+    await bookCoverage(7, words, { computedAt: 1, wordsStamp }, await getKnownSet());
+    await loadCoverageCache();
+    expect(knownCoverage$.getValue()).toEqual({ 7: 0.6 });
+    wordsStamp = 'b';
+    await loadCoverageCache();
+    expect(knownCoverage$.getValue()).toEqual({});
+  });
+
   it('counts words met 8 times and Anki words as known, cached per known set', async () => {
     stubAnki(['猫']);
     await refreshKnownWords();

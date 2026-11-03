@@ -15,7 +15,7 @@
   import { isPlain, loadFeed, loadThread, type FeedPost } from '$lib/data/social/community';
   import { communityErrorKey, splitContext, threadPath } from '$lib/data/social/community-book';
   import { pagePath } from '$lib/data/env';
-  import { setPendingImport, type PendingImport } from '$lib/data/library/library-home';
+  import { importOnManage } from '$lib/data/library/library-home';
   import { page } from '$lib/data/page-store';
   import { relativeTime } from '$lib/functions/format-time';
   import { socialSession$ } from '$lib/data/social/social-account';
@@ -110,11 +110,6 @@
   function closeThread() {
     goto(`${pagePath}/community`);
     if (!posts.length) more(true);
-  }
-
-  function importOnManage(value: PendingImport) {
-    setPendingImport(value);
-    goto(`${pagePath}/manage`);
   }
 </script>
 

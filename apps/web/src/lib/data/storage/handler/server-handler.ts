@@ -801,26 +801,6 @@ export class ServerStorageHandler extends BaseStorageHandler {
     return 0;
   }
 
-  /**
-   * Saves a visual novel in this browser only, for this source: listed with its books, opened
-   * from here (a Windows game, manage page).
-   */
-  async keepOnDevice(data: Omit<BooksDbBookData, 'id'>) {
-    const { getStorageHandler } = await import('$lib/data/storage/storage-handler-factory');
-    const id = await getStorageHandler(
-      this.window,
-      StorageKey.BROWSER,
-      undefined,
-      true,
-      this.cacheStorageData,
-      this.saveBehavior
-    ).saveBook({ ...data, storageSource: this.storageSourceName }, false, false, this.cancelSignal);
-
-    this.addDeviceVnCard(data);
-
-    return id;
-  }
-
   private personalWrite() {
     if (this.holdPersonal) throw unauthorizedError(true);
   }
@@ -1074,39 +1054,6 @@ export class ServerStorageHandler extends BaseStorageHandler {
           });
         }
       });
-  }
-
-  /** Deletes the browser copies of visual novels kept on this device, or they would be listed again. */
-  private async deleteDeviceVns(
-    titles: string[],
-    cancelSignal: AbortSignal,
-    keepStatistics: boolean
-  ) {
-    const idToTitle = new Map<number, string>();
-
-    for (const title of titles) {
-      const book = await database.getDataByTitle(title);
-
-      if (book?.storageSource === this.storageSourceName && isVn(book)) {
-        idToTitle.set(book.id, title);
-      }
-    }
-
-    if (!idToTitle.size) return '';
-
-    return (
-      await database.deleteData([...idToTitle.keys()], idToTitle, cancelSignal, keepStatistics)
-    ).error;
-  }
-
-  private addDeviceVnCard(book: Omit<BooksDbBookData, 'id'>) {
-    this.addBookCard(book.title, {
-      imagePath: book.coverImage || '',
-      characters: BaseStorageHandler.getBookCharacters(book.characters || 0, book.sections || []),
-      lastBookModified: book.lastBookModified || 0,
-      lastBookOpen: book.lastBookOpen || 0,
-      vn: true
-    });
   }
 
   private async processCalibreBook() {

@@ -5,7 +5,7 @@
    */
   import { browser } from '$app/env';
   import { account$ } from '$lib/data/account/account';
-  import { releaseReaderData } from '$lib/data/account/reader-data-owner';
+  import { signOutAndRelease, UnsentChangesError } from '$lib/data/account/reader-data-owner';
   import {
     connectServer,
     disconnectServer,
@@ -42,11 +42,28 @@
 
   async function disconnect() {
     busy = true;
-    // While still connected: the server's catalog names the titles whose progress to forget.
-    await releaseReaderData(null, true).catch(() => {});
-    await disconnectServer();
-    chooseStorage(window, StorageKey.BROWSER);
-    window.location.reload();
+    error = '';
+    try {
+      try {
+        await signOutAndRelease(disconnectServer);
+      } catch (e) {
+        if (!(e instanceof UnsentChangesError)) throw e;
+        // Not sign-out's words: disconnecting works offline too (the token is only forgotten here).
+        const anyway = window.confirm(
+          "Disconnect anyway? Some reading changes on this device haven't reached the server, and they will be lost."
+        );
+        if (!anyway) {
+          busy = false;
+          return;
+        }
+        await signOutAndRelease(disconnectServer, true);
+      }
+      chooseStorage(window, StorageKey.BROWSER);
+      window.location.reload();
+    } catch (err: any) {
+      error = err.message || 'Disconnecting failed.';
+      busy = false;
+    }
   }
 </script>
 
@@ -66,6 +83,7 @@
     <button type="button" class="app-button" disabled={busy} on:click={disconnect}>
       Disconnect
     </button>
+    {#if error}<p class="server-error" role="alert">{error}</p>{/if}
   </div>
 {:else}
   <div class="server-connect" data-settings-item data-settings-search="Server connect address">

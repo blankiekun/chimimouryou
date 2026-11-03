@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import ImportMenu from '$lib/components/library/import-menu.svelte';
   import StatisticsContent from '$lib/components/statistics/statistics-content.svelte';
@@ -13,7 +12,7 @@
   } from '$lib/components/statistics/statistics-types';
   import { pagePath } from '$lib/data/env';
   import { t$ } from '$lib/i18n';
-  import { setPendingImport, type PendingImport } from '$lib/data/library/library-home';
+  import { importOnManage } from '$lib/data/library/library-home';
   import {
     database,
     lastStartDayOfWeek$,
@@ -48,11 +47,6 @@
   onDestroy(() => ($preFilteredTitlesForStatistics$ = new Set()));
 
   // The import runs (with its progress and errors) in the library.
-  function importOnManage(value: PendingImport) {
-    setPendingImport(value);
-    goto(`${pagePath}/manage`);
-  }
-
   function handleSelectedStatisticsDateChange({
     detail: { dateString, isStartDate }
   }: CustomEvent<StatisticsDateChange>) {

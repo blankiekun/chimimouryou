@@ -23,9 +23,12 @@
 // following it doesn't put one CBZ with all 6 pages, in chapter order, into the library; a page
 // crosses into the app (any page error); a failed Update (the jar is gone) changes the pin or
 // removes the old jar, or the source stops listing; a good Update leaves anything but the new jar
-// under its own hash, or the running host (which loaded the old jar) stops answering.
+// under its own hash, or the running host (which loaded the old jar) stops answering; removing a
+// repository deletes a jar another repository still holds, or leaves its jar behind once none does,
+// or the host running that jar stops answering; an extension's fetch (refuseNonPublic) reaches a
+// private address, a name that doesn't resolve, or refuses a public address.
 
-/* global indexedDB, localStorage -- used inside page.evaluate */
+/* global indexedDB, localStorage, window -- used inside page.evaluate */
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -210,6 +213,84 @@ try {
     .digest('hex');
   if (`${hash}.jar` !== jar) fail(`${jar} doesn't match its hash ${hash}`);
   await stillLists();
+
+  step('Removing: a repository that shares the jar keeps it, and the last one takes it');
+  const repos = () =>
+    page.evaluate(
+      () =>
+        new Promise((resolve, reject) => {
+          const open = indexedDB.open('chimi-sources');
+          open.onerror = () => reject(open.error);
+          open.onsuccess = () => {
+            const all = open.result.transaction('repos').objectStore('repos').getAll();
+            all.onsuccess = () => resolve(all.result.map((repo) => repo.id));
+          };
+        })
+    );
+  const remove = async (id) => {
+    await page.goto(`${origin}/sources/add?repo=${id}`);
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByRole('button', { name: 'Remove repository' }).click();
+    await page.waitForURL(/\/sources\/?$/);
+  };
+  const addRepository = async (address) => {
+    await page.goto(`${origin}/sources/add?type=repo`);
+    await page.getByLabel('Repository address').fill(address);
+    await page.getByRole('button', { name: 'Look up' }).click();
+    await page.getByRole('switch', { name: 'Rawkuma' }).click();
+    await page.getByRole('button', { name: 'Add repository with 1 source' }).click();
+    await page.waitForURL(/\/sources\/browse\?ext=/);
+    await page.getByRole('link', { name: 'Fixture Manga' }).first().waitFor();
+    return page.url();
+  };
+  // The same jars under another address (its key differs, which only Android checks).
+  const mirror = await addRepository('https://repo.example/mihon/untrusted/index.pb');
+  if (jars().join() !== jar) fail(`jars with two repositories: ${jars()}`);
+  await remove(repoId);
+  if (jars().join() !== jar) fail(`jars after removing one of two repositories: ${jars()}`);
+  await page.goto(mirror);
+  await page.getByRole('link', { name: 'Fixture Manga' }).first().waitFor();
+  await remove((await repos())[0]);
+  if (jars().length) fail(`jars after removing the last repository: ${jars()}`);
+
+  step('The host that had the jar open still works: the repository comes back');
+  await addRepository('https://repo.example/mihon/index.pb');
+  if (jars().join() !== jar) fail(`jars after adding it back: ${jars()}`);
+
+  step(
+    'An extension’s fetch: refused for private addresses and failed lookups, not for public ones'
+  );
+  const publicFetch = (url) =>
+    page.evaluate(
+      (target) =>
+        window.chimiDesktop.fetch(target, { publicOnly: true }).then(
+          () => 'answered',
+          (error) => error.message
+        ),
+      url
+    );
+  for (const url of [
+    'http://127.0.0.1:9/',
+    'http://localhost:9/',
+    'http://10.0.0.1:9/',
+    'http://192.168.0.1:9/',
+    'http://[::1]:9/',
+    'http://[fd00::1]:9/',
+    'http://[::ffff:10.0.0.1]:9/'
+  ]) {
+    const answer = await publicFetch(url);
+    if (!answer.includes('is not a public address')) fail(`${url}: ${answer}`);
+  }
+  const unknown = await publicFetch('https://no-such-host.invalid/');
+  if (!unknown.includes('could not be resolved')) fail(`no-such-host.invalid: ${unknown}`);
+  for (const url of [
+    'https://example.com/',
+    'https://1.1.1.1/',
+    'https://[2606:4700:4700::1111]/'
+  ]) {
+    const answer = await publicFetch(url);
+    if (/is not a public address|could not be resolved/.test(answer)) fail(`${url}: ${answer}`);
+  }
 
   if (errors.length) fail(`page errors:\n${[...new Set(errors)].join('\n')}`);
   console.log(`ok: ${found[0].title}, ${names.length} pages`);

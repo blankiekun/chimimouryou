@@ -11,6 +11,9 @@
 // - `replaces` left out still deletes something (another row can hold that pin; the page decides)
 // - an old jar that can't be deleted (Windows, a running host has it open) fails the update
 // - an old jar that is already gone fails the update
+// Ways removing a repository's jar could go wrong:
+// - the pin from the page names a path outside ext/, or anything but a pin, and that file goes
+// - a jar that can't be deleted (Windows, a running host has it open) or is already gone fails the removal
 /* global Response -- Node's fetch classes */
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -47,7 +50,8 @@ function setup(t, respond = () => new Response('new')) {
   writeFileSync(jar(OLD), 'old');
   const install = (replaces) =>
     handlers['mihon-install']({}, 'https://repo.example/new.jar', replaces);
-  return { root, ext, jar, install, fetches };
+  const remove = (pin) => handlers['mihon-remove']({}, pin);
+  return { root, ext, jar, install, remove, fetches };
 }
 
 test('the new jar in place, the old one goes', async (t) => {
@@ -112,4 +116,40 @@ test('an old jar already gone, or one that cannot be deleted, still updates', as
   mkdirSync(join(held.jar(OLD), 'inside'), { recursive: true }); // rm without recursive fails on it
   assert.deepEqual(await held.install(OLD), { sha256: NEW });
   assert.ok(existsSync(held.jar(NEW)));
+});
+
+test('remove deletes only the pinned jar', async (t) => {
+  const { jar, install, remove } = setup(t);
+  await install(undefined);
+  await remove(OLD);
+  assert.ok(!existsSync(jar(OLD)));
+  assert.ok(existsSync(jar(NEW)));
+});
+
+test('remove must be given a pin: refused with nothing deleted', async (t) => {
+  const { root, jar, remove } = setup(t);
+  const outside = join(root, 'secret.jar');
+  writeFileSync(outside, 'secret');
+  for (const bad of [
+    '../../secret',
+    `../ext/${OLD}`,
+    `${OLD}/../../../secret`,
+    OLD.toUpperCase(),
+    `${OLD}\n`,
+    '',
+    undefined,
+    [OLD]
+  ]) {
+    await assert.rejects(remove(bad), /Not a pin/, String(bad));
+  }
+  assert.ok(existsSync(outside));
+  assert.ok(existsSync(jar(OLD)));
+});
+
+test('a jar already gone, or one that cannot be deleted, still removes', async (t) => {
+  const { jar, remove } = setup(t);
+  rmSync(jar(OLD));
+  await remove(OLD);
+  mkdirSync(join(jar(OLD), 'inside'), { recursive: true }); // rm without recursive fails on it
+  await remove(OLD);
 });
