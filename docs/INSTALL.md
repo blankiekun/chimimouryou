@@ -186,8 +186,9 @@ update from the admin panel: Tools → Updates compares the server with the late
 release (Stable, the default) or the newest commit on main (Bleeding edge) of
 `UPDATE_REPO` on GitHub, and "Update" makes `ebook-update` (a systemd
 path unit installed by the deploy) download that commit, rebuild the images and
-restart the stack. A failed build keeps the running version; the previous images
-stay tagged `:previous`. Its log: `journalctl -u ebook-update`. It builds and
+restart the stack. A failed build, or a service that doesn't come up healthy within
+three minutes, puts the previous version back; the previous images stay tagged
+`:previous`. Its log: `journalctl -u ebook-update`. It builds and
 runs whatever is released or on main as root, so only point `UPDATE_REPO` at a
 repository you trust. Tools → Visual novel engine uses the same updater to
 install a new CONscripter release: it only downloads the release's web build into
@@ -206,7 +207,7 @@ those folders into `library.db` once, with `web` stopped. Updating by hand, do t
 before starting the new version:
 
 ```sh
-docker compose build && docker compose stop web && docker compose up -d api
+docker compose build && docker compose stop web && docker compose up -d --no-deps api
 docker compose run --rm --no-deps catalog build-calibre-catalog /library /data/state/catalog/catalog.json --force
 docker compose run --rm --no-deps api python3 /app/api/migrate.py --apply
 docker compose up -d

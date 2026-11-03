@@ -7,8 +7,8 @@
 #
 # The account service writes DATA_PATH/state/update/request.json; the path unit
 # starts this, which downloads the commit (main's head or the latest release), swaps it into /opt/ebook-reader,
-# builds the images and restarts the stack like deploy.sh. If the build or restart fails
-# the previous version is put back. Progress goes to status.json (engine-status.json for engines) for the admin panel.
+# builds the images and restarts the stack like deploy.sh. If the build fails or a service
+# doesn't come up healthy the previous version is put back. Progress goes to status.json (engine-status.json for engines) for the admin panel.
 # A request naming an "engine" (Tools → Visual novel engine) instead downloads that
 # CONscripter release's web build into DATA_PATH/state/engine, which nginx serves ahead of
 # the built-in engine: nothing is built or restarted.
@@ -18,6 +18,11 @@ set -euo pipefail
 APP=/opt/ebook-reader
 CONFIG=/etc/ebook-reader
 COMMANDS="ebook-compose ebook-account ebook-update"
+
+# A crash or reboot between the two mv calls of an update leaves no source at all.
+if [ ! -e "$APP" ] && [ -d "$APP.previous" ]; then
+  mv "$APP.previous" "$APP"
+fi
 
 setting() { sed -n "s/^$1=//p" "$CONFIG/env" | tail -n 1 | tr -d '"'"'"; }
 
@@ -169,7 +174,7 @@ if ! $compose run --rm --no-deps -T api test -f /data/state/api/migrate-report.j
   first=1
   status running "Moving the reading data to the new database"
   if ! { $compose stop web \
-    && $compose up -d api \
+    && $compose up -d --no-deps api \
     && $compose run --rm --no-deps -T catalog build-calibre-catalog /library /data/state/catalog/catalog.json --force \
     && $compose run --rm --no-deps -T api python3 /app/api/migrate.py --apply; }; then
     restore
@@ -178,7 +183,8 @@ if ! $compose run --rm --no-deps -T api test -f /data/state/api/migrate-report.j
     exit 1
   fi
 fi
-if ! $compose up -d --remove-orphans; then
+# --wait fails on a service that crash-loops or never gets healthy; plain `up -d` returns 0 for both.
+if ! $compose up -d --wait --wait-timeout 180 --remove-orphans; then
   restore
   $compose up -d --remove-orphans || true
   status failed "The new version did not start; the previous one runs again"
