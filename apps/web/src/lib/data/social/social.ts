@@ -125,6 +125,7 @@ const cacheTime = 15 * 60_000;
 const pushInterval = 15 * 60_000;
 /** The hub's guard between two status pushes (STATUS_GAP in deploy/social-hub) */
 const hubGap = 60_000;
+const sweepGap = 3_600_000;
 /** Like words met: 97% counts as finished */
 const finishedShare = 0.97;
 
@@ -149,6 +150,9 @@ const finishedPending$ = writableArrayLocalStorageSubject<Omit<FinishedBook, 'mo
   []
 );
 
+/** Hidden books known to be off this hub account (sweepHidden) */
+const hiddenCleared$ = writableArrayLocalStorageSubject<string>()('socialHiddenCleared', []);
+
 // Books are only noted while signed in: another hub account here (a server sign-in change
 // brings the account's own) must not send the last one's.
 socialSession$.subscribe((session) => {
@@ -158,6 +162,7 @@ socialSession$.subscribe((session) => {
   if (window.localStorage.getItem('socialBooksUser') !== id) {
     currentBooks$.next([]);
     finishedPending$.next([]);
+    hiddenCleared$.next([]);
     window.localStorage.setItem('socialBooksUser', id);
   }
 });
@@ -191,6 +196,7 @@ export function setBookHidden(title: string, hide: boolean) {
   const others = hiddenBooks$.getValue().filter((other) => other !== key);
 
   hiddenBooks$.next(hide ? [...others, key] : others);
+  hiddenCleared$.next(hiddenCleared$.getValue().filter((other) => other !== key));
   if (hide) {
     finishedPending$.next(finishedPending$.getValue().filter((book) => book.key !== key));
     lastPush = { at: 0, title: '' };
@@ -200,14 +206,44 @@ export function setBookHidden(title: string, hide: boolean) {
 
 /**
  * A book just hidden leaves the hub: its finished entry and events, and its current row with a
- * push. shortcut: best effort, a failure leaves them until the next push (current row) or a hide
- * again (finished row); queue the delete if readers hide books offline.
+ * push. A failure leaves them until the next push: its row, and sweepHidden for the rest.
  */
 async function takeOffHub(key: string) {
   if (!socialSession$.getValue() || !enabledPlugins$.getValue().includes('social')) return;
 
   await hubFetch(`/v1/finished/${encodeURIComponent(key)}`, 'DELETE');
+  hiddenCleared$.next([...hiddenCleared$.getValue(), key]);
   await pushOutsideCadence();
+}
+
+let sweptAt = 0;
+
+/**
+ * Hidden books the hub may still hold: hidden before hiding removed them, or the DELETE failed.
+ * The reader's own profile says which, so a hidden book the hub never had is never named to it. At
+ * most hourly (the hub allows 30 profile reads a day), and not at all once they are all cleared.
+ * shortcut: the profile lists 30 events; an older event of a book never finished stays until it
+ * expires (90 days). A hub route listing a reader's keys would cover those.
+ */
+async function sweepHidden() {
+  const session = socialSession$.getValue();
+  const hidden = hiddenBooks$.getValue();
+  const cleared = hiddenCleared$.getValue();
+
+  if (!session || Date.now() - sweptAt < sweepGap || hidden.every((key) => cleared.includes(key))) {
+    return;
+  }
+  sweptAt = Date.now();
+
+  const { finished, events } = await hubFetch<Profile>(
+    `/v1/profile/${encodeURIComponent(session.me.username)}`
+  );
+  const onHub = new Set([...finished, ...events].map((book) => book.key));
+
+  for (const key of hidden) {
+    if (onHub.has(key)) await hubFetch(`/v1/finished/${encodeURIComponent(key)}`, 'DELETE');
+  }
+  hiddenCleared$.next(hidden);
 }
 
 /** What friends get of the current books: the shown ones, or "Reading something" when all are hidden */
@@ -472,6 +508,7 @@ async function pushStatus(leaving: boolean, keepalive = false) {
     finishedPending$.getValue().filter((book) => book !== finished && !isHidden(book))
   );
   if (!keepalive && needCovers?.length) uploadCovers(needCovers).catch(() => {});
+  if (!keepalive) sweepHidden().catch(() => {});
 }
 
 const forHub = <T extends { key: string; title: string }>(book: T): T => ({

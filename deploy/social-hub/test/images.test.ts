@@ -220,6 +220,38 @@ describe('hub images', () => {
     }
   });
 
+  // Bug: a deleted account's cover stays served from the edge cache for a day (the privacy page says
+  // "at once"), while a cover another reader still shows must stay.
+  it("drops a deleted account's cover from the edge cache, not one still shown", async () => {
+    const aki = await signUp('aki');
+    const ren = await signUp('ren');
+    const store = new Map<string, Response>();
+
+    vi.stubGlobal('caches', {
+      default: {
+        match: async (key: string) => store.get(key)?.clone(),
+        put: async (key: string, response: Response) => void store.set(key, response),
+        delete: async (key: string) => store.delete(key)
+      }
+    });
+    try {
+      await call('PUT', '/v1/status', { books: [book('k1'), book('k2')] }, aki.token);
+      await call('PUT', '/v1/status', { books: [book('k1')] }, ren.token);
+      const only = (await call('PUT', '/v1/cover?key=k2', webp(160, 226), aki.token)).body.cover;
+      const shared = (await call('PUT', '/v1/cover?key=k1', webp(160, 227), aki.token)).body.cover;
+
+      await call('PUT', '/v1/cover?key=k1', webp(160, 227), ren.token);
+      await call('GET', `/v1/cover/${only}`);
+      await call('GET', `/v1/cover/${shared}`);
+      expect(store.size).toBe(2);
+
+      expect((await call('DELETE', '/v1/me', undefined, aki.token)).status).toBe(200);
+      expect([...store.keys()]).toEqual([`https://hub.example/v1/cover/${shared}`]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('counts a cover towards the daily ceiling only once its row is in', async () => {
     const aki = await signUp('aki');
     const uploads = () =>

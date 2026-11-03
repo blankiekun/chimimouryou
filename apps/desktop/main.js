@@ -44,6 +44,7 @@ import { checkForUpdates } from './updater.js';
 const port = 41917;
 const origin = `http://127.0.0.1:${port}`;
 const FETCH_SILENCE_MS = 60 * 1000;
+const FETCH_PUBLIC_TOTAL_MS = 2 * 60 * 1000;
 
 const resource = (name, devPath) =>
   app.isPackaged ? join(process.resourcesPath, name) : join(import.meta.dirname, devPath);
@@ -284,6 +285,9 @@ async function sourcesFetch(
     clearTimeout(stall);
     stall = setTimeout(() => controller.abort(), FETCH_SILENCE_MS);
   };
+  // An extension's request also has a total limit (as Mihon's callTimeout): a site dripping bytes
+  // is never silent. A reader's own server keeps the silence limit alone.
+  if (publicOnly) setTimeout(() => controller.abort(), FETCH_PUBLIC_TOTAL_MS);
   for (let hop = 0; hop < 10; hop += 1) {
     if (!/^https?:\/\//.test(url)) throw new Error('Only http and https');
     if (publicOnly) await refuseNonPublic(url);

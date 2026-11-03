@@ -229,6 +229,36 @@ describe('standalone edition', () => {
     expect(sent()).toEqual(['GET /v1/community/work']);
   });
 
+  // Bug: the Community tab on a matched hidden book sent its work's threads GET, signed in, on open.
+  it('asks before the Community tab loads a hidden book', async () => {
+    signedIn();
+    fetchMock.mockImplementation(async () => new Response('{"threads":[],"next":null}'));
+
+    const { hiddenBooks$, bookKey } = await import('$lib/data/social/social');
+    const { communityWorks$ } = await import('$lib/data/social/community');
+    const { default: Panel } = await import('$lib/components/community/community-panel.svelte');
+    const target = document.body.appendChild(document.createElement('div'));
+
+    hiddenBooks$.next([bookKey('照合済みの本')]);
+    communityWorks$.next({ 照合済みの本: 'anilist:1' });
+    new (Panel as unknown as new (options: unknown) => unknown)({
+      target,
+      props: {
+        title: '照合済みの本',
+        getIndex: async () => ({ paragraphs: [{ text: '本文の一行目です。', startCount: 0 }] }),
+        sections: [],
+        bookCharacters: 9,
+        active: true
+      }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    target.querySelector<HTMLButtonElement>('button.tab-retry')!.click();
+    await vi.waitFor(() => expect(sent()).toEqual(['GET /v1/community/threads']));
+    target.remove();
+  });
+
   // Bug: Hide from friends only filtered later pushes: the finished row, events and current row stayed.
   it('takes a book off the hub when hidden, and tells the hub nothing with social off or signed out', async () => {
     signedIn();

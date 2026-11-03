@@ -181,6 +181,67 @@ describe('social', () => {
     ]);
   }, 15000);
 
+  // Bugs: a book hidden before hiding removed rows (or whose DELETE failed) stays on the hub until
+  // toggled; naming every hidden book to find out would send books the hub never had; asking on
+  // every push would use up the hub's 30 profile reads a day.
+  it('takes books still on the hub off it, naming only those', async () => {
+    const [kept, never, shown] = ['Kept', 'Never', 'Shown'].map(bookKey);
+    const on = (start: number) => vi.spyOn(Date, 'now').mockReturnValue(start);
+    const calls: string[] = [];
+    let deleteStatus = 500;
+    const start = Date.now() + 2 * 3_600_000;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit) => {
+        const path = new URL(url).pathname;
+
+        if (init.method === 'DELETE') {
+          calls.push(`DELETE ${decodeURIComponent(path)}`);
+          return new Response('{"error":"down"}', { status: deleteStatus });
+        }
+        if (path.startsWith('/v1/profile/')) {
+          calls.push('profile');
+          return new Response(
+            JSON.stringify({ finished: [{ key: kept }], events: [{ key: shown }] })
+          );
+        }
+        return new Response('{"ok":true}');
+      })
+    );
+    hiddenBooks$.next([kept, never]);
+
+    on(start);
+    noteReading('Sweep 1', 10, 100);
+    await vi.waitFor(() => expect(calls).toContain(`DELETE /v1/finished/${kept}`), {
+      timeout: 5000
+    });
+    expect(calls.join()).not.toContain(never);
+    expect(calls.join()).not.toContain(shown);
+
+    // It failed: not within the hour, then again.
+    calls.length = 0;
+    noteReading('Sweep 2', 10, 100);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(calls).toEqual([]);
+
+    deleteStatus = 200;
+    on(start + 2 * 3_600_000);
+    noteReading('Sweep 3', 10, 100);
+    await vi.waitFor(() => expect(calls).toContain(`DELETE /v1/finished/${kept}`), {
+      timeout: 5000
+    });
+
+    // Done: no more profile reads for these books, whatever the time.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    calls.length = 0;
+    on(start + 4 * 3_600_000);
+    noteReading('Sweep 4', 10, 100);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(calls).toEqual([]);
+    vi.restoreAllMocks();
+  }, 15000);
+
   // Bug: the hub refuses a whole push over one title or key past 200, silently, on every push, while
   // the long book stays among the current ones.
   it('clips long titles and keys to what the hub takes, kept ones too', async () => {

@@ -13,12 +13,18 @@ import java.io.IOException
 import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.Socket
+import java.net.SocketAddress
+import javax.net.SocketFactory
 
 /**
  * The fence on `network.client` (owner decision 7a): https only, and a host must resolve to
  * public addresses only (no LAN, loopback, link-local, CGNAT/Tailscale, multicast), as the
  * server's fetch proxy. An extension can still build its own client: the repository's trust and
  * the SHA-256 pin are the real fence. `testHosts` (E2E only) may resolve to loopback.
+ * [sockets] judges the address of each connect before it happens: OkHttp skips Dns for an IP in the
+ * URL, and a host can answer differently after [lookup].
  */
 class Guard(private val testHosts: Set<String> = emptySet()) : Dns, Interceptor {
     override fun lookup(hostname: String): List<InetAddress> {
@@ -32,12 +38,28 @@ class Guard(private val testHosts: Set<String> = emptySet()) : Dns, Interceptor 
     override fun intercept(chain: Interceptor.Chain): Response {
         val url = chain.request().url
         if (!url.isHttps) throw IOException("Only https: ${url.host}")
-        // OkHttp doesn't ask the Dns above for an IP address in the URL: check what it connected to.
-        val address = chain.connection()?.route()?.socketAddress?.address
-        if (address != null && url.host.lowercase() !in testHosts && !isPublic(address)) {
-            throw IOException("${url.host} is not a public address")
-        }
         return chain.proceed(chain.request())
+    }
+
+    val sockets: SocketFactory = object : SocketFactory() {
+        override fun createSocket(): Socket = object : Socket() {
+            override fun connect(endpoint: SocketAddress, timeout: Int) {
+                val target = endpoint as InetSocketAddress
+                // hostString never asks DNS: the name the address came from, or the IP itself.
+                if (target.hostString.lowercase() !in testHosts && target.address?.let(::isPublic) != true) {
+                    throw IOException("${target.hostString} is not a public address")
+                }
+                super.connect(endpoint, timeout)
+            }
+        }
+
+        // OkHttp only calls createSocket().
+        override fun createSocket(host: String, port: Int): Socket = throw UnsupportedOperationException()
+        override fun createSocket(host: String, port: Int, local: InetAddress, localPort: Int): Socket =
+            throw UnsupportedOperationException()
+        override fun createSocket(host: InetAddress, port: Int): Socket = throw UnsupportedOperationException()
+        override fun createSocket(host: InetAddress, port: Int, local: InetAddress, localPort: Int): Socket =
+            throw UnsupportedOperationException()
     }
 
     companion object {

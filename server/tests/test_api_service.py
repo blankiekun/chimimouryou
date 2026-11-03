@@ -185,6 +185,18 @@ class WriteTest(ServiceTestCase):
         self.assertEqual((status, outside['highlights']), (200, []))
         self.assertEqual(len(self.sync()['highlights']), 1)
 
+    # Bug caught: the browser's mirror keeps the rev of a sync that left shared rows out, so back on the
+    # trusted network its `since` is past them and they never arrive.
+    def test_sync_outside_the_trusted_network_keeps_the_rev_behind_hidden_rows(self):
+        self.assertEqual(self.call('PUT', f'/api/v1/books/{self.book}/highlights/h-1',
+                                   {'modified': 1, 'data': {'text': '猫'}})[0], 200)
+        outside = self.call('GET', '/api/v1/sync?since=0', headers={'X-Trusted-Network': '0'})[1]
+        back = self.call('GET', f"/api/v1/sync?since={outside['rev']}")[1]
+        self.assertEqual(len(back['highlights']), 1)
+        # A database made again still shows (rev below what the browser asks for): it starts over.
+        self.assertLess(self.call('GET', '/api/v1/sync?since=999999', headers={'X-Trusted-Network': '0'})[1]['rev'],
+                        999999)
+
     # Bug caught: a tab whose session died writes its reader's rows into the shared account.
     def test_dead_session_is_refused_not_filed_under_shared(self):
         path = f'/api/v1/books/{self.book}/highlights/h-1'

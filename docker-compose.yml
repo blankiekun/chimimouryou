@@ -94,9 +94,8 @@ services:
         '-c',
         'while :; do build-calibre-catalog /library /data/state/catalog/catalog.json --thumbs; sleep ${CATALOG_INTERVAL:-600}; done'
       ]
-    # It runs Pillow on book files: no writing to accounts or other server data.
+    # It runs Pillow on book files: only its own state and the library database. No accounts.
     volumes:
-      - ${DATA_PATH:-./data}:/data:ro
       - ${DATA_PATH:-./data}/state/catalog:/data/state/catalog
       - ${DATA_PATH:-./data}/state/api:/data/state/api
       - ${LIBRARY_PATH:?set LIBRARY_PATH in .env}:/library
@@ -119,9 +118,9 @@ services:
       SOURCES_FIXTURE_URL: ${SOURCES_FIXTURE_URL:-}
       # Encrypts the passwords of OPDS/Suwayomi servers added as sources; keep it out of DATA_PATH.
       SOURCES_SECRET_KEY: ${SOURCES_SECRET_KEY:-}
-    # It runs Calibre on uploaded files: no writing to accounts or other server data.
+    # It runs Calibre on uploaded files: only its state, the token and the library database. No accounts.
     volumes:
-      - ${DATA_PATH:-./data}:/data:ro
+      - ${DATA_PATH:-./data}/state/internal-token:/data/state/internal-token:ro
       - ${DATA_PATH:-./data}/state/import:/data/state/import
       - ${DATA_PATH:-./data}/state/catalog:/data/state/catalog
       - ${DATA_PATH:-./data}/state/api:/data/state/api

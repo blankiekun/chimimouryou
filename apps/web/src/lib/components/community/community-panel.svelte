@@ -3,7 +3,12 @@
   import CommunityMatch from '$lib/components/community/community-match.svelte';
   import CommunitySignup from '$lib/components/community/community-signup.svelte';
   import CommunityThread from '$lib/components/community/community-thread.svelte';
-  import { listThreads, visibleThreads, type ThreadSummary } from '$lib/data/social/community';
+  import {
+    hiddenBook,
+    listThreads,
+    visibleThreads,
+    type ThreadSummary
+  } from '$lib/data/social/community';
   import {
     bookMarks,
     communityErrorKey,
@@ -26,7 +31,8 @@
    * reader is (a spoiler thread's line blurred, its posts behind Show spoiler), in book order or by
    * posts, and a line's thread. The first visit matches the book to its work (board 6). Its threads also mark
    * the lines in the text (community-markers.svelte); a marker or a `/b?line=` link opens one.
-   * Hub requests start only here, when the tab is first opened.
+   * Hub requests start only here, when the tab is first opened; for a book hidden from friends, only
+   * after the reader asks.
    */
   export let title: string;
   export let getIndex: () => Promise<SearchIndex>;
@@ -40,7 +46,8 @@
     reveal: number;
   }>();
 
-  let state: 'loading' | 'match' | 'ready' | 'error' = 'loading';
+  let state: 'hidden' | 'loading' | 'match' | 'ready' | 'error' = 'loading';
+  let hiddenAsked = false;
   let suggestion: string | null = null;
   let work = '';
   let lines: BookLine[] = [];
@@ -66,6 +73,10 @@
 
   async function start() {
     started = true;
+    if (!hiddenAsked && hiddenBook(title)) {
+      state = 'hidden';
+      return;
+    }
     state = 'loading';
     error = '';
     try {
@@ -142,7 +153,17 @@
 <div class="community-tab">
   {#if !$socialSession$ && state !== 'match'}<CommunitySignup />{/if}
 
-  {#if state === 'loading'}
+  {#if state === 'hidden'}
+    <p class="tab-text">{$t$('community.hiddenBook')}</p>
+    <button
+      type="button"
+      class="app-button tab-retry"
+      on:click={() => {
+        hiddenAsked = true;
+        start();
+      }}>{$t$('community.hiddenLoad')}</button
+    >
+  {:else if state === 'loading'}
     <p class="tab-quiet">{$t$('community.loading')}</p>
   {:else if state === 'error'}
     <p class="tab-text" role="alert">{error}</p>
