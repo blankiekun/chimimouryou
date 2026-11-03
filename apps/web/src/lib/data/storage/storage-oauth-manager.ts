@@ -370,32 +370,51 @@ export class StorageOAuthManager {
       form.append('client_secret', this.remoteData.clientSecret);
     }
 
+    // Only invalid_grant means the refresh token is dead (undefined: the caller asks for sign-in).
+    // Anything else, like no network or an outage, throws: the token stays for the next try.
+    const notRenewed = new Error(
+      `Could not renew the ${this.storageType === StorageKey.ONEDRIVE ? 'OneDrive' : 'Drive'} sign-in, try again later`
+    );
     const response = await fetch(this.refreshEndpoint, { method: 'POST', body: form })
       .then(async (httpResponse) => {
-        if (!httpResponse.ok) {
-          throw new Error(await convertAuthErrorResponse(httpResponse));
+        if (httpResponse.ok) {
+          return httpResponse.json();
         }
 
-        return httpResponse.json();
+        const answer = await httpResponse
+          .clone()
+          .json()
+          .catch(() => undefined);
+        const message = await convertAuthErrorResponse(httpResponse);
+
+        logger.error(`Unable to refresh token for ${this.storageSourceName}: ${message}`);
+
+        if (answer?.error === 'invalid_grant') {
+          return undefined;
+        }
+
+        throw notRenewed;
       })
       .catch((error) => {
-        logger.error(`Unable to refresh token for ${this.storageSourceName}: ${error.message}`);
-        return undefined;
+        if (error !== notRenewed) {
+          logger.error(`Unable to refresh token for ${this.storageSourceName}: ${error.message}`);
+        }
+
+        throw notRenewed;
       });
 
-    if (!response) {
+    if (response === undefined) {
       this.remoteData.refreshToken = undefined;
       return undefined;
     }
 
-    const { access_token: accessToken, expires_in: expiration, scope } = response;
+    const { access_token: accessToken, expires_in: expiration, scope } = response ?? {};
 
     if (!accessToken || !expiration || !scope) {
-      this.remoteData.refreshToken = undefined;
       logger.error(
         `A required authentication property was not found\nhad token: ${!!accessToken}\nhad expiration: ${!!expiration}\nhad scope: ${!!scope}`
       );
-      return undefined;
+      throw notRenewed;
     }
 
     const token: OAuthTokenData = {

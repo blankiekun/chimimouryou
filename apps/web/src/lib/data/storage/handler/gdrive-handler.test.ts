@@ -120,3 +120,121 @@ describe('GDriveStorageHandler.deleteBookData', () => {
     expect(await database.getDataByTitle('本')).toBeDefined();
   });
 });
+
+describe('GDriveStorageHandler.sendProgressNow', () => {
+  const place = { dataId: 1, progress: 0.5, lastBookmarkModified: 2000 } as any;
+  const oldName = 'progress_6_6_1000_0.25.json';
+  // jsdom's Blob has no text().
+  const read = (blob: Blob) =>
+    new Promise<string>((resolve) => {
+      const reader = new FileReader();
+
+      reader.onload = () => resolve(reader.result as string);
+      reader.readAsText(blob);
+    });
+
+  async function setUp(
+    files: { id: string; name: string }[] | null = [{ id: 'p1', name: oldName }],
+    expiration = Date.now() + 60000
+  ) {
+    const { storageOAuthTokens } = await import('$lib/data/storage/storage-oauth-manager');
+    const handler = new GDriveStorageHandler(window) as any;
+
+    storageOAuthTokens.set('drive', { accessToken: 'live', scope: 'x', expiration });
+    Object.assign(handler, { storageSourceName: 'drive', rootId: 'root', dataListFetched: true });
+    handler.currentContext = { title: '本' };
+    handler.titleToId.set('本', 'folder');
+    if (files) handler.titleToFiles.set('本', files);
+    // The normal sync's network step: XMLHttpRequest, which jsdom can't take to Drive.
+    handler.request = vi.fn(async (_url: string, options: any) => ({
+      id: 'p1',
+      name: JSON.parse(await read(options.body.get('resource'))).name
+    }));
+
+    return handler;
+  }
+
+  // Bugs: other devices read a stale name, or the request dies with the page.
+  it('renames the file along with its content, in one request that outlives the page', async () => {
+    const handler = await setUp();
+    const fetch = vi.fn(async (_url: string, _init: RequestInit) => new Response('{}'));
+
+    vi.stubGlobal('fetch', fetch);
+    await handler.sendProgressNow('本', place);
+    vi.unstubAllGlobals();
+
+    const [url, init] = fetch.mock.calls[0];
+    const body = init.body as FormData;
+
+    expect(url).toBe('https://www.googleapis.com/upload/drive/v3/files/p1?uploadType=multipart');
+    expect(init).toMatchObject({ method: 'PATCH', keepalive: true });
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer live');
+
+    const { name } = JSON.parse(await read(body.get('resource') as Blob));
+
+    expect(name).toMatch(/^progress_\d+_\d+_2000_0\.5\.json$/);
+    expect(JSON.parse(body.get('file') as string)).toEqual(place);
+    // Bug: the normal sync sends it all over again, or the list still shows the old place.
+    expect(await handler.isProgressPresentAndUpToDate(name)).toBe(true);
+    expect(handler.titleToBookCard.get('本')).toMatchObject({
+      progress: 0.5,
+      lastBookmarkModified: 2000
+    });
+  });
+
+  // Bug: the next sync, seeing a stale list, POSTs a second progress_ file beside the first.
+  it('leaves one progress file: the sync after it updates the same file', async () => {
+    const handler = await setUp();
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}'))
+    );
+    await handler.sendProgressNow('本', place);
+    vi.unstubAllGlobals();
+    await handler.saveProgress({ ...place, lastBookmarkModified: 3000 });
+
+    expect(handler.request).toHaveBeenCalledTimes(1);
+    expect(handler.request.mock.calls[0][0]).toContain('/files/p1?');
+    expect(handler.request.mock.calls[0][1].method).toBe('PATCH');
+    expect(handler.titleToFiles.get('本')).toHaveLength(1);
+  });
+
+  // Bug: a failed send marks the place as saved, and the normal sync never sends it.
+  it.each([
+    ['a 503', async () => new Response('', { status: 503 })],
+    ['no network', async () => Promise.reject(new TypeError('Failed to fetch'))]
+  ])('leaves the place to the normal sync after %s', async (_name, answer) => {
+    const handler = await setUp();
+
+    vi.stubGlobal('fetch', vi.fn(answer));
+    await expect(handler.sendProgressNow('本', place)).resolves.toBeUndefined();
+    vi.unstubAllGlobals();
+
+    expect(handler.titleToFiles.get('本')[0].name).toBe(oldName);
+    expect(await handler.isProgressPresentAndUpToDate('progress_6_6_2000_0.5.json')).toBe(false);
+  });
+
+  // Bugs: a lookup or token renewal the phone kills halfway; a duplicate file from a blind create;
+  // a stale tab overwriting the newer place this list already knows about.
+  it.each([
+    ['the file list is not known', null, 60000],
+    ['the book has no progress file yet', [{ id: 'b1', name: 'bookdata_6_6_1_1_1.zip' }], 60000],
+    ['the token has expired', [{ id: 'p1', name: oldName }], -1000],
+    [
+      'the file already holds a newer place',
+      [{ id: 'p1', name: 'progress_6_6_9000_0.9.json' }],
+      60000
+    ]
+  ])('sends nothing when %s', async (_name, files, expiresIn) => {
+    const handler = await setUp(files, Date.now() + expiresIn);
+    const fetch = vi.fn(async () => new Response('{}'));
+
+    vi.stubGlobal('fetch', fetch);
+    await handler.sendProgressNow('本', place);
+    vi.unstubAllGlobals();
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(handler.request).not.toHaveBeenCalled();
+  });
+});
