@@ -14,6 +14,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(DriveAuthPlugin.class);
         registerPlugin(FileSavePlugin.class);
         registerPlugin(PublicAddressPlugin.class);
+        registerPlugin(LandscapeLockPlugin.class);
         FlavorPlugins.register(this);
         super.onCreate(savedInstanceState);
 

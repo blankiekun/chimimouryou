@@ -103,6 +103,7 @@
   import { serverConnected, serverFetch } from '$lib/data/remote/server-connect';
   import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
   import { padStep, watchGamepads, type PadAction } from '$lib/data/vn/vn-gamepad';
+  import { vnLandscape } from '$lib/data/vn/vn-landscape';
 
   /** The Backlog sidebar beside the game (not on portrait phones); hovering the game's own text works without it. */
   const showText$ = writableBooleanLocalStorageSubject()('vnTextPanel', false);
@@ -170,6 +171,9 @@
   let savesNote: string | undefined;
   /** This game's files are missing here: the import dialog can add them to this record. */
   let missingFiles = false;
+  /** This browser can't turn the phone: the reader is asked to (vn-landscape.ts). */
+  let turnNote = false;
+  let landscape: ReturnType<typeof vnLandscape> | undefined;
 
   // The player holds taps on its text for the built-in dictionary only while it is on, and keeps
   // the scan modifier over its text from the game (vnbox.js): the built-in one's, else Yomitan's
@@ -814,6 +818,7 @@
     load(Number($page.url.searchParams.get('id'))).catch((error) =>
       logger.error(`Error loading visual novel: ${error.message}`)
     );
+    landscape = vnLandscape((show) => (turnNote = show));
     const stopWatchingReturn = watchReturn(onReturn);
     // The frame hides the pads from its engine (overlay.js) but can still read them.
     const stopWatchingPads = watchGamepads(
@@ -830,6 +835,7 @@
     return () => {
       stopWatchingReturn();
       stopWatchingPads();
+      landscape?.stop();
     };
   });
 
@@ -889,8 +895,16 @@
     {/if}
     <!-- The game's own dark ground: part of the content, not the theme -->
     <div class="vn-game" class:vn-game-blocked={blocked || unapprovedHook || showSaves}>
-      {#if newerEngine || savesNote || ended}
+      {#if newerEngine || savesNote || ended || turnNote}
         <div class="vn-notices">
+          {#if turnNote}
+            <div class="vn-notice">
+              <p>Turn your phone sideways.</p>
+              <button class="app-button app-button-quiet" on:click={() => (turnNote = false)}>
+                Dismiss
+              </button>
+            </div>
+          {/if}
           {#if ended}
             <div class="vn-notice"><p>The game has ended.</p></div>
           {/if}
@@ -968,6 +982,7 @@
             allow="autoplay; fullscreen"
             on:load={() => {
               if (frame) lookupPopup?.attachFrame(frame);
+              if (frame?.contentWindow) landscape?.watchFrame(frame.contentWindow);
               frame?.contentDocument?.documentElement.style.setProperty(
                 '--accent-color',
                 getComputedStyle(document.documentElement).getPropertyValue('--accent-color')
