@@ -529,6 +529,7 @@ ${CORS_WITH_SECURITY_HEADERS}
     proxy_set_header X-Internal-Token "${INTERNAL_TOKEN}";
     # Empty (signed out) drops the header: the client's own never reaches the service.
     proxy_set_header X-Account-Id $account_id;
+    proxy_set_header X-Trusted-Network $trusted_network;
     proxy_http_version 1.1;
     proxy_set_header Host $http_host;
     proxy_set_header X-Real-IP $remote_addr;

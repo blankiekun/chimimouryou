@@ -23,7 +23,8 @@ chown -R "$PUID:$PGID" /var/cache/nginx
 # The services run as PUID and can't create these in a root-owned /data.
 for dir in /data /data/sync /data/accounts /data/state \
   /data/state/account /data/state/catalog /data/state/import /data/state/difficulty \
-  /data/state/update /data/state/engine /data/state/mokuro; do
+  /data/state/update /data/state/engine /data/state/mokuro \
+  /data/state/api /data/state/api/text; do
   mkdir -p "$dir"
   chown "$PUID:$PGID" "$dir"
 done

@@ -22,6 +22,7 @@
     deleteWindowsGame,
     folderInputFiles,
     hasWindowsGame,
+    approveHook,
     hookScripts,
     hookSuggestion,
     missingWindowsGames,
@@ -360,6 +361,7 @@
     if (!file) return;
 
     hook = { name: file.name, text: await file.text() };
+    await approveHook(hook.text);
     picked = CHOSEN;
   }
 
