@@ -2220,6 +2220,7 @@ export const ja: Record<MessageKey, string> = {
   'community.error.full': 'このスレッドはいっぱいです。',
   'community.error.limit':
     '投稿が多すぎます。新しいアカウントは最初の3日間、1時間に3件、1日10件まで投稿できます(その後は1時間に10件、1日50件)。書いた文はここに残っています。',
+  'community.error.reportLimit': '通報は1日5件までです。明日もう一度お試しください。',
   'community.error.down': '今はコミュニティにつながりません。',
   'community.error.other': 'ハブで処理できませんでした。後でもう一度お試しください。',
   'moderation.community': 'コミュニティ',

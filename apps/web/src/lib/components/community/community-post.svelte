@@ -17,7 +17,7 @@
   import { blockFriend } from '$lib/data/social/social';
   import { socialSession$ } from '$lib/data/social/social-account';
   import { removePost, removeUserPosts } from '$lib/data/social/social-moderation';
-  import { t$, uiLanguage$ } from '$lib/i18n';
+  import { t$, uiLanguage$, type MessageKey } from '$lib/i18n';
   import { createEventDispatcher } from 'svelte';
 
   /**
@@ -52,7 +52,7 @@
   $: author = post.author;
   $: words = author?.level?.wordsKnown;
 
-  async function act(action: () => Promise<unknown>, done?: () => void) {
+  async function act(action: () => Promise<unknown>, done?: () => void, limitKey?: MessageKey) {
     if (!signedIn) {
       dispatch('signUp');
       return;
@@ -63,7 +63,7 @@
       await action();
       done?.();
     } catch (e) {
-      error = $t$(communityErrorKey(e));
+      error = $t$(communityErrorKey(e, limitKey));
     } finally {
       busy = false;
       menuOpen = false;
@@ -108,7 +108,8 @@
     if (window.confirm($t$('community.reportConfirm'))) {
       act(
         () => reportPost(post.id),
-        () => (note = $t$('social.reported'))
+        () => (note = $t$('social.reported')),
+        'community.error.reportLimit'
       );
     }
   }

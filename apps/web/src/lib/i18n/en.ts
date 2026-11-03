@@ -2215,6 +2215,7 @@ export const en = {
   'community.error.full': 'This thread is full.',
   'community.error.limit':
     'You’ve posted a lot. New accounts can post 3 times an hour and 10 times a day in their first 3 days; later it’s 10 an hour and 50 a day. Your text stays here.',
+  'community.error.reportLimit': 'You can send 5 reports a day. Try again tomorrow.',
   'community.error.down': 'Community can’t be reached right now.',
   'community.error.other': 'The hub couldn’t do that. Try again later.',
   'moderation.community': 'Community',

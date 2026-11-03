@@ -133,7 +133,7 @@
       await report();
       workNote = $t$('social.reported');
     } catch (e) {
-      workError = $t$(communityErrorKey(e));
+      workError = $t$(communityErrorKey(e, 'community.error.reportLimit'));
     }
   }
 
