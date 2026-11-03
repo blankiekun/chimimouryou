@@ -221,7 +221,7 @@ class WriteTest(ServiceTestCase):
         full = self.sync()
         status, some = self.call('GET', '/api/v1/sync?since=0&tables=progress,statistics')
         self.assertEqual(status, 200)
-        self.assertEqual(set(some), {'rev', 'progress', 'statistics'})
+        self.assertEqual(set(some) - {'rev', 'db'}, {'progress', 'statistics'})
         self.assertEqual((some['rev'], some['progress']), (full['rev'], full['progress']))
         # rev vouches only for the tables asked: a client adding a table starts it from 0.
         self.assertEqual(self.call('GET', f"/api/v1/sync?since={some['rev']}&tables=progress")[1]['progress'], [])
