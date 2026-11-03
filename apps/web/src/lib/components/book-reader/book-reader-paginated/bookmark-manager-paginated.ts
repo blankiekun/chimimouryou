@@ -21,8 +21,11 @@ export class BookmarkManagerPaginated implements BookmarkManager {
   ) {}
 
   scrollToBookmark(bookmarkData: BooksDbBookmarkData, _offset?: number, asReader = false) {
-    const charCount = bookmarkData.exploredCharCount;
-    if (!charCount) return;
+    if (!bookmarkData.exploredCharCount) return;
+
+    // The book's end (or past it, from an older copy) belongs to no section: go to its last character.
+    const charCount = Math.min(bookmarkData.exploredCharCount, this.calculator.charCount - 1);
+    if (charCount < 0) return;
 
     const index = this.calculator.getSectionIndexByCharCount(charCount);
 

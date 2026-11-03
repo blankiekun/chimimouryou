@@ -6,6 +6,7 @@
     filter,
     map,
     mergeMap,
+    switchMap,
     of,
     ReplaySubject,
     share,
@@ -219,7 +220,8 @@
         hideSpoilerImage,
         navigator.standalone || window.matchMedia('(display-mode: fullscreen)').matches
       );
-      return contentEl$.pipe(mergeMap((contentEl) => reactiveElementsFn(contentEl)));
+      // Paginated emits the same element per section: its one ruby listener must not stack.
+      return contentEl$.pipe(switchMap((contentEl) => reactiveElementsFn(contentEl)));
     }),
     reduceToEmptyString()
   );

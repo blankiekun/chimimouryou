@@ -10,7 +10,10 @@ import fixXHtmlHref from '../utils/fix-xhtml-href';
 import type { HtmlzContent } from './types';
 
 export function getFormattedElementHtmlz(data: HtmlzContent, document: Document) {
-  const regexResult = /.*<body[^>]*>((.|\s)+)<\/body>.*/.exec(data['index.html'])!;
+  const regexResult = /<body[^>]*>([\s\S]*)<\/body>/i.exec(data['index.html']);
+  if (!regexResult) {
+    throw new Error('Unable to find a body in the HTMLZ index.html');
+  }
   let html = regexResult[1];
   Object.entries(data)
     .filter(([, value]) => value instanceof Blob)

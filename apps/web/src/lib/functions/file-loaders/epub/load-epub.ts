@@ -60,7 +60,7 @@ export default async function loadEpub(
           if (typeof dcLanguage === 'string') {
             languages.push(...Intl.getCanonicalLocales(dcLanguage.trim()));
           } else if (dcLanguage && dcLanguage['#text']) {
-            languages.push(...Intl.getCanonicalLocales(dcLanguage.trim()));
+            languages.push(...Intl.getCanonicalLocales(dcLanguage['#text'].trim()));
           }
         } catch (_) {
           //no-op

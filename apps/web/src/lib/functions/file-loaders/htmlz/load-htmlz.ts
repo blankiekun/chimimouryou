@@ -22,7 +22,7 @@ export default async function loadHtmlz(
   const element = getFormattedElementHtmlz(data, createInertDocument());
 
   sanitizeBookElement(element);
-  const parser = new XMLParser();
+  const parser = new XMLParser({ parseTagValue: false });
   const metadata = parser.parse(data['metadata.opf'])?.package?.metadata;
 
   const displayData = {
@@ -31,7 +31,7 @@ export default async function loadHtmlz(
     styleSheet: data['style.css']
   };
   if (metadata && metadata['dc:title']) {
-    displayData.title = metadata['dc:title'];
+    displayData.title = [metadata['dc:title']].flat()[0];
   }
   const blobData = reduceObjToBlobs(data);
   const coverImageFilename = getHtmlzCoverImageFilename();

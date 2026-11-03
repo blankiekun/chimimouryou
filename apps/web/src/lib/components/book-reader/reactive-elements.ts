@@ -20,7 +20,7 @@ import {
 } from 'rxjs';
 
 import { FuriganaStyle } from '../../data/furigana-style';
-import { loadKnownRubyCheck, markKnownRuby } from '$lib/data/words/known-furigana';
+import { knownRubyClass, loadKnownRubyCheck, markKnownRuby } from '$lib/data/words/known-furigana';
 import { nextChapter$ } from '$lib/components/book-reader/book-toc/book-toc';
 import { pulseElement } from '$lib/functions/range-util';
 import { toggleImageGalleryPictureSpoiler$ } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';
@@ -44,7 +44,13 @@ export function reactiveElements(
       anchorTagDocumentListener(contentEl),
       knownRuby
         ? from(knownRuby).pipe(
-            switchMap((hide) => merge(...markKnownRuby(contentEl, hide).map(toggleRuby)))
+            switchMap((hide) => {
+              markKnownRuby(contentEl, hide);
+              return rubyClick(
+                contentEl,
+                (ruby) => ruby.classList.contains(knownRubyClass) && toggleRuby(ruby)
+              );
+            })
           )
         : rubyTagListener(contentEl, furiganaStyle),
       spoilerImageDocumentListener(contentEl),
@@ -54,7 +60,16 @@ export function reactiveElements(
 
 function anchorTagListener(document: Document) {
   return (contentEl: HTMLElement) => {
-    const anchorTags = Array.from(contentEl.getElementsByTagName('a'));
+    const anchorTags: HTMLAnchorElement[] = [];
+    contentEl.querySelectorAll('a, area').forEach((el) => {
+      if (el instanceof HTMLAnchorElement) {
+        anchorTags.push(el);
+      } else {
+        // SVG links and image maps can't be pointed back at the book, and would navigate away.
+        el.removeAttribute('href');
+        el.removeAttribute('xlink:href');
+      }
+    });
     anchorTags.forEach((el) => {
       el.href = document.location.pathname + el.hash;
     });
@@ -72,24 +87,32 @@ function rubyTagListener(contentEl: HTMLElement, furiganaStyle: FuriganaStyle) {
   }
 
   const isToggle = furiganaStyle === FuriganaStyle.Toggle || furiganaStyle === FuriganaStyle.Hover;
-  const rubyTags = Array.from(contentEl.getElementsByTagName('ruby'));
-  const obs$ = rubyTags.map((el) =>
-    isToggle
-      ? toggleRuby(el)
-      : fromClickEvent(el).pipe(
-          take(1),
-          tap(() => {
-            el.classList.add('reveal-rt');
-          })
-        )
-  );
-  return merge(...obs$);
+  return rubyClick(contentEl, (ruby) => {
+    if (isToggle) return toggleRuby(ruby);
+    if (ruby.classList.contains('reveal-rt')) return false;
+    ruby.classList.add('reveal-rt');
+    return true;
+  });
 }
 
-function toggleRuby(el: Element) {
-  return fromClickEvent(el).pipe(
-    tap(() => {
-      el.classList.toggle('reveal-rt');
+function toggleRuby(ruby: Element) {
+  ruby.classList.toggle('reveal-rt');
+  return true;
+}
+
+/**
+ * One listener for all rubies: one each overflows `merge`'s arguments on very long books. Captures,
+ * so a tap on ruby inside a link stays the ruby's. `onClick` returns whether it used the tap.
+ */
+function rubyClick(contentEl: HTMLElement, onClick: (ruby: Element) => boolean) {
+  return fromEvent(contentEl, 'click', { capture: true }).pipe(
+    tap((ev) => {
+      const ruby = (ev.target as Element).closest('ruby');
+
+      if (ruby && onClick(ruby)) {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+      }
     })
   );
 }
@@ -98,6 +121,9 @@ function spoilerImageListener(document: Document) {
   return (contentEl: HTMLElement) => {
     const elements = Array.from(contentEl.querySelectorAll('[data-ttu-spoiler-img]'));
     const obs$ = elements.map((el) => {
+      // Set up again on the same section (fonts loading): its old listener is gone.
+      el.querySelector(':scope > .spoiler-label')?.remove();
+
       const spoilerLabelEl = document.createElement('span');
       spoilerLabelEl.title = 'Show Image';
       spoilerLabelEl.classList.add('spoiler-label');

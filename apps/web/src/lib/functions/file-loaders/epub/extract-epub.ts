@@ -31,6 +31,8 @@ export default async function extractEpub(blob: Blob) {
     const containerXml = await fileMap['META-INF/container.xml'].getData!(new TextWriter());
     const parser = new XMLParser({
       ignoreAttributes: false,
+      // Titles are text, even 1984 or 007.
+      parseTagValue: false,
       // A manifest with one item parses to an object, not a list; the loaders map over it.
       isArray: (name) => name === 'item' || name === 'opf:item'
     });
@@ -47,16 +49,32 @@ export default async function extractEpub(blob: Blob) {
 
     contents = parser.parse(contentsXml);
 
+    const spineIds = new Set(
+      [
+        isOPFType(contents)
+          ? contents['opf:package']['opf:spine']['opf:itemref']
+          : contents.package.spine.itemref
+      ]
+        .flat()
+        .map((ref) => ref['@_idref'])
+    );
+
     await Promise.all(
       (isOPFType(contents)
         ? contents['opf:package']['opf:manifest']['opf:item']
         : contents.package.manifest.item
       ).map(async (item) => {
         const fileRelativePath = item['@_href'];
-        const entry = fileMap[path.join(contentsDirectory, fileRelativePath)];
+        const entry =
+          fileMap[path.join(contentsDirectory, fileRelativePath)] ??
+          fileMap[path.join(contentsDirectory, decodedHref(fileRelativePath))];
 
         if (!entry) {
-          throw new Error(`item ${fileRelativePath} not found`);
+          // A lost chapter must not import quietly; a lost font or picture can.
+          if (spineIds.has(item['@_id'])) {
+            throw new Error(`item ${fileRelativePath} not found`);
+          }
+          return;
         }
 
         if (entry.getData && !entry.directory) {
@@ -79,4 +97,12 @@ export default async function extractEpub(blob: Blob) {
     contents,
     result
   };
+}
+
+function decodedHref(href: string) {
+  try {
+    return decodeURI(href);
+  } catch {
+    return href;
+  }
 }

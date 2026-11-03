@@ -9,15 +9,20 @@ import parseCss from '../css-parser/css-parser';
 import stringifyCss from '../css-parser/css-stringify';
 import type { Declaration, Rule } from '../css-parser/types';
 
-const htmlRegex = /\s?html\s?/gi;
-const bodyRegex = /\s?body\s?/gi;
+// The page's own elements, not class names like .body-text or elements like tbody.
+const pageElementRegex = /(^|[\s>+~,])(html|body)(?![\w-])/i;
 
 export default function formatStyleSheet(bookData: BooksDbBookData, parentSelector: string) {
-  const cssTree = parseCss(bookData.styleSheet);
+  let newRules: Rule[] = [];
 
-  const newRules = cssTree.stylesheet.rules
-    .filter((r) => r.type === 'rule')
-    .filter((r) => !r.selectors.some((s) => htmlRegex.test(s) || bodyRegex.test(s)));
+  try {
+    newRules = parseCss(bookData.styleSheet)
+      .stylesheet.rules.filter((r) => r.type === 'rule')
+      .filter((r) => !r.selectors.some((s) => pageElementRegex.test(s)));
+  } catch (error) {
+    // Parsed on every open: a stylesheet the parser refuses must not keep the book from opening.
+    console.warn(`book stylesheet ignored: ${error}`);
+  }
 
   newRules.forEach((rule) => {
     const newDeclarations: Record<string, string> = {};
