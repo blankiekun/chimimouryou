@@ -15,8 +15,9 @@
  * or textContent, never {@html}), keep line breaks with CSS (white-space: pre-wrap), and make no
  * links of URLs in them. Titles too.
  *
- * Requests: only while the social plugin is on (`communityOn`), and only from the Community tab
- * or a line deep link (nothing here runs on import). Signed out, only the public reads go (feed,
+ * Requests: only while the social plugin is on (`communityOn`), and only from the Community tab,
+ * a line deep link or the open of a book already matched to a work (`markBookOnOpen`; nothing here
+ * runs on import). Signed out, only the public reads go (feed,
  * threads, thread, covers: no token, the hub caches them); writes need a hub account and are
  * refused here without one.
  *
@@ -256,8 +257,14 @@ export function volumeOf(title: string) {
   return /^\d{1,4}(?:\.\d{1,2})?$/.test(text) ? text : '';
 }
 
-/** The book key (social.ts bookKey) the hub's work mapping uses, at most 100 characters */
-const workBook = (title: string) => absMatchKey(absCleanTitle(title)).slice(0, 100);
+/**
+ * The book key (social.ts bookKey) the hub's work mapping uses, at most 100 characters. Only a
+ * split character goes: counting by code points would change keys that already hold threads.
+ */
+const workBook = (title: string) =>
+  absMatchKey(absCleanTitle(title))
+    .slice(0, 100)
+    .replace(/[\ud800-\udbff]$/, '');
 
 /** The work key of an AniList or VNDB page (Find details' url), null for other pages */
 export function workFromUrl(url: string, title: string) {

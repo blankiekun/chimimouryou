@@ -158,14 +158,14 @@ describe('hub community', () => {
       expect(
         db
           .prepare(
-            `SELECT SUM(count) AS n FROM limits WHERE action = 'feed' AND subject LIKE 'ip:%'`
+            `SELECT SUM(count) AS n FROM limits WHERE action = 'cfeed' AND subject LIKE 'ip:%'`
           )
           .get()
       ).toEqual({ n: 1 });
       // Signed-in reads skip the shared cache (blocks and helpful marks are per reader).
       await call('GET', '/v1/community/feed', undefined, aki.token);
       expect(
-        db.prepare(`SELECT count FROM limits WHERE action = 'feed' AND subject = ?`).get(aki.me.id)
+        db.prepare(`SELECT count FROM limits WHERE action = 'cfeed' AND subject = ?`).get(aki.me.id)
       ).toEqual({ count: 1 });
     } finally {
       vi.unstubAllGlobals();
