@@ -729,12 +729,18 @@
         dispatch('contentChange', contentEl);
       }, timeout);
 
-      document.fonts.addEventListener('loadingdone', () => {
+      const onFontsLoaded = () => {
         clearTimeout(fontLoadTimer);
 
         if (contentEl) {
           dispatch('contentChange', contentEl);
         }
+      };
+
+      document.fonts.addEventListener('loadingdone', onFontsLoaded, { once: true });
+      destroy$.subscribe(() => {
+        clearTimeout(fontLoadTimer);
+        document.fonts.removeEventListener('loadingdone', onFontsLoaded);
       });
     }
   }

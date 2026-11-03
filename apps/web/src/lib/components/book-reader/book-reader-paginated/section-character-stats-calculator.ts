@@ -13,6 +13,9 @@ import { getCharacterCount } from '$lib/functions/get-character-count';
 import { getParagraphNodes } from '../get-paragraph-nodes';
 import { flowPosition, type PageGeometry } from '../page-anchor';
 
+/** Each section change makes a new calculator: counting the book every time cost ~200 ms per 1M characters. */
+const accCharCountsOf = new WeakMap<ReadonlyArray<Element>, number[]>();
+
 export class SectionCharacterStatsCalculator {
   readonly charCount: number;
 
@@ -39,12 +42,17 @@ export class SectionCharacterStatsCalculator {
       const paragraphs = getParagraphNodes(section);
       return paragraphs.reduce((acc, cur) => acc + getCharacterCount(cur), 0);
     };
-    let exploredCharCount = 0;
-    this.sectionAccCharCounts = sections.map((section) => {
-      exploredCharCount += getSectionCharCount(section);
-      return exploredCharCount;
-    });
-    this.charCount = exploredCharCount;
+    let counts = accCharCountsOf.get(sections);
+    if (!counts) {
+      let exploredCharCount = 0;
+      counts = sections.map((section) => {
+        exploredCharCount += getSectionCharCount(section);
+        return exploredCharCount;
+      });
+      accCharCountsOf.set(sections, counts);
+    }
+    this.sectionAccCharCounts = counts;
+    this.charCount = counts[counts.length - 1] ?? 0;
   }
 
   updateCurrentSection(sectionIndex: number) {

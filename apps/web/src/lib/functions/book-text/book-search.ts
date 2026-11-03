@@ -99,7 +99,7 @@ export function getParagraphs(htmlContent: string): Paragraph[] {
       .trim();
 
     if (reading) {
-      paragraph.ruby = [...(paragraph.ruby ?? []), [start, end, reading]];
+      (paragraph.ruby ??= []).push([start, end, reading]);
     }
   });
 

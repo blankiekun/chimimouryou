@@ -633,9 +633,15 @@
         triggerContentChange();
       }, timeout);
 
-      document.fonts.addEventListener('loadingdone', () => {
+      const onFontsLoaded = () => {
         clearTimeout(fontLoadTimer);
         triggerContentChange();
+      };
+
+      document.fonts.addEventListener('loadingdone', onFontsLoaded, { once: true });
+      destroy$.subscribe(() => {
+        clearTimeout(fontLoadTimer);
+        document.fonts.removeEventListener('loadingdone', onFontsLoaded);
       });
     }
   }

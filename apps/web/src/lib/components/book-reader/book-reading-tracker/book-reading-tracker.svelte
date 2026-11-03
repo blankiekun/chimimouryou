@@ -101,6 +101,9 @@
 
     if (overlappedDay || referenceDateKey !== todayKey) {
       let otherDayTimeDiff = 0;
+      // A tick over the day's start: its time splits, its characters are already today's.
+      const otherDayCharacterDiff =
+        overlappedDay && referenceDateKey === todayKey ? 0 : characterDiff;
 
       if (overlappedDay) {
         otherDayTimeDiff = isNegativeTimeDiff
@@ -116,7 +119,12 @@
       const otherDayStatistics =
         statistics.get(otherDayKey) || getDefaultStatistic(bookTitle, otherDayKey);
 
-      updateStatistic(otherDayStatistics, otherDayTimeDiff, characterDiff, lastStatisticModified);
+      updateStatistic(
+        otherDayStatistics,
+        otherDayTimeDiff,
+        otherDayCharacterDiff,
+        lastStatisticModified
+      );
 
       statistics.set(otherDayKey, otherDayStatistics);
       statisticsToStore.add(otherDayKey);
@@ -127,7 +135,7 @@
           dateKey: otherDayStatistics.dateKey,
           dateTimeKey,
           timeDiff: otherDayTimeDiff,
-          characterDiff,
+          characterDiff: otherDayCharacterDiff,
           saved: false
         });
       }
@@ -155,19 +163,8 @@
     updateStatistic(sessionStatistics, timeDiff, characterDiff, lastStatisticModified);
     updateStatistic(allTimeStatistics, timeDiff, characterDiff, lastStatisticModified);
 
-    for (let index = 0, { length } = trackerHistory; index < length; index += 1) {
-      if (historyIndex > 59) {
-        historyIndex = 0;
-      }
-
-      if (trackingHistory.length < 60) {
-        trackingHistory.unshift(trackerHistory[index]);
-      } else {
-        trackingHistory[historyIndex] = trackerHistory[index];
-        trackingHistory.sort((t1, t2) => (t2.dateTimeKey > t1.dateTimeKey ? 1 : -1));
-        historyIndex += 1;
-      }
-    }
+    trackerHistory.forEach((entry) => trackingHistory.unshift(entry));
+    if (trackingHistory.length > 60) trackingHistory.length = 60;
 
     updateTimeToFinishBook();
 
@@ -204,7 +201,7 @@
       trackingHistory = trackingHistory.map((item) => {
         const oldItem = item;
 
-        oldItem.saved = toUpdate.some((dateKey) => dateKey === item.dateKey);
+        oldItem.saved ||= toUpdate.some((dateKey) => dateKey === item.dateKey);
 
         return oldItem;
       });
@@ -417,9 +414,9 @@
   let lastExploredCharCount = exploredCharCount;
   let previousLastExploredCharCount = 0;
   let trackingHistory: TrackingHistory[] = [];
-  let historyIndex = 0;
   let autoScrollerStatistics: BooksDbStatistic | undefined;
   let autoScrollerTimer$: Observable<''> | undefined;
+  let autoScrollerTimed: AutoScroller | undefined;
   let lastExploredCharCountScroller = exploredCharCount;
   let statisticsToStore = new Set<string>();
   /** Today's row as this tab last read or saved it: the tab's unsaved difference is measured from it. */
@@ -488,7 +485,9 @@
     updateLastExploredCharCount();
   }
 
-  $: if (autoScroller && !autoScrollerTimer$) {
+  // A reader remount brings a new scroller.
+  $: if (autoScroller && autoScroller !== autoScrollerTimed) {
+    autoScrollerTimed = autoScroller;
     autoScrollerTimer$ = autoScroller.wasAutoScrollerEnabled$.pipe(
       tap((isEnabled) => {
         if (isEnabled) {
@@ -792,7 +791,11 @@
     const now = Date.now();
     const nowTick = trackerIdleTime ? Math.min(trackerIdleTime, now) : now;
     const trackerIdleTimeReached = trackerIdleTime && nowTick >= trackerIdleTime;
-    const elapsed = Math.round((nowTick - lastTrackerTick) / 1000);
+    // Idle off, nothing else bounds a tick: a long gap is a sleeping laptop or a frozen tab, not reading.
+    const elapsed = Math.min(
+      Math.round((nowTick - lastTrackerTick) / 1000),
+      trackerIdleTime ? Infinity : 60
+    );
 
     lastTrackerTick = nowTick;
 
