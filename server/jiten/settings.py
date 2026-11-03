@@ -76,6 +76,8 @@ TEXT_DIR = os.environ.get('TEXT_DIR', '/data/state/api/text')
 # estimated from it, and again whenever the file changes (watch_manga_text, every MANGA_TEXT_CHECK_SECONDS).
 MOKURO_DIR = os.environ.get('MOKURO_STATE_DIR', '/data/state/mokuro')
 MANGA_TEXT_CHECK_SECONDS = 60
+# After a Cancel, nothing starts by itself for this long (a job started by hand doesn't wait).
+CANCEL_HOLD_SECONDS = 60 * 60
 READINGS_DIR = os.path.join(STATE_DIR, 'readings')
 READINGS_QUEUE_MAX = 100
 # No new readings files with less free space than this (there are no quotas).

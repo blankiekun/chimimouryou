@@ -14,7 +14,7 @@
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
 import { loadCalibreCatalog } from '$lib/data/remote/calibre';
 import { serverless } from '$lib/data/remote/server-connect';
-import { isSeriesName, splitVolume } from '$lib/functions/split-volume';
+import { isSeriesName, splitVolume, withoutEditionLabel } from '$lib/functions/split-volume';
 import { apiVersion, putRow, syncMirror } from '$lib/data/remote/server-api';
 
 export interface SeriesOverride {
@@ -275,11 +275,20 @@ export function inferSeries(cards: BookCardProps[]) {
     const series = existing.get(key(name));
 
     if (series || members.length > 1) {
-      const twoParts = !members.some((card) => /中巻?[\s)）】\]]*$/.test(card.title));
+      const inSeries = series
+        ? cards.filter((card) => card.series && key(card.series) === key(name))
+        : [];
+      const twoParts = ![...members, ...inSeries].some((card) =>
+        /中巻?[\s)）】\]]*$/.test(withoutEditionLabel(card.title))
+      );
 
       members.forEach((card) => {
         inferred.set(card, series ?? name);
-        if (twoParts && volumes.get(card) === 3 && /下巻?[\s)）】\]]*$/.test(card.title)) {
+        if (
+          twoParts &&
+          volumes.get(card) === 3 &&
+          /下巻?[\s)）】\]]*$/.test(withoutEditionLabel(card.title))
+        ) {
           volumes.set(card, 2);
         }
       });

@@ -348,14 +348,25 @@ def parse_added_ids(output: str) -> list[int]:
     return [int(i) for i in re.findall(r'\d+', match.group(1))] if match else []
 
 
-def book_title(book_id: int) -> str:
+def list_book(book_id: int) -> list | None:
+    """`calibredb list`'s rows for this id: [] when Calibre has no such book, None when calibredb itself failed."""
     result = subprocess.run(
         [CALIBREDB, '--library-path', LIBRARY, 'list', '--search', f'id:{book_id}',
          '--fields', 'title', '--for-machine'],
         capture_output=True, text=True, timeout=120, check=False)
+    if result.returncode:
+        return None
     try:
-        return json.loads(result.stdout)[0]['title']
-    except (ValueError, IndexError, KeyError, TypeError):
+        rows = json.loads(result.stdout)
+    except ValueError:
+        return None
+    return rows if isinstance(rows, list) else None
+
+
+def book_title(book_id: int) -> str:
+    try:
+        return list_book(book_id)[0]['title']
+    except (IndexError, KeyError, TypeError):
         return ''
 
 
@@ -371,9 +382,9 @@ def replace_book(job: dict) -> dict | None:
                                 capture_output=True, text=True, timeout=ADD_TIMEOUT_SECONDS, check=False)
         if result.returncode:
             print(f"calibredb add_format {book_id}: {(result.stdout + result.stderr).strip()[-500:]}", file=sys.stderr)
-            if book_title(int(book_id)):
-                return {'state': 'failed', 'error': 'Calibre could not add this file'}
-            return None
+            if list_book(int(book_id)) == []:
+                return None
+            return {'state': 'failed', 'error': 'Calibre could not add this file'}
         now = time.strftime('%Y-%m-%dT%H:%M:%S+00:00', time.gmtime())
         result = subprocess.run(library + ['set_metadata', book_id, '--field', f'timestamp:{now}'],
                                 capture_output=True, text=True, timeout=ADD_TIMEOUT_SECONDS, check=False)
@@ -425,9 +436,11 @@ def add_book(job: dict) -> dict:
     if ids:
         return {'state': 'added', 'calibreId': ids[0], 'title': book_title(ids[0])}
     if 'already exist' in output:
-        # A retry after a restart between Calibre's add and its record: this very volume is in.
+        # A retry after a restart between Calibre's add and its record: this volume is in, but the record will
+        # say this file's chapters, and it may hold more than the file Calibre kept.
         if job.get('identifier') and (found := book_with_identifier(job['identifier'])) is not None:
-            return {'state': 'added', 'calibreId': found, 'title': book_title(found)}
+            job['replaceCalibreId'] = found
+            return replace_book(job) or {'state': 'failed', 'error': 'Calibre could not add this file'}
         return {'state': 'duplicate', 'error': 'Already in the Calibre library'}
     print(f"calibredb add {job['name']}: {output.strip()[-500:]}", file=sys.stderr)
     return {'state': 'failed', 'error': 'Calibre could not add this file'}

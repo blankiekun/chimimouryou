@@ -55,8 +55,12 @@ put() {
 
 echo "Deploying ${VERSION} to ${TARGET}..."
 
-# ebook-update holds this lock while it works: its source, settings and commands aren't replaced under it.
-run bash -c 'flock -n /run/ebook-update.lock true || { echo "An update from the admin panel is running: deploy again when it ends" >&2; exit 1; }'
+# Held from here until this script ends (the holder's stdin closes then), against a second deploy and
+# ebook-update, which waits for it: their source, settings and commands aren't replaced under each other.
+coproc lock_holder {
+  run bash -c 'exec 9>/run/ebook-update.lock; flock -n 9 || { echo "Another deploy or an update from the admin panel is running: deploy again when it ends" >&2; exit 1; }; echo held; cat >/dev/null'
+}
+read -r _ <&"${lock_holder[0]:-}" || exit 1
 
 tar -C "$REPO_ROOT" \
   --exclude=.git --exclude=node_modules --exclude=build --exclude=.svelte-kit \
@@ -98,9 +102,6 @@ run env LANG=C.UTF-8 VERSION="$VERSION" bash -s <<'EOF'
   app=/opt/ebook-reader
   saved=$app.config.previous
   images=
-  # One at a time with ebook-update, which waits for this lock (closed when this script ends).
-  exec 9>/run/ebook-update.lock
-  flock 9
   # On failure the source, settings and commands that ran come back and the images get their tags
   # back, so the old commands run on the old images and the next deploy keeps them as :previous.
   rollback() {
@@ -111,7 +112,7 @@ run env LANG=C.UTF-8 VERSION="$VERSION" bash -s <<'EOF'
       rm -rf "$app"
       mv "$app.previous" "$app"
     fi
-    # With env's secrets, $saved stays root-only until the next deploy replaces it. mv, not cp: a full disk can't lose env.
+    # mv, not cp: a full disk can't lose env. Whatever couldn't move stays root-only in $saved for the next try.
     if [ -d "$saved/etc" ]; then
       rm -rf /etc/ebook-reader
       mv "$saved/etc" /etc/ebook-reader || true
@@ -119,6 +120,7 @@ run env LANG=C.UTF-8 VERSION="$VERSION" bash -s <<'EOF'
     for command in ebook-compose ebook-account ebook-update; do
       if [ -f "$saved/$command" ]; then mv "$saved/$command" "/usr/local/bin/$command" || true; fi
     done
+    rmdir "$saved" 2>/dev/null || true
     # ebook-compose reads the restored source's .version.
     unset VERSION
     $compose up -d --remove-orphans || true

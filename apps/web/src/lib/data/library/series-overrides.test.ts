@@ -137,6 +137,19 @@ describe('inferSeries', () => {
     ]);
   });
 
+  // Bug: an edition label hid 下 from the rule, and a lone 下 took a Calibre series' 中's index.
+  it('counts labelled parts and the middle volume of the series a lone 下 joins', () => {
+    const indexes = (cards: BookCardProps[]) => inferSeries(cards).map((c) => c.seriesIndex);
+
+    expect(indexes([card('銃口 上 (GA文庫)'), card('銃口 下 (GA文庫)')])).toEqual([1, 2]);
+    expect(
+      indexes([{ ...card('終物語 中'), series: '終物語', seriesIndex: 2 }, card('終物語 下')])
+    ).toEqual([2, 3]);
+    expect(
+      indexes([{ ...card('銃口 上'), series: '銃口', seriesIndex: 1 }, card('銃口 下')])
+    ).toEqual([1, 2]);
+  });
+
   // Bug: 上 and 下 alone get indexes 1 and 3, a gap the catalog and assign-series.py don't have.
   it('makes 下 the second volume when the series has no 中, without touching titles', () => {
     const result = inferSeries([card('銃口 上'), card('銃口（下巻）')]);

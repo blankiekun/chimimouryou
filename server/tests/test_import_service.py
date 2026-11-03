@@ -30,8 +30,14 @@ with open(TOKEN_FILE, 'w') as f:
 with open(FAKE_CALIBREDB, 'w') as f:
     f.write(f"""#!{sys.executable}
 import sys
+import os
 args = sys.argv[1:]
-if 'add' in args:
+broken = os.environ.get('FAKE_CALIBRE_BROKEN', '').split()
+if args[2] in broken:  # calibredb's own failure (a lock), not an answer
+    sys.exit(1)
+if 'list' in args and 'no-book' in broken:
+    print('[]')
+elif 'add' in args:
     open({ADDS!r}, 'a').write(repr(args[3:]) + '\\n')
     if 'dup' in open(args[3], 'rb').read().decode('latin-1'):
         print('The following books were not added as they already exist in the database')
@@ -197,6 +203,34 @@ class ImportServiceTest(unittest.TestCase):
             f.write('chimi:kakuyomu:restarted:1\n')
         job = self.wait_for(self.sources_volume('chimi:kakuyomu:restarted:1')['id'])
         self.assertEqual((job['state'], job['calibreId']), ('added', 43))
+
+    def test_retried_volume_replaces_the_file_calibre_kept(self):
+        # Catches: the retry being recorded with this file's chapters while Calibre keeps the earlier file, so
+        # the reader's book lacks chapters the work says it has.
+        with open(IDENTIFIERS, 'a') as f:
+            f.write('chimi:kakuyomu:longer:1\n')
+        job = self.wait_for(self.sources_volume('chimi:kakuyomu:longer:1')['id'])
+        self.assertEqual((job['state'], job['calibreId']), ('added', 43))
+        with open(ADDS) as f:
+            self.assertEqual(f.read().splitlines()[-1], 'add_format 43')
+
+    def test_replacing_a_book_when_calibredb_fails(self):
+        # Catches: a lock failing add_format and then list too being read as "no such book", adding a copy; a book
+        # really gone no longer being added as new.
+        name = 'replace.epub'
+        with open(os.path.join(service.queue_dir(), name), 'wb') as f:
+            f.write(epub())
+        job = {'name': name, 'file': name, 'replaceCalibreId': 7}
+
+        def adds():
+            with open(ADDS) as f:
+                return [line for line in f.read().splitlines() if not line.startswith('add_format')]
+
+        before = adds()
+        for broken, state in (('add_format list', 'failed'), ('add_format', 'failed'), ('add_format no-book', 'added')):
+            with self.subTest(broken=broken), mock.patch.dict(os.environ, {'FAKE_CALIBRE_BROKEN': broken}):
+                self.assertEqual(service.add_book(dict(job))['state'], state)
+                self.assertEqual(len(adds()) - len(before), int(state == 'added'))
 
     def test_volume_duplicating_another_book_stays_a_duplicate(self):
         # Catches: every same-titled volume being taken for this one, when Calibre has no book with its identifier.

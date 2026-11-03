@@ -19,7 +19,7 @@ APP=/opt/ebook-reader
 CONFIG=/etc/ebook-reader
 COMMANDS="ebook-compose ebook-account ebook-update"
 
-# One at a time with deploy.sh, which holds this lock while it runs `install`.
+# One at a time with deploy.sh, which holds this lock from start to end, `install` included.
 if [ "${1:-}" != install ]; then
   exec 9>/run/ebook-update.lock
   flock 9
