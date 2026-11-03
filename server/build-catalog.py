@@ -118,14 +118,6 @@ def is_vn(archive: zipfile.ZipFile) -> bool:
     return any(posixpath.basename(name).lower() in VN_SCRIPTS for name in archive.namelist())
 
 
-def is_vn_file(file_path: str) -> bool:
-    try:
-        with zipfile.ZipFile(file_path) as archive:
-            return is_vn(archive)
-    except (OSError, zipfile.BadZipFile):
-        return False
-
-
 VN_COVERS = ('cover.jpg', 'cover.jpeg', 'cover.png', 'cover.webp', 'icon.png', 'icon.jpg')
 
 
@@ -236,20 +228,20 @@ def vn_mtime(vn_dir: str) -> float:
     return max(times)
 
 
-def is_valid_book(file_path: str, fmt: str) -> bool:
-    """Skip missing files and non-zip EPUB/HTMLZ, e.g. macOS '._' resource forks,
-    and CBZ/ZIP files that are neither mostly images nor an ONScripter game."""
+def book_kind(file_path: str, fmt: str) -> str | None:
+    """'vn' for a CBZ/ZIP holding an ONScripter game, 'book' for anything else usable. None skips it: missing
+    files, non-zip EPUB/HTMLZ, e.g. macOS '._' resource forks, and CBZ/ZIP files that aren't mostly images."""
     try:
         if fmt in MANGA_FORMATS:
             with zipfile.ZipFile(file_path) as archive:
                 files = [name for name in archive.namelist() if not name.endswith('/')]
                 if is_vn(archive):
-                    return True
-                return len(manga_pages(archive)) * 2 > len(files)
+                    return 'vn'
+                return 'book' if len(manga_pages(archive)) * 2 > len(files) else None
         with open(file_path, 'rb') as f:
-            return fmt == 'TXT' or f.read(2) == b'PK'
+            return 'book' if fmt == 'TXT' or f.read(2) == b'PK' else None
     except (OSError, zipfile.BadZipFile):
-        return False
+        return None
 
 
 MAX_COVER_BYTES = 20 * 1024 * 1024
@@ -460,7 +452,35 @@ def add_thumbnails(library: str, output: str, vn_dir: str | None, seconds: float
             written += 1
         except Exception as error:  # noqa: BLE001 - a broken cover keeps its full-size fallback
             print(f'No thumbnail for {source}: {error}', file=sys.stderr)
+    prune_thumbs(thumbs, books)
     return written
+
+
+def prune_thumbs(thumbs: str, books: list[dict]) -> None:
+    """Removes thumbnails no book names any more (a title or author edit moves a book's folder). Soft-deleted
+    books keep theirs, as they can come back; so nothing goes without library.db to tell them, or with no books."""
+    api_db = os.environ.get('API_DB')
+    if not api_db or not books:
+        return
+    try:
+        connection = sqlite3.connect(f'file:{urllib.request.pathname2url(api_db)}?mode=ro', uri=True)
+        try:
+            rows = connection.execute('SELECT format, cover FROM books').fetchall()
+        finally:
+            connection.close()
+    except sqlite3.Error:
+        return
+    named = {os.path.join(thumbs, 'vn' if fmt == 'VN' else 'library', cover)
+             for fmt, cover in [*rows, *((book['format'], book['cover']) for book in books)] if cover}
+    for folder, _, files in os.walk(thumbs, topdown=False):
+        try:
+            for name in files:
+                if os.path.join(folder, name) not in named:
+                    os.remove(os.path.join(folder, name))
+            if folder != thumbs and not os.listdir(folder):
+                os.rmdir(folder)
+        except OSError as error:
+            print(f'Pruning thumbnails in {folder}: {error}', file=sys.stderr)
 
 
 def main(library: str, output: str, vn_dir: str | None = None, force: bool = False,
@@ -525,7 +545,8 @@ def build(library: str, output: str, vn_dir: str | None = None, force: bool = Fa
         if current and FORMATS.index(current['format']) <= FORMATS.index(fmt):
             continue
         file = f'{path}/{name}.{fmt.lower()}'
-        if not is_valid_book(os.path.join(library, file), fmt):
+        kind = book_kind(os.path.join(library, file), fmt)
+        if not kind:
             continue
         books[book_id] = {
             'id': book_id,
@@ -541,7 +562,7 @@ def build(library: str, output: str, vn_dir: str | None = None, force: bool = Fa
             'published': added_ms(pubdate) if pubdate and not pubdate.startswith('0101') else None,
             'added': added_ms(added),
             'format': fmt,
-            'vn': fmt in MANGA_FORMATS and is_vn_file(os.path.join(library, file)),
+            'vn': kind == 'vn',
             'size': size,
             'file': file,
             'cover': '',

@@ -55,14 +55,21 @@ def _run_pool(books, task, cancel: threading.Event, processes: int, lost: list, 
                 yield book, error
 
 
+_catalog = (None, [])  # (what catalog.json was when read, its books)
+
+
 def load_catalog():
     """The books with text: EPUB, HTMLZ, TXT, visual novels (their scripts) and manga (CBZ/ZIP, their mokuro
     text: 'manga', and 'text', its manga_text_stamp, None while they have none)."""
-    with open(settings.CATALOG_PATH, encoding='utf-8') as f:
-        books = json.load(f)['books']
-    for book in books:
-        if book['format'] in ('CBZ', 'ZIP') and not book.get('vn'):
-            book.update(manga=True, text=workers.manga_text_stamp(book['id']))
+    global _catalog
+    stat = os.stat(settings.CATALOG_PATH)
+    # The inode too: a build gives the file its inputs' time, which a forced build doesn't move.
+    stamp = (stat.st_mtime_ns, stat.st_size, stat.st_ino)
+    if _catalog[0] != stamp:
+        with open(settings.CATALOG_PATH, encoding='utf-8') as f:
+            _catalog = (stamp, json.load(f)['books'])
+    books = [{**b, 'manga': True, 'text': workers.manga_text_stamp(b['id'])}
+             if b['format'] in ('CBZ', 'ZIP') and not b.get('vn') else b for b in _catalog[1]]
     return [b for b in books if b['format'] in ('EPUB', 'HTMLZ', 'TXT') or b.get('vn') or b.get('manga')]
 
 
@@ -257,6 +264,8 @@ def watch_manga_text():
     """Estimates manga as their text is made or uploaded (mokuro service), and replaced books, when no other job runs."""
     while True:
         time.sleep(settings.MANGA_TEXT_CHECK_SECONDS)
+        if runner.cancel.is_set():  # the reader cancelled: nothing starts by itself until a job is started
+            continue
         try:
             ids = stale_manga() + replaced_books()
             if ids:

@@ -184,6 +184,7 @@ def main(argv):
     install.install_bundled_dictionary()
     command = argv[1] if len(argv) > 1 else 'serve'
     if command == 'serve':
+        workers.remove_old_words()
         threading.Thread(target=jobs.watch_manga_text, daemon=True).start()
         ThreadingHTTPServer((settings.HOST, settings.PORT), Handler).serve_forever()
     elif command == 'compute':

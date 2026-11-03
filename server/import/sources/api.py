@@ -227,7 +227,10 @@ def _fetch_details(work: dict) -> dict:
     details = _adapter(work['site']).details(work['url'])
     if details.get('mode') == 'files':
         details = _number_files(work['id'], details)
-    _details[work['id']] = (time.monotonic(), details)
+    now = time.monotonic()
+    for old in [k for k, (at, _) in list(_details.items()) if now - at >= DETAILS_SECONDS]:
+        _details.pop(old, None)
+    _details[work['id']] = (now, details)
     size = work['volume_size'] or planner.VOLUME_SIZE
     if details.get('mode') == 'files':
         size = 1

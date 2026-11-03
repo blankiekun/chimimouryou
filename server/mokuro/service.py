@@ -18,11 +18,13 @@ CLI: service.py serve | generate ID...
 Standard library only (mokuro runs as a separate program). Not part of upstream.
 """
 import json
+import math
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import zipfile
@@ -61,7 +63,7 @@ def ocr_path(book_id: int):
 
 
 def _number(value):
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value != value:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
         raise ValueError('not a number')
     return round(float(value), 1)
 
@@ -91,7 +93,7 @@ def convert(mokuro: dict, source: str) -> dict:
                     raise ValueError
                 converted.append({'box': box, 'vertical': bool(block.get('vertical')),
                                   'fontSize': _number(block.get('font_size', 0)), 'lines': lines})
-        except (KeyError, TypeError, ValueError):
+        except (KeyError, TypeError, ValueError, OverflowError):  # OverflowError: an integer past any float
             raise ValueError('Not a .mokuro file (a page is malformed)') from None
         result.append({'name': re.sub(r'^(\./)+', '', name.replace('\\', '/')), 'width': width,
                        'height': height, 'blocks': converted})
@@ -103,9 +105,15 @@ def convert(mokuro: dict, source: str) -> dict:
 def save_ocr(book_id: int, data: dict):
     os.makedirs(STATE_DIR, exist_ok=True)
     path = ocr_path(book_id)
-    with open(path + '.tmp', 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, separators=(',', ':'))
-    os.replace(path + '.tmp', path)
+    fd, tmp = tempfile.mkstemp(dir=STATE_DIR, prefix='.tmp-')
+    try:
+        os.fchmod(fd, 0o644)  # nginx serves it; mkstemp's default is 0600
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, separators=(',', ':'))
+        os.replace(tmp, path)
+    except BaseException:
+        os.unlink(tmp)
+        raise
 
 
 def load_manga():

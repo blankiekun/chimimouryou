@@ -299,7 +299,8 @@ def is_vn_zip(path: str) -> bool:
 def vn_title(name: str) -> str:
     """The game's folder name: the uploaded file's name without .zip/.cbz."""
     title = re.sub(r'\.(?:zip|cbz)$', '', name, flags=re.I).strip().lstrip('.')
-    return re.sub(r'[/\\:*?"<>|]', '_', title)[:150] or 'game'
+    # A file name holds 255 bytes, and Japanese takes 3 a character.
+    return re.sub(r'[/\\:*?"<>|]', '_', title)[:150].encode()[:240].decode('utf-8', 'ignore') or 'game'
 
 
 def add_vn(job: dict) -> dict:
@@ -361,7 +362,7 @@ def book_title(book_id: int) -> str:
 def replace_book(job: dict) -> dict | None:
     """A followed work's open volume: its EPUB replaced on the same Calibre book (same id and uuid, so reading data
     stays) and its timestamp (the catalog's `added`) moved to now, so devices fetch it again. None when Calibre
-    no longer has the book: it is then added as a new one."""
+    no longer has the book: it is then added as a new one. Any other failure (a brief lock) mustn't add a copy."""
     book_id = str(job['replaceCalibreId'])
     library = [CALIBREDB, '--library-path', LIBRARY]
     with open(WRITE_LOCK, 'a') as lock:
@@ -370,6 +371,8 @@ def replace_book(job: dict) -> dict | None:
                                 capture_output=True, text=True, timeout=ADD_TIMEOUT_SECONDS, check=False)
         if result.returncode:
             print(f"calibredb add_format {book_id}: {(result.stdout + result.stderr).strip()[-500:]}", file=sys.stderr)
+            if book_title(int(book_id)):
+                return {'state': 'failed', 'error': 'Calibre could not add this file'}
             return None
         now = time.strftime('%Y-%m-%dT%H:%M:%S+00:00', time.gmtime())
         result = subprocess.run(library + ['set_metadata', book_id, '--field', f'timestamp:{now}'],
