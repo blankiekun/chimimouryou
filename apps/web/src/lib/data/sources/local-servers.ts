@@ -6,6 +6,7 @@
 
 /** OPDS and Suwayomi servers on this device (standalone): listed, added, removed and browsed. */
 
+import { Capacitor } from '@capacitor/core';
 import { all, marks, one, put, remove, share, source, type ServerRow } from './local-sources';
 import * as opds from './sites/opds';
 import { FetchError, NeedsAppError } from './transport';
@@ -37,6 +38,10 @@ export async function addServer(input: {
   const url = input.url.trim();
   if (!/^https?:\/\/[^/]+/.test(url)) {
     throw new SourceError('Enter the address with http:// or https://', 'url');
+  }
+  // Release builds don't allow cleartext: the request would only fail as "Can't reach".
+  if (Capacitor.isNativePlatform() && url.startsWith('http://')) {
+    throw new SourceError('The Android app reaches https:// servers only', 'url');
   }
   const existing = (await all('servers')).find((s) => s.url === url);
   if (existing && !existing.deleted) throw new SourceError('This source is already added', 'url');

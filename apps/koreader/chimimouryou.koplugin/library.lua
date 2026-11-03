@@ -69,8 +69,17 @@ local function download_dir(plugin)
     return dir
 end
 
+local MAX_NAME_BYTES = 200
+
 local function file_name(book)
-    local name = tostring(book.title or book.id):gsub('[\\/:*?"<>|%c]', "_")
+    local name = tostring(book.title or book.id)
+    -- File systems allow 255 bytes, about 85 Japanese characters. The id keeps two cut titles apart.
+    if #name > MAX_NAME_BYTES then
+        local cut = MAX_NAME_BYTES
+        while cut > 0 and name:byte(cut + 1) >= 0x80 and name:byte(cut + 1) < 0xC0 do cut = cut - 1 end
+        name = name:sub(1, cut) .. " " .. tostring(book.id)
+    end
+    name = name:gsub('[\\/:*?"<>|%c]', "_")
     return name .. "." .. tostring(book.format or "epub"):lower()
 end
 

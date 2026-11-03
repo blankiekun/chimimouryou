@@ -105,7 +105,9 @@ export interface DesktopGames {
   ): Promise<{ status: 'ok'; exe: string } | { status: 'error'; message: string }>;
   forget(folder: string): Promise<void>;
   list(): Promise<NativeGamesList>;
-  session(): Promise<{ folder: string; running: boolean; messages: NativeMessage[] } | undefined>;
+  session(
+    folder: string
+  ): Promise<{ folder: string; running: boolean; messages: NativeMessage[] } | undefined>;
   onHook(callback: (message: NativeMessage) => void): () => void;
   /** /hook shows the line: its screenshot is taken once drawn */
   mark(seq: number): Promise<void>;
