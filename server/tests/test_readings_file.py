@@ -286,6 +286,33 @@ class ReadingsQueueTest(unittest.TestCase):
         thread.join(10)
         self.assertIsNone(queue.thread)
 
+    def test_a_worker_death_is_tried_once_more_before_it_counts(self):
+        # Catches: a brief worker death (out of memory) leaving the book "unavailable" until a restart;
+        # a book that kills every worker being retried for ever.
+        from concurrent.futures import ThreadPoolExecutor
+        from concurrent.futures.process import BrokenProcessPool
+        service, queue = self.service, self.service.queues.ReadingsQueue()
+        deaths = [1]
+
+        class Pool(ThreadPoolExecutor):
+            def submit(self, *args):
+                if deaths:
+                    deaths.pop()
+                    raise BrokenProcessPool('died')
+                return super().submit(*args)
+        service.queues.ProcessPoolExecutor = lambda workers, initializer: Pool(workers)
+        service.settings.READINGS_KEEP_ALIVE = 0
+        service.workers._reader = FakeReader(('行っ', '行く', 'いく', 'only'))
+        self.assertEqual(queue.request(1), 'queued')
+        queue.thread.join(10)
+        self.assertEqual((queue.failed, queue.request(1)), ({}, 'ready'))
+
+        os.remove(service.workers.readings_path(1))
+        deaths[:] = [1, 1]
+        self.assertEqual(queue.request(1), 'queued')
+        queue.thread.join(10)
+        self.assertEqual((queue.failed, queue.request(1)), ({1: self.job[1]}, 'unavailable'))
+
     def test_a_changed_pack_replaces_the_kept_alive_worker(self):
         # Catches: a dictionary installed while reading, then files from the old Reader stamped with the new version.
         from concurrent.futures import ThreadPoolExecutor

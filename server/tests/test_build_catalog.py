@@ -116,14 +116,12 @@ class MangaTest(unittest.TestCase):
             self.assertEqual(catalog.manga_pages(archive), ['1.png', '2.jpg', '10.jpg'])
 
     def test_only_image_archives_are_manga(self):
-        self.assertTrue(catalog.is_valid_book(self.archive(['1.jpg', '2.jpg', 'a.txt']), 'ZIP'))
-        self.assertFalse(catalog.is_valid_book(self.archive(['book.epub']), 'ZIP'))
+        self.assertEqual(catalog.book_kind(self.archive(['1.jpg', '2.jpg', 'a.txt']), 'ZIP'), 'book')
+        self.assertIsNone(catalog.book_kind(self.archive(['book.epub']), 'ZIP'))
 
     def test_onscripter_games_are_listed(self):
         game = self.archive(['Game/0.txt', 'Game/arc.nsa', 'Game/arc1.nsa'])
-        self.assertTrue(catalog.is_valid_book(game, 'ZIP'))
-        self.assertTrue(catalog.is_vn_file(game))
-        self.assertFalse(catalog.is_vn_file(self.archive(['1.jpg'])))
+        self.assertEqual(catalog.book_kind(game, 'ZIP'), 'vn')
 
 
 class VnFolderTest(unittest.TestCase):
@@ -391,6 +389,39 @@ class ThumbnailTest(unittest.TestCase):
         cover = os.path.join(self.library, 'A/B (1)/cover.jpg')
         os.utime(cover, (os.path.getmtime(cover) + 10,) * 2)
         self.assertEqual(catalog.add_thumbnails(self.library, self.output, self.vn), 1)
+
+    def test_prunes_only_what_no_book_names(self):
+        # Catches: a moved book's old thumbnail staying for good; a soft-deleted book's being removed;
+        # everything being removed with no library.db to tell, with an unreadable one, or with an empty catalog.
+        thumbs = os.path.join(self.root, 'state', 'thumbs')
+        moved, kept = os.path.join(thumbs, 'library/Old/X (2)/cover.jpg'), os.path.join(thumbs, 'library/Z/Gone (3)/cover.jpg')
+        live = os.path.join(thumbs, 'library/A/B (1)/cover.jpg')
+        catalog.add_thumbnails(self.library, self.output, self.vn)
+        for path in (moved, kept):
+            open(self.mkdirs(path), 'w').close()
+        db_path = os.path.join(self.root, 'state', 'library.db')
+        books = [{'id': 1, 'key': 'a', 'title': 'B', 'authors': '', 'series': '', 'seriesIndex': None, 'seriesInferred': False,
+                  'tags': [], 'rating': None, 'publisher': '', 'published': None, 'added': 1, 'format': 'EPUB', 'file': 'f',
+                  'size': 1, 'cover': 'A/B (1)/cover.jpg', 'vn': False}]
+        gone = {**books[0], 'id': 3, 'key': 'c', 'title': 'Gone', 'cover': 'Z/Gone (3)/cover.jpg'}
+        db = apidb.Database(db_path)
+        db.transaction(lambda c: apidb.upsert_books(c, [*books, gone], None, 1))
+        db.transaction(lambda c: apidb.upsert_books(c, books, None, 2))  # soft-deletes `gone`
+        db.connection.close()
+
+        with mock.patch.dict(os.environ, {'API_DB': ''}):
+            catalog.add_thumbnails(self.library, self.output, self.vn)
+        self.assertTrue(os.path.exists(moved))
+        with mock.patch.dict(os.environ, {'API_DB': os.path.join(self.root, 'missing.db')}):
+            catalog.add_thumbnails(self.library, self.output, self.vn)
+        self.assertTrue(os.path.exists(moved))
+        with mock.patch.dict(os.environ, {'API_DB': db_path}):
+            catalog.prune_thumbs(thumbs, [])
+            self.assertTrue(os.path.exists(moved))
+            catalog.add_thumbnails(self.library, self.output, self.vn)
+        self.assertFalse(os.path.exists(os.path.join(thumbs, 'library/Old')))
+        self.assertTrue(os.path.exists(kept) and os.path.exists(live))
+        self.assertTrue(os.path.exists(os.path.join(thumbs, 'vn/Game/cover.png')))
 
     def test_stops_at_the_deadline_and_skips_broken_covers(self):
         self.assertEqual(catalog.add_thumbnails(self.library, self.output, self.vn, seconds=-1), 0)

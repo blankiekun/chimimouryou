@@ -4,6 +4,8 @@ import gzip
 import hashlib
 import json
 import os
+import re
+import shutil
 import time
 from collections import Counter
 
@@ -58,6 +60,17 @@ def save_kanji(book_id: int, text: str):
 
 def words_path(book_id: int) -> str:
     return os.path.join(settings.WORDS_DIR, f'v{settings.WORDS_VERSION}', f'{book_id}.json.gz')
+
+
+def remove_old_words():
+    """Word lists of another WORDS_VERSION are never read: words_path names the current one."""
+    try:
+        names = os.listdir(settings.WORDS_DIR)
+    except OSError:
+        return
+    for name in names:
+        if re.fullmatch(r'v\d+', name) and name != f'v{settings.WORDS_VERSION}':
+            shutil.rmtree(os.path.join(settings.WORDS_DIR, name), ignore_errors=True)
 
 
 def write_words(book_id: int, data: dict):

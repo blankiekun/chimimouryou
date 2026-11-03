@@ -228,7 +228,7 @@ def header(path: str):
         with gzip.open(path, 'rt', encoding='utf-8') as f:
             data = json.load(f)
         return data['v'], data['yurigana'], data['bookdata'], data.get('html')
-    except (OSError, ValueError, KeyError, TypeError):
+    except (OSError, EOFError, ValueError, KeyError, TypeError):
         return None
 
 

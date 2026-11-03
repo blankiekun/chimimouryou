@@ -35,6 +35,7 @@ class ReadingsQueue:
         self.queue = {}  # book id -> job
         self.running = None
         self.failed = {}  # book id -> text copy name it failed on: not retried until that changes
+        self.worker_died = set()  # book ids whose worker died once: tried once more before they count as failed
         self.thread = None
         self.added = threading.Event()  # wakes an idle worker thread at once
         self.finished = threading.Condition(self.lock)  # notified after each file
@@ -126,11 +127,19 @@ class ReadingsQueue:
                         pool = ProcessPoolExecutor(1, initializer=self.initializer)
                         pool_key = key
                     pool.submit(self.task, book_id, work).result()
+                    self.worker_died.discard(book_id)
                 except Exception as error:
                     print(f'{type(self).__name__} {book_id}: {error}', file=sys.stderr, flush=True)
-                    self.failed[book_id] = self.failure(work)
-                    if isinstance(error, BrokenProcessPool):
+                    broken = isinstance(error, BrokenProcessPool)
+                    if broken:
                         pool = None
+                    if broken and book_id not in self.worker_died:
+                        self.worker_died.add(book_id)
+                        with self.lock:
+                            self.queue[book_id] = work
+                    else:
+                        self.worker_died.discard(book_id)
+                        self.failed[book_id] = self.failure(work)
                 finally:
                     with self.lock:
                         self.running = None
