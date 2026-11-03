@@ -6,6 +6,7 @@
 
 import {
   advanceDateDays,
+  deletionLifetime,
   getDate,
   getDateString,
   getStartHoursDate,
@@ -35,6 +36,21 @@ export interface ReadingGoalSaveResult {
   readingGoalsToDelete: string[];
   readingGoalsToInsert: BooksDbReadingGoal[];
   error: string;
+}
+
+/** A deleted goal stays in the sync file with zeros and this flag, as a deleted day does. */
+export function isDeletedGoal(readingGoal: BooksDbReadingGoal) {
+  return readingGoal.deleted === true && !readingGoal.timeGoal && !readingGoal.characterGoal;
+}
+
+export function deletedGoal(readingGoal: BooksDbReadingGoal, now: number): BooksDbReadingGoal {
+  return {
+    ...readingGoal,
+    timeGoal: 0,
+    characterGoal: 0,
+    lastGoalModified: Math.max(now, readingGoal.lastGoalModified + 1),
+    deleted: true
+  };
 }
 
 export async function getCurrentReadingGoal(givenReadingGoals?: BooksDbReadingGoal[]) {
@@ -105,11 +121,16 @@ export function getReadingGoalWindow(
 }
 
 export function mergeReadingGoals(
-  readingGoals: BooksDbReadingGoal[] = [],
-  existingReadingGoals: BooksDbReadingGoal[] = [],
+  allReadingGoals: BooksDbReadingGoal[] = [],
+  allExistingReadingGoals: BooksDbReadingGoal[] = [],
   isNewOnly = true,
   fallbackLastModified = 0
 ) {
+  const remembered = Date.now() - deletionLifetime;
+  const notExpired = (entry: BooksDbReadingGoal) =>
+    !isDeletedGoal(entry) || entry.lastGoalModified >= remembered;
+  const readingGoals = allReadingGoals.filter(notExpired);
+  const existingReadingGoals = allExistingReadingGoals.filter(notExpired);
   const dataWithoutOpenReadingGoals = readingGoals.filter((entry) => entry.goalEndDate);
   const existingDataWithoutOpenReadingGoals: BooksDbReadingGoal[] = existingReadingGoals.filter(
     (entry: BooksDbReadingGoal) => entry.goalEndDate
@@ -192,10 +213,13 @@ export function mergeReadingGoals(
     }
   }
 
-  let maxEndDate = mergedReadingGoals[0]?.goalEndDate || '';
+  let maxEndDate = '';
 
-  for (let index = 1, { length } = mergedReadingGoals; index < length; index += 1) {
+  for (let index = 0, { length } = mergedReadingGoals; index < length; index += 1) {
     const mergedReadingGoal = mergedReadingGoals[index];
+
+    // A deleted goal doesn't hold its dates: a new open goal may start inside them.
+    if (isDeletedGoal(mergedReadingGoal)) continue;
 
     maxEndDate =
       mergedReadingGoal.goalEndDate > maxEndDate ? mergedReadingGoal.goalEndDate : maxEndDate;

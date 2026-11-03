@@ -69,7 +69,7 @@ import {
 } from '$lib/data/store';
 import { logger } from '$lib/data/logger';
 import { MergeMode } from '$lib/data/merge-mode';
-import { mergeReadingGoals } from '$lib/data/reading-goal';
+import { isDeletedGoal, mergeReadingGoals } from '$lib/data/reading-goal';
 import { storage } from '$lib/data/window/navigator/storage';
 import loadEpub from '$lib/functions/file-loaders/epub/load-epub';
 import loadHtmlz from '$lib/functions/file-loaders/htmlz/load-htmlz';
@@ -84,7 +84,11 @@ import { handleErrorDuringReplication } from '$lib/functions/replication/error-h
 import { throwIfAborted } from '$lib/functions/replication/replication-error';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
 import { replicationProgress$ } from '$lib/functions/replication/replication-progress';
-import { mergeStatistics, updateStatisticToStore } from '$lib/functions/statistic-util';
+import {
+  isDeletedStatistic,
+  mergeStatistics,
+  updateStatisticToStore
+} from '$lib/functions/statistic-util';
 import { writableArrayLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
 import pLimit from 'p-limit';
 
@@ -857,7 +861,8 @@ export class ServerStorageHandler extends BaseStorageHandler {
       statisticsToStore.map((entry) => ({
         key: entry.dateKey,
         modified: entry.lastStatisticModified || lastStatisticModified,
-        data: entry
+        data: entry,
+        deleted: isDeletedStatistic(entry)
       })),
       (dateKey) => `books/${book}/statistics/${dateKey}`,
       (row) => row.dateKey!,
@@ -886,7 +891,8 @@ export class ServerStorageHandler extends BaseStorageHandler {
       goals.map((goal) => ({
         key: goal.goalStartDate,
         modified: goal.lastGoalModified || lastGoalModified,
-        data: goal
+        data: goal,
+        deleted: isDeletedGoal(goal)
       })),
       (start) => `goals/${start}`,
       (row) => row.goalStart!,

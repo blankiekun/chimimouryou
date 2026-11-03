@@ -115,6 +115,34 @@ export function getWeekNumber(referenceDate: number, startDate: number) {
   return Math.ceil(days / 7);
 }
 
+/** How long a deleted day or goal is remembered; a device stale for longer brings its copy back. */
+export const deletionLifetime = 365 * 864e5;
+
+/**
+ * Sync files have no other record of a deletion, so a deleted day stays as a row with zeros and this
+ * flag: readers of the format (older versions, upstream) merge it as any newer row and see an empty
+ * day. An older version reading on that day keeps the flag on a row with numbers, which is live again.
+ */
+export function isDeletedStatistic(statistic: BooksDbStatistic) {
+  return statistic.deleted === true && !statistic.readingTime && !statistic.charactersRead;
+}
+
+export function deletedStatistic(statistic: BooksDbStatistic, now: number): BooksDbStatistic {
+  return {
+    title: statistic.title,
+    dateKey: statistic.dateKey,
+    charactersRead: 0,
+    readingTime: 0,
+    minReadingSpeed: 0,
+    altMinReadingSpeed: 0,
+    lastReadingSpeed: 0,
+    maxReadingSpeed: 0,
+    // Above the row on any clock, as the server's tombstones.
+    lastStatisticModified: Math.max(now, statistic.lastStatisticModified + 1),
+    deleted: true
+  };
+}
+
 export function mergeStatistics(
   statistics: BooksDbStatistic[] = [],
   existingStatistics: BooksDbStatistic[] = [],
@@ -135,7 +163,9 @@ export function mergeStatistics(
     if (
       !isNewOnly ||
       !existingStatistic ||
-      statistic.lastStatisticModified > existingStatistic.lastStatisticModified
+      statistic.lastStatisticModified > existingStatistic.lastStatisticModified ||
+      (statistic.lastStatisticModified === existingStatistic.lastStatisticModified &&
+        isDeletedStatistic(statistic))
     ) {
       groupedStatistics.set(statistic.dateKey, statistic);
     }
@@ -148,7 +178,10 @@ export function updateStatisticToStore(
   mergedStatistics: BooksDbStatistic[],
   fallbackLastModified: number
 ) {
-  const statisticsToStore = mergedStatistics;
+  const remembered = Date.now() - deletionLifetime;
+  const statisticsToStore = mergedStatistics.filter(
+    (statistic) => !isDeletedStatistic(statistic) || statistic.lastStatisticModified >= remembered
+  );
   const statisticsWithCompletionFlag = statisticsToStore.filter((entry) => entry.completedBook);
 
   let statisticWithCompletionFlag = statisticsWithCompletionFlag[0];
@@ -165,6 +198,8 @@ export function updateStatisticToStore(
 
   for (let index = 0, { length } = statisticsToStore; index < length; index += 1) {
     const statistic = statisticsToStore[index];
+
+    if (statistic.deleted && !isDeletedStatistic(statistic)) delete statistic.deleted;
 
     if (
       statisticWithCompletionFlag &&

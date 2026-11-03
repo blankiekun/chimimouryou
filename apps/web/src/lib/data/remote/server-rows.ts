@@ -213,7 +213,7 @@ export async function holdsAccountData() {
 /** PUTs the entries newer than their rows; `replace` also DELETEs live rows the list lacks. */
 export async function writeRows(
   rows: SyncRow[],
-  entries: { key: string; modified: number; data: unknown }[],
+  entries: { key: string; modified: number; data: unknown; deleted?: boolean }[],
   path: (key: string) => string,
   keyOf: (row: SyncRow) => string,
   replace: boolean
@@ -224,10 +224,22 @@ export async function writeRows(
 
   await Promise.all([
     ...entries
-      .filter((entry) => (stored.get(entry.key)?.modified ?? -1) < entry.modified)
+      .filter((entry) => {
+        const row = stored.get(entry.key);
+
+        return (
+          (row?.modified ?? -1) < entry.modified ||
+          (entry.deleted && row?.modified === entry.modified && !row.deleted)
+        );
+      })
       .map((entry) =>
         limiter(() =>
-          signedInOr401(putRow(path(entry.key), { modified: entry.modified, data: entry.data }))
+          signedInOr401(
+            // A row deleted on a sync file: the server's PUT would store it as a live one.
+            entry.deleted
+              ? putRow(path(entry.key), { modified: entry.modified }, 'DELETE')
+              : putRow(path(entry.key), { modified: entry.modified, data: entry.data })
+          )
         )
       ),
     ...(replace
