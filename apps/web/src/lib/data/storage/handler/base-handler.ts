@@ -190,6 +190,11 @@ export abstract class BaseStorageHandler {
   /** The server, Drive and OneDrive take the place in one request; elsewhere the normal sync sends it. */
   async sendProgressNow(_title: string, _progress: BooksDbBookmarkData): Promise<void> {}
 
+  /** The next read of the current book asks the source, not what it answered before. */
+  listFresh() {
+    this.clearData(false);
+  }
+
   abstract saveStatistics(
     data: BooksDbStatistic[],
     lastStatisticModified: number,
@@ -825,15 +830,16 @@ export abstract class BaseStorageHandler {
   }
 
   /**
-   * The file with this prefix to read: for progress and statistics the newest by the time in its
-   * name, so a leftover older file (a failed delete, two devices racing) is never read.
+   * The file with this prefix to read: the newest by the time in its name, so a leftover older file
+   * (a failed delete, two devices racing) isn't read. Covers have no time.
    */
   static findFile<T extends { name: string }>(files: T[], prefix: string) {
     const matching = files.filter((file) => file.name.startsWith(prefix));
+    const timePart = prefix === 'bookdata_' ? 4 : 3;
 
-    if (prefix !== 'progress_' && prefix !== 'statistics_') return matching[0];
+    if (prefix === 'cover_') return matching[0];
 
-    const time = (file: T) => +file.name.split('_')[3] || 0;
+    const time = (file: T) => +file.name.split('_')[timePart] || 0;
 
     return matching.reduce<T | undefined>(
       (newest, file) => (!newest || time(file) > time(newest) ? file : newest),

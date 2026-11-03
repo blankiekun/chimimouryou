@@ -97,6 +97,30 @@ describe('catalog', () => {
     ]);
   });
 
+  // Bug: a restored database that passed the browser's rev: only its id tells, and the delta would
+  // keep books the server no longer has. An older server (no id) and the first id must not refetch.
+  it('starts over when the database id changes, also with a higher rev', async () => {
+    let db = 'a';
+
+    api = fakeApi({ db: () => db });
+    vi.stubGlobal('fetch', api.fetch);
+    api.addBook({ id: 1, calibreId: 501, title: 'Lost', added: 1 });
+    let { catalog } = await load();
+
+    await catalog();
+    ({ catalog } = await load());
+    await catalog();
+    expect(api.requests.at(-1)).toBe('GET /api/v1/catalog?since=1');
+
+    db = 'b';
+    api.addBook({ id: 1, calibreId: 501, title: 'Lost', deleted: true });
+    api.addBook({ id: 2, calibreId: 502, title: 'Kept', added: 2 });
+    ({ catalog } = await load());
+
+    expect((await catalog()).map((book) => book.title)).toEqual(['Kept']);
+    expect(api.requests.at(-1)).toBe('GET /api/v1/catalog?since=0');
+  });
+
   // Bug: a 404 (first build running) turned into an empty library instead of "being built".
   it('keeps the HTTP status of a failure', async () => {
     vi.stubGlobal('fetch', async () => new Response('{"error":"x"}', { status: 404 }));
@@ -122,6 +146,27 @@ describe('syncMirror', () => {
     await (await load()).syncMirror();
 
     expect(sent).toEqual([null, 'a']);
+  });
+
+  // Bug: a phone returning after a restore kept rows the server lost, so it never resent them.
+  it('drops the rows the server lost when the database id changes', async () => {
+    let db = 'a';
+
+    api = fakeApi({ db: () => db });
+    vi.stubGlobal('fetch', api.fetch);
+    api.setRow('progress', { book: 1, data: {}, modified: 5 });
+
+    expect((await (await load()).syncMirror()).progress).toHaveLength(1);
+
+    api.reset();
+    api.setRow('progress', { book: 2, data: {}, modified: 6 });
+    api.setRow('progress', { book: 3, data: {}, modified: 6 });
+    db = 'b';
+
+    const { progress, db: id } = await (await load()).syncMirror();
+
+    expect(progress.map((row) => row.book).sort()).toEqual([2, 3]);
+    expect(id).toBe('b');
   });
 
   // Bug: on a shared browser the next reader would see (and sync into) the last one's rows.

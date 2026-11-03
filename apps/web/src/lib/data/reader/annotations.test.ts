@@ -127,6 +127,33 @@ describe('AnnotationsController account scoping', () => {
     expect(uploads.map((u) => u.body).join()).not.toContain('secret');
   });
 
+  // Bug: Alice's upload failed, Bob opened the book on this browser and saved, and her only copy
+  // of the highlight was replaced. It must come back for her, and never show for Bob.
+  it("keeps another account's unsent highlights until they open the book again", async () => {
+    await storeLocally('Book A', [highlight('unsent', 1, { note: 'hers' })], 'alice');
+    account.user = { id: 'bob', username: 'bob' };
+    mockServer([]);
+
+    const bob = new AnnotationsController('Book A', 'ttu-calibre-default');
+
+    await bob.load();
+    bob.add({ start: 0, end: 1, text: 'his', note: '', color: 'yellow', chapter: '' });
+    await vi.waitFor(async () =>
+      expect((await (await readerDb()).get('annotations', 'Book A'))?.account).toBe('bob')
+    );
+    expect(uploads.map((u) => u.body).join()).not.toContain('hers');
+
+    account.user = { id: 'alice', username: 'alice' };
+
+    const alice = new AnnotationsController('Book A', 'ttu-calibre-default');
+
+    await alice.load();
+
+    expect(alice.highlights$.getValue().map((h) => h.id)).toEqual(['unsent']);
+    expect(uploads.map((u) => u.body).join()).toContain('hers');
+    expect(await (await readerDb()).get('annotations', 'Book A\0alice')).toBeUndefined();
+  });
+
   it("doesn't upload an account's highlights to the shared folder after signing out", async () => {
     await storeLocally('Book B', [highlight('private', 1, { note: 'secret' })], 'alice');
     mockServer([]);

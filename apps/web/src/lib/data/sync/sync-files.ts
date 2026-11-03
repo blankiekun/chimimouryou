@@ -34,7 +34,7 @@ import {
   syncTarget$
 } from '$lib/data/store';
 import { MergeMode } from '$lib/data/merge-mode';
-import { recordSyncError } from '$lib/data/sync/sync-status';
+import { recordSyncError, syncFileFailed } from '$lib/data/sync/sync-status';
 import {
   AutoReplicationType,
   ReplicationSaveBehavior
@@ -209,8 +209,11 @@ export async function syncJsonFile<T>(
         keepalive
       });
       return;
-    } catch (error) {
-      if (!(error instanceof SyncConflictError) || attempt) throw error;
+    } catch (error: any) {
+      if (!(error instanceof SyncConflictError) || attempt) {
+        syncFileFailed(title ?? name, error.message);
+        throw error;
+      }
     }
   }
 }

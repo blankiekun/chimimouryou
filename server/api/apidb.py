@@ -232,6 +232,7 @@ class Database:
     """One connection shared by the request threads, serialized by a lock."""
 
     def __init__(self, path: str):
+        self.path = path
         old_umask = os.umask(0o077)
         try:
             os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -252,6 +253,10 @@ class Database:
                 self.connection.execute(f'ALTER TABLE {table} ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0')
         drop_kind_checks(self.connection)
         self.lock = threading.Lock()
+
+    def file_id(self) -> str:
+        """Differs once the file was made again or restored from a backup, which an id stored inside it can't tell."""
+        return str(os.stat(self.path).st_ino)
 
     def query(self, sql: str, params=()) -> list[sqlite3.Row]:
         with self.lock:

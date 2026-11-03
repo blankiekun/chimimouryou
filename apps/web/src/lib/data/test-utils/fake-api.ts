@@ -47,7 +47,9 @@ function bytes(blob: Blob) {
   });
 }
 
-export function fakeApi(options: { api?: number | null; account?: () => string } = {}) {
+export function fakeApi(
+  options: { api?: number | null; account?: () => string; db?: () => string } = {}
+) {
   let rev = 0;
   const rows: Row[] = [];
   const books: (FakeBook & { rev: number })[] = [];
@@ -154,6 +156,7 @@ export function fakeApi(options: { api?: number | null; account?: () => string }
     if (path === 'catalog') {
       return json(200, {
         rev,
+        db: options.db?.(),
         books: since
           ? books.filter((book) => book.rev > since)
           : books
@@ -163,7 +166,7 @@ export function fakeApi(options: { api?: number | null; account?: () => string }
     }
 
     if (path === 'sync') {
-      const result: Record<string, any> = { rev };
+      const result: Record<string, any> = { rev, db: options.db?.() };
 
       Object.values(tables)
         .concat('accountDocs', 'gameDocs')

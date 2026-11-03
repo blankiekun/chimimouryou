@@ -169,6 +169,7 @@
     isTrackerPaused$
   } from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker';
   import BookReadingTracker from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker.svelte';
+  import { MergeMode } from '$lib/data/merge-mode';
   import {
     getChapterData,
     nextChapter$,
@@ -1624,14 +1625,26 @@
 
     const handler = externalStorageHandler;
     const book = $rawBookData$;
-    const error = await syncLocked(() =>
+    const context = { id: book.id, title: book.title, imagePath: book.coverImage };
+    const tracker = trackerElm;
+    const upload = () =>
       replicateData(
         localStorageHandler,
         handler,
         !isSilent && $storageSource$ === handler.storageType,
-        [{ id: book.id, title: book.title, imagePath: book.coverImage }],
+        [context],
         dataToReplicate
-      )
+      );
+    const error = await syncLocked(() =>
+      tracker &&
+      dataToReplicate.includes(StorageDataType.STATISTICS) &&
+      $statisticsMergeMode$ === MergeMode.MERGE
+        ? tracker.uploadOnSynced(() => {
+            handler.startContext(context);
+            handler.listFresh();
+            return handler.getStatistics().then(({ statistics }) => statistics);
+          }, upload)
+        : upload()
     ).catch((err: any) => err.message);
 
     externalStorageHandler.updateSettings(

@@ -209,7 +209,8 @@
         return oldItem;
       });
 
-      dispatch('statisticsSaved');
+      // During an upload: it sends this save, or the next flush asks for another.
+      if (!holdFlush) dispatch('statisticsSaved');
     } catch (error: any) {
       hadError = true;
       statisticsToStore = new Set([...statisticsToStore, ...toUpdate]);
@@ -224,6 +225,81 @@
     }
 
     return [hadError, toUpdate.length];
+  }
+
+  /**
+   * Runs `upload` with today's row built on what another device wrote since this tab last synced:
+   * a tab that keeps ticking always holds the newest row, so newest-wins would drop their count.
+   * shortcut: only today; the last seconds of yesterday can still replace theirs just after midnight.
+   */
+  export async function uploadOnSynced(
+    read: () => Promise<BooksDbStatistic[] | undefined>,
+    upload: () => Promise<string>
+  ) {
+    // A save between what's sent and what's kept as sent would be counted twice next time.
+    holdFlush += 1;
+
+    try {
+      // A failed read: the upload reads the same file first, and reports what's wrong.
+      takeOtherDevices(await read().catch(() => undefined));
+      await flushUpdates(true);
+
+      todayKey = getDateKey($startDayHoursForTracker$);
+
+      const sending = (await database.getSyncedStatisticsForBook(bookTitle)).find(
+        (row) => row.dateKey === todayKey
+      );
+
+      sentToday = sending;
+
+      const error = await upload();
+
+      if (!error && sending) syncedToday = sending;
+
+      return error;
+    } finally {
+      holdFlush -= 1;
+      flushUpdates();
+    }
+  }
+
+  function takeOtherDevices(rows: BooksDbStatistic[] | undefined) {
+    const key = getDateKey($startDayHoursForTracker$);
+    const theirs = rows?.find((row) => row.dateKey === key);
+
+    if (!theirs) return;
+
+    // Sent last time and reported as failed, yet it landed: this tab's own row, not another device's.
+    if (sentToday?.lastStatisticModified === theirs.lastStatisticModified) syncedToday = sentToday;
+
+    const synced = syncedToday?.dateKey === key ? syncedToday : undefined;
+
+    if (theirs.lastStatisticModified <= (synced?.lastStatisticModified ?? 0)) return;
+
+    const current = statistics.get(key);
+    const today = { ...theirs, title: bookTitle };
+
+    if (current?.completedBook) {
+      today.completedBook = 1;
+      today.completedData = current.completedData;
+    }
+
+    updateStatistic(
+      today,
+      (current?.readingTime ?? 0) - (synced?.readingTime ?? 0),
+      (current?.charactersRead ?? 0) - (synced?.charactersRead ?? 0),
+      Math.max(current?.lastStatisticModified ?? 0, theirs.lastStatisticModified + 1)
+    );
+    updateStatistic(
+      allTimeStatistics,
+      today.readingTime - (current?.readingTime ?? 0),
+      today.charactersRead - (current?.charactersRead ?? 0),
+      today.lastStatisticModified
+    );
+    statistics.set(key, today);
+    statisticsToStore.add(key);
+    todaysStatistics = today;
+    syncedToday = { ...theirs };
   }
 
   export function updateCompletedBook(
@@ -258,7 +334,7 @@
    */
   export async function reloadStatistics(pull: () => Promise<unknown>) {
     // A save during the pull would make this tab's older count the newest row, and win the merge.
-    holdFlush = true;
+    holdFlush += 1;
 
     try {
       await pull();
@@ -286,6 +362,7 @@
       if (stored && (!current || stored.lastStatisticModified !== saved?.lastStatisticModified)) {
         today = stored;
         savedToday = { ...stored };
+        syncedToday = { ...stored };
 
         const timeDiff = (current?.readingTime ?? 0) - (saved?.readingTime ?? 0);
         const characterDiff = (current?.charactersRead ?? 0) - (saved?.charactersRead ?? 0);
@@ -309,7 +386,7 @@
         todaysStatistics = today;
       }
     } finally {
-      holdFlush = false;
+      holdFlush -= 1;
     }
 
     return flushUpdates();
@@ -347,7 +424,10 @@
   let statisticsToStore = new Set<string>();
   /** Today's row as this tab last read or saved it: the tab's unsaved difference is measured from it. */
   let savedToday: BooksDbStatistic | undefined;
-  let holdFlush = false;
+  /** Today's row as last read from or sent to the sync target: this tab's reading is measured from it. */
+  let syncedToday: BooksDbStatistic | undefined;
+  let sentToday: BooksDbStatistic | undefined;
+  let holdFlush = 0;
   let lastTrackerTick = 0;
   let lastTrackerFlushTime = 0;
   let trackerIdleTime = 0;
@@ -646,6 +726,7 @@
         // The row itself, not a copy: it carries the book's completion, and every tick writes it back.
         todaysStatistics = today;
         savedToday = { ...today };
+        syncedToday = { ...today };
       }
 
       dispatch('trackerAvailable');

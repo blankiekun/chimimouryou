@@ -690,68 +690,71 @@ export class DatabaseService {
     let statisticsToStore: BooksDbStatistic[] = statistics;
     let newStatisticModified = currentLastModified;
 
-    if (statisticsMergeMode === MergeMode.LOCAL) {
-      // Reading on a day deleted elsewhere must beat the deletion, on a slow clock too.
-      const stored = new Map(
-        (await this.getSyncedStatisticsForBook(bookTitle)).map((row) => [row.dateKey, row])
-      );
-
-      statistics.forEach((statistic) => {
-        const row = stored.get(statistic.dateKey);
-
-        if (
-          row &&
-          (statistic.lastStatisticModified < row.lastStatisticModified ||
-            (statistic.lastStatisticModified === row.lastStatisticModified &&
-              isDeletedStatistic(row)))
-        ) {
-          statistic.lastStatisticModified = row.lastStatisticModified + 1;
-        }
-      });
-    }
-
-    if (statisticsMergeMode === MergeMode.MERGE) {
-      const existingStatistics = await this.getSyncedStatisticsForBook(bookTitle);
-
-      statisticsToStore = mergeStatistics(
-        statistics,
-        existingStatistics,
-        saveBehavior === ReplicationSaveBehavior.NewOnly
-      );
-
-      if (raiseDaysOnlyHere) {
-        const incoming = new Set(statistics.map((statistic) => statistic.dateKey));
-        const newest = Math.max(
-          currentLastModified,
-          ...statistics.map((statistic) => statistic.lastStatisticModified)
-        );
-
-        existingStatistics.forEach((statistic) => {
-          if (!incoming.has(statistic.dateKey) && statistic.lastStatisticModified <= newest) {
-            statistic.lastStatisticModified = newest + 1;
-          }
-        });
-      }
-    }
-
-    ({ newStatisticModified, statisticsToStore } = updateStatisticToStore(
-      statisticsToStore,
-      newStatisticModified
-    ));
-
-    if (statisticsMergeMode === MergeMode.LOCAL) {
-      // Reading here after pulling a future-dated row (another device's fast clock): below that
-      // time the sync file would look up to date, and this reading would never be uploaded.
-      const known = await this.getLastModifiedForType(bookTitle, StorageDataType.STATISTICS);
-
-      if (known && known >= newStatisticModified) newStatisticModified = known + 1;
-    }
-
+    // The reads belong to the write: a pull in one tab must not overwrite another tab's last save.
     const tx = db.transaction(['statistic', 'lastModified'], 'readwrite');
 
     try {
       const statisticsStore = tx.objectStore('statistic');
       const lastModifiedStore = tx.objectStore('lastModified');
+      const readStored = () =>
+        statisticsStore.getAll(IDBKeyRange.bound([bookTitle], [bookTitle, []]));
+
+      if (statisticsMergeMode === MergeMode.LOCAL) {
+        // Reading on a day deleted elsewhere must beat the deletion, on a slow clock too.
+        const stored = new Map((await readStored()).map((row) => [row.dateKey, row]));
+
+        statistics.forEach((statistic) => {
+          const row = stored.get(statistic.dateKey);
+
+          if (
+            row &&
+            (statistic.lastStatisticModified < row.lastStatisticModified ||
+              (statistic.lastStatisticModified === row.lastStatisticModified &&
+                isDeletedStatistic(row)))
+          ) {
+            statistic.lastStatisticModified = row.lastStatisticModified + 1;
+          }
+        });
+      }
+
+      if (statisticsMergeMode === MergeMode.MERGE) {
+        const existingStatistics = await readStored();
+
+        statisticsToStore = mergeStatistics(
+          statistics,
+          existingStatistics,
+          saveBehavior === ReplicationSaveBehavior.NewOnly
+        );
+
+        if (raiseDaysOnlyHere) {
+          const incoming = new Set(statistics.map((statistic) => statistic.dateKey));
+          const newest = Math.max(
+            currentLastModified,
+            ...statistics.map((statistic) => statistic.lastStatisticModified)
+          );
+
+          existingStatistics.forEach((statistic) => {
+            if (!incoming.has(statistic.dateKey) && statistic.lastStatisticModified <= newest) {
+              statistic.lastStatisticModified = newest + 1;
+            }
+          });
+        }
+      }
+
+      ({ newStatisticModified, statisticsToStore } = updateStatisticToStore(
+        statisticsToStore,
+        newStatisticModified
+      ));
+
+      if (statisticsMergeMode === MergeMode.LOCAL) {
+        // Reading here after pulling a future-dated row (another device's fast clock): below that
+        // time the sync file would look up to date, and this reading would never be uploaded.
+        const known = (await lastModifiedStore.get([bookTitle, StorageDataType.STATISTICS]))
+          ?.lastModifiedValue;
+
+        if (known && known >= newStatisticModified) newStatisticModified = known + 1;
+      }
+
       const limiter = pLimit(1);
       const tasks: Promise<void>[] = [];
 

@@ -92,6 +92,9 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
 
   protected titleToFiles = new Map<string, ExternalFile[]>();
 
+  /** Listed even with the cache on (`listFresh`). */
+  protected freshTitle = '';
+
   constructor(storageType: StorageKey, window: Window, refreshEndpoint: string) {
     super(window, storageType);
     this.authManager = new StorageOAuthManager(this.storageType, refreshEndpoint);
@@ -115,6 +118,11 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
     this.statisticsMergeMode = statisticsMergeMode;
     this.readingGoalsMergeMode = readingGoalsMergeMode;
     this.setInternalSettings(storageSourceName);
+  }
+
+  listFresh() {
+    this.titleToFiles.delete(this.currentContext.title);
+    this.freshTitle = this.currentContext.title;
   }
 
   clearData(clearAll = true) {
@@ -251,6 +259,9 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
       return false;
     }
 
+    // Asked when uploading: with a cached list, a retry of an older place replaces a newer one.
+    if (this.cacheStorageData) this.listFresh();
+
     const { file } = await this.getExternalFile('progress_');
 
     return BaseStorageHandler.checkIsPresentAndUpToDate(
@@ -378,15 +389,35 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
       : new File([new Blob([JSON.stringify(data)])], file.name, { type: 'application/json' });
   }
 
+  /** Older duplicates (two devices uploading at once) can hold days the newest lacks. */
+  private async withDuplicateStatistics(
+    files: ExternalFile[],
+    file: ExternalFile | undefined,
+    data: BooksDbStatistic[] | undefined
+  ) {
+    const others = files.filter((other) => other !== file && other.name.startsWith('statistics_'));
+
+    if (!others.length) return data;
+
+    const rows = await Promise.all(
+      others.map((other) => this.retrieve(other, 'json').catch(() => undefined))
+    );
+
+    return rows.reduce<BooksDbStatistic[] | undefined>(
+      (merged, row) => (Array.isArray(row) ? mergeStatistics(row, merged) : merged),
+      data
+    );
+  }
+
   async getStatistics() {
-    const { file, data } = await this.getExternalFile('statistics_', 'json');
+    const { file, files, data } = await this.getExternalFile('statistics_', 'json');
 
     if (!file) {
       return { statistics: undefined, lastStatisticModified: 0 };
     }
 
     return {
-      statistics: data,
+      statistics: await this.withDuplicateStatistics(files, file, data),
       lastStatisticModified: BaseStorageHandler.getStatisticsMetadata(file.name)
         .lastStatisticModified
     };
@@ -604,7 +635,7 @@ export abstract class ApiStorageHandler extends BaseStorageHandler {
     if (isMerge) {
       statisticsToStore = mergeStatistics(
         statistics,
-        existingData,
+        await this.withDuplicateStatistics(files, file, existingData),
         this.saveBehavior === ReplicationSaveBehavior.NewOnly
       );
     }

@@ -323,8 +323,31 @@ export class FilesystemStorageHandler extends BaseStorageHandler implements Sync
     return progressFile;
   }
 
+  /** Older duplicates (two devices uploading at once) can hold days the newest lacks. */
+  private static async withDuplicateStatistics(
+    files: FileSystemFileHandle[],
+    file: FileSystemFileHandle | undefined,
+    data: BooksDbStatistic[]
+  ) {
+    let merged = data;
+
+    for (const other of files) {
+      if (other.name !== file?.name && other.name.startsWith('statistics_')) {
+        const rows = await other
+          .getFile()
+          .then(FilesystemStorageHandler.readFileObject)
+          .then(JSON.parse)
+          .catch(() => undefined);
+
+        if (Array.isArray(rows)) merged = mergeStatistics(rows, merged);
+      }
+    }
+
+    return merged;
+  }
+
   async getStatistics() {
-    const { file } = await this.getExternalFile('statistics_', 0.6);
+    const { file, files } = await this.getExternalFile('statistics_', 0.6);
 
     if (!file) {
       return { statistics: undefined, lastStatisticModified: 0 };
@@ -332,7 +355,11 @@ export class FilesystemStorageHandler extends BaseStorageHandler implements Sync
 
     const statisticsFile = await file.getFile();
     const statisticsFileData = await FilesystemStorageHandler.readFileObject(statisticsFile);
-    const statistics = JSON.parse(statisticsFileData);
+    const statistics = await FilesystemStorageHandler.withDuplicateStatistics(
+      files,
+      file,
+      JSON.parse(statisticsFileData)
+    );
 
     BaseStorageHandler.reportProgress(0.4);
 
@@ -498,7 +525,7 @@ export class FilesystemStorageHandler extends BaseStorageHandler implements Sync
 
       statisticsToStore = mergeStatistics(
         statistics,
-        existingData,
+        await FilesystemStorageHandler.withDuplicateStatistics(files, file, existingData),
         this.saveBehavior === ReplicationSaveBehavior.NewOnly
       );
     }

@@ -284,7 +284,8 @@ docker compose up -d
 ```
 
 Keep `PUID` and `PGID` as they were (this restores `.env` too). A browser that synced after the backup
-was made sees that the server went back and reloads its copy from the server.
+was made sees that the database is another file and reloads its copy from the server, then sends what it
+holds that the server lost.
 
 ## Manga text (mokuro)
 

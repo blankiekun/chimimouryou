@@ -145,25 +145,19 @@ export async function writeSyncFile(
   }
 
   if (name === annotationsName) {
-    const stored = new Map(rows.map((row) => [row.hid, row]));
-    const changed = (data.highlights || []).filter(
-      (highlight: { id: string; modified: number }) =>
-        (stored.get(highlight.id)?.modified ?? -1) < highlight.modified
-    );
-    const results = await Promise.all(
-      changed.map((highlight: { id: string; modified: number }) =>
-        signedInOr401(
-          putRow(
-            `books/${book}/highlights/${encodeURIComponent(highlight.id)}`,
-            { modified: highlight.modified, data: highlight },
-            'PUT',
-            keepalive
-          )
-        )
-      )
+    const conflict = await writeRows(
+      rows,
+      (data.highlights || []).map((highlight: { id: string; modified: number }) => ({
+        key: highlight.id,
+        modified: highlight.modified,
+        data: highlight
+      })),
+      (id) => `books/${book}/highlights/${encodeURIComponent(id)}`,
+      (row) => row.hid!,
+      false
     );
 
-    if (results.some((result) => !result.ok)) throw new SyncConflictError();
+    if (conflict) throw new SyncConflictError();
     return;
   }
 
@@ -210,7 +204,10 @@ export async function holdsAccountData() {
   return !(await accountReady()) && !!(await readerDataOwner());
 }
 
-/** PUTs the entries newer than their rows; `replace` also DELETEs live rows the list lacks. */
+/**
+ * PUTs the entries newer than their rows; `replace` also DELETEs live rows the list lacks. True when
+ * the server kept a newer row.
+ */
 export async function writeRows(
   rows: SyncRow[],
   entries: { key: string; modified: number; data: unknown; deleted?: boolean }[],
@@ -222,7 +219,7 @@ export async function writeRows(
   const keys = new Set(entries.map((entry) => entry.key));
   const limiter = pLimit(6);
 
-  await Promise.all([
+  const results = await Promise.all([
     ...entries
       .filter((entry) => {
         const row = stored.get(entry.key);
@@ -258,6 +255,8 @@ export async function writeRows(
           )
       : [])
   ]);
+
+  return results.some((result) => !result.ok);
 }
 
 /** The server as a sync-file store (`syncFileStore`, `readerSyncStore`). */

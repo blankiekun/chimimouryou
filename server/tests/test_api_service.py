@@ -5,6 +5,7 @@ python3 -m unittest discover -s server/tests
 import importlib.util
 import json
 import os
+import shutil
 import sys
 import tempfile
 import threading
@@ -129,7 +130,7 @@ class ReadTest(ServiceTestCase):
         self.assertEqual(self.call('GET', '/api/v1/catalog?since=0'), (404, {'error': 'The library is being built'}))
         with open(service.CALIBRE_CATALOG, 'w') as f:
             f.write('{"books": []}')
-        self.assertEqual(self.call('GET', '/api/v1/catalog?since=0'), (200, {'rev': 0, 'books': []}))
+        self.assertEqual(self.call('GET', '/api/v1/catalog?since=0'), (200, {'rev': 0, 'db': service.db.file_id(), 'books': []}))
 
     # Bug caught: no report yet (a fresh install) would be a 500 on the admin page.
     def test_migration_report(self):
@@ -176,6 +177,16 @@ class WriteTest(ServiceTestCase):
         status, body = self.call('GET', '/api/v1/sync?since=0', account=account)
         self.assertEqual(status, 200)
         return body
+
+    # Bug caught: a database restored from a backup, later past a phone's rev: its id must differ, or the
+    # phone keeps rows the server lost and never resends them.
+    def test_restored_database_has_another_id(self):
+        path = service.db.path
+        before = self.sync()['db']
+        self.assertEqual(self.sync()['db'], before)
+        os.rename(path, path + '.old')
+        shutil.copy(path + '.old', path)
+        self.assertNotEqual(self.sync()['db'], before)
 
     # Bug caught: PUBLIC_READS lets a stranger read what readers on the trusted network highlighted.
     def test_sync_hides_shared_rows_outside_the_trusted_network(self):

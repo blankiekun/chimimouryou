@@ -90,7 +90,13 @@ function fakeDrive() {
       .map((part) => part.slice(part.indexOf('\r\n\r\n') + 4, -2));
     return { metadata: JSON.parse(parts[0]), content: parts[1] ?? '' };
   };
-  const state = { refreshError: '', failUploads: false, failAll: false };
+  const state = {
+    refreshError: '',
+    failUploads: false,
+    failAll: false,
+    failDownloads: false,
+    loseUploadAnswer: false
+  };
 
   async function handle(route) {
     const request = route.request();
@@ -117,6 +123,9 @@ function fakeDrive() {
       const file = id ? files.get(id) : add(metadata.name, metadata.parents[0], content);
       file.name = metadata.name;
       file.content = content;
+      if (state.loseUploadAnswer && metadata.name.startsWith('statistics_')) {
+        return route.fulfill({ status: 500, headers, body: '{"error":{"message":"lost"}}' });
+      }
       return json(route, { id: file.id, name: file.name, parents: file.parents });
     }
     if (method === 'DELETE') {
@@ -127,7 +136,12 @@ function fakeDrive() {
       const { name, parents } = JSON.parse(request.postData());
       return json(route, { id: add(name, parents[0], '', true).id });
     }
-    if (id) return route.fulfill({ status: 200, headers, body: files.get(id)?.content ?? '' });
+    if (id) {
+      if (state.failDownloads && files.get(id)?.name.startsWith('statistics_')) {
+        return route.fulfill({ status: 500, headers, body: '{"error":{"message":"no"}}' });
+      }
+      return route.fulfill({ status: 200, headers, body: files.get(id)?.content ?? '' });
+    }
     return json(route, { files: list(url.searchParams.get('q')) });
   }
 
@@ -154,6 +168,10 @@ function fakeDrive() {
         JSON.stringify(rows)
       );
     },
+    statisticsFiles: () =>
+      [...files.values()].filter(
+        (f) => f.parents[0] === bookFolder().id && f.name.startsWith('statistics_')
+      ).length,
     days() {
       const file = newest();
       return {
@@ -486,7 +504,333 @@ async function zeroRow() {
   await dev.context.close();
 }
 
+/*
+ * Tracker baseline: before each statistics upload the tab reads today's row and, when another device
+ * wrote it since this tab last synced, sends theirs plus what this tab read since. Ways it could fail:
+ * - double counting: the same seconds added at every upload, or after an upload reported as failed;
+ * - a failed read: the tab's reading lost, or added twice once reads work again;
+ * - midnight: yesterday's count carried into today, or today's other device dropped;
+ * - offline: reading done meanwhile lost, or the other device's count lost on the way back;
+ * - a deleted day: the deletion ignored (their old count comes back) or this tab's new reading lost;
+ * - a manual correction elsewhere: the corrected count replaced by this tab's higher one.
+ */
+const sumNear = (actual, expected, slack = 15) => actual >= expected && actual <= expected + slack;
+
+// The tab reads, with an upload every time this is called. Reader's own 60 s wait is skipped by
+// hiding the page, which saves and uploads at once; the tab that stays visible uses the same path.
+async function upload({ page }) {
+  await sleep(2500);
+  await setVisible(page, false);
+  await sleep(2500);
+  await setVisible(page, true);
+  await sleep(500);
+}
+
+async function readingTab(drive) {
+  const dev = await device(drive, { tracker: true });
+
+  await importBook(dev);
+
+  const today = await todayOf(dev.page);
+
+  await openBook(dev);
+  await upload(dev);
+
+  return { dev, today };
+}
+
+const driveRow = (drive, today) => drive.days().rows.get(today);
+
+// Failure this proves fixed: a tab that returns within 10 s replaced the other device's count.
+async function baselineOtherDevice() {
+  const drive = fakeDrive();
+  const { dev, today } = await readingTab(drive);
+
+  // Their row already holds what this tab sent (they pulled it): only the reading since is added.
+  drive.writeDays([stat(today, Date.now(), 5000, 600)]);
+  await upload(dev);
+
+  const row = driveRow(drive, today);
+
+  check(
+    'baseline: their 600 s stay on Drive, plus the reading since',
+    row.readingTime > 600 && row.readingTime <= 620,
+    `${row.readingTime}`
+  );
+  check('baseline: their characters stay', row.charactersRead >= 5000, `${row.charactersRead}`);
+
+  const here = await localRow(dev.page, today);
+
+  check('baseline: the tab has the sum too', here.readingTime >= row.readingTime);
+
+  // Double counting: more uploads with nobody else writing only add this tab's own seconds.
+  const before = row.readingTime;
+  const started = Date.now();
+
+  await upload(dev);
+  await upload(dev);
+
+  const after = driveRow(drive, today).readingTime;
+  const elapsed = (Date.now() - started) / 1000;
+
+  check(
+    'baseline: later uploads add only the time since',
+    sumNear(after, before, elapsed + 5),
+    `${before} -> ${after} in ${elapsed} s`
+  );
+  check('baseline: no second file', drive.statisticsFiles() === 1);
+  await dev.context.close();
+}
+
+// Two real tabs in two browsers, both reading: neither overwrites the other, nobody counts twice.
+async function baselineTwoDevices() {
+  const drive = fakeDrive();
+  const one = await readingTab(drive);
+  const other = await device(drive, { tracker: true });
+
+  await importBook(other);
+  await openBook(other);
+
+  const started = Date.now();
+
+  await upload(other);
+  await upload(one.dev);
+  await upload(other);
+  await upload(one.dev);
+
+  const seconds = (Date.now() - started) / 1000;
+  const row = driveRow(drive, one.today);
+
+  // Both tabs tick all the time: at most twice the elapsed time plus what the first had before.
+  check(
+    'two devices: the row holds both',
+    row.readingTime >= seconds * 1.5 && row.readingTime <= seconds * 2 + 30,
+    `${row.readingTime} s in ${seconds} s`
+  );
+  await one.dev.context.close();
+  await other.context.close();
+}
+
+// A refused upload that reached Drive anyway: the next read sees this tab's own row.
+async function baselineLostAnswer() {
+  const drive = fakeDrive();
+  const { dev, today } = await readingTab(drive);
+
+  drive.state.loseUploadAnswer = true;
+  await upload(dev);
+  drive.state.loseUploadAnswer = false;
+
+  const landed = driveRow(drive, today).readingTime;
+  const started = Date.now();
+
+  await upload(dev);
+
+  const after = driveRow(drive, today).readingTime;
+  const elapsed = (Date.now() - started) / 1000;
+
+  check(
+    'lost answer: not counted twice',
+    sumNear(after, landed, elapsed + 5),
+    `${landed} -> ${after} in ${elapsed} s`
+  );
+  await dev.context.close();
+}
+
+// Reads and uploads refused for a while (offline, Drive down), and another device writes meanwhile.
+async function baselineOffline() {
+  const drive = fakeDrive();
+  const { dev, today } = await readingTab(drive);
+
+  drive.state.failAll = true;
+  await upload(dev);
+  await upload(dev);
+
+  const waited = (await localRow(dev.page, today)).readingTime;
+
+  check('offline: reading kept here', waited > 0, `${waited}`);
+
+  const synced = driveRow(drive, today).readingTime;
+
+  drive.writeDays([stat(today, Date.now(), 5000, 600)]);
+  drive.state.failAll = false;
+  await upload(dev);
+
+  const row = driveRow(drive, today);
+
+  check(
+    'offline: theirs plus what this tab read while away',
+    row.readingTime >= 600 + waited - synced && row.readingTime <= 600 + waited + 30,
+    `${row.readingTime}, waited ${waited}, synced ${synced}`
+  );
+  await dev.context.close();
+}
+
+// Only the read fails, once: nothing lost and nothing added twice.
+async function baselineFailedRead() {
+  const drive = fakeDrive();
+  const { dev, today } = await readingTab(drive);
+
+  drive.state.failDownloads = true;
+  await upload(dev);
+  drive.state.failDownloads = false;
+
+  const here = (await localRow(dev.page, today)).readingTime;
+
+  await upload(dev);
+
+  const row = driveRow(drive, today);
+
+  check(
+    'failed read: the reading gets there once',
+    row.readingTime >= here && row.readingTime <= here + 20,
+    `${row.readingTime}, here ${here}`
+  );
+  await dev.context.close();
+}
+
+// Another device deleted today: this tab's reading since stays, the old count doesn't come back.
+async function baselineDeleted() {
+  const drive = fakeDrive();
+  const { dev, today } = await readingTab(drive);
+  const old = driveRow(drive, today).readingTime;
+
+  drive.writeDays([
+    {
+      ...stat(today, Date.now(), 0, 0),
+      minReadingSpeed: 0,
+      altMinReadingSpeed: 0,
+      lastReadingSpeed: 0,
+      maxReadingSpeed: 0,
+      deleted: true
+    }
+  ]);
+
+  const started = Date.now();
+
+  await upload(dev);
+
+  const row = driveRow(drive, today);
+  const elapsed = (Date.now() - started) / 1000;
+
+  check(
+    'deleted day: only the reading since',
+    row.readingTime > 0 && row.readingTime <= elapsed + 5,
+    `${row.readingTime} (was ${old}) in ${elapsed} s`
+  );
+  check('deleted day: no longer marked deleted', !row.deleted);
+  await dev.context.close();
+}
+
+// A correction on another device (down from what this tab holds) stands.
+async function baselineCorrection() {
+  const drive = fakeDrive();
+  const { dev, today } = await readingTab(drive);
+
+  await upload(dev);
+
+  drive.writeDays([stat(today, Date.now(), 7, 2)]);
+
+  const started = Date.now();
+
+  await upload(dev);
+
+  const row = driveRow(drive, today);
+  const elapsed = (Date.now() - started) / 1000;
+
+  check(
+    'correction: their 2 s plus the reading since',
+    row.readingTime >= 2 && row.readingTime <= 2 + elapsed + 5,
+    `${row.readingTime} in ${elapsed} s`
+  );
+  await dev.context.close();
+}
+
+// The day changes under an open tab: today starts from the other device's today, not from yesterday.
+async function baselineMidnight() {
+  const drive = fakeDrive();
+  const dev = await device(drive, { tracker: true });
+  const { context, page } = dev;
+
+  await importBook(dev);
+
+  const now = new Date();
+  const lateEvening = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 40);
+
+  await context.clock.install({ time: lateEvening });
+  await openBook(dev);
+
+  const yesterday = await todayOf(page);
+
+  await upload(dev);
+
+  const before = driveRow(drive, yesterday).readingTime;
+  const nextDay = new Date(lateEvening.getTime() + 60_000);
+
+  await context.clock.setSystemTime(nextDay);
+  await sleep(1500);
+
+  const today = await todayOf(page);
+
+  check('midnight: the day did change', today !== yesterday, `${yesterday} -> ${today}`);
+  drive.writeDays([
+    { ...driveRow(drive, yesterday) },
+    stat(today, nextDay.getTime() + 500, 5000, 600)
+  ]);
+  await upload(dev);
+
+  const row = driveRow(drive, today);
+
+  check(
+    "midnight: today is theirs plus this tab's since",
+    // The clock's jump counts as reading: the 40 s after midnight of the 60 s jumped, then real time.
+    row.readingTime >= 640 && row.readingTime <= 640 + 20,
+    `${row.readingTime}`
+  );
+  check(
+    'midnight: yesterday stays',
+    driveRow(drive, yesterday).readingTime >= before,
+    `${before} -> ${driveRow(drive, yesterday).readingTime}`
+  );
+  await dev.context.close();
+}
+
+// Failures only: a settings write refused (on page load, this browser's settings are new to Drive)
+// shows in the header, with its reason on tap. Highlights and words go through the same call.
+async function failuresOnly() {
+  const drive = fakeDrive();
+
+  drive.state.failUploads = true;
+
+  const dev = await device(drive, {
+    ls: { lastStorageSource: 'gdrive', syncLastSync: String(Date.now()), theme: 'dark-theme' }
+  });
+  const { page } = dev;
+  const button = page.getByRole('button', { name: 'Sync failed' });
+
+  await button.waitFor({ timeout: 20000 });
+  await button.click();
+
+  const reason = await page
+    .locator('p', { hasText: /403|refused/ })
+    .first()
+    .textContent({ timeout: 5000 })
+    .catch(() => '');
+
+  check('failures only: the reason shows', !!reason, reason);
+  await page.screenshot({ path: join(shots, 'failures-only.png') });
+  await dev.context.close();
+}
+
 const scenarios = {
+  baselineOtherDevice,
+  baselineTwoDevices,
+  baselineLostAnswer,
+  baselineOffline,
+  baselineFailedRead,
+  baselineDeleted,
+  baselineCorrection,
+  baselineMidnight,
+  failuresOnly,
   deadToken,
   failedReason,
   dockerDrive,

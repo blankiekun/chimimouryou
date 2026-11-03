@@ -180,7 +180,7 @@ class Handler(BaseHTTPRequestHandler):
                 rows = connection.execute('SELECT * FROM books WHERE deleted = 0 ORDER BY added DESC, id DESC')
             else:
                 rows = connection.execute('SELECT * FROM books WHERE rev > ? ORDER BY rev, id', (since,))
-            return {'rev': apidb.current_rev(connection), 'books': [book_json(row) for row in rows]}
+            return {'rev': apidb.current_rev(connection), 'db': db.file_id(), 'books': [book_json(row) for row in rows]}
         return 200, db.transaction(read)
 
     def get_books(self, match):
@@ -217,7 +217,7 @@ class Handler(BaseHTTPRequestHandler):
         def read(connection):
             rev = apidb.current_rev(connection)
             # Not past the rows left out: back on the trusted network this browser still needs them.
-            result = {'rev': min(since, rev) if hide_shared else rev}
+            result = {'rev': min(since, rev) if hide_shared else rev, 'db': db.file_id()}
             for name, table in SYNC_TABLES.items():
                 if hide_shared and 'account' in apidb.TABLE_KEYS[table]:
                     rows = []
