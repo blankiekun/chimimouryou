@@ -30,8 +30,11 @@
 // the prefix's Documents still leads into the home folder; a newer save in vnsaves.json (as VNBox
 // writes it) isn't where the game reads it at the next start, or its time isn't kept; a synced
 // Startup .bat or game/*.dll is written; saves over the 20 MB cap are pushed or the page doesn't
-// say so; a game closed after leaving /hook pushes nothing, or with no /hook open (entering /v loads a
-// new page) nothing at its next start. Anki (a fake AnkiConnect): a note mined from a line after the game closed gets no picture,
+// say so; a game closed after leaving /hook pushes nothing. Closed with no /hook open (the root
+// layout's watcher, which knows no /hook session after a full page load): on /v nothing is pushed
+// without a next start; with no page loaded, nothing at the next page load (Back, reload); a later
+// page load or a /hook that heard the exit too writes vnsaves.json again; a failed push isn't logged,
+// or isn't retried at the next start. Anki (a fake AnkiConnect): a note mined from a line after the game closed gets no picture,
 // or one of another line (each step has its own background colour), or no sound, or another line's
 // (each step's speech carries its own pilot tone), or other programs' sound (a tone playing on the
 // speakers throughout).
@@ -254,6 +257,53 @@ const vnsaves = (page, text) =>
     [title, text]
   );
 
+/** When vnsaves.json was last written. */
+const vnsavesWritten = (page) =>
+  page.evaluate(async (wanted) => {
+    const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(wanted);
+    return (await (await folder.getFileHandle('vnsaves.json')).getFile()).lastModified;
+  }, title);
+
+/** A record /v keeps open in the app (an ONScripter one; its files don't matter here): its id. */
+const addOtherVn = (page) =>
+  page.evaluate(async (wanted) => {
+    const db = await new Promise((resolve, reject) => {
+      const open = indexedDB.open('books');
+      open.onsuccess = () => resolve(open.result);
+      open.onerror = () => reject(open.error);
+    });
+    return new Promise((resolve, reject) => {
+      const store = db.transaction('data', 'readwrite').objectStore('data');
+      const all = store.getAll();
+      all.onsuccess = () => {
+        const game = { ...all.result.find((book) => book.title === wanted) };
+        delete game.id;
+        const added = store.add({
+          ...game,
+          title: `${wanted} on /v`,
+          elementHtml: `<!--ttu-vn-->${JSON.stringify({ encoding: 'sjis', files: [] })}`,
+          storageSource: undefined
+        });
+        added.onsuccess = () => resolve(added.result);
+        added.onerror = () => reject(added.error);
+      };
+    });
+  }, title);
+
+const removeBook = (page, id) =>
+  page.evaluate(async (wanted) => {
+    const db = await new Promise((resolve, reject) => {
+      const open = indexedDB.open('books');
+      open.onsuccess = () => resolve(open.result);
+      open.onerror = () => reject(open.error);
+    });
+    return new Promise((resolve, reject) => {
+      const removed = db.transaction('data', 'readwrite').objectStore('data').delete(wanted);
+      removed.onsuccess = () => resolve();
+      removed.onerror = () => reject(removed.error);
+    });
+  }, id);
+
 /** vnsaves.json once it has `name` with a time after `after`. */
 async function syncedSave(page, name, after = 0) {
   for (let tries = 0; tries < 60; tries += 1) {
@@ -441,18 +491,79 @@ try {
   await page.locator('.nt-row').first().waitFor();
   await page.getByText('The game has closed.').waitFor();
 
-  step('Closed with no /hook open: its saves go at the next start');
+  step('Closed on /v, after a full page load: its saves go up with no next start');
   const hookUrl = page.url();
+  const otherVn = await addOtherVn(page);
   await page.goto(hookUrl);
   await page.getByText('Playing.').waitFor();
-  const leftAt = Date.now();
-  await page.goto(new URL('/statistics', hookUrl).href);
+  const onV = Date.now();
+  await page.goto(new URL(`/v?id=${otherVn}`, hookUrl).href);
+  await page.locator('.vn-page').waitFor();
   await waitForNoGame();
-  if (JSON.parse(await vnsaves(page))[appData].modified > leftAt)
-    fail('pushed with no page listening: this step no longer tests anything');
+  if (new URL(page.url()).pathname !== '/v') fail(`not on /v: ${page.url()}`);
+  await syncedSave(page, appData, onV);
+
+  step('A page load after that writes nothing again');
+  const written = await vnsavesWritten(page);
+  await page.reload();
+  await page.locator('.vn-page').waitFor();
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+  if ((await vnsavesWritten(page)) !== written) fail('pushed again on a page load');
+
+  step('Closed with no page loaded: its saves go up at the next page load');
   await page.goto(hookUrl);
-  await syncedSave(page, appData, leftAt);
+  await page.getByText('Playing.').waitFor();
+  const noPage = Date.now();
+  await page.goto('about:blank');
+  await waitForNoGame();
+  await page.goto(new URL('/statistics', hookUrl).href);
+  await syncedSave(page, appData, noPage);
+
+  step('/hook open hears the exit too: one write');
+  await page.goto(hookUrl);
   await page.getByText('The game has closed.').waitFor();
+  await page.evaluate(() => {
+    const proto = globalThis.FileSystemFileHandle.prototype;
+    const real = proto.createWritable;
+    globalThis.vnsavesWrites = 0;
+    proto.createWritable = function (...args) {
+      if (this.name === 'vnsaves.json') globalThis.vnsavesWrites += 1;
+      return real.apply(this, args);
+    };
+  });
+  await page.getByRole('button', { name: 'Start the game' }).click();
+  await page.getByText('Playing.').waitFor();
+  await page.getByText('The game has closed.').waitFor();
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+  const writes = await page.evaluate(() => globalThis.vnsavesWrites);
+  if (writes !== 1) fail(`/hook and the watcher wrote vnsaves.json ${writes} times`);
+
+  step('A failed push is logged and goes at the next start');
+  const warnings = [];
+  const onConsole = (message) => warnings.push(message.text());
+  page.on('console', onConsole);
+  const failedAt = Date.now();
+  await page.evaluate(() => {
+    const proto = globalThis.FileSystemFileHandle.prototype;
+    const real = proto.createWritable;
+    proto.createWritable = () => Promise.reject(new Error('E2E: no writing'));
+    globalThis.restoreWrites = () => (proto.createWritable = real);
+  });
+  await page.getByRole('button', { name: 'Start the game' }).click();
+  await page.getByText('Playing.').waitFor();
+  await page.getByText('The game has closed.').waitFor();
+  for (let tries = 0; !warnings.some((text) => text.includes('save sync failed')); tries += 1) {
+    if (tries > 40) fail('the failed push wasn’t logged');
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  page.off('console', onConsole);
+  if (JSON.parse(await vnsaves(page))[appData].modified > failedAt)
+    fail('the push that should fail went through: this step tests nothing');
+  await page.evaluate(() => globalThis.restoreWrites());
+  await page.getByRole('button', { name: 'Start the game' }).click();
+  await syncedSave(page, appData, failedAt);
+  await page.getByText('The game has closed.').waitFor();
+  await removeBook(page, otherVn);
 
   step('Saves over the 20 MB cap: nothing pushed, the page says so');
   writeFileSync(join(user, 'AppData/Roaming/TestVN/big.dat'), Buffer.alloc(21 * 1024 * 1024));
