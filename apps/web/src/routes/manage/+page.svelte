@@ -130,6 +130,7 @@
   import pLimit from 'p-limit';
   import { combineLatest, map, Observable, share, Subject, switchMap, takeUntil } from 'rxjs';
   import { onDestroy, onMount, tick } from 'svelte';
+  import { watchReturn } from '$lib/data/sync/media-sync';
   import Fa from 'svelte-fa';
 
   const booksAreLoading$ = database.listLoading$.pipe(map((isLoading) => isLoading));
@@ -214,7 +215,7 @@
   // Large libraries (Calibre) are rendered in steps to keep the DOM small.
   $: (activeFilter, searchTerm, $storageSource$, (renderLimit = renderStep));
   $: renderedBookCards = visibleBookCards.slice(0, renderLimit);
-  $: isLoading = !$bookCards$ || $booksAreLoading$;
+  $: isLoading = !$bookCards$ || ($booksAreLoading$ && !listingOnReturn);
   $: activeSeries = activeFilter.startsWith('series:') ? activeFilter.slice('series:'.length) : '';
   $: hasActiveFilter = activeFilter !== allBooksFilter.key || !!searchTerm.trim();
   $: isHome = $libraryTab$ !== 'store';
@@ -318,6 +319,61 @@
       5000
     );
   }
+
+  let listingOnReturn = false;
+  let listedAt = Date.now();
+
+  /**
+   * Back after a minute or more: lists a synced library again, behind the books on screen. The
+   * server answers with a delta; Drive and OneDrive list every folder, so at most every 5 minutes.
+   * A failure keeps what is shown (the usual listing path would switch to the browser's library).
+   */
+  async function listOnReturn(away: number) {
+    const source = $storageSource$;
+    const cloud = source === StorageKey.GDRIVE || source === StorageKey.ONEDRIVE;
+
+    // Card ids change with a new list, so not under an open book page or a selection.
+    if (
+      away < 60_000 ||
+      (!cloud && source !== StorageKey.CALIBRE) ||
+      (cloud && (!$isOnline$ || Date.now() - listedAt < 300_000)) ||
+      isLoading ||
+      selectMode ||
+      replicationToProgress ||
+      $page.state.bookDetails
+    ) {
+      return;
+    }
+
+    listedAt = Date.now();
+    listingOnReturn = true;
+
+    // No unlock dialog for a refresh nobody asked for.
+    const handler = getStorageHandler(
+      window,
+      source,
+      '',
+      false,
+      $cacheStorageData$,
+      $replicationSaveBehavior$,
+      $statisticsMergeMode$,
+      $readingGoalsMergeMode$,
+      false
+    );
+
+    try {
+      handler.clearData();
+      await handler.getBookList();
+      database.dataListChanged$.next(handler);
+    } catch (error: any) {
+      logger.warn(`Could not refresh the library: ${error.message}`);
+    } finally {
+      database.listLoading$.next(false);
+      listingOnReturn = false;
+    }
+  }
+
+  onMount(() => watchReturn(listOnReturn));
 
   function retryLibrary() {
     if ($libraryOffline$) {

@@ -221,6 +221,7 @@
   import { isIgnoredReaderKey, isSearchShortcut, onKeydownReader } from './on-keydown-reader';
   import { shouldBookmarkOnLeave } from '$lib/functions/bookmark-on-leave';
   import { onDestroy, onMount, tick, untrack } from 'svelte';
+  import { watchReturn } from '$lib/data/sync/media-sync';
   import { isManga } from '$lib/data/manga/manga';
   import { isVn } from '$lib/data/vn/vn';
   import { bookRoute, readerPath, replacePage } from '$lib/data/reader/reader-route';
@@ -1435,44 +1436,50 @@
     bookmarkManager.scrollToBookmark(data, readingOffset);
   }
 
-  let hiddenAt = 0;
-
   /**
    * Leaving the page (app switch, closing the tab, a phone killing the app) sends the place now
-   * instead of after the 60 s batch; coming back after a minute or more pulls what other devices
-   * read meanwhile and goes there (Jump back returns).
+   * instead of after the 60 s batch.
    */
   async function onVisibilityChange() {
     const book = $rawBookData$;
-    if (blockDataUpdates || showSpinner || !book) return;
+    if (blockDataUpdates || showSpinner || !book || document.visibilityState !== 'hidden') return;
 
-    if (document.visibilityState === 'hidden') {
-      hiddenAt = Date.now();
-      const saving =
-        $autoBookmark$ && storedExploredCharacter !== exploredCharCount
-          ? bookmarkPage()
-          : undefined;
-      if (
-        upSyncEnabled &&
-        (saving ||
-          dataToReplicate.includes(StorageDataType.PROGRESS) ||
-          dataToReplicateQueue.includes(StorageDataType.PROGRESS))
-      ) {
-        const place = await bookmarkData;
-        if (place) await externalStorageHandler?.sendProgressNow(book.title, place);
-      }
-      await saving;
-      if (upSyncEnabled) await executeReplication();
-      return;
+    const saving =
+      $autoBookmark$ && storedExploredCharacter !== exploredCharCount ? bookmarkPage() : undefined;
+    if (
+      upSyncEnabled &&
+      (saving ||
+        dataToReplicate.includes(StorageDataType.PROGRESS) ||
+        dataToReplicateQueue.includes(StorageDataType.PROGRESS))
+    ) {
+      const place = await bookmarkData;
+      if (place) await externalStorageHandler?.sendProgressNow(book.title, place);
     }
+    await saving;
+    if (upSyncEnabled) await executeReplication();
+  }
+
+  /**
+   * Back after a minute or more: pulls what other devices read and highlighted meanwhile and goes
+   * to the pulled place (Jump back returns).
+   */
+  async function onReturn(away: number) {
+    const book = $rawBookData$;
+    if (blockDataUpdates || showSpinner || !book) return;
 
     // What couldn't be sent when the page was hidden goes now, not at the next page turn.
     if (upSyncEnabled) await executeReplication();
 
-    if (!externalStorageHandler || isReplicating || Date.now() - hiddenAt < 60_000) return;
+    if (away < 60_000) return;
+    annotations?.sync();
+
+    if (!externalStorageHandler || isReplicating) return;
     const before = await bookmarkData;
+    const here = exploredCharCount;
     // Only the place: the running tracker holds today's statistics and writes them itself.
     try {
+      // The handler's cache would answer with the place it saw when the book opened.
+      externalStorageHandler.clearData(false);
       await syncDownData(
         localStorageHandler,
         externalStorageHandler,
@@ -1490,9 +1497,12 @@
     const after = await database.getBookmark(book.id);
     if (after && after.exploredCharCount !== before?.exploredCharCount) {
       bookmarkData = Promise.resolve(after);
-      await scrollToBookmark();
+      // Turned a page during the pull: they're reading, the place above stays for the bookmark.
+      if (exploredCharCount === here) await scrollToBookmark();
     }
   }
+
+  onMount(() => watchReturn(onReturn, () => exploredCharCount));
 
   function onFullscreenClick() {
     showHeader = false;
