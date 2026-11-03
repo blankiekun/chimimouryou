@@ -15,6 +15,7 @@
     socialSession$
   } from '$lib/data/social/social-account';
   import {
+    deleteAccount,
     deleteUserRow,
     dismissReports,
     loadReports,
@@ -42,6 +43,7 @@
   let username = '';
   let found: LookedUp | undefined;
   let lookupError = '';
+  let deleted = '';
 
   $: dev = $socialSession$?.me.role === 'dev';
   $: if (dev && !reports) reload();
@@ -95,8 +97,17 @@
     }
   }
 
+  function removeAccount(user: LookedUp['user']) {
+    act($t$('moderation.deleteAccountConfirm', { username: user.username }), async () => {
+      await deleteAccount(user.id);
+      found = undefined;
+      deleted = user.username;
+    });
+  }
+
   async function lookUp() {
     lookupError = '';
+    deleted = '';
     found = undefined;
     if (!/^[A-Za-z0-9_]{3,20}$/.test(username.trim())) {
       lookupError = $t$('social.error.username');
@@ -280,6 +291,11 @@
           </button>
         </form>
         {#if lookupError}<p class="moderation-error" role="alert">{lookupError}</p>{/if}
+        {#if deleted}
+          <p class="moderation-note" role="status">
+            {$t$('moderation.accountDeleted', { username: deleted })}
+          </p>
+        {/if}
 
         {#if found}
           {@const user = found.user}
@@ -317,6 +333,14 @@
                     act($t$('moderation.removePictureConfirm', { username: user.username }), () =>
                       removeUserPicture(user.id)
                     )}>{$t$('social.removePicture')}</button
+                >
+              {/if}
+              {#if user.role !== 'dev'}
+                <button
+                  type="button"
+                  class="app-button app-button-danger"
+                  disabled={busy}
+                  on:click={() => removeAccount(user)}>{$t$('moderation.deleteAccount')}</button
                 >
               {/if}
             </span>

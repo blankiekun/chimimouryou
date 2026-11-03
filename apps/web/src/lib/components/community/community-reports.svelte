@@ -85,6 +85,7 @@
               <small lang="ja"
                 >「{post.quote}」 · @{post.author?.username ?? '–'} · {when(post.last)}</small
               >
+              {#if post.context}<small class="reports-context" lang="ja">{post.context}</small>{/if}
             </td>
             <td class="reports-number">{post.count}</td>
             <td>
@@ -207,6 +208,12 @@
     margin: 0.25rem 0;
     overflow-wrap: anywhere;
     white-space: pre-wrap;
+  }
+
+  .reports-context {
+    display: block;
+    margin-top: 0.25rem;
+    overflow-wrap: anywhere;
   }
 
   .reports-number {

@@ -11,6 +11,7 @@
  */
 
 import {
+  clearLinesOfUser,
   communityAdmin,
   communityRead,
   communityRoute,
@@ -1935,7 +1936,7 @@ const ROWS: Record<string, [string, string]> = {
 
 /**
  * /v1/admin/*: moderation, for role 'dev' only (403 for everyone else). Reports, reset name,
- * remove picture or cover, dismiss, and one reader's rows.
+ * remove picture or cover, dismiss, one reader's rows, and deleting an account (never a dev's).
  */
 async function admin(request: Request, env: Env, viewer: UserRow, path: string) {
   if (viewer.role !== 'dev') throw new HttpError(403, 'role');
@@ -1979,6 +1980,22 @@ async function admin(request: Request, env: Env, viewer: UserRow, path: string) 
   const lookup = /^user\/([A-Za-z0-9_]{3,20})$/.exec(path);
 
   if (request.method === 'GET' && lookup) return json(await lookUp(env, lookup[1]));
+
+  const account = /^user\/([0-9a-f]{16})$/.exec(path);
+
+  if (request.method === 'DELETE' && account) {
+    const user = await userById(env, account[1]);
+
+    if (!user) throw new HttpError(404, 'user');
+    // Roles are granted by hand: one moderator can't remove another, or themselves by mistake.
+    if (user.role === 'dev') throw new HttpError(403, 'role');
+    await clearLinesOfUser(env, user.id);
+    await deleteUsers(env, 'id = ?1', user.id);
+    await closeStreams(env, user.id);
+    await purgeProfile(request, user.username);
+    if (user.picture) await purgeImage(request, `avatar/${user.id}/${user.picture}`);
+    return json({ ok: true });
+  }
 
   const action = /^user\/([0-9a-f]{16})\/(name|picture|status|finished|events)(?:\/([^/]+))?$/.exec(
     path
@@ -2056,6 +2073,9 @@ there. Paired computers are kept as a name you choose, when they were added and 
 keys and pairing codes only as hashes. Signing out everywhere, changing your password or deleting
 your account removes them.</p>
 <p>No email, IP address log or book files. Rate limits keep hashed addresses for two days.</p>
+<p>A moderator can remove a post, which also clears the line and page kept for it, or delete an
+account that breaks the rules, with the same result as deleting it yourself; a line that account's
+posts kept is cleared too.</p>
 <p>Deleting your account (Settings, Social) removes your rows, picture and covers at once, apart from
 the Community text above. Sessions unused for 90 days
 and accounts unused for 12 months are deleted automatically.</p>`;

@@ -70,6 +70,11 @@ export async function removeUserPicture(userId: string) {
   await hubFetch(`/v1/admin/user/${userId}/picture`, 'DELETE');
 }
 
+/** The account and everything of it; never a dev's. It can't be undone. */
+export async function deleteAccount(userId: string) {
+  await hubFetch(`/v1/admin/user/${userId}`, 'DELETE');
+}
+
 /** One row: a current book (by slot), a finished book (by key) or an event (by id) */
 export async function deleteUserRow(userId: string, rows: UserRows, id: string | number) {
   await hubFetch(`/v1/admin/user/${userId}/${rows}/${encodeURIComponent(String(id))}`, 'DELETE');
@@ -86,6 +91,8 @@ export interface CommunityReports {
     body: string;
     spoiler: boolean;
     quote: string;
+    /** The page around the line, where the hub kept one */
+    context: string;
     at: number;
     author: Person | null;
   }[];

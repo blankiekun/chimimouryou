@@ -1963,6 +1963,10 @@ export const en = {
     'Remove the picture of @{username}? They go back to their preset avatar.',
   'moderation.removeCoverConfirm':
     'Remove this cover? Friends see the title card instead, and the book takes no new cover.',
+  'moderation.deleteAccount': 'Delete account',
+  'moderation.deleteAccountConfirm':
+    'Delete the account @{username} for good? Their profile, friends, posts and pictures go, and this can’t be undone. The username becomes free to sign up with again.',
+  'moderation.accountDeleted': 'Deleted the account @{username}.',
   'moderation.lookUp': 'Look up a reader',
   'moderation.lookUpButton': 'Look up',
   'moderation.noUser': 'No one has that username.',
@@ -2220,7 +2224,8 @@ export const en = {
   'moderation.what.work': 'Book match',
   'moderation.what.workinfo': 'Title and cover',
   'moderation.deletePost': 'Delete post',
-  'moderation.deletePostConfirm': 'Delete this post? Its replies stay.',
+  'moderation.deletePostConfirm':
+    'Delete this post? Its replies stay, but the line and page shown for everyone’s posts on this line go too.',
   'moderation.clearMatch': 'Clear match',
   'moderation.clearMatchConfirm':
     'Clear this match? The confirmations go and readers are asked again.',
@@ -2230,7 +2235,8 @@ export const en = {
     'Reset this work’s title and cover? The next post names it again; the uploader can’t give another cover.',
   'community.remove': 'Remove',
   'community.removeAll': 'Remove all posts by {name}',
-  'community.removeConfirm': 'Remove this post? It goes for everyone; replies stay.',
+  'community.removeConfirm':
+    'Remove this post? It goes for everyone; replies stay, but the line and page shown for everyone’s posts on this line go too.',
   'community.removeAllConfirm':
     'Remove every post by {name}? Posts with replies stay as “This post was deleted.”',
   'dict.installJmdict': 'Install dictionary ({size} MB)',

@@ -169,7 +169,9 @@ Moderation, role `dev` only (403 for everyone else): `GET admin/reports` (open r
 by kind and target, with the name, picture or cover reported); `DELETE admin/reports?what=&target=`
 (dismiss); `DELETE admin/cover?target=<uploader id>:<key>` (that upload only: `removed = 1`, the R2
 object goes unless another upload uses the same image); `GET admin/user/:username`
-(account, current and finished books, events); `POST admin/user/:id/name` (name back to the
+(account, current and finished books, events); `DELETE admin/user/:id` (the account and everything of it, as `DELETE me`, plus
+the text of lines its posts kept; 403 for a `dev`, irreversible, the username is free again);
+`POST admin/user/:id/name` (name back to the
 username); `DELETE admin/user/:id/picture`; `DELETE admin/user/:id/status/:slot`,
 `…/finished/:key`, `…/events/:id` (one row). Resolving a report deletes its reports.
 Library covers, role `dev` only, for the Discord status of anyone reading a book: `PUT
@@ -217,7 +219,8 @@ stacked combining characters, capped in characters and bytes. Under `/v1/communi
   ceilings. Blocks hide posts both ways (threads, listings, feed, notes, replies, helpful).
 - Reports: `POST report` with `{what: post, id}`, `{what: work, book, vol}` (a wrong mapping) or
   `{what: workinfo, work}` (title or cover). Moderators: `GET admin/community/reports`,
-  `DELETE admin/community/post/:id`, `DELETE admin/community/user/:id/posts`,
+  `DELETE admin/community/post/:id` (also clears its line's quote and context, for every post on the
+  line), `DELETE admin/community/user/:id/posts` (also clears the lines their posts kept),
   `DELETE admin/community/work?book=&vol=&work=` (drops those confirmations),
   `DELETE admin/community/workinfo?work=` (title and cover reset; the next post names the work
   again, and the removed cover's uploader can't give another). `GET admin/user/:username`
