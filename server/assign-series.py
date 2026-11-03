@@ -224,10 +224,11 @@ def merge_plan(books):
 def plan(books):
     """books: dicts with id, title, series, authors. Returns ({id: (series, index)}, warnings)."""
     existing = {merge_key(b['series']): b['series'] for b in books if b['series']}
-    existing_authors = defaultdict(list)
+    existing_authors, existing_titles = defaultdict(list), defaultdict(list)
     for b in books:
         if b['series']:
             existing_authors[merge_key(b['series'])].append(b.get('authors', []))
+            existing_titles[merge_key(b['series'])].append(b['title'])
     groups = defaultdict(list)
     for book in books:
         if book['series']:
@@ -256,9 +257,9 @@ def plan(books):
         if not series:
             series = Counter(written_name(b['title'], base) for b, base, _ in members).most_common(1)[0][0]
         # 上/下 without a 中: 下 is the second volume, not the third.
-        two_parts = not any(catalog.PART_MIDDLE.search(b['title']) for b, _, _ in members)
+        two_parts = catalog.has_no_middle_part([b['title'] for b, _, _ in members] + existing_titles.get(group_key, []))
         for book, _, number in members:
-            if two_parts and number == 3 and catalog.PART_LAST.search(book['title']):
+            if two_parts and number == 3 and catalog.is_last_part(book['title']):
                 number = 2.0
             changes[book['id']] = (series, number)
 

@@ -256,6 +256,32 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(result[2], ('銃口', 2.0))
         self.assertEqual(result[5], ('終物語', 3))
 
+    def test_lower_volume_with_an_edition_label(self):
+        # Catches: the label hiding 下 or 中 from the two-part rule (index 3 with a gap; a 中 not counted, so a
+        # labelled 下 taken for second and colliding with it).
+        result = self.build([
+            (1, '銃口 上 (GA文庫)', None),
+            (2, '銃口 下 (GA文庫)', None),
+            (3, '終物語 上', None),
+            (4, '終物語 中 【電子特別版】', None),
+            (5, '終物語 下', None),
+        ])
+        self.assertEqual(result[2], ('銃口', 2.0))
+        self.assertEqual(result[5], ('終物語', 3))
+
+    def test_lone_lower_volume_joining_a_calibre_series(self):
+        # Catches: a lone 下 taking index 2 from the 中 already in the Calibre series, or being pushed to 3 when
+        # the series has no 中. The series' own books must not move.
+        result = self.build([
+            (1, '終物語 中', '終物語'),
+            (2, '終物語 下', None),
+            (3, '銃口 上', '銃口'),
+            (4, '銃口 下', None),
+        ])
+        self.assertEqual(result[2], ('終物語', 3))
+        self.assertEqual(result[4], ('銃口', 2.0))
+        self.assertEqual(result[1][0], '終物語')
+
 class CatalogDbTest(unittest.TestCase):
     """Builds with API_DB set: books are kept in library.db and their unique titles are sticky."""
 

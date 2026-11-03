@@ -18,11 +18,11 @@ RUN apt-get -qq update && apt-get -qq install -y --no-install-recommends curl ca
   && rm -rf /var/lib/apt/lists/*
 COPY scripts/vnbox/ scripts/vnbox/
 RUN VNBOX_OUT=/vnbox scripts/vnbox/build.sh \
-  || { echo 'VNBox was not downloaded: no Windows game player' >&2; [ -z "$REQUIRE_ASSETS" ]; }
+  || { rm -rf /vnbox; echo 'VNBox was not downloaded: no Windows game player' >&2; [ -z "$REQUIRE_ASSETS" ]; }
 # vita-vn-ocr's models (screen text for Windows games, scripts/vn-ocr/fetch.sh); optional the same way.
 COPY scripts/vn-ocr/ scripts/vn-ocr/
 RUN VN_OCR_OUT=/vnocr scripts/vn-ocr/fetch.sh \
-  || { echo 'The VN OCR models were not downloaded: hooked lines keep the fixed layout' >&2; [ -z "$REQUIRE_ASSETS" ]; }
+  || { rm -rf /vnocr; echo 'The VN OCR models were not downloaded: hooked lines keep the fixed layout' >&2; [ -z "$REQUIRE_ASSETS" ]; }
 COPY . .
 # The HTTPS address the plain-HTTP page links to for signing in (optional).
 ARG VITE_HTTPS_URL=

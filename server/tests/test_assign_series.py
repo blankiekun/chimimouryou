@@ -82,6 +82,16 @@ class PlanTest(unittest.TestCase):
         changes, _ = assign.plan([book(1, '終物語 上'), book(2, '終物語 中'), book(3, '終物語 下')])
         self.assertEqual(changes[3], ('終物語', 3))
 
+    def test_lower_volume_with_a_label_or_a_middle_in_the_series(self):
+        # Catches: the tool drifting from the catalog on these: a labelled 下 kept at 3, a lone 下 given 2 while
+        # the existing series holds a 中.
+        changes, _ = assign.plan([book(1, '銃口 上 (GA文庫)'), book(2, '銃口 下 (GA文庫)')])
+        self.assertEqual(changes[2][1], 2)
+        changes, _ = assign.plan([book(1, '終物語 中', '終物語'), book(2, '終物語 下')])
+        self.assertEqual(changes, {2: ('終物語', 3)})
+        changes, _ = assign.plan([book(1, '銃口 上', '銃口'), book(2, '銃口 下')])
+        self.assertEqual(changes, {2: ('銃口', 2)})
+
     def test_written_name_keeps_full_width_characters(self):
         self.assertEqual(assign.written_name('［作者］ 魔法 ～副題～ ３', '魔法 ~副題~'), '魔法 ～副題～')
 

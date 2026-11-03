@@ -103,6 +103,18 @@ def split_volume(title: str) -> tuple[str, float | None]:
     return text, None
 
 
+def without_label(title: str) -> str:
+    return EDITION_LABEL.sub('', unicodedata.normalize('NFKC', title).strip())
+
+
+def has_no_middle_part(titles) -> bool:
+    return not any(PART_MIDDLE.search(without_label(title)) for title in titles)
+
+
+def is_last_part(title: str) -> bool:
+    return bool(PART_LAST.search(without_label(title)))
+
+
 def is_series_name(base: str) -> bool:
     """Skip product codes like 'b522apdm' and very short leftovers."""
     return len(base) >= 2 and not re.fullmatch(r'[0-9a-z_\-]+', base, re.I)
@@ -590,15 +602,19 @@ def build(library: str, output: str, vn_dir: str | None = None, force: bool = Fa
                 groups[base].append((book, number))
     # A Calibre series written differently (～ vs ~, full-width digits) takes in the
     # matching volumes, even a single one, instead of becoming a second series.
-    calibre_series = {unicodedata.normalize('NFKC', book['series']).casefold(): book['series']
-                      for book in books.values() if book['series']}
+    calibre_series, calibre_titles = {}, defaultdict(list)
+    for book in books.values():
+        if book['series']:
+            name = unicodedata.normalize('NFKC', book['series']).casefold()
+            calibre_series[name] = book['series']
+            calibre_titles[name].append(book['title'])
     for base, members in groups.items():
         series = calibre_series.get(base.casefold())
         if not series and len(members) < 2:
             continue
-        two_parts = not any(PART_MIDDLE.search(book['title']) for book, _ in members)
+        two_parts = has_no_middle_part([book['title'] for book, _ in members] + calibre_titles.get(base.casefold(), []))
         for book, number in members:
-            if two_parts and number == 3 and PART_LAST.search(book['title']):
+            if two_parts and number == 3 and is_last_part(book['title']):
                 number = 2.0
             book.update(series=series or base, seriesIndex=number, seriesInferred=True)
 

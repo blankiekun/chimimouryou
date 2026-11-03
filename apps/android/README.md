@@ -60,7 +60,8 @@ extensions (below), for a Play Store build later. `assembleGithubRelease` signs 
   drops to the display cutout alone: nothing under a notch, no gap where the bars were. Other pages
   (`/hook` too: it is a desktop texthooker page with its own header) keep the bars.
 - `<input type=file>` opens Android's file picker (Capacitor's `BridgeWebChromeClient`); links to
-  other sites, `window.open` included, open in the browser (`Bridge.launchIntent`).
+  other sites, `window.open` included, open in the browser (`Bridge.launchIntent`); other schemes
+  go nowhere (`PublicAddressPlugin.shouldOverrideLoad`).
 - CapacitorHttp's global `fetch` patch is off (the default): it breaks streaming and abort. Sources
   call `CapacitorHttp.request` directly (`transport.ts`), following redirects themselves, so sites
   without CORS work in the app.

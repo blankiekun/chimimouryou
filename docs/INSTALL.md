@@ -200,7 +200,9 @@ no restart).
 Otherwise:
 
 ```sh
-git pull && docker compose up -d --build
+git pull
+export VERSION=$(git describe --tags --always)  # what /version.txt and the admin panel show; without it, "docker"
+docker compose up -d --build
 ```
 
 Coming from a version before the v1 API (reading data in the `sync/` and

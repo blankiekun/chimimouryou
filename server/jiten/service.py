@@ -166,7 +166,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(400, {'error': 'no books given'})
                 jobs.runner.start('compute', jobs.runner.compute, ids)
             elif action == 'cancel':
-                jobs.runner.cancel.set()
+                jobs.runner.request_cancel()
             else:
                 return self._send(404, {'error': 'not found'})
         except RuntimeError as error:

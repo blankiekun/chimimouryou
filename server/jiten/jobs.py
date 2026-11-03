@@ -176,6 +176,17 @@ class JobRunner:
             self.job['finished'] = int(time.time() * 1000)
             self.job['cancelled'] = self.cancel.is_set()
 
+    def request_cancel(self):
+        with self.lock:  # after a job has ended it would hold off automatic runs for nothing
+            if self.job and not self.job.get('finished'):
+                self.cancel.set()
+
+    def holds_off_automatic(self) -> bool:
+        """The run the reader cancelled doesn't start again by itself right away; later ones do."""
+        with self.lock:
+            finished = (self.job or {}).get('finished', 0)
+        return self.cancel.is_set() and time.time() * 1000 - finished < settings.CANCEL_HOLD_SECONDS * 1000
+
     def _progress(self, done=None, total=None):
         with self.lock:
             if done is not None:
@@ -264,7 +275,7 @@ def watch_manga_text():
     """Estimates manga as their text is made or uploaded (mokuro service), and replaced books, when no other job runs."""
     while True:
         time.sleep(settings.MANGA_TEXT_CHECK_SECONDS)
-        if runner.cancel.is_set():  # the reader cancelled: nothing starts by itself until a job is started
+        if runner.holds_off_automatic():
             continue
         try:
             ids = stale_manga() + replaced_books()

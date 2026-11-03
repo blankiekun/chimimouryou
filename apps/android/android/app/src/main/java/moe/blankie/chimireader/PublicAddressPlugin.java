@@ -1,5 +1,6 @@
 package moe.blankie.chimireader;
 
+import android.net.Uri;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
@@ -15,6 +16,17 @@ import java.net.UnknownHostException;
  */
 @CapacitorPlugin(name = "PublicAddress")
 public class PublicAddressPlugin extends Plugin {
+
+    /**
+     * Capacitor's Bridge.launchIntent hands any other scheme to ACTION_VIEW, so content in the
+     * WebView could open another app with a chosen address. true: the load is dropped.
+     */
+    @Override
+    public Boolean shouldOverrideLoad(Uri url) {
+        String scheme = url.getScheme();
+        boolean web = "http".equals(scheme) || "https".equals(scheme) || "data".equals(scheme) || "blob".equals(scheme);
+        return web ? null : Boolean.TRUE;
+    }
 
     /** { host }: resolves if every address of the host is public. */
     @PluginMethod

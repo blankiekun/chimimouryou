@@ -20,6 +20,10 @@ const editionLabel = new RegExp(
   `[${S}]*[【\\[(（〔][^】\\])）〕]*(?:版|文庫|ノベル|ブックス|BOOKS|Books|特典|限定|特装|コミック)[^】\\])）〕]*[】\\])）〕]$`,
   'u'
 );
+/** The title with its trailing edition label off, for the 上/中/下 checks in `inferSeries`. */
+export const withoutEditionLabel = (title: string) =>
+  strip(title.normalize('NFKC'), S).replace(editionLabel, '');
+
 const authorPrefix = new RegExp(`^\\[[^\\]]+\\][${S}]*`, 'u');
 const kanjiDigits: Record<string, number> = {
   〇: 0,
