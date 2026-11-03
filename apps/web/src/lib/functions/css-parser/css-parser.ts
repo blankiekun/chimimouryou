@@ -115,16 +115,11 @@ function parseCss(css: string, options = {}): CssTree {
     const m = match(/^(("(?:\\"|[^"])*"|'(?:\\'|[^'])*'|[^{])+)/);
 
     if (m) {
-      return m[0]
-        .trim() // remove all comments from selectors
-        .replace(/\/\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*\/+/g, '')
-        .replace(/"(?:\\"|[^"])*"|'(?:\\'|[^'])*'/g, function (m) {
-          return m.replace(/,/g, '\u200C');
-        })
-        .split(/\s*(?![^(]*\)),\s*/)
-        .map(function (s) {
-          return s.replace(/\u200C/g, ',');
-        });
+      return splitSelectors(
+        m[0]
+          .trim() // remove all comments from selectors
+          .replace(/\/\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*\/+/g, '')
+      );
     }
   }
 
@@ -429,4 +424,35 @@ function parseCss(css: string, options = {}): CssTree {
 
 // Exports
 // =============================================================================
+/** Splits at commas outside parens and strings, in one pass: a stylesheet can list 100,000. */
+function splitSelectors(list: string) {
+  const selectors: string[] = [];
+  let depth = 0;
+  let quote = '';
+  let start = 0;
+
+  for (let i = 0; i < list.length; i += 1) {
+    const char = list[i];
+
+    if (quote) {
+      if (char === '\\') {
+        i += 1;
+      } else if (char === quote) {
+        quote = '';
+      }
+    } else if (char === '"' || char === "'") {
+      quote = char;
+    } else if (char === '(') {
+      depth += 1;
+    } else if (char === ')') {
+      depth = Math.max(0, depth - 1);
+    } else if (char === ',' && !depth) {
+      selectors.push(list.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+
+  return [...selectors, list.slice(start).trim()];
+}
+
 export default parseCss;

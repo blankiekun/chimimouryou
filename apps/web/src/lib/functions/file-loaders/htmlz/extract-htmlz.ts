@@ -5,7 +5,20 @@
  */
 
 import { BlobReader, BlobWriter, TextWriter, ZipReader } from '@zip.js/zip.js';
+import type { Entry } from '@zip.js/zip.js';
 import type { HtmlzContent } from './types';
+
+const maxMemberBytes = 300 * 1024 * 1024;
+
+/**
+ * Refuses a zip member too big to unpack into memory, so a crafted file can't crash the tab.
+ * shortcut: trusts the size the zip declares; count bytes while inflating if files start lying.
+ */
+export function assertMemberSize(entry: Entry) {
+  if (entry.uncompressedSize > maxMemberBytes) {
+    throw new Error(`${entry.filename} is too large to read (over 300 MB)`);
+  }
+}
 
 export default async function extract(blob: Blob) {
   const reader = new ZipReader(new BlobReader(blob));
@@ -21,6 +34,8 @@ export default async function extract(blob: Blob) {
     await Promise.all(
       entries.map(async (entry) => {
         if (entry.getData && !entry.directory) {
+          assertMemberSize(entry);
+
           let value: string | Blob;
           switch (entry.filename) {
             case 'index.html':

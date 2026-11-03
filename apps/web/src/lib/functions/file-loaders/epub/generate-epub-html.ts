@@ -192,13 +192,9 @@ export default function generateEpubHtml(
     let contentToParse = typeof content === 'string' ? content : '';
 
     for (const tagMatch of selfClosingContentTagsToFix) {
-      const matches = contentToParse.match(new RegExp(`<${tagMatch}[^>]+?>`, 'gim')) || [];
-
-      for (const match of matches) {
-        if (match.endsWith('/>')) {
-          contentToParse = contentToParse.replace(match, `${match.slice(0, -2)}></${tagMatch}>`);
-        }
-      }
+      contentToParse = contentToParse.replace(new RegExp(`<${tagMatch}[^>]+?>`, 'gim'), (match) =>
+        match.endsWith('/>') ? `${match.slice(0, -2)}></${tagMatch}>` : match
+      );
     }
 
     if (importHTMLFixMode === ImportHTMLFixMode.EXTENDED) {
@@ -238,7 +234,7 @@ export default function generateEpubHtml(
       for (const attr of attributes) {
         const value = elm.getAttribute(attr);
 
-        if (value) {
+        if (value && !/^data:image\//i.test(value)) {
           elm.setAttribute(attr, path.join(path.dirname(htmlHref), value));
         }
       }

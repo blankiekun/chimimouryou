@@ -12,7 +12,8 @@
 export default function clearAllBadImageRef(el: HTMLElement) {
   const clearTagBadImageAttribute = (tag: Element, attributeName: string) => {
     const attr = tag.getAttribute(attributeName);
-    if (attr && !(attr.startsWith('ttu:') || attr.startsWith('data:image/gif;ttu:'))) {
+    // The dummy images (data:image/gif;ttu:…) are data: images too.
+    if (attr && !(attr.startsWith('ttu:') || /^data:image\//i.test(attr))) {
       tag.setAttribute(`data-ttu-${attributeName}`, attr);
       tag.removeAttribute(attributeName);
     }

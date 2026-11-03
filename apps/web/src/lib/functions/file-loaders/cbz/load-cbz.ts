@@ -6,7 +6,7 @@
 
 import { BlobReader, BlobWriter, ZipReader } from '@zip.js/zip.js';
 import type { LoadData } from '../types';
-import { getMimeTypeFromName } from '../htmlz/extract-htmlz';
+import { assertMemberSize, getMimeTypeFromName } from '../htmlz/extract-htmlz';
 import { mangaElementHtml, sortPages } from '$lib/data/manga/manga';
 import { findVnRoot } from '$lib/data/vn/vn';
 import loadVn from '../vn/load-vn';
@@ -43,6 +43,9 @@ export default async function loadCbz(
       !entry.filename.split('/').pop()!.startsWith('.')
   );
   const blobs: Record<string, Blob> = {};
+
+  // Per page: a long CBZ is fine however big the whole file is.
+  entries.forEach(assertMemberSize);
 
   for (const entry of entries) {
     blobs[entry.filename] = await entry.getData!(

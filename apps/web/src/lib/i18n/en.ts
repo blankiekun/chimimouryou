@@ -2173,6 +2173,12 @@ export const en = {
   'community.report': 'Report',
   'community.reportConfirm':
     'Report this post? A moderator will look at it; after 3 reports it is hidden until then.',
+  'community.reportInfo': 'Report title or cover',
+  'community.reportInfoConfirm':
+    "Report this work's title or cover as wrong or offensive? A moderator will look at it.",
+  'community.reportMatch': 'Report wrong book match',
+  'community.reportMatchConfirm':
+    'Report that this book is matched to the wrong work? A moderator will look at it.',
   'community.blockName': 'Block {name}',
   'community.wordsKnown': '{count} words known',
   'community.newReplies': 'New replies',

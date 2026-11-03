@@ -211,8 +211,9 @@ function openImageInNewTab(
                 tap(() => {
                   const src = elm.getAttribute('src') || elm.getAttribute('href');
 
-                  if (src) {
-                    window.open(src, '_blank');
+                  // Only the book's own pictures, and the opened page can't reach this tab.
+                  if (src?.startsWith('blob:')) {
+                    window.open(src, '_blank', 'noopener');
                   }
                 })
               );

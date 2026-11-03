@@ -42,6 +42,7 @@ import {
   ZipWriter,
   type Entry
 } from '@zip.js/zip.js';
+import { assertMemberSize } from '$lib/functions/file-loaders/htmlz/extract-htmlz';
 
 export const exporterVersion = 1;
 
@@ -589,6 +590,12 @@ export abstract class BaseStorageHandler {
   ) {
     this.currentLastProgressValue = 0;
     this.currentProgressBase = progressBase;
+
+    // Text only: blobs here are a VN's game files or, in a backup, a whole book's zip, all
+    // legitimately huge, and a Blob doesn't have to fit in one string.
+    if (writer instanceof TextWriter) {
+      assertMemberSize(retrievedData);
+    }
 
     const zipData =
       writer instanceof BlobWriter
