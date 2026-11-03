@@ -80,6 +80,8 @@ describe('synthesizeSpeech', () => {
     expect(JSON.parse(init!.body as string)).toEqual({
       text: 'テスト',
       model_id: 'eleven_v4',
+      language_code: 'ja',
+      apply_language_text_normalization: true,
       previous_text: '前'
     });
     expect([speech.audio.size, speech.audio.type]).toEqual([3, 'audio/mpeg']);
