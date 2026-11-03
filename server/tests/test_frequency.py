@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import unittest
 import zipfile
 from unittest import mock
@@ -81,6 +82,19 @@ class YomitanRanksTest(unittest.TestCase):
 
 
 
+def add_made_files(service):
+    """A word list and a readings file made from the dictionaries now installed, and one being written."""
+    service.settings.WORDS_DIR = os.path.join(tempfile.mkdtemp(), 'words')
+    service.settings.READINGS_DIR = os.path.join(tempfile.mkdtemp(), 'readings')
+    service.workers.write_words(1, {'words': [], 'uniqueWords': 0, 'tokens': 0})
+    readings = service.workers.readings_path(1)
+    os.makedirs(os.path.dirname(readings))
+    open(readings, 'w').close()
+    writing = service.workers.words_path(2) + '.tmp'
+    open(writing, 'w').close()
+    return service.workers.words_path(1), readings, writing
+
+
 class InstallDictionaryTest(unittest.TestCase):
     def setUp(self):
         self.service = load_service()
@@ -148,6 +162,35 @@ class InstallDictionaryTest(unittest.TestCase):
         with open(self.service.settings.FREQUENCY_DICTIONARY, 'rb') as f:
             self.assertEqual(f.read(), uploaded)
 
+    def test_a_new_list_drops_what_was_made_from_the_old_one(self):
+        # Catches: word rows keeping old ranks after a new list, and readings keeping its readings (reader_version
+        # doesn't cover the list, so nothing else would remake them); a refused upload or a file a worker is
+        # writing must lose nothing.
+        words, readings, writing = add_made_files(self.service)
+        with self.assertRaises(ValueError):
+            self.install(b'not a zip')
+        self.assertTrue(os.path.exists(words) and os.path.exists(readings))
+        self.install(open(dictionary('rank-based'), 'rb').read())
+        self.assertFalse(os.path.exists(words) or os.path.exists(readings))
+        self.assertTrue(os.path.exists(writing))
+
+    def test_a_list_installed_while_a_file_is_being_made_drops_that_file_too(self):
+        # Catches: the worker that held the old list finishing after the delete, leaving a stale file for good.
+        service = self.service
+        words, _, _ = add_made_files(service)
+        queue = service.queues.word_lists
+        queue.running = 1
+        thread = threading.Thread(target=self.install, args=(open(dictionary('rank-based'), 'rb').read(),))
+        thread.start()
+        thread.join(0.5)
+        self.assertTrue(thread.is_alive())  # waits for the worker before deleting
+        self.assertTrue(os.path.exists(words))
+        with queue.lock:
+            queue.running = None
+            queue.finished.notify_all()
+        thread.join(10)
+        self.assertFalse(os.path.exists(words))
+
     def test_rejects_other_files_and_keeps_the_current_one(self):
         for data in (b'not a zip', open(dictionary('occurrence-based'), 'rb').read()):
             with self.assertRaises(ValueError):
@@ -193,6 +236,20 @@ class InstallTermDictionaryTest(unittest.TestCase):
         self.service.install.remove_term_dictionary('My terms')
         self.assertEqual(self.service.readerpack.term_dictionaries(), [])
         self.assertEqual(self.service.readerpack.reader_version(), version)
+
+    def test_a_term_dictionary_change_drops_word_lists_and_readings(self):
+        # Catches: word rows keeping the readings of a removed or replaced dictionary (their path has no version for
+        # it), and removing a dictionary that isn't there making the whole library remake its files.
+        service = self.service
+        data = self.zip([('星喰竜', 'ほしくいりゅう'), ('女剣豪', 'おんなけんごう')])
+        words, readings, _ = add_made_files(service)
+        service.install.remove_term_dictionary('Not installed')
+        self.assertTrue(os.path.exists(words) and os.path.exists(readings))
+        self.install(data)
+        self.assertFalse(os.path.exists(words) or os.path.exists(readings))
+        words, readings, _ = add_made_files(service)
+        service.install.remove_term_dictionary('My terms')
+        self.assertFalse(os.path.exists(words) or os.path.exists(readings))
 
     def test_jmnedict_is_a_name_dictionary(self):
         from yurigana.yomitan import name_readings  # noqa: F401 (yurigana 0.5.1+)

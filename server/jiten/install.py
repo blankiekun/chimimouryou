@@ -1,13 +1,19 @@
 """Installing the frequency list and term dictionaries, never while a job runs (holds_off_jobs)."""
+import contextlib
 import functools
+import glob
 import os
 import re
 import shutil
 import zipfile
 
 import jobs
+import queues
 import readerpack
 import settings
+
+
+DROP_WAIT_SECONDS = 300  # a stuck worker mustn't hold up the install's answer for ever
 
 
 def holds_off_jobs(install):
@@ -23,6 +29,18 @@ def holds_off_jobs(install):
         finally:
             jobs.runner.installing = False
     return wrapper
+
+
+def drop_made_files():
+    """After a dictionary changed: word lists and readings files are made again on request. A worker that started
+    before the change finishes first, or its file would stay; later ones get the new dictionaries (the queues' pools)."""
+    for queue in (queues.readings, queues.word_lists):
+        with queue.lock:
+            queue.finished.wait_for(lambda: queue.running is None, DROP_WAIT_SECONDS)
+    for path in glob.glob(os.path.join(glob.escape(settings.WORDS_DIR), '*', '*.json.gz')) \
+            + glob.glob(os.path.join(glob.escape(settings.READINGS_DIR), '*.json.gz')):
+        with contextlib.suppress(OSError):
+            os.remove(path)
 
 
 class DictionaryMismatch(ValueError):
@@ -74,6 +92,7 @@ def install_dictionary(source, length: int, force: bool = False) -> int:
             if agreement < settings.MIN_AGREEMENT:
                 raise DictionaryMismatch(agreement)
         os.replace(upload, settings.FREQUENCY_DICTIONARY)
+        drop_made_files()
         return terms
     finally:
         if os.path.exists(upload):
@@ -120,6 +139,7 @@ def install_term_dictionary(source, length: int, name: str) -> int:
         if terms < settings.MIN_TERM_DICTIONARY_TERMS:
             raise ValueError(f'The dictionary has only {terms:,} usable terms with kanji')
         os.replace(upload, path)
+        drop_made_files()
         return terms
     finally:
         if os.path.exists(upload):
@@ -131,4 +151,5 @@ def remove_term_dictionary(name: str):
     try:
         os.remove(term_dictionary_path(name))
     except FileNotFoundError:
-        pass
+        return
+    drop_made_files()
