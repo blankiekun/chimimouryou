@@ -24,6 +24,7 @@ import {
 } from '$lib/data/storage/storage-types';
 import { throwIfAborted } from '$lib/functions/replication/replication-error';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
+import { isDeletedStatistic } from '$lib/functions/statistic-util';
 import {
   replicationProgress$,
   reportBytes,
@@ -341,6 +342,9 @@ export abstract class BaseStorageHandler {
 
     for (let index = 0, { length } = statistics; index < length; index += 1) {
       const statistic = statistics[index];
+
+      // An empty row would reset the speed minimums below.
+      if (isDeletedStatistic(statistic)) continue;
 
       readingTime += statistic.readingTime;
       charactersRead += statistic.charactersRead;

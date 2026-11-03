@@ -323,7 +323,7 @@ export class BrowserStorageHandler extends BaseStorageHandler {
   }
 
   async getStatistics() {
-    const statistics = await database.getStatisticsForBook(this.currentContext.title);
+    const statistics = await database.getSyncedStatisticsForBook(this.currentContext.title);
 
     BaseStorageHandler.reportProgress(0.5);
 
@@ -495,7 +495,7 @@ export class BrowserStorageHandler extends BaseStorageHandler {
   }
 
   async getReadingGoals() {
-    const readingGoals = await database.getReadingGoals();
+    const readingGoals = await database.getSyncedReadingGoals();
     const lastGoalModified = lastReadingGoalsModified$.getValue();
 
     BaseStorageHandler.reportProgress();

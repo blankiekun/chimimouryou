@@ -82,11 +82,15 @@ interface BooksDbV6Statistic {
   lastStatisticModified: number;
   completedBook?: number;
   completedData?: Omit<BooksDbV6Statistic, 'title' | 'lastStatisticModified'>;
+  /** A deleted day (`isDeletedStatistic`). */
+  deleted?: boolean;
 }
 
 interface BooksDbV6ReadingGoal extends ReadingGoal {
   goalEndDate: string;
   goalOriginalEndDate: string;
+  /** A deleted goal (`isDeletedGoal`). */
+  deleted?: boolean;
 }
 
 interface BooksDbV6LastModified {

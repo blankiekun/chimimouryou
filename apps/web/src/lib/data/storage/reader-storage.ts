@@ -318,11 +318,11 @@ const librarySources: Partial<Record<StorageKey, string>> = {
 type Copy = (from: BaseStorageHandler, to: BaseStorageHandler) => Promise<void>;
 
 /**
- * A deletion or edit of statistics or goals. A merge would bring a deleted entry back, so this pulls
- * what other devices wrote, makes the change, then replaces the synced copy with the result. The
- * pull skips the replicator's up-to-date check: a merging upload leaves this browser's time as new
- * as days it never received, and replacing without them would delete them. For the same reason
- * nothing is pushed after a failed pull: the change stays here and a message says so.
+ * A deletion or edit of statistics or goals: this pulls what other devices wrote, makes the change,
+ * then replaces the synced copy with the result, so the file holds the deletion at once. The pull
+ * skips the replicator's up-to-date check: a merging upload leaves this browser's time as new as
+ * days it never received, and replacing without them would delete them. For the same reason nothing
+ * is pushed after a failed pull: the change stays here, a message says so, and the next sync takes it.
  */
 function correct(
   window: Window,
@@ -393,7 +393,7 @@ function correct(
       setTimeout(() =>
         showMessage(
           'Changed on this device only',
-          `Couldn't sync the change, so it may be undone later: ${problem}`
+          `Couldn't sync the change yet, so it goes with this device's next sync: ${problem}`
         )
       );
     }

@@ -17,15 +17,17 @@ import { Observable, Subject, from } from 'rxjs';
 import { StorageDataType } from '$lib/data/storage/storage-types';
 import type { ReaderRoute } from '$lib/data/reader/reader-route';
 import {
-  advanceDateDays,
-  getDate,
+  deletedStatistic,
   getDateKey,
+  isDeletedStatistic,
   mergeStatistics,
   updateStatisticToStore
 } from '$lib/functions/statistic-util';
 import { catchError, map, shareReplay, startWith, switchMap, tap } from 'rxjs/operators';
 import {
+  deletedGoal,
   getCurrentReadingGoal,
+  isDeletedGoal,
   mergeReadingGoals,
   readingGoalSortFunction
 } from '$lib/data/reading-goal';
@@ -210,7 +212,7 @@ export class DatabaseService {
     let firstStatistic = existingStatistic;
 
     if (!firstStatistic) {
-      firstStatistic = await db.get('statistic', IDBKeyRange.bound([bookTitle], [bookTitle, []]));
+      [firstStatistic] = await this.getStatisticsForBook(bookTitle);
     }
 
     if (firstStatistic) {
@@ -224,6 +226,11 @@ export class DatabaseService {
       const statisticsStore = tx.objectStore('statistic');
       const lastModifiedStore = tx.objectStore('lastModified');
       const newStatistic = getDefaultStatistic(bookTitle, dateKey);
+      const deleted = await statisticsStore.get([bookTitle, dateKey]);
+
+      if (deleted && newStatistic.lastStatisticModified <= deleted.lastStatisticModified) {
+        newStatistic.lastStatisticModified = deleted.lastStatisticModified + 1;
+      }
 
       await statisticsStore.put(newStatistic);
       await lastModifiedStore.put({
@@ -625,6 +632,13 @@ export class DatabaseService {
   }
 
   async getStatisticsForBook(bookTitle: string) {
+    return (await this.getSyncedStatisticsForBook(bookTitle)).filter(
+      (statistic) => !isDeletedStatistic(statistic)
+    );
+  }
+
+  /** With the deleted days, which only sync should see. */
+  async getSyncedStatisticsForBook(bookTitle: string) {
     const db = await this.db;
 
     return db.getAll('statistic', IDBKeyRange.bound([bookTitle], [bookTitle, []]));
@@ -639,7 +653,9 @@ export class DatabaseService {
   async getStatisticsForTimeWindow(startDate: string, endDate: string) {
     const db = await this.db;
 
-    return db.getAllFromIndex('statistic', 'dateKey', IDBKeyRange.bound(startDate, endDate));
+    return (
+      await db.getAllFromIndex('statistic', 'dateKey', IDBKeyRange.bound(startDate, endDate))
+    ).filter((statistic) => !isDeletedStatistic(statistic));
   }
 
   async getStatisticsUntilDate(bookTitle: string, maxDate: string) {
@@ -651,7 +667,7 @@ export class DatabaseService {
       IDBKeyRange.upperBound(maxDate)
     );
 
-    return results.filter((result) => result.title === bookTitle);
+    return results.filter((result) => result.title === bookTitle && !isDeletedStatistic(result));
   }
 
   async storeStatistics(
@@ -667,8 +683,28 @@ export class DatabaseService {
     let statisticsToStore: BooksDbStatistic[] = statistics;
     let newStatisticModified = currentLastModified;
 
+    if (statisticsMergeMode === MergeMode.LOCAL) {
+      // Reading on a day deleted elsewhere must beat the deletion, on a slow clock too.
+      const stored = new Map(
+        (await this.getSyncedStatisticsForBook(bookTitle)).map((row) => [row.dateKey, row])
+      );
+
+      statistics.forEach((statistic) => {
+        const row = stored.get(statistic.dateKey);
+
+        if (
+          row &&
+          (statistic.lastStatisticModified < row.lastStatisticModified ||
+            (statistic.lastStatisticModified === row.lastStatisticModified &&
+              isDeletedStatistic(row)))
+        ) {
+          statistic.lastStatisticModified = row.lastStatisticModified + 1;
+        }
+      });
+    }
+
     if (statisticsMergeMode === MergeMode.MERGE) {
-      const existingStatistics = await this.getStatisticsForBook(bookTitle);
+      const existingStatistics = await this.getSyncedStatisticsForBook(bookTitle);
 
       statisticsToStore = mergeStatistics(
         statistics,
@@ -914,79 +950,32 @@ export class DatabaseService {
     try {
       const statisticsStore = tx.objectStore('statistic');
       const lastModifiedStore = tx.objectStore('lastModified');
-      const limiter = pLimit(1);
-      const tasks: Promise<void>[] = [];
-      const dates: string[] = [];
-      const lastModifiedValue = Date.now();
-      const hadDataMap = new Map<string, boolean>();
+      const now = Date.now();
 
-      if (startDateString) {
-        // eslint-disable-next-line prefer-const
-        let { referenceDate, dateString } = advanceDateDays(getDate(startDateString), 0);
+      for (const bookTitle of bookTitles) {
+        const rows = (
+          await statisticsStore.getAll(
+            startDateString
+              ? IDBKeyRange.bound([bookTitle, startDateString], [bookTitle, endDateString])
+              : IDBKeyRange.bound([bookTitle], [bookTitle, []])
+          )
+        ).filter((statistic) => !isDeletedStatistic(statistic));
+        const deleted = rows.map((statistic) => deletedStatistic(statistic, now));
 
-        while (dateString <= endDateString) {
-          dates.push(dateString);
-          ({ dateString } = advanceDateDays(referenceDate));
+        await Promise.all(deleted.map((statistic) => statisticsStore.put(statistic)));
+
+        if (!checkExistingData || deleted.length) {
+          await lastModifiedStore.put({
+            title: bookTitle,
+            dataType: StorageDataType.STATISTICS,
+            lastModifiedValue: Math.max(
+              now,
+              ...deleted.map((statistic) => statistic.lastStatisticModified)
+            )
+          });
         }
       }
 
-      bookTitles.forEach((bookTitle) => {
-        if (dates.length) {
-          dates.forEach((dateKey) => {
-            tasks.push(
-              limiter(async () => {
-                try {
-                  await statisticsStore.delete([bookTitle, dateKey]);
-                } catch (error: any) {
-                  limiter.clearQueue();
-
-                  throw error;
-                }
-              })
-            );
-          });
-        } else {
-          tasks.push(
-            limiter(async () => {
-              try {
-                const keyRange = IDBKeyRange.bound([bookTitle], [bookTitle, []]);
-
-                if (checkExistingData && !hadDataMap.has(bookTitle)) {
-                  const hadData = !!(await statisticsStore.getKey(keyRange));
-
-                  hadDataMap.set(bookTitle, hadData);
-                }
-
-                await statisticsStore.delete(keyRange);
-              } catch (error: any) {
-                limiter.clearQueue();
-
-                throw error;
-              }
-            })
-          );
-        }
-
-        tasks.push(
-          limiter(async () => {
-            try {
-              if (!checkExistingData || hadDataMap.get(bookTitle)) {
-                await lastModifiedStore.put({
-                  title: bookTitle,
-                  dataType: StorageDataType.STATISTICS,
-                  lastModifiedValue
-                });
-              }
-            } catch (error: any) {
-              limiter.clearQueue();
-
-              throw error;
-            }
-          })
-        );
-      });
-
-      await Promise.all(tasks);
       await tx.done;
     } catch (error: any) {
       try {
@@ -1001,6 +990,11 @@ export class DatabaseService {
   }
 
   async getReadingGoals() {
+    return (await this.getSyncedReadingGoals()).filter((goal) => !isDeletedGoal(goal));
+  }
+
+  /** With the deleted goals, which only sync should see. */
+  async getSyncedReadingGoals() {
     const db = await this.db;
 
     return db.getAll('readingGoal');
@@ -1009,14 +1003,18 @@ export class DatabaseService {
   async getOpenReadingGoals() {
     const db = await this.db;
 
-    return db.getAllFromIndex('readingGoal', 'goalEndDate', '');
+    return (await db.getAllFromIndex('readingGoal', 'goalEndDate', '')).filter(
+      (goal) => !isDeletedGoal(goal)
+    );
   }
 
   async getCurrentClosedReadingGoal(referenceDate: string) {
     const db = await this.db;
     const readingGoals = await db.getAll('readingGoal', IDBKeyRange.upperBound(referenceDate));
 
-    return readingGoals.find((readingGoal) => readingGoal.goalEndDate >= referenceDate);
+    return readingGoals.find(
+      (readingGoal) => readingGoal.goalEndDate >= referenceDate && !isDeletedGoal(readingGoal)
+    );
   }
 
   async getReadingGoalsForDateWindow(startDate: string, newStartDate = '', endDate = '') {
@@ -1058,12 +1056,34 @@ export class DatabaseService {
       const store = tx.objectStore('readingGoal');
       const limiter = pLimit(1);
       const tasks: Promise<void>[] = [];
+      const now = Date.now();
+      let newest = Math.max(now, lastReadingGoalsModified$.getValue());
+      const endOf = (goal: BooksDbReadingGoal) => goal.goalEndDate || '9999-99-99';
 
       readingGoalsToDelete.forEach((readingGoal) =>
         tasks.push(
           limiter(async () => {
             try {
-              await store.delete(readingGoal);
+              const stored = await store.get(readingGoal);
+
+              // A goal an inserted one overlaps goes in the merge anyway, and a deletion dated
+              // like the new goal could beat it there.
+              if (
+                !stored ||
+                isDeletedGoal(stored) ||
+                readingGoalsToInsert.some(
+                  (goal) =>
+                    goal.goalStartDate <= endOf(stored) && stored.goalStartDate <= endOf(goal)
+                )
+              ) {
+                if (!stored || !isDeletedGoal(stored)) await store.delete(readingGoal);
+                return;
+              }
+
+              const deleted = deletedGoal(stored, now);
+
+              newest = Math.max(newest, deleted.lastGoalModified);
+              await store.put(deleted);
             } catch (error: any) {
               limiter.clearQueue();
 
@@ -1077,6 +1097,17 @@ export class DatabaseService {
         tasks.push(
           limiter(async () => {
             try {
+              const stored = await store.get(readingGoal.goalStartDate);
+
+              // Set again after its deletion: must beat it, on a slow clock too.
+              if (stored && isDeletedGoal(stored)) {
+                readingGoal.lastGoalModified = Math.max(
+                  readingGoal.lastGoalModified,
+                  stored.lastGoalModified + 1
+                );
+                newest = Math.max(newest, readingGoal.lastGoalModified);
+              }
+
               await store.put(readingGoal);
             } catch (error: any) {
               limiter.clearQueue();
@@ -1090,7 +1121,7 @@ export class DatabaseService {
       await Promise.all(tasks);
       await tx.done;
 
-      lastReadingGoalsModified$.next(Date.now());
+      lastReadingGoalsModified$.next(newest);
     } catch (error: any) {
       try {
         tx.abort();
@@ -1115,7 +1146,7 @@ export class DatabaseService {
     let newReadingGoalModified = lastGoalModified;
 
     if (readingGoalsMergeMode === MergeMode.MERGE) {
-      const existingReadingGoals = await this.getReadingGoals();
+      const existingReadingGoals = await this.getSyncedReadingGoals();
 
       ({ readingGoalsToStore, newReadingGoalModified } = mergeReadingGoals(
         readingGoals,
@@ -1182,14 +1213,22 @@ export class DatabaseService {
 
   async deleteReadingGoal(dateKey?: string) {
     const db = await this.db;
+    const tx = db.transaction('readingGoal', 'readwrite');
+    const now = Date.now();
+    const deleted = (await tx.store.getAll(dateKey ? IDBKeyRange.only(dateKey) : undefined))
+      .filter((goal) => !isDeletedGoal(goal))
+      .map((goal) => deletedGoal(goal, now));
 
-    if (dateKey) {
-      await db.delete('readingGoal', dateKey);
-    } else {
-      await db.clear('readingGoal');
-    }
+    await Promise.all(deleted.map((goal) => tx.store.put(goal)));
+    await tx.done;
 
-    lastReadingGoalsModified$.next(Date.now());
+    lastReadingGoalsModified$.next(
+      Math.max(
+        now,
+        lastReadingGoalsModified$.getValue(),
+        ...deleted.map((goal) => goal.lastGoalModified)
+      )
+    );
   }
 
   async getAudioBook(title: string) {

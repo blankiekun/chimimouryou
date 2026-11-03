@@ -663,11 +663,10 @@
 
   async function init() {
     try {
-      const db = await database.db;
       const hasPrefilteredTitlesForStatistics = !!$preFilteredTitlesForStatistics$.size;
 
       [statisticsData, readingGoals] = await Promise.all([
-        db.getAllFromIndex('statistic', 'dateKey'),
+        database.getStatisticsForTimeWindow('0000-00-00', '9999-99-99'),
         database.getReadingGoals()
       ]).then(([statistics, readingGoalData]) => [
         statistics.map((statistic) => {
