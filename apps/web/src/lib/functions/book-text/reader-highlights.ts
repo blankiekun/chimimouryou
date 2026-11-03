@@ -115,7 +115,13 @@ export function paintHighlights(
 
   const readingRange =
     readingMatch && readingMatch.end > base && readingMatch.start < end
-      ? rangeForCounts(document, segments, readingMatch.start, readingMatch.end, base)
+      ? rangeForCounts(
+          document,
+          segments,
+          Math.max(readingMatch.start, base),
+          Math.min(readingMatch.end, end),
+          base
+        )
       : undefined;
 
   setCssHighlight('ttu-reading', readingRange ? [readingRange] : []);

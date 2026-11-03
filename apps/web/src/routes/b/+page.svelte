@@ -15,9 +15,11 @@
     distinctUntilChanged,
     skip,
     startWith,
+    ReplaySubject,
     Subject,
     switchMap,
     take,
+    takeUntil,
     takeWhile,
     tap,
     timer
@@ -253,6 +255,12 @@
   );
   /** bookmarkData once resolved, for a re-render that must decide at once where to reopen */
   let savedBookmark: BooksDbBookmarkData | undefined;
+  /** Manual bookmarks, during a layout change: the real one while bookmarkData holds where to reopen. */
+  let heldBookmark:
+    | { data: Promise<BooksDbBookmarkData | undefined>; from: BookmarkManager }
+    | undefined;
+  /** Replays, so what starts after an await on a page that's gone ends at once. */
+  const pageLeft$ = new ReplaySubject<void>(1);
   $effect.pre(() => {
     bookmarkData.then((data) => (savedBookmark = data));
   });
@@ -734,7 +742,7 @@
         pulseElement(pointRange?.endContainer?.parentElement, 'add', 1);
 
         fromEvent(document, 'click')
-          .pipe(skip(1), take(1))
+          .pipe(skip(1), take(1), takeUntil(pageLeft$))
           .subscribe(() => {
             showCustomReadingPoint = false;
             pulseElement(customReadingPointRange?.endContainer?.parentElement, 'remove', 1);
@@ -859,6 +867,8 @@
     // Leaving without the close button (browser back) must stop the tracker too;
     // pausing also saves the session's statistics.
     isTrackerPaused$.next(true);
+    isTrackerMenuOpen$.next(false);
+    pageLeft$.next();
     readerImageGalleryPictures$.next([]);
     painter.destroy();
     annotations?.flush();
@@ -885,7 +895,7 @@
   }
 
   function trackerSingleClickHandler() {
-    if (!statisticsEnabled$) {
+    if (!$statisticsEnabled$) {
       return;
     }
 
@@ -895,7 +905,7 @@
   }
 
   function trackerDblClickHandler() {
-    if (!statisticsEnabled$) {
+    if (!$statisticsEnabled$) {
       return;
     }
 
@@ -1107,7 +1117,8 @@
     }
 
     if (!back) jumpBack.jumped();
-    pauseTracker(true);
+    // A jump within the page changes no count: nothing else would restart the tracker.
+    pauseTracker(true, 1000);
     scrollToCount(count);
     painter.scheduleHighlights(true);
   }
@@ -1144,9 +1155,27 @@
 
   /** Direction or view from the Aa sheet: save the place, then remount the reader there. */
   async function changeLayout(apply: () => void) {
-    await bookmarkPage();
+    if (!$manualBookmark$) {
+      await bookmarkPage();
+    } else if (bookmarkManager) {
+      // Only the remount opens here: the bookmark itself comes back once the place has (below).
+      const place = currentPlace();
+
+      if (place) {
+        heldBookmark = { data: bookmarkData, from: bookmarkManager };
+        bookmarkData = Promise.resolve(place);
+      }
+    }
+
     apply();
   }
+
+  $effect.pre(() => {
+    if (bookmarkManager && heldBookmark && bookmarkManager !== heldBookmark.from) {
+      bookmarkData = heldBookmark.data;
+      heldBookmark = undefined;
+    }
+  });
 
   /** Phones: a jump from the sheet closes it, so the place it went to is visible. */
   function closeSheetAfterJump() {
@@ -1406,8 +1435,19 @@
   }
 
   async function bookmarkPage() {
+    const data = currentPlace();
+    if (!data) return;
+
+    // Set before the write: leaving the page sends this place without waiting for the database.
+    bookmarkData = Promise.resolve(data);
+
+    if (await savePlace(data)) scheduleReplication(StorageDataType.PROGRESS);
+  }
+
+  /** The place a bookmark would save now. */
+  function currentPlace() {
     const bookId = getBookIdSync();
-    if (!bookId || !bookmarkManager) return;
+    if (!bookId || !bookmarkManager) return undefined;
 
     let data: BooksDbBookmarkData;
 
@@ -1430,10 +1470,7 @@
       data = bookmarkManager.formatBookmarkData(bookId, readingOffset);
     }
 
-    // Set before the write: leaving the page sends this place without waiting for the database.
-    bookmarkData = Promise.resolve(data);
-
-    if (await savePlace(data)) scheduleReplication(StorageDataType.PROGRESS);
+    return data;
   }
 
   /**
@@ -1460,7 +1497,7 @@
     if (!data || !bookmarkManager) return;
 
     if (data.exploredCharCount !== exploredCharCount) {
-      pauseTracker(true);
+      pauseTracker(true, 1000);
     }
 
     jumpBack.jumped();
@@ -1490,7 +1527,7 @@
         dataToReplicate.includes(StorageDataType.PROGRESS) ||
         dataToReplicateQueue.includes(StorageDataType.PROGRESS))
     ) {
-      const place = await bookmarkData;
+      const place = await (heldBookmark?.data ?? bookmarkData);
       if (place) await externalStorageHandler?.sendProgressNow(book.title, place);
     }
     await saving;
@@ -1920,13 +1957,13 @@
       });
   }
 
-  function pauseTracker(restartAfterCharacterChange = false) {
+  function pauseTracker(restartAfterCharacterChange = false, restartAfter = 0) {
     if ($statisticsEnabled$ && !$isTrackerPaused$) {
       wasTrackerPaused = false;
       $isTrackerPaused$ = true;
 
       if (restartAfterCharacterChange) {
-        restartTrackerAfterCharacterChangeOrTime();
+        restartTrackerAfterCharacterChangeOrTime(restartAfter);
       }
     }
   }
@@ -1937,7 +1974,7 @@
     }
 
     merge(fromEvent(document, PAGE_CHANGE), timerAmount ? timer(timerAmount) : NEVER)
-      .pipe(debounceTime(200), take(1))
+      .pipe(debounceTime(200), take(1), takeUntil(pageLeft$))
       .subscribe(() => {
         wasTrackerPaused = false;
         $isTrackerPaused$ = false;
@@ -2463,7 +2500,7 @@
       pauseTracker();
 
       merge(fromEvent(document, PAGE_CHANGE), timer(1000))
-        .pipe(debounceTime(1000), take(1))
+        .pipe(debounceTime(1000), take(1), takeUntil(pageLeft$))
         .subscribe(() => {
           restartTrackerAfterCharacterChangeOrTime(1000);
         });

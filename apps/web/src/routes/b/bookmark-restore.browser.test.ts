@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ViewMode } from '$lib/data/view-mode';
 // @ts-expect-error tsconfig's moduleResolution "node" doesn't read package exports; Vitest does.
 import { page as browserPage } from 'vitest/browser';
-import { autoBookmarkTime$, database } from '$lib/data/store';
+import { autoBookmark$, autoBookmarkTime$, database, manualBookmark$ } from '$lib/data/store';
 import {
   addBook,
   mountReader,
@@ -38,6 +38,7 @@ vi.mock('$lib/data/page-store', async () => {
 });
 
 let component: { $destroy(): void } | undefined;
+const savedAutoBookmark = autoBookmark$.getValue();
 
 const close = () => {
   component?.$destroy();
@@ -49,6 +50,8 @@ const close = () => {
 afterEach(async () => {
   close();
   autoBookmarkTime$.next(3);
+  manualBookmark$.next(false);
+  autoBookmark$.next(savedAutoBookmark);
   await browserPage.viewport(1000, 700);
 });
 
@@ -183,5 +186,69 @@ describe('/b paginated: the auto bookmark follows pages inside a paragraph (phon
       await settle(800);
       expect(firstOnScreen(), `saved ${saved}`).toBe(left);
     });
+  }
+});
+
+/*
+ * Manual bookmarks and the Aa sheet's layout buttons. Ways this can go wrong:
+ * - the change writes the current place to the database: the bookmark is gone on the next open;
+ * - the reader reopens on the bookmark instead of the page being read;
+ * - the place stays in memory as "the bookmark": Return to bookmark goes to the wrong place, and
+ *   the send on hide would upload it over the real one.
+ */
+describe('/b keeps a manual bookmark through a layout change', () => {
+  const openBar = async (title: string) => {
+    (document.querySelector('button.fixed.inset-x-0.top-0') as HTMLElement).click();
+    await vi.waitFor(() => {
+      const button = document.querySelector<HTMLElement>(`button[title="${title}"]`);
+      expect(button).toBeTruthy();
+      button!.click();
+    });
+  };
+  const clickText = (selector: string, text: string) =>
+    vi.waitFor(() => {
+      const button = [...document.querySelectorAll<HTMLElement>(selector)].find(
+        (el) => el.textContent?.trim() === text
+      );
+      expect(button, text).toBeTruthy();
+      button!.click();
+    });
+
+  for (const view of [ViewMode.Paginated, ViewMode.Continuous]) {
+    for (const writing of ['horizontal-tb', 'vertical-rl'] as const) {
+      for (const change of ['direction', 'view'] as const) {
+        it(`${view}, ${writing}, ${change}`, async () => {
+          manualBookmark$.next(true);
+          autoBookmark$.next(false);
+          const id = await addBook(2, 25, true);
+          component = await mountReader(id, view, writing);
+          await waitOnScreen('p-2-25');
+          await settle();
+          const bookmark = await savedCount(id);
+
+          for (let turn = 0; turn < 3; turn++) await pageDown(view);
+          const read = visibleParagraphs();
+
+          await openBar('Quick settings');
+          if (change === 'direction') {
+            await clickText('.app-segment', writing === 'vertical-rl' ? 'Horizontal' : 'Vertical');
+          } else {
+            await clickText('.app-segment', view === ViewMode.Paginated ? 'Scroll' : 'Pages');
+          }
+          // A paragraph can span pages, or the page can start with the one after: any of them.
+          await vi.waitFor(
+            () => expect(visibleParagraphs().filter((p) => read.includes(p))).not.toHaveLength(0),
+            { timeout: 10_000 }
+          );
+          await settle(500);
+          expect(await savedCount(id)).toBe(bookmark);
+
+          await openBar('More reader actions');
+          await clickText('button', 'Return to bookmark');
+          await waitOnScreen('p-2-25');
+          expect(await savedCount(id)).toBe(bookmark);
+        }, 40_000);
+      }
+    }
   }
 });
