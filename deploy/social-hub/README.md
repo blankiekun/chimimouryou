@@ -89,7 +89,7 @@ before steps) is III of that rank; no migration, as
 book and its events, when its statistics are deleted); `GET friends` (with their finished books and
 stats; once a minute); `GET feed?since=` (friends' events, 90 days; once a minute);
 `GET profile/:username` (public profiles to anyone, edge-cached 15 minutes; private ones to
-friends; 404 when blocked; 30 a day); `POST report` (`{username, what: name|picture}` or
+friends; 404 when blocked; 30 a day per address, 300 per account); `POST report` (`{username, what: name|picture}` or
 `{what: cover, key, username}`: the cover that reader uploaded, 5 a day; signed-in readers only, 401 otherwise);
 `PUT status` answers `needCovers`: the shared book keys this reader gave no thumbnail for. `PUT cover?key=`
 (raw `image/webp`, at most 20 KB, 32-200 px wide, no EXIF/XMP; only for a book in the reader's

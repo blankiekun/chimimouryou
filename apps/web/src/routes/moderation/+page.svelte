@@ -30,6 +30,7 @@
   import { libraryCoversAvailable } from '$lib/data/library/library-covers';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { t$, uiLanguage$, type MessageKey } from '$lib/i18n';
+  import { activePlugins$ } from '$lib/plugins';
   import { onMount } from 'svelte';
 
   /**
@@ -45,11 +46,12 @@
   let lookupError = '';
   let deleted = '';
 
-  $: dev = $socialSession$?.me.role === 'dev';
+  $: socialOn = $activePlugins$.some((plugin) => plugin.id === 'social');
+  $: dev = socialOn && $socialSession$?.me.role === 'dev';
   $: if (dev && !reports) reload();
 
   onMount(() => {
-    if ($socialSession$) refreshMe().catch(() => {});
+    if (socialOn && $socialSession$) refreshMe().catch(() => {});
   });
 
   const when = (at: number) => relativeTime(at, $uiLanguage$);

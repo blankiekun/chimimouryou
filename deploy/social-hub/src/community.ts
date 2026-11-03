@@ -10,7 +10,8 @@
  * own title key) and the line's hash (sha256 of `normalizeLine`, `#n` added for a repeated line's
  * copy n, 32 hex; the client hashes the same way, test/line-hashes.json). A post is anything about the line (a question, a comment, a
  * quote worth sharing), optionally marked as a spoiler; replies answer it. Works carry a title,
- * volume and one cover thumbnail. Everything here needs a session. The client is
+ * volume and one cover thumbnail. Feed, threads and thread also answer without a session
+ * (`communityRead`); everything else needs one. The client is
  * apps/web/src/lib/data/social/community.ts.
  *
  * Book text the hub keeps: each line's first post stores the line (<= 300 characters, shown in
@@ -24,7 +25,10 @@ import {
   HttpError,
   ID,
   IMMUTABLE,
+  coverFits,
+  dismiss,
   edgeCache,
+  edgePut,
   ipSubject,
   json,
   limit,
@@ -91,6 +95,12 @@ const BIDI = /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/;
 /** Zalgo: three or more combining marks in a row */
 const STACKED = /\p{M}{3,}/u;
 const INVISIBLE = /[\u00ad\u200b\u2060\ufeff]/g;
+const BIDI_ALL = new RegExp(BIDI.source, 'g');
+// eslint-disable-next-line no-control-regex
+const CONTROL_ALL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g;
+/** Book text keeps direction marks; normalizeLine ignores them, so a line's hash survives this */
+const dropBidi = (value: unknown) =>
+  typeof value === 'string' ? value.replace(BIDI_ALL, '') : value;
 
 /**
  * The line as two editions of a book share it: ruby (Aozora 《》 and ｜) dropped, NFKC (width,
@@ -144,14 +154,35 @@ export function plain(value: unknown, max: number, code: string, single = false)
   return text;
 }
 
+/**
+ * A book's title or author from a client, as `plain` allows it. It comes from the book's own
+ * metadata, and one refusal loses the reader's whole status push, on apps already installed too:
+ * what `plain` would refuse is dropped here instead.
+ */
+export function bookText(value: unknown, code: string, optional = false) {
+  if (optional && (value === undefined || value === null)) return '';
+
+  const cleaned =
+    typeof value === 'string'
+      ? value
+          .replace(BIDI_ALL, '')
+          .replace(CONTROL_ALL, '')
+          .replace(/(\p{M}{2})\p{M}+/gu, '$1')
+      : value;
+
+  if (optional && typeof cleaned === 'string' && !cleaned.replace(INVISIBLE, '').trim()) return '';
+  return plain(cleaned, TITLE_LENGTH, code, true);
+}
+
 /** Hides rows of `column`'s author from `viewer` (a bound parameter) when either blocked the other */
 const unblocked = (column: string, viewer: string) =>
   `NOT EXISTS (SELECT 1 FROM links l WHERE l.state = 'blocked'
      AND l.a = min(${column}, ${viewer}) AND l.b = max(${column}, ${viewer}))`;
 
 /** Posts FEED_REPORTS readers past their first days reported wait for a moderator */
-const unreported = () => `(SELECT COUNT(*) FROM reports r JOIN users ru ON ru.id = r.reporter
-  WHERE r.what = 'post' AND r.target = p.id AND ru.created <= ${now() - NEW_ACCOUNT}) < ${FEED_REPORTS}`;
+const unreported = (alias = 'p') =>
+  `(SELECT COUNT(*) FROM reports rp JOIN users ru ON ru.id = rp.reporter
+  WHERE rp.what = 'post' AND rp.target = ${alias}.id AND ru.created <= ${now() - NEW_ACCOUNT}) < ${FEED_REPORTS}`;
 
 const authorColumns = `u.id AS uid, u.username, u.name, u.avatar, u.role, u.share,
   COALESCE(pi.version, 0) AS picture, st.data AS stats`;
@@ -318,6 +349,7 @@ async function threads(request: Request, env: Env, user: UserRow | null, query: 
   const { results } = await env.DB.prepare(
     `SELECT p.line, substr(p.line, 1, 8) AS p, COUNT(*) AS n, MAX(p.spoiler) AS s FROM posts p
      WHERE p.work = ?1 AND p.line > ?2 AND p.user != '' AND ${unblocked('p.user', '?3')}
+       AND ${unreported()}
      GROUP BY p.line ORDER BY p.line LIMIT ${PAGE}`
   )
     // An old 8-hex cursor: past every line that starts with it ('g' sorts after the hex digits).
@@ -384,7 +416,8 @@ async function feed(request: Request, env: Env, user: UserRow | null, query: URL
   const before = /^(\d{1,12}):([0-9a-f]{16})$/.exec(query.get('before') ?? '');
 
   if (query.has('before') && !before) throw new HttpError(400, 'before');
-  await limit(env, user?.id ?? (await ipSubject(request)), 'feed', DAY, 500);
+  // Not 'feed': that's the friends feed's one-minute limit, the same row at 00:00 UTC.
+  await limit(env, user?.id ?? (await ipSubject(request)), 'cfeed', DAY, 500);
 
   const { results } = await env.DB.prepare(
     `SELECT p.id, p.work, p.line, p.body, p.spoiler, p.at, p.edited, ${threadQuote('p')} AS quote,
@@ -473,8 +506,8 @@ async function createPost(request: Request, env: Env, user: UserRow) {
     work = matching(body.work, WORK, 'work');
     title = plain(body.title, TITLE_LENGTH, 'title', true);
     vol = workVolume(work, body.vol);
-    quote = plain(body.quote, QUOTE_LENGTH, 'quote', true);
-    context = plain(body.context, CONTEXT_LENGTH, 'context');
+    quote = plain(dropBidi(body.quote), QUOTE_LENGTH, 'quote', true);
+    context = plain(dropBidi(body.context), CONTEXT_LENGTH, 'context');
     // The feed shows the title and the quote; the thread the context.
     refuseLinks(user, `${title}\n${quote}\n${context}`);
 
@@ -630,11 +663,7 @@ async function uploadWorkCover(request: Request, env: Env, user: UserRow) {
   if (now() - user.created < NEW_ACCOUNT) throw new HttpError(403, 'new');
   await limit(env, user.id, 'cover', DAY, 50);
 
-  const bytes = await readImage(
-    request,
-    COVER_BYTES,
-    (width, height) => width >= 32 && width <= 200 && height >= 32 && height <= 400
-  );
+  const bytes = await readImage(request, COVER_BYTES, coverFits);
   const row = await env.DB.prepare(
     `SELECT w.cover, w.cover_ban, EXISTS (SELECT 1 FROM posts p WHERE p.work = w.work AND p.user = ?2) AS posted
      FROM works w WHERE w.work = ?1`
@@ -685,6 +714,7 @@ async function notes(env: Env, user: UserRow, query: URLSearchParams) {
      FROM posts p JOIN posts r ON r.parent = p.id LEFT JOIN works w ON w.work = r.work
      ${authorJoins('r.user')}
      WHERE p.user = ?1 AND r.user != ?1 AND r.user != '' AND r.at > ?2 AND ${unblocked('r.user', '?1')}
+       AND ${unreported('r')}
      ORDER BY r.at DESC LIMIT 50`
   )
     .bind(user.id, since)
@@ -819,15 +849,7 @@ export async function communityRead(
 
   const response = json(await read(request, env, null, query));
 
-  if (cache) {
-    const copy = new Response(response.clone().body, response);
-
-    copy.headers.set('Cache-Control', `public, max-age=${PUBLIC_TTL[path]}`);
-    const put = cache.put(key, copy).catch(() => {});
-
-    if (ctx) ctx.waitUntil(put);
-    else await put;
-  }
+  await edgePut(cache, ctx, key, response, PUBLIC_TTL[path]);
   return response;
 }
 
@@ -868,8 +890,6 @@ export async function postsOf(env: Env, user: string) {
 export async function communityAdmin(request: Request, env: Env, path: string) {
   const route = `${request.method} ${path}`;
   const query = new URL(request.url).searchParams;
-  const dismiss = (what: string, target: string) =>
-    env.DB.prepare('DELETE FROM reports WHERE what = ?1 AND target = ?2').bind(what, target);
 
   if (route === 'GET reports') {
     const grouped = (what: string) =>
@@ -955,7 +975,7 @@ export async function communityAdmin(request: Request, env: Env, path: string) {
         vol,
         work
       ),
-      dismiss('work', `${vol}|${book}`)
+      dismiss(env, 'work', `${vol}|${book}`)
     ]);
     return json({ ok: true });
   }
@@ -972,7 +992,7 @@ export async function communityAdmin(request: Request, env: Env, path: string) {
         `UPDATE works SET title = '', cover = '', cover_user = '',
            cover_ban = CASE WHEN ?2 != '' THEN ?3 ELSE cover_ban END WHERE work = ?1`
       ).bind(work, row.cover, row.cover_user),
-      dismiss('workinfo', work)
+      dismiss(env, 'workinfo', work)
     ]);
     if (row.cover) {
       await dropWorkFiles(env, [row.cover]);

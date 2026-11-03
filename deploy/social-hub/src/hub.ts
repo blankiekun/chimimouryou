@@ -11,6 +11,7 @@
  */
 
 import {
+  bookText,
   clearLinesOfUser,
   communityAdmin,
   communityRead,
@@ -19,6 +20,7 @@ import {
   deleteUserCommunitySql,
   dropUnusedWorks,
   NEW_ACCOUNT,
+  plain,
   postsOf
 } from './community';
 import {
@@ -95,6 +97,25 @@ export interface Context {
 
 export const edgeCache = () => (globalThis as { caches?: { default?: EdgeCache } }).caches?.default;
 
+/** Keeps a copy of a response in the edge cache (`maxAge`: as long as this, else its own headers) */
+export async function edgePut(
+  cache: EdgeCache | undefined,
+  ctx: Context | undefined,
+  key: string,
+  response: Response,
+  maxAge?: number
+) {
+  if (!cache) return;
+
+  const copy = new Response(response.clone().body, response);
+
+  if (maxAge) copy.headers.set('Cache-Control', `public, max-age=${maxAge}`);
+  const put = cache.put(key, copy).catch(() => {});
+
+  if (ctx) ctx.waitUntil(put);
+  else await put;
+}
+
 export type Row = Record<string, unknown>;
 
 export interface UserRow {
@@ -142,6 +163,8 @@ const KINDS = ['book', 'manga', 'vn'];
 /** Events are kept this long */
 export const EVENT_TTL = 90 * DAY;
 const MAX_FINISHED = 50;
+/** The most words known a profile shows: the app's frequency list (placement-items.json's top band) */
+const WORDS_KNOWN_MAX = 398_255;
 /** A reader's newest events kept (each push may add a few) */
 const MAX_EVENTS = 100;
 /** Streaks that make an event, in days */
@@ -167,6 +190,8 @@ const LOGINS_PER_DAY = 50;
 const SHARE_CHANGES = 200;
 /** Cover thumbnails: ~160 px wide WebP, one per book key and uploader */
 export const COVER_BYTES = 20_480;
+export const coverFits = (width: number, height: number) =>
+  width >= 32 && width <= 200 && height >= 32 && height <= 400;
 export const COVER_UPLOADS = 50;
 /** In an account's first days (NEW_ACCOUNT), so new accounts can't use up UPLOADS_PER_DAY */
 export const NEW_COVER_UPLOADS = 5;
@@ -298,16 +323,8 @@ export function matching(value: unknown, pattern: RegExp, code: string) {
   return value;
 }
 
-/** 1-40 characters, spaces collapsed, no control or direction-override characters */
-export function displayName(value: unknown) {
-  const name = typeof value === 'string' ? value.normalize('NFC').replace(/\s+/g, ' ').trim() : '';
-
-  // eslint-disable-next-line no-control-regex
-  if (!name || [...name].length > 40 || /[\u0000-\u001f\u007f‪-‮⁦-⁩]/.test(name)) {
-    throw new HttpError(400, 'name');
-  }
-  return name;
-}
+/** 1-40 characters of plain text on one line */
+export const displayName = (value: unknown) => plain(value, 40, 'name', true);
 
 function text(value: unknown, max: number, code: string, optional = false) {
   if (optional && (value === undefined || value === null)) return '';
@@ -342,7 +359,6 @@ export async function ipSubject(request: Request) {
   return `ip:${await sha256(clientAddress(request))}`;
 }
 
-/** Counts one use of `action` in the current window; false once `max` were used. */
 /** Counts one action in the window: the count so far, 0 once it reached max */
 export async function take(env: Env, subject: string, action: string, window: number, max: number) {
   const win = Math.floor(now() / window) * window;
@@ -920,11 +936,7 @@ async function uploadCover(request: Request, env: Env, user: UserRow) {
     now() - user.created < NEW_ACCOUNT ? NEW_COVER_UPLOADS : COVER_UPLOADS
   );
 
-  const bytes = await readImage(
-    request,
-    COVER_BYTES,
-    (width, height) => width >= 32 && width <= 200 && height >= 32 && height <= 400
-  );
+  const bytes = await readImage(request, COVER_BYTES, coverFits);
   const shared = await env.DB.prepare(
     `SELECT 1 FROM status WHERE user = ?1 AND book_key = ?2
      UNION ALL SELECT 1 FROM finished WHERE user = ?1 AND book_key = ?2
@@ -972,11 +984,7 @@ async function uploadLibraryCover(request: Request, env: Env, user: UserRow) {
   const count = await take(env, user.id, 'library', DAY, LIBRARY_UPLOADS);
 
   if (!count) throw new HttpError(429, 'limit');
-  const bytes = await readImage(
-    request,
-    COVER_BYTES,
-    (width, height) => width >= 32 && width <= 200 && height >= 32 && height <= 400
-  );
+  const bytes = await readImage(request, COVER_BYTES, coverFits);
 
   if (count % LIBRARY_ROOM_EVERY === 1) await mediaRoom(env);
 
@@ -1074,12 +1082,7 @@ async function serveImage(request: Request, env: Env, ctx: Context | undefined, 
     }
   });
 
-  if (cache) {
-    const put = cache.put(key, response.clone()).catch(() => {});
-
-    if (ctx) ctx.waitUntil(put);
-    else await put;
-  }
+  await edgePut(cache, ctx, key, response);
   return response;
 }
 
@@ -1174,8 +1177,8 @@ function validBooks(value: unknown) {
     if (!hidden && !KINDS.includes(book.kind as string)) throw new HttpError(400, 'kind');
     return {
       key: hidden ? '' : text(book.key, 200, 'key'),
-      title: hidden ? '' : text(book.title, 200, 'title'),
-      author: hidden ? '' : text(book.author, 200, 'author', true),
+      title: hidden ? '' : bookText(book.title, 'title'),
+      author: hidden ? '' : bookText(book.author, 'author', true),
       kind: book.kind as string,
       pct,
       readAt
@@ -1193,7 +1196,7 @@ function validFinished(value: unknown) {
   }
   return {
     key: text(book.key, 200, 'key'),
-    title: text(book.title, 200, 'title'),
+    title: bookText(book.title, 'title'),
     kind: book.kind as string
   };
 }
@@ -1220,7 +1223,7 @@ function validStats(value: unknown, wordsKnown: boolean) {
     finishedYear: count(stats.finishedYear),
     heat: stats.heat,
     ...(wordsKnown && stats.wordsKnown !== undefined && stats.wordsKnown !== null
-      ? { wordsKnown: count(stats.wordsKnown) }
+      ? { wordsKnown: Math.min(count(stats.wordsKnown), WORDS_KNOWN_MAX) }
       : {}),
     ...(stats.rank !== undefined && stats.rank !== null ? validRank(stats, count) : {})
   };
@@ -1569,7 +1572,7 @@ function sdp(value: unknown) {
 /** POST /v1/transfers: {to, title, kind, size}; one live transfer per pair, 20 a day. */
 async function createTransfer(env: Env, user: UserRow, body: Row) {
   const to = matching(body.to, ID, 'to');
-  const title = text(body.title, 200, 'title');
+  const title = bookText(body.title, 'title');
   const kind = body.kind === 'book' || body.kind === 'manga' ? body.kind : null;
   const size = Number(body.size);
 
@@ -1929,7 +1932,7 @@ async function lookUp(env: Env, username: string) {
   };
 }
 
-const dismiss = (env: Env, what: string, target: string) =>
+export const dismiss = (env: Env, what: string, target: string) =>
   env.DB.prepare('DELETE FROM reports WHERE what = ?1 AND target = ?2').bind(what, target);
 
 /** A user's single rows a moderator can delete: the table and the column the last path part names */
@@ -2087,7 +2090,8 @@ and accounts unused for 12 months are deleted automatically.</p>`;
 
 /**
  * GET /v1/profile/:username. Without a token: public profiles only, from the edge cache for
- * 15 minutes (30 misses a day per address); with one: friends see private profiles too.
+ * 15 minutes (30 misses a day per address); with one: friends see private profiles too (300 a
+ * day: every author tap, and the app's own hourly read of the reader's profile).
  */
 async function profileResponse(
   request: Request,
@@ -2101,19 +2105,11 @@ async function profileResponse(
   const hit = await cache?.match(key).catch(() => undefined);
 
   if (hit) return hit;
-  await limit(env, viewer?.id ?? (await ipSubject(request)), 'profile', DAY, 30);
+  await limit(env, viewer?.id ?? (await ipSubject(request)), 'profile', DAY, viewer ? 300 : 30);
 
   const response = json(await profile(env, username, viewer));
 
-  if (cache) {
-    const copy = new Response(response.clone().body, response);
-
-    copy.headers.set('Cache-Control', `public, max-age=${PROFILE_TTL}`);
-    const put = cache.put(key, copy).catch(() => {});
-
-    if (ctx) ctx.waitUntil(put);
-    else await put;
-  }
+  await edgePut(cache, ctx, key, response, PROFILE_TTL);
   return response;
 }
 
