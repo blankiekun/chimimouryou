@@ -101,6 +101,15 @@ internal object MihonApks {
         return pin
     }
 
+    /**
+     * Deletes the pinned apk (the caller checks that nothing else holds it). As with `replaces` in
+     * `install`, a loader that has it open reads on and the loaded sources stay cached.
+     */
+    fun remove(context: Context, pin: String) {
+        if (!PIN.matches(pin)) throw HostError("Not a pin")
+        File(dir(context), "$pin.ext").delete()
+    }
+
     /** The pinned apk's path, after checking it still matches its pin. */
     fun open(context: Context, pin: String): String {
         if (!PIN.matches(pin)) throw HostError("Not a pin")

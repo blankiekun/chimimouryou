@@ -45,7 +45,7 @@
     // One at a time: each book's share is also cached for the Known words sort.
     for (const id of selectedIds.slice(0, maxCoverageBooks)) {
       const estimate = difficulty[id];
-      const words = estimate ? await wordList(id, estimate.computedAt).catch(() => null) : null;
+      const words = estimate ? await wordList(id, estimate).catch(() => null) : null;
 
       coverage = {
         ...coverage,

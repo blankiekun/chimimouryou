@@ -57,6 +57,12 @@ def reader_pack_key() -> str:
                                              for p in paths if os.path.exists(p))
 
 
+def words_stamp() -> str:
+    """Moves when the dictionaries do, which computedAt doesn't: difficulty.json carries it so browsers refetch
+    the word lists they cached (wordList in words-met.ts)."""
+    return hashlib.sha256(f'{reader_pack_key()} words{settings.WORDS_VERSION}'.encode()).hexdigest()[:12]
+
+
 def reader_pack_current() -> bool:
     try:
         with open(settings.READER_PACK + '.key', encoding='utf-8') as f:

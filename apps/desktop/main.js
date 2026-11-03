@@ -20,7 +20,6 @@ import {
   shell
 } from 'electron';
 import { Blob } from 'node:buffer';
-import { lookup } from 'node:dns/promises';
 import { cpSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import { BlockList } from 'node:net';
 import { join } from 'node:path';
@@ -256,8 +255,14 @@ for (const [address, prefix] of [
 
 async function refuseNonPublic(url) {
   const host = new URL(url).hostname.replace(/^\[|\]$/g, '');
-  for (const { address, family } of await lookup(host, { all: true })) {
-    if (notPublic.check(address, family === 6 ? 'ipv6' : 'ipv4'))
+  // shortcut: DNS rebinding stays possible, Chromium resolves again for the request itself (this shares
+  // its host cache, which only narrows the gap); closing it needs a check on the connected address.
+  const { endpoints } = await session.defaultSession.resolveHost(host).catch(() => {
+    throw new Error(`${host} could not be resolved`);
+  });
+  if (!endpoints.length) throw new Error(`${host} could not be resolved`);
+  for (const { address } of endpoints) {
+    if (notPublic.check(address, address.includes(':') ? 'ipv6' : 'ipv4'))
       throw new Error(`${host} is not a public address`);
   }
 }

@@ -21,7 +21,7 @@ HTTP API (bound to localhost, proxied by nginx at /calibre/difficulty/api/):
                                     Replacing one needs ?force=1 when its readings disagree (409 with "agreement")
   POST terms?name=NAME  body: zip   install a Yomitan term dictionary (TERM_DICTIONARY_DIR); admins only
   POST terms/remove {"name": NAME}  remove one; admins only
-Results are written to RESULTS_PATH, which nginx serves as /calibre/difficulty.json.
+Results are written to RESULTS_PATH, which nginx serves as /calibre/difficulty.json, with wordsStamp (readerpack.words_stamp).
 Readings files and word lists are made one at a time in processes of their own, never waiting behind an
 estimate job.
 
@@ -185,6 +185,7 @@ def main(argv):
     command = argv[1] if len(argv) > 1 else 'serve'
     if command == 'serve':
         workers.remove_old_words()
+        jobs.refresh_words_stamp()
         threading.Thread(target=jobs.watch_manga_text, daemon=True).start()
         ThreadingHTTPServer((settings.HOST, settings.PORT), Handler).serve_forever()
     elif command == 'compute':

@@ -38,7 +38,7 @@ import {
   gDriveStorageSource$,
   oneDriveStorageSource$
 } from '$lib/data/store';
-import { storage } from '$lib/data/window/navigator/storage';
+import { persistStorage } from '$lib/data/window/navigator/storage';
 import { AutoReplicationType } from '$lib/functions/replication/replication-options';
 
 /** The first run's choice was made (the storage itself is `storageSource$`). */
@@ -59,11 +59,6 @@ export function showsExternalReadHint(
   isApiSource: boolean
 ) {
   return !isStandalone && !hidden && isApiSource && storageType !== StorageKey.CALIBRE;
-}
-
-/** Asks the browser not to evict books (Safari deletes data of sites unused for 7 days). */
-export function persistStorage() {
-  storage.persist().catch(() => {});
 }
 
 export function driveAvailable(window: Window) {

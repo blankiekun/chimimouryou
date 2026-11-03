@@ -98,7 +98,7 @@
 
     estimate = difficulty?.[id];
     [list, known] = await Promise.all([
-      estimate ? wordList(id, estimate.computedAt).catch(() => null) : null,
+      estimate ? wordList(id, estimate).catch(() => null) : null,
       refreshKnownWordsIfStale()
         .then(getKnownSet)
         .catch(() => undefined)

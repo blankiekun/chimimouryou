@@ -251,6 +251,65 @@ class InstallTermDictionaryTest(unittest.TestCase):
         service.install.remove_term_dictionary('My terms')
         self.assertFalse(os.path.exists(words) or os.path.exists(readings))
 
+    def test_the_words_stamp_follows_a_term_dictionary_change(self):
+        # Catches: a browser keeping cached word rows after a change, since installing or removing runs no job and
+        # computedAt stays (no stamp written then); the rewrite losing the estimates; the stamp moving before the old
+        # lists are gone, so a browser fetches an old list and keeps it under the new stamp.
+        service = self.service
+        service.settings.RESULTS_PATH = os.path.join(tempfile.mkdtemp(), 'difficulty.json')
+        service.jobs.save_results({'books': {'7': {'computedAt': 1}}})
+
+        def results():
+            with open(service.settings.RESULTS_PATH, encoding='utf-8') as f:
+                return json.load(f)
+        before = results()['wordsStamp']
+        words, _, _ = add_made_files(service)
+        lists_left = []
+        save = service.jobs.save_results
+        service.jobs.save_results = lambda r: (lists_left.append(os.path.exists(words)), save(r))
+        self.install(self.zip([('星喰竜', 'ほしくいりゅう'), ('女剣豪', 'おんなけんごう')]))
+        self.assertEqual(lists_left, [False])
+        installed = results()['wordsStamp']
+        self.assertNotEqual(installed, before)
+        self.assertEqual(results()['books'], {'7': {'computedAt': 1}})
+        service.install.remove_term_dictionary('My terms')
+        self.assertNotEqual(results()['wordsStamp'], installed)
+
+    def test_the_words_stamp_at_startup(self):
+        # Catches: a yurigana update (reader_version in the key) leaving the old stamp until the next job, a missing
+        # results file failing the start, and every restart rewriting a file that's already right.
+        service = self.service
+        service.settings.RESULTS_PATH = os.path.join(tempfile.mkdtemp(), 'difficulty.json')
+        service.jobs.refresh_words_stamp()
+        with open(service.settings.RESULTS_PATH, encoding='utf-8') as f:
+            self.assertEqual(json.load(f), {'books': {}, 'wordsStamp': service.readerpack.words_stamp()})
+        saved = []
+        service.jobs.save_results = saved.append
+        service.jobs.refresh_words_stamp()
+        self.assertEqual(saved, [])
+
+    def test_the_words_stamp_never_replaces_results_it_could_not_read(self):
+        # Catches: a damaged or unreadable difficulty.json read as "no estimates" and written back that way, which
+        # loses every estimate (a dictionary change or a plain restart calls this, with no reader asking for it).
+        service = self.service
+        service.settings.RESULTS_PATH = os.path.join(tempfile.mkdtemp(), 'difficulty.json')
+        for damaged in (b'{"books": {"7": {"comput', b'[1, 2]'):
+            with open(service.settings.RESULTS_PATH, 'wb') as f:
+                f.write(damaged)
+            service.jobs.refresh_words_stamp()
+            with open(service.settings.RESULTS_PATH, 'rb') as f:
+                self.assertEqual(f.read(), damaged)
+        os.remove(service.settings.RESULTS_PATH)
+        os.mkdir(service.settings.RESULTS_PATH)  # open() fails with an OSError other than "not there"
+        service.jobs.refresh_words_stamp()
+        self.assertTrue(os.path.isdir(service.settings.RESULTS_PATH))
+
+    def test_a_words_version_bump_moves_the_stamp(self):
+        # Catches: a bump remaking the server's lists while browsers keep the rows they cached (computedAt stays).
+        before = self.service.readerpack.words_stamp()
+        self.service.settings.WORDS_VERSION += 1
+        self.assertNotEqual(self.service.readerpack.words_stamp(), before)
+
     def test_jmnedict_is_a_name_dictionary(self):
         from yurigana.yomitan import name_readings  # noqa: F401 (yurigana 0.5.1+)
         path = os.path.join(tempfile.mkdtemp(), 'names.zip')

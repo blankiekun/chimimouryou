@@ -1,6 +1,6 @@
 <script lang="ts">
   import { browser } from '$app/env';
-  import { goto, replaceState } from '$app/navigation';
+  import { replaceState } from '$app/navigation';
   import { faArrowLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons';
   import { onDestroy, onMount, tick } from 'svelte';
   import { writable } from 'svelte/store';
@@ -8,7 +8,7 @@
   import Fa from 'svelte-fa';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import ImportMenu from '$lib/components/library/import-menu.svelte';
-  import { setPendingImport, type PendingImport } from '$lib/data/library/library-home';
+  import { importOnManage } from '$lib/data/library/library-home';
   import SettingsAccount from '$lib/components/settings/settings-account.svelte';
   import InstallHint from '$lib/components/standalone/install-hint.svelte';
   import SettingsAnalysisTools from '$lib/components/analysis/settings-analysis-tools.svelte';
@@ -341,11 +341,6 @@
       .catch(() => {
         // no-op
       });
-  }
-
-  function importOnManage(value: PendingImport) {
-    setPendingImport(value);
-    goto(`${pagePath}/manage`);
   }
 </script>
 

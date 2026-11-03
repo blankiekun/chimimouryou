@@ -41,6 +41,8 @@ def drop_made_files():
             + glob.glob(os.path.join(glob.escape(settings.READINGS_DIR), '*.json.gz')):
         with contextlib.suppress(OSError):
             os.remove(path)
+    # Only now: a browser told of the change must not fetch an old list and keep it under the new stamp.
+    jobs.refresh_words_stamp()
 
 
 class DictionaryMismatch(ValueError):

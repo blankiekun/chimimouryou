@@ -76,7 +76,7 @@ export interface CoverageCache {
   /** `KnownSet.key` the coverages were computed from */
   key: string;
   /** Calibre book id → share of the book's word occurrences that are known, per estimate */
-  books: Record<number, { share: number; computedAt: number }>;
+  books: Record<number, { share: number; computedAt: number; wordsStamp?: string }>;
 }
 
 const day = 24 * 60 * 60 * 1000;
@@ -247,12 +247,19 @@ async function coverageCache(key: string): Promise<CoverageCache> {
 /** The shares still current: books re-estimated since (or cached in the older format) are left out. */
 function currentShares(
   books: CoverageCache['books'],
-  difficulty: Record<number, { computedAt: number } | undefined>
+  difficulty: Record<number, { computedAt: number; wordsStamp?: string } | undefined>
 ) {
   const shares: Record<number, number> = {};
 
   for (const [id, cached] of Object.entries(books)) {
-    if (cached?.computedAt === difficulty[+id]?.computedAt) shares[+id] = cached.share;
+    const estimate = difficulty[+id];
+
+    if (
+      cached?.computedAt === estimate?.computedAt &&
+      cached?.wordsStamp === estimate?.wordsStamp
+    ) {
+      shares[+id] = cached.share;
+    }
   }
 
   return shares;
@@ -317,7 +324,7 @@ export function estimatedShares(
 export async function bookCoverage(
   id: number,
   words: BookWord[],
-  estimate: WordTotals & { computedAt: number },
+  estimate: WordTotals & { computedAt: number; wordsStamp?: string },
   known: KnownSet
 ) {
   const coverage = wordCoverage(words, known.isKnown, estimate);
@@ -328,10 +335,18 @@ export async function bookCoverage(
   const latest = await coverageCache(known.key);
   const cached = latest.books[id];
 
-  if (cached?.share !== coverage.share || cached.computedAt !== estimate.computedAt) {
+  if (
+    cached?.share !== coverage.share ||
+    cached.computedAt !== estimate.computedAt ||
+    cached.wordsStamp !== estimate.wordsStamp
+  ) {
     const books = {
       ...latest.books,
-      [id]: { share: coverage.share, computedAt: estimate.computedAt }
+      [id]: {
+        share: coverage.share,
+        computedAt: estimate.computedAt,
+        wordsStamp: estimate.wordsStamp
+      }
     };
 
     await (await readerDb()).put('known', { key: known.key, books }, 'coverage');
@@ -371,7 +386,7 @@ export function cacheCoverage(ids: number[]) {
 
         if (!estimate || cached[id] !== undefined) continue;
 
-        const words = await wordList(id, estimate.computedAt).catch(() => null);
+        const words = await wordList(id, estimate).catch(() => null);
 
         if (words) await bookCoverage(id, words, estimate, known);
       }

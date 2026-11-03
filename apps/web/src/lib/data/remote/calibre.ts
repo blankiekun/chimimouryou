@@ -64,6 +64,8 @@ export interface CalibreDifficulty {
    */
   engine?: string;
   computedAt: number;
+  /** The server's dictionaries when its word lists were made (`wordList`); older servers have none */
+  wordsStamp?: string;
   /** The fast core's numbers (V98, histogram; difficulty-core.ts); estimates before it have none */
   core?: CoreNumbers;
 }
@@ -106,7 +108,13 @@ export async function loadCalibreDifficulty(): Promise<Record<string, CalibreDif
     return {};
   }
 
-  return (await response.json()).books || {};
+  const { books, wordsStamp } = await response.json();
+
+  if (!books || !wordsStamp) return books || {};
+
+  return Object.fromEntries(
+    Object.entries<CalibreDifficulty>(books).map(([id, book]) => [id, { ...book, wordsStamp }])
+  );
 }
 
 function toLibraryUrl(path: string, base = libraryUrl) {

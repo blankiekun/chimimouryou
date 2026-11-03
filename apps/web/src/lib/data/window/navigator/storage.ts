@@ -13,3 +13,8 @@ const fakeStorage = {
 };
 
 export const storage = browser ? navigator.storage || fakeStorage : fakeStorage;
+
+/** Asks the browser not to evict books (Safari deletes data of sites unused for 7 days). */
+export function persistStorage() {
+  storage.persist().catch(() => {});
+}

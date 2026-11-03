@@ -10,7 +10,9 @@
  * series can be added at once. Not part of upstream.
  */
 
+import { goto } from '$app/navigation';
 import type { BookCardProps } from '$lib/components/book-card/book-card-props';
+import { pagePath } from '$lib/data/env';
 import { isFinished, isReading } from '$lib/data/library/library-filters';
 import { orderSeries } from '$lib/data/library/library-sort';
 import { writableObjectLocalStorageSubject } from '$lib/data/internal/writable-object-local-storage-subject';
@@ -30,6 +32,12 @@ let pendingImport: PendingImport | undefined;
 
 export function setPendingImport(value: PendingImport) {
   pendingImport = value;
+}
+
+/** The Import menu outside /manage: its files or backup go to /manage, which imports them. */
+export function importOnManage(value: PendingImport) {
+  setPendingImport(value);
+  goto(`${pagePath}/manage`);
 }
 
 export function takePendingImport() {

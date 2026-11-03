@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import ImportMenu from '$lib/components/library/import-menu.svelte';
   import PointBox from '$lib/components/point-box.svelte';
@@ -11,7 +10,7 @@
   import { account$ } from '$lib/data/account/account';
   import { pagePath, standalone } from '$lib/data/env';
   import { learnerStats, type LearnerStats } from '$lib/data/stats/learner-stats';
-  import { setPendingImport, type PendingImport } from '$lib/data/library/library-home';
+  import { importOnManage } from '$lib/data/library/library-home';
   import { socialSession$ } from '$lib/data/social/social-account';
   import { pullAccountStatistics } from '$lib/data/stats/statistics-sync';
   import type { BooksDbStatistic } from '$lib/data/database/books-db/versions/books-db';
@@ -78,11 +77,6 @@
       ?.writeText(link)
       .then(() => (note = $t$('social.linkCopied')))
       .catch(() => {});
-  }
-
-  function importOnManage(value: PendingImport) {
-    setPendingImport(value);
-    goto(`${pagePath}/manage`);
   }
 
   $: rows = stats
