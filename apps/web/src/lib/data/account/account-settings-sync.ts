@@ -20,7 +20,7 @@ import {
   sourcesWifiOnly$
 } from '$lib/data/sources/sources-settings';
 import { BehaviorSubject, map, merge, skip, type Subscription } from 'rxjs';
-import type { ParsedStore } from '$lib/data/internal/writable-storage-subject';
+import { isOtherTabChange, type ParsedStore } from '$lib/data/internal/writable-storage-subject';
 import { isRecord } from '$lib/data/setting-parsers';
 import { mangaSeriesModes$ } from '$lib/data/manga/manga';
 import { mergePlacementResults, placementResults$ } from '$lib/data/difficulty/placement';
@@ -642,12 +642,14 @@ export function startSettingsSync(user: AccountUser | null) {
       )
     )
   ).subscribe(([key, value]) => {
+    const recorded = applyingRemote || isOtherTabChange();
+
     if (entrySettings[key]) {
-      if (applyingRemote) entryValues[key] = entrySettings[key].toMap(value);
+      if (recorded) entryValues[key] = entrySettings[key].toMap(value);
       else recordEntryChanges(key, value);
     }
 
-    if (!applyingRemote) {
+    if (!recorded) {
       writeChangeTimes({ ...readChangeTimes(), [key]: Date.now() });
       scheduleUpload();
     }

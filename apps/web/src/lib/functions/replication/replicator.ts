@@ -9,6 +9,7 @@ import { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
 import { storage } from '$lib/data/window/navigator/storage';
 import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
 import { database, requestPersistentStorage$ } from '$lib/data/store';
+import { pluralize } from '$lib/functions/utils';
 import loadEpub from '$lib/functions/file-loaders/epub/load-epub';
 import loadHtmlz from '$lib/functions/file-loaders/htmlz/load-htmlz';
 import loadTxt from '$lib/functions/file-loaders/txt/load-txt';
@@ -228,11 +229,12 @@ export async function importBackup(
   file: File,
   cancelSignal: AbortSignal
 ) {
-  return replicateData(
+  const contexts = await sourceHandler.setBackupZip(file);
+  const error = await replicateData(
     sourceHandler,
     targetHandler,
     true,
-    await sourceHandler.setBackupZip(file),
+    contexts,
     [
       StorageDataType.DATA,
       StorageDataType.PROGRESS,
@@ -243,6 +245,32 @@ export async function importBackup(
     ],
     cancelSignal
   );
+  const skipped =
+    targetHandler.storageType === StorageKey.BROWSER && !cancelSignal.aborted
+      ? await placesWithoutBook(sourceHandler, contexts)
+      : 0;
+
+  return [
+    error,
+    skipped && `Import the books first, then restore: ${pluralize(skipped, 'place')} not restored.`
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+/** Backups may hold no books, and this browser keeps a place only on a book's record. */
+async function placesWithoutBook(source: BackupStorageHandler, contexts: ReplicationContext[]) {
+  let skipped = 0;
+
+  for (const context of contexts) {
+    source.startContext(context);
+
+    if (!(await database.getDataByTitle(context.title)) && (await source.getProgress())) {
+      skipped += 1;
+    }
+  }
+
+  return skipped;
 }
 
 export async function replicateData(

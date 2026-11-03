@@ -1029,6 +1029,9 @@ export const ja: Record<MessageKey, string> = {
   'reader.copyProgress': '進捗をコピー',
   'reader.welcomeBack': '{days}日ぶりの読書です',
   'reader.dismiss': '閉じる',
+  'reader.placeNotSavedLabel': '読書位置を保存できません',
+  'reader.placeNotSaved':
+    'ブラウザの保存容量がいっぱいのため、読書位置をこの端末に保存できません。空き容量を増やしてください。閉じると失われることがあります。',
   'reader.jumpBack': '戻る',
   'reader.jumpBackLabel': 'ジャンプ前の位置に戻る',
   'reader.close': '閉じる',

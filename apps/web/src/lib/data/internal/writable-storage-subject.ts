@@ -15,6 +15,13 @@ export type Parse<T> = (value: unknown) => T | undefined;
 
 type Subject<T> = ReturnType<typeof writableSubject<T>>;
 
+let refreshing = false;
+
+/** Whether a store is taking another tab's value right now: that tab recorded the change. */
+export function isOtherTabChange() {
+  return refreshing;
+}
+
 /** A store that only takes valid values: from localStorage, `next`/`set` and the settings sync. */
 export type ParsedStore<T> = Subject<T> & { parse: Parse<T> };
 
@@ -30,8 +37,27 @@ export function writableStorageSubject<T>(
     const subject = writableSubject(initValue);
     if (parse) guard(subject, parse);
     subject.pipe(skip(1)).subscribe((updatedValue) => {
-      storage.setItem(key, mapToString(updatedValue ?? defaultValue));
+      if (!refreshing) storage.setItem(key, mapToString(updatedValue ?? defaultValue));
     });
+    // Values live in each tab's memory: a stale one here would upload as the newest (settings sync).
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', (event) => {
+        if ((event.storageArea ?? storage) !== storage) return;
+        if (event.key !== key && event.key !== null) return;
+
+        const value = getStoredOrDefault(storage)(key, defaultValue, mapFromString, parse);
+
+        if (
+          mapToString(value ?? defaultValue) === mapToString(subject.getValue() ?? defaultValue)
+        ) {
+          return;
+        }
+
+        refreshing = true;
+        subject.next(value);
+        refreshing = false;
+      });
+    }
     return subject;
   }
 

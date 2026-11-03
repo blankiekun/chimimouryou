@@ -97,6 +97,10 @@ function sameHighlights(a: Highlight[], b: Highlight[]) {
   );
 }
 
+function isOwnedByOther(stored: { account?: string } | undefined, owner: string | undefined) {
+  return owner !== undefined && stored?.account !== undefined && stored.account !== owner;
+}
+
 function newId() {
   return typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
@@ -130,10 +134,8 @@ export class AnnotationsController {
     // under another sign-in state must not be merged (and uploaded) into this one;
     // they are safe on that account's server. Old records without an owner are kept.
     const owner = this.syncSource ? await this.owner() : undefined;
-    const ownedByOther =
-      owner !== undefined && stored?.account !== undefined && stored.account !== owner;
 
-    this.setAll(ownedByOther ? [] : stored?.highlights || []);
+    this.setAll(isOwnedByOther(stored, owner) ? [] : stored?.highlights || []);
 
     if (this.syncSource) {
       await this.sync();
@@ -185,10 +187,21 @@ export class AnnotationsController {
     return currentAccount()?.id ?? '';
   }
 
+  /** Merges with the stored list in one transaction: another tab may have added to it. */
   private async save(highlights: Highlight[]) {
     const owner = this.syncSource ? await this.owner() : undefined;
+    const tx = (await db()).transaction('annotations', 'readwrite');
+    const stored = await tx.store.get(this.title);
+    const merged = isOwnedByOther(stored, owner)
+      ? highlights
+      : mergeHighlights(highlights, stored?.highlights || []);
 
-    await (await db()).put('annotations', { title: this.title, highlights, account: owner });
+    await tx.store.put({ title: this.title, highlights: merged, account: owner });
+    await tx.done;
+
+    const known = mergeHighlights(this.all, merged);
+
+    if (!sameHighlights(known, this.all)) this.setAll(known);
   }
 
   private persist() {

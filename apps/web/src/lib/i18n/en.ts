@@ -1032,6 +1032,9 @@ export const en = {
   'reader.copyProgress': 'Copy progress',
   'reader.welcomeBack': '{days} days since you last read',
   'reader.dismiss': 'Dismiss',
+  'reader.placeNotSavedLabel': 'Place not saved',
+  'reader.placeNotSaved':
+    "This browser's storage is full, so your place isn't saved here. Free up some space, or it may be lost when you close this page.",
   'reader.jumpBack': 'Back',
   'reader.jumpBackLabel': 'Back to where you were',
   'reader.close': 'Close',
