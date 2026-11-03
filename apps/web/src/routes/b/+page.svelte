@@ -1557,22 +1557,15 @@
     const before = await bookmarkData;
     const here = exploredCharCount;
     const handler = externalStorageHandler;
+    const context = { id: book.id, title: book.title, imagePath: book.coverImage };
     const pull = () => {
       // The handler's cache would answer with what it saw when the book opened.
-      handler.clearData(false);
-      return syncDownData(
-        localStorageHandler,
-        handler,
-        {
-          id: book.id,
-          title: book.title,
-          imagePath: book.coverImage
-        },
-        [
-          ...(long ? [StorageDataType.PROGRESS] : []),
-          ...(tracker ? [StorageDataType.STATISTICS] : [])
-        ]
-      );
+      handler.startContext(context);
+      handler.listFresh();
+      return syncDownData(localStorageHandler, handler, context, [
+        ...(long ? [StorageDataType.PROGRESS] : []),
+        ...(tracker ? [StorageDataType.STATISTICS] : [])
+      ]);
     };
     try {
       // The running tracker would overwrite what other devices read today: it takes their rows.
@@ -1686,7 +1679,7 @@
         ? tracker.uploadOnSynced(() => {
             handler.startContext(context);
             handler.listFresh();
-            return handler.getStatistics().then(({ statistics }) => statistics);
+            return handler.statisticsWithDeleted();
           }, upload)
         : upload()
     ).catch((err: any) => err.message);

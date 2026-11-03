@@ -11,7 +11,12 @@
  */
 
 import { nativeDrive, nativeGrant } from '$lib/data/standalone/android-drive';
-import { gDriveRefreshEndpoint, gDriveRevokeEndpoint, pagePath } from '$lib/data/env';
+import {
+  gDriveRefreshEndpoint,
+  gDriveRevokeEndpoint,
+  oneDriveTokenEndpoint,
+  pagePath
+} from '$lib/data/env';
 import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
 import { writableStringLocalStorageSubject } from '$lib/data/internal/writable-string-local-storage-subject';
 import { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
@@ -22,6 +27,7 @@ import {
   storedRefreshToken,
   storeRefreshToken
 } from '$lib/data/storage/storage-oauth-manager';
+import { isAppDefault } from '$lib/data/storage/storage-source-manager';
 import { StorageKey, StorageSourceDefault } from '$lib/data/storage/storage-types';
 import { isStorageSourceAvailable, storageSource$ } from '$lib/data/storage/storage-view';
 import {
@@ -29,7 +35,8 @@ import {
   cacheStorageData$,
   database,
   fsStorageSource$,
-  gDriveStorageSource$
+  gDriveStorageSource$,
+  oneDriveStorageSource$
 } from '$lib/data/store';
 import { storage } from '$lib/data/window/navigator/storage';
 import { AutoReplicationType } from '$lib/functions/replication/replication-options';
@@ -71,11 +78,31 @@ function driveSourceName() {
   return gDriveStorageSource$.getValue() || StorageSourceDefault.GDRIVE_DEFAULT;
 }
 
+function oneDriveSourceName() {
+  return oneDriveStorageSource$.getValue() || StorageSourceDefault.ONEDRIVE_DEFAULT;
+}
+
+function hasLiveToken(name: string, now: number) {
+  const token = storageOAuthTokens.get(name);
+  return !!token && token.expiration > now;
+}
+
 /** A Drive token that hasn't expired, or a kept refresh token: the next sync needs no sign-in. */
 export function driveSignedIn(now = Date.now()) {
   const name = driveSourceName();
-  const token = storageOAuthTokens.get(name);
-  return (!!token && token.expiration > now) || !!storedRefreshToken(name);
+  return hasLiveToken(name, now) || !!storedRefreshToken(name);
+}
+
+/**
+ * False only when the library's source is the built-in Drive or OneDrive with no sign-in. A source
+ * with the reader's own client asks for its password when it's used.
+ */
+export function cloudSignedIn(source: StorageKey, now = Date.now()) {
+  if (source === StorageKey.GDRIVE) return !isAppDefault(driveSourceName()) || driveSignedIn(now);
+  if (source !== StorageKey.ONEDRIVE) return true;
+  const name = oneDriveSourceName();
+  // The built-in OneDrive client never renews from a refresh token (`getToken`).
+  return !isAppDefault(name) || hasLiveToken(name, now);
 }
 
 /** The signed-in Google account, for the Storage row; empty when unknown. Kept across reloads, cleared on sign-out. */
@@ -104,8 +131,38 @@ export async function signInToDrive(window: Window): Promise<string> {
     return '';
   }
 
-  // The Android app signs in natively, without the pop-up.
-  const popup = nativeDrive()
+  const error = await openSignIn(
+    window,
+    new StorageOAuthManager(StorageKey.GDRIVE, gDriveRefreshEndpoint),
+    driveSourceName(),
+    !nativeDrive()
+  );
+
+  if (!error) await loadDriveEmail();
+
+  return error;
+}
+
+/** `signInToDrive` for the library's source, Drive or OneDrive. */
+export function signInToCloud(window: Window, source: StorageKey): Promise<string> {
+  return source === StorageKey.ONEDRIVE
+    ? openSignIn(
+        window,
+        new StorageOAuthManager(StorageKey.ONEDRIVE, oneDriveTokenEndpoint),
+        oneDriveSourceName(),
+        true
+      )
+    : signInToDrive(window);
+}
+
+async function openSignIn(
+  window: Window,
+  manager: StorageOAuthManager,
+  name: string,
+  // The Android app signs in to Drive natively, without the pop-up.
+  usePopup: boolean
+): Promise<string> {
+  const popup = !usePopup
     ? undefined
     : StorageOAuthManager.createWindow(
         `${pagePath}/auth?ttu-init-wait=1`,
@@ -117,12 +174,7 @@ export async function signInToDrive(window: Window): Promise<string> {
   if (popup === null) return 'blocked';
 
   try {
-    await new StorageOAuthManager(StorageKey.GDRIVE, gDriveRefreshEndpoint).getToken(
-      window,
-      driveSourceName(),
-      true,
-      popup
-    );
+    await manager.getToken(window, name, true, popup);
   } catch (error: any) {
     return error.message || 'Sign-in failed';
   } finally {
@@ -130,7 +182,6 @@ export async function signInToDrive(window: Window): Promise<string> {
     if (popup && !popup.closed) popup.close();
   }
 
-  await loadDriveEmail();
   return '';
 }
 

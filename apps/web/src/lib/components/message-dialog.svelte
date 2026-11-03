@@ -8,6 +8,9 @@
 
   export let message: string;
 
+  /** The way to fix what the message says, beside Close. */
+  export let link: { href: string; text: string } | undefined = undefined;
+
   const dispatch = createEventDispatcher<{
     close: void;
   }>();
@@ -19,6 +22,9 @@
     <p>{message}</p>
   </svelte:fragment>
   <svelte:fragment slot="footer">
+    {#if link}
+      <a class={buttonClasses} href={link.href} on:click={() => dispatch('close')}>{link.text}</a>
+    {/if}
     <button class={buttonClasses} on:click={() => dispatch('close')}>
       Close
       <Ripple />

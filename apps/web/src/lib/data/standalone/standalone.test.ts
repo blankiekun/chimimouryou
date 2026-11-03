@@ -7,6 +7,14 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Up here, outside any test's timeout: compiling these cold under load outlasts it, and the tests
+// and hooks below only evaluate them again after `vi.resetModules`.
+await Promise.all([
+  import('$lib/plugins'),
+  import('$lib/data/social/social'),
+  import('$lib/data/discord/discord')
+]);
+
 describe('standalone edition', () => {
   const fetchMock = vi.fn();
 

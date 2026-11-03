@@ -40,6 +40,7 @@
     getDateTimeString,
     getPreviousDayKey,
     getSecondsToDate,
+    isDeletedStatistic,
     toTimeString
   } from '$lib/functions/statistic-util';
   import { clickOutside } from '$lib/functions/use-click-outside';
@@ -171,7 +172,16 @@
     return flushData ? flushUpdates() : Promise.resolve([false, 0]);
   }
 
-  export async function flushUpdates(force = false) {
+  export function flushUpdates(force = false) {
+    // One at a time: a save seen half done would look like another writer's row (`takeThisDevice`).
+    const flush = flushing.then(() => storeUpdates(force));
+
+    flushing = flush;
+
+    return flush;
+  }
+
+  async function storeUpdates(force: boolean) {
     if (!statisticsToStore.size || ((blockDataUpdates || holdFlush) && !force)) {
       return [false, 0];
     }
@@ -180,15 +190,20 @@
     hadError = false;
 
     const toUpdate: string[] = JSON.parse(JSON.stringify([...statisticsToStore]));
-    const itemsToStore = toUpdate
-      .map((statisticToStore) => statistics.get(statisticToStore))
-      .filter(filterNotNullAndNotUndefined);
-    const savingToday = toUpdate.includes(todayKey) ? statistics.get(todayKey) : undefined;
-    const savingNow = savingToday && { ...savingToday };
 
     statisticsToStore.clear();
 
     try {
+      await takeThisDevice();
+
+      // Copies: exactly what lands in the database, with the time `storeStatistics` may raise,
+      // whatever the ticks do to the live rows meanwhile.
+      const itemsToStore = toUpdate
+        .map((statisticToStore) => statistics.get(statisticToStore))
+        .filter(filterNotNullAndNotUndefined)
+        .map((row) => ({ ...row }));
+      const savingNow = itemsToStore.find((row) => row.dateKey === todayKey);
+
       await database.storeStatistics(
         bookTitle,
         itemsToStore,
@@ -237,8 +252,17 @@
     holdFlush += 1;
 
     try {
+      await flushing;
+      await takeThisDevice();
+      let readFailed = false;
+
       // A failed read: the upload reads the same file first, and reports what's wrong.
-      takeOtherDevices(await read().catch(() => undefined));
+      takeOtherDevices(
+        await read().catch(() => {
+          readFailed = true;
+          return undefined;
+        })
+      );
       await flushUpdates(true);
 
       todayKey = getDateKey($startDayHoursForTracker$);
@@ -251,7 +275,9 @@
 
       const error = await upload();
 
-      if (!error && sending) syncedToday = sending;
+      // Not after a failed read: a newer file there makes the upload skip with no error, and this
+      // row was never sent. If it was, `takeOtherDevices` knows it by `sentToday`.
+      if (!error && sending && !readFailed) syncedToday = sending;
 
       return error;
     } finally {
@@ -273,8 +299,31 @@
 
     if (theirs.lastStatisticModified <= (synced?.lastStatisticModified ?? 0)) return;
 
+    rebaseToday(key, theirs, synced);
+  }
+
+  /**
+   * A correction made on this device (statistics page, another tab) changes today's row under this
+   * tab, and its upload can fail, so the sync target never shows it: only what was read since stays.
+   * shortcut: a pull in another tab looks the same, so this tab's saved but unsent seconds go with it.
+   */
+  async function takeThisDevice() {
+    const key = getDateKey($startDayHoursForTracker$);
+    const stored = (await database.getSyncedStatisticsForBook(bookTitle)).find(
+      (row) => row.dateKey === key
+    );
+    const saved = savedToday?.dateKey === key ? savedToday : undefined;
+
+    if (!stored || sameCount(stored, saved)) return;
+
+    rebaseToday(key, stored, saved);
+    savedToday = { ...stored };
+  }
+
+  /** Today's row becomes `row` plus what this tab read beyond `base`, and counts as synced there. */
+  function rebaseToday(key: string, row: BooksDbStatistic, base: BooksDbStatistic | undefined) {
     const current = statistics.get(key);
-    const today = { ...theirs, title: bookTitle };
+    const today = { ...row, title: bookTitle };
 
     if (current?.completedBook) {
       today.completedBook = 1;
@@ -283,9 +332,9 @@
 
     updateStatistic(
       today,
-      (current?.readingTime ?? 0) - (synced?.readingTime ?? 0),
-      (current?.charactersRead ?? 0) - (synced?.charactersRead ?? 0),
-      Math.max(current?.lastStatisticModified ?? 0, theirs.lastStatisticModified + 1)
+      (current?.readingTime ?? 0) - (base?.readingTime ?? 0),
+      (current?.charactersRead ?? 0) - (base?.charactersRead ?? 0),
+      Math.max(current?.lastStatisticModified ?? 0, row.lastStatisticModified + 1)
     );
     updateStatistic(
       allTimeStatistics,
@@ -296,7 +345,15 @@
     statistics.set(key, today);
     statisticsToStore.add(key);
     todaysStatistics = today;
-    syncedToday = { ...theirs };
+    syncedToday = { ...row };
+  }
+
+  /** Counts, not times: a save or a pull can raise a row's time without it being anyone else's row. */
+  function sameCount(row: BooksDbStatistic, other: BooksDbStatistic | undefined) {
+    return (
+      row.readingTime === (other?.readingTime ?? 0) &&
+      row.charactersRead === (other?.charactersRead ?? 0)
+    );
   }
 
   export function updateCompletedBook(
@@ -326,23 +383,27 @@
   }
 
   /**
-   * Runs `pull`, which brings other devices' rows into the database, then takes them. Today keeps
-   * only what this tab hasn't saved: the rest is in the database's row or was replaced by a newer one.
+   * Runs `pull`, which brings other devices' rows into the database, then takes them. A pulled today
+   * gets what this tab hasn't sent on top, as an upload's read would; otherwise today stays.
    */
   export async function reloadStatistics(pull: () => Promise<unknown>) {
     // A save during the pull would make this tab's older count the newest row, and win the merge.
     holdFlush += 1;
 
     try {
+      // Before the pull: what it leaves different from this tab's last save is theirs.
+      await flushing;
+      await takeThisDevice();
       await pull();
 
-      const rows = await database.getStatisticsForBook(bookTitle);
+      const rows = await database.getSyncedStatisticsForBook(bookTitle);
 
       todayKey = getDateKey($startDayHoursForTracker$);
 
       const current = statistics.get(todayKey);
       const stored = rows.find((row) => row.dateKey === todayKey);
       const saved = savedToday?.dateKey === todayKey ? savedToday : undefined;
+      const synced = syncedToday?.dateKey === todayKey ? syncedToday : undefined;
       const pending = [...statisticsToStore]
         .filter((dateKey) => dateKey !== todayKey)
         .map((dateKey) => statistics.get(dateKey))
@@ -351,18 +412,18 @@
       statistics = new Map();
       allTimeStatistics = getDefaultStatistic(bookTitle, todayKey);
       bookCompletionStatistics = undefined;
-      loadRows(rows.filter((row) => row.dateKey !== todayKey));
+      loadRows(rows.filter((row) => row.dateKey !== todayKey && !isDeletedStatistic(row)));
       pending.forEach((row) => statistics.set(row.dateKey, row));
 
       let today = current;
 
-      if (stored && (!current || stored.lastStatisticModified !== saved?.lastStatisticModified)) {
+      if (stored && (!current || !sameCount(stored, saved))) {
         today = stored;
         savedToday = { ...stored };
         syncedToday = { ...stored };
 
-        const timeDiff = (current?.readingTime ?? 0) - (saved?.readingTime ?? 0);
-        const characterDiff = (current?.charactersRead ?? 0) - (saved?.charactersRead ?? 0);
+        const timeDiff = (current?.readingTime ?? 0) - (synced?.readingTime ?? 0);
+        const characterDiff = (current?.charactersRead ?? 0) - (synced?.charactersRead ?? 0);
 
         if (timeDiff || characterDiff) {
           updateStatistic(
@@ -425,6 +486,7 @@
   let syncedToday: BooksDbStatistic | undefined;
   let sentToday: BooksDbStatistic | undefined;
   let holdFlush = 0;
+  let flushing: Promise<unknown> = Promise.resolve();
   let lastTrackerTick = 0;
   let lastTrackerFlushTime = 0;
   let trackerIdleTime = 0;
