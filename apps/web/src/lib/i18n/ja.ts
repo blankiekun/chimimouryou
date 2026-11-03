@@ -2180,6 +2180,12 @@ export const ja: Record<MessageKey, string> = {
   'community.report': '報告',
   'community.reportConfirm':
     'この投稿を報告しますか?モデレーターが確認します。3件の報告で確認まで非表示になります。',
+  'community.reportInfo': 'タイトル・表紙を報告',
+  'community.reportInfoConfirm':
+    'この作品のタイトルや表紙が誤っている、または不適切だと報告しますか？モデレーターが確認します。',
+  'community.reportMatch': '本の紐付けの誤りを報告',
+  'community.reportMatchConfirm':
+    'この本が別の作品に紐付けられていると報告しますか？モデレーターが確認します。',
   'community.blockName': '{name}さんをブロック',
   'community.wordsKnown': '既知語 {count}',
   'community.newReplies': '新しい返信',

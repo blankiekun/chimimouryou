@@ -6,10 +6,14 @@
 
 import { BlobReader, BlobWriter, TextWriter, ZipReader } from '@zip.js/zip.js';
 import { isOPFType, type EpubContent, type EpubOPFContent } from './types';
+import { assertMemberSize } from '../htmlz/extract-htmlz';
 
 import type { Entry } from '@zip.js/zip.js';
 import { XMLParser } from 'fast-xml-parser';
 import path from 'path-browserify';
+
+/** What generate-epub-html and generate-epub-style-sheet read, besides the spine and the .ncx */
+const textMediaTypes = new Set(['application/xhtml+xml', 'text/html', 'text/css']);
 
 export default async function extractEpub(blob: Blob) {
   const reader = new ZipReader(new BlobReader(blob));
@@ -25,6 +29,8 @@ export default async function extractEpub(blob: Blob) {
       return acc;
     }, {});
 
+    assertMemberSize(fileMap['META-INF/container.xml']);
+
     const containerXml = await fileMap['META-INF/container.xml'].getData!(new TextWriter());
     const parser = new XMLParser({
       ignoreAttributes: false,
@@ -38,6 +44,8 @@ export default async function extractEpub(blob: Blob) {
     const rootFile = Array.isArray(rootFiles) ? rootFiles[0] : rootFiles;
 
     const contentOpfFilename = rootFile['@_full-path'];
+
+    assertMemberSize(fileMap[contentOpfFilename]);
 
     const contentsXml = await fileMap[contentOpfFilename].getData!(new TextWriter());
     result[contentOpfFilename] = contentsXml;
@@ -75,14 +83,23 @@ export default async function extractEpub(blob: Blob) {
         }
 
         if (entry.getData && !entry.directory) {
-          let value: string | Blob;
           const mediaType: string = item['@_media-type'];
-          if (mediaType.startsWith('image/')) {
-            value = await entry.getData(new BlobWriter(mediaType));
-          } else {
-            value = await entry.getData(new TextWriter());
+          const isImage = mediaType.startsWith('image/');
+
+          // Fonts, audio and video are never used: left in the zip, whatever their size.
+          if (
+            !isImage &&
+            !spineIds.has(item['@_id']) &&
+            !textMediaTypes.has(mediaType) &&
+            !fileRelativePath.endsWith('.ncx')
+          ) {
+            return;
           }
-          result[fileRelativePath] = value;
+
+          assertMemberSize(entry);
+          result[fileRelativePath] = isImage
+            ? await entry.getData(new BlobWriter(mediaType))
+            : await entry.getData(new TextWriter());
         }
       })
     );

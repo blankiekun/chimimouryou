@@ -317,16 +317,23 @@
               {/if}
             </button>
             {#if openEntry === entry.id}
-              <textarea
-                class="app-input w-full"
-                rows="5"
-                lang="ja"
-                value={entry.content}
-                on:change={(e) => editContent(entry.id, e.currentTarget.value)}
-              />
+              {#if then === entry}
+                <textarea
+                  class="app-input w-full"
+                  rows="5"
+                  lang="ja"
+                  value={entry.content}
+                  on:change={(e) => editContent(entry.id, e.currentTarget.value)}
+                />
+              {:else if then}
+                <!-- Read earlier in the book: as it was then; the latest version would be a spoiler. -->
+                <p class="lore-then" lang="ja">{then.content}</p>
+              {:else}
+                <p class="panel-note pb-2">{$t$('reader.loreUpdatedLater')}</p>
+              {/if}
               <div class="panel-note flex items-center gap-3 pb-2">
                 <span class="min-w-0 flex-1 truncate" lang="ja"
-                  >{$t$('reader.loreKeys', { keys: entry.keys.join('、') })}</span
+                  >{then ? $t$('reader.loreKeys', { keys: then.keys.join('、') }) : ''}</span
                 >
                 <span
                   >{entry.fromBook
@@ -375,6 +382,11 @@
     padding: 0.6rem 0;
     text-align: left;
     line-height: 1.6;
+  }
+
+  .lore-then {
+    padding-bottom: 0.5rem;
+    white-space: pre-wrap;
   }
 
   .lore-preview {

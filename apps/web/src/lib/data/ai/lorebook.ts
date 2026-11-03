@@ -61,8 +61,8 @@ export interface Lorebook {
 }
 
 /**
- * lorebook.json from another device: entries without an id, name or keys are dropped; undefined
- * when `entries` isn't a list or a count isn't a number.
+ * lorebook.json from another device: entries without an id, name, content or keys are dropped;
+ * undefined when `entries` isn't a list or a count isn't a number.
  */
 export function parseLorebook(raw: any): Lorebook | undefined {
   if (
@@ -79,6 +79,7 @@ export function parseLorebook(raw: any): Lorebook | undefined {
       (entry: any) =>
         typeof entry?.id === 'string' &&
         typeof entry.name === 'string' &&
+        typeof entry.content === 'string' &&
         Array.isArray(entry.keys) &&
         entry.keys.every((key: unknown) => typeof key === 'string')
     )
@@ -193,13 +194,17 @@ const genericWords = new Set(
 );
 
 /**
- * An entry still known by a description (髭のある男, 団扇の女): its name ends with a common word.
- * Its generic keys stay until it is named, since they are how the passage refers to it.
+ * An entry still known by a description (髭のある男, 団扇の女): its name is a common word, or kana
+ * and then a word for a person. 和男 and Yuki are names. Its generic keys stay until it is named,
+ * since they are how the passage refers to it.
  */
 function unnamed(name: string) {
   const plain = nameKey(name);
 
-  return [...genericWords].some((word) => plain.endsWith(word));
+  return (
+    genericWords.has(plain) ||
+    /[\p{sc=Hiragana}\p{sc=Katakana}ー](?:男|女|少女|少年|老人|子供)$/u.test(plain)
+  );
 }
 
 /**

@@ -10,6 +10,8 @@
     isPlain,
     loadThread,
     replyTo,
+    reportWork,
+    reportWorkInfo,
     type CommunityPost as Post,
     type CommunityThread
   } from '$lib/data/social/community';
@@ -31,7 +33,8 @@
    * opening its own discussion (the post and its replies). A reply box (with its own Spoiler mark)
    * at the end. A spoiler-marked post stays blurred until its Show spoiler; the line's page with it
    * while the shown root is one. Post on this line opens the composer on the line (no selection).
-   * A plain post (`isPlain`, on no line) shows only itself and its replies.
+   * A plain post (`isPlain`, on no line) shows only itself and its replies. ••• beside the work
+   * reports its title or cover and, with a book open, a wrong match to it.
    */
   export let work: string;
   export let line: string;
@@ -59,6 +62,9 @@
   let replyBox: HTMLTextAreaElement;
   /** Post on this line: the composer in place of the posts */
   let composing = false;
+  let workMenuOpen = false;
+  let workNote = '';
+  let workError = '';
 
   let focus = post;
   $: parts = thread ? splitThread(thread.posts) : undefined;
@@ -114,6 +120,23 @@
     }
   }
 
+  async function reportWorkThing(confirm: string, report: () => Promise<void>) {
+    workMenuOpen = false;
+    if (!$socialSession$) {
+      signUp = true;
+      return;
+    }
+    if (!window.confirm(confirm)) return;
+    workError = '';
+    workNote = '';
+    try {
+      await report();
+      workNote = $t$('social.reported');
+    } catch (e) {
+      workError = $t$(communityErrorKey(e));
+    }
+  }
+
   function copyLink() {
     navigator.clipboard
       ?.writeText(lineLink(work, line))
@@ -162,7 +185,42 @@
     />
   {:else if thread && context}
     {#if !isPlain(thread)}
-      <CommunityWork title={thread.title} vol={thread.vol} cover={thread.cover} />
+      <CommunityWork title={thread.title} vol={thread.vol} cover={thread.cover}>
+        <span class="thread-work-menu">
+          <button
+            type="button"
+            class="thread-work-more"
+            aria-label={$t$('community.more')}
+            aria-expanded={workMenuOpen}
+            on:click={() => (workMenuOpen = !workMenuOpen)}>•••</button
+          >
+          {#if workMenuOpen}
+            <div class="thread-work-panel app-popover-panel" role="menu">
+              <button
+                type="button"
+                class="app-popover-item"
+                role="menuitem"
+                on:click={() =>
+                  reportWorkThing($t$('community.reportInfoConfirm'), () => reportWorkInfo(work))}
+                >{$t$('community.reportInfo')}</button
+              >
+              {#if bookTitle}
+                <button
+                  type="button"
+                  class="app-popover-item"
+                  role="menuitem"
+                  on:click={() =>
+                    reportWorkThing($t$('community.reportMatchConfirm'), () =>
+                      reportWork(bookTitle)
+                    )}>{$t$('community.reportMatch')}</button
+                >
+              {/if}
+            </div>
+          {/if}
+        </span>
+      </CommunityWork>
+      {#if workError}<p class="thread-error" role="alert">{workError}</p>{/if}
+      {#if workNote}<p class="thread-quiet" role="status">{workNote}</p>{/if}
       <figure class="thread-context">
         <blockquote
           lang="ja"
@@ -325,6 +383,26 @@
 
   .thread-retry {
     align-self: flex-start;
+  }
+
+  .thread-work-menu {
+    position: relative;
+    margin-left: auto;
+  }
+
+  .thread-work-more {
+    min-width: 2.75rem;
+    min-height: 2rem;
+    color: var(--c-muted, var(--app-muted-fg));
+    letter-spacing: 0.08em;
+  }
+
+  .thread-work-panel {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 5;
+    white-space: nowrap;
   }
 
   .thread-context {

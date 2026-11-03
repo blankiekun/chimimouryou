@@ -106,6 +106,8 @@ function removeUnsafeMarkup(root: Element) {
       if (
         lowerName.startsWith('on') ||
         lowerName === 'srcdoc' ||
+        // <img name="getElementById"> replaces that method on `document`.
+        (lowerName === 'name' && element.localName.toLowerCase() === 'img') ||
         (urlAttributes.has(lowerName) && isUnsafeUrl(element, lowerName, value))
       ) {
         element.removeAttribute(name);
