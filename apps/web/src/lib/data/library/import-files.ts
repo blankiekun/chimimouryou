@@ -28,7 +28,7 @@ import {
   waitForImportJobs,
   type CalibreImportJob
 } from '$lib/data/remote/calibre-import';
-import { ApiStorageHandler } from '$lib/data/storage/handler/api-handler';
+import { GDriveStorageHandler } from '$lib/data/storage/handler/gdrive-handler';
 import { ServerStorageHandler } from '$lib/data/storage/handler/server-handler';
 import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
 import { asksBeforeVnUpload, StorageKey } from '$lib/data/storage/storage-types';
@@ -158,12 +158,12 @@ export function openInstalledGame() {
 
 /**
  * A Windows game is only ever in this browser: under a cloud or Calibre source it is kept on
- * this device like a visual novel kept off the cloud (ApiStorageHandler.keepOnDevice).
+ * this device like a visual novel kept off the cloud (BaseStorageHandler.keepOnDevice).
  */
 async function saveWindowsGame(book: LoadData) {
   const handler = getStorageHandler(window, storageSource$.getValue(), '');
 
-  if (handler instanceof ApiStorageHandler || handler instanceof ServerStorageHandler) {
+  if (handler instanceof GDriveStorageHandler || handler instanceof ServerStorageHandler) {
     await handler.keepOnDevice(book);
   } else {
     await getStorageHandler(

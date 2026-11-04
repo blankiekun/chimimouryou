@@ -65,8 +65,6 @@ export function storeRefreshToken(storageSourceName: string, refreshToken: strin
 }
 
 export class StorageOAuthManager {
-  private storageType: StorageKey;
-
   private refreshEndpoint;
 
   private parentWindow: Window | undefined;
@@ -94,8 +92,7 @@ export class StorageOAuthManager {
 
   private authTimeoutTimer: number | undefined;
 
-  constructor(type: StorageKey, refreshEndpoint: string) {
-    this.storageType = type;
+  constructor(refreshEndpoint: string) {
     this.refreshEndpoint = refreshEndpoint;
   }
 
@@ -303,7 +300,7 @@ export class StorageOAuthManager {
           await db.put('storageSource', {
             ...existingStorageSourceData,
             name: storageSourceName,
-            type: this.storageType,
+            type: StorageKey.GDRIVE,
             data: newData,
             lastSourceModified: Date.now()
           });
@@ -470,7 +467,9 @@ export class StorageOAuthManager {
         event.ports[0].postMessage({
           result: {
             ...this.remoteData,
-            ...StorageOAuthManager.getAuthVariables(this.storageType),
+            authEndpoint: gDriveAuthEndpoint,
+            tokenEndpoint: gDriveTokenEndpoint,
+            scope: gDriveScope,
             // The built-in client sends its secret too when the build has one (Google's token
             // endpoint needs it for web clients).
             sendSecret: !isAppDefault(this.storageSourceName) || !!gDriveClientSecret
@@ -577,20 +576,6 @@ export class StorageOAuthManager {
     const newWindow = window.open(url, title, features.join(','));
 
     return newWindow;
-  }
-
-  static getAuthVariables(target: StorageKey) {
-    switch (target) {
-      case StorageKey.GDRIVE:
-        return {
-          authEndpoint: gDriveAuthEndpoint,
-          tokenEndpoint: gDriveTokenEndpoint,
-          scope: gDriveScope
-        };
-
-      default:
-        return {};
-    }
   }
 
   static revokeToken(revokeEndpoint: string, token: string) {
