@@ -10,5 +10,4 @@ overrides:
   'ajv@>=8 <8.18.0': ^8.18.0
   'yaml@<1.10.3': ^1.10.3
   'tinypool@<2.1.2': ^2.1.2
-  # 4.64.6+ breaks the build ($state is not defined in kit's state.svelte.js).
-  rollup: 4.64.5
+  'glob@>=9 <14.0.2': ^14.0.2
