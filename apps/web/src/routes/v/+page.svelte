@@ -124,6 +124,8 @@
   let lines: VnLine[] = [];
   let ended = false;
   let reading: VnReading | undefined;
+  // Each opening starts paused: menus and title screens would otherwise count as reading.
+  let statsPaused = true;
   /** The game's text source and frame (CONscripter or VNBox) */
   $: info = book && vnInfo(book);
   $: source = info && vnTextSource(info, onText);
@@ -568,7 +570,7 @@
 
     lines = parseVnPage(text);
 
-    const dirty = reading.add(text, skipped, readBefore, {
+    const dirty = reading.add(text, skipped || statsPaused, readBefore, {
       statistics: $statisticsEnabled$,
       startDayHours: $startDayHoursForTracker$
     });
@@ -671,6 +673,11 @@
     goto(`${pagePath}/manage`);
   }
 
+  function toggleStats() {
+    statsPaused = !statsPaused;
+    if (reading) reading.lastTextTime = Date.now();
+  }
+
   function toggleSkip() {
     skipping = !skipping;
     engineSet('Skip', skipping ? 1 : 0);
@@ -749,7 +756,15 @@
       click: openMenu,
       phone: true
     },
-    { label: 'Skip', title: skipTitle, on: skipping, click: toggleSkip, phone: true }
+    { label: 'Skip', title: skipTitle, on: skipping, click: toggleSkip, phone: true },
+    {
+      label: 'Stats',
+      title: statsPaused
+        ? 'Paused: reading time and characters are not counted'
+        : 'Counting reading time and characters',
+      on: !statsPaused,
+      click: toggleStats
+    }
   ];
 
   function toggleFullscreen() {
