@@ -12,10 +12,42 @@ permissions:
   contents: read
 
 jobs:
+  # Catches a release on an outdated Electron, before the CI wait, any build or anything that publishes.
+  # Override: the repository variable ELECTRON_ALLOWED_MAJOR=44 requires 44's latest patch instead (CONTRIBUTING.md).
+  electron:
+    name: Electron is the latest stable
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: apps/desktop pins npm's latest Electron
+        env:
+          ALLOWED_MAJOR: ${{ vars.ELECTRON_ALLOWED_MAJOR }}
+        run: |
+          pinned=$(jq -r .devDependencies.electron apps/desktop/package.json)
+          tag=${ALLOWED_MAJOR:+$ALLOWED_MAJOR-x-y}
+          wanted=$(curl -fsS --retry 2 --max-time 15 https://registry.npmjs.org/-/package/electron/dist-tags |
+            jq -r --arg tag "${tag:-latest}" '.[$tag] // empty') || true
+          if [ -z "$wanted" ]; then
+            if [ -n "$ALLOWED_MAJOR" ] && [ "${pinned%%.*}" = "$ALLOWED_MAJOR" ]; then
+              echo "::warning::No Electron ${tag} from npm, so the patch is unchecked: $pinned passes on ELECTRON_ALLOWED_MAJOR"; exit 0
+            fi
+            echo "::error::No Electron ${tag:-latest} from npm (unreachable?). Re-run this job, or if npm stays down set the repository variable ELECTRON_ALLOWED_MAJOR=${pinned%%.*}"; exit 1
+          fi
+          if [ "$pinned" != "$wanted" ]; then
+            echo "::error::apps/desktop/package.json pins Electron $pinned, npm's ${tag:-latest} is $wanted: pin $wanted exactly on main and tag that (CONTRIBUTING.md, CI and releases)"; exit 1
+          fi
+          echo "Electron $pinned is npm's ${tag:-latest}"
+          [ -z "$ALLOWED_MAJOR" ] || echo "::warning::ELECTRON_ALLOWED_MAJOR=$ALLOWED_MAJOR is set: delete the variable once the app runs on npm's latest"
+
   # Catches a tag on a commit whose CI on main failed, is missing or doesn't finish within 15 minutes.
   # Main's push already ran CI on this commit, so it isn't run again. The names are ci.yml's job
   # names: renaming a required CI job there breaks this gate.
   ci:
+    needs: electron
     name: CI passed on main
     runs-on: ubuntu-latest
     permissions:
@@ -49,6 +81,7 @@ jobs:
   # release and its files, the sites) also waits for the ci job, so builds overlap the CI wait.
   # Catches a tag pushed on a commit that isn't on main: only tags on main publish anything.
   on-main:
+    needs: electron
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
