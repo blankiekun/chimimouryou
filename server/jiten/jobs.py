@@ -73,12 +73,28 @@ def load_catalog():
     return [b for b in books if b['format'] in ('EPUB', 'HTMLZ', 'TXT') or b.get('vn') or b.get('manga')]
 
 
+class ResultsUnreadable(Exception):
+    """difficulty.json is there but can't be used. Nothing may write the results after this: a save would replace
+    every estimate (hours of work on a real library) with none, also when the read error was a passing one."""
+
+
 def load_results():
+    """The results; none for a first run, when there is no file. Raises ResultsUnreadable for any other failure."""
     try:
         with open(settings.RESULTS_PATH, encoding='utf-8') as f:
-            return json.load(f)
-    except (OSError, ValueError):
+            results = json.load(f)
+    except FileNotFoundError:
         return {'books': {}}
+    except (OSError, ValueError) as error:
+        raise _unreadable(error) from error
+    if not isinstance(results, dict) or not isinstance(results.get('books'), dict):
+        raise _unreadable('no "books" object')
+    return results
+
+
+def _unreadable(reason):
+    return ResultsUnreadable(f'Estimates are stopped: {settings.RESULTS_PATH} can\'t be read ({reason}). Repair or remove '
+                             'the file; once it is removed, every book is estimated again.')
 
 
 def save_results(results):
@@ -90,17 +106,12 @@ def save_results(results):
 
 def refresh_words_stamp():
     """For a change no job follows (a dictionary installed, a new yurigana at startup). Failing only delays the
-    browsers' refetch until the next results are written. Not load_results: results that can't be read must stay
-    on disk, not be replaced by none."""
+    browsers' refetch until the next results are written."""
     try:
-        try:
-            with open(settings.RESULTS_PATH, encoding='utf-8') as f:
-                results = json.load(f)
-        except FileNotFoundError:
-            results = {'books': {}}
+        results = load_results()
         if results.get('wordsStamp') != readerpack.words_stamp():
             save_results(results)
-    except (OSError, ValueError, AttributeError) as error:
+    except (OSError, ValueError, ResultsUnreadable) as error:
         print(f'words stamp: {error}', file=sys.stderr, flush=True)
 
 
@@ -155,7 +166,16 @@ class JobRunner:
             job = dict(self.job) if self.job else None
             if job and not job.get('finished') and self.cancel.is_set():
                 job['cancelling'] = True
-        results = load_results()
+        try:
+            results = load_results()
+        except ResultsUnreadable as error:
+            results = {'books': {}}  # only counted below
+            # No job runs on such a file, so it is told here for as long as it lasts, a restart included. Not
+            # kept as a job's error: that would still show after the file was repaired.
+            if not job or job.get('finished'):
+                now = int(time.time() * 1000)
+                job = {'type': 'compute', 'done': 0, 'total': 0, 'started': now, 'finished': now, **(job or {}),
+                       'error': str(error)}
         dictionary = os.path.exists(settings.FREQUENCY_DICTIONARY)
         return {
             'job': job,
@@ -185,6 +205,10 @@ class JobRunner:
     def _run(self, target, args):
         try:
             target(*args)
+        except ResultsUnreadable:
+            with self.lock:
+                self.job = None  # status tells it
+            return
         except Exception as error:  # reported through status
             with self.lock:
                 self.job['error'] = str(error)
@@ -287,17 +311,27 @@ def replaced_books() -> list:
     return [b['id'] for b in load_catalog() if not b.get('manga') and replaced(b) and needs_estimate(b, results, engine)]
 
 
+def check_stale_books(problem=''):
+    """Starts a job for stale_manga and replaced_books. Takes and returns what is wrong, to log it once, not every minute."""
+    try:
+        ids = stale_manga() + replaced_books()
+        if ids:
+            runner.start('compute', runner.compute, ids)
+    except RuntimeError:
+        pass  # another job or a dictionary install: next time
+    except Exception as error:
+        if str(error) != problem:
+            print(f'manga text: {error}', file=sys.stderr, flush=True)
+        return str(error)
+    if problem:
+        print('manga text: checking again', file=sys.stderr, flush=True)
+    return ''
+
+
 def watch_manga_text():
     """Estimates manga as their text is made or uploaded (mokuro service), and replaced books, when no other job runs."""
+    problem = ''
     while True:
         time.sleep(settings.MANGA_TEXT_CHECK_SECONDS)
-        if runner.holds_off_automatic():
-            continue
-        try:
-            ids = stale_manga() + replaced_books()
-            if ids:
-                runner.start('compute', runner.compute, ids)
-        except RuntimeError:
-            pass  # another job or a dictionary install: next time
-        except Exception as error:
-            print(f'manga text: {error}', file=sys.stderr, flush=True)
+        if not runner.holds_off_automatic():
+            problem = check_stale_books(problem)
