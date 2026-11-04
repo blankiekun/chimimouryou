@@ -157,7 +157,7 @@ export function unescapeName(name: string) {
   const encoder = new TextEncoder();
   const token = /\(_(?:(colon|question|at|dot|space)|x([0-9A-Fa-f]{2}))_\)/y;
 
-  for (let index = 0; index < name.length; ) {
+  for (let index = 0; index < name.length;) {
     token.lastIndex = index;
     const match = token.exec(name);
 

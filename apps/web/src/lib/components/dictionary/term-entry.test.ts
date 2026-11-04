@@ -99,9 +99,8 @@ describe('TermEntry', () => {
   });
 
   it('shows Add to Anki once a card format is set', async () => {
-    const { dictionaryAnki$, dictionaryAnkiRoute$ } = await import(
-      '$lib/data/dictionary/anki-dictionary'
-    );
+    const { dictionaryAnki$, dictionaryAnkiRoute$ } =
+      await import('$lib/data/dictionary/anki-dictionary');
     const ankiContext = {
       url: '',
       documentTitle: '',

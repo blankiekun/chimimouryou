@@ -108,9 +108,8 @@ try {
   );
   const id = await page.evaluate(
     async ({ title, files, placeOff }) => {
-      const { windowsGameBook, windowsGameFolder } = await import(
-        '/src/lib/data/vn/windows-game.ts'
-      );
+      const { windowsGameBook, windowsGameFolder } =
+        await import('/src/lib/data/vn/windows-game.ts');
       const { database } = await import('/src/lib/data/store.ts');
       const { vnElementHtml, vnInfo } = await import('/src/lib/data/vn/vn.ts');
       const root = await (

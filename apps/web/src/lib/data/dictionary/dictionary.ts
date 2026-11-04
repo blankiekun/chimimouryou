@@ -344,9 +344,8 @@ export async function importYomitanSettings(json: string) {
   const installed = await call<DictionarySummary[]>({ type: 'list' });
   saveYomitanOptions(ensureDictionarySettings(options, installed, false));
   // Its Anki card format too, for the popup's Add to Anki (kept apart: it follows the account).
-  const { dictionaryAnki$, dictionaryAnkiFromYomitan } = await import(
-    '$lib/data/dictionary/anki-dictionary'
-  );
+  const { dictionaryAnki$, dictionaryAnkiFromYomitan } =
+    await import('$lib/data/dictionary/anki-dictionary');
   const anki = dictionaryAnkiFromYomitan(options);
   if (anki) dictionaryAnki$.next(anki);
 }

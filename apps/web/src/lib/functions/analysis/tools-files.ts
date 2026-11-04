@@ -103,7 +103,7 @@ export async function readRawInto(name: string, view: Uint8Array) {
   try {
     if (handle.getSize() !== view.length) throw new Error(`${name}: incomplete`);
 
-    for (let done = 0; done < view.length; ) {
+    for (let done = 0; done < view.length;) {
       const read = handle.read(view.subarray(done), { at: done });
 
       if (!read) throw new Error(`${name}: incomplete`);

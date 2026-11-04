@@ -82,12 +82,10 @@ export function extractParagraphsFrom(elementHtml: string, startCharCount: numbe
 
       return !next || next.startCount > startCharCount;
     })
-    .map(
-      (paragraph): ReadingParagraph => ({
-        text: paragraph.text.replaceAll(gaijiPlaceholder, '').replace(/\s+/g, ' ').trim(),
-        startCharCount: paragraph.startCount
-      })
-    )
+    .map((paragraph): ReadingParagraph => ({
+      text: paragraph.text.replaceAll(gaijiPlaceholder, '').replace(/\s+/g, ' ').trim(),
+      startCharCount: paragraph.startCount
+    }))
     .filter((paragraph) => paragraph.text);
 }
 

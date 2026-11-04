@@ -102,7 +102,7 @@ function isWide(size: PageSize | undefined) {
 export function pageSpreads(sizes: (PageSize | undefined)[], dual: boolean, shift: boolean) {
   const groups: number[][] = [];
 
-  for (let i = 0; i < sizes.length; ) {
+  for (let i = 0; i < sizes.length;) {
     const alone =
       !dual ||
       i === sizes.length - 1 ||

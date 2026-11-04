@@ -32,7 +32,7 @@ function take(says: (item: PlacementItem) => boolean, seed = 1, length = placeme
   const answers: PlacementAnswer[] = [];
   const next = () => nextItem(answers, undefined, random, undefined, length);
 
-  for (let item = next(); item; ) {
+  for (let item = next(); item;) {
     answers.push({ item, yes: says(item) });
     item = next();
   }

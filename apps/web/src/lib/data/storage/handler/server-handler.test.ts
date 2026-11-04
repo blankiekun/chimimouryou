@@ -43,9 +43,8 @@ async function loadModules() {
   vi.stubGlobal('indexedDB', new IDBFactory());
   ({ ServerStorageHandler, calibreReceivedBooks$ } = await import('./server-handler'));
   ({ BrowserStorageHandler } = await import('./browser-handler'));
-  ({ database, libraryBuilding$, libraryOffline$, librarySignInNeeded } = await import(
-    '$lib/data/store'
-  ));
+  ({ database, libraryBuilding$, libraryOffline$, librarySignInNeeded } =
+    await import('$lib/data/store'));
   ({ replicateData } = await import('$lib/functions/replication/replicator'));
   ({ windowsGameBook } = await import('$lib/data/vn/windows-game'));
   ({ writeSyncFile } = await import('$lib/data/remote/server-rows'));

@@ -99,8 +99,7 @@ export interface StatisticsHeatmapData extends HeatmapData {
 }
 
 export interface StatisticsHeatmapDayData
-  extends HeatmapDayData,
-    Omit<HeatmapGlobalDayData, 'charactersRead' | 'titles'> {}
+  extends HeatmapDayData, Omit<HeatmapGlobalDayData, 'charactersRead' | 'titles'> {}
 
 export interface ReadingGoalHeatmapGlobalDayData extends HeatmapGlobalDayData {
   readingGoalStartDate: string;

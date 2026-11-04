@@ -71,7 +71,7 @@ jobs:
         name: Install Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 24.21.0
+          node-version: 24.22.1
           cache: pnpm
 
       - &install
@@ -201,7 +201,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 24.21.0
+          node-version: 24.22.1
           cache: pnpm
 
       # Also catches a native-games helper (apps/desktop/native) that no longer builds with mingw.
@@ -237,7 +237,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 24.21.0
+          node-version: 24.22.1
           cache: pnpm
 
       - name: Install Java
