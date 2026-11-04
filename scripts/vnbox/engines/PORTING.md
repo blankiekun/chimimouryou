@@ -269,7 +269,7 @@ string: `L.utf8A('…')`.
 
 | C++ | JS |
 | --- | --- |
-| `PcHooks::hookGDIFunctions()` / `(ptr)` | `L.hookGDIFunctions()` / `(ptr)` |
+| `PcHooks::hookGDIFunctions()` / `(ptr)` | `L.hookGDIFunctions()` / `(ptr)`: runs after attach, only if no real hook attached |
 | `Msg::Log`, `ConsoleOutput` | `console.log('[luna] …')` or drop |
 | `RegisterEngineType(…)` | drop |
 | `trigger_fun = …` | not supported: skip that hook (see below) |

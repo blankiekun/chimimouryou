@@ -895,6 +895,7 @@ function absoluteAddress(hp) {
     return address;
 }
 const hooked = new Set();
+let textHooks = 0;
 let anyHook = false;
 // NewHook(hp, name) → true when attached. Unsupported kinds are refused with a console note.
 function NewHook(hpIn, name) {
@@ -923,6 +924,7 @@ function NewHook(hpIn, name) {
         }
     });
     anyHook = true;
+    textHooks += 1;
     return true;
 }
 // PcHooks::hookGDIFunctions (pchooks.cpp NEW_HOOK table): data arg, split arg, type, length arg.
@@ -944,8 +946,12 @@ const GDI = [
     ['user32.dll', 'TabbedTextOutW', 4, T.CODEC_UTF16 | T.USING_STRING, 5], ['user32.dll', 'GetTabbedTextExtentW', 2, T.CODEC_UTF16 | T.USING_STRING, 3],
 ];
 const gdiDone = new Set();
+// While engines attach, what they ask for waits. Every hook goes out as one stream, so a text export
+// beside a real hook sends each line twice: it only runs if no real hook attached (attachOneOf).
+let gdiWaiting = null;
 // hookGDIFunctions(ptr = 0): every GDI/USER text export, or only the one at ptr.
 function hookGDIFunctions(only = 0) {
+    if (gdiWaiting) { gdiWaiting.push(only); return; }
     for (const [dll, fn, data, type, lenArg] of GDI) {
         const at = GetProcAddress(dll, fn);
         if (!at || (only ? at !== u32(only) : gdiDone.has(at))) continue;
@@ -953,6 +959,17 @@ function hookGDIFunctions(only = 0) {
         NewHook({ address: 0, module: dll, function: fn, offset: GETARG(data), index: 0, split: GETARG(1), split_index: 0,
             type: type | T.MODULE_OFFSET | T.FUNCTION_OFFSET, length_offset: lenArg }, fn);
     }
+}
+
+// Runs attachAll, then the text exports its engines asked for unless a real hook attached.
+function attachOneOf(attachAll) {
+    gdiWaiting = [];
+    const realBefore = textHooks;
+    const result = attachAll();
+    const waiting = gdiWaiting;
+    gdiWaiting = null;
+    if (textHooks === realBefore) waiting.forEach(hookGDIFunctions);
+    return result;
 }
 
 // ---- engines ----------------------------------------------------------------------------------
@@ -982,15 +999,21 @@ function safe(what, e, fn) {
 async function auto(engines) {
     await listGameFiles();
     initRanges();
-    for (const e of engines) {
-        if (!safe('match', e, () => check_function(e))) continue;
-        console.log('[luna] matched engine ' + e.name);
-        const attached = safe('attach', e, () => e.attach());
-        if (attached) console.log('[luna] attached ' + e.name);
-        if (e.certain || attached) return attached ? e.name : null;
+    const done = attachOneOf(() => {
+        for (const e of engines) {
+            if (!safe('match', e, () => check_function(e))) continue;
+            console.log('[luna] matched engine ' + e.name);
+            const attached = safe('attach', e, () => e.attach());
+            if (attached) console.log('[luna] attached ' + e.name);
+            if (e.certain || attached) return { name: attached ? e.name : null };
+        }
+        return undefined;
+    });
+    if (done) return done.name;
+    if (!textHooks) {
+        console.log('[luna] no engine attached: hooking the GDI text functions');
+        hookGDIFunctions();
     }
-    console.log('[luna] no engine attached: hooking the GDI text functions');
-    hookGDIFunctions();
     return null;
 }
 // An engine file picked by hand (run as the frida= script): its engines in order, the matching ones
@@ -1001,11 +1024,13 @@ async function run(list) {
     initRanges();
     const matched = list.filter((e) => safe('match', e, () => check_function(e)));
     if (!matched.length) console.log('[luna] ' + list.map((e) => e.name).join(', ') + ': the engine check failed; attaching anyway');
-    for (const e of matched.length ? matched : list) {
-        if (safe('attach', e, () => e.attach())) { console.log('[luna] ' + e.name + ' attached'); return true; }
-        console.log('[luna] ' + e.name + ' did not attach (no hook site found)');
-    }
-    return false;
+    return attachOneOf(() => {
+        for (const e of matched.length ? matched : list) {
+            if (safe('attach', e, () => e.attach())) { console.log('[luna] ' + e.name + ' attached'); return true; }
+            console.log('[luna] ' + e.name + ' did not attach (no hook site found)');
+        }
+        return false;
+    });
 }
 const L = {
     // process range (HIJACK): the exe's image

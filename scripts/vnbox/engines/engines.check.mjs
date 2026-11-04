@@ -178,6 +178,29 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
             engines++;
         }
     }
+    // Bugs: a text export hooked beside an engine's real hook sends every line twice (信天翁 with
+    // CodeX, saiima with XUSE); an engine that gave up leaving one behind doubles the next engine's;
+    // a game with only the text exports gets no text.
+    const hooksAfter = async (engines) => {
+        const G = fakeGuest();
+        const cache = new Map();
+        cache.set(path.resolve(dir, '__entry'), { exports: {} });
+        const L = load('libLuna.js', G.g, cache);
+        L._test.setGameFiles([]);
+        const before = G.hooks.length;
+        await L.run(engines(L));
+        return G.hooks.length - before;
+    };
+    const realHook = (L) => L.NewHook({ address: 0x401015, offset: L.regoffset('edx'), type: L.CODEC_ANSI_BE }, 'real');
+    assert.equal(await hooksAfter((L) => [{ name: 'beside', attach() { L.hookGDIFunctions(); return realHook(L); } }]), 1);
+    assert.equal(await hooksAfter((L) => [{ name: 'after', attach() { const ok = realHook(L); L.hookGDIFunctions(); return ok; } }]), 1);
+    assert.equal(await hooksAfter((L) => [
+        { name: 'gave up', attach() { L.hookGDIFunctions(); return false; } },
+        { name: 'next', attach() { return realHook(L); } }
+    ]), 1);
+    assert.equal(await hooksAfter((L) => [{ name: 'only exports', attach() { L.hookGDIFunctions(); return true; } }]), 3);
+    assert.equal(await hooksAfter((L) => [{ name: 'real failed', attach() { L.hookGDIFunctions(); return false; } }]), 3);
+
     // the automatic script runs every check in order and falls back to the GDI hooks
     const G = fakeGuest();
     globalThis.lunaGameFiles = [];
