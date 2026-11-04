@@ -20,7 +20,7 @@ vi.stubEnv('VITE_GDRIVE_CLIENT_SECRET', 'client-secret');
 
 const { StorageOAuthManager, storageOAuthTokens, storedRefreshToken, storeRefreshToken } =
   await import('./storage-oauth-manager');
-const { StorageKey, StorageSourceDefault } = await import('./storage-types');
+const { StorageSourceDefault } = await import('./storage-types');
 
 describe('StorageOAuthManager.getToken', () => {
   it('never opens sign-in without a click', async () => {
@@ -31,11 +31,7 @@ describe('StorageOAuthManager.getToken', () => {
     const open = vi.spyOn(window, 'open');
 
     await expect(
-      new StorageOAuthManager(StorageKey.GDRIVE, '').getToken(
-        window,
-        StorageSourceDefault.GDRIVE_DEFAULT,
-        false
-      )
+      new StorageOAuthManager('').getToken(window, StorageSourceDefault.GDRIVE_DEFAULT, false)
     ).rejects.toThrow('Sign in to Drive again');
     expect(open).not.toHaveBeenCalled();
 
@@ -53,11 +49,7 @@ describe('StorageOAuthManager.getToken', () => {
     const open = vi.spyOn(window, 'open');
 
     await expect(
-      new StorageOAuthManager(StorageKey.GDRIVE, '').getToken(
-        window,
-        StorageSourceDefault.GDRIVE_DEFAULT,
-        true
-      )
+      new StorageOAuthManager('').getToken(window, StorageSourceDefault.GDRIVE_DEFAULT, true)
     ).resolves.toBe('native');
     expect(open).not.toHaveBeenCalled();
     expect(storedRefreshToken(StorageSourceDefault.GDRIVE_DEFAULT)).toBe('android-authorization');
@@ -68,11 +60,7 @@ describe('StorageOAuthManager.getToken', () => {
       Object.assign(new Error('Sign in to Drive again'), { code: 'needsConsent' })
     );
     await expect(
-      new StorageOAuthManager(StorageKey.GDRIVE, '').getToken(
-        window,
-        StorageSourceDefault.GDRIVE_DEFAULT,
-        false
-      )
+      new StorageOAuthManager('').getToken(window, StorageSourceDefault.GDRIVE_DEFAULT, false)
     ).rejects.toThrow('Sign in to Drive again');
     expect(storedRefreshToken(StorageSourceDefault.GDRIVE_DEFAULT)).toBeUndefined();
 
@@ -104,7 +92,7 @@ describe('StorageOAuthManager.getToken', () => {
     storeRefreshToken(StorageSourceDefault.GDRIVE_DEFAULT, 'refresh-1');
 
     await expect(
-      new StorageOAuthManager(StorageKey.GDRIVE, 'https://oauth.test/token').getToken(
+      new StorageOAuthManager('https://oauth.test/token').getToken(
         window,
         StorageSourceDefault.GDRIVE_DEFAULT,
         false
@@ -142,7 +130,7 @@ describe('StorageOAuthManager.getToken', () => {
       storeRefreshToken(StorageSourceDefault.GDRIVE_DEFAULT, 'refresh-1');
 
       // `userActivation` absent counts as a click: the worst case for a pop-up.
-      const error = await new StorageOAuthManager(StorageKey.GDRIVE, 'https://oauth.test/token')
+      const error = await new StorageOAuthManager('https://oauth.test/token')
         .getToken(window, StorageSourceDefault.GDRIVE_DEFAULT, false)
         .catch((failure) => failure);
 
@@ -176,7 +164,7 @@ describe('StorageOAuthManager.getToken', () => {
     storeRefreshToken(StorageSourceDefault.GDRIVE_DEFAULT, 'refresh-1');
 
     await expect(
-      new StorageOAuthManager(StorageKey.GDRIVE, 'https://oauth.test/token').getToken(
+      new StorageOAuthManager('https://oauth.test/token').getToken(
         window,
         StorageSourceDefault.GDRIVE_DEFAULT,
         false

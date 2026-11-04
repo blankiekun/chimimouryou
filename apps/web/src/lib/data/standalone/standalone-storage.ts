@@ -122,12 +122,7 @@ export async function signInToDrive(window: Window): Promise<string> {
   if (popup === null) return 'blocked';
 
   try {
-    await new StorageOAuthManager(StorageKey.GDRIVE, gDriveRefreshEndpoint).getToken(
-      window,
-      name,
-      true,
-      popup
-    );
+    await new StorageOAuthManager(gDriveRefreshEndpoint).getToken(window, name, true, popup);
   } catch (error: any) {
     return error.message || 'Sign-in failed';
   } finally {

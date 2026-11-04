@@ -81,7 +81,7 @@
   } from '$lib/data/standalone/standalone-storage';
   import { logger } from '$lib/data/logger';
   import type { SortOption } from '$lib/data/sort-types';
-  import { ApiStorageHandler } from '$lib/data/storage/handler/api-handler';
+  import { GDriveStorageHandler } from '$lib/data/storage/handler/gdrive-handler';
   import { correctStatistics } from '$lib/data/storage/reader-storage';
   import { getStorageHandler } from '$lib/data/storage/storage-handler-factory';
   import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
@@ -449,7 +449,7 @@
             standalone,
             $hideExternalReadHint$,
             handler.storageType,
-            handler instanceof ApiStorageHandler
+            handler instanceof GDriveStorageHandler
           )
         ) {
           const nextAction = await new Promise<string>((resolver) => {

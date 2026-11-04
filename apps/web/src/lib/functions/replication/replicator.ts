@@ -18,7 +18,7 @@ import { loadVnFiles } from '$lib/functions/file-loaders/vn/load-vn';
 import type { VnFolder } from '$lib/data/vn/vn-upload';
 import { isMangaFileName } from '$lib/data/manga/manga';
 import { isVn } from '$lib/data/vn/vn';
-import type { ApiStorageHandler } from '$lib/data/storage/handler/api-handler';
+import type { GDriveStorageHandler } from '$lib/data/storage/handler/gdrive-handler';
 import type { LoadData } from '$lib/functions/file-loaders/types';
 import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
 import { handleErrorDuringReplication } from '$lib/functions/replication/error-handler';
@@ -170,7 +170,7 @@ export async function importData(
 
           // File names of visual novels the reader kept off a cloud provider (vn-upload.ts)
           if ('name' in file && keepOnDevice?.has(file.name) && isVn(bookContent)) {
-            dataIds.push(await (targetHandler as ApiStorageHandler).keepOnDevice(bookContent));
+            dataIds.push(await (targetHandler as GDriveStorageHandler).keepOnDevice(bookContent));
           } else {
             dataIds.push(await targetHandler.saveBook(bookContent, false, undefined, cancelSignal));
 
