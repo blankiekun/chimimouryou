@@ -107,6 +107,13 @@ git merge upstream/main`, open a PR and merge it with **Create a merge
   publish creates private packages: make them public in the repository's
   Packages settings.
 
+- Bump Electron in the release PR: `apps/desktop/package.json` pins npm's latest stable exactly (then
+  `pnpm install --no-frozen-lockfile`), and a tag that doesn't fails before anything publishes (`release.yml`'s
+  `electron` job). Run the desktop E2Es (`apps/desktop/e2e`) only for a major bump. If a new major breaks the
+  app, or npm stays down, set the repository variable `ELECTRON_ALLOWED_MAJOR` to the major to ship: the tag then
+  needs that major's latest patch (with npm down, only that major, and a warning says the patch is unchecked).
+  Delete the variable once the app runs on the latest again.
+
 - Check workflow changes with `actionlint` (e.g. `docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint .github/workflows/*.yml`).
 
 ## Testing expectations
