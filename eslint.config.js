@@ -51,7 +51,7 @@ module.exports = (async () => {
           extraFileExtensions: ['.svelte'],
           project: './tsconfig.eslint.json',
           sourceType: 'module',
-          tsconfigRootDir: './apps/web/'
+          tsconfigRootDir: `${__dirname}/apps/web/`
         }
       },
       name: 'root',

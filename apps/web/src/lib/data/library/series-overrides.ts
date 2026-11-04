@@ -221,9 +221,8 @@ function sameOverrides(a: SeriesOverrides, b: SeriesOverrides) {
  * browser's copy changed. Nothing is sent without such a source.
  */
 export async function syncBrowserSeries() {
-  const { readerSyncSource, syncFileStore, syncJsonFile } = await import(
-    '$lib/data/sync/sync-files'
-  );
+  const { readerSyncSource, syncFileStore, syncJsonFile } =
+    await import('$lib/data/sync/sync-files');
   // Never the Calibre source: it has its own shared series.json (`saveSeriesOverrides`).
   const store = await syncFileStore(readerSyncSource());
   let changed = false;

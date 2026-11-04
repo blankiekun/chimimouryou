@@ -191,8 +191,7 @@ export interface ServerDetails extends SiteDetails {
 
 /** A file of the server as it came, or a chapter's page images in order. */
 export type ServerChapter =
-  | { title: string; item: string; file: File }
-  | { title: string; item: string; pages: Blob[] };
+  { title: string; item: string; file: File } | { title: string; item: string; pages: Blob[] };
 
 /** A reader's server as a site: details, chapters, and fetching from it alone. */
 export class Server {

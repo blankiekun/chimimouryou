@@ -359,8 +359,7 @@ async function workRow(id: number) {
 
 async function workFor(site: string, workKey: string, url: string) {
   const found = (await (await db()).getFromIndex('works', 'key', [site, workKey])) as
-    | WorkRow
-    | undefined;
+    WorkRow | undefined;
   if (found) return found;
   const id = (await put('works', {
     site,
@@ -1456,8 +1455,7 @@ export async function syncSourcesWith(store: SyncFileStore) {
         (entry.site in SITES || isExtension(entry.site)) && !entry.deleted
           ? await workFor(entry.site, entry.workKey, entry.url)
           : ((await (await db()).getFromIndex('works', 'key', [entry.site, entry.workKey])) as
-              | WorkRow
-              | undefined);
+              WorkRow | undefined);
       if (!work) continue;
       if (!work.title) await put('works', { ...work, title: entry.title });
       const follow = await one('follows', work.id);

@@ -46,14 +46,7 @@ export interface SocialMe {
 }
 
 export type ShareKey =
-  | 'public'
-  | 'current'
-  | 'finished'
-  | 'activity'
-  | 'stats'
-  | 'wordsKnown'
-  | 'hideManga'
-  | 'hideVn';
+  'public' | 'current' | 'finished' | 'activity' | 'stats' | 'wordsKnown' | 'hideManga' | 'hideVn';
 
 /** On unless turned off, except words known (opt-in) and the hide switches */
 export const shareDefaults: Record<ShareKey, boolean> = {

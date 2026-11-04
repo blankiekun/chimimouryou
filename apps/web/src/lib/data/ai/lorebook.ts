@@ -589,15 +589,13 @@ export async function copyLorebookTo(sourceTitle: string, targetTitle: string) {
     );
   const added = source.entries
     .filter((entry) => !known(entry.name) && !entry.keys.some(known))
-    .map(
-      (entry): LoreEntry => ({
-        ...entry,
-        id: `${sourceTitle}/${entry.id}`,
-        firstSeen: 0,
-        updated: 0,
-        fromBook: entry.fromBook ?? sourceTitle
-      })
-    );
+    .map((entry): LoreEntry => ({
+      ...entry,
+      id: `${sourceTitle}/${entry.id}`,
+      firstSeen: 0,
+      updated: 0,
+      fromBook: entry.fromBook ?? sourceTitle
+    }));
 
   await putLorebook({ ...target, entries: [...target.entries, ...added] });
 

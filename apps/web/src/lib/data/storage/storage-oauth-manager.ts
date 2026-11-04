@@ -335,15 +335,13 @@ export class StorageOAuthManager {
   }
 
   private async refreshToken() {
-    if (
-      !(
-        this.refreshEndpoint &&
-        this.storageSourceName &&
-        this.remoteData?.clientId &&
-        this.remoteData.clientSecret &&
-        this.remoteData.refreshToken
-      )
-    ) {
+    if (!(
+      this.refreshEndpoint &&
+      this.storageSourceName &&
+      this.remoteData?.clientId &&
+      this.remoteData.clientSecret &&
+      this.remoteData.refreshToken
+    )) {
       return undefined;
     }
 

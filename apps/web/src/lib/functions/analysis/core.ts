@@ -143,7 +143,7 @@ export function mergeCompounds(tokens: CoreToken[], table: CoreTable): CoreToken
   const rank = (token: CoreToken) =>
     wordRank(table, token.lemma, toHiragana(token.reading)) ?? Infinity;
 
-  for (let i = 0; i < tokens.length; ) {
+  for (let i = 0; i < tokens.length;) {
     const token = tokens[i];
     let joined = false;
 
@@ -312,7 +312,7 @@ export function parseCoreTable(text: string): CoreTable {
   const table: CoreTable = { ranks: new Map(), readingRanks: new Map(), compounds: new Map() };
   let section = 0;
 
-  for (let at = 0; at < text.length; ) {
+  for (let at = 0; at < text.length;) {
     let end = text.indexOf('\n', at);
 
     if (end < 0) end = text.length;

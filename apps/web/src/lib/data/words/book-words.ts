@@ -77,12 +77,11 @@ export function foldReadings(words: BookWord[]): BookWord[] {
 
   return extra.size
     ? kept
-        .map(
-          (word): BookWord =>
-            // A copy with the count added; the lemma (5th column) stays.
-            extra.has(word)
-              ? Object.assign([...word] as BookWord, { 2: word[2] + extra.get(word)! })
-              : word
+        .map((word): BookWord =>
+          // A copy with the count added; the lemma (5th column) stays.
+          extra.has(word)
+            ? Object.assign([...word] as BookWord, { 2: word[2] + extra.get(word)! })
+            : word
         )
         .sort((a, b) => b[2] - a[2])
     : words;

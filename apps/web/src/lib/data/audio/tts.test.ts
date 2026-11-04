@@ -106,9 +106,8 @@ describe('synthesizeSpeech', () => {
 
 describe('readingTimeline', () => {
   it('times phrases against the spoken katakana readings', async () => {
-    const { extractParagraphsFrom, speechText } = await import(
-      '$lib/functions/tts/extract-reading-text'
-    );
+    const { extractParagraphsFrom, speechText } =
+      await import('$lib/functions/tts/extract-reading-text');
     const [chunk] = extractParagraphsFrom('<p><ruby>魔法<rt>マジック</rt></ruby>、次。</p>', 0);
     const spoken = speechText(chunk.text);
     const timeline = readingTimeline(chunk, timed(spoken, [0, 0.1, 0.2, 0.3, 0.4, 1, 1.1]));

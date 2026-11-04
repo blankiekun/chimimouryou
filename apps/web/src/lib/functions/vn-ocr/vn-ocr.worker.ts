@@ -42,8 +42,7 @@ export interface VnOcrRequest {
 }
 
 export type VnOcrMessage =
-  | { id: number; lines: VnOcrLine[]; ms: number }
-  | { id: number; error: string };
+  { id: number; lines: VnOcrLine[]; ms: number } | { id: number; error: string };
 
 // The runtime from this site, not a CDN.
 ort.env.wasm.wasmPaths = { mjs: ortMjs, wasm: ortWasm };

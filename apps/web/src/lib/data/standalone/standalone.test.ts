@@ -210,9 +210,8 @@ describe('standalone edition', () => {
 
     const { setBookHidden, hiddenBooks$, bookKey } = await import('$lib/data/social/social');
     const { markBookOnOpen } = await import('$lib/data/social/community-book');
-    const { confirmWork, resolveWork, communityWorks$ } = await import(
-      '$lib/data/social/community'
-    );
+    const { confirmWork, resolveWork, communityWorks$ } =
+      await import('$lib/data/social/community');
     const getIndex = async () => ({ paragraphs: [{ text: '本文の一行目です。', startCount: 0 }] });
 
     hiddenBooks$.next([bookKey('隠した本'), bookKey('照合済みの本')]);
@@ -299,9 +298,8 @@ describe('standalone edition', () => {
   });
 
   it('takes the public word test without a request, and saves the result for the app', async () => {
-    const { default: PlacementTest } = await import(
-      '$lib/components/placement/placement-test.svelte'
-    );
+    const { default: PlacementTest } =
+      await import('$lib/components/placement/placement-test.svelte');
     const placement = await import('$lib/data/difficulty/placement');
     const target = document.createElement('div');
     const test = new PlacementTest({ target, props: { shared: true } });
@@ -326,9 +324,8 @@ describe('standalone edition', () => {
   });
 
   it('takes the hard word test without a request, and keeps its result apart', async () => {
-    const { default: PlacementTest } = await import(
-      '$lib/components/placement/placement-test.svelte'
-    );
+    const { default: PlacementTest } =
+      await import('$lib/components/placement/placement-test.svelte');
     const placement = await import('$lib/data/difficulty/placement');
     const items = await placement.loadHardItems();
     const target = document.createElement('div');
@@ -532,9 +529,8 @@ describe('standalone edition', () => {
     const plugins = await import('$lib/plugins');
     const hooks = await import('$lib/data/reader/reader-hooks');
     const discord = await import('$lib/data/discord/discord');
-    const { discordActivities$, discordOptions$ } = await import(
-      '$lib/data/discord/discord-settings'
-    );
+    const { discordActivities$, discordOptions$ } =
+      await import('$lib/data/discord/discord-settings');
     // Fake timers, as above.
     vi.useFakeTimers();
     const searches = () =>
@@ -567,9 +563,8 @@ describe('standalone edition', () => {
     const hooks = await import('$lib/data/reader/reader-hooks');
     const discord = await import('$lib/data/discord/discord');
     const { socialSession$ } = await import('$lib/data/social/social-account');
-    const { discordActivities$, discordOptions$ } = await import(
-      '$lib/data/discord/discord-settings'
-    );
+    const { discordActivities$, discordOptions$ } =
+      await import('$lib/data/discord/discord-settings');
     // Fake timers, as above.
     vi.useFakeTimers();
     const coverCalls = () =>

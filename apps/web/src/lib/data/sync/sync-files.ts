@@ -78,9 +78,8 @@ export async function syncFileStore(name: string): Promise<SyncFileStore | undef
       const { GDriveStorageHandler } = await import('$lib/data/storage/handler/gdrive-handler');
       handler = new GDriveStorageHandler(window);
     } else if (type === StorageKey.FS) {
-      const { FilesystemStorageHandler } = await import(
-        '$lib/data/storage/handler/filesystem-handler'
-      );
+      const { FilesystemStorageHandler } =
+        await import('$lib/data/storage/handler/filesystem-handler');
       handler = new FilesystemStorageHandler(window, StorageKey.FS);
     } else return undefined;
 

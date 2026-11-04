@@ -50,7 +50,7 @@ export async function putVnFiles(blobs: Record<string, Blob>, cancelSignal?: Abo
   reportBytes('saving', 0, total);
 
   try {
-    for (let index = 0; index < entries.length; ) {
+    for (let index = 0; index < entries.length;) {
       throwIfAborted(cancelSignal);
 
       const tx = db.transaction('files', 'readwrite');

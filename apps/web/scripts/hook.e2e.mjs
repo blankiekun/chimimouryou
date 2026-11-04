@@ -215,9 +215,8 @@ async function run(name, options) {
 
     step(`${name}: /v's Hooks sheet shows the cleanup and saves it on the game`);
     const id = await page.evaluate(async () => {
-      const { windowsGameBook, windowsGameFolder } = await import(
-        '/src/lib/data/vn/windows-game.ts'
-      );
+      const { windowsGameBook, windowsGameFolder } =
+        await import('/src/lib/data/vn/windows-game.ts');
       const { database } = await import('/src/lib/data/store.ts');
       const root = await (
         await navigator.storage.getDirectory()

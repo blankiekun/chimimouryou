@@ -19,9 +19,8 @@ const analyseInBackground = vi.fn();
 vi.mock('$lib/data/analysis/background-analysis', () => ({ analyseInBackground }));
 
 const { database } = await import('$lib/data/store');
-const { importData, replicateData, LOCAL_COPY_LIMIT } = await import(
-  '$lib/functions/replication/replicator'
-);
+const { importData, replicateData, LOCAL_COPY_LIMIT } =
+  await import('$lib/functions/replication/replicator');
 const { StorageDataType } = await import('$lib/data/storage/storage-types');
 
 /** A Drive source; its uploads only count calls. */

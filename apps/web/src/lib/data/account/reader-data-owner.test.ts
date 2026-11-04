@@ -22,9 +22,8 @@ vi.mock('$lib/data/storage/reader-storage', () => ({ retryWaitingChanges: async 
 
 const { database } = await import('$lib/data/store');
 const { readerDb } = await import('$lib/data/reader-db');
-const { releaseReaderData, signOutAndRelease } = await import(
-  '$lib/data/account/reader-data-owner'
-);
+const { releaseReaderData, signOutAndRelease } =
+  await import('$lib/data/account/reader-data-owner');
 const { dropWaiting, syncQueued, waitingChanges } = await import('$lib/data/sync/sync-status');
 
 async function seed() {

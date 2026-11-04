@@ -19,9 +19,8 @@ vi.mock('$lib/data/library/book-metadata', () => ({
   )
 }));
 
-const { mentionParts, mentionQuery, mentionToken, searchMentions } = await import(
-  './community-mentions'
-);
+const { mentionParts, mentionQuery, mentionToken, searchMentions } =
+  await import('./community-mentions');
 // Up here, outside any test's timeout: compiling the component cold under load can take over 5 s.
 const { default: CommunityText } = await import('$lib/components/community/community-text.svelte');
 

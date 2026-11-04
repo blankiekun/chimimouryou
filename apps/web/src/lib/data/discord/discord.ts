@@ -94,13 +94,7 @@ export interface ValueExtras {
 }
 
 export type ConnectionState =
-  | 'checking'
-  | 'connected'
-  | 'missing'
-  | 'ankiClosed'
-  | 'discordClosed'
-  | 'blocked'
-  | 'off';
+  'checking' | 'connected' | 'missing' | 'ankiClosed' | 'discordClosed' | 'blocked' | 'off';
 
 export interface DiscordConnection {
   state: ConnectionState;

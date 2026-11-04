@@ -126,7 +126,7 @@ export class PackWriter {
     if (this.used + text.length * 3 > this.buffer.length) this.cut(false);
     if (this.used + text.length * 3 > this.buffer.length) {
       const bytes = this.encoder.encode(text);
-      for (let at = 0; at < bytes.length; ) {
+      for (let at = 0; at < bytes.length;) {
         const n = Math.min(bytes.length - at, this.buffer.length - this.used);
         this.buffer.set(bytes.subarray(at, at + n), this.used);
         this.used += n;
@@ -590,7 +590,9 @@ export class DictionaryStore extends DictionaryDatabase {
     for (const pack of this.packs) pack.close();
     const result = await super.purge();
     if (opfsAvailable()) {
-      await (await navigator.storage.getDirectory())
+      await (
+        await navigator.storage.getDirectory()
+      )
         .removeEntry(folder, { recursive: true })
         .catch(() => undefined);
     }
