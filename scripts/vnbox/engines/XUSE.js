@@ -6,6 +6,7 @@ const L = require('./libLuna.js');
 const { XX, XX4 } = L;
 
 function InsertXUSEHook2() {
+    L.hookGDIFunctions(L.FindFunction('GetCharABCWidthsA')); // 神様のゲーム
     const bytes = [
         0x68, 0x34, 0x01, 0x00, 0x00,
     ];
@@ -23,8 +24,6 @@ function InsertXUSEHook2() {
             },
         }, 'XUSE2') || succ;
     }
-    // Not beside a real hook, as LunaHook has it: both go out as one stream, so every line came twice.
-    if (!succ) L.hookGDIFunctions(L.FindFunction('GetCharABCWidthsA')); // 神様のゲーム
     return succ;
 }
 

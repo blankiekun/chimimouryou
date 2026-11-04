@@ -70,10 +70,9 @@ const E = L.engine({
     check: { FILE: 'voice\\*.pck' },
     certain: false,
     attach() {
+        L.hookGDIFunctions(L.FindFunction('GetGlyphOutlineA'));
         let b1 = InsertAnimHook() || InsertAnim2Hook();
         b1 = InsertAnim3Hook() || b1;
-        // Not beside a real hook, as LunaHook has it: both go out as one stream, so every line came twice.
-        if (!b1) L.hookGDIFunctions(L.FindFunction('GetGlyphOutlineA'));
         return b1;
     },
 });
