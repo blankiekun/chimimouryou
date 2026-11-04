@@ -4,6 +4,67 @@ chimimouryou is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook
 upstream's own changes are not listed here. Each version's section is written when it is released,
 from the pull requests merged since the previous tag (pull requests don't edit this file).
 
+## v3.15.0 (2026-11-03)
+
+### Added
+
+- Community: a thread's ••• menu reports a work's title or cover, and, in the reader, a wrong book
+  match.
+- Visual novels: phones turn to landscape on the player. In full screen on a phone browser the bar
+  hides, giving the game its height.
+- Visual novels: a warning when VNBox can't store saves, and a clear message when a second tab is
+  the problem.
+- Admin: a damaged estimates file stops estimate jobs and says so, instead of being overwritten.
+
+### Changed
+
+- OneDrive is gone. Sync and libraries use Google Drive, a folder or a server.
+- Visual novels: a mined line's sound follows the click that brought it: speech already playing at
+  the click is left out, and a line whose speech starts over 1 s later gets no sound.
+- Drive: covers load through Drive's API, so the site no longer allows images from
+  googleusercontent.com. They can be heavier than the old thumbnails.
+- Statistics: a laptop asleep with idle off counts at most a minute, and a tick over the day's start
+  no longer counts its characters twice. Some totals read slightly differently.
+- Statistics: a tab open on two devices adds its own reading to the other's count for today.
+- Delete account asks for your password.
+- Standalone: Disconnect tries to send waiting changes and asks before dropping them.
+- Server: word lists refetch once after a term dictionary changes. Every browser refetches each
+  list once after this update.
+- Server: catalog and import containers no longer mount all of `/data`. Check your compose override
+  if it relies on them seeing it.
+- Mihon: updating an extension or removing its repository deletes the code nothing else uses.
+- Visual novels: VNBox v0.2.10.
+
+### Fixed
+
+- Reading place: loading or hiding a page, a layout change and a re-render keep your place and your
+  manual bookmark, on every device.
+- Statistics: finishing a book stays finished after reopening it, an open tab no longer erases what
+  another device read today, older days and goals reach other devices, deleted days stay deleted,
+  and reading saved but unsent survives a failed upload.
+- Sync: waiting changes survive a closed tab, a network blip keeps the Drive sign-in, coming back
+  refreshes the library, manga and highlights, corrections reach the source, and duplicate Drive
+  files and folders are read the same way on every device. Sync failures show in the header with
+  their reason, and a sign-in that's needed asks for it.
+- Server: refuses rows dated past its clock, moves on from a restored database, and keeps replaced
+  books, restarts during import, failed replaces and long game names working.
+- Deploy and update: an unhealthy release rolls back, with its settings, and deploys and updates
+  wait for each other.
+- Security: extensions' requests have a total time limit and tighter address checks, nginx's error
+  log no longer holds Audiobookshelf tokens, Android drops links to other apps, and hidden books
+  leave the hub.
+- Books: odd EPUB, HTMLZ and CBZ files open or fail with a clear reason, SVG-only chapters show,
+  inline images survive, broken stylesheet rules cost only themselves, and script text no longer
+  counts as characters.
+- Visual novels: saves push when a game closes on any page, cards keep their pictures, and screen
+  text has Try again.
+- Lore: an earlier version shows read-only with no spoilers, and an entry deleted during an update
+  stays out.
+- KOReader: time read offline is kept, partial downloads aren't taken as books, and sync asks only
+  for the tables it reads.
+- Hub: a push with fewer statistics no longer lowers a shared rank, hidden posts leave no markers,
+  and moderators can clear a removed post's line and delete an account.
+
 ## v3.14.0 (2026-11-02)
 
 ### Added
