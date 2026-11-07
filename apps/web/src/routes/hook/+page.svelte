@@ -487,7 +487,10 @@
     saveLines(lines);
   }
 
-  /** When the middle button was last pressed (event time). */
+  /**
+   * When the middle button was last pressed or released (event time). Pointer events, not mouse:
+   * Yomitan cancels the middle pointerdown, which drops mousedown, and Chromium pastes on release.
+   */
   let middleAt = -Infinity;
 
   function onPaste(event: ClipboardEvent) {
@@ -544,7 +547,8 @@
 
 <svelte:window
   onpaste={onPaste}
-  onmousedowncapture={(event) => event.button === 1 && (middleAt = event.timeStamp)}
+  onpointerdowncapture={(event) => event.button === 1 && (middleAt = event.timeStamp)}
+  onpointerupcapture={(event) => event.button === 1 && (middleAt = event.timeStamp)}
 />
 
 <AppHeader active="profile" />
