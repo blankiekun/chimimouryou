@@ -4,6 +4,28 @@ chimimouryou is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook
 upstream's own changes are not listed here. Each version's section is written when it is released,
 from the pull requests merged since the previous tag (pull requests don't edit this file).
 
+## v3.16.0 (2026-11-07)
+
+### Added
+
+- Visual novels: a Stats toggle in the bar pauses counting on menus and title screens. It starts
+  paused each time a game opens; while paused, lines don't move progress, statistics or Kanji met,
+  but the Backlog still fills.
+
+### Changed
+
+- Desktop: Electron 45.2.3.
+
+### Fixed
+
+- Visual novels: lines no longer show twice. Engines' glyph hooks and text export hooks run only
+  when real hooks fail, and text export hooks wait until the engine attaches.
+- Desktop: middle-click paste is caught again with Yomitan on.
+
+### Security
+
+- Dependencies: fixable Dependabot alerts cleared, with patch and minor updates.
+
 ## v3.15.0 (2026-11-03)
 
 ### Added
