@@ -378,6 +378,7 @@ export const en = {
   'dict.scanTap': 'Look up on tap',
   'dict.scanKey': 'Mouse scan key',
   'dict.scanKeyNone': 'None (hover)',
+  'dict.scanMiddleMouse': 'Scan using middle mouse button',
   'dict.scanWithoutMove': 'Scan when the key is pressed',
   'dict.scanDelay': 'Delay (ms)',
   'dict.scanLength': 'Scan length',
