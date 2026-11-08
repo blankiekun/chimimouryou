@@ -207,8 +207,9 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
     /**
      * A game starts: what came before is dropped. Linux: returns Wine's env additions (its own
      * sink); Windows: the helper's extra arguments (the pipe). `baseEnv`: the env Wine runs with.
+     * `ownSink` false (Linux): a game already running isn't on a new sink, so the whole system's.
      */
-    async start(baseEnv = process.env) {
+    async start(baseEnv = process.env, { ownSink = true } = {}) {
       await this.stop();
       sound.clear();
       marks.forEach((mark) => mark.timers.forEach(clearTimeout));
@@ -231,11 +232,13 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
       }
       if (!(await run('pactl', ['info'], env))) return { mode };
       await unloadSink();
-      const sink = await run(
-        'pactl',
-        ['load-module', 'module-null-sink', `sink_name=${sinkName}`, `rate=${rate * 2}`],
-        env
-      );
+      const sink =
+        ownSink &&
+        (await run(
+          'pactl',
+          ['load-module', 'module-null-sink', `sink_name=${sinkName}`, `rate=${rate * 2}`],
+          env
+        ));
       const loop =
         sink &&
         (await run(

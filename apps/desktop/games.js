@@ -159,6 +159,14 @@ export function isSafeSaveName(name) {
   );
 }
 
+/** Line breaks and other control characters: a hook code is one line of the helper's stdin. */
+const hookCodeChars = '[^\\0-\\x1f\\x7f\\u2028\\u2029]';
+const hookCodeShape = new RegExp(`^/?[HR]${hookCodeChars}*@${hookCodeChars}+$`);
+
+/** A hook code main may hand the helper: an H-code's or R-code's shape, on one line, 500 at most. */
+export const isHookCode = (code) =>
+  typeof code === 'string' && code.length <= 500 && hookCodeShape.test(code);
+
 /**
  * The files under `dir` as `{ path (relative, '/'), modified (ms), size }`. Links are never
  * followed: a prefix folder linked into the real home isn't the game's.
@@ -410,39 +418,46 @@ async function makePrefix(ctx, prefix, env) {
   writeFileSync(join(prefix, '.chimi-ready'), '');
 }
 
+/** Wine's env for a game: its own prefix (or, without one, the user's default prefix). */
+const wineEnv = (prefix) => ({
+  ...process.env,
+  ...(prefix ? { WINEPREFIX: prefix, WINEARCH: 'win64' } : {}),
+  WINEDEBUG: '-all',
+  WINEDLLOVERRIDES: 'mscoree,mshtml=',
+  LANG: 'ja_JP.UTF-8',
+  LC_ALL: 'ja_JP.UTF-8',
+  TZ: 'Asia/Tokyo'
+});
+
+const noWine = {
+  status: 'error',
+  message: 'Wine isn’t installed: install it to play this game here.'
+};
+
 async function startLinux(ctx, folder, game, gameExe, saves) {
   const { prefixes, media, hookDir } = ctx;
   const wine = await wineStatus();
-  if (!wine.version) {
-    return {
-      status: 'error',
-      message: 'Wine isn’t installed: install it to play this game here.'
-    };
-  }
+  if (!wine.version) return noWine;
   const prefix = join(prefixes, folder);
-  const env = {
-    ...process.env,
-    WINEPREFIX: prefix,
-    WINEARCH: 'win64',
-    WINEDEBUG: '-all',
-    WINEDLLOVERRIDES: 'mscoree,mshtml=',
-    LANG: 'ja_JP.UTF-8',
-    LC_ALL: 'ja_JP.UTF-8',
-    TZ: 'Asia/Tokyo'
-  };
+  const env = wineEnv(prefix);
   if (!existsSync(join(prefix, '.chimi-ready'))) await makePrefix(ctx, prefix, env);
   writeSaves(ctx, folder, game, saves);
   const audio = await media.start(env);
   send(ctx, { type: 'audio', mode: audio.mode });
-  return spawn('wine', [winePath(join(hookDir, 'chimihook.exe')), winePath(gameExe)], {
-    cwd: game.installDir,
-    env: { ...env, ...audio.env }
-  });
+  return spawn(
+    'wine',
+    [
+      winePath(join(hookDir, 'chimihook.exe')),
+      ...(game.launchOnly ? ['--no-hook'] : []),
+      winePath(gameExe)
+    ],
+    { cwd: game.installDir, env: { ...env, ...audio.env } }
+  );
 }
 
 /** Starts a game; `saves`: the synced vnsaves.json entries, written in before it starts. */
 async function launch(ctx, event, folder, saves) {
-  const { platform, hookDir, media, overlay, app } = ctx;
+  const { platform, hookDir, media, app } = ctx;
   if (platform !== 'win32' && platform !== 'linux') return { status: 'unsupported' };
   if (!existsSync(join(hookDir, 'chimihook.exe'))) return { status: 'unsupported' };
   if (ctx.session?.running) return { status: 'running', title: ctx.session.title };
@@ -454,7 +469,14 @@ async function launch(ctx, event, folder, saves) {
   // Links from before save sync: saves made until now count as the game's own files.
   if (!game.manifest) update(ctx, folder, { manifest: manifestOf(game.installDir) });
 
-  ctx.session = { folder, title: game.title, sender: event.sender, messages: [], running: true };
+  ctx.session = {
+    folder,
+    title: game.title,
+    sender: event.sender,
+    messages: [],
+    running: true,
+    launchOnly: !!game.launchOnly
+  };
   const current = ctx.session;
   watchSender(ctx, event.sender);
   syncOverlay(ctx);
@@ -472,7 +494,12 @@ async function launch(ctx, event, folder, saves) {
       platform === 'win32'
         ? spawn(
             join(hookDir, 'chimihook.exe'),
-            ['--locale', ...(await media.start()).args, gameExe],
+            [
+              '--locale',
+              ...(game.launchOnly ? ['--no-hook'] : []),
+              ...(await media.start()).args,
+              gameExe
+            ],
             {
               cwd: game.installDir,
               windowsHide: true
@@ -489,6 +516,14 @@ async function launch(ctx, event, folder, saves) {
     syncOverlay(ctx);
     return child;
   }
+  watchHelper(ctx, current, child);
+  return { status: 'started' };
+}
+
+/** The helper's messages go to the session's page; its end stops the recording and the overlay. */
+function watchHelper(ctx, current, child) {
+  const { media, overlay, app } = ctx;
+  const { folder } = current;
   let rest = '';
   let exited = false;
   child.stdout.setEncoding('utf8');
@@ -513,9 +548,17 @@ async function launch(ctx, event, folder, saves) {
           media.window(message);
           if (ctx.session === current) overlay.window(message);
         } else if (
-          ['text', 'thread', 'inject', 'connect', 'disconnect', 'error', 'audio', 'exit'].includes(
-            message.type
-          )
+          [
+            'text',
+            'thread',
+            'inject',
+            'hookcode',
+            'connect',
+            'disconnect',
+            'error',
+            'audio',
+            'exit'
+          ].includes(message.type)
         )
           send(ctx, message, current);
       } catch {
@@ -560,7 +603,73 @@ async function launch(ctx, event, folder, saves) {
     // The last lines may still be in the pipe.
     setTimeout(() => !exited && send(ctx, { type: 'exit' }, current), 1000);
   });
+  // Hook codes go in on stdin (games-hook-code); a helper gone before a write is no crash.
+  child.stdin?.on('error', () => {});
   current.child = child;
+}
+
+/**
+ * The processes with a window (Linux: in the game's prefix when it has one, else Wine's default),
+ * for Attach; kept so the page picks one by its index and never names a process itself.
+ */
+async function listWindows(ctx, folder) {
+  const { platform, hookDir, prefixes } = ctx;
+  const exe = join(hookDir, 'chimihook.exe');
+  if ((platform !== 'win32' && platform !== 'linux') || !existsSync(exe))
+    return { status: 'unsupported' };
+  if (!Object.hasOwn(ctx.store.games, folder)) return { status: 'missing' };
+  const prefix = join(prefixes, folder);
+  const env = wineEnv(existsSync(join(prefix, '.chimi-ready')) ? prefix : undefined);
+  if (platform === 'linux' && !(await wineStatus()).version) return noWine;
+  const out =
+    platform === 'win32'
+      ? await run(exe, ['--list'], { timeout: 15_000, windowsHide: true })
+      : await run('wine', [winePath(exe), '--list'], { env, timeout: 60_000 });
+  let list = [];
+  try {
+    list = JSON.parse(out.split('\n').find((line) => line.startsWith('{"type":"windows"'))).list;
+  } catch {
+    return { status: 'error', message: 'The running programs couldn’t be listed.' };
+  }
+  ctx.windows = { folder, env, list };
+  return {
+    status: 'ok',
+    windows: list.map(({ title, exe: path }) => ({ title, exe: path.split(/[\\/]/).pop() }))
+  };
+}
+
+/** Hooks the game picked from listWindows (by index): a session of `folder`'s, as if started here. */
+async function attach(ctx, event, folder, index) {
+  const { platform, hookDir, media } = ctx;
+  const picked = ctx.windows?.folder === folder ? ctx.windows.list[index] : undefined;
+  if (!Number.isInteger(index) || !picked)
+    return { status: 'error', message: 'That list has expired: open it again.' };
+  if (ctx.session?.running) return { status: 'running', title: ctx.session.title };
+  const game = Object.hasOwn(ctx.store.games, folder) ? ctx.store.games[folder] : undefined;
+  if (!game) return { status: 'missing' };
+  const { env } = ctx.windows;
+  ctx.windows = undefined;
+  ctx.session = { folder, title: game.title, sender: event.sender, messages: [], running: true };
+  const current = ctx.session;
+  watchSender(ctx, event.sender);
+  syncOverlay(ctx);
+  const exe = join(hookDir, 'chimihook.exe');
+  const pid = String(picked.pid);
+  let child;
+  try {
+    // Linux: already playing on the default sound output, so the whole system's sound.
+    const audio = await media.start(env, { ownSink: false });
+    if (platform !== 'win32') send(ctx, { type: 'audio', mode: audio.mode });
+    child =
+      platform === 'win32'
+        ? spawn(exe, [...audio.args, '--attach', pid], { windowsHide: true })
+        : spawn('wine', [winePath(exe), '--attach', pid], { env });
+  } catch (error) {
+    current.running = false;
+    syncOverlay(ctx);
+    return { status: 'error', message: error.message };
+  }
+  watchHelper(ctx, current, child);
   return { status: 'started' };
 }
 
@@ -768,6 +877,28 @@ export function registerGames({
     }
     return { folder: session.folder, running: session.running, messages: session.messages };
   });
+  // Per game, never synced: start it without LunaHook (the reader's own hook sends the lines).
+  handle('games-options', (event, folder, changes) => {
+    if (!Object.hasOwn(ctx.store.games, folder)) return undefined;
+    if (typeof changes?.launchOnly === 'boolean')
+      update(ctx, folder, { launchOnly: changes.launchOnly || undefined });
+    return { launchOnly: !!ctx.store.games[folder].launchOnly };
+  });
+  // A hook code typed on /hook, checked here: it becomes one line of the helper's stdin.
+  handle('games-hook-code', (event, code) => {
+    const { session } = ctx;
+    if (!isHookCode(code)) return { status: 'error', message: 'That isn’t an H-code or R-code.' };
+    if (!session?.running || session.launchOnly || !session.child?.stdin?.writable)
+      return { status: 'error', message: 'The game isn’t running with the built-in hook.' };
+    session.child.stdin.write(`insert ${code}\n`);
+    return { status: 'ok' };
+  });
+  // Launch only: a line from the reader's own hook gets a number for its Anki media too.
+  handle('games-stamp', () =>
+    ctx.session?.running && ctx.session.launchOnly ? media.stamp() : undefined
+  );
+  handle('games-windows', (event, folder) => listWindows(ctx, folder));
+  handle('games-attach', (event, folder, index) => attach(ctx, event, folder, index));
 
   // The overlay: its settings (/hook, Settings → Desktop games), Adjust mode (/hook), and from the
   // overlay page itself its rects and adjusted area.

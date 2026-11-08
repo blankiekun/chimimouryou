@@ -42,6 +42,8 @@ export type NativeMessage =
   | { type: 'status'; text: string }
   | { type: 'error'; message: string }
   | { type: 'inject'; ok: boolean; bits: number }
+  /** A hook code inserted from /hook: whether LunaHook took it */
+  | { type: 'hookcode'; ok: boolean; code: string }
   | { type: 'connect' | 'disconnect'; pid: number }
   | { type: 'exit' };
 
@@ -110,6 +112,25 @@ export interface DesktopGames {
     folder?: string
   ): Promise<{ folder: string; running: boolean; messages: NativeMessage[] } | undefined>;
   onHook(callback: (message: NativeMessage) => void): () => void;
+  /** Per-game options on this computer (undefined when not linked); `launchOnly`: no LunaHook */
+  options(
+    folder: string,
+    changes?: { launchOnly?: boolean }
+  ): Promise<{ launchOnly: boolean } | undefined>;
+  /** Inserts a hook code (H-code or R-code) into the running game; main checks its shape */
+  insertHook(code: string): Promise<{ status: 'ok' } | { status: 'error'; message: string }>;
+  /** Launch only: a number for a line from the reader's own hook, for its Anki media */
+  stamp(): Promise<{ seq: number; at: number } | undefined>;
+  /** The programs with a window now, to attach to: picked by index, kept by main */
+  windows(
+    folder: string
+  ): Promise<
+    | { status: 'ok'; windows: { title: string; exe: string }[] }
+    | { status: 'missing' | 'unsupported' }
+    | { status: 'error'; message: string }
+  >;
+  /** Hooks the running program at `index` of the last `windows` list, as `folder`'s game */
+  attach(folder: string, index: number): Promise<LaunchResult>;
   /** /hook shows the line: its screenshot is taken once drawn */
   mark(seq: number): Promise<void>;
   /**

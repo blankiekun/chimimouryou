@@ -37,7 +37,12 @@
 // or isn't retried at the next start. Anki (a fake AnkiConnect): a note mined from a line after the game closed gets no picture,
 // or one of another line (each step has its own background colour), or no sound, or another line's
 // (each step's speech carries its own pilot tone), or other programs' sound (a tone playing on the
-// speakers throughout).
+// speakers throughout). Beyond auto hooks: a game whose text no auto hook sees (testvn's hidden mode)
+// gets no lines from a hook code typed on /hook, a code carrying a second command reaches the
+// helper, or the saved code isn't inserted again at the next start; a launcher's game
+// (launcher.exe starts testvn.exe and exits) isn't hooked or its session ends with the launcher;
+// Launch only loads LunaHook, or its WebSocket lines don't show or get no Anki number; a game
+// started outside the app can't be picked from Attach's list and hooked.
 
 /* global indexedDB, localStorage, navigator -- used inside page.evaluate */
 import { Buffer } from 'node:buffer';
@@ -54,6 +59,7 @@ import {
   statSync,
   writeFileSync
 } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { homedir, tmpdir, userInfo } from 'node:os';
@@ -154,6 +160,20 @@ const ankiServer = createServer((request, response) => {
   });
 });
 await new Promise((resolve) => ankiServer.listen(0, '127.0.0.1', resolve));
+// A texthooker WebSocket (Textractor's role) for Launch only: text frames to /hook, nothing read.
+const sockets = [];
+const wsServer = createServer();
+wsServer.on('upgrade', (request, socket) => {
+  const accept = createHash('sha1')
+    .update(`${request.headers['sec-websocket-key']}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
+    .digest('base64');
+  socket.write(
+    `HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`
+  );
+  socket.on('error', () => {});
+  sockets.push(socket);
+});
+await new Promise((resolve) => wsServer.listen(0, '127.0.0.1', resolve));
 
 const app = await _electron.launch({
   executablePath: process.env.E2E_APP ?? join(desktop, 'node_modules/electron/dist/electron'),
@@ -350,11 +370,15 @@ const page = await app.firstWindow();
 try {
   page.setDefaultTimeout(timeout);
   await page.waitForLoadState('load');
-  await page.evaluate((port) => {
-    localStorage.setItem('storageChosen', '1');
-    localStorage.setItem('ankiEnabled', '1');
-    localStorage.setItem('ankiConnectUrl', `http://127.0.0.1:${port}`);
-  }, ankiServer.address().port);
+  await page.evaluate(
+    ([port, wsPort]) => {
+      localStorage.setItem('storageChosen', '1');
+      localStorage.setItem('ankiEnabled', '1');
+      localStorage.setItem('ankiConnectUrl', `http://127.0.0.1:${port}`);
+      localStorage.setItem('hookSocketUrl', `ws://127.0.0.1:${wsPort}`);
+    },
+    [ankiServer.address().port, wsServer.address().port]
+  );
   await page.goto('http://127.0.0.1:41917/manage');
 
   step('Import → Installed game');
@@ -665,6 +689,110 @@ try {
   );
 
   await page.screenshot({ path: join(root, 'hook.png') });
+  otherSound.kill();
+  const gameLine = page.locator('.hook-text li', { hasText: /第\d+場面の台詞です。/ });
+
+  step(
+    'A hook code: lines no auto hook finds come from the code typed on /hook, saved, and inserted again'
+  );
+  writeFileSync(join(moved, 'hidden.txt'), '');
+  rmSync(join(moved, 'hookaddr.txt'), { force: true });
+  await page.getByRole('button', { name: 'Clear lines' }).click();
+  await page.getByRole('button', { name: 'Start the game' }).click();
+  await page.getByText('Playing.').waitFor();
+  const code = `HQ4@${readFileSync(join(moved, 'hookaddr.txt'), 'utf8')}:testvn.exe`;
+  await page.getByRole('button', { name: 'Add hook code…' }).click();
+  // Main refuses a second command on the same line.
+  await page.locator('.nt-code input').fill(`${code}\u2028insert HS0@0:x.dll`);
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByText('That isn’t an H-code or R-code.').waitFor();
+  await page.locator('.nt-code input').fill(code);
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  const coded = page.locator('.nt-row', { hasText: /場面の台詞です/ });
+  await coded.click();
+  await gameLine.first().waitFor();
+  await page.getByText('The game has closed.').waitFor();
+  const withCode = JSON.parse((await record(page)).elementHtml.replace('<!--ttu-vn-->', ''));
+  if (!/^HQ4@/.test(withCode.nativeHook?.hookcode ?? ''))
+    fail(`hook code not saved: ${JSON.stringify(withCode.nativeHook)}`);
+  await page.getByRole('button', { name: 'Clear lines' }).click();
+  await page.getByRole('button', { name: 'Start the game' }).click();
+  await page.locator('.nt-row.nt-current', { hasText: /場面の台詞です/ }).waitFor();
+  await gameLine.first().waitFor();
+  await page.getByText('The game has closed.').waitFor();
+  rmSync(join(moved, 'hidden.txt'));
+
+  step('A launcher: the game it starts is hooked, and its exit ends the session');
+  copyFileSync(join(moved, 'testvn.exe'), join(moved, 'launcher.exe'));
+  const viaLauncher = join(games, 'Test VN launcher');
+  renameSync(moved, viaLauncher);
+  await pickFolder(viaLauncher);
+  await page.getByRole('button', { name: 'Clear lines' }).click();
+  await page.getByRole('button', { name: 'Start the game' }).click();
+  await page.getByRole('button', { name: 'Choose folder…' }).click();
+  await page.locator('.ng-program', { hasText: 'launcher.exe' }).click();
+  await page.getByRole('button', { name: 'Link and play' }).click();
+  await page.locator('.nt-row', { hasText: 'DrawTextExW' }).click();
+  await gameLine.first().waitFor();
+  await page.getByText('The game has closed.').waitFor();
+
+  step('Launch only: no LunaHook, lines from the WebSocket, numbered for Anki');
+  const socketLine = 'ソケットから来た行です。';
+  const sendLine = (text) => {
+    const body = Buffer.from(text);
+    for (const socket of sockets)
+      socket.write(Buffer.concat([Buffer.from([0x81, body.length]), body]));
+  };
+  await page.getByLabel('Launch only (I hook with my own tool)').check();
+  await page.getByRole('button', { name: 'Start the game' }).click();
+  await page.getByText('Playing: lines come from your own text hook.').waitFor();
+  for (let tries = 0; !sockets.length; tries += 1) {
+    if (tries > 40) fail('/hook didn’t connect to the WebSocket');
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  // The launcher starts it a moment after the WebSocket connects.
+  for (let tries = 0; ; tries += 1) {
+    try {
+      execFileSync('pgrep', ['-f', 'testvn.exe'], { stdio: 'ignore' });
+      break;
+    } catch {
+      if (tries > 60) fail('the game didn’t start in launch-only mode');
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+  sendLine(socketLine);
+  await page.locator('.hook-text li', { hasText: socketLine }).waitFor();
+  if (await page.locator('.nt-row').count()) fail('LunaHook threads in launch-only mode');
+  await page.getByText('The game has closed.').waitFor();
+  const socketSeq = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('hookLines') ?? '[]').at(-1)?.seq
+  );
+  if (!Number.isInteger(socketSeq)) fail(`the WebSocket line has no Anki number: ${socketSeq}`);
+  await page.getByLabel('Launch only (I hook with my own tool)').uncheck();
+
+  step('Attach: a game started outside the app, picked from the list, is hooked');
+  const outside = spawn('wine', [join(viaLauncher, 'testvn.exe')], {
+    cwd: viaLauncher,
+    env: {
+      ...process.env,
+      HOME: home,
+      WINEPREFIX: join(prefixes, saved.folder),
+      WINEDEBUG: '-all',
+      LANG: 'ja_JP.UTF-8',
+      TESTVN_MS: '3000'
+    },
+    stdio: 'ignore'
+  });
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+  await page.getByRole('button', { name: 'Clear lines' }).click();
+  await page.getByRole('button', { name: 'Attach to running game…' }).click();
+  await page.locator('.so-row', { hasText: 'testvn.exe' }).click();
+  await page.locator('.nt-row', { hasText: 'DrawTextExW' }).click();
+  await gameLine.first().waitFor();
+  await page.getByText('The game has closed.').waitFor();
+  outside.kill();
+  await page.screenshot({ path: join(root, 'hook-attach.png') });
+
   console.log(`OK (screenshot ${join(root, 'hook.png')}, Anki media anki.jpeg and anki.wav)`);
 } catch (error) {
   await page.screenshot({ path: join(root, 'failed.png') });
@@ -672,6 +800,8 @@ try {
 } finally {
   await app.close();
   ankiServer.close();
+  sockets.forEach((socket) => socket.destroy());
+  wsServer.close();
   otherSound?.kill();
   pulse.kill();
 }

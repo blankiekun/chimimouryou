@@ -53,6 +53,7 @@
   import NativeGameDialog from '$lib/components/vn/native-game-dialog.svelte';
   import NativeThreads from '$lib/components/vn/native-threads.svelte';
   import NativeOverlayControls from '$lib/components/vn/native-overlay-controls.svelte';
+  import NativeStartOptions from '$lib/components/vn/native-start-options.svelte';
   import { dialogManager } from '$lib/data/dialog-manager';
   import { page } from '$lib/data/page-store';
   import { database } from '$lib/data/store';
@@ -175,6 +176,11 @@
   let clean = hookCleaner({});
   let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
   let stopListening: (() => void) | undefined;
+  /** The game's folder (main's key), once its record is read */
+  let nativeFolder = $state<string>();
+  /** Started without LunaHook: lines come over the WebSocket; undefined while not linked here */
+  let launchOnly = $state<boolean>();
+  let reinsertTimer: ReturnType<typeof setTimeout> | undefined;
   /** vnsaves.json, shared with VNBox: pulled before the game starts, pushed when it closes. */
   let saveSync: VnSaveSync | undefined;
   let saveNote = $state<string>();
@@ -204,6 +210,8 @@
     title = book.title;
     saveSync = new VnSaveSync(book.title, info, book.storageSource, () => {});
     rememberNativeGame(info.folder!, book.id);
+    nativeFolder = info.folder;
+    launchOnly = (await games.options(info.folder!))?.launchOnly;
     nativeHook = info.nativeHook;
     cleanup = info.hookCleanup ?? {};
     clean = hookCleaner(cleanup);
@@ -219,6 +227,7 @@
     if (session && session.folder === info.folder && session.running) {
       nativeRunning = true;
       nativeStatus = 'Playing.';
+      if (launchOnly) connect();
       reportActivity();
       session.messages.forEach((message) => onNative(message, true));
       return;
@@ -236,7 +245,10 @@
 
     if (result.status === 'started') {
       nativeRunning = true;
-      nativeStatus = 'Starting the game…';
+      nativeStatus = launchOnly
+        ? 'Playing: lines come from your own text hook.'
+        : 'Starting the game…';
+      if (launchOnly) connect();
       reportActivity();
     } else if (result.status === 'missing' || result.status === 'gone') {
       nativeStatus = 'Waiting for the game’s folder.';
@@ -263,16 +275,59 @@
     }
   }
 
+  /** Hooks a game already running (picked from main's list) as this record's. */
+  async function attachNative(index: number) {
+    if (!games || !nativeFolder) return;
+    threads = new Threads();
+    ranked = [];
+    stopListening ??= games.onHook(onNative);
+    const result = await games.attach(nativeFolder, index);
+
+    if (result.status === 'started') {
+      nativeRunning = true;
+      nativeStatus = 'Attaching the text hook…';
+      reportActivity();
+    } else {
+      nativeStatus =
+        result.status === 'running'
+          ? `${result.title} is running: close it first.`
+          : result.status === 'error'
+            ? result.message
+            : 'Link the game’s folder first: Start the game.';
+    }
+  }
+
+  /** A hook code typed on /hook; main checks it. Resolves to an error message, if any. */
+  async function insertCode(code: string) {
+    const result = await games!.insertHook(code);
+
+    return result.status === 'error' ? result.message : undefined;
+  }
+
+  /** The saved hook again when none of its threads came up: a hook code typed for this game. */
+  function reinsertHook() {
+    const hook = nativeHook;
+
+    if (nativeRunning && hook && ![...threads.threads.values()].some((t) => isSavedThread(t, hook)))
+      games?.insertHook(hook.hookcode);
+  }
+
   /** A message from the built-in hook; `replayed` ones (from before this page) add no stats. */
   function onNative(message: NativeMessage, replayed = false) {
     if (message.type === 'status') nativeStatus = message.text;
     else if (message.type === 'error') nativeStatus = message.message;
     else if (message.type === 'audio') audioNote = audioNotes[message.mode];
-    else if (message.type === 'inject')
+    else if (message.type === 'hookcode' && !message.ok)
+      nativeStatus = `LunaHook didn’t take the hook code ${message.code}.`;
+    else if (message.type === 'inject') {
       nativeStatus = message.ok ? 'Playing.' : 'The text hook couldn’t attach to the game.';
-    else if (message.type === 'exit') {
+      // Auto hooks come up at once; a saved hook code that didn't is inserted again.
+      clearTimeout(reinsertTimer);
+      if (message.ok && !replayed) reinsertTimer = setTimeout(reinsertHook, 5000);
+    } else if (message.type === 'exit') {
       nativeRunning = false;
       nativeStatus = 'The game has closed.';
+      if (launchOnly) disconnect();
       readingActivity();
       if (!replayed) pushSaves();
     } else if (message.type === 'text') {
@@ -436,12 +491,15 @@
     raw = [...raw, text].slice(-20);
   }
 
-  function fromSocket(data: unknown, thread: string) {
+  async function fromSocket(data: unknown, thread: string) {
     const text = parseHookMessage(data);
 
     if (!text) return;
     keepRaw(text);
-    addLine(socketClean(text, thread).trim());
+    // A game launched without the built-in hook: main numbers the line for its Anki media.
+    const seq = nativeRunning && launchOnly ? (await games?.stamp())?.seq : undefined;
+
+    addLine(socketClean(text, thread).trim(), seq);
   }
 
   /** The stats strip lights up: a line came in while paused and wasn't counted. */
@@ -607,6 +665,7 @@
     readingActivity();
     stopLineAudio();
     clearTimeout(rankTimer);
+    clearTimeout(reinsertTimer);
   });
 </script>
 
@@ -727,6 +786,13 @@
               </button>
             {/if}
           </div>
+          {#if !nativeRunning && nativeFolder}
+            <NativeStartOptions folder={nativeFolder} bind:launchOnly onattach={attachNative} />
+          {:else if nativeRunning && launchOnly}
+            <p class="hook-hint" role="status">
+              Your text hook: {$t$(statusLabels[status])} ({url}).
+            </p>
+          {/if}
           {#if audioNote}
             <p class="hook-hint">{audioNote}</p>
           {/if}
@@ -753,13 +819,16 @@
             </div>
           {/if}
           <NativeOverlayControls />
-          <NativeThreads
-            {ranked}
-            hook={nativeHook}
-            auto={autoPicked}
-            onpick={pickThread}
-            onundo={undoAutoPick}
-          />
+          {#if !launchOnly}
+            <NativeThreads
+              {ranked}
+              hook={nativeHook}
+              auto={autoPicked}
+              onpick={pickThread}
+              onundo={undoAutoPick}
+              oninsert={nativeRunning ? insertCode : undefined}
+            />
+          {/if}
         </div>
         <AnkiWatcher media={ankiMedia} />
       {:else if status === 'connected' && !changing}
@@ -883,11 +952,12 @@
 {#if showSettings}
   <ReaderSheet title="Settings" on:close={() => (showSettings = false)}>
     <HookSettings
-      native={!!nativeId}
-      cleanup={nativeId ? cleanup : socketCleanup}
+      native={!!nativeId && !launchOnly}
+      cleanup={nativeId && !launchOnly ? cleanup : socketCleanup}
       {raw}
       {status2}
-      oncleanup={(next) => (nativeId ? setNativeCleanup(next) : hookCleanup$.next(next))}
+      oncleanup={(next) =>
+        nativeId && !launchOnly ? setNativeCleanup(next) : hookCleanup$.next(next)}
       onreconnect={() => {
         url = hookSocketUrl$.getValue();
         if (status !== 'off') connect();

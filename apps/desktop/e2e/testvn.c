@@ -72,10 +72,27 @@ static void writeSave(REFKNOWNFOLDERID id, const wchar_t *sub) {
   CoTaskMemFree(base);
 }
 
+// Hidden mode (hidden.txt beside it): each step's caption only goes through say(), drawn as a bar
+// with no text API, so no hook LunaHook finds by itself sees it: the E2E inserts a hook code
+// (HQ4@<say's offset>:testvn.exe, the offset written to hookaddr.txt), and the game runs 20 steps.
+static int hidden;
+__attribute__((noinline, noipa)) void say(const wchar_t *text, HDC dc) {
+  int n = 0;
+  while (text[n]) n++;
+  RECT r = {20, 40, 20 + 12 * n, 60};
+  FillRect(dc, &r, GetStockObject(BLACK_BRUSH));
+}
+
 static void paint(HWND hwnd) {
   PAINTSTRUCT ps; HDC dc = BeginPaint(hwnd, &ps);
   RECT all; GetClientRect(hwnd, &all);
   HBRUSH bg = CreateSolidBrush(stepColors[step % 12]); FillRect(dc, &all, bg); DeleteObject(bg);
+  if (hidden) {
+    wchar_t caption[64]; swprintf(caption, 64, L"第%d場面の台詞です。", step);
+    say(caption, dc);
+    EndPaint(hwnd, &ps);
+    return;
+  }
   HFONT font = CreateFontW(28, 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, ANTIALIASED_QUALITY, 0, L"MS Gothic");
   SelectObject(dc, font);
   SetBkMode(dc, TRANSPARENT);
@@ -280,7 +297,7 @@ static LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
       *wcsrchr(self, L'\\') = 0;
       writeSaveIn(self, L"savedata");
     }
-    if (step >= 11) PostQuitMessage(0);
+    if (step >= (hidden ? 20 : 11)) PostQuitMessage(0);
     InvalidateRect(hwnd, NULL, TRUE); return 0;
   case WM_DESTROY: PostQuitMessage(0); return 0;
   }
@@ -288,6 +305,22 @@ static LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
 }
 
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show) {
+  // Copied as launcher.exe: a launcher with no window that starts testvn.exe beside it and exits.
+  wchar_t self[MAX_PATH]; GetModuleFileNameW(NULL, self, MAX_PATH);
+  wchar_t *name = wcsrchr(self, L'\\') + 1;
+  if (!_wcsicmp(name, L"launcher.exe")) {
+    wcscpy(name, L"testvn.exe");
+    STARTUPINFOW si = {sizeof si}; PROCESS_INFORMATION pi;
+    return CreateProcessW(self, NULL, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi) ? 0 : 1;
+  }
+  FILE *flag = _wfopen(L"hidden.txt", L"rb");
+  if (flag) {
+    fclose(flag);
+    hidden = 1;
+    FILE *addr = _wfopen(L"hookaddr.txt", L"wb");
+    fprintf(addr, "%X", (unsigned)((char *)say - (char *)GetModuleHandleW(NULL)));
+    fclose(addr);
+  }
   int sceneMode = loadScenes();
   WNDCLASSW wc = {0}; wc.lpfnWndProc = sceneMode ? sceneProc : proc; wc.hInstance = inst; wc.lpszClassName = L"TestVN";
   wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH); wc.hCursor = LoadCursor(NULL, IDC_ARROW);

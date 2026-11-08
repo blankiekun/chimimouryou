@@ -6,7 +6,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { isSafeSaveName } from './games.js';
+import { isHookCode, isSafeSaveName } from './games.js';
 
 const user = 'wine/drive_c/users/username/';
 
@@ -36,4 +36,31 @@ test('main never writes or reads synced names that run code or reach Windows’ 
     'game/savedata/01.sav'
   ])
     assert.equal(isSafeSaveName(name), true, name);
+});
+
+test('only one plausible hook code goes to the helper’s stdin, never a second command', () => {
+  for (const code of [
+    'HQ4@1A2B:testvn.exe\ninsert HS0@0:x.dll',
+    'HS4@0:gdi32.dll\r:TextOutA',
+    'HS4@0:gdi32.dll\0',
+    'HS4@0:gdi32.dll\u2028x',
+    `HS4@${'0'.repeat(600)}`,
+    'hs4@0:gdi32.dll',
+    'insert HS4@0:gdi32.dll',
+    'HS4:gdi32.dll',
+    'H@',
+    '',
+    undefined,
+    42,
+    ['HS4@0']
+  ])
+    assert.equal(isHookCode(code), false, JSON.stringify(code));
+  for (const code of [
+    'HS4@0:gdi32.dll:TextOutA',
+    '/HQN-8*0@4A3B10:game.exe',
+    'HQ4@1A2B:ゲーム 体験版.exe',
+    'RS@1234:game.exe',
+    'HW-1C:-20@44A6F0'
+  ])
+    assert.equal(isHookCode(code), true, code);
 });
