@@ -23,12 +23,18 @@
     type PopupHotkeyAction
   } from '$lib/functions/dictionary/hotkeys';
   import { t$ } from '$lib/i18n';
-  import type { AudioSourceOptions, ProfileOptions } from '$lib/vendor/yomitan/types/settings';
+  import type {
+    AudioSourceOptions,
+    ProfileOptions,
+    ScanningInput
+  } from '$lib/vendor/yomitan/types/settings';
 
   $: profile = $yomitanOptions$ ? profileOptions($yomitanOptions$) : undefined;
   $: general = profile?.general;
   $: scanning = profile?.scanning;
-  $: mouseIndex = scanning?.inputs.findIndex(({ types }) => types.mouse) ?? -1;
+  const isMiddleMouse = (input: ScanningInput) => input.types.mouse && input.include === 'mouse2';
+  $: mouseIndex =
+    scanning?.inputs.findIndex((input) => input.types.mouse && !isMiddleMouse(input)) ?? -1;
   $: touchIndex = scanning?.inputs.findIndex(({ types }) => types.touch) ?? -1;
 
   let voices: SpeechSynthesisVoice[] = [];
@@ -127,6 +133,23 @@
     set((p) => {
       const input = p.scanning.inputs[mouseIndex];
       if (input) input.include = key;
+    });
+  }
+
+  /** Yomitan's "Scan using middle mouse button": an input that scans while mouse2 is held. */
+  function setMiddleMouse(on: boolean) {
+    set((p) => {
+      const inputs = p.scanning.inputs.filter((input) => !isMiddleMouse(input));
+      const base = p.scanning.inputs[mouseIndex];
+      if (on && base) {
+        inputs.splice(mouseIndex + 1, 0, {
+          ...structuredClone(base),
+          include: 'mouse2',
+          exclude: '',
+          types: { mouse: true, touch: false, pen: false }
+        });
+      }
+      p.scanning.inputs = inputs;
     });
   }
 
@@ -350,7 +373,10 @@
     </SettingsItemGroup>
   </SettingsSection>
 
-  <SettingsSection id="dictionary-scanning" keywords="scan shift hover tap modifier delay length">
+  <SettingsSection
+    id="dictionary-scanning"
+    keywords="scan shift hover tap modifier middle mouse delay length"
+  >
     <SettingsItemGroup title={$t$('dict.scanTap')}>
       <Switch
         checked={!!scanning.inputs[touchIndex]?.options.scanOnTouchTap}
@@ -376,6 +402,15 @@
             </option>
           {/if}
         </select>
+      </SettingsItemGroup>
+    {/if}
+    {#if mouseIndex >= 0}
+      <SettingsItemGroup title={$t$('dict.scanMiddleMouse')}>
+        <Switch
+          checked={scanning.inputs.some(isMiddleMouse)}
+          aria-label={$t$('dict.scanMiddleMouse')}
+          onchange={(next) => setMiddleMouse(next)}
+        />
       </SettingsItemGroup>
     {/if}
     <SettingsItemGroup title={$t$('dict.scanWithoutMove')}>

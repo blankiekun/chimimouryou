@@ -375,6 +375,7 @@ export const ja: Record<MessageKey, string> = {
   'dict.scanTap': 'タップで検索',
   'dict.scanKey': 'マウスのスキャンキー',
   'dict.scanKeyNone': 'なし（ホバー）',
+  'dict.scanMiddleMouse': 'マウスの中ボタンでスキャン',
   'dict.scanWithoutMove': 'キーを押した時点でスキャン',
   'dict.scanDelay': '遅延（ms）',
   'dict.scanLength': 'スキャンの長さ',

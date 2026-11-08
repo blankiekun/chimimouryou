@@ -133,6 +133,9 @@ describe('lookup helpers', () => {
     expect(matchingInput(inputs, 'mouse', [])).toBeUndefined();
     expect(matchingInput(inputs, 'mouse', ['shift'])).toBe(inputs[0]);
     expect(matchingInput(inputs, 'mouse', ['shift', 'mouse0'])).toBeUndefined();
+    expect(matchingInput(inputs, 'mouse', ['mouse2'])).toBeUndefined();
+    const middle = { ...inputs[0], include: 'mouse2', exclude: '' };
+    expect(matchingInput([inputs[0], middle], 'mouse', ['mouse2'])).toBe(middle);
     expect(matchingInput(inputs, 'touch', [])?.options.scanOnTouchTap).toBe(true);
   });
 
