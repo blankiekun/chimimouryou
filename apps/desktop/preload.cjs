@@ -42,6 +42,12 @@ contextBridge.exposeInMainWorld('chimiDesktop', {
     session: (folder) => ipcRenderer.invoke('games-session', folder),
     mark: (seq) => ipcRenderer.invoke('games-mark', seq),
     media: (seq, want) => ipcRenderer.invoke('games-media', seq, want),
+    hotkeys: (changes) => ipcRenderer.invoke('games-hotkeys', changes),
+    onHotkey: (callback) => {
+      const listener = (_event, action) => callback(action);
+      ipcRenderer.on('native-hotkey', listener);
+      return () => ipcRenderer.removeListener('native-hotkey', listener);
+    },
     onHook: (callback) => {
       const listener = (_event, message) => callback(message);
       ipcRenderer.on('native-hook', listener);

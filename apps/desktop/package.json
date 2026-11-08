@@ -25,6 +25,7 @@
       "games.js",
       "jiten.js",
       "game-media.js",
+      "hotkeys.js",
       "overlay.js",
       "mihon.js",
       "oauth.js",

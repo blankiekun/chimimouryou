@@ -3,7 +3,7 @@
    * Settings → Desktop games (desktop app only): where this computer's Windows games are
    * installed (the app's native-games.json, native-games.ts), with Change folder and Forget, and
    * on Linux whether Wine is ready to run them, and the game overlay's text size and opacity (on/off
-   * and its place are on /hook).
+   * and its place are on /hook), and the global shortcuts while a game runs (hotkeys.js).
    */
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
@@ -12,6 +12,7 @@
   import {
     desktopGames,
     desktopOverlay,
+    type NativeHotkeys,
     type OverlaySettings,
     type NativeGameEntry,
     type NativeGamesList
@@ -24,9 +25,15 @@
   const overlay = desktopOverlay();
   let overlaySettings = $state<OverlaySettings>();
   const refresh = async () => (list = await games.list());
+  let hotkeys = $state<NativeHotkeys & { failed: string[] }>();
+  const hotkeyFields: { action: keyof NativeHotkeys; label: string }[] = [
+    { action: 'mine', label: 'Newest line to the last Anki card' },
+    { action: 'show', label: 'Show the texthooker (again: back to the game)' }
+  ];
 
   onMount(async () => {
     overlaySettings = await overlay?.settings();
+    hotkeys = await games.hotkeys();
     await refresh();
   });
 
@@ -114,6 +121,32 @@
       </div>
     </SettingsItemGroup>
   {/if}
+  {#if hotkeys && list?.hook}
+    <SettingsItemGroup
+      title="Shortcuts while a game runs"
+      tooltip="Global shortcuts that work with the game in front, set only while a game runs. Electron's format, such as CommandOrControl+Shift+M; empty turns one off."
+    >
+      <div class="dg-keys">
+        {#each hotkeyFields as { action, label } (action)}
+          <label class="dg-field">
+            <input
+              class="app-input"
+              value={hotkeys[action]}
+              spellcheck="false"
+              placeholder="Off"
+              onchange={async (event) =>
+                (hotkeys = await games.hotkeys({ [action]: event.currentTarget.value }))}
+            />
+            {label}
+            {#if hotkeys.failed.includes(action)}
+              <span class="dg-missing">Not set: another program has it, or it isn’t a shortcut</span
+              >
+            {/if}
+          </label>
+        {/each}
+      </div>
+    </SettingsItemGroup>
+  {/if}
   {#if list && !list.hook}
     <p class="dg-note">This build of the app has no built-in text hook, so games can’t start.</p>
   {/if}
@@ -167,6 +200,17 @@
 
   .dg-field input {
     width: 5rem;
+  }
+
+  .dg-keys {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-size: var(--type-small);
+  }
+
+  .dg-keys input {
+    width: 16rem;
   }
 
   .dg-actions {

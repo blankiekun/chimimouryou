@@ -196,6 +196,24 @@ export class DatabaseService {
     return undefined;
   }
 
+  /** Every stored book's title, from the title index (no book read). */
+  async getTitles() {
+    const db = await this.db;
+    const titles: string[] = [];
+
+    for (
+      let cursor = await db
+        .transaction('data')
+        .store.index('title')
+        .openKeyCursor(null, 'nextunique');
+      cursor;
+      cursor = await cursor.continue()
+    ) {
+      titles.push(cursor.key);
+    }
+    return titles;
+  }
+
   async getDataByTitle(title: string) {
     if (title) {
       const db = await this.db;

@@ -130,6 +130,15 @@ export interface DesktopGames {
       endClick: boolean;
     };
   }>;
+  /** The global shortcuts while a game runs ('' = off); `failed`: those another program holds */
+  hotkeys(changes?: Partial<NativeHotkeys>): Promise<NativeHotkeys & { failed: string[] }>;
+  /** A global shortcut pressed while the game is in front: /hook mines the newest line */
+  onHotkey(callback: (action: 'mine') => void): () => void;
+}
+
+export interface NativeHotkeys {
+  mine: string;
+  show: string;
 }
 
 /** The desktop app's games API, undefined everywhere else (web, Android, server builds). */
@@ -257,6 +266,20 @@ export class NativeThreads {
 }
 
 /** The saved hook's threads: same hook code (its address and context change between starts). */
+/**
+ * A game with no saved hook: the thread to pick without asking, from rankThreads' rows, or
+ * undefined. Only a clear winner: at least 8 lines heard, score 0.8 or more, and no other hook
+ * (its own other contexts aside) at 0.5, where the picker would call it Suggested too.
+ */
+export function autoThread(ranked: { thread: NativeThread; score: number }[]) {
+  const [best] = ranked;
+  const rival = ranked.find((row) => row.thread.hookcode !== best?.thread.hookcode);
+
+  if (!best || best.thread.recent.length < 8 || best.score < 0.8 || (rival?.score ?? 0) >= 0.5)
+    return undefined;
+  return best.thread;
+}
+
 export function isSavedThread(thread: { hookcode: string }, hook: NativeHook | undefined) {
   return !!hook && thread.hookcode === hook.hookcode;
 }
