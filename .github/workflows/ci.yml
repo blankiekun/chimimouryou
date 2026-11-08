@@ -217,6 +217,19 @@ jobs:
           mkdir -p ../web/build && echo '<!doctype html>' > ../web/build/index.html
           pnpm exec electron-builder --linux dir --publish never
 
+      # Catches an app that starts without a visible window in a Wayland session (overlay on or off).
+      - name: Wayland start
+        working-directory: apps/desktop
+        run: |
+          sudo apt-get install -y --no-install-recommends weston xwayland xdotool
+          XDG_RUNTIME_DIR=$(mktemp -d)
+          export XDG_RUNTIME_DIR WAYLAND_DISPLAY=wayland-e2e
+          weston --backend=headless --xwayland --socket=$WAYLAND_DISPLAY > weston.log 2>&1 &
+          for _ in $(seq 50); do [ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ] && ls /tmp/.X11-unix/X* >/dev/null 2>&1 && break; sleep 0.2; done
+          DISPLAY=:$(find /tmp/.X11-unix -name 'X*' -printf '%f\n' | sed 's/^X//' | sort -n | tail -1)
+          export DISPLAY
+          node e2e/wayland.e2e.mjs || { cat weston.log; exit 1; }
+
   # Catches an Android app that no longer builds (only when its inputs change, the Mihon host's core
   # among them). The `github` flavor's debug APK can be installed on a phone from the run's
   # artifacts. Debug-signed, without the release's Drive client (apps/android/README.md).
