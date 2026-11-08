@@ -117,7 +117,19 @@ root install stays light for the web app and its Docker image; `fetch` downloads
   `chimihook --audio`, the game's process tree into a named pipe) and screenshots of its window
   (`desktopCapturer`; none on native Wayland, where every capture asks to share the screen,
   so there only with the overlay on) in memory, and `/hook` fills a mined note's empty picture/audio fields with
-  its line's (`games-mark`, `games-media`). `e2e/native-vn.e2e.mjs` runs the whole flow
+  its line's (`games-mark`, `games-media`). Beyond auto hooks: /hook's "Add hook code…" sends an
+  H-code or R-code to `games-hook-code`, which checks its shape (`isHookCode`: 500 at most, one line,
+  no control characters) before writing `insert <code>` to the helper's stdin
+  (`Luna_InsertHookCode`); its thread is picked and saved like any other, and a saved code no thread
+  matched 5 s after injection is inserted again. A launcher (no window of its own while a process it
+  started has one, or it exits with one running) hands over to that process (`follow` in
+  chimihook.c). "Attach to running game…" (`games-windows`, `games-attach`): main runs
+  `chimihook --list` (Linux: in the game's prefix if it has one, else Wine's default prefix), keeps
+  the list, and the page picks by index; `--attach <pid>` then hooks it as the linked game's session
+  (Linux records the whole system's sound: the game isn't on the app's sink). "Launch only (I hook
+  with my own tool)" (`launchOnly` in `native-games.json`, `games-options`) starts the game with
+  `--no-hook`: no LunaHook, /hook takes lines from its WebSocket and numbers each through
+  `games-stamp` for its Anki media. `e2e/native-vn.e2e.mjs` runs the whole flow
   under Wine with a test VN (`xvfb-run -a node e2e/native-vn.e2e.mjs`; not in CI).
   Overlay (`overlay.js`, Windows and X11): with "Text overlay over the game" on (`/hook`), a
   transparent, frameless, unfocusable, always-on-top window on `/hook/overlay` takes the game

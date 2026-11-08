@@ -3,11 +3,22 @@
 // text line as one JSON object per line on stdout (UTF-8). A separate program from the desktop app
 // (it loads the GPL-3.0 LunaHost64.dll in-process), like the bundled Yomitan.
 //
-// Usage: chimihook.exe [--locale] [--audio <pipe>] <game.exe>
+// Usage: chimihook.exe [--locale] [--no-hook] [--audio <pipe>] <game.exe>
+//        chimihook.exe [--audio <pipe>] --attach <pid>
+//        chimihook.exe --list
 //   --locale  start the game through Locale Remulator (LRProc.exe, LGPL-3.0, beside this exe) with
 //             its "Run in Japanese" profile (Windows: Shift JIS games on any system locale).
+//   --no-hook start the game but load no LunaHook (the reader hooks it with their own tool):
+//             window, input, audio and exit messages as usual, no text.
 //   --audio   Windows: record the game's sound (its process tree; Windows 10 2004+, else the whole
 //             system) as PCM s16le mono 24 kHz into the named pipe <pipe>, for Anki clips.
+//   --attach  hook a game that is already running, process <pid>, then as for one started here.
+//   --list    print the processes with a visible top-level window, one line
+//             {"type":"windows","list":[{pid, title, exe}]}, and exit (what --attach picks from).
+// A started process that is a launcher (no window of its own while a process it started has one,
+// or it exits with one still running) hands over: that process is the game from then on.
+// Commands on stdin, one per line: "insert <hook code>" inserts an H-code or R-code into the game
+// (Luna_InsertHookCode), answered by {"type":"hookcode","code","ok"}.
 // Lines: {"type":"text","thread":{pid,addr,ctx,ctx2,hookcode,name},"sentence":"…"}; also "thread"
 // (a new thread), "inject", "connect", "disconnect", "error" {message}, "window" {hwnd, xid, title,
 // x, y, width, height, active, minimized} (the game's main window, on change; xid: Wine's X11
@@ -39,6 +50,7 @@ typedef void (*StartFn)(ProcessEvent, ProcessEvent, ThreadEventE, ThreadEvent, O
 typedef void (*SettingsFn)(int, int, int, int, BOOLEAN);
 typedef void (*PidFn)(DWORD);
 typedef BOOLEAN (*NeedFn)(DWORD);
+typedef BOOLEAN (*InsertCodeFn)(DWORD, const wchar_t *);
 
 // LRConfig.xml's "Run in Japanese" profile (the copy LunaTranslator ships).
 #define LR_JAPANESE L"688d4946-eed5-4983-9915-a0022f0f759c"
@@ -136,18 +148,122 @@ static HANDLE findGame(const wchar_t *game, ULONGLONG since, DWORD *pid) {
   return NULL;
 }
 
-static DWORD gamePid;
+// The game's process; a launcher's hands over to the game it starts (follow).
+static volatile DWORD gamePid;
 
-// The game's main window: its largest visible unowned top-level window.
-typedef struct { HWND hwnd; LONG area; } Found;
+// A process's main window: its largest visible unowned top-level window.
+typedef struct { DWORD pid; HWND hwnd; LONG area; } Found;
 static BOOL CALLBACK findWindow(HWND hwnd, LPARAM data) {
+  Found *f = (Found *)data;
   DWORD pid; GetWindowThreadProcessId(hwnd, &pid);
   RECT r;
-  if (pid != gamePid || !IsWindowVisible(hwnd) || GetWindow(hwnd, GW_OWNER) || !GetWindowRect(hwnd, &r)) return TRUE;
-  Found *f = (Found *)data;
+  if (pid != f->pid || !IsWindowVisible(hwnd) || GetWindow(hwnd, GW_OWNER) || !GetWindowRect(hwnd, &r)) return TRUE;
   LONG area = (r.right - r.left) * (r.bottom - r.top);
   if (area > f->area) { f->hwnd = hwnd; f->area = area; }
   return TRUE;
+}
+
+static HWND mainWindow(DWORD pid) {
+  Found f = {pid, NULL, 0};
+  EnumWindows(findWindow, (LPARAM)&f);
+  return f.hwnd;
+}
+
+static ULONGLONG startedAt(HANDLE proc) {
+  FILETIME created, x1, x2, x3;
+  if (!GetProcessTimes(proc, &created, &x1, &x2, &x3)) return 0;
+  return ((ULONGLONG)created.dwHighDateTime << 32) | created.dwLowDateTime;
+}
+
+// A living process <parent> started (or one those started, 4 deep), started after <since> so a
+// reused process id isn't taken for a child: the first with a main window, else with <any> the
+// newest. NULL when none.
+static HANDLE childOf(DWORD parent, ULONGLONG since, BOOL any, DWORD *pid) {
+  static PROCESSENTRY32W all[1024];
+  int n = 0;
+  HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  all[0].dwSize = sizeof all[0];
+  for (BOOL more = Process32FirstW(snap, &all[0]); more && n < 1023;) {
+    all[++n].dwSize = sizeof all[0];
+    more = Process32NextW(snap, &all[n]);
+  }
+  CloseHandle(snap);
+  DWORD tree[64] = {parent};
+  int count = 1, from = 0;
+  HANDLE best = NULL; ULONGLONG bestAt = 0;
+  for (int depth = 0; depth < 4 && from < count; depth++) {
+    int to = count;
+    for (int i = 0; i < n && count < 64; i++) {
+      BOOL under = FALSE;
+      for (int j = from; j < to; j++) under |= all[i].th32ParentProcessID == tree[j];
+      if (!under || all[i].th32ProcessID == GetCurrentProcessId()) continue;
+      HANDLE proc = OpenProcess(PROCESS_ALL_ACCESS, FALSE, all[i].th32ProcessID);
+      ULONGLONG at = proc ? startedAt(proc) : 0;
+      if (!proc || at < since || WaitForSingleObject(proc, 0) == WAIT_OBJECT_0) {
+        if (proc) CloseHandle(proc);
+        continue;
+      }
+      tree[count++] = all[i].th32ProcessID;
+      if (mainWindow(all[i].th32ProcessID)) {
+        if (best) CloseHandle(best);
+        *pid = all[i].th32ProcessID;
+        return proc;
+      }
+      if (any && at >= bestAt) {
+        if (best) CloseHandle(best);
+        best = proc; bestAt = at; *pid = all[i].th32ProcessID;
+      } else CloseHandle(proc);
+    }
+    from = to;
+  }
+  return best;
+}
+
+// A launcher hands over: while the started process shows no window, a process it started that does
+// (or, once it has exited, the newest one still running) is the game. Up to 10 s without a window.
+static HANDLE follow(HANDLE proc, ULONGLONG since) {
+  for (int tries = 0; tries < 50 && !mainWindow(gamePid); tries++, Sleep(200)) {
+    BOOL ended = WaitForSingleObject(proc, 0) == WAIT_OBJECT_0;
+    DWORD pid = 0;
+    HANDLE child = childOf(gamePid, since, ended, &pid);
+    if (child) {
+      CloseHandle(proc);
+      proc = child; gamePid = pid; tries = 0;
+    } else if (ended) break;
+  }
+  return proc;
+}
+
+// --list: each process with a visible, titled main window (the shell's and this one's left out).
+static BOOL CALLBACK listWindow(HWND hwnd, LPARAM data) {
+  int *n = (int *)data;
+  DWORD pid; GetWindowThreadProcessId(hwnd, &pid);
+  wchar_t title[256] = L"";
+  if (*n >= 100 || pid == GetCurrentProcessId() || hwnd == GetShellWindow() || hwnd != mainWindow(pid) ||
+      !GetWindowTextW(hwnd, title, 256))
+    return TRUE;
+  wchar_t image[MAX_PATH] = L""; DWORD size = MAX_PATH;
+  HANDLE proc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+  if (proc) { QueryFullProcessImageNameW(proc, 0, image, &size); CloseHandle(proc); }
+  printf("%s{\"pid\":%lu,\"title\":", (*n)++ ? "," : "", pid);
+  jstr(title); printf(",\"exe\":"); jstr(image); printf("}");
+  return TRUE;
+}
+
+// Main's commands, one per line on stdin: "insert <hook code>".
+static DWORD WINAPI readCommands(LPVOID host) {
+  InsertCodeFn insert = (InsertCodeFn)GetProcAddress((HMODULE)host, "Luna_InsertHookCode");
+  char line[2048];
+  while (fgets(line, sizeof line, stdin)) {
+    line[strcspn(line, "\r\n")] = 0;
+    wchar_t code[1024];
+    if (strncmp(line, "insert ", 7) || !MultiByteToWideChar(CP_UTF8, 0, line + 7, -1, code, 1024)) continue;
+    BOOL ok = insert && insert(gamePid, code);
+    EnterCriticalSection(&out);
+    printf("{\"type\":\"hookcode\",\"ok\":%s,\"code\":", ok ? "true" : "false"); jstr(code); printf("}\n"); fflush(stdout);
+    LeaveCriticalSection(&out);
+  }
+  return 0;
 }
 
 // Says where the game's window is whenever it changes (screenshots for Anki, the overlay), every
@@ -155,7 +271,7 @@ static BOOL CALLBACK findWindow(HWND hwnd, LPARAM data) {
 static DWORD WINAPI watchWindow(LPVOID unused) {
   HWND lastHwnd = NULL; wchar_t lastTitle[256] = L""; RECT last = {0}; BOOL lastActive = -1, lastMin = -1;
   for (;; Sleep(100)) {
-    Found f = {NULL, 0};
+    Found f = {gamePid, NULL, 0};
     EnumWindows(findWindow, (LPARAM)&f);
     if (!f.hwnd) continue;
     wchar_t title[256] = L""; GetWindowTextW(f.hwnd, title, 256);
@@ -315,29 +431,51 @@ static DWORD WINAPI recordAudio(LPVOID pipeName) {
 
 int wmain(int argc, wchar_t **argv) {
   int arg = 1;
-  BOOL locale = FALSE; wchar_t *audioPipe = NULL;
+  BOOL locale = FALSE, hook = TRUE; wchar_t *audioPipe = NULL; DWORD attach = 0;
+  if (argc == 2 && !wcscmp(argv[1], L"--list")) {
+    int n = 0;
+    printf("{\"type\":\"windows\",\"list\":[");
+    EnumWindows(listWindow, (LPARAM)&n);
+    printf("]}\n");
+    return 0;
+  }
   for (; arg < argc - 1; arg++) {
     if (!wcscmp(argv[arg], L"--locale")) locale = TRUE;
+    else if (!wcscmp(argv[arg], L"--no-hook")) hook = FALSE;
     else if (!wcscmp(argv[arg], L"--audio") && arg + 2 < argc) audioPipe = argv[++arg];
+    else if (!wcscmp(argv[arg], L"--attach") && arg + 2 == argc) attach = wcstoul(argv[++arg], NULL, 10);
     else break;
   }
-  if (arg != argc - 1) { fprintf(stderr, "usage: chimihook [--locale] [--audio pipe] game.exe\n"); return 2; }
+  if (attach ? arg != argc : arg != argc - 1) {
+    fprintf(stderr, "usage: chimihook [--locale] [--no-hook] [--audio pipe] game.exe | [--audio pipe] --attach pid | --list\n");
+    return 2;
+  }
   InitializeCriticalSection(&out);
-  wchar_t game[MAX_PATH]; GetFullPathNameW(argv[arg], MAX_PATH, game, NULL);
   wchar_t dir[MAX_PATH]; GetModuleFileNameW(NULL, dir, MAX_PATH); *wcsrchr(dir, L'\\') = 0;
   wchar_t path[MAX_PATH]; swprintf(path, MAX_PATH, L"%ls\\LunaHost64.dll", dir);
-  HMODULE host = LoadLibraryW(path);
-  if (!host) { fail("LunaHost64.dll didn't load", GetLastError()); return 1; }
-  ((SettingsFn)GetProcAddress(host, "Luna_Settings"))(500, 932, 3000, 1000000, TRUE);
-  ((StartFn)GetProcAddress(host, "Luna_Start"))(onConnect, onDisconnect, onCreate, onDestroy, onOutput, onInfo, onInsert, onEmbed, onI18n, onEmu);
+  HMODULE host = NULL;
+  if (hook) {
+    host = LoadLibraryW(path);
+    if (!host) { fail("LunaHost64.dll didn't load", GetLastError()); return 1; }
+    ((SettingsFn)GetProcAddress(host, "Luna_Settings"))(500, 932, 3000, 1000000, TRUE);
+    ((StartFn)GetProcAddress(host, "Luna_Start"))(onConnect, onDisconnect, onCreate, onDestroy, onOutput, onInfo, onInsert, onEmbed, onI18n, onEmu);
+  }
 
-  // The game starts in its own folder, as a launcher would.
-  wchar_t gameDir[MAX_PATH]; wcscpy(gameDir, game); *wcsrchr(gameDir, L'\\') = 0;
   wchar_t cmd[2048];
   HANDLE proc; DWORD pid;
-  if (locale) {
-    FILETIME now; GetSystemTimeAsFileTime(&now);
-    ULONGLONG since = (((ULONGLONG)now.dwHighDateTime << 32) | now.dwLowDateTime) - 10000000; // 1 s slack
+  FILETIME now; GetSystemTimeAsFileTime(&now);
+  ULONGLONG since = (((ULONGLONG)now.dwHighDateTime << 32) | now.dwLowDateTime) - 10000000; // 1 s slack
+  wchar_t game[MAX_PATH], gameDir[MAX_PATH];
+  if (!attach) {
+    // The game starts in its own folder, as a launcher would.
+    GetFullPathNameW(argv[arg], MAX_PATH, game, NULL);
+    wcscpy(gameDir, game); *wcsrchr(gameDir, L'\\') = 0;
+  }
+  if (attach) {
+    proc = OpenProcess(PROCESS_ALL_ACCESS, FALSE, attach);
+    if (!proc) { fail("The game isn't running any more", GetLastError()); return 1; }
+    pid = attach;
+  } else if (locale) {
     swprintf(cmd, 2048, L"\"%ls\\LRProc.exe\" " LR_JAPANESE L" \"%ls\"", dir, game);
     PROCESS_INFORMATION lr;
     if (!run(cmd, gameDir, &lr)) { fail("Locale Remulator didn't start", GetLastError()); return 1; }
@@ -351,15 +489,20 @@ int wmain(int argc, wchar_t **argv) {
     CloseHandle(pi.hThread); proc = pi.hProcess; pid = pi.dwProcessId;
   }
   gamePid = pid;
-  // Started at once: the sound from the game's first moments is kept too.
+  // Started at once: the sound from the game's first moments is kept too. shortcut: a launcher's
+  // process tree is recorded, which may lose a game whose launcher exits; restart it on follow if so.
   if (audioPipe) CloseHandle(CreateThread(NULL, 0, recordAudio, audioPipe, 0, NULL));
   CloseHandle(CreateThread(NULL, 0, watchWindow, NULL, 0, NULL));
   CloseHandle(CreateThread(NULL, 0, watchInput, NULL, 0, NULL));
-  WaitForInputIdle(proc, 5000);
-  Sleep(300);
+  if (!attach) {
+    WaitForInputIdle(proc, 5000);
+    Sleep(300);
+    proc = follow(proc, since);
+    pid = gamePid;
+  }
 
-  ((PidFn)GetProcAddress(host, "Luna_ConnectProcess"))(pid);
-  if (((NeedFn)GetProcAddress(host, "Luna_CheckIfNeedInject"))(pid)) {
+  if (hook) ((PidFn)GetProcAddress(host, "Luna_ConnectProcess"))(pid);
+  if (hook && ((NeedFn)GetProcAddress(host, "Luna_CheckIfNeedInject"))(pid)) {
     BOOL wow = FALSE; IsWow64Process(proc, &wow);
     BOOL ok;
     if (!wow) { swprintf(path, MAX_PATH, L"%ls\\LunaHook64.dll", dir); ok = inject64(proc, path); }
@@ -374,6 +517,7 @@ int wmain(int argc, wchar_t **argv) {
     printf("{\"type\":\"inject\",\"pid\":%lu,\"bits\":%d,\"ok\":%s}\n", pid, wow ? 32 : 64, ok ? "true" : "false"); fflush(stdout);
     LeaveCriticalSection(&out);
   }
+  if (hook) CloseHandle(CreateThread(NULL, 0, readCommands, host, 0, NULL));
   WaitForSingleObject(proc, INFINITE);
   Sleep(800); // last lines flush
   EnterCriticalSection(&out); printf("{\"type\":\"exit\"}\n"); fflush(stdout); LeaveCriticalSection(&out);

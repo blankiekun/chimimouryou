@@ -48,6 +48,11 @@ contextBridge.exposeInMainWorld('chimiDesktop', {
       ipcRenderer.on('native-hotkey', listener);
       return () => ipcRenderer.removeListener('native-hotkey', listener);
     },
+    options: (folder, changes) => ipcRenderer.invoke('games-options', folder, changes),
+    insertHook: (code) => ipcRenderer.invoke('games-hook-code', code),
+    stamp: () => ipcRenderer.invoke('games-stamp'),
+    windows: (folder) => ipcRenderer.invoke('games-windows', folder),
+    attach: (folder, index) => ipcRenderer.invoke('games-attach', folder, index),
     onHook: (callback) => {
       const listener = (_event, message) => callback(message);
       ipcRenderer.on('native-hook', listener);

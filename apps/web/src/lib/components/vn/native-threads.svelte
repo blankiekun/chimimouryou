@@ -16,9 +16,22 @@
     auto?: boolean;
     onpick: (thread: NativeThread) => void;
     onundo?: () => void;
+    /** While the game runs: inserts a hook code (H-code or R-code); resolves to an error, if any */
+    oninsert?: (code: string) => Promise<string | undefined>;
   }
 
-  let { ranked, hook, auto = false, onpick, onundo }: Props = $props();
+  let { ranked, hook, auto = false, onpick, onundo, oninsert }: Props = $props();
+  let adding = $state(false);
+  let code = $state('');
+  let codeNote = $state('');
+
+  async function insert(event: SubmitEvent) {
+    event.preventDefault();
+    const error = await oninsert?.(code.trim());
+
+    codeNote = error ?? 'Added: its thread shows here once the game draws text through it.';
+    if (!error) code = '';
+  }
 
   // The same hook on several contexts shows once: its best thread.
   const rows = $derived(
@@ -73,6 +86,41 @@
       {/each}
     </ul>
   {/if}
+  {#if oninsert}
+    {#if adding}
+      <form class="nt-code" onsubmit={insert}>
+        <label class="nt-field">
+          <span>Hook code (H-code or R-code)</span>
+          <input
+            class="app-input"
+            bind:value={code}
+            maxlength={500}
+            spellcheck="false"
+            placeholder="HS4@0:gdi32.dll:TextOutA"
+          />
+        </label>
+        <div class="nt-actions">
+          <button type="submit" class="app-button" disabled={!code.trim()}>Add</button>
+          <button
+            type="button"
+            class="app-button app-button-quiet"
+            onclick={() => (adding = false)}
+          >
+            Cancel
+          </button>
+        </div>
+        {#if codeNote}<p class="nt-note" role="status">{codeNote}</p>{/if}
+      </form>
+    {:else}
+      <button
+        type="button"
+        class="app-button app-button-quiet nt-add"
+        onclick={() => (adding = true)}
+      >
+        Add hook code…
+      </button>
+    {/if}
+  {/if}
 </div>
 
 <style>
@@ -92,6 +140,27 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
+  }
+
+  .nt-code,
+  .nt-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .nt-field {
+    gap: 0.25rem;
+    font-size: var(--type-small);
+  }
+
+  .nt-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .nt-add {
+    align-self: flex-start;
   }
 
   .nt-list {
