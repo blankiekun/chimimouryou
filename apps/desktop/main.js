@@ -71,6 +71,9 @@ if (
   !process.argv.includes('--ozone-platform=x11') &&
   loadStore(join(app.getPath('userData'), 'native-games.json')).overlay?.on === true
 ) {
+  // Chromium's screen capture asks the Wayland portal (a share dialog per Anki screenshot) whenever
+  // XDG_SESSION_TYPE says wayland, whatever platform the app runs on; on X11 it captures directly.
+  process.env.XDG_SESSION_TYPE = 'x11';
   // An AppImage's own binary sits in a mount that goes away when this process exits.
   app.relaunch({
     execPath: process.env.APPIMAGE || process.execPath,
