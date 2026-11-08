@@ -4,6 +4,27 @@ chimimouryou is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook
 upstream's own changes are not listed here. Each version's section is written when it is released,
 from the pull requests merged since the previous tag (pull requests don't edit this file).
 
+## v3.17.0 (2026-11-08)
+
+### Added
+
+- Desktop games: "Add hook code…" on /hook takes an H-code or R-code for games no automatic hook
+  reads. The code is saved and inserted again at the next start.
+- Desktop games: "Attach to running game…" hooks a linked game started outside the app.
+- Desktop games: "Launch only" starts a game without the built-in hook, for your own hooking tool;
+  the overlay, saves and Anki media still work.
+- Desktop games: a launcher that starts the real game and exits is followed to the game.
+- Desktop games: a thread that is clearly the game's text is picked automatically, with Undo.
+- Desktop games: global shortcuts while a game runs: Ctrl+Shift+M puts the newest line on the last
+  Anki card, Ctrl+Shift+H brings /hook to the front. Change or clear them in Settings → Desktop
+  games.
+- Texthooker: the Game field suggests library titles, so a WebSocket session counts toward that
+  book.
+
+### Fixed
+
+- Desktop games: a game that failed to start no longer leaves the overlay open.
+
 ## v3.16.0 (2026-11-07)
 
 ### Added
