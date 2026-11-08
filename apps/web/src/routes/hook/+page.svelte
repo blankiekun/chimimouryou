@@ -9,6 +9,7 @@
     ankiVnAudio$,
     ankiVnScreenshot$,
     noteSentence,
+    useForLastNote,
     vnLineFor,
     type AnkiMedia,
     type AnkiNote
@@ -57,6 +58,7 @@
   import { database } from '$lib/data/store';
   import { hookCleaner, type HookCleanup } from '$lib/data/vn/hook-cleanup';
   import {
+    autoThread,
     desktopGames,
     isSavedThread,
     nativeSavesToPull,
@@ -153,6 +155,9 @@
   });
 
   const gameTitle = () => title.trim() || 'Texthooker';
+  /** The library's titles, offered for the WebSocket session's game: one picked, the session counts toward that book. */
+  let libraryTitles = $state<string[]>([]);
+  const linked = $derived(libraryTitles.includes(title.trim()));
 
   // Set on mount: the address can't be read while prerendering.
   let nativeId = $state<number>();
@@ -161,6 +166,9 @@
   let nativeStatus = $state('Starting the game…');
   let nativeRunning = $state(false);
   let ranked = $state<{ thread: NativeThread; score: number }[]>([]);
+  /** The hook was picked by autoThread this session (shown with Undo); undone, it isn't again. */
+  let autoPicked = $state(false);
+  let autoDeclined = false;
   let threads = new Threads();
   let rankTimer: ReturnType<typeof setTimeout> | undefined;
   let cleanup = $state<HookCleanup>({});
@@ -172,6 +180,8 @@
   let saveNote = $state<string>();
   /** Windows: folders the game's first run wrote, to confirm as its saves */
   let pendingFolders = $state<string[]>();
+  /** What the mine shortcut did last */
+  let mineNote = $state<string>();
   /** Where Anki clips' sound comes from, said under the status */
   let audioNote = $state<string>();
   const audioNotes = {
@@ -272,6 +282,13 @@
       rankTimer ??= setTimeout(() => {
         rankTimer = undefined;
         ranked = rankThreads([...threads.threads.values()], cleanup) as typeof ranked;
+
+        const auto = !nativeHook && !autoDeclined ? autoThread(ranked) : undefined;
+
+        if (auto) {
+          pickThread(auto);
+          autoPicked = true;
+        }
       }, 250);
       if (!replayed && isSavedThread(thread, nativeHook)) {
         keepRaw(message.sentence);
@@ -290,14 +307,18 @@
       noteSentence(note),
       lines.map((line) => line.text)
     );
-    const seq = lines[index]?.seq;
-    const text = lines[index]?.text ?? '';
 
-    if (seq === undefined || !games) {
+    if (lines[index]?.seq === undefined || !games) {
       throw new Error(
         `card left alone, its ${$ankiSentenceField$.trim()} field isn't a line of this game's recent text`
       );
     }
+    return lineMedia(lines[index]);
+  }
+
+  async function lineMedia({ seq, text }: HookLine): Promise<AnkiMedia> {
+    if (seq === undefined || !games) return {};
+
     const found = await games.media(seq, { picture: $ankiVnScreenshot$, audio: $ankiVnAudio$ });
     const sound = found.audio && {
       ...found.audio,
@@ -308,6 +329,31 @@
       picture: found.picture && new Blob([found.picture], { type: 'image/jpeg' }),
       audio: await lineAudio(sound, text)
     };
+  }
+
+  /** The mine shortcut (pressed in the game): the newest line on the last Anki card, as the Backlog's "Use for last card". */
+  async function mineNewest() {
+    const line = lines.at(-1);
+    let text: string;
+
+    try {
+      if (!line) throw new Error('no line yet');
+
+      const filled = await useForLastNote(line.text, () => lineMedia(line));
+
+      text = filled.length
+        ? `Added to the last Anki card: ${filled.join(', ')}`
+        : `Nothing added: the last card has no ${$ankiSentenceField$.trim()} field, and its media fields are missing or filled`;
+    } catch (error: any) {
+      text = `Anki: ${error.message}`;
+    }
+    mineNote = text;
+    // The game is in front: say so outside the page too.
+    try {
+      new Notification('chimimouryou', { body: text, silent: true });
+    } catch {
+      // No notifications here: the note on the page stays
+    }
   }
 
   async function pushSaves() {
@@ -329,9 +375,19 @@
   }
 
   /** Lines come from this thread's hook from now on; saved on the record for every device. */
-  async function pickThread(thread: NativeThread) {
-    const hook = { hookcode: thread.hookcode, name: thread.label ?? thread.hookcode };
+  function pickThread(thread: NativeThread) {
+    autoPicked = false;
+    return saveHook({ hookcode: thread.hookcode, name: thread.label ?? thread.hookcode });
+  }
 
+  /** The automatic pick undone: back to asking, for the rest of this session. */
+  function undoAutoPick() {
+    autoPicked = false;
+    autoDeclined = true;
+    return saveHook(undefined);
+  }
+
+  async function saveHook(hook: NativeHook | undefined) {
     nativeHook = hook;
     const stored = await database.getData(nativeId!);
 
@@ -522,13 +578,26 @@
 
   onMount(() => {
     nativeId = (games && Number($page.url.searchParams.get('native'))) || undefined;
+    const stopHotkeys = nativeId
+      ? games?.onHotkey((action) => action === 'mine' && mineNewest())
+      : undefined;
+
     if (nativeId) startNative().catch((error) => (nativeStatus = error.message));
-    else connect();
+    else {
+      connect();
+      database
+        .getTitles()
+        .then((titles) => (libraryTitles = titles))
+        .catch(() => {});
+    }
     if (list) list.scrollTop = $hookReverse$ ? 0 : list.scrollHeight;
 
     const ticker = setInterval(() => (now = Date.now()), 1000);
 
-    return () => clearInterval(ticker);
+    return () => {
+      clearInterval(ticker);
+      stopHotkeys?.();
+    };
   });
 
   onDestroy(() => {
@@ -661,6 +730,9 @@
           {#if audioNote}
             <p class="hook-hint">{audioNote}</p>
           {/if}
+          {#if mineNote}
+            <p class="hook-hint" role="status">{mineNote}</p>
+          {/if}
           {#if saveNote}
             <p class="hook-hint" role="status">{saveNote}</p>
           {/if}
@@ -681,7 +753,13 @@
             </div>
           {/if}
           <NativeOverlayControls />
-          <NativeThreads {ranked} hook={nativeHook} onpick={pickThread} />
+          <NativeThreads
+            {ranked}
+            hook={nativeHook}
+            auto={autoPicked}
+            onpick={pickThread}
+            onundo={undoAutoPick}
+          />
         </div>
         <AnkiWatcher media={ankiMedia} />
       {:else if status === 'connected' && !changing}
@@ -719,7 +797,18 @@
               placeholder="Texthooker"
               onchange={saveTitle}
               lang="ja"
+              list="hook-books"
             />
+            <datalist id="hook-books">
+              {#each libraryTitles as book (book)}
+                <option value={book}></option>
+              {/each}
+            </datalist>
+            <span class="hook-hint">
+              {linked
+                ? 'In your library: time and characters count toward this book.'
+                : 'Pick a book from your library, or type any name.'}
+            </span>
           </label>
           <label class="hook-field">
             <span>{$t$('hook.address')}</span>

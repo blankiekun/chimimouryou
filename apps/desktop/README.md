@@ -134,6 +134,14 @@ root install stays light for the web app and its Docker image; `fetch` downloads
   a Wayland session the app starts on X11 (`--ozone-platform=x11`) while the overlay is on (a
   change takes a restart). `e2e/overlay.e2e.mjs` checks it under Xvfb with openbox and xcompmgr
   (`apt install openbox xcompmgr xdotool`); Windows is compile-only.
+  Shortcuts (`hotkeys.js`, Electron `globalShortcut`): while a game runs and its `/hook` window is
+  open, Ctrl+Shift+M puts the newest line (with its screenshot and sound) on the last Anki card
+  (`native-hotkey` to `/hook`, which says how it went in a desktop notification) and Ctrl+Shift+H
+  brings `/hook` to the front, back to the game's `/hook` if the window went elsewhere (pressed
+  with the app in front, it minimizes it). Registered at launch or rejoin, unregistered when the
+  game exits, its page closes or the app quits, so they never take keys otherwise; changed or
+  cleared in Settings → Desktop games (`hotkeys` in `native-games.json`, `games-hotkeys`). On a
+  native Wayland session they work only with the overlay on (the app then runs on X11).
 - Help → About lists the licences (Yomitan is GPL-3.0, a separate program; its source is the
   release tag named there).
 

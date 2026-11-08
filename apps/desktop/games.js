@@ -30,6 +30,7 @@ import {
 import { basename, dirname, join, relative } from 'node:path';
 import { homedir, userInfo } from 'node:os';
 import { gameMedia } from './game-media.js';
+import { gameHotkeys, hotkeySettings } from './hotkeys.js';
 import { gameOverlay, overlaySettings } from './overlay.js';
 
 /** Programs listed last when a folder is picked: setup and settings tools, not the game. */
@@ -212,9 +213,10 @@ function update(ctx, folder, changes) {
 const overlayOn = ({ store, platform, noX11 }) =>
   overlaySettings(store.overlay).on && (platform === 'win32' || platform === 'linux') && !noX11;
 
-/** Opens or closes the overlay to match the game, /hook and the setting. */
+/** Opens or closes the overlay to match the game, /hook and the setting; the shortcuts too. */
 function syncOverlay(ctx) {
   const { session, store, overlay } = ctx;
+  ctx.hotkeys.sync(session, hotkeySettings(store.hotkeys));
   const wanted = session?.running && !session.sender.isDestroyed() && overlayOn(ctx);
   if (!wanted) overlay.close();
   else if (!overlay.webContents) {
@@ -479,10 +481,12 @@ async function launch(ctx, event, folder, saves) {
         : await startLinux(ctx, folder, ctx.store.games[folder], gameExe, saves);
   } catch (error) {
     current.running = false;
+    syncOverlay(ctx);
     return { status: 'error', message: error.message };
   }
   if (!child.pid && child.status) {
     current.running = false;
+    syncOverlay(ctx);
     return child;
   }
   let rest = '';
@@ -525,7 +529,7 @@ async function launch(ctx, event, folder, saves) {
     // Not a later game's recording.
     if (ctx.session === current) {
       media.stop();
-      overlay.close();
+      syncOverlay(ctx);
     }
     if (current.watch) {
       const before = current.watch;
@@ -623,6 +627,7 @@ export function registerGames({
   ipcMain,
   BrowserWindow,
   desktopCapturer,
+  globalShortcut,
   screen,
   hookDir,
   overlayUrl,
@@ -665,10 +670,15 @@ export function registerGames({
       prepare,
       platform
     }),
+    /** Global shortcuts while a game runs (hotkeys.js) */
+    hotkeys: gameHotkeys({ globalShortcut, BrowserWindow }),
     noX11
   };
   const { media, overlay } = ctx;
-  app.on('will-quit', () => media.stop());
+  app.on('will-quit', () => {
+    media.stop();
+    ctx.hotkeys.sync();
+  });
 
   const handle = (channel, fn) =>
     ipcMain.handle(channel, (event, ...args) => {
@@ -776,6 +786,16 @@ export function registerGames({
     };
   });
   handle('overlay-edit', (event, on) => overlay.edit(on));
+  // The shortcuts (Settings → Desktop games): `failed` names those another program holds now.
+  handle('games-hotkeys', (event, changes) => {
+    const failed = [];
+    if (changes && typeof changes === 'object') {
+      ctx.store = { ...ctx.store, hotkeys: hotkeySettings({ ...ctx.store.hotkeys, ...changes }) };
+      save(ctx);
+      failed.push(...ctx.hotkeys.sync(ctx.session, hotkeySettings(ctx.store.hotkeys)));
+    }
+    return { ...hotkeySettings(ctx.store.hotkeys), failed };
+  });
   const fromOverlay = (event) => event.sender === overlay.webContents;
   handle(
     'overlay-rects',

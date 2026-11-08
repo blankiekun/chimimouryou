@@ -3,7 +3,8 @@
    * /hook's thread picker for a game played natively: LunaHook sends each line on several
    * threads (one per hooked function or engine hook); the reader picks the one with the game's
    * text, ranked by rankThreads (one line per burst, Japanese, few repeats). The pick is saved on
-   * the game's record (VnInfo.nativeHook) by the page.
+   * the game's record (VnInfo.nativeHook) by the page, which may pick a clear winner itself
+   * (`auto`, autoThread) and offers Undo for it.
    */
   import SectionHead from '$lib/components/section-head.svelte';
   import type { NativeHook, NativeThread } from '$lib/data/vn/native-games';
@@ -11,10 +12,13 @@
   interface Props {
     ranked: { thread: NativeThread; score: number }[];
     hook: NativeHook | undefined;
+    /** The hook was picked automatically */
+    auto?: boolean;
     onpick: (thread: NativeThread) => void;
+    onundo?: () => void;
   }
 
-  let { ranked, hook, onpick }: Props = $props();
+  let { ranked, hook, auto = false, onpick, onundo }: Props = $props();
 
   // The same hook on several contexts shows once: its best thread.
   const rows = $derived(
@@ -30,11 +34,20 @@
   {#if !rows.length}
     <p class="nt-note">Waiting for the game’s first line…</p>
   {:else}
-    <p class="nt-note">
-      {hook
-        ? 'Lines come from the marked thread. Pick another if it isn’t the game’s text.'
-        : 'Pick the thread that shows the game’s text. It is saved for this game.'}
-    </p>
+    {#if auto && hook}
+      <p class="nt-note nt-auto" role="status">
+        <span>Picked automatically: the only thread that looked like the game’s text.</span>
+        <button type="button" class="app-button app-button-quiet" onclick={() => onundo?.()}>
+          Undo
+        </button>
+      </p>
+    {:else}
+      <p class="nt-note">
+        {hook
+          ? 'Lines come from the marked thread. Pick another if it isn’t the game’s text.'
+          : 'Pick the thread that shows the game’s text. It is saved for this game.'}
+      </p>
+    {/if}
     <ul class="nt-list">
       {#each rows as { thread, score }, index (thread.hookcode)}
         {@const current = thread.hookcode === hook?.hookcode}
@@ -48,7 +61,7 @@
           >
             <span class="nt-head">
               <span class="nt-name">{thread.label}</span>
-              {#if current}<span class="nt-tag">Picked</span>
+              {#if current}<span class="nt-tag">{auto ? 'Picked automatically' : 'Picked'}</span>
               {:else if index === 0 && score >= 0.5}<span class="nt-tag nt-tag-quiet"
                   >Suggested</span
                 >{/if}
@@ -72,6 +85,13 @@
   .nt-note {
     color: var(--app-muted-fg);
     font-size: var(--type-small);
+  }
+
+  .nt-auto {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
   }
 
   .nt-list {
