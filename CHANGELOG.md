@@ -4,6 +4,13 @@ chimimouryou is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook
 upstream's own changes are not listed here. Each version's section is written when it is released,
 from the pull requests merged since the previous tag (pull requests don't edit this file).
 
+## v3.17.1 (2026-11-08)
+
+### Fixed
+
+- Dictionary lookups: Settings → Dictionary lookups → Scanning has Yomitan's "Scan using middle
+  mouse button" again, so the built-in popup can scan while the middle button is held.
+
 ## v3.17.0 (2026-11-08)
 
 ### Added
