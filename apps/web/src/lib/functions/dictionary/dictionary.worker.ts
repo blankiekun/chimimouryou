@@ -11,6 +11,7 @@
  */
 
 import type { ProfileOptions } from '$lib/vendor/yomitan/types/settings';
+import type { LookupSearch } from './dictionary-engine';
 import {
   cancelCollectionImport,
   deleteAllDictionaries,
@@ -29,7 +30,7 @@ export type DictionaryRequest =
   | { id: number; type: 'list' }
   | { id: number; type: 'delete'; name: string }
   | { id: number; type: 'deleteAll' }
-  | { id: number; type: 'lookup'; text: string; options: ProfileOptions }
+  | { id: number; type: 'lookup'; text: string; options: ProfileOptions; search?: LookupSearch }
   | { id: number; type: 'media'; path: string; dictionary: string };
 
 export type DictionaryResponse =
@@ -58,7 +59,7 @@ async function handle(request: DictionaryRequest) {
     case 'deleteAll':
       return deleteAllDictionaries();
     case 'lookup':
-      return lookup(request.text, request.options);
+      return lookup(request.text, request.options, request.search);
     case 'media':
       return getMedia(request.path, request.dictionary);
   }

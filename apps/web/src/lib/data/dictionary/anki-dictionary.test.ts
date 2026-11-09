@@ -137,7 +137,14 @@ describe('built-in dictionary notes', () => {
       }),
       duplicateScope: 'deck'
     });
-    const note = await buildAnkiNote({ entry, context, settings, profile, summaries: [] });
+    const note = await buildAnkiNote({
+      entry,
+      format: settings.cardFormats[0],
+      context,
+      settings,
+      profile,
+      summaries: []
+    });
     expect(note.deckName).toBe('Mining');
     expect(note.modelName).toBe('Japanese');
     expect(note.tags).toEqual(['chimimouryou']);
@@ -156,6 +163,7 @@ describe('built-in dictionary notes', () => {
 
     const first = await buildAnkiNote({
       entry,
+      format: settings.cardFormats[0],
       context,
       settings,
       profile,
@@ -173,7 +181,14 @@ describe('built-in dictionary notes', () => {
       fieldTemplates:
         '{{#*inline "custom"}}[{{definition.expression}}]{{/inline}}{{~> (lookup . "marker") ~}}'
     });
-    const note = await buildAnkiNote({ entry, context, settings, profile, summaries: [] });
+    const note = await buildAnkiNote({
+      entry,
+      format: settings.cardFormats[0],
+      context,
+      settings,
+      profile,
+      summaries: []
+    });
     expect(note.fields.Front).toBe('[食べる]');
   });
 
@@ -185,8 +200,18 @@ describe('built-in dictionary notes', () => {
       model: 'M',
       fields: fields({ Front: '{expression}', Audio: '{audio}' })
     });
-    const note = await buildAnkiNote({ entry, context, settings, profile, summaries: [] });
-    expect(await addAnkiNote(note, entry, settings)).toBe(42);
+    const note = await buildAnkiNote({
+      entry,
+      format: settings.cardFormats[0],
+      context,
+      settings,
+      profile,
+      summaries: []
+    });
+    expect(await addAnkiNote(note, entry, settings.cardFormats[0], settings)).toEqual({
+      noteId: 42,
+      errors: []
+    });
     const body = JSON.parse(
       (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string
     );
@@ -233,15 +258,51 @@ describe('built-in dictionary notes', () => {
     };
     anki.tags = ['yomitan'];
     anki.duplicateScope = 'deck-root';
+    anki.duplicateBehavior = 'overwrite';
+    anki.apiKey = 'k';
     const upgraded = await util.update(JSON.parse(JSON.stringify(options)));
     expect(dictionaryAnkiFromYomitan(upgraded)).toMatchObject({
-      deck: 'Mining',
-      model: 'Lapis',
-      fields: { Expression: { value: '{expression}' }, Sentence: { value: '{sentence}' } },
-      tags: ['yomitan'],
-      duplicateScope: 'deck-root',
-      fieldTemplates: null
+      settings: {
+        cardFormats: [
+          {
+            name: 'Expression',
+            deck: 'Mining',
+            model: 'Lapis',
+            fields: { Expression: { value: '{expression}' }, Sentence: { value: '{sentence}' } }
+          },
+          { name: 'Reading' },
+          { name: 'Kanji', type: 'kanji' }
+        ],
+        tags: ['yomitan'],
+        duplicateScope: 'deck-root',
+        duplicateBehavior: 'overwrite',
+        fieldTemplates: null
+      },
+      apiKey: 'k'
     });
+  });
+
+  // An earlier version's single card format must keep working (OptionsUtil v64's upgrade).
+  it('upgrades the card format an earlier version stored', () => {
+    const settings = dictionaryAnkiSettings({
+      deck: 'D',
+      model: 'M',
+      fields: fields({ Word: '{expression}', Back: '{glossary}' }),
+      tags: ['mine']
+    });
+    expect(settings.tags).toEqual(['mine']);
+    expect(settings.cardFormats.map(({ name, type, deck }) => [name, type, deck])).toEqual([
+      ['Expression', 'term', 'D'],
+      ['Reading', 'term', 'D'],
+      ['Kanji', 'kanji', '']
+    ]);
+    expect(settings.cardFormats[1].fields.Word.value).toBe('{reading}');
+    expect('deck' in settings).toBe(false);
+    // malformed formats from another device are dropped, not crashed on
+    expect(
+      dictionaryAnkiSettings({ cardFormats: [null, { type: 'term' }, settings.cardFormats[2]] })
+        .cardFormats
+    ).toHaveLength(1);
   });
 
   it('guesses field markers like Yomitan', () => {

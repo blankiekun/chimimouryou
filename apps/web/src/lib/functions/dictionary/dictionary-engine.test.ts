@@ -9,7 +9,20 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { TextReader, Uint8ArrayWriter, ZipWriter, configure } from '@zip.js/zip.js';
 import { OptionsUtil } from '$lib/vendor/yomitan/data/options-util';
 import type { ProfileOptions } from '$lib/vendor/yomitan/types/settings';
-import { deleteDictionary, importDictionary, listDictionaries, lookup } from './dictionary-engine';
+import type { TermDictionaryEntry } from '$lib/vendor/yomitan/types/dictionary';
+import {
+  deleteDictionary,
+  importDictionary,
+  listDictionaries,
+  lookup as find,
+  type LookupSearch
+} from './dictionary-engine';
+
+/** Term lookups (the default search): entries typed as terms. */
+async function lookup(text: string, profile: ProfileOptions, search?: LookupSearch) {
+  const result = await find(text, profile, search);
+  return { ...result, dictionaryEntries: result.dictionaryEntries as TermDictionaryEntry[] };
+}
 
 // jsdom has no Worker.
 configure({ useWebWorkers: false });
@@ -33,6 +46,10 @@ async function dictionaryZip() {
     'term_meta_bank_1.json': [
       ['食べる', 'freq', { reading: 'たべる', frequency: 500 }],
       ['食べる', 'pitch', { reading: 'たべる', pitches: [{ position: 2 }] }]
+    ],
+    'kanji_bank_1.json': [
+      ['食', 'ショク ジキ', 'く.う た.べる', 'jouyou', ['eat', 'food'], { strokes: '9' }],
+      ['鬱', 'ウツ', '', '', ['gloom'], { strokes: '29' }]
     ],
     'tag_bank_1.json': [['v1', 'partOfSpeech', 0, 'Ichidan verb', 0]]
   };
@@ -73,6 +90,7 @@ describe('dictionary engine', () => {
     expect(errors).toEqual([]);
     expect(result?.title).toBe('Test JMdict');
     expect(result?.counts?.terms.total).toBe(10);
+    expect(result?.counts?.kanji.total).toBe(2);
     expect(progress.length).toBeGreaterThan(0);
     expect((await listDictionaries()).map(({ title }) => title)).toEqual(['Test JMdict']);
   });
@@ -109,6 +127,38 @@ describe('dictionary engine', () => {
     expect(await first('口を')).toEqual(['口', 'くち', 1]);
     expect(await first('近所の')).toEqual(['近所', 'きんじょ', 2]);
     expect(await first('ことは')).toEqual(['こと', 'こと', 2]);
+  });
+
+  // Yomitan's TextScanner: terms first, the first character's kanji only when no term matched.
+  it('falls back to the kanji of the first character when no term matches', async () => {
+    const result = await find('鬱だ', options, { searchTerms: true, searchKanji: true });
+    expect(result.type).toBe('kanji');
+    expect(result.originalTextLength).toBe(1);
+    const [entry] = result.dictionaryEntries;
+    expect(entry).toMatchObject({ type: 'kanji', character: '鬱', onyomi: ['ウツ'] });
+    // a term match wins over its first kanji
+    expect((await find('食べる', options, { searchKanji: true })).type).toBe('terms');
+  });
+
+  it('honours an input that searches only kanji, or only terms', async () => {
+    const kanji = await find('食べる', options, { searchTerms: false, searchKanji: true });
+    expect(kanji.type).toBe('kanji');
+    expect(
+      kanji.dictionaryEntries.map((entry) => entry.type === 'kanji' && entry.character)
+    ).toEqual(['食']);
+    const terms = await find('鬱だ', options, { searchTerms: true, searchKanji: false });
+    expect(terms.dictionaryEntries).toEqual([]);
+    const none = await find('食べる', options, { searchTerms: false, searchKanji: false });
+    expect(none.dictionaryEntries).toEqual([]);
+  });
+
+  // matchTypePrefix: a real prefix match, so a partial word still finds the full one.
+  it('finds words that start with the text under a prefix match', async () => {
+    expect((await lookup('辞', options, { searchKanji: false })).dictionaryEntries).toEqual([]);
+    const prefix = await lookup('辞', options, { searchKanji: false, matchType: 'prefix' });
+    expect(
+      prefix.dictionaryEntries.map((entry) => entry.type === 'term' && entry.headwords[0].term)
+    ).toContain('辞書');
   });
 
   it('skips disabled dictionaries and deletes them', async () => {

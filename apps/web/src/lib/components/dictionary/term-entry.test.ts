@@ -114,15 +114,18 @@ describe('TermEntry', () => {
     expect(target.querySelector('.entry-anki')).toBeNull();
 
     dictionaryAnkiRoute$.next('ankimobile');
+    // the single card format an earlier version stored: upgraded to Yomitan's card formats
     dictionaryAnki$.next({
       deck: 'D',
       model: 'M',
       fields: { Front: { value: '{expression}', overwriteMode: 'coalesce' } }
-    });
+    } as never);
     const ready = document.createElement('div');
     new TermEntry({ target: ready, props });
     await Promise.resolve();
-    expect(ready.querySelector('.entry-anki')?.getAttribute('aria-label')).toBe('Add to Anki');
+    expect(
+      [...ready.querySelectorAll('.entry-anki')].map((button) => button.getAttribute('aria-label'))
+    ).toEqual(['Add Expression note', 'Add Reading note']);
     dictionaryAnki$.next({});
   });
 });
@@ -146,7 +149,8 @@ describe('lookup helpers', () => {
     expect(key('Escape')).toBe('close');
     expect(key('KeyP', { altKey: true })).toBe('playAudio');
     expect(key('KeyP')).toBeUndefined();
-    expect(key('KeyE', { altKey: true })).toBeUndefined(); // addNote: the + button only
+    expect(key('KeyE', { altKey: true })).toBe('addNote'); // Yomitan's Alt+E: the Expression card
+    expect(key('KeyV', { altKey: true })).toBe('viewNotes');
   });
 
   it('places the popup below horizontal text, flipping when there is no room', () => {

@@ -1,8 +1,9 @@
 <script lang="ts">
   /**
    * Settings → Dictionary lookups: Popup, Scanning, Audio and Shortcuts for the built-in lookup
-   * popup (components/dictionary/lookup-popup.svelte), in Yomitan's options shape. Only options
-   * the popup carries out in a web page are shown. Not part of upstream.
+   * popup (components/dictionary/lookup-popup.svelte), in Yomitan's options shape; the Anki
+   * shortcuts (addNote, viewNotes) take a card format from Settings → Anki → Dictionary cards.
+   * Not part of upstream.
    */
   import { faXmark } from '@fortawesome/free-solid-svg-icons';
   import Fa from 'svelte-fa';
@@ -16,6 +17,7 @@
     yomitanOptions$
   } from '$lib/data/dictionary/dictionary';
   import { audioSourceTypes, playTermAudio } from '$lib/data/dictionary/dictionary-audio';
+  import { dictionaryAnki$, dictionaryAnkiSettings } from '$lib/data/dictionary/anki-dictionary';
   import {
     eventModifiers,
     hotkeyLabel,
@@ -187,6 +189,18 @@
     set((p) => {
       p.inputs.hotkeys = p.inputs.hotkeys.map((hotkey, i) =>
         i === index ? { ...hotkey, key, modifiers } : hotkey
+      );
+    });
+  }
+
+  /** addNote / viewNotes take a card format (its index in `anki.cardFormats`), as in Yomitan. */
+  const ankiActions = ['addNote', 'viewNotes'];
+  $: cardFormats = dictionaryAnkiSettings($dictionaryAnki$).cardFormats;
+
+  function setHotkeyArgument(index: number, argument: string) {
+    set((p) => {
+      p.inputs.hotkeys = p.inputs.hotkeys.map((hotkey, i) =>
+        i === index ? { ...hotkey, argument } : hotkey
       );
     });
   }
@@ -570,6 +584,18 @@
         {#if isPopupHotkey(hotkey)}
           <li class="dict-hotkey">
             <span class="dict-hotkey-action">{$t$(actionLabel(hotkey.action))}</span>
+            {#if ankiActions.includes(hotkey.action)}
+              <select
+                class="app-input dict-hotkey-format"
+                aria-label={$t$('dict.hotkeyFormat', { action: $t$(actionLabel(hotkey.action)) })}
+                value={hotkey.argument}
+                on:change={(e) => setHotkeyArgument(index, e.currentTarget.value)}
+              >
+                {#each cardFormats as format, formatIndex}
+                  <option value={`${formatIndex}`}>{format.name}</option>
+                {/each}
+              </select>
+            {/if}
             <button
               type="button"
               class="app-button dict-key"
@@ -648,6 +674,11 @@
     flex: 1 1 auto;
     color: var(--font-color);
     font-size: var(--type-body);
+  }
+
+  .dict-hotkey-format {
+    width: auto;
+    max-width: 10rem;
   }
 
   .dict-key {

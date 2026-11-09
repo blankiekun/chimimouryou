@@ -5,6 +5,7 @@
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
   import SettingsAnkiDictionary from '$lib/components/dictionary/settings-anki-dictionary.svelte';
   import {
+    ankiApiKey$,
     ankiAudioField$,
     ankiConnectUrl$,
     ankiEnabled$,
@@ -66,6 +67,17 @@
     {#if testResult}
       <p class="anki-status" data-state={testState} role="status">{testResult}</p>
     {/if}
+  </SettingsItemGroup>
+  <SettingsItemGroup title={$t$('anki.apiKey')} tooltip={$t$('anki.apiKeyHint')}>
+    <input
+      aria-label={$t$('anki.apiKey')}
+      autocomplete="off"
+      class="app-input"
+      placeholder={$t$('settings.off')}
+      spellcheck="false"
+      type="password"
+      bind:value={$ankiApiKey$}
+    />
   </SettingsItemGroup>
   <SettingsItemGroup title={$t$('anki.sentenceField')}>
     <input

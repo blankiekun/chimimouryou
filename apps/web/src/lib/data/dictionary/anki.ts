@@ -22,6 +22,11 @@ export const ankiConnectUrl$ = writableStringLocalStorageSubject()(
   'ankiConnectUrl',
   'http://127.0.0.1:8765'
 );
+/**
+ * AnkiConnect's API key (Yomitan's `anki.apiKey`), sent with every request when set. Per browser
+ * like the address: it belongs to this device's AnkiConnect, so it never syncs.
+ */
+export const ankiApiKey$ = writableStringLocalStorageSubject()('ankiApiKey', '');
 export const ankiSentenceField$ = writableStringLocalStorageSubject()(
   'ankiSentenceField',
   'Sentence'
@@ -58,12 +63,13 @@ export interface AnkiMedia {
 
 export async function ankiInvoke<T>(action: string, params: object = {}): Promise<T> {
   let response: Response;
+  const key = ankiApiKey$.getValue();
 
   try {
     // No Content-Type: a simple request, as Yomitan sends it.
     response = await fetch(ankiConnectUrl$.getValue(), {
       method: 'POST',
-      body: JSON.stringify({ action, version: 6, params })
+      body: JSON.stringify({ action, version: 6, params, ...(key && { key }) })
     });
   } catch (_) {
     throw new Error(

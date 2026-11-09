@@ -49,12 +49,16 @@
   } from '$lib/vendor/yomitan/dom/document-util';
   import { addScopeToCssLegacy } from '$lib/vendor/yomitan/core/utilities';
   import TermEntry from './term-entry.svelte';
+  import KanjiEntry from './kanji-entry.svelte';
   import InstallDictionary from './install-dictionary.svelte';
   import Toast from '$lib/components/toast.svelte';
   import { pagePath } from '$lib/data/env';
+  import type { ScreenshotSource } from '$lib/data/dictionary/anki-dictionary';
 
   /** Selector of the elements whose text is scanned (e.g. `.book-content`) */
   export let scope: string;
+  /** What Add to Anki's {screenshot} takes (the game frame, the manga page); none: empty */
+  export let screenshot: ScreenshotSource | undefined = undefined;
 
   interface View {
     query: string;
@@ -92,9 +96,25 @@
   let listed = false;
   /** The one-time note after a lookup with no dictionary to look in */
   let emptyNote = false;
+  /** The last addNote / viewNotes shortcut, for the selected entry's Anki buttons */
+  let ankiCommand: { action: string; argument: string; id: number } | undefined;
+  /** The element of the root match (the manga page's text block, for {screenshot}) */
+  let matchElement: Element | null = null;
+  const takeScreenshot = () => screenshot?.(matchElement) ?? null;
+  $: entryScreenshot = screenshot ? takeScreenshot : undefined;
 
   $: profile = $yomitanOptions$ ? profileOptions($yomitanOptions$) : undefined;
   $: view = views[index] as View | undefined;
+  $: many = (view?.result.dictionaryEntries.length ?? 0) > 1;
+  // A shortcut acts once, on the entry selected when it was pressed.
+  $: (selected, view, (ankiCommand = undefined));
+  $: ankiContext = view && {
+    url: location.href,
+    documentTitle: document.title,
+    query: view.query,
+    fullQuery: view.fullQuery,
+    sentence: view.sentence
+  };
   // Nothing to look in: taps pass through (page turns, manga and VN taps) instead of finding nothing.
   $: noDictionary = listed && !!profile && !profile.dictionaries.some(({ enabled }) => enabled);
   /** Bindable: the popup is showing (the reader hides its toast meanwhile) */
@@ -277,6 +297,7 @@
         ({ x, y, width, height }) => new DOMRect(x + at.left, y + at.top, width, height)
       );
       const element = range.startContainer.parentElement;
+      matchElement = element;
       writingMode = getElementWritingMode(element);
       views = [nextView];
     }
@@ -288,10 +309,13 @@
     if (profile.audio.enabled && profile.audio.autoPlay) playFirst();
   }
 
-  async function lookupQuery(query: string) {
+  /** A `?query=` link (terms, as Yomitan's search) or a headword's kanji link (kanji). */
+  async function lookupQuery(query: string, kanji = false) {
     if (!profile || !canNest()) return;
     const current = ++token;
-    const result = await lookup(query).catch(() => undefined);
+    const result = await lookup(query, { searchTerms: !kanji, searchKanji: kanji }).catch(
+      () => undefined
+    );
     if (current !== token || !result?.dictionaryEntries.length) return;
     views = [
       ...views.slice(0, index + 1),
@@ -349,7 +373,7 @@
 
   function playFirst() {
     const entry = view?.result.dictionaryEntries[selected];
-    const headword = entry?.headwords[0];
+    const headword = entry?.type === 'term' ? entry.headwords[0] : undefined;
     if (profile && headword) playTermAudio(headword.term, headword.reading, profile.audio);
   }
 
@@ -470,6 +494,10 @@
         return go(1);
       case 'playAudio':
         return playFirst();
+      case 'addNote':
+      case 'viewNotes':
+        ankiCommand = { action, argument, id: (ankiCommand?.id ?? 0) + 1 };
+        return;
     }
   }
 
@@ -554,25 +582,35 @@
     </div>
     <div class="dict-body" bind:this={bodyEl}>
       {#each view.result.dictionaryEntries as entry, entryIndex}
-        <TermEntry
-          {entry}
-          options={profile}
-          summaries={$dictionaries$}
-          current={entryIndex === selected && view.result.dictionaryEntries.length > 1}
-          audio={profile.audio.enabled}
-          ankiContext={{
-            url: location.href,
-            documentTitle: document.title,
-            query: view.query,
-            fullQuery: view.fullQuery,
-            sentence: view.sentence
-          }}
-          on:lookup={({ detail }) => lookupQuery(detail)}
-          on:audio={({ detail }) =>
-            profile && playTermAudio(detail.term, detail.reading, profile.audio)}
-          on:copy={({ detail }) => copy(detail)}
-          on:markKnown={({ detail }) => setWordMarks([[detail, null]], 'known')}
-        />
+        {#if entry.type === 'kanji'}
+          <KanjiEntry
+            {entry}
+            options={profile}
+            summaries={$dictionaries$}
+            current={entryIndex === selected && many}
+            {ankiContext}
+            screenshot={entryScreenshot}
+            ankiCommand={entryIndex === selected ? ankiCommand : undefined}
+            oncopy={copy}
+          />
+        {:else}
+          <TermEntry
+            {entry}
+            options={profile}
+            summaries={$dictionaries$}
+            current={entryIndex === selected && many}
+            audio={profile.audio.enabled}
+            {ankiContext}
+            screenshot={entryScreenshot}
+            ankiCommand={entryIndex === selected ? ankiCommand : undefined}
+            on:lookup={({ detail }) => lookupQuery(detail)}
+            on:lookupKanji={({ detail }) => lookupQuery(detail, true)}
+            on:audio={({ detail }) =>
+              profile && playTermAudio(detail.term, detail.reading, profile.audio)}
+            on:copy={({ detail }) => copy(detail)}
+            on:markKnown={({ detail }) => setWordMarks([[detail, null]], 'known')}
+          />
+        {/if}
       {/each}
     </div>
   </section>
@@ -712,6 +750,7 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
+    flex-wrap: wrap;
     gap: 0.5rem;
   }
 
@@ -731,6 +770,7 @@
   .ttu-dict :global(.headword-term) {
     font-size: 1.75em;
     line-height: 1.3;
+    white-space: nowrap;
   }
 
   .ttu-dict :global(.headword-term rt) {
@@ -740,6 +780,19 @@
 
   .ttu-dict :global(.headword + .headword .headword-term) {
     font-size: 1.25em;
+  }
+
+  .ttu-dict :global(.headword-kanji-link) {
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .ttu-dict :global(.headword-kanji-link:hover) {
+    color: var(--accent-strong-color);
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
   }
 
   .ttu-dict :global(.headword-reading) {

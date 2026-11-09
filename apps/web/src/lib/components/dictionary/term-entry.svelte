@@ -19,10 +19,11 @@
     groupTermFrequencies,
     groupTermTags
   } from '$lib/vendor/yomitan/dictionary/dictionary-data-util';
-  import { distributeFurigana } from '$lib/vendor/yomitan/language/ja/japanese';
+  import { distributeFurigana, isCodePointKanji } from '$lib/vendor/yomitan/language/ja/japanese';
   import type { Tag, TermDictionaryEntry } from '$lib/vendor/yomitan/types/dictionary';
   import type { ProfileOptions } from '$lib/vendor/yomitan/types/settings';
   import type { AnkiNoteContext } from '$lib/vendor/yomitan/data/anki-note-builder';
+  import type { ScreenshotSource } from '$lib/data/dictionary/anki-dictionary';
   import AnkiAddButton from './anki-add-button.svelte';
   import { glossary, pitchAccent } from './structured-content';
 
@@ -33,9 +34,13 @@
   export let audio = false;
   /** Where the word was looked up, for Add to Anki (none: no button) */
   export let ankiContext: AnkiNoteContext | undefined = undefined;
+  export let screenshot: ScreenshotSource | undefined = undefined;
+  /** A popup shortcut for the entry's Anki buttons (addNote / viewNotes) */
+  export let ankiCommand: { action: string; argument: string; id: number } | undefined = undefined;
 
   const dispatch = createEventDispatcher<{
     lookup: string;
+    lookupKanji: string;
     audio: { term: string; reading: string };
     markKnown: string;
     copy: string;
@@ -95,7 +100,29 @@
       general.termDisplayMode === 'term-and-reading');
   $: furigana =
     general.termDisplayMode === 'ruby' || general.termDisplayMode === 'ruby-and-reading';
+
+  /** DisplayGenerator._appendKanjiLinks: the headword's kanji open their kanji entries. */
+  function kanjiParts(text: string) {
+    const parts: { text: string; kanji: boolean }[] = [];
+    for (const c of text) {
+      const kanji = isCodePointKanji(c.codePointAt(0)!);
+      const last = parts.at(-1);
+      if (!kanji && last && !last.kanji) last.text += c;
+      else parts.push({ text: c, kanji });
+    }
+    return parts;
+  }
 </script>
+
+{#snippet linked(text: string)}
+  {#each kanjiParts(text) as part}
+    {#if part.kanji}<button
+        type="button"
+        class="headword-kanji-link"
+        on:click={() => dispatch('lookupKanji', part.text)}>{part.text}</button
+      >{:else}{part.text}{/if}
+  {/each}
+{/snippet}
 
 <article class="entry" class:current lang="ja" data-glossary-layout={general.glossaryLayoutMode}>
   <header class="entry-head">
@@ -106,10 +133,10 @@
             {#if furigana}
               {#each distributeFurigana(term, reading) as segment}
                 {#if segment.reading}
-                  <ruby>{segment.text}<rt>{segment.reading}</rt></ruby>
-                {:else}{segment.text}{/if}
+                  <ruby>{@render linked(segment.text)}<rt>{segment.reading}</rt></ruby>
+                {:else}{@render linked(segment.text)}{/if}
               {/each}
-            {:else}{term}{/if}
+            {:else}{@render linked(term)}{/if}
           </span>
           {#if showReading(term, reading)}
             <span class="headword-reading">{reading}</span>
@@ -151,7 +178,14 @@
         <span>{$t$(known ? 'reader.wordKnown' : 'reader.markKnown')}</span>
       </button>
       {#if ankiContext}
-        <AnkiAddButton {entry} {options} {summaries} context={ankiContext} />
+        <AnkiAddButton
+          {entry}
+          {options}
+          {summaries}
+          context={ankiContext}
+          {screenshot}
+          command={ankiCommand}
+        />
       {/if}
     </div>
   </header>

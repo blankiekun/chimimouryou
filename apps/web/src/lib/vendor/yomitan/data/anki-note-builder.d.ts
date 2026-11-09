@@ -18,7 +18,7 @@
 
 // chimimouryou: declarations for the TypeScript side (Yomitan types these with JSDoc).
 
-import type { TermDictionaryEntry } from '../types/dictionary';
+import type { DictionaryEntry } from '../types/dictionary';
 import type {
   AnkiCardFormat,
   AnkiDuplicateScope,
@@ -51,7 +51,7 @@ export type AnkiNoteContext = {
 };
 
 export type CreateNoteDetails = {
-  dictionaryEntry: TermDictionaryEntry;
+  dictionaryEntry: DictionaryEntry;
   cardFormat: AnkiCardFormat;
   context: AnkiNoteContext;
   template: string;
@@ -62,6 +62,12 @@ export type CreateNoteDetails = {
   glossaryLayoutMode?: GlossaryLayoutMode;
   compactTags?: boolean;
   dictionaryStylesMap?: Map<string, string>;
+  requirements?: { type: string }[];
+  mediaOptions?: {
+    audio: unknown;
+    textParsing: unknown;
+    screenshot: { format: string; quality: number; contentOrigin: { tabId: number; frameId: number } };
+  } | null;
 };
 
 export class AnkiNoteBuilder {
