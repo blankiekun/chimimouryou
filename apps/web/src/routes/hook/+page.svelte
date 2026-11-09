@@ -21,6 +21,7 @@
   import { readingActivity } from '$lib/data/reader/reader-hooks';
   import { startDayHoursForTracker$, statisticsEnabled$, trackerIdleTime$ } from '$lib/data/store';
   import { bookContent } from '$lib/data/book-content';
+  import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
   import { noteReading } from '$lib/data/social/social';
   import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
   import { context, externalHandler, handler } from '$lib/data/sync/media-sync';
@@ -86,7 +87,7 @@
   } from '$lib/functions/replication/replication-options';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { t$, type MessageKey } from '$lib/i18n';
-  import { onDestroy, onMount, tick } from 'svelte';
+  import { onDestroy, onMount, tick, untrack } from 'svelte';
 
   /**
    * The texthooker: game text from Textractor, LunaTranslator or agent over a WebSocket on this
@@ -170,34 +171,81 @@
   /** The library's titles, offered for the WebSocket session's game: one picked, the session counts toward that book. */
   let libraryTitles = $state<string[]>([]);
   const linked = $derived(libraryTitles.includes(title.trim()));
-  /** The session's title is a library VN: its lines count in that book's progress and statistics, as on /v. */
-  let saver: VnReadingSaver | undefined;
-  let linking = '';
+  /** A counted line while its title's link is being looked up, with the hook's own count. */
+  type HeldLine = { text: string; at: number; seconds: number; characters: number };
+  /**
+   * One title's link: a library VN's lines count in its progress and statistics (`saver`, as on
+   * /v), any other title's in the immersion log. Until `done`, its lines wait in `held`.
+   */
+  type BookLink = {
+    name: string;
+    held: HeldLine[];
+    saver?: VnReadingSaver;
+    started: boolean;
+    done: boolean;
+  };
+  /** The current title's link; lines from before a title change stay with the old one. */
+  let current: BookLink | undefined;
 
   $effect(() => {
-    const name = title.trim();
-    const timer = setTimeout(
-      () => linkBook(name).catch((error) => logger.warn(error.message)),
-      500
-    );
+    const link: BookLink = { name: title.trim(), held: [], started: false, done: false };
+    const previous = current;
 
-    return () => clearTimeout(timer);
+    current = link;
+    if (previous?.done) leaveLink(previous);
+    // Native play's title is known at launch; a typed one is looked up once typing stops.
+    const timer = setTimeout(() => resolveLink(link), untrack(() => nativeId) ? 0 : 500);
+
+    return () => {
+      if (link.started) return;
+      clearTimeout(timer);
+      // Superseded before its lookup: only lines it holds need one.
+      if (link.held.length) resolveLink(link);
+      else link.done = true;
+    };
   });
 
-  /** Counts the session toward the VN titled `name`, if the library has one; lines meanwhile go to the immersion log. */
-  async function linkBook(name: string) {
-    if (saver?.book.title === name) return;
+  /** Looks the title up, then counts the lines it held, in order. */
+  async function resolveLink(link: BookLink) {
+    link.started = true;
+    try {
+      const book = link.name ? await database.getDataByTitle(link.name) : undefined;
 
-    const previous = saver;
+      if (book && bookContent(book).kind === 'vn') link.saver = await openSaver(book);
+    } catch (error: any) {
+      logger.warn(error.message);
+    }
+    link.done = true;
+    link.held.splice(0).forEach((line) => countLine(link, line, true));
+    if (link !== current) leaveLink(link);
+    else reportActivity();
+  }
 
-    linking = name;
-    saver = undefined;
-    await previous?.save(true);
+  /** Counts a line toward the link's book, or in the immersion log under its title. */
+  function countLine(link: BookLink, { text, at, seconds, characters }: HeldLine, held = false) {
+    const { saver } = link;
 
-    const book = name ? await database.getDataByTitle(name) : undefined;
+    if (saver) {
+      // A held line's gap is the hook's (pauses known): the reading may be newer than the line.
+      if (held) saver.reading.lastTextTime = at - seconds * 1000;
+      const added = saver.reading.add(
+        text,
+        false,
+        false,
+        { statistics: $statisticsEnabled$, startDayHours: $startDayHoursForTracker$ },
+        at
+      );
 
-    if (!book || bookContent(book).kind !== 'vn' || linking !== name) return;
+      if (added) saver.changed();
+    } else if ($statisticsEnabled$) {
+      addImmersionTime('hook', 'vn', link.name || 'Texthooker', seconds, characters).catch(
+        (error) => logger.warn(`Couldn't save to the immersion log: ${error.message}`)
+      );
+    }
+  }
 
+  /** The book's reading as /v opens it: progress and statistics synced down first. */
+  async function openSaver(book: BooksDbBookData) {
     const local = handler(StorageKey.BROWSER);
     const external = await externalHandler(book).catch(() => undefined);
 
@@ -216,9 +264,22 @@
       if (error) logger.warn(`Visual novel sync failed: ${error}`);
     }
 
-    const reading = await loadVnReading(book);
+    return new VnReadingSaver(book, await loadVnReading(book), local, external);
+  }
 
-    if (linking === name) saver = new VnReadingSaver(book, reading, local, external);
+  /** A link no longer current (title changed, page closed): saved, synced and "left", as on /v. */
+  function leaveLink({ saver }: BookLink) {
+    if (!saver) return;
+    saver.save(true).catch((error) => logger.warn(error.message));
+    if (isPluginEnabled('social')) {
+      noteReading(
+        saver.book.title,
+        saver.reading.read.characters,
+        saver.book.characters,
+        true,
+        'vn'
+      );
+    }
   }
 
   // Set on mount: the address can't be read while prerendering.
@@ -582,7 +643,7 @@
   function togglePause() {
     paused = !paused;
     if (!paused) since = Date.now();
-    if (saver) saver.reading.lastTextTime = Date.now();
+    if (current?.saver) current.saver.reading.lastTextTime = Date.now();
   }
 
   function addLine(text: string, seq?: number) {
@@ -614,18 +675,10 @@
     sessionCharacters += count.characters;
     sessionSeconds += count.seconds;
     // Each line at once: a closed tab loses nothing.
-    if (saver) {
-      const added = saver.reading.add(text, false, false, {
-        statistics: $statisticsEnabled$,
-        startDayHours: $startDayHoursForTracker$
-      });
+    const held = { text, at, seconds: count.seconds, characters: count.characters };
 
-      if (added) saver.changed();
-    } else if ($statisticsEnabled$) {
-      addImmersionTime('hook', 'vn', gameTitle(), count.seconds, count.characters).catch((error) =>
-        logger.warn(`Couldn't save to the immersion log: ${error.message}`)
-      );
-    }
+    if (current && !current.done) current.held.push(held);
+    else if (current) countLine(current, held);
     reportActivity();
   }
 
@@ -634,8 +687,8 @@
     readingActivity({
       kind: 'vn',
       title: gameTitle(),
-      position: saver ? saver.reading.read.characters : sessionCharacters,
-      characters: saver?.book.characters,
+      position: current?.saver ? current.saver.reading.read.characters : sessionCharacters,
+      characters: current?.saver?.book.characters,
       playing: nativeRunning || undefined
     });
   }
@@ -733,16 +786,11 @@
     cleanupSubscription.unsubscribe();
     disconnect();
     readingActivity();
-    saver?.save(true).catch((error) => logger.warn(error.message));
-    if (saver && isPluginEnabled('social')) {
-      noteReading(
-        saver.book.title,
-        saver.reading.read.characters,
-        saver.book.characters,
-        true,
-        'vn'
-      );
-    }
+    const link = current;
+
+    // One still being looked up leaves itself once done.
+    current = undefined;
+    if (link?.done) leaveLink(link);
     stopLineAudio();
     clearTimeout(rankTimer);
     clearTimeout(reinsertTimer);
@@ -756,7 +804,7 @@
 <svelte:document
   onvisibilitychange={() =>
     document.visibilityState === 'hidden' &&
-    saver?.save(true).catch((error) => logger.warn(error.message))}
+    current?.saver?.save(true).catch((error) => logger.warn(error.message))}
 />
 
 <svelte:window
