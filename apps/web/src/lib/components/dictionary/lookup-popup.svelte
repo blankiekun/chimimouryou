@@ -750,6 +750,7 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
+    flex-wrap: wrap;
     gap: 0.5rem;
   }
 
@@ -769,6 +770,7 @@
   .ttu-dict :global(.headword-term) {
     font-size: 1.75em;
     line-height: 1.3;
+    white-space: nowrap;
   }
 
   .ttu-dict :global(.headword-term rt) {

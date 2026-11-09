@@ -63,12 +63,12 @@ site's CSP holds) at the commit Yomitan pins (`12aff5e3550954d7d3a98a5917ff7d579
   (here the page is the book, not an extension page).
 - `app/popup-position.js`: `Popup._getPosition` and its helpers from `app/popup.js`, as functions
   taking the frame size and offsets.
-- `background/find-terms-options.js`: `Backend._getTranslatorFindTermsOptions` and its helpers
+- `background/find-terms-options.js`: `Backend._getTranslatorFindTermsOptions`, `_getTranslatorFindKanjiOptions` and their helpers
   from `background/backend.js`, as functions.
 - `*.d.ts` beside the entry modules: declarations for the TypeScript side (Yomitan types its
   JavaScript with JSDoc).
 
-The popup itself is the app's (`components/dictionary/lookup-popup.svelte`, `term-entry.svelte`):
+The popup itself is the app's (`components/dictionary/lookup-popup.svelte`, `term-entry.svelte`, `kanji-entry.svelte`):
 the entry layout follows `display/display-generator.js` with Yomitan's class names, so custom popup
 CSS and dictionary styles (scoped with `addScopeToCssLegacy`, as `display.js` does) still apply.
 Word audio follows `media/audio-downloader.js` and `audio-system.js` in `lib/data/dictionary/dictionary-audio.ts`
@@ -76,10 +76,11 @@ for the sources a web page can reach.
 
 Anki notes (`lib/data/dictionary/anki-dictionary.ts`) are built by `data/anki-note-builder.js` with the
 `AnkiTemplateRenderer` called directly, as Yomitan's own tests do, instead of through its
-sandboxed template-renderer frame; media injection (`injectAnkiNoteMedia`: dictionary images,
-screenshots, clipboard, Yomitan's audio download) is not used.
+sandboxed template-renderer frame. Of its media injection (`injectAnkiNoteMedia`) only the
+screenshot is used, taken from what the host shows (a page can't capture the tab); dictionary
+images, clipboard and Yomitan's audio download are not.
 
 Left out: the extension (backend, messaging, `chrome.*`), the display's templates and its text
 scanner (`language/text-scanner.js`; the app's `functions/dictionary/scan.ts` uses the scanner pieces
 above), the settings pages, AnkiConnect (`comm/anki-connect.js`; the app's `lib/data/dictionary/anki.ts`
-talks to it), the kanji lookup path's UI, and every language but Japanese.
+talks to it), and every language but Japanese.
