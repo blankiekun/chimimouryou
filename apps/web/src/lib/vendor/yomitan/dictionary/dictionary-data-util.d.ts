@@ -18,12 +18,19 @@
 
 // chimimouryou: declarations for the TypeScript side (Yomitan types these with JSDoc).
 
-import type { Pronunciation, Tag, TermDictionaryEntry, TermHeadword } from '../types/dictionary';
+import type {
+  KanjiFrequency as KanjiFrequencySource,
+  Pronunciation,
+  Tag,
+  TermDictionaryEntry,
+  TermHeadword
+} from '../types/dictionary';
 import type { DictionarySummary } from './dictionary-importer';
 
 export type TagGroup = { tag: Tag; headwordIndices: number[] };
 export type FrequencyData = { frequency: number; displayValue: string | null };
 export type TermFrequency = { term: string; reading: string | null; values: FrequencyData[] };
+export type KanjiFrequency = { character: string; values: FrequencyData[] };
 export type DictionaryFrequency<T> = {
   dictionary: string;
   dictionaryAlias: string;
@@ -49,6 +56,10 @@ export function groupTermFrequencies(
   dictionaryEntry: TermDictionaryEntry,
   dictionaryInfo: DictionarySummary[]
 ): DictionaryFrequency<TermFrequency>[];
+export function groupKanjiFrequencies(
+  sourceFrequencies: KanjiFrequencySource[],
+  dictionaryInfo: DictionarySummary[]
+): DictionaryFrequency<KanjiFrequency>[];
 export function getGroupedPronunciations(
   dictionaryEntry: TermDictionaryEntry
 ): DictionaryGroupedPronunciations[];

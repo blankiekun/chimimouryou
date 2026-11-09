@@ -995,7 +995,12 @@
 </svelte:head>
 
 <svelte:window on:keydown={onKeydown} />
-<LookupPopup bind:this={lookupPopup} scope=".mokuro-block" />
+<LookupPopup
+  bind:this={lookupPopup}
+  scope=".mokuro-block"
+  screenshot={(match) =>
+    match?.closest('.mokuro-page')?.parentElement?.querySelector('img') ?? null}
+/>
 <svelte:document on:visibilitychange={onVisibilityChange} />
 
 <div

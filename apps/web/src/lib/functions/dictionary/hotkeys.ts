@@ -11,7 +11,7 @@
 
 import type { InputsHotkeyOptions } from '$lib/vendor/yomitan/types/settings';
 
-/** The popup actions the built-in popup carries out (Anki, profiles and the search page aren't here). */
+/** The popup actions the built-in popup carries out (profiles and the search page aren't here). */
 export const popupHotkeyActions = [
   'close',
   'previousEntry',
@@ -20,7 +20,9 @@ export const popupHotkeyActions = [
   'lastEntry',
   'historyBackward',
   'historyForward',
-  'playAudio'
+  'playAudio',
+  'addNote',
+  'viewNotes'
 ] as const;
 
 export type PopupHotkeyAction = (typeof popupHotkeyActions)[number];

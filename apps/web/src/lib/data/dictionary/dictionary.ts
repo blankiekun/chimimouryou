@@ -321,14 +321,21 @@ export function getDictionaryMedia(path: string, dictionary: string) {
 
 // Backup (Yomitan's settings export format, BackupController)
 
-/** A settings file Yomitan can import, and the same shape Yomitan exports. */
+/**
+ * A settings file Yomitan can import, and the same shape Yomitan exports: the current profile
+ * carries the popup's Anki options (kept apart, as they follow the account).
+ */
 export async function exportYomitanSettings() {
+  const options = structuredClone(await loadYomitanOptions());
+  const { dictionaryAnkiToYomitan } = await import('$lib/data/dictionary/anki-dictionary');
+  const profile = profileOptions(options);
+  profile.anki = dictionaryAnkiToYomitan(profile.anki);
   return JSON.stringify(
     {
       version: 0,
       date: new Date().toISOString(),
       userAgent: navigator.userAgent,
-      options: await loadYomitanOptions()
+      options
     },
     null,
     4
@@ -344,11 +351,9 @@ export async function importYomitanSettings(json: string) {
   );
   const installed = await call<DictionarySummary[]>({ type: 'list' });
   saveYomitanOptions(ensureDictionarySettings(options, installed, false));
-  // Its Anki card format too, for the popup's Add to Anki (kept apart: it follows the account).
-  const { dictionaryAnki$, dictionaryAnkiFromYomitan } =
-    await import('$lib/data/dictionary/anki-dictionary');
-  const anki = dictionaryAnkiFromYomitan(options);
-  if (anki) dictionaryAnki$.next(anki);
+  // Its Anki options too, for the popup's Add to Anki (kept apart: they follow the account).
+  const { applyYomitanAnki } = await import('$lib/data/dictionary/anki-dictionary');
+  applyYomitanAnki(options);
 }
 
 /** Yomitan's default settings, keeping the installed dictionaries (enabled). */

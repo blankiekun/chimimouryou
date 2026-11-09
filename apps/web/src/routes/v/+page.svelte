@@ -1079,7 +1079,11 @@
   </div>
 </div>
 
-<LookupPopup bind:this={lookupPopup} scope=".vn-text" />
+<LookupPopup
+  bind:this={lookupPopup}
+  scope=".vn-text"
+  screenshot={() => (frame?.contentWindow as any)?.screenCanvas?.() ?? null}
+/>
 
 {#if showMore}
   <ReaderSheet title="More" on:close={() => (showMore = false)}>
