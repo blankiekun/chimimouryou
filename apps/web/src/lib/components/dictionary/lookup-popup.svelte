@@ -2,16 +2,19 @@
   /**
    * The built-in dictionary's lookup popup (lib/data/dictionary/dictionary.ts) for a reader page, Yomitan's
    * behaviour with the app's look:
-   * - Scanning: the host calls `tapAt` for taps (touch and pen inputs with "scan on tap"), and
-   *   the mouse scans on its own with Yomitan's scanning inputs (default Shift + hover, or the
-   *   modifier pressed while hovering). Only text inside `scope` (and the popup itself, for
-   *   nested lookups) is scanned; the match is shown with the CSS Custom Highlight API, so the
-   *   book's DOM is never changed. `attachFrame` adds a same-origin iframe (the VN player's
-   *   text overlay, /v): its pointer and key events are listened to, and points over it are
-   *   scanned in its document.
+   * - Scanning: Yomitan's scanning inputs (`ScanInput`, functions/dictionary/scan.ts) read the
+   *   window's pointer, touch, pen, mouse button and key events: hover with a modifier or mouse
+   *   button, touch press/move/release, pen press/move/hover/release. Taps are the host's: it
+   *   calls `tapAt` for each tap it would otherwise use (true = a scan took it, so no page turn),
+   *   and checks `lookupClaimsGesture()` (yomitan.ts) before a swipe or pan. Only text inside
+   *   `scope` (and the popup itself, for nested lookups) is scanned; the match is shown with the
+   *   CSS Custom Highlight API and, with selectText, selected (the reader ignores that selection:
+   *   `isLookupSelection`). `attachFrame` adds a same-origin iframe (the VN player's text
+   *   overlay, /v): its events are fed in too, and points over it scanned in its document.
    * - Popup: near the word on larger screens (Yomitan's placement, app/popup-position.js); a
-   *   sheet at the bottom on phones, or at the top when the word is down there.
-   * - Nested lookups replace the content with a back button, up to the nesting depth.
+   *   sheet at the bottom on phones, or at the top when the word is down there. Scaled as
+   *   Frontend._updateContentScale does (page zoom, pinch zoom).
+   * - Nested lookups replace the content with Back/Forward, up to the nesting depth.
    * Off while `builtInLookups$` is off. Not part of upstream.
    */
   import { faArrowLeft, faArrowRight, faXmark } from '@fortawesome/free-solid-svg-icons';
@@ -29,24 +32,27 @@
     type LookupResult
   } from '$lib/data/dictionary/dictionary';
   import { playTermAudio, stopTermAudio } from '$lib/data/dictionary/dictionary-audio';
-  import { builtInPopupOpen$ } from '$lib/data/dictionary/yomitan';
+  import {
+    builtInPopupOpen$,
+    setGestureClaimed,
+    setLookupSelection
+  } from '$lib/data/dictionary/yomitan';
   import { setWordMarks } from '$lib/data/words/word-marks';
   import { setCssHighlight } from '$lib/functions/book-text/css-highlights';
   import {
-    matchingInput,
+    ScanInput,
     scanAt,
     scannedRange,
     scannedSentence,
+    scanSelection,
+    type PointerKind,
+    type ScanInputInfo,
     type ScannedText
   } from '$lib/functions/dictionary/scan';
   import { hotkeyAction } from '$lib/functions/dictionary/hotkeys';
   import { t$ } from '$lib/i18n';
   import { getPosition } from '$lib/vendor/yomitan/app/popup-position';
-  import {
-    getActiveModifiers,
-    getActiveModifiersAndButtons,
-    getElementWritingMode
-  } from '$lib/vendor/yomitan/dom/document-util';
+  import { getElementWritingMode } from '$lib/vendor/yomitan/dom/document-util';
   import { addScopeToCssLegacy } from '$lib/vendor/yomitan/core/utilities';
   import TermEntry from './term-entry.svelte';
   import KanjiEntry from './kanji-entry.svelte';
@@ -70,6 +76,10 @@
 
   const highlightName = 'ttu-lookup';
   const nestedHighlightName = 'ttu-lookup-nested';
+  // shortcut: a browser can't read its page zoom, so it is taken as devicePixelRatio against its
+  // value when the page loaded (wrong if the page loaded zoomed or moves to a screen of another
+  // density); the desktop app reads the exact factor (preload.cjs zoomFactor).
+  const loadPixelRatio = globalThis.devicePixelRatio || 1;
 
   let popupEl: HTMLElement | undefined;
   let bodyEl: HTMLElement | undefined;
@@ -85,9 +95,9 @@
   let token = 0;
   let lastPointer: { x: number; y: number; type: string } | undefined;
   let lastScanKey = '';
-  let hoverTimer: ReturnType<typeof setTimeout> | undefined;
   let viewportWidth = 0;
   let viewportHeight = 0;
+  let contentScale = 1;
   let frame: HTMLIFrameElement | undefined;
   let detachFrame = () => {};
   /** The window the root match is highlighted in */
@@ -102,6 +112,15 @@
   let matchElement: Element | null = null;
   const takeScreenshot = () => screenshot?.(matchElement) ?? null;
   $: entryScreenshot = screenshot ? takeScreenshot : undefined;
+  /** autoHideResults (hideDelay) and hidePopupOnCursorExit (its delay) */
+  let hideTimer: ReturnType<typeof setTimeout> | undefined;
+  let pointerOverPopup = false;
+  /** selectText: the match selected, and the selection it replaced (scanSelectedText restores it) */
+  let selection: { doc: Document; range: Range; restore: Range[] } | undefined;
+  /** The reader selected nothing themselves (TextScanner._userHasNotSelectedAnythingManually) */
+  let userSelectionEmpty = true;
+  let changingSelection = false;
+  let selectionTimer: ReturnType<typeof setTimeout> | undefined;
 
   $: profile = $yomitanOptions$ ? profileOptions($yomitanOptions$) : undefined;
   $: view = views[index] as View | undefined;
@@ -124,6 +143,7 @@
   $: sheet =
     profile?.general.popupDisplayMode === 'full-width' ||
     (viewportWidth > 0 && viewportWidth < 640 && matchMedia('(pointer: coarse)').matches);
+  $: actionBarAlways = profile?.general.popupActionBarVisibility === 'always';
   $: dictionaryCss = profile
     ? [
         addScopeToCssLegacy(profile.general.customPopupCss, '.ttu-dict'),
@@ -142,17 +162,45 @@
 
   $: if (!$builtInLookups$) close();
 
+  const scanner = new ScanInput({
+    options: () => ($builtInLookups$ ? profile?.scanning : undefined),
+    search: (x, y, info) => searchAt(x, y, info),
+    current: () => (open ? lastScanKey : null),
+    clear: () => close(),
+    inPopup: (target) => inPopup(target)
+  });
+
+  function onScanEvent(event: Event) {
+    if (event.type === 'pointerdown') pointerDown(event as PointerEvent);
+    scanner.handle(event);
+  }
+
   onMount(() => {
     loadYomitanOptions()
       .then(() => refreshDictionaries())
       .then(() => (listed = true))
       .catch(() => undefined);
+    setGestureClaimed(() => scanner.claimed);
+    for (const type of ScanInput.eventTypes) {
+      addEventListener(type, onScanEvent, { capture: true, passive: false });
+    }
+    document.addEventListener('selectionchange', onSelectionChange);
+    globalThis.visualViewport?.addEventListener('resize', place);
+    return () => {
+      for (const type of ScanInput.eventTypes) {
+        removeEventListener(type, onScanEvent, { capture: true });
+      }
+      document.removeEventListener('selectionchange', onSelectionChange);
+      globalThis.visualViewport?.removeEventListener('resize', place);
+    };
   });
 
   onDestroy(() => {
-    clearTimeout(hoverTimer);
+    clearTimeout(hideTimer);
     builtInPopupOpen$.next(false);
+    setGestureClaimed(() => false);
     detachFrame();
+    deselect();
     setCssHighlight(highlightName, [], highlightView);
     setCssHighlight(highlightName, []);
     setCssHighlight(nestedHighlightName, []);
@@ -160,20 +208,24 @@
   });
 
   /**
-   * A tap at the point: looks up the text there when a touch or pen input scans on tap.
-   * True when there was text to scan, so the host leaves the tap alone (no page turn).
+   * A tap the host would otherwise use (page turn, menu, the game's tap). True when a scan
+   * takes it: this touch or pen gesture already found a word (press, move, release), or a touch
+   * input scans on tap and there is text here.
    */
   export function tapAt(x: number, y: number) {
     if (!profile || !$builtInLookups$) return false;
-    const type = lastPointer?.type === 'pen' ? 'pen' : 'touch';
-    if (lastPointer?.type === 'mouse') return false;
-    const input = matchingInput(profile.scanning.inputs, type, []);
-    if (!input?.options.scanOnTouchTap && !(type === 'pen' && input?.options.scanOnPenRelease)) {
-      return false;
-    }
+    if (scanner.claimed) return true;
+    if (lastPointer?.type !== 'touch') return false;
+    const input = scanner.tapInput(x, y);
+    if (!input) return false;
     const at = pointAt(x, y);
     if (!inScope(at.doc.elementFromPoint(at.x, at.y))) return false;
-    return searchAt(x, y, false);
+    return scanTap(x, y, input, false);
+  }
+
+  /** A tap's lookup: true when there is text to look up (the lookup itself runs on). */
+  function scanTap(x: number, y: number, input: ScanInputInfo['input'], nested: boolean) {
+    return !!scanPoint(x, y, nested, { input, pointerType: 'touch', passive: false });
   }
 
   /**
@@ -185,28 +237,24 @@
     const view = element.contentWindow;
     if (!view) return;
     frame = element;
-    const offset = () => element.getBoundingClientRect();
-    const down = (event: PointerEvent) => {
-      const { left, top } = offset();
-      pointerDown(event.clientX + left, event.clientY + top, event.pointerType, event.target);
+    const listener = (event: Event) => {
+      const { left, top } = element.getBoundingClientRect();
+      if (event.type === 'pointerdown') {
+        const e = event as PointerEvent;
+        pointerDown(e, e.clientX + left, e.clientY + top);
+      }
+      if (event.type === 'keydown') onKeydown(event as KeyboardEvent);
+      scanner.handle(event, left, top);
     };
-    const move = (event: PointerEvent) => {
-      const { left, top } = offset();
-      pointerMove(
-        event.clientX + left,
-        event.clientY + top,
-        event.pointerType,
-        event.target,
-        getActiveModifiersAndButtons(event)
-      );
-    };
-    view.addEventListener('pointerdown', down, true);
-    view.addEventListener('pointermove', move);
-    view.addEventListener('keydown', onKeydown, true);
+    for (const type of ScanInput.eventTypes) {
+      view.addEventListener(type, listener, { capture: true, passive: false });
+    }
+    view.document.addEventListener('selectionchange', onSelectionChange);
     detachFrame = () => {
-      view.removeEventListener('pointerdown', down, true);
-      view.removeEventListener('pointermove', move);
-      view.removeEventListener('keydown', onKeydown, true);
+      for (const type of ScanInput.eventTypes) {
+        view.removeEventListener(type, listener, { capture: true });
+      }
+      view.document.removeEventListener('selectionchange', onSelectionChange);
       frame = undefined;
       detachFrame = () => {};
     };
@@ -235,52 +283,121 @@
 
   export function close() {
     token++;
+    clearTimeout(hideTimer);
     views = [];
     index = -1;
     lastScanKey = '';
+    pointerOverPopup = false;
+    deselect();
     setCssHighlight(highlightName, [], highlightView);
     setCssHighlight(nestedHighlightName, []);
     stopTermAudio();
   }
 
-  function searchAt(x: number, y: number, nested: boolean) {
-    if (!profile) return false;
+  /** The scanning input's search: the text at the point, root or nested by where it is. */
+  function searchAt(x: number, y: number, info: ScanInputInfo) {
+    if (!profile || !$builtInLookups$) return undefined;
     const at = pointAt(x, y);
-    const scan = scanAt(at.x, at.y, profile.scanning, at.doc);
-    if (!scan) return false;
+    const target = at.doc.elementFromPoint(at.x, at.y);
+    const nested = inPopup(target);
+    if (nested ? !canNest() : !inScope(target)) {
+      if (!nested) emptied();
+      return undefined;
+    }
+    return scanPoint(x, y, nested, info);
+  }
+
+  /**
+   * Scans at the point and looks the text up: undefined when there is no text there (or no
+   * dictionary), else the lookup's promise.
+   */
+  function scanPoint(x: number, y: number, nested: boolean, info: ScanInputInfo) {
+    if (!profile) return undefined;
+    const at = pointAt(x, y);
+    const scan = scanAt(
+      at.x,
+      at.y,
+      profile.scanning,
+      at.doc,
+      nested ? popupExclude(info.pointerType) : ''
+    );
+    if (!scan) {
+      if (!nested) emptied();
+      return undefined;
+    }
     if (noDictionary && !nested) {
       if (!$noDictionaryNoteSeen$) {
         emptyNote = true;
         noDictionaryNoteSeen$.next(true);
       }
-      return false;
+      return undefined;
     }
     const key = `${nested}:${scan.text}`;
-    if (key === lastScanKey && open) return true;
+    if (key === lastScanKey && open) return Promise.resolve();
     lastScanKey = key;
-    run(scan, nested, at);
-    return true;
+    return run(scan, nested, at, info.input.options);
   }
 
-  async function run(scan: ScannedText, nested: boolean, at: { left: number; top: number }) {
+  /**
+   * What isn't scanned in the popup (Frontend's exclude selectors for popup pages): the
+   * headwords unless enableOnPopupExpressions, controls, and links and tags for touch.
+   */
+  function popupExclude(type: PointerKind) {
+    return [
+      '.scan-disable, .scan-disable *, a, a *, button, button *, summary, summary *',
+      profile?.scanning.enableOnPopupExpressions
+        ? ''
+        : '.source-text, .source-text *, .headword-term, .headword-term *',
+      type === 'touch' ? '.gloss-link, .gloss-link *, .tag, .tag *, .inflection' : ''
+    ]
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  /** Nothing found at the scan (Frontend._onSearchEmpty): autoHideResults after hideDelay. */
+  function emptied() {
+    if (!profile?.scanning.autoHideResults || !open) return;
+    hideAfter(profile.scanning.hideDelay);
+  }
+
+  /** Popup.hideDelayed: closes after the delay unless the pointer is over the popup by then. */
+  function hideAfter(delay: number) {
+    clearTimeout(hideTimer);
+    if (pointerOverPopup) return;
+    if (delay <= 0) return close();
+    hideTimer = setTimeout(() => !pointerOverPopup && close(), delay);
+  }
+
+  async function run(
+    scan: ScannedText,
+    nested: boolean,
+    at: { left: number; top: number },
+    input: { searchTerms: boolean; searchKanji: boolean }
+  ) {
     if (!profile) return;
     const current = ++token;
     let result: LookupResult;
     try {
-      result = await lookup(scan.text);
+      result = await lookup(scan.text, {
+        // Scans in the popup look for both, as Yomitan's popup does.
+        searchTerms: nested || input.searchTerms,
+        searchKanji: nested || input.searchKanji,
+        matchType: profile.scanning.matchTypePrefix ? 'prefix' : 'exact'
+      });
     } catch {
       return;
     }
     if (current !== token) return;
     if (!result.dictionaryEntries.length) {
-      if (!nested && profile.scanning.autoHideResults) close();
+      if (!nested) emptied();
       return;
     }
+    clearTimeout(hideTimer);
     const range = scannedRange(scan, result.originalTextLength, profile.scanning.layoutAwareScan);
     const query = range.toString();
     const sentence = scannedSentence(
       scan,
-      result.originalTextLength,
+      scan.fixed ? [...scan.text].length : result.originalTextLength,
       profile.scanning.layoutAwareScan,
       profile.sentenceParsing
     );
@@ -300,6 +417,7 @@
       matchElement = element;
       writingMode = getElementWritingMode(element);
       views = [nextView];
+      select(range, !!scan.fixed);
     }
     index = views.length - 1;
     selected = 0;
@@ -307,6 +425,48 @@
     bodyEl?.scrollTo({ top: 0 });
     place();
     if (profile.audio.enabled && profile.audio.autoPlay) playFirst();
+  }
+
+  /** selectText (TextScanner.setCurrentTextSource): the match becomes the selection. */
+  function select(range: Range, restoreSelection: boolean) {
+    const previous = selection;
+    deselect(false);
+    if (!profile?.scanning.selectText) return;
+    const doc = range.startContainer.ownerDocument ?? document;
+    const current = doc.getSelection();
+    if (!current) return;
+    // The selection a scanSelectedText lookup replaces comes back when it closes.
+    const restore =
+      previous?.restore ??
+      (restoreSelection
+        ? Array.from({ length: current.rangeCount }, (_, i) => current.getRangeAt(i).cloneRange())
+        : []);
+    if (!restoreSelection && !userSelectionEmpty) return;
+    changingSelection = true;
+    clearTimeout(selectionTimer);
+    // As TextScanner: 50 ms for the selectionchange events this causes.
+    selectionTimer = setTimeout(() => (changingSelection = false), 50);
+    setLookupSelection(range);
+    current.removeAllRanges();
+    current.addRange(range);
+    selection = { doc, range, restore };
+  }
+
+  function deselect(restore = true) {
+    if (!selection) return;
+    const { doc, restore: ranges } = selection;
+    selection = undefined;
+    setLookupSelection(undefined);
+    const current = doc.getSelection();
+    if (!current) return;
+    current.removeAllRanges();
+    if (restore) for (const range of ranges) current.addRange(range);
+  }
+
+  function onSelectionChange() {
+    if (changingSelection) return;
+    const doc = selection?.doc ?? document;
+    userSelectionEmpty = doc.getSelection()?.isCollapsed ?? true;
   }
 
   /** A `?query=` link (terms, as Yomitan's search) or a headword's kanji link (kanji). */
@@ -329,10 +489,24 @@
 
   const canNest = () => !!profile && index < profile.scanning.popupNestingMaxDepth;
 
+  /** The page's zoom (desktop app: exact; browser: estimated, see loadPixelRatio). */
+  function pageZoom() {
+    const desktop = (globalThis as { chimiDesktop?: { zoomFactor?: () => number } }).chimiDesktop;
+    const exact = desktop?.zoomFactor?.();
+    return typeof exact === 'number' && exact > 0
+      ? exact
+      : (globalThis.devicePixelRatio || 1) / loadPixelRatio;
+  }
+
   function place() {
     if (!profile || !open) return;
     const { general } = profile;
     const viewport = window.visualViewport;
+    // Frontend._updateContentScale
+    contentScale =
+      (general.popupScalingFactor || 1) /
+      (general.popupScaleRelativeToPageZoom ? pageZoom() : 1) /
+      (general.popupScaleRelativeToVisualViewport ? (viewport?.scale ?? 1) : 1);
     const width = viewport?.width ?? window.innerWidth;
     const height = viewport?.height ?? window.innerHeight;
     const top = viewport?.offsetTop ?? 0;
@@ -352,7 +526,7 @@
       }`;
       return;
     }
-    const scale = general.popupScalingFactor || 1;
+    const scale = contentScale;
     const rect = getPosition(
       sourceRects.map(({ left: l, top: t, right, bottom }) => ({ left: l, top: t, right, bottom })),
       writingMode,
@@ -410,72 +584,24 @@
     return target instanceof Node && !!popupEl?.contains(target);
   }
 
-  const onPointerDown = (event: PointerEvent) =>
-    pointerDown(event.clientX, event.clientY, event.pointerType, event.target);
-
-  const onPointerMove = (event: PointerEvent) =>
-    pointerMove(
-      event.clientX,
-      event.clientY,
-      event.pointerType,
-      event.target,
-      getActiveModifiersAndButtons(event)
-    );
-
-  function pointerDown(x: number, y: number, type: string, target: EventTarget | null) {
-    lastPointer = { x, y, type };
-    if (open && !inPopup(target)) close();
-  }
-
-  function pointerMove(
-    x: number,
-    y: number,
-    type: string,
-    target: EventTarget | null,
-    modifiers: string[]
-  ) {
-    lastPointer = { x, y, type };
-    if (type === 'touch') return;
-    scanHover(x, y, target, modifiers);
-  }
-
-  function scanHover(x: number, y: number, target: EventTarget | null, modifiers: string[]) {
-    if (!profile || !$builtInLookups$ || !isElement(target)) return;
-    const nested = inPopup(target);
-    if (!nested && !inScope(target)) return;
-    if (nested && (!canNest() || target.closest('a, button, summary'))) return;
-    const type = lastPointer?.type === 'pen' ? 'pen' : 'mouse';
-    const input = matchingInput(profile.scanning.inputs, type, modifiers);
-    if (
-      !input ||
-      (type === 'pen' && !input.options.scanOnPenMove && !input.options.scanOnPenHover)
-    ) {
-      return;
-    }
-    clearTimeout(hoverTimer);
-    hoverTimer = setTimeout(() => searchAt(x, y, nested), profile.scanning.delay);
+  function pointerDown(event: PointerEvent, x = event.clientX, y = event.clientY) {
+    lastPointer = { x, y, type: event.pointerType };
+    if (open && !inPopup(event.target)) close();
   }
 
   function onKeydown(event: KeyboardEvent) {
     if (!profile || !$builtInLookups$) return;
-    if (open) {
-      const action = hotkeyAction(profile.inputs.hotkeys, event);
-      if (action) {
-        event.preventDefault();
-        event.stopPropagation();
-        runAction(action.action, action.argument);
-        return;
-      }
-    }
-    // The modifier pressed while the pointer rests on text (scanWithoutMousemove).
-    if (profile.scanning.scanWithoutMousemove && lastPointer && lastPointer.type !== 'touch') {
-      const at = pointAt(lastPointer.x, lastPointer.y);
-      const target = at.doc.elementFromPoint(at.x, at.y);
-      scanHover(lastPointer.x, lastPointer.y, target, getActiveModifiers(event));
+    const action =
+      (open && hotkeyAction(profile.inputs.hotkeys, event, 'popup')) ||
+      hotkeyAction(profile.inputs.hotkeys, event, 'web');
+    if (action) {
+      event.preventDefault();
+      event.stopPropagation();
+      runAction(action.action, action.argument, event);
     }
   }
 
-  function runAction(action: string, argument: string) {
+  function runAction(action: string, argument: string, event: KeyboardEvent) {
     const count = Number.parseInt(argument, 10) || 1;
     switch (action) {
       case 'close':
@@ -498,7 +624,22 @@
       case 'viewNotes':
         ankiCommand = { action, argument, id: (ankiCommand?.id ?? 0) + 1 };
         return;
+      case 'scanSelectedText':
+        return scanSelectedText((event.target as Node | null)?.ownerDocument ?? document);
     }
+  }
+
+  /** Frontend._scanSelectedText: the selection looked up as it is, in the reader or the popup. */
+  function scanSelectedText(doc: Document) {
+    if (!profile) return;
+    const scan = scanSelection(doc.getSelection());
+    if (!scan) return;
+    const nested = inPopup(scan.node.parentElement);
+    if (nested ? !canNest() : !inScope(scan.node.parentElement)) return;
+    const left = doc === frame?.contentDocument ? frame.getBoundingClientRect().left : 0;
+    const top = doc === frame?.contentDocument ? frame.getBoundingClientRect().top : 0;
+    lastScanKey = `${nested}:${scan.text}`;
+    void run(scan, nested, { left, top }, { searchTerms: true, searchKanji: true });
   }
 
   /** The dictionaries' own styles and the custom popup CSS, as text in a style element (no markup). */
@@ -512,18 +653,88 @@
     };
   }
 
-  /** Taps inside the popup look the word under them up (nested), outside links and buttons. */
+  /**
+   * reducedMotionScrolling (Display._onWheel, _onTouchStart, _onTouchMove): the wheel and a
+   * swipe past the threshold scroll by a share of the popup's height, without animation.
+   */
+  function reducedMotion(node: HTMLElement) {
+    const options = () => profile?.scanning;
+    const scrollBy = (direction: 1 | -1) => {
+      const scale = options()?.reducedMotionScrollingScale ?? 1;
+      const bottom = node.scrollHeight - node.clientHeight;
+      node.scrollTop = Math.max(
+        0,
+        Math.min(node.scrollTop + node.clientHeight * scale * direction, bottom)
+      );
+    };
+    let start: number | undefined;
+    const wheel = (event: WheelEvent) => {
+      if (!options()?.reducedMotionScrolling || event.altKey || event.shiftKey) return;
+      scrollBy(event.deltaY > 0 ? 1 : -1);
+      event.preventDefault();
+    };
+    const touchStart = (event: TouchEvent) => {
+      start =
+        options()?.reducedMotionScrolling && event.touches.length === 1
+          ? event.touches[0].clientY
+          : undefined;
+    };
+    const touchMove = (event: TouchEvent) => {
+      if (options()?.reducedMotionScrolling && event.cancelable) event.preventDefault();
+    };
+    const touchEnd = (event: TouchEvent) => {
+      if (start === undefined) return;
+      const delta = start - event.changedTouches[0].clientY;
+      const threshold = options()?.reducedMotionScrollingSwipeThreshold ?? 40;
+      start = undefined;
+      if (delta > threshold) scrollBy(1);
+      else if (delta < -threshold) scrollBy(-1);
+    };
+    node.addEventListener('wheel', wheel, { passive: false });
+    node.addEventListener('touchstart', touchStart, { passive: true });
+    node.addEventListener('touchmove', touchMove, { passive: false });
+    node.addEventListener('touchend', touchEnd, { passive: true });
+    return {
+      destroy() {
+        node.removeEventListener('wheel', wheel);
+        node.removeEventListener('touchstart', touchStart);
+        node.removeEventListener('touchmove', touchMove);
+        node.removeEventListener('touchend', touchEnd);
+      }
+    };
+  }
+
+  /** Taps inside the popup look the word under them up (nested), as on the page. */
   function onPopupClick(event: MouseEvent) {
-    if (lastPointer?.type === 'mouse' || !canNest()) return;
-    if (!(event.target instanceof Element) || event.target.closest('a, button, summary')) return;
-    if (!event.target.closest('.definition-list')) return;
-    searchAt(event.clientX, event.clientY, true);
+    if (lastPointer?.type !== 'touch' || !canNest() || scanner.claimed) return;
+    const input = scanner.tapInput(event.clientX, event.clientY);
+    if (input) scanTap(event.clientX, event.clientY, input, true);
+  }
+
+  /** The mouse's back and forward buttons go through the popup's history (Display), unless prevented. */
+  function onPopupMouseUp(event: MouseEvent) {
+    if (event.button !== 3 && event.button !== 4) return;
+    if (profile?.scanning.preventBackForward.onPopupPages) return;
+    const by = event.button === 3 ? -1 : 1;
+    if (index + by < 0 || index + by >= views.length) return;
+    event.preventDefault();
+    go(by);
+  }
+
+  function onPopupPointerEnter() {
+    pointerOverPopup = true;
+    clearTimeout(hideTimer);
+  }
+
+  /** hidePopupOnCursorExit (Frontend._onPopupFramePointerOut) */
+  function onPopupPointerLeave(event: PointerEvent) {
+    pointerOverPopup = false;
+    if (event.pointerType !== 'mouse' || !profile?.scanning.hidePopupOnCursorExit) return;
+    hideAfter(profile.scanning.hidePopupOnCursorExitDelay);
   }
 </script>
 
 <svelte:window
-  on:pointerdown|capture={onPointerDown}
-  on:pointermove={onPointerMove}
   on:keydown|capture={onKeydown}
   on:resize={place}
   bind:innerWidth={viewportWidth}
@@ -538,15 +749,21 @@
     class:sheet
     class:sheet-top={sheet && sheetTop}
     {style}
-    style:--dict-font-size="{profile.general.fontSize}px"
+    style:--dict-font-size="{profile.general.fontSize * contentScale}px"
     style:--dict-line-height={profile.general.lineHeight}
+    style:--dict-font-family={profile.general.fontFamily || null}
+    data-indicator={profile.general.popupCurrentIndicatorMode}
+    data-action-bar={profile.general.popupActionBarLocation}
     role="dialog"
     aria-label={$t$('lookup.title', { query: view.query })}
     on:click={onPopupClick}
+    on:mouseup={onPopupMouseUp}
+    on:pointerenter={onPopupPointerEnter}
+    on:pointerleave={onPopupPointerLeave}
     use:styleSheet={dictionaryCss}
   >
     <div class="dict-bar">
-      {#if views.length > 1}
+      {#if views.length > 1 || actionBarAlways}
         <button
           type="button"
           class="dict-icon"
@@ -580,7 +797,7 @@
         <Fa icon={faXmark} />
       </button>
     </div>
-    <div class="dict-body" bind:this={bodyEl}>
+    <div class="dict-body" bind:this={bodyEl} use:reducedMotion>
       {#each view.result.dictionaryEntries as entry, entryIndex}
         {#if entry.type === 'kanji'}
           <KanjiEntry
@@ -653,7 +870,7 @@
     border-radius: 2px;
     background: var(--reader-panel-bg);
     color: var(--reader-panel-fg);
-    font-family: var(--app-font-ui);
+    font-family: var(--dict-font-family, var(--app-font-ui));
     font-size: var(--dict-font-size, 14px);
     line-height: var(--dict-line-height, 1.5);
   }
@@ -679,6 +896,37 @@
     gap: 0.25rem;
     padding: 0.25rem 0.25rem 0.25rem 0.75rem;
     border-bottom: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
+  }
+
+  /* popupActionBarLocation: the bar at the bottom, or down the left or right edge */
+  .ttu-dict[data-action-bar='bottom'] .dict-bar {
+    order: 1;
+    border-top: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
+    border-bottom: 0;
+  }
+
+  .ttu-dict[data-action-bar='left'],
+  .ttu-dict[data-action-bar='right'] {
+    flex-direction: row;
+  }
+
+  .ttu-dict[data-action-bar='left'] .dict-bar,
+  .ttu-dict[data-action-bar='right'] .dict-bar {
+    flex-direction: column;
+    padding: 0.25rem;
+    border-bottom: 0;
+    border-right: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
+  }
+
+  .ttu-dict[data-action-bar='right'] .dict-bar {
+    order: 1;
+    border-right: 0;
+    border-left: 1px solid color-mix(in srgb, var(--reader-panel-fg) 16%, transparent);
+  }
+
+  .ttu-dict[data-action-bar='left'] .dict-query,
+  .ttu-dict[data-action-bar='right'] .dict-query {
+    writing-mode: vertical-rl;
   }
 
   .dict-query {
@@ -736,7 +984,9 @@
     border-bottom: 0;
   }
 
-  .ttu-dict :global(.entry.current)::before {
+  /* popupCurrentIndicatorMode (Yomitan's display.css entry indicators) */
+  .ttu-dict[data-indicator='bar-left'] :global(.entry.current)::before,
+  .ttu-dict[data-indicator='bar-right'] :global(.entry.current)::before {
     content: '';
     position: absolute;
     top: 0.75rem;
@@ -744,6 +994,48 @@
     left: -0.75rem;
     width: 3px;
     background: var(--accent-color);
+  }
+
+  .ttu-dict[data-indicator='bar-right'] :global(.entry.current)::before {
+    left: auto;
+    right: -0.75rem;
+  }
+
+  .ttu-dict[data-indicator='dot-left'] :global(.entry.current)::before,
+  .ttu-dict[data-indicator='dot-right'] :global(.entry.current)::before {
+    content: '';
+    position: absolute;
+    top: 0.75rem;
+    left: -0.6rem;
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 50%;
+    background: var(--accent-color);
+  }
+
+  .ttu-dict[data-indicator='dot-right'] :global(.entry.current)::before {
+    left: auto;
+    right: -0.6rem;
+  }
+
+  .ttu-dict[data-indicator='triangle'] :global(.entry.current .headword:first-child)::before {
+    content: '';
+    position: absolute;
+    left: -0.75rem;
+    width: 0.4rem;
+    height: 0.8rem;
+    margin-top: 0.6em;
+    background: var(--accent-color);
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
+  }
+
+  .ttu-dict[data-indicator='asterisk'] :global(.entry.current .entry-head)::after {
+    content: '*';
+    order: 2;
+    color: var(--accent-strong-color);
+    font-size: 1.5em;
+    font-weight: 700;
+    line-height: 1;
   }
 
   .ttu-dict :global(.entry-head) {

@@ -20,21 +20,142 @@ import {computeZoomScale, isPointInAnyRect} from './document-util.js';
 import {DOMTextScanner} from './dom-text-scanner.js';
 
 // chimimouryou: the text path of `TextSourceGenerator.getRangeFromPoint` as a function:
-// `_caretRangeFromPoint`, `_caretPositionFromPoint` and `_isPointInRange`. Left out: imposters
-// for inputs and textareas, shadow roots, images and the deep DOM scan (the app only scans its
-// own text). The document is a parameter so a same-origin frame's text can be scanned.
+// `_caretRangeFromPointExt` (with the deep content scan: `_getElementsFromPoint`,
+// `_disableTransparentElement`, `_revertStyles`, `_isElementTransparent`), `_caretRangeFromPoint`,
+// `_caretPositionFromPoint` and `_isPointInRange`. Left out: imposters for inputs and textareas,
+// shadow roots and images (the app only scans its own text). The document is a parameter so a
+// same-origin frame's text can be scanned.
 
 /**
  * @param {number} x
  * @param {number} y
  * @param {boolean} normalizeCssZoom
  * @param {Document} [doc]
+ * @param {boolean} [deepContentScan]
  * @returns {?Range}
  */
-export function getRangeFromPoint(x, y, normalizeCssZoom, doc = document) {
-    const range = caretRangeFromPoint(x, y, doc);
-    if (range === null) { return null; }
-    return isPointInRange(x, y, range, normalizeCssZoom) ? range : null;
+export function getRangeFromPoint(x, y, normalizeCssZoom, doc = document, deepContentScan = false) {
+    const elements = deepContentScan ? getElementsFromPoint(x, y, doc) : [];
+    return caretRangeFromPointExt(x, y, elements, normalizeCssZoom, doc);
+}
+
+/**
+ * @param {number} x
+ * @param {number} y
+ * @param {Document} doc
+ * @returns {Element[]}
+ */
+function getElementsFromPoint(x, y, doc) {
+    try {
+        // document.elementsFromPoint can return duplicates which must be removed.
+        const elements = doc.elementsFromPoint(x, y);
+        return elements.filter((e, i) => elements.indexOf(e) === i);
+    } catch (e) {
+        return [];
+    }
+}
+
+/**
+ * @param {number} x
+ * @param {number} y
+ * @param {Element[]} elements
+ * @param {boolean} normalizeCssZoom
+ * @param {Document} doc
+ * @returns {?Range}
+ */
+function caretRangeFromPointExt(x, y, elements, normalizeCssZoom, doc) {
+    /** @type {?Map<Element, ?string>} */
+    let previousStyles = null;
+    try {
+        let i = 0;
+        let startContainerPre = null;
+        while (true) {
+            const range = caretRangeFromPoint(x, y, doc);
+            if (range === null) {
+                return null;
+            }
+
+            const startContainer = range.startContainer;
+            if (startContainerPre !== startContainer) {
+                if (isPointInRange(x, y, range, normalizeCssZoom)) {
+                    return range;
+                }
+                startContainerPre = startContainer;
+            }
+
+            if (previousStyles === null) { previousStyles = new Map(); }
+            i = disableTransparentElement(elements, i, previousStyles, doc);
+            if (i < 0) {
+                return null;
+            }
+        }
+    } finally {
+        if (previousStyles !== null && previousStyles.size > 0) {
+            revertStyles(previousStyles);
+        }
+    }
+}
+
+/**
+ * @param {Element[]} elements
+ * @param {number} i
+ * @param {Map<Element, ?string>} previousStyles
+ * @param {Document} doc
+ * @returns {number}
+ */
+function disableTransparentElement(elements, i, previousStyles, doc) {
+    while (true) {
+        if (i >= elements.length) {
+            return -1;
+        }
+
+        const element = elements[i++];
+        if (isElementTransparent(element, doc)) {
+            // chimimouryou: `instanceof HTMLElement` fails for a frame's elements.
+            if ('style' in element) {
+                if (!previousStyles.has(element)) {
+                    previousStyles.set(element, element.hasAttribute('style') ? element.getAttribute('style') : null);
+                }
+                /** @type {HTMLElement} */ (element).style.setProperty('pointer-events', 'none', 'important');
+            }
+            return i;
+        }
+    }
+}
+
+/**
+ * @param {Map<Element, ?string>} previousStyles
+ */
+function revertStyles(previousStyles) {
+    for (const [element, style] of previousStyles.entries()) {
+        if (style === null) {
+            element.removeAttribute('style');
+        } else {
+            element.setAttribute('style', style);
+        }
+    }
+}
+
+const transparentColorPattern = /rgba\s*\([^)]*,\s*0(?:\.0+)?\s*\)/;
+
+/**
+ * @param {Element} element
+ * @param {Document} doc
+ * @returns {boolean}
+ */
+function isElementTransparent(element, doc) {
+    if (
+        element === doc.body ||
+        element === doc.documentElement
+    ) {
+        return false;
+    }
+    const style = /** @type {Window} */ (doc.defaultView).getComputedStyle(element);
+    return (
+        Number.parseFloat(style.opacity) <= 0 ||
+        style.visibility === 'hidden' ||
+        (style.backgroundImage === 'none' && transparentColorPattern.test(style.backgroundColor))
+    );
 }
 
 /**

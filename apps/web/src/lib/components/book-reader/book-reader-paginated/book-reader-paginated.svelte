@@ -37,6 +37,7 @@
   } from 'rxjs';
   import Fa from 'svelte-fa';
   import { swipe } from 'svelte-gestures';
+  import { lookupClaimsGesture } from '$lib/data/dictionary/yomitan';
   import type { BookmarkManager, PageManager } from '../types';
   import { BookmarkManagerPaginated } from './bookmark-manager-paginated';
   import { PageManagerPaginated } from './page-manager-paginated';
@@ -740,6 +741,8 @@
   ) {
     // A mouse drag is a text selection; mice turn pages with clicks, keys and the wheel
     if (!concretePageManager || $skipKeyDownListener$ || ev.detail.pointerType === 'mouse') return;
+    // A dictionary scan took this touch (scan on touch press/move/release).
+    if (lookupClaimsGesture()) return;
     if (ev.detail.direction !== 'left' && ev.detail.direction !== 'right') return;
     const swipeLeft = ev.detail.direction === 'left';
     const nextPage = verticalMode ? !swipeLeft : swipeLeft;

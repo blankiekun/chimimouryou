@@ -32,3 +32,13 @@ export function getActiveModifiers(event: KeyboardEvent | MouseEvent | TouchEven
 export function getActiveModifiersAndButtons(
   event: KeyboardEvent | MouseEvent | TouchEvent
 ): string[];
+export function getNodesInRange(range: Range): Node[];
+export function anyNodeMatchesSelector(nodes: Node[], selector: string): boolean;
+export function isPointInSelection(
+  x: number,
+  y: number,
+  selection: Selection,
+  language: string,
+  browser: string | null
+): boolean;
+export function isInputElementFocused(): boolean;

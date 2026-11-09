@@ -11,17 +11,32 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({ enabled: [] as boolean[], lookup: vi.fn() }));
 
-vi.mock('$lib/functions/dictionary/scan', () => ({
+// jsdom has no caret-from-point: the text under any point is 狐の親子.
+vi.mock('$lib/functions/dictionary/scan', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('$lib/functions/dictionary/scan')>()),
   scanAt: () => ({ text: '狐の親子' }),
-  matchingInput: () => ({ options: { scanOnTouchTap: true } }),
   scannedRange: vi.fn()
 }));
+
+const touchInput = {
+  include: '',
+  exclude: '',
+  types: { mouse: false, touch: true, pen: true },
+  options: { scanOnTouchTap: true, minimumTouchTime: 0, searchTerms: true, searchKanji: true }
+};
 
 vi.mock('$lib/data/dictionary/dictionary', async () => {
   const { writableSubject } = await import('$lib/functions/svelte/store');
   const profile = () => ({
     dictionaries: state.enabled.map((enabled, index) => ({ name: `d${index}`, enabled })),
-    scanning: { inputs: [], delay: 0, autoHideResults: false, layoutAwareScan: false },
+    scanning: {
+      inputs: [touchInput],
+      delay: 0,
+      autoHideResults: false,
+      layoutAwareScan: false,
+      matchTypePrefix: false,
+      selectText: false
+    },
     general: { popupDisplayMode: 'default', customPopupCss: '', fontSize: 14, lineHeight: 1.5 },
     audio: { enabled: false }
   });
@@ -65,6 +80,22 @@ async function mount() {
   return { target, popup: popup as unknown as { tapAt(x: number, y: number): boolean } };
 }
 
+/** A finger down and up at the point, as the window sees it before the host's tap handler. */
+function touch(x: number, y: number) {
+  for (const type of ['pointerdown', 'pointerup']) {
+    const event = new Event(type, { bubbles: true, cancelable: true });
+    Object.assign(event, {
+      pointerType: 'touch',
+      isPrimary: true,
+      pointerId: 1,
+      clientX: x,
+      clientY: y,
+      buttons: 0
+    });
+    document.body.dispatchEvent(event);
+  }
+}
+
 describe('LookupPopup tapAt', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
@@ -76,6 +107,7 @@ describe('LookupPopup tapAt', () => {
     state.enabled = [];
     const { target, popup } = await mount();
 
+    touch(10, 10);
     expect(popup.tapAt(10, 10)).toBe(false);
     await tick();
     expect(target.textContent).toContain('No dictionary yet');
@@ -87,6 +119,7 @@ describe('LookupPopup tapAt', () => {
     state.enabled = [false];
     const { popup } = await mount();
 
+    touch(10, 10);
     expect(popup.tapAt(10, 10)).toBe(false);
   });
 
@@ -94,8 +127,13 @@ describe('LookupPopup tapAt', () => {
     state.enabled = [true];
     const { target, popup } = await mount();
 
+    touch(10, 10);
     expect(popup.tapAt(10, 10)).toBe(true);
-    expect(state.lookup).toHaveBeenCalledWith('狐の親子');
+    expect(state.lookup).toHaveBeenCalledWith('狐の親子', {
+      searchTerms: true,
+      searchKanji: true,
+      matchType: 'exact'
+    });
     await tick();
     expect(target.textContent).not.toContain('No dictionary yet');
   });

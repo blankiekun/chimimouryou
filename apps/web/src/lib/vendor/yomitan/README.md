@@ -50,9 +50,9 @@ site's CSP holds) at the commit Yomitan pins (`12aff5e3550954d7d3a98a5917ff7d579
   `<img>` from blob URLs out of the dictionary database (the Anki renderer's path, not the
   extension's canvas drawing), links are checked there (only http(s) opens, in a new tab; internal
   `?query=` links do a nested lookup).
-- `dom/text-source-generator.js`: only the text path of `getRangeFromPoint` (`_caretRangeFromPoint`,
-  `_caretPositionFromPoint`, `_isPointInRange`) as a function; no imposters for inputs, shadow
-  roots, images or deep DOM scan. `extractSentence` as a function over the match's start and
+- `dom/text-source-generator.js`: only the text path of `getRangeFromPoint` (`_caretRangeFromPointExt`
+  with the deep DOM scan, `_caretRangeFromPoint`, `_caretPositionFromPoint`, `_isPointInRange`) as a
+  function taking the document; no imposters for inputs, shadow roots or images. `extractSentence` as a function over the match's start and
   length, the text around it read with DOMTextScanner as TextSourceRange does.
 - `templates/anki-template-renderer.js`, `template-renderer.js`, `template-renderer-media-provider.js`:
   Handlebars from `../lib/` (ext's `lib/` sits inside this folder); NodeFilter is the page's,

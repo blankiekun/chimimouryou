@@ -45,6 +45,36 @@ export function watchYomitan(window: Window & typeof globalThis) {
 /** The built-in lookup popup is showing (set by `lookup-popup.svelte`). */
 export const builtInPopupOpen$ = new BehaviorSubject(false);
 
+let gestureClaimed = () => false;
+let popupSelection: Range | undefined;
+
+/** Set by `lookup-popup.svelte`: whether a scan took the current touch or pen gesture. */
+export function setGestureClaimed(claimed: () => boolean) {
+  gestureClaimed = claimed;
+}
+
+/** A scan took the current touch or pen gesture: no swipe, page turn or pan for it. */
+export const lookupClaimsGesture = () => gestureClaimed();
+
+/** Set by `lookup-popup.svelte`: the range it selected for its match (scanning.selectText). */
+export function setLookupSelection(range: Range | undefined) {
+  popupSelection = range;
+}
+
+/** The range is the popup's selected match, not the reader's own selection (no selection toolbar). */
+export function isLookupSelection(range: Range | undefined) {
+  if (!range || !popupSelection) return false;
+  try {
+    return (
+      range.compareBoundaryPoints(Range.START_TO_START, popupSelection) === 0 &&
+      range.compareBoundaryPoints(Range.END_TO_END, popupSelection) === 0
+    );
+  } catch {
+    // another document's range
+    return false;
+  }
+}
+
 /** Text selected in the book: Yomitan selects the word it looks up, also from its shadow root. */
 function bookTextSelected(document: Document) {
   const selection = document.getSelection();

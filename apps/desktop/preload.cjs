@@ -7,14 +7,16 @@
 // Preload for the app's own windows: tells the web build it runs in the desktop app, where cloud
 // sign-in continues in the system browser (oauth.js), and lets Sources fetch sites without CORS
 // (main.js sourcesFetch), runs Mihon extensions (mihon.js), and plays Windows games natively (games.js) with an overlay over them
-// (overlay.js). Nothing else is exposed.
+// (overlay.js), and gives the page zoom for the dictionary popup's popupScaleRelativeToPageZoom.
+// Nothing else is exposed.
 
 /* global require */
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- sandboxed preloads are CommonJS
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webFrame } = require('electron');
 
 contextBridge.exposeInMainWorld('chimiDesktop', {
   browserSignIn: true,
+  zoomFactor: () => webFrame.getZoomFactor(),
   fetch: (url, options) => ipcRenderer.invoke('sources-fetch', url, options),
   mihon: {
     status: () => ipcRenderer.invoke('mihon-status'),
