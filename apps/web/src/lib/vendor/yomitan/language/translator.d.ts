@@ -18,7 +18,7 @@
 
 // chimimouryou: declarations for the TypeScript side (Yomitan types these with JSDoc).
 
-import type { TermDictionaryEntry } from '../types/dictionary';
+import type { KanjiDictionaryEntry, TermDictionaryEntry } from '../types/dictionary';
 import type { DictionaryDatabase } from '../dictionary/dictionary-database';
 
 export type FindTermsMode = 'group' | 'term' | 'merge' | 'split' | 'simple';
@@ -32,4 +32,5 @@ export class Translator {
     text: string,
     options: unknown
   ): Promise<{ dictionaryEntries: TermDictionaryEntry[]; originalTextLength: number }>;
+  findKanji(text: string, options: unknown): Promise<KanjiDictionaryEntry[]>;
 }

@@ -26,3 +26,5 @@ export function getTranslatorFindTermsOptions(
   details: { matchType?: string; deinflect?: boolean; primaryReading?: string },
   options: ProfileOptions
 ): unknown;
+
+export function getTranslatorFindKanjiOptions(options: ProfileOptions): unknown;

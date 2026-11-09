@@ -18,17 +18,33 @@ import {
   type MediaLoader
 } from '$lib/vendor/yomitan/dictionary/dictionary-importer';
 import { Translator } from '$lib/vendor/yomitan/language/translator';
-import { getTranslatorFindTermsOptions } from '$lib/vendor/yomitan/background/find-terms-options';
+import {
+  getTranslatorFindKanjiOptions,
+  getTranslatorFindTermsOptions
+} from '$lib/vendor/yomitan/background/find-terms-options';
 import type { ProfileOptions } from '$lib/vendor/yomitan/types/settings';
-import type { TermDictionaryEntry } from '$lib/vendor/yomitan/types/dictionary';
+import type {
+  KanjiDictionaryEntry,
+  TermDictionaryEntry
+} from '$lib/vendor/yomitan/types/dictionary';
 
 /** The Yomitan release the engine was ported from (lib/vendor/yomitan/README.md). */
 export const yomitanVersion = '26.10.12.0';
 
-export interface LookupResult {
-  dictionaryEntries: TermDictionaryEntry[];
-  /** Characters of the text the longest match covers */
-  originalTextLength: number;
+export type LookupResult =
+  | {
+      type: 'terms';
+      dictionaryEntries: TermDictionaryEntry[];
+      /** Characters of the text the longest match covers */
+      originalTextLength: number;
+    }
+  | { type: 'kanji'; dictionaryEntries: KanjiDictionaryEntry[]; originalTextLength: number };
+
+/** What a scanning input searches for (Yomitan's `searchTerms`, `searchKanji`, `matchTypePrefix`). */
+export interface LookupSearch {
+  searchTerms?: boolean;
+  searchKanji?: boolean;
+  matchType?: 'exact' | 'prefix';
 }
 
 /** Image sizes for structured-content images, as Yomitan's media loader reads them. */
@@ -115,25 +131,47 @@ export async function getMedia(path: string, dictionary: string) {
 }
 
 /**
- * Terms at the start of `text`, longest match first, as Yomitan's `termsFind` API returns them
- * (backend.js `_onApiTermsFind`): deinflected, with frequencies and pitch accents.
+ * What Yomitan's TextScanner finds at the start of `text` (`_findDictionaryEntries`): terms
+ * (`termsFind`: deinflected, with frequencies and pitch accents, longest match first) and, when
+ * none match, the first character's kanji (`kanjiFind`).
  */
-export async function lookup(text: string, options: ProfileOptions): Promise<LookupResult> {
+export async function lookup(
+  text: string,
+  options: ProfileOptions,
+  { searchTerms = true, searchKanji = true, matchType = 'exact' }: LookupSearch = {}
+): Promise<LookupResult> {
   const { translator } = await ready();
   const {
     general: { resultOutputMode: mode, maxResults }
   } = options;
-  const findTermsOptions = getTranslatorFindTermsOptions(mode, {}, options);
-  const { dictionaryEntries, originalTextLength } = await translator.findTerms(
-    mode,
-    text,
-    findTermsOptions
-  );
-  const sorted = demoteUnlikely(dictionaryEntries).slice(0, maxResults);
-  return {
-    dictionaryEntries: sorted,
-    originalTextLength: sorted[0]?.maxOriginalTextLength ?? originalTextLength
-  };
+  if (searchTerms) {
+    const findTermsOptions = getTranslatorFindTermsOptions(mode, { matchType }, options);
+    const { dictionaryEntries, originalTextLength } = await translator.findTerms(
+      mode,
+      text,
+      findTermsOptions
+    );
+    const sorted = demoteUnlikely(dictionaryEntries).slice(0, maxResults);
+    if (sorted.length) {
+      return {
+        type: 'terms',
+        dictionaryEntries: sorted,
+        originalTextLength: sorted[0].maxOriginalTextLength ?? originalTextLength
+      };
+    }
+  }
+  const [character] = text;
+  if (searchKanji && character) {
+    const entries = await translator.findKanji(character, getTranslatorFindKanjiOptions(options));
+    if (entries.length) {
+      return {
+        type: 'kanji',
+        dictionaryEntries: entries.slice(0, maxResults),
+        originalTextLength: 1
+      };
+    }
+  }
+  return { type: 'terms', dictionaryEntries: [], originalTextLength: 0 };
 }
 
 const kanji = /[\u3400-\u9fff\uf900-\ufaff々]/;

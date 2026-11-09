@@ -24,7 +24,7 @@ import type {
   DictionaryRequest,
   DictionaryResponse
 } from '$lib/functions/dictionary/dictionary.worker';
-import type { LookupResult } from '$lib/functions/dictionary/dictionary-engine';
+import type { LookupResult, LookupSearch } from '$lib/functions/dictionary/dictionary-engine';
 import type { CollectionResult } from '$lib/functions/dictionary/collection-import';
 import { canRunYomitan } from '$lib/functions/can-run-yomitan';
 import { writableSubject } from '$lib/functions/svelte/store';
@@ -33,7 +33,7 @@ import { localStorage } from '$lib/data/window/local-storage';
 import { writableBooleanLocalStorageSubject } from '$lib/data/internal/writable-boolean-local-storage-subject';
 import { yomitanSeen$ } from '$lib/data/dictionary/yomitan';
 
-export type { DictionarySummary, LookupResult, Options as YomitanOptions };
+export type { DictionarySummary, LookupResult, LookupSearch, Options as YomitanOptions };
 
 const optionsKey = 'yomitanOptions';
 
@@ -306,11 +306,12 @@ export function moveDictionary(name: string, by: -1 | 1) {
 
 /**
  * Terms at the start of `text` (longest match first), Yomitan-shaped: headwords, definitions,
- * deinflection reasons (`inflectionRuleChainCandidates`), frequencies and pronunciations.
+ * deinflection reasons (`inflectionRuleChainCandidates`), frequencies and pronunciations; or,
+ * when no term matches and the input searches kanji, the first character's kanji entries.
  */
-export async function lookup(text: string): Promise<LookupResult> {
+export async function lookup(text: string, search?: LookupSearch): Promise<LookupResult> {
   const options = profileOptions(await loadYomitanOptions());
-  return call<LookupResult>({ type: 'lookup', text, options });
+  return call<LookupResult>({ type: 'lookup', text, options, search });
 }
 
 /** A dictionary's image (structured content), as a Blob; null when the dictionary lacks it. */

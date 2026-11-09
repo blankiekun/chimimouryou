@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// chimimouryou: Backend._getTranslatorFindTermsOptions and its helpers from backend.js, as
+// chimimouryou: Backend._getTranslatorFindTermsOptions, _getTranslatorFindKanjiOptions and their helpers from backend.js, as
 // functions (the rest of the Backend is extension plumbing).
 
 /**
@@ -67,6 +67,18 @@ export function getTranslatorFindTermsOptions(mode, details, options) {
         excludeDictionaryDefinitions,
         language,
         useAllFrequencyDictionaries: false,
+    };
+}
+
+/**
+ * @param {import('settings').ProfileOptions} options
+ * @returns {import('translation').FindKanjiOptions}
+ */
+export function getTranslatorFindKanjiOptions(options) {
+    const enabledDictionaryMap = getTranslatorEnabledDictionaryMap(options);
+    return {
+        enabledDictionaryMap,
+        removeNonJapaneseCharacters: !options.scanning.alphanumeric,
     };
 }
 
