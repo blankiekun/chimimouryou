@@ -26,6 +26,7 @@
   import VolumeTransition from '$lib/components/manga/volume-transition.svelte';
   import MokuroOverlay from '$lib/components/manga/mokuro-overlay.svelte';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
+  import { lookupClaimsGesture } from '$lib/data/dictionary/yomitan';
   import { calibreCoverUrl, loadCalibreCatalog, type CalibreBook } from '$lib/data/remote/calibre';
   import { loadSeriesOverrides } from '$lib/data/library/series-overrides';
   import {
@@ -699,6 +700,9 @@
       );
       return;
     }
+
+    // A dictionary scan took this touch (scan on touch press/move): no pan or swipe.
+    if (lookupClaimsGesture()) return;
 
     const dx = event.clientX - gesture.x;
     const dy = event.clientY - gesture.y;

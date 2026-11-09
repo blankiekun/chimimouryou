@@ -136,6 +136,7 @@
   import { communityWorks$ } from '$lib/data/social/community';
   import { lineLinkTarget, matchOffer$ } from '$lib/data/social/community-book';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
+  import { isLookupSelection } from '$lib/data/dictionary/yomitan';
   import LookupHint from '$lib/components/dictionary/lookup-hint.svelte';
   import {
     AnnotationsController,
@@ -257,8 +258,7 @@
   let savedBookmark: BooksDbBookmarkData | undefined;
   /** Manual bookmarks, during a remount: the real one while bookmarkData holds where to reopen. */
   let heldBookmark:
-    | { data: Promise<BooksDbBookmarkData | undefined>; from: BookmarkManager }
-    | undefined;
+    { data: Promise<BooksDbBookmarkData | undefined>; from: BookmarkManager } | undefined;
   /** Replays, so what starts after an await on a page that's gone ends at once. */
   const pageLeft$ = new ReplaySubject<void>(1);
   $effect.pre(() => {
@@ -947,7 +947,10 @@
   }
 
   function onSelectionChange() {
-    selectedRange = selectedBookRange();
+    const range = selectedBookRange();
+
+    // The popup's selected match (scanning.selectText) is no selection of the reader's.
+    selectedRange = isLookupSelection(range) ? undefined : range;
   }
 
   /** The book's word list forms, loaded on the first selection ("Mark known") */

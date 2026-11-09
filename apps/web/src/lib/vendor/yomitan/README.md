@@ -18,7 +18,7 @@ the translator imports), `data/database.js`, `data/json-schema.js`, `general/cac
 `language/text-utilities.js`, `core/extension-error.js`, `data/anki-util.js`, `data/anki-template-util.js`,
 `templates/template-renderer.js`, `templates/anki-template-renderer-content-manager.js`,
 `templates/template-renderer-media-provider.js`, ext's `data/anki-compact-gloss-style.js`,
-`data/structured-content-style.json`, `data/pronunciation-style.json` and
+`data/structured-content-style.json`, `data/pronunciation-style.json`, `data/audio/fallback-click.mp3`, `data/audio/fallback-bloop.mp3` and
 `data/templates/default-anki-field-templates.handlebars` (ext's `data/`, here beside `data/schemas/`),
 `data/schemas/options-schema.json` and the type files in `types/`.
 
@@ -50,9 +50,9 @@ site's CSP holds) at the commit Yomitan pins (`12aff5e3550954d7d3a98a5917ff7d579
   `<img>` from blob URLs out of the dictionary database (the Anki renderer's path, not the
   extension's canvas drawing), links are checked there (only http(s) opens, in a new tab; internal
   `?query=` links do a nested lookup).
-- `dom/text-source-generator.js`: only the text path of `getRangeFromPoint` (`_caretRangeFromPoint`,
-  `_caretPositionFromPoint`, `_isPointInRange`) as a function; no imposters for inputs, shadow
-  roots, images or deep DOM scan. `extractSentence` as a function over the match's start and
+- `dom/text-source-generator.js`: only the text path of `getRangeFromPoint` (`_caretRangeFromPointExt`
+  with the deep DOM scan, `_caretRangeFromPoint`, `_caretPositionFromPoint`, `_isPointInRange`) as a
+  function taking the document; no imposters for inputs, shadow roots or images. `extractSentence` as a function over the match's start and
   length, the text around it read with DOMTextScanner as TextSourceRange does.
 - `templates/anki-template-renderer.js`, `template-renderer.js`, `template-renderer-media-provider.js`:
   Handlebars from `../lib/` (ext's `lib/` sits inside this folder); NodeFilter is the page's,

@@ -22,7 +22,8 @@ export function getRangeFromPoint(
   x: number,
   y: number,
   normalizeCssZoom: boolean,
-  doc?: Document
+  doc?: Document,
+  deepContentScan?: boolean
 ): Range | null;
 
 export function extractSentence(

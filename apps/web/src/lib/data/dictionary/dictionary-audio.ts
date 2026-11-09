@@ -13,6 +13,8 @@
  * LanguagePod101's and Jisho's pages, which can only be read without CORS. Not part of upstream.
  */
 
+import fallbackBloop from '$lib/vendor/yomitan/data/audio/fallback-bloop.mp3?url';
+import fallbackClick from '$lib/vendor/yomitan/data/audio/fallback-click.mp3?url';
 import type { AudioOptions, AudioSourceOptions } from '$lib/vendor/yomitan/types/settings';
 import { isStringEntirelyKana } from '$lib/vendor/yomitan/language/ja/japanese';
 
@@ -191,5 +193,21 @@ export async function playTermAudio(term: string, reading: string, audio: AudioO
       }
     }
   }
+  playFallback(audio);
   return false;
+}
+
+const fallbackSounds: Partial<Record<AudioOptions['fallbackSoundType'], string>> = {
+  click: fallbackClick,
+  bloop: fallbackBloop
+};
+
+/** AudioSystem.getFallbackAudio: the sound for "no audio found" (audio.fallbackSoundType). */
+function playFallback({ fallbackSoundType, volume }: AudioOptions) {
+  const url = fallbackSounds[fallbackSoundType];
+  if (!url) return;
+  const element = new Audio(url);
+  element.volume = Math.max(0, Math.min(1, volume / 100));
+  playing = element;
+  element.play().catch(() => undefined);
 }
