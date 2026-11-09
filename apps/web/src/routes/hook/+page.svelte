@@ -19,7 +19,14 @@
   import { addImmersionTime } from '$lib/data/stats/immersion-log';
   import { logger } from '$lib/data/logger';
   import { readingActivity } from '$lib/data/reader/reader-hooks';
-  import { statisticsEnabled$, trackerIdleTime$ } from '$lib/data/store';
+  import { startDayHoursForTracker$, statisticsEnabled$, trackerIdleTime$ } from '$lib/data/store';
+  import { bookContent } from '$lib/data/book-content';
+  import { noteReading } from '$lib/data/social/social';
+  import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
+  import { context, externalHandler, handler } from '$lib/data/sync/media-sync';
+  import { loadVnReading, VnReadingSaver, vnSyncs } from '$lib/data/vn/vn-text';
+  import { replicateData } from '$lib/functions/replication/replicator';
+  import { isPluginEnabled } from '$lib/plugins';
   import {
     charsPerHour,
     clock,
@@ -73,7 +80,10 @@
   import { vnElementHtml, vnInfo } from '$lib/data/vn/vn';
   import { VnSaveSync } from '$lib/data/vn/vn-save-store';
   import { rankThreads } from '$lib/data/vn/windows-game';
-  import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
+  import {
+    AutoReplicationType,
+    ReplicationSaveBehavior
+  } from '$lib/functions/replication/replication-options';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { t$, type MessageKey } from '$lib/i18n';
   import { onDestroy, onMount, tick } from 'svelte';
@@ -81,7 +91,8 @@
   /**
    * The texthooker: game text from Textractor, LunaTranslator or agent over a WebSocket on this
    * computer, or pasted, as a list for Yomitan and the built-in lookups. Characters and time go
-   * to the immersion log; the lines stay in this browser.
+   * to the book's progress and statistics when the title is a library VN (as on /v), else to the
+   * immersion log; the lines stay in this browser.
    * `?native=<book id>` (desktop app): the library's Windows game played natively, its lines from
    * the app's built-in hook (native-games.ts) on the thread picked here instead of a WebSocket.
    * Select mode, undo, notes, presets, Pause and the stats strip follow texthooker-ui (MIT).
@@ -159,6 +170,56 @@
   /** The library's titles, offered for the WebSocket session's game: one picked, the session counts toward that book. */
   let libraryTitles = $state<string[]>([]);
   const linked = $derived(libraryTitles.includes(title.trim()));
+  /** The session's title is a library VN: its lines count in that book's progress and statistics, as on /v. */
+  let saver: VnReadingSaver | undefined;
+  let linking = '';
+
+  $effect(() => {
+    const name = title.trim();
+    const timer = setTimeout(
+      () => linkBook(name).catch((error) => logger.warn(error.message)),
+      500
+    );
+
+    return () => clearTimeout(timer);
+  });
+
+  /** Counts the session toward the VN titled `name`, if the library has one; lines meanwhile go to the immersion log. */
+  async function linkBook(name: string) {
+    if (saver?.book.title === name) return;
+
+    const previous = saver;
+
+    linking = name;
+    saver = undefined;
+    await previous?.save(true);
+
+    const book = name ? await database.getDataByTitle(name) : undefined;
+
+    if (!book || bookContent(book).kind !== 'vn' || linking !== name) return;
+
+    const local = handler(StorageKey.BROWSER);
+    const external = await externalHandler(book).catch(() => undefined);
+
+    local.startContext(context(book));
+    external?.startContext(context(book));
+    // Another device's day must be here before this one overwrites it, as /v does on opening.
+    if (vnSyncs(external, AutoReplicationType.Down)) {
+      const error = await replicateData(
+        external!,
+        local,
+        false,
+        [context(book)],
+        [StorageDataType.PROGRESS, StorageDataType.STATISTICS]
+      ).catch((err: any) => err.message);
+
+      if (error) logger.warn(`Visual novel sync failed: ${error}`);
+    }
+
+    const reading = await loadVnReading(book);
+
+    if (linking === name) saver = new VnReadingSaver(book, reading, local, external);
+  }
 
   // Set on mount: the address can't be read while prerendering.
   let nativeId = $state<number>();
@@ -521,6 +582,7 @@
   function togglePause() {
     paused = !paused;
     if (!paused) since = Date.now();
+    if (saver) saver.reading.lastTextTime = Date.now();
   }
 
   function addLine(text: string, seq?: number) {
@@ -552,7 +614,14 @@
     sessionCharacters += count.characters;
     sessionSeconds += count.seconds;
     // Each line at once: a closed tab loses nothing.
-    if ($statisticsEnabled$) {
+    if (saver) {
+      const added = saver.reading.add(text, false, false, {
+        statistics: $statisticsEnabled$,
+        startDayHours: $startDayHoursForTracker$
+      });
+
+      if (added) saver.changed();
+    } else if ($statisticsEnabled$) {
       addImmersionTime('hook', 'vn', gameTitle(), count.seconds, count.characters).catch((error) =>
         logger.warn(`Couldn't save to the immersion log: ${error.message}`)
       );
@@ -565,7 +634,8 @@
     readingActivity({
       kind: 'vn',
       title: gameTitle(),
-      position: sessionCharacters,
+      position: saver ? saver.reading.read.characters : sessionCharacters,
+      characters: saver?.book.characters,
       playing: nativeRunning || undefined
     });
   }
@@ -663,6 +733,16 @@
     cleanupSubscription.unsubscribe();
     disconnect();
     readingActivity();
+    saver?.save(true).catch((error) => logger.warn(error.message));
+    if (saver && isPluginEnabled('social')) {
+      noteReading(
+        saver.book.title,
+        saver.reading.read.characters,
+        saver.book.characters,
+        true,
+        'vn'
+      );
+    }
     stopLineAudio();
     clearTimeout(rankTimer);
     clearTimeout(reinsertTimer);
@@ -672,6 +752,12 @@
 <svelte:head>
   <title>{formatPageTitle($t$('hook.title'))}</title>
 </svelte:head>
+
+<svelte:document
+  onvisibilitychange={() =>
+    document.visibilityState === 'hidden' &&
+    saver?.save(true).catch((error) => logger.warn(error.message))}
+/>
 
 <svelte:window
   onpaste={onPaste}

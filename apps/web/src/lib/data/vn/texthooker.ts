@@ -7,7 +7,8 @@
 /**
  * The texthooker page (`/hook`): game text sent by a hooking tool over a WebSocket on this
  * computer, or pasted. The lines stay in this browser (localStorage, never synced); their
- * characters and time go into the immersion log (immersion-log.ts). Line editing, notes, setting
+ * characters and time go to a library VN's progress and statistics (vn-text.ts VnReadingSaver)
+ * when the title is one, else into the immersion log (immersion-log.ts). Line editing, notes, setting
  * presets, the stats strip and the layout settings follow texthooker-ui (Renji-XD, MIT; NOTICE).
  * Not part of upstream.
  */

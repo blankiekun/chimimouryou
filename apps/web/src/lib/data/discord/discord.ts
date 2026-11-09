@@ -185,7 +185,7 @@ export function readingValues(
     percent: Number.isFinite(fraction) ? `${Math.min(100, Math.floor(fraction * 100))}%` : '',
     page: page ? String(page) : '',
     pageCount: pageCount ? String(pageCount) : '',
-    charsRead: characters ? number(position) : '',
+    charsRead: position ? number(position) : '',
     timeLeftBook: bookLeft === undefined ? '' : formatDuration(bookLeft),
     timeLeftChapter: chapterLeft === undefined ? '' : formatDuration(chapterLeft),
     charsToday: stats ? number(stats.charsToday) : '',

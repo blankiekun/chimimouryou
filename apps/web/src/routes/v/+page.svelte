@@ -20,34 +20,32 @@
   import ReaderSheet from '$lib/components/book-reader/reader-sheet.svelte';
   import ReaderMoreList from '$lib/components/book-reader/reader-more-list.svelte';
   import { fullscreenManager } from '$lib/data/fullscreen-manager';
-  import {
-    autoReplication$,
-    database,
-    startDayHoursForTracker$,
-    statisticsEnabled$
-  } from '$lib/data/store';
+  import { database, startDayHoursForTracker$, statisticsEnabled$ } from '$lib/data/store';
   import { context, externalHandler, handler, watchReturn } from '$lib/data/sync/media-sync';
   import { pagePath } from '$lib/data/env';
   import { desktopGames } from '$lib/data/vn/native-games';
   import { clearVnStarting, markVnStarting } from '$lib/data/vn/vn-start-guard';
   import { logger } from '$lib/data/logger';
-  import { MergeMode } from '$lib/data/merge-mode';
   import {
     encodePath,
     fromBase64,
     hashPage,
-    loadVnRead,
     newerSaveEngine,
     vnCacheName,
     parseVnPage,
-    saveVnRead,
     vnBookmark,
     vnInfo,
     type VnLine,
     type VnInfo,
     type VnSaves
   } from '$lib/data/vn/vn';
-  import { VnReading, vnTextSource } from '$lib/data/vn/vn-text';
+  import {
+    loadVnReading,
+    VnReadingSaver,
+    vnSyncs,
+    vnTextSource,
+    type VnReading
+  } from '$lib/data/vn/vn-text';
   import {
     fittedTuning,
     hasWindowsGame,
@@ -61,15 +59,11 @@
     windowsGameBlocker,
     windowsGameBlockerText
   } from '$lib/data/vn/windows-game';
-  import { recordKanjiText } from '$lib/data/words/kanji-seen';
   import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
   import type { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
   import type { BrowserStorageHandler } from '$lib/data/storage/handler/browser-handler';
   import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
-  import {
-    AutoReplicationType,
-    ReplicationSaveBehavior
-  } from '$lib/functions/replication/replication-options';
+  import { AutoReplicationType } from '$lib/functions/replication/replication-options';
   import { replicateData } from '$lib/functions/replication/replicator';
   import { vnFolderSize } from '$lib/functions/file-loaders/vn/load-vn';
   import { formatPageTitle } from '$lib/functions/format-page-title';
@@ -165,10 +159,7 @@
   let newerEngine: string | undefined;
   let local: BrowserStorageHandler;
   let external: BaseStorageHandler | undefined;
-  let saveTimer: ReturnType<typeof setTimeout> | undefined;
-  /** Saves after each line sync at most once a minute: when it last did, and what is still to send. */
-  let syncedAt = 0;
-  let unsynced = new Set<StorageDataType>();
+  let saver: VnReadingSaver | undefined;
   let started = false;
   /** vnsaves.json sync of this game's saves (vn-save-store.ts), from load() */
   let saveSync: VnSaveSync | undefined;
@@ -273,14 +264,7 @@
     (frame?.contentWindow as any)?.engineSet(name, value);
   }
 
-  function syncs(direction: AutoReplicationType) {
-    return (
-      external &&
-      (external.storageType === StorageKey.CALIBRE ||
-        $autoReplication$ === direction ||
-        $autoReplication$ === AutoReplicationType.All)
-    );
-  }
+  const syncs = (direction: AutoReplicationType) => vnSyncs(external, direction);
 
   async function load(id: number) {
     local = handler(StorageKey.BROWSER) as BrowserStorageHandler;
@@ -334,20 +318,15 @@
       logger.warn(`Visual novel sync failed: ${error.message}`);
     }
 
-    const read = await loadVnRead(data.title);
+    reading = await loadVnReading(data);
+    saver = new VnReadingSaver(data, reading, local, external);
+    updateProgress();
 
-    // Another device may be further along: keep the larger position.
     const bookmark = await database.getBookmark(data.id);
 
-    read.characters = Math.max(read.characters, bookmark?.exploredCharCount || 0);
-    reading = new VnReading(
-      read,
-      new Map((await database.getStatisticsForBook(data.title)).map((stat) => [stat.dateKey, stat]))
-    );
-    updateProgress();
     // A game of unknown length (Windows) counts as being read once opened, hooked or not.
     if (!data.characters && !bookmark?.progress) {
-      await database.putBookmark(vnBookmark(data.id, read.characters, 0));
+      await database.putBookmark(vnBookmark(data.id, reading.read.characters, 0));
     }
 
     const game = vnInfo(data);
@@ -577,65 +556,12 @@
 
     updateProgress();
 
-    if (dirty) {
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(save, 3000);
-    }
+    if (dirty) saver?.changed();
   }
 
   /** force: leaving, hiding or restarting the game, which always syncs. */
   async function save(force = false) {
-    clearTimeout(saveTimer);
-
-    const changes = book && reading?.takeChanges();
-
-    if (book && changes) await saveLocally(book, changes);
-    if (!book || !unsynced.size || !syncs(AutoReplicationType.Up)) return;
-
-    const wait = syncedAt + 60_000 - Date.now();
-
-    if (!force && wait > 0) {
-      // A player who stops reading still syncs within the minute.
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(save, wait);
-      return;
-    }
-
-    const types = [...unsynced];
-
-    syncedAt = Date.now();
-    unsynced = new Set();
-
-    const error = await replicateData(local, external!, false, [context(book)], types).catch(
-      (err: any) => err.message
-    );
-
-    if (!error) return;
-    // Sent again with the next sync.
-    types.forEach((type) => unsynced.add(type));
-    logger.warn(`Visual novel progress sync failed: ${error}`);
-  }
-
-  async function saveLocally(
-    book: BooksDbBookData,
-    { read, text, days }: NonNullable<ReturnType<VnReading['takeChanges']>>
-  ) {
-    await saveVnRead(read);
-    await recordKanjiText(book.title, text, read.characters);
-    await database.putBookmark(vnBookmark(book.id, read.characters, book.characters));
-    if (isPluginEnabled('social'))
-      noteReading(book.title, read.characters, book.characters, false, 'vn');
-
-    unsynced.add(StorageDataType.PROGRESS);
-    if (days.length) {
-      await database.storeStatistics(
-        book.title,
-        days,
-        ReplicationSaveBehavior.Overwrite,
-        MergeMode.LOCAL
-      );
-      unsynced.add(StorageDataType.STATISTICS);
-    }
+    await saver?.save(force);
   }
 
   let sentLeaving = false;
