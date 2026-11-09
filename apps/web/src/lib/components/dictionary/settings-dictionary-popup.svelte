@@ -1235,10 +1235,14 @@
 
   .dict-input-row {
     display: grid;
-    grid-template-columns: minmax(7rem, 10rem) 1fr;
+    grid-template-columns: minmax(7rem, 10rem) minmax(0, 1fr);
     gap: 0.5rem;
     align-items: start;
     margin-top: 0.5rem;
+  }
+
+  .dict-input-row > * {
+    min-width: 0;
   }
 
   .dict-input-label {
