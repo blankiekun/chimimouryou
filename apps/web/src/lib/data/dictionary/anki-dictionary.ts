@@ -179,13 +179,16 @@ export function applyYomitanAnki(options: Options) {
   return anki.settings;
 }
 
-/** Yomitan's `anki` options with this app's, for a settings export Yomitan imports. */
+/**
+ * Yomitan's `anki` options with this app's, for a settings export Yomitan imports. The API key
+ * is left out: export files get shared, and keys stay out of shared files (import still reads it).
+ */
 export function dictionaryAnkiToYomitan(anki: AnkiOptions): AnkiOptions {
   return {
     ...anki,
     ...dictionaryAnkiSettings(dictionaryAnki$.getValue()),
     server: ankiConnectUrl$.getValue(),
-    apiKey: ankiApiKey$.getValue()
+    apiKey: ''
   };
 }
 
