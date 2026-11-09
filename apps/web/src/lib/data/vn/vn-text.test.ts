@@ -4,6 +4,7 @@
  * All rights reserved.
  */
 
+import 'fake-indexeddb/auto';
 import { describe, expect, it, vi } from 'vitest';
 import { VnReading, vnTextSource } from '$lib/data/vn/vn-text';
 import { vnboxLines } from '$lib/data/vn/vn';

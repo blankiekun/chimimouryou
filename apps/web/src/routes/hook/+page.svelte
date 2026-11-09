@@ -19,7 +19,15 @@
   import { addImmersionTime } from '$lib/data/stats/immersion-log';
   import { logger } from '$lib/data/logger';
   import { readingActivity } from '$lib/data/reader/reader-hooks';
-  import { statisticsEnabled$, trackerIdleTime$ } from '$lib/data/store';
+  import { startDayHoursForTracker$, statisticsEnabled$, trackerIdleTime$ } from '$lib/data/store';
+  import { bookContent } from '$lib/data/book-content';
+  import type { BooksDbBookData } from '$lib/data/database/books-db/versions/books-db';
+  import { noteReading } from '$lib/data/social/social';
+  import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
+  import { context, externalHandler, handler } from '$lib/data/sync/media-sync';
+  import { loadVnReading, VnReadingSaver, vnSyncs } from '$lib/data/vn/vn-text';
+  import { replicateData } from '$lib/functions/replication/replicator';
+  import { isPluginEnabled } from '$lib/plugins';
   import {
     charsPerHour,
     clock,
@@ -73,15 +81,19 @@
   import { vnElementHtml, vnInfo } from '$lib/data/vn/vn';
   import { VnSaveSync } from '$lib/data/vn/vn-save-store';
   import { rankThreads } from '$lib/data/vn/windows-game';
-  import { ReplicationSaveBehavior } from '$lib/functions/replication/replication-options';
+  import {
+    AutoReplicationType,
+    ReplicationSaveBehavior
+  } from '$lib/functions/replication/replication-options';
   import { formatPageTitle } from '$lib/functions/format-page-title';
   import { t$, type MessageKey } from '$lib/i18n';
-  import { onDestroy, onMount, tick } from 'svelte';
+  import { onDestroy, onMount, tick, untrack } from 'svelte';
 
   /**
    * The texthooker: game text from Textractor, LunaTranslator or agent over a WebSocket on this
    * computer, or pasted, as a list for Yomitan and the built-in lookups. Characters and time go
-   * to the immersion log; the lines stay in this browser.
+   * to the book's progress and statistics when the title is a library VN (as on /v), else to the
+   * immersion log; the lines stay in this browser.
    * `?native=<book id>` (desktop app): the library's Windows game played natively, its lines from
    * the app's built-in hook (native-games.ts) on the thread picked here instead of a WebSocket.
    * Select mode, undo, notes, presets, Pause and the stats strip follow texthooker-ui (MIT).
@@ -159,6 +171,116 @@
   /** The library's titles, offered for the WebSocket session's game: one picked, the session counts toward that book. */
   let libraryTitles = $state<string[]>([]);
   const linked = $derived(libraryTitles.includes(title.trim()));
+  /** A counted line while its title's link is being looked up, with the hook's own count. */
+  type HeldLine = { text: string; at: number; seconds: number; characters: number };
+  /**
+   * One title's link: a library VN's lines count in its progress and statistics (`saver`, as on
+   * /v), any other title's in the immersion log. Until `done`, its lines wait in `held`.
+   */
+  type BookLink = {
+    name: string;
+    held: HeldLine[];
+    saver?: VnReadingSaver;
+    started: boolean;
+    done: boolean;
+  };
+  /** The current title's link; lines from before a title change stay with the old one. */
+  let current: BookLink | undefined;
+
+  $effect(() => {
+    const link: BookLink = { name: title.trim(), held: [], started: false, done: false };
+    const previous = current;
+
+    current = link;
+    if (previous?.done) leaveLink(previous);
+    // Native play's title is known at launch; a typed one is looked up once typing stops.
+    const timer = setTimeout(() => resolveLink(link), untrack(() => nativeId) ? 0 : 500);
+
+    return () => {
+      if (link.started) return;
+      clearTimeout(timer);
+      // Superseded before its lookup: only lines it holds need one.
+      if (link.held.length) resolveLink(link);
+      else link.done = true;
+    };
+  });
+
+  /** Looks the title up, then counts the lines it held, in order. */
+  async function resolveLink(link: BookLink) {
+    link.started = true;
+    try {
+      const book = link.name ? await database.getDataByTitle(link.name) : undefined;
+
+      if (book && bookContent(book).kind === 'vn') link.saver = await openSaver(book);
+    } catch (error: any) {
+      logger.warn(error.message);
+    }
+    link.done = true;
+    link.held.splice(0).forEach((line) => countLine(link, line, true));
+    if (link !== current) leaveLink(link);
+    else reportActivity();
+  }
+
+  /** Counts a line toward the link's book, or in the immersion log under its title. */
+  function countLine(link: BookLink, { text, at, seconds, characters }: HeldLine, held = false) {
+    const { saver } = link;
+
+    if (saver) {
+      // A held line's gap is the hook's (pauses known): the reading may be newer than the line.
+      if (held) saver.reading.lastTextTime = at - seconds * 1000;
+      const added = saver.reading.add(
+        text,
+        false,
+        false,
+        { statistics: $statisticsEnabled$, startDayHours: $startDayHoursForTracker$ },
+        at
+      );
+
+      if (added) saver.changed();
+    } else if ($statisticsEnabled$) {
+      addImmersionTime('hook', 'vn', link.name || 'Texthooker', seconds, characters).catch(
+        (error) => logger.warn(`Couldn't save to the immersion log: ${error.message}`)
+      );
+    }
+  }
+
+  /** The book's reading as /v opens it: progress and statistics synced down first. */
+  async function openSaver(book: BooksDbBookData) {
+    const local = handler(StorageKey.BROWSER);
+    const external = await externalHandler(book).catch(() => undefined);
+
+    local.startContext(context(book));
+    external?.startContext(context(book));
+    // Another device's day must be here before this one overwrites it, as /v does on opening.
+    if (vnSyncs(external, AutoReplicationType.Down)) {
+      const error = await replicateData(
+        external!,
+        local,
+        false,
+        [context(book)],
+        [StorageDataType.PROGRESS, StorageDataType.STATISTICS]
+      ).catch((err: any) => err.message);
+
+      if (error) logger.warn(`Visual novel sync failed: ${error}`);
+    }
+
+    return new VnReadingSaver(book, await loadVnReading(book), local, external);
+  }
+
+  /** A link no longer current (title changed, page closed): saved, synced and "left", as on /v. */
+  function leaveLink({ saver }: BookLink) {
+    if (!saver) return;
+    saver.save(true).catch((error) => logger.warn(error.message));
+    if (isPluginEnabled('social')) {
+      noteReading(
+        saver.book.title,
+        saver.reading.read.characters,
+        saver.book.characters,
+        true,
+        'vn'
+      );
+    }
+  }
 
   // Set on mount: the address can't be read while prerendering.
   let nativeId = $state<number>();
@@ -521,6 +643,7 @@
   function togglePause() {
     paused = !paused;
     if (!paused) since = Date.now();
+    if (current?.saver) current.saver.reading.lastTextTime = Date.now();
   }
 
   function addLine(text: string, seq?: number) {
@@ -552,11 +675,10 @@
     sessionCharacters += count.characters;
     sessionSeconds += count.seconds;
     // Each line at once: a closed tab loses nothing.
-    if ($statisticsEnabled$) {
-      addImmersionTime('hook', 'vn', gameTitle(), count.seconds, count.characters).catch((error) =>
-        logger.warn(`Couldn't save to the immersion log: ${error.message}`)
-      );
-    }
+    const held = { text, at, seconds: count.seconds, characters: count.characters };
+
+    if (current && !current.done) current.held.push(held);
+    else if (current) countLine(current, held);
     reportActivity();
   }
 
@@ -565,7 +687,8 @@
     readingActivity({
       kind: 'vn',
       title: gameTitle(),
-      position: sessionCharacters,
+      position: current?.saver ? current.saver.reading.read.characters : sessionCharacters,
+      characters: current?.saver?.book.characters,
       playing: nativeRunning || undefined
     });
   }
@@ -663,6 +786,11 @@
     cleanupSubscription.unsubscribe();
     disconnect();
     readingActivity();
+    const link = current;
+
+    // One still being looked up leaves itself once done.
+    current = undefined;
+    if (link?.done) leaveLink(link);
     stopLineAudio();
     clearTimeout(rankTimer);
     clearTimeout(reinsertTimer);
@@ -672,6 +800,12 @@
 <svelte:head>
   <title>{formatPageTitle($t$('hook.title'))}</title>
 </svelte:head>
+
+<svelte:document
+  onvisibilitychange={() =>
+    document.visibilityState === 'hidden' &&
+    current?.saver?.save(true).catch((error) => logger.warn(error.message))}
+/>
 
 <svelte:window
   onpaste={onPaste}
