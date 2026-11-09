@@ -18,7 +18,7 @@ the translator imports), `data/database.js`, `data/json-schema.js`, `general/cac
 `language/text-utilities.js`, `core/extension-error.js`, `data/anki-util.js`, `data/anki-template-util.js`,
 `templates/template-renderer.js`, `templates/anki-template-renderer-content-manager.js`,
 `templates/template-renderer-media-provider.js`, ext's `data/anki-compact-gloss-style.js`,
-`data/structured-content-style.json`, `data/pronunciation-style.json` and
+`data/structured-content-style.json`, `data/pronunciation-style.json`, `data/audio/fallback-click.mp3`, `data/audio/fallback-bloop.mp3` and
 `data/templates/default-anki-field-templates.handlebars` (ext's `data/`, here beside `data/schemas/`),
 `data/schemas/options-schema.json` and the type files in `types/`.
 
