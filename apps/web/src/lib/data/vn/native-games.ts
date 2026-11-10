@@ -74,13 +74,23 @@ export interface NativeGameEntry {
   exe: string;
   linkedAt: number;
   present: boolean;
+  /** Linux: this game's own runner; without it, the app's */
+  runner?: NativeRunner;
 }
+
+/** Linux: what starts the games. Automatic = Wine when installed, else the newest Proton. */
+export type NativeRunner = 'auto' | 'wine' | { proton: string };
 
 export interface NativeGamesList {
   platform: string;
   /** chimihook and LunaHook are bundled */
   hook: boolean;
   wine?: { version?: string; japaneseLocale: boolean; winetricks: boolean };
+  /** Linux: Steam's Proton builds, the one Automatic takes first; `needs`: a runtime to install */
+  proton?: { name: string; path: string; needs?: string }[];
+  runner?: NativeRunner;
+  /** Linux: what the app's setting starts games with now, or why it can't */
+  runs?: { kind?: 'wine' | 'proton'; name?: string; error?: string };
   running?: string;
   games: NativeGameEntry[];
 }
@@ -107,6 +117,8 @@ export interface DesktopGames {
   ): Promise<{ status: 'ok'; exe: string } | { status: 'error'; message: string }>;
   forget(folder: string): Promise<void>;
   list(): Promise<NativeGamesList>;
+  /** Linux: sets the runner of all games (no folder) or of one (no runner: as the others) */
+  runner(folder: string | undefined, runner: NativeRunner | undefined): Promise<void>;
   /** `folder`: this game's /hook takes over its lines; without it, only asks what's running. */
   session(
     folder?: string

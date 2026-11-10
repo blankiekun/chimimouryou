@@ -372,3 +372,41 @@ For each FAIL: steps to reproduce, expected vs actual, browser/device, account
 used (qa-\* only), URL, console errors, relevant server log
 (`$DC logs --since 10m account web`), and the deployed version from
 `/version.txt`. Finish with the cleanup confirmation from 3.2.
+
+## 21. Desktop app: Windows games with Proton (Steam Deck)
+
+Not part of the server QA run: a person does this on a Steam Deck (or any Linux computer with
+Steam and no Wine). Nothing here has run on Valve's Proton or its container yet, so a failure in
+PRO-1 or PRO-2 is a finding, not a surprise: note which step failed and the output of the app
+started from a terminal (Konsole: `./chimimouryou-*.AppImage`), where the helper's errors print.
+
+Setup, in Desktop Mode: in Steam, Library → Tools, install "Proton 11.0" (or another Proton) and the
+"Steam Linux Runtime" it names (4.0 for Proton 11, 3.0 "sniper" for 8 to 10). Download the AppImage,
+`chmod +x` it, start it, and have one Windows visual novel's folder on the Deck (a 32-bit one for
+PRO-2, e.g. an older Kirikiri game). Import → Installed game, pick its folder.
+
+The two risks, tried first:
+
+| ID    | Steps                                                                                                                                                               | Expected                                                                                                                                                                               |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PRO-1 | Game Mode focus. In Desktop Mode, Steam → Add a Non-Steam Game → the AppImage. Switch to Game Mode, start it from the library, open the game from the app's library | The game's window comes to the front and takes the controls; Steam button → the app's window can be switched to and back. If the game stays hidden behind the app, that is the finding |
+| PRO-2 | 32-bit injection. Desktop Mode, start the 32-bit game from the app, wait for the thread list on the texthooker page                                                 | "Hooked" (no injection error), threads listed, a picked thread's lines arrive as the game advances                                                                                     |
+
+Then, in Desktop Mode unless said otherwise:
+
+| ID     | Steps                                                                                                                                     | Expected                                                                                                                                                                           |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PRO-3  | Settings → Desktop games                                                                                                                  | "Runs games with" is Automatic and the list under it names the Proton build ("Proton 11.0, from Steam"); the select lists every installed Proton; no locale warning                |
+| PRO-4  | Uninstall the Steam Linux Runtime in Steam, reopen Settings → Desktop games, then start a game                                            | Both name the runtime to install ("Steam Linux Runtime 4.0") instead of failing silently. Install it again                                                                         |
+| PRO-5  | First start of a game                                                                                                                     | "Setting up Proton … (first start only, about a minute)", then the game's window; Japanese text is readable (no boxes or garbled characters), Shift JIS games too                  |
+| PRO-6  | A game that uses a Mincho font, or Meiryo/Yu Gothic                                                                                       | Text shows in a Gothic font, not boxes or a Latin-only font                                                                                                                        |
+| PRO-7  | A game that shows the date or time                                                                                                        | Japan time                                                                                                                                                                         |
+| PRO-8  | Texthooker → Add hook code…, type a known H-code for the game                                                                             | Its thread appears (the code reached the helper's stdin through the container)                                                                                                     |
+| PRO-9  | While the game runs: Attach to running game… in a second linked entry of the same game; and Launch only on, restart                       | The running game is listed and hooks; with Launch only the game starts with no thread list                                                                                         |
+| PRO-10 | Mine a line to Anki (AnkiConnect reachable)                                                                                               | The note gets the game's screenshot and the line's sound; the texthooker page says which sound it records (the game's own, or the whole system's)                                  |
+| PRO-11 | Save in the game, close it; check the record's sync folder; on another computer change the save and sync back                             | "The game has closed." within a few seconds of the window closing; `vnsaves.json` holds the save under `wine/drive_c/users/username/…`; the newer save is loaded at the next start |
+| PRO-12 | A game installed on the SD card; a Proton installed on the SD card                                                                        | Both start as from the internal drive                                                                                                                                              |
+| PRO-13 | The overlay and the global shortcuts while the game runs                                                                                  | As under Wine (Game Mode: note what happens; the overlay needs window positions)                                                                                                   |
+| PRO-14 | Repeat PRO-5 and PRO-8 in Game Mode                                                                                                       | Same                                                                                                                                                                               |
+| PRO-15 | On a computer with both Wine and Steam: play and save with Wine, set the game's own select to a Proton build, start it; then back to Wine | Each time the save made with the other one is there; a newer save is never replaced by an older one                                                                                |
+| PRO-16 | On a computer with Wine and no Steam, or with Automatic and Wine installed                                                                | Unchanged: games start with Wine in their existing prefixes                                                                                                                        |

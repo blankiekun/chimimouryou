@@ -2,7 +2,7 @@
   /**
    * Settings → Desktop games (desktop app only): where this computer's Windows games are
    * installed (the app's native-games.json, native-games.ts), with Change folder and Forget, and
-   * on Linux whether Wine is ready to run them, and the game overlay's text size and opacity (on/off
+   * on Linux what runs them (Wine or a Proton build, for all and per game), and the game overlay's text size and opacity (on/off
    * and its place are on /hook), and the global shortcuts while a game runs (hotkeys.js).
    */
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
@@ -15,7 +15,8 @@
     type NativeHotkeys,
     type OverlaySettings,
     type NativeGameEntry,
-    type NativeGamesList
+    type NativeGamesList,
+    type NativeRunner
   } from '$lib/data/vn/native-games';
   import { onMount } from 'svelte';
 
@@ -39,6 +40,17 @@
 
   async function setOverlay(changes: Partial<OverlaySettings>) {
     overlaySettings = await overlay?.settings(changes);
+  }
+
+  /** A runner as a select's value: 'auto', 'wine' or a Proton build's folder. */
+  const runnerValue = (runner: NativeRunner) =>
+    typeof runner === 'string' ? runner : runner.proton;
+
+  /** Linux: what starts the games, for all (no folder) or one ('' = as the others). */
+  async function setRunner(folder: string | undefined, value: string) {
+    const runner = value === 'auto' || value === 'wine' ? value : { proton: value };
+    await games.runner(folder, value ? runner : undefined);
+    await refresh();
   }
 
   function changeFolder(game: NativeGameEntry) {
@@ -65,28 +77,49 @@
 
 <SettingsSection
   id="general-desktop-games"
-  keywords="desktop games windows native wine install folder hook texthooker"
+  keywords="desktop games windows native wine proton steam deck install folder hook texthooker"
 >
   {#if list?.platform === 'linux'}
     <SettingsItemGroup
-      title="Wine"
-      tooltip="Games run in the Wine installed on this computer, each in its own prefix."
+      title="Runs games with"
+      tooltip="Wine installed on this computer, or a Proton build from Steam (Library → Tools), each game in its own prefix. Automatic takes Wine when it is installed, else the newest Proton. Saves are copied over when a game changes."
     >
-      <ul class="dg-checks">
-        <li class:dg-missing={!list.wine?.version}>
-          {list.wine?.version ?? 'Not found: install Wine'}
-        </li>
-        <li class:dg-missing={!list.wine?.japaneseLocale}>
-          {list.wine?.japaneseLocale
-            ? 'Japanese locale (ja_JP.UTF-8)'
-            : 'No ja_JP.UTF-8 locale: generate it, or Shift JIS games show garbled text'}
-        </li>
-        <li class:dg-missing={!list.wine?.winetricks}>
-          {list.wine?.winetricks
-            ? 'winetricks (Japanese fonts)'
-            : 'No winetricks: games may lack Japanese fonts'}
-        </li>
-      </ul>
+      <div class="dg-runner">
+        <select
+          class="app-input"
+          aria-label="Runs games with"
+          value={runnerValue(list.runner ?? 'auto')}
+          onchange={(event) => setRunner(undefined, event.currentTarget.value)}
+        >
+          <option value="auto">Automatic</option>
+          <option value="wine">Wine</option>
+          {#each list.proton ?? [] as build (build.path)}
+            <option value={build.path}
+              >{build.name}{build.needs ? ' (runtime not installed)' : ''}</option
+            >
+          {/each}
+        </select>
+        <ul class="dg-checks">
+          {#if list.runs?.error}
+            <li class="dg-missing">{list.runs.error}</li>
+          {:else if list.runs?.kind === 'proton'}
+            <li>{list.runs.name}, from Steam</li>
+            <li>Japanese locale, Tokyo time and font replacements are set by the app</li>
+          {:else}
+            <li>{list.wine?.version}</li>
+            <li class:dg-missing={!list.wine?.japaneseLocale}>
+              {list.wine?.japaneseLocale
+                ? 'Japanese locale (ja_JP.UTF-8)'
+                : 'No ja_JP.UTF-8 locale: generate it, or Shift JIS games show garbled text'}
+            </li>
+            <li class:dg-missing={!list.wine?.winetricks}>
+              {list.wine?.winetricks
+                ? 'winetricks (Japanese fonts)'
+                : 'No winetricks: games may lack Japanese fonts'}
+            </li>
+          {/if}
+        </ul>
+      </div>
     </SettingsItemGroup>
   {/if}
   {#if overlaySettings && list?.hook}
@@ -170,6 +203,22 @@
         <button type="button" class="app-button app-button-quiet" onclick={() => forget(game)}>
           Forget
         </button>
+        {#if list?.platform === 'linux'}
+          <select
+            class="app-input dg-game-runner"
+            aria-label={`Runs ${game.title} with`}
+            value={game.runner ? runnerValue(game.runner) : ''}
+            onchange={(event) => setRunner(game.folder, event.currentTarget.value)}
+          >
+            <option value="">Same as the others</option>
+            <option value="wine">Wine</option>
+            {#each list.proton ?? [] as build (build.path)}
+              <option value={build.path}
+                >{build.name}{build.needs ? ' (runtime not installed)' : ''}</option
+              >
+            {/each}
+          </select>
+        {/if}
       </div>
     </SettingsItemGroup>
   {/each}
@@ -181,6 +230,19 @@
     flex-direction: column;
     gap: 0.25rem;
     font-size: var(--type-small);
+  }
+
+  .dg-runner {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .dg-runner select,
+  .dg-game-runner {
+    width: auto;
+    max-width: 100%;
   }
 
   .dg-missing {

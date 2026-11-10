@@ -7,7 +7,7 @@
 // Windows games played natively: where each library game is installed on this computer, and its
 // launch through chimihook (lunahook/, a separate GPL-3.0 program; scripts/fetch-lunahook.sh) with
 // its text lines sent to the page that started it. Windows starts the game through Locale
-// Remulator; Linux through the user's Wine, one prefix per game.
+// Remulator; Linux through the user's Wine or Steam's Proton (proton.js), one prefix per game.
 //
 // Install paths live only in <userData>/native-games.json, written only after main's own folder
 // dialog: a page names a game by its record's folder and never hands main a path to run.
@@ -15,6 +15,7 @@
 import { Buffer } from 'node:buffer';
 import { execFile, spawn } from 'node:child_process';
 import {
+  cpSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -32,6 +33,7 @@ import { homedir, userInfo } from 'node:os';
 import { gameMedia } from './game-media.js';
 import { gameHotkeys, hotkeySettings } from './hotkeys.js';
 import { gameOverlay, overlaySettings } from './overlay.js';
+import { findProton, fontReplacements, protonCommand, protonEnv } from './proton.js';
 
 /** Programs listed last when a folder is picked: setup and settings tools, not the game. */
 const toolPattern =
@@ -242,23 +244,39 @@ function syncOverlay(ctx) {
 const watchSender = (ctx, sender) =>
   sender.once('destroyed', () => setTimeout(() => syncOverlay(ctx)));
 
+/** A game's Proton compat-data folder holds its prefix as `pfx`; its user is always `steamuser`. */
+const protonUser = 'steamuser';
+
+/**
+ * A game's prefix on Linux and its user's folder there: the one of the runner it last ran with
+ * (`ranWith`; Wine for games from before Proton), where its saves are.
+ */
+const linuxPrefix = ({ prefixes, protonData }, folder, game) => {
+  const proton = game.ranWith === 'proton';
+  const dir = proton ? join(protonData, folder, 'pfx') : join(prefixes, folder);
+  return { dir, user: join(dir, 'drive_c/users', proton ? protonUser : userInfo().username) };
+};
+
 /**
  * Where synced save names live on this computer, as [name prefix, folder]: on Linux the game's
  * own prefix (its user folders and ProgramData), on Windows the user's own folders, of which
  * only the game's save folders (`saveFolders`) are read or written.
  */
-const saveRoots = ({ platform, app, prefixes }, folder, game) =>
-  platform === 'win32'
+const saveRoots = (ctx, folder, game) =>
+  ctx.platform === 'win32'
     ? [
         [`${userKey}AppData/`, join(homedir(), 'AppData')],
-        [`${userKey}Documents/`, app.getPath('documents')],
+        [`${userKey}Documents/`, ctx.app.getPath('documents')],
         [`${userKey}Saved Games/`, join(homedir(), 'Saved Games')],
         ['wine/drive_c/ProgramData/', process.env.ProgramData ?? 'C:\\ProgramData'],
         ['game/', game.installDir]
       ]
     : [
-        [userKey, join(prefixes, folder, 'drive_c/users', userInfo().username)],
-        ['wine/drive_c/ProgramData/', join(prefixes, folder, 'drive_c/ProgramData')],
+        [userKey, linuxPrefix(ctx, folder, game).user],
+        [
+          'wine/drive_c/ProgramData/',
+          join(linuxPrefix(ctx, folder, game).dir, 'drive_c/ProgramData')
+        ],
         ['game/', game.installDir]
       ];
 
@@ -382,6 +400,17 @@ function listSaves(ctx, folder, game) {
   ].filter((file) => isSafeSaveName(file.name));
 }
 
+/** The user folders Wine links into the real home become plain folders: saves stay in the prefix. */
+function plainUserFolders(user) {
+  for (const name of existsSync(user) ? readdirSync(user) : []) {
+    const path = join(user, name);
+    if (lstatSync(path).isSymbolicLink()) {
+      rmSync(path);
+      mkdirSync(path);
+    }
+  }
+}
+
 /**
  * A new prefix for a game: Wine's first start without the Mono/Gecko prompts, the user folders
  * Wine links into the real home made plain folders (saves stay in the prefix), and the Japanese
@@ -393,14 +422,7 @@ async function makePrefix(ctx, prefix, env) {
   status(ctx, 'Setting up Wine for this game (first start only, about a minute)…');
   await run('wine', ['wineboot', '-i'], { env });
   await run('wineserver', ['-w'], { env });
-  const user = join(prefix, 'drive_c/users', userInfo().username);
-  for (const name of existsSync(user) ? readdirSync(user) : []) {
-    const path = join(user, name);
-    if (lstatSync(path).isSymbolicLink()) {
-      rmSync(path);
-      mkdirSync(path);
-    }
-  }
+  plainUserFolders(join(prefix, 'drive_c/users', userInfo().username));
   if ((await wineStatus()).winetricks) {
     status(ctx, 'Adding Japanese fonts…');
     await run('winetricks', ['-q', 'fakejapanese'], { env });
@@ -436,25 +458,167 @@ const noWine = {
   message: 'Wine isn’t installed: install it to play this game here.'
 };
 
-async function startLinux(ctx, folder, game, gameExe, saves) {
-  const { prefixes, media, hookDir } = ctx;
-  const wine = await wineStatus();
-  if (!wine.version) return noWine;
-  const prefix = join(prefixes, folder);
-  const env = wineEnv(prefix);
-  if (!existsSync(join(prefix, '.chimi-ready'))) await makePrefix(ctx, prefix, env);
-  writeSaves(ctx, folder, game, saves);
-  const audio = await media.start(env);
-  send(ctx, { type: 'audio', mode: audio.mode });
-  return spawn(
-    'wine',
-    [
-      winePath(join(hookDir, 'chimihook.exe')),
-      ...(game.launchOnly ? ['--no-hook'] : []),
-      winePath(gameExe)
-    ],
-    { cwd: game.installDir, env: { ...env, ...audio.env } }
+const readText = (file) => {
+  try {
+    return readFileSync(file, 'utf8');
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * The helper's folder for Proton: a packaged app's files are in the AppImage's mount, which
+ * Steam's container may not show, so a copy in the app's own folder (as Yomitan's in main.js).
+ */
+function protonHookDir({ app, hookDir }) {
+  if (!app.isPackaged) return hookDir;
+  const dir = join(app.getPath('userData'), 'hook');
+  const stamp = join(dir, 'app-version.txt');
+  if (readText(stamp) !== app.getVersion()) {
+    rmSync(dir, { recursive: true, force: true });
+    cpSync(hookDir, dir, { recursive: true });
+    // Last, so an interrupted copy is redone.
+    writeFileSync(stamp, app.getVersion());
+  }
+  return dir;
+}
+
+/**
+ * A game's Proton prefix, made or upgraded when it's new or its build changed: `proton run` sets
+ * it up before starting anything (here Wine's own wineboot, which ends at once), then the user
+ * folder links become folders and the Japanese fonts Proton lacks get replacements.
+ */
+async function makeProtonPrefix(ctx, { build, data, env }) {
+  const ready = join(data, '.chimi-ready');
+  const stamp = `${build.path}\n${readText(join(build.path, 'version')) ?? ''}`;
+  if (readText(ready) === stamp) return;
+  mkdirSync(data, { recursive: true });
+  status(
+    ctx,
+    existsSync(ready)
+      ? `Updating this game’s prefix for ${build.name}…`
+      : `Setting up ${build.name} for this game (first start only, about a minute)…`
   );
+  await run(...protonCommand(build, 'run', ['wineboot', '--init']), { env });
+  if (!existsSync(join(data, 'pfx/drive_c')))
+    throw new Error(`${build.name} couldn’t set up this game’s prefix.`);
+  plainUserFolders(join(data, 'pfx/drive_c/users', protonUser));
+  const fonts = join(data, 'chimi-fonts.reg');
+  writeFileSync(fonts, fontReplacements);
+  await run(...protonCommand(build, 'runinprefix', ['reg.exe', 'import', winePath(fonts)]), {
+    env
+  });
+  writeFileSync(ready, stamp);
+}
+
+/**
+ * Which runner a game starts with on Linux: its own setting, else the app's (`runner` in the
+ * store: 'auto', 'wine' or `{ proton: <build's folder> }`). Automatic is the system's Wine when
+ * there is one, else the newest Proton that can run. `{ kind }`, or the error to show.
+ */
+async function pickRunner(ctx, game) {
+  const want = game?.runner ?? ctx.store.runner ?? 'auto';
+  const wine = typeof want === 'string' && (await wineStatus()).version;
+  if (want === 'wine' || wine) return wine ? { kind: 'wine' } : noWine;
+  const builds = findProton();
+  const build = want === 'auto' ? builds[0] : builds.find((found) => found.path === want?.proton);
+  const error = (message) => ({ status: 'error', message });
+  if (!build)
+    return error(
+      want === 'auto'
+        ? 'Neither Wine nor Proton was found: install Wine, or a Proton in Steam (Library → Tools).'
+        : 'The chosen Proton build isn’t installed any more: pick another in Settings → Desktop games.'
+    );
+  if (!build.runtime)
+    return error(`${build.name} runs in “${build.needs}”: install it in Steam (Library → Tools).`);
+  return { kind: 'proton', build };
+}
+
+/** Settings' list: the Proton builds found, the app's runner setting and what it starts games with. */
+async function runners(ctx) {
+  const picked = await pickRunner(ctx);
+  return {
+    proton: findProton().map(({ name, path, needs }) => ({ name, path, needs })),
+    runner: ctx.store.runner ?? 'auto',
+    runs: picked.status
+      ? { error: picked.message }
+      : { kind: picked.kind, name: picked.build?.name }
+  };
+}
+
+/**
+ * How a game runs on Linux, or the error to show: its `env`, the helper's folder, `argv(args)` =
+ * [command, args] starting a Windows program, whether its prefix is `ready`, and `prepare()`
+ * making it.
+ */
+async function linuxRunner(ctx, folder, game) {
+  const picked = await pickRunner(ctx, game);
+  if (picked.status) return picked;
+  if (picked.kind === 'wine') {
+    const prefix = join(ctx.prefixes, folder);
+    const env = wineEnv(prefix);
+    const ready = () => existsSync(join(prefix, '.chimi-ready'));
+    return {
+      kind: 'wine',
+      env,
+      hookDir: ctx.hookDir,
+      argv: (args) => ['wine', args],
+      ready: ready(),
+      prepare: async () => ready() || (await makePrefix(ctx, prefix, env))
+    };
+  }
+  const { build } = picked;
+  const data = join(ctx.protonData, folder);
+  const hookDir = protonHookDir(ctx);
+  const env = protonEnv(build, data, [game.installDir, hookDir, data]);
+  return {
+    kind: 'proton',
+    env,
+    hookDir,
+    argv: (args) => protonCommand(build, 'runinprefix', args),
+    ready: existsSync(join(data, '.chimi-ready')),
+    prepare: () => makeProtonPrefix(ctx, { build, data, env })
+  };
+}
+
+/**
+ * A game that last ran with the other runner: its saves there are copied into this runner's
+ * prefix before it starts, by writeSaves' rules (never over a newer file, never through a link,
+ * safe names only), so switching strands none.
+ */
+function carrySaves(ctx, folder, kind) {
+  const game = ctx.store.games[folder];
+  if ((game.ranWith ?? 'wine') === kind) return;
+  // shortcut: the files pass through memory as synced saves do; copy file to file if a game
+  // turns up keeping hundreds of MB in its save folders.
+  const saves = Object.fromEntries(
+    listSaves(ctx, folder, game)
+      .filter((file) => !file.name.startsWith('game/'))
+      .map((file) => [
+        file.name,
+        { modified: file.modified, data: readFileSync(file.full).toString('base64') }
+      ])
+  );
+  update(ctx, folder, { ranWith: kind });
+  writeSaves(ctx, folder, ctx.store.games[folder], saves);
+}
+
+async function startLinux(ctx, folder, gameExe, saves) {
+  const { media } = ctx;
+  const game = ctx.store.games[folder];
+  const runner = await linuxRunner(ctx, folder, game);
+  if (runner.status) return runner;
+  await runner.prepare();
+  carrySaves(ctx, folder, runner.kind);
+  writeSaves(ctx, folder, ctx.store.games[folder], saves);
+  const audio = await media.start(runner.env);
+  send(ctx, { type: 'audio', mode: audio.mode });
+  const [command, args] = runner.argv([
+    winePath(join(runner.hookDir, 'chimihook.exe')),
+    ...(game.launchOnly ? ['--no-hook'] : []),
+    winePath(gameExe)
+  ]);
+  return spawn(command, args, { cwd: game.installDir, env: { ...runner.env, ...audio.env } });
 }
 
 /** Starts a game; `saves`: the synced vnsaves.json entries, written in before it starts. */
@@ -507,7 +671,7 @@ async function launch(ctx, event, folder, saves) {
               windowsHide: true
             }
           )
-        : await startLinux(ctx, folder, ctx.store.games[folder], gameExe, saves);
+        : await startLinux(ctx, folder, gameExe, saves);
   } catch (error) {
     current.running = false;
     syncOverlay(ctx);
@@ -616,25 +780,33 @@ function watchHelper(ctx, current, child) {
  * for Attach; kept so the page picks one by its index and never names a process itself.
  */
 async function listWindows(ctx, folder) {
-  const { platform, hookDir, prefixes } = ctx;
-  const exe = join(hookDir, 'chimihook.exe');
-  if ((platform !== 'win32' && platform !== 'linux') || !existsSync(exe))
+  const { platform, hookDir } = ctx;
+  if ((platform !== 'win32' && platform !== 'linux') || !existsSync(join(hookDir, 'chimihook.exe')))
     return { status: 'unsupported' };
   if (!Object.hasOwn(ctx.store.games, folder)) return { status: 'missing' };
-  const prefix = join(prefixes, folder);
-  const env = wineEnv(existsSync(join(prefix, '.chimi-ready')) ? prefix : undefined);
-  if (platform === 'linux' && !(await wineStatus()).version) return noWine;
+  const runner =
+    platform === 'linux' ? await linuxRunner(ctx, folder, ctx.store.games[folder]) : {};
+  if (runner.status) return runner;
+  // Proton has no default prefix: a game Steam itself started is in Steam's, not the app's.
+  if (runner.kind === 'proton' && !runner.ready)
+    return {
+      status: 'error',
+      message: 'With Proton, only a game started from here can be attached to: start it here once.'
+    };
+  const env = runner.kind === 'wine' && !runner.ready ? wineEnv() : runner.env;
+  const exe = join(runner.hookDir ?? hookDir, 'chimihook.exe');
+  const argv = runner.argv;
   const out =
     platform === 'win32'
       ? await run(exe, ['--list'], { timeout: 15_000, windowsHide: true })
-      : await run('wine', [winePath(exe), '--list'], { env, timeout: 60_000 });
+      : await run(...argv([winePath(exe), '--list']), { env, timeout: 60_000 });
   let list = [];
   try {
     list = JSON.parse(out.split('\n').find((line) => line.startsWith('{"type":"windows"'))).list;
   } catch {
     return { status: 'error', message: 'The running programs couldn’t be listed.' };
   }
-  ctx.windows = { folder, env, list };
+  ctx.windows = { folder, env, list, exe, argv };
   return {
     status: 'ok',
     windows: list.map(({ title, exe: path }) => ({ title, exe: path.split(/[\\/]/).pop() }))
@@ -643,20 +815,19 @@ async function listWindows(ctx, folder) {
 
 /** Hooks the game picked from listWindows (by index): a session of `folder`'s, as if started here. */
 async function attach(ctx, event, folder, index) {
-  const { platform, hookDir, media } = ctx;
+  const { platform, media } = ctx;
   const picked = ctx.windows?.folder === folder ? ctx.windows.list[index] : undefined;
   if (!Number.isInteger(index) || !picked)
     return { status: 'error', message: 'That list has expired: open it again.' };
   if (ctx.session?.running) return { status: 'running', title: ctx.session.title };
   const game = Object.hasOwn(ctx.store.games, folder) ? ctx.store.games[folder] : undefined;
   if (!game) return { status: 'missing' };
-  const { env } = ctx.windows;
+  const { env, exe, argv } = ctx.windows;
   ctx.windows = undefined;
   ctx.session = { folder, title: game.title, sender: event.sender, messages: [], running: true };
   const current = ctx.session;
   watchSender(ctx, event.sender);
   syncOverlay(ctx);
-  const exe = join(hookDir, 'chimihook.exe');
   const pid = String(picked.pid);
   let child;
   try {
@@ -666,7 +837,7 @@ async function attach(ctx, event, folder, index) {
     child =
       platform === 'win32'
         ? spawn(exe, [...audio.args, '--attach', pid], { windowsHide: true })
-        : spawn('wine', [winePath(exe), '--attach', pid], { env });
+        : spawn(...argv([winePath(exe), '--attach', pid]), { env });
   } catch (error) {
     current.running = false;
     syncOverlay(ctx);
@@ -763,6 +934,8 @@ export function registerGames({
     platform,
     storeFile,
     prefixes: join(app.getPath('userData'), 'wine-prefixes'),
+    /** Proton's compat-data folders, one per game (its prefix is `pfx` inside). */
+    protonData: join(app.getPath('userData'), 'proton-prefixes'),
     fontDir: join(app.getPath('userData'), 'wine-fonts'),
     store: loadStore(storeFile),
     /** Folders picked and waiting for the page's confirmation, by id. */
@@ -857,6 +1030,7 @@ export function registerGames({
     platform,
     hook: existsSync(join(hookDir, 'chimihook.exe')),
     wine: platform === 'linux' ? await wineStatus() : undefined,
+    ...(platform === 'linux' ? await runners(ctx) : {}),
     running: ctx.session?.running ? ctx.session.folder : undefined,
     games: Object.entries(ctx.store.games).map(([folder, game]) => {
       let present = false;
@@ -865,10 +1039,24 @@ export function registerGames({
       } catch {
         // Gone: drive unplugged, moved or uninstalled
       }
-      const { title, installDir, exe, linkedAt } = game;
-      return { folder, title, installDir, exe, linkedAt, present };
+      const { title, installDir, exe, linkedAt, runner } = game;
+      return { folder, title, installDir, exe, linkedAt, present, runner };
     })
   }));
+  // Linux: what starts the games (Settings → Desktop games), for all (`folder` null) or one game
+  // (null `runner`: as the others). A Proton build is named by its folder, and only one found.
+  handle('games-runner', (event, folder, runner) => {
+    const build =
+      typeof runner?.proton === 'string' &&
+      findProton().some((found) => found.path === runner.proton);
+    if (!build && runner !== 'auto' && runner !== 'wine' && (runner != null || folder == null))
+      return;
+    const value = build ? { proton: runner.proton } : (runner ?? undefined);
+    if (folder == null) {
+      ctx.store = { ...ctx.store, runner: value };
+      save(ctx);
+    } else if (Object.hasOwn(ctx.store.games, folder)) update(ctx, folder, { runner: value });
+  });
   handle('games-session', (event, folder) => {
     const { session } = ctx;
     if (!session) return undefined;
