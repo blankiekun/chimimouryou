@@ -76,6 +76,7 @@ export interface NativeGameEntry {
   present: boolean;
   /** Linux: this game's own runner; without it, the app's */
   runner?: NativeRunner;
+  overlay: GameOverlay;
 }
 
 /** Linux: what starts the games. Automatic = Wine when installed, else the newest Proton. */
@@ -187,7 +188,18 @@ export interface OverlayArea {
   h: number;
 }
 
-export interface OverlaySettings {
+/** Off, the line on a background over the text box (Band), or transparent over the game's own text. */
+export type OverlayMode = 'off' | 'band' | 'invisible';
+
+/** One game's overlay, kept on this computer. */
+export interface GameOverlay {
+  mode: OverlayMode;
+  /** Invisible: placed from a read of the game's screen, or flowing in the adjusted area */
+  place: 'screen' | 'area';
+}
+
+export interface OverlaySettings extends GameOverlay {
+  /** Some game uses the overlay */
   on: boolean;
   /** Text size in px */
   fontSize: number;
@@ -200,14 +212,23 @@ export interface OverlayState {
   platform: string;
   area: OverlayArea;
   editing: boolean;
+  mode: OverlayMode;
+  place: GameOverlay['place'];
   fontSize: number;
   opacity: number;
 }
 
 /** The text overlay over a game played natively (apps/desktop/overlay.js). */
 export interface DesktopOverlay {
-  /** Reads, or changes, its settings; `restart`: on Wayland it starts with the app's next start */
-  settings(changes?: Partial<OverlaySettings>): Promise<OverlaySettings & { restart: boolean }>;
+  /**
+   * Reads, or changes, its settings; `mode` and `place` are one game's (`folder`, else the running
+   * game's; Off with none). `restart`: on Wayland it starts with the app's next start.
+   * `nextStart`: the running game (Wine, Proton) takes the mode fully at its next start: until
+   * then lookups over it fullscreen stop at the first click, or with Off its pointer isn't confined
+   */
+  settings(
+    changes?: Partial<OverlaySettings> & { folder?: string }
+  ): Promise<OverlaySettings & { restart: boolean; nextStart?: boolean }>;
   /** Adjust mode: the text box area can be moved and resized; false when no overlay is open */
   edit(on: boolean): Promise<boolean>;
   /** Overlay page: the parts that take the mouse (window coordinates), or all of it (`solid`) */
@@ -217,6 +238,8 @@ export interface DesktopOverlay {
   ): Promise<void>;
   /** Overlay page: the adjusted area, saved for this game on this computer */
   setArea(area: OverlayArea): Promise<void>;
+  /** Overlay page: the game's window now, a PNG (none when it can't be captured) */
+  frame(): Promise<Uint8Array | undefined>;
   onState(callback: (state: OverlayState) => void): () => void;
 }
 

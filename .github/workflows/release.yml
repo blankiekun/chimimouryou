@@ -304,9 +304,11 @@ jobs:
       - name: Install mingw-w64
         run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 gcc-mingw-w64-i686
 
-      - name: Add the theme guide, Yomitan and the native-games hook
+      # The screen-text models: the desktop overlay's Invisible mode and the phone's Windows games.
+      - name: Add the theme guide, the screen-text models, Yomitan and the native-games hook
         run: |
           cp themes.md apps/web/build/themes.md
+          VN_OCR_OUT=apps/web/build/vn/ocr scripts/vn-ocr/fetch.sh
           bash apps/desktop/scripts/fetch-yomitan.sh
           bash apps/desktop/scripts/fetch-lunahook.sh
 
@@ -539,7 +541,6 @@ jobs:
         run: |
           VNBOX_OUT="$RUNNER_TEMP/vnbox" scripts/vnbox/build.sh
           cp -r "$RUNNER_TEMP/vnbox" apps/web/build/vn/vnbox
-          VN_OCR_OUT=apps/web/build/vn/ocr scripts/vn-ocr/fetch.sh
 
       # versionCode must grow with every release: (major·1000000 + minor·1000 + patch)·100, plus N for
       # -rcN or 99 for a final, so v3.11.0-rc1 → 301100001 < v3.11.0 → 301100099.

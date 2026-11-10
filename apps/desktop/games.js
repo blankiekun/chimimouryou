@@ -32,7 +32,7 @@ import { basename, dirname, join, relative } from 'node:path';
 import { homedir, userInfo } from 'node:os';
 import { gameMedia } from './game-media.js';
 import { gameHotkeys, hotkeySettings } from './hotkeys.js';
-import { gameOverlay, overlaySettings } from './overlay.js';
+import { gameOverlay, overlayMode, overlaySettings } from './overlay.js';
 import { findProton, fontReplacements, protonCommand, protonEnv } from './proton.js';
 
 /** Programs listed last when a folder is picked: setup and settings tools, not the game. */
@@ -222,8 +222,22 @@ function update(ctx, folder, changes) {
   save(ctx);
 }
 
-const overlayOn = ({ store, platform, noX11 }) =>
-  overlaySettings(store.overlay).on && (platform === 'win32' || platform === 'linux') && !noX11;
+/** A game's overlay: its mode, and where Invisible puts the text (a screen read, or the area). */
+const gameOverlayOf = (game) => ({
+  mode: overlayMode(game?.overlayMode),
+  place: game?.overlayPlace === 'area' ? 'area' : 'screen'
+});
+
+/** What the overlay window is told: the shared look and the game's mode and placing. */
+const overlayFor = ({ store }, folder) => ({
+  ...overlaySettings(store.overlay),
+  ...gameOverlayOf(store.games[folder])
+});
+
+const overlayOn = ({ store, platform, noX11, session }) =>
+  gameOverlayOf(store.games[session?.folder]).mode !== 'off' &&
+  (platform === 'win32' || platform === 'linux') &&
+  !noX11;
 
 /** Opens or closes the overlay to match the game, /hook and the setting; the shortcuts too. */
 function syncOverlay(ctx) {
@@ -233,11 +247,11 @@ function syncOverlay(ctx) {
   if (!wanted) overlay.close();
   else if (!overlay.webContents) {
     const { folder } = session;
-    overlay.open(store.games[folder]?.overlay, overlaySettings(store.overlay), (area) =>
+    overlay.open(store.games[folder]?.overlay, overlayFor(ctx, folder), (area) =>
       update(ctx, folder, { overlay: area })
     );
     if (session.window) overlay.window(session.window);
-  }
+  } else overlay.settings(overlayFor(ctx, session.folder));
 }
 
 /** /hook's page closing takes the overlay with it (its lines come from there). */
@@ -560,6 +574,7 @@ async function linuxRunner(ctx, folder, game) {
     const ready = () => existsSync(join(prefix, '.chimi-ready'));
     return {
       kind: 'wine',
+      dir: prefix,
       env,
       hookDir: ctx.hookDir,
       argv: (args) => ['wine', args],
@@ -573,6 +588,7 @@ async function linuxRunner(ctx, folder, game) {
   const env = protonEnv(build, data, [game.installDir, hookDir, data]);
   return {
     kind: 'proton',
+    dir: data,
     env,
     hookDir,
     argv: (args) => protonCommand(build, 'runinprefix', args),
@@ -603,12 +619,37 @@ function carrySaves(ctx, folder, kind) {
   writeSaves(ctx, folder, ctx.store.games[folder], saves);
 }
 
+/**
+ * Wine grabs the pointer for a fullscreen game at its first click (always, under gamescope), and
+ * the overlay's text gets no pointer from then on. So a game whose overlay isn't Off runs with
+ * `GrabPointer=N` in its prefix (it can't confine the cursor then), and gets Wine's default back
+ * once it's Off. A marker in the prefix says which is set: `reg` runs only when that changes.
+ * Returns whether the grab is off.
+ */
+async function pointerGrab(runner, game) {
+  const marker = join(runner.dir, '.chimi-nograb');
+  const off = gameOverlayOf(game).mode !== 'off';
+  if (off === existsSync(marker)) return off;
+  const key = 'HKCU\\Software\\Wine\\X11 Driver';
+  const [command, args] = runner.argv(
+    off
+      ? ['reg.exe', 'add', key, '/v', 'GrabPointer', '/d', 'N', '/f']
+      : ['reg.exe', 'delete', key, '/v', 'GrabPointer', '/f']
+  );
+  // A failed reg leaves the marker as it was: tried again at the next start.
+  if ((await run(command, args, { env: runner.env })) === undefined) return !off;
+  if (off) writeFileSync(marker, '');
+  else rmSync(marker);
+  return off;
+}
+
 async function startLinux(ctx, folder, gameExe, saves) {
   const { media } = ctx;
   const game = ctx.store.games[folder];
   const runner = await linuxRunner(ctx, folder, game);
   if (runner.status) return runner;
   await runner.prepare();
+  ctx.session.grabOff = await pointerGrab(runner, game);
   carrySaves(ctx, folder, runner.kind);
   writeSaves(ctx, folder, ctx.store.games[folder], saves);
   const audio = await media.start(runner.env);
@@ -959,6 +1000,20 @@ export function registerGames({
     hotkeys: gameHotkeys({ globalShortcut, BrowserWindow }),
     noX11
   };
+  // Before per-game modes the overlay was on or off for every game: on becomes Band for each.
+  if (
+    ctx.store.overlay?.on === true &&
+    !Object.values(ctx.store.games).some((game) => game.overlayMode)
+  )
+    ctx.store = {
+      ...ctx.store,
+      games: Object.fromEntries(
+        Object.entries(ctx.store.games).map(([folder, game]) => [
+          folder,
+          { ...game, overlayMode: 'band' }
+        ])
+      )
+    };
   const { media, overlay } = ctx;
   app.on('will-quit', () => {
     media.stop();
@@ -1040,7 +1095,8 @@ export function registerGames({
         // Gone: drive unplugged, moved or uninstalled
       }
       const { title, installDir, exe, linkedAt, runner } = game;
-      return { folder, title, installDir, exe, linkedAt, present, runner };
+      const overlay = gameOverlayOf(game);
+      return { folder, title, installDir, exe, linkedAt, present, runner, overlay };
     })
   }));
   // Linux: what starts the games (Settings → Desktop games), for all (`folder` null) or one game
@@ -1093,18 +1149,38 @@ export function registerGames({
 
   // The overlay: its settings (/hook, Settings → Desktop games), Adjust mode (/hook), and from the
   // overlay page itself its rects and adjusted area.
+  // `mode` and `place` are one game's (`changes.folder`, else the running game's).
   handle('overlay-settings', (event, changes) => {
+    const folder = typeof changes?.folder === 'string' ? changes.folder : ctx.session?.folder;
     if (changes && typeof changes === 'object') {
-      const { on, fontSize, opacity } = { ...overlaySettings(ctx.store.overlay), ...changes };
-      ctx.store = { ...ctx.store, overlay: overlaySettings({ on, fontSize, opacity }) };
+      let { games } = ctx.store;
+      if (games[folder] && (changes.mode !== undefined || changes.place !== undefined)) {
+        const { mode, place } = { ...gameOverlayOf(games[folder]), ...changes };
+        const overlayPlace = place === 'area' ? 'area' : 'screen';
+        games = {
+          ...games,
+          [folder]: { ...games[folder], overlayMode: overlayMode(mode), overlayPlace }
+        };
+      }
+      const { fontSize, opacity } = { ...overlaySettings(ctx.store.overlay), ...changes };
+      // `on`: some game uses the overlay, which main.js reads at start (X11 on a Wayland session).
+      const on = Object.values(games).some((game) => gameOverlayOf(game).mode !== 'off');
+      ctx.store = { ...ctx.store, games, overlay: overlaySettings({ on, fontSize, opacity }) };
       save(ctx);
-      overlay.settings(ctx.store.overlay);
       syncOverlay(ctx);
     }
-    // On Wayland it starts with the next start of the app.
+    // On Wayland it starts with the next start of the app; Wine's pointer grab (pointerGrab) is
+    // set when the game starts.
+    const state = overlayFor(ctx, folder);
+    const { session } = ctx;
     return {
-      ...overlaySettings(ctx.store.overlay),
-      restart: noX11 && overlaySettings(ctx.store.overlay).on
+      ...state,
+      restart: noX11 && overlaySettings(ctx.store.overlay).on,
+      nextStart:
+        !!session?.running &&
+        session.folder === folder &&
+        session.grabOff !== undefined &&
+        session.grabOff !== (state.mode !== 'off')
     };
   });
   handle('overlay-edit', (event, on) => overlay.edit(on));
@@ -1124,4 +1200,6 @@ export function registerGames({
     (event, rects, solid) => fromOverlay(event) && overlay.rects(rects, solid)
   );
   handle('overlay-area', (event, area) => fromOverlay(event) && overlay.area(area));
+  // The game's window now, for the overlay page's screen read (Invisible).
+  handle('overlay-frame', (event) => (fromOverlay(event) ? media.frame() : undefined));
 }

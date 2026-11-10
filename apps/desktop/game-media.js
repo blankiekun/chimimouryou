@@ -155,7 +155,7 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
     return child;
   }
 
-  async function shoot() {
+  async function shoot(png = false) {
     if (!source || !desktopCapturer) return undefined;
     try {
       const sources = await desktopCapturer.getSources({
@@ -168,7 +168,8 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
         sources.find((item) => item.id === source.id) ??
         sources.find((item) => source.name && item.name === source.name);
       const image = found?.thumbnail;
-      return image && !image.isEmpty() ? image.toJPEG(90) : undefined;
+      if (!image || image.isEmpty()) return undefined;
+      return png ? image.toPNG() : image.toJPEG(90);
     } catch {
       return undefined;
     }
@@ -286,6 +287,13 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
     window({ hwnd, xid, title, width, height }) {
       const id = platform === 'win32' ? hwnd : xid;
       source = { id: id ? `window:${id}:0` : '', name: title, width, height };
+    },
+
+    /** The game's window now (PNG), for the overlay's screen read; after any waiting shot. */
+    frame() {
+      const shot = shooting.then(() => shoot(true));
+      shooting = shot.then(() => {});
+      return shot;
     },
 
     /** /hook shows line `seq`: its screenshot is taken once its text is drawn. */

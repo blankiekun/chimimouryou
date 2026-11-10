@@ -7,6 +7,9 @@
    * the whole window (`solid`) while the pointer is over a popup, and on X11 also over the text
    * while Yomitan is loaded (its popup sits in a closed shadow root, so it can't be measured and
    * would be clipped by the window's shape). Adjust mode (from /hook) moves and resizes the area.
+   * Invisible mode draws the text transparent with no background, over the game's own: placed
+   * from a read of the game's settled frame (`readVnScreen`, as /v does for VNBox), or flowing in
+   * the area when the game is set to that, the read matches under half the line, or it can't run.
    */
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
   import {
@@ -15,6 +18,8 @@
     type OverlayArea,
     type OverlayState
   } from '$lib/data/vn/native-games';
+  import type { VnOverlayLine } from '$lib/data/vn/vn';
+  import { readVnScreen } from '$lib/data/vn/vn-ocr';
   import { onMount, tick } from 'svelte';
 
   const overlay = desktopOverlay();
@@ -28,6 +33,70 @@
   let solidTimer: ReturnType<typeof setTimeout> | undefined;
   let lastSent = '';
   let frame = 0;
+  /** Invisible: the line's rows where the game drew it, in page pixels; none = the area's flow. */
+  let rows = $state<VnOverlayLine[]>();
+  let reads = 0;
+  const invisible = $derived(view?.mode === 'invisible' && !view.editing);
+  const screenPlaced = $derived(view?.mode === 'invisible' && view.place === 'screen');
+
+  /**
+   * The game's window once it stops changing (a typewriter finished), as /v's settledFrame:
+   * quarter-size copies 200 ms apart until under 0.1% changed, at most 3 s.
+   */
+  async function settledFrame(read: number) {
+    const thumb = document.createElement('canvas');
+    const context = thumb.getContext('2d', { willReadFrequently: true })!;
+    let before: Uint8ClampedArray | undefined;
+    let shot: ImageBitmap | undefined;
+
+    for (let waited = 0; waited < 3000; waited += 200) {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const png = read === reads ? await overlay?.frame() : undefined;
+      shot?.close();
+      shot = undefined;
+      if (!png || read !== reads) return undefined;
+      shot = await createImageBitmap(new Blob([png as BlobPart], { type: 'image/png' }));
+      thumb.width = Math.max(1, Math.ceil(shot.width / 4));
+      thumb.height = Math.max(1, Math.ceil(shot.height / 4));
+      context.drawImage(shot, 0, 0, thumb.width, thumb.height);
+      const now = context.getImageData(0, 0, thumb.width, thumb.height).data;
+      let changed = 0;
+
+      if (before?.length === now.length) {
+        for (let i = 0; i < now.length; i += 4) {
+          const diff = now[i] + now[i + 1] + now[i + 2] - before[i] - before[i + 1] - before[i + 2];
+          if (diff > 72 || diff < -72) changed += 1;
+        }
+        if (changed <= now.length / 4000) break;
+      }
+      before = now;
+    }
+    return shot;
+  }
+
+  /** Invisible with screen placing: the line laid over the game's own glyphs. */
+  async function place(line: string, wanted: boolean) {
+    const read = (reads += 1);
+    rows = undefined;
+    if (!wanted || !line) return;
+    try {
+      const shot = await settledFrame(read);
+      if (!shot) return;
+      // The frame is the game's window, as this page is: one scale.
+      const scale = window.innerWidth / shot.width;
+      const result = await readVnScreen(shot, line);
+      if (read !== reads || !result) return;
+      rows = result.lines.map((row) => ({
+        text: row.text,
+        x: row.x * scale,
+        y: row.y * scale,
+        size: row.size * scale,
+        pitch: row.pitch * scale
+      }));
+    } catch (error) {
+      console.warn(`Overlay screen read: ${(error as Error).message}`);
+    }
+  }
 
   /** The page's own top-level element in body; any other is an extension's (Yomitan's popup). */
   const ownTop = () => root?.closest('body > *');
@@ -40,7 +109,9 @@
   function report() {
     cancelAnimationFrame(frame);
     frame = requestAnimationFrame(() => {
-      const boxes = [...(textEl?.getClientRects() ?? [])];
+      const boxes = [...(root?.querySelectorAll('.hook-text span') ?? [])].flatMap((span) => [
+        ...span.getClientRects()
+      ]);
       const popup = document.querySelector('.ttu-dict')?.getBoundingClientRect();
       if (popup && popup.width > 0 && popup.height > 0) boxes.push(popup);
       const rects = boxes.map(({ x, y, width, height }) => ({ x, y, width, height }));
@@ -111,8 +182,12 @@
 
   $effect(() => {
     // Re-measured whenever the text, its look or the area change.
-    void [text, view?.fontSize, view?.opacity, area.x, area.y, area.w, area.h];
+    void [text, rows, invisible, view?.fontSize, view?.opacity, area.x, area.y, area.w, area.h];
     tick().then(report);
+  });
+
+  $effect(() => {
+    place(text, screenPlaced);
   });
 
   onMount(() => {
@@ -153,12 +228,37 @@
   <title>Overlay</title>
 </svelte:head>
 
-<svelte:window onmousemove={onMove} />
+<!--
+  The game switched windowed <-> fullscreen: the area's text moved without changing size (the
+  shape would stay where it was), and the rows were for the old size.
+-->
+<svelte:window
+  onmousemove={onMove}
+  onresize={() => {
+    // Main dropped its boxes with the old size: sent again even when they are the same.
+    lastSent = '';
+    report();
+    if (rows) place(text, screenPlaced);
+  }}
+/>
 
-<div class="ov-root" bind:this={root}>
+<div class="ov-root" class:ov-invisible={invisible} bind:this={root}>
+  {#if invisible && rows}
+    <div class="hook-text ov-rows" lang="ja">
+      {#each rows as row, index (index)}
+        <span
+          style:left="{row.x}px"
+          style:top="{row.y}px"
+          style:font-size="{row.size}px"
+          style:letter-spacing="{row.pitch - row.size}px">{row.text}</span
+        >
+      {/each}
+    </div>
+  {/if}
   <div
     class="ov-area"
     class:ov-editing={view?.editing}
+    hidden={invisible && !!rows}
     style:left="{area.x * 100}%"
     style:top="{area.y * 100}%"
     style:width="{area.w * 100}%"
@@ -233,6 +333,31 @@
     box-decoration-break: clone;
     -webkit-box-decoration-break: clone;
     padding: 0 0.25em;
+  }
+
+  /* Invisible: only the game's own glyphs show; a lookup's popup still does. */
+  .ov-invisible .hook-text span {
+    color: transparent;
+    background: none;
+  }
+
+  /* A lookup marks its word on the game's own glyphs; ours stay unseen. */
+  .ov-invisible .hook-text span::selection {
+    color: transparent;
+    background: color-mix(in srgb, var(--app-progress-fill) 35%, transparent);
+  }
+
+  .ov-rows {
+    padding: 0;
+  }
+
+  .ov-rows span {
+    position: absolute;
+    padding: 0;
+    /* A cell per character: the UI font's kana are narrower than its kanji. */
+    font-family: monospace;
+    line-height: 1;
+    white-space: pre;
   }
 
   .ov-done {
