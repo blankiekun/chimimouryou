@@ -11,6 +11,9 @@
 // - `replaces` left out still deletes something (another row can hold that pin; the page decides)
 // - an old jar that can't be deleted (Windows, a running host has it open) fails the update
 // - an old jar that is already gone fails the update
+// Ways a download could go wrong:
+// - a redirect leads to a plain http address and its bytes are installed
+// - a server that never answers leaves the download waiting for ever
 // Ways removing a repository's jar could go wrong:
 // - the pin from the page names a path outside ext/, or anything but a pin, and that file goes
 // - a jar that can't be deleted (Windows, a running host has it open) or is already gone fails the removal
@@ -18,9 +21,11 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { setImmediate } from 'node:timers';
 import { registerMihon } from './mihon.js';
 
 const pinOf = (text) => createHash('sha256').update(text).digest('hex');
@@ -36,9 +41,9 @@ function setup(t, respond = () => new Response('new')) {
     app: { getPath: () => root, on: () => undefined },
     ipcMain: { handle: (name, handler) => (handlers[name] = handler) },
     net: {
-      fetch: async (url) => {
+      fetch: async (url, options) => {
         fetches.push(url);
-        return respond();
+        return respond(url, options);
       }
     },
     isApp: () => true,
@@ -152,4 +157,41 @@ test('a jar already gone, or one that cannot be deleted, still removes', async (
   await remove(OLD);
   mkdirSync(join(jar(OLD), 'inside'), { recursive: true }); // rm without recursive fails on it
   await remove(OLD);
+});
+
+// As fetch: redirects followed unless the caller takes them itself.
+const redirecting = (to) => (url, options) =>
+  url === to || options?.redirect !== 'manual'
+    ? new Response('new')
+    : new Response(null, { status: 302, headers: { Location: to } });
+
+test('a redirect to another https address is followed', async (t) => {
+  const { jar, install, fetches } = setup(t, redirecting('https://cdn.example/new.jar'));
+  assert.deepEqual(await install(undefined), { sha256: NEW });
+  assert.deepEqual(fetches, ['https://repo.example/new.jar', 'https://cdn.example/new.jar']);
+  assert.ok(existsSync(jar(NEW)));
+});
+
+test('a redirect to a plain http address is refused, nothing fetched from it or written', async (t) => {
+  const { jar, install, fetches } = setup(t, redirecting('http://cdn.example/new.jar'));
+  await assert.rejects(install(undefined), /Only https/);
+  assert.deepEqual(fetches, ['https://repo.example/new.jar']);
+  assert.ok(!existsSync(jar(NEW)));
+});
+
+test('a download with no answer gives up', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  syncBuiltinESMExports(); // mihon.js imports setTimeout from node:timers
+  t.after(() => (t.mock.timers.reset(), syncBuiltinESMExports()));
+  const { install } = setup(
+    t,
+    (url, { signal }) =>
+      new Promise((resolve, reject) =>
+        signal.addEventListener('abort', () => reject(signal.reason))
+      )
+  );
+  const installing = assert.rejects(install(undefined), { name: 'AbortError' });
+  await new Promise(setImmediate);
+  t.mock.timers.tick(60_000);
+  await installing;
 });

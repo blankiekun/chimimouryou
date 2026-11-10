@@ -24,6 +24,14 @@ test('main never writes or reads synced names that run code or reach Windows’ 
     'wine/drive_c/windows/system32/x.dat',
     'game/d3d9.dll',
     'game/x.EXE.',
+    'game/patch.xp3',
+    'game/game/archive.rpa',
+    'game/game/x.rpyb',
+    'game/x.pyd',
+    'game/lib/x.so',
+    'game/game.exe.config',
+    'game/game.exe.manifest',
+    'game/game.exe.local',
     'game/../x.dat',
     'game'
   ])
