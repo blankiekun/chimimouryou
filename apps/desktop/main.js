@@ -62,13 +62,25 @@ const electronDir = app.isPackaged
 let mainWindow;
 
 // The game overlay needs window positions, which Wayland doesn't give: while it's on, the app runs
-// on X11 (XWayland, where Wine's games are too). Read before `ready`, so a change takes a restart.
+// on X11 (XWayland, where Wine's games are too). Read at start, so a change takes a restart.
+// Electron picks the platform before this file runs, so appendSwitch would only reach the child
+// processes (an X11 GPU process under a Wayland browser crashes and no window shows): relaunch.
 if (
   process.platform === 'linux' &&
   (process.env.XDG_SESSION_TYPE === 'wayland' || process.env.WAYLAND_DISPLAY) &&
+  !process.argv.includes('--ozone-platform=x11') &&
   loadStore(join(app.getPath('userData'), 'native-games.json')).overlay?.on === true
-)
-  app.commandLine.appendSwitch('ozone-platform', 'x11');
+) {
+  // Chromium's screen capture asks the Wayland portal (a share dialog per Anki screenshot) whenever
+  // XDG_SESSION_TYPE says wayland, whatever platform the app runs on; on X11 it captures directly.
+  process.env.XDG_SESSION_TYPE = 'x11';
+  // An AppImage's own binary sits in a mount that goes away when this process exits.
+  app.relaunch({
+    execPath: process.env.APPIMAGE || process.execPath,
+    args: [...process.argv.slice(1), '--ozone-platform=x11']
+  });
+  app.exit(0);
+}
 
 /** The file: URLs the About window links to (licences): the only local files a window may open. */
 const aboutFiles = new Set();
