@@ -172,6 +172,10 @@ const pulse = spawn(
     stdio: 'ignore'
   }
 );
+// Every way out stops it (a failed start, a throw before the try, Ctrl+C): a leftover one keeps
+// the D-Bus name org.PulseAudio1, and the next run's then doesn't start.
+process.on('exit', () => pulse.kill());
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => process.exit(1));
 for (let tries = 0; !existsSync(join(pulseDir, 'native')); tries += 1) {
   if (tries > 50) fail('PulseAudio didn’t start (pulseaudio and pulseaudio-utils needed)');
   await wait(100);

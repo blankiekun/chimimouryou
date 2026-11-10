@@ -52,7 +52,11 @@
   $: author = post.author;
   $: words = author?.level?.wordsKnown;
 
-  async function act(action: () => Promise<unknown>, done?: () => void, limitKey?: MessageKey) {
+  async function act(
+    action: () => Promise<unknown>,
+    done?: () => void,
+    limitKey: MessageKey = 'community.error.actionLimit'
+  ) {
     if (!signedIn) {
       dispatch('signUp');
       return;

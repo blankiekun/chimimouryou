@@ -223,7 +223,6 @@ async function device(drive, { base = NEW, skew = 0, tracker = false } = {}) {
         autoReplication: 'all',
         syncTarget: 'ttu-gdrive-default',
         trackerStartOnOpen: tracker ? '1' : '0',
-        lastStatisticsTab: 'Summary',
         lastStatisticsRangeTemplate: 'Custom',
         lastStatisticsStartDate: '2020-01-01',
         lastStatisticsEndDate: '2036-12-31',

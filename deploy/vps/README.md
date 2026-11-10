@@ -73,7 +73,8 @@ big files. The social hub stays on Cloudflare Workers; no server data lives here
   (nor HTML), so without the rule VNBox's wasm goes to the VPS each time. Files up to 512 MB are
   cached on the free plan (the largest, the Wine root fs, is ~100 MB).
 - After a VNBox bump (`scripts/vnbox/sha256sums`) its files keep their names, so Cloudflare must drop
-  `chimireader.blankie.moe/vn/vnbox/`. The VPS site workflow does it after each deploy when the repo
+  `chimireader.blankie.moe/vn/vnbox/`. The VPS site workflow purges all of `/vn/` (the player pages
+  too: Cloudflare keeps the response headers it stored with them) after each deploy when the repo
   has the secret `CF_API_TOKEN` (an API token with Zone → Cache Purge on the zone) and the variable
   `CF_ZONE_ID` (the zone's ID, on its Overview page). Without them, purge the prefix by hand (Caching →
   Configuration → Custom Purge) after the deploy. Browsers may still keep the old files for up to a day.

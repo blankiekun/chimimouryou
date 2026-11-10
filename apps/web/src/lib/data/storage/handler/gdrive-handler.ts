@@ -521,11 +521,11 @@ export class GDriveStorageHandler extends BaseStorageHandler implements SyncFile
   }
 
   /** Lists the visual novels this browser keeps for this source (`keepOnDevice`). */
-  private async addDeviceVns(only = isVn) {
+  private async addDeviceVns() {
     const books = await (await database.db).getAll('data');
 
     books
-      .filter((book) => book.storageSource === this.storageSourceName && only(book))
+      .filter((book) => book.storageSource === this.storageSourceName && isVn(book))
       .forEach((book) => this.addDeviceVnCard(book));
   }
 

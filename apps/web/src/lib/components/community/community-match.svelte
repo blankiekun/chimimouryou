@@ -50,7 +50,7 @@
       if (chosen) dispatch('done', chosen);
       else error = $t$('community.error.other');
     } catch (e) {
-      error = $t$(communityErrorKey(e));
+      error = $t$(communityErrorKey(e, 'community.error.actionLimit'));
     } finally {
       busy = false;
     }
