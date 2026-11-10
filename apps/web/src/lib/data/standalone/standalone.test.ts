@@ -468,6 +468,25 @@ describe('standalone edition', () => {
       expect(init.credentials).toBe('omit');
     });
 
+    // Bug it guards: the device token going to another site (a cover, a dictionary, the hub).
+    it("sends the token only to the server's own paths", async () => {
+      const { serverFetch } = await import('$lib/data/remote/server-connect');
+
+      await serverFetch('/api/v1/version');
+      await serverFetch('https://other.example/api/v1/version');
+      await serverFetch('/dicts/index.json', { headers: { Accept: 'application/json' } });
+
+      const sent = fetchMock.mock.calls.map(([url, init]) => [
+        url,
+        new Headers(init?.headers).get('Authorization')
+      ]);
+      expect(sent).toEqual([
+        ['https://books.example/api/v1/version', 'Bearer secret-token'],
+        ['https://other.example/api/v1/version', null],
+        ['/dicts/index.json', null]
+      ]);
+    });
+
     it('is ignored by the self-hosted build', async () => {
       vi.stubEnv('VITE_EDITION', '');
       const { serverConnected } = await import('$lib/data/remote/server-connect');
