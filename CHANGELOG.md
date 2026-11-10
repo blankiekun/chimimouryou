@@ -4,6 +4,34 @@ chimimouryou is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook
 upstream's own changes are not listed here. Each version's section is written when it is released,
 from the pull requests merged since the previous tag (pull requests don't edit this file).
 
+## v3.20.0 (2026-11-10)
+
+### Added
+
+- Desktop: the overlay over a natively played game now has a mode per game: Off, Band or
+  Invisible. Band is the overlay as before. Invisible draws the line as transparent text over the
+  game's own text, so hovering or tapping the game's text looks words up (built-in popup or
+  Yomitan). Placing is per game: Screen read (the default, reads the game window's picture) or
+  Manual area (an area and text size you set; also the fallback when the screen read finds too
+  little). Set it on the hook page or per game in Settings → Desktop games. An older global "on"
+  becomes Band for every game.
+- Desktop: the overlay follows a game that goes fullscreen, and back. The app never makes a game
+  fullscreen itself.
+- Desktop: the screen-text models now ship in the desktop app.
+- Not yet tried: Steam Deck (Desktop Mode and Game Mode), Proton, Windows and touch input. The
+  overlay modes were run on Linux with Wine only.
+
+### Changed
+
+- Desktop (Linux): a game with its overlay on (Band or Invisible) no longer confines the pointer,
+  so the overlay's text keeps getting the pointer once the game is fullscreen. It takes effect at
+  the game's next start.
+
+### Fixed
+
+- Desktop: changing an overlay setting before any game had run in that app session threw an error
+  in the shortcuts.
+
 ## v3.19.0 (2026-11-10)
 
 ### Added
