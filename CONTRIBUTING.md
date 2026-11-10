@@ -120,6 +120,9 @@ git merge upstream/main`, open a PR and merge it with **Create a merge
   needs that major's latest patch (with npm down, only that major, and a warning says the patch is unchecked).
   Delete the variable once the app runs on the latest again.
 
+- Bump JMdict in the release PR: set the tag and checksum in `scripts/fetch-jmdict.sh` to the latest release (the
+  script's header says how to read the digest).
+
 - Check workflow changes with `actionlint` (e.g. `docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint .github/workflows/*.yml`).
 
 ## Testing expectations

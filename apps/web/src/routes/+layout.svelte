@@ -21,7 +21,6 @@
   import { needsFullLoad } from '$lib/data/reader/reader-route';
   import { waitingChanges } from '$lib/data/sync/sync-status';
   import { dummyFn, isMobile, isMobile$ } from '$lib/functions/utils';
-  import { MetaTags } from 'svelte-meta-tags';
   import { distinctUntilChanged, filter } from 'rxjs';
   import '$lib/assets/fonts/biz-udpgothic/biz-udpgothic.css';
   import '../app.scss';
@@ -32,6 +31,7 @@
   // Prerendered pages don't know their origin: without VITE_BASE_PATH or VITE_HTTPS_URL
   // the tags are set in the browser.
   const siteOrigin = basePath || (browser ? window.location.origin : '');
+  const description = 'Online e-book reader that supports dictionary extensions like Yomitan';
   let dialogs: Dialog[] = [];
   let clickOnCloseDisabled = false;
   let zIndex = '';
@@ -161,25 +161,25 @@
 
 <svelte:window bind:online={$isOnline$} />
 
-{#if !wordTest}
-  <MetaTags
-    title="Chimimouryou"
-    description="Online e-book reader that supports dictionary extensions like Yomitan"
-    canonical={siteOrigin ? `${siteOrigin}${path !== '/' ? path : ''}` : undefined}
-    openGraph={{
-      type: 'website',
-      images: siteOrigin
-        ? [
-            {
-              url: `${siteOrigin}${pagePath}/icons/regular-icon@512x512.png`,
-              width: 512,
-              height: 512
-            }
-          ]
-        : []
-    }}
-  />
-{/if}
+<svelte:head>
+  {#if !wordTest}
+    <title>Chimimouryou</title>
+    <meta name="robots" content="index,follow" />
+    <meta name="description" content={description} />
+    {#if siteOrigin}
+      <link rel="canonical" href="{siteOrigin}{path !== '/' ? path : ''}" />
+      <meta property="og:url" content="{siteOrigin}{path !== '/' ? path : ''}" />
+    {/if}
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Chimimouryou" />
+    <meta property="og:description" content={description} />
+    {#if siteOrigin}
+      <meta property="og:image" content="{siteOrigin}{pagePath}/icons/regular-icon@512x512.png" />
+      <meta property="og:image:width" content="512" />
+      <meta property="og:image:height" content="512" />
+    {/if}
+  {/if}
+</svelte:head>
 
 <ThemeStyle />
 

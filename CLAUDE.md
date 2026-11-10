@@ -38,7 +38,7 @@ The details of a particular deployment (hosts, addresses, how it is deployed and
 ## Commands and tests
 
 - Testing rules are in AGENTS.md: read them before writing or changing any test.
-- Front end (Node 24, pnpm 10 from `packageManager`): `pnpm test` (Vitest + jsdom, `src/**/*.test.ts`), `pnpm test:browser` (`*.browser.test.ts` in headless Chromium, for layout/positions/vertical text/`::highlight`; needs `pnpm exec playwright install --only-shell chromium`) and `pnpm check` (svelte-check) in `apps/web`, `npx eslint .` from the repo root. Without Node installed, run them in a `node:24-slim` container (CONTRIBUTING.md).
+- Front end (Node 24, pnpm 10 from `packageManager`): `pnpm test` (Vitest + jsdom, `src/**/*.test.ts`), `pnpm test:browser` (`*.browser.test.ts` in headless Chromium, for layout/positions/vertical text/`::highlight`; needs `pnpm exec playwright install --only-shell chromium`) and `pnpm check` (svelte-check) in `apps/web`, `npx eslint .` from the repo root (after `pnpm svelte-kit sync` in `apps/web` on a fresh checkout, or ESLint runs out of memory). Without Node installed, run them in a `node:24-slim` container (CONTRIBUTING.md).
 - Python tests: `python3 -m unittest discover -s engine/tests` and `-s server/tests` (standard library plus yurigana: `pip install --no-deps` its line of `engine/requirements.txt`, or put its source on `PYTHONPATH`).
 - Baseline: tests all pass, ESLint is clean, `pnpm check` has 13 pre-existing errors (`skipLibCheck` hides the libraries' own). Keep it that way.
 - When dependencies change, regenerate `pnpm-lock.yaml` with pnpm 10 (`pnpm install --no-frozen-lockfile`; `CI=true` forces frozen mode); image builds use `--frozen-lockfile`.

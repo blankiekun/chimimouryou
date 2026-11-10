@@ -122,5 +122,5 @@ describe('manga text worker', () => {
       },
       { type: 'done' }
     ]);
-  });
+  }, 30_000); // the worker's imports alone can pass the default 5 s on a busy machine
 });

@@ -173,9 +173,6 @@ importers:
       svelte-gestures:
         specifier: 5.0.7
         version: 5.0.7
-      svelte-meta-tags:
-        specifier: 3.1.4
-        version: 3.1.4(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@6.0.3)
       yurigana:
         specifier: github:blankiekun/yurigana#v0.5.11
         version: https://codeload.github.com/blankiekun/yurigana/tar.gz/5b4f9f56b544db8f0c902d416f6e3c296f2bbace
@@ -3618,11 +3615,6 @@ packages:
     resolution: {integrity: sha512-xAg7SOnEhrm5zI3puOOKyy1OMcMlIJZYNJY7xLBwSze0UjhPLnWfj2GF2EpT0jmzaJKIWKHLsaSSajf35bcYnA==}
     engines: {node: '>=v12.22.7'}
 
-  schema-dts@1.1.2:
-    resolution: {integrity: sha512-MpNwH0dZJHinVxk9bT8XUdjKTxMYrA5bLtrrGmFA6PTLwlOKnhi67XoRd6/ty+Djt6ZC0slR57qFhZDNMI6DhQ==}
-    peerDependencies:
-      typescript: '>=4.1.0'
-
   semver-compare@1.0.0:
     resolution: {integrity: sha512-YM3/ITh2MJ5MtzaM429anh+x2jiLVjqILF4m4oyQB18W7Ggea7BfqdH/wGMK7dDiMghv/6WG7znWMwUDzJiXow==}
 
@@ -3794,11 +3786,6 @@ packages:
 
   svelte-gestures@5.0.7:
     resolution: {integrity: sha512-TeCrcHQdnlTJKFTlEm6Vh1el0O1cLnbmVLeHqJqW8OayhsYNsEnuDL491+4HUkrHBpaaApKCGIFXKsPZqAoVKw==}
-
-  svelte-meta-tags@3.1.4:
-    resolution: {integrity: sha512-TUIfhut0iVeTm7f5v/ZuU/tZ9XsNig9bNN8yK0t2x2WL9qw6AxAVRe9i5XddYJE0SuVwkoDCzjoSg5hXv7oWbQ==}
-    peerDependencies:
-      svelte: ^3.55.0 || ^4.0.0
 
   svelte-preprocess@6.0.5:
     resolution: {integrity: sha512-sgwew5yV/2eMeQobIWgAxCNarKwiTUDIc3siAUbq3sp0G6ONtzk0W+wJihMdqjbYb3iGU3ubpGv0usnnuXT3qg==}
@@ -7685,10 +7672,6 @@ snapshots:
     dependencies:
       xmlchars: 2.2.0
 
-  schema-dts@1.1.2(typescript@6.0.3):
-    dependencies:
-      typescript: 6.0.3
-
   semver-compare@1.0.0:
     optional: true
 
@@ -7880,13 +7863,6 @@ snapshots:
       svelte: 5.57.3(@typescript-eslint/types@8.72.1)
 
   svelte-gestures@5.0.7: {}
-
-  svelte-meta-tags@3.1.4(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@6.0.3):
-    dependencies:
-      schema-dts: 1.1.2(typescript@6.0.3)
-      svelte: 5.57.3(@typescript-eslint/types@8.72.1)
-    transitivePeerDependencies:
-      - typescript
 
   svelte-preprocess@6.0.5(postcss-load-config@4.0.2(postcss@8.5.32))(postcss@8.5.32)(sass@1.107.0)(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@6.0.3):
     dependencies:
