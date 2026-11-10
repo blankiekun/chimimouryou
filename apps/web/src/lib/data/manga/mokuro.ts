@@ -176,6 +176,25 @@ export function searchMangaText(
   return results;
 }
 
+/** The shown page a sentence is on (for an Anki card's picture); the first shown page when none has it. */
+export function pageOfSentence(
+  pages: (MokuroPage | undefined)[],
+  shown: number[],
+  sentence: string
+): number {
+  const wanted = sentence.replace(/\s+/g, '');
+  // Yomitan's sentence may be longer than one bubble, or a part of it.
+  const found = shown.find((index) =>
+    pages[index]?.blocks.some((block) => {
+      const text = block.lines.join('').replace(/\s+/g, '');
+
+      return !!text && (text.includes(wanted) || wanted.includes(text));
+    })
+  );
+
+  return wanted && found !== undefined ? found : shown[0];
+}
+
 /** The same as book HTML for the analysis tools (localEstimate): a paragraph per bubble. */
 export function mokuroHtml(text: MokuroText) {
   const escape = (line: string) =>

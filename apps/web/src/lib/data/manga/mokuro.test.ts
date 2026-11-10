@@ -19,6 +19,7 @@ import {
   removeLocalMokuro,
   saveLocalMokuro,
   maxMangaSearchResults,
+  pageOfSentence,
   searchMangaText,
   type MokuroPage,
   type MokuroText
@@ -278,5 +279,41 @@ describe('searchMangaText', () => {
 
     expect(searchMangaText(pages, '(笑')).toEqual([{ page: 0, text: '(笑)' }]);
     expect(searchMangaText(pages, '.')).toEqual([]);
+  });
+});
+
+describe('pageOfSentence', () => {
+  const withLines = (...lines: string[]): MokuroPage => ({
+    ...page('p.jpg'),
+    blocks: [{ box: [0, 0, 1, 1], vertical: true, fontSize: 20, lines }]
+  });
+  const pages = [withLines('おはよう'), withLines('こんにちは'), withLines('吾輩は', '猫である')];
+
+  it('gives the shown page the sentence is on', () => {
+    expect(pageOfSentence(pages, [0, 1], 'こんにちは')).toBe(1);
+  });
+
+  it('finds a sentence across the lines of a block', () => {
+    expect(pageOfSentence(pages, [1, 2], '吾輩は猫である')).toBe(2);
+  });
+
+  it('ignores whitespace on both sides', () => {
+    expect(pageOfSentence(pages, [1, 2], '吾輩は 猫\nである')).toBe(2);
+    expect(pageOfSentence([withLines('吾輩は ', '猫'), withLines('犬')], [1, 0], '吾輩は猫')).toBe(
+      0
+    );
+  });
+
+  it('finds a sentence longer than the bubble', () => {
+    expect(pageOfSentence(pages, [0, 1], '「こんにちは」と言った。')).toBe(1);
+  });
+
+  it('gives the first shown page when no page has it, or it is empty', () => {
+    expect(pageOfSentence(pages, [1, 2], 'さようなら')).toBe(1);
+    expect(pageOfSentence(pages, [2, 1], '')).toBe(2);
+  });
+
+  it('skips shown pages without text', () => {
+    expect(pageOfSentence([undefined, withLines('猫')], [0, 1], '猫')).toBe(1);
   });
 });

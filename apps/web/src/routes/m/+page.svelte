@@ -28,6 +28,8 @@
   import VolumeTransition from '$lib/components/manga/volume-transition.svelte';
   import MokuroOverlay from '$lib/components/manga/mokuro-overlay.svelte';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
+  import AnkiWatcher from '$lib/components/dictionary/anki-watcher.svelte';
+  import { noteSentence, type AnkiNote } from '$lib/data/dictionary/anki';
   import { lookupClaimsGesture } from '$lib/data/dictionary/yomitan';
   import { calibreCoverUrl, loadCalibreCatalog, type CalibreBook } from '$lib/data/remote/calibre';
   import { loadSeriesOverrides } from '$lib/data/library/series-overrides';
@@ -36,6 +38,7 @@
     loadMokuro,
     localMokuroChanged$,
     mangaText$,
+    pageOfSentence,
     pagesText,
     type MangaText,
     type MokuroPage
@@ -1077,6 +1080,13 @@
     goToPage(pulled);
   }
 
+  /** A card made with Yomitan while this volume is open gets the page it came from. */
+  async function ankiMedia(note: AnkiNote) {
+    const url = urls[pageOfSentence(pageText, shownPages, noteSentence(note))];
+
+    return { picture: url ? await (await fetch(url)).blob() : null };
+  }
+
   onMount(() => {
     load(Number($page.url.searchParams.get('id'))).catch((error) =>
       logger.error(`Error loading manga: ${error.message}`)
@@ -1111,6 +1121,7 @@
   screenshot={(match) =>
     match?.closest('.mokuro-page')?.parentElement?.querySelector('img') ?? null}
 />
+<AnkiWatcher media={ankiMedia} />
 <svelte:document on:visibilitychange={onVisibilityChange} />
 
 <div
