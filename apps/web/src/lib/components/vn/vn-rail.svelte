@@ -4,7 +4,7 @@
    * the game's left edge; the handle folds it to a strip. Not upstream.
    */
   import Fa from 'svelte-fa';
-  import { faExpand } from '@fortawesome/free-solid-svg-icons';
+  import { faCompress, faExpand } from '@fortawesome/free-solid-svg-icons';
   import { fullscreenManager } from '$lib/data/fullscreen-manager';
   import type { writableSubject } from '$lib/functions/svelte/store';
 
@@ -19,7 +19,11 @@
   }
 
   let { railOpen, skipping, skipTitle, onmenu, onskip, onfullscreen }: Props = $props();
+
+  let full = $state(!!fullscreenManager.fullscreenElement);
 </script>
+
+<svelte:document onfullscreenchange={() => (full = !!fullscreenManager.fullscreenElement)} />
 
 <div class="vn-rail" class:vn-rail-open={$railOpen}>
   <button
@@ -52,8 +56,8 @@
     </button>
     {#if fullscreenManager.fullscreenEnabled}
       <button class="vn-rail-button" onclick={onfullscreen}>
-        <Fa icon={faExpand} />
-        <span>Full screen</span>
+        <Fa icon={full ? faCompress : faExpand} />
+        <span>{full ? 'Exit full screen' : 'Full screen'}</span>
       </button>
     {/if}
   {/if}

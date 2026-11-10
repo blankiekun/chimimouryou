@@ -97,7 +97,6 @@ async function openBook(page, title) {
 
 async function t50() {
   const a = await device({
-    lastStatisticsTab: 'Summary',
     lastStatisticsRangeTemplate: 'Custom',
     lastStatisticsStartDate: '2026-01-01',
     lastStatisticsEndDate: '2026-12-31',

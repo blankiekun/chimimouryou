@@ -4,8 +4,8 @@
  * All rights reserved.
  */
 
-export const pHeaderMat = 'p-2.5';
-export const opacityHeaderIcon = 'opacity-60 hover:opacity-100 transition-opacity';
+const pHeaderMat = 'p-2.5';
+const opacityHeaderIcon = 'opacity-60 hover:opacity-100 transition-opacity';
 /** Styles in app.scss (.app-input, .app-button) */
 export const inputClasses = 'app-input mt-1 block w-full';
 export const buttonClasses = 'app-button';

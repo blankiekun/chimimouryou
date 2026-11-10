@@ -53,9 +53,9 @@ Front end (Node 24; pnpm 10 comes from `packageManager` via `corepack enable`):
 
 ```sh
 pnpm install
-cd apps/web && pnpm test && pnpm check   # Vitest; svelte-check (13 known errors)
+cd apps/web && pnpm svelte-kit sync && pnpm test && pnpm check   # Vitest; svelte-check (13 known errors)
 pnpm exec playwright install --only-shell chromium && pnpm test:browser   # browser tests
-cd ../.. && npx eslint .                 # clean
+cd ../.. && npx eslint .                 # clean; runs out of memory before the first `svelte-kit sync`
 cd apps/web && pnpm dev                  # dev server; the server side needs the Docker stack
 ```
 
@@ -97,7 +97,7 @@ git merge upstream/main`, open a PR and merge it with **Create a merge
 
 - `.github/workflows/ci.yml` runs on every pull request and on `main`: ESLint, unit
   tests and a production build of the front end; the Python tests and an nginx
-  config render; the compose files and a build of all four images.
+  config render; the compose files and a build of all six images.
 - `.github/workflows/release.yml` publishes the images for amd64 and arm64 to
   GitHub's container registry when a version tag is pushed:
 
@@ -105,7 +105,7 @@ git merge upstream/main`, open a PR and merge it with **Create a merge
   git tag -a v1.2.0 -m v1.2.0 && git push origin v1.2.0
   ```
 
-  gives `ghcr.io/<owner>/<repository>-{web,services,import,difficulty}` tagged
+  gives `ghcr.io/<owner>/<repository>-{web,services,import,difficulty,mokuro}` tagged
   `1.2.0`, `1.2` and `latest` (pre-releases like `v1.2.0-rc1` don't move
   `latest`). First write the version's `CHANGELOG.md` section from the commits since the last tag
   (`git log --oneline <last tag>..main`): what readers and server operators notice, grouped

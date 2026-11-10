@@ -14,6 +14,7 @@
     'https://github.com/blankiekun/chimimouryou/blob/main/docs/LEARNING.md#7-where-to-get-japanese-books';
 
   const places: Partial<Record<StorageKey, string>> = {
+    [StorageKey.CALIBRE]: 'Books you import go to your server’s library.',
     [StorageKey.GDRIVE]: 'Books you import go to your Drive and open offline on this device.',
     [StorageKey.FS]: 'Books you import go to your folder and open offline.'
   };
