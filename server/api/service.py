@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import sys
+import threading
 import time
 import unicodedata
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -128,6 +129,10 @@ def gunzip(data: bytes, limit: int) -> bytes:
     except (OSError, EOFError):
         raise ApiError(400, 'Not gzip') from None
     return bytes(out)
+
+
+# Two uploads of different types would each delete the other's file.
+cover_lock = threading.Lock()
 
 
 def cover_files(book: int) -> list[str]:
@@ -405,10 +410,11 @@ class Handler(BaseHTTPRequestHandler):
         if image_type(data) != content_type:
             raise ApiError(415, 'Not that image type')
         path = os.path.join(API_STATE_DIR, 'covers', f'{book}.{COVER_TYPES[content_type]}')
-        apidb.write_atomic(path, data)
-        for other in cover_files(book):
-            if other != path:
-                os.unlink(other)
+        with cover_lock:
+            apidb.write_atomic(path, data)
+            for other in cover_files(book):
+                if other != path:
+                    os.unlink(other)
         return 200, {}
 
     def get_cover(self, match):
