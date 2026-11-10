@@ -1026,6 +1026,26 @@
     }
   });
 
+  // "Open in the book" on the Highlights page (/highlights): one jump, taken once.
+  let pageJumpTaken = false;
+
+  $effect.pre(() => {
+    if (bookmarkManager && !pageJumpTaken) {
+      untrack(() => {
+        pageJumpTaken = true;
+
+        try {
+          const jump = JSON.parse(sessionStorage.getItem('ttu-jump') || 'null');
+
+          sessionStorage.removeItem('ttu-jump');
+          if (jump?.id === getBookIdSync() && Number.isFinite(jump.count)) jumpToCount(jump.count);
+        } catch {
+          // No jump.
+        }
+      });
+    }
+  });
+
   const hooks = new ReaderHooksSession(getSearchIndex, () => bookCharCount, jumpToCount);
 
   // Background work that follows the reading position: kanji seen (Home tab)
