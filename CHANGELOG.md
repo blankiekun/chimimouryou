@@ -4,6 +4,25 @@ chimimouryou is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook
 upstream's own changes are not listed here. Each version's section is written when it is released,
 from the pull requests merged since the previous tag (pull requests don't edit this file).
 
+## v3.18.0 (2026-11-09)
+
+### Added
+
+- Dictionary lookups: Yomitan's kanji entries, prefix matching and Anki card formats and options,
+  in the built-in popup. Settings exports leave the AnkiConnect API key out.
+- Dictionary lookups: Yomitan's scanning inputs, popup, audio and shortcut options are in Settings
+  → Dictionary lookups.
+- Games: Windows games' audio on a plain host runs through the AudioWorklet (VNBox v0.2.11, about
+  40 ms queued instead of 0.4 s).
+
+### Fixed
+
+- Texthooker: lines hooked from a game linked to a library visual novel count in the book's
+  statistics (progress, day statistics, kanji met), synced like /v.
+- Desktop: the app shows its window on Wayland with the game overlay on, without a share dialog
+  per Anki screenshot.
+- Sources: a URL lookup no longer drops the list while it is still loading.
+
 ## v3.17.1 (2026-11-08)
 
 ### Fixed
