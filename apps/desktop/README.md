@@ -97,7 +97,7 @@ root install stays light for the web app and its Docker image; `fetch` downloads
   `LANG/LC_ALL=ja_JP.UTF-8`, `TZ=Asia/Tokyo`, one prefix per game in `<userData>/wine-prefixes/<folder>`
   (made on first start: `wineboot`, the home-folder links replaced with folders so saves stay in the
   prefix, `winetricks -q fakejapanese` when winetricks is there, its font files moved to
-  `<userData>/wine-fonts/` and linked). `scripts/fetch-lunahook.sh` fetches LunaHook, Locale
+  `<userData>/wine-fonts/` and linked), or Steam's Proton (the Proton entry below). `scripts/fetch-lunahook.sh` fetches LunaHook, Locale
   Remulator and the MSVC runtime from LunaTranslator's pinned release zip (sha256) and builds the
   helper with mingw-w64 into `lunahook/` (not on macOS). Saves sync with VNBox through the record's
   `vnsaves.json` (same names and merge): `/hook` fetches it and passes it to `games-launch`, which
@@ -154,6 +154,42 @@ root install stays light for the web app and its Docker image; `fetch` downloads
   game exits, its page closes or the app quits, so they never take keys otherwise; changed or
   cleared in Settings → Desktop games (`hotkeys` in `native-games.json`, `games-hotkeys`). On a
   native Wayland session they work only with the overlay on (the app then runs on X11).
+- Proton (Linux, `proton.js`; for a Steam Deck, which has no system Wine): Settings → Desktop games
+  → "Runs games with" picks Automatic (Wine when `wine --version` works, else Proton), Wine, or a
+  Proton build, with the same choice per game (`runner` in `native-games.json`: `'auto'`, `'wine'`
+  or `{ proton: <build's folder> }`, never synced). Builds are read from Steam's files (Steam
+  needn't run): the installs in `~/.steam/root`, `~/.local/share/Steam` and Flatpak Steam's folder,
+  their libraries from `steamapps/libraryfolders.vdf` (SD cards included), every
+  `steamapps/common/*` and `compatibilitytools.d/*` folder with a `proton` script and a
+  `toolmanifest.vdf`, and the container that file asks for (`require_tool_appid` →
+  `appmanifest_<id>.acf` → its folder with `_v2-entry-point`). Automatic takes the newest numbered
+  Valve build whose container is installed, then Experimental, then the newest custom build; with
+  the container missing the app names it ("Steam Linux Runtime 4.0", in Steam's Library → Tools).
+  The app runs what Steam runs, with no other program:
+  `<runtime>/_v2-entry-point --verb=waitforexitandrun -- <build>/proton <verb> …` with
+  `STEAM_COMPAT_DATA_PATH=<userData>/proton-prefixes/<folder>` (the prefix is its `pfx/`, the user
+  `steamuser`), `STEAM_COMPAT_CLIENT_INSTALL_PATH`, `STEAM_COMPAT_TOOL_PATHS`,
+  `STEAM_COMPAT_APP_ID=0`, `STEAM_COMPAT_MOUNTS` (the game's folder, the helper's, the prefix),
+  `LANG/LC_ALL/HOST_LC_ALL=ja_JP.UTF-8` (proton takes `LC_ALL` from `HOST_LC_ALL`; the container
+  generates the locale, so the system needs none), `TZ=Asia/Tokyo` and `PRESSURE_VESSEL_DEVEL=1`
+  (the container otherwise gives the helper no stdin, where hook codes go). First start, or a
+  changed build: `proton run wineboot --init` makes or upgrades the prefix, the user folder links
+  become folders, and one `reg import` adds Wine font replacements for the Japanese fonts Proton
+  lacks (MS Mincho, Meiryo, Yu Gothic, Yu Mincho and their Japanese names → MS Gothic; the P and UI
+  ones → MS PGothic, MS UI Gothic), so Mincho text shows in Gothic; no winetricks, no download.
+  The helper then runs with `proton runinprefix` (plain `wine`, our stdin and stdout; `run` would
+  start it through Proton's `steam.exe` in a new console and lose its lines), for launch, `--list`
+  and `--attach` alike; Attach lists only games in the app's own prefix (one Steam started is in
+  Steam's). A packaged app copies the helper's folder to `<userData>/hook/` first (an AppImage's
+  mount may not be visible in the container). Saves map to `pfx/drive_c/users/steamuser` and
+  `pfx/drive_c/ProgramData`; a game that last ran with the other runner (`ranWith`) gets its saves
+  copied into the new prefix before it starts, by the rules synced saves are written with (never
+  over a newer file, never through a link, `isSafeSaveName`); both prefixes stay. Sound, the X
+  window id, the overlay's window messages, shortcuts and exit handling are the Wine path's.
+  Not supported: the app itself started inside a Steam runtime container. Untested on real
+  hardware: nothing here has run Valve's Proton or container; `E2E_RUNNER=proton xvfb-run -a node
+e2e/native-vn.e2e.mjs` runs the whole flow through this path with stand-in scripts in front of
+  Wine, and `docs/QA.md` (Steam Deck) lists what to try on a Deck.
 - Help → About lists the licences (Yomitan is GPL-3.0, a separate program; its source is the
   release tag named there).
 

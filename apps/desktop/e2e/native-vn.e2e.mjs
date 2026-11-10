@@ -16,6 +16,18 @@
 //                                                 E2E_APP=<squashfs-root>/chimimouryou runs a packaged
 //                                                 build: `pnpm run dist`, then --appimage-extract)
 //
+//   E2E_RUNNER=proton xvfb-run -a node e2e/native-vn.e2e.mjs
+// runs all of it through the app's Proton path instead (proton.js): a made-up Steam folder in the
+// test's home with a "Proton 10.0" and its runtime, both small scripts in front of this computer's
+// Wine that keep the real ones' rules the app depends on (the container's entry point drops stdin
+// without PRESSURE_VESSEL_DEVEL=1; proton refuses to start without its compat-data path, takes
+// LC_ALL from HOST_LC_ALL only, makes the prefix only on `run`, whose program's output is lost,
+// and names the user `steamuser`). Valve's own Proton and container aren't run. It also fails
+// when: Settings doesn't offer the build or the game doesn't start with it; the prefix isn't under
+// proton-prefixes/<folder>/pfx with its saves under `steamuser`; the font replacements aren't in
+// its registry; a game switched to Wine doesn't find its Proton saves in the Wine prefix with
+// their times, gets files outside the save folders, or has a newer file there overwritten.
+//
 // It fails when: Import offers Windows game (VNBox, which the app doesn't ship: its player waits on
 // "Downloading…" for good); a game opened from the library doesn't go to /hook and start in Wine
 // (/v starts VNBox, or waits on a click), or, not linked here, doesn't ask for its folder and then
@@ -44,7 +56,7 @@
 // Launch only loads LunaHook, or its WebSocket lines don't show or get no Anki number; a game
 // started outside the app can't be picked from Attach's list and hooked.
 
-/* global indexedDB, localStorage, navigator -- used inside page.evaluate */
+/* global indexedDB, localStorage, navigator, window -- used inside page.evaluate */
 import { Buffer } from 'node:buffer';
 import { execFileSync, spawn } from 'node:child_process';
 import {
@@ -57,6 +69,8 @@ import {
   renameSync,
   rmSync,
   statSync,
+  symlinkSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -87,6 +101,60 @@ mkdirSync(gameDir, { recursive: true });
 mkdirSync(config, { recursive: true });
 mkdirSync(join(home, 'Documents'), { recursive: true });
 mkdirSync(join(home, 'Desktop'), { recursive: true });
+// E2E_RUNNER=proton: Steam's folders as proton.js reads them, with stand-ins for the two programs.
+// E2E_STEAM=<a Steam folder with a real Proton and its runtime> is used in their place.
+const proton = process.env.E2E_RUNNER === 'proton';
+if (proton && process.env.E2E_STEAM) {
+  mkdirSync(join(home, '.local/share'), { recursive: true });
+  symlinkSync(process.env.E2E_STEAM, join(home, '.local/share/Steam'));
+} else if (proton) {
+  const steamapps = join(home, '.local/share/Steam/steamapps');
+  const files = {
+    'appmanifest_1628350.acf': `"AppState"\n{\n\t"appid"\t\t"1628350"\n\t"installdir"\t\t"SteamLinuxRuntime_sniper"\n}\n`,
+    'common/Proton 10.0/toolmanifest.vdf': `"manifest"\n{\n\t"version"\t"2"\n\t"commandline"\t"/proton %verb%"\n\t"require_tool_appid"\t"1628350"\n}\n`,
+    'common/Proton 10.0/version': '1 proton-10.0-e2e\n',
+    // The container: the command after "--", with no stdin unless developer mode is on.
+    'common/SteamLinuxRuntime_sniper/_v2-entry-point': `#!/bin/sh
+while [ "$#" -gt 0 ] && [ "$1" != -- ]; do shift; done
+shift
+[ "\${PRESSURE_VESSEL_DEVEL:-}" = 1 ] || exec </dev/null
+exec "$@"
+`,
+    'common/Proton 10.0/proton': `#!/bin/sh
+[ -n "\${STEAM_COMPAT_DATA_PATH:-}" ] || { echo 'No compat data path?' >&2; exit 1; }
+export WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" WINEARCH=win64
+export WINEDEBUG=-all WINEDLLOVERRIDES='mscoree,mshtml='
+if [ -n "\${HOST_LC_ALL:-}" ]; then export LC_ALL="$HOST_LC_ALL"; else unset LC_ALL; fi
+verb=$1
+shift
+case $verb in
+  run)
+    # setup_prefix reads it unguarded; steam.exe gives the program a new console.
+    : "\${STEAM_COMPAT_CLIENT_INSTALL_PATH:?}"
+    mkdir -p "$WINEPREFIX"
+    wineboot -i && wineserver -w
+    # Proton's user is steamuser whoever runs it; plain Wine names it after the Unix user, so that
+    # name leads to the real folder (the app never reads through a link).
+    users=$WINEPREFIX/drive_c/users
+    [ -d "$users/steamuser" ] || { mv "$users/$(id -un)" "$users/steamuser" && ln -s steamuser "$users/$(id -un)"; }
+    wine "$@" >/dev/null 2>&1
+    ;;
+  runinprefix)
+    [ -d "$WINEPREFIX/drive_c" ] || { echo 'No prefix' >&2; exit 1; }
+    exec wine "$@"
+    ;;
+  *)
+    echo 'Need a verb.' >&2
+    exit 1
+    ;;
+esac
+`
+  };
+  for (const [path, text] of Object.entries(files)) {
+    mkdirSync(join(steamapps, path, '..'), { recursive: true });
+    writeFileSync(join(steamapps, path), text, { mode: 0o755 });
+  }
+}
 execFileSync('i686-w64-mingw32-gcc', [
   '-municode',
   '-mwindows',
@@ -405,6 +473,12 @@ try {
   await page.goto('http://127.0.0.1:41917/settings');
   await page.getByRole('button', { name: 'Forget' }).click();
   await page.getByText('No games linked yet.').waitFor();
+  if (proton) {
+    // Automatic is Wine here (it's installed): the build is picked as a reader would.
+    // After Automatic and Wine: the first build found.
+    await page.getByLabel('Runs games with').selectOption({ index: 2 });
+    await page.getByText(', from Steam').waitFor();
+  }
   await page.goto('http://127.0.0.1:41917/manage');
   await page.locator(`.cover-card-main[title="${title}"]`).click();
   await page.getByText('Read', { exact: true }).click();
@@ -442,11 +516,14 @@ try {
   checkNames(synced);
   if (decode(synced[appData]) !== 'step=10\n') fail(`save contents: ${decode(synced[appData])}`);
   if (existsSync(join(home, 'Documents/TestVN'))) fail('the save went into the home folder');
-  const prefixes = readdirSync(config)
-    .map((name) => join(config, name, 'wine-prefixes'))
-    .find((path) => existsSync(path));
-  const prefix = join(prefixes, saved.folder);
-  const user = join(prefix, 'drive_c/users', userInfo().username);
+  const userData = readdirSync(config)
+    .map((name) => join(config, name))
+    .find((path) => existsSync(join(path, proton ? 'proton-prefixes' : 'wine-prefixes')));
+  if (!userData) fail(`no ${proton ? 'Proton' : 'Wine'} prefix was made`);
+  const winePrefix = join(userData, 'wine-prefixes', saved.folder);
+  if (proton && existsSync(winePrefix)) fail('a Wine prefix was made for a game on Proton');
+  const prefix = proton ? join(userData, 'proton-prefixes', saved.folder, 'pfx') : winePrefix;
+  const user = join(prefix, 'drive_c/users', proton ? 'steamuser' : userInfo().username);
   // Not saves: the next push must leave them out.
   for (const junk of ['AppData/Local/Temp/junk.dat', 'AppData/Local/TestVN/cache/junk.dat']) {
     mkdirSync(join(user, junk, '..'), { recursive: true });
@@ -780,7 +857,7 @@ try {
     env: {
       ...process.env,
       HOME: home,
-      WINEPREFIX: join(prefixes, saved.folder),
+      WINEPREFIX: prefix,
       WINEDEBUG: '-all',
       LANG: 'ja_JP.UTF-8',
       TESTVN_MS: '3000'
@@ -797,8 +874,58 @@ try {
   outside.kill();
   await page.screenshot({ path: join(root, 'hook-attach.png') });
 
+  if (proton) {
+    step('Switched to Wine: the saves made under Proton are in the Wine prefix at its first start');
+    await waitForNoGame();
+    // Here, where waiting changes no step's timing: Wine writes the registry file when its
+    // server ends, a few seconds after the game.
+    const wanted = [
+      '"MS Mincho"="MS Gothic"',
+      // メイリオ, as Wine writes it.
+      '"\\x30e1\\x30a4\\x30ea\\x30aa"="MS Gothic"'
+    ];
+    for (let tries = 0; ; tries += 1) {
+      const registry = existsSync(join(prefix, 'user.reg'))
+        ? readFileSync(join(prefix, 'user.reg'), 'utf8')
+        : '';
+      if (wanted.every((line) => registry.includes(line))) break;
+      if (tries > 60) fail(`the prefix has no font replacements (${wanted})`);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    const saves = 'AppData/Roaming/TestVN';
+    const wineUser = join(winePrefix, 'drive_c/users', userInfo().username);
+    const carried = Date.now() - 86_400_000;
+    writeFileSync(join(user, saves, 'carried.dat'), 'from Proton\n');
+    utimesSync(join(user, saves, 'carried.dat'), new Date(), new Date(carried));
+    writeFileSync(join(user, saves, 'kept.dat'), 'older, from Proton\n');
+    utimesSync(join(user, saves, 'kept.dat'), new Date(), new Date(carried));
+    // Already in the Wine prefix and newer: it stays.
+    mkdirSync(join(wineUser, saves), { recursive: true });
+    writeFileSync(join(wineUser, saves, 'kept.dat'), 'newer, in Wine\n');
+    await page.evaluate((folder) => window.chimiDesktop.games.runner(folder, 'wine'), saved.folder);
+    await page.getByRole('button', { name: 'Clear lines' }).click();
+    await page.getByRole('button', { name: 'Start the game' }).click();
+    // The last run's rows are still listed for a moment: this start's own status, then its game.
+    await page.getByText('Playing.').waitFor();
+    const read = (name) => readFileSync(join(wineUser, saves, name), 'utf8');
+    if (
+      !existsSync(join(wineUser, saves, 'carried.dat')) ||
+      read('carried.dat') !== 'from Proton\n'
+    )
+      fail('the Proton save isn’t in the Wine prefix');
+    if (Math.floor(statSync(join(wineUser, saves, 'carried.dat')).mtimeMs) !== carried)
+      fail('the copied save lost its time');
+    if (read('kept.dat') !== 'newer, in Wine\n')
+      fail('a newer save in the Wine prefix was replaced');
+    for (const junk of ['AppData/Local/Temp/junk.dat', 'AppData/Local/TestVN/cache/junk.dat'])
+      if (existsSync(join(wineUser, junk))) fail(`copied though not a save: ${junk}`);
+    await page.getByText('The game has closed.').waitFor();
+  }
+
   console.log(`OK (screenshot ${join(root, 'hook.png')}, Anki media anki.jpeg and anki.wav)`);
 } catch (error) {
+  // First, in case closing the app hangs.
+  console.log(`FAILED: ${error.message}`);
   await page.screenshot({ path: join(root, 'failed.png') });
   throw error;
 } finally {

@@ -41,6 +41,7 @@ contextBridge.exposeInMainWorld('chimiDesktop', {
     link: (id, index, folder, title) => ipcRenderer.invoke('games-link', id, index, folder, title),
     forget: (folder) => ipcRenderer.invoke('games-forget', folder),
     list: () => ipcRenderer.invoke('games-list'),
+    runner: (folder, runner) => ipcRenderer.invoke('games-runner', folder, runner),
     session: (folder) => ipcRenderer.invoke('games-session', folder),
     mark: (seq) => ipcRenderer.invoke('games-mark', seq),
     media: (seq, want) => ipcRenderer.invoke('games-media', seq, want),
