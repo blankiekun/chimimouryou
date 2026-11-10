@@ -298,6 +298,8 @@
   let clean = hookCleaner({});
   let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
   let stopListening: (() => void) | undefined;
+  /** The page was left: a start still waiting launches and connects nothing */
+  let destroyed = false;
   /** The game's folder (main's key), once its record is read */
   let nativeFolder = $state<string>();
   /** Started without LunaHook: lines come over the WebSocket; undefined while not linked here */
@@ -323,6 +325,7 @@
   async function startNative() {
     const book = await database.getData(nativeId!);
 
+    if (destroyed) return;
     if (!book || !games) {
       nativeStatus = 'This game isn’t in this library.';
       return;
@@ -334,11 +337,14 @@
     rememberNativeGame(info.folder!, book.id);
     nativeFolder = info.folder;
     launchOnly = (await games.options(info.folder!))?.launchOnly;
+    if (destroyed) return;
     nativeHook = info.nativeHook;
     cleanup = info.hookCleanup ?? {};
     clean = hookCleaner(cleanup);
 
     const session = await games.session(info.folder!);
+
+    if (destroyed) return;
 
     // Another game is running: this page must not listen, or its lines and exit count here.
     if (session?.running && session.folder !== info.folder) {
@@ -359,8 +365,15 @@
     nativeStatus = 'Starting the game…';
     // The last run may have closed with no /hook open to push its saves.
     await pushSaves();
+    if (destroyed) return;
 
-    const result = await games.launch(info.folder!, await nativeSavesToPull(saveSync));
+    const pull = await nativeSavesToPull(saveSync);
+
+    if (destroyed) return;
+
+    const result = await games.launch(info.folder!, pull);
+
+    if (destroyed) return;
 
     // It ended while saves were pulled: this launch started, and needs the lines.
     if (result.status === 'started') stopListening ??= games.onHook(onNative);
@@ -404,6 +417,8 @@
     ranked = [];
     stopListening ??= games.onHook(onNative);
     const result = await games.attach(nativeFolder, index);
+
+    if (destroyed) return;
 
     if (result.status === 'started') {
       nativeRunning = true;
@@ -782,6 +797,7 @@
   });
 
   onDestroy(() => {
+    destroyed = true;
     stopListening?.();
     cleanupSubscription.unsubscribe();
     disconnect();

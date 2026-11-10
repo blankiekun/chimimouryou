@@ -169,14 +169,19 @@ export function dictionaryAnkiFromYomitan(options: Options) {
   return { settings: dictionaryAnkiSettings(settings), server, apiKey };
 }
 
-/** Takes a Yomitan export's Anki options: the synced ones, this browser's address and key. */
+/**
+ * Takes a Yomitan export's Anki options: the synced ones, this browser's address (http(s) only)
+ * and its key when the file has one (this app's own export leaves it out). `server` is the
+ * address when the file changed it, for the import's message.
+ */
 export function applyYomitanAnki(options: Options) {
   const anki = dictionaryAnkiFromYomitan(options);
   if (!anki) return undefined;
   dictionaryAnki$.next(anki.settings);
-  if (anki.server) ankiConnectUrl$.next(anki.server);
-  ankiApiKey$.next(anki.apiKey);
-  return anki.settings;
+  const changed = /^https?:\/\//i.test(anki.server) && anki.server !== ankiConnectUrl$.getValue();
+  if (changed) ankiConnectUrl$.next(anki.server);
+  if (anki.apiKey) ankiApiKey$.next(anki.apiKey);
+  return { settings: anki.settings, server: changed ? anki.server : undefined };
 }
 
 /**

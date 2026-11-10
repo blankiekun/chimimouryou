@@ -114,8 +114,11 @@ async function infoList({ type, url, voice }: AudioSourceOptions, term: string, 
 }
 
 let playing: HTMLAudioElement | undefined;
+/** Bumped by every stop, so a word still loading doesn't play after it */
+let generation = 0;
 
 export function stopTermAudio() {
+  generation += 1;
   playing?.pause();
   playing = undefined;
   globalThis.speechSynthesis?.cancel();
@@ -170,13 +173,15 @@ export function audioSources(audio: AudioOptions): AudioSourceOptions[] {
 /** Plays the first audio found for the word; false when no source has it. */
 export async function playTermAudio(term: string, reading: string, audio: AudioOptions) {
   stopTermAudio();
+  const current = generation;
   for (const source of audioSources(audio)) {
     let infos: Info[] = [];
     try {
       infos = await infoList(source, term, reading);
     } catch {
-      continue;
+      // none from this source
     }
+    if (current !== generation) return false;
     for (const info of infos) {
       if (info.type === 'tts') {
         if (speak(info.text, info.voice, audio.volume)) return true;
@@ -184,12 +189,13 @@ export async function playTermAudio(term: string, reading: string, audio: AudioO
       }
       try {
         const element = await loadAudio(info.url, source.type, audio.volume);
-        stopTermAudio();
+        if (current !== generation) return false;
         playing = element;
         await element.play();
         return true;
       } catch {
-        // the next one
+        // the next one, unless stopped meanwhile (a paused play() rejects)
+        if (current !== generation) return false;
       }
     }
   }

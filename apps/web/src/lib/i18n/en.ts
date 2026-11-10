@@ -621,6 +621,7 @@ export const en = {
   'anki.dict.import': 'Import from Yomitan',
   'anki.dict.importHint': 'From Yomitan → Settings → Backup → Export Settings.',
   'anki.dict.imported': 'Imported: {formats}',
+  'anki.dict.addressChanged': 'AnkiConnect’s address is now {address}.',
   'anki.dict.formats': 'Card formats',
   'anki.dict.formatName': 'Name',
   'anki.dict.formatType': 'For',

@@ -27,7 +27,7 @@
 
   async function insert(event: SubmitEvent) {
     event.preventDefault();
-    const error = await oninsert?.(code.trim());
+    const error = await oninsert?.(code.trim()).catch((e: any) => String(e.message));
 
     codeNote = error ?? 'Added: its thread shows here once the game draws text through it.';
     if (!error) code = '';

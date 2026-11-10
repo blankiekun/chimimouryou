@@ -88,6 +88,14 @@ type Request = DictionaryRequest extends infer R
     : never
   : never;
 
+/** The worker died or its file didn't load: its calls fail, and the next call starts a new one. */
+function failWorker(message: string) {
+  worker?.terminate();
+  worker = undefined;
+  pending.forEach(({ reject }) => reject(new Error(message)));
+  pending.clear();
+}
+
 function call<T>(request: Request, onProgress?: Progress) {
   if (!worker) {
     worker = new Worker(
@@ -107,6 +115,8 @@ function call<T>(request: Request, onProgress?: Progress) {
       if (data.type === 'error') waiting.reject(new Error(data.message));
       else waiting.resolve(data.value);
     };
+    worker.onerror = (event) => failWorker(event.message || "The dictionary's worker didn't load");
+    worker.onmessageerror = () => failWorker("The dictionary's worker sent an unreadable answer");
   }
   const id = nextId++;
   return new Promise<T>((resolve, reject) => {
@@ -342,7 +352,10 @@ export async function exportYomitanSettings() {
   );
 }
 
-/** Imports a Yomitan settings export (or a bare options object), upgraded to this version. */
+/**
+ * Imports a Yomitan settings export (or a bare options object), upgraded to this version.
+ * Resolves to AnkiConnect's address when the file changed it.
+ */
 export async function importYomitanSettings(json: string) {
   const data = JSON.parse(json);
   const util = await getOptionsUtil();
@@ -353,7 +366,7 @@ export async function importYomitanSettings(json: string) {
   saveYomitanOptions(ensureDictionarySettings(options, installed, false));
   // Its Anki options too, for the popup's Add to Anki (kept apart: they follow the account).
   const { applyYomitanAnki } = await import('$lib/data/dictionary/anki-dictionary');
-  applyYomitanAnki(options);
+  return applyYomitanAnki(options)?.server;
 }
 
 /** Yomitan's default settings, keeping the installed dictionaries (enabled). */

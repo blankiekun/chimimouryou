@@ -19,16 +19,29 @@
   let listing = $state(false);
   let note = $state('');
 
-  async function setLaunchOnly(on: boolean) {
-    launchOnly = (await games.options(folder, { launchOnly: on }))?.launchOnly;
+  async function setLaunchOnly(box: HTMLInputElement) {
+    note = '';
+    try {
+      launchOnly = (await games.options(folder, { launchOnly: box.checked }))?.launchOnly;
+    } catch (error: any) {
+      note = error.message;
+      box.checked = !!launchOnly;
+    }
   }
 
   async function list() {
     listing = true;
     note = '';
-    const result = await games.windows(folder);
+    let result: Awaited<ReturnType<typeof games.windows>>;
 
-    listing = false;
+    try {
+      result = await games.windows(folder);
+    } catch (error: any) {
+      note = error.message;
+      return;
+    } finally {
+      listing = false;
+    }
     windows = result.status === 'ok' ? result.windows : undefined;
     if (result.status === 'ok') {
       if (!result.windows.length) note = 'No program with a window is running.';
@@ -45,7 +58,7 @@
         <input
           type="checkbox"
           checked={launchOnly}
-          onchange={(event) => setLaunchOnly(event.currentTarget.checked)}
+          onchange={(event) => setLaunchOnly(event.currentTarget)}
         />
         Launch only (I hook with my own tool)
       </label>

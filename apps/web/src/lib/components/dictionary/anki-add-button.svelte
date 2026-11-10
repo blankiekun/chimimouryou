@@ -128,6 +128,9 @@
   async function add(item: (typeof formats)[number]) {
     const state = states[item.index];
     if (addDisabled(state)) return;
+    // The popup reuses this component for the next word: answers for this one are dropped then.
+    const started = entry;
+    const stale = () => entry !== started;
     busy = item.index;
     message = '';
     error = '';
@@ -138,11 +141,12 @@
         return;
       }
       if (state?.noteIds?.length && settings.duplicateBehavior === 'overwrite') {
-        await overwriteAnkiNote(note, entry, item.format, state.noteIds);
-        message = $t$('lookup.overwritten');
+        await overwriteAnkiNote(note, started, item.format, state.noteIds);
+        if (!stale()) message = $t$('lookup.overwritten');
         return;
       }
-      const { noteId, errors } = await addAnkiNote(note, entry, item.format, settings);
+      const { noteId, errors } = await addAnkiNote(note, started, item.format, settings);
+      if (stale()) return;
       states = {
         ...states,
         [item.index]: { noteIds: [...validIds(state), noteId], noteInfos: state?.noteInfos ?? [] }
@@ -150,7 +154,7 @@
       message = $t$('lookup.addedToAnki');
       if (errors.length) error = errors.join('\n');
     } catch (e: any) {
-      error = e.message;
+      if (!stale()) error = e.message;
     } finally {
       busy = null;
     }
