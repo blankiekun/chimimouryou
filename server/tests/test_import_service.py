@@ -232,6 +232,20 @@ class ImportServiceTest(unittest.TestCase):
                 self.assertEqual(service.add_book(dict(job))['state'], state)
                 self.assertEqual(len(adds()) - len(before), int(state == 'added'))
 
+    def test_identifier_lookup_failing_fails_the_job(self):
+        # Catches: a locked library read as "no book carries this identifier": a retried volume recorded as a
+        # duplicate, an extension's update added as a second book.
+        with mock.patch.dict(os.environ, {'FAKE_CALIBRE_BROKEN': 'list'}):
+            job = self.wait_for(self.sources_volume('chimi:kakuyomu:locked:1')['id'])
+            self.assertEqual(job['state'], 'failed')
+            with open(ADDS) as f:
+                before = f.read()
+            _, body = self.request('/add?name=w.epub&identifier=chimi:ext:0123456789ab:42:abcdefabcdef:9'
+                                   '&title=W%209&series=W&seriesIndex=9', epub())
+            self.assertEqual(self.wait_for(body['job']['id'])['state'], 'failed')
+        with open(ADDS) as f:
+            self.assertEqual(f.read(), before)
+
     def test_volume_duplicating_another_book_stays_a_duplicate(self):
         # Catches: every same-titled volume being taken for this one, when Calibre has no book with its identifier.
         job = self.wait_for(self.sources_volume('chimi:kakuyomu:other:1')['id'])
