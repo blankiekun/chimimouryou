@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pagePath } from '$lib/data/env';
   import { highlightsToMarkdown, type Highlight } from '$lib/data/reader/annotations';
   import { downloadBlob } from '$lib/functions/file-dom/download-blob';
   import { createEventDispatcher } from 'svelte';
@@ -73,6 +74,7 @@
       >
         {$t$('reader.download')}
       </button>
+      <a class="app-button-quiet" href="{pagePath}/highlights">{$t$('highlights.allBooks')}</a>
     </span>
   </div>
 
