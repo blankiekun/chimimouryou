@@ -4,7 +4,8 @@
    * two-page spread at a time (right to left or left to right) or a vertical strip; tap the
    * middle for the menu. Paged modes handle their own gestures: swipes drag the page along,
    * pinch, double tap and Ctrl+wheel zoom, and a zoomed page pans.
-   * Book-only extras (highlights, recap, listen, search, statistics) are left out.
+   * Book-only extras (highlights, recap, listen, search) are left out. Reading time, characters
+   * and kanji met are counted per page turn in manga-reading.ts.
    */
   import { bookContent, damagedBookText } from '$lib/data/book-content';
   import { noteReading } from '$lib/data/social/social';
@@ -38,7 +39,15 @@
     type MangaText,
     type MokuroPage
   } from '$lib/data/manga/mokuro';
-  import { autoReplication$, database } from '$lib/data/store';
+  import {
+    autoReplication$,
+    database,
+    startDayHoursForTracker$,
+    statisticsEnabled$
+  } from '$lib/data/store';
+  import { MangaReading } from '$lib/data/manga/manga-reading';
+  import { recordKanjiText } from '$lib/data/words/kanji-seen';
+  import { MergeMode } from '$lib/data/merge-mode';
   import { context, externalHandler, handler, watchReturn } from '$lib/data/sync/media-sync';
   import { pagePath } from '$lib/data/env';
   import { fullscreenManager } from '$lib/data/fullscreen-manager';
@@ -69,7 +78,10 @@
   import type { BaseStorageHandler } from '$lib/data/storage/handler/base-handler';
   import type { BrowserStorageHandler } from '$lib/data/storage/handler/browser-handler';
   import { StorageDataType, StorageKey } from '$lib/data/storage/storage-types';
-  import { AutoReplicationType } from '$lib/functions/replication/replication-options';
+  import {
+    AutoReplicationType,
+    ReplicationSaveBehavior
+  } from '$lib/functions/replication/replication-options';
   import { replicateData } from '$lib/functions/replication/replicator';
   import { formatPageTitle } from '$lib/functions/format-page-title';
 
@@ -132,6 +144,15 @@
   let requestingWakeLock = false;
   /** Each page's mokuro text, if the server has some for this volume. */
   let pageText: (MokuroPage | undefined)[] = [];
+  let reading: MangaReading | undefined;
+  /** Statistics saved here but not uploaded yet */
+  let statisticsUnsynced = false;
+  let statisticsSyncedAt = 0;
+
+  const readingOptions = () => ({
+    statistics: $statisticsEnabled$,
+    startDayHours: $startDayHoursForTracker$
+  });
 
   $: readingMode = seriesReadingMode(volumes.series);
   $: mode = $readingMode;
@@ -160,6 +181,10 @@
   // What is open, for the plugins (Discord status).
   $: if (ready && book && pageCount) {
     readingActivity({ kind: 'manga', title: book.title, page: shownPage + 1, pageCount });
+  }
+  $: if (ready && reading) {
+    reading.moved(shownPages, readingOptions());
+    scheduleSave();
   }
   // Next is to the left in right-to-left manga.
   $: sign = mode === 'rtl' ? -1 : 1;
@@ -298,7 +323,7 @@
             local,
             false,
             [context(book!)],
-            [StorageDataType.PROGRESS]
+            [StorageDataType.PROGRESS, StorageDataType.STATISTICS]
           );
 
           if (error) throw new Error(error);
@@ -317,6 +342,16 @@
     openedPage = savedIndex;
     goToPage(savedIndex);
     ready = true;
+    reading = new MangaReading(
+      data.title,
+      new Map(
+        (await database.getStatisticsForBook(data.title)).map((stat) => [stat.dateKey, stat])
+      ),
+      pageCount,
+      savedIndex,
+      shownPages
+    );
+    reading.setText(pageText);
 
     loadText(data).catch(({ message }) => logger.warn(`Could not load the page text: ${message}`));
     if (external?.storageType === StorageKey.CALIBRE) {
@@ -349,6 +384,7 @@
     }
 
     pageText = text ? pagesText(text, mangaPages(data)) : [];
+    reading?.setText(pageText);
   }
 
   // Text uploaded or made in this browser while the volume is open shows at once.
@@ -368,7 +404,9 @@
     openError = '';
 
     try {
-      await save();
+      // The next volume opens in a new page, with its own reading.
+      reading?.pause(readingOptions());
+      await save(true);
 
       const calibre = handler(StorageKey.CALIBRE, '', false);
 
@@ -381,6 +419,7 @@
     } catch (error: any) {
       // The handler is shared: progress saved from here must still go to this book.
       external?.startContext(context(book!));
+      reading?.resume();
       openError = `Could not open ${target.title}: ${error.message}`;
       logger.warn(openError);
     } finally {
@@ -393,15 +432,40 @@
     saveTimer = setTimeout(save, 1000);
   }
 
-  async function save() {
+  /** `force` uploads statistics at once; else statistics alone upload at most once a minute. */
+  async function save(force = false) {
     clearTimeout(saveTimer);
 
-    if (!ready || shownPage === savedIndex) return;
+    if (!ready) return;
 
-    savedIndex = shownPage;
-    await database.putBookmark(mangaBookmark(book!.id, shownPage, pageCount));
-    if (isPluginEnabled('social'))
-      noteReading(book!.title, shownPage + 1, pageCount, false, 'manga');
+    const bookmarkChanged = shownPage !== savedIndex;
+
+    if (bookmarkChanged) {
+      savedIndex = shownPage;
+      await database.putBookmark(mangaBookmark(book!.id, shownPage, pageCount));
+      if (isPluginEnabled('social'))
+        noteReading(book!.title, shownPage + 1, pageCount, false, 'manga');
+    }
+
+    const changes = reading?.takeChanges();
+
+    if (changes) {
+      try {
+        if (changes.text) await recordKanjiText(book!.title, changes.text, changes.upTo);
+        if (changes.days.length) {
+          await database.storeStatistics(
+            book!.title,
+            changes.days,
+            ReplicationSaveBehavior.Overwrite,
+            MergeMode.LOCAL
+          );
+          statisticsUnsynced = true;
+        }
+      } catch (error: any) {
+        reading!.putBack(changes);
+        logger.warn(`Manga statistics were not saved: ${error.message}`);
+      }
+    }
 
     const upSync =
       external &&
@@ -409,16 +473,32 @@
         $autoReplication$ === AutoReplicationType.Up ||
         $autoReplication$ === AutoReplicationType.All);
 
-    if (upSync) {
-      const error = await replicateData(
-        local,
-        external!,
-        false,
-        [context(book!)],
-        [StorageDataType.PROGRESS]
-      ).catch((err: any) => err.message);
+    if (!upSync || (!bookmarkChanged && !statisticsUnsynced)) return;
 
-      if (error) logger.warn(`Manga progress sync failed: ${error}`);
+    const wait = statisticsSyncedAt + 60_000 - Date.now();
+
+    if (!bookmarkChanged && !force && wait > 0) {
+      // A reader who stops turning pages still syncs within the minute.
+      saveTimer = setTimeout(save, wait);
+      return;
+    }
+
+    const types = [StorageDataType.PROGRESS];
+    const withStatistics = statisticsUnsynced;
+
+    if (withStatistics) {
+      types.push(StorageDataType.STATISTICS);
+      statisticsUnsynced = false;
+      statisticsSyncedAt = Date.now();
+    }
+
+    const error = await replicateData(local, external!, false, [context(book!)], types).catch(
+      (err: any) => err.message
+    );
+
+    if (error) {
+      if (withStatistics) statisticsUnsynced = true;
+      logger.warn(`Manga progress sync failed: ${error}`);
     }
   }
 
@@ -918,13 +998,19 @@
   }
 
   async function leave() {
-    await save().catch((error) => logger.warn(error.message));
+    reading?.pause(readingOptions());
+    await save(true).catch((error) => logger.warn(error.message));
     await database.deleteLastItem();
     goto(`${pagePath}/manage`);
   }
 
   function onVisibilityChange() {
-    if (document.visibilityState === 'hidden') save();
+    if (document.visibilityState === 'hidden') {
+      reading?.pause(readingOptions());
+      save(true);
+    } else {
+      reading?.resume();
+    }
     // The browser drops the lock when the page is hidden.
     updateWakeLock($mangaKeepScreenOn$);
   }
@@ -981,7 +1067,8 @@
 
   onDestroy(() => {
     textChanged.unsubscribe();
-    save();
+    reading?.pause(readingOptions());
+    save(true);
     readingActivity();
     if (book && pageCount && isPluginEnabled('social')) {
       noteReading(book.title, shownPage + 1, pageCount, true, 'manga');
