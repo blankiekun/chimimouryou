@@ -4,6 +4,52 @@ chimimouryou is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook
 upstream's own changes are not listed here. Each version's section is written when it is released,
 from the pull requests merged since the previous tag (pull requests don't edit this file).
 
+## v3.18.1 (2026-11-10)
+
+### Changed
+
+- Dictionary: the one-tap JMdict install takes the 2026-11-10 release.
+
+### Fixed
+
+- Dictionary lookups: if the dictionary's worker fails to load, lookups recover instead of staying
+  dead until a reload. The same word elsewhere on the page is looked up again where it is.
+- Dictionary lookups: word audio from an earlier lookup no longer plays after a newer one, or after
+  the popup closes.
+- Anki: "Add to Anki" no longer marks the next looked-up word as added. Importing a settings file
+  keeps this browser's AnkiConnect key, and says when it changed the AnkiConnect address.
+- Visual novels and texthooker: reading changes from a save that failed are kept for the next save.
+  Leaving the texthooker page while a game is starting no longer starts it.
+- Desktop: a Mihon download (Java, extensions) that stalls is given up after 60 seconds without
+  data, instead of blocking installs until the app restarts.
+- Desktop: a sign-in redirect with an odd `state` no longer raises an error dialog, and forgetting
+  a game while it runs no longer raises an error when it exits.
+- Google Drive: book folders with more than 100 files were read only up to the first 100, so the
+  newest progress or statistics could be missed. Now all are read.
+- Google Drive: cancelling a library export no longer drops other books' waiting changes or shows
+  "Synced". Deleting a book that had two folders on Drive removes both. A reading goal saved in
+  another tab during a sync is no longer lost.
+- Community: actions limited for the day (helpful, edit, delete and similar) show a message that
+  fits.
+- Visual novels: the rail button reads "Exit full screen" while in full screen.
+- Standalone connected to a server: the empty library says imports go to the server's library.
+- Server: a locked Calibre library during an import is reported as a failed job, not read as
+  "duplicate". Two cover uploads at once for one book no longer lose the cover, and the difficulty
+  results file is flushed to disk before it replaces the old one.
+- Social hub: a malformed address answers 400, not 500.
+- VPS site: the deploy workflow purges all of /vn/ from Cloudflare.
+
+### Security
+
+- Accounts: after a session expired with changes unsent, another reader signing in on the same
+  browser could get the first reader's progress and statistics written into their account. They
+  no longer are.
+- Desktop games: synced saves may no longer write engine archives, Python modules or Windows side
+  files (.xp3, .rpa, .pyd, .config and similar) into a game's folder.
+- Google Drive: the Drive token is no longer put in the address when access is revoked.
+- Server: the difficulty service's request limit could be skipped with a trailing slash. It no
+  longer can.
+
 ## v3.18.0 (2026-11-09)
 
 ### Added
