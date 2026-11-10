@@ -77,7 +77,59 @@ describe('GDriveStorageHandler.upload', () => {
   });
 });
 
+describe('GDriveStorageHandler listings', () => {
+  // Bug: a folder's listing stopped at Drive's first page, losing the newest progress file.
+  it("reads a book folder's second page", async () => {
+    const handler = new GDriveStorageHandler(window) as any;
+
+    // Like Drive: only the requested fields come back, the page token included.
+    handler.request = vi.fn(async (url: string) => {
+      const params = new URL(url).searchParams;
+      const paged = params.get('fields')!.includes('nextPageToken');
+
+      if (params.get('pageToken') === 'page2') {
+        return { files: [{ id: 'p2', name: 'progress_6_6_2000_0.5.json', parents: ['folder'] }] };
+      }
+
+      return {
+        files: [{ id: 'b1', name: 'bookdata_6_6_1_1_1.zip', parents: ['folder'] }],
+        ...(paged ? { nextPageToken: 'page2' } : {})
+      };
+    });
+    handler.currentContext = { title: '本' };
+
+    const files = await handler.getExternalFiles('folder');
+
+    expect(files.map((file: { id: string }) => file.id)).toEqual(['b1', 'p2']);
+  });
+});
+
 describe('GDriveStorageHandler.deleteBookData', () => {
+  // Bug: the book came back from the folder a second device had made for it.
+  it('deletes every folder of a book that has two', async () => {
+    const handler = new GDriveStorageHandler(window) as any;
+    const executeDelete = vi.fn(async () => {});
+
+    Object.assign(handler, { storageSourceName: 'two-folders', rootId: 'root', executeDelete });
+    handler.request = vi.fn(async (url: string) => {
+      const query = new URL(url).searchParams.get('q')!;
+
+      return query.includes("'root' in parents")
+        ? {
+            files: [
+              { id: 'old', name: '本' },
+              { id: 'new', name: '本' }
+            ]
+          }
+        : { files: [{ id: 'b1', name: 'bookdata_6_6_1_1_1.zip', parents: ['old'] }] };
+    });
+
+    await handler.getBookList();
+    await handler.deleteBookData(['本'], new AbortController().signal, false);
+
+    expect(executeDelete.mock.calls.map(([id]: any) => id).sort()).toEqual(['new', 'old']);
+  });
+
   it('also deletes the browser copy of a game kept on this device', async () => {
     const { database } = await import('$lib/data/store');
     const { vnElementHtml } = await import('$lib/data/vn/vn');

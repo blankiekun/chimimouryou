@@ -102,6 +102,9 @@ export class GDriveStorageHandler extends BaseStorageHandler implements SyncFile
 
   private titleToId = new Map<string, string>();
 
+  /** The newer folders of a title that has several: deleted with the book. */
+  private titleToExtraIds = new Map<string, string[]>();
+
   private titleToFiles = new Map<string, ExternalFile[]>();
 
   /** Listed even with the cache on (`listFresh`). */
@@ -144,6 +147,7 @@ export class GDriveStorageHandler extends BaseStorageHandler implements SyncFile
     if (clearAll) {
       this.rootId = '';
       this.titleToId.clear();
+      this.titleToExtraIds.clear();
       this.titleToBookCard.clear();
       this.dataListFetched = false;
     }
@@ -716,10 +720,15 @@ export class GDriveStorageHandler extends BaseStorageHandler implements SyncFile
           try {
             throwIfAborted(cancelSignal);
 
-            const externalId = this.titleToId.get(bookToDelete);
+            const externalIds = [
+              ...(this.titleToExtraIds.get(bookToDelete) ?? []),
+              this.titleToId.get(bookToDelete)
+            ];
 
-            if (externalId) {
-              await this.executeDelete(externalId);
+            for (const externalId of externalIds) {
+              if (externalId) {
+                await this.executeDelete(externalId);
+              }
             }
 
             removedTitles.push(bookToDelete);
@@ -733,6 +742,7 @@ export class GDriveStorageHandler extends BaseStorageHandler implements SyncFile
             }
 
             this.titleToId.delete(bookToDelete);
+            this.titleToExtraIds.delete(bookToDelete);
             this.titleToBookCard.delete(bookToDelete);
 
             database.dataListChanged$.next(this);
@@ -985,7 +995,16 @@ export class GDriveStorageHandler extends BaseStorageHandler implements SyncFile
           const desanitizedTitle = BaseStorageHandler.desanitizeFilename(title.name);
 
           // Two devices can make a book's folder at once: the oldest is the one, as in `ensureTitle`.
-          if (!this.titleToId.has(desanitizedTitle)) this.titleToId.set(desanitizedTitle, title.id);
+          const firstId = this.titleToId.get(desanitizedTitle);
+
+          if (!firstId) {
+            this.titleToId.set(desanitizedTitle, title.id);
+          } else if (firstId !== title.id) {
+            this.titleToExtraIds.set(desanitizedTitle, [
+              ...(this.titleToExtraIds.get(desanitizedTitle) ?? []),
+              title.id
+            ]);
+          }
           titleIdToName.set(title.id, desanitizedTitle);
         }
 
@@ -1383,7 +1402,8 @@ export class GDriveStorageHandler extends BaseStorageHandler implements SyncFile
     const params = new URLSearchParams();
     params.append('corpora', 'user');
     params.append('spaces', 'drive');
-    params.append('fields', fields);
+    // Drive returns only the fields asked for: without the token a listing ends at its first page.
+    params.append('fields', fields.includes('nextPageToken') ? fields : `${fields},nextPageToken`);
     // Folders: the oldest first, so every device picks the same one of two.
     params.append('orderBy', 'createdTime');
     params.append('q', query);

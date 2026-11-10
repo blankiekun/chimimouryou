@@ -9,7 +9,14 @@ import { describe, expect, it } from 'vitest';
 import { installWay } from '$lib/data/standalone/install-app';
 import { showsExternalReadHint } from '$lib/data/standalone/standalone-storage';
 import { StorageKey } from '$lib/data/storage/storage-types';
-import { syncEnded, syncState$, syncView, type SyncState } from '$lib/data/sync/sync-status';
+import {
+  syncCancelled,
+  syncEnded,
+  syncStarted,
+  syncState$,
+  syncView,
+  type SyncState
+} from '$lib/data/sync/sync-status';
 
 const idle: SyncState = {
   running: undefined,
@@ -83,6 +90,24 @@ describe('syncEnded', () => {
       waiting: [],
       lastSync: now + 1,
       lastWhat: 'Book'
+    });
+  });
+});
+
+describe('syncCancelled', () => {
+  // Bug: a cancelled sync counted as a success, dropping the changes it never sent.
+  it('keeps the changes of books it did not reach waiting, and does not say synced', () => {
+    const waiting = ['A\tbookmark', 'B\tbookmark'];
+
+    localStorage.setItem('syncWaiting', JSON.stringify(waiting));
+    syncState$.next({ ...idle, lastSync: now, waiting });
+    syncStarted(2);
+    syncCancelled(['A\tbookmark']);
+
+    expect(syncState$.getValue()).toMatchObject({
+      running: undefined,
+      waiting: ['B\tbookmark'],
+      lastSync: now
     });
   });
 });

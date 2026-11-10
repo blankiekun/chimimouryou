@@ -581,7 +581,8 @@ export class StorageOAuthManager {
 
     params.append('token', token);
 
-    fetch(`${revokeEndpoint}?${params.toString()}`, { method: 'POST' }).catch(() => {
+    // In the body (sent as a form), so the token stays out of URLs and their logs.
+    fetch(revokeEndpoint, { method: 'POST', body: params }).catch(() => {
       // no-op
     });
   }

@@ -153,6 +153,12 @@ export function syncEnded(keys: string[], error: string, what: string, now = Dat
   update({ running: undefined, failed: true });
 }
 
+/** A cancelled sync is no success: only the `done` keys stop waiting, and the last sync stays. */
+export function syncCancelled(done: string[]) {
+  dropWaiting(done);
+  update({ running: undefined });
+}
+
 /** Lists an error in Settings → Sync → Status (also an unreadable synced file, sync-files.ts). */
 export function recordSyncError(what: string, detail: string, now = Date.now()) {
   const errors = [

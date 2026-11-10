@@ -29,6 +29,7 @@ import {
 } from '$lib/functions/replication/replication-progress';
 import {
   isSyncBetween,
+  syncCancelled,
   syncEnded,
   syncStarted,
   syncStep,
@@ -298,6 +299,7 @@ export async function replicateData(
   const processSubtitleData = dataToReplicate.includes(StorageDataType.SUBTITLE);
   const replicationLimiter = pLimit(1);
   const replicationTasks: Promise<void>[] = [];
+  const finished: ReplicationContext[] = [];
 
   let errorMessage = '';
   let processed = 0;
@@ -477,6 +479,7 @@ export async function replicateData(
           }
 
           processed += 1;
+          finished.push(context);
           if (isSync) syncStep();
         } catch (error: any) {
           errorMessage = handleErrorDuringReplication(
@@ -531,19 +534,27 @@ export async function replicateData(
 
   if (isSync) {
     // Only sends wait for a retry, and never whole books: those are imports the reader can repeat.
-    syncEnded(
+    const keysOf = (sent: ReplicationContext[]) =>
       targetHandler.storageType === StorageKey.BROWSER
         ? []
-        : contexts.flatMap((context) =>
+        : sent.flatMap((context) =>
             dataToReplicate
               .filter((type) => type !== StorageDataType.DATA)
               .map((type) =>
                 waitingEntry(targetHandler.getCurrentStorageSource(), type, context.title)
               )
-          ),
-      cancelSignal?.aborted ? '' : errorMessage,
-      contexts.length === 1 ? contexts[0].title : `${contexts.length} books`
-    );
+          );
+
+    if (cancelSignal?.aborted) {
+      // The books it never reached keep waiting.
+      syncCancelled(keysOf(finished));
+    } else {
+      syncEnded(
+        keysOf(contexts),
+        errorMessage,
+        contexts.length === 1 ? contexts[0].title : `${contexts.length} books`
+      );
+    }
   }
 
   if (targetHandler instanceof BackupStorageHandler) {

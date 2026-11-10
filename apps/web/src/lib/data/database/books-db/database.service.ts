@@ -1178,23 +1178,22 @@ export class DatabaseService {
     let readingGoalsToStore: BooksDbReadingGoal[] = readingGoals;
     let newReadingGoalModified = lastGoalModified;
 
-    if (readingGoalsMergeMode === MergeMode.MERGE) {
-      const existingReadingGoals = await this.getSyncedReadingGoals();
-
-      ({ readingGoalsToStore, newReadingGoalModified } = mergeReadingGoals(
-        readingGoals,
-        existingReadingGoals,
-        saveBehavior === ReplicationSaveBehavior.NewOnly,
-        newReadingGoalModified
-      ));
-    }
-
+    // The read belongs to the write: a goal another tab saves in between must not be cleared.
     const tx = db.transaction(['readingGoal'], 'readwrite');
 
     try {
       const readingGoalStore = tx.objectStore('readingGoal');
       const limiter = pLimit(1);
       const tasks: Promise<void>[] = [];
+
+      if (readingGoalsMergeMode === MergeMode.MERGE) {
+        ({ readingGoalsToStore, newReadingGoalModified } = mergeReadingGoals(
+          readingGoals,
+          await readingGoalStore.getAll(),
+          saveBehavior === ReplicationSaveBehavior.NewOnly,
+          newReadingGoalModified
+        ));
+      }
 
       readingGoalsToStore.sort(readingGoalSortFunction);
 
