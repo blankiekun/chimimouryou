@@ -6,7 +6,8 @@
 
 import 'fake-indexeddb/auto';
 import { describe, expect, it, vi } from 'vitest';
-import { VnReading, vnTextSource } from '$lib/data/vn/vn-text';
+import { database } from '$lib/data/store';
+import { VnReading, VnReadingSaver, vnTextSource } from '$lib/data/vn/vn-text';
 import { vnboxLines } from '$lib/data/vn/vn';
 
 const options = { statistics: true, startDayHours: 0 };
@@ -86,5 +87,26 @@ describe('VnReading', () => {
 
     game.add('犬', false, false, options, start + 2 * 3600_000);
     expect(game.takeChanges()!.days[0].readingTime).toBe(120);
+  });
+});
+
+describe('VnReadingSaver', () => {
+  it('saves what a failed save took with the next one', async () => {
+    const start = new Date(2026, 9, 26, 12).getTime();
+    const game = new VnReading({ title: 'g', pages: [], characters: 0 }, new Map(), start);
+    const saver = new VnReadingSaver(
+      { id: 1, title: 'g', characters: 100 } as any,
+      game,
+      undefined as any,
+      undefined
+    );
+
+    game.add('猫が好き', false, false, options, start + 5000);
+    vi.spyOn(database, 'putBookmark').mockRejectedValueOnce(new Error('QuotaExceededError'));
+    await expect(saver.save(true)).rejects.toThrow('QuotaExceededError');
+    await saver.save(true);
+
+    expect(await database.getStatisticsForBook('g')).toMatchObject([{ charactersRead: 4 }]);
+    expect((await database.getBookmark(1))?.exploredCharCount).toBe(4);
   });
 });

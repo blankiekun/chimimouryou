@@ -189,8 +189,10 @@
     backupMessage = '';
     backupError = '';
     try {
-      await importYomitanSettings(await files[0].text());
-      backupMessage = $t$('dict.importedSettings');
+      const server = await importYomitanSettings(await files[0].text());
+      backupMessage =
+        $t$('dict.importedSettings') +
+        (server ? ` ${$t$('anki.dict.addressChanged', { address: server })}` : '');
     } catch (error: any) {
       backupError = $t$('dict.importSettingsFailed', { error: error.message });
     }

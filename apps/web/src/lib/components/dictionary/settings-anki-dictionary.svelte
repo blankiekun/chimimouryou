@@ -111,8 +111,11 @@
     if (!connect || !models.includes(model)) return;
     error = '';
     try {
-      const names = await ankiInvoke<string[]>('modelFieldNames', { modelName: model });
+      // The format as it is now: by the time Anki answers, its index may be another format's.
       const format = settings.cardFormats[index];
+      const names = await ankiInvoke<string[]>('modelFieldNames', { modelName: model });
+      index = settings.cardFormats.indexOf(format);
+      if (index < 0) return;
       setFormat(index, {
         model,
         fields: Object.fromEntries(
@@ -200,13 +203,14 @@
     message = '';
     error = '';
     try {
-      const anki = await importDictionaryAnki(await files[0].text());
-      message = $t$('anki.dict.imported', {
-        formats: anki.cardFormats
-          .filter(({ deck, model }) => deck && model)
-          .map(({ name, deck, model }) => `${name} (${deck}, ${model})`)
-          .join('; ')
-      });
+      const { settings: anki, server } = await importDictionaryAnki(await files[0].text());
+      message =
+        $t$('anki.dict.imported', {
+          formats: anki.cardFormats
+            .filter(({ deck, model }) => deck && model)
+            .map(({ name, deck, model }) => `${name} (${deck}, ${model})`)
+            .join('; ')
+        }) + (server ? ` ${$t$('anki.dict.addressChanged', { address: server })}` : '');
     } catch (e: any) {
       error = $t$('anki.dict.importFailed', { error: e.message });
     }

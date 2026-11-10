@@ -157,6 +157,13 @@ export class VnReading {
     return changes;
   }
 
+  /** Changes taken but not saved (the save failed): the next takeChanges has them again. */
+  putBack({ text, days }: NonNullable<ReturnType<VnReading['takeChanges']>>) {
+    this.unsavedText = text + this.unsavedText;
+    days.forEach(({ dateKey }) => this.changedDays.add(dateKey));
+    this.dirty = true;
+  }
+
   today(startDayHours: number, now = new Date()) {
     return this.statistics.get(getDateKey(startDayHours, now))?.charactersRead ?? 0;
   }
@@ -215,7 +222,14 @@ export class VnReadingSaver {
 
     const changes = this.reading.takeChanges();
 
-    if (changes) await this.saveLocally(changes);
+    if (changes) {
+      try {
+        await this.saveLocally(changes);
+      } catch (error) {
+        this.reading.putBack(changes);
+        throw error;
+      }
+    }
     if (!this.unsynced.size || !vnSyncs(this.external, AutoReplicationType.Up)) return;
 
     const wait = this.syncedAt + 60_000 - Date.now();

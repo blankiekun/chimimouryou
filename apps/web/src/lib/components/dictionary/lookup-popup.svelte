@@ -294,6 +294,15 @@
     stopTermAudio();
   }
 
+  const nodeIds = new WeakMap<Node, number>();
+  let nextNodeId = 0;
+
+  /** Where a scan starts and its text (TextSource.hasSameStart): the same words elsewhere differ. */
+  function scanKey(nested: boolean, { node, offset, text }: ScannedText) {
+    if (!nodeIds.has(node)) nodeIds.set(node, (nextNodeId += 1));
+    return `${nested}:${nodeIds.get(node)}:${offset}:${text}`;
+  }
+
   /** The scanning input's search: the text at the point, root or nested by where it is. */
   function searchAt(x: number, y: number, info: ScanInputInfo) {
     if (!profile || !$builtInLookups$) return undefined;
@@ -332,7 +341,7 @@
       }
       return undefined;
     }
-    const key = `${nested}:${scan.text}`;
+    const key = scanKey(nested, scan);
     if (key === lastScanKey && open) return Promise.resolve();
     lastScanKey = key;
     return run(scan, nested, at, info.input.options);
@@ -638,7 +647,7 @@
     if (nested ? !canNest() : !inScope(scan.node.parentElement)) return;
     const left = doc === frame?.contentDocument ? frame.getBoundingClientRect().left : 0;
     const top = doc === frame?.contentDocument ? frame.getBoundingClientRect().top : 0;
-    lastScanKey = `${nested}:${scan.text}`;
+    lastScanKey = scanKey(nested, scan);
     void run(scan, nested, { left, top }, { searchTerms: true, searchKanji: true });
   }
 

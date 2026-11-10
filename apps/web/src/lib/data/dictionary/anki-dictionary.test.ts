@@ -10,13 +10,16 @@ import { getStandardFieldMarkers } from '$lib/vendor/yomitan/data/anki-template-
 import type { TermDictionaryEntry } from '$lib/vendor/yomitan/types/dictionary';
 import type { ProfileOptions } from '$lib/vendor/yomitan/types/settings';
 import { scannedSentence } from '$lib/functions/dictionary/scan';
+import { ankiApiKey$, ankiConnectUrl$ } from './anki';
 import {
   addAnkiNote,
   ankiMobileUrl,
+  applyYomitanAnki,
   buildAnkiNote,
   defaultFieldValue,
   dictionaryAnkiFromYomitan,
   dictionaryAnkiSettings,
+  dictionaryAnkiToYomitan,
   duplicateQuery
 } from './anki-dictionary';
 
@@ -280,6 +283,26 @@ describe('built-in dictionary notes', () => {
       },
       apiKey: 'k'
     });
+  });
+
+  it('importing our own export keeps the key', () => {
+    const options = util.getDefault();
+    const anki = options.profiles[0].options.anki;
+    anki.cardFormats[0] = { ...anki.cardFormats[0], deck: 'Mining', model: 'Lapis' };
+    ankiApiKey$.next('secret');
+    ankiConnectUrl$.next('http://127.0.0.1:8765');
+    options.profiles[0].options.anki = dictionaryAnkiToYomitan(anki);
+
+    expect(applyYomitanAnki(options)?.server).toBeUndefined();
+    expect(ankiApiKey$.getValue()).toBe('secret');
+
+    // Another device's file: its key and address are taken, an address that isn't http(s) is not.
+    options.profiles[0].options.anki = { ...anki, apiKey: 'theirs', server: 'http://desk:8765' };
+    expect(applyYomitanAnki(options)?.server).toBe('http://desk:8765');
+    expect(ankiApiKey$.getValue()).toBe('theirs');
+    options.profiles[0].options.anki = { ...anki, apiKey: '', server: 'file:///etc/hosts' };
+    expect(applyYomitanAnki(options)?.server).toBeUndefined();
+    expect(ankiConnectUrl$.getValue()).toBe('http://desk:8765');
   });
 
   // An earlier version's single card format must keep working (OptionsUtil v64's upgrade).

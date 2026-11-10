@@ -57,19 +57,21 @@ const mediaLoader: MediaLoader = {
   }
 };
 
-let database: DictionaryStore | undefined;
-let translator: Translator | undefined;
+let engine: Promise<{ database: DictionaryStore; translator: Translator }> | undefined;
 
-async function ready() {
-  if (!database) {
-    const db = new DictionaryStore();
-    await db.prepare();
-    const tr = new Translator(db);
-    tr.prepare();
-    database = db;
-    translator = tr;
-  }
-  return { database, translator: translator as Translator };
+/** One store and translator, however many calls come first; a failed setup is tried again. */
+function ready() {
+  engine ??= (async () => {
+    const database = new DictionaryStore();
+    await database.prepare();
+    const translator = new Translator(database);
+    translator.prepare();
+    return { database, translator };
+  })().catch((error) => {
+    engine = undefined;
+    throw error;
+  });
+  return engine;
 }
 
 export async function importDictionary(

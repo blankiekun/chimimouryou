@@ -618,6 +618,7 @@ export const ja: Record<MessageKey, string> = {
   'anki.dict.import': 'Yomitan から読み込む',
   'anki.dict.importHint': 'Yomitan → 設定 → バックアップ → 設定をエクスポート から。',
   'anki.dict.imported': '読み込みました: {formats}',
+  'anki.dict.addressChanged': 'AnkiConnectのアドレスは {address} になりました。',
   'anki.dict.formats': 'カード形式',
   'anki.dict.formatName': '名前',
   'anki.dict.formatType': '対象',

@@ -14,7 +14,7 @@ const state = vi.hoisted(() => ({ enabled: [] as boolean[], lookup: vi.fn() }));
 // jsdom has no caret-from-point: the text under any point is 狐の親子.
 vi.mock('$lib/functions/dictionary/scan', async (importOriginal) => ({
   ...(await importOriginal<typeof import('$lib/functions/dictionary/scan')>()),
-  scanAt: () => ({ text: '狐の親子' }),
+  scanAt: () => ({ node: document.body, offset: 0, text: '狐の親子' }),
   scannedRange: vi.fn()
 }));
 
