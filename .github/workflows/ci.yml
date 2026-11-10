@@ -86,12 +86,20 @@ jobs:
       - name: Lint
         run: pnpm eslint .
 
-      # svelte-check isn't run: it has 13 known errors from upstream files.
+      # 13 known errors from upstream files (CONTRIBUTING.md): only more than that fails.
+      - name: Type check
+        working-directory: apps/web
+        run: |
+          pnpm check --output machine | tee "$RUNNER_TEMP/check.txt" || true
+          errors=$(grep -c ' ERROR ' "$RUNNER_TEMP/check.txt" || true)
+          echo "svelte-check: $errors errors (baseline 13)"
+          grep -q ' COMPLETED ' "$RUNNER_TEMP/check.txt" && [ "$errors" -le 13 ]
+
       - name: Social hub tests
         run: pnpm --filter chimi-social-hub test
 
       - name: Desktop shell tests
-        run: node --test apps/desktop/serve.test.js apps/desktop/oauth.test.js apps/desktop/mihon.test.js
+        run: pnpm --filter desktop test
 
       - name: Test build
         run: pnpm build
