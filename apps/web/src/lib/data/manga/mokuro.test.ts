@@ -18,6 +18,9 @@ import {
   readMokuroFile,
   removeLocalMokuro,
   saveLocalMokuro,
+  maxMangaSearchResults,
+  pageOfSentence,
+  searchMangaText,
   type MokuroPage,
   type MokuroText
 } from './mokuro';
@@ -214,5 +217,103 @@ describe('mokuroPlainText', () => {
 
   it('escapes the text as HTML for the analysis tools', () => {
     expect(mokuroHtml(volume)).toBe('<p>吾輩は猫である。</p><p>&lt;名前&gt;&amp;</p>');
+  });
+});
+
+describe('searchMangaText', () => {
+  const block = (...lines: string[]) => ({
+    box: [0, 0, 1, 1] as [number, number, number, number],
+    vertical: true,
+    fontSize: 20,
+    lines
+  });
+  const withBlocks = (...blocks: string[][]): MokuroPage => ({
+    ...page('p.jpg'),
+    blocks: blocks.map((lines) => block(...lines))
+  });
+
+  it('finds a query in a block, with its page and text', () => {
+    const pages = [withBlocks(['おはよう']), withBlocks(['吾輩は猫である'], ['名前はまだ無い'])];
+
+    expect(searchMangaText(pages, '猫')).toEqual([{ page: 1, text: '吾輩は猫である' }]);
+  });
+
+  it('finds a query across the lines of one block', () => {
+    expect(searchMangaText([withBlocks(['吾輩は', '猫である'])], 'は猫')).toEqual([
+      { page: 0, text: '吾輩は猫である' }
+    ]);
+  });
+
+  it('does not match across blocks', () => {
+    expect(searchMangaText([withBlocks(['吾輩は'], ['猫である'])], 'は猫')).toEqual([]);
+  });
+
+  it('ignores kana type and full-width letters', () => {
+    const pages = [withBlocks(['ネコがいる']), withBlocks(['abc の本'])];
+
+    expect(searchMangaText(pages, 'ねこ')).toEqual([{ page: 0, text: 'ネコがいる' }]);
+    expect(searchMangaText(pages, 'ＡＢＣ')).toEqual([{ page: 1, text: 'abc の本' }]);
+  });
+
+  it('gives nothing for an empty or blank query', () => {
+    const pages = [withBlocks(['猫'])];
+
+    expect(searchMangaText(pages, '')).toEqual([]);
+    expect(searchMangaText(pages, ' 　')).toEqual([]);
+  });
+
+  it('skips pages without text and keeps the page indexes', () => {
+    const pages = [undefined, withBlocks(['犬']), undefined, withBlocks(['猫'])];
+
+    expect(searchMangaText(pages, '猫')).toEqual([{ page: 3, text: '猫' }]);
+  });
+
+  it('stops at the result limit', () => {
+    const pages = Array.from({ length: maxMangaSearchResults + 50 }, () => withBlocks(['猫']));
+
+    expect(searchMangaText(pages, '猫')).toHaveLength(maxMangaSearchResults);
+  });
+
+  it('takes regex characters as plain text', () => {
+    const pages = [withBlocks(['(笑)']), withBlocks(['笑い'])];
+
+    expect(searchMangaText(pages, '(笑')).toEqual([{ page: 0, text: '(笑)' }]);
+    expect(searchMangaText(pages, '.')).toEqual([]);
+  });
+});
+
+describe('pageOfSentence', () => {
+  const withLines = (...lines: string[]): MokuroPage => ({
+    ...page('p.jpg'),
+    blocks: [{ box: [0, 0, 1, 1], vertical: true, fontSize: 20, lines }]
+  });
+  const pages = [withLines('おはよう'), withLines('こんにちは'), withLines('吾輩は', '猫である')];
+
+  it('gives the shown page the sentence is on', () => {
+    expect(pageOfSentence(pages, [0, 1], 'こんにちは')).toBe(1);
+  });
+
+  it('finds a sentence across the lines of a block', () => {
+    expect(pageOfSentence(pages, [1, 2], '吾輩は猫である')).toBe(2);
+  });
+
+  it('ignores whitespace on both sides', () => {
+    expect(pageOfSentence(pages, [1, 2], '吾輩は 猫\nである')).toBe(2);
+    expect(pageOfSentence([withLines('吾輩は ', '猫'), withLines('犬')], [1, 0], '吾輩は猫')).toBe(
+      0
+    );
+  });
+
+  it('finds a sentence longer than the bubble', () => {
+    expect(pageOfSentence(pages, [0, 1], '「こんにちは」と言った。')).toBe(1);
+  });
+
+  it('gives the first shown page when no page has it, or it is empty', () => {
+    expect(pageOfSentence(pages, [1, 2], 'さようなら')).toBe(1);
+    expect(pageOfSentence(pages, [2, 1], '')).toBe(2);
+  });
+
+  it('skips shown pages without text', () => {
+    expect(pageOfSentence([undefined, withLines('猫')], [0, 1], '猫')).toBe(1);
   });
 });
