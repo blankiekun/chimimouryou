@@ -66,7 +66,8 @@ class Handler(BaseHTTPRequestHandler):
     def _get(self):
         if not httpbase.from_nginx(self.headers, settings.INTERNAL_TOKEN_FILE):
             return self._send(403, {'error': 'Only nginx may call this service'})
-        parts = self.path.split('?')[0].strip('/').split('/')
+        # Only the leading slash: nginx rate-limits words/<id>, readings/<id> and ranks exactly, not words/5/.
+        parts = self.path.split('?')[0].removeprefix('/').split('/')
         if parts == ['status']:
             self._send(200, jobs.runner.status())
         elif len(parts) == 2 and parts[0] in ('kanji', 'words', 'readings') and re.fullmatch(r'-?[0-9]+', parts[1]):
@@ -105,7 +106,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, {'error': 'Only nginx may call this service'})
         if not httpbase.same_site(self.headers, settings.CORS_ORIGINS):
             return self._send(403, {'error': 'Request from another site'})
-        parts = self.path.split('?')[0].strip('/').split('/')
+        parts = self.path.split('?')[0].removeprefix('/').split('/')
         if len(parts) == 2 and parts[0] == 'readings' and re.fullmatch(r'-?[0-9]+', parts[1]):
             return self._send(200, {'status': queues.readings.request(int(parts[1]), settings.READINGS_WAIT)})
         if parts == ['ranks']:
