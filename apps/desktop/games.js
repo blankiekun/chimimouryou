@@ -133,10 +133,12 @@ const notSaves = /^(?:temp|tmp)$|cache/i;
 const systemFolders = /^wine\/drive_c\/(?:users\/[^/]+\/AppData\/[^/]+|ProgramData)\/microsoft\//i;
 /**
  * Files Windows or a game runs or loads (Windows drops trailing dots and spaces), engines' scripts
- * too (Ren'Py, Python, Lua, Java, Kirikiri): `game/game/x.rpy` would run on launch.
+ * too (Ren'Py, Python, Lua, Java, Kirikiri): `game/game/x.rpy` would run on launch. Also what they
+ * load by themselves from the game's folder: archives (`patch.xp3`, `.rpa`), Python modules and
+ * Windows' side files (`game.exe.config`, `.manifest`, `.local`).
  */
 const runnable =
-  /\.(?:exe|dll|asi|ocx|sys|cpl|scr|com|bat|cmd|ps1|vbs|js|jse|wsf|msi|lnk|url|reg|hta|inf|pif|rpy|rpyc|rpym|rpymc|py|pyc|lua|jar|tjs|ks)[. ]*$/i;
+  /\.(?:exe|dll|asi|ocx|sys|cpl|scr|com|bat|cmd|ps1|vbs|js|jse|wsf|msi|lnk|url|reg|hta|inf|pif|rpy|rpyc|rpym|rpymc|py|pyc|lua|jar|tjs|ks|xp3|rpa|rpyb|pyd|pyo|so|dylib|config|manifest|local)[. ]*$/i;
 
 /**
  * Whether main may write or read a synced name: isWindowsSaveKey's rules plus no Microsoft
@@ -574,7 +576,8 @@ function watchHelper(ctx, current, child) {
       media.stop();
       syncOverlay(ctx);
     }
-    if (current.watch) {
+    // Forgotten while it ran: no record to add folders to, and none made again.
+    if (current.watch && ctx.store.games[folder]) {
       const before = current.watch;
       const pending = Object.entries(topFolders(app))
         .filter(

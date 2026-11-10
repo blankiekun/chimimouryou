@@ -45,3 +45,13 @@ test('only the waiting state finishes a sign-in, once', () => {
   cancelBrowserSignIn(popup);
   assert.equal(finishBrowserSignIn(redirect({ code: 'c', state: closed })), undefined);
 });
+
+test('a state of the same length with other characters is no match and no crash', () => {
+  const popup = {};
+  const state = new URL(startBrowserSignIn(consent, popup)).searchParams.get('state');
+  assert.equal(
+    finishBrowserSignIn(redirect({ code: 'c', state: `é${state.slice(1)}` })),
+    undefined
+  );
+  assert.deepEqual(finishBrowserSignIn(redirect({ code: 'c', state })), { popup, code: 'c' });
+});

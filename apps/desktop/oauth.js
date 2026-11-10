@@ -39,8 +39,11 @@ export function cancelBrowserSignIn(popup) {
   if (pending?.popup === popup) pending = undefined;
 }
 
-const sameState = (a, b) =>
-  a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
+// Byte lengths, not string lengths: timingSafeEqual throws on buffers of different sizes.
+const sameState = (a, b) => {
+  const [left, right] = [Buffer.from(a), Buffer.from(b)];
+  return left.length === right.length && timingSafeEqual(left, right);
+};
 
 /**
  * For a redirect to /auth carrying the waiting sign-in's state: { popup, code } or { popup, error },
