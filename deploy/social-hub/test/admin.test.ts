@@ -188,6 +188,7 @@ describe('hub moderation', () => {
 
     expect((await as('DELETE', `/v1/admin/user/${aki.me.id}/finished/k2`)).status).toBe(200);
     expect((await as('DELETE', `/v1/admin/user/${aki.me.id}/finished/k2`)).status).toBe(404);
+    expect((await as('DELETE', `/v1/admin/user/${aki.me.id}/finished/%E0`)).status).toBe(400);
     expect((await as('DELETE', `/v1/admin/user/${aki.me.id}/status/0`)).status).toBe(200);
     expect(
       (await as('DELETE', `/v1/admin/user/${aki.me.id}/events/${body.events[0].id}`)).status

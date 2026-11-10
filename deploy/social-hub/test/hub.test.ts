@@ -720,6 +720,7 @@ describe('social hub', () => {
     expect(rows('finished').map((r) => r.user)).toEqual([ren.me.id]);
     expect(rows('events').map((r) => r.user)).toEqual([ren.me.id]);
     expect((await call('DELETE', '/v1/finished/k1')).status).toBe(401);
+    expect((await call('DELETE', '/v1/finished/%E0', undefined, aki.token)).status).toBe(400);
   });
 
   it('answers 429 with CORS headers when the edge limit refuses, before any D1 access', async () => {
