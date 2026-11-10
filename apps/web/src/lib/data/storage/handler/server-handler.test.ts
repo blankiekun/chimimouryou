@@ -759,6 +759,35 @@ describe('while an expired session still owns the data', () => {
   });
 });
 
+describe("while the browser still holds another reader's data", () => {
+  // Bug: A's session expired with changes unsent, B signed in here, and A's progress went into
+  // B's account before (or, the catalog out of reach, without) the release clearing it.
+  it("writes none of it into the signed-in reader's rows", async () => {
+    account.user = { id: 'b', username: 'b' };
+
+    const server = handler();
+
+    server.startContext({ title: 'こころ' });
+    await expect(
+      server.saveProgress({ progress: 0.1, lastBookmarkModified: 10 } as never)
+    ).rejects.toMatchObject({ status: 401 });
+    await expect(
+      writeSyncFile('annotations.json', '{"highlights":[]}', { title: 'こころ' })
+    ).rejects.toMatchObject({ status: 401 });
+    expect(api.requests.filter((request) => request.startsWith('PUT'))).toEqual([]);
+  });
+
+  it('writes data from before owners were recorded, adopted by the reader', async () => {
+    window.localStorage.removeItem('readerDataOwner');
+
+    const server = handler();
+
+    server.startContext({ title: 'こころ' });
+    await server.saveProgress({ progress: 0.1, lastBookmarkModified: 10 } as never);
+    expect(api.rowsOf('progress')).toMatchObject([{ book: 7, progress: 0.1 }]);
+  });
+});
+
 describe('opening a book offline', () => {
   // Bug: opening a book asked the server for the sync state first, so a book cached in this
   // browser failed with "Failed to fetch" when the server was out of reach.

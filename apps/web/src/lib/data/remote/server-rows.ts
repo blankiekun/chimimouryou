@@ -12,6 +12,7 @@
 
 import { accountReady, currentAccount } from '$lib/data/account/account';
 import { readerDataOwner } from '$lib/data/account/reader-data-owner';
+import { standalone } from '$lib/data/env';
 import {
   apiVersion,
   bookIdOf,
@@ -197,11 +198,16 @@ async function syncFileRows(title?: string) {
 }
 
 /**
- * Signed out while this browser still holds an account's data (its session expired): that
- * reader's rows wait in the browser for sign-in, never mixing with the shared ones.
+ * This browser still holds another reader's data: an account's while signed out (its session
+ * expired), or the previous reader's when its release failed (`releaseReaderData`, catalog out of
+ * reach). Those rows wait in the browser for their reader, never mixing with anyone else's.
  */
 export async function holdsAccountData() {
-  return !(await accountReady()) && !!(await readerDataOwner());
+  const id = (await accountReady())?.id ?? '';
+  const owner = await readerDataOwner();
+
+  // The same data `releaseReaderData` adopts: from before owners were recorded, the standalone's own.
+  return owner !== null && owner !== id && !(standalone && owner === '');
 }
 
 /**
