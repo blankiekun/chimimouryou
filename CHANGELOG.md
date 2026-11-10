@@ -4,6 +4,29 @@ chimimouryou is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook
 upstream's own changes are not listed here. Each version's section is written when it is released,
 from the pull requests merged since the previous tag (pull requests don't edit this file).
 
+## v3.19.0 (2026-11-10)
+
+### Added
+
+- Manga: the reader now records reading time, characters and kanji met in Statistics, as books and
+  visual novels do (a turn counts at most 120 seconds). Volumes without text record time only.
+  More → "Search text" (or Ctrl+F) lists the speech bubbles whose text has your search and opens
+  their page. Cards made with the Yomitan extension while a volume is open get the page the
+  sentence is on as their picture.
+- Highlights: a new page, `/highlights`, lists every book's highlights and notes held in this
+  browser, with a text filter, "With notes only", Copy and Download all as Markdown, and "Open in
+  the book". Reached from the reader's Highlights tab ("All books"). Books never opened in this
+  browser aren't listed.
+- Desktop (Linux): native Windows visual novels can run with Steam's Proton, for computers with no
+  Wine such as a Steam Deck. Settings → Desktop games, "Runs games with": Automatic (Wine when
+  installed, else the newest Proton that can run), Wine, or a Proton build, also per game. Saves
+  are carried over when a game changes runner. The Proton runner has not yet been run against
+  Valve's real Proton or on a Steam Deck; it was tried only with stand-ins for Valve's programs.
+
+### Changed
+
+- Desktop: Electron 45.3.0.
+
 ## v3.18.1 (2026-11-10)
 
 ### Changed
