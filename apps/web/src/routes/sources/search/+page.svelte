@@ -67,6 +67,8 @@
     event.preventDefault();
     const text = input.trim();
     if (/^https?:\/\//i.test(text)) {
+      // Drops a list still loading, so it can't end this lookup's Loading or overwrite its error.
+      request += 1;
       loading = true;
       error = '';
       try {

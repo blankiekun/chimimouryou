@@ -28,6 +28,12 @@ How to change this fork. See `ARCHITECTURE.md` for how the pieces fit together,
   Existing ones stay in Svelte 4 syntax (`export let`, `$:`, stores with `$`) until converted;
   `routes/b/+page.svelte` stays legacy for now. Svelte picks the mode per component, so don't mix
   the two in one file. RxJS `BehaviorSubject` stores for settings (`writable*LocalStorageSubject`).
+- State with more than two phases is one string union, not a set of booleans
+  (`let state: 'loading' | 'match' | 'ready' | 'error'` in `community-panel.svelte`,
+  `state` on import rows in `calibre-import.ts`), so impossible mixes can't be written. A plain
+  `busy` + `error` pair is fine for one button. Async loads that a newer one can replace keep a
+  request counter and drop answers that aren't the latest (`request` in
+  `routes/sources/search/+page.svelte`); anything else that sets the same `loading`/`error` bumps it too.
 - Colours come from theme CSS variables (`var(--surface-strong-color)`,
   `var(--reader-panel-bg)`, …), never fixed values.
 - Commit messages: `fix: …`, `feat: …`, `refactor: …`, `test: …`, `docs: …`,
