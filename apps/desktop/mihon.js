@@ -19,7 +19,6 @@ import { readFile, rename, rm, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { clearTimeout, setTimeout } from 'node:timers';
-import { URL } from 'node:url';
 
 /** Temurin 21.0.13+9 JRE per platform/arch (api.adoptium.net, checksums from its release). */
 const JRE = {
@@ -92,10 +91,13 @@ export function registerMihon({ app, ipcMain, net, isApp, hostDir, jvmArgs = [] 
   });
 
   /**
-   * A download through the app's network stack, redirects followed (GitHub → its CDN) and https on
-   * every hop. Given up after DOWNLOAD_SILENCE_MS with no bytes (as main.js sourcesFetch).
+   * A download through the app's network stack, redirects followed by Electron (GitHub → its CDN).
+   * Given up after DOWNLOAD_SILENCE_MS with no bytes (as main.js sourcesFetch).
+   * https is checked on the address given only: later hops can't be checked through net.fetch
+   * (`redirect: 'manual'` rejects with "Redirect was cancelled", and `response.url` is empty).
    */
   async function download(url, maxBytes, onProgress) {
+    if (!url.startsWith('https://')) throw new Error('Only https addresses');
     // eslint-disable-next-line no-undef -- a global only: no node: module exports it
     const controller = new AbortController();
     let stall;
@@ -104,21 +106,12 @@ export function registerMihon({ app, ipcMain, net, isApp, hostDir, jvmArgs = [] 
       stall = setTimeout(() => controller.abort(), DOWNLOAD_SILENCE_MS);
     };
     try {
-      let response;
-      for (let hop = 0; ; hop += 1) {
-        if (hop === 10) throw new Error('Too many redirects');
-        if (!url.startsWith('https://')) throw new Error('Only https addresses');
-        alive();
-        response = await net.fetch(url, {
-          signal: controller.signal,
-          redirect: 'manual',
-          cache: 'no-store',
-          credentials: 'omit'
-        });
-        const location = response.headers.get('Location');
-        if (!(response.status >= 300 && response.status < 400 && location)) break;
-        url = new URL(location, url).href;
-      }
+      alive();
+      const response = await net.fetch(url, {
+        signal: controller.signal,
+        cache: 'no-store',
+        credentials: 'omit'
+      });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const total = Number(response.headers.get('Content-Length') || 0);
       if (total > maxBytes) throw new Error('Too big');
