@@ -4,7 +4,7 @@
    * two-page spread at a time (right to left or left to right) or a vertical strip; tap the
    * middle for the menu. Paged modes handle their own gestures: swipes drag the page along,
    * pinch, double tap and Ctrl+wheel zoom, and a zoomed page pans.
-   * Book-only extras (highlights, recap, listen, search) are left out. Reading time, characters
+   * Book-only extras (highlights, recap, listen) are left out. Reading time, characters
    * and kanji met are counted per page turn in manga-reading.ts.
    */
   import { bookContent, damagedBookText } from '$lib/data/book-content';
@@ -24,6 +24,7 @@
   import ReaderMoreList from '$lib/components/book-reader/reader-more-list.svelte';
   import MangaBottomBar from '$lib/components/manga/manga-bottom-bar.svelte';
   import MangaSettings from '$lib/components/manga/manga-settings.svelte';
+  import MangaSearch from '$lib/components/manga/manga-search.svelte';
   import VolumeTransition from '$lib/components/manga/volume-transition.svelte';
   import MokuroOverlay from '$lib/components/manga/mokuro-overlay.svelte';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
@@ -114,6 +115,7 @@
   let showMenu = false;
   let showSettings = false;
   let showMore = false;
+  let showSearch = false;
   let shift = false;
   let loaded = new Set<number>();
   let strip: HTMLElement | undefined;
@@ -244,6 +246,17 @@
         openVolume(item.volume);
       }
     })),
+    ...(hasText
+      ? [
+          {
+            label: 'Search text',
+            onclick: () => {
+              showMore = false;
+              showSearch = true;
+            }
+          }
+        ]
+      : []),
     ...(fullscreenManager.fullscreenEnabled
       ? [
           {
@@ -940,8 +953,14 @@
     const forward = mode === 'rtl' ? 'ArrowLeft' : 'ArrowRight';
     const back = mode === 'rtl' ? 'ArrowRight' : 'ArrowLeft';
 
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f' && hasText) {
+      showSearch = true;
+      event.preventDefault();
+      return;
+    }
+
     if (event.key === 'Escape') {
-      if (showMore) return;
+      if (showMore || showSearch) return;
       if (showSettings) showSettings = false;
       else if (transition && mode !== 'vertical') leave();
       else showMenu = !showMenu;
@@ -1243,7 +1262,7 @@
           <Fa icon={faExpand} />
         </button>
       {/if}
-      {#if moreItems.length || fullscreenManager.fullscreenEnabled}
+      {#if moreItems.length || hasText || fullscreenManager.fullscreenEnabled}
         <button
           class="bar-icon"
           class:bar-icon-active={showMore}
@@ -1295,5 +1314,17 @@
 {#if showMore}
   <ReaderSheet title="More" on:close={() => (showMore = false)}>
     <ReaderMoreList items={moreList} />
+  </ReaderSheet>
+{/if}
+
+{#if showSearch}
+  <ReaderSheet title="Search text" on:close={() => (showSearch = false)}>
+    <MangaSearch
+      pages={pageText}
+      onjump={(index) => {
+        showSearch = false;
+        goToPage(index);
+      }}
+    />
   </ReaderSheet>
 {/if}

@@ -18,6 +18,8 @@ import {
   readMokuroFile,
   removeLocalMokuro,
   saveLocalMokuro,
+  maxMangaSearchResults,
+  searchMangaText,
   type MokuroPage,
   type MokuroText
 } from './mokuro';
@@ -214,5 +216,67 @@ describe('mokuroPlainText', () => {
 
   it('escapes the text as HTML for the analysis tools', () => {
     expect(mokuroHtml(volume)).toBe('<p>吾輩は猫である。</p><p>&lt;名前&gt;&amp;</p>');
+  });
+});
+
+describe('searchMangaText', () => {
+  const block = (...lines: string[]) => ({
+    box: [0, 0, 1, 1] as [number, number, number, number],
+    vertical: true,
+    fontSize: 20,
+    lines
+  });
+  const withBlocks = (...blocks: string[][]): MokuroPage => ({
+    ...page('p.jpg'),
+    blocks: blocks.map((lines) => block(...lines))
+  });
+
+  it('finds a query in a block, with its page and text', () => {
+    const pages = [withBlocks(['おはよう']), withBlocks(['吾輩は猫である'], ['名前はまだ無い'])];
+
+    expect(searchMangaText(pages, '猫')).toEqual([{ page: 1, text: '吾輩は猫である' }]);
+  });
+
+  it('finds a query across the lines of one block', () => {
+    expect(searchMangaText([withBlocks(['吾輩は', '猫である'])], 'は猫')).toEqual([
+      { page: 0, text: '吾輩は猫である' }
+    ]);
+  });
+
+  it('does not match across blocks', () => {
+    expect(searchMangaText([withBlocks(['吾輩は'], ['猫である'])], 'は猫')).toEqual([]);
+  });
+
+  it('ignores kana type and full-width letters', () => {
+    const pages = [withBlocks(['ネコがいる']), withBlocks(['abc の本'])];
+
+    expect(searchMangaText(pages, 'ねこ')).toEqual([{ page: 0, text: 'ネコがいる' }]);
+    expect(searchMangaText(pages, 'ＡＢＣ')).toEqual([{ page: 1, text: 'abc の本' }]);
+  });
+
+  it('gives nothing for an empty or blank query', () => {
+    const pages = [withBlocks(['猫'])];
+
+    expect(searchMangaText(pages, '')).toEqual([]);
+    expect(searchMangaText(pages, ' 　')).toEqual([]);
+  });
+
+  it('skips pages without text and keeps the page indexes', () => {
+    const pages = [undefined, withBlocks(['犬']), undefined, withBlocks(['猫'])];
+
+    expect(searchMangaText(pages, '猫')).toEqual([{ page: 3, text: '猫' }]);
+  });
+
+  it('stops at the result limit', () => {
+    const pages = Array.from({ length: maxMangaSearchResults + 50 }, () => withBlocks(['猫']));
+
+    expect(searchMangaText(pages, '猫')).toHaveLength(maxMangaSearchResults);
+  });
+
+  it('takes regex characters as plain text', () => {
+    const pages = [withBlocks(['(笑)']), withBlocks(['笑い'])];
+
+    expect(searchMangaText(pages, '(笑')).toEqual([{ page: 0, text: '(笑)' }]);
+    expect(searchMangaText(pages, '.')).toEqual([]);
   });
 });

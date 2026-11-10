@@ -137,6 +137,45 @@ export function mokuroPlainText(text: MokuroText) {
     .join('\n');
 }
 
+export interface MangaSearchResult {
+  /** Index into the volume's pages */
+  page: number;
+  /** The text of the block that matched */
+  text: string;
+}
+
+export const maxMangaSearchResults = 200;
+
+/** Width, case, kana type and spaces don't matter to a search. */
+const searchForm = (text: string) =>
+  text
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[ァ-ヶ]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0x60))
+    .replace(/\s+/g, '');
+
+/** The blocks (speech bubbles) whose text has the query, in page then block order. */
+export function searchMangaText(
+  pages: (MokuroPage | undefined)[],
+  query: string
+): MangaSearchResult[] {
+  const wanted = searchForm(query);
+  const results: MangaSearchResult[] = [];
+
+  if (!wanted) return results;
+
+  for (const [index, page] of pages.entries()) {
+    for (const block of page?.blocks ?? []) {
+      const text = block.lines.join('');
+
+      if (!searchForm(text).includes(wanted)) continue;
+      if (results.push({ page: index, text }) === maxMangaSearchResults) return results;
+    }
+  }
+
+  return results;
+}
+
 /** The same as book HTML for the analysis tools (localEstimate): a paragraph per bubble. */
 export function mokuroHtml(text: MokuroText) {
   const escape = (line: string) =>
