@@ -394,16 +394,21 @@ def replace_book(job: dict) -> dict | None:
 
 
 def book_with_identifier(identifier: str) -> int | None:
-    """The Calibre book carrying exactly this chimi: identifier (`identifiers:"=chimi:=<value>"`)."""
+    """The Calibre book carrying exactly this chimi: identifier (`identifiers:"=chimi:=<value>"`); None when
+    Calibre has none. Raises when calibredb itself failed (a locked library), which the worker records as a
+    failed job: read as "no such book", a volume would be added twice or called a duplicate."""
     value = identifier.split(':', 1)[1]
     result = subprocess.run(
         [CALIBREDB, '--library-path', LIBRARY, 'list', '--search', f'identifiers:"=chimi:={value}"',
          '--fields', 'title', '--for-machine'],
         capture_output=True, text=True, timeout=120, check=False)
     try:
-        return int(json.loads(result.stdout)[0]['id'])
+        if result.returncode:
+            raise ValueError
+        rows = json.loads(result.stdout)
+        return int(rows[0]['id']) if rows else None
     except (ValueError, IndexError, KeyError, TypeError):
-        return None
+        raise RuntimeError(f'calibredb list for {identifier} failed: {result.stderr.strip()[-500:]}') from None
 
 
 def add_book(job: dict) -> dict:

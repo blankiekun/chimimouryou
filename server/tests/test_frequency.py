@@ -392,6 +392,25 @@ class KanjiEndpointTest(unittest.TestCase):
             self.assertEqual(upload('0'), 403)
             self.assertEqual(upload(''), 403)
             self.assertEqual(upload('1'), 400)
+
+            # nginx rate-limits words/<id> and readings/<id> exactly: a trailing or doubled slash, which misses
+            # those locations, must not reach the queues.
+            def status(path, data=None):
+                headers = {'X-Internal-Token': 'c0ffee', 'Host': 'reader.example', 'Origin': 'https://reader.example'}
+                try:
+                    return urllib.request.urlopen(urllib.request.Request(base + path, data=data, headers=headers)).status
+                except urllib.error.HTTPError as error:
+                    return error.code
+            with mock.patch.object(service.queues.word_lists, 'request', return_value='queued') as words, \
+                    mock.patch.object(service.queues.readings, 'request', return_value='queued') as readings:
+                for path in ('/words/5/', '/words//5', '/readings/5/', '/kanji/7/', '/status/'):
+                    self.assertEqual(status(path), 404, path)
+                self.assertEqual(status('/readings/5/', b'{}'), 404)
+                self.assertEqual(status('/ranks/', b'{}'), 404)
+                self.assertEqual((words.call_count, readings.call_count), (0, 0))
+                self.assertEqual(status('/words/5'), 503)
+                self.assertEqual(status('/readings/5', b'{}'), 200)
+                self.assertEqual((words.call_count, readings.call_count), (1, 1))
         finally:
             server.shutdown()
             server.server_close()

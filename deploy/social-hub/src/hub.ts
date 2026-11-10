@@ -334,6 +334,15 @@ function text(value: unknown, max: number, code: string, optional = false) {
   return value;
 }
 
+/** A path part decoded; a malformed escape (`%E0`) is the caller's error, not a 500 */
+function decoded(value: string, code: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    throw new HttpError(400, code);
+  }
+}
+
 /** The client's address; IPv6 by its /64 (one reader gets a whole /64 to rotate through) */
 export function clientAddress(request: Request) {
   const ip = request.headers.get('CF-Connecting-IP') ?? '';
@@ -2036,7 +2045,7 @@ async function admin(request: Request, env: Env, viewer: UserRow, path: string) 
   ) {
     const [table, column] = ROWS[part];
     const { meta } = await env.DB.prepare(`DELETE FROM ${table} WHERE user = ?1 AND ${column} = ?2`)
-      .bind(user.id, part === 'finished' ? decodeURIComponent(rest) : Number(rest))
+      .bind(user.id, part === 'finished' ? decoded(rest, 'key') : Number(rest))
       .run();
 
     if (!meta.changes) throw new HttpError(404, 'row');
@@ -2234,7 +2243,7 @@ async function route(request: Request, env: Env, ctx?: Context): Promise<Respons
   if (request.method === 'DELETE' && finished) {
     // The reader deleted the book's statistics or hid it: its finished entry and events go too.
     await limit(env, user.id, 'unfinish', DAY, 100);
-    const key = text(decodeURIComponent(finished[1]), 200, 'key');
+    const key = text(decoded(finished[1], 'key'), 200, 'key');
 
     await env.DB.batch([
       env.DB.prepare('DELETE FROM finished WHERE user = ?1 AND book_key = ?2').bind(user.id, key),

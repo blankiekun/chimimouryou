@@ -101,6 +101,8 @@ def save_results(results):
     tmp = settings.RESULTS_PATH + '.tmp'
     with open(tmp, 'w', encoding='utf-8') as f:
         json.dump({**results, 'wordsStamp': readerpack.words_stamp()}, f, separators=(',', ':'))
+        f.flush()
+        os.fsync(f.fileno())
     os.replace(tmp, settings.RESULTS_PATH)
 
 
