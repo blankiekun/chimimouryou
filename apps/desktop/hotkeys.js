@@ -67,7 +67,8 @@ export function gameHotkeys({ globalShortcut, BrowserWindow }) {
     if (same) return active.failed;
     for (const accelerator of Object.values(active?.keys ?? {}))
       if (accelerator) globalShortcut.unregister(accelerator);
-    const page = active?.session === session ? active.page : undefined;
+    // No session and nothing registered (a setting changed before any game ran): no page.
+    const page = active && active.session === session ? active.page : undefined;
     active = undefined;
     if (!wanted) return [];
     const url = session.sender.getURL();

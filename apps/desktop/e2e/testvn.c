@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
-// Tiny test "VN": each click (or every 1.5 s) shows the next line, drawn the way VN engines do:
+// Tiny test "VN": each click (or every 1.5 s) shows the next line (a right click: fullscreen and back), drawn the way VN engines do:
 // TextOutW, ExtTextOutW, DrawTextW, GetGlyphOutlineW (one char at a time) and TextOutA (Shift-JIS).
 // It also writes a save file to %APPDATA%\TestVN\save1.dat, Documents\TestVN\, Saved Games\TestVN\
 // and savedata\ in its own folder. For Anki media, each step also has its own background colour, its
@@ -76,6 +76,10 @@ static void writeSave(REFKNOWNFOLDERID id, const wchar_t *sub) {
 // with no text API, so no hook LunaHook finds by itself sees it: the E2E inserts a hook code
 // (HQ4@<say's offset>:testvn.exe, the offset written to hookaddr.txt), and the game runs 20 steps.
 static int hidden;
+// TESTVN_BOX=<font height>: a text box as a VN's, for the overlay E2E's screen read: the step's line cut to
+// two characters (a speaker's name), the font at that height (the line spotter doesn't read 20 px glyphs)
+// and the caption's number in kanji (rows are laid out in full-width cells, and the read has ASCII digits).
+static int box;
 __attribute__((noinline, noipa)) void say(const wchar_t *text, HDC dc) {
   int n = 0;
   while (text[n]) n++;
@@ -93,18 +97,19 @@ static void paint(HWND hwnd) {
     EndPaint(hwnd, &ps);
     return;
   }
-  HFONT font = CreateFontW(28, 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, ANTIALIASED_QUALITY, 0, L"MS Gothic");
+  HFONT font = CreateFontW(box ? box : 28, 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, ANTIALIASED_QUALITY, 0, L"MS Gothic");
   SelectObject(dc, font);
   SetBkMode(dc, TRANSPARENT);
   int kind = step % 5;
-  if (kind == 0) TextOutW(dc, 20, 40, linesW[0], lstrlenW(linesW[0]));
-  else if (kind == 1) ExtTextOutW(dc, 20, 40, 0, NULL, linesW[1], lstrlenW(linesW[1]), NULL);
-  else if (kind == 2) { RECT r = {20, 40, 780, 200}; DrawTextW(dc, linesW[2], -1, &r, DT_LEFT | DT_WORDBREAK); }
+  #define LEN(n) (box ? 2 : (n))
+  if (kind == 0) TextOutW(dc, 20, 40, linesW[0], LEN(lstrlenW(linesW[0])));
+  else if (kind == 1) ExtTextOutW(dc, 20, 40, 0, NULL, linesW[1], LEN(lstrlenW(linesW[1])), NULL);
+  else if (kind == 2) { RECT r = {20, 40, 780, 200}; DrawTextW(dc, linesW[2], LEN(-1), &r, DT_LEFT | DT_WORDBREAK); }
   else if (kind == 3) {
     // Glyph by glyph, like engines that rasterise text themselves.
     MAT2 m = {{0, 1}, {0, 0}, {0, 0}, {0, 1}};
     int x = 20;
-    for (const wchar_t *c = linesW[3]; *c; c++) {
+    for (const wchar_t *c = linesW[3]; *c && c - linesW[3] < LEN(999); c++) {
       GLYPHMETRICS gm; DWORD size = GetGlyphOutlineW(dc, *c, GGO_GRAY8_BITMAP, &gm, 0, NULL, &m);
       if (size != GDI_ERROR && size) {
         BYTE *buf = malloc(size);
@@ -117,9 +122,10 @@ static void paint(HWND hwnd) {
       }
       x += gm.gmCellIncX;
     }
-  } else TextOutA(dc, 20, 40, lineA, lstrlenA(lineA));
+  } else TextOutA(dc, 20, 40, lineA, 2 * LEN(lstrlenA(lineA) / 2));
   wchar_t caption[64]; swprintf(caption, 64, L"第%d場面の台詞です。", step);
-  RECT capRect = {20, 120, 500, 160}; DrawTextExW(dc, caption, -1, &capRect, DT_LEFT, NULL);
+  if (box) swprintf(caption, 64, L"第%lc場面の台詞です。", L"〇一二三四五六七八九十"[step % 11]);
+  RECT capRect = {20, 120, 780, 160 + box}; DrawTextExW(dc, caption, -1, &capRect, DT_LEFT, NULL);
   DeleteObject(font);
   EndPaint(hwnd, &ps);
 }
@@ -283,6 +289,8 @@ static LRESULT CALLBACK sceneProc(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
 }
 
 static LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
+  static RECT windowed; static int full;
+  if (msg == WM_TIMER && w == 5) { KillTimer(hwnd, 5); msg = WM_APP; }
   switch (msg) {
   case WM_PAINT: paint(hwnd); return 0;
   case WM_TIMER: case WM_LBUTTONDOWN:
@@ -299,6 +307,18 @@ static LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
     }
     if (step >= (hidden ? 20 : 11)) PostQuitMessage(0);
     InvalidateRect(hwnd, NULL, TRUE); return 0;
+  // Right click: borderless fullscreen and back, as a VN's own fullscreen setting (overlay E2E).
+  // Placed again 0.3 s later: a window manager taking the frame off can put the old place back.
+  case WM_RBUTTONDOWN:
+    full = !full;
+    if (full) GetWindowRect(hwnd, &windowed);
+    SetWindowLongW(hwnd, GWL_STYLE, (full ? WS_POPUP : WS_OVERLAPPEDWINDOW) | WS_VISIBLE);
+    SetTimer(hwnd, 5, 300, NULL);
+    // fall through
+  case WM_APP:
+    if (full) SetWindowPos(hwnd, HWND_TOP, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), SWP_FRAMECHANGED);
+    else SetWindowPos(hwnd, HWND_TOP, windowed.left, windowed.top, windowed.right - windowed.left, windowed.bottom - windowed.top, SWP_FRAMECHANGED);
+    return 0;
   case WM_DESTROY: PostQuitMessage(0); return 0;
   }
   return DefWindowProcW(hwnd, msg, w, l);
@@ -328,6 +348,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show) {
   // TESTVN_MS: the step time when no argument gives it; TESTVN_HEIGHT: the window's (overlay E2E).
   wchar_t env[16];
   int height = GetEnvironmentVariableW(L"TESTVN_HEIGHT", env, 16) ? _wtoi(env) : 200;
+  if (GetEnvironmentVariableW(L"TESTVN_BOX", env, 16)) box = _wtoi(env);
   HWND hwnd = CreateWindowW(L"TestVN", L"テストVN", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 0, 0, 820, height, NULL, NULL, inst, NULL);
   int ms = cmd && *cmd ? _wtoi(cmd) : GetEnvironmentVariableW(L"TESTVN_MS", env, 16) ? _wtoi(env) : 1500;
   if (sceneMode) {

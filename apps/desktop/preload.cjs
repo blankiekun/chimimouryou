@@ -67,6 +67,7 @@ contextBridge.exposeInMainWorld('chimiDesktop', {
     edit: (on) => ipcRenderer.invoke('overlay-edit', on),
     setRects: (rects, solid) => ipcRenderer.invoke('overlay-rects', rects, solid),
     setArea: (area) => ipcRenderer.invoke('overlay-area', area),
+    frame: () => ipcRenderer.invoke('overlay-frame'),
     onState: (callback) => {
       const listener = (_event, state) => callback(state);
       ipcRenderer.on('overlay-state', listener);

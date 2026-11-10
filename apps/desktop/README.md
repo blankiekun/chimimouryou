@@ -37,6 +37,8 @@ From this folder, after `pnpm install` at the repository root:
 pnpm run fetch      # Electron's binary, Yomitan's Chrome build and LunaHook (pinned, sha256-checked;
                     # LunaHook's helper needs mingw-w64: gcc-mingw-w64-x86-64 and -i686)
 pnpm run build:web  # the standalone web build in ../web/build
+VN_OCR_OUT=../web/build/vn/ocr ../../scripts/vn-ocr/fetch.sh  # the screen-text models (~15 MB), for
+                    # the overlay's Invisible mode; without them it uses the manual area
 pnpm start
 pnpm run dist       # optional: an installer for this platform in dist/
 ```
@@ -131,12 +133,14 @@ root install stays light for the web app and its Docker image; `fetch` downloads
   `--no-hook`: no LunaHook, /hook takes lines from its WebSocket and numbers each through
   `games-stamp` for its Anki media. `e2e/native-vn.e2e.mjs` runs the whole flow
   under Wine with a test VN (`xvfb-run -a node e2e/native-vn.e2e.mjs`; not in CI).
-  Overlay (`overlay.js`, Windows and X11): with "Text overlay over the game" on (`/hook`), a
+  Overlay (`overlay.js`, Windows and X11): with a game's "Text overlay over the game" set to Band
+  or Invisible (`/hook`, or per game in Settings → Desktop games), a
   transparent, frameless, unfocusable, always-on-top window on `/hook/overlay` takes the game
   window's place (the helper's `window` message: rect, foreground, minimized, every 0.1 s) and
   shows `/hook`'s newest line (a `BroadcastChannel`) in the text box area: a bottom band by
-  default, moved and resized with Adjust overlay, kept per game in `native-games.json`
-  (`overlay` there holds on, text size and opacity; Settings → Desktop games). Windows: clicks go
+  default, moved and resized with Adjust area, kept per game in `native-games.json` with the
+  game's mode (`overlayMode`, `overlayPlace`; `overlay` there holds the text size and opacity,
+  Settings → Desktop games). Windows: clicks go
   through with mouse moves forwarded, so hover looks up and clicks still reach the game. X11:
   `forward` is Windows/macOS only, so the window's shape is the text's line boxes and an open
   popup (the whole window while the pointer is over a popup, or over the text while Yomitan is
@@ -146,6 +150,37 @@ root install stays light for the web app and its Docker image; `fetch` downloads
   a Wayland session the app starts on X11 (`--ozone-platform=x11`) while the overlay is on (a
   change takes a restart). `e2e/overlay.e2e.mjs` checks it under Xvfb with openbox and xcompmgr
   (`apt install openbox xcompmgr xdotool`); Windows is compile-only.
+  Invisible: the line is drawn transparent with no background over the game's own text, so the
+  game looks untouched and hovering or tapping its text looks words up (built-in popup or
+  Yomitan). Placing, per game: "Screen read" (default) captures the game's window once the line
+  has settled, finds the line in it (`readVnScreen`, the screen-text models in `web/vn/ocr/`,
+  GPL-3.0-or-later and non-commercial, see NOTICE) and lays each row on its glyphs; when under
+  half the line is found, the text is vertical, the window can't be captured or the models are
+  missing, and always with "Manual area", the text flows in the adjusted area at the overlay's
+  text size (fit both to the game's text box). The first read of a session loads the models (a
+  few seconds). What the read doesn't place: glyphs of about 20 px or less, a line that starts 9
+  characters or more into the dialogue on the screen; and half-width characters shift the rest of
+  their row (rows are full-width cells, as `/v`'s). A lookup tints its word on the game's text. A click on the text itself still doesn't reach the game on X11: advance with a
+  click anywhere else, or a key.
+  Fullscreen: the overlay follows the game's window, so a game that goes fullscreen by its own
+  setting (or back) keeps it; the app never makes a game fullscreen. Its X window is
+  override-redirect, which no window manager stacks, so a fullscreen game's layer doesn't cover
+  it (checked with openbox in the E2E; KWin not run).
+  Wine's pointer grab: Wine confines the pointer to a fullscreen game from the first click in it
+  (an X pointer grab, on a single monitor; always under gamescope), and the overlay's text would
+  get no pointer from then on. So a game whose overlay is Band or Invisible starts with
+  `GrabPointer=N` (`HKCU\Software\Wine\X11 Driver`) in its Wine or Proton prefix, and such a
+  game can't confine the pointer; a game set to Off gets Wine's default back at its next start.
+  `games.js` `pointerGrab` runs `reg` only when that changes (the marker `.chimi-nograb` in the
+  prefix), so a mode changed while the game runs counts from the game's next start (the control
+  says so). Run with Wine in the E2E; the Proton prefix has not been run.
+  Steam Deck: Desktop Mode is plain X11 (KDE), as above. Game Mode (gamescope) is built from
+  gamescope's source and has not been run on a Deck: gamescope paints an override-redirect window
+  of the same Steam app as the focused game over it, scaled with the game, and the pointer and
+  touch reach it by the same X shape; the keyboard focus should stay with the game. For that the
+  app must be started from Steam (a non-Steam game) and start the game itself, so both share one
+  app id. Nothing in the code is specific to gamescope. On SteamOS games start with Steam's
+  Proton (the Proton entry below).
   Shortcuts (`hotkeys.js`, Electron `globalShortcut`): while a game runs and its `/hook` window is
   open, Ctrl+Shift+M puts the newest line (with its screenshot and sound) on the last Anki card
   (`native-hotkey` to `/hook`, which says how it went in a desktop notification) and Ctrl+Shift+H

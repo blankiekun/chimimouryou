@@ -8,6 +8,7 @@
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
   import NativeGameDialog from '$lib/components/vn/native-game-dialog.svelte';
+  import NativeOverlayControls from '$lib/components/vn/native-overlay-controls.svelte';
   import { dialogManager } from '$lib/data/dialog-manager';
   import {
     desktopGames,
@@ -125,7 +126,7 @@
   {#if overlaySettings && list?.hook}
     <SettingsItemGroup
       title="Game overlay"
-      tooltip="The current line over the game's text box, for lookups. Turn it on and adjust its place on the texthooker page while a game runs."
+      tooltip="The current line over the game, for lookups. Each game below has its own mode; adjust its area on the texthooker page while the game runs. Size and opacity are for the band and the manual area."
     >
       <div class="dg-actions">
         <label class="dg-field">
@@ -196,6 +197,9 @@
         ? `${game.installDir} · ${game.exe}`
         : `Not at ${game.installDir} any more`}
     >
+      {#if list?.hook}
+        <NativeOverlayControls folder={game.folder} />
+      {/if}
       <div class="dg-actions">
         <button type="button" class="app-button" onclick={() => changeFolder(game)}>
           Change folder

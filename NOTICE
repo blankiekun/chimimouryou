@@ -68,10 +68,11 @@ built site) are ported from LunaHook in LunaTranslator
 HIllya51 and contributors, licensed under the GNU General Public License v3.0; the
 ports are GPL-3.0-or-later (see LICENSE).
 
-The Windows game player's screen text (vn/ocr/ in the built site, fetched by
-scripts/vn-ocr/fetch.sh at the release pinned in scripts/vn-ocr/sha256sums when
-the Pages site, the web image and the Android app are built; not in the
-repository) uses vita-vn-ocr's line spotter and recognizer
+The Windows game player's screen text and the desktop app's invisible game
+overlay (vn/ocr/ in the built site, fetched by scripts/vn-ocr/fetch.sh at the
+release pinned in scripts/vn-ocr/sha256sums when the Pages site, the web image,
+the desktop app and the Android app are built; not in the repository) uses
+vita-vn-ocr's line spotter and recognizer
 (https://github.com/bee-san/vita-vn-ocr, release v0.5.1-onnx.2, textspot8_exact.onnx
 and VOCR6.2_L_fast.onnx), licensed under the GNU General Public License v3.0 or
 later and, because of their training data, for non-commercial use only; their

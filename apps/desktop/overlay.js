@@ -16,6 +16,14 @@
 // - The page reports its rects (`rects`) and whether it wants the whole window (`solid`: over a
 //   popup; on X11 also over the text while Yomitan is there, whose popup it can't measure).
 // Hidden while the game is minimized or not in front, except while its text box area is adjusted.
+// - Per game (`overlayMode` in native-games.json): Band shows the line on a background; Invisible
+//   draws it transparent over the game's own text (the page places it from a read of the game's
+//   frame, or in the area), so only lookups show. Input works the same in both.
+// - With these options Chromium makes an override-redirect X window (e2e/overlay.e2e.mjs checks
+//   it): no window manager stacks it, so it stays over a fullscreen game (seen with openbox), and
+//   gamescope (Steam Deck Game Mode) paints it over the focused game of the same Steam app as a
+//   dropdown would be, scaled with it, the pointer reaching it by the same X shape. Don't make it
+//   focusable or framed.
 
 /** The text box area as fractions of the game window: a bottom band. */
 export const defaultArea = { x: 0.04, y: 0.68, w: 0.92, h: 0.28 };
@@ -30,6 +38,9 @@ export const isArea = (area) =>
   area.h >= 0.05 &&
   area.x + area.w <= 1.001 &&
   area.y + area.h <= 1.001;
+
+/** A game's overlay mode: 'off', 'band' (the line on a background) or 'invisible'. */
+export const overlayMode = (value) => (['band', 'invisible'].includes(value) ? value : 'off');
 
 /** Overlay settings: on/off (default off), text size in px, background opacity. */
 export function overlaySettings(value) {
@@ -59,6 +70,8 @@ export function gameOverlay({ BrowserWindow, screen, url, preload, prepare, plat
       platform,
       area,
       editing,
+      mode: settings.mode,
+      place: settings.place,
       fontSize: settings.fontSize,
       opacity: settings.opacity
     });
