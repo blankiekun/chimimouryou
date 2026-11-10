@@ -4,7 +4,6 @@
   import PlacementTest from '$lib/components/placement/placement-test.svelte';
   import { basePath, pagePath } from '$lib/data/env';
   import { tr } from '$lib/i18n';
-  import { MetaTags } from 'svelte-meta-tags';
 
   /**
    * The public word test (/word-test, /hard-word-test), to share on social media: the
@@ -23,31 +22,36 @@
   const title = tr(hard ? 'hardTest.ogTitle' : 'wordTest.ogTitle');
   const description = tr(hard ? 'hardTest.ogDescription' : 'wordTest.ogDescription');
   const path = hard ? '/hard-word-test' : '/word-test';
-  const image = siteOrigin
-    ? [
-        {
-          url: `${siteOrigin}${pagePath}${path}-card.png`,
-          width: 1200,
-          height: 630,
-          alt: title
-        }
-      ]
-    : [];
+  const image = siteOrigin ? `${siteOrigin}${pagePath}${path}-card.png` : '';
 </script>
 
-<MetaTags
-  {title}
-  {description}
-  canonical={siteOrigin ? `${siteOrigin}${pagePath}${path}` : undefined}
-  openGraph={{ type: 'website', title, description, images: image }}
-  twitter={{
-    cardType: 'summary_large_image',
-    title,
-    description,
-    image: image[0]?.url,
-    imageAlt: title
-  }}
-/>
+<svelte:head>
+  <title>{title}</title>
+  <meta name="robots" content="index,follow" />
+  <meta name="description" content={description} />
+  {#if siteOrigin}
+    <link rel="canonical" href="{siteOrigin}{pagePath}{path}" />
+  {/if}
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content={title} />
+  <meta name="twitter:description" content={description} />
+  {#if image}
+    <meta name="twitter:image" content={image} />
+  {/if}
+  <meta name="twitter:image:alt" content={title} />
+  {#if siteOrigin}
+    <meta property="og:url" content="{siteOrigin}{pagePath}{path}" />
+  {/if}
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content={title} />
+  <meta property="og:description" content={description} />
+  {#if image}
+    <meta property="og:image" content={image} />
+    <meta property="og:image:alt" content={title} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+  {/if}
+</svelte:head>
 
 <header class="word-test-bar">
   <a href="{pagePath}/manage" class="word-test-logo" title="Chimimouryou">
