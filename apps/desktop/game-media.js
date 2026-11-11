@@ -125,6 +125,8 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
   const sound = soundMix();
   /** The whole system's sound, for a game whose streams never showed their mark. */
   const whole = soundRing();
+  /** A marked stream was found this game: its sound alone counts, even while it is quiet. */
+  let marked = false;
   // From the clock: numbers kept in /hook's saved lines never meet a later run's.
   let seq = Date.now();
   /** Arrival times of the recent text lines, by seq. */
@@ -192,6 +194,7 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
         // Must be that sink's monitor (PulseAudio); it ends if the stream moves: found again then.
         const child = record(`${name.split('\t')[1]}.monitor`, [`--monitor-stream=${index}`]);
         live.set(index, child);
+        marked = true;
         child.on('exit', () => live.delete(index));
       }
       scanning = false;
@@ -265,6 +268,7 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
       await this.stop();
       sound.clear();
       whole.clear();
+      marked = false;
       marks.forEach((mark) => mark.timers.forEach(clearTimeout));
       marks = [];
       arrivals = new Map();
@@ -355,7 +359,9 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
         // (line-audio.ts): just before the line arrived up to the next line's arrival.
         const start = mark.at - beginOffsetMs;
         const end = marks[index + 1]?.at ?? Date.now();
-        const pcm = sound.clip(start, end) ?? whole.clip(start, end);
+        const pcm = marked
+          ? sound.clip(start, end)
+          : (sound.clip(start, end) ?? whole.clip(start, end));
         if (pcm)
           result.audio = {
             pcm: new Uint8Array(pcm.buffer),

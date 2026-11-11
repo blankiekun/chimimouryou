@@ -52,8 +52,8 @@ export function stopLineAudio() {
   if (!pending.size) failVad('stopped');
 }
 
-/** Speech segments, in seconds, of 16 kHz samples. */
-function vad(samples: Int16Array) {
+/** Speech segments, in seconds, of mono samples at `rate`. */
+function vad(samples: Int16Array, rate: number) {
   stopWhenIdle = false;
   if (!worker) {
     worker = new Worker(new URL('../../functions/vn/line-vad.worker.ts', import.meta.url), {
@@ -76,36 +76,12 @@ function vad(samples: Int16Array) {
       if ('segments' in message) resolve(message.segments);
       else reject(new Error(message.error));
     });
-    worker!.postMessage({ id, samples }, [samples.buffer]);
+    worker!.postMessage({ id, samples, rate }, [samples.buffer]);
   });
 }
 
 /** Seconds */
 type Segment = [start: number, end: number];
-
-/** A band-limited resampling to 16 kHz (as ffmpeg gives GameSentenceMiner). */
-function to16k(samples: Int16Array, rate: number) {
-  if (rate === 16000) return samples;
-  const out = new Int16Array(Math.floor((samples.length * 16000) / rate));
-  const step = rate / 16000;
-  const cutoff = 0.97 / Math.max(step, 1);
-  const reach = Math.ceil(16 / cutoff);
-
-  for (let i = 0; i < out.length; i += 1) {
-    const at = i * step;
-    let sum = 0;
-
-    for (let j = Math.ceil(at - reach); j <= at + reach; j += 1) {
-      if (j < 0 || j >= samples.length) continue;
-      const x = j - at;
-      const sinc = x ? Math.sin(Math.PI * cutoff * x) / (Math.PI * x) : cutoff;
-
-      sum += samples[j] * sinc * (0.5 + 0.5 * Math.cos((Math.PI * x) / (reach + 1)));
-    }
-    out[i] = Math.max(-32768, Math.min(32767, Math.round(sum)));
-  }
-  return out;
-}
 
 /** A WAV file of mono s16 samples. */
 function wav(samples: Int16Array, rate: number) {
@@ -173,7 +149,7 @@ export async function lineAudio(
       Math.round(audio.end * audio.rate)
     );
 
-    speech = (await vad(to16k(window.slice(), audio.rate))).map(([from, to]) => [
+    speech = (await vad(window.slice(), audio.rate)).map(([from, to]) => [
       from + Math.max(0, audio.start),
       to + Math.max(0, audio.start)
     ]);
