@@ -64,22 +64,26 @@ let mainWindow;
 // The game overlay needs window positions, which Wayland doesn't give: while it's on, the app runs
 // on X11 (XWayland, where Wine's games are too). Read at start, so a change takes a restart.
 // Electron picks the platform before this file runs, so appendSwitch would only reach the child
-// processes (an X11 GPU process under a Wayland browser crashes and no window shows): relaunch.
+// processes (an X11 GPU process under a Wayland browser crashes and no window shows): this process
+// replaces itself. Not app.relaunch: its helper runs from the AppImage's mount, which goes away
+// when this process exits; with exec the process lives on, so the mount does too.
 if (
   process.platform === 'linux' &&
-  (process.env.XDG_SESSION_TYPE === 'wayland' || process.env.WAYLAND_DISPLAY) &&
-  !process.argv.includes('--ozone-platform=x11') &&
-  loadStore(join(app.getPath('userData'), 'native-games.json')).overlay?.on === true
+  (process.env.XDG_SESSION_TYPE === 'wayland' || process.env.WAYLAND_DISPLAY)
 ) {
-  // Chromium's screen capture asks the Wayland portal (a share dialog per Anki screenshot) whenever
+  // Chromium's screen capture asks the Wayland portal (a share dialog per shot) whenever
   // XDG_SESSION_TYPE says wayland, whatever platform the app runs on; on X11 it captures directly.
-  process.env.XDG_SESSION_TYPE = 'x11';
-  // An AppImage's own binary sits in a mount that goes away when this process exits.
-  app.relaunch({
-    execPath: process.env.APPIMAGE || process.execPath,
-    args: [...process.argv.slice(1), '--ozone-platform=x11']
-  });
-  app.exit(0);
+  if (app.commandLine.getSwitchValue('ozone-platform') === 'x11')
+    process.env.XDG_SESSION_TYPE = 'x11';
+  else if (
+    process.env.DISPLAY &&
+    loadStore(join(app.getPath('userData'), 'native-games.json')).overlay?.on === true
+  )
+    process.execve(
+      process.execPath,
+      [process.execPath, ...process.argv.slice(1), '--ozone-platform=x11'],
+      { ...process.env, XDG_SESSION_TYPE: 'x11' }
+    );
 }
 
 /** The file: URLs the About window links to (licences): the only local files a window may open. */

@@ -25,6 +25,7 @@ let queued:
   | {
       frame: ImageBitmap;
       hook?: string;
+      exact?: boolean;
       resolve: (result: Awaited<ReturnType<typeof readFrame>>) => void;
       reject: (error: unknown) => void;
     }
@@ -34,8 +35,13 @@ const maxFailures = 3;
 let failures = 0;
 /** Why reading stopped (models missing or won't run here): stop asking. */
 let off: string | undefined;
+/** The last read's failure, when it failed rather than found nothing. */
+let lastError: string | undefined;
 /** First load: about 15 MB (runtime and models) on a slow connection, then a phone compiling it. */
 const readTimeoutMs = 5 * 60_000;
+
+/** Why the last read returned nothing, if it couldn't run; undefined when it just found no match. */
+export const vnOcrError = () => off ?? lastError;
 
 /** Why a game reading its text from the screen has none now; the player and Hooks sheet show it. */
 export const screenTextOff$ = new BehaviorSubject<string | undefined>(undefined);
@@ -65,7 +71,7 @@ function start() {
  * are clipped to the spotter's box, which can cut the last character, so the pitch comes from the
  * inner cuts (halfway between character centres) when there are three characters or more.
  */
-function overlayLine({ text, box, chars }: VnOcrLine): VnOverlayLine {
+function overlayLine({ text, box, chars, vertical, ink }: VnOcrLine) {
   const n = chars.length;
   const pitch =
     n >= 3 ? (chars[n - 1].x0 - chars[0].x1) / (n - 2) : (chars[n - 1].x1 - chars[0].x0) / n;
@@ -75,11 +81,15 @@ function overlayLine({ text, box, chars }: VnOcrLine): VnOverlayLine {
     x: n >= 3 ? chars[0].x1 - pitch : chars[0].x0,
     y: box[1],
     size: box[3],
-    pitch
-  };
+    pitch,
+    /** With `exact`: the raw cells and ink, for text laid character by character */
+    chars,
+    vertical,
+    ink
+  } satisfies VnOverlayLine & Partial<VnOcrLine>;
 }
 
-async function readFrame(frame: ImageBitmap, hook?: string) {
+async function readFrame(frame: ImageBitmap, hook?: string, exact?: boolean) {
   if (off) {
     frame.close();
     if (hook === undefined) screenTextOff$.next(off);
@@ -109,7 +119,8 @@ async function readFrame(frame: ImageBitmap, hook?: string) {
         recognizer: model('VOCR6.2_L_fast.onnx')
       },
       frame,
-      hook
+      hook,
+      exact
     } satisfies VnOcrRequest,
     [frame]
   );
@@ -117,12 +128,14 @@ async function readFrame(frame: ImageBitmap, hook?: string) {
 
   if ('error' in message) {
     console.warn(`Screen text: ${message.error}`);
+    lastError = message.error;
     failures += 1;
     if (failures >= maxFailures) off ??= message.error;
     if (off && hook === undefined) screenTextOff$.next(off);
     return undefined;
   }
   failures = 0;
+  lastError = undefined;
 
   const lines = hook === undefined ? message.lines.filter(({ tag }) => tag === 0) : message.lines;
 
@@ -138,10 +151,10 @@ async function readFrame(frame: ImageBitmap, hook?: string) {
 async function readQueued() {
   reading = true;
   while (queued) {
-    const { frame, hook, resolve, reject } = queued;
+    const { frame, hook, exact, resolve, reject } = queued;
 
     queued = undefined;
-    await readFrame(frame, hook).then(resolve, reject);
+    await readFrame(frame, hook, exact).then(resolve, reject);
   }
   reading = false;
 }
@@ -150,13 +163,13 @@ async function readQueued() {
  * The game's frame read: with a hooked line, that line's rows placed in the game's text box
  * (undefined when no OCR'd line matches it); without, the dialogue lines' text and rows (undefined
  * when there are none). Undefined too when OCR can't run here, or a newer frame replaced this one
- * before its turn (the frame is closed).
+ * before its turn (the frame is closed). `exact`: for text laid on the glyphs (the desktop overlay).
  */
-export function readVnScreen(frame: ImageBitmap, hook?: string) {
+export function readVnScreen(frame: ImageBitmap, hook?: string, exact?: boolean) {
   return new Promise<Awaited<ReturnType<typeof readFrame>>>((resolve, reject) => {
     queued?.frame.close();
     queued?.resolve(undefined);
-    queued = { frame, hook, resolve, reject };
+    queued = { frame, hook, exact, resolve, reject };
     if (!reading) readQueued();
   });
 }

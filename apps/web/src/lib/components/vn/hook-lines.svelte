@@ -179,8 +179,10 @@
     bind:this={list}
     {onclick}
   >
+    <!-- The newlines render as nothing but end Yomitan's sentence at the line (no layout-aware scan). -->
     {#each shown as line (line.id)}
       {@const picked = selected.has(line.id)}
+      {'\n'}
       <li data-id={line.id} class:hl-picked={picked} class:hl-new={line.id === flashId}>
         {#if editing === line.id}
           <textarea
@@ -208,7 +210,7 @@
           {line.text}
         {/if}
       </li>
-    {/each}
+    {/each}{'\n'}
   </ol>
 {:else}
   <p class="hl-empty">{empty}</p>

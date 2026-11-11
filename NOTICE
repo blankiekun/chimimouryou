@@ -107,9 +107,12 @@ allows. The program that runs LunaHook, chimihook (apps/desktop/native/), is
 GPL-3.0-or-later.
 
 The voice finder for visual novel lines mined to Anki
-(apps/web/src/lib/functions/vn/silero_vad.onnx) is Silero VAD v5.1.2
-(https://github.com/snakers4/silero-vad), Copyright (c) 2020-present Silero
-Team, licensed under the MIT License, redistributed unmodified. It runs on
+(apps/web/src/lib/functions/vn/fireredvad_vad.onnx, with its normalization
+values in firered-cmvn.json) is FireRedVAD
+(https://github.com/FireRedTeam/FireRedVAD), licensed under the Apache License
+2.0, redistributed unmodified from GameSentenceMiner
+(https://github.com/bpwhelan/GameSentenceMiner). firered-vad.ts is a port of
+GameSentenceMiner's code for it, GPL-3.0-or-later. It runs on
 onnxruntime-web (https://github.com/microsoft/onnxruntime), Copyright (c)
 Microsoft Corporation, licensed under the MIT License, the npm package the web
 app already uses.

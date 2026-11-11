@@ -1,7 +1,7 @@
 <script lang="ts">
   import AppHeader from '$lib/components/app-header/app-header.svelte';
   import AnkiWatcher from '$lib/components/dictionary/anki-watcher.svelte';
-  import { lineAudio, stopLineAudio } from '$lib/data/vn/line-audio';
+  import { lineAudio, lineAudioWhy, stopLineAudio } from '$lib/data/vn/line-audio';
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
   import PointBox from '$lib/components/point-box.svelte';
   import {
@@ -517,9 +517,19 @@
       samples: new Int16Array(found.audio.pcm.slice().buffer)
     };
 
+    const audio = await lineAudio(sound, text);
+
+    mineNote = undefined;
+    if ($ankiVnAudio$ && !audio) {
+      const peak = sound ? sound.samples.reduce((top, v) => Math.max(top, Math.abs(v)), 0) : 0;
+
+      mineNote = sound
+        ? `No clip on the card: ${(sound.samples.length / sound.rate).toFixed(1)} s recorded, loudest ${peak} of 32767, ${lineAudioWhy}`
+        : 'No clip on the card: no sound was recorded for this line';
+    }
     return {
       picture: found.picture && new Blob([found.picture], { type: 'image/jpeg' }),
-      audio: await lineAudio(sound, text)
+      audio
     };
   }
 
@@ -533,9 +543,8 @@
 
       const filled = await useForLastNote(line.text, () => lineMedia(line));
 
-      text = filled.length
-        ? `Added to the last Anki card: ${filled.join(', ')}`
-        : `Nothing added: the last card has no ${$ankiSentenceField$.trim()} field, and its media fields are missing or filled`;
+      if (filled.length) return;
+      text = `Nothing added: the last card has no ${$ankiSentenceField$.trim()} field, and its media fields are missing or filled`;
     } catch (error: any) {
       text = `Anki: ${error.message}`;
     }
@@ -968,7 +977,10 @@
               </button>
             </div>
           {/if}
-          <NativeOverlayControls />
+          <!-- Asks for the running game's settings on mount, so again once a game is running. -->
+          {#key nativeRunning}
+            <NativeOverlayControls />
+          {/key}
           {#if !launchOnly}
             <NativeThreads
               {ranked}

@@ -63,6 +63,8 @@
 
   /** Selector of the elements whose text is scanned (e.g. `.book-content`) */
   export let scope: string;
+  /** Hover alone scans, whatever keys the profile's inputs ask for (the desktop overlay: games take them). */
+  export let plainHover = false;
   /** What Add to Anki's {screenshot} takes (the game frame, the manga page); none: empty */
   export let screenshot: ScreenshotSource | undefined = undefined;
 
@@ -163,7 +165,15 @@
   $: if (!$builtInLookups$) close();
 
   const scanner = new ScanInput({
-    options: () => ($builtInLookups$ ? profile?.scanning : undefined),
+    options: () =>
+      $builtInLookups$ && profile
+        ? plainHover
+          ? {
+              ...profile.scanning,
+              inputs: profile.scanning.inputs.map((input) => ({ ...input, include: '' }))
+            }
+          : profile.scanning
+        : undefined,
     search: (x, y, info) => searchAt(x, y, info),
     current: () => (open ? lastScanKey : null),
     clear: () => close(),

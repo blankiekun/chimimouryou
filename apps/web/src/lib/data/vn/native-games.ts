@@ -148,7 +148,7 @@ export interface DesktopGames {
   mark(seq: number): Promise<void>;
   /**
    * A mined line's screenshot (JPEG) and sound, each when kept: s16le mono `pcm` with the line's
-   * window `start`-`end` in seconds into it, `earliest`/`endClick` (lib/data/vn/line-audio.ts)
+   * window `start`-`end` in seconds into it (lib/data/vn/line-audio.ts)
    */
   media(
     seq: number,
@@ -160,8 +160,6 @@ export interface DesktopGames {
       rate: number;
       start: number;
       end: number;
-      earliest: number;
-      endClick: boolean;
     };
   }>;
   /** The global shortcuts while a game runs ('' = off); `failed`: those another program holds */
@@ -195,7 +193,6 @@ export type OverlayMode = 'off' | 'band' | 'invisible';
 export interface GameOverlay {
   mode: OverlayMode;
   /** Invisible: placed from a read of the game's screen, or flowing in the adjusted area */
-  place: 'screen' | 'area';
 }
 
 export interface OverlaySettings extends GameOverlay {
@@ -213,7 +210,6 @@ export interface OverlayState {
   area: OverlayArea;
   editing: boolean;
   mode: OverlayMode;
-  place: GameOverlay['place'];
   fontSize: number;
   opacity: number;
 }
@@ -221,7 +217,7 @@ export interface OverlayState {
 /** The text overlay over a game played natively (apps/desktop/overlay.js). */
 export interface DesktopOverlay {
   /**
-   * Reads, or changes, its settings; `mode` and `place` are one game's (`folder`, else the running
+   * Reads, or changes, its settings; `mode` is one game's (`folder`, else the running
    * game's; Off with none). `restart`: on Wayland it starts with the app's next start.
    * `nextStart`: the running game (Wine, Proton) takes the mode fully at its next start: until
    * then lookups over it fullscreen stop at the first click, or with Off its pointer isn't confined

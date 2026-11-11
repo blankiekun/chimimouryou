@@ -16,7 +16,7 @@
 //
 // It fails when: the overlay doesn't open over the running game or doesn't sit on the game's
 // window (Wine's coordinates vs X's); it doesn't follow a moved window; it doesn't show the line
-// /hook shows when it opens; hovering its text with Shift doesn't open the lookup popup (the shape
+// /hook shows when it opens; hovering its text doesn't open the lookup popup (the shape
 // lets no pointer through); a click on the game off the text doesn't reach the game or lands in
 // the overlay; it stays up while the game is minimized or doesn't come back once it's restored;
 // its X window isn't override-redirect (a window manager would stack it under a fullscreen game,
@@ -25,10 +25,9 @@
 // overlay gets no motion, unless the game started with its overlay on), let clicks through, or follow it back to a window; Invisible shows any
 // of the line or its background, paints its glyphs when a lookup selects a word, or takes no
 // lookup; the screen read puts the line anywhere but on the glyphs the game drew (windowed and
-// fullscreen), or the manual-area switch doesn't flow it in the area; Off leaves the overlay
+// fullscreen); Off leaves the overlay
 // open; Settings → Desktop games doesn't keep a game's mode.
-// Artifacts: overlay.png (Band's popup over the game), fullscreen.png, invisible-area.png,
-// invisible-screen.png and invisible-fullscreen.png (the popup on the game's own text),
+// Artifacts: overlay.png (Band's popup over the game), fullscreen.png, invisible-screen.png and invisible-fullscreen.png (the popup on the game's own text),
 // controls-hook.png, controls-settings.png.
 // Needs the OCR models in the build: VN_OCR_OUT=../web/build/vn/ocr ../../scripts/vn-ocr/fetch.sh
 
@@ -118,8 +117,7 @@ const app = await _electron.launch({
     // No sound server: Anki media isn't tested here.
     PULSE_SERVER: 'unix:/nonexistent',
     // testvn: a line per click only, a window tall enough for the popup, and for the screen read
-    // a text box as a VN's: a name over the hooked line (9 other characters or more before it are
-    // a miss: the area's flow), glyphs of a size the line spotter reads, full-width characters.
+    // a text box as a VN's: a name over the hooked line, glyphs of a size the line spotter reads, full-width characters.
     TESTVN_BOX: '44',
     TESTVN_MS: '600000',
     TESTVN_HEIGHT: '600'
@@ -296,18 +294,21 @@ try {
   const wordBox = () =>
     overlay.evaluate(() => {
       for (const span of document.querySelectorAll('.hook-text span')) {
-        const node = span.firstChild;
-        const at = node?.textContent.indexOf('台詞') ?? -1;
+        const at = span.textContent.indexOf('台詞');
         if (at < 0 || !span.getClientRects().length) continue;
+        // Invisible's rows have one element per character.
+        const cells = span.querySelectorAll('i');
+        const node = cells.length ? cells[at].firstChild : span.firstChild;
+        const from = cells.length ? 0 : at;
         const range = document.createRange();
-        range.setStart(node, at);
-        range.setEnd(node, at + 1);
+        range.setStart(node, from);
+        range.setEnd(node, from + 1);
         const { x, y, width, height } = range.getBoundingClientRect();
         return { x, y, width, height };
       }
       return undefined;
     });
-  /** Shift + hover over 台詞 opens the lookup popup; `shot` keeps the screen. */
+  /** Hover over 台詞, no key, opens the lookup popup; `shot` keeps the screen. */
   async function lookup(shot) {
     const word = await until('台詞 in the overlay', async () => {
       seen = await overlay.evaluate(() => document.querySelector('.ov-root')?.outerHTML);
@@ -317,7 +318,6 @@ try {
     const x = Math.round(bounds.x + word.x + word.width / 2);
     const y = Math.round(bounds.y + word.y + word.height / 2);
     xdo('mousemove', x - 3, y);
-    xdo('keydown', 'shift');
     try {
       await wait(100);
       xdo('mousemove', x, y);
@@ -335,8 +335,6 @@ try {
       );
       const state = JSON.stringify({ window: await overlayWindow(), word, moves, under, rects });
       throw new Error(`no lookup popup for ${shot}: ${state}`, { cause: error });
-    } finally {
-      xdo('keyup', 'shift');
     }
     await wait(300);
     execFileSync('import', ['-window', 'root', join(root, shot)]);
@@ -366,7 +364,7 @@ try {
       return win?.visible && same(win.bounds, at) && same(at, place);
     });
 
-  step('Shift + hover over 台詞 opens the lookup popup');
+  step('Hover over 台詞 opens the lookup popup');
   await lookup('overlay.png');
 
   step('A click on the game off the text advances it; the overlay gets no click');
@@ -396,9 +394,7 @@ try {
   await lookup('windowed-again.png');
   await advance();
 
-  step('Invisible, manual area: nothing of the line shows, lookups still open');
   await page.getByRole('radio', { name: 'Invisible' }).click();
-  await page.getByRole('radio', { name: 'Manual area' }).click();
   const look = () =>
     overlay.evaluate(() => {
       const span = [...document.querySelectorAll('.hook-text span')].find(
@@ -415,19 +411,6 @@ try {
         }
       );
     });
-  await until('transparent text with no background in the area', async () => {
-    const now = await look();
-    seen = JSON.stringify(now);
-    return (
-      now?.color === 'rgba(0, 0, 0, 0)' &&
-      now.background === 'rgba(0, 0, 0, 0)' &&
-      now.selected === 'rgba(0, 0, 0, 0)' &&
-      !now.rows
-    );
-  });
-  await lookup('invisible-area.png');
-  await advance();
-
   /**
    * Where the game drew the caption (DrawTextExW at 20,120 of its window), from the screen: the
    * non-background pixels' box in that band, in the game window's coordinates.
@@ -485,7 +468,6 @@ try {
     );
 
   step('Invisible, screen read: the line lies on the glyphs the game drew');
-  await page.getByRole('radio', { name: 'Screen read' }).click();
   await onCaption('the row on the drawn caption');
   if ((await look())?.color !== 'rgba(0, 0, 0, 0)') fail('the screen-read row is visible');
   await lookup('invisible-screen.png');
@@ -500,6 +482,8 @@ try {
   await overGame('the overlay over the fullscreen game', screenSize);
   await onCaption('the row on the caption of the fullscreen game');
   await lookup('invisible-fullscreen.png');
+  // Plain hover keeps the popup up until a click: else drawnCaption would read it.
+  await advance();
   toggleFullscreen();
   await overGame('the overlay over the windowed game', windowed);
   await onCaption('the row on the caption back in the window');

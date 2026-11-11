@@ -9,9 +9,10 @@
 // and audio, as VNBox games do on /v. Memory only (about 25 MB at most), never written to disk;
 // kept until the next game starts, so lines mined just after closing still get theirs.
 //
-// Sound: Linux puts the game on its own PulseAudio/PipeWire null sink (PULSE_SINK in Wine's env),
-// looped back to the speakers, and records its monitor with parec; when that sink can't be made,
-// the whole system's sound (the default sink's monitor). Windows: the helper (chimihook --audio)
+// Sound: on Linux the game plays straight to the speakers, as any program does: nothing is put in
+// its way, so its level is the system's. Its streams carry a mark (PULSE_PROP in Wine's env) and
+// each is recorded on its own with parec --monitor-stream; with no way to watch for them, the
+// whole system's sound (the default sink's monitor). Windows: the helper (chimihook --audio)
 // records the game's process tree (Windows 10 2004+, else the whole system) into a named pipe.
 // Either way PCM s16le mono 24 kHz, each chunk stamped on arrival: a sink with nothing playing sends
 // nothing, so gaps are silence, not missing time.
@@ -25,25 +26,15 @@ import { clearTimeout, setTimeout } from 'node:timers';
 const rate = 24000;
 /** Sound kept: 3 minutes (8.6 MB). */
 const keepMs = 180_000;
-/**
- * LunaHost sends a line once no more text came for this long (Luna_Settings in chimihook.c), so a
- * line was shown this much before it arrived.
- */
-const flushMs = 500;
-/** A line starts at the first click or key after the previous line, if within this before it. */
-const clickWithinMs = 3000;
-/** Sound around a line's window (preRollMs as in lib/data/vn/line-audio.ts). */
-const preRollMs = 400;
-const tailMs = 6000;
-/** A line that came without a click is looked at this far back for its voice (typewriter text). */
-const maxTypeMs = 6000;
+/** GameSentenceMiner's audio.beginning_offset: a line's sound starts this long before it arrived. */
+const beginOffsetMs = 500;
 const maxClipMs = 40_000;
 /** Screenshots kept: the newest 30 lines, 16 MB at most. */
 const keepShots = 30;
 const maxShotBytes = 16 * 1024 * 1024;
 /** A line's screenshot after it arrived (its text is drawn), again later if still the newest line. */
 const shotDelays = [200, 2500];
-const sinkName = 'chimi_game';
+const streamMark = 'chimi.game';
 
 const run = (command, args, env) =>
   new Promise((resolve) =>
@@ -92,6 +83,35 @@ export function soundRing(now = Date.now) {
     clear() {
       chunks = [];
       odd = undefined;
+    },
+    /** When its last sound started; 0 before any. A stream long gone is dropped by this. */
+    newest: () => chunks.at(-1)?.start ?? Date.now()
+  };
+}
+
+/** Several rolling buffers heard together: one per stream, since each has its own timing. */
+function soundMix() {
+  let rings = [];
+  return {
+    add() {
+      const cutoff = Date.now() - keepMs;
+      rings = rings.filter((ring) => ring.newest() >= cutoff);
+      const ring = soundRing();
+      rings.push(ring);
+      return ring;
+    },
+    clip(from, to) {
+      let mixed;
+      for (const ring of rings) {
+        const part = ring.clip(from, to);
+        if (!part) continue;
+        if (!mixed) mixed = part;
+        else part.forEach((v, i) => (mixed[i] = Math.max(-32768, Math.min(32767, mixed[i] + v))));
+      }
+      return mixed;
+    },
+    clear() {
+      rings = [];
     }
   };
 }
@@ -102,15 +122,17 @@ export function soundRing(now = Date.now) {
  * line's media (`media`).
  */
 export function gameMedia({ desktopCapturer, platform = process.platform }) {
-  const sound = soundRing();
+  const sound = soundMix();
+  /** The whole system's sound, for a game whose streams never showed their mark. */
+  const whole = soundRing();
+  /** A marked stream was found this game: its sound alone counts, even while it is quiet. */
+  let marked = false;
   // From the clock: numbers kept in /hook's saved lines never meet a later run's.
   let seq = Date.now();
   /** Arrival times of the recent text lines, by seq. */
   let arrivals = new Map();
   /** Lines /hook showed, oldest first: { seq, at, shot?, timers } */
   let marks = [];
-  /** When the player clicked or pressed a key in the game (the helper's `input`), oldest first. */
-  let inputs = [];
   let source; // { id, name, width, height } of the game's window
   let recorder; // parec, or the Windows pipe server
   let mode = 'none';
@@ -123,25 +145,13 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
     recorder = undefined;
   };
 
-  /** Our sink's modules (from a crash too): unloaded. */
-  async function unloadSink() {
-    const modules = (await run('pactl', ['list', 'short', 'modules'], env)) ?? '';
-    for (const line of modules.split('\n')) {
-      const [id, name, args = ''] = line.split('\t');
-      if (
-        (name === 'module-null-sink' && args.includes(`sink_name=${sinkName}`)) ||
-        (name === 'module-loopback' && args.includes(`source=${sinkName}.monitor`))
-      )
-        await run('pactl', ['unload-module', id], env);
-    }
-  }
-
-  function record(device) {
+  function record(device, extra = [], ring = sound.add()) {
     const child = spawn(
       'parec',
       [
         '-d',
         device,
+        ...extra,
         '--raw',
         '--format=s16le',
         `--rate=${rate}`,
@@ -151,11 +161,69 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
       { env, stdio: ['ignore', 'pipe', 'ignore'] }
     );
     child.on('error', () => {});
-    child.stdout.on('data', (chunk) => sound.push(chunk));
+    child.stdout.on('data', (chunk) => ring.push(chunk));
     return child;
   }
 
-  async function shoot(png = false) {
+  /**
+   * Records each stream carrying `mark` as it appears (a game opens several, and closes some).
+   * pactl's text is parsed, so in English whatever the game's locale.
+   */
+  function recordStreams(mark) {
+    const english = { ...env, LC_ALL: 'C' };
+    const live = new Map(); // stream index → its parec
+    let scanning = false;
+    let again = false;
+    async function scan() {
+      if (scanning) return void (again = true);
+      scanning = true;
+      const list = await run('pactl', ['list', 'sink-inputs'], english);
+      const sinks = (await run('pactl', ['list', 'short', 'sinks'], english)) ?? '';
+      const blocks = list?.split(/^Sink Input #/m).slice(1) ?? [];
+      // PipeWire doesn't end a recording whose stream ended: it goes on with the whole sink.
+      if (list !== undefined) {
+        const open = new Set(blocks.map((block) => parseInt(block)));
+        live.forEach((child, index) => open.has(index) || child.kill());
+      }
+      for (const block of blocks) {
+        const index = parseInt(block);
+        if (!block.includes(`${streamMark} = "${mark}"`) || live.has(index) || !watch) continue;
+        const sink = /^\s*Sink: (\d+)/m.exec(block)?.[1];
+        const name = sinks.split('\n').find((line) => line.startsWith(`${sink}\t`));
+        if (!name) continue;
+        // Must be that sink's monitor (PulseAudio); it ends if the stream moves: found again then.
+        const child = record(`${name.split('\t')[1]}.monitor`, [`--monitor-stream=${index}`]);
+        live.set(index, child);
+        marked = true;
+        child.on('exit', () => live.delete(index));
+      }
+      scanning = false;
+      if (again) {
+        again = false;
+        scan();
+      }
+    }
+    let watch = spawn('pactl', ['subscribe'], {
+      env: english,
+      stdio: ['ignore', 'pipe', 'ignore']
+    });
+    watch.on('error', () => {});
+    watch.stdout.on('data', (events) => /sink-input/.test(events) && scan());
+    // PulseAudio renders far ahead unless a client asks for low latency, and a stream's recording
+    // only gets what is rendered after it attaches (short sounds: nothing). This one asks, and
+    // is the sound of a game whose streams carry no mark (a runner that drops PULSE_PROP).
+    const pace = record('@DEFAULT_MONITOR@', [], whole);
+    return {
+      kill() {
+        pace.kill();
+        watch?.kill();
+        watch = undefined;
+        live.forEach((child) => child.kill());
+      }
+    };
+  }
+
+  async function shoot(png = false, exact = false) {
     if (!source || !desktopCapturer) return undefined;
     try {
       const sources = await desktopCapturer.getSources({
@@ -166,7 +234,7 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
       // By id; the title when the id differs (a window manager's frame on X11).
       const found =
         sources.find((item) => item.id === source.id) ??
-        sources.find((item) => source.name && item.name === source.name);
+        (exact ? undefined : sources.find((item) => source.name && item.name === source.name));
       const image = found?.thumbnail;
       if (!image || image.isEmpty()) return undefined;
       return png ? image.toPNG() : image.toJPEG(90);
@@ -189,41 +257,29 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
     return shooting;
   };
 
-  /**
-   * When line marks[index] was brought up: { at, click }. The first click or key after the previous
-   * line was fully drawn (a click that finishes a typewriter comes just before), if one came
-   * shortly before this one was shown, else when it was shown (no clicks: auto mode, or the
-   * helper's input hooks don't fire; typewriter text then counts from its end, see `media`).
-   */
-  function lineStart(index) {
-    const shown = marks[index].at - flushMs;
-    const after = (marks[index - 1]?.at ?? -Infinity) - flushMs + 100;
-    const click = inputs.find(
-      (time) => time > after && time <= marks[index].at && time >= shown - clickWithinMs
-    );
-    return { at: click ?? shown, click: click !== undefined };
-  }
-
   return {
     /**
-     * A game starts: what came before is dropped. Linux: returns Wine's env additions (its own
-     * sink); Windows: the helper's extra arguments (the pipe). `baseEnv`: the env Wine runs with.
-     * `ownSink` false (Linux): a game already running isn't on a new sink, so the whole system's.
+     * A game starts: what came before is dropped. Linux: returns Wine's env additions (the mark
+     * on its streams); Windows: the helper's extra arguments (the pipe). `baseEnv`: the env Wine
+     * runs with. `ownStreams` false (Linux): a game already running has no mark, so the whole
+     * system's.
      */
-    async start(baseEnv = process.env, { ownSink = true } = {}) {
+    async start(baseEnv = process.env, { ownStreams = true } = {}) {
       await this.stop();
       sound.clear();
+      whole.clear();
+      marked = false;
       marks.forEach((mark) => mark.timers.forEach(clearTimeout));
       marks = [];
-      inputs = [];
       arrivals = new Map();
       source = undefined;
       env = baseEnv;
       mode = 'none';
       if (platform === 'win32') {
         const pipe = `\\\\.\\pipe\\chimi-audio-${randomBytes(8).toString('hex')}`;
+        const ring = sound.add();
         const server = createServer((socket) => {
-          socket.on('data', (chunk) => sound.push(chunk));
+          socket.on('data', (chunk) => ring.push(chunk));
           socket.on('error', () => {});
         });
         server.on('error', () => {});
@@ -231,28 +287,15 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
         recorder = server;
         return { args: ['--audio', pipe] };
       }
-      if (!(await run('pactl', ['info'], env))) return { mode };
-      await unloadSink();
-      const sink =
-        ownSink &&
-        (await run(
-          'pactl',
-          ['load-module', 'module-null-sink', `sink_name=${sinkName}`, `rate=${rate * 2}`],
-          env
-        ));
-      const loop =
-        sink &&
-        (await run(
-          'pactl',
-          ['load-module', 'module-loopback', `source=${sinkName}.monitor`, 'latency_msec=30'],
-          env
-        ));
-      if (loop) {
+      const parec = await run('parec', ['--help'], env);
+      if (!parec || !(await run('pactl', ['info'], env))) return { mode };
+      if (ownStreams && parec.includes('--monitor-stream')) {
+        const mark = randomBytes(8).toString('hex');
         mode = 'game';
-        recorder = record(`${sinkName}.monitor`);
-        return { mode, env: { PULSE_SINK: sinkName } };
+        recorder = recordStreams(mark);
+        const props = [baseEnv.PULSE_PROP, `${streamMark}=${mark}`].filter(Boolean).join(' ');
+        return { mode, env: { PULSE_PROP: props } };
       }
-      await unloadSink();
       mode = 'system';
       recorder = record('@DEFAULT_MONITOR@');
       return { mode };
@@ -261,10 +304,6 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
     /** The game closed (or the app quits): recording stops, what was kept stays. */
     stop() {
       stopRecorder();
-      if (platform !== 'win32' && mode === 'game') {
-        mode = 'none';
-        return unloadSink();
-      }
     },
 
     /** A text line from the helper: its seq and arrival time. */
@@ -276,13 +315,6 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
       return { seq, at };
     },
 
-    /** The helper's `input` message: a click or key in the game's window. */
-    input() {
-      const at = Date.now();
-      inputs.push(at);
-      if (inputs[0] < at - keepMs) inputs = inputs.filter((time) => time >= at - keepMs);
-    },
-
     /** The helper's `window` message: the game's main window, for screenshots. */
     window({ hwnd, xid, title, width, height }) {
       const id = platform === 'win32' ? hwnd : xid;
@@ -291,7 +323,8 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
 
     /** The game's window now (PNG), for the overlay's screen read; after any waiting shot. */
     frame() {
-      const shot = shooting.then(() => shoot(true));
+      // Only that very window: another of the same title (/hook's) would put the text elsewhere.
+      const shot = shooting.then(() => shoot(true, true));
       shooting = shot.then(() => {});
       return shot;
     },
@@ -322,28 +355,19 @@ export function gameMedia({ desktopCapturer, platform = process.platform }) {
         result.picture = mark.shot;
       }
       if (want.audio) {
-        // From the click that brought the line to the next line's (lineStart), with the sound
-        // around it for the voice finder (line-audio.ts): { pcm, rate, start, end, earliest,
-        // endClick }, seconds in.
-        const { at: start, click } = lineStart(index);
-        const next = index < marks.length - 1 ? lineStart(index + 1) : undefined;
-        const end = next?.at ?? Date.now();
-        // No click (auto mode): a typewriter line was only seen once drawn, but it may have begun
-        // as early as the previous line's drawing ended, so its voice is looked for from there.
-        const earliest = click
-          ? start
-          : Math.max(start - maxTypeMs, (marks[index - 1]?.at ?? start + flushMs) - flushMs);
-        const from = earliest - preRollMs;
-        const pcm = sound.clip(from, Math.min(end + tailMs, Date.now()));
+        // GameSentenceMiner's window (trim_audio_based_on_last_line), for the voice finder
+        // (line-audio.ts): just before the line arrived up to the next line's arrival.
+        const start = mark.at - beginOffsetMs;
+        const end = marks[index + 1]?.at ?? Date.now();
+        const pcm = marked
+          ? sound.clip(start, end)
+          : (sound.clip(start, end) ?? whole.clip(start, end));
         if (pcm)
           result.audio = {
             pcm: new Uint8Array(pcm.buffer),
             rate,
-            start: (start - from) / 1000,
-            end: (end - from) / 1000,
-            earliest: (earliest - from) / 1000,
-            // The next line came without a click: it too may have begun before `end`.
-            endClick: next?.click ?? true
+            start: 0,
+            end: (end - start) / 1000
           };
       }
       return result;

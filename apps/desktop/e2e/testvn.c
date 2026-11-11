@@ -87,9 +87,80 @@ __attribute__((noinline, noipa)) void say(const wchar_t *text, HDC dc) {
   FillRect(dc, &r, GetStockObject(BLACK_BRUSH));
 }
 
+// layout.txt beside it (invisible.e2e.mjs): one screen per line, "size x y kind font name text"
+// (kind h, v vertical, w wrapping every 14 characters, d white on a dark box, n drawn nowhere; font 0
+// MS Gothic, 1 MS PGothic; name - for none; text: earlier lines on the screen, then the hooked one
+// last, split by |). The hooked line only goes through say(); each character is drawn on its own
+// and where it went is written to drawn.txt ("step index x0 y0 x1 y1"), the truth the E2E measures.
+typedef struct { int size, x, y, pgothic; char kind; wchar_t name[32], text[256]; } Layout;
+static Layout layouts[32];
+static int layoutCount, layoutDone = -1;
+
+static void loadLayouts(void) {
+  FILE *f = _wfopen(L"layout.txt", L"rb");
+  if (!f) return;
+  char line[1024], name[128];
+  while (layoutCount < 32 && fgets(line, sizeof line, f)) {
+    Layout *l = &layouts[layoutCount];
+    int used = 0;
+    if (sscanf(line, "%d %d %d %c %d %127s %n", &l->size, &l->x, &l->y, &l->kind, &l->pgothic, name, &used) < 6) continue;
+    line[strcspn(line, "\r\n")] = 0;
+    MultiByteToWideChar(CP_UTF8, 0, line + used, -1, l->text, 256);
+    if (strcmp(name, "-")) MultiByteToWideChar(CP_UTF8, 0, name, -1, l->name, 32);
+    layoutCount++;
+  }
+  fclose(f);
+  FILE *addr = _wfopen(L"hookaddr.txt", L"wb");
+  fprintf(addr, "%X", (unsigned)((char *)say - (char *)GetModuleHandleW(NULL)));
+  fclose(addr);
+}
+
+// A run of characters from (x, y), each on its own; `log`: written to drawn.txt.
+static void drawRun(HDC dc, const Layout *l, const wchar_t *text, int n, int x, int y, FILE *log) {
+  int startX = x;
+  for (int i = 0; i < n; i++) {
+    SIZE size; GetTextExtentPoint32W(dc, text + i, 1, &size);
+    TextOutW(dc, x, y, text + i, 1);
+    if (log) fprintf(log, "%d %d %d %d %d %d\n", step, i, x, y, x + size.cx, y + l->size);
+    if (l->kind == 'v') y += l->size + l->size / 20;
+    else if (l->kind == 'w' && i % 14 == 13) { x = startX; y += l->size * 3 / 2; }
+    else x += size.cx;
+  }
+}
+
+static void paintLayout(HDC dc, RECT *all) {
+  const Layout *l = &layouts[step % layoutCount];
+  const wchar_t *hooked = wcsrchr(l->text, L'|');
+  hooked = hooked ? hooked + 1 : l->text;
+  // Only once per step: a repaint would send the line again.
+  if (layoutDone != step) say(hooked, dc);
+  FillRect(dc, all, GetStockObject(WHITE_BRUSH));
+  if (l->kind == 'n') { layoutDone = step; return; }
+  HFONT font = CreateFontW(l->size, 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, ANTIALIASED_QUALITY, 0, l->pgothic ? L"MS PGothic" : L"MS Gothic");
+  SelectObject(dc, font);
+  SetBkMode(dc, TRANSPARENT);
+  if (l->kind == 'd') {
+    RECT panel = {0, l->y - l->size, all->right, all->bottom};
+    HBRUSH dark = CreateSolidBrush(RGB(30, 36, 60)); FillRect(dc, &panel, dark); DeleteObject(dark);
+    SetTextColor(dc, RGB(255, 255, 255));
+  }
+  if (l->name[0]) drawRun(dc, l, l->name, lstrlenW(l->name), l->x, l->y - l->size * 8 / 5, NULL);
+  int y = l->y, lines = 0;
+  for (const wchar_t *c = l->text; c < hooked; c++) if (*c == L'|') lines++;
+  y -= lines * (l->size * 3 / 2);
+  for (const wchar_t *from = l->text, *bar; (bar = wcschr(from, L'|')); from = bar + 1, y += l->size * 3 / 2)
+    drawRun(dc, l, from, bar - from, l->x, y, NULL);
+  FILE *log = layoutDone != step ? _wfopen(L"drawn.txt", L"ab") : NULL;
+  drawRun(dc, l, hooked, lstrlenW(hooked), l->x, y, log);
+  if (log) fclose(log);
+  layoutDone = step;
+  DeleteObject(font);
+}
+
 static void paint(HWND hwnd) {
   PAINTSTRUCT ps; HDC dc = BeginPaint(hwnd, &ps);
   RECT all; GetClientRect(hwnd, &all);
+  if (layoutCount) { paintLayout(dc, &all); EndPaint(hwnd, &ps); return; }
   HBRUSH bg = CreateSolidBrush(stepColors[step % 12]); FillRect(dc, &all, bg); DeleteObject(bg);
   if (hidden) {
     wchar_t caption[64]; swprintf(caption, 64, L"第%d場面の台詞です。", step);
@@ -305,7 +376,7 @@ static LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
       *wcsrchr(self, L'\\') = 0;
       writeSaveIn(self, L"savedata");
     }
-    if (step >= (hidden ? 20 : 11)) PostQuitMessage(0);
+    if (step >= (layoutCount ? layoutCount : hidden ? 20 : 11)) PostQuitMessage(0);
     InvalidateRect(hwnd, NULL, TRUE); return 0;
   // Right click: borderless fullscreen and back, as a VN's own fullscreen setting (overlay E2E).
   // Placed again 0.3 s later: a window manager taking the frame off can put the old place back.
@@ -341,6 +412,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show) {
     fprintf(addr, "%X", (unsigned)((char *)say - (char *)GetModuleHandleW(NULL)));
     fclose(addr);
   }
+  loadLayouts();
   int sceneMode = loadScenes();
   WNDCLASSW wc = {0}; wc.lpfnWndProc = sceneMode ? sceneProc : proc; wc.hInstance = inst; wc.lpszClassName = L"TestVN";
   wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH); wc.hCursor = LoadCursor(NULL, IDC_ARROW);
@@ -349,7 +421,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show) {
   wchar_t env[16];
   int height = GetEnvironmentVariableW(L"TESTVN_HEIGHT", env, 16) ? _wtoi(env) : 200;
   if (GetEnvironmentVariableW(L"TESTVN_BOX", env, 16)) box = _wtoi(env);
-  HWND hwnd = CreateWindowW(L"TestVN", L"テストVN", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 0, 0, 820, height, NULL, NULL, inst, NULL);
+  int width = GetEnvironmentVariableW(L"TESTVN_WIDTH", env, 16) ? _wtoi(env) : 820;
+  HWND hwnd = CreateWindowW(L"TestVN", L"テストVN", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 0, 0, width, height, NULL, NULL, inst, NULL);
   int ms = cmd && *cmd ? _wtoi(cmd) : GetEnvironmentVariableW(L"TESTVN_MS", env, 16) ? _wtoi(env) : 1500;
   if (sceneMode) {
     mainHwnd = hwnd;
