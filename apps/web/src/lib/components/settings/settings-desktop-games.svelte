@@ -4,6 +4,8 @@
    * installed (the app's native-games.json, native-games.ts), with Change folder and Forget, and
    * on Linux what runs them (Wine or a Proton build, for all and per game), and the game overlay's text size and opacity (on/off
    * and Band's area are on /hook), and the global shortcuts while a game runs (hotkeys.js).
+   * Each game's Steam launch option (`--game=<folder>`, main.js), and diagnostics with the log
+   * file's end for reports (Steam Deck's Game Mode has no terminal).
    */
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
@@ -73,6 +75,58 @@
   async function forget(game: NativeGameEntry) {
     await games.forget(game.folder);
     await refresh();
+  }
+
+  /** What the last Copy did, said beside its button */
+  let copied = $state<{ what: string; text: string }>();
+
+  async function copy(what: string, text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      copied = { what, text: 'Copied.' };
+    } catch {
+      copied = { what, text: 'The clipboard refused it.' };
+    }
+  }
+
+  /** A runner as the selects name it. */
+  const runnerName = (runner: NativeRunner) =>
+    runner === 'auto'
+      ? 'Automatic'
+      : runner === 'wine'
+        ? 'Wine'
+        : (list?.proton?.find((build) => build.path === runner.proton)?.name ?? runner.proton);
+
+  /** For a bug report: this computer, what runs the games, and the log file's last lines. */
+  async function copyDiagnostics() {
+    const info = await games.diagnostics();
+    const yes = (value?: boolean) => (value ? 'yes' : 'no');
+    const linux = list?.platform === 'linux';
+    const lines = [
+      `chimimouryou ${info.version}`,
+      `OS: ${info.os}`,
+      `Session: ${info.session}`,
+      `Text hook bundled: ${yes(list?.hook)}`,
+      ...(linux && list
+        ? [
+            `Runs games with: ${runnerName(list.runner ?? 'auto')}`,
+            `Starts them with: ${list.runs?.error ?? `${list.runs?.kind} ${list.runs?.name ?? ''}`.trim()}`,
+            `Wine: ${list.wine?.version ?? 'not installed'}, ja_JP.UTF-8 ${yes(list.wine?.japaneseLocale)}, winetricks ${yes(list.wine?.winetricks)}`,
+            ...(list.proton ?? []).map(
+              (build) =>
+                `Proton: ${build.name} (${build.path})${build.needs ? `, needs ${build.needs}` : ''}`
+            ),
+            ...list.games
+              .filter((game) => game.runner)
+              .map((game) => `Game ${game.folder} runs with ${runnerName(game.runner!)}`),
+            `pactl: ${yes(info.pactl)}, parec: ${yes(info.parec)}`
+          ]
+        : []),
+      '',
+      'Log:',
+      ...info.log
+    ];
+    await copy('diagnostics', lines.join('\n'));
   }
 </script>
 
@@ -181,6 +235,28 @@
       </div>
     </SettingsItemGroup>
   {/if}
+  {#if list}
+    <SettingsItemGroup
+      title="Diagnostics"
+      tooltip="For a bug report: this computer, what runs the games, and the end of the app's log file (no keys, tokens or game text)."
+    >
+      <div class="dg-actions">
+        <button type="button" class="app-button" onclick={copyDiagnostics}>Copy diagnostics</button>
+        <button type="button" class="app-button app-button-quiet" onclick={() => games.openLogs()}>
+          Open log folder
+        </button>
+        {#if copied?.what === 'diagnostics'}<span class="dg-note">{copied.text}</span>{/if}
+      </div>
+    </SettingsItemGroup>
+  {/if}
+  {#if list?.hook && list.games.length}
+    <p class="dg-note">
+      To start a game from Steam, add this app as a non-Steam game{list.appImage
+        ? ` (target: ${list.appImage})`
+        : ''} and paste the game's Steam launch option into its Launch Options. The app then starts the
+      game itself, which Steam's Game Mode needs to show the overlay over it.
+    </p>
+  {/if}
   {#if list && !list.hook}
     <p class="dg-note">This build of the app has no built-in text hook, so games can’t start.</p>
   {/if}
@@ -207,6 +283,16 @@
         <button type="button" class="app-button app-button-quiet" onclick={() => forget(game)}>
           Forget
         </button>
+        {#if list?.hook}
+          <button
+            type="button"
+            class="app-button app-button-quiet"
+            onclick={() => copy(game.folder, `--game=${game.folder}`)}
+          >
+            Copy Steam launch option
+          </button>
+          {#if copied?.what === game.folder}<span class="dg-note">{copied.text}</span>{/if}
+        {/if}
         {#if list?.platform === 'linux'}
           <select
             class="app-input dg-game-runner"
@@ -283,5 +369,9 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
+  }
+
+  .dg-actions .dg-note {
+    align-self: center;
   }
 </style>

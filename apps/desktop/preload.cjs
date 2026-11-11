@@ -56,6 +56,8 @@ contextBridge.exposeInMainWorld('chimiDesktop', {
     stamp: () => ipcRenderer.invoke('games-stamp'),
     windows: (folder) => ipcRenderer.invoke('games-windows', folder),
     attach: (folder, index) => ipcRenderer.invoke('games-attach', folder, index),
+    diagnostics: () => ipcRenderer.invoke('games-diagnostics'),
+    openLogs: () => ipcRenderer.invoke('games-open-logs'),
     onHook: (callback) => {
       const listener = (_event, message) => callback(message);
       ipcRenderer.on('native-hook', listener);

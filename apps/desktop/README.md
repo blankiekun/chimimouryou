@@ -181,6 +181,15 @@ root install stays light for the web app and its Docker image; `fetch` downloads
   app must be started from Steam (a non-Steam game) and start the game itself, so both share one
   app id. Nothing in the code is specific to gamescope. On SteamOS games start with Steam's
   Proton (the Proton entry below).
+  Starting a game from Steam: `--game=<folder>` (the record's folder, the key of
+  `native-games.json`) opens that game's `/hook?game=<folder>`, which finds the record by its
+  folder and goes on to `/hook?native=<id>`; with no such record, the library says so. It works at
+  start (kept through the Wayland → X11 re-exec, which passes the arguments on) and on a second
+  start (`second-instance`: the running window opens the game; the second process quits, so Steam
+  sees the game end at once: close the app before starting a game from Steam). Settings → Desktop
+  games → a game's "Copy Steam launch option" copies `--game=<folder>` for a non-Steam shortcut's
+  Launch Options; the page shows the AppImage (`APPIMAGE`) as the shortcut's target. Not yet run
+  from a real Steam shortcut or on a Deck.
   Shortcuts (`hotkeys.js`, Electron `globalShortcut`): while a game runs and its `/hook` window is
   open, Ctrl+Shift+M puts the newest line (with its screenshot and sound) on the last Anki card
   (`native-hotkey` to `/hook`, which says how it went in a desktop notification) and Ctrl+Shift+H
@@ -225,6 +234,16 @@ root install stays light for the web app and its Docker image; `fetch` downloads
   hardware: nothing here has run Valve's Proton or container; `E2E_RUNNER=proton xvfb-run -a node
 e2e/native-vn.e2e.mjs` runs the whole flow through this path with stand-in scripts in front of
   Wine, and `docs/QA.md` (Steam Deck) lists what to try on a Deck.
+- Log file (`main.js` `log`): `<userData>/logs/main.log`, about 1 MB, then it becomes
+  `main.old.log` (one kept), for Game Mode, which has no terminal; lines go to the terminal too.
+  It has the app version, platform, session (X11/Wayland, the X11 re-exec, `SteamAppId`), the
+  arguments, each game's runner, sound source and helper command line, prefix setup steps (`wine`,
+  `winetricks`, `proton run`/`runinprefix`, `reg`) with their exit codes, chimihook's stderr and
+  its `audio`/`error` messages, the game's exit code, failed launches, the windows' crashes and
+  failed loads (the overlay's too), and uncaught main-process errors. Never tokens, keys, URLs or
+  a game's text lines. Settings → Desktop games → Diagnostics: "Copy diagnostics" (version, OS,
+  session, the runners as the page shows them, pactl/parec, the log's last 200 lines;
+  `games-diagnostics`) and "Open log folder" (`games-open-logs`).
 - Help → About lists the licences (Yomitan is GPL-3.0, a separate program; its source is the
   release tag named there).
 

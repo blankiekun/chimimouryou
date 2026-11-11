@@ -21,8 +21,19 @@ import {
   shell
 } from 'electron';
 import { Blob } from 'node:buffer';
-import { cpSync, existsSync, readFileSync, rmSync } from 'node:fs';
+import { execFile } from 'node:child_process';
+import {
+  appendFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync
+} from 'node:fs';
 import { BlockList } from 'node:net';
+import { release } from 'node:os';
 import { join } from 'node:path';
 import { clearTimeout, setTimeout } from 'node:timers';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -32,7 +43,7 @@ import {
   isSignInUrl,
   startBrowserSignIn
 } from './oauth.js';
-import { loadStore, registerGames } from './games.js';
+import { loadStore, registerGames, startPage } from './games.js';
 import { handleJiten } from './jiten.js';
 import { registerMihon } from './mihon.js';
 import { serve } from './serve.js';
@@ -61,6 +72,42 @@ const electronDir = app.isPackaged
 
 let mainWindow;
 
+// Steam Deck's Game Mode has no terminal: what goes wrong with a game is in this file too, for
+// Settings → Desktop games' Copy diagnostics. About 1 MB, then it becomes main.old.log.
+// Never tokens, keys or a game's text lines; no URLs (an /auth URL holds a sign-in code).
+const logDir = join(app.getPath('userData'), 'logs');
+const logFile = join(logDir, 'main.log');
+const oldLogFile = join(logDir, 'main.old.log');
+function log(text) {
+  console.warn(text);
+  try {
+    mkdirSync(logDir, { recursive: true });
+    if ((statSync(logFile, { throwIfNoEntry: false })?.size ?? 0) > 1_000_000)
+      renameSync(logFile, oldLogFile);
+    appendFileSync(logFile, `${new Date().toISOString()} ${text}\n`);
+  } catch {
+    // A log that can't be written stops nothing.
+  }
+}
+process.on('uncaughtExceptionMonitor', (error, origin) =>
+  log(`${origin}: ${error?.stack ?? error}`)
+);
+process.on('unhandledRejection', (reason) => log(`unhandledRejection: ${reason?.stack ?? reason}`));
+
+/** How the app runs here, for the log and diagnostics: Wayland or X11, and whether Steam started it. */
+const sessionInfo = () =>
+  [
+    `XDG_SESSION_TYPE=${process.env.XDG_SESSION_TYPE ?? ''}`,
+    `WAYLAND_DISPLAY=${process.env.WAYLAND_DISPLAY ?? ''}`,
+    `DISPLAY=${process.env.DISPLAY ?? ''}`,
+    `ozone-platform=${app.commandLine.getSwitchValue('ozone-platform')}`,
+    `SteamAppId=${process.env.SteamAppId ?? ''}`,
+    `SteamDeck=${process.env.SteamDeck ?? ''}`
+  ].join(' ');
+log(
+  `start: chimimouryou ${app.getVersion()}, ${process.platform} ${release()} ${process.arch}, ${sessionInfo()}, args: ${process.argv.slice(1).join(' ')}`
+);
+
 // The game overlay needs window positions, which Wayland doesn't give: while it's on, the app runs
 // on X11 (XWayland, where Wine's games are too). Read at start, so a change takes a restart.
 // Electron picks the platform before this file runs, so appendSwitch would only reach the child
@@ -78,12 +125,14 @@ if (
   else if (
     process.env.DISPLAY &&
     loadStore(join(app.getPath('userData'), 'native-games.json')).overlay?.on === true
-  )
+  ) {
+    log('restarting on X11 (XWayland) for the game overlay');
     process.execve(
       process.execPath,
       [process.execPath, ...process.argv.slice(1), '--ozone-platform=x11'],
       { ...process.env, XDG_SESSION_TYPE: 'x11' }
     );
+  }
 }
 
 /** The file: URLs the About window links to (licences): the only local files a window may open. */
@@ -147,13 +196,14 @@ function handleSignInRedirect(url, res) {
   return true;
 }
 
-const readVersion = (dir) => {
+const readText = (file) => {
   try {
-    return readFileSync(join(dir, 'yomitan-version.txt'), 'utf8');
+    return readFileSync(file, 'utf8');
   } catch {
     return undefined;
   }
 };
+const readVersion = (dir) => readText(join(dir, 'yomitan-version.txt'));
 
 /**
  * An unpacked extension's ID comes from its path, and Yomitan's settings and dictionaries live
@@ -185,9 +235,52 @@ async function loadYomitan() {
       allowFileAccess: true
     });
   } catch (error) {
-    console.error('Yomitan failed to load:', error);
+    log(`Yomitan failed to load: ${error.stack}`);
     return undefined;
   }
+}
+
+/** A window's crashes and failed loads go to the log (the game overlay's above all). */
+function logErrors(contents, name) {
+  contents.on('render-process-gone', (_event, { reason, exitCode }) =>
+    log(`${name} window: renderer gone (${reason}, ${exitCode})`)
+  );
+  contents.on('did-fail-load', (_event, code, description, _url, mainFrame) =>
+    // -3: a navigation that another one replaced
+    mainFrame && code !== -3
+      ? log(`${name} window: load failed (${code} ${description})`)
+      : undefined
+  );
+  contents.on('preload-error', (_event, _path, error) =>
+    log(`${name} window: preload failed: ${error.stack}`)
+  );
+}
+
+/** Whether a program runs here (pactl, parec: Anki clips' sound on Linux). */
+const hasProgram = (name) =>
+  new Promise((resolve) =>
+    execFile(name, ['--version'], { timeout: 10_000 }, (error) => resolve(!error))
+  );
+
+const tailLines = (file) => {
+  try {
+    return readFileSync(file, 'utf8').split('\n').filter(Boolean);
+  } catch {
+    return [];
+  }
+};
+
+/** Settings → Desktop games' Copy diagnostics: this computer, the session, and the log's end. */
+async function diagnostics() {
+  const osName = /^PRETTY_NAME="?(.*?)"?$/m.exec(readText('/etc/os-release') ?? '')?.[1];
+  return {
+    version: app.getVersion(),
+    os: [osName, `${process.platform} ${release()} ${process.arch}`].filter(Boolean).join(', '),
+    session: sessionInfo(),
+    pactl: process.platform === 'linux' ? await hasProgram('pactl') : undefined,
+    parec: process.platform === 'linux' ? await hasProgram('parec') : undefined,
+    log: [...tailLines(oldLogFile), ...tailLines(logFile)].slice(-200)
+  };
 }
 
 function openWindow(url, options = {}, webPreferences = {}) {
@@ -398,7 +491,11 @@ if (!app.requestSingleInstanceLock()) {
   // Another instance owns the port and the profile.
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  // A second start (another Steam shortcut's `--game=`) opens its game here.
+  app.on('second-instance', (_event, argv) => {
+    const page = startPage(origin, argv);
+    if (page) log(`second start: ${argv.find((arg) => arg.startsWith('--game='))}`);
+    if (page) mainWindow?.loadURL(page);
     if (mainWindow?.isMinimized()) mainWindow.restore();
     mainWindow?.focus();
   });
@@ -421,6 +518,16 @@ if (!app.requestSingleInstanceLock()) {
       return;
     }
     ipcMain.handle('sources-fetch', sourcesFetch);
+    // Settings → Desktop games: Copy diagnostics, Open log folder.
+    ipcMain.handle('games-diagnostics', (event) => {
+      if (!isApp(event)) throw new Error('Not the app');
+      return diagnostics();
+    });
+    ipcMain.handle('games-open-logs', async (event) => {
+      if (!isApp(event)) throw new Error('Not the app');
+      mkdirSync(logDir, { recursive: true });
+      return shell.openPath(logDir);
+    });
     registerMihon({
       app,
       ipcMain,
@@ -441,16 +548,22 @@ if (!app.requestSingleInstanceLock()) {
       hookDir,
       overlayUrl: `${origin}/hook/overlay`,
       preload: appPreferences.preload,
-      prepare: keepExternalLinksOut,
-      isApp
+      prepare: (contents) => {
+        keepExternalLinksOut(contents);
+        logErrors(contents, 'overlay');
+      },
+      isApp,
+      log
     });
     const yomitan = await loadYomitan();
     setMenu(yomitan);
+    // `--game=<folder>` (a Steam shortcut's launch options) starts straight into that game.
     mainWindow = openWindow(
-      `${origin}/`,
+      startPage(origin, process.argv) ?? `${origin}/`,
       { width: 1200, height: 900, title: 'chimimouryou' },
       appPreferences
     );
+    logErrors(mainWindow.webContents, 'main');
     checkForUpdates(mainWindow);
   });
 }

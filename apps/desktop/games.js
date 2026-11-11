@@ -97,11 +97,22 @@ export function loadStore(file) {
   }
 }
 
-const run = (command, args, options = {}) =>
+/**
+ * The page a `--game=<folder>` argument (a Steam shortcut's launch options) opens, at start or on a
+ * second start: that game's `/hook`, which finds its record by the folder. Undefined without one.
+ */
+export function startPage(origin, argv) {
+  const game = argv.findLast((arg) => arg.startsWith('--game='))?.slice('--game='.length);
+  return game ? `${origin}/hook?game=${encodeURIComponent(game)}` : undefined;
+}
+
+/** Runs a program for its output; with `log`, its command line and exit code go to the log file. */
+const run = (command, args, options = {}, log) =>
   new Promise((resolve) =>
-    execFile(command, args, { timeout: 600_000, ...options }, (error, stdout) =>
-      resolve(error ? undefined : stdout.toString())
-    )
+    execFile(command, args, { timeout: 600_000, ...options }, (error, stdout) => {
+      log?.(`${[command, ...args].join(' ')}: exit ${error ? (error.code ?? error.signal) : 0}`);
+      resolve(error ? undefined : stdout.toString());
+    })
   );
 
 /** Wine: its version, and whether this system has the Japanese UTF-8 locale it runs games in. */
@@ -431,12 +442,12 @@ async function makePrefix(ctx, prefix, env) {
   const { fontDir } = ctx;
   mkdirSync(prefix, { recursive: true });
   status(ctx, 'Setting up Wine for this game (first start only, about a minute)…');
-  await run('wine', ['wineboot', '-i'], { env });
-  await run('wineserver', ['-w'], { env });
+  await run('wine', ['wineboot', '-i'], { env }, ctx.log);
+  await run('wineserver', ['-w'], { env }, ctx.log);
   plainUserFolders(join(prefix, 'drive_c/users', userInfo().username));
   if ((await wineStatus()).winetricks) {
     status(ctx, 'Adding Japanese fonts…');
-    await run('winetricks', ['-q', 'fakejapanese'], { env });
+    await run('winetricks', ['-q', 'fakejapanese'], { env }, ctx.log);
     const fonts = join(prefix, 'drive_c/windows/Fonts');
     mkdirSync(fontDir, { recursive: true });
     for (const name of readdirSync(fonts)) {
@@ -510,15 +521,17 @@ async function makeProtonPrefix(ctx, { build, data, env }) {
       ? `Updating this game’s prefix for ${build.name}…`
       : `Setting up ${build.name} for this game (first start only, about a minute)…`
   );
-  await run(...protonCommand(build, 'run', ['wineboot', '--init']), { env });
+  await run(...protonCommand(build, 'run', ['wineboot', '--init']), { env }, ctx.log);
   if (!existsSync(join(data, 'pfx/drive_c')))
     throw new Error(`${build.name} couldn’t set up this game’s prefix.`);
   plainUserFolders(join(data, 'pfx/drive_c/users', protonUser));
   const fonts = join(data, 'chimi-fonts.reg');
   writeFileSync(fonts, fontReplacements);
-  await run(...protonCommand(build, 'runinprefix', ['reg.exe', 'import', winePath(fonts)]), {
-    env
-  });
+  await run(
+    ...protonCommand(build, 'runinprefix', ['reg.exe', 'import', winePath(fonts)]),
+    { env },
+    ctx.log
+  );
   writeFileSync(ready, stamp);
 }
 
@@ -574,6 +587,7 @@ async function linuxRunner(ctx, folder, game) {
       dir: prefix,
       env,
       hookDir: ctx.hookDir,
+      name: 'Wine',
       argv: (args) => ['wine', args],
       ready: ready(),
       prepare: async () => ready() || (await makePrefix(ctx, prefix, env))
@@ -588,6 +602,7 @@ async function linuxRunner(ctx, folder, game) {
     dir: data,
     env,
     hookDir,
+    name: build.name,
     argv: (args) => protonCommand(build, 'runinprefix', args),
     ready: existsSync(join(data, '.chimi-ready')),
     prepare: () => makeProtonPrefix(ctx, { build, data, env })
@@ -623,7 +638,7 @@ function carrySaves(ctx, folder, kind) {
  * once it's Off. A marker in the prefix says which is set: `reg` runs only when that changes.
  * Returns whether the grab is off.
  */
-async function pointerGrab(runner, game) {
+async function pointerGrab(runner, game, log) {
   const marker = join(runner.dir, '.chimi-nograb');
   const off = gameOverlayOf(game).mode !== 'off';
   if (off === existsSync(marker)) return off;
@@ -634,7 +649,7 @@ async function pointerGrab(runner, game) {
       : ['reg.exe', 'delete', key, '/v', 'GrabPointer', '/f']
   );
   // A failed reg leaves the marker as it was: tried again at the next start.
-  if ((await run(command, args, { env: runner.env })) === undefined) return !off;
+  if ((await run(command, args, { env: runner.env }, log)) === undefined) return !off;
   if (off) writeFileSync(marker, '');
   else rmSync(marker);
   return off;
@@ -646,7 +661,7 @@ async function startLinux(ctx, folder, gameExe, saves) {
   const runner = await linuxRunner(ctx, folder, game);
   if (runner.status) return runner;
   await runner.prepare();
-  ctx.session.grabOff = await pointerGrab(runner, game);
+  ctx.session.grabOff = await pointerGrab(runner, game, ctx.log);
   carrySaves(ctx, folder, runner.kind);
   writeSaves(ctx, folder, ctx.store.games[folder], saves);
   const audio = await media.start(runner.env);
@@ -656,6 +671,7 @@ async function startLinux(ctx, folder, gameExe, saves) {
     ...(game.launchOnly ? ['--no-hook'] : []),
     winePath(gameExe)
   ]);
+  ctx.log(`runner: ${runner.name}; sound: ${audio.mode}`);
   return spawn(command, args, { cwd: game.installDir, env: { ...runner.env, ...audio.env } });
 }
 
@@ -711,11 +727,13 @@ async function launch(ctx, event, folder, saves) {
           )
         : await startLinux(ctx, folder, gameExe, saves);
   } catch (error) {
+    ctx.log(`launch failed: ${error.stack}`);
     current.running = false;
     syncOverlay(ctx);
     return { status: 'error', message: error.message };
   }
   if (!child.pid && child.status) {
+    ctx.log(`launch: ${child.message ?? child.status}`);
     current.running = false;
     syncOverlay(ctx);
     return child;
@@ -726,8 +744,9 @@ async function launch(ctx, event, folder, saves) {
 
 /** The helper's messages go to the session's page; its end stops the recording and the overlay. */
 function watchHelper(ctx, current, child) {
-  const { media, overlay, app } = ctx;
+  const { media, overlay, app, log } = ctx;
   const { folder } = current;
+  log(`started: ${child.spawnargs.join(' ')}`);
   let rest = '';
   let exited = false;
   child.stdout.setEncoding('utf8');
@@ -745,6 +764,8 @@ function watchHelper(ctx, current, child) {
         }
         // Text lines get the number and arrival time /hook asks for their Anki media by.
         if (message.type === 'text') Object.assign(message, media.stamp());
+        // Never a text line: those are the game's.
+        if (message.type === 'audio' || message.type === 'error') log(`chimihook: ${line}`);
         if (message.type === 'window') {
           current.window = message;
           media.window(message);
@@ -768,7 +789,7 @@ function watchHelper(ctx, current, child) {
       }
     }
   });
-  child.stderr.on('data', (chunk) => console.warn(`chimihook: ${chunk}`));
+  child.stderr.on('data', (chunk) => log(`chimihook: ${chunk}`));
   const ended = () => {
     current.running = false;
     // Not a later game's recording.
@@ -792,6 +813,7 @@ function watchHelper(ctx, current, child) {
     }
   };
   child.on('error', (error) => {
+    log(`chimihook failed: ${error.message}`);
     // A spawn that failed never fires 'exit'. Its exit goes first, so /hook keeps showing the error.
     if (!child.pid) {
       exited = true;
@@ -801,7 +823,8 @@ function watchHelper(ctx, current, child) {
     send(ctx, { type: 'error', message: error.message }, current);
   });
   // 'exit', not 'close': Wine's own processes (wineserver, services) can keep stdout open.
-  child.on('exit', () => {
+  child.on('exit', (code, signal) => {
+    log(`game exited: ${code ?? signal}`);
     ended();
     // The last lines may still be in the pipe.
     setTimeout(() => !exited && send(ctx, { type: 'exit' }, current), 1000);
@@ -870,6 +893,7 @@ async function attach(ctx, event, folder, index) {
     // Linux: already playing on the default sound output, so the whole system's sound.
     const audio = await media.start(env, { ownStreams: false });
     if (platform !== 'win32') send(ctx, { type: 'audio', mode: audio.mode });
+    if (platform !== 'win32') ctx.log(`sound: ${audio.mode}`);
     child =
       platform === 'win32'
         ? spawn(exe, [...audio.args, '--attach', pid], { windowsHide: true })
@@ -952,7 +976,8 @@ export function registerGames({
   overlayUrl,
   preload,
   prepare,
-  isApp
+  isApp,
+  log
 }) {
   const storeFile = join(app.getPath('userData'), 'native-games.json');
   const platform = process.platform;
@@ -993,7 +1018,9 @@ export function registerGames({
     }),
     /** Global shortcuts while a game runs (hotkeys.js) */
     hotkeys: gameHotkeys({ globalShortcut, BrowserWindow }),
-    noX11
+    noX11,
+    /** A line in the log file (main.js) */
+    log
   };
   // Before per-game modes the overlay was on or off for every game: on becomes Band for each.
   if (
@@ -1078,6 +1105,7 @@ export function registerGames({
   });
   handle('games-list', async () => ({
     platform,
+    appImage: process.env.APPIMAGE,
     hook: existsSync(join(hookDir, 'chimihook.exe')),
     wine: platform === 'linux' ? await wineStatus() : undefined,
     ...(platform === 'linux' ? await runners(ctx) : {}),

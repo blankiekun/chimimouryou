@@ -6,7 +6,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { isHookCode, isSafeSaveName } from './games.js';
+import { isHookCode, isSafeSaveName, startPage } from './games.js';
 
 const user = 'wine/drive_c/users/username/';
 
@@ -71,4 +71,22 @@ test('only one plausible hook code goes to the helper’s stdin, never a second 
     'HW-1C:-20@44A6F0'
   ])
     assert.equal(isHookCode(code), true, code);
+});
+
+// How `--game=<folder>` (Steam launch options) can go wrong: another switch that starts the same
+// (`--gamescope…`) taken for it; an empty value opening a game page for nothing; a value with `&`
+// or `#` adding its own query (`&native=<id>` would play another record); no argument at all, or a
+// second start without one, navigating away from what is open.
+test('a --game= argument opens that game’s page, anything else none', () => {
+  const origin = 'http://127.0.0.1:41917';
+  assert.equal(
+    startPage(origin, ['/app', '--ozone-platform=x11', '--game=1712-ab_c']),
+    `${origin}/hook?game=1712-ab_c`
+  );
+  assert.equal(
+    startPage(origin, ['/app', '--game=x&native=5#y']),
+    `${origin}/hook?game=x%26native%3D5%23y`
+  );
+  for (const argv of [['/app'], ['/app', '--game='], ['/app', '--gamescope=1', '--game']])
+    assert.equal(startPage(origin, argv), undefined);
 });

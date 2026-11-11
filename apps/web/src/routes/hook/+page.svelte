@@ -78,7 +78,9 @@
     type NativeMessage,
     type NativeThread
   } from '$lib/data/vn/native-games';
-  import { vnElementHtml, vnInfo } from '$lib/data/vn/vn';
+  import { isVn, vnElementHtml, vnInfo } from '$lib/data/vn/vn';
+  import MessageDialog from '$lib/components/message-dialog.svelte';
+  import { goto } from '$app/navigation';
   import { VnSaveSync } from '$lib/data/vn/vn-save-store';
   import { rankThreads } from '$lib/data/vn/windows-game';
   import {
@@ -408,6 +410,37 @@
             ? result.message
             : 'This build of the app can’t play games natively.';
     }
+  }
+
+  /**
+   * `?game=<folder>` (the desktop app's `--game=`, from a Steam shortcut): main knows a game by its
+   * record's folder, the page by the record's id. That record's page, else the library with why.
+   */
+  async function openGame(folder: string) {
+    const db = await database.db;
+
+    for (
+      let cursor = await db.transaction('data').store.openCursor();
+      cursor;
+      cursor = await cursor.continue()
+    ) {
+      const book = cursor.value;
+
+      if (isVn(book) && vnInfo(book).folder === folder) {
+        location.replace(`${pagePath}/hook?native=${book.id}`);
+        return;
+      }
+    }
+    await goto(`${pagePath}/manage`, { replaceState: true });
+    dialogManager.dialogs$.next([
+      {
+        component: MessageDialog,
+        props: {
+          title: 'Game not found',
+          message: `No game in this library matches the launch option --game=${folder}. Copy it again from Settings → Desktop games.`
+        }
+      }
+    ]);
   }
 
   /** Hooks a game already running (picked from main's list) as this record's. */
@@ -782,6 +815,12 @@
   }
 
   onMount(() => {
+    const game = games && $page.url.searchParams.get('game');
+
+    if (game) {
+      openGame(game).catch((error) => logger.warn(`Opening a game failed: ${error.message}`));
+      return;
+    }
     nativeId = (games && Number($page.url.searchParams.get('native'))) || undefined;
     const stopHotkeys = nativeId
       ? games?.onHotkey((action) => action === 'mine' && mineNewest())
