@@ -4,6 +4,32 @@ chimimouryou is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook
 upstream's own changes are not listed here. Each version's section is written when it is released,
 from the pull requests merged since the previous tag (pull requests don't edit this file).
 
+## v3.20.1 (2026-11-10)
+
+### Changed
+
+- Visual novels: a mined line's voice clip now follows GameSentenceMiner: the same window around
+  the line, the same checks, and its default speech detector, FireRedVAD, in place of Silero. The
+  old rules based on your clicks are gone. A line with no voice can now sometimes get the end of a
+  neighbouring voice.
+- Desktop: Invisible overlay is automatic only. Each character sits over the same character the
+  game drew, and if it can't be placed nothing is shown and the hook page says why. Manual area,
+  Placement and Adjust are gone from Invisible; Band keeps its area and Adjust. Hovering the text
+  looks words up with no key held.
+- Anki: no more "Added to the last Anki card" message after mining. Failures still show.
+
+### Fixed
+
+- Anki: Yomitan's sentence on the hook page and the Backlog now ends at the line, so labels like
+  "Picture · Sound" and neighbouring lines no longer end up in it. Such sentences also stopped the
+  card from being matched to its line.
+- Desktop (Linux): when a game's own sound can't be found, its clips come from the system's sound
+  instead of having none. A card with no clip says why on the hook page.
+- Desktop (Linux): the app starts on Wayland without a flag, no longer pops up screen-share
+  dialogs, and no longer reroutes the game's sound, which could change its volume.
+- Not yet tried: Steam Deck and Windows. Invisible placement is still off for very small or very
+  large text, vertical text, and hook threads that carry the name line.
+
 ## v3.20.0 (2026-11-10)
 
 ### Added
