@@ -46,6 +46,12 @@ The app then shows in your library under Non-Steam. In Game Mode, start the app 
 start games from inside the app. Do not add the game itself to Steam: the app starts the game so
 that both share one Steam entry, which is what lets the overlay sit on the game in Game Mode.
 
+**One Steam entry per game (optional, after step 4).** Add the AppImage to Steam again, rename
+the entry to the game, and paste the game's launch option into its Launch Options: Settings →
+Desktop games → the game → Copy Steam launch option (`--game=…`). That entry then opens the app
+straight into the game. Close the app before starting a game this way: if it is already running,
+the game opens in the running app and Steam shows the new entry as ended.
+
 ## 4. Link a game
 
 1. Copy the game's installed folder to the Deck (internal drive or SD card).
@@ -101,7 +107,8 @@ in the library and its controller settings, then edit the layout. A suggested la
 | Another back button | Ctrl+Shift+H (Show)                 |
 
 - **Mine** (Ctrl+Shift+M) puts the newest line, with its screenshot and sound, on your last Anki
-  card. A notification says how it went.
+  card. A success says nothing. A failure shows in a notification and as a short line on the
+  overlay.
 - **Show** (Ctrl+Shift+H) brings the texthooker page to the front, and back again.
 
 These shortcuts only work while a game runs from the app. You can change them in Settings →
@@ -124,7 +131,10 @@ There are two ways today:
 
 - **Anki on the Deck.** Install Anki in Desktop Mode (for example from Discover) with the
   AnkiConnect add-on, and keep it running while you play. The app's default address works and
-  AnkiConnect needs no extra setting for the app.
+  AnkiConnect needs no extra setting for the app. To have the app start Anki for you, turn on
+  Settings → Desktop games → "Start Anki with games": when a game starts and AnkiConnect doesn't
+  answer, the app starts Anki first (it waits up to 30 seconds), then the game. Anki stays open
+  afterwards.
 - **Anki on another computer.** In that Anki's AnkiConnect config, set `webBindAddress` to
   `0.0.0.0` so other devices can reach it, and set an `apiKey`. On the Deck, open Settings → Anki,
   set "AnkiConnect address" to `http://<that computer's address>:8765`, put the same key in "API key",
@@ -138,8 +148,8 @@ picture and sound fields with the line's screenshot and sound.
 
 Game saves sync through the same place as your books' progress.
 
-1. On both devices: Settings → Sync, turn on Automatic sync, and mark the same Google Drive or
-   folder source as Sync target in the storage sources.
+1. On both devices: Settings → Sync, turn on Automatic sync, and mark the same source (Google
+   Drive, a folder, or the server you are signed in to) as Sync target in the storage sources.
 2. On the PC, install the desktop app and link the same game with Import → Installed game. Give
    it the same title as on the Deck, since synced files are found by title.
 
@@ -154,9 +164,11 @@ device.
   overlay, why a card got no sound, and save sync problems.
 - **Settings → Desktop games** shows the Proton build in use and names a missing Steam Linux
   Runtime.
-- **Notifications** say how each Mine went.
-- **Konsole**: in Desktop Mode, start the app from a terminal (`./chimimouryou-*.AppImage`). The
-  hook helper's errors print there.
+- **A failed Mine** shows in a notification and on the overlay.
+- **The log file**: Settings → Desktop games → Diagnostics. "Copy diagnostics" copies this
+  computer's details and the end of the app's log (no keys, tokens or game text, but it does
+  contain folder paths with your user name); "Open log folder" shows the file. This also works in
+  Game Mode, which has no terminal.
 
 When you report a problem, include which mode you were in (Game Mode or Desktop Mode), the Proton
-build, the game, and what the texthooker page or the terminal said.
+build, the game, what the texthooker page said, and the copied diagnostics.
