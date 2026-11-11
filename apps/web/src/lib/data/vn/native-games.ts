@@ -93,7 +93,20 @@ export interface NativeGamesList {
   /** Linux: what the app's setting starts games with now, or why it can't */
   runs?: { kind?: 'wine' | 'proton'; name?: string; error?: string };
   running?: string;
+  /** Linux: the AppImage the app runs from, a Steam shortcut's target */
+  appImage?: string;
   games: NativeGameEntry[];
+}
+
+/** Settings → Desktop games' Copy diagnostics, from main (`pactl`/`parec`: Linux only) */
+export interface NativeDiagnostics {
+  version: string;
+  os: string;
+  session: string;
+  pactl?: boolean;
+  parec?: boolean;
+  /** The log file's last lines (never tokens, keys or game text) */
+  log: string[];
 }
 
 export interface NativeSaveList {
@@ -144,6 +157,9 @@ export interface DesktopGames {
   >;
   /** Hooks the running program at `index` of the last `windows` list, as `folder`'s game */
   attach(folder: string, index: number): Promise<LaunchResult>;
+  diagnostics(): Promise<NativeDiagnostics>;
+  /** Opens the log file's folder in the file manager */
+  openLogs(): Promise<string>;
   /** /hook shows the line: its screenshot is taken once drawn */
   mark(seq: number): Promise<void>;
   /**
