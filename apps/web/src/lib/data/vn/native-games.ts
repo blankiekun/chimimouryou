@@ -143,6 +143,23 @@ export interface DesktopGames {
     folder: string,
     changes?: { launchOnly?: boolean }
   ): Promise<{ launchOnly: boolean } | undefined>;
+  /**
+   * Start Anki with games, on this computer: `on`, whether `url` (AnkiConnect's address) is this
+   * computer, what would start (`command`, none when not found) and where it was looked for
+   */
+  anki(
+    changes: { on?: boolean } | undefined,
+    url: string
+  ): Promise<{ on: boolean; local: boolean; command?: string; looked: string[] }>;
+  /** Before a game starts: starts Anki when on, local and AnkiConnect doesn't answer, and waits */
+  startAnki(
+    url: string
+  ): Promise<
+    | { status: 'off' | 'remote' | 'running' | 'started' }
+    | { status: 'missing'; looked: string[] }
+    | { status: 'timeout'; seconds: number }
+    | { status: 'error'; message: string }
+  >;
   /** Inserts a hook code (H-code or R-code) into the running game; main checks its shape */
   insertHook(code: string): Promise<{ status: 'ok' } | { status: 'error'; message: string }>;
   /** Launch only: a number for a line from the reader's own hook, for its Anki media */
@@ -265,18 +282,25 @@ export const overlayChannel = 'chimi-overlay';
 let overlayLines: BroadcastChannel | undefined;
 let overlayText = '';
 
-/** A line /hook shows, for the overlay (desktop app only). */
-export function postOverlayLine(text: string) {
+function postOverlay(message: { text: string } | { notice: string }) {
   if (!desktopOverlay()) return;
-  overlayText = text;
   if (!overlayLines) {
     overlayLines = new BroadcastChannel(overlayChannel);
     overlayLines.onmessage = (event) => {
       if (event.data?.ask) overlayLines?.postMessage({ text: overlayText });
     };
   }
-  overlayLines.postMessage({ text });
+  overlayLines.postMessage(message);
 }
+
+/** A line /hook shows, for the overlay (desktop app only). */
+export function postOverlayLine(text: string) {
+  if (desktopOverlay()) overlayText = text;
+  postOverlay({ text });
+}
+
+/** A failed mine (the shortcut, pressed in the game), shown on the overlay for a few seconds. */
+export const postOverlayNotice = (notice: string) => postOverlay({ notice });
 
 export interface NativeThread extends HookThread {
   hookcode: string;
