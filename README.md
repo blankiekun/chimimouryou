@@ -246,6 +246,9 @@ control, the tracker and import/export.
   devices and big games can be kept offline. Games for other engines can often
   be converted with
   [conscripter-convert](https://github.com/blankiekun/conscripter-convert).
+- **Windows visual novels** play in the desktop app (Linux and Windows), which
+  hooks their text for lookups, statistics and Anki cards with the line's sound
+  and a screenshot. On a Steam Deck: [docs/STEAM-DECK.md](docs/STEAM-DECK.md).
 
 ![A two-page spread of MONSTER in the manga reader](assets/readme/screenshots/manga.png)
 
