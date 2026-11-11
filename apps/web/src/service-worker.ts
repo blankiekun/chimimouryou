@@ -41,7 +41,7 @@ const prerenderedSet = new Set(prerendered);
 const assetsToCache = build
   .filter(
     (file) =>
-      !/ort-wasm|silero_vad|line-vad\.worker|webp_enc|webp-encode\.worker|whisper\.worker|manga-ocr\.worker|vn-ocr\.worker|analysis-\w+\.worker/.test(
+      !/ort-wasm|fireredvad_vad|line-vad\.worker|webp_enc|webp-encode\.worker|whisper\.worker|manga-ocr\.worker|vn-ocr\.worker|analysis-\w+\.worker/.test(
         file
       ) && !uiFontFile.test(file)
   )

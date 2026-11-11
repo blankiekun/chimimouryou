@@ -316,8 +316,8 @@ function keepLine(lines) {
 }
 
 /**
- * The line's recorded sound for the page's voice finder: { samples (mono s16), rate, start, end,
- * earliest? }, its window in seconds into samples, or null when not recorded or no longer in the ring.
+ * The line's recorded sound for the page's voice finder: { samples (mono s16), rate, start, end },
+ * its window in seconds into samples, or null when not recorded or no longer in the ring.
  */
 function lineSound(line) {
   if (!soundTap || !line.recorded) return null;
@@ -333,12 +333,10 @@ function lineSound(line) {
   var samples = new Int16Array(to - from);
 
   for (var i = 0; i < samples.length; i += 1) samples[i] = ring[(from + i) % ring.length];
-  var start = line.start - from / rate;
-  var sound = { samples: samples, rate: rate, start: start, end: end - from / rate };
+  // Just before a click that brought the line; with none, GameSentenceMiner's half second.
+  var start = line.start - (line.start !== line.at ? 0.1 : 0.5) - from / rate;
 
-  // A click brought the line (lineStart): the page's voice finder trusts its start (line-audio.ts).
-  if (line.start !== line.at) sound.earliest = start;
-  return sound;
+  return { samples: samples, rate: rate, start: start, end: end - from / rate };
 }
 
 function noteClick(event) {

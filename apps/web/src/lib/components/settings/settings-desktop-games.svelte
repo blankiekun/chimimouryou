@@ -3,7 +3,7 @@
    * Settings → Desktop games (desktop app only): where this computer's Windows games are
    * installed (the app's native-games.json, native-games.ts), with Change folder and Forget, and
    * on Linux what runs them (Wine or a Proton build, for all and per game), and the game overlay's text size and opacity (on/off
-   * and its place are on /hook), and the global shortcuts while a game runs (hotkeys.js).
+   * and Band's area are on /hook), and the global shortcuts while a game runs (hotkeys.js).
    */
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
@@ -126,7 +126,7 @@
   {#if overlaySettings && list?.hook}
     <SettingsItemGroup
       title="Game overlay"
-      tooltip="The current line over the game, for lookups. Each game below has its own mode; adjust its area on the texthooker page while the game runs. Size and opacity are for the band and the manual area."
+      tooltip="The current line over the game, for lookups. Each game below has its own mode; adjust its area on the texthooker page while the game runs. Size and opacity are for the band."
     >
       <div class="dg-actions">
         <label class="dg-field">

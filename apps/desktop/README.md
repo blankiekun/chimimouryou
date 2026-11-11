@@ -38,7 +38,7 @@ pnpm run fetch      # Electron's binary, Yomitan's Chrome build and LunaHook (pi
                     # LunaHook's helper needs mingw-w64: gcc-mingw-w64-x86-64 and -i686)
 pnpm run build:web  # the standalone web build in ../web/build
 VN_OCR_OUT=../web/build/vn/ocr ../../scripts/vn-ocr/fetch.sh  # the screen-text models (~15 MB), for
-                    # the overlay's Invisible mode; without them it uses the manual area
+                    # the overlay's Invisible mode; without them it shows nothing
 pnpm start
 pnpm run dist       # optional: an installer for this platform in dist/
 ```
@@ -115,7 +115,7 @@ root install stays light for the web app and its Docker image; `fetch` downloads
   outside VNBox's save folders, temp/cache folders, a `Microsoft` folder under AppData or
   ProgramData, runnable or loadable files (`.exe`, `.dll`, `.bat`…, `game/` included), 8.3 short
   names and parts ending in a dot or space. Anki: `game-media.js` keeps the game's sound (Linux: its own
-  PulseAudio/PipeWire null sink looped back to the speakers, recorded with `parec`; Windows:
+  PulseAudio/PipeWire streams, marked and recorded one by one with `parec --monitor-stream`, while the game plays to the speakers as usual; Windows:
   `chimihook --audio`, the game's process tree into a named pipe) and screenshots of its window
   (`desktopCapturer`; none on native Wayland, where every capture asks to share the screen,
   so there only with the overlay on) in memory, and `/hook` fills a mined note's empty picture/audio fields with
@@ -139,7 +139,7 @@ root install stays light for the web app and its Docker image; `fetch` downloads
   window's place (the helper's `window` message: rect, foreground, minimized, every 0.1 s) and
   shows `/hook`'s newest line (a `BroadcastChannel`) in the text box area: a bottom band by
   default, moved and resized with Adjust area, kept per game in `native-games.json` with the
-  game's mode (`overlayMode`, `overlayPlace`; `overlay` there holds the text size and opacity,
+  game's mode (`overlayMode`; `overlay` there holds the text size and opacity,
   Settings → Desktop games). Windows: clicks go
   through with mouse moves forwarded, so hover looks up and clicks still reach the game. X11:
   `forward` is Windows/macOS only, so the window's shape is the text's line boxes and an open
@@ -149,18 +149,18 @@ root install stays light for the web app and its Docker image; `fetch` downloads
   window black; the built-in popup works. Hidden while the game is minimized or not in front. On
   a Wayland session the app starts on X11 (`--ozone-platform=x11`) while the overlay is on (a
   change takes a restart). `e2e/overlay.e2e.mjs` checks it under Xvfb with openbox and xcompmgr
-  (`apt install openbox xcompmgr xdotool`); Windows is compile-only.
+  (`apt install openbox xcompmgr xdotool`), `e2e/invisible.e2e.mjs` Invisible's placing inside a
+  real compositor with XWayland; Windows is compile-only.
   Invisible: the line is drawn transparent with no background over the game's own text, so the
   game looks untouched and hovering or tapping its text looks words up (built-in popup or
-  Yomitan). Placing, per game: "Screen read" (default) captures the game's window once the line
-  has settled, finds the line in it (`readVnScreen`, the screen-text models in `web/vn/ocr/`,
-  GPL-3.0-or-later and non-commercial, see NOTICE) and lays each row on its glyphs; when under
-  half the line is found, the text is vertical, the window can't be captured or the models are
-  missing, and always with "Manual area", the text flows in the adjusted area at the overlay's
-  text size (fit both to the game's text box). The first read of a session loads the models (a
-  few seconds). What the read doesn't place: glyphs of about 20 px or less, a line that starts 9
-  characters or more into the dialogue on the screen; and half-width characters shift the rest of
-  their row (rows are full-width cells, as `/v`'s). A lookup tints its word on the game's text. A click on the text itself still doesn't reach the game on X11: advance with a
+  Yomitan). It's automatic, with nothing to place: the app captures the game's window once the
+  line has settled, finds the line in it (`readVnScreen`, the screen-text models in `web/vn/ocr/`,
+  GPL-3.0-or-later and non-commercial, see NOTICE) and puts each character on the glyph the game
+  drew. If the line can't be found there's no other place for it: nothing shows for that line and
+  the texthooker page says why. The first read of a session loads the models (a few seconds).
+  Lookups on the overlay need no key (a game takes Shift for itself): hovering is enough with the
+  built-in popup. Yomitan keeps its own scan key: set it to no key in its settings to match.
+  A lookup tints its word on the game's text. A click on the text itself still doesn't reach the game on X11: advance with a
   click anywhere else, or a key.
   Fullscreen: the overlay follows the game's window, so a game that goes fullscreen by its own
   setting (or back) keeps it; the app never makes a game fullscreen. Its X window is

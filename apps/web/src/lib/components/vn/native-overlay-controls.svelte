@@ -1,12 +1,13 @@
 <script lang="ts">
   /**
-   * A game's overlay controls (desktop app only): its mode (Off / Band / Invisible), for Invisible
-   * where the text goes (read from the screen, or the manual area), and on /hook (no `folder`: the
-   * running game) Adjust, which moves and resizes the area over the game. Settings → Desktop games
-   * shows it per game (`folder`), and has the size and opacity.
+   * A game's overlay controls (desktop app only): its mode (Off / Band / Invisible), and on /hook
+   * (no `folder`: the running game) Band's Adjust, which moves and resizes its area over the game,
+   * and why Invisible shows nothing for the line (the overlay page's `status`). Settings → Desktop
+   * games shows it per game (`folder`), and has the size and opacity.
    */
   import {
     desktopOverlay,
+    overlayChannel,
     type GameOverlay,
     type OverlayMode,
     type OverlaySettings
@@ -23,20 +24,25 @@
     { mode: 'band', label: 'Band' },
     { mode: 'invisible', label: 'Invisible' }
   ];
-  const places: { place: GameOverlay['place']; label: string }[] = [
-    { place: 'screen', label: 'Screen read' },
-    { place: 'area', label: 'Manual area' }
-  ];
-  /** Band always uses the area; Invisible when set to, or when a screen read finds no match. */
-  const adjustable = $derived(!folder && !!settings && settings.mode !== 'off');
+  /** Only Band has an area; Invisible goes on the game's own text. */
+  const adjustable = $derived(!folder && settings?.mode === 'band');
+  let status = $state('');
 
-  onMount(async () => {
-    settings = await overlay?.settings(folder ? { folder } : undefined);
+  onMount(() => {
+    overlay?.settings(folder ? { folder } : undefined).then((value) => (settings = value));
+    if (folder) return;
+    const channel = new BroadcastChannel(overlayChannel);
+    channel.onmessage = ({ data }) => {
+      if (typeof data?.status === 'string') status = data.status;
+      if (data?.editing === false) editing = false;
+    };
+    return () => channel.close();
   });
 
   async function change(changes: Partial<GameOverlay>) {
     settings = await overlay?.settings({ ...changes, folder });
-    if (settings?.mode === 'off') editing = false;
+    if (settings?.mode !== 'band') editing = false;
+    status = '';
   }
 
   async function adjust() {
@@ -61,23 +67,6 @@
         {/each}
       </div>
     </div>
-    {#if settings.mode === 'invisible'}
-      <div class="ov-field">
-        <span aria-hidden="true">Placement</span>
-        <div class="app-segmented" role="radiogroup" aria-label="Placement of the invisible text">
-          {#each places as { place, label } (place)}
-            <button
-              type="button"
-              role="radio"
-              class="app-segment"
-              class:app-segment-selected={settings.place === place}
-              aria-checked={settings.place === place}
-              onclick={() => change({ place })}>{label}</button
-            >
-          {/each}
-        </div>
-      </div>
-    {/if}
     {#if adjustable}
       <button type="button" class="app-button" onclick={adjust}>
         {editing ? 'Done adjusting' : 'Adjust area'}
@@ -94,10 +83,10 @@
         Restart the game for lookups while it’s fullscreen.
       {:else if settings.mode === 'band'}
         The current line on a band over the game, for lookups.
-      {:else if settings.mode === 'invisible' && settings.place === 'screen'}
-        Lookups on the game’s own text: the line is found on the screen, and falls back to the area.
+      {:else if settings.mode === 'invisible' && status}
+        {status}
       {:else if settings.mode === 'invisible'}
-        Lookups on the game’s own text: fit the area and the text size to the game’s text box.
+        Hover the game’s own text to look it up.
       {/if}
     </p>
   {/if}

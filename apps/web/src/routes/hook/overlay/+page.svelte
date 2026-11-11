@@ -6,10 +6,11 @@
    * and tells main which parts take the mouse: the text's line boxes and the built-in popup, or
    * the whole window (`solid`) while the pointer is over a popup, and on X11 also over the text
    * while Yomitan is loaded (its popup sits in a closed shadow root, so it can't be measured and
-   * would be clipped by the window's shape). Adjust mode (from /hook) moves and resizes the area.
-   * Invisible mode draws the text transparent with no background, over the game's own: placed
-   * from a read of the game's settled frame (`readVnScreen`, as /v does for VNBox), or flowing in
-   * the area when the game is set to that, the read matches under half the line, or it can't run.
+   * would be clipped by the window's shape). Adjust mode (from /hook) moves and resizes Band's area.
+   * Invisible mode draws the text transparent with no background, each character on the cell of
+   * the glyph the game drew, from a read of the game's settled frame (`readVnScreen`). There is no
+   * other place for it: a line that isn't found shows nothing, and /hook says why.
+   * Lookups here need no key: a game takes Shift for itself (Yomitan keeps its own setting).
    */
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
   import {
@@ -18,8 +19,7 @@
     type OverlayArea,
     type OverlayState
   } from '$lib/data/vn/native-games';
-  import type { VnOverlayLine } from '$lib/data/vn/vn';
-  import { readVnScreen } from '$lib/data/vn/vn-ocr';
+  import { readVnScreen, vnOcrError } from '$lib/data/vn/vn-ocr';
   import { onMount, tick } from 'svelte';
 
   const overlay = desktopOverlay();
@@ -33,11 +33,18 @@
   let solidTimer: ReturnType<typeof setTimeout> | undefined;
   let lastSent = '';
   let frame = 0;
-  /** Invisible: the line's rows where the game drew it, in page pixels; none = the area's flow. */
-  let rows = $state<VnOverlayLine[]>();
+  /** Invisible: the line's rows, a box in page pixels and each character's spacing to the next. */
+  interface Row {
+    x: number;
+    y: number;
+    size: number;
+    vertical: boolean;
+    chars: { text: string; spacing: number }[];
+  }
+  let rows = $state<Row[]>();
+  let channel: BroadcastChannel | undefined;
   let reads = 0;
-  const invisible = $derived(view?.mode === 'invisible' && !view.editing);
-  const screenPlaced = $derived(view?.mode === 'invisible' && view.place === 'screen');
+  const invisible = $derived(view?.mode === 'invisible');
 
   /**
    * The game's window once it stops changing (a typewriter finished), as /v's settledFrame:
@@ -74,27 +81,58 @@
     return shot;
   }
 
-  /** Invisible with screen placing: the line laid over the game's own glyphs. */
+  /** Tells /hook why a line shows nothing; empty once one is placed. */
+  const status = (why: string) => channel?.postMessage({ status: why });
+
+  /** A row's characters on their cells: each advances by exactly its cell (the font's own + spacing). */
+  function layRow(
+    row: NonNullable<Awaited<ReturnType<typeof readVnScreen>>>['lines'][number],
+    scale: number
+  ): Row {
+    const cells = row.chars;
+    const [from, to] = row.ink!;
+    const size = (to - from) * scale;
+    const vertical = !!row.vertical;
+    const measure = document.createElement('canvas').getContext('2d')!;
+    measure.font = `${size}px monospace`;
+    return {
+      x: (vertical ? from : cells[0].x0) * scale,
+      y: (vertical ? cells[0].x0 : from) * scale,
+      size,
+      vertical,
+      chars: cells.map(({ text, x0, x1 }, i) => ({
+        text,
+        spacing:
+          ((cells[i + 1]?.x0 ?? x1) - x0) * scale -
+          (vertical ? size : measure.measureText(text).width)
+      }))
+    };
+  }
+
+  /** Invisible: the line laid on the game's own glyphs, or nothing and a reason. */
   async function place(line: string, wanted: boolean) {
     const read = (reads += 1);
     rows = undefined;
-    if (!wanted || !line) return;
+    if (!wanted || !line) return status('');
     try {
       const shot = await settledFrame(read);
-      if (!shot) return;
+      if (read !== reads) return;
+      if (!shot) return status("The game's window couldn't be captured.");
       // The frame is the game's window, as this page is: one scale.
       const scale = window.innerWidth / shot.width;
-      const result = await readVnScreen(shot, line);
-      if (read !== reads || !result) return;
-      rows = result.lines.map((row) => ({
-        text: row.text,
-        x: row.x * scale,
-        y: row.y * scale,
-        size: row.size * scale,
-        pitch: row.pitch * scale
-      }));
+      const result = await readVnScreen(shot, line, true);
+      if (read !== reads) return;
+      if (!result) {
+        const error = vnOcrError();
+        return status(
+          error ? `The text reader couldn't run: ${error}` : "The line wasn't found on the screen."
+        );
+      }
+      rows = result.lines.map((row) => layRow(row, scale));
+      status('');
     } catch (error) {
       console.warn(`Overlay screen read: ${(error as Error).message}`);
+      status(`The text reader couldn't run: ${(error as Error).message}`);
     }
   }
 
@@ -187,11 +225,11 @@
   });
 
   $effect(() => {
-    place(text, screenPlaced);
+    place(text, invisible);
   });
 
   onMount(() => {
-    const channel = new BroadcastChannel(overlayChannel);
+    channel = new BroadcastChannel(overlayChannel);
     channel.onmessage = (event) => {
       if (typeof event.data?.text !== 'string' || event.data.text === text) return;
       // The game moved on; clicks on it never reach this page to close the popup.
@@ -216,7 +254,7 @@
     if (textEl) resized.observe(textEl);
     document.addEventListener('mouseleave', () => setSolid(false));
     return () => {
-      channel.close();
+      channel?.close();
       off?.();
       observer.disconnect();
       resized.disconnect();
@@ -238,7 +276,7 @@
     // Main dropped its boxes with the old size: sent again even when they are the same.
     lastSent = '';
     report();
-    if (rows) place(text, screenPlaced);
+    if (invisible) place(text, true);
   }}
 />
 
@@ -247,10 +285,13 @@
     <div class="hook-text ov-rows" lang="ja">
       {#each rows as row, index (index)}
         <span
+          class:ov-vertical={row.vertical}
           style:left="{row.x}px"
           style:top="{row.y}px"
           style:font-size="{row.size}px"
-          style:letter-spacing="{row.pitch - row.size}px">{row.text}</span
+          >{#each row.chars as char, at (at)}<i style:letter-spacing="{char.spacing}px"
+              >{char.text}</i
+            >{/each}</span
         >
       {/each}
     </div>
@@ -258,7 +299,7 @@
   <div
     class="ov-area"
     class:ov-editing={view?.editing}
-    hidden={invisible && !!rows}
+    hidden={invisible}
     style:left="{area.x * 100}%"
     style:top="{area.y * 100}%"
     style:width="{area.w * 100}%"
@@ -294,7 +335,7 @@
   </div>
 </div>
 
-<LookupPopup bind:this={popup} scope=".hook-text" />
+<LookupPopup bind:this={popup} scope=".hook-text" plainHover />
 
 <style>
   :global(html),
@@ -354,10 +395,19 @@
   .ov-rows span {
     position: absolute;
     padding: 0;
-    /* A cell per character: the UI font's kana are narrower than its kanji. */
+    /* The advance per character is measured in this font (layRow). */
     font-family: monospace;
     line-height: 1;
     white-space: pre;
+  }
+
+  .ov-rows i {
+    font-style: normal;
+  }
+
+  .ov-vertical {
+    writing-mode: vertical-rl;
+    text-orientation: upright;
   }
 
   .ov-done {

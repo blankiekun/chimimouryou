@@ -139,7 +139,7 @@
 
   async function useForLastCard(line: BacklogLine) {
     busy = true;
-    show('Adding the line to the last Anki card…');
+    show('');
     try {
       const filled = await useForLastNote(line.text, async () => {
         const media = await player().ankiMedia(line.index, -1, {
@@ -151,11 +151,11 @@
         return { picture: media.picture, audio: await lineAudio(media.audio, line.text) };
       });
 
-      show(
-        filled.length
-          ? `Added to the last Anki card: ${filled.join(', ')}`
-          : `Nothing added: the last card has no ${$ankiSentenceField$.trim()} field, and its media fields are missing or filled`
-      );
+      if (!filled.length) {
+        show(
+          `Nothing added: the last card has no ${$ankiSentenceField$.trim()} field, and its media fields are missing or filled`
+        );
+      }
     } catch (error: any) {
       show(`Anki: ${error.message}`, true);
     } finally {
@@ -176,7 +176,10 @@
     >
       {#each lines as line}
         <li class="backlog-line" class:backlog-current={line.index >= pageStart}>
+          <!-- The newlines render as nothing but end Yomitan's sentence at the line (no layout-aware scan). -->
+          {'\n'}
           <p class="vn-text" lang="ja">{line.text}</p>
+          {'\n'}
           <div class="backlog-meta">
             {#if line.picture || line.sound}
               <span class="backlog-muted">

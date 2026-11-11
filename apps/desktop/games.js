@@ -222,13 +222,10 @@ function update(ctx, folder, changes) {
   save(ctx);
 }
 
-/** A game's overlay: its mode, and where Invisible puts the text (a screen read, or the area). */
-const gameOverlayOf = (game) => ({
-  mode: overlayMode(game?.overlayMode),
-  place: game?.overlayPlace === 'area' ? 'area' : 'screen'
-});
+/** A game's overlay: its mode. (An older `overlayPlace` in the store is ignored.) */
+const gameOverlayOf = (game) => ({ mode: overlayMode(game?.overlayMode) });
 
-/** What the overlay window is told: the shared look and the game's mode and placing. */
+/** What the overlay window is told: the shared look and the game's mode. */
 const overlayFor = ({ store }, folder) => ({
   ...overlaySettings(store.overlay),
   ...gameOverlayOf(store.games[folder])
@@ -748,8 +745,6 @@ function watchHelper(ctx, current, child) {
         }
         // Text lines get the number and arrival time /hook asks for their Anki media by.
         if (message.type === 'text') Object.assign(message, media.stamp());
-        // Clicks and keys in the game: where each line's sound starts.
-        if (message.type === 'input') media.input();
         if (message.type === 'window') {
           current.window = message;
           media.window(message);
@@ -873,7 +868,7 @@ async function attach(ctx, event, folder, index) {
   let child;
   try {
     // Linux: already playing on the default sound output, so the whole system's sound.
-    const audio = await media.start(env, { ownSink: false });
+    const audio = await media.start(env, { ownStreams: false });
     if (platform !== 'win32') send(ctx, { type: 'audio', mode: audio.mode });
     child =
       platform === 'win32'
@@ -1149,19 +1144,16 @@ export function registerGames({
 
   // The overlay: its settings (/hook, Settings → Desktop games), Adjust mode (/hook), and from the
   // overlay page itself its rects and adjusted area.
-  // `mode` and `place` are one game's (`changes.folder`, else the running game's).
+  // `mode` is one game's (`changes.folder`, else the running game's).
   handle('overlay-settings', (event, changes) => {
     const folder = typeof changes?.folder === 'string' ? changes.folder : ctx.session?.folder;
     if (changes && typeof changes === 'object') {
       let { games } = ctx.store;
-      if (games[folder] && (changes.mode !== undefined || changes.place !== undefined)) {
-        const { mode, place } = { ...gameOverlayOf(games[folder]), ...changes };
-        const overlayPlace = place === 'area' ? 'area' : 'screen';
+      if (games[folder] && changes.mode !== undefined)
         games = {
           ...games,
-          [folder]: { ...games[folder], overlayMode: overlayMode(mode), overlayPlace }
+          [folder]: { ...games[folder], overlayMode: overlayMode(changes.mode) }
         };
-      }
       const { fontSize, opacity } = { ...overlaySettings(ctx.store.overlay), ...changes };
       // `on`: some game uses the overlay, which main.js reads at start (X11 on a Wayland session).
       const on = Object.values(games).some((game) => gameOverlayOf(game).mode !== 'off');

@@ -7,7 +7,7 @@
 /**
  * A mined VN line's sound, for Anki (lib/data/dictionary/anki.ts): native play's ring
  * (apps/desktop/game-media.js, via /hook) and the VN players' (static/vn/overlay.js, via /v) hand
- * over the recorded sound of the line's window, from the click that brought the line to the next
+ * over the recorded sound of the line's window, as GameSentenceMiner cuts it, up to the next
  * line's, with a little before and after. The speech detector (line-vad.worker.ts) trims it the way GameSentenceMiner does: the clip ends 0.5 s after
  * the last speech in the window, and a line with too little speech for its text gets no sound.
  * Not part of upstream.
@@ -22,31 +22,13 @@ export interface LinePcm {
   rate: number;
   start: number;
   end: number;
-  /** Equals `start` when a click brought the line (native play, overlay.js); earlier or absent when none did. */
-  earliest?: number;
 }
 
 /** Recorded before the window's start, so a voice starting with the click isn't clipped. */
 export const preRollMs = 400;
 
-const frameSeconds = 512 / 16000;
-const threshold = 0.5;
-const negThreshold = 0.35;
-const minSilence = 0.1;
-const minSpeech = 0.25;
-/**
- * GameSentenceMiner's audio.beginning_offset is 0.5 s before its hook's arrival, which comes after
- * the voice has begun; from a true click a voice has yet to start, so a small pad is enough.
- */
-const padBeforeClick = 0.1;
-/** With no click the line's start is only when it was seen. */
-const padBefore = 0.4;
 /** GameSentenceMiner's audio.end_offset. */
 const padAfter = 0.5;
-/** Speech starting this little before a click is the detector's lead on a voice starting with it. */
-const clickGrace = 0.15;
-/** A click's own voice has begun by then; later speech is something else on the sound. */
-const voiceWithin = 1;
 const fade = 0.05;
 
 let worker: Worker | undefined;
@@ -70,8 +52,8 @@ export function stopLineAudio() {
   if (!pending.size) failVad('stopped');
 }
 
-/** Speech probability per 32 ms frame of 16 kHz samples. */
-function vad(samples: Float32Array) {
+/** Speech segments, in seconds, of 16 kHz samples. */
+function vad(samples: Int16Array) {
   stopWhenIdle = false;
   if (!worker) {
     worker = new Worker(new URL('../../functions/vn/line-vad.worker.ts', import.meta.url), {
@@ -86,77 +68,43 @@ function vad(samples: Float32Array) {
   }
   const id = (nextId += 1);
 
-  return new Promise<Float32Array>((resolve, reject) => {
+  return new Promise<Segment[]>((resolve, reject) => {
     const timer = setTimeout(() => failVad('no answer in 5 minutes'), vadTimeoutMs);
 
     pending.set(id, (message) => {
       clearTimeout(timer);
-      if ('probs' in message) resolve(message.probs);
+      if ('segments' in message) resolve(message.segments);
       else reject(new Error(message.error));
     });
     worker!.postMessage({ id, samples }, [samples.buffer]);
   });
 }
 
-/** Linear resampling to 16 kHz, as floats. */
-function to16k({ samples, rate }: LinePcm) {
-  const out = new Float32Array(Math.floor((samples.length * 16000) / rate));
-  const step = rate / 16000;
-
-  for (let i = 0; i < out.length; i += 1) {
-    const at = i * step;
-    const j = Math.floor(at);
-    const next = samples[Math.min(j + 1, samples.length - 1)];
-
-    out[i] = (samples[j] + (next - samples[j]) * (at - j)) / 32768;
-  }
-  return out;
-}
-
 /** Seconds */
 type Segment = [start: number, end: number];
 
-/** Speech segments in seconds, Silero's get_speech_timestamps rules (no padding). */
-export function speechSegments(probs: ArrayLike<number>): Segment[] {
-  const segments: Segment[] = [];
-  let start = -1;
-  let quietFrom = -1;
+/** A band-limited resampling to 16 kHz (as ffmpeg gives GameSentenceMiner). */
+function to16k(samples: Int16Array, rate: number) {
+  if (rate === 16000) return samples;
+  const out = new Int16Array(Math.floor((samples.length * 16000) / rate));
+  const step = rate / 16000;
+  const cutoff = 0.97 / Math.max(step, 1);
+  const reach = Math.ceil(16 / cutoff);
 
-  for (let i = 0; i <= probs.length; i += 1) {
-    const p = i < probs.length ? probs[i] : 0;
+  for (let i = 0; i < out.length; i += 1) {
+    const at = i * step;
+    let sum = 0;
 
-    if (start < 0) {
-      if (p >= threshold) start = i;
-      continue;
+    for (let j = Math.ceil(at - reach); j <= at + reach; j += 1) {
+      if (j < 0 || j >= samples.length) continue;
+      const x = j - at;
+      const sinc = x ? Math.sin(Math.PI * cutoff * x) / (Math.PI * x) : cutoff;
+
+      sum += samples[j] * sinc * (0.5 + 0.5 * Math.cos((Math.PI * x) / (reach + 1)));
     }
-    if (p >= threshold) quietFrom = -1;
-    else if (p < negThreshold) {
-      if (quietFrom < 0) quietFrom = i;
-      if (i === probs.length || (i - quietFrom) * frameSeconds >= minSilence) {
-        if ((quietFrom - start) * frameSeconds >= minSpeech)
-          segments.push([start * frameSeconds, quietFrom * frameSeconds]);
-        start = quietFrom = -1;
-      }
-    }
+    out[i] = Math.max(-32768, Math.min(32767, Math.round(sum)));
   }
-  return segments;
-}
-
-/**
- * The speech inside the line's window [start, end], cut at its end (GameSentenceMiner's window).
- * From a click, speech already going isn't the line's, and speech that first starts late isn't
- * either; pauses after its start stay, however long.
- */
-export function lineSpeech(
-  probs: ArrayLike<number>,
-  { start, end, earliest }: { start: number; end: number; earliest?: number }
-) {
-  const clicked = earliest === start;
-  const speech = speechSegments(probs)
-    .filter(([from, to]) => to > start && from < end && !(clicked && from < start - clickGrace))
-    .map(([from, to]): Segment => [Math.max(from, start), Math.min(to, end)]);
-
-  return clicked && speech.length && speech[0][0] > start + voiceWithin ? [] : speech;
+  return out;
 }
 
 /** A WAV file of mono s16 samples. */
@@ -197,6 +145,9 @@ function clip({ samples, rate }: LinePcm, from: number, to: number, fades = fals
   return out.length ? wav(out, rate) : undefined;
 }
 
+/** Why the last recorded window gave no sound ('' when it did). */
+export let lineAudioWhy = '';
+
 const isPcm = (audio: unknown): audio is LinePcm =>
   !!audio && typeof audio === 'object' && 'samples' in audio && 'rate' in audio;
 
@@ -212,25 +163,42 @@ export async function lineAudio(
   if (!audio) return undefined;
   if (!isPcm(audio)) return audio;
 
-  let probs: Float32Array;
+  let speech: Segment[];
 
+  lineAudioWhy = '';
   try {
-    probs = await vad(to16k(audio));
+    // Only the line's window, as GameSentenceMiner's detector hears it.
+    const window = audio.samples.subarray(
+      Math.max(0, Math.round(audio.start * audio.rate)),
+      Math.round(audio.end * audio.rate)
+    );
+
+    speech = (await vad(to16k(window.slice(), audio.rate))).map(([from, to]) => [
+      from + Math.max(0, audio.start),
+      to + Math.max(0, audio.start)
+    ]);
   } catch (error: any) {
     logger.warn(`Visual novel line sound skipped: ${error.message}`);
+    lineAudioWhy = `the voice finder failed: ${error.message}`;
     return undefined;
   }
 
-  const speech = lineSpeech(probs, audio);
-  const length = (speech.at(-1)?.[1] ?? 0) - (speech[0]?.[0] ?? 0);
-  // GameSentenceMiner's rule: 0.05 s per character, half a second at least.
-  const chars = text.replace(/\s/g, '').length;
+  if (!speech.length) {
+    lineAudioWhy = 'no speech in it';
+    return undefined;
+  }
 
-  if (!speech.length || length < Math.max(0.5, chars * 0.05)) return undefined;
-  const to = speech.at(-1)![1] + padAfter;
+  // GameSentenceMiner's rules (vad.py _validate_detection): a last segment starting in the window's
+  // final half second is the next line's; 0.05 s per character, half a second at least.
+  const last =
+    speech.length > 1 && audio.end - speech.at(-1)![0] < 0.5 ? speech.at(-2)! : speech.at(-1)!;
+  const length = last[1] - speech[0][0];
 
-  // Like GameSentenceMiner, the start isn't trimmed (the click is the line's start), the end is.
-  return audio.earliest === audio.start
-    ? clip(audio, audio.start - padBeforeClick, Math.min(to, audio.end), true)
-    : clip(audio, audio.start - padBefore, to, true);
+  if (length < Math.max(0.5, text.length * 0.05)) {
+    lineAudioWhy = `only ${length.toFixed(1)} s of speech for ${text.length} characters`;
+    return undefined;
+  }
+
+  // Like GameSentenceMiner, the start isn't trimmed, the end is.
+  return clip(audio, audio.start, Math.min(last[1] + padAfter, audio.end), true);
 }

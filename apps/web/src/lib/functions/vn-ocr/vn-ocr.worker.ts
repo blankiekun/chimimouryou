@@ -31,6 +31,10 @@ export interface VnOcrLine {
   /** x, y, w, h in game-screen px */
   box: [number, number, number, number];
   chars: VnOcrChar[];
+  /** With `exact`: a vertical line (the chars' cells run down it) */
+  vertical?: boolean;
+  /** With `exact`: where its ink lies across the line (y of a horizontal one), in game-screen px */
+  ink?: [number, number];
 }
 
 export interface VnOcrRequest {
@@ -39,6 +43,8 @@ export interface VnOcrRequest {
   frame: ImageBitmap;
   /** A hooked line: the lines returned are its characters placed in the OCR'd cells, [] when it doesn't match */
   hook?: string;
+  /** Placing text on the glyphs themselves: cells fitted to the ink, every kind of line, vertical ones too */
+  exact?: boolean;
 }
 
 export type VnOcrMessage =
@@ -660,46 +666,47 @@ async function spot(sp: Spotter, g: Grey): Promise<Box9[]> {
 
 // ----------------------------------------------------------------------------- hook text
 
-const SYNC = 8;
+/** OCR reads full-width digits and Latin as ASCII: they count as the same character. */
+const fold = (ch: string) => ch.normalize('NFKC');
 
-/** eval/charbox.py align_map: dst[j] → the index of the src character it is aligned to, or -1. */
-function alignMap(src: string[], dst: string[], sync = SYNC) {
+/**
+ * dst[j] → the index of the src character it is aligned to, or -1: dst laid at its best place in
+ * src (free at both ends of src), so a line that starts anywhere on the screen is found. On a tie
+ * the later place wins: the newest text is the lowest.
+ */
+function alignMap(src: string[], dst: string[]) {
   const n = src.length;
   const m = dst.length;
-  const out = new Array(m).fill(-1);
+  const width = m + 1;
+  const score = new Int32Array((n + 1) * width);
+  const diagonal = (i: number, j: number) =>
+    score[(i - 1) * width + j - 1] + (fold(src[i - 1]) === fold(dst[j - 1]) ? 2 : -1);
+
+  for (let j = 1; j <= m; j += 1) score[j] = -j;
+  for (let i = 1; i <= n; i += 1) {
+    for (let j = 1; j <= m; j += 1) {
+      score[i * width + j] = Math.max(
+        diagonal(i, j),
+        score[(i - 1) * width + j] - 1,
+        score[i * width + j - 1] - 1
+      );
+    }
+  }
   let i = 0;
-  let j = 0;
 
-  while (i < n && j < m) {
-    if (src[i] === dst[j]) {
-      out[j++] = i++;
-      continue;
-    }
-    let found: [number, number] | undefined;
+  for (let end = 1; end <= n; end += 1) if (score[end * width + m] >= score[i * width + m]) i = end;
+  const out = new Array(m).fill(-1);
+  let j = m;
 
-    for (let s = 1; s <= 2 * sync && !found; s += 1) {
-      let best: [number, number, number] | undefined;
+  while (i > 0 && j > 0) {
+    const here = score[i * width + j];
 
-      for (let di = Math.max(0, s - sync); di <= Math.min(s, sync); di += 1) {
-        const dj = s - di;
-
-        if (i + di >= n || j + dj >= m || src[i + di] !== dst[j + dj]) continue;
-        if (!(i + di + 1 >= n || j + dj + 1 >= m || src[i + di + 1] === dst[j + dj + 1])) continue;
-        const key = Math.abs(di - dj) * 64 + dj;
-
-        if (!best || key < best[0]) best = [key, di, dj];
-      }
-      if (best) found = [best[1], best[2]];
-    }
-    if (!found) {
-      out[j++] = i++;
-      continue;
-    }
-    const [di, dj] = found;
-
-    for (let t = 0; t < Math.min(di, dj); t += 1) out[j + t] = i + t;
-    i += di;
-    j += dj;
+    if (here === diagonal(i, j)) {
+      i -= 1;
+      j -= 1;
+      out[j] = i;
+    } else if (here === score[i * width + j - 1] - 1) j -= 1;
+    else i -= 1;
   }
   return out;
 }
@@ -716,25 +723,31 @@ function placeHook(hook: string, lines: VnOcrLine[]): VnOcrLine[] {
     src.map(({ char }) => char.text),
     dst
   );
-  const equal = map.filter((i, j) => i >= 0 && src[i].char.text === dst[j]).length;
+  const equal = map.filter((i, j) => i >= 0 && fold(src[i].char.text) === fold(dst[j])).length;
 
   if (!dst.length || 2 * equal < dst.length) return [];
   const out: VnOcrLine[] = [];
 
+  const cellOf = dst.map((_, j) =>
+    map[j] >= 0 ? map[j] : (map.slice(0, j).findLast((k) => k >= 0) ?? map.find((k) => k >= 0))
+  );
+
   dst.forEach((text, j) => {
-    const i =
-      map[j] >= 0 ? map[j] : (map.slice(0, j).findLast((k) => k >= 0) ?? map.find((k) => k >= 0));
+    const i = cellOf[j];
 
     if (i === undefined || i < 0) return;
     const { char, index } = src[i];
     const last = out[out.length - 1];
-    const placed = { text, x0: char.x0, x1: char.x1 };
+    // Characters sharing a cell (no glyph of their own was read) split it.
+    const step = (char.x1 - char.x0) / cellOf.filter((k) => k === i).length;
+    const part = cellOf.slice(0, j).filter((k) => k === i).length;
+    const placed = { text, x0: char.x0 + part * step, x1: char.x0 + (part + 1) * step };
 
     if (last && last.box === lines[index].box) {
       last.text += text;
       last.chars.push(placed);
     } else {
-      out.push({ text, tag: lines[index].tag, box: lines[index].box, chars: [placed] });
+      out.push({ ...lines[index], text, chars: [placed] });
     }
   });
   return out;
@@ -778,9 +791,9 @@ function loadModels(urls: VnOcrRequest['models']) {
   return models;
 }
 
-/** The frame scaled to fit 960 × 544, as grey ((77 R + 150 G + 29 B) >> 8), and its scale. */
-function frameGrey(frame: ImageBitmap) {
-  const scale = Math.min(fitWidth / frame.width, fitHeight / frame.height);
+/** The frame scaled to fit 960 × 544 (or by `fixed`), as grey ((77 R + 150 G + 29 B) >> 8), and its scale. */
+function frameGrey(frame: ImageBitmap, fixed?: number) {
+  const scale = fixed ?? Math.min(fitWidth / frame.width, fitHeight / frame.height);
   const width = Math.round(frame.width * scale);
   const height = Math.round(frame.height * scale);
   const context = new OffscreenCanvas(width, height).getContext('2d', {
@@ -798,33 +811,239 @@ function frameGrey(frame: ImageBitmap) {
   return { grey: { data, width, height }, scale: width / frame.width };
 }
 
-/** vocr_onnx.read_region on the whole frame: every horizontal line, in reading order. */
-async function readGrey(spotter: Spotter, recognizer: Recognizer, g: Grey) {
+/** Which pixels of a line's crop are text: as vocr_line_dark, those well off the border's shade. */
+function inkOf({ data: a, width: w, height: h }: Grey, dark: boolean) {
+  const border: number[] = [];
+
+  for (let i = 0; i < w; i += 1) border.push(a[i], a[(h - 1) * w + i]);
+  for (let i = 0; i < h; i += 1) border.push(a[i * w], a[i * w + w - 1]);
+  border.sort((p, q) => p - q);
+  const bg = border[Math.floor(border.length / 2)];
+  const sorted = [...a].sort((p, q) => p - q);
+  const d = Math.max(
+    16,
+    Math.floor((sorted[Math.floor(a.length * 0.98)] - sorted[Math.floor(a.length * 0.02)]) / 4)
+  );
+
+  return { bg, ink: a.map((v) => ((dark ? v < bg - d : v > bg + d) ? 1 : 0)) };
+}
+
+/** A crop's ink at each row (`rows`) or column. */
+function inkCounts({ width: w, height: h }: Grey, ink: Uint8Array, rows: boolean) {
+  const out = new Array<number>(rows ? h : w).fill(0);
+
+  ink.forEach((on, at) => (out[rows ? Math.floor(at / w) : at % w] += on));
+  return out;
+}
+
+/** The first position and the one after the last with real ink: over a twentieth of the fullest. */
+function extent(counts: number[]): [number, number] | undefined {
+  const floor = Math.max(...counts) / 20;
+  const first = counts.findIndex((v) => v > floor);
+
+  return first < 0 ? undefined : [first, counts.findLastIndex((v) => v > floor) + 1];
+}
+
+/** The runs of ink along a line: [start, end) of each stretch with no blank between. */
+function inkRuns(counts: number[]) {
+  const runs: [number, number][] = [];
+
+  counts.forEach((v, x) => {
+    if (!v) return;
+    const last = runs[runs.length - 1];
+
+    if (last?.[1] === x) last[1] = x + 1;
+    else runs.push([x, x + 1]);
+  });
+  return runs;
+}
+
+/**
+ * The recognizer's cells lie halfway between its character centres, which moves them around any
+ * glyph of another width. Here each character takes the run or runs of ink (は is two) nearest its
+ * cell, at the least cost over the whole line, and its cell becomes that ink's: a line whose
+ * glyphs touch has too few runs and keeps the recognizer's cells.
+ */
+function fitCells(chars: VnOcrChar[], counts: number[], em: number) {
+  const runs = inkRuns(counts);
+  const n = chars.length;
+  const k = runs.length;
+
+  if (!n || k < n) return chars;
+  const most = 8;
+  const cost = Array.from({ length: n + 1 }, () => new Array<number>(k + 1).fill(Infinity));
+  const from = Array.from({ length: n + 1 }, () => new Array<number>(k + 1).fill(0));
+
+  cost[0][0] = 0;
+  for (let i = 1; i <= n; i += 1) {
+    const { text, x0, x1 } = chars[i - 1];
+    const group = charGroup(text);
+    const middle = (x0 + x1) / 2;
+
+    for (let b = i; b <= k - (n - i); b += 1) {
+      for (let a = Math.max(i - 1, b - most); a < b; a += 1) {
+        if (cost[i - 1][a] === Infinity) continue;
+        const width = runs[b - 1][1] - runs[a][0];
+        const off = (runs[a][0] + runs[b - 1][1]) / 2 - middle;
+        // Wider than a character can't be one; a full glyph is rarely under 60 % of its square.
+        const wide = Math.max(0, width - em * (group === 7 ? 0.85 : 1.05));
+        const thin = group === 0 ? Math.max(0, em * 0.6 - width) : 0;
+        const total = cost[i - 1][a] + off * off + 4 * wide * wide + 4 * thin * thin;
+
+        if (total < cost[i][b]) {
+          cost[i][b] = total;
+          from[i][b] = a;
+        }
+      }
+    }
+  }
+  if (cost[n][k] === Infinity) return chars;
+  const bounds = new Array<number>(n + 1);
+
+  bounds[n] = k;
+  for (let i = n; i > 0; i -= 1) bounds[i - 1] = from[i][bounds[i]];
+  const out = chars.map((char) => ({ ...char }));
+
+  for (let i = 0; i < n; i += 1) {
+    const start = runs[bounds[i]][0];
+
+    // A cut meets the next glyph's ink, or the last one's before an opening bracket, whose ink
+    // sits at the right of its square; 。 and the like keep their blank right half that way.
+    if (i === 0) out[0].x0 = charGroup(out[0].text) === 2 ? chars[0].x0 : start;
+    else {
+      const end = runs[bounds[i] - 1][1];
+      const cut = charGroup(out[i].text) === 2 ? end : start;
+
+      out[i - 1].x1 = cut;
+      out[i].x0 = cut;
+    }
+  }
+  if (charGroup(out[n - 1].text) !== 1) out[n - 1].x1 = runs[k - 1][1];
+  return out;
+}
+
+/** A column's character pitch: the row ink's best repeat near the glyphs' width. */
+function columnPitch(counts: number[], size: number) {
+  let best = size;
+  let bestScore = -1;
+
+  for (let p = Math.round(size * 0.8); p <= Math.round(size * 1.6); p += 1) {
+    let sum = 0;
+
+    for (let i = 0; i + p < counts.length; i += 1) sum += counts[i] * counts[i + p];
+    const score = sum / Math.max(1, counts.length - p);
+
+    if (score > bestScore) [best, bestScore] = [p, score];
+  }
+  return Math.max(1, best);
+}
+
+/**
+ * A vertical line for the horizontal recognizer (upstream didn't export its vertical one): cut
+ * into glyph-sized tiles at the column's pitch and laid side by side, upright, so a position along
+ * the strip is the same position down the column.
+ */
+function columnStrip(g: Grey, ink: Uint8Array, bg: number): Grey | undefined {
+  const rows = inkCounts(g, ink, true);
+  const across = extent(inkCounts(g, ink, false));
+  const along = extent(rows);
+
+  if (!across || !along) return undefined;
+  const { data, width: w, height: h } = g;
+  const pitch = columnPitch(rows, across[1] - across[0]);
+  const pad = Math.max(2, Math.floor(pitch / 6));
+  const height = pitch + 2 * pad;
+  const strip = new Uint8Array(h * height).fill(bg);
+  const left = Math.floor((across[0] + across[1] - pitch) / 2);
+
+  for (let top = along[0] % pitch; top < h; top += pitch) {
+    for (let v = 0; v < pitch && top + v < h; v += 1) {
+      for (let u = 0; u < pitch && top + u < h; u += 1) {
+        if (left + u >= 0 && left + u < w) {
+          strip[(pad + v) * h + top + u] = data[(top + v) * w + left + u];
+        }
+      }
+    }
+  }
+  return { data: strip, width: h, height };
+}
+
+/** vocr_onnx.read_region on the whole frame: its lines in reading order. `full`: the frame at its own size, `scale` from it to `g`; given, cells are fitted to its ink (more detail than `g`'s) and vertical lines read too. */
+async function readGrey(spotter: Spotter, recognizer: Recognizer, g: Grey, full?: Grey, scale = 1) {
   const lines: VnOcrLine[] = [];
 
   for (const [x, y, w, h, vertical, , dark, tag] of await spot(spotter, g)) {
-    // shortcut: horizontal lines only; upstream didn't export its vertical recognizer.
-    if (vertical) continue;
-    const chars = await readLine(recognizer, crop(g, x, y, w, h), !!dark);
+    if (vertical && !full) continue;
+    const part = crop(g, x, y, w, h);
+    let strip: Grey | undefined = part;
 
-    lines.push({
-      text: chars.map((char) => char.text).join(''),
+    if (vertical) {
+      const { ink, bg } = inkOf(part, !!dark);
+
+      strip = columnStrip(part, ink, bg);
+    }
+    if (!strip) continue;
+    const read = await readLine(recognizer, strip, !!dark);
+    const line: VnOcrLine = {
+      text: read.map((char) => char.text).join(''),
       tag,
       box: [x, y, w, h],
-      chars: chars.map((char) => ({ ...char, x0: char.x0 + x, x1: char.x1 + x }))
-    });
+      chars: read.map((char) => ({
+        ...char,
+        x0: char.x0 + (vertical ? y : x),
+        x1: char.x1 + (vertical ? y : x)
+      }))
+    };
+
+    if (full) fitLine(line, full, scale, !!vertical, !!dark);
+    lines.push(line);
   }
   return lines;
 }
 
-async function read({ models: urls, frame, hook }: VnOcrRequest) {
+/** A line's cells and across-extent from the ink of the full-size frame (in `g`'s px still). */
+function fitLine(line: VnOcrLine, full: Grey, scale: number, vertical: boolean, dark: boolean) {
+  const [x, y, w, h] = line.box;
+  const left = Math.floor(x / scale);
+  const top = Math.floor(y / scale);
+  const part = crop(
+    full,
+    left,
+    top,
+    Math.min(full.width - left, Math.ceil(w / scale)),
+    Math.min(full.height - top, Math.ceil(h / scale))
+  );
+  const { ink } = inkOf(part, dark);
+  const across = extent(inkCounts(part, ink, !vertical));
+  const start = vertical ? top : left;
+  const side = vertical ? left : top;
+
+  line.vertical = vertical;
+  line.ink = across
+    ? [(across[0] + side) * scale, (across[1] + side) * scale]
+    : [vertical ? x : y, vertical ? x + w : y + h];
+  if (!across) return;
+  const cells = line.chars.map((char) => ({
+    ...char,
+    x0: char.x0 / scale - start,
+    x1: char.x1 / scale - start
+  }));
+
+  line.chars = fitCells(cells, inkCounts(part, ink, vertical), across[1] - across[0]).map(
+    (char) => ({ ...char, x0: (char.x0 + start) * scale, x1: (char.x1 + start) * scale })
+  );
+}
+
+async function read({ models: urls, frame, hook, exact }: VnOcrRequest) {
   const { spotter, recognizer } = await loadModels(urls);
   const { grey, scale } = frameGrey(frame);
+  const full = exact ? frameGrey(frame, 1).grey : undefined;
 
   frame.close();
-  const lines = (await readGrey(spotter, recognizer, grey)).map((line) => ({
+  const lines = (await readGrey(spotter, recognizer, grey, full, scale)).map((line) => ({
     ...line,
     box: line.box.map((v) => v / scale) as VnOcrLine['box'],
+    ink: line.ink?.map((v) => v / scale) as VnOcrLine['ink'],
     chars: line.chars.map((char) => ({ ...char, x0: char.x0 / scale, x1: char.x1 / scale }))
   }));
 
@@ -832,7 +1051,8 @@ async function read({ models: urls, frame, hook }: VnOcrRequest) {
     ? lines
     : placeHook(
         hook,
-        lines.filter(({ tag }) => tag <= 1)
+        // A choice or a misjudged line can be the hook's too when text goes on the glyphs.
+        exact ? lines : lines.filter(({ tag }) => tag <= 1)
       );
 }
 
