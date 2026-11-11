@@ -43,6 +43,9 @@
   }
   let rows = $state<Row[]>();
   let channel: BroadcastChannel | undefined;
+  /** A failed mine from /hook, shown a few seconds (the game's in front; notifications may not show) */
+  let notice = $state('');
+  let noticeTimer: ReturnType<typeof setTimeout> | undefined;
   let reads = 0;
   const invisible = $derived(view?.mode === 'invisible');
 
@@ -152,6 +155,9 @@
       ]);
       const popup = document.querySelector('.ttu-dict')?.getBoundingClientRect();
       if (popup && popup.width > 0 && popup.height > 0) boxes.push(popup);
+      // On X11 the window's shape clips drawing too: the notice needs its own box.
+      const shown = root?.querySelector('.ov-notice')?.getBoundingClientRect();
+      if (shown) boxes.push(shown);
       const rects = boxes.map(({ x, y, width, height }) => ({ x, y, width, height }));
       const message = JSON.stringify([rects, solid]);
       if (message === lastSent) return;
@@ -220,7 +226,8 @@
 
   $effect(() => {
     // Re-measured whenever the text, its look or the area change.
-    void [text, rows, invisible, view?.fontSize, view?.opacity, area.x, area.y, area.w, area.h];
+    void [text, notice, rows, invisible, view?.fontSize, view?.opacity];
+    void [area.x, area.y, area.w, area.h];
     tick().then(report);
   });
 
@@ -231,6 +238,12 @@
   onMount(() => {
     channel = new BroadcastChannel(overlayChannel);
     channel.onmessage = (event) => {
+      if (typeof event.data?.notice === 'string') {
+        clearTimeout(noticeTimer);
+        notice = event.data.notice;
+        noticeTimer = setTimeout(() => (notice = ''), 6000);
+        return;
+      }
       if (typeof event.data?.text !== 'string' || event.data.text === text) return;
       // The game moved on; clicks on it never reach this page to close the popup.
       popup?.close();
@@ -255,6 +268,7 @@
     document.addEventListener('mouseleave', () => setSolid(false));
     return () => {
       channel?.close();
+      clearTimeout(noticeTimer);
       off?.();
       observer.disconnect();
       resized.disconnect();
@@ -281,6 +295,9 @@
 />
 
 <div class="ov-root" class:ov-invisible={invisible} bind:this={root}>
+  {#if notice}
+    <p class="ov-notice" role="status">{notice}</p>
+  {/if}
   {#if invisible && rows}
     <div class="hook-text ov-rows" lang="ja">
       {#each rows as row, index (index)}
@@ -408,6 +425,22 @@
   .ov-vertical {
     writing-mode: vertical-rl;
     text-orientation: upright;
+  }
+
+  .ov-notice {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 1;
+    max-width: min(32rem, calc(100% - 1rem));
+    margin: 0;
+    padding: 0.375rem 0.625rem;
+    border: 2px solid var(--app-danger-color);
+    border-radius: 2px;
+    background: var(--background-color);
+    color: var(--font-color);
+    font-size: var(--type-small);
+    line-height: 1.4;
   }
 
   .ov-done {

@@ -5,6 +5,7 @@
   import LookupPopup from '$lib/components/dictionary/lookup-popup.svelte';
   import PointBox from '$lib/components/point-box.svelte';
   import {
+    ankiConnectUrl$,
     ankiSentenceField$,
     ankiVnAudio$,
     ankiVnScreenshot$,
@@ -72,6 +73,7 @@
     isSavedThread,
     nativeSavesToPull,
     NativeThreads as Threads,
+    postOverlayNotice,
     pushNativeSaves,
     rememberNativeGame,
     type NativeHook,
@@ -314,6 +316,8 @@
   let pendingFolders = $state<string[]>();
   /** What the mine shortcut did last */
   let mineNote = $state<string>();
+  /** Start Anki with games: why Anki isn't there (not found, or AnkiConnect never answered) */
+  let ankiNote = $state<string>();
   /** Where Anki clips' sound comes from, said under the status */
   let audioNote = $state<string>();
   const audioNotes = {
@@ -372,6 +376,20 @@
     const pull = await nativeSavesToPull(saveSync);
 
     if (destroyed) return;
+
+    // Start Anki with games: before the game, so the game's window comes up last, in front.
+    const ankiWait = setTimeout(() => (nativeStatus = 'Starting Anki…'), 500);
+    const anki = await games.startAnki($ankiConnectUrl$).finally(() => clearTimeout(ankiWait));
+    ankiNote =
+      anki.status === 'missing'
+        ? `Anki wasn’t started: it isn’t installed where the app looks (${anki.looked.join(', ')}).`
+        : anki.status === 'timeout'
+          ? `Anki was started, but AnkiConnect didn’t answer within ${anki.seconds} s: mining won’t work until it does. Is the AnkiConnect add-on installed?`
+          : anki.status === 'error'
+            ? `Anki couldn’t start: ${anki.message}`
+            : undefined;
+    if (destroyed) return;
+    nativeStatus = 'Starting the game…';
 
     const result = await games.launch(info.folder!, pull);
 
@@ -582,7 +600,8 @@
       text = `Anki: ${error.message}`;
     }
     mineNote = text;
-    // The game is in front: say so outside the page too.
+    // The game is in front: say so outside the page too (gamescope may show no notification).
+    postOverlayNotice(text);
     try {
       new Notification('chimimouryou', { body: text, silent: true });
     } catch {
@@ -993,6 +1012,9 @@
           {/if}
           {#if audioNote}
             <p class="hook-hint">{audioNote}</p>
+          {/if}
+          {#if ankiNote}
+            <p class="hook-hint" role="status">{ankiNote}</p>
           {/if}
           {#if mineNote}
             <p class="hook-hint" role="status">{mineNote}</p>

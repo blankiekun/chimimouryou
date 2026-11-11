@@ -192,12 +192,25 @@ root install stays light for the web app and its Docker image; `fetch` downloads
   from a real Steam shortcut or on a Deck.
   Shortcuts (`hotkeys.js`, Electron `globalShortcut`): while a game runs and its `/hook` window is
   open, Ctrl+Shift+M puts the newest line (with its screenshot and sound) on the last Anki card
-  (`native-hotkey` to `/hook`, which says how it went in a desktop notification) and Ctrl+Shift+H
+  (`native-hotkey` to `/hook`; a success says nothing, a failure goes to a desktop notification
+  and, since gamescope may never show one, as a line in the overlay's top left corner for 6 s,
+  in Band and Invisible, its box part of the window's shape) and Ctrl+Shift+H
   brings `/hook` to the front, back to the game's `/hook` if the window went elsewhere (pressed
   with the app in front, it minimizes it). Registered at launch or rejoin, unregistered when the
   game exits, its page closes or the app quits, so they never take keys otherwise; changed or
   cleared in Settings → Desktop games (`hotkeys` in `native-games.json`, `games-hotkeys`). On a
   native Wayland session they work only with the overlay on (the app then runs on X11).
+  Start Anki with games (Settings → Desktop games, `startAnki` in `native-games.json`, per
+  computer, off by default): before `/hook` launches a game it asks main (`games-start-anki`)
+  with the reader's AnkiConnect address; when that address is this computer (loopback only; a
+  remote one does nothing) and AnkiConnect doesn't answer, main starts Anki as its own detached
+  child, never through a shell, from fixed places only: Linux `anki` on PATH (absolute entries),
+  else `flatpak run net.ankiweb.Anki` when installed per user or system; Windows
+  `%LOCALAPPDATA%\Programs\Anki\anki.exe`, then `%ProgramFiles%\Anki\anki.exe`; macOS
+  `Anki.app` in `/Applications` or `~/Applications`. The game starts once AnkiConnect answers (at
+  most 30 s), so its window maps last and stays in front; `/hook` says when Anki wasn't found or
+  never answered. Anki is never stopped by the app. In Game Mode Steam may still end every process
+  of the app's tree when the app closes. Never run with a real Anki or on a Deck.
 - Proton (Linux, `proton.js`; for a Steam Deck, which has no system Wine): Settings → Desktop games
   → "Runs games with" picks Automatic (Wine when `wine --version` works, else Proton), Wine, or a
   Proton build, with the same choice per game (`runner` in `native-games.json`: `'auto'`, `'wine'`

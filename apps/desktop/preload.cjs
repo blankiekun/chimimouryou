@@ -52,6 +52,8 @@ contextBridge.exposeInMainWorld('chimiDesktop', {
       return () => ipcRenderer.removeListener('native-hotkey', listener);
     },
     options: (folder, changes) => ipcRenderer.invoke('games-options', folder, changes),
+    anki: (changes, url) => ipcRenderer.invoke('games-anki', changes, url),
+    startAnki: (url) => ipcRenderer.invoke('games-start-anki', url),
     insertHook: (code) => ipcRenderer.invoke('games-hook-code', code),
     stamp: () => ipcRenderer.invoke('games-stamp'),
     windows: (folder) => ipcRenderer.invoke('games-windows', folder),

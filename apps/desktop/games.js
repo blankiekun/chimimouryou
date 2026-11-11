@@ -15,6 +15,8 @@
 import { Buffer } from 'node:buffer';
 import { execFile, spawn } from 'node:child_process';
 import {
+  accessSync,
+  constants,
   cpSync,
   existsSync,
   lstatSync,
@@ -960,6 +962,119 @@ function link(ctx, event, id, index, folder, title) {
   return { status: 'ok', exe };
 }
 
+// Start Anki with games (Settings → Desktop games, `startAnki` in the store): before a game starts,
+// a local AnkiConnect that doesn't answer gets Anki started as the app's own child, never through a
+// shell, from fixed places only. The game starts after Anki answers, so its window maps last and
+// stays in front. Anki is never stopped by the app (it may hold unsynced reviews).
+
+/** The AnkiConnect address when it is this computer (a loopback name or address), else undefined. */
+export function localAnkiUrl(url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return undefined;
+  }
+  const host = parsed.hostname;
+  const local = host === 'localhost' || host === '[::1]' || /^127(\.\d{1,3}){3}$/.test(host);
+  return local && /^https?:$/.test(parsed.protocol) ? parsed.href : undefined;
+}
+
+const flatpakAnki = 'net.ankiweb.Anki';
+
+/**
+ * Where Anki is looked for, in order, and the first found: Linux `anki` on PATH (absolute entries
+ * only, never the current folder), else Flatpak's; Windows and macOS their standard installs.
+ */
+export function ankiCommand({ platform, env, home, isFile, exists = isFile }) {
+  const program = (path) => (path ? { command: path, args: [] } : undefined);
+  if (platform === 'linux') {
+    const dirs = (env.PATH ?? '').split(':').filter((dir) => dir.startsWith('/'));
+    const looked = ['anki on PATH', `Flatpak ${flatpakAnki}`];
+    const onPath = dirs.map((dir) => join(dir, 'anki')).find(isFile);
+    if (onPath) return { found: program(onPath), looked };
+    const flatpak = dirs.map((dir) => join(dir, 'flatpak')).find(isFile);
+    const installed = [home ? join(home, '.local/share/flatpak') : '', '/var/lib/flatpak']
+      .filter(Boolean)
+      .some((dir) => exists(join(dir, 'app', flatpakAnki)));
+    const found =
+      flatpak && installed ? { command: flatpak, args: ['run', flatpakAnki] } : undefined;
+    return { found, looked };
+  }
+  const looked =
+    platform === 'win32'
+      ? [env.LOCALAPPDATA && `${env.LOCALAPPDATA}\\Programs`, env.ProgramFiles]
+          .filter((dir) => /^[A-Z]:\\/i.test(dir ?? ''))
+          .map((dir) => `${dir}\\Anki\\anki.exe`)
+      : platform === 'darwin'
+        ? ['/Applications', join(home, 'Applications')].map((dir) =>
+            join(dir, 'Anki.app/Contents/MacOS/anki')
+          )
+        : [];
+  return { found: program(looked.find(isFile)), looked };
+}
+
+/** Anki as the Settings row shows it: on, the address is local, and what would start. */
+function ankiInfo(ctx, url) {
+  const { found, looked } = ankiCommand({
+    platform: ctx.platform,
+    env: process.env,
+    home: homedir(),
+    isFile: (path) => {
+      try {
+        accessSync(path, constants.X_OK);
+        return statSync(path).isFile();
+      } catch {
+        return false;
+      }
+    },
+    exists: existsSync
+  });
+  return {
+    on: ctx.store.startAnki === true,
+    local: !!localAnkiUrl(url),
+    command: found && [found.command, ...found.args].join(' '),
+    found,
+    looked
+  };
+}
+
+/* global fetch, AbortSignal */
+/** Any answer counts: with an API key set, AnkiConnect still answers (with an error). */
+const ankiAnswers = (url) =>
+  fetch(url, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'version', version: 6 }),
+    signal: AbortSignal.timeout(2000)
+  }).then(
+    () => true,
+    () => false
+  );
+
+/** How long a started Anki gets to answer before the game starts anyway. */
+const ankiWaitMs = 30_000;
+
+/** Starts Anki when on, local and not answering; the game waits for it (see above). */
+async function startAnki(ctx, url) {
+  const info = ankiInfo(ctx, url);
+  if (!info.on) return { status: 'off' };
+  if (!info.local) return { status: 'remote' };
+  const target = localAnkiUrl(url);
+  if (await ankiAnswers(target)) return { status: 'running' };
+  if (!info.found) return { status: 'missing', looked: info.looked };
+  let failed;
+  // Detached: a signal to the app's process group doesn't take Anki along; still its descendant.
+  const child = spawn(info.found.command, info.found.args, { detached: true, stdio: 'ignore' });
+  child.on('error', (error) => (failed = error));
+  child.unref();
+  for (let waited = 0; waited < ankiWaitMs; waited += 1000) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    if (failed) return { status: 'error', message: failed.message };
+    if (await ankiAnswers(target)) return { status: 'started' };
+  }
+  return { status: 'timeout', seconds: ankiWaitMs / 1000 };
+}
+
 /**
  * Registers the games IPC. `hookDir` holds chimihook and LunaHook; `isApp(event)` says whether
  * the sender is one of the app's own pages.
@@ -1153,6 +1268,21 @@ export function registerGames({
     if (typeof changes?.launchOnly === 'boolean')
       update(ctx, folder, { launchOnly: changes.launchOnly || undefined });
     return { launchOnly: !!ctx.store.games[folder].launchOnly };
+  });
+  // Start Anki with games: per computer, never synced (Settings → Desktop games reads and sets it;
+  // `url`: the reader's AnkiConnect address). /hook asks for the start before launching a game.
+  handle('games-anki', (event, changes, url) => {
+    if (typeof changes?.on === 'boolean') {
+      ctx.store = { ...ctx.store, startAnki: changes.on || undefined };
+      save(ctx);
+    }
+    const { on, local, command, looked } = ankiInfo(ctx, url);
+    return { on, local, command, looked };
+  });
+  handle('games-start-anki', (event, url) => {
+    // Two pages starting games at once: one Anki.
+    ctx.ankiStart ??= startAnki(ctx, url).finally(() => (ctx.ankiStart = undefined));
+    return ctx.ankiStart;
   });
   // A hook code typed on /hook, checked here: it becomes one line of the helper's stdin.
   handle('games-hook-code', (event, code) => {

@@ -11,7 +11,9 @@
   import SettingsSection from '$lib/components/settings/settings-section.svelte';
   import NativeGameDialog from '$lib/components/vn/native-game-dialog.svelte';
   import NativeOverlayControls from '$lib/components/vn/native-overlay-controls.svelte';
+  import Switch from '$lib/components/switch.svelte';
   import { dialogManager } from '$lib/data/dialog-manager';
+  import { ankiConnectUrl$ } from '$lib/data/dictionary/anki';
   import {
     desktopGames,
     desktopOverlay,
@@ -35,9 +37,12 @@
     { action: 'show', label: 'Show the texthooker (again: back to the game)' }
   ];
 
+  let anki = $state<Awaited<ReturnType<typeof games.anki>>>();
+
   onMount(async () => {
     overlaySettings = await overlay?.settings();
     hotkeys = await games.hotkeys();
+    anki = await games.anki(undefined, $ankiConnectUrl$);
     await refresh();
   });
 
@@ -232,6 +237,31 @@
             {/if}
           </label>
         {/each}
+      </div>
+    </SettingsItemGroup>
+  {/if}
+  {#if anki && list?.hook}
+    <SettingsItemGroup
+      title="Start Anki with games"
+      tooltip="When a game starts and AnkiConnect doesn’t answer, the app starts Anki first, then the game. Anki stays open when the game or the app closes. Only for an AnkiConnect address on this computer."
+    >
+      <div class="dg-runner">
+        <Switch
+          checked={anki.on}
+          aria-label="Start Anki with games"
+          onchange={async (on) => (anki = await games.anki({ on }, $ankiConnectUrl$))}
+        />
+        <ul class="dg-checks">
+          {#if !anki.local}
+            <li class="dg-missing">
+              Does nothing: AnkiConnect’s address ({$ankiConnectUrl$}) isn’t this computer
+            </li>
+          {:else if anki.command}
+            <li>Starts {anki.command}</li>
+          {:else}
+            <li class="dg-missing">Anki not found: looked for {anki.looked.join(', ')}</li>
+          {/if}
+        </ul>
       </div>
     </SettingsItemGroup>
   {/if}
