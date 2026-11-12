@@ -251,13 +251,13 @@ async function settledFrame(read) {
   return read === screenRead ? createImageBitmap(screenCanvas()) : null;
 }
 
-/** Reads the settled frame; then(result) only for the latest read. */
-function readSettled(hook, then) {
+/** Reads the settled frame (exact: cells and ink for text laid on the glyphs); then(result) only for the latest read. */
+function readSettled(hook, then, exact) {
   var read = ++screenRead;
 
   settledFrame(read)
     .then(function (frame) {
-      return frame && readScreen(frame, hook);
+      return frame && readScreen(frame, hook, exact);
     })
     .then(function (result) {
       if (!result || read !== screenRead) return;
@@ -269,11 +269,18 @@ function readSettled(hook, then) {
     });
 }
 
-/** A hooked line's rows moved from the fixed guess to where the game drew it. */
+/**
+ * A hooked line's rows moved from the fixed guess to where the game drew it, each character on its
+ * glyph (overlay.js cellLine); not found, the guess stays.
+ */
 function placeHooked(line) {
-  readSettled(line, function (result) {
-    showText(result.lines);
-  });
+  readSettled(
+    line,
+    function (result) {
+      showText(result.lines);
+    },
+    true
+  );
 }
 
 /** Screen text: the dialogue on screen after a click, as a hooked line would come. */
