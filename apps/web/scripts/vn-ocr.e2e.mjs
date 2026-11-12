@@ -230,6 +230,9 @@ try {
       `the line isn't over the game's: ${JSON.stringify(placed)}`
     );
     console.log(`  placed: ${JSON.stringify(placed)}`);
+    console.log(
+      `  worker time placing the hooked line: ${Math.round(await frame().evaluate(() => lastScreenMs))} ms`
+    );
     // Yomitan's hover finds the line's text, and the text lies on the game's own line on screen.
     const onScreen = await frame().evaluate(() => {
       const div = document.querySelector('#page-text div');
@@ -238,7 +241,8 @@ try {
       const at = document.elementFromPoint(rect.left + rect.width / 4, rect.top + rect.height / 2);
 
       return {
-        hit: at === div,
+        // A placed line's characters are its <i> children (overlay.js cellLine).
+        hit: div.contains(at),
         top: ((rect.top - game.top) / game.height) * screenCanvas().height,
         left: ((rect.left - game.left) / game.width) * screenCanvas().width
       };

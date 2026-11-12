@@ -9,6 +9,7 @@
 function overlayLine(line) {
   var div = document.createElement('div');
 
+  if (line.ink && line.chars && line.chars.length) return cellLine(line, div);
   div.textContent = line.text;
   div.style.left = (100 * line.x) / g_screen_width + '%';
   div.style.top = (100 * line.y) / g_screen_height + '%';
@@ -19,7 +20,43 @@ function overlayLine(line) {
   return div;
 }
 
-/** lines: [{ text, x, y, size, pitch, vertical? }] in screen pixels (overlayLines in lib/data/vn/vn.ts). */
+var measureContext = null;
+
+/**
+ * A line read with its cells and ink (readVnScreen's `exact`, vnbox.js placeHooked): each character
+ * on the cell the game drew it in, its letter-spacing making its advance exactly that cell, as the
+ * desktop overlay's layRow (routes/hook/overlay). The line's text stays the line div's textContent.
+ */
+function cellLine(line, div) {
+  var cells = line.chars;
+  var from = line.ink[0];
+  var size = line.ink[1] - from;
+
+  measureContext = measureContext || document.createElement('canvas').getContext('2d');
+  // The advances are measured in this font (vnbox.css sets it on the line).
+  measureContext.font = size + 'px monospace';
+  div.className = 'cells';
+  div.style.left = (100 * (line.vertical ? from : cells[0].x0)) / g_screen_width + '%';
+  div.style.top = (100 * (line.vertical ? cells[0].x0 : from)) / g_screen_height + '%';
+  div.style.fontSize = 'calc(var(--scale) * ' + size + 'px)';
+  if (line.vertical) div.style.writingMode = 'vertical-rl';
+  cells.forEach(function (cell, i) {
+    var char = document.createElement('i');
+    var next = cells[i + 1] ? cells[i + 1].x0 : cell.x1;
+    var advance = line.vertical ? size : measureContext.measureText(cell.text).width;
+
+    char.textContent = cell.text;
+    // In screen pixels like the font size, so it scales with the game.
+    char.style.letterSpacing = 'calc(var(--scale) * ' + (next - cell.x0 - advance) + 'px)';
+    div.appendChild(char);
+  });
+  return div;
+}
+
+/**
+ * lines: [{ text, x, y, size, pitch, vertical?, chars?, ink? }] in screen pixels (overlayLines in
+ * lib/data/vn/vn.ts; chars and ink from an exact screen read, laid by cellLine).
+ */
 function showText(lines) {
   document
     .getElementById('page-text')

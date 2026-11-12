@@ -99,8 +99,20 @@ canvas {
   cursor: default;
 }
 
-#overlay div div::selection {
+#overlay div div::selection,
+#page-text .cells i::selection {
   background: rgba(255, 220, 120, 0.35);
+}
+
+/* A line laid on the game's glyphs (cellLine in overlay.js): one <i> per character, its advance
+   measured in this font. */
+#page-text .cells {
+  font-family: monospace;
+  text-orientation: upright;
+}
+
+#page-text .cells i {
+  font-style: normal;
 }
 
 ::highlight(ttu-lookup) {
