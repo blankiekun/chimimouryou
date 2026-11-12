@@ -4,6 +4,36 @@ chimimouryou is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook
 upstream's own changes are not listed here. Each version's section is written when it is released,
 from the pull requests merged since the previous tag (pull requests don't edit this file).
 
+## v3.21.0 (2026-11-12)
+
+### Added
+
+- Desktop: a log file for the app. Settings → Desktop games → Diagnostics has Copy diagnostics
+  (this computer, what runs the games, and the end of the log, with no keys, tokens or game text)
+  and Open log folder. Useful in Steam Deck Game Mode, which has no terminal.
+- Desktop: a Steam entry can start straight into one game. Each linked game in Settings → Desktop
+  games has Copy Steam launch option (`--game=…`) for a non-Steam shortcut's Launch Options.
+- Desktop: Start Anki with games (Settings → Desktop games, off by default). When a game starts
+  and the AnkiConnect on this computer doesn't answer, the app starts Anki first, waits up to 30
+  seconds, then starts the game. Anki stays open afterwards.
+- Desktop: a failed Mine also shows as a short line on the game overlay, since notifications may not
+  show in Steam Deck Game Mode. Successes still say nothing.
+- Docs: a Steam Deck guide (docs/STEAM-DECK.md) for Windows visual novels.
+
+### Changed
+
+- Windows games in the browser (VNBox v0.2.13, from v0.2.11): many speed-ups (texture uploads,
+  fake bold text, Vorbis audio, memory copies, file and disc reads, saves, pointer moves, blits),
+  and a game's first movie starts without waiting for the decoder to download.
+- Desktop: Electron 45.3.1.
+
+### Fixed
+
+- Windows games in the browser: a key pressed with Ctrl held now gets released; audio that could
+  stall or start late; a frame arriving late no longer holds the game for 100 ms; a JIT block the
+  browser rejects is no longer retried over and over; drawing fixes for WebGL games.
+- Not yet tried: Steam Deck Game Mode, Proton on a Deck, and Start Anki with a real Anki.
+
 ## v3.20.1 (2026-11-10)
 
 ### Changed
