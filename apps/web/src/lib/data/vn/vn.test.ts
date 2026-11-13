@@ -73,6 +73,16 @@ describe('vn', () => {
     expect(newText('', '名前はまだ無い。', seen, true)).toBe('');
   });
 
+  it('counts each hooked line in full, seen before or not, but not a redraw', () => {
+    const seen = new Set<string>();
+
+    expect(newText('', 'はい。', seen, false, true)).toBe('はい。');
+    expect(newText('はい。', 'はい。そう。', seen, false, true)).toBe('はい。そう。');
+    expect(newText('はい。そう。', 'はい。', seen, false, true)).toBe('はい。');
+    expect(newText('はい。', 'はい。', seen, false, true)).toBe('');
+    expect(seen.size).toBe(0);
+  });
+
   it('merges save files, the newer copy of each winning', () => {
     const local = {
       'save1.dat': { modified: 5, data: 'b' },

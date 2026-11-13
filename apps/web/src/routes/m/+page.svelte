@@ -367,7 +367,7 @@
       savedIndex,
       shownPages
     );
-    reading.setText(pageText);
+    reading.setText(pageText, readingOptions());
 
     loadText(data).catch(({ message }) => logger.warn(`Could not load the page text: ${message}`));
     if (external?.storageType === StorageKey.CALIBRE) {
@@ -400,7 +400,7 @@
     }
 
     pageText = text ? pagesText(text, mangaPages(data)) : [];
-    reading?.setText(pageText);
+    reading?.setText(pageText, readingOptions());
   }
 
   // Text uploaded or made in this browser while the volume is open shows at once.
@@ -467,7 +467,6 @@
 
     if (changes) {
       try {
-        if (changes.text) await recordKanjiText(book!.title, changes.text, changes.upTo);
         if (changes.days.length) {
           await database.storeStatistics(
             book!.title,
@@ -477,6 +476,8 @@
           );
           statisticsUnsynced = true;
         }
+        // Last: it adds up, so a failed write before it must not have recorded the text already.
+        if (changes.text) await recordKanjiText(book!.title, changes.text, changes.upTo);
       } catch (error: any) {
         reading!.putBack(changes);
         logger.warn(`Manga statistics were not saved: ${error.message}`);

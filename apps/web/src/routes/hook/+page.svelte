@@ -116,6 +116,8 @@
   let status = $state<HookStatus>('off');
   let status2 = $state<HookStatus>('off');
   let lines = $state<HookLine[]>(loadLines());
+  /** The last line counted: deletes, edits and undo change `lines`, never this, so nothing counts twice. */
+  let lastCounted = $state<Pick<HookLine, 'text' | 'at'> | undefined>(lines.at(-1));
   let sessionCharacters = $state(0);
   let sessionSeconds = $state(0);
   let list = $state<HTMLOListElement>();
@@ -161,12 +163,13 @@
     socketClean = hookCleaner(next);
   });
 
-  const lastLine = $derived(lines.at(-1));
   /** The running gap since the last line, capped like lineCount: shown, logged with the next line */
   const timer = $derived.by(() => {
     const idle = $trackerIdleTime$ > 0 ? $trackerIdleTime$ : 120;
     const gap =
-      !paused && lastLine && lastLine.at >= since ? Math.min(idle, (now - lastLine.at) / 1000) : 0;
+      !paused && lastCounted && lastCounted.at >= since
+        ? Math.min(idle, (now - lastCounted.at) / 1000)
+        : 0;
 
     return sessionSeconds + Math.max(0, gap);
   });
@@ -220,18 +223,18 @@
       logger.warn(error.message);
     }
     link.done = true;
-    link.held.splice(0).forEach((line) => countLine(link, line, true));
+    link.held.splice(0).forEach((line) => countLine(link, line));
     if (link !== current) leaveLink(link);
     else reportActivity();
   }
 
   /** Counts a line toward the link's book, or in the immersion log under its title. */
-  function countLine(link: BookLink, { text, at, seconds, characters }: HeldLine, held = false) {
+  function countLine(link: BookLink, { text, at, seconds, characters }: HeldLine) {
     const { saver } = link;
 
     if (saver) {
-      // A held line's gap is the hook's (pauses known): the reading may be newer than the line.
-      if (held) saver.reading.lastTextTime = at - seconds * 1000;
+      // The gap is the hook's (pauses, idle time and page opening known), as the strip counts it.
+      saver.reading.lastTextTime = at - seconds * 1000;
       const added = saver.reading.add(
         text,
         false,
@@ -268,7 +271,7 @@
       if (error) logger.warn(`Visual novel sync failed: ${error}`);
     }
 
-    return new VnReadingSaver(book, await loadVnReading(book), local, external);
+    return new VnReadingSaver(book, await loadVnReading(book, true), local, external);
   }
 
   /** A link no longer current (title changed, page closed): saved, synced and "left", as on /v. */
@@ -719,14 +722,13 @@
   function togglePause() {
     paused = !paused;
     if (!paused) since = Date.now();
-    if (current?.saver) current.saver.reading.lastTextTime = Date.now();
   }
 
   function addLine(text: string, seq?: number) {
     if (!text) return;
 
     const at = Date.now();
-    const count = lineCount(text, lines.at(-1), at, $trackerIdleTime$, since);
+    const count = lineCount(text, lastCounted, at, $trackerIdleTime$, since);
 
     if (count.repeat) return;
 
@@ -737,6 +739,7 @@
     const line = { id: `${at}-${lineSeq++}`, text, at, seq };
 
     lines = [...lines, line].slice(-maxLines);
+    lastCounted = line;
     if (seq !== undefined) games?.mark(seq);
     saveLines(lines);
     flashId = $hookFlash$ ? line.id : undefined;

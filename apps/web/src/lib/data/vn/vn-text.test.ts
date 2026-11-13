@@ -7,6 +7,7 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it, vi } from 'vitest';
 import { database } from '$lib/data/store';
+import * as kanjiSeen from '$lib/data/words/kanji-seen';
 import { VnReading, VnReadingSaver, vnTextSource } from '$lib/data/vn/vn-text';
 import { vnboxLines } from '$lib/data/vn/vn';
 
@@ -78,6 +79,16 @@ describe('VnReading', () => {
     expect(game.read.characters).toBe(1);
   });
 
+  it('counts the repeated lines of a line source in full', () => {
+    const game = new VnReading({ title: 'g', pages: [], characters: 0 }, new Map(), start, true);
+
+    game.add('はい。', false, false, options, start + 1000);
+    game.add('うん', false, false, options, start + 2000);
+    game.add('はい。', false, false, options, start + 3000);
+
+    expect(game.read.characters).toBe(2 + 2 + 2);
+  });
+
   it('caps a break and keeps statistics out when they are off', () => {
     const game = reading();
 
@@ -108,5 +119,24 @@ describe('VnReadingSaver', () => {
 
     expect(await database.getStatisticsForBook('g')).toMatchObject([{ charactersRead: 4 }]);
     expect((await database.getBookmark(1))?.exploredCharCount).toBe(4);
+  });
+
+  it('records the kanji text once when a write before it fails', async () => {
+    const start = new Date(2026, 9, 26, 12).getTime();
+    const game = new VnReading({ title: 'k', pages: [], characters: 0 }, new Map(), start);
+    const saver = new VnReadingSaver(
+      { id: 2, title: 'k', characters: 100 } as any,
+      game,
+      undefined as any,
+      undefined
+    );
+    const record = vi.spyOn(kanjiSeen, 'recordKanjiText');
+
+    game.add('猫が好き', false, false, options, start + 5000);
+    vi.spyOn(database, 'storeStatistics').mockRejectedValueOnce(new Error('QuotaExceededError'));
+    await expect(saver.save(true)).rejects.toThrow('QuotaExceededError');
+    await saver.save(true);
+
+    expect(record.mock.calls.filter(([title]) => title === 'k')).toEqual([['k', '猫が好き', 4]]);
   });
 });

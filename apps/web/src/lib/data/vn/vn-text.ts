@@ -96,10 +96,12 @@ export class VnReading {
   changedDays = new Set<string>();
   dirty = false;
 
+  /** perLine: the texts are lines (/hook, VNBox), not CONscripter's whole page resent (newText) */
   constructor(
     public read: VnRead,
     public statistics: Map<string, BooksDbStatistic>,
-    now = Date.now()
+    now = Date.now(),
+    public perLine = false
   ) {
     this.seen = new Set(read.pages);
     this.lastTextTime = now;
@@ -114,7 +116,7 @@ export class VnReading {
     now = Date.now()
   ) {
     if (!skipped) {
-      const added = newText(this.previousText, text, this.seen, readBefore);
+      const added = newText(this.previousText, text, this.seen, readBefore, this.perLine);
       const characters = countTextCharacters(added);
       const seconds = Math.min((now - this.lastTextTime) / 1000, maxSecondsPerPage);
 
@@ -170,7 +172,7 @@ export class VnReading {
 }
 
 /** A game's reading as saved on this browser: the read count raised to another device's bookmark. */
-export async function loadVnReading(book: BooksDbBookData) {
+export async function loadVnReading(book: BooksDbBookData, perLine = false) {
   const read = await loadVnRead(book.title);
   // Another device may be further along: keep the larger position.
   const bookmark = await database.getBookmark(book.id);
@@ -179,7 +181,9 @@ export async function loadVnReading(book: BooksDbBookData) {
 
   return new VnReading(
     read,
-    new Map((await database.getStatisticsForBook(book.title)).map((stat) => [stat.dateKey, stat]))
+    new Map((await database.getStatisticsForBook(book.title)).map((stat) => [stat.dateKey, stat])),
+    Date.now(),
+    perLine
   );
 }
 
@@ -267,7 +271,6 @@ export class VnReadingSaver {
     const { book } = this;
 
     await saveVnRead(read);
-    await recordKanjiText(book.title, text, read.characters);
     await database.putBookmark(vnBookmark(book.id, read.characters, book.characters));
     if (isPluginEnabled('social'))
       noteReading(book.title, read.characters, book.characters, false, 'vn');
@@ -282,5 +285,7 @@ export class VnReadingSaver {
       );
       this.unsynced.add(StorageDataType.STATISTICS);
     }
+    // Last: it adds up, so a failed write before it must not have recorded the text already.
+    await recordKanjiText(book.title, text, read.characters);
   }
 }
