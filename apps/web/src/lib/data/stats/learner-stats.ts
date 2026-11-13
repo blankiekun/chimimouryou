@@ -33,23 +33,54 @@ function dayNumber(dateKey: string) {
   return Math.round(Date.UTC(year, month - 1, day) / 8.64e7);
 }
 
+type ReadingRow = { charactersRead: number; readingTime?: number };
+
+/**
+ * The one rule for reading figures (Statistics page, Home, profile, Discord, social): every
+ * row's characters count, even without reading time (a jump ahead); a row with characters or
+ * time is a day read; speed uses only rows with reading time. The rank keeps its own stricter
+ * `countedReading`, a gate against jumps rather than a display.
+ */
+export const rowCharacters = (row: ReadingRow) => Math.max(0, row.charactersRead || 0);
+
+export const countsAsRead = (row: ReadingRow) =>
+  rowCharacters(row) > 0 || Math.max(0, row.readingTime || 0) > 0;
+
+export function readingTotals(rows: ReadingRow[]) {
+  let characters = 0;
+  let time = 0;
+  let timedCharacters = 0;
+
+  rows.forEach((row) => {
+    const seconds = Math.max(0, row.readingTime || 0);
+
+    characters += rowCharacters(row);
+    time += seconds;
+    if (seconds) timedCharacters += rowCharacters(row);
+  });
+
+  /** Characters per hour */
+  const speed = time ? Math.round((3600 * timedCharacters) / time) : 0;
+
+  return { characters, time, speed };
+}
+
+/** A run of days (or goal windows) is current while it reaches today or ended yesterday. */
+export const isCurrentRun = (run: { startDate: string; endDate: string }, today: string) =>
+  !!run.startDate && run.startDate <= today && dayNumber(run.endDate) >= dayNumber(today) - 1;
+
 /** `today` is the statistics date key of today (respecting the tracker's start of day). */
 export function learnerStats(statistics: BooksDbStatistic[], today: string): LearnerStats {
   const todayNumber = dayNumber(today);
   const days = new Set<number>();
-  let totalCharacters = 0;
-  let totalTime = 0;
   let todayCharacters = 0;
   let weekCharacters = 0;
 
   statistics.forEach((statistic) => {
     const day = dayNumber(statistic.dateKey);
-    const characters = Math.max(0, statistic.charactersRead || 0);
+    const characters = rowCharacters(statistic);
 
-    totalCharacters += characters;
-    totalTime += Math.max(0, statistic.readingTime || 0);
-
-    if (characters > 0) {
+    if (countsAsRead(statistic)) {
       days.add(day);
     }
     if (day === todayNumber) {
@@ -69,16 +100,18 @@ export function learnerStats(statistics: BooksDbStatistic[], today: string): Lea
     longestStreak = Math.max(longestStreak, run);
   });
 
+  const totals = readingTotals(statistics);
   let streak = 0;
 
+  // isCurrentRun's rule: a run ending yesterday still counts until today ends.
   for (let day = days.has(todayNumber) ? todayNumber : todayNumber - 1; days.has(day); day -= 1) {
     streak += 1;
   }
 
   return {
-    totalCharacters,
-    totalTime,
-    speed: totalTime ? Math.round(totalCharacters / (totalTime / 3600)) : 0,
+    totalCharacters: totals.characters,
+    totalTime: totals.time,
+    speed: totals.speed,
     todayCharacters,
     weekCharacters,
     streak,

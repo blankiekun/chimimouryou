@@ -4,6 +4,7 @@
  * All rights reserved.
  */
 
+import { countsAsRead, readingTotals, rowCharacters } from '$lib/data/stats/learner-stats';
 import { advanceDateDays, getDate } from '$lib/functions/statistic-util';
 
 /** Not part of upstream: the Statistics page's "Characters per day" bars and period totals. */
@@ -20,7 +21,7 @@ export interface CharactersBar {
 export const maxDailyBars = 92;
 
 export function charactersPerDay(
-  entries: { dateKey: string; charactersRead: number }[],
+  entries: { dateKey: string; charactersRead: number; readingTime?: number }[],
   start: string,
   end: string
 ): CharactersBar[] {
@@ -28,8 +29,8 @@ export function charactersPerDay(
 
   const byDay = new Map<string, number>();
 
-  entries.forEach(({ dateKey, charactersRead }) =>
-    byDay.set(dateKey, (byDay.get(dateKey) || 0) + charactersRead)
+  entries.forEach((entry) =>
+    byDay.set(entry.dateKey, (byDay.get(entry.dateKey) || 0) + rowCharacters(entry))
   );
 
   const days: string[] = [];
@@ -63,22 +64,12 @@ export function charactersPerDay(
 export function periodTotals(
   entries: { dateKey: string; title: string; readingTime: number; charactersRead: number }[]
 ) {
-  const days = new Set<string>();
-  const titles = new Set<string>();
-  let characters = 0;
-  let time = 0;
-
-  entries.forEach((entry) => {
-    days.add(entry.dateKey);
-    titles.add(entry.title);
-    characters += entry.charactersRead;
-    time += entry.readingTime;
-  });
+  const counted = entries.filter(countsAsRead);
+  const days = new Set(counted.map((entry) => entry.dateKey));
+  const titles = new Set(counted.map((entry) => entry.title));
 
   return {
-    characters,
-    time,
-    speed: time ? Math.ceil((3600 * characters) / time) : 0,
+    ...readingTotals(counted),
     days: days.size,
     titles: titles.size
   };

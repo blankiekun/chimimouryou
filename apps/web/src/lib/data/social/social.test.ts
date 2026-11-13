@@ -186,6 +186,27 @@ describe('social', () => {
     ]);
   }, 15000);
 
+  // Bug: finishing needed a position below 97% seen here first, so a book synced past it never counted.
+  it('sends a book first seen finished once', async () => {
+    const bodies: Record<string, unknown>[] = [];
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init: RequestInit) => {
+        if (init.body) bodies.push(JSON.parse(init.body as string));
+        return new Response('{"ok":true}');
+      })
+    );
+
+    noteReading('Synced Book', 98, 100);
+    await vi.waitFor(() => expect(bodies).toHaveLength(1), { timeout: 5000 });
+    noteReading('Synced Book', 99, 100, true);
+    await vi.waitFor(() => expect(bodies).toHaveLength(2), { timeout: 5000 });
+    expect(bodies.map((body) => body.finished).filter(Boolean)).toEqual([
+      { key: bookKey('Synced Book'), title: 'Synced Book', kind: 'book' }
+    ]);
+  }, 15000);
+
   // Bugs: a book hidden before hiding removed rows (or whose DELETE failed) stays on the hub until
   // toggled; naming every hidden book to find out would send books the hub never had; asking on
   // every push would use up the hub's 30 profile reads a day.
