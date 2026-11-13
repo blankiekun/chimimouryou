@@ -348,6 +348,10 @@ class WriteTest(ServiceTestCase):
         self.assertEqual(self.call('PUT', '/api/v1/docs/settings', {'modified': 1, 'data': {'a': 1}},
                                    account=ACCOUNT_A)[0], 200)
         self.assertEqual(self.sync(ACCOUNT_A)['accountDocs'][0]['kind'], 'settings')
+        # KOReader reads the settings doc alone (the start of the day), only the account's own.
+        self.assertEqual(self.call('GET', '/api/v1/docs/settings', account=ACCOUNT_A)[1]['data'], {'a': 1})
+        self.assertEqual(self.call('GET', '/api/v1/docs/settings', account=ACCOUNT_B)[0], 404)
+        self.assertEqual(self.call('GET', '/api/v1/docs/settings')[0], 403)
         self.assertEqual(self.call('PUT', '/api/v1/goals/2026-10-01', {'modified': 1, 'data': []},
                                    account=ACCOUNT_A)[0], 200)
         self.assertEqual(self.sync(ACCOUNT_A)['goals'][0]['goalStart'], '2026-10-01')

@@ -116,6 +116,12 @@ function Api:sync(since)
     return self:request("GET", "/api/v1/sync" .. query{ since = since or 0, tables = "progress,statistics" })
 end
 
+-- One account doc (`settings`) by itself: the mirror would bring words and kanji too. 404 when the
+-- account has none, or from a server older than this route.
+function Api:doc(kind)
+    return self:request("GET", "/api/v1/docs/" .. kind)
+end
+
 function Api:put(path, modified, data, extra)
     local body = { modified = modified, data = data }
     for key, value in pairs(extra or {}) do body[key] = value end

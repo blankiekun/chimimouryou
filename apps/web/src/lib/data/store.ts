@@ -314,9 +314,17 @@ export const overwriteBookCompletion$ = writableBooleanLocalStorageSubject()(
   false
 );
 
+// Synced with the account: every device, KOReader too, must count a reading day from the same hour.
 export const startDayHoursForTracker$ = writableNumberLocalStorageSubject()(
   'startDayHoursForTracker',
-  0
+  0,
+  (value) => {
+    const hours = finite(value);
+
+    return hours !== undefined && Number.isInteger(hours) && hours >= 0 && hours < 24
+      ? hours
+      : undefined;
+  }
 );
 
 export const statisticsEnabled$ = writableBooleanLocalStorageSubject()('statisticsEnabled', true);

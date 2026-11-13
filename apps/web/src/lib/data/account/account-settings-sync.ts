@@ -96,6 +96,7 @@ import {
   showFooterChapterCharacterCounter$,
   showFooterChapterPercentage$,
   showPercentage$,
+  startDayHoursForTracker$,
   swipeThreshold$,
   textIndentation$,
   textMarginMode$,
@@ -184,7 +185,9 @@ const sharedSettings: Record<string, Store> = {
   // Standalone Sources: how followed works update on every device of the account (owner s58).
   sourcesAutoUpdate: sourcesAutoUpdate$,
   sourcesCheckHours: sourcesCheckHours$,
-  sourcesWifiOnly: sourcesWifiOnly$
+  sourcesWifiOnly: sourcesWifiOnly$,
+  // Where a reading day starts: the same on every device, and KOReader reads it (GET docs/settings).
+  startDayHoursForTracker: startDayHoursForTracker$
 };
 
 /**
