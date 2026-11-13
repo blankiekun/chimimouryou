@@ -79,16 +79,19 @@ and (token optional) `profile/:username`.
 `POST password` (`{key, next}`: the current and new stretched password, same salt; other sessions end);
 `POST recovery` (`{key}`: a new recovery code, the old one stops working); `GET|PUT|DELETE me` (turning a share off
 in `PUT me` deletes that data at once; `DELETE me` checks `{key}`, the stretched password, when sent); `POST code`;
-`PUT status` (current books, `finished`, `stats`; one a minute, plus one when leaving a
-book; writes started, finished and streak events; a reading rank in `stats` (`rank` 1-7, `step` 1-3 with ranks
+`PUT status` (current books, `finished` (optional `month`, YYYY-MM of the reader's local day, kept when within a month
+of the hub's, else the hub's UTC month), `stats` (`weekChars` and `weekMinutes` clamped to a week); one a minute, plus
+one when leaving a book; writes started, finished and streak events (a streak event only when stored stats exist and
+the streak grew at most a day a day since them); ends with the share-off deletions of `PUT me`, read from the stored
+switches, so a push racing a switch keeps nothing it turned off; stats without a rank keep the stored rank; a reading rank in `stats` (`rank` 1-7, `step` 1-3 with ranks
 2-7, `chars`) is capped by `capRank` on the 19 steps: characters grow at most 300,000 a day since the last stats or the
 account's creation, the step is at most what they support and rises one step a week, `rankAt`; neither ever falls (a new browser or a
 reset device pushes less; turning stats sharing off and on clears them); a rank without `step` (older apps, rows from
 before steps) is III of that rank; no migration, as
 `stats.data` is JSON; deploy this before the app release that sends `step`); `DELETE finished/:key` (the reader's finished
 book and its events, when its statistics are deleted); `GET friends` (with their finished books and
-stats; once a minute); `GET feed?since=` (friends' events, 90 days; once a minute);
-`GET profile/:username` (public profiles to anyone, edge-cached 15 minutes; private ones to
+stats, each with `at`, when they were pushed; once a minute); `GET feed?since=` (friends' events, 90 days; once a minute);
+`GET profile/:username` (`stats` carry `at` too; public profiles to anyone, edge-cached 15 minutes; private ones to
 friends; 404 when blocked; 30 a day per address, 300 per account); `POST report` (`{username, what: name|picture}` or
 `{what: cover, key, username}`: the cover that reader uploaded, 5 a day; signed-in readers only, 401 otherwise);
 `PUT status` answers `needCovers`: the shared book keys this reader gave no thumbnail for. `PUT cover?key=`

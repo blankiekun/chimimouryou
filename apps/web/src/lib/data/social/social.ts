@@ -54,6 +54,9 @@ export interface FinishedBook {
   cover?: string | null;
 }
 
+/** A finished book not yet on the hub, with when it was finished (ms; older entries have none) */
+type PendingBook = Omit<FinishedBook, 'month'> & { at?: number };
+
 export interface SocialStats {
   streak: number;
   weekChars: number;
@@ -69,6 +72,8 @@ export interface SocialStats {
   rank?: number;
   step?: number;
   chars?: number;
+  /** When the hub got them (Unix seconds; older hubs send none) */
+  at?: number;
 }
 
 export interface Person {
@@ -145,7 +150,7 @@ export const feed$ = writableObjectLocalStorageSubject<{
 const currentBooks$ = writableArrayLocalStorageSubject<FriendBook>()('socialBooks', []);
 
 /** Finished here and not yet on the hub */
-const finishedPending$ = writableArrayLocalStorageSubject<Omit<FinishedBook, 'month'>>()(
+const finishedPending$ = writableArrayLocalStorageSubject<PendingBook>()(
   'socialFinishedPending',
   []
 );
@@ -348,6 +353,32 @@ export function socialStats(
   };
 }
 
+const localDay = (date: Date) =>
+  Math.round(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 8.64e7);
+
+/**
+ * Stats as of now, from the last ones pushed (`at`): a reader who stopped reading keeps the hub's
+ * row of that day, so the streak ends, the week empties and the heat strip moves on here, and the
+ * finished count keeps its own year. Days are the viewer's local ones.
+ */
+export function agedStats(stats: SocialStats, now = new Date()) {
+  if (!stats.at) return { ...stats, year: now.getFullYear() };
+
+  const pushed = new Date(stats.at * 1000);
+  const days = Math.max(0, localDay(now) - localDay(pushed));
+  // No reading on the day pushed: the streak already ended the day before.
+  const unread = stats.heat.endsWith('0') ? 1 : 0;
+
+  return {
+    ...stats,
+    streak: days + unread > 1 ? 0 : stats.streak,
+    // shortcut: the week keeps days that left its 7 until all did; per-day figures would fix it.
+    ...(days >= 7 ? { weekChars: 0, weekMinutes: 0 } : {}),
+    heat: stats.heat.slice(Math.min(days, 84)).padEnd(84, '0'),
+    year: pushed.getFullYear()
+  };
+}
+
 let lastStats: SocialStats | undefined;
 
 async function collectStats() {
@@ -502,6 +533,7 @@ async function pushStatus(leaving: boolean, keepalive = false) {
   const finished = finishedPending$.getValue().find((book) => !isHidden(book));
   // pagehide can't wait for IndexedDB: the stats of the last push.
   const stats = keepalive ? lastStats : await collectStats().catch(() => lastStats);
+  const month = finished?.at && !keepalive ? await localMonth(finished.at) : undefined;
 
   const { needCovers } = await hubFetch<{ needCovers?: string[] }>(
     '/v1/status',
@@ -510,7 +542,7 @@ async function pushStatus(leaving: boolean, keepalive = false) {
       // Stored ones can predate bookKey's clip, and long titles stay whole here (lastPush, the toast).
       books: books.map(forHub),
       leaving,
-      ...(finished ? { finished: forHub(finished) } : {}),
+      ...(finished ? { finished: { ...forHub(finished), at: undefined, month } } : {}),
       ...(stats ? { stats } : {})
     },
     keepalive
@@ -520,6 +552,16 @@ async function pushStatus(leaving: boolean, keepalive = false) {
   );
   if (!keepalive && needCovers?.length) uploadCovers(needCovers).catch(() => {});
   if (!keepalive) sweepHidden().catch(() => {});
+}
+
+/** The reader's month of a time, like the stats' days (the hub uses its own without one) */
+async function localMonth(at: number) {
+  const [{ startDayHoursForTracker$ }, { getDateKey }] = await Promise.all([
+    import('$lib/data/store'),
+    import('$lib/functions/statistic-util')
+  ]);
+
+  return getDateKey(startDayHoursForTracker$.getValue(), new Date(at)).slice(0, 7);
 }
 
 const forHub = <T extends { key: string; title: string }>(book: T): T => ({
@@ -633,7 +675,7 @@ export function noteReading(
   if (finished && !isHidden(book)) {
     finishedPending$.next([
       ...finishedPending$.getValue().filter((other) => other.key !== book.key),
-      { key: book.key, title, kind }
+      { key: book.key, title, kind, at: Date.now() }
     ]);
   }
   if (
