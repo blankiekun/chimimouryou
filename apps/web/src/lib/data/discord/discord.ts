@@ -47,6 +47,7 @@ import {
 import { socialSession$ } from '$lib/data/social/social-account';
 import { resetHubCovers } from '$lib/data/discord/discord-covers';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
+import { nowPlaying$ } from '$lib/data/audio/now-playing';
 
 export const addonUrl = 'http://127.0.0.1:41918';
 /** Origins the add-on allows without `extraOrigins` (server.py DEFAULT_ORIGINS) */
@@ -74,6 +75,8 @@ export interface ReadingActivity {
   sections?: SectionWithProgress[];
   /** A natively played game is running: it stays the status without page turns (no Away) */
   playing?: boolean;
+  /** VN lines read (this game) */
+  lines?: number;
 }
 
 export interface ReadingStats {
@@ -91,6 +94,23 @@ export interface ValueExtras {
   series?: string;
   difficulty?: number;
   wordsKnown?: number;
+  /** The Find details page (AniList, VNDB, Jiten), else the Community match's */
+  workUrl?: string;
+  titleRomaji?: string;
+  titleEnglish?: string;
+  communityUrl?: string;
+  profileUrl?: string;
+  /** Calibre's 0-5 stars */
+  rating?: number | null;
+  tags?: string[];
+  publisher?: string;
+  /** Share (0-1) of the book's words the reader knows */
+  comprehension?: number;
+  /** Characters read in this title since the session's first move in it */
+  sessionChars?: number;
+  cardsMinedToday?: number;
+  newWordsToday?: number;
+  linesToday?: number;
 }
 
 export type ConnectionState =
@@ -122,6 +142,7 @@ const kindNames: Record<DiscordKind, string> = {
   book: 'Book',
   manga: 'Manga',
   vn: 'Visual novel',
+  listen: 'Audiobook',
   idle: ''
 };
 
@@ -192,7 +213,25 @@ export function readingValues(
     timeToday: stats ? formatDuration(stats.timeToday) : '',
     speed: speed ? number(speed) : '',
     wordsKnown: extras.wordsKnown === undefined ? '' : number(extras.wordsKnown),
-    streak: stats?.streak ? `${stats.streak} ${stats.streak === 1 ? 'day' : 'days'}` : ''
+    streak: stats?.streak ? `${stats.streak} ${stats.streak === 1 ? 'day' : 'days'}` : '',
+    workUrl: extras.workUrl,
+    vndbId: extras.workUrl?.match(/^https:\/\/vndb\.org\/(v\d+)/)?.[1],
+    anilistId: extras.workUrl?.match(/^https:\/\/anilist\.co\/(?:manga|anime)\/(\d+)/)?.[1],
+    titleRomaji: extras.titleRomaji,
+    titleEnglish: extras.titleEnglish,
+    communityUrl: extras.communityUrl,
+    rating: extras.rating ? `${Math.round(extras.rating * 2) / 2}/5` : '',
+    tags: extras.tags?.slice(0, 3).join(', '),
+    publisher: extras.publisher,
+    comprehension:
+      extras.comprehension === undefined ? '' : `${Math.round(extras.comprehension * 100)}%`,
+    charsSession: extras.sessionChars ? number(extras.sessionChars) : '',
+    timeSession: times.session ? formatDuration((times.now - times.session) / 1000) : '',
+    linesRead: activity.lines ? number(activity.lines) : '',
+    cardsMinedToday: extras.cardsMinedToday === undefined ? '' : number(extras.cardsMinedToday),
+    newWordsToday: extras.newWordsToday === undefined ? '' : number(extras.newWordsToday),
+    linesToday: extras.linesToday === undefined ? '' : number(extras.linesToday),
+    profileUrl: extras.profileUrl
   };
 
   return { values, times: { ...times, bookLeft, chapterLeft } };
@@ -208,10 +247,30 @@ const templateVariables = (template: DiscordActivityTemplate) =>
 // Lookups shared by every update, each made only when a template needs it.
 let statsCache: { at: number; value: Promise<ReadingStats | undefined> } | undefined;
 let wordsCache: { at: number; value: Promise<number | undefined> } | undefined;
-let catalogCache: Promise<Map<string, { id: number; author: string; series: string }>> | undefined;
+let newWordsCache: { at: number; value: Promise<number | undefined> } | undefined;
+interface CatalogEntry {
+  id: number;
+  author: string;
+  series: string;
+  rating?: number | null;
+  tags: string[];
+  publisher: string;
+}
+let catalogCache: Promise<Map<string, CatalogEntry>> | undefined;
 /** The 1-10 level by catalog id */
 let difficultyCache: Promise<Record<string, number | undefined>> | undefined;
-let coverCache: { saves: number; value: Promise<Record<string, { cover: string }>> } | undefined;
+let metadataCache:
+  | {
+      saves: number;
+      value: Promise<import('$lib/data/library/book-metadata').BookMetadataMap>;
+    }
+  | undefined;
+/** knownCoverage$ loaded for {comprehension} (Calibre books) */
+let coverageLoad: { at: number; value: Promise<unknown> } | undefined;
+/** Calibre books whose exact coverage was asked for on this page */
+const coverageAsked = new Set<number>();
+/** {comprehension} of books outside the catalog (the standalone's word lists), by title */
+const localShares = new Map<string, { at: number; value: Promise<number | undefined> }>();
 
 async function loadStats(): Promise<ReadingStats | undefined> {
   const [{ database, startDayHoursForTracker$ }, { getDateKey }, { learnerStats }] =
@@ -245,7 +304,14 @@ async function catalogBook(title: string) {
         new Map(
           books.map((book) => [
             book.title,
-            { id: book.id, author: book.authors, series: book.series }
+            {
+              id: book.id,
+              author: book.authors,
+              series: book.series,
+              rating: book.rating,
+              tags: book.tags ?? [],
+              publisher: book.publisher ?? ''
+            }
           ])
         )
     )
@@ -253,7 +319,90 @@ async function catalogBook(title: string) {
   return (await catalogCache).get(title);
 }
 
-async function extrasFor(title: string, used: Set<VariableName>): Promise<ValueExtras> {
+/** The page of a Community work key: anilist:123[/vol] → its AniList page, vndb:v17 → VNDB's */
+export function workPage(work?: string) {
+  const anilist = /^anilist:(\d+)/.exec(work ?? '');
+  const vndb = /^vndb:(v\d+)$/.exec(work ?? '');
+
+  if (anilist) return `https://anilist.co/manga/${anilist[1]}`;
+  return vndb ? `https://vndb.org/${vndb[1]}` : undefined;
+}
+
+/** The site's https address (no trailing slash), '' when it isn't served over https */
+async function siteUrl() {
+  const { basePath, pagePath } = await import('$lib/data/env');
+  const site = `${basePath || window.location.origin}${pagePath}`.replace(/\/+$/, '');
+
+  return site.startsWith('https://') ? site : '';
+}
+
+async function localShare(title: string) {
+  const [{ localWordList }, { getKnownSet }, { wordCoverage }] = await Promise.all([
+    import('$lib/data/analysis/analysis-tools'),
+    import('$lib/data/words/known-words'),
+    import('$lib/data/words/book-words')
+  ]);
+  const [list, known] = await Promise.all([localWordList(title), getKnownSet()]);
+
+  return list ? wordCoverage(list.words, known.isKnown, list.totals)?.share : undefined;
+}
+
+/** The share of the book's words the reader knows: the library's coverage, else the word list's */
+async function comprehensionFor(title: string, hidden: boolean) {
+  const book = await catalogBook(title);
+
+  if (book) {
+    const words = await import('$lib/data/words/known-words');
+
+    coverageLoad = fresh(coverageLoad, 600_000) ?? {
+      at: Date.now(),
+      value: words.loadCoverageCache().catch(() => undefined)
+    };
+    await coverageLoad.value;
+
+    const share = words.knownCoverage$.getValue()[book.id];
+
+    // Worked out in the background (its word list is fetched): the next update has it.
+    if (share === undefined && !hidden && allowed() && !coverageAsked.has(book.id)) {
+      coverageAsked.add(book.id);
+      words.cacheCoverage([book.id]);
+    }
+    return share;
+  }
+
+  const { standalone } = await import('$lib/data/env');
+
+  if (!standalone) return undefined;
+
+  const cached = fresh(localShares.get(title), 600_000) ?? {
+    at: Date.now(),
+    value: localShare(title).catch(() => undefined)
+  };
+
+  localShares.set(title, cached);
+  return cached.value;
+}
+
+/** Words marked known today (Words page, popup), ignored ones left out */
+async function countNewWords() {
+  const [{ getWordMarks }, { startDayHoursForTracker$ }, { getDateKey }] = await Promise.all([
+    import('$lib/data/words/word-marks'),
+    import('$lib/data/store'),
+    import('$lib/functions/statistic-util')
+  ]);
+  const hours = startDayHoursForTracker$.getValue();
+  const today = getDateKey(hours);
+
+  return Object.values(await getWordMarks()).filter(
+    (mark) => mark.status === 'known' && getDateKey(hours, new Date(mark.modified)) === today
+  ).length;
+}
+
+async function extrasFor(
+  title: string,
+  used: Set<VariableName>,
+  hidden: boolean
+): Promise<ValueExtras> {
   const extras: ValueExtras = {};
   const needs = (...names: VariableName[]) => names.some((name) => used.has(name));
 
@@ -274,12 +423,70 @@ async function extrasFor(title: string, used: Set<VariableName>): Promise<ValueE
     };
     extras.wordsKnown = await wordsCache.value;
   }
-  if (title && needs('author', 'series')) {
+  if (title && needs('author', 'series', 'rating', 'tags', 'publisher')) {
     const book = await catalogBook(title);
     const { guessSeriesName } = await import('$lib/data/library/series-overrides');
 
     extras.author = book?.author;
     extras.series = book?.series || guessSeriesName(title);
+    extras.rating = book?.rating;
+    extras.tags = book?.tags;
+    extras.publisher = book?.publisher;
+  }
+  if (
+    title &&
+    needs('workUrl', 'vndbId', 'anilistId', 'titleRomaji', 'titleEnglish', 'communityUrl')
+  ) {
+    const [metadata, { communityWorks$, communityOn, workFromUrl }] = await Promise.all([
+      metadataFor(title),
+      import('$lib/data/social/community')
+    ]);
+    const work = communityWorks$.getValue()[title];
+
+    extras.workUrl = metadata?.url || workPage(work);
+    if (needs('titleRomaji', 'titleEnglish')) {
+      const saved = metadata?.titleRomaji || metadata?.titleEnglish;
+      // Asked from AniList/VNDB only for a book whose title may leave the browser.
+      const asked =
+        !saved && extras.workUrl && !hidden && allowed()
+          ? (await import('$lib/data/discord/discord-titles')).altTitles(extras.workUrl)
+          : undefined;
+
+      extras.titleRomaji = saved ? metadata?.titleRomaji : asked?.romaji;
+      extras.titleEnglish = saved ? metadata?.titleEnglish : asked?.english;
+    }
+    if (needs('communityUrl') && !hidden && communityOn()) {
+      const key = work ?? (metadata ? workFromUrl(metadata.url, title) : null);
+      const site = key ? await siteUrl() : '';
+
+      if (key && site) extras.communityUrl = `${site}/community?work=${encodeURIComponent(key)}`;
+    }
+  }
+  if (needs('profileUrl') && enabledPlugins$.getValue().includes('social')) {
+    const name = socialSession$.getValue()?.me.username;
+    const site = name ? await siteUrl() : '';
+
+    if (name && site) extras.profileUrl = `${site}/u?name=${encodeURIComponent(name)}`;
+  }
+  if (title && needs('comprehension')) {
+    extras.comprehension = await comprehensionFor(title, hidden);
+  }
+  if (needs('newWordsToday')) {
+    newWordsCache = fresh(newWordsCache, 60_000) ?? {
+      at: Date.now(),
+      value: countNewWords().catch(() => undefined)
+    };
+    extras.newWordsToday = await newWordsCache.value;
+  }
+  if (needs('cardsMinedToday', 'linesToday')) {
+    const [{ minedCards, vnLines }, { startDayHoursForTracker$ }] = await Promise.all([
+      import('$lib/data/stats/day-counters'),
+      import('$lib/data/store')
+    ]);
+    const hours = startDayHoursForTracker$.getValue();
+
+    extras.cardsMinedToday = minedCards.today(hours);
+    extras.linesToday = vnLines.today(hours);
   }
   if (title && needs('difficulty')) {
     difficultyCache ??= Promise.all([
@@ -309,17 +516,20 @@ async function extrasFor(title: string, used: Set<VariableName>): Promise<ValueE
  * on and the book not private; uploaded once when the hub has none), the AniList/VNDB cover this
  * browser matched (discord-covers.ts), else none. Find details are reloaded after any save.
  */
-async function coverFor(title: string, hidden: boolean) {
+async function metadataFor(title: string) {
   const metadata = await import('$lib/data/library/book-metadata');
 
-  if (coverCache?.saves !== metadata.metadataSaves) {
-    coverCache = {
+  if (metadataCache?.saves !== metadata.metadataSaves) {
+    metadataCache = {
       saves: metadata.metadataSaves,
       value: metadata.loadBookMetadata().catch(() => ({}))
     };
   }
+  return (await metadataCache.value)[title];
+}
 
-  const picked = (await coverCache.value)[title]?.cover;
+async function coverFor(title: string, hidden: boolean) {
+  const picked = (await metadataFor(title))?.cover;
   const covers = await import('$lib/data/discord/discord-covers');
   const hub =
     !picked &&
@@ -341,7 +551,7 @@ async function discoverCover(activity: ReadingActivity) {
   if (kind === 'idle' || !title || !canSearch(title)) return;
   const series = (await catalogBook(title))?.series;
 
-  if (allowed()) findCover(title, kind, series);
+  if (allowed()) findCover(title, kind === 'listen' ? 'book' : kind, series);
 }
 
 const isPrivate = async (activity: ReadingActivity) => {
@@ -364,11 +574,15 @@ export async function renderActivity(
   const title = activity.title ?? '';
   const hidden = await isPrivate(activity);
   const [extras, cover] = await Promise.all([
-    extrasFor(title, templateVariables(template)),
+    extrasFor(title, templateVariables(template), hidden),
     template.largeImage === 'cover' && title && activity.kind !== 'idle'
       ? coverFor(title, hidden)
       : undefined
   ]);
+  const start = title && activity.kind !== 'manga' ? sessionPositions.get(title) : undefined;
+
+  if (start !== undefined) extras.sessionChars = Math.max(0, (activity.position ?? 0) - start);
+
   const filled = readingValues(activity, extras, times);
 
   // Only while sending is allowed, and never for a private book: the title would leave the browser.
@@ -380,7 +594,12 @@ export async function renderActivity(
     template,
     blocked: !hidden && activityProblems(template, filled.values).length > 0,
     activity: template.show
-      ? buildActivity(template, filled.values, { times: filled.times, cover, private: hidden })
+      ? buildActivity(template, filled.values, {
+          times: filled.times,
+          cover,
+          private: hidden,
+          kind: activity.kind
+        })
       : undefined
   };
 }
@@ -461,9 +680,12 @@ let leaveTimer: ReturnType<typeof setTimeout> | undefined;
 let awayTimer: ReturnType<typeof setTimeout> | undefined;
 let away = false;
 let sessionStart = 0;
+/** Each title's position at its first move this session ({charsSession}) */
+const sessionPositions = new Map<string, number>();
 let renderRun = 0;
 const openedAt = new Map<string, number>();
 let lastActivity: DiscordActivity | undefined;
+let listening = false;
 /** Which tab sent last: only that one re-sends, or two open tabs would swap the status. */
 const senderId = String(Math.random());
 /** The add-on clears a status after 15 minutes without a PUT (a crashed browser sends no DELETE). */
@@ -520,7 +742,12 @@ async function update() {
   if (!allowed() || !current) return;
 
   const run = ++renderRun;
-  const shown = away && discordOptions().awayIdle ? { kind: 'idle' as const } : current;
+  // With the Listening activity's Show off, the book activity shows.
+  const base =
+    listening && current.kind === 'book' && activityTemplate('listen').show
+      ? { ...current, kind: 'listen' as const }
+      : current;
+  const shown = away && discordOptions().awayIdle ? { kind: 'idle' as const } : base;
 
   if (away && !discordOptions().awayIdle) {
     clear();
@@ -548,6 +775,7 @@ const moved = (before: ReadingActivity | undefined, after: ReadingActivity) =>
 function goAway() {
   away = true;
   sessionStart = 0;
+  sessionPositions.clear();
   update();
 }
 
@@ -571,11 +799,14 @@ export function discordActivity(activity: ReadingActivity | undefined) {
     away = false;
     relayPageTurn();
     sessionStart ||= now;
+    if (activity.title && !sessionPositions.has(activity.title)) {
+      sessionPositions.set(activity.title, activity.position ?? 0);
+    }
     if (activity.title && !openedAt.has(activity.title)) openedAt.set(activity.title, now);
     clearTimeout(awayTimer);
     awayTimer = setTimeout(goAway, Math.max(1, discordOptions().awayMinutes) * 60_000);
   }
-  if (activity.playing) {
+  if (activity.playing || listening) {
     away = false;
     sessionStart ||= Date.now();
     clearTimeout(awayTimer);
@@ -600,11 +831,15 @@ export function resetSender() {
   current = pending = undefined;
   lastKey = '';
   lastAt = 0;
-  sent = away = false;
+  sent = away = listening = false;
   sessionStart = 0;
   openedAt.clear();
-  statsCache = wordsCache = undefined;
-  catalogCache = difficultyCache = coverCache = undefined;
+  sessionPositions.clear();
+  coverageAsked.clear();
+  localShares.clear();
+  statsCache = wordsCache = newWordsCache = coverageLoad = undefined;
+  catalogCache = difficultyCache = metadataCache = undefined;
+  import('$lib/data/discord/discord-titles').then(({ resetAltTitles }) => resetAltTitles());
   resetHubCovers();
   discordValues$.next(null);
   resetRelay();
@@ -620,6 +855,21 @@ if (typeof window !== 'undefined') {
     }
   );
   window.addEventListener('pagehide', () => clear(true));
+  // Audiobookshelf playing is Listening: no Away while it plays.
+  nowPlaying$.subscribe((playing) => {
+    const next = !!playing?.playing && playing.source === 'audiobookshelf';
+
+    if (next === listening) return;
+    listening = next;
+    clearTimeout(awayTimer);
+    if (listening) {
+      away = false;
+      sessionStart ||= Date.now();
+    } else if (current && current.kind !== 'idle') {
+      awayTimer = setTimeout(goAway, Math.max(1, discordOptions().awayMinutes) * 60_000);
+    }
+    update();
+  });
   setInterval(() => {
     if (
       sent &&

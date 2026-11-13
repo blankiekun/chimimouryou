@@ -38,6 +38,9 @@ export interface BookMetadata {
   released: string;
   /** 0-100 */
   score: number | null;
+  /** The source's romaji and English titles (Discord's {titleRomaji}, {titleEnglish}) */
+  titleRomaji?: string;
+  titleEnglish?: string;
   modified: number;
 }
 
@@ -94,6 +97,8 @@ export function parseBookMetadata(data: unknown): BookMetadataMap {
         : [],
       released: text(entry.released, 10),
       score: typeof entry.score === 'number' ? entry.score : null,
+      ...(text(entry.titleRomaji, 300) && { titleRomaji: text(entry.titleRomaji, 300) }),
+      ...(text(entry.titleEnglish, 300) && { titleEnglish: text(entry.titleEnglish, 300) }),
       modified: entry.modified
     };
   });
@@ -291,6 +296,8 @@ async function searchAniList(query: string, kind: 'book' | 'manga'): Promise<Met
     source: 'anilist',
     url: media.siteUrl,
     title: media.title?.native || media.title?.romaji || '',
+    titleRomaji: media.title?.romaji || '',
+    titleEnglish: media.title?.english || '',
     names: [
       media.title?.native,
       media.title?.romaji,
@@ -308,11 +315,24 @@ async function searchAniList(query: string, kind: 'book' | 'manga'): Promise<Met
   }));
 }
 
+/** A VNDB entry's romaji title (its main title's latin) and English title (official first) */
+export function vndbAltTitles(vn: any) {
+  const titles: any[] = vn.titles ?? [];
+  const english =
+    titles.find((entry) => entry.lang === 'en' && entry.official) ??
+    titles.find((entry) => entry.lang === 'en');
+
+  return {
+    titleRomaji: (vn.alttitle ? vn.title : titles.find((entry) => entry.main)?.latin) || '',
+    titleEnglish: english?.title || ''
+  };
+}
+
 async function searchVndb(query: string): Promise<MetadataCandidate[]> {
   const { results } = await postJson('https://api.vndb.org/kana/vn', {
     filters: ['search', '=', query],
     fields:
-      'title,alttitle,titles.title,aliases,description,image.url,released,rating,tags.name,tags.rating,tags.spoiler',
+      'title,alttitle,titles.title,titles.lang,titles.latin,titles.official,titles.main,aliases,description,image.url,released,rating,tags.name,tags.rating,tags.spoiler',
     sort: 'searchrank',
     results: 8
   });
@@ -321,6 +341,7 @@ async function searchVndb(query: string): Promise<MetadataCandidate[]> {
     source: 'vndb',
     url: `https://vndb.org/${vn.id}`,
     title: vn.alttitle || vn.title || '',
+    ...vndbAltTitles(vn),
     names: [
       vn.title,
       vn.alttitle,
@@ -371,6 +392,8 @@ export function parseJitenDecks(data: any, kind: MetadataKind): MetadataCandidat
       source: 'jiten',
       url: `https://jiten.moe/decks/media/${deck.deckId}/detail`,
       title: deck.originalTitle || deck.romajiTitle || deck.englishTitle || '',
+      titleRomaji: deck.romajiTitle || '',
+      titleEnglish: deck.englishTitle || '',
       description: cleanDescription(deck.description || ''),
       cover: deck.coverName || '',
       genres: [

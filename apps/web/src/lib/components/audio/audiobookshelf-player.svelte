@@ -113,7 +113,8 @@
           rates: ratePresets,
           toggle: () => controller.toggle(),
           step: (offset) => controller.line(offset),
-          setRate: (rate) => controller.setRate(rate)
+          setRate: (rate) => controller.setRate(rate),
+          source: 'audiobookshelf'
         }
       : undefined
   );

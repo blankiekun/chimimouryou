@@ -48,7 +48,7 @@ const REFRESH_LEFT = 2 * MINUTE;
 /** Expired rows keep only their times for this long, so `next` can slow an idle add-on down */
 const IDLE_KEPT = HOUR;
 const ACTIVITY_BYTES = 4096;
-const KINDS = ['book', 'manga', 'vn', 'idle'];
+const KINDS = ['book', 'manga', 'vn', 'listen', 'idle'];
 const ASSET_KEY = /^[A-Za-z0-9_-]{1,256}$/;
 const MAX_TIMESTAMP = 2 ** 53;
 
@@ -123,6 +123,7 @@ export function cleanActivity(raw: unknown) {
     if (value !== undefined) target[key] = value;
   };
 
+  if (input.type === 2) out.type = 2; // Listening; anything else is Playing
   ['name', 'details', 'state'].forEach((key) => put(out, key, clampText(input[key])));
   ['details_url', 'state_url'].forEach((key) => put(out, key, clampUrl(input[key])));
 

@@ -42,6 +42,7 @@
     book: 'discord.kind.book',
     manga: 'discord.kind.manga',
     vn: 'discord.kind.vn',
+    listen: 'discord.kind.listen',
     idle: 'discord.kind.idle'
   };
   const presetLabels: Record<DiscordPreset, MessageKey> = {
@@ -57,6 +58,8 @@
   const smallOptions: { id: SmallImage; label: MessageKey }[] = [
     { id: 'none', label: 'discord.image.none' },
     { id: 'logo', label: 'discord.image.logo' },
+    { id: 'ring', label: 'discord.image.ring' },
+    { id: 'kind', label: 'discord.image.kind' },
     { id: 'custom', label: 'discord.image.custom' }
   ];
   const timestampOptions: { id: TimestampMode; label: MessageKey }[] = [
@@ -90,7 +93,8 @@
             bookLeft: 34_800
           },
           cover: live?.cover,
-          private: reading && hideTitles
+          private: reading && hideTitles,
+          kind
         })
       : undefined
   );
@@ -129,6 +133,7 @@
       <h2>{$t$(kindLabels[kind])}</h2>
       <!-- Only Idle needs saying: book variables stay empty there. -->
       {#if kind === 'idle'}<p>{$t$('discord.kindHint.idle')}</p>{/if}
+      {#if kind === 'listen'}<p>{$t$('discord.kindHint.listen')}</p>{/if}
       <p class="editor-phone">{$t$('discord.phoneNote')}</p>
     </div>
     <Switch checked={template.show} onchange={(next) => (template.show = next)}
@@ -266,7 +271,7 @@
         <div class="editor-field">
           <span class="editor-label">{$t$('discord.smallImage')}</span>
           <div class="app-segmented" role="radiogroup" aria-label={$t$('discord.smallImage')}>
-            {#each smallOptions as option (option.id)}
+            {#each smallOptions.filter((option) => reading || (option.id !== 'ring' && option.id !== 'kind')) as option (option.id)}
               <button
                 type="button"
                 role="radio"
@@ -279,7 +284,9 @@
               </button>
             {/each}
           </div>
-          {#if template.smallImage === 'custom'}
+          {#if template.smallImage === 'ring'}
+            <p class="editor-hint">{$t$('discord.ringHint')}</p>
+          {:else if template.smallImage === 'custom'}
             <input
               class="app-input editor-input"
               placeholder={$t$('discord.customImage')}

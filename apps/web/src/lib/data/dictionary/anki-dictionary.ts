@@ -34,6 +34,7 @@ import type {
   ProfileOptions
 } from '$lib/vendor/yomitan/types/settings';
 import { record } from '$lib/data/setting-parsers';
+import { minedCards } from '$lib/data/stats/day-counters';
 
 /** Yomitan's `anki` options as this app keeps them: all but `enable` and the per-browser `server` and `apiKey`. */
 export type DictionaryAnki = Omit<AnkiOptions, 'enable' | 'server' | 'apiKey'>;
@@ -583,6 +584,10 @@ export async function addAnkiNote(
     note: { ...note, ...wordAudio(entry, format) }
   });
   if (noteId === null) throw new Error('Note could not be added');
+  // {cardsMinedToday}; the store is loaded lazily (it opens IndexedDB).
+  import('$lib/data/store')
+    .then(({ startDayHoursForTracker$ }) => minedCards.add(startDayHoursForTracker$.getValue()))
+    .catch(() => undefined);
   const errors: string[] = [];
   if (settings.suspendNewCards) {
     try {

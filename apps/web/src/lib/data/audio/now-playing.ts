@@ -24,6 +24,8 @@ export interface NowPlaying {
   /** Previous (-1) or next (1) line */
   step(offset: number): void;
   setRate(rate: number): void;
+  /** Which player: only Audiobookshelf counts as Listening on Discord */
+  source?: 'audiobookshelf';
 }
 
 export const nowPlaying$ = new BehaviorSubject<NowPlaying | undefined>(undefined);

@@ -1771,6 +1771,10 @@ export const ja: Record<MessageKey, string> = {
   'discord.kind.idle': 'ライブラリ（待機中）',
   'discord.kindHint.idle':
     'ライブラリで、また離席時に待機ステータスを出す設定なら離席中に表示。本の {variables} は空のままです。',
+  'discord.kind.listen': '聴いている（Audiobookshelf）',
+  'discord.kindHint.listen':
+    'リーダーで Audiobookshelf を再生中に表示。表示をオフにすると本のアクティビティが出ます。',
+  'discord.listeningTo': '{name} を聴いています',
   'discord.preset.minimal': '最小',
   'discord.preset.progress': '進み具合',
   'discord.preset.everything': 'すべて',
@@ -1778,6 +1782,9 @@ export const ja: Record<MessageKey, string> = {
   'discord.image.cover': '表紙',
   'discord.image.custom': 'カスタム',
   'discord.image.none': 'なし',
+  'discord.image.ring': '進捗リング',
+  'discord.image.kind': '種類アイコン',
+  'discord.ringHint': '{percent} に合わせて5%ずつ埋まります。',
   'discord.time.none': 'なし',
   'discord.time.session': 'このセッションの経過時間',
   'discord.time.opened': '本を開いてからの経過時間',
@@ -2292,6 +2299,7 @@ export const ja: Record<MessageKey, string> = {
   'community.downNote': '本・メモ・進み具合には影響しません。',
   'community.empty': 'この本にはまだ投稿がありません。',
   'community.emptyHint': '行を選んで「コミュニティに投稿」で始められます。',
+  'community.workFeed': 'この作品の投稿',
   'community.feedEmpty': 'まだ投稿がありません。',
   'community.howToPost': '投稿するには、本で行を選んで「コミュニティに投稿」を選びます。',
   'community.order': '並び順',

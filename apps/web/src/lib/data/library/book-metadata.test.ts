@@ -13,6 +13,7 @@ import {
   jitenCharacters,
   jitenVnCharacters,
   parseBookMetadata,
+  vndbAltTitles,
   parseJitenDecks,
   saveBookMetadata
 } from './book-metadata';
@@ -91,6 +92,7 @@ describe('parseJitenDecks', () => {
     mediaType: 7,
     parentDeckId: null,
     originalTitle: 'Fate/stay night',
+    romajiTitle: 'Fate/stay night',
     description: 'Text',
     coverName: 'https://cdn.jiten.moe/233/cover.jpg',
     genres: [1, 99],
@@ -117,9 +119,35 @@ describe('parseJitenDecks', () => {
       cover: deck.coverName,
       genres: ['Action', 'Magic'],
       released: '2004-01-30',
-      score: 85
+      score: 85,
+      titleRomaji: 'Fate/stay night',
+      titleEnglish: ''
     });
-    expect(parseBookMetadata({ a: { ...candidate, modified: 1 } }).a.cover).toBe(deck.coverName);
+    const saved = parseBookMetadata({ a: { ...candidate, modified: 1 } }).a;
+
+    expect(saved.cover).toBe(deck.coverName);
+    expect(saved.titleRomaji).toBe('Fate/stay night');
+    expect(saved).not.toHaveProperty('titleEnglish');
+  });
+});
+
+describe('vndbAltTitles', () => {
+  it('takes the romanized title and the official English one', () => {
+    const titles = [
+      { lang: 'ja', title: 'ひぐらしのなく頃に', latin: 'Higurashi no Naku Koro ni', main: true },
+      { lang: 'en', title: 'Fan title', official: false },
+      { lang: 'en', title: 'Higurashi When They Cry', official: true }
+    ];
+
+    expect(
+      vndbAltTitles({ title: 'Higurashi no Naku Koro ni', alttitle: 'ひぐらしのなく頃に', titles })
+    ).toEqual({
+      titleRomaji: 'Higurashi no Naku Koro ni',
+      titleEnglish: 'Higurashi When They Cry'
+    });
+    expect(
+      vndbAltTitles({ title: 'X', titles: [{ lang: 'ja', main: true, latin: 'Ekkusu' }] })
+    ).toEqual({ titleRomaji: 'Ekkusu', titleEnglish: '' });
   });
 });
 

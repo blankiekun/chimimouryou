@@ -45,7 +45,7 @@ export const discordActivities$ = writableObjectLocalStorageSubject<
   Partial<Record<DiscordKind, Partial<DiscordActivityTemplate>>>
 >()('discordActivities', {}, record);
 
-export const discordKinds: DiscordKind[] = ['book', 'manga', 'vn', 'idle'];
+export const discordKinds: DiscordKind[] = ['book', 'manga', 'vn', 'listen', 'idle'];
 
 export type DiscordPreset = 'minimal' | 'progress' | 'everything';
 
@@ -145,6 +145,30 @@ const presets: Record<DiscordKind, Record<DiscordPreset, PresetFields>> = {
       smallText: '{timeLeftBook} left'
     }
   },
+  listen: {
+    minimal: { name: 'an audiobook', details: '{title}' },
+    progress: {
+      name: '{title}',
+      details: '{chapter}',
+      state: '{percent} · {timeToday} today',
+      largeImage: 'cover',
+      largeText: '{title}',
+      smallImage: 'logo',
+      smallText: 'chimimouryou'
+    },
+    everything: {
+      name: '{title}',
+      details: '{title} {volume} · {author}',
+      state: '{chapter} · {percent} · {streak} streak',
+      largeImage: 'cover',
+      largeText: '{series}',
+      smallImage: 'logo',
+      smallText: '{percent} listened',
+      party: true,
+      partyCurrent: 'chapterNumber',
+      partyMax: 'chapterCount'
+    }
+  },
   idle: {
     minimal: { name: 'Choosing what to read next', timestamp: 'none' },
     progress: {
@@ -172,7 +196,12 @@ export function presetFields(kind: DiscordKind, preset: DiscordPreset): PresetFi
 
 /** The activity's default: the Progress preset, shown except In the library */
 export function defaultTemplate(kind: DiscordKind): DiscordActivityTemplate {
-  return { ...base, ...presetFields(kind, 'progress'), show: kind !== 'idle' };
+  return {
+    ...base,
+    ...presetFields(kind, 'progress'),
+    show: kind !== 'idle',
+    privacyText: kind === 'listen' ? 'an audiobook' : base.privacyText
+  };
 }
 
 export function activityTemplate(
