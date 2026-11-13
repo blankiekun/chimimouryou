@@ -8,7 +8,7 @@ import 'fake-indexeddb/auto';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
 import { discordActivities$, discordOptions$ } from './discord-settings';
-import { discordActivity, formatDuration, readingValues, resetSender } from './discord';
+import { discordActivity, formatDuration, readingValues, resetSender, workPage } from './discord';
 import { socialSession$ } from '../social/social-account';
 import { fakeApi } from '../test-utils/fake-api';
 
@@ -478,6 +478,47 @@ describe('readingValues', () => {
     );
 
     expect(values).toMatchObject({ page: '48', pageCount: '200', percent: '24%', charsRead: '' });
+  });
+
+  it('fills in work links, Calibre fields, the session and the day counts', () => {
+    const { values } = readingValues(
+      { kind: 'vn', title: 'V', position: 900, lines: 1234 },
+      {
+        workUrl: 'https://vndb.org/v17',
+        rating: 3.8,
+        tags: ['a', 'b', 'c', 'd'],
+        comprehension: 0.936,
+        sessionChars: 6120,
+        cardsMinedToday: 0,
+        linesToday: 320
+      },
+      { now: 3_900_000, session: 1_000 }
+    );
+
+    expect(values).toMatchObject({
+      workUrl: 'https://vndb.org/v17',
+      vndbId: 'v17',
+      anilistId: undefined,
+      rating: '4/5',
+      tags: 'a, b, c',
+      comprehension: '94%',
+      charsSession: '6,120',
+      timeSession: '1 h 5 min',
+      linesRead: '1,234',
+      cardsMinedToday: '0',
+      linesToday: '320',
+      newWordsToday: ''
+    });
+    expect(
+      readingValues(
+        { kind: 'book' },
+        { workUrl: 'https://anilist.co/manga/30104', rating: 0 },
+        { now: 0 }
+      ).values
+    ).toMatchObject({ anilistId: '30104', rating: '', timeSession: '' });
+    expect(workPage('anilist:123/2')).toBe('https://anilist.co/manga/123');
+    expect(workPage('vndb:v17')).toBe('https://vndb.org/v17');
+    expect(workPage('title:abc')).toBeUndefined();
   });
 
   it('formats durations', () => {

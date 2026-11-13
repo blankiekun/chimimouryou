@@ -23,8 +23,36 @@ export const discordLimits = {
 /** The Discord app's art asset key for the app logo (App logo, and the fallback for covers) */
 export const logoKey = 'applogo';
 
+/** Progress ring art key for a {percent} value: 5% steps, rounded down (ring-0…ring-100) */
+export function ringKey(percent?: string) {
+  const p = parseFloat(percent?.replace(/[^\d.]/g, '') ?? '');
+
+  return Number.isNaN(p) ? undefined : `ring-${Math.min(100, Math.max(0, Math.floor(p / 5) * 5))}`;
+}
+/** Kind icon art key (kind-book, kind-manga, kind-vn, kind-listen); none for the library */
+export const kindKey = (kind?: DiscordKind) =>
+  kind && kind !== 'idle' ? `kind-${kind}` : undefined;
+
 export const variableGroups = {
-  book: ['title', 'author', 'series', 'volume', 'chapter', 'kind', 'difficulty'],
+  book: [
+    'title',
+    'author',
+    'series',
+    'volume',
+    'chapter',
+    'kind',
+    'difficulty',
+    'workUrl',
+    'vndbId',
+    'anilistId',
+    'titleRomaji',
+    'titleEnglish',
+    'communityUrl',
+    'rating',
+    'tags',
+    'publisher',
+    'comprehension'
+  ],
   progress: [
     'chapterNumber',
     'chapterCount',
@@ -33,10 +61,13 @@ export const variableGroups = {
     'pageCount',
     'charsRead',
     'timeLeftBook',
-    'timeLeftChapter'
+    'timeLeftChapter',
+    'charsSession',
+    'timeSession',
+    'linesRead'
   ],
-  today: ['charsToday', 'timeToday', 'speed'],
-  you: ['wordsKnown', 'streak']
+  today: ['charsToday', 'timeToday', 'speed', 'cardsMinedToday', 'newWordsToday', 'linesToday'],
+  you: ['wordsKnown', 'streak', 'profileUrl']
 } as const;
 
 export type VariableGroup = keyof typeof variableGroups;
@@ -53,11 +84,9 @@ export const partyVariables: VariableName[] = [
   'pageCount'
 ];
 
-export type DiscordKind = 'book' | 'manga' | 'vn' | 'idle';
+export type DiscordKind = 'book' | 'manga' | 'vn' | 'listen' | 'idle';
 export type LargeImage = 'logo' | 'cover' | 'custom';
-// shortcut: no "Progress ring": the add-on can only send image keys or https URLs and the
-// Discord app has no ring images; add ring assets (e.g. ring-0…ring-100) to offer it.
-export type SmallImage = 'none' | 'logo' | 'custom';
+export type SmallImage = 'none' | 'logo' | 'ring' | 'kind' | 'custom';
 export type TimestampMode = 'none' | 'session' | 'opened' | 'chapterLeft' | 'bookLeft';
 
 export interface DiscordButton {
@@ -92,6 +121,8 @@ export interface DiscordActivityTemplate {
 
 /** The activity the add-on takes (SPEC.md) */
 export interface DiscordActivity {
+  /** 2: Listening (Discord shows "Listening to {name}"); left out for Playing */
+  type?: 2;
   name?: string;
   details?: string;
   details_url?: string;
@@ -180,6 +211,28 @@ export function renderTemplate(template: string, values: DiscordValues) {
   return halfWidth(filled);
 }
 
+/** Variables that hold a whole https link: put into link fields as they are */
+export const linkVariables: VariableName[] = ['workUrl', 'communityUrl', 'profileUrl'];
+
+/**
+ * A link field filled in: link variables as they are, others URL-encoded, nothing tidied. '' when
+ * a variable it uses is empty, so the link is left out rather than blocking the status. Unknown
+ * {names} stay as typed (`unknownVariables` reports them).
+ */
+export function renderLink(template: string, values: DiscordValues) {
+  let missing = false;
+  const filled = template.trim().replace(variablePattern, (match, name: string) => {
+    if (!isVariable(name)) return match;
+
+    const value = values[name]?.trim() ?? '';
+
+    missing ||= !value;
+    return linkVariables.includes(name) ? value : encodeURIComponent(value);
+  });
+
+  return missing ? '' : filled;
+}
+
 export const isHttps = (url: string) => /^https:\/\/[^\s/?#]+\.[^\s]*$/i.test(url);
 const isImageKey = (value: string) => /^[\w-]{1,64}$/.test(value);
 
@@ -200,7 +253,7 @@ export function checkField(
   { link = false, max }: { link?: boolean; max?: number } = {}
 ): FieldCheck {
   max ??= link ? discordLimits.url : discordLimits.text;
-  const text = renderTemplate(template, values);
+  const text = link ? renderLink(template, values) : renderTemplate(template, values);
 
   return {
     unknown: unknownVariables(template),
@@ -250,13 +303,14 @@ function text(template: string, values: DiscordValues, max = discordLimits.text)
 }
 
 function linkText(template: string, values: DiscordValues, max = discordLimits.url) {
-  const filled = renderTemplate(template, values);
+  const filled = renderLink(template, values);
 
   return isHttps(filled) && length(filled) <= max ? filled : undefined;
 }
 
-function image(choice: string, custom: string, cover?: string) {
+function image(choice: string, custom: string, cover?: string, small?: string) {
   if (choice === 'logo') return logoKey;
+  if (choice === 'ring' || choice === 'kind') return small;
   if (choice === 'cover') return cover && isHttps(cover) ? cover : logoKey;
   if (choice === 'custom') {
     const value = custom.trim();
@@ -294,6 +348,8 @@ export interface BuildOptions {
   cover?: string;
   /** Hidden from friends, or Hide titles everywhere: only the privacy text and the logo */
   private?: boolean;
+  /** The activity's kind: the Kind icon, and Listening (type 2) */
+  kind?: DiscordKind;
 }
 
 /** The finished activity, cut to Discord's limits; undefined when nothing is left to show. */
@@ -306,6 +362,7 @@ export function buildActivity(
 
   if (options.private) {
     return {
+      ...(options.kind === 'listen' ? { type: 2 as const } : {}),
       name: text(template.privacyText, {}) ?? 'Reading',
       assets: { large_image: logoKey },
       ...(time ? { timestamps: time } : {})
@@ -313,7 +370,12 @@ export function buildActivity(
   }
 
   const largeImage = image(template.largeImage, template.largeCustom, options.cover);
-  const smallImage = image(template.smallImage, template.smallCustom);
+  const smallImage = image(
+    template.smallImage,
+    template.smallCustom,
+    undefined,
+    template.smallImage === 'ring' ? ringKey(values.percent) : kindKey(options.kind)
+  );
   const current = count(values[template.partyCurrent]);
   const max = count(values[template.partyMax]);
   const buttons = template.buttons
@@ -348,6 +410,7 @@ export function buildActivity(
   if (!activity?.name && !activity?.details && !activity?.state) return undefined;
   if (!activity.details) delete activity.details_url;
   if (!activity.state) delete activity.state_url;
+  if (options.kind === 'listen') activity.type = 2;
   return activity;
 }
 

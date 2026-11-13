@@ -1767,6 +1767,10 @@ export const en = {
   'discord.kind.idle': 'In the library (idle)',
   'discord.kindHint.idle':
     'Shown in the library, and when away if Away shows the Idle status. Book {variables} stay empty.',
+  'discord.kind.listen': 'Listening (Audiobookshelf)',
+  'discord.kindHint.listen':
+    'Shown while Audiobookshelf plays in the reader. With Show off, the book activity shows instead.',
+  'discord.listeningTo': 'Listening to {name}',
   'discord.preset.minimal': 'Minimal',
   'discord.preset.progress': 'Progress',
   'discord.preset.everything': 'Everything',
@@ -1774,6 +1778,9 @@ export const en = {
   'discord.image.cover': 'Book cover',
   'discord.image.custom': 'Custom',
   'discord.image.none': 'None',
+  'discord.image.ring': 'Progress ring',
+  'discord.image.kind': 'Kind icon',
+  'discord.ringHint': 'Fills in 5% steps with {percent}.',
   'discord.time.none': 'None',
   'discord.time.session': 'Elapsed this session',
   'discord.time.opened': 'Elapsed since the book was opened',
@@ -2285,6 +2292,7 @@ export const en = {
   'community.downNote': 'Your book, notes and progress are not affected.',
   'community.empty': 'No posts on this book yet.',
   'community.emptyHint': 'Select a line and choose Post to community to start one.',
+  'community.workFeed': 'Posts on this work',
   'community.feedEmpty': 'No posts yet.',
   'community.howToPost': 'To post, select a line in a book and choose Post to community.',
   'community.order': 'Order',

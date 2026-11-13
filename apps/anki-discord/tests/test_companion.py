@@ -155,6 +155,10 @@ class CleanTest(unittest.TestCase):
                               "timestamps": {"start": True, "end": -1}})
         self.assertEqual(out, {"type": 0, "name": "ok"})
 
+    def test_type_is_playing_or_listening(self):
+        for raw, expected in ((2, 2), (0, 0), (3, 0), (True, 0), ("2", 0), (None, 0)):
+            self.assertEqual(activity.clean({"name": "ok", "type": raw})["type"], expected)
+
 
 class FakeConn:
     def __init__(self, sent):

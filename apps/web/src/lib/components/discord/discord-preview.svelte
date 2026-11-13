@@ -1,5 +1,6 @@
 <script lang="ts">
   import AppHeaderLogo from '$lib/components/app-header/app-header-logo.svelte';
+  import { artSvg } from '$lib/data/discord/discord-art';
   import { activityClock, type DiscordActivity } from '$lib/data/discord/discord-template';
   import { t$ } from '$lib/i18n';
 
@@ -75,7 +76,11 @@
         <span class="member-avatar" aria-hidden="true">{userName.slice(0, 1).toUpperCase()}</span>
         <div class="member-text">
           <span class="member-name">{userName}</span>
-          {#if activity.name}<span class="member-activity">{activity.name}</span>{/if}
+          {#if activity.name}<span class="member-activity"
+              >{activity.type === 2
+                ? $t$('discord.listeningTo', { name: activity.name })
+                : activity.name}</span
+            >{/if}
         </div>
       </div>
       <p class="preview-label">{$t$('discord.profileAndActivity')}</p>
@@ -88,16 +93,24 @@
             <div class="card-images">
               {#if isUrl(large) && !coverFailed}
                 <img class="card-large" src={large} alt="" onerror={() => (coverFailed = true)} />
+              {:else if artSvg(large)}
+                <span class="card-large card-logo">{@html artSvg(large)}</span>
               {:else}
                 <span class="card-large card-logo"><AppHeaderLogo /></span>
               {/if}
               {#if small}
-                <span class="card-small card-logo"><AppHeaderLogo /></span>
+                <span class="card-small card-logo">
+                  {#if artSvg(small)}{@html artSvg(small)}{:else}<AppHeaderLogo />{/if}
+                </span>
               {/if}
             </div>
           {/if}
           <div class="card-text">
-            {#if activity.name}<p class="card-title">{activity.name}</p>{/if}
+            {#if activity.name}<p class="card-title">
+                {activity.type === 2
+                  ? $t$('discord.listeningTo', { name: activity.name })
+                  : activity.name}
+              </p>{/if}
             {#if activity.details}
               <p class="card-line" class:card-link={!!activity.details_url}>{activity.details}</p>
             {/if}

@@ -11,6 +11,7 @@ import {
   buildActivity,
   checkField,
   clampText,
+  renderLink,
   renderTemplate,
   halfWidth,
   suggestVariable,
@@ -151,7 +152,7 @@ describe('buildActivity', () => {
     expect(activity?.party).toBeUndefined();
     expect(activity?.timestamps).toEqual({ end: 1_060_000 });
     expect(activity?.buttons).toEqual([
-      { label: 'One', url: 'https://a.example/薬屋のひとりごと' },
+      { label: 'One', url: `https://a.example/${encodeURIComponent('薬屋のひとりごと')}` },
       { label: 'Three', url: 'https://c.example' }
     ]);
   });
@@ -176,5 +177,34 @@ describe('buildActivity', () => {
 
     expect(activityKey(a)).toBe(activityKey(b));
     expect(activityKey(undefined)).toBe('');
+  });
+});
+
+describe('renderLink', () => {
+  it('puts link variables in as they are and encodes the others', () => {
+    expect(renderLink(' {workUrl} ', { workUrl: 'https://vndb.org/v17' })).toBe(
+      'https://vndb.org/v17'
+    );
+    expect(renderLink('https://jisho.org/search/{title}', { title: 'a b/c' })).toBe(
+      'https://jisho.org/search/a%20b%2Fc'
+    );
+  });
+
+  it('drops the link when a variable is empty, and flags non-https output', () => {
+    expect(renderLink('https://x.example/{title}', {})).toBe('');
+    expect(checkField('{workUrl}', {}, { link: true }).badLink).toBe(false);
+    expect(checkField('{workUrl}', { workUrl: 'http://x.example' }, { link: true }).badLink).toBe(
+      true
+    );
+  });
+
+  it('keeps a link variable as details_url', () => {
+    expect(
+      buildActivity(
+        { ...template, detailsUrl: '{workUrl}' },
+        { ...values, workUrl: 'https://anilist.co/manga/1' },
+        { times }
+      )?.details_url
+    ).toBe('https://anilist.co/manga/1');
   });
 });

@@ -22,7 +22,6 @@
   import { removePost } from '$lib/data/social/social-moderation';
   import { t$, uiLanguage$ } from '$lib/i18n';
   import { activePlugins$ } from '$lib/plugins';
-  import { onMount } from 'svelte';
 
   /**
    * Community (header tab, boards 9, 10, D9): lines readers are sharing, newest first, each with
@@ -30,7 +29,8 @@
    * from here); a spoiler-marked post's line and text stay blurred until the reader taps Show
    * spoiler, its work's cover, title and volume shown. Signed in, a post box on top makes plain
    * posts (no book line: shown with the poster only). `?work=&line=` shows that line's thread (deep
-   * links), `&post=` that feed post's discussion (the feed, Home's replies). The side column
+   * links), `&post=` that feed post's discussion (the feed, Home's replies), `?work=` alone that
+   * work's posts (the Discord status's {communityUrl}). The side column
    * holds new replies and, signed in, the friends part (home-social.svelte).
    */
 
@@ -73,12 +73,25 @@
   $: line = browser ? ($page.url.searchParams.get('line') ?? '') : '';
   $: focusPost = browser ? ($page.url.searchParams.get('post') ?? undefined) : undefined;
 
+  /** The work the feed shows ('' for every work); undefined before it loads */
+  let feedWork: string | undefined;
+
+  $: if (browser && socialOn && !line && work !== feedWork) {
+    feedWork = work;
+    posts = [];
+    next = null;
+    more(true);
+  }
+
   async function more(first = false) {
+    const asked = feedWork;
+
     loading = true;
     error = '';
     try {
-      const result = await loadFeed(first ? undefined : (next ?? undefined));
+      const result = await loadFeed(first ? undefined : (next ?? undefined), asked || undefined);
 
+      if (asked !== feedWork) return;
       posts = first ? result.posts : [...posts, ...result.posts];
       next = result.next;
     } catch (e) {
@@ -87,10 +100,6 @@
       loading = false;
     }
   }
-
-  onMount(() => {
-    if (socialOn && !(work && line)) more(true);
-  });
 
   /** Hub moderators remove any post (the hub checks the role) */
   $: dev = socialOn && $socialSession$?.me.role === 'dev';
@@ -107,10 +116,7 @@
 
   const openThread = (post: FeedPost) => goto(threadPath(post.work, post.line, post.id));
 
-  function closeThread() {
-    goto(`${pagePath}/community`);
-    if (!posts.length) more(true);
-  }
+  const closeThread = () => goto(`${pagePath}/community`);
 </script>
 
 <svelte:head><title>{$t$('nav.community')}</title></svelte:head>
@@ -144,8 +150,18 @@
     {:else}
       <div class="community-main">
         {#if !$socialSession$}<CommunitySignup />{/if}
-        <h1 class="community-title">{$t$('nav.community')}</h1>
-        {#if $socialSession$}<CommunityPlainComposer onposted={() => more(true)} />{/if}
+        {#if work}
+          <a class="app-button-quiet" href="{pagePath}/community">← {$t$('nav.community')}</a>
+          <h1 class="community-title">{$t$('community.workFeed')}</h1>
+          {#if posts[0]}<CommunityWork
+              title={posts[0].title}
+              vol={posts[0].vol}
+              cover={posts[0].cover}
+            />{/if}
+        {:else}
+          <h1 class="community-title">{$t$('nav.community')}</h1>
+          {#if $socialSession$}<CommunityPlainComposer onposted={() => more(true)} />{/if}
+        {/if}
 
         <ol class="feed">
           {#each posts as post (post.id)}

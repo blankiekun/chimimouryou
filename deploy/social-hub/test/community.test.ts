@@ -702,6 +702,22 @@ describe('hub community', () => {
     );
   });
 
+  it('filters the feed by work', async () => {
+    const aki = await signUp('aki');
+
+    const mine = (await post(aki.token)).body.id;
+    vi.advanceTimersByTime(400_000);
+    await post(aki.token, { work: 'vndb:v17' });
+
+    const feed = (work: string) =>
+      call('GET', `/v1/community/feed?work=${encodeURIComponent(work)}`);
+
+    expect((await feed(WORK)).body.posts.map((one: { id: string }) => one.id)).toEqual([mine]);
+    expect((await feed('anilist:999')).body.posts).toEqual([]);
+    expect((await feed('nope')).status).toBe(400);
+    expect((await call('GET', '/v1/community/feed')).body.posts).toHaveLength(2);
+  });
+
   it('takes plain posts: in the feed with no work or line, their own thread, replies and notes', async () => {
     const aki = await signUp('aki');
     const ben = await signUp('ben');

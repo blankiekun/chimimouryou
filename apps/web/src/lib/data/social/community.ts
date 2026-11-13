@@ -394,10 +394,12 @@ export function loadThread(work: string, line: string) {
   return read<CommunityThread>(`/v1/community/thread?${new URLSearchParams({ work, line })}`);
 }
 
-/** Every work's posts, newest first, 30 a page: pass the last page's `next` for more */
-export function loadFeed(before?: string) {
+/** Every work's posts (or one `work`'s), newest first, 30 a page: pass the last page's `next` for more */
+export function loadFeed(before?: string, work?: string) {
+  const query = String(new URLSearchParams({ ...(before && { before }), ...(work && { work }) }));
+
   return read<{ posts: FeedPost[]; next: string | null }>(
-    `/v1/community/feed${before ? `?${new URLSearchParams({ before })}` : ''}`
+    `/v1/community/feed${query ? `?${query}` : ''}`
   );
 }
 

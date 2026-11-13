@@ -128,7 +128,8 @@ folder or the self-hosted server, never the hub.
 
 Discord status relay (`src/presence.ts`; times in Unix seconds): the reader's other devices send the
 rendered activity, the Anki add-on on their computer reads it. `PUT presence` (`{activity, kind:
-book|manga|vn|idle, ttl}`, 204; clamped and stripped of unknown fields like the add-on's `activity.py`, at
+book|manga|vn|listen|idle, ttl}`, 204; clamped and stripped of unknown fields like the add-on's `activity.py`
+(`activity.type` 2 is kept for Listening, anything else dropped as Playing), at
 most 4 KB, kept `ttl` minutes (the reader's Away after, 5-30, default 10; clients send on a change, no
 keep-alive); one per 20 s, else 429; the same activity and ttl are not written again while more than 2
 minutes are left); `DELETE presence` (ends it now); `POST presence/keys` (`{name}`, at most
@@ -194,8 +195,8 @@ stacked combining characters, capped in characters and bytes. Under `/v1/communi
 - Public (token optional; without one, edge-cached and counted per address, no blocks applied):
   `GET threads?work=&after=` (8-hex line prefixes with post counts and a spoiler flag, 1,000 a
   page; a prefix isn't enough to open a thread), `GET thread?work=&line=` (work title, volume and
-  cover, the line, its context and the posts), `GET feed?before=<at>:<id>` (top-level posts of
-  every work, newest first, 30 a page, with the line, title, cover, reply count and spoiler flag).
+  cover, the line, its context and the posts), `GET feed?before=<at>:<id>&work=` (top-level posts of
+  every work, or of one work key, newest first, 30 a page, with the line, title, cover, reply count and spoiler flag).
   Posts with 3 open reports are left out until a moderator decides. `GET /v1/work/:hash` serves a
   work's cover like the other images.
 - Signed in: `POST posts` (`{work, title, vol, quote, context, body, spoiler, feed}`: the hub hashes the
