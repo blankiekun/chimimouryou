@@ -244,8 +244,18 @@ export function hashPage(text: string) {
  * the whole page at every click, so only what was added counts, and pages seen before
  * (reread, loaded from a save) add nothing, nor do pages the engine has as read before
  * (`readBefore`, from its kidoku data, which also covers other devices through synced saves).
+ * A line source (`perLine`: /hook, VNBox) sends each line once as shown, so a line counts in
+ * full every time unless it repeats the line just before (a redraw).
  */
-export function newText(previous: string, page: string, seen: Set<string>, readBefore = false) {
+export function newText(
+  previous: string,
+  page: string,
+  seen: Set<string>,
+  readBefore = false,
+  perLine = false
+) {
+  if (perLine) return readBefore || page === previous ? '' : pageText(page);
+
   const hash = hashPage(page);
 
   if (seen.has(hash)) return '';

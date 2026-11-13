@@ -34,6 +34,8 @@ export class MangaReading {
   private readThrough: number;
   /** When the time last counted ended; unset while paused */
   private last: number | undefined;
+  /** Pages left while their text hadn't loaded: counted when it comes */
+  private pending = new Set<number>();
   private unsavedText = '';
   private changedDays = new Set<string>();
   private dirty = false;
@@ -50,9 +52,14 @@ export class MangaReading {
     this.last = now;
   }
 
-  /** The page text came (or changed). */
-  setText(text: Text) {
+  /** The page text came (or changed): pages left before it did count now, with no time. */
+  setText(text: Text, options: Options, now = Date.now()) {
     this.text = text;
+
+    const ready = [...this.pending].filter((page) => text[page]);
+
+    ready.forEach((page) => this.pending.delete(page));
+    this.addText(ready, options, now, false);
   }
 
   /** The pages on screen changed. */
@@ -65,17 +72,13 @@ export class MangaReading {
     const counted = [...this.shown, ...(shown.includes(this.pageCount - 1) ? shown : [])].filter(
       (page, i, all) => page >= this.readThrough && all.indexOf(page) === i
     );
-    const text = counted.map((page) => mangaPageText(this.text[page])).join('');
 
     if (counted.length) this.readThrough = Math.max(...counted) + 1;
-    if (text) {
-      this.unsavedText += text;
-      this.dirty = true;
-    }
-
-    this.count(countTextCharacters(text), options, now);
+    counted.filter((page) => !this.text[page]).forEach((page) => this.pending.add(page));
+    this.addText(counted, options, now);
     this.shown = shown;
-    this.last = now;
+    // Paused (hidden) stays paused: only resume() restarts the clock.
+    if (this.last !== undefined) this.last = now;
   }
 
   /** The page is hidden or closed: the time on the current pages, no characters. */
@@ -115,9 +118,21 @@ export class MangaReading {
     this.dirty = true;
   }
 
-  private count(characters: number, options: Options, now: number) {
+  /** The text of pages read, with the time since the last count. */
+  private addText(pages: number[], options: Options, now: number, timed = true) {
+    const text = pages.map((page) => mangaPageText(this.text[page])).join('');
+
+    if (text) {
+      this.unsavedText += text;
+      this.dirty = true;
+    }
+
+    this.count(countTextCharacters(text), options, now, timed);
+  }
+
+  private count(characters: number, options: Options, now: number, timed = true) {
     const seconds =
-      this.last === undefined ? 0 : Math.min((now - this.last) / 1000, maxSecondsPerPage);
+      !timed || this.last === undefined ? 0 : Math.min((now - this.last) / 1000, maxSecondsPerPage);
 
     if (!options.statistics || (!characters && seconds < 1)) return;
 

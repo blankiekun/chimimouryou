@@ -28,7 +28,7 @@ function reading(pageCount: number, opened: number, shown: number[], text = page
   const statistics = new Map<string, BooksDbStatistic>();
   const result = new MangaReading('Manga', statistics, pageCount, opened, shown, start);
 
-  result.setText(text);
+  result.setText(text, on, start);
 
   return { reading: result, statistics };
 }
@@ -149,15 +149,32 @@ describe('MangaReading', () => {
     expect(r.takeChanges()).toEqual(changes);
   });
 
-  it('counts characters once the text arrives late', () => {
+  it('counts pages left before the text came once it does, with no extra time', () => {
     const { reading: r, statistics } = reading(5, 0, [0], []);
 
     r.moved([1], on, start + 1000);
     expect(statistics.get(day)).toMatchObject({ readingTime: 1, charactersRead: 0 });
 
-    r.setText(pages(5));
+    r.setText(pages(5), on, start + 1500);
+    expect(statistics.get(day)).toMatchObject({ readingTime: 1, charactersRead: 1 });
+
     r.moved([2], on, start + 2000);
-    expect(statistics.get(day)).toMatchObject({ readingTime: 2, charactersRead: 2 });
+    expect(statistics.get(day)).toMatchObject({ readingTime: 2, charactersRead: 1 + 2 });
+    expect(r.takeChanges()?.text).toBe('あ' + 'ああ');
+
+    // Counted once: the same text again adds nothing.
+    r.setText(pages(5), on, start + 3000);
+    expect(statistics.get(day)?.charactersRead).toBe(3);
+  });
+
+  it('stays paused when the shown pages change while hidden', () => {
+    const { reading: r, statistics } = reading(5, 0, [0]);
+
+    r.pause(on, start + 20_000);
+    r.moved([1], on, start + 30_000);
+    r.pause(on, start + 100_000);
+
+    expect(statistics.get(day)?.readingTime).toBe(20);
   });
 
   it('does nothing when the same pages are shown again', () => {
