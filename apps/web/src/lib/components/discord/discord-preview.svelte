@@ -75,7 +75,11 @@
         <span class="member-avatar" aria-hidden="true">{userName.slice(0, 1).toUpperCase()}</span>
         <div class="member-text">
           <span class="member-name">{userName}</span>
-          {#if activity.name}<span class="member-activity">{activity.name}</span>{/if}
+          {#if activity.name}<span class="member-activity"
+              >{activity.type === 2
+                ? $t$('discord.listeningTo', { name: activity.name })
+                : activity.name}</span
+            >{/if}
         </div>
       </div>
       <p class="preview-label">{$t$('discord.profileAndActivity')}</p>
@@ -97,7 +101,11 @@
             </div>
           {/if}
           <div class="card-text">
-            {#if activity.name}<p class="card-title">{activity.name}</p>{/if}
+            {#if activity.name}<p class="card-title">
+                {activity.type === 2
+                  ? $t$('discord.listeningTo', { name: activity.name })
+                  : activity.name}
+              </p>{/if}
             {#if activity.details}
               <p class="card-line" class:card-link={!!activity.details_url}>{activity.details}</p>
             {/if}

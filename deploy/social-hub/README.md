@@ -128,7 +128,8 @@ folder or the self-hosted server, never the hub.
 
 Discord status relay (`src/presence.ts`; times in Unix seconds): the reader's other devices send the
 rendered activity, the Anki add-on on their computer reads it. `PUT presence` (`{activity, kind:
-book|manga|vn|idle, ttl}`, 204; clamped and stripped of unknown fields like the add-on's `activity.py`, at
+book|manga|vn|listen|idle, ttl}`, 204; clamped and stripped of unknown fields like the add-on's `activity.py`
+(`activity.type` 2 is kept for Listening, anything else dropped as Playing), at
 most 4 KB, kept `ttl` minutes (the reader's Away after, 5-30, default 10; clients send on a change, no
 keep-alive); one per 20 s, else 429; the same activity and ttl are not written again while more than 2
 minutes are left); `DELETE presence` (ends it now); `POST presence/keys` (`{name}`, at most

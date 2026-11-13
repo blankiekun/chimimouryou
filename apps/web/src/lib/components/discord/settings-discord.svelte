@@ -71,6 +71,7 @@
     book: 'discord.kind.book',
     manga: 'discord.kind.manga',
     vn: 'discord.kind.vn',
+    listen: 'discord.kind.listen',
     idle: 'discord.kind.idle'
   };
 

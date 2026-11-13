@@ -59,7 +59,9 @@ def clean(raw):
     """Returns the activity Discord gets, or raises InvalidActivity."""
     if not isinstance(raw, dict):
         raise InvalidActivity("activity must be an object")
-    out = {"type": 0}
+    kind = raw.get("type")
+    # 0 Playing, 2 Listening; `type(...) is int` keeps bools out
+    out = {"type": kind if type(kind) is int and kind in (0, 2) else 0}
     for key in ("name", "details", "state"):
         value = _text(raw.get(key))
         if value:

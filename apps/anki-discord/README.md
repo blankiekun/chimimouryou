@@ -109,7 +109,7 @@ The activity is rendered by the page; the add-on has no templates. Fields (all o
   Discord app. An image text without its image is dropped.
 - `timestamps` are epoch milliseconds; `party.size` is `[current, max]` with 1 ≤ current ≤ max.
 - At most 2 buttons, label 1–32 characters.
-- `type` is always 0 (Playing); any other field is dropped.
+- `type` is 0 (Playing) or 2 (Listening); anything else becomes 0. Any other field is dropped.
 
 Discord accepts about one update per 15 s. The add-on answers `204` at once and sends the newest
 waiting activity when it may (the first one right away), so the page can PUT whenever something
