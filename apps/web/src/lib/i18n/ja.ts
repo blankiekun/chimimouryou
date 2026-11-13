@@ -2292,6 +2292,7 @@ export const ja: Record<MessageKey, string> = {
   'community.downNote': '本・メモ・進み具合には影響しません。',
   'community.empty': 'この本にはまだ投稿がありません。',
   'community.emptyHint': '行を選んで「コミュニティに投稿」で始められます。',
+  'community.workFeed': 'この作品の投稿',
   'community.feedEmpty': 'まだ投稿がありません。',
   'community.howToPost': '投稿するには、本で行を選んで「コミュニティに投稿」を選びます。',
   'community.order': '並び順',

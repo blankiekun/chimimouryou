@@ -405,8 +405,8 @@ async function thread(request: Request, env: Env, user: UserRow | null, query: U
 }
 
 /**
- * GET feed?before=<at>:<id>: top-level posts of every work, newest first, 30 a page, with the
- * work's title, volume and cover, the line and the spoiler mark (the app blurs those until the
+ * GET feed?before=<at>:<id>&work=: top-level posts of every work (or of one `work`), newest first,
+ * 30 a page, with the work's title, volume and cover, the line and the spoiler mark (the app blurs those until the
  * reader is past the line). Posts FEED_REPORTS readers reported wait for a moderator; posts made
  * for their line only (`in_feed` 0) stay out.
  */
@@ -416,6 +416,7 @@ async function feed(request: Request, env: Env, user: UserRow | null, query: URL
   const before = /^(\d{1,12}):([0-9a-f]{16})$/.exec(query.get('before') ?? '');
 
   if (query.has('before') && !before) throw new HttpError(400, 'before');
+  const work = query.has('work') ? matching(query.get('work'), WORK, 'work') : '';
   // Not 'feed': that's the friends feed's one-minute limit, the same row at 00:00 UTC.
   await limit(env, user?.id ?? (await ipSubject(request)), 'cfeed', DAY, 500);
 
@@ -425,11 +426,12 @@ async function feed(request: Request, env: Env, user: UserRow | null, query: URL
        w.title, w.vol, w.cover, ${authorColumns}
      FROM posts p LEFT JOIN works w ON w.work = p.work ${authorJoins('p.user')}
      WHERE p.parent = '' AND p.user != '' AND p.in_feed = 1 AND (p.at < ?2 OR (p.at = ?2 AND p.id < ?3))
+       AND (?4 = '' OR p.work = ?4)
        AND ${unblocked('p.user', '?1')}
        AND ${unreported()}
      ORDER BY p.at DESC, p.id DESC LIMIT ${FEED_PAGE}`
   )
-    .bind(viewer, before ? Number(before[1]) : 2 ** 40, before ? before[2] : 'g')
+    .bind(viewer, before ? Number(before[1]) : 2 ** 40, before ? before[2] : 'g', work)
     .all();
   const last = results[results.length - 1];
 

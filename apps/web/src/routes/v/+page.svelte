@@ -253,7 +253,8 @@
       kind: 'vn',
       title: book.title,
       position: readCharacters,
-      characters: book.characters
+      characters: book.characters,
+      lines: reading?.seen.size
     });
   }
 

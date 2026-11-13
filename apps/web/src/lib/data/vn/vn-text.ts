@@ -37,6 +37,7 @@ import {
 } from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker';
 import { countTextCharacters } from '$lib/functions/get-character-count';
 import { getDateKey } from '$lib/functions/statistic-util';
+import { vnLines } from '$lib/data/stats/day-counters';
 import {
   decodeText,
   loadVnRead,
@@ -119,6 +120,7 @@ export class VnReading {
       const seconds = Math.min((now - this.lastTextTime) / 1000, maxSecondsPerPage);
 
       if (characters) {
+        vnLines.add(options.startDayHours, now);
         this.read.characters += characters;
         this.unsavedText += added;
         this.dirty = true;

@@ -18,6 +18,7 @@
   import { formatDuration, localNetworkDenied } from '$lib/data/discord/discord';
   import { pagePath } from '$lib/data/env';
   import { addImmersionTime } from '$lib/data/stats/immersion-log';
+  import { vnLines } from '$lib/data/stats/day-counters';
   import { logger } from '$lib/data/logger';
   import { readingActivity } from '$lib/data/reader/reader-hooks';
   import { startDayHoursForTracker$, statisticsEnabled$, trackerIdleTime$ } from '$lib/data/store';
@@ -118,6 +119,8 @@
   let lines = $state<HookLine[]>(loadLines());
   let sessionCharacters = $state(0);
   let sessionSeconds = $state(0);
+  /** Counted lines this session ({linesRead} for a title not in the library) */
+  let sessionLines = 0;
   let list = $state<HTMLOListElement>();
   let lookupPopup = $state<LookupPopup>();
   /** Paused: lines still show, but add nothing to the log or the session */
@@ -241,7 +244,9 @@
       );
 
       if (added) saver.changed();
-    } else if ($statisticsEnabled$) {
+    } else {
+      if (characters) vnLines.add($startDayHoursForTracker$, at);
+      if (!$statisticsEnabled$) return;
       addImmersionTime('hook', 'vn', link.name || 'Texthooker', seconds, characters).catch(
         (error) => logger.warn(`Couldn't save to the immersion log: ${error.message}`)
       );
@@ -750,6 +755,7 @@
 
     sessionCharacters += count.characters;
     sessionSeconds += count.seconds;
+    if (count.characters) sessionLines += 1;
     // Each line at once: a closed tab loses nothing.
     const held = { text, at, seconds: count.seconds, characters: count.characters };
 
@@ -765,6 +771,7 @@
       title: gameTitle(),
       position: current?.saver ? current.saver.reading.read.characters : sessionCharacters,
       characters: current?.saver?.book.characters,
+      lines: current?.saver ? current.saver.reading.seen.size : sessionLines,
       playing: nativeRunning || undefined
     });
   }

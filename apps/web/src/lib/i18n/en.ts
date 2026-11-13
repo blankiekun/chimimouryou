@@ -2285,6 +2285,7 @@ export const en = {
   'community.downNote': 'Your book, notes and progress are not affected.',
   'community.empty': 'No posts on this book yet.',
   'community.emptyHint': 'Select a line and choose Post to community to start one.',
+  'community.workFeed': 'Posts on this work',
   'community.feedEmpty': 'No posts yet.',
   'community.howToPost': 'To post, select a line in a book and choose Post to community.',
   'community.order': 'Order',

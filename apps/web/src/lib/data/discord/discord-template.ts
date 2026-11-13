@@ -24,7 +24,25 @@ export const discordLimits = {
 export const logoKey = 'applogo';
 
 export const variableGroups = {
-  book: ['title', 'author', 'series', 'volume', 'chapter', 'kind', 'difficulty'],
+  book: [
+    'title',
+    'author',
+    'series',
+    'volume',
+    'chapter',
+    'kind',
+    'difficulty',
+    'workUrl',
+    'vndbId',
+    'anilistId',
+    'titleRomaji',
+    'titleEnglish',
+    'communityUrl',
+    'rating',
+    'tags',
+    'publisher',
+    'comprehension'
+  ],
   progress: [
     'chapterNumber',
     'chapterCount',
@@ -33,10 +51,13 @@ export const variableGroups = {
     'pageCount',
     'charsRead',
     'timeLeftBook',
-    'timeLeftChapter'
+    'timeLeftChapter',
+    'charsSession',
+    'timeSession',
+    'linesRead'
   ],
-  today: ['charsToday', 'timeToday', 'speed'],
-  you: ['wordsKnown', 'streak']
+  today: ['charsToday', 'timeToday', 'speed', 'cardsMinedToday', 'newWordsToday', 'linesToday'],
+  you: ['wordsKnown', 'streak', 'profileUrl']
 } as const;
 
 export type VariableGroup = keyof typeof variableGroups;
@@ -180,6 +201,28 @@ export function renderTemplate(template: string, values: DiscordValues) {
   return halfWidth(filled);
 }
 
+/** Variables that hold a whole https link: put into link fields as they are */
+export const linkVariables: VariableName[] = ['workUrl', 'communityUrl', 'profileUrl'];
+
+/**
+ * A link field filled in: link variables as they are, others URL-encoded, nothing tidied. '' when
+ * a variable it uses is empty, so the link is left out rather than blocking the status. Unknown
+ * {names} stay as typed (`unknownVariables` reports them).
+ */
+export function renderLink(template: string, values: DiscordValues) {
+  let missing = false;
+  const filled = template.trim().replace(variablePattern, (match, name: string) => {
+    if (!isVariable(name)) return match;
+
+    const value = values[name]?.trim() ?? '';
+
+    missing ||= !value;
+    return linkVariables.includes(name) ? value : encodeURIComponent(value);
+  });
+
+  return missing ? '' : filled;
+}
+
 export const isHttps = (url: string) => /^https:\/\/[^\s/?#]+\.[^\s]*$/i.test(url);
 const isImageKey = (value: string) => /^[\w-]{1,64}$/.test(value);
 
@@ -200,7 +243,7 @@ export function checkField(
   { link = false, max }: { link?: boolean; max?: number } = {}
 ): FieldCheck {
   max ??= link ? discordLimits.url : discordLimits.text;
-  const text = renderTemplate(template, values);
+  const text = link ? renderLink(template, values) : renderTemplate(template, values);
 
   return {
     unknown: unknownVariables(template),
@@ -250,7 +293,7 @@ function text(template: string, values: DiscordValues, max = discordLimits.text)
 }
 
 function linkText(template: string, values: DiscordValues, max = discordLimits.url) {
-  const filled = renderTemplate(template, values);
+  const filled = renderLink(template, values);
 
   return isHttps(filled) && length(filled) <= max ? filled : undefined;
 }
