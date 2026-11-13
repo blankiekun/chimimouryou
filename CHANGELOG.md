@@ -4,6 +4,52 @@ chimimouryou is a fork of [ッツ Ebook Reader](https://github.com/ttu-ttu/ebook
 upstream's own changes are not listed here. Each version's section is written when it is released,
 from the pull requests merged since the previous tag (pull requests don't edit this file).
 
+## v3.22.0 (2026-11-13)
+
+### Added
+
+- Discord status: new variables: links to the work on VNDB/AniList (`{workUrl}`, `{vndbId}`,
+  `{anilistId}`), romaji and English titles from Find details (`{titleRomaji}`, `{titleEnglish}`),
+  `{communityUrl}` and `{profileUrl}`, Calibre's `{rating}`, `{tags}` and `{publisher}`, this
+  session's `{charsSession}` and `{timeSession}`, `{comprehension}`, `{cardsMinedToday}`,
+  `{newWordsToday}`, and VN `{linesRead}` and `{linesToday}`. Link fields and buttons accept link
+  variables.
+- Discord status: a progress ring or a book/manga/VN icon as the small image.
+- Discord status: a Listening activity while Audiobookshelf plays ("Listening to …"), with its own
+  template. Needs the updated Anki add-on and hub.
+- Community: the feed can be filtered to one work (`/community?work=`).
+
+### Changed
+
+- Statistics: characters read with no recorded time now count toward totals and days read
+  everywhere (Statistics, Home, profile, Discord, social); speed still uses only time-tracked
+  reading. A streak that ended yesterday stays current until today ends, on every screen.
+- Statistics: reading goals and the immersion log's Books row and Total no longer follow the title
+  filter.
+- Profiles: shared stats age with time, so a lapsed streak shows as ended, the week figures clear
+  after 7 days, and the finished count is labelled with its own year.
+- Desktop: Electron 45.3.2. JMdict 2026-11-13.
+
+### Fixed
+
+- Reader: the reading tracker no longer stays paused after cancelling the Close dialog,
+  double-clicking the sync icon, or coming back to the reader with Back.
+- Statistics deleted on one device are now deleted on the others.
+- VN and texthooker: repeated short lines (はい。, ……) count; a linked game follows the idle
+  setting and the gap since the last line; deleting or editing the newest line no longer counts
+  the next one twice; kanji are no longer counted twice after a failed save.
+- Manga: pages turned before the text loads are counted; hidden time no longer counts after a
+  layout change.
+- Immersion log: listening time is kept on tab close and no longer counts buffering; deleted entries
+  from another device stay deleted; clearing browser data no longer overwrites a larger synced day;
+  listening during reading is no longer counted twice in the Total.
+- Statistics: Alt Min speed in By book and By day; days with characters but no time are shown.
+- Social: a finished book is announced once, also when it left the current books; a failed rank load
+  no longer resets your rank; the finished month follows your local day; implausible stats are capped
+  and no longer make streak milestones; turning sharing off always removes the shared data.
+- KOReader: days follow the start-of-day setting, and time is no longer counted twice when an upload's
+  reply is lost.
+
 ## v3.21.0 (2026-11-12)
 
 ### Added

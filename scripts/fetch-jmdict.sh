@@ -5,8 +5,8 @@
 # `gh release view <tag> -R yomidevs/jmdict-yomitan --json assets` shows each file's digest).
 set -euo pipefail
 
-tag=2026-11-10
-sum=b20944abc8813875e27b14fb957cb6e5acc6dc6e8c8887434adfea4b15c81620
+tag=2026-11-13
+sum=a1dcf378c78d89e81946c3808094ac33b693e2f467654d46f4dadd323550da42
 
 curl -fsSL --retry 3 -o "$1" "https://github.com/yomidevs/jmdict-yomitan/releases/download/$tag/JMdict_english.zip"
 echo "$sum  $1" | sha256sum -c --quiet || { rm -f "$1"; exit 1; }
