@@ -115,9 +115,10 @@
   let title = $state(hookTitle$.getValue());
   let status = $state<HookStatus>('off');
   let status2 = $state<HookStatus>('off');
-  let lines = $state<HookLine[]>(loadLines());
+  const keptLines = loadLines();
+  let lines = $state<HookLine[]>(keptLines);
   /** The last line counted: deletes, edits and undo change `lines`, never this, so nothing counts twice. */
-  let lastCounted = $state<Pick<HookLine, 'text' | 'at'> | undefined>(lines.at(-1));
+  let lastCounted = $state<Pick<HookLine, 'text' | 'at'> | undefined>(keptLines.at(-1));
   let sessionCharacters = $state(0);
   let sessionSeconds = $state(0);
   let list = $state<HTMLOListElement>();
