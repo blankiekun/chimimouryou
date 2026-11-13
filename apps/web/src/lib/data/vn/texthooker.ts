@@ -271,7 +271,7 @@ export function parseHookMessage(data: unknown) {
  */
 export function lineCount(
   text: string,
-  last: HookLine | undefined,
+  last: Pick<HookLine, 'text' | 'at'> | undefined,
   now: number,
   idleSeconds: number,
   since = 0

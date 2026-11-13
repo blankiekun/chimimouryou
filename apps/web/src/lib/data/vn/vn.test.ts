@@ -73,6 +73,18 @@ describe('vn', () => {
     expect(newText('', '名前はまだ無い。', seen, true)).toBe('');
   });
 
+  it('counts each hooked line in full, a short one seen before too, but not a redraw', () => {
+    const seen = new Set<string>();
+
+    expect(newText('', 'はい。', seen, false, true)).toBe('はい。');
+    expect(newText('はい。', 'はい。そう。', seen, false, true)).toBe('はい。そう。');
+    expect(newText('はい。そう。', 'はい。', seen, false, true)).toBe('はい。');
+    expect(newText('はい。', 'はい。', seen, false, true)).toBe('');
+    // A long line seen before is a reread or a skip-mode replay.
+    expect(newText('はい。', '吾輩は猫である。', seen, false, true)).toBe('吾輩は猫である。');
+    expect(newText('はい。', '吾輩は猫である。', seen, false, true)).toBe('');
+  });
+
   it('merges save files, the newer copy of each winning', () => {
     const local = {
       'save1.dat': { modified: 5, data: 'b' },

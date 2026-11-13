@@ -319,7 +319,7 @@
       logger.warn(`Visual novel sync failed: ${error.message}`);
     }
 
-    reading = await loadVnReading(data);
+    reading = await loadVnReading(data, vnInfo(data).engine === 'vnbox');
     saver = new VnReadingSaver(data, reading, local, external);
     updateProgress();
 

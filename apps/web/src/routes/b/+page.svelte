@@ -168,6 +168,7 @@
   } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';
   import BookReaderImageGallery from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery.svelte';
   import {
+    holdTracker,
     isTrackerMenuOpen$,
     isTrackerPaused$
   } from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker';
@@ -308,6 +309,8 @@
   let trackerElm = $state.raw<BookReadingTracker>();
   let showTrackerIcon = $state.raw(false);
   let wasTrackerPaused = $state.raw(true);
+  /** Set by pagehide; resumes the tracker if the page comes back from the back/forward cache. */
+  let resumeTrackerOnShow: (() => void) | undefined;
   let frozenPosition = $state.raw(-1);
   let skipFirstFreezeChange = false;
   let bookCompleted = $state.raw(false);
@@ -1280,14 +1283,15 @@
     }
 
     const wasAutoscrollerEnabled = autoScroller?.wasAutoScrollerEnabled$.getValue();
-    const wasTrackerPausedBefore = $statisticsEnabled$ ? $isTrackerPaused$ : true;
+    const wasTrackerPausedBefore = wasTrackerPaused;
 
     showHeader = false;
     autoScroller?.off();
 
+    const releaseTracker = holdTracker($statisticsEnabled$);
+
     if ($statisticsEnabled$) {
       wasTrackerPaused = true;
-      isTrackerPaused$.next(true);
     }
 
     const diffToComplete =
@@ -1310,10 +1314,8 @@
     });
 
     if (wasCanceled) {
-      if ($statisticsEnabled$ && !wasTrackerPausedBefore) {
-        wasTrackerPaused = false;
-        $isTrackerPaused$ = false;
-      }
+      wasTrackerPaused = wasTrackerPausedBefore;
+      releaseTracker();
 
       if (wasAutoscrollerEnabled) {
         autoScroller?.toggle();
@@ -1789,9 +1791,13 @@
 
       await tick();
 
+      const wasAutoscrollerEnabled = autoScroller?.wasAutoScrollerEnabled$.getValue();
+      const wasTrackerPausedBefore = wasTrackerPaused;
+
       autoScroller?.off();
       wasTrackerPaused = true;
-      isTrackerPaused$.next(true);
+
+      const releaseTracker = holdTracker(true);
 
       if ($confirmClose$ && storedExploredCharacter !== exploredCharCount) {
         const wasCanceled = await new Promise((resolver) => {
@@ -1811,6 +1817,13 @@
 
         if (wasCanceled) {
           blockDataUpdates = false;
+          wasTrackerPaused = wasTrackerPausedBefore;
+          releaseTracker();
+
+          if (wasAutoscrollerEnabled) {
+            autoScroller?.toggle();
+          }
+
           return;
         }
 
@@ -2302,16 +2315,13 @@
         onclick={(event) => {
           event.stopPropagation();
 
-          if ($statisticsEnabled$) {
-            wasTrackerPaused = $isTrackerPaused$;
-            isTrackerPaused$.next(true);
+          if (isReplicating) {
+            return;
           }
 
-          executeReplication(false).finally(() => {
-            if ($statisticsEnabled$ && !wasTrackerPaused) {
-              isTrackerPaused$.next(false);
-            }
-          });
+          const releaseTracker = holdTracker($statisticsEnabled$);
+
+          executeReplication(false).finally(releaseTracker);
         }}
         onkeyup={dummyFn}
       >
@@ -2517,7 +2527,16 @@
   onkeydown={onKeydown}
   ononline={() => !blockDataUpdates && executeReplicate$.next()}
   onbeforeunload={handleUnload}
-  onpagehide={() => isTrackerPaused$.next(true)}
+  onpagehide={() => {
+    resumeTrackerOnShow = holdTracker(true);
+  }}
+  onpageshow={(event) => {
+    if (event.persisted && !wasTrackerPaused) {
+      resumeTrackerOnShow?.();
+    }
+
+    resumeTrackerOnShow = undefined;
+  }}
   onresize={() => {
     if ($statisticsEnabled$ && !$isTrackerPaused$) {
       pauseTracker();

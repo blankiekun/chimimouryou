@@ -352,6 +352,14 @@ class Handler(BaseHTTPRequestHandler):
         return self.put('account_docs', {'account': self.account, 'kind': match[1]}, body['modified'],
                         {'data': self.data_of(body)})
 
+    def get_account_doc(self, match):
+        """One doc without the sync mirror: KOReader reads settings (the start of the day) but not words."""
+        self.needs_account()
+        rows = db.query('SELECT * FROM account_docs WHERE account = ? AND kind = ?', (self.account, match[1]))
+        if not rows:
+            raise ApiError(404, 'No such doc')
+        return 200, row_json('account_docs', rows[0])
+
     def goal_key(self, match) -> dict:
         if not apidb.DATE_RE.fullmatch(match[1]):
             raise ApiError(400, 'Bad date')
@@ -502,6 +510,7 @@ class Handler(BaseHTTPRequestHandler):
         ('DELETE', re.compile(r'/api/v1/books/(\d+)/highlights/([^/]+)'), delete_highlight),
         ('PUT', re.compile(rf'/api/v1/books/(\d+)/docs/({kinds("book_docs")})'), put_book_doc),
         ('PUT', re.compile(rf'/api/v1/docs/({kinds("account_docs")})'), put_account_doc),
+        ('GET', re.compile(rf'/api/v1/docs/({kinds("account_docs")})'), get_account_doc),
         ('PUT', re.compile(r'/api/v1/goals/([^/]+)'), put_goals),
         ('DELETE', re.compile(r'/api/v1/goals/([^/]+)'), delete_goals),
         ('PUT', re.compile(r'/api/v1/series/(\d+)'), put_series),

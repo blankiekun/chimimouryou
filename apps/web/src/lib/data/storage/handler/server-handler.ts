@@ -69,7 +69,7 @@ import {
 } from '$lib/data/store';
 import { logger } from '$lib/data/logger';
 import { MergeMode } from '$lib/data/merge-mode';
-import { isDeletedGoal, mergeReadingGoals } from '$lib/data/reading-goal';
+import { deletedGoal, isDeletedGoal, mergeReadingGoals } from '$lib/data/reading-goal';
 import { storage } from '$lib/data/window/navigator/storage';
 import loadEpub from '$lib/functions/file-loaders/epub/load-epub';
 import loadHtmlz from '$lib/functions/file-loaders/htmlz/load-htmlz';
@@ -259,12 +259,9 @@ export class ServerStorageHandler extends BaseStorageHandler {
     }
   }
 
-  /** The server's live days and their times; a Windows game keeps them as one document's list. */
+  /** The server's days and their times; a Windows game keeps them as one document's list. */
   private async serverDays() {
-    const game = await this.gameDoc('statistics');
-    const days = game
-      ? ((game.row?.data as BooksDbStatistic[] | undefined) ?? [])
-      : live((await this.bookRows('statistics')).rows).map((row) => row.data as BooksDbStatistic);
+    const days = (await this.getStatistics()).statistics ?? [];
 
     return new Map(days.map((day) => [day.dateKey, day.lastStatisticModified]));
   }
@@ -283,7 +280,12 @@ export class ServerStorageHandler extends BaseStorageHandler {
       ])
     );
 
-    return [...(await this.serverDays())].some(([day, time]) => time > (here.get(day) ?? 0));
+    // A day deleted there is a change to pull, unless this browser never had it (or forgot it).
+    return ((await this.getStatistics()).statistics ?? []).some(
+      (day) =>
+        day.lastStatisticModified >
+        (here.get(day.dateKey) ?? (isDeletedStatistic(day) ? Infinity : 0))
+    );
   }
 
   /**
@@ -677,38 +679,38 @@ export class ServerStorageHandler extends BaseStorageHandler {
     const { rows } = await this.bookRows('statistics');
 
     return {
-      // All days deleted is still an answer: REPLACE takes the deletions.
+      // Deleted days come as flagged rows, as sync files hold them, so a MERGE pull deletes them too.
       statistics: rows.length
-        ? live(rows).map((row) => ({ ...row.data, title }) as BooksDbStatistic)
+        ? rows.map((row) =>
+            row.deleted
+              ? deletedStatistic(
+                  { title, dateKey: row.dateKey!, lastStatisticModified: 0 } as BooksDbStatistic,
+                  row.modified
+                )
+              : ({ ...row.data, title } as BooksDbStatistic)
+          )
         : undefined,
       lastStatisticModified: newest(rows) || 0
     };
   }
 
-  /** `getStatistics` hides deleted days, or this reader's tab would overwrite one with its full count. */
-  async statisticsWithDeleted() {
-    if (await this.gameDoc('statistics')) return (await this.getStatistics()).statistics;
-
-    const { rows } = await this.bookRows('statistics');
-    const { title } = this.currentContext;
-
-    return rows.map((row) =>
-      row.deleted
-        ? deletedStatistic(
-            { title, dateKey: row.dateKey!, lastStatisticModified: 0 } as BooksDbStatistic,
-            row.modified
-          )
-        : ({ ...row.data, title } as BooksDbStatistic)
-    );
-  }
-
   async getReadingGoals() {
     const rows = await this.goalRows();
+    // A tombstone holds only its start; the dates come from the goal it deletes here, without which
+    // there is nothing to delete (and a guessed range could cover another goal).
+    const here = rows.some((row) => row.deleted)
+      ? new Map((await database.getSyncedReadingGoals()).map((goal) => [goal.goalStartDate, goal]))
+      : new Map<string, BooksDbReadingGoal>();
+    const goals = rows.flatMap((row) => {
+      if (!row.deleted) return [row.data as BooksDbReadingGoal];
+
+      const goal = here.get(row.goalStart!);
+
+      return goal ? [{ ...deletedGoal(goal, 0), lastGoalModified: row.modified }] : [];
+    });
 
     return {
-      readingGoals: rows.length
-        ? live(rows).map((row) => row.data as BooksDbReadingGoal)
-        : undefined,
+      readingGoals: rows.length ? goals : undefined,
       lastGoalModified: newest(rows) || 0
     };
   }

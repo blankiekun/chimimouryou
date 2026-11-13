@@ -186,6 +186,30 @@ describe('social', () => {
     ]);
   }, 15000);
 
+  // Bug: finishing needed the book's earlier position in the 3 current books, so a book that left
+  // them never counted; and a book first seen finished (finished long ago, or announced by
+  // another device) must not be sent again.
+  it('sends a book finished after leaving the current books, not one first seen finished', async () => {
+    const bodies: Record<string, unknown>[] = [];
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init: RequestInit) => {
+        if (init.body) bodies.push(JSON.parse(init.body as string));
+        return new Response('{"ok":true}');
+      })
+    );
+
+    noteReading('Old Finished', 98, 100, true);
+    noteReading('Long Book', 40, 100, true);
+    for (const other of ['X1', 'X2', 'X3']) noteReading(other, 10, 100, true);
+    noteReading('Long Book', 99, 100, true);
+    await vi.waitFor(() => expect(bodies).toHaveLength(6), { timeout: 5000 });
+    expect(bodies.map((body) => body.finished).filter(Boolean)).toEqual([
+      { key: bookKey('Long Book'), title: 'Long Book', kind: 'book' }
+    ]);
+  }, 15000);
+
   // Bugs: a book hidden before hiding removed rows (or whose DELETE failed) stays on the hub until
   // toggled; naming every hidden book to find out would send books the hub never had; asking on
   // every push would use up the hub's 30 profile reads a day.

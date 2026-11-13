@@ -383,11 +383,51 @@ describe('statistics', () => {
       ['2026-01-01', true],
       ['2026-01-02', false]
     ]);
-    // The deleted day still counts for the newest time, so other devices take the deletion.
+    // The deleted day comes as its flagged row, so other devices take the deletion.
     const server = handler(MergeMode.REPLACE);
 
     server.startContext({ title: 'こころ' });
-    expect((await server.getStatistics()).statistics?.map((entry) => entry.dateKey)).toEqual([
+    expect(
+      (await server.getStatistics()).statistics?.map((entry) => [entry.dateKey, !!entry.deleted])
+    ).toEqual([
+      ['2026-01-01', true],
+      ['2026-01-02', false]
+    ]);
+  });
+
+  // Bug: a MERGE pull left out the server's deleted days, so a device still holding one kept its
+  // time forever (its own upload is older, so the server refuses it and nothing heals).
+  it('MERGE pulls the deletion of a day this browser holds', async () => {
+    await database.storeStatistics(
+      'こころ',
+      [day('2026-01-01', 10), day('2026-01-02', 50)] as never,
+      ReplicationSaveBehavior.Overwrite,
+      MergeMode.LOCAL,
+      50
+    );
+    api.setRow('statistics', {
+      book: 7,
+      dateKey: '2026-01-01',
+      data: null,
+      modified: 20,
+      deleted: true
+    });
+    api.setRow('statistics', {
+      book: 7,
+      dateKey: '2026-01-02',
+      data: day('2026-01-02', 50),
+      modified: 50
+    });
+
+    await replicateData(
+      handler(),
+      browser(),
+      false,
+      [{ title: 'こころ' } as never],
+      [StorageDataType.STATISTICS]
+    );
+
+    expect((await database.getStatisticsForBook('こころ')).map((row) => row.dateKey)).toEqual([
       '2026-01-02'
     ]);
   });
@@ -472,7 +512,9 @@ describe('statistics', () => {
         deleted: true
       }
     ]);
-    expect((await server.getStatistics()).statistics).toEqual([]);
+    expect(await server.getStatistics()).toMatchObject({
+      statistics: [{ dateKey: '2026-01-01', deleted: true }]
+    });
   });
 
   // Bug: reading here again after pulling a future-dated row lowered this browser's time below the
@@ -494,6 +536,46 @@ describe('statistics', () => {
     expect(
       await database.getLastModifiedForType('こころ', StorageDataType.STATISTICS)
     ).toBeGreaterThan(future);
+  });
+
+  // Bug: the pull left out deleted goals, so a device that still held one kept it forever.
+  it('MERGE pulls the deletion of a goal this browser holds', async () => {
+    // Recent: a deletion older than deletionLifetime is forgotten.
+    const now = Date.now();
+    const goal = (goalStartDate: string, goalEndDate: string) => ({
+      goalStartDate,
+      lastGoalModified: now - 10,
+      timeGoal: 1,
+      characterGoal: 1,
+      goalFrequency: 'daily',
+      goalEndDate,
+      goalOriginalEndDate: goalEndDate
+    });
+
+    await database.storeReadingGoals(
+      [goal('2026-01-01', '2026-01-31'), goal('2026-02-01', '')] as never,
+      ReplicationSaveBehavior.Overwrite,
+      MergeMode.LOCAL,
+      now - 10
+    );
+    api.setRow('goals', { goalStart: '2026-01-01', data: null, modified: now, deleted: true });
+    api.setRow('goals', { goalStart: '2026-02-01', data: null, modified: now, deleted: true });
+    // A goal never held here has nothing to delete.
+    api.setRow('goals', { goalStart: '2026-03-01', data: null, modified: now, deleted: true });
+
+    const { readingGoals } = await handler().getReadingGoals();
+
+    expect(readingGoals).toMatchObject([
+      {
+        goalStartDate: '2026-01-01',
+        goalEndDate: '2026-01-31',
+        lastGoalModified: now,
+        deleted: true
+      },
+      { goalStartDate: '2026-02-01', goalEndDate: '', lastGoalModified: now, deleted: true }
+    ]);
+    await browser().saveReadingGoals(readingGoals!, now);
+    expect(await database.getReadingGoals()).toEqual([]);
   });
 
   // Bug: goals keyed by the wrong field, so REPLACE deleted the goal it had just written.

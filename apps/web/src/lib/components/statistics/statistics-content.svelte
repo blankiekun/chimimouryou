@@ -16,6 +16,7 @@
   import ReadingRankRow from '$lib/components/reading-rank/reading-rank-row.svelte';
   import CharactersChart from '$lib/components/statistics/characters-chart.svelte';
   import { charactersPerDay, periodTotals } from '$lib/components/statistics/characters-per-day';
+  import { countsAsRead, readingTotals } from '$lib/data/stats/learner-stats';
   import PointBox from '$lib/components/point-box.svelte';
   import SectionHead from '$lib/components/section-head.svelte';
   import { t$, type MessageKey } from '$lib/i18n';
@@ -281,6 +282,8 @@
   let titlesInStatisticsDateRange = new Set<string>();
   let statisticsData: BookStatistic[] = [];
   let statisticsForSelection: BookStatistic[] = [];
+  /** The date range's rows of every title: the immersion log compares all of it, filter or not */
+  let statisticsInDateRange: BookStatistic[] = [];
   let aggregratedStatistics: BookStatistic[] = [];
   let readingGoals: BooksDbReadingGoal[] = [];
 
@@ -315,6 +318,7 @@
 
   // After the update above: statisticsForSelection is assigned inside updateStatisticsData.
   $: totals = periodTotals(statisticsForSelection);
+  $: rangeTotals = periodTotals(statisticsInDateRange);
   $: bars = charactersPerDay(
     statisticsForSelection,
     $lastStatisticsStartDate$,
@@ -456,7 +460,7 @@
           return returnValue;
         }
 
-        if (statistic.readingTime) {
+        if (countsAsRead(statistic)) {
           notDeletedMap.set(statistic.title, statisticsTitleFilters.get(statistic.title) || false);
         }
 
@@ -678,7 +682,7 @@
       ]).then(([statistics, readingGoalData]) => [
         statistics.map((statistic) => {
           if (
-            statistic.readingTime &&
+            countsAsRead(statistic) &&
             (!hasPrefilteredTitlesForStatistics ||
               $preFilteredTitlesForStatistics$.has(statistic.title))
           ) {
@@ -717,12 +721,16 @@
   }
 
   function updateStatisticsData() {
-    const newTitleFilterForStatisticsSet = new Set<string>();
-
-    statisticsForSelection = statisticsData.filter((statistic) =>
-      filterStatisticsForSelection(statistic, newTitleFilterForStatisticsSet)
+    statisticsInDateRange = statisticsData.filter(
+      (statistic) =>
+        countsAsRead(statistic) &&
+        statistic.dateKey >= $lastStatisticsStartDate$ &&
+        statistic.dateKey <= $lastStatisticsEndDate$
     );
-    titlesInStatisticsDateRange = newTitleFilterForStatisticsSet;
+    statisticsForSelection = statisticsInDateRange.filter((statistic) =>
+      statisticsTitleFilters.get(statistic.title)
+    );
+    titlesInStatisticsDateRange = new Set(statisticsInDateRange.map(({ title }) => title));
 
     aggregratedStatistics = [...getAggregatedStatistics($lastPrimaryReadingDataAggregationMode$)];
   }
@@ -787,7 +795,7 @@
             : entry.minReadingSpeed;
           statistic.altMinReadingSpeed = statistic.altMinReadingSpeed
             ? Math.min(statistic.altMinReadingSpeed, entry.altMinReadingSpeed)
-            : statistic.altMinReadingSpeed;
+            : entry.altMinReadingSpeed;
           statistic.maxReadingSpeed = Math.max(statistic.maxReadingSpeed, entry.lastReadingSpeed);
           weightedSum += entry.readingTime * entry.charactersRead;
 
@@ -796,9 +804,7 @@
           }
         }
 
-        statistic.lastReadingSpeed = statistic.readingTime
-          ? Math.ceil((3600 * statistic.charactersRead) / statistic.readingTime)
-          : 0;
+        statistic.lastReadingSpeed = readingTotals(entries).speed;
         statistic.averageReadingTime = validReadingDays
           ? Math.ceil(statistic.readingTime / validReadingDays)
           : 0;
@@ -811,9 +817,8 @@
         statistic.averageWeightedCharactersRead = statistic.readingTime
           ? Math.ceil(weightedSum / statistic.readingTime)
           : 0;
-        statistic.averageReadingSpeed = statistic.averageReadingTime
-          ? Math.ceil((3600 * statistic.averageCharactersRead) / statistic.averageReadingTime)
-          : 0;
+        // Average characters over average time is the overall speed: readingTotals' rule.
+        statistic.averageReadingSpeed = statistic.lastReadingSpeed;
         statistic.averageWeightedReadingSpeed = statistic.averageWeightedReadingTime
           ? Math.ceil(
               (3600 * statistic.averageWeightedCharactersRead) /
@@ -826,22 +831,6 @@
     }
 
     return aggregatedStatisticsData;
-  }
-
-  function filterStatisticsForSelection(
-    statistic: BookStatistic,
-    newTitleFilterForStatisticsSet: Set<string>
-  ) {
-    const isInDateRange =
-      statistic.readingTime &&
-      statistic.dateKey >= $lastStatisticsStartDate$ &&
-      statistic.dateKey <= $lastStatisticsEndDate$;
-
-    if (isInDateRange) {
-      newTitleFilterForStatisticsSet.add(statistic.title);
-    }
-
-    return isInDateRange && statisticsTitleFilters.get(statistic.title);
   }
 </script>
 
@@ -942,8 +931,8 @@
     start={$lastStatisticsStartDate$}
     end={$lastStatisticsEndDate$}
     {todayKey}
-    readingSeconds={totals.time}
-    readingCharacters={totals.characters}
+    readingSeconds={rangeTotals.time}
+    readingCharacters={rangeTotals.characters}
   />
 {/if}
 {#if $statisticsTitleFilterIsOpen$}

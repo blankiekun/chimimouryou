@@ -10,7 +10,7 @@ import type { BooksDbStatistic } from '$lib/data/database/books-db/versions/book
 import { buildSearchIndex } from '$lib/functions/book-text/book-search';
 import { readerDb } from '$lib/data/reader-db';
 import { countKanji, recordKanjiSeen } from '../words/kanji-seen';
-import { activityWeeks, learnerStats } from './learner-stats';
+import { activityWeeks, isCurrentRun, learnerStats, readingTotals } from './learner-stats';
 
 const stat = (title: string, dateKey: string, charactersRead: number, extra = {}) =>
   ({ title, dateKey, charactersRead, readingTime: 1800, ...extra }) as BooksDbStatistic;
@@ -36,8 +36,9 @@ describe('learnerStats', () => {
       todayCharacters: 1000,
       weekCharacters: 3500,
       streak: 3,
-      longestStreak: 4,
-      daysRead: 7,
+      // C's day has time and no characters: still a day read.
+      longestStreak: 5,
+      daysRead: 8,
       booksCompleted: 1,
       booksStarted: 3,
       speed: 975
@@ -47,6 +48,39 @@ describe('learnerStats', () => {
   it('keeps a streak that ended yesterday', () => {
     expect(learnerStats([stat('A', '2026-10-10', 1)], '2026-10-11').streak).toBe(1);
     expect(learnerStats([stat('A', '2026-10-09', 1)], '2026-10-11').streak).toBe(0);
+  });
+
+  // Bug: places disagreed on characters without reading time (a jump ahead).
+  it('counts characters without time, but not in the speed', () => {
+    const rows = [
+      stat('A', '2026-10-10', 1000),
+      stat('A', '2026-10-11', 50_000, { readingTime: 0 })
+    ];
+
+    expect(learnerStats(rows, '2026-10-11')).toMatchObject({
+      totalCharacters: 51_000,
+      todayCharacters: 50_000,
+      streak: 2,
+      speed: 2000
+    });
+    expect(readingTotals([...rows, stat('A', '2026-10-12', -5, { readingTime: -60 })])).toEqual({
+      characters: 51_000,
+      time: 1800,
+      speed: 2000
+    });
+  });
+});
+
+describe('isCurrentRun', () => {
+  it('holds a run reaching today or ending yesterday', () => {
+    const run = (startDate: string, endDate: string) => ({ startDate, endDate });
+
+    expect(isCurrentRun(run('2026-10-01', '2026-10-11'), '2026-10-11')).toBe(true);
+    expect(isCurrentRun(run('2026-10-01', '2026-10-10'), '2026-10-11')).toBe(true);
+    expect(isCurrentRun(run('2026-10-01', '2026-10-09'), '2026-10-11')).toBe(false);
+    // A goal window running past today
+    expect(isCurrentRun(run('2026-10-05', '2026-10-18'), '2026-10-11')).toBe(true);
+    expect(isCurrentRun(run('2026-10-12', '2026-10-18'), '2026-10-11')).toBe(false);
   });
 });
 
