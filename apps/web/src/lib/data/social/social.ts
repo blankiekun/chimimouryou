@@ -151,10 +151,11 @@ const finishedPending$ = writableArrayLocalStorageSubject<Omit<FinishedBook, 'mo
 );
 
 /**
- * Books seen at or past `finishedShare` here, so a book first seen finished (synced from another
- * device, or dropped from currentBooks$) is sent finished once, not on every page turn.
+ * Books seen below `finishedShare` here (most recent first), so reaching it later sends the book
+ * finished once even after it left the 3 currentBooks$. A book first seen past it (finished long
+ * ago, or announced by the device that read it) is not sent.
  */
-const finishedSeen$ = writableArrayLocalStorageSubject<string>()('socialFinishedSeen', []);
+const belowSeen$ = writableArrayLocalStorageSubject<string>()('socialBelowSeen', []);
 
 /** Hidden books known to be off this hub account (sweepHidden) */
 const hiddenCleared$ = writableArrayLocalStorageSubject<string>()('socialHiddenCleared', []);
@@ -168,7 +169,7 @@ socialSession$.subscribe((session) => {
   if (window.localStorage.getItem('socialBooksUser') !== id) {
     currentBooks$.next([]);
     finishedPending$.next([]);
-    finishedSeen$.next([]);
+    belowSeen$.next([]);
     hiddenCleared$.next([]);
     window.localStorage.setItem('socialBooksUser', id);
   }
@@ -615,9 +616,9 @@ export function noteReading(
     readAt: Math.floor(Date.now() / 1000)
   };
   const before = currentBooks$.getValue();
-  const seen = finishedSeen$.getValue();
+  const below = belowSeen$.getValue();
   const done = book.pct >= finishedShare;
-  const finished = done && !seen.includes(book.key);
+  const finished = done && below.includes(book.key);
   const books = [book, ...before.filter((other) => other.key !== book.key)]
     .filter((other) => other.pct < finishedShare)
     .slice(0, 3);
@@ -625,8 +626,9 @@ export function noteReading(
   reading = !leaving;
   currentBooks$.next(books);
   // Going back below it (a reread) lets the next finish count again.
-  if (finished || (!done && seen.includes(book.key))) {
-    finishedSeen$.next(finished ? [...seen, book.key] : seen.filter((key) => key !== book.key));
+  if (finished) belowSeen$.next(below.filter((key) => key !== book.key));
+  if (!done && below[0] !== book.key) {
+    belowSeen$.next([book.key, ...below.filter((key) => key !== book.key)].slice(0, 500));
   }
   if (finished && !isHidden(book)) {
     finishedPending$.next([

@@ -186,8 +186,10 @@ describe('social', () => {
     ]);
   }, 15000);
 
-  // Bug: finishing needed a position below 97% seen here first, so a book synced past it never counted.
-  it('sends a book first seen finished once', async () => {
+  // Bug: finishing needed the book's earlier position in the 3 current books, so a book that left
+  // them never counted; and a book first seen finished (finished long ago, or announced by
+  // another device) must not be sent again.
+  it('sends a book finished after leaving the current books, not one first seen finished', async () => {
     const bodies: Record<string, unknown>[] = [];
 
     vi.stubGlobal(
@@ -198,12 +200,13 @@ describe('social', () => {
       })
     );
 
-    noteReading('Synced Book', 98, 100);
-    await vi.waitFor(() => expect(bodies).toHaveLength(1), { timeout: 5000 });
-    noteReading('Synced Book', 99, 100, true);
-    await vi.waitFor(() => expect(bodies).toHaveLength(2), { timeout: 5000 });
+    noteReading('Old Finished', 98, 100, true);
+    noteReading('Long Book', 40, 100, true);
+    for (const other of ['X1', 'X2', 'X3']) noteReading(other, 10, 100, true);
+    noteReading('Long Book', 99, 100, true);
+    await vi.waitFor(() => expect(bodies).toHaveLength(6), { timeout: 5000 });
     expect(bodies.map((body) => body.finished).filter(Boolean)).toEqual([
-      { key: bookKey('Synced Book'), title: 'Synced Book', kind: 'book' }
+      { key: bookKey('Long Book'), title: 'Long Book', kind: 'book' }
     ]);
   }, 15000);
 

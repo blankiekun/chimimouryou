@@ -89,6 +89,17 @@ describe('VnReading', () => {
     expect(game.read.characters).toBe(2 + 2 + 2);
   });
 
+  it('counts a long line of a line source seen before as nothing (reread, skip mode)', () => {
+    const game = new VnReading({ title: 'g', pages: [], characters: 0 }, new Map(), start, true);
+    const long = '吾輩は猫である名前はまだ無い';
+
+    game.add(long, false, false, options, start + 1000);
+    game.add('うん', false, false, options, start + 2000);
+    game.add(long, false, false, options, start + 3000);
+
+    expect(game.read.characters).toBe(long.length + 2);
+  });
+
   it('caps a break and keeps statistics out when they are off', () => {
     const game = reading();
 
