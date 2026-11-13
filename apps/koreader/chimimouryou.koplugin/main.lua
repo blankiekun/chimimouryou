@@ -333,6 +333,17 @@ function Chimi:pull(api)
     return true
 end
 
+--- The account's start of the day (the web's Settings → Statistics hour), kept for offline reading.
+--- Without a settings doc (or on an older server) the last known hour stays, midnight at first.
+function Chimi:pullDayStart(api)
+    local code, body = api:doc("settings")
+    if code ~= 200 or type(body) ~= "table" or type(body.data) ~= "table" then return end
+    local values = type(body.data.values) == "table" and body.data.values or {}
+    local hours = tonumber(values.startDayHoursForTracker) or 0
+    if hours < 0 or hours > 23 or hours % 1 ~= 0 then hours = 0 end
+    if hours ~= self:get("day_start", 0) then self:set("day_start", hours) end
+end
+
 local function now_ms()
     return math.floor(os.time() * 1000)
 end
@@ -377,6 +388,8 @@ function Chimi:sync(opts)
         if opts.interactive then notify(T(_("Sync failed: %1"), err or "?"), 4) end
         return
     end
+    -- On open and when asked, not on every push: the setting rarely changes.
+    if not opts.quiet then self:pullDayStart(api) end
     local key = tostring(id)
     local row = self:get("progress", {})[key]
     local here = self:currentCount()
@@ -424,7 +437,13 @@ end
 
 -- Statistics
 
-local function day_key(t)
+-- getDateKey (statistic-util.ts): before the start hour it is still the day before.
+local function day_key(t, start_hour)
+    local d = os.date("*t", t)
+    if d.hour < (start_hour or 0) then
+        -- Noon of the day before, normalised by os.time: clear of DST changes.
+        return os.date("%Y-%m-%d", os.time{ year = d.year, month = d.month, day = d.day - 1, hour = 12 })
+    end
     return os.date("%Y-%m-%d", t)
 end
 
@@ -442,10 +461,11 @@ function Chimi:countPageTurn()
             local key = tostring(id)
             pending[key] = pending[key] or { title = book.title, days = {} }
             local days = pending[key].days
-            local day = days[day_key(now)] or { seconds = 0, characters = 0 }
+            local date = day_key(now, self:get("day_start", 0))
+            local day = days[date] or { seconds = 0, characters = 0 }
             day.seconds = day.seconds + math.max(seconds, 0)
             day.characters = day.characters + characters
-            days[day_key(now)] = day
+            days[date] = day
             self.store:saveSetting("pending", pending)
         end
     end
@@ -479,12 +499,28 @@ function Chimi:pushStatistics(api)
     local stats = self:get("stats", {})
     for key, book in pairs(pending) do
         for day, add in pairs(book.days) do
-            for _ = 1, 2 do
-                local row = (stats[key] or {})[day]
+            -- A PUT whose answer was lost: the pulled row carrying its exact `modified` means the
+            -- server took it, so only what was read since is still to add.
+            -- shortcut: a row another device wrote on top before this pull hides whether ours landed
+            -- (added again then); an idempotency id on the server would settle it if that shows up.
+            local sent, row = add.sent, (stats[key] or {})[day]
+            if sent and row and row.modified == sent.modified then
+                add.seconds, add.characters = add.seconds - sent.seconds, add.characters - sent.characters
+            end
+            add.sent = nil
+            if add.seconds <= 0 and add.characters == 0 then
+                book.days[day] = nil
+                self:set("pending", pending)
+            end
+            for _ = 1, book.days[day] and 2 or 0 do
+                row = (stats[key] or {})[day]
                 local stat = util.tableDeepCopy(row and row.data or {})
                 stat.title, stat.dateKey = book.title, day
                 local modified = math.max(now_ms(), (row and row.modified or 0) + 1)
                 add_to_statistic(stat, add.seconds, add.characters, modified)
+                -- On disk before the PUT, so a lost answer (or a crash) can't count it twice.
+                add.sent = { modified = modified, seconds = add.seconds, characters = add.characters }
+                self:set("pending", pending)
                 local code, body = api:put("books/" .. key .. "/statistics/" .. day, modified, stat)
                 if code == 200 then
                     stats[key] = stats[key] or {}
@@ -494,6 +530,7 @@ function Chimi:pushStatistics(api)
                     self:set("pending", pending)
                     break
                 elseif code == 409 and body and type(body.row) == "table" then
+                    add.sent = nil -- refused, so nothing of it landed
                     stats[key] = stats[key] or {}
                     stats[key][day] = { modified = body.row.modified, data = without_nulls(body.row.data) }
                 else

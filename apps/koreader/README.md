@@ -12,7 +12,8 @@ the web reader.
   Your place is sent about 90 s after a page turn, on close and on sleep, while Wi-Fi is on.
 - **Reading time**: time and characters read per day go to the server's statistics (Statistics page,
   Home dashboard). Each page turn counts up to 2 minutes; KOReader's own statistics plugin is not read,
-  so nothing is counted twice. Off with Send reading time.
+  so nothing is counted twice. A day starts at the hour set in the web app's statistics settings
+  (read when a book opens). Off with Send reading time.
 
 Only books downloaded through the plugin sync (the book's sidecar remembers which server book it
 is). Japanese books render horizontally: KOReader has no vertical text.
@@ -53,5 +54,7 @@ The token is kept in KOReader's settings folder (`settings/chimimouryou.lua`) an
   (`./koreader-*.AppImage --appimage-extract`, then `squashfs-root/usr/lib/koreader`), and run
   `pnpm install` first.
 - `tools/e2e.sh` drives the plugin in a real KOReader under Xvfb against a test server.
+- `luajit tools/stats-check.lua chimimouryou.koplugin` checks the day start and the pending reading
+  time (a lost PUT answer) with KOReader's modules stubbed.
 
 GPL-3.0-or-later. KOReader itself is AGPL-3.0; the GPLv3 allows the combination (section 13).
