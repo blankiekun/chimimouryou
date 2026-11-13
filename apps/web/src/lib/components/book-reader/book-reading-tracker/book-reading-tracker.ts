@@ -11,6 +11,24 @@ export const isTrackerMenuOpen$ = writableSubject<boolean>(false);
 
 export const isTrackerPaused$ = writableSubject<boolean>(true);
 
+/**
+ * Pauses the tracker (when statistics are on) and returns a function that resumes it only if
+ * it was running here. Each caller keeps its own snapshot, so overlapping holds can't lose it.
+ */
+export function holdTracker(statisticsEnabled: boolean): () => void {
+  const wasRunning = statisticsEnabled && !isTrackerPaused$.getValue();
+
+  if (statisticsEnabled) {
+    isTrackerPaused$.next(true);
+  }
+
+  return () => {
+    if (wasRunning) {
+      isTrackerPaused$.next(false);
+    }
+  };
+}
+
 export enum TrackerAutoPause {
   OFF = 'off',
   MODERATE = 'moderate',
