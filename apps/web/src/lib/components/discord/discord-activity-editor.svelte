@@ -57,6 +57,8 @@
   const smallOptions: { id: SmallImage; label: MessageKey }[] = [
     { id: 'none', label: 'discord.image.none' },
     { id: 'logo', label: 'discord.image.logo' },
+    { id: 'ring', label: 'discord.image.ring' },
+    { id: 'kind', label: 'discord.image.kind' },
     { id: 'custom', label: 'discord.image.custom' }
   ];
   const timestampOptions: { id: TimestampMode; label: MessageKey }[] = [
@@ -90,7 +92,8 @@
             bookLeft: 34_800
           },
           cover: live?.cover,
-          private: reading && hideTitles
+          private: reading && hideTitles,
+          kind
         })
       : undefined
   );
@@ -266,7 +269,7 @@
         <div class="editor-field">
           <span class="editor-label">{$t$('discord.smallImage')}</span>
           <div class="app-segmented" role="radiogroup" aria-label={$t$('discord.smallImage')}>
-            {#each smallOptions as option (option.id)}
+            {#each smallOptions.filter((option) => reading || (option.id !== 'ring' && option.id !== 'kind')) as option (option.id)}
               <button
                 type="button"
                 role="radio"
@@ -279,7 +282,9 @@
               </button>
             {/each}
           </div>
-          {#if template.smallImage === 'custom'}
+          {#if template.smallImage === 'ring'}
+            <p class="editor-hint">{$t$('discord.ringHint')}</p>
+          {:else if template.smallImage === 'custom'}
             <input
               class="app-input editor-input"
               placeholder={$t$('discord.customImage')}

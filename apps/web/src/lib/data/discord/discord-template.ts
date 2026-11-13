@@ -23,6 +23,16 @@ export const discordLimits = {
 /** The Discord app's art asset key for the app logo (App logo, and the fallback for covers) */
 export const logoKey = 'applogo';
 
+/** Progress ring art key for a {percent} value: 5% steps, rounded down (ring-0…ring-100) */
+export function ringKey(percent?: string) {
+  const p = parseFloat(percent?.replace(/[^\d.]/g, '') ?? '');
+
+  return Number.isNaN(p) ? undefined : `ring-${Math.min(100, Math.max(0, Math.floor(p / 5) * 5))}`;
+}
+/** Kind icon art key (kind-book, kind-manga, kind-vn, kind-listen); none for the library */
+export const kindKey = (kind?: DiscordKind) =>
+  kind && kind !== 'idle' ? `kind-${kind}` : undefined;
+
 export const variableGroups = {
   book: [
     'title',
@@ -76,9 +86,7 @@ export const partyVariables: VariableName[] = [
 
 export type DiscordKind = 'book' | 'manga' | 'vn' | 'idle';
 export type LargeImage = 'logo' | 'cover' | 'custom';
-// shortcut: no "Progress ring": the add-on can only send image keys or https URLs and the
-// Discord app has no ring images; add ring assets (e.g. ring-0…ring-100) to offer it.
-export type SmallImage = 'none' | 'logo' | 'custom';
+export type SmallImage = 'none' | 'logo' | 'ring' | 'kind' | 'custom';
 export type TimestampMode = 'none' | 'session' | 'opened' | 'chapterLeft' | 'bookLeft';
 
 export interface DiscordButton {
@@ -298,8 +306,9 @@ function linkText(template: string, values: DiscordValues, max = discordLimits.u
   return isHttps(filled) && length(filled) <= max ? filled : undefined;
 }
 
-function image(choice: string, custom: string, cover?: string) {
+function image(choice: string, custom: string, cover?: string, small?: string) {
   if (choice === 'logo') return logoKey;
+  if (choice === 'ring' || choice === 'kind') return small;
   if (choice === 'cover') return cover && isHttps(cover) ? cover : logoKey;
   if (choice === 'custom') {
     const value = custom.trim();
@@ -337,6 +346,8 @@ export interface BuildOptions {
   cover?: string;
   /** Hidden from friends, or Hide titles everywhere: only the privacy text and the logo */
   private?: boolean;
+  /** The activity's kind: the Kind icon, and Listening (type 2) */
+  kind?: DiscordKind;
 }
 
 /** The finished activity, cut to Discord's limits; undefined when nothing is left to show. */
@@ -356,7 +367,12 @@ export function buildActivity(
   }
 
   const largeImage = image(template.largeImage, template.largeCustom, options.cover);
-  const smallImage = image(template.smallImage, template.smallCustom);
+  const smallImage = image(
+    template.smallImage,
+    template.smallCustom,
+    undefined,
+    template.smallImage === 'ring' ? ringKey(values.percent) : kindKey(options.kind)
+  );
   const current = count(values[template.partyCurrent]);
   const max = count(values[template.partyMax]);
   const buttons = template.buttons
