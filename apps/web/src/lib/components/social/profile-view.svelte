@@ -16,6 +16,7 @@
     monthName,
     removeFriend,
     reportCover,
+    agedStats,
     reportProfile,
     requestByUsername,
     type Profile
@@ -52,7 +53,7 @@
   $: shared = (key: ShareKey) => me?.share[key] ?? shareDefaults[key];
   // One's own toggles take effect here at once; the hub deletes the data with the change.
   $: show = (key: ShareKey) => !self || shared(key);
-  $: stats = show('stats') ? profile.stats : null;
+  $: stats = show('stats') && profile.stats ? agedStats(profile.stats) : null;
   $: dateFormat = new Intl.DateTimeFormat($uiLanguage$, { month: 'long', year: 'numeric' });
   $: shortMonth = (month: string) => {
     const [year, number] = month.split('-').map(Number);
@@ -65,7 +66,6 @@
   };
   $: link = `${typeof location === 'undefined' ? '' : location.origin}${pagePath}/u?name=${person.username}`;
   $: daysRead = stats ? [...stats.heat].filter((level) => level !== '0').length : 0;
-  $: year = new Date().getFullYear();
   $: statCells = (
     stats
       ? [
@@ -86,7 +86,10 @@
           },
           { value: stats.weekChars.toLocaleString('en-US'), label: $t$('social.charsWeek') },
           { value: formatDuration(stats.weekMinutes * 60, $t$), label: $t$('social.timeWeek') },
-          { value: String(stats.finishedYear), label: $t$('social.finishedIn', { year }) },
+          {
+            value: String(stats.finishedYear),
+            label: $t$('social.finishedIn', { year: stats.year })
+          },
           ...(stats.wordsKnown !== undefined && show('wordsKnown')
             ? [{ value: stats.wordsKnown.toLocaleString('en-US'), label: $t$('social.wordsKnown') }]
             : [])

@@ -7,7 +7,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeApi } from '$lib/data/test-utils/fake-api';
 import type { BooksDbStatistic } from '$lib/data/database/books-db/versions/books-db';
+import { getDateKey } from '$lib/functions/statistic-util';
 import {
+  agedStats,
   bookKey,
   friendsWithBook,
   uploadCovers,
@@ -115,6 +117,26 @@ describe('social', () => {
     expect(socialStats([], '2026-10-23')).not.toHaveProperty('wordsKnown');
   });
 
+  // Catches a reader who stopped reading showing the streak, week and heat of their last push, and
+  // last year's finished count under this year in January.
+  it('ages stats by the day they were pushed', () => {
+    const at = new Date(2026, 11, 31, 20).getTime() / 1000;
+    const pushed = { ...socialStats([], '2026-12-31'), streak: 5, weekChars: 900, at };
+    const read = { ...pushed, heat: pushed.heat.slice(1) + '3' };
+    const on = (month: number, date: number) => new Date(2027, month, date, 9);
+
+    expect(agedStats(read, on(0, 1))).toMatchObject({ streak: 5, weekChars: 900, year: 2026 });
+    expect(agedStats(read, on(0, 1)).heat.slice(-2)).toBe('30');
+    expect(agedStats(pushed, on(0, 1))).toMatchObject({ streak: 0, weekChars: 900 });
+    expect(agedStats(read, on(0, 2))).toMatchObject({ streak: 0 });
+    expect(agedStats(read, on(0, 7))).toMatchObject({ weekChars: 0, weekMinutes: 0 });
+    // Older hubs send no time: as sent, under this year.
+    expect(agedStats({ ...read, at: undefined }, on(0, 9))).toMatchObject({
+      streak: 5,
+      year: 2027
+    });
+  });
+
   it('keeps hidden books in the browser: only "Reading something" with its share', () => {
     const books = [book('薬屋のひとりごと 1', 'book', 0.62), book('魔女の旅々 3', 'manga')];
 
@@ -170,8 +192,9 @@ describe('social', () => {
     noteReading('Book A', 50, 100);
     noteReading('Book A', 99, 100);
     await vi.waitFor(() => expect(bodies).toHaveLength(2), { timeout: 5000 });
+    // With the reader's own month (the hub's is UTC).
     expect(bodies.map((body) => body.finished).filter(Boolean)).toEqual([
-      { key: bookKey('Book A'), title: 'Book A', kind: 'book' }
+      { key: bookKey('Book A'), title: 'Book A', kind: 'book', month: getDateKey(0).slice(0, 7) }
     ]);
 
     setBookHidden('Book B', true);

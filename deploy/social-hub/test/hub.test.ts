@@ -446,10 +446,11 @@ describe('social hub', () => {
     const mio = await signUp('mio');
 
     await befriend(aki, ren);
+    await push(aki, { stats: stats(6) });
     await push(aki, {
       books: [{ key: 'kusuriya1', title: '薬屋のひとりごと 1', kind: 'book', pct: 0.1 }],
       finished: { key: 'honzuki1', title: '本好きの下剋上 1', kind: 'book' },
-      stats: stats(14)
+      stats: stats(7)
     });
 
     const visitor = await call('GET', '/v1/profile/AKI_READS');
@@ -459,7 +460,7 @@ describe('social hub', () => {
       profile: { username: 'aki_reads' },
       books: [{ key: 'kusuriya1' }],
       finished: [{ key: 'honzuki1', month: '2026-10' }],
-      stats: { streak: 14, heat },
+      stats: { streak: 7, heat, at: Math.floor(Date.now() / 1000) },
       events: []
     });
     const friend = await call('GET', '/v1/profile/aki_reads', undefined, ren.token);
@@ -600,6 +601,16 @@ describe('social hub', () => {
       capRank({ rank: 1, chars: 0 }, { rank: 5, step: 1, chars: 2e6, rankAt: 0 }, 0, 0, day)
     ).toEqual({ rank: 5, step: 1, chars: 2e6, rankAt: 0 });
     expect(capRank({ streak: 1 } as { rank?: number }, null, 0, 0, day)).toEqual({ streak: 1 });
+    // Catches a push without a rank (an older app, a failed rank load) wiping the earned one.
+    expect(
+      capRank(
+        { streak: 1 } as { rank?: number },
+        { rank: 5, step: 2, chars: 3e6, rankAt: 9 },
+        0,
+        0,
+        day
+      )
+    ).toEqual({ streak: 1, rank: 5, step: 2, chars: 3e6, rankAt: 9 });
     // A first rank from an old account rises from 1, whatever its characters allow.
     expect(capRank({ rank: 7, chars: 1e7 }, { streak: 1 }, 0, 0, 40 * day)).toMatchObject({
       rank: 2,
@@ -627,6 +638,66 @@ describe('social hub', () => {
       chars: 9e6,
       rankAt: 8 * day
     });
+  });
+
+  // Catches made-up week figures stored as sent and a hand-made streak announcing milestones.
+  it('bounds the week figures and announces only streaks that grew day by day', async () => {
+    const aki = await signUp('aki');
+    const streaks = () => rows('events').map((r) => r.value);
+
+    await push(aki, { stats: { ...stats(1000), weekChars: 1e9, weekMinutes: 1e9 } });
+    expect(JSON.parse(rows('stats')[0].data as string)).toMatchObject({
+      weekChars: 2_100_000,
+      weekMinutes: 10_080
+    });
+    // The first stats announce nothing; a jump of 900 days in a minute doesn't either.
+    expect(streaks()).toEqual([]);
+    await push(aki, { stats: stats(6) });
+    await push(aki, { stats: stats(906) });
+    expect(streaks()).toEqual([]);
+    await push(aki, { stats: stats(6) });
+    vi.advanceTimersByTime(86400_000);
+    await push(aki, { stats: stats(7) });
+    expect(streaks()).toEqual([7]);
+  });
+
+  // Catches a UTC+9 reader's book finished on 1 January stored under December.
+  it('stores the finished month the app sends when it is within a month', async () => {
+    const aki = await signUp('aki');
+    const finish = (key: string, month?: string) =>
+      push(aki, { finished: { key, title: key, kind: 'book', month } });
+
+    vi.setSystemTime(new Date('2026-12-31T23:30:00Z'));
+    await finish('local', '2027-01');
+    await finish('old');
+    await finish('far', '2026-08');
+    await finish('bad', '2026-1');
+    expect(Object.fromEntries(rows('finished').map((r) => [r.book_key, r.month]))).toEqual({
+      local: '2027-01',
+      old: '2026-12',
+      far: '2026-12',
+      bad: '2026-12'
+    });
+  });
+
+  // Catches a push authenticated before a share switch went off rewriting what it dropped.
+  it('keeps nothing a switch turned off while a push was under way', async () => {
+    const aki = await signUp('aki');
+    const batch = env.DB.batch.bind(env.DB);
+
+    env.DB.batch = async (statements) => {
+      env.DB.batch = batch;
+      db.prepare(
+        `UPDATE users SET share = '{"stats":false,"finished":false,"current":false}' WHERE id = ?`
+      ).run(aki.me.id);
+      return batch(statements);
+    };
+    await push(aki, {
+      books: [{ key: 'k1', title: 'Book', kind: 'book', pct: 0.1 }],
+      finished: { key: 'k0', title: 'Book 0', kind: 'book' },
+      stats: stats(3)
+    });
+    expect([rows('status'), rows('finished'), rows('stats')]).toEqual([[], [], []]);
   });
 
   it('feeds only friends’ events, once each, for 90 days', async () => {
@@ -659,7 +730,8 @@ describe('social hub', () => {
     expect(friends[0].books).toEqual([
       expect.objectContaining({ key: '', title: '', kind: 'hidden', pct: 0.4 })
     ]);
-    expect(friends[0].stats).toMatchObject({ weekChars: 12400 });
+    // With the time they were pushed, so the app can tell a stale streak or week.
+    expect(friends[0].stats).toMatchObject({ weekChars: 12400, at: expect.any(Number) });
 
     vi.advanceTimersByTime(60_000);
     const since = (

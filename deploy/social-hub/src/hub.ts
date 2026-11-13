@@ -584,7 +584,7 @@ export async function friendsOf(env: Env, user: string) {
       `SELECT t.user, t.book_key, t.title, t.kind, t.month, t.at, c.file AS cover FROM finished t
        ${coverJoin('t')}`
     ),
-    ofFriends('SELECT t.user, t.data FROM stats t')
+    ofFriends('SELECT t.user, t.data, t.at FROM stats t')
   ]);
 
   friends.forEach((friend) => Object.assign(friend, { finished: [], stats: null }));
@@ -602,7 +602,7 @@ export async function friendsOf(env: Env, user: string) {
   stats.results.forEach((row) => {
     const friend = friends.get(row.user as string);
 
-    if (friend) friend.stats = JSON.parse(row.data as string);
+    if (friend) friend.stats = statsJson(row);
   });
   return { friends: [...friends.values()], incoming, outgoing };
 }
@@ -624,28 +624,35 @@ function sharing(user: UserRow) {
   };
 }
 
+/** A share switch as stored now (`sharing`'s defaults), so a write racing `PUT me` can't outlive it */
+const storedShare = (key: string, fallback: boolean) =>
+  `coalesce(json_extract((SELECT share FROM users WHERE id = ?1), '$.${key}'), ${Number(fallback)})`;
+
+/** Deletes what the reader no longer shares; also the last statements of every status push */
+const UNSHARED_SQL = [
+  `DELETE FROM status WHERE user = ?1 AND NOT ${storedShare('current', true)}`,
+  `DELETE FROM finished WHERE user = ?1 AND NOT ${storedShare('finished', true)}`,
+  `DELETE FROM events WHERE user = ?1 AND NOT ${storedShare('activity', true)}`,
+  `DELETE FROM stats WHERE user = ?1 AND NOT ${storedShare('stats', true)}`,
+  `UPDATE stats SET data = json_remove(data, '$.wordsKnown') WHERE user = ?1
+     AND json_type(data, '$.wordsKnown') IS NOT NULL AND NOT ${storedShare('wordsKnown', false)}`,
+  ...[
+    ['manga', 'hideManga'],
+    ['vn', 'hideVn']
+  ].flatMap(([kind, key]) =>
+    ['status', 'finished', 'events'].map(
+      (table) =>
+        `DELETE FROM ${table} WHERE user = ?1 AND kind = '${kind}' AND ${storedShare(key, false)}`
+    )
+  )
+];
+
+const unshared = (env: Env, user: string) =>
+  UNSHARED_SQL.map((sql) => env.DB.prepare(sql).bind(user));
+
 /** Deletes at once what the reader no longer shares */
 function dropUnshared(env: Env, user: UserRow) {
-  const share = sharing(user);
-  const sql: string[] = [];
-
-  if (!share.current) sql.push('DELETE FROM status WHERE user = ?1');
-  if (!share.finished) sql.push('DELETE FROM finished WHERE user = ?1');
-  if (!share.activity) sql.push('DELETE FROM events WHERE user = ?1');
-  if (!share.stats) sql.push('DELETE FROM stats WHERE user = ?1');
-  if (!share.wordsKnown) {
-    sql.push(`UPDATE stats SET data = json_remove(data, '$.wordsKnown') WHERE user = ?1`);
-  }
-  ['manga', 'vn']
-    .filter(share.hidden)
-    .forEach((kind) =>
-      ['status', 'finished', 'events'].forEach((table) =>
-        sql.push(`DELETE FROM ${table} WHERE user = ?1 AND kind = '${kind}'`)
-      )
-    );
-  return sql.length
-    ? env.DB.batch(sql.map((one) => env.DB.prepare(one).bind(user.id)))
-    : Promise.resolve();
+  return env.DB.batch(unshared(env, user.id));
 }
 
 const profileKey = (request: Request, username: string) =>
@@ -697,9 +704,7 @@ async function profile(env: Env, username: string, viewer: UserRow | null) {
       `SELECT f.book_key, f.title, f.kind, f.month, c.file AS cover
        FROM finished f ${coverJoin('f')} WHERE f.user = ?1 ORDER BY f.at DESC`
     ),
-    env.DB.prepare('SELECT data FROM stats WHERE user = ?1')
-      .bind(user.id)
-      .first<{ data: string }>(),
+    env.DB.prepare('SELECT data, at FROM stats WHERE user = ?1').bind(user.id).first(),
     relation === 'visitor'
       ? Promise.resolve({ results: [] })
       : rows(
@@ -738,11 +743,14 @@ async function profile(env: Env, username: string, viewer: UserRow | null) {
       month: row.month,
       cover: row.cover
     })),
-    stats: stats ? JSON.parse(stats.data) : null,
+    stats: stats ? statsJson(stats) : null,
     events: events.results.map(eventJson),
     ...(presence ? { presence } : {})
   };
 }
+
+/** Stats with `at`, when they were pushed: the app ages the streak, week and heat strip by it */
+const statsJson = (row: Row) => ({ ...JSON.parse(row.data as string), at: row.at });
 
 function eventJson(row: Row) {
   return {
@@ -1206,20 +1214,32 @@ function validFinished(value: unknown) {
   return {
     key: text(book.key, 200, 'key'),
     title: bookText(book.title, 'title'),
-    kind: book.kind as string
+    kind: book.kind as string,
+    month: book.month
   };
 }
+
+const utcMonth = (time: number) => new Date(time * 1000).toISOString().slice(0, 7);
+
+/**
+ * The finished month: the reader's own (YYYY-MM of their local day, like their finished count) when
+ * within a month of the hub's (a day ahead for UTC+14), else the hub's in UTC (older apps send none).
+ */
+const finishedMonth = (month: unknown, time: number) =>
+  [utcMonth(time - 31 * DAY), utcMonth(time), utcMonth(time + DAY)].includes(month as string)
+    ? (month as string)
+    : utcMonth(time);
 
 function validStats(value: unknown, wordsKnown: boolean) {
   if (value === undefined || value === null) return null;
   if (typeof value !== 'object') throw new HttpError(400, 'stats');
 
   const stats = value as Row;
-  const count = (field: unknown) => {
+  const count = (field: unknown, max = 1e9) => {
     const n = Number(field);
 
     if (!Number.isInteger(n) || n < 0 || n > 1e9) throw new HttpError(400, 'stats');
-    return n;
+    return Math.min(n, max);
   };
 
   if (typeof stats.heat !== 'string' || !/^[0-4]{84}$/.test(stats.heat)) {
@@ -1227,8 +1247,9 @@ function validStats(value: unknown, wordsKnown: boolean) {
   }
   return {
     streak: count(stats.streak),
-    weekChars: count(stats.weekChars),
-    weekMinutes: count(stats.weekMinutes),
+    // A week holds at most 7 days of reading at the rank's daily cap, and 7 × 24 hours.
+    weekChars: count(stats.weekChars, 7 * RANK_DAILY_CAP),
+    weekMinutes: count(stats.weekMinutes, 7 * 1440),
     finishedYear: count(stats.finishedYear),
     heat: stats.heat,
     ...(wordsKnown && stats.wordsKnown !== undefined && stats.wordsKnown !== null
@@ -1268,7 +1289,18 @@ export function capRank<T extends { rank?: number; step?: number; chars?: number
   created: number,
   time: number
 ) {
-  if (stats.rank === undefined || stats.chars === undefined) return stats;
+  // No rank sent (an older app, or the app's rank failed to load): the stored one stays.
+  if (stats.rank === undefined || stats.chars === undefined) {
+    return typeof old?.rank === 'number' && typeof old.chars === 'number'
+      ? {
+          ...stats,
+          rank: old.rank,
+          ...(typeof old.step === 'number' ? { step: old.step } : {}),
+          chars: old.chars,
+          rankAt: old.rankAt
+        }
+      : stats;
+  }
 
   const hadChars = typeof old?.chars === 'number';
   const since = hadChars ? oldAt : created;
@@ -1347,11 +1379,14 @@ async function pushStatus(env: Env, user: UserRow, body: Row) {
       .filter((book) => book.kind !== 'hidden' && !known.has(book.key) && book.pct < STARTED_BELOW)
       .forEach((book) => events.push(['started', book.key, book.title, book.kind, 0]));
     if (done && share.finished) events.push(['finished', done.key, done.title, done.kind, 0]);
-    if (stats) {
-      const last = oldStats ? Number(JSON.parse(oldStats.data).streak) || 0 : 0;
+    // Only a streak grown at most a day a day since the last stats: none on the first push (a new
+    // account, or sharing back on), so a made-up streak can't announce a milestone.
+    if (stats && oldStats) {
+      const last = Number(JSON.parse(oldStats.data).streak) || 0;
+      const grown = stats.streak - last <= Math.floor((time - oldStats.at) / DAY) + 1;
       const reached = STREAKS.filter((days) => last < days && stats.streak >= days).pop();
 
-      if (reached) events.push(['streak', '', '', 'book', reached]);
+      if (reached && grown) events.push(['streak', '', '', 'book', reached]);
     }
   }
 
@@ -1377,14 +1412,7 @@ async function pushStatus(env: Env, user: UserRow, body: Row) {
           env.DB.prepare(
             `INSERT OR REPLACE INTO finished (user, book_key, title, kind, month, at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)`
-          ).bind(
-            user.id,
-            done.key,
-            done.title,
-            done.kind,
-            new Date(time * 1000).toISOString().slice(0, 7),
-            time
-          ),
+          ).bind(user.id, done.key, done.title, done.kind, finishedMonth(done.month, time), time),
           env.DB.prepare(
             `DELETE FROM finished WHERE user = ?1 AND book_key NOT IN
                (SELECT book_key FROM finished WHERE user = ?1 ORDER BY at DESC LIMIT ${MAX_FINISHED})`
@@ -1405,7 +1433,9 @@ async function pushStatus(env: Env, user: UserRow, body: Row) {
                (SELECT id FROM events WHERE user = ?1 ORDER BY at DESC, id DESC LIMIT ${MAX_EVENTS})`
           ).bind(user.id)
         ]
-      : [])
+      : []),
+    // `share` was read before this batch: a switch turned off meanwhile still wins.
+    ...unshared(env, user.id)
   ]);
 
   // The shared books this reader gave no thumbnail for: the app uploads the ones it has a cover of.
