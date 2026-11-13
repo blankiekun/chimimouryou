@@ -419,7 +419,8 @@ describe('immersion sync', () => {
     window.localStorage.setItem('readerDataOwner', 'bob');
     await syncImmersion();
 
-    const merged = { a: logged('a', 2), b: logged('b', 4) };
+    // The newer copy, with the larger automatic count
+    const merged = { a: logged('a', 2, 999), b: logged('b', 4) };
 
     expect(await db.get('known', 'immersion')).toEqual(merged);
     expect(api.doc('immersion', undefined, 'bob')).toEqual({ entries: merged });

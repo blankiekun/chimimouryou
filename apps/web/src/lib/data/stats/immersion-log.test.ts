@@ -13,6 +13,7 @@ vi.mock('$lib/data/account/account', () => ({
 }));
 
 import { readerDb } from '$lib/data/reader-db';
+import { isTrackerPaused$ } from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker';
 import {
   addImmersionEntry,
   addImmersionTime,
@@ -21,6 +22,7 @@ import {
   immersionLog$,
   isImmersionEntry,
   mergeImmersion,
+  sameImmersion,
   totalsByType,
   trackListening,
   type ImmersionEntry
@@ -46,7 +48,7 @@ describe('immersion log', () => {
     await (await readerDb()).delete('known', 'immersion');
   });
 
-  it('keeps the newest copy of each entry, removals included', () => {
+  it('keeps the newest copy of each entry, and a removal over any live copy', () => {
     expect(
       mergeImmersion(
         { a: entry('a', 5), b: entry('b', 1), c: entry('c', 3, { deleted: true }) },
@@ -57,11 +59,40 @@ describe('immersion log', () => {
         }
       )
     ).toEqual({
-      a: entry('a', 5),
+      a: entry('a', 4, { deleted: true }),
       b: entry('b', 2, { deleted: true }),
       c: entry('c', 3, { deleted: true }),
       d: entry('d', 1)
     });
+  });
+
+  it('lets a removal win over a newer live copy, and keeps the larger automatic counts', () => {
+    const auto = (modified: number, extra: Partial<ImmersionEntry> = {}) =>
+      entry('listen:x', modified, { source: 'listen', ...extra });
+
+    expect(
+      mergeImmersion({ x: auto(9, { seconds: 7260 }) }, { x: auto(2, { deleted: true }) }).x
+    ).toEqual(auto(2, { deleted: true }));
+    expect(
+      mergeImmersion({ x: auto(9, { seconds: 60 }) }, { x: auto(2, { seconds: 7200 }) }).x
+    ).toEqual(auto(9, { seconds: 7200 }));
+    expect(sameImmersion({ x: auto(9, { seconds: 60 }) }, { x: auto(9, { seconds: 7200 }) })).toBe(
+      false
+    );
+  });
+
+  it('starts a new automatic entry after a removal', async () => {
+    const day = new Date(2026, 9, 21, 12);
+
+    await addImmersionTime('hook', 'vn', 'ゲーム', 30, 100, day);
+    await deleteImmersionEntry(Object.keys(immersionLog$.getValue())[0]);
+    await addImmersionTime('hook', 'vn', 'ゲーム', 5, 1, day);
+    await addImmersionTime('hook', 'vn', 'ゲーム', 5, 1, day);
+
+    expect(entriesBetween(immersionLog$.getValue(), '2026-10-21', '2026-10-21')).toMatchObject([
+      { seconds: 10, characters: 2 }
+    ]);
+    expect(Object.keys(immersionLog$.getValue())).toHaveLength(2);
   });
 
   it('checks entries from other devices', () => {
@@ -120,5 +151,30 @@ describe('immersion log', () => {
         { type: 'listening', title: '本', source: 'listen', seconds: 120 }
       ])
     );
+  });
+
+  it('skips buffering and time the reader counts, and writes when the page hides', async () => {
+    vi.useFakeTimers({ now: new Date(2026, 9, 21, 12), toFake: ['Date'] });
+
+    const audio = document.createElement('audio');
+    const at = (minutes: number) => vi.setSystemTime(new Date(2026, 9, 21, 12, minutes));
+
+    Object.defineProperty(audio, 'paused', { value: false, configurable: true });
+    const stop = trackListening(audio, () => '本');
+
+    at(1);
+    audio.dispatchEvent(new Event('waiting'));
+    at(3);
+    audio.dispatchEvent(new Event('playing'));
+    at(4);
+    isTrackerPaused$.next(false);
+    at(10);
+    isTrackerPaused$.next(true);
+    at(11);
+    window.dispatchEvent(new Event('pagehide'));
+    await vi.waitFor(() =>
+      expect(Object.values(immersionLog$.getValue())).toMatchObject([{ seconds: 180 }])
+    );
+    stop();
   });
 });

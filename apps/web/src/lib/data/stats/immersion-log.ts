@@ -17,6 +17,7 @@ import { immersionChanged, pullImmersion } from '$lib/data/sync/extras-sync';
 import { readerDb } from '$lib/data/reader-db';
 import { startDayHoursForTracker$, statisticsEnabled$ } from '$lib/data/store';
 import { getDateKey } from '$lib/functions/statistic-util';
+import { isTrackerPaused$ } from '$lib/components/book-reader/book-reading-tracker/book-reading-tracker';
 
 /** Preset types; any other string is the reader's own type. */
 export const immersionTypes = ['vn', 'anime', 'podcast', 'listening', 'other'] as const;
@@ -61,14 +62,32 @@ export function isImmersionEntry(value: any): value is ImmersionEntry {
   );
 }
 
+/**
+ * A removal wins over any live copy, since an id is never written again once removed (see
+ * `addImmersionTime`): a device still adding to it can't bring the removed time back. Otherwise the
+ * newer copy, and an automatic entry keeps the larger counts, which only grow, so a device whose log
+ * was emptied can't overwrite the synced total with its fresh one.
+ */
+function pickImmersion(local: ImmersionEntry, remote: ImmersionEntry) {
+  if (!!local.deleted !== !!remote.deleted) return local.deleted ? local : remote;
+
+  const [older, newer] = remote.modified > local.modified ? [local, remote] : [remote, local];
+
+  if (newer.deleted || newer.source === 'manual') return newer;
+
+  return {
+    ...newer,
+    seconds: Math.max(older.seconds, newer.seconds),
+    characters: Math.max(older.characters, newer.characters)
+  };
+}
+
 /** Keeps the newest copy of each entry, removals included. */
 export function mergeImmersion(local: ImmersionLog, remote: ImmersionLog) {
   const merged = { ...local };
 
   for (const [id, entry] of Object.entries(remote)) {
-    if (!merged[id] || entry.modified > merged[id].modified) {
-      merged[id] = entry;
-    }
+    merged[id] = merged[id] ? pickImmersion(merged[id], entry) : entry;
   }
 
   return merged;
@@ -76,7 +95,13 @@ export function mergeImmersion(local: ImmersionLog, remote: ImmersionLog) {
 
 export const sameImmersion = (a: ImmersionLog, b: ImmersionLog) =>
   Object.keys(a).length === Object.keys(b).length &&
-  Object.entries(a).every(([id, entry]) => b[id]?.modified === entry.modified);
+  Object.entries(a).every(
+    ([id, entry]) =>
+      b[id]?.modified === entry.modified &&
+      !!b[id].deleted === !!entry.deleted &&
+      b[id].seconds === entry.seconds &&
+      b[id].characters === entry.characters
+  );
 
 async function change(apply: (log: ImmersionLog) => ImmersionLog) {
   const tx = (await readerDb()).transaction('known', 'readwrite');
@@ -133,7 +158,7 @@ function deviceId() {
   }
 }
 
-/** The automatic entry's id: one per source, day, device and title. */
+/** The automatic entry's id: one per source, day, device and title (`#2`… after a removal). */
 export const autoEntryId = (source: ImmersionSource, day: string, device: string, title: string) =>
   `${source}:${day}:${device}:${title}`;
 
@@ -149,10 +174,15 @@ export function addImmersionTime(
   if (seconds <= 0 && characters <= 0) return Promise.resolve();
 
   const day = getDateKey(startDayHoursForTracker$.getValue(), now);
-  const id = autoEntryId(source, day, deviceId(), title);
+  const base = autoEntryId(source, day, deviceId(), title);
 
   return change((log) => {
-    const old = log[id] && !log[id].deleted ? log[id] : undefined;
+    let id = base;
+
+    // A removed id stays removed (mergeImmersion), so the time after it starts a new entry
+    for (let n = 2; log[id]?.deleted; n += 1) id = `${base}#${n}`;
+
+    const old = log[id];
 
     return {
       ...log,
@@ -194,10 +224,13 @@ export function totalsByType(entries: ImmersionEntry[]) {
 
 /**
  * Counts play time of a Listen player's audio element into the log under the book's title:
- * wall time while it plays, written at each pause and every minute. Returns the cleanup.
+ * wall time while it plays, not while it buffers nor while the reader's tracker counts the same
+ * time as reading, written at each pause, every minute and when the page is hidden. Returns the
+ * cleanup.
  */
 export function trackListening(audio: HTMLMediaElement, title: () => string) {
   let since = 0;
+  let reading = false;
 
   const flush = () => {
     if (!since) return;
@@ -205,29 +238,49 @@ export function trackListening(audio: HTMLMediaElement, title: () => string) {
     const now = Date.now();
     const seconds = Math.round((now - since) / 1000);
 
-    since = audio.paused ? 0 : now;
+    since = audio.paused || reading ? 0 : now;
     if (seconds > 0 && title() && statisticsEnabled$.getValue()) {
       addImmersionTime('listen', 'listening', title(), seconds).catch(() => {});
     }
   };
-  const play = () => (since ||= Date.now());
+  const play = () => {
+    if (!reading) since ||= Date.now();
+  };
+  const stop = () => {
+    flush();
+    since = 0;
+  };
   const tick = () => {
     if (since && Date.now() - since >= 60_000) flush();
   };
+  // Best effort: the write is async and may not finish before the page goes
+  const hidden = () => {
+    if (document.visibilityState === 'hidden') flush();
+  };
+  const tracker = isTrackerPaused$.subscribe((paused) => {
+    reading = !paused;
+    if (reading) stop();
+    else if (!audio.paused) play();
+  });
 
   audio.addEventListener('playing', play);
   audio.addEventListener('pause', flush);
   audio.addEventListener('ended', flush);
+  audio.addEventListener('waiting', stop);
   audio.addEventListener('timeupdate', tick);
-  if (!audio.paused) play();
+  window.addEventListener('pagehide', flush);
+  document.addEventListener('visibilitychange', hidden);
 
   return () => {
-    flush();
-    since = 0;
+    stop();
+    tracker.unsubscribe();
     audio.removeEventListener('playing', play);
     audio.removeEventListener('pause', flush);
     audio.removeEventListener('ended', flush);
+    audio.removeEventListener('waiting', stop);
     audio.removeEventListener('timeupdate', tick);
+    window.removeEventListener('pagehide', flush);
+    document.removeEventListener('visibilitychange', hidden);
   };
 }
 
