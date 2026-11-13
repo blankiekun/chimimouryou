@@ -130,7 +130,8 @@
     const live = $discordValues$?.kind === 'book' ? $discordValues$ : null;
     const activity = buildActivity(activityTemplate('book'), live?.values ?? sampleValues.book, {
       times: { now: Date.now(), session: Date.now() },
-      cover: live?.cover
+      cover: live?.cover,
+      kind: 'book'
     });
 
     if (activity) await sendTest(activity);

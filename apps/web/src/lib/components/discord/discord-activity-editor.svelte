@@ -90,7 +90,8 @@
             bookLeft: 34_800
           },
           cover: live?.cover,
-          private: reading && hideTitles
+          private: reading && hideTitles,
+          kind
         })
       : undefined
   );

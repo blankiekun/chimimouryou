@@ -380,7 +380,12 @@ export async function renderActivity(
     template,
     blocked: !hidden && activityProblems(template, filled.values).length > 0,
     activity: template.show
-      ? buildActivity(template, filled.values, { times: filled.times, cover, private: hidden })
+      ? buildActivity(template, filled.values, {
+          times: filled.times,
+          cover,
+          private: hidden,
+          kind: activity.kind
+        })
       : undefined
   };
 }
