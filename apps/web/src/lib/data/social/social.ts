@@ -150,6 +150,12 @@ const finishedPending$ = writableArrayLocalStorageSubject<Omit<FinishedBook, 'mo
   []
 );
 
+/**
+ * Books seen at or past `finishedShare` here, so a book first seen finished (synced from another
+ * device, or dropped from currentBooks$) is sent finished once, not on every page turn.
+ */
+const finishedSeen$ = writableArrayLocalStorageSubject<string>()('socialFinishedSeen', []);
+
 /** Hidden books known to be off this hub account (sweepHidden) */
 const hiddenCleared$ = writableArrayLocalStorageSubject<string>()('socialHiddenCleared', []);
 
@@ -162,6 +168,7 @@ socialSession$.subscribe((session) => {
   if (window.localStorage.getItem('socialBooksUser') !== id) {
     currentBooks$.next([]);
     finishedPending$.next([]);
+    finishedSeen$.next([]);
     hiddenCleared$.next([]);
     window.localStorage.setItem('socialBooksUser', id);
   }
@@ -608,14 +615,19 @@ export function noteReading(
     readAt: Math.floor(Date.now() / 1000)
   };
   const before = currentBooks$.getValue();
-  const previous = before.find((other) => other.key === book.key);
-  const finished = !!previous && previous.pct < finishedShare && book.pct >= finishedShare;
+  const seen = finishedSeen$.getValue();
+  const done = book.pct >= finishedShare;
+  const finished = done && !seen.includes(book.key);
   const books = [book, ...before.filter((other) => other.key !== book.key)]
     .filter((other) => other.pct < finishedShare)
     .slice(0, 3);
 
   reading = !leaving;
   currentBooks$.next(books);
+  // Going back below it (a reread) lets the next finish count again.
+  if (finished || (!done && seen.includes(book.key))) {
+    finishedSeen$.next(finished ? [...seen, book.key] : seen.filter((key) => key !== book.key));
+  }
   if (finished && !isHidden(book)) {
     finishedPending$.next([
       ...finishedPending$.getValue().filter((other) => other.key !== book.key),

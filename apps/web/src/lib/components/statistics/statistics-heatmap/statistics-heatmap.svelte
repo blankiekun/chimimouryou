@@ -26,6 +26,7 @@
     BooksDbStatistic
   } from '$lib/data/database/books-db/versions/books-db';
   import { getDateRangeLabel } from '$lib/data/reading-goal';
+  import { countsAsRead, isCurrentRun } from '$lib/data/stats/learner-stats';
   import {
     lastStartDayOfWeek$,
     lastStatisticsEndDate$,
@@ -287,7 +288,7 @@
           entryData.readingTime += entry.readingTime;
           entryData.charactersRead += entry.charactersRead;
 
-          if (entry.readingTime) {
+          if (countsAsRead(entry)) {
             const entryDate = getDate(dateKey);
 
             if (!firstReadingDay) {
@@ -320,10 +321,13 @@
 
             entryData.titles.add(entry.title);
 
-            maxReadingTime = Math.max(maxReadingTime, entryData.readingTime);
-            minReadingTime = minReadingTime
-              ? Math.min(minReadingTime, entryData.readingTime)
-              : entryData.readingTime;
+            // Colours scale by time; a day read without time (a jump) stays out of the range.
+            if (entryData.readingTime > 0) {
+              maxReadingTime = Math.max(maxReadingTime, entryData.readingTime);
+              minReadingTime = minReadingTime
+                ? Math.min(minReadingTime, entryData.readingTime)
+                : entryData.readingTime;
+            }
 
             daysRead.add(dateKey);
           }
@@ -411,7 +415,7 @@
         if (dayKey >= firstDayOfYearDateString) {
           const dayData = globalHeatmapDayData.get(dayKey)!;
 
-          if (dayData.readingTime) {
+          if (dayData.titles.size) {
             const entryDate = getDate(dayKey);
 
             if (!firstReadingDay) {
@@ -421,10 +425,12 @@
             daysRead.add(dayKey);
 
             lastReadingDay = entryDate;
-            maxReadingTime = Math.max(maxReadingTime, dayData.readingTime);
-            minReadingTime = minReadingTime
-              ? Math.min(minReadingTime, dayData.readingTime)
-              : dayData.readingTime;
+            if (dayData.readingTime > 0) {
+              maxReadingTime = Math.max(maxReadingTime, dayData.readingTime);
+              minReadingTime = minReadingTime
+                ? Math.min(minReadingTime, dayData.readingTime)
+                : dayData.readingTime;
+            }
           }
         }
       }
@@ -465,23 +471,21 @@
 
       for (let index = 0, { length } = statisticsData; index < length; index += 1) {
         const entry = statisticsData[index];
+        // Goals count all reading: the title filter narrows the Statistics view, not a goal.
+        const entryData =
+          groupsedStatisticsData.get(entry.dateKey) || getDefaultHeatmapGlobalDayData();
 
-        if (statisticsTitleFilters.get(entry.title)) {
-          const entryData =
-            groupsedStatisticsData.get(entry.dateKey) || getDefaultHeatmapGlobalDayData();
+        entryData.readingTime += entry.readingTime;
+        entryData.charactersRead += entry.charactersRead;
 
-          entryData.readingTime += entry.readingTime;
-          entryData.charactersRead += entry.charactersRead;
+        if (countsAsRead(entry)) {
+          entryData.titles.add(entry.title);
+        }
 
-          if (entryData.readingTime) {
-            entryData.titles.add(entry.title);
-          }
+        groupsedStatisticsData.set(entry.dateKey, entryData);
 
-          groupsedStatisticsData.set(entry.dateKey, entryData);
-
-          if (entry.dateKey > lastDayString) {
-            lastDayString = entry.dateKey;
-          }
+        if (entry.dateKey > lastDayString) {
+          lastDayString = entry.dateKey;
         }
       }
 
@@ -635,7 +639,7 @@
         ),
         streaks,
         longestStreaks: getLongestStreaks(streaks),
-        currentStreak: getCurrentStreak(streaks, todayKey)
+        currentStreak: getCurrentStreak(streaks, goalWindowStart(todayKey))
       };
     }
 
@@ -700,7 +704,7 @@
           closedReadingGoalsCount
         ),
         longestStreaks: getLongestStreaks(streaksInYear),
-        currentStreak: getCurrentStreak(streaksInYear, todayKey)
+        currentStreak: getCurrentStreak(streaksInYear, goalWindowStart(todayKey))
       };
 
       heatmapDataByYear.set(heatmapYear, newMapData);
@@ -748,13 +752,29 @@
       : [];
   }
 
+  /**
+   * The first day of the goal window holding dateKey: the window still running doesn't end the
+   * streak of windows before it (isCurrentRun, like a day not read yet).
+   */
+  function goalWindowStart(dateKey: string) {
+    for (const goalWindow of (
+      globalHeatmapDayData as Map<string, ReadingGoalHeatmapGlobalDayData>
+    ).values()) {
+      if (goalWindow.readingGoalStartDate <= dateKey && dateKey <= goalWindow.readingGoalEndDate) {
+        return goalWindow.readingGoalStartDate;
+      }
+    }
+
+    return dateKey;
+  }
+
   function getCurrentStreak(streaks: HeatmapStreak[], dateKey: string) {
     let currentStreak: HeatmapStreak = { startDate: '', endDate: '', duration: 0 };
 
     for (let index = 0, { length } = streaks; index < length; index += 1) {
       const streak = streaks[index];
 
-      if (dateKey >= streak.startDate && dateKey <= streak.endDate) {
+      if (isCurrentRun(streak, dateKey)) {
         currentStreak = streak;
         break;
       }

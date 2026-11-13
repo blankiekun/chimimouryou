@@ -59,4 +59,11 @@ describe('periodTotals', () => {
     ).toEqual({ characters: 1200, time: 240, speed: 18000, days: 2, titles: 2 });
     expect(periodTotals([])).toEqual({ characters: 0, time: 0, speed: 0, days: 0, titles: 0 });
   });
+
+  // Bug: the page dropped characters without reading time that Home and the profile count.
+  it('counts characters without time, but not in the speed', () => {
+    expect(
+      periodTotals([entry('2026-10-01', 600, 'A', 60), entry('2026-10-02', 5000, 'B', 0)])
+    ).toEqual({ characters: 5600, time: 60, speed: 36000, days: 2, titles: 2 });
+  });
 });
