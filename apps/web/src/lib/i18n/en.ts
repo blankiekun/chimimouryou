@@ -1767,6 +1767,10 @@ export const en = {
   'discord.kind.idle': 'In the library (idle)',
   'discord.kindHint.idle':
     'Shown in the library, and when away if Away shows the Idle status. Book {variables} stay empty.',
+  'discord.kind.listen': 'Listening (Audiobookshelf)',
+  'discord.kindHint.listen':
+    'Shown while Audiobookshelf plays in the reader. With Show off, the book activity shows instead.',
+  'discord.listeningTo': 'Listening to {name}',
   'discord.preset.minimal': 'Minimal',
   'discord.preset.progress': 'Progress',
   'discord.preset.everything': 'Everything',

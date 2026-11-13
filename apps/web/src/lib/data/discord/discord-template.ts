@@ -84,7 +84,7 @@ export const partyVariables: VariableName[] = [
   'pageCount'
 ];
 
-export type DiscordKind = 'book' | 'manga' | 'vn' | 'idle';
+export type DiscordKind = 'book' | 'manga' | 'vn' | 'listen' | 'idle';
 export type LargeImage = 'logo' | 'cover' | 'custom';
 export type SmallImage = 'none' | 'logo' | 'ring' | 'kind' | 'custom';
 export type TimestampMode = 'none' | 'session' | 'opened' | 'chapterLeft' | 'bookLeft';
@@ -121,6 +121,8 @@ export interface DiscordActivityTemplate {
 
 /** The activity the add-on takes (SPEC.md) */
 export interface DiscordActivity {
+  /** 2: Listening (Discord shows "Listening to {name}"); left out for Playing */
+  type?: 2;
   name?: string;
   details?: string;
   details_url?: string;
@@ -360,6 +362,7 @@ export function buildActivity(
 
   if (options.private) {
     return {
+      ...(options.kind === 'listen' ? { type: 2 as const } : {}),
       name: text(template.privacyText, {}) ?? 'Reading',
       assets: { large_image: logoKey },
       ...(time ? { timestamps: time } : {})
@@ -407,6 +410,7 @@ export function buildActivity(
   if (!activity?.name && !activity?.details && !activity?.state) return undefined;
   if (!activity.details) delete activity.details_url;
   if (!activity.state) delete activity.state_url;
+  if (options.kind === 'listen') activity.type = 2;
   return activity;
 }
 

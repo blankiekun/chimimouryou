@@ -119,6 +119,10 @@ describe('Discord status relay', () => {
     expect((await call('PUT', '/v1/presence', { kind: 'idle', activity }, aki.token)).status).toBe(
       204
     );
+    vi.advanceTimersByTime(20_000);
+    expect(
+      (await call('PUT', '/v1/presence', { kind: 'listen', activity }, aki.token)).status
+    ).toBe(204);
     expect((await call('PUT', '/v1/presence', { kind: 'x', activity }, aki.token)).status).toBe(
       400
     );
@@ -435,6 +439,12 @@ describe('Discord status relay', () => {
     });
     expect(() => cleanActivity({ state: 'x' })).toThrow('activity');
     expect(() => cleanActivity([])).toThrow('activity');
+  });
+
+  it('keeps Listening (type 2) and drops other types', () => {
+    expect(cleanActivity({ name: 'Book', type: 2 })).toEqual({ type: 2, name: 'Book' });
+    expect(cleanActivity({ name: 'Book', type: 3 })).toEqual({ name: 'Book' });
+    expect(cleanActivity({ name: 'Book', type: '2' })).toEqual({ name: 'Book' });
   });
 
   it('compares hashes in constant time', () => {

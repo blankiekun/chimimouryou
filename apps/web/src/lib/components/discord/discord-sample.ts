@@ -20,7 +20,7 @@ const today: DiscordValues = {
   streak: '12 days'
 };
 
-export const sampleValues: Record<DiscordKind, DiscordValues> = {
+const samples: Record<Exclude<DiscordKind, 'listen'>, DiscordValues> = {
   book: {
     title: '薬屋のひとりごと',
     workUrl: 'https://anilist.co/manga/101011',
@@ -84,4 +84,9 @@ export const sampleValues: Record<DiscordKind, DiscordValues> = {
     ...today
   },
   idle: today
+};
+
+export const sampleValues: Record<DiscordKind, DiscordValues> = {
+  ...samples,
+  listen: { ...samples.book, kind: 'Audiobook' }
 };

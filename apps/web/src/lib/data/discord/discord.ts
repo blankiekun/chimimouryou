@@ -47,6 +47,7 @@ import {
 import { socialSession$ } from '$lib/data/social/social-account';
 import { resetHubCovers } from '$lib/data/discord/discord-covers';
 import { enabledPlugins$ } from '$lib/plugins/plugin-settings';
+import { nowPlaying$ } from '$lib/data/audio/now-playing';
 
 export const addonUrl = 'http://127.0.0.1:41918';
 /** Origins the add-on allows without `extraOrigins` (server.py DEFAULT_ORIGINS) */
@@ -141,6 +142,7 @@ const kindNames: Record<DiscordKind, string> = {
   book: 'Book',
   manga: 'Manga',
   vn: 'Visual novel',
+  listen: 'Audiobook',
   idle: ''
 };
 
@@ -549,7 +551,7 @@ async function discoverCover(activity: ReadingActivity) {
   if (kind === 'idle' || !title || !canSearch(title)) return;
   const series = (await catalogBook(title))?.series;
 
-  if (allowed()) findCover(title, kind, series);
+  if (allowed()) findCover(title, kind === 'listen' ? 'book' : kind, series);
 }
 
 const isPrivate = async (activity: ReadingActivity) => {
@@ -683,6 +685,7 @@ const sessionPositions = new Map<string, number>();
 let renderRun = 0;
 const openedAt = new Map<string, number>();
 let lastActivity: DiscordActivity | undefined;
+let listening = false;
 /** Which tab sent last: only that one re-sends, or two open tabs would swap the status. */
 const senderId = String(Math.random());
 /** The add-on clears a status after 15 minutes without a PUT (a crashed browser sends no DELETE). */
@@ -739,7 +742,12 @@ async function update() {
   if (!allowed() || !current) return;
 
   const run = ++renderRun;
-  const shown = away && discordOptions().awayIdle ? { kind: 'idle' as const } : current;
+  // With the Listening activity's Show off, the book activity shows.
+  const base =
+    listening && current.kind === 'book' && activityTemplate('listen').show
+      ? { ...current, kind: 'listen' as const }
+      : current;
+  const shown = away && discordOptions().awayIdle ? { kind: 'idle' as const } : base;
 
   if (away && !discordOptions().awayIdle) {
     clear();
@@ -798,7 +806,7 @@ export function discordActivity(activity: ReadingActivity | undefined) {
     clearTimeout(awayTimer);
     awayTimer = setTimeout(goAway, Math.max(1, discordOptions().awayMinutes) * 60_000);
   }
-  if (activity.playing) {
+  if (activity.playing || listening) {
     away = false;
     sessionStart ||= Date.now();
     clearTimeout(awayTimer);
@@ -823,7 +831,7 @@ export function resetSender() {
   current = pending = undefined;
   lastKey = '';
   lastAt = 0;
-  sent = away = false;
+  sent = away = listening = false;
   sessionStart = 0;
   openedAt.clear();
   sessionPositions.clear();
@@ -847,6 +855,21 @@ if (typeof window !== 'undefined') {
     }
   );
   window.addEventListener('pagehide', () => clear(true));
+  // Audiobookshelf playing is Listening: no Away while it plays.
+  nowPlaying$.subscribe((playing) => {
+    const next = !!playing?.playing && playing.source === 'audiobookshelf';
+
+    if (next === listening) return;
+    listening = next;
+    clearTimeout(awayTimer);
+    if (listening) {
+      away = false;
+      sessionStart ||= Date.now();
+    } else if (current && current.kind !== 'idle') {
+      awayTimer = setTimeout(goAway, Math.max(1, discordOptions().awayMinutes) * 60_000);
+    }
+    update();
+  });
   setInterval(() => {
     if (
       sent &&

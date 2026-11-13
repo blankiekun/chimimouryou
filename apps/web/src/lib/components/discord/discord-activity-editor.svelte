@@ -42,6 +42,7 @@
     book: 'discord.kind.book',
     manga: 'discord.kind.manga',
     vn: 'discord.kind.vn',
+    listen: 'discord.kind.listen',
     idle: 'discord.kind.idle'
   };
   const presetLabels: Record<DiscordPreset, MessageKey> = {
@@ -132,6 +133,7 @@
       <h2>{$t$(kindLabels[kind])}</h2>
       <!-- Only Idle needs saying: book variables stay empty there. -->
       {#if kind === 'idle'}<p>{$t$('discord.kindHint.idle')}</p>{/if}
+      {#if kind === 'listen'}<p>{$t$('discord.kindHint.listen')}</p>{/if}
       <p class="editor-phone">{$t$('discord.phoneNote')}</p>
     </div>
     <Switch checked={template.show} onchange={(next) => (template.show = next)}

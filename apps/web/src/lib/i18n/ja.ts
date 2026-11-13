@@ -1771,6 +1771,10 @@ export const ja: Record<MessageKey, string> = {
   'discord.kind.idle': 'ライブラリ（待機中）',
   'discord.kindHint.idle':
     'ライブラリで、また離席時に待機ステータスを出す設定なら離席中に表示。本の {variables} は空のままです。',
+  'discord.kind.listen': '聴いている（Audiobookshelf）',
+  'discord.kindHint.listen':
+    'リーダーで Audiobookshelf を再生中に表示。表示をオフにすると本のアクティビティが出ます。',
+  'discord.listeningTo': '{name} を聴いています',
   'discord.preset.minimal': '最小',
   'discord.preset.progress': '進み具合',
   'discord.preset.everything': 'すべて',
