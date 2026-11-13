@@ -294,6 +294,8 @@ export interface BuildOptions {
   cover?: string;
   /** Hidden from friends, or Hide titles everywhere: only the privacy text and the logo */
   private?: boolean;
+  /** The activity's kind: the Kind icon, and Listening (type 2) */
+  kind?: DiscordKind;
 }
 
 /** The finished activity, cut to Discord's limits; undefined when nothing is left to show. */
