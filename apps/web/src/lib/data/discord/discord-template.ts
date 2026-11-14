@@ -23,6 +23,10 @@ export const discordLimits = {
 /** The Discord app's art asset key for the app logo (App logo, and the fallback for covers) */
 export const logoKey = 'applogo';
 
+/** The ring and kind art, served by the default social hub from its R2 bucket (apps/anki-discord/art) */
+// shortcut: the URLs are cached for a year; redrawn art needs new file names.
+export const artUrl = (key: string) => `https://chimi-hub.blankiekun.workers.dev/v1/art/${key}.png`;
+
 /** Progress ring art key for a {percent} value: 5% steps, rounded down (ring-0…ring-100) */
 export function ringKey(percent?: string) {
   const p = parseFloat(percent?.replace(/[^\d.]/g, '') ?? '');
@@ -310,7 +314,7 @@ function linkText(template: string, values: DiscordValues, max = discordLimits.u
 
 function image(choice: string, custom: string, cover?: string, small?: string) {
   if (choice === 'logo') return logoKey;
-  if (choice === 'ring' || choice === 'kind') return small;
+  if (choice === 'ring' || choice === 'kind') return small && artUrl(small);
   if (choice === 'cover') return cover && isHttps(cover) ? cover : logoKey;
   if (choice === 'custom') {
     const value = custom.trim();

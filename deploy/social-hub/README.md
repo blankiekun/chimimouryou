@@ -107,6 +107,8 @@ people `picture` (a version, 0 for none); `GET cover/:hash` and `GET avatar/:id/
 them from the edge cache, else R2, with `Cache-Control: public, max-age=31536000, s-maxage=86400, immutable` (a removed image stops
 answering from the edge within a day), and
 skip the edge limit (a shelf shows a dozen at once; each device fetches each URL once).
+`GET art/:name.png` serves the Discord status art the same way (`image/png`; only `ring-0`…`ring-100`
+in 5% steps and `kind-book|manga|vn|listen`; uploaded to R2 by hand, see `apps/anki-discord/art/README.md`).
 `POST friends/request` (`{code}`, or `{username}` of a public profile); `POST friends/:id/accept`;
 `DELETE friends/:id` (decline, cancel, remove); `POST block/:id`. `GET /privacy` is the privacy
 page. Limits are counters in D1 (`limits`).
