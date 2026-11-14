@@ -1074,8 +1074,8 @@ async function removePicture(request: Request, env: Env, user: UserRow) {
 }
 
 /**
- * GET /v1/cover/:file and /v1/avatar/:id/:version, from the edge cache, else R2. The URLs never
- * change, so browsers and the edge keep them for a year.
+ * GET /v1/cover/:file, /v1/avatar/:id/:version and /v1/art/:name.png (Discord status art), from the
+ * edge cache, else R2. The URLs never change, so browsers and the edge keep them for a year.
  */
 async function serveImage(request: Request, env: Env, ctx: Context | undefined, path: string) {
   const cache = edgeCache();
@@ -1093,7 +1093,7 @@ async function serveImage(request: Request, env: Env, ctx: Context | undefined, 
   const response = new Response(object.body, {
     headers: {
       ...cors,
-      'Content-Type': 'image/webp',
+      'Content-Type': path.endsWith('.png') ? 'image/png' : 'image/webp',
       'Cache-Control': IMMUTABLE,
       'X-Content-Type-Options': 'nosniff'
     }
@@ -2323,9 +2323,10 @@ export default {
   async fetch(request: Request, env: Env, ctx?: Context) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     try {
-      const image = /^\/v1\/((?:cover|work)\/[0-9a-f]{16}|avatar\/[0-9a-f]{16}\/\d{1,12})$/.exec(
-        new URL(request.url).pathname
-      );
+      const image =
+        /^\/v1\/((?:cover|work)\/[0-9a-f]{16}|avatar\/[0-9a-f]{16}\/\d{1,12}|art\/(?:ring-(?:[05]|[1-9][05]|100)|kind-(?:book|manga|vn|listen))\.png)$/.exec(
+          new URL(request.url).pathname
+        );
 
       // Images skip the edge limit (a shelf shows a dozen at once); each URL is fetched about
       // once per device and edge location.

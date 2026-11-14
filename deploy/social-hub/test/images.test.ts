@@ -280,6 +280,17 @@ describe('hub images', () => {
     expect(objects.size).toBe(0);
   });
 
+  it('serves the Discord art as PNG, and only the known names', async () => {
+    objects.set('art/ring-45.png', new Uint8Array([137, 80, 78, 71]));
+    const art = await call('GET', '/v1/art/ring-45.png');
+    expect(art.status).toBe(200);
+    expect(art.headers.get('Content-Type')).toBe('image/png');
+    expect(art.body).toEqual(new Uint8Array([137, 80, 78, 71]));
+    expect((await call('GET', '/v1/art/kind-vn.png')).status).toBe(404);
+    for (const name of ['ring-47', 'ring-105', 'kind-x', '../cover/0123456789abcdef'])
+      expect((await call('GET', `/v1/art/${name}.png`)).status).not.toBe(200);
+  });
+
   it('replaces and removes a picture, 5 uploads a day, and deletes it with the account', async () => {
     const aki = await signUp('aki');
     const ren = await signUp('ren');

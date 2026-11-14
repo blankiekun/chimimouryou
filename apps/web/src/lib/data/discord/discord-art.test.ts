@@ -44,16 +44,16 @@ describe('ringKey', () => {
 });
 
 describe('small ring and kind images', () => {
-  it('puts the ring or kind key in small_image', () => {
+  it('puts the hub URL of the ring or kind art in small_image', () => {
     expect(buildActivity(template, values, { times })?.assets).toEqual({
       large_image: 'applogo',
-      small_image: 'ring-45',
+      small_image: 'https://chimi-hub.blankiekun.workers.dev/v1/art/ring-45.png',
       small_text: '47%'
     });
     expect(
       buildActivity({ ...template, smallImage: 'kind' }, values, { times, kind: 'vn' })?.assets
         ?.small_image
-    ).toBe('kind-vn');
+    ).toBe('https://chimi-hub.blankiekun.workers.dev/v1/art/kind-vn.png');
   });
 
   it('drops them when there is nothing to show', () => {
