@@ -246,17 +246,49 @@ def vn_mtime(vn_dir: str) -> float:
 def book_kind(file_path: str, fmt: str) -> str | None:
     """'vn' for a CBZ/ZIP holding an ONScripter game, 'book' for anything else usable. None skips it: missing
     files, non-zip EPUB/HTMLZ, e.g. macOS '._' resource forks, and CBZ/ZIP files that aren't mostly images."""
+    return book_kind_and_pages(file_path, fmt)[0]
+
+
+def book_kind_and_pages(file_path: str, fmt: str) -> tuple[str | None, int | None]:
+    """book_kind, and a manga's page count (None for anything else)."""
     try:
         if fmt in MANGA_FORMATS:
             with zipfile.ZipFile(file_path) as archive:
                 files = [name for name in archive.namelist() if not name.endswith('/')]
                 if is_vn(archive):
-                    return 'vn'
-                return 'book' if len(manga_pages(archive)) * 2 > len(files) else None
+                    return 'vn', None
+                pages = len(manga_pages(archive))
+                return ('book', pages) if pages * 2 > len(files) else (None, None)
         with open(file_path, 'rb') as f:
-            return 'book' if fmt == 'TXT' or f.read(2) == b'PK' else None
+            return 'book' if fmt == 'TXT' or f.read(2) == b'PK' else None, None
     except (OSError, zipfile.BadZipFile):
+        return None, None
+
+
+def difficulty_path() -> str:
+    """The difficulty service's results (served as /calibre/difficulty.json), mounted read-only here."""
+    return os.path.join(os.environ.get('JITEN_STATE_DIR', '/data/state/difficulty'), 'difficulty.json')
+
+
+def difficulty_estimates() -> dict | None:
+    """Calibre id (a string) -> estimate from difficulty.json; None when it can't be read (no difficulty
+    service, not mounted, damaged), which keeps the counts already stored rather than clearing them."""
+    try:
+        with open(difficulty_path(), encoding='utf-8') as f:
+            books = json.load(f)['books']
+    except (OSError, ValueError, KeyError, TypeError):
         return None
+    return books if isinstance(books, dict) else None
+
+
+def estimated_characters(estimate, book: dict) -> int | None:
+    """The book's character count from its estimate; None without one, or from a file replaced since
+    (`added` moved, as jobs.file_replaced tells)."""
+    if not isinstance(estimate, dict) or not isinstance(estimate.get('characters'), int):
+        return None
+    if estimate.get('added', book['added']) != book['added']:
+        return None
+    return estimate['characters']
 
 
 MAX_COVER_BYTES = 20 * 1024 * 1024
@@ -515,8 +547,10 @@ def build(library: str, output: str, vn_dir: str | None = None, force: bool = Fa
     # Skip unless the library, the games or this script changed since the last build.
     # The output gets the inputs' time, not the time the build finished, so a book
     # added while a build ran is picked up by the next one.
+    # New difficulty estimates too, for the books' character counts.
     newest_input = max(os.path.getmtime(db_path), os.path.getmtime(__file__),
-                       vn_mtime(vn_dir) if vn_dir else 0)
+                       vn_mtime(vn_dir) if vn_dir else 0,
+                       os.path.getmtime(difficulty_path()) if os.path.exists(difficulty_path()) else 0)
     api_db = os.environ.get('API_DB')
     if (not force and os.path.exists(output) and os.path.getmtime(output) >= newest_input
             and not (api_db and api_db_empty(api_db))):
@@ -560,7 +594,7 @@ def build(library: str, output: str, vn_dir: str | None = None, force: bool = Fa
         if current and FORMATS.index(current['format']) <= FORMATS.index(fmt):
             continue
         file = f'{path}/{name}.{fmt.lower()}'
-        kind = book_kind(os.path.join(library, file), fmt)
+        kind, pages = book_kind_and_pages(os.path.join(library, file), fmt)
         if not kind:
             continue
         books[book_id] = {
@@ -581,6 +615,7 @@ def build(library: str, output: str, vn_dir: str | None = None, force: bool = Fa
             'size': size,
             'file': file,
             'cover': '',
+            'pages': pages,
         }
 
     add_missing_covers(library, books, os.path.join(os.path.dirname(output), 'no-cover.json'))
@@ -591,7 +626,13 @@ def build(library: str, output: str, vn_dir: str | None = None, force: bool = Fa
             book['cover'] = cover
 
     for game in vn_games(vn_dir) if vn_dir else []:
-        books[game['id']] = game
+        books[game['id']] = {**game, 'pages': None}
+
+    # Without the results, 'characters' is left out: library.db keeps its counts (apidb.book_columns).
+    estimates = difficulty_estimates()
+    if estimates is not None:
+        for book in books.values():
+            book['characters'] = estimated_characters(estimates.get(str(book['id'])), book)
 
     # Most books have no Calibre series, so group volumes by title ('...１', '...２').
     groups = defaultdict(list)

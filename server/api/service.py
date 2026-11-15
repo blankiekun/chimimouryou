@@ -100,7 +100,7 @@ def book_json(row) -> dict:
         'tags': json.loads(row['tags']), 'rating': row['rating'], 'publisher': row['publisher'],
         'published': row['published'], 'added': row['added'], 'format': row['format'], 'file': row['file'],
         'size': row['size'], 'cover': row['cover'], 'vn': bool(row['vn']), 'deleted': bool(row['deleted']),
-        'rev': row['rev'],
+        'characters': row['characters'], 'pages': row['pages'], 'rev': row['rev'],
     }
 
 

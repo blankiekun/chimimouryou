@@ -55,6 +55,25 @@ class ApiDbTest(unittest.TestCase):
             self.assertEqual(row['deleted'], 0)
         self.assertEqual(upgraded.query('SELECT data FROM statistics')[0][0], '{"x":1}')
 
+    # Catches: a library.db from before book lengths failing every catalog build and catalog request.
+    def test_adds_book_lengths_to_old_schema(self):
+        path = os.path.join(self.tmp.name, 'old', 'library.db')
+        os.makedirs(os.path.dirname(path))
+        import sqlite3
+        old = sqlite3.connect(path)
+        sql = self.db.query("SELECT sql FROM sqlite_master WHERE name = 'books'")[0][0]
+        old.execute(sql.replace(',\n    characters INTEGER', '').replace(',\n    pages INTEGER', ''))
+        old.execute("INSERT INTO books (key, calibre_id, title, unique_title, format, file, updated, rev) "
+                    "VALUES ('k1', 1, 'a', 'a', 'EPUB', 'a.epub', 0, 1)")
+        old.commit()
+        self.assertNotIn('pages', [row[1] for row in old.execute('PRAGMA table_info(books)')])
+        old.close()
+        for _ in range(2):
+            upgraded = apidb.Database(path)
+            [row] = upgraded.query('SELECT key, characters, pages FROM books')
+            upgraded.connection.close()
+            self.assertEqual(tuple(row), ('k1', None, None))
+
     # Catches a transaction that raises halfway leaving partial rows, a used-up rev, or a stuck BEGIN or
     # lock: one connection serves every request thread, so that would block all writes until a restart.
     def test_a_failed_transaction_rolls_back_and_frees_the_lock(self):
