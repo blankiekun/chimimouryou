@@ -94,10 +94,12 @@ services:
         '-c',
         'while :; do build-calibre-catalog /library /data/state/catalog/catalog.json --thumbs; sleep ${CATALOG_INTERVAL:-600}; done'
       ]
-    # It runs Pillow on book files: only its own state and the library database. No accounts.
+    # It runs Pillow on book files: only its own state, the library database and the difficulty
+    # results (books' character counts). No accounts.
     volumes:
       - ${DATA_PATH:-./data}/state/catalog:/data/state/catalog
       - ${DATA_PATH:-./data}/state/api:/data/state/api
+      - ${DATA_PATH:-./data}/state/difficulty:/data/state/difficulty:ro
       - ${LIBRARY_PATH:?set LIBRARY_PATH in .env}:/library
       - ${VN_PATH:-${DATA_PATH:-./data}/vn}:/vn:ro
 
@@ -124,6 +126,7 @@ services:
       - ${DATA_PATH:-./data}/state/import:/data/state/import
       - ${DATA_PATH:-./data}/state/catalog:/data/state/catalog
       - ${DATA_PATH:-./data}/state/api:/data/state/api
+      - ${DATA_PATH:-./data}/state/difficulty:/data/state/difficulty:ro
       - ${LIBRARY_PATH:?set LIBRARY_PATH in .env}:/library
       # Game ZIPs are unpacked here; its catalog rebuilds list the visual novels too.
       - ${VN_PATH:-${DATA_PATH:-./data}/vn}:/vn

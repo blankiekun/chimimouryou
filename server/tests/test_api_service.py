@@ -123,6 +123,14 @@ class ReadTest(ServiceTestCase):
         self.assertEqual(self.call('GET', '/api/v1/catalog?since=-1')[0], 400)
         self.assertEqual(self.call('GET', '/api/v1/catalog?since=x')[0], 400)
 
+    # Catches: lengths missing from the catalog, or a count the builder didn't know (no estimate) given as 0.
+    def test_catalog_book_length(self):
+        self.books([{**catalog_book(1, '猫'), 'characters': 120000},
+                    {**catalog_book(2, '漫画'), 'format': 'CBZ', 'pages': 180}, catalog_book(3, '犬')])
+        books = self.call('GET', '/api/v1/catalog?since=0')[1]['books']
+        self.assertEqual({b['originalTitle']: (b['characters'], b['pages']) for b in books},
+                         {'猫': (120000, None), '漫画': (None, 180), '犬': (None, None)})
+
     # Bug caught: before the first build the client must see 'being built' (404), not an empty library;
     # an empty library after it must not stay 'being built'.
     def test_catalog_before_first_build(self):

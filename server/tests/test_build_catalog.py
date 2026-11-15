@@ -177,7 +177,7 @@ class UniqueTitlesTest(unittest.TestCase):
 
 def write_library(library, books):
     """A minimal Calibre library: metadata.db (rewritten) and one EPUB per book. Books are dicts with
-    id, title and optionally series, uuid, authors, added (Calibre timestamp)."""
+    id, title and optionally series, uuid, authors, added (Calibre timestamp); with pages, a CBZ of that many."""
     import sqlite3
     db_path = os.path.join(library, 'metadata.db')
     if os.path.exists(db_path):
@@ -200,13 +200,18 @@ def write_library(library, books):
     """)
     for book in books:
         book_id = book['id']
+        fmt = 'CBZ' if 'pages' in book else 'EPUB'
         os.makedirs(os.path.join(library, str(book_id)), exist_ok=True)
-        with zipfile.ZipFile(os.path.join(library, str(book_id), 'b.epub'), 'w') as epub:
-            epub.writestr('META-INF/container.xml', '<container/>')
+        with zipfile.ZipFile(os.path.join(library, str(book_id), f'b.{fmt.lower()}'), 'w') as archive:
+            if fmt == 'CBZ':
+                for page in range(book['pages']):
+                    archive.writestr(f'{page + 1}.jpg', b'x')
+            else:
+                archive.writestr('META-INF/container.xml', '<container/>')
         db.execute('INSERT INTO books VALUES (?, ?, ?, ?, 1, NULL, ?)',
                    (book_id, book['title'], str(book_id), book.get('added', '2026-01-01 00:00:00+00:00'),
                     book.get('uuid')))
-        db.execute('INSERT INTO data VALUES (?, "EPUB", "b", 1)', (book_id,))
+        db.execute('INSERT INTO data VALUES (?, ?, "b", 1)', (book_id, fmt))
         if book.get('series'):
             db.execute('INSERT OR IGNORE INTO series (name) VALUES (?)', (book['series'],))
             db.execute('INSERT INTO books_series_link SELECT ?, id FROM series WHERE name = ?',
@@ -294,7 +299,9 @@ class CatalogDbTest(unittest.TestCase):
         self.output = os.path.join(tmp.name, 'state', 'catalog', 'catalog.json')
         os.makedirs(os.path.dirname(self.output))
         self.db_path = os.path.join(tmp.name, 'state', 'api', 'library.db')
-        patcher = mock.patch.dict(os.environ, {'API_DB': self.db_path})
+        self.difficulty = os.path.join(tmp.name, 'state', 'difficulty', 'difficulty.json')
+        patcher = mock.patch.dict(os.environ, {'API_DB': self.db_path,
+                                               'JITEN_STATE_DIR': os.path.dirname(self.difficulty)})
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -381,6 +388,64 @@ class CatalogDbTest(unittest.TestCase):
         apidb.Database(self.db_path).connection.close()
         catalog.main(self.library, self.output)
         self.assertEqual(list(self.rows()), [1])
+
+    def write_difficulty(self, books, mtime=None):
+        os.makedirs(os.path.dirname(self.difficulty), exist_ok=True)
+        with open(self.difficulty, 'w', encoding='utf-8') as f:
+            json.dump({'books': books}, f)
+        if mtime:
+            os.utime(self.difficulty, (mtime, mtime))
+
+    def lengths(self):
+        return {i: (row['characters'], row['pages']) for i, row in self.rows().items()}
+
+    # Catches: page counts missing for manga or made up for text books; a count from an estimate of a
+    # replaced file (its `added` moved); a book with no estimate getting anything but null.
+    def test_book_length(self):
+        added = catalog.added_ms('2026-01-01 00:00:00+00:00')
+        self.write_difficulty({'1': {'characters': 120000, 'added': added}, '2': {'characters': 5000, 'added': 1},
+                               '3': {'characters': 9000, 'added': added}})
+        self.build([self.book(1, '猫'), self.book(2, '犬'), {**self.book(3, '漫画'), 'pages': 3},
+                    self.book(4, '鳥')])
+        self.assertEqual(self.lengths(), {1: (120000, None), 2: (None, None), 3: (9000, 3), 4: (None, None)})
+        with open(self.output, encoding='utf-8') as f:
+            listed = {b['id']: (b['characters'], b['pages']) for b in json.load(f)['books']}
+        self.assertEqual(listed, self.lengths())
+
+    # Catches: a library upgraded to this version (or estimated later) never sending the lengths to clients
+    # that sync the catalog with since=rev, because nothing else about the books changed.
+    def test_new_lengths_bump_the_rev(self):
+        books = [self.book(1, '猫')]
+        self.build(books)
+        rev = self.rev()
+        self.write_difficulty({'1': {'characters': 120000}})
+        self.build(books)
+        self.assertGreater(self.rev(), rev)
+        self.assertEqual(self.rows()[1]['rev'], self.rev())
+        self.assertEqual(self.lengths(), {1: (120000, None)})
+
+    # Catches: new estimates staying out of the catalog until Calibre changes, since a build is skipped while
+    # its inputs are older than catalog.json.
+    def test_new_estimates_start_a_build(self):
+        write_library(self.library, [self.book(1, '猫')])
+        catalog.main(self.library, self.output)
+        self.write_difficulty({'1': {'characters': 120000}}, os.path.getmtime(self.output) + 10)
+        catalog.main(self.library, self.output)
+        self.assertEqual(self.lengths(), {1: (120000, None)})
+
+    # Catches: a build that can't see difficulty.json (the import service's, a server without the difficulty
+    # profile, a damaged file) dropping every known count and bumping the rev, then the next one putting them back.
+    def test_counts_stay_without_estimates(self):
+        books = [self.book(1, '猫')]
+        self.write_difficulty({'1': {'characters': 120000}})
+        self.build(books)
+        rev = self.rev()
+        os.remove(self.difficulty)
+        self.build(books)
+        with open(self.difficulty, 'w', encoding='utf-8') as f:
+            f.write('{"books": ')
+        self.build(books)
+        self.assertEqual((self.lengths(), self.rev()), ({1: (120000, None)}, rev))
 
     def test_vn_key(self):
         os.makedirs(os.path.join(self.vn, 'game1'))

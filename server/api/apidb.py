@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS books (
     size INTEGER NOT NULL DEFAULT 0,
     cover TEXT NOT NULL DEFAULT '',
     vn INTEGER NOT NULL DEFAULT 0,
+    characters INTEGER,
+    pages INTEGER,
     updated INTEGER NOT NULL,
     deleted INTEGER NOT NULL DEFAULT 0,
     rev INTEGER NOT NULL
@@ -251,6 +253,11 @@ class Database:
             columns = [row['name'] for row in self.connection.execute(f'PRAGMA table_info({table})')]
             if 'deleted' not in columns:
                 self.connection.execute(f'ALTER TABLE {table} ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0')
+        # Databases from before book lengths: null until the next catalog build fills them (and bumps their rev).
+        columns = [row['name'] for row in self.connection.execute('PRAGMA table_info(books)')]
+        for column in ('characters', 'pages'):
+            if column not in columns:
+                self.connection.execute(f'ALTER TABLE books ADD COLUMN {column} INTEGER')
         drop_kind_checks(self.connection)
         self.lock = threading.Lock()
 
@@ -330,13 +337,15 @@ def to_json(value) -> str:
 
 
 def book_columns(book: dict) -> dict:
-    """books columns (besides key, unique_title and the bookkeeping ones) from a catalog builder dict."""
+    """books columns (besides key, unique_title and the bookkeeping ones) from a catalog builder dict. A dict
+    without 'characters' (the builder couldn't read the difficulty results) keeps the stored count."""
     return {
         'calibre_id': book['id'], 'title': book['title'], 'authors': book['authors'], 'series': book['series'],
         'series_index': book['seriesIndex'], 'series_inferred': int(bool(book['seriesInferred'])),
         'tags': to_json(book['tags']), 'rating': book['rating'], 'publisher': book['publisher'],
         'published': book['published'], 'added': book['added'], 'format': book['format'], 'file': book['file'],
-        'size': book['size'] or 0, 'cover': book['cover'], 'vn': int(bool(book['vn'])),
+        'size': book['size'] or 0, 'cover': book['cover'], 'vn': int(bool(book['vn'])), 'pages': book.get('pages'),
+        **({'characters': book['characters']} if 'characters' in book else {}),
     }
 
 
