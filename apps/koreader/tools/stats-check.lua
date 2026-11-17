@@ -21,6 +21,8 @@ stub("util", { tableDeepCopy = deepcopy })
 stub("ffi/util", { template = function(s) return s end })
 stub("gettext", function(s) return s end)
 stub("rapidjson", { null = null })
+local library_reset
+stub("library", { reset = function() library_reset = true end })
 
 local Chimi = dofile(plugin .. "/main.lua")
 
@@ -153,6 +155,9 @@ c:set("progress", { ["7"] = { modified = 1, count = 1, progress = 0.1 } })
 assert(not c:pull({ sync = function() return 401 end }))
 assert(c:get("token") == nil and c:get("account_id") == nil and c:get("progress") == nil)
 assert(c:get("username") == "me" and c:get("pending")["7"])
+assert(library_reset, "the library's session cache goes too")
+-- Until the next sign-in nothing is pulled (or pushed) as the shared account.
+assert(not c:pull({ sync = function() error("pulled without a token") end }))
 
 -- summary: today, the last 7 days, streaks, deleted rows, unsent time, characters without time.
 fake_now = real_time{ year = 2026, month = 3, day = 10, hour = 12 }

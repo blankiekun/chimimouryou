@@ -252,6 +252,13 @@ function Chimi:forget(keep_pending)
         if not (keep_pending and (key == "pending" or key == "username")) then self.store:delSetting(key) end
     end
     self.store:flush()
+    require("library").reset()
+end
+
+--- After a 401 the username stays and the token is gone: until the next sign-in, pulls and pushes
+--- would be the shared account's (a trusted network lets them through).
+function Chimi:signedOut()
+    return self:get("username") ~= nil and not self:get("token")
 end
 
 --- A 401 while signed in: the token was revoked or expired. The mirror goes too (pulls after this
@@ -403,6 +410,7 @@ end
 --- to its own LuaSettings file if it passes ~1 MB.
 --- Returns true, or false and the error.
 function Chimi:pull(api)
+    if self:signedOut() then return false, _("signed out") end
     local code, body, err = api:sync(self:get("rev_all", 0))
     self:lostToken(code)
     if code ~= 200 or not body then return false, err end
@@ -432,6 +440,7 @@ end
 --- homeRemovedTitles: title → time removed, negative when added back).
 --- Without a settings doc (or on an older server) the last known values stay, midnight at first.
 function Chimi:pullSettings(api)
+    if self:signedOut() then return end
     local code, body = api:doc("settings")
     if code ~= 200 or type(body) ~= "table" or type(body.data) ~= "table" then return end
     local values = type(body.data.values) == "table" and body.data.values or {}

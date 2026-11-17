@@ -202,19 +202,24 @@ class Handler(BaseHTTPRequestHandler):
         if 'series' in self.query:
             where.append('series = ?')
             params.append(self.query['series'][0])
-        # Exact books (KOReader's Home and Continue reading): ids=1,2,3 and/or titles= (repeated).
+        # Exact books (KOReader's Home and Continue reading): ids=1,2,3 and/or titles= (repeated),
+        # each book matching either.
+        exact, exact_params = [], []
         if 'ids' in self.query:
             ids = [part for value in self.query['ids'] for part in value.split(',') if part]
             if not ids or len(ids) > 100 or not all(re.fullmatch(r'\d{1,16}', part) for part in ids):
                 raise ApiError(400, 'Bad ids')
-            where.append(f'id IN ({",".join("?" * len(ids))})')
-            params += [int(part) for part in ids]
+            exact.append(f'id IN ({",".join("?" * len(ids))})')
+            exact_params += [int(part) for part in ids]
         if 'titles' in self.query:
             titles = self.query['titles']
             if len(titles) > 100:
                 raise ApiError(400, 'Bad titles')
-            where.append(f'unique_title IN ({",".join("?" * len(titles))})')
-            params += titles
+            exact.append(f'unique_title IN ({",".join("?" * len(titles))})')
+            exact_params += titles
+        if exact:
+            where.append(f'({" OR ".join(exact)})')
+            params += exact_params
         if cursor := self.query.get('cursor', [''])[0]:
             found = re.fullmatch(r'(-?\d{1,16}):(-?\d{1,16})', cursor)
             if not found:

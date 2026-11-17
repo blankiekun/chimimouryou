@@ -172,6 +172,7 @@ class ReadTest(ServiceTestCase):
         # Exact books by id or unique title (KOReader's Home and Continue reading).
         ids = {b['title']: b['id'] for b in self.call('GET', '/api/v1/books')[1]['books']}
         self.assertEqual(titles(f"ids={ids['こころ']},{ids['吾輩は猫である']}"), (['こころ', '吾輩は猫である'], None))
+        self.assertEqual(titles(f"ids={ids['こころ']}&titles=" + urllib.request.quote('猫町')), (['こころ', '猫町'], None))
         self.assertEqual(titles('titles=' + urllib.request.quote('猫町') + '&titles=' + urllib.request.quote('三四郎')),
                          (['三四郎', '猫町'], None))
         self.assertEqual(self.call('GET', '/api/v1/books?ids=1,x')[0], 400)

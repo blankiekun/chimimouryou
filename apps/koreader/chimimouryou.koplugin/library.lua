@@ -134,6 +134,11 @@ end
 -- Server books by id and by unique title (false: asked for, not there), for this KOReader session.
 local by_id, by_title = {}, {}
 
+--- Forgets the session's server data (another server or account: Chimi:forget).
+function Library.reset()
+    by_id, by_title, levels = {}, {}, nil
+end
+
 -- Games aren't books KOReader can open.
 local function openable(book)
     return not book.vn and not book.deleted and type(book.file) == "string"
@@ -246,6 +251,9 @@ end
 
 function Library.show(plugin)
     -- Best effort: offline or signed out the sections show what this device knows.
+    local busy = InfoMessage:new{ text = _("Loading the library…") }
+    UIManager:show(busy)
+    UIManager:forceRePaint()
     plugin:pull(plugin:api())
     local api = plugin:api() -- without the token when the pull found it dead
     plugin:pullSettings(api)
@@ -297,7 +305,9 @@ function Library.show(plugin)
     function state.load(more)
         local code, body, err = api:books(state.q, more and state.next or nil)
         if code ~= 200 or not body then
+            UIManager:close(busy)
             UIManager:show(InfoMessage:new{ text = T(_("Could not read the library: %1"), err or "?") })
+            if not more then render() end -- the sections still open what is on this device
             return
         end
         if not more then state.books = {} end
@@ -308,6 +318,7 @@ function Library.show(plugin)
         end
         state.next = type(body.next) == "string" and body.next or nil
         render()
+        UIManager:close(busy)
     end
 
     menu = Menu:new{
