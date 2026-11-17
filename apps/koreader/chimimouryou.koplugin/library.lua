@@ -1,8 +1,7 @@
 -- SPDX-License-Identifier: GPL-3.0-or-later
 -- chimimouryou KOReader plugin: the server's library (GET /api/v1/books), with each book's 1-10
--- difficulty level, search and download.
+-- difficulty level, search and download, under the sections Continue reading, Home and On this device.
 
-local ConfirmBox = require("ui/widget/confirmbox")
 local DataStorage = require("datastorage")
 local DocSettings = require("docsettings")
 local InfoMessage = require("ui/widget/infomessage")
@@ -88,25 +87,37 @@ local function open_book(path)
     ReaderUI:showReader(path)
 end
 
+--- What the plugin keeps of a downloaded book (books[id]): enough to list and open it offline.
+local function downloaded_entry(book, path)
+    local entry = { path = path }
+    for _, key in ipairs{ "id", "title", "authors", "calibreId", "format", "file", "characters" } do
+        -- Strings and numbers only: LuaSettings can't save rapidjson's null.
+        local value = book[key]
+        if type(value) == "string" or type(value) == "number" then entry[key] = value end
+    end
+    return entry
+end
+
+local function is_file(path)
+    return type(path) == "string" and lfs.attributes(path, "mode") == "file"
+end
+
+--- Opens the book when it is on this device, else downloads it and opens it.
 function Library.download(plugin, menu, book)
     local api = plugin:api()
-    local path = download_dir(plugin) .. "/" .. file_name(book)
+    local entry = plugin:get("books", {})[tostring(book.id)]
+    local path = type(entry) == "table" and is_file(entry.path) and entry.path
+        or download_dir(plugin) .. "/" .. file_name(book)
     local function done()
         -- The book's sidecar remembers which server book it is, so progress follows it when moved.
         local settings = DocSettings:open(path)
         settings:saveSetting("chimimouryou", { id = book.id, server = plugin:get("server"), title = book.title })
         settings:flush()
         local books = plugin:get("books", {})
-        books[tostring(book.id)] = true
+        books[tostring(book.id)] = downloaded_entry(book, path)
         plugin:set("books", books)
-        UIManager:show(ConfirmBox:new{
-            text = T(_("%1 is on this device. Open it now?"), book.title),
-            ok_text = _("Open"),
-            ok_callback = function()
-                UIManager:close(menu)
-                open_book(path)
-            end,
-        })
+        UIManager:close(menu)
+        open_book(path)
     end
     if lfs.attributes(path, "mode") == "file" then
         done()
@@ -120,8 +131,125 @@ function Library.download(plugin, menu, book)
     if ok then done() else UIManager:show(InfoMessage:new{ text = T(_("Download failed: %1"), err) }) end
 end
 
+-- Server books by id and by unique title (false: asked for, not there), for this KOReader session.
+local by_id, by_title = {}, {}
+
+-- Games aren't books KOReader can open.
+local function openable(book)
+    return not book.vn and not book.deleted and type(book.file) == "string"
+end
+
+--- Fills by_id/by_title for the ids and titles not asked for yet (GET /api/v1/books?ids=&titles=).
+local function fetch_books(api, ids, titles)
+    local want_ids, want_titles = {}, {}
+    for _, id in ipairs(ids) do if by_id[id] == nil then table.insert(want_ids, id) end end
+    for _, title in ipairs(titles) do if by_title[title] == nil then table.insert(want_titles, title) end end
+    local i, j = 1, 1
+    while i <= #want_ids or j <= #want_titles do
+        local chunk_ids, chunk_titles = {}, {}
+        while i <= #want_ids and #chunk_ids < 100 do
+            table.insert(chunk_ids, want_ids[i])
+            i = i + 1
+        end
+        while j <= #want_titles and #chunk_titles < 20 do
+            table.insert(chunk_titles, want_titles[j])
+            j = j + 1
+        end
+        local code, body = api:books_by(chunk_ids, chunk_titles)
+        if code ~= 200 or not body then return end -- asked again next time
+        local asked_ids, asked_titles = {}, {}
+        for _, id in ipairs(chunk_ids) do asked_ids[id] = true end
+        for _, title in ipairs(chunk_titles) do asked_titles[title] = true end
+        -- An older server ignores ids/titles and sends the newest books: keep only the ones asked for.
+        for _, book in ipairs(body.books or {}) do
+            local key = tostring(book.id)
+            if (asked_ids[key] or asked_titles[book.title]) and openable(book) then
+                by_id[key], by_title[book.title] = book, book
+            end
+        end
+        for id in pairs(asked_ids) do if by_id[id] == nil then by_id[id] = false end end
+        for title in pairs(asked_titles) do if by_title[title] == nil then by_title[title] = false end end
+    end
+end
+
+--- The sections above the server's list: Continue reading (as the web's Home shelf), the Home books
+--- (last added first) and the other books on this device (last read or downloaded first).
+function Library.sections(plugin, api)
+    local books, progress = plugin:get("books", {}), plugin:get("progress", {})
+    local home = plugin:get("home", {})
+    local titles, removed = home.titles or {}, home.removed or {}
+    local reading = plugin:inProgress()
+    local ids = {}
+    for _, item in ipairs(reading) do
+        if type(books[item.key]) ~= "table" then table.insert(ids, item.key) end
+    end
+    -- Downloaded before books kept their metadata.
+    for key, entry in pairs(books) do if entry == true then table.insert(ids, key) end end
+    local downloaded_title = {}
+    for _, entry in pairs(books) do if type(entry) == "table" then downloaded_title[entry.title] = entry end end
+    local home_titles = {}
+    for _, title in ipairs(titles) do if not downloaded_title[title] then table.insert(home_titles, title) end end
+    fetch_books(api, ids, home_titles)
+
+    local upgraded = false
+    for key, entry in pairs(books) do
+        local book = by_id[key]
+        if entry == true and book then
+            local path = download_dir(plugin) .. "/" .. file_name(book)
+            if is_file(path) then
+                books[key] = downloaded_entry(book, path)
+                downloaded_title[book.title] = books[key]
+                upgraded = true
+            end
+        end
+    end
+    if upgraded then plugin:set("books", books) end
+
+    local function book_of(key)
+        if type(books[key]) == "table" then return books[key] end
+        return by_id[key] or nil
+    end
+    local listed = {}
+    local continue, home_books, device = {}, {}, {}
+    for _, item in ipairs(reading) do
+        local book = book_of(item.key)
+        if book and openable(book) and (item.row.modified or 0) > (removed[book.title] or 0) then
+            table.insert(continue, book)
+            listed[item.key] = true
+            if #continue == 12 then break end
+        end
+    end
+    for i = #titles, 1, -1 do
+        local title = titles[i]
+        local book = downloaded_title[title] or by_title[title]
+        if book and not ((removed[title] or 0) > 0) and not listed[tostring(book.id)] then
+            table.insert(home_books, book)
+            listed[tostring(book.id)] = true
+        end
+    end
+    for key, entry in pairs(books) do
+        if type(entry) == "table" and not listed[key] and is_file(entry.path) then
+            local row = progress[key]
+            local time = row and row.modified or (lfs.attributes(entry.path, "modification") or 0) * 1000
+            table.insert(device, { book = entry, time = time })
+        end
+    end
+    table.sort(device, function(a, b) return a.time > b.time end)
+    for i, item in ipairs(device) do device[i] = item.book end
+    local sections = {}
+    for _, section in ipairs{ { _("Continue reading"), continue }, { _("Home"), home_books },
+        { _("On this device"), device } } do
+        if #section[2] > 0 then table.insert(sections, { title = section[1], books = section[2] }) end
+    end
+    return sections
+end
+
 function Library.show(plugin)
-    local api = plugin:api()
+    -- Best effort: offline or signed out the sections show what this device knows.
+    plugin:pull(plugin:api())
+    local api = plugin:api() -- without the token when the pull found it dead
+    plugin:pullSettings(api)
+    local sections = Library.sections(plugin, api)
     local menu
     local state = { q = nil, books = {}, next = nil }
 
@@ -133,14 +261,33 @@ function Library.show(plugin)
             },
         }
         local level_of = load_levels(api)
-        for _, book in ipairs(state.books) do
+        local progress = plugin:get("progress", {})
+        local function add(book)
             local level = book.calibreId and level_of[tostring(book.calibreId)]
+            local text = level and string.format("Lv %.1f", level) or nil
+            local row = progress[tostring(book.id)]
+            local done = row and row.progress >= 0.995 -- FINISHED (main.lua)
+            if row then
+                local place = done and _("Done") or math.floor(row.progress * 100) .. "%"
+                text = text and place .. " · " .. text or place
+            end
             table.insert(items, {
-                text = book.authors ~= "" and book.title .. " — " .. book.authors or book.title,
-                mandatory = level and string.format("Lv %.1f", level) or nil,
+                text = book.authors and book.authors ~= "" and book.title .. " — " .. book.authors or book.title,
+                mandatory = text,
+                dim = done or nil,
                 callback = function() Library.download(plugin, menu, book) end,
+                hold_callback = function() plugin:showStats(book.id, book) end,
             })
         end
+        if not state.q then
+            for _, section in ipairs(sections) do
+                table.insert(items, { text = section.title, bold = true, separator = true })
+                for _, book in ipairs(section.books) do add(book) end
+            end
+            if #sections > 0 then table.insert(items, { text = _("All books"), bold = true, separator = true }) end
+        end
+        state.offset = #items
+        for _, book in ipairs(state.books) do add(book) end
         if state.next then
             table.insert(items, { text = _("More…"), callback = function() state.load(true) end })
         end
@@ -154,13 +301,10 @@ function Library.show(plugin)
             return
         end
         if not more then state.books = {} end
-        -- After More…, open the page of the first new book (the search line is item 1).
-        state.first_new = more and #state.books + 2 or 1
+        -- After More…, open the page of the first new book (after the search line and the sections).
+        state.first_new = more and (state.offset or 1) + #state.books + 1 or 1
         for _, book in ipairs(body.books or {}) do
-            -- Games aren't books KOReader can open.
-            if not book.vn and not book.deleted and type(book.file) == "string" then
-                table.insert(state.books, book)
-            end
+            if openable(book) then table.insert(state.books, book) end
         end
         state.next = type(body.next) == "string" and body.next or nil
         render()
@@ -174,6 +318,11 @@ function Library.show(plugin)
         is_popout = false,
     }
     menu.close_callback = function() UIManager:close(menu) end
+    -- Hold a book: its statistics.
+    menu.onMenuHold = function(_, item)
+        if item.hold_callback then item.hold_callback() end
+        return true
+    end
     UIManager:show(menu)
     state.load(false)
 end

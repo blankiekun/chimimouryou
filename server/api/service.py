@@ -202,6 +202,19 @@ class Handler(BaseHTTPRequestHandler):
         if 'series' in self.query:
             where.append('series = ?')
             params.append(self.query['series'][0])
+        # Exact books (KOReader's Home and Continue reading): ids=1,2,3 and/or titles= (repeated).
+        if 'ids' in self.query:
+            ids = [part for value in self.query['ids'] for part in value.split(',') if part]
+            if not ids or len(ids) > 100 or not all(re.fullmatch(r'\d{1,16}', part) for part in ids):
+                raise ApiError(400, 'Bad ids')
+            where.append(f'id IN ({",".join("?" * len(ids))})')
+            params += [int(part) for part in ids]
+        if 'titles' in self.query:
+            titles = self.query['titles']
+            if len(titles) > 100:
+                raise ApiError(400, 'Bad titles')
+            where.append(f'unique_title IN ({",".join("?" * len(titles))})')
+            params += titles
         if cursor := self.query.get('cursor', [''])[0]:
             found = re.fullmatch(r'(-?\d{1,16}):(-?\d{1,16})', cursor)
             if not found:
