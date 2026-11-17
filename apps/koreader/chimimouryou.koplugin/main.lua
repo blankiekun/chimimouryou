@@ -138,6 +138,57 @@ function Chimi:unsentSeconds()
     return seconds
 end
 
+-- Reading folder
+
+-- One sync (a book's or the Reading folder's) at a time.
+local busy = false
+
+--- Runs fn(...) unless another sync is running; an error inside still frees the next one.
+local function exclusive(fn, ...)
+    if busy then return end
+    busy = true
+    local ok, result, err = pcall(fn, ...)
+    busy = false
+    if not ok then
+        logger.warn("chimimouryou: sync failed:", result)
+        return nil, tostring(result)
+    end
+    return result, err
+end
+
+function Chimi:folderOn()
+    return self:get("token") ~= nil and self:get("reading_folder", true)
+end
+
+--- Brings the Reading folder in step with Home (library.lua's syncFolder). interactive: say so
+--- when nothing changed or it failed; otherwise only changes are shown.
+function Chimi:syncFolder(interactive)
+    if not self:folderOn() or not NetworkMgr:isOnline() then return end
+    local doc = self.ui.document
+    local result, err = exclusive(require("library").syncFolder, self, doc and doc.file)
+    if not result then
+        if interactive then notify(T(_("Reading folder: %1"), err or _("another sync is running")), 4) end
+        return
+    end
+    if result.got + result.removed + result.kept > 0 then
+        local text = T(_("Reading folder: %1 downloaded, %2 removed."), result.got, result.removed)
+        if result.kept > 0 then
+            -- Open, or its place couldn't be sent: deleted on a later sync.
+            text = text .. "\n" .. T(_("%1 left Home but stays for now."), result.kept)
+        end
+        notify(text, 4)
+    elseif interactive then
+        notify(_("Reading folder: already in step with Home."), 3)
+    end
+end
+
+function Chimi:openFolder()
+    local dir = require("library").folderDir(self)
+    if self.ui.document then self.ui:onClose() end
+    local FileManager = require("apps/filemanager/filemanager")
+    if FileManager.instance then FileManager.instance:reinit(dir) else FileManager:showFiles(dir) end
+end
+
 -- Menu
 
 function Chimi:addToMainMenu(menu_items)
@@ -201,6 +252,25 @@ function Chimi:menuItems()
         })
     end
     table.insert(items, {
+        text = _("Reading folder (your Home books, synced on Wi-Fi)"),
+        enabled_func = function() return self:get("token") ~= nil end,
+        checked_func = function() return self:folderOn() end,
+        callback = function() self:set("reading_folder", not self:get("reading_folder", true)) end,
+    })
+    table.insert(items, {
+        text = _("Sync reading folder now"),
+        enabled_func = function() return self:folderOn() end,
+        callback = function()
+            if NetworkMgr:isOnline() then self:syncFolder(true) else notify(_("Turn on Wi-Fi first."), 3) end
+        end,
+    })
+    table.insert(items, {
+        text = _("Open reading folder"),
+        enabled_func = function() return self:get("server") ~= nil end,
+        callback = function() self:openFolder() end,
+        separator = true,
+    })
+    table.insert(items, {
         text_func = function()
             local seconds = self:unsentSeconds()
             return seconds >= 60 and T(_("Send reading time (%1 unsent)"), format_duration(seconds))
@@ -247,9 +317,11 @@ end
 --- Drops the account and everything mirrored from the server (not the downloaded books).
 --- keep_pending: the same account signs in again, so time read meanwhile is still sent.
 function Chimi:forget(keep_pending)
+    -- `folder` goes too unless kept: its files are then never deleted (they may hold another account's place).
     for _, key in ipairs{ "token", "account_id", "username", "rev_all", "progress", "stats", "seen", "home",
-        "pending" } do
-        if not (keep_pending and (key == "pending" or key == "username")) then self.store:delSetting(key) end
+        "pending", "synced", "unsent", "folder" } do
+        local keep = key == "pending" or key == "username" or key == "unsent" or key == "folder"
+        if not (keep_pending and keep) then self.store:delSetting(key) end
     end
     self.store:flush()
     require("library").reset()
@@ -337,7 +409,7 @@ end
 --- The server's id of the open book (written by the library when it downloaded it), or nil.
 function Chimi:bookId()
     local doc = self.ui.document
-    if not doc or doc.info.has_pages or not self.ui.doc_settings then return nil end
+    if not doc or not self.ui.doc_settings then return nil end
     local book = self.ui.doc_settings:readSetting("chimimouryou")
     if book and book.server == self:get("server") then return book.id, book end
     return nil
@@ -375,8 +447,28 @@ function Chimi:fragmentIndex(n)
     return index
 end
 
+--- Manga (CBZ) and other page-based documents: the place is the 0-based page index, as /m saves it
+--- (mangaBookmark, manga.ts), instead of a character count.
+function Chimi:paged()
+    return self.ui.document.info.has_pages
+end
+
+--- The progress fraction of a place: count / characters, or page / (pages - 1) as /m has it.
+function Chimi:fraction(count)
+    if self:paged() then
+        local pages = self.ui.document:getPageCount()
+        return pages > 1 and math.min(count / (pages - 1), 1) or 0
+    end
+    local total = self:counts().total
+    return total > 0 and count / total or 0
+end
+
 --- Characters before the current page's first character, as the web reader counts them.
 function Chimi:currentCount()
+    if self:paged() then
+        local page = self.ui.paging and self.ui.paging.current_page
+        return page and page - 1
+    end
     local xp = self.ui.rolling and self.ui.rolling:getLastProgress()
     local n = charcount.fragment_of(xp)
     local counts = self:counts()
@@ -388,6 +480,11 @@ function Chimi:currentCount()
 end
 
 function Chimi:gotoCount(count)
+    if self:paged() then
+        local page = math.max(1, math.min(count + 1, self.ui.document:getPageCount()))
+        self.ui:handleEvent(Event:new("GotoPage", page))
+        return
+    end
     local counts = self:counts()
     local before = 0
     for n, total in ipairs(counts.fragments) do
@@ -439,10 +536,12 @@ end
 --- web's Settings → Statistics hour) and the library's Home books (homeBookTitles, and
 --- homeRemovedTitles: title → time removed, negative when added back).
 --- Without a settings doc (or on an older server) the last known values stay, midnight at first.
+--- Returns true when the server answered (a 404 too: no settings doc), false on errors.
 function Chimi:pullSettings(api)
-    if self:signedOut() then return end
+    if self:signedOut() then return false end
     local code, body = api:doc("settings")
-    if code ~= 200 or type(body) ~= "table" or type(body.data) ~= "table" then return end
+    if code == 404 then return true end
+    if code ~= 200 or type(body) ~= "table" or type(body.data) ~= "table" then return false end
     local values = type(body.data.values) == "table" and body.data.values or {}
     local hours = tonumber(values.startDayHoursForTracker) or 0
     if hours < 0 or hours > 23 or hours % 1 ~= 0 then hours = 0 end
@@ -455,26 +554,33 @@ function Chimi:pullSettings(api)
         if type(title) == "string" and type(time) == "number" then home.removed[title] = time end
     end
     self:set("home", home)
+    return true
 end
 
 local function now_ms()
     return math.floor(os.time() * 1000)
 end
 
+--- Goes to the place `row` (a mirrored progress row) saved.
+function Chimi:jumpTo(id, row)
+    self:seen(id, row.modified)
+    self:agreed(tostring(id), row.count)
+    -- The jump isn't reading: the next page turn counts from the new place.
+    self.last_pushed, self.last_count = row.count, row.count
+    self:gotoCount(row.count)
+end
+
 --- Asks whether to go to the place `row` (a mirrored progress row) saved.
 function Chimi:offerJump(id, row)
-    local total = self:counts().total
+    local place = self:paged() and T(_("page %1"), row.count + 1) or T(_("character %1"), row.count)
     UIManager:show(ConfirmBox:new{
-        text = T(_("Another device saved your place in this book on %1: %2% (character %3). Go there?"),
-            os.date("%Y-%m-%d %H:%M", math.floor(row.modified / 1000)), percent(row.count, total), row.count),
+        text = T(_("Another device saved your place in this book on %1: %2% (%3). Go there?"),
+            os.date("%Y-%m-%d %H:%M", math.floor(row.modified / 1000)),
+            math.floor(self:fraction(row.count) * 100), place),
         ok_text = _("Go there"),
         -- Staying marks it seen, so this device's next save replaces it: the reader chose so.
         cancel_text = _("Stay here"),
-        ok_callback = function()
-            self:seen(id, row.modified)
-            self.last_pushed = row.count
-            self:gotoCount(row.count)
-        end,
+        ok_callback = function() self:jumpTo(id, row) end,
         cancel_callback = function() self:seen(id, row.modified) end,
     })
 end
@@ -485,10 +591,82 @@ function Chimi:seen(id, modified)
     self:set("seen", seen)
 end
 
+--- This device and the server agree on the book's place `count` (`synced`): nothing unsent.
+function Chimi:agreed(key, count)
+    local synced, unsent = self:get("synced", {}), self:get("unsent", {})
+    synced[key], unsent[key] = count, nil
+    self.store:saveSetting("unsent", unsent)
+    self:set("synced", synced)
+end
+
+--- Keeps the open book's place as unsent (`unsent`) unless the server has it already, so a closed
+--- book's place can still be sent (flushBook) before the Reading folder deletes it.
+function Chimi:keepPlace()
+    local id = self:bookId()
+    local here = id and self:currentCount()
+    if not here then return end
+    local key = tostring(id)
+    local unsent = self:get("unsent", {})
+    if here == self:get("synced", {})[key] then
+        unsent[key] = nil
+    else
+        unsent[key] = { count = here, progress = self:fraction(here) }
+    end
+    self.store:saveSetting("unsent", unsent)
+end
+
+--- A Reading folder book whose place on this device is the one it last agreed with the server
+--- (or, never synced, its start): a newer place from another device opens without asking.
+function Chimi:landsWithoutAsking(key, here)
+    if not self:get("folder", {})[key] or self:get("unsent", {})[key] then return false end
+    local synced = self:get("synced", {})[key]
+    if synced == nil then return (here or 0) == 0 end
+    return here == synced
+end
+
+--- PUTs a place over the mirrored `row`; on success the mirror, `seen` and `synced` follow.
+function Chimi:putPlace(api, key, count, fraction, row)
+    -- A clock behind the row's would get a 409 on every save.
+    local modified = math.max(now_ms(), (row and row.modified or 0) + 1)
+    local code, body, err = api:put("books/" .. key .. "/progress", modified,
+        { exploredCharCount = count, progress = fraction, lastBookmarkModified = modified },
+        { progress = fraction })
+    if code == 200 then
+        self:seen(key, modified)
+        local progress = self:get("progress", {})
+        progress[key] = { modified = modified, count = count, progress = fraction }
+        self:set("progress", progress)
+        self:agreed(key, count)
+    end
+    return code, body, err
+end
+
+--- Before the Reading folder deletes a closed book: sends its unsent place (pushStatistics has
+--- sent the time just before). True when nothing of the book is left unsent; false keeps the file.
+function Chimi:flushBook(api, key)
+    local unsent = self:get("unsent", {})[key]
+    if unsent then
+        local row = self:get("progress", {})[key]
+        if row and row.count == unsent.count then
+            self:agreed(key, row.count)
+        elseif row and row.modified > (self:get("seen", {})[key] or 0) then
+            -- Another device saved a place after this one last looked: open the book to choose.
+            return false
+        elseif self:putPlace(api, key, unsent.count, unsent.progress, row) ~= 200 then
+            return false
+        end
+    end
+    return self:get("pending", {})[key] == nil
+end
+
+function Chimi:sync(opts)
+    exclusive(self.syncBook, self, opts)
+end
+
 --- Pulls, then offers the server's place if another device saved one since this device last looked,
 --- else sends this device's place (if it moved) and its reading time.
 --- opts.interactive: say what happened; opts.quiet: never prompt (closing, suspending).
-function Chimi:sync(opts)
+function Chimi:syncBook(opts)
     local id = self:bookId()
     if not id then return end
     local api = self:api()
@@ -504,25 +682,17 @@ function Chimi:sync(opts)
     local here = self:currentCount()
     if row and row.modified > (self:get("seen", {})[key] or 0) and row.count ~= here then
         -- Someone saved a place after the one this device last saw: never overwrite it unasked.
-        if not opts.quiet then self:offerJump(id, row) end
+        if not opts.quiet then
+            if self:landsWithoutAsking(key, here) then self:jumpTo(id, row) else self:offerJump(id, row) end
+        end
         self:pushStatistics(api)
         return
     end
     if row then self:seen(id, row.modified) end
     local pushed, refused = false, false
     if here and here ~= self.last_pushed and not (row and row.count == here) then
-        local total = self:counts().total
-        -- A clock behind the row's would get a 409 on every save.
-        local modified = math.max(now_ms(), (row and row.modified or 0) + 1)
-        local fraction = total > 0 and here / total or 0
-        local code, body, put_err = api:put("books/" .. id .. "/progress", modified,
-            { exploredCharCount = here, progress = fraction, lastBookmarkModified = modified },
-            { progress = fraction })
+        local code, body, put_err = self:putPlace(api, key, here, self:fraction(here), row)
         if code == 200 then
-            self:seen(id, modified)
-            local progress = self:get("progress", {})
-            progress[key] = { modified = modified, count = here, progress = fraction }
-            self:set("progress", progress)
             self.last_pushed = here
             pushed = true
         elseif code == 409 and body and body.row then
@@ -534,6 +704,7 @@ function Chimi:sync(opts)
             return
         end
     elseif row and row.count == here then
+        self:agreed(key, here)
         self.last_pushed = here
     end
     local stats_err = self:pushStatistics(api)
@@ -566,7 +737,8 @@ function Chimi:countPageTurn()
     local now, count = os.time(), self:currentCount()
     if self.last_turn and count then
         local seconds = math.min(now - self.last_turn, MAX_PAGE_SECONDS)
-        local characters = self.last_count and count - self.last_count or 0
+        -- Manga: /m counts the characters of the pages' mokuro text, which isn't on the device.
+        local characters = self.last_count and not self:paged() and count - self.last_count or 0
         if characters < 0 or characters > MAX_PAGE_CHARACTERS then characters = 0 end
         if seconds > 0 or characters > 0 then
             local pending = self:get("pending", {})
@@ -758,12 +930,14 @@ function Chimi:showStats(id, book)
         table.insert(lines, T(_("Speed: %1 characters/hour"), s.total.speed))
     end
     if key then
-        local count, total
+        local count, total, pages
         if open_id and key == tostring(open_id) then
-            count, total = self:currentCount(), self:counts().total
+            count = self:currentCount()
+            if self:paged() then pages = self.ui.document:getPageCount() else total = self:counts().total end
         else
             local row = self:get("progress", {})[key]
-            count, total = row and row.count, book and tonumber(book.characters)
+            count, pages = row and row.count, book and tonumber(book.pages)
+            if not pages then total = book and tonumber(book.characters) end
         end
         local b = s.book
         table.insert(lines, "")
@@ -773,7 +947,9 @@ function Chimi:showStats(id, book)
             table.insert(lines, T(_("Speed: %1 characters/hour"), b.speed))
             table.insert(lines, T(_("Days read: %1 (%2 to %3)"), b.days, b.first, b.last))
         end
-        if count and total then
+        if count and pages then
+            table.insert(lines, T(_("Place: page %1 of %2"), count + 1, pages))
+        elseif count and total then
             table.insert(lines, T(_("Place: character %1 of %2 (%3%)"), count, total, percent(count, total)))
             local left = math.max(0, total - count)
             table.insert(lines, T(_("Characters left: %1"), left))
@@ -812,6 +988,7 @@ end
 function Chimi:onSuspend()
     if not self:bookId() then return end
     self:countPageTurn()
+    self:keepPlace()
     self.store:flush() -- offline, nothing else writes the pending time to disk
     self.last_turn = nil
     if NetworkMgr:isOnline() then self:sync{ quiet = true } end
@@ -824,9 +1001,15 @@ end
 function Chimi:onCloseDocument()
     if not self:bookId() then return end
     self:countPageTurn()
+    self:keepPlace()
     self.store:flush() -- offline, nothing else writes the pending time to disk
     if NetworkMgr:isOnline() then self:sync{ quiet = true } end
     self.fragment_counts, self.index_cache, self.last_turn, self.last_count = nil, nil, nil, nil
+end
+
+-- Wi-Fi came on: the Reading folder follows Home (never turns Wi-Fi on itself).
+function Chimi:onNetworkConnected()
+    UIManager:nextTick(function() self:syncFolder() end)
 end
 
 function Chimi:onCloseWidget()

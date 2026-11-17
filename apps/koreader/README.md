@@ -1,7 +1,7 @@
 # chimimouryou for KOReader
 
 A [KOReader](https://koreader.rocks) plugin for a chimimouryou server: browse and search the library
-with each book's difficulty level, download EPUBs, and keep your place and reading time in step with
+with each book's difficulty level, download EPUBs and manga, and keep your place and reading time in step with
 the web reader.
 
 - **Library**: Continue reading (the books you are reading, last read first, as on the web's Home),
@@ -18,6 +18,16 @@ the web reader.
   Home dashboard). Each page turn counts up to 2 minutes; KOReader's own statistics plugin is not read,
   so nothing is counted twice. A day starts at the hour set in the web app's statistics settings
   (read when a book opens). Off with Send reading time, which also shows the time not sent yet.
+- **Reading folder**: a `Reading` folder in the download folder holds the books of your Continue
+  reading and Home, as on the web's Home. Each time Wi-Fi connects (or with Tools → chimimouryou →
+  Sync reading folder now) new ones are downloaded, and the books it downloaded that left Home
+  (removed or finished) are deleted, after their place and reading time reached the server. Books
+  you downloaded yourself are never deleted, nor the open book. Opening a folder book takes you to
+  the place saved on another device without asking, unless this device has a newer place of its
+  own. Open reading folder shows it in the file browser; switch it off with the Reading folder
+  checkbox.
+- **Manga**: CBZ volumes sync by page with the web's manga reader. Their reading time is sent, but no
+  characters (the web counts the pages' OCR text, which the device doesn't have).
 - **Statistics**: Tools → chimimouryou → Reading statistics (or a gesture: chimimouryou statistics)
   shows today, the last 7 days, your streak, total time and speed, from every device's reading; in a
   book also its time, speed, place, characters left and about how long it will take to finish.
@@ -63,7 +73,7 @@ The token is kept in KOReader's settings folder (`settings/chimimouryou.lua`) an
   `pnpm install` first.
 - `tools/e2e.sh` drives the plugin in a real KOReader under Xvfb against a test server.
 - `luajit tools/stats-check.lua chimimouryou.koplugin` checks the day start, the pending reading
-  time (a lost PUT answer), the mirror, the statistics summary, the Home settings and
-  `X-Expected-Account`, with KOReader's modules stubbed.
+  time (a lost PUT answer), the mirror, the statistics summary, the Home settings,
+  `X-Expected-Account`, manga pages, the no-dialog jump and which books the Reading folder downloads and deletes, with KOReader's modules stubbed.
 
 GPL-3.0-or-later. KOReader itself is AGPL-3.0; the GPLv3 allows the combination (section 13).

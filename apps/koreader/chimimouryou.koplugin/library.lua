@@ -1,6 +1,7 @@
 -- SPDX-License-Identifier: GPL-3.0-or-later
 -- chimimouryou KOReader plugin: the server's library (GET /api/v1/books), with each book's 1-10
--- difficulty level, search and download, under the sections Continue reading, Home and On this device.
+-- difficulty level, search and download, under the sections Continue reading, Home and On this device;
+-- and the Reading folder, which mirrors Continue reading and Home on the device (syncFolder).
 
 local DataStorage = require("datastorage")
 local DocSettings = require("docsettings")
@@ -79,7 +80,9 @@ local function file_name(book)
         name = name:sub(1, cut) .. " " .. tostring(book.id)
     end
     name = name:gsub('[\\/:*?"<>|%c]', "_")
-    return name .. "." .. tostring(book.format or "epub"):lower()
+    local ext = tostring(book.format or "epub"):lower()
+    -- A manga ZIP opens as a comic (MuPDF) only under .cbz.
+    return name .. "." .. (ext == "zip" and "cbz" or ext)
 end
 
 local function open_book(path)
@@ -90,7 +93,7 @@ end
 --- What the plugin keeps of a downloaded book (books[id]): enough to list and open it offline.
 local function downloaded_entry(book, path)
     local entry = { path = path }
-    for _, key in ipairs{ "id", "title", "authors", "calibreId", "format", "file", "characters" } do
+    for _, key in ipairs{ "id", "title", "authors", "calibreId", "format", "file", "characters", "pages" } do
         -- Strings and numbers only: LuaSettings can't save rapidjson's null.
         local value = book[key]
         if type(value) == "string" or type(value) == "number" then entry[key] = value end
@@ -102,6 +105,17 @@ local function is_file(path)
     return type(path) == "string" and lfs.attributes(path, "mode") == "file"
 end
 
+--- Marks the file at `path` as the server book `book`.
+local function remember(plugin, book, path)
+    -- The book's sidecar remembers which server book it is, so progress follows it when moved.
+    local settings = DocSettings:open(path)
+    settings:saveSetting("chimimouryou", { id = book.id, server = plugin:get("server"), title = book.title })
+    settings:flush()
+    local books = plugin:get("books", {})
+    books[tostring(book.id)] = downloaded_entry(book, path)
+    plugin:set("books", books)
+end
+
 --- Opens the book when it is on this device, else downloads it and opens it.
 function Library.download(plugin, menu, book)
     local api = plugin:api()
@@ -109,13 +123,7 @@ function Library.download(plugin, menu, book)
     local path = type(entry) == "table" and is_file(entry.path) and entry.path
         or download_dir(plugin) .. "/" .. file_name(book)
     local function done()
-        -- The book's sidecar remembers which server book it is, so progress follows it when moved.
-        local settings = DocSettings:open(path)
-        settings:saveSetting("chimimouryou", { id = book.id, server = plugin:get("server"), title = book.title })
-        settings:flush()
-        local books = plugin:get("books", {})
-        books[tostring(book.id)] = downloaded_entry(book, path)
-        plugin:set("books", books)
+        remember(plugin, book, path)
         UIManager:close(menu)
         open_book(path)
     end
@@ -242,11 +250,103 @@ function Library.sections(plugin, api)
     table.sort(device, function(a, b) return a.time > b.time end)
     for i, item in ipairs(device) do device[i] = item.book end
     local sections = {}
-    for _, section in ipairs{ { _("Continue reading"), continue }, { _("Home"), home_books },
-        { _("On this device"), device } } do
-        if #section[2] > 0 then table.insert(sections, { title = section[1], books = section[2] }) end
+    for _, section in ipairs{ { _("Continue reading"), continue, "continue" }, { _("Home"), home_books, "home" },
+        { _("On this device"), device, "device" } } do
+        if #section[2] > 0 then
+            table.insert(sections, { title = section[1], books = section[2], key = section[3] })
+        end
     end
     return sections
+end
+
+-- The Reading folder: the books of Continue reading and Home, downloaded into download_dir/Reading
+-- and deleted again once they leave both. Only files it downloaded itself (setting `folder`:
+-- id → path) are ever deleted, and only after their unsent place and reading time reached the server.
+
+function Library.folderDir(plugin)
+    local dir = download_dir(plugin) .. "/Reading"
+    if not lfs.attributes(dir, "mode") then util.makePath(dir) end
+    return dir
+end
+
+--- What the folder has to do for these sections: the books to download (not on the device yet)
+--- and the ids of its own files whose books left Continue reading and Home.
+function Library.folderPlan(plugin, sections)
+    local books, folder = plugin:get("books", {}), plugin:get("folder", {})
+    local wanted, get, drop = {}, {}, {}
+    for _, section in ipairs(sections) do
+        if section.key == "continue" or section.key == "home" then
+            for _, book in ipairs(section.books) do
+                local key = tostring(book.id)
+                wanted[key] = true
+                local entry = books[key]
+                -- On the device already (downloaded by hand too): left where it is.
+                if not (type(entry) == "table" and is_file(entry.path)) and openable(book) then
+                    table.insert(get, book)
+                end
+            end
+        end
+    end
+    for key in pairs(folder) do
+        if not wanted[key] then table.insert(drop, key) end
+    end
+    table.sort(drop)
+    return get, drop
+end
+
+--- Downloads the Home books missing from the Reading folder and deletes the folder's books that
+--- left Home, never `open_path` (the open book). Returns { got, removed, kept } or nil and an error.
+function Library.syncFolder(plugin, open_path)
+    local api = plugin:api()
+    local ok, err = plugin:pull(api)
+    if not ok then return nil, err end
+    -- Without the account's Home the folder would drop its Home books: change nothing then.
+    if not plugin:pullSettings(api) then return nil, _("could not read the Home books") end
+    local get, drop = Library.folderPlan(plugin, Library.sections(plugin, api))
+    local result = { got = 0, removed = 0, kept = 0 }
+    for _i, book in ipairs(get) do -- not `_`: that is gettext here
+        local path = Library.folderDir(plugin) .. "/" .. file_name(book)
+        if is_file(path) then
+            -- Already there but not put there by the folder (as far as it knows): used, never deleted.
+            remember(plugin, book, path)
+        else
+            local info = InfoMessage:new{ text = T(_("Reading folder: downloading %1…"), book.title) }
+            UIManager:show(info)
+            UIManager:forceRePaint()
+            local done = api:download(book.file, path)
+            UIManager:close(info)
+            if done then
+                remember(plugin, book, path)
+                local folder = plugin:get("folder", {})
+                folder[tostring(book.id)] = path
+                plugin:set("folder", folder)
+                result.got = result.got + 1
+            end
+        end
+    end
+    if #drop > 0 then plugin:pushStatistics(api) end
+    for _, key in ipairs(drop) do
+        local folder = plugin:get("folder", {})
+        local path = folder[key]
+        if path == open_path or not plugin:flushBook(api, key) then
+            result.kept = result.kept + 1
+        else
+            if is_file(path) then
+                os.remove(path)
+                DocSettings:open(path):purge()
+                require("readhistory"):fileDeleted(path)
+            end
+            folder[key] = nil
+            plugin:set("folder", folder)
+            local books = plugin:get("books", {})
+            if type(books[key]) == "table" and books[key].path == path then
+                books[key] = nil
+                plugin:set("books", books)
+            end
+            result.removed = result.removed + 1
+        end
+    end
+    return result
 end
 
 function Library.show(plugin)

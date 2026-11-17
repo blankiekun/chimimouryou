@@ -1,4 +1,5 @@
--- Self-check for main.lua's day start, pending reading time, mirror, statistics summary and settings,
+-- Self-check for main.lua's day start, pending reading time, mirror, statistics summary, settings, manga
+-- pages and the no-dialog jump, library.lua's Reading folder,
 -- and api.lua's X-Expected-Account, with KOReader's modules stubbed.
 -- Run from apps/koreader: luajit tools/stats-check.lua chimimouryou.koplugin (prints "ok").
 local plugin = arg[1]
@@ -34,7 +35,7 @@ local function store()
 end
 
 local function new()
-    local c = setmetatable({ store = store() }, { __index = Chimi })
+    local c = setmetatable({ store = store(), ui = { document = { info = {} } } }, { __index = Chimi })
     c:set("books", { ["7"] = true })
     return c
 end
@@ -194,6 +195,127 @@ assert(c:summary().streak == 3)
 c = new()
 assert(c:summary().streak == 0 and c:summary().total.t == 0)
 os.time = real_time
+
+-- Manga (paged documents): the place is the 0-based page index, progress page / (pages - 1) (/m).
+local event
+require("ui/event").new = function(_, name, value) return { name = name, value = value } end
+c = new()
+c.ui = { document = { info = { has_pages = true }, getPageCount = function() return 11 end },
+    paging = { current_page = 6 }, handleEvent = function(_, e) event = e end }
+assert(c:currentCount() == 5)
+assert(c:fraction(5) == 0.5 and c:fraction(10) == 1)
+c:gotoCount(8)
+assert(event.name == "GotoPage" and event.value == 9)
+c:gotoCount(40)
+assert(event.value == 11, "past the end: the last page")
+c.bookId = function() return 12, { title = "manga" } end
+local put, rows = nil, {}
+local manga_api = { sync = function() return 200, { rev = 1, progress = rows } end, doc = function() return 404 end,
+    put = function(_, path, _m, data, extra) put = { path = path, data = data, extra = extra } return 200, {} end }
+c.api = function() return manga_api end
+c:sync{ quiet = true }
+assert(put.path == "books/12/progress" and put.data.exploredCharCount == 5 and put.extra.progress == 0.5)
+assert(c:get("synced")["12"] == 5 and c:get("unsent")["12"] == nil)
+-- Page turns count time only: /m's characters are the mokuro text's.
+fake_now = 1000
+os.time = function(t) if t == nil then return fake_now end return real_time(t) end
+c.last_turn, c.last_count = 940, 4
+c:countPageTurn()
+local day = next(c:get("pending")["12"].days)
+assert(c:get("pending")["12"].days[day].seconds == 60 and c:get("pending")["12"].days[day].characters == 0)
+os.time = real_time
+
+-- Another device's newer place: a Reading folder book at the place it last agreed lands there
+-- without asking; a book outside the folder, or one read further here, still asks.
+c:set("pending", {})
+rows[1] = { book = 12, modified = 9e12, progress = 0.8, data = { exploredCharCount = 8 } }
+local offered
+c.offerJump = function() offered = true end
+c:set("folder", { ["12"] = "/dl/Reading/m.cbz" })
+c:sync{}
+assert(not offered and event.value == 9, "landed on page 9 (index 8)")
+assert(c:get("synced")["12"] == 8 and c:get("seen")["12"] == 9e12)
+rows[1] = { book = 12, modified = 9e12 + 1, progress = 0.3, data = { exploredCharCount = 3 } }
+c.ui.paging.current_page = 7 -- read on here since: index 6, not the 8 agreed
+c:sync{}
+assert(offered, "this device has a newer place of its own: asked")
+c = new()
+c:set("folder", { ["12"] = "p" })
+assert(c:landsWithoutAsking("12", 0), "never synced, at the start")
+assert(not c:landsWithoutAsking("12", 3), "never synced, read here")
+c:set("synced", { ["12"] = 3 })
+assert(c:landsWithoutAsking("12", 3) and not c:landsWithoutAsking("12", 4))
+c:set("unsent", { ["12"] = { count = 3, progress = 0.3 } })
+assert(not c:landsWithoutAsking("12", 3), "an unsent place asks")
+assert(not c:landsWithoutAsking("13", 0), "not a folder book: asks")
+
+-- Reading folder: downloads Continue reading and Home, deletes only its own files that left both,
+-- and only after their place and time reached the server; never the open book.
+local files, removed_files, purged = {}, {}, {}
+for _, p in ipairs{ "/dl/Reading/Two.epub", "/dl/Reading/Three.epub", "/hand/Five.epub", "/dl/Reading/Six.epub",
+    "/dl/Reading/Eight.epub", "/dl/Reading/Nine.epub" } do files[p] = true end
+require("libs/libkoreader-lfs").attributes = function(p, what)
+    if what == "modification" then return files[p] and 1 or nil end
+    return files[p] and "file" or nil
+end
+package.loaded["util"].makePath = function() end
+package.loaded["ui/uimanager"].forceRePaint = function() end
+package.loaded["ui/uimanager"].close = function() end
+stub("docsettings", { open = function(_, p) return { saveSetting = function() end, flush = function() end,
+    purge = function() purged[#purged + 1] = p end } end })
+stub("readhistory", { fileDeleted = function() end })
+stub("ui/widget/menu", {})
+local Library = dofile(plugin .. "/library.lua")
+c = new()
+local function entry(id, title, path) return { id = id, title = title, file = title .. ".epub", path = path } end
+c:set("download_dir", "/dl")
+c:set("books", { ["2"] = entry(2, "Two", "/dl/Reading/Two.epub"), ["3"] = entry(3, "Three", "/dl/Reading/Three.epub"),
+    ["5"] = entry(5, "Five", "/hand/Five.epub"), ["6"] = entry(6, "Six", "/dl/Reading/Six.epub"),
+    ["8"] = entry(8, "Eight", "/dl/Reading/Eight.epub"), ["9"] = entry(9, "Nine", "/dl/Reading/Nine.epub") })
+c:set("folder", { ["2"] = "/dl/Reading/Two.epub", ["3"] = "/dl/Reading/Three.epub", ["6"] = "/dl/Reading/Six.epub",
+    ["8"] = "/dl/Reading/Eight.epub", ["9"] = "/dl/Reading/Nine.epub" })
+c:set("pending", { ["2"] = { title = "Two", days = { ["2026-03-01"] = { seconds = 30, characters = 10 } } } })
+c:set("unsent", { ["8"] = { count = 10, progress = 0.1 } })
+local puts_to = {}
+local folder_api = {
+    sync = function() return 200, { rev = 1, progress = {
+        { book = 1, modified = 100, progress = 0.5, data = { exploredCharCount = 50 } }, -- reading, not here
+        { book = 2, modified = 100, progress = 1, data = { exploredCharCount = 99 } }, -- finished
+        { book = 3, modified = 50, progress = 0.3, data = { exploredCharCount = 3 } }, -- removed from Home after
+        { book = 8, modified = 200, progress = 0.2, data = { exploredCharCount = 20 } }, -- newer than seen
+    } } end,
+    doc = function() return 200, { data = { values = { homeBookTitles = { "Four", "Six" },
+        homeRemovedTitles = { Three = 60, Eight = 300 } } } } end,
+    books_by = function() return 200, { books = {
+        { id = 1, title = "One", file = "One.zip", format = "ZIP" },
+        { id = 4, title = "Four", file = "Four.epub", format = "EPUB" } } } end,
+    download = function(_, _f, dest) files[dest] = true return true end,
+    put = function(_, path) puts_to[#puts_to + 1] = path return 200, {} end,
+}
+c.api = function() return folder_api end
+local real_remove = os.remove
+os.remove = function(p) files[p] = nil removed_files[#removed_files + 1] = p end
+local result = Library.syncFolder(c, "/dl/Reading/Nine.epub")
+os.remove = real_remove
+assert(result.got == 2 and result.removed == 2 and result.kept == 2,
+    result.got .. " " .. result.removed .. " " .. result.kept)
+assert(files["/dl/Reading/One.cbz"] and files["/dl/Reading/Four.epub"], "manga ZIP saved as .cbz")
+assert(c:get("folder")["1"] == "/dl/Reading/One.cbz" and c:get("books")["4"].path == "/dl/Reading/Four.epub")
+assert(not files["/dl/Reading/Two.epub"] and not files["/dl/Reading/Three.epub"] and #purged == 2)
+assert(c:get("books")["2"] == nil and c:get("folder")["3"] == nil)
+assert(puts_to[1] == "books/2/statistics/2026-03-01", "the finished book's time went first")
+assert(files["/dl/Reading/Eight.epub"] and c:get("folder")["8"], "a place newer than seen keeps the file")
+assert(files["/dl/Reading/Nine.epub"], "the open book stays")
+assert(files["/dl/Reading/Six.epub"] and files["/hand/Five.epub"] and c:get("books")["5"], "Home and hand-downloaded stay")
+-- An unsent place the server refuses keeps the file; sent, it goes.
+c:set("progress", {})
+folder_api.put = function() return 500, nil, "HTTP 500" end
+assert(not c:flushBook(folder_api, "8") and c:get("unsent")["8"])
+folder_api.put = function() return 200, {} end
+assert(c:flushBook(folder_api, "8") and c:get("unsent")["8"] == nil and c:get("synced")["8"] == 10)
+-- Settings unreadable: nothing is downloaded or deleted.
+folder_api.doc = function() return 500 end
+assert(Library.syncFolder(c, nil) == nil)
 
 -- api.lua: X-Expected-Account goes with the token only (and the token only over https).
 local headers
