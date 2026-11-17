@@ -4,8 +4,12 @@ A [KOReader](https://koreader.rocks) plugin for a chimimouryou server: browse an
 with each book's difficulty level, download EPUBs, and keep your place and reading time in step with
 the web reader.
 
-- **Library**: the server's books, newest first, with search and the 1-10 level the web library shows.
-  Tap a book to download it (into `chimimouryou/` in KOReader's home folder) and open it.
+- **Library**: Continue reading (the books you are reading, last read first, as on the web's Home),
+  your Home books and the other books on this device come first, then the server's books, newest
+  first, with search. Each row shows your place (`42%`, `Done`) and the 1-10 level the web library
+  shows. Tap a book to open it, downloading it first (into `chimimouryou/` in KOReader's home folder)
+  when it isn't on the device; hold it for its statistics. Tools → chimimouryou → Continue opens the
+  last book you were reading, without Wi-Fi.
 - **Progress**: positions are the web reader's own character counts, so KOReader and the browser
   open at the same character. When you open a book, and when you sync, the plugin asks before it
   jumps to a place another device saved; it never overwrites a place saved after the one it last saw.
@@ -13,10 +17,14 @@ the web reader.
 - **Reading time**: time and characters read per day go to the server's statistics (Statistics page,
   Home dashboard). Each page turn counts up to 2 minutes; KOReader's own statistics plugin is not read,
   so nothing is counted twice. A day starts at the hour set in the web app's statistics settings
-  (read when a book opens). Off with Send reading time.
+  (read when a book opens). Off with Send reading time, which also shows the time not sent yet.
+- **Statistics**: Tools → chimimouryou → Reading statistics (or a gesture: chimimouryou statistics)
+  shows today, the last 7 days, your streak, total time and speed, from every device's reading; in a
+  book also its time, speed, place, characters left and about how long it will take to finish.
 
 Only books downloaded through the plugin sync (the book's sidecar remembers which server book it
-is). Japanese books render horizontally: KOReader has no vertical text.
+is). When the server signs the device out (the token was revoked or expired) the plugin says so; time
+read meanwhile is sent after you sign in again. Japanese books render horizontally: KOReader has no vertical text.
 
 ## Install
 
@@ -54,7 +62,8 @@ The token is kept in KOReader's settings folder (`settings/chimimouryou.lua`) an
   (`./koreader-*.AppImage --appimage-extract`, then `squashfs-root/usr/lib/koreader`), and run
   `pnpm install` first.
 - `tools/e2e.sh` drives the plugin in a real KOReader under Xvfb against a test server.
-- `luajit tools/stats-check.lua chimimouryou.koplugin` checks the day start and the pending reading
-  time (a lost PUT answer) with KOReader's modules stubbed.
+- `luajit tools/stats-check.lua chimimouryou.koplugin` checks the day start, the pending reading
+  time (a lost PUT answer), the mirror, the statistics summary, the Home settings and
+  `X-Expected-Account`, with KOReader's modules stubbed.
 
 GPL-3.0-or-later. KOReader itself is AGPL-3.0; the GPLv3 allows the combination (section 13).

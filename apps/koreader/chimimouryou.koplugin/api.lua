@@ -12,9 +12,10 @@ local _ = require("gettext")
 local Api = {}
 Api.__index = Api
 
---- base: the server's address ("https://books.example"), token: a session token or nil.
-function Api.new(base, token)
-    return setmetatable({ base = (base or ""):gsub("/+$", ""), token = token }, Api)
+--- base: the server's address ("https://books.example"), token: a session token or nil, account: the
+--- token's user id (sent as X-Expected-Account, so a dead token gets a 401, not the shared account).
+function Api.new(base, token, account)
+    return setmetatable({ base = (base or ""):gsub("/+$", ""), token = token, account = account }, Api)
 end
 
 function Api:secure()
@@ -51,7 +52,10 @@ end
 function Api:request(method, path, body, sink, timeouts)
     local headers = { ["Accept"] = "application/json", ["Accept-Encoding"] = "identity" }
     -- Tokens only over HTTPS: the server ignores them over HTTP anyway, and they'd travel in clear.
-    if self.token and self:secure() then headers["Authorization"] = "Bearer " .. self.token end
+    if self.token and self:secure() then
+        headers["Authorization"] = "Bearer " .. self.token
+        if self.account then headers["X-Expected-Account"] = tostring(self.account) end
+    end
     local source
     if body then
         local data = rapidjson.encode(body)
@@ -108,6 +112,18 @@ end
 
 function Api:books(q, cursor)
     return self:request("GET", "/api/v1/books" .. query{ q = q, cursor = cursor, limit = 50 })
+end
+
+--- Exact books by id and unique title, for Home and Continue reading: up to 100 ids and 20 titles
+--- a request (percent-encoded Japanese titles stay well under nginx's 8 KB request line).
+--- Older servers ignore both and send the newest books: callers keep only the books they asked for.
+function Api:books_by(ids, titles)
+    local parts = { "limit=200" }
+    if #ids > 0 then table.insert(parts, "ids=" .. table.concat(ids, ",")) end
+    for _, title in ipairs(titles) do
+        table.insert(parts, "titles=" .. encode_path(title):gsub("/", "%%2F"))
+    end
+    return self:request("GET", "/api/v1/books?" .. table.concat(parts, "&"))
 end
 
 -- Adding a table here needs a new name for the stored `rev` (main.lua): it vouches only for these

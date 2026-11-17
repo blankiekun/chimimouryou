@@ -1,8 +1,8 @@
 -- SPDX-License-Identifier: GPL-3.0-or-later
 -- KOReader user patch (e2e.sh installs it as patches/2-chimimouryou-e2e.lua): drives the plugin in a
 -- real KOReader session and screenshots each step into E2E_OUT. Steps: sign-in over http (refused
--- here), library with levels, search, download, open, the offer to jump to the server's place, page
--- turns, sync. Lines starting with "E2E" are what e2e.sh checks.
+-- here), library with its sections and levels, search, download (opens the book), the offer to jump
+-- to the server's place, page turns, sync. Lines starting with "E2E" are what e2e.sh checks.
 local Event = require("ui/event")
 local UIManager = require("ui/uimanager")
 
@@ -37,7 +37,12 @@ local steps = {
     function()
         shot("02-library")
         local menu = top()
-        log("library", #menu.item_table, menu.item_table[2] and menu.item_table[2].mandatory)
+        -- The first book: section headers (Continue reading, Home, …) have no callback.
+        local first
+        for i = 2, #menu.item_table do
+            if menu.item_table[i].callback then first = menu.item_table[i] break end
+        end
+        log("library", #menu.item_table, first and first.mandatory)
         menu.item_table[1].callback()
     end,
     function()
@@ -52,19 +57,12 @@ local steps = {
         for _, item in ipairs(menu.item_table) do
             if item.text:find(title, 1, true) == 1 then
                 log("found", item.text, item.mandatory)
+                -- Downloads it and opens it at once: wait for ReaderReady and the offer.
                 item.callback()
-                return 4
+                return 12
             end
         end
         log("found", "nothing")
-    end,
-    function()
-        shot("04-downloaded")
-        local box = top()
-        log("downloaded", box.text)
-        box.ok_callback()
-        UIManager:close(box)
-        return 8
     end,
     function()
         shot("05-offer")
