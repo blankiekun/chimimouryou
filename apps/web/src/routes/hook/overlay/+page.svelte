@@ -31,6 +31,7 @@
   let popup = $state<LookupPopup>();
   let solid = false;
   let solidTimer: ReturnType<typeof setTimeout> | undefined;
+  let awayTimer: ReturnType<typeof setTimeout> | undefined;
   let lastSent = '';
   let frame = 0;
   /** Invisible: the line's rows, a box in page pixels and each character's spacing to the next. */
@@ -183,12 +184,29 @@
       }, 300);
   }
 
+  /**
+   * Off both the text and the popup: the built-in popup closes, whatever the hide settings, since
+   * a click out would land in the game and moves over the game often never reach this page.
+   */
+  function awayFromLookup(away: boolean) {
+    if (!away) {
+      clearTimeout(awayTimer);
+      awayTimer = undefined;
+    } else if (!awayTimer) {
+      awayTimer = setTimeout(() => {
+        awayTimer = undefined;
+        popup?.close();
+      }, 300);
+    }
+  }
+
   function onMove(event: MouseEvent) {
     if (view?.editing) return;
     const hit = document.elementFromPoint(event.clientX, event.clientY);
     const overPopup = !!hit?.closest('.ttu-dict') || foreignTop(hit);
     const overText = !!hit?.closest('.hook-text');
     setSolid(overPopup || (view?.platform !== 'win32' && overText && hasYomitan()));
+    awayFromLookup(!overPopup && !overText);
   }
 
   /** Adjust mode: dragging the frame moves the area, its corner handle resizes it. */
@@ -265,7 +283,10 @@
     });
     const resized = new ResizeObserver(report);
     if (textEl) resized.observe(textEl);
-    document.addEventListener('mouseleave', () => setSolid(false));
+    document.addEventListener('mouseleave', () => {
+      setSolid(false);
+      awayFromLookup(true);
+    });
     return () => {
       channel?.close();
       clearTimeout(noticeTimer);

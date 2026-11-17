@@ -750,7 +750,10 @@
     saveLines(lines);
     flashId = $hookFlash$ ? line.id : undefined;
     if (atEdge) {
-      tick().then(() => list && (list.scrollTop = reverse ? 0 : list.scrollHeight));
+      // The line itself, not just the list's end: the list's bottom can sit below the page's fold.
+      tick().then(() =>
+        list?.querySelector(`[data-id="${line.id}"]`)?.scrollIntoView({ block: 'nearest' })
+      );
     }
     if (paused) {
       flashPaused();
